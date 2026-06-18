@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useRef } from "react";
 import type { CSSProperties } from "react";
 import { CATALOG_BY_KIND } from "../schematic/catalog";
 import { useSchematic } from "../store/useSchematic";
@@ -21,6 +21,8 @@ export function SimulationPanel({ result, options, onOptionsChange, onRun }: Sim
   const wires = useSchematic((s) => s.wires);
   const selectedId = useSchematic((s) => s.selectedId);
   const setValue = useSchematic((s) => s.setValue);
+  const beginChange = useSchematic((s) => s.beginChange);
+  const editingRef = useRef(false);
   const selected = components.find((component) => component.id === selectedId) ?? null;
   const selectedEntry = selected ? CATALOG_BY_KIND[selected.kind] : null;
   const warnings = result?.warnings ?? [];
@@ -87,8 +89,18 @@ export function SimulationPanel({ result, options, onOptionsChange, onRun }: Sim
             <label className="value-editor">
               <span>VALUE</span>
               <input
+                key={selected.id}
                 value={selected.value}
-                onChange={(event) => setValue(selected.id, event.currentTarget.value)}
+                onFocus={() => {
+                  editingRef.current = false;
+                }}
+                onChange={(event) => {
+                  if (!editingRef.current) {
+                    beginChange();
+                    editingRef.current = true;
+                  }
+                  setValue(selected.id, event.currentTarget.value);
+                }}
                 spellCheck={false}
               />
               <em>{selectedEntry.unit}</em>

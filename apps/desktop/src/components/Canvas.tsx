@@ -17,6 +17,8 @@ const clampZoom = (z: number) => Math.min(5, Math.max(0.25, z));
 const pointsEqual = (a: Point, b: Point) => a.x === b.x && a.y === b.y;
 const routeWire = (start: Point, end: Point): Point[] =>
   start.x === end.x || start.y === end.y ? [start, end] : [start, { x: end.x, y: start.y }, end];
+const pathFromPoints = (points: Point[]) =>
+  points.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x} ${p.y}`).join(" ");
 
 export function Canvas() {
   const svgRef = useRef<SVGSVGElement | null>(null);
@@ -27,18 +29,22 @@ export function Canvas() {
   const components = useSchematic((s) => s.components);
   const wires = useSchematic((s) => s.wires);
   const selectedId = useSchematic((s) => s.selectedId);
+  const selectedWireId = useSchematic((s) => s.selectedWireId);
   const tool = useSchematic((s) => s.tool);
   const placeRotation = useSchematic((s) => s.placeRotation);
   const addComponent = useSchematic((s) => s.addComponent);
   const addWire = useSchematic((s) => s.addWire);
   const select = useSchematic((s) => s.select);
+  const selectWire = useSchematic((s) => s.selectWire);
   const moveComponent = useSchematic((s) => s.moveComponent);
+  const beginChange = useSchematic((s) => s.beginChange);
 
   // Interaction kept in a ref so dragging/panning doesn't trigger re-renders.
-  const drag = useRef<{ mode: "none" | "pan" | "move"; id?: string; lastX: number; lastY: number }>({
+  const drag = useRef<{ mode: "none" | "pan" | "move"; id?: string; lastX: number; lastY: number; moved: boolean }>({
     mode: "none",
     lastX: 0,
     lastY: 0,
+    moved: false,
   });
 
   // Center the world origin on first mount.
@@ -127,7 +133,7 @@ export function Canvas() {
       return;
     }
     select(null);
-    drag.current = { mode: "pan", lastX: e.clientX, lastY: e.clientY };
+    drag.current = { mode: "pan", lastX: e.clientX, lastY: e.clientY, moved: false };
     svgRef.current?.setPointerCapture(e.pointerId);
   };
 
@@ -143,8 +149,14 @@ export function Canvas() {
       return;
     }
     select(comp.id);
-    drag.current = { mode: "move", id: comp.id, lastX: e.clientX, lastY: e.clientY };
+    drag.current = { mode: "move", id: comp.id, lastX: e.clientX, lastY: e.clientY, moved: false };
     svgRef.current?.setPointerCapture(e.pointerId);
+  };
+
+  const onWirePointerDown = (e: ReactPointerEvent<SVGElement>, wire: SchematicWire) => {
+    if (tool.mode !== "select" || e.button !== 0) return; // let place/wire/pan handle via bubbling
+    e.stopPropagation();
+    selectWire(wire.id);
   };
 
   const onPointerMove = (e: ReactPointerEvent<SVGElement>) => {
@@ -163,6 +175,11 @@ export function Canvas() {
       d.lastY = e.clientY;
       setView((v) => ({ ...v, x: v.x + dx, y: v.y + dy }));
     } else if (d.mode === "move" && d.id) {
+      // Capture one undo snapshot for the whole drag, on the first move only.
+      if (!d.moved) {
+        beginChange();
+        d.moved = true;
+      }
       const w = screenToWorld(e.clientX, e.clientY);
       moveComponent(d.id, snap(w.x), snap(w.y));
     }
@@ -171,6 +188,7 @@ export function Canvas() {
   const endDrag = (e: ReactPointerEvent<SVGElement>) => {
     drag.current.mode = "none";
     drag.current.id = undefined;
+    drag.current.moved = false;
     const el = svgRef.current;
     if (el?.hasPointerCapture(e.pointerId)) el.releasePointerCapture(e.pointerId);
   };
@@ -199,7 +217,12 @@ export function Canvas() {
         <rect x={-100000} y={-100000} width={200000} height={200000} fill="url(#grid)" />
 
         {wires.map((wire) => (
-          <WireView key={wire.id} wire={wire} />
+          <WireView
+            key={wire.id}
+            wire={wire}
+            selected={wire.id === selectedWireId}
+            onPointerDown={(e) => onWirePointerDown(e, wire)}
+          />
         ))}
 
         {previewWire && <WirePolyline points={previewWire} className="wire preview" />}
@@ -271,11 +294,25 @@ function ComponentView({
   );
 }
 
-function WireView({ wire }: { wire: SchematicWire }) {
-  return <WirePolyline points={wire.points} className="wire" />;
+function WireView({
+  wire,
+  selected,
+  onPointerDown,
+}: {
+  wire: SchematicWire;
+  selected: boolean;
+  onPointerDown: (e: ReactPointerEvent<SVGElement>) => void;
+}) {
+  const d = pathFromPoints(wire.points);
+  return (
+    <g className={`wire-group${selected ? " selected" : ""}`} onPointerDown={onPointerDown}>
+      {/* Wide invisible stroke makes the thin wire easy to click. */}
+      <path className="wire-hit" d={d} />
+      <path className="wire" d={d} />
+    </g>
+  );
 }
 
 function WirePolyline({ points, className }: { points: Point[]; className: string }) {
-  const d = points.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x} ${p.y}`).join(" ");
-  return <path className={className} d={d} />;
+  return <path className={className} d={pathFromPoints(points)} />;
 }

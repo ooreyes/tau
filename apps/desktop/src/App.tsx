@@ -22,6 +22,8 @@ function App() {
   const cancel = useSchematic((s) => s.cancel);
   const rotate = useSchematic((s) => s.rotate);
   const deleteSelected = useSchematic((s) => s.deleteSelected);
+  const undo = useSchematic((s) => s.undo);
+  const redo = useSchematic((s) => s.redo);
   const [analysisOptions, setAnalysisOptions] = useState<AnalysisOptions>(DEFAULT_ANALYSIS_OPTIONS);
   const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
 
@@ -33,7 +35,19 @@ function App() {
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement | null;
       if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
-      if (e.metaKey || e.ctrlKey) return; // leave OS / app shortcuts alone
+
+      if (e.metaKey || e.ctrlKey) {
+        const k = e.key.toLowerCase();
+        if (k === "z") {
+          e.preventDefault();
+          if (e.shiftKey) redo();
+          else undo();
+        } else if (k === "y") {
+          e.preventDefault();
+          redo();
+        }
+        return; // leave other OS / app shortcuts alone
+      }
 
       if (e.key === "Escape") return cancel();
       if (e.key === " ") {
@@ -57,7 +71,7 @@ function App() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [startPlacing, startWiring, cancel, rotate, deleteSelected]);
+  }, [startPlacing, startWiring, cancel, rotate, deleteSelected, undo, redo]);
 
   return (
     <div className="app">
