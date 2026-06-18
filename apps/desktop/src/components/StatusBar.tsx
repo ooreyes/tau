@@ -15,6 +15,8 @@ export function StatusBar() {
         <kbd>C</kbd>
         <kbd>L</kbd>
         <kbd>V</kbd>
+        <kbd>I</kbd>
+        <kbd>A</kbd>
         <kbd>G</kbd> place
         <span className="dot">·</span>
         <kbd>W</kbd> wire

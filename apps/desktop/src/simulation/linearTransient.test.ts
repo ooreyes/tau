@@ -27,6 +27,14 @@ function vsource(x: number, y: number, value: string, label = "V1"): SchematicCo
   return { id: uid("vs"), kind: "vsource", x, y, rotation: 0, value, label };
 }
 
+function vac(x: number, y: number, value: string, label = "V1"): SchematicComponent {
+  return { id: uid("vac"), kind: "vac", x, y, rotation: 0, value, label };
+}
+
+function isource(x: number, y: number, value: string, label = "I1"): SchematicComponent {
+  return { id: uid("is"), kind: "isource", x, y, rotation: 0, value, label };
+}
+
 function resistor(x: number, y: number, value: string, label = "R1"): SchematicComponent {
   return { id: uid("r"), kind: "resistor", x, y, rotation: 0, value, label };
 }
@@ -41,6 +49,10 @@ function inductor(x: number, y: number, value: string, label = "L1"): SchematicC
 
 function ground(x: number, y: number): SchematicComponent {
   return { id: uid("gnd"), kind: "ground", x, y, rotation: 0, value: "", label: "" };
+}
+
+function opamp(x: number, y: number): SchematicComponent {
+  return { id: uid("op"), kind: "opamp", x, y, rotation: 0, value: "ideal", label: "U1" };
 }
 
 function wire(points: { x: number; y: number }[]): SchematicWire {
@@ -428,5 +440,52 @@ describe("Graceful failure cases", () => {
 
     const result = runTransientAnalysis({ components, wires }, { stopTime: 1e-3, steps: 100 });
     expect(result.ok).toBe(false);
+  });
+
+  it("unsupported model part → ok=false with a clear message", () => {
+    const U1 = opamp(96, 0);
+    const GND = ground(0, 32);
+
+    const result = runTransientAnalysis({ components: [U1, GND], wires: [] }, { stopTime: 1e-3, steps: 100 });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.message).toContain("interim solver");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Test 5 — New source primitives
+// ---------------------------------------------------------------------------
+describe("Transient source primitives", () => {
+  it("AC voltage source drives a sine waveform", () => {
+    const V1 = vac(0, 32, "1 1k", "V1");
+    const GND = ground(0, 64);
+
+    const result = runTransientAnalysis({ components: [V1, GND], wires: [] }, { stopTime: 1e-3, steps: 200 });
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error(result.message);
+
+    const trace = result.traces[0];
+    expect(trace.values[0]).toBeCloseTo(0, 6);
+    expect(Math.max(...trace.values)).toBeGreaterThan(0.98);
+    expect(Math.min(...trace.values)).toBeLessThan(-0.98);
+  });
+
+  it("DC current source through resistor produces Ohm-law voltage", () => {
+    const I1 = isource(0, 32, "1m", "I1");
+    const R1 = resistor(96, 0, "1k", "R1");
+    const GND_source = ground(0, 64);
+    const GND_resistor = ground(128, 0);
+    const wires = [wire([{ x: 0, y: 0 }, { x: 64, y: 0 }])];
+
+    const result = runTransientAnalysis(
+      { components: [I1, R1, GND_source, GND_resistor], wires },
+      { stopTime: 1e-3, steps: 100 },
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error(result.message);
+
+    const sourceNode = result.traces.find((trace) => Math.abs(trace.values[trace.values.length - 1] ?? 0) > 0.5);
+    expect(sourceNode).toBeDefined();
+    expect(sourceNode?.values[sourceNode.values.length - 1]).toBeCloseTo(-1, 3);
   });
 });

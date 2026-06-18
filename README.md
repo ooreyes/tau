@@ -43,6 +43,21 @@ approachable — a tool you can learn circuits on and still trust for real desig
 See [ARCHITECTURE.md](ARCHITECTURE.md) for the full picture and
 [DESIGN_LOG.md](DESIGN_LOG.md) for decisions and current state.
 
+## Current component library
+
+Tau ships an owned generic SPICE-style starter library: squiggly resistor,
+capacitor, inductor, DC/AC voltage and current sources, ground, diode/LED/zener,
+NMOS/PMOS, NPN/PNP, op amp, potentiometer, switch, transformer, and test point.
+
+The interim TypeScript solver currently simulates linear R/C/L, DC voltage and
+current sources, sine AC voltage/current sources, open/closed switches, grounds,
+and test points. Nonlinear/model-based parts are placeable and wireable now, but
+need the planned ngspice engine and model/subcircuit support before analysis.
+
+Tau does not bundle or copy LTspice's proprietary libraries. Future work should
+add an importer for user-provided SPICE `.lib`/`.subckt` files and symbol
+mapping rather than vendoring third-party libraries.
+
 ## Quickstart (development)
 
 Prerequisites: **Node ≥ 20**, **pnpm**, **Rust** (stable), and the platform's

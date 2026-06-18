@@ -26,6 +26,72 @@ const LOCAL_PINS: Record<ComponentKind, LocalPin[]> = {
     { id: "p", label: "+", x: 0, y: -32 },
     { id: "n", label: "-", x: 0, y: 32 },
   ],
+  isource: [
+    { id: "p", label: "+", x: 0, y: -32 },
+    { id: "n", label: "-", x: 0, y: 32 },
+  ],
+  vac: [
+    { id: "p", label: "+", x: 0, y: -32 },
+    { id: "n", label: "-", x: 0, y: 32 },
+  ],
+  iac: [
+    { id: "p", label: "+", x: 0, y: -32 },
+    { id: "n", label: "-", x: 0, y: 32 },
+  ],
+  diode: [
+    { id: "a", label: "A", x: -32, y: 0 },
+    { id: "k", label: "K", x: 32, y: 0 },
+  ],
+  led: [
+    { id: "a", label: "A", x: -32, y: 0 },
+    { id: "k", label: "K", x: 32, y: 0 },
+  ],
+  zener: [
+    { id: "a", label: "A", x: -32, y: 0 },
+    { id: "k", label: "K", x: 32, y: 0 },
+  ],
+  opamp: [
+    { id: "in+", label: "+", x: -32, y: 16 },
+    { id: "in-", label: "-", x: -32, y: -16 },
+    { id: "out", label: "OUT", x: 32, y: 0 },
+    { id: "v+", label: "V+", x: 0, y: -32 },
+    { id: "v-", label: "V-", x: 0, y: 32 },
+  ],
+  nmos: [
+    { id: "d", label: "D", x: 16, y: -32 },
+    { id: "g", label: "G", x: -32, y: 0 },
+    { id: "s", label: "S", x: 16, y: 32 },
+    { id: "b", label: "B", x: 32, y: 0 },
+  ],
+  pmos: [
+    { id: "d", label: "D", x: 16, y: -32 },
+    { id: "g", label: "G", x: -32, y: 0 },
+    { id: "s", label: "S", x: 16, y: 32 },
+    { id: "b", label: "B", x: 32, y: 0 },
+  ],
+  npn: [
+    { id: "c", label: "C", x: 16, y: -32 },
+    { id: "b", label: "B", x: -32, y: 0 },
+    { id: "e", label: "E", x: 16, y: 32 },
+  ],
+  pnp: [
+    { id: "c", label: "C", x: 16, y: -32 },
+    { id: "b", label: "B", x: -32, y: 0 },
+    { id: "e", label: "E", x: 16, y: 32 },
+  ],
+  potentiometer: [
+    { id: "a", label: "A", x: -32, y: 0 },
+    { id: "b", label: "B", x: 32, y: 0 },
+    { id: "w", label: "W", x: 0, y: -32 },
+  ],
+  switch: TWO_TERMINAL_PINS,
+  transformer: [
+    { id: "p1", label: "P1", x: -32, y: -16 },
+    { id: "p2", label: "P2", x: -32, y: 16 },
+    { id: "s1", label: "S1", x: 32, y: -16 },
+    { id: "s2", label: "S2", x: 32, y: 16 },
+  ],
+  testpoint: [{ id: "tp", label: "TP", x: 0, y: 0 }],
   ground: [{ id: "g", label: "0", x: 0, y: 0 }],
 };
 

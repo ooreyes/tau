@@ -14,7 +14,7 @@
  *   - parseQuantity from ./quantity
  */
 
-import type { SchematicComponent, SchematicWire } from "../schematic/types";
+import type { ComponentKind, SchematicComponent, SchematicWire } from "../schematic/types";
 import { extractCircuit, type ExtractedCircuit } from "../schematic/netlist";
 import { parseQuantity } from "./quantity";
 
@@ -34,6 +34,19 @@ export type OperatingPointResult =
       warnings: string[];
     };
 
+const OP_SUPPORTED = new Set<ComponentKind>([
+  "resistor",
+  "capacitor",
+  "inductor",
+  "vsource",
+  "isource",
+  "vac",
+  "iac",
+  "switch",
+  "testpoint",
+  "ground",
+]);
+
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
@@ -50,14 +63,21 @@ export function runOperatingPoint(schematic: {
     if (schematic.components.length === 0) {
       return fail("Place components before running analysis.", circuit);
     }
+    const unsupported = schematic.components.filter((component) => !OP_SUPPORTED.has(component.kind));
+    if (unsupported.length > 0) {
+      return fail(
+        `${unsupported.map((component) => component.label || component.kind).join(", ")} ${unsupported.length === 1 ? "is" : "are"} placeable and wireable, but operating point currently supports only R/C/L, voltage/current sources, AC sources at 0 DC, switches, grounds, and test points.`,
+        circuit,
+      );
+    }
     if (!circuit.groundNetId) {
       return fail(
         "Add a ground symbol so node voltages have a reference.",
         circuit,
       );
     }
-    if (!schematic.components.some((c) => c.kind === "vsource")) {
-      return fail("Add a voltage source to excite the circuit.", circuit);
+    if (!schematic.components.some((c) => ["vsource", "isource", "vac", "iac"].includes(c.kind))) {
+      return fail("Add a voltage or current source to excite the circuit.", circuit);
     }
 
     // Non-ground nets become unknowns (node voltages)
@@ -69,7 +89,7 @@ export function runOperatingPoint(schematic: {
     // Voltage sources and inductors (treated as 0 V sources) each add one
     // extra unknown (branch current).
     const voltageSources = circuit.components.filter(
-      ({ component }) => component.kind === "vsource",
+      ({ component }) => component.kind === "vsource" || component.kind === "vac",
     );
     const inductors = circuit.components.filter(
       ({ component }) => component.kind === "inductor",
@@ -132,6 +152,38 @@ export function runOperatingPoint(schematic: {
           break;
         }
 
+        case "vac": {
+          const sIdx =
+            voltageSourceOffset +
+            voltageSources.findIndex(
+              (v) => v.component.id === entry.component.id,
+            );
+          const p = nodeIdx(entry.pins["p"], nodeIndex);
+          const n = nodeIdx(entry.pins["n"], nodeIndex);
+          stampVoltageSource(matrix, rhs, p, n, sIdx, 0);
+          break;
+        }
+
+        case "isource": {
+          const p = nodeIdx(entry.pins["p"], nodeIndex);
+          const n = nodeIdx(entry.pins["n"], nodeIndex);
+          stampCurrent(rhs, p, n, parseQuantity(entry.component.value, "A"));
+          break;
+        }
+
+        case "iac":
+          // Pure AC current source contributes 0 A at DC.
+          break;
+
+        case "switch":
+          if (entry.component.value.trim().toLowerCase().startsWith("closed")) {
+            const a = nodeIdx(entry.pins["a"], nodeIndex);
+            const b = nodeIdx(entry.pins["b"], nodeIndex);
+            stampConductance(matrix, a, b, 1e9);
+          }
+          break;
+
+        case "testpoint":
         case "ground":
           // Ground pins are absorbed into the reference — nothing to stamp
           break;
@@ -186,6 +238,11 @@ function stampConductance(
     matrix[a][b] -= g;
     matrix[b][a] -= g;
   }
+}
+
+function stampCurrent(rhs: number[], a: number, b: number, currentFromAToB: number) {
+  if (a >= 0) rhs[a] -= currentFromAToB;
+  if (b >= 0) rhs[b] += currentFromAToB;
 }
 
 function stampVoltageSource(

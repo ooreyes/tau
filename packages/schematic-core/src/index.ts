@@ -13,6 +13,21 @@ export type ComponentKind =
   | "capacitor"
   | "inductor"
   | "vsource"
+  | "isource"
+  | "vac"
+  | "iac"
+  | "diode"
+  | "led"
+  | "zener"
+  | "opamp"
+  | "nmos"
+  | "pmos"
+  | "npn"
+  | "pnp"
+  | "potentiometer"
+  | "switch"
+  | "transformer"
+  | "testpoint"
   | "ground";
 
 /** Allowed component rotations, in degrees. */

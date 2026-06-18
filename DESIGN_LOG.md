@@ -197,3 +197,36 @@ and [README.md](README.md) (the pitch).
 - Next: wire native Tauri file dialogs for Open/Save, add explicit probe
   selection, set up Developer ID signing/notarization, and consider enabling a
   production CSP once Tauri IPC/download behavior is verified under it.
+
+### 2026-06-18 — Expanded generic component library — Codex
+
+- Added Tau-owned generic SPICE-style schematic parts instead of copying
+  LTspice's proprietary library: squiggly resistor, capacitor, inductor,
+  potentiometer, DC/AC voltage sources, DC/AC current sources, ground,
+  diode/LED/zener, NMOS/PMOS, NPN/PNP, op amp, switch, transformer, and test
+  point.
+- Updated `apps/desktop/src/schematic/catalog.ts`, `symbols.tsx`, `pins.ts`,
+  app-local schematic types, and `@tau/schematic-core` intended types. The
+  palette is now grouped by component section and scrolls inside the left rail.
+- Interim transient solver now supports DC current sources, sine AC voltage and
+  current sources (`"amplitude frequency"` or `"offset amplitude frequency"`),
+  open/closed switches, and test points in addition to the previous R/C/L/DC
+  voltage source/ground set. Operating-point analysis supports DC current
+  sources, AC sources as 0 at DC, open/closed switches, and test points.
+- Nonlinear/model parts (diodes, LEDs, zeners, MOSFETs, BJTs, op amps,
+  potentiometers, transformers) are placeable and wireable but analysis returns
+  an explicit unsupported-model error until ngspice/model/subcircuit support is
+  added.
+- Added tests for transient AC source behavior, DC current-source behavior, and
+  clear unsupported-model feedback. Verified `pnpm typecheck`, `pnpm test`
+  (71 tests), and `pnpm --filter @tau/desktop build`.
+- Browser smoke at `http://localhost:1420/`: expanded grouped palette renders,
+  AC Voltage can be placed with Ground, Run produces one trace, and layout has
+  no body overflow. A lone source produces a single-pin warning as expected.
+- Rebuilt the Tauri release app/DMG after the library changes, ad-hoc signed
+  `Tau.app`, rebuilt `Tau_0.2.0_aarch64.dmg`, verified the DMG with
+  `hdiutil verify`, mounted it, and verified the contained app signature.
+  Updated DMG SHA-256:
+  `afb1c281c4c6292412ef09724caf01bad9b16b429b0563cc8e454933eafd20e2`.
+- Next: add user-provided SPICE `.lib`/`.subckt` import and symbol mapping.
+  Do not vendor/copy LTspice libraries unless licensing is explicitly resolved.

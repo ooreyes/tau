@@ -1,4 +1,4 @@
-import type { SchematicComponent, SchematicWire } from "../schematic/types";
+import type { ComponentKind, SchematicComponent, SchematicWire } from "../schematic/types";
 import { extractCircuit, type ExtractedCircuit, type ExtractedComponent } from "../schematic/netlist";
 import { parseQuantity } from "./quantity";
 
@@ -50,6 +50,19 @@ const TRACE_COLORS = [
   "var(--trace-amber)",
 ];
 
+const TRANSIENT_SUPPORTED = new Set<ComponentKind>([
+  "resistor",
+  "capacitor",
+  "inductor",
+  "vsource",
+  "isource",
+  "vac",
+  "iac",
+  "switch",
+  "testpoint",
+  "ground",
+]);
+
 export function runTransientAnalysis(
   schematic: { components: SchematicComponent[]; wires: SchematicWire[] },
   options: AnalysisOptions,
@@ -62,11 +75,19 @@ export function runTransientAnalysis(
     if (schematic.components.length === 0) {
       return fail("No circuit", "Place components before running analysis.", circuit);
     }
+    const unsupported = schematic.components.filter((component) => !TRANSIENT_SUPPORTED.has(component.kind));
+    if (unsupported.length > 0) {
+      return fail(
+        "Unsupported model",
+        `${unsupported.map((component) => component.label || component.kind).join(", ")} ${unsupported.length === 1 ? "is" : "are"} placeable and wireable, but the interim solver only supports R/C/L, voltage/current sources, AC sine sources, switches, grounds, and test points. Full models need the planned ngspice engine.`,
+        circuit,
+      );
+    }
     if (!circuit.groundNetId) {
       return fail("No reference", "Add a ground symbol so node voltages have a reference.", circuit);
     }
-    if (!schematic.components.some((component) => component.kind === "vsource")) {
-      return fail("No source", "Add a voltage source to excite the circuit.", circuit);
+    if (!schematic.components.some((component) => ["vsource", "isource", "vac", "iac"].includes(component.kind))) {
+      return fail("No source", "Add a voltage or current source to excite the circuit.", circuit);
     }
 
     const nonGroundNets = circuit.nets.filter((net) => !net.isGround);
@@ -75,7 +96,7 @@ export function runTransientAnalysis(
     }
 
     const nodeIndex = new Map(nonGroundNets.map((net, index) => [net.id, index]));
-    const voltageSources = circuit.components.filter(({ component }) => component.kind === "vsource");
+    const voltageSources = circuit.components.filter(({ component }) => component.kind === "vsource" || component.kind === "vac");
     const inductors = circuit.components.filter(({ component }) => component.kind === "inductor");
     const voltageSourceOffset = nonGroundNets.length;
     const inductorOffset = voltageSourceOffset + voltageSources.length;
@@ -89,6 +110,7 @@ export function runTransientAnalysis(
     const inductorCurrent = new Map<string, number>();
 
     for (let step = 0; step <= options.steps; step += 1) {
+      const time = step * stepSize;
       const matrix = zeroMatrix(size);
       const rhs = Array(size).fill(0) as number[];
 
@@ -112,6 +134,17 @@ export function runTransientAnalysis(
             stampVoltageSource(matrix, rhs, netIndex(entry.pins.p, nodeIndex), netIndex(entry.pins.n, nodeIndex), sourceIndex, parseQuantity(entry.component.value, "V"));
             break;
           }
+          case "vac": {
+            const sourceIndex = voltageSourceOffset + voltageSources.findIndex((source) => source.component.id === entry.component.id);
+            stampVoltageSource(matrix, rhs, netIndex(entry.pins.p, nodeIndex), netIndex(entry.pins.n, nodeIndex), sourceIndex, signalValue(entry.component.value, "V", time));
+            break;
+          }
+          case "isource":
+            stampCurrent(rhs, netIndex(entry.pins.p, nodeIndex), netIndex(entry.pins.n, nodeIndex), parseQuantity(entry.component.value, "A"));
+            break;
+          case "iac":
+            stampCurrent(rhs, netIndex(entry.pins.p, nodeIndex), netIndex(entry.pins.n, nodeIndex), signalValue(entry.component.value, "A", time));
+            break;
           case "inductor": {
             const inductorIndex = inductorOffset + inductors.findIndex((source) => source.component.id === entry.component.id);
             const inductance = positiveValue(entry, "H");
@@ -127,13 +160,19 @@ export function runTransientAnalysis(
             );
             break;
           }
+          case "switch":
+            if (entry.component.value.trim().toLowerCase().startsWith("closed")) {
+              stampConductance(matrix, netIndex(entry.pins.a, nodeIndex), netIndex(entry.pins.b, nodeIndex), 1e9);
+            }
+            break;
+          case "testpoint":
           case "ground":
             break;
         }
       }
 
       const solution = solveLinearSystem(matrix, rhs);
-      times.push(step * stepSize);
+      times.push(time);
       for (let i = 0; i < nonGroundNets.length; i += 1) traceValues[i].push(solution[i]);
 
       for (const entry of circuit.components) {
@@ -201,6 +240,17 @@ function positiveValue(entry: ExtractedComponent, unit: string): number {
     throw new Error(`${entry.component.label || entry.component.id} must have a positive ${unit} value.`);
   }
   return value;
+}
+
+function signalValue(value: string, unit: "V" | "A", time: number): number {
+  const tokens = value.trim().split(/[\s,;@]+/).filter(Boolean);
+  if (tokens.length === 0) throw new Error(`AC ${unit} source needs amplitude and frequency.`);
+  if (tokens.length === 1) return parseQuantity(tokens[0], unit);
+
+  const offset = tokens.length >= 3 ? parseQuantity(tokens[0], unit) : 0;
+  const amplitude = parseQuantity(tokens.length >= 3 ? tokens[1] : tokens[0], unit);
+  const frequency = parseQuantity(tokens.length >= 3 ? tokens[2] : tokens[1], "Hz");
+  return offset + amplitude * Math.sin(2 * Math.PI * frequency * time);
 }
 
 function netIndex(net: string | undefined, nodeIndex: Map<string, number>): number {

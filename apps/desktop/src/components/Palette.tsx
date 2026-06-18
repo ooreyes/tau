@@ -2,6 +2,8 @@ import { useSchematic } from "../store/useSchematic";
 import { CATALOG } from "../schematic/catalog";
 import { ComponentSymbol } from "../schematic/symbols";
 
+const sections = [...new Set(CATALOG.map((entry) => entry.section))];
+
 export function Palette() {
   const tool = useSchematic((s) => s.tool);
   const startPlacing = useSchematic((s) => s.startPlacing);
@@ -10,26 +12,32 @@ export function Palette() {
 
   return (
     <aside className="palette">
-      <div className="palette-title">Components</div>
-      <div className="palette-list">
-        {CATALOG.map((e) => (
-          <button
-            key={e.kind}
-            className={`palette-item${activeKind === e.kind ? " active" : ""}`}
-            title={`Place ${e.name.toLowerCase()} — press ${e.hotkey.toUpperCase()}`}
-            onClick={(ev) => {
-              startPlacing(e.kind);
-              ev.currentTarget.blur();
-            }}
-          >
-            <svg className="palette-icon" viewBox="-40 -36 80 72">
-              <g className="symbol">
-                <ComponentSymbol kind={e.kind} />
-              </g>
-            </svg>
-            <span className="palette-name">{e.name}</span>
-            <kbd className="palette-key">{e.hotkey.toUpperCase()}</kbd>
-          </button>
+      <div className="palette-scroll">
+        {sections.map((section) => (
+          <div className="palette-section" key={section}>
+            <div className="palette-title">{section}</div>
+            <div className="palette-list">
+              {CATALOG.filter((entry) => entry.section === section).map((e) => (
+                <button
+                  key={e.kind}
+                  className={`palette-item${activeKind === e.kind ? " active" : ""}`}
+                  title={`Place ${e.name.toLowerCase()} — press ${e.hotkey.toUpperCase()}`}
+                  onClick={(ev) => {
+                    startPlacing(e.kind);
+                    ev.currentTarget.blur();
+                  }}
+                >
+                  <svg className="palette-icon" viewBox="-42 -40 84 80">
+                    <g className="symbol">
+                      <ComponentSymbol kind={e.kind} />
+                    </g>
+                  </svg>
+                  <span className="palette-name">{e.name}</span>
+                  <kbd className="palette-key">{e.hotkey.toUpperCase()}</kbd>
+                </button>
+              ))}
+            </div>
+          </div>
         ))}
       </div>
       <div className="palette-title palette-tools-title">Tools</div>
@@ -49,7 +57,8 @@ export function Palette() {
       </button>
       <div className="palette-hint">
         Click a part or press its key, then click the canvas to place it. Use
-        Wire to connect grid points; Esc returns to select.
+        Wire to connect grid points. Semiconductor and op-amp models are
+        placeable now; ngspice support comes next.
       </div>
     </aside>
   );
