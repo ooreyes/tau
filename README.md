@@ -10,7 +10,7 @@
 
 ---
 
-> ⚠️ **Status: early development (v0.1, pre-alpha).** The schematic editor is taking shape; the simulation engine is not yet wired in. Not yet usable for real work.
+> ⚠️ **Status: early development (v0.2, pre-alpha).** Tau can edit simple schematics, load examples, run a real interim linear transient/operating-point solver for R/C/L/V/GND circuits, and plot node voltages. The planned Rust/ngspice engine is not wired in yet.
 
 ## What is Tau?
 
@@ -37,8 +37,8 @@ approachable — a tool you can learn circuits on and still trust for real desig
 | Frontend | React 19 + TypeScript + Vite 7 |
 | Schematic canvas | SVG + React (v0) → Canvas2D/WebGL for scale |
 | State | Zustand |
-| Engine | ngspice via Rust FFI (`libngspice`), bundled (Phase 3) |
-| Plotting | uPlot (planned) |
+| Engine | Interim TypeScript MNA solver now; ngspice via Rust FFI (`libngspice`) planned |
+| Plotting | SVG plotter now; uPlot or custom renderer later |
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for the full picture and
 [DESIGN_LOG.md](DESIGN_LOG.md) for decisions and current state.
@@ -53,6 +53,7 @@ pnpm install          # install workspace dependencies
 pnpm dev              # launch the Tauri desktop app (native window)
 pnpm dev:web          # OR run just the frontend in a browser (Vite dev server)
 pnpm typecheck        # type-check the app
+pnpm test             # run solver/example correctness tests
 ```
 
 ## Repository layout

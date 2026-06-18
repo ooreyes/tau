@@ -142,3 +142,31 @@ and [README.md](README.md) (the pitch).
 - Next: add wire/component deletion for wires, save/load, explicit probe
   selection, net labels, and eventually replace/route this interim solver
   behind the planned Rust/ngspice engine adapter.
+
+### 2026-06-18 — Onboarding and persistence polish — Codex
+
+- Picked up after the editor undo/redo and solver-test commits. Finished the
+  interrupted onboarding/persistence increment.
+- Added autosave to `localStorage` in `apps/desktop/src/store/useSchematic.ts`;
+  reload restores the last schematic. `loadCircuit` now clones incoming
+  documents with fresh ids and derives reference-designator counters.
+- Added toolbar actions for New, Open, Save, and an Examples picker backed by
+  `apps/desktop/src/examples/circuits.ts`. Save emits a `.tau.json` document;
+  Open accepts Tau JSON documents through a hidden file input.
+- Added `apps/desktop/src/components/EmptyState.tsx`: an empty-canvas overlay
+  with a one-click RC example plus direct Resistor/Wire entry points. Analysis
+  results are cleared whenever the schematic changes so stale traces do not
+  survive New/example/open/edit actions.
+- Updated `README.md` to reflect the current v0.2 pre-alpha reality: simple
+  schematic editing, examples, interim linear simulation, and plotter are
+  working; Rust/ngspice is still planned. Added root `pnpm test`.
+- Verified with `pnpm typecheck` and `pnpm --filter @tau/desktop test`
+  (68 tests passing). Browser smoke at `http://localhost:1420/`: New shows the
+  empty state, Open RC example loads 5 components/1 wire, reload restores the
+  autosaved circuit, Examples picker loads RLC (6 components/2 wires), Run
+  renders 3 traces with no warnings, and layout has no body overflow at
+  1280x720. In-app browser download events are unsupported, so Save download
+  could not be asserted there beyond enabled/disabled UI state and typecheck.
+- Next: add explicit probe selection, component/wire labels in the plot legend,
+  stronger imported-document validation, native Tauri file dialogs for Open/Save,
+  and a production build pass for the Tauri shell.

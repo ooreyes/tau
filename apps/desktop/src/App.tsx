@@ -5,6 +5,7 @@ import { Palette } from "./components/Palette";
 import { Canvas } from "./components/Canvas";
 import { StatusBar } from "./components/StatusBar";
 import { SimulationPanel } from "./components/SimulationPanel";
+import { EmptyState } from "./components/EmptyState";
 import { useSchematic } from "./store/useSchematic";
 import { CATALOG } from "./schematic/catalog";
 import { runTransientAnalysis, type AnalysisOptions, type AnalysisResult } from "./simulation/linearTransient";
@@ -30,6 +31,10 @@ function App() {
   const runAnalysis = useCallback(() => {
     setAnalysis(runTransientAnalysis({ components, wires }, analysisOptions));
   }, [components, wires, analysisOptions]);
+
+  useEffect(() => {
+    setAnalysis(null);
+  }, [components, wires]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -79,6 +84,7 @@ function App() {
       <Palette />
       <main className="stage">
         <Canvas />
+        {components.length === 0 && wires.length === 0 && <EmptyState />}
       </main>
       <SimulationPanel
         result={analysis}

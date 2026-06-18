@@ -57,6 +57,7 @@ interface SchematicState extends Doc {
 }
 
 const HISTORY_LIMIT = 100;
+const STORAGE_KEY = "tau.schematic.v1";
 const nextRotation = (r: Rotation): Rotation => (((r + 90) % 360) as Rotation);
 const docOf = (s: Doc): Doc => ({ components: s.components, wires: s.wires, counters: s.counters });
 
@@ -70,6 +71,44 @@ function deriveCounters(components: SchematicComponent[]): Record<string, number
   return counters;
 }
 
+/** Clone an incoming document with fresh ids so examples/files never alias live state. */
+function cloneDocument(doc: SchematicDocument): SchematicDocument {
+  return {
+    components: doc.components.map((c) => ({ ...c, id: nanoid(6) })),
+    wires: doc.wires.map((w) => ({ id: nanoid(6), points: w.points.map((p) => ({ ...p })) })),
+  };
+}
+
+function loadPersisted(): SchematicDocument | null {
+  if (typeof localStorage === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (parsed && Array.isArray(parsed.components) && Array.isArray(parsed.wires)) {
+      return { components: parsed.components, wires: parsed.wires };
+    }
+  } catch {
+    // ignore corrupt/unavailable storage
+  }
+  return null;
+}
+
+let saveTimer: ReturnType<typeof setTimeout> | undefined;
+function persist(doc: SchematicDocument) {
+  if (typeof localStorage === "undefined") return;
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(doc));
+    } catch {
+      // ignore quota/unavailable
+    }
+  }, 250);
+}
+
+const initialDoc = loadPersisted();
+
 export const useSchematic = create<SchematicState>()((set) => {
   /** Push the current document onto the undo stack and clear redo. */
   const recordInto = (s: SchematicState) => ({
@@ -78,9 +117,9 @@ export const useSchematic = create<SchematicState>()((set) => {
   });
 
   return {
-    components: [],
-    wires: [],
-    counters: {},
+    components: initialDoc?.components ?? [],
+    wires: initialDoc?.wires ?? [],
+    counters: initialDoc ? deriveCounters(initialDoc.components) : {},
     selectedId: null,
     selectedWireId: null,
     tool: { mode: "select" },
@@ -204,15 +243,18 @@ export const useSchematic = create<SchematicState>()((set) => {
       })),
 
     loadCircuit: (doc) =>
-      set((s) => ({
-        ...recordInto(s),
-        components: doc.components,
-        wires: doc.wires,
-        counters: deriveCounters(doc.components),
-        selectedId: null,
-        selectedWireId: null,
-        tool: { mode: "select" },
-      })),
+      set((s) => {
+        const cloned = cloneDocument(doc);
+        return {
+          ...recordInto(s),
+          components: cloned.components,
+          wires: cloned.wires,
+          counters: deriveCounters(cloned.components),
+          selectedId: null,
+          selectedWireId: null,
+          tool: { mode: "select" },
+        };
+      }),
 
     newCircuit: () =>
       set((s) => ({
@@ -225,4 +267,11 @@ export const useSchematic = create<SchematicState>()((set) => {
         tool: { mode: "select" },
       })),
   };
+});
+
+// Autosave the document to localStorage so work survives an app restart.
+useSchematic.subscribe((state, prev) => {
+  if (state.components !== prev.components || state.wires !== prev.wires) {
+    persist({ components: state.components, wires: state.wires });
+  }
 });

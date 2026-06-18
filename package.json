@@ -8,6 +8,7 @@
     "dev": "pnpm --filter @tau/desktop tauri dev",
     "dev:web": "pnpm --filter @tau/desktop dev",
     "build": "pnpm --filter @tau/desktop tauri build",
-    "typecheck": "pnpm --filter @tau/desktop exec tsc --noEmit"
+    "typecheck": "pnpm --filter @tau/desktop exec tsc --noEmit",
+    "test": "pnpm --filter @tau/desktop test"
   }
 }

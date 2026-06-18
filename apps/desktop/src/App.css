@@ -93,6 +93,44 @@ body {
 .toolbar-spacer {
   flex: 1;
 }
+.text-btn,
+.example-picker select {
+  height: 30px;
+  color: var(--text);
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  font: 650 12px Inter, system-ui, sans-serif;
+}
+.text-btn {
+  padding: 0 11px;
+  cursor: pointer;
+}
+.text-btn:disabled {
+  opacity: 0.38;
+  cursor: not-allowed;
+}
+.text-btn:hover:not(:disabled),
+.example-picker select:hover {
+  border-color: var(--accent);
+}
+.file-input {
+  display: none;
+}
+.example-picker {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+.example-picker span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+.example-picker select {
+  min-width: 132px;
+  padding: 0 8px;
+}
 .run-btn {
   display: inline-flex;
   align-items: center;
@@ -264,6 +302,62 @@ body {
   stroke: var(--accent);
   stroke-dasharray: 4 3;
   opacity: 0.7;
+}
+.empty-state {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+.empty-panel {
+  width: min(520px, calc(100% - 56px));
+  padding: 28px;
+  background: rgba(17, 22, 31, 0.9);
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.36);
+  pointer-events: auto;
+}
+.empty-kicker {
+  color: var(--trace-purple);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+.empty-panel h1 {
+  margin: 8px 0 8px;
+  color: var(--trace-cream);
+  font-size: 34px;
+  line-height: 1;
+}
+.empty-panel p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.55;
+}
+.empty-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+  margin-top: 20px;
+}
+.empty-actions button {
+  height: 34px;
+  padding: 0 13px;
+  color: var(--text);
+  background: var(--panel-2);
+  border: 1px solid var(--border-strong);
+  border-radius: 7px;
+  font-weight: 750;
+  cursor: pointer;
+}
+.empty-actions .primary-action {
+  color: var(--accent-ink);
+  background: var(--accent);
+  border-color: var(--accent);
 }
 
 /* ── Plotter ───────────────────────────────────────────── */
