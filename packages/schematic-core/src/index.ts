@@ -31,14 +31,26 @@ export interface SchematicComponent {
   label: string;
 }
 
-/** The full schematic document. Wires/nets land here in the next iteration. */
+/** A grid-snapped point in world coordinates. */
+export interface Point {
+  x: number;
+  y: number;
+}
+
+/** A wire drawn as an orthogonal polyline. Nets are derived from wires later. */
+export interface SchematicWire {
+  id: string;
+  points: Point[];
+}
+
+/** The full schematic document. Nets are derived from components + wires. */
 export interface Schematic {
   components: SchematicComponent[];
-  // wires: Wire[];   // planned
-  // nets: Net[];     // derived (planned)
+  wires: SchematicWire[];
 }
 
 /** The active editing tool. */
 export type Tool =
   | { mode: "select" }
-  | { mode: "place"; kind: ComponentKind };
+  | { mode: "place"; kind: ComponentKind }
+  | { mode: "wire" };

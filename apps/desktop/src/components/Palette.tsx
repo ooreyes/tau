@@ -5,6 +5,7 @@ import { ComponentSymbol } from "../schematic/symbols";
 export function Palette() {
   const tool = useSchematic((s) => s.tool);
   const startPlacing = useSchematic((s) => s.startPlacing);
+  const startWiring = useSchematic((s) => s.startWiring);
   const activeKind = tool.mode === "place" ? tool.kind : null;
 
   return (
@@ -31,9 +32,24 @@ export function Palette() {
           </button>
         ))}
       </div>
+      <div className="palette-title palette-tools-title">Tools</div>
+      <button
+        className={`palette-item${tool.mode === "wire" ? " active" : ""}`}
+        title="Draw wire — press W"
+        onClick={(ev) => {
+          startWiring();
+          ev.currentTarget.blur();
+        }}
+      >
+        <svg className="palette-icon" viewBox="-40 -36 80 72">
+          <path className="wire-icon" d="M -30 18 H 0 V -18 H 30" />
+        </svg>
+        <span className="palette-name">Wire</span>
+        <kbd className="palette-key">W</kbd>
+      </button>
       <div className="palette-hint">
-        Click a part or press its key, then click the canvas to place it. Keep
-        clicking to place more.
+        Click a part or press its key, then click the canvas to place it. Use
+        Wire to connect grid points; Esc returns to select.
       </div>
     </aside>
   );

@@ -32,8 +32,8 @@ describes layers not yet built; those are marked _(planned)_. See
 │                                                                │
 │  Toolbar · Palette · Command palette (planned)                 │
 │  Schematic Canvas (SVG→Canvas2D/WebGL)   Zustand doc + undo    │
-│  Net extractor (planned) → Circuit IR → Netlist gen (planned)  │
-│  Waveform viewer (planned)   Probe manager (planned)           │
+│  Net extractor → Circuit IR (planned) → Netlist gen (planned)  │
+│  Plotter UI   Probe manager (planned)                          │
 └───────────────────────────────┬────────────────────────────────┘
                                  │  Engine Contract (typed, planned)
                                  │  {CircuitIR, AnalysisSpec} → stream<Result>
@@ -74,6 +74,18 @@ describes layers not yet built; those are marked _(planned)_. See
   system; implicit integration (Backward Euler / Trapezoidal / Gear) with
   adaptive time-stepping and local-truncation-error control; Newton–Raphson with
   Gmin/source stepping for convergence; sparse LU (KLU) per iteration.
+
+## Current interim simulation path
+
+Phase 1 now includes a small TypeScript transient solver inside
+`apps/desktop/src/simulation/`. This is a temporary, linear-only implementation
+for the current R/C/L/V/GND catalog so the UI can run real analysis before the
+Rust/ngspice adapter exists. React still calls a single analysis function and
+consumes structured results; solver math stays outside React components.
+
+When Phase 2/3 engine work begins, keep the UI contract shape and replace the
+implementation behind it with the Rust/ngspice result stream rather than adding
+SPICE details to the canvas or plotter components.
 
 ## Decisions locked
 

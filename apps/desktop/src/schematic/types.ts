@@ -29,7 +29,20 @@ export interface SchematicComponent {
   label: string;
 }
 
+/** A grid-snapped point in world coordinates. */
+export interface Point {
+  x: number;
+  y: number;
+}
+
+/** A wire drawn as an orthogonal polyline. Nets are derived from wires later. */
+export interface SchematicWire {
+  id: string;
+  points: Point[];
+}
+
 /** The active editing tool. */
 export type Tool =
   | { mode: "select" }
-  | { mode: "place"; kind: ComponentKind };
+  | { mode: "place"; kind: ComponentKind }
+  | { mode: "wire" };

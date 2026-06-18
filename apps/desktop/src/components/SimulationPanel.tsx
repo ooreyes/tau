@@ -1,0 +1,254 @@
+import { useMemo } from "react";
+import type { CSSProperties } from "react";
+import { CATALOG_BY_KIND } from "../schematic/catalog";
+import { useSchematic } from "../store/useSchematic";
+import type { AnalysisOptions, AnalysisResult, Trace } from "../simulation/linearTransient";
+import { formatEngineering } from "../simulation/quantity";
+
+interface SimulationPanelProps {
+  result: AnalysisResult | null;
+  options: AnalysisOptions;
+  onOptionsChange: (options: AnalysisOptions) => void;
+  onRun: () => void;
+}
+
+const PLOT_WIDTH = 340;
+const PLOT_HEIGHT = 210;
+const PLOT_PAD = 26;
+
+export function SimulationPanel({ result, options, onOptionsChange, onRun }: SimulationPanelProps) {
+  const components = useSchematic((s) => s.components);
+  const wires = useSchematic((s) => s.wires);
+  const selectedId = useSchematic((s) => s.selectedId);
+  const setValue = useSchematic((s) => s.setValue);
+  const selected = components.find((component) => component.id === selectedId) ?? null;
+  const selectedEntry = selected ? CATALOG_BY_KIND[selected.kind] : null;
+  const warnings = result?.warnings ?? [];
+
+  return (
+    <aside className="plotter" aria-label="Analysis plotter">
+      <div className="plotter-header">
+        <div>
+          <div className="plotter-kicker">Analysis</div>
+          <div className="plotter-title">Transient scope</div>
+        </div>
+        <button className="plotter-run" onClick={onRun}>
+          Run
+        </button>
+      </div>
+
+      <div className="plotter-tabs" aria-label="Analysis modes">
+        <button className="plotter-tab active">TRAN</button>
+        <button className="plotter-tab" disabled>
+          OP
+        </button>
+        <button className="plotter-tab" disabled>
+          AC
+        </button>
+      </div>
+
+      <WaveformPlot result={result} />
+
+      <div className="meter-row">
+        <Metric label="NETS" value={result?.ok ? String(result.stats.netCount) : "--"} tone="green" />
+        <Metric label="NODES" value={result?.ok ? String(Math.max(0, result.stats.netCount - 1)) : "--"} tone="cyan" />
+        <Metric label="SAMPLES" value={result?.ok ? String(result.stats.sampleCount) : "--"} tone="cream" />
+      </div>
+
+      <div className="plotter-controls">
+        <DialControl
+          label="STOP"
+          value={`${formatEngineering(options.stopTime, "s", 2)}`}
+          min={0.1}
+          max={200}
+          step={0.1}
+          numericValue={options.stopTime * 1000}
+          onChange={(value) => onOptionsChange({ ...options, stopTime: value / 1000 })}
+        />
+        <DialControl
+          label="STEPS"
+          value={String(options.steps)}
+          min={32}
+          max={1000}
+          step={1}
+          numericValue={options.steps}
+          onChange={(value) => onOptionsChange({ ...options, steps: Math.round(value) })}
+        />
+      </div>
+
+      <div className="selection-strip">
+        <div className="strip-label">SELECT</div>
+        {selected && selectedEntry ? (
+          <>
+            <div className="selected-part">
+              <span>{selected.label || selectedEntry.name}</span>
+              <small>{selectedEntry.name}</small>
+            </div>
+            <label className="value-editor">
+              <span>VALUE</span>
+              <input
+                value={selected.value}
+                onChange={(event) => setValue(selected.id, event.currentTarget.value)}
+                spellCheck={false}
+              />
+              <em>{selectedEntry.unit}</em>
+            </label>
+          </>
+        ) : (
+          <div className="selected-part muted">No selection</div>
+        )}
+      </div>
+
+      <div className="plotter-footer">
+        <div className="tiny-leds" aria-hidden="true">
+          <span className={components.length ? "on green" : ""} />
+          <span className={wires.length ? "on cyan" : ""} />
+          <span className={result?.ok ? "on cream" : result && !result.ok ? "on red" : ""} />
+        </div>
+        <div className="plotter-message">
+          {result ? (
+            result.ok ? (
+              <>
+                <strong>{result.title}</strong>
+                <span>{formatEngineering(result.stats.stepSize, "s", 2)} step</span>
+              </>
+            ) : (
+              <>
+                <strong>{result.title}</strong>
+                <span>{result.message}</span>
+              </>
+            )
+          ) : (
+            <>
+              <strong>Idle</strong>
+              <span>{components.length} parts · {wires.length} wires</span>
+            </>
+          )}
+        </div>
+      </div>
+
+      {warnings.length > 0 && (
+        <div className="warning-list">
+          {warnings.slice(0, 3).map((warning) => (
+            <div key={warning}>{warning}</div>
+          ))}
+        </div>
+      )}
+    </aside>
+  );
+}
+
+function WaveformPlot({ result }: { result: AnalysisResult | null }) {
+  const success = result?.ok ? result : null;
+  const plot = useMemo(() => {
+    if (!success || success.traces.length === 0) return null;
+    const values = success.traces.flatMap((trace) => trace.values);
+    const rawMin = Math.min(...values, 0);
+    const rawMax = Math.max(...values, 0);
+    const span = rawMax - rawMin || 1;
+    const min = rawMin - span * 0.08;
+    const max = rawMax + span * 0.08;
+    const tMax = success.times[success.times.length - 1] || 1;
+    return { min, max, tMax };
+  }, [success]);
+
+  const traces = success?.traces ?? [];
+
+  return (
+    <div className="scope-shell">
+      <svg className="scope-svg" viewBox={`0 0 ${PLOT_WIDTH} ${PLOT_HEIGHT}`} role="img" aria-label="Waveform plot">
+        <g className="scope-grid">
+          {Array.from({ length: 6 }).map((_, i) => {
+            const x = PLOT_PAD + (i * (PLOT_WIDTH - PLOT_PAD * 2)) / 5;
+            return <line key={`x${i}`} x1={x} y1={PLOT_PAD} x2={x} y2={PLOT_HEIGHT - PLOT_PAD} />;
+          })}
+          {Array.from({ length: 5 }).map((_, i) => {
+            const y = PLOT_PAD + (i * (PLOT_HEIGHT - PLOT_PAD * 2)) / 4;
+            return <line key={`y${i}`} x1={PLOT_PAD} y1={y} x2={PLOT_WIDTH - PLOT_PAD} y2={y} />;
+          })}
+        </g>
+        <rect className="scope-frame" x={PLOT_PAD} y={PLOT_PAD} width={PLOT_WIDTH - PLOT_PAD * 2} height={PLOT_HEIGHT - PLOT_PAD * 2} />
+        {plot &&
+          traces.map((trace) => (
+            <path key={trace.id} className="scope-trace" stroke={trace.color} d={tracePath(trace, success!.times, plot.min, plot.max, plot.tMax)} />
+          ))}
+        <text className="scope-axis" x={PLOT_PAD} y={18}>
+          {plot ? formatEngineering(plot.max, "V", 2) : "MAX"}
+        </text>
+        <text className="scope-axis" x={PLOT_PAD} y={PLOT_HEIGHT - 8}>
+          {plot ? formatEngineering(plot.min, "V", 2) : "MIN"}
+        </text>
+        <text className="scope-axis right" x={PLOT_WIDTH - PLOT_PAD} y={PLOT_HEIGHT - 8}>
+          {success ? formatEngineering(success.stats.stopTime, "s", 2) : "TIME"}
+        </text>
+      </svg>
+      <div className="scope-legend">
+        {traces.length > 0 ? (
+          traces.map((trace) => (
+            <span key={trace.id}>
+              <i style={{ background: trace.color }} />
+              {trace.label}
+            </span>
+          ))
+        ) : (
+          <span className="muted">No traces</span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function tracePath(trace: Trace, times: number[], min: number, max: number, tMax: number): string {
+  return trace.values
+    .map((value, index) => {
+      const x = PLOT_PAD + ((times[index] ?? 0) / tMax) * (PLOT_WIDTH - PLOT_PAD * 2);
+      const y = PLOT_HEIGHT - PLOT_PAD - ((value - min) / (max - min || 1)) * (PLOT_HEIGHT - PLOT_PAD * 2);
+      return `${index === 0 ? "M" : "L"} ${x.toFixed(2)} ${y.toFixed(2)}`;
+    })
+    .join(" ");
+}
+
+function Metric({ label, value, tone }: { label: string; value: string; tone: string }) {
+  return (
+    <div className={`metric ${tone}`}>
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </div>
+  );
+}
+
+function DialControl({
+  label,
+  value,
+  numericValue,
+  min,
+  max,
+  step,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  numericValue: number;
+  min: number;
+  max: number;
+  step: number;
+  onChange: (value: number) => void;
+}) {
+  const progress = Math.max(0, Math.min(1, (numericValue - min) / (max - min)));
+  return (
+    <label className="dial-control">
+      <span>{label}</span>
+      <div className="dial" style={{ "--dial-progress": `${progress * 270}deg` } as CSSProperties}>
+        <strong>{value}</strong>
+      </div>
+      <input
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={numericValue}
+        onChange={(event) => onChange(Number(event.currentTarget.value))}
+      />
+    </label>
+  );
+}

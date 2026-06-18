@@ -64,12 +64,17 @@ and [README.md](README.md) (the pitch).
 - OQ4: Live-mode integration loop — reuse ngspice background-run streaming, or a
   purpose-built lightweight transient loop for real-time animation?
 - OQ5: Rotate keybinding — currently `Space`; revisit against muscle memory.
+- OQ6: Interim TypeScript linear transient solver — keep as a small Live-mode
+  seed/test oracle, or replace entirely once the Rust/ngspice adapter lands?
 
 ## Known tech debt
 
 - Schematic types currently live in `apps/desktop/src/schematic/` rather than in
   `@tau/schematic-core` (see OQ3). The package holds the canonical *intended*
   API; the app will migrate to import from it.
+- The current simulation path is an interim frontend TypeScript MNA solver for
+  linear R/C/L/V/GND circuits only. It is real analysis, not mocked output, but
+  it does not replace the locked ngspice/Rust engine decision.
 
 ---
 
@@ -93,3 +98,47 @@ and [README.md](README.md) (the pitch).
   Repo pushed to https://github.com/ooreyes/tau (private).
 - Next: wiring tool + net labels → net extraction → SPICE netlist export, then
   Phase 2 (build `libngspice`, FFI crate, first `.op`/`.tran`).
+
+### 2026-06-18 — Wire tool and document model — Codex
+
+- Added app-local wire document state: `SchematicWire` stores grid-snapped
+  orthogonal polylines in `apps/desktop/src/schematic/types.ts`, and Zustand now
+  keeps `wires` beside `components`.
+- Mirrored the intended canonical wire shape into
+  `packages/schematic-core/src/index.ts`; the app still uses its local Phase 1
+  types until OQ3 is resolved.
+- Added a Wire tool (`W` hotkey and palette button). In wire mode, click once to
+  start, click another grid point to commit an orthogonal segment, and continue
+  chaining; `Esc` returns to select mode.
+- Renders persisted wires and an in-progress preview on the SVG canvas. Nets are
+  still not extracted and simulation remains unwired.
+- Verified with `pnpm typecheck` and a browser smoke test at
+  `http://localhost:1420/`: the Wire button appears, one two-click segment
+  creates exactly one persisted wire, and the status bar reports wire count.
+- Next: add pin-aware endpoint snapping/visual pin affordances, wire selection /
+  deletion, then net extraction over component pins + wire graph.
+
+### 2026-06-18 — Interim simulation and plotter UI — Codex
+
+- Added pin metadata (`apps/desktop/src/schematic/pins.ts`) and a net extractor
+  (`apps/desktop/src/schematic/netlist.ts`) that connects coincident pins, wire
+  intersections, pins lying on wire segments, and all ground symbols.
+- Added `apps/desktop/src/simulation/linearTransient.ts`: a limited but real
+  linear transient solver using Modified Nodal Analysis. It supports the current
+  R/C/L/V/GND catalog, ideal DC voltage sources, Backward Euler companion models
+  for capacitors/inductors, and reports structured failures for unsupported or
+  singular circuits.
+- Replaced the disabled Run stub with working transient analysis and added a
+  right-side plotter panel styled after the supplied dark synth/control-panel
+  references: dense mode tabs, neon waveform traces, meters, dials, status LEDs,
+  and selected-part value editing.
+- Added visible pin targets while wiring so users can connect the exact terminal
+  points the net extractor consumes.
+- Verified with `pnpm typecheck` and an in-browser smoke test at
+  `http://localhost:1420/`: placed a 5-component RC circuit (V source, R, C, two
+  grounds), ran transient analysis, rendered 2 voltage traces, produced 241
+  samples, and had no warnings. Layout check: plotter `scrollHeight` equals its
+  642px panel height at the default viewport.
+- Next: add wire/component deletion for wires, save/load, explicit probe
+  selection, net labels, and eventually replace/route this interim solver
+  behind the planned Rust/ngspice engine adapter.

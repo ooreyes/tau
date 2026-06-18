@@ -1,17 +1,33 @@
-import { useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import "./App.css";
 import { Toolbar } from "./components/Toolbar";
 import { Palette } from "./components/Palette";
 import { Canvas } from "./components/Canvas";
 import { StatusBar } from "./components/StatusBar";
+import { SimulationPanel } from "./components/SimulationPanel";
 import { useSchematic } from "./store/useSchematic";
 import { CATALOG } from "./schematic/catalog";
+import { runTransientAnalysis, type AnalysisOptions, type AnalysisResult } from "./simulation/linearTransient";
+
+const DEFAULT_ANALYSIS_OPTIONS: AnalysisOptions = {
+  stopTime: 0.006,
+  steps: 240,
+};
 
 function App() {
+  const components = useSchematic((s) => s.components);
+  const wires = useSchematic((s) => s.wires);
   const startPlacing = useSchematic((s) => s.startPlacing);
+  const startWiring = useSchematic((s) => s.startWiring);
   const cancel = useSchematic((s) => s.cancel);
   const rotate = useSchematic((s) => s.rotate);
   const deleteSelected = useSchematic((s) => s.deleteSelected);
+  const [analysisOptions, setAnalysisOptions] = useState<AnalysisOptions>(DEFAULT_ANALYSIS_OPTIONS);
+  const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
+
+  const runAnalysis = useCallback(() => {
+    setAnalysis(runTransientAnalysis({ components, wires }, analysisOptions));
+  }, [components, wires, analysisOptions]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -28,6 +44,10 @@ function App() {
         e.preventDefault();
         return deleteSelected();
       }
+      if (e.key.toLowerCase() === "w") {
+        e.preventDefault();
+        return startWiring();
+      }
 
       const entry = CATALOG.find((c) => c.hotkey === e.key.toLowerCase());
       if (entry) {
@@ -37,15 +57,21 @@ function App() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [startPlacing, cancel, rotate, deleteSelected]);
+  }, [startPlacing, startWiring, cancel, rotate, deleteSelected]);
 
   return (
     <div className="app">
-      <Toolbar />
+      <Toolbar onRun={runAnalysis} />
       <Palette />
       <main className="stage">
         <Canvas />
       </main>
+      <SimulationPanel
+        result={analysis}
+        options={analysisOptions}
+        onOptionsChange={setAnalysisOptions}
+        onRun={runAnalysis}
+      />
       <StatusBar />
     </div>
   );

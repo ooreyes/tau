@@ -1,4 +1,8 @@
-export function Toolbar() {
+interface ToolbarProps {
+  onRun: () => void;
+}
+
+export function Toolbar({ onRun }: ToolbarProps) {
   return (
     <header className="toolbar">
       <div className="brand">
@@ -7,7 +11,7 @@ export function Toolbar() {
         <span className="brand-sub">circuit simulator</span>
       </div>
       <div className="toolbar-spacer" />
-      <button className="run-btn" disabled title="The simulation engine arrives in the next phase">
+      <button className="run-btn" onClick={onRun} title="Run transient analysis">
         ▶&nbsp; Run
       </button>
       <span className="version-tag">v0.1 · pre-alpha</span>

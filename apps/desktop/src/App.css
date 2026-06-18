@@ -2,14 +2,30 @@
   --bg: #0d1017;
   --panel: #11161f;
   --panel-2: #161c27;
+  --panel-3: #0f1218;
   --border: #232b39;
+  --border-strong: #343d50;
   --text: #e6edf3;
   --muted: #8b97a7;
   --accent: #2dd4bf;
+  --accent-ink: #052b27;
   --accent-soft: rgba(45, 212, 191, 0.14);
+  --danger: #ff3459;
+  --danger-soft: rgba(255, 52, 89, 0.15);
+  --cream: #fffbe0;
+  --cream-soft: rgba(255, 251, 224, 0.1);
   --comp: #c9d4e0;
   --comp-ref: #aeb9c7;
   --grid-dot: #263041;
+  --scope-bg: #111111;
+  --scope-grid: #2e2b4f;
+  --trace-cyan: #5edcff;
+  --trace-green: #38e58f;
+  --trace-cream: #fffbe0;
+  --trace-red: #ff456e;
+  --trace-purple: #8a78ff;
+  --trace-amber: #f5a524;
+  --dial-track: #343943;
 
   font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
   color: var(--text);
@@ -36,12 +52,12 @@ body {
 .app {
   height: 100vh;
   display: grid;
-  grid-template-columns: 220px 1fr;
+  grid-template-columns: 220px minmax(420px, 1fr) 380px;
   grid-template-rows: 48px 1fr 30px;
   grid-template-areas:
-    "toolbar toolbar"
-    "palette stage"
-    "status  status";
+    "toolbar toolbar toolbar"
+    "palette stage   plotter"
+    "status  status  status";
 }
 
 /* ── Toolbar ───────────────────────────────────────────── */
@@ -83,7 +99,7 @@ body {
   padding: 6px 14px;
   font-size: 13px;
   font-weight: 600;
-  color: #052b27;
+  color: var(--accent-ink);
   background: var(--accent);
   border: none;
   border-radius: 7px;
@@ -114,6 +130,9 @@ body {
   text-transform: uppercase;
   color: var(--muted);
   padding: 2px 6px 10px;
+}
+.palette-tools-title {
+  padding-top: 16px;
 }
 .palette-list {
   display: flex;
@@ -158,6 +177,16 @@ body {
   border: 1px solid var(--border);
   border-radius: 4px;
   padding: 1px 6px;
+}
+.wire-icon {
+  fill: none;
+  stroke: var(--comp);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.palette-item.active .wire-icon {
+  stroke: var(--accent);
 }
 .palette-hint {
   margin-top: auto;
@@ -212,10 +241,347 @@ body {
 .component.selected .val {
   fill: var(--accent);
 }
+.pin-target {
+  fill: var(--cream);
+  stroke: var(--accent);
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+}
+.wire {
+  fill: none;
+  stroke: var(--comp);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+.wire.preview {
+  stroke: var(--accent);
+  stroke-dasharray: 5 4;
+  opacity: 0.8;
+}
 .ghost .symbol {
   stroke: var(--accent);
   stroke-dasharray: 4 3;
   opacity: 0.7;
+}
+
+/* ── Plotter ───────────────────────────────────────────── */
+.plotter {
+  grid-area: plotter;
+  min-width: 0;
+  background: var(--scope-bg);
+  border-left: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow: auto;
+}
+.plotter-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 10px 16px 8px;
+}
+.plotter-kicker {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  color: var(--trace-purple);
+  text-transform: uppercase;
+}
+.plotter-title {
+  font-size: 23px;
+  font-weight: 760;
+  color: var(--trace-cream);
+  letter-spacing: 0;
+  line-height: 1.1;
+}
+.plotter-run {
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  color: var(--accent-ink);
+  background: var(--trace-green);
+  border: 7px solid var(--dial-track);
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.plotter-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  padding: 0 16px 9px;
+}
+.plotter-tab {
+  height: 30px;
+  border: 2px solid var(--scope-grid);
+  background: transparent;
+  color: var(--muted);
+  font-size: 15px;
+  letter-spacing: 0.4px;
+}
+.plotter-tab.active {
+  color: var(--trace-cream);
+  border-color: var(--trace-purple);
+}
+.plotter-tab:disabled {
+  opacity: 0.42;
+}
+.scope-shell {
+  padding: 0 16px 8px;
+}
+.scope-svg {
+  width: 100%;
+  aspect-ratio: 340 / 174;
+  display: block;
+  background:
+    linear-gradient(90deg, transparent 0 49%, var(--panel-3) 49% 51%, transparent 51%),
+    var(--scope-bg);
+  border-bottom: 2px solid var(--scope-grid);
+}
+.scope-grid line {
+  stroke: var(--scope-grid);
+  stroke-width: 0.8;
+  opacity: 0.65;
+}
+.scope-frame {
+  fill: transparent;
+  stroke: var(--scope-grid);
+  stroke-width: 1.4;
+}
+.scope-trace {
+  fill: none;
+  stroke-width: 2.1;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  filter: drop-shadow(0 0 4px currentColor);
+}
+.scope-axis {
+  fill: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+.scope-axis.right {
+  text-anchor: end;
+}
+.scope-legend {
+  min-height: 30px;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px 10px;
+  padding: 9px 0 2px;
+  color: var(--muted);
+  font-size: 11px;
+}
+.scope-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.scope-legend i {
+  width: 18px;
+  height: 3px;
+  border-radius: 999px;
+}
+.meter-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  padding: 0 16px 9px;
+}
+.metric {
+  min-width: 0;
+  border-top: 2px solid var(--border-strong);
+  padding-top: 8px;
+}
+.metric span {
+  display: block;
+  font-size: 10px;
+  color: var(--muted);
+  font-weight: 800;
+  letter-spacing: 0.8px;
+}
+.metric strong {
+  display: block;
+  margin-top: 1px;
+  color: var(--trace-cream);
+  font-size: 29px;
+  font-weight: 300;
+  line-height: 1;
+}
+.metric.green strong {
+  color: var(--trace-green);
+}
+.metric.cyan strong {
+  color: var(--trace-cyan);
+}
+.metric.cream strong {
+  color: var(--trace-cream);
+}
+.plotter-controls {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  padding: 0 16px 10px;
+}
+.dial-control {
+  min-width: 0;
+  display: grid;
+  gap: 6px;
+}
+.dial-control > span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 1px;
+}
+.dial {
+  width: 70px;
+  height: 70px;
+  margin: 0 auto;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at center, var(--cream) 0 49%, transparent 50%),
+    conic-gradient(var(--trace-cyan) 0 var(--dial-progress), var(--dial-track) var(--dial-progress) 270deg, transparent 270deg);
+  border: 7px solid var(--panel-2);
+}
+.dial strong {
+  max-width: 58px;
+  color: var(--scope-bg);
+  font-size: 12px;
+  font-weight: 800;
+  text-align: center;
+}
+.dial-control input[type="range"] {
+  width: 100%;
+  accent-color: var(--trace-cyan);
+}
+.selection-strip {
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  padding: 9px 16px;
+  display: grid;
+  grid-template-columns: 64px 1fr;
+  gap: 10px 12px;
+  align-items: center;
+}
+.strip-label {
+  color: var(--trace-purple);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 1px;
+}
+.selected-part {
+  min-width: 0;
+  color: var(--text);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.selected-part span {
+  font-size: 17px;
+  font-weight: 760;
+}
+.selected-part small {
+  color: var(--muted);
+  font-size: 11px;
+}
+.muted {
+  color: var(--muted);
+}
+.value-editor {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: 64px 1fr 32px;
+  align-items: center;
+  gap: 12px;
+}
+.value-editor span {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 1px;
+}
+.value-editor input {
+  min-width: 0;
+  height: 34px;
+  color: var(--trace-cream);
+  background: var(--panel-3);
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  padding: 0 10px;
+  font: 600 14px Inter, system-ui, sans-serif;
+}
+.value-editor em {
+  color: var(--muted);
+  font-style: normal;
+  font-size: 12px;
+}
+.plotter-footer {
+  margin-top: auto;
+  display: grid;
+  grid-template-columns: 74px 1fr;
+  gap: 10px;
+  padding: 10px 16px;
+}
+.tiny-leds {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+.tiny-leds span {
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: var(--dial-track);
+}
+.tiny-leds .on.green {
+  background: var(--trace-green);
+}
+.tiny-leds .on.cyan {
+  background: var(--trace-cyan);
+}
+.tiny-leds .on.cream {
+  background: var(--trace-cream);
+}
+.tiny-leds .on.red {
+  background: var(--danger);
+}
+.plotter-message {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.plotter-message strong {
+  color: var(--trace-cream);
+  font-size: 13px;
+}
+.plotter-message span {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.35;
+}
+.warning-list {
+  max-height: 86px;
+  overflow: auto;
+  padding: 0 16px 14px;
+  display: grid;
+  gap: 6px;
+}
+.warning-list div {
+  color: var(--danger);
+  background: var(--danger-soft);
+  border-left: 2px solid var(--danger);
+  padding: 6px 8px;
+  font-size: 11px;
+  line-height: 1.35;
 }
 
 /* ── Status bar ────────────────────────────────────────── */
