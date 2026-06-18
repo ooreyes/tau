@@ -88,5 +88,8 @@ and [README.md](README.md) (the pitch).
   component palette (R, C, L, V, GND), keyboard + click placement, grid snapping,
   selection, drag-to-move, rotate, delete. SVG-based renderer.
 - **Engine is NOT wired yet** — the "Run" button is a stub. No simulation occurs.
+- ✅ Verified end-to-end: frontend renders and places components with no console
+  errors; the native Tauri shell compiles clean (`tau` crate, Tauri 2.11.3, ~49s).
+  Repo pushed to https://github.com/ooreyes/tau (private).
 - Next: wiring tool + net labels → net extraction → SPICE netlist export, then
   Phase 2 (build `libngspice`, FFI crate, first `.op`/`.tran`).
