@@ -1,0 +1,257 @@
+:root {
+  --bg: #0d1017;
+  --panel: #11161f;
+  --panel-2: #161c27;
+  --border: #232b39;
+  --text: #e6edf3;
+  --muted: #8b97a7;
+  --accent: #2dd4bf;
+  --accent-soft: rgba(45, 212, 191, 0.14);
+  --comp: #c9d4e0;
+  --comp-ref: #aeb9c7;
+  --grid-dot: #263041;
+
+  font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--bg);
+  overflow: hidden;
+}
+
+.app {
+  height: 100vh;
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  grid-template-rows: 48px 1fr 30px;
+  grid-template-areas:
+    "toolbar toolbar"
+    "palette stage"
+    "status  status";
+}
+
+/* ── Toolbar ───────────────────────────────────────────── */
+.toolbar {
+  grid-area: toolbar;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 14px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+}
+.brand {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.brand-mark {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--accent);
+  line-height: 1;
+}
+.brand-name {
+  font-size: 15px;
+  font-weight: 650;
+  letter-spacing: 0.2px;
+}
+.brand-sub {
+  font-size: 12px;
+  color: var(--muted);
+}
+.toolbar-spacer {
+  flex: 1;
+}
+.run-btn {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #052b27;
+  background: var(--accent);
+  border: none;
+  border-radius: 7px;
+  cursor: pointer;
+}
+.run-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.version-tag {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+/* ── Palette ───────────────────────────────────────────── */
+.palette {
+  grid-area: palette;
+  background: var(--panel);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  padding: 12px 10px;
+}
+.palette-title {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding: 2px 6px 10px;
+}
+.palette-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.palette-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 8px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  color: var(--text);
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+.palette-item:hover {
+  background: var(--panel-2);
+  border-color: var(--border);
+}
+.palette-item.active {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+.palette-icon {
+  width: 40px;
+  height: 28px;
+  flex: none;
+}
+.palette-name {
+  flex: 1;
+  font-size: 13px;
+}
+.palette-key {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--muted);
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 6px;
+}
+.palette-hint {
+  margin-top: auto;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--muted);
+  padding: 10px 6px 2px;
+}
+
+/* ── Stage / canvas ────────────────────────────────────── */
+.stage {
+  grid-area: stage;
+  position: relative;
+  overflow: hidden;
+}
+.canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+  background: var(--bg);
+  touch-action: none;
+}
+.grid-dot {
+  fill: var(--grid-dot);
+}
+
+.symbol {
+  fill: none;
+  stroke: var(--comp);
+  stroke-width: 1.75;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+.component {
+  cursor: pointer;
+}
+.component .ref,
+.component .val {
+  font-size: 9px;
+  font-weight: 500;
+  fill: var(--muted);
+  user-select: none;
+}
+.component .ref {
+  fill: var(--comp-ref);
+}
+.component.selected .symbol {
+  stroke: var(--accent);
+}
+.component.selected .ref,
+.component.selected .val {
+  fill: var(--accent);
+}
+.ghost .symbol {
+  stroke: var(--accent);
+  stroke-dasharray: 4 3;
+  opacity: 0.7;
+}
+
+/* ── Status bar ────────────────────────────────────────── */
+.statusbar {
+  grid-area: status;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 0 14px;
+  background: var(--panel);
+  border-top: 1px solid var(--border);
+  font-size: 11px;
+  color: var(--muted);
+}
+.status-mode {
+  color: var(--text);
+  font-weight: 600;
+  min-width: 110px;
+}
+.status-hints {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+}
+.status-hints kbd {
+  font: 600 10px Inter, system-ui, sans-serif;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 5px;
+  color: var(--muted);
+}
+.status-hints .dot {
+  opacity: 0.5;
+}
+.status-count {
+  margin-left: auto;
+}
