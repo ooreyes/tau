@@ -56,6 +56,25 @@ pnpm typecheck        # type-check the app
 pnpm test             # run solver/example correctness tests
 ```
 
+## Release build
+
+```bash
+pnpm typecheck
+pnpm test
+pnpm --filter @tau/desktop build   # frontend production bundle
+pnpm build                         # Tauri release app + DMG
+```
+
+Current macOS release artifacts are produced under
+`apps/desktop/src-tauri/target/release/bundle/`:
+
+- `macos/Tau.app`
+- `dmg/Tau_0.2.0_aarch64.dmg`
+
+Local release builds are ad-hoc signed and the app bundle code signature
+verifies after signing. Public distribution still needs Apple Developer ID
+signing and notarization; without that, Gatekeeper will reject the app.
+
 ## Repository layout
 
 ```

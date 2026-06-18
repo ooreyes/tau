@@ -170,3 +170,30 @@ and [README.md](README.md) (the pitch).
 - Next: add explicit probe selection, component/wire labels in the plot legend,
   stronger imported-document validation, native Tauri file dialogs for Open/Save,
   and a production build pass for the Tauri shell.
+
+### 2026-06-18 — Production build hardening — Codex
+
+- Ran the full release gate: `pnpm typecheck`, `pnpm test` (68 tests),
+  `pnpm --filter @tau/desktop build`, and `pnpm build`.
+- Aligned app/package/Rust/Tauri versions to `0.2.0` across `package.json`,
+  `apps/desktop/package.json`, `apps/desktop/src-tauri/Cargo.toml`,
+  `apps/desktop/src-tauri/Cargo.lock`, and
+  `apps/desktop/src-tauri/tauri.conf.json`.
+- Produced release artifacts:
+  `apps/desktop/src-tauri/target/release/bundle/macos/Tau.app` and
+  `apps/desktop/src-tauri/target/release/bundle/dmg/Tau_0.2.0_aarch64.dmg`.
+- The generated `.app` initially had only a linker ad-hoc executable signature,
+  so bundle verification failed. Re-signed the full app bundle with ad-hoc
+  signing (`codesign --force --deep --sign -`), verified the bundle, rebuilt the
+  DMG from the signed app, verified the DMG checksum with `hdiutil verify`, then
+  mounted the DMG and verified the contained `Tau.app` signature.
+- `pnpm audit --prod --audit-level high` reported no known vulnerabilities.
+- Current release checksum:
+  `d759579eb93356d7f59987602ad24949f25596c09531b62ec6f3e482bfb57b74`
+  for `Tau_0.2.0_aarch64.dmg`.
+- Distribution caveat: the app is ad-hoc signed, not Developer ID signed or
+  notarized. `spctl --assess --type execute` rejects it as expected. Public
+  distribution still needs Apple Developer ID signing/notarization credentials.
+- Next: wire native Tauri file dialogs for Open/Save, add explicit probe
+  selection, set up Developer ID signing/notarization, and consider enabling a
+  production CSP once Tauri IPC/download behavior is verified under it.
