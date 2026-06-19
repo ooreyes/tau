@@ -35,6 +35,7 @@ export function SimulationPanel({ result, options, onOptionsChange, onRun }: Sim
   const warnings = result?.warnings ?? [];
 
   const [mode, setMode] = useState<"tran" | "op" | "ac">("tran");
+  const [maximized, setMaximized] = useState(false);
   const title = mode === "tran" ? "Transient scope" : mode === "op" ? "Operating point" : "AC sweep";
   const opResult = useMemo(
     () => (mode === "op" ? runOperatingPoint({ components, wires }) : null),
@@ -46,19 +47,29 @@ export function SimulationPanel({ result, options, onOptionsChange, onRun }: Sim
   );
 
   return (
-    <aside className="plotter" aria-label="Analysis plotter">
+    <aside className={`plotter${maximized ? " maximized" : ""}`} aria-label="Analysis plotter">
       <div className="plotter-header">
         <div>
           <div className="plotter-kicker">Analysis</div>
           <div className="plotter-title">{title}</div>
         </div>
-        {mode === "tran" ? (
-          <button className="plotter-run" onClick={onRun}>
-            Run
+        <div className="plotter-actions">
+          <button
+            className="plotter-max"
+            onClick={() => setMaximized((m) => !m)}
+            title={maximized ? "Restore panel" : "Maximize analysis"}
+            aria-label="Toggle maximized analysis"
+          >
+            {maximized ? "⤡" : "⤢"}
           </button>
-        ) : (
-          <div className="plotter-live">Live</div>
-        )}
+          {mode === "tran" ? (
+            <button className="plotter-run" onClick={onRun}>
+              Run
+            </button>
+          ) : (
+            <div className="plotter-live">Live</div>
+          )}
+        </div>
       </div>
 
       <div className="plotter-tabs" aria-label="Analysis modes">
