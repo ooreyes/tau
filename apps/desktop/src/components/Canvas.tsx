@@ -41,6 +41,9 @@ export function Canvas({ analysis }: { analysis: AnalysisResult | null }) {
   const selectWire = useSchematic((s) => s.selectWire);
   const moveComponent = useSchematic((s) => s.moveComponent);
   const beginChange = useSchematic((s) => s.beginChange);
+  const setValue = useSchematic((s) => s.setValue);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const editDirty = useRef(false);
 
   // Map of world "x,y" -> component pins there, for attributing wire current flow.
   const pinIndex = useMemo(() => {
@@ -230,6 +233,17 @@ export function Canvas({ analysis }: { analysis: AnalysisResult | null }) {
   const flowEndTime = analysis?.ok ? analysis.times[analysis.times.length - 1] ?? 0 : 0;
   const flowSlowdown = flowEndTime > 0 ? FLOW_PLAY_MS / 1000 / flowEndTime : 0;
 
+  const editingComp = editingId ? components.find((c) => c.id === editingId) ?? null : null;
+  const editBox = editingComp ? SYMBOL_BOX[editingComp.kind] : null;
+  const editVert =
+    editingComp && editBox
+      ? editingComp.rotation === 90 || editingComp.rotation === 270
+        ? editBox.halfW
+        : editBox.halfH
+      : 0;
+  const editLeft = editingComp ? editingComp.x * view.zoom + view.x : 0;
+  const editTop = editingComp ? (editingComp.y + editVert + 15) * view.zoom + view.y : 0;
+
   return (
     <>
       <svg
@@ -268,6 +282,12 @@ export function Canvas({ analysis }: { analysis: AnalysisResult | null }) {
               selected={c.id === selectedId}
               showPins={wiring}
               onPointerDown={(e) => onComponentPointerDown(e, c)}
+              onEdit={() => {
+                if (c.kind !== "ground") {
+                  editDirty.current = false;
+                  setEditingId(c.id);
+                }
+              }}
             />
           ))}
 
@@ -300,6 +320,31 @@ export function Canvas({ analysis }: { analysis: AnalysisResult | null }) {
           )}
         </div>
       )}
+
+      {editingComp && (
+        <input
+          className="value-edit-input"
+          autoFocus
+          value={editingComp.value}
+          spellCheck={false}
+          style={{ left: editLeft, top: editTop }}
+          onFocus={(e) => e.currentTarget.select()}
+          onChange={(e) => {
+            if (!editDirty.current) {
+              beginChange();
+              editDirty.current = true;
+            }
+            setValue(editingComp.id, e.currentTarget.value);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === "Escape") {
+              e.preventDefault();
+              setEditingId(null);
+            }
+          }}
+          onBlur={() => setEditingId(null)}
+        />
+      )}
     </>
   );
 }
@@ -309,11 +354,13 @@ function ComponentView({
   selected,
   showPins,
   onPointerDown,
+  onEdit,
 }: {
   comp: SchematicComponent;
   selected: boolean;
   showPins: boolean;
   onPointerDown: (e: ReactPointerEvent<SVGElement>) => void;
+  onEdit: () => void;
 }) {
   const entry = CATALOG_BY_KIND[comp.kind];
   const box = SYMBOL_BOX[comp.kind];
@@ -325,6 +372,10 @@ function ComponentView({
       className={`component${selected ? " selected" : ""}`}
       transform={`translate(${comp.x} ${comp.y})`}
       onPointerDown={onPointerDown}
+      onDoubleClick={(e) => {
+        e.stopPropagation();
+        onEdit();
+      }}
     >
       {/* Generous transparent hit area so thin symbols are easy to grab. */}
       <rect x={-36} y={-36} width={72} height={72} fill="transparent" />

@@ -804,6 +804,23 @@ body {
   padding: 3px 8px;
   letter-spacing: 0.2px;
 }
+
+/* ── Inline value editor (double-click a part) ─────────── */
+.value-edit-input {
+  position: absolute;
+  transform: translateX(-50%);
+  z-index: 8;
+  width: 88px;
+  text-align: center;
+  font: 600 12px Inter, system-ui, sans-serif;
+  color: var(--text);
+  background: var(--panel, #11161f);
+  border: 1px solid var(--accent, #2dd4bf);
+  border-radius: 6px;
+  padding: 3px 6px;
+  outline: none;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+}
 .flow-toggle {
   display: inline-flex;
   align-items: center;
