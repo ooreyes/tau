@@ -6,6 +6,7 @@ import type { AnalysisOptions, AnalysisResult, Trace } from "../simulation/linea
 import { formatEngineering } from "../simulation/quantity";
 import { OPAMP_LIBRARY, findOpAmp } from "../library/opamps";
 import type { Probe } from "../schematic/types";
+import { paramFields, decodeParams, encodeParams } from "../schematic/params";
 
 interface SimulationPanelProps {
   result: AnalysisResult | null;
@@ -118,26 +119,35 @@ export function SimulationPanel({ result, options, onOptionsChange, onRun }: Sim
                   </div>
                 )}
               </>
+            ) : paramFields(selected.kind).length > 0 ? (
+              <div className="param-fields">
+                {paramFields(selected.kind).map((f) => (
+                  <label key={f.key} className="value-editor">
+                    <span>{f.label}</span>
+                    <input
+                      value={decodeParams(selected.kind, selected.value)[f.key] ?? ""}
+                      onFocus={() => {
+                        editingRef.current = false;
+                      }}
+                      onChange={(event) => {
+                        if (!editingRef.current) {
+                          beginChange();
+                          editingRef.current = true;
+                        }
+                        const next = {
+                          ...decodeParams(selected.kind, selected.value),
+                          [f.key]: event.currentTarget.value,
+                        };
+                        setValue(selected.id, encodeParams(selected.kind, next));
+                      }}
+                      spellCheck={false}
+                    />
+                    {f.unit && <em>{f.unit}</em>}
+                  </label>
+                ))}
+              </div>
             ) : (
-              <label className="value-editor">
-                <span>VALUE</span>
-                <input
-                  key={selected.id}
-                  value={selected.value}
-                  onFocus={() => {
-                    editingRef.current = false;
-                  }}
-                  onChange={(event) => {
-                    if (!editingRef.current) {
-                      beginChange();
-                      editingRef.current = true;
-                    }
-                    setValue(selected.id, event.currentTarget.value);
-                  }}
-                  spellCheck={false}
-                />
-                <em>{selectedEntry.unit}</em>
-              </label>
+              <div className="selected-part muted">No parameters</div>
             )}
           </>
         ) : (

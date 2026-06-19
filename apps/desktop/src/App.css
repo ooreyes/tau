@@ -1570,3 +1570,12 @@ body {
 .param-slider::-webkit-slider-thumb:hover {
   transform: scale(1.12);
 }
+
+/* ── Structured parameter fields (selection strip) ─────── */
+.param-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+}
