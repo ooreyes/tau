@@ -279,3 +279,29 @@ and [README.md](README.md) (the pitch).
   - Nonlinear/model parts still require the planned ngspice/model/subcircuit
     engine path. Do not vendor LTspice libraries; add user-provided SPICE
     library import and symbol mapping instead.
+
+### 2026-06-19 — Probes, net labels, canvas UX, structured params, maximize — Claude (Opus) via Claude Code
+
+Feature batch, each committed separately (probes/node-names; home-zoom; pin
+snapping; dials→sliders; structured params; OP/AC wiring [Codex]; maximize; net
+labels):
+- **Meter probes** (`probe` tool, palette Tools + ⌘K): click a wire/pin → a
+  colored probe; the scope plots exactly the probed nets in multimeter colors.
+  `probes` in store; markers in Canvas; `SimulationPanel` resolves probe points
+  → traces. Re-click toggles off.
+- **Friendly node names**: solver trace labels are `V(R1·C1)` (from net pin
+  labels), not `V(N001)`; all non-ground nodes returned.
+- **Explicit net labels**: select a wire → NET NAME field; renders on canvas and
+  overrides the auto label in the transient legend (`V(Vout)`). `netLabels`
+  (point-pinned) in store; cleared on New/Open.
+- **Home / zoom-to-fit** + zoom controls; **pin-aware** wiring & probing
+  (`snappedCursor` latches to nearest pin, else grid) with a hover snap ring.
+- **Inline value editing** (double-click) + **structured per-part parameters**
+  (`schematic/params.ts`): AC sources split into Offset/Amplitude/Frequency,
+  etc., encoded to/from the value string (solver unchanged).
+- **Dials → labeled sliders**; **maximizable** analysis panel.
+- Verified: `pnpm typecheck`, `pnpm test` (100), `pnpm --filter @tau/desktop
+  build`; browser smoke — probes plot, net label `V(Vmid)`, AC Bode 20.8 dB
+  (×11) on the non-inverting amp.
+- Next: AC-sweep range controls; persist probes/net-labels with the document;
+  source series resistance in the solver; the ngspice engine path.
