@@ -1470,3 +1470,36 @@ body {
   opacity: 0.55;
   vector-effect: non-scaling-stroke;
 }
+
+/* ── View controls (zoom / fit) ────────────────────────── */
+.view-controls {
+  position: absolute;
+  right: 14px;
+  bottom: 14px;
+  z-index: 6;
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+.view-btn {
+  height: 28px;
+  min-width: 28px;
+  padding: 0 9px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm, 6px);
+  cursor: pointer;
+  transition: color 140ms var(--ease-out, ease), border-color 140ms var(--ease-out, ease),
+    background 140ms var(--ease-out, ease);
+}
+.view-btn:hover {
+  color: var(--text);
+  border-color: var(--border-strong);
+  background: var(--panel-4, var(--panel-2));
+}

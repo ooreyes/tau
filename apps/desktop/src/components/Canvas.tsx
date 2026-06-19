@@ -245,6 +245,54 @@ export function Canvas({ analysis }: { analysis: AnalysisResult | null }) {
     if (el?.hasPointerCapture(e.pointerId)) el.releasePointerCapture(e.pointerId);
   };
 
+  const zoomBy = (factor: number) => {
+    const r = svgRef.current?.getBoundingClientRect();
+    if (!r) return;
+    const cx = r.width / 2;
+    const cy = r.height / 2;
+    setView((v) => {
+      const zoom = clampZoom(v.zoom * factor);
+      const k = zoom / v.zoom;
+      return { zoom, x: cx - (cx - v.x) * k, y: cy - (cy - v.y) * k };
+    });
+  };
+
+  // Frame the whole circuit in the viewport (home / zoom-to-fit).
+  const fitView = () => {
+    const el = svgRef.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    if (components.length === 0 && wires.length === 0) {
+      setView({ x: r.width / 2, y: r.height / 2, zoom: 1 });
+      return;
+    }
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+    for (const c of components) {
+      minX = Math.min(minX, c.x - 40);
+      minY = Math.min(minY, c.y - 40);
+      maxX = Math.max(maxX, c.x + 40);
+      maxY = Math.max(maxY, c.y + 40);
+    }
+    for (const w of wires) {
+      for (const p of w.points) {
+        minX = Math.min(minX, p.x);
+        minY = Math.min(minY, p.y);
+        maxX = Math.max(maxX, p.x);
+        maxY = Math.max(maxY, p.y);
+      }
+    }
+    const pad = 80;
+    const zoom = clampZoom(
+      Math.min((r.width - pad * 2) / Math.max(maxX - minX, 1), (r.height - pad * 2) / Math.max(maxY - minY, 1)),
+    );
+    const cx = (minX + maxX) / 2;
+    const cy = (minY + maxY) / 2;
+    setView({ zoom, x: r.width / 2 - cx * zoom, y: r.height / 2 - cy * zoom });
+  };
+
   const placing = tool.mode === "place";
   const wiring = tool.mode === "wire";
   const probing = tool.mode === "probe";
@@ -347,6 +395,18 @@ export function Canvas({ analysis }: { analysis: AnalysisResult | null }) {
           )}
         </div>
       )}
+
+      <div className="view-controls">
+        <button className="view-btn" onClick={() => zoomBy(1.25)} title="Zoom in" aria-label="Zoom in">
+          +
+        </button>
+        <button className="view-btn" onClick={() => zoomBy(0.8)} title="Zoom out" aria-label="Zoom out">
+          −
+        </button>
+        <button className="view-btn fit" onClick={fitView} title="Fit circuit to view (home)">
+          ⤢ Fit
+        </button>
+      </div>
 
       {editingComp && (
         <input
