@@ -45,6 +45,7 @@ export function Canvas({ analysis }: { analysis: AnalysisResult | null }) {
   const setValue = useSchematic((s) => s.setValue);
   const probes = useSchematic((s) => s.probes);
   const addProbe = useSchematic((s) => s.addProbe);
+  const netLabels = useSchematic((s) => s.netLabels);
   const [editingId, setEditingId] = useState<string | null>(null);
   const editDirty = useRef(false);
 
@@ -402,6 +403,12 @@ export function Canvas({ analysis }: { analysis: AnalysisResult | null }) {
               <circle className="probe-ring" cx={p.x} cy={p.y} r={7} />
               <circle className="probe-dot" cx={p.x} cy={p.y} r={3.5} />
             </g>
+          ))}
+
+          {netLabels.map((l) => (
+            <text key={l.id} className="net-label-text" x={l.x + 6} y={l.y - 6}>
+              {l.text}
+            </text>
           ))}
 
           {flowActive && flowOn && analysis?.ok && (

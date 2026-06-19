@@ -1702,3 +1702,13 @@ body {
   color: var(--text);
   border-color: var(--border-strong);
 }
+
+/* ── Net labels (named nodes) ──────────────────────────── */
+.net-label-text {
+  fill: var(--accent);
+  font: 600 9px Inter, system-ui, sans-serif;
+  paint-order: stroke;
+  stroke: var(--bg);
+  stroke-width: 3px;
+  user-select: none;
+}

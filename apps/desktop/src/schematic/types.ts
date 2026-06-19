@@ -64,6 +64,14 @@ export interface Probe {
   color: string;
 }
 
+/** A user-assigned name for a net, pinned to a world point that lies on it. */
+export interface NetLabel {
+  id: string;
+  x: number;
+  y: number;
+  text: string;
+}
+
 /** The active editing tool. */
 export type Tool =
   | { mode: "select" }

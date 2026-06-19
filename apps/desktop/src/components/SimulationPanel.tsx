@@ -5,7 +5,7 @@ import { useSchematic } from "../store/useSchematic";
 import type { AnalysisOptions, AnalysisResult, Trace } from "../simulation/linearTransient";
 import { formatEngineering } from "../simulation/quantity";
 import { OPAMP_LIBRARY, findOpAmp } from "../library/opamps";
-import type { Probe } from "../schematic/types";
+import type { Probe, NetLabel } from "../schematic/types";
 import { paramFields, decodeParams, encodeParams } from "../schematic/params";
 import { runOperatingPoint } from "../simulation/operatingPoint";
 import { runAcSweep } from "../simulation/acSweep";
@@ -28,8 +28,12 @@ export function SimulationPanel({ result, options, onOptionsChange, onRun }: Sim
   const setValue = useSchematic((s) => s.setValue);
   const beginChange = useSchematic((s) => s.beginChange);
   const probes = useSchematic((s) => s.probes);
+  const selectedWireId = useSchematic((s) => s.selectedWireId);
+  const netLabels = useSchematic((s) => s.netLabels);
+  const upsertNetLabel = useSchematic((s) => s.upsertNetLabel);
   const editingRef = useRef(false);
   const selected = components.find((component) => component.id === selectedId) ?? null;
+  const selectedWire = wires.find((w) => w.id === selectedWireId) ?? null;
   const selectedEntry = selected ? CATALOG_BY_KIND[selected.kind] : null;
   const opampPart = selected && selected.kind === "opamp" ? findOpAmp(selected.value) : null;
   const warnings = result?.warnings ?? [];
@@ -86,7 +90,7 @@ export function SimulationPanel({ result, options, onOptionsChange, onRun }: Sim
 
       {mode === "tran" && (
         <>
-          <WaveformPlot result={result} probes={probes} />
+          <WaveformPlot result={result} probes={probes} netLabels={netLabels} />
 
           <div className="meter-row">
             <Metric label="NETS" value={result?.ok ? String(result.stats.netCount) : "--"} tone="green" />
@@ -187,6 +191,26 @@ export function SimulationPanel({ result, options, onOptionsChange, onRun }: Sim
               <div className="selected-part muted">No parameters</div>
             )}
           </>
+        ) : selectedWire ? (
+          <>
+            <div className="selected-part">
+              <span>Net</span>
+              <small>wire segment</small>
+            </div>
+            <label className="value-editor">
+              <span>NET NAME</span>
+              <input
+                value={
+                  netLabels.find((l) => l.x === selectedWire.points[0].x && l.y === selectedWire.points[0].y)?.text ?? ""
+                }
+                placeholder="e.g. Vout"
+                onChange={(event) =>
+                  upsertNetLabel(selectedWire.points[0].x, selectedWire.points[0].y, event.currentTarget.value)
+                }
+                spellCheck={false}
+              />
+            </label>
+          </>
         ) : (
           <div className="selected-part muted">No selection</div>
         )}
@@ -231,7 +255,15 @@ export function SimulationPanel({ result, options, onOptionsChange, onRun }: Sim
   );
 }
 
-function WaveformPlot({ result, probes }: { result: AnalysisResult | null; probes: Probe[] }) {
+function WaveformPlot({
+  result,
+  probes,
+  netLabels,
+}: {
+  result: AnalysisResult | null;
+  probes: Probe[];
+  netLabels: NetLabel[];
+}) {
   const success = result?.ok ? result : null;
 
   // With probes, show exactly the probed nets in their probe colors; otherwise
@@ -262,6 +294,17 @@ function WaveformPlot({ result, probes }: { result: AnalysisResult | null; probe
     const tMax = success.times[success.times.length - 1] || 1;
     return { min, max, tMax };
   }, [success, traces]);
+
+  // Prefer a user-assigned net name (V(Vout)) over the auto V(R1·C1) label.
+  const labelFor = (trace: Trace) => {
+    if (!success) return trace.label;
+    const net = success.circuit.nets.find((n) => n.id === trace.id);
+    if (net) {
+      const lbl = netLabels.find((l) => net.points.some((pt) => pt.x === l.x && pt.y === l.y));
+      if (lbl) return `V(${lbl.text})`;
+    }
+    return trace.label;
+  };
 
   return (
     <div className="scope-shell">
@@ -296,7 +339,7 @@ function WaveformPlot({ result, probes }: { result: AnalysisResult | null; probe
           traces.map((trace) => (
             <span key={trace.id}>
               <i style={{ background: trace.color }} />
-              {trace.label}
+              {labelFor(trace)}
             </span>
           ))
         ) : (

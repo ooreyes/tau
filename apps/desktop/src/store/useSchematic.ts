@@ -8,6 +8,7 @@ import type {
   SchematicWire,
   Tool,
   Probe,
+  NetLabel,
 } from "../schematic/types";
 import { CATALOG_BY_KIND } from "../schematic/catalog";
 
@@ -51,6 +52,10 @@ interface SchematicState extends Doc {
   addProbe: (x: number, y: number) => void;
   removeProbe: (id: string) => void;
   clearProbes: () => void;
+
+  /** User-assigned net names, pinned to world points on the net. */
+  netLabels: NetLabel[];
+  upsertNetLabel: (x: number, y: number, text: string) => void;
 
   addComponent: (kind: ComponentKind, x: number, y: number) => void;
   addWire: (points: Point[]) => void;
@@ -142,6 +147,7 @@ export const useSchematic = create<SchematicState>()((set) => {
     tool: { mode: "select" },
     placeRotation: 0,
     probes: [],
+    netLabels: [],
     past: [],
     future: [],
 
@@ -190,6 +196,15 @@ export const useSchematic = create<SchematicState>()((set) => {
       }),
     removeProbe: (id) => set((s) => ({ probes: s.probes.filter((p) => p.id !== id) })),
     clearProbes: () => set({ probes: [] }),
+
+    upsertNetLabel: (x, y, text) =>
+      set((s) => {
+        const trimmed = text.trim();
+        const existing = s.netLabels.find((l) => l.x === x && l.y === y);
+        if (!trimmed) return { netLabels: s.netLabels.filter((l) => !(l.x === x && l.y === y)) };
+        if (existing) return { netLabels: s.netLabels.map((l) => (l.id === existing.id ? { ...l, text: trimmed } : l)) };
+        return { netLabels: [...s.netLabels, { id: nanoid(6), x, y, text: trimmed }] };
+      }),
 
     addComponent: (kind, x, y) =>
       set((s) => {
@@ -279,6 +294,7 @@ export const useSchematic = create<SchematicState>()((set) => {
           components: cloned.components,
           wires: cloned.wires,
           counters: deriveCounters(cloned.components),
+          netLabels: [],
           selectedId: null,
           selectedWireId: null,
           tool: { mode: "select" },
@@ -291,6 +307,7 @@ export const useSchematic = create<SchematicState>()((set) => {
         components: [],
         wires: [],
         counters: {},
+        netLabels: [],
         selectedId: null,
         selectedWireId: null,
         tool: { mode: "select" },
