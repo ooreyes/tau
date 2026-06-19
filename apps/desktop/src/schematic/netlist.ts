@@ -141,6 +141,8 @@ export function extractCircuit(
   for (const net of nets) {
     if (!net.isGround && net.pins.length === 1) {
       const pin = net.pins[0];
+      // The ideal op-amp ignores its supply rails, so don't nag about unconnected V+/V-.
+      if (pin.kind === "opamp" && (pin.id === "v+" || pin.id === "v-")) continue;
       warnings.push(`${pin.componentLabel || pin.componentId}.${pin.label} is only connected to one pin.`);
     }
   }

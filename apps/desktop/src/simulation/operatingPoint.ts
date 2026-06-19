@@ -42,10 +42,15 @@ const OP_SUPPORTED = new Set<ComponentKind>([
   "isource",
   "vac",
   "iac",
+  "opamp",
   "switch",
   "testpoint",
   "ground",
 ]);
+
+/** Tiny conductance added from every non-ground node to ground (SPICE gmin trick).
+ *  Prevents singular matrices caused by floating nodes (e.g. unconnected op-amp rails). */
+const GMIN = 1e-12;
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -87,12 +92,16 @@ export function runOperatingPoint(schematic: {
     }
 
     // Voltage sources and inductors (treated as 0 V sources) each add one
-    // extra unknown (branch current).
+    // extra unknown (branch current). Op-amps add one extra unknown (output
+    // branch current io) whose constraint row enforces V(in+) = V(in-).
     const voltageSources = circuit.components.filter(
       ({ component }) => component.kind === "vsource" || component.kind === "vac",
     );
     const inductors = circuit.components.filter(
       ({ component }) => component.kind === "inductor",
+    );
+    const opamps = circuit.components.filter(
+      ({ component }) => component.kind === "opamp",
     );
 
     const nodeIndex = new Map(
@@ -100,7 +109,8 @@ export function runOperatingPoint(schematic: {
     );
     const voltageSourceOffset = nonGroundNets.length;
     const inductorOffset = voltageSourceOffset + voltageSources.length;
-    const size = nonGroundNets.length + voltageSources.length + inductors.length;
+    const opampOffset = inductorOffset + inductors.length;
+    const size = nonGroundNets.length + voltageSources.length + inductors.length + opamps.length;
 
     if (size === 0) {
       return fail("The circuit has no unknowns to solve.", circuit);
@@ -109,6 +119,17 @@ export function runOperatingPoint(schematic: {
     // Allocate MNA matrix and RHS
     const matrix = zeroMatrix(size);
     const rhs = Array<number>(size).fill(0);
+
+    // SPICE gmin: when op-amps are present, add GMIN from every non-ground
+    // node to ground so floating nodes (e.g. unconnected op-amp v+/v- rails)
+    // resolve to ~0 V rather than making the matrix singular.
+    // Applied only when op-amps are in the circuit to avoid masking genuine
+    // floating-node errors in resistive/reactive-only circuits.
+    if (opamps.length > 0) {
+      for (let i = 0; i < nonGroundNets.length; i++) {
+        matrix[i][i] += GMIN;
+      }
+    }
 
     // Stamp each component
     for (const entry of circuit.components) {
@@ -174,6 +195,26 @@ export function runOperatingPoint(schematic: {
         case "iac":
           // Pure AC current source contributes 0 A at DC.
           break;
+
+        case "opamp": {
+          // Ideal op-amp (nullor): adds one extra unknown io (output branch current).
+          // The constraint row enforces V(in+) = V(in-) (virtual short).
+          // Output current io is injected into the out net KCL row.
+          // Input pins draw NO current. Power pins (v+/v-) are ignored (gmin handles them).
+          const ioIdx =
+            opampOffset +
+            opamps.findIndex((op) => op.component.id === entry.component.id);
+          const outNode = nodeIdx(entry.pins["out"], nodeIndex);
+          const inPlusNode = nodeIdx(entry.pins["in+"], nodeIndex);
+          const inMinusNode = nodeIdx(entry.pins["in-"], nodeIndex);
+          // Output current injection into out KCL row
+          if (outNode >= 0) matrix[outNode][ioIdx] += 1;
+          // Virtual-short constraint row: V(in+) - V(in-) = 0
+          if (inPlusNode >= 0) matrix[ioIdx][inPlusNode] += 1;
+          if (inMinusNode >= 0) matrix[ioIdx][inMinusNode] -= 1;
+          // rhs[ioIdx] = 0 (already zero from initialisation)
+          break;
+        }
 
         case "switch":
           if (entry.component.value.trim().toLowerCase().startsWith("closed")) {

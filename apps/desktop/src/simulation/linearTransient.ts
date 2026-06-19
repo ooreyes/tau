@@ -58,10 +58,15 @@ const TRANSIENT_SUPPORTED = new Set<ComponentKind>([
   "isource",
   "vac",
   "iac",
+  "opamp",
   "switch",
   "testpoint",
   "ground",
 ]);
+
+/** Tiny conductance added from every non-ground node to ground (SPICE gmin trick).
+ *  Prevents singular matrices caused by floating nodes (e.g. unconnected op-amp rails). */
+const GMIN = 1e-12;
 
 export function runTransientAnalysis(
   schematic: { components: SchematicComponent[]; wires: SchematicWire[] },
@@ -87,7 +92,7 @@ export function runTransientAnalysis(
       return fail("No reference", "Add a ground symbol so node voltages have a reference.", circuit);
     }
     if (!schematic.components.some((component) => ["vsource", "isource", "vac", "iac"].includes(component.kind))) {
-      return fail("No source", "Add a voltage or current source to excite the circuit.", circuit);
+      return fail("No source", "Add a voltage or current source to excite the circuit. The interim solver requires an explicit independent source.", circuit);
     }
 
     const nonGroundNets = circuit.nets.filter((net) => !net.isGround);
@@ -98,9 +103,11 @@ export function runTransientAnalysis(
     const nodeIndex = new Map(nonGroundNets.map((net, index) => [net.id, index]));
     const voltageSources = circuit.components.filter(({ component }) => component.kind === "vsource" || component.kind === "vac");
     const inductors = circuit.components.filter(({ component }) => component.kind === "inductor");
+    const opamps = circuit.components.filter(({ component }) => component.kind === "opamp");
     const voltageSourceOffset = nonGroundNets.length;
     const inductorOffset = voltageSourceOffset + voltageSources.length;
-    const size = nonGroundNets.length + voltageSources.length + inductors.length;
+    const opampOffset = inductorOffset + inductors.length;
+    const size = nonGroundNets.length + voltageSources.length + inductors.length + opamps.length;
     if (size === 0) return fail("Empty matrix", "The circuit has no unknowns to solve.", circuit);
 
     const stepSize = options.stopTime / options.steps;
@@ -113,6 +120,17 @@ export function runTransientAnalysis(
       const time = step * stepSize;
       const matrix = zeroMatrix(size);
       const rhs = Array(size).fill(0) as number[];
+
+      // SPICE gmin: when op-amps are present, add GMIN from every non-ground
+      // node to ground so floating nodes (e.g. unconnected op-amp v+/v- rails)
+      // resolve to ~0 V rather than making the matrix singular.
+      // Applied only when op-amps are in the circuit to avoid masking genuine
+      // floating-node errors in resistive/reactive-only circuits.
+      if (opamps.length > 0) {
+        for (let i = 0; i < nonGroundNets.length; i += 1) {
+          matrix[i][i] += GMIN;
+        }
+      }
 
       for (const entry of circuit.components) {
         switch (entry.component.kind) {
@@ -158,6 +176,23 @@ export function runTransientAnalysis(
               resistance,
               inductorCurrent.get(entry.component.id) ?? 0,
             );
+            break;
+          }
+          case "opamp": {
+            // Ideal op-amp (nullor): adds one extra unknown io (output branch current).
+            // The constraint row enforces V(in+) = V(in-) (virtual short).
+            // Output current io is injected into the out net KCL row.
+            // Input pins draw NO current. Power pins (v+/v-) are ignored (gmin handles them).
+            const ioIndex = opampOffset + opamps.findIndex((op) => op.component.id === entry.component.id);
+            const outNode = netIndex(entry.pins["out"], nodeIndex);
+            const inPlusNode = netIndex(entry.pins["in+"], nodeIndex);
+            const inMinusNode = netIndex(entry.pins["in-"], nodeIndex);
+            // Output current injection into out KCL row
+            if (outNode >= 0) matrix[outNode][ioIndex] += 1;
+            // Virtual-short constraint row: V(in+) - V(in-) = 0
+            if (inPlusNode >= 0) matrix[ioIndex][inPlusNode] += 1;
+            if (inMinusNode >= 0) matrix[ioIndex][inMinusNode] -= 1;
+            // rhs[ioIndex] = 0 (already zero from initialisation)
             break;
           }
           case "switch":

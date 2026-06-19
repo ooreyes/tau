@@ -170,6 +170,130 @@ const RLC_SERIES: ExampleCircuit = {
 };
 
 // ---------------------------------------------------------------------------
+// Circuit 5 — Non-inverting amplifier (gain = 1 + Rf/Rg = 1 + 10k/1k = 11)
+//
+// GRID = 16. Op-amp pin geometry (rotation 0):
+//   opamp at (cx, cy): in+ at (cx-32, cy+16), in- at (cx-32, cy-16), out at (cx+32, cy)
+//                       v+ at (cx, cy-32),     v- at (cx, cy+32)   [unconnected]
+//
+// Component world-pin coordinates:
+//   V1   vac  rot=0 at (64, 144):    p=(64,112),   n=(64,176)
+//   U1   opamp   rot=0 at (256, 96): in+=(224,112), in-=(224,80), out=(288,96)
+//                                     v+=(256,64), v-=(256,128) [unconnected, gmin handles]
+//   Rg   resistor rot=0 at (160, 80): a=(128,80),  b=(192,80)
+//   Rf   resistor rot=0 at (256, 80): a=(224,80),  b=(288,80)
+//   GND_v1 ground at (64,176):  g=(64,176)   — coincides with V1.n
+//   GND_rg ground at (128,80):  g=(128,80)   — coincides with Rg.a
+//
+// Net connections:
+//   N1 (input):  V1.p(64,112) ── wire ── U1.in+(224,112)
+//   N2 (in-/fb): Rg.b(192,80) ── wire ── Rf.a=U1.in-(224,80)  [coincident Rf.a and in-]
+//   N3 (output): Rf.b(288,80) ── wire ── U1.out(288,96)
+//   GND:         GND_v1, GND_rg (all ground kind, unioned)
+//
+// Gain = 1 + Rf/Rg = 1 + 10k/1k = 11.  1V 1kHz sine → 11V sine at output.
+// AC source (vac) ensures visible transient variation in the waveform viewer.
+// ---------------------------------------------------------------------------
+const NONINVERTING_AMP: ExampleCircuit = {
+  id: "opamp-noninv.v1",
+  name: "Non-inverting Amplifier",
+  description: "Ideal op-amp non-inverting configuration: gain = 1 + Rf/Rg = 11. 1 V 1 kHz input → 11 V sine output.",
+  components: [
+    { id: "ni.v1",   kind: "vac",      x: 64,  y: 144, rotation: 0,  value: "1 1k",  label: "V1" },
+    { id: "ni.u1",   kind: "opamp",    x: 256, y: 96,  rotation: 0,  value: "ideal", label: "U1" },
+    { id: "ni.rg",   kind: "resistor", x: 160, y: 80,  rotation: 0,  value: "1k",    label: "Rg" },
+    { id: "ni.rf",   kind: "resistor", x: 256, y: 80,  rotation: 0,  value: "10k",   label: "Rf" },
+    { id: "ni.gnd1", kind: "ground",   x: 64,  y: 176, rotation: 0,  value: "",      label: "" },
+    { id: "ni.gnd2", kind: "ground",   x: 128, y: 80,  rotation: 0,  value: "",      label: "" },
+  ],
+  wires: [
+    // V1.p(64,112) → U1.in+(224,112): horizontal along y=112
+    { id: "ni.w1", points: [{ x: 64, y: 112 }, { x: 224, y: 112 }] },
+    // Rg.b(192,80) → Rf.a=in-(224,80): horizontal along y=80
+    { id: "ni.w2", points: [{ x: 192, y: 80 }, { x: 224, y: 80 }] },
+    // Rf.b(288,80) → out(288,96): vertical along x=288
+    { id: "ni.w3", points: [{ x: 288, y: 80 }, { x: 288, y: 96 }] },
+  ],
+};
+
+// ---------------------------------------------------------------------------
+// Circuit 6 — Inverting amplifier (gain = -Rf/Rin = -10k/1k = -10)
+//
+// Component world-pin coordinates:
+//   V1   vac  rot=0 at (64, 112):    p=(64,80),    n=(64,144)
+//   U1   opamp   rot=0 at (256, 96): in+=(224,112), in-=(224,80), out=(288,96)
+//                                     v+=(256,64), v-=(256,128) [unconnected]
+//   Rin  resistor rot=0 at (160, 80): a=(128,80),  b=(192,80)
+//   Rf   resistor rot=0 at (256, 80): a=(224,80),  b=(288,80)
+//   GND_v1  ground at (64,144):  g=(64,144)  — coincides with V1.n
+//   GND_in+ ground at (224,112): g=(224,112) — ties in+ to GND
+//
+// Net connections:
+//   N1 (Vin):    V1.p(64,80) ── wire ── Rin.a(128,80)
+//   N2 (in-/fb): Rin.b(192,80) ── wire ── Rf.a=in-(224,80)  [coincident Rf.a and in-]
+//   N3 (output): Rf.b(288,80) ── wire ── U1.out(288,96)
+//   GND:         GND_v1, GND_in+ (all ground kind)
+//
+// Gain = -Rf/Rin = -10k/1k = -10.  1V 1kHz sine → −10V inverted sine at output.
+// ---------------------------------------------------------------------------
+const INVERTING_AMP: ExampleCircuit = {
+  id: "opamp-inv.v1",
+  name: "Inverting Amplifier",
+  description: "Ideal op-amp inverting configuration: gain = -Rf/Rin = -10. 1 V 1 kHz input → −10 V inverted sine output.",
+  components: [
+    { id: "inv.v1",   kind: "vac",      x: 64,  y: 112, rotation: 0,  value: "1 1k",  label: "V1" },
+    { id: "inv.u1",   kind: "opamp",    x: 256, y: 96,  rotation: 0,  value: "ideal", label: "U1" },
+    { id: "inv.rin",  kind: "resistor", x: 160, y: 80,  rotation: 0,  value: "1k",    label: "Rin" },
+    { id: "inv.rf",   kind: "resistor", x: 256, y: 80,  rotation: 0,  value: "10k",   label: "Rf" },
+    { id: "inv.gnd1", kind: "ground",   x: 64,  y: 144, rotation: 0,  value: "",      label: "" },
+    { id: "inv.gnd2", kind: "ground",   x: 224, y: 112, rotation: 0,  value: "",      label: "" },
+  ],
+  wires: [
+    // V1.p(64,80) → Rin.a(128,80): horizontal along y=80
+    { id: "inv.w1", points: [{ x: 64, y: 80 }, { x: 128, y: 80 }] },
+    // Rin.b(192,80) → Rf.a=in-(224,80): horizontal along y=80
+    { id: "inv.w2", points: [{ x: 192, y: 80 }, { x: 224, y: 80 }] },
+    // Rf.b(288,80) → out(288,96): vertical along x=288
+    { id: "inv.w3", points: [{ x: 288, y: 80 }, { x: 288, y: 96 }] },
+  ],
+};
+
+// ---------------------------------------------------------------------------
+// Circuit 7 — Unity buffer (voltage follower, gain = 1)
+//
+// Component world-pin coordinates:
+//   V1   vac  rot=0 at (64, 144):    p=(64,112),   n=(64,176)
+//   U1   opamp   rot=0 at (192, 96): in+=(160,112), in-=(160,80), out=(224,96)
+//                                     v+=(192,64), v-=(192,128) [unconnected]
+//   GND_v1 ground at (64,176): g=(64,176) — V1.n
+//
+// Net connections:
+//   N1 (input):  V1.p(64,112) ── wire ── U1.in+(160,112)
+//   N2 (output): U1.out(224,96) ── wire → (224,80) → U1.in-(160,80)
+//                [output fed back directly to in-: unity gain]
+//   GND:         GND_v1
+//
+// Gain = 1 (Vout = Vin). 1V 1kHz sine → 1V sine at output (in-phase).
+// AC source produces visible waveform variation in the viewer.
+// ---------------------------------------------------------------------------
+const UNITY_BUFFER: ExampleCircuit = {
+  id: "opamp-buffer.v1",
+  name: "Unity Buffer",
+  description: "Ideal op-amp voltage follower: output tracks input with gain = 1. Low source impedance, 1 kHz sine demo.",
+  components: [
+    { id: "buf.v1",   kind: "vac",    x: 64,  y: 144, rotation: 0, value: "1 1k",  label: "V1" },
+    { id: "buf.u1",   kind: "opamp",  x: 192, y: 96,  rotation: 0, value: "ideal", label: "U1" },
+    { id: "buf.gnd1", kind: "ground", x: 64,  y: 176, rotation: 0, value: "",      label: "" },
+  ],
+  wires: [
+    // V1.p(64,112) → U1.in+(160,112): horizontal along y=112
+    { id: "buf.w1", points: [{ x: 64, y: 112 }, { x: 160, y: 112 }] },
+    // Feedback: out(224,96) → (224,80) → in-(160,80): L-shaped wire
+    { id: "buf.w2", points: [{ x: 224, y: 96 }, { x: 224, y: 80 }, { x: 160, y: 80 }] },
+  ],
+};
+
+// ---------------------------------------------------------------------------
 // Exported library
 // ---------------------------------------------------------------------------
 export const EXAMPLE_CIRCUITS: ExampleCircuit[] = [
@@ -177,4 +301,7 @@ export const EXAMPLE_CIRCUITS: ExampleCircuit[] = [
   RC_LOWPASS,
   VOLTAGE_DIVIDER,
   RLC_SERIES,
+  NONINVERTING_AMP,
+  INVERTING_AMP,
+  UNITY_BUFFER,
 ];
