@@ -1,10 +1,12 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import { useSchematic } from "../store/useSchematic";
-import { ComponentSymbol, GRID } from "../schematic/symbols";
+import { ComponentSymbol, GRID, SYMBOL_BOX } from "../schematic/symbols";
 import { CATALOG_BY_KIND } from "../schematic/catalog";
 import type { Point, SchematicComponent, SchematicWire } from "../schematic/types";
-import { getLocalPins } from "../schematic/pins";
+import { getLocalPins, getComponentPins } from "../schematic/pins";
+import type { AnalysisResult } from "../simulation/linearTransient";
+import { FlowLayer, FLOW_PLAY_MS } from "./FlowLayer";
 
 interface View {
   x: number;
@@ -20,11 +22,12 @@ const routeWire = (start: Point, end: Point): Point[] =>
 const pathFromPoints = (points: Point[]) =>
   points.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x} ${p.y}`).join(" ");
 
-export function Canvas() {
+export function Canvas({ analysis }: { analysis: AnalysisResult | null }) {
   const svgRef = useRef<SVGSVGElement | null>(null);
   const [view, setView] = useState<View>({ x: 0, y: 0, zoom: 1 });
   const [ghost, setGhost] = useState<{ x: number; y: number } | null>(null);
   const [wireDraft, setWireDraft] = useState<{ start: Point; cursor: Point } | null>(null);
+  const [flowOn, setFlowOn] = useState(true);
 
   const components = useSchematic((s) => s.components);
   const wires = useSchematic((s) => s.wires);
@@ -38,6 +41,33 @@ export function Canvas() {
   const selectWire = useSchematic((s) => s.selectWire);
   const moveComponent = useSchematic((s) => s.moveComponent);
   const beginChange = useSchematic((s) => s.beginChange);
+
+  // Map of world "x,y" -> component pins there, for attributing wire current flow.
+  const pinIndex = useMemo(() => {
+    const m = new Map<string, { componentId: string; pinId: string }[]>();
+    for (const c of components) {
+      for (const p of getComponentPins(c)) {
+        const k = `${p.x},${p.y}`;
+        const list = m.get(k) ?? [];
+        list.push({ componentId: c.id, pinId: p.id });
+        m.set(k, list);
+      }
+    }
+    return m;
+  }, [components]);
+
+  // World pin endpoints of two-terminal R/C/L parts, so charge also flows through the body.
+  const legs = useMemo(() => {
+    const out: { id: string; a: Point; b: Point }[] = [];
+    for (const c of components) {
+      if (c.kind !== "resistor" && c.kind !== "capacitor" && c.kind !== "inductor") continue;
+      const pins = getComponentPins(c);
+      const a = pins.find((p) => p.id === "a");
+      const b = pins.find((p) => p.id === "b");
+      if (a && b) out.push({ id: c.id, a: { x: a.x, y: a.y }, b: { x: b.x, y: b.y } });
+    }
+    return out;
+  }, [components]);
 
   // Interaction kept in a ref so dragging/panning doesn't trigger re-renders.
   const drag = useRef<{ mode: "none" | "pan" | "move"; id?: string; lastX: number; lastY: number; moved: boolean }>({
@@ -196,56 +226,81 @@ export function Canvas() {
   const placing = tool.mode === "place";
   const wiring = tool.mode === "wire";
   const previewWire = wireDraft ? routeWire(wireDraft.start, wireDraft.cursor) : null;
+  const flowActive = analysis?.ok === true;
+  const flowEndTime = analysis?.ok ? analysis.times[analysis.times.length - 1] ?? 0 : 0;
+  const flowSlowdown = flowEndTime > 0 ? FLOW_PLAY_MS / 1000 / flowEndTime : 0;
 
   return (
-    <svg
-      ref={svgRef}
-      className="canvas"
-      style={{ cursor: placing || wiring ? "crosshair" : "default" }}
-      onPointerDown={onBackgroundPointerDown}
-      onPointerMove={onPointerMove}
-      onPointerUp={endDrag}
-      onPointerLeave={() => placing && setGhost(null)}
-    >
-      <defs>
-        <pattern id="grid" width={GRID} height={GRID} patternUnits="userSpaceOnUse">
-          <circle cx={0} cy={0} r={0.9} className="grid-dot" />
-        </pattern>
-      </defs>
+    <>
+      <svg
+        ref={svgRef}
+        className="canvas"
+        style={{ cursor: placing || wiring ? "crosshair" : "default" }}
+        onPointerDown={onBackgroundPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={endDrag}
+        onPointerLeave={() => placing && setGhost(null)}
+      >
+        <defs>
+          <pattern id="grid" width={GRID} height={GRID} patternUnits="userSpaceOnUse">
+            <circle cx={0} cy={0} r={0.9} className="grid-dot" />
+          </pattern>
+        </defs>
 
-      <g transform={`translate(${view.x} ${view.y}) scale(${view.zoom})`}>
-        <rect x={-100000} y={-100000} width={200000} height={200000} fill="url(#grid)" />
+        <g transform={`translate(${view.x} ${view.y}) scale(${view.zoom})`}>
+          <rect x={-100000} y={-100000} width={200000} height={200000} fill="url(#grid)" />
 
-        {wires.map((wire) => (
-          <WireView
-            key={wire.id}
-            wire={wire}
-            selected={wire.id === selectedWireId}
-            onPointerDown={(e) => onWirePointerDown(e, wire)}
-          />
-        ))}
+          {wires.map((wire) => (
+            <WireView
+              key={wire.id}
+              wire={wire}
+              selected={wire.id === selectedWireId}
+              onPointerDown={(e) => onWirePointerDown(e, wire)}
+            />
+          ))}
 
-        {previewWire && <WirePolyline points={previewWire} className="wire preview" />}
+          {previewWire && <WirePolyline points={previewWire} className="wire preview" />}
 
-        {components.map((c) => (
-          <ComponentView
-            key={c.id}
-            comp={c}
-            selected={c.id === selectedId}
-            showPins={wiring}
-            onPointerDown={(e) => onComponentPointerDown(e, c)}
-          />
-        ))}
+          {components.map((c) => (
+            <ComponentView
+              key={c.id}
+              comp={c}
+              selected={c.id === selectedId}
+              showPins={wiring}
+              onPointerDown={(e) => onComponentPointerDown(e, c)}
+            />
+          ))}
 
-        {placing && ghost && (
-          <g className="ghost" transform={`translate(${ghost.x} ${ghost.y})`}>
-            <g className="symbol" transform={`rotate(${placeRotation})`}>
-              <ComponentSymbol kind={tool.kind} />
+          {flowActive && flowOn && analysis?.ok && (
+            <FlowLayer wires={wires} legs={legs} pinIndex={pinIndex} result={analysis} playing={flowOn} />
+          )}
+
+          {placing && ghost && (
+            <g className="ghost" transform={`translate(${ghost.x} ${ghost.y})`}>
+              <g className="symbol" transform={`rotate(${placeRotation})`}>
+                <ComponentSymbol kind={tool.kind} />
+              </g>
             </g>
-          </g>
-        )}
-      </g>
-    </svg>
+          )}
+        </g>
+      </svg>
+
+      {flowActive && (
+        <div className="flow-controls">
+          <button
+            className={`flow-toggle${flowOn ? " on" : ""}`}
+            onClick={() => setFlowOn((v) => !v)}
+            title="Animate conventional current along wires and through components"
+          >
+            <span className="flow-bolt">⚡</span>
+            {flowOn ? "Current flow" : "Flow paused"}
+          </button>
+          {flowOn && flowSlowdown > 0 && (
+            <span className="flow-rate">slowed ≈{Math.round(flowSlowdown).toLocaleString()}× vs real time</span>
+          )}
+        </div>
+      )}
+    </>
   );
 }
 
@@ -261,6 +316,10 @@ function ComponentView({
   onPointerDown: (e: ReactPointerEvent<SVGElement>) => void;
 }) {
   const entry = CATALOG_BY_KIND[comp.kind];
+  const box = SYMBOL_BOX[comp.kind];
+  const vert = comp.rotation === 90 || comp.rotation === 270 ? box.halfW : box.halfH;
+  const refY = -(vert + 10);
+  const valY = vert + 15;
   return (
     <g
       className={`component${selected ? " selected" : ""}`}
@@ -280,12 +339,12 @@ function ComponentView({
         </g>
       )}
       {comp.label && (
-        <text className="ref" x={0} y={-24} textAnchor="middle">
+        <text className="ref" x={0} y={refY} textAnchor="middle">
           {comp.label}
         </text>
       )}
       {comp.value && (
-        <text className="val" x={0} y={33} textAnchor="middle">
+        <text className="val" x={0} y={valY} textAnchor="middle">
           {comp.value}
           {entry.unit}
         </text>

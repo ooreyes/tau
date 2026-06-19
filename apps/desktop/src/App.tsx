@@ -6,6 +6,7 @@ import { Canvas } from "./components/Canvas";
 import { StatusBar } from "./components/StatusBar";
 import { SimulationPanel } from "./components/SimulationPanel";
 import { EmptyState } from "./components/EmptyState";
+import { CommandPalette } from "./components/CommandPalette";
 import { useSchematic } from "./store/useSchematic";
 import { CATALOG } from "./schematic/catalog";
 import { runTransientAnalysis, type AnalysisOptions, type AnalysisResult } from "./simulation/linearTransient";
@@ -27,6 +28,7 @@ function App() {
   const redo = useSchematic((s) => s.redo);
   const [analysisOptions, setAnalysisOptions] = useState<AnalysisOptions>(DEFAULT_ANALYSIS_OPTIONS);
   const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
+  const [paletteOpen, setPaletteOpen] = useState(false);
 
   const runAnalysis = useCallback(() => {
     setAnalysis(runTransientAnalysis({ components, wires }, analysisOptions));
@@ -50,10 +52,17 @@ function App() {
         } else if (k === "y") {
           e.preventDefault();
           redo();
+        } else if (k === "k") {
+          e.preventDefault();
+          setPaletteOpen(true);
         }
         return; // leave other OS / app shortcuts alone
       }
 
+      if (e.key === "/") {
+        e.preventDefault();
+        return setPaletteOpen(true);
+      }
       if (e.key === "Escape") return cancel();
       if (e.key === " ") {
         e.preventDefault();
@@ -83,7 +92,7 @@ function App() {
       <Toolbar onRun={runAnalysis} />
       <Palette />
       <main className="stage">
-        <Canvas />
+        <Canvas analysis={analysis} />
         {components.length === 0 && wires.length === 0 && <EmptyState />}
       </main>
       <SimulationPanel
@@ -93,6 +102,7 @@ function App() {
         onRun={runAnalysis}
       />
       <StatusBar />
+      <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
     </div>
   );
 }

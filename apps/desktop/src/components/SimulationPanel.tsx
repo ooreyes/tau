@@ -4,6 +4,7 @@ import { CATALOG_BY_KIND } from "../schematic/catalog";
 import { useSchematic } from "../store/useSchematic";
 import type { AnalysisOptions, AnalysisResult, Trace } from "../simulation/linearTransient";
 import { formatEngineering } from "../simulation/quantity";
+import { OPAMP_LIBRARY, findOpAmp } from "../library/opamps";
 
 interface SimulationPanelProps {
   result: AnalysisResult | null;
@@ -25,6 +26,7 @@ export function SimulationPanel({ result, options, onOptionsChange, onRun }: Sim
   const editingRef = useRef(false);
   const selected = components.find((component) => component.id === selectedId) ?? null;
   const selectedEntry = selected ? CATALOG_BY_KIND[selected.kind] : null;
+  const opampPart = selected && selected.kind === "opamp" ? findOpAmp(selected.value) : null;
   const warnings = result?.warnings ?? [];
 
   return (
@@ -86,25 +88,55 @@ export function SimulationPanel({ result, options, onOptionsChange, onRun }: Sim
               <span>{selected.label || selectedEntry.name}</span>
               <small>{selectedEntry.name}</small>
             </div>
-            <label className="value-editor">
-              <span>VALUE</span>
-              <input
-                key={selected.id}
-                value={selected.value}
-                onFocus={() => {
-                  editingRef.current = false;
-                }}
-                onChange={(event) => {
-                  if (!editingRef.current) {
-                    beginChange();
-                    editingRef.current = true;
-                  }
-                  setValue(selected.id, event.currentTarget.value);
-                }}
-                spellCheck={false}
-              />
-              <em>{selectedEntry.unit}</em>
-            </label>
+            {selected.kind === "opamp" ? (
+              <>
+                <label className="value-editor">
+                  <span>MODEL</span>
+                  <select
+                    value={OPAMP_LIBRARY.some((p) => p.part === selected.value) ? selected.value : "Ideal"}
+                    onChange={(event) => {
+                      beginChange();
+                      setValue(selected.id, event.currentTarget.value);
+                    }}
+                  >
+                    {OPAMP_LIBRARY.map((p) => (
+                      <option key={p.part} value={p.part}>
+                        {p.part}
+                        {p.part === "Ideal" ? "" : ` · ${p.manufacturer}`}
+                      </option>
+                    ))}
+                  </select>
+                  <em>IC</em>
+                </label>
+                {opampPart && (
+                  <div className="opamp-spec">
+                    {Number.isFinite(opampPart.gbwHz) && opampPart.gbwHz > 0
+                      ? `${formatEngineering(opampPart.gbwHz, "Hz", 2)} GBW · ${opampPart.slewRate} V/µs · ±${opampPart.supplyMax} V · ${opampPart.package}`
+                      : "ideal — infinite gain & bandwidth"}
+                  </div>
+                )}
+              </>
+            ) : (
+              <label className="value-editor">
+                <span>VALUE</span>
+                <input
+                  key={selected.id}
+                  value={selected.value}
+                  onFocus={() => {
+                    editingRef.current = false;
+                  }}
+                  onChange={(event) => {
+                    if (!editingRef.current) {
+                      beginChange();
+                      editingRef.current = true;
+                    }
+                    setValue(selected.id, event.currentTarget.value);
+                  }}
+                  spellCheck={false}
+                />
+                <em>{selectedEntry.unit}</em>
+              </label>
+            )}
           </>
         ) : (
           <div className="selected-part muted">No selection</div>

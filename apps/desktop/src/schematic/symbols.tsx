@@ -3,6 +3,30 @@ import type { ComponentKind } from "./types";
 /** World pixels per grid cell. Components span a few cells; pins land on grid. */
 export const GRID = 16;
 
+/** Half-extents of each symbol body (excludes pin leads), used to keep labels clear of the symbol. */
+export const SYMBOL_BOX: Record<ComponentKind, { halfW: number; halfH: number }> = {
+  resistor: { halfW: 30, halfH: 12 },
+  capacitor: { halfW: 8, halfH: 15 },
+  inductor: { halfW: 26, halfH: 9 },
+  vsource: { halfW: 16, halfH: 17 },
+  isource: { halfW: 16, halfH: 17 },
+  vac: { halfW: 16, halfH: 17 },
+  iac: { halfW: 16, halfH: 17 },
+  diode: { halfW: 14, halfH: 15 },
+  led: { halfW: 18, halfH: 22 },
+  zener: { halfW: 16, halfH: 18 },
+  opamp: { halfW: 28, halfH: 28 },
+  nmos: { halfW: 26, halfH: 20 },
+  pmos: { halfW: 26, halfH: 20 },
+  npn: { halfW: 22, halfH: 20 },
+  pnp: { halfW: 22, halfH: 20 },
+  potentiometer: { halfW: 30, halfH: 18 },
+  switch: { halfW: 14, halfH: 20 },
+  transformer: { halfW: 24, halfH: 27 },
+  testpoint: { halfW: 11, halfH: 16 },
+  ground: { halfW: 12, halfH: 22 },
+};
+
 /**
  * Renders the bare symbol for a component, centered on its origin (0,0).
  * Stroke/fill come from CSS (`.symbol` class on the parent <g>).
