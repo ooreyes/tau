@@ -5,7 +5,13 @@ export function StatusBar() {
   const wireCount = useSchematic((s) => s.wires.length);
   const tool = useSchematic((s) => s.tool);
   const mode =
-    tool.mode === "place" ? `Placing ${tool.kind}` : tool.mode === "wire" ? "Wiring" : "Select";
+    tool.mode === "place"
+      ? `Placing ${tool.kind}`
+      : tool.mode === "wire"
+        ? "Wiring"
+        : tool.mode === "probe"
+          ? "Probing — click a node"
+          : "Select";
 
   return (
     <footer className="statusbar">

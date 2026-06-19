@@ -5,7 +5,7 @@ import { useSchematic } from "../store/useSchematic";
 import type { ComponentKind } from "../schematic/types";
 
 interface Entry {
-  kind: ComponentKind | "__wire__";
+  kind: ComponentKind | "__wire__" | "__probe__";
   name: string;
   section: string;
   hotkey: string;
@@ -14,11 +14,13 @@ interface Entry {
 const ENTRIES: Entry[] = [
   ...CATALOG.map((c) => ({ kind: c.kind, name: c.name, section: c.section, hotkey: c.hotkey })),
   { kind: "__wire__", name: "Wire", section: "Tools", hotkey: "w" },
+  { kind: "__probe__", name: "Probe", section: "Tools", hotkey: "" },
 ];
 
 export function CommandPalette({ open, onClose }: { open: boolean; onClose: () => void }) {
   const startPlacing = useSchematic((s) => s.startPlacing);
   const startWiring = useSchematic((s) => s.startWiring);
+  const startProbing = useSchematic((s) => s.startProbing);
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -50,6 +52,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
   const choose = (entry: Entry | undefined) => {
     if (!entry) return;
     if (entry.kind === "__wire__") startWiring();
+    else if (entry.kind === "__probe__") startProbing();
     else startPlacing(entry.kind);
     onClose();
   };
@@ -94,6 +97,11 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
               <svg className="cmdk-icon" viewBox="-42 -34 84 68">
                 {entry.kind === "__wire__" ? (
                   <path className="wire-icon" d="M -30 16 H 0 V -16 H 30" />
+                ) : entry.kind === "__probe__" ? (
+                  <g className="symbol">
+                    <circle cx={0} cy={0} r={7} fill="none" />
+                    <circle cx={0} cy={0} r={2.5} />
+                  </g>
                 ) : (
                   <g className="symbol">
                     <ComponentSymbol kind={entry.kind} />

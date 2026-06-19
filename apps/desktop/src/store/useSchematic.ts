@@ -7,6 +7,7 @@ import type {
   SchematicComponent,
   SchematicWire,
   Tool,
+  Probe,
 } from "../schematic/types";
 import { CATALOG_BY_KIND } from "../schematic/catalog";
 
@@ -44,6 +45,13 @@ interface SchematicState extends Doc {
   select: (id: string | null) => void;
   selectWire: (id: string | null) => void;
 
+  /** Meter probes (ephemeral): each pins to a world point and plots whatever net is there. */
+  probes: Probe[];
+  startProbing: () => void;
+  addProbe: (x: number, y: number) => void;
+  removeProbe: (id: string) => void;
+  clearProbes: () => void;
+
   addComponent: (kind: ComponentKind, x: number, y: number) => void;
   addWire: (points: Point[]) => void;
   moveComponent: (id: string, x: number, y: number) => void;
@@ -57,6 +65,15 @@ interface SchematicState extends Doc {
 }
 
 const HISTORY_LIMIT = 100;
+/** Multimeter-lead colors, cycled as probes are added. */
+const PROBE_COLORS = [
+  "var(--trace-red)",
+  "var(--trace-purple)",
+  "var(--trace-cyan)",
+  "var(--trace-green)",
+  "var(--trace-amber)",
+  "var(--trace-cream)",
+];
 const STORAGE_KEY = "tau.schematic.v1";
 const nextRotation = (r: Rotation): Rotation => (((r + 90) % 360) as Rotation);
 const docOf = (s: Doc): Doc => ({ components: s.components, wires: s.wires, counters: s.counters });
@@ -124,6 +141,7 @@ export const useSchematic = create<SchematicState>()((set) => {
     selectedWireId: null,
     tool: { mode: "select" },
     placeRotation: 0,
+    probes: [],
     past: [],
     future: [],
 
@@ -161,6 +179,17 @@ export const useSchematic = create<SchematicState>()((set) => {
 
     select: (id) => set({ selectedId: id, selectedWireId: null }),
     selectWire: (id) => set({ selectedWireId: id, selectedId: null }),
+
+    startProbing: () => set({ tool: { mode: "probe" }, selectedId: null, selectedWireId: null }),
+    addProbe: (x, y) =>
+      set((s) => {
+        const existing = s.probes.find((p) => p.x === x && p.y === y);
+        if (existing) return { probes: s.probes.filter((p) => p.id !== existing.id) };
+        const color = PROBE_COLORS[s.probes.length % PROBE_COLORS.length];
+        return { probes: [...s.probes, { id: nanoid(6), x, y, color }] };
+      }),
+    removeProbe: (id) => set((s) => ({ probes: s.probes.filter((p) => p.id !== id) })),
+    clearProbes: () => set({ probes: [] }),
 
     addComponent: (kind, x, y) =>
       set((s) => {

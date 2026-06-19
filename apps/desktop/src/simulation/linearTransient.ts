@@ -224,9 +224,9 @@ export function runTransientAnalysis(
       ok: true,
       title: "Transient",
       times,
-      traces: nonGroundNets.slice(0, TRACE_COLORS.length).map((net, index) => ({
+      traces: nonGroundNets.map((net, index) => ({
         id: net.id,
-        label: `V(${net.id})`,
+        label: `V(${nodeName(net)})`,
         unit: "V",
         color: TRACE_COLORS[index % TRACE_COLORS.length],
         values: traceValues[index],
@@ -244,6 +244,12 @@ export function runTransientAnalysis(
   } catch (error) {
     return fail("Analysis failed", error instanceof Error ? error.message : "Unknown analysis error.", circuit);
   }
+}
+
+/** A friendly node name derived from the parts it touches, e.g. "R1·C1" instead of "N001". */
+function nodeName(net: { id: string; pins: { componentLabel: string }[] }): string {
+  const labels = [...new Set(net.pins.map((p) => p.componentLabel).filter(Boolean))];
+  return labels.length > 0 ? labels.slice(0, 2).join("·") : net.id;
 }
 
 function fail(title: string, message: string, circuit?: ExtractedCircuit): AnalysisResult {

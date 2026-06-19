@@ -5,6 +5,7 @@ import { useSchematic } from "../store/useSchematic";
 import type { AnalysisOptions, AnalysisResult, Trace } from "../simulation/linearTransient";
 import { formatEngineering } from "../simulation/quantity";
 import { OPAMP_LIBRARY, findOpAmp } from "../library/opamps";
+import type { Probe } from "../schematic/types";
 
 interface SimulationPanelProps {
   result: AnalysisResult | null;
@@ -23,6 +24,7 @@ export function SimulationPanel({ result, options, onOptionsChange, onRun }: Sim
   const selectedId = useSchematic((s) => s.selectedId);
   const setValue = useSchematic((s) => s.setValue);
   const beginChange = useSchematic((s) => s.beginChange);
+  const probes = useSchematic((s) => s.probes);
   const editingRef = useRef(false);
   const selected = components.find((component) => component.id === selectedId) ?? null;
   const selectedEntry = selected ? CATALOG_BY_KIND[selected.kind] : null;
@@ -51,7 +53,7 @@ export function SimulationPanel({ result, options, onOptionsChange, onRun }: Sim
         </button>
       </div>
 
-      <WaveformPlot result={result} />
+      <WaveformPlot result={result} probes={probes} />
 
       <div className="meter-row">
         <Metric label="NETS" value={result?.ok ? String(result.stats.netCount) : "--"} tone="green" />
@@ -182,11 +184,29 @@ export function SimulationPanel({ result, options, onOptionsChange, onRun }: Sim
   );
 }
 
-function WaveformPlot({ result }: { result: AnalysisResult | null }) {
+function WaveformPlot({ result, probes }: { result: AnalysisResult | null; probes: Probe[] }) {
   const success = result?.ok ? result : null;
+
+  // With probes, show exactly the probed nets in their probe colors; otherwise
+  // fall back to the first few node voltages.
+  const traces = useMemo<Trace[]>(() => {
+    if (!success) return [];
+    if (probes.length === 0) return success.traces.slice(0, 6);
+    const out: Trace[] = [];
+    for (const probe of probes) {
+      const net = success.circuit.nets.find(
+        (n) => !n.isGround && n.points.some((pt) => pt.x === probe.x && pt.y === probe.y),
+      );
+      if (!net) continue;
+      const trace = success.traces.find((tr) => tr.id === net.id);
+      if (trace && !out.some((o) => o.id === trace.id)) out.push({ ...trace, color: probe.color });
+    }
+    return out;
+  }, [success, probes]);
+
   const plot = useMemo(() => {
-    if (!success || success.traces.length === 0) return null;
-    const values = success.traces.flatMap((trace) => trace.values);
+    if (!success || traces.length === 0) return null;
+    const values = traces.flatMap((trace) => trace.values);
     const rawMin = Math.min(...values, 0);
     const rawMax = Math.max(...values, 0);
     const span = rawMax - rawMin || 1;
@@ -194,9 +214,7 @@ function WaveformPlot({ result }: { result: AnalysisResult | null }) {
     const max = rawMax + span * 0.08;
     const tMax = success.times[success.times.length - 1] || 1;
     return { min, max, tMax };
-  }, [success]);
-
-  const traces = success?.traces ?? [];
+  }, [success, traces]);
 
   return (
     <div className="scope-shell">

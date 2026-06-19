@@ -42,6 +42,8 @@ export function Canvas({ analysis }: { analysis: AnalysisResult | null }) {
   const moveComponent = useSchematic((s) => s.moveComponent);
   const beginChange = useSchematic((s) => s.beginChange);
   const setValue = useSchematic((s) => s.setValue);
+  const probes = useSchematic((s) => s.probes);
+  const addProbe = useSchematic((s) => s.addProbe);
   const [editingId, setEditingId] = useState<string | null>(null);
   const editDirty = useRef(false);
 
@@ -165,6 +167,11 @@ export function Canvas({ analysis }: { analysis: AnalysisResult | null }) {
       wireAtCursor(e.clientX, e.clientY);
       return;
     }
+    if (tool.mode === "probe") {
+      const w = snappedCursor(e.clientX, e.clientY);
+      addProbe(w.x, w.y);
+      return;
+    }
     select(null);
     drag.current = { mode: "pan", lastX: e.clientX, lastY: e.clientY, moved: false };
     svgRef.current?.setPointerCapture(e.pointerId);
@@ -181,13 +188,25 @@ export function Canvas({ analysis }: { analysis: AnalysisResult | null }) {
       wireAtCursor(e.clientX, e.clientY);
       return;
     }
+    if (tool.mode === "probe") {
+      const w = snappedCursor(e.clientX, e.clientY);
+      addProbe(w.x, w.y);
+      return;
+    }
     select(comp.id);
     drag.current = { mode: "move", id: comp.id, lastX: e.clientX, lastY: e.clientY, moved: false };
     svgRef.current?.setPointerCapture(e.pointerId);
   };
 
   const onWirePointerDown = (e: ReactPointerEvent<SVGElement>, wire: SchematicWire) => {
-    if (tool.mode !== "select" || e.button !== 0) return; // let place/wire/pan handle via bubbling
+    if (e.button !== 0) return;
+    if (tool.mode === "probe") {
+      e.stopPropagation();
+      const w = snappedCursor(e.clientX, e.clientY);
+      addProbe(w.x, w.y);
+      return;
+    }
+    if (tool.mode !== "select") return; // let place/wire/pan handle via bubbling
     e.stopPropagation();
     selectWire(wire.id);
   };
@@ -228,6 +247,7 @@ export function Canvas({ analysis }: { analysis: AnalysisResult | null }) {
 
   const placing = tool.mode === "place";
   const wiring = tool.mode === "wire";
+  const probing = tool.mode === "probe";
   const previewWire = wireDraft ? routeWire(wireDraft.start, wireDraft.cursor) : null;
   const flowActive = analysis?.ok === true;
   const flowEndTime = analysis?.ok ? analysis.times[analysis.times.length - 1] ?? 0 : 0;
@@ -249,7 +269,7 @@ export function Canvas({ analysis }: { analysis: AnalysisResult | null }) {
       <svg
         ref={svgRef}
         className="canvas"
-        style={{ cursor: placing || wiring ? "crosshair" : "default" }}
+        style={{ cursor: placing || wiring || probing ? "crosshair" : "default" }}
         onPointerDown={onBackgroundPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={endDrag}
@@ -280,7 +300,7 @@ export function Canvas({ analysis }: { analysis: AnalysisResult | null }) {
               key={c.id}
               comp={c}
               selected={c.id === selectedId}
-              showPins={wiring}
+              showPins={wiring || probing}
               onPointerDown={(e) => onComponentPointerDown(e, c)}
               onEdit={() => {
                 if (c.kind !== "ground") {
@@ -289,6 +309,13 @@ export function Canvas({ analysis }: { analysis: AnalysisResult | null }) {
                 }
               }}
             />
+          ))}
+
+          {probes.map((p) => (
+            <g key={p.id} className="probe-marker" style={{ color: p.color }}>
+              <circle className="probe-ring" cx={p.x} cy={p.y} r={7} />
+              <circle className="probe-dot" cx={p.x} cy={p.y} r={3.5} />
+            </g>
           ))}
 
           {flowActive && flowOn && analysis?.ok && (

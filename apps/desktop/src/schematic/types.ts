@@ -56,8 +56,17 @@ export interface SchematicWire {
   points: Point[];
 }
 
+/** A meter probe pinned to a world point; resolves to whatever net sits there. */
+export interface Probe {
+  id: string;
+  x: number;
+  y: number;
+  color: string;
+}
+
 /** The active editing tool. */
 export type Tool =
   | { mode: "select" }
   | { mode: "place"; kind: ComponentKind }
-  | { mode: "wire" };
+  | { mode: "wire" }
+  | { mode: "probe" };

@@ -12,6 +12,7 @@ export function Palette() {
   const tool = useSchematic((s) => s.tool);
   const startPlacing = useSchematic((s) => s.startPlacing);
   const startWiring = useSchematic((s) => s.startWiring);
+  const startProbing = useSchematic((s) => s.startProbing);
   const activeKind = tool.mode === "place" ? tool.kind : null;
 
   const [query, setQuery] = useState("");
@@ -130,6 +131,22 @@ export function Palette() {
                     </svg>
                     <span className="palette-name">Wire</span>
                     <kbd className="palette-key">W</kbd>
+                  </button>
+                  <button
+                    className={`palette-item${tool.mode === "probe" ? " active" : ""}`}
+                    title="Probe a node — then click a wire or pin to plot it"
+                    onClick={(ev) => {
+                      startProbing();
+                      ev.currentTarget.blur();
+                    }}
+                  >
+                    <svg className="palette-icon" viewBox="-40 -36 80 72">
+                      <g className="symbol">
+                        <circle cx={0} cy={0} r={11} fill="none" />
+                        <line x1={0} y1={-18} x2={0} y2={-11} />
+                      </g>
+                    </svg>
+                    <span className="palette-name">Probe</span>
                   </button>
                 </div>
               )}
