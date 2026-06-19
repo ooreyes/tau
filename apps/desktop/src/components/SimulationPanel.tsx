@@ -298,18 +298,20 @@ function DialControl({
 }) {
   const progress = Math.max(0, Math.min(1, (numericValue - min) / (max - min)));
   return (
-    <label className="dial-control">
-      <span>{label}</span>
-      <div className="dial" style={{ "--dial-progress": `${progress * 270}deg` } as CSSProperties}>
-        <strong>{value}</strong>
+    <label className="param-control">
+      <div className="param-head">
+        <span className="param-label">{label}</span>
+        <span className="param-value">{value}</span>
       </div>
       <input
+        className="param-slider"
         type="range"
         min={min}
         max={max}
         step={step}
         value={numericValue}
         onChange={(event) => onChange(Number(event.currentTarget.value))}
+        style={{ "--fill": `${progress * 100}%` } as CSSProperties}
       />
     </label>
   );

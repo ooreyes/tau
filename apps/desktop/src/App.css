@@ -1517,3 +1517,56 @@ body {
   opacity: 0.95;
   stroke-width: 2;
 }
+
+/* ── Analysis parameter sliders (replaces dials) ───────── */
+.param-control {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+.param-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+.param-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.param-value {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.param-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 4px;
+  border-radius: 2px;
+  background: linear-gradient(
+    to right,
+    var(--accent) var(--fill, 0%),
+    var(--dial-track, #1e2530) var(--fill, 0%)
+  );
+  cursor: pointer;
+  outline: none;
+}
+.param-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
+  cursor: pointer;
+  transition: transform 120ms var(--ease-out, ease);
+}
+.param-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.12);
+}
