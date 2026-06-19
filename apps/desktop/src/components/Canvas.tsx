@@ -3,7 +3,7 @@ import type { PointerEvent as ReactPointerEvent } from "react";
 import { useSchematic } from "../store/useSchematic";
 import { ComponentSymbol, GRID, SYMBOL_BOX } from "../schematic/symbols";
 import { CATALOG_BY_KIND } from "../schematic/catalog";
-import type { Point, SchematicComponent, SchematicWire } from "../schematic/types";
+import type { ComponentKind, Point, SchematicComponent, SchematicWire } from "../schematic/types";
 import { getLocalPins, getComponentPins } from "../schematic/pins";
 import type { AnalysisResult } from "../simulation/linearTransient";
 import { FlowLayer, FLOW_PLAY_MS } from "./FlowLayer";
@@ -21,6 +21,52 @@ const routeWire = (start: Point, end: Point): Point[] =>
   start.x === end.x || start.y === end.y ? [start, end] : [start, { x: end.x, y: start.y }, end];
 const pathFromPoints = (points: Point[]) =>
   points.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x} ${p.y}`).join(" ");
+
+/** Body half-extents (rotation-aware) used to keep component bodies from overlapping. */
+const bodyHalf = (kind: ComponentKind, rotation: number) => {
+  const b = SYMBOL_BOX[kind];
+  return rotation === 90 || rotation === 270 ? { hw: b.halfH, hh: b.halfW } : { hw: b.halfW, hh: b.halfH };
+};
+
+/** True if a body at (x,y) would overlap another component's body. Pins may still touch. */
+const collides = (
+  components: SchematicComponent[],
+  x: number,
+  y: number,
+  kind: ComponentKind,
+  rotation: number,
+  excludeId: string | null,
+): boolean => {
+  const a = bodyHalf(kind, rotation);
+  for (const c of components) {
+    if (c.id === excludeId) continue;
+    const b = bodyHalf(c.kind, c.rotation);
+    if (Math.abs(x - c.x) < a.hw + b.hw && Math.abs(y - c.y) < a.hh + b.hh) return true;
+  }
+  return false;
+};
+
+/** Nearest grid spot (spiralling out) where a new body won't overlap an existing one. */
+const findFreeSpot = (
+  components: SchematicComponent[],
+  x: number,
+  y: number,
+  kind: ComponentKind,
+  rotation: number,
+): Point => {
+  if (!collides(components, x, y, kind, rotation, null)) return { x, y };
+  for (let r = 1; r <= 16; r += 1) {
+    for (let dx = -r; dx <= r; dx += 1) {
+      for (let dy = -r; dy <= r; dy += 1) {
+        if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
+        const nx = x + dx * GRID;
+        const ny = y + dy * GRID;
+        if (!collides(components, nx, ny, kind, rotation, null)) return { x: nx, y: ny };
+      }
+    }
+  }
+  return { x, y };
+};
 
 export function Canvas({ analysis }: { analysis: AnalysisResult | null }) {
   const svgRef = useRef<SVGSVGElement | null>(null);
@@ -145,9 +191,10 @@ export function Canvas({ analysis }: { analysis: AnalysisResult | null }) {
     (clientX: number, clientY: number) => {
       if (tool.mode !== "place") return;
       const w = screenToWorld(clientX, clientY);
-      addComponent(tool.kind, snap(w.x), snap(w.y));
+      const spot = findFreeSpot(components, snap(w.x), snap(w.y), tool.kind, placeRotation);
+      addComponent(tool.kind, spot.x, spot.y);
     },
-    [tool, screenToWorld, addComponent],
+    [tool, screenToWorld, addComponent, components, placeRotation],
   );
 
   // Snap to the nearest pin within a small radius, otherwise to the grid — so
@@ -254,13 +301,18 @@ export function Canvas({ analysis }: { analysis: AnalysisResult | null }) {
       d.lastY = e.clientY;
       setView((v) => ({ ...v, x: v.x + dx, y: v.y + dy }));
     } else if (d.mode === "move" && d.id) {
+      const w = screenToWorld(e.clientX, e.clientY);
+      const tx = snap(w.x);
+      const ty = snap(w.y);
+      const moving = components.find((c) => c.id === d.id);
+      // Never let a body slide into another body (pins may still meet).
+      if (moving && collides(components, tx, ty, moving.kind, moving.rotation, d.id)) return;
       // Capture one undo snapshot for the whole drag, on the first move only.
       if (!d.moved) {
         beginChange();
         d.moved = true;
       }
-      const w = screenToWorld(e.clientX, e.clientY);
-      moveComponent(d.id, snap(w.x), snap(w.y));
+      moveComponent(d.id, tx, ty);
     }
   };
 
@@ -415,6 +467,8 @@ export function Canvas({ analysis }: { analysis: AnalysisResult | null }) {
             <FlowLayer wires={wires} legs={legs} pinIndex={pinIndex} result={analysis} playing={flowOn} />
           )}
 
+          <ComponentLabels components={components} />
+
           {placing && ghost && (
             <g className="ghost" transform={`translate(${ghost.x} ${ghost.y})`}>
               <g className="symbol" transform={`rotate(${placeRotation})`}>
@@ -494,11 +548,6 @@ function ComponentView({
   onPointerDown: (e: ReactPointerEvent<SVGElement>) => void;
   onEdit: () => void;
 }) {
-  const entry = CATALOG_BY_KIND[comp.kind];
-  const box = SYMBOL_BOX[comp.kind];
-  const vert = comp.rotation === 90 || comp.rotation === 270 ? box.halfW : box.halfH;
-  const refY = -(vert + 10);
-  const valY = vert + 15;
   return (
     <g
       className={`component${selected ? " selected" : ""}`}
@@ -521,17 +570,34 @@ function ComponentView({
           ))}
         </g>
       )}
-      {comp.label && (
-        <text className="ref" x={0} y={refY} textAnchor="middle">
-          {comp.label}
-        </text>
-      )}
-      {comp.value && (
-        <text className="val" x={0} y={valY} textAnchor="middle">
-          {comp.value}
-          {entry.unit}
-        </text>
-      )}
+    </g>
+  );
+}
+
+/** All component ref/value labels, drawn in a top layer so nothing can obscure them. */
+function ComponentLabels({ components }: { components: SchematicComponent[] }) {
+  return (
+    <g className="label-layer" aria-hidden="true">
+      {components.map((c) => {
+        const entry = CATALOG_BY_KIND[c.kind];
+        const box = SYMBOL_BOX[c.kind];
+        const vert = c.rotation === 90 || c.rotation === 270 ? box.halfW : box.halfH;
+        return (
+          <g key={c.id} transform={`translate(${c.x} ${c.y})`}>
+            {c.label && (
+              <text className="ref" x={0} y={-(vert + 10)} textAnchor="middle">
+                {c.label}
+              </text>
+            )}
+            {c.value && (
+              <text className="val" x={0} y={vert + 15} textAnchor="middle">
+                {c.value}
+                {entry.unit}
+              </text>
+            )}
+          </g>
+        );
+      })}
     </g>
   );
 }

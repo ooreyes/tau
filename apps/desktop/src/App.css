@@ -1712,3 +1712,15 @@ body {
   stroke-width: 3px;
   user-select: none;
 }
+
+/* ── Component labels (always-on-top, never obscured) ──── */
+.label-layer {
+  pointer-events: none;
+}
+.label-layer .ref,
+.label-layer .val {
+  paint-order: stroke;
+  stroke: var(--bg);
+  stroke-width: 3.5px;
+  stroke-linejoin: round;
+}
