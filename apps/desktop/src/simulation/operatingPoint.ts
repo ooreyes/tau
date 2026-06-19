@@ -25,7 +25,7 @@ import { parseQuantity } from "./quantity";
 export type OperatingPointResult =
   | {
       ok: true;
-      nets: { id: string; voltage: number }[];
+      nets: { id: string; label: string; voltage: number }[];
       warnings: string[];
     }
   | {
@@ -235,11 +235,12 @@ export function runOperatingPoint(schematic: {
 
     const nets = nonGroundNets.map((net, idx) => ({
       id: net.id,
+      label: `V(${nodeName(net)})`,
       voltage: solution[idx],
     }));
 
     // Add the ground net explicitly at 0 V
-    nets.unshift({ id: circuit.groundNetId, voltage: 0 });
+    nets.unshift({ id: circuit.groundNetId, label: "GND", voltage: 0 });
 
     return {
       ok: true,
@@ -357,6 +358,11 @@ function positiveValue(component: SchematicComponent, unit: string): number {
     );
   }
   return v;
+}
+
+function nodeName(net: { id: string; pins: { componentLabel: string }[] }): string {
+  const labels = [...new Set(net.pins.map((pin) => pin.componentLabel).filter(Boolean))];
+  return labels.length > 0 ? labels.slice(0, 2).join("·") : net.id;
 }
 
 function fail(

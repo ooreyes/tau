@@ -109,4 +109,9 @@ describe("formatEngineering", () => {
     const result = formatEngineering(4700);
     expect(result).toMatch(/4\.7\s*k/);
   });
+
+  it("clamps invalid precision requests instead of throwing", () => {
+    expect(formatEngineering(1000, "Hz", 0)).toBe("1 kHz");
+    expect(formatEngineering(1000, "Hz", 101)).toBe("1 kHz");
+  });
 });

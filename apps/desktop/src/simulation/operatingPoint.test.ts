@@ -81,7 +81,15 @@ describe("DC operating point — resistive voltage divider", () => {
     if (!result.ok) throw new Error(result.message);
     const gnd = result.nets.find(n => n.id === "0");
     expect(gnd).toBeDefined();
+    expect(gnd?.label).toBe("GND");
     expect(gnd?.voltage).toBe(0);
+  });
+
+  it("returns friendly node labels for display", () => {
+    const result = runOperatingPoint({ components, wires });
+    if (!result.ok) throw new Error(result.message);
+    const sourceNet = result.nets.find(n => n.label.includes("V1") && n.label.includes("R1"));
+    expect(sourceNet?.label).toMatch(/^V\(.+\)$/);
   });
 
   it("source node is 10 V (within 0.1%)", () => {

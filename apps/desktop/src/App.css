@@ -878,6 +878,23 @@ body {
   box-shadow: 0 0 20px rgba(46, 219, 128, 0.40);
 }
 
+.plotter-live {
+  height: 30px;
+  min-width: 48px;
+  padding: 0 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(46, 219, 128, 0.35);
+  border-radius: 999px;
+  color: var(--trace-green);
+  background: rgba(46, 219, 128, 0.08);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+}
+
 /* Analysis tabs */
 .plotter-tabs {
   flex-shrink: 0;
@@ -1027,6 +1044,76 @@ body {
 .metric.green strong { color: var(--trace-green); }
 .metric.cyan strong  { color: var(--trace-cyan);  }
 .metric.cream strong { color: var(--cream);        }
+
+.analysis-meter {
+  padding-top: 10px;
+}
+
+.analysis-empty {
+  margin: 12px 14px 10px;
+  padding: 14px;
+  border: 1px solid rgba(240, 64, 96, 0.28);
+  border-left: 2px solid var(--danger);
+  border-radius: var(--r-sm);
+  color: var(--text);
+  background: var(--danger-soft);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.op-table {
+  margin: 0 14px 12px;
+  border: 1px solid rgba(28, 31, 56, 0.9);
+  border-radius: var(--r-sm);
+  overflow: hidden;
+  background: #040608;
+  box-shadow: inset 0 0 24px rgba(0, 0, 10, 0.55);
+}
+
+.op-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  min-height: 30px;
+  padding: 0 10px;
+  border-top: 1px solid rgba(28, 31, 56, 0.65);
+  color: var(--text);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.op-row:first-child {
+  border-top: 0;
+}
+
+.op-row span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.op-row span:last-child {
+  color: var(--cream);
+  font-family: -apple-system, BlinkMacSystemFont, "SF Mono", "Menlo", monospace;
+  font-weight: 600;
+}
+
+.op-head {
+  min-height: 26px;
+  color: var(--faint);
+  background: rgba(139, 124, 255, 0.06);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.9px;
+  text-transform: uppercase;
+}
+
+.op-head span:last-child {
+  color: var(--faint);
+  font-family: inherit;
+}
 
 /* Dial controls */
 .plotter-controls {

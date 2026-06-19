@@ -230,3 +230,52 @@ and [README.md](README.md) (the pitch).
   `afb1c281c4c6292412ef09724caf01bad9b16b429b0563cc8e454933eafd20e2`.
 - Next: add user-provided SPICE `.lib`/`.subckt` import and symbol mapping.
   Do not vendor/copy LTspice libraries unless licensing is explicitly resolved.
+
+### 2026-06-19 — Finished OP/AC analysis wiring and release verification — Codex
+
+- Picked up an interrupted pass where structured per-part parameters were
+  already committed and `apps/desktop/src/components/SimulationPanel.tsx` plus
+  a new AC sweep solver were left uncommitted.
+- Finished `apps/desktop/src/simulation/acSweep.ts`: complex-valued MNA over a
+  logarithmic frequency sweep, R/C/L impedance stamping, DC sources handled as
+  AC shorts/opens, AC voltage/current excitation, ideal op-amp support, closed
+  switch conductance, friendly `V(part·part)` labels, and explicit
+  unsupported-model failures instead of silently ignoring nonlinear/model parts.
+- Wired the OP and AC plotter tabs live in the UI. OP now renders a styled DC
+  node-voltage table with friendly labels; AC renders a Bode magnitude plot,
+  trace legend, and START/POINTS/PEAK meters. TRAN remains the only tab with a
+  Run button and stop/steps sliders.
+- Added `apps/desktop/src/components/AnalysisErrorBoundary.tsx` around the
+  analysis panel after browser verification exposed a render-time crash. Root
+  cause was `formatEngineering(..., digits=0)` reaching
+  `Number.toPrecision(0)`; fixed `formatEngineering` to clamp precision safely
+  and covered it with a regression test.
+- Added/extended solver tests: AC RC low-pass validates cutoff magnitude, phase,
+  rolloff, passband, labels, graceful failures, unsupported nonlinear parts,
+  and closed-switch AC behavior. Operating-point tests now assert display
+  labels. Test count is now 100.
+- Verification:
+  - `pnpm typecheck`
+  - `pnpm test` — 100 tests passing
+  - `pnpm --filter @tau/desktop build`
+  - Browser smoke at `http://localhost:1420/`: loaded the non-inverting
+    amplifier example, verified OP table renders 7 rows without raw `N###`
+    labels, verified AC sweep renders 4 non-empty traces with no overflow, and
+    verified TRAN still shows Run plus STOP/STEPS sliders. No browser errors.
+  - `pnpm build` produced `Tau.app` and `Tau_0.2.0_aarch64.dmg`.
+  - Re-signed `Tau.app` ad-hoc with `codesign --force --deep --sign -`,
+    rebuilt the DMG from the signed app using the generated Tauri
+    `bundle_dmg.sh`, verified the DMG with `hdiutil verify`, mounted it, and
+    verified `/Volumes/Tau/Tau.app` with `codesign --verify --deep --strict`.
+- Current local release artifacts:
+  - `apps/desktop/src-tauri/target/release/bundle/macos/Tau.app`
+  - `apps/desktop/src-tauri/target/release/bundle/dmg/Tau_0.2.0_aarch64.dmg`
+  - DMG SHA-256:
+    `d43df26263fa892658e1ee3cadd3cc9ae51baaf52bd7b46f5e6b051ed967b354`
+- Caveats / next work:
+  - App is still ad-hoc signed, not Developer ID signed/notarized.
+  - AC sweep uses fixed 10 Hz to 1 MHz / 20 points-per-decade options in the UI;
+    expose sweep controls next.
+  - Nonlinear/model parts still require the planned ngspice/model/subcircuit
+    engine path. Do not vendor LTspice libraries; add user-provided SPICE
+    library import and symbol mapping instead.

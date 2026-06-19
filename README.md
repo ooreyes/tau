@@ -10,7 +10,7 @@
 
 ---
 
-> ⚠️ **Status: early development (v0.2, pre-alpha).** Tau can edit simple schematics, load examples, run a real interim linear transient/operating-point solver for R/C/L/V/GND circuits, and plot node voltages. The planned Rust/ngspice engine is not wired in yet.
+> ⚠️ **Status: early development (v0.2, pre-alpha).** Tau can edit simple schematics, load examples, run real interim linear transient, operating-point, and AC sweep analyses for the supported starter component set, and plot node voltages. The planned Rust/ngspice engine is not wired in yet.
 
 ## What is Tau?
 
@@ -49,10 +49,12 @@ Tau ships an owned generic SPICE-style starter library: squiggly resistor,
 capacitor, inductor, DC/AC voltage and current sources, ground, diode/LED/zener,
 NMOS/PMOS, NPN/PNP, op amp, potentiometer, switch, transformer, and test point.
 
-The interim TypeScript solver currently simulates linear R/C/L, DC voltage and
-current sources, sine AC voltage/current sources, open/closed switches, grounds,
-and test points. Nonlinear/model-based parts are placeable and wireable now, but
-need the planned ngspice engine and model/subcircuit support before analysis.
+The interim TypeScript solvers currently simulate linear R/C/L, DC voltage and
+current sources, sine AC voltage/current sources, ideal op amps, open/closed
+switches, grounds, and test points across transient, operating-point, and AC
+sweep where those models make sense. Nonlinear/model-based parts are placeable
+and wireable now, but need the planned ngspice engine and model/subcircuit
+support before analysis.
 
 Tau does not bundle or copy LTspice's proprietary libraries. Future work should
 add an importer for user-provided SPICE `.lib`/`.subckt` files and symbol
@@ -89,6 +91,9 @@ Current macOS release artifacts are produced under
 Local release builds are ad-hoc signed and the app bundle code signature
 verifies after signing. Public distribution still needs Apple Developer ID
 signing and notarization; without that, Gatekeeper will reject the app.
+
+Current local DMG SHA-256:
+`d43df26263fa892658e1ee3cadd3cc9ae51baaf52bd7b46f5e6b051ed967b354`.
 
 ## Repository layout
 

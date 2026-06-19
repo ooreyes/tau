@@ -5,6 +5,7 @@ import { Palette } from "./components/Palette";
 import { Canvas } from "./components/Canvas";
 import { StatusBar } from "./components/StatusBar";
 import { SimulationPanel } from "./components/SimulationPanel";
+import { AnalysisErrorBoundary } from "./components/AnalysisErrorBoundary";
 import { EmptyState } from "./components/EmptyState";
 import { CommandPalette } from "./components/CommandPalette";
 import { useSchematic } from "./store/useSchematic";
@@ -95,12 +96,14 @@ function App() {
         <Canvas analysis={analysis} />
         {components.length === 0 && wires.length === 0 && <EmptyState />}
       </main>
-      <SimulationPanel
-        result={analysis}
-        options={analysisOptions}
-        onOptionsChange={setAnalysisOptions}
-        onRun={runAnalysis}
-      />
+      <AnalysisErrorBoundary>
+        <SimulationPanel
+          result={analysis}
+          options={analysisOptions}
+          onOptionsChange={setAnalysisOptions}
+          onRun={runAnalysis}
+        />
+      </AnalysisErrorBoundary>
       <StatusBar />
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
     </div>

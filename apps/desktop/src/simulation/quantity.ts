@@ -41,6 +41,7 @@ export function parseQuantity(input: string, fallbackUnit = ""): number {
 export function formatEngineering(value: number, unit = "", digits = 3): string {
   if (!Number.isFinite(value)) return "--";
   if (value === 0) return `0 ${unit}`.trim();
+  const safeDigits = Math.max(1, Math.min(100, Math.trunc(digits)));
 
   const prefixes = [
     { scale: 1e9, suffix: "G" },
@@ -55,5 +56,5 @@ export function formatEngineering(value: number, unit = "", digits = 3): string 
   const abs = Math.abs(value);
   const prefix = prefixes.find((entry) => abs >= entry.scale) ?? prefixes[prefixes.length - 1];
   const scaled = value / prefix.scale;
-  return `${Number(scaled.toPrecision(digits))} ${prefix.suffix}${unit}`.trim();
+  return `${Number(scaled.toPrecision(safeDigits))} ${prefix.suffix}${unit}`.trim();
 }
