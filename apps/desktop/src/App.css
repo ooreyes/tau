@@ -1503,3 +1503,17 @@ body {
   border-color: var(--border-strong);
   background: var(--panel-4, var(--panel-2));
 }
+
+/* ── Wire / probe snap ring ────────────────────────────── */
+.snap-ring {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 1.5;
+  opacity: 0.4;
+  vector-effect: non-scaling-stroke;
+  pointer-events: none;
+}
+.snap-ring.on-pin {
+  opacity: 0.95;
+  stroke-width: 2;
+}

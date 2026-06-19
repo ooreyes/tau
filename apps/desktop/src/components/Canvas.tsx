@@ -27,6 +27,7 @@ export function Canvas({ analysis }: { analysis: AnalysisResult | null }) {
   const [view, setView] = useState<View>({ x: 0, y: 0, zoom: 1 });
   const [ghost, setGhost] = useState<{ x: number; y: number } | null>(null);
   const [wireDraft, setWireDraft] = useState<{ start: Point; cursor: Point } | null>(null);
+  const [snapHover, setSnapHover] = useState<{ x: number; y: number; pin: boolean } | null>(null);
   const [flowOn, setFlowOn] = useState(true);
 
   const components = useSchematic((s) => s.components);
@@ -73,6 +74,16 @@ export function Canvas({ analysis }: { analysis: AnalysisResult | null }) {
     }
     return out;
   }, [components]);
+
+  // Flat list of pin world points, for snapping wires/probes onto terminals.
+  const pinPoints = useMemo(
+    () =>
+      [...pinIndex.keys()].map((k) => {
+        const [x, y] = k.split(",").map(Number);
+        return { x, y };
+      }),
+    [pinIndex],
+  );
 
   // Interaction kept in a ref so dragging/panning doesn't trigger re-renders.
   const drag = useRef<{ mode: "none" | "pan" | "move"; id?: string; lastX: number; lastY: number; moved: boolean }>({
@@ -126,6 +137,7 @@ export function Canvas({ analysis }: { analysis: AnalysisResult | null }) {
 
   useEffect(() => {
     if (tool.mode !== "wire") setWireDraft(null);
+    if (tool.mode !== "wire" && tool.mode !== "probe") setSnapHover(null);
   }, [tool.mode]);
 
   const placeAtCursor = useCallback(
@@ -137,12 +149,25 @@ export function Canvas({ analysis }: { analysis: AnalysisResult | null }) {
     [tool, screenToWorld, addComponent],
   );
 
+  // Snap to the nearest pin within a small radius, otherwise to the grid — so
+  // wiring and probing latch onto terminals instead of being pixel-finicky.
   const snappedCursor = useCallback(
     (clientX: number, clientY: number): Point => {
       const w = screenToWorld(clientX, clientY);
-      return { x: snap(w.x), y: snap(w.y) };
+      let best: Point | null = null;
+      let bestD = 14 * 14;
+      for (const p of pinPoints) {
+        const dx = p.x - w.x;
+        const dy = p.y - w.y;
+        const d = dx * dx + dy * dy;
+        if (d < bestD) {
+          bestD = d;
+          best = p;
+        }
+      }
+      return best ?? { x: snap(w.x), y: snap(w.y) };
     },
-    [screenToWorld],
+    [screenToWorld, pinPoints],
   );
 
   const wireAtCursor = useCallback(
@@ -215,9 +240,10 @@ export function Canvas({ analysis }: { analysis: AnalysisResult | null }) {
     if (tool.mode === "place") {
       const w = screenToWorld(e.clientX, e.clientY);
       setGhost({ x: snap(w.x), y: snap(w.y) });
-    } else if (tool.mode === "wire") {
+    } else if (tool.mode === "wire" || tool.mode === "probe") {
       const cursor = snappedCursor(e.clientX, e.clientY);
-      setWireDraft((draft) => (draft ? { ...draft, cursor } : draft));
+      setSnapHover({ x: cursor.x, y: cursor.y, pin: pinPoints.some((p) => p.x === cursor.x && p.y === cursor.y) });
+      if (tool.mode === "wire") setWireDraft((draft) => (draft ? { ...draft, cursor } : draft));
     }
     const d = drag.current;
     if (d.mode === "pan") {
@@ -321,7 +347,10 @@ export function Canvas({ analysis }: { analysis: AnalysisResult | null }) {
         onPointerDown={onBackgroundPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={endDrag}
-        onPointerLeave={() => placing && setGhost(null)}
+        onPointerLeave={() => {
+          if (placing) setGhost(null);
+          setSnapHover(null);
+        }}
       >
         <defs>
           <pattern id="grid" width={GRID} height={GRID} patternUnits="userSpaceOnUse">
@@ -342,6 +371,15 @@ export function Canvas({ analysis }: { analysis: AnalysisResult | null }) {
           ))}
 
           {previewWire && <WirePolyline points={previewWire} className="wire preview" />}
+
+          {(wiring || probing) && snapHover && (
+            <circle
+              className={`snap-ring${snapHover.pin ? " on-pin" : ""}`}
+              cx={snapHover.x}
+              cy={snapHover.y}
+              r={6}
+            />
+          )}
 
           {components.map((c) => (
             <ComponentView
