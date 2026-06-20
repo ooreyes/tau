@@ -15,13 +15,14 @@ interface SimulationPanelProps {
   options: AnalysisOptions;
   onOptionsChange: (options: AnalysisOptions) => void;
   onRun: () => void;
+  onStop: () => void;
 }
 
 const PLOT_WIDTH = 340;
 const PLOT_HEIGHT = 210;
 const PLOT_PAD = 26;
 
-export function SimulationPanel({ result, options, onOptionsChange, onRun }: SimulationPanelProps) {
+export function SimulationPanel({ result, options, onOptionsChange, onRun, onStop }: SimulationPanelProps) {
   const components = useSchematic((s) => s.components);
   const wires = useSchematic((s) => s.wires);
   const selectedId = useSchematic((s) => s.selectedId);
@@ -67,9 +68,16 @@ export function SimulationPanel({ result, options, onOptionsChange, onRun }: Sim
             {maximized ? "⤡" : "⤢"}
           </button>
           {mode === "tran" ? (
-            <button className="plotter-run" onClick={onRun} title="Run transient analysis">
-              ▶&nbsp;Run
-            </button>
+            <>
+              <button className="plotter-run" onClick={onRun} title="Run transient analysis">
+                ▶&nbsp;Run
+              </button>
+              {result && (
+                <button className="plotter-stop" onClick={onStop} title="Clear transient result" aria-label="Stop simulation">
+                  ■
+                </button>
+              )}
+            </>
           ) : (
             <div className="plotter-live">Live</div>
           )}

@@ -3,16 +3,23 @@ import type { AnalysisResult } from "../simulation/linearTransient";
 interface ToolbarProps {
   mode: "schematic" | "simulator";
   result: AnalysisResult | null;
+  runState: "idle" | "complete" | "error" | "stopped";
+  title: string;
   onModeChange: (mode: "schematic" | "simulator") => void;
   onRun: () => void;
+  onOpenSettings: () => void;
 }
 
-export function Toolbar({ mode, result, onModeChange, onRun }: ToolbarProps) {
+export function Toolbar({ mode, result, runState, title, onModeChange, onRun, onOpenSettings }: ToolbarProps) {
   const isSimulator = mode === "simulator";
   const statusText = isSimulator
     ? result?.ok
       ? `sim complete · ${result.stats.sampleCount} samples`
-      : "simulator ready"
+      : runState === "error"
+        ? "sim error"
+        : runState === "stopped"
+          ? "sim stopped"
+          : "simulator ready"
     : "ready · edit mode";
 
   return (
@@ -25,7 +32,7 @@ export function Toolbar({ mode, result, onModeChange, onRun }: ToolbarProps) {
         </div>
         <div className="brand">
           <span className="brand-name">tau</span>
-          <span className="brand-file">boost converter.sim</span>
+          <span className="brand-file">{title}</span>
         </div>
       </div>
 
@@ -68,7 +75,7 @@ export function Toolbar({ mode, result, onModeChange, onRun }: ToolbarProps) {
           <i />
           {statusText}
         </span>
-        <button className="settings-btn" title="Settings" aria-label="Settings">
+        <button className="settings-btn" title="Settings" aria-label="Settings" onClick={onOpenSettings}>
           <svg viewBox="0 0 20 20" aria-hidden="true">
             <path d="M10 2.5l1.8 1.2 2.1-.5.9 2 1.9.9-.5 2.1 1.2 1.8-1.2 1.8.5 2.1-1.9.9-.9 2-2.1-.5L10 17.5l-1.8-1.2-2.1.5-.9-2-1.9-.9.5-2.1L2.6 10l1.2-1.8-.5-2.1 1.9-.9.9-2 2.1.5z" />
             <circle cx="10" cy="10" r="2.4" />

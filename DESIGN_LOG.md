@@ -358,3 +358,41 @@ labels):
 - Caveat: after the initial screenshots and simulator smoke, the in-app browser
   refused a reload under its URL policy, so the final status-footer CSS tweak
   was verified by compiler/build rather than a second browser screenshot.
+
+### 2026-06-20 — Button behavior audit and interaction pass — Codex
+
+- Audited the shell after the design migration for enabled buttons that looked
+  clickable but had no behavior or were hidden under overlapping panels.
+- Wired the activity rail: Explorer switches to schematic, Search opens the
+  command palette, Components focuses the component filter, Waveforms switches
+  to simulator, and Settings opens a real settings popover.
+- Added app-level document title, notice/toast, settings, and run-state wiring.
+  New/Open/Examples now update the visible document title; Settings can open
+  the command palette, clear probes, clear local autosave, or start a new blank
+  circuit.
+- Palette library +/- now attach/remove user-selected model-library filenames
+  locally and clearly report that SPICE model mapping is not enabled yet. This
+  avoids pretending LTspice/model import exists before the planned importer.
+- Editor tabs now perform actions: the reference tab opens the RC Charging
+  example, + starts a new blank circuit, and the simulator hide tab returns to
+  schematic mode. Bottom tabs now switch between component/results, output/log,
+  and real error/warning content.
+- Ask Sim send now accepts prompt text and returns a deterministic summary based
+  on the current schematic/result. It is not an external AI integration.
+- Found and fixed a real simulator-mode click bug: the editor toolbar transport
+  overflowed behind the plotter header, so Stop was covered. In simulator mode
+  the cramped editor transport is hidden, and Stop now lives in the plotter
+  header next to Run where it clears the transient result.
+- Pause and Step remain disabled with explicit titles because the current
+  transient solver is synchronous and has no async/incremental execution loop.
+  Do not fake pause/step until the engine supports it.
+- Verification:
+  - `pnpm typecheck`
+  - `pnpm test` — 100 tests passing
+  - `pnpm --filter @tau/desktop build`
+  - Browser smoke at `http://127.0.0.1:1421/`: settings open/close, Search opens
+    command palette, Components focuses palette search, bottom tabs switch,
+    RC example loads, Run enters simulator, OP/AC tabs activate, Ask Sim sends,
+    plotter Stop clears the result and updates the live pill to `sim stopped`,
+    simulator hide returns to schematic, remove-library reports feedback, and
+    no console errors were present.

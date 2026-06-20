@@ -561,7 +561,7 @@ export function Canvas({ analysis }: { analysis: AnalysisResult | null }) {
         <button className="view-btn" onClick={() => zoomBy(0.8)} title="Zoom out" aria-label="Zoom out">
           −
         </button>
-        <button className="view-btn fit" onClick={fitView} title="Fit circuit to view (home)">
+        <button className="view-btn fit" onClick={fitView} title="Fit circuit to view (home)" aria-label="Fit circuit to view">
           ⤢ Fit
         </button>
       </div>

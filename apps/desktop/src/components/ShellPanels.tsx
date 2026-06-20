@@ -1,10 +1,10 @@
-import { useMemo, useRef, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { CATALOG_BY_KIND } from "../schematic/catalog";
 import { ComponentSymbol } from "../schematic/symbols";
 import type { SchematicComponent } from "../schematic/types";
 import { decodeParams, paramFields } from "../schematic/params";
-import { useSchematic } from "../store/useSchematic";
-import { EXAMPLE_CIRCUITS } from "../examples/circuits";
+import { useSchematic, type SchematicDocument } from "../store/useSchematic";
+import { EXAMPLE_CIRCUITS, type ExampleCircuit } from "../examples/circuits";
 import type { AnalysisResult } from "../simulation/linearTransient";
 import { componentCurrents } from "../simulation/currents";
 import { formatEngineering, parseQuantity } from "../simulation/quantity";
@@ -12,19 +12,22 @@ import { formatEngineering, parseQuantity } from "../simulation/quantity";
 interface ModeProps {
   mode: "schematic" | "simulator";
   onModeChange: (mode: "schematic" | "simulator") => void;
+  onSearch: () => void;
+  onFocusComponents: () => void;
+  onOpenSettings: () => void;
 }
 
-export function ActivityRail({ mode, onModeChange }: ModeProps) {
+export function ActivityRail({ mode, onModeChange, onSearch, onFocusComponents, onOpenSettings }: ModeProps) {
   return (
     <nav className="activity-rail" aria-label="Workspace sections">
       <RailButton active={mode === "schematic"} title="Explorer" onClick={() => onModeChange("schematic")}>
         <path d="M3 3h7l2 2h5v12H3z" />
       </RailButton>
-      <RailButton title="Search">
+      <RailButton title="Search" onClick={onSearch}>
         <circle cx="9" cy="9" r="6" />
         <path d="M13.5 13.5 18 18" />
       </RailButton>
-      <RailButton title="Components">
+      <RailButton title="Components" onClick={onFocusComponents}>
         <rect x="5" y="5" width="10" height="10" rx="1.5" />
         <path d="M8 2v3M12 2v3M8 15v3M12 15v3M2 8h3M2 12h3M15 8h3M15 12h3" />
       </RailButton>
@@ -32,7 +35,7 @@ export function ActivityRail({ mode, onModeChange }: ModeProps) {
         <path d="M3 14 8 7l3 3 6-7" />
       </RailButton>
       <div className="rail-spacer" />
-      <RailButton title="Settings">
+      <RailButton title="Settings" onClick={onOpenSettings}>
         <path d="M10 2.5l1.8 1.2 2.1-.5.9 2 1.9.9-.5 2.1 1.2 1.8-1.2 1.8.5 2.1-1.9.9-.9 2-2.1-.5L10 17.5l-1.8-1.2-2.1.5-.9-2-1.9-.9.5-2.1L2.6 10l1.2-1.8-.5-2.1 1.9-.9.9-2 2.1.5z" />
         <circle cx="10" cy="10" r="2.4" />
       </RailButton>
@@ -61,8 +64,7 @@ function RailButton({
   );
 }
 
-export function ExplorerPanel() {
-  const loadCircuit = useSchematic((s) => s.loadCircuit);
+export function ExplorerPanel({ onOpenExample }: { onOpenExample: (example: ExampleCircuit) => void }) {
   const examples = EXAMPLE_CIRCUITS.slice(0, 4);
 
   return (
@@ -92,7 +94,7 @@ export function ExplorerPanel() {
             <button
               key={example.id}
               className={`tree-file${index === 0 ? " active" : ""}`}
-              onClick={() => loadCircuit(example)}
+              onClick={() => onOpenExample(example)}
             >
               <i className={index === 0 ? "amber" : "blue"} />
               {example.name.toLowerCase().replace(/\s+/g, "-")}.sim
@@ -104,7 +106,23 @@ export function ExplorerPanel() {
   );
 }
 
-export function EditorToolbar({ onRun }: { onRun: () => void }) {
+export function EditorToolbar({
+  runState,
+  onRun,
+  onStop,
+  onNewCircuit,
+  onOpenCircuit,
+  onOpenExample,
+  onNotice,
+}: {
+  runState: "idle" | "complete" | "error" | "stopped";
+  onRun: () => void;
+  onStop: () => void;
+  onNewCircuit: () => void;
+  onOpenCircuit: (doc: SchematicDocument, title: string) => void;
+  onOpenExample: (example: ExampleCircuit) => void;
+  onNotice: (message: string) => void;
+}) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const components = useSchematic((s) => s.components);
   const wires = useSchematic((s) => s.wires);
@@ -117,9 +135,8 @@ export function EditorToolbar({ onRun }: { onRun: () => void }) {
   const canUndo = useSchematic((s) => s.past.length > 0);
   const canRedo = useSchematic((s) => s.future.length > 0);
   const deleteSelected = useSchematic((s) => s.deleteSelected);
-  const newCircuit = useSchematic((s) => s.newCircuit);
-  const loadCircuit = useSchematic((s) => s.loadCircuit);
   const hasDocument = components.length > 0 || wires.length > 0;
+  const canStop = runState === "complete" || runState === "error";
 
   const saveCircuit = () => {
     const payload = {
@@ -144,7 +161,7 @@ export function EditorToolbar({ onRun }: { onRun: () => void }) {
       if (!parsed || !Array.isArray(parsed.components) || !Array.isArray(parsed.wires)) {
         throw new Error("File does not contain a Tau schematic document.");
       }
-      loadCircuit({ components: parsed.components, wires: parsed.wires });
+      onOpenCircuit({ components: parsed.components, wires: parsed.wires }, file.name.replace(/\.tau\.json$/i, ".sim"));
     } catch (error) {
       window.alert(error instanceof Error ? error.message : "Could not open circuit file.");
     } finally {
@@ -179,7 +196,7 @@ export function EditorToolbar({ onRun }: { onRun: () => void }) {
         <path d="M4 5h10M7 5V3h4v2M6 7v7M10 7v7M13 5l-.8 10H5.8L5 5" />
       </IconButton>
       <span className="toolbar-divider" />
-      <button className="editor-text-btn" onClick={newCircuit}>New</button>
+      <button className="editor-text-btn" onClick={onNewCircuit}>New</button>
       <button className="editor-text-btn" onClick={() => fileInputRef.current?.click()}>Open</button>
       <button className="editor-text-btn" disabled={!hasDocument} onClick={saveCircuit}>Save</button>
       <input
@@ -198,7 +215,7 @@ export function EditorToolbar({ onRun }: { onRun: () => void }) {
           value=""
           onChange={(event) => {
             const example = EXAMPLE_CIRCUITS.find((circuit) => circuit.id === event.currentTarget.value);
-            if (example) loadCircuit(example);
+            if (example) onOpenExample(example);
           }}
           aria-label="Open example circuit"
         >
@@ -211,9 +228,31 @@ export function EditorToolbar({ onRun }: { onRun: () => void }) {
       <div className="editor-toolbar-spacer" />
       <div className="transport">
         <button className="transport-play" title="Run simulation" aria-label="Run simulation" onClick={onRun}>▶</button>
-        <button title="Pause" aria-label="Pause simulation">Ⅱ</button>
-        <button className="transport-stop" title="Stop" aria-label="Stop simulation">■</button>
-        <button title="Step" aria-label="Step simulation">▸▌</button>
+        <button
+          title="Pause is available after the async engine lands"
+          aria-label="Pause simulation"
+          disabled
+          onClick={() => onNotice("Pause needs the planned async solver loop.")}
+        >
+          Ⅱ
+        </button>
+        <button
+          className="transport-stop"
+          title={canStop ? "Clear current simulation result" : "No active result to stop"}
+          aria-label="Stop simulation"
+          disabled={!canStop}
+          onClick={onStop}
+        >
+          ■
+        </button>
+        <button
+          title="Step is available after the incremental solver lands"
+          aria-label="Step simulation"
+          disabled
+          onClick={() => onNotice("Step needs the planned incremental solver.")}
+        >
+          ▸▌
+        </button>
       </div>
     </div>
   );
@@ -245,40 +284,148 @@ function IconButton({
   );
 }
 
-export function EditorTabs({ mode }: { mode: "schematic" | "simulator" }) {
+export function EditorTabs({
+  mode,
+  title,
+  onOpenExample,
+  onNewCircuit,
+  onHideSimulator,
+}: {
+  mode: "schematic" | "simulator";
+  title: string;
+  onOpenExample: (example: ExampleCircuit) => void;
+  onNewCircuit: () => void;
+  onHideSimulator: () => void;
+}) {
+  const referenceExample = EXAMPLE_CIRCUITS[0];
+
   return (
     <div className="editor-tabs" role="tablist" aria-label="Open schematics">
-      <button className="editor-tab">
+      <button className="editor-tab" onClick={() => onOpenExample(referenceExample)}>
         <i className="blue" />
-        load switch
+        {referenceExample.name.toLowerCase()}
       </button>
-      <button className="editor-tab active">
+      <button className="editor-tab active" aria-current="page" onClick={mode === "simulator" ? onHideSimulator : undefined}>
         <i className="amber" />
-        boost converter
+        {title.replace(/\.sim$/i, "")}
         <span>×</span>
       </button>
-      <button className="editor-tab add" aria-label="New tab">＋</button>
+      <button className="editor-tab add" aria-label="New tab" onClick={onNewCircuit}>＋</button>
       <div className="editor-tab-spacer" />
-      {mode === "simulator" && <button className="editor-hide">× hide</button>}
+      {mode === "simulator" && <button className="editor-hide" onClick={onHideSimulator}>× hide</button>}
     </div>
   );
 }
 
 export function BottomPanel({ mode, result }: { mode: "schematic" | "simulator"; result: AnalysisResult | null }) {
   const components = useSchematic((s) => s.components);
+  const wires = useSchematic((s) => s.wires);
+  const probes = useSchematic((s) => s.probes);
   const selectedId = useSchematic((s) => s.selectedId);
+  const selectedWireId = useSchematic((s) => s.selectedWireId);
   const selected = components.find((component) => component.id === selectedId) ?? components[0] ?? null;
+  const [activeTab, setActiveTab] = useState<"primary" | "secondary" | "errors">("primary");
+
+  useEffect(() => {
+    setActiveTab("primary");
+  }, [mode]);
+
+  const primaryLabel = mode === "simulator" ? "results" : "component";
+  const secondaryLabel = mode === "simulator" ? "log" : "output";
+  const hasError = result && !result.ok;
+  const content = activeTab === "primary"
+    ? mode === "simulator"
+      ? <SimulatorResults result={result} />
+      : <ComponentInspector selected={selected} />
+    : activeTab === "secondary"
+      ? (
+        <OutputPanel
+          mode={mode}
+          componentCount={components.length}
+          wireCount={wires.length}
+          probeCount={probes.length}
+          selectedLabel={selected?.label || selectedWireId || "none"}
+          result={result}
+        />
+      )
+      : <ErrorPanel result={result} />;
 
   return (
     <section className="bottom-panel" aria-label={mode === "simulator" ? "Simulation results" : "Component inspector"}>
       <div className="bottom-resize-handle"><span /></div>
       <div className="bottom-tabs">
-        <button className="active">{mode === "simulator" ? "results" : "component"}</button>
-        <button>{mode === "simulator" ? "log" : "output"}</button>
-        <button>errors</button>
+        <button className={activeTab === "primary" ? "active" : ""} onClick={() => setActiveTab("primary")}>
+          {primaryLabel}
+        </button>
+        <button className={activeTab === "secondary" ? "active" : ""} onClick={() => setActiveTab("secondary")}>
+          {secondaryLabel}
+        </button>
+        <button className={activeTab === "errors" ? "active" : ""} onClick={() => setActiveTab("errors")}>
+          errors{hasError ? " •" : ""}
+        </button>
       </div>
-      {mode === "simulator" ? <SimulatorResults result={result} /> : <ComponentInspector selected={selected} />}
+      {content}
     </section>
+  );
+}
+
+function OutputPanel({
+  mode,
+  componentCount,
+  wireCount,
+  probeCount,
+  selectedLabel,
+  result,
+}: {
+  mode: "schematic" | "simulator";
+  componentCount: number;
+  wireCount: number;
+  probeCount: number;
+  selectedLabel: string;
+  result: AnalysisResult | null;
+}) {
+  const rows = mode === "simulator" && result?.ok
+    ? [
+        ["status", "transient complete"],
+        ["samples", String(result.stats.sampleCount)],
+        ["stop", formatEngineering(result.stats.stopTime, "s", 3)],
+        ["step", formatEngineering(result.stats.stepSize, "s", 3)],
+      ]
+    : [
+        ["parts", String(componentCount)],
+        ["wires", String(wireCount)],
+        ["probes", String(probeCount)],
+        ["selected", selectedLabel],
+      ];
+
+  return (
+    <div className="bottom-output">
+      {rows.map(([label, value]) => (
+        <div key={label} className="bottom-output-row">
+          <span>{label}</span>
+          <strong>{value}</strong>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function ErrorPanel({ result }: { result: AnalysisResult | null }) {
+  const messages = [
+    ...(result && !result.ok ? [result.message] : []),
+    ...(result?.warnings ?? []),
+  ];
+
+  return (
+    <div className="bottom-errors">
+      {messages.length > 0 ? messages.map((message, index) => (
+        <div key={`${message}-${index}`} className={result && !result.ok && index === 0 ? "error" : "warning"}>
+          {message}
+        </div>
+      )) : (
+        <p>No errors or warnings.</p>
+      )}
+    </div>
   );
 }
 
@@ -392,6 +539,26 @@ export function AskSimPanel({ result }: { result: AnalysisResult | null }) {
   const componentCount = useSchematic((s) => s.components.length);
   const wireCount = useSchematic((s) => s.wires.length);
   const state = result?.ok ? "analysis ready" : result && !result.ok ? "needs attention" : "waiting for run";
+  const [draft, setDraft] = useState("Summarize my board.");
+  const [messages, setMessages] = useState<Array<{ role: "user" | "assistant"; text: string }>>([
+    { role: "user", text: "Summarize my board." },
+  ]);
+  const summary = result?.ok
+    ? `This schematic has ${componentCount} parts, ${wireCount} wires, and ${result.stats.sampleCount} transient samples across ${formatEngineering(result.stats.stopTime, "s", 3)}.`
+    : result && !result.ok
+      ? `The last run needs attention: ${result.message}`
+      : `This schematic has ${componentCount} parts and ${wireCount} wires. Run TRAN, OP, or AC analysis, then probe a node for focused measurements.`;
+
+  const send = () => {
+    const question = draft.trim();
+    if (!question) return;
+    setMessages((current) => [
+      ...current,
+      { role: "user", text: question },
+      { role: "assistant", text: summary },
+    ]);
+    setDraft("");
+  };
 
   return (
     <aside className="ask-panel" aria-label="Ask Sim">
@@ -401,16 +568,12 @@ export function AskSimPanel({ result }: { result: AnalysisResult | null }) {
         <small>analysis · agent</small>
       </div>
       <div className="chat-scroll">
-        <div className="chat-message user">
-          <span>you</span>
-          <p>Summarize my board.</p>
-        </div>
-        <div className="chat-message assistant">
-          <span>sim</span>
-          <p>
-            This schematic has {componentCount} parts and {wireCount} wires. Run transient, OP, or AC analysis, then probe a node for focused measurements.
-          </p>
-        </div>
+        {messages.map((message, index) => (
+          <div key={`${message.role}-${index}-${message.text}`} className={`chat-message ${message.role}`}>
+            <span>{message.role === "user" ? "you" : "sim"}</span>
+            <p>{message.text}</p>
+          </div>
+        ))}
         <div className="board-summary">
           <h3><i />board summary</h3>
           <dl>
@@ -421,14 +584,93 @@ export function AskSimPanel({ result }: { result: AnalysisResult | null }) {
           </dl>
         </div>
       </div>
-      <div className="ask-composer">
-        <span>Summarize my board…</span>
+      <form
+        className="ask-composer"
+        onSubmit={(event) => {
+          event.preventDefault();
+          send();
+        }}
+      >
+        <input
+          value={draft}
+          onChange={(event) => setDraft(event.currentTarget.value)}
+          placeholder="Summarize my board..."
+          aria-label="Ask Sim prompt"
+        />
         <div>
           <i>datasheet</i>
           <i>sim · temp</i>
-          <button aria-label="Send">↑</button>
+          <button aria-label="Send" disabled={!draft.trim()}>↑</button>
         </div>
-      </div>
+      </form>
     </aside>
+  );
+}
+
+export function SettingsPanel({
+  title,
+  onClose,
+  onNewCircuit,
+  onOpenCommandPalette,
+  onNotice,
+}: {
+  title: string;
+  onClose: () => void;
+  onNewCircuit: () => void;
+  onOpenCommandPalette: () => void;
+  onNotice: (message: string) => void;
+}) {
+  const probes = useSchematic((s) => s.probes);
+  const clearProbes = useSchematic((s) => s.clearProbes);
+
+  const clearAutosave = () => {
+    try {
+      localStorage.removeItem("tau.schematic.v1");
+      onNotice("Local autosave cleared.");
+    } catch {
+      onNotice("Local autosave could not be cleared in this webview.");
+    }
+  };
+
+  return (
+    <div className="settings-backdrop" onPointerDown={onClose}>
+      <section className="settings-panel" role="dialog" aria-label="Tau settings" onPointerDown={(event) => event.stopPropagation()}>
+        <header>
+          <div>
+            <span>settings</span>
+            <strong>{title}</strong>
+          </div>
+          <button aria-label="Close settings" onClick={onClose}>×</button>
+        </header>
+        <div className="settings-list">
+          <button onClick={onOpenCommandPalette}>
+            <span>Command palette</span>
+            <strong>Open</strong>
+          </button>
+          <button
+            onClick={() => {
+              clearProbes();
+              onNotice(probes.length > 0 ? "Cleared all probes." : "No probes to clear.");
+            }}
+          >
+            <span>Meter probes</span>
+            <strong>Clear {probes.length}</strong>
+          </button>
+          <button onClick={clearAutosave}>
+            <span>Local autosave</span>
+            <strong>Clear</strong>
+          </button>
+          <button
+            onClick={() => {
+              onNewCircuit();
+              onClose();
+            }}
+          >
+            <span>Document</span>
+            <strong>New blank</strong>
+          </button>
+        </div>
+      </section>
+    </div>
   );
 }
