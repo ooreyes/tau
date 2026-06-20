@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { useSchematic } from "../store/useSchematic";
 import { CATALOG } from "../schematic/catalog";
 import { ComponentSymbol } from "../schematic/symbols";
+import type { ComponentKind } from "../schematic/types";
 
 const sections = [...new Set(CATALOG.map((entry) => entry.section))];
 
@@ -17,6 +18,7 @@ export function Palette() {
 
   const [query, setQuery] = useState("");
   const [openSections, setOpenSections] = useState<Record<string, boolean>>(initialOpen);
+  const [selectedKind, setSelectedKind] = useState<ComponentKind>("resistor");
 
   const trimmed = query.trim().toLowerCase();
 
@@ -38,17 +40,29 @@ export function Palette() {
 
   return (
     <aside className="palette">
-      {/* Search field */}
+      <div className="palette-head">
+        <span>component selection</span>
+        <div>
+          <button title="Add library">＋</button>
+          <button title="Remove library">−</button>
+        </div>
+      </div>
+
       <div className="palette-search-wrap">
         <input
           className="palette-search"
           type="search"
-          placeholder="Filter parts…"
+          placeholder="Filter"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           spellCheck={false}
           aria-label="Filter components"
         />
+      </div>
+
+      <div className="palette-table-head">
+        <span>item</span>
+        <span>description</span>
       </div>
 
       <div className="palette-scroll">
@@ -64,7 +78,10 @@ export function Palette() {
                     name={e.name}
                     hotkey={e.hotkey}
                     active={activeKind === e.kind}
-                    onPlace={() => startPlacing(e.kind)}
+                    onPlace={() => {
+                      setSelectedKind(e.kind);
+                      startPlacing(e.kind);
+                    }}
                   />
                 ))}
               </div>
@@ -97,7 +114,10 @@ export function Palette() {
                           name={e.name}
                           hotkey={e.hotkey}
                           active={activeKind === e.kind}
-                          onPlace={() => startPlacing(e.kind)}
+                          onPlace={() => {
+                            setSelectedKind(e.kind);
+                            startPlacing(e.kind);
+                          }}
                         />
                       ))}
                     </div>
@@ -130,6 +150,7 @@ export function Palette() {
                       <path className="wire-icon" d="M -30 18 H 0 V -18 H 30" />
                     </svg>
                     <span className="palette-name">Wire</span>
+                    <span className="palette-desc">route net</span>
                     <kbd className="palette-key">W</kbd>
                   </button>
                   <button
@@ -147,6 +168,7 @@ export function Palette() {
                       </g>
                     </svg>
                     <span className="palette-name">Probe</span>
+                    <span className="palette-desc">plot net</span>
                   </button>
                 </div>
               )}
@@ -155,15 +177,24 @@ export function Palette() {
         )}
       </div>
 
-      <div className="palette-hint">
-        Click a part or press its key, then click the canvas to place it.
+      <div className="symbol-preview">
+        <span>symbol</span>
+        <div>
+          <svg viewBox="-44 -40 88 80">
+            <g className="symbol">
+              <ComponentSymbol kind={selectedKind} />
+            </g>
+          </svg>
+          <strong>{CATALOG.find((entry) => entry.kind === selectedKind)?.name ?? selectedKind}</strong>
+          <em>⌞</em>
+        </div>
       </div>
     </aside>
   );
 }
 
 interface PaletteItemProps {
-  kind: string;
+  kind: ComponentKind;
   name: string;
   hotkey: string;
   active: boolean;
@@ -182,10 +213,11 @@ function PaletteItem({ kind, name, hotkey, active, onPlace }: PaletteItemProps) 
     >
       <svg className="palette-icon" viewBox="-42 -40 84 80">
         <g className="symbol">
-          <ComponentSymbol kind={kind as Parameters<typeof ComponentSymbol>[0]["kind"]} />
+          <ComponentSymbol kind={kind} />
         </g>
       </svg>
       <span className="palette-name">{name}</span>
+      <span className="palette-desc">{kind}</span>
       <kbd className="palette-key">{hotkey.toUpperCase()}</kbd>
     </button>
   );

@@ -305,3 +305,56 @@ labels):
   (×11) on the non-inverting amp.
 - Next: AC-sweep range controls; persist probes/net-labels with the document;
   source series resistance in the solver; the ngspice engine path.
+
+### 2026-06-19 — Canvas label readability and Apple-like visual polish — Codex
+
+- Fixed the black/overlaid schematic label bug from the screenshot. The newer
+  always-on-top `.label-layer` now has explicit light fill, SF-style font
+  styling, and a dark canvas halo instead of inheriting SVG's default black
+  text.
+- Reworked component label placement in `apps/desktop/src/components/Canvas.tsx`
+  to use the full rotated pin/body footprint. Vertical two-terminal parts now
+  place reference/value labels to the side, so source and rotated-part leads no
+  longer run through text. Horizontal parts keep centered labels above/below.
+- Added compact display formatting for schematic values, including AC sources
+  (`1V @ 1kHz`) instead of concatenating raw value plus catalog units
+  (`1 1kV Hz`).
+- Continued the restrained Apple-like surface pass in `apps/desktop/src/App.css`:
+  glassy toolbar/palette/plotter/status surfaces, subtler grid, cleaner wire
+  strokes, and calmer label/net-label typography.
+- Verified with `pnpm typecheck`, `pnpm test` (100 passing),
+  `pnpm --filter @tau/desktop build`, and browser smoke at
+  `http://localhost:1420/` using the non-inverting amplifier example. The AC
+  source/ground stack now renders light, legible, and clear of the symbol/lead.
+
+### 2026-06-20 — Migrated LTspice-style shell design handoff — Codex
+
+- Consumed `/Users/omarreyes/Downloads/Tau LTspice UI design.zip`, specifically
+  `design_handoff_tau_editor/README.md` and the `Tau.dc.html` prototype. The
+  prototype was used as a visual/source spec only; no HTML runtime was shipped.
+- Migrated the React app to the handoff's production shell: 40px title bar,
+  54px activity rail, 226px explorer, VS Code-like editor tabs, a fixed editor
+  canvas plus bottom inspector/results panel, simulator plotter column, and
+  Ask Sim right rail.
+- Added `apps/desktop/src/components/ShellPanels.tsx` for the activity rail,
+  explorer, editor toolbar/tabs, bottom panel, result lists, component
+  inspector, and Ask Sim panel. Repurposed `Toolbar.tsx` as the macOS-style
+  title bar and expanded `StatusBar.tsx`/`Palette.tsx` to match the handoff.
+- Reworked `apps/desktop/src/App.css` with the handoff token palette
+  (`#0a0a0c`/cream/amber/blue/green/red), dense chrome, lighter SVG text,
+  restrained borders, fixed panel dimensions, and non-wrapping status footer
+  text so labels do not turn black or bleed into panels.
+- Kept the real Tau schematic canvas, solver, plotter, component model, and
+  examples wired through the new shell. The Run buttons now execute the current
+  transient analysis and switch into simulator mode.
+- Verification:
+  - `pnpm typecheck`
+  - `pnpm test` — 100 tests passing
+  - `pnpm --filter @tau/desktop build`
+  - Browser smoke at `http://localhost:1420/`: schematic shell rendered at
+    1280x720 with no document scroll; label colors were cream/line instead of
+    black; source/op-amp/resistor labels no longer overlap their symbols; Run
+    switched to simulator mode with waveform plotter and Ask Sim visible.
+- Caveat: after the initial screenshots and simulator smoke, the in-app browser
+  refused a reload under its URL policy, so the final status-footer CSS tweak
+  was verified by compiler/build rather than a second browser screenshot.

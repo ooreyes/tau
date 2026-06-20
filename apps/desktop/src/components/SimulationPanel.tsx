@@ -67,8 +67,8 @@ export function SimulationPanel({ result, options, onOptionsChange, onRun }: Sim
             {maximized ? "⤡" : "⤢"}
           </button>
           {mode === "tran" ? (
-            <button className="plotter-run" onClick={onRun}>
-              Run
+            <button className="plotter-run" onClick={onRun} title="Run transient analysis">
+              ▶&nbsp;Run
             </button>
           ) : (
             <div className="plotter-live">Live</div>
@@ -76,16 +76,18 @@ export function SimulationPanel({ result, options, onOptionsChange, onRun }: Sim
         </div>
       </div>
 
-      <div className="plotter-tabs" aria-label="Analysis modes">
-        <button className={`plotter-tab${mode === "tran" ? " active" : ""}`} onClick={() => setMode("tran")}>
-          TRAN
-        </button>
-        <button className={`plotter-tab${mode === "op" ? " active" : ""}`} onClick={() => setMode("op")}>
-          OP
-        </button>
-        <button className={`plotter-tab${mode === "ac" ? " active" : ""}`} onClick={() => setMode("ac")}>
-          AC
-        </button>
+      <div className="plotter-tabs" role="tablist" aria-label="Analysis modes">
+        <div className="plotter-tabs-inner">
+          <button className={`plotter-tab${mode === "tran" ? " active" : ""}`} role="tab" aria-selected={mode === "tran"} onClick={() => setMode("tran")}>
+            TRAN
+          </button>
+          <button className={`plotter-tab${mode === "op" ? " active" : ""}`} role="tab" aria-selected={mode === "op"} onClick={() => setMode("op")}>
+            OP
+          </button>
+          <button className={`plotter-tab${mode === "ac" ? " active" : ""}`} role="tab" aria-selected={mode === "ac"} onClick={() => setMode("ac")}>
+            AC
+          </button>
+        </div>
       </div>
 
       {mode === "tran" && (

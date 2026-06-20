@@ -5,6 +5,7 @@ import { ComponentSymbol, GRID, SYMBOL_BOX } from "../schematic/symbols";
 import { CATALOG_BY_KIND } from "../schematic/catalog";
 import type { ComponentKind, Point, SchematicComponent, SchematicWire } from "../schematic/types";
 import { getLocalPins, getComponentPins } from "../schematic/pins";
+import { decodeParams } from "../schematic/params";
 import type { AnalysisResult } from "../simulation/linearTransient";
 import { FlowLayer, FLOW_PLAY_MS } from "./FlowLayer";
 
@@ -21,6 +22,64 @@ const routeWire = (start: Point, end: Point): Point[] =>
   start.x === end.x || start.y === end.y ? [start, end] : [start, { x: end.x, y: start.y }, end];
 const pathFromPoints = (points: Point[]) =>
   points.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x} ${p.y}`).join(" ");
+
+const rotateLocalPoint = (point: Point, rotation: number): Point => {
+  switch (rotation) {
+    case 90:
+      return { x: -point.y, y: point.x };
+    case 180:
+      return { x: -point.x, y: -point.y };
+    case 270:
+      return { x: point.y, y: -point.x };
+    default:
+      return point;
+  }
+};
+
+const explicitUnit = (value: string, unit: string) => {
+  if (!unit) return value.trim();
+  const v = value.trim();
+  if (!v) return "";
+  if (unit === "Ω" && /(Ω|ohm|ohms)$/i.test(v)) return v;
+  if (unit !== "Ω" && new RegExp(`${unit}$`, "i").test(v)) return v;
+  return `${v}${unit}`;
+};
+
+const sourceValueLabel = (kind: ComponentKind, value: string) => {
+  if (kind !== "vac" && kind !== "iac") {
+    const unit = CATALOG_BY_KIND[kind].unit;
+    return explicitUnit(value, unit);
+  }
+  const params = decodeParams(kind, value);
+  const ampUnit = kind === "vac" ? "V" : "A";
+  return `${explicitUnit(params.amplitude ?? "1", ampUnit)} @ ${explicitUnit(params.frequency ?? "1k", "Hz")}`;
+};
+
+const componentBounds = (component: SchematicComponent) => {
+  const box = SYMBOL_BOX[component.kind];
+  const bodyCorners: Point[] = [
+    { x: -box.halfW, y: -box.halfH },
+    { x: box.halfW, y: -box.halfH },
+    { x: box.halfW, y: box.halfH },
+    { x: -box.halfW, y: box.halfH },
+  ];
+  const pins = getLocalPins(component.kind).map((pin) => ({ x: pin.x, y: pin.y }));
+  const points = [...bodyCorners, ...pins].map((point) => rotateLocalPoint(point, component.rotation));
+  return {
+    minX: Math.min(...points.map((point) => point.x)),
+    maxX: Math.max(...points.map((point) => point.x)),
+    minY: Math.min(...points.map((point) => point.y)),
+    maxY: Math.max(...points.map((point) => point.y)),
+  };
+};
+
+const labelAxis = (component: SchematicComponent) => {
+  const pins = getLocalPins(component.kind).map((pin) => rotateLocalPoint({ x: pin.x, y: pin.y }, component.rotation));
+  if (pins.length !== 2) return "center";
+  const dx = Math.abs(pins[0].x - pins[1].x);
+  const dy = Math.abs(pins[0].y - pins[1].y);
+  return dy > dx ? "vertical" : "horizontal";
+};
 
 /** Body half-extents (rotation-aware) used to keep component bodies from overlapping. */
 const bodyHalf = (kind: ComponentKind, rotation: number) => {
@@ -579,20 +638,26 @@ function ComponentLabels({ components }: { components: SchematicComponent[] }) {
   return (
     <g className="label-layer" aria-hidden="true">
       {components.map((c) => {
-        const entry = CATALOG_BY_KIND[c.kind];
-        const box = SYMBOL_BOX[c.kind];
-        const vert = c.rotation === 90 || c.rotation === 270 ? box.halfW : box.halfH;
+        const bounds = componentBounds(c);
+        const axis = labelAxis(c);
+        const value = sourceValueLabel(c.kind, c.value);
+        const sideX = bounds.minX - 10;
+        const ref = axis === "vertical"
+          ? { x: sideX, y: -6, anchor: "end" as const }
+          : { x: 0, y: bounds.minY - 11, anchor: "middle" as const };
+        const val = axis === "vertical"
+          ? { x: sideX, y: 9, anchor: "end" as const }
+          : { x: 0, y: bounds.maxY + 15, anchor: "middle" as const };
         return (
           <g key={c.id} transform={`translate(${c.x} ${c.y})`}>
             {c.label && (
-              <text className="ref" x={0} y={-(vert + 10)} textAnchor="middle">
+              <text className="ref" x={ref.x} y={ref.y} textAnchor={ref.anchor}>
                 {c.label}
               </text>
             )}
-            {c.value && (
-              <text className="val" x={0} y={vert + 15} textAnchor="middle">
-                {c.value}
-                {entry.unit}
+            {value && (
+              <text className="val" x={val.x} y={val.y} textAnchor={val.anchor}>
+                {value}
               </text>
             )}
           </g>

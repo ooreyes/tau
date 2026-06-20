@@ -1,10 +1,11 @@
 import { useSchematic } from "../store/useSchematic";
+import type { AnalysisResult } from "../simulation/linearTransient";
 
-export function StatusBar() {
+export function StatusBar({ mode, result }: { mode: "schematic" | "simulator"; result: AnalysisResult | null }) {
   const componentCount = useSchematic((s) => s.components.length);
   const wireCount = useSchematic((s) => s.wires.length);
   const tool = useSchematic((s) => s.tool);
-  const mode =
+  const toolLabel =
     tool.mode === "place"
       ? `Placing ${tool.kind}`
       : tool.mode === "wire"
@@ -12,11 +13,25 @@ export function StatusBar() {
         : tool.mode === "probe"
           ? "Probing — click a node"
           : "Select";
+  const state = mode === "simulator"
+    ? result?.ok
+      ? "sim complete"
+      : result
+        ? "sim error"
+        : "sim ready"
+    : "ready · edit mode";
 
   return (
     <footer className="statusbar">
-      <span className="status-mode">{mode}</span>
+      <span className={`status-mode ${mode}`}>
+        <i />
+        {state}
+      </span>
+      <span className="status-file">boost converter.sim</span>
+      <span className="status-codec">utf-8 · spice3</span>
       <span className="status-hints">
+        <span>{mode === "simulator" ? "probe nodes in the analysis panel" : toolLabel}</span>
+        <span className="dot">·</span>
         <kbd>R</kbd>
         <kbd>C</kbd>
         <kbd>L</kbd>
@@ -36,8 +51,8 @@ export function StatusBar() {
         <kbd>⌘</kbd>+scroll zoom · two-finger pan
       </span>
       <span className="status-count">
-        {componentCount} component{componentCount === 1 ? "" : "s"} · {wireCount} wire
-        {wireCount === 1 ? "" : "s"}
+        grid 0.1 in · {componentCount} component{componentCount === 1 ? "" : "s"} · {wireCount} wire
+        {wireCount === 1 ? "" : "s"} · zoom 100%
       </span>
     </footer>
   );

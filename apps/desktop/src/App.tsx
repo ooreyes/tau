@@ -8,6 +8,7 @@ import { SimulationPanel } from "./components/SimulationPanel";
 import { AnalysisErrorBoundary } from "./components/AnalysisErrorBoundary";
 import { EmptyState } from "./components/EmptyState";
 import { CommandPalette } from "./components/CommandPalette";
+import { ActivityRail, AskSimPanel, BottomPanel, EditorTabs, EditorToolbar, ExplorerPanel } from "./components/ShellPanels";
 import { useSchematic } from "./store/useSchematic";
 import { CATALOG } from "./schematic/catalog";
 import { runTransientAnalysis, type AnalysisOptions, type AnalysisResult } from "./simulation/linearTransient";
@@ -30,9 +31,15 @@ function App() {
   const [analysisOptions, setAnalysisOptions] = useState<AnalysisOptions>(DEFAULT_ANALYSIS_OPTIONS);
   const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [mode, setMode] = useState<"schematic" | "simulator">("schematic");
 
   const runAnalysis = useCallback(() => {
     setAnalysis(runTransientAnalysis({ components, wires }, analysisOptions));
+  }, [components, wires, analysisOptions]);
+
+  const runAndShowSimulator = useCallback(() => {
+    setAnalysis(runTransientAnalysis({ components, wires }, analysisOptions));
+    setMode("simulator");
   }, [components, wires, analysisOptions]);
 
   useEffect(() => {
@@ -89,22 +96,33 @@ function App() {
   }, [startPlacing, startWiring, cancel, rotate, deleteSelected, undo, redo]);
 
   return (
-    <div className="app">
-      <Toolbar onRun={runAnalysis} />
-      <Palette />
-      <main className="stage">
-        <Canvas analysis={analysis} />
-        {components.length === 0 && wires.length === 0 && <EmptyState />}
-      </main>
-      <AnalysisErrorBoundary>
-        <SimulationPanel
-          result={analysis}
-          options={analysisOptions}
-          onOptionsChange={setAnalysisOptions}
-          onRun={runAnalysis}
-        />
-      </AnalysisErrorBoundary>
-      <StatusBar />
+    <div className={`app app-${mode}`}>
+      <Toolbar mode={mode} result={analysis} onModeChange={setMode} onRun={runAndShowSimulator} />
+      <div className="shell-body">
+        <ActivityRail mode={mode} onModeChange={setMode} />
+        {mode === "schematic" && <ExplorerPanel />}
+        <section className="editor-shell" aria-label="Schematic editor">
+          <EditorToolbar onRun={runAndShowSimulator} />
+          <EditorTabs mode={mode} />
+          <main className="stage">
+            <Canvas analysis={analysis} />
+            {components.length === 0 && wires.length === 0 && <EmptyState />}
+          </main>
+          <BottomPanel mode={mode} result={analysis} />
+        </section>
+        {mode === "simulator" && (
+          <AnalysisErrorBoundary>
+            <SimulationPanel
+              result={analysis}
+              options={analysisOptions}
+              onOptionsChange={setAnalysisOptions}
+              onRun={runAnalysis}
+            />
+          </AnalysisErrorBoundary>
+        )}
+        {mode === "simulator" ? <AskSimPanel result={analysis} /> : <Palette />}
+      </div>
+      <StatusBar mode={mode} result={analysis} />
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
     </div>
   );
