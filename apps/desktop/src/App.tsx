@@ -12,9 +12,11 @@ import {
   ActivityRail,
   AskSimPanel,
   BottomPanel,
+  ConfirmDialog,
   EditorTabs,
   EditorToolbar,
   ExplorerPanel,
+  MinimizedPanelDock,
   SettingsPanel,
 } from "./components/ShellPanels";
 import { useSchematic, type SchematicDocument } from "./store/useSchematic";
@@ -41,11 +43,14 @@ function App() {
   const redo = useSchematic((s) => s.redo);
   const [analysisOptions, setAnalysisOptions] = useState<AnalysisOptions>(DEFAULT_ANALYSIS_OPTIONS);
   const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
-  const [runState, setRunState] = useState<"idle" | "complete" | "error" | "stopped">("idle");
+  const [runState, setRunState] = useState<"idle" | "complete" | "error" | "stopped" | "paused">("idle");
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [mode, setMode] = useState<"schematic" | "simulator">("schematic");
   const [documentTitle, setDocumentTitle] = useState("boost converter.sim");
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [confirmClearOpen, setConfirmClearOpen] = useState(false);
+  const [graphOpen, setGraphOpen] = useState(true);
+  const [aiOpen, setAiOpen] = useState(true);
   const [componentFocusSignal, setComponentFocusSignal] = useState(0);
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -65,13 +70,44 @@ function App() {
     setAnalysis(result);
     setRunState(result.ok ? "complete" : "error");
     setMode("simulator");
+    setGraphOpen(true);
   }, [components, wires, analysisOptions]);
 
+  const pauseAnalysis = useCallback(() => {
+    if (!analysis) {
+      showNotice("Run a transient analysis before pausing.");
+      return;
+    }
+    setRunState((state) => {
+      if (state === "paused") {
+        showNotice("Simulation resumed.");
+        return analysis.ok ? "complete" : "error";
+      }
+      showNotice("Simulation paused.");
+      return "paused";
+    });
+  }, [analysis, showNotice]);
+
+  const stepAnalysis = useCallback(() => {
+    const nextOptions = { ...analysisOptions, steps: Math.min(1000, analysisOptions.steps + 1) };
+    const result = runTransientAnalysis({ components, wires }, nextOptions);
+    setAnalysisOptions(nextOptions);
+    setAnalysis(result);
+    setRunState(result.ok ? "complete" : "error");
+    setMode("simulator");
+    setGraphOpen(true);
+    showNotice("Advanced transient by one sample.");
+  }, [analysisOptions, components, wires, showNotice]);
+
   const stopAnalysis = useCallback(() => {
+    if (!analysis) {
+      showNotice("No simulation result to stop.");
+      return;
+    }
     setAnalysis(null);
     setRunState("stopped");
     showNotice("Simulation stopped. Run again when ready.");
-  }, [showNotice]);
+  }, [analysis, showNotice]);
 
   const openDocument = useCallback((doc: SchematicDocument, title: string) => {
     loadCircuit(doc);
@@ -92,7 +128,21 @@ function App() {
     setAnalysis(null);
     setRunState("idle");
     setMode("schematic");
+    setGraphOpen(true);
+    setAiOpen(true);
     showNotice("Started a new blank circuit.");
+  }, [newCircuit, showNotice]);
+
+  const clearScratchpad = useCallback(() => {
+    newCircuit();
+    setDocumentTitle("untitled.sim");
+    setAnalysis(null);
+    setRunState("idle");
+    setMode("schematic");
+    setConfirmClearOpen(false);
+    setGraphOpen(true);
+    setAiOpen(true);
+    showNotice("Scratchpad cleared.");
   }, [newCircuit, showNotice]);
 
   useEffect(() => {
@@ -171,22 +221,31 @@ function App() {
           }}
           onOpenSettings={() => setSettingsOpen(true)}
         />
-        {mode === "schematic" && <ExplorerPanel onOpenExample={openExample} />}
+        {mode === "schematic" && (
+          <ExplorerPanel
+            onOpenExample={openExample}
+            onNewCircuit={startNewCircuit}
+            onSearch={() => setPaletteOpen(true)}
+          />
+        )}
         <section className="editor-shell" aria-label="Schematic editor">
           <EditorToolbar
             runState={runState}
             onRun={runAndShowSimulator}
+            onPause={pauseAnalysis}
+            onStep={stepAnalysis}
             onStop={stopAnalysis}
             onNewCircuit={startNewCircuit}
+            onClearScratchpad={() => setConfirmClearOpen(true)}
             onOpenCircuit={(doc, title) => openDocument(doc, title)}
             onOpenExample={openExample}
-            onNotice={showNotice}
           />
           <EditorTabs
             mode={mode}
             title={documentTitle}
             onOpenExample={openExample}
             onNewCircuit={startNewCircuit}
+            onCloseCurrent={() => setConfirmClearOpen(true)}
             onHideSimulator={() => setMode("schematic")}
           />
           <main className="stage">
@@ -195,7 +254,7 @@ function App() {
           </main>
           <BottomPanel mode={mode} result={analysis} />
         </section>
-        {mode === "simulator" && (
+        {mode === "simulator" && graphOpen && (
           <AnalysisErrorBoundary>
             <SimulationPanel
               result={analysis}
@@ -203,10 +262,22 @@ function App() {
               onOptionsChange={setAnalysisOptions}
               onRun={runAnalysis}
               onStop={stopAnalysis}
+              onPause={pauseAnalysis}
+              onStep={stepAnalysis}
+              onClose={() => setGraphOpen(false)}
             />
           </AnalysisErrorBoundary>
         )}
-        {mode === "simulator" ? <AskSimPanel result={analysis} /> : <Palette focusSignal={componentFocusSignal} onNotice={showNotice} />}
+        {mode === "simulator" && aiOpen && <AskSimPanel result={analysis} onClose={() => setAiOpen(false)} />}
+        {mode === "simulator" && (!graphOpen || !aiOpen) && (
+          <MinimizedPanelDock
+            graphHidden={!graphOpen}
+            aiHidden={!aiOpen}
+            onRestoreGraph={() => setGraphOpen(true)}
+            onRestoreAi={() => setAiOpen(true)}
+          />
+        )}
+        {mode === "schematic" && <Palette focusSignal={componentFocusSignal} onNotice={showNotice} />}
       </div>
       <StatusBar mode={mode} result={analysis} title={documentTitle} />
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
@@ -220,6 +291,15 @@ function App() {
             setPaletteOpen(true);
           }}
           onNotice={showNotice}
+        />
+      )}
+      {confirmClearOpen && (
+        <ConfirmDialog
+          title="Clear scratchpad?"
+          body="This removes all components, wires, labels, probes, and the current analysis from the scratchpad."
+          confirmLabel="Clear scratchpad"
+          onConfirm={clearScratchpad}
+          onCancel={() => setConfirmClearOpen(false)}
         />
       )}
       {notice && <div className="shell-toast" role="status">{notice}</div>}

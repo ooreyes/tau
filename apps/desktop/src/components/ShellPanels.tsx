@@ -64,26 +64,34 @@ function RailButton({
   );
 }
 
-export function ExplorerPanel({ onOpenExample }: { onOpenExample: (example: ExampleCircuit) => void }) {
+export function ExplorerPanel({
+  onOpenExample,
+  onNewCircuit,
+  onSearch,
+}: {
+  onOpenExample: (example: ExampleCircuit) => void;
+  onNewCircuit: () => void;
+  onSearch: () => void;
+}) {
   const examples = EXAMPLE_CIRCUITS.slice(0, 4);
 
   return (
     <aside className="explorer-panel" aria-label="Project explorer">
       <div className="explorer-head">
         <span>explorer</span>
-        <div className="explorer-icons" aria-hidden="true">
-          <span>＋</span>
-          <span>▣</span>
-          <span>↻</span>
+        <div className="explorer-icons">
+          <button title="New scratchpad" aria-label="New scratchpad" onClick={onNewCircuit}>＋</button>
+          <button title="Search commands" aria-label="Search commands" onClick={onSearch}>▣</button>
+          <button title="Reload first example" aria-label="Reload first example" onClick={() => onOpenExample(examples[0])}>↻</button>
         </div>
       </div>
-      <div className="explorer-search">
+      <button className="explorer-search" onClick={onSearch}>
         <svg viewBox="0 0 16 16" aria-hidden="true">
           <circle cx="7" cy="7" r="4.5" />
           <path d="M10.5 10.5 14 14" />
         </svg>
         <span>find schematic</span>
-      </div>
+      </button>
       <div className="tree-list">
         <div className="tree-root">
           <span className="tree-caret">▸</span>
@@ -109,19 +117,23 @@ export function ExplorerPanel({ onOpenExample }: { onOpenExample: (example: Exam
 export function EditorToolbar({
   runState,
   onRun,
+  onPause,
+  onStep,
   onStop,
   onNewCircuit,
+  onClearScratchpad,
   onOpenCircuit,
   onOpenExample,
-  onNotice,
 }: {
-  runState: "idle" | "complete" | "error" | "stopped";
+  runState: "idle" | "complete" | "error" | "stopped" | "paused";
   onRun: () => void;
+  onPause: () => void;
+  onStep: () => void;
   onStop: () => void;
   onNewCircuit: () => void;
+  onClearScratchpad: () => void;
   onOpenCircuit: (doc: SchematicDocument, title: string) => void;
   onOpenExample: (example: ExampleCircuit) => void;
-  onNotice: (message: string) => void;
 }) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const components = useSchematic((s) => s.components);
@@ -134,9 +146,8 @@ export function EditorToolbar({
   const redo = useSchematic((s) => s.redo);
   const canUndo = useSchematic((s) => s.past.length > 0);
   const canRedo = useSchematic((s) => s.future.length > 0);
-  const deleteSelected = useSchematic((s) => s.deleteSelected);
   const hasDocument = components.length > 0 || wires.length > 0;
-  const canStop = runState === "complete" || runState === "error";
+  const isPaused = runState === "paused";
 
   const saveCircuit = () => {
     const payload = {
@@ -192,7 +203,7 @@ export function EditorToolbar({
         <path d="M12 4l4 4-4 4" />
         <path d="M16 8H7a4 4 0 0 0-4 4v2" />
       </IconButton>
-      <IconButton title="Delete" onClick={deleteSelected}>
+      <IconButton title="Clear scratchpad" onClick={onClearScratchpad}>
         <path d="M4 5h10M7 5V3h4v2M6 7v7M10 7v7M13 5l-.8 10H5.8L5 5" />
       </IconButton>
       <span className="toolbar-divider" />
@@ -229,27 +240,26 @@ export function EditorToolbar({
       <div className="transport">
         <button className="transport-play" title="Run simulation" aria-label="Run simulation" onClick={onRun}>▶</button>
         <button
-          title="Pause is available after the async engine lands"
+          className={isPaused ? "transport-pause active" : "transport-pause"}
+          title={isPaused ? "Resume simulation state" : "Pause simulation state"}
           aria-label="Pause simulation"
-          disabled
-          onClick={() => onNotice("Pause needs the planned async solver loop.")}
+          aria-pressed={isPaused}
+          onClick={onPause}
         >
           Ⅱ
         </button>
         <button
           className="transport-stop"
-          title={canStop ? "Clear current simulation result" : "No active result to stop"}
+          title="Clear current simulation result"
           aria-label="Stop simulation"
-          disabled={!canStop}
           onClick={onStop}
         >
           ■
         </button>
         <button
-          title="Step is available after the incremental solver lands"
+          title="Advance transient by one sample"
           aria-label="Step simulation"
-          disabled
-          onClick={() => onNotice("Step needs the planned incremental solver.")}
+          onClick={onStep}
         >
           ▸▌
         </button>
@@ -289,12 +299,14 @@ export function EditorTabs({
   title,
   onOpenExample,
   onNewCircuit,
+  onCloseCurrent,
   onHideSimulator,
 }: {
   mode: "schematic" | "simulator";
   title: string;
   onOpenExample: (example: ExampleCircuit) => void;
   onNewCircuit: () => void;
+  onCloseCurrent: () => void;
   onHideSimulator: () => void;
 }) {
   const referenceExample = EXAMPLE_CIRCUITS[0];
@@ -305,11 +317,26 @@ export function EditorTabs({
         <i className="blue" />
         {referenceExample.name.toLowerCase()}
       </button>
-      <button className="editor-tab active" aria-current="page" onClick={mode === "simulator" ? onHideSimulator : undefined}>
+      <div
+        className="editor-tab active"
+        role="tab"
+        aria-current="page"
+        onClick={mode === "simulator" ? onHideSimulator : undefined}
+      >
         <i className="amber" />
         {title.replace(/\.sim$/i, "")}
-        <span>×</span>
-      </button>
+        <button
+          type="button"
+          aria-label="Close current scratchpad"
+          className="tab-close"
+          onClick={(event) => {
+            event.stopPropagation();
+            onCloseCurrent();
+          }}
+        >
+          ×
+        </button>
+      </div>
       <button className="editor-tab add" aria-label="New tab" onClick={onNewCircuit}>＋</button>
       <div className="editor-tab-spacer" />
       {mode === "simulator" && <button className="editor-hide" onClick={onHideSimulator}>× hide</button>}
@@ -535,7 +562,7 @@ function ResultList({
   );
 }
 
-export function AskSimPanel({ result }: { result: AnalysisResult | null }) {
+export function AskSimPanel({ result, onClose }: { result: AnalysisResult | null; onClose: () => void }) {
   const componentCount = useSchematic((s) => s.components.length);
   const wireCount = useSchematic((s) => s.wires.length);
   const state = result?.ok ? "analysis ready" : result && !result.ok ? "needs attention" : "waiting for run";
@@ -566,6 +593,7 @@ export function AskSimPanel({ result }: { result: AnalysisResult | null }) {
         <span className="spark">✦</span>
         <strong>Ask Sim</strong>
         <small>analysis · agent</small>
+        <button className="panel-close" aria-label="Close Ask Sim" title="Close Ask Sim" onClick={onClose}>×</button>
       </div>
       <div className="chat-scroll">
         {messages.map((message, index) => (
@@ -669,6 +697,77 @@ export function SettingsPanel({
             <span>Document</span>
             <strong>New blank</strong>
           </button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+export function MinimizedPanelDock({
+  graphHidden,
+  aiHidden,
+  onRestoreGraph,
+  onRestoreAi,
+}: {
+  graphHidden: boolean;
+  aiHidden: boolean;
+  onRestoreGraph: () => void;
+  onRestoreAi: () => void;
+}) {
+  return (
+    <aside className="minimized-panel-dock" aria-label="Minimized panels">
+      {graphHidden && (
+        <button className="restore-orb graph" aria-label="Restore graphs" title="Restore graphs" onClick={onRestoreGraph}>
+          <svg viewBox="0 0 28 28" aria-hidden="true">
+            <path d="M5 19 11 10l4 5 8-11" />
+            <path d="M20 4h4v4" />
+          </svg>
+          <span>Graphs</span>
+        </button>
+      )}
+      {aiHidden && (
+        <button className="restore-orb ai" aria-label="Restore Ask Sim" title="Restore Ask Sim" onClick={onRestoreAi}>
+          <svg viewBox="0 0 28 28" aria-hidden="true">
+            <path d="M14 3 16.5 11.5 25 14 16.5 16.5 14 25 11.5 16.5 3 14 11.5 11.5z" />
+          </svg>
+          <span>Ask Sim</span>
+        </button>
+      )}
+    </aside>
+  );
+}
+
+export function ConfirmDialog({
+  title,
+  body,
+  confirmLabel,
+  onConfirm,
+  onCancel,
+}: {
+  title: string;
+  body: string;
+  confirmLabel: string;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  return (
+    <div className="confirm-backdrop" role="presentation" onPointerDown={onCancel}>
+      <section
+        className="confirm-dialog"
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="confirm-title"
+        aria-describedby="confirm-body"
+        onPointerDown={(event) => event.stopPropagation()}
+      >
+        <header>
+          <strong id="confirm-title">{title}</strong>
+          <button aria-label="Cancel" onClick={onCancel}>×</button>
+        </header>
+        <p id="confirm-body">{body}</p>
+        <div className="confirm-actions">
+          <button onClick={onCancel}>Cancel</button>
+          <button className="danger" onClick={onConfirm}>{confirmLabel}</button>
         </div>
       </section>
     </div>

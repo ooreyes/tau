@@ -16,13 +16,16 @@ interface SimulationPanelProps {
   onOptionsChange: (options: AnalysisOptions) => void;
   onRun: () => void;
   onStop: () => void;
+  onPause: () => void;
+  onStep: () => void;
+  onClose: () => void;
 }
 
 const PLOT_WIDTH = 340;
 const PLOT_HEIGHT = 210;
 const PLOT_PAD = 26;
 
-export function SimulationPanel({ result, options, onOptionsChange, onRun, onStop }: SimulationPanelProps) {
+export function SimulationPanel({ result, options, onOptionsChange, onRun, onStop, onPause, onStep, onClose }: SimulationPanelProps) {
   const components = useSchematic((s) => s.components);
   const wires = useSchematic((s) => s.wires);
   const selectedId = useSchematic((s) => s.selectedId);
@@ -59,6 +62,12 @@ export function SimulationPanel({ result, options, onOptionsChange, onRun, onSto
           <div className="plotter-title">{title}</div>
         </div>
         <div className="plotter-actions">
+          <button className="plotter-icon-action" onClick={onStop} title="Clear transient result" aria-label="Stop simulation">
+            ■
+          </button>
+          <button className="plotter-icon-action" onClick={onStep} title="Advance transient by one sample" aria-label="Step simulation">
+            ◔
+          </button>
           <button
             className="plotter-max"
             onClick={() => setMaximized((m) => !m)}
@@ -67,14 +76,17 @@ export function SimulationPanel({ result, options, onOptionsChange, onRun, onSto
           >
             {maximized ? "⤡" : "⤢"}
           </button>
+          <button className="plotter-close" onClick={onClose} title="Close graphs" aria-label="Close graphs">
+            ×
+          </button>
           {mode === "tran" ? (
             <>
               <button className="plotter-run" onClick={onRun} title="Run transient analysis">
                 ▶&nbsp;Run
               </button>
               {result && (
-                <button className="plotter-stop" onClick={onStop} title="Clear transient result" aria-label="Stop simulation">
-                  ■
+                <button className="plotter-pause" onClick={onPause} title="Pause or resume simulation state" aria-label="Pause simulation">
+                  Ⅱ
                 </button>
               )}
             </>

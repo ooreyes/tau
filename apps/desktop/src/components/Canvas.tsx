@@ -81,6 +81,117 @@ const labelAxis = (component: SchematicComponent) => {
   return dy > dx ? "vertical" : "horizontal";
 };
 
+interface Rect {
+  minX: number;
+  minY: number;
+  maxX: number;
+  maxY: number;
+}
+
+interface LabelPlacement {
+  ref: { x: number; y: number; anchor: "start" | "middle" | "end" };
+  val: { x: number; y: number; anchor: "start" | "middle" | "end" };
+  box: Rect;
+}
+
+const padRect = (rect: Rect, pad: number): Rect => ({
+  minX: rect.minX - pad,
+  minY: rect.minY - pad,
+  maxX: rect.maxX + pad,
+  maxY: rect.maxY + pad,
+});
+
+const overlapArea = (a: Rect, b: Rect) => {
+  const x = Math.max(0, Math.min(a.maxX, b.maxX) - Math.max(a.minX, b.minX));
+  const y = Math.max(0, Math.min(a.maxY, b.maxY) - Math.max(a.minY, b.minY));
+  return x * y;
+};
+
+const estimateTextWidth = (text: string, kind: "ref" | "val") => text.length * (kind === "ref" ? 5.5 : 4.9);
+
+const labelLineRect = (text: string, x: number, y: number, anchor: "start" | "middle" | "end", kind: "ref" | "val") => {
+  const w = Math.max(8, estimateTextWidth(text, kind));
+  const h = kind === "ref" ? 10 : 9;
+  const minX = anchor === "middle" ? x - w / 2 : anchor === "end" ? x - w : x;
+  return padRect({ minX, minY: y - h / 2, maxX: minX + w, maxY: y + h / 2 }, 2);
+};
+
+const unionRect = (a: Rect, b: Rect): Rect => ({
+  minX: Math.min(a.minX, b.minX),
+  minY: Math.min(a.minY, b.minY),
+  maxX: Math.max(a.maxX, b.maxX),
+  maxY: Math.max(a.maxY, b.maxY),
+});
+
+const makePlacement = (
+  refText: string,
+  valText: string,
+  ref: LabelPlacement["ref"],
+  val: LabelPlacement["val"],
+): LabelPlacement => {
+  const refBox = labelLineRect(refText, ref.x, ref.y, ref.anchor, "ref");
+  const valBox = valText ? labelLineRect(valText, val.x, val.y, val.anchor, "val") : refBox;
+  return { ref, val, box: unionRect(refBox, valBox) };
+};
+
+const componentWorldRect = (component: SchematicComponent): Rect => {
+  const bounds = componentBounds(component);
+  return padRect(
+    {
+      minX: component.x + bounds.minX,
+      minY: component.y + bounds.minY,
+      maxX: component.x + bounds.maxX,
+      maxY: component.y + bounds.maxY,
+    },
+    5,
+  );
+};
+
+const labelCandidates = (component: SchematicComponent, refText: string, valText: string) => {
+  const b = componentBounds(component);
+  const x = component.x;
+  const y = component.y;
+  const leftX = x + b.minX - 10;
+  const rightX = x + b.maxX + 10;
+  const topRefY = y + b.minY - 20;
+  const belowRefY = y + b.maxY + 10;
+  const vertical = labelAxis(component) === "vertical";
+  const candidates = [
+    makePlacement(refText, valText, { x: leftX, y: y - 7, anchor: "end" }, { x: leftX, y: y + 7, anchor: "end" }),
+    makePlacement(refText, valText, { x: rightX, y: y - 7, anchor: "start" }, { x: rightX, y: y + 7, anchor: "start" }),
+    makePlacement(refText, valText, { x, y: topRefY, anchor: "middle" }, { x, y: topRefY + 12, anchor: "middle" }),
+    makePlacement(refText, valText, { x, y: belowRefY, anchor: "middle" }, { x, y: belowRefY + 12, anchor: "middle" }),
+    makePlacement(refText, valText, { x: leftX - 8, y: y + b.minY - 6, anchor: "end" }, { x: leftX - 8, y: y + b.minY + 7, anchor: "end" }),
+    makePlacement(refText, valText, { x: rightX + 8, y: y + b.maxY - 8, anchor: "start" }, { x: rightX + 8, y: y + b.maxY + 5, anchor: "start" }),
+  ];
+  return vertical ? candidates : [candidates[2], candidates[3], candidates[1], candidates[0], candidates[5], candidates[4]];
+};
+
+const buildLabelPlacements = (components: SchematicComponent[]) => {
+  const componentRects = components.map(componentWorldRect);
+  const placed: Rect[] = [];
+  const placements = new Map<string, LabelPlacement>();
+
+  for (const component of components) {
+    const refText = component.label;
+    const valText = sourceValueLabel(component.kind, component.value);
+    if (!refText && !valText) continue;
+
+    const candidates = labelCandidates(component, refText || valText, valText);
+    const scored = candidates.map((candidate) => {
+      const obstacles = [...componentRects, ...placed];
+      const score = obstacles.reduce((total, rect) => total + overlapArea(candidate.box, rect), 0);
+      return { candidate, score };
+    });
+    const chosen = scored.find((entry) => entry.score === 0)?.candidate
+      ?? scored.sort((a, b) => a.score - b.score)[0].candidate;
+    placements.set(component.id, chosen);
+    placed.push(padRect(chosen.box, 3));
+  }
+
+  return placements;
+};
+
 /** Body half-extents (rotation-aware) used to keep component bodies from overlapping. */
 const bodyHalf = (kind: ComponentKind, rotation: number) => {
   const b = SYMBOL_BOX[kind];
@@ -635,28 +746,23 @@ function ComponentView({
 
 /** All component ref/value labels, drawn in a top layer so nothing can obscure them. */
 function ComponentLabels({ components }: { components: SchematicComponent[] }) {
+  const placements = useMemo(() => buildLabelPlacements(components), [components]);
+
   return (
     <g className="label-layer" aria-hidden="true">
       {components.map((c) => {
-        const bounds = componentBounds(c);
-        const axis = labelAxis(c);
         const value = sourceValueLabel(c.kind, c.value);
-        const sideX = bounds.minX - 10;
-        const ref = axis === "vertical"
-          ? { x: sideX, y: -6, anchor: "end" as const }
-          : { x: 0, y: bounds.minY - 11, anchor: "middle" as const };
-        const val = axis === "vertical"
-          ? { x: sideX, y: 9, anchor: "end" as const }
-          : { x: 0, y: bounds.maxY + 15, anchor: "middle" as const };
+        const placement = placements.get(c.id);
+        if (!placement) return null;
         return (
-          <g key={c.id} transform={`translate(${c.x} ${c.y})`}>
+          <g key={c.id}>
             {c.label && (
-              <text className="ref" x={ref.x} y={ref.y} textAnchor={ref.anchor}>
+              <text className="ref" x={placement.ref.x} y={placement.ref.y} textAnchor={placement.ref.anchor}>
                 {c.label}
               </text>
             )}
             {value && (
-              <text className="val" x={val.x} y={val.y} textAnchor={val.anchor}>
+              <text className="val" x={placement.val.x} y={placement.val.y} textAnchor={placement.val.anchor}>
                 {value}
               </text>
             )}

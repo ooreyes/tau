@@ -3,7 +3,7 @@ import type { AnalysisResult } from "../simulation/linearTransient";
 interface ToolbarProps {
   mode: "schematic" | "simulator";
   result: AnalysisResult | null;
-  runState: "idle" | "complete" | "error" | "stopped";
+  runState: "idle" | "complete" | "error" | "stopped" | "paused";
   title: string;
   onModeChange: (mode: "schematic" | "simulator") => void;
   onRun: () => void;
@@ -12,15 +12,17 @@ interface ToolbarProps {
 
 export function Toolbar({ mode, result, runState, title, onModeChange, onRun, onOpenSettings }: ToolbarProps) {
   const isSimulator = mode === "simulator";
-  const statusText = isSimulator
-    ? result?.ok
-      ? `sim complete · ${result.stats.sampleCount} samples`
-      : runState === "error"
-        ? "sim error"
-        : runState === "stopped"
-          ? "sim stopped"
-          : "simulator ready"
-    : "ready · edit mode";
+  const statusText = !isSimulator
+    ? "ready · edit mode"
+    : runState === "paused"
+      ? "sim paused"
+      : result?.ok
+        ? `sim complete · ${result.stats.sampleCount} samples`
+        : runState === "error"
+          ? "sim error"
+          : runState === "stopped"
+            ? "sim stopped"
+            : "simulator ready";
 
   return (
     <header className="toolbar">

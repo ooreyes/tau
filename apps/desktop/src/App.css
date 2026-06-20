@@ -2028,6 +2028,23 @@ body {
   font-size: 12px;
 }
 
+.explorer-icons button {
+  width: 16px;
+  height: 20px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  color: inherit;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  padding: 0;
+}
+
+.explorer-icons button:hover {
+  color: #d9d4c2;
+}
+
 .explorer-search {
   margin: 0 12px 8px;
   height: 30px;
@@ -2040,6 +2057,8 @@ body {
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 7px;
   font-size: 12px;
+  width: calc(100% - 24px);
+  cursor: pointer;
 }
 
 .explorer-search svg {
@@ -2228,6 +2247,7 @@ body {
 }
 
 .transport .transport-play { color: #71ab7e; }
+.transport .transport-pause.active { color: #d68a3c; background: rgba(214, 138, 60, 0.12); }
 .transport .transport-stop { color: #cf5450; }
 
 .app-simulator .editor-toolbar {
@@ -2267,6 +2287,25 @@ body {
   color: #e6e0cf;
   background: #08080a;
   border-top: 2px solid #d68a3c;
+}
+
+.tab-close {
+  width: 18px;
+  height: 18px;
+  display: grid;
+  place-items: center;
+  margin-left: 2px;
+  border: 0;
+  border-radius: 5px;
+  color: #6b6b73;
+  background: transparent;
+  cursor: pointer;
+  font: 700 13px "JetBrains Mono", ui-monospace, monospace;
+}
+
+.tab-close:hover {
+  color: #efe9d6;
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .editor-tab.add {
@@ -2571,9 +2610,52 @@ body {
   font: 800 11px "JetBrains Mono", ui-monospace, monospace;
 }
 
+.plotter-icon-action,
+.plotter-close,
+.panel-close {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 7px;
+  color: #6b6b73;
+  background: transparent;
+  cursor: pointer;
+  font: 800 11px "JetBrains Mono", ui-monospace, monospace;
+}
+
+.plotter-icon-action:hover,
+.plotter-close:hover,
+.panel-close:hover {
+  color: #efe9d6;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.plotter-close,
+.panel-close {
+  font-size: 14px;
+}
+
 .plotter-stop:hover {
   border-color: rgba(207, 84, 80, 0.66);
   background: rgba(207, 84, 80, 0.2);
+}
+
+.plotter-pause {
+  width: 31px;
+  height: 30px;
+  border: 1px solid rgba(214, 138, 60, 0.38);
+  border-radius: 7px;
+  color: #edc08a;
+  background: rgba(214, 138, 60, 0.12);
+  cursor: pointer;
+  font: 800 11px "JetBrains Mono", ui-monospace, monospace;
+}
+
+.plotter-pause:hover {
+  border-color: rgba(214, 138, 60, 0.66);
+  background: rgba(214, 138, 60, 0.2);
 }
 
 .scope-svg,
@@ -2824,6 +2906,13 @@ body {
   margin-left: auto;
   color: #5a5a62;
   font: 500 10px "JetBrains Mono", ui-monospace, monospace;
+}
+
+.ask-head .panel-close {
+  width: 28px;
+  height: 28px;
+  margin-left: 4px;
+  flex: none;
 }
 
 .chat-scroll {
@@ -3210,6 +3299,133 @@ body {
 .settings-list strong {
   color: #d68a3c;
   font: 700 11px "JetBrains Mono", ui-monospace, monospace;
+}
+
+.minimized-panel-dock {
+  width: 86px;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  padding: 18px 10px;
+  background: #0b0b0e;
+  border-left: 1px solid var(--border);
+}
+
+.restore-orb {
+  width: 64px;
+  min-height: 86px;
+  display: grid;
+  justify-items: center;
+  gap: 7px;
+  border: 0;
+  color: #d9d4c2;
+  background: transparent;
+  cursor: pointer;
+  font: 700 10px "JetBrains Mono", ui-monospace, monospace;
+}
+
+.restore-orb svg {
+  width: 58px;
+  height: 58px;
+  padding: 16px;
+  border: 2px solid currentColor;
+  border-radius: 50%;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.restore-orb.graph {
+  color: #71ab7e;
+}
+
+.restore-orb.ai {
+  color: #d68a3c;
+}
+
+.restore-orb:hover svg {
+  background: rgba(255, 255, 255, 0.06);
+  transform: translateY(-1px);
+}
+
+.confirm-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 110;
+  display: grid;
+  place-items: center;
+  background: rgba(0, 0, 0, 0.42);
+}
+
+.confirm-dialog {
+  width: min(430px, calc(100vw - 32px));
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  border-radius: 12px;
+  background: #0e0e12;
+  color: #d9d4c2;
+  box-shadow: 0 28px 80px rgba(0, 0, 0, 0.55);
+}
+
+.confirm-dialog header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.confirm-dialog header strong {
+  color: #efe9d6;
+  font-size: 15px;
+}
+
+.confirm-dialog header button {
+  width: 28px;
+  height: 28px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 7px;
+  color: #9a9aa2;
+  background: #08080a;
+  cursor: pointer;
+}
+
+.confirm-dialog p {
+  margin: 0;
+  padding: 16px;
+  color: #9a9aa2;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 0 16px 16px;
+}
+
+.confirm-actions button {
+  height: 32px;
+  padding: 0 13px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  color: #d9d4c2;
+  background: #08080a;
+  cursor: pointer;
+  font: 700 12px "Space Grotesk", Inter, system-ui, sans-serif;
+}
+
+.confirm-actions .danger {
+  border-color: rgba(207, 84, 80, 0.48);
+  color: #fff0ee;
+  background: rgba(207, 84, 80, 0.18);
 }
 
 .shell-toast {

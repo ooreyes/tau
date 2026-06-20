@@ -307,6 +307,7 @@ export const useSchematic = create<SchematicState>()((set) => {
         components: [],
         wires: [],
         counters: {},
+        probes: [],
         netLabels: [],
         selectedId: null,
         selectedWireId: null,

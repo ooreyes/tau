@@ -393,6 +393,41 @@ labels):
   - Browser smoke at `http://127.0.0.1:1421/`: settings open/close, Search opens
     command palette, Components focuses palette search, bottom tabs switch,
     RC example loads, Run enters simulator, OP/AC tabs activate, Ask Sim sends,
-    plotter Stop clears the result and updates the live pill to `sim stopped`,
-    simulator hide returns to schematic, remove-library reports feedback, and
-    no console errors were present.
+  plotter Stop clears the result and updates the live pill to `sim stopped`,
+  simulator hide returns to schematic, remove-library reports feedback, and
+  no console errors were present.
+
+### 2026-06-20 — Customer button contract and panel close pass — Codex
+
+- Tightened the customer-facing button contract after the follow-up request:
+  visible controls now either perform a real action, open confirmation UI, or
+  restore/minimize an active panel.
+- Changed Trash/Clear Scratchpad to open a confirmation dialog before deleting
+  the working schematic. Confirming clears components, wires, probes, document
+  title, and analysis output; cancel leaves the scratchpad untouched.
+- Added working X buttons to the active editor tab, the graph/plotter panel,
+  and Ask Sim. The editor tab X routes through the same scratchpad confirmation;
+  the graph and AI X buttons minimize their panels into persistent round restore
+  buttons at the right edge of the simulator.
+- Made Pause and Step real controls for the current synchronous solver surface:
+  Pause toggles the visible run state between paused and complete, and Step
+  increments transient sample count by one and reruns analysis.
+- Added dynamic component-label placement in the canvas. Labels estimate their
+  text bounds, try multiple candidate positions around each symbol, and choose
+  the lowest-overlap placement so labels avoid symbols and other labels as the
+  circuit changes.
+- Verification:
+  - `pnpm typecheck`
+  - `pnpm test` — 100 tests passing
+  - `pnpm --filter @tau/desktop build`
+  - Chrome customer-flow QA at `http://127.0.0.1:1422/`: Run, Pause, Step,
+    TRAN/OP/AC tab switching, Ask Sim submit, graph close/restore, AI
+    close/restore, Stop, simulator Hide, Search, Settings, clear confirmation,
+    and cancel confirmation paths worked without console errors.
+  - Chrome geometry checks across the current scratchpad, non-inverting op-amp,
+    and RLC examples reported no component label-to-label or label-to-symbol
+    overlaps.
+- Caveat: Chrome file chooser/download automation timed out while attempting to
+  exercise Save/Open through the browser wrapper. Those code paths were not
+  changed in this pass; the rest of the customer-visible button audit was
+  verified directly in Chrome.
