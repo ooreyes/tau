@@ -431,3 +431,39 @@ labels):
   exercise Save/Open through the browser wrapper. Those code paths were not
   changed in this pass; the rest of the customer-visible button audit was
   verified directly in Chrome.
+
+### 2026-06-21 — Post-migration bug-fix pass on the IDE shell — Claude (Opus 4.8)
+
+Fixed the bug list raised against the newly-migrated LTspice/VS Code shell.
+
+- Selection: replaced the fixed 72×72 transparent hit-rect with one sized to
+  each part's own footprint (body + pins). A small part (e.g. ground) no longer
+  has a huge box that swallows clicks meant for a neighbour, so clicking a
+  capacitor selects the capacitor.
+- Snapping: the placement ghost now previews the collision-resolved drop spot
+  (same `findFreeSpot` the placer uses), so a part lands exactly where the ghost
+  shows instead of "a random area".
+- Empty-state card: its body captured pointer events while centred over the
+  canvas, blocking the first drop. Now only its buttons take clicks and the card
+  hides once a tool is active — a major cause of "nothing happens on click".
+- Labels: thinned the value halo (3.5px → 2px) + crisp text-rendering so values
+  like "10nF" read cleanly; labels now also avoid wire segments so a value no
+  longer reads as if the wire carried it.
+- Simulator canvas is read-only: pan/zoom + select-to-inspect only (no place,
+  wire, probe, drag, or value edit) via a new `interactive` prop on `Canvas`.
+- Editor tabs are now a real in-memory multi-document model: each tab keeps its
+  own schematic snapshot, switching preserves edits, opening an example focuses
+  its tab, and the amber highlight follows the active document (both modes).
+- Explorer tree highlight follows the open document instead of pinning file 0.
+- Components rail button toggles the parts catalogue (given a real width in the
+  flex shell, where its legacy `grid-area` was inert) and reflects open state.
+- Removed the fake macOS traffic lights (native title bar already draws them);
+  the refined `tau` brand mark leads instead.
+- Simulator's three columns (circuit / analysis scope / Ask Sim) are resizable
+  via draggable dividers; the circuit column flexes to fill the remainder.
+- Verification: `pnpm typecheck` clean; `pnpm test` — 100 tests passing.
+  Visual check deferred to the running dev server (port 1420 held by the user's
+  `pnpm dev`, vite `strictPort` prevents a second preview instance); HMR is live.
+- Note: App.css still carries the legacy pre-migration stylesheet (~lines
+  100–1700) alongside the new shell section; later rules win, but a dedup pass
+  would reduce risk for the next editor.
