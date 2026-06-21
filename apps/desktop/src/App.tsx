@@ -30,6 +30,15 @@ import {
   type AnalysisOptions,
   type AnalysisResult,
 } from "./simulation/linearTransient";
+import { runOperatingPoint, type OperatingPointResult } from "./simulation/operatingPoint";
+import { runAcSweep, type AcResult } from "./simulation/acSweep";
+import {
+  isNativeSpiceRuntime,
+  MAX_NATIVE_OUTPUT_POINTS,
+  runNativeAcSweep,
+  runNativeOperatingPoint,
+  runNativeTransient,
+} from "./engine/nativeSpice";
 
 const DEFAULT_ANALYSIS_OPTIONS: AnalysisOptions = {
   stopTime: 0.006,
@@ -99,6 +108,9 @@ function App() {
   const redo = useSchematic((s) => s.redo);
   const [analysisOptions, setAnalysisOptions] = useState<AnalysisOptions>(DEFAULT_ANALYSIS_OPTIONS);
   const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
+  const [opAnalysis, setOpAnalysis] = useState<OperatingPointResult | null>(null);
+  const [acAnalysis, setAcAnalysis] = useState<AcResult | null>(null);
+  const [analysisRunning, setAnalysisRunning] = useState(false);
   const [runState, setRunState] = useState<"idle" | "complete" | "error" | "stopped" | "paused">("idle");
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [mode, setMode] = useState<"schematic" | "simulator">("schematic");
@@ -121,19 +133,61 @@ function App() {
     window.setTimeout(() => setNotice((current) => (current === message ? null : current)), 2600);
   }, []);
 
-  const runAnalysis = useCallback(() => {
-    const result = runTransientAnalysis({ components, wires }, analysisOptions);
-    setAnalysis(result);
-    setRunState(result.ok ? "complete" : "error");
-  }, [components, wires, analysisOptions]);
+  const executeTransient = useCallback(async (options: AnalysisOptions) => {
+    setAnalysisRunning(true);
+    try {
+      const result = await runNativeTransient({ components, wires }, options) ?? runTransientAnalysis({ components, wires }, options);
+      setAnalysis(result);
+      setRunState(result.ok ? "complete" : "error");
+    } catch (error) {
+      setAnalysis({
+        ok: false,
+        title: "ngspice transient",
+        message: error instanceof Error ? error.message : "ngspice could not run this transient analysis.",
+        warnings: [],
+      });
+      setRunState("error");
+    } finally {
+      setAnalysisRunning(false);
+    }
+  }, [components, wires]);
 
-  const runAndShowSimulator = useCallback(() => {
-    const result = runTransientAnalysis({ components, wires }, analysisOptions);
-    setAnalysis(result);
-    setRunState(result.ok ? "complete" : "error");
+  const runAnalysis = useCallback(async () => {
+    await executeTransient(analysisOptions);
+  }, [analysisOptions, executeTransient]);
+
+  const runAndShowSimulator = useCallback(async () => {
     setMode("simulator");
     setGraphOpen(true);
-  }, [components, wires, analysisOptions]);
+    await executeTransient(analysisOptions);
+  }, [analysisOptions, executeTransient]);
+
+  const runOperatingAnalysis = useCallback(async () => {
+    setAnalysisRunning(true);
+    try {
+      const result = await runNativeOperatingPoint({ components, wires }) ?? runOperatingPoint({ components, wires });
+      setOpAnalysis(result);
+    } catch (error) {
+      setOpAnalysis({ ok: false, message: error instanceof Error ? error.message : "ngspice could not calculate the operating point.", warnings: [] });
+    } finally {
+      setAnalysisRunning(false);
+    }
+  }, [components, wires]);
+
+  const runAcAnalysis = useCallback(async () => {
+    setAnalysisRunning(true);
+    try {
+      const result = await runNativeAcSweep(
+        { components, wires },
+        { startHz: 10, stopHz: 1e6, pointsPerDecade: 20 },
+      ) ?? runAcSweep({ components, wires }, { startHz: 10, stopHz: 1e6, pointsPerDecade: 20 });
+      setAcAnalysis(result);
+    } catch (error) {
+      setAcAnalysis({ ok: false, message: error instanceof Error ? error.message : "ngspice could not run this AC sweep.", warnings: [] });
+    } finally {
+      setAnalysisRunning(false);
+    }
+  }, [components, wires]);
 
   const pauseAnalysis = useCallback(() => {
     if (!analysis) {
@@ -150,16 +204,15 @@ function App() {
     });
   }, [analysis, showNotice]);
 
-  const stepAnalysis = useCallback(() => {
-    const nextOptions = { ...analysisOptions, steps: Math.min(MAX_TRANSIENT_STEPS, analysisOptions.steps + 1) };
-    const result = runTransientAnalysis({ components, wires }, nextOptions);
+  const stepAnalysis = useCallback(async () => {
+    const maxSteps = isNativeSpiceRuntime() ? MAX_NATIVE_OUTPUT_POINTS : MAX_TRANSIENT_STEPS;
+    const nextOptions = { ...analysisOptions, steps: Math.min(maxSteps, analysisOptions.steps + 1) };
     setAnalysisOptions(nextOptions);
-    setAnalysis(result);
-    setRunState(result.ok ? "complete" : "error");
     setMode("simulator");
     setGraphOpen(true);
+    await executeTransient(nextOptions);
     showNotice("Advanced transient by one sample.");
-  }, [analysisOptions, components, wires, showNotice]);
+  }, [analysisOptions, executeTransient, showNotice]);
 
   const stopAnalysis = useCallback(() => {
     if (!analysis) {
@@ -272,6 +325,8 @@ function App() {
 
   useEffect(() => {
     setAnalysis(null);
+    setOpAnalysis(null);
+    setAcAnalysis(null);
     setRunState("idle");
   }, [components, wires]);
 
@@ -400,9 +455,14 @@ function App() {
             <AnalysisErrorBoundary>
               <SimulationPanel
                 result={analysis}
+                opResult={opAnalysis}
+                acResult={acAnalysis}
                 options={analysisOptions}
+                isRunning={analysisRunning}
                 onOptionsChange={setAnalysisOptions}
                 onRun={runAnalysis}
+                onRunOperatingPoint={runOperatingAnalysis}
+                onRunAcSweep={runAcAnalysis}
                 onStop={stopAnalysis}
                 onPause={pauseAnalysis}
                 onStep={stepAnalysis}

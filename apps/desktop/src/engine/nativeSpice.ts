@@ -1,0 +1,152 @@
+import { invoke } from "@tauri-apps/api/core";
+import { buildSpiceDeck, type SpiceAnalysis } from "./spiceNetlist";
+import type { SchematicComponent, SchematicWire } from "../schematic/types";
+import type { AnalysisOptions, AnalysisResult, Trace } from "../simulation/linearTransient";
+import type { OperatingPointResult } from "../simulation/operatingPoint";
+import type { AcResult, AcTrace } from "../simulation/acSweep";
+
+interface NativeVector {
+  name: string;
+  real: number[];
+  imaginary: number[] | null;
+}
+
+interface NativeSpiceResult {
+  plot: string;
+  vectors: NativeVector[];
+  messages: string[];
+  libraryPath: string;
+}
+
+type Schematic = { components: SchematicComponent[]; wires: SchematicWire[] };
+type NativeExecution = { result: NativeSpiceResult; deck: ReturnType<typeof buildSpiceDeck> };
+
+/** Keeps a single high-resolution result below Rust's transfer guard. */
+export const MAX_NATIVE_OUTPUT_POINTS = 2_000_000;
+
+const TRACE_COLORS = [
+  "var(--trace-cyan)",
+  "var(--trace-green)",
+  "var(--trace-cream)",
+  "var(--trace-red)",
+  "var(--trace-purple)",
+  "var(--trace-amber)",
+];
+
+/** `invoke` is available only inside a Tauri webview. Browser development keeps
+ * the small TypeScript solvers as an explicit fallback, never as desktop fake. */
+export function isNativeSpiceRuntime(): boolean {
+  return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+}
+
+export async function runNativeTransient(
+  schematic: Schematic,
+  options: AnalysisOptions,
+): Promise<AnalysisResult | null> {
+  const execution = await executeNative(schematic, { kind: "tran", ...options });
+  if (!execution) return null;
+  const time = vector(execution.result, "time");
+  if (!time || time.real.length < 2) throw new Error("ngspice returned no transient time vector.");
+
+  const traces: Trace[] = execution.deck.circuit.nets
+    .filter((net) => !net.isGround)
+    .flatMap((net, index) => {
+      const values = vector(execution.result, `v(${net.id})`)?.real;
+      if (!values || values.length !== time.real.length) return [];
+      return [{
+        id: net.id,
+        label: `V(${friendlyNetName(net)})`,
+        unit: "V" as const,
+        color: TRACE_COLORS[index % TRACE_COLORS.length],
+        values,
+      }];
+    });
+
+  if (traces.length === 0) throw new Error("ngspice completed, but returned no node-voltage traces.");
+  const stopTime = time.real[time.real.length - 1] ?? options.stopTime;
+  return {
+    ok: true,
+    title: "ngspice transient",
+    times: time.real,
+    traces,
+    stats: {
+      netCount: execution.deck.circuit.nets.length,
+      componentCount: schematic.components.length,
+      sampleCount: time.real.length,
+      stopTime,
+      stepSize: time.real.length > 1 ? (time.real[1] - time.real[0]) : stopTime,
+    },
+    warnings: [...execution.deck.circuit.warnings, ...engineWarnings(execution.result.messages)],
+    circuit: execution.deck.circuit,
+  };
+}
+
+export async function runNativeOperatingPoint(schematic: Schematic): Promise<OperatingPointResult | null> {
+  const execution = await executeNative(schematic, { kind: "op" });
+  if (!execution) return null;
+  const nets = execution.deck.circuit.nets
+    .filter((net) => !net.isGround)
+    .flatMap((net) => {
+      const voltage = vector(execution.result, `v(${net.id})`)?.real[0];
+      return Number.isFinite(voltage) ? [{ id: net.id, label: `V(${friendlyNetName(net)})`, voltage: voltage as number }] : [];
+    });
+  if (nets.length === 0) throw new Error("ngspice completed, but returned no operating-point voltages.");
+  return { ok: true, nets, warnings: [...execution.deck.circuit.warnings, ...engineWarnings(execution.result.messages)] };
+}
+
+export async function runNativeAcSweep(
+  schematic: Schematic,
+  options: { startHz: number; stopHz: number; pointsPerDecade: number },
+): Promise<AcResult | null> {
+  const execution = await executeNative(schematic, { kind: "ac", ...options });
+  if (!execution) return null;
+  const frequency = vector(execution.result, "frequency");
+  if (!frequency || frequency.real.length < 2) throw new Error("ngspice returned no AC frequency vector.");
+
+  const traces: AcTrace[] = execution.deck.circuit.nets
+    .filter((net) => !net.isGround)
+    .flatMap((net) => {
+      const values = vector(execution.result, `v(${net.id})`);
+      if (!values || values.real.length !== frequency.real.length) return [];
+      const imag = values.imaginary ?? Array(values.real.length).fill(0);
+      return [{
+        id: net.id,
+        label: `V(${friendlyNetName(net)})`,
+        magDb: values.real.map((real, index) => {
+          const magnitude = Math.hypot(real, imag[index] ?? 0);
+          return magnitude > 0 ? 20 * Math.log10(magnitude) : -300;
+        }),
+        phaseDeg: values.real.map((real, index) => Math.atan2(imag[index] ?? 0, real) * (180 / Math.PI)),
+      }];
+    });
+
+  if (traces.length === 0) throw new Error("ngspice completed, but returned no AC node-voltage traces.");
+  return { ok: true, freqs: frequency.real, traces, warnings: [...execution.deck.circuit.warnings, ...engineWarnings(execution.result.messages)] };
+}
+
+async function executeNative(schematic: Schematic, analysis: SpiceAnalysis): Promise<NativeExecution | null> {
+  if (!isNativeSpiceRuntime()) return null;
+  const deck = buildSpiceDeck(schematic, analysis);
+  const result = await invoke<NativeSpiceResult>("simulate_spice", { request: { netlist: deck.netlist } });
+  return { result, deck };
+}
+
+function vector(result: NativeSpiceResult, name: string): NativeVector | undefined {
+  const normalized = nodeVectorName(name);
+  return result.vectors.find((candidate) => nodeVectorName(candidate.name) === normalized);
+}
+
+function nodeVectorName(name: string): string {
+  const normalized = name.toLowerCase().replace(/\s+/g, "");
+  const voltageMatch = normalized.match(/^v\((.+)\)$/);
+  return voltageMatch?.[1] ?? normalized;
+}
+
+function friendlyNetName(net: { id: string; pins: { componentLabel: string }[] }): string {
+  const labels = [...new Set(net.pins.map((pin) => pin.componentLabel).filter(Boolean))];
+  return labels.length > 0 ? labels.slice(0, 2).join(".") : net.id;
+}
+
+function engineWarnings(messages: string[]): string[] {
+  return messages.filter((message) => /warn|singular|converg|error/i.test(message)).slice(0, 8);
+}

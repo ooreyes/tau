@@ -15,17 +15,23 @@ import { OPAMP_LIBRARY, findOpAmp } from "../library/opamps";
 import type { Probe, NetLabel } from "../schematic/types";
 import { paramFields, decodeParams, encodeParams } from "../schematic/params";
 import { EngineeringInput } from "./EngineeringInput";
-import { runOperatingPoint } from "../simulation/operatingPoint";
-import { runAcSweep } from "../simulation/acSweep";
+import type { OperatingPointResult } from "../simulation/operatingPoint";
+import type { AcResult } from "../simulation/acSweep";
+import { isNativeSpiceRuntime, MAX_NATIVE_OUTPUT_POINTS } from "../engine/nativeSpice";
 
 interface SimulationPanelProps {
   result: AnalysisResult | null;
+  opResult: OperatingPointResult | null;
+  acResult: AcResult | null;
   options: AnalysisOptions;
+  isRunning: boolean;
   onOptionsChange: (options: AnalysisOptions) => void;
-  onRun: () => void;
+  onRun: () => void | Promise<void>;
+  onRunOperatingPoint: () => void | Promise<void>;
+  onRunAcSweep: () => void | Promise<void>;
   onStop: () => void;
-  onPause: () => void;
-  onStep: () => void;
+  onPause: () => void | Promise<void>;
+  onStep: () => void | Promise<void>;
   onClose: () => void;
 }
 
@@ -33,7 +39,21 @@ const PLOT_WIDTH = 340;
 const PLOT_HEIGHT = 210;
 const PLOT_PAD = 26;
 
-export function SimulationPanel({ result, options, onOptionsChange, onRun, onStop, onPause, onStep, onClose }: SimulationPanelProps) {
+export function SimulationPanel({
+  result,
+  opResult,
+  acResult,
+  options,
+  isRunning,
+  onOptionsChange,
+  onRun,
+  onRunOperatingPoint,
+  onRunAcSweep,
+  onStop,
+  onPause,
+  onStep,
+  onClose,
+}: SimulationPanelProps) {
   const components = useSchematic((s) => s.components);
   const wires = useSchematic((s) => s.wires);
   const selectedId = useSchematic((s) => s.selectedId);
@@ -53,14 +73,7 @@ export function SimulationPanel({ result, options, onOptionsChange, onRun, onSto
   const [mode, setMode] = useState<"tran" | "op" | "ac">("tran");
   const [maximized, setMaximized] = useState(false);
   const title = mode === "tran" ? "Transient scope" : mode === "op" ? "Operating point" : "AC sweep";
-  const opResult = useMemo(
-    () => (mode === "op" ? runOperatingPoint({ components, wires }) : null),
-    [mode, components, wires],
-  );
-  const acResult = useMemo(
-    () => (mode === "ac" ? runAcSweep({ components, wires }, { startHz: 10, stopHz: 1e6, pointsPerDecade: 20 }) : null),
-    [mode, components, wires],
-  );
+  const maxTransientSteps = isNativeSpiceRuntime() ? MAX_NATIVE_OUTPUT_POINTS : MAX_TRANSIENT_STEPS;
   const resolution = useMemo(() => {
     try {
       return inspectTransientResolution(components, options);
@@ -70,7 +83,7 @@ export function SimulationPanel({ result, options, onOptionsChange, onRun, onSto
   }, [components, options]);
 
   return (
-    <aside className={`plotter${maximized ? " maximized" : ""}`} aria-label="Analysis plotter">
+    <aside className={`plotter${maximized ? " maximized" : ""}`} aria-label="Analysis plotter" aria-busy={isRunning}>
       <div className="plotter-header">
         <div>
           <div className="plotter-kicker">Analysis</div>
@@ -96,8 +109,8 @@ export function SimulationPanel({ result, options, onOptionsChange, onRun, onSto
           </button>
           {mode === "tran" ? (
             <>
-              <button className="plotter-run" onClick={onRun} title="Run transient analysis">
-                ▶&nbsp;Run
+              <button className="plotter-run" onClick={() => void onRun()} title="Run transient analysis" disabled={isRunning}>
+                {isRunning ? "Running" : "▶ Run"}
               </button>
               {result && (
                 <button className="plotter-pause" onClick={onPause} title="Pause or resume simulation state" aria-label="Pause simulation">
@@ -106,7 +119,7 @@ export function SimulationPanel({ result, options, onOptionsChange, onRun, onSto
               )}
             </>
           ) : (
-            <div className="plotter-live">Live</div>
+            <div className="plotter-live">{isRunning ? "Running" : "Ready"}</div>
           )}
         </div>
       </div>
@@ -116,10 +129,26 @@ export function SimulationPanel({ result, options, onOptionsChange, onRun, onSto
           <button className={`plotter-tab${mode === "tran" ? " active" : ""}`} role="tab" aria-selected={mode === "tran"} onClick={() => setMode("tran")}>
             TRAN
           </button>
-          <button className={`plotter-tab${mode === "op" ? " active" : ""}`} role="tab" aria-selected={mode === "op"} onClick={() => setMode("op")}>
+          <button
+            className={`plotter-tab${mode === "op" ? " active" : ""}`}
+            role="tab"
+            aria-selected={mode === "op"}
+            onClick={() => {
+              setMode("op");
+              void onRunOperatingPoint();
+            }}
+          >
             OP
           </button>
-          <button className={`plotter-tab${mode === "ac" ? " active" : ""}`} role="tab" aria-selected={mode === "ac"} onClick={() => setMode("ac")}>
+          <button
+            className={`plotter-tab${mode === "ac" ? " active" : ""}`}
+            role="tab"
+            aria-selected={mode === "ac"}
+            onClick={() => {
+              setMode("ac");
+              void onRunAcSweep();
+            }}
+          >
             AC
           </button>
         </div>
@@ -149,7 +178,7 @@ export function SimulationPanel({ result, options, onOptionsChange, onRun, onSto
               label="STEPS"
               value={String(options.steps)}
               min={32}
-              max={MAX_TRANSIENT_STEPS}
+              max={maxTransientSteps}
               step={1}
               numericValue={options.steps}
               onChange={(value) => onOptionsChange({ ...options, steps: Math.round(value) })}
@@ -157,8 +186,9 @@ export function SimulationPanel({ result, options, onOptionsChange, onRun, onSto
             <ResolutionControl
               resolution={resolution}
               steps={options.steps}
+              maxSteps={maxTransientSteps}
               onApply={() => {
-                if (!resolution || resolution.requiredSteps <= 0 || resolution.requiredSteps > MAX_TRANSIENT_STEPS) return;
+                if (!resolution || resolution.requiredSteps <= 0 || resolution.requiredSteps > maxTransientSteps) return;
                 onOptionsChange({ ...options, steps: Math.max(32, resolution.requiredSteps) });
               }}
             />
@@ -425,7 +455,7 @@ function tracePath(trace: Trace, times: number[], min: number, max: number, tMax
     .join(" ");
 }
 
-function OpTable({ result }: { result: ReturnType<typeof runOperatingPoint> | null }) {
+function OpTable({ result }: { result: OperatingPointResult | null }) {
   if (!result) return null;
   if (!result.ok) return <div className="analysis-empty">{result.message}</div>;
   const maxAbs = Math.max(...result.nets.map((net) => Math.abs(net.voltage)), 0);
@@ -454,7 +484,7 @@ function OpTable({ result }: { result: ReturnType<typeof runOperatingPoint> | nu
 
 const AC_COLORS = ["var(--trace-cyan)", "var(--trace-green)", "var(--trace-cream)", "var(--trace-red)"];
 
-function AcPlot({ result }: { result: ReturnType<typeof runAcSweep> | null }) {
+function AcPlot({ result }: { result: AcResult | null }) {
   const success = result?.ok ? result : null;
   const traces = success ? success.traces.slice(0, 4) : [];
   const plot = useMemo(() => {
@@ -586,10 +616,12 @@ function DialControl({
 function ResolutionControl({
   resolution,
   steps,
+  maxSteps,
   onApply,
 }: {
   resolution: ReturnType<typeof inspectTransientResolution> | null;
   steps: number;
+  maxSteps: number;
   onApply: () => void;
 }) {
   if (!resolution || resolution.maxFrequencyHz <= 0) {
@@ -603,7 +635,7 @@ function ResolutionControl({
   }
 
   const samples = resolution.samplesPerCycle ?? 0;
-  const canResolve = resolution.requiredSteps <= MAX_TRANSIENT_STEPS;
+  const canResolve = resolution.requiredSteps <= maxSteps;
   const ready = samples >= MIN_SAMPLES_PER_CYCLE;
   return (
     <div className={`resolution-control${ready ? " ready" : " warning"}`}>
@@ -619,7 +651,7 @@ function ResolutionControl({
           {ready ? "Resolved" : `Set ${MIN_SAMPLES_PER_CYCLE}×`}
         </button>
       ) : (
-        <small className="resolution-limit">Shorten STOP or use AC analysis. Interactive limit: {formatCount(MAX_TRANSIENT_STEPS)} steps.</small>
+        <small className="resolution-limit">Shorten STOP or use AC analysis. Output limit: {formatCount(maxSteps)} steps.</small>
       )}
     </div>
   );

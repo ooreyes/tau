@@ -10,7 +10,10 @@
 
 ---
 
-> ⚠️ **Status: early development (v0.2, pre-alpha).** Tau can edit simple schematics, load examples, run real interim linear transient, operating-point, and AC sweep analyses for the supported starter component set, and plot node voltages. The planned Rust/ngspice engine is not wired in yet.
+> ⚠️ **Status: early development (v0.2, pre-alpha).** Tau has an embedded
+> ngspice engine for the native desktop app, including transient, operating
+> point, and AC analyses. The browser-only dev path retains the smaller
+> TypeScript solver as a fallback.
 
 ## What is Tau?
 
@@ -37,7 +40,7 @@ approachable — a tool you can learn circuits on and still trust for real desig
 | Frontend | React 19 + TypeScript + Vite 7 |
 | Schematic canvas | SVG + React (v0) → Canvas2D/WebGL for scale |
 | State | Zustand |
-| Engine | Interim TypeScript MNA solver now; ngspice via Rust FFI (`libngspice`) planned |
+| Engine | Bundled ngspice via Rust FFI (`libngspice`); TypeScript MNA only for browser dev fallback |
 | Plotting | SVG plotter now; uPlot or custom renderer later |
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for the full picture and
@@ -49,12 +52,12 @@ Tau ships an owned generic SPICE-style starter library: squiggly resistor,
 capacitor, inductor, DC/AC voltage and current sources, ground, diode/LED/zener,
 NMOS/PMOS, NPN/PNP, op amp, potentiometer, switch, transformer, and test point.
 
-The interim TypeScript solvers currently simulate linear R/C/L, DC voltage and
-current sources, sine AC voltage/current sources, ideal op amps, open/closed
-switches, grounds, and test points across transient, operating-point, and AC
-sweep where those models make sense. Nonlinear/model-based parts are placeable
-and wireable now, but need the planned ngspice engine and model/subcircuit
-support before analysis.
+The native desktop app exports the current library to ngspice. R/C/L, DC and
+AC sources, diodes, LEDs, zeners, NMOS/PMOS, NPN/PNP, ideal op amps,
+potentiometers, switches, transformers, grounds, and test points therefore run
+through real SPICE analysis. Tau supplies conservative generic models for the
+semiconductor symbols; vendor-accurate models still require a future
+user-provided `.lib` / `.subckt` import workflow.
 
 Tau does not bundle or copy LTspice's proprietary libraries. Future work should
 add an importer for user-provided SPICE `.lib`/`.subckt` files and symbol
@@ -63,21 +66,27 @@ mapping rather than vendoring third-party libraries.
 ## Quickstart (development)
 
 Prerequisites: **Node ≥ 20**, **pnpm**, **Rust** (stable), and the platform's
-native webview toolchain (macOS: Xcode Command Line Tools).
+native webview toolchain (macOS: Xcode Command Line Tools). Native engine
+builds also need GNU Bison 3.x (macOS: `brew install bison`).
 
 ```bash
 pnpm install          # install workspace dependencies
+scripts/build-ngspice.sh # build and stage the bundled native ngspice resource
 pnpm dev              # launch the Tauri desktop app (native window)
 pnpm dev:web          # OR run just the frontend in a browser (Vite dev server)
 pnpm typecheck        # type-check the app
 pnpm test             # run solver/example correctness tests
 ```
 
+`pnpm dev:web` intentionally uses the browser fallback and cannot exercise the
+native engine. Use `pnpm dev` for ngspice verification.
+
 ## Release build
 
 ```bash
 pnpm typecheck
 pnpm test
+scripts/build-ngspice.sh
 pnpm --filter @tau/desktop build   # frontend production bundle
 pnpm build                         # Tauri release app + DMG
 ```
@@ -87,13 +96,14 @@ Current macOS release artifacts are produced under
 
 - `macos/Tau.app`
 - `dmg/Tau_0.2.0_aarch64.dmg`
+- `dmg/Tau_0.2.0_aarch64_signed.dmg` after the local ad-hoc signing pass
 
 Local release builds are ad-hoc signed and the app bundle code signature
 verifies after signing. Public distribution still needs Apple Developer ID
 signing and notarization; without that, Gatekeeper will reject the app.
 
-Current local DMG SHA-256:
-`d43df26263fa892658e1ee3cadd3cc9ae51baaf52bd7b46f5e6b051ed967b354`.
+Current signed local DMG SHA-256:
+`29a6d2d9957bf4a524dac8e81fda8e5d75532c10e4fed302a44712d674599234`.
 
 ## Repository layout
 

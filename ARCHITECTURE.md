@@ -32,8 +32,8 @@ describes layers not yet built; those are marked _(planned)_. See
 │                                                                │
 │  Toolbar · Palette · Command palette (planned)                 │
 │  Schematic Canvas (SVG→Canvas2D/WebGL)   Zustand doc + undo    │
-│  Net extractor → Circuit IR (planned) → Netlist gen (planned)  │
-│  Plotter UI   Probe manager (planned)                          │
+│  Net extractor → SPICE deck exporter → typed results           │
+│  Plotter UI   Probe manager                                    │
 └───────────────────────────────┬────────────────────────────────┘
                                  │  Engine Contract (typed, planned)
                                  │  {CircuitIR, AnalysisSpec} → stream<Result>
@@ -41,13 +41,13 @@ describes layers not yet built; those are marked _(planned)_. See
 ┌──────────────────────────────────────────────────────────────┐
 │  RUST SHELL  (apps/desktop/src-tauri)  +  crates/ (planned)    │
 │                                                                │
-│  Tauri commands / events  ⇄  sim-orchestrator (planned)        │
-│     ├─ ngspice-rs  (safe wrapper, streaming)        (planned)  │
-│     │     └─ ngspice-sys (FFI bindings to libngspice)(planned) │
+│  Tauri command  ⇄  serialized native ngspice access            │
+│     ├─ apps/desktop/src-tauri/src/spice.rs                     │
+│     └─ future sim-orchestrator / streaming crate               │
 │     └─ multi-process pool for parallel sweeps / MC  (planned)  │
 └──────────────────────────────────────────────────────────────┘
                                  │
-                          bundled libngspice (Phase 3)
+                          bundled libngspice
 ```
 
 ## Module boundaries
@@ -60,13 +60,15 @@ describes layers not yet built; those are marked _(planned)_. See
 | `ngspice-rs` _(planned)_ | `crates/ngspice-rs` | Safe wrapper + result streaming via ngspice callbacks |
 | `sim-orchestrator` _(planned)_ | `crates/sim-orchestrator` | Run scheduling, parallel sweeps/Monte Carlo |
 
-## Engine integration (Phase 3)
+## Engine integration
 
-- **Mechanism:** Rust FFI to `libngspice` (the ngspice shared library), **bundled**
-  into the app. Chosen for native speed, live result streaming (via ngspice's
-  data/exit callbacks → Tauri events → live plots), and zero-install for users.
-- **Build:** ngspice's shared library is not shipped by Homebrew; it will be
-  built from source (`--with-ngshared`) and linked. KLU sparse solver enabled.
+- **Mechanism:** Rust dynamically loads the bundled `libngspice` and serializes
+  calls behind one Tauri command because ngspice has global process state. It
+  returns completed vector data for `.tran`, `.op`, and `.ac`; streaming remains
+  future work.
+- **Build:** `scripts/build-ngspice.sh` pins and builds ngspice with
+  `--with-ngshared`, KLU enabled, OpenMP disabled, then stages resources under
+  `apps/desktop/src-tauri/resources/ngspice/` for Tauri bundling.
 - **Concurrency note:** `libngspice` carries global state and is not safely
   reentrant. Parallel sweeps/Monte Carlo run as **multiple processes**, not
   threads inside one instance. This is the robust path to "use all cores."
@@ -75,17 +77,13 @@ describes layers not yet built; those are marked _(planned)_. See
   adaptive time-stepping and local-truncation-error control; Newton–Raphson with
   Gmin/source stepping for convergence; sparse LU (KLU) per iteration.
 
-## Current interim simulation path
+## Browser fallback
 
-Phase 1 now includes a small TypeScript transient solver inside
-`apps/desktop/src/simulation/`. This is a temporary, linear-only implementation
-for the current R/C/L/V/GND catalog so the UI can run real analysis before the
-Rust/ngspice adapter exists. React still calls a single analysis function and
-consumes structured results; solver math stays outside React components.
-
-When Phase 2/3 engine work begins, keep the UI contract shape and replace the
-implementation behind it with the Rust/ngspice result stream rather than adding
-SPICE details to the canvas or plotter components.
+`apps/desktop/src/simulation/` retains a small TypeScript MNA implementation
+only for `pnpm dev:web`. `apps/desktop/src/engine/` exports schematic documents
+to SPICE and adapts the native command result into the existing plotter types.
+The desktop app must not silently fall back when native ngspice loading fails;
+that failure is shown to the user.
 
 ## Decisions locked
 

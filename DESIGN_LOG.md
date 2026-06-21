@@ -558,3 +558,46 @@ Fixed the bug list raised against the newly-migrated LTspice/VS Code shell.
   - `pnpm --filter @tau/desktop build`
   - Screenshot smoke at `http://127.0.0.1:1421/`; cleaned the no-selection
     inspector state after visual review.
+
+### 2026-06-21 — Embedded ngspice engine and packaged native analysis — Codex
+
+- Implemented the desktop native engine in
+  `apps/desktop/src-tauri/src/spice.rs`. It dynamically loads the bundled
+  shared `libngspice`, serializes access through `NativeSpiceState`, loads a
+  generated deck with `ngSpice_Circ`, runs it, and returns real/complex vectors
+  through the Tauri `simulate_spice` command. Calls are intentionally
+  serialized because libngspice has global state.
+- Added `apps/desktop/src/engine/spiceNetlist.ts`, which derives `.tran`,
+  `.op`, and `.ac` decks from the schematic. It supports every currently
+  placeable part with generic ngspice models for diode/LED/zener, MOSFET, and
+  BJT symbols. User-supplied vendor model and subcircuit import remains future
+  work; Tau does not bundle LTspice libraries.
+- Added `apps/desktop/src/engine/nativeSpice.ts` and connected the simulator UI
+  to the native engine for transient, operating-point, and AC tabs. The
+  TypeScript solvers remain an explicit `pnpm dev:web` fallback only. Native
+  desktop failures show an ngspice error instead of silently using the limited
+  fallback.
+- Added native output support up to 2,000,000 points, bounded by the Rust
+  vector-transfer guard. Browser fallback remains capped at 200,000 points.
+- Added `scripts/build-ngspice.sh`, pinned to commit
+  `67fbaa9e6a6d756fa23bf52c7b565fbe926fb9c6`, to build ngspice with its
+  shared library, KLU, XSPICE/OSDI support, and GNU Bison 3.x. Tauri now bundles
+  the staged `resources/ngspice/` directory; the binary resources are ignored
+  by git and must be regenerated before a fresh native/release build.
+- Important native lifecycle finding: `ngSpice_nospinit`, `ngSpice_nospiceinit`,
+  and `ngSpice_Reset` crash this ngspice build before a circuit exists. The
+  bridge intentionally does not call them. Repeated `ngSpice_Circ` runs are
+  validated and replace the prior circuit safely.
+- Verification:
+  - `pnpm typecheck`
+  - `pnpm test` — 126 tests passing
+  - `cargo check --manifest-path apps/desktop/src-tauri/Cargo.toml`
+  - Native ignored Rust FFI smoke test against the staged dylib: repeated DC
+    operating-point runs, generic NMOS operating point, transient time vectors,
+    and complex AC vectors all passed.
+  - `pnpm build` produced a Tau.app containing `Resources/ngspice/lib/libngspice.dylib`.
+  - Re-signed Tau.app ad-hoc and built/verified
+    `Tau_0.2.0_aarch64_signed.dmg`; SHA-256
+    `29a6d2d9957bf4a524dac8e81fda8e5d75532c10e4fed302a44712d674599234`.
+- Remaining production caveat: ad-hoc signing verifies locally but public
+  macOS distribution still requires Developer ID signing and notarization.

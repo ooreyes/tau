@@ -11,6 +11,8 @@ build/
 # Rust / Tauri
 target/
 **/gen/schemas/
+apps/desktop/src-tauri/resources/ngspice/**
+!apps/desktop/src-tauri/resources/ngspice/.gitkeep
 
 # Logs
 *.log
