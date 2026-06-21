@@ -76,7 +76,7 @@ export function SimulationPanel({ result, options, onOptionsChange, onRun, onSto
           >
             {maximized ? "⤡" : "⤢"}
           </button>
-          <button className="plotter-close" onClick={onClose} title="Close graphs" aria-label="Close graphs">
+          <button className="plotter-close" onClick={onClose} title="Minimize graphs" aria-label="Minimize graphs">
             ×
           </button>
           {mode === "tran" ? (

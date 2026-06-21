@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { CATALOG_BY_KIND } from "../schematic/catalog";
 import { ComponentSymbol } from "../schematic/symbols";
 import type { SchematicComponent } from "../schematic/types";
-import { decodeParams, paramFields } from "../schematic/params";
+import { decodeParams, encodeParams, paramFields } from "../schematic/params";
 import { useSchematic, type SchematicDocument } from "../store/useSchematic";
 import { EXAMPLE_CIRCUITS, type ExampleCircuit } from "../examples/circuits";
 import type { AnalysisResult } from "../simulation/linearTransient";
@@ -477,13 +477,28 @@ function ErrorPanel({ result }: { result: AnalysisResult | null }) {
 
 function ComponentInspector({ selected }: { selected: SchematicComponent | null }) {
   const entry = selected ? CATALOG_BY_KIND[selected.kind] : null;
-  const fields = selected && entry
-    ? paramFields(selected.kind).map((field) => ({
-        label: field.label,
-        value: decodeParams(selected.kind, selected.value)[field.key] || selected.value || "—",
+  const setValue = useSchematic((s) => s.setValue);
+  const beginChange = useSchematic((s) => s.beginChange);
+  const editKeyRef = useRef<string | null>(null);
+  const fields = selected && entry ? paramFields(selected.kind) : [];
+  const decoded = selected ? decodeParams(selected.kind, selected.value) : {};
+  const visibleFields = fields.length > 0
+    ? fields.map((field) => ({
+        ...field,
+        value: decoded[field.key] ?? "",
+        editable: true,
       }))
-    : [];
-  const visibleFields = fields.length > 0 ? fields : [{ label: "Value", value: selected?.value || "—" }];
+    : [{ key: "value", label: "Value", unit: "", value: selected?.value || "—", editable: false }];
+
+  const updateParam = (key: string, value: string) => {
+    if (!selected) return;
+    const changeKey = `${selected.id}:${key}`;
+    if (editKeyRef.current !== changeKey) {
+      beginChange();
+      editKeyRef.current = changeKey;
+    }
+    setValue(selected.id, encodeParams(selected.kind, { ...decodeParams(selected.kind, selected.value), [key]: value }));
+  };
 
   return (
     <div className="component-inspector">
@@ -509,7 +524,22 @@ function ComponentInspector({ selected }: { selected: SchematicComponent | null 
         {visibleFields.slice(0, 6).map((field) => (
           <label key={field.label} className="property-field">
             <span>{field.label}</span>
-            <input value={field.value} readOnly />
+            <input
+              value={field.value}
+              readOnly={!field.editable}
+              aria-readonly={!field.editable}
+              onFocus={() => {
+                editKeyRef.current = null;
+              }}
+              onBlur={() => {
+                editKeyRef.current = null;
+              }}
+              onChange={(event) => {
+                if (field.editable) updateParam(field.key, event.currentTarget.value);
+              }}
+              spellCheck={false}
+            />
+            {field.unit && <em>{field.unit}</em>}
           </label>
         ))}
       </div>
@@ -612,7 +642,7 @@ export function AskSimPanel({ result, onClose }: { result: AnalysisResult | null
         <span className="spark">✦</span>
         <strong>Ask Sim</strong>
         <small>analysis · agent</small>
-        <button className="panel-close" aria-label="Close Ask Sim" title="Close Ask Sim" onClick={onClose}>×</button>
+        <button className="panel-close" aria-label="Minimize Ask Sim" title="Minimize Ask Sim" onClick={onClose}>×</button>
       </div>
       <div className="chat-scroll">
         {messages.map((message, index) => (
@@ -736,7 +766,7 @@ export function MinimizedPanelDock({
   return (
     <aside className="minimized-panel-dock" aria-label="Minimized panels">
       {graphHidden && (
-        <button className="restore-orb graph" aria-label="Restore graphs" title="Restore graphs" onClick={onRestoreGraph}>
+        <button className="restore-orb graph" aria-label="Restore graphs panel" title="Restore graphs panel" onClick={onRestoreGraph}>
           <svg viewBox="0 0 28 28" aria-hidden="true">
             <path d="M5 19 11 10l4 5 8-11" />
             <path d="M20 4h4v4" />
@@ -745,7 +775,7 @@ export function MinimizedPanelDock({
         </button>
       )}
       {aiHidden && (
-        <button className="restore-orb ai" aria-label="Restore Ask Sim" title="Restore Ask Sim" onClick={onRestoreAi}>
+        <button className="restore-orb ai" aria-label="Restore Ask Sim panel" title="Restore Ask Sim panel" onClick={onRestoreAi}>
           <svg viewBox="0 0 28 28" aria-hidden="true">
             <path d="M14 3 16.5 11.5 25 14 16.5 16.5 14 25 11.5 16.5 3 14 11.5 11.5z" />
           </svg>

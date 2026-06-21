@@ -504,3 +504,27 @@ Fixed the bug list raised against the newly-migrated LTspice/VS Code shell.
   pin-level SVG schematic editor framework, while ELK/libavoid is relevant for
   full automatic orthogonal routing. This pass kept Tau's custom SVG editor and
   fixed the local geometry/routing instead of introducing a large dependency.
+
+### 2026-06-21 — Editable inspector parameters and panel minimize labels — Codex
+
+- Fixed the bottom `component` inspector: its parameter inputs were rendered as
+  `readOnly`, so users could see structured fields such as AC source Offset /
+  Amplitude / Frequency but could not change them. The inspector now uses the
+  same `decodeParams` / `encodeParams` path as the simulator strip and writes
+  through `useSchematic.setValue`.
+- Inspector edits now capture one undo snapshot per focused field edit via
+  `beginChange`, so changing component values participates in the existing undo
+  stack.
+- Added unit suffix styling in the bottom property grid and a focus treatment so
+  editable fields are visibly active without overlapping the value text.
+- Clarified graph and Ask Sim panel behavior: their X buttons are labeled as
+  “Minimize ...” and the dock buttons are labeled “Restore ... panel”. The
+  existing state flow remains: graph X sets `graphOpen=false`, Ask Sim X sets
+  `aiOpen=false`, and `MinimizedPanelDock` restores either panel.
+- Verification:
+  - `pnpm typecheck`
+  - `pnpm test` — 114 tests passing
+  - `pnpm --filter @tau/desktop build`
+- Browser caveat: the in-app browser backend and Chrome extension backend were
+  both unavailable in this session, so this pass was verified by compiler,
+  tests, build, and code-path inspection rather than live browser automation.

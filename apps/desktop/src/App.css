@@ -2492,10 +2492,13 @@ body {
 .property-field {
   min-width: 0;
   display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 5px;
+  align-items: center;
 }
 
 .property-field span {
+  grid-column: 1 / -1;
   color: #8a8a92;
   font-size: 11px;
 }
@@ -2509,6 +2512,18 @@ body {
   color: #e6e0cf;
   background: #08080a;
   font: 500 13px "JetBrains Mono", ui-monospace, monospace;
+}
+
+.property-field input:not([readonly]):focus {
+  border-color: rgba(214, 138, 60, 0.68);
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(214, 138, 60, 0.14);
+}
+
+.property-field em {
+  color: #6f7078;
+  font: 700 10px "JetBrains Mono", ui-monospace, monospace;
+  font-style: normal;
 }
 
 .sim-results {
