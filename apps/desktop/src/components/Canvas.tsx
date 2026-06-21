@@ -446,14 +446,20 @@ export function Canvas({
     [tool, screenToWorld, addComponent, components, placeRotation],
   );
 
-  // Snap to the nearest pin within a small radius, otherwise to the grid — so
-  // wiring and probing latch onto terminals instead of being pixel-finicky.
+  // Snap targets: every component pin plus every wire vertex, so wiring/probing
+  // latch onto terminals and existing wires instead of being pixel-finicky.
+  const snapTargets = useMemo(() => {
+    const pts = [...pinPoints];
+    for (const wire of wires) for (const p of wire.points) pts.push(p);
+    return pts;
+  }, [pinPoints, wires]);
+
   const snappedCursor = useCallback(
     (clientX: number, clientY: number): Point => {
       const w = screenToWorld(clientX, clientY);
       let best: Point | null = null;
-      let bestD = 14 * 14;
-      for (const p of pinPoints) {
+      let bestD = 20 * 20; // ~1.25 grid cells of forgiveness
+      for (const p of snapTargets) {
         const dx = p.x - w.x;
         const dy = p.y - w.y;
         const d = dx * dx + dy * dy;
@@ -464,7 +470,7 @@ export function Canvas({
       }
       return best ?? { x: snap(w.x), y: snap(w.y) };
     },
-    [screenToWorld, pinPoints],
+    [screenToWorld, snapTargets],
   );
 
   const wireAtCursor = useCallback(
