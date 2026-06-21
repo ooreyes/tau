@@ -13,6 +13,8 @@ const PREFIXES: Record<string, number> = {
   MEG: 1e6,
   g: 1e9,
   G: 1e9,
+  t: 1e12,
+  T: 1e12,
 };
 
 export function parseQuantity(input: string, fallbackUnit = ""): number {
@@ -44,6 +46,7 @@ export function formatEngineering(value: number, unit = "", digits = 3): string 
   const safeDigits = Math.max(1, Math.min(100, Math.trunc(digits)));
 
   const prefixes = [
+    { scale: 1e12, suffix: "T" },
     { scale: 1e9, suffix: "G" },
     { scale: 1e6, suffix: "M" },
     { scale: 1e3, suffix: "k" },
@@ -52,6 +55,7 @@ export function formatEngineering(value: number, unit = "", digits = 3): string 
     { scale: 1e-6, suffix: "µ" },
     { scale: 1e-9, suffix: "n" },
     { scale: 1e-12, suffix: "p" },
+    { scale: 1e-15, suffix: "f" },
   ];
   const abs = Math.abs(value);
   const prefix = prefixes.find((entry) => abs >= entry.scale) ?? prefixes[prefixes.length - 1];

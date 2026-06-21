@@ -1141,6 +1141,79 @@ body {
   border-top: 1px solid var(--border-subtle);
 }
 
+.resolution-control {
+  grid-column: 1 / -1;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--panel-3);
+}
+
+.resolution-control > div {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.resolution-control span {
+  color: var(--faint);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.55px;
+}
+
+.resolution-control strong {
+  color: var(--text);
+  font: 600 12px -apple-system, BlinkMacSystemFont, "SF Mono", "Menlo", monospace;
+}
+
+.resolution-control small {
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.35;
+}
+
+.resolution-control.ready {
+  border-color: rgba(113, 171, 126, 0.36);
+}
+
+.resolution-control.warning {
+  border-color: rgba(214, 138, 60, 0.46);
+}
+
+.resolution-control button {
+  min-height: 28px;
+  padding: 0 9px;
+  border: 1px solid rgba(214, 138, 60, 0.5);
+  border-radius: var(--r-sm);
+  color: #f3c38d;
+  background: rgba(214, 138, 60, 0.12);
+  font: 600 10px -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  cursor: pointer;
+}
+
+.resolution-control button:disabled {
+  border-color: rgba(113, 171, 126, 0.3);
+  color: #9eb7a2;
+  background: rgba(113, 171, 126, 0.1);
+  cursor: default;
+}
+
+.resolution-control.neutral {
+  display: grid;
+  grid-template-columns: auto 1fr;
+}
+
+.resolution-control.neutral small,
+.resolution-limit {
+  grid-column: 1 / -1;
+}
+
 /* Selection strip */
 .selection-strip {
   flex-shrink: 0;
@@ -1224,6 +1297,50 @@ body {
   font-style: normal;
   font-size: 11px;
   font-weight: 500;
+}
+
+.engineering-value-editor {
+  grid-template-columns: 56px minmax(0, 1fr);
+}
+
+.engineering-input {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px;
+}
+
+.engineering-input input,
+.engineering-input select {
+  min-width: 0;
+  height: 28px;
+  color: var(--text);
+  background: var(--panel-3);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  outline: none;
+}
+
+.engineering-input input {
+  padding: 0 10px;
+  font: 500 12px -apple-system, BlinkMacSystemFont, "SF Mono", "Menlo", monospace;
+}
+
+.engineering-input select {
+  min-width: 58px;
+  padding: 0 6px;
+  font: 600 11px -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  cursor: pointer;
+}
+
+.engineering-input input:focus,
+.engineering-input select:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-soft);
+}
+
+.engineering-input input[aria-invalid="true"] {
+  border-color: var(--trace-red);
 }
 
 .value-editor select {
@@ -2483,6 +2600,17 @@ body {
   font-size: 12px;
 }
 
+.inspector-summary.empty {
+  grid-template-columns: 1fr;
+  grid-template-rows: auto auto;
+  align-content: center;
+  gap: 6px;
+}
+
+.inspector-summary.empty strong {
+  white-space: nowrap;
+}
+
 .property-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -2524,6 +2652,16 @@ body {
   color: #6f7078;
   font: 700 10px "JetBrains Mono", ui-monospace, monospace;
   font-style: normal;
+}
+
+.property-field .engineering-input {
+  grid-column: 1 / -1;
+}
+
+.property-field .engineering-input input,
+.property-field .engineering-input select {
+  background: #08080a;
+  border-color: rgba(255, 255, 255, 0.08);
 }
 
 .sim-results {

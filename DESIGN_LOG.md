@@ -528,3 +528,33 @@ Fixed the bug list raised against the newly-migrated LTspice/VS Code shell.
 - Browser caveat: the in-app browser backend and Chrome extension backend were
   both unavailable in this session, so this pass was verified by compiler,
   tests, build, and code-path inspection rather than live browser automation.
+
+### 2026-06-21 — Engineering value controls and transient resolution guard — Codex
+
+- Replaced numeric free-form parameter entry with a reusable engineering-value
+  control for unit-bearing component fields: numeric mantissa plus explicit
+  prefix selector (`f`, `p`, `n`, `µ`, `m`, base, `k`, `M`, `G`, `T`). It is
+  used in both the bottom component inspector and simulation selection strip.
+  Lowercase `m` remains milli; uppercase `M` remains mega.
+- Added `apps/desktop/src/schematic/engineering.ts` and
+  `components/EngineeringInput.tsx`, with tests covering `m`/`M`, micro,
+  `meg`, composition, and intermediate typing. Model/state fields remain text
+  inputs rather than pretending they are quantities.
+- Extended quantity parsing/formatting to `T` (tera), useful for explicit
+  high-frequency units in source fields.
+- Added a real transient-resolution contract to the interim TypeScript solver:
+  periodic sources require at least 32 samples per cycle, and the interactive
+  solver permits up to 200,000 steps. Under-sampled requests now fail with an
+  actionable message rather than plotting alias artifacts. The analysis panel
+  shows samples/cycle, required steps, an automatic `Set 32×` action, and a
+  clear AC-analysis/shorter-stop-time recommendation when the request exceeds
+  the interactive limit.
+- This is an honest resolution improvement, not a claim that the temporary
+  TypeScript MNA engine is an RF simulator. Full high-speed/RF behavior still
+  requires the planned native ngspice engine.
+- Verification:
+  - `pnpm typecheck`
+  - `pnpm test` — 122 tests passing
+  - `pnpm --filter @tau/desktop build`
+  - Screenshot smoke at `http://127.0.0.1:1421/`; cleaned the no-selection
+    inspector state after visual review.

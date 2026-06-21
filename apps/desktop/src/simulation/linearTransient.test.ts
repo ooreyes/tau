@@ -11,7 +11,7 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { runTransientAnalysis } from "./linearTransient";
+import { inspectTransientResolution, runTransientAnalysis } from "./linearTransient";
 import type { SchematicComponent, SchematicWire } from "../schematic/types";
 
 // ---------------------------------------------------------------------------
@@ -58,6 +58,32 @@ function opamp(x: number, y: number): SchematicComponent {
 function wire(points: { x: number; y: number }[]): SchematicWire {
   return { id: uid("w"), points };
 }
+
+describe("Transient resolution guard", () => {
+  it("calculates required samples from the highest AC source frequency", () => {
+    const source = vac(0, 32, "1 1M", "V1");
+    const resolution = inspectTransientResolution([source], { stopTime: 10e-6, steps: 320 });
+    expect(resolution.maxFrequencyHz).toBe(1e6);
+    expect(resolution.requiredSteps).toBe(320);
+    expect(resolution.samplesPerCycle).toBeCloseTo(32, 10);
+  });
+
+  it("rejects an under-sampled sine transient instead of aliasing it", () => {
+    const source = vac(0, 32, "1 1M", "V1");
+    const gnd = ground(0, 64);
+    const result = runTransientAnalysis({ components: [source, gnd], wires: [] }, { stopTime: 10e-6, steps: 100 });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.message).toContain("Transient resolution is too low");
+  });
+
+  it("rejects a request that exceeds the interactive high-speed ceiling", () => {
+    const source = vac(0, 32, "1 1G", "V1");
+    const gnd = ground(0, 64);
+    const result = runTransientAnalysis({ components: [source, gnd], wires: [] }, { stopTime: 1e-3, steps: 200_000 });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.message).toContain("interactive solver is capped");
+  });
+});
 
 // ---------------------------------------------------------------------------
 // Analytic reference values

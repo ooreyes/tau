@@ -3,6 +3,7 @@ import { CATALOG_BY_KIND } from "../schematic/catalog";
 import { ComponentSymbol } from "../schematic/symbols";
 import type { SchematicComponent } from "../schematic/types";
 import { decodeParams, encodeParams, paramFields } from "../schematic/params";
+import { EngineeringInput } from "./EngineeringInput";
 import { useSchematic, type SchematicDocument } from "../store/useSchematic";
 import { EXAMPLE_CIRCUITS, type ExampleCircuit } from "../examples/circuits";
 import type { AnalysisResult } from "../simulation/linearTransient";
@@ -490,19 +491,23 @@ function ComponentInspector({ selected }: { selected: SchematicComponent | null 
       }))
     : [{ key: "value", label: "Value", unit: "", value: selected?.value || "—", editable: false }];
 
-  const updateParam = (key: string, value: string) => {
+  const beginParamChange = (key: string) => {
     if (!selected) return;
     const changeKey = `${selected.id}:${key}`;
     if (editKeyRef.current !== changeKey) {
       beginChange();
       editKeyRef.current = changeKey;
     }
+  };
+
+  const updateParam = (key: string, value: string) => {
+    if (!selected) return;
     setValue(selected.id, encodeParams(selected.kind, { ...decodeParams(selected.kind, selected.value), [key]: value }));
   };
 
   return (
     <div className="component-inspector">
-      <div className="inspector-summary">
+      <div className={`inspector-summary${selected && entry ? "" : " empty"}`}>
         {selected && entry ? (
           <>
             <svg viewBox="-44 -40 88 80">
@@ -520,29 +525,42 @@ function ComponentInspector({ selected }: { selected: SchematicComponent | null 
           </>
         )}
       </div>
-      <div className="property-grid">
-        {visibleFields.slice(0, 6).map((field) => (
-          <label key={field.label} className="property-field">
-            <span>{field.label}</span>
-            <input
-              value={field.value}
-              readOnly={!field.editable}
-              aria-readonly={!field.editable}
-              onFocus={() => {
-                editKeyRef.current = null;
-              }}
-              onBlur={() => {
-                editKeyRef.current = null;
-              }}
-              onChange={(event) => {
-                if (field.editable) updateParam(field.key, event.currentTarget.value);
-              }}
-              spellCheck={false}
-            />
-            {field.unit && <em>{field.unit}</em>}
-          </label>
-        ))}
-      </div>
+      {selected && (
+        <div className="property-grid">
+          {visibleFields.slice(0, 6).map((field) => (
+            <label key={field.label} className="property-field">
+              <span>{field.label}</span>
+              {field.editable && field.unit ? (
+                <EngineeringInput
+                  label={field.label}
+                  value={field.value}
+                  unit={field.unit}
+                  onBeginChange={() => beginParamChange(field.key)}
+                  onValueChange={(value) => updateParam(field.key, value)}
+                />
+              ) : (
+                <input
+                  value={field.value}
+                  readOnly={!field.editable}
+                  aria-readonly={!field.editable}
+                  onFocus={() => {
+                    editKeyRef.current = null;
+                  }}
+                  onBlur={() => {
+                    editKeyRef.current = null;
+                  }}
+                  onChange={(event) => {
+                    if (!field.editable) return;
+                    beginParamChange(field.key);
+                    updateParam(field.key, event.currentTarget.value);
+                  }}
+                  spellCheck={false}
+                />
+              )}
+            </label>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

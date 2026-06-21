@@ -1,10 +1,21 @@
 import type { ComponentKind, SchematicComponent, SchematicWire } from "../schematic/types";
 import { extractCircuit, type ExtractedCircuit, type ExtractedComponent } from "../schematic/netlist";
-import { parseQuantity } from "./quantity";
+import { formatEngineering, parseQuantity } from "./quantity";
 
 export interface AnalysisOptions {
   stopTime: number;
   steps: number;
+}
+
+/** The interim interactive solver needs enough samples to represent a sine
+ * source faithfully. Native ngspice will eventually replace this ceiling. */
+export const MIN_SAMPLES_PER_CYCLE = 32;
+export const MAX_TRANSIENT_STEPS = 200_000;
+
+export interface TransientResolution {
+  maxFrequencyHz: number;
+  requiredSteps: number;
+  samplesPerCycle: number | null;
 }
 
 export interface Trace {
@@ -76,6 +87,9 @@ export function runTransientAnalysis(
   try {
     circuit = extractCircuit(schematic.components, schematic.wires);
     validateOptions(options);
+
+    const resolution = inspectTransientResolution(schematic.components, options);
+    validateTransientResolution(resolution, options);
 
     if (schematic.components.length === 0) {
       return fail("No circuit", "Place components before running analysis.", circuit);
@@ -266,10 +280,54 @@ function validateOptions(options: AnalysisOptions) {
   if (!Number.isFinite(options.stopTime) || options.stopTime <= 0) {
     throw new Error("Stop time must be greater than zero.");
   }
-  if (!Number.isInteger(options.steps) || options.steps < 8 || options.steps > 5000) {
-    throw new Error("Steps must be an integer from 8 to 5000.");
+  if (!Number.isInteger(options.steps) || options.steps < 8 || options.steps > MAX_TRANSIENT_STEPS) {
+    throw new Error(`Steps must be an integer from 8 to ${MAX_TRANSIENT_STEPS.toLocaleString("en-US")}.`);
   }
 }
+
+/** Inspect the highest periodic source before running, so the UI can display a
+ * meaningful samples-per-cycle figure and the solver can prevent aliasing. */
+export function inspectTransientResolution(
+  components: SchematicComponent[],
+  options: AnalysisOptions,
+): TransientResolution {
+  let maxFrequencyHz = 0;
+  for (const component of components) {
+    if (component.kind !== "vac" && component.kind !== "iac") continue;
+    const frequency = parseSineSource(component.value, component.kind === "vac" ? "V" : "A").frequency;
+    if (!Number.isFinite(frequency) || frequency < 0) {
+      throw new Error(`${component.label || component.id} needs a non-negative frequency.`);
+    }
+    maxFrequencyHz = Math.max(maxFrequencyHz, frequency);
+  }
+  const samplesPerCycle = maxFrequencyHz > 0 ? options.steps / (options.stopTime * maxFrequencyHz) : null;
+  return {
+    maxFrequencyHz,
+    requiredSteps: maxFrequencyHz > 0 ? Math.ceil(options.stopTime * maxFrequencyHz * MIN_SAMPLES_PER_CYCLE) : 0,
+    samplesPerCycle,
+  };
+}
+
+function validateTransientResolution(resolution: TransientResolution, options: AnalysisOptions) {
+  if (resolution.maxFrequencyHz <= 0) return;
+  const frequency = formatEngineering(resolution.maxFrequencyHz, "Hz", 3);
+  if (resolution.requiredSteps > MAX_TRANSIENT_STEPS) {
+    const maxStopTime = MAX_TRANSIENT_STEPS / (resolution.maxFrequencyHz * MIN_SAMPLES_PER_CYCLE);
+    throw new Error(
+      `${frequency} across ${formatEngineering(options.stopTime, "s", 3)} needs ${formatStepCount(resolution.requiredSteps)} steps at ${MIN_SAMPLES_PER_CYCLE} samples/cycle. `
+      + `The interactive solver is capped at ${formatStepCount(MAX_TRANSIENT_STEPS)}. Reduce STOP to ${formatEngineering(maxStopTime, "s", 3)} or less, or use AC analysis.`,
+    );
+  }
+  if ((resolution.samplesPerCycle ?? Infinity) < MIN_SAMPLES_PER_CYCLE) {
+    throw new Error(
+      `Transient resolution is too low for ${frequency}: ${formatStepCount(options.steps)} steps gives ${formatSamplesPerCycle(resolution.samplesPerCycle)} samples/cycle. `
+      + `Use at least ${formatStepCount(resolution.requiredSteps)} steps (${MIN_SAMPLES_PER_CYCLE} samples/cycle), reduce STOP, or use AC analysis.`,
+    );
+  }
+}
+
+const formatStepCount = (value: number) => value.toLocaleString("en-US");
+const formatSamplesPerCycle = (value: number | null) => value === null ? "--" : Number(value.toPrecision(3)).toString();
 
 function resistanceToConductance(entry: ExtractedComponent): number {
   return 1 / positiveValue(entry, "Ω");
@@ -284,14 +342,19 @@ function positiveValue(entry: ExtractedComponent, unit: string): number {
 }
 
 function signalValue(value: string, unit: "V" | "A", time: number): number {
+  const source = parseSineSource(value, unit);
+  return source.offset + source.amplitude * Math.sin(2 * Math.PI * source.frequency * time);
+}
+
+function parseSineSource(value: string, unit: "V" | "A") {
   const tokens = value.trim().split(/[\s,;@]+/).filter(Boolean);
   if (tokens.length === 0) throw new Error(`AC ${unit} source needs amplitude and frequency.`);
-  if (tokens.length === 1) return parseQuantity(tokens[0], unit);
+  if (tokens.length === 1) return { offset: 0, amplitude: parseQuantity(tokens[0], unit), frequency: 0 };
 
   const offset = tokens.length >= 3 ? parseQuantity(tokens[0], unit) : 0;
   const amplitude = parseQuantity(tokens.length >= 3 ? tokens[1] : tokens[0], unit);
   const frequency = parseQuantity(tokens.length >= 3 ? tokens[2] : tokens[1], "Hz");
-  return offset + amplitude * Math.sin(2 * Math.PI * frequency * time);
+  return { offset, amplitude, frequency };
 }
 
 function netIndex(net: string | undefined, nodeIndex: Map<string, number>): number {

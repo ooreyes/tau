@@ -24,7 +24,12 @@ import { useSchematic, type SchematicDocument } from "./store/useSchematic";
 import { CATALOG } from "./schematic/catalog";
 import type { Probe } from "./schematic/types";
 import { type ExampleCircuit } from "./examples/circuits";
-import { runTransientAnalysis, type AnalysisOptions, type AnalysisResult } from "./simulation/linearTransient";
+import {
+  MAX_TRANSIENT_STEPS,
+  runTransientAnalysis,
+  type AnalysisOptions,
+  type AnalysisResult,
+} from "./simulation/linearTransient";
 
 const DEFAULT_ANALYSIS_OPTIONS: AnalysisOptions = {
   stopTime: 0.006,
@@ -146,7 +151,7 @@ function App() {
   }, [analysis, showNotice]);
 
   const stepAnalysis = useCallback(() => {
-    const nextOptions = { ...analysisOptions, steps: Math.min(1000, analysisOptions.steps + 1) };
+    const nextOptions = { ...analysisOptions, steps: Math.min(MAX_TRANSIENT_STEPS, analysisOptions.steps + 1) };
     const result = runTransientAnalysis({ components, wires }, nextOptions);
     setAnalysisOptions(nextOptions);
     setAnalysis(result);

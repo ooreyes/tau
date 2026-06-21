@@ -26,6 +26,10 @@ describe("parseQuantity", () => {
     expect(parseQuantity("1meg")).toBe(1e6);
   });
 
+  it('parses "1T" as 1e12', () => {
+    expect(parseQuantity("1T")).toBe(1e12);
+  });
+
   it('parses "2.2k" as 2200', () => {
     expect(parseQuantity("2.2k")).toBeCloseTo(2200, 10);
   });

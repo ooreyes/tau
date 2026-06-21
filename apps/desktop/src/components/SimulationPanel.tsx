@@ -2,11 +2,19 @@ import { useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import { CATALOG_BY_KIND } from "../schematic/catalog";
 import { useSchematic } from "../store/useSchematic";
-import type { AnalysisOptions, AnalysisResult, Trace } from "../simulation/linearTransient";
+import {
+  MAX_TRANSIENT_STEPS,
+  MIN_SAMPLES_PER_CYCLE,
+  inspectTransientResolution,
+  type AnalysisOptions,
+  type AnalysisResult,
+  type Trace,
+} from "../simulation/linearTransient";
 import { formatEngineering } from "../simulation/quantity";
 import { OPAMP_LIBRARY, findOpAmp } from "../library/opamps";
 import type { Probe, NetLabel } from "../schematic/types";
 import { paramFields, decodeParams, encodeParams } from "../schematic/params";
+import { EngineeringInput } from "./EngineeringInput";
 import { runOperatingPoint } from "../simulation/operatingPoint";
 import { runAcSweep } from "../simulation/acSweep";
 
@@ -53,6 +61,13 @@ export function SimulationPanel({ result, options, onOptionsChange, onRun, onSto
     () => (mode === "ac" ? runAcSweep({ components, wires }, { startHz: 10, stopHz: 1e6, pointsPerDecade: 20 }) : null),
     [mode, components, wires],
   );
+  const resolution = useMemo(() => {
+    try {
+      return inspectTransientResolution(components, options);
+    } catch {
+      return null;
+    }
+  }, [components, options]);
 
   return (
     <aside className={`plotter${maximized ? " maximized" : ""}`} aria-label="Analysis plotter">
@@ -134,10 +149,18 @@ export function SimulationPanel({ result, options, onOptionsChange, onRun, onSto
               label="STEPS"
               value={String(options.steps)}
               min={32}
-              max={1000}
+              max={MAX_TRANSIENT_STEPS}
               step={1}
               numericValue={options.steps}
               onChange={(value) => onOptionsChange({ ...options, steps: Math.round(value) })}
+            />
+            <ResolutionControl
+              resolution={resolution}
+              steps={options.steps}
+              onApply={() => {
+                if (!resolution || resolution.requiredSteps <= 0 || resolution.requiredSteps > MAX_TRANSIENT_STEPS) return;
+                onOptionsChange({ ...options, steps: Math.max(32, resolution.requiredSteps) });
+              }}
             />
           </div>
         </>
@@ -185,27 +208,47 @@ export function SimulationPanel({ result, options, onOptionsChange, onRun, onSto
             ) : paramFields(selected.kind).length > 0 ? (
               <div className="param-fields">
                 {paramFields(selected.kind).map((f) => (
-                  <label key={f.key} className="value-editor">
+                  <label key={f.key} className={`value-editor${f.unit ? " engineering-value-editor" : ""}`}>
                     <span>{f.label}</span>
-                    <input
-                      value={decodeParams(selected.kind, selected.value)[f.key] ?? ""}
-                      onFocus={() => {
-                        editingRef.current = false;
-                      }}
-                      onChange={(event) => {
-                        if (!editingRef.current) {
-                          beginChange();
-                          editingRef.current = true;
-                        }
-                        const next = {
-                          ...decodeParams(selected.kind, selected.value),
-                          [f.key]: event.currentTarget.value,
-                        };
-                        setValue(selected.id, encodeParams(selected.kind, next));
-                      }}
-                      spellCheck={false}
-                    />
-                    {f.unit && <em>{f.unit}</em>}
+                    {f.unit ? (
+                      <EngineeringInput
+                        label={f.label}
+                        value={decodeParams(selected.kind, selected.value)[f.key] ?? ""}
+                        unit={f.unit}
+                        onBeginChange={() => {
+                          if (!editingRef.current) {
+                            beginChange();
+                            editingRef.current = true;
+                          }
+                        }}
+                        onValueChange={(value) => {
+                          const next = {
+                            ...decodeParams(selected.kind, selected.value),
+                            [f.key]: value,
+                          };
+                          setValue(selected.id, encodeParams(selected.kind, next));
+                        }}
+                      />
+                    ) : (
+                      <input
+                        value={decodeParams(selected.kind, selected.value)[f.key] ?? ""}
+                        onFocus={() => {
+                          editingRef.current = false;
+                        }}
+                        onChange={(event) => {
+                          if (!editingRef.current) {
+                            beginChange();
+                            editingRef.current = true;
+                          }
+                          const next = {
+                            ...decodeParams(selected.kind, selected.value),
+                            [f.key]: event.currentTarget.value,
+                          };
+                          setValue(selected.id, encodeParams(selected.kind, next));
+                        }}
+                        spellCheck={false}
+                      />
+                    )}
                   </label>
                 ))}
               </div>
@@ -539,3 +582,48 @@ function DialControl({
     </label>
   );
 }
+
+function ResolutionControl({
+  resolution,
+  steps,
+  onApply,
+}: {
+  resolution: ReturnType<typeof inspectTransientResolution> | null;
+  steps: number;
+  onApply: () => void;
+}) {
+  if (!resolution || resolution.maxFrequencyHz <= 0) {
+    return (
+      <div className="resolution-control neutral">
+        <span>RESOLUTION</span>
+        <strong>DC / static</strong>
+        <small>Add an AC source to calculate samples per cycle.</small>
+      </div>
+    );
+  }
+
+  const samples = resolution.samplesPerCycle ?? 0;
+  const canResolve = resolution.requiredSteps <= MAX_TRANSIENT_STEPS;
+  const ready = samples >= MIN_SAMPLES_PER_CYCLE;
+  return (
+    <div className={`resolution-control${ready ? " ready" : " warning"}`}>
+      <div>
+        <span>RESOLUTION</span>
+        <strong>{formatSamples(samples)} samples / cycle</strong>
+        <small>
+          {formatEngineering(resolution.maxFrequencyHz, "Hz", 3)} requires {formatCount(resolution.requiredSteps)} steps for {MIN_SAMPLES_PER_CYCLE}× sampling.
+        </small>
+      </div>
+      {canResolve ? (
+        <button type="button" onClick={onApply} disabled={steps >= resolution.requiredSteps}>
+          {ready ? "Resolved" : `Set ${MIN_SAMPLES_PER_CYCLE}×`}
+        </button>
+      ) : (
+        <small className="resolution-limit">Shorten STOP or use AC analysis. Interactive limit: {formatCount(MAX_TRANSIENT_STEPS)} steps.</small>
+      )}
+    </div>
+  );
+}
+
+const formatCount = (value: number) => value.toLocaleString("en-US");
+const formatSamples = (value: number) => Number(value.toPrecision(3)).toString();
