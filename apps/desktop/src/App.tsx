@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
 import "./App.css";
 import { Toolbar } from "./components/Toolbar";
 import { Palette } from "./components/Palette";
@@ -29,6 +30,51 @@ const DEFAULT_ANALYSIS_OPTIONS: AnalysisOptions = {
   steps: 240,
 };
 
+/** One open editor tab. `doc` is the in-memory snapshot of its schematic; the
+ *  active tab's live content is held in the store and snapshotted on switch. */
+interface OpenTab {
+  id: string;
+  title: string;
+  doc: SchematicDocument | null;
+}
+
+const newTabId = () => `tab-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+const clamp = (v: number, min: number, max: number) => Math.min(max, Math.max(min, v));
+
+/** A draggable vertical divider that reports horizontal deltas while dragged. */
+function ColumnResizeHandle({ onResize, label }: { onResize: (dx: number) => void; label: string }) {
+  const lastX = useRef(0);
+  const dragging = useRef(false);
+  const onDown = (e: ReactPointerEvent<HTMLDivElement>) => {
+    dragging.current = true;
+    lastX.current = e.clientX;
+    e.currentTarget.setPointerCapture(e.pointerId);
+  };
+  const onMove = (e: ReactPointerEvent<HTMLDivElement>) => {
+    if (!dragging.current) return;
+    const dx = e.clientX - lastX.current;
+    lastX.current = e.clientX;
+    if (dx !== 0) onResize(dx);
+  };
+  const onUp = (e: ReactPointerEvent<HTMLDivElement>) => {
+    dragging.current = false;
+    if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
+  };
+  return (
+    <div
+      className="col-resize-handle"
+      role="separator"
+      aria-orientation="vertical"
+      aria-label={label}
+      onPointerDown={onDown}
+      onPointerMove={onMove}
+      onPointerUp={onUp}
+    >
+      <span />
+    </div>
+  );
+}
+
 function App() {
   const components = useSchematic((s) => s.components);
   const wires = useSchematic((s) => s.wires);
@@ -46,14 +92,19 @@ function App() {
   const [runState, setRunState] = useState<"idle" | "complete" | "error" | "stopped" | "paused">("idle");
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [mode, setMode] = useState<"schematic" | "simulator">("schematic");
-  const [documentTitle, setDocumentTitle] = useState("boost converter.sim");
+  const [tabs, setTabs] = useState<OpenTab[]>([{ id: "tab-0", title: "boost converter.sim", doc: null }]);
+  const [activeId, setActiveId] = useState("tab-0");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [confirmClearOpen, setConfirmClearOpen] = useState(false);
   const [graphOpen, setGraphOpen] = useState(true);
   const [aiOpen, setAiOpen] = useState(true);
   const [componentFocusSignal, setComponentFocusSignal] = useState(0);
   const [partsOpen, setPartsOpen] = useState(true);
+  const [scopeWidth, setScopeWidth] = useState(440);
+  const [askWidth, setAskWidth] = useState(330);
   const [notice, setNotice] = useState<string | null>(null);
+
+  const documentTitle = (tabs.find((tab) => tab.id === activeId) ?? tabs[0])?.title ?? "untitled.sim";
 
   const showNotice = useCallback((message: string) => {
     setNotice(message);
@@ -110,33 +161,90 @@ function App() {
     showNotice("Simulation stopped. Run again when ready.");
   }, [analysis, showNotice]);
 
+  // Snapshot the live store into the active tab, so its edits survive a switch.
+  const snapshotActive = useCallback(
+    (list: OpenTab[]) => list.map((tab) => (tab.id === activeId ? { ...tab, doc: { components, wires } } : tab)),
+    [activeId, components, wires],
+  );
+
+  // Open a document: focus its tab if already open, otherwise add a new one.
   const openDocument = useCallback((doc: SchematicDocument, title: string) => {
+    const snap = snapshotActive(tabs);
+    const existing = snap.find((tab) => tab.title === title);
+    if (existing) {
+      setTabs(snap.map((tab) => (tab.id === existing.id ? { ...tab, doc } : tab)));
+      setActiveId(existing.id);
+    } else {
+      const id = newTabId();
+      setTabs([...snap, { id, title, doc }]);
+      setActiveId(id);
+    }
     loadCircuit(doc);
-    setDocumentTitle(title);
     setAnalysis(null);
     setRunState("idle");
     setMode("schematic");
     showNotice(`Opened ${title}`);
-  }, [loadCircuit, showNotice]);
+  }, [tabs, snapshotActive, loadCircuit, showNotice]);
 
   const openExample = useCallback((example: ExampleCircuit) => {
     openDocument(example, `${example.name.toLowerCase().replace(/\s+/g, "-")}.sim`);
   }, [openDocument]);
 
+  // Switch to an already-open tab, preserving each tab's content in memory.
+  const switchTab = useCallback((id: string) => {
+    if (id === activeId) return;
+    const snap = snapshotActive(tabs);
+    const target = snap.find((tab) => tab.id === id);
+    if (!target) return;
+    setTabs(snap);
+    setActiveId(id);
+    loadCircuit(target.doc ?? { components: [], wires: [] });
+    setAnalysis(null);
+    setRunState("idle");
+  }, [activeId, tabs, snapshotActive, loadCircuit]);
+
   const startNewCircuit = useCallback(() => {
+    const snap = snapshotActive(tabs);
+    const taken = new Set(snap.map((tab) => tab.title));
+    let title = "untitled.sim";
+    for (let n = 2; taken.has(title); n += 1) title = `untitled-${n}.sim`;
+    const id = newTabId();
+    setTabs([...snap, { id, title, doc: { components: [], wires: [] } }]);
+    setActiveId(id);
     newCircuit();
-    setDocumentTitle("untitled.sim");
     setAnalysis(null);
     setRunState("idle");
     setMode("schematic");
     setGraphOpen(true);
     setAiOpen(true);
     showNotice("Started a new blank circuit.");
-  }, [newCircuit, showNotice]);
+  }, [tabs, snapshotActive, newCircuit, showNotice]);
+
+  const closeTab = useCallback((id: string) => {
+    const idx = tabs.findIndex((tab) => tab.id === id);
+    if (idx === -1) return;
+    const remaining = tabs.filter((tab) => tab.id !== id);
+    if (remaining.length === 0) {
+      const blank: OpenTab = { id: newTabId(), title: "untitled.sim", doc: { components: [], wires: [] } };
+      setTabs([blank]);
+      setActiveId(blank.id);
+      newCircuit();
+    } else {
+      const next = remaining[Math.max(0, idx - 1)];
+      setTabs(remaining);
+      if (id === activeId) {
+        setActiveId(next.id);
+        loadCircuit(next.doc ?? { components: [], wires: [] });
+      }
+    }
+    setAnalysis(null);
+    setRunState("idle");
+    setMode("schematic");
+  }, [tabs, activeId, loadCircuit, newCircuit]);
 
   const clearScratchpad = useCallback(() => {
     newCircuit();
-    setDocumentTitle("untitled.sim");
+    setTabs((prev) => prev.map((tab) => (tab.id === activeId ? { ...tab, doc: { components: [], wires: [] } } : tab)));
     setAnalysis(null);
     setRunState("idle");
     setMode("schematic");
@@ -144,7 +252,7 @@ function App() {
     setGraphOpen(true);
     setAiOpen(true);
     showNotice("Scratchpad cleared.");
-  }, [newCircuit, showNotice]);
+  }, [activeId, newCircuit, showNotice]);
 
   useEffect(() => {
     setAnalysis(null);
@@ -211,7 +319,10 @@ function App() {
         onRun={runAndShowSimulator}
         onOpenSettings={() => setSettingsOpen(true)}
       />
-      <div className="shell-body">
+      <div
+        className="shell-body"
+        style={{ "--scope-w": `${scopeWidth}px`, "--ask-w": `${askWidth}px` } as CSSProperties}
+      >
         <ActivityRail
           mode={mode}
           partsOpen={partsOpen && mode === "schematic"}
@@ -248,11 +359,12 @@ function App() {
             onOpenExample={openExample}
           />
           <EditorTabs
+            tabs={tabs}
+            activeId={activeId}
             mode={mode}
-            title={documentTitle}
-            onOpenExample={openExample}
+            onSelectTab={switchTab}
+            onCloseTab={closeTab}
             onNewCircuit={startNewCircuit}
-            onCloseCurrent={() => setConfirmClearOpen(true)}
             onHideSimulator={() => setMode("schematic")}
           />
           <main className="stage">
@@ -262,20 +374,34 @@ function App() {
           <BottomPanel mode={mode} result={analysis} />
         </section>
         {mode === "simulator" && graphOpen && (
-          <AnalysisErrorBoundary>
-            <SimulationPanel
-              result={analysis}
-              options={analysisOptions}
-              onOptionsChange={setAnalysisOptions}
-              onRun={runAnalysis}
-              onStop={stopAnalysis}
-              onPause={pauseAnalysis}
-              onStep={stepAnalysis}
-              onClose={() => setGraphOpen(false)}
+          <>
+            <ColumnResizeHandle
+              label="Resize analysis panel"
+              onResize={(dx) => setScopeWidth((w) => clamp(w - dx, 300, 820))}
             />
-          </AnalysisErrorBoundary>
+            <AnalysisErrorBoundary>
+              <SimulationPanel
+                result={analysis}
+                options={analysisOptions}
+                onOptionsChange={setAnalysisOptions}
+                onRun={runAnalysis}
+                onStop={stopAnalysis}
+                onPause={pauseAnalysis}
+                onStep={stepAnalysis}
+                onClose={() => setGraphOpen(false)}
+              />
+            </AnalysisErrorBoundary>
+          </>
         )}
-        {mode === "simulator" && aiOpen && <AskSimPanel result={analysis} onClose={() => setAiOpen(false)} />}
+        {mode === "simulator" && aiOpen && (
+          <>
+            <ColumnResizeHandle
+              label="Resize Ask Sim panel"
+              onResize={(dx) => setAskWidth((w) => clamp(w - dx, 260, 640))}
+            />
+            <AskSimPanel result={analysis} onClose={() => setAiOpen(false)} />
+          </>
+        )}
         {mode === "simulator" && (!graphOpen || !aiOpen) && (
           <MinimizedPanelDock
             graphHidden={!graphOpen}

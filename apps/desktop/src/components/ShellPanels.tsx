@@ -305,51 +305,60 @@ function IconButton({
 }
 
 export function EditorTabs({
+  tabs,
+  activeId,
   mode,
-  title,
-  onOpenExample,
+  onSelectTab,
+  onCloseTab,
   onNewCircuit,
-  onCloseCurrent,
   onHideSimulator,
 }: {
+  tabs: { id: string; title: string }[];
+  activeId: string;
   mode: "schematic" | "simulator";
-  title: string;
-  onOpenExample: (example: ExampleCircuit) => void;
+  onSelectTab: (id: string) => void;
+  onCloseTab: (id: string) => void;
   onNewCircuit: () => void;
-  onCloseCurrent: () => void;
   onHideSimulator: () => void;
 }) {
-  const referenceExample = EXAMPLE_CIRCUITS[0];
-
   return (
     <div className="editor-tabs" role="tablist" aria-label="Open schematics">
-      <button className="editor-tab" onClick={() => onOpenExample(referenceExample)}>
-        <i className="blue" />
-        {referenceExample.name.toLowerCase()}
-      </button>
-      <div
-        className="editor-tab active"
-        role="tab"
-        aria-current="page"
-        onClick={mode === "simulator" ? onHideSimulator : undefined}
-      >
-        <i className="amber" />
-        {title.replace(/\.sim$/i, "")}
-        <button
-          type="button"
-          aria-label="Close current scratchpad"
-          className="tab-close"
-          onClick={(event) => {
-            event.stopPropagation();
-            onCloseCurrent();
-          }}
-        >
-          ×
-        </button>
-      </div>
+      {tabs.map((tab) => {
+        const active = tab.id === activeId;
+        return (
+          <div
+            key={tab.id}
+            className={`editor-tab${active ? " active" : ""}`}
+            role="tab"
+            aria-selected={active}
+            tabIndex={0}
+            onClick={() => onSelectTab(tab.id)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                onSelectTab(tab.id);
+              }
+            }}
+          >
+            <i className={active ? "amber" : "blue"} />
+            {tab.title.replace(/\.sim$/i, "")}
+            <button
+              type="button"
+              aria-label={`Close ${tab.title}`}
+              className="tab-close"
+              onClick={(event) => {
+                event.stopPropagation();
+                onCloseTab(tab.id);
+              }}
+            >
+              ×
+            </button>
+          </div>
+        );
+      })}
       <button className="editor-tab add" aria-label="New tab" onClick={onNewCircuit}>＋</button>
       <div className="editor-tab-spacer" />
-      {mode === "simulator" && <button className="editor-hide" onClick={onHideSimulator}>× hide</button>}
+      {mode === "simulator" && <button className="editor-hide" onClick={onHideSimulator}>× back to schematic</button>}
     </div>
   );
 }

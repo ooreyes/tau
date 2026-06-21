@@ -2574,6 +2574,39 @@ body {
   border-left: 1px solid var(--border);
 }
 
+/* Resizable simulator columns: circuit (flex), analysis scope, and Ask Sim.
+   Widths are driven by CSS vars set on .shell-body and dragged via handles. */
+.app-simulator .shell-body > .plotter {
+  width: var(--scope-w, 440px);
+  border-left: 0;
+}
+.app-simulator .shell-body > .ask-panel {
+  width: var(--ask-w, 330px);
+}
+
+.col-resize-handle {
+  flex: none;
+  width: 7px;
+  margin: 0 -3px;
+  z-index: 5;
+  cursor: col-resize;
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+  background: transparent;
+  touch-action: none;
+}
+.col-resize-handle > span {
+  width: 1px;
+  background: var(--border);
+  transition: background 120ms var(--ease-out), width 120ms var(--ease-out);
+}
+.col-resize-handle:hover > span,
+.col-resize-handle:active > span {
+  width: 2px;
+  background: var(--accent);
+}
+
 .plotter-header {
   min-height: 45px;
   padding: 8px 14px;
