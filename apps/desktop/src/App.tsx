@@ -78,6 +78,7 @@ function ColumnResizeHandle({ onResize, label }: { onResize: (dx: number) => voi
 function App() {
   const components = useSchematic((s) => s.components);
   const wires = useSchematic((s) => s.wires);
+  const toolMode = useSchematic((s) => s.tool.mode);
   const startPlacing = useSchematic((s) => s.startPlacing);
   const startWiring = useSchematic((s) => s.startWiring);
   const loadCircuit = useSchematic((s) => s.loadCircuit);
@@ -369,7 +370,9 @@ function App() {
           />
           <main className="stage">
             <Canvas analysis={analysis} interactive={mode === "schematic"} />
-            {components.length === 0 && wires.length === 0 && <EmptyState />}
+            {components.length === 0 && wires.length === 0 && toolMode === "select" && mode === "schematic" && (
+              <EmptyState />
+            )}
           </main>
           <BottomPanel mode={mode} result={analysis} />
         </section>

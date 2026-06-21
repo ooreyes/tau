@@ -629,8 +629,14 @@ body {
   border: 1px solid var(--border);
   border-radius: var(--r-xl);
   box-shadow: 0 16px 48px rgba(0, 0, 0, 0.4);
-  pointer-events: auto;
+  pointer-events: none;
   backdrop-filter: blur(12px);
+}
+
+/* Only the actions take clicks, so clicking the card's body still reaches the
+   canvas underneath (so a first part can be dropped anywhere). */
+.empty-actions button {
+  pointer-events: auto;
 }
 
 .empty-kicker {
