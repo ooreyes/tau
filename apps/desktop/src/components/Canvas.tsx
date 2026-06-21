@@ -167,8 +167,33 @@ const labelCandidates = (component: SchematicComponent, refText: string, valText
   return vertical ? candidates : [candidates[2], candidates[3], candidates[1], candidates[0], candidates[5], candidates[4]];
 };
 
-const buildLabelPlacements = (components: SchematicComponent[]) => {
+/** Thin rects covering each wire segment, so labels don't settle on top of a
+ *  wire and read as if the wire itself carried that value. */
+const wireSegmentRects = (wires: SchematicWire[]): Rect[] => {
+  const rects: Rect[] = [];
+  for (const wire of wires) {
+    for (let i = 1; i < wire.points.length; i += 1) {
+      const a = wire.points[i - 1];
+      const b = wire.points[i];
+      rects.push(
+        padRect(
+          {
+            minX: Math.min(a.x, b.x),
+            minY: Math.min(a.y, b.y),
+            maxX: Math.max(a.x, b.x),
+            maxY: Math.max(a.y, b.y),
+          },
+          3,
+        ),
+      );
+    }
+  }
+  return rects;
+};
+
+const buildLabelPlacements = (components: SchematicComponent[], wires: SchematicWire[] = []) => {
   const componentRects = components.map(componentWorldRect);
+  const wireRects = wireSegmentRects(wires);
   const placed: Rect[] = [];
   const placements = new Map<string, LabelPlacement>();
 
@@ -179,7 +204,7 @@ const buildLabelPlacements = (components: SchematicComponent[]) => {
 
     const candidates = labelCandidates(component, refText || valText, valText);
     const scored = candidates.map((candidate) => {
-      const obstacles = [...componentRects, ...placed];
+      const obstacles = [...componentRects, ...wireRects, ...placed];
       const score = obstacles.reduce((total, rect) => total + overlapArea(candidate.box, rect), 0);
       return { candidate, score };
     });
@@ -238,7 +263,15 @@ const findFreeSpot = (
   return { x, y };
 };
 
-export function Canvas({ analysis }: { analysis: AnalysisResult | null }) {
+export function Canvas({
+  analysis,
+  interactive = true,
+}: {
+  analysis: AnalysisResult | null;
+  /** When false (simulator view) the canvas is a read-only reflection: pan/zoom
+   *  and selecting-to-inspect only — no placing, wiring, probing, or editing. */
+  interactive?: boolean;
+}) {
   const svgRef = useRef<SVGSVGElement | null>(null);
   const [view, setView] = useState<View>({ x: 0, y: 0, zoom: 1 });
   const [ghost, setGhost] = useState<{ x: number; y: number } | null>(null);
@@ -402,6 +435,13 @@ export function Canvas({ analysis }: { analysis: AnalysisResult | null }) {
 
   const onBackgroundPointerDown = (e: ReactPointerEvent<SVGElement>) => {
     if (e.button !== 0) return;
+    if (!interactive) {
+      // Read-only: clear selection and allow panning to look around.
+      select(null);
+      drag.current = { mode: "pan", lastX: e.clientX, lastY: e.clientY, moved: false };
+      svgRef.current?.setPointerCapture(e.pointerId);
+      return;
+    }
     if (tool.mode === "place") {
       placeAtCursor(e.clientX, e.clientY);
       return;
@@ -423,6 +463,11 @@ export function Canvas({ analysis }: { analysis: AnalysisResult | null }) {
   const onComponentPointerDown = (e: ReactPointerEvent<SVGElement>, comp: SchematicComponent) => {
     e.stopPropagation();
     if (e.button !== 0) return;
+    if (!interactive) {
+      // Read-only: select to inspect in the results panel, but never move it.
+      select(comp.id);
+      return;
+    }
     if (tool.mode === "place") {
       placeAtCursor(e.clientX, e.clientY);
       return;
@@ -443,6 +488,7 @@ export function Canvas({ analysis }: { analysis: AnalysisResult | null }) {
 
   const onWirePointerDown = (e: ReactPointerEvent<SVGElement>, wire: SchematicWire) => {
     if (e.button !== 0) return;
+    if (!interactive) return;
     if (tool.mode === "probe") {
       e.stopPropagation();
       const w = snappedCursor(e.clientX, e.clientY);
@@ -455,9 +501,20 @@ export function Canvas({ analysis }: { analysis: AnalysisResult | null }) {
   };
 
   const onPointerMove = (e: ReactPointerEvent<SVGElement>) => {
+    if (!interactive) {
+      const d = drag.current;
+      if (d.mode === "pan") {
+        setView((v) => ({ ...v, x: v.x + (e.clientX - d.lastX), y: v.y + (e.clientY - d.lastY) }));
+        d.lastX = e.clientX;
+        d.lastY = e.clientY;
+      }
+      return;
+    }
     if (tool.mode === "place") {
       const w = screenToWorld(e.clientX, e.clientY);
-      setGhost({ x: snap(w.x), y: snap(w.y) });
+      // Show the ghost where the part will actually land (collision-resolved),
+      // so the preview never lies about the drop position.
+      setGhost(findFreeSpot(components, snap(w.x), snap(w.y), tool.kind, placeRotation));
     } else if (tool.mode === "wire" || tool.mode === "probe") {
       const cursor = snappedCursor(e.clientX, e.clientY);
       setSnapHover({ x: cursor.x, y: cursor.y, pin: pinPoints.some((p) => p.x === cursor.x && p.y === cursor.y) });
@@ -566,7 +623,7 @@ export function Canvas({ analysis }: { analysis: AnalysisResult | null }) {
       <svg
         ref={svgRef}
         className="canvas"
-        style={{ cursor: placing || wiring || probing ? "crosshair" : "default" }}
+        style={{ cursor: interactive && (placing || wiring || probing) ? "crosshair" : "default" }}
         onPointerDown={onBackgroundPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={endDrag}
@@ -612,7 +669,7 @@ export function Canvas({ analysis }: { analysis: AnalysisResult | null }) {
               showPins={wiring || probing}
               onPointerDown={(e) => onComponentPointerDown(e, c)}
               onEdit={() => {
-                if (c.kind !== "ground") {
+                if (interactive && c.kind !== "ground") {
                   editDirty.current = false;
                   setEditingId(c.id);
                 }
@@ -637,7 +694,7 @@ export function Canvas({ analysis }: { analysis: AnalysisResult | null }) {
             <FlowLayer wires={wires} legs={legs} pinIndex={pinIndex} result={analysis} playing={flowOn} />
           )}
 
-          <ComponentLabels components={components} />
+          <ComponentLabels components={components} wires={wires} />
 
           {placing && ghost && (
             <g className="ghost" transform={`translate(${ghost.x} ${ghost.y})`}>
@@ -718,6 +775,11 @@ function ComponentView({
   onPointerDown: (e: ReactPointerEvent<SVGElement>) => void;
   onEdit: () => void;
 }) {
+  // Hit area sized to this part's own footprint (body + pins) so a small part
+  // like ground gets a small target — not a fixed 72×72 box that swallows
+  // clicks meant for neighbouring components.
+  const bounds = componentBounds(comp);
+  const HIT_PAD = 8;
   return (
     <g
       className={`component${selected ? " selected" : ""}`}
@@ -728,8 +790,13 @@ function ComponentView({
         onEdit();
       }}
     >
-      {/* Generous transparent hit area so thin symbols are easy to grab. */}
-      <rect x={-36} y={-36} width={72} height={72} fill="transparent" />
+      <rect
+        x={bounds.minX - HIT_PAD}
+        y={bounds.minY - HIT_PAD}
+        width={bounds.maxX - bounds.minX + HIT_PAD * 2}
+        height={bounds.maxY - bounds.minY + HIT_PAD * 2}
+        fill="transparent"
+      />
       <g className="symbol" transform={`rotate(${comp.rotation})`}>
         <ComponentSymbol kind={comp.kind} />
       </g>
@@ -745,8 +812,8 @@ function ComponentView({
 }
 
 /** All component ref/value labels, drawn in a top layer so nothing can obscure them. */
-function ComponentLabels({ components }: { components: SchematicComponent[] }) {
-  const placements = useMemo(() => buildLabelPlacements(components), [components]);
+function ComponentLabels({ components, wires }: { components: SchematicComponent[]; wires: SchematicWire[] }) {
+  const placements = useMemo(() => buildLabelPlacements(components, wires), [components, wires]);
 
   return (
     <g className="label-layer" aria-hidden="true">

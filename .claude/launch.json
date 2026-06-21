@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "tau-web",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["-C", "apps/desktop", "dev"],
+      "port": 1420
+    }
+  ]
+}

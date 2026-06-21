@@ -11,13 +11,14 @@ import { formatEngineering, parseQuantity } from "../simulation/quantity";
 
 interface ModeProps {
   mode: "schematic" | "simulator";
+  partsOpen: boolean;
   onModeChange: (mode: "schematic" | "simulator") => void;
   onSearch: () => void;
   onFocusComponents: () => void;
   onOpenSettings: () => void;
 }
 
-export function ActivityRail({ mode, onModeChange, onSearch, onFocusComponents, onOpenSettings }: ModeProps) {
+export function ActivityRail({ mode, partsOpen, onModeChange, onSearch, onFocusComponents, onOpenSettings }: ModeProps) {
   return (
     <nav className="activity-rail" aria-label="Workspace sections">
       <RailButton active={mode === "schematic"} title="Explorer" onClick={() => onModeChange("schematic")}>
@@ -27,7 +28,7 @@ export function ActivityRail({ mode, onModeChange, onSearch, onFocusComponents, 
         <circle cx="9" cy="9" r="6" />
         <path d="M13.5 13.5 18 18" />
       </RailButton>
-      <RailButton title="Components" onClick={onFocusComponents}>
+      <RailButton active={partsOpen} title="Components" onClick={onFocusComponents}>
         <rect x="5" y="5" width="10" height="10" rx="1.5" />
         <path d="M8 2v3M12 2v3M8 15v3M12 15v3M2 8h3M2 12h3M15 8h3M15 12h3" />
       </RailButton>
@@ -64,11 +65,15 @@ function RailButton({
   );
 }
 
+const exampleFileName = (example: ExampleCircuit) => `${example.name.toLowerCase().replace(/\s+/g, "-")}.sim`;
+
 export function ExplorerPanel({
+  activeTitle,
   onOpenExample,
   onNewCircuit,
   onSearch,
 }: {
+  activeTitle: string;
   onOpenExample: (example: ExampleCircuit) => void;
   onNewCircuit: () => void;
   onSearch: () => void;
@@ -98,16 +103,21 @@ export function ExplorerPanel({
           <span className="tree-folder">Powerboard</span>
         </div>
         <div className="tree-children">
-          {examples.map((example, index) => (
-            <button
-              key={example.id}
-              className={`tree-file${index === 0 ? " active" : ""}`}
-              onClick={() => onOpenExample(example)}
-            >
-              <i className={index === 0 ? "amber" : "blue"} />
-              {example.name.toLowerCase().replace(/\s+/g, "-")}.sim
-            </button>
-          ))}
+          {examples.map((example) => {
+            const fileName = exampleFileName(example);
+            const active = fileName === activeTitle;
+            return (
+              <button
+                key={example.id}
+                className={`tree-file${active ? " active" : ""}`}
+                aria-current={active ? "page" : undefined}
+                onClick={() => onOpenExample(example)}
+              >
+                <i className={active ? "amber" : "blue"} />
+                {fileName}
+              </button>
+            );
+          })}
         </div>
       </div>
     </aside>

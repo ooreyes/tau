@@ -52,6 +52,7 @@ function App() {
   const [graphOpen, setGraphOpen] = useState(true);
   const [aiOpen, setAiOpen] = useState(true);
   const [componentFocusSignal, setComponentFocusSignal] = useState(0);
+  const [partsOpen, setPartsOpen] = useState(true);
   const [notice, setNotice] = useState<string | null>(null);
 
   const showNotice = useCallback((message: string) => {
@@ -213,16 +214,22 @@ function App() {
       <div className="shell-body">
         <ActivityRail
           mode={mode}
+          partsOpen={partsOpen && mode === "schematic"}
           onModeChange={setMode}
           onSearch={() => setPaletteOpen(true)}
           onFocusComponents={() => {
             setMode("schematic");
-            setComponentFocusSignal((value) => value + 1);
+            setPartsOpen((open) => {
+              const next = !open;
+              if (next) setComponentFocusSignal((value) => value + 1);
+              return next;
+            });
           }}
           onOpenSettings={() => setSettingsOpen(true)}
         />
         {mode === "schematic" && (
           <ExplorerPanel
+            activeTitle={documentTitle}
             onOpenExample={openExample}
             onNewCircuit={startNewCircuit}
             onSearch={() => setPaletteOpen(true)}
@@ -249,7 +256,7 @@ function App() {
             onHideSimulator={() => setMode("schematic")}
           />
           <main className="stage">
-            <Canvas analysis={analysis} />
+            <Canvas analysis={analysis} interactive={mode === "schematic"} />
             {components.length === 0 && wires.length === 0 && <EmptyState />}
           </main>
           <BottomPanel mode={mode} result={analysis} />
@@ -277,7 +284,9 @@ function App() {
             onRestoreAi={() => setAiOpen(true)}
           />
         )}
-        {mode === "schematic" && <Palette focusSignal={componentFocusSignal} onNotice={showNotice} />}
+        {mode === "schematic" && partsOpen && (
+          <Palette focusSignal={componentFocusSignal} onNotice={showNotice} />
+        )}
       </div>
       <StatusBar mode={mode} result={analysis} title={documentTitle} />
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />

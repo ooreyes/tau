@@ -27,12 +27,8 @@ export function Toolbar({ mode, result, runState, title, onModeChange, onRun, on
   return (
     <header className="toolbar">
       <div className="titlebar-left">
-        <div className="traffic-lights" aria-hidden="true">
-          <span className="traffic red" />
-          <span className="traffic amber" />
-          <span className="traffic green" />
-        </div>
         <div className="brand">
+          <span className="brand-mark" aria-hidden="true">τ</span>
           <span className="brand-name">tau</span>
           <span className="brand-file">{title}</span>
         </div>

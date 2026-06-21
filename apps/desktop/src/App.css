@@ -1678,15 +1678,17 @@ body {
 .label-layer .ref,
 .label-layer .val {
   fill: var(--canvas-label-muted);
-  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Mono", system-ui, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
   font-size: 8.5px;
-  font-weight: 560;
-  letter-spacing: 0.08px;
+  font-weight: 500;
+  letter-spacing: 0.1px;
   paint-order: stroke;
   stroke: var(--canvas-label-halo);
-  stroke-width: 3.5px;
+  stroke-width: 2px;
   stroke-linejoin: round;
   dominant-baseline: middle;
+  text-rendering: geometricPrecision;
+  -webkit-font-smoothing: antialiased;
   user-select: none;
 }
 .label-layer .ref {
@@ -1797,28 +1799,22 @@ body {
   gap: 10px;
 }
 
-.traffic-lights {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-shrink: 0;
-}
-
-.traffic {
-  width: 11px;
-  height: 11px;
-  border-radius: 50%;
-}
-.traffic.red { background: #cf5450; }
-.traffic.amber { background: #d68a3c; }
-.traffic.green { background: #71ab7e; }
-
 .brand {
   min-width: 0;
   display: flex;
   align-items: baseline;
   gap: 9px;
   padding: 0;
+  -webkit-app-region: no-drag;
+}
+
+.brand .brand-mark {
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--accent);
+  font-family: "Times New Roman", "Georgia", serif;
+  align-self: center;
 }
 
 .brand-name {
@@ -2139,6 +2135,17 @@ body {
   display: flex;
   flex-direction: column;
   background: #08080a;
+}
+
+/* Component parts catalogue — a fixed right column inside the flex shell-body
+   (the legacy `grid-area: palette` is inert here, so size it explicitly). */
+.shell-body > .palette {
+  flex: none;
+  width: 236px;
+  border-left: 1px solid var(--border);
+  border-right: 0;
+  background: #0c0c0f;
+  backdrop-filter: none;
 }
 
 .editor-toolbar {
