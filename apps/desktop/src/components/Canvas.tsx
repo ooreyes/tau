@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { PointerEvent as ReactPointerEvent } from "react";
+import type { MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from "react";
 import { useSchematic } from "../store/useSchematic";
 import { ComponentSymbol, GRID, SYMBOL_BODY, SYMBOL_BOX } from "../schematic/symbols";
 import { CATALOG_BY_KIND } from "../schematic/catalog";
@@ -241,6 +241,32 @@ const bodyBoxAt = (kind: ComponentKind, x: number, y: number, rotation: number):
 const rectsOverlap = (a: Rect, b: Rect) =>
   a.minX < b.maxX && b.minX < a.maxX && a.minY < b.maxY && b.minY < a.maxY;
 
+/** Click slack around a body, in world px, for selecting thin symbols. */
+const HIT_PAD = 7;
+
+/** The component under a world point. Prefer one whose actual body contains the
+ *  point over one only within the click pad, then the smaller body — so a small
+ *  part (e.g. ground) can never steal a click from the part under the cursor,
+ *  regardless of render/z-order. */
+const componentAt = (components: SchematicComponent[], wx: number, wy: number): SchematicComponent | null => {
+  let best: SchematicComponent | null = null;
+  let bestScore = Infinity;
+  for (const c of components) {
+    const box = bodyBoxAt(c.kind, c.x, c.y, c.rotation);
+    if (wx < box.minX - HIT_PAD || wx > box.maxX + HIT_PAD || wy < box.minY - HIT_PAD || wy > box.maxY + HIT_PAD) {
+      continue;
+    }
+    const inside = wx >= box.minX && wx <= box.maxX && wy >= box.minY && wy <= box.maxY;
+    const area = (box.maxX - box.minX) * (box.maxY - box.minY);
+    const score = (inside ? 0 : 1e7) + area;
+    if (score < bestScore) {
+      bestScore = score;
+      best = c;
+    }
+  }
+  return best;
+};
+
 /** True if a body at (x,y) would overlap another component's body. Touching is allowed. */
 const collides = (
   components: SchematicComponent[],
@@ -268,23 +294,79 @@ const segmentHitsBody = (a: Point, b: Point, components: SchematicComponent[]): 
     maxY: Math.max(a.y, b.y) + 1,
   };
   return components.some((c) => {
+    const isEndpointComponent = getComponentPins(c).some((pin) => pointsEqual(pin, a) || pointsEqual(pin, b));
+    if (isEndpointComponent) return false;
     const box = bodyBoxAt(c.kind, c.x, c.y, c.rotation);
     // Shrink the body slightly so a wire ending exactly on a pin/edge is fine.
     return rectsOverlap(seg, { minX: box.minX + 2, minY: box.minY + 2, maxX: box.maxX - 2, maxY: box.maxY - 2 });
   });
 };
 
-/** Route an L between two points, choosing the elbow that avoids crossing a
- *  component body where possible (falls back to horizontal-first). */
+const cleanRoute = (points: Point[]) => {
+  const out: Point[] = [];
+  for (const point of points) {
+    if (out.length === 0 || !pointsEqual(out[out.length - 1], point)) out.push(point);
+  }
+  for (let i = 1; i < out.length - 1; i += 1) {
+    const a = out[i - 1];
+    const b = out[i];
+    const c = out[i + 1];
+    if ((a.x === b.x && b.x === c.x) || (a.y === b.y && b.y === c.y)) {
+      out.splice(i, 1);
+      i -= 1;
+    }
+  }
+  return out;
+};
+
+const routeLength = (points: Point[]) =>
+  points.slice(1).reduce((total, point, index) => {
+    const prev = points[index];
+    return total + Math.abs(point.x - prev.x) + Math.abs(point.y - prev.y);
+  }, 0);
+
+const routeHitCount = (points: Point[], components: SchematicComponent[]) =>
+  points.slice(1).reduce((total, point, index) => {
+    const prev = points[index];
+    return total + (segmentHitsBody(prev, point, components) ? 1 : 0);
+  }, 0);
+
+/** Route an orthogonal wire between two points. It first tries direct/L paths,
+ *  then doglegs on grid channels just outside component bodies, and picks the
+ *  shortest non-crossing candidate. */
 const routeWireSmart = (start: Point, end: Point, components: SchematicComponent[]): Point[] => {
-  if (start.x === end.x || start.y === end.y) return [start, end];
+  const candidates: Point[][] = [];
+  const push = (points: Point[]) => {
+    const cleaned = cleanRoute(points);
+    if (cleaned.length >= 2) candidates.push(cleaned);
+  };
+
+  if (start.x === end.x || start.y === end.y) push([start, end]);
   const horizFirst = { x: end.x, y: start.y };
   const vertFirst = { x: start.x, y: end.y };
-  const horizBad =
-    segmentHitsBody(start, horizFirst, components) || segmentHitsBody(horizFirst, end, components);
-  const vertBad = segmentHitsBody(start, vertFirst, components) || segmentHitsBody(vertFirst, end, components);
-  if (horizBad && !vertBad) return [start, vertFirst, end];
-  return [start, horizFirst, end];
+  push([start, horizFirst, end]);
+  push([start, vertFirst, end]);
+
+  const xChannels = new Set<number>([start.x, end.x]);
+  const yChannels = new Set<number>([start.y, end.y]);
+  for (const component of components) {
+    const box = bodyBoxAt(component.kind, component.x, component.y, component.rotation);
+    xChannels.add(snap(box.minX - GRID));
+    xChannels.add(snap(box.maxX + GRID));
+    yChannels.add(snap(box.minY - GRID));
+    yChannels.add(snap(box.maxY + GRID));
+  }
+
+  for (const y of yChannels) push([start, { x: start.x, y }, { x: end.x, y }, end]);
+  for (const x of xChannels) push([start, { x, y: start.y }, { x, y: end.y }, end]);
+
+  return candidates
+    .map((points) => ({
+      points,
+      hits: routeHitCount(points, components),
+      length: routeLength(points),
+    }))
+    .sort((a, b) => a.hits - b.hits || a.length - b.length || a.points.length - b.points.length)[0].points;
 };
 
 /** Nearest grid spot (spiralling out) where a new body won't overlap an existing one. */
@@ -468,9 +550,35 @@ export function Canvas({
           best = p;
         }
       }
+      for (const wire of wires) {
+        for (let i = 1; i < wire.points.length; i += 1) {
+          const a = wire.points[i - 1];
+          const b = wire.points[i];
+          let candidate: Point | null = null;
+          if (a.x === b.x) {
+            const minY = Math.min(a.y, b.y);
+            const maxY = Math.max(a.y, b.y);
+            const y = Math.min(maxY, Math.max(minY, snap(w.y)));
+            candidate = { x: a.x, y };
+          } else if (a.y === b.y) {
+            const minX = Math.min(a.x, b.x);
+            const maxX = Math.max(a.x, b.x);
+            const x = Math.min(maxX, Math.max(minX, snap(w.x)));
+            candidate = { x, y: a.y };
+          }
+          if (!candidate) continue;
+          const dx = candidate.x - w.x;
+          const dy = candidate.y - w.y;
+          const d = dx * dx + dy * dy;
+          if (d < bestD) {
+            bestD = d;
+            best = candidate;
+          }
+        }
+      }
       return best ?? { x: snap(w.x), y: snap(w.y) };
     },
-    [screenToWorld, snapTargets],
+    [screenToWorld, snapTargets, wires],
   );
 
   const wireAtCursor = useCallback(
@@ -485,15 +593,23 @@ export function Canvas({
     [tool, snappedCursor, wireDraft, addWire, components],
   );
 
+  // All selection/drag goes through one hit-test on the SVG, so z-order never
+  // decides which component a click lands on (components don't intercept).
   const onBackgroundPointerDown = (e: ReactPointerEvent<SVGElement>) => {
     if (e.button !== 0) return;
+    const world = screenToWorld(e.clientX, e.clientY);
+
     if (!interactive) {
-      // Read-only: clear selection and allow panning to look around.
-      select(null);
-      drag.current = { mode: "pan", lastX: e.clientX, lastY: e.clientY, moved: false };
-      svgRef.current?.setPointerCapture(e.pointerId);
+      // Read-only: select to inspect, otherwise pan to look around.
+      const hit = componentAt(components, world.x, world.y);
+      select(hit?.id ?? null);
+      if (!hit) {
+        drag.current = { mode: "pan", lastX: e.clientX, lastY: e.clientY, moved: false };
+        svgRef.current?.setPointerCapture(e.pointerId);
+      }
       return;
     }
+
     if (tool.mode === "place") {
       placeAtCursor(e.clientX, e.clientY);
       return;
@@ -507,35 +623,26 @@ export function Canvas({
       addProbe(w.x, w.y);
       return;
     }
-    select(null);
-    drag.current = { mode: "pan", lastX: e.clientX, lastY: e.clientY, moved: false };
+
+    const hit = componentAt(components, world.x, world.y);
+    if (hit) {
+      select(hit.id);
+      drag.current = { mode: "move", id: hit.id, lastX: e.clientX, lastY: e.clientY, moved: false };
+    } else {
+      select(null);
+      drag.current = { mode: "pan", lastX: e.clientX, lastY: e.clientY, moved: false };
+    }
     svgRef.current?.setPointerCapture(e.pointerId);
   };
 
-  const onComponentPointerDown = (e: ReactPointerEvent<SVGElement>, comp: SchematicComponent) => {
-    e.stopPropagation();
-    if (e.button !== 0) return;
-    if (!interactive) {
-      // Read-only: select to inspect in the results panel, but never move it.
-      select(comp.id);
-      return;
+  const onCanvasDoubleClick = (e: ReactMouseEvent<SVGElement>) => {
+    if (!interactive) return;
+    const world = screenToWorld(e.clientX, e.clientY);
+    const hit = componentAt(components, world.x, world.y);
+    if (hit && hit.kind !== "ground") {
+      editDirty.current = false;
+      setEditingId(hit.id);
     }
-    if (tool.mode === "place") {
-      placeAtCursor(e.clientX, e.clientY);
-      return;
-    }
-    if (tool.mode === "wire") {
-      wireAtCursor(e.clientX, e.clientY);
-      return;
-    }
-    if (tool.mode === "probe") {
-      const w = snappedCursor(e.clientX, e.clientY);
-      addProbe(w.x, w.y);
-      return;
-    }
-    select(comp.id);
-    drag.current = { mode: "move", id: comp.id, lastX: e.clientX, lastY: e.clientY, moved: false };
-    svgRef.current?.setPointerCapture(e.pointerId);
   };
 
   const onWirePointerDown = (e: ReactPointerEvent<SVGElement>, wire: SchematicWire) => {
@@ -679,6 +786,7 @@ export function Canvas({
         onPointerDown={onBackgroundPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={endDrag}
+        onDoubleClick={onCanvasDoubleClick}
         onPointerLeave={() => {
           if (placing) setGhost(null);
           setSnapHover(null);
@@ -714,19 +822,7 @@ export function Canvas({
           )}
 
           {components.map((c) => (
-            <ComponentView
-              key={c.id}
-              comp={c}
-              selected={c.id === selectedId}
-              showPins={wiring || probing}
-              onPointerDown={(e) => onComponentPointerDown(e, c)}
-              onEdit={() => {
-                if (interactive && c.kind !== "ground") {
-                  editDirty.current = false;
-                  setEditingId(c.id);
-                }
-              }}
-            />
+            <ComponentView key={c.id} comp={c} selected={c.id === selectedId} showPins={wiring || probing} />
           ))}
 
           {probes.map((p) => (
@@ -818,37 +914,15 @@ function ComponentView({
   comp,
   selected,
   showPins,
-  onPointerDown,
-  onEdit,
 }: {
   comp: SchematicComponent;
   selected: boolean;
   showPins: boolean;
-  onPointerDown: (e: ReactPointerEvent<SVGElement>) => void;
-  onEdit: () => void;
 }) {
-  // Hit area = the part's accurate drawn body (rotation-aware, asymmetric where
-  // needed, e.g. ground) plus a small pad. This stops a small part's box from
-  // reaching into a neighbour and stealing its clicks.
-  const bounds = rotatedBodyBox(comp.kind, comp.rotation);
-  const HIT_PAD = 7;
+  // Presentational only — selection/drag/edit are resolved centrally by
+  // geometry in the SVG handlers, so render order never decides hit results.
   return (
-    <g
-      className={`component${selected ? " selected" : ""}`}
-      transform={`translate(${comp.x} ${comp.y})`}
-      onPointerDown={onPointerDown}
-      onDoubleClick={(e) => {
-        e.stopPropagation();
-        onEdit();
-      }}
-    >
-      <rect
-        x={bounds.minX - HIT_PAD}
-        y={bounds.minY - HIT_PAD}
-        width={bounds.maxX - bounds.minX + HIT_PAD * 2}
-        height={bounds.maxY - bounds.minY + HIT_PAD * 2}
-        fill="transparent"
-      />
+    <g className={`component${selected ? " selected" : ""}`} transform={`translate(${comp.x} ${comp.y})`}>
       <g className="symbol" transform={`rotate(${comp.rotation})`}>
         <ComponentSymbol kind={comp.kind} />
       </g>

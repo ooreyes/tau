@@ -1,12 +1,93 @@
 import { describe, it, expect } from "vitest";
 import { EXAMPLE_CIRCUITS } from "./circuits";
 import { runTransientAnalysis } from "../simulation/linearTransient";
+import { SYMBOL_BODY } from "../schematic/symbols";
+import type { ComponentKind, Point, SchematicComponent } from "../schematic/types";
 
 const OPTIONS = { stopTime: 0.005, steps: 200 };
+
+interface Rect {
+  minX: number;
+  minY: number;
+  maxX: number;
+  maxY: number;
+}
+
+const rotatePoint = (point: Point, rotation: number): Point => {
+  switch (rotation) {
+    case 90:
+      return { x: -point.y, y: point.x };
+    case 180:
+      return { x: -point.x, y: -point.y };
+    case 270:
+      return { x: point.y, y: -point.x };
+    default:
+      return point;
+  }
+};
+
+const bodyRect = (kind: ComponentKind, x: number, y: number, rotation: number, inset = 0): Rect => {
+  const body = SYMBOL_BODY[kind];
+  const corners = [
+    { x: body.minX, y: body.minY },
+    { x: body.maxX, y: body.minY },
+    { x: body.maxX, y: body.maxY },
+    { x: body.minX, y: body.maxY },
+  ].map((point) => rotatePoint(point, rotation));
+  return {
+    minX: x + Math.min(...corners.map((point) => point.x)) + inset,
+    minY: y + Math.min(...corners.map((point) => point.y)) + inset,
+    maxX: x + Math.max(...corners.map((point) => point.x)) - inset,
+    maxY: y + Math.max(...corners.map((point) => point.y)) - inset,
+  };
+};
+
+const rectsOverlap = (a: Rect, b: Rect) =>
+  a.minX < b.maxX && b.minX < a.maxX && a.minY < b.maxY && b.minY < a.maxY;
+
+const segmentRect = (a: Point, b: Point): Rect => ({
+  minX: Math.min(a.x, b.x) - 1,
+  minY: Math.min(a.y, b.y) - 1,
+  maxX: Math.max(a.x, b.x) + 1,
+  maxY: Math.max(a.y, b.y) + 1,
+});
+
+const componentLabel = (component: SchematicComponent) =>
+  component.label || `${component.kind}@${component.x},${component.y}`;
 
 describe("EXAMPLE_CIRCUITS", () => {
   for (const circuit of EXAMPLE_CIRCUITS) {
     describe(circuit.name, () => {
+      it("keeps component bodies from overlapping", () => {
+        for (let i = 0; i < circuit.components.length; i += 1) {
+          const a = circuit.components[i];
+          const aRect = bodyRect(a.kind, a.x, a.y, a.rotation);
+          for (let j = i + 1; j < circuit.components.length; j += 1) {
+            const b = circuit.components[j];
+            const bRect = bodyRect(b.kind, b.x, b.y, b.rotation);
+            expect(
+              rectsOverlap(aRect, bRect),
+              `${circuit.name}: ${componentLabel(a)} overlaps ${componentLabel(b)}`,
+            ).toBe(false);
+          }
+        }
+      });
+
+      it("routes example wires around symbol bodies", () => {
+        for (const wire of circuit.wires) {
+          for (let i = 1; i < wire.points.length; i += 1) {
+            const segment = segmentRect(wire.points[i - 1], wire.points[i]);
+            for (const component of circuit.components) {
+              const body = bodyRect(component.kind, component.x, component.y, component.rotation, 4);
+              expect(
+                rectsOverlap(segment, body),
+                `${circuit.name}: ${wire.id} crosses ${componentLabel(component)}`,
+              ).toBe(false);
+            }
+          }
+        }
+      });
+
       it("simulates without error", () => {
         const result = runTransientAnalysis(
           { components: circuit.components, wires: circuit.wires },

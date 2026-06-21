@@ -183,13 +183,13 @@ const RLC_SERIES: ExampleCircuit = {
 //   Rg   resistor rot=0 at (160, 80): a=(128,80),  b=(192,80)
 //   Rf   resistor rot=0 at (256, 80): a=(224,80),  b=(288,80)
 //   GND_v1 ground at (64,176):  g=(64,176)   — coincides with V1.n
-//   GND_rg ground at (128,80):  g=(128,80)   — coincides with Rg.a
+//   GND_rg ground at (96,80):   g=(96,80)    — short wire from Rg.a
 //
 // Net connections:
 //   N1 (input):  V1.p(64,112) ── wire ── U1.in+(224,112)
 //   N2 (in-/fb): Rg.b(192,80) ── wire ── Rf.a=U1.in-(224,80)  [coincident Rf.a and in-]
 //   N3 (output): Rf.b(288,80) ── wire ── U1.out(288,96)
-//   GND:         GND_v1, GND_rg (all ground kind, unioned)
+//   GND:         GND_v1, GND_rg (Rg.a wired to GND_rg)
 //
 // Gain = 1 + Rf/Rg = 1 + 10k/1k = 11.  1V 1kHz sine → 11V sine at output.
 // AC source (vac) ensures visible transient variation in the waveform viewer.
@@ -204,7 +204,7 @@ const NONINVERTING_AMP: ExampleCircuit = {
     { id: "ni.rg",   kind: "resistor", x: 160, y: 80,  rotation: 0,  value: "1k",    label: "Rg" },
     { id: "ni.rf",   kind: "resistor", x: 256, y: 48,  rotation: 0,  value: "10k",   label: "Rf" },
     { id: "ni.gnd1", kind: "ground",   x: 64,  y: 176, rotation: 0,  value: "",      label: "" },
-    { id: "ni.gnd2", kind: "ground",   x: 128, y: 80,  rotation: 0,  value: "",      label: "" },
+    { id: "ni.gnd2", kind: "ground",   x: 96,  y: 80,  rotation: 0,  value: "",      label: "" },
   ],
   // Rf is lifted to y=48 (clear above the op-amp body) and the feedback is
   // routed up from the in- node and down into the output, so nothing overlaps.
@@ -217,6 +217,8 @@ const NONINVERTING_AMP: ExampleCircuit = {
     { id: "ni.w3", points: [{ x: 224, y: 80 }, { x: 224, y: 48 }] },
     // Rf.b(288,48) → down to U1.out(288,96)
     { id: "ni.w4", points: [{ x: 288, y: 48 }, { x: 288, y: 96 }] },
+    // Rg.a(128,80) → GND_rg(96,80), with the ground body left of the resistor.
+    { id: "ni.w5", points: [{ x: 128, y: 80 }, { x: 96, y: 80 }] },
   ],
 };
 

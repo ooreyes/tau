@@ -467,3 +467,40 @@ Fixed the bug list raised against the newly-migrated LTspice/VS Code shell.
 - Note: App.css still carries the legacy pre-migration stylesheet (~lines
   100–1700) alongside the new shell section; later rules win, but a dedup pass
   would reduce risk for the next editor.
+
+### 2026-06-21 — Finished schematic geometry and wiring recovery pass — Codex
+
+- Picked up the incomplete central hit-testing refactor after the divider and
+  ground-selection bugs were reported. Finished the event wiring so component
+  selection/drag/edit is resolved by one geometry hit-test on the SVG root
+  instead of per-symbol render order.
+- Replaced the one-elbow router with a small orthogonal candidate router. It
+  tries direct/L routes plus grid doglegs outside component body boxes, scores
+  body crossings first and path length second, and uses the shortest clean
+  route. Wire endpoints now snap to whole existing wire segments as well as
+  pins/vertices.
+- Fixed the built-in non-inverting amplifier example so its feedback ground no
+  longer overlaps the input resistor body or shorts the input trace. The voltage
+  divider example now routes the top source lead up and over, away from `R1`.
+- Added example-geometry regression coverage in
+  `apps/desktop/src/examples/circuits.test.ts`: every built-in circuit now
+  asserts that component bodies do not overlap and that example wire segments do
+  not cut through symbol bodies.
+- Verified in the browser at `http://127.0.0.1:1420/`:
+  - divider top wire renders as `M 96 64 L 96 32 L 160 32`, not through `R1`;
+  - clicking `R2` selects `translate(160 128)` and clicking the adjacent ground
+    selects `translate(160 160)`;
+  - probes are tab/schematic-scoped: a divider probe disappears on RC and
+    returns when switching back to the divider tab;
+  - non-inverting amplifier renders with `Rg` grounded by a short left-hand
+    lead and no resistor/ground overlap.
+- Verification commands:
+  - `pnpm typecheck`
+  - `pnpm test` — 114 tests passing
+  - `pnpm --filter @tau/desktop build`
+- Cleared the stale Vite process that was holding port `1420` and causing
+  `pnpm dev` to fail before starting the fresh verification preview.
+- Library note: checked current candidates. JointJS is the most relevant
+  pin-level SVG schematic editor framework, while ELK/libavoid is relevant for
+  full automatic orthogonal routing. This pass kept Tau's custom SVG editor and
+  fixed the local geometry/routing instead of introducing a large dependency.
