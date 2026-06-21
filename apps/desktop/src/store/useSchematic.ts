@@ -52,6 +52,8 @@ interface SchematicState extends Doc {
   addProbe: (x: number, y: number) => void;
   removeProbe: (id: string) => void;
   clearProbes: () => void;
+  /** Replace all probes (used to restore a tab's saved probes). */
+  setProbes: (probes: Probe[]) => void;
 
   /** User-assigned net names, pinned to world points on the net. */
   netLabels: NetLabel[];
@@ -196,6 +198,7 @@ export const useSchematic = create<SchematicState>()((set) => {
       }),
     removeProbe: (id) => set((s) => ({ probes: s.probes.filter((p) => p.id !== id) })),
     clearProbes: () => set({ probes: [] }),
+    setProbes: (probes) => set({ probes }),
 
     upsertNetLabel: (x, y, text) =>
       set((s) => {
@@ -294,6 +297,7 @@ export const useSchematic = create<SchematicState>()((set) => {
           components: cloned.components,
           wires: cloned.wires,
           counters: deriveCounters(cloned.components),
+          probes: [],
           netLabels: [],
           selectedId: null,
           selectedWireId: null,

@@ -3,6 +3,39 @@ import type { ComponentKind } from "./types";
 /** World pixels per grid cell. Components span a few cells; pins land on grid. */
 export const GRID = 16;
 
+/** Accurate local bounding box of each symbol's drawn body (excludes pin leads).
+ *  Unlike SYMBOL_BOX these are NOT assumed symmetric about the origin — e.g.
+ *  ground is drawn entirely below its pin — so they give correct hit-testing
+ *  and collision for asymmetric parts. Used for selection + overlap. */
+export interface BodyBox {
+  minX: number;
+  minY: number;
+  maxX: number;
+  maxY: number;
+}
+export const SYMBOL_BODY: Record<ComponentKind, BodyBox> = {
+  resistor: { minX: -28, minY: -12, maxX: 28, maxY: 12 },
+  capacitor: { minX: -8, minY: -15, maxX: 8, maxY: 15 },
+  inductor: { minX: -26, minY: -10, maxX: 26, maxY: 10 },
+  vsource: { minX: -16, minY: -16, maxX: 16, maxY: 16 },
+  isource: { minX: -16, minY: -16, maxX: 16, maxY: 16 },
+  vac: { minX: -16, minY: -16, maxX: 16, maxY: 16 },
+  iac: { minX: -16, minY: -16, maxX: 16, maxY: 16 },
+  diode: { minX: -13, minY: -15, maxX: 13, maxY: 15 },
+  led: { minX: -13, minY: -15, maxX: 16, maxY: 15 },
+  zener: { minX: -13, minY: -15, maxX: 16, maxY: 15 },
+  opamp: { minX: -24, minY: -26, maxX: 30, maxY: 26 },
+  nmos: { minX: -12, minY: -20, maxX: 18, maxY: 20 },
+  pmos: { minX: -12, minY: -20, maxX: 18, maxY: 20 },
+  npn: { minX: -8, minY: -20, maxX: 18, maxY: 20 },
+  pnp: { minX: -8, minY: -20, maxX: 18, maxY: 20 },
+  potentiometer: { minX: -28, minY: -18, maxX: 28, maxY: 12 },
+  switch: { minX: -14, minY: -20, maxX: 14, maxY: 8 },
+  transformer: { minX: -24, minY: -27, maxX: 24, maxY: 27 },
+  testpoint: { minX: -11, minY: -16, maxX: 11, maxY: 14 },
+  ground: { minX: -12, minY: -3, maxX: 12, maxY: 22 },
+};
+
 /** Half-extents of each symbol body (excludes pin leads), used to keep labels clear of the symbol. */
 export const SYMBOL_BOX: Record<ComponentKind, { halfW: number; halfH: number }> = {
   resistor: { halfW: 30, halfH: 12 },

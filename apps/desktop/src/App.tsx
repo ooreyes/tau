@@ -22,6 +22,7 @@ import {
 } from "./components/ShellPanels";
 import { useSchematic, type SchematicDocument } from "./store/useSchematic";
 import { CATALOG } from "./schematic/catalog";
+import type { Probe } from "./schematic/types";
 import { type ExampleCircuit } from "./examples/circuits";
 import { runTransientAnalysis, type AnalysisOptions, type AnalysisResult } from "./simulation/linearTransient";
 
@@ -36,6 +37,7 @@ interface OpenTab {
   id: string;
   title: string;
   doc: SchematicDocument | null;
+  probes: Probe[];
 }
 
 const newTabId = () => `tab-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
@@ -83,6 +85,8 @@ function App() {
   const startWiring = useSchematic((s) => s.startWiring);
   const loadCircuit = useSchematic((s) => s.loadCircuit);
   const newCircuit = useSchematic((s) => s.newCircuit);
+  const probes = useSchematic((s) => s.probes);
+  const setProbes = useSchematic((s) => s.setProbes);
   const cancel = useSchematic((s) => s.cancel);
   const rotate = useSchematic((s) => s.rotate);
   const deleteSelected = useSchematic((s) => s.deleteSelected);
@@ -93,7 +97,7 @@ function App() {
   const [runState, setRunState] = useState<"idle" | "complete" | "error" | "stopped" | "paused">("idle");
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [mode, setMode] = useState<"schematic" | "simulator">("schematic");
-  const [tabs, setTabs] = useState<OpenTab[]>([{ id: "tab-0", title: "boost converter.sim", doc: null }]);
+  const [tabs, setTabs] = useState<OpenTab[]>([{ id: "tab-0", title: "boost converter.sim", doc: null, probes: [] }]);
   const [activeId, setActiveId] = useState("tab-0");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [confirmClearOpen, setConfirmClearOpen] = useState(false);
@@ -162,10 +166,12 @@ function App() {
     showNotice("Simulation stopped. Run again when ready.");
   }, [analysis, showNotice]);
 
-  // Snapshot the live store into the active tab, so its edits survive a switch.
+  // Snapshot the live store (schematic + probes) into the active tab, so its
+  // edits and meter placements survive a switch.
   const snapshotActive = useCallback(
-    (list: OpenTab[]) => list.map((tab) => (tab.id === activeId ? { ...tab, doc: { components, wires } } : tab)),
-    [activeId, components, wires],
+    (list: OpenTab[]) =>
+      list.map((tab) => (tab.id === activeId ? { ...tab, doc: { components, wires }, probes } : tab)),
+    [activeId, components, wires, probes],
   );
 
   // Open a document: focus its tab if already open, otherwise add a new one.
@@ -175,17 +181,19 @@ function App() {
     if (existing) {
       setTabs(snap.map((tab) => (tab.id === existing.id ? { ...tab, doc } : tab)));
       setActiveId(existing.id);
+      loadCircuit(doc);
+      setProbes(existing.probes);
     } else {
       const id = newTabId();
-      setTabs([...snap, { id, title, doc }]);
+      setTabs([...snap, { id, title, doc, probes: [] }]);
       setActiveId(id);
+      loadCircuit(doc);
     }
-    loadCircuit(doc);
     setAnalysis(null);
     setRunState("idle");
     setMode("schematic");
     showNotice(`Opened ${title}`);
-  }, [tabs, snapshotActive, loadCircuit, showNotice]);
+  }, [tabs, snapshotActive, loadCircuit, setProbes, showNotice]);
 
   const openExample = useCallback((example: ExampleCircuit) => {
     openDocument(example, `${example.name.toLowerCase().replace(/\s+/g, "-")}.sim`);
@@ -200,9 +208,10 @@ function App() {
     setTabs(snap);
     setActiveId(id);
     loadCircuit(target.doc ?? { components: [], wires: [] });
+    setProbes(target.probes);
     setAnalysis(null);
     setRunState("idle");
-  }, [activeId, tabs, snapshotActive, loadCircuit]);
+  }, [activeId, tabs, snapshotActive, loadCircuit, setProbes]);
 
   const startNewCircuit = useCallback(() => {
     const snap = snapshotActive(tabs);
@@ -210,7 +219,7 @@ function App() {
     let title = "untitled.sim";
     for (let n = 2; taken.has(title); n += 1) title = `untitled-${n}.sim`;
     const id = newTabId();
-    setTabs([...snap, { id, title, doc: { components: [], wires: [] } }]);
+    setTabs([...snap, { id, title, doc: { components: [], wires: [] }, probes: [] }]);
     setActiveId(id);
     newCircuit();
     setAnalysis(null);
@@ -226,7 +235,7 @@ function App() {
     if (idx === -1) return;
     const remaining = tabs.filter((tab) => tab.id !== id);
     if (remaining.length === 0) {
-      const blank: OpenTab = { id: newTabId(), title: "untitled.sim", doc: { components: [], wires: [] } };
+      const blank: OpenTab = { id: newTabId(), title: "untitled.sim", doc: { components: [], wires: [] }, probes: [] };
       setTabs([blank]);
       setActiveId(blank.id);
       newCircuit();
@@ -236,12 +245,13 @@ function App() {
       if (id === activeId) {
         setActiveId(next.id);
         loadCircuit(next.doc ?? { components: [], wires: [] });
+        setProbes(next.probes);
       }
     }
     setAnalysis(null);
     setRunState("idle");
     setMode("schematic");
-  }, [tabs, activeId, loadCircuit, newCircuit]);
+  }, [tabs, activeId, loadCircuit, newCircuit, setProbes]);
 
   const clearScratchpad = useCallback(() => {
     newCircuit();

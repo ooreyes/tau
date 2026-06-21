@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import { useSchematic } from "../store/useSchematic";
-import { ComponentSymbol, GRID, SYMBOL_BOX } from "../schematic/symbols";
+import { ComponentSymbol, GRID, SYMBOL_BODY, SYMBOL_BOX } from "../schematic/symbols";
 import { CATALOG_BY_KIND } from "../schematic/catalog";
 import type { ComponentKind, Point, SchematicComponent, SchematicWire } from "../schematic/types";
 import { getLocalPins, getComponentPins } from "../schematic/pins";
@@ -18,8 +18,6 @@ interface View {
 const snap = (v: number) => Math.round(v / GRID) * GRID;
 const clampZoom = (z: number) => Math.min(5, Math.max(0.25, z));
 const pointsEqual = (a: Point, b: Point) => a.x === b.x && a.y === b.y;
-const routeWire = (start: Point, end: Point): Point[] =>
-  start.x === end.x || start.y === end.y ? [start, end] : [start, { x: end.x, y: start.y }, end];
 const pathFromPoints = (points: Point[]) =>
   points.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x} ${p.y}`).join(" ");
 
@@ -217,13 +215,33 @@ const buildLabelPlacements = (components: SchematicComponent[], wires: Schematic
   return placements;
 };
 
-/** Body half-extents (rotation-aware) used to keep component bodies from overlapping. */
-const bodyHalf = (kind: ComponentKind, rotation: number) => {
-  const b = SYMBOL_BOX[kind];
-  return rotation === 90 || rotation === 270 ? { hw: b.halfH, hh: b.halfW } : { hw: b.halfW, hh: b.halfH };
+/** A component's drawn body box, rotated to its orientation (still centred on origin). */
+const rotatedBodyBox = (kind: ComponentKind, rotation: number): Rect => {
+  const b = SYMBOL_BODY[kind];
+  const corners = [
+    { x: b.minX, y: b.minY },
+    { x: b.maxX, y: b.minY },
+    { x: b.maxX, y: b.maxY },
+    { x: b.minX, y: b.maxY },
+  ].map((p) => rotateLocalPoint(p, rotation));
+  return {
+    minX: Math.min(...corners.map((c) => c.x)),
+    minY: Math.min(...corners.map((c) => c.y)),
+    maxX: Math.max(...corners.map((c) => c.x)),
+    maxY: Math.max(...corners.map((c) => c.y)),
+  };
 };
 
-/** True if a body at (x,y) would overlap another component's body. Pins may still touch. */
+/** World-space AABB of a component body at (x,y) with the given rotation. */
+const bodyBoxAt = (kind: ComponentKind, x: number, y: number, rotation: number): Rect => {
+  const box = rotatedBodyBox(kind, rotation);
+  return { minX: x + box.minX, minY: y + box.minY, maxX: x + box.maxX, maxY: y + box.maxY };
+};
+
+const rectsOverlap = (a: Rect, b: Rect) =>
+  a.minX < b.maxX && b.minX < a.maxX && a.minY < b.maxY && b.minY < a.maxY;
+
+/** True if a body at (x,y) would overlap another component's body. Touching is allowed. */
 const collides = (
   components: SchematicComponent[],
   x: number,
@@ -232,13 +250,41 @@ const collides = (
   rotation: number,
   excludeId: string | null,
 ): boolean => {
-  const a = bodyHalf(kind, rotation);
+  const a = bodyBoxAt(kind, x, y, rotation);
   for (const c of components) {
     if (c.id === excludeId) continue;
-    const b = bodyHalf(c.kind, c.rotation);
-    if (Math.abs(x - c.x) < a.hw + b.hw && Math.abs(y - c.y) < a.hh + b.hh) return true;
+    if (rectsOverlap(a, bodyBoxAt(c.kind, c.x, c.y, c.rotation))) return true;
   }
   return false;
+};
+
+/** Does an axis-aligned wire segment pass through any component body? Used to
+ *  pick the wire elbow that doesn't run across a symbol. */
+const segmentHitsBody = (a: Point, b: Point, components: SchematicComponent[]): boolean => {
+  const seg: Rect = {
+    minX: Math.min(a.x, b.x) - 1,
+    minY: Math.min(a.y, b.y) - 1,
+    maxX: Math.max(a.x, b.x) + 1,
+    maxY: Math.max(a.y, b.y) + 1,
+  };
+  return components.some((c) => {
+    const box = bodyBoxAt(c.kind, c.x, c.y, c.rotation);
+    // Shrink the body slightly so a wire ending exactly on a pin/edge is fine.
+    return rectsOverlap(seg, { minX: box.minX + 2, minY: box.minY + 2, maxX: box.maxX - 2, maxY: box.maxY - 2 });
+  });
+};
+
+/** Route an L between two points, choosing the elbow that avoids crossing a
+ *  component body where possible (falls back to horizontal-first). */
+const routeWireSmart = (start: Point, end: Point, components: SchematicComponent[]): Point[] => {
+  if (start.x === end.x || start.y === end.y) return [start, end];
+  const horizFirst = { x: end.x, y: start.y };
+  const vertFirst = { x: start.x, y: end.y };
+  const horizBad =
+    segmentHitsBody(start, horizFirst, components) || segmentHitsBody(horizFirst, end, components);
+  const vertBad = segmentHitsBody(start, vertFirst, components) || segmentHitsBody(vertFirst, end, components);
+  if (horizBad && !vertBad) return [start, vertFirst, end];
+  return [start, horizFirst, end];
 };
 
 /** Nearest grid spot (spiralling out) where a new body won't overlap an existing one. */
@@ -426,11 +472,11 @@ export function Canvas({
       if (tool.mode !== "wire") return;
       const end = snappedCursor(clientX, clientY);
       if (wireDraft && !pointsEqual(wireDraft.start, end)) {
-        addWire(routeWire(wireDraft.start, end));
+        addWire(routeWireSmart(wireDraft.start, end, components));
       }
       setWireDraft({ start: end, cursor: end });
     },
-    [tool, snappedCursor, wireDraft, addWire],
+    [tool, snappedCursor, wireDraft, addWire, components],
   );
 
   const onBackgroundPointerDown = (e: ReactPointerEvent<SVGElement>) => {
@@ -602,7 +648,7 @@ export function Canvas({
   const placing = tool.mode === "place";
   const wiring = tool.mode === "wire";
   const probing = tool.mode === "probe";
-  const previewWire = wireDraft ? routeWire(wireDraft.start, wireDraft.cursor) : null;
+  const previewWire = wireDraft ? routeWireSmart(wireDraft.start, wireDraft.cursor, components) : null;
   const flowActive = analysis?.ok === true;
   const flowEndTime = analysis?.ok ? analysis.times[analysis.times.length - 1] ?? 0 : 0;
   const flowSlowdown = flowEndTime > 0 ? FLOW_PLAY_MS / 1000 / flowEndTime : 0;
@@ -775,11 +821,11 @@ function ComponentView({
   onPointerDown: (e: ReactPointerEvent<SVGElement>) => void;
   onEdit: () => void;
 }) {
-  // Hit area sized to this part's own footprint (body + pins) so a small part
-  // like ground gets a small target — not a fixed 72×72 box that swallows
-  // clicks meant for neighbouring components.
-  const bounds = componentBounds(comp);
-  const HIT_PAD = 8;
+  // Hit area = the part's accurate drawn body (rotation-aware, asymmetric where
+  // needed, e.g. ground) plus a small pad. This stops a small part's box from
+  // reaching into a neighbour and stealing its clicks.
+  const bounds = rotatedBodyBox(comp.kind, comp.rotation);
+  const HIT_PAD = 7;
   return (
     <g
       className={`component${selected ? " selected" : ""}`}

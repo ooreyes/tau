@@ -121,8 +121,8 @@ const VOLTAGE_DIVIDER: ExampleCircuit = {
     { id: "div.gnd2", kind: "ground",   x: 160, y: 160, rotation: 0,  value: "",   label: "" },
   ],
   wires: [
-    // V1.p(96,64) → right to (160,64) → up to R1.a(160,32): L-shaped
-    { id: "div.w1", points: [{ x: 96, y: 64 }, { x: 160, y: 64 }, { x: 160, y: 32 }] },
+    // V1.p(96,64) → up to (96,32) → right to R1.a(160,32): stays clear of R1's body.
+    { id: "div.w1", points: [{ x: 96, y: 64 }, { x: 96, y: 32 }, { x: 160, y: 32 }] },
   ],
 };
 
@@ -202,17 +202,21 @@ const NONINVERTING_AMP: ExampleCircuit = {
     { id: "ni.v1",   kind: "vac",      x: 64,  y: 144, rotation: 0,  value: "1 1k",  label: "V1" },
     { id: "ni.u1",   kind: "opamp",    x: 256, y: 96,  rotation: 0,  value: "ideal", label: "U1" },
     { id: "ni.rg",   kind: "resistor", x: 160, y: 80,  rotation: 0,  value: "1k",    label: "Rg" },
-    { id: "ni.rf",   kind: "resistor", x: 256, y: 80,  rotation: 0,  value: "10k",   label: "Rf" },
+    { id: "ni.rf",   kind: "resistor", x: 256, y: 48,  rotation: 0,  value: "10k",   label: "Rf" },
     { id: "ni.gnd1", kind: "ground",   x: 64,  y: 176, rotation: 0,  value: "",      label: "" },
     { id: "ni.gnd2", kind: "ground",   x: 128, y: 80,  rotation: 0,  value: "",      label: "" },
   ],
+  // Rf is lifted to y=48 (clear above the op-amp body) and the feedback is
+  // routed up from the in- node and down into the output, so nothing overlaps.
   wires: [
-    // V1.p(64,112) → U1.in+(224,112): horizontal along y=112
+    // V1.p(64,112) → U1.in+(224,112)
     { id: "ni.w1", points: [{ x: 64, y: 112 }, { x: 224, y: 112 }] },
-    // Rg.b(192,80) → Rf.a=in-(224,80): horizontal along y=80
+    // Rg.b(192,80) → U1.in-(224,80)
     { id: "ni.w2", points: [{ x: 192, y: 80 }, { x: 224, y: 80 }] },
-    // Rf.b(288,80) → out(288,96): vertical along x=288
-    { id: "ni.w3", points: [{ x: 288, y: 80 }, { x: 288, y: 96 }] },
+    // in-(224,80) → up to Rf.a(224,48)
+    { id: "ni.w3", points: [{ x: 224, y: 80 }, { x: 224, y: 48 }] },
+    // Rf.b(288,48) → down to U1.out(288,96)
+    { id: "ni.w4", points: [{ x: 288, y: 48 }, { x: 288, y: 96 }] },
   ],
 };
 
@@ -244,17 +248,23 @@ const INVERTING_AMP: ExampleCircuit = {
     { id: "inv.v1",   kind: "vac",      x: 64,  y: 112, rotation: 0,  value: "1 1k",  label: "V1" },
     { id: "inv.u1",   kind: "opamp",    x: 256, y: 96,  rotation: 0,  value: "ideal", label: "U1" },
     { id: "inv.rin",  kind: "resistor", x: 160, y: 80,  rotation: 0,  value: "1k",    label: "Rin" },
-    { id: "inv.rf",   kind: "resistor", x: 256, y: 80,  rotation: 0,  value: "10k",   label: "Rf" },
+    { id: "inv.rf",   kind: "resistor", x: 256, y: 48,  rotation: 0,  value: "10k",   label: "Rf" },
     { id: "inv.gnd1", kind: "ground",   x: 64,  y: 144, rotation: 0,  value: "",      label: "" },
-    { id: "inv.gnd2", kind: "ground",   x: 224, y: 112, rotation: 0,  value: "",      label: "" },
+    { id: "inv.gnd2", kind: "ground",   x: 224, y: 144, rotation: 0,  value: "",      label: "" },
   ],
+  // Rf lifted to y=48 above the op-amp; in+ tied to ground below via a short
+  // lead so the ground symbol doesn't sit on top of the op-amp triangle.
   wires: [
-    // V1.p(64,80) → Rin.a(128,80): horizontal along y=80
+    // V1.p(64,80) → Rin.a(128,80)
     { id: "inv.w1", points: [{ x: 64, y: 80 }, { x: 128, y: 80 }] },
-    // Rin.b(192,80) → Rf.a=in-(224,80): horizontal along y=80
+    // Rin.b(192,80) → U1.in-(224,80)
     { id: "inv.w2", points: [{ x: 192, y: 80 }, { x: 224, y: 80 }] },
-    // Rf.b(288,80) → out(288,96): vertical along x=288
-    { id: "inv.w3", points: [{ x: 288, y: 80 }, { x: 288, y: 96 }] },
+    // in-(224,80) → up to Rf.a(224,48)
+    { id: "inv.w3", points: [{ x: 224, y: 80 }, { x: 224, y: 48 }] },
+    // Rf.b(288,48) → down to U1.out(288,96)
+    { id: "inv.w4", points: [{ x: 288, y: 48 }, { x: 288, y: 96 }] },
+    // U1.in+(224,112) → GND2(224,144)
+    { id: "inv.w5", points: [{ x: 224, y: 112 }, { x: 224, y: 144 }] },
   ],
 };
 
@@ -288,8 +298,9 @@ const UNITY_BUFFER: ExampleCircuit = {
   wires: [
     // V1.p(64,112) → U1.in+(160,112): horizontal along y=112
     { id: "buf.w1", points: [{ x: 64, y: 112 }, { x: 160, y: 112 }] },
-    // Feedback: out(224,96) → (224,80) → in-(160,80): L-shaped wire
-    { id: "buf.w2", points: [{ x: 224, y: 96 }, { x: 224, y: 80 }, { x: 160, y: 80 }] },
+    // Feedback: out(224,96) → up to (224,64) → left to (160,64) → down to
+    // in-(160,80), routed above the op-amp body so the wire never crosses it.
+    { id: "buf.w2", points: [{ x: 224, y: 96 }, { x: 224, y: 64 }, { x: 160, y: 64 }, { x: 160, y: 80 }] },
   ],
 };
 
