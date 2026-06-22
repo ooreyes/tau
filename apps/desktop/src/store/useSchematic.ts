@@ -11,6 +11,7 @@ import type {
   NetLabel,
 } from "../schematic/types";
 import { CATALOG_BY_KIND } from "../schematic/catalog";
+import { validateSchematicDocument } from "../schematic/documentValidation";
 
 /** The undoable document slice. Everything else in the store is ephemeral UI. */
 interface Doc {
@@ -150,17 +151,10 @@ function loadPersisted(): SchematicDocument | null {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    if (parsed && Array.isArray(parsed.components) && Array.isArray(parsed.wires)) {
-      return {
-        components: parsed.components,
-        wires: parsed.wires,
-        probes: Array.isArray(parsed.probes) ? parsed.probes : [],
-        netLabels: Array.isArray(parsed.netLabels) ? parsed.netLabels : [],
-      };
-    }
+    // Validate fully so stale or corrupt autosave data never reaches the renderer.
+    return validateSchematicDocument(JSON.parse(raw));
   } catch {
-    // ignore corrupt/unavailable storage
+    // Corrupt, stale, or incompatible autosave — discard silently.
   }
   return null;
 }

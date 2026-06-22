@@ -874,6 +874,8 @@ export function Canvas({
       const w = screenToWorld(e.clientX, e.clientY);
       const tx = snap(w.x);
       const ty = snap(w.y);
+      // Skip if coordinates are degenerate (can happen if svgRef was null during screenToWorld).
+      if (!Number.isFinite(tx) || !Number.isFinite(ty)) return;
       const moving = components.find((c) => c.id === d.id);
       // Never let a body slide into another body (pins may still meet).
       if (moving && collides(components, tx, ty, moving.kind, moving.rotation, d.id)) return;

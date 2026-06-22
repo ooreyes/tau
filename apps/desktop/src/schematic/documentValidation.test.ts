@@ -36,4 +36,30 @@ describe("schematic document validation", () => {
     unsafeColor.probes[0].color = "url(javascript:alert(1))";
     expect(() => validateSchematicDocument(unsafeColor)).toThrow(/color is not supported/i);
   });
+
+  it("rejects null / undefined / non-object inputs", () => {
+    expect(() => validateSchematicDocument(null)).toThrow();
+    expect(() => validateSchematicDocument(undefined)).toThrow();
+    expect(() => validateSchematicDocument("corrupted string")).toThrow();
+    expect(() => validateSchematicDocument(42)).toThrow();
+  });
+
+  it("accepts documents with missing optional probes and netLabels arrays", () => {
+    const minimal = { components: [], wires: [] };
+    const result = validateSchematicDocument(minimal);
+    expect(result.probes).toEqual([]);
+    expect(result.netLabels).toEqual([]);
+  });
+
+  it("rejects wires with fewer than two points", () => {
+    const bad = validDocument();
+    bad.wires[0].points = [{ x: 0, y: 0 }];
+    expect(() => validateSchematicDocument(bad)).toThrow(/at least two points/i);
+  });
+
+  it("rejects components with invalid rotation", () => {
+    const bad = validDocument();
+    bad.components[0].rotation = 45;
+    expect(() => validateSchematicDocument(bad)).toThrow(/0, 90, 180, or 270/i);
+  });
 });
