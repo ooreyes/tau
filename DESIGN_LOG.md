@@ -628,3 +628,25 @@ Fixed the bug list raised against the newly-migrated LTspice/VS Code shell.
   warning in real ngspice (no DC path) — add a magnetizing/damping path.
   (3) BJT/MOSFET/diode circuits only solve on the native path (TS solvers reject
   nonlinear devices by design).
+
+### 2026-06-21 (eve) — Pulse source + Class-D MOSFET example — Claude (Opus 4.8)
+
+- User asked for a MOSFET Class-D amplifier "to test that it works." The engine
+  handled it (verified a half-bridge deck in the real ngspice CLI: SW switches
+  rail-to-rail, OUT filters to the PWM average), but the app had no PWM source.
+- Added a **pulse voltage source** (`vpulse`) across the stack: type, catalog
+  (hotkey `k`), pins, symbol (pulse-train glyph), structured params
+  (low/high/frequency/duty), and SPICE `PULSE(...)` emission. Verified the
+  builder's PULSE card simulates in ngspice. Native-only for transient (the TS
+  solver path was left untouched to avoid risk — follow-up if browser pulse
+  transient is wanted).
+- Added the **Class-D Output Stage** example: complementary MOSFET half-bridge +
+  100 kHz/45% PWM gate + LC reconstruction filter into a 1 kΩ load. Built it by
+  round-tripping through the real netlist builder (the extractor unions crossing
+  wire segments, so the layout had to be genuinely planar) until it emitted 5
+  correct nets, then confirmed real ngspice solves it. Marked `nativeOnly`;
+  `circuits.test.ts` now validates such circuits' built deck instead of
+  TS-simulating, and still enforces no body-overlap / no wire-crosses-body.
+- 170 tests passing. Note: default MOSFET models (Kp=200µ/80µ) are weak, so the
+  example uses a 1 kΩ load to show a clean switching swing; a future pass could
+  add stronger/parameterised device models (W/L) for low-impedance loads.
