@@ -602,6 +602,18 @@ Fixed the bug list raised against the newly-migrated LTspice/VS Code shell.
 - Remaining production caveat: ad-hoc signing verifies locally but public
   macOS distribution still requires Developer ID signing and notarization.
 
+### 2026-06-21 — Native waveform rendering guard — Codex
+
+- Fixed `Maximum call stack size exceeded` when rendering large native ngspice
+  transient results. `SimulationPanel` previously spread all trace samples into
+  `Math.min` / `Math.max` and created one SVG path command per sample.
+- Added `apps/desktop/src/simulation/waveform.ts`: iterative bounds calculation
+  and first/last-preserving display decimation at 4,096 points per trace. Full
+  native data remains available to analysis; only SVG rendering is decimated.
+- Added regression tests over a 250,000-sample trace and a 2,000,000-sample
+  display request. Verified `pnpm typecheck`, `pnpm test` (172 tests), and a
+  Chrome RC simulation smoke test with no console errors or stack-overflow log.
+
 ### 2026-06-21 (pm) — Engine validation + schematic polish — Claude (Opus 4.8) + subagent
 
 - Diagnosed "ngspice isn't working": ngspice runs only in the **native desktop

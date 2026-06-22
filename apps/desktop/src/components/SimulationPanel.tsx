@@ -18,6 +18,7 @@ import { EngineeringInput } from "./EngineeringInput";
 import type { OperatingPointResult } from "../simulation/operatingPoint";
 import type { AcResult } from "../simulation/acSweep";
 import { isNativeSpiceRuntime, MAX_NATIVE_OUTPUT_POINTS } from "../engine/nativeSpice";
+import { displaySampleIndices, waveformBounds } from "../simulation/waveform";
 
 interface SimulationPanelProps {
   result: AnalysisResult | null;
@@ -380,12 +381,7 @@ function WaveformPlot({
 
   const plot = useMemo(() => {
     if (!success || traces.length === 0) return null;
-    const values = traces.flatMap((trace) => trace.values);
-    const rawMin = Math.min(...values, 0);
-    const rawMax = Math.max(...values, 0);
-    const span = rawMax - rawMin || 1;
-    const min = rawMin - span * 0.08;
-    const max = rawMax + span * 0.08;
+    const { min, max } = waveformBounds(traces);
     const tMax = success.times[success.times.length - 1] || 1;
     return { min, max, tMax };
   }, [success, traces]);
@@ -446,13 +442,19 @@ function WaveformPlot({
 }
 
 function tracePath(trace: Trace, times: number[], min: number, max: number, tMax: number): string {
-  return trace.values
-    .map((value, index) => {
-      const x = PLOT_PAD + ((times[index] ?? 0) / tMax) * (PLOT_WIDTH - PLOT_PAD * 2);
-      const y = PLOT_HEIGHT - PLOT_PAD - ((value - min) / (max - min || 1)) * (PLOT_HEIGHT - PLOT_PAD * 2);
-      return `${index === 0 ? "M" : "L"} ${x.toFixed(2)} ${y.toFixed(2)}`;
-    })
-    .join(" ");
+  const sampleCount = Math.min(trace.values.length, times.length);
+  let path = "";
+  let started = false;
+  for (const index of displaySampleIndices(sampleCount)) {
+    const value = trace.values[index];
+    const time = times[index];
+    if (!Number.isFinite(value) || !Number.isFinite(time)) continue;
+    const x = PLOT_PAD + (time / tMax) * (PLOT_WIDTH - PLOT_PAD * 2);
+    const y = PLOT_HEIGHT - PLOT_PAD - ((value - min) / (max - min || 1)) * (PLOT_HEIGHT - PLOT_PAD * 2);
+    path += `${started ? "L" : "M"} ${x.toFixed(2)} ${y.toFixed(2)} `;
+    started = true;
+  }
+  return path;
 }
 
 function OpTable({ result }: { result: OperatingPointResult | null }) {
