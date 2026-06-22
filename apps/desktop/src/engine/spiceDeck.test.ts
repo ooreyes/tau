@@ -164,6 +164,35 @@ describe("deck structure — node numbering is contiguous from N001", () => {
   });
 });
 
+describe("deck structure — isource / iac polarity (n before p)", () => {
+  // SPICE convention: I N+ N- value pulls current from N+ (making it negative for
+  // positive I).  To match Tau's schematic convention (current exits p, raising V(p)),
+  // the deck must emit "I name n p value", i.e., swap the terminal order.
+  const Isrc = (x: number, y: number, v: string, l = "I1") =>
+    ({ id: `is-${l}`, kind: "isource" as const, x, y, rotation: 0 as const, value: v, label: l });
+  const Iac = (x: number, y: number, v: string, l = "I1") =>
+    ({ id: `iac-${l}`, kind: "iac" as const, x, y, rotation: 0 as const, value: v, label: l });
+
+  it("isource deck lists n then p (so ngspice agrees V(p) > 0)", () => {
+    // isource at (0,32): p=(0,0) = n001, n=(0,64) = ground.
+    const deck = buildSpiceDeck(
+      { components: [Isrc(0, 32, "1m"), GND(0, 64)], wires: [] },
+      { kind: "op" },
+    );
+    // Must have "0 n001" (n then p) NOT "n001 0" (p then n).
+    expect(deck.netlist).toMatch(/^I\S+ 0 n001 DC/m);
+  });
+
+  it("iac deck lists n then p for correct polarity", () => {
+    // iac at (0,32): p=(0,0) = n001, n=(0,64) = ground.
+    const deck = buildSpiceDeck(
+      { components: [Iac(0, 32, "1 1k"), GND(0, 64)], wires: [] },
+      { kind: "ac", startHz: 10, stopHz: 1e4, pointsPerDecade: 10 },
+    );
+    expect(deck.netlist).toMatch(/^I\S+ 0 n001 DC/m);
+  });
+});
+
 describe("deck builder — failure modes", () => {
   it("throws when no ground is present", () => {
     expect(() =>
@@ -189,6 +218,34 @@ describe("deck builder — failure modes", () => {
       buildSpiceDeck(
         { components: [Vac(0, 32, "1 1k"), GND(0, 64)], wires: [] },
         { kind: "ac", startHz: 1e6, stopHz: 10, pointsPerDecade: 10 },
+      ),
+    ).toThrow();
+  });
+
+  it("rejects a zero-ohm resistor (would produce a singular matrix in ngspice)", () => {
+    expect(() =>
+      buildSpiceDeck(
+        { components: [Vdc(0, 32, "5"), R(96, 0, "0", "R1"), GND(0, 64), GND(128, 0)], wires: [W({ x: 0, y: 0 }, { x: 64, y: 0 })] },
+        { kind: "op" },
+      ),
+    ).toThrow(/positive/i);
+  });
+
+  it("rejects a negative capacitance", () => {
+    expect(() =>
+      buildSpiceDeck(
+        { components: [Vdc(0, 32, "5"), Cap(96, 0, "-1u", "C1"), GND(0, 64), GND(128, 0)], wires: [W({ x: 0, y: 0 }, { x: 64, y: 0 })] },
+        { kind: "op" },
+      ),
+    ).toThrow(/positive/i);
+  });
+
+  it("rejects a non-finite component value (NaN string)", () => {
+    // A garbage value string should throw a clear error, not emit NaN into the deck.
+    expect(() =>
+      buildSpiceDeck(
+        { components: [Vdc(0, 32, "5"), R(96, 0, "oops", "R1"), GND(0, 64), GND(128, 0)], wires: [W({ x: 0, y: 0 }, { x: 64, y: 0 })] },
+        { kind: "op" },
       ),
     ).toThrow();
   });

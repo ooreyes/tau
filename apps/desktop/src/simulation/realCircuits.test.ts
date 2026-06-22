@@ -135,10 +135,12 @@ describe("Multi-stage divider (12 V, 1k/1k/2k → 9 V, 6 V)", () => {
 });
 
 describe("Current divider (3 mA into 1k‖2k)", () => {
-  // I1 at (0,32): p=(0,0) n=(0,64). R1 rot90 at (64,32): a=(64,0) b=(64,64).
-  // R2 rot90 at (128,32): a=(128,0) b=(128,64). Top rail y=0, bottom rail y=64→GND.
-  // V(node) = ±I·(R1‖R2) = 3 mA · (2000/3) = 2 V. ngspice current-source
-  // convention drives the + terminal node negative, so |V| = 2 V.
+  // I1 at (0,32): p=(0,0) n=(0,64=GND). R1 rot90 at (64,32): a=(64,0) b=(64,64).
+  // R2 rot90 at (128,32): a=(128,0) b=(128,64). Top rail y=0, bottom rail y=64=GND.
+  //
+  // SPICE convention: positive isource value → conventional current exits the + (p)
+  // terminal into the external circuit.  The top rail (p node) is the current sink for
+  // both resistors, so V(top) = I · (R1‖R2) = 3 mA · (2000/3 Ω) = +2 V.
   const comps = [
     Idc(0, 32, "3m"),
     R(64, 32, "1k", "R1", 90),
@@ -150,14 +152,15 @@ describe("Current divider (3 mA into 1k‖2k)", () => {
     W({ x: 0, y: 64 }, { x: 64, y: 64 }, { x: 128, y: 64 }),
   ];
 
-  it("node magnitude = I·(R1‖R2) = 2 V", () => {
+  it("top-rail node = +I·(R1‖R2) = +2 V (SPICE polarity: current exits p)", () => {
     const res = runOperatingPoint({ components: comps, wires });
     expect(res.ok).toBe(true);
     if (!res.ok) return;
     const node = res.nets.find((n) => n.id !== "0");
     expect(node).toBeDefined();
-    expect(Math.abs(node!.voltage)).toBeCloseTo(2, 6);
-    // Current split: I_R1 = V/1k, I_R2 = V/2k → ratio 2:1 (verified by R1‖R2 value).
+    // Correct SPICE result: +2 V (current exits + terminal, raising the top rail).
+    expect(node!.voltage).toBeCloseTo(2, 6);
+    // Current split: I_R1 = 2V/1k = 2 mA, I_R2 = 2V/2k = 1 mA → sum = 3 mA ✓
   });
 });
 

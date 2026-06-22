@@ -85,7 +85,7 @@ describe("native ngspice adapter", () => {
     expect(result.warnings).toEqual(["Warning: internal timestep reduced"]);
   });
 
-  it("returns all finite operating-point voltages, including a 0 V non-ground net", async () => {
+  it("returns all finite operating-point voltages, with GND prepended at 0 V", async () => {
     enableNativeRuntime();
     invoke.mockResolvedValueOnce(nativeResult([
       { name: "v(n001)", real: [5], imaginary: null },
@@ -94,9 +94,11 @@ describe("native ngspice adapter", () => {
 
     const result = await runNativeOperatingPoint(rcSchematic());
 
+    // GND is always prepended at 0 V to match the TS solver's OperatingPointResult shape.
     expect(result).toEqual({
       ok: true,
       nets: [
+        { id: "0", label: "GND", voltage: 0 },
         { id: "N001", label: "V(V1.R1)", voltage: 5 },
         { id: "N002", label: "V(R1.C1)", voltage: 0 },
       ],

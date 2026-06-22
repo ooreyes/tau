@@ -335,6 +335,64 @@ describe("tiny and huge reactive values in AC stay finite", () => {
 });
 
 // ---------------------------------------------------------------------------
+// isource / iac polarity (SPICE convention: current exits + terminal)
+// ---------------------------------------------------------------------------
+
+describe("isource polarity: current exits + terminal, raising the p node", () => {
+  // I1(2 mA) at (0,32): p=(0,0), n=(0,64)=GND. R1(500 Ω) from (64,0) to (128,0)=GND.
+  // V(p) = I × R = 2 mA × 500 Ω = +1 V (positive, matching ngspice).
+  const comps = [
+    mk("isource", 0, 32, "2m", "I1"),
+    R(96, 0, "500", "R1"),
+    GND(0, 64),
+    GND(128, 0),
+  ];
+  const wires = [W({ x: 0, y: 0 }, { x: 64, y: 0 })];
+
+  it("DC OP: p-node voltage = +I×R = +1 V", () => {
+    const res = runOperatingPoint({ components: comps, wires });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    const node = res.nets.find((n) => n.id !== "0");
+    expect(node).toBeDefined();
+    expect(node!.voltage).toBeCloseTo(1, 6);
+  });
+
+  it("transient: steady-state p-node voltage = +1 V", () => {
+    const res = runTransientAnalysis({ components: comps, wires }, { stopTime: 1e-3, steps: 200 });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    const trace = res.traces[0];
+    expect(trace).toBeDefined();
+    // Steady state: V = +1 V
+    expect(trace.values[trace.values.length - 1]).toBeCloseTo(1, 3);
+  });
+});
+
+describe("iac polarity: AC current exits + terminal (consistent with isource and acSweep)", () => {
+  // iac(1 A, 1 kHz) at (0,32): p=(0,0), n=(0,64)=GND. R1(1 kΩ) from (64,0) to (128,0)=GND.
+  // Magnitude at any frequency = I × R = 1 A × 1 kΩ = 1000 V → 60 dB at DC-like frequencies.
+  // All three solvers (OP, transient, AC) must agree that the p-node is raised, not lowered.
+  const comps = [
+    mk("iac", 0, 32, "1 1k", "I1"),
+    R(96, 0, "1k", "R1"),
+    GND(0, 64),
+    GND(128, 0),
+  ];
+  const wires = [W({ x: 0, y: 0 }, { x: 64, y: 0 })];
+
+  it("AC sweep: p-node at 20 dB ≈ 60 dB (1 A × 1 kΩ = 1000 V)", () => {
+    const ac = runAcSweep({ components: comps, wires }, { startHz: 1, stopHz: 1e4, pointsPerDecade: 5 });
+    expect(ac.ok).toBe(true);
+    if (!ac.ok) return;
+    // At low frequencies well below any reactive corner, |V| ≈ I × R = 1000 V → 60 dB.
+    const lowFreqDb = ac.traces[0]?.magDb[0];
+    expect(lowFreqDb).toBeDefined();
+    expect(lowFreqDb).toBeCloseTo(60, 0);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // No analysis should ever throw
 // ---------------------------------------------------------------------------
 
@@ -349,6 +407,26 @@ describe("malformed inputs never throw", () => {
       expect(() => runOperatingPoint(schematic)).not.toThrow();
       expect(() => runTransientAnalysis(schematic, { stopTime: 1e-3, steps: 100 })).not.toThrow();
       expect(() => runAcSweep(schematic, { startHz: 1, stopHz: 1e3, pointsPerDecade: 5 })).not.toThrow();
+    }
+  });
+
+  it("Inf and NaN component values never produce Infinity/NaN outputs (OP)", () => {
+    // These should return ok:false with an error message, never NaN in voltages.
+    const infR = R(96, 0, "Infinity", "R1"); // Not parseable → fail gracefully
+    const res = runOperatingPoint({ components: [Vdc(0, 32, "5"), infR, GND(0, 64)], wires: [] });
+    expect(res.ok).toBe(false);
+    expect(() => runOperatingPoint({ components: [Vdc(0, 32, "5"), infR, GND(0, 64)], wires: [] })).not.toThrow();
+  });
+
+  it("extremely large stop-time rejects gracefully without hanging", () => {
+    const comps = [Vdc(0, 32, "5"), R(96, 0, "1k", "R1"), GND(0, 64), GND(128, 0)];
+    const wires = [W({ x: 0, y: 0 }, { x: 64, y: 0 })];
+    const res = runTransientAnalysis({ components: comps, wires }, { stopTime: 1e100, steps: 100 });
+    // stopTime is finite but huge — solver should run without producing NaN.
+    if (res.ok) {
+      for (const trace of res.traces) {
+        expect(trace.values.every((v) => Number.isFinite(v))).toBe(true);
+      }
     }
   });
 });

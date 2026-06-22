@@ -497,6 +497,9 @@ describe("Transient source primitives", () => {
   });
 
   it("DC current source through resistor produces Ohm-law voltage", () => {
+    // I1(1 mA) at (0,32): p=(0,0), n=(0,64)=GND.  R1(1k) from (64,0) to (128,0)=GND.
+    // SPICE convention: 1 mA exits the + (p) terminal into the network.
+    // V(p→R1→GND) = I × R = 1 mA × 1 kΩ = +1 V.
     const I1 = isource(0, 32, "1m", "I1");
     const R1 = resistor(96, 0, "1k", "R1");
     const GND_source = ground(0, 64);
@@ -512,6 +515,7 @@ describe("Transient source primitives", () => {
 
     const sourceNode = result.traces.find((trace) => Math.abs(trace.values[trace.values.length - 1] ?? 0) > 0.5);
     expect(sourceNode).toBeDefined();
-    expect(sourceNode?.values[sourceNode.values.length - 1]).toBeCloseTo(-1, 3);
+    // Correct SPICE result: +1 V (current exits + terminal, raising the p node).
+    expect(sourceNode?.values[sourceNode.values.length - 1]).toBeCloseTo(1, 3);
   });
 });
