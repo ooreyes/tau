@@ -662,3 +662,33 @@ Fixed the bug list raised against the newly-migrated LTspice/VS Code shell.
 - 170 tests passing. Note: default MOSFET models (Kp=200µ/80µ) are weak, so the
   example uses a 1 kΩ load to show a clean switching swing; a future pass could
   add stronger/parameterised device models (W/L) for low-impedance loads.
+
+### 2026-06-21 — Native engine packaging hardening — Codex
+
+- Hardened `scripts/build-ngspice.sh` into a reproducible native macOS/Linux
+  staging flow: pinned detached ngspice checkout, generated autotools files,
+  out-of-tree build, OpenMP disabled, resource provenance in `build-info.json`,
+  and a hard failure when the expected staged library is absent. The script
+  works around stale Homebrew Perl shebangs in a disposable build-only tool
+  directory rather than changing user-managed tools.
+- Normalized the staged macOS install name to `@rpath/libngspice.0.dylib` and
+  confirmed the release asset has no temporary build-directory dependency.
+- The Tauri command now resolves the engine through
+  `app.path().resource_dir()` instead of guessing a macOS bundle path or loading
+  a machine-wide Homebrew/system library. `TAU_NGSPICE_LIB` is retained only as
+  an explicit development/test override.
+- Added a Rust build-time guard: desktop compilation fails with an actionable
+  message unless the platform-matched engine resource has been staged. Tauri
+  bundle metadata now declares the engine resource and macOS 11.0 minimum.
+- Verification: strict `cargo clippy --all-targets -- -D warnings`; Rust unit
+  tests; the ignored native smoke test against both staged and release-bundled
+  `libngspice`; a clean pinned ngspice rebuild; a release `Tau.app` bundle with
+  29 engine resource objects; and strict ad-hoc `codesign` verification.
+- The normal frontend bundle step was not green in this shared worktree because
+  unrelated in-progress edits in `apps/desktop/src/store/useSchematic.ts` have
+  two TypeScript unused-variable errors. A temporary Tauri config override
+  skipped only that frontend prebuild to validate native packaging. Do not treat
+  the release as fully ship-ready until the frontend typecheck is green again.
+- Windows runtime lookup is supported (`ngspice.dll` in the same resource
+  layout), but automated Windows ngspice staging is intentionally not yet
+  implemented; see `README.md`.

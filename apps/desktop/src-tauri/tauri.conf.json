@@ -26,8 +26,14 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "publisher": "Tau",
+    "category": "DeveloperTool",
+    "shortDescription": "A modern, fast circuit simulator with a SPICE-class engine.",
     "resources": {
       "resources/ngspice/": "ngspice/"
+    },
+    "macOS": {
+      "minimumSystemVersion": "11.0"
     },
     "icon": [
       "icons/32x32.png",

@@ -67,7 +67,9 @@ mapping rather than vendoring third-party libraries.
 
 Prerequisites: **Node ≥ 20**, **pnpm**, **Rust** (stable), and the platform's
 native webview toolchain (macOS: Xcode Command Line Tools). Native engine
-builds also need GNU Bison 3.x (macOS: `brew install bison`).
+builds also need a C toolchain, GNU Make, Git, and GNU Bison 3.x (macOS:
+`brew install bison`). Build each distributable on its target platform; Tau
+does not cross-compile ngspice resources.
 
 ```bash
 pnpm install          # install workspace dependencies
@@ -81,6 +83,20 @@ pnpm test             # run solver/example correctness tests
 `pnpm dev:web` intentionally uses the browser fallback and cannot exercise the
 native engine. Use `pnpm dev` for ngspice verification.
 
+The build script locks ngspice to its recorded source commit, compiles out of
+tree, stages a target-matched library under `src-tauri/resources/ngspice/`, and
+writes `build-info.json` with the exact provenance. Desktop builds fail early
+when that staged library is absent. `TAU_NGSPICE_LIB` remains an explicit local
+development override only; packaged apps resolve their library through Tauri's
+resource directory and never load an arbitrary system/Homebrew installation.
+
+`scripts/build-ngspice.sh` currently automates native macOS and Linux builds.
+For Windows, build ngspice with the target's native toolchain and stage its
+target-matched `ngspice.dll` at
+`apps/desktop/src-tauri/resources/ngspice/lib/ngspice.dll` before running
+`tauri build`. The Rust loader and Tauri resource layout already support that
+path; the Windows build automation remains a separate release-engineering task.
+
 ## Release build
 
 ```bash
@@ -90,6 +106,17 @@ scripts/build-ngspice.sh
 pnpm --filter @tau/desktop build   # frontend production bundle
 pnpm build                         # Tauri release app + DMG
 ```
+
+Before shipping a macOS build, inspect the staged resource and signed bundle:
+
+```bash
+otool -L apps/desktop/src-tauri/resources/ngspice/lib/libngspice.dylib
+codesign --verify --deep --strict apps/desktop/src-tauri/target/release/bundle/macos/Tau.app
+```
+
+The build script normalizes the staged ngspice install name so it cannot retain
+a machine-local build path. A public macOS release still must be Developer ID
+signed and notarized after bundling.
 
 Current macOS release artifacts are produced under
 `apps/desktop/src-tauri/target/release/bundle/`:

@@ -8,7 +8,7 @@ use std::{
 
 use libloading::Library;
 use serde::{Deserialize, Serialize};
-use tauri::State;
+use tauri::{AppHandle, Manager, State};
 
 const MAX_VECTOR_LENGTH: usize = 2_000_000;
 
@@ -168,11 +168,14 @@ struct SpiceEngine {
 }
 
 impl SpiceEngine {
-    fn load() -> Result<Self, String> {
-        let candidates = library_candidates();
+    fn load(candidates: Vec<PathBuf>) -> Result<Self, String> {
         let mut failures = Vec::new();
-        for candidate in candidates {
-            match unsafe { Library::new(&candidate) } {
+        for candidate in &candidates {
+            if !candidate.is_file() {
+                failures.push(format!("{}: file not found", candidate.display()));
+                continue;
+            }
+            match unsafe { Library::new(candidate) } {
                 Ok(library) => match unsafe { Self::from_library(library, candidate.clone()) } {
                     Ok(engine) => return Ok(engine),
                     Err(error) => failures.push(format!("{}: {error}", candidate.display())),
@@ -181,8 +184,8 @@ impl SpiceEngine {
             }
         }
         Err(format!(
-            "libngspice was not found. Set TAU_NGSPICE_LIB to a shared ngspice library. Checked: {}{}",
-            library_candidates()
+            "Tau's bundled libngspice could not be loaded. Run scripts/build-ngspice.sh before a development build, or set TAU_NGSPICE_LIB for an explicit development override. Checked: {}{}",
+            candidates
                 .iter()
                 .map(|path| path.display().to_string())
                 .collect::<Vec<_>>()
@@ -345,6 +348,7 @@ impl SpiceEngine {
 
 #[tauri::command]
 pub fn simulate_spice(
+    app: AppHandle,
     state: State<'_, NativeSpiceState>,
     request: SpiceRequest,
 ) -> Result<SpiceResult, String> {
@@ -353,7 +357,7 @@ pub fn simulate_spice(
         .lock()
         .map_err(|_| "ngspice engine lock was poisoned.".to_string())?;
     if engine.is_none() {
-        *engine = Some(SpiceEngine::load()?);
+        *engine = Some(SpiceEngine::load(library_candidates(&app))?);
     }
     engine
         .as_mut()
@@ -361,42 +365,34 @@ pub fn simulate_spice(
         .run(request)
 }
 
-fn library_candidates() -> Vec<PathBuf> {
+fn library_candidates(app: &AppHandle) -> Vec<PathBuf> {
     let mut paths = Vec::new();
     if let Some(path) = env::var_os("TAU_NGSPICE_LIB") {
         paths.push(PathBuf::from(path));
     }
 
-    // These locations make a checked-out build work without a Homebrew install
-    // and make a packaged macOS app load its bundled copy first.
+    // Tauri owns platform-specific resource resolution. This covers macOS app
+    // bundles, Linux AppImages/packages, Windows installers, and debug builds
+    // without coupling a release build to an arbitrary system ngspice install.
+    if let Ok(resource_dir) = app.path().resource_dir() {
+        paths.push(resource_dir.join("ngspice/lib").join(library_file_name()));
+    }
+
+    // Tauri development commands run from the crate directory. Keep these
+    // source-tree paths out of release binaries so a packaged app cannot fall
+    // back to a library supplied by its working directory.
+    #[cfg(debug_assertions)]
     if let Ok(current_dir) = env::current_dir() {
-        paths.push(current_dir.join("resources/ngspice/lib/libngspice.dylib"));
         paths.push(
-            current_dir.join("apps/desktop/src-tauri/resources/ngspice/lib/libngspice.dylib"),
+            current_dir
+                .join("resources/ngspice/lib")
+                .join(library_file_name()),
         );
-    }
-    if let Some(path) = bundled_library_path() {
-        paths.push(path);
-    }
-    #[cfg(target_os = "macos")]
-    {
-        paths.extend([
-            PathBuf::from("/opt/homebrew/opt/ngspice/lib/libngspice.dylib"),
-            PathBuf::from("/opt/homebrew/lib/libngspice.dylib"),
-            PathBuf::from("/usr/local/opt/ngspice/lib/libngspice.dylib"),
-            PathBuf::from("/usr/local/lib/libngspice.dylib"),
-        ]);
-    }
-    #[cfg(target_os = "linux")]
-    {
-        paths.extend([
-            PathBuf::from("/usr/lib/libngspice.so"),
-            PathBuf::from("/usr/local/lib/libngspice.so"),
-        ]);
-    }
-    #[cfg(target_os = "windows")]
-    {
-        paths.push(PathBuf::from("ngspice.dll"));
+        paths.push(
+            current_dir
+                .join("apps/desktop/src-tauri/resources/ngspice/lib")
+                .join(library_file_name()),
+        );
     }
     let mut unique = Vec::new();
     for path in paths {
@@ -407,16 +403,19 @@ fn library_candidates() -> Vec<PathBuf> {
     unique
 }
 
-#[cfg(target_os = "macos")]
-fn bundled_library_path() -> Option<PathBuf> {
-    let executable = env::current_exe().ok()?;
-    let contents = executable.parent()?.parent()?;
-    Some(contents.join("Resources/ngspice/lib/libngspice.dylib"))
-}
-
-#[cfg(not(target_os = "macos"))]
-fn bundled_library_path() -> Option<PathBuf> {
-    None
+const fn library_file_name() -> &'static str {
+    #[cfg(target_os = "windows")]
+    {
+        "ngspice.dll"
+    }
+    #[cfg(target_os = "macos")]
+    {
+        "libngspice.dylib"
+    }
+    #[cfg(all(not(target_os = "windows"), not(target_os = "macos")))]
+    {
+        "libngspice.so"
+    }
 }
 
 fn deck_lines(netlist: &str) -> Result<Vec<String>, String> {
@@ -478,7 +477,9 @@ fn with_engine_messages(state: &CallbackState, message: String) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{deck_lines, SpiceEngine, SpiceRequest};
+    use std::path::PathBuf;
+
+    use super::{deck_lines, library_file_name, SpiceEngine, SpiceRequest};
 
     #[test]
     fn accepts_a_complete_deck() {
@@ -492,9 +493,18 @@ mod tests {
     }
 
     #[test]
+    fn uses_the_platform_library_name() {
+        let name = PathBuf::from(library_file_name());
+        assert!(name.file_name().is_some());
+    }
+
+    #[test]
     #[ignore = "requires TAU_NGSPICE_LIB pointing to libngspice"]
     fn runs_an_operating_point_with_the_real_ngspice_library() {
-        let mut engine = SpiceEngine::load().expect("ngspice library should load");
+        let library = std::env::var_os("TAU_NGSPICE_LIB")
+            .map(PathBuf::from)
+            .expect("TAU_NGSPICE_LIB must point to a shared ngspice library");
+        let mut engine = SpiceEngine::load(vec![library]).expect("ngspice library should load");
         let result = engine
             .run(SpiceRequest {
                 netlist: "Tau FFI smoke test\nV1 in 0 5\nR1 in 0 1k\n.op\n.end".to_string(),
