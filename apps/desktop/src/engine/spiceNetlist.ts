@@ -93,11 +93,15 @@ function componentLines(entry: ExtractedComponent, index: number): string[] {
       ];
     }
     case "potentiometer": {
-      const resistance = numberValue(component, "Ohm");
+      // Split the track into two equal halves around the wiper. ngspice does
+      // not evaluate arithmetic in a bare value field, so emit a precomputed
+      // number rather than an expression like "10000/2".
+      const resistance = parsedNumber(component, "Ohm");
+      const half = (resistance / 2).toString();
       const base = safeName(component.label || `RV${index + 1}`);
       return [
-        `R_${base}_a ${node("a")} ${node("w")} ${resistance}/2`,
-        `R_${base}_b ${node("w")} ${node("b")} ${resistance}/2`,
+        `R_${base}_a ${node("a")} ${node("w")} ${half}`,
+        `R_${base}_b ${node("w")} ${node("b")} ${half}`,
       ];
     }
     case "switch": {
@@ -156,10 +160,14 @@ function requiredNode(entry: ExtractedComponent, pin: string): string {
 }
 
 function numberValue(component: SchematicComponent, unit: string): string {
+  return parsedNumber(component, unit).toString();
+}
+
+function parsedNumber(component: SchematicComponent, unit: string): number {
   try {
     const value = parseQuantity(component.value, unit);
     if (!Number.isFinite(value)) throw new Error("not finite");
-    return value.toString();
+    return value;
   } catch {
     throw new Error(`${component.label || component.kind} needs a valid ${unit} value.`);
   }

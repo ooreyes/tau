@@ -562,5 +562,53 @@ mod tests {
         assert!(ac.vectors.iter().any(|vector| {
             vector.name.eq_ignore_ascii_case("out") && vector.imaginary.is_some()
         }));
+
+        // Common-emitter BJT bias point: with VCC=12, RC=4.7k, base fed through
+        // RB=100k from a 0.8 V supply, the generic NPN sits in the active region
+        // so the collector stays well below the rail and the base near a diode drop.
+        let bjt = engine
+            .run(SpiceRequest {
+                netlist: "Tau BJT bias\n.model TAU_NPN NPN(Is=1e-14 Bf=100 Vaf=100)\nVCC vcc 0 12\nVBB vbb 0 0.8\nRC vcc coll 4.7k\nRB vbb base 100k\nQ1 coll base 0 TAU_NPN\n.op\n.end".to_string(),
+            })
+            .expect("BJT bias point should solve");
+        let collector = bjt
+            .vectors
+            .iter()
+            .find(|vector| vector.name.eq_ignore_ascii_case("coll"))
+            .and_then(|vector| vector.real.first())
+            .copied()
+            .expect("collector node present");
+        assert!(
+            collector > 0.0 && collector < 12.0,
+            "collector should sit inside the rails, got {collector}"
+        );
+
+        // Half-wave rectifier: the diode passes the positive half of a 5 V swing
+        // to the 1k load, so the load node must reach a few volts at its peak.
+        let rectifier = engine
+            .run(SpiceRequest {
+                netlist: "Tau rectifier\n.model TAU_DIODE D(Is=1e-14 N=1)\nV1 in 0 SIN(0 5 1k)\nD1 in out TAU_DIODE\nRL out 0 1k\n.tran 10u 2m\n.end".to_string(),
+            })
+            .expect("rectifier transient should solve");
+        let load_peak = rectifier
+            .vectors
+            .iter()
+            .find(|vector| vector.name.eq_ignore_ascii_case("out"))
+            .map(|vector| vector.real.iter().cloned().fold(f64::MIN, f64::max))
+            .expect("load node present");
+        assert!(
+            load_peak > 3.0,
+            "rectified output should peak above 3 V, got {load_peak}"
+        );
+        let load_min = rectifier
+            .vectors
+            .iter()
+            .find(|vector| vector.name.eq_ignore_ascii_case("out"))
+            .map(|vector| vector.real.iter().cloned().fold(f64::MAX, f64::min))
+            .expect("load node present");
+        assert!(
+            load_min > -0.5,
+            "rectifier should block the negative half-cycle, got {load_min}"
+        );
     }
 }
