@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { EXAMPLE_CIRCUITS } from "./circuits";
 import { runTransientAnalysis } from "../simulation/linearTransient";
+import { buildSpiceDeck } from "../engine/spiceNetlist";
 import { SYMBOL_BODY } from "../schematic/symbols";
 import type { ComponentKind, Point, SchematicComponent } from "../schematic/types";
 
@@ -89,6 +90,18 @@ describe("EXAMPLE_CIRCUITS", () => {
       });
 
       it("simulates without error", () => {
+        if (circuit.nativeOnly) {
+          // Nonlinear (native-engine) circuit: the TS solver rejects it by
+          // design, so validate the builder produces a runnable ngspice deck.
+          const deck = buildSpiceDeck(
+            { components: circuit.components, wires: circuit.wires },
+            { kind: "tran", stopTime: OPTIONS.stopTime, steps: OPTIONS.steps },
+          );
+          expect(deck.netlist).toMatch(/\.tran /);
+          expect(deck.netlist.trim().endsWith(".end")).toBe(true);
+          expect(deck.circuit.warnings).toEqual([]);
+          return;
+        }
         const result = runTransientAnalysis(
           { components: circuit.components, wires: circuit.wires },
           OPTIONS,
@@ -100,6 +113,16 @@ describe("EXAMPLE_CIRCUITS", () => {
       });
 
       it("has at least one trace with real variation", () => {
+        if (circuit.nativeOnly) {
+          // Validate the derived netlist's topology instead of TS-simulating.
+          const deck = buildSpiceDeck(
+            { components: circuit.components, wires: circuit.wires },
+            { kind: "tran", stopTime: OPTIONS.stopTime, steps: OPTIONS.steps },
+          );
+          const nonGround = deck.circuit.nets.filter((net) => !net.isGround);
+          expect(nonGround.length).toBeGreaterThanOrEqual(4);
+          return;
+        }
         const result = runTransientAnalysis(
           { components: circuit.components, wires: circuit.wires },
           OPTIONS,

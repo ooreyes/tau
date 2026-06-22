@@ -14,6 +14,7 @@ export type ComponentKind =
   | "isource"
   | "vac"
   | "iac"
+  | "vpulse"
   | "diode"
   | "led"
   | "zener"

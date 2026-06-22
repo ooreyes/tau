@@ -1,6 +1,7 @@
 import { extractCircuit, type ExtractedCircuit, type ExtractedComponent } from "../schematic/netlist";
 import type { ComponentKind, SchematicComponent, SchematicWire } from "../schematic/types";
 import { parseQuantity } from "../simulation/quantity";
+import { decodeParams } from "../schematic/params";
 
 export type SpiceAnalysis =
   | { kind: "tran"; stopTime: number; steps: number }
@@ -70,6 +71,18 @@ function componentLines(entry: ExtractedComponent, index: number): string[] {
     case "iac": {
       const signal = sourceSignal(component, "A");
       return [`${name} ${node("p")} ${node("n")} DC ${signal.offset} AC ${signal.amplitude} SIN(${signal.offset} ${signal.amplitude} ${signal.frequency})`];
+    }
+    case "vpulse": {
+      const p = decodeParams("vpulse", component.value);
+      const low = parseQuantity(p.low ?? "0", "V");
+      const high = parseQuantity(p.high ?? "5", "V");
+      const freq = parseQuantity(p.frequency ?? "100k", "Hz");
+      const duty = Math.min(0.99, Math.max(0.01, Number(p.duty ?? "0.5") || 0.5));
+      const period = freq > 0 ? 1 / freq : 1e-5;
+      const edge = period * 0.01;
+      const width = Math.max(period * duty - edge, period * 0.005);
+      // PULSE(V1 V2 TD TR TF PW PER)
+      return [`${name} ${node("p")} ${node("n")} DC ${low} PULSE(${low} ${high} 0 ${edge} ${edge} ${width} ${period})`];
     }
     case "diode":
       return [`${name} ${node("a")} ${node("k")} TAU_DIODE`];
@@ -145,7 +158,7 @@ function analysisLine(analysis: SpiceAnalysis): string {
 
 function instanceName(component: SchematicComponent, index: number): string {
   const prefix: Record<ComponentKind, string> = {
-    resistor: "R", capacitor: "C", inductor: "L", vsource: "V", isource: "I", vac: "V", iac: "I",
+    resistor: "R", capacitor: "C", inductor: "L", vsource: "V", isource: "I", vac: "V", iac: "I", vpulse: "V",
     diode: "D", led: "D", zener: "D", opamp: "E", nmos: "M", pmos: "M", npn: "Q", pnp: "Q",
     potentiometer: "R", switch: "R", transformer: "L", testpoint: "X", ground: "X",
   };

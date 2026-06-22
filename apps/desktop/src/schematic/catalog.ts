@@ -25,6 +25,7 @@ export const CATALOG: CatalogEntry[] = [
   { kind: "isource",       section: "Sources",           name: "DC Current",      hotkey: "i", prefix: "I",   defaultValue: "1m",    unit: "A" },
   { kind: "vac",           section: "Sources",           name: "AC Voltage",      hotkey: "a", prefix: "V",   defaultValue: "1 1k",  unit: "V Hz" },
   { kind: "iac",           section: "Sources",           name: "AC Current",      hotkey: "y", prefix: "I",   defaultValue: "1m 1k", unit: "A Hz" },
+  { kind: "vpulse",        section: "Sources",           name: "Pulse Voltage",   hotkey: "k", prefix: "V",   defaultValue: "0 5 100k 0.5", unit: "V" },
   { kind: "ground",        section: "Sources",           name: "Ground",          hotkey: "g", prefix: "GND", defaultValue: "",      unit: "" },
 
   { kind: "diode",         section: "Semiconductors",    name: "Diode",           hotkey: "d", prefix: "D",   defaultValue: "D",     unit: "" },

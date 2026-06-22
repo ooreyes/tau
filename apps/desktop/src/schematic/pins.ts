@@ -38,6 +38,10 @@ const LOCAL_PINS: Record<ComponentKind, LocalPin[]> = {
     { id: "p", label: "+", x: 0, y: -32 },
     { id: "n", label: "-", x: 0, y: 32 },
   ],
+  vpulse: [
+    { id: "p", label: "+", x: 0, y: -32 },
+    { id: "n", label: "-", x: 0, y: 32 },
+  ],
   diode: [
     { id: "a", label: "A", x: -32, y: 0 },
     { id: "k", label: "K", x: 32, y: 0 },

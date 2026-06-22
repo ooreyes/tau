@@ -18,6 +18,9 @@ export interface ExampleCircuit {
   description: string;
   components: SchematicComponent[];
   wires: SchematicWire[];
+  /** Uses nonlinear devices (MOSFET/BJT/diode) — only the native ngspice engine
+   *  can solve it; the interim TypeScript solver rejects it by design. */
+  nativeOnly?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -307,6 +310,60 @@ const UNITY_BUFFER: ExampleCircuit = {
 };
 
 // ---------------------------------------------------------------------------
+// Circuit 8 — Class-D switching output stage (CMOS half-bridge + LC filter)
+//
+// A complementary MOSFET half-bridge switched by a PWM gate drive, with an LC
+// reconstruction filter into the load — the power stage of a Class-D amplifier.
+// Nonlinear (MOSFETs) → solves on the native ngspice engine only.
+//
+// Net / world-pin map (GRID = 16):
+//   V1  vsource (0,0):     p=(0,-32)=VDD,  n=(0,32)=GND
+//   VG  vpulse  (0,256):   p=(0,224)=IN,   n=(0,288)=GND   (0→12 V, 100 kHz, 45% duty)
+//   M1  pmos    (256,0):   d=(272,-32)=SW, g=(224,0)=IN,   s=(272,32)=VDD,  b=(288,0)=VDD
+//   M2  nmos    (256,256): d=(272,224)=SW, g=(224,256)=IN, s=(272,288)=GND, b=(288,256)=GND
+//   L1  inductor(640,224): a=(608,224)=SW, b=(672,224)=OUT
+//   C1  cap rot90 (768,320): a=(768,288)=OUT, b=(768,352)=GND
+//   RL  res rot90 (896,320): a=(896,288)=OUT, b=(896,352)=GND
+//   grounds at V1.n, VG.n, M2.s, M2.b, C1.b, RL.b
+//
+// PMOS conducts when the gate is low (SW→VDD); NMOS conducts when the gate is
+// high (SW→GND). The LC filter averages the PWM, so OUT ≈ duty × VDD.
+// Verified: builder emits 5 nets and real ngspice solves it (SW switches, OUT
+// settles to the filtered average).
+// ---------------------------------------------------------------------------
+const CLASS_D: ExampleCircuit = {
+  id: "classd.v1",
+  name: "Class-D Output Stage",
+  description: "Complementary MOSFET half-bridge with a PWM gate drive and an LC reconstruction filter — a Class-D amplifier power stage. Needs the native ngspice engine.",
+  nativeOnly: true,
+  components: [
+    { id: "cd.v1", kind: "vsource",   x: 0,   y: 0,   rotation: 0,  value: "12",            label: "V1" },
+    { id: "cd.vg", kind: "vpulse",    x: 0,   y: 256, rotation: 0,  value: "0 12 100k 0.45", label: "VG" },
+    { id: "cd.m1", kind: "pmos",      x: 256, y: 0,   rotation: 0,  value: "",               label: "M1" },
+    { id: "cd.m2", kind: "nmos",      x: 256, y: 256, rotation: 0,  value: "",               label: "M2" },
+    { id: "cd.l1", kind: "inductor",  x: 640, y: 224, rotation: 0,  value: "1m",             label: "L1" },
+    { id: "cd.c1", kind: "capacitor", x: 768, y: 320, rotation: 90, value: "100n",           label: "C1" },
+    { id: "cd.rl", kind: "resistor",  x: 896, y: 320, rotation: 90, value: "1k",             label: "RL" },
+    { id: "cd.g1", kind: "ground",    x: 0,   y: 32,  rotation: 0,  value: "",               label: "" },
+    { id: "cd.g2", kind: "ground",    x: 0,   y: 288, rotation: 0,  value: "",               label: "" },
+    { id: "cd.g3", kind: "ground",    x: 272, y: 288, rotation: 0,  value: "",               label: "" },
+    { id: "cd.g4", kind: "ground",    x: 288, y: 256, rotation: 0,  value: "",               label: "" },
+    { id: "cd.g5", kind: "ground",    x: 768, y: 352, rotation: 0,  value: "",               label: "" },
+    { id: "cd.g6", kind: "ground",    x: 896, y: 352, rotation: 0,  value: "",               label: "" },
+  ],
+  wires: [
+    { id: "cd.w_vdd",  points: [{ x: 0, y: -32 }, { x: 0, y: -128 }, { x: 304, y: -128 }, { x: 304, y: 32 }, { x: 272, y: 32 }] },
+    { id: "cd.w_vddb", points: [{ x: 288, y: 0 }, { x: 304, y: 0 }] },
+    { id: "cd.w_in",   points: [{ x: 0, y: 224 }, { x: 160, y: 224 }, { x: 160, y: 0 }, { x: 224, y: 0 }] },
+    { id: "cd.w_in2",  points: [{ x: 160, y: 224 }, { x: 224, y: 224 }, { x: 224, y: 256 }] },
+    { id: "cd.w_sw",   points: [{ x: 272, y: -32 }, { x: 240, y: -32 }, { x: 240, y: 224 }, { x: 272, y: 224 }] },
+    { id: "cd.w_swl",  points: [{ x: 272, y: 224 }, { x: 608, y: 224 }] },
+    { id: "cd.w_out",  points: [{ x: 672, y: 224 }, { x: 768, y: 224 }, { x: 768, y: 288 }] },
+    { id: "cd.w_out2", points: [{ x: 768, y: 224 }, { x: 896, y: 224 }, { x: 896, y: 288 }] },
+  ],
+};
+
+// ---------------------------------------------------------------------------
 // Exported library
 // ---------------------------------------------------------------------------
 export const EXAMPLE_CIRCUITS: ExampleCircuit[] = [
@@ -317,4 +374,5 @@ export const EXAMPLE_CIRCUITS: ExampleCircuit[] = [
   NONINVERTING_AMP,
   INVERTING_AMP,
   UNITY_BUFFER,
+  CLASS_D,
 ];

@@ -30,6 +30,12 @@ const SCHEMA: Partial<Record<ComponentKind, ParamField[]>> = {
     { key: "amplitude", label: "Amplitude", unit: "A" },
     { key: "frequency", label: "Frequency", unit: "Hz" },
   ],
+  vpulse: [
+    { key: "low", label: "Low level", unit: "V" },
+    { key: "high", label: "High level", unit: "V" },
+    { key: "frequency", label: "Frequency", unit: "Hz" },
+    { key: "duty", label: "Duty (0–1)", unit: "" },
+  ],
   diode: [{ key: "model", label: "Model", unit: "" }],
   led: [{ key: "model", label: "Model", unit: "" }],
   zener: [{ key: "model", label: "Model", unit: "" }],
@@ -60,6 +66,15 @@ export function decodeParams(kind: ComponentKind, value: string): Record<string,
     if (t.length === 1) return { offset: "0", amplitude: t[0], frequency: "1k" };
     return { offset: "0", amplitude: "1", frequency: "1k" };
   }
+  if (kind === "vpulse") {
+    const t = value.trim().split(/[\s,;]+/).filter(Boolean);
+    return {
+      low: t[0] ?? "0",
+      high: t[1] ?? "5",
+      frequency: t[2] ?? "100k",
+      duty: t[3] ?? "0.5",
+    };
+  }
   return {};
 }
 
@@ -73,6 +88,13 @@ export function encodeParams(kind: ComponentKind, values: Record<string, string>
     const frequency = (values.frequency ?? "").trim() || "1k";
     // "amp freq" when there's no offset, else the full "offset amp freq" form.
     return offset === "0" ? `${amplitude} ${frequency}` : `${offset} ${amplitude} ${frequency}`;
+  }
+  if (kind === "vpulse") {
+    const low = (values.low ?? "").trim() || "0";
+    const high = (values.high ?? "").trim() || "5";
+    const frequency = (values.frequency ?? "").trim() || "100k";
+    const duty = (values.duty ?? "").trim() || "0.5";
+    return `${low} ${high} ${frequency} ${duty}`;
   }
   return "";
 }

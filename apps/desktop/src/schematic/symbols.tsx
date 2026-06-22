@@ -21,6 +21,7 @@ export const SYMBOL_BODY: Record<ComponentKind, BodyBox> = {
   isource: { minX: -16, minY: -16, maxX: 16, maxY: 16 },
   vac: { minX: -16, minY: -16, maxX: 16, maxY: 16 },
   iac: { minX: -16, minY: -16, maxX: 16, maxY: 16 },
+  vpulse: { minX: -16, minY: -16, maxX: 16, maxY: 16 },
   diode: { minX: -13, minY: -15, maxX: 13, maxY: 15 },
   led: { minX: -13, minY: -15, maxX: 16, maxY: 15 },
   zener: { minX: -13, minY: -15, maxX: 16, maxY: 15 },
@@ -45,6 +46,7 @@ export const SYMBOL_BOX: Record<ComponentKind, { halfW: number; halfH: number }>
   isource: { halfW: 16, halfH: 17 },
   vac: { halfW: 16, halfH: 17 },
   iac: { halfW: 16, halfH: 17 },
+  vpulse: { halfW: 16, halfH: 17 },
   diode: { halfW: 14, halfH: 15 },
   led: { halfW: 18, halfH: 22 },
   zener: { halfW: 16, halfH: 18 },
@@ -142,6 +144,17 @@ export function ComponentSymbol({ kind }: { kind: ComponentKind }) {
           <path d="M -10 -5 C -6 -15 -2 -15 2 -5 S 10 5 14 -5" />
           <path d="M 0 1 V 10" />
           <path d="M -5 5 L 0 11 L 5 5" />
+          <line x1={0} y1={15} x2={0} y2={32} />
+        </>
+      );
+
+    case "vpulse":
+      return (
+        <>
+          <line x1={0} y1={-32} x2={0} y2={-15} />
+          <circle cx={0} cy={0} r={15} />
+          {/* pulse train: low–high–low–high */}
+          <path d="M -10 5 L -10 -5 L -2 -5 L -2 5 L 6 5 L 6 -5 L 10 -5" />
           <line x1={0} y1={15} x2={0} y2={32} />
         </>
       );
