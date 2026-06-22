@@ -69,6 +69,12 @@ interface SchematicState extends Doc {
   /** User-assigned net names, pinned to world points on the net. */
   netLabels: NetLabel[];
   upsertNetLabel: (x: number, y: number, text: string) => void;
+  /**
+   * Update a net label without pushing to undo history (caller must call
+   * `beginChange()` once before the first keystroke, then use this for
+   * subsequent characters so the whole edit is a single undo entry).
+   */
+  setNetLabelDirect: (x: number, y: number, text: string) => void;
 
   addComponent: (kind: ComponentKind, x: number, y: number) => void;
   addWire: (points: Point[]) => void;
@@ -248,6 +254,14 @@ export const useSchematic = create<SchematicState>()((set) => {
         if (!trimmed) return { ...recordInto(s), netLabels: s.netLabels.filter((l) => !(l.x === x && l.y === y)) };
         if (existing) return { ...recordInto(s), netLabels: s.netLabels.map((l) => (l.id === existing.id ? { ...l, text: trimmed } : l)) };
         return { ...recordInto(s), netLabels: [...s.netLabels, { id: nanoid(6), x, y, text: trimmed }] };
+      }),
+
+    setNetLabelDirect: (x, y, text) =>
+      set((s) => {
+        const existing = s.netLabels.find((l) => l.x === x && l.y === y);
+        if (!text) return { netLabels: s.netLabels.filter((l) => !(l.x === x && l.y === y)) };
+        if (existing) return { netLabels: s.netLabels.map((l) => (l.id === existing.id ? { ...l, text } : l)) };
+        return { netLabels: [...s.netLabels, { id: nanoid(6), x, y, text }] };
       }),
 
     addComponent: (kind, x, y) =>

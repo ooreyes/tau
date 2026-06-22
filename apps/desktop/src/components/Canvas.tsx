@@ -654,7 +654,9 @@ export function Canvas({
 
   const screenToWorld = useCallback(
     (clientX: number, clientY: number) => {
-      const r = svgRef.current!.getBoundingClientRect();
+      const el = svgRef.current;
+      if (!el || view.zoom === 0) return { x: 0, y: 0 };
+      const r = el.getBoundingClientRect();
       return {
         x: (clientX - r.left - view.x) / view.zoom,
         y: (clientY - r.top - view.y) / view.zoom,

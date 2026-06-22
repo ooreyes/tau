@@ -81,6 +81,7 @@ export function ExplorerPanel({
   onSearch: () => void;
 }) {
   const examples = EXAMPLE_CIRCUITS.slice(0, 4);
+  const firstExample = examples[0];
 
   return (
     <aside className="explorer-panel" aria-label="Project explorer">
@@ -89,7 +90,9 @@ export function ExplorerPanel({
         <div className="explorer-icons">
           <button title="New scratchpad" aria-label="New scratchpad" onClick={onNewCircuit}>＋</button>
           <button title="Search commands" aria-label="Search commands" onClick={onSearch}>▣</button>
-          <button title="Reload first example" aria-label="Reload first example" onClick={() => onOpenExample(examples[0])}>↻</button>
+          {firstExample && (
+            <button title="Reload first example" aria-label="Reload first example" onClick={() => onOpenExample(firstExample)}>↻</button>
+          )}
         </div>
       </div>
       <button className="explorer-search" onClick={onSearch}>
