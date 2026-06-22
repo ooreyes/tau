@@ -32,19 +32,42 @@ class DisjointSet {
     if (!this.parent.has(key)) this.parent.set(key, key);
   }
 
+  // Iterative find with path compression. Recursion here could blow the call
+  // stack on large/complex nets (long union chains from wire breakpoints), so
+  // we walk to the root then re-point every node on the path directly at it.
   find(key: string): string {
     this.add(key);
-    const parent = this.parent.get(key);
-    if (!parent || parent === key) return key;
-    const root = this.find(parent);
-    this.parent.set(key, root);
+    let root = key;
+    let parent = this.parent.get(root)!;
+    while (parent !== root) {
+      root = parent;
+      parent = this.parent.get(root)!;
+    }
+    let node = key;
+    while (node !== root) {
+      const next = this.parent.get(node)!;
+      this.parent.set(node, root);
+      node = next;
+    }
     return root;
   }
+
+  // Union by size keeps trees shallow regardless of insertion order.
+  private size = new Map<string, number>();
 
   union(a: string, b: string) {
     const rootA = this.find(a);
     const rootB = this.find(b);
-    if (rootA !== rootB) this.parent.set(rootB, rootA);
+    if (rootA === rootB) return;
+    const sizeA = this.size.get(rootA) ?? 1;
+    const sizeB = this.size.get(rootB) ?? 1;
+    if (sizeA < sizeB) {
+      this.parent.set(rootA, rootB);
+      this.size.set(rootB, sizeA + sizeB);
+    } else {
+      this.parent.set(rootB, rootA);
+      this.size.set(rootA, sizeA + sizeB);
+    }
   }
 
   keys() {
