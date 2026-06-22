@@ -601,3 +601,30 @@ Fixed the bug list raised against the newly-migrated LTspice/VS Code shell.
     `29a6d2d9957bf4a524dac8e81fda8e5d75532c10e4fed302a44712d674599234`.
 - Remaining production caveat: ad-hoc signing verifies locally but public
   macOS distribution still requires Developer ID signing and notarization.
+
+### 2026-06-21 (pm) — Engine validation + schematic polish — Claude (Opus 4.8) + subagent
+
+- Diagnosed "ngspice isn't working": ngspice runs only in the **native desktop
+  build**; the browser preview falls back to the TS solver. Added an
+  `engine: ngspice | built-in solver` label to the status bar so the active
+  engine is explicit.
+- Symmetric resistor/potentiometer leads (were 8px/4px) — fixes the lopsided /
+  "different length" look.
+- Junction dots at 3+ way conductor meetings (degree-based), standard schematic
+  convention; plain corners and wire-to-pin joins get none.
+- Subagent (worktree, merged) hardened the engine: +40 tests (166 total) across
+  `realCircuits.test.ts` (analytically-verified dividers, RC/RL/RLC, LP/HP/
+  Sallen-Key filters, op-amp gains), `cornerCases.test.ts` (floating/no-ground/
+  multi-ground/shorted/series-cap/coincident-pin/etc. — fail clean, never
+  hang/NaN), and `spiceDeck.test.ts` (deck structure). Found+fixed a real bug:
+  the potentiometer emitted un-evaluated `10000/2` into the SPICE deck (ngspice
+  doesn't evaluate arithmetic in bare value fields) — now numeric.
+- Native ngspice FFI test passes with a real libngspice (Homebrew v46);
+  extended with BJT bias-point and half-wave-rectifier assertions.
+- OPEN follow-ups: (1) `libngspice.dylib` is NOT committed (only `.gitkeep`);
+  it's bundled from a local copy via `tauri.conf.json`, so a fresh clone / CI /
+  distribution build has no engine — decide on a fetch-on-setup script or LFS.
+  (2) Transformer (coupled inductors) triggers a transient-start singular-matrix
+  warning in real ngspice (no DC path) — add a magnetizing/damping path.
+  (3) BJT/MOSFET/diode circuits only solve on the native path (TS solvers reject
+  nonlinear devices by design).
