@@ -55,22 +55,30 @@ function componentLines(entry: ExtractedComponent, index: number): string[] {
 
   switch (component.kind) {
     case "resistor":
-      return [`${name} ${node("a")} ${node("b")} ${numberValue(component, "Ohm")}`];
+      return [`${name} ${node("a")} ${node("b")} ${positiveNumberValue(component, "Ohm")}`];
     case "capacitor":
-      return [`${name} ${node("a")} ${node("b")} ${numberValue(component, "F")}`];
+      return [`${name} ${node("a")} ${node("b")} ${positiveNumberValue(component, "F")}`];
     case "inductor":
-      return [`${name} ${node("a")} ${node("b")} ${numberValue(component, "H")}`];
+      return [`${name} ${node("a")} ${node("b")} ${positiveNumberValue(component, "H")}`];
     case "vsource":
       return [`${name} ${node("p")} ${node("n")} DC ${numberValue(component, "V")}`];
     case "isource":
-      return [`${name} ${node("p")} ${node("n")} DC ${numberValue(component, "A")}`];
+      // SPICE convention: I N+ N- value → current flows from N+ toward N- through the
+      // source body, so N+ is the terminal where external current enters (N+ voltage goes
+      // negative for positive I into a resistive load).  Tau's schematic uses p="+", n="-"
+      // with the convention that positive I raises V(p) — consistent with the TS MNA solver.
+      // Emit as "I name n p value" so that ngspice's N+ = n (sink) and N- = p (source),
+      // making V(p) rise for positive current just as the TS solver predicts.
+      return [`${name} ${node("n")} ${node("p")} DC ${numberValue(component, "A")}`];
     case "vac": {
       const signal = sourceSignal(component, "V");
       return [`${name} ${node("p")} ${node("n")} DC ${signal.offset} AC ${signal.amplitude} SIN(${signal.offset} ${signal.amplitude} ${signal.frequency})`];
     }
     case "iac": {
+      // Same polarity swap as isource: emit n before p so ngspice gives V(p) > 0 for
+      // positive amplitude, consistent with the TS AC solver.
       const signal = sourceSignal(component, "A");
-      return [`${name} ${node("p")} ${node("n")} DC ${signal.offset} AC ${signal.amplitude} SIN(${signal.offset} ${signal.amplitude} ${signal.frequency})`];
+      return [`${name} ${node("n")} ${node("p")} DC ${signal.offset} AC ${signal.amplitude} SIN(${signal.offset} ${signal.amplitude} ${signal.frequency})`];
     }
     case "vpulse": {
       const p = decodeParams("vpulse", component.value);
@@ -110,6 +118,7 @@ function componentLines(entry: ExtractedComponent, index: number): string[] {
       // not evaluate arithmetic in a bare value field, so emit a precomputed
       // number rather than an expression like "10000/2".
       const resistance = parsedNumber(component, "Ohm");
+      if (resistance <= 0) throw new Error(`${component.label || component.kind} needs a positive Ohm value.`);
       const half = (resistance / 2).toString();
       const base = safeName(component.label || `RV${index + 1}`);
       return [
@@ -179,11 +188,21 @@ function numberValue(component: SchematicComponent, unit: string): string {
 function parsedNumber(component: SchematicComponent, unit: string): number {
   try {
     const value = parseQuantity(component.value, unit);
-    if (!Number.isFinite(value)) throw new Error("not finite");
+    if (!Number.isFinite(value) || value !== value) throw new Error("not finite");
     return value;
   } catch {
     throw new Error(`${component.label || component.kind} needs a valid ${unit} value.`);
   }
+}
+
+/** Like parsedNumber but additionally requires the value to be strictly positive.
+ *  Used for R, C, L where zero or negative values produce a singular/invalid deck. */
+function positiveNumberValue(component: SchematicComponent, unit: string): string {
+  const value = parsedNumber(component, unit);
+  if (value <= 0) {
+    throw new Error(`${component.label || component.kind} needs a positive ${unit} value (got ${value}).`);
+  }
+  return value.toString();
 }
 
 function sourceSignal(component: SchematicComponent, unit: "V" | "A") {

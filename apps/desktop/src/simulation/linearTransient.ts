@@ -172,10 +172,13 @@ export function runTransientAnalysis(
             break;
           }
           case "isource":
-            stampCurrent(rhs, netIndex(entry.pins.p, nodeIndex), netIndex(entry.pins.n, nodeIndex), parseQuantity(entry.component.value, "A"));
+            // SPICE convention: positive value → current exits p into the external circuit.
+            // Stamp from n to p so that rhs[p] += I (current injected into p).
+            stampCurrent(rhs, netIndex(entry.pins.n, nodeIndex), netIndex(entry.pins.p, nodeIndex), parseQuantity(entry.component.value, "A"));
             break;
           case "iac":
-            stampCurrent(rhs, netIndex(entry.pins.p, nodeIndex), netIndex(entry.pins.n, nodeIndex), signalValue(entry.component.value, "A", time));
+            // Same polarity convention as isource.
+            stampCurrent(rhs, netIndex(entry.pins.n, nodeIndex), netIndex(entry.pins.p, nodeIndex), signalValue(entry.component.value, "A", time));
             break;
           case "inductor": {
             const inductorIndex = inductorOffset + inductors.findIndex((source) => source.component.id === entry.component.id);

@@ -84,13 +84,15 @@ export async function runNativeTransient(
 export async function runNativeOperatingPoint(schematic: Schematic): Promise<OperatingPointResult | null> {
   const execution = await executeNative(schematic, { kind: "op" });
   if (!execution) return null;
-  const nets = execution.deck.circuit.nets
+  const nonGroundNets = execution.deck.circuit.nets
     .filter((net) => !net.isGround)
     .flatMap((net) => {
       const voltage = vector(execution.result, `v(${net.id})`)?.real[0];
       return Number.isFinite(voltage) ? [{ id: net.id, label: `V(${friendlyNetName(net)})`, voltage: voltage as number }] : [];
     });
-  if (nets.length === 0) throw new Error("ngspice completed, but returned no operating-point voltages.");
+  if (nonGroundNets.length === 0) throw new Error("ngspice completed, but returned no operating-point voltages.");
+  // Prepend the ground net at 0 V, matching the TS solver's OperatingPointResult shape.
+  const nets = [{ id: "0", label: "GND", voltage: 0 }, ...nonGroundNets];
   return { ok: true, nets, warnings: [...execution.deck.circuit.warnings, ...engineWarnings(execution.result.messages)] };
 }
 

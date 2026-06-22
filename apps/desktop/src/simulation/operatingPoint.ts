@@ -188,7 +188,11 @@ export function runOperatingPoint(schematic: {
         case "isource": {
           const p = nodeIdx(entry.pins["p"], nodeIndex);
           const n = nodeIdx(entry.pins["n"], nodeIndex);
-          stampCurrent(rhs, p, n, parseQuantity(entry.component.value, "A"));
+          // SPICE convention: positive value → conventional current exits the + (p) terminal
+          // into the external circuit, i.e., the source injects current INTO node p and
+          // withdraws from node n.  stampCurrent(rhs, from, to, I) subtracts from "from"
+          // and adds to "to", so stamp from n to p.
+          stampCurrent(rhs, n, p, parseQuantity(entry.component.value, "A"));
           break;
         }
 
