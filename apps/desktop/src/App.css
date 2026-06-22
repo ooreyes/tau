@@ -2477,6 +2477,12 @@ body {
   stroke-width: 1.8;
 }
 
+/* Connection dot where 3+ conductors meet (drawn by Canvas at junctions). */
+.junction-dot {
+  fill: #cfc9b6;
+  stroke: none;
+}
+
 .view-controls {
   top: 16px;
   right: 16px;

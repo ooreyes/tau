@@ -463,6 +463,33 @@ export function Canvas({
     [pinIndex],
   );
 
+  // Connection dots: drawn where three or more conductors meet (a T or +),
+  // following schematic convention. Degree = wire-segment ends at a point
+  // (a pass-through interior vertex counts 2, an endpoint 1) plus any pin
+  // there; a simple corner or a plain wire-to-pin join (degree 2) gets no dot.
+  const junctions = useMemo(() => {
+    const degree = new Map<string, number>();
+    const bump = (x: number, y: number, n: number) => {
+      const k = `${x},${y}`;
+      degree.set(k, (degree.get(k) ?? 0) + n);
+    };
+    for (const wire of wires) {
+      const pts = wire.points;
+      for (let i = 0; i < pts.length; i += 1) {
+        bump(pts[i].x, pts[i].y, i === 0 || i === pts.length - 1 ? 1 : 2);
+      }
+    }
+    for (const p of pinPoints) bump(p.x, p.y, 1);
+    const out: Point[] = [];
+    for (const [k, d] of degree) {
+      if (d >= 3) {
+        const [x, y] = k.split(",").map(Number);
+        out.push({ x, y });
+      }
+    }
+    return out;
+  }, [wires, pinPoints]);
+
   // Interaction kept in a ref so dragging/panning doesn't trigger re-renders.
   const drag = useRef<{ mode: "none" | "pan" | "move"; id?: string; lastX: number; lastY: number; moved: boolean }>({
     mode: "none",
@@ -820,6 +847,10 @@ export function Canvas({
               r={6}
             />
           )}
+
+          {junctions.map((j) => (
+            <circle key={`j-${j.x}-${j.y}`} className="junction-dot" cx={j.x} cy={j.y} r={2.6} />
+          ))}
 
           {components.map((c) => (
             <ComponentView key={c.id} comp={c} selected={c.id === selectedId} showPins={wiring || probing} />
