@@ -75,8 +75,8 @@ export function ComponentSymbol({ kind }: { kind: ComponentKind }) {
       return (
         <>
           <line x1={-32} y1={0} x2={-24} y2={0} />
-          <path d="M -24 0 L -18 -10 L -10 10 L -2 -10 L 6 10 L 14 -10 L 22 10 L 28 0" />
-          <line x1={28} y1={0} x2={32} y2={0} />
+          <path d="M -24 0 L -20 -10 L -12 10 L -4 -10 L 4 10 L 12 -10 L 20 10 L 24 0" />
+          <line x1={24} y1={0} x2={32} y2={0} />
         </>
       );
 
@@ -250,8 +250,8 @@ export function ComponentSymbol({ kind }: { kind: ComponentKind }) {
       return (
         <>
           <line x1={-32} y1={0} x2={-24} y2={0} />
-          <path d="M -24 0 L -18 -10 L -10 10 L -2 -10 L 6 10 L 14 -10 L 22 10 L 28 0" />
-          <line x1={28} y1={0} x2={32} y2={0} />
+          <path d="M -24 0 L -20 -10 L -12 10 L -4 -10 L 4 10 L 12 -10 L 20 10 L 24 0" />
+          <line x1={24} y1={0} x2={32} y2={0} />
           <line x1={0} y1={-32} x2={0} y2={-9} />
           <path d="M -8 -16 L 0 -8 L 8 -16" />
         </>

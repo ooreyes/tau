@@ -1,5 +1,6 @@
 import { useSchematic } from "../store/useSchematic";
 import type { AnalysisResult } from "../simulation/linearTransient";
+import { isNativeSpiceRuntime } from "../engine/nativeSpice";
 
 export function StatusBar({
   mode,
@@ -21,6 +22,10 @@ export function StatusBar({
         : tool.mode === "probe"
           ? "Probing — click a node"
           : "Select";
+  // ngspice runs only inside the native desktop build; the browser preview uses
+  // the built-in TypeScript solver. Surface which one is active to avoid the
+  // "ngspice isn't working" confusion when running in a browser.
+  const engineLabel = isNativeSpiceRuntime() ? "ngspice" : "built-in solver";
   const state = mode === "simulator"
     ? result?.ok
       ? "sim complete"
@@ -36,7 +41,9 @@ export function StatusBar({
         {state}
       </span>
       <span className="status-file">{title}</span>
-      <span className="status-codec">utf-8 · spice3</span>
+      <span className="status-codec" title={isNativeSpiceRuntime() ? "Native ngspice engine" : "Built-in TypeScript solver — ngspice runs in the desktop app"}>
+        engine: {engineLabel}
+      </span>
       <span className="status-hints">
         <span>{mode === "simulator" ? "probe nodes in the analysis panel" : toolLabel}</span>
         <span className="dot">·</span>
