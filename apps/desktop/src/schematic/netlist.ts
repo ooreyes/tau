@@ -89,6 +89,10 @@ export function extractCircuit(
   for (let i = 0; i < segments.length; i += 1) {
     for (let j = i + 1; j < segments.length; j += 1) {
       for (const point of segmentIntersections(segments[i], segments[j])) {
+        // A plain crossing is an overpass. It becomes a junction only when a
+        // wire was explicitly terminated/turned there; pins were already
+        // added as breakpoints above and therefore also create a junction.
+        if (!isSegmentEndpoint(point, segments[i]) && !isSegmentEndpoint(point, segments[j])) continue;
         breakpoints[i].push(point);
         breakpoints[j].push(point);
       }
@@ -212,6 +216,10 @@ function pointOnSegment(point: Point, segment: Segment): boolean {
     return point.y === segment.a.y && between(point.x, segment.a.x, segment.b.x);
   }
   return false;
+}
+
+function isSegmentEndpoint(point: Point, segment: Segment): boolean {
+  return pointKey(point) === pointKey(segment.a) || pointKey(point) === pointKey(segment.b);
 }
 
 function between(value: number, a: number, b: number): boolean {

@@ -18,6 +18,7 @@ interface View {
 const snap = (v: number) => Math.round(v / GRID) * GRID;
 const clampZoom = (z: number) => Math.min(5, Math.max(0.25, z));
 const pointsEqual = (a: Point, b: Point) => a.x === b.x && a.y === b.y;
+const pointKey = (point: Point) => `${point.x},${point.y}`;
 const pathFromPoints = (points: Point[]) =>
   points.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x} ${p.y}`).join(" ");
 
@@ -85,6 +86,67 @@ interface Rect {
   maxX: number;
   maxY: number;
 }
+
+interface WireSegment {
+  a: Point;
+  b: Point;
+}
+
+const wireSegments = (wires: SchematicWire[]): WireSegment[] => {
+  const segments: WireSegment[] = [];
+  for (const wire of wires) {
+    for (let index = 1; index < wire.points.length; index += 1) {
+      const a = wire.points[index - 1];
+      const b = wire.points[index];
+      if (!pointsEqual(a, b)) segments.push({ a, b });
+    }
+  }
+  return segments;
+};
+
+const pointOnWireSegment = (point: Point, segment: WireSegment): boolean => {
+  if (segment.a.x === segment.b.x) {
+    return point.x === segment.a.x
+      && point.y >= Math.min(segment.a.y, segment.b.y)
+      && point.y <= Math.max(segment.a.y, segment.b.y);
+  }
+  if (segment.a.y === segment.b.y) {
+    return point.y === segment.a.y
+      && point.x >= Math.min(segment.a.x, segment.b.x)
+      && point.x <= Math.max(segment.a.x, segment.b.x);
+  }
+  return false;
+};
+
+const segmentIntersections = (first: WireSegment, second: WireSegment): Point[] => {
+  const firstVertical = first.a.x === first.b.x;
+  const secondVertical = second.a.x === second.b.x;
+
+  if (firstVertical !== secondVertical) {
+    const vertical = firstVertical ? first : second;
+    const horizontal = firstVertical ? second : first;
+    const point = { x: vertical.a.x, y: horizontal.a.y };
+    return pointOnWireSegment(point, vertical) && pointOnWireSegment(point, horizontal) ? [point] : [];
+  }
+
+  const axis = firstVertical ? "y" : "x";
+  if ((firstVertical && first.a.x !== second.a.x) || (!firstVertical && first.a.y !== second.a.y)) return [];
+  return [first.a, first.b, second.a, second.b].filter((point, index, points) => {
+    const value = axis === "x" ? point.x : point.y;
+    const firstStart = axis === "x" ? first.a.x : first.a.y;
+    const firstEnd = axis === "x" ? first.b.x : first.b.y;
+    const secondStart = axis === "x" ? second.a.x : second.a.y;
+    const secondEnd = axis === "x" ? second.b.x : second.b.y;
+    return value >= Math.min(firstStart, firstEnd)
+      && value <= Math.max(firstStart, firstEnd)
+      && value >= Math.min(secondStart, secondEnd)
+      && value <= Math.max(secondStart, secondEnd)
+      && points.findIndex((candidate) => pointsEqual(candidate, point)) === index;
+  });
+};
+
+const isWireEndpoint = (point: Point, segment: WireSegment) =>
+  pointsEqual(point, segment.a) || pointsEqual(point, segment.b);
 
 interface LabelPlacement {
   ref: { x: number; y: number; anchor: "start" | "middle" | "end" };
@@ -319,6 +381,62 @@ const cleanRoute = (points: Point[]) => {
   return out;
 };
 
+const startsAxisAligned = (a: Point, b: Point) => a.x === b.x || a.y === b.y;
+
+function moveWireStart(points: Point[], target: Point): Point[] {
+  const original = points[0];
+  const next = points[1];
+  if (startsAxisAligned(target, next)) return cleanRoute([target, ...points.slice(1)]);
+
+  // Preserve the original lead direction at the moved pin, then turn once.
+  const elbow = original.y === next.y
+    ? { x: next.x, y: target.y }
+    : { x: target.x, y: next.y };
+  return cleanRoute([target, elbow, ...points.slice(1)]);
+}
+
+function moveWireEnd(points: Point[], target: Point): Point[] {
+  const original = points[points.length - 1];
+  const previous = points[points.length - 2];
+  if (startsAxisAligned(previous, target)) return cleanRoute([...points.slice(0, -1), target]);
+
+  // Preserve the original lead direction into the moved pin, then turn once.
+  const elbow = previous.y === original.y
+    ? { x: previous.x, y: target.y }
+    : { x: target.x, y: previous.y };
+  return cleanRoute([...points.slice(0, -1), elbow, target]);
+}
+
+/** Move wire endpoints that were attached to a component's pins at drag start.
+ *  Source routes are supplied from that moment, so a long drag does not add a
+ *  new elbow for every pointer event. */
+export function translateAttachedWireEndpoints(
+  sourceWires: SchematicWire[],
+  sourcePins: Point[],
+  dx: number,
+  dy: number,
+): SchematicWire[] {
+  const targetFor = (point: Point) =>
+    sourcePins.some((pin) => pointsEqual(pin, point))
+      ? { x: point.x + dx, y: point.y + dy }
+      : null;
+
+  return sourceWires.map((wire) => {
+    if (wire.points.length < 2) return wire;
+    const firstTarget = targetFor(wire.points[0]);
+    const lastTarget = targetFor(wire.points[wire.points.length - 1]);
+    if (!firstTarget && !lastTarget) return wire;
+
+    if (firstTarget && lastTarget) {
+      return { ...wire, points: wire.points.map((point) => ({ x: point.x + dx, y: point.y + dy })) };
+    }
+    return {
+      ...wire,
+      points: firstTarget ? moveWireStart(wire.points, firstTarget) : moveWireEnd(wire.points, lastTarget!),
+    };
+  });
+}
+
 const routeLength = (points: Point[]) =>
   points.slice(1).reduce((total, point, index) => {
     const prev = points[index];
@@ -334,7 +452,8 @@ const routeHitCount = (points: Point[], components: SchematicComponent[]) =>
 /** Route an orthogonal wire between two points. It first tries direct/L paths,
  *  then doglegs on grid channels just outside component bodies, and picks the
  *  shortest non-crossing candidate. */
-const routeWireSmart = (start: Point, end: Point, components: SchematicComponent[]): Point[] => {
+export const routeWireSmart = (start: Point, end: Point, components: SchematicComponent[]): Point[] => {
+  if (pointsEqual(start, end)) return [start];
   const candidates: Point[][] = [];
   const push = (points: Point[]) => {
     const cleaned = cleanRoute(points);
@@ -366,7 +485,8 @@ const routeWireSmart = (start: Point, end: Point, components: SchematicComponent
       hits: routeHitCount(points, components),
       length: routeLength(points),
     }))
-    .sort((a, b) => a.hits - b.hits || a.length - b.length || a.points.length - b.points.length)[0].points;
+    .sort((a, b) => a.hits - b.hits || a.length - b.length || a.points.length - b.points.length)[0]?.points
+    ?? [start, end];
 };
 
 /** Nearest grid spot (spiralling out) where a new body won't overlap an existing one. */
@@ -390,6 +510,17 @@ const findFreeSpot = (
   }
   return { x, y };
 };
+
+interface DragState {
+  mode: "none" | "pan" | "move";
+  id?: string;
+  lastX: number;
+  lastY: number;
+  moved: boolean;
+  origin?: Point;
+  sourcePins?: Point[];
+  sourceWires?: SchematicWire[];
+}
 
 export function Canvas({
   analysis,
@@ -417,7 +548,6 @@ export function Canvas({
   const addWire = useSchematic((s) => s.addWire);
   const select = useSchematic((s) => s.select);
   const selectWire = useSchematic((s) => s.selectWire);
-  const moveComponent = useSchematic((s) => s.moveComponent);
   const beginChange = useSchematic((s) => s.beginChange);
   const setValue = useSchematic((s) => s.setValue);
   const probes = useSchematic((s) => s.probes);
@@ -463,40 +593,56 @@ export function Canvas({
     [pinIndex],
   );
 
-  // Connection dots: drawn where three or more conductors meet (a T or +),
-  // following schematic convention. Degree = wire-segment ends at a point
-  // (a pass-through interior vertex counts 2, an endpoint 1) plus any pin
-  // there; a simple corner or a plain wire-to-pin join (degree 2) gets no dot.
+  // Connection dots use the same explicit-junction semantics as net extraction:
+  // a wire end/turn or a component pin makes a connection; two wire interiors
+  // that merely cross remain an unmarked overpass.
   const junctions = useMemo(() => {
-    const degree = new Map<string, number>();
-    const bump = (x: number, y: number, n: number) => {
-      const k = `${x},${y}`;
-      degree.set(k, (degree.get(k) ?? 0) + n);
-    };
+    const segments = wireSegments(wires);
+    const candidates = new Map<string, Point>();
+    const addCandidate = (point: Point) => candidates.set(pointKey(point), point);
+
     for (const wire of wires) {
-      const pts = wire.points;
-      for (let i = 0; i < pts.length; i += 1) {
-        bump(pts[i].x, pts[i].y, i === 0 || i === pts.length - 1 ? 1 : 2);
+      for (const point of wire.points) addCandidate(point);
+    }
+    for (const point of pinPoints) addCandidate(point);
+    for (let i = 0; i < segments.length; i += 1) {
+      for (let j = i + 1; j < segments.length; j += 1) {
+        for (const point of segmentIntersections(segments[i], segments[j])) {
+          if (isWireEndpoint(point, segments[i]) || isWireEndpoint(point, segments[j])) addCandidate(point);
+        }
       }
     }
-    for (const p of pinPoints) bump(p.x, p.y, 1);
+
     const out: Point[] = [];
-    for (const [k, d] of degree) {
-      if (d >= 3) {
-        const [x, y] = k.split(",").map(Number);
-        out.push({ x, y });
+    for (const [key, point] of candidates) {
+      let degree = pinIndex.get(key)?.length ?? 0;
+      for (const segment of segments) {
+        if (!pointOnWireSegment(point, segment)) continue;
+        degree += isWireEndpoint(point, segment) ? 1 : 2;
       }
+      if (degree >= 3) out.push(point);
     }
     return out;
-  }, [wires, pinPoints]);
+  }, [wires, pinIndex, pinPoints]);
 
   // Interaction kept in a ref so dragging/panning doesn't trigger re-renders.
-  const drag = useRef<{ mode: "none" | "pan" | "move"; id?: string; lastX: number; lastY: number; moved: boolean }>({
+  const drag = useRef<DragState>({
     mode: "none",
     lastX: 0,
     lastY: 0,
     moved: false,
   });
+
+  const moveComponentWithAttachedWires = useCallback(
+    (id: string, x: number, y: number, sourcePins: Point[], sourceWires: SchematicWire[], dx: number, dy: number) => {
+      const wiresWithMovedEndpoints = translateAttachedWireEndpoints(sourceWires, sourcePins, dx, dy);
+      useSchematic.setState((state) => ({
+        components: state.components.map((component) => (component.id === id ? { ...component, x, y } : component)),
+        wires: wiresWithMovedEndpoints,
+      }));
+    },
+    [],
+  );
 
   // Center the world origin on first mount.
   useEffect(() => {
@@ -654,7 +800,16 @@ export function Canvas({
     const hit = componentAt(components, world.x, world.y);
     if (hit) {
       select(hit.id);
-      drag.current = { mode: "move", id: hit.id, lastX: e.clientX, lastY: e.clientY, moved: false };
+      drag.current = {
+        mode: "move",
+        id: hit.id,
+        lastX: e.clientX,
+        lastY: e.clientY,
+        moved: false,
+        origin: { x: hit.x, y: hit.y },
+        sourcePins: getComponentPins(hit).map(({ x, y }) => ({ x, y })),
+        sourceWires: wires.map((wire) => ({ ...wire, points: wire.points.map((point) => ({ ...point })) })),
+      };
     } else {
       select(null);
       drag.current = { mode: "pan", lastX: e.clientX, lastY: e.clientY, moved: false };
@@ -713,19 +868,20 @@ export function Canvas({
       d.lastX = e.clientX;
       d.lastY = e.clientY;
       setView((v) => ({ ...v, x: v.x + dx, y: v.y + dy }));
-    } else if (d.mode === "move" && d.id) {
+    } else if (d.mode === "move" && d.id && d.origin && d.sourcePins && d.sourceWires) {
       const w = screenToWorld(e.clientX, e.clientY);
       const tx = snap(w.x);
       const ty = snap(w.y);
       const moving = components.find((c) => c.id === d.id);
       // Never let a body slide into another body (pins may still meet).
       if (moving && collides(components, tx, ty, moving.kind, moving.rotation, d.id)) return;
+      if (moving?.x === tx && moving.y === ty) return;
       // Capture one undo snapshot for the whole drag, on the first move only.
       if (!d.moved) {
         beginChange();
         d.moved = true;
       }
-      moveComponent(d.id, tx, ty);
+      moveComponentWithAttachedWires(d.id, tx, ty, d.sourcePins, d.sourceWires, tx - d.origin.x, ty - d.origin.y);
     }
   };
 
@@ -733,6 +889,9 @@ export function Canvas({
     drag.current.mode = "none";
     drag.current.id = undefined;
     drag.current.moved = false;
+    drag.current.origin = undefined;
+    drag.current.sourcePins = undefined;
+    drag.current.sourceWires = undefined;
     const el = svgRef.current;
     if (el?.hasPointerCapture(e.pointerId)) el.releasePointerCapture(e.pointerId);
   };
@@ -788,7 +947,9 @@ export function Canvas({
   const placing = tool.mode === "place";
   const wiring = tool.mode === "wire";
   const probing = tool.mode === "probe";
-  const previewWire = wireDraft ? routeWireSmart(wireDraft.start, wireDraft.cursor, components) : null;
+  const previewWire = wireDraft && !pointsEqual(wireDraft.start, wireDraft.cursor)
+    ? routeWireSmart(wireDraft.start, wireDraft.cursor, components)
+    : null;
   const flowActive = analysis?.ok === true;
   const flowEndTime = analysis?.ok ? analysis.times[analysis.times.length - 1] ?? 0 : 0;
   const flowSlowdown = flowEndTime > 0 ? FLOW_PLAY_MS / 1000 / flowEndTime : 0;
