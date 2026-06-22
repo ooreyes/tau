@@ -130,7 +130,7 @@ verifies after signing. Public distribution still needs Apple Developer ID
 signing and notarization; without that, Gatekeeper will reject the app.
 
 Current signed local DMG SHA-256:
-`29a6d2d9957bf4a524dac8e81fda8e5d75532c10e4fed302a44712d674599234`.
+`dee445b493922361b86c7c33247e07283cbd0020ba50eea04c7937069b00a136`.
 
 ## Repository layout
 

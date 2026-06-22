@@ -36,13 +36,9 @@ const SCHEMA: Partial<Record<ComponentKind, ParamField[]>> = {
     { key: "frequency", label: "Frequency", unit: "Hz" },
     { key: "duty", label: "Duty (0–1)", unit: "" },
   ],
-  diode: [{ key: "model", label: "Model", unit: "" }],
-  led: [{ key: "model", label: "Model", unit: "" }],
-  zener: [{ key: "model", label: "Model", unit: "" }],
-  nmos: [{ key: "model", label: "Model", unit: "" }],
-  pmos: [{ key: "model", label: "Model", unit: "" }],
-  npn: [{ key: "model", label: "Model", unit: "" }],
-  pnp: [{ key: "model", label: "Model", unit: "" }],
+  // Semiconductor symbols use Tau's generic built-in models. Arbitrary vendor
+  // names stay unavailable until a parsed library-to-symbol mapping can affect
+  // the generated deck instead of being silently ignored.
   switch: [{ key: "state", label: "State (open/closed)", unit: "" }],
   transformer: [{ key: "ratio", label: "Turns ratio", unit: "" }],
   // opamp uses a dedicated model chooser; testpoint / ground take no parameters.

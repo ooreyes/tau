@@ -9,31 +9,17 @@ const sections = [...new Set(CATALOG.map((entry) => entry.section))];
 // Initialize all sections as open
 const initialOpen = Object.fromEntries(sections.map((s) => [s, true]));
 
-const LIBRARY_STORAGE_KEY = "tau.attachedLibraries.v1";
-
-function loadAttachedLibraries(): string[] {
-  if (typeof localStorage === "undefined") return [];
-  try {
-    const parsed = JSON.parse(localStorage.getItem(LIBRARY_STORAGE_KEY) ?? "[]");
-    return Array.isArray(parsed) ? parsed.filter((entry) => typeof entry === "string") : [];
-  } catch {
-    return [];
-  }
-}
-
-export function Palette({ focusSignal, onNotice }: { focusSignal: number; onNotice: (message: string) => void }) {
+export function Palette({ focusSignal }: { focusSignal: number; onNotice: (message: string) => void }) {
   const tool = useSchematic((s) => s.tool);
   const startPlacing = useSchematic((s) => s.startPlacing);
   const startWiring = useSchematic((s) => s.startWiring);
   const startProbing = useSchematic((s) => s.startProbing);
   const activeKind = tool.mode === "place" ? tool.kind : null;
   const searchRef = useRef<HTMLInputElement | null>(null);
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const [query, setQuery] = useState("");
   const [openSections, setOpenSections] = useState<Record<string, boolean>>(initialOpen);
   const [selectedKind, setSelectedKind] = useState<ComponentKind>("resistor");
-  const [attachedLibraries, setAttachedLibraries] = useState<string[]>(loadAttachedLibraries);
 
   const trimmed = query.trim().toLowerCase();
 
@@ -53,36 +39,6 @@ export function Palette({ focusSignal, onNotice }: { focusSignal: number; onNoti
     setOpenSections((prev) => ({ ...prev, [section]: !prev[section] }));
   };
 
-  const persistLibraries = (libraries: string[]) => {
-    setAttachedLibraries(libraries);
-    try {
-      localStorage.setItem(LIBRARY_STORAGE_KEY, JSON.stringify(libraries));
-    } catch {
-      // storage can be unavailable in constrained webviews
-    }
-  };
-
-  const attachLibraries = (files: FileList | null) => {
-    const names = [...(files ?? [])].map((file) => file.name);
-    if (names.length === 0) return;
-    const next = [...attachedLibraries, ...names].filter((name, index, all) => all.indexOf(name) === index);
-    persistLibraries(next);
-    onNotice(
-      `${names.length} model file${names.length === 1 ? "" : "s"} attached. SPICE model mapping is next; built-in symbols are unchanged.`,
-    );
-    if (fileInputRef.current) fileInputRef.current.value = "";
-  };
-
-  const removeLastLibrary = () => {
-    if (attachedLibraries.length === 0) {
-      onNotice("No attached model libraries to remove.");
-      return;
-    }
-    const removed = attachedLibraries[attachedLibraries.length - 1];
-    persistLibraries(attachedLibraries.slice(0, -1));
-    onNotice(`Removed ${removed} from attached model libraries.`);
-  };
-
   useEffect(() => {
     if (focusSignal > 0) {
       searchRef.current?.focus();
@@ -94,18 +50,6 @@ export function Palette({ focusSignal, onNotice }: { focusSignal: number; onNoti
     <aside className="palette">
       <div className="palette-head">
         <span>component selection</span>
-        <div>
-          <button title="Attach SPICE model library" aria-label="Attach SPICE model library" onClick={() => fileInputRef.current?.click()}>＋</button>
-          <button title="Remove last attached model library" aria-label="Remove last attached model library" onClick={removeLastLibrary}>−</button>
-          <input
-            ref={fileInputRef}
-            className="file-input"
-            type="file"
-            accept=".lib,.sub,.subckt,.cir,.model,.mod,.txt"
-            multiple
-            onChange={(event) => attachLibraries(event.currentTarget.files)}
-          />
-        </div>
       </div>
 
       <div className="palette-search-wrap">
@@ -249,11 +193,6 @@ export function Palette({ focusSignal, onNotice }: { focusSignal: number; onNoti
           <strong>{CATALOG.find((entry) => entry.kind === selectedKind)?.name ?? selectedKind}</strong>
           <em>⌞</em>
         </div>
-        {attachedLibraries.length > 0 && (
-          <small className="attached-libraries">
-            models: {attachedLibraries.slice(-2).join(", ")}
-          </small>
-        )}
       </div>
     </aside>
   );

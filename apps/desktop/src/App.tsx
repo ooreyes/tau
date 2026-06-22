@@ -20,9 +20,8 @@ import {
   MinimizedPanelDock,
   SettingsPanel,
 } from "./components/ShellPanels";
-import { useSchematic, type SchematicDocument } from "./store/useSchematic";
+import { useSchematic, type SchematicDocument, type SchematicHistory } from "./store/useSchematic";
 import { CATALOG } from "./schematic/catalog";
-import type { Probe } from "./schematic/types";
 import { type ExampleCircuit } from "./examples/circuits";
 import {
   MAX_TRANSIENT_STEPS,
@@ -51,11 +50,13 @@ interface OpenTab {
   id: string;
   title: string;
   doc: SchematicDocument | null;
-  probes: Probe[];
+  history: SchematicHistory;
 }
 
 const newTabId = () => `tab-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
 const clamp = (v: number, min: number, max: number) => Math.min(max, Math.max(min, v));
+const blankDocument = (): SchematicDocument => ({ components: [], wires: [], probes: [], netLabels: [] });
+const emptyHistory = (): SchematicHistory => ({ past: [], future: [] });
 
 /** A draggable vertical divider that reports horizontal deltas while dragged. */
 function ColumnResizeHandle({ onResize, label }: { onResize: (dx: number) => void; label: string }) {
@@ -98,9 +99,12 @@ function App() {
   const startPlacing = useSchematic((s) => s.startPlacing);
   const startWiring = useSchematic((s) => s.startWiring);
   const loadCircuit = useSchematic((s) => s.loadCircuit);
+  const restoreCircuit = useSchematic((s) => s.restoreCircuit);
   const newCircuit = useSchematic((s) => s.newCircuit);
   const probes = useSchematic((s) => s.probes);
-  const setProbes = useSchematic((s) => s.setProbes);
+  const netLabels = useSchematic((s) => s.netLabels);
+  const past = useSchematic((s) => s.past);
+  const future = useSchematic((s) => s.future);
   const cancel = useSchematic((s) => s.cancel);
   const rotate = useSchematic((s) => s.rotate);
   const deleteSelected = useSchematic((s) => s.deleteSelected);
@@ -111,13 +115,14 @@ function App() {
   const [opAnalysis, setOpAnalysis] = useState<OperatingPointResult | null>(null);
   const [acAnalysis, setAcAnalysis] = useState<AcResult | null>(null);
   const [analysisRunning, setAnalysisRunning] = useState(false);
-  const [runState, setRunState] = useState<"idle" | "complete" | "error" | "stopped" | "paused">("idle");
+  const [runState, setRunState] = useState<"idle" | "complete" | "error" | "stopped">("idle");
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [mode, setMode] = useState<"schematic" | "simulator">("schematic");
-  const [tabs, setTabs] = useState<OpenTab[]>([{ id: "tab-0", title: "boost converter.sim", doc: null, probes: [] }]);
+  const [tabs, setTabs] = useState<OpenTab[]>([{ id: "tab-0", title: "boost converter.sim", doc: null, history: emptyHistory() }]);
   const [activeId, setActiveId] = useState("tab-0");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [confirmClearOpen, setConfirmClearOpen] = useState(false);
+  const [confirmCloseTabId, setConfirmCloseTabId] = useState<string | null>(null);
   const [graphOpen, setGraphOpen] = useState(true);
   const [aiOpen, setAiOpen] = useState(true);
   const [componentFocusSignal, setComponentFocusSignal] = useState(0);
@@ -125,6 +130,9 @@ function App() {
   const [scopeWidth, setScopeWidth] = useState(440);
   const [askWidth, setAskWidth] = useState(330);
   const [notice, setNotice] = useState<string | null>(null);
+  // ngspice runs outside React's lifecycle. A request version prevents a late
+  // result from an edited, closed, or stopped circuit overwriting current UI.
+  const analysisRequestRef = useRef(0);
 
   const documentTitle = (tabs.find((tab) => tab.id === activeId) ?? tabs[0])?.title ?? "untitled.sim";
 
@@ -133,13 +141,25 @@ function App() {
     window.setTimeout(() => setNotice((current) => (current === message ? null : current)), 2600);
   }, []);
 
+  const invalidateAnalysis = useCallback((state: "idle" | "stopped" = "idle") => {
+    analysisRequestRef.current += 1;
+    setAnalysisRunning(false);
+    setAnalysis(null);
+    setOpAnalysis(null);
+    setAcAnalysis(null);
+    setRunState(state);
+  }, []);
+
   const executeTransient = useCallback(async (options: AnalysisOptions) => {
+    const requestId = ++analysisRequestRef.current;
     setAnalysisRunning(true);
     try {
       const result = await runNativeTransient({ components, wires }, options) ?? runTransientAnalysis({ components, wires }, options);
+      if (analysisRequestRef.current !== requestId) return;
       setAnalysis(result);
       setRunState(result.ok ? "complete" : "error");
     } catch (error) {
+      if (analysisRequestRef.current !== requestId) return;
       setAnalysis({
         ok: false,
         title: "ngspice transient",
@@ -148,7 +168,7 @@ function App() {
       });
       setRunState("error");
     } finally {
-      setAnalysisRunning(false);
+      if (analysisRequestRef.current === requestId) setAnalysisRunning(false);
     }
   }, [components, wires]);
 
@@ -163,73 +183,73 @@ function App() {
   }, [analysisOptions, executeTransient]);
 
   const runOperatingAnalysis = useCallback(async () => {
+    const requestId = ++analysisRequestRef.current;
     setAnalysisRunning(true);
     try {
       const result = await runNativeOperatingPoint({ components, wires }) ?? runOperatingPoint({ components, wires });
+      if (analysisRequestRef.current !== requestId) return;
       setOpAnalysis(result);
     } catch (error) {
+      if (analysisRequestRef.current !== requestId) return;
       setOpAnalysis({ ok: false, message: error instanceof Error ? error.message : "ngspice could not calculate the operating point.", warnings: [] });
     } finally {
-      setAnalysisRunning(false);
+      if (analysisRequestRef.current === requestId) setAnalysisRunning(false);
     }
   }, [components, wires]);
 
   const runAcAnalysis = useCallback(async () => {
+    const requestId = ++analysisRequestRef.current;
     setAnalysisRunning(true);
     try {
       const result = await runNativeAcSweep(
         { components, wires },
         { startHz: 10, stopHz: 1e6, pointsPerDecade: 20 },
       ) ?? runAcSweep({ components, wires }, { startHz: 10, stopHz: 1e6, pointsPerDecade: 20 });
+      if (analysisRequestRef.current !== requestId) return;
       setAcAnalysis(result);
     } catch (error) {
+      if (analysisRequestRef.current !== requestId) return;
       setAcAnalysis({ ok: false, message: error instanceof Error ? error.message : "ngspice could not run this AC sweep.", warnings: [] });
     } finally {
-      setAnalysisRunning(false);
+      if (analysisRequestRef.current === requestId) setAnalysisRunning(false);
     }
   }, [components, wires]);
 
-  const pauseAnalysis = useCallback(() => {
-    if (!analysis) {
-      showNotice("Run a transient analysis before pausing.");
-      return;
-    }
-    setRunState((state) => {
-      if (state === "paused") {
-        showNotice("Simulation resumed.");
-        return analysis.ok ? "complete" : "error";
-      }
-      showNotice("Simulation paused.");
-      return "paused";
-    });
-  }, [analysis, showNotice]);
-
   const stepAnalysis = useCallback(async () => {
-    const maxSteps = isNativeSpiceRuntime() ? MAX_NATIVE_OUTPUT_POINTS : MAX_TRANSIENT_STEPS;
-    const nextOptions = { ...analysisOptions, steps: Math.min(maxSteps, analysisOptions.steps + 1) };
+    // Native ngspice may return an endpoint in addition to requested samples.
+    const maxSteps = isNativeSpiceRuntime() ? MAX_NATIVE_OUTPUT_POINTS - 1 : MAX_TRANSIENT_STEPS;
+    const nextOptions = {
+      ...analysisOptions,
+      steps: Math.min(maxSteps, Math.max(analysisOptions.steps + 1, Math.ceil(analysisOptions.steps * 1.25))),
+    };
     setAnalysisOptions(nextOptions);
     setMode("simulator");
     setGraphOpen(true);
     await executeTransient(nextOptions);
-    showNotice("Advanced transient by one sample.");
+    showNotice(`Re-ran transient at ${nextOptions.steps.toLocaleString()} samples.`);
   }, [analysisOptions, executeTransient, showNotice]);
 
   const stopAnalysis = useCallback(() => {
-    if (!analysis) {
+    if (!analysis && !analysisRunning) {
       showNotice("No simulation result to stop.");
       return;
     }
-    setAnalysis(null);
-    setRunState("stopped");
+    invalidateAnalysis("stopped");
     showNotice("Simulation stopped. Run again when ready.");
-  }, [analysis, showNotice]);
+  }, [analysis, analysisRunning, invalidateAnalysis, showNotice]);
 
-  // Snapshot the live store (schematic + probes) into the active tab, so its
-  // edits and meter placements survive a switch.
+  // Snapshot the live store into the active tab so schematic annotations and
+  // undo/redo history are isolated from every other open circuit.
   const snapshotActive = useCallback(
     (list: OpenTab[]) =>
-      list.map((tab) => (tab.id === activeId ? { ...tab, doc: { components, wires }, probes } : tab)),
-    [activeId, components, wires, probes],
+      list.map((tab) => (tab.id === activeId
+        ? {
+            ...tab,
+            doc: { components, wires, probes, netLabels },
+            history: { past, future },
+          }
+        : tab)),
+    [activeId, components, wires, probes, netLabels, past, future],
   );
 
   // Open a document: focus its tab if already open, otherwise add a new one.
@@ -237,21 +257,19 @@ function App() {
     const snap = snapshotActive(tabs);
     const existing = snap.find((tab) => tab.title === title);
     if (existing) {
-      setTabs(snap.map((tab) => (tab.id === existing.id ? { ...tab, doc } : tab)));
+      setTabs(snap.map((tab) => (tab.id === existing.id ? { ...tab, doc, history: emptyHistory() } : tab)));
       setActiveId(existing.id);
       loadCircuit(doc);
-      setProbes(existing.probes);
     } else {
       const id = newTabId();
-      setTabs([...snap, { id, title, doc, probes: [] }]);
+      setTabs([...snap, { id, title, doc, history: emptyHistory() }]);
       setActiveId(id);
       loadCircuit(doc);
     }
-    setAnalysis(null);
-    setRunState("idle");
+    invalidateAnalysis();
     setMode("schematic");
     showNotice(`Opened ${title}`);
-  }, [tabs, snapshotActive, loadCircuit, setProbes, showNotice]);
+  }, [tabs, snapshotActive, loadCircuit, invalidateAnalysis, showNotice]);
 
   const openExample = useCallback((example: ExampleCircuit) => {
     openDocument(example, `${example.name.toLowerCase().replace(/\s+/g, "-")}.sim`);
@@ -265,11 +283,9 @@ function App() {
     if (!target) return;
     setTabs(snap);
     setActiveId(id);
-    loadCircuit(target.doc ?? { components: [], wires: [] });
-    setProbes(target.probes);
-    setAnalysis(null);
-    setRunState("idle");
-  }, [activeId, tabs, snapshotActive, loadCircuit, setProbes]);
+    restoreCircuit(target.doc ?? blankDocument(), target.history);
+    invalidateAnalysis();
+  }, [activeId, tabs, snapshotActive, restoreCircuit, invalidateAnalysis]);
 
   const startNewCircuit = useCallback(() => {
     const snap = snapshotActive(tabs);
@@ -277,23 +293,30 @@ function App() {
     let title = "untitled.sim";
     for (let n = 2; taken.has(title); n += 1) title = `untitled-${n}.sim`;
     const id = newTabId();
-    setTabs([...snap, { id, title, doc: { components: [], wires: [] }, probes: [] }]);
+    setTabs([...snap, { id, title, doc: blankDocument(), history: emptyHistory() }]);
     setActiveId(id);
     newCircuit();
-    setAnalysis(null);
-    setRunState("idle");
+    invalidateAnalysis();
     setMode("schematic");
     setGraphOpen(true);
     setAiOpen(true);
     showNotice("Started a new blank circuit.");
-  }, [tabs, snapshotActive, newCircuit, showNotice]);
+  }, [tabs, snapshotActive, newCircuit, invalidateAnalysis, showNotice]);
 
-  const closeTab = useCallback((id: string) => {
-    const idx = tabs.findIndex((tab) => tab.id === id);
+  const closeTab = useCallback((id: string, confirmed = false) => {
+    const snap = snapshotActive(tabs);
+    const idx = snap.findIndex((tab) => tab.id === id);
     if (idx === -1) return;
-    const remaining = tabs.filter((tab) => tab.id !== id);
+    const closing = snap[idx];
+    const isLastPopulatedTab = snap.length === 1
+      && Boolean(closing.doc && (closing.doc.components.length > 0 || closing.doc.wires.length > 0));
+    if (isLastPopulatedTab && !confirmed) {
+      setConfirmCloseTabId(id);
+      return;
+    }
+    const remaining = snap.filter((tab) => tab.id !== id);
     if (remaining.length === 0) {
-      const blank: OpenTab = { id: newTabId(), title: "untitled.sim", doc: { components: [], wires: [] }, probes: [] };
+      const blank: OpenTab = { id: newTabId(), title: "untitled.sim", doc: blankDocument(), history: emptyHistory() };
       setTabs([blank]);
       setActiveId(blank.id);
       newCircuit();
@@ -302,38 +325,36 @@ function App() {
       setTabs(remaining);
       if (id === activeId) {
         setActiveId(next.id);
-        loadCircuit(next.doc ?? { components: [], wires: [] });
-        setProbes(next.probes);
+        restoreCircuit(next.doc ?? blankDocument(), next.history);
       }
     }
-    setAnalysis(null);
-    setRunState("idle");
+    invalidateAnalysis();
     setMode("schematic");
-  }, [tabs, activeId, loadCircuit, newCircuit, setProbes]);
+  }, [tabs, activeId, snapshotActive, restoreCircuit, newCircuit, invalidateAnalysis]);
 
   const clearScratchpad = useCallback(() => {
     newCircuit();
-    setTabs((prev) => prev.map((tab) => (tab.id === activeId ? { ...tab, doc: { components: [], wires: [] } } : tab)));
-    setAnalysis(null);
-    setRunState("idle");
+    setTabs((prev) => prev.map((tab) => (
+      tab.id === activeId ? { ...tab, doc: blankDocument(), history: emptyHistory() } : tab
+    )));
+    invalidateAnalysis();
     setMode("schematic");
     setConfirmClearOpen(false);
     setGraphOpen(true);
     setAiOpen(true);
     showNotice("Scratchpad cleared.");
-  }, [activeId, newCircuit, showNotice]);
+  }, [activeId, newCircuit, invalidateAnalysis, showNotice]);
 
   useEffect(() => {
-    setAnalysis(null);
-    setOpAnalysis(null);
-    setAcAnalysis(null);
-    setRunState("idle");
-  }, [components, wires]);
+    invalidateAnalysis();
+  }, [components, wires, invalidateAnalysis]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement | null;
-      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
+      if (t?.closest("input, textarea, select, button, [role='button'], [role='tab'], [role='dialog'], [contenteditable='true']")) {
+        return;
+      }
 
       if (e.metaKey || e.ctrlKey) {
         const k = e.key.toLowerCase();
@@ -419,9 +440,8 @@ function App() {
         )}
         <section className="editor-shell" aria-label="Schematic editor">
           <EditorToolbar
-            runState={runState}
+            isRunning={analysisRunning}
             onRun={runAndShowSimulator}
-            onPause={pauseAnalysis}
             onStep={stepAnalysis}
             onStop={stopAnalysis}
             onNewCircuit={startNewCircuit}
@@ -464,7 +484,6 @@ function App() {
                 onRunOperatingPoint={runOperatingAnalysis}
                 onRunAcSweep={runAcAnalysis}
                 onStop={stopAnalysis}
-                onPause={pauseAnalysis}
                 onStep={stepAnalysis}
                 onClose={() => setGraphOpen(false)}
               />
@@ -513,6 +532,18 @@ function App() {
           confirmLabel="Clear scratchpad"
           onConfirm={clearScratchpad}
           onCancel={() => setConfirmClearOpen(false)}
+        />
+      )}
+      {confirmCloseTabId && (
+        <ConfirmDialog
+          title="Close this scratchpad?"
+          body="Save a .tau.json copy first if you need this circuit later. Closing the only open scratchpad starts a new blank circuit."
+          confirmLabel="Close scratchpad"
+          onConfirm={() => {
+            closeTab(confirmCloseTabId, true);
+            setConfirmCloseTabId(null);
+          }}
+          onCancel={() => setConfirmCloseTabId(null)}
         />
       )}
       {notice && <div className="shell-toast" role="status">{notice}</div>}

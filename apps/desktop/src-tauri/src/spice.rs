@@ -1,16 +1,21 @@
 use std::{
-    env,
     ffi::{c_char, c_int, c_void, CStr, CString},
     path::PathBuf,
     ptr, slice,
     sync::Mutex,
 };
 
+#[cfg(debug_assertions)]
+use std::env;
+
 use libloading::Library;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, State};
 
 const MAX_VECTOR_LENGTH: usize = 2_000_000;
+const MAX_TRANSFER_VALUES: usize = 8_000_000;
+const MAX_NETLIST_BYTES: usize = 512 * 1024;
+const MAX_DECK_LINES: usize = 30_000;
 
 type SendChar = unsafe extern "C" fn(*mut c_char, c_int, *mut c_void) -> c_int;
 type SendStat = unsafe extern "C" fn(*mut c_char, c_int, *mut c_void) -> c_int;
@@ -297,6 +302,7 @@ impl SpiceEngine {
             return Err(format!("ngspice returned no vectors for plot {plot}."));
         }
         let mut result = Vec::new();
+        let mut transfer_values = 0_usize;
         for index in 0..10_000 {
             let entry = unsafe { *vector_names.add(index) };
             if entry.is_null() {
@@ -321,6 +327,20 @@ impl SpiceEngine {
                 .map_err(|_| format!("ngspice returned an invalid length for {name}."))?;
             if length > MAX_VECTOR_LENGTH {
                 return Err(format!("ngspice vector {name} has {length} points, exceeding Tau's {MAX_VECTOR_LENGTH} point transfer limit."));
+            }
+            let scalar_values = length
+                .checked_mul(if info.real_data.is_null() { 2 } else { 1 })
+                .ok_or_else(|| {
+                    "ngspice vector length overflowed Tau's transfer budget.".to_string()
+                })?;
+            transfer_values = transfer_values
+                .checked_add(scalar_values)
+                .ok_or_else(|| "ngspice result overflowed Tau's transfer budget.".to_string())?;
+            if transfer_values > MAX_TRANSFER_VALUES {
+                return Err(format!(
+                    "ngspice result has more than Tau's {} scalar-value transfer limit. Reduce stop time, output resolution, or circuit size.",
+                    MAX_TRANSFER_VALUES
+                ));
             }
             let (real, imaginary) = if !info.real_data.is_null() {
                 (
@@ -367,6 +387,10 @@ pub fn simulate_spice(
 
 fn library_candidates(app: &AppHandle) -> Vec<PathBuf> {
     let mut paths = Vec::new();
+
+    // A developer may explicitly point a debug build at a custom library.
+    // Release builds only load Tau's bundled, signed resource.
+    #[cfg(debug_assertions)]
     if let Some(path) = env::var_os("TAU_NGSPICE_LIB") {
         paths.push(PathBuf::from(path));
     }
@@ -419,6 +443,11 @@ const fn library_file_name() -> &'static str {
 }
 
 fn deck_lines(netlist: &str) -> Result<Vec<String>, String> {
+    if netlist.len() > MAX_NETLIST_BYTES {
+        return Err(format!(
+            "The ngspice netlist exceeds Tau's {MAX_NETLIST_BYTES} byte limit."
+        ));
+    }
     let lines = netlist
         .lines()
         .map(str::trim_end)
@@ -428,11 +457,51 @@ fn deck_lines(netlist: &str) -> Result<Vec<String>, String> {
     if lines.is_empty() {
         return Err("The ngspice netlist is empty.".to_string());
     }
+    if lines.len() > MAX_DECK_LINES {
+        return Err(format!(
+            "The ngspice netlist exceeds Tau's {MAX_DECK_LINES} line limit."
+        ));
+    }
     if !lines
-        .iter()
-        .any(|line| line.trim().eq_ignore_ascii_case(".end"))
+        .last()
+        .is_some_and(|line| line.trim().eq_ignore_ascii_case(".end"))
     {
         return Err("The ngspice netlist must end with an .end card.".to_string());
+    }
+    for (index, line) in lines.iter().enumerate().skip(1) {
+        let trimmed = line.trim_start();
+        let lower = trimmed.to_ascii_lowercase();
+        if trimmed.starts_with('.') {
+            let card = lower.split_whitespace().next().unwrap_or_default();
+            if !matches!(
+                card,
+                ".model" | ".option" | ".options" | ".tran" | ".op" | ".ac" | ".end"
+            ) {
+                return Err(format!(
+                    "Unsupported ngspice card on line {}: {card}.",
+                    index + 1
+                ));
+            }
+        }
+        let command = lower.split_whitespace().next().unwrap_or_default();
+        if matches!(
+            command,
+            "shell"
+                | "system"
+                | "source"
+                | "load"
+                | "quit"
+                | "exit"
+                | "destroy"
+                | "write"
+                | "wrdata"
+                | "cd"
+        ) {
+            return Err(format!(
+                "Unsafe ngspice command on line {} is not permitted.",
+                index + 1
+            ));
+        }
     }
     Ok(lines)
 }
@@ -490,6 +559,12 @@ mod tests {
     #[test]
     fn requires_an_end_card() {
         assert!(deck_lines("Tau\n.op\n").is_err());
+    }
+
+    #[test]
+    fn rejects_control_cards_and_shell_commands() {
+        assert!(deck_lines("Tau\n.control\nshell touch /tmp/nope\n.end\n").is_err());
+        assert!(deck_lines("Tau\nR1 1 0 1k\n.include outside.lib\n.op\n.end\n").is_err());
     }
 
     #[test]

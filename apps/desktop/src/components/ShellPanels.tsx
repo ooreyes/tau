@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { CATALOG_BY_KIND } from "../schematic/catalog";
+import { MAX_SCHEMATIC_FILE_BYTES, validateSchematicDocument } from "../schematic/documentValidation";
 import { ComponentSymbol } from "../schematic/symbols";
 import type { SchematicComponent } from "../schematic/types";
 import { decodeParams, encodeParams, paramFields } from "../schematic/params";
@@ -126,9 +127,8 @@ export function ExplorerPanel({
 }
 
 export function EditorToolbar({
-  runState,
+  isRunning,
   onRun,
-  onPause,
   onStep,
   onStop,
   onNewCircuit,
@@ -136,9 +136,8 @@ export function EditorToolbar({
   onOpenCircuit,
   onOpenExample,
 }: {
-  runState: "idle" | "complete" | "error" | "stopped" | "paused";
+  isRunning: boolean;
   onRun: () => void;
-  onPause: () => void;
   onStep: () => void;
   onStop: () => void;
   onNewCircuit: () => void;
@@ -149,6 +148,8 @@ export function EditorToolbar({
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const components = useSchematic((s) => s.components);
   const wires = useSchematic((s) => s.wires);
+  const probes = useSchematic((s) => s.probes);
+  const netLabels = useSchematic((s) => s.netLabels);
   const tool = useSchematic((s) => s.tool);
   const cancel = useSchematic((s) => s.cancel);
   const startWiring = useSchematic((s) => s.startWiring);
@@ -158,7 +159,6 @@ export function EditorToolbar({
   const canUndo = useSchematic((s) => s.past.length > 0);
   const canRedo = useSchematic((s) => s.future.length > 0);
   const hasDocument = components.length > 0 || wires.length > 0;
-  const isPaused = runState === "paused";
 
   const saveCircuit = () => {
     const payload = {
@@ -167,6 +167,8 @@ export function EditorToolbar({
       savedAt: new Date().toISOString(),
       components,
       wires,
+      probes,
+      netLabels,
     };
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
@@ -179,11 +181,11 @@ export function EditorToolbar({
 
   const openCircuit = async (file: File) => {
     try {
-      const parsed = JSON.parse(await file.text());
-      if (!parsed || !Array.isArray(parsed.components) || !Array.isArray(parsed.wires)) {
-        throw new Error("File does not contain a Tau schematic document.");
+      if (file.size > MAX_SCHEMATIC_FILE_BYTES) {
+        throw new Error(`Circuit files must be smaller than ${MAX_SCHEMATIC_FILE_BYTES / (1024 * 1024)} MB.`);
       }
-      onOpenCircuit({ components: parsed.components, wires: parsed.wires }, file.name.replace(/\.tau\.json$/i, ".sim"));
+      const document = validateSchematicDocument(JSON.parse(await file.text()));
+      onOpenCircuit(document, file.name.replace(/\.tau\.json$/i, ".sim"));
     } catch (error) {
       window.alert(error instanceof Error ? error.message : "Could not open circuit file.");
     } finally {
@@ -249,16 +251,7 @@ export function EditorToolbar({
       </label>
       <div className="editor-toolbar-spacer" />
       <div className="transport">
-        <button className="transport-play" title="Run simulation" aria-label="Run simulation" onClick={onRun}>▶</button>
-        <button
-          className={isPaused ? "transport-pause active" : "transport-pause"}
-          title={isPaused ? "Resume simulation state" : "Pause simulation state"}
-          aria-label="Pause simulation"
-          aria-pressed={isPaused}
-          onClick={onPause}
-        >
-          Ⅱ
-        </button>
+        <button className="transport-play" title="Run simulation" aria-label="Run simulation" onClick={onRun} disabled={isRunning}>▶</button>
         <button
           className="transport-stop"
           title="Clear current simulation result"
@@ -268,9 +261,10 @@ export function EditorToolbar({
           ■
         </button>
         <button
-          title="Advance transient by one sample"
-          aria-label="Step simulation"
+          title="Re-run transient at finer resolution"
+          aria-label="Refine transient resolution"
           onClick={onStep}
+          disabled={isRunning}
         >
           ▸▌
         </button>
@@ -370,7 +364,7 @@ export function BottomPanel({ mode, result }: { mode: "schematic" | "simulator";
   const probes = useSchematic((s) => s.probes);
   const selectedId = useSchematic((s) => s.selectedId);
   const selectedWireId = useSchematic((s) => s.selectedWireId);
-  const selected = components.find((component) => component.id === selectedId) ?? components[0] ?? null;
+  const selected = components.find((component) => component.id === selectedId) ?? null;
   const [activeTab, setActiveTab] = useState<"primary" | "secondary" | "errors">("primary");
 
   useEffect(() => {

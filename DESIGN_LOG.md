@@ -692,3 +692,48 @@ Fixed the bug list raised against the newly-migrated LTspice/VS Code shell.
 - Windows runtime lookup is supported (`ngspice.dll` in the same resource
   layout), but automated Windows ngspice staging is intentionally not yet
   implemented; see `README.md`.
+
+### 2026-06-22 — Release hardening and schematic data integrity — Codex + parallel audits
+
+- Audited editor, UI, persistence, native engine, packaging, and security in
+  parallel. Fixed explicit wire topology: orthogonal crossings no longer short
+  unless there is a pin/vertex junction; empty wire previews no longer crash;
+  dragging a connected part carries its attached wire endpoints.
+- Made probes and net labels first-class `SchematicDocument` data. They now
+  survive tab switches, undo/redo, Save/Open, and local autosave. Tab snapshots
+  now also retain independent history, preventing undo in one tab from restoring
+  a different circuit. Closing the only populated scratchpad now asks for
+  confirmation instead of silently replacing its autosave.
+- Added bounded runtime validation for `.tau.json` imports: file-size, object,
+  component kind, rotation, coordinate, wire, probe, and label validation runs
+  before imported data reaches the renderer. Added a root recovery boundary.
+- Removed the nonfunctional model-library attachment controls and arbitrary
+  vendor-model editing. Tau exposes only generic built-in semiconductor models
+  until a parsed library-to-symbol mapping can affect the netlist; it no longer
+  pretends attached files influence simulation.
+- Added stale-analysis request invalidation, disabled duplicate analysis actions
+  while ngspice is running, removed the fake Pause control, and renamed Step to
+  its real behavior: rerun transient at finer resolution. The SVG safety guard
+  now applies to Bode plots as well as transient plots. Native UI limits reserve
+  one point below the bridge's 2,000,000-point vector limit.
+- Hardened the native bridge: only Tau's generated analysis-card subset is
+  accepted (control/file/process cards are rejected), aggregate result transfer
+  is capped at 8,000,000 scalar values, release builds load only the bundled
+  ngspice library, CSP is enabled, and unused opener permission/plugin support
+  was removed.
+- Verification on this tree:
+  - `pnpm typecheck`
+  - `pnpm test` — 193 tests passing
+  - `pnpm audit --prod --audit-level=high` — no known production JS issues
+  - `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, and
+    `cargo test`
+  - staged native ngspice ignored smoke test
+  - `pnpm build` — production frontend, Tau.app, and DMG
+  - strict ad-hoc `codesign` verification and `hdiutil verify`
+- Local signed DMG:
+  `apps/desktop/src-tauri/target/release/bundle/dmg/Tau_0.2.0_aarch64_signed.dmg`
+  SHA-256 `dee445b493922361b86c7c33247e07283cbd0020ba50eea04c7937069b00a136`.
+- Public macOS distribution is still externally blocked on Developer ID
+  credentials, notarization/stapling, and a clean-machine Gatekeeper check.
+  Legal review and bundled third-party notices for ngspice/XSPICE are also
+  required before publishing a public installer.

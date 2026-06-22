@@ -31,7 +31,6 @@ interface SimulationPanelProps {
   onRunOperatingPoint: () => void | Promise<void>;
   onRunAcSweep: () => void | Promise<void>;
   onStop: () => void;
-  onPause: () => void | Promise<void>;
   onStep: () => void | Promise<void>;
   onClose: () => void;
 }
@@ -51,7 +50,6 @@ export function SimulationPanel({
   onRunOperatingPoint,
   onRunAcSweep,
   onStop,
-  onPause,
   onStep,
   onClose,
 }: SimulationPanelProps) {
@@ -74,7 +72,8 @@ export function SimulationPanel({
   const [mode, setMode] = useState<"tran" | "op" | "ac">("tran");
   const [maximized, setMaximized] = useState(false);
   const title = mode === "tran" ? "Transient scope" : mode === "op" ? "Operating point" : "AC sweep";
-  const maxTransientSteps = isNativeSpiceRuntime() ? MAX_NATIVE_OUTPUT_POINTS : MAX_TRANSIENT_STEPS;
+  // ngspice may include the final endpoint in addition to requested steps.
+  const maxTransientSteps = isNativeSpiceRuntime() ? MAX_NATIVE_OUTPUT_POINTS - 1 : MAX_TRANSIENT_STEPS;
   const resolution = useMemo(() => {
     try {
       return inspectTransientResolution(components, options);
@@ -94,7 +93,7 @@ export function SimulationPanel({
           <button className="plotter-icon-action" onClick={onStop} title="Clear transient result" aria-label="Stop simulation">
             ■
           </button>
-          <button className="plotter-icon-action" onClick={onStep} title="Advance transient by one sample" aria-label="Step simulation">
+          <button className="plotter-icon-action" onClick={onStep} title="Re-run transient at finer resolution" aria-label="Refine transient resolution" disabled={isRunning}>
             ◔
           </button>
           <button
@@ -113,11 +112,6 @@ export function SimulationPanel({
               <button className="plotter-run" onClick={() => void onRun()} title="Run transient analysis" disabled={isRunning}>
                 {isRunning ? "Running" : "▶ Run"}
               </button>
-              {result && (
-                <button className="plotter-pause" onClick={onPause} title="Pause or resume simulation state" aria-label="Pause simulation">
-                  Ⅱ
-                </button>
-              )}
             </>
           ) : (
             <div className="plotter-live">{isRunning ? "Running" : "Ready"}</div>
@@ -127,13 +121,14 @@ export function SimulationPanel({
 
       <div className="plotter-tabs" role="tablist" aria-label="Analysis modes">
         <div className="plotter-tabs-inner">
-          <button className={`plotter-tab${mode === "tran" ? " active" : ""}`} role="tab" aria-selected={mode === "tran"} onClick={() => setMode("tran")}>
+          <button className={`plotter-tab${mode === "tran" ? " active" : ""}`} role="tab" aria-selected={mode === "tran"} onClick={() => setMode("tran")} disabled={isRunning}>
             TRAN
           </button>
           <button
             className={`plotter-tab${mode === "op" ? " active" : ""}`}
             role="tab"
             aria-selected={mode === "op"}
+            disabled={isRunning}
             onClick={() => {
               setMode("op");
               void onRunOperatingPoint();
@@ -145,6 +140,7 @@ export function SimulationPanel({
             className={`plotter-tab${mode === "ac" ? " active" : ""}`}
             role="tab"
             aria-selected={mode === "ac"}
+            disabled={isRunning}
             onClick={() => {
               setMode("ac");
               void onRunAcSweep();
@@ -491,9 +487,24 @@ function AcPlot({ result }: { result: AcResult | null }) {
   const traces = success ? success.traces.slice(0, 4) : [];
   const plot = useMemo(() => {
     if (!success || traces.length === 0) return null;
-    const all = traces.flatMap((t) => t.magDb).filter((v) => Number.isFinite(v) && v > -250);
-    const maxDb = Math.ceil(Math.max(...all, 0) / 10) * 10;
-    const minDb = Math.floor(Math.min(...all, maxDb - 10) / 10) * 10;
+    let rawMin = 0;
+    let rawMax = 0;
+    let found = false;
+    for (const trace of traces) {
+      for (const db of trace.magDb) {
+        if (!Number.isFinite(db) || db <= -250) continue;
+        if (!found) {
+          rawMin = db;
+          rawMax = db;
+          found = true;
+        } else {
+          rawMin = Math.min(rawMin, db);
+          rawMax = Math.max(rawMax, db);
+        }
+      }
+    }
+    const maxDb = Math.ceil(Math.max(rawMax, 0) / 10) * 10;
+    const minDb = Math.floor(Math.min(rawMin, maxDb - 10) / 10) * 10;
     const f0 = Math.log10(success.freqs[0] || 1);
     const f1 = Math.log10(success.freqs[success.freqs.length - 1] || 10);
     return { minDb, maxDb, f0, f1 };
@@ -501,7 +512,12 @@ function AcPlot({ result }: { result: AcResult | null }) {
 
   if (!result) return null;
   if (!result.ok) return <div className="analysis-empty">{result.message}</div>;
-  const peak = traces.flatMap((t) => t.magDb).reduce((max, db) => (Number.isFinite(db) ? Math.max(max, db) : max), -Infinity);
+  let peak = -Infinity;
+  for (const trace of traces) {
+    for (const db of trace.magDb) {
+      if (Number.isFinite(db)) peak = Math.max(peak, db);
+    }
+  }
 
   return (
     <>
@@ -557,15 +573,21 @@ function AcPlot({ result }: { result: AcResult | null }) {
 function bodePath(magDb: number[], freqs: number[], plot: { minDb: number; maxDb: number; f0: number; f1: number }): string {
   const span = plot.maxDb - plot.minDb || 1;
   const fSpan = plot.f1 - plot.f0 || 1;
-  return magDb
-    .map((db, i) => {
-      const lx = (Math.log10(freqs[i] || 1) - plot.f0) / fSpan;
-      const x = PLOT_PAD + lx * (PLOT_WIDTH - PLOT_PAD * 2);
-      const yv = Math.max(plot.minDb, Math.min(plot.maxDb, db));
-      const y = PLOT_HEIGHT - PLOT_PAD - ((yv - plot.minDb) / span) * (PLOT_HEIGHT - PLOT_PAD * 2);
-      return `${i === 0 ? "M" : "L"} ${x.toFixed(2)} ${y.toFixed(2)}`;
-    })
-    .join(" ");
+  const count = Math.min(magDb.length, freqs.length);
+  let path = "";
+  let started = false;
+  for (const index of displaySampleIndices(count)) {
+    const db = magDb[index];
+    const frequency = freqs[index];
+    if (!Number.isFinite(db) || !Number.isFinite(frequency) || frequency <= 0) continue;
+    const lx = (Math.log10(frequency) - plot.f0) / fSpan;
+    const x = PLOT_PAD + lx * (PLOT_WIDTH - PLOT_PAD * 2);
+    const yv = Math.max(plot.minDb, Math.min(plot.maxDb, db));
+    const y = PLOT_HEIGHT - PLOT_PAD - ((yv - plot.minDb) / span) * (PLOT_HEIGHT - PLOT_PAD * 2);
+    path += `${started ? "L" : "M"} ${x.toFixed(2)} ${y.toFixed(2)} `;
+    started = true;
+  }
+  return path;
 }
 
 function Metric({ label, value, tone }: { label: string; value: string; tone: string }) {

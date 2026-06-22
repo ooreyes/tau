@@ -17,11 +17,22 @@ interface Doc {
   components: SchematicComponent[];
   wires: SchematicWire[];
   counters: Record<string, number>;
+  probes: Probe[];
+  netLabels: NetLabel[];
 }
 
 export interface SchematicDocument {
   components: SchematicComponent[];
   wires: SchematicWire[];
+  /** Optional for compatibility with Tau v1 files. */
+  probes?: Probe[];
+  /** Optional for compatibility with Tau v1 files. */
+  netLabels?: NetLabel[];
+}
+
+export interface SchematicHistory {
+  past: Doc[];
+  future: Doc[];
 }
 
 interface SchematicState extends Doc {
@@ -68,6 +79,8 @@ interface SchematicState extends Doc {
   setValue: (id: string, value: string) => void;
 
   loadCircuit: (doc: SchematicDocument) => void;
+  /** Restore a trusted in-memory tab snapshot without leaking history between tabs. */
+  restoreCircuit: (doc: SchematicDocument, history: SchematicHistory) => void;
   newCircuit: () => void;
 }
 
@@ -83,7 +96,13 @@ const PROBE_COLORS = [
 ];
 const STORAGE_KEY = "tau.schematic.v1";
 const nextRotation = (r: Rotation): Rotation => (((r + 90) % 360) as Rotation);
-const docOf = (s: Doc): Doc => ({ components: s.components, wires: s.wires, counters: s.counters });
+const docOf = (s: Doc): Doc => ({
+  components: s.components,
+  wires: s.wires,
+  counters: s.counters,
+  probes: s.probes,
+  netLabels: s.netLabels,
+});
 
 /** Rebuild designator counters from labels so loaded circuits keep numbering correct. */
 function deriveCounters(components: SchematicComponent[]): Record<string, number> {
@@ -96,10 +115,27 @@ function deriveCounters(components: SchematicComponent[]): Record<string, number
 }
 
 /** Clone an incoming document with fresh ids so examples/files never alias live state. */
-function cloneDocument(doc: SchematicDocument): SchematicDocument {
+function copyDocument(doc: SchematicDocument, freshIds: boolean): SchematicDocument {
   return {
-    components: doc.components.map((c) => ({ ...c, id: nanoid(6) })),
-    wires: doc.wires.map((w) => ({ id: nanoid(6), points: w.points.map((p) => ({ ...p })) })),
+    components: doc.components.map((c) => ({ ...c, id: freshIds ? nanoid(6) : c.id })),
+    wires: doc.wires.map((w) => ({ id: freshIds ? nanoid(6) : w.id, points: w.points.map((p) => ({ ...p })) })),
+    probes: (doc.probes ?? []).map((probe) => ({ ...probe, id: freshIds ? nanoid(6) : probe.id })),
+    netLabels: (doc.netLabels ?? []).map((label) => ({ ...label, id: freshIds ? nanoid(6) : label.id })),
+  };
+}
+
+/** Clone an imported document with fresh ids so files/examples never alias live state. */
+function cloneDocument(doc: SchematicDocument): SchematicDocument {
+  return copyDocument(doc, true);
+}
+
+function copyHistoryEntry(entry: Doc): Doc {
+  const document = copyDocument(entry, false);
+  return {
+    ...document,
+    counters: { ...entry.counters },
+    probes: document.probes ?? [],
+    netLabels: document.netLabels ?? [],
   };
 }
 
@@ -110,7 +146,12 @@ function loadPersisted(): SchematicDocument | null {
     if (!raw) return null;
     const parsed = JSON.parse(raw);
     if (parsed && Array.isArray(parsed.components) && Array.isArray(parsed.wires)) {
-      return { components: parsed.components, wires: parsed.wires };
+      return {
+        components: parsed.components,
+        wires: parsed.wires,
+        probes: Array.isArray(parsed.probes) ? parsed.probes : [],
+        netLabels: Array.isArray(parsed.netLabels) ? parsed.netLabels : [],
+      };
     }
   } catch {
     // ignore corrupt/unavailable storage
@@ -148,8 +189,8 @@ export const useSchematic = create<SchematicState>()((set) => {
     selectedWireId: null,
     tool: { mode: "select" },
     placeRotation: 0,
-    probes: [],
-    netLabels: [],
+    probes: initialDoc?.probes ?? [],
+    netLabels: initialDoc?.netLabels ?? [],
     past: [],
     future: [],
 
@@ -192,21 +233,21 @@ export const useSchematic = create<SchematicState>()((set) => {
     addProbe: (x, y) =>
       set((s) => {
         const existing = s.probes.find((p) => p.x === x && p.y === y);
-        if (existing) return { probes: s.probes.filter((p) => p.id !== existing.id) };
+        if (existing) return { ...recordInto(s), probes: s.probes.filter((p) => p.id !== existing.id) };
         const color = PROBE_COLORS[s.probes.length % PROBE_COLORS.length];
-        return { probes: [...s.probes, { id: nanoid(6), x, y, color }] };
+        return { ...recordInto(s), probes: [...s.probes, { id: nanoid(6), x, y, color }] };
       }),
-    removeProbe: (id) => set((s) => ({ probes: s.probes.filter((p) => p.id !== id) })),
-    clearProbes: () => set({ probes: [] }),
+    removeProbe: (id) => set((s) => ({ ...recordInto(s), probes: s.probes.filter((p) => p.id !== id) })),
+    clearProbes: () => set((s) => ({ ...recordInto(s), probes: [] })),
     setProbes: (probes) => set({ probes }),
 
     upsertNetLabel: (x, y, text) =>
       set((s) => {
         const trimmed = text.trim();
         const existing = s.netLabels.find((l) => l.x === x && l.y === y);
-        if (!trimmed) return { netLabels: s.netLabels.filter((l) => !(l.x === x && l.y === y)) };
-        if (existing) return { netLabels: s.netLabels.map((l) => (l.id === existing.id ? { ...l, text: trimmed } : l)) };
-        return { netLabels: [...s.netLabels, { id: nanoid(6), x, y, text: trimmed }] };
+        if (!trimmed) return { ...recordInto(s), netLabels: s.netLabels.filter((l) => !(l.x === x && l.y === y)) };
+        if (existing) return { ...recordInto(s), netLabels: s.netLabels.map((l) => (l.id === existing.id ? { ...l, text: trimmed } : l)) };
+        return { ...recordInto(s), netLabels: [...s.netLabels, { id: nanoid(6), x, y, text: trimmed }] };
       }),
 
     addComponent: (kind, x, y) =>
@@ -290,15 +331,33 @@ export const useSchematic = create<SchematicState>()((set) => {
       })),
 
     loadCircuit: (doc) =>
-      set((s) => {
+      set(() => {
         const cloned = cloneDocument(doc);
         return {
-          ...recordInto(s),
           components: cloned.components,
           wires: cloned.wires,
           counters: deriveCounters(cloned.components),
-          probes: [],
-          netLabels: [],
+          probes: cloned.probes ?? [],
+          netLabels: cloned.netLabels ?? [],
+          past: [],
+          future: [],
+          selectedId: null,
+          selectedWireId: null,
+          tool: { mode: "select" },
+        };
+      }),
+
+    restoreCircuit: (doc, history) =>
+      set(() => {
+        const restored = copyDocument(doc, false);
+        return {
+          components: restored.components,
+          wires: restored.wires,
+          counters: deriveCounters(restored.components),
+          probes: restored.probes ?? [],
+          netLabels: restored.netLabels ?? [],
+          past: history.past.map(copyHistoryEntry).slice(-HISTORY_LIMIT),
+          future: history.future.map(copyHistoryEntry).slice(0, HISTORY_LIMIT),
           selectedId: null,
           selectedWireId: null,
           tool: { mode: "select" },
@@ -306,13 +365,14 @@ export const useSchematic = create<SchematicState>()((set) => {
       }),
 
     newCircuit: () =>
-      set((s) => ({
-        ...recordInto(s),
+      set(() => ({
         components: [],
         wires: [],
         counters: {},
         probes: [],
         netLabels: [],
+        past: [],
+        future: [],
         selectedId: null,
         selectedWireId: null,
         tool: { mode: "select" },
@@ -322,7 +382,17 @@ export const useSchematic = create<SchematicState>()((set) => {
 
 // Autosave the document to localStorage so work survives an app restart.
 useSchematic.subscribe((state, prev) => {
-  if (state.components !== prev.components || state.wires !== prev.wires) {
-    persist({ components: state.components, wires: state.wires });
+  if (
+    state.components !== prev.components
+    || state.wires !== prev.wires
+    || state.probes !== prev.probes
+    || state.netLabels !== prev.netLabels
+  ) {
+    persist({
+      components: state.components,
+      wires: state.wires,
+      probes: state.probes,
+      netLabels: state.netLabels,
+    });
   }
 });
