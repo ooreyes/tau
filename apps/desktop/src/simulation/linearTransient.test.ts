@@ -355,8 +355,8 @@ describe("RLC series — under-damped oscillation", () => {
 
     // Find the cap node: it's the one that oscillates and isn't pinned to VS
     const capTrace = result.traces.find(t => {
-      const max = Math.max(...t.values);
-      const min = Math.min(...t.values);
+      const max = t.values.reduce((a, b) => (b > a ? b : a), -Infinity);
+      const min = t.values.reduce((a, b) => (b < a ? b : a), Infinity);
       return max > 1 && min < 9; // oscillates
     });
 
@@ -396,7 +396,7 @@ describe("RLC series — under-damped oscillation", () => {
     // Under-damped RLC: the capacitor voltage peaks above the source voltage
     let anyOvershoot = false;
     for (const trace of result.traces) {
-      const max = Math.max(...trace.values);
+      const max = trace.values.reduce((a, b) => (b > a ? b : a), -Infinity);
       if (max > 10 * 1.05) { // more than 5% above VS
         anyOvershoot = true;
         break;
@@ -492,8 +492,8 @@ describe("Transient source primitives", () => {
 
     const trace = result.traces[0];
     expect(trace.values[0]).toBeCloseTo(0, 6);
-    expect(Math.max(...trace.values)).toBeGreaterThan(0.98);
-    expect(Math.min(...trace.values)).toBeLessThan(-0.98);
+    expect(trace.values.reduce((a, b) => (b > a ? b : a), -Infinity)).toBeGreaterThan(0.98);
+    expect(trace.values.reduce((a, b) => (b < a ? b : a), Infinity)).toBeLessThan(-0.98);
   });
 
   it("DC current source through resistor produces Ohm-law voltage", () => {

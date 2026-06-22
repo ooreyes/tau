@@ -247,7 +247,7 @@ describe("RLC series under-damped ringing (ζ=0.5, f₀≈1.6 kHz)", () => {
     if (!res.ok) return;
     const vC = res.traces.find((t) => t.label.includes("C1"));
     expect(vC).toBeDefined();
-    const peak = Math.max(...vC!.values);
+    const peak = vC!.values.reduce((a, b) => (b > a ? b : a), -Infinity);
     // ζ=0.5 → first-overshoot ≈ exp(−ζπ/√(1−ζ²)) ≈ 16% → peak ≈ 5.8 V.
     expect(peak).toBeGreaterThan(5.4);
     expect(peak).toBeLessThan(6.2);
