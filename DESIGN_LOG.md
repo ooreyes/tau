@@ -737,3 +737,33 @@ Fixed the bug list raised against the newly-migrated LTspice/VS Code shell.
   credentials, notarization/stapling, and a clean-machine Gatekeeper check.
   Legal review and bundled third-party notices for ngspice/XSPICE are also
   required before publishing a public installer.
+
+### 2026-06-22 — Crash fix + robustness review (2 Sonnet subagents) — Claude (Opus 4.8)
+
+- **"Maximum call stack size exceeded" fixed.** Root cause: `schematic/netlist.ts`
+  `DisjointSet.find()` was recursive → deep recursion on long union chains
+  (wire breakpoints/intersections) in complex circuits. Rewrote iteratively with
+  path compression + union-by-size. Belt-and-suspenders from the UI agent:
+  `SimulationPanel` OpTable `Math.max(...spread)` → reduce; `screenToWorld`
+  guards svgRef-null and zoom=0.
+- **Worktree-base gotcha (recorded so it doesn't bite again):** `isolation:
+  worktree` cuts the agent branch from the v0.1 scaffold (`8bdfe34`), NOT the
+  current branch. First subagent round was wasted re-implementing existing
+  features. Fix: instruct every worktree agent to FIRST
+  `git fetch origin && git merge --ff-only origin/<current-branch>` and verify
+  the test count before working. Re-spawned correctly after that.
+- **Engine agent (Sonnet):** corrected isource/iac polarity to SPICE convention
+  (positive I raises V(p)) across operatingPoint/linearTransient stamping +
+  spiceNetlist deck emission + native OP ground net; added `positiveNumberValue`
+  guards for R/C/L; ngspice-CLI validated; new corner-case tests.
+- **UI agent (Sonnet):** localStorage restore hardened via
+  `schematic/documentValidation.ts` (rejects corrupt/stale autosave); per-tab
+  `restoreCircuit` (no history bleed between tabs); `setNetLabelDirect` fixes
+  undo-entry-per-keystroke; NaN-coord/EmptyState guards; accessible bottom-panel
+  tabs + dialog focus/Escape; many tests.
+- Merged both cleanly. **228 tests passing, typecheck clean, production build OK.**
+- HONEST STATUS: strong schematic editor + interim TS solver + working native
+  ngspice path, now well-hardened. NOT yet a sellable LTspice replacement —
+  see the gap list in the session summary (more device/vendor models, DC sweep
+  /noise/.measure/parametric, subcircuits, end-to-end native-app verification,
+  packaging/signing). Visual UI verification still blocked by the held dev port.
