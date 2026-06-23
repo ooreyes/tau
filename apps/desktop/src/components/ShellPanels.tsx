@@ -81,6 +81,7 @@ export function ExplorerPanel({
   onSearch: () => void;
 }) {
   const examples = EXAMPLE_CIRCUITS.slice(0, 4);
+  const firstExample = examples[0];
 
   return (
     <aside className="explorer-panel" aria-label="Project explorer">
@@ -89,10 +90,12 @@ export function ExplorerPanel({
         <div className="explorer-icons">
           <button title="New scratchpad" aria-label="New scratchpad" onClick={onNewCircuit}>＋</button>
           <button title="Search commands" aria-label="Search commands" onClick={onSearch}>▣</button>
-          <button title="Reload first example" aria-label="Reload first example" onClick={() => onOpenExample(examples[0])}>↻</button>
+          {firstExample && (
+            <button title="Reload first example" aria-label="Reload first example" onClick={() => onOpenExample(firstExample)}>↻</button>
+          )}
         </div>
       </div>
-      <button className="explorer-search" onClick={onSearch}>
+      <button className="explorer-search" aria-label="Search schematics and commands" onClick={onSearch}>
         <svg viewBox="0 0 16 16" aria-hidden="true">
           <circle cx="7" cy="7" r="4.5" />
           <path d="M10.5 10.5 14 14" />
@@ -353,7 +356,7 @@ export function EditorTabs({
       })}
       <button className="editor-tab add" aria-label="New tab" onClick={onNewCircuit}>＋</button>
       <div className="editor-tab-spacer" />
-      {mode === "simulator" && <button className="editor-hide" onClick={onHideSimulator}>× back to schematic</button>}
+      {mode === "simulator" && <button className="editor-hide" aria-label="Return to schematic editor" onClick={onHideSimulator}>× back to schematic</button>}
     </div>
   );
 }
@@ -394,14 +397,29 @@ export function BottomPanel({ mode, result }: { mode: "schematic" | "simulator";
   return (
     <section className="bottom-panel" aria-label={mode === "simulator" ? "Simulation results" : "Component inspector"}>
       <div className="bottom-resize-handle"><span /></div>
-      <div className="bottom-tabs">
-        <button className={activeTab === "primary" ? "active" : ""} onClick={() => setActiveTab("primary")}>
+      <div className="bottom-tabs" role="tablist" aria-label="Panel tabs">
+        <button
+          className={activeTab === "primary" ? "active" : ""}
+          role="tab"
+          aria-selected={activeTab === "primary"}
+          onClick={() => setActiveTab("primary")}
+        >
           {primaryLabel}
         </button>
-        <button className={activeTab === "secondary" ? "active" : ""} onClick={() => setActiveTab("secondary")}>
+        <button
+          className={activeTab === "secondary" ? "active" : ""}
+          role="tab"
+          aria-selected={activeTab === "secondary"}
+          onClick={() => setActiveTab("secondary")}
+        >
           {secondaryLabel}
         </button>
-        <button className={activeTab === "errors" ? "active" : ""} onClick={() => setActiveTab("errors")}>
+        <button
+          className={activeTab === "errors" ? "active" : ""}
+          role="tab"
+          aria-selected={activeTab === "errors"}
+          onClick={() => setActiveTab("errors")}
+        >
           errors{hasError ? " •" : ""}
         </button>
       </div>
@@ -722,7 +740,11 @@ export function SettingsPanel({
   };
 
   return (
-    <div className="settings-backdrop" onPointerDown={onClose}>
+    <div
+      className="settings-backdrop"
+      onPointerDown={onClose}
+      onKeyDown={(e) => { if (e.key === "Escape") { e.stopPropagation(); onClose(); } }}
+    >
       <section className="settings-panel" role="dialog" aria-label="Tau settings" onPointerDown={(event) => event.stopPropagation()}>
         <header>
           <div>
@@ -812,7 +834,12 @@ export function ConfirmDialog({
   onCancel: () => void;
 }) {
   return (
-    <div className="confirm-backdrop" role="presentation" onPointerDown={onCancel}>
+    <div
+      className="confirm-backdrop"
+      role="presentation"
+      onPointerDown={onCancel}
+      onKeyDown={(e) => { if (e.key === "Escape") { e.stopPropagation(); onCancel(); } }}
+    >
       <section
         className="confirm-dialog"
         role="alertdialog"
@@ -827,7 +854,8 @@ export function ConfirmDialog({
         </header>
         <p id="confirm-body">{body}</p>
         <div className="confirm-actions">
-          <button onClick={onCancel}>Cancel</button>
+          {/* autoFocus on Cancel (not Confirm) so Enter doesn't accidentally confirm. */}
+          <button autoFocus onClick={onCancel}>Cancel</button>
           <button className="danger" onClick={onConfirm}>{confirmLabel}</button>
         </div>
       </section>

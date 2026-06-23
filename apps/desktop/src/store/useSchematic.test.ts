@@ -210,4 +210,110 @@ describe("schematic document store", () => {
     expect(saved.probes).toEqual(useSchematic.getState().probes);
     expect(saved.netLabels).toEqual(useSchematic.getState().netLabels);
   });
+
+  it("setNetLabelDirect updates the label without adding an undo entry", () => {
+    useSchematic.getState().loadCircuit(sourceDocument());
+    const historyBefore = useSchematic.getState().past.length;
+
+    useSchematic.getState().setNetLabelDirect(64, 0, "Vout");
+
+    const state = useSchematic.getState();
+    expect(state.netLabels).toEqual([expect.objectContaining({ x: 64, y: 0, text: "Vout" })]);
+    // No undo entry should be pushed by setNetLabelDirect.
+    expect(state.past.length).toBe(historyBefore);
+  });
+
+  it("setNetLabelDirect creates a label when none exists and updates in-place", () => {
+    useSchematic.getState().setNetLabelDirect(32, 16, "GND_REF");
+    expect(useSchematic.getState().netLabels).toHaveLength(1);
+    expect(useSchematic.getState().netLabels[0].text).toBe("GND_REF");
+
+    // Updating same point should mutate in-place, not duplicate.
+    useSchematic.getState().setNetLabelDirect(32, 16, "AGND");
+    expect(useSchematic.getState().netLabels).toHaveLength(1);
+    expect(useSchematic.getState().netLabels[0].text).toBe("AGND");
+  });
+
+  it("setNetLabelDirect removes the label when given empty text", () => {
+    useSchematic.getState().setNetLabelDirect(0, 0, "Temp");
+    expect(useSchematic.getState().netLabels).toHaveLength(1);
+
+    useSchematic.getState().setNetLabelDirect(0, 0, "");
+    expect(useSchematic.getState().netLabels).toHaveLength(0);
+  });
+
+  it("upsertNetLabel always records an undo entry so full-label operations can be undone", () => {
+    useSchematic.getState().loadCircuit(sourceDocument());
+    const historyBefore = useSchematic.getState().past.length;
+
+    useSchematic.getState().upsertNetLabel(64, 0, "Vout");
+
+    expect(useSchematic.getState().past.length).toBe(historyBefore + 1);
+    expect(useSchematic.getState().netLabels).toEqual([expect.objectContaining({ text: "Vout" })]);
+  });
+
+  it("undo history is capped at HISTORY_LIMIT (100) entries", () => {
+    for (let n = 0; n < 110; n += 1) {
+      useSchematic.getState().beginChange();
+    }
+    expect(useSchematic.getState().past.length).toBeLessThanOrEqual(100);
+  });
+
+  it("undo reverts after multiple beginChange calls, redo re-applies", () => {
+    useSchematic.getState().loadCircuit(sourceDocument());
+    const id = useSchematic.getState().components[0].id;
+
+    useSchematic.getState().beginChange();
+    useSchematic.getState().setValue(id, "4.7k");
+    useSchematic.getState().beginChange();
+    useSchematic.getState().setValue(id, "10k");
+
+    useSchematic.getState().undo();
+    expect(useSchematic.getState().components[0].value).toBe("4.7k");
+    useSchematic.getState().undo();
+    expect(useSchematic.getState().components[0].value).toBe("1k");
+
+    useSchematic.getState().redo();
+    expect(useSchematic.getState().components[0].value).toBe("4.7k");
+    useSchematic.getState().redo();
+    expect(useSchematic.getState().components[0].value).toBe("10k");
+  });
+
+  it("undo does nothing when history is empty", () => {
+    useSchematic.getState().undo();
+    const state = useSchematic.getState();
+    expect(state.components).toEqual([]);
+    expect(state.past.length).toBe(0);
+  });
+
+  it("redo does nothing when future is empty", () => {
+    useSchematic.getState().redo();
+    const state = useSchematic.getState();
+    expect(state.future.length).toBe(0);
+  });
+
+  it("loadCircuit fails gracefully when data is valid but clones ids", () => {
+    const doc = sourceDocument();
+    useSchematic.getState().loadCircuit(doc);
+    const loaded = useSchematic.getState();
+    // Fresh ids are assigned on load.
+    expect(loaded.components[0].id).not.toBe("source-r1");
+    // But coordinates and values are preserved.
+    expect(loaded.components[0].x).toBe(96);
+    expect(loaded.components[0].value).toBe("1k");
+  });
+
+  it("deleteSelected removes the component and clears selection", () => {
+    useSchematic.getState().loadCircuit(sourceDocument());
+    const id = useSchematic.getState().components[0].id;
+    useSchematic.getState().select(id);
+    useSchematic.getState().beginChange();
+    useSchematic.getState().deleteSelected();
+
+    const state = useSchematic.getState();
+    expect(state.components).toHaveLength(0);
+    expect(state.selectedId).toBeNull();
+    // Wire is untouched.
+    expect(state.wires).toHaveLength(1);
+  });
 });

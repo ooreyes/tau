@@ -654,7 +654,9 @@ export function Canvas({
 
   const screenToWorld = useCallback(
     (clientX: number, clientY: number) => {
-      const r = svgRef.current!.getBoundingClientRect();
+      const el = svgRef.current;
+      if (!el || view.zoom === 0) return { x: 0, y: 0 };
+      const r = el.getBoundingClientRect();
       return {
         x: (clientX - r.left - view.x) / view.zoom,
         y: (clientY - r.top - view.y) / view.zoom,
@@ -872,6 +874,8 @@ export function Canvas({
       const w = screenToWorld(e.clientX, e.clientY);
       const tx = snap(w.x);
       const ty = snap(w.y);
+      // Skip if coordinates are degenerate (can happen if svgRef was null during screenToWorld).
+      if (!Number.isFinite(tx) || !Number.isFinite(ty)) return;
       const moving = components.find((c) => c.id === d.id);
       // Never let a body slide into another body (pins may still meet).
       if (moving && collides(components, tx, ty, moving.kind, moving.rotation, d.id)) return;

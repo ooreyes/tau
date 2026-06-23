@@ -61,10 +61,23 @@ export function SimulationPanel({
   const probes = useSchematic((s) => s.probes);
   const selectedWireId = useSchematic((s) => s.selectedWireId);
   const netLabels = useSchematic((s) => s.netLabels);
-  const upsertNetLabel = useSchematic((s) => s.upsertNetLabel);
+  const setNetLabelDirect = useSchematic((s) => s.setNetLabelDirect);
   const editingRef = useRef(false);
+  const netLabelEditingRef = useRef(false);
   const selected = components.find((component) => component.id === selectedId) ?? null;
   const selectedWire = wires.find((w) => w.id === selectedWireId) ?? null;
+  // Reset undo-tracking refs whenever the selection changes so each new component
+  // or wire edit gets its own undo entry from the first keystroke.
+  const prevSelectedIdRef = useRef<string | null>(null);
+  if (prevSelectedIdRef.current !== selectedId) {
+    prevSelectedIdRef.current = selectedId;
+    editingRef.current = false;
+  }
+  const prevWireIdRef = useRef<string | null>(null);
+  if (prevWireIdRef.current !== selectedWireId) {
+    prevWireIdRef.current = selectedWireId;
+    netLabelEditingRef.current = false;
+  }
   const selectedEntry = selected ? CATALOG_BY_KIND[selected.kind] : null;
   const opampPart = selected && selected.kind === "opamp" ? findOpAmp(selected.value) : null;
   const warnings = result?.warnings ?? [];
@@ -296,9 +309,18 @@ export function SimulationPanel({
                   netLabels.find((l) => l.x === selectedWire.points[0].x && l.y === selectedWire.points[0].y)?.text ?? ""
                 }
                 placeholder="e.g. Vout"
-                onChange={(event) =>
-                  upsertNetLabel(selectedWire.points[0].x, selectedWire.points[0].y, event.currentTarget.value)
-                }
+                onFocus={() => { netLabelEditingRef.current = false; }}
+                onBlur={() => {
+                  // On blur, commit a final upsert so deletion (empty text) is recorded cleanly.
+                  netLabelEditingRef.current = false;
+                }}
+                onChange={(event) => {
+                  if (!netLabelEditingRef.current) {
+                    beginChange();
+                    netLabelEditingRef.current = true;
+                  }
+                  setNetLabelDirect(selectedWire.points[0].x, selectedWire.points[0].y, event.currentTarget.value);
+                }}
                 spellCheck={false}
               />
             </label>
@@ -456,7 +478,8 @@ function tracePath(trace: Trace, times: number[], min: number, max: number, tMax
 function OpTable({ result }: { result: OperatingPointResult | null }) {
   if (!result) return null;
   if (!result.ok) return <div className="analysis-empty">{result.message}</div>;
-  const maxAbs = Math.max(...result.nets.map((net) => Math.abs(net.voltage)), 0);
+  // Avoid Math.max(...spread) over a potentially large array — use reduce instead.
+  const maxAbs = result.nets.reduce((acc, net) => Math.max(acc, Math.abs(net.voltage)), 0);
   return (
     <>
       <div className="meter-row analysis-meter">
