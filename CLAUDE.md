@@ -1,5 +1,6 @@
 # CLAUDE.md — context for AI assistants working on Tau
 
+> **Read [FEATURE_PARITY.md](FEATURE_PARITY.md) for the LTspice-parity roadmap and the key goal (open the user's own .asc files).**
 > **Read [DESIGN_LOG.md](DESIGN_LOG.md) first.** It is the source of truth for
 > decisions, current state, open questions, and the append-only session log.
 > When you finish a unit of work, **append an entry to the session log** so the
