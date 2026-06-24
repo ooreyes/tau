@@ -45,7 +45,14 @@ Status legend: ✅ done · 🟡 partial · ⬜ not started
 ---
 
 ## 1. File I/O & interoperability  ← **highest leverage for the key goal**
-- ⬜ **Import LTspice `.asc` schematics** (parse `Version/SHEET/WIRE/FLAG/SYMBOL/SYMATTR/WINDOW/TEXT/IOPIN/LINE/RECTANGLE/CIRCLE`). The single biggest unlock.
+- 🟡 **Import LTspice `.asc` schematics** — **parser landed** (`io/ascImport.ts`,
+  13 tests). Parses `Version/SHEET/WIRE/FLAG/SYMBOL/SYMATTR/WINDOW/TEXT/LINE/…`
+  losslessly; validated by parsing **4,012 real LTspice files (49,625 symbols,
+  165,744 wires) with zero throws**, plus `ltspiceTypeToKind` + orientation map.
+  **NEXT:** (a) `ascToSchematic()` — convert to Tau `SchematicDocument` with
+  coordinate scaling; (b) **pin-accurate connectivity** so nets extract (align
+  LTspice symbol pins to Tau pins, or drive nets from LTspice `.asy` pin coords);
+  (c) wire into the Open dialog; (d) parse `TEXT !` directives → analyses.
 - ⬜ **Import LTspice `.asy` symbols** (so library parts render) — 6,280 ship with LTspice.
 - ⬜ Map LTspice `SYMATTR Value/Value2/SpiceModel/ModelFile` to Tau component values.
 - ⬜ Export Tau schematic → `.asc` (round-trip).
