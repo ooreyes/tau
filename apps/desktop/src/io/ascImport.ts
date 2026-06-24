@@ -263,18 +263,19 @@ export const LTSPICE_PINS: Record<string, LtPin[]> = {
 export function transformLtPoint(dx: number, dy: number, orientation: AscOrientation): { x: number; y: number } {
   const mirrored = orientation.startsWith("M");
   const mx = mirrored ? -dx : dx;
+  const z = (n: number) => (n === 0 ? 0 : n); // normalize -0 → 0
   switch (orientation) {
     case "R90":
     case "M90":
-      return { x: -dy, y: mx };
+      return { x: z(-dy), y: z(mx) };
     case "R180":
     case "M180":
-      return { x: -mx, y: -dy };
+      return { x: z(-mx), y: z(-dy) };
     case "R270":
     case "M270":
-      return { x: dy, y: -mx };
+      return { x: z(dy), y: z(-mx) };
     default:
-      return { x: mx, y: dy };
+      return { x: z(mx), y: z(dy) };
   }
 }
 
