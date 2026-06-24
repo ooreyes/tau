@@ -225,6 +225,59 @@ export function ltspiceTypeToKind(type: string): ComponentKind | null {
   return map[leaf] ?? null;
 }
 
+/**
+ * LTspice symbol-local pin offsets (R0), extracted from the installed LTspice
+ * 17.2.4 library (`lib/sym/*.asy`). Order matches LTspice's PIN order, which is
+ * also Tau's pin role order for the mapped kinds (e.g. voltage: + then −; npn:
+ * C, B, E; nmos: D, G, S[, B]). Used by the connectivity step of the importer.
+ *
+ * NOTE: LTspice pin spacing differs from Tau's fixed symbol geometry (e.g. a
+ * resistor is 80 units pin-to-pin in LTspice vs 64 in Tau). Faithful import
+ * therefore needs imported components to carry their OWN pin positions rather
+ * than reuse Tau's built-in geometry — see FEATURE_PARITY.md §1 design note.
+ */
+export interface LtPin {
+  name: string;
+  dx: number;
+  dy: number;
+}
+export const LTSPICE_PINS: Record<string, LtPin[]> = {
+  res: [{ name: "1", dx: 16, dy: 16 }, { name: "2", dx: 16, dy: 96 }],
+  cap: [{ name: "1", dx: 16, dy: 0 }, { name: "2", dx: 16, dy: 64 }],
+  ind: [{ name: "1", dx: 16, dy: 16 }, { name: "2", dx: 16, dy: 96 }],
+  voltage: [{ name: "+", dx: 0, dy: 16 }, { name: "-", dx: 0, dy: 96 }],
+  current: [{ name: "+", dx: 0, dy: 0 }, { name: "-", dx: 0, dy: 80 }],
+  diode: [{ name: "A", dx: 16, dy: 0 }, { name: "K", dx: 16, dy: 64 }],
+  led: [{ name: "A", dx: 16, dy: 0 }, { name: "K", dx: 16, dy: 64 }],
+  zener: [{ name: "A", dx: 16, dy: 0 }, { name: "K", dx: 16, dy: 64 }],
+  schottky: [{ name: "A", dx: 16, dy: 0 }, { name: "K", dx: 16, dy: 64 }],
+  npn: [{ name: "C", dx: 64, dy: 0 }, { name: "B", dx: 0, dy: 48 }, { name: "E", dx: 64, dy: 96 }],
+  pnp: [{ name: "C", dx: 64, dy: 0 }, { name: "B", dx: 0, dy: 48 }, { name: "E", dx: 64, dy: 96 }],
+  nmos: [{ name: "D", dx: 48, dy: 0 }, { name: "G", dx: 0, dy: 80 }, { name: "S", dx: 48, dy: 96 }],
+  pmos: [{ name: "D", dx: 48, dy: 0 }, { name: "G", dx: 0, dy: 80 }, { name: "S", dx: 48, dy: 96 }],
+  sw: [{ name: "A", dx: 0, dy: 16 }, { name: "B", dx: 0, dy: 96 }],
+};
+
+/** Apply an LTspice orientation to a symbol-local point (LTspice screen Y is
+ *  down; rotations are clockwise; M* mirrors across the vertical axis first). */
+export function transformLtPoint(dx: number, dy: number, orientation: AscOrientation): { x: number; y: number } {
+  const mirrored = orientation.startsWith("M");
+  const mx = mirrored ? -dx : dx;
+  switch (orientation) {
+    case "R90":
+    case "M90":
+      return { x: -dy, y: mx };
+    case "R180":
+    case "M180":
+      return { x: -mx, y: -dy };
+    case "R270":
+    case "M270":
+      return { x: dy, y: -mx };
+    default:
+      return { x: mx, y: dy };
+  }
+}
+
 /** Convert an LTspice orientation to a Tau rotation (degrees). Mirror flips are
  *  approximated by their rotation for now (Tau has no mirror flag yet). */
 export function orientationToRotation(orientation: AscOrientation): 0 | 90 | 180 | 270 {

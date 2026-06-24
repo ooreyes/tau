@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseAsc, ltspiceTypeToKind, orientationToRotation } from "./ascImport";
+import { parseAsc, ltspiceTypeToKind, orientationToRotation, transformLtPoint, LTSPICE_PINS } from "./ascImport";
 
 // A representative slice of real LTspice .asc grammar (RC low-pass with a
 // pulse source, a directive, a comment, and a drawing primitive).
@@ -123,5 +123,34 @@ describe("orientationToRotation", () => {
     expect(orientationToRotation("R180")).toBe(180);
     expect(orientationToRotation("R270")).toBe(270);
     expect(orientationToRotation("M90")).toBe(90);
+  });
+});
+
+describe("transformLtPoint", () => {
+  it("is identity at R0", () => {
+    expect(transformLtPoint(16, 96, "R0")).toEqual({ x: 16, y: 96 });
+  });
+  it("rotates clockwise (Y down)", () => {
+    // a point to the right rotates to down at R90
+    expect(transformLtPoint(10, 0, "R90")).toEqual({ x: 0, y: 10 });
+    expect(transformLtPoint(10, 0, "R180")).toEqual({ x: -10, y: 0 });
+    expect(transformLtPoint(10, 0, "R270")).toEqual({ x: 0, y: -10 });
+  });
+  it("mirrors across the vertical axis for M*", () => {
+    expect(transformLtPoint(10, 5, "M0")).toEqual({ x: -10, y: 5 });
+  });
+  it("composes mirror then rotate consistently", () => {
+    // round-trip: applying the same rotation 4 times returns to start
+    let p = { x: 7, y: 13 };
+    for (let i = 0; i < 4; i += 1) p = transformLtPoint(p.x, p.y, "R90");
+    expect(p).toEqual({ x: 7, y: 13 });
+  });
+});
+
+describe("LTSPICE_PINS", () => {
+  it("has correct pin counts for mapped kinds", () => {
+    expect(LTSPICE_PINS.res).toHaveLength(2);
+    expect(LTSPICE_PINS.npn).toHaveLength(3);
+    expect(LTSPICE_PINS.nmos.map((p) => p.name)).toEqual(["D", "G", "S"]);
   });
 });

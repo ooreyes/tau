@@ -53,6 +53,19 @@ Status legend: ✅ done · 🟡 partial · ⬜ not started
   coordinate scaling; (b) **pin-accurate connectivity** so nets extract (align
   LTspice symbol pins to Tau pins, or drive nets from LTspice `.asy` pin coords);
   (c) wire into the Open dialog; (d) parse `TEXT !` directives → analyses.
+  - **Pin data banked:** `LTSPICE_PINS` + `transformLtPoint()` in `io/ascImport.ts`
+    hold the real LTspice symbol-local pin offsets (from `lib/sym/*.asy`) and the
+    orientation transform (clockwise, Y-down, mirror-aware).
+  - **DESIGN DECISION (blocks faithful connectivity):** LTspice pin spacing ≠
+    Tau's fixed symbol geometry (LTspice resistor = 80u pin-to-pin, Tau = 64u),
+    so imported parts cannot reuse Tau's built-in pin geometry and still meet the
+    original wires. Add an optional per-component **`pinOverride` (world pin
+    positions)** to `SchematicComponent` + honor it in `schematic/netlist.ts`
+    extraction (and ideally render imported symbols at their LTspice geometry).
+    Then `ascToSchematic` places each part with `pinOverride = anchor +
+    transformLtPoint(pin)` so nets extract exactly as LTspice intends — no
+    connector-wire hacks (which would risk crossing-shorts, since the extractor
+    unions crossing segments). This is the next concrete task.
 - ⬜ **Import LTspice `.asy` symbols** (so library parts render) — 6,280 ship with LTspice.
 - ⬜ Map LTspice `SYMATTR Value/Value2/SpiceModel/ModelFile` to Tau component values.
 - ⬜ Export Tau schematic → `.asc` (round-trip).
