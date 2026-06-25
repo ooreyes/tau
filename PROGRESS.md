@@ -1,5 +1,56 @@
 # Tau Autobuilder — Progress Log
 
+## 2026-06-25 — auto/ltspice-parity — directives carried on the document + fed to the param scope at every run site (§1 d-param)
+
+### What I did
+- Closed the §1(d) param half: an imported `.asc`'s `.param`/`.func`/`{expr}`
+  values now resolve when the circuit simulates. Previously `ascToSchematic`
+  surfaced directives but they died on the floor — nothing stored them, so the
+  running app never built a param scope from an imported file.
+- Added `directives: string[]` to the document model (`Doc` + `SchematicDocument`)
+  and threaded it through the whole store: `docOf`, `copyDocument`,
+  `copyHistoryEntry`, initial state, `loadCircuit`/`restoreCircuit`/`newCircuit`,
+  persistence subscriber, and a new `setDirectives` action (undoable).
+- Bounded-validated `directives` in `documentValidation` (≤1000 lines, ≤1024
+  chars each, must be strings) so persisted/imported docs stay safe.
+- Added `params?: ParamScope` to the native `Schematic` type; `buildSpiceDeck`
+  already reads `schematic.params`, so native ngspice now resolves params too.
+- `App.tsx`: memoized `params = buildParamScope(directives)` (falls back to
+  `EMPTY_SCOPE` on a cycle/undefined rather than crashing the run) and passed
+  `params` into all six run sites — native + TS `.tran`/`.op`/`.ac` — plus the
+  tab snapshot so directives survive tab switches.
+
+### Files touched
+- src/store/useSchematic.ts (directives field + setDirectives + threading)
+- src/store/useSchematic.test.ts (+3 tests: load/carry, setDirectives undo/redo, newCircuit clears)
+- src/schematic/documentValidation.ts (validate directives array)
+- src/schematic/documentValidation.test.ts (+1 test, validDocument carries directives)
+- src/engine/nativeSpice.ts (params on Schematic type)
+- src/io/ascImport.test.ts (+1 integration test: directives → buildParamScope → resolved value)
+- src/App.tsx (memoized param scope + params at every run site + snapshot)
+- FEATURE_PARITY.md (§1 d-param ✅; §5 .param NEXT note updated)
+
+### Tests
+329 passing (was 324; +5 new). Typecheck clean.
+
+### FEATURE_PARITY items updated
+- §1 import `.asc`: (d-param) directives-on-document + param-scope wiring ✅.
+  Line stays 🟡 overall — (c) Open dialog and (d-analyses) directive→analysis
+  mapping still pending.
+- §5 `.param` NEXT note resolved (scope now built from imported directives).
+
+### UX issues found
+- None this run (no UI surface changed; the directive plumbing is invisible until
+  an Open dialog (§1 c) or a canvas directive editor (§2) exposes it).
+
+### Next step
+Build §1(c): an Open dialog / file picker that runs `parseAsc` → `ascToSchematic`
+and calls `loadCircuit(doc)` with `directives` populated, so a user can actually
+open a `.asc`. Then §1(d-analyses): parse the stored `.tran`/`.ac` directives into
+`AnalysisOptions` (stopTime/steps, start/stop Hz) so the imported analysis runs
+with the circuit's own settings instead of the hardcoded defaults.
+
+
 ## 2026-06-25 — auto/ltspice-parity — LTspice expression engine + .param/.func resolved through every solver (§5)
 
 ### What I did
