@@ -1,5 +1,43 @@
 # Tau Autobuilder — Progress Log
 
+## 2026-06-25T23:57Z — auto/ltspice-parity — `.dc` DC-sweep solver + directive parser (§4)
+
+### What I did
+- Added `simulation/dcSweep.ts`, a self-contained `.dc` analysis layer:
+  - `parseDcDirective(line)` parses `.dc <src> <start> <stop> <incr>` (SI
+    suffixes via `parseQuantity`, leading `.`/`!` stripped, returns `null` on
+    non-`dc`/malformed/unparseable lines — `parseQuantity` throws, so wrapped).
+  - `runDcSweep(schematic, spec)` builds the ordered sweep points (ascending or
+    descending, endpoint-inclusive with a 1e-9 fudge), overrides the named
+    independent source's `value` per step, and re-solves via `runOperatingPoint`
+    — so it inherits the exact same MNA solver with zero duplicated stamping.
+    Returns a per-net voltage series aligned to the sweep index. Guards a
+    zero increment (no infinite loop) and a point count past MAX_POINTS=100001.
+- This is the solver foundation; UI dispatch (a `.dc` run mode + a sweep
+  waveform pane) and mapping an imported `.dc` directive to it are the next step.
+
+### Files touched
+- src/simulation/dcSweep.ts (new)
+- src/simulation/dcSweep.test.ts (new, 9 tests)
+- FEATURE_PARITY.md (§4 `.dc` ⬜ → 🟡)
+
+### Tests
+354 passing (was 345; +9 new). Typecheck clean. Hand-computed divider proof:
+V1 swept 0→10 step 2 → midpoint net = [0,1,2,3,4,5] (Vsweep/2); descending
+sweep, unknown-source / non-source / zero-increment / oversized-range all error.
+
+### FEATURE_PARITY items updated
+- §4 `.dc` DC sweep → 🟡 (solver + parser done; UI + directive mapping pending).
+
+### UX issues found
+- None (no UI surface this increment).
+
+### Next step
+Wire `runDcSweep` into the app: add a `.dc` run mode (dispatch when the active
+circuit's directives contain a `.dc` line via `parseDcDirective`) and a sweep
+plot pane in `SimulationPanel` (x = swept value, y = chosen net traces). Then
+the imported class-d/Draft circuits with `.dc` directives run end-to-end.
+
 ## 2026-06-25T23:53Z — auto/ltspice-parity — Open dialog imports `.asc` files (§1c)
 
 ### What I did
