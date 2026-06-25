@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
 import "./App.css";
 import { Toolbar } from "./components/Toolbar";
@@ -31,6 +31,7 @@ import {
 } from "./simulation/linearTransient";
 import { runOperatingPoint, type OperatingPointResult } from "./simulation/operatingPoint";
 import { runAcSweep, type AcResult } from "./simulation/acSweep";
+import { buildParamScope, EMPTY_SCOPE, type ParamScope } from "./simulation/paramScope";
 import {
   isNativeSpiceRuntime,
   MAX_NATIVE_OUTPUT_POINTS,
@@ -103,6 +104,7 @@ function App() {
   const newCircuit = useSchematic((s) => s.newCircuit);
   const probes = useSchematic((s) => s.probes);
   const netLabels = useSchematic((s) => s.netLabels);
+  const directives = useSchematic((s) => s.directives);
   const past = useSchematic((s) => s.past);
   const future = useSchematic((s) => s.future);
   const cancel = useSchematic((s) => s.cancel);
@@ -150,11 +152,24 @@ function App() {
     setRunState(state);
   }, []);
 
+  // Build the param scope (.param/.func) from the document's directives once per
+  // change so every analysis resolves {expr}/{param} values the same way. A bad
+  // set of directives (cycle/undefined) falls back to an empty scope rather than
+  // crashing the run; the per-value resolver still surfaces unresolved refs.
+  const params = useMemo<ParamScope>(() => {
+    if (directives.length === 0) return EMPTY_SCOPE;
+    try {
+      return buildParamScope(directives);
+    } catch {
+      return EMPTY_SCOPE;
+    }
+  }, [directives]);
+
   const executeTransient = useCallback(async (options: AnalysisOptions) => {
     const requestId = ++analysisRequestRef.current;
     setAnalysisRunning(true);
     try {
-      const result = await runNativeTransient({ components, wires, netLabels }, options) ?? runTransientAnalysis({ components, wires, netLabels }, options);
+      const result = await runNativeTransient({ components, wires, netLabels, params }, options) ?? runTransientAnalysis({ components, wires, netLabels, params }, options);
       if (analysisRequestRef.current !== requestId) return;
       setAnalysis(result);
       setRunState(result.ok ? "complete" : "error");
@@ -170,7 +185,7 @@ function App() {
     } finally {
       if (analysisRequestRef.current === requestId) setAnalysisRunning(false);
     }
-  }, [components, wires, netLabels]);
+  }, [components, wires, netLabels, params]);
 
   const runAnalysis = useCallback(async () => {
     await executeTransient(analysisOptions);
@@ -186,7 +201,7 @@ function App() {
     const requestId = ++analysisRequestRef.current;
     setAnalysisRunning(true);
     try {
-      const result = await runNativeOperatingPoint({ components, wires, netLabels }) ?? runOperatingPoint({ components, wires, netLabels });
+      const result = await runNativeOperatingPoint({ components, wires, netLabels, params }) ?? runOperatingPoint({ components, wires, netLabels, params });
       if (analysisRequestRef.current !== requestId) return;
       setOpAnalysis(result);
     } catch (error) {
@@ -195,16 +210,16 @@ function App() {
     } finally {
       if (analysisRequestRef.current === requestId) setAnalysisRunning(false);
     }
-  }, [components, wires, netLabels]);
+  }, [components, wires, netLabels, params]);
 
   const runAcAnalysis = useCallback(async () => {
     const requestId = ++analysisRequestRef.current;
     setAnalysisRunning(true);
     try {
       const result = await runNativeAcSweep(
-        { components, wires, netLabels },
+        { components, wires, netLabels, params },
         { startHz: 10, stopHz: 1e6, pointsPerDecade: 20 },
-      ) ?? runAcSweep({ components, wires, netLabels }, { startHz: 10, stopHz: 1e6, pointsPerDecade: 20 });
+      ) ?? runAcSweep({ components, wires, netLabels, params }, { startHz: 10, stopHz: 1e6, pointsPerDecade: 20 });
       if (analysisRequestRef.current !== requestId) return;
       setAcAnalysis(result);
     } catch (error) {
@@ -213,7 +228,7 @@ function App() {
     } finally {
       if (analysisRequestRef.current === requestId) setAnalysisRunning(false);
     }
-  }, [components, wires, netLabels]);
+  }, [components, wires, netLabels, params]);
 
   const stepAnalysis = useCallback(async () => {
     // Native ngspice may return an endpoint in addition to requested samples.
@@ -245,11 +260,11 @@ function App() {
       list.map((tab) => (tab.id === activeId
         ? {
             ...tab,
-            doc: { components, wires, probes, netLabels },
+            doc: { components, wires, probes, netLabels, directives },
             history: { past, future },
           }
         : tab)),
-    [activeId, components, wires, probes, netLabels, past, future],
+    [activeId, components, wires, probes, netLabels, directives, past, future],
   );
 
   // Open a document: focus its tab if already open, otherwise add a new one.

@@ -20,6 +20,8 @@ interface Doc {
   counters: Record<string, number>;
   probes: Probe[];
   netLabels: NetLabel[];
+  /** SPICE directives (`.param`/`.tran`/`.ac`/`.meas`/…) carried by the document. */
+  directives: string[];
 }
 
 export interface SchematicDocument {
@@ -29,6 +31,12 @@ export interface SchematicDocument {
   probes?: Probe[];
   /** Optional for compatibility with Tau v1 files. */
   netLabels?: NetLabel[];
+  /**
+   * Optional SPICE directive lines (leading "." or "!" already stripped to a
+   * bare directive, e.g. `param Rload=10k`, `tran 1m`). Set by the LTspice
+   * importer from `TEXT !` lines; absent for legacy/v1 files.
+   */
+  directives?: string[];
 }
 
 export interface SchematicHistory {
@@ -85,6 +93,11 @@ interface SchematicState extends Doc {
   deleteSelected: () => void;
   setValue: (id: string, value: string) => void;
 
+  /** SPICE directives carried by the document (built into the param scope at run time). */
+  directives: string[];
+  /** Replace the document's directive lines (used by the LTspice importer / directive editor). */
+  setDirectives: (directives: string[]) => void;
+
   loadCircuit: (doc: SchematicDocument) => void;
   /** Restore a trusted in-memory tab snapshot without leaking history between tabs. */
   restoreCircuit: (doc: SchematicDocument, history: SchematicHistory) => void;
@@ -109,6 +122,7 @@ const docOf = (s: Doc): Doc => ({
   counters: s.counters,
   probes: s.probes,
   netLabels: s.netLabels,
+  directives: s.directives,
 });
 
 /** Rebuild designator counters from labels so loaded circuits keep numbering correct. */
@@ -128,6 +142,7 @@ function copyDocument(doc: SchematicDocument, freshIds: boolean): SchematicDocum
     wires: doc.wires.map((w) => ({ id: freshIds ? nanoid(6) : w.id, points: w.points.map((p) => ({ ...p })) })),
     probes: (doc.probes ?? []).map((probe) => ({ ...probe, id: freshIds ? nanoid(6) : probe.id })),
     netLabels: (doc.netLabels ?? []).map((label) => ({ ...label, id: freshIds ? nanoid(6) : label.id })),
+    directives: [...(doc.directives ?? [])],
   };
 }
 
@@ -143,6 +158,7 @@ function copyHistoryEntry(entry: Doc): Doc {
     counters: { ...entry.counters },
     probes: document.probes ?? [],
     netLabels: document.netLabels ?? [],
+    directives: document.directives ?? [],
   };
 }
 
@@ -191,10 +207,13 @@ export const useSchematic = create<SchematicState>()((set) => {
     placeRotation: 0,
     probes: initialDoc?.probes ?? [],
     netLabels: initialDoc?.netLabels ?? [],
+    directives: initialDoc?.directives ?? [],
     past: [],
     future: [],
 
     beginChange: () => set((s) => recordInto(s)),
+
+    setDirectives: (directives) => set((s) => ({ ...recordInto(s), directives: [...directives] })),
 
     undo: () =>
       set((s) => {
@@ -347,6 +366,7 @@ export const useSchematic = create<SchematicState>()((set) => {
           counters: deriveCounters(cloned.components),
           probes: cloned.probes ?? [],
           netLabels: cloned.netLabels ?? [],
+          directives: cloned.directives ?? [],
           past: [],
           future: [],
           selectedId: null,
@@ -364,6 +384,7 @@ export const useSchematic = create<SchematicState>()((set) => {
           counters: deriveCounters(restored.components),
           probes: restored.probes ?? [],
           netLabels: restored.netLabels ?? [],
+          directives: restored.directives ?? [],
           past: history.past.map(copyHistoryEntry).slice(-HISTORY_LIMIT),
           future: history.future.map(copyHistoryEntry).slice(0, HISTORY_LIMIT),
           selectedId: null,
@@ -379,6 +400,7 @@ export const useSchematic = create<SchematicState>()((set) => {
         counters: {},
         probes: [],
         netLabels: [],
+        directives: [],
         past: [],
         future: [],
         selectedId: null,
@@ -395,12 +417,14 @@ useSchematic.subscribe((state, prev) => {
     || state.wires !== prev.wires
     || state.probes !== prev.probes
     || state.netLabels !== prev.netLabels
+    || state.directives !== prev.directives
   ) {
     persist({
       components: state.components,
       wires: state.wires,
       probes: state.probes,
       netLabels: state.netLabels,
+      directives: state.directives,
     });
   }
 });

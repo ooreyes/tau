@@ -9,6 +9,8 @@ const MAX_WIRE_POINTS = 100_000;
 const MAX_ABS_COORDINATE = 1_000_000;
 const MAX_TEXT_LENGTH = 160;
 const MAX_ID_LENGTH = 128;
+const MAX_DIRECTIVES = 1_000;
+const MAX_DIRECTIVE_LENGTH = 1_024;
 const ROTATIONS = new Set<Rotation>([0, 90, 180, 270]);
 const PROBE_COLORS = new Set([
   "var(--trace-red)",
@@ -111,8 +113,10 @@ export function validateSchematicDocument(value: unknown): SchematicDocument {
   }
   const probes = source.probes === undefined ? [] : source.probes;
   const netLabels = source.netLabels === undefined ? [] : source.netLabels;
+  const directives = source.directives === undefined ? [] : source.directives;
   if (!Array.isArray(probes) || probes.length > MAX_COMPONENTS) fail("probes must be a bounded array.");
   if (!Array.isArray(netLabels) || netLabels.length > MAX_COMPONENTS) fail("netLabels must be a bounded array.");
+  if (!Array.isArray(directives) || directives.length > MAX_DIRECTIVES) fail("directives must be a bounded array.");
 
   const remainingPoints = { value: MAX_WIRE_POINTS };
   return {
@@ -120,5 +124,6 @@ export function validateSchematicDocument(value: unknown): SchematicDocument {
     wires: source.wires.map((candidate, index) => wire(candidate, index, remainingPoints)),
     probes: probes.map(probe),
     netLabels: netLabels.map(netLabel),
+    directives: directives.map((value, index) => text(value, `directives[${index}]`, MAX_DIRECTIVE_LENGTH)),
   };
 }

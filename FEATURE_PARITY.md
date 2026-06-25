@@ -65,10 +65,19 @@ Status legend: ✅ done · 🟡 partial · ⬜ not started
     same-named FLAGs into one net, treats `0`/`GND` as ground, and names nets
     after their label (so `V(vcc)` resolves). Threaded through the native +
     TS-solver paths and `App.tsx`. (Previously net labels were cosmetic.)
-  - **NEXT:** (c) wire into the Open dialog (file picker → store load);
-    (d) map parsed `TEXT !` directives → runnable analyses (`.tran`/`.ac`/`.meas`/
-    `.param`); render imported symbols at their LTspice geometry; bank `.asy` pins
-    for opamps/pots/transformers (currently placed but flagged "no banked pins").
+  - ✅ **(d-param) directives carried on the document + fed into the param scope** —
+    `directives: string[]` added to `SchematicDocument`/`Doc` (store, persistence,
+    undo/redo, tab snapshots, validation) with a `setDirectives` action. `App.tsx`
+    memoizes `buildParamScope(directives)` and threads `params` into **all six run
+    sites** (native + TS `.tran`/`.op`/`.ac`), so an imported `.asc`'s `.param`/
+    `.func`/`{expr}` values resolve when simulated. End-to-end proof in
+    `ascImport.test.ts`: a parsed `!.param Rload=4.7k` + `Value {Rload}` resolves
+    to `4700` through `buildParamScope` → `resolveComponentValues`.
+  - **NEXT:** (c) wire into the Open dialog (file picker → store load, populating
+    `directives` from `ascToSchematic`); (d-analyses) map parsed `.tran`/`.ac`/
+    `.meas` directives → the matching analysis runner + options; render imported
+    symbols at their LTspice geometry; bank `.asy` pins for opamps/pots/
+    transformers (currently placed but flagged "no banked pins").
   - **Pin data banked:** `LTSPICE_PINS` + `transformLtPoint()` in `io/ascImport.ts`
     hold the real LTspice symbol-local pin offsets (from `lib/sym/*.asy`) and the
     orientation transform (clockwise, Y-down, mirror-aware).
@@ -140,8 +149,9 @@ zener, opamp, NMOS, PMOS, NPN, PNP, switch, transformer, testpoint, ground.
   cycle/undefined detection) + `resolveComponentValues` threaded into **all four
   solve paths** (`linearTransient`/`operatingPoint`/`acSweep`/`spiceNetlist`).
   End-to-end proof in `paramIntegration.test.ts`: a `{Vsrc}/{Rtop}/{Rbot}`
-  divider solves to the hand-computed 9 V. **NEXT (§1 d):** store directives on
-  the document so the running app builds the scope from an imported `.asc`.
+  divider solves to the hand-computed 9 V. **§1(d-param) done:** `directives` now
+  live on the document and `App.tsx` builds the scope (`buildParamScope`) and
+  passes `params` to every run site, so an imported `.asc` resolves its params.
 - ✅ `.func` user functions — used 13× — `parseFuncDirective` + call binding in
   `simulation/expr.ts` (args bound into a child scope; nested funcs resolve)
 - ✅ `{expression}` evaluation in any value field (the LTspice braces syntax) —

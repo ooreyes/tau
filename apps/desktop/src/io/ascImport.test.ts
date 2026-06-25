@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { parseAsc, ltspiceTypeToKind, orientationToRotation, transformLtPoint, LTSPICE_PINS, ascToSchematic } from "./ascImport";
 import { extractCircuit } from "../schematic/netlist";
+import { buildParamScope, resolveComponentValues } from "../simulation/paramScope";
 
 // A representative slice of real LTspice .asc grammar (RC low-pass with a
 // pulse source, a directive, a comment, and a drawing primitive).
@@ -199,6 +200,26 @@ TEXT 0 40 Left 2 ;a note`;
     const doc = ascToSchematic(parseAsc(SRC));
     expect(doc.directives).toEqual([".tran 1m"]);
     expect(doc.comments).toEqual(["a note"]);
+  });
+
+  it("imported directives build a param scope that resolves {expr} component values", () => {
+    // §1(d): a real imported circuit's `.param`/`{expr}` round-trip — the
+    // directives ascToSchematic surfaces must drive the param scope that the
+    // solvers resolve component values against.
+    const PARAMETRIZED = `Version 4
+SHEET 1 880 680
+SYMBOL res 336 192 R90
+SYMATTR InstName R1
+SYMATTR Value {Rload}
+TEXT 0 0 Left 2 !.param Rload=4.7k
+TEXT 0 40 Left 2 !.tran 1m`;
+    const doc = ascToSchematic(parseAsc(PARAMETRIZED));
+    expect(doc.directives).toEqual([".param Rload=4.7k", ".tran 1m"]);
+
+    const scope = buildParamScope(doc.directives);
+    const resolved = resolveComponentValues(doc.components, scope);
+    const r1 = resolved.find((c) => c.label === "R1");
+    expect(r1?.value).toBe("4700"); // {Rload} → 4.7k → 4700, no braces left
   });
 
   it("produces a circuit whose nets extract exactly as LTspice intends", () => {

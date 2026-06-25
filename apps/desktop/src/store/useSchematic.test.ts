@@ -58,6 +58,7 @@ function resetStore() {
     placeRotation: 0,
     probes: [],
     netLabels: [],
+    directives: [],
     past: [],
     future: [],
   });
@@ -124,6 +125,41 @@ describe("schematic document store", () => {
     incoming.netLabels![0].text = "MUTATED";
     expect(useSchematic.getState().probes[0].x).toBe(64);
     expect(useSchematic.getState().netLabels[0].text).toBe("OUT");
+  });
+
+  it("carries imported SPICE directives onto the document", () => {
+    const incoming: SchematicDocument = {
+      ...sourceDocument(),
+      directives: [".param Rload=10k", ".tran 1m"],
+    };
+
+    useSchematic.getState().loadCircuit(incoming);
+
+    const loaded = useSchematic.getState();
+    expect(loaded.directives).toEqual([".param Rload=10k", ".tran 1m"]);
+
+    // The store keeps its own copy — caller mutations cannot corrupt it.
+    incoming.directives![0] = ".param Rload=999";
+    expect(useSchematic.getState().directives[0]).toBe(".param Rload=10k");
+  });
+
+  it("setDirectives replaces directives and is undoable", () => {
+    useSchematic.getState().loadCircuit({ ...sourceDocument(), directives: [".param a=1"] });
+
+    useSchematic.getState().setDirectives([".param a=2", ".func f(x)=x*2"]);
+    expect(useSchematic.getState().directives).toEqual([".param a=2", ".func f(x)=x*2"]);
+
+    useSchematic.getState().undo();
+    expect(useSchematic.getState().directives).toEqual([".param a=1"]);
+
+    useSchematic.getState().redo();
+    expect(useSchematic.getState().directives).toEqual([".param a=2", ".func f(x)=x*2"]);
+  });
+
+  it("starts each fresh document without residual directives", () => {
+    useSchematic.getState().loadCircuit({ ...sourceDocument(), directives: [".param a=1"] });
+    useSchematic.getState().newCircuit();
+    expect(useSchematic.getState().directives).toEqual([]);
   });
 
   it("restores a focused parameter edit through undo and redo", () => {

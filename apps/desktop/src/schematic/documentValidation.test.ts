@@ -10,6 +10,7 @@ const validDocument = () => ({
   ],
   probes: [{ id: "p1", x: 64, y: 0, color: "var(--trace-red)" }],
   netLabels: [{ id: "n1", x: 64, y: 0, text: "OUT" }],
+  directives: [".param Rload=10k", ".tran 1m"],
 });
 
 describe("schematic document validation", () => {
@@ -44,11 +45,20 @@ describe("schematic document validation", () => {
     expect(() => validateSchematicDocument(42)).toThrow();
   });
 
-  it("accepts documents with missing optional probes and netLabels arrays", () => {
+  it("accepts documents with missing optional probes, netLabels, and directives arrays", () => {
     const minimal = { components: [], wires: [] };
     const result = validateSchematicDocument(minimal);
     expect(result.probes).toEqual([]);
     expect(result.netLabels).toEqual([]);
+    expect(result.directives).toEqual([]);
+  });
+
+  it("preserves SPICE directives and rejects a non-string directive", () => {
+    expect(validateSchematicDocument(validDocument()).directives).toEqual([".param Rload=10k", ".tran 1m"]);
+
+    const bad = validDocument();
+    (bad.directives as unknown[])[0] = 42;
+    expect(() => validateSchematicDocument(bad)).toThrow(/directives\[0\] must be a string/i);
   });
 
   it("rejects wires with fewer than two points", () => {
