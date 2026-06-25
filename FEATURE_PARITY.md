@@ -73,11 +73,18 @@ Status legend: ✅ done · 🟡 partial · ⬜ not started
     `.func`/`{expr}` values resolve when simulated. End-to-end proof in
     `ascImport.test.ts`: a parsed `!.param Rload=4.7k` + `Value {Rload}` resolves
     to `4700` through `buildParamScope` → `resolveComponentValues`.
+  - ✅ **(d-analyses `.tran`/`.ac`) directive → analysis options** — `io/
+    directiveAnalysis.ts` parses `.tran <Tstep> <Tstop> …` → `{ stopTime, steps }`
+    and `.ac <dec|oct|lin> <N> <Fstart> <Fstop>` → `{ startHz, stopHz,
+    pointsPerDecade }` (SI suffixes, modifiers ignored, lin/oct normalized to
+    points-per-decade). `App.tsx` `adoptDirectiveOptions` applies an imported
+    circuit's own `.tran` window on open / tab-switch, so it simulates as
+    authored instead of with the editor default. 14 unit tests, hand-computed.
   - **NEXT:** (c) wire into the Open dialog (file picker → store load, populating
-    `directives` from `ascToSchematic`); (d-analyses) map parsed `.tran`/`.ac`/
-    `.meas` directives → the matching analysis runner + options; render imported
-    symbols at their LTspice geometry; bank `.asy` pins for opamps/pots/
-    transformers (currently placed but flagged "no banked pins").
+    `directives` from `ascToSchematic`); map `.meas`/`.dc`/`.step` directives
+    (need those analyses first — §4); render imported symbols at their LTspice
+    geometry; bank `.asy` pins for opamps/pots/transformers (currently placed but
+    flagged "no banked pins").
   - **Pin data banked:** `LTSPICE_PINS` + `transformLtPoint()` in `io/ascImport.ts`
     hold the real LTspice symbol-local pin offsets (from `lib/sym/*.asy`) and the
     orientation transform (clockwise, Y-down, mirror-aware).

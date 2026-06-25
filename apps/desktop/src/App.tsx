@@ -32,6 +32,7 @@ import {
 import { runOperatingPoint, type OperatingPointResult } from "./simulation/operatingPoint";
 import { runAcSweep, type AcResult } from "./simulation/acSweep";
 import { buildParamScope, EMPTY_SCOPE, type ParamScope } from "./simulation/paramScope";
+import { analysesFromDirectives } from "./io/directiveAnalysis";
 import {
   isNativeSpiceRuntime,
   MAX_NATIVE_OUTPUT_POINTS,
@@ -267,6 +268,13 @@ function App() {
     [activeId, components, wires, probes, netLabels, directives, past, future],
   );
 
+  // Adopt an imported circuit's own `.tran` settings (stop time / sample count)
+  // so it simulates as authored instead of with the editor's default window.
+  const adoptDirectiveOptions = useCallback((doc: SchematicDocument) => {
+    const { tran } = analysesFromDirectives(doc.directives ?? []);
+    if (tran) setAnalysisOptions(tran);
+  }, []);
+
   // Open a document: focus its tab if already open, otherwise add a new one.
   const openDocument = useCallback((doc: SchematicDocument, title: string) => {
     const snap = snapshotActive(tabs);
@@ -281,10 +289,11 @@ function App() {
       setActiveId(id);
       loadCircuit(doc);
     }
+    adoptDirectiveOptions(doc);
     invalidateAnalysis();
     setMode("schematic");
     showNotice(`Opened ${title}`);
-  }, [tabs, snapshotActive, loadCircuit, invalidateAnalysis, showNotice]);
+  }, [tabs, snapshotActive, loadCircuit, adoptDirectiveOptions, invalidateAnalysis, showNotice]);
 
   const openExample = useCallback((example: ExampleCircuit) => {
     openDocument(example, `${example.name.toLowerCase().replace(/\s+/g, "-")}.sim`);
@@ -298,9 +307,11 @@ function App() {
     if (!target) return;
     setTabs(snap);
     setActiveId(id);
-    restoreCircuit(target.doc ?? blankDocument(), target.history);
+    const restored = target.doc ?? blankDocument();
+    restoreCircuit(restored, target.history);
+    adoptDirectiveOptions(restored);
     invalidateAnalysis();
-  }, [activeId, tabs, snapshotActive, restoreCircuit, invalidateAnalysis]);
+  }, [activeId, tabs, snapshotActive, restoreCircuit, adoptDirectiveOptions, invalidateAnalysis]);
 
   const startNewCircuit = useCallback(() => {
     const snap = snapshotActive(tabs);
