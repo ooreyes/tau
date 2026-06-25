@@ -452,3 +452,13 @@ export function ascToSchematic(doc: AscDocument): AscImportResult {
 
   return { components, wires, netLabels, directives, comments, warnings };
 }
+
+/**
+ * Parse raw LTspice `.asc` text and convert it to Tau schematic content in one
+ * step. Convenience wrapper over `parseAsc` + `ascToSchematic` for the Open
+ * dialog and tests. Throws (from `parseAsc`) only on a non-LTspice file; an
+ * empty/contentless `.asc` yields an empty-but-valid result.
+ */
+export function importAsc(text: string): AscImportResult {
+  return ascToSchematic(parseAsc(text));
+}

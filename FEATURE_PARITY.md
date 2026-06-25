@@ -80,11 +80,20 @@ Status legend: ✅ done · 🟡 partial · ⬜ not started
     points-per-decade). `App.tsx` `adoptDirectiveOptions` applies an imported
     circuit's own `.tran` window on open / tab-switch, so it simulates as
     authored instead of with the editor default. 14 unit tests, hand-computed.
-  - **NEXT:** (c) wire into the Open dialog (file picker → store load, populating
-    `directives` from `ascToSchematic`); map `.meas`/`.dc`/`.step` directives
-    (need those analyses first — §4); render imported symbols at their LTspice
-    geometry; bank `.asy` pins for opamps/pots/transformers (currently placed but
-    flagged "no banked pins").
+  - ✅ **(c) Open dialog wired to the importer** — the toolbar **Open** button's
+    file picker now accepts `.asc` (`accept=".tau.json,.asc,application/json"`).
+    `ShellPanels.openCircuit` branches on extension: `.asc` → `importAsc(text)`
+    (`parseAsc`→`ascToSchematic`, new convenience export) → builds a
+    `SchematicDocument` with `components/wires/netLabels/directives` and calls
+    `onOpenCircuit` → `App.openDocument`, which already adopts the imported
+    `.tran`/`.ac` window (`adoptDirectiveOptions`) and builds the param scope.
+    Empty/non-LTspice files error cleanly ("No schematic content found …");
+    banked-pin warnings logged non-fatally. Real-file proof: opening
+    `class-d_starter.asc` (15 comps/46 wires/4 directives), `deadtime.asc`
+    (18/59), `Draft1.asc` (4/10/1) all load.
+  - **NEXT:** map `.meas`/`.dc`/`.step` directives (need those analyses first —
+    §4); render imported symbols at their LTspice geometry; bank `.asy` pins for
+    opamps/pots/transformers (currently placed but flagged "no banked pins").
   - **Pin data banked:** `LTSPICE_PINS` + `transformLtPoint()` in `io/ascImport.ts`
     hold the real LTspice symbol-local pin offsets (from `lib/sym/*.asy`) and the
     orientation transform (clockwise, Y-down, mirror-aware).

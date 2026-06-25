@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseAsc, ltspiceTypeToKind, orientationToRotation, transformLtPoint, LTSPICE_PINS, ascToSchematic } from "./ascImport";
+import { parseAsc, ltspiceTypeToKind, orientationToRotation, transformLtPoint, LTSPICE_PINS, ascToSchematic, importAsc } from "./ascImport";
 import { extractCircuit } from "../schematic/netlist";
 import { buildParamScope, resolveComponentValues } from "../simulation/paramScope";
 
@@ -242,6 +242,22 @@ SYMATTR InstName M1`));
     const pins = Object.fromEntries((m1?.pinOverride ?? []).map((p) => [p.id, { x: p.x, y: p.y }]));
     expect(Object.keys(pins).sort()).toEqual(["b", "d", "g", "s"]);
     expect(pins.b).toEqual(pins.s); // bulk tied to source
+  });
+
+  it("importAsc parses raw text and converts in one step (Open-dialog path)", () => {
+    const result = importAsc(SAMPLE);
+    // Equivalent to ascToSchematic(parseAsc(text)).
+    const direct = ascToSchematic(parseAsc(SAMPLE));
+    expect(result.components.length).toBe(direct.components.length);
+    expect(result.wires.length).toBe(direct.wires.length);
+    expect(result.components.some((c) => c.label === "R1")).toBe(true);
+    expect(result.wires.length).toBeGreaterThan(0);
+  });
+
+  it("importAsc yields empty content for a non-LTspice file (Open dialog guards on this)", () => {
+    const result = importAsc("this is not a schematic\nrandom text\n");
+    expect(result.components).toHaveLength(0);
+    expect(result.wires).toHaveLength(0);
   });
 
   it("skips unmappable symbols with a warning rather than throwing", () => {

@@ -4,6 +4,7 @@ import { MAX_SCHEMATIC_FILE_BYTES, validateSchematicDocument } from "../schemati
 import { ComponentSymbol } from "../schematic/symbols";
 import type { SchematicComponent } from "../schematic/types";
 import { decodeParams, encodeParams, paramFields } from "../schematic/params";
+import { importAsc } from "../io/ascImport";
 import { EngineeringInput } from "./EngineeringInput";
 import { useSchematic, type SchematicDocument } from "../store/useSchematic";
 import { EXAMPLE_CIRCUITS, type ExampleCircuit } from "../examples/circuits";
@@ -187,7 +188,27 @@ export function EditorToolbar({
       if (file.size > MAX_SCHEMATIC_FILE_BYTES) {
         throw new Error(`Circuit files must be smaller than ${MAX_SCHEMATIC_FILE_BYTES / (1024 * 1024)} MB.`);
       }
-      const document = validateSchematicDocument(JSON.parse(await file.text()));
+      const text = await file.text();
+      if (/\.asc$/i.test(file.name)) {
+        // LTspice schematic import (FEATURE_PARITY §1c).
+        const result = importAsc(text);
+        if (result.components.length === 0 && result.wires.length === 0) {
+          throw new Error("No schematic content found — is this a valid LTspice .asc file?");
+        }
+        const document: SchematicDocument = {
+          components: result.components,
+          wires: result.wires,
+          netLabels: result.netLabels,
+          directives: result.directives,
+        };
+        onOpenCircuit(document, file.name.replace(/\.asc$/i, ".sim"));
+        if (result.warnings.length > 0) {
+          // Non-fatal: some vendor symbols lack banked pin geometry.
+          console.warn(`Imported ${file.name} with ${result.warnings.length} warning(s):`, result.warnings);
+        }
+        return;
+      }
+      const document = validateSchematicDocument(JSON.parse(text));
       onOpenCircuit(document, file.name.replace(/\.tau\.json$/i, ".sim"));
     } catch (error) {
       window.alert(error instanceof Error ? error.message : "Could not open circuit file.");
@@ -230,7 +251,7 @@ export function EditorToolbar({
         ref={fileInputRef}
         className="file-input"
         type="file"
-        accept=".tau.json,application/json"
+        accept=".tau.json,.asc,application/json"
         onChange={(event) => {
           const file = event.currentTarget.files?.[0];
           if (file) void openCircuit(file);
