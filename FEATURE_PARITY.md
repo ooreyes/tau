@@ -148,7 +148,14 @@ zener, opamp, NMOS, PMOS, NPN, PNP, switch, transformer, testpoint, ground.
 - ✅ `.op` Operating point — TS + native — `operatingPoint.ts`
 - ✅ `.tran` Transient — TS + native — `linearTransient.ts`
 - ✅ `.ac` AC sweep (Bode) — TS + native — `acSweep.ts`
-- ⬜ `.dc` **DC sweep** (source sweep, nested) — used 37× by user
+- 🟡 `.dc` **DC sweep** (source sweep, nested) — used 37× by user — **solver +
+  directive parser landed** (`simulation/dcSweep.ts`): `parseDcDirective(".dc V1
+  start stop incr")` → `{source,start,stop,step}` (SI suffixes, leading `.`/`!`,
+  ascending/descending), `runDcSweep` overrides the named source and re-solves
+  the OP per step, returning a per-net voltage series. Reuses `runOperatingPoint`
+  (no duplicated stamping); guards zero/oversized increments. Hand-computed
+  divider test (V(mid)=Vsweep/2), 9 tests. **NEXT:** UI dispatch + waveform pane
+  + map an imported `.dc` directive to this runner; nested 2nd-source sweep.
 - ⬜ `.noise` **Noise analysis** — used 13×
 - ⬜ `.tf` **Transfer function** (small-signal DC gain, Zin/Zout)
 - ⬜ `.step` **Parametric sweep** (param/source/temp, nested, list) — used 34×; huge for real work
