@@ -135,10 +135,18 @@ zener, opamp, NMOS, PMOS, NPN, PNP, switch, transformer, testpoint, ground.
 - ⬜ `.options` passthrough (reltol, etc.) — used 7×
 
 ## 5. Expressions & parameters
-- ⬜ `.param` parameter definitions — used 180× (critical)
-- ⬜ `.func` user functions — used 13×
-- ⬜ `{expression}` evaluation in any value field (the LTspice braces syntax)
-- ⬜ Built-in functions (sin, sqrt, if, limit, table, etc.) + constants
+- 🟡 `.param` parameter definitions — used 180× (critical) — **evaluator landed**
+  (`simulation/paramScope.ts` `buildParamScope`): multi-assignment lines,
+  inter-param refs in any order (fixpoint), cycle/undefined detection. **NEXT:**
+  thread the scope into netlist value resolution so `{R}` reaches the solver.
+- ✅ `.func` user functions — used 13× — `parseFuncDirective` + call binding in
+  `simulation/expr.ts` (args bound into a child scope; nested funcs resolve)
+- 🟡 `{expression}` evaluation in any value field (the LTspice braces syntax) —
+  `evaluateValueExpr()` resolves braces/bare-param/plain quantities; **not yet
+  wired into the component→netlist value path** (next step, see §1 d)
+- ✅ Built-in functions (sin, sqrt, if, limit, table, pwr/pwrs, min/max, floor…) +
+  constants (pi, e) — `simulation/expr.ts` `FUNCS`/`CONSTS`; SI-suffixed literals
+  (1k/2.2meg/10n/1mil), comparison/logical/ternary, `^`/`**` power semantics
 - ⬜ `.step param x list/range` driving the above
 
 ## 6. Waveform viewer (the LTspice plot window)
