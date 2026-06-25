@@ -1,5 +1,46 @@
 # Tau Autobuilder — Progress Log
 
+## 2026-06-25 — auto/ltspice-parity — imported `.tran`/`.ac` directives drive the run options (§1 d-analyses)
+
+### What I did
+- Built `io/directiveAnalysis.ts` — pure parsers turning LTspice analysis
+  directives into Tau's option shapes:
+  - `parseTranDirective`: `.tran <Tstop>` (short) and `.tran <Tstep> <Tstop>
+    [<Tstart> [<Tmax>]] [uic…]` (full) → `{ stopTime, steps }`. Steps derived
+    from `Tstop/Tstep` (clamped to [2, MAX_TRANSIENT_STEPS]); zero/missing Tstep
+    falls back to the editor default (240). SI suffixes via `parseQuantity`.
+  - `parseAcDirective`: `.ac <dec|oct|lin> <N> <Fstart> <Fstop>` → `{ startHz,
+    stopHz, pointsPerDecade }`. `dec` maps directly; `oct` → ×log2(10); `lin`'s
+    total-point count normalized across the span's decades.
+  - `analysesFromDirectives`: picks the first `.tran`/`.ac` from a directive list.
+- Wired into `App.tsx`: `adoptDirectiveOptions(doc)` applies an imported circuit's
+  own `.tran` window on document-open and tab-switch, so it runs as authored
+  rather than with the hardcoded 6 ms / 240-sample default.
+
+### Files touched
+- src/io/directiveAnalysis.ts (new)
+- src/io/directiveAnalysis.test.ts (new, 14 tests, hand-computed)
+- src/App.tsx (import + adoptDirectiveOptions on open/switch)
+- FEATURE_PARITY.md (§1 d-analyses .tran/.ac ✅)
+
+### Tests
+343 passing (was 329; +14 new). Typecheck clean.
+
+### FEATURE_PARITY items updated
+- §1 import `.asc`: (d-analyses) `.tran`/`.ac` directive→options ✅. `.meas`/
+  `.dc`/`.step` directive mapping still pending (need those analyses first, §4).
+
+### UX issues found
+- None this run. Note: `analysisOptions` is app-global, not per-tab; switching
+  tabs adopts the active circuit's `.tran` but a manual options edit isn't yet
+  remembered per-tab. Tracked as minor UX debt — fine until §1(c) Open dialog.
+
+### Next step
+Either §1(c) — a real Open dialog (Tauri file picker → `parseAsc` →
+`ascToSchematic` → `openDocument` with directives) so users open their own
+`.asc` — or start §4 `.dc`/`.step` analyses (the next directive kinds to map and
+high-value for the user's circuits: .dc ×37, .step ×34).
+
 ## 2026-06-25 — auto/ltspice-parity — directives carried on the document + fed to the param scope at every run site (§1 d-param)
 
 ### What I did
