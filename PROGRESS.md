@@ -1,5 +1,47 @@
 # Tau Autobuilder — Progress Log
 
+## 2026-06-25T23:53Z — auto/ltspice-parity — Open dialog imports `.asc` files (§1c)
+
+### What I did
+- Wired the LTspice importer into the existing toolbar **Open** button so a user
+  can actually open a real `.asc` (the §1 key-goal blocker). The file picker now
+  accepts `.asc`; `ShellPanels.openCircuit` branches on extension and, for `.asc`,
+  runs the new `importAsc(text)` convenience export (`parseAsc`→`ascToSchematic`),
+  builds a `SchematicDocument` carrying `components/wires/netLabels/directives`,
+  and hands it to `App.openDocument` — which already adopts the imported
+  `.tran`/`.ac` window (`adoptDirectiveOptions`) and builds the param scope at run.
+- Honest error states: a non-LTspice or content-free file throws
+  "No schematic content found …" (caught → `window.alert`); banked-pin warnings
+  for vendor symbols are logged non-fatally rather than blocking the open.
+
+### Files touched
+- src/io/ascImport.ts (`importAsc` convenience export)
+- src/io/ascImport.test.ts (+2 tests: one-step import, empty-file guard)
+- src/components/ShellPanels.tsx (`.asc` branch in `openCircuit`, `accept` attr, import)
+- FEATURE_PARITY.md (§1c ✅, NEXT note trimmed)
+
+### Tests
+345 passing (was 343; +2 new). Typecheck clean. Validated end-to-end with a
+throwaway smoke test over the user's **real** files (since removed):
+class-d_starter.asc → 15 comps/46 wires/8 labels/4 directives, deadtime.asc →
+18/59/13/0, Draft1.asc → 4/10/0/1. All import without throwing.
+
+### FEATURE_PARITY items updated
+- §1 import `.asc`: (c) Open dialog ✅. Line stays 🟡 overall (symbol geometry +
+  `.asy` pin banking + `.meas`/`.dc`/`.step` directive mapping still pending).
+
+### UX issues found
+- Imported parts still render at Tau's built-in geometry (pins correct via
+  override, drawn symbol won't match LTspice spacing) — tracked §1 follow-up.
+- Desktop visual QA still blocked (dev port held); this change is a behavioral
+  tweak to an existing toolbar button, no new visual surface.
+
+### Next step
+§4 analyses are the next blocker for the key goal: implement `.step` (used 34×)
+or `.meas` (used 61×) so imported circuits' directives run, OR map
+`.dc`/`.meas`/`.step` directive strings → analysis options once those runners
+exist. Recommend `.dc` source sweep next (simplest, 37× usage), then `.step`.
+
 ## 2026-06-25 — auto/ltspice-parity — imported `.tran`/`.ac` directives drive the run options (§1 d-analyses)
 
 ### What I did
