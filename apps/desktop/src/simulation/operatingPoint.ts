@@ -14,7 +14,7 @@
  *   - parseQuantity from ./quantity
  */
 
-import type { ComponentKind, SchematicComponent, SchematicWire } from "../schematic/types";
+import type { ComponentKind, NetLabel, SchematicComponent, SchematicWire } from "../schematic/types";
 import { extractCircuit, type ExtractedCircuit } from "../schematic/netlist";
 import { parseQuantity } from "./quantity";
 
@@ -59,11 +59,12 @@ const GMIN = 1e-12;
 export function runOperatingPoint(schematic: {
   components: SchematicComponent[];
   wires: SchematicWire[];
+  netLabels?: NetLabel[];
 }): OperatingPointResult {
   let circuit: ExtractedCircuit | undefined;
 
   try {
-    circuit = extractCircuit(schematic.components, schematic.wires);
+    circuit = extractCircuit(schematic.components, schematic.wires, schematic.netLabels ?? []);
 
     if (schematic.components.length === 0) {
       return fail("Place components before running analysis.", circuit);

@@ -154,7 +154,7 @@ function App() {
     const requestId = ++analysisRequestRef.current;
     setAnalysisRunning(true);
     try {
-      const result = await runNativeTransient({ components, wires }, options) ?? runTransientAnalysis({ components, wires }, options);
+      const result = await runNativeTransient({ components, wires, netLabels }, options) ?? runTransientAnalysis({ components, wires, netLabels }, options);
       if (analysisRequestRef.current !== requestId) return;
       setAnalysis(result);
       setRunState(result.ok ? "complete" : "error");
@@ -170,7 +170,7 @@ function App() {
     } finally {
       if (analysisRequestRef.current === requestId) setAnalysisRunning(false);
     }
-  }, [components, wires]);
+  }, [components, wires, netLabels]);
 
   const runAnalysis = useCallback(async () => {
     await executeTransient(analysisOptions);
@@ -186,7 +186,7 @@ function App() {
     const requestId = ++analysisRequestRef.current;
     setAnalysisRunning(true);
     try {
-      const result = await runNativeOperatingPoint({ components, wires }) ?? runOperatingPoint({ components, wires });
+      const result = await runNativeOperatingPoint({ components, wires, netLabels }) ?? runOperatingPoint({ components, wires, netLabels });
       if (analysisRequestRef.current !== requestId) return;
       setOpAnalysis(result);
     } catch (error) {
@@ -195,16 +195,16 @@ function App() {
     } finally {
       if (analysisRequestRef.current === requestId) setAnalysisRunning(false);
     }
-  }, [components, wires]);
+  }, [components, wires, netLabels]);
 
   const runAcAnalysis = useCallback(async () => {
     const requestId = ++analysisRequestRef.current;
     setAnalysisRunning(true);
     try {
       const result = await runNativeAcSweep(
-        { components, wires },
+        { components, wires, netLabels },
         { startHz: 10, stopHz: 1e6, pointsPerDecade: 20 },
-      ) ?? runAcSweep({ components, wires }, { startHz: 10, stopHz: 1e6, pointsPerDecade: 20 });
+      ) ?? runAcSweep({ components, wires, netLabels }, { startHz: 10, stopHz: 1e6, pointsPerDecade: 20 });
       if (analysisRequestRef.current !== requestId) return;
       setAcAnalysis(result);
     } catch (error) {
@@ -213,7 +213,7 @@ function App() {
     } finally {
       if (analysisRequestRef.current === requestId) setAnalysisRunning(false);
     }
-  }, [components, wires]);
+  }, [components, wires, netLabels]);
 
   const stepAnalysis = useCallback(async () => {
     // Native ngspice may return an endpoint in addition to requested samples.

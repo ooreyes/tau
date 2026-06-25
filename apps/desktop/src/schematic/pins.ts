@@ -102,6 +102,19 @@ const LOCAL_PINS: Record<ComponentKind, LocalPin[]> = {
 export const getLocalPins = (kind: ComponentKind): LocalPin[] => LOCAL_PINS[kind];
 
 export function getComponentPins(component: SchematicComponent): ComponentPin[] {
+  // Imported parts (e.g. from LTspice) carry absolute world pin positions that
+  // override the kind's built-in geometry so they meet the original wires.
+  if (component.pinOverride && component.pinOverride.length > 0) {
+    return component.pinOverride.map((pin) => ({
+      id: pin.id,
+      label: pin.label,
+      x: pin.x,
+      y: pin.y,
+      componentId: component.id,
+      componentLabel: component.label,
+      kind: component.kind,
+    }));
+  }
   return getLocalPins(component.kind).map((pin) => {
     const rotated = rotatePoint(pin, component.rotation);
     return {

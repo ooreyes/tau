@@ -22,7 +22,14 @@
  *   IOPIN x y <dir>             ; hierarchy port
  */
 
-import type { ComponentKind } from "../schematic/types";
+import type {
+  ComponentKind,
+  NetLabel,
+  PinOverride,
+  SchematicComponent,
+  SchematicWire,
+} from "../schematic/types";
+import { getLocalPins } from "../schematic/pins";
 
 export type AscOrientation = "R0" | "R90" | "R180" | "R270" | "M0" | "M90" | "M180" | "M270";
 
@@ -295,4 +302,153 @@ export function orientationToRotation(orientation: AscOrientation): 0 | 90 | 180
     default:
       return 0;
   }
+}
+
+/**
+ * Map an LTspice symbol type to the {@link LTSPICE_PINS} key holding its
+ * symbol-local pin offsets. Returns `null` when no pin geometry is banked
+ * (vendor symbols, opamps, transformers, pots — those need `.asy` import).
+ */
+function ltPinKey(type: string): keyof typeof LTSPICE_PINS | null {
+  const leaf = (type.replace(/\\/g, "/").toLowerCase().split("/").pop() ?? "");
+  const map: Record<string, keyof typeof LTSPICE_PINS> = {
+    res: "res", res2: "res", r: "res",
+    cap: "cap", cap2: "cap", c: "cap", polcap: "cap",
+    ind: "ind", ind2: "ind", l: "ind",
+    voltage: "voltage",
+    current: "current",
+    diode: "diode", schottky: "schottky", zener: "zener", led: "led",
+    npn: "npn", npn3: "npn", npn4: "npn",
+    pnp: "pnp", pnp3: "pnp", pnp4: "pnp",
+    nmos: "nmos", nmos4: "nmos",
+    pmos: "pmos", pmos4: "pmos",
+    sw: "sw", csw: "sw",
+  };
+  return map[leaf] ?? null;
+}
+
+/** A faithfully-imported LTspice schematic, ready to hand to the Tau store. */
+export interface AscImportResult {
+  components: SchematicComponent[];
+  wires: SchematicWire[];
+  netLabels: NetLabel[];
+  /** SPICE directives (`TEXT … !…`), in document order, leading "!" stripped. */
+  directives: string[];
+  /** Free-text comments (`TEXT … ;…`), leading ";" stripped. */
+  comments: string[];
+  /** Non-fatal issues (symbols placed without pin-accurate geometry, etc.). */
+  warnings: string[];
+}
+
+/**
+ * Build the per-component world pin positions that make an imported part meet
+ * the original LTspice wires. Returns `null` when this symbol has no banked pin
+ * geometry (caller falls back to Tau geometry and warns).
+ *
+ * LTSPICE_PINS is ordered to match each kind's Tau pin-role order, so we zip the
+ * LTspice offsets onto Tau's local pin ids/labels. 3-terminal MOS symbols tie
+ * the bulk to the source (LTspice's convention) so the 4-node device still
+ * resolves every terminal.
+ */
+function buildPinOverride(symbol: AscSymbol, kind: ComponentKind): PinOverride[] | null {
+  const key = ltPinKey(symbol.type);
+  if (!key) return null;
+  const ltPins = LTSPICE_PINS[key];
+  const tauPins = getLocalPins(kind);
+  if (ltPins.length === 0 || tauPins.length === 0) return null;
+
+  const count = Math.min(ltPins.length, tauPins.length);
+  const override: PinOverride[] = [];
+  for (let i = 0; i < count; i += 1) {
+    const offset = transformLtPoint(ltPins[i].dx, ltPins[i].dy, symbol.orientation);
+    override.push({
+      id: tauPins[i].id,
+      label: tauPins[i].label,
+      x: symbol.x + offset.x,
+      y: symbol.y + offset.y,
+    });
+  }
+
+  // 3-pin LTspice MOS symbols omit the bulk terminal; Tau models it as a 4th
+  // node tied to the source so the netlist's body node resolves.
+  if ((kind === "nmos" || kind === "pmos") && override.length === 3 && tauPins.length >= 4) {
+    const source = override[2];
+    const bulk = tauPins[3];
+    override.push({ id: bulk.id, label: bulk.label, x: source.x, y: source.y });
+  }
+
+  return override;
+}
+
+/**
+ * Convert a parsed LTspice document into Tau schematic content with
+ * pin-accurate connectivity. Symbols become components carrying absolute world
+ * pin positions (`pinOverride`) so they land on the original wires; FLAGs become
+ * ground symbols ("0") or net labels; `TEXT !` lines are surfaced as directives.
+ *
+ * Coordinates are kept 1:1 with LTspice's 16-unit grid (Tau's GRID is also 16),
+ * so wires, pins, and labels stay in one consistent integer coordinate space and
+ * nets extract exactly as LTspice intends.
+ */
+export function ascToSchematic(doc: AscDocument): AscImportResult {
+  let counter = 0;
+  const id = (prefix: string) => `${prefix}-${(counter += 1)}`;
+
+  const wires: SchematicWire[] = doc.wires.map((w) => ({
+    id: id("w"),
+    points: [{ x: w.x1, y: w.y1 }, { x: w.x2, y: w.y2 }],
+  }));
+
+  const components: SchematicComponent[] = [];
+  const netLabels: NetLabel[] = [];
+  const warnings: string[] = [];
+
+  for (const symbol of doc.symbols) {
+    const kind = ltspiceTypeToKind(symbol.type);
+    const instName = symbol.attrs.InstName ?? "";
+    if (!kind) {
+      warnings.push(
+        `Skipped ${instName || "an unnamed part"}: no Tau equivalent for LTspice symbol "${symbol.type}".`,
+      );
+      continue;
+    }
+    const pinOverride = buildPinOverride(symbol, kind) ?? undefined;
+    if (!pinOverride) {
+      warnings.push(
+        `${instName || symbol.type}: placed without pin-accurate geometry (no banked pins for "${symbol.type}"); its connections may be wrong.`,
+      );
+    }
+    components.push({
+      id: id("c"),
+      kind,
+      x: symbol.x,
+      y: symbol.y,
+      rotation: orientationToRotation(symbol.orientation),
+      value: symbol.attrs.Value ?? "",
+      label: instName,
+      ...(pinOverride ? { pinOverride } : {}),
+    });
+  }
+
+  for (const flag of doc.flags) {
+    if (flag.net === "0") {
+      // LTspice ground flag → a Tau ground symbol whose pin sits at the flag.
+      components.push({
+        id: id("c"),
+        kind: "ground",
+        x: flag.x,
+        y: flag.y,
+        rotation: 0,
+        value: "",
+        label: "",
+      });
+    } else if (flag.net.trim() !== "") {
+      netLabels.push({ id: id("n"), x: flag.x, y: flag.y, text: flag.net });
+    }
+  }
+
+  const directives = doc.texts.filter((t) => t.directive).map((t) => t.text);
+  const comments = doc.texts.filter((t) => !t.directive).map((t) => t.text);
+
+  return { components, wires, netLabels, directives, comments, warnings };
 }

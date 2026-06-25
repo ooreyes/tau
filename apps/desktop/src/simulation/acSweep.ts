@@ -12,7 +12,7 @@
  *   - types from ../schematic/types
  */
 
-import type { ComponentKind, SchematicComponent, SchematicWire } from "../schematic/types";
+import type { ComponentKind, NetLabel, SchematicComponent, SchematicWire } from "../schematic/types";
 import { extractCircuit, type ExtractedCircuit } from "../schematic/netlist";
 import { parseQuantity } from "./quantity";
 
@@ -255,12 +255,12 @@ function logFrequencies(startHz: number, stopHz: number, pointsPerDecade: number
 // ---------------------------------------------------------------------------
 
 export function runAcSweep(
-  schematic: { components: SchematicComponent[]; wires: SchematicWire[] },
+  schematic: { components: SchematicComponent[]; wires: SchematicWire[]; netLabels?: NetLabel[] },
   options: AcOptions,
 ): AcResult {
   let circuit: ExtractedCircuit | undefined;
   try {
-    circuit = extractCircuit(schematic.components, schematic.wires);
+    circuit = extractCircuit(schematic.components, schematic.wires, schematic.netLabels ?? []);
 
     if (!circuit.groundNetId) {
       return fail("Add a ground symbol so node voltages have a reference.", circuit);

@@ -1,5 +1,5 @@
 import { extractCircuit, type ExtractedCircuit, type ExtractedComponent } from "../schematic/netlist";
-import type { ComponentKind, SchematicComponent, SchematicWire } from "../schematic/types";
+import type { ComponentKind, NetLabel, SchematicComponent, SchematicWire } from "../schematic/types";
 import { parseQuantity } from "../simulation/quantity";
 import { decodeParams } from "../schematic/params";
 
@@ -13,7 +13,7 @@ export interface SpiceDeck {
   netlist: string;
 }
 
-type Schematic = { components: SchematicComponent[]; wires: SchematicWire[] };
+type Schematic = { components: SchematicComponent[]; wires: SchematicWire[]; netLabels?: NetLabel[] };
 
 const DEFAULT_MODELS = [
   ".model TAU_DIODE D(Is=1e-14 N=1)",
@@ -31,7 +31,7 @@ const DEFAULT_MODELS = [
  * imported library, not in the schematic renderer or React UI.
  */
 export function buildSpiceDeck(schematic: Schematic, analysis: SpiceAnalysis): SpiceDeck {
-  const circuit = extractCircuit(schematic.components, schematic.wires);
+  const circuit = extractCircuit(schematic.components, schematic.wires, schematic.netLabels ?? []);
   if (schematic.components.length === 0) throw new Error("Place components before running analysis.");
   if (!circuit.groundNetId) throw new Error("Add a ground symbol so node voltages have a reference.");
 

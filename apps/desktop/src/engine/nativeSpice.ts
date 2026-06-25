@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { buildSpiceDeck, type SpiceAnalysis } from "./spiceNetlist";
-import type { SchematicComponent, SchematicWire } from "../schematic/types";
+import type { NetLabel, SchematicComponent, SchematicWire } from "../schematic/types";
 import type { AnalysisOptions, AnalysisResult, Trace } from "../simulation/linearTransient";
 import type { OperatingPointResult } from "../simulation/operatingPoint";
 import type { AcResult, AcTrace } from "../simulation/acSweep";
@@ -18,7 +18,7 @@ interface NativeSpiceResult {
   libraryPath: string;
 }
 
-type Schematic = { components: SchematicComponent[]; wires: SchematicWire[] };
+type Schematic = { components: SchematicComponent[]; wires: SchematicWire[]; netLabels?: NetLabel[] };
 type NativeExecution = { result: NativeSpiceResult; deck: ReturnType<typeof buildSpiceDeck> };
 
 /** Keeps a single high-resolution result below Rust's transfer guard. */

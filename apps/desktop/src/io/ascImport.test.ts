@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { parseAsc, ltspiceTypeToKind, orientationToRotation, transformLtPoint, LTSPICE_PINS } from "./ascImport";
+import { parseAsc, ltspiceTypeToKind, orientationToRotation, transformLtPoint, LTSPICE_PINS, ascToSchematic } from "./ascImport";
+import { extractCircuit } from "../schematic/netlist";
 
 // A representative slice of real LTspice .asc grammar (RC low-pass with a
 // pulse source, a directive, a comment, and a drawing primitive).
@@ -152,5 +153,87 @@ describe("LTSPICE_PINS", () => {
     expect(LTSPICE_PINS.res).toHaveLength(2);
     expect(LTSPICE_PINS.npn).toHaveLength(3);
     expect(LTSPICE_PINS.nmos.map((p) => p.name)).toEqual(["D", "G", "S"]);
+  });
+});
+
+describe("ascToSchematic", () => {
+  // R1 (res, R90) sits at (336,192). Its LTspice pins (16,16)/(16,96) map under
+  // R90 to world (320,208)/(240,208) — verified by hand against the wires below.
+  const SRC = `Version 4
+SHEET 1 880 680
+WIRE 368 208 320 208
+WIRE 240 208 192 208
+SYMBOL res 336 192 R90
+SYMATTR InstName R1
+SYMATTR Value 100k
+FLAG 192 208 vout
+FLAG 368 208 vcc
+FLAG 320 96 0
+TEXT 0 0 Left 2 !.tran 1m
+TEXT 0 40 Left 2 ;a note`;
+
+  it("converts symbols into components carrying LTspice-accurate world pins", () => {
+    const doc = ascToSchematic(parseAsc(SRC));
+    const r1 = doc.components.find((c) => c.label === "R1");
+    expect(r1).toBeDefined();
+    expect(r1?.kind).toBe("resistor");
+    expect(r1?.value).toBe("100k");
+    expect(r1?.rotation).toBe(90);
+    const pins = Object.fromEntries((r1?.pinOverride ?? []).map((p) => [p.id, { x: p.x, y: p.y }]));
+    expect(pins.a).toEqual({ x: 320, y: 208 });
+    expect(pins.b).toEqual({ x: 240, y: 208 });
+  });
+
+  it("maps wires 1:1 and FLAGs into grounds / net labels", () => {
+    const doc = ascToSchematic(parseAsc(SRC));
+    expect(doc.wires).toHaveLength(2);
+    expect(doc.wires[0].points).toEqual([{ x: 368, y: 208 }, { x: 320, y: 208 }]);
+    // "0" flag → ground component at the flag point; named flags → net labels.
+    const ground = doc.components.find((c) => c.kind === "ground");
+    expect(ground).toMatchObject({ x: 320, y: 96 });
+    expect(doc.netLabels.map((l) => l.text).sort()).toEqual(["vcc", "vout"]);
+    expect(doc.netLabels.find((l) => l.text === "vcc")).toMatchObject({ x: 368, y: 208 });
+  });
+
+  it("surfaces SPICE directives and comments separately", () => {
+    const doc = ascToSchematic(parseAsc(SRC));
+    expect(doc.directives).toEqual([".tran 1m"]);
+    expect(doc.comments).toEqual(["a note"]);
+  });
+
+  it("produces a circuit whose nets extract exactly as LTspice intends", () => {
+    const doc = ascToSchematic(parseAsc(SRC));
+    const circuit = extractCircuit(doc.components, doc.wires, doc.netLabels);
+    const pinNet = (label: string, pinId: string) =>
+      circuit.nets.find((n) => n.pins.some((p) => p.componentLabel === label && p.id === pinId))?.id;
+    // R1.a meets the vcc wire; R1.b meets the vout wire — net names follow labels.
+    expect(pinNet("R1", "a")).toBe("vcc");
+    expect(pinNet("R1", "b")).toBe("vout");
+    expect(circuit.warnings).not.toContain("No ground symbol found.");
+  });
+
+  it("ties the bulk of a 3-terminal MOS symbol to its source", () => {
+    const doc = ascToSchematic(parseAsc(`Version 4
+SHEET 1 880 680
+SYMBOL nmos 100 100 R0
+SYMATTR InstName M1`));
+    const m1 = doc.components.find((c) => c.label === "M1");
+    const pins = Object.fromEntries((m1?.pinOverride ?? []).map((p) => [p.id, { x: p.x, y: p.y }]));
+    expect(Object.keys(pins).sort()).toEqual(["b", "d", "g", "s"]);
+    expect(pins.b).toEqual(pins.s); // bulk tied to source
+  });
+
+  it("skips unmappable symbols with a warning rather than throwing", () => {
+    const doc = ascToSchematic(parseAsc(`Version 4
+SHEET 1 880 680
+SYMBOL opamps\\\\LT1468 0 0 R0
+SYMATTR InstName U1
+SYMBOL exotic\\\\WidgetXYZ 0 0 R0
+SYMATTR InstName X1`));
+    // The opamp maps to a native kind (placed, but no banked pins → warned);
+    // the unknown vendor part is skipped entirely.
+    expect(doc.components.some((c) => c.kind === "opamp")).toBe(true);
+    expect(doc.components.some((c) => c.label === "X1")).toBe(false);
+    expect(doc.warnings.length).toBeGreaterThanOrEqual(2);
   });
 });

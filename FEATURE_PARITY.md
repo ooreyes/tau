@@ -45,27 +45,33 @@ Status legend: ✅ done · 🟡 partial · ⬜ not started
 ---
 
 ## 1. File I/O & interoperability  ← **highest leverage for the key goal**
-- 🟡 **Import LTspice `.asc` schematics** — **parser landed** (`io/ascImport.ts`,
-  13 tests). Parses `Version/SHEET/WIRE/FLAG/SYMBOL/SYMATTR/WINDOW/TEXT/LINE/…`
-  losslessly; validated by parsing **4,012 real LTspice files (49,625 symbols,
-  165,744 wires) with zero throws**, plus `ltspiceTypeToKind` + orientation map.
-  **NEXT:** (a) `ascToSchematic()` — convert to Tau `SchematicDocument` with
-  coordinate scaling; (b) **pin-accurate connectivity** so nets extract (align
-  LTspice symbol pins to Tau pins, or drive nets from LTspice `.asy` pin coords);
-  (c) wire into the Open dialog; (d) parse `TEXT !` directives → analyses.
+- 🟡 **Import LTspice `.asc` schematics** — **parser + `ascToSchematic()` landed**
+  (`io/ascImport.ts`). Parses `Version/SHEET/WIRE/FLAG/SYMBOL/SYMATTR/WINDOW/TEXT/
+  LINE/…` losslessly; validated by parsing **4,012 real LTspice files (49,625
+  symbols, 165,744 wires) with zero throws**, plus `ltspiceTypeToKind` +
+  orientation map.
+  - ✅ **(a) `ascToSchematic()`** — converts a parsed doc to Tau components
+    (with `pinOverride`), wires, ground symbols / net labels, and surfaces
+    `TEXT !` directives + `;` comments. Coords kept 1:1 (LTspice grid = Tau
+    GRID = 16). Real-file proof: `deadtime.asc` → 18 comps / 59 wires / 12 nets,
+    ground found, vcc/vee/gp/gn/pwm/vrcp/vrcm each collapse to one net;
+    `class-d_starter.asc` → 15 comps / 10 nets / 4 directives (`.tran`, 3×`.meas`).
+  - ✅ **(b) pin-accurate connectivity via `pinOverride`** — `PinOverride`
+    (world pin positions) added to `SchematicComponent`; honored in
+    `schematic/pins.ts` `getComponentPins`. `ascToSchematic` places each part with
+    `pinOverride = anchor + transformLtPoint(pin)` so nets extract exactly as
+    LTspice intends (no connector-wire hacks). 3-terminal MOS bulk tied to source.
+  - ✅ **Net labels are now electrical** — `extractCircuit(…, netLabels)` merges
+    same-named FLAGs into one net, treats `0`/`GND` as ground, and names nets
+    after their label (so `V(vcc)` resolves). Threaded through the native +
+    TS-solver paths and `App.tsx`. (Previously net labels were cosmetic.)
+  - **NEXT:** (c) wire into the Open dialog (file picker → store load);
+    (d) map parsed `TEXT !` directives → runnable analyses (`.tran`/`.ac`/`.meas`/
+    `.param`); render imported symbols at their LTspice geometry; bank `.asy` pins
+    for opamps/pots/transformers (currently placed but flagged "no banked pins").
   - **Pin data banked:** `LTSPICE_PINS` + `transformLtPoint()` in `io/ascImport.ts`
     hold the real LTspice symbol-local pin offsets (from `lib/sym/*.asy`) and the
     orientation transform (clockwise, Y-down, mirror-aware).
-  - **DESIGN DECISION (blocks faithful connectivity):** LTspice pin spacing ≠
-    Tau's fixed symbol geometry (LTspice resistor = 80u pin-to-pin, Tau = 64u),
-    so imported parts cannot reuse Tau's built-in pin geometry and still meet the
-    original wires. Add an optional per-component **`pinOverride` (world pin
-    positions)** to `SchematicComponent` + honor it in `schematic/netlist.ts`
-    extraction (and ideally render imported symbols at their LTspice geometry).
-    Then `ascToSchematic` places each part with `pinOverride = anchor +
-    transformLtPoint(pin)` so nets extract exactly as LTspice intends — no
-    connector-wire hacks (which would risk crossing-shorts, since the extractor
-    unions crossing segments). This is the next concrete task.
 - ⬜ **Import LTspice `.asy` symbols** (so library parts render) — 6,280 ship with LTspice.
 - ⬜ Map LTspice `SYMATTR Value/Value2/SpiceModel/ModelFile` to Tau component values.
 - ⬜ Export Tau schematic → `.asc` (round-trip).
@@ -77,7 +83,9 @@ Status legend: ✅ done · 🟡 partial · ⬜ not started
 ## 2. Schematic capture
 - ✅ Place / move / rotate / mirror? (rotate ✅; **mirror ⬜**) / delete components — `Canvas.tsx`, `store/useSchematic.ts`
 - ✅ Wire drawing with orthogonal routing + junction dots — `Canvas.tsx` (`routeWireSmart`)
-- ✅ Net labels (name a node) — `FLAG` equivalent — store `upsertNetLabel`
+- ✅ Net labels (name a node) — `FLAG` equivalent — store `upsertNetLabel`;
+  **now electrical** (merge same-named nets, `0`/`GND`→ground, name the net) in
+  `schematic/netlist.ts` `extractCircuit`
 - ✅ Ground symbol — ✅
 - ✅ Grid snap, pan, zoom, fit — `Canvas.tsx`
 - ✅ Undo/redo, autosave, multi-tab documents

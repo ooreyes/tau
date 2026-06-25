@@ -1,5 +1,9 @@
-import type { Point, SchematicComponent, SchematicWire } from "./types";
+import type { NetLabel, Point, SchematicComponent, SchematicWire } from "./types";
 import { getComponentPins, type ComponentPin } from "./pins";
+
+/** Net-label texts that denote the global ground / reference node (case-insensitive). */
+const GROUND_LABELS = new Set(["0", "gnd"]);
+const isGroundLabel = (text: string): boolean => GROUND_LABELS.has(text.trim().toLowerCase());
 
 export interface ExtractedNet {
   id: string;
@@ -78,6 +82,7 @@ class DisjointSet {
 export function extractCircuit(
   components: SchematicComponent[],
   wires: SchematicWire[],
+  netLabels: NetLabel[] = [],
 ): ExtractedCircuit {
   const dsu = new DisjointSet();
   const allPins = components.flatMap(getComponentPins);
@@ -89,15 +94,40 @@ export function extractCircuit(
     pinByComponent.set(pin.componentId, [...(pinByComponent.get(pin.componentId) ?? []), pin]);
   }
 
+  // Net labels are electrical: a labelled point joins whatever net sits under
+  // it, and all labels sharing a name are the same net (LTspice's primary
+  // cross-schematic connectivity). Register each label point as a DSU node;
+  // points coincide with wire endpoints/pins, so unions merge the real nets.
+  const labelPoints: Point[] = netLabels.map((label) => ({ x: label.x, y: label.y }));
+  for (const point of labelPoints) dsu.add(pointKey(point));
+
   for (const pins of pinsByPoint(allPins).values()) {
     for (let i = 1; i < pins.length; i += 1) {
       dsu.union(pointKey(pins[0]), pointKey(pins[i]));
     }
   }
 
-  const groundPins = allPins.filter((pin) => pin.kind === "ground");
-  for (let i = 1; i < groundPins.length; i += 1) {
-    dsu.union(pointKey(groundPins[0]), pointKey(groundPins[i]));
+  // Ground anchors: ground-symbol pins plus any net label named "0"/"GND".
+  const groundAnchors: Point[] = [
+    ...allPins.filter((pin) => pin.kind === "ground"),
+    ...netLabels.filter((label) => isGroundLabel(label.text)),
+  ].map((p) => ({ x: p.x, y: p.y }));
+  for (let i = 1; i < groundAnchors.length; i += 1) {
+    dsu.union(pointKey(groundAnchors[0]), pointKey(groundAnchors[i]));
+  }
+
+  // Merge non-ground labels that share a name.
+  const labelsByName = new Map<string, Point[]>();
+  for (const label of netLabels) {
+    if (isGroundLabel(label.text)) continue;
+    const key = label.text.trim();
+    if (key === "") continue;
+    labelsByName.set(key, [...(labelsByName.get(key) ?? []), { x: label.x, y: label.y }]);
+  }
+  for (const points of labelsByName.values()) {
+    for (let i = 1; i < points.length; i += 1) {
+      dsu.union(pointKey(points[0]), pointKey(points[i]));
+    }
   }
 
   const segments = wires.flatMap(wireSegments);
@@ -106,6 +136,11 @@ export function extractCircuit(
   for (let i = 0; i < segments.length; i += 1) {
     for (const pin of allPins) {
       if (pointOnSegment(pin, segments[i])) breakpoints[i].push(pin);
+    }
+    // A label dropped mid-wire (not at an endpoint) must still split the wire
+    // there so the label's net joins the segment, mirroring pin handling.
+    for (const point of labelPoints) {
+      if (pointOnSegment(point, segments[i])) breakpoints[i].push(point);
     }
   }
 
@@ -143,7 +178,7 @@ export function extractCircuit(
     rootToPins.set(root, [...(rootToPins.get(root) ?? []), pin]);
   }
 
-  const groundRoot = groundPins.length > 0 ? dsu.find(pointKey(groundPins[0])) : null;
+  const groundRoot = groundAnchors.length > 0 ? dsu.find(pointKey(groundAnchors[0])) : null;
   if (!groundRoot) warnings.push("No ground symbol found.");
 
   const sortedRoots = [...rootToPoints.keys()].sort((a, b) => {
@@ -152,10 +187,32 @@ export function extractCircuit(
     return a.localeCompare(b);
   });
 
+  // Prefer a user/LTspice net-label name for a net's id (so V(vcc) resolves as
+  // the author intended); fall back to a generated N00x id otherwise.
+  const rootToLabelName = new Map<string, string>();
+  for (const label of netLabels) {
+    if (isGroundLabel(label.text)) continue;
+    const name = sanitizeNetName(label.text);
+    if (name === "") continue;
+    const root = dsu.find(pointKey({ x: label.x, y: label.y }));
+    if (!rootToLabelName.has(root)) rootToLabelName.set(root, name);
+  }
+  const usedNames = new Set<string>();
+
   const rootToNetId = new Map<string, string>();
   let nextNet = 1;
   for (const root of sortedRoots) {
-    rootToNetId.set(root, root === groundRoot ? "0" : `N${String(nextNet++).padStart(3, "0")}`);
+    if (root === groundRoot) {
+      rootToNetId.set(root, "0");
+      continue;
+    }
+    const labelName = rootToLabelName.get(root);
+    if (labelName && !usedNames.has(labelName)) {
+      usedNames.add(labelName);
+      rootToNetId.set(root, labelName);
+    } else {
+      rootToNetId.set(root, `N${String(nextNet++).padStart(3, "0")}`);
+    }
   }
 
   const nets: ExtractedNet[] = sortedRoots.map((root) => ({
@@ -257,6 +314,14 @@ function pinsByPoint(pins: ComponentPin[]): Map<string, ComponentPin[]> {
 
 function uniquePoints(points: Point[]): Point[] {
   return [...new Map(points.map((point) => [pointKey(point), point])).values()];
+}
+
+/** Reduce a net-label to a SPICE-safe node name (no whitespace; never starts a
+ *  generated N00x id, never the ground id "0"). */
+function sanitizeNetName(text: string): string {
+  const cleaned = text.trim().replace(/\s+/g, "_").replace(/[^A-Za-z0-9_+\-./]/g, "");
+  if (cleaned === "" || cleaned === "0") return "";
+  return cleaned;
 }
 
 function pointKey(point: Point): string {

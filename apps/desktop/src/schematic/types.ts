@@ -32,6 +32,21 @@ export type ComponentKind =
 /** Allowed component rotations, in degrees. */
 export type Rotation = 0 | 90 | 180 | 270;
 
+/**
+ * An absolute, world-coordinate pin position that overrides a component's
+ * built-in (kind + rotation) pin geometry. Used by the LTspice importer, whose
+ * symbols have different pin spacing than Tau's fixed symbols (e.g. an LTspice
+ * resistor is 80 units pin-to-pin vs Tau's 64). Carrying world pin positions
+ * lets imported parts meet the original wires exactly so nets extract as
+ * LTspice intends. `id`/`label` map to the component kind's pin roles in order.
+ */
+export interface PinOverride {
+  id: string;
+  label: string;
+  x: number;
+  y: number;
+}
+
 /** A placed component. Coordinates are world units and grid-snapped. */
 export interface SchematicComponent {
   id: string;
@@ -43,6 +58,12 @@ export interface SchematicComponent {
   value: string;
   /** Reference designator, e.g. "R1". Empty for ground. */
   label: string;
+  /**
+   * Optional absolute world pin positions overriding the kind's built-in
+   * geometry (see {@link PinOverride}). Set by the LTspice importer; absent for
+   * parts placed in the editor (which use rotated kind geometry).
+   */
+  pinOverride?: PinOverride[];
 }
 
 /** A grid-snapped point in world coordinates. */

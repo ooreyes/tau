@@ -1,4 +1,4 @@
-import type { ComponentKind, SchematicComponent, SchematicWire } from "../schematic/types";
+import type { ComponentKind, NetLabel, SchematicComponent, SchematicWire } from "../schematic/types";
 import { extractCircuit, type ExtractedCircuit, type ExtractedComponent } from "../schematic/netlist";
 import { formatEngineering, parseQuantity } from "./quantity";
 
@@ -80,12 +80,12 @@ const TRANSIENT_SUPPORTED = new Set<ComponentKind>([
 const GMIN = 1e-12;
 
 export function runTransientAnalysis(
-  schematic: { components: SchematicComponent[]; wires: SchematicWire[] },
+  schematic: { components: SchematicComponent[]; wires: SchematicWire[]; netLabels?: NetLabel[] },
   options: AnalysisOptions,
 ): AnalysisResult {
   let circuit: ExtractedCircuit | undefined;
   try {
-    circuit = extractCircuit(schematic.components, schematic.wires);
+    circuit = extractCircuit(schematic.components, schematic.wires, schematic.netLabels ?? []);
     validateOptions(options);
 
     const resolution = inspectTransientResolution(schematic.components, options);
