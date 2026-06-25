@@ -135,15 +135,19 @@ zener, opamp, NMOS, PMOS, NPN, PNP, switch, transformer, testpoint, ground.
 - ⬜ `.options` passthrough (reltol, etc.) — used 7×
 
 ## 5. Expressions & parameters
-- 🟡 `.param` parameter definitions — used 180× (critical) — **evaluator landed**
-  (`simulation/paramScope.ts` `buildParamScope`): multi-assignment lines,
-  inter-param refs in any order (fixpoint), cycle/undefined detection. **NEXT:**
-  thread the scope into netlist value resolution so `{R}` reaches the solver.
+- ✅ `.param` parameter definitions — used 180× (critical) — `buildParamScope`
+  (multi-assignment lines, inter-param refs in any order via fixpoint,
+  cycle/undefined detection) + `resolveComponentValues` threaded into **all four
+  solve paths** (`linearTransient`/`operatingPoint`/`acSweep`/`spiceNetlist`).
+  End-to-end proof in `paramIntegration.test.ts`: a `{Vsrc}/{Rtop}/{Rbot}`
+  divider solves to the hand-computed 9 V. **NEXT (§1 d):** store directives on
+  the document so the running app builds the scope from an imported `.asc`.
 - ✅ `.func` user functions — used 13× — `parseFuncDirective` + call binding in
   `simulation/expr.ts` (args bound into a child scope; nested funcs resolve)
-- 🟡 `{expression}` evaluation in any value field (the LTspice braces syntax) —
-  `evaluateValueExpr()` resolves braces/bare-param/plain quantities; **not yet
-  wired into the component→netlist value path** (next step, see §1 d)
+- ✅ `{expression}` evaluation in any value field (the LTspice braces syntax) —
+  `substituteBraces()` replaces every `{…}` in a value (incl. compound source
+  specs like `PULSE(0 {Vhi} …)`) with its evaluated literal before extraction,
+  exactly as LTspice does
 - ✅ Built-in functions (sin, sqrt, if, limit, table, pwr/pwrs, min/max, floor…) +
   constants (pi, e) — `simulation/expr.ts` `FUNCS`/`CONSTS`; SI-suffixed literals
   (1k/2.2meg/10n/1mil), comparison/logical/ternary, `^`/`**` power semantics

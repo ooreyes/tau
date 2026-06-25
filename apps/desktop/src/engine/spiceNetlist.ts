@@ -1,4 +1,5 @@
 import { extractCircuit, type ExtractedCircuit, type ExtractedComponent } from "../schematic/netlist";
+import { resolveComponentValues, EMPTY_SCOPE, type ParamScope } from "../simulation/paramScope";
 import type { ComponentKind, NetLabel, SchematicComponent, SchematicWire } from "../schematic/types";
 import { parseQuantity } from "../simulation/quantity";
 import { decodeParams } from "../schematic/params";
@@ -13,7 +14,7 @@ export interface SpiceDeck {
   netlist: string;
 }
 
-type Schematic = { components: SchematicComponent[]; wires: SchematicWire[]; netLabels?: NetLabel[] };
+type Schematic = { components: SchematicComponent[]; wires: SchematicWire[]; netLabels?: NetLabel[]; params?: ParamScope };
 
 const DEFAULT_MODELS = [
   ".model TAU_DIODE D(Is=1e-14 N=1)",
@@ -31,12 +32,13 @@ const DEFAULT_MODELS = [
  * imported library, not in the schematic renderer or React UI.
  */
 export function buildSpiceDeck(schematic: Schematic, analysis: SpiceAnalysis): SpiceDeck {
-  const circuit = extractCircuit(schematic.components, schematic.wires, schematic.netLabels ?? []);
-  if (schematic.components.length === 0) throw new Error("Place components before running analysis.");
+  const components = resolveComponentValues(schematic.components, schematic.params ?? EMPTY_SCOPE);
+  const circuit = extractCircuit(components, schematic.wires, schematic.netLabels ?? []);
+  if (components.length === 0) throw new Error("Place components before running analysis.");
   if (!circuit.groundNetId) throw new Error("Add a ground symbol so node voltages have a reference.");
 
   const lines = ["Tau generated circuit", ".options gmin=1e-12 reltol=1e-4 abstol=1e-12 vntol=1e-7"];
-  const usedKinds = new Set(schematic.components.map((component) => component.kind));
+  const usedKinds = new Set(components.map((component) => component.kind));
   const needsModels = ["diode", "led", "zener", "nmos", "pmos", "npn", "pnp"].some((kind) => usedKinds.has(kind as ComponentKind));
   if (needsModels) lines.push(...DEFAULT_MODELS);
 

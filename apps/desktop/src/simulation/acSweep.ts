@@ -15,6 +15,7 @@
 import type { ComponentKind, NetLabel, SchematicComponent, SchematicWire } from "../schematic/types";
 import { extractCircuit, type ExtractedCircuit } from "../schematic/netlist";
 import { parseQuantity } from "./quantity";
+import { resolveComponentValues, EMPTY_SCOPE, type ParamScope } from "./paramScope";
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -255,18 +256,19 @@ function logFrequencies(startHz: number, stopHz: number, pointsPerDecade: number
 // ---------------------------------------------------------------------------
 
 export function runAcSweep(
-  schematic: { components: SchematicComponent[]; wires: SchematicWire[]; netLabels?: NetLabel[] },
+  schematic: { components: SchematicComponent[]; wires: SchematicWire[]; netLabels?: NetLabel[]; params?: ParamScope },
   options: AcOptions,
 ): AcResult {
   let circuit: ExtractedCircuit | undefined;
   try {
-    circuit = extractCircuit(schematic.components, schematic.wires, schematic.netLabels ?? []);
+    const components = resolveComponentValues(schematic.components, schematic.params ?? EMPTY_SCOPE);
+    circuit = extractCircuit(components, schematic.wires, schematic.netLabels ?? []);
 
     if (!circuit.groundNetId) {
       return fail("Add a ground symbol so node voltages have a reference.", circuit);
     }
 
-    const unsupported = schematic.components.filter((component) => !AC_SUPPORTED.has(component.kind));
+    const unsupported = components.filter((component) => !AC_SUPPORTED.has(component.kind));
     if (unsupported.length > 0) {
       return fail(
         `${unsupported.map((component) => component.label || component.kind).join(", ")} ${unsupported.length === 1 ? "is" : "are"} placeable and wireable, but AC analysis currently supports only R/C/L, voltage/current sources, ideal op amps, switches, grounds, and test points. Full models need the planned ngspice engine.`,
@@ -274,7 +276,7 @@ export function runAcSweep(
       );
     }
 
-    const hasAcSource = schematic.components.some((c) => c.kind === "vac" || c.kind === "iac");
+    const hasAcSource = components.some((c) => c.kind === "vac" || c.kind === "iac");
     if (!hasAcSource) {
       return fail(
         "No AC source found. Add a vac or iac component to excite the circuit for AC analysis.",

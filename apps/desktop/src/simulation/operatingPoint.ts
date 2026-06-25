@@ -17,6 +17,7 @@
 import type { ComponentKind, NetLabel, SchematicComponent, SchematicWire } from "../schematic/types";
 import { extractCircuit, type ExtractedCircuit } from "../schematic/netlist";
 import { parseQuantity } from "./quantity";
+import { resolveComponentValues, EMPTY_SCOPE, type ParamScope } from "./paramScope";
 
 // ---------------------------------------------------------------------------
 // Result type (mirrors linearTransient's style)
@@ -60,16 +61,18 @@ export function runOperatingPoint(schematic: {
   components: SchematicComponent[];
   wires: SchematicWire[];
   netLabels?: NetLabel[];
+  params?: ParamScope;
 }): OperatingPointResult {
   let circuit: ExtractedCircuit | undefined;
 
   try {
-    circuit = extractCircuit(schematic.components, schematic.wires, schematic.netLabels ?? []);
+    const components = resolveComponentValues(schematic.components, schematic.params ?? EMPTY_SCOPE);
+    circuit = extractCircuit(components, schematic.wires, schematic.netLabels ?? []);
 
-    if (schematic.components.length === 0) {
+    if (components.length === 0) {
       return fail("Place components before running analysis.", circuit);
     }
-    const unsupported = schematic.components.filter((component) => !OP_SUPPORTED.has(component.kind));
+    const unsupported = components.filter((component) => !OP_SUPPORTED.has(component.kind));
     if (unsupported.length > 0) {
       return fail(
         `${unsupported.map((component) => component.label || component.kind).join(", ")} ${unsupported.length === 1 ? "is" : "are"} placeable and wireable, but operating point currently supports only R/C/L, voltage/current sources, AC sources at 0 DC, switches, grounds, and test points.`,
@@ -82,7 +85,7 @@ export function runOperatingPoint(schematic: {
         circuit,
       );
     }
-    if (!schematic.components.some((c) => ["vsource", "isource", "vac", "iac"].includes(c.kind))) {
+    if (!components.some((c) => ["vsource", "isource", "vac", "iac"].includes(c.kind))) {
       return fail("Add a voltage or current source to excite the circuit.", circuit);
     }
 

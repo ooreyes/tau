@@ -1,6 +1,7 @@
 import type { ComponentKind, NetLabel, SchematicComponent, SchematicWire } from "../schematic/types";
 import { extractCircuit, type ExtractedCircuit, type ExtractedComponent } from "../schematic/netlist";
 import { formatEngineering, parseQuantity } from "./quantity";
+import { resolveComponentValues, EMPTY_SCOPE, type ParamScope } from "./paramScope";
 
 export interface AnalysisOptions {
   stopTime: number;
@@ -80,21 +81,24 @@ const TRANSIENT_SUPPORTED = new Set<ComponentKind>([
 const GMIN = 1e-12;
 
 export function runTransientAnalysis(
-  schematic: { components: SchematicComponent[]; wires: SchematicWire[]; netLabels?: NetLabel[] },
+  schematic: { components: SchematicComponent[]; wires: SchematicWire[]; netLabels?: NetLabel[]; params?: ParamScope },
   options: AnalysisOptions,
 ): AnalysisResult {
   let circuit: ExtractedCircuit | undefined;
   try {
-    circuit = extractCircuit(schematic.components, schematic.wires, schematic.netLabels ?? []);
+    // Resolve {param} expressions in component values before extraction so the
+    // solver sees concrete numbers (LTspice substitutes braces the same way).
+    const components = resolveComponentValues(schematic.components, schematic.params ?? EMPTY_SCOPE);
+    circuit = extractCircuit(components, schematic.wires, schematic.netLabels ?? []);
     validateOptions(options);
 
-    const resolution = inspectTransientResolution(schematic.components, options);
+    const resolution = inspectTransientResolution(components, options);
     validateTransientResolution(resolution, options);
 
-    if (schematic.components.length === 0) {
+    if (components.length === 0) {
       return fail("No circuit", "Place components before running analysis.", circuit);
     }
-    const unsupported = schematic.components.filter((component) => !TRANSIENT_SUPPORTED.has(component.kind));
+    const unsupported = components.filter((component) => !TRANSIENT_SUPPORTED.has(component.kind));
     if (unsupported.length > 0) {
       return fail(
         "Unsupported model",
@@ -105,7 +109,7 @@ export function runTransientAnalysis(
     if (!circuit.groundNetId) {
       return fail("No reference", "Add a ground symbol so node voltages have a reference.", circuit);
     }
-    if (!schematic.components.some((component) => ["vsource", "isource", "vac", "iac"].includes(component.kind))) {
+    if (!components.some((component) => ["vsource", "isource", "vac", "iac"].includes(component.kind))) {
       return fail("No source", "Add a voltage or current source to excite the circuit. The interim solver requires an explicit independent source.", circuit);
     }
 

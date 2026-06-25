@@ -9,6 +9,7 @@
  */
 
 import { evaluateExpression, type FuncDef, type Scope } from "./expr";
+import type { SchematicComponent } from "../schematic/types";
 
 export interface ParamScope {
   scope: Scope;
@@ -150,4 +151,36 @@ export function evaluateValueExpr(value: string, ctx: ParamScope = EMPTY_SCOPE):
  */
 export function isExpression(value: string): boolean {
   return /[{}]/.test(value) || /[+\-*/^()]/.test(value.replace(/^[-+]?\d*\.?\d+(e[-+]?\d+)?/i, ""));
+}
+
+/** Format an evaluated number as a plain SPICE-parseable literal (no µ/prefix). */
+function spiceNumber(v: number): string {
+  if (!Number.isFinite(v)) throw new Error(`Expression produced a non-finite value (${v})`);
+  return String(v);
+}
+
+/**
+ * Substitute every `{expr}` occurrence in a value string with its evaluated
+ * numeric literal, exactly as LTspice does before handing the deck to the
+ * engine. Leaves the rest of the string (compound source specs like
+ * `PULSE(0 {Vhi} ...)`, model names, units) untouched.
+ */
+export function substituteBraces(text: string, ctx: ParamScope = EMPTY_SCOPE): string {
+  if (!text.includes("{")) return text;
+  return text.replace(/\{([^{}]*)\}/g, (_match, inner: string) => spiceNumber(evaluateExpression(inner, ctx.scope, ctx.funcs)));
+}
+
+/**
+ * Return a copy of `components` with every `{expr}` in each value resolved
+ * against `ctx`. Components without brace expressions are returned untouched
+ * (and the whole list is returned as-is when there are no params), so the
+ * common no-parameter circuit pays nothing.
+ */
+export function resolveComponentValues(components: SchematicComponent[], ctx: ParamScope = EMPTY_SCOPE): SchematicComponent[] {
+  if (Object.keys(ctx.scope).length === 0 && Object.keys(ctx.funcs).length === 0) return components;
+  return components.map((component) =>
+    component.value && component.value.includes("{")
+      ? { ...component, value: substituteBraces(component.value, ctx) }
+      : component,
+  );
 }
