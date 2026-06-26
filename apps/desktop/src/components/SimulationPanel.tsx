@@ -17,6 +17,7 @@ import { paramFields, decodeParams, encodeParams } from "../schematic/params";
 import { EngineeringInput } from "./EngineeringInput";
 import type { OperatingPointResult } from "../simulation/operatingPoint";
 import type { AcResult } from "../simulation/acSweep";
+import type { MeasResult } from "../simulation/measure";
 import { isNativeSpiceRuntime, MAX_NATIVE_OUTPUT_POINTS } from "../engine/nativeSpice";
 import { displaySampleIndices, waveformBounds } from "../simulation/waveform";
 
@@ -24,6 +25,7 @@ interface SimulationPanelProps {
   result: AnalysisResult | null;
   opResult: OperatingPointResult | null;
   acResult: AcResult | null;
+  measurements: MeasResult[];
   options: AnalysisOptions;
   isRunning: boolean;
   onOptionsChange: (options: AnalysisOptions) => void;
@@ -43,6 +45,7 @@ export function SimulationPanel({
   result,
   opResult,
   acResult,
+  measurements,
   options,
   isRunning,
   onOptionsChange,
@@ -173,6 +176,8 @@ export function SimulationPanel({
             <Metric label="NODES" value={result?.ok ? String(Math.max(0, result.stats.netCount - 1)) : "--"} tone="cyan" />
             <Metric label="SAMPLES" value={result?.ok ? String(result.stats.sampleCount) : "--"} tone="cream" />
           </div>
+
+          <MeasTable measurements={measurements} />
 
           <div className="plotter-controls">
             <DialControl
@@ -611,6 +616,27 @@ function bodePath(magDb: number[], freqs: number[], plot: { minDb: number; maxDb
     started = true;
   }
   return path;
+}
+
+/** A compact table of `.meas` results, shown under the transient scope. */
+function MeasTable({ measurements }: { measurements: MeasResult[] }) {
+  if (measurements.length === 0) return null;
+  return (
+    <div className="meas-table" role="table" aria-label="Measurements">
+      <div className="meas-table-head" role="row">
+        <span role="columnheader">MEASURE</span>
+        <span role="columnheader">VALUE</span>
+      </div>
+      {measurements.map((m) => (
+        <div className="meas-row" role="row" key={m.name}>
+          <span className="meas-name" role="cell">{m.name}</span>
+          <span className={`meas-value${m.value === null ? " meas-fail" : ""}`} role="cell" title={m.error}>
+            {m.value === null ? (m.error ?? "—") : formatEngineering(m.value, "", 4)}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
 }
 
 function Metric({ label, value, tone }: { label: string; value: string; tone: string }) {

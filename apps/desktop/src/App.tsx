@@ -33,6 +33,7 @@ import { runOperatingPoint, type OperatingPointResult } from "./simulation/opera
 import { runAcSweep, type AcResult } from "./simulation/acSweep";
 import { buildParamScope, EMPTY_SCOPE, type ParamScope } from "./simulation/paramScope";
 import { analysesFromDirectives } from "./io/directiveAnalysis";
+import { runMeasurements, type MeasResult } from "./simulation/measure";
 import {
   isNativeSpiceRuntime,
   MAX_NATIVE_OUTPUT_POINTS,
@@ -165,6 +166,14 @@ function App() {
       return EMPTY_SCOPE;
     }
   }, [directives]);
+
+  // Evaluate the document's `.meas` directives against the latest transient
+  // result. Recomputed only when the result or directives change; measurements
+  // chain by name through a scope seeded with the circuit's `.param` values.
+  const measurements = useMemo<MeasResult[]>(() => {
+    if (!analysis || !analysis.ok || directives.length === 0) return [];
+    return runMeasurements(directives, analysis, params.scope, params.funcs);
+  }, [analysis, directives, params]);
 
   const executeTransient = useCallback(async (options: AnalysisOptions) => {
     const requestId = ++analysisRequestRef.current;
@@ -503,6 +512,7 @@ function App() {
                 result={analysis}
                 opResult={opAnalysis}
                 acResult={acAnalysis}
+                measurements={measurements}
                 options={analysisOptions}
                 isRunning={analysisRunning}
                 onOptionsChange={setAnalysisOptions}

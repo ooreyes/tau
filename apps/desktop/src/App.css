@@ -1131,6 +1131,67 @@ body {
   font-weight: 600;
 }
 
+/* `.meas` measurement table — mirrors the operating-point table styling. */
+.meas-table {
+  margin: 0 14px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  overflow: hidden;
+  background: var(--panel-3);
+}
+
+.meas-table-head,
+.meas-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  min-height: 26px;
+  padding: 0 10px;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.meas-table-head {
+  min-height: 22px;
+  color: var(--faint);
+  background: var(--panel-4);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--border);
+}
+
+.meas-row {
+  border-top: 1px solid var(--border-subtle);
+  color: var(--text);
+}
+
+.meas-row:first-of-type {
+  border-top: 0;
+}
+
+.meas-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.meas-value {
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "SF Mono", "Menlo", monospace;
+  font-weight: 500;
+  text-align: right;
+}
+
+.meas-value.meas-fail {
+  color: var(--faint);
+  font-style: italic;
+  font-weight: 400;
+}
+
 /* Parameter controls (formerly "dial controls") */
 .plotter-controls {
   flex-shrink: 0;
