@@ -158,7 +158,16 @@ zener, opamp, NMOS, PMOS, NPN, PNP, switch, transformer, testpoint, ground.
   + map an imported `.dc` directive to this runner; nested 2nd-source sweep.
 - ⬜ `.noise` **Noise analysis** — used 13×
 - ⬜ `.tf` **Transfer function** (small-signal DC gain, Zin/Zout)
-- ⬜ `.step` **Parametric sweep** (param/source/temp, nested, list) — used 34×; huge for real work
+- 🟡 `.step` **Parametric sweep** (param/source/temp, nested, list) — used 34×; huge for real work.
+  **Parser + param-runner landed** (`simulation/paramStep.ts`): `parseStepDirective`
+  enumerates every LTspice form — linear `start stop incr`, `dec`/`oct` log
+  (N points/decade|octave), explicit `list`, and `param`/`source`/`temp` kinds —
+  up front into `StepSpec.values`. `runParamStep` injects each swept value into a
+  copy of the `ParamScope` (`withStepValue`) and re-runs a caller-supplied
+  analysis closure, yielding a labelled family of results; reuses the existing
+  `.op`/`.tran`/`.ac` solvers (proven against the divider solver). `stepFromDirectives`
+  picks an imported circuit's first `.step`. 25 tests, hand-computed. **NEXT:**
+  UI dispatch + family-of-curves overlay (§6); source/temp run paths; nested steps.
 - ⬜ `.four` Fourier analysis
 - ⬜ `.temp` temperature sweep / set — used 4×
 - ⬜ `.meas` **Measurements** (extract gain, BW, rise time, etc.) — used 61×
@@ -184,7 +193,11 @@ zener, opamp, NMOS, PMOS, NPN, PNP, switch, transformer, testpoint, ground.
 - ✅ Built-in functions (sin, sqrt, if, limit, table, pwr/pwrs, min/max, floor…) +
   constants (pi, e) — `simulation/expr.ts` `FUNCS`/`CONSTS`; SI-suffixed literals
   (1k/2.2meg/10n/1mil), comparison/logical/ternary, `^`/`**` power semantics
-- ⬜ `.step param x list/range` driving the above
+- ✅ `.step param x list/range` driving the above — `simulation/paramStep.ts`
+  `runParamStep` binds each swept value into the `ParamScope` (`withStepValue`)
+  so `{...}` component values re-resolve per step; list + linear + `dec`/`oct`
+  log ranges all enumerate to concrete values. Engine support complete and tested
+  end-to-end through `runOperatingPoint`; UI dispatch/overlay tracked in §4/§6.
 
 ## 6. Waveform viewer (the LTspice plot window)
 - 🟡 Transient scope — `SimulationPanel.tsx` (downsamples large native results ✅)
