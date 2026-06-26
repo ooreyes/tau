@@ -18,6 +18,7 @@ import { EngineeringInput } from "./EngineeringInput";
 import type { OperatingPointResult } from "../simulation/operatingPoint";
 import type { AcResult } from "../simulation/acSweep";
 import type { DcSweepResult } from "../simulation/dcSweep";
+import type { StepFamilyResult } from "../simulation/stepFamily";
 import type { MeasResult } from "../simulation/measure";
 import { isNativeSpiceRuntime, MAX_NATIVE_OUTPUT_POINTS } from "../engine/nativeSpice";
 import { displaySampleIndices, waveformBounds } from "../simulation/waveform";
@@ -27,6 +28,7 @@ interface SimulationPanelProps {
   opResult: OperatingPointResult | null;
   acResult: AcResult | null;
   dcResult: DcSweepResult | null;
+  stepResult: StepFamilyResult | null;
   measurements: MeasResult[];
   acMeasurements: MeasResult[];
   options: AnalysisOptions;
@@ -36,6 +38,7 @@ interface SimulationPanelProps {
   onRunOperatingPoint: () => void | Promise<void>;
   onRunAcSweep: () => void | Promise<void>;
   onRunDcSweep: () => void | Promise<void>;
+  onRunStep: () => void | Promise<void>;
   onStop: () => void;
   onStep: () => void | Promise<void>;
   onClose: () => void;
@@ -50,6 +53,7 @@ export function SimulationPanel({
   opResult,
   acResult,
   dcResult,
+  stepResult,
   measurements,
   acMeasurements,
   options,
@@ -59,6 +63,7 @@ export function SimulationPanel({
   onRunOperatingPoint,
   onRunAcSweep,
   onRunDcSweep,
+  onRunStep,
   onStop,
   onStep,
   onClose,
@@ -92,9 +97,14 @@ export function SimulationPanel({
   const opampPart = selected && selected.kind === "opamp" ? findOpAmp(selected.value) : null;
   const warnings = result?.warnings ?? [];
 
-  const [mode, setMode] = useState<"tran" | "op" | "ac" | "dc">("tran");
+  const [mode, setMode] = useState<"tran" | "op" | "ac" | "dc" | "step">("tran");
   const [maximized, setMaximized] = useState(false);
-  const title = mode === "tran" ? "Transient scope" : mode === "op" ? "Operating point" : mode === "ac" ? "AC sweep" : "DC sweep";
+  const title =
+    mode === "tran" ? "Transient scope"
+    : mode === "op" ? "Operating point"
+    : mode === "ac" ? "AC sweep"
+    : mode === "dc" ? "DC sweep"
+    : "Step sweep";
   // ngspice may include the final endpoint in addition to requested steps.
   const maxTransientSteps = isNativeSpiceRuntime() ? MAX_NATIVE_OUTPUT_POINTS - 1 : MAX_TRANSIENT_STEPS;
   const resolution = useMemo(() => {
@@ -183,6 +193,18 @@ export function SimulationPanel({
           >
             DC
           </button>
+          <button
+            className={`plotter-tab${mode === "step" ? " active" : ""}`}
+            role="tab"
+            aria-selected={mode === "step"}
+            disabled={isRunning}
+            onClick={() => {
+              setMode("step");
+              void onRunStep();
+            }}
+          >
+            STEP
+          </button>
         </div>
       </div>
 
@@ -238,6 +260,7 @@ export function SimulationPanel({
         </>
       )}
       {mode === "dc" && <DcPlot result={dcResult} />}
+      {mode === "step" && <StepPlot result={stepResult} probes={probes} />}
 
       <div className="selection-strip">
         <div className="strip-label">SELECT</div>
@@ -749,6 +772,117 @@ function dcPath(
     started = true;
   }
   return path;
+}
+
+// A wider ramp than AC_COLORS so a family of up to MAX_FAMILY_MEMBERS curves
+// stays distinguishable. All entries are App.css trace variables (no hardcoding).
+const STEP_COLORS = [
+  "var(--trace-cyan)",
+  "var(--trace-green)",
+  "var(--trace-cream)",
+  "var(--trace-red)",
+  "var(--trace-purple)",
+  "var(--trace-amber)",
+];
+
+/**
+ * Overlay a `.step` family: re-run a transient once per swept value and draw the
+ * same signal across the family, one colored curve per step (FEATURE_PARITY §6
+ * family-of-curves). The plotted signal follows the probe (first probed net),
+ * falling back to the first trace, matching the transient scope.
+ */
+function StepPlot({ result, probes }: { result: StepFamilyResult | null; probes: Probe[] }) {
+  // Members whose run succeeded, paired with the chosen trace for each.
+  const family = useMemo(() => {
+    if (!result?.ok) return null;
+    const ok = result.members.filter((m) => m.result.ok);
+    if (ok.length === 0) return null;
+    const first = ok[0].result;
+    if (!first.ok) return null;
+    const traceId = pickFamilyTraceId(first, probes);
+    if (!traceId) return null;
+    const series = ok
+      .map((m) => {
+        if (!m.result.ok) return null;
+        const trace = m.result.traces.find((t) => t.id === traceId);
+        if (!trace) return null;
+        return { label: m.label, times: m.result.times, trace };
+      })
+      .filter((s): s is { label: string; times: number[]; trace: Trace } => s !== null);
+    if (series.length === 0) return null;
+    const { min, max } = waveformBounds(series.map((s) => s.trace));
+    const tMax = series.reduce((acc, s) => Math.max(acc, s.times[s.times.length - 1] || 0), 0) || 1;
+    const signal = first.traces.find((t) => t.id === traceId)?.label ?? "V";
+    return { series, min, max, tMax, signal };
+  }, [result, probes]);
+
+  if (!result) return null;
+  if (!result.ok) return <div className="analysis-empty">{result.message ?? "No step sweep to show."}</div>;
+  if (!family) return <div className="analysis-empty">Step ran, but the selected signal has no data. Probe a node or check the sweep.</div>;
+
+  return (
+    <>
+      <div className="scope-shell">
+        <svg className="scope-svg" viewBox={`0 0 ${PLOT_WIDTH} ${PLOT_HEIGHT}`} role="img" aria-label="Step family plot">
+          <g className="scope-grid">
+            {Array.from({ length: 6 }).map((_, i) => {
+              const x = PLOT_PAD + (i * (PLOT_WIDTH - PLOT_PAD * 2)) / 5;
+              return <line key={`x${i}`} x1={x} y1={PLOT_PAD} x2={x} y2={PLOT_HEIGHT - PLOT_PAD} />;
+            })}
+            {Array.from({ length: 5 }).map((_, i) => {
+              const y = PLOT_PAD + (i * (PLOT_HEIGHT - PLOT_PAD * 2)) / 4;
+              return <line key={`y${i}`} x1={PLOT_PAD} y1={y} x2={PLOT_WIDTH - PLOT_PAD} y2={y} />;
+            })}
+          </g>
+          <rect className="scope-frame" x={PLOT_PAD} y={PLOT_PAD} width={PLOT_WIDTH - PLOT_PAD * 2} height={PLOT_HEIGHT - PLOT_PAD * 2} />
+          {family.series.map((s, i) => (
+            <path
+              key={s.label}
+              className="scope-trace"
+              stroke={STEP_COLORS[i % STEP_COLORS.length]}
+              d={tracePath(s.trace, s.times, family.min, family.max, family.tMax)}
+            />
+          ))}
+          <text className="scope-axis" x={PLOT_PAD} y={18}>
+            {formatEngineering(family.max, "V", 2)}
+          </text>
+          <text className="scope-axis" x={PLOT_PAD} y={PLOT_HEIGHT - 8}>
+            {formatEngineering(family.min, "V", 2)}
+          </text>
+          <text className="scope-axis right" x={PLOT_WIDTH - PLOT_PAD} y={PLOT_HEIGHT - 8}>
+            {formatEngineering(family.tMax, "s", 2)}
+          </text>
+        </svg>
+        <div className="scope-legend">
+          {family.series.map((s, i) => (
+            <span key={s.label}>
+              <i style={{ background: STEP_COLORS[i % STEP_COLORS.length] }} />
+              {s.label}
+            </span>
+          ))}
+        </div>
+      </div>
+      <div className="meter-row analysis-meter">
+        <Metric label="SIGNAL" value={family.signal} tone="green" />
+        <Metric label="STEPS" value={String(family.series.length)} tone="cyan" />
+        <Metric label="SWEEP" value={result.spec?.name ?? "--"} tone="cream" />
+      </div>
+    </>
+  );
+}
+
+/** Pick the trace to plot across a step family: the first probed net's trace,
+ *  else the first trace — mirroring the transient scope's selection. */
+function pickFamilyTraceId(success: Extract<AnalysisResult, { ok: true }>, probes: Probe[]): string | null {
+  for (const probe of probes) {
+    const net = success.circuit.nets.find(
+      (n) => !n.isGround && n.points.some((pt) => pt.x === probe.x && pt.y === probe.y),
+    );
+    if (!net) continue;
+    const trace = success.traces.find((t) => t.id === net.id);
+    if (trace) return trace.id;
+  }
+  return success.traces[0]?.id ?? null;
 }
 
 /** A compact table of `.meas` results, shown under the transient scope. */

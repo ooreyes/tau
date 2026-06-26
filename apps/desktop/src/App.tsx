@@ -32,6 +32,13 @@ import {
 import { runOperatingPoint, type OperatingPointResult } from "./simulation/operatingPoint";
 import { runAcSweep, type AcResult } from "./simulation/acSweep";
 import { runDcSweep, type DcSweepResult } from "./simulation/dcSweep";
+import { stepFromDirectives } from "./simulation/paramStep";
+import {
+  stepContexts,
+  isRunnableStep,
+  type StepFamilyMember,
+  type StepFamilyResult,
+} from "./simulation/stepFamily";
 import { buildParamScope, EMPTY_SCOPE, type ParamScope } from "./simulation/paramScope";
 import { analysesFromDirectives } from "./io/directiveAnalysis";
 import { runMeasurements, type MeasResult } from "./simulation/measure";
@@ -121,6 +128,7 @@ function App() {
   const [opAnalysis, setOpAnalysis] = useState<OperatingPointResult | null>(null);
   const [acAnalysis, setAcAnalysis] = useState<AcResult | null>(null);
   const [dcAnalysis, setDcAnalysis] = useState<DcSweepResult | null>(null);
+  const [stepFamily, setStepFamily] = useState<StepFamilyResult | null>(null);
   const [analysisRunning, setAnalysisRunning] = useState(false);
   const [runState, setRunState] = useState<"idle" | "complete" | "error" | "stopped">("idle");
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -155,6 +163,7 @@ function App() {
     setOpAnalysis(null);
     setAcAnalysis(null);
     setDcAnalysis(null);
+    setStepFamily(null);
     setRunState(state);
   }, []);
 
@@ -277,6 +286,51 @@ function App() {
       if (analysisRequestRef.current === requestId) setAnalysisRunning(false);
     }
   }, [components, wires, netLabels, params, directives]);
+
+  // A `.step` sweep re-runs the transient once per swept value, producing a
+  // family of overlaid curves. Needs a `.step param|source …` directive on the
+  // document (imported `.asc` files carry their own); temp sweeps and a missing
+  // directive surface a clear message instead of a silent no-op.
+  const runStepAnalysis = useCallback(async () => {
+    const requestId = ++analysisRequestRef.current;
+    const spec = stepFromDirectives(directives);
+    if (!isRunnableStep(spec)) {
+      setStepFamily({
+        ok: false,
+        message: spec
+          ? "Temperature stepping (.step temp) isn’t supported yet."
+          : "Add a “.step param <name> <start> <stop> <incr>” or “.step <source> …” directive to sweep.",
+        members: [],
+        warnings: [],
+      });
+      return;
+    }
+    let contexts;
+    try {
+      contexts = stepContexts(spec, params, components);
+    } catch (error) {
+      setStepFamily({ ok: false, message: error instanceof Error ? error.message : "Could not expand this .step.", members: [], warnings: [] });
+      return;
+    }
+    setAnalysisRunning(true);
+    try {
+      const members: StepFamilyMember[] = [];
+      for (const ctx of contexts) {
+        const result =
+          (await runNativeTransient({ components: ctx.components, wires, netLabels, params: ctx.params }, analysisOptions))
+          ?? runTransientAnalysis({ components: ctx.components, wires, netLabels, params: ctx.params }, analysisOptions);
+        if (analysisRequestRef.current !== requestId) return;
+        members.push({ label: ctx.label, value: ctx.value, result });
+      }
+      const warnings = members.find((m) => m.result.ok)?.result.warnings ?? [];
+      setStepFamily({ ok: members.some((m) => m.result.ok), spec, members, warnings });
+    } catch (error) {
+      if (analysisRequestRef.current !== requestId) return;
+      setStepFamily({ ok: false, message: error instanceof Error ? error.message : "Could not run this .step sweep.", members: [], warnings: [] });
+    } finally {
+      if (analysisRequestRef.current === requestId) setAnalysisRunning(false);
+    }
+  }, [components, wires, netLabels, params, directives, analysisOptions]);
 
   const stepAnalysis = useCallback(async () => {
     // Native ngspice may return an endpoint in addition to requested samples.
@@ -551,6 +605,7 @@ function App() {
                 opResult={opAnalysis}
                 acResult={acAnalysis}
                 dcResult={dcAnalysis}
+                stepResult={stepFamily}
                 measurements={measurements}
                 acMeasurements={acMeasurements}
                 options={analysisOptions}
@@ -560,6 +615,7 @@ function App() {
                 onRunOperatingPoint={runOperatingAnalysis}
                 onRunAcSweep={runAcAnalysis}
                 onRunDcSweep={runDcAnalysis}
+                onRunStep={runStepAnalysis}
                 onStop={stopAnalysis}
                 onStep={stepAnalysis}
                 onClose={() => setGraphOpen(false)}

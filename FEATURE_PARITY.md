@@ -174,8 +174,18 @@ zener, opamp, NMOS, PMOS, NPN, PNP, switch, transformer, testpoint, ground.
   copy of the `ParamScope` (`withStepValue`) and re-runs a caller-supplied
   analysis closure, yielding a labelled family of results; reuses the existing
   `.op`/`.tran`/`.ac` solvers (proven against the divider solver). `stepFromDirectives`
-  picks an imported circuit's first `.step`. 25 tests, hand-computed. **NEXT:**
-  UI dispatch + family-of-curves overlay (§6); source/temp run paths; nested steps.
+  picks an imported circuit's first `.step`. 25 tests, hand-computed.
+  **UI dispatch + family-of-curves overlay landed** (`simulation/stepFamily.ts`):
+  `stepContexts(spec, params, components)` expands a spec into one concrete run
+  context per swept value — **param** injects into a scope copy (`withStepValue`),
+  **source** overrides the matched component's `value` (case-insensitive ref-des),
+  **temp** throws a clear message — capped at `MAX_FAMILY_MEMBERS` (16).
+  `App.runStepAnalysis` re-runs the transient (native or TS) once per context and
+  stores a `StepFamilyResult`; a **STEP** tab in `SimulationPanel` overlays the
+  probed signal across the family in a trace-variable color ramp (`StepPlot`, §6).
+  10 hand-computed tests incl. a source sweep that tracks a 1:1 divider's
+  half-supply through the real OP solver. **NEXT:** temp run path; nested steps;
+  AC/DC-domain step families; per-trace pick in the overlay legend.
 - ⬜ `.four` Fourier analysis
 - ⬜ `.temp` temperature sweep / set — used 4×
 - 🟡 `.meas` **Measurements** (extract gain, BW, rise time, etc.) — used 61× —
@@ -239,7 +249,10 @@ zener, opamp, NMOS, PMOS, NPN, PNP, switch, transformer, testpoint, ground.
 - ⬜ **Measurement cursors** (1 & 2, delta readout)
 - ⬜ FFT of a waveform; THD readout
 - ⬜ Log/linear axes, dB, phase, group delay
-- ⬜ `.step` family-of-curves overlay
+- 🟡 `.step` family-of-curves overlay — **transient overlay landed** (`StepPlot`
+  in `SimulationPanel`): the **STEP** tab re-runs the sweep and draws the probed
+  signal across all step members in a color ramp; legend lists each `name=value`.
+  Pending: AC/DC-domain families, per-trace selection, cursor readout.
 - ⬜ Save plot settings (`.plt`), export image/CSV
 - ⬜ Right-click trace → math/operations
 
