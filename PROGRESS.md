@@ -1,5 +1,51 @@
 # Tau Autobuilder — Progress Log
 
+## 2026-06-26T02:05Z — auto/ltspice-parity — inline LTspice source functions in the ngspice deck (§3)
+
+### What I did
+- Found a hard blocker for the user's real files: an imported LTspice
+  `voltage`/`current` symbol carries its stimulus inline on the Value attribute
+  (`SINE(0 7.5 1k)`, `PULSE(-10 10 5u 25u 25u 0u 50u)` in class-d_starter.asc),
+  but `buildSpiceDeck` only emitted `DC <number>` for `vsource`/`isource` — so it
+  threw `needs a valid V value` on those decks and nothing simulated.
+- New `engine/sourceFunction.ts`: `parseSourceFunction(rawValue, "V"|"A")` parses
+  the five LTspice transient families — **SINE/SIN, PULSE, PWL, EXP, SFFM** — and
+  re-emits an ngspice-ready spec (`DC <t0> SIN(...)` etc.). It (a) parses every
+  numeric arg through `parseQuantity` so LTspice's `µ`/`meg`/unicode prefixes are
+  normalized to plain numbers ngspice always accepts, (b) rounds to 12 sig-digits
+  to kill binary-float noise (`10·1e-6` → `0.00001`, not `0.0000099999`), and
+  (c) trims the trailing `Ncycles` slot that ngspice's SIN/PULSE reject. Returns
+  `null` for a plain DC number so the existing numeric path still handles it.
+- Wired it into `buildSpiceDeck`'s `vsource`/`isource` cases (keeping the isource
+  node-swap polarity convention intact).
+
+### Files touched
+- src/engine/sourceFunction.ts (new), src/engine/sourceFunction.test.ts (new, 10 tests)
+- src/engine/spiceNetlist.ts (vsource/isource try the function parser first)
+- src/engine/spiceNetlist.test.ts (+2 deck-integration tests)
+- FEATURE_PARITY.md (§3 Sources note)
+
+### Tests
+441 passing (was 429; +12 new). Typecheck clean. Live-validated both generated
+decks in real ngspice 17 (`/opt/homebrew/bin/ngspice -b`): the SIN deck produces
+v() output and the full-PULSE deck runs with zero errors/warnings.
+
+### FEATURE_PARITY items updated
+- §3 Sources — SINE/PULSE/PWL/EXP/SFFM inline functions now reach the deck
+  (line stays 🟡: PWL FILE, behavioral B-source, AC spec, noise sources, and
+  TS-fallback-solver support for these functions remain).
+
+### UX issues found
+- None (no UI surface touched). The TS fallback solver (web mode, no native
+  ngspice) still treats a `vsource` SINE string as DC-only — native path is
+  unaffected since ngspice now gets the real function.
+
+### Next step
+Teach the TS fallback solver (`simulation/linearTransient.ts`) to drive a
+`vsource`/`isource` from `parseSourceFunction` (at least SINE + PULSE) so web-mode
+sims match native; or add the behavioral **B-source** (`V=`/`I=` expressions),
+the last remaining source family the user's circuits need.
+
 ## 2026-06-26T02:00Z — auto/ltspice-parity — AC-domain `.meas` engine + UI (§4/§6)
 
 ### What I did
