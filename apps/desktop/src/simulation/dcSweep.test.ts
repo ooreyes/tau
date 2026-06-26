@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { parseDcDirective, runDcSweep } from "./dcSweep";
+import { analysesFromDirectives } from "../io/directiveAnalysis";
 import type { SchematicComponent, SchematicWire } from "../schematic/types";
 
 // ---------------------------------------------------------------------------
@@ -120,5 +121,20 @@ describe("runDcSweep", () => {
     expect(res.ok).toBe(false);
     if (res.ok) return;
     expect(res.message).toMatch(/max/);
+  });
+
+  // Mirrors App.runDcAnalysis: an imported circuit's own `.dc` directive is
+  // mapped to a sweep spec, then run against the schematic — the path that
+  // lets a real `.asc` sweep as authored.
+  it("runs the sweep spec recovered from a document's `.dc` directive", () => {
+    const { components, wires } = dividerSchematic();
+    const { dc } = analysesFromDirectives([".param x=1", ".dc V1 0 10 5"]);
+    expect(dc).toEqual({ source: "V1", start: 0, stop: 10, step: 5 });
+    const res = runDcSweep({ components, wires }, dc!);
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.sweep).toEqual([0, 5, 10]);
+    const mid = res.nets.find((n) => n.label !== "GND" && n.voltages.every((v, k) => Math.abs(v - res.sweep[k] / 2) < 1e-9));
+    expect(mid?.voltages).toEqual([0, 2.5, 5]);
   });
 });
