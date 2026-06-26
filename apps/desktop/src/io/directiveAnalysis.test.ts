@@ -98,4 +98,15 @@ describe("analysesFromDirectives", () => {
     const out = analysesFromDirectives([".tran 1m", ".tran 9m"]);
     expect(out.tran?.stopTime).toBe(0.001);
   });
+
+  it("extracts a .dc source sweep with SI-suffixed bounds", () => {
+    const out = analysesFromDirectives([".param x=1", ".dc V1 0 10 0.5", ".dc V2 0 5 1"]);
+    // First .dc wins; later ones are ignored.
+    expect(out.dc).toEqual({ source: "V1", start: 0, stop: 10, step: 0.5 });
+  });
+
+  it("does not confuse .dc with .tran/.ac", () => {
+    const out = analysesFromDirectives([".tran 1m", ".ac dec 20 10 1Meg"]);
+    expect(out.dc).toBeUndefined();
+  });
 });

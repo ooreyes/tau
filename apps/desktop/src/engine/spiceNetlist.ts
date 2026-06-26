@@ -8,7 +8,8 @@ import { parseSourceFunction } from "./sourceFunction";
 export type SpiceAnalysis =
   | { kind: "tran"; stopTime: number; steps: number }
   | { kind: "op" }
-  | { kind: "ac"; startHz: number; stopHz: number; pointsPerDecade: number };
+  | { kind: "ac"; startHz: number; stopHz: number; pointsPerDecade: number }
+  | { kind: "dc"; source: string; start: number; stop: number; step: number };
 
 export interface SpiceDeck {
   circuit: ExtractedCircuit;
@@ -172,6 +173,15 @@ function analysisLine(analysis: SpiceAnalysis): string {
         throw new Error("AC analysis needs positive start/stop frequencies and at least one point per decade.");
       }
       return `.ac dec ${Math.round(analysis.pointsPerDecade)} ${analysis.startHz} ${analysis.stopHz}`;
+    case "dc": {
+      if (!analysis.source.trim()) throw new Error("DC sweep needs a source name.");
+      if (!Number.isFinite(analysis.start) || !Number.isFinite(analysis.stop) || !Number.isFinite(analysis.step) || analysis.step === 0) {
+        throw new Error("DC sweep needs finite start/stop values and a non-zero increment.");
+      }
+      // ngspice wants the increment signed toward the stop value.
+      const inc = Math.abs(analysis.step) * (analysis.stop >= analysis.start ? 1 : -1);
+      return `.dc ${safeName(analysis.source)} ${analysis.start} ${analysis.stop} ${inc}`;
+    }
   }
 }
 

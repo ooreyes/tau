@@ -31,6 +31,7 @@ import {
 } from "./simulation/linearTransient";
 import { runOperatingPoint, type OperatingPointResult } from "./simulation/operatingPoint";
 import { runAcSweep, type AcResult } from "./simulation/acSweep";
+import { runDcSweep, type DcSweepResult } from "./simulation/dcSweep";
 import { buildParamScope, EMPTY_SCOPE, type ParamScope } from "./simulation/paramScope";
 import { analysesFromDirectives } from "./io/directiveAnalysis";
 import { runMeasurements, type MeasResult } from "./simulation/measure";
@@ -119,6 +120,7 @@ function App() {
   const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
   const [opAnalysis, setOpAnalysis] = useState<OperatingPointResult | null>(null);
   const [acAnalysis, setAcAnalysis] = useState<AcResult | null>(null);
+  const [dcAnalysis, setDcAnalysis] = useState<DcSweepResult | null>(null);
   const [analysisRunning, setAnalysisRunning] = useState(false);
   const [runState, setRunState] = useState<"idle" | "complete" | "error" | "stopped">("idle");
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -152,6 +154,7 @@ function App() {
     setAnalysis(null);
     setOpAnalysis(null);
     setAcAnalysis(null);
+    setDcAnalysis(null);
     setRunState(state);
   }, []);
 
@@ -247,6 +250,33 @@ function App() {
       if (analysisRequestRef.current === requestId) setAnalysisRunning(false);
     }
   }, [components, wires, netLabels, params]);
+
+  // A DC sweep needs a `.dc <src> <start> <stop> <incr>` directive to know which
+  // source to sweep and over what range. Imported `.asc` files carry their own;
+  // a hand-built circuit gets a clear prompt instead of a silent no-op.
+  const runDcAnalysis = useCallback(async () => {
+    const requestId = ++analysisRequestRef.current;
+    const { dc } = analysesFromDirectives(directives);
+    if (!dc) {
+      setDcAnalysis({
+        ok: false,
+        message: "Add a “.dc <source> <start> <stop> <increment>” directive to sweep a source.",
+        warnings: [],
+      });
+      return;
+    }
+    setAnalysisRunning(true);
+    try {
+      const result = runDcSweep({ components, wires, netLabels, params }, dc);
+      if (analysisRequestRef.current !== requestId) return;
+      setDcAnalysis(result);
+    } catch (error) {
+      if (analysisRequestRef.current !== requestId) return;
+      setDcAnalysis({ ok: false, message: error instanceof Error ? error.message : "Could not run this DC sweep.", warnings: [] });
+    } finally {
+      if (analysisRequestRef.current === requestId) setAnalysisRunning(false);
+    }
+  }, [components, wires, netLabels, params, directives]);
 
   const stepAnalysis = useCallback(async () => {
     // Native ngspice may return an endpoint in addition to requested samples.
@@ -520,6 +550,7 @@ function App() {
                 result={analysis}
                 opResult={opAnalysis}
                 acResult={acAnalysis}
+                dcResult={dcAnalysis}
                 measurements={measurements}
                 acMeasurements={acMeasurements}
                 options={analysisOptions}
@@ -528,6 +559,7 @@ function App() {
                 onRun={runAnalysis}
                 onRunOperatingPoint={runOperatingAnalysis}
                 onRunAcSweep={runAcAnalysis}
+                onRunDcSweep={runDcAnalysis}
                 onStop={stopAnalysis}
                 onStep={stepAnalysis}
                 onClose={() => setGraphOpen(false)}

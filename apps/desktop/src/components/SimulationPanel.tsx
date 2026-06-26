@@ -17,6 +17,7 @@ import { paramFields, decodeParams, encodeParams } from "../schematic/params";
 import { EngineeringInput } from "./EngineeringInput";
 import type { OperatingPointResult } from "../simulation/operatingPoint";
 import type { AcResult } from "../simulation/acSweep";
+import type { DcSweepResult } from "../simulation/dcSweep";
 import type { MeasResult } from "../simulation/measure";
 import { isNativeSpiceRuntime, MAX_NATIVE_OUTPUT_POINTS } from "../engine/nativeSpice";
 import { displaySampleIndices, waveformBounds } from "../simulation/waveform";
@@ -25,6 +26,7 @@ interface SimulationPanelProps {
   result: AnalysisResult | null;
   opResult: OperatingPointResult | null;
   acResult: AcResult | null;
+  dcResult: DcSweepResult | null;
   measurements: MeasResult[];
   acMeasurements: MeasResult[];
   options: AnalysisOptions;
@@ -33,6 +35,7 @@ interface SimulationPanelProps {
   onRun: () => void | Promise<void>;
   onRunOperatingPoint: () => void | Promise<void>;
   onRunAcSweep: () => void | Promise<void>;
+  onRunDcSweep: () => void | Promise<void>;
   onStop: () => void;
   onStep: () => void | Promise<void>;
   onClose: () => void;
@@ -46,6 +49,7 @@ export function SimulationPanel({
   result,
   opResult,
   acResult,
+  dcResult,
   measurements,
   acMeasurements,
   options,
@@ -54,6 +58,7 @@ export function SimulationPanel({
   onRun,
   onRunOperatingPoint,
   onRunAcSweep,
+  onRunDcSweep,
   onStop,
   onStep,
   onClose,
@@ -87,9 +92,9 @@ export function SimulationPanel({
   const opampPart = selected && selected.kind === "opamp" ? findOpAmp(selected.value) : null;
   const warnings = result?.warnings ?? [];
 
-  const [mode, setMode] = useState<"tran" | "op" | "ac">("tran");
+  const [mode, setMode] = useState<"tran" | "op" | "ac" | "dc">("tran");
   const [maximized, setMaximized] = useState(false);
-  const title = mode === "tran" ? "Transient scope" : mode === "op" ? "Operating point" : "AC sweep";
+  const title = mode === "tran" ? "Transient scope" : mode === "op" ? "Operating point" : mode === "ac" ? "AC sweep" : "DC sweep";
   // ngspice may include the final endpoint in addition to requested steps.
   const maxTransientSteps = isNativeSpiceRuntime() ? MAX_NATIVE_OUTPUT_POINTS - 1 : MAX_TRANSIENT_STEPS;
   const resolution = useMemo(() => {
@@ -166,6 +171,18 @@ export function SimulationPanel({
           >
             AC
           </button>
+          <button
+            className={`plotter-tab${mode === "dc" ? " active" : ""}`}
+            role="tab"
+            aria-selected={mode === "dc"}
+            disabled={isRunning}
+            onClick={() => {
+              setMode("dc");
+              void onRunDcSweep();
+            }}
+          >
+            DC
+          </button>
         </div>
       </div>
 
@@ -220,6 +237,7 @@ export function SimulationPanel({
           <MeasTable measurements={acMeasurements} />
         </>
       )}
+      {mode === "dc" && <DcPlot result={dcResult} />}
 
       <div className="selection-strip">
         <div className="strip-label">SELECT</div>
@@ -619,6 +637,114 @@ function bodePath(magDb: number[], freqs: number[], plot: { minDb: number; maxDb
     const x = PLOT_PAD + lx * (PLOT_WIDTH - PLOT_PAD * 2);
     const yv = Math.max(plot.minDb, Math.min(plot.maxDb, db));
     const y = PLOT_HEIGHT - PLOT_PAD - ((yv - plot.minDb) / span) * (PLOT_HEIGHT - PLOT_PAD * 2);
+    path += `${started ? "L" : "M"} ${x.toFixed(2)} ${y.toFixed(2)} `;
+    started = true;
+  }
+  return path;
+}
+
+/**
+ * Plot a `.dc` source sweep: the swept source value on a linear X axis, each
+ * node's voltage on a linear Y axis. Mirrors {@link AcPlot} but without the log
+ * frequency mapping. The ground net (label "GND") is dropped — it is always 0 V.
+ */
+function DcPlot({ result }: { result: DcSweepResult | null }) {
+  const traces = result?.ok ? result.nets.filter((n) => n.label !== "GND").slice(0, 6) : [];
+  const sweep = result?.ok ? result.sweep : [];
+  const plot = useMemo(() => {
+    if (traces.length === 0 || sweep.length === 0) return null;
+    let vMin = Infinity;
+    let vMax = -Infinity;
+    for (const net of traces) {
+      for (const v of net.voltages) {
+        if (!Number.isFinite(v)) continue;
+        vMin = Math.min(vMin, v);
+        vMax = Math.max(vMax, v);
+      }
+    }
+    if (!Number.isFinite(vMin) || !Number.isFinite(vMax)) return null;
+    // Pad a flat trace so it sits mid-frame instead of on an axis edge.
+    if (vMax - vMin < 1e-12) {
+      vMin -= 0.5;
+      vMax += 0.5;
+    }
+    const xMin = sweep[0];
+    const xMax = sweep[sweep.length - 1];
+    return { vMin, vMax, xMin, xMax };
+  }, [traces, sweep]);
+
+  if (!result) return null;
+  if (!result.ok) return <div className="analysis-empty">{result.message}</div>;
+
+  return (
+    <>
+      <div className="scope-shell">
+        <svg className="scope-svg" viewBox={`0 0 ${PLOT_WIDTH} ${PLOT_HEIGHT}`} role="img" aria-label="DC sweep plot">
+          <g className="scope-grid">
+            {Array.from({ length: 6 }).map((_, i) => {
+              const x = PLOT_PAD + (i * (PLOT_WIDTH - PLOT_PAD * 2)) / 5;
+              return <line key={`x${i}`} x1={x} y1={PLOT_PAD} x2={x} y2={PLOT_HEIGHT - PLOT_PAD} />;
+            })}
+            {Array.from({ length: 5 }).map((_, i) => {
+              const y = PLOT_PAD + (i * (PLOT_HEIGHT - PLOT_PAD * 2)) / 4;
+              return <line key={`y${i}`} x1={PLOT_PAD} y1={y} x2={PLOT_WIDTH - PLOT_PAD} y2={y} />;
+            })}
+          </g>
+          <rect className="scope-frame" x={PLOT_PAD} y={PLOT_PAD} width={PLOT_WIDTH - PLOT_PAD * 2} height={PLOT_HEIGHT - PLOT_PAD * 2} />
+          {plot &&
+            traces.map((net, i) => (
+              <path key={net.id} className="scope-trace" stroke={AC_COLORS[i % AC_COLORS.length]} d={dcPath(net.voltages, sweep, plot)} />
+            ))}
+          <text className="scope-axis" x={PLOT_PAD} y={18}>
+            {plot ? formatEngineering(plot.vMax, "V", 2) : "MAX"}
+          </text>
+          <text className="scope-axis" x={PLOT_PAD} y={PLOT_HEIGHT - 8}>
+            {plot ? formatEngineering(plot.vMin, "V", 2) : "MIN"}
+          </text>
+          <text className="scope-axis right" x={PLOT_WIDTH - PLOT_PAD} y={PLOT_HEIGHT - 8}>
+            {plot ? `${result.source} ${formatEngineering(plot.xMax, "", 2)}` : result.source}
+          </text>
+        </svg>
+        <div className="scope-legend">
+          {traces.length > 0 ? (
+            traces.map((net, i) => (
+              <span key={net.id}>
+                <i style={{ background: AC_COLORS[i % AC_COLORS.length] }} />
+                {net.label}
+              </span>
+            ))
+          ) : (
+            <span className="muted">No traces</span>
+          )}
+        </div>
+      </div>
+      <div className="meter-row analysis-meter">
+        <Metric label="SWEEP" value={result.source} tone="green" />
+        <Metric label="POINTS" value={String(sweep.length)} tone="cyan" />
+        <Metric label="NETS" value={String(traces.length)} tone="cream" />
+      </div>
+    </>
+  );
+}
+
+/** Map a DC sweep net series to an SVG polyline over a linear X (sweep) / Y (volts) frame. */
+function dcPath(
+  voltages: number[],
+  sweep: number[],
+  plot: { vMin: number; vMax: number; xMin: number; xMax: number },
+): string {
+  const vSpan = plot.vMax - plot.vMin || 1;
+  const xSpan = plot.xMax - plot.xMin || 1;
+  const count = Math.min(voltages.length, sweep.length);
+  let path = "";
+  let started = false;
+  for (const index of displaySampleIndices(count)) {
+    const v = voltages[index];
+    const sx = sweep[index];
+    if (!Number.isFinite(v) || !Number.isFinite(sx)) continue;
+    const x = PLOT_PAD + ((sx - plot.xMin) / xSpan) * (PLOT_WIDTH - PLOT_PAD * 2);
+    const yv = Math.max(plot.vMin, Math.min(plot.vMax, v));
+    const y = PLOT_HEIGHT - PLOT_PAD - ((yv - plot.vMin) / vSpan) * (PLOT_HEIGHT - PLOT_PAD * 2);
     path += `${started ? "L" : "M"} ${x.toFixed(2)} ${y.toFixed(2)} `;
     started = true;
   }

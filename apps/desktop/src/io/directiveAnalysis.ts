@@ -9,6 +9,7 @@
 
 import { parseQuantity } from "../simulation/quantity";
 import { MAX_TRANSIENT_STEPS, type AnalysisOptions } from "../simulation/linearTransient";
+import { parseDcDirective, type DcSweepSpec } from "../simulation/dcSweep";
 
 /** Sample count used when a `.tran` gives no usable timestep. Mirrors the editor default. */
 export const DEFAULT_TRAN_STEPS = 240;
@@ -114,10 +115,11 @@ export function parseAcDirective(directive: string): AcAnalysisOptions | null {
 export interface DirectiveAnalyses {
   tran?: AnalysisOptions;
   ac?: AcAnalysisOptions;
+  dc?: DcSweepSpec;
 }
 
 /**
- * Scan a document's directive lines and return the first `.tran` / `.ac`
+ * Scan a document's directive lines and return the first `.tran` / `.ac` / `.dc`
  * analysis each maps to. Lets the app pick a default run + options for an
  * imported circuit. Unparseable directives are simply skipped.
  */
@@ -131,6 +133,10 @@ export function analysesFromDirectives(directives: string[]): DirectiveAnalyses 
     if (!result.ac) {
       const ac = parseAcDirective(directive);
       if (ac) result.ac = ac;
+    }
+    if (!result.dc) {
+      const dc = parseDcDirective(directive);
+      if (dc) result.dc = dc;
     }
   }
   return result;

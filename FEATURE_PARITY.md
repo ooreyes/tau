@@ -154,8 +154,16 @@ zener, opamp, NMOS, PMOS, NPN, PNP, switch, transformer, testpoint, ground.
   ascending/descending), `runDcSweep` overrides the named source and re-solves
   the OP per step, returning a per-net voltage series. Reuses `runOperatingPoint`
   (no duplicated stamping); guards zero/oversized increments. Hand-computed
-  divider test (V(mid)=Vsweep/2), 9 tests. **NEXT:** UI dispatch + waveform pane
-  + map an imported `.dc` directive to this runner; nested 2nd-source sweep.
+  divider test (V(mid)=Vsweep/2), 9 tests. **UI dispatch + plot pane + import
+  mapping landed:** a **DC** tab in `SimulationPanel` runs `runDcSweep` and a new
+  linear-axis `DcPlot` (mirrors `AcPlot`; X = swept source value, Y = node volts,
+  ground dropped); `App.runDcAnalysis` sources the sweep spec from the document's
+  own `.dc` directive via `analysesFromDirectives` (so an imported `.asc` sweeps
+  as authored) and shows a clear prompt when none is present. Native ngspice deck
+  now emits `.dc <src> <start> <stop> <inc>` (stop-directed sign) —
+  `buildSpiceDeck` `kind:"dc"`, live-validated in ngspice 17 (1:1 divider →
+  V(mid)=Vsweep/2). **NEXT:** native (FFI) DC runner for nonlinear sweeps;
+  manual source/range picker for hand-built circuits; nested 2nd-source sweep.
 - ⬜ `.noise` **Noise analysis** — used 13×
 - ⬜ `.tf` **Transfer function** (small-signal DC gain, Zin/Zout)
 - 🟡 `.step` **Parametric sweep** (param/source/temp, nested, list) — used 34×; huge for real work.

@@ -93,6 +93,23 @@ describe("buildSpiceDeck", () => {
     expect(deck.netlist).toContain(".ac dec 20 10 1000000");
   });
 
+  it("writes a .dc source-sweep directive with a stop-directed increment", () => {
+    const components = [
+      component("vsource", "V1", "5", 0, 32),
+      component("resistor", "R1", "1k", 96, 0),
+      component("ground", "", "", 0, 64),
+      component("ground", "", "", 128, 0),
+    ];
+    const wires = [wire("w1", [{ x: 0, y: 0 }, { x: 64, y: 0 }])];
+
+    const up = buildSpiceDeck({ components, wires }, { kind: "dc", source: "V1", start: 0, stop: 10, step: 1 });
+    expect(up.netlist).toContain(".dc V1 0 10 1");
+
+    // A descending range flips the increment sign so ngspice walks start → stop.
+    const down = buildSpiceDeck({ components, wires }, { kind: "dc", source: "V1", start: 10, stop: 0, step: 2 });
+    expect(down.netlist).toContain(".dc V1 10 0 -2");
+  });
+
   it("exports every remaining starter-library symbol to an ngspice primitive", () => {
     const components = [
       component("diode", "D1", "D", 0, 0),
