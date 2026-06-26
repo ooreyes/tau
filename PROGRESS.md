@@ -1,5 +1,43 @@
 # Tau Autobuilder — Progress Log
 
+## 2026-06-26T00:10Z — auto/ltspice-parity — `.step` parametric-sweep parser + param runner (§4/§5)
+
+### What I did
+- Added `simulation/paramStep.ts`. `parseStepDirective` enumerates every LTspice
+  `.step` form up front into `StepSpec.values`:
+  - linear `start stop incr` (handles clean endpoints, descending ranges,
+    negative increments normalized toward stop, SI suffixes),
+  - `dec`/`oct` log ranges (N points per decade/octave, endpoint-inclusive),
+  - explicit `list`,
+  - `param <name>` / bare-source / `temp` kinds.
+- `runParamStep` (param kind): injects each swept value into a copy of the
+  `ParamScope` via `withStepValue` (exact + lowercased key, base untouched) and
+  re-runs a caller-supplied analysis closure, returning a labelled family
+  (`{value,label,result}`). Reuses existing `.op`/`.tran`/`.ac` solvers.
+- `stepFromDirectives` picks an imported circuit's first `.step`.
+
+### Files touched
+- src/simulation/paramStep.ts (new)
+- src/simulation/paramStep.test.ts (new, 25 tests)
+- FEATURE_PARITY.md (§4 `.step` ⬜→🟡, §5 `.step param x list/range` ⬜→✅)
+
+### Tests
+379 passing (was 354; +25 new). Typecheck clean. Integration test sweeps a
+divider's Rtop through the real `runOperatingPoint` solver and confirms the
+midpoint voltage tracks 12·1k/(Rtop+1k) = 6 V then 3 V.
+
+### FEATURE_PARITY items updated
+- §4 `.step`: ⬜ → 🟡 (parser + param-runner done; UI dispatch/source-temp/nested pending)
+- §5 `.step param x list/range`: ⬜ → ✅ (engine support complete + tested)
+
+### UX issues found
+- None (no UI surface changed this run).
+
+### Next step
+Wire `stepFromDirectives` + `runParamStep` into App.tsx's run path with a
+family-of-curves overlay in the waveform pane (§6); then add source/temp step
+run paths (override a component `value` / analysis temp) and nested `.step`.
+
 ## 2026-06-25T23:57Z — auto/ltspice-parity — `.dc` DC-sweep solver + directive parser (§4)
 
 ### What I did
