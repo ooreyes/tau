@@ -1,5 +1,54 @@
 # Tau Autobuilder — Progress Log
 
+## 2026-06-26T01:06Z — auto/ltspice-parity — `.meas` transient measurement engine + UI (§4/§6)
+
+### What I did
+- Built `simulation/measure.ts`, a full LTspice `.meas`/`.measure` engine for
+  transient results. `parseMeasDirective` covers the forms used in the user's
+  circuits: `MAX/MIN/PP/AVG/RMS/INTEG` aggregates over `FROM/TO` windows,
+  `PARAM <expr>`, `FIND <expr> AT=/WHEN`, bare `WHEN <cond>` (crossing time),
+  and `TRIG ... TARG ...` timing with `RISE/FALL/CROSS`, occurrence count, and
+  `TD`. SI suffixes via the existing expr engine; `=`/space option forms both.
+- `runMeasurements` evaluates directives in order through an accumulating scope
+  (seeded with circuit `.param`/`.func`) so later `PARAM` lines reference earlier
+  measurements by name — reproducing deadtime.asc's
+  `vmax→vmin→vamp→tper→freq→*_err` chain. Signals `V(node)`/`V(a,b)` resolve
+  against trace ids/labels and combine with arbitrary expressions; crossing times
+  and FIND...AT use linear interpolation.
+- Wired into the app: `App.tsx` memoizes `runMeasurements(directives, analysis,
+  params.scope, params.funcs)` off the transient result and passes a `MeasResult[]`
+  to `SimulationPanel`, which renders a new `MeasTable` under the transient meters
+  (op-table styling; failed measurements show their reason). New `.meas-table` CSS.
+
+### Files touched
+- src/simulation/measure.ts (new), src/simulation/measure.test.ts (new, 25 tests)
+- src/components/SimulationPanel.tsx (measurements prop + MeasTable)
+- src/App.tsx (memoized measurements + prop wiring)
+- src/App.css (.meas-table styles)
+- FEATURE_PARITY.md (§4 `.meas` ⬜→🟡)
+
+### Tests
+404 passing (was 379; +25 new). Typecheck clean. Measurement math is
+hand-computed: triangle-wave MAX/MIN/PP, trapezoidal INTEG/AVG/RMS of constants,
+interpolated FIND/WHEN, and a full deadtime.asc-style TRIG/TARG period →
+frequency chain with `.param`-seeded percentage error.
+
+### FEATURE_PARITY items updated
+- §4 `.meas` ⬜ → 🟡 (transient domain done; AC-domain `.meas` and `I(...)`
+  branch-current signals remain).
+
+### UX issues found
+- Visual QA still blocked headless (cannot screenshot the running dev server);
+  MeasTable styling mirrors the verified op-table, so low risk. Tracked as UX debt.
+
+### Next step
+Map an imported `.dc`/`.step` directive to its landed solver and dispatch from the
+UI (both engines exist; only `.tran`/`.ac` adopt directive options today), then
+add AC-domain `.meas` so loop-gain circuits' `FIND v(vout) AT`/`WHEN db()=-3`
+measurements resolve.
+
+---
+
 ## 2026-06-26T00:10Z — auto/ltspice-parity — `.step` parametric-sweep parser + param runner (§4/§5)
 
 ### What I did

@@ -170,7 +170,16 @@ zener, opamp, NMOS, PMOS, NPN, PNP, switch, transformer, testpoint, ground.
   UI dispatch + family-of-curves overlay (§6); source/temp run paths; nested steps.
 - ⬜ `.four` Fourier analysis
 - ⬜ `.temp` temperature sweep / set — used 4×
-- ⬜ `.meas` **Measurements** (extract gain, BW, rise time, etc.) — used 61×
+- 🟡 `.meas` **Measurements** (extract gain, BW, rise time, etc.) — used 61× —
+  **transient engine + UI landed** (`simulation/measure.ts`): `parseMeasDirective`
+  handles `MAX/MIN/PP/AVG/RMS/INTEG` aggregates over `FROM/TO`, `PARAM` expressions,
+  `FIND <expr> AT=/WHEN`, `WHEN` crossing-time, and `TRIG/TARG` timing
+  (`RISE/FALL/CROSS`, occurrence, `TD`). `runMeasurements` chains results by name
+  through a scope seeded with `.param`/`.func`, matching deadtime.asc exactly;
+  signals (`V(node)`, `V(a,b)`) resolve against trace ids/labels via the
+  expression engine. `App.tsx` memoizes them off the transient result and renders
+  a `MeasTable` in `SimulationPanel`. 25 hand-computed tests. **NEXT:** AC-domain
+  `.meas` (db()/FIND...AT on AcResult); `I(...)` branch-current signals.
 - ⬜ DC operating point annotation on schematic (show node V / device I in-place)
 - ⬜ Initial conditions `.ic` / `.nodeset`
 - ⬜ `.options` passthrough (reltol, etc.) — used 7×
