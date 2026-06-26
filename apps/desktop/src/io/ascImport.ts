@@ -31,6 +31,41 @@ import type {
 } from "../schematic/types";
 import { getLocalPins } from "../schematic/pins";
 
+/**
+ * Decode a schematic file's raw bytes to text, honoring the encoding LTspice
+ * actually writes. LTspice saves many `.asc`/`.asy` files as UTF-16 (with a BOM);
+ * the browser's `File.text()` assumes UTF-8 and silently mangles them (every other
+ * byte becomes NUL), so the parser then finds zero symbols. Detect the BOM (and a
+ * BOM-less UTF-16LE heuristic) and decode correctly before parsing.
+ */
+export function decodeSchematicText(input: ArrayBuffer | Uint8Array): string {
+  const bytes = input instanceof Uint8Array ? input : new Uint8Array(input);
+  if (bytes.length >= 2 && bytes[0] === 0xff && bytes[1] === 0xfe) {
+    return new TextDecoder("utf-16le").decode(bytes.subarray(2));
+  }
+  if (bytes.length >= 2 && bytes[0] === 0xfe && bytes[1] === 0xff) {
+    return new TextDecoder("utf-16be").decode(bytes.subarray(2));
+  }
+  if (bytes.length >= 3 && bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf) {
+    return new TextDecoder("utf-8").decode(bytes.subarray(3));
+  }
+  // BOM-less UTF-16LE heuristic: ASCII-range text encoded as UTF-16LE has a NUL in
+  // every odd byte position. If odd bytes are overwhelmingly NUL, decode as UTF-16LE.
+  if (bytes.length >= 4) {
+    const sample = Math.min(bytes.length, 512);
+    let oddNuls = 0;
+    let oddCount = 0;
+    for (let i = 1; i < sample; i += 2) {
+      oddCount++;
+      if (bytes[i] === 0x00) oddNuls++;
+    }
+    if (oddCount > 0 && oddNuls / oddCount > 0.7) {
+      return new TextDecoder("utf-16le").decode(bytes);
+    }
+  }
+  return new TextDecoder("utf-8").decode(bytes);
+}
+
 export type AscOrientation = "R0" | "R90" | "R180" | "R270" | "M0" | "M90" | "M180" | "M270";
 
 export interface AscWire {

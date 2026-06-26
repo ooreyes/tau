@@ -4,7 +4,7 @@ import { MAX_SCHEMATIC_FILE_BYTES, validateSchematicDocument } from "../schemati
 import { ComponentSymbol } from "../schematic/symbols";
 import type { SchematicComponent } from "../schematic/types";
 import { decodeParams, encodeParams, paramFields } from "../schematic/params";
-import { importAsc } from "../io/ascImport";
+import { importAsc, decodeSchematicText } from "../io/ascImport";
 import { EngineeringInput } from "./EngineeringInput";
 import { useSchematic, type SchematicDocument } from "../store/useSchematic";
 import { EXAMPLE_CIRCUITS, type ExampleCircuit } from "../examples/circuits";
@@ -188,7 +188,9 @@ export function EditorToolbar({
       if (file.size > MAX_SCHEMATIC_FILE_BYTES) {
         throw new Error(`Circuit files must be smaller than ${MAX_SCHEMATIC_FILE_BYTES / (1024 * 1024)} MB.`);
       }
-      const text = await file.text();
+      // Decode by actual byte encoding (LTspice writes some .asc files as UTF-16),
+      // not the UTF-8 that File.text() assumes — otherwise the parser sees garbage.
+      const text = decodeSchematicText(await file.arrayBuffer());
       if (/\.asc$/i.test(file.name)) {
         // LTspice schematic import (FEATURE_PARITY §1c).
         const result = importAsc(text);
