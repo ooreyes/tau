@@ -34,6 +34,7 @@ import { runAcSweep, type AcResult } from "./simulation/acSweep";
 import { buildParamScope, EMPTY_SCOPE, type ParamScope } from "./simulation/paramScope";
 import { analysesFromDirectives } from "./io/directiveAnalysis";
 import { runMeasurements, type MeasResult } from "./simulation/measure";
+import { runAcMeasurements } from "./simulation/measureAc";
 import {
   isNativeSpiceRuntime,
   MAX_NATIVE_OUTPUT_POINTS,
@@ -174,6 +175,13 @@ function App() {
     if (!analysis || !analysis.ok || directives.length === 0) return [];
     return runMeasurements(directives, analysis, params.scope, params.funcs);
   }, [analysis, directives, params]);
+
+  // Evaluate the document's `.meas ac …` directives against the latest AC sweep.
+  // Mirrors the transient measurements but on the frequency axis (db/mag/phase).
+  const acMeasurements = useMemo<MeasResult[]>(() => {
+    if (!acAnalysis || !acAnalysis.ok || directives.length === 0) return [];
+    return runAcMeasurements(directives, acAnalysis, params.scope, params.funcs);
+  }, [acAnalysis, directives, params]);
 
   const executeTransient = useCallback(async (options: AnalysisOptions) => {
     const requestId = ++analysisRequestRef.current;
@@ -513,6 +521,7 @@ function App() {
                 opResult={opAnalysis}
                 acResult={acAnalysis}
                 measurements={measurements}
+                acMeasurements={acMeasurements}
                 options={analysisOptions}
                 isRunning={analysisRunning}
                 onOptionsChange={setAnalysisOptions}

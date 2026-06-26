@@ -1,5 +1,61 @@
 # Tau Autobuilder — Progress Log
 
+## 2026-06-26T02:00Z — auto/ltspice-parity — AC-domain `.meas` engine + UI (§4/§6)
+
+### What I did
+- Generalized the `.meas` evaluation core in `simulation/measure.ts` to be
+  **axis-agnostic**: extracted `evaluateOnAxis(spec, axis, compile, scope, funcs)`
+  plus axis-generic `interpAt`/`findCrossing`/`evalAggregateOnAxis` that work on
+  either the transient time axis or the AC frequency axis. The transient
+  `evaluateMeasurement`/`runMeasurements` API is unchanged (delegates to the core).
+- Tagged each parsed `MeasSpec` with its `analysis` domain (`tran`/`ac`/…),
+  captured from the directive's type token, and **domain-routed** the runners so a
+  `.meas ac …` line never runs against a transient result and vice-versa.
+- New `simulation/measureAc.ts`: `runAcMeasurements`/`evaluateAcMeasurement` over
+  an `AcMeasData {freqs, traces[{magDb,phaseDeg}]}`. An AC expression compiler
+  reconstructs each node's complex phasor from dB/phase and resolves the LTspice
+  wrappers `db/mag/ph(phase)/re/im` (bare `V` ⇒ magnitude) and two-node `V(a,b)`
+  complex differences. So `FIND db(V(out)) AT=1k`, `WHEN mag(V(out))=0.707`,
+  `MAX MAG(V(out))`, `PP/AVG`, and `TRIG/TARG` bandwidth all resolve over freq.
+- Made crossing thresholds **scope-evaluated expressions** (`CrossingClause.value`
+  is now a raw string) so real forms like `WHEN mag(V(out))=GAIN/sqrt(2)` and
+  `=(vout_3db)` work — these previously threw at parse time with an empty scope
+  (latent crash on the user's AD4080/AFE decks). Exposed the `freq`/`time`
+  independent variable so `FIND freq WHEN …` (the AD4080 bandwidth idiom) returns
+  the crossing frequency.
+- Wired into the app: `App.tsx` memoizes `runAcMeasurements(directives, acAnalysis,
+  params.scope, params.funcs)`; `SimulationPanel` renders a second `MeasTable`
+  under the Bode plot in AC mode.
+
+### Files touched
+- src/simulation/measure.ts (axis-generic core, `analysis` tag, string thresholds,
+  `time` var, exports `evaluateOnAxis`/`CompiledExpr`/`safeEvalScalar`)
+- src/simulation/measureAc.ts (new), src/simulation/measureAc.test.ts (new, 19 tests)
+- src/simulation/measure.test.ts (3 expectations updated for the new fields)
+- src/components/SimulationPanel.tsx (acMeasurements prop + AC MeasTable)
+- src/App.tsx (acMeasurements memo + prop wiring)
+- FEATURE_PARITY.md (§4 `.meas` note: AC domain landed)
+
+### Tests
+423 passing (was 404; +19 new). Typecheck clean. AC math is hand-computed
+against a 1-pole low-pass H(f)=1/(1+jf/fc): −3.01 dB / 0.707 / −45° at the corner,
+WHEN/db corner detection, MAX/MIN/PP over the sweep, `V(a,b)` differential dB, and
+the user's exact AD4080 `vout_max→vout_3db→FIND freq WHEN mag(V)=(vout_3db)` and
+`WHEN mag(V) = GAIN/sqrt(2)` bandwidth chains.
+
+### FEATURE_PARITY items updated
+- §4 `.meas` — AC domain now covered (still 🟡 overall: `I(...)` branch currents
+  and `.meas dc`/`.meas noise` remain).
+
+### UX issues found
+- Visual QA still blocked headless; AC MeasTable reuses the verified transient
+  MeasTable component, so low risk.
+
+### Next step
+Add `I(...)` branch-current signals to `.meas` (requires the TS solver to expose
+device currents), or wire the landed `.dc`/`.step` solvers into the UI (both
+engines exist and are tested; only `.tran`/`.ac` dispatch today).
+
 ## 2026-06-26T01:06Z — auto/ltspice-parity — `.meas` transient measurement engine + UI (§4/§6)
 
 ### What I did

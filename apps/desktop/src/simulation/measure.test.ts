@@ -41,7 +41,7 @@ describe("parseMeasDirective", () => {
 
   it("parses a PARAM measurement", () => {
     const spec = parseMeasDirective(".meas tran vamp PARAM (vmax-vmin)/2");
-    expect(spec).toEqual({ kind: "param", name: "vamp", expr: "(vmax-vmin)/2" });
+    expect(spec).toEqual({ kind: "param", name: "vamp", analysis: "tran", expr: "(vmax-vmin)/2" });
   });
 
   it("parses FIND ... AT (space form)", () => {
@@ -60,8 +60,9 @@ describe("parseMeasDirective", () => {
     expect(spec).toEqual({
       kind: "when",
       name: "t1",
+      analysis: "tran",
       expr: null,
-      cross: { expr: "V(out)", value: 2.5, edge: "RISE", occurrence: 1, td: 0 },
+      cross: { expr: "V(out)", value: "2.5", edge: "RISE", occurrence: 1, td: 0 },
     });
   });
 
@@ -72,8 +73,8 @@ describe("parseMeasDirective", () => {
     expect(spec).toMatchObject({
       kind: "trigtarg",
       name: "tper",
-      trig: { expr: "V(vtri)", value: 2.5, edge: "RISE", occurrence: 1 },
-      targ: { expr: "V(vtri)", value: 2.5, edge: "RISE", occurrence: 2 },
+      trig: { expr: "V(vtri)", value: "2.5", edge: "RISE", occurrence: 1 },
+      targ: { expr: "V(vtri)", value: "2.5", edge: "RISE", occurrence: 2 },
     });
     const tt = spec as Extract<typeof spec, { kind: "trigtarg" }>;
     expect(tt.trig.td).toBeCloseTo(1e-4, 12);

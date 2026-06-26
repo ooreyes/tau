@@ -26,6 +26,7 @@ interface SimulationPanelProps {
   opResult: OperatingPointResult | null;
   acResult: AcResult | null;
   measurements: MeasResult[];
+  acMeasurements: MeasResult[];
   options: AnalysisOptions;
   isRunning: boolean;
   onOptionsChange: (options: AnalysisOptions) => void;
@@ -46,6 +47,7 @@ export function SimulationPanel({
   opResult,
   acResult,
   measurements,
+  acMeasurements,
   options,
   isRunning,
   onOptionsChange,
@@ -212,7 +214,12 @@ export function SimulationPanel({
       )}
 
       {mode === "op" && <OpTable result={opResult} />}
-      {mode === "ac" && <AcPlot result={acResult} />}
+      {mode === "ac" && (
+        <>
+          <AcPlot result={acResult} />
+          <MeasTable measurements={acMeasurements} />
+        </>
+      )}
 
       <div className="selection-strip">
         <div className="strip-label">SELECT</div>

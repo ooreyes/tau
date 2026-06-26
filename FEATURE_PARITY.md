@@ -178,8 +178,21 @@ zener, opamp, NMOS, PMOS, NPN, PNP, switch, transformer, testpoint, ground.
   through a scope seeded with `.param`/`.func`, matching deadtime.asc exactly;
   signals (`V(node)`, `V(a,b)`) resolve against trace ids/labels via the
   expression engine. `App.tsx` memoizes them off the transient result and renders
-  a `MeasTable` in `SimulationPanel`. 25 hand-computed tests. **NEXT:** AC-domain
-  `.meas` (db()/FIND...AT on AcResult); `I(...)` branch-current signals.
+  a `MeasTable` in `SimulationPanel`. **AC-domain `.meas` now landed**
+  (`simulation/measureAc.ts`): the measure core was generalized to an
+  axis-agnostic `evaluateOnAxis` (time *or* frequency) and an AC compiler resolves
+  `db()/mag()/ph()/re()/im()` (bare `V` ⇒ magnitude) and `V(a,b)` complex
+  differences from the AcTrace dB/phase, so `FIND db(V(out)) AT=1k`,
+  `WHEN mag(V(out))=0.707` (−3 dB corner), `MAX MAG(V(out))`, and `TRIG/TARG`
+  bandwidth resolve over frequency. `runAcMeasurements` consumes only `.meas ac`
+  directives and chains them by name; `App.tsx` memoizes them off the AC result
+  and renders a second `MeasTable` under the Bode plot. Crossing thresholds are
+  now **scope-evaluated expressions** (`=GAIN/sqrt(2)`, `=(vout_3db)`) instead of
+  parse-time literals — fixing a latent throw on real decks — and the `freq`/`time`
+  independent variable is exposed (`FIND freq WHEN …`). 44 hand-computed tests,
+  incl. the AD4080/AFE bandwidth-chain forms from the user's own circuits.
+  **NEXT:** `I(...)` branch-current signals (needs the TS solver to expose device
+  currents); `.meas dc`/`.meas noise` domains.
 - ⬜ DC operating point annotation on schematic (show node V / device I in-place)
 - ⬜ Initial conditions `.ic` / `.nodeset`
 - ⬜ `.options` passthrough (reltol, etc.) — used 7×
