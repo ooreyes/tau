@@ -3,6 +3,7 @@ import { resolveComponentValues, EMPTY_SCOPE, type ParamScope } from "../simulat
 import type { ComponentKind, NetLabel, SchematicComponent, SchematicWire } from "../schematic/types";
 import { parseQuantity } from "../simulation/quantity";
 import { decodeParams } from "../schematic/params";
+import { parseSourceFunction } from "./sourceFunction";
 
 export type SpiceAnalysis =
   | { kind: "tran"; stopTime: number; steps: number }
@@ -62,16 +63,23 @@ function componentLines(entry: ExtractedComponent, index: number): string[] {
       return [`${name} ${node("a")} ${node("b")} ${positiveNumberValue(component, "F")}`];
     case "inductor":
       return [`${name} ${node("a")} ${node("b")} ${positiveNumberValue(component, "H")}`];
-    case "vsource":
+    case "vsource": {
+      // LTspice carries SINE/PULSE/PWL/EXP/SFFM inline on the source value.
+      const fn = parseSourceFunction(component.value, "V");
+      if (fn) return [`${name} ${node("p")} ${node("n")} ${fn.text}`];
       return [`${name} ${node("p")} ${node("n")} DC ${numberValue(component, "V")}`];
-    case "isource":
+    }
+    case "isource": {
       // SPICE convention: I N+ N- value → current flows from N+ toward N- through the
       // source body, so N+ is the terminal where external current enters (N+ voltage goes
       // negative for positive I into a resistive load).  Tau's schematic uses p="+", n="-"
       // with the convention that positive I raises V(p) — consistent with the TS MNA solver.
       // Emit as "I name n p value" so that ngspice's N+ = n (sink) and N- = p (source),
       // making V(p) rise for positive current just as the TS solver predicts.
+      const fn = parseSourceFunction(component.value, "A");
+      if (fn) return [`${name} ${node("n")} ${node("p")} ${fn.text}`];
       return [`${name} ${node("n")} ${node("p")} DC ${numberValue(component, "A")}`];
+    }
     case "vac": {
       const signal = sourceSignal(component, "V");
       return [`${name} ${node("p")} ${node("n")} DC ${signal.offset} AC ${signal.amplitude} SIN(${signal.offset} ${signal.amplitude} ${signal.frequency})`];

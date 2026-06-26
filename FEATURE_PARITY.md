@@ -132,7 +132,7 @@ Status legend: ✅ done · 🟡 partial · ⬜ not started
 Current Tau kinds (~21): R, C, L, pot, V(DC), I(DC), Vac, Iac, **Vpulse**, diode, LED,
 zener, opamp, NMOS, PMOS, NPN, PNP, switch, transformer, testpoint, ground.
 - 🟡 Passives R/C/L (✅) — add: parasitics (ESR/IC), behavioral R/C/L, **C/L initial conditions**
-- 🟡 Sources — have DC/AC/PULSE. **Missing LTspice source functions:** SINE (with damping/phase), EXP, PWL, PWL FILE, SFFM, **arbitrary behavioral B-source** (`V=...`, `I=...`), AC spec, noise sources
+- 🟡 Sources — DC/AC/PULSE plus **inline LTspice transient functions on V/I sources now emit to the ngspice deck: SINE (offset/amp/freq/td/damping/phase), PULSE (full 7-arg, Ncycles trimmed), PWL, EXP, SFFM** (`engine/sourceFunction.ts`; µ/meg normalized). Still missing: PWL FILE, **arbitrary behavioral B-source** (`V=...`, `I=...`), explicit AC spec on these, noise sources, TS-fallback solver support for the non-DC functions
 - 🟡 Semiconductors — diode/BJT/MOS/zener present with **generic models only**. Need real model selection.
 - ⬜ **Behavioral sources (B)** — used constantly in real LTspice circuits
 - ⬜ **Voltage/current-controlled sources** E/F/G/H

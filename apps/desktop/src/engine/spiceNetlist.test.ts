@@ -35,6 +35,36 @@ describe("buildSpiceDeck", () => {
     expect(deck.netlist).toMatch(/\.end$/);
   });
 
+  it("emits an inline SINE function from an LTspice voltage source value", () => {
+    const components = [
+      component("vsource", "V1", "SINE(0 7.5 1k)", 0, 32),
+      component("resistor", "R1", "1k", 96, 0),
+      component("ground", "", "", 0, 64),
+      component("ground", "", "", 128, 0),
+    ];
+    const wires = [wire("w1", [{ x: 0, y: 0 }, { x: 64, y: 0 }])];
+
+    const deck = buildSpiceDeck({ components, wires }, { kind: "tran", stopTime: 0.003, steps: 300 });
+
+    expect(deck.netlist).toContain("V1 n001 0 DC 0 SIN(0 7.5 1000)");
+  });
+
+  it("emits a full LTspice PULSE function and trims its Ncycles slot", () => {
+    const components = [
+      component("vsource", "V1", "PULSE(-10 10 5u 25u 25u 0u 50u)", 0, 32),
+      component("resistor", "R1", "1k", 96, 0),
+      component("ground", "", "", 0, 64),
+      component("ground", "", "", 128, 0),
+    ];
+    const wires = [wire("w1", [{ x: 0, y: 0 }, { x: 64, y: 0 }])];
+
+    const deck = buildSpiceDeck({ components, wires }, { kind: "tran", stopTime: 0.001, steps: 200 });
+
+    expect(deck.netlist).toContain(
+      "V1 n001 0 DC -10 PULSE(-10 10 0.000005 0.000025 0.000025 0 0.00005)",
+    );
+  });
+
   it("includes generic nonlinear models and the complete M1 pin order", () => {
     const components = [
       component("nmos", "M1", "NMOS", 0, 0),
