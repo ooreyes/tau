@@ -1,5 +1,55 @@
 # Tau Autobuilder — Progress Log
 
+## 2026-06-26T08:00Z — auto/ltspice-parity — wire .dc DC sweep end-to-end (§4)
+
+### What I did
+- The `.dc` solver + parser (`simulation/dcSweep.ts`) had been landed but was
+  never reachable from the UI or from an imported circuit's directives. Wired it
+  end-to-end so a `.dc` source sweep actually runs and plots.
+- **Import mapping:** `analysesFromDirectives` (`io/directiveAnalysis.ts`) now
+  also returns the first `.dc` directive as a `DcSweepSpec` (reusing
+  `parseDcDirective`), so an imported `.asc` sweeps the source it specifies.
+- **UI dispatch + plot:** added a **DC** tab to `SimulationPanel` and a new
+  linear-axis `DcPlot` component (mirrors `AcPlot`: X = swept source value,
+  Y = node voltages, the GND net dropped). `App.runDcAnalysis` pulls the sweep
+  spec from the document's own `.dc` directive and runs `runDcSweep`; with no
+  `.dc` present it shows a clear prompt instead of a silent no-op. DC result
+  state is cleared by `invalidateAnalysis` like the other analyses.
+- **Native deck:** `buildSpiceDeck` gained a `kind:"dc"` analysis emitting
+  `.dc <src> <start> <stop> <inc>` with the increment signed toward `stop`.
+
+### Files touched
+- src/io/directiveAnalysis.ts (+ `.dc` recognition), directiveAnalysis.test.ts (+2)
+- src/engine/spiceNetlist.ts (`SpiceAnalysis` dc kind + `analysisLine`), spiceNetlist.test.ts (+1)
+- src/App.tsx (dcAnalysis state, runDcAnalysis, props, invalidate)
+- src/components/SimulationPanel.tsx (DC tab + DcPlot + dcPath)
+- FEATURE_PARITY.md (§4 `.dc` notes)
+
+### Tests
+444 passing (was 441; +3 new). Typecheck clean. Native `.dc` deck live-validated
+in ngspice 17 (`ngspice -b`): a 1:1 divider sweep `.dc V1 0 10 2` prints
+V(mid)=Vsweep/2 across all 6 points exactly.
+
+### FEATURE_PARITY items updated
+- §4 `.dc` — UI dispatch + plot pane + import mapping + native deck line all
+  landed (line stays 🟡 only for native/FFI nonlinear DC runner, a manual
+  source/range picker, and nested 2nd-source sweeps).
+
+### UX issues found
+- Visual QA still blocked headless (no playwright/puppeteer in node_modules,
+  consistent with prior sessions). DcPlot is a faithful mirror of AcPlot; verify
+  the DC tab visually on a real desktop run. Tracked as UX debt.
+- DC sweep currently runs only via the TS OP solver, so nonlinear DC sweeps
+  (diode/MOS curve tracer) on desktop need the native FFI runner — follow-up.
+
+### Next step
+Add a native ngspice DC runner (`runNativeDcSweep` in `engine/nativeSpice.ts`)
+so nonlinear `.dc` sweeps (curve-tracer/varactor circuits) match LTspice on
+desktop, then prefer it over the TS solver in `App.runDcAnalysis` exactly as the
+other analyses do (`runNative… ?? runTS…`).
+
+---
+
 ## 2026-06-26T02:05Z — auto/ltspice-parity — inline LTspice source functions in the ngspice deck (§3)
 
 ### What I did
