@@ -1,5 +1,55 @@
 # Tau Autobuilder — Progress Log
 
+## 2026-06-26T08:36Z — auto/ltspice-parity — wire .step sweep to UI + family overlay (§4/§6)
+
+### What I did
+- The `.step` parser + generic param-runner (`simulation/paramStep.ts`) existed
+  but was unreachable from the UI: an imported circuit with `.step` never swept.
+  Wired it end-to-end (used 34× in the user's circuits).
+- New pure module `simulation/stepFamily.ts`: `stepContexts(spec, params,
+  components)` expands a `StepSpec` into one concrete run context per swept value.
+  Handles all three kinds — **param** injects into a scope copy (`withStepValue`),
+  **source** overrides the matched component's `value` (case-insensitive ref-des,
+  list untouched), **temp** throws a clear "not supported yet" message. Capped at
+  `MAX_FAMILY_MEMBERS` (16) so a fine `.step` can't launch hundreds of sims.
+  Added `isRunnableStep` + `StepFamilyResult`/`StepFamilyMember` types.
+- `App.runStepAnalysis`: reads `stepFromDirectives`, expands contexts, re-runs the
+  transient (native ngspice, TS fallback) once per context, stores a
+  `StepFamilyResult`. Clear prompts for missing/temp specs. New `stepFamily` state,
+  invalidated alongside the other analyses.
+- `SimulationPanel`: new **STEP** tab + `StepPlot` overlay — draws the probed
+  signal (first probed net, else first trace) across every step member in a
+  trace-variable color ramp; legend lists each `name=value`; metrics show signal /
+  step count / swept name. Honest empty states for no-directive / no-data.
+
+### Files touched
+- src/simulation/stepFamily.ts (new), src/simulation/stepFamily.test.ts (new, 10)
+- src/App.tsx (state + runStepAnalysis + props)
+- src/components/SimulationPanel.tsx (STEP tab + StepPlot + pickFamilyTraceId)
+- FEATURE_PARITY.md (§4 .step note, §6 family-overlay 🟡)
+
+### Tests
+455 passing (was 445; +10 new). Typecheck clean. Source-sweep integration test
+runs through the real OP solver and tracks a 1:1 divider's half-supply
+(V1∈{4,8,12} → mid∈{2,4,6}).
+
+### FEATURE_PARITY items updated
+- §4 `.step` — UI dispatch + family overlay landed (stays 🟡: temp/nested/AC-DC
+  families pending).
+- §6 `.step` family-of-curves overlay ⬜ → 🟡 (transient overlay landed).
+
+### UX issues found
+- Step overlay plots a single signal (probe-driven). LTspice overlays *every*
+  trace as its own family — per-trace selection is the next UI step. Logged as
+  UX debt.
+
+### Next step
+Add the temp run path (set analysis temperature) and AC/DC-domain step families,
+then a per-trace selector in the STEP legend so a user can choose which signal's
+family to overlay.
+
+---
+
 ## 2026-06-26T08:00Z — auto/ltspice-parity — wire .dc DC sweep end-to-end (§4)
 
 ### What I did
