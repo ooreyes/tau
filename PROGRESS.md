@@ -1,5 +1,56 @@
 # Tau Autobuilder — Progress Log
 
+## 2026-06-27T18:52Z — auto/ltspice-parity — VCVS (E) + VCCS (G) controlled sources (§3)
+
+### What I did
+- Added the two **voltage-controlled linear sources** — VCVS (E) and VCCS (G) —
+  which §3 flags as "used constantly in real LTspice circuits." Chose these (over
+  more analyses) as the highest-leverage *testable* increment: linear, so the
+  existing TS MNA solvers handle them exactly, with hand-computable expected values.
+- New component kinds `vcvs`/`vccs` modelled as 4-pin 2-ports: control pair
+  (`cp`/`cn`, left) + output pair (`op`/`on`, right). Filled every exhaustive
+  `Record<ComponentKind,…>` — pin geometry (`pins.ts`), `SYMBOL_BODY`/`SYMBOL_BOX`
+  + a drawn 2-port block symbol with source diamond (`symbols.tsx`), catalog
+  entries (`catalog.ts`, Analog section, prefixes E/G).
+- **MNA stamps in all three TS solvers**: VCCS is a pure transconductance stamp
+  (`I(op→on)=gm·V(cp,cn)`, no extra unknown); VCVS adds a branch-current unknown
+  with a controlled constraint row (`V(op)−V(on)=gain·V(cp,cn)`). Done for
+  `operatingPoint.ts`, `linearTransient.ts` (incl. I(ref) current samples), and
+  `acSweep.ts` (complex, real gain). Added to each solver's SUPPORTED set.
+- Native ngspice deck (`spiceNetlist.ts`): emits `E op on cp cn gain` /
+  `G op on cp cn gm`, prefixes E/G. `ascImport.ts`: LTspice `e`/`e2`→vcvs,
+  `g`/`g2`→vccs (previously skipped as "no Tau equivalent").
+- **Verified sign conventions live against ngspice 17** before coding tests:
+  `E op 0 cp 0 10`→V(op)=10; `G op 0 cp 0 1m` with op-side 1k load →V(op)=−1;
+  negative gain `E −5`→−10. All match.
+
+### Files touched
+- src/schematic/{types.ts,pins.ts,symbols.tsx,catalog.ts}
+- src/simulation/{operatingPoint.ts,linearTransient.ts,acSweep.ts}
+- src/engine/spiceNetlist.ts
+- src/io/ascImport.ts (+ ascImport.test.ts mapping test)
+- src/simulation/controlledSources.test.ts (new, 9 tests)
+- FEATURE_PARITY.md (§3 E/G → 🟡 with detail; kind count 21→23)
+
+### Tests
+506 passing (was 496; +10 new). Typecheck clean. New tests are hand-computed
+and cross-checked against ngspice 17 (gain·V, −gm·R·V, difference-amp, negative
+gain, flat-gain AC, branch current, deck E/G emission, e/g import mapping).
+
+### FEATURE_PARITY items updated
+- §3 "Voltage/current-controlled sources E/F/G/H" ⬜ → 🟡 (E + G done; F/H pending).
+
+### UX issues found
+- Visual QA of the two new palette symbols not done this run (headless screenshot
+  still blocked per prior runs). The symbols follow existing SVG patterns and
+  typecheck; **UX debt:** eyeball the VCVS/VCCS glyphs + rotation in `pnpm dev:web`.
+
+### Next step
+Implement the current-controlled pair F (CCCS) and H (CCVS): they need a
+controlling-current sense branch (current through a 0 V sense element), so add a
+branch-current unknown for the control path and reference it in the output stamp.
+Then flip §3 E/F/G/H to ✅.
+
 ## 2026-06-27T18:05Z — auto/ltspice-parity — wire `.noise` to a NOISE tab + log it (§4/§6)
 
 ### What I did
