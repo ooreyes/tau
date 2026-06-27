@@ -61,6 +61,20 @@ const LOCAL_PINS: Record<ComponentKind, LocalPin[]> = {
     { id: "v+", label: "V+", x: 0, y: -32 },
     { id: "v-", label: "V-", x: 0, y: 32 },
   ],
+  // Voltage-controlled sources (4-terminal 2-port): control pair on the left,
+  // output pair on the right. cp/cn sense the controlling voltage; op/on drive.
+  vcvs: [
+    { id: "cp", label: "C+", x: -32, y: -16 },
+    { id: "cn", label: "C-", x: -32, y: 16 },
+    { id: "op", label: "+", x: 32, y: -16 },
+    { id: "on", label: "-", x: 32, y: 16 },
+  ],
+  vccs: [
+    { id: "cp", label: "C+", x: -32, y: -16 },
+    { id: "cn", label: "C-", x: -32, y: 16 },
+    { id: "op", label: "+", x: 32, y: -16 },
+    { id: "on", label: "-", x: 32, y: 16 },
+  ],
   nmos: [
     { id: "d", label: "D", x: 16, y: -32 },
     { id: "g", label: "G", x: -32, y: 0 },

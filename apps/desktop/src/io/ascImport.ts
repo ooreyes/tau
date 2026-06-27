@@ -260,6 +260,11 @@ export function ltspiceTypeToKind(type: string): ComponentKind | null {
     ind2t: "transformer",
     "opamp": "opamp",
     "opamp2": "opamp",
+    // Voltage-controlled sources (LTspice e/e2 = VCVS, g/g2 = VCCS).
+    e: "vcvs",
+    e2: "vcvs",
+    g: "vccs",
+    g2: "vccs",
   };
 
   // Any symbol living under an "opamps" directory is an op-amp at heart.

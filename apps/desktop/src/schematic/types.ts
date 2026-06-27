@@ -19,6 +19,8 @@ export type ComponentKind =
   | "led"
   | "zener"
   | "opamp"
+  | "vcvs"
+  | "vccs"
   | "nmos"
   | "pmos"
   | "npn"

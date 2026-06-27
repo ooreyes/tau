@@ -26,6 +26,8 @@ export const SYMBOL_BODY: Record<ComponentKind, BodyBox> = {
   led: { minX: -13, minY: -15, maxX: 16, maxY: 15 },
   zener: { minX: -13, minY: -15, maxX: 16, maxY: 15 },
   opamp: { minX: -24, minY: -26, maxX: 30, maxY: 26 },
+  vcvs: { minX: -18, minY: -22, maxX: 18, maxY: 22 },
+  vccs: { minX: -18, minY: -22, maxX: 18, maxY: 22 },
   nmos: { minX: -12, minY: -20, maxX: 18, maxY: 20 },
   pmos: { minX: -12, minY: -20, maxX: 18, maxY: 20 },
   npn: { minX: -8, minY: -20, maxX: 18, maxY: 20 },
@@ -51,6 +53,8 @@ export const SYMBOL_BOX: Record<ComponentKind, { halfW: number; halfH: number }>
   led: { halfW: 18, halfH: 22 },
   zener: { halfW: 16, halfH: 18 },
   opamp: { halfW: 28, halfH: 28 },
+  vcvs: { halfW: 20, halfH: 24 },
+  vccs: { halfW: 20, halfH: 24 },
   nmos: { halfW: 26, halfH: 20 },
   pmos: { halfW: 26, halfH: 20 },
   npn: { halfW: 22, halfH: 20 },
@@ -204,6 +208,41 @@ export function ComponentSymbol({ kind }: { kind: ComponentKind }) {
           <line x1={0} y1={14} x2={0} y2={32} />
           <path d="M -20 16 H -12 M -16 12 V 20" />
           <path d="M -20 -16 H -12" />
+        </>
+      );
+
+    case "vcvs":
+      return (
+        <>
+          {/* 2-port block: control pair (left), output pair (right) */}
+          <rect x={-14} y={-20} width={28} height={40} rx={2} />
+          <line x1={-32} y1={-16} x2={-14} y2={-16} />
+          <line x1={-32} y1={16} x2={-14} y2={16} />
+          <line x1={14} y1={-16} x2={32} y2={-16} />
+          <line x1={14} y1={16} x2={32} y2={16} />
+          {/* source diamond */}
+          <path d="M 0 -11 L 9 0 L 0 11 L -9 0 Z" />
+          {/* + / − (voltage source) */}
+          <line x1={-3} y1={-5} x2={3} y2={-5} />
+          <line x1={0} y1={-8} x2={0} y2={-2} />
+          <line x1={-3} y1={6} x2={3} y2={6} />
+        </>
+      );
+
+    case "vccs":
+      return (
+        <>
+          {/* 2-port block: control pair (left), output pair (right) */}
+          <rect x={-14} y={-20} width={28} height={40} rx={2} />
+          <line x1={-32} y1={-16} x2={-14} y2={-16} />
+          <line x1={-32} y1={16} x2={-14} y2={16} />
+          <line x1={14} y1={-16} x2={32} y2={-16} />
+          <line x1={14} y1={16} x2={32} y2={16} />
+          {/* source diamond */}
+          <path d="M 0 -11 L 9 0 L 0 11 L -9 0 Z" />
+          {/* current arrow (top → bottom) */}
+          <line x1={0} y1={-7} x2={0} y2={6} />
+          <path d="M -3 1 L 0 7 L 3 1" />
         </>
       );
 

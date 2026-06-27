@@ -82,6 +82,8 @@ const TRANSIENT_SUPPORTED = new Set<ComponentKind>([
   "vac",
   "iac",
   "opamp",
+  "vcvs",
+  "vccs",
   "switch",
   "testpoint",
   "ground",
@@ -133,10 +135,12 @@ export function runTransientAnalysis(
     const voltageSources = circuit.components.filter(({ component }) => component.kind === "vsource" || component.kind === "vac");
     const inductors = circuit.components.filter(({ component }) => component.kind === "inductor");
     const opamps = circuit.components.filter(({ component }) => component.kind === "opamp");
+    const vcvss = circuit.components.filter(({ component }) => component.kind === "vcvs");
     const voltageSourceOffset = nonGroundNets.length;
     const inductorOffset = voltageSourceOffset + voltageSources.length;
     const opampOffset = inductorOffset + inductors.length;
-    const size = nonGroundNets.length + voltageSources.length + inductors.length + opamps.length;
+    const vcvsOffset = opampOffset + opamps.length;
+    const size = nonGroundNets.length + voltageSources.length + inductors.length + opamps.length + vcvss.length;
     if (size === 0) return fail("Empty matrix", "The circuit has no unknowns to solve.", circuit);
 
     const stepSize = options.stopTime / options.steps;
@@ -240,6 +244,34 @@ export function runTransientAnalysis(
             // rhs[ioIndex] = 0 (already zero from initialisation)
             break;
           }
+          case "vccs": {
+            // VCCS (G): I(op→on) = gm·(V(cp) − V(cn)).
+            const gm = parseQuantity(entry.component.value, "A/V");
+            stampVCCS(
+              matrix,
+              netIndex(entry.pins.op, nodeIndex),
+              netIndex(entry.pins.on, nodeIndex),
+              netIndex(entry.pins.cp, nodeIndex),
+              netIndex(entry.pins.cn, nodeIndex),
+              gm,
+            );
+            break;
+          }
+          case "vcvs": {
+            // VCVS (E): V(op) − V(on) = gain·(V(cp) − V(cn)).
+            const gain = parseQuantity(entry.component.value, "V/V");
+            const iIdx = vcvsOffset + vcvss.findIndex((e) => e.component.id === entry.component.id);
+            stampVCVS(
+              matrix,
+              netIndex(entry.pins.op, nodeIndex),
+              netIndex(entry.pins.on, nodeIndex),
+              netIndex(entry.pins.cp, nodeIndex),
+              netIndex(entry.pins.cn, nodeIndex),
+              iIdx,
+              gain,
+            );
+            break;
+          }
           case "switch":
             if (entry.component.value.trim().toLowerCase().startsWith("closed")) {
               stampConductance(matrix, netIndex(entry.pins.a, nodeIndex), netIndex(entry.pins.b, nodeIndex), 1e9);
@@ -294,6 +326,18 @@ export function runTransientAnalysis(
           }
           case "iac": {
             pushCurrent(id, ref, signalValue(entry.component.value, "A", time));
+            break;
+          }
+          case "vcvs": {
+            const currentIndex = vcvsOffset + vcvss.findIndex((e) => e.component.id === id);
+            pushCurrent(id, ref, solution[currentIndex]);
+            break;
+          }
+          case "vccs": {
+            let gm = 0;
+            try { gm = parseQuantity(entry.component.value, "A/V"); } catch { gm = 0; }
+            const vctrl = voltageBetween(entry.pins.cp, entry.pins.cn, nodeIndex, solution);
+            pushCurrent(id, ref, gm * vctrl);
             break;
           }
         }
@@ -470,6 +514,28 @@ function stampVoltageSource(
     matrix[sourceIndex][negative] -= 1;
   }
   rhs[sourceIndex] += voltage;
+}
+
+/** Voltage-controlled current source: I(op→on) = gm·(V(cp) − V(cn)). */
+function stampVCCS(matrix: number[][], op: number, on: number, cp: number, cn: number, gm: number) {
+  if (op >= 0 && cp >= 0) matrix[op][cp] += gm;
+  if (op >= 0 && cn >= 0) matrix[op][cn] -= gm;
+  if (on >= 0 && cp >= 0) matrix[on][cp] -= gm;
+  if (on >= 0 && cn >= 0) matrix[on][cn] += gm;
+}
+
+/** Voltage-controlled voltage source: V(op) − V(on) = gain·(V(cp) − V(cn)). */
+function stampVCVS(matrix: number[][], op: number, on: number, cp: number, cn: number, branchIndex: number, gain: number) {
+  if (op >= 0) {
+    matrix[op][branchIndex] += 1;
+    matrix[branchIndex][op] += 1;
+  }
+  if (on >= 0) {
+    matrix[on][branchIndex] -= 1;
+    matrix[branchIndex][on] -= 1;
+  }
+  if (cp >= 0) matrix[branchIndex][cp] -= gain;
+  if (cn >= 0) matrix[branchIndex][cn] += gain;
 }
 
 function stampInductor(

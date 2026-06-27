@@ -129,13 +129,22 @@ Status legend: ✅ done · 🟡 partial · ⬜ not started
 - ⬜ Pin/port symbols (IOPIN) for hierarchy
 
 ## 3. Component / symbol library
-Current Tau kinds (~21): R, C, L, pot, V(DC), I(DC), Vac, Iac, **Vpulse**, diode, LED,
-zener, opamp, NMOS, PMOS, NPN, PNP, switch, transformer, testpoint, ground.
+Current Tau kinds (~23): R, C, L, pot, V(DC), I(DC), Vac, Iac, **Vpulse**, diode, LED,
+zener, opamp, **VCVS (E)**, **VCCS (G)**, NMOS, PMOS, NPN, PNP, switch, transformer, testpoint, ground.
 - 🟡 Passives R/C/L (✅) — add: parasitics (ESR/IC), behavioral R/C/L, **C/L initial conditions**
 - 🟡 Sources — DC/AC/PULSE plus **inline LTspice transient functions on V/I sources now emit to the ngspice deck: SINE (offset/amp/freq/td/damping/phase), PULSE (full 7-arg, Ncycles trimmed), PWL, EXP, SFFM** (`engine/sourceFunction.ts`; µ/meg normalized). Still missing: PWL FILE, **arbitrary behavioral B-source** (`V=...`, `I=...`), explicit AC spec on these, noise sources, TS-fallback solver support for the non-DC functions
 - 🟡 Semiconductors — diode/BJT/MOS/zener present with **generic models only**. Need real model selection.
 - ⬜ **Behavioral sources (B)** — used constantly in real LTspice circuits
-- ⬜ **Voltage/current-controlled sources** E/F/G/H
+- 🟡 **Voltage/current-controlled sources** E/F/G/H — **VCVS (E) + VCCS (G)
+  landed** end-to-end: new `vcvs`/`vccs` component kinds (2-port: control pair +
+  output pair), pin geometry + symbol + palette entries, and **linear MNA stamps
+  in all three TS solvers** (`.op`/`.tran`/`.ac`). VCCS is a pure transconductance
+  stamp (no extra unknown); VCVS adds a branch-current unknown like a voltage
+  source. Native ngspice deck emits `E op on cp cn gain` / `G op on cp cn gm`,
+  and `ascImport` maps LTspice `e/e2`→VCVS, `g/g2`→VCCS. 10 hand-computed tests
+  cross-checked against ngspice 17 (E: V(op)=gain·V(cp); G: V(op)=−gm·R·V(cp);
+  difference-amp, negative gain, flat-gain AC, branch current). **NEXT:** the
+  current-controlled pair F (CCCS) and H (CCVS) need a controlling sense branch.
 - ⬜ JFET, MESFET, IGBT
 - ⬜ MOSFET level/VDMOS power models, body diode
 - ⬜ Comparators / logic gates / digital (LTspice `A` devices) — **needed for class-d_starter.asc**

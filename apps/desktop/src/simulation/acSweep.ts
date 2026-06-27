@@ -184,6 +184,8 @@ const AC_SUPPORTED = new Set<ComponentKind>([
   "vac",
   "iac",
   "opamp",
+  "vcvs",
+  "vccs",
   "switch",
   "testpoint",
   "ground",
@@ -300,11 +302,13 @@ export function runAcSweep(
     const inductors = circuit.components.filter(({ component }) => component.kind === "inductor");
     // Op-amps: add output branch current unknown
     const opamps = circuit.components.filter(({ component }) => component.kind === "opamp");
+    const vcvss = circuit.components.filter(({ component }) => component.kind === "vcvs");
 
     const voltageSourceOffset = nonGroundNets.length;
     const inductorOffset = voltageSourceOffset + voltageSources.length;
     const opampOffset = inductorOffset + inductors.length;
-    const size = nonGroundNets.length + voltageSources.length + inductors.length + opamps.length;
+    const vcvsOffset = opampOffset + opamps.length;
+    const size = nonGroundNets.length + voltageSources.length + inductors.length + opamps.length + vcvss.length;
 
     if (size === 0) return fail("The circuit has no unknowns to solve.", circuit);
 
@@ -441,6 +445,45 @@ export function runAcSweep(
             if (outNode >= 0) matrix[outNode][ioIdx] = cadd(matrix[outNode][ioIdx], one);
             if (inPlusNode >= 0) matrix[ioIdx][inPlusNode] = cadd(matrix[ioIdx][inPlusNode], one);
             if (inMinusNode >= 0) matrix[ioIdx][inMinusNode] = cadd(matrix[ioIdx][inMinusNode], negOne);
+            break;
+          }
+
+          case "vccs": {
+            // VCCS (G): I(op→on) = gm·(V(cp) − V(cn)). Real transconductance.
+            const gm = parseQuantity(component.value, "A/V");
+            const op = nodeIdx(pins["op"], nodeIndex);
+            const on = nodeIdx(pins["on"], nodeIndex);
+            const cp = nodeIdx(pins["cp"], nodeIndex);
+            const cn = nodeIdx(pins["cn"], nodeIndex);
+            const g: Complex = { re: gm, im: 0 };
+            const ng: Complex = { re: -gm, im: 0 };
+            if (op >= 0 && cp >= 0) matrix[op][cp] = cadd(matrix[op][cp], g);
+            if (op >= 0 && cn >= 0) matrix[op][cn] = cadd(matrix[op][cn], ng);
+            if (on >= 0 && cp >= 0) matrix[on][cp] = cadd(matrix[on][cp], ng);
+            if (on >= 0 && cn >= 0) matrix[on][cn] = cadd(matrix[on][cn], g);
+            break;
+          }
+
+          case "vcvs": {
+            // VCVS (E): V(op) − V(on) = gain·(V(cp) − V(cn)). Adds a branch unknown.
+            const gain = parseQuantity(component.value, "V/V");
+            const iIdx = vcvsOffset + vcvss.findIndex((e) => e.component.id === component.id);
+            const op = nodeIdx(pins["op"], nodeIndex);
+            const on = nodeIdx(pins["on"], nodeIndex);
+            const cp = nodeIdx(pins["cp"], nodeIndex);
+            const cn = nodeIdx(pins["cn"], nodeIndex);
+            const one: Complex = { re: 1, im: 0 };
+            const negOne: Complex = { re: -1, im: 0 };
+            if (op >= 0) {
+              matrix[op][iIdx] = cadd(matrix[op][iIdx], one);
+              matrix[iIdx][op] = cadd(matrix[iIdx][op], one);
+            }
+            if (on >= 0) {
+              matrix[on][iIdx] = cadd(matrix[on][iIdx], negOne);
+              matrix[iIdx][on] = cadd(matrix[iIdx][on], negOne);
+            }
+            if (cp >= 0) matrix[iIdx][cp] = cadd(matrix[iIdx][cp], { re: -gain, im: 0 });
+            if (cn >= 0) matrix[iIdx][cn] = cadd(matrix[iIdx][cn], { re: gain, im: 0 });
             break;
           }
 

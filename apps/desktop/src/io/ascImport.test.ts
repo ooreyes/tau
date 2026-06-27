@@ -107,6 +107,13 @@ describe("ltspiceTypeToKind", () => {
     expect(ltspiceTypeToKind("sw")).toBe("switch");
   });
 
+  it("maps LTspice controlled-source symbols (e/g) to VCVS/VCCS", () => {
+    expect(ltspiceTypeToKind("e")).toBe("vcvs");
+    expect(ltspiceTypeToKind("E2")).toBe("vcvs");
+    expect(ltspiceTypeToKind("g")).toBe("vccs");
+    expect(ltspiceTypeToKind("g2")).toBe("vccs");
+  });
+
   it("treats any opamps/* library symbol as an op-amp", () => {
     expect(ltspiceTypeToKind("opamps\\LT1468")).toBe("opamp");
     expect(ltspiceTypeToKind("Opamps\\AD8675")).toBe("opamp");

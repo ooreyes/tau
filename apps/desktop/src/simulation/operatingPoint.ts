@@ -65,6 +65,8 @@ const OP_SUPPORTED = new Set<ComponentKind>([
   "vac",
   "iac",
   "opamp",
+  "vcvs",
+  "vccs",
   "switch",
   "testpoint",
   "ground",
@@ -131,6 +133,10 @@ export function runOperatingPoint(
     const opamps = circuit.components.filter(
       ({ component }) => component.kind === "opamp",
     );
+    // VCVS (E) adds a branch-current unknown, like an independent voltage source.
+    const vcvss = circuit.components.filter(
+      ({ component }) => component.kind === "vcvs",
+    );
 
     const nodeIndex = new Map(
       nonGroundNets.map((net, idx) => [net.id, idx]),
@@ -138,7 +144,8 @@ export function runOperatingPoint(
     const voltageSourceOffset = nonGroundNets.length;
     const inductorOffset = voltageSourceOffset + voltageSources.length;
     const opampOffset = inductorOffset + inductors.length;
-    const size = nonGroundNets.length + voltageSources.length + inductors.length + opamps.length;
+    const vcvsOffset = opampOffset + opamps.length;
+    const size = nonGroundNets.length + voltageSources.length + inductors.length + opamps.length + vcvss.length;
 
     if (size === 0) {
       return fail("The circuit has no unknowns to solve.", circuit);
@@ -245,6 +252,34 @@ export function runOperatingPoint(
           if (inPlusNode >= 0) matrix[ioIdx][inPlusNode] += 1;
           if (inMinusNode >= 0) matrix[ioIdx][inMinusNode] -= 1;
           // rhs[ioIdx] = 0 (already zero from initialisation)
+          break;
+        }
+
+        case "vccs": {
+          // VCCS (G): I(op→on) = gm·(V(cp) − V(cn)). Pure transconductance stamp,
+          // no extra unknown. Current leaves op into the device (+gm row) and
+          // enters on (−gm row), matching ngspice `G op on cp cn gm`.
+          const gm = parseQuantity(entry.component.value, "A/V");
+          const op = nodeIdx(entry.pins["op"], nodeIndex);
+          const on = nodeIdx(entry.pins["on"], nodeIndex);
+          const cp = nodeIdx(entry.pins["cp"], nodeIndex);
+          const cn = nodeIdx(entry.pins["cn"], nodeIndex);
+          stampVCCS(matrix, op, on, cp, cn, gm);
+          break;
+        }
+
+        case "vcvs": {
+          // VCVS (E): V(op) − V(on) = gain·(V(cp) − V(cn)). Like a voltage source
+          // whose value is the controlled term; adds one branch-current unknown.
+          const gain = parseQuantity(entry.component.value, "V/V");
+          const iIdx =
+            vcvsOffset +
+            vcvss.findIndex((e) => e.component.id === entry.component.id);
+          const op = nodeIdx(entry.pins["op"], nodeIndex);
+          const on = nodeIdx(entry.pins["on"], nodeIndex);
+          const cp = nodeIdx(entry.pins["cp"], nodeIndex);
+          const cn = nodeIdx(entry.pins["cn"], nodeIndex);
+          stampVCVS(matrix, op, on, cp, cn, iIdx, gain);
           break;
         }
 
@@ -366,6 +401,46 @@ function stampVoltageSource(
     matrix[sourceIndex][negative] -= 1;
   }
   rhs[sourceIndex] += voltage;
+}
+
+/** Voltage-controlled current source: I(op→on) = gm·(V(cp) − V(cn)). */
+function stampVCCS(
+  matrix: number[][],
+  op: number,
+  on: number,
+  cp: number,
+  cn: number,
+  gm: number,
+) {
+  if (op >= 0 && cp >= 0) matrix[op][cp] += gm;
+  if (op >= 0 && cn >= 0) matrix[op][cn] -= gm;
+  if (on >= 0 && cp >= 0) matrix[on][cp] -= gm;
+  if (on >= 0 && cn >= 0) matrix[on][cn] += gm;
+}
+
+/** Voltage-controlled voltage source: V(op) − V(on) = gain·(V(cp) − V(cn)).
+ *  `branchIndex` is the auxiliary branch-current unknown. */
+function stampVCVS(
+  matrix: number[][],
+  op: number,
+  on: number,
+  cp: number,
+  cn: number,
+  branchIndex: number,
+  gain: number,
+) {
+  // Output branch current couples into the KCL of op (+) and on (−).
+  if (op >= 0) {
+    matrix[op][branchIndex] += 1;
+    matrix[branchIndex][op] += 1;
+  }
+  if (on >= 0) {
+    matrix[on][branchIndex] -= 1;
+    matrix[branchIndex][on] -= 1;
+  }
+  // Constraint row: V(op) − V(on) − gain·(V(cp) − V(cn)) = 0.
+  if (cp >= 0) matrix[branchIndex][cp] -= gain;
+  if (cn >= 0) matrix[branchIndex][cn] += gain;
 }
 
 /**
