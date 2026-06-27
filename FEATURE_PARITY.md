@@ -164,7 +164,20 @@ zener, opamp, NMOS, PMOS, NPN, PNP, switch, transformer, testpoint, ground.
   `buildSpiceDeck` `kind:"dc"`, live-validated in ngspice 17 (1:1 divider →
   V(mid)=Vsweep/2). **NEXT:** native (FFI) DC runner for nonlinear sweeps;
   manual source/range picker for hand-built circuits; nested 2nd-source sweep.
-- ⬜ `.noise` **Noise analysis** — used 13×
+- ✅ `.noise` **Noise analysis** — used 13× — **solver + parser + UI landed**
+  (`simulation/noise.ts`): `parseNoiseDirective(".noise V(out) V1 dec 10 1 1Meg")`
+  → `{output, source, sweep}` (`V(node)`/`V(a,b)` output, independent-source input,
+  `dec`/`oct`/`lin` sweep). `runNoiseAnalysis` builds the complex AC MNA system and
+  uses the **adjoint (transpose) method** — one extra solve per frequency yields
+  the transimpedance from every internal noise source to the output port; resistor
+  thermal noise (`4kT/R`) is summed to the output PSD and input-referred via the
+  input→output gain. Returns onoise/inoise spectral densities + integrated totals.
+  **Verified against textbook values**: 1k resistor → 4.07 nV/√Hz flat; RC low-pass
+  output noise = 4kTR/(1+(ωRC)²); integrated kTC noise = √(kT/C). 16 hand-computed
+  tests. `analysesFromDirectives` maps an imported `.asc`'s own `.noise`; a **NOISE**
+  tab in `SimulationPanel` (`NoisePlot`) draws output-referred density on a log–log
+  axis with integrated totals. **NEXT:** device (non-resistor) noise needs the
+  native ngspice engine; `.meas noise` domain.
 - ✅ `.tf` **Transfer function** (small-signal DC gain, Zin/Zout) — **solver +
   parser + UI landed** (`simulation/transferFunction.ts`): `parseTfDirective`
   reads `V(node)`/`V(a,b)`/`I(dev)` outputs + an independent source; `runTransferFunction`

@@ -19,6 +19,7 @@ import type { OperatingPointResult } from "../simulation/operatingPoint";
 import type { AcResult } from "../simulation/acSweep";
 import type { DcSweepResult } from "../simulation/dcSweep";
 import type { TfResult } from "../simulation/transferFunction";
+import type { NoiseResult } from "../simulation/noise";
 import type { StepFamilyResult } from "../simulation/stepFamily";
 import type { MeasResult } from "../simulation/measure";
 import { isNativeSpiceRuntime, MAX_NATIVE_OUTPUT_POINTS } from "../engine/nativeSpice";
@@ -30,6 +31,7 @@ interface SimulationPanelProps {
   acResult: AcResult | null;
   dcResult: DcSweepResult | null;
   tfResult: TfResult | null;
+  noiseResult: NoiseResult | null;
   stepResult: StepFamilyResult | null;
   measurements: MeasResult[];
   acMeasurements: MeasResult[];
@@ -41,6 +43,7 @@ interface SimulationPanelProps {
   onRunAcSweep: () => void | Promise<void>;
   onRunDcSweep: () => void | Promise<void>;
   onRunTf: () => void | Promise<void>;
+  onRunNoise: () => void | Promise<void>;
   onRunStep: () => void | Promise<void>;
   onStop: () => void;
   onStep: () => void | Promise<void>;
@@ -57,6 +60,7 @@ export function SimulationPanel({
   acResult,
   dcResult,
   tfResult,
+  noiseResult,
   stepResult,
   measurements,
   acMeasurements,
@@ -68,6 +72,7 @@ export function SimulationPanel({
   onRunAcSweep,
   onRunDcSweep,
   onRunTf,
+  onRunNoise,
   onRunStep,
   onStop,
   onStep,
@@ -102,7 +107,7 @@ export function SimulationPanel({
   const opampPart = selected && selected.kind === "opamp" ? findOpAmp(selected.value) : null;
   const warnings = result?.warnings ?? [];
 
-  const [mode, setMode] = useState<"tran" | "op" | "ac" | "dc" | "tf" | "step">("tran");
+  const [mode, setMode] = useState<"tran" | "op" | "ac" | "dc" | "tf" | "noise" | "step">("tran");
   const [maximized, setMaximized] = useState(false);
   const title =
     mode === "tran" ? "Transient scope"
@@ -110,6 +115,7 @@ export function SimulationPanel({
     : mode === "ac" ? "AC sweep"
     : mode === "dc" ? "DC sweep"
     : mode === "tf" ? "Transfer function"
+    : mode === "noise" ? "Noise analysis"
     : "Step sweep";
   // ngspice may include the final endpoint in addition to requested steps.
   const maxTransientSteps = isNativeSpiceRuntime() ? MAX_NATIVE_OUTPUT_POINTS - 1 : MAX_TRANSIENT_STEPS;
@@ -212,6 +218,18 @@ export function SimulationPanel({
             TF
           </button>
           <button
+            className={`plotter-tab${mode === "noise" ? " active" : ""}`}
+            role="tab"
+            aria-selected={mode === "noise"}
+            disabled={isRunning}
+            onClick={() => {
+              setMode("noise");
+              void onRunNoise();
+            }}
+          >
+            NOISE
+          </button>
+          <button
             className={`plotter-tab${mode === "step" ? " active" : ""}`}
             role="tab"
             aria-selected={mode === "step"}
@@ -279,6 +297,7 @@ export function SimulationPanel({
       )}
       {mode === "dc" && <DcPlot result={dcResult} />}
       {mode === "tf" && <TfTable result={tfResult} />}
+      {mode === "noise" && <NoisePlot result={noiseResult} />}
       {mode === "step" && <StepPlot result={stepResult} probes={probes} />}
 
       <div className="selection-strip">
@@ -616,6 +635,108 @@ function TfTable({ result }: { result: TfResult | null }) {
       )}
     </>
   );
+}
+
+/**
+ * Plot a `.noise` analysis: output-referred noise density vs frequency on a
+ * log–log scale (frequency decades on X, V/√Hz decades on Y), with the
+ * integrated total output / input-referred noise in the metric row. Mirrors
+ * {@link AcPlot}'s log-frequency mapping but maps a single positive density
+ * trace through log10 rather than dB.
+ */
+function NoisePlot({ result }: { result: NoiseResult | null }) {
+  const success = result?.ok ? result : null;
+  const plot = useMemo(() => {
+    if (!success) return null;
+    let lo = Infinity;
+    let hi = -Infinity;
+    for (const v of success.onoise) {
+      if (!Number.isFinite(v) || v <= 0) continue;
+      const l = Math.log10(v);
+      lo = Math.min(lo, l);
+      hi = Math.max(hi, l);
+    }
+    if (!Number.isFinite(lo) || !Number.isFinite(hi)) return null;
+    // Pad to whole decades and guarantee a non-zero span for a flat spectrum.
+    let yMin = Math.floor(lo);
+    let yMax = Math.ceil(hi);
+    if (yMax - yMin < 1) {
+      yMin = Math.floor(lo - 0.5);
+      yMax = Math.ceil(hi + 0.5);
+    }
+    const f0 = Math.log10(success.freqs[0] || 1);
+    const f1 = Math.log10(success.freqs[success.freqs.length - 1] || 10);
+    return { yMin, yMax, f0, f1 };
+  }, [success]);
+
+  if (!result) return null;
+  if (!result.ok) return <div className="analysis-empty">{result.message}</div>;
+
+  const path = plot ? noisePath(result.onoise, result.freqs, plot) : "";
+  const decadeLabel = (exp: number) => formatEngineering(Math.pow(10, exp), "V/√Hz", 1);
+
+  return (
+    <>
+      <div className="scope-shell">
+        <svg className="scope-svg" viewBox={`0 0 ${PLOT_WIDTH} ${PLOT_HEIGHT}`} role="img" aria-label="Output noise density">
+          <g className="scope-grid">
+            {Array.from({ length: 6 }).map((_, i) => {
+              const x = PLOT_PAD + (i * (PLOT_WIDTH - PLOT_PAD * 2)) / 5;
+              return <line key={`x${i}`} x1={x} y1={PLOT_PAD} x2={x} y2={PLOT_HEIGHT - PLOT_PAD} />;
+            })}
+            {Array.from({ length: 5 }).map((_, i) => {
+              const y = PLOT_PAD + (i * (PLOT_HEIGHT - PLOT_PAD * 2)) / 4;
+              return <line key={`y${i}`} x1={PLOT_PAD} y1={y} x2={PLOT_WIDTH - PLOT_PAD} y2={y} />;
+            })}
+          </g>
+          <rect className="scope-frame" x={PLOT_PAD} y={PLOT_PAD} width={PLOT_WIDTH - PLOT_PAD * 2} height={PLOT_HEIGHT - PLOT_PAD * 2} />
+          {path && <path className="scope-trace" stroke="var(--trace-red)" d={path} />}
+          <text className="scope-axis" x={PLOT_PAD} y={18}>
+            {plot ? decadeLabel(plot.yMax) : "V/√Hz"}
+          </text>
+          <text className="scope-axis" x={PLOT_PAD} y={PLOT_HEIGHT - 8}>
+            {plot ? decadeLabel(plot.yMin) : ""}
+          </text>
+          <text className="scope-axis right" x={PLOT_WIDTH - PLOT_PAD} y={PLOT_HEIGHT - 8}>
+            {formatEngineering(result.freqs[result.freqs.length - 1] ?? 0, "Hz", 0)}
+          </text>
+        </svg>
+        <div className="scope-legend">
+          <span>
+            <i style={{ background: "var(--trace-red)" }} />
+            Output noise V({result.spec.output.pos}
+            {result.spec.output.neg ? `,${result.spec.output.neg}` : ""})
+          </span>
+        </div>
+      </div>
+      <div className="meter-row analysis-meter">
+        <Metric label="TOT ONOISE" value={formatEngineering(result.totalOutputNoise, "V", 3)} tone="green" />
+        <Metric label="TOT INOISE" value={formatEngineering(result.totalInputNoise, result.inoiseUnit.replace("/√Hz", ""), 3)} tone="cyan" />
+        <Metric label="POINTS" value={String(result.freqs.length)} tone="cream" />
+      </div>
+      {result.warnings.length > 0 && <div className="analysis-empty">{result.warnings.join(" ")}</div>}
+    </>
+  );
+}
+
+function noisePath(onoise: number[], freqs: number[], plot: { yMin: number; yMax: number; f0: number; f1: number }): string {
+  const span = plot.yMax - plot.yMin || 1;
+  const fSpan = plot.f1 - plot.f0 || 1;
+  const count = Math.min(onoise.length, freqs.length);
+  let path = "";
+  let started = false;
+  for (const index of displaySampleIndices(count)) {
+    const v = onoise[index];
+    const frequency = freqs[index];
+    if (!Number.isFinite(v) || v <= 0 || !Number.isFinite(frequency) || frequency <= 0) continue;
+    const lx = (Math.log10(frequency) - plot.f0) / fSpan;
+    const x = PLOT_PAD + lx * (PLOT_WIDTH - PLOT_PAD * 2);
+    const ly = Math.max(plot.yMin, Math.min(plot.yMax, Math.log10(v)));
+    const y = PLOT_HEIGHT - PLOT_PAD - ((ly - plot.yMin) / span) * (PLOT_HEIGHT - PLOT_PAD * 2);
+    path += `${started ? "L" : "M"} ${x.toFixed(2)} ${y.toFixed(2)} `;
+    started = true;
+  }
+  return path;
 }
 
 const AC_COLORS = ["var(--trace-cyan)", "var(--trace-green)", "var(--trace-cream)", "var(--trace-red)"];

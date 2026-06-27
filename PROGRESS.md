@@ -1,5 +1,44 @@
 # Tau Autobuilder — Progress Log
 
+## 2026-06-27T18:05Z — auto/ltspice-parity — wire `.noise` to a NOISE tab + log it (§4/§6)
+
+### What I did
+- The previous session landed the `.noise` solver + parser (`simulation/noise.ts`,
+  commit ea6df81) but never wired it to the UI, flipped FEATURE_PARITY, or logged
+  it. Closed all three so `.noise` is reachable end-to-end like `.tf`/`.dc`/`.step`.
+- `App.tsx`: new `noiseAnalysis` state (reset in `invalidateAnalysis`) + a
+  `runNoiseAnalysis_` callback that reads the document's own `.noise` via
+  `analysesFromDirectives`, runs `runNoiseAnalysis({components,wires,netLabels,params},
+  spec)` with the request-version guard, and prompts clearly when no `.noise`
+  directive is present. Threaded `noiseResult`/`onRunNoise` props into `SimulationPanel`.
+- `SimulationPanel.tsx`: added `"noise"` to the tab mode union, a **NOISE** tab
+  button (runs on select), the panel title, and a new `NoisePlot` component —
+  output-referred noise density on a **log–log** axis (frequency decades X, V/√Hz
+  decades Y; `noisePath` maps through log10), a legend naming the output port, and
+  a metric row with integrated total output / input-referred noise + point count.
+
+### Files touched
+- src/App.tsx (noiseAnalysis state, runNoiseAnalysis_, props)
+- src/components/SimulationPanel.tsx (NOISE tab, NoisePlot, noisePath)
+- FEATURE_PARITY.md (§4 `.noise` ⬜ → ✅)
+
+### Tests
+496 passing (unchanged; solver's 16 tests + directive mapping already covered).
+Typecheck clean. NoisePlot/noisePath are presentational (no component-render test
+infra in the repo); the numeric path is validated by the solver's textbook tests.
+
+### FEATURE_PARITY items updated
+- §4 `.noise` Noise analysis: ⬜ → ✅ (TS adjoint solver; native device noise NEXT).
+
+### UX issues found
+- None new — NOISE tab follows the established AC/DC plot styling (CSS variables,
+  log axis, dense metric row). Native FFI noise path still pending (TS-only), same
+  caveat as `.tf`/`.dc`.
+
+### Next step
+Either (a) start §3 behavioral B-source deck emission (needed for class-d_starter),
+or (b) §6 waveform viewer: surface `I(...)` branch currents as probable traces.
+
 ## 2026-06-27T12:16Z — auto/ltspice-parity — `.tf` transfer-function analysis (solver + parser + UI) (§4/§6)
 
 ### What I did

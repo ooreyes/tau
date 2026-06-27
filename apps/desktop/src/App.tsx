@@ -33,6 +33,7 @@ import { runOperatingPoint, type OperatingPointResult } from "./simulation/opera
 import { runAcSweep, type AcResult } from "./simulation/acSweep";
 import { runDcSweep, type DcSweepResult } from "./simulation/dcSweep";
 import { runTransferFunction, type TfResult } from "./simulation/transferFunction";
+import { runNoiseAnalysis, type NoiseResult } from "./simulation/noise";
 import { stepFromDirectives } from "./simulation/paramStep";
 import {
   stepContexts,
@@ -130,6 +131,7 @@ function App() {
   const [acAnalysis, setAcAnalysis] = useState<AcResult | null>(null);
   const [dcAnalysis, setDcAnalysis] = useState<DcSweepResult | null>(null);
   const [tfAnalysis, setTfAnalysis] = useState<TfResult | null>(null);
+  const [noiseAnalysis, setNoiseAnalysis] = useState<NoiseResult | null>(null);
   const [stepFamily, setStepFamily] = useState<StepFamilyResult | null>(null);
   const [analysisRunning, setAnalysisRunning] = useState(false);
   const [runState, setRunState] = useState<"idle" | "complete" | "error" | "stopped">("idle");
@@ -166,6 +168,7 @@ function App() {
     setAcAnalysis(null);
     setDcAnalysis(null);
     setTfAnalysis(null);
+    setNoiseAnalysis(null);
     setStepFamily(null);
     setRunState(state);
   }, []);
@@ -312,6 +315,33 @@ function App() {
     } catch (error) {
       if (analysisRequestRef.current !== requestId) return;
       setTfAnalysis({ ok: false, message: error instanceof Error ? error.message : "Could not run this transfer function.", warnings: [] });
+    } finally {
+      if (analysisRequestRef.current === requestId) setAnalysisRunning(false);
+    }
+  }, [components, wires, netLabels, params, directives]);
+
+  // `.noise` needs a `.noise <output> <source> <dec|oct|lin> <N> <fstart> <fstop>`
+  // directive. Imported `.asc` files carry their own; a hand-built circuit gets a
+  // clear prompt instead of a silent no-op. TS-only (small-signal adjoint solver).
+  const runNoiseAnalysis_ = useCallback(async () => {
+    const requestId = ++analysisRequestRef.current;
+    const { noise } = analysesFromDirectives(directives);
+    if (!noise) {
+      setNoiseAnalysis({
+        ok: false,
+        message: "Add a “.noise V(out) <source> dec <N> <fstart> <fstop>” directive to compute output and input-referred noise.",
+        warnings: [],
+      });
+      return;
+    }
+    setAnalysisRunning(true);
+    try {
+      const result = runNoiseAnalysis({ components, wires, netLabels, params }, noise);
+      if (analysisRequestRef.current !== requestId) return;
+      setNoiseAnalysis(result);
+    } catch (error) {
+      if (analysisRequestRef.current !== requestId) return;
+      setNoiseAnalysis({ ok: false, message: error instanceof Error ? error.message : "Could not run this noise analysis.", warnings: [] });
     } finally {
       if (analysisRequestRef.current === requestId) setAnalysisRunning(false);
     }
@@ -636,6 +666,7 @@ function App() {
                 acResult={acAnalysis}
                 dcResult={dcAnalysis}
                 tfResult={tfAnalysis}
+                noiseResult={noiseAnalysis}
                 stepResult={stepFamily}
                 measurements={measurements}
                 acMeasurements={acMeasurements}
@@ -647,6 +678,7 @@ function App() {
                 onRunAcSweep={runAcAnalysis}
                 onRunDcSweep={runDcAnalysis}
                 onRunTf={runTfAnalysis}
+                onRunNoise={runNoiseAnalysis_}
                 onRunStep={runStepAnalysis}
                 onStop={stopAnalysis}
                 onStep={stepAnalysis}
