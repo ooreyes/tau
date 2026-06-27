@@ -2,7 +2,8 @@ import { invoke } from "@tauri-apps/api/core";
 import { buildSpiceDeck, type SpiceAnalysis } from "./spiceNetlist";
 import type { NetLabel, SchematicComponent, SchematicWire } from "../schematic/types";
 import type { ParamScope } from "../simulation/paramScope";
-import type { AnalysisOptions, AnalysisResult, Trace } from "../simulation/linearTransient";
+import type { AnalysisOptions, AnalysisResult, CurrentTrace, Trace } from "../simulation/linearTransient";
+import { deriveRcCurrents } from "../simulation/currents";
 import type { OperatingPointResult } from "../simulation/operatingPoint";
 import type { AcResult, AcTrace } from "../simulation/acSweep";
 
@@ -64,12 +65,35 @@ export async function runNativeTransient(
     });
 
   if (traces.length === 0) throw new Error("ngspice completed, but returned no node-voltage traces.");
+
+  // Branch currents: voltage-source/inductor currents come straight from ngspice
+  // `<ref>#branch` vectors; resistor/capacitor currents are derived from the node
+  // voltages we already pulled, so `.meas`/plot can resolve `I(ref)`.
+  const nodeVoltages = new Map<string, number[]>(traces.map((t) => [t.id, t.values]));
+  const currents: CurrentTrace[] = [];
+  const seen = new Set<string>();
+  for (const { component } of execution.deck.circuit.components) {
+    const ref = component.label;
+    if (!ref || seen.has(ref.toLowerCase())) continue;
+    const branch = vector(execution.result, `${ref}#branch`)?.real;
+    if (branch && branch.length === time.real.length) {
+      currents.push({ ref, label: `I(${ref})`, values: branch });
+      seen.add(ref.toLowerCase());
+    }
+  }
+  for (const derived of deriveRcCurrents(execution.deck.circuit.components, nodeVoltages, time.real)) {
+    if (seen.has(derived.ref.toLowerCase())) continue;
+    currents.push(derived);
+    seen.add(derived.ref.toLowerCase());
+  }
+
   const stopTime = time.real[time.real.length - 1] ?? options.stopTime;
   return {
     ok: true,
     title: "ngspice transient",
     times: time.real,
     traces,
+    currents,
     stats: {
       netCount: execution.deck.circuit.nets.length,
       componentCount: schematic.components.length,

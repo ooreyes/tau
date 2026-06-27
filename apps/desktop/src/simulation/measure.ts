@@ -20,6 +20,8 @@ import { evaluateExpression, type FuncDef, type Scope } from "./expr";
 export interface MeasWaveform {
   times: number[];
   traces: ReadonlyArray<{ id: string; label: string; values: number[] }>;
+  /** Branch-current waveforms keyed by ref-des, so `I(R1)`/`I(V1)` resolve. */
+  currents?: ReadonlyArray<{ ref: string; label: string; values: ReadonlyArray<number> }>;
 }
 
 export type AggregateKind = "MAX" | "MIN" | "PP" | "AVG" | "RMS" | "INTEG";
@@ -335,7 +337,8 @@ export function safeEvalScalar(expr: string, scope: Scope, funcs: Record<string,
 /**
  * Compile a measurement expression that may mix signals (`V(out)`, `V(a,b)`)
  * with scalars from `scope` (earlier measurements + circuit params).
- * Unsupported `I(...)` signals (no current traces in the TS solver) yield NaN.
+ * `I(ref)` signals resolve against the waveform's branch-current traces; an
+ * unknown reference yields NaN.
  */
 function compileExpr(expr: string, wf: MeasWaveform, scope: Scope, funcs: Record<string, FuncDef>): CompiledExpr {
   const getters: Array<(i: number) => number> = [];
@@ -367,8 +370,13 @@ function compileExpr(expr: string, wf: MeasWaveform, scope: Scope, funcs: Record
 
 function makeGetter(kind: string, arg: string, wf: MeasWaveform): (i: number) => number {
   if (kind.toUpperCase() === "I") {
-    // The interim TS solver does not expose branch currents to `.meas`.
-    return () => NaN;
+    // Branch current by ref-des, e.g. I(R1)/I(V1). Resolved against the
+    // waveform's current traces (both the TS solver and native ngspice supply
+    // these); an unknown ref reads NaN so the measurement reports cleanly.
+    const ref = arg.trim().toLowerCase();
+    const cur = wf.currents?.find((c) => c.ref.toLowerCase() === ref);
+    if (!cur) return () => NaN;
+    return (i) => cur.values[i] ?? NaN;
   }
   const parts = arg.split(",").map((p) => p.trim());
   if (parts.length === 2) {

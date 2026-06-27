@@ -27,6 +27,16 @@ export interface Trace {
   values: number[];
 }
 
+/** A branch-current waveform, e.g. `I(V1)` or `I(R1)`, in SPICE sign convention.
+ *  Voltage-source and inductor currents come straight from the MNA solution
+ *  vector; resistor/capacitor/current-source currents are derived from node
+ *  voltages. Keyed by the component's ref-des so `.meas`/plot can resolve `I(ref)`. */
+export interface CurrentTrace {
+  ref: string;
+  label: string;
+  values: number[];
+}
+
 export interface AnalysisStats {
   netCount: number;
   componentCount: number;
@@ -41,6 +51,7 @@ export type AnalysisResult =
       title: string;
       times: number[];
       traces: Trace[];
+      currents: CurrentTrace[];
       stats: AnalysisStats;
       warnings: string[];
       circuit: ExtractedCircuit;
@@ -133,6 +144,19 @@ export function runTransientAnalysis(
     const traceValues = nonGroundNets.map(() => [] as number[]);
     const capacitorVoltage = new Map<string, number>();
     const inductorCurrent = new Map<string, number>();
+    // Per-component branch-current samples (SPICE sign convention), keyed by id.
+    const currentSamples = new Map<string, number[]>();
+    const currentRefs = new Map<string, string>();
+    const pushCurrent = (id: string, ref: string, value: number) => {
+      if (!ref) return; // unlabeled parts can't be referenced as I(ref)
+      let arr = currentSamples.get(id);
+      if (!arr) {
+        arr = [];
+        currentSamples.set(id, arr);
+        currentRefs.set(id, ref);
+      }
+      arr.push(value);
+    };
 
     for (let step = 0; step <= options.steps; step += 1) {
       const time = step * stepSize;
@@ -232,13 +256,54 @@ export function runTransientAnalysis(
       for (let i = 0; i < nonGroundNets.length; i += 1) traceValues[i].push(solution[i]);
 
       for (const entry of circuit.components) {
-        if (entry.component.kind === "capacitor") {
-          capacitorVoltage.set(entry.component.id, voltageBetween(entry.pins.a, entry.pins.b, nodeIndex, solution));
-        } else if (entry.component.kind === "inductor") {
-          const currentIndex = inductorOffset + inductors.findIndex((source) => source.component.id === entry.component.id);
-          inductorCurrent.set(entry.component.id, solution[currentIndex]);
+        const id = entry.component.id;
+        const ref = entry.component.label;
+        switch (entry.component.kind) {
+          case "capacitor": {
+            const now = voltageBetween(entry.pins.a, entry.pins.b, nodeIndex, solution);
+            const prev = capacitorVoltage.get(id) ?? 0;
+            capacitorVoltage.set(id, now);
+            let c = 0;
+            try { c = parseQuantity(entry.component.value, "F"); } catch { c = 0; }
+            pushCurrent(id, ref, step === 0 || !(c > 0) ? 0 : (c * (now - prev)) / stepSize);
+            break;
+          }
+          case "inductor": {
+            const currentIndex = inductorOffset + inductors.findIndex((source) => source.component.id === id);
+            inductorCurrent.set(id, solution[currentIndex]);
+            pushCurrent(id, ref, solution[currentIndex]);
+            break;
+          }
+          case "resistor": {
+            let r = 0;
+            try { r = parseQuantity(entry.component.value, "Ω"); } catch { r = 0; }
+            if (r > 0) pushCurrent(id, ref, voltageBetween(entry.pins.a, entry.pins.b, nodeIndex, solution) / r);
+            break;
+          }
+          case "vsource":
+          case "vac": {
+            const currentIndex = voltageSourceOffset + voltageSources.findIndex((source) => source.component.id === id);
+            pushCurrent(id, ref, solution[currentIndex]);
+            break;
+          }
+          case "isource": {
+            let a = 0;
+            try { a = parseQuantity(entry.component.value, "A"); } catch { a = 0; }
+            pushCurrent(id, ref, a);
+            break;
+          }
+          case "iac": {
+            pushCurrent(id, ref, signalValue(entry.component.value, "A", time));
+            break;
+          }
         }
       }
+    }
+
+    const currents: CurrentTrace[] = [];
+    for (const [id, values] of currentSamples) {
+      const ref = currentRefs.get(id) ?? id;
+      currents.push({ ref, label: `I(${ref})`, values });
     }
 
     return {
@@ -252,6 +317,7 @@ export function runTransientAnalysis(
         color: TRACE_COLORS[index % TRACE_COLORS.length],
         values: traceValues[index],
       })),
+      currents,
       stats: {
         netCount: circuit.nets.length,
         componentCount: circuit.components.length,

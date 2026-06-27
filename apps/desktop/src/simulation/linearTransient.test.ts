@@ -519,3 +519,77 @@ describe("Transient source primitives", () => {
     expect(sourceNode?.values[sourceNode.values.length - 1]).toBeCloseTo(1, 3);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Test 5 — Branch currents I(...) exposed for .meas / probe
+// ---------------------------------------------------------------------------
+describe("Branch currents — I(...) exposure", () => {
+  /**
+   * Same resistive divider as Test 2: V1=10 V across R1=R2=1k in series.
+   * Series current = 10 / 2000 = 5 mA.
+   *   I(R1) = (V(p) - V(mid))/R1 = (10-5)/1000 = +5 mA   (a→b)
+   *   I(R2) = (V(mid) - 0)/R2    = (5-0)/1000  = +5 mA   (a→b)
+   *   I(V1) = current into + terminal = -(delivered) = -5 mA  (SPICE convention)
+   */
+  const V10 = vsource(0, 32, "10V", "V1");
+  const R1 = resistor(96, 0, "1k", "R1");
+  const R2 = resistor(192, 0, "1k", "R2");
+  const GND_vs = ground(0, 64);
+  const GND_r2 = ground(224, 0);
+  const components = [V10, R1, R2, GND_vs, GND_r2];
+  const wires = [
+    wire([{ x: 0, y: 0 }, { x: 64, y: 0 }]),
+    wire([{ x: 128, y: 0 }, { x: 160, y: 0 }]),
+  ];
+
+  function lastCurrent(ref: string): number {
+    const result = runTransientAnalysis({ components, wires }, { stopTime: 1e-3, steps: 100 });
+    if (!result.ok) throw new Error(result.message);
+    const cur = result.currents.find((c) => c.ref === ref);
+    if (!cur) throw new Error(`no current trace for ${ref}; got ${result.currents.map((c) => c.ref).join(",")}`);
+    return cur.values[cur.values.length - 1];
+  }
+
+  it("exposes a current trace per labelled R / V part", () => {
+    const result = runTransientAnalysis({ components, wires }, { stopTime: 1e-3, steps: 100 });
+    if (!result.ok) throw new Error(result.message);
+    const refs = result.currents.map((c) => c.ref).sort();
+    expect(refs).toEqual(["R1", "R2", "V1"]);
+    expect(result.currents.every((c) => c.values.length === result.times.length)).toBe(true);
+    expect(result.currents.find((c) => c.ref === "R1")?.label).toBe("I(R1)");
+  });
+
+  it("resistor currents equal V/R = 5 mA (a→b sign)", () => {
+    expect(lastCurrent("R1")).toBeCloseTo(0.005, 6);
+    expect(lastCurrent("R2")).toBeCloseTo(0.005, 6);
+  });
+
+  it("voltage-source current is -5 mA (SPICE: current into + terminal)", () => {
+    expect(lastCurrent("V1")).toBeCloseTo(-0.005, 6);
+  });
+
+  it("capacitor current is C·dV/dt and starts at 0", () => {
+    // RC charging: V1=5 V, R1=1k, C1=1µF. At t=0 the cap current = 0 (defined),
+    // then I_C = (Vs - Vc)/R. First post-step current ≈ Vs/R = 5 mA (cap ~0 V).
+    const Vs = vsource(0, 32, "5V", "V1");
+    const R = resistor(96, 0, "1k", "R1");
+    const C = capacitor(192, 0, "1u", "C1"); // a=(160,0), b=(224,0)
+    const gnd = ground(0, 64);
+    const gndC = ground(224, 0);
+    const comps = [Vs, R, C, gnd, gndC];
+    const ws = [
+      wire([{ x: 0, y: 0 }, { x: 64, y: 0 }]),
+      wire([{ x: 128, y: 0 }, { x: 160, y: 0 }]),
+    ];
+    const result = runTransientAnalysis({ components: comps, wires: ws }, { stopTime: 5e-3, steps: 500 });
+    if (!result.ok) throw new Error(result.message);
+    const ic = result.currents.find((c) => c.ref === "C1");
+    expect(ic).toBeDefined();
+    expect(ic?.values[0]).toBe(0);
+    // Cap current must equal resistor current at every step (series path).
+    const ir = result.currents.find((c) => c.ref === "R1")!;
+    for (let i = 1; i < result.times.length; i += 50) {
+      expect(ic!.values[i]).toBeCloseTo(ir.values[i], 6);
+    }
+  });
+});

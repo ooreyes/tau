@@ -209,8 +209,18 @@ zener, opamp, NMOS, PMOS, NPN, PNP, switch, transformer, testpoint, ground.
   parse-time literals — fixing a latent throw on real decks — and the `freq`/`time`
   independent variable is exposed (`FIND freq WHEN …`). 44 hand-computed tests,
   incl. the AD4080/AFE bandwidth-chain forms from the user's own circuits.
-  **NEXT:** `I(...)` branch-current signals (needs the TS solver to expose device
-  currents); `.meas dc`/`.meas noise` domains.
+  **`I(...)` branch-current signals now resolve** — the transient solvers expose
+  per-device current waveforms (`simulation/currents.ts` `CurrentTrace`): the TS
+  MNA solver emits voltage-source/inductor currents straight from the solution
+  vector and R/C/I currents derived from node voltages; native ngspice pulls
+  source currents from its `<ref>#branch` vectors (live-confirmed: a 10 V/1k:1k
+  divider gives `v1#branch = -5 mA = I(V1)`) and derives R/C currents the same
+  way (`deriveRcCurrents`). `measure.ts` `makeGetter` resolves `I(ref)` against
+  these, so deadtime.asc's `PS avg -(10*I(V1)+10*I(V2))` / `PL avg V(vo)*I(R1)` /
+  `Efficiency=PL/PS` evaluate. 13 hand-computed tests (I(R)=V/R, I(V1)=−5 mA,
+  I(C)=C·dV/dt=I(R) in series, power forms).
+  **NEXT:** `.meas dc`/`.meas noise` domains; expose currents in the waveform
+  viewer (probe a device → plot its current, §6).
 - ⬜ DC operating point annotation on schematic (show node V / device I in-place)
 - ⬜ Initial conditions `.ic` / `.nodeset`
 - ⬜ `.options` passthrough (reltol, etc.) — used 7×

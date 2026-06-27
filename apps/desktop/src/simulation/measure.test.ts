@@ -238,3 +238,41 @@ describe("edge cases", () => {
     expect(r.value).toBeNull();
   });
 });
+
+describe("branch-current signals I(ref)", () => {
+  // out node = 2 V across a 4 Ω load; I(R1) = 0.5 A. Source delivers it: I(V1) = -0.5 A.
+  const w: MeasWaveform = {
+    times: [0, 1, 2, 3],
+    traces: [{ id: "out", label: "V(out)", values: [2, 2, 2, 2] }],
+    currents: [
+      { ref: "R1", label: "I(R1)", values: [0.5, 0.5, 0.5, 0.5] },
+      { ref: "V1", label: "I(V1)", values: [-0.5, -0.5, -0.5, -0.5] },
+    ],
+  };
+
+  it("resolves I(R1) in an AVG measurement", () => {
+    const r = evaluateMeasurement(parseMeasDirective(".meas tran ir AVG I(R1)")!, w, {});
+    expect(r.value).toBeCloseTo(0.5, 9);
+  });
+
+  it("computes load power V(out)*I(R1)", () => {
+    const r = evaluateMeasurement(parseMeasDirective(".meas tran pl AVG V(out)*I(R1)")!, w, {});
+    expect(r.value).toBeCloseTo(1.0, 9); // 2 V × 0.5 A
+  });
+
+  it("handles the deadtime.asc supplied-power form -(k*I(V1))", () => {
+    const r = evaluateMeasurement(parseMeasDirective(".meas tran ps AVG -(10*I(V1))")!, w, {});
+    expect(r.value).toBeCloseTo(5.0, 9); // -(10 × -0.5)
+  });
+
+  it("an unknown ref yields a null/NaN measurement, not a throw", () => {
+    const r = evaluateMeasurement(parseMeasDirective(".meas tran m AVG I(R9)")!, w, {});
+    expect(r.value === null || Number.isNaN(r.value)).toBe(true);
+  });
+
+  it("a waveform with no currents leaves I(...) unresolved (no throw)", () => {
+    const noCur = wf([0, 1], { out: [1, 1] });
+    const r = evaluateMeasurement(parseMeasDirective(".meas tran m AVG I(R1)")!, noCur, {});
+    expect(r.value === null || Number.isNaN(r.value)).toBe(true);
+  });
+});
