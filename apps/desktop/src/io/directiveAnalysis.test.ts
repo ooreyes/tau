@@ -114,4 +114,13 @@ describe("analysesFromDirectives", () => {
     const out = analysesFromDirectives([".param x=1", ".tf V(out) V1"]);
     expect(out.tf).toEqual({ output: { kind: "voltage", pos: "out", neg: undefined }, source: "V1" });
   });
+
+  it("extracts a .noise request", () => {
+    const out = analysesFromDirectives([".param x=1", ".noise V(out) V1 dec 10 1 100k"]);
+    expect(out.noise).toEqual({
+      output: { pos: "out", neg: undefined },
+      source: "V1",
+      sweep: { startHz: 1, stopHz: 100_000, pointsPerDecade: 10 },
+    });
+  });
 });
