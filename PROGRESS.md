@@ -1,5 +1,54 @@
 # Tau Autobuilder — Progress Log
 
+## 2026-06-27T11:30Z — auto/ltspice-parity — expose I(...) branch currents to .meas (§4)
+
+### What I did
+- Closed the explicit §4 `.meas` NEXT: **branch-current signals `I(ref)`**. The
+  measure engine previously returned NaN for every `I(...)`, which blocked
+  deadtime.asc's `.meas` lines (`I(V1)`, `I(V2)`, `I(R1)` → PS/PL/Efficiency).
+- **TS solver** (`linearTransient.ts`): added `CurrentTrace` + `currents:
+  CurrentTrace[]` to the ok result. During the solve loop I now capture each
+  device's branch current in SPICE sign convention — voltage-source & inductor
+  currents straight from the MNA solution vector, resistor currents `(Va-Vb)/R`,
+  capacitor `C·dV/dt`, independent-source currents from the set value. Keyed by
+  ref-des (unlabeled parts skipped).
+- **Native ngspice** (`nativeSpice.ts`): pulls source currents from ngspice's
+  `<ref>#branch` vectors and derives R/C currents from the node voltages it
+  already returns (`deriveRcCurrents` in `currents.ts`). Live-confirmed with
+  `ngspice -b`: a 10 V / 1k:1k divider gives `v1#branch = -0.005 = I(V1)`,
+  matching the TS convention exactly (resistor currents aren't in ngspice's
+  default vector set, hence the derivation).
+- **measure.ts**: `makeGetter` resolves `I(ref)` against `wf.currents`
+  (case-insensitive); added optional `currents` to `MeasWaveform`. App already
+  passes the AnalysisResult straight through, so both engine paths light up.
+
+### Files touched
+- src/simulation/linearTransient.ts (CurrentTrace + currents capture)
+- src/simulation/currents.ts (deriveRcCurrents helper) + currents.test.ts (new, 4)
+- src/simulation/measure.ts (I(ref) resolution + MeasWaveform.currents)
+- src/simulation/linearTransient.test.ts (+4 hand-computed current tests)
+- src/simulation/measure.test.ts (+5 I(...) tests incl. deadtime power forms)
+- src/engine/nativeSpice.ts (currents from #branch + derived R/C)
+- FEATURE_PARITY.md (§4 .meas I(...) note)
+
+### Tests
+468 passing (was 455; +13 new). Typecheck clean. Native `#branch` sign/value
+live-validated against ngspice 17 CLI.
+
+### FEATURE_PARITY items updated
+- §4 `.meas` — `I(...)` branch-current signals ✅ (line stays 🟡 for `.meas dc`/
+  `.meas noise` domains, now the NEXT).
+
+### UX issues found
+- None (no UI surface changed). Currents are now available to plot, but the
+  waveform viewer doesn't yet offer a current probe — logged as the §6 NEXT.
+
+### Next step
+Surface `currents` in the waveform viewer (§6): let a probe/trace picker plot
+`I(R1)` etc. alongside voltages; then add `.meas dc`/`.meas noise` domains.
+
+---
+
 ## 2026-06-26T08:36Z — auto/ltspice-parity — wire .step sweep to UI + family overlay (§4/§6)
 
 ### What I did
