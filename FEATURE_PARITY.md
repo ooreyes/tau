@@ -165,7 +165,17 @@ zener, opamp, NMOS, PMOS, NPN, PNP, switch, transformer, testpoint, ground.
   V(mid)=Vsweep/2). **NEXT:** native (FFI) DC runner for nonlinear sweeps;
   manual source/range picker for hand-built circuits; nested 2nd-source sweep.
 - ⬜ `.noise` **Noise analysis** — used 13×
-- ⬜ `.tf` **Transfer function** (small-signal DC gain, Zin/Zout)
+- ✅ `.tf` **Transfer function** (small-signal DC gain, Zin/Zout) — **solver +
+  parser + UI landed** (`simulation/transferFunction.ts`): `parseTfDirective`
+  reads `V(node)`/`V(a,b)`/`I(dev)` outputs + an independent source; `runTransferFunction`
+  computes gain, input impedance and output impedance by perturbation around
+  `runOperatingPoint` (no duplicated stamping — additive `OpOptions` add
+  test-current injection + branch-current return to the OP solver). Handles
+  voltage and current inputs. `analysesFromDirectives` maps an imported `.asc`'s
+  own `.tf`; a **TF** tab in `SimulationPanel` shows gain/Zin/Zout.
+  **12 hand-computed tests, cross-checked against ngspice 17** (1k:1k divider →
+  gain 0.5, Zin 2k, Zout 500 — exact match). **NEXT:** native/nonlinear path
+  (linearized around the bias point) once the OP solver gains nonlinear devices.
 - 🟡 `.step` **Parametric sweep** (param/source/temp, nested, list) — used 34×; huge for real work.
   **Parser + param-runner landed** (`simulation/paramStep.ts`): `parseStepDirective`
   enumerates every LTspice form — linear `start stop incr`, `dec`/`oct` log

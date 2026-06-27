@@ -1,5 +1,56 @@
 # Tau Autobuilder — Progress Log
 
+## 2026-06-27T12:16Z — auto/ltspice-parity — `.tf` transfer-function analysis (solver + parser + UI) (§4/§6)
+
+### What I did
+- Implemented the `.tf` small-signal DC transfer function — the next ⬜ in §4
+  analyses. `simulation/transferFunction.ts`:
+  - `parseTfDirective(".tf V(out) V1")` → `{output, source}`. Outputs:
+    `V(node)`, differential `V(a,b)` (commas + spaces ok), `I(device)`, and the
+    bare-node form. Strips leading `.`/`!`.
+  - `runTransferFunction` computes **gain**, **input impedance**, **output
+    impedance** by perturbation around `runOperatingPoint` (same no-duplicated-
+    stamping pattern as `dcSweep`): gain = Δoutput over a unit input step;
+    Rin = drive input alone with a unit stimulus and read delivered current
+    (voltage input) or terminal voltage (current input); Rout = zero every
+    source, inject a unit test current into the output port, read the response.
+  - Handles both voltage and current input sources; AC source kinds collapse to
+    a DC stimulus for the small-signal solve.
+- Extended the OP solver **additively** (`operatingPoint.ts`): new `OpOptions`
+  `{ injectCurrents, returnBranches }` — test-current injection into named nets
+  and voltage-source/inductor branch-current return. Default behavior unchanged
+  (all 468 prior tests still green).
+- `analysesFromDirectives` now also returns `tf` so an imported `.asc`'s own
+  `.tf` runs as authored (`io/directiveAnalysis.ts`).
+- UI: a **TF** tab in `SimulationPanel` (`TfTable`) shows gain/Zin/Zout in a
+  metric row + table; `App.runTfAnalysis` runs it from the document directive
+  with a clear prompt when none is present. Mirrors the DC tab wiring.
+
+### Files touched
+- src/simulation/transferFunction.ts (new), transferFunction.test.ts (new, 12)
+- src/simulation/operatingPoint.ts (additive OpOptions + branches)
+- src/io/directiveAnalysis.ts (+tf), directiveAnalysis.test.ts (+1)
+- src/components/SimulationPanel.tsx (TF tab + TfTable)
+- src/App.tsx (tfAnalysis state, runTfAnalysis, props)
+- FEATURE_PARITY.md (§4 `.tf` ⬜ → ✅)
+
+### Tests
+480 passing (was 468; +12 new). Typecheck clean. **Cross-checked against
+ngspice 17**: 1k:1k divider `.tf v(out) V1` → ngspice reports gain 0.5,
+input_impedance 2000, output_impedance 500 — Tau matches exactly. Current-input
+transimpedance case also hand-verified.
+
+### FEATURE_PARITY items updated
+- §4 `.tf` Transfer function: ⬜ → ✅ (TS path; native/nonlinear noted as NEXT).
+
+### UX issues found
+- None new. TF tab follows the established OP/DC table styling (CSS variables,
+  dense metric row). Note: TF has no native FFI path yet (TS-only), same as DC.
+
+### Next step
+Either (a) add `.noise` analysis (§4, the last ⬜ analysis besides .four/.temp),
+or (b) start §3 behavioral B-source deck emission (needed for class-d_starter).
+
 ## 2026-06-27T11:30Z — auto/ltspice-parity — expose I(...) branch currents to .meas (§4)
 
 ### What I did
