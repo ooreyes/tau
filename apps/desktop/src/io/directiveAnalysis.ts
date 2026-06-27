@@ -10,6 +10,7 @@
 import { parseQuantity } from "../simulation/quantity";
 import { MAX_TRANSIENT_STEPS, type AnalysisOptions } from "../simulation/linearTransient";
 import { parseDcDirective, type DcSweepSpec } from "../simulation/dcSweep";
+import { parseTfDirective, type TfSpec } from "../simulation/transferFunction";
 
 /** Sample count used when a `.tran` gives no usable timestep. Mirrors the editor default. */
 export const DEFAULT_TRAN_STEPS = 240;
@@ -116,6 +117,7 @@ export interface DirectiveAnalyses {
   tran?: AnalysisOptions;
   ac?: AcAnalysisOptions;
   dc?: DcSweepSpec;
+  tf?: TfSpec;
 }
 
 /**
@@ -137,6 +139,10 @@ export function analysesFromDirectives(directives: string[]): DirectiveAnalyses 
     if (!result.dc) {
       const dc = parseDcDirective(directive);
       if (dc) result.dc = dc;
+    }
+    if (!result.tf) {
+      const tf = parseTfDirective(directive);
+      if (tf) result.tf = tf;
     }
   }
   return result;

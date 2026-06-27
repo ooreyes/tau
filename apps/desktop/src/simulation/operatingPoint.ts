@@ -27,6 +27,14 @@ export type OperatingPointResult =
   | {
       ok: true;
       nets: { id: string; label: string; voltage: number }[];
+      /**
+       * Independent-voltage-source and inductor branch currents (the MNA
+       * auxiliary unknowns), present only when {@link OpOptions.returnBranches}
+       * is set. `current` is the raw MNA unknown: for a voltage source it equals
+       * the current flowing INTO its + node from the source branch, i.e. the
+       * NEGATIVE of the conventional current delivered out of the + terminal.
+       */
+      branches?: { id: string; label: string; current: number }[];
       warnings: string[];
     }
   | {
@@ -34,6 +42,19 @@ export type OperatingPointResult =
       message: string;
       warnings: string[];
     };
+
+/** Optional, purely-additive knobs used by small-signal analyses (`.tf`). */
+export interface OpOptions {
+  /**
+   * Extra DC current injected INTO the given nets (amps). A positive value adds
+   * current into that node's KCL — i.e. an ideal test current source from ground
+   * into the net. Used to probe output impedance. Nets are matched by net id
+   * (the same id reported back in `nets[].id`).
+   */
+  injectCurrents?: { netId: string; amps: number }[];
+  /** Also return independent voltage-source / inductor branch currents. */
+  returnBranches?: boolean;
+}
 
 const OP_SUPPORTED = new Set<ComponentKind>([
   "resistor",
@@ -57,12 +78,15 @@ const GMIN = 1e-12;
 // Public API
 // ---------------------------------------------------------------------------
 
-export function runOperatingPoint(schematic: {
-  components: SchematicComponent[];
-  wires: SchematicWire[];
-  netLabels?: NetLabel[];
-  params?: ParamScope;
-}): OperatingPointResult {
+export function runOperatingPoint(
+  schematic: {
+    components: SchematicComponent[];
+    wires: SchematicWire[];
+    netLabels?: NetLabel[];
+    params?: ParamScope;
+  },
+  options: OpOptions = {},
+): OperatingPointResult {
   let circuit: ExtractedCircuit | undefined;
 
   try {
@@ -239,6 +263,16 @@ export function runOperatingPoint(schematic: {
       }
     }
 
+    // Optional test-current injection (e.g. output-impedance probe): add the
+    // requested current into each named net's KCL row. Unknown net ids are
+    // ignored (the caller learns valid ids from a prior baseline solve).
+    if (options.injectCurrents) {
+      for (const { netId, amps } of options.injectCurrents) {
+        const idx = nodeIndex.get(netId);
+        if (idx !== undefined) rhs[idx] += amps;
+      }
+    }
+
     const solution = solveLinearSystem(matrix, rhs);
 
     const nets = nonGroundNets.map((net, idx) => ({
@@ -250,9 +284,29 @@ export function runOperatingPoint(schematic: {
     // Add the ground net explicitly at 0 V
     nets.unshift({ id: circuit.groundNetId, label: "GND", voltage: 0 });
 
+    let branches: { id: string; label: string; current: number }[] | undefined;
+    if (options.returnBranches) {
+      branches = [];
+      voltageSources.forEach((v, i) => {
+        branches!.push({
+          id: v.component.id,
+          label: `I(${v.component.label || v.component.id})`,
+          current: solution[voltageSourceOffset + i],
+        });
+      });
+      inductors.forEach((l, i) => {
+        branches!.push({
+          id: l.component.id,
+          label: `I(${l.component.label || l.component.id})`,
+          current: solution[inductorOffset + i],
+        });
+      });
+    }
+
     return {
       ok: true,
       nets,
+      ...(branches ? { branches } : {}),
       warnings: circuit.warnings,
     };
   } catch (error) {

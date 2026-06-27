@@ -109,4 +109,9 @@ describe("analysesFromDirectives", () => {
     const out = analysesFromDirectives([".tran 1m", ".ac dec 20 10 1Meg"]);
     expect(out.dc).toBeUndefined();
   });
+
+  it("extracts a .tf transfer-function request", () => {
+    const out = analysesFromDirectives([".param x=1", ".tf V(out) V1"]);
+    expect(out.tf).toEqual({ output: { kind: "voltage", pos: "out", neg: undefined }, source: "V1" });
+  });
 });
