@@ -32,6 +32,7 @@ import {
 import { runOperatingPoint, type OperatingPointResult } from "./simulation/operatingPoint";
 import { runAcSweep, type AcResult } from "./simulation/acSweep";
 import { runDcSweep, type DcSweepResult } from "./simulation/dcSweep";
+import { runTransferFunction, type TfResult } from "./simulation/transferFunction";
 import { stepFromDirectives } from "./simulation/paramStep";
 import {
   stepContexts,
@@ -128,6 +129,7 @@ function App() {
   const [opAnalysis, setOpAnalysis] = useState<OperatingPointResult | null>(null);
   const [acAnalysis, setAcAnalysis] = useState<AcResult | null>(null);
   const [dcAnalysis, setDcAnalysis] = useState<DcSweepResult | null>(null);
+  const [tfAnalysis, setTfAnalysis] = useState<TfResult | null>(null);
   const [stepFamily, setStepFamily] = useState<StepFamilyResult | null>(null);
   const [analysisRunning, setAnalysisRunning] = useState(false);
   const [runState, setRunState] = useState<"idle" | "complete" | "error" | "stopped">("idle");
@@ -163,6 +165,7 @@ function App() {
     setOpAnalysis(null);
     setAcAnalysis(null);
     setDcAnalysis(null);
+    setTfAnalysis(null);
     setStepFamily(null);
     setRunState(state);
   }, []);
@@ -282,6 +285,33 @@ function App() {
     } catch (error) {
       if (analysisRequestRef.current !== requestId) return;
       setDcAnalysis({ ok: false, message: error instanceof Error ? error.message : "Could not run this DC sweep.", warnings: [] });
+    } finally {
+      if (analysisRequestRef.current === requestId) setAnalysisRunning(false);
+    }
+  }, [components, wires, netLabels, params, directives]);
+
+  // A `.tf` transfer function needs a `.tf <output> <source>` directive to know
+  // the output variable and the input source. Imported `.asc` files carry their
+  // own; a hand-built circuit gets a clear prompt instead of a silent no-op.
+  const runTfAnalysis = useCallback(async () => {
+    const requestId = ++analysisRequestRef.current;
+    const { tf } = analysesFromDirectives(directives);
+    if (!tf) {
+      setTfAnalysis({
+        ok: false,
+        message: "Add a “.tf V(out) <source>” directive to compute a small-signal transfer function.",
+        warnings: [],
+      });
+      return;
+    }
+    setAnalysisRunning(true);
+    try {
+      const result = runTransferFunction({ components, wires, netLabels, params }, tf);
+      if (analysisRequestRef.current !== requestId) return;
+      setTfAnalysis(result);
+    } catch (error) {
+      if (analysisRequestRef.current !== requestId) return;
+      setTfAnalysis({ ok: false, message: error instanceof Error ? error.message : "Could not run this transfer function.", warnings: [] });
     } finally {
       if (analysisRequestRef.current === requestId) setAnalysisRunning(false);
     }
@@ -605,6 +635,7 @@ function App() {
                 opResult={opAnalysis}
                 acResult={acAnalysis}
                 dcResult={dcAnalysis}
+                tfResult={tfAnalysis}
                 stepResult={stepFamily}
                 measurements={measurements}
                 acMeasurements={acMeasurements}
@@ -615,6 +646,7 @@ function App() {
                 onRunOperatingPoint={runOperatingAnalysis}
                 onRunAcSweep={runAcAnalysis}
                 onRunDcSweep={runDcAnalysis}
+                onRunTf={runTfAnalysis}
                 onRunStep={runStepAnalysis}
                 onStop={stopAnalysis}
                 onStep={stepAnalysis}

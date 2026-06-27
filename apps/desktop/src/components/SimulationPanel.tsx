@@ -18,6 +18,7 @@ import { EngineeringInput } from "./EngineeringInput";
 import type { OperatingPointResult } from "../simulation/operatingPoint";
 import type { AcResult } from "../simulation/acSweep";
 import type { DcSweepResult } from "../simulation/dcSweep";
+import type { TfResult } from "../simulation/transferFunction";
 import type { StepFamilyResult } from "../simulation/stepFamily";
 import type { MeasResult } from "../simulation/measure";
 import { isNativeSpiceRuntime, MAX_NATIVE_OUTPUT_POINTS } from "../engine/nativeSpice";
@@ -28,6 +29,7 @@ interface SimulationPanelProps {
   opResult: OperatingPointResult | null;
   acResult: AcResult | null;
   dcResult: DcSweepResult | null;
+  tfResult: TfResult | null;
   stepResult: StepFamilyResult | null;
   measurements: MeasResult[];
   acMeasurements: MeasResult[];
@@ -38,6 +40,7 @@ interface SimulationPanelProps {
   onRunOperatingPoint: () => void | Promise<void>;
   onRunAcSweep: () => void | Promise<void>;
   onRunDcSweep: () => void | Promise<void>;
+  onRunTf: () => void | Promise<void>;
   onRunStep: () => void | Promise<void>;
   onStop: () => void;
   onStep: () => void | Promise<void>;
@@ -53,6 +56,7 @@ export function SimulationPanel({
   opResult,
   acResult,
   dcResult,
+  tfResult,
   stepResult,
   measurements,
   acMeasurements,
@@ -63,6 +67,7 @@ export function SimulationPanel({
   onRunOperatingPoint,
   onRunAcSweep,
   onRunDcSweep,
+  onRunTf,
   onRunStep,
   onStop,
   onStep,
@@ -97,13 +102,14 @@ export function SimulationPanel({
   const opampPart = selected && selected.kind === "opamp" ? findOpAmp(selected.value) : null;
   const warnings = result?.warnings ?? [];
 
-  const [mode, setMode] = useState<"tran" | "op" | "ac" | "dc" | "step">("tran");
+  const [mode, setMode] = useState<"tran" | "op" | "ac" | "dc" | "tf" | "step">("tran");
   const [maximized, setMaximized] = useState(false);
   const title =
     mode === "tran" ? "Transient scope"
     : mode === "op" ? "Operating point"
     : mode === "ac" ? "AC sweep"
     : mode === "dc" ? "DC sweep"
+    : mode === "tf" ? "Transfer function"
     : "Step sweep";
   // ngspice may include the final endpoint in addition to requested steps.
   const maxTransientSteps = isNativeSpiceRuntime() ? MAX_NATIVE_OUTPUT_POINTS - 1 : MAX_TRANSIENT_STEPS;
@@ -194,6 +200,18 @@ export function SimulationPanel({
             DC
           </button>
           <button
+            className={`plotter-tab${mode === "tf" ? " active" : ""}`}
+            role="tab"
+            aria-selected={mode === "tf"}
+            disabled={isRunning}
+            onClick={() => {
+              setMode("tf");
+              void onRunTf();
+            }}
+          >
+            TF
+          </button>
+          <button
             className={`plotter-tab${mode === "step" ? " active" : ""}`}
             role="tab"
             aria-selected={mode === "step"}
@@ -260,6 +278,7 @@ export function SimulationPanel({
         </>
       )}
       {mode === "dc" && <DcPlot result={dcResult} />}
+      {mode === "tf" && <TfTable result={tfResult} />}
       {mode === "step" && <StepPlot result={stepResult} probes={probes} />}
 
       <div className="selection-strip">
@@ -552,6 +571,49 @@ function OpTable({ result }: { result: OperatingPointResult | null }) {
           </div>
         ))}
       </div>
+    </>
+  );
+}
+
+/** Small-signal `.tf` results: gain, input impedance, output impedance. */
+function TfTable({ result }: { result: TfResult | null }) {
+  if (!result) return null;
+  if (!result.ok) return <div className="analysis-empty">{result.message}</div>;
+  const ohms = (v: number) => (Number.isFinite(v) ? formatEngineering(v, "Ω", 3) : "∞ Ω");
+  const gainText =
+    result.gainUnit === "Ω"
+      ? formatEngineering(result.gain, "Ω", 4)
+      : result.gainUnit === "A/V"
+        ? `${formatEngineering(result.gain, "S", 4)}`
+        : result.gain.toPrecision(5);
+  return (
+    <>
+      <div className="meter-row analysis-meter">
+        <Metric label="GAIN" value={gainText} tone="green" />
+        <Metric label="ZIN" value={ohms(result.inputImpedance)} tone="cyan" />
+        <Metric label="ZOUT" value={ohms(result.outputImpedance)} tone="cream" />
+      </div>
+      <div className="op-table">
+        <div className="op-row op-head">
+          <span>QUANTITY</span>
+          <span>VALUE</span>
+        </div>
+        <div className="op-row">
+          <span>{result.gainLabel}</span>
+          <span>{gainText}</span>
+        </div>
+        <div className="op-row">
+          <span>Input impedance at {result.spec.source}</span>
+          <span>{ohms(result.inputImpedance)}</span>
+        </div>
+        <div className="op-row">
+          <span>Output impedance</span>
+          <span>{ohms(result.outputImpedance)}</span>
+        </div>
+      </div>
+      {result.warnings.length > 0 && (
+        <div className="analysis-empty">{result.warnings.join(" ")}</div>
+      )}
     </>
   );
 }
