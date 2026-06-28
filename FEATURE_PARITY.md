@@ -409,7 +409,9 @@ zener, opamp, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**, **B (behav
 ## 7. Engine & accuracy
 - ✅ Native ngspice FFI (desktop) — `src-tauri/src/spice.rs`
 - ✅ Interim TS MNA solver (linear) for browser/tests
-- ✅ Source polarity matches SPICE convention; R/C/L value guards
+- ✅ Source polarity matches SPICE convention; R/C/L value guards (resistors now
+  allow a **negative (active) resistance** — SPICE-legal, e.g. Draft7's -1k — and
+  reject only zero; C/L stay strictly positive)
 - ⬜ Match LTspice's defaults/timestep/convergence for waveform-level agreement
 - 🟡 Ship/bundle a real device-model set — **common LTspice standard diodes/
   zeners/BJTs bundled** (`engine/standardModels.ts`, real `standard.*` params,

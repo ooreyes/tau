@@ -269,7 +269,7 @@ describe("deck builder — failure modes", () => {
         { components: [Vdc(0, 32, "5"), R(96, 0, "0", "R1"), GND(0, 64), GND(128, 0)], wires: [W({ x: 0, y: 0 }, { x: 64, y: 0 })] },
         { kind: "op" },
       ),
-    ).toThrow(/positive/i);
+    ).toThrow(/non-zero/i);
   });
 
   it("rejects a negative capacitance", () => {

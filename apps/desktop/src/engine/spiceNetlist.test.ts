@@ -121,6 +121,26 @@ describe("buildSpiceDeck", () => {
     expect(deck.netlist).not.toMatch(/uic/);
   });
 
+  it("allows a negative resistance (SPICE active element, Draft7's -1k)", () => {
+    const components = [
+      component("vsource", "V1", "1", 0, 32),
+      component("resistor", "R1", "-1k", 96, 0),
+      component("ground", "", "", 0, 64),
+      component("ground", "", "", 128, 0),
+    ];
+    const wires = [wire("w1", [{ x: 0, y: 0 }, { x: 64, y: 0 }])];
+    const deck = buildSpiceDeck({ components, wires }, { kind: "op" });
+    expect(deck.netlist).toMatch(/R1 \S+ \S+ -1000/);
+  });
+
+  it("still rejects a zero resistance (a short)", () => {
+    const components = [
+      component("resistor", "R1", "0", 0, 0),
+      component("ground", "", "", 16, 32),
+    ];
+    expect(() => buildSpiceDeck({ components, wires: [] }, { kind: "op" })).toThrow(/non-zero/);
+  });
+
   it("lets a document's .options directive override the default deck options", () => {
     const components = [
       component("vsource", "V1", "5", 0, 32),

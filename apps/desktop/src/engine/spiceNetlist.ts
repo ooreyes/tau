@@ -135,7 +135,9 @@ function componentLines(entry: ExtractedComponent, index: number, userModels: Se
 
   switch (component.kind) {
     case "resistor":
-      return [`${name} ${node("a")} ${node("b")} ${positiveNumberValue(component, "Ohm")}`];
+      // SPICE allows negative resistance (active/negative-impedance elements,
+      // e.g. Draft7's -1k); reject only zero/NaN, which is a short.
+      return [`${name} ${node("a")} ${node("b")} ${nonZeroNumberValue(component, "Ohm")}`];
     case "capacitor":
       return [`${name} ${node("a")} ${node("b")} ${positiveNumberFromText(component, stripIcSpec(component.value), "F")}${icSpecDeckText(component.value)}`];
     case "inductor":
@@ -377,12 +379,13 @@ function positiveNumberFromText(component: SchematicComponent, text: string, uni
   return value.toString();
 }
 
-/** Like parsedNumber but additionally requires the value to be strictly positive.
- *  Used for R, C, L where zero or negative values produce a singular/invalid deck. */
-function positiveNumberValue(component: SchematicComponent, unit: string): string {
+/** Like parsedNumber but rejects only zero/NaN, allowing negative values.
+ *  Used for resistors, where SPICE permits a negative (active) resistance but a
+ *  zero value is a short that yields a singular deck. */
+function nonZeroNumberValue(component: SchematicComponent, unit: string): string {
   const value = parsedNumber(component, unit);
-  if (value <= 0) {
-    throw new Error(`${component.label || component.kind} needs a positive ${unit} value (got ${value}).`);
+  if (value === 0) {
+    throw new Error(`${component.label || component.kind} needs a non-zero ${unit} value.`);
   }
   return value.toString();
 }
