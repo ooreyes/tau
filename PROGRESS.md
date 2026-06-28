@@ -1,5 +1,42 @@
 # Tau Autobuilder — Progress Log
 
+## 2026-06-28T12:33Z — auto/ltspice-parity — bundle LTspice standard device models (§3/§7)
+
+### What I did
+- New `engine/standardModels.ts`: a curated bundle of LTspice's shipped standard
+  device models (`lib/cmp/standard.dio`/`.bjt`), keyed by lower-cased name →
+  `.model` line. Parameters verbatim from LTspice 17.2.4, with LTspice-only
+  annotation keys (mfg/Iave/Vpk/Vceo/Icrating/type) stripped so each is a clean
+  ngspice line. Bundled: 1N4148/1N914/MMSD4148, 1N5817-19 + BAT54 Schottky,
+  1N750/751/4733/5231 zeners, 2N2222/2N3904/BC547 NPN, 2N2907/2N3906/BC557 PNP.
+  Only parts a Tau kind can instantiate (diode/zener/npn/pnp).
+- `buildSpiceDeck` now, for each semiconductor referencing a model name that the
+  document doesn't define but we bundle, emits the real `.model` line and uses
+  the part name on the device line (union set drives `deviceModel`). Unbundled/
+  unknown names still fall back to the generic `TAU_*` starter.
+
+### Files touched
+- src/engine/standardModels.ts (new), standardModels.test.ts (new, 7 tests)
+- src/engine/spiceNetlist.ts (emit referenced standard models; knownModels union)
+- src/engine/spiceNetlist.test.ts (+2 tests; retargeted 1 obsolete fallback test)
+- FEATURE_PARITY.md (§3 semiconductors, §7 model bundle → 🟡)
+
+### Tests
+635 passing (was 626; +9 net). Typecheck clean. ngspice CLI: all 17 bundled
+models parse; 1N750 zener clamps at 4.67 V; 1N4148 forward drop correct.
+
+### FEATURE_PARITY items updated
+- §3 Semiconductors: bundled standard models note (still 🟡 — MOS generic).
+- §7 Ship a real device-model set: ⬜ → 🟡.
+
+### UX issues found
+- None (deck-only plumbing).
+
+### Next step
+Resolve `.lib`/`.inc` file paths (read referenced model files, inline blocks) so
+deadtime.asc's UniversalOpamp2 subcircuit and any lib-referenced parts resolve;
+or broaden the standard-model bundle / add VDMOS MOSFET support.
+
 ## 2026-06-28T12:24Z — auto/ltspice-parity — source AC stimulus (SYMATTR Value2) → deck + solvers (§1)
 
 ### What I did
