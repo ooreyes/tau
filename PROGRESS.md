@@ -1,5 +1,34 @@
 # Tau Autobuilder — Progress Log
 
+## 2026-06-28T06:53Z — auto/ltspice-parity — .ic/.nodeset passthrough + uic (§4)
+
+### What I did
+- Added **`.ic` / `.nodeset` initial-condition passthrough** to the native deck.
+  `icLinesFromDirectives` in `spiceNetlist.ts` collects both (re-prefixed leading
+  dot, lower-cased keyword) and reports whether any `.ic` is present; the lines are
+  emitted and `analysisLine` gains a `useInitialConditions` flag that appends
+  **`uic`** to the `.tran` line so initial values hold at t=0 (LTspice semantics),
+  not merely bias the OP.
+
+### Files touched
+- src/engine/spiceNetlist.ts (icLinesFromDirectives + uic on .tran)
+- src/engine/spiceNetlist.test.ts (+2)
+- FEATURE_PARITY.md (§4 .ic/.nodeset 🟡)
+
+### Tests
+588 passing (was 586; +2 new). Typecheck clean. Live-verified in ngspice 17:
+`.ic v(cap)=2` + `.tran … uic` → cap starts at 2 V.
+
+### FEATURE_PARITY items updated
+- §4 **Initial conditions `.ic`/`.nodeset`** ⬜ → 🟡 (native deck path; TS IC next).
+
+### UX issues found
+- None new.
+
+### Next step
+§3 coupled-inductor `K` / comparators (A devices for class-d_starter.asc), or §6
+probe-in-place / arbitrary-expression plots, or finish `.step temp` family.
+
 ## 2026-06-28T06:50Z — auto/ltspice-parity — .temp → native deck temperature (§4)
 
 ### What I did
