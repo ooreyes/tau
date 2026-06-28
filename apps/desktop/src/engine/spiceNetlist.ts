@@ -4,7 +4,7 @@ import type { ComponentKind, NetLabel, SchematicComponent, SchematicWire } from 
 import { parseQuantity } from "../simulation/quantity";
 import { decodeParams } from "../schematic/params";
 import { parseSourceFunction } from "./sourceFunction";
-import { stripAcSpec, acSpecDeckText } from "./acSpec";
+import { stripAcSpec, acSpecDeckText, stripSourceModifiers } from "./acSpec";
 import { stripIcSpec, icSpecDeckText, parseIcValue } from "./icSpec";
 import { behavioralSpecText as behavioralSpec } from "../simulation/behavioral";
 import { optionsLineFromDirectives } from "./spiceOptions";
@@ -145,7 +145,7 @@ function componentLines(entry: ExtractedComponent, index: number, userModels: Se
     case "vsource": {
       // LTspice carries SINE/PULSE/PWL/EXP/SFFM inline on the source value, plus
       // an optional `AC <mag> [phase]` stimulus (from SYMATTR Value2). Split them.
-      const main = stripAcSpec(component.value);
+      const main = stripSourceModifiers(stripAcSpec(component.value));
       const ac = acSpecDeckText(component.value);
       const fn = parseSourceFunction(main, "V");
       if (fn) return [`${name} ${node("p")} ${node("n")} ${fn.text}${ac}`];
@@ -158,7 +158,7 @@ function componentLines(entry: ExtractedComponent, index: number, userModels: Se
       // with the convention that positive I raises V(p) — consistent with the TS MNA solver.
       // Emit as "I name n p value" so that ngspice's N+ = n (sink) and N- = p (source),
       // making V(p) rise for positive current just as the TS solver predicts.
-      const main = stripAcSpec(component.value);
+      const main = stripSourceModifiers(stripAcSpec(component.value));
       const ac = acSpecDeckText(component.value);
       const fn = parseSourceFunction(main, "A");
       if (fn) return [`${name} ${node("n")} ${node("p")} ${fn.text}${ac}`];

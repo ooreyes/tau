@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseAcSpec, stripAcSpec, acSpecDeckText } from "./acSpec";
+import { parseAcSpec, stripAcSpec, acSpecDeckText, stripSourceModifiers } from "./acSpec";
 
 describe("parseAcSpec", () => {
   it("returns null when there is no AC keyword", () => {
@@ -67,5 +67,23 @@ describe("acSpecDeckText", () => {
   it("emits nothing without an AC spec", () => {
     expect(acSpecDeckText("SINE(0 1 1)")).toBe("");
     expect(acSpecDeckText("5")).toBe("");
+  });
+});
+
+describe("stripSourceModifiers", () => {
+  it("drops Rser/Cpar instance params ngspice rejects on sources", () => {
+    // After the AC spec is stripped, a leftover `Rser=1K` must not survive into
+    // the DC-level parse (NoiseFigure V1, S-param V2/V4).
+    expect(stripSourceModifiers("Rser=1K")).toBe("");
+    expect(stripSourceModifiers("Rser=50")).toBe("");
+    expect(stripSourceModifiers("5 Rser=0.1 Cpar=10p")).toBe("5");
+  });
+  it("drops a .wav file source's wavefile/chan tokens (wavein)", () => {
+    expect(stripSourceModifiers("wavefile=.\\ring.wav chan=0")).toBe("");
+  });
+  it("leaves a plain DC level or transient function untouched", () => {
+    expect(stripSourceModifiers("5")).toBe("5");
+    expect(stripSourceModifiers("SINE(0 1 1k)")).toBe("SINE(0 1 1k)");
+    expect(stripSourceModifiers("")).toBe("");
   });
 });
