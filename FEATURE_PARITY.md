@@ -216,6 +216,14 @@ zener, opamp, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**, **B (behav
 - ⬜ JFET, MESFET, IGBT
 - ⬜ MOSFET level/VDMOS power models, body diode
 - ⬜ Comparators / logic gates / digital (LTspice `A` devices) — **needed for class-d_starter.asc**
+  - **Finding (2026-06-28):** class-d_starter.asc now *builds and runs* its `.tran`
+    in ngspice 17 — the comparator U1 imports as the generic `opamp` and emits as
+    a gain-1e6 VCVS (`E_U1 … 1e6`). But open-loop it **saturates to ~1e7 V** at
+    `vpwm` instead of clamping to a logic/rail level, so the half-bridge gate
+    drive is unphysical and won't match LTspice. The 1e6 gain is *correct* for
+    feedback opamps (Sallen-Key, inv/non-inv amps all pass), so the fix is a real
+    **comparator kind with defined output high/low levels** (or output `limit()`
+    keyed to explicit rails) — NOT a blanket clamp on the shared opamp.
 - ⬜ Transmission lines (T, LTRA, UR)
 - 🟡 Coupled inductors `K` — **directive passthrough landed** (`engine/
   couplingDirectives.ts`): a document's on-canvas `K` TEXT directives
