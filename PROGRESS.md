@@ -1,5 +1,40 @@
 # Tau Autobuilder — Progress Log
 
+## 2026-06-28T13:00Z — auto/ltspice-parity — seed .step param first value (§5)
+
+### What I did
+- `buildParamScope` now seeds each `.step param X …` variable with its first
+  enumerated value (reusing `parseStepDirective`), so a default/preview run can
+  resolve `{X}` component values for circuits whose only definition of `X` is the
+  `.step` line. A stepped run still overrides per value via `withStepValue`; a
+  `.step` value overrides a same-named `.param` default.
+- Import cycle paramScope→paramStep is benign (the imported fn is used only in
+  the function body; paramStep's EMPTY_SCOPE is likewise body-only).
+- Re-ran the real-`.asc` smoke (throwaway): deck-build success now **64/82**
+  (session start was 43/82).
+
+### Files touched
+- src/simulation/paramScope.ts (step seeding + import), paramScope.test.ts (+2)
+- FEATURE_PARITY.md (§5 .step seed note)
+
+### Tests
+653 passing (was 651; +2). Typecheck clean.
+
+### FEATURE_PARITY items updated
+- §5 `.step param`: base-scope first-value seeding.
+
+### Session summary (this run, 9 commits)
+605→653 tests. Real-circuit `.op` deck-build 43→64/82. Landed: source AC stimulus
+(Value2), bundled LTspice standard models (diodes/zeners/BJTs + 1N4007), C/L `IC=`,
+multi-line/`;`-comment `.param`, trailing-dot numbers, empty `""` source sentinel,
+negative resistance, `.step param` seeding.
+
+### Next step (remaining real-.asc deck blockers)
+Laplace E/G sources (PLL/PLL2/HalfSlope/TwoTau/Draft8 — need `Laplace=` support);
+`mc()` Monte-Carlo function; hierarchical IOPIN sheets (Draft4/5); a few sources
+still "needs valid V value" (NoiseFigure/S-param — investigate Value2 path).
+Or pivot to §3 VDMOS MOSFET models, or `.lib`/`.inc` file-path resolution.
+
 ## 2026-06-28T12:55Z — auto/ltspice-parity — real-.asc import robustness (§1/§5/§7)
 
 ### What I did
