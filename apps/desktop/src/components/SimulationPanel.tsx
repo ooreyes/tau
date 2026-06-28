@@ -22,6 +22,7 @@ import type { TfResult } from "../simulation/transferFunction";
 import type { NoiseResult } from "../simulation/noise";
 import type { StepFamilyResult } from "../simulation/stepFamily";
 import type { MeasResult } from "../simulation/measure";
+import type { FourierResult } from "../simulation/fourier";
 import { isNativeSpiceRuntime, MAX_NATIVE_OUTPUT_POINTS } from "../engine/nativeSpice";
 import { displaySampleIndices, waveformBounds } from "../simulation/waveform";
 
@@ -34,6 +35,7 @@ interface SimulationPanelProps {
   noiseResult: NoiseResult | null;
   stepResult: StepFamilyResult | null;
   measurements: MeasResult[];
+  fourier: FourierResult[];
   acMeasurements: MeasResult[];
   options: AnalysisOptions;
   isRunning: boolean;
@@ -63,6 +65,7 @@ export function SimulationPanel({
   noiseResult,
   stepResult,
   measurements,
+  fourier,
   acMeasurements,
   options,
   isRunning,
@@ -255,6 +258,7 @@ export function SimulationPanel({
           </div>
 
           <MeasTable measurements={measurements} />
+          <FourierTable results={fourier} />
 
           <div className="plotter-controls">
             <DialControl
@@ -1083,6 +1087,40 @@ function MeasTable({ measurements }: { measurements: MeasResult[] }) {
           <span className={`meas-value${m.value === null ? " meas-fail" : ""}`} role="cell" title={m.error}>
             {m.value === null ? (m.error ?? "—") : formatEngineering(m.value, "", 4)}
           </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** `.four` Fourier results, shown under the transient scope: per output a THD
+ *  header then DC / fundamental / harmonic magnitudes (normalized to fundamental). */
+function FourierTable({ results }: { results: FourierResult[] }) {
+  if (results.length === 0) return null;
+  return (
+    <div className="meas-table" role="table" aria-label="Fourier analysis">
+      {results.map((r) => (
+        <div key={r.output}>
+          <div className="meas-table-head" role="row">
+            <span role="columnheader">FOURIER {r.output}</span>
+            <span role="columnheader">THD {(r.thd * 100).toFixed(3)}%</span>
+          </div>
+          {r.harmonics.map((h) => {
+            const name = h.harmonic === 0
+              ? "DC"
+              : h.harmonic === 1
+                ? `f₀ ${formatEngineering(h.frequency, "Hz", 3)}`
+                : `${h.harmonic}× ${formatEngineering(h.frequency, "Hz", 3)}`;
+            const norm = h.harmonic >= 1 ? ` (${h.normalized.toFixed(4)})` : "";
+            return (
+              <div className="meas-row" role="row" key={h.harmonic}>
+                <span className="meas-name" role="cell">{name}</span>
+                <span className="meas-value" role="cell">
+                  {formatEngineering(h.magnitude, "", 4)}{norm}
+                </span>
+              </div>
+            );
+          })}
         </div>
       ))}
     </div>

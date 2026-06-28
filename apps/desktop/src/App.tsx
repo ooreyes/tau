@@ -44,6 +44,7 @@ import {
 import { buildParamScope, EMPTY_SCOPE, type ParamScope } from "./simulation/paramScope";
 import { analysesFromDirectives } from "./io/directiveAnalysis";
 import { runMeasurements, type MeasResult } from "./simulation/measure";
+import { runFourier, type FourierResult } from "./simulation/fourier";
 import { runAcMeasurements } from "./simulation/measureAc";
 import {
   isNativeSpiceRuntime,
@@ -197,6 +198,15 @@ function App() {
     if (!analysis || !analysis.ok || directives.length === 0) return [];
     return runMeasurements(directives, analysis, params.scope, params.funcs);
   }, [analysis, directives, params]);
+
+  // Evaluate the document's `.four` directive against the latest transient result
+  // (DC + harmonics + THD over the last period). Recomputed only on change.
+  const fourier = useMemo<FourierResult[]>(() => {
+    if (!analysis || !analysis.ok || directives.length === 0) return [];
+    const { four } = analysesFromDirectives(directives);
+    if (!four) return [];
+    return runFourier(analysis, four);
+  }, [analysis, directives]);
 
   // Evaluate the document's `.meas ac …` directives against the latest AC sweep.
   // Mirrors the transient measurements but on the frequency axis (db/mag/phase).
@@ -688,6 +698,7 @@ function App() {
                 noiseResult={noiseAnalysis}
                 stepResult={stepFamily}
                 measurements={measurements}
+                fourier={fourier}
                 acMeasurements={acMeasurements}
                 options={analysisOptions}
                 isRunning={analysisRunning}
