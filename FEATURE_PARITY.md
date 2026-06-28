@@ -301,7 +301,15 @@ zener, opamp, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**, **B (behav
   viewer (probe a device → plot its current, §6).
 - ⬜ DC operating point annotation on schematic (show node V / device I in-place)
 - ⬜ Initial conditions `.ic` / `.nodeset`
-- ⬜ `.options` passthrough (reltol, etc.) — used 7×
+- ✅ `.options` **passthrough** (reltol, etc.) — used 7× — `engine/spiceOptions.ts`:
+  `parseOptionsDirectives` collects every `.options`/`.option` key=val + bare flag
+  (lower-cased keys, later lines win, leading `.`/`!` + comma separators tolerated),
+  `mergeOptionsLine` overlays them on Tau's defaults (gmin/reltol/abstol/vntol;
+  document wins, deterministic order). `buildSpiceDeck` emits the merged line and
+  `App.tsx` threads the document `directives` into all three native run sites
+  (tran/op/ac). Live-verified: ngspice tolerates LTspice-only keys (plotwinsize,
+  numdgt, maxstep) without error and an overridden reltol still solves
+  V(out)=2.5 V. 10 hand-computed tests (parse/merge/override/deck emission).
 
 ## 5. Expressions & parameters
 - ✅ `.param` parameter definitions — used 180× (critical) — `buildParamScope`

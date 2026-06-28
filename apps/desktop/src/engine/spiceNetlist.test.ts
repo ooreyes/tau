@@ -33,6 +33,27 @@ describe("buildSpiceDeck", () => {
     expect(deck.netlist).toContain("C1 n002 0 0.000001");
     expect(deck.netlist).toContain(".tran 0.00001 0.005");
     expect(deck.netlist).toMatch(/\.end$/);
+    // Default options line is present when the document carries none.
+    expect(deck.netlist).toContain(".options gmin=1e-12 reltol=1e-4 abstol=1e-12 vntol=1e-7");
+  });
+
+  it("lets a document's .options directive override the default deck options", () => {
+    const components = [
+      component("vsource", "V1", "5", 0, 32),
+      component("resistor", "R1", "1k", 96, 0),
+      component("ground", "", "", 0, 64),
+      component("ground", "", "", 128, 0),
+    ];
+    const wires = [wire("w1", [{ x: 0, y: 0 }, { x: 64, y: 0 }])];
+    const deck = buildSpiceDeck(
+      { components, wires, directives: [".options reltol=1e-3 maxstep=1n"] },
+      { kind: "op" },
+    );
+    expect(deck.netlist).toContain("reltol=1e-3");
+    expect(deck.netlist).not.toContain("reltol=1e-4");
+    expect(deck.netlist).toContain("maxstep=1n");
+    // Untouched defaults remain.
+    expect(deck.netlist).toContain("gmin=1e-12");
   });
 
   it("emits an inline SINE function from an LTspice voltage source value", () => {

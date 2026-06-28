@@ -219,7 +219,7 @@ function App() {
     const requestId = ++analysisRequestRef.current;
     setAnalysisRunning(true);
     try {
-      const result = await runNativeTransient({ components, wires, netLabels, params }, options) ?? runTransientAnalysis({ components, wires, netLabels, params }, options);
+      const result = await runNativeTransient({ components, wires, netLabels, params, directives }, options) ?? runTransientAnalysis({ components, wires, netLabels, params }, options);
       if (analysisRequestRef.current !== requestId) return;
       setAnalysis(result);
       setRunState(result.ok ? "complete" : "error");
@@ -235,7 +235,7 @@ function App() {
     } finally {
       if (analysisRequestRef.current === requestId) setAnalysisRunning(false);
     }
-  }, [components, wires, netLabels, params]);
+  }, [components, wires, netLabels, params, directives]);
 
   const runAnalysis = useCallback(async () => {
     await executeTransient(analysisOptions);
@@ -251,7 +251,7 @@ function App() {
     const requestId = ++analysisRequestRef.current;
     setAnalysisRunning(true);
     try {
-      const result = await runNativeOperatingPoint({ components, wires, netLabels, params }) ?? runOperatingPoint({ components, wires, netLabels, params });
+      const result = await runNativeOperatingPoint({ components, wires, netLabels, params, directives }) ?? runOperatingPoint({ components, wires, netLabels, params });
       if (analysisRequestRef.current !== requestId) return;
       setOpAnalysis(result);
     } catch (error) {
@@ -260,14 +260,14 @@ function App() {
     } finally {
       if (analysisRequestRef.current === requestId) setAnalysisRunning(false);
     }
-  }, [components, wires, netLabels, params]);
+  }, [components, wires, netLabels, params, directives]);
 
   const runAcAnalysis = useCallback(async () => {
     const requestId = ++analysisRequestRef.current;
     setAnalysisRunning(true);
     try {
       const result = await runNativeAcSweep(
-        { components, wires, netLabels, params },
+        { components, wires, netLabels, params, directives },
         { startHz: 10, stopHz: 1e6, pointsPerDecade: 20 },
       ) ?? runAcSweep({ components, wires, netLabels, params }, { startHz: 10, stopHz: 1e6, pointsPerDecade: 20 });
       if (analysisRequestRef.current !== requestId) return;
@@ -278,7 +278,7 @@ function App() {
     } finally {
       if (analysisRequestRef.current === requestId) setAnalysisRunning(false);
     }
-  }, [components, wires, netLabels, params]);
+  }, [components, wires, netLabels, params, directives]);
 
   // A DC sweep needs a `.dc <src> <start> <stop> <incr>` directive to know which
   // source to sweep and over what range. Imported `.asc` files carry their own;

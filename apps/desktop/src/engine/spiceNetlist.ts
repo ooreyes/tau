@@ -5,6 +5,7 @@ import { parseQuantity } from "../simulation/quantity";
 import { decodeParams } from "../schematic/params";
 import { parseSourceFunction } from "./sourceFunction";
 import { behavioralSpecText as behavioralSpec } from "../simulation/behavioral";
+import { optionsLineFromDirectives } from "./spiceOptions";
 
 export type SpiceAnalysis =
   | { kind: "tran"; stopTime: number; steps: number }
@@ -17,7 +18,14 @@ export interface SpiceDeck {
   netlist: string;
 }
 
-type Schematic = { components: SchematicComponent[]; wires: SchematicWire[]; netLabels?: NetLabel[]; params?: ParamScope };
+type Schematic = {
+  components: SchematicComponent[];
+  wires: SchematicWire[];
+  netLabels?: NetLabel[];
+  params?: ParamScope;
+  /** Document directive lines; any `.options` here override Tau's defaults. */
+  directives?: string[];
+};
 
 const DEFAULT_MODELS = [
   ".model TAU_DIODE D(Is=1e-14 N=1)",
@@ -40,7 +48,7 @@ export function buildSpiceDeck(schematic: Schematic, analysis: SpiceAnalysis): S
   if (components.length === 0) throw new Error("Place components before running analysis.");
   if (!circuit.groundNetId) throw new Error("Add a ground symbol so node voltages have a reference.");
 
-  const lines = ["Tau generated circuit", ".options gmin=1e-12 reltol=1e-4 abstol=1e-12 vntol=1e-7"];
+  const lines = ["Tau generated circuit", optionsLineFromDirectives(schematic.directives ?? [])];
   const usedKinds = new Set(components.map((component) => component.kind));
   const needsModels = ["diode", "led", "zener", "nmos", "pmos", "npn", "pnp"].some((kind) => usedKinds.has(kind as ComponentKind));
   if (needsModels) lines.push(...DEFAULT_MODELS);
