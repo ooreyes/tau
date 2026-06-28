@@ -9,6 +9,7 @@
  */
 
 import { evaluateExpression, type FuncDef, type Scope } from "./expr";
+import { parseStepDirective } from "./paramStep";
 import type { SchematicComponent } from "../schematic/types";
 
 export interface ParamScope {
@@ -122,6 +123,18 @@ export function buildParamScope(directives: string[]): ParamScope {
   // Later assignments override earlier ones (LTspice last-definition-wins).
   const pending = new Map<string, string>();
   for (const a of assignments) pending.set(a.name, a.expr);
+
+  // Seed each `.step param X …` swept variable with its FIRST value so a default
+  // (non-stepped) run can resolve `{X}` component values — a stepped run later
+  // overrides X per value via `withStepValue`. (Imported deferred to avoid a
+  // top-level cycle; used only here in the function body.)
+  for (const line of expandDirectiveLines(directives)) {
+    if (!/^\.step\b/i.test(line)) continue;
+    const spec = parseStepDirective(line);
+    if (spec?.kind === "param" && spec.name && spec.values.length > 0) {
+      pending.set(spec.name, String(spec.values[0]));
+    }
+  }
 
   const scope: Scope = {};
   const setScope = (name: string, v: number) => {

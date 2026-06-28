@@ -63,6 +63,18 @@ describe("buildParamScope", () => {
     expect(scope.c3).toBeCloseTo(34e-12, 18);
   });
 
+  it("seeds a `.step param` swept variable with its first value (default run)", () => {
+    // list form → first value; linear form → start; both let `{X}` resolve for a
+    // non-stepped preview run (a stepped run overrides per value elsewhere).
+    expect(buildParamScope([".step param X list 2 5 10"]).scope.x).toBe(2);
+    expect(buildParamScope([".step param Rdim 1k 10k 1k"]).scope.rdim).toBe(1000);
+  });
+
+  it("lets a `.step` value override a same-named `.param` default", () => {
+    const { scope } = buildParamScope([".param N=3", ".step param N list 7 8 9"]);
+    expect(scope.n).toBe(7);
+  });
+
   it("resolves params that depend on earlier params", () => {
     const { scope } = buildParamScope([".param a=2", ".param b={a*3}"]);
     expect(scope.b).toBe(6);

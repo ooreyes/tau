@@ -385,7 +385,11 @@ zener, opamp, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**, **B (behav
   (1k/2.2meg/10n/1mil), comparison/logical/ternary, `^`/`**` power semantics
 - ✅ `.step param x list/range` driving the above — `simulation/paramStep.ts`
   `runParamStep` binds each swept value into the `ParamScope` (`withStepValue`)
-  so `{...}` component values re-resolve per step; list + linear + `dec`/`oct`
+  so `{...}` component values re-resolve per step; **`buildParamScope` now also
+  seeds each `.step param` variable with its first value** so a default
+  (non-stepped) run / preview deck resolves `{X}` for circuits whose only
+  definition of `X` is the `.step` line (real cases: Howland, notch, dimmer,
+  passive, varactor); list + linear + `dec`/`oct`
   log ranges all enumerate to concrete values. Engine support complete and tested
   end-to-end through `runOperatingPoint`; UI dispatch/overlay tracked in §4/§6.
 
