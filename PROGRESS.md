@@ -1,5 +1,35 @@
 # Tau Autobuilder — Progress Log
 
+## 2026-06-28T06:50Z — auto/ltspice-parity — .temp → native deck temperature (§4)
+
+### What I did
+- Added **`.temp` temperature set** (used 4×). `parseTempDirective` (°C; leading
+  `.`/`!`, SI suffixes, negatives, first value of a list) in
+  `io/directiveAnalysis.ts`, surfaced on `DirectiveAnalyses.temp`. `buildSpiceDeck`
+  emits `.temp <°C>` from the document directives so **native ngspice** runs its
+  temperature-dependent device models at the authored temperature. TS solver still
+  ignores temperature (→ 🟡, not ✅).
+
+### Files touched
+- src/io/directiveAnalysis.ts (parseTempDirective + temp discovery)
+- src/engine/spiceNetlist.ts (emit .temp from directives)
+- src/io/directiveAnalysis.test.ts (+3), src/engine/spiceNetlist.test.ts (+1)
+- FEATURE_PARITY.md (§4 .temp 🟡)
+
+### Tests
+586 passing (was 582; +4 new). Typecheck clean. Live-verified in ngspice 17:
+`.temp 100` shifts a diode forward drop (V(out) 0.499 vs ~0.52 at 27 °C).
+
+### FEATURE_PARITY items updated
+- §4 **`.temp`** ⬜ → 🟡 (native deck path; TS coefficients + `.step temp` next).
+
+### UX issues found
+- None new.
+
+### Next step
+§3 coupled-inductor `K` / comparators (A devices for class-d_starter.asc), or §6
+probe-in-place / arbitrary-expression plots, or finish `.step temp` family.
+
 ## 2026-06-28T06:46Z — auto/ltspice-parity — .options passthrough (§4)
 
 ### What I did
