@@ -41,6 +41,7 @@ export const CATALOG: CatalogEntry[] = [
   { kind: "vccs",          section: "Analog",            name: "VCCS (G)",        hotkey: "w", prefix: "G",   defaultValue: "1m",    unit: "A/V" },
   { kind: "cccs",          section: "Analog",            name: "CCCS (F)",        hotkey: "f", prefix: "F",   defaultValue: "10",    unit: "A/A" },
   { kind: "ccvs",          section: "Analog",            name: "CCVS (H)",        hotkey: "n", prefix: "H",   defaultValue: "1k",    unit: "V/A" },
+  { kind: "bsource",       section: "Analog",            name: "Behavioral (B)",  hotkey: "j", prefix: "B",   defaultValue: "V=1",   unit: "" },
   { kind: "switch",        section: "Electromechanical", name: "Switch",          hotkey: "s", prefix: "S",   defaultValue: "open",  unit: "" },
   { kind: "transformer",   section: "Electromechanical", name: "Transformer",     hotkey: "t", prefix: "T",   defaultValue: "1:1",   unit: "" },
   { kind: "testpoint",     section: "Markers",           name: "Test Point",      hotkey: "x", prefix: "TP",  defaultValue: "",      unit: "" },

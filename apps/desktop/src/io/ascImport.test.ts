@@ -121,6 +121,13 @@ describe("ltspiceTypeToKind", () => {
     expect(ltspiceTypeToKind("h2")).toBe("ccvs");
   });
 
+  it("maps LTspice behavioral source symbols (bv/bi) to bsource", () => {
+    expect(ltspiceTypeToKind("bv")).toBe("bsource");
+    expect(ltspiceTypeToKind("bi")).toBe("bsource");
+    expect(ltspiceTypeToKind("B")).toBe("bsource");
+    expect(ltspiceTypeToKind("b2")).toBe("bsource");
+  });
+
   it("treats any opamps/* library symbol as an op-amp", () => {
     expect(ltspiceTypeToKind("opamps\\LT1468")).toBe("opamp");
     expect(ltspiceTypeToKind("Opamps\\AD8675")).toBe("opamp");
@@ -197,6 +204,24 @@ TEXT 0 40 Left 2 ;a note`;
     const pins = Object.fromEntries((r1?.pinOverride ?? []).map((p) => [p.id, { x: p.x, y: p.y }]));
     expect(pins.a).toEqual({ x: 320, y: 208 });
     expect(pins.b).toEqual({ x: 240, y: 208 });
+  });
+
+  it("imports a behavioral B-source carrying its V=/I= expression and pins", () => {
+    // bi (behavioral current) at (160,-656) R0; current pins map to + at (0,0),
+    // − at (0,80) → world (160,-656)/(160,-576), matching GFT.asc's wiring.
+    const BSRC = `Version 4
+SHEET 1 880 680
+SYMBOL bi 160 -656 R0
+SYMATTR InstName B1
+SYMATTR Value I=I(V1)*2`;
+    const doc = ascToSchematic(parseAsc(BSRC));
+    const b1 = doc.components.find((c) => c.label === "B1");
+    expect(b1).toBeDefined();
+    expect(b1?.kind).toBe("bsource");
+    expect(b1?.value).toBe("I=I(V1)*2");
+    const pins = Object.fromEntries((b1?.pinOverride ?? []).map((p) => [p.id, { x: p.x, y: p.y }]));
+    expect(pins.p).toEqual({ x: 160, y: -656 });
+    expect(pins.n).toEqual({ x: 160, y: -576 });
   });
 
   it("maps wires 1:1 and FLAGs into grounds / net labels", () => {

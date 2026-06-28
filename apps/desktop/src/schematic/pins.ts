@@ -90,6 +90,12 @@ const LOCAL_PINS: Record<ComponentKind, LocalPin[]> = {
     { id: "op", label: "+", x: 32, y: -16 },
     { id: "on", label: "-", x: 32, y: 16 },
   ],
+  // Behavioral source (B): a 2-terminal output whose value is an arbitrary
+  // expression of node voltages/currents/time. Output pair p/n like vsource.
+  bsource: [
+    { id: "p", label: "+", x: 0, y: -32 },
+    { id: "n", label: "-", x: 0, y: 32 },
+  ],
   nmos: [
     { id: "d", label: "D", x: 16, y: -32 },
     { id: "g", label: "G", x: -32, y: 0 },

@@ -86,6 +86,47 @@ describe("deck structure — operating point", () => {
   });
 });
 
+describe("deck structure — behavioral B-source", () => {
+  // B-source output pin p sits at (0,-32), n at (0,32) for a vertical source.
+  const Bsrc = (x: number, y: number, v: string, l = "B1") =>
+    mk("bsource", x, y, v, l);
+
+  it("emits a B-voltage source with its expression verbatim", () => {
+    const deck = buildSpiceDeck(
+      {
+        components: [
+          Vdc(0, 0, "5", "V1"), // V1 at origin; p at (0,-32), n at (0,32)
+          Bsrc(0, 128, "V=2*V(n001)", "B1"), // p at (0,96), n at (0,160)
+          R(0, -64, "1k", "R1", 90),
+          GND(0, 32),
+          GND(0, 160),
+        ],
+        wires: [
+          W({ x: 0, y: -32 }, { x: 0, y: -32 }),
+          W({ x: 0, y: 96 }, { x: 0, y: -32 }),
+        ],
+      },
+      { kind: "op" },
+    );
+    expect(deck.netlist).toMatch(/^B1 \S+ \S+ V=2\*V\(n001\)$/m);
+    expectValidDeck(deck.netlist, /^\.op$/);
+  });
+
+  it("normalizes a bare expression to V= and preserves I= current sources", () => {
+    const vDeck = buildSpiceDeck(
+      { components: [Bsrc(0, 0, "V(n001)*3", "B1"), R(0, -64, "1k", "R1", 90), GND(0, 32)], wires: [] },
+      { kind: "op" },
+    );
+    expect(vDeck.netlist).toMatch(/^B1 \S+ \S+ V=V\(n001\)\*3$/m);
+
+    const iDeck = buildSpiceDeck(
+      { components: [Bsrc(0, 0, "I=1m*V(n001)", "B1"), R(0, -64, "1k", "R1", 90), GND(0, 32)], wires: [] },
+      { kind: "op" },
+    );
+    expect(iDeck.netlist).toMatch(/^B1 \S+ \S+ I=1m\*V\(n001\)$/m);
+  });
+});
+
 describe("deck structure — AC sweep", () => {
   it("emits a DC/AC/SIN source and a single .ac card", () => {
     const deck = buildSpiceDeck(

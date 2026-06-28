@@ -270,6 +270,11 @@ export function ltspiceTypeToKind(type: string): ComponentKind | null {
     f2: "cccs",
     h: "ccvs",
     h2: "ccvs",
+    // Behavioral (arbitrary) sources: LTspice bv = B-voltage, bi = B-current.
+    bv: "bsource",
+    bi: "bsource",
+    b: "bsource",
+    b2: "bsource",
   };
 
   // Any symbol living under an "opamps" directory is an op-amp at heart.
@@ -368,6 +373,9 @@ function ltPinKey(type: string): keyof typeof LTSPICE_PINS | null {
     nmos: "nmos", nmos4: "nmos",
     pmos: "pmos", pmos4: "pmos",
     sw: "sw", csw: "sw",
+    // Behavioral sources share the independent-source pin geometry: the bv
+    // (voltage) symbol pins match `voltage`, bi (current) match `current`.
+    bv: "voltage", bi: "current", b: "voltage", b2: "voltage",
   };
   return map[leaf] ?? null;
 }

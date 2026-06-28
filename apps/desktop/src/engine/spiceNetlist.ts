@@ -4,6 +4,7 @@ import type { ComponentKind, NetLabel, SchematicComponent, SchematicWire } from 
 import { parseQuantity } from "../simulation/quantity";
 import { decodeParams } from "../schematic/params";
 import { parseSourceFunction } from "./sourceFunction";
+import { behavioralSpecText as behavioralSpec } from "../simulation/behavioral";
 
 export type SpiceAnalysis =
   | { kind: "tran"; stopTime: number; steps: number }
@@ -147,6 +148,14 @@ function componentLines(entry: ExtractedComponent, index: number): string[] {
         `${name} ${node("op")} ${node("on")} V_${base}_sense ${numberValue(component, "V/A")}`,
       ];
     }
+    case "bsource": {
+      // Behavioral (arbitrary) source B: value carries "V=<expr>" or "I=<expr>",
+      // an expression of node voltages/currents/time. ngspice's B-source syntax
+      // matches LTspice's, so emit the spec verbatim after p/n (already
+      // brace-substituted for any {param}). Default to V= when no prefix given.
+      const spec = behavioralSpec(component.value);
+      return [`${name} ${node("p")} ${node("n")} ${spec}`];
+    }
     case "potentiometer": {
       // Split the track into two equal halves around the wiper. ngspice does
       // not evaluate arithmetic in a bare value field, so emit a precomputed
@@ -211,7 +220,7 @@ function analysisLine(analysis: SpiceAnalysis): string {
 function instanceName(component: SchematicComponent, index: number): string {
   const prefix: Record<ComponentKind, string> = {
     resistor: "R", capacitor: "C", inductor: "L", vsource: "V", isource: "I", vac: "V", iac: "I", vpulse: "V",
-    diode: "D", led: "D", zener: "D", opamp: "E", vcvs: "E", vccs: "G", cccs: "F", ccvs: "H", nmos: "M", pmos: "M", npn: "Q", pnp: "Q",
+    diode: "D", led: "D", zener: "D", opamp: "E", vcvs: "E", vccs: "G", cccs: "F", ccvs: "H", bsource: "B", nmos: "M", pmos: "M", npn: "Q", pnp: "Q",
     potentiometer: "R", switch: "R", transformer: "L", testpoint: "X", ground: "X",
   };
   const requested = safeName(component.label);

@@ -23,6 +23,7 @@ export type ComponentKind =
   | "vccs"
   | "cccs"
   | "ccvs"
+  | "bsource"
   | "nmos"
   | "pmos"
   | "npn"

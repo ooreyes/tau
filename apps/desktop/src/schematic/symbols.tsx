@@ -30,6 +30,7 @@ export const SYMBOL_BODY: Record<ComponentKind, BodyBox> = {
   vccs: { minX: -18, minY: -22, maxX: 18, maxY: 22 },
   cccs: { minX: -18, minY: -22, maxX: 18, maxY: 22 },
   ccvs: { minX: -18, minY: -22, maxX: 18, maxY: 22 },
+  bsource: { minX: -16, minY: -16, maxX: 16, maxY: 16 },
   nmos: { minX: -12, minY: -20, maxX: 18, maxY: 20 },
   pmos: { minX: -12, minY: -20, maxX: 18, maxY: 20 },
   npn: { minX: -8, minY: -20, maxX: 18, maxY: 20 },
@@ -59,6 +60,7 @@ export const SYMBOL_BOX: Record<ComponentKind, { halfW: number; halfH: number }>
   vccs: { halfW: 20, halfH: 24 },
   cccs: { halfW: 20, halfH: 24 },
   ccvs: { halfW: 20, halfH: 24 },
+  bsource: { halfW: 16, halfH: 17 },
   nmos: { halfW: 26, halfH: 20 },
   pmos: { halfW: 26, halfH: 20 },
   npn: { halfW: 22, halfH: 20 },
@@ -288,6 +290,19 @@ export function ComponentSymbol({ kind }: { kind: ComponentKind }) {
           <line x1={1} y1={-5} x2={7} y2={-5} />
           <line x1={4} y1={-8} x2={4} y2={-2} />
           <line x1={1} y1={6} x2={7} y2={6} />
+        </>
+      );
+
+    case "bsource":
+      return (
+        <>
+          {/* behavioral (arbitrary) source: a 2-terminal diamond with an "=" to
+              denote that its value is an equation of other node quantities */}
+          <line x1={0} y1={-32} x2={0} y2={-15} />
+          <path d="M 0 -15 L 15 0 L 0 15 L -15 0 Z" />
+          <line x1={-6} y1={-3} x2={6} y2={-3} />
+          <line x1={-6} y1={3} x2={6} y2={3} />
+          <line x1={0} y1={15} x2={0} y2={32} />
         </>
       );
 
