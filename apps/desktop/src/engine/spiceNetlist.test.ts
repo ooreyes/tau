@@ -74,6 +74,40 @@ describe("buildSpiceDeck", () => {
     expect(plain.netlist).not.toContain(".temp");
   });
 
+  it("passes .ic/.nodeset through and adds uic to the transient line", () => {
+    const components = [
+      component("vsource", "V1", "5", 0, 32),
+      component("resistor", "R1", "1k", 96, 0),
+      component("capacitor", "C1", "1u", 224, 0),
+      component("ground", "", "", 0, 64),
+      component("ground", "", "", 256, 0),
+    ];
+    const wires = [wire("w1", [{ x: 0, y: 0 }, { x: 64, y: 0 }])];
+    const deck = buildSpiceDeck(
+      { components, wires, directives: [".ic V(out)=2", ".nodeset V(mid)=1"] },
+      { kind: "tran", stopTime: 0.005, steps: 500 },
+    );
+    expect(deck.netlist).toContain(".ic V(out)=2");
+    expect(deck.netlist).toContain(".nodeset V(mid)=1");
+    expect(deck.netlist).toMatch(/\.tran [\d.e-]+ 0\.005 uic/);
+  });
+
+  it("omits uic when only a .nodeset (no .ic) is present", () => {
+    const components = [
+      component("vsource", "V1", "5", 0, 32),
+      component("resistor", "R1", "1k", 96, 0),
+      component("ground", "", "", 0, 64),
+      component("ground", "", "", 128, 0),
+    ];
+    const wires = [wire("w1", [{ x: 0, y: 0 }, { x: 64, y: 0 }])];
+    const deck = buildSpiceDeck(
+      { components, wires, directives: [".nodeset V(out)=1"] },
+      { kind: "tran", stopTime: 0.001, steps: 200 },
+    );
+    expect(deck.netlist).toContain(".nodeset V(out)=1");
+    expect(deck.netlist).not.toContain("uic");
+  });
+
   it("emits an inline SINE function from an LTspice voltage source value", () => {
     const components = [
       component("vsource", "V1", "SINE(0 7.5 1k)", 0, 32),

@@ -306,7 +306,12 @@ zener, opamp, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**, **B (behav
   **NEXT:** `.meas dc`/`.meas noise` domains; expose currents in the waveform
   viewer (probe a device → plot its current, §6).
 - ⬜ DC operating point annotation on schematic (show node V / device I in-place)
-- ⬜ Initial conditions `.ic` / `.nodeset`
+- 🟡 Initial conditions **`.ic` / `.nodeset`** — `buildSpiceDeck` carries both
+  through to the native ngspice deck verbatim (re-prefixed, lower-cased keyword);
+  when any `.ic` is present the `.tran` line gains **`uic`** so the values hold at
+  t=0 (LTspice semantics) rather than only biasing the OP. Live-verified in ngspice
+  17 (`.ic v(cap)=2` → cap starts at 2 V). 2 deck tests. **NEXT:** TS-solver IC
+  support; `C`/`L` per-instance `IC=` attribute.
 - ✅ `.options` **passthrough** (reltol, etc.) — used 7× — `engine/spiceOptions.ts`:
   `parseOptionsDirectives` collects every `.options`/`.option` key=val + bare flag
   (lower-cased keys, later lines win, leading `.`/`!` + comma separators tolerated),

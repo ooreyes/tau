@@ -64,10 +64,16 @@ export function buildSpiceDeck(schematic: Schematic, analysis: SpiceAnalysis): S
     }
   }
 
+  // Carry `.ic`/`.nodeset` initial conditions through to ngspice verbatim. When
+  // any `.ic` is present a transient must run with `uic` for the initial values
+  // to hold at t=0 (LTspice semantics), not just bias the operating point.
+  const { lines: icLines, hasIc } = icLinesFromDirectives(schematic.directives ?? []);
+  lines.push(...icLines);
+
   circuit.components.forEach((entry, index) => {
     lines.push(...componentLines(entry, index));
   });
-  lines.push(analysisLine(analysis), ".end");
+  lines.push(analysisLine(analysis, hasIc), ".end");
 
   return { circuit, netlist: lines.join("\n") };
 }
@@ -209,13 +215,32 @@ function componentLines(entry: ExtractedComponent, index: number): string[] {
   }
 }
 
-function analysisLine(analysis: SpiceAnalysis): string {
+/**
+ * Collect `.ic`/`.nodeset` directives as deck lines (re-prefixed with a leading
+ * dot, lower-cased keyword), reporting whether any `.ic` is present so the
+ * transient line can request `uic`.
+ */
+function icLinesFromDirectives(directives: ReadonlyArray<string>): { lines: string[]; hasIc: boolean } {
+  const lines: string[] = [];
+  let hasIc = false;
+  for (const directive of directives) {
+    const bare = directive.trim().replace(/^[.!]+/, "");
+    const m = /^(ic|nodeset)\b\s*(.+)$/i.exec(bare);
+    if (!m) continue;
+    const keyword = m[1].toLowerCase();
+    lines.push(`.${keyword} ${m[2].trim()}`);
+    if (keyword === "ic") hasIc = true;
+  }
+  return { lines, hasIc };
+}
+
+function analysisLine(analysis: SpiceAnalysis, useInitialConditions = false): string {
   switch (analysis.kind) {
     case "tran": {
       if (!Number.isFinite(analysis.stopTime) || analysis.stopTime <= 0 || !Number.isInteger(analysis.steps) || analysis.steps < 2) {
         throw new Error("Transient analysis needs a positive stop time and at least two output steps.");
       }
-      return `.tran ${analysis.stopTime / analysis.steps} ${analysis.stopTime}`;
+      return `.tran ${analysis.stopTime / analysis.steps} ${analysis.stopTime}${useInitialConditions ? " uic" : ""}`;
     }
     case "op":
       return ".op";
