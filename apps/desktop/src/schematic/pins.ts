@@ -151,11 +151,11 @@ export function getComponentPins(component: SchematicComponent): ComponentPin[] 
     }));
   }
   return getLocalPins(component.kind).map((pin) => {
-    const rotated = rotatePoint(pin, component.rotation);
+    const t = transformPoint(pin, component.rotation, component.mirrored ?? false);
     return {
       ...pin,
-      x: component.x + rotated.x,
-      y: component.y + rotated.y,
+      x: component.x + t.x,
+      y: component.y + t.y,
       componentId: component.id,
       componentLabel: component.label,
       kind: component.kind,
@@ -174,4 +174,15 @@ export function rotatePoint(point: Point, rotation: Rotation): Point {
     case 270:
       return { x: point.y, y: -point.x };
   }
+}
+
+/**
+ * Apply a horizontal mirror (across the vertical axis, `x → -x`) followed by a
+ * rotation to a symbol-local point. Mirror-before-rotate matches LTspice's `M*`
+ * orientations (see {@link transformLtPoint} in the importer), so an editor flip
+ * and an imported `M0` part end up with identical geometry.
+ */
+export function transformPoint(point: Point, rotation: Rotation, mirrored: boolean): Point {
+  const flipped = mirrored ? { x: -point.x, y: point.y } : point;
+  return rotatePoint(flipped, rotation);
 }

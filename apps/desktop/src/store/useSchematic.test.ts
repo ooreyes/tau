@@ -56,6 +56,7 @@ function resetStore() {
     selectedWireId: null,
     tool: { mode: "select" },
     placeRotation: 0,
+    placeMirror: false,
     probes: [],
     netLabels: [],
     directives: [],
@@ -337,6 +338,45 @@ describe("schematic document store", () => {
     // But coordinates and values are preserved.
     expect(loaded.components[0].x).toBe(96);
     expect(loaded.components[0].value).toBe("1k");
+  });
+
+  it("mirror toggles the selected component's mirrored flag and is undoable", () => {
+    useSchematic.getState().loadCircuit(sourceDocument());
+    const id = useSchematic.getState().components[0].id;
+    useSchematic.getState().select(id);
+
+    useSchematic.getState().mirror();
+    expect(useSchematic.getState().components[0].mirrored).toBe(true);
+
+    // Toggling again clears it.
+    useSchematic.getState().mirror();
+    expect(useSchematic.getState().components[0].mirrored).toBe(false);
+
+    // Each toggle is its own undo entry.
+    useSchematic.getState().undo();
+    expect(useSchematic.getState().components[0].mirrored).toBe(true);
+  });
+
+  it("mirror toggles placeMirror (not the document) while placing", () => {
+    useSchematic.getState().startPlacing("opamp");
+    expect(useSchematic.getState().placeMirror).toBe(false);
+
+    useSchematic.getState().mirror();
+    expect(useSchematic.getState().placeMirror).toBe(true);
+
+    // A part placed now inherits the place-mirror flag.
+    useSchematic.getState().addComponent("opamp", 0, 0);
+    const placed = useSchematic.getState().components.find((c) => c.kind === "opamp");
+    expect(placed?.mirrored).toBe(true);
+  });
+
+  it("mirror does nothing with no selection in select mode", () => {
+    useSchematic.getState().loadCircuit(sourceDocument());
+    const historyBefore = useSchematic.getState().past.length;
+    useSchematic.getState().select(null);
+    useSchematic.getState().mirror();
+    expect(useSchematic.getState().past.length).toBe(historyBefore);
+    expect(useSchematic.getState().components[0].mirrored ?? false).toBe(false);
   });
 
   it("deleteSelected removes the component and clears selection", () => {

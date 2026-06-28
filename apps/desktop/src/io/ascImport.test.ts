@@ -224,6 +224,21 @@ SYMATTR Value I=I(V1)*2`;
     expect(pins.n).toEqual({ x: 160, y: -576 });
   });
 
+  it("flags M* orientations as mirrored so the symbol renders flipped", () => {
+    const MSRC = `Version 4
+SHEET 1 880 680
+SYMBOL nmos 160 160 M0
+SYMATTR InstName M1
+SYMBOL res 336 192 R0
+SYMATTR InstName R1`;
+    const doc = ascToSchematic(parseAsc(MSRC));
+    const m1 = doc.components.find((c) => c.label === "M1");
+    const r1 = doc.components.find((c) => c.label === "R1");
+    expect(m1?.mirrored).toBe(true);
+    // Non-mirror (R*) orientations leave the flag unset.
+    expect(r1?.mirrored).toBeUndefined();
+  });
+
   it("maps wires 1:1 and FLAGs into grounds / net labels", () => {
     const doc = ascToSchematic(parseAsc(SRC));
     expect(doc.wires).toHaveLength(2);

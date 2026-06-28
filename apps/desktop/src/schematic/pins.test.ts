@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getComponentPins } from "./pins";
+import { getComponentPins, transformPoint } from "./pins";
 import type { SchematicComponent } from "./types";
 
 describe("getComponentPins", () => {
@@ -51,5 +51,46 @@ describe("getComponentPins", () => {
     };
     expect(getComponentPins(r)).toHaveLength(2);
     expect(getComponentPins(r)[0].x).toBe(-32);
+  });
+
+  it("mirrors an asymmetric part's pins across the vertical axis", () => {
+    // Opamp: in+ (-32,16), in- (-32,-16), out (32,0). Mirror flips x → -x, so
+    // the inputs move to the right and the output to the left.
+    const op: SchematicComponent = {
+      id: "u1", kind: "opamp", label: "U1", value: "", x: 0, y: 0, rotation: 0, mirrored: true,
+    };
+    const pins = getComponentPins(op);
+    const by = Object.fromEntries(pins.map((p) => [p.id, { x: p.x, y: p.y }]));
+    expect(by["in+"]).toEqual({ x: 32, y: 16 });
+    expect(by["in-"]).toEqual({ x: 32, y: -16 });
+    expect(by["out"]).toEqual({ x: -32, y: 0 });
+    // The vertical supply pins lie on the axis, so mirror leaves them put.
+    expect(by["v+"]).toEqual({ x: 0, y: -32 });
+  });
+
+  it("applies mirror BEFORE rotation (matches LTspice M* orientations)", () => {
+    // Opamp out (32,0): mirror → (-32,0), then rotate 90° → (0,-32).
+    const op: SchematicComponent = {
+      id: "u1", kind: "opamp", label: "U1", value: "", x: 10, y: 20, rotation: 90, mirrored: true,
+    };
+    const out = getComponentPins(op).find((p) => p.id === "out")!;
+    expect({ x: out.x, y: out.y }).toEqual({ x: 10 + 0, y: 20 + -32 });
+  });
+});
+
+describe("transformPoint", () => {
+  it("is the identity at rotation 0 with no mirror", () => {
+    expect(transformPoint({ x: 5, y: -7 }, 0, false)).toEqual({ x: 5, y: -7 });
+  });
+
+  it("flips x then rotates clockwise", () => {
+    // (4, 1) mirrored → (-4, 1), rotate 90° → (-1, -4).
+    expect(transformPoint({ x: 4, y: 1 }, 90, true)).toEqual({ x: -1, y: -4 });
+  });
+
+  it("mirror twice (toggle) returns the original geometry", () => {
+    const p = { x: 3, y: 9 };
+    const once = transformPoint(p, 0, true);
+    expect(transformPoint(once, 0, true)).toEqual(p);
   });
 });

@@ -51,6 +51,8 @@ interface SchematicState extends Doc {
   tool: Tool;
   /** Rotation applied to the next placed component (and the placement ghost). */
   placeRotation: Rotation;
+  /** Horizontal flip applied to the next placed component (and the placement ghost). */
+  placeMirror: boolean;
   // history
   past: Doc[];
   future: Doc[];
@@ -90,6 +92,8 @@ interface SchematicState extends Doc {
   moveComponent: (id: string, x: number, y: number) => void;
   /** Rotate the current selection, or the placement ghost when in place mode. */
   rotate: () => void;
+  /** Mirror (horizontal flip) the current selection, or the placement ghost in place mode. */
+  mirror: () => void;
   deleteSelected: () => void;
   setValue: (id: string, value: string) => void;
 
@@ -205,6 +209,7 @@ export const useSchematic = create<SchematicState>()((set) => {
     selectedWireId: null,
     tool: { mode: "select" },
     placeRotation: 0,
+    placeMirror: false,
     probes: initialDoc?.probes ?? [],
     netLabels: initialDoc?.netLabels ?? [],
     directives: initialDoc?.directives ?? [],
@@ -288,6 +293,7 @@ export const useSchematic = create<SchematicState>()((set) => {
           x,
           y,
           rotation: s.placeRotation,
+          mirrored: s.placeMirror,
           value: entry.defaultValue,
           label,
         };
@@ -326,6 +332,20 @@ export const useSchematic = create<SchematicState>()((set) => {
             ...recordInto(s),
             components: s.components.map((c) =>
               c.id === s.selectedId ? { ...c, rotation: nextRotation(c.rotation) } : c,
+            ),
+          };
+        }
+        return {};
+      }),
+
+    mirror: () =>
+      set((s) => {
+        if (s.tool.mode === "place") return { placeMirror: !s.placeMirror };
+        if (s.selectedId) {
+          return {
+            ...recordInto(s),
+            components: s.components.map((c) =>
+              c.id === s.selectedId ? { ...c, mirrored: !(c.mirrored ?? false) } : c,
             ),
           };
         }

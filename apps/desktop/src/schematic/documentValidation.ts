@@ -61,6 +61,7 @@ function component(value: unknown, index: number): SchematicComponent {
     x: coordinate(source.x, `components[${index}].x`),
     y: coordinate(source.y, `components[${index}].y`),
     rotation: rotation as Rotation,
+    ...(source.mirrored === true ? { mirrored: true } : {}),
     value: text(source.value, `components[${index}].value`),
     label: text(source.label, `components[${index}].label`),
   };

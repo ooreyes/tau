@@ -477,6 +477,7 @@ export function ascToSchematic(doc: AscDocument): AscImportResult {
       x: symbol.x,
       y: symbol.y,
       rotation: orientationToRotation(symbol.orientation),
+      ...(symbol.orientation.startsWith("M") ? { mirrored: true } : {}),
       value: symbol.attrs.Value ?? "",
       label: instName,
       ...(pinOverride ? { pinOverride } : {}),

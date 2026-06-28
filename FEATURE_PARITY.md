@@ -106,7 +106,7 @@ Status legend: ✅ done · 🟡 partial · ⬜ not started
 - ⬜ Save/Open Tau-native `.tau.json` — **partial** (toolbar Save/Open exists); verify robustness.
 
 ## 2. Schematic capture
-- ✅ Place / move / rotate / mirror? (rotate ✅; **mirror ⬜**) / delete components — `Canvas.tsx`, `store/useSchematic.ts`
+- ✅ Place / move / rotate / mirror / delete components — `Canvas.tsx`, `store/useSchematic.ts` (mirror = horizontal flip, applied before rotation; Ctrl+E)
 - ✅ Wire drawing with orthogonal routing + junction dots — `Canvas.tsx` (`routeWireSmart`)
 - ✅ Net labels (name a node) — `FLAG` equivalent — store `upsertNetLabel`;
   **now electrical** (merge same-named nets, `0`/`GND`→ground, name the net) in
@@ -116,7 +116,14 @@ Status legend: ✅ done · 🟡 partial · ⬜ not started
 - ✅ Undo/redo, autosave, multi-tab documents
 - ✅ Component value editing (double-click) + structured params
 - ✅ Probe tool (click node → plot) — `probes`
-- ⬜ **Mirror/flip components** (LTspice Ctrl+E / Ctrl+R)
+- ✅ **Mirror/flip components** (LTspice Ctrl+E) — `mirrored` flag on
+  `SchematicComponent` (flip across the vertical axis, applied BEFORE rotation to
+  match LTspice `M*`); `transformPoint` in `schematic/pins.ts` drives connectivity,
+  `symbolTransform` (`rotate(R) scale(-1 1)`) drives rendering. `mirror()` store
+  action toggles the selection or the placement ghost; Ctrl+E bound in `App.tsx`.
+  The importer now sets `mirrored` for `M*` orientations so imported parts render
+  flipped. 12 hand-computed tests (pin geometry incl. mirror-before-rotate, store
+  toggle/undo/place, import mapping).
 - ⬜ **Copy/paste, duplicate, multi-select, drag-box select, group move**
 - ⬜ **Drag wires / move with rubber-banding** (move a part, wires follow)
 - ⬜ Bus wires / bus taps
@@ -332,7 +339,10 @@ zener, opamp, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**, **B (behav
 - ✅ IDE-style shell, multi-tab, command palette, settings, status bar engine indicator
 - ⬜ **Visual QA on the actual desktop app** (currently blocked — dev port held; cannot screenshot headless)
 - ⬜ Component picker matching LTspice (F2 part browser over the full library)
-- ⬜ Keyboard shortcut parity (F2 part, F3 wire, F4 label, F5 delete, F6 copy, F7 move, F8 drag, Ctrl+R rotate, Ctrl+E mirror, etc.)
+- 🟡 Keyboard shortcut parity — **Ctrl+R rotate + Ctrl+E mirror now bound**
+  (`App.tsx`), alongside existing Space=rotate, W=wire, hotkey placement, ⌘K palette.
+  Still missing the LTspice function-key set (F2 part, F3 wire, F4 label, F5 delete,
+  F6 copy, F7 move, F8 drag).
 - ⬜ Help / model docs, error console with SPICE messages
 - ⬜ Crash-free on large/real circuits (stack-overflow class fixed; keep stress-testing)
 

@@ -122,6 +122,7 @@ function App() {
   const future = useSchematic((s) => s.future);
   const cancel = useSchematic((s) => s.cancel);
   const rotate = useSchematic((s) => s.rotate);
+  const mirror = useSchematic((s) => s.mirror);
   const deleteSelected = useSchematic((s) => s.deleteSelected);
   const undo = useSchematic((s) => s.undo);
   const redo = useSchematic((s) => s.redo);
@@ -555,6 +556,12 @@ function App() {
         } else if (k === "k") {
           e.preventDefault();
           setPaletteOpen(true);
+        } else if (k === "r") {
+          e.preventDefault();
+          rotate();
+        } else if (k === "e") {
+          e.preventDefault();
+          mirror();
         }
         return; // leave other OS / app shortcuts alone
       }
@@ -585,7 +592,7 @@ function App() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [startPlacing, startWiring, cancel, rotate, deleteSelected, undo, redo]);
+  }, [startPlacing, startWiring, cancel, rotate, mirror, deleteSelected, undo, redo]);
 
   return (
     <div className={`app app-${mode}`}>

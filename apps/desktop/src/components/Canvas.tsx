@@ -35,6 +35,11 @@ const rotateLocalPoint = (point: Point, rotation: number): Point => {
   }
 };
 
+/** SVG transform for a symbol's orientation: mirror (across the vertical axis)
+ *  applied before rotation, matching {@link transformPoint}. */
+const symbolTransform = (rotation: number, mirrored: boolean): string =>
+  mirrored ? `rotate(${rotation}) scale(-1 1)` : `rotate(${rotation})`;
+
 const explicitUnit = (value: string, unit: string) => {
   if (!unit) return value.trim();
   const v = value.trim();
@@ -544,6 +549,7 @@ export function Canvas({
   const selectedWireId = useSchematic((s) => s.selectedWireId);
   const tool = useSchematic((s) => s.tool);
   const placeRotation = useSchematic((s) => s.placeRotation);
+  const placeMirror = useSchematic((s) => s.placeMirror);
   const addComponent = useSchematic((s) => s.addComponent);
   const addWire = useSchematic((s) => s.addWire);
   const select = useSchematic((s) => s.select);
@@ -1042,7 +1048,7 @@ export function Canvas({
 
           {placing && ghost && (
             <g className="ghost" transform={`translate(${ghost.x} ${ghost.y})`}>
-              <g className="symbol" transform={`rotate(${placeRotation})`}>
+              <g className="symbol" transform={symbolTransform(placeRotation, placeMirror)}>
                 <ComponentSymbol kind={tool.kind} />
               </g>
             </g>
@@ -1117,13 +1123,16 @@ function ComponentView({
 }) {
   // Presentational only — selection/drag/edit are resolved centrally by
   // geometry in the SVG handlers, so render order never decides hit results.
+  // Mirror-before-rotate (matches transformPoint / LTspice M*): SVG applies
+  // transforms right-to-left, so `rotate(R) scale(-1 1)` flips then rotates.
+  const orient = symbolTransform(comp.rotation, comp.mirrored ?? false);
   return (
     <g className={`component${selected ? " selected" : ""}`} transform={`translate(${comp.x} ${comp.y})`}>
-      <g className="symbol" transform={`rotate(${comp.rotation})`}>
+      <g className="symbol" transform={orient}>
         <ComponentSymbol kind={comp.kind} />
       </g>
       {showPins && (
-        <g className="pin-layer" transform={`rotate(${comp.rotation})`}>
+        <g className="pin-layer" transform={orient}>
           {getLocalPins(comp.kind).map((pin) => (
             <circle key={pin.id} className="pin-target" cx={pin.x} cy={pin.y} r={4.5} />
           ))}

@@ -59,6 +59,12 @@ export interface SchematicComponent {
   x: number;
   y: number;
   rotation: Rotation;
+  /**
+   * Horizontal flip (mirror across the vertical axis), applied BEFORE rotation —
+   * matching LTspice's `M*` orientations and {@link transformLtPoint}. Absent or
+   * `false` means not mirrored. Toggled by Ctrl+E in the editor.
+   */
+  mirrored?: boolean;
   /** Display value, e.g. "1k", "10µ", "5V". */
   value: string;
   /** Reference designator, e.g. "R1". Empty for ground. */
