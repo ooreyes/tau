@@ -64,7 +64,16 @@ export function decodeSchematicText(input: ArrayBuffer | Uint8Array): string {
       return new TextDecoder("utf-16le").decode(bytes);
     }
   }
-  return new TextDecoder("utf-8").decode(bytes);
+  // No BOM and not UTF-16. LTspice often saves single-byte (Windows-1252) files
+  // where the micro sign is byte 0xB5 (`47µ`); decoding those as UTF-8 mangles
+  // the byte into U+FFFD and the value no longer parses. Try strict UTF-8 first
+  // (the common case) and fall back to Windows-1252 when a stray high byte makes
+  // the stream invalid UTF-8, so `0xB5` → `µ` (U+00B5), which parseQuantity reads.
+  try {
+    return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+  } catch {
+    return new TextDecoder("windows-1252").decode(bytes);
+  }
 }
 
 export type AscOrientation = "R0" | "R90" | "R180" | "R270" | "M0" | "M90" | "M180" | "M270";

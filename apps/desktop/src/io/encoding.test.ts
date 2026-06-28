@@ -40,4 +40,17 @@ describe("decodeSchematicText", () => {
     const txt = decodeSchematicText(utf16le("Version 4\nSHEET 1 880 680\nSYMBOL res 96 80 R0\nSYMATTR InstName R1\nSYMATTR Value 1k\n"));
     expect(parseAsc(txt).symbols.length).toBe(1);
   });
+  it("decodes a Windows-1252 micro sign (0xB5 → µ) rather than mangling it", () => {
+    // LTspice frequently saves single-byte files where the micro prefix is the
+    // lone high byte 0xB5; decoding as UTF-8 would turn it into U+FFFD and the
+    // value `47µ` would no longer parse. Bytes for "Value 47" + 0xB5.
+    const bytes = new Uint8Array([...new TextEncoder().encode("SYMATTR Value 47"), 0xb5]);
+    expect(decodeSchematicText(bytes)).toBe("SYMATTR Value 47µ");
+  });
+  it("a Windows-1252 µ value survives into the parsed symbol attr (regression)", () => {
+    const src = "Version 4\nSHEET 1 880 680\nSYMBOL ind 96 80 R0\nSYMATTR InstName L1\nSYMATTR Value 47";
+    const bytes = new Uint8Array([...new TextEncoder().encode(src), 0xb5, 0x0a]);
+    const sym = parseAsc(decodeSchematicText(bytes)).symbols[0];
+    expect(sym.attrs.Value).toBe("47µ");
+  });
 });
