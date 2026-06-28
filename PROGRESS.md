@@ -1,5 +1,42 @@
 # Tau Autobuilder — Progress Log
 
+## 2026-06-28T12:41Z — auto/ltspice-parity — C/L per-instance IC= initial condition (§3/§4)
+
+### What I did
+- Real acceptance circuit Draft10.asc has a cap with `SYMATTR SpiceLine2 IC=1`.
+  New `engine/icSpec.ts` (`parseIcValue`/`stripIcSpec`/`icSpecDeckText`) extracts/
+  removes an `IC=<token>` from a value (SI suffix preserved, spaces/`-` tolerated).
+- Importer `componentValueFromAttrs`: for capacitor/inductor, pulls just the `IC=`
+  token from `Value2`/`SpiceLine`/`SpiceLine2` (not the whole attr — avoids
+  ngspice-incompatible LTspice keys like Rser) and appends it → `100p IC=1`.
+- Native deck (`spiceNetlist.ts`): C/L emit the value (IC stripped) + ` IC=<v>`
+  via new `positiveNumberFromText`; when any C/L (or `.ic`) carries an IC the
+  `.tran` line gets `uic` so the value holds at t=0.
+- Also added 1N4007 rectifier to the standard-model bundle (prior commit).
+
+### Files touched
+- src/engine/icSpec.ts (new), icSpec.test.ts (new, 9 tests)
+- src/engine/spiceNetlist.ts (+positiveNumberFromText, C/L IC emit, uic), +2 tests
+- src/io/ascImport.ts (componentValueFromAttrs C/L IC), ascImport.test.ts (+1)
+- src/engine/standardModels.ts (1N4007)
+- FEATURE_PARITY.md (§3 passives C/L IC, §4 .ic per-instance)
+
+### Tests
+645 passing (was 635; +10). Typecheck clean. ngspice CLI: `C1 ... 100p IC=1`
+with uic → cap starts at 1 V.
+
+### FEATURE_PARITY items updated
+- §3 Passives: C/L initial conditions landed.
+- §4 `.ic`/`.nodeset`: per-instance IC= attribute landed.
+
+### UX issues found
+- None (importer + deck plumbing).
+
+### Next step
+TS-solver IC support; or `.lib`/`.inc` file-path resolution (inject a file
+reader, inline `.model`/`.subckt` blocks) so deadtime.asc's UniversalOpamp2
+subcircuit resolves; or VDMOS MOSFET model support.
+
 ## 2026-06-28T12:33Z — auto/ltspice-parity — bundle LTspice standard device models (§3/§7)
 
 ### What I did
