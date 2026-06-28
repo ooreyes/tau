@@ -21,6 +21,8 @@ const MODEL_LINES: readonly string[] = [
   ".model 1N4148 D(Is=2.52n Rs=.568 N=1.752 Cjo=4p M=.4 tt=20n)",
   ".model 1N914 D(Is=2.52n Rs=.568 N=1.752 Cjo=4p M=.4 tt=20n)",
   ".model MMSD4148 D(Is=2.52n Rs=.568 N=1.752 Cjo=.64p M=.4 tt=5n)",
+  // --- Power rectifier (standard.dio) ---
+  ".model 1N4007 D(Is=90p Rs=40m Cjo=30p N=1.4 TT=5u)",
   // --- Schottky rectifiers (standard.dio) ---
   ".model 1N5817 D(Is=31.7u Rs=.051 N=1.373 Cjo=190p M=.3 Eg=.69 Xti=2)",
   ".model 1N5818 D(Is=31.7u Rs=.051 N=1.373 Cjo=160p M=.32 Eg=.69 Xti=2)",
