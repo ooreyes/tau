@@ -1,5 +1,41 @@
 # Tau Autobuilder — Progress Log
 
+## 2026-06-28T06:46Z — auto/ltspice-parity — .options passthrough (§4)
+
+### What I did
+- Implemented **`.options` passthrough** (used 7× in the user's circuits). New
+  `engine/spiceOptions.ts`: `parseOptionsDirectives` (collects `.options`/`.option`
+  key=val + bare flags; lower-cased keys; later lines win; leading `.`/`!` + comma
+  separators tolerated), `mergeOptionsLine` (overlays document options on Tau's
+  gmin/reltol/abstol/vntol defaults — document wins, deterministic order),
+  `optionsLineFromDirectives`. `buildSpiceDeck` now emits the merged line from
+  `schematic.directives`; `App.tsx` threads document `directives` into all three
+  native run sites (tran/op/ac, deps updated). Schematic type bag gained an
+  optional `directives?: string[]` in both spiceNetlist + nativeSpice (existing
+  callers unaffected).
+
+### Files touched
+- src/engine/spiceOptions.ts (new), spiceOptions.test.ts (new, 10)
+- src/engine/spiceNetlist.ts (merged options line + directives field)
+- src/engine/nativeSpice.ts (directives field), src/App.tsx (thread directives)
+- src/engine/spiceNetlist.test.ts (+2 deck override tests)
+- FEATURE_PARITY.md (§4 .options ✅)
+
+### Tests
+582 passing (was 572; +10 new). Typecheck clean. Live-verified in ngspice 17:
+LTspice-only keys (plotwinsize/numdgt/maxstep) tolerated, overridden reltol still
+solves V(out)=2.5 V on a 1:1 divider.
+
+### FEATURE_PARITY items updated
+- §4 **`.options` passthrough** ⬜ → ✅.
+
+### UX issues found
+- None new.
+
+### Next step
+§3 coupled-inductor `K` / comparators (A devices for class-d_starter.asc), or §6
+probe-in-place / arbitrary-expression plots, or §4 `.temp`.
+
 ## 2026-06-28T06:42Z — auto/ltspice-parity — Fourier results table UI (§4/§6)
 
 ### What I did
