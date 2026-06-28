@@ -186,6 +186,8 @@ const AC_SUPPORTED = new Set<ComponentKind>([
   "opamp",
   "vcvs",
   "vccs",
+  "cccs",
+  "ccvs",
   "switch",
   "testpoint",
   "ground",
@@ -303,12 +305,18 @@ export function runAcSweep(
     // Op-amps: add output branch current unknown
     const opamps = circuit.components.filter(({ component }) => component.kind === "opamp");
     const vcvss = circuit.components.filter(({ component }) => component.kind === "vcvs");
+    const cccss = circuit.components.filter(({ component }) => component.kind === "cccs");
+    const ccvss = circuit.components.filter(({ component }) => component.kind === "ccvs");
 
     const voltageSourceOffset = nonGroundNets.length;
     const inductorOffset = voltageSourceOffset + voltageSources.length;
     const opampOffset = inductorOffset + inductors.length;
     const vcvsOffset = opampOffset + opamps.length;
-    const size = nonGroundNets.length + voltageSources.length + inductors.length + opamps.length + vcvss.length;
+    const cccsOffset = vcvsOffset + vcvss.length;
+    const ccvsOffset = cccsOffset + cccss.length;
+    const size =
+      nonGroundNets.length + voltageSources.length + inductors.length + opamps.length +
+      vcvss.length + cccss.length + ccvss.length * 2;
 
     if (size === 0) return fail("The circuit has no unknowns to solve.", circuit);
 
@@ -484,6 +492,66 @@ export function runAcSweep(
             }
             if (cp >= 0) matrix[iIdx][cp] = cadd(matrix[iIdx][cp], { re: -gain, im: 0 });
             if (cn >= 0) matrix[iIdx][cn] = cadd(matrix[iIdx][cn], { re: gain, im: 0 });
+            break;
+          }
+
+          case "cccs": {
+            // CCCS (F): I(op→on) = gain·I_sense(cp→cn). Real gain; one sense unknown.
+            const gain = parseQuantity(component.value, "A/A");
+            const senseIdx = cccsOffset + cccss.findIndex((f) => f.component.id === component.id);
+            const op = nodeIdx(pins["op"], nodeIndex);
+            const on = nodeIdx(pins["on"], nodeIndex);
+            const cp = nodeIdx(pins["cp"], nodeIndex);
+            const cn = nodeIdx(pins["cn"], nodeIndex);
+            const one: Complex = { re: 1, im: 0 };
+            const negOne: Complex = { re: -1, im: 0 };
+            // Internal 0 V sense source across cp→cn.
+            if (cp >= 0) {
+              matrix[cp][senseIdx] = cadd(matrix[cp][senseIdx], one);
+              matrix[senseIdx][cp] = cadd(matrix[senseIdx][cp], one);
+            }
+            if (cn >= 0) {
+              matrix[cn][senseIdx] = cadd(matrix[cn][senseIdx], negOne);
+              matrix[senseIdx][cn] = cadd(matrix[senseIdx][cn], negOne);
+            }
+            // Output current = gain·I_sense.
+            if (op >= 0) matrix[op][senseIdx] = cadd(matrix[op][senseIdx], { re: gain, im: 0 });
+            if (on >= 0) matrix[on][senseIdx] = cadd(matrix[on][senseIdx], { re: -gain, im: 0 });
+            break;
+          }
+
+          case "ccvs": {
+            // CCVS (H): V(op) − V(on) = r·I_sense(cp→cn). Sense + output unknowns.
+            const r = parseQuantity(component.value, "V/A");
+            const hi = ccvss.findIndex((h) => h.component.id === component.id);
+            const senseIdx = ccvsOffset + hi * 2;
+            const outIdx = ccvsOffset + hi * 2 + 1;
+            const op = nodeIdx(pins["op"], nodeIndex);
+            const on = nodeIdx(pins["on"], nodeIndex);
+            const cp = nodeIdx(pins["cp"], nodeIndex);
+            const cn = nodeIdx(pins["cn"], nodeIndex);
+            const one: Complex = { re: 1, im: 0 };
+            const negOne: Complex = { re: -1, im: 0 };
+            // Internal 0 V sense source across cp→cn.
+            if (cp >= 0) {
+              matrix[cp][senseIdx] = cadd(matrix[cp][senseIdx], one);
+              matrix[senseIdx][cp] = cadd(matrix[senseIdx][cp], one);
+            }
+            if (cn >= 0) {
+              matrix[cn][senseIdx] = cadd(matrix[cn][senseIdx], negOne);
+              matrix[senseIdx][cn] = cadd(matrix[senseIdx][cn], negOne);
+            }
+            // Output branch couples into op (+) and on (−).
+            if (op >= 0) {
+              matrix[op][outIdx] = cadd(matrix[op][outIdx], one);
+              matrix[outIdx][op] = cadd(matrix[outIdx][op], one);
+            }
+            if (on >= 0) {
+              matrix[on][outIdx] = cadd(matrix[on][outIdx], negOne);
+              matrix[outIdx][on] = cadd(matrix[outIdx][on], negOne);
+            }
+            // Constraint: V(op) − V(on) − r·I_sense = 0.
+            matrix[outIdx][senseIdx] = cadd(matrix[outIdx][senseIdx], { re: -r, im: 0 });
             break;
           }
 

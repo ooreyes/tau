@@ -21,6 +21,8 @@ export type ComponentKind =
   | "opamp"
   | "vcvs"
   | "vccs"
+  | "cccs"
+  | "ccvs"
   | "nmos"
   | "pmos"
   | "npn"

@@ -265,6 +265,11 @@ export function ltspiceTypeToKind(type: string): ComponentKind | null {
     e2: "vcvs",
     g: "vccs",
     g2: "vccs",
+    // Current-controlled sources (LTspice f/f2 = CCCS, h/h2 = CCVS).
+    f: "cccs",
+    f2: "cccs",
+    h: "ccvs",
+    h2: "ccvs",
   };
 
   // Any symbol living under an "opamps" directory is an op-amp at heart.

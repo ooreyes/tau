@@ -28,6 +28,8 @@ export const SYMBOL_BODY: Record<ComponentKind, BodyBox> = {
   opamp: { minX: -24, minY: -26, maxX: 30, maxY: 26 },
   vcvs: { minX: -18, minY: -22, maxX: 18, maxY: 22 },
   vccs: { minX: -18, minY: -22, maxX: 18, maxY: 22 },
+  cccs: { minX: -18, minY: -22, maxX: 18, maxY: 22 },
+  ccvs: { minX: -18, minY: -22, maxX: 18, maxY: 22 },
   nmos: { minX: -12, minY: -20, maxX: 18, maxY: 20 },
   pmos: { minX: -12, minY: -20, maxX: 18, maxY: 20 },
   npn: { minX: -8, minY: -20, maxX: 18, maxY: 20 },
@@ -55,6 +57,8 @@ export const SYMBOL_BOX: Record<ComponentKind, { halfW: number; halfH: number }>
   opamp: { halfW: 28, halfH: 28 },
   vcvs: { halfW: 20, halfH: 24 },
   vccs: { halfW: 20, halfH: 24 },
+  cccs: { halfW: 20, halfH: 24 },
+  ccvs: { halfW: 20, halfH: 24 },
   nmos: { halfW: 26, halfH: 20 },
   pmos: { halfW: 26, halfH: 20 },
   npn: { halfW: 22, halfH: 20 },
@@ -243,6 +247,47 @@ export function ComponentSymbol({ kind }: { kind: ComponentKind }) {
           {/* current arrow (top → bottom) */}
           <line x1={0} y1={-7} x2={0} y2={6} />
           <path d="M -3 1 L 0 7 L 3 1" />
+        </>
+      );
+
+    case "cccs":
+      return (
+        <>
+          {/* 2-port block: current-sense pair (left), output pair (right) */}
+          <rect x={-14} y={-20} width={28} height={40} rx={2} />
+          <line x1={-32} y1={-16} x2={-14} y2={-16} />
+          <line x1={-32} y1={16} x2={-14} y2={16} />
+          <line x1={14} y1={-16} x2={32} y2={-16} />
+          <line x1={14} y1={16} x2={32} y2={16} />
+          {/* control current-sense arrow on the left port (cp → cn) */}
+          <line x1={-11} y1={-12} x2={-11} y2={11} />
+          <path d="M -14 6 L -11 12 L -8 6" />
+          {/* source diamond */}
+          <path d="M 4 -11 L 13 0 L 4 11 L -5 0 Z" />
+          {/* output current arrow (top → bottom) */}
+          <line x1={4} y1={-7} x2={4} y2={6} />
+          <path d="M 1 1 L 4 7 L 7 1" />
+        </>
+      );
+
+    case "ccvs":
+      return (
+        <>
+          {/* 2-port block: current-sense pair (left), output pair (right) */}
+          <rect x={-14} y={-20} width={28} height={40} rx={2} />
+          <line x1={-32} y1={-16} x2={-14} y2={-16} />
+          <line x1={-32} y1={16} x2={-14} y2={16} />
+          <line x1={14} y1={-16} x2={32} y2={-16} />
+          <line x1={14} y1={16} x2={32} y2={16} />
+          {/* control current-sense arrow on the left port (cp → cn) */}
+          <line x1={-11} y1={-12} x2={-11} y2={11} />
+          <path d="M -14 6 L -11 12 L -8 6" />
+          {/* source diamond */}
+          <path d="M 4 -11 L 13 0 L 4 11 L -5 0 Z" />
+          {/* + / − (voltage source) */}
+          <line x1={1} y1={-5} x2={7} y2={-5} />
+          <line x1={4} y1={-8} x2={4} y2={-2} />
+          <line x1={1} y1={6} x2={7} y2={6} />
         </>
       );
 

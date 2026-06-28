@@ -67,6 +67,8 @@ const OP_SUPPORTED = new Set<ComponentKind>([
   "opamp",
   "vcvs",
   "vccs",
+  "cccs",
+  "ccvs",
   "switch",
   "testpoint",
   "ground",
@@ -137,6 +139,14 @@ export function runOperatingPoint(
     const vcvss = circuit.components.filter(
       ({ component }) => component.kind === "vcvs",
     );
+    // CCCS (F): 1 extra unknown (the zero-volt control-sense branch current).
+    const cccss = circuit.components.filter(
+      ({ component }) => component.kind === "cccs",
+    );
+    // CCVS (H): 2 extra unknowns (control-sense branch + output branch current).
+    const ccvss = circuit.components.filter(
+      ({ component }) => component.kind === "ccvs",
+    );
 
     const nodeIndex = new Map(
       nonGroundNets.map((net, idx) => [net.id, idx]),
@@ -145,7 +155,16 @@ export function runOperatingPoint(
     const inductorOffset = voltageSourceOffset + voltageSources.length;
     const opampOffset = inductorOffset + inductors.length;
     const vcvsOffset = opampOffset + opamps.length;
-    const size = nonGroundNets.length + voltageSources.length + inductors.length + opamps.length + vcvss.length;
+    const cccsOffset = vcvsOffset + vcvss.length;
+    const ccvsOffset = cccsOffset + cccss.length;
+    const size =
+      nonGroundNets.length +
+      voltageSources.length +
+      inductors.length +
+      opamps.length +
+      vcvss.length +
+      cccss.length +
+      ccvss.length * 2;
 
     if (size === 0) {
       return fail("The circuit has no unknowns to solve.", circuit);
@@ -280,6 +299,35 @@ export function runOperatingPoint(
           const cp = nodeIdx(entry.pins["cp"], nodeIndex);
           const cn = nodeIdx(entry.pins["cn"], nodeIndex);
           stampVCVS(matrix, op, on, cp, cn, iIdx, gain);
+          break;
+        }
+
+        case "cccs": {
+          // CCCS (F): I(op→on) = gain·I_sense, where I_sense is the current
+          // through an internal 0 V source across the control pair (cp→cn).
+          const gain = parseQuantity(entry.component.value, "A/A");
+          const senseIdx =
+            cccsOffset +
+            cccss.findIndex((f) => f.component.id === entry.component.id);
+          const op = nodeIdx(entry.pins["op"], nodeIndex);
+          const on = nodeIdx(entry.pins["on"], nodeIndex);
+          const cp = nodeIdx(entry.pins["cp"], nodeIndex);
+          const cn = nodeIdx(entry.pins["cn"], nodeIndex);
+          stampCCCS(matrix, op, on, cp, cn, senseIdx, gain);
+          break;
+        }
+
+        case "ccvs": {
+          // CCVS (H): V(op) − V(on) = r·I_sense (transresistance).
+          const r = parseQuantity(entry.component.value, "V/A");
+          const i = ccvss.findIndex((h) => h.component.id === entry.component.id);
+          const senseIdx = ccvsOffset + i * 2;
+          const outIdx = ccvsOffset + i * 2 + 1;
+          const op = nodeIdx(entry.pins["op"], nodeIndex);
+          const on = nodeIdx(entry.pins["on"], nodeIndex);
+          const cp = nodeIdx(entry.pins["cp"], nodeIndex);
+          const cn = nodeIdx(entry.pins["cn"], nodeIndex);
+          stampCCVS(matrix, op, on, cp, cn, senseIdx, outIdx, r);
           break;
         }
 
@@ -441,6 +489,70 @@ function stampVCVS(
   // Constraint row: V(op) − V(on) − gain·(V(cp) − V(cn)) = 0.
   if (cp >= 0) matrix[branchIndex][cp] -= gain;
   if (cn >= 0) matrix[branchIndex][cn] += gain;
+}
+
+/**
+ * Stamp the internal zero-volt sense source across a current-controlled source's
+ * control pair (cp→cn). `senseIdx` is its branch-current unknown: the current
+ * flowing INTO cp and out of cn through the (ideal ammeter) sense branch, i.e.
+ * the controlling current I(cp→cn). Constraint row enforces V(cp) − V(cn) = 0.
+ */
+function stampSenseBranch(
+  matrix: number[][],
+  cp: number,
+  cn: number,
+  senseIdx: number,
+) {
+  if (cp >= 0) {
+    matrix[cp][senseIdx] += 1;
+    matrix[senseIdx][cp] += 1;
+  }
+  if (cn >= 0) {
+    matrix[cn][senseIdx] -= 1;
+    matrix[senseIdx][cn] -= 1;
+  }
+}
+
+/** Current-controlled current source: I(op→on) = gain·I_sense(cp→cn). */
+function stampCCCS(
+  matrix: number[][],
+  op: number,
+  on: number,
+  cp: number,
+  cn: number,
+  senseIdx: number,
+  gain: number,
+) {
+  stampSenseBranch(matrix, cp, cn, senseIdx);
+  // Output current gain·I_sense leaves op and enters on.
+  if (op >= 0) matrix[op][senseIdx] += gain;
+  if (on >= 0) matrix[on][senseIdx] -= gain;
+}
+
+/** Current-controlled voltage source: V(op) − V(on) = r·I_sense(cp→cn).
+ *  `outIdx` is the output branch-current unknown. */
+function stampCCVS(
+  matrix: number[][],
+  op: number,
+  on: number,
+  cp: number,
+  cn: number,
+  senseIdx: number,
+  outIdx: number,
+  r: number,
+) {
+  stampSenseBranch(matrix, cp, cn, senseIdx);
+  // Output branch current couples into the KCL of op (+) and on (−).
+  if (op >= 0) {
+    matrix[op][outIdx] += 1;
+    matrix[outIdx][op] += 1;
+  }
+  if (on >= 0) {
+    matrix[on][outIdx] -= 1;
+    matrix[outIdx][on] -= 1;
+  }
+  // Constraint row: V(op) − V(on) − r·I_sense = 0.
+  matrix[outIdx][senseIdx] -= r;
 }
 
 /**

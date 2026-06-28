@@ -75,6 +75,21 @@ const LOCAL_PINS: Record<ComponentKind, LocalPin[]> = {
     { id: "op", label: "+", x: 32, y: -16 },
     { id: "on", label: "-", x: 32, y: 16 },
   ],
+  // Current-controlled sources (4-terminal 2-port): the control pair (cp/cn) is
+  // an internal zero-volt sense branch whose current is the controlling current;
+  // op/on drive the output. Same geometry as the voltage-controlled pair.
+  cccs: [
+    { id: "cp", label: "C+", x: -32, y: -16 },
+    { id: "cn", label: "C-", x: -32, y: 16 },
+    { id: "op", label: "+", x: 32, y: -16 },
+    { id: "on", label: "-", x: 32, y: 16 },
+  ],
+  ccvs: [
+    { id: "cp", label: "C+", x: -32, y: -16 },
+    { id: "cn", label: "C-", x: -32, y: 16 },
+    { id: "op", label: "+", x: 32, y: -16 },
+    { id: "on", label: "-", x: 32, y: 16 },
+  ],
   nmos: [
     { id: "d", label: "D", x: 16, y: -32 },
     { id: "g", label: "G", x: -32, y: 0 },

@@ -174,7 +174,149 @@ describe("controlled sources in AC analysis", () => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// Current-controlled sources: CCCS (F) and CCVS (H).
+//
+// The controlling current is set explicitly: an independent current source
+// pushes Ic into the CP node, whose only other connection is the device's
+// internal zero-volt sense branch (CP→GND), so I_sense = Ic exactly. Every
+// expected value is hand-computed and cross-checked against ngspice 17:
+//   F op 0 Vsense gain →  V(op) = -gain·I_sense·R_load   (current pulled from op)
+//   H op 0 Vsense r    →  V(op) =  r·I_sense              (ideal, load-independent)
+// ---------------------------------------------------------------------------
+
+describe("CCCS (F) — current-controlled current source", () => {
+  it("drives gain·I_sense into the load (V(out) = -gain·I_sense·R_load)", () => {
+    // Ic = 1 mA, gain = 10, R = 1k → V(out) = -10·1e-3·1000 = -10 V (ngspice: -10)
+    const components = [
+      part("isource", "1m", "I1", { p: CP, n: GND }),
+      part("cccs", "10", "F1", { cp: CP, cn: GND, op: OUT, on: GND }),
+      part("resistor", "1k", "R1", { a: OUT, b: GND }),
+      ground(),
+    ];
+    expect(nodeNear(runOperatingPoint({ components, wires: [] }), -10)).toBeCloseTo(-10, 6);
+  });
+
+  it("output current scales with the controlling current and load", () => {
+    // Ic = 2 mA, gain = 4, R = 470 → V(out) = -4·2e-3·470 = -3.76 V
+    const components = [
+      part("isource", "2m", "I1", { p: CP, n: GND }),
+      part("cccs", "4", "F1", { cp: CP, cn: GND, op: OUT, on: GND }),
+      part("resistor", "470", "R1", { a: OUT, b: GND }),
+      ground(),
+    ];
+    expect(nodeNear(runOperatingPoint({ components, wires: [] }), -3.76)).toBeCloseTo(-3.76, 6);
+  });
+
+  it("honours a negative gain", () => {
+    // Ic = 1 mA, gain = -5, R = 1k → V(out) = -(-5)·1e-3·1000 = +5 V
+    const components = [
+      part("isource", "1m", "I1", { p: CP, n: GND }),
+      part("cccs", "-5", "F1", { cp: CP, cn: GND, op: OUT, on: GND }),
+      part("resistor", "1k", "R1", { a: OUT, b: GND }),
+      ground(),
+    ];
+    expect(nodeNear(runOperatingPoint({ components, wires: [] }), 5)).toBeCloseTo(5, 6);
+  });
+});
+
+describe("CCVS (H) — current-controlled voltage source", () => {
+  it("outputs r·I_sense, independent of the load", () => {
+    // Ic = 1 mA, r = 2k → V(out) = 2000·1e-3 = 2 V (ngspice: 2)
+    const components = [
+      part("isource", "1m", "I1", { p: CP, n: GND }),
+      part("ccvs", "2k", "H1", { cp: CP, cn: GND, op: OUT, on: GND }),
+      part("resistor", "1k", "R1", { a: OUT, b: GND }),
+      ground(),
+    ];
+    expect(nodeNear(runOperatingPoint({ components, wires: [] }), 2)).toBeCloseTo(2, 6);
+  });
+
+  it("load resistance does not change the output (ideal source)", () => {
+    const components = [
+      part("isource", "1m", "I1", { p: CP, n: GND }),
+      part("ccvs", "2k", "H1", { cp: CP, cn: GND, op: OUT, on: GND }),
+      part("resistor", "100", "R1", { a: OUT, b: GND }),
+      ground(),
+    ];
+    expect(nodeNear(runOperatingPoint({ components, wires: [] }), 2)).toBeCloseTo(2, 6);
+  });
+
+  it("honours a negative transresistance", () => {
+    // Ic = 1 mA, r = -3k → V(out) = -3 V
+    const components = [
+      part("isource", "1m", "I1", { p: CP, n: GND }),
+      part("ccvs", "-3k", "H1", { cp: CP, cn: GND, op: OUT, on: GND }),
+      part("resistor", "1k", "R1", { a: OUT, b: GND }),
+      ground(),
+    ];
+    expect(nodeNear(runOperatingPoint({ components, wires: [] }), -3)).toBeCloseTo(-3, 6);
+  });
+});
+
+describe("current-controlled sources in transient & AC", () => {
+  it("CCCS holds a DC output and reports gain·I_sense as its branch current", () => {
+    const components = [
+      part("isource", "1m", "I1", { p: CP, n: GND }),
+      part("cccs", "10", "F1", { cp: CP, cn: GND, op: OUT, on: GND }),
+      part("resistor", "1k", "R1", { a: OUT, b: GND }),
+      ground(),
+    ];
+    const result = runTransientAnalysis({ components, wires: [] }, { stopTime: 1e-3, steps: 16 });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const out = result.traces.find((t) => Math.abs(t.values[t.values.length - 1] + 10) < 1e-6);
+    expect(out).toBeDefined();
+    // Output current = gain·I_sense = 10·1 mA = 10 mA out of op.
+    const f1 = result.currents.find((c) => c.ref === "F1");
+    expect(f1?.values[f1.values.length - 1]).toBeCloseTo(0.01, 6);
+  });
+
+  it("CCVS gives a flat r·I_sense magnitude across frequency", () => {
+    // AC current source 1 mA → I_sense = 1 mA, r = 2k → V(out) = 2 V → 6.0206 dB.
+    const components = [
+      part("iac", "1m 1k", "I1", { p: CP, n: GND }),
+      part("ccvs", "2k", "H1", { cp: CP, cn: GND, op: OUT, on: GND }),
+      part("resistor", "1k", "R1", { a: OUT, b: GND }),
+      ground(),
+    ];
+    const result = runAcSweep({ components, wires: [] }, { startHz: 10, stopHz: 1e5, pointsPerDecade: 4 });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const expectedDb = 20 * Math.log10(2);
+    const out = result.traces.find((t) => Math.abs(t.magDb[0] - expectedDb) < 0.01);
+    expect(out).toBeDefined();
+    if (!out) return;
+    for (const db of out.magDb) expect(db).toBeCloseTo(expectedDb, 3);
+  });
+});
+
 describe("controlled sources in the ngspice deck", () => {
+  it("emits F and H lines with an internal sense source and gain", () => {
+    const components = [
+      part("isource", "1m", "I1", { p: CP, n: GND }),
+      part("cccs", "10", "F1", { cp: CP, cn: GND, op: OUT, on: GND }),
+      part("ccvs", "2k", "H1", { cp: CP, cn: GND, op: OUT, on: GND }),
+      part("resistor", "1k", "R1", { a: OUT, b: GND }),
+      ground(),
+    ];
+    const { netlist } = buildSpiceDeck({ components, wires: [] }, { kind: "op" });
+    const lines = netlist.split("\n");
+    const fLine = lines.find((l) => l.startsWith("F1 "));
+    const hLine = lines.find((l) => l.startsWith("H1 "));
+    // Each device emits its own zero-volt sense source named after the ref-des.
+    expect(lines.some((l) => l.startsWith("V_F1_sense "))).toBe(true);
+    expect(lines.some((l) => l.startsWith("V_H1_sense "))).toBe(true);
+    expect(fLine).toBeDefined();
+    expect(hLine).toBeDefined();
+    // F op on Vsense gain → ref + 4 fields = 5 tokens
+    expect(fLine!.trim().split(/\s+/)).toHaveLength(5);
+    expect(fLine!.trim().split(/\s+/)[3]).toBe("V_F1_sense");
+    expect(fLine!.trim().split(/\s+/).pop()).toBe("10");
+    expect(hLine!.trim().split(/\s+/)[3]).toBe("V_H1_sense");
+    expect(hLine!.trim().split(/\s+/).pop()).toBe("2000");
+  });
+
   it("emits E and G lines with control nodes and gain", () => {
     const components = [
       part("vsource", "1", "V1", { p: CP, n: GND }),

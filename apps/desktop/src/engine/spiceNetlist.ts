@@ -130,6 +130,23 @@ function componentLines(entry: ExtractedComponent, index: number): string[] {
     case "vccs":
       // VCCS (G): G op on cp cn gm  →  I(op→on) = gm·V(cp,cn)
       return [`${name} ${node("op")} ${node("on")} ${node("cp")} ${node("cn")} ${numberValue(component, "A/V")}`];
+    case "cccs": {
+      // CCCS (F): the control pair is a zero-volt sense source; F references it.
+      // I(op→on) = gain·I(cp→cn). Emit "V<base> cp cn 0" then "F op on V<base> gain".
+      const base = safeName(component.label || `F${index + 1}`);
+      return [
+        `V_${base}_sense ${node("cp")} ${node("cn")} 0`,
+        `${name} ${node("op")} ${node("on")} V_${base}_sense ${numberValue(component, "A/A")}`,
+      ];
+    }
+    case "ccvs": {
+      // CCVS (H): V(op,on) = r·I(cp→cn), sensed through a zero-volt source.
+      const base = safeName(component.label || `H${index + 1}`);
+      return [
+        `V_${base}_sense ${node("cp")} ${node("cn")} 0`,
+        `${name} ${node("op")} ${node("on")} V_${base}_sense ${numberValue(component, "V/A")}`,
+      ];
+    }
     case "potentiometer": {
       // Split the track into two equal halves around the wiper. ngspice does
       // not evaluate arithmetic in a bare value field, so emit a precomputed
@@ -194,7 +211,7 @@ function analysisLine(analysis: SpiceAnalysis): string {
 function instanceName(component: SchematicComponent, index: number): string {
   const prefix: Record<ComponentKind, string> = {
     resistor: "R", capacitor: "C", inductor: "L", vsource: "V", isource: "I", vac: "V", iac: "I", vpulse: "V",
-    diode: "D", led: "D", zener: "D", opamp: "E", vcvs: "E", vccs: "G", nmos: "M", pmos: "M", npn: "Q", pnp: "Q",
+    diode: "D", led: "D", zener: "D", opamp: "E", vcvs: "E", vccs: "G", cccs: "F", ccvs: "H", nmos: "M", pmos: "M", npn: "Q", pnp: "Q",
     potentiometer: "R", switch: "R", transformer: "L", testpoint: "X", ground: "X",
   };
   const requested = safeName(component.label);
