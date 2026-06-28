@@ -251,7 +251,18 @@ zener, opamp, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**, **B (behav
   10 hand-computed tests incl. a source sweep that tracks a 1:1 divider's
   half-supply through the real OP solver. **NEXT:** temp run path; nested steps;
   AC/DC-domain step families; per-trace pick in the overlay legend.
-- ⬜ `.four` Fourier analysis
+- 🟡 `.four` **Fourier analysis** — **parser + solver landed** (`simulation/fourier.ts`):
+  `parseFourDirective(".four 1k [Nharm] [Nperiods] V(out) …")` → `{freq, harmonics,
+  outputs}` (leading `.`/`!` tolerated, bare-integer Nharmonics/Nperiods consumed,
+  SI-suffixed freq). `computeFourier` extracts DC + fundamental + harmonics over the
+  **last period** by direct trapezoidal integration of the Fourier coefficients
+  (no resampling error), reporting per-harmonic magnitude/phase/normalized + THD.
+  `runFourier` resolves `V(node)`/bare-node/`I(ref)` outputs against the transient
+  `MeasWaveform` and analyzes each. `analysesFromDirectives` now surfaces an
+  imported circuit's `.four`. 15 hand-computed tests (pure DC/sine/cosine,
+  DC+sine separation, fundamental+½ 2nd-harmonic THD=50%, multi-period
+  last-period selection, signal resolution). **NEXT:** UI FOUR tab/table + native
+  ngspice `.four` path for nonlinear distortion.
 - ⬜ `.temp` temperature sweep / set — used 4×
 - 🟡 `.meas` **Measurements** (extract gain, BW, rise time, etc.) — used 61× —
   **transient engine + UI landed** (`simulation/measure.ts`): `parseMeasDirective`

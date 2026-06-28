@@ -123,4 +123,9 @@ describe("analysesFromDirectives", () => {
       sweep: { startHz: 1, stopHz: 100_000, pointsPerDecade: 10 },
     });
   });
+
+  it("extracts a .four request", () => {
+    const out = analysesFromDirectives([".tran 1m", ".four 1k V(out)"]);
+    expect(out.four).toEqual({ freq: 1000, harmonics: 10, outputs: ["V(out)"] });
+  });
 });
