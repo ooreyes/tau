@@ -63,6 +63,39 @@ describe("buildSpiceDeck", () => {
     expect(deck.netlist).toContain("V1 n001 0 DC 5 AC 2");
   });
 
+  it("emits a bundled LTspice standard model when a diode references it by name", () => {
+    const components = [
+      component("vsource", "V1", "5", 0, 32),
+      component("resistor", "R1", "1k", 96, 0),
+      component("diode", "D1", "1N4148", 224, 0),
+      component("ground", "", "", 0, 64),
+      component("ground", "", "", 256, 0),
+    ];
+    const wires = [
+      wire("w1", [{ x: 0, y: 0 }, { x: 64, y: 0 }]),
+      wire("w2", [{ x: 128, y: 0 }, { x: 192, y: 0 }]),
+    ];
+    const deck = buildSpiceDeck({ components, wires }, { kind: "op" });
+    // The real 1N4148 model is emitted and the device line references it by name.
+    expect(deck.netlist).toMatch(/^\.model 1N4148 D\(/m);
+    expect(deck.netlist).toMatch(/D1 \S+ \S+ 1N4148/);
+    // The generic TAU_DIODE is NOT used for this part's device line.
+    expect(deck.netlist).not.toMatch(/D1 \S+ \S+ TAU_DIODE/);
+  });
+
+  it("falls back to the generic model for an unknown diode part name", () => {
+    const components = [
+      component("vsource", "V1", "5", 0, 32),
+      component("diode", "D1", "MYSTERY_PART", 96, 0),
+      component("ground", "", "", 0, 64),
+      component("ground", "", "", 128, 0),
+    ];
+    const wires = [wire("w1", [{ x: 0, y: 0 }, { x: 64, y: 0 }])];
+    const deck = buildSpiceDeck({ components, wires }, { kind: "op" });
+    expect(deck.netlist).toMatch(/D1 \S+ \S+ TAU_DIODE/);
+    expect(deck.netlist).not.toContain(".model MYSTERY_PART");
+  });
+
   it("lets a document's .options directive override the default deck options", () => {
     const components = [
       component("vsource", "V1", "5", 0, 32),
@@ -255,15 +288,16 @@ describe("buildSpiceDeck", () => {
     expect(deck.netlist).not.toMatch(/M1 .*TAU_NMOS/);
   });
 
-  it("falls back to the generic model when the named one is undefined", () => {
+  it("falls back to the generic model when the named one is undefined and unbundled", () => {
     const components = [
-      component("diode", "D1", "1N4148", 0, 0),
+      component("diode", "D1", "XYZ999", 0, 0),
       component("ground", "", "", 16, 32),
     ];
-    // No matching .model present → must not emit an undefined model reference.
+    // No matching .model present and not a bundled standard part → must not emit
+    // an undefined model reference; use the generic starter.
     const deck = buildSpiceDeck({ components, wires: [] }, { kind: "op" });
     expect(deck.netlist).toMatch(/D1 n\d+ n\d+ TAU_DIODE/);
-    expect(deck.netlist).not.toContain("1N4148");
+    expect(deck.netlist).not.toContain("XYZ999");
   });
 
   it("exports every remaining starter-library symbol to an ngspice primitive", () => {

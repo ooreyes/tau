@@ -157,7 +157,14 @@ Current Tau kinds (~25): R, C, L, pot, V(DC), I(DC), Vac, Iac, **Vpulse**, diode
 zener, opamp, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**, **B (behavioral)**, NMOS, PMOS, NPN, PNP, switch, transformer, testpoint, ground.
 - 🟡 Passives R/C/L (✅) — add: parasitics (ESR/IC), behavioral R/C/L, **C/L initial conditions**
 - 🟡 Sources — DC/AC/PULSE plus **inline LTspice transient functions on V/I sources now emit to the ngspice deck: SINE (offset/amp/freq/td/damping/phase), PULSE (full 7-arg, Ncycles trimmed), PWL, EXP, SFFM** (`engine/sourceFunction.ts`; µ/meg normalized). Still missing: PWL FILE, explicit AC spec on these, noise sources, TS-fallback solver support for the non-DC functions (**arbitrary behavioral B-source `V=…`/`I=…` now landed** — see the dedicated B item below)
-- 🟡 Semiconductors — diode/BJT/MOS/zener present with **generic models only**. Need real model selection.
+- 🟡 Semiconductors — diode/BJT/MOS/zener present; **bundled LTspice standard
+  models landed** (`engine/standardModels.ts`): common parts referenced by name
+  with no inline `.model` (1N4148/1N914, 1N5817-19 Schottky, BAT54, 1N750/4733/
+  5231 zeners, 2N2222/3904/BC547 NPN, 2N2907/3906/BC557 PNP) now emit their real
+  LTspice `lib/cmp/standard.*` parameters into the deck and the device line uses
+  the part name. Live-verified in ngspice (1N750 zener clamps at 4.67 V). Generic
+  `TAU_*` still covers unbundled/unknown names. **NEXT:** broaden the bundle; MOS
+  VDMOS power models + JFET kinds; browser TS-solver model parsing.
 - ✅ **Behavioral sources (B)** — used constantly in real LTspice circuits —
   **landed end-to-end.** New `bsource` component kind (2-terminal output, value
   carries `V=<expr>`/`I=<expr>`): pin geometry + diamond symbol + palette entry
@@ -394,7 +401,10 @@ zener, opamp, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**, **B (behav
 - ✅ Interim TS MNA solver (linear) for browser/tests
 - ✅ Source polarity matches SPICE convention; R/C/L value guards
 - ⬜ Match LTspice's defaults/timestep/convergence for waveform-level agreement
-- ⬜ Ship/bundle a real device-model set (currently generic; weak MOSFET Kp)
+- 🟡 Ship/bundle a real device-model set — **common LTspice standard diodes/
+  zeners/BJTs bundled** (`engine/standardModels.ts`, real `standard.*` params,
+  emitted by `buildSpiceDeck` when referenced by name). Still generic for MOS and
+  any unbundled part.
 - ⬜ Convergence aids (gmin stepping, source stepping) surfaced to user
 - ⬜ Per-analysis ngspice option mapping
 

@@ -8,6 +8,7 @@ import { stripAcSpec, acSpecDeckText } from "./acSpec";
 import { behavioralSpecText as behavioralSpec } from "../simulation/behavioral";
 import { optionsLineFromDirectives } from "./spiceOptions";
 import { modelLibLinesFromDirectives, definedModelNames } from "./modelDirectives";
+import { standardModelLine } from "./standardModels";
 import { parseTempDirective } from "../io/directiveAnalysis";
 
 export type SpiceAnalysis =
@@ -78,8 +79,32 @@ export function buildSpiceDeck(schematic: Schematic, analysis: SpiceAnalysis): S
   lines.push(...icLines);
 
   const userModels = definedModelNames(schematic.directives ?? []);
+
+  // A semiconductor may reference an LTspice standard part by name (1N4148,
+  // 2N2222, …) with no inline `.model`. When the document doesn't define it but
+  // we bundle it, emit the real LTspice model line so the device simulates with
+  // its actual parameters instead of a generic `TAU_*` starter. The union of
+  // user-defined + emitted-standard names tells `deviceModel` which names are
+  // safe to put on the device line.
+  const knownModels = new Set(userModels);
+  const SEMI_KINDS: ReadonlySet<ComponentKind> = new Set([
+    "diode", "led", "zener", "npn", "pnp", "nmos", "pmos",
+  ]);
+  const emittedStandard = new Set<string>();
+  for (const { component } of circuit.components) {
+    if (!SEMI_KINDS.has(component.kind)) continue;
+    const named = component.value.trim().split(/\s+/)[0] ?? "";
+    if (!named || knownModels.has(named.toLowerCase())) continue;
+    const line = standardModelLine(named);
+    if (line && !emittedStandard.has(named.toLowerCase())) {
+      lines.push(line);
+      emittedStandard.add(named.toLowerCase());
+      knownModels.add(named.toLowerCase());
+    }
+  }
+
   circuit.components.forEach((entry, index) => {
-    lines.push(...componentLines(entry, index, userModels));
+    lines.push(...componentLines(entry, index, knownModels));
   });
   lines.push(analysisLine(analysis, hasIc), ".end");
 
