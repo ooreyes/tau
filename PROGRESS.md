@@ -1,5 +1,48 @@
 # Tau Autobuilder — Progress Log
 
+## 2026-06-28T12:24Z — auto/ltspice-parity — source AC stimulus (SYMATTR Value2) → deck + solvers (§1)
+
+### What I did
+- Found a concrete acceptance-test blocker: Draft1.asc / Draft2.asc carry their
+  AC stimulus in `SYMATTR Value2 AC 1` (separate from the `SYMATTR Value SINE(...)`
+  transient spec). The importer dropped `Value2`, so `.ac`/`.meas AC` ran against
+  a 0 V source.
+- New `engine/acSpec.ts`: `parseAcSpec`/`stripAcSpec`/`acSpecDeckText` extract /
+  remove an `AC <mag> [phase]` chunk from a source value (SI suffixes, optional
+  numeric phase, won't mistake a trailing `Rser=…` for phase).
+- Importer (`componentValueFromAttrs`): for `vsource`/`isource` joins
+  `Value`+`Value2`+`SpiceLine` onto the value (LTspice netlist concatenation).
+  Non-source kinds keep `Value` only (semiconductor instance params deferred).
+- Native deck (`spiceNetlist.ts`): vsource/isource emit the AC spec after the
+  DC/function text (`V1 n1 0 SIN(0 1 1) AC 1`); DC level parsed from the
+  AC-stripped text via new `numberFromText`.
+- TS AC solver (`acSweep.ts`): vsource/isource with an AC spec now drive the
+  sweep as a phasor (`acPhasor`), and `hasAcSource` recognizes them.
+- TS transient/OP DC-parse sites strip the AC chunk so `5 AC 2` still reads 5 V.
+
+### Files touched
+- src/engine/acSpec.ts (new), src/engine/acSpec.test.ts (new, 13 tests)
+- src/engine/spiceNetlist.ts (+numberFromText, AC emission), spiceNetlist.test.ts (+2)
+- src/io/ascImport.ts (+componentValueFromAttrs), ascImport.test.ts (+4)
+- src/simulation/acSweep.ts (+acPhasor, vsource/isource AC), acSweep.test.ts (+2)
+- src/simulation/{linearTransient,operatingPoint}.ts (strip AC at DC parse)
+- FEATURE_PARITY.md (§1 SYMATTR mapping ⬜ → 🟡)
+
+### Tests
+626 passing (was 605; +21 new). Typecheck clean. ngspice CLI confirmed:
+`SIN(0 1 1) AC 1` → RC corner −3.01 dB / −45° at fc.
+
+### FEATURE_PARITY items updated
+- §1 SYMATTR Value/Value2/SpiceModel/ModelFile mapping ⬜ → 🟡 (source AC spec).
+
+### UX issues found
+- None (importer + deck + solver plumbing; no UI surface changed).
+
+### Next step
+Map semiconductor `Value2`/`SpiceLine` instance params and `SpiceModel`/`ModelFile`
+to model selection; or resolve `.lib`/`.inc` file paths so deadtime.asc's
+1N4148 / UniversalOpamp2 resolve.
+
 ## 2026-06-28T07:04Z — auto/ltspice-parity — .model/.lib/.inc/.subckt passthrough + model-name mapping (§3)
 
 ### What I did
