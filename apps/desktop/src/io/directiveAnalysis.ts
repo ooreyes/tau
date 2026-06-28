@@ -114,6 +114,20 @@ export function parseAcDirective(directive: string): AcAnalysisOptions | null {
   return { startHz, stopHz, pointsPerDecade };
 }
 
+/**
+ * Parse a `.temp <celsius>` directive → the temperature in °C, or null. Leading
+ * `.`/`!` and SI suffixes are tolerated. The first value is used (LTspice/ngspice
+ * accept a list, but Tau emits a single operating temperature).
+ */
+export function parseTempDirective(directive: string): number | null {
+  const trimmed = directive.trim().replace(/^[.!]+/, "");
+  const m = /^temp\b\s*(.*)$/i.exec(trimmed);
+  if (!m) return null;
+  const token = m[1].split(/[\s,]+/).filter(Boolean)[0];
+  if (!token) return null;
+  return quantityOrNull(token);
+}
+
 /** The kind of analysis a document's directives request, with parsed options. */
 export interface DirectiveAnalyses {
   tran?: AnalysisOptions;
@@ -123,6 +137,8 @@ export interface DirectiveAnalyses {
   noise?: NoiseSpec;
   /** `.four` Fourier analysis run over the transient result. */
   four?: FourierSpec;
+  /** `.temp` circuit temperature in °C (emitted to the native deck). */
+  temp?: number;
 }
 
 /**
@@ -156,6 +172,10 @@ export function analysesFromDirectives(directives: string[]): DirectiveAnalyses 
     if (!result.four) {
       const four = parseFourDirective(directive);
       if (four) result.four = four;
+    }
+    if (result.temp === undefined) {
+      const temp = parseTempDirective(directive);
+      if (temp !== null) result.temp = temp;
     }
   }
   return result;

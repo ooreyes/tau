@@ -265,7 +265,13 @@ zener, opamp, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**, **B (behav
   the transient result; a **`FourierTable`** under the transient scope shows each
   output's THD + DC/fundamental/harmonic magnitudes (normalized to the fundamental).
   **NEXT:** native ngspice `.four` path for nonlinear distortion.
-- ⬜ `.temp` temperature sweep / set — used 4×
+- 🟡 `.temp` **temperature set** — used 4× — `parseTempDirective` (°C, leading
+  `.`/`!` + SI/negative tolerated, first value) in `io/directiveAnalysis.ts`;
+  surfaced on `DirectiveAnalyses.temp`. `buildSpiceDeck` emits `.temp <°C>` from
+  the document directives so **native ngspice** runs its temperature-dependent
+  device models at the authored temperature (live-verified: `.temp 100` shifts a
+  diode drop). 6 tests. **NEXT:** TS-solver temperature coefficients; `.step temp`
+  sweep family (the swept-temperature path in `stepFamily` still throws).
 - 🟡 `.meas` **Measurements** (extract gain, BW, rise time, etc.) — used 61× —
   **transient engine + UI landed** (`simulation/measure.ts`): `parseMeasDirective`
   handles `MAX/MIN/PP/AVG/RMS/INTEG` aggregates over `FROM/TO`, `PARAM` expressions,

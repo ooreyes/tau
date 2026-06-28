@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   parseTranDirective,
   parseAcDirective,
+  parseTempDirective,
   analysesFromDirectives,
   DEFAULT_TRAN_STEPS,
 } from "./directiveAnalysis";
@@ -127,5 +128,24 @@ describe("analysesFromDirectives", () => {
   it("extracts a .four request", () => {
     const out = analysesFromDirectives([".tran 1m", ".four 1k V(out)"]);
     expect(out.four).toEqual({ freq: 1000, harmonics: 10, outputs: ["V(out)"] });
+  });
+
+  it("extracts a .temp setting", () => {
+    expect(analysesFromDirectives([".tran 1m", ".temp 85"]).temp).toBe(85);
+    expect(analysesFromDirectives([".param x=1"]).temp).toBeUndefined();
+  });
+});
+
+describe("parseTempDirective", () => {
+  it("reads the temperature in °C, tolerating leading . / ! and negatives", () => {
+    expect(parseTempDirective(".temp 27")).toBe(27);
+    expect(parseTempDirective("!temp -40")).toBe(-40);
+    expect(parseTempDirective(".temp 125 0 75")).toBe(125); // first value only
+  });
+
+  it("returns null for non-.temp or malformed lines", () => {
+    expect(parseTempDirective(".tran 1m")).toBeNull();
+    expect(parseTempDirective(".temp")).toBeNull();
+    expect(parseTempDirective(".temperature 50")).toBeNull();
   });
 });
