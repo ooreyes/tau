@@ -1,5 +1,52 @@
 # Tau Autobuilder — Progress Log
 
+## 2026-06-28T01:05Z — auto/ltspice-parity — Behavioral B-source end-to-end (§3)
+
+### What I did
+- Added the **behavioral B-source** (`bsource` kind) — the top remaining ⬜ in
+  §3, "used constantly in real LTspice circuits". 2-terminal output; value carries
+  `V=<expr>`/`I=<expr>`. Full plumbing: type, pin geometry (p/n), diamond symbol +
+  bounds/box, palette entry (hotkey `j`).
+- **Native ngspice deck**: emits `B p n V=…`/`I=…` verbatim (brace-substituted;
+  bare expr → `V=`). Live-verified in ngspice 17 (`V=2*V(in)+0.5` → 4.5 V;
+  `I=1m*V(ctrl)` polarity confirmed and matched in the TS stamp).
+- **Import**: LTspice `bv`/`bi`/`b`/`b2` → `bsource`; value flows through; pin
+  geometry banked (bv≈voltage, bi≈current), matching GFT.asc wiring.
+- **TS solver (linear subset)**: `simulation/behavioral.ts` `linearizeBehavioral`
+  reduces an affine expression to `const + Σ coeff·V(node)` via symbolic
+  perturbation + a multi-point linearity check (rejects products/powers/`time`/
+  `I(...)`/unknown params). Stamped in `.op`/`.tran`/`.ac`: V-type as a
+  multi-input VCVS (branch unknown + offset), I-type as transconductance
+  (constant drops at AC). Nonlinear/dynamic forms raise a clear "needs native
+  engine" error instead of mis-solving.
+
+### Files touched
+- src/schematic/types.ts, pins.ts, symbols.tsx, catalog.ts (new kind plumbing)
+- src/engine/spiceNetlist.ts (deck emission + prefix)
+- src/io/ascImport.ts (bv/bi mapping + pin keys)
+- src/simulation/behavioral.ts (new: parse/normalize/linearize/term-resolve)
+- src/simulation/{operatingPoint,linearTransient,acSweep}.ts (stamps + offsets)
+- tests: behavioral.test.ts (15), behavioralSolver.test.ts (9),
+  engine/spiceDeck.test.ts (+2), io/ascImport.test.ts (+2)
+- FEATURE_PARITY.md (§3 B-source ✅; kinds list)
+
+### Tests
+544 passing (was 516 at run start; +28 new). Typecheck clean. Native deck
+validated in ngspice 17.
+
+### FEATURE_PARITY items updated
+- §3 **Behavioral sources (B)** ⬜ → ✅. Kinds list + §3 Sources note updated.
+
+### UX issues found
+- B-source value editing uses the plain value field (free-text `V=…`); no
+  structured editor or syntax highlighting yet. Imported B-source renders at
+  Tau's diamond geometry (pins correct via override). Logged as UX debt.
+
+### Next step
+§3 next ⬜: **Comparators / logic gates (LTspice `A` devices)** — needed for
+class-d_starter.asc — or generic coupled-inductor `K`. Alternatively §2
+mirror/flip (Ctrl+E), the next schematic-capture gap.
+
 ## 2026-06-27T19:33Z — auto/ltspice-parity — CCCS (F) + CCVS (H) current-controlled sources (§3)
 
 ### What I did

@@ -130,11 +130,27 @@ Status legend: ✅ done · 🟡 partial · ⬜ not started
 
 ## 3. Component / symbol library
 Current Tau kinds (~25): R, C, L, pot, V(DC), I(DC), Vac, Iac, **Vpulse**, diode, LED,
-zener, opamp, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**, NMOS, PMOS, NPN, PNP, switch, transformer, testpoint, ground.
+zener, opamp, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**, **B (behavioral)**, NMOS, PMOS, NPN, PNP, switch, transformer, testpoint, ground.
 - 🟡 Passives R/C/L (✅) — add: parasitics (ESR/IC), behavioral R/C/L, **C/L initial conditions**
-- 🟡 Sources — DC/AC/PULSE plus **inline LTspice transient functions on V/I sources now emit to the ngspice deck: SINE (offset/amp/freq/td/damping/phase), PULSE (full 7-arg, Ncycles trimmed), PWL, EXP, SFFM** (`engine/sourceFunction.ts`; µ/meg normalized). Still missing: PWL FILE, **arbitrary behavioral B-source** (`V=...`, `I=...`), explicit AC spec on these, noise sources, TS-fallback solver support for the non-DC functions
+- 🟡 Sources — DC/AC/PULSE plus **inline LTspice transient functions on V/I sources now emit to the ngspice deck: SINE (offset/amp/freq/td/damping/phase), PULSE (full 7-arg, Ncycles trimmed), PWL, EXP, SFFM** (`engine/sourceFunction.ts`; µ/meg normalized). Still missing: PWL FILE, explicit AC spec on these, noise sources, TS-fallback solver support for the non-DC functions (**arbitrary behavioral B-source `V=…`/`I=…` now landed** — see the dedicated B item below)
 - 🟡 Semiconductors — diode/BJT/MOS/zener present with **generic models only**. Need real model selection.
-- ⬜ **Behavioral sources (B)** — used constantly in real LTspice circuits
+- ✅ **Behavioral sources (B)** — used constantly in real LTspice circuits —
+  **landed end-to-end.** New `bsource` component kind (2-terminal output, value
+  carries `V=<expr>`/`I=<expr>`): pin geometry + diamond symbol + palette entry
+  (hotkey `j`). **Native ngspice deck** emits `B p n V=…`/`I=…` verbatim
+  (`engine/spiceNetlist.ts` + `simulation/behavioral.ts behavioralSpecText`,
+  brace-substituted; bare expr defaults to `V=`); live-verified in ngspice 17
+  (`V=2*V(in)+0.5` → 4.5 V; `I=1m*V(ctrl)` polarity matched). **Import**:
+  LTspice `bv`/`bi`/`b`/`b2` → `bsource`, value (`I=I(V1)…`) flows through 1:1,
+  pin geometry banked (bv≈voltage, bi≈current — matches GFT.asc wiring). **TS
+  solver** simulates the *affine* subset via `linearizeBehavioral` (reduces
+  `const + Σ coeff·V(node)` by symbolic perturbation with a multi-point
+  linearity check; rejects products/powers/`time`/`I(...)`/unknown params):
+  V-type stamps as a multi-input VCVS (branch unknown + constant offset), I-type
+  as transconductance, in `.op`/`.tran`/`.ac` (constant drops at AC). Nonlinear/
+  dynamic forms raise a clear "needs native engine" error rather than silently
+  mis-solving. **35 hand-computed tests** (behavioral parse/linearize, deck
+  emission, import mapping, op/tran/ac solves) cross-checked against ngspice 17.
 - ✅ **Voltage/current-controlled sources** E/F/G/H — **all four landed**
   end-to-end: `vcvs`/`vccs`/`cccs`/`ccvs` component kinds (2-port: control pair +
   output pair), pin geometry + symbols + palette entries, and **linear MNA stamps
