@@ -1,5 +1,40 @@
 # Tau Autobuilder — Progress Log
 
+## 2026-06-28T18:55Z — auto/ltspice-parity — coupled-inductor K passthrough (§3)
+
+### What I did
+- Real LTspice transformer circuits (Transformer, varactor, Royer) keep winding
+  coupling in on-canvas `K` TEXT directives; the deck builder only emitted
+  .model/.lib/.options/.temp/.ic, so `K` lines were **silently dropped** —
+  simulating a coupled transformer as independent inductors (wrong waveforms).
+- New `engine/couplingDirectives.ts couplingLinesFromDirectives()` passes every
+  K line through verbatim (ngspice shares LTspice's syntax) with any `{expr}`
+  coefficient resolved against the param scope; wired into `buildSpiceDeck`.
+- Live-verified in ngspice 17: a 1mH:4mH transformer with K=0.99 steps a 1 V
+  sine up to ~1.9 V (turns ratio 2) — physically correct.
+
+### Files touched
+- src/engine/couplingDirectives.ts (new), couplingDirectives.test.ts (new, 7)
+- src/engine/spiceNetlist.ts (emit coupling lines after model/lib)
+- src/engine/spiceDeck.test.ts (+1 deck-integration test, +Lind builder)
+- FEATURE_PARITY.md (§3 coupled-inductor K → 🟡)
+
+### Tests
+668 passing (was 659; +8 wait, +9 incl deck). Typecheck clean.
+
+### FEATURE_PARITY items updated
+- §3 Coupled inductors `K` ⬜ → 🟡 (native passthrough; TS-stamp + UI pending).
+
+### UX issues found
+- None (engine only).
+
+### Next step
+TS-solver mutual-inductance (`K`) stamp for the browser path; or a placeable K
+symbol so users don't hand-edit the directive. Or continue native-only deck
+blockers (Laplace E/G — note arbitrary s-expressions like exp(-.001*s) can't map
+to ngspice's polynomial-only s_xfer, so full Laplace parity is partly
+impossible). Or pivot to testable §6 (expression plotting) / §2 (multi-select).
+
 ## 2026-06-28T18:40Z — auto/ltspice-parity — real-.asc deck build 34→75/82 (§1/§5)
 
 ### What I did

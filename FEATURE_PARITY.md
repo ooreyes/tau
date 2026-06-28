@@ -217,7 +217,14 @@ zener, opamp, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**, **B (behav
 - ⬜ MOSFET level/VDMOS power models, body diode
 - ⬜ Comparators / logic gates / digital (LTspice `A` devices) — **needed for class-d_starter.asc**
 - ⬜ Transmission lines (T, LTRA, UR)
-- ⬜ Coupled inductors `K` (have transformer; expose generic K)
+- 🟡 Coupled inductors `K` — **directive passthrough landed** (`engine/
+  couplingDirectives.ts`): a document's on-canvas `K` TEXT directives
+  (`K1 L1 L2 1`, `K3 L1 L2 .95`, the all-windings `K1 L1 L2 L3 L4 1`, parameterized
+  `Kcup1 L2 L3 {Kcup}`) now flow into the native deck verbatim with any `{expr}`
+  coefficient resolved against the param scope — previously dropped, which made a
+  coupled transformer simulate as independent inductors. Live-verified in ngspice
+  17 (1mH:4mH, K=0.99 → 2× step-up). 8 tests. **NEXT:** TS-solver mutual-inductance
+  stamp; a placeable K symbol/UI (still must hand-edit the directive).
 - ⬜ Special functions: TRIANGLE/PWM generators, schmitt, etc.
 - 🟡 **Model/library import** (`.model`, `.lib`, `.inc`, `.subckt`) — LTspice ships 2,038 `.lib` + 2,469 `.sub`.
   **Passthrough to native ngspice landed** (`engine/modelDirectives.ts`):
