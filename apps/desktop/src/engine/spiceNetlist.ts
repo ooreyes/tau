@@ -5,6 +5,7 @@ import { parseQuantity } from "../simulation/quantity";
 import { decodeParams } from "../schematic/params";
 import { parseSourceFunction } from "./sourceFunction";
 import { stripAcSpec, acSpecDeckText } from "./acSpec";
+import { stripIcSpec, icSpecDeckText, parseIcValue } from "./icSpec";
 import { behavioralSpecText as behavioralSpec } from "../simulation/behavioral";
 import { optionsLineFromDirectives } from "./spiceOptions";
 import { modelLibLinesFromDirectives, definedModelNames } from "./modelDirectives";
@@ -103,10 +104,18 @@ export function buildSpiceDeck(schematic: Schematic, analysis: SpiceAnalysis): S
     }
   }
 
+  // A per-instance C/L initial condition also needs `uic` so the value holds at
+  // t=0, exactly like a `.ic` directive.
+  const hasInstanceIc = circuit.components.some(
+    ({ component }) =>
+      (component.kind === "capacitor" || component.kind === "inductor") &&
+      parseIcValue(component.value) !== null,
+  );
+
   circuit.components.forEach((entry, index) => {
     lines.push(...componentLines(entry, index, knownModels));
   });
-  lines.push(analysisLine(analysis, hasIc), ".end");
+  lines.push(analysisLine(analysis, hasIc || hasInstanceIc), ".end");
 
   return { circuit, netlist: lines.join("\n") };
 }
@@ -128,9 +137,9 @@ function componentLines(entry: ExtractedComponent, index: number, userModels: Se
     case "resistor":
       return [`${name} ${node("a")} ${node("b")} ${positiveNumberValue(component, "Ohm")}`];
     case "capacitor":
-      return [`${name} ${node("a")} ${node("b")} ${positiveNumberValue(component, "F")}`];
+      return [`${name} ${node("a")} ${node("b")} ${positiveNumberFromText(component, stripIcSpec(component.value), "F")}${icSpecDeckText(component.value)}`];
     case "inductor":
-      return [`${name} ${node("a")} ${node("b")} ${positiveNumberValue(component, "H")}`];
+      return [`${name} ${node("a")} ${node("b")} ${positiveNumberFromText(component, stripIcSpec(component.value), "H")}${icSpecDeckText(component.value)}`];
     case "vsource": {
       // LTspice carries SINE/PULSE/PWL/EXP/SFFM inline on the source value, plus
       // an optional `AC <mag> [phase]` stimulus (from SYMATTR Value2). Split them.
@@ -349,6 +358,23 @@ function parsedNumber(component: SchematicComponent, unit: string): number {
   } catch {
     throw new Error(`${component.label || component.kind} needs a valid ${unit} value.`);
   }
+}
+
+/** Parse a strictly-positive value from already-extracted text (the value minus
+ *  its IC spec), keeping the component-aware error message. Used for C/L whose
+ *  value may carry a trailing `IC=` token. */
+function positiveNumberFromText(component: SchematicComponent, text: string, unit: string): string {
+  let value: number;
+  try {
+    value = parseQuantity(text.trim(), unit);
+    if (!Number.isFinite(value)) throw new Error("not finite");
+  } catch {
+    throw new Error(`${component.label || component.kind} needs a valid ${unit} value.`);
+  }
+  if (value <= 0) {
+    throw new Error(`${component.label || component.kind} needs a positive ${unit} value (got ${value}).`);
+  }
+  return value.toString();
 }
 
 /** Like parsedNumber but additionally requires the value to be strictly positive.

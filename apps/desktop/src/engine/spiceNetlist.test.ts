@@ -96,6 +96,31 @@ describe("buildSpiceDeck", () => {
     expect(deck.netlist).not.toContain(".model MYSTERY_PART");
   });
 
+  it("emits a capacitor IC and adds uic to the transient (Draft10 case)", () => {
+    const components = [
+      component("capacitor", "C1", "100p IC=1", 0, 0),
+      component("resistor", "R1", "1k", 96, 0),
+      component("ground", "", "", 0, 32),
+      component("ground", "", "", 128, 0),
+    ];
+    const wires = [wire("w1", [{ x: 0, y: 0 }, { x: 64, y: 0 }])];
+    const deck = buildSpiceDeck({ components, wires }, { kind: "tran", stopTime: 0.001, steps: 100 });
+    expect(deck.netlist).toMatch(/C1 \S+ \S+ 1e-10 IC=1/);
+    expect(deck.netlist).toMatch(/\.tran .* uic/);
+  });
+
+  it("does not add uic when no instance carries an IC", () => {
+    const components = [
+      component("capacitor", "C1", "100p", 0, 0),
+      component("resistor", "R1", "1k", 96, 0),
+      component("ground", "", "", 0, 32),
+      component("ground", "", "", 128, 0),
+    ];
+    const wires = [wire("w1", [{ x: 0, y: 0 }, { x: 64, y: 0 }])];
+    const deck = buildSpiceDeck({ components, wires }, { kind: "tran", stopTime: 0.001, steps: 100 });
+    expect(deck.netlist).not.toMatch(/uic/);
+  });
+
   it("lets a document's .options directive override the default deck options", () => {
     const components = [
       component("vsource", "V1", "5", 0, 32),

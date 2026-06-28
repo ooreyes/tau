@@ -370,4 +370,12 @@ describe("componentValueFromAttrs", () => {
     expect(componentValueFromAttrs("vsource", {})).toBe("");
     expect(componentValueFromAttrs("vsource", { Value2: "AC 1" })).toBe("AC 1");
   });
+
+  it("appends a C/L initial condition from SpiceLine2 (Draft10 cap)", () => {
+    expect(componentValueFromAttrs("capacitor", { Value: "100p", SpiceLine2: "IC=1" })).toBe("100p IC=1");
+    expect(componentValueFromAttrs("inductor", { Value: "1m", SpiceLine: "IC=0.5" })).toBe("1m IC=0.5");
+    // Only the IC token is appended, not the whole (possibly incompatible) attr.
+    expect(componentValueFromAttrs("capacitor", { Value: "1u", Value2: "Rser=0.1 IC=2" })).toBe("1u IC=2");
+    expect(componentValueFromAttrs("capacitor", { Value: "1u", SpiceLine: "Rser=0.1" })).toBe("1u");
+  });
 });

@@ -155,7 +155,13 @@ Status legend: ✅ done · 🟡 partial · ⬜ not started
 ## 3. Component / symbol library
 Current Tau kinds (~25): R, C, L, pot, V(DC), I(DC), Vac, Iac, **Vpulse**, diode, LED,
 zener, opamp, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**, **B (behavioral)**, NMOS, PMOS, NPN, PNP, switch, transformer, testpoint, ground.
-- 🟡 Passives R/C/L (✅) — add: parasitics (ESR/IC), behavioral R/C/L, **C/L initial conditions**
+- 🟡 Passives R/C/L (✅) — **C/L initial conditions (`IC=`) landed**: the importer
+  pulls an `IC=` token from a cap/inductor's `Value2`/`SpiceLine`/`SpiceLine2`
+  (LTspice writes e.g. `SpiceLine2 IC=1`; `engine/icSpec.ts` + `componentValueFromAttrs`)
+  and the native deck emits `C1 n1 n2 100p IC=1`, adding `uic` to the transient so
+  the value holds at t=0 (live-verified in ngspice — cap starts at 1 V). Real
+  case: Draft10.asc. Still to add: parasitics (ESR/Rser), behavioral R/C/L,
+  TS-solver IC support.
 - 🟡 Sources — DC/AC/PULSE plus **inline LTspice transient functions on V/I sources now emit to the ngspice deck: SINE (offset/amp/freq/td/damping/phase), PULSE (full 7-arg, Ncycles trimmed), PWL, EXP, SFFM** (`engine/sourceFunction.ts`; µ/meg normalized). Still missing: PWL FILE, explicit AC spec on these, noise sources, TS-fallback solver support for the non-DC functions (**arbitrary behavioral B-source `V=…`/`I=…` now landed** — see the dedicated B item below)
 - 🟡 Semiconductors — diode/BJT/MOS/zener present; **bundled LTspice standard
   models landed** (`engine/standardModels.ts`): common parts referenced by name
@@ -343,8 +349,10 @@ zener, opamp, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**, **B (behav
   through to the native ngspice deck verbatim (re-prefixed, lower-cased keyword);
   when any `.ic` is present the `.tran` line gains **`uic`** so the values hold at
   t=0 (LTspice semantics) rather than only biasing the OP. Live-verified in ngspice
-  17 (`.ic v(cap)=2` → cap starts at 2 V). 2 deck tests. **NEXT:** TS-solver IC
-  support; `C`/`L` per-instance `IC=` attribute.
+  17 (`.ic v(cap)=2` → cap starts at 2 V). 2 deck tests. **`C`/`L` per-instance
+  `IC=` attribute now landed** (`engine/icSpec.ts`; deck emits `IC=` + `uic`;
+  importer reads it from `SpiceLine2` etc. — see §3 passives). **NEXT:** TS-solver
+  IC support.
 - ✅ `.options` **passthrough** (reltol, etc.) — used 7× — `engine/spiceOptions.ts`:
   `parseOptionsDirectives` collects every `.options`/`.option` key=val + bare flag
   (lower-cased keys, later lines win, leading `.`/`!` + comma separators tolerated),

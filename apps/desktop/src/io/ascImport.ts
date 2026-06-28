@@ -30,6 +30,7 @@ import type {
   SchematicWire,
 } from "../schematic/types";
 import { getLocalPins } from "../schematic/pins";
+import { parseIcValue } from "../engine/icSpec";
 
 /**
  * Decode a schematic file's raw bytes to text, honoring the encoding LTspice
@@ -461,11 +462,23 @@ export function componentValueFromAttrs(
   attrs: Record<string, string>,
 ): string {
   const base = (attrs.Value ?? "").trim();
-  if (!SOURCE_KINDS_WITH_INLINE_SPEC.has(kind)) return base;
-  const extras = [attrs.Value2, attrs.SpiceLine]
-    .map((s) => s?.trim())
-    .filter((s): s is string => !!s);
-  return [base, ...extras].filter(Boolean).join(" ");
+  if (SOURCE_KINDS_WITH_INLINE_SPEC.has(kind)) {
+    const extras = [attrs.Value2, attrs.SpiceLine]
+      .map((s) => s?.trim())
+      .filter((s): s is string => !!s);
+    return [base, ...extras].filter(Boolean).join(" ");
+  }
+  // Capacitors/inductors may carry an initial condition in any of the spec
+  // attributes (LTspice writes e.g. `SpiceLine2 IC=1`). Append just the `IC=`
+  // token — not the whole attribute, which can hold ngspice-incompatible
+  // LTspice-only keys (Rser, Cpar, …).
+  if (kind === "capacitor" || kind === "inductor") {
+    const ic = [attrs.Value2, attrs.SpiceLine, attrs.SpiceLine2]
+      .map((s) => parseIcValue(s ?? ""))
+      .find((v): v is string => v !== null);
+    return ic !== undefined ? `${base} IC=${ic}`.trim() : base;
+  }
+  return base;
 }
 
 export function ascToSchematic(doc: AscDocument): AscImportResult {
