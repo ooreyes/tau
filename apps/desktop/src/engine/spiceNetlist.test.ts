@@ -212,6 +212,34 @@ describe("buildSpiceDeck", () => {
     expect(deck.netlist).not.toContain(".tran 1m");
   });
 
+  it("references a semiconductor's own model name when the document defines it", () => {
+    const components = [
+      component("diode", "D1", "1N4148", 0, 0),
+      component("nmos", "M1", "IRF540", 96, 0),
+      component("ground", "", "", 16, 32),
+    ];
+    const deck = buildSpiceDeck(
+      { components, wires: [], directives: [".model 1N4148 D(Is=2.5n)", ".model IRF540 NMOS(Vto=4)"] },
+      { kind: "op" },
+    );
+    expect(deck.netlist).toMatch(/D1 n\d+ n\d+ 1N4148/);
+    expect(deck.netlist).toMatch(/M1 (?:n\d+|0) (?:n\d+|0) (?:n\d+|0) (?:n\d+|0) IRF540/);
+    // The device lines reference the user models, not the generic starters.
+    expect(deck.netlist).not.toMatch(/D1 .*TAU_DIODE/);
+    expect(deck.netlist).not.toMatch(/M1 .*TAU_NMOS/);
+  });
+
+  it("falls back to the generic model when the named one is undefined", () => {
+    const components = [
+      component("diode", "D1", "1N4148", 0, 0),
+      component("ground", "", "", 16, 32),
+    ];
+    // No matching .model present → must not emit an undefined model reference.
+    const deck = buildSpiceDeck({ components, wires: [] }, { kind: "op" });
+    expect(deck.netlist).toMatch(/D1 n\d+ n\d+ TAU_DIODE/);
+    expect(deck.netlist).not.toContain("1N4148");
+  });
+
   it("exports every remaining starter-library symbol to an ngspice primitive", () => {
     const components = [
       component("diode", "D1", "D", 0, 0),

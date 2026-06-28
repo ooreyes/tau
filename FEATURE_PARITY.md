@@ -192,10 +192,13 @@ zener, opamp, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**, **B (behav
   analysis/param/option directives. `buildSpiceDeck` emits them so an imported
   `.asc` simulates against its real device models instead of the generic `TAU_*`
   starters (live-verified: `.model MyDiode D(...)` is picked up by ngspice 17).
-  11 unit tests + a deck-integration test. **NEXT:** map a semiconductor's
-  `SYMATTR Value` model name onto its device line (currently always `TAU_*`);
-  resolve `.lib`/`.inc` *file paths* (read & inline, or hand to ngspice); browser
-  TS-solver model parsing.
+  11 unit tests + a deck-integration test. **Model-name mapping landed:**
+  `definedModelNames` collects the document's `.model`/`.subckt` names and the
+  deck builder emits a semiconductor's own `SYMATTR Value` model name on its
+  device line *when that model is defined* (else the generic `TAU_*`), so it
+  never introduces an undefined-model error. **NEXT:** resolve `.lib`/`.inc`
+  *file paths* (read & inline, or hand to ngspice); browser TS-solver model
+  parsing.
 
 ## 4. Analyses (simulation commands)
 - ✅ `.op` Operating point — TS + native — `operatingPoint.ts`

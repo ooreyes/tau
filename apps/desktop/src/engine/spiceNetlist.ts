@@ -6,7 +6,7 @@ import { decodeParams } from "../schematic/params";
 import { parseSourceFunction } from "./sourceFunction";
 import { behavioralSpecText as behavioralSpec } from "../simulation/behavioral";
 import { optionsLineFromDirectives } from "./spiceOptions";
-import { modelLibLinesFromDirectives } from "./modelDirectives";
+import { modelLibLinesFromDirectives, definedModelNames } from "./modelDirectives";
 import { parseTempDirective } from "../io/directiveAnalysis";
 
 export type SpiceAnalysis =
@@ -76,18 +76,27 @@ export function buildSpiceDeck(schematic: Schematic, analysis: SpiceAnalysis): S
   const { lines: icLines, hasIc } = icLinesFromDirectives(schematic.directives ?? []);
   lines.push(...icLines);
 
+  const userModels = definedModelNames(schematic.directives ?? []);
   circuit.components.forEach((entry, index) => {
-    lines.push(...componentLines(entry, index));
+    lines.push(...componentLines(entry, index, userModels));
   });
   lines.push(analysisLine(analysis, hasIc), ".end");
 
   return { circuit, netlist: lines.join("\n") };
 }
 
-function componentLines(entry: ExtractedComponent, index: number): string[] {
+function componentLines(entry: ExtractedComponent, index: number, userModels: Set<string> = new Set()): string[] {
   const { component } = entry;
   const name = instanceName(component, index);
   const node = (pin: string) => requiredNode(entry, pin);
+
+  // For a semiconductor, prefer the part's own model name when the document
+  // actually defines it (`.model`/`.subckt` passthrough); else the generic
+  // starter. The part's value is the LTspice `SYMATTR Value` (a model name).
+  const deviceModel = (fallback: string): string => {
+    const named = component.value.trim().split(/\s+/)[0] ?? "";
+    return named && userModels.has(named.toLowerCase()) ? named : fallback;
+  };
 
   switch (component.kind) {
     case "resistor":
@@ -136,19 +145,19 @@ function componentLines(entry: ExtractedComponent, index: number): string[] {
       return [`${name} ${node("p")} ${node("n")} DC ${low} PULSE(${low} ${high} 0 ${edge} ${edge} ${width} ${period})`];
     }
     case "diode":
-      return [`${name} ${node("a")} ${node("k")} TAU_DIODE`];
+      return [`${name} ${node("a")} ${node("k")} ${deviceModel("TAU_DIODE")}`];
     case "led":
-      return [`${name} ${node("a")} ${node("k")} TAU_LED`];
+      return [`${name} ${node("a")} ${node("k")} ${deviceModel("TAU_LED")}`];
     case "zener":
-      return [`${name} ${node("a")} ${node("k")} TAU_ZENER`];
+      return [`${name} ${node("a")} ${node("k")} ${deviceModel("TAU_ZENER")}`];
     case "nmos":
-      return [`${name} ${node("d")} ${node("g")} ${node("s")} ${node("b")} TAU_NMOS`];
+      return [`${name} ${node("d")} ${node("g")} ${node("s")} ${node("b")} ${deviceModel("TAU_NMOS")}`];
     case "pmos":
-      return [`${name} ${node("d")} ${node("g")} ${node("s")} ${node("b")} TAU_PMOS`];
+      return [`${name} ${node("d")} ${node("g")} ${node("s")} ${node("b")} ${deviceModel("TAU_PMOS")}`];
     case "npn":
-      return [`${name} ${node("c")} ${node("b")} ${node("e")} TAU_NPN`];
+      return [`${name} ${node("c")} ${node("b")} ${node("e")} ${deviceModel("TAU_NPN")}`];
     case "pnp":
-      return [`${name} ${node("c")} ${node("b")} ${node("e")} TAU_PNP`];
+      return [`${name} ${node("c")} ${node("b")} ${node("e")} ${deviceModel("TAU_PNP")}`];
     case "opamp": {
       const base = safeName(component.label || `U${index + 1}`);
       return [

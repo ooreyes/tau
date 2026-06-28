@@ -40,6 +40,24 @@ function normalizeOpeningLine(line: string): string {
  * each non-empty physical line is emitted; blank lines inside a block are
  * dropped. Directives that are not a model/library kind are skipped.
  */
+/**
+ * Collect the set of model/subckt *names* a document defines (lower-cased), from
+ * its `.model <name> …` and `.subckt <name> …` directives (multi-line blocks
+ * included). Lets the deck builder safely reference a semiconductor's own model
+ * name only when that model is actually present, falling back to Tau's generic
+ * starters otherwise — so this never introduces an "undefined model" error.
+ */
+export function definedModelNames(directives: ReadonlyArray<string>): Set<string> {
+  const names = new Set<string>();
+  for (const raw of directives) {
+    for (const line of raw.replace(/\\n/g, "\n").split("\n")) {
+      const m = /^[.!]?(model|subckt)\b\s+([^\s(]+)/i.exec(line.trim());
+      if (m) names.add(m[2].toLowerCase());
+    }
+  }
+  return names;
+}
+
 export function modelLibLinesFromDirectives(directives: ReadonlyArray<string>): string[] {
   const out: string[] = [];
   for (const raw of directives) {
