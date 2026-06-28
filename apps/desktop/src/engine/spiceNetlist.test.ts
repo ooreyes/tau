@@ -183,6 +183,35 @@ describe("buildSpiceDeck", () => {
     expect(down.netlist).toContain(".dc V1 10 0 -2");
   });
 
+  it("carries a document's own .model/.lib/.subckt definitions into the deck", () => {
+    const components = [
+      component("vsource", "V1", "5", 0, 32),
+      component("resistor", "R1", "1k", 96, 0),
+      component("ground", "", "", 0, 64),
+      component("ground", "", "", 128, 0),
+    ];
+    const wires = [wire("w1", [{ x: 0, y: 0 }, { x: 64, y: 0 }])];
+    const deck = buildSpiceDeck(
+      {
+        components,
+        wires,
+        directives: [
+          ".model MyNPN NPN(Bf=250)",
+          ".lib /path/std.lib NMOS",
+          ".subckt myamp in out\\nR1 in out 1k\\n.ends",
+          ".tran 1m", // analysis directive must NOT leak into the deck body
+        ],
+      },
+      { kind: "op" },
+    );
+    expect(deck.netlist).toContain(".model MyNPN NPN(Bf=250)");
+    expect(deck.netlist).toContain(".lib /path/std.lib NMOS");
+    expect(deck.netlist).toContain(".subckt myamp in out");
+    expect(deck.netlist).toContain(".ends");
+    // The analysis directive is handled by the analysis line, not the body.
+    expect(deck.netlist).not.toContain(".tran 1m");
+  });
+
   it("exports every remaining starter-library symbol to an ngspice primitive", () => {
     const components = [
       component("diode", "D1", "D", 0, 0),

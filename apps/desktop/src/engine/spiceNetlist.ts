@@ -6,6 +6,7 @@ import { decodeParams } from "../schematic/params";
 import { parseSourceFunction } from "./sourceFunction";
 import { behavioralSpecText as behavioralSpec } from "../simulation/behavioral";
 import { optionsLineFromDirectives } from "./spiceOptions";
+import { modelLibLinesFromDirectives } from "./modelDirectives";
 import { parseTempDirective } from "../io/directiveAnalysis";
 
 export type SpiceAnalysis =
@@ -53,6 +54,11 @@ export function buildSpiceDeck(schematic: Schematic, analysis: SpiceAnalysis): S
   const usedKinds = new Set(components.map((component) => component.kind));
   const needsModels = ["diode", "led", "zener", "nmos", "pmos", "npn", "pnp"].some((kind) => usedKinds.has(kind as ComponentKind));
   if (needsModels) lines.push(...DEFAULT_MODELS);
+
+  // Carry the document's own `.model`/`.lib`/`.inc`/`.subckt` definitions into the
+  // deck so an imported `.asc` simulates against its real device models and
+  // libraries instead of only Tau's generic starter models.
+  lines.push(...modelLibLinesFromDirectives(schematic.directives ?? []));
 
   // Carry a document `.temp <°C>` into the deck so native ngspice runs its
   // temperature-dependent device models at the authored operating temperature.

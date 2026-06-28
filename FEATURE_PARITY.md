@@ -184,7 +184,18 @@ zener, opamp, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**, **B (behav
 - ⬜ Transmission lines (T, LTRA, UR)
 - ⬜ Coupled inductors `K` (have transformer; expose generic K)
 - ⬜ Special functions: TRIANGLE/PWM generators, schmitt, etc.
-- ⬜ **Model/library import** (`.model`, `.lib`, `.inc`, `.subckt`) — LTspice ships 2,038 `.lib` + 2,469 `.sub`
+- 🟡 **Model/library import** (`.model`, `.lib`, `.inc`, `.subckt`) — LTspice ships 2,038 `.lib` + 2,469 `.sub`.
+  **Passthrough to native ngspice landed** (`engine/modelDirectives.ts`):
+  `modelLibLinesFromDirectives` extracts a document's `.model`/`.lib`/`.inc`
+  (→`.include`)/`.subckt`…`.ends` directives, expands LTspice multi-line TEXT
+  blocks on the literal `\n` escape, normalizes the opening keyword, and skips
+  analysis/param/option directives. `buildSpiceDeck` emits them so an imported
+  `.asc` simulates against its real device models instead of the generic `TAU_*`
+  starters (live-verified: `.model MyDiode D(...)` is picked up by ngspice 17).
+  11 unit tests + a deck-integration test. **NEXT:** map a semiconductor's
+  `SYMATTR Value` model name onto its device line (currently always `TAU_*`);
+  resolve `.lib`/`.inc` *file paths* (read & inline, or hand to ngspice); browser
+  TS-solver model parsing.
 
 ## 4. Analyses (simulation commands)
 - ✅ `.op` Operating point — TS + native — `operatingPoint.ts`
