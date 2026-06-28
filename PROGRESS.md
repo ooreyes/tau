@@ -1,5 +1,55 @@
 # Tau Autobuilder — Progress Log
 
+## 2026-06-28T06:30Z — auto/ltspice-parity — Mirror/flip components (Ctrl+E) (§2)
+
+### What I did
+- Implemented **mirror/flip** — the top remaining ⬜ in §2 schematic capture and a
+  keyboard-parity gap (LTspice Ctrl+E). Added a `mirrored?: boolean` to
+  `SchematicComponent` (horizontal flip across the vertical axis, applied **before**
+  rotation to match LTspice `M*` orientations + the importer's `transformLtPoint`).
+- **Connectivity:** new `transformPoint(point, rotation, mirrored)` in
+  `schematic/pins.ts` (mirror x→-x, then rotate); `getComponentPins` uses it, so
+  net extraction / netlist emission see the flipped pin positions. **Rendering:**
+  `symbolTransform` in `Canvas.tsx` emits `rotate(R) scale(-1 1)` (SVG right-to-left
+  = flip then rotate) for the symbol, pin-layer, and placement ghost.
+- **Store:** `placeMirror` state + `mirror()` action — toggles the placement ghost
+  in place mode, else toggles the selection's flag (undoable). `addComponent`
+  stamps `mirrored: placeMirror`. `documentValidation` preserves the flag on
+  load/save round-trips.
+- **Keyboard:** Ctrl/Cmd+E → mirror, Ctrl/Cmd+R → rotate bound in `App.tsx`
+  (Space=rotate kept). StatusBar hint updated.
+- **Import fidelity:** `ascImport` now sets `mirrored: true` for `M*` orientations,
+  so imported parts render flipped as in LTspice (pins were already correct via
+  pinOverride).
+
+### Files touched
+- src/schematic/types.ts (mirrored flag)
+- src/schematic/pins.ts (transformPoint + getComponentPins)
+- src/schematic/documentValidation.ts (preserve mirrored)
+- src/store/useSchematic.ts (placeMirror + mirror action + addComponent)
+- src/components/Canvas.tsx (symbolTransform, ghost, ComponentView, selector)
+- src/components/StatusBar.tsx (hint), src/App.tsx (Ctrl+E/Ctrl+R)
+- src/io/ascImport.ts (M* → mirrored)
+- tests: pins.test.ts (+5), useSchematic.test.ts (+3), ascImport.test.ts (+1)
+- FEATURE_PARITY.md (§2 mirror ✅; §8 keyboard 🟡)
+
+### Tests
+553 passing (was 544; +9 new). Typecheck clean.
+
+### FEATURE_PARITY items updated
+- §2 **Mirror/flip components** ⬜ → ✅; §2 place/move/rotate/mirror line ✅.
+- §8 keyboard parity ⬜ → 🟡 (Ctrl+R/Ctrl+E bound).
+
+### UX issues found
+- Function-key shortcuts (F2–F8) still unbound (§8). Multi-select/copy-paste still
+  ⬜ — mirror only acts on the single selection.
+
+### Next step
+§2 next ⬜: **copy/paste + duplicate + multi-select** (drag-box select), or §3
+**coupled inductors K** (small, testable) / comparators (A devices, needed for
+class-d_starter.asc).
+
+
 ## 2026-06-28T01:05Z — auto/ltspice-parity — Behavioral B-source end-to-end (§3)
 
 ### What I did
