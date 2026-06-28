@@ -94,6 +94,15 @@ interface SchematicState extends Doc {
   rotate: () => void;
   /** Mirror (horizontal flip) the current selection, or the placement ghost in place mode. */
   mirror: () => void;
+
+  /** Clipboard holding a copied component (ephemeral; never recorded in history). */
+  clipboard: SchematicComponent | null;
+  /** Copy the selected component into the clipboard. */
+  copySelected: () => void;
+  /** Paste the clipboard component (offset + fresh ref-des), selecting the copy. */
+  paste: () => void;
+  /** Duplicate the selected component in place (copy + paste in one step, Ctrl+D). */
+  duplicateSelected: () => void;
   deleteSelected: () => void;
   setValue: (id: string, value: string) => void;
 
@@ -128,6 +137,35 @@ const docOf = (s: Doc): Doc => ({
   netLabels: s.netLabels,
   directives: s.directives,
 });
+
+/** Grid units a pasted/duplicated component is offset by so it never lands exactly
+ *  on top of its source (2 grid cells, like LTspice's paste nudge). */
+const PASTE_OFFSET = 32;
+
+/**
+ * Produce a placed clone of `src`: a fresh id, the next ref-des for its kind, and
+ * a small diagonal offset. `pinOverride` (imported, pin-accurate parts) is offset
+ * by the same delta so the copy stays connected to wires the same way.
+ */
+function placeClone(
+  counters: Record<string, number>,
+  src: SchematicComponent,
+): { comp: SchematicComponent; prefix: string; next: number } {
+  const entry = CATALOG_BY_KIND[src.kind];
+  const next = (counters[entry.prefix] ?? 0) + 1;
+  const label = entry.prefix === "GND" ? "" : `${entry.prefix}${next}`;
+  const comp: SchematicComponent = {
+    ...src,
+    id: nanoid(6),
+    x: src.x + PASTE_OFFSET,
+    y: src.y + PASTE_OFFSET,
+    label,
+    ...(src.pinOverride
+      ? { pinOverride: src.pinOverride.map((p) => ({ ...p, x: p.x + PASTE_OFFSET, y: p.y + PASTE_OFFSET })) }
+      : {}),
+  };
+  return { comp, prefix: entry.prefix, next };
+}
 
 /** Rebuild designator counters from labels so loaded circuits keep numbering correct. */
 function deriveCounters(components: SchematicComponent[]): Record<string, number> {
@@ -210,6 +248,7 @@ export const useSchematic = create<SchematicState>()((set) => {
     tool: { mode: "select" },
     placeRotation: 0,
     placeMirror: false,
+    clipboard: null,
     probes: initialDoc?.probes ?? [],
     netLabels: initialDoc?.netLabels ?? [],
     directives: initialDoc?.directives ?? [],
@@ -350,6 +389,41 @@ export const useSchematic = create<SchematicState>()((set) => {
           };
         }
         return {};
+      }),
+
+    copySelected: () =>
+      set((s) => {
+        if (!s.selectedId) return {};
+        const src = s.components.find((c) => c.id === s.selectedId);
+        return src ? { clipboard: { ...src } } : {};
+      }),
+
+    paste: () =>
+      set((s) => {
+        if (!s.clipboard) return {};
+        const { comp, prefix, next } = placeClone(s.counters, s.clipboard);
+        return {
+          ...recordInto(s),
+          components: [...s.components, comp],
+          counters: { ...s.counters, [prefix]: next },
+          selectedId: comp.id,
+          selectedWireId: null,
+        };
+      }),
+
+    duplicateSelected: () =>
+      set((s) => {
+        if (!s.selectedId) return {};
+        const src = s.components.find((c) => c.id === s.selectedId);
+        if (!src) return {};
+        const { comp, prefix, next } = placeClone(s.counters, src);
+        return {
+          ...recordInto(s),
+          components: [...s.components, comp],
+          counters: { ...s.counters, [prefix]: next },
+          selectedId: comp.id,
+          selectedWireId: null,
+        };
       }),
 
     deleteSelected: () =>

@@ -123,6 +123,9 @@ function App() {
   const cancel = useSchematic((s) => s.cancel);
   const rotate = useSchematic((s) => s.rotate);
   const mirror = useSchematic((s) => s.mirror);
+  const copySelected = useSchematic((s) => s.copySelected);
+  const paste = useSchematic((s) => s.paste);
+  const duplicateSelected = useSchematic((s) => s.duplicateSelected);
   const deleteSelected = useSchematic((s) => s.deleteSelected);
   const undo = useSchematic((s) => s.undo);
   const redo = useSchematic((s) => s.redo);
@@ -562,6 +565,15 @@ function App() {
         } else if (k === "e") {
           e.preventDefault();
           mirror();
+        } else if (k === "c") {
+          e.preventDefault();
+          copySelected();
+        } else if (k === "v") {
+          e.preventDefault();
+          paste();
+        } else if (k === "d") {
+          e.preventDefault();
+          duplicateSelected();
         }
         return; // leave other OS / app shortcuts alone
       }
@@ -592,7 +604,7 @@ function App() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [startPlacing, startWiring, cancel, rotate, mirror, deleteSelected, undo, redo]);
+  }, [startPlacing, startWiring, cancel, rotate, mirror, copySelected, paste, duplicateSelected, deleteSelected, undo, redo]);
 
   return (
     <div className={`app app-${mode}`}>

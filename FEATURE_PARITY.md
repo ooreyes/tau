@@ -124,7 +124,12 @@ Status legend: ✅ done · 🟡 partial · ⬜ not started
   The importer now sets `mirrored` for `M*` orientations so imported parts render
   flipped. 12 hand-computed tests (pin geometry incl. mirror-before-rotate, store
   toggle/undo/place, import mapping).
-- ⬜ **Copy/paste, duplicate, multi-select, drag-box select, group move**
+- 🟡 **Copy/paste, duplicate** (single selection) — **landed** in
+  `store/useSchematic.ts`: `copySelected` → ephemeral `clipboard`; `paste`/
+  `duplicateSelected` place a `placeClone` (fresh id, next ref-des, 2-grid diagonal
+  offset, `pinOverride` offset in lockstep so imported parts stay wired); both
+  undoable and select the copy. Bound to Ctrl+C / Ctrl+V / Ctrl+D in `App.tsx`.
+  9 store tests. **Still ⬜: multi-select, drag-box select, group move.**
 - ⬜ **Drag wires / move with rubber-banding** (move a part, wires follow)
 - ⬜ Bus wires / bus taps
 - ⬜ `.asc`-style `TEXT` SPICE directives placed on the canvas (free-text directive blocks)
@@ -339,10 +344,10 @@ zener, opamp, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**, **B (behav
 - ✅ IDE-style shell, multi-tab, command palette, settings, status bar engine indicator
 - ⬜ **Visual QA on the actual desktop app** (currently blocked — dev port held; cannot screenshot headless)
 - ⬜ Component picker matching LTspice (F2 part browser over the full library)
-- 🟡 Keyboard shortcut parity — **Ctrl+R rotate + Ctrl+E mirror now bound**
-  (`App.tsx`), alongside existing Space=rotate, W=wire, hotkey placement, ⌘K palette.
-  Still missing the LTspice function-key set (F2 part, F3 wire, F4 label, F5 delete,
-  F6 copy, F7 move, F8 drag).
+- 🟡 Keyboard shortcut parity — **Ctrl+R rotate, Ctrl+E mirror, Ctrl+C/V copy/paste,
+  Ctrl+D duplicate now bound** (`App.tsx`), alongside existing Space=rotate, W=wire,
+  hotkey placement, ⌘K palette. Still missing the LTspice function-key set (F2 part,
+  F3 wire, F4 label, F5 delete, F6 copy, F7 move, F8 drag).
 - ⬜ Help / model docs, error console with SPICE messages
 - ⬜ Crash-free on large/real circuits (stack-overflow class fixed; keep stress-testing)
 

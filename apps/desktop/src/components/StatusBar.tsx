@@ -61,6 +61,8 @@ export function StatusBar({
         <span className="dot">·</span>
         <kbd>⌘</kbd>+<kbd>E</kbd> mirror
         <span className="dot">·</span>
+        <kbd>⌘</kbd>+<kbd>D</kbd> duplicate
+        <span className="dot">·</span>
         <kbd>⌫</kbd> delete
         <span className="dot">·</span>
         <kbd>Esc</kbd> cancel

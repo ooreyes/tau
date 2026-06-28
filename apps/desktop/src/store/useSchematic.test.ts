@@ -57,6 +57,7 @@ function resetStore() {
     tool: { mode: "select" },
     placeRotation: 0,
     placeMirror: false,
+    clipboard: null,
     probes: [],
     netLabels: [],
     directives: [],
@@ -377,6 +378,77 @@ describe("schematic document store", () => {
     useSchematic.getState().mirror();
     expect(useSchematic.getState().past.length).toBe(historyBefore);
     expect(useSchematic.getState().components[0].mirrored ?? false).toBe(false);
+  });
+
+  it("duplicateSelected clones the selection with a fresh id, ref-des, and offset", () => {
+    useSchematic.getState().loadCircuit(sourceDocument());
+    const id = useSchematic.getState().components[0].id;
+    useSchematic.getState().select(id);
+
+    useSchematic.getState().duplicateSelected();
+
+    const state = useSchematic.getState();
+    expect(state.components).toHaveLength(2);
+    const src = state.components[0];
+    const copy = state.components[1];
+    expect(copy.id).not.toBe(src.id);
+    expect(copy.label).toBe("R2"); // next ref-des after R1
+    expect(copy.value).toBe(src.value);
+    expect(copy.x).toBe(src.x + 32);
+    expect(copy.y).toBe(src.y + 32);
+    // The copy becomes the selection and the duplicate is undoable.
+    expect(state.selectedId).toBe(copy.id);
+    useSchematic.getState().undo();
+    expect(useSchematic.getState().components).toHaveLength(1);
+  });
+
+  it("copy then paste places an offset copy; a second paste keeps numbering", () => {
+    useSchematic.getState().loadCircuit(sourceDocument());
+    const id = useSchematic.getState().components[0].id;
+    useSchematic.getState().select(id);
+
+    useSchematic.getState().copySelected();
+    useSchematic.getState().paste();
+    expect(useSchematic.getState().components.map((c) => c.label)).toEqual(["R1", "R2"]);
+
+    useSchematic.getState().paste();
+    expect(useSchematic.getState().components.map((c) => c.label)).toEqual(["R1", "R2", "R3"]);
+    // Each paste lands one offset further from the clipboard source.
+    const [, r2, r3] = useSchematic.getState().components;
+    expect(r3.x).toBe(r2.x); // both offset from the same clipboard component
+  });
+
+  it("paste offsets pinOverride positions so imported parts stay wired", () => {
+    useSchematic.getState().loadCircuit({
+      components: [
+        {
+          id: "imp1", kind: "resistor", x: 100, y: 100, rotation: 0, value: "1k", label: "R1",
+          pinOverride: [
+            { id: "a", label: "A", x: 68, y: 100 },
+            { id: "b", label: "B", x: 132, y: 100 },
+          ],
+        },
+      ],
+      wires: [],
+    });
+    useSchematic.getState().select(useSchematic.getState().components[0].id);
+    useSchematic.getState().copySelected();
+    useSchematic.getState().paste();
+
+    const copy = useSchematic.getState().components[1];
+    expect(copy.pinOverride).toEqual([
+      { id: "a", label: "A", x: 100, y: 132 },
+      { id: "b", label: "B", x: 164, y: 132 },
+    ]);
+  });
+
+  it("copy/paste/duplicate are no-ops without a selection or clipboard", () => {
+    useSchematic.getState().loadCircuit(sourceDocument());
+    useSchematic.getState().select(null);
+    useSchematic.getState().copySelected();
+    useSchematic.getState().paste(); // empty clipboard
+    useSchematic.getState().duplicateSelected();
+    expect(useSchematic.getState().components).toHaveLength(1);
   });
 
   it("deleteSelected removes the component and clears selection", () => {
