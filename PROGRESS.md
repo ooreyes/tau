@@ -1,5 +1,55 @@
 # Tau Autobuilder — Progress Log
 
+## 2026-06-27T19:33Z — auto/ltspice-parity — CCCS (F) + CCVS (H) current-controlled sources (§3)
+
+### What I did
+- Completed the controlled-source family **E/F/G/H** by adding the two
+  current-controlled kinds — **CCCS (F)** and **CCVS (H)** — the documented NEXT
+  step from the VCVS/VCCS session. Linear, so the existing TS MNA solvers handle
+  them exactly with hand-computable expected values.
+- Modelled the control port (like LTspice's F/H symbols) as an **internal
+  zero-volt sense branch** across `cp`/`cn`; its branch current is the controlling
+  current I(cp→cn). **CCCS** adds 1 MNA unknown (sense current) and stamps output
+  current `gain·I_sense` leaving `op`/entering `on`. **CCVS** adds 2 unknowns
+  (sense + output branch) and constrains `V(op)−V(on)=r·I_sense`. Added the same
+  stamps to all three TS solvers (`.op`/`.tran`/`.ac`, complex in AC).
+- New component kinds `cccs`/`ccvs` (4-pin 2-ports, same geometry as VCVS/VCCS):
+  filled every exhaustive `Record<ComponentKind,…>` — `pins.ts`, `SYMBOL_BODY`/
+  `SYMBOL_BOX` + render cases (current-sense arrow on the left port; diamond +
+  arrow for F, diamond + ± for H), `catalog.ts` palette (F hotkey `f`, H hotkey
+  `n`), and the `spiceNetlist` prefix map (F/H).
+- Native ngspice deck: each F/H emits a per-device `V_<ref>_sense cp cn 0` plus
+  `F/H op on V_<ref>_sense k` (the only correct way ngspice senses a current).
+- `ascImport`: LTspice `f/f2`→cccs, `h/h2`→ccvs.
+- Transient solver now reports F/H branch currents as `I(ref)`.
+
+### Files touched
+- src/schematic/types.ts (cccs/ccvs kinds)
+- src/schematic/pins.ts, src/schematic/symbols.tsx, src/schematic/catalog.ts
+- src/engine/spiceNetlist.ts (prefix + F/H emission w/ internal sense source)
+- src/io/ascImport.ts (f/h→cccs/ccvs)
+- src/simulation/operatingPoint.ts, linearTransient.ts, acSweep.ts (MNA stamps)
+- src/simulation/controlledSources.test.ts (+9), src/io/ascImport.test.ts (+1)
+- FEATURE_PARITY.md (§3 E/F/G/H ✅)
+
+### Tests
+516 passing (was 506; +10 new). Typecheck clean. Sign conventions cross-checked
+live against ngspice 17 on an equivalent deck: CCCS V(out)=−gain·I_sense·R=−10 V,
+CCVS V(out)=r·I_sense=+2 V — both exact.
+
+### FEATURE_PARITY items updated
+- §3 E/F/G/H controlled sources: 🟡 → ✅ (CCCS + CCVS complete the family).
+- §3 component-kinds header: ~23 → ~25 kinds.
+
+### UX issues found
+- None new. Like VCVS/VCCS, imported F/H symbols have no banked `.asy` pin
+  geometry yet, so they're placed-but-flagged on import (tracked under §1).
+
+### Next step
+Tackle §3 **behavioral B-source** (`V=…`/`I=…`), used constantly in real LTspice
+circuits — but it's nonlinear in general, so scope a linear/native split first;
+or do §4 `.four` (Fourier) / `.temp` which are smaller and fully testable in TS.
+
 ## 2026-06-27T18:52Z — auto/ltspice-parity — VCVS (E) + VCCS (G) controlled sources (§3)
 
 ### What I did
