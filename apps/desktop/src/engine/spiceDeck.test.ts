@@ -27,6 +27,8 @@ const R = (x: number, y: number, v: string, l: string, rot: SchematicComponent["
   mk("resistor", x, y, v, l, rot);
 const Cap = (x: number, y: number, v: string, l: string, rot: SchematicComponent["rotation"] = 0) =>
   mk("capacitor", x, y, v, l, rot);
+const Lind = (x: number, y: number, v: string, l: string, rot: SchematicComponent["rotation"] = 0) =>
+  mk("inductor", x, y, v, l, rot);
 const Vdc = (x: number, y: number, v: string, l = "V1") => mk("vsource", x, y, v, l);
 const Vac = (x: number, y: number, v: string, l = "V1") => mk("vac", x, y, v, l);
 const GND = (x: number, y: number) => mk("ground", x, y, "", "");
@@ -82,6 +84,28 @@ describe("deck structure — operating point", () => {
       { components: [Vdc(0, 32, "5"), R(96, 0, "1k", "R1"), GND(0, 64), GND(128, 0)], wires: [W({ x: 0, y: 0 }, { x: 64, y: 0 })] },
       { kind: "op" },
     );
+    expectValidDeck(deck.netlist, /^\.op$/);
+  });
+});
+
+describe("deck structure — coupled inductors (K)", () => {
+  it("emits a transformer's K coupling directive into the deck (Transformer.asc)", () => {
+    const deck = buildSpiceDeck(
+      {
+        components: [
+          Vdc(0, 32, "5"),
+          Lind(96, 0, "1m", "L1"),
+          Lind(224, 0, "1m", "L2"),
+          GND(0, 64),
+          GND(256, 0),
+        ],
+        wires: [W({ x: 0, y: 0 }, { x: 64, y: 0 })],
+        directives: ["K1 L1 L2 1"],
+      },
+      { kind: "op" },
+    );
+    // The coupling line passes through verbatim so ngspice couples the windings.
+    expect(deck.netlist).toMatch(/^K1 L1 L2 1$/m);
     expectValidDeck(deck.netlist, /^\.op$/);
   });
 });

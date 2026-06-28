@@ -9,6 +9,7 @@ import { stripIcSpec, icSpecDeckText, parseIcValue } from "./icSpec";
 import { behavioralSpecText as behavioralSpec } from "../simulation/behavioral";
 import { optionsLineFromDirectives } from "./spiceOptions";
 import { modelLibLinesFromDirectives, definedModelNames } from "./modelDirectives";
+import { couplingLinesFromDirectives } from "./couplingDirectives";
 import { standardModelLine } from "./standardModels";
 import { parseTempDirective } from "../io/directiveAnalysis";
 
@@ -62,6 +63,11 @@ export function buildSpiceDeck(schematic: Schematic, analysis: SpiceAnalysis): S
   // deck so an imported `.asc` simulates against its real device models and
   // libraries instead of only Tau's generic starter models.
   lines.push(...modelLibLinesFromDirectives(schematic.directives ?? []));
+
+  // Carry mutual-inductance `K` coupling directives (transformer windings) into
+  // the deck with any `{expr}` coefficient resolved; without this a coupled
+  // transformer would simulate as independent inductors.
+  lines.push(...couplingLinesFromDirectives(schematic.directives ?? [], schematic.params ?? EMPTY_SCOPE));
 
   // Carry a document `.temp <°C>` into the deck so native ngspice runs its
   // temperature-dependent device models at the authored operating temperature.
