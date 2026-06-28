@@ -443,6 +443,31 @@ function buildPinOverride(symbol: AscSymbol, kind: ComponentKind): PinOverride[]
  * so wires, pins, and labels stay in one consistent integer coordinate space and
  * nets extract exactly as LTspice intends.
  */
+/** Independent-source kinds whose LTspice `Value2`/`SpiceLine` carry the
+ *  `AC <mag> [phase]` stimulus (and other inline spec) that concatenates onto
+ *  the SPICE source line. For every other kind we keep only `Value` (Value2 on
+ *  a semiconductor names instance params the generic models don't consume yet). */
+const SOURCE_KINDS_WITH_INLINE_SPEC = new Set<ComponentKind>(["vsource", "isource"]);
+
+/**
+ * Build a Tau component value from a symbol's SYMATTR attributes. For
+ * independent sources, append `Value2` and `SpiceLine` to `Value` (space-joined)
+ * so the LTspice `AC <mag> [phase]` stimulus — and any other inline source spec
+ * — rides on the value, exactly as LTspice concatenates them on the netlist
+ * line. Other kinds map `Value` only.
+ */
+export function componentValueFromAttrs(
+  kind: ComponentKind,
+  attrs: Record<string, string>,
+): string {
+  const base = (attrs.Value ?? "").trim();
+  if (!SOURCE_KINDS_WITH_INLINE_SPEC.has(kind)) return base;
+  const extras = [attrs.Value2, attrs.SpiceLine]
+    .map((s) => s?.trim())
+    .filter((s): s is string => !!s);
+  return [base, ...extras].filter(Boolean).join(" ");
+}
+
 export function ascToSchematic(doc: AscDocument): AscImportResult {
   let counter = 0;
   const id = (prefix: string) => `${prefix}-${(counter += 1)}`;
@@ -478,7 +503,7 @@ export function ascToSchematic(doc: AscDocument): AscImportResult {
       y: symbol.y,
       rotation: orientationToRotation(symbol.orientation),
       ...(symbol.orientation.startsWith("M") ? { mirrored: true } : {}),
-      value: symbol.attrs.Value ?? "",
+      value: componentValueFromAttrs(kind, symbol.attrs),
       label: instName,
       ...(pinOverride ? { pinOverride } : {}),
     });

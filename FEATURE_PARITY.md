@@ -98,7 +98,19 @@ Status legend: ✅ done · 🟡 partial · ⬜ not started
     hold the real LTspice symbol-local pin offsets (from `lib/sym/*.asy`) and the
     orientation transform (clockwise, Y-down, mirror-aware).
 - ⬜ **Import LTspice `.asy` symbols** (so library parts render) — 6,280 ship with LTspice.
-- ⬜ Map LTspice `SYMATTR Value/Value2/SpiceModel/ModelFile` to Tau component values.
+- 🟡 Map LTspice `SYMATTR Value/Value2/SpiceModel/ModelFile` to Tau component
+  values — **source AC-stimulus mapping landed** (`io/ascImport.ts`
+  `componentValueFromAttrs`): for `voltage`/`current` symbols the importer now
+  joins `Value` + `Value2` + `SpiceLine` onto the component value, exactly as
+  LTspice concatenates them on the netlist line, so the `AC <mag> [phase]`
+  stimulus (the common `SYMATTR Value2 AC 1`) is no longer dropped.
+  `engine/acSpec.ts` (`parseAcSpec`/`stripAcSpec`/`acSpecDeckText`) pulls the AC
+  chunk back out: the **native ngspice deck** emits it (`V1 n1 0 SIN(0 1 1) AC 1`,
+  live-verified — RC corner at −3.01 dB/−45°), the **TS AC solver** drives any
+  `vsource`/`isource` carrying an AC spec as that phasor (not a short/open), and
+  the TS transient/OP DC-parse sites strip the AC chunk so a `5 AC 2` value still
+  reads 5 V. 21 hand-computed tests. **NEXT:** semiconductor instance params
+  (`Value2`/`SpiceLine` on diodes/MOS), `SpiceModel`/`ModelFile` model selection.
 - ⬜ Export Tau schematic → `.asc` (round-trip).
 - 🟡 Native SPICE netlist generation (`engine/spiceNetlist.ts`) — works for built-in kinds; needs the directive/model coverage below.
 - ⬜ Export `.cir`/netlist to file; import `.cir`.

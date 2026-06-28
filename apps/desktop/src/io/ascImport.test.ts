@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseAsc, ltspiceTypeToKind, orientationToRotation, transformLtPoint, LTSPICE_PINS, ascToSchematic, importAsc } from "./ascImport";
+import { parseAsc, ltspiceTypeToKind, orientationToRotation, transformLtPoint, LTSPICE_PINS, ascToSchematic, importAsc, componentValueFromAttrs } from "./ascImport";
 import { extractCircuit } from "../schematic/netlist";
 import { buildParamScope, resolveComponentValues } from "../simulation/paramScope";
 
@@ -326,5 +326,48 @@ SYMATTR InstName X1`));
     expect(doc.components.some((c) => c.kind === "opamp")).toBe(true);
     expect(doc.components.some((c) => c.label === "X1")).toBe(false);
     expect(doc.warnings.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("joins a source's Value2 (AC spec) onto its value (Draft1/Draft2 case)", () => {
+    // LTspice writes the transient stimulus in Value and the AC stimulus in Value2.
+    const SRC2 = `Version 4
+SHEET 1 880 680
+SYMBOL voltage 80 96 R0
+SYMATTR InstName V1
+SYMATTR Value SINE(0 1 1)
+SYMATTR Value2 AC 1`;
+    const doc = ascToSchematic(parseAsc(SRC2));
+    const v1 = doc.components.find((c) => c.label === "V1");
+    expect(v1?.kind).toBe("vsource");
+    expect(v1?.value).toBe("SINE(0 1 1) AC 1");
+  });
+
+  it("keeps only Value for non-source kinds (Value2 not appended)", () => {
+    const SRC3 = `Version 4
+SHEET 1 880 680
+SYMBOL res 80 96 R0
+SYMATTR InstName R1
+SYMATTR Value 100k
+SYMATTR Value2 tol=1`;
+    const doc = ascToSchematic(parseAsc(SRC3));
+    const r1 = doc.components.find((c) => c.label === "R1");
+    expect(r1?.value).toBe("100k");
+  });
+});
+
+describe("componentValueFromAttrs", () => {
+  it("appends Value2 and SpiceLine for sources", () => {
+    expect(
+      componentValueFromAttrs("vsource", { Value: "SINE(0 1 1)", Value2: "AC 1" }),
+    ).toBe("SINE(0 1 1) AC 1");
+    expect(
+      componentValueFromAttrs("isource", { Value: "1", Value2: "AC 1", SpiceLine: "Rser=0.1" }),
+    ).toBe("1 AC 1 Rser=0.1");
+  });
+
+  it("returns Value alone for non-source kinds and tolerates missing attrs", () => {
+    expect(componentValueFromAttrs("resistor", { Value: "100k", Value2: "tol=1" })).toBe("100k");
+    expect(componentValueFromAttrs("vsource", {})).toBe("");
+    expect(componentValueFromAttrs("vsource", { Value2: "AC 1" })).toBe("AC 1");
   });
 });

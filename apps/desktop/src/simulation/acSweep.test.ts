@@ -323,3 +323,63 @@ describe("AC sweep — switch primitive", () => {
     expect(loadTrace?.magDb[0]).toBeCloseTo(0, 3);
   });
 });
+
+// ---------------------------------------------------------------------------
+// A plain vsource carrying an LTspice `AC <mag>` stimulus (imported via Value2)
+// must drive the AC sweep exactly like a dedicated vac source. Same RC low-pass
+// as suite 1, swapping VAC for a vsource whose value is "SINE(0 1 1) AC 1".
+// ---------------------------------------------------------------------------
+
+describe("AC sweep — vsource with an LTspice AC spec drives the sweep", () => {
+  const VS = vsource(0, 32, "SINE(0 1 1) AC 1", "V1");
+  const R1b = resistor(96, 0, R_VALUE, "R1");
+  const C1b = capacitor(224, 0, C_VALUE, "C1");
+  const G1 = ground(0, 64);
+  const G2 = ground(256, 0);
+  const comps = [VS, R1b, C1b, G1, G2];
+  const wiresB = [
+    wire([{ x: 0, y: 0 }, { x: 64, y: 0 }]),
+    wire([{ x: 128, y: 0 }, { x: 192, y: 0 }]),
+  ];
+
+  it("excites the circuit (no 'No AC source' failure) and rolls off at fc", () => {
+    const result = runAcSweep({ components: comps, wires: wiresB }, acOptions);
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error(result.message);
+
+    const outTrace = findOutTrace(result);
+    expect(outTrace).toBeDefined();
+    if (!outTrace) return;
+    const fcIdx = result.freqs.reduce(
+      (best, f, idx) => (Math.abs(f - 1000) < Math.abs(result.freqs[best] - 1000) ? idx : best),
+      0,
+    );
+    expect(outTrace.magDb[fcIdx]).toBeCloseTo(-3.01, 0);
+  });
+});
+
+describe("AC sweep — current source with an AC spec", () => {
+  it("injects an AC current into a load resistor", () => {
+    // I1 (AC 1 A) across R=1k → |V(R)| = 1·1000 = 1000 V = 60 dB, flat with frequency.
+    const I1: SchematicComponent = {
+      id: uid("is"), kind: "isource", x: 0, y: 32, rotation: 0, value: "0 AC 1", label: "I1",
+    };
+    const R1c = resistor(96, 0, "1k", "R1");
+    const G1 = ground(0, 64);
+    const G2 = ground(128, 0);
+    const result = runAcSweep(
+      {
+        components: [I1, R1c, G1, G2],
+        wires: [wire([{ x: 0, y: 0 }, { x: 64, y: 0 }])],
+      },
+      { startHz: 100, stopHz: 10_000, pointsPerDecade: 2 },
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error(result.message);
+    const rTrace = result.traces.find((t) => t.label.includes("R1"));
+    expect(rTrace).toBeDefined();
+    expect(rTrace?.magDb[0]).toBeCloseTo(60, 1);
+    // Purely resistive → flat across the band.
+    expect(rTrace?.magDb[rTrace.magDb.length - 1]).toBeCloseTo(60, 1);
+  });
+});

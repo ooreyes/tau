@@ -4,6 +4,7 @@ import type { ComponentKind, NetLabel, SchematicComponent, SchematicWire } from 
 import { parseQuantity } from "../simulation/quantity";
 import { decodeParams } from "../schematic/params";
 import { parseSourceFunction } from "./sourceFunction";
+import { stripAcSpec, acSpecDeckText } from "./acSpec";
 import { behavioralSpecText as behavioralSpec } from "../simulation/behavioral";
 import { optionsLineFromDirectives } from "./spiceOptions";
 import { modelLibLinesFromDirectives, definedModelNames } from "./modelDirectives";
@@ -106,10 +107,13 @@ function componentLines(entry: ExtractedComponent, index: number, userModels: Se
     case "inductor":
       return [`${name} ${node("a")} ${node("b")} ${positiveNumberValue(component, "H")}`];
     case "vsource": {
-      // LTspice carries SINE/PULSE/PWL/EXP/SFFM inline on the source value.
-      const fn = parseSourceFunction(component.value, "V");
-      if (fn) return [`${name} ${node("p")} ${node("n")} ${fn.text}`];
-      return [`${name} ${node("p")} ${node("n")} DC ${numberValue(component, "V")}`];
+      // LTspice carries SINE/PULSE/PWL/EXP/SFFM inline on the source value, plus
+      // an optional `AC <mag> [phase]` stimulus (from SYMATTR Value2). Split them.
+      const main = stripAcSpec(component.value);
+      const ac = acSpecDeckText(component.value);
+      const fn = parseSourceFunction(main, "V");
+      if (fn) return [`${name} ${node("p")} ${node("n")} ${fn.text}${ac}`];
+      return [`${name} ${node("p")} ${node("n")} DC ${numberFromText(component, main, "V")}${ac}`];
     }
     case "isource": {
       // SPICE convention: I N+ N- value → current flows from N+ toward N- through the
@@ -118,9 +122,11 @@ function componentLines(entry: ExtractedComponent, index: number, userModels: Se
       // with the convention that positive I raises V(p) — consistent with the TS MNA solver.
       // Emit as "I name n p value" so that ngspice's N+ = n (sink) and N- = p (source),
       // making V(p) rise for positive current just as the TS solver predicts.
-      const fn = parseSourceFunction(component.value, "A");
-      if (fn) return [`${name} ${node("n")} ${node("p")} ${fn.text}`];
-      return [`${name} ${node("n")} ${node("p")} DC ${numberValue(component, "A")}`];
+      const main = stripAcSpec(component.value);
+      const ac = acSpecDeckText(component.value);
+      const fn = parseSourceFunction(main, "A");
+      if (fn) return [`${name} ${node("n")} ${node("p")} ${fn.text}${ac}`];
+      return [`${name} ${node("n")} ${node("p")} DC ${numberFromText(component, main, "A")}${ac}`];
     }
     case "vac": {
       const signal = sourceSignal(component, "V");
@@ -294,6 +300,20 @@ function requiredNode(entry: ExtractedComponent, pin: string): string {
 
 function numberValue(component: SchematicComponent, unit: string): string {
   return parsedNumber(component, unit).toString();
+}
+
+/** Parse a DC level from already-extracted text (the value minus its AC spec),
+ *  keeping the component-aware error message. Empty text → DC 0. */
+function numberFromText(component: SchematicComponent, text: string, unit: string): string {
+  const trimmed = text.trim();
+  if (trimmed === "") return "0";
+  try {
+    const value = parseQuantity(trimmed, unit);
+    if (!Number.isFinite(value)) throw new Error("not finite");
+    return value.toString();
+  } catch {
+    throw new Error(`${component.label || component.kind} needs a valid ${unit} value.`);
+  }
 }
 
 function parsedNumber(component: SchematicComponent, unit: string): number {

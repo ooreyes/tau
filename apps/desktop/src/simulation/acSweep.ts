@@ -17,6 +17,7 @@ import { extractCircuit, type ExtractedCircuit } from "../schematic/netlist";
 import { parseQuantity } from "./quantity";
 import { resolveComponentValues, EMPTY_SCOPE, type ParamScope } from "./paramScope";
 import { linearBSourceModel, resolveBehavioralTerms, type LinearBehavioral } from "./behavioral";
+import { parseAcSpec } from "../engine/acSpec";
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -209,6 +210,15 @@ function acAmplitude(value: string, unit: "V" | "A"): number {
   return parseQuantity(tokens[1], unit);
 }
 
+/** Complex AC phasor from a source value's `AC <mag> [phase]` spec.
+ *  Returns 0+0j when the value has no AC stimulus (DC source → short/open). */
+function acPhasor(value: string): { re: number; im: number } {
+  const ac = parseAcSpec(value);
+  if (!ac) return { re: 0, im: 0 };
+  const rad = (ac.phase * Math.PI) / 180;
+  return { re: ac.mag * Math.cos(rad), im: ac.mag * Math.sin(rad) };
+}
+
 function nodeIdx(net: string | undefined, index: Map<string, number>): number {
   if (!net || net === "0") return -1;
   return index.get(net) ?? -1;
@@ -282,7 +292,12 @@ export function runAcSweep(
       );
     }
 
-    const hasAcSource = components.some((c) => c.kind === "vac" || c.kind === "iac");
+    const hasAcSource = components.some(
+      (c) =>
+        c.kind === "vac" ||
+        c.kind === "iac" ||
+        ((c.kind === "vsource" || c.kind === "isource") && parseAcSpec(c.value) !== null),
+    );
     if (!hasAcSource) {
       return fail(
         "No AC source found. Add a vac or iac component to excite the circuit for AC analysis.",
@@ -410,7 +425,9 @@ export function runAcSweep(
           }
 
           case "vsource": {
-            // DC voltage source → short circuit in AC analysis (0 V)
+            // A plain DC voltage source is a short (0 V) at AC; but LTspice lets
+            // any V source carry an `AC <mag> [phase]` stimulus (imported onto the
+            // value via SYMATTR Value2). When present, drive it as that phasor.
             const sIdx =
               voltageSourceOffset +
               voltageSources.findIndex((v) => v.component.id === component.id);
@@ -419,7 +436,7 @@ export function runAcSweep(
               nodeIdx(pins["p"], nodeIndex),
               nodeIdx(pins["n"], nodeIndex),
               sIdx,
-              { re: 0, im: 0 },
+              acPhasor(component.value),
             );
             break;
           }
@@ -440,9 +457,18 @@ export function runAcSweep(
             break;
           }
 
-          case "isource":
-            // DC current source → open circuit in AC analysis (0 A)
+          case "isource": {
+            // DC current source → open (0 A) at AC, unless it carries an
+            // `AC <mag> [phase]` stimulus (imported onto the value via Value2).
+            const phasor = acPhasor(component.value);
+            if (phasor.re !== 0 || phasor.im !== 0) {
+              const p = nodeIdx(pins["p"], nodeIndex);
+              const n = nodeIdx(pins["n"], nodeIndex);
+              if (p >= 0) rhs[p] = { re: rhs[p].re + phasor.re, im: rhs[p].im + phasor.im };
+              if (n >= 0) rhs[n] = { re: rhs[n].re - phasor.re, im: rhs[n].im - phasor.im };
+            }
             break;
+          }
 
           case "iac": {
             // AC current source: amplitude∠0° injected from n→p (p is positive terminal)

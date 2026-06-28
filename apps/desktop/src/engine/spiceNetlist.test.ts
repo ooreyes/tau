@@ -37,6 +37,32 @@ describe("buildSpiceDeck", () => {
     expect(deck.netlist).toContain(".options gmin=1e-12 reltol=1e-4 abstol=1e-12 vntol=1e-7");
   });
 
+  it("emits the AC stimulus on an imported V source (SINE + AC spec)", () => {
+    // LTspice Draft1: SYMATTR Value SINE(0 1 1) + SYMATTR Value2 AC 1 → one value.
+    const components = [
+      component("vsource", "V1", "SINE(0 1 1) AC 1", 0, 32),
+      component("resistor", "R1", "1k", 96, 0),
+      component("ground", "", "", 0, 64),
+      component("ground", "", "", 128, 0),
+    ];
+    const wires = [wire("w1", [{ x: 0, y: 0 }, { x: 64, y: 0 }])];
+    const deck = buildSpiceDeck({ components, wires }, { kind: "ac", startHz: 1, stopHz: 1e6, pointsPerDecade: 10 });
+    // The SIN(...) transient form survives and the AC magnitude is appended.
+    expect(deck.netlist).toMatch(/V1 n001 0 DC 0 SIN\(0 1 1\) AC 1/);
+  });
+
+  it("emits the AC stimulus on a plain DC V source with an AC spec", () => {
+    const components = [
+      component("vsource", "V1", "5 AC 2", 0, 32),
+      component("resistor", "R1", "1k", 96, 0),
+      component("ground", "", "", 0, 64),
+      component("ground", "", "", 128, 0),
+    ];
+    const wires = [wire("w1", [{ x: 0, y: 0 }, { x: 64, y: 0 }])];
+    const deck = buildSpiceDeck({ components, wires }, { kind: "op" });
+    expect(deck.netlist).toContain("V1 n001 0 DC 5 AC 2");
+  });
+
   it("lets a document's .options directive override the default deck options", () => {
     const components = [
       component("vsource", "V1", "5", 0, 32),

@@ -3,6 +3,7 @@ import { extractCircuit, type ExtractedCircuit, type ExtractedComponent } from "
 import { formatEngineering, parseQuantity } from "./quantity";
 import { resolveComponentValues, EMPTY_SCOPE, type ParamScope } from "./paramScope";
 import { linearBSourceModel, resolveBehavioralTerms, type BehavioralTerm, type LinearBehavioral } from "./behavioral";
+import { stripAcSpec } from "../engine/acSpec";
 
 export interface AnalysisOptions {
   stopTime: number;
@@ -218,7 +219,7 @@ export function runTransientAnalysis(
           }
           case "vsource": {
             const sourceIndex = voltageSourceOffset + voltageSources.findIndex((source) => source.component.id === entry.component.id);
-            stampVoltageSource(matrix, rhs, netIndex(entry.pins.p, nodeIndex), netIndex(entry.pins.n, nodeIndex), sourceIndex, parseQuantity(entry.component.value, "V"));
+            stampVoltageSource(matrix, rhs, netIndex(entry.pins.p, nodeIndex), netIndex(entry.pins.n, nodeIndex), sourceIndex, parseQuantity(stripAcSpec(entry.component.value), "V"));
             break;
           }
           case "vac": {
@@ -229,7 +230,7 @@ export function runTransientAnalysis(
           case "isource":
             // SPICE convention: positive value → current exits p into the external circuit.
             // Stamp from n to p so that rhs[p] += I (current injected into p).
-            stampCurrent(rhs, netIndex(entry.pins.n, nodeIndex), netIndex(entry.pins.p, nodeIndex), parseQuantity(entry.component.value, "A"));
+            stampCurrent(rhs, netIndex(entry.pins.n, nodeIndex), netIndex(entry.pins.p, nodeIndex), parseQuantity(stripAcSpec(entry.component.value), "A"));
             break;
           case "iac":
             // Same polarity convention as isource.
@@ -387,7 +388,7 @@ export function runTransientAnalysis(
           }
           case "isource": {
             let a = 0;
-            try { a = parseQuantity(entry.component.value, "A"); } catch { a = 0; }
+            try { a = parseQuantity(stripAcSpec(entry.component.value), "A"); } catch { a = 0; }
             pushCurrent(id, ref, a);
             break;
           }
