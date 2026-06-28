@@ -1,5 +1,37 @@
 # Tau Autobuilder — Progress Log
 
+## 2026-06-28T06:38Z — auto/ltspice-parity — .four Fourier analysis (§4)
+
+### What I did
+- Added **`.four` Fourier analysis** (§4 missing analysis), engine layer.
+  `simulation/fourier.ts`: `parseFourDirective` (freq + optional bare-integer
+  `[Nharmonics] [Nperiods]` + output list; leading `.`/`!` tolerated; SI freq),
+  `computeFourier` (DC + fundamental + harmonics over the **last period** via
+  direct trapezoidal integration of `a_k`/`b_k` — no resample error — with
+  per-harmonic magnitude/phase/normalized + THD; guards an ill-defined fundamental
+  so pure DC reads 0% THD), and `runFourier` (resolves `V(node)`/bare/`I(ref)`
+  against the transient `MeasWaveform`). Wired into `analysesFromDirectives` so an
+  imported `.asc`'s `.four` is discovered.
+
+### Files touched
+- src/simulation/fourier.ts (new), src/simulation/fourier.test.ts (new, 14)
+- src/io/directiveAnalysis.ts (four discovery), directiveAnalysis.test.ts (+1)
+- FEATURE_PARITY.md (§4 .four 🟡)
+
+### Tests
+572 passing (was 557; +15 new). Typecheck clean. Coefficients hand-verified
+(pure sine A=1 phase 90°, fundamental+½·2nd-harmonic → THD 50%).
+
+### FEATURE_PARITY items updated
+- §4 **`.four` Fourier analysis** ⬜ → 🟡 (engine landed; UI tab + native path next).
+
+### UX issues found
+- No FOUR results tab in the SimulationPanel yet (engine-only this session).
+
+### Next step
+Wire a FOUR tab/table into `SimulationPanel` (mirror MeasTable), or §4 `.temp`
+sweep, or §3 coupled-inductor `K` / comparators (A devices for class-d_starter).
+
 ## 2026-06-28T06:32Z — auto/ltspice-parity — Copy/paste + duplicate (Ctrl+C/V/D) (§2)
 
 ### What I did
