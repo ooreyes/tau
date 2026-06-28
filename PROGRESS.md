@@ -1,5 +1,43 @@
 # Tau Autobuilder — Progress Log
 
+## 2026-06-28T07:04Z — auto/ltspice-parity — .model/.lib/.inc/.subckt passthrough + model-name mapping (§3)
+
+### What I did
+- **Model/library directive passthrough** (`engine/modelDirectives.ts`):
+  `modelLibLinesFromDirectives` pulls a document's `.model`/`.lib`/`.inc`
+  (→`.include`)/`.subckt`…`.ends` directives out of the imported TEXT directives,
+  expands LTspice multi-line blocks on the literal `\n` escape, normalizes the
+  opening keyword (leading dot, `.inc`→`.include`), and skips analysis/param/
+  option directives. `buildSpiceDeck` now emits these so an imported `.asc`
+  simulates against its real device models, not just Tau's generic `TAU_*`.
+  Live-verified in ngspice 17 (`.model MyDiode D(...)` picked up).
+- **Model-name mapping**: `definedModelNames` collects the document's
+  `.model`/`.subckt` names; the deck builder emits a semiconductor's own
+  `SYMATTR Value` model name on its device line *when that model is defined*
+  (else the generic `TAU_*`) — strictly improving, never an undefined-model error.
+
+### Files touched
+- src/engine/modelDirectives.ts (new), src/engine/modelDirectives.test.ts (new, 14 tests)
+- src/engine/spiceNetlist.ts (emit model/lib lines; deviceModel() per semiconductor)
+- src/engine/spiceNetlist.test.ts (+3 deck-integration tests)
+- FEATURE_PARITY.md (§3 model/library import ⬜ → 🟡)
+
+### Tests
+605 passing (was 588; +17 new). Typecheck clean. ngspice CLI confirmed model pickup.
+
+### FEATURE_PARITY items updated
+- §3 **Model/library import** ⬜ → 🟡 (passthrough + model-name mapping; lib/inc
+  file-path resolution + TS-solver model parsing remain).
+
+### UX issues found
+- None (no UI surface changed; deck-only plumbing).
+
+### Next step
+Resolve `.lib`/`.inc` *file paths* — read the referenced model file and inline its
+`.model`/`.subckt` blocks into the deck (or hand the path to ngspice's search
+path) so circuits referencing LTspice's shipped libraries simulate. Then bring
+model parsing to the browser TS solver.
+
 ## 2026-06-28T06:53Z — auto/ltspice-parity — .ic/.nodeset passthrough + uic (§4)
 
 ### What I did
