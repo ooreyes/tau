@@ -1,5 +1,51 @@
 # Tau Autobuilder — Progress Log
 
+## 2026-06-28T12:55Z — auto/ltspice-parity — real-.asc import robustness (§1/§5/§7)
+
+### What I did
+- Wrote a throwaway smoke test importing all 82 real acceptance `.asc` files and
+  building an `.op` deck. Baseline: 82 import, **43 build a deck**. Used the
+  failures to drive fixes; deck-build success rose to **58/82** (then more).
+- **`.param` multi-line/comment** (`paramScope.ts` `expandDirectiveLines`):
+  LTspice packs a whole param block into one TEXT entry with literal `\n` joins
+  and inline `;` comments (e.g. Cohn.asc). `buildParamScope` now splits on `\n`
+  and strips `;` before parsing — unblocked Cohn/100W/IdealTransformer/Linkwitz/
+  MonteCarlo/Draft8/Draft10 and more.
+- **Trailing/leading decimal point** (`quantity.ts`): `parseQuantity` rejected
+  `10.` (LTspice style) — required a digit after the dot. Regex now accepts
+  `10.`, `.5`, `2.k`. Unblocked Clapp/Hartly/Pierce/colpits/curvetrace/…
+- **Empty source sentinel** (`ascImport.ts`): LTspice writes a 0 V source as
+  `Value ""`; `componentValueFromAttrs` normalizes `""`/`''` to empty so the
+  source emits `DC 0` (+ any AC spec). Unblocked GFT/S-param/MeasureBW/NoiseFigure.
+- **Negative resistance** (`spiceNetlist.ts`): SPICE allows a negative (active)
+  resistor (Draft7 `-1k`); resistors now use `nonZeroNumberValue` (reject only
+  zero), C/L stay strictly positive. Removed the now-unused `positiveNumberValue`.
+
+### Files touched
+- src/simulation/paramScope.ts (+expandDirectiveLines), paramScope.test.ts (+1)
+- src/simulation/quantity.ts (regex), quantity.test.ts (+2)
+- src/io/ascImport.ts (empty sentinel), ascImport.test.ts (+1)
+- src/engine/spiceNetlist.ts (nonZeroNumberValue; drop positiveNumberValue),
+  spiceNetlist.test.ts (+2), spiceDeck.test.ts (message update)
+- FEATURE_PARITY.md (§5 .param multi-line, §7 negative R)
+
+### Tests
+651 passing (was 645; +6 net). Typecheck clean.
+
+### FEATURE_PARITY items updated
+- §5 `.param`: multi-line `\n` block + `;` comment handling.
+- §7: negative (active) resistance allowed.
+
+### UX issues found
+- None (import/deck plumbing).
+
+### Next step
+Remaining real-.asc deck blockers (lower priority — most run via their own
+`.step`/`.ac` machinery): `.step param`-only `{x}` refs (seed base scope with
+first step value — watch the paramStep↔paramScope import cycle), VCVS/VCCS `E/G`
+value format (PLL/HalfSlope), `mc()` Monte-Carlo function, hierarchical/IOPIN
+sheets (Draft4/5). Or: `.lib`/`.inc` file-path resolution for deadtime.asc.
+
 ## 2026-06-28T12:41Z — auto/ltspice-parity — C/L per-instance IC= initial condition (§3/§4)
 
 ### What I did
