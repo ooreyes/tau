@@ -343,6 +343,18 @@ const FUNCS: Record<string, Fn> = {
   u: ([x]) => bool(x > 0),
   buf: ([x]) => bool(x > 0.5),
   inv: ([x]) => bool(!(x > 0.5)),
+
+  // LTspice statistical / Monte-Carlo functions. Tau runs a single deterministic
+  // analysis, so these evaluate to their *nominal* (mean) value — the value
+  // LTspice's nominal run uses before any `.step`-driven randomization. This lets
+  // circuits that pepper component values with `mc()`/`gauss()`/`flat()` build and
+  // simulate at nominal instead of failing on an unknown function (MonteCarlo.asc).
+  mc: ([x]) => x, // mc(x,tol): uniform in x·[1−tol,1+tol]; nominal = x
+  gauss: () => 0, // gauss(sigma): Gaussian, mean 0
+  flat: () => 0, // flat(x): uniform in [−x,x], mean 0
+  rand: () => 0.5, // rand(n): pseudo-random in [0,1); mean 0.5
+  random: () => 0.5, // random(x): smooth pseudo-random in [0,1); mean 0.5
+  white: () => 0, // white(x): band-limited white noise, mean 0
 };
 
 /** table(x, x1,y1, x2,y2, ...) — piecewise-linear lookup, clamped at the ends. */

@@ -141,6 +141,21 @@ describe("evaluateExpression — functions", () => {
   it("throws on unknown function", () => {
     expect(() => ev("bogus(1)")).toThrow();
   });
+
+  it("evaluates LTspice statistical functions at their nominal (mean) value", () => {
+    // Tau runs a single deterministic analysis: mc(x,tol) → x, gauss/flat → 0,
+    // rand/random → 0.5. This unblocks MonteCarlo.asc and any value built with
+    // these instead of throwing on an unknown function.
+    expect(ev("mc(100, .1)")).toBe(100);
+    expect(ev("mc(4.7k, 0.05)")).toBe(4700);
+    expect(ev("gauss(0.3)")).toBe(0);
+    expect(ev("flat(2)")).toBe(0);
+    expect(ev("rand(7)")).toBe(0.5);
+    expect(ev("random(1)")).toBe(0.5);
+    expect(ev("white(1)")).toBe(0);
+    // Usable inside a larger expression, as real circuits write it.
+    expect(ev("10k*(1+mc(0,.01))")).toBe(10000);
+  });
 });
 
 describe("evaluateExpression — comparisons, logic, ternary", () => {
