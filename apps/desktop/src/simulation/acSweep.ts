@@ -16,6 +16,7 @@ import type { ComponentKind, NetLabel, SchematicComponent, SchematicWire } from 
 import { extractCircuit, type ExtractedCircuit } from "../schematic/netlist";
 import { parseQuantity } from "./quantity";
 import { resolveComponentValues, EMPTY_SCOPE, type ParamScope } from "./paramScope";
+import { linearBSourceModel, resolveBehavioralTerms, type LinearBehavioral } from "./behavioral";
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -188,6 +189,7 @@ const AC_SUPPORTED = new Set<ComponentKind>([
   "vccs",
   "cccs",
   "ccvs",
+  "bsource",
   "switch",
   "testpoint",
   "ground",
@@ -307,6 +309,17 @@ export function runAcSweep(
     const vcvss = circuit.components.filter(({ component }) => component.kind === "vcvs");
     const cccss = circuit.components.filter(({ component }) => component.kind === "cccs");
     const ccvss = circuit.components.filter(({ component }) => component.kind === "ccvs");
+    // Behavioral sources: only the small-signal Σ coeff·V(node) coupling matters
+    // at AC (the constant DC bias drops, like an independent source → 0).
+    const paramScope = schematic.params ?? EMPTY_SCOPE;
+    const bModels = new Map<string, LinearBehavioral>();
+    for (const e of circuit.components) {
+      if (e.component.kind !== "bsource") continue;
+      bModels.set(e.component.id, linearBSourceModel(e.component.label, e.component.value, paramScope.scope, paramScope.funcs));
+    }
+    const vBsources = circuit.components.filter(({ component }) => component.kind === "bsource" && bModels.get(component.id)?.type === "V");
+    const netByName = new Map<string, number>();
+    nonGroundNets.forEach((net, idx) => netByName.set(net.id.toLowerCase(), idx));
 
     const voltageSourceOffset = nonGroundNets.length;
     const inductorOffset = voltageSourceOffset + voltageSources.length;
@@ -314,9 +327,10 @@ export function runAcSweep(
     const vcvsOffset = opampOffset + opamps.length;
     const cccsOffset = vcvsOffset + vcvss.length;
     const ccvsOffset = cccsOffset + cccss.length;
+    const bsourceOffset = ccvsOffset + ccvss.length * 2;
     const size =
       nonGroundNets.length + voltageSources.length + inductors.length + opamps.length +
-      vcvss.length + cccss.length + ccvss.length * 2;
+      vcvss.length + cccss.length + ccvss.length * 2 + vBsources.length;
 
     if (size === 0) return fail("The circuit has no unknowns to solve.", circuit);
 
@@ -552,6 +566,39 @@ export function runAcSweep(
             }
             // Constraint: V(op) − V(on) − r·I_sense = 0.
             matrix[outIdx][senseIdx] = cadd(matrix[outIdx][senseIdx], { re: -r, im: 0 });
+            break;
+          }
+
+          case "bsource": {
+            // Small-signal: V/I = Σ coeff·V(node); the constant bias drops at AC.
+            const model = bModels.get(component.id)!;
+            const p = nodeIdx(pins["p"], nodeIndex);
+            const n = nodeIdx(pins["n"], nodeIndex);
+            const terms = resolveBehavioralTerms(model, component.label, netByName);
+            if (model.type === "V") {
+              const iIdx = bsourceOffset + vBsources.findIndex((b) => b.component.id === component.id);
+              const one: Complex = { re: 1, im: 0 };
+              const negOne: Complex = { re: -1, im: 0 };
+              if (p >= 0) {
+                matrix[p][iIdx] = cadd(matrix[p][iIdx], one);
+                matrix[iIdx][p] = cadd(matrix[iIdx][p], one);
+              }
+              if (n >= 0) {
+                matrix[n][iIdx] = cadd(matrix[n][iIdx], negOne);
+                matrix[iIdx][n] = cadd(matrix[iIdx][n], negOne);
+              }
+              // Constraint: V(p) − V(n) − Σ coeff·V(node) = 0.
+              for (const { index, coeff } of terms) {
+                if (index >= 0) matrix[iIdx][index] = cadd(matrix[iIdx][index], { re: -coeff, im: 0 });
+              }
+            } else {
+              // I(p→n) = Σ coeff·V(node): a transconductance from each node.
+              for (const { index, coeff } of terms) {
+                if (index < 0) continue;
+                if (p >= 0) matrix[p][index] = cadd(matrix[p][index], { re: coeff, im: 0 });
+                if (n >= 0) matrix[n][index] = cadd(matrix[n][index], { re: -coeff, im: 0 });
+              }
+            }
             break;
           }
 

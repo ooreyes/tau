@@ -2,6 +2,7 @@ import type { ComponentKind, NetLabel, SchematicComponent, SchematicWire } from 
 import { extractCircuit, type ExtractedCircuit, type ExtractedComponent } from "../schematic/netlist";
 import { formatEngineering, parseQuantity } from "./quantity";
 import { resolveComponentValues, EMPTY_SCOPE, type ParamScope } from "./paramScope";
+import { linearBSourceModel, resolveBehavioralTerms, type BehavioralTerm, type LinearBehavioral } from "./behavioral";
 
 export interface AnalysisOptions {
   stopTime: number;
@@ -86,6 +87,7 @@ const TRANSIENT_SUPPORTED = new Set<ComponentKind>([
   "vccs",
   "cccs",
   "ccvs",
+  "bsource",
   "switch",
   "testpoint",
   "ground",
@@ -124,7 +126,7 @@ export function runTransientAnalysis(
     if (!circuit.groundNetId) {
       return fail("No reference", "Add a ground symbol so node voltages have a reference.", circuit);
     }
-    if (!components.some((component) => ["vsource", "isource", "vac", "iac"].includes(component.kind))) {
+    if (!components.some((component) => ["vsource", "isource", "vac", "iac", "bsource"].includes(component.kind))) {
       return fail("No source", "Add a voltage or current source to excite the circuit. The interim solver requires an explicit independent source.", circuit);
     }
 
@@ -134,21 +136,34 @@ export function runTransientAnalysis(
     }
 
     const nodeIndex = new Map(nonGroundNets.map((net, index) => [net.id, index]));
+    // Behavioral expressions reference nodes by (sanitized net-label) name.
+    const netByName = new Map<string, number>();
+    nonGroundNets.forEach((net, index) => netByName.set(net.id.toLowerCase(), index));
     const voltageSources = circuit.components.filter(({ component }) => component.kind === "vsource" || component.kind === "vac");
     const inductors = circuit.components.filter(({ component }) => component.kind === "inductor");
     const opamps = circuit.components.filter(({ component }) => component.kind === "opamp");
     const vcvss = circuit.components.filter(({ component }) => component.kind === "vcvs");
     const cccss = circuit.components.filter(({ component }) => component.kind === "cccs");
     const ccvss = circuit.components.filter(({ component }) => component.kind === "ccvs");
+    // Behavioral sources (B): linearize once (constant — we reject time-varying
+    // forms), V-type adds a branch unknown, I-type does not.
+    const paramScope = schematic.params ?? EMPTY_SCOPE;
+    const bModels = new Map<string, LinearBehavioral>();
+    for (const e of circuit.components) {
+      if (e.component.kind !== "bsource") continue;
+      bModels.set(e.component.id, linearBSourceModel(e.component.label, e.component.value, paramScope.scope, paramScope.funcs));
+    }
+    const vBsources = circuit.components.filter(({ component }) => component.kind === "bsource" && bModels.get(component.id)?.type === "V");
     const voltageSourceOffset = nonGroundNets.length;
     const inductorOffset = voltageSourceOffset + voltageSources.length;
     const opampOffset = inductorOffset + inductors.length;
     const vcvsOffset = opampOffset + opamps.length;
     const cccsOffset = vcvsOffset + vcvss.length;
     const ccvsOffset = cccsOffset + cccss.length;
+    const bsourceOffset = ccvsOffset + ccvss.length * 2;
     const size =
       nonGroundNets.length + voltageSources.length + inductors.length + opamps.length +
-      vcvss.length + cccss.length + ccvss.length * 2;
+      vcvss.length + cccss.length + ccvss.length * 2 + vBsources.length;
     if (size === 0) return fail("Empty matrix", "The circuit has no unknowns to solve.", circuit);
 
     const stepSize = options.stopTime / options.steps;
@@ -309,6 +324,19 @@ export function runTransientAnalysis(
               ccvsOffset + hi * 2 + 1,
               r,
             );
+            break;
+          }
+          case "bsource": {
+            const model = bModels.get(entry.component.id)!;
+            const p = netIndex(entry.pins.p, nodeIndex);
+            const n = netIndex(entry.pins.n, nodeIndex);
+            const terms = resolveBehavioralTerms(model, entry.component.label, netByName);
+            if (model.type === "V") {
+              const branchIndex = bsourceOffset + vBsources.findIndex((b) => b.component.id === entry.component.id);
+              stampLinearVSource(matrix, rhs, p, n, branchIndex, model.constant, terms);
+            } else {
+              stampLinearISource(matrix, rhs, p, n, model.constant, terms);
+            }
             break;
           }
           case "switch":
@@ -589,6 +617,22 @@ function stampVCVS(matrix: number[][], op: number, on: number, cp: number, cn: n
   }
   if (cp >= 0) matrix[branchIndex][cp] -= gain;
   if (cn >= 0) matrix[branchIndex][cn] += gain;
+}
+
+/** Linear behavioral V-source: V(p) − V(n) = constant + Σ coeff·V(node). */
+function stampLinearVSource(matrix: number[][], rhs: number[], p: number, n: number, branchIndex: number, constant: number, terms: BehavioralTerm[]) {
+  stampVoltageSource(matrix, rhs, p, n, branchIndex, constant);
+  for (const { index, coeff } of terms) {
+    if (index >= 0) matrix[branchIndex][index] -= coeff;
+  }
+}
+
+/** Linear behavioral I-source: I(p→n) = constant + Σ coeff·V(node). */
+function stampLinearISource(matrix: number[][], rhs: number[], p: number, n: number, constant: number, terms: BehavioralTerm[]) {
+  stampCurrent(rhs, p, n, constant);
+  for (const { index, coeff } of terms) {
+    stampVCCS(matrix, p, n, index, -1, coeff);
+  }
 }
 
 /** Internal zero-volt control-sense source (cp→cn); `senseIdx` = I(cp→cn). */

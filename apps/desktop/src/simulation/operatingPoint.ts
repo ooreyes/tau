@@ -18,6 +18,7 @@ import type { ComponentKind, NetLabel, SchematicComponent, SchematicWire } from 
 import { extractCircuit, type ExtractedCircuit } from "../schematic/netlist";
 import { parseQuantity } from "./quantity";
 import { resolveComponentValues, EMPTY_SCOPE, type ParamScope } from "./paramScope";
+import { linearBSourceModel, resolveBehavioralTerms, type BehavioralTerm, type LinearBehavioral } from "./behavioral";
 
 // ---------------------------------------------------------------------------
 // Result type (mirrors linearTransient's style)
@@ -69,6 +70,7 @@ const OP_SUPPORTED = new Set<ComponentKind>([
   "vccs",
   "cccs",
   "ccvs",
+  "bsource",
   "switch",
   "testpoint",
   "ground",
@@ -113,7 +115,7 @@ export function runOperatingPoint(
         circuit,
       );
     }
-    if (!components.some((c) => ["vsource", "isource", "vac", "iac"].includes(c.kind))) {
+    if (!components.some((c) => ["vsource", "isource", "vac", "iac", "bsource"].includes(c.kind))) {
       return fail("Add a voltage or current source to excite the circuit.", circuit);
     }
 
@@ -147,16 +149,36 @@ export function runOperatingPoint(
     const ccvss = circuit.components.filter(
       ({ component }) => component.kind === "ccvs",
     );
+    // Behavioral sources (B): linearize each to constant + Σ coeff·V(node).
+    // V-type behaves like a (multi-input) VCVS and adds one branch unknown;
+    // I-type is a transconductance-style stamp with no extra unknown.
+    const scope = (schematic.params ?? EMPTY_SCOPE);
+    const bModels = new Map<string, LinearBehavioral>();
+    for (const e of circuit.components) {
+      if (e.component.kind !== "bsource") continue;
+      bModels.set(
+        e.component.id,
+        linearBSourceModel(e.component.label, e.component.value, scope.scope, scope.funcs),
+      );
+    }
+    const vBsources = circuit.components.filter(
+      ({ component }) => component.kind === "bsource" && bModels.get(component.id)?.type === "V",
+    );
 
     const nodeIndex = new Map(
       nonGroundNets.map((net, idx) => [net.id, idx]),
     );
+    // Resolve a behavioral expression's node name (e.g. V(out)) to a matrix
+    // index; ground / "0" → −1. Net ids are the (sanitized) net-label names.
+    const netByName = new Map<string, number>();
+    nonGroundNets.forEach((net, idx) => netByName.set(net.id.toLowerCase(), idx));
     const voltageSourceOffset = nonGroundNets.length;
     const inductorOffset = voltageSourceOffset + voltageSources.length;
     const opampOffset = inductorOffset + inductors.length;
     const vcvsOffset = opampOffset + opamps.length;
     const cccsOffset = vcvsOffset + vcvss.length;
     const ccvsOffset = cccsOffset + cccss.length;
+    const bsourceOffset = ccvsOffset + ccvss.length * 2;
     const size =
       nonGroundNets.length +
       voltageSources.length +
@@ -164,7 +186,8 @@ export function runOperatingPoint(
       opamps.length +
       vcvss.length +
       cccss.length +
-      ccvss.length * 2;
+      ccvss.length * 2 +
+      vBsources.length;
 
     if (size === 0) {
       return fail("The circuit has no unknowns to solve.", circuit);
@@ -331,6 +354,22 @@ export function runOperatingPoint(
           break;
         }
 
+        case "bsource": {
+          const model = bModels.get(entry.component.id)!;
+          const p = nodeIdx(entry.pins["p"], nodeIndex);
+          const n = nodeIdx(entry.pins["n"], nodeIndex);
+          const terms = resolveBehavioralTerms(model, entry.component.label, netByName);
+          if (model.type === "V") {
+            const branchIndex =
+              bsourceOffset +
+              vBsources.findIndex((b) => b.component.id === entry.component.id);
+            stampLinearVSource(matrix, rhs, p, n, branchIndex, model.constant, terms);
+          } else {
+            stampLinearISource(matrix, rhs, p, n, model.constant, terms);
+          }
+          break;
+        }
+
         case "switch":
           if (entry.component.value.trim().toLowerCase().startsWith("closed")) {
             const a = nodeIdx(entry.pins["a"], nodeIndex);
@@ -489,6 +528,39 @@ function stampVCVS(
   // Constraint row: V(op) − V(on) − gain·(V(cp) − V(cn)) = 0.
   if (cp >= 0) matrix[branchIndex][cp] -= gain;
   if (cn >= 0) matrix[branchIndex][cn] += gain;
+}
+
+/** Linear behavioral V-source: V(p) − V(n) = constant + Σ coeff·V(node). Adds a
+ *  branch unknown (like a VCVS with a constant offset and multiple inputs). */
+function stampLinearVSource(
+  matrix: number[][],
+  rhs: number[],
+  p: number,
+  n: number,
+  branchIndex: number,
+  constant: number,
+  terms: BehavioralTerm[],
+) {
+  stampVoltageSource(matrix, rhs, p, n, branchIndex, constant);
+  for (const { index, coeff } of terms) {
+    if (index >= 0) matrix[branchIndex][index] -= coeff;
+  }
+}
+
+/** Linear behavioral I-source: I(p→n) = constant + Σ coeff·V(node). No extra
+ *  unknown — a constant current plus VCCS coupling terms. */
+function stampLinearISource(
+  matrix: number[][],
+  rhs: number[],
+  p: number,
+  n: number,
+  constant: number,
+  terms: BehavioralTerm[],
+) {
+  stampCurrent(rhs, p, n, constant);
+  for (const { index, coeff } of terms) {
+    stampVCCS(matrix, p, n, index, -1, coeff);
+  }
 }
 
 /**

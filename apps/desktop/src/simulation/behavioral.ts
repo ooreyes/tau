@@ -49,6 +49,28 @@ export function behavioralSpecText(value: string): string {
   return `${type}=${expr}`;
 }
 
+/**
+ * Resolve a behavioral source's value to a linear model for the TS MNA solver,
+ * or throw a clear, user-facing error when the expression is beyond the linear
+ * solver's reach (nonlinear / time-dependent / current-controlled / unknown
+ * params). The native ngspice engine handles those — this is only the
+ * browser/test path.
+ */
+export function linearBSourceModel(
+  label: string,
+  value: string,
+  scope: Scope = {},
+  funcs: Record<string, FuncDef> = {},
+): LinearBehavioral {
+  const model = linearizeBehavioral(parseBehavioral(value), scope, funcs);
+  if (!model) {
+    throw new Error(
+      `Behavioral source ${label || "B"} ("${value}") needs the native engine: its expression is nonlinear, time-dependent, current-controlled (I(...)), or uses unknown parameters. The interim linear solver handles only affine V(node) expressions.`,
+    );
+  }
+  return model;
+}
+
 /** An affine model of a behavioral source: `constant + Σ coeff·V(node)`. */
 export interface LinearBehavioral {
   type: BehavioralType;
@@ -56,6 +78,35 @@ export interface LinearBehavioral {
   constant: number;
   /** node name (lowercased) → coefficient on `V(node)`. */
   coeffs: Map<string, number>;
+}
+
+/** A controlling term `coeff·V(node)` of a linearized behavioral source, with
+ *  the node resolved to an MNA matrix index (ground → −1, already dropped). */
+export interface BehavioralTerm {
+  index: number;
+  coeff: number;
+}
+
+/**
+ * Map a linear behavioral model's node names to MNA matrix indices via the
+ * solver's net-name lookup. Ground (`0`/`gnd`) is dropped (V = 0). Throws a
+ * clear error when the expression references a node not present in the circuit.
+ */
+export function resolveBehavioralTerms(
+  model: LinearBehavioral,
+  label: string,
+  netByName: Map<string, number>,
+): BehavioralTerm[] {
+  const terms: BehavioralTerm[] = [];
+  for (const [name, coeff] of model.coeffs) {
+    if (name === "0" || name === "gnd") continue;
+    const index = netByName.get(name);
+    if (index === undefined) {
+      throw new Error(`Behavioral source ${label || "B"} references unknown node V(${name}).`);
+    }
+    terms.push({ index, coeff });
+  }
+  return terms;
 }
 
 // Match V(node) and V(a,b). Group 1 = first node, group 2 = optional second.
