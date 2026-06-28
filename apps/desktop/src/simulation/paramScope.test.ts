@@ -49,6 +49,14 @@ describe("buildParamScope", () => {
     expect(scope.rload).toBe(1000);
   });
 
+  it("accepts the plural `.params` keyword (notch/passive/varactor)", () => {
+    const { scope } = buildParamScope([".params R=10K C=.1u", ".params w=.0005 x=.005"]);
+    expect(scope.r).toBe(10000);
+    expect(scope.c).toBeCloseTo(0.1e-6, 12);
+    expect(scope.w).toBe(0.0005);
+    expect(scope.x).toBe(0.005);
+  });
+
   it("expands a multi-line `\\n` directive block and strips `;` comments (Cohn.asc)", () => {
     // LTspice packs the whole block into one TEXT entry with literal `\n` joins
     // and an inline `;` comment after the first assignment.

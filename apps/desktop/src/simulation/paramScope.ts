@@ -112,7 +112,8 @@ export function buildParamScope(directives: string[]): ParamScope {
       if (parsed) funcs[parsed.name.toLowerCase()] = parsed.def;
       continue;
     }
-    const paramBody = stripKeyword(raw, "param");
+    // LTspice accepts both `.param` and the plural `.params` for definitions.
+    const paramBody = stripKeyword(raw, "params") ?? stripKeyword(raw, "param");
     if (paramBody !== null) {
       for (const a of parseParamAssignments(paramBody)) {
         assignments.push({ name: a.name, expr: stripBraces(a.expr) });
