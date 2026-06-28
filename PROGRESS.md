@@ -1,5 +1,37 @@
 # Tau Autobuilder — Progress Log
 
+## 2026-06-28T06:32Z — auto/ltspice-parity — Copy/paste + duplicate (Ctrl+C/V/D) (§2)
+
+### What I did
+- Added **copy / paste / duplicate** for the single selection (§2). Store gains an
+  ephemeral `clipboard: SchematicComponent | null`, `copySelected`, `paste`,
+  `duplicateSelected`, and a `placeClone` helper that produces a clone with a fresh
+  id, the next ref-des for its kind, and a 2-grid diagonal offset. **`pinOverride`
+  positions are offset by the same delta** so imported, pin-accurate parts stay
+  connected the same way after a copy. Paste/duplicate are undoable and select the
+  new copy. Bound Ctrl/Cmd+C / +V / +D in `App.tsx`; StatusBar hint adds ⌘D.
+
+### Files touched
+- src/store/useSchematic.ts (clipboard + placeClone + 3 actions)
+- src/App.tsx (Ctrl+C/V/D), src/components/StatusBar.tsx (hint)
+- src/store/useSchematic.test.ts (+4)
+- FEATURE_PARITY.md (§2 copy/paste 🟡; §8 keyboard line)
+
+### Tests
+557 passing (was 553; +4 new). Typecheck clean.
+
+### FEATURE_PARITY items updated
+- §2 **Copy/paste, duplicate** ⬜ → 🟡 (single selection; multi-select still ⬜).
+- §8 keyboard parity note extended (Ctrl+C/V/D).
+
+### UX issues found
+- Multi-select / drag-box / group move still absent — copy acts on one part only.
+
+### Next step
+§2 **multi-select + drag-box select** (bigger Canvas-interaction change), or §3
+coupled-inductor `K` / comparators (A devices for class-d_starter.asc), or §4
+`.four`/`.temp`.
+
 ## 2026-06-28T06:30Z — auto/ltspice-parity — Mirror/flip components (Ctrl+E) (§2)
 
 ### What I did
