@@ -1,5 +1,35 @@
 # Tau Autobuilder — Progress Log
 
+## 2026-06-28T06:42Z — auto/ltspice-parity — Fourier results table UI (§4/§6)
+
+### What I did
+- Surfaced `.four` results in the UI: `App.tsx` memoizes `runFourier` off the
+  transient `analysis` + the document's `.four` directive; a new `FourierTable`
+  under the transient scope (`SimulationPanel.tsx`) shows, per output, the THD
+  header and DC/fundamental/harmonic magnitudes (each ≥1 normalized to the
+  fundamental). Reuses the existing `.meas` table styling — no new CSS. `.four`
+  flipped ⬜→🟡→✅ (TS solver + UI; native path the remaining NEXT).
+
+### Files touched
+- src/App.tsx (fourier memo + prop), src/components/SimulationPanel.tsx
+  (prop + FourierTable component + render under transient MeasTable)
+- FEATURE_PARITY.md (§4 .four ✅)
+
+### Tests
+572 passing (unchanged; UI is presentational, logic covered by fourier.test.ts).
+Typecheck clean.
+
+### FEATURE_PARITY items updated
+- §4 **`.four` Fourier analysis** 🟡 → ✅.
+
+### UX issues found
+- Visual QA still headless-blocked (§8) — FourierTable not screenshot-verified,
+  but it reuses the verified meas-table layout.
+
+### Next step
+§3 coupled-inductor `K` / comparators (A devices for class-d_starter.asc), or §4
+`.temp`, or §6 probe-in-place / expression plots.
+
 ## 2026-06-28T06:38Z — auto/ltspice-parity — .four Fourier analysis (§4)
 
 ### What I did
