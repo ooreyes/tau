@@ -378,4 +378,11 @@ describe("componentValueFromAttrs", () => {
     expect(componentValueFromAttrs("capacitor", { Value: "1u", Value2: "Rser=0.1 IC=2" })).toBe("1u IC=2");
     expect(componentValueFromAttrs("capacitor", { Value: "1u", SpiceLine: "Rser=0.1" })).toBe("1u");
   });
+
+  it("normalizes LTspice's empty source sentinel `\"\"` to empty (GFT/S-param)", () => {
+    // A source written `Value ""` is a 0 V source, often AC-only via Value2.
+    expect(componentValueFromAttrs("vsource", { Value: '""' })).toBe("");
+    expect(componentValueFromAttrs("vsource", { Value: '""', Value2: "AC 2" })).toBe("AC 2");
+    expect(componentValueFromAttrs("isource", { Value: "''" })).toBe("");
+  });
 });

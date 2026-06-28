@@ -38,6 +38,17 @@ describe("parseQuantity", () => {
     expect(parseQuantity("5")).toBe(5);
   });
 
+  it('parses an LTspice trailing-decimal-point value "10." as 10', () => {
+    expect(parseQuantity("10.")).toBe(10);
+    expect(parseQuantity("10.", "V")).toBe(10);
+    expect(parseQuantity("2.k")).toBe(2000); // 2. + k suffix
+  });
+
+  it('parses a leading-decimal-point value ".5" as 0.5', () => {
+    expect(parseQuantity(".5")).toBe(0.5);
+    expect(parseQuantity(".5m")).toBeCloseTo(5e-4, 20);
+  });
+
   it('parses "1µ" as 1e-6', () => {
     expect(parseQuantity("1µ")).toBeCloseTo(1e-6, 20);
   });

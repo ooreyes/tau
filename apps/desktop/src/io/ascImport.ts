@@ -461,7 +461,10 @@ export function componentValueFromAttrs(
   kind: ComponentKind,
   attrs: Record<string, string>,
 ): string {
-  const base = (attrs.Value ?? "").trim();
+  // LTspice writes an empty source value as the quoted sentinel `""` (a 0 V/0 A
+  // source, typically excited only by its AC spec). Normalize it to empty.
+  const rawBase = (attrs.Value ?? "").trim();
+  const base = /^["']*$/.test(rawBase) ? "" : rawBase;
   if (SOURCE_KINDS_WITH_INLINE_SPEC.has(kind)) {
     const extras = [attrs.Value2, attrs.SpiceLine]
       .map((s) => s?.trim())

@@ -81,11 +81,30 @@ function stripBraces(s: string): string {
  * a leading `.`). Unrecognized directives are ignored. Throws if a `.param`
  * references an undefined name or forms a dependency cycle.
  */
+/**
+ * Expand directive strings into individual physical lines: LTspice packs a
+ * whole multi-line directive block into one `TEXT` entry using a literal `\n`
+ * escape (e.g. `.param x=.54 ; pos\n.param R=50\n.param L=2.95u …`), and lines
+ * may carry a trailing `;` comment. Split on the `\n` escape, drop the comment,
+ * and trim, so each `.param`/`.func` line parses cleanly.
+ */
+export function expandDirectiveLines(directives: string[]): string[] {
+  const out: string[] = [];
+  for (const raw of directives) {
+    for (const physical of raw.replace(/\\n/g, "\n").split("\n")) {
+      const semi = physical.indexOf(";");
+      const line = (semi >= 0 ? physical.slice(0, semi) : physical).trim();
+      if (line) out.push(line);
+    }
+  }
+  return out;
+}
+
 export function buildParamScope(directives: string[]): ParamScope {
   const funcs: Record<string, FuncDef> = {};
   const assignments: Array<{ name: string; expr: string }> = [];
 
-  for (const raw of directives) {
+  for (const raw of expandDirectiveLines(directives)) {
     const funcBody = stripKeyword(raw, "func");
     if (funcBody !== null) {
       const parsed = parseFuncDirective(funcBody);

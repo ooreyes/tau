@@ -49,6 +49,20 @@ describe("buildParamScope", () => {
     expect(scope.rload).toBe(1000);
   });
 
+  it("expands a multi-line `\\n` directive block and strips `;` comments (Cohn.asc)", () => {
+    // LTspice packs the whole block into one TEXT entry with literal `\n` joins
+    // and an inline `;` comment after the first assignment.
+    const { scope } = buildParamScope([
+      ".param x=.54 ; trimer postion\\n.param R=50\\n.param L=2.95u Lm=.27u C1=22p+x*25p C2=240p C3=34p",
+    ]);
+    expect(scope.x).toBeCloseTo(0.54, 10);
+    expect(scope.r).toBe(50);
+    expect(scope.l).toBeCloseTo(2.95e-6, 18);
+    // C1 = 22p + x*25p = 22p + .54*25p = 35.5p
+    expect(scope.c1).toBeCloseTo(35.5e-12, 18);
+    expect(scope.c3).toBeCloseTo(34e-12, 18);
+  });
+
   it("resolves params that depend on earlier params", () => {
     const { scope } = buildParamScope([".param a=2", ".param b={a*3}"]);
     expect(scope.b).toBe(6);

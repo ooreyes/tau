@@ -366,7 +366,9 @@ zener, opamp, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**, **B (behav
 ## 5. Expressions & parameters
 - ✅ `.param` parameter definitions — used 180× (critical) — `buildParamScope`
   (multi-assignment lines, inter-param refs in any order via fixpoint,
-  cycle/undefined detection) + `resolveComponentValues` threaded into **all four
+  cycle/undefined detection; **now expands LTspice multi-line `\n` TEXT blocks
+  and strips inline `;` comments** via `expandDirectiveLines` — real circuits
+  pack a whole param block into one TEXT entry, e.g. Cohn.asc) + `resolveComponentValues` threaded into **all four
   solve paths** (`linearTransient`/`operatingPoint`/`acSweep`/`spiceNetlist`).
   End-to-end proof in `paramIntegration.test.ts`: a `{Vsrc}/{Rtop}/{Rbot}`
   divider solves to the hand-computed 9 V. **§1(d-param) done:** `directives` now

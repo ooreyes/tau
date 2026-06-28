@@ -23,7 +23,9 @@ export function parseQuantity(input: string, fallbackUnit = ""): number {
     .replace(/ohms?|Ω/gi, "")
     .replace(new RegExp(`${fallbackUnit}$`, "i"), "")
     .trim();
-  const match = normalized.match(/^([-+]?\d*\.?\d+(?:e[-+]?\d+)?)([a-zA-Zµ]*)$/);
+  // Accept an LTspice-style trailing decimal point ("10." = 10) as well as a
+  // leading one (".5"): the integer/fraction parts are independently optional.
+  const match = normalized.match(/^([-+]?(?:\d+\.?\d*|\.\d+)(?:e[-+]?\d+)?)([a-zA-Zµ]*)$/i);
   if (!match) throw new Error(`Could not parse value "${input}".`);
 
   const value = Number(match[1]);
