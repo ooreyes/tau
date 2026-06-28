@@ -45,6 +45,16 @@ Status legend: ✅ done · 🟡 partial · ⬜ not started
 ---
 
 ## 1. File I/O & interoperability  ← **highest leverage for the key goal**
+- 🟡 **Real-`.asc` op-deck build now 75/82** (was 34/82 at this session's start):
+  `decodeSchematicText` falls back to **Windows-1252** when the bytes aren't valid
+  UTF-8, so LTspice's single-byte `µ` (0xB5) decodes as the micro sign instead of
+  U+FFFD (was the biggest blocker — 32 files); `buildParamScope` accepts the
+  plural **`.params`** keyword; `stripSourceModifiers` drops `Rser=`/`Cpar=`/
+  `wavefile=` instance-param tokens ngspice rejects on independent sources; and
+  the expression engine resolves LTspice **statistical functions** (`mc`/`gauss`/
+  `flat`/`rand`/`random`/`white`) at their nominal/mean value. Remaining 7 are
+  native-only (`Laplace=` on E/G ×5, hysteretic/nonlinear inductor) or a
+  malformed WIP source. NoiseFigure.asc live-verified end-to-end in ngspice 17.
 - 🟡 **Import LTspice `.asc` schematics** — **parser + `ascToSchematic()` landed**
   (`io/ascImport.ts`). Parses `Version/SHEET/WIRE/FLAG/SYMBOL/SYMATTR/WINDOW/TEXT/
   LINE/…` losslessly; validated by parsing **4,012 real LTspice files (49,625

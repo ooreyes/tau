@@ -1,5 +1,56 @@
 # Tau Autobuilder — Progress Log
 
+## 2026-06-28T18:40Z — auto/ltspice-parity — real-.asc deck build 34→75/82 (§1/§5)
+
+### What I did
+Drove the real-acceptance op-deck build from **34/82 to 75/82** with four
+targeted, fully-tested fixes (throwaway smoke over all 82 files guided each):
+- **Windows-1252 decoding** (`io/ascImport.ts` `decodeSchematicText`): the single
+  biggest blocker. LTspice saves many single-byte `.asc` files where the micro
+  prefix is the lone high byte 0xB5 (`47µ`); decoding as UTF-8 mangled it to
+  U+FFFD so `47µ` no longer parsed. Now strict-decode UTF-8 first and fall back
+  to windows-1252 on invalid bytes → 0xB5 = µ (U+00B5). Unblocked 32 files.
+- **Plural `.params`** (`simulation/paramScope.ts`): LTspice accepts both `.param`
+  and `.params`; we only matched the singular, leaving `{6*R}` unresolved
+  (notch, passive, varactor, phaseshift2).
+- **`stripSourceModifiers`** (`engine/acSpec.ts`): ngspice rejects inline
+  instance params on independent sources (`unknown parameter (rser)`), so a value
+  of `AC 1 Rser=1K` left `Rser=1K` after the AC strip and failed as "needs a
+  valid V value". Now drop every `key=value` token before the DC level parses
+  (NoiseFigure, S-param, wavein). Transient functions carry no bare key=value.
+- **LTspice statistical functions** (`simulation/expr.ts`): `mc`/`gauss`/`flat`/
+  `rand`/`random`/`white` now resolve to their nominal/mean value (single
+  deterministic run) instead of throwing "Unknown function" (MonteCarlo.asc).
+- Verified end-to-end: built NoiseFigure.asc's op deck and ran it in **ngspice 17
+  — clean solve**. (passive.asc is singular only under `.op` because it's an LC
+  ladder = DC short; it's an `.ac` circuit, so that's expected, not a regression.)
+
+### Files touched
+- src/io/ascImport.ts (windows-1252 fallback), src/io/encoding.test.ts (+2)
+- src/simulation/paramScope.ts (.params alias), paramScope.test.ts (+1)
+- src/engine/acSpec.ts (stripSourceModifiers), acSpec.test.ts (+3)
+- src/engine/spiceNetlist.ts (apply stripSourceModifiers to V/I sources)
+- src/simulation/expr.ts (mc/gauss/flat/rand/random/white), expr.test.ts (+1)
+- FEATURE_PARITY.md (§1 deck-build 75/82 summary)
+
+### Tests
+659 passing (was 653; +6 new across 4 files). Typecheck clean. 4 commits, each
+pushed.
+
+### FEATURE_PARITY items updated
+- §1 import `.asc`: deck-build 34→75/82 (new summary bullet). §5 statistical fns.
+
+### UX issues found
+- None (no UI surface changed this run).
+
+### Next step
+Remaining 7 deck blockers are native-only: `Laplace=` transfer-function E/G
+sources (PLL/PLL2/TwoTau/Draft8/HalfSlope ×5 — needs ngspice XSPICE `s_xfer` or
+B-source mapping; untestable in the TS suite), a hysteretic/nonlinear inductor
+(NonLinearTransformer), and one malformed WIP source (P2). Either implement the
+native Laplace path (validate via `ngspice -b`), or pivot to a testable item:
+§6 probe-in-place / expression plotting, or §2 multi-select / rubber-band move.
+
 ## 2026-06-28T13:00Z — auto/ltspice-parity — seed .step param first value (§5)
 
 ### What I did
