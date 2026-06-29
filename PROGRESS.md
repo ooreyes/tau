@@ -1,5 +1,42 @@
 # Tau Autobuilder — Progress Log
 
+## 2026-06-29T13:48Z — auto/ltspice-parity — import SPICE .cir netlists into a schematic (§1)
+
+### What I did
+- New `io/cirImport.ts` `parseCir(text)` — turns a SPICE deck into Tau schematic
+  content. Connectivity is electrical via **one net label per device pin**,
+  placed at the pin's exact world coordinate so it shares the pin's DSU point key
+  in `extractCircuit` (same-named labels merge; `0`/`GND` → ground). No wire
+  routing needed; devices land on a deterministic grid.
+- Handles R/C/L, V/I, D, Q, M, E/G, B. Parses the title card, `+` continuations,
+  `;`/`$` inline comments, `.model` polarity (npn↔pnp, nmos↔pmos), and the
+  ambiguous 3-vs-4-terminal MOS/BJT node count by locating the model name in the
+  `.model` map. Ties a 3-terminal MOS bulk to its source. Warns + skips
+  X/K/F/H/T (subckt, coupling, current-controlled sources, transmission lines).
+- Wired into the Open dialog (`.cir`/`.net`/`.sp`/`.spice`), with an empty-deck
+  error message.
+
+### Files touched
+- src/io/cirImport.ts (new), src/io/cirImport.test.ts (new, 10 tests)
+- src/components/ShellPanels.tsx (Open dialog branch + accept list)
+- FEATURE_PARITY.md (§1 "import `.cir`" ⬜→✅, line now fully ✅)
+
+### Tests
+788 passing (was 778; +10 new). Typecheck clean. Validated with a throwaway test
+(removed): real `deadtime.asc` → `buildSpiceDeck` → `parseCir` re-imports all 16
+deck devices with 0 warnings, `extractCircuit` yields 10 nets with ground.
+
+### FEATURE_PARITY items updated
+- §1 "Export `.cir`/netlist to file; import `.cir`" 🟡→✅.
+
+### UX issues found
+- None new. Imported `.cir` parts render at Tau geometry on a grid (no original
+  layout exists in a netlist) — expected; connectivity is correct.
+
+### Next step
+Measurement cursors on the transient/FFT plots (§6 ⬜, delta readout between two
+clicked points), or `.raw` waveform export (§1 ⬜).
+
 ## 2026-06-29T13:36Z — auto/ltspice-parity — export Tau schematic → LTspice .asc (round-trip) (§1)
 
 ### What I did
