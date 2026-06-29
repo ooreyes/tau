@@ -1,5 +1,47 @@
 # Tau Autobuilder — Progress Log
 
+## 2026-06-28T19:09Z — auto/ltspice-parity — dedicated comparator component kind (§3)
+
+### What I did
+- Added a real `comparator` component kind so an **open-loop** comparator clamps
+  to explicit rails instead of the shared op-amp's gain-1e6 model saturating to
+  ~1e7 V (the documented class-d_starter.asc blocker, §3 finding).
+- `engine/comparatorSpec.ts`: `parseComparator` (positional `5 0 0.1` or keyed
+  `Vhigh=/Vlow=/Vhyst=` with aliases + SI suffixes, ignores stray tokens) and
+  `comparatorDeckLine` emitting an ngspice **ternary** B-source
+  `V=(V(in+)-V(in-))>0 ? vhigh : vlow`, with a self-referential `V(out)`-state
+  hysteresis form for Schmitt behavior.
+- Discovered ngspice rejects LTspice's `if()` ("no such function 'if'") outside
+  compat mode; the ternary form is what works — **live-verified both ideal
+  (clamps 5V/0V) and hysteretic (asymmetric ±0.5 switching) in ngspice 17.**
+- Wired the new kind through types, catalog (palette, empty hotkey — all letters
+  taken), pins (in+/in-/out, no supply pins), params (structured Output high/low/
+  hysteresis fields), symbols (triangle + step glyph), and the native netlist.
+  Nonlinear → stays out of the linear TS solver set (native-engine only).
+
+### Files touched
+- src/engine/comparatorSpec.ts (new), comparatorSpec.test.ts (new, 13)
+- src/engine/spiceNetlist.ts (comparator case + prefix + import)
+- src/engine/spiceDeck.test.ts (+2 deck-integration tests, +NetLabel import)
+- src/schematic/{types,pins,catalog,params,symbols.tsx} (new kind plumbing)
+- FEATURE_PARITY.md (§3 comparator ⬜ → 🟡)
+
+### Tests
+683 passing (was 668; +15). Typecheck clean. ngspice-validated decks.
+
+### FEATURE_PARITY items updated
+- §3 Comparators / logic gates ⬜ → 🟡 (comparator kind done; logic/A-devices +
+  import mapping pending).
+
+### UX issues found
+- Comparator palette entry has an empty hotkey (all 26 letters already assigned);
+  it's still placeable via the palette/command palette. UX debt: revisit hotkey
+  scheme (e.g. shifted keys or a two-key chord) when the library grows further.
+
+### Next step
+Import-map LTspice `Comparators\\*` symbols to the new comparator kind, or pick
+the next §3/§4 item (logic gates, or TS-solver mutual-inductance K stamp).
+
 ## 2026-06-28T18:55Z — auto/ltspice-parity — coupled-inductor K passthrough (§3)
 
 ### What I did
