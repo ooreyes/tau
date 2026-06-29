@@ -535,7 +535,12 @@ zener, opamp, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**, **B (behav
   tests. **NEXT:** per-trace axis/unit (power shows on a "V" axis for now);
   expression traces in the AC/step panes; cursor readout.
 - ⬜ Multiple plot panes, add/remove traces, autorange, manual axis
-- ⬜ **Measurement cursors** (1 & 2, delta readout)
+- ✅ **Measurement cursors** (1 & 2, delta readout) — `simulation/cursors.ts`
+  (`cursorReadout`/`fractionToX`, 8 unit tests) + a collapsible **Cursors** panel
+  on the transient scope (`SimulationPanel` `CursorView`). Two sliders position
+  cursors along the run; a meter row shows t1/t2/Δt/(1/Δt) and a table lists each
+  signal's value at C1, C2, and the delta. Reuses the tested `interpolateAt`
+  resampler so readings are interpolated between samples.
 - 🟡 **FFT of a waveform** (LTspice "View → FFT") — **landed** (`simulation/fft.ts`):
   an in-place radix-2 Cooley–Tukey FFT (`fftRadix2`), window functions
   (`rectangular`/`hann`/`hamming`/`blackman`), and `waveformSpectrum` which

@@ -28,6 +28,8 @@ import { seriesToCsv } from "../simulation/waveformCsv";
 import { runWaveformFft, dominantFrequency, spectrumThd, type WindowFn } from "../simulation/fft";
 import { buildSpiceDeck } from "../engine/spiceNetlist";
 import { serializeRaw, inferRawType } from "../io/rawExport";
+import { cursorReadout, fractionToX } from "../simulation/cursors";
+import type { CursorTraceInput } from "../simulation/cursors";
 import { buildParamScope } from "../simulation/paramScope";
 import { isNativeSpiceRuntime, MAX_NATIVE_OUTPUT_POINTS } from "../engine/nativeSpice";
 import { displaySampleIndices, waveformBounds } from "../simulation/waveform";
@@ -440,6 +442,7 @@ export function SimulationPanel({
           <MeasTable measurements={measurements} />
           <FourierTable results={fourier} />
           <FftView result={result} />
+          <CursorView result={result} extraTraces={exprTraces} />
 
           <div className="plotter-controls">
             <DialControl
@@ -1124,6 +1127,105 @@ function FftView({ result }: { result: AnalysisResult | null }) {
               tone="cream"
             />
           </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Measurement cursors (§6) — two positions along the time axis with a per-trace
+ * value + delta readout (LTspice's "1 & 2" cursors). Positions are sliders
+ * (0–100% of the run) so there is no canvas drag to get wrong; the readout comes
+ * from the unit-tested `cursorReadout`.
+ */
+function CursorView({ result, extraTraces }: { result: AnalysisResult | null; extraTraces: Trace[] }) {
+  const [open, setOpen] = useState(false);
+  const [f1, setF1] = useState(0.25);
+  const [f2, setF2] = useState(0.75);
+
+  const success = result?.ok ? result : null;
+  const signals = useMemo<CursorTraceInput[]>(() => {
+    if (!success) return [];
+    return [
+      ...success.traces.map((t) => ({ label: t.label, values: t.values })),
+      ...success.currents.map((c) => ({ label: c.label, values: c.values })),
+      ...extraTraces.map((t) => ({ label: t.label, values: t.values })),
+    ];
+  }, [success, extraTraces]);
+
+  const readout = useMemo(() => {
+    if (!open || !success || signals.length === 0) return null;
+    try {
+      const x1 = fractionToX(success.times, f1);
+      const x2 = fractionToX(success.times, f2);
+      return cursorReadout(success.times, signals, x1, x2);
+    } catch {
+      return null;
+    }
+  }, [open, success, signals, f1, f2]);
+
+  if (!success) return null;
+
+  return (
+    <div className="fft-view">
+      <button
+        className="fft-toggle"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        aria-label="Toggle measurement cursors"
+      >
+        {open ? "▾" : "▸"} Cursors
+      </button>
+      {open && (
+        <>
+          <div className="cursor-sliders">
+            <label>
+              C1
+              <input
+                type="range" min={0} max={1000} value={Math.round(f1 * 1000)}
+                aria-label="Cursor 1 position"
+                onChange={(e) => setF1(Number(e.currentTarget.value) / 1000)}
+              />
+            </label>
+            <label>
+              C2
+              <input
+                type="range" min={0} max={1000} value={Math.round(f2 * 1000)}
+                aria-label="Cursor 2 position"
+                onChange={(e) => setF2(Number(e.currentTarget.value) / 1000)}
+              />
+            </label>
+          </div>
+          {readout && (
+            <div className="meter-row analysis-meter">
+              <Metric label="t1" value={formatEngineering(readout.x1, "s", 3)} tone="cyan" />
+              <Metric label="t2" value={formatEngineering(readout.x2, "s", 3)} tone="cyan" />
+              <Metric label="Δt" value={formatEngineering(readout.dx, "s", 3)} tone="green" />
+              <Metric
+                label="1/Δt"
+                value={Number.isFinite(readout.inverseDx) ? formatEngineering(readout.inverseDx, "Hz", 3) : "--"}
+                tone="cream"
+              />
+            </div>
+          )}
+          {readout && (
+            <table className="cursor-table">
+              <thead>
+                <tr><th>Signal</th><th>@C1</th><th>@C2</th><th>Δ</th></tr>
+              </thead>
+              <tbody>
+                {readout.traces.map((t) => (
+                  <tr key={t.label}>
+                    <td>{t.label}</td>
+                    <td>{formatEngineering(t.y1, "V", 3)}</td>
+                    <td>{formatEngineering(t.y2, "V", 3)}</td>
+                    <td>{formatEngineering(t.dy, "V", 3)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </>
       )}
     </div>
