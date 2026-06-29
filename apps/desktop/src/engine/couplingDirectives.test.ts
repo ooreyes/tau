@@ -28,6 +28,17 @@ describe("couplingLinesFromDirectives", () => {
     ]);
   });
 
+  it("rewrites inductor references through the rename map (Electrometer)", () => {
+    // Inductors labelled T2a/T2b/T2c are renamed (an ngspice inductor must start
+    // with L); the K refs must follow. The coefficient and unknown names are kept.
+    const names = new Map([["t2a", "L14"], ["t2b", "L15"], ["t2c", "L16"]]);
+    expect(couplingLinesFromDirectives(["K2 T2a T2b T2c 1."], undefined, names)).toEqual(["K2 L14 L15 L16 1."]);
+    // Case-insensitive; tokens not in the map (already valid) pass through.
+    expect(couplingLinesFromDirectives(["K1 t2a L9 0.9"], undefined, names)).toEqual(["K1 L14 L9 0.9"]);
+    // No map → verbatim (back-compat).
+    expect(couplingLinesFromDirectives(["K2 T2a T2b 1"])).toEqual(["K2 T2a T2b 1"]);
+  });
+
   it("ignores non-coupling directives (.param/.model/.tran)", () => {
     expect(
       couplingLinesFromDirectives([".param Kcup=.08", ".model D1 D", ".tran 1m", "Kfoo La Lb 1"]),

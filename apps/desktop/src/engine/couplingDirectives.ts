@@ -14,6 +14,13 @@
  * ngspice accepts the same `Kxxx Lyyy Lzzz [Lwww …] coeff` syntax as LTspice, so
  * the line passes through verbatim once any `{expr}` coefficient is resolved.
  *
+ * One twist: a `K` line names inductors by their LTspice instance name (e.g.
+ * `K2 T2a T2b T2c 1`), but the deck builder renames an inductor whose label
+ * doesn't start with `L` (an ngspice inductor must — `T2a` would be parsed as a
+ * transmission line). The caller passes the original-label → emitted-name map so
+ * the references are rewritten to match (else ngspice: "coupling to non-existent
+ * inductor", Electrometer.asc).
+ *
  * Pure function. The coefficient may be a braced parameter expression, so the
  * caller's resolved `ParamScope` is applied via `substituteBraces`.
  */
@@ -26,13 +33,33 @@ function isCouplingLine(line: string): boolean {
 }
 
 /**
+ * Rewrite the inductor-reference tokens of a `K` line (every token except the
+ * leading `K`-name and the trailing coefficient) through the rename map, so they
+ * match the inductor names the deck actually emits. Tokens not in the map (and
+ * the coefficient) pass through unchanged.
+ */
+function rewriteCouplingNames(line: string, names: ReadonlyMap<string, string>): string {
+  if (names.size === 0) return line;
+  const toks = line.split(" ");
+  for (let i = 1; i < toks.length - 1; i += 1) {
+    const mapped = names.get(toks[i].toLowerCase());
+    if (mapped) toks[i] = mapped;
+  }
+  return toks.join(" ");
+}
+
+/**
  * Extract mutual-inductance deck lines from a document's directive list, in
  * document order, with any `{expr}` coupling coefficient resolved against the
  * param scope. Multi-line TEXT blocks are split on LTspice's `\n` escape.
+ *
+ * @param inductorNames original-label (lower-cased) → emitted deck name, used to
+ *   rewrite `K` inductor references to the renamed instances.
  */
 export function couplingLinesFromDirectives(
   directives: ReadonlyArray<string>,
   params: ParamScope = EMPTY_SCOPE,
+  inductorNames: ReadonlyMap<string, string> = new Map(),
 ): string[] {
   const out: string[] = [];
   for (const raw of directives) {
@@ -41,7 +68,8 @@ export function couplingLinesFromDirectives(
       if (!line || !isCouplingLine(line)) continue;
       // Collapse any whitespace runs (LTspice sometimes double-spaces before a
       // braced coefficient) and resolve a parameterized coefficient.
-      out.push(substituteBraces(line, params).replace(/\s+/g, " ").trim());
+      const resolved = substituteBraces(line, params).replace(/\s+/g, " ").trim();
+      out.push(rewriteCouplingNames(resolved, inductorNames));
     }
   }
   return out;

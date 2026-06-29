@@ -78,8 +78,17 @@ export function buildSpiceDeck(schematic: Schematic, analysis: SpiceAnalysis): S
 
   // Carry mutual-inductance `K` coupling directives (transformer windings) into
   // the deck with any `{expr}` coefficient resolved; without this a coupled
-  // transformer would simulate as independent inductors.
-  lines.push(...couplingLinesFromDirectives(flatDirectives, schematic.params ?? EMPTY_SCOPE));
+  // transformer would simulate as independent inductors. A `K` line names
+  // inductors by their LTspice instance name, but the deck renames an inductor
+  // whose label isn't a valid ngspice `L…` name, so pass the rename map to keep
+  // the references in sync.
+  const inductorNames = new Map<string, string>();
+  circuit.components.forEach((entry, index) => {
+    if (entry.component.kind !== "inductor") return;
+    const label = safeName(entry.component.label).toLowerCase();
+    if (label) inductorNames.set(label, instanceName(entry.component, index));
+  });
+  lines.push(...couplingLinesFromDirectives(flatDirectives, schematic.params ?? EMPTY_SCOPE, inductorNames));
 
   // Carry a document `.temp <°C>` into the deck so native ngspice runs its
   // temperature-dependent device models at the authored operating temperature.
