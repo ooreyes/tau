@@ -155,7 +155,16 @@ Status legend: ✅ done · 🟡 partial · ⬜ not started
   (`.cir`/`.net`/`.sp`). Validated: a real `deadtime.asc` → `buildSpiceDeck` →
   `parseCir` re-imports all 16 deck devices, 0 warnings, 10 nets, ground
   resolved. 10 unit tests incl. an `extractCircuit` connectivity check.
-- ⬜ `.raw` waveform export/import (LTspice binary raw format).
+- 🟡 `.raw` waveform export/import (LTspice binary raw format). **Import parser
+  landed** (`io/rawImport.ts` `parseRaw`): decodes LTspice's UTF-16LE/ASCII
+  header + `Variables:` table + `Binary:`/`Values:` data, with the exact
+  precision layout (var0 float64, dependents float32 unless `double`; complex
+  `.ac` as re/im float64 pairs). `rawTrace(data, name)` pairs a named variable
+  with the independent axis (magnitude for complex). Validated against real
+  machine files: `_t_startup.op.raw` (`V(n001)≈-0.9983`), `_t_startup.raw`
+  (monotonic time axis spanning No. Points). 7 unit tests (synthetic binary +
+  ASCII + real). **NEXT:** overlay an imported `.raw` reference trace on the
+  scope; `.raw` export.
 - ⬜ Save/Open Tau-native `.tau.json` — **partial** (toolbar Save/Open exists); verify robustness.
 
 ## 2. Schematic capture
