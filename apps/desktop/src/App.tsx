@@ -46,6 +46,7 @@ import { analysesFromDirectives } from "./io/directiveAnalysis";
 import { runMeasurements, type MeasResult } from "./simulation/measure";
 import { runFourier, type FourierResult } from "./simulation/fourier";
 import { runAcMeasurements } from "./simulation/measureAc";
+import { runDcMeasurements } from "./simulation/measureDc";
 import {
   isNativeSpiceRuntime,
   MAX_NATIVE_OUTPUT_POINTS,
@@ -214,6 +215,13 @@ function App() {
     if (!acAnalysis || !acAnalysis.ok || directives.length === 0) return [];
     return runAcMeasurements(directives, acAnalysis, params.scope, params.funcs);
   }, [acAnalysis, directives, params]);
+
+  // Evaluate the document's `.meas dc …` directives against the latest DC sweep
+  // (aggregates / FIND / WHEN over the swept-source axis, not time).
+  const dcMeasurements = useMemo<MeasResult[]>(() => {
+    if (!dcAnalysis || !dcAnalysis.ok || directives.length === 0) return [];
+    return runDcMeasurements(directives, dcAnalysis, params.scope, params.funcs);
+  }, [dcAnalysis, directives, params]);
 
   const executeTransient = useCallback(async (options: AnalysisOptions) => {
     const requestId = ++analysisRequestRef.current;
@@ -700,6 +708,7 @@ function App() {
                 measurements={measurements}
                 fourier={fourier}
                 acMeasurements={acMeasurements}
+                dcMeasurements={dcMeasurements}
                 options={analysisOptions}
                 isRunning={analysisRunning}
                 onOptionsChange={setAnalysisOptions}

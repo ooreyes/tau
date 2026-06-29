@@ -37,6 +37,7 @@ interface SimulationPanelProps {
   measurements: MeasResult[];
   fourier: FourierResult[];
   acMeasurements: MeasResult[];
+  dcMeasurements: MeasResult[];
   options: AnalysisOptions;
   isRunning: boolean;
   onOptionsChange: (options: AnalysisOptions) => void;
@@ -67,6 +68,7 @@ export function SimulationPanel({
   measurements,
   fourier,
   acMeasurements,
+  dcMeasurements,
   options,
   isRunning,
   onOptionsChange,
@@ -299,7 +301,12 @@ export function SimulationPanel({
           <MeasTable measurements={acMeasurements} />
         </>
       )}
-      {mode === "dc" && <DcPlot result={dcResult} />}
+      {mode === "dc" && (
+        <>
+          <DcPlot result={dcResult} />
+          <MeasTable measurements={dcMeasurements} />
+        </>
+      )}
       {mode === "tf" && <TfTable result={tfResult} />}
       {mode === "noise" && <NoisePlot result={noiseResult} />}
       {mode === "step" && <StepPlot result={stepResult} probes={probes} />}

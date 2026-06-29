@@ -577,9 +577,10 @@ export function runMeasurements(
   for (const line of directives) {
     const spec = parseMeasDirective(line);
     if (!spec) continue;
-    // Only transient-domain directives belong here; an `.meas ac …` line is
-    // resolved by runAcMeasurements against the AC result instead.
-    if (spec.analysis !== null && spec.analysis !== "tran" && spec.analysis !== "dc") continue;
+    // Only transient-domain directives belong here; `.meas ac …` is resolved by
+    // runAcMeasurements against the AC result and `.meas dc …` by
+    // runDcMeasurements against the DC-sweep result (each over its own axis).
+    if (spec.analysis !== null && spec.analysis !== "tran") continue;
     const result = evaluateMeasurement(spec, wf, running, funcs);
     results.push(result);
     if (result.value !== null && Number.isFinite(result.value)) {

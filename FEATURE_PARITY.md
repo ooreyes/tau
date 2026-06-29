@@ -420,8 +420,17 @@ zener, opamp, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**, **B (behav
   these, so deadtime.asc's `PS avg -(10*I(V1)+10*I(V2))` / `PL avg V(vo)*I(R1)` /
   `Efficiency=PL/PS` evaluate. 13 hand-computed tests (I(R)=V/R, I(V1)=−5 mA,
   I(C)=C·dV/dt=I(R) in series, power forms).
-  **NEXT:** `.meas dc`/`.meas noise` domains; expose currents in the waveform
-  viewer (probe a device → plot its current, §6).
+  **`.meas dc` now landed** (`simulation/measureDc.ts`): a DC-sweep result is the
+  same real-valued shape as a transient one with the **swept-source value as the
+  axis**, so `runDcMeasurements` adapts a `DcSweepResult` into a `MeasWaveform`
+  (`dcResultToWaveform`) and reuses the transient measurement core — `MAX/MIN/PP/
+  AVG/RMS/INTEG`, `FIND V(out) AT=<Vsrc>`, `WHEN V(out)=<level>` (returns the
+  source value at the crossing) and chained `PARAM`s all evaluate over the sweep.
+  `runMeasurements` no longer mis-routes `dc` lines onto the time axis (it now
+  takes only `tran`/untyped); `App.tsx` memoizes `dcMeasurements` off the DC
+  result and renders a `MeasTable` under the DC plot. 8 hand-computed tests
+  (divider V(out)=Vin/2). **NEXT:** `.meas noise` domain; expose currents in the
+  waveform viewer (probe a device → plot its current, §6).
 - ⬜ DC operating point annotation on schematic (show node V / device I in-place)
 - 🟡 Initial conditions **`.ic` / `.nodeset`** — `buildSpiceDeck` carries both
   through to the native ngspice deck verbatim (re-prefixed, lower-cased keyword);
