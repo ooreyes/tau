@@ -577,6 +577,14 @@ zener, opamp, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**, **B (behav
   allow a **negative (active) resistance** — SPICE-legal, e.g. Draft7's -1k — and
   reject only zero; C/L stay strictly positive)
 - ⬜ Match LTspice's defaults/timestep/convergence for waveform-level agreement
+  - 🟡 **Numeric agreement tooling landed** (`simulation/waveformCompare.ts`):
+    `compareWaveforms(testT,testV, refT,refV)` resamples a reference series
+    (e.g. parsed from an LTspice `.raw`) onto the test's time grid over the
+    overlapping interval and reports max/RMS abs error plus reference-normalized
+    metrics and a pass/fail verdict — so "match LTspice within tolerance" is a
+    number, not an eyeball. `interpolateAt`/`resampleOnto` exported for the
+    `.raw` scope overlay. 10 unit tests. (Still ⬜: actually tuning ngspice
+    defaults so the verdict passes across the deck suite.)
 - 🟡 **Real-`.asc` op-deck *run* now ~70/82** (was 45/82 when first measured this
   session) — i.e. how many acceptance decks ngspice actually solves an operating
   point for, not just builds. Driven up by: a **default `rshunt=1e12`** (every node
