@@ -516,7 +516,11 @@ zener, opamp, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**, **B (behav
   collapsible **FFT spectrum** view under the transient scope
   (`SimulationPanel` `FftView`) picks a signal + window and draws the magnitude
   on a log-frequency / dB axis (shares `bodePath` with the Bode plot) with a peak
-  frequency / DC readout. **NEXT:** THD-from-spectrum readout; cursor on the FFT.
+  frequency / **THD** / DC readout. `spectrumThd(spectrum, [f0])` reads THD from
+  the spectrum (fundamental = supplied freq or loudest bin above DC; harmonics =
+  bins nearest `2f₀,3f₀,…` to Nyquist; exact for a leakage-free signal — 50% for
+  a half-amplitude 2nd harmonic, hand-verified). **NEXT:** measurement cursor on
+  the FFT/transient plots (delta readout between two clicked points).
 - ⬜ Log/linear axes, dB, phase, group delay
 - 🟡 `.step` family-of-curves overlay — **transient overlay landed** (`StepPlot`
   in `SimulationPanel`): the **STEP** tab re-runs the sweep and draws the probed

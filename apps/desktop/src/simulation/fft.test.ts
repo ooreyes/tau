@@ -5,6 +5,7 @@ import {
   windowValue,
   waveformSpectrum,
   dominantFrequency,
+  spectrumThd,
   runWaveformFft,
 } from "./fft";
 import type { MeasWaveform } from "./measure";
@@ -191,6 +192,58 @@ describe("dominantFrequency", () => {
     }
     const s = waveformSpectrum(times, values, { window: "rectangular", points: n, tStart: 0, tEnd: duration });
     expect(dominantFrequency(s)).toBeCloseTo(freq, 0);
+  });
+});
+
+describe("spectrumThd", () => {
+  // Fundamental at freq with a half-amplitude 2nd harmonic, sampled on exact bins
+  // (rectangular window → no leakage), so THD = 0.5 / 1 = 0.5 exactly.
+  function distorted(n: number, cycles: number, duration: number) {
+    const times: number[] = [];
+    const values: number[] = [];
+    const f = cycles / duration;
+    for (let i = 0; i <= n; i++) {
+      const t = (i / n) * duration;
+      times.push(t);
+      values.push(Math.cos(2 * Math.PI * f * t) + 0.5 * Math.cos(2 * Math.PI * 2 * f * t));
+    }
+    return { times, values };
+  }
+
+  it("computes THD = 50% for a fundamental + half-amplitude 2nd harmonic", () => {
+    const n = 256;
+    const duration = 1;
+    const { times, values } = distorted(n, 8, duration);
+    const s = waveformSpectrum(times, values, { window: "rectangular", points: n, tStart: 0, tEnd: duration });
+    const thd = spectrumThd(s);
+    expect(thd.fundamentalHz).toBeCloseTo(8, 6);
+    expect(thd.fundamental).toBeCloseTo(1, 4);
+    expect(thd.thd).toBeCloseTo(0.5, 3);
+    expect(thd.harmonics).toBeGreaterThanOrEqual(1);
+  });
+
+  it("reports zero THD for a pure tone", () => {
+    const n = 256;
+    const duration = 1;
+    const times: number[] = [];
+    const values: number[] = [];
+    for (let i = 0; i <= n; i++) {
+      const t = (i / n) * duration;
+      times.push(t);
+      values.push(Math.cos(2 * Math.PI * 10 * t));
+    }
+    const s = waveformSpectrum(times, values, { window: "rectangular", points: n, tStart: 0, tEnd: duration });
+    expect(spectrumThd(s).thd).toBeCloseTo(0, 4);
+  });
+
+  it("honors an explicit fundamental frequency", () => {
+    const n = 256;
+    const duration = 1;
+    const { times, values } = distorted(n, 8, duration);
+    const s = waveformSpectrum(times, values, { window: "rectangular", points: n, tStart: 0, tEnd: duration });
+    const thd = spectrumThd(s, 8);
+    expect(thd.fundamentalHz).toBeCloseTo(8, 6);
+    expect(thd.thd).toBeCloseTo(0.5, 3);
   });
 });
 

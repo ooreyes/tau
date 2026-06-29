@@ -25,7 +25,7 @@ import type { MeasResult } from "../simulation/measure";
 import type { FourierResult } from "../simulation/fourier";
 import { evaluatePlotExpression } from "../simulation/plotExpression";
 import { seriesToCsv } from "../simulation/waveformCsv";
-import { runWaveformFft, dominantFrequency, type WindowFn } from "../simulation/fft";
+import { runWaveformFft, dominantFrequency, spectrumThd, type WindowFn } from "../simulation/fft";
 import { isNativeSpiceRuntime, MAX_NATIVE_OUTPUT_POINTS } from "../engine/nativeSpice";
 import { displaySampleIndices, waveformBounds } from "../simulation/waveform";
 
@@ -1034,7 +1034,11 @@ function FftView({ result }: { result: AnalysisResult | null }) {
               value={spectrum ? formatEngineering(dominantFrequency(spectrum), "Hz", 1) : "--"}
               tone="green"
             />
-            <Metric label="BINS" value={spectrum ? String(spectrum.frequencies.length) : "--"} tone="cyan" />
+            <Metric
+              label="THD"
+              value={spectrum ? `${(spectrumThd(spectrum).thd * 100).toFixed(2)}%` : "--"}
+              tone="cyan"
+            />
             <Metric
               label="DC"
               value={spectrum ? formatEngineering(spectrum.magnitude[0], "V", 2) : "--"}

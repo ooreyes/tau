@@ -210,6 +210,58 @@ export function dominantFrequency(spectrum: Spectrum): number {
   return best;
 }
 
+export interface ThdResult {
+  /** Fundamental frequency in Hz, snapped to the nearest FFT bin. */
+  fundamentalHz: number;
+  /** Fundamental amplitude (signal units). */
+  fundamental: number;
+  /** Total harmonic distortion as a fraction (0.05 = 5%). */
+  thd: number;
+  /** Number of harmonic bins summed (2nd … up to Nyquist). */
+  harmonics: number;
+}
+
+/** Index of the uniformly-spaced bin nearest `target` Hz. */
+function nearestBin(frequencies: number[], target: number): number {
+  const df = frequencies.length > 1 ? frequencies[1] - frequencies[0] : 1;
+  if (!(df > 0)) return 0;
+  return Math.min(frequencies.length - 1, Math.max(0, Math.round(target / df)));
+}
+
+/**
+ * Total harmonic distortion read from an amplitude spectrum. The fundamental is
+ * the supplied frequency (snapped to its nearest bin) or, if omitted, the
+ * loudest bin above DC; harmonics are the bins nearest `2f₀, 3f₀, …` up to
+ * Nyquist. THD = √(Σ harmonic²) / fundamental. Exact for a leakage-free
+ * (exact-bin, rectangular-window) signal; an estimate under a smoothing window.
+ */
+export function spectrumThd(
+  spectrum: Spectrum,
+  fundamentalHz?: number,
+  maxHarmonics = 9,
+): ThdResult {
+  const { frequencies, magnitude } = spectrum;
+  const nyquist = frequencies[frequencies.length - 1];
+  const targetHz = fundamentalHz ?? dominantFrequency(spectrum);
+  const fundIdx = nearestBin(frequencies, targetHz);
+  const f0Hz = frequencies[fundIdx];
+  const fundamental = magnitude[fundIdx];
+  if (!(fundamental > 0) || !(f0Hz > 0)) {
+    return { fundamentalHz: f0Hz, fundamental, thd: 0, harmonics: 0 };
+  }
+  let sumSq = 0;
+  let count = 0;
+  for (let h = 2; h <= maxHarmonics + 1; h++) {
+    const hf = h * f0Hz;
+    if (hf > nyquist) break;
+    const idx = nearestBin(frequencies, hf);
+    if (idx === fundIdx) continue; // guard against a degenerate spacing collapsing onto f₀
+    sumSq += magnitude[idx] * magnitude[idx];
+    count++;
+  }
+  return { fundamentalHz: f0Hz, fundamental, thd: Math.sqrt(sumSq) / fundamental, harmonics: count };
+}
+
 /** Resolve an FFT output signal (`V(node)`, bare node, or `I(ref)`) to a value series. */
 function resolveSignal(waveform: MeasWaveform, output: string): number[] | null {
   const text = output.trim();
