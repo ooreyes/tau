@@ -13,9 +13,11 @@ existing infrastructure:
   through one evaluator. Bad signal names show a clear error; traces managed via
   labelled removable chips. WaveformPlot gained an `extraTraces` prop folded into
   its bounds + rendering.
-- **CSV export** (`simulation/waveformCsv.ts`): an **Export CSV** button writes
-  `time` + every node trace + branch current + plotted expression as a table
-  (RFC-4180 header quoting, non-finite samples as empty cells).
+- **CSV export** (`simulation/waveformCsv.ts`): **Export CSV** buttons on the
+  transient pane (`time` + node traces + branch currents + plotted expressions),
+  the AC pane (`freq` + per-trace mag(dB)/phase(°)) and the DC pane (swept source
+  + each net voltage), sharing a `downloadCsv` helper. RFC-4180 header quoting,
+  non-finite samples as empty cells.
 
 ### Files touched
 - src/simulation/plotExpression.ts (+ .test.ts, 6 tests)
@@ -39,8 +41,9 @@ existing infrastructure:
   per-trace units/axis is future work.
 
 ### Next step
-§6: add expression traces to the AC/Bode pane (reuse measureAc's compiler), or
-measurement cursors (1 & 2 with delta readout) on the transient scope.
+§6: measurement cursors (1 & 2 with delta readout) on the transient scope, or
+add expression traces to the AC/Bode pane (reuse measureAc's compiler). Also a
+good time for a live visual QA pass once the dev port is free (UX debt above).
 
 ## 2026-06-29T06:27Z — auto/ltspice-parity — .meas dc + .meas noise domains (§4)
 
