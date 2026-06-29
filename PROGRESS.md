@@ -1,5 +1,56 @@
 # Tau Autobuilder — Progress Log
 
+## 2026-06-29T01:05Z — auto/ltspice-parity — real-.asc op-deck *run* 45 → 70/82 (§3/§4/§7)
+
+### What I did
+With all 82 acceptance files now building a deck, measured the next layer —
+how many ngspice actually **solves an `.op` for** (a throwaway smoke ran each
+deck through `ngspice -b`). Baseline 45/82; drove to **~70/82** with four fixes:
+- **`rshunt=1e12` in the default `.options`** (`engine/spiceOptions.ts`): ngspice
+  throws a fatal "singular matrix" the instant any node lacks a DC path to ground
+  (floating op-amp input, AC-coupled stage, ideal-transformer winding). A 1 TΩ
+  shunt from every node fixes it; numerically invisible (a 5 V divider still
+  reads 5.000000 V). **+19 files** (Wien/Howland/phono/LoopGain/Linkwitz/GFT/…).
+- **`LPNP`/`LNPN` → `PNP`/`NPN`** (`engine/modelDirectives.ts`): ngspice has no
+  lateral-BJT model type, so the discrete LM741/LM308 `.model PN LPNP(...)` was
+  "Unknown model type lpnp - ignored" → every transistor type-mismatched.
+- **Split multi-directive TEXT blocks on `\n`** (`engine/spiceNetlist.ts`):
+  LTspice packs `.ic v(vo)=0.5\n.tran 10m` into one TEXT; the single-line
+  directive consumers (.options/.temp/.ic/K) now read `expandDirectiveLines`
+  so two directives don't collapse into one malformed line (Draft6).
+- **Rewrite `K` coupling refs to renamed inductors** (`engine/couplingDirectives.ts`):
+  a K line names inductors by LTspice instance name, but the deck renames an
+  inductor whose label isn't a valid ngspice `L…` name (T2a → transmission line),
+  so ngspice hit "coupling to non-existent inductor t2b" (Electrometer). The deck
+  now passes the label→emitted-name map and the K refs are rewritten.
+
+### Files touched
+- src/engine/spiceOptions.ts (+ test), modelDirectives.ts (+ test),
+  couplingDirectives.ts (+ test), spiceNetlist.ts (flat directives, inductor map),
+  spiceDeck.test.ts (+1 \n-split test)
+- FEATURE_PARITY.md (§7 op-run ~70/82 + rshunt convergence aid)
+
+### Tests
+714 passing (was 692 at session start; +22 over the whole session). Typecheck
+clean. ngspice-46 verified each fix end-to-end.
+
+### FEATURE_PARITY items updated
+- §7 added "op-deck *run* ~70/82" + flipped convergence-aids ⬜→🟡 (rshunt ships).
+- §3 model-type translation + K-rename notes.
+
+### UX issues found
+- None (engine only).
+
+### Next step
+The ~12 non-running files are mostly out of ngspice's reach: 4 need external
+`.sub` libs not on disk, PLL/PLL2 use `rand()`, SoftDiodeRecovery a proprietary
+diode `Vp`, UHFpreamp an unbundled `mrf901`, 2 ISO demos time out, LoopGain2/P2
+are deep loop-probe/connectivity cases. Highest-value next: a real **waveform
+diff vs. LTspice** on the ~70 that run (the KEY GOAL needs values, not just
+convergence) — or resolve `.lib`/`.inc` paths against LTspice's lib dir to
+unblock the `.sub` files. P2's shorted-node connectivity (pin geometry on dense
+multi-transistor sheets) is its own focused task.
+
 ## 2026-06-29T00:45Z — auto/ltspice-parity — real-.asc op-deck build 75 → 82/82 (§1/§3)
 
 ### What I did

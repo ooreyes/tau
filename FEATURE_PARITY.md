@@ -488,11 +488,24 @@ zener, opamp, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**, **B (behav
   allow a **negative (active) resistance** — SPICE-legal, e.g. Draft7's -1k — and
   reject only zero; C/L stay strictly positive)
 - ⬜ Match LTspice's defaults/timestep/convergence for waveform-level agreement
+- 🟡 **Real-`.asc` op-deck *run* now ~70/82** (was 45/82 when first measured this
+  session) — i.e. how many acceptance decks ngspice actually solves an operating
+  point for, not just builds. Driven up by: a **default `rshunt=1e12`** (every node
+  gets a DC path — 19 op-amp/AC-coupled circuits stopped throwing "singular
+  matrix"); **`LPNP`/`LNPN` → `PNP`/`NPN`** (discrete LM741/LM308); splitting
+  **multi-directive TEXT blocks** on `\n` so `.ic`/`.tran` don't collapse
+  (Draft6); and **rewriting `K` coupling refs** to renamed inductor instances
+  (Electrometer). The ~12 that still don't run are genuinely out of ngspice's
+  reach here: 4 reference external `.sub` libraries not present on disk
+  (opamp/capometer/TowTom2), PLL/PLL2 use LTspice's `rand()`, SoftDiodeRecovery a
+  proprietary diode `Vp` param, UHFpreamp an unbundled `mrf901`, 2 ISO demos time
+  out, plus two deep loop-probe/connectivity cases (LoopGain2, P2).
 - 🟡 Ship/bundle a real device-model set — **common LTspice standard diodes/
   zeners/BJTs bundled** (`engine/standardModels.ts`, real `standard.*` params,
   emitted by `buildSpiceDeck` when referenced by name). Still generic for MOS and
   any unbundled part.
-- ⬜ Convergence aids (gmin stepping, source stepping) surfaced to user
+- 🟡 Convergence aids — a baseline `rshunt=1e12` ships in the default `.options`
+  so floating-node circuits solve; gmin/source stepping not yet surfaced to user.
 - ⬜ Per-analysis ngspice option mapping
 
 ## 8. UX / app
