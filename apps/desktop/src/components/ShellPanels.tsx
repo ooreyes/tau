@@ -6,6 +6,7 @@ import type { SchematicComponent } from "../schematic/types";
 import { decodeParams, encodeParams, paramFields } from "../schematic/params";
 import { importAsc, decodeSchematicText } from "../io/ascImport";
 import { schematicToAsc } from "../io/ascExport";
+import { parseCir } from "../io/cirImport";
 import { EngineeringInput } from "./EngineeringInput";
 import { useSchematic, type SchematicDocument } from "../store/useSchematic";
 import { EXAMPLE_CIRCUITS, type ExampleCircuit } from "../examples/circuits";
@@ -226,6 +227,24 @@ export function EditorToolbar({
         }
         return;
       }
+      if (/\.(cir|net|sp|spice)$/i.test(file.name)) {
+        // SPICE netlist import (FEATURE_PARITY §1 "import .cir").
+        const result = parseCir(text);
+        if (result.components.length === 0) {
+          throw new Error("No devices found — is this a valid SPICE netlist?");
+        }
+        const document: SchematicDocument = {
+          components: result.components,
+          wires: result.wires,
+          netLabels: result.netLabels,
+          directives: result.directives,
+        };
+        onOpenCircuit(document, file.name.replace(/\.[^.]+$/i, ".sim"));
+        if (result.warnings.length > 0) {
+          console.warn(`Imported ${file.name} with ${result.warnings.length} warning(s):`, result.warnings);
+        }
+        return;
+      }
       const document = validateSchematicDocument(JSON.parse(text));
       onOpenCircuit(document, file.name.replace(/\.tau\.json$/i, ".sim"));
     } catch (error) {
@@ -270,7 +289,7 @@ export function EditorToolbar({
         ref={fileInputRef}
         className="file-input"
         type="file"
-        accept=".tau.json,.asc,application/json"
+        accept=".tau.json,.asc,.cir,.net,.sp,application/json"
         onChange={(event) => {
           const file = event.currentTarget.files?.[0];
           if (file) void openCircuit(file);

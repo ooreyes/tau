@@ -140,12 +140,21 @@ Status legend: ✅ done · 🟡 partial · ⬜ not started
   import→export→re-import preserve all counts/kinds with idempotent re-export
   and zero warnings. 11 unit tests.
 - 🟡 Native SPICE netlist generation (`engine/spiceNetlist.ts`) — works for built-in kinds; needs the directive/model coverage below.
-- 🟡 Export `.cir`/netlist to file; import `.cir`. — **Netlist export landed**
+- ✅ Export `.cir`/netlist to file; import `.cir`. — **Netlist export landed**
   (LTspice "View → SPICE Netlist"): a **Netlist** button on the transient pane
   builds the same deck the engine runs (`buildSpiceDeck` with the document's
   `.param` scope) and downloads it as `tau-netlist-<date>.cir`. Build errors
-  (no ground, no parts) surface inline instead of crashing. **NEXT:** import a
-  `.cir` netlist back into a schematic.
+  (no ground, no parts) surface inline instead of crashing. **`.cir` import
+  landed** (`io/cirImport.ts` `parseCir`): parses a SPICE deck (title card,
+  `+` continuations, `;`/`$` inline comments, `.model` polarity → npn/pnp,
+  nmos/pmos, ambiguous 3/4-terminal MOS resolved via the model map) into Tau
+  components laid out on a grid with **net-label-per-pin connectivity** (a label
+  at each pin's exact coordinate shares the pin's DSU point key, so same-named
+  nets merge and `0`/`GND` → ground — no wire routing needed). Handles
+  R/C/L/V/I/D/Q/M/E/G/B; warns+skips X/K/F/H/T. Wired into the Open dialog
+  (`.cir`/`.net`/`.sp`). Validated: a real `deadtime.asc` → `buildSpiceDeck` →
+  `parseCir` re-imports all 16 deck devices, 0 warnings, 10 nets, ground
+  resolved. 10 unit tests incl. an `extractCircuit` connectivity check.
 - ⬜ `.raw` waveform export/import (LTspice binary raw format).
 - ⬜ Save/Open Tau-native `.tau.json` — **partial** (toolbar Save/Open exists); verify robustness.
 
