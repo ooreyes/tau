@@ -12,6 +12,7 @@ import { optionsLineFromDirectives } from "./spiceOptions";
 import { modelLibLinesFromDirectives, definedModelNames } from "./modelDirectives";
 import { couplingLinesFromDirectives } from "./couplingDirectives";
 import { laplaceTransfer, laplaceSourceLines } from "./laplace";
+import { coreInductance } from "./coreInductor";
 import { standardModelLine } from "./standardModels";
 import { parseTempDirective } from "../io/directiveAnalysis";
 
@@ -148,8 +149,14 @@ function componentLines(entry: ExtractedComponent, index: number, userModels: Se
       return [`${name} ${node("a")} ${node("b")} ${nonZeroNumberValue(component, "Ohm")}`];
     case "capacitor":
       return [`${name} ${node("a")} ${node("b")} ${positiveNumberFromText(component, stripIcSpec(component.value), "F")}${icSpecDeckText(component.value)}`];
-    case "inductor":
+    case "inductor": {
+      // A nonlinear (Chan) magnetic-core inductor (Hc/Bs/Br/A/Lm/Lg/N) has no
+      // ngspice equivalent; emit its unsaturated linear inductance instead so the
+      // deck builds and runs (engine/coreInductor.ts).
+      const core = coreInductance(component.value);
+      if (core !== null) return [`${name} ${node("a")} ${node("b")} ${core}`];
       return [`${name} ${node("a")} ${node("b")} ${positiveNumberFromText(component, stripIcSpec(component.value), "H")}${icSpecDeckText(component.value)}`];
+    }
     case "vsource": {
       // LTspice carries SINE/PULSE/PWL/EXP/SFFM inline on the source value, plus
       // an optional `AC <mag> [phase]` stimulus (from SYMATTR Value2). Split them.

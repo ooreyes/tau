@@ -45,7 +45,7 @@ Status legend: ✅ done · 🟡 partial · ⬜ not started
 ---
 
 ## 1. File I/O & interoperability  ← **highest leverage for the key goal**
-- 🟡 **Real-`.asc` op-deck build now 81/82** (was 34/82 at this work's start):
+- 🟡 **Real-`.asc` op-deck build now 82/82** (was 34/82 at this work's start):
   `decodeSchematicText` falls back to **Windows-1252** when the bytes aren't valid
   UTF-8, so LTspice's single-byte `µ` (0xB5) decodes as the micro sign instead of
   U+FFFD (was the biggest blocker — 32 files); `buildParamScope` accepts the
@@ -57,8 +57,14 @@ Status legend: ✅ done · 🟡 partial · ⬜ not started
   SYMATTR fields** (`Value`/`Value2`/`SpiceLine`/`SpiceLine2` — P2.asc's SINE);
   and **`Laplace=H(s)` on E/G sources** is realized as an XSPICE `s_xfer`
   (rational transfers, ngspice-verified) or its DC gain H(0) (exact for `.op`;
-  transport-delay/√ fallbacks) — unblocked Draft8/PLL/PLL2/TwoTau/HalfSlope. The
-  lone remaining file is NonLinearTransformer's **Chan hysteretic-core inductor**.
+  transport-delay/√ fallbacks) — unblocked Draft8/PLL/PLL2/TwoTau/HalfSlope; and
+  a **Chan magnetic-core inductor** (`Hc/Bs/Br/A/Lm/Lg/N`) is sized to its
+  **unsaturated linear inductance** from the gap+core reluctance
+  (`engine/coreInductor.ts`; ngspice has no saturable-core primitive) — unblocked
+  NonLinearTransformer. **All 82 now build a deck.** (NonLinearTransformer is a
+  behavioral-magnetics demo whose flux-integrating G-source loop still hits a
+  singular matrix in ngspice without the true Chan model — building ≠ converging
+  for that one file; the saturable waveform is genuinely out of ngspice's reach.)
 - 🟡 **Import LTspice `.asc` schematics** — **parser + `ascToSchematic()` landed**
   (`io/ascImport.ts`). Parses `Version/SHEET/WIRE/FLAG/SYMBOL/SYMATTR/WINDOW/TEXT/
   LINE/…` losslessly; validated by parsing **4,012 real LTspice files (49,625

@@ -489,6 +489,15 @@ export function componentValueFromAttrs(
   // token — not the whole attribute, which can hold ngspice-incompatible
   // LTspice-only keys (Rser, Cpar, …).
   if (kind === "capacitor" || kind === "inductor") {
+    // A nonlinear (Chan) magnetic-core inductor spreads its core geometry across
+    // Value2/SpiceLine (A=/Lm=/Lg=/N=); keep all of it so the deck builder can
+    // size the equivalent linear inductance. Plain L/C keep just the `IC=` token.
+    if (kind === "inductor" && /\b(hc|bs|br|lm|lg)\s*=/i.test(base)) {
+      const extras = [attrs.Value2, attrs.SpiceLine]
+        .map((s) => s?.trim())
+        .filter((s): s is string => !!s && !/^rser\b/i.test(s));
+      return [base, ...extras].join(" ").trim();
+    }
     const ic = [attrs.Value2, attrs.SpiceLine, attrs.SpiceLine2]
       .map((s) => parseIcValue(s ?? ""))
       .find((v): v is string => v !== null);
