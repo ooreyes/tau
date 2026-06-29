@@ -40,13 +40,87 @@ export function parseBehavioral(value: string): BehavioralSpec {
 }
 
 /**
- * Normalize a behavioral value to a canonical ngspice/LTspice B-source spec
- * (`"V=<expr>"` or `"I=<expr>"`). Throws when the expression body is empty.
+ * Find the index of the parenthesis matching the `(` at `open`, or -1 if none.
+ */
+function matchParen(text: string, open: number): number {
+  let depth = 0;
+  for (let i = open; i < text.length; i++) {
+    if (text[i] === "(") depth++;
+    else if (text[i] === ")") {
+      depth--;
+      if (depth === 0) return i;
+    }
+  }
+  return -1;
+}
+
+/** Split a function-argument list on top-level (depth-0) commas. */
+function splitTopLevel(inner: string): string[] {
+  const args: string[] = [];
+  let depth = 0;
+  let start = 0;
+  for (let i = 0; i < inner.length; i++) {
+    const ch = inner[i];
+    if (ch === "(") depth++;
+    else if (ch === ")") depth--;
+    else if (ch === "," && depth === 0) {
+      args.push(inner.slice(start, i));
+      start = i + 1;
+    }
+  }
+  args.push(inner.slice(start));
+  return args;
+}
+
+/**
+ * Translate LTspice's `if(cond, a, b)` to ngspice's native ternary
+ * `(cond) ? (a) : (b)`. ngspice has no `if` *function* in B-sources (it raises
+ * "no such function 'if'", live-verified) and its compatibility mode can't be
+ * set per-deck, so any imported behavioral source using `if()` would otherwise
+ * fail. Handles nesting (recurses into each argument) and a 2-arg `if(cond, a)`
+ * (else defaults to 0). A bare `if` not immediately followed by `(`, or one
+ * embedded in a longer identifier (e.g. `motif`), is left untouched.
+ */
+export function ifToTernary(expr: string): string {
+  const lower = expr.toLowerCase();
+  let out = "";
+  let i = 0;
+  while (i < expr.length) {
+    const isWordBoundary = i === 0 || !/[A-Za-z0-9_.]/.test(expr[i - 1]);
+    if (isWordBoundary && lower.startsWith("if(", i)) {
+      const open = i + 2;
+      const close = matchParen(expr, open);
+      if (close === -1) {
+        out += expr.slice(i);
+        break;
+      }
+      const args = splitTopLevel(expr.slice(open + 1, close)).map((a) => ifToTernary(a.trim()));
+      if (args.length >= 2) {
+        const elseBranch = args.length >= 3 ? args[2] : "0";
+        out += `((${args[0]}) ? (${args[1]}) : (${elseBranch}))`;
+        i = close + 1;
+        continue;
+      }
+      // A single-argument "if(...)" isn't a real conditional — leave verbatim.
+      out += expr.slice(i, close + 1);
+      i = close + 1;
+      continue;
+    }
+    out += expr[i];
+    i++;
+  }
+  return out;
+}
+
+/**
+ * Normalize a behavioral value to a canonical ngspice B-source spec
+ * (`"V=<expr>"` or `"I=<expr>"`). LTspice `if()` calls are rewritten to ngspice
+ * ternaries. Throws when the expression body is empty.
  */
 export function behavioralSpecText(value: string): string {
   const { type, expr } = parseBehavioral(value);
   if (!expr) throw new Error("Behavioral source needs a V=/I= expression.");
-  return `${type}=${expr}`;
+  return `${type}=${ifToTernary(expr)}`;
 }
 
 /**

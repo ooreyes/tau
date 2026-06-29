@@ -198,6 +198,14 @@ zener, opamp, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**, **B (behav
   dynamic forms raise a clear "needs native engine" error rather than silently
   mis-solving. **35 hand-computed tests** (behavioral parse/linearize, deck
   emission, import mapping, op/tran/ac solves) cross-checked against ngspice 17.
+  **LTspice `if(cond,a,b)` now auto-translated to ngspice's ternary**
+  `(cond) ? (a) : (b)` in `behavioralSpecText` (`ifToTernary`): ngspice has no
+  `if` function in B-sources ("no such function 'if'", live-verified) and its
+  compat mode can't be set per-deck, so any imported behavioral source using
+  `if()` would otherwise crash the deck. Handles nesting, commas inside nested
+  calls, 2-arg `if` (else→0), case-insensitivity, and leaves `if` inside longer
+  identifiers (`motif`) alone. +9 tests; the translated ternary live-verified in
+  ngspice 17 (outputs exactly the two rails).
 - ✅ **Voltage/current-controlled sources** E/F/G/H — **all four landed**
   end-to-end: `vcvs`/`vccs`/`cccs`/`ccvs` component kinds (2-port: control pair +
   output pair), pin geometry + symbols + palette entries, and **linear MNA stamps

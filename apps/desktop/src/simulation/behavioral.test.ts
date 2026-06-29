@@ -3,7 +3,53 @@ import {
   parseBehavioral,
   behavioralSpecText,
   linearizeBehavioral,
+  ifToTernary,
 } from "./behavioral";
+
+describe("ifToTernary", () => {
+  it("leaves an expression without if() untouched", () => {
+    expect(ifToTernary("2*V(a)+1")).toBe("2*V(a)+1");
+  });
+
+  it("rewrites a simple if() to a ternary", () => {
+    expect(ifToTernary("if(V(a)>0, 5, 0)")).toBe("((V(a)>0) ? (5) : (0))");
+  });
+
+  it("defaults the else branch to 0 for a 2-arg if()", () => {
+    expect(ifToTernary("if(V(a)>0, 5)")).toBe("((V(a)>0) ? (5) : (0))");
+  });
+
+  it("recurses into nested if()", () => {
+    expect(ifToTernary("if(a>0, if(b>0, 1, 2), 3)")).toBe(
+      "((a>0) ? (((b>0) ? (1) : (2))) : (3))",
+    );
+  });
+
+  it("handles commas inside nested function calls in arguments", () => {
+    expect(ifToTernary("if(V(a)>0, max(1,2), min(3,4))")).toBe(
+      "((V(a)>0) ? (max(1,2)) : (min(3,4)))",
+    );
+  });
+
+  it("is case-insensitive on the IF keyword", () => {
+    expect(ifToTernary("IF(x>0,1,0)")).toBe("((x>0) ? (1) : (0))");
+  });
+
+  it("does not touch 'if' embedded in a longer identifier", () => {
+    expect(ifToTernary("motif(1,2,3)")).toBe("motif(1,2,3)");
+    expect(ifToTernary("Vdiff(1,2)")).toBe("Vdiff(1,2)");
+  });
+
+  it("rewrites multiple if()s in one expression", () => {
+    expect(ifToTernary("if(a>0,1,0) + if(b>0,2,0)")).toBe(
+      "((a>0) ? (1) : (0)) + ((b>0) ? (2) : (0))",
+    );
+  });
+
+  it("threads through behavioralSpecText", () => {
+    expect(behavioralSpecText("V=if(V(in)>2.5, 5, 0)")).toBe("V=((V(in)>2.5) ? (5) : (0))");
+  });
+});
 
 describe("parseBehavioral", () => {
   it("parses V= and I= prefixes case-insensitively", () => {
