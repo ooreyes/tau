@@ -25,6 +25,7 @@ import type { MeasResult } from "../simulation/measure";
 import type { FourierResult } from "../simulation/fourier";
 import { evaluatePlotExpression } from "../simulation/plotExpression";
 import { seriesToCsv } from "../simulation/waveformCsv";
+import { runWaveformFft, dominantFrequency, type WindowFn } from "../simulation/fft";
 import { isNativeSpiceRuntime, MAX_NATIVE_OUTPUT_POINTS } from "../engine/nativeSpice";
 import { displaySampleIndices, waveformBounds } from "../simulation/waveform";
 
@@ -369,6 +370,7 @@ export function SimulationPanel({
 
           <MeasTable measurements={measurements} />
           <FourierTable results={fourier} />
+          <FftView result={result} />
 
           <div className="plotter-controls">
             <DialControl
@@ -895,6 +897,155 @@ function downloadCsv(csv: string, tag: string): void {
 const AC_COLORS = ["var(--trace-cyan)", "var(--trace-green)", "var(--trace-cream)", "var(--trace-red)"];
 // Distinct ramp for user expression traces so they stand out from node traces.
 const EXPR_COLORS = ["var(--trace-red)", "var(--trace-cream)", "var(--trace-cyan)", "var(--trace-green)"];
+
+/**
+ * FFT of a transient signal — LTspice's "View → FFT". Resamples the chosen
+ * waveform onto a uniform grid, windows it, and shows the one-sided amplitude
+ * spectrum on a log-frequency / dB axis. Collapsed by default so the (heavier)
+ * transform only runs when the user opens it. Reuses {@link bodePath} for the
+ * log-frequency / dB mapping it shares with the Bode plot.
+ */
+function FftView({ result }: { result: AnalysisResult | null }) {
+  const [open, setOpen] = useState(false);
+  const [signal, setSignal] = useState<string>("");
+  const [windowFn, setWindowFn] = useState<WindowFn>("hann");
+
+  const success = result?.ok ? result : null;
+  const signals = useMemo(() => {
+    if (!success) return [];
+    return [...success.traces.map((t) => t.label), ...success.currents.map((c) => c.label)];
+  }, [success]);
+  const chosen = signal && signals.includes(signal) ? signal : signals[0] ?? "";
+
+  const spectrum = useMemo(() => {
+    if (!open || !success || !chosen) return null;
+    try {
+      return runWaveformFft(success, chosen, { window: windowFn });
+    } catch {
+      return null;
+    }
+  }, [open, success, chosen, windowFn]);
+
+  const plot = useMemo(() => {
+    if (!spectrum) return null;
+    let rawMin = 0;
+    let rawMax = 0;
+    let found = false;
+    for (let k = 1; k < spectrum.magnitudeDb.length; k++) {
+      const db = spectrum.magnitudeDb[k];
+      if (!Number.isFinite(db) || db <= -250) continue;
+      if (!found) {
+        rawMin = db;
+        rawMax = db;
+        found = true;
+      } else {
+        rawMin = Math.min(rawMin, db);
+        rawMax = Math.max(rawMax, db);
+      }
+    }
+    const maxDb = Math.ceil(rawMax / 10) * 10;
+    const minDb = Math.floor(Math.min(rawMin, maxDb - 60) / 10) * 10;
+    // Skip the DC bin (freq 0) — it has no place on a log axis.
+    const positive = spectrum.frequencies.filter((f) => f > 0);
+    const f0 = Math.log10(positive[0] || 1);
+    const f1 = Math.log10(positive[positive.length - 1] || 10);
+    return { minDb, maxDb, f0, f1 };
+  }, [spectrum]);
+
+  if (!success) return null;
+
+  return (
+    <div className="fft-view">
+      <button
+        className="fft-toggle"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        aria-label="Toggle FFT spectrum"
+      >
+        {open ? "▾" : "▸"} FFT spectrum
+      </button>
+      {open && (
+        <>
+          <div className="expr-bar">
+            <select
+              className="expr-input"
+              value={chosen}
+              aria-label="FFT signal"
+              onChange={(e) => setSignal(e.currentTarget.value)}
+            >
+              {signals.map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
+            </select>
+            <select
+              className="expr-add"
+              value={windowFn}
+              aria-label="FFT window"
+              onChange={(e) => setWindowFn(e.currentTarget.value as WindowFn)}
+            >
+              <option value="hann">Hann</option>
+              <option value="hamming">Hamming</option>
+              <option value="blackman">Blackman</option>
+              <option value="rectangular">Rectangular</option>
+            </select>
+          </div>
+          <div className="scope-shell">
+            <svg className="scope-svg" viewBox={`0 0 ${PLOT_WIDTH} ${PLOT_HEIGHT}`} role="img" aria-label="FFT magnitude">
+              <g className="scope-grid">
+                {Array.from({ length: 6 }).map((_, i) => {
+                  const x = PLOT_PAD + (i * (PLOT_WIDTH - PLOT_PAD * 2)) / 5;
+                  return <line key={`x${i}`} x1={x} y1={PLOT_PAD} x2={x} y2={PLOT_HEIGHT - PLOT_PAD} />;
+                })}
+                {Array.from({ length: 5 }).map((_, i) => {
+                  const y = PLOT_PAD + (i * (PLOT_HEIGHT - PLOT_PAD * 2)) / 4;
+                  return <line key={`y${i}`} x1={PLOT_PAD} y1={y} x2={PLOT_WIDTH - PLOT_PAD} y2={y} />;
+                })}
+              </g>
+              <rect className="scope-frame" x={PLOT_PAD} y={PLOT_PAD} width={PLOT_WIDTH - PLOT_PAD * 2} height={PLOT_HEIGHT - PLOT_PAD * 2} />
+              {plot && spectrum && (
+                <path className="scope-trace" stroke={AC_COLORS[0]} d={bodePath(spectrum.magnitudeDb, spectrum.frequencies, plot)} />
+              )}
+              <text className="scope-axis" x={PLOT_PAD} y={18}>
+                {plot ? `${plot.maxDb} dB` : "dB"}
+              </text>
+              <text className="scope-axis" x={PLOT_PAD} y={PLOT_HEIGHT - 8}>
+                {plot ? `${plot.minDb} dB` : ""}
+              </text>
+              <text className="scope-axis right" x={PLOT_WIDTH - PLOT_PAD} y={PLOT_HEIGHT - 8}>
+                {spectrum ? formatEngineering(spectrum.frequencies[spectrum.frequencies.length - 1], "Hz", 0) : "f"}
+              </text>
+            </svg>
+            <div className="scope-legend">
+              {spectrum ? (
+                <span>
+                  <i style={{ background: AC_COLORS[0] }} />
+                  {chosen}
+                </span>
+              ) : (
+                <span className="muted">No spectrum</span>
+              )}
+            </div>
+          </div>
+          <div className="meter-row analysis-meter">
+            <Metric
+              label="PEAK f"
+              value={spectrum ? formatEngineering(dominantFrequency(spectrum), "Hz", 1) : "--"}
+              tone="green"
+            />
+            <Metric label="BINS" value={spectrum ? String(spectrum.frequencies.length) : "--"} tone="cyan" />
+            <Metric
+              label="DC"
+              value={spectrum ? formatEngineering(spectrum.magnitude[0], "V", 2) : "--"}
+              tone="cream"
+            />
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
 
 function AcPlot({ result }: { result: AcResult | null }) {
   const success = result?.ok ? result : null;

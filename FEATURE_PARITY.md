@@ -503,7 +503,20 @@ zener, opamp, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**, **B (behav
   expression traces in the AC/step panes; cursor readout.
 - ⬜ Multiple plot panes, add/remove traces, autorange, manual axis
 - ⬜ **Measurement cursors** (1 & 2, delta readout)
-- ⬜ FFT of a waveform; THD readout
+- 🟡 **FFT of a waveform** (LTspice "View → FFT") — **landed** (`simulation/fft.ts`):
+  an in-place radix-2 Cooley–Tukey FFT (`fftRadix2`), window functions
+  (`rectangular`/`hann`/`hamming`/`blackman`), and `waveformSpectrum` which
+  linear-resamples a transient signal onto a power-of-two uniform grid over the
+  time window, windows it, transforms, and returns the **one-sided amplitude
+  spectrum** scaled so a pure `A·cos(ωt)` reads amplitude `A` at its bin (DC and
+  Nyquist carry no doubling). `runWaveformFft` resolves `V(node)`/bare-node/
+  `I(ref)` against the transient `MeasWaveform`; `dominantFrequency` reports the
+  loudest tone above DC. 19 hand-computed tests (DC→bin 0, exact-bin sine→true
+  amplitude, 4-point DFT of `[1,2,3,4]`, dB conversion, window coefficients). A
+  collapsible **FFT spectrum** view under the transient scope
+  (`SimulationPanel` `FftView`) picks a signal + window and draws the magnitude
+  on a log-frequency / dB axis (shares `bodePath` with the Bode plot) with a peak
+  frequency / DC readout. **NEXT:** THD-from-spectrum readout; cursor on the FFT.
 - ⬜ Log/linear axes, dB, phase, group delay
 - 🟡 `.step` family-of-curves overlay — **transient overlay landed** (`StepPlot`
   in `SimulationPanel`): the **STEP** tab re-runs the sweep and draws the probed
