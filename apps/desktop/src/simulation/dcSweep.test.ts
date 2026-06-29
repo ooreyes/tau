@@ -27,6 +27,18 @@ describe("parseDcDirective", () => {
     expect(parseDcDirective(".dc V1 zero ten one")).toBeNull(); // unparseable numbers
     expect(parseDcDirective("")).toBeNull();
   });
+
+  it("parses a nested two-source sweep (inner src first, SPICE order)", () => {
+    expect(parseDcDirective(".dc V1 0 5 0.5 V2 0 5 1")).toEqual({
+      source: "V1", start: 0, stop: 5, step: 0.5,
+      source2: "V2", start2: 0, stop2: 5, step2: 1,
+    });
+  });
+
+  it("ignores a malformed second leg but keeps the primary sweep", () => {
+    // Only 7 tokens after `dc` — second leg incomplete, so it's dropped.
+    expect(parseDcDirective(".dc V1 0 5 1 V2 0 5")).toEqual({ source: "V1", start: 0, stop: 5, step: 1 });
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -121,6 +133,78 @@ describe("runDcSweep", () => {
     expect(res.ok).toBe(false);
     if (res.ok) return;
     expect(res.message).toMatch(/max/);
+  });
+
+  // Nested sweep: V1 (inner) and V2 (outer) each feed node `out` through a 1k
+  // resistor, so V(out) = (V1 + V2)/2. For each outer V2 value the inner sweep
+  // of V1 traces a line offset by V2/2.
+  //
+  //   n1 --R1-- out --R2-- n2
+  //   |                     |
+  //   V1+                  V2+
+  //   V1-/gnd ----------- V2-/gnd
+  function summingSchematic(): { components: SchematicComponent[]; wires: SchematicWire[] } {
+    const components: SchematicComponent[] = [
+      { id: "v1", label: "V1", kind: "vsource", x: 0, y: 0, rotation: 0, value: "0",
+        pinOverride: [{ id: "p", label: "+", x: 0, y: 0 }, { id: "n", label: "-", x: 0, y: 100 }] },
+      { id: "r1", label: "R1", kind: "resistor", x: 0, y: 0, rotation: 0, value: "1k",
+        pinOverride: [{ id: "a", label: "a", x: 0, y: 0 }, { id: "b", label: "b", x: 50, y: 50 }] },
+      { id: "r2", label: "R2", kind: "resistor", x: 0, y: 0, rotation: 0, value: "1k",
+        pinOverride: [{ id: "a", label: "a", x: 50, y: 50 }, { id: "b", label: "b", x: 100, y: 0 }] },
+      { id: "v2", label: "V2", kind: "vsource", x: 0, y: 0, rotation: 0, value: "0",
+        pinOverride: [{ id: "p", label: "+", x: 100, y: 0 }, { id: "n", label: "-", x: 0, y: 100 }] },
+      { id: "g", label: "", kind: "ground", x: 0, y: 100, rotation: 0, value: "",
+        pinOverride: [{ id: "g", label: "gnd", x: 0, y: 100 }] },
+    ];
+    return { components, wires: [] };
+  }
+
+  it("runs a nested two-source sweep as a fan of curves (one per outer value)", () => {
+    const { components, wires } = summingSchematic();
+    const res = runDcSweep({ components, wires }, {
+      source: "V1", start: 0, stop: 4, step: 2,
+      source2: "V2", start2: 0, stop2: 4, step2: 2,
+    });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.sweep).toEqual([0, 2, 4]); // inner axis = V1
+
+    // Three non-ground nets (n1=V1, n2=V2, out) fanned across 3 outer values.
+    const traces = res.nets.filter((n) => !n.ground);
+    expect(traces).toHaveLength(9);
+    // Every trace is labelled with its outer V2 value, 3 per value.
+    for (const v2 of [0, 2, 4]) {
+      expect(traces.filter((t) => t.label.includes(`V2=${v2}`))).toHaveLength(3);
+    }
+    // V(out) = (V1 + V2)/2 with V1 swept [0,2,4]; find it by its waveform.
+    const out = (v2: number) =>
+      traces.find((t) => t.label.includes(`V2=${v2}`) &&
+        t.voltages.every((v, k) => Math.abs(v - (res.sweep[k] + v2) / 2) < 1e-9));
+    expect(out(0)?.voltages).toEqual([0, 1, 2]);
+    expect(out(2)?.voltages).toEqual([1, 2, 3]);
+    expect(out(4)?.voltages).toEqual([2, 3, 4]);
+  });
+
+  it("errors when the nested outer source is unknown", () => {
+    const { components, wires } = summingSchematic();
+    const res = runDcSweep({ components, wires }, {
+      source: "V1", start: 0, stop: 4, step: 2,
+      source2: "V9", start2: 0, stop2: 4, step2: 2,
+    });
+    expect(res.ok).toBe(false);
+    if (res.ok) return;
+    expect(res.message).toMatch(/not found/);
+  });
+
+  it("errors when inner and outer sources are the same", () => {
+    const { components, wires } = summingSchematic();
+    const res = runDcSweep({ components, wires }, {
+      source: "V1", start: 0, stop: 4, step: 2,
+      source2: "V1", start2: 0, stop2: 4, step2: 2,
+    });
+    expect(res.ok).toBe(false);
+    if (res.ok) return;
+    expect(res.message).toMatch(/must differ/);
   });
 
   // Mirrors App.runDcAnalysis: an imported circuit's own `.dc` directive is

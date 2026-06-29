@@ -314,8 +314,15 @@ zener, opamp, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**, **B (behav
   as authored) and shows a clear prompt when none is present. Native ngspice deck
   now emits `.dc <src> <start> <stop> <inc>` (stop-directed sign) —
   `buildSpiceDeck` `kind:"dc"`, live-validated in ngspice 17 (1:1 divider →
-  V(mid)=Vsweep/2). **NEXT:** native (FFI) DC runner for nonlinear sweeps;
-  manual source/range picker for hand-built circuits; nested 2nd-source sweep.
+  V(mid)=Vsweep/2). **Nested 2nd-source sweep now landed** (`.dc V1 … V2 …`):
+  `parseDcDirective` reads the second leg (SPICE inner-source-first order),
+  `runDcSweep` re-runs the inner sweep once per outer value and returns the
+  result as a fan of curves (one annotated net trace per outer value, shared
+  inner X axis — how LTspice draws nested DC); `DcPlot` renders the fan via a
+  `ground` flag on each net. Native deck appends `<src2> <start2> <stop2>
+  <inc2>` to the `.dc` line. Hand-computed summing-node test (V(out)=(V1+V2)/2)
+  **matches ngspice 17 exactly** (9-row fan). **NEXT:** native (FFI) DC runner
+  for nonlinear sweeps; manual source/range picker for hand-built circuits.
 - ✅ `.noise` **Noise analysis** — used 13× — **solver + parser + UI landed**
   (`simulation/noise.ts`): `parseNoiseDirective(".noise V(out) V1 dec 10 1 1Meg")`
   → `{output, source, sweep}` (`V(node)`/`V(a,b)` output, independent-source input,

@@ -287,6 +287,23 @@ describe("buildSpiceDeck", () => {
     expect(down.netlist).toContain(".dc V1 10 0 -2");
   });
 
+  it("appends a nested outer source to the .dc directive (SPICE inner-first order)", () => {
+    const components = [
+      component("vsource", "V1", "5", 0, 32),
+      component("vsource", "V2", "5", 64, 32),
+      component("resistor", "R1", "1k", 96, 0),
+      component("ground", "", "", 0, 64),
+      component("ground", "", "", 128, 0),
+    ];
+    const wires = [wire("w1", [{ x: 0, y: 0 }, { x: 64, y: 0 }])];
+
+    const nested = buildSpiceDeck({ components, wires }, {
+      kind: "dc", source: "V1", start: 0, stop: 5, step: 1,
+      source2: "V2", start2: 0, stop2: 10, step2: 2,
+    });
+    expect(nested.netlist).toContain(".dc V1 0 5 1 V2 0 10 2");
+  });
+
   it("carries a document's own .model/.lib/.subckt definitions into the deck", () => {
     const components = [
       component("vsource", "V1", "5", 0, 32),

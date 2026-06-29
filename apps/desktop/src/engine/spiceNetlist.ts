@@ -20,7 +20,18 @@ export type SpiceAnalysis =
   | { kind: "tran"; stopTime: number; steps: number }
   | { kind: "op" }
   | { kind: "ac"; startHz: number; stopHz: number; pointsPerDecade: number }
-  | { kind: "dc"; source: string; start: number; stop: number; step: number };
+  | {
+      kind: "dc";
+      source: string;
+      start: number;
+      stop: number;
+      step: number;
+      /** Optional nested outer source (SPICE: inner source listed first). */
+      source2?: string;
+      start2?: number;
+      stop2?: number;
+      step2?: number;
+    };
 
 export interface SpiceDeck {
   circuit: ExtractedCircuit;
@@ -375,7 +386,21 @@ function analysisLine(analysis: SpiceAnalysis, useInitialConditions = false): st
       }
       // ngspice wants the increment signed toward the stop value.
       const inc = Math.abs(analysis.step) * (analysis.stop >= analysis.start ? 1 : -1);
-      return `.dc ${safeName(analysis.source)} ${analysis.start} ${analysis.stop} ${inc}`;
+      let line = `.dc ${safeName(analysis.source)} ${analysis.start} ${analysis.stop} ${inc}`;
+      // Nested outer source: append `<src2> <start2> <stop2> <inc2>` (SPICE
+      // sweeps the first-listed source innermost).
+      if (
+        analysis.source2 &&
+        analysis.source2.trim() &&
+        Number.isFinite(analysis.start2) &&
+        Number.isFinite(analysis.stop2) &&
+        Number.isFinite(analysis.step2) &&
+        analysis.step2 !== 0
+      ) {
+        const inc2 = Math.abs(analysis.step2!) * (analysis.stop2! >= analysis.start2! ? 1 : -1);
+        line += ` ${safeName(analysis.source2)} ${analysis.start2} ${analysis.stop2} ${inc2}`;
+      }
+      return line;
     }
   }
 }

@@ -859,7 +859,7 @@ function bodePath(magDb: number[], freqs: number[], plot: { minDb: number; maxDb
  * frequency mapping. The ground net (label "GND") is dropped — it is always 0 V.
  */
 function DcPlot({ result }: { result: DcSweepResult | null }) {
-  const traces = result?.ok ? result.nets.filter((n) => n.label !== "GND").slice(0, 6) : [];
+  const traces = result?.ok ? result.nets.filter((n) => !n.ground).slice(0, 6) : [];
   const sweep = result?.ok ? result.sweep : [];
   const plot = useMemo(() => {
     if (traces.length === 0 || sweep.length === 0) return null;
