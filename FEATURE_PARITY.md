@@ -429,8 +429,14 @@ zener, opamp, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**, **B (behav
   `runMeasurements` no longer mis-routes `dc` lines onto the time axis (it now
   takes only `tran`/untyped); `App.tsx` memoizes `dcMeasurements` off the DC
   result and renders a `MeasTable` under the DC plot. 8 hand-computed tests
-  (divider V(out)=Vin/2). **NEXT:** `.meas noise` domain; expose currents in the
-  waveform viewer (probe a device → plot its current, §6).
+  (divider V(out)=Vin/2). **`.meas noise` now landed too**
+  (`simulation/measureNoise.ts`): a NoiseResult is adapted into a MeasWaveform
+  over frequency with `onoise`/`inoise` traces, so `MAX/MIN V(onoise)`,
+  `FIND V(onoise) AT=1k`, `WHEN V(onoise)=10n` and `V(inoise)` resolve; `App.tsx`
+  memoizes `noiseMeasurements` and renders a `MeasTable` under the noise plot.
+  7 hand-computed tests. All four spectral/sweep `.meas` domains
+  (tran/ac/dc/noise) now run. **NEXT:** expose currents in the waveform viewer
+  (probe a device → plot its current, §6).
 - ⬜ DC operating point annotation on schematic (show node V / device I in-place)
 - 🟡 Initial conditions **`.ic` / `.nodeset`** — `buildSpiceDeck` carries both
   through to the native ngspice deck verbatim (re-prefixed, lower-cased keyword);

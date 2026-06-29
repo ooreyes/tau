@@ -47,6 +47,7 @@ import { runMeasurements, type MeasResult } from "./simulation/measure";
 import { runFourier, type FourierResult } from "./simulation/fourier";
 import { runAcMeasurements } from "./simulation/measureAc";
 import { runDcMeasurements } from "./simulation/measureDc";
+import { runNoiseMeasurements } from "./simulation/measureNoise";
 import {
   isNativeSpiceRuntime,
   MAX_NATIVE_OUTPUT_POINTS,
@@ -222,6 +223,13 @@ function App() {
     if (!dcAnalysis || !dcAnalysis.ok || directives.length === 0) return [];
     return runDcMeasurements(directives, dcAnalysis, params.scope, params.funcs);
   }, [dcAnalysis, directives, params]);
+
+  // Evaluate the document's `.meas noise …` directives against the latest noise
+  // analysis (`V(onoise)`/`V(inoise)` spectral densities over frequency).
+  const noiseMeasurements = useMemo<MeasResult[]>(() => {
+    if (!noiseAnalysis || !noiseAnalysis.ok || directives.length === 0) return [];
+    return runNoiseMeasurements(directives, noiseAnalysis, params.scope, params.funcs);
+  }, [noiseAnalysis, directives, params]);
 
   const executeTransient = useCallback(async (options: AnalysisOptions) => {
     const requestId = ++analysisRequestRef.current;
@@ -709,6 +717,7 @@ function App() {
                 fourier={fourier}
                 acMeasurements={acMeasurements}
                 dcMeasurements={dcMeasurements}
+                noiseMeasurements={noiseMeasurements}
                 options={analysisOptions}
                 isRunning={analysisRunning}
                 onOptionsChange={setAnalysisOptions}

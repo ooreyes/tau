@@ -38,6 +38,7 @@ interface SimulationPanelProps {
   fourier: FourierResult[];
   acMeasurements: MeasResult[];
   dcMeasurements: MeasResult[];
+  noiseMeasurements: MeasResult[];
   options: AnalysisOptions;
   isRunning: boolean;
   onOptionsChange: (options: AnalysisOptions) => void;
@@ -69,6 +70,7 @@ export function SimulationPanel({
   fourier,
   acMeasurements,
   dcMeasurements,
+  noiseMeasurements,
   options,
   isRunning,
   onOptionsChange,
@@ -308,7 +310,12 @@ export function SimulationPanel({
         </>
       )}
       {mode === "tf" && <TfTable result={tfResult} />}
-      {mode === "noise" && <NoisePlot result={noiseResult} />}
+      {mode === "noise" && (
+        <>
+          <NoisePlot result={noiseResult} />
+          <MeasTable measurements={noiseMeasurements} />
+        </>
+      )}
       {mode === "step" && <StepPlot result={stepResult} probes={probes} />}
 
       <div className="selection-strip">
