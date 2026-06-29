@@ -58,6 +58,16 @@ export function definedModelNames(directives: ReadonlyArray<string>): Set<string
   return names;
 }
 
+/**
+ * ngspice has no lateral-BJT model types: LTspice's `LPNP`/`LNPN` (used by the
+ * discrete LM741/LM308 demos) must become plain `PNP`/`NPN`, or ngspice reports
+ * "Unknown model type lpnp - ignored" and every transistor on that model fails
+ * with a type mismatch. Rewrites only the model-type token on a `.model` line.
+ */
+function translateModelType(line: string): string {
+  return line.replace(/^(\.model\s+\S+\s+)l(pnp|npn)\b/i, (_m, head: string, type: string) => `${head}${type.toUpperCase()}`);
+}
+
 export function modelLibLinesFromDirectives(directives: ReadonlyArray<string>): string[] {
   const out: string[] = [];
   for (const raw of directives) {
@@ -67,7 +77,8 @@ export function modelLibLinesFromDirectives(directives: ReadonlyArray<string>): 
     physicalLines.forEach((line, index) => {
       const trimmed = line.trim();
       if (!trimmed) return;
-      out.push(index === 0 ? normalizeOpeningLine(trimmed) : trimmed);
+      const normalized = index === 0 ? normalizeOpeningLine(trimmed) : trimmed;
+      out.push(translateModelType(normalized));
     });
   }
   return out;

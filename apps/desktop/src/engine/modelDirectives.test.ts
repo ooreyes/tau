@@ -36,6 +36,20 @@ describe("modelLibLinesFromDirectives", () => {
     ]);
   });
 
+  it("rewrites LTspice lateral LPNP/LNPN to ngspice PNP/NPN (LM741/LM308)", () => {
+    expect(modelLibLinesFromDirectives([".model PN LPNP(BF=25 Cje=.3p Rb=250)"])).toEqual([
+      ".model PN PNP(BF=25 Cje=.3p Rb=250)",
+    ]);
+    expect(modelLibLinesFromDirectives([".model LX lnpn(Bf=100)"])).toEqual([".model LX NPN(Bf=100)"]);
+    // Each line of a multi-model block is translated independently.
+    expect(modelLibLinesFromDirectives([".model A LPNP(Bf=1)\\n.model B NPN(Bf=2)"])).toEqual([
+      ".model A PNP(Bf=1)",
+      ".model B NPN(Bf=2)",
+    ]);
+    // A plain PNP/NPN and a model whose *name* starts with L are untouched.
+    expect(modelLibLinesFromDirectives([".model LPN PNP(Bf=3)"])).toEqual([".model LPN PNP(Bf=3)"]);
+  });
+
   it("expands a multi-line .subckt block on the LTspice \\n escape", () => {
     const block = ".subckt myamp in out vcc\\nR1 in n1 1k\\nC1 n1 0 1n\\n.ends myamp";
     expect(modelLibLinesFromDirectives([block])).toEqual([
