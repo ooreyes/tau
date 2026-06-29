@@ -1,5 +1,39 @@
 # Tau Autobuilder — Progress Log
 
+## 2026-06-29T14:12Z — auto/ltspice-parity — numeric waveform comparison vs LTspice (§7)
+
+### What I did
+- New `simulation/waveformCompare.ts` — turns the acceptance test ("reproduce
+  LTspice's waveforms exactly") into a number:
+  - `interpolateAt` / `resampleOnto` — linear resampling onto an arbitrary time
+    grid (also the resampler the future `.raw` scope overlay needs).
+  - `compareWaveforms(testT,testV, refT,refV, opts)` — resamples the reference
+    onto the test's times over the overlapping interval and reports samples,
+    overlap, max/RMS abs error, reference peak-to-peak range, normalized RMS/max,
+    and a pass/fail verdict (default 5% RMS / 10% max of full scale). Handles a
+    flat reference (no divide-by-zero), partial overlap, and empty/no-overlap
+    inputs (throws).
+
+### Files touched
+- src/simulation/waveformCompare.ts (new), src/simulation/waveformCompare.test.ts (new, 10 tests)
+- FEATURE_PARITY.md (§7 waveform-agreement: tooling 🟡 note)
+
+### Tests
+809 passing (was 799; +10 new). Typecheck clean. Tests: linear interp + clamp,
+zero-error on mismatched grids, normalized-offset metrics, tolerance pass/fail,
+overlap restriction, flat reference, error guards.
+
+### FEATURE_PARITY items updated
+- §7 "Match LTspice's defaults … for waveform-level agreement" — added a 🟡
+  sub-bullet for the comparison tooling (the tuning itself stays ⬜).
+
+### UX issues found
+- None (pure logic). This unblocks an automated/visual LTspice-vs-Tau overlay.
+
+### Next step
+Overlay a loaded `.raw` reference trace on the transient scope using
+`resampleOnto` + show `compareWaveforms` metrics (§6), or measurement cursors.
+
 ## 2026-06-29T14:06Z — auto/ltspice-parity — export Tau results as LTspice .raw (§1)
 
 ### What I did
