@@ -475,7 +475,11 @@ export function componentValueFromAttrs(
   const rawBase = (attrs.Value ?? "").trim();
   const base = /^["']*$/.test(rawBase) ? "" : rawBase;
   if (SOURCE_KINDS_WITH_INLINE_SPEC.has(kind)) {
-    const extras = [attrs.Value2, attrs.SpiceLine]
+    // LTspice can split one transient spec across all four attribute fields
+    // (e.g. `Value SINE(` / `Value2 0 100u` / `SpiceLine 5Meg` /
+    // `SpiceLine2 0 0 0 1)`), so concatenate every field — in document order —
+    // to reconstruct the full netlist value, exactly as LTspice joins them.
+    const extras = [attrs.Value2, attrs.SpiceLine, attrs.SpiceLine2]
       .map((s) => s?.trim())
       .filter((s): s is string => !!s);
     return [base, ...extras].filter(Boolean).join(" ");

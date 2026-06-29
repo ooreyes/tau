@@ -365,6 +365,18 @@ describe("componentValueFromAttrs", () => {
     ).toBe("1 AC 1 Rser=0.1");
   });
 
+  it("reassembles a SINE spec split across all four fields (P2.asc I1)", () => {
+    // LTspice spreads one transient function over Value/Value2/SpiceLine/SpiceLine2.
+    expect(
+      componentValueFromAttrs("isource", {
+        Value: "SINE(",
+        Value2: "0 100u",
+        SpiceLine: "5Meg",
+        SpiceLine2: "0 0 0 1)",
+      }),
+    ).toBe("SINE( 0 100u 5Meg 0 0 0 1)");
+  });
+
   it("returns Value alone for non-source kinds and tolerates missing attrs", () => {
     expect(componentValueFromAttrs("resistor", { Value: "100k", Value2: "tol=1" })).toBe("100k");
     expect(componentValueFromAttrs("vsource", {})).toBe("");
