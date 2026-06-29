@@ -24,6 +24,7 @@ import type { StepFamilyResult } from "../simulation/stepFamily";
 import type { MeasResult } from "../simulation/measure";
 import type { FourierResult } from "../simulation/fourier";
 import { evaluatePlotExpression } from "../simulation/plotExpression";
+import { seriesToCsv } from "../simulation/waveformCsv";
 import { isNativeSpiceRuntime, MAX_NATIVE_OUTPUT_POINTS } from "../engine/nativeSpice";
 import { displaySampleIndices, waveformBounds } from "../simulation/waveform";
 
@@ -145,6 +146,25 @@ export function SimulationPanel({
     if (!exprList.includes(expr)) setExprList((prev) => [...prev, expr]);
     setExprInput("");
     setExprError(null);
+  };
+
+  // Export the transient result (node voltages + branch currents + any plotted
+  // expressions) as a CSV table — one column per signal, one row per timestep.
+  const exportCsv = () => {
+    if (!result || !result.ok) return;
+    const series = [
+      ...result.traces.map((t) => ({ label: t.label, values: t.values })),
+      ...result.currents.map((c) => ({ label: c.label, values: c.values })),
+      ...exprTraces.map((t) => ({ label: t.label, values: t.values })),
+    ];
+    const csv = seriesToCsv("time", result.times, series);
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `tau-transient-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
   const title =
     mode === "tran" ? "Transient scope"
@@ -302,6 +322,14 @@ export function SimulationPanel({
             />
             <button className="expr-add" onClick={addExpression} disabled={!exprInput.trim()}>
               Add trace
+            </button>
+            <button
+              className="expr-add"
+              onClick={exportCsv}
+              disabled={!result?.ok}
+              title="Export the transient waveforms as a CSV table"
+            >
+              Export CSV
             </button>
           </div>
           {exprError && <div className="expr-error" role="alert">{exprError}</div>}

@@ -509,7 +509,12 @@ zener, opamp, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**, **B (behav
   in `SimulationPanel`): the **STEP** tab re-runs the sweep and draws the probed
   signal across all step members in a color ramp; legend lists each `name=value`.
   Pending: AC/DC-domain families, per-trace selection, cursor readout.
-- ⬜ Save plot settings (`.plt`), export image/CSV
+- 🟡 Save plot settings (`.plt`), export image/CSV — **CSV export landed**
+  (`simulation/waveformCsv.ts` `seriesToCsv`): an **Export CSV** button on the
+  transient scope writes a table of `time` + every node-voltage trace + branch
+  current + plotted expression, one row per timestep (RFC-4180 quoting,
+  non-finite samples as gaps). 4 hand-computed tests. **NEXT:** `.plt` settings,
+  PNG image export, AC/DC-result CSV.
 - ⬜ Right-click trace → math/operations
 
 ## 7. Engine & accuracy

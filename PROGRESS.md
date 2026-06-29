@@ -1,5 +1,47 @@
 # Tau Autobuilder — Progress Log
 
+## 2026-06-29T06:37Z — auto/ltspice-parity — waveform viewer: expression plots + CSV export (§6)
+
+### What I did
+Two §6 waveform-viewer features, both with a pure testable core reused from
+existing infrastructure:
+- **Plot arbitrary expressions** (`simulation/plotExpression.ts`): an expression
+  bar under the transient scope evaluates any expression of the simulated
+  signals (`V(out)-V(in)`, power `V(out)*I(R1)`, `2*V(in)+1`) at every timestep
+  and overlays it as a derived trace. Reuses the `.meas` compiler (`compileExpr`,
+  now exported from `measure.ts`) so node voltages + branch currents resolve
+  through one evaluator. Bad signal names show a clear error; traces managed via
+  labelled removable chips. WaveformPlot gained an `extraTraces` prop folded into
+  its bounds + rendering.
+- **CSV export** (`simulation/waveformCsv.ts`): an **Export CSV** button writes
+  `time` + every node trace + branch current + plotted expression as a table
+  (RFC-4180 header quoting, non-finite samples as empty cells).
+
+### Files touched
+- src/simulation/plotExpression.ts (+ .test.ts, 6 tests)
+- src/simulation/waveformCsv.ts (+ .test.ts, 4 tests)
+- src/simulation/measure.ts (export compileExpr)
+- src/components/SimulationPanel.tsx (expr bar, chips, export button, exprTraces)
+- src/App.css (.expr-* styles)
+- FEATURE_PARITY.md (§6 expression-plot + CSV notes)
+
+### Tests
+745 passing (was 735; +10 new). Typecheck clean. `pnpm vite build` succeeds.
+
+### FEATURE_PARITY items updated
+- §6 plot arbitrary expressions 🟡 (was ⬜); §6 export CSV 🟡 (was ⬜).
+
+### UX issues found
+- Live headless screenshot still blocked (dev port held per design log), so the
+  new expression bar was verified via typecheck + production build + following
+  existing CSS patterns, not a live screenshot — **UX debt: visual QA pending**.
+- Expression traces (incl. power, in W) render on the scope's shared "V" axis;
+  per-trace units/axis is future work.
+
+### Next step
+§6: add expression traces to the AC/Bode pane (reuse measureAc's compiler), or
+measurement cursors (1 & 2 with delta readout) on the transient scope.
+
 ## 2026-06-29T06:27Z — auto/ltspice-parity — .meas dc + .meas noise domains (§4)
 
 ### What I did
