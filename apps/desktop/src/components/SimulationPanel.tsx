@@ -30,6 +30,9 @@ import { buildSpiceDeck } from "../engine/spiceNetlist";
 import { serializeRaw, inferRawType } from "../io/rawExport";
 import { cursorReadout, fractionToX } from "../simulation/cursors";
 import type { CursorTraceInput } from "../simulation/cursors";
+import { parseRaw } from "../io/rawImport";
+import type { RawData } from "../io/rawImport";
+import { buildReferenceOverlay } from "../simulation/rawOverlay";
 import { buildParamScope } from "../simulation/paramScope";
 import { isNativeSpiceRuntime, MAX_NATIVE_OUTPUT_POINTS } from "../engine/nativeSpice";
 import { displaySampleIndices, waveformBounds } from "../simulation/waveform";
@@ -131,6 +134,10 @@ export function SimulationPanel({
   const [exprInput, setExprInput] = useState("");
   const [exprError, setExprError] = useState<string | null>(null);
   const [netlistError, setNetlistError] = useState<string | null>(null);
+  // An LTspice `.raw` loaded as a reference to overlay against Tau's results.
+  const [refData, setRefData] = useState<RawData | null>(null);
+  const [refError, setRefError] = useState<string | null>(null);
+  const refInputRef = useRef<HTMLInputElement | null>(null);
 
   // Evaluate each saved expression against the latest transient result; drop the
   // ones that no longer resolve (e.g. after a circuit change removes a node).
@@ -142,6 +149,35 @@ export function SimulationPanel({
     });
     return out;
   }, [exprList, result]);
+
+  // Match a loaded LTspice `.raw` to the current transient result by signal name,
+  // resampling each match onto Tau's time grid for overlay + numeric comparison.
+  const refOverlay = useMemo(() => {
+    if (!refData || !result || !result.ok) return null;
+    const signals = [
+      ...result.traces.map((t) => ({ label: t.label, values: t.values })),
+      ...result.currents.map((c) => ({ label: c.label, values: c.values })),
+      ...exprTraces.map((t) => ({ label: t.label, values: t.values })),
+    ];
+    return buildReferenceOverlay(refData, result.times, signals, REF_COLORS);
+  }, [refData, result, exprTraces]);
+
+  const loadReferenceRaw = async (file: File) => {
+    try {
+      setRefData(parseRaw(await file.arrayBuffer()));
+      setRefError(null);
+    } catch (err) {
+      setRefData(null);
+      setRefError(err instanceof Error ? err.message : "Could not read the .raw file.");
+    } finally {
+      if (refInputRef.current) refInputRef.current.value = "";
+    }
+  };
+
+  const scopeTraces = useMemo(
+    () => (refOverlay ? [...exprTraces, ...refOverlay.traces] : exprTraces),
+    [exprTraces, refOverlay],
+  );
 
   const addExpression = () => {
     const expr = exprInput.trim();
@@ -368,7 +404,7 @@ export function SimulationPanel({
 
       {mode === "tran" && (
         <>
-          <WaveformPlot result={result} probes={probes} netLabels={netLabels} extraTraces={exprTraces} />
+          <WaveformPlot result={result} probes={probes} netLabels={netLabels} extraTraces={scopeTraces} />
 
           <div className="expr-bar">
             <input
@@ -412,7 +448,47 @@ export function SimulationPanel({
             >
               Save .raw
             </button>
+            <button
+              className="expr-add"
+              onClick={() => refInputRef.current?.click()}
+              disabled={!result?.ok}
+              title="Overlay an LTspice .raw reference waveform and compare"
+            >
+              {refData ? "Ref .raw ✓" : "Ref .raw"}
+            </button>
+            {refData && (
+              <button className="expr-add" onClick={() => { setRefData(null); setRefError(null); }} title="Remove the reference overlay">
+                Clear ref
+              </button>
+            )}
+            <input
+              ref={refInputRef}
+              className="file-input"
+              type="file"
+              accept=".raw"
+              onChange={(e) => {
+                const file = e.currentTarget.files?.[0];
+                if (file) void loadReferenceRaw(file);
+              }}
+            />
           </div>
+          {refError && <div className="expr-error" role="alert">{refError}</div>}
+          {refOverlay && (
+            <div className="ref-compare">
+              {refOverlay.comparisons.length === 0 ? (
+                <span className="muted">
+                  No reference signal matched a plotted trace
+                  {refOverlay.unmatched.length > 0 ? ` (${refOverlay.unmatched.slice(0, 4).join(", ")}…)` : ""}.
+                </span>
+              ) : (
+                refOverlay.comparisons.map((c) => (
+                  <span key={c.label} className={c.pass ? "ref-pass" : "ref-fail"}>
+                    {c.label}: {(c.normalizedRms * 100).toFixed(2)}% RMS {c.pass ? "✓" : "✗"}
+                  </span>
+                ))
+              )}
+            </div>
+          )}
           {exprError && <div className="expr-error" role="alert">{exprError}</div>}
           {netlistError && <div className="expr-error" role="alert">{netlistError}</div>}
           {exprList.length > 0 && (
@@ -743,7 +819,12 @@ function WaveformPlot({
         <rect className="scope-frame" x={PLOT_PAD} y={PLOT_PAD} width={PLOT_WIDTH - PLOT_PAD * 2} height={PLOT_HEIGHT - PLOT_PAD * 2} />
         {plot &&
           traces.map((trace) => (
-            <path key={trace.id} className="scope-trace" stroke={trace.color} d={tracePath(trace, success!.times, plot.min, plot.max, plot.tMax)} />
+            <path
+              key={trace.id}
+              className={trace.id.startsWith("ref:") ? "scope-trace ref" : "scope-trace"}
+              stroke={trace.color}
+              d={tracePath(trace, success!.times, plot.min, plot.max, plot.tMax)}
+            />
           ))}
         <text className="scope-axis" x={PLOT_PAD} y={18}>
           {plot ? formatEngineering(plot.max, "V", 2) : "MAX"}
@@ -979,6 +1060,8 @@ function downloadCsv(csv: string, tag: string): void {
 const AC_COLORS = ["var(--trace-cyan)", "var(--trace-green)", "var(--trace-cream)", "var(--trace-red)"];
 // Distinct ramp for user expression traces so they stand out from node traces.
 const EXPR_COLORS = ["var(--trace-red)", "var(--trace-cream)", "var(--trace-cyan)", "var(--trace-green)"];
+// Reference (.raw overlay) traces — drawn dashed (see `.scope-trace.ref`).
+const REF_COLORS = ["var(--trace-amber)", "var(--trace-purple)", "var(--trace-cream)", "var(--trace-green)"];
 
 /**
  * FFT of a transient signal — LTspice's "View → FFT". Resamples the chosen

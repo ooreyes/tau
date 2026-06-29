@@ -982,6 +982,30 @@ body {
   /* no glow filter — precise, clean */
 }
 
+/* LTspice .raw reference overlay — dashed so it reads as the comparison line. */
+.scope-trace.ref {
+  stroke-width: 1.25;
+  stroke-dasharray: 4 3;
+  opacity: 0.85;
+}
+
+.ref-compare {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 4px 2px 2px;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+.ref-compare .ref-pass {
+  color: var(--accent);
+}
+
+.ref-compare .ref-fail {
+  color: var(--danger);
+}
+
 .scope-axis {
   fill: var(--muted);
   font-size: 8.5px;
