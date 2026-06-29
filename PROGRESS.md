@@ -1,5 +1,42 @@
 # Tau Autobuilder — Progress Log
 
+## 2026-06-29T14:22Z — auto/ltspice-parity — measurement cursors on the transient scope (§6)
+
+### What I did
+- New `simulation/cursors.ts` — pure cursor math (LTspice "1 & 2" cursors):
+  `fractionToX` maps a 0–1 slider position to an axis value; `cursorReadout`
+  interpolates every trace at both cursors and returns t1/t2/Δt/(1/Δt) plus each
+  signal's y1/y2/Δy/slope. Clamps to range, NaN-guards coincident cursors,
+  validates trace lengths. Reuses the tested `interpolateAt` resampler.
+- New `CursorView` collapsible panel on the transient pane (`SimulationPanel`):
+  two sliders position the cursors; a meter row shows t1/t2/Δt/(1/Δt) and a
+  table lists each shown signal (node V + branch I + plotted expressions) at C1,
+  C2, and the delta. Sliders + table (no canvas drag) keep visual risk low.
+- New `.cursor-sliders`/`.cursor-table` CSS (theme variables only).
+
+### Files touched
+- src/simulation/cursors.ts (new), src/simulation/cursors.test.ts (new, 8 tests)
+- src/components/SimulationPanel.tsx (CursorView + render + imports)
+- src/App.css (.cursor-sliders/.cursor-table)
+- FEATURE_PARITY.md (§6 "Measurement cursors" ⬜→✅)
+
+### Tests
+817 passing (was 809; +8 new). Typecheck clean. `vite build` succeeds (99
+modules) — confirms the UI bundles. Visual QA still blocked (no headless
+screenshot); component mirrors the existing FftView pattern exactly.
+
+### FEATURE_PARITY items updated
+- §6 "Measurement cursors (1 & 2, delta readout)" ⬜→✅.
+
+### UX issues found
+- UX debt: cursors are slider-driven, not draggable vertical lines on the plot
+  (LTspice drags on the trace). Functional + testable now; drag-on-canvas is a
+  visual-polish follow-up once headless screenshotting is unblocked.
+
+### Next step
+Overlay a loaded `.raw` reference trace on the scope (resample via `resampleOnto`,
+show `compareWaveforms` metrics) — the last keystone for the acceptance test.
+
 ## 2026-06-29T14:12Z — auto/ltspice-parity — numeric waveform comparison vs LTspice (§7)
 
 ### What I did
