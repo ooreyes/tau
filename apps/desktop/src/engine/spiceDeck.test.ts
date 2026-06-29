@@ -86,6 +86,21 @@ describe("deck structure — operating point", () => {
     );
     expectValidDeck(deck.netlist, /^\.op$/);
   });
+
+  it("splits a TEXT block packing several directives on the LTspice \\n escape", () => {
+    // LTspice stores `.ic v(out)=0.5\n.tran 10m` as one directive; the .ic
+    // consumer must see one directive per line, not the collapsed string (Draft6).
+    const deck = buildSpiceDeck(
+      {
+        components: [Vdc(0, 32, "5"), R(96, 0, "1k", "R1"), GND(0, 64), GND(128, 0)],
+        wires: [W({ x: 0, y: 0 }, { x: 64, y: 0 })],
+        directives: [".ic v(out)=0.5\\n.tran 10m"],
+      },
+      { kind: "op" },
+    );
+    expect(deck.netlist).toMatch(/^\.ic v\(out\)=0\.5$/m);
+    expect(deck.netlist).not.toContain("\\n"); // no literal escape leaked onto a line
+  });
 });
 
 describe("deck structure — coupled inductors (K)", () => {

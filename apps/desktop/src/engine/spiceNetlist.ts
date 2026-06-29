@@ -1,5 +1,5 @@
 import { extractCircuit, type ExtractedCircuit, type ExtractedComponent } from "../schematic/netlist";
-import { resolveComponentValues, EMPTY_SCOPE, type ParamScope } from "../simulation/paramScope";
+import { resolveComponentValues, expandDirectiveLines, EMPTY_SCOPE, type ParamScope } from "../simulation/paramScope";
 import type { ComponentKind, NetLabel, SchematicComponent, SchematicWire } from "../schematic/types";
 import { parseQuantity } from "../simulation/quantity";
 import { decodeParams } from "../schematic/params";
@@ -57,7 +57,16 @@ export function buildSpiceDeck(schematic: Schematic, analysis: SpiceAnalysis): S
   if (components.length === 0) throw new Error("Place components before running analysis.");
   if (!circuit.groundNetId) throw new Error("Add a ground symbol so node voltages have a reference.");
 
-  const lines = ["Tau generated circuit", optionsLineFromDirectives(schematic.directives ?? [])];
+  // LTspice packs several directives into one on-canvas TEXT block joined by the
+  // literal `\n` escape (e.g. `.ic v(vo)=0.5\n.tran 10m`). The single-line
+  // directive consumers below must see one directive per entry, or two collapse
+  // into one malformed line; `expandDirectiveLines` splits on `\n` and strips
+  // `;` comments. Multi-line *blocks* (`.subckt…ends`, `.model` continuations)
+  // stay on the raw list, which `modelLibLinesFromDirectives` re-splits itself.
+  const rawDirectives = schematic.directives ?? [];
+  const flatDirectives = expandDirectiveLines(rawDirectives);
+
+  const lines = ["Tau generated circuit", optionsLineFromDirectives(flatDirectives)];
   const usedKinds = new Set(components.map((component) => component.kind));
   const needsModels = ["diode", "led", "zener", "nmos", "pmos", "npn", "pnp"].some((kind) => usedKinds.has(kind as ComponentKind));
   if (needsModels) lines.push(...DEFAULT_MODELS);
@@ -65,16 +74,16 @@ export function buildSpiceDeck(schematic: Schematic, analysis: SpiceAnalysis): S
   // Carry the document's own `.model`/`.lib`/`.inc`/`.subckt` definitions into the
   // deck so an imported `.asc` simulates against its real device models and
   // libraries instead of only Tau's generic starter models.
-  lines.push(...modelLibLinesFromDirectives(schematic.directives ?? []));
+  lines.push(...modelLibLinesFromDirectives(rawDirectives));
 
   // Carry mutual-inductance `K` coupling directives (transformer windings) into
   // the deck with any `{expr}` coefficient resolved; without this a coupled
   // transformer would simulate as independent inductors.
-  lines.push(...couplingLinesFromDirectives(schematic.directives ?? [], schematic.params ?? EMPTY_SCOPE));
+  lines.push(...couplingLinesFromDirectives(flatDirectives, schematic.params ?? EMPTY_SCOPE));
 
   // Carry a document `.temp <°C>` into the deck so native ngspice runs its
   // temperature-dependent device models at the authored operating temperature.
-  for (const directive of schematic.directives ?? []) {
+  for (const directive of flatDirectives) {
     const temp = parseTempDirective(directive);
     if (temp !== null) {
       lines.push(`.temp ${temp}`);
@@ -85,7 +94,7 @@ export function buildSpiceDeck(schematic: Schematic, analysis: SpiceAnalysis): S
   // Carry `.ic`/`.nodeset` initial conditions through to ngspice verbatim. When
   // any `.ic` is present a transient must run with `uic` for the initial values
   // to hold at t=0 (LTspice semantics), not just bias the operating point.
-  const { lines: icLines, hasIc } = icLinesFromDirectives(schematic.directives ?? []);
+  const { lines: icLines, hasIc } = icLinesFromDirectives(flatDirectives);
   lines.push(...icLines);
 
   const userModels = definedModelNames(schematic.directives ?? []);
