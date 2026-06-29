@@ -1,5 +1,47 @@
 # Tau Autobuilder — Progress Log
 
+## 2026-06-29T06:20Z — auto/ltspice-parity — nested 2nd-source .dc sweep (§4)
+
+### What I did
+- Implemented LTspice's **nested two-source `.dc` sweep** (`.dc V1 … V2 …`,
+  used 37× by the user's circuits), the last documented gap on the `.dc` item.
+  - `parseDcDirective` now reads an optional second leg (SPICE inner-source-first
+    order); `DcSweepSpec` gains optional `source2/start2/stop2/step2`.
+  - `runDcSweep` re-runs the inner sweep once per outer value and returns the
+    result as a **fan of curves** — one annotated net trace per outer value
+    (`V(out) (V2=2)`), sharing the inner sweep X axis, exactly how LTspice draws
+    nested DC. Refactored the per-step solve into `solveInnerSweep`.
+  - Each net now carries a `ground` flag; `DcPlot` filters on it (instead of the
+    literal `"GND"` label, which the annotation broke). Outer loop capped at 64.
+  - Native ngspice deck (`spiceNetlist.ts` `kind:"dc"`) appends
+    `<src2> <start2> <stop2> <inc2>` to the `.dc` line.
+
+### Files touched
+- src/simulation/dcSweep.ts (nested parse + fan runner)
+- src/simulation/dcSweep.test.ts (+5 tests)
+- src/engine/spiceNetlist.ts (nested .dc emission)
+- src/engine/spiceNetlist.test.ts (+1 test)
+- src/components/SimulationPanel.tsx (DcPlot uses `ground` flag)
+- FEATURE_PARITY.md (§4 .dc nested note)
+
+### Tests
+720 passing (was 714; +6 new). Typecheck clean. **Validated against ngspice 17**:
+a summing node V(out)=(V1+V2)/2 with `.dc V1 0 4 2 V2 0 4 2` produces the same
+9-row fan ([0,1,2],[1,2,3],[2,3,4]) as the TS solver — exact match.
+
+### FEATURE_PARITY items updated
+- §4 `.dc` nested 2nd-source sweep ✅ (line stays 🟡: native FFI DC runner for
+  nonlinear sweeps + manual source picker still pending).
+
+### UX issues found
+- None new. DcPlot caps the fan at 6 traces (existing `.slice(0,6)`); a large
+  nested sweep shows only the first few curves — acceptable, noted as future
+  legend/pick work.
+
+### Next step
+Continue §4: add the `.meas dc` domain (run measurements over a DC sweep result),
+or wire a native (FFI) DC runner so nonlinear `.dc` sweeps match ngspice.
+
 ## 2026-06-29T01:05Z — auto/ltspice-parity — real-.asc op-deck *run* 45 → 70/82 (§3/§4/§7)
 
 ### What I did
