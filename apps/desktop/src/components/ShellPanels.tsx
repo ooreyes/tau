@@ -5,6 +5,7 @@ import { ComponentSymbol } from "../schematic/symbols";
 import type { SchematicComponent } from "../schematic/types";
 import { decodeParams, encodeParams, paramFields } from "../schematic/params";
 import { importAsc, decodeSchematicText } from "../io/ascImport";
+import { schematicToAsc } from "../io/ascExport";
 import { EngineeringInput } from "./EngineeringInput";
 import { useSchematic, type SchematicDocument } from "../store/useSchematic";
 import { EXAMPLE_CIRCUITS, type ExampleCircuit } from "../examples/circuits";
@@ -154,6 +155,7 @@ export function EditorToolbar({
   const wires = useSchematic((s) => s.wires);
   const probes = useSchematic((s) => s.probes);
   const netLabels = useSchematic((s) => s.netLabels);
+  const directives = useSchematic((s) => s.directives);
   const tool = useSchematic((s) => s.tool);
   const cancel = useSchematic((s) => s.cancel);
   const startWiring = useSchematic((s) => s.startWiring);
@@ -179,6 +181,20 @@ export function EditorToolbar({
     const a = document.createElement("a");
     a.href = url;
     a.download = `tau-circuit-${new Date().toISOString().slice(0, 10)}.tau.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const saveAsc = () => {
+    const { text, warnings } = schematicToAsc({ components, wires, netLabels, directives });
+    if (warnings.length > 0) {
+      console.warn(`Exported .asc with ${warnings.length} warning(s):`, warnings);
+    }
+    const blob = new Blob([text], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `tau-circuit-${new Date().toISOString().slice(0, 10)}.asc`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -249,6 +265,7 @@ export function EditorToolbar({
       <button className="editor-text-btn" onClick={onNewCircuit}>New</button>
       <button className="editor-text-btn" onClick={() => fileInputRef.current?.click()}>Open</button>
       <button className="editor-text-btn" disabled={!hasDocument} onClick={saveCircuit}>Save</button>
+      <button className="editor-text-btn" disabled={!hasDocument} onClick={saveAsc} title="Export as LTspice .asc">Save .asc</button>
       <input
         ref={fileInputRef}
         className="file-input"

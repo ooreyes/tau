@@ -131,7 +131,14 @@ Status legend: ✅ done · 🟡 partial · ⬜ not started
   the TS transient/OP DC-parse sites strip the AC chunk so a `5 AC 2` value still
   reads 5 V. 21 hand-computed tests. **NEXT:** semiconductor instance params
   (`Value2`/`SpiceLine` on diodes/MOS), `SpiceModel`/`ModelFile` model selection.
-- ⬜ Export Tau schematic → `.asc` (round-trip).
+- ✅ Export Tau schematic → `.asc` (round-trip). `io/ascExport.ts`:
+  `serializeAscDocument` (inverse of `parseAsc`, round-trips an `AscDocument`)
+  + `schematicToAsc` (Tau components/wires/netLabels/directives → `.asc` text,
+  `kindToLtspiceType`/`rotationToOrientation` reverse maps). Wired to a **Save
+  .asc** toolbar button (`ShellPanels`). Validated: real `deadtime.asc` (18
+  comps/59 wires/13 nets), `class-d_starter.asc` (15/46/8), `Draft1.asc` (4/10)
+  import→export→re-import preserve all counts/kinds with idempotent re-export
+  and zero warnings. 11 unit tests.
 - 🟡 Native SPICE netlist generation (`engine/spiceNetlist.ts`) — works for built-in kinds; needs the directive/model coverage below.
 - 🟡 Export `.cir`/netlist to file; import `.cir`. — **Netlist export landed**
   (LTspice "View → SPICE Netlist"): a **Netlist** button on the transient pane
