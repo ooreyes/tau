@@ -1,5 +1,46 @@
 # Tau Autobuilder — Progress Log
 
+## 2026-06-29T14:31Z — auto/ltspice-parity — overlay an LTspice .raw reference on the scope (§6/KEY GOAL)
+
+### What I did
+- The keystone acceptance-test feature: load LTspice's own `.raw` output and
+  overlay it against Tau's results, with a numeric agreement verdict.
+- New `simulation/rawOverlay.ts` `buildReferenceOverlay(data, times, tauSignals,
+  colors)` — matches reference variables to plotted Tau traces by name
+  (case/space-insensitive), resamples each onto Tau's time grid (`resampleOnto`),
+  and compares (`compareWaveforms`) → returns dashed reference `Trace[]`,
+  per-signal `{normalizedRms, maxAbsError, pass}`, and the unmatched names.
+- Wired into `SimulationPanel`: a **Ref .raw** button (file input → `parseRaw`),
+  a **Clear ref** button, the dashed overlay traces concatenated into the scope's
+  `extraTraces`, and a `.ref-compare` readout showing each matched signal's
+  **% RMS + ✓/✗**. New `.scope-trace.ref` dashed style + `REF_COLORS`.
+
+### Files touched
+- src/simulation/rawOverlay.ts (new), src/simulation/rawOverlay.test.ts (new, 4 tests)
+- src/components/SimulationPanel.tsx (refData state, overlay memo, Ref/Clear buttons,
+  comparison readout, dashed ref traces)
+- src/App.css (.scope-trace.ref, .ref-compare/.ref-pass/.ref-fail)
+- FEATURE_PARITY.md (§1 `.raw` scope overlay note; §6 overlay ✅)
+
+### Tests
+821 passing (was 817; +4 new). Typecheck clean. `vite build` succeeds.
+
+### FEATURE_PARITY items updated
+- §6 "Overlay an LTspice `.raw` reference on the scope" ✅ (new line); §1 `.raw`
+  note updated.
+
+### UX issues found
+- UX debt: name-matching only overlays reference signals whose names match a
+  plotted Tau trace (works for labelled nets; LTspice auto names like `V(n005)`
+  won't match Tau's `N00x`). Acceptable; surfaced as "no reference signal
+  matched" with the unmatched names listed. Visual QA of the dashed overlay still
+  pending a headless screenshot path.
+
+### Next step
+Probe-in-place (§6 ⬜: click a node/wire to add its trace), or AC/step-pane
+expression traces (§6), or tune ngspice defaults so the overlay verdict passes
+across the real-deck suite (§7).
+
 ## 2026-06-29T14:22Z — auto/ltspice-parity — measurement cursors on the transient scope (§6)
 
 ### What I did
