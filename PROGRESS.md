@@ -1,5 +1,45 @@
 # Tau Autobuilder — Progress Log
 
+## 2026-06-29T14:06Z — auto/ltspice-parity — export Tau results as LTspice .raw (§1)
+
+### What I did
+- New `io/rawExport.ts` `serializeRaw(input)` — writes the canonical LTspice
+  binary `.raw` (UTF-16LE header, `Variables:` table, `Binary:` marker, var0
+  float64 / dependents float32; complex re/im float64 pairs). `inferRawType`
+  classifies axis/signal names. `parseRaw(serializeRaw(x))` round-trips for both
+  real and complex data.
+- Wired a **Save .raw** button onto the transient pane (`SimulationPanel`):
+  exports time + every node voltage / branch current / plotted expression so the
+  result opens in LTspice's own waveform viewer for a side-by-side comparison.
+  Generalized `downloadText` to accept `BlobPart` (string or bytes).
+- **Made the `.raw` import test hermetic:** the prior commit's `rawImport.test.ts`
+  used `node:fs` (no `@types/node` in this project → `tsc` failed). Replaced the
+  on-disk reads with an embedded base64 fixture of the real `_t_startup.op.raw`
+  (`rawFixture.ts`); typecheck is green again and the test still exercises the
+  genuine UTF-16LE + float64/float32 binary layout.
+
+### Files touched
+- src/io/rawExport.ts (new), src/io/rawExport.test.ts (new, 5 tests)
+- src/io/rawFixture.ts (new, embedded real .op.raw), src/io/rawImport.test.ts (hermetic)
+- src/components/SimulationPanel.tsx (Save .raw button + exportRaw, downloadText BlobPart)
+- FEATURE_PARITY.md (§1 `.raw` import+export 🟡→✅)
+
+### Tests
+799 passing (was 795). Typecheck clean (also fixes the regression the previous
+commit introduced). Round-trip tests cover real transient + complex AC; the
+import fixture is a genuine LTspice file.
+
+### FEATURE_PARITY items updated
+- §1 "`.raw` waveform export/import" 🟡→✅.
+
+### UX issues found
+- Save .raw is disabled until a transient result exists (matches Export CSV).
+  Visual QA still blocked (dev port held) — button parallels existing exports.
+
+### Next step
+Overlay an imported `.raw` reference trace on the transient scope (§6), or
+measurement cursors (§6 ⬜).
+
 ## 2026-06-29T13:55Z — auto/ltspice-parity — parse LTspice .raw waveform output (§1)
 
 ### What I did
