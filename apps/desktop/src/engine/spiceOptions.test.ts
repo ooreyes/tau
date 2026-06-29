@@ -42,7 +42,7 @@ describe("parseOptionsDirectives", () => {
 
 describe("mergeOptionsLine", () => {
   it("emits the defaults when no overrides are given", () => {
-    expect(mergeOptionsLine({})).toBe(`.options gmin=${DEFAULT_OPTIONS.gmin} reltol=${DEFAULT_OPTIONS.reltol} abstol=${DEFAULT_OPTIONS.abstol} vntol=${DEFAULT_OPTIONS.vntol}`);
+    expect(mergeOptionsLine({})).toBe(`.options gmin=${DEFAULT_OPTIONS.gmin} reltol=${DEFAULT_OPTIONS.reltol} abstol=${DEFAULT_OPTIONS.abstol} vntol=${DEFAULT_OPTIONS.vntol} rshunt=${DEFAULT_OPTIONS.rshunt}`);
   });
 
   it("lets the document override a default in place", () => {
@@ -51,6 +51,13 @@ describe("mergeOptionsLine", () => {
     expect(line).not.toContain("reltol=1e-4");
     // Other defaults are still present.
     expect(line).toContain("gmin=1e-12");
+  });
+
+  it("includes a default rshunt the document can override (floating-node DC path)", () => {
+    expect(mergeOptionsLine({})).toContain("rshunt=1e12");
+    // A circuit that wants tighter/looser leakage wins.
+    expect(mergeOptionsLine({ rshunt: "1e9" })).toContain("rshunt=1e9");
+    expect(optionsLineFromDirectives([".options rshunt=0"])).toContain("rshunt=0");
   });
 
   it("appends document-only options after the defaults, flags bare", () => {

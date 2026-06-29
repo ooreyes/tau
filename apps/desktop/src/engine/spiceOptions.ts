@@ -14,6 +14,13 @@ export const DEFAULT_OPTIONS: Record<string, string> = {
   reltol: "1e-4",
   abstol: "1e-12",
   vntol: "1e-7",
+  // A 1 TΩ resistor from every node to ground. ngspice (unlike LTspice) throws a
+  // fatal "singular matrix" the moment any node lacks a DC path to ground — a
+  // floating op-amp input, an AC-coupled stage, an ideal-transformer winding.
+  // rshunt gives every node a negligible DC return so those circuits solve; at
+  // 1e12 Ω its effect on real node voltages is below measurement noise. The
+  // document can override or disable it.
+  rshunt: "1e12",
 };
 
 /**
