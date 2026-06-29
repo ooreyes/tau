@@ -1,5 +1,42 @@
 # Tau Autobuilder — Progress Log
 
+## 2026-06-29T06:27Z — auto/ltspice-parity — .meas dc + .meas noise domains (§4)
+
+### What I did
+Closed the two remaining spectral/sweep `.meas` domains by reusing the
+transient measurement core (axis-generic `evaluateMeasurement` + `compileExpr`)
+against adapted waveforms — no duplicated parsing or crossing logic.
+- **`.meas dc`** (`simulation/measureDc.ts`): `dcResultToWaveform` maps a
+  DcSweepResult onto a MeasWaveform with the swept-source value as the axis, so
+  `MAX/MIN/FIND AT/WHEN`/chained PARAMs evaluate over the sweep. Fixed a latent
+  bug: `runMeasurements` used to route `dc` lines onto the *time* axis — it now
+  takes only tran/untyped.
+- **`.meas noise`** (`simulation/measureNoise.ts`): `noiseResultToWaveform`
+  exposes `onoise`/`inoise` traces over frequency, so `V(onoise)`/`V(inoise)`
+  measurements resolve.
+- Wired both into `App.tsx` (`dcMeasurements`/`noiseMeasurements` memos) and a
+  `MeasTable` under the DC and NOISE plots in `SimulationPanel`.
+
+### Files touched
+- src/simulation/measureDc.ts (+ .test.ts, 8 tests)
+- src/simulation/measureNoise.ts (+ .test.ts, 7 tests)
+- src/simulation/measure.ts (runMeasurements no longer routes `dc`)
+- src/App.tsx, src/components/SimulationPanel.tsx (memos + MeasTables)
+- FEATURE_PARITY.md (§4 .meas dc/noise notes)
+
+### Tests
+735 passing (was 720; +15 new). Typecheck clean.
+
+### FEATURE_PARITY items updated
+- §4 `.meas`: dc + noise domains ✅ (all of tran/ac/dc/noise now run).
+
+### UX issues found
+- None new.
+
+### Next step
+§4: expose branch currents in the waveform viewer (probe a device → plot its
+current, §6), or a native (FFI) DC runner for nonlinear `.dc` sweeps.
+
 ## 2026-06-29T06:20Z — auto/ltspice-parity — nested 2nd-source .dc sweep (§4)
 
 ### What I did
