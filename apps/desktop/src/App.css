@@ -1020,6 +1020,101 @@ body {
   opacity: 0.85;
 }
 
+/* Expression-trace bar (transient scope) */
+.expr-bar {
+  display: flex;
+  gap: 6px;
+  padding: 4px 0 2px;
+}
+
+.expr-input {
+  flex: 1;
+  min-width: 0;
+  background: var(--panel-3);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 5px 8px;
+  color: var(--text);
+  font-size: 11px;
+  font-family: inherit;
+}
+
+.expr-input::placeholder {
+  color: var(--muted);
+}
+
+.expr-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.expr-add {
+  flex-shrink: 0;
+  background: var(--accent-soft);
+  border: 1px solid var(--border-strong);
+  border-radius: 5px;
+  padding: 5px 10px;
+  color: var(--accent);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.expr-add:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+.expr-add:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.expr-error {
+  color: var(--danger);
+  background: var(--danger-soft);
+  border-radius: 5px;
+  padding: 4px 8px;
+  font-size: 10px;
+  margin-top: 2px;
+}
+
+.expr-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  padding: 4px 0 2px;
+}
+
+.expr-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  padding: 2px 6px 2px 7px;
+  font-size: 10px;
+  color: var(--text);
+}
+
+.expr-chip i {
+  width: 12px;
+  height: 1.5px;
+  border-radius: 999px;
+}
+
+.expr-remove {
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+  padding: 0 0 0 2px;
+}
+
+.expr-remove:hover {
+  color: var(--danger);
+}
+
 /* Metrics row */
 .meter-row {
   flex-shrink: 0;

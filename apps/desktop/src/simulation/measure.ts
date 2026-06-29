@@ -340,7 +340,7 @@ export function safeEvalScalar(expr: string, scope: Scope, funcs: Record<string,
  * `I(ref)` signals resolve against the waveform's branch-current traces; an
  * unknown reference yields NaN.
  */
-function compileExpr(expr: string, wf: MeasWaveform, scope: Scope, funcs: Record<string, FuncDef>): CompiledExpr {
+export function compileExpr(expr: string, wf: MeasWaveform, scope: Scope, funcs: Record<string, FuncDef>): CompiledExpr {
   const getters: Array<(i: number) => number> = [];
   let idx = 0;
   const rewritten = expr.replace(SIGNAL_RE, (_m, kind: string, arg: string) => {

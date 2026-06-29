@@ -491,7 +491,16 @@ zener, opamp, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**, **B (behav
 - 🟡 Bode (AC mag/phase) — present
 - 🟡 OP results table — present
 - ⬜ **Click a node/wire on the schematic to add its trace** (LTspice probe-in-place)
-- ⬜ **Plot arbitrary expressions** (`V(a)-V(b)`, `I(R1)*V(out)`, power `V(out)*I(out)`)
+- 🟡 **Plot arbitrary expressions** (`V(a)-V(b)`, `I(R1)*V(out)`, power `V(out)*I(out)`)
+  — **landed** (`simulation/plotExpression.ts`): an expression bar under the
+  transient scope evaluates any expression of the simulated signals at every
+  time point and overlays it as a derived trace. Reuses the `.meas` expression
+  compiler (`compileExpr`, now exported) so `V(out)-V(in)`, `2*V(in)+1` and
+  instantaneous power `V(out)*I(R1)` all resolve against node-voltage traces +
+  branch-current waveforms — one evaluator shared with measurements. Bad signal
+  names surface a clear error; added/removed via labelled chips. 6 hand-computed
+  tests. **NEXT:** per-trace axis/unit (power shows on a "V" axis for now);
+  expression traces in the AC/step panes; cursor readout.
 - ⬜ Multiple plot panes, add/remove traces, autorange, manual axis
 - ⬜ **Measurement cursors** (1 & 2, delta readout)
 - ⬜ FFT of a waveform; THD readout

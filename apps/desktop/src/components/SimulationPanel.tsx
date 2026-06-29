@@ -23,6 +23,7 @@ import type { NoiseResult } from "../simulation/noise";
 import type { StepFamilyResult } from "../simulation/stepFamily";
 import type { MeasResult } from "../simulation/measure";
 import type { FourierResult } from "../simulation/fourier";
+import { evaluatePlotExpression } from "../simulation/plotExpression";
 import { isNativeSpiceRuntime, MAX_NATIVE_OUTPUT_POINTS } from "../engine/nativeSpice";
 import { displaySampleIndices, waveformBounds } from "../simulation/waveform";
 
@@ -116,6 +117,35 @@ export function SimulationPanel({
 
   const [mode, setMode] = useState<"tran" | "op" | "ac" | "dc" | "tf" | "noise" | "step">("tran");
   const [maximized, setMaximized] = useState(false);
+  // User-entered expression traces overlaid on the transient scope (§6), e.g.
+  // `V(out)-V(in)` or power `V(out)*I(R1)`.
+  const [exprList, setExprList] = useState<string[]>([]);
+  const [exprInput, setExprInput] = useState("");
+  const [exprError, setExprError] = useState<string | null>(null);
+
+  // Evaluate each saved expression against the latest transient result; drop the
+  // ones that no longer resolve (e.g. after a circuit change removes a node).
+  const exprTraces = useMemo<Trace[]>(() => {
+    const out: Trace[] = [];
+    exprList.forEach((expr, i) => {
+      const r = evaluatePlotExpression(expr, result, EXPR_COLORS[i % EXPR_COLORS.length]);
+      if (r.ok) out.push(r.trace);
+    });
+    return out;
+  }, [exprList, result]);
+
+  const addExpression = () => {
+    const expr = exprInput.trim();
+    if (!expr) return;
+    const probe = evaluatePlotExpression(expr, result, "#000");
+    if (!probe.ok) {
+      setExprError(probe.error);
+      return;
+    }
+    if (!exprList.includes(expr)) setExprList((prev) => [...prev, expr]);
+    setExprInput("");
+    setExprError(null);
+  };
   const title =
     mode === "tran" ? "Transient scope"
     : mode === "op" ? "Operating point"
@@ -253,7 +283,45 @@ export function SimulationPanel({
 
       {mode === "tran" && (
         <>
-          <WaveformPlot result={result} probes={probes} netLabels={netLabels} />
+          <WaveformPlot result={result} probes={probes} netLabels={netLabels} extraTraces={exprTraces} />
+
+          <div className="expr-bar">
+            <input
+              className="expr-input"
+              type="text"
+              value={exprInput}
+              placeholder="Plot an expression, e.g. V(out)-V(in) or V(out)*I(R1)"
+              aria-label="Plot expression"
+              onChange={(e) => {
+                setExprInput(e.currentTarget.value);
+                if (exprError) setExprError(null);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") addExpression();
+              }}
+            />
+            <button className="expr-add" onClick={addExpression} disabled={!exprInput.trim()}>
+              Add trace
+            </button>
+          </div>
+          {exprError && <div className="expr-error" role="alert">{exprError}</div>}
+          {exprList.length > 0 && (
+            <div className="expr-list">
+              {exprList.map((expr, i) => (
+                <span key={expr} className="expr-chip" style={{ borderColor: EXPR_COLORS[i % EXPR_COLORS.length] }}>
+                  <i style={{ background: EXPR_COLORS[i % EXPR_COLORS.length] }} />
+                  {expr}
+                  <button
+                    className="expr-remove"
+                    aria-label={`Remove ${expr}`}
+                    onClick={() => setExprList((prev) => prev.filter((e) => e !== expr))}
+                  >
+                    ×
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
 
           <div className="meter-row">
             <Metric label="NETS" value={result?.ok ? String(result.stats.netCount) : "--"} tone="green" />
@@ -482,29 +550,37 @@ function WaveformPlot({
   result,
   probes,
   netLabels,
+  extraTraces = [],
 }: {
   result: AnalysisResult | null;
   probes: Probe[];
   netLabels: NetLabel[];
+  /** User-entered expression traces overlaid on the scope (§6). */
+  extraTraces?: Trace[];
 }) {
   const success = result?.ok ? result : null;
 
   // With probes, show exactly the probed nets in their probe colors; otherwise
-  // fall back to the first few node voltages.
+  // fall back to the first few node voltages. User expression traces are always
+  // overlaid on top of whichever node set is shown.
   const traces = useMemo<Trace[]>(() => {
     if (!success) return [];
-    if (probes.length === 0) return success.traces.slice(0, 6);
-    const out: Trace[] = [];
-    for (const probe of probes) {
-      const net = success.circuit.nets.find(
-        (n) => !n.isGround && n.points.some((pt) => pt.x === probe.x && pt.y === probe.y),
-      );
-      if (!net) continue;
-      const trace = success.traces.find((tr) => tr.id === net.id);
-      if (trace && !out.some((o) => o.id === trace.id)) out.push({ ...trace, color: probe.color });
+    let base: Trace[];
+    if (probes.length === 0) {
+      base = success.traces.slice(0, 6);
+    } else {
+      base = [];
+      for (const probe of probes) {
+        const net = success.circuit.nets.find(
+          (n) => !n.isGround && n.points.some((pt) => pt.x === probe.x && pt.y === probe.y),
+        );
+        if (!net) continue;
+        const trace = success.traces.find((tr) => tr.id === net.id);
+        if (trace && !base.some((o) => o.id === trace.id)) base.push({ ...trace, color: probe.color });
+      }
     }
-    return out;
-  }, [success, probes]);
+    return [...base, ...extraTraces];
+  }, [success, probes, extraTraces]);
 
   const plot = useMemo(() => {
     if (!success || traces.length === 0) return null;
@@ -758,6 +834,8 @@ function noisePath(onoise: number[], freqs: number[], plot: { yMin: number; yMax
 }
 
 const AC_COLORS = ["var(--trace-cyan)", "var(--trace-green)", "var(--trace-cream)", "var(--trace-red)"];
+// Distinct ramp for user expression traces so they stand out from node traces.
+const EXPR_COLORS = ["var(--trace-red)", "var(--trace-cream)", "var(--trace-cyan)", "var(--trace-green)"];
 
 function AcPlot({ result }: { result: AcResult | null }) {
   const success = result?.ok ? result : null;
