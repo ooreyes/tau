@@ -1,5 +1,50 @@
 # Tau Autobuilder — Progress Log
 
+## 2026-06-29T06:56Z — auto/ltspice-parity — FFT THD readout + noise CSV + SPICE netlist export (§6/§1)
+
+### What I did
+Three follow-on increments after the FFT view:
+- **THD-from-spectrum** (§6, `simulation/fft.ts` `spectrumThd`): fundamental =
+  supplied freq or loudest bin above DC; harmonics = bins nearest `2f₀,3f₀,…` to
+  Nyquist; `THD = √(Σ harmonic²)/fundamental`. Shown in the FFT view's meter row
+  (replaced the BINS metric). +3 tests (50% THD for a half-amplitude 2nd
+  harmonic; 0% for a pure tone; explicit-f₀ form), exact on a leakage-free signal.
+- **Noise CSV export** (§6): an **Export CSV** button on the noise pane writes
+  `freq` + `onoise (V/√Hz)` + `inoise (<unit>)` via the shared `seriesToCsv`/
+  `downloadCsv` helpers.
+- **SPICE netlist export** (§1, LTspice "View → SPICE Netlist"): a **Netlist**
+  button on the transient pane builds the same deck the engine runs
+  (`buildSpiceDeck` with the document's `.param` scope) and downloads it as
+  `tau-netlist-<date>.cir`; build errors (no ground, no parts) surface inline.
+  Generalized `downloadCsv` into a `downloadText` helper.
+
+### Validation
+- **End-to-end ngspice check** of the netlist export: imported the real
+  `~/Downloads/LTspice_export/deadtime.asc` through `importAsc` → `buildSpiceDeck`,
+  wrote the deck to `/tmp`, and ran it in ngspice 17 — parsed cleanly and solved
+  a 1008-row transient (the batch-mode "needs .print" notice is expected; the FFI
+  path reads vectors). Deck included the bundled `1N4148` model, both op-amp
+  VCVS stages, and the resolved `.tran` line. (Throwaway test removed.)
+
+### Files touched
+- src/simulation/fft.ts (+spectrumThd), src/simulation/fft.test.ts (+3 tests)
+- src/components/SimulationPanel.tsx (THD metric, noise CSV, netlist export, downloadText)
+- FEATURE_PARITY.md (§6 FFT THD note; §6 CSV noise pane; §1 netlist export ⬜→🟡)
+
+### Tests
+767 passing (was 764; +3 new). Typecheck clean.
+
+### FEATURE_PARITY items updated
+- §6 FFT: THD readout done. §6 CSV: noise pane added. §1 "Export `.cir`/netlist
+  to file" ⬜→🟡 (netlist export done; `.cir` import still pending).
+
+### UX issues found
+- None new.
+
+### Next step
+Import a `.cir` netlist back into a schematic (§1), or measurement cursors on the
+transient/FFT plots (§6 ⬜) — delta readout between two clicked points.
+
 ## 2026-06-29T06:47Z — auto/ltspice-parity — FFT of a waveform on the transient scope (§6)
 
 ### What I did
