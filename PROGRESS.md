@@ -1,5 +1,41 @@
 # Tau Autobuilder — Progress Log
 
+## 2026-06-29T13:36Z — auto/ltspice-parity — export Tau schematic → LTspice .asc (round-trip) (§1)
+
+### What I did
+- New `io/ascExport.ts` — the inverse of `ascImport.ts`:
+  - `serializeAscDocument(doc)` serializes an `AscDocument` to `.asc` text;
+    the round-trip `parseAsc(serializeAscDocument(doc)) ≅ doc` holds for all
+    structured content (VERSION/SHEET/WIRE/FLAG/SYMBOL/SYMATTR/TEXT).
+  - `schematicToAsc({components,wires,netLabels,directives,comments})` builds an
+    `AscDocument` from Tau content and serializes it — `ground` parts + net
+    labels → FLAGs, components → SYMBOL+SYMATTR (`InstName`/`Value`), Tau
+    polyline wires split into single-segment WIREs, directives/comments → TEXT.
+  - `kindToLtspiceType` / `rotationToOrientation` reverse maps (chosen so the
+    banked-pin symbol type re-imports with the same `pinOverride`).
+- Wired a **Save .asc** toolbar button into `ShellPanels` next to Save.
+
+### Files touched
+- src/io/ascExport.ts (new), src/io/ascExport.test.ts (new, 11 tests)
+- src/components/ShellPanels.tsx (Save .asc button + saveAsc)
+- FEATURE_PARITY.md (§1 "Export Tau schematic → .asc" ⬜→✅)
+
+### Tests
+778 passing (was 767; +11 new). Typecheck clean. Validated with a throwaway
+test (since removed) that imports the real `deadtime.asc` (18 comps/59 wires/13
+nets), `class-d_starter.asc` (15/46/8), and `Draft1.asc` (4/10), exports, and
+re-imports: all counts/kinds preserved, re-export byte-idempotent, 0 warnings.
+
+### FEATURE_PARITY items updated
+- §1 "Export Tau schematic → `.asc` (round-trip)" ⬜→✅.
+
+### UX issues found
+- None new. Save .asc disabled on empty document, matching Save.
+
+### Next step
+Import a `.cir` netlist back into a schematic (§1, the other half of the 🟡
+netlist line), or measurement cursors on the transient/FFT plots (§6 ⬜).
+
 ## 2026-06-29T06:56Z — auto/ltspice-parity — FFT THD readout + noise CSV + SPICE netlist export (§6/§1)
 
 ### What I did
