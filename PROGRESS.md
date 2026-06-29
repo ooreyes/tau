@@ -1,5 +1,57 @@
 # Tau Autobuilder — Progress Log
 
+## 2026-06-29T00:45Z — auto/ltspice-parity — real-.asc op-deck build 75 → 82/82 (§1/§3)
+
+### What I did
+Reproduced the 75/82 acceptance-deck-build metric (throwaway smoke over the 82
+real files = 2 Downloads + 11 Documents/LTspice + 69 Educational) and drove it
+to **82/82** with three targeted, fully-tested fixes:
+- **Split-field source spec** (`io/ascImport.ts`): LTspice can spread one
+  transient function across all four SYMATTR fields (P2.asc I1:
+  `Value SINE(` / `Value2 0 100u` / `SpiceLine 5Meg` / `SpiceLine2 0 0 0 1)`).
+  `componentValueFromAttrs` only joined the first three — append `SpiceLine2`.
+- **`Laplace=H(s)` on E/G sources** (`engine/laplace.ts`, new): a symbolic
+  rational expander (polynomial ± × ÷ ** over s, params resolved against the
+  scope) emits ngspice XSPICE `s_xfer` num/den coefficient lists (highest-power
+  first — empirically confirmed in ngspice-46). Non-rational transfers
+  (`exp(-Ts)`, `sqrt`) fall back to the DC gain H(0), exact for an `.op`.
+  Unblocked Draft8/PLL/PLL2/TwoTau/HalfSlope. Wired into `buildSpiceDeck`'s
+  vcvs/vccs cases. Live-verified: `A0/(1+s/wp1)/(1+s/wp2)` → correct 60 dB
+  two-pole AC rolloff in ngspice-46.
+- **Chan magnetic-core inductor** (`engine/coreInductor.ts`, new): no ngspice
+  saturable-core primitive exists, so size the unsaturated linear inductance from
+  the magnetic reluctance `L = N²·µ0·A/(Lg + Lm/µi)`, `µi = Br/(µ0·Hc)`.
+  `componentValueFromAttrs` now preserves the core geometry (was dropping
+  A=/Lm=/Lg=/N=). Unblocked NonLinearTransformer (L1 → 45.7 mH, hand-verified).
+
+### Files touched
+- src/engine/laplace.ts (new), laplace.test.ts (new, 10)
+- src/engine/coreInductor.ts (new), coreInductor.test.ts (new, 5)
+- src/engine/spiceNetlist.ts (Laplace in vcvs/vccs; core inductor; thread params)
+- src/engine/spiceDeck.test.ts (+2 Laplace deck-integration tests)
+- src/io/ascImport.ts (SpiceLine2 for sources; preserve core geometry)
+- src/io/ascImport.test.ts (+1 split-field test)
+- FEATURE_PARITY.md (§1 deck-build 82/82; §3 Laplace sub-item)
+
+### Tests
+710 passing (was 692; +18 new). Typecheck clean. ngspice-46 verified the s_xfer
+AC rolloff and the emitted decks.
+
+### FEATURE_PARITY items updated
+- §1 real-.asc op-deck build 75 → **82/82** (every acceptance file builds a deck).
+- §3 E/F/G/H: added 🟡 `Laplace=H(s)` sub-item (s_xfer + DC fallback).
+
+### UX issues found
+- None (engine/import only; no UI surface changed).
+
+### Next step
+Deck-BUILD is 82/82 but build ≠ converge: pivot to **waveform fidelity** — run
+each acceptance file's own analyses through native ngspice and diff node voltages
+vs. LTspice (the KEY GOAL). Or pick a testable UI item: §6 probe-in-place /
+expression plotting, or §2 multi-select. NonLinearTransformer's behavioral
+G-source loop is singular in ngspice (genuinely needs the Chan model — document,
+don't chase).
+
 ## 2026-06-28T19:09Z — auto/ltspice-parity — dedicated comparator component kind (§3)
 
 ### What I did
