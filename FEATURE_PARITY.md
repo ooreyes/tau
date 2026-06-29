@@ -531,9 +531,10 @@ zener, opamp, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**, **B (behav
   transient scope writes a table of `time` + every node-voltage trace + branch
   current + plotted expression, one row per timestep (RFC-4180 quoting,
   non-finite samples as gaps). **Export CSV buttons on the AC pane** (freq +
-  per-trace mag(dB)/phase(°)) **and DC pane** (swept source + each net voltage)
-  too, sharing a `downloadCsv` helper. 4 hand-computed tests. **NEXT:** `.plt`
-  settings, PNG image export, noise/step CSV.
+  per-trace mag(dB)/phase(°)), **DC pane** (swept source + each net voltage),
+  and **noise pane** (freq + onoise V/√Hz + inoise) too, sharing a `downloadCsv`
+  helper. 4 hand-computed tests. **NEXT:** `.plt`
+  settings, PNG image export, step-family CSV (per-member time grids).
 - ⬜ Right-click trace → math/operations
 
 ## 7. Engine & accuracy

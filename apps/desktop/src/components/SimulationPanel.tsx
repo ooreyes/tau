@@ -177,6 +177,17 @@ export function SimulationPanel({
     const series = dcResult.nets.map((n) => ({ label: n.label, values: n.voltages }));
     downloadCsv(seriesToCsv(dcResult.source, dcResult.sweep, series), "dc");
   };
+
+  // Export the noise analysis as a CSV table: freq + output-referred and
+  // input-referred spectral densities (V/√Hz, A/√Hz).
+  const exportNoiseCsv = () => {
+    if (!noiseResult || !noiseResult.ok) return;
+    const series = [
+      { label: "onoise (V/sqrtHz)", values: noiseResult.onoise },
+      { label: `inoise (${noiseResult.inoiseUnit})`, values: noiseResult.inoise },
+    ];
+    downloadCsv(seriesToCsv("freq", noiseResult.freqs, series), "noise");
+  };
   const title =
     mode === "tran" ? "Transient scope"
     : mode === "op" ? "Operating point"
@@ -431,6 +442,11 @@ export function SimulationPanel({
       {mode === "noise" && (
         <>
           <NoisePlot result={noiseResult} />
+          <div className="expr-bar">
+            <button className="expr-add" onClick={exportNoiseCsv} disabled={!noiseResult?.ok} title="Export the noise spectrum as a CSV table">
+              Export CSV
+            </button>
+          </div>
           <MeasTable measurements={noiseMeasurements} />
         </>
       )}
