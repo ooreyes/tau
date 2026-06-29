@@ -27,6 +27,7 @@ import { evaluatePlotExpression } from "../simulation/plotExpression";
 import { seriesToCsv } from "../simulation/waveformCsv";
 import { runWaveformFft, dominantFrequency, spectrumThd, type WindowFn } from "../simulation/fft";
 import { buildSpiceDeck } from "../engine/spiceNetlist";
+import { serializeRaw, inferRawType } from "../io/rawExport";
 import { buildParamScope } from "../simulation/paramScope";
 import { isNativeSpiceRuntime, MAX_NATIVE_OUTPUT_POINTS } from "../engine/nativeSpice";
 import { displaySampleIndices, waveformBounds } from "../simulation/waveform";
@@ -209,6 +210,25 @@ export function SimulationPanel({
     }
   };
 
+  // Export the transient result as an LTspice binary `.raw` (time + every node
+  // voltage / branch current / plotted expression) so it can be opened in
+  // LTspice's own waveform viewer for a side-by-side comparison.
+  const exportRaw = () => {
+    if (!result || !result.ok) return;
+    const signals = [
+      ...result.traces.map((t) => ({ label: t.label, values: t.values })),
+      ...result.currents.map((c) => ({ label: c.label, values: c.values })),
+      ...exprTraces.map((t) => ({ label: t.label, values: t.values })),
+    ];
+    const variables = [
+      { index: 0, name: "time", type: "time" },
+      ...signals.map((s, i) => ({ index: i + 1, name: s.label, type: inferRawType(s.label) })),
+    ];
+    const values = [Array.from(result.times), ...signals.map((s) => Array.from(s.values))];
+    const bytes = serializeRaw({ plotname: "Transient Analysis", variables, values });
+    downloadText(bytes, "transient", "raw", "application/octet-stream");
+  };
+
   const title =
     mode === "tran" ? "Transient scope"
     : mode === "op" ? "Operating point"
@@ -381,6 +401,14 @@ export function SimulationPanel({
               title="Export the generated SPICE netlist as a .cir file"
             >
               Netlist
+            </button>
+            <button
+              className="expr-add"
+              onClick={exportRaw}
+              disabled={!result?.ok}
+              title="Export the transient waveforms as an LTspice .raw file"
+            >
+              Save .raw
             </button>
           </div>
           {exprError && <div className="expr-error" role="alert">{exprError}</div>}
@@ -930,7 +958,7 @@ function noisePath(onoise: number[], freqs: number[], plot: { yMin: number; yMax
 }
 
 /** Trigger a browser download of `content` under a dated, tagged file name. */
-function downloadText(content: string, tag: string, ext: string, mime: string): void {
+function downloadText(content: BlobPart, tag: string, ext: string, mime: string): void {
   const blob = new Blob([content], { type: mime });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");

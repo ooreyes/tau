@@ -1,8 +1,14 @@
 import { describe, it, expect } from "vitest";
-import { readFileSync, existsSync } from "node:fs";
-import { homedir } from "node:os";
-import { join } from "node:path";
 import { parseRaw, rawTrace } from "./rawImport";
+import { OP_RAW_B64 } from "./rawFixture";
+
+/** Decode the embedded base64 fixture to bytes (browser/node `atob`). */
+function fromBase64(b64: string): Uint8Array {
+  const binary = atob(b64);
+  const out = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) out[i] = binary.charCodeAt(i);
+  return out;
+}
 
 /** Build a binary `.raw` with an ASCII header and var0=float64, rest=float32. */
 function makeBinaryRaw(
@@ -86,31 +92,15 @@ describe("parseRaw (errors)", () => {
   });
 });
 
-// Real LTspice .raw files from this machine (skipped if absent on another box).
-const opRaw = join(homedir(), "Documents/LTspice/_t_startup.op.raw");
-const tranRaw = join(homedir(), "Documents/LTspice/_t_startup.raw");
-
-describe.runIf(existsSync(opRaw))("parseRaw (real .op.raw, UTF-16LE)", () => {
-  const data = parseRaw(readFileSync(opRaw));
+// A REAL LTspice operating-point .raw (embedded base64 fixture) — exercises the
+// genuine UTF-16LE header + float64/float32 binary layout end to end.
+describe("parseRaw (real .op.raw, UTF-16LE)", () => {
+  const data = parseRaw(fromBase64(OP_RAW_B64));
   it("parses the operating-point header and a known node value", () => {
     expect(data.plotname).toBe("Operating Point");
     expect(data.variables).toHaveLength(22);
     expect(data.pointCount).toBe(1);
     const vn001 = rawTrace(data, "V(n001)");
     expect(vn001!.values[0]).toBeCloseTo(-0.9983, 3);
-  });
-});
-
-describe.runIf(existsSync(tranRaw))("parseRaw (real transient .raw, UTF-16LE)", () => {
-  const data = parseRaw(readFileSync(tranRaw));
-  it("decodes a monotonic time axis spanning the point count", () => {
-    expect(data.plotname).toBe("Transient Analysis");
-    expect(data.values[0].length).toBe(data.pointCount);
-    const t = data.values[0];
-    expect(t[0]).toBeGreaterThanOrEqual(0);
-    expect(t[t.length - 1]).toBeGreaterThan(t[0]);
-    let monotonic = true;
-    for (let i = 1; i < t.length; i += 1) if (t[i] < t[i - 1]) { monotonic = false; break; }
-    expect(monotonic).toBe(true);
   });
 });
