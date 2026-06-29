@@ -26,6 +26,8 @@ import type { FourierResult } from "../simulation/fourier";
 import { evaluatePlotExpression } from "../simulation/plotExpression";
 import { seriesToCsv } from "../simulation/waveformCsv";
 import { runWaveformFft, dominantFrequency, spectrumThd, type WindowFn } from "../simulation/fft";
+import { buildSpiceDeck } from "../engine/spiceNetlist";
+import { buildParamScope } from "../simulation/paramScope";
 import { isNativeSpiceRuntime, MAX_NATIVE_OUTPUT_POINTS } from "../engine/nativeSpice";
 import { displaySampleIndices, waveformBounds } from "../simulation/waveform";
 
@@ -96,6 +98,7 @@ export function SimulationPanel({
   const probes = useSchematic((s) => s.probes);
   const selectedWireId = useSchematic((s) => s.selectedWireId);
   const netLabels = useSchematic((s) => s.netLabels);
+  const directives = useSchematic((s) => s.directives);
   const setNetLabelDirect = useSchematic((s) => s.setNetLabelDirect);
   const editingRef = useRef(false);
   const netLabelEditingRef = useRef(false);
@@ -124,6 +127,7 @@ export function SimulationPanel({
   const [exprList, setExprList] = useState<string[]>([]);
   const [exprInput, setExprInput] = useState("");
   const [exprError, setExprError] = useState<string | null>(null);
+  const [netlistError, setNetlistError] = useState<string | null>(null);
 
   // Evaluate each saved expression against the latest transient result; drop the
   // ones that no longer resolve (e.g. after a circuit change removes a node).
@@ -188,6 +192,23 @@ export function SimulationPanel({
     ];
     downloadCsv(seriesToCsv("freq", noiseResult.freqs, series), "noise");
   };
+  // Export the generated SPICE netlist as a `.cir` file (LTspice "View → SPICE
+  // Netlist"). Builds the same deck the engine runs for the transient analysis,
+  // resolving `.param` values; surfaces build errors (no ground, no parts) inline.
+  const exportNetlist = () => {
+    try {
+      const params = directives.length > 0 ? buildParamScope(directives) : undefined;
+      const deck = buildSpiceDeck(
+        { components, wires, netLabels, params, directives },
+        { kind: "tran", stopTime: options.stopTime, steps: options.steps },
+      );
+      downloadText(deck.netlist, "netlist", "cir", "text/plain");
+      setNetlistError(null);
+    } catch (err) {
+      setNetlistError(err instanceof Error ? err.message : "Could not build the netlist.");
+    }
+  };
+
   const title =
     mode === "tran" ? "Transient scope"
     : mode === "op" ? "Operating point"
@@ -353,8 +374,17 @@ export function SimulationPanel({
             >
               Export CSV
             </button>
+            <button
+              className="expr-add"
+              onClick={exportNetlist}
+              disabled={components.length === 0}
+              title="Export the generated SPICE netlist as a .cir file"
+            >
+              Netlist
+            </button>
           </div>
           {exprError && <div className="expr-error" role="alert">{exprError}</div>}
+          {netlistError && <div className="expr-error" role="alert">{netlistError}</div>}
           {exprList.length > 0 && (
             <div className="expr-list">
               {exprList.map((expr, i) => (
@@ -899,15 +929,20 @@ function noisePath(onoise: number[], freqs: number[], plot: { yMin: number; yMax
   return path;
 }
 
-/** Trigger a browser download of CSV text with a dated, analysis-tagged name. */
-function downloadCsv(csv: string, tag: string): void {
-  const blob = new Blob([csv], { type: "text/csv" });
+/** Trigger a browser download of `content` under a dated, tagged file name. */
+function downloadText(content: string, tag: string, ext: string, mime: string): void {
+  const blob = new Blob([content], { type: mime });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `tau-${tag}-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.download = `tau-${tag}-${new Date().toISOString().slice(0, 10)}.${ext}`;
   a.click();
   URL.revokeObjectURL(url);
+}
+
+/** Trigger a browser download of CSV text with a dated, analysis-tagged name. */
+function downloadCsv(csv: string, tag: string): void {
+  downloadText(csv, tag, "csv", "text/csv");
 }
 
 const AC_COLORS = ["var(--trace-cyan)", "var(--trace-green)", "var(--trace-cream)", "var(--trace-red)"];

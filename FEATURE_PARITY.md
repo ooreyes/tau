@@ -133,7 +133,12 @@ Status legend: ✅ done · 🟡 partial · ⬜ not started
   (`Value2`/`SpiceLine` on diodes/MOS), `SpiceModel`/`ModelFile` model selection.
 - ⬜ Export Tau schematic → `.asc` (round-trip).
 - 🟡 Native SPICE netlist generation (`engine/spiceNetlist.ts`) — works for built-in kinds; needs the directive/model coverage below.
-- ⬜ Export `.cir`/netlist to file; import `.cir`.
+- 🟡 Export `.cir`/netlist to file; import `.cir`. — **Netlist export landed**
+  (LTspice "View → SPICE Netlist"): a **Netlist** button on the transient pane
+  builds the same deck the engine runs (`buildSpiceDeck` with the document's
+  `.param` scope) and downloads it as `tau-netlist-<date>.cir`. Build errors
+  (no ground, no parts) surface inline instead of crashing. **NEXT:** import a
+  `.cir` netlist back into a schematic.
 - ⬜ `.raw` waveform export/import (LTspice binary raw format).
 - ⬜ Save/Open Tau-native `.tau.json` — **partial** (toolbar Save/Open exists); verify robustness.
 
