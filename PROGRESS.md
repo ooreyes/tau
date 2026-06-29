@@ -1,5 +1,40 @@
 # Tau Autobuilder — Progress Log
 
+## 2026-06-29T13:55Z — auto/ltspice-parity — parse LTspice .raw waveform output (§1)
+
+### What I did
+- New `io/rawImport.ts` `parseRaw(buffer)` — reads LTspice's `.raw` simulation
+  output so its reference waveforms can be loaded into Tau (the heart of the
+  acceptance test: overlay LTspice vs Tau). Decodes the UTF-16LE/ASCII header,
+  `Variables:` table, and `Binary:`/`Values:` data with the **exact LTspice
+  precision layout** (independent var0 = float64, dependents = float32 unless
+  the `double` flag; complex `.ac` = re/im float64 pairs). `rawTrace(data, name)`
+  pairs a named variable with the independent axis (magnitude for complex).
+- Verified the binary layout empirically against a real file in Python first
+  (var0 double + 21 float32 = 92 bytes/point for `_t_startup.op.raw`).
+
+### Files touched
+- src/io/rawImport.ts (new), src/io/rawImport.test.ts (new, 7 tests)
+- FEATURE_PARITY.md (§1 `.raw` import ⬜→🟡)
+
+### Tests
+795 passing (was 788; +7 new). Typecheck clean. Tests cover a synthetic binary
+deck (deterministic float64/float32 layout), a synthetic ASCII `Values:` deck,
+the no-marker error, and two REAL machine files: `_t_startup.op.raw`
+(`V(n001)≈-0.9983`) and `_t_startup.raw` (monotonic time over No. Points). The
+real-file tests self-skip (`describe.runIf`) on machines without them.
+
+### FEATURE_PARITY items updated
+- §1 "`.raw` waveform export/import" ⬜→🟡 (import parser done; scope overlay +
+  export pending).
+
+### UX issues found
+- None (no UI surface changed).
+
+### Next step
+Overlay an imported `.raw` reference trace on the transient scope (§1/§6), or
+measurement cursors (§6 ⬜).
+
 ## 2026-06-29T13:48Z — auto/ltspice-parity — import SPICE .cir netlists into a schematic (§1)
 
 ### What I did
