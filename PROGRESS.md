@@ -1,5 +1,48 @@
 # Tau Autobuilder — Progress Log
 
+## 2026-06-29T06:47Z — auto/ltspice-parity — FFT of a waveform on the transient scope (§6)
+
+### What I did
+- **FFT of a transient waveform** (§6 ⬜→🟡, LTspice "View → FFT"), pure-logic
+  core in `simulation/fft.ts`:
+  - `fftRadix2` — in-place iterative radix-2 Cooley–Tukey FFT (bit-reversal +
+    butterflies); throws on non-power-of-two length.
+  - `windowValue` — rectangular/Hann/Hamming/Blackman window coefficients.
+  - `waveformSpectrum` — linear-resamples a (non-uniform) transient signal onto a
+    power-of-two uniform grid over the time window, windows it, FFTs, and returns
+    the **one-sided amplitude spectrum** (DC…Nyquist) with coherent-gain
+    normalization so a pure `A·cos(ωt)` reads amplitude `A` at its bin (DC and
+    Nyquist carry no ×2 fold). Magnitude in linear + dB (floored), phase in deg.
+  - `runWaveformFft` resolves `V(node)`/bare-node/`I(ref)` against a transient
+    `MeasWaveform`; `dominantFrequency` reports the loudest bin above DC.
+- **UI:** collapsible **FFT spectrum** view under the transient scope
+  (`SimulationPanel` `FftView`): signal + window selectors, magnitude on a
+  log-frequency / dB axis (shares `bodePath` with the Bode plot), peak-frequency
+  / bin-count / DC readout. Collapsed by default so the transform only runs when
+  opened. New `.fft-toggle`/`.fft-view` CSS (theme variables, no hardcoded color).
+
+### Files touched
+- src/simulation/fft.ts (new), src/simulation/fft.test.ts (new, 19 tests)
+- src/components/SimulationPanel.tsx (FftView + render in transient pane)
+- src/App.css (.fft-toggle/.fft-view)
+- FEATURE_PARITY.md (§6 FFT ⬜→🟡)
+
+### Tests
+764 passing (was 745; +19 new). Typecheck clean.
+
+### FEATURE_PARITY items updated
+- §6 "FFT of a waveform; THD readout" ⬜→🟡 (spectrum + UI done; THD-from-spectrum
+  + FFT cursor still pending — `.four` already gives THD over a known fundamental).
+
+### UX issues found
+- None new. FFT view is collapsed by default to avoid recomputing on every
+  transient run; reuses the Bode plot's log-frequency rendering for consistency.
+
+### Next step
+Add a THD-from-spectrum readout to the FFT view (pick the fundamental as the
+dominant bin, sum harmonic bins) and/or measurement cursors (§6 ⬜) on the
+transient/FFT plots — delta readout between two clicked points.
+
 ## 2026-06-29T06:37Z — auto/ltspice-parity — waveform viewer: expression plots + CSV export (§6)
 
 ### What I did
