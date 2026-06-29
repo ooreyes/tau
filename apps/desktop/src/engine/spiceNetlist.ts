@@ -11,6 +11,7 @@ import { parseComparator, comparatorDeckLine } from "./comparatorSpec";
 import { optionsLineFromDirectives } from "./spiceOptions";
 import { modelLibLinesFromDirectives, definedModelNames } from "./modelDirectives";
 import { couplingLinesFromDirectives } from "./couplingDirectives";
+import { laplaceTransfer, laplaceSourceLines } from "./laplace";
 import { standardModelLine } from "./standardModels";
 import { parseTempDirective } from "../io/directiveAnalysis";
 
@@ -120,14 +121,14 @@ export function buildSpiceDeck(schematic: Schematic, analysis: SpiceAnalysis): S
   );
 
   circuit.components.forEach((entry, index) => {
-    lines.push(...componentLines(entry, index, knownModels));
+    lines.push(...componentLines(entry, index, knownModels, schematic.params ?? EMPTY_SCOPE));
   });
   lines.push(analysisLine(analysis, hasIc || hasInstanceIc), ".end");
 
   return { circuit, netlist: lines.join("\n") };
 }
 
-function componentLines(entry: ExtractedComponent, index: number, userModels: Set<string> = new Set()): string[] {
+function componentLines(entry: ExtractedComponent, index: number, userModels: Set<string> = new Set(), params: ParamScope = EMPTY_SCOPE): string[] {
   const { component } = entry;
   const name = instanceName(component, index);
   const node = (pin: string) => requiredNode(entry, pin);
@@ -223,12 +224,32 @@ function componentLines(entry: ExtractedComponent, index: number, userModels: Se
       const spec = parseComparator(component.value);
       return [comparatorDeckLine(`B_${base}`, node("out"), node("in+"), node("in-"), spec)];
     }
-    case "vcvs":
+    case "vcvs": {
+      // A `Laplace=H(s)` value is a continuous transfer function, not a gain;
+      // realize it as an XSPICE s_xfer (rational) or its DC gain (otherwise).
+      const transfer = laplaceTransfer(component.value);
+      if (transfer !== null) {
+        return laplaceSourceLines({
+          base: safeName(component.label || `E${index + 1}`),
+          op: node("op"), on: node("on"), cp: node("cp"), cn: node("cn"),
+          transfer, isCurrent: false, scope: params.scope, funcs: params.funcs,
+        }).lines;
+      }
       // VCVS (E): E op on cp cn gain  →  V(op,on) = gain·V(cp,cn)
       return [`${name} ${node("op")} ${node("on")} ${node("cp")} ${node("cn")} ${numberValue(component, "V/V")}`];
-    case "vccs":
+    }
+    case "vccs": {
+      const transfer = laplaceTransfer(component.value);
+      if (transfer !== null) {
+        return laplaceSourceLines({
+          base: safeName(component.label || `G${index + 1}`),
+          op: node("op"), on: node("on"), cp: node("cp"), cn: node("cn"),
+          transfer, isCurrent: true, scope: params.scope, funcs: params.funcs,
+        }).lines;
+      }
       // VCCS (G): G op on cp cn gm  →  I(op→on) = gm·V(cp,cn)
       return [`${name} ${node("op")} ${node("on")} ${node("cp")} ${node("cn")} ${numberValue(component, "A/V")}`];
+    }
     case "cccs": {
       // CCCS (F): the control pair is a zero-volt sense source; F references it.
       // I(op→on) = gain·I(cp→cn). Emit "V<base> cp cn 0" then "F op on V<base> gain".

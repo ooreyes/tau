@@ -45,16 +45,20 @@ Status legend: ✅ done · 🟡 partial · ⬜ not started
 ---
 
 ## 1. File I/O & interoperability  ← **highest leverage for the key goal**
-- 🟡 **Real-`.asc` op-deck build now 75/82** (was 34/82 at this session's start):
+- 🟡 **Real-`.asc` op-deck build now 81/82** (was 34/82 at this work's start):
   `decodeSchematicText` falls back to **Windows-1252** when the bytes aren't valid
   UTF-8, so LTspice's single-byte `µ` (0xB5) decodes as the micro sign instead of
   U+FFFD (was the biggest blocker — 32 files); `buildParamScope` accepts the
   plural **`.params`** keyword; `stripSourceModifiers` drops `Rser=`/`Cpar=`/
-  `wavefile=` instance-param tokens ngspice rejects on independent sources; and
-  the expression engine resolves LTspice **statistical functions** (`mc`/`gauss`/
-  `flat`/`rand`/`random`/`white`) at their nominal/mean value. Remaining 7 are
-  native-only (`Laplace=` on E/G ×5, hysteretic/nonlinear inductor) or a
-  malformed WIP source. NoiseFigure.asc live-verified end-to-end in ngspice 17.
+  `wavefile=` instance-param tokens ngspice rejects on independent sources; the
+  expression engine resolves LTspice **statistical functions** (`mc`/`gauss`/
+  `flat`/`rand`/`random`/`white`) at their nominal/mean value;
+  `componentValueFromAttrs` now **reassembles a source spec split across all four
+  SYMATTR fields** (`Value`/`Value2`/`SpiceLine`/`SpiceLine2` — P2.asc's SINE);
+  and **`Laplace=H(s)` on E/G sources** is realized as an XSPICE `s_xfer`
+  (rational transfers, ngspice-verified) or its DC gain H(0) (exact for `.op`;
+  transport-delay/√ fallbacks) — unblocked Draft8/PLL/PLL2/TwoTau/HalfSlope. The
+  lone remaining file is NonLinearTransformer's **Chan hysteretic-core inductor**.
 - 🟡 **Import LTspice `.asc` schematics** — **parser + `ascToSchematic()` landed**
   (`io/ascImport.ts`). Parses `Version/SHEET/WIRE/FLAG/SYMBOL/SYMATTR/WINDOW/TEXT/
   LINE/…` losslessly; validated by parsing **4,012 real LTspice files (49,625
@@ -221,6 +225,16 @@ zener, opamp, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**, **B (behav
   (E: V(op)=gain·V(cp); G: V(op)=−gm·R·V(cp); F: V(out)=−gain·I_sense·R;
   H: V(out)=r·I_sense, load-independent; difference-amp, negative gain/r, flat-gain
   AC, branch current).
+  - 🟡 **`Laplace=H(s)` transfer functions on E/G** (`engine/laplace.ts`):
+    a symbolic rational expander turns LTspice's `Laplace=A0/(1+s/wp1)/(1+s/wp2)`,
+    `1/(1+τs)**n`, band-pass `ks/(s²+ks+w²)`, … into **highest-power-first
+    numerator/denominator coefficient lists** for ngspice's XSPICE `s_xfer` code
+    model (params resolved against the schematic scope; AC rolloff ngspice-46
+    verified). Non-rational transfers — transport delay `exp(-Ts)`, fractional
+    `sqrt(1+τs)` (TwoTau/HalfSlope) — fall back to the **DC gain H(0)**, which is
+    exact for an operating point and a low-frequency stand-in elsewhere, so every
+    Laplace source builds. Current (G) Laplace always uses the DC fallback
+    (s_xfer sources a voltage, not a current). 10 unit + 2 deck-integration tests.
 - ⬜ JFET, MESFET, IGBT
 - ⬜ MOSFET level/VDMOS power models, body diode
 - 🟡 Comparators / logic gates / digital (LTspice `A` devices) — **needed for class-d_starter.asc**

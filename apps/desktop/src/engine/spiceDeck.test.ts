@@ -151,6 +151,43 @@ describe("deck structure — behavioral B-source", () => {
   });
 });
 
+describe("deck structure — Laplace E source", () => {
+  // vcvs local pins: cp(-32,-16) cn(-32,16) op(32,-16) on(32,16).
+  const Vcvs = (x: number, y: number, v: string, l = "E1") => mk("vcvs", x, y, v, l);
+
+  it("realizes a rational Laplace=H(s) as an s_xfer A-device", () => {
+    const deck = buildSpiceDeck(
+      {
+        components: [
+          Vcvs(0, 0, "Laplace=1/(1+0.001*s)", "E1"),
+          GND(-32, 16), // cn → ground
+          GND(32, 16), //  on → ground
+        ],
+        wires: [],
+      },
+      { kind: "op" },
+    );
+    expect(deck.netlist).toMatch(/^A_E1 %vd\(\S+ \S+\) %vd\(\S+ \S+\) XF_E1$/m);
+    expect(deck.netlist).toMatch(/^\.model XF_E1 s_xfer\(num_coeff=\[1\] den_coeff=\[0\.001 1\]\)$/m);
+    // Ground (cn/on pins) is referenced as node 0 inside the A-device's %vd specs.
+    expect(deck.netlist).toContain(" 0)");
+    expect(deck.netlist.trim().endsWith(".end")).toBe(true);
+  });
+
+  it("falls back to the DC gain for a non-rational transfer (transport delay)", () => {
+    const deck = buildSpiceDeck(
+      {
+        components: [Vcvs(0, 0, "Laplace=2*exp(-.001*s)", "E1"), GND(-32, 16), GND(32, 16)],
+        wires: [],
+      },
+      { kind: "op" },
+    );
+    // H(0) = 2*exp(0) = 2 → plain VCVS, no code model.
+    expect(deck.netlist).toMatch(/^E_E1 \S+ \S+ \S+ \S+ 2$/m);
+    expect(deck.netlist).not.toContain("s_xfer");
+  });
+});
+
 describe("deck structure — AC sweep", () => {
   it("emits a DC/AC/SIN source and a single .ac card", () => {
     const deck = buildSpiceDeck(
