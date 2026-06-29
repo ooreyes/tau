@@ -157,14 +157,24 @@ export function SimulationPanel({
       ...result.currents.map((c) => ({ label: c.label, values: c.values })),
       ...exprTraces.map((t) => ({ label: t.label, values: t.values })),
     ];
-    const csv = seriesToCsv("time", result.times, series);
-    const blob = new Blob([csv], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `tau-transient-${new Date().toISOString().slice(0, 10)}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    downloadCsv(seriesToCsv("time", result.times, series), "transient");
+  };
+
+  // Export the AC sweep as a CSV table: freq + per-trace magnitude(dB)/phase(°).
+  const exportAcCsv = () => {
+    if (!acResult || !acResult.ok) return;
+    const series = acResult.traces.flatMap((t) => [
+      { label: `${t.label} mag(dB)`, values: t.magDb },
+      { label: `${t.label} phase(deg)`, values: t.phaseDeg },
+    ]);
+    downloadCsv(seriesToCsv("freq", acResult.freqs, series), "ac");
+  };
+
+  // Export the DC sweep as a CSV table: swept source value + each net's voltage.
+  const exportDcCsv = () => {
+    if (!dcResult || !dcResult.ok) return;
+    const series = dcResult.nets.map((n) => ({ label: n.label, values: n.voltages }));
+    downloadCsv(seriesToCsv(dcResult.source, dcResult.sweep, series), "dc");
   };
   const title =
     mode === "tran" ? "Transient scope"
@@ -396,12 +406,22 @@ export function SimulationPanel({
       {mode === "ac" && (
         <>
           <AcPlot result={acResult} />
+          <div className="expr-bar">
+            <button className="expr-add" onClick={exportAcCsv} disabled={!acResult?.ok} title="Export the AC sweep as a CSV table">
+              Export CSV
+            </button>
+          </div>
           <MeasTable measurements={acMeasurements} />
         </>
       )}
       {mode === "dc" && (
         <>
           <DcPlot result={dcResult} />
+          <div className="expr-bar">
+            <button className="expr-add" onClick={exportDcCsv} disabled={!dcResult?.ok} title="Export the DC sweep as a CSV table">
+              Export CSV
+            </button>
+          </div>
           <MeasTable measurements={dcMeasurements} />
         </>
       )}
@@ -859,6 +879,17 @@ function noisePath(onoise: number[], freqs: number[], plot: { yMin: number; yMax
     started = true;
   }
   return path;
+}
+
+/** Trigger a browser download of CSV text with a dated, analysis-tagged name. */
+function downloadCsv(csv: string, tag: string): void {
+  const blob = new Blob([csv], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `tau-${tag}-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 const AC_COLORS = ["var(--trace-cyan)", "var(--trace-green)", "var(--trace-cream)", "var(--trace-red)"];

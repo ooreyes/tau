@@ -513,8 +513,10 @@ zener, opamp, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**, **B (behav
   (`simulation/waveformCsv.ts` `seriesToCsv`): an **Export CSV** button on the
   transient scope writes a table of `time` + every node-voltage trace + branch
   current + plotted expression, one row per timestep (RFC-4180 quoting,
-  non-finite samples as gaps). 4 hand-computed tests. **NEXT:** `.plt` settings,
-  PNG image export, AC/DC-result CSV.
+  non-finite samples as gaps). **Export CSV buttons on the AC pane** (freq +
+  per-trace mag(dB)/phase(°)) **and DC pane** (swept source + each net voltage)
+  too, sharing a `downloadCsv` helper. 4 hand-computed tests. **NEXT:** `.plt`
+  settings, PNG image export, noise/step CSV.
 - ⬜ Right-click trace → math/operations
 
 ## 7. Engine & accuracy
