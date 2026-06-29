@@ -37,6 +37,7 @@ export const CATALOG: CatalogEntry[] = [
   { kind: "pnp",           section: "Semiconductors",    name: "PNP",             hotkey: "b", prefix: "Q",   defaultValue: "PNP",   unit: "" },
 
   { kind: "opamp",         section: "Analog",            name: "Op Amp",          hotkey: "o", prefix: "U",   defaultValue: "ideal", unit: "" },
+  { kind: "comparator",    section: "Analog",            name: "Comparator",      hotkey: "",  prefix: "U",   defaultValue: "1 0",   unit: "Vhi Vlo" },
   { kind: "vcvs",          section: "Analog",            name: "VCVS (E)",        hotkey: "u", prefix: "E",   defaultValue: "10",    unit: "V/V" },
   { kind: "vccs",          section: "Analog",            name: "VCCS (G)",        hotkey: "w", prefix: "G",   defaultValue: "1m",    unit: "A/V" },
   { kind: "cccs",          section: "Analog",            name: "CCCS (F)",        hotkey: "f", prefix: "F",   defaultValue: "10",    unit: "A/A" },

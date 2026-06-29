@@ -61,6 +61,15 @@ const LOCAL_PINS: Record<ComponentKind, LocalPin[]> = {
     { id: "v+", label: "V+", x: 0, y: -32 },
     { id: "v-", label: "V-", x: 0, y: 32 },
   ],
+  // Comparator: differential inputs (left) drive a single-ended output (right)
+  // that snaps to explicit high/low levels. No supply pins — rails are encoded
+  // in the value (see engine/comparatorSpec.ts), so an open-loop comparator
+  // clamps instead of saturating the way an ideal op-amp would.
+  comparator: [
+    { id: "in+", label: "+", x: -32, y: 16 },
+    { id: "in-", label: "-", x: -32, y: -16 },
+    { id: "out", label: "OUT", x: 32, y: 0 },
+  ],
   // Voltage-controlled sources (4-terminal 2-port): control pair on the left,
   // output pair on the right. cp/cn sense the controlling voltage; op/on drive.
   vcvs: [

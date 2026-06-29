@@ -215,7 +215,25 @@ zener, opamp, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**, **B (behav
   AC, branch current).
 - ⬜ JFET, MESFET, IGBT
 - ⬜ MOSFET level/VDMOS power models, body diode
-- ⬜ Comparators / logic gates / digital (LTspice `A` devices) — **needed for class-d_starter.asc**
+- 🟡 Comparators / logic gates / digital (LTspice `A` devices) — **needed for class-d_starter.asc**
+  - ✅ **Dedicated `comparator` component kind landed** (`engine/comparatorSpec.ts`):
+    a real open-loop comparator with **explicit output high/low levels + optional
+    hysteresis** instead of the gain-1e6 op-amp model that saturates to ~1e7 V.
+    Value parses `5 0` / `Vhigh=5 Vlow=0 Vhyst=0.1` (positional or keyed, SI
+    suffixes, aliases). The native deck emits a single **B-source using ngspice's
+    ternary** `V=(V(in+)-V(in-))>0 ? vhigh : vlow` — LTspice's `if()` is rejected
+    by ngspice outside compat mode (live-verified "no such function 'if'"), the
+    ternary clamps correctly. Hysteresis uses the self-referential `V(out)`-state
+    idiom (live-verified Schmitt switching in ngspice 17: flips high past +Vhyst,
+    low past −Vhyst). New kind wired through types/catalog (palette)/pins (in+/
+    in-/out, no supply pins so it can't mis-clamp like a floating-rail op-amp)/
+    params (structured Output-high/low/hysteresis fields)/symbol (triangle + step
+    glyph)/netlist. 16 tests (parse, ternary + hysteretic deck lines, deck
+    integration). Nonlinear → native-engine only (correctly excluded from the
+    linear TS solver set, like MOSFETs).
+  - **NEXT:** import-map LTspice comparator symbols (`Comparators\\*`) to this
+    kind; logic gates / `A` devices; UniversalOpAmp2 open-loop rail behavior
+    (class-d's U1 — stays an op-amp since it's also used in feedback, see finding).
   - **Finding (2026-06-28):** class-d_starter.asc now *builds and runs* its `.tran`
     in ngspice 17 — the comparator U1 imports as the generic `opamp` and emits as
     a gain-1e6 VCVS (`E_U1 … 1e6`). But open-loop it **saturates to ~1e7 V** at

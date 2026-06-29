@@ -10,7 +10,7 @@
 
 import { describe, expect, it } from "vitest";
 import { buildSpiceDeck, type SpiceAnalysis } from "./spiceNetlist";
-import type { SchematicComponent, SchematicWire } from "../schematic/types";
+import type { NetLabel, SchematicComponent, SchematicWire } from "../schematic/types";
 
 let counter = 0;
 const uid = (p: string) => `${p}-${++counter}`;
@@ -179,6 +179,31 @@ describe("deck structure — nonlinear models only when used", () => {
     );
     expect(deck.netlist).toContain(".model TAU_NPN NPN");
     expect(deck.netlist).toMatch(/Q1 n\d+ n\d+ 0 TAU_NPN/);
+  });
+});
+
+describe("deck structure — comparator emits a clamped behavioral source", () => {
+  // An open-loop comparator must snap to its explicit rails via a B-source, not
+  // saturate the way the gain-1e6 op-amp model does (FEATURE_PARITY.md §3).
+  const lbl = (x: number, y: number, text: string): NetLabel => ({ id: uid("flag"), x, y, text });
+  // U1 at (0,0): in+ (-32,16), in- (-32,-16), out (32,0).
+  const comps = [mk("comparator", 0, 0, "5 0", "U1"), R(96, 0, "1k", "R1")];
+  const wires = [W({ x: 32, y: 0 }, { x: 64, y: 0 })]; // out → R1.a
+  const netLabels = [lbl(-32, 16, "inp"), lbl(-32, -16, "inn"), lbl(128, 0, "0")];
+
+  it("emits B_U1 with a ternary clamp on the differential input, no gain-1e6 E-source", () => {
+    const deck = buildSpiceDeck({ components: comps, wires, netLabels }, { kind: "op" });
+    expect(deck.netlist).toMatch(/^B_U1 \S+ 0 V=\(V\(inp\)-V\(inn\)\)>0 \? 5 : 0$/m);
+    expect(deck.netlist).not.toMatch(/E_U1 .* 1e6/);
+    expectValidDeck(deck.netlist, /^\.op$/);
+  });
+
+  it("encodes hysteresis as a self-referential threshold shift", () => {
+    const hyst = [mk("comparator", 0, 0, "4 0 0.5", "U1"), R(96, 0, "1k", "R1")];
+    const deck = buildSpiceDeck({ components: hyst, wires, netLabels }, { kind: "op" });
+    expect(deck.netlist).toMatch(/B_U1 \S+ 0 V=V\(\S+\)>2 \?/);
+    expect(deck.netlist).toContain(">-0.5 ? 4 : 0)");
+    expect(deck.netlist).toContain(">0.5 ? 4 : 0)");
   });
 });
 

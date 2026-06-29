@@ -1,4 +1,5 @@
 import type { ComponentKind } from "./types";
+import { parseComparator } from "../engine/comparatorSpec";
 
 /**
  * Structured parameter fields per component kind. The canonical storage stays a
@@ -41,6 +42,11 @@ const SCHEMA: Partial<Record<ComponentKind, ParamField[]>> = {
   // the generated deck instead of being silently ignored.
   switch: [{ key: "state", label: "State (open/closed)", unit: "" }],
   transformer: [{ key: "ratio", label: "Turns ratio", unit: "" }],
+  comparator: [
+    { key: "vhigh", label: "Output high", unit: "V" },
+    { key: "vlow", label: "Output low", unit: "V" },
+    { key: "vhyst", label: "Hysteresis", unit: "V" },
+  ],
   // opamp uses a dedicated model chooser; testpoint / ground take no parameters.
 };
 
@@ -71,6 +77,14 @@ export function decodeParams(kind: ComponentKind, value: string): Record<string,
       duty: t[3] ?? "0.5",
     };
   }
+  if (kind === "comparator") {
+    const spec = parseComparator(value);
+    return {
+      vhigh: String(spec.vhigh),
+      vlow: String(spec.vlow),
+      vhyst: String(spec.vhyst),
+    };
+  }
   return {};
 }
 
@@ -91,6 +105,13 @@ export function encodeParams(kind: ComponentKind, values: Record<string, string>
     const frequency = (values.frequency ?? "").trim() || "100k";
     const duty = (values.duty ?? "").trim() || "0.5";
     return `${low} ${high} ${frequency} ${duty}`;
+  }
+  if (kind === "comparator") {
+    const vhigh = (values.vhigh ?? "").trim() || "1";
+    const vlow = (values.vlow ?? "").trim() || "0";
+    const vhyst = (values.vhyst ?? "").trim() || "0";
+    // Drop a zero hysteresis so the common ideal comparator stays "vhi vlo".
+    return Number(vhyst) ? `${vhigh} ${vlow} ${vhyst}` : `${vhigh} ${vlow}`;
   }
   return "";
 }

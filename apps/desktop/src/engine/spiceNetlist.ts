@@ -7,6 +7,7 @@ import { parseSourceFunction } from "./sourceFunction";
 import { stripAcSpec, acSpecDeckText, stripSourceModifiers } from "./acSpec";
 import { stripIcSpec, icSpecDeckText, parseIcValue } from "./icSpec";
 import { behavioralSpecText as behavioralSpec } from "../simulation/behavioral";
+import { parseComparator, comparatorDeckLine } from "./comparatorSpec";
 import { optionsLineFromDirectives } from "./spiceOptions";
 import { modelLibLinesFromDirectives, definedModelNames } from "./modelDirectives";
 import { couplingLinesFromDirectives } from "./couplingDirectives";
@@ -213,6 +214,15 @@ function componentLines(entry: ExtractedComponent, index: number, userModels: Se
         `R_${base}_out ${node("out")} 0 1e9`,
       ];
     }
+    case "comparator": {
+      // Open-loop comparator: a behavioral source whose output snaps to explicit
+      // high/low levels (engine/comparatorSpec.ts), so it clamps instead of the
+      // gain-1e6 op-amp model's ~1e7 V saturation. ngspice's B-source if()
+      // syntax matches LTspice's.
+      const base = safeName(component.label || `U${index + 1}`);
+      const spec = parseComparator(component.value);
+      return [comparatorDeckLine(`B_${base}`, node("out"), node("in+"), node("in-"), spec)];
+    }
     case "vcvs":
       // VCVS (E): E op on cp cn gain  →  V(op,on) = gain·V(cp,cn)
       return [`${name} ${node("op")} ${node("on")} ${node("cp")} ${node("cn")} ${numberValue(component, "V/V")}`];
@@ -327,7 +337,7 @@ function analysisLine(analysis: SpiceAnalysis, useInitialConditions = false): st
 function instanceName(component: SchematicComponent, index: number): string {
   const prefix: Record<ComponentKind, string> = {
     resistor: "R", capacitor: "C", inductor: "L", vsource: "V", isource: "I", vac: "V", iac: "I", vpulse: "V",
-    diode: "D", led: "D", zener: "D", opamp: "E", vcvs: "E", vccs: "G", cccs: "F", ccvs: "H", bsource: "B", nmos: "M", pmos: "M", npn: "Q", pnp: "Q",
+    diode: "D", led: "D", zener: "D", opamp: "E", comparator: "B", vcvs: "E", vccs: "G", cccs: "F", ccvs: "H", bsource: "B", nmos: "M", pmos: "M", npn: "Q", pnp: "Q",
     potentiometer: "R", switch: "R", transformer: "L", testpoint: "X", ground: "X",
   };
   const requested = safeName(component.label);

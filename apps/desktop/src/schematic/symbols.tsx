@@ -26,6 +26,7 @@ export const SYMBOL_BODY: Record<ComponentKind, BodyBox> = {
   led: { minX: -13, minY: -15, maxX: 16, maxY: 15 },
   zener: { minX: -13, minY: -15, maxX: 16, maxY: 15 },
   opamp: { minX: -24, minY: -26, maxX: 30, maxY: 26 },
+  comparator: { minX: -24, minY: -26, maxX: 30, maxY: 26 },
   vcvs: { minX: -18, minY: -22, maxX: 18, maxY: 22 },
   vccs: { minX: -18, minY: -22, maxX: 18, maxY: 22 },
   cccs: { minX: -18, minY: -22, maxX: 18, maxY: 22 },
@@ -56,6 +57,7 @@ export const SYMBOL_BOX: Record<ComponentKind, { halfW: number; halfH: number }>
   led: { halfW: 18, halfH: 22 },
   zener: { halfW: 16, halfH: 18 },
   opamp: { halfW: 28, halfH: 28 },
+  comparator: { halfW: 28, halfH: 28 },
   vcvs: { halfW: 20, halfH: 24 },
   vccs: { halfW: 20, halfH: 24 },
   cccs: { halfW: 20, halfH: 24 },
@@ -214,6 +216,22 @@ export function ComponentSymbol({ kind }: { kind: ComponentKind }) {
           <line x1={0} y1={14} x2={0} y2={32} />
           <path d="M -20 16 H -12 M -16 12 V 20" />
           <path d="M -20 -16 H -12" />
+        </>
+      );
+
+    case "comparator":
+      return (
+        <>
+          {/* Same triangle body as the op-amp; pins on the −16/+16 grid. */}
+          <path d="M -24 -26 L -24 26 L 30 0 Z" />
+          <line x1={-32} y1={-16} x2={-24} y2={-16} />
+          <line x1={-32} y1={16} x2={-24} y2={16} />
+          <line x1={30} y1={0} x2={32} y2={0} />
+          {/* + on the lower input, − on the upper (matches pin geometry). */}
+          <path d="M -20 16 H -12 M -16 12 V 20" />
+          <path d="M -20 -16 H -12" />
+          {/* hysteresis/step glyph marks it as a comparator, not an op-amp */}
+          <path d="M -8 6 H 0 V -6 H 8" fill="none" />
         </>
       );
 

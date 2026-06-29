@@ -19,6 +19,7 @@ export type ComponentKind =
   | "led"
   | "zener"
   | "opamp"
+  | "comparator"
   | "vcvs"
   | "vccs"
   | "cccs"
