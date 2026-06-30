@@ -393,6 +393,20 @@ describe("buildSpiceDeck", () => {
     expect(deck.netlist).not.toContain("TP1 ");
   });
 
+  it("emits a JFET (J device) with the generic NJF/PJF model", () => {
+    // njf J1 at origin: d(16,-32) g(-32,0) s(16,32). Drain on a net, gate+source 0.
+    const components = [
+      component("njf", "J1", "NJF", 0, 0),
+      component("vsource", "V1", "10", 16, -64),  // p=(16,-96), n=(16,-32)=d
+      component("ground", "", "", 16, -96),       // V1 p → 0
+      component("ground", "", "", -32, 0),        // g → 0
+      component("ground", "", "", 16, 32),        // s → 0
+    ];
+    const deck = buildSpiceDeck({ components, wires: [] }, { kind: "op" });
+    expect(deck.netlist).toMatch(/J1 \S+ 0 0 TAU_NJF/);
+    expect(deck.netlist).toContain(".model TAU_NJF NJF(");
+  });
+
   it("emits an ideal lossless transmission line (T device, 4 nodes + Z0/TD)", () => {
     // tline T1 at origin: a1(-32,-16) a2(-32,16) b1(32,-16) b2(32,16).
     const components = [

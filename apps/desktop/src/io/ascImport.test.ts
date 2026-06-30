@@ -133,6 +133,12 @@ describe("ltspiceTypeToKind", () => {
     expect(ltspiceTypeToKind("TLINE")).toBe("tline");
   });
 
+  it("maps LTspice JFET symbols (njf/pjf) to njf/pjf kinds", () => {
+    expect(ltspiceTypeToKind("njf")).toBe("njf");
+    expect(ltspiceTypeToKind("NJF")).toBe("njf");
+    expect(ltspiceTypeToKind("pjf")).toBe("pjf");
+  });
+
   it("maps alias symbols to their underlying kind", () => {
     // varactor / SMdiode are diodes; battery is a DC source; RN55upright and
     // UprightPowerResistor are resistors (real PAsystem / corpus symbols).
@@ -293,6 +299,24 @@ SYMATTR InstName D2`;
     expect(pins("D2").k).toEqual({ x: 400, y: 132 });
     // None should warn about a missing Tau equivalent.
     expect(doc.warnings.filter((w) => /no Tau equivalent/i.test(w))).toHaveLength(0);
+  });
+
+  it("imports a JFET carrying its model and D/G/S pins", () => {
+    // njf J1 at (100,100) R0; njf.asy pins D(48,0)/G(0,64)/S(48,96) →
+    // world (148,100)/(100,164)/(148,196).
+    const JSRC = `Version 4
+SHEET 1 880 680
+SYMBOL njf 100 100 R0
+SYMATTR InstName J1
+SYMATTR Value 2N3819`;
+    const doc = ascToSchematic(parseAsc(JSRC));
+    const j1 = doc.components.find((c) => c.label === "J1");
+    expect(j1?.kind).toBe("njf");
+    expect(j1?.value).toBe("2N3819");
+    const pins = Object.fromEntries((j1?.pinOverride ?? []).map((p) => [p.id, { x: p.x, y: p.y }]));
+    expect(pins.d).toEqual({ x: 148, y: 100 });
+    expect(pins.g).toEqual({ x: 100, y: 164 });
+    expect(pins.s).toEqual({ x: 148, y: 196 });
   });
 
   it("a tline with no SYMATTR Value adopts LTspice's .asy default (Td=50n Z0=50)", () => {

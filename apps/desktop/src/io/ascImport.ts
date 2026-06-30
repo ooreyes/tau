@@ -269,6 +269,8 @@ export function ltspiceTypeToKind(type: string): ComponentKind | null {
     nmos4: "nmos",
     pmos: "pmos",
     pmos4: "pmos",
+    njf: "njf",
+    pjf: "pjf",
     sw: "switch",
     csw: "switch",
     pot: "potentiometer",
@@ -333,6 +335,8 @@ export const LTSPICE_PINS: Record<string, LtPin[]> = {
   pnp: [{ name: "C", dx: 64, dy: 0 }, { name: "B", dx: 0, dy: 48 }, { name: "E", dx: 64, dy: 96 }],
   nmos: [{ name: "D", dx: 48, dy: 0 }, { name: "G", dx: 0, dy: 80 }, { name: "S", dx: 48, dy: 96 }],
   pmos: [{ name: "D", dx: 48, dy: 0 }, { name: "G", dx: 0, dy: 80 }, { name: "S", dx: 48, dy: 96 }],
+  // LTspice njf/pjf.asy pins (SpiceOrder D,G,S): gate at dy=64 (vs MOS dy=80).
+  njf: [{ name: "D", dx: 48, dy: 0 }, { name: "G", dx: 0, dy: 64 }, { name: "S", dx: 48, dy: 96 }],
   sw: [{ name: "A", dx: 0, dy: 16 }, { name: "B", dx: 0, dy: 96 }],
   // LTspice tline.asy pins, in SpiceOrder: I1,R1 (left port) / I2,R2 (right
   // port). Symbol-local offsets are centered; mapped to Tau's a1/a2/b1/b2.
@@ -403,6 +407,7 @@ function ltPinKey(type: string): keyof typeof LTSPICE_PINS | null {
     pnp: "pnp", pnp3: "pnp", pnp4: "pnp",
     nmos: "nmos", nmos4: "nmos",
     pmos: "pmos", pmos4: "pmos",
+    njf: "njf", pjf: "njf",
     sw: "sw", csw: "sw",
     tline: "tline", ltline: "tline",
     // Behavioral sources share the independent-source pin geometry: the bv

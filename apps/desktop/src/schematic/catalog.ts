@@ -33,6 +33,8 @@ export const CATALOG: CatalogEntry[] = [
   { kind: "zener",         section: "Semiconductors",    name: "Zener",           hotkey: "z", prefix: "D",   defaultValue: "5V1",   unit: "" },
   { kind: "nmos",          section: "Semiconductors",    name: "NMOS",            hotkey: "m", prefix: "M",   defaultValue: "NMOS",  unit: "" },
   { kind: "pmos",          section: "Semiconductors",    name: "PMOS",            hotkey: "p", prefix: "M",   defaultValue: "PMOS",  unit: "" },
+  { kind: "njf",           section: "Semiconductors",    name: "N-JFET",          hotkey: "",  prefix: "J",   defaultValue: "NJF",   unit: "" },
+  { kind: "pjf",           section: "Semiconductors",    name: "P-JFET",          hotkey: "",  prefix: "J",   defaultValue: "PJF",   unit: "" },
   { kind: "npn",           section: "Semiconductors",    name: "NPN",             hotkey: "q", prefix: "Q",   defaultValue: "NPN",   unit: "" },
   { kind: "pnp",           section: "Semiconductors",    name: "PNP",             hotkey: "b", prefix: "Q",   defaultValue: "PNP",   unit: "" },
 

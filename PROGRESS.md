@@ -1,5 +1,44 @@
 # Tau Autobuilder — Progress Log
 
+## 2026-06-29T20:17Z — auto/ltspice-parity — JFET (njf/pjf) component kind (§3)
+
+### What I did
+- Added N- and P-channel JFETs end-to-end (`njf`/`pjf`), parallel to nmos/pmos
+  — an explicitly-listed missing kind (§3 "JFET, MESFET, IGBT") with 15 corpus
+  uses (previously skipped on import).
+- 3-terminal D/G/S: pin geometry (`pins.ts`), schematic glyph (`symbols.tsx`,
+  vertical channel + gate arrow whose direction encodes polarity), palette
+  entries (`catalog.ts`, Semiconductors), and deck emission `J<name> d g s
+  <model>` with bundled generic `TAU_NJF`/`TAU_PJF` `.model` lines
+  (`Vto=∓2 Beta=1m Lambda=1e-4`). Prefix `J`; added to the model-emit /
+  standard-model / SEMI_KINDS sets.
+- Import maps LTspice `njf`/`pjf` with the real `.asy` pin offsets (D 48,0 /
+  G 0,64 / S 48,96 — gate at dy=64, unlike the MOSFET's dy=80) banked in
+  `LTSPICE_PINS`; export reverse-map round-trips. Native-engine only (nonlinear;
+  not in any TS-solver allowlist).
+
+### Files touched
+- src/schematic/types.ts, pins.ts, catalog.ts, symbols.tsx
+- src/engine/spiceNetlist.ts (models, needs/semi sets, deck case, prefix)
+- src/engine/spiceNetlist.test.ts (+1), src/io/ascImport.ts, ascImport.test.ts (+2)
+- src/io/ascExport.ts (round-trip map)
+- FEATURE_PARITY.md (§3 JFET ⬜→🟡; kinds list)
+
+### Tests
+838 passing (was 835; +3 net). Typecheck clean. ngspice-46 live-verified the
+NJF common-source bias: V(dr)=7.75 V → Id=2.25 mA = Beta·(Vgs−Vto)² exactly.
+
+### FEATURE_PARITY items updated
+- §3 "JFET, MESFET, IGBT": ⬜ → 🟡 (JFET done). Kinds list += NJF/PJF.
+
+### UX issues found
+- JFET palette entries have no hotkey (q/p taken); reachable via the palette.
+  Imported JFETs still render at Tau's fixed geometry (pins override-accurate).
+
+### Next step
+MESFET/IGBT, or bundle real JFET models (2N3819/J309) by name like the BJT/diode
+bundle. Or chip the unmapped list further (`Misc\jumper` = 26, a net-tie short).
+
 ## 2026-06-29T20:12Z — auto/ltspice-parity — map alias SYMBOL types to existing kinds (§1)
 
 ### What I did

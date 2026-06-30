@@ -56,6 +56,8 @@ const DEFAULT_MODELS = [
   ".model TAU_PMOS PMOS(Level=1 Vto=-1 Kp=80u Lambda=0.02)",
   ".model TAU_NPN NPN(Is=1e-14 Bf=100 Vaf=100)",
   ".model TAU_PNP PNP(Is=1e-14 Bf=100 Vaf=100)",
+  ".model TAU_NJF NJF(Vto=-2 Beta=1m Lambda=1e-4)",
+  ".model TAU_PJF PJF(Vto=2 Beta=1m Lambda=1e-4)",
 ];
 
 /**
@@ -80,7 +82,7 @@ export function buildSpiceDeck(schematic: Schematic, analysis: SpiceAnalysis): S
 
   const lines = ["Tau generated circuit", optionsLineFromDirectives(flatDirectives)];
   const usedKinds = new Set(components.map((component) => component.kind));
-  const needsModels = ["diode", "led", "zener", "nmos", "pmos", "npn", "pnp"].some((kind) => usedKinds.has(kind as ComponentKind));
+  const needsModels = ["diode", "led", "zener", "nmos", "pmos", "njf", "pjf", "npn", "pnp"].some((kind) => usedKinds.has(kind as ComponentKind));
   if (needsModels) lines.push(...DEFAULT_MODELS);
 
   // Carry the document's own `.model`/`.lib`/`.inc`/`.subckt` definitions into the
@@ -128,7 +130,7 @@ export function buildSpiceDeck(schematic: Schematic, analysis: SpiceAnalysis): S
   // safe to put on the device line.
   const knownModels = new Set(userModels);
   const SEMI_KINDS: ReadonlySet<ComponentKind> = new Set([
-    "diode", "led", "zener", "npn", "pnp", "nmos", "pmos",
+    "diode", "led", "zener", "npn", "pnp", "nmos", "pmos", "njf", "pjf",
   ]);
   const emittedStandard = new Set<string>();
   for (const { component } of circuit.components) {
@@ -241,6 +243,10 @@ function componentLines(entry: ExtractedComponent, index: number, userModels: Se
       return [`${name} ${node("d")} ${node("g")} ${node("s")} ${node("b")} ${deviceModel("TAU_NMOS")}`];
     case "pmos":
       return [`${name} ${node("d")} ${node("g")} ${node("s")} ${node("b")} ${deviceModel("TAU_PMOS")}`];
+    case "njf":
+      return [`${name} ${node("d")} ${node("g")} ${node("s")} ${deviceModel("TAU_NJF")}`];
+    case "pjf":
+      return [`${name} ${node("d")} ${node("g")} ${node("s")} ${deviceModel("TAU_PJF")}`];
     case "npn":
       return [`${name} ${node("c")} ${node("b")} ${node("e")} ${deviceModel("TAU_NPN")}`];
     case "pnp":
@@ -415,7 +421,7 @@ function analysisLine(analysis: SpiceAnalysis, useInitialConditions = false): st
 function instanceName(component: SchematicComponent, index: number): string {
   const prefix: Record<ComponentKind, string> = {
     resistor: "R", capacitor: "C", inductor: "L", vsource: "V", isource: "I", vac: "V", iac: "I", vpulse: "V",
-    diode: "D", led: "D", zener: "D", opamp: "E", comparator: "B", vcvs: "E", vccs: "G", cccs: "F", ccvs: "H", bsource: "B", nmos: "M", pmos: "M", npn: "Q", pnp: "Q",
+    diode: "D", led: "D", zener: "D", opamp: "E", comparator: "B", vcvs: "E", vccs: "G", cccs: "F", ccvs: "H", bsource: "B", nmos: "M", pmos: "M", njf: "J", pjf: "J", npn: "Q", pnp: "Q",
     potentiometer: "R", switch: "R", transformer: "L", tline: "T", testpoint: "X", ground: "X",
   };
   const requested = safeName(component.label);

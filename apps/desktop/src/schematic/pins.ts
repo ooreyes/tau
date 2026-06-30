@@ -117,6 +117,19 @@ const LOCAL_PINS: Record<ComponentKind, LocalPin[]> = {
     { id: "s", label: "S", x: 16, y: 32 },
     { id: "b", label: "B", x: 32, y: 0 },
   ],
+  // JFET (3-terminal): drain top-right, gate left, source bottom-right — same
+  // role layout as the MOSFET but no bulk pin (D G S map straight to the SPICE
+  // J device order).
+  njf: [
+    { id: "d", label: "D", x: 16, y: -32 },
+    { id: "g", label: "G", x: -32, y: 0 },
+    { id: "s", label: "S", x: 16, y: 32 },
+  ],
+  pjf: [
+    { id: "d", label: "D", x: 16, y: -32 },
+    { id: "g", label: "G", x: -32, y: 0 },
+    { id: "s", label: "S", x: 16, y: 32 },
+  ],
   npn: [
     { id: "c", label: "C", x: 16, y: -32 },
     { id: "b", label: "B", x: -32, y: 0 },

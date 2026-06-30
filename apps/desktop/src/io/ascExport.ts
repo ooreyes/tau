@@ -81,6 +81,8 @@ export function kindToLtspiceType(kind: ComponentKind): string | null {
     pnp: "pnp",
     nmos: "nmos",
     pmos: "pmos",
+    njf: "njf",
+    pjf: "pjf",
     switch: "sw",
     potentiometer: "pot",
     transformer: "ind2t",

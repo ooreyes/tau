@@ -34,6 +34,8 @@ export const SYMBOL_BODY: Record<ComponentKind, BodyBox> = {
   bsource: { minX: -16, minY: -16, maxX: 16, maxY: 16 },
   nmos: { minX: -12, minY: -20, maxX: 18, maxY: 20 },
   pmos: { minX: -12, minY: -20, maxX: 18, maxY: 20 },
+  njf: { minX: -12, minY: -20, maxX: 18, maxY: 20 },
+  pjf: { minX: -12, minY: -20, maxX: 18, maxY: 20 },
   npn: { minX: -8, minY: -20, maxX: 18, maxY: 20 },
   pnp: { minX: -8, minY: -20, maxX: 18, maxY: 20 },
   potentiometer: { minX: -28, minY: -18, maxX: 28, maxY: 12 },
@@ -66,6 +68,8 @@ export const SYMBOL_BOX: Record<ComponentKind, { halfW: number; halfH: number }>
   bsource: { halfW: 16, halfH: 17 },
   nmos: { halfW: 26, halfH: 20 },
   pmos: { halfW: 26, halfH: 20 },
+  njf: { halfW: 26, halfH: 20 },
+  pjf: { halfW: 26, halfH: 20 },
   npn: { halfW: 22, halfH: 20 },
   pnp: { halfW: 22, halfH: 20 },
   potentiometer: { halfW: 30, halfH: 18 },
@@ -375,6 +379,35 @@ export function ComponentSymbol({ kind }: { kind: ComponentKind }) {
           <line x1={-6} y1={-8} x2={16} y2={-32} />
           <line x1={-6} y1={8} x2={16} y2={32} />
           <path d="M 5 17 L -4 8 L 8 11" />
+        </>
+      );
+
+    case "njf":
+      return (
+        <>
+          {/* JFET: vertical channel bar, drain top / source bottom, gate lead
+              from the left with an arrow pointing INTO the channel (N-type). */}
+          <line x1={16} y1={-32} x2={16} y2={-14} />
+          <line x1={16} y1={14} x2={16} y2={32} />
+          <line x1={4} y1={-18} x2={4} y2={18} />
+          <line x1={4} y1={-14} x2={16} y2={-14} />
+          <line x1={4} y1={14} x2={16} y2={14} />
+          <line x1={-32} y1={0} x2={4} y2={0} />
+          <path d="M -6 -5 L 4 0 L -6 5" />
+        </>
+      );
+
+    case "pjf":
+      return (
+        <>
+          {/* P-JFET: same body, gate arrow pointing OUT of the channel. */}
+          <line x1={16} y1={-32} x2={16} y2={-14} />
+          <line x1={16} y1={14} x2={16} y2={32} />
+          <line x1={4} y1={-18} x2={4} y2={18} />
+          <line x1={4} y1={-14} x2={16} y2={-14} />
+          <line x1={4} y1={14} x2={16} y2={14} />
+          <line x1={-32} y1={0} x2={4} y2={0} />
+          <path d="M 2 -5 L -6 0 L 2 5" />
         </>
       );
 

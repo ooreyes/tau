@@ -221,7 +221,7 @@ Status legend: ✅ done · 🟡 partial · ⬜ not started
 
 ## 3. Component / symbol library
 Current Tau kinds (~25): R, C, L, pot, V(DC), I(DC), Vac, Iac, **Vpulse**, diode, LED,
-zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**, **B (behavioral)**, NMOS, PMOS, NPN, PNP, switch, transformer, **tline**, testpoint, ground.
+zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**, **B (behavioral)**, NMOS, PMOS, **NJF**, **PJF**, NPN, PNP, switch, transformer, **tline**, testpoint, ground.
 - 🟡 Passives R/C/L (✅) — **C/L initial conditions (`IC=`) landed**: the importer
   pulls an `IC=` token from a cap/inductor's `Value2`/`SpiceLine`/`SpiceLine2`
   (LTspice writes e.g. `SpiceLine2 IC=1`; `engine/icSpec.ts` + `componentValueFromAttrs`)
@@ -288,7 +288,16 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
     exact for an operating point and a low-frequency stand-in elsewhere, so every
     Laplace source builds. Current (G) Laplace always uses the DC fallback
     (s_xfer sources a voltage, not a current). 10 unit + 2 deck-integration tests.
-- ⬜ JFET, MESFET, IGBT
+- 🟡 JFET, MESFET, IGBT — **JFET landed end-to-end.** New `njf`/`pjf`
+  component kinds (3-terminal D/G/S, parallel to nmos/pmos): pin geometry +
+  symbol (vertical channel + gate arrow, direction per polarity) + palette
+  (Semiconductors) + `buildSpiceDeck` `J<name> d g s <model>` with bundled
+  generic `TAU_NJF`/`TAU_PJF` models (`Vto=∓2 Beta=1m Lambda=1e-4`).
+  Live-verified in ngspice-46 (NJF common-source bias: Id = Beta·(Vgs−Vto)²
+  = 2.25 mA exact at Vgs=−0.5). Import maps LTspice `njf`/`pjf` with the real
+  `.asy` D/G/S pins (gate at dy=64) and export round-trips. Native engine only
+  (nonlinear — excluded from the linear TS solver). 5 tests. **NEXT:** MESFET,
+  IGBT; real bundled JFET models (2N3819/J309) by name.
 - ⬜ MOSFET level/VDMOS power models, body diode
 - 🟡 Comparators / logic gates / digital (LTspice `A` devices) — **needed for class-d_starter.asc**
   - ✅ **Dedicated `comparator` component kind landed** (`engine/comparatorSpec.ts`):

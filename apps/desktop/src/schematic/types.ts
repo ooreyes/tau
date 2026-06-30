@@ -27,6 +27,8 @@ export type ComponentKind =
   | "bsource"
   | "nmos"
   | "pmos"
+  | "njf"
+  | "pjf"
   | "npn"
   | "pnp"
   | "potentiometer"
