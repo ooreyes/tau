@@ -1,5 +1,59 @@
 # Tau Autobuilder — Progress Log
 
+## 2026-06-30T02:25Z — auto/ltspice-parity — hierarchical `.asc` subcircuit flattening (§1)
+
+### What I did
+- A smoke over the user's own files showed the **only** remaining import warning
+  on the **flagship** `class-d_starter.asc` was its `deadtime` X1 — a `.asc`
+  used as a symbol (hierarchical block). Implemented import-time flattening:
+  - `parseAsy()` reads LTspice `.asy` `BLOCK` symbols → ports sorted by
+    SpiceOrder (name + symbol-local position).
+  - `ascToSchematic(doc, { resolveSubcircuit })` resolves an unmapped symbol to
+    a `{ symbol, body }` block and **inlines** the body: each `.asy` pin bridges
+    to the parent net at the instance's world pin position via a synthetic
+    `<inst>:<pin>` net label (parent side) + a same-named rename of the body's
+    port net (body side); every other body net is privatised `<inst>/…`; ground
+    (`0`/`GND`) stays global (ngspice subckt node-0 semantics); the body is
+    packed into a disjoint X-region (shared placement cursor) so no body
+    geometry can short against parent/sibling content. Body directives dropped.
+    Recurses for nested blocks with depth + self-reference (cycle) guards.
+  - `makeSubcircuitResolver(readFiles)` builds a resolver from sibling-file text
+    (pure; FS stays out of the module).
+  - Open dialog (`ShellPanels.tsx`) now multi-selects (and accepts `.asy`):
+    sibling `.asy/.asc` are pre-read and fed as the resolver, so the user can
+    open `class-d_starter.asc` + `deadtime.asy` + `deadtime.asc` together and
+    the block inlines. Single-file open unchanged.
+- Verified on the **real** files (throwaway smoke, since removed): class-d_starter
+  imports with **zero** warnings — 33 components (X1.D1…X1.U2 all present), all
+  five ports (pwm/gp/gn/vcc/vee) bridge to vpwm/vgp/vgn/vcc/vee, `extractCircuit`
+  returns 16 nets with ground resolved and **no** net warnings.
+
+### Files touched
+- src/io/ascImport.ts (parseAsy, SubcircuitDef/Resolver, flattenSubcircuit,
+  ascToSchematic options, makeSubcircuitResolver)
+- src/io/ascImport.test.ts (+7: parseAsy order, inline+prefix, drop body
+  directives, port-bridge topology, two-instance isolation, self-ref guard,
+  no-resolver skip)
+- src/components/ShellPanels.tsx (multi-file Open → sibling resolver)
+- FEATURE_PARITY.md (§1 hierarchical ⬜→🟡)
+
+### Tests
+852 passing (was 845; +7 new). Typecheck clean.
+
+### FEATURE_PARITY items updated
+- §1 "Hierarchical schematics" ⬜ → 🟡 (import-flattening complete end-to-end;
+  native subckt device / hierarchy re-export still ⬜).
+
+### UX issues found
+- Open is now multi-select; no visual layout change. Headless screenshot still
+  blocked, so no pixel QA. UX debt: a friendlier hierarchy flow (auto-discover
+  siblings, or a folder picker) would beat shift-selecting dependencies.
+
+### Next step
+Add `.meas`/run validation of the now-fully-imported `class-d_starter.asc`
+against LTspice (it has `.tran 3m` + Efficiency `.meas`), or render imported
+symbols at LTspice geometry (§1 visual parity) so inlined blocks draw correctly.
+
 ## 2026-06-30T02:00Z — auto/ltspice-parity — bank op-amp + E/G source pins from real .asy geometry (§1)
 
 ### What I did

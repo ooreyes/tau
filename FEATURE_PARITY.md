@@ -240,7 +240,19 @@ Status legend: ✅ done · 🟡 partial · ⬜ not started
 - ⬜ `.asc`-style `TEXT` SPICE directives placed on the canvas (free-text directive blocks)
 - ⬜ `.asc`-style `TEXT` comments
 - ⬜ Draw primitives (line/rect/circle/arc) on schematic
-- ⬜ Hierarchical schematics (a schematic used as a symbol / `.subckt`)
+- 🟡 Hierarchical schematics (a schematic used as a symbol / `.subckt`) —
+  **import-flattening landed** (`io/ascImport.ts`): `parseAsy` reads `.asy`
+  `BLOCK` pins (SpiceOrder), and a `resolveSubcircuit` hook on `ascToSchematic`
+  **inlines** a referenced sub-schematic into the parent — ports bridge to the
+  parent net at each pin via synthetic net labels, internals stay private
+  (`<inst>/…`), ground stays global, and each block is packed into a disjoint
+  X-region so no geometry shorts across instances; body directives are dropped.
+  `makeSubcircuitResolver` builds a resolver from sibling-file text and the Open
+  dialog (multi-select) feeds it the user's `.asy/.asc` siblings. **Clears the
+  last import warning on the flagship `class-d_starter.asc`** (its `deadtime` X1
+  fully inlines: 33 components, all 5 ports bridged, netlist extracts clean). 7
+  tests. Still ⬜: a Tau-native subckt *device* / hierarchy re-export and an
+  in-canvas hierarchical block symbol (this path flattens on import only).
 - ⬜ Net highlighting (hover a net → highlight whole net)
 - ⬜ Component attribute window/editor (full SPICE line editor per part)
 - ⬜ Pin/port symbols (IOPIN) for hierarchy
