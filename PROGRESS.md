@@ -1,5 +1,32 @@
 # Tau Autobuilder — Progress Log
 
+## 2026-06-29T20:20Z — auto/ltspice-parity — import Misc\jumper as a wire net-tie (§1)
+
+### What I did
+- `Misc\jumper` (≈26 corpus uses) is a graphical 0 Ω net-tie — LTspice emits no
+  SPICE device for it. `ascToSchematic` now detects the `jumper` leaf type and
+  pushes a `WIRE` between its two pins (jumper.asy +(-32,64)/-(32,64), orientation
+  transformed) instead of skipping it with a warning, so the shorted nets merge
+  exactly as LTspice intends.
+
+### Files touched
+- src/io/ascImport.ts (jumper → wire in ascToSchematic)
+- src/io/ascImport.test.ts (+1 test)
+- FEATURE_PARITY.md (§1 alias note)
+
+### Tests
+839 passing (was 838; +1). Typecheck clean.
+
+### FEATURE_PARITY items updated
+- §1 alias-symbols: added the jumper→wire net-tie sub-bullet.
+
+### UX issues found
+- None (importer-only change).
+
+### Next step
+Bundle real JFET models (2N3819/J309) by name like the BJT/diode bundle, or add
+MESFET/IGBT, or move to §2 capture (multi-select / rubber-band wire move).
+
 ## 2026-06-29T20:17Z — auto/ltspice-parity — JFET (njf/pjf) component kind (§3)
 
 ### What I did

@@ -128,6 +128,11 @@ Status legend: ✅ done · 🟡 partial · ⬜ not started
     banks). 7 tests. (The varactor still needs its `.model` to behave as a
     variable-capacitance device, but it now places + connects instead of being
     dropped.)
+  - 🟡 **`Misc\jumper` imports as a wire net-tie** — a jumper is a graphical
+    0 Ω short (LTspice emits no SPICE line for it), so `ascToSchematic` converts
+    each one to a `WIRE` between its two pins (`+(-32,64)`/`-(32,64)`) so the
+    nets merge exactly. ~26 instances across the corpus (e.g. Educational/160.asc
+    uses 6). 1 test.
 - 🟡 Map LTspice `SYMATTR Value/Value2/SpiceModel/ModelFile` to Tau component
   values — **source AC-stimulus mapping landed** (`io/ascImport.ts`
   `componentValueFromAttrs`): for `voltage`/`current` symbols the importer now

@@ -319,6 +319,24 @@ SYMATTR Value 2N3819`;
     expect(pins.s).toEqual({ x: 148, y: 196 });
   });
 
+  it("imports a jumper as a wire net-tie (no component, no warning)", () => {
+    // MISC\JUMPER J1 at (656,1296) R0; pins +(-32,64)/-(32,64) → world
+    // (624,1360)/(688,1360). LTspice emits no SPICE device for a jumper.
+    const JUMP = `Version 4
+SHEET 1 880 680
+SYMBOL MISC\\JUMPER 656 1296 R0
+SYMATTR InstName J1`;
+    const doc = ascToSchematic(parseAsc(JUMP));
+    expect(doc.components.filter((c) => c.label === "J1")).toHaveLength(0);
+    const tie = doc.wires.find(
+      (w) =>
+        w.points.some((p) => p.x === 624 && p.y === 1360) &&
+        w.points.some((p) => p.x === 688 && p.y === 1360),
+    );
+    expect(tie).toBeDefined();
+    expect(doc.warnings.filter((w) => /jumper/i.test(w))).toHaveLength(0);
+  });
+
   it("a tline with no SYMATTR Value adopts LTspice's .asy default (Td=50n Z0=50)", () => {
     const T0 = `Version 4
 SHEET 1 880 680

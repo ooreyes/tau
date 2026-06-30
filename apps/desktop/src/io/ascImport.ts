@@ -553,6 +553,22 @@ export function ascToSchematic(doc: AscDocument): AscImportResult {
   const warnings: string[] = [];
 
   for (const symbol of doc.symbols) {
+    const leaf = symbol.type.replace(/\\/g, "/").toLowerCase().split("/").pop() ?? "";
+    if (leaf === "jumper") {
+      // A jumper is a graphical net-tie (0 Ω short), not a SPICE device —
+      // LTspice emits no netlist line for it. Import it as a wire between its
+      // two pins (jumper.asy: +(-32,64) / -(32,64)) so the nets merge exactly.
+      const p1 = transformLtPoint(-32, 64, symbol.orientation);
+      const p2 = transformLtPoint(32, 64, symbol.orientation);
+      wires.push({
+        id: id("w"),
+        points: [
+          { x: symbol.x + p1.x, y: symbol.y + p1.y },
+          { x: symbol.x + p2.x, y: symbol.y + p2.y },
+        ],
+      });
+      continue;
+    }
     const kind = ltspiceTypeToKind(symbol.type);
     const instName = symbol.attrs.InstName ?? "";
     if (!kind) {
