@@ -6,6 +6,7 @@ import { mutualTerms, type CouplingSpec, type MutualTerm } from "./coupling";
 import { linearBSourceModel, resolveBehavioralTerms, type BehavioralTerm, type LinearBehavioral } from "./behavioral";
 import { stripAcSpec } from "../engine/acSpec";
 import { parseIcValue, stripIcSpec } from "../engine/icSpec";
+import { parseTransientSource, isFunctionSource, type TransientSource } from "./sourceWaveform";
 
 export interface AnalysisOptions {
   stopTime: number;
@@ -204,6 +205,19 @@ export function runTransientAnalysis(
             schematic.couplings,
           )
         : [];
+    // Independent-source waveforms parsed once (SINE/PULSE/PWL/EXP/SFFM or DC),
+    // keyed by component id, so the time loop evaluates without re-parsing.
+    const sourceWaveforms = new Map<string, TransientSource>();
+    for (const entry of circuit.components) {
+      const { kind } = entry.component;
+      if (kind === "vsource" || kind === "isource") {
+        sourceWaveforms.set(
+          entry.component.id,
+          parseTransientSource(entry.component.value, kind === "vsource" ? "V" : "A"),
+        );
+      }
+    }
+
     // Per-component branch-current samples (SPICE sign convention), keyed by id.
     const currentSamples = new Map<string, number[]>();
     const currentRefs = new Map<string, string>();
@@ -251,7 +265,8 @@ export function runTransientAnalysis(
           }
           case "vsource": {
             const sourceIndex = voltageSourceOffset + voltageSources.findIndex((source) => source.component.id === entry.component.id);
-            stampVoltageSource(matrix, rhs, netIndex(entry.pins.p, nodeIndex), netIndex(entry.pins.n, nodeIndex), sourceIndex, parseQuantity(stripAcSpec(entry.component.value), "V"));
+            const wave = sourceWaveforms.get(entry.component.id);
+            stampVoltageSource(matrix, rhs, netIndex(entry.pins.p, nodeIndex), netIndex(entry.pins.n, nodeIndex), sourceIndex, wave ? wave.at(time) : parseQuantity(stripAcSpec(entry.component.value), "V"));
             break;
           }
           case "vac": {
@@ -259,11 +274,13 @@ export function runTransientAnalysis(
             stampVoltageSource(matrix, rhs, netIndex(entry.pins.p, nodeIndex), netIndex(entry.pins.n, nodeIndex), sourceIndex, signalValue(entry.component.value, "V", time));
             break;
           }
-          case "isource":
+          case "isource": {
             // SPICE convention: positive value → current exits p into the external circuit.
             // Stamp from n to p so that rhs[p] += I (current injected into p).
-            stampCurrent(rhs, netIndex(entry.pins.n, nodeIndex), netIndex(entry.pins.p, nodeIndex), parseQuantity(stripAcSpec(entry.component.value), "A"));
+            const wave = sourceWaveforms.get(entry.component.id);
+            stampCurrent(rhs, netIndex(entry.pins.n, nodeIndex), netIndex(entry.pins.p, nodeIndex), wave ? wave.at(time) : parseQuantity(stripAcSpec(entry.component.value), "A"));
             break;
+          }
           case "iac":
             // Same polarity convention as isource.
             stampCurrent(rhs, netIndex(entry.pins.n, nodeIndex), netIndex(entry.pins.p, nodeIndex), signalValue(entry.component.value, "A", time));
@@ -434,8 +451,10 @@ export function runTransientAnalysis(
             break;
           }
           case "isource": {
+            const wave = sourceWaveforms.get(id);
             let a = 0;
-            try { a = parseQuantity(stripAcSpec(entry.component.value), "A"); } catch { a = 0; }
+            if (wave) a = wave.at(time);
+            else { try { a = parseQuantity(stripAcSpec(entry.component.value), "A"); } catch { a = 0; } }
             pushCurrent(id, ref, a);
             break;
           }
@@ -539,8 +558,19 @@ export function inspectTransientResolution(
 ): TransientResolution {
   let maxFrequencyHz = 0;
   for (const component of components) {
-    if (component.kind !== "vac" && component.kind !== "iac") continue;
-    const frequency = parseSineSource(component.value, component.kind === "vac" ? "V" : "A").frequency;
+    const isAcSymbol = component.kind === "vac" || component.kind === "iac";
+    const isPlainSource = component.kind === "vsource" || component.kind === "isource";
+    if (!isAcSymbol && !isPlainSource) continue;
+    const unit: "V" | "A" = component.kind === "vac" || component.kind === "vsource" ? "V" : "A";
+    let frequency: number;
+    if (isFunctionSource(component.value)) {
+      // SINE/PULSE/SFFM etc. on any source symbol contributes its own frequency.
+      frequency = parseTransientSource(component.value, unit).maxFrequencyHz;
+    } else if (isAcSymbol) {
+      frequency = parseSineSource(component.value, unit).frequency;
+    } else {
+      continue; // a plain DC vsource/isource imposes no sampling requirement
+    }
     if (!Number.isFinite(frequency) || frequency < 0) {
       throw new Error(`${component.label || component.id} needs a non-negative frequency.`);
     }
@@ -590,6 +620,10 @@ function positiveValue(entry: ExtractedComponent, unit: string): number {
 }
 
 function signalValue(value: string, unit: "V" | "A", time: number): number {
+  // SINE/PULSE/PWL/EXP/SFFM stimulus on an AC-symbol source: evaluate the
+  // full time-domain waveform. Plain `amp freq` (legacy vac/iac form) keeps the
+  // bare-sine interpretation below.
+  if (isFunctionSource(value)) return parseTransientSource(value, unit).at(time);
   const source = parseSineSource(value, unit);
   return source.offset + source.amplitude * Math.sin(2 * Math.PI * source.frequency * time);
 }

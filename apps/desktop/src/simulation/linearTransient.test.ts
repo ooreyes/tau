@@ -593,3 +593,59 @@ describe("Branch currents — I(...) exposure", () => {
     }
   });
 });
+
+// ---------------------------------------------------------------------------
+// Test — function-source stimulus (PULSE / SINE on a plain vsource)
+// ---------------------------------------------------------------------------
+describe("PULSE/SINE stimulus drives the TS transient solver", () => {
+  /**
+   * VS at (0,32): p=(0,0), n=(0,64). GND at VS.n. A 1k resistor from VS.p to a
+   * second ground gives the source current a path; with n grounded the source
+   * node voltage equals the source waveform exactly (V(p) − V(n) = Vsrc).
+   *   VS.p (0,0) → R1.a (64,0); R1.b (128,0) → GND.
+   */
+  function driveNode(value: string) {
+    const VS = vsource(0, 32, value, "V1");
+    const R1 = resistor(96, 0, "1k", "R1");
+    const GND_n = ground(0, 64);
+    const GND_r = ground(128, 0);
+    const components = [VS, R1, GND_n, GND_r];
+    const wires = [wire([{ x: 0, y: 0 }, { x: 64, y: 0 }])];
+    return { components, wires };
+  }
+
+  it("a PULSE source steps the node between V1 and V2 on schedule", () => {
+    // PULSE(0 5 1m 0 0 2m 4m): low until 1ms, high for the next 2ms, low again.
+    const { components, wires } = driveNode("PULSE(0 5 1m 0 0 2m 4m)");
+    const stopTime = 4e-3;
+    const steps = 400; // 10µs sample spacing
+    const result = runTransientAnalysis({ components, wires }, { stopTime, steps });
+    if (!result.ok) throw new Error(result.message);
+
+    const node = result.traces.find((t) => {
+      const max = Math.max(...t.values);
+      const min = Math.min(...t.values);
+      return max > 4.9 && min < 0.1;
+    });
+    expect(node).toBeDefined();
+    const at = (time: number) => node!.values[Math.round(time / stopTime * steps)];
+    expect(at(0.5e-3)).toBeCloseTo(0, 6); // before the 1ms delay → V1
+    expect(at(2e-3)).toBeCloseTo(5, 6); // mid on-time → V2
+    expect(at(3.5e-3)).toBeCloseTo(0, 6); // after the 2ms width → back to V1
+  });
+
+  it("a SINE source on a plain vsource produces a sine node voltage", () => {
+    const { components, wires } = driveNode("SINE(0 2 1k)");
+    const stopTime = 2e-3;
+    const steps = 400;
+    const result = runTransientAnalysis({ components, wires }, { stopTime, steps });
+    if (!result.ok) throw new Error(result.message);
+
+    const node = result.traces.find((t) => Math.max(...t.values) > 1.9 && Math.min(...t.values) < -1.9);
+    expect(node).toBeDefined();
+    const at = (time: number) => node!.values[Math.round(time / stopTime * steps)];
+    expect(at(0)).toBeCloseTo(0, 5);
+    expect(at(250e-6)).toBeCloseTo(2, 3); // quarter period → peak
+    expect(at(750e-6)).toBeCloseTo(-2, 3); // three-quarter → trough
+  });
+});

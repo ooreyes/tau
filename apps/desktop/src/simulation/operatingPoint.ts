@@ -20,6 +20,7 @@ import { parseQuantity } from "./quantity";
 import { resolveComponentValues, EMPTY_SCOPE, type ParamScope } from "./paramScope";
 import { linearBSourceModel, resolveBehavioralTerms, type BehavioralTerm, type LinearBehavioral } from "./behavioral";
 import { stripAcSpec } from "../engine/acSpec";
+import { parseTransientSource, isFunctionSource } from "./sourceWaveform";
 
 // ---------------------------------------------------------------------------
 // Result type (mirrors linearTransient's style)
@@ -246,7 +247,9 @@ export function runOperatingPoint(
             );
           const p = nodeIdx(entry.pins["p"], nodeIndex);
           const n = nodeIdx(entry.pins["n"], nodeIndex);
-          const v = parseQuantity(stripAcSpec(entry.component.value), "V");
+          const v = isFunctionSource(entry.component.value)
+            ? parseTransientSource(entry.component.value, "V").dc
+            : parseQuantity(stripAcSpec(entry.component.value), "V");
           stampVoltageSource(matrix, rhs, p, n, sIdx, v);
           break;
         }
@@ -270,7 +273,10 @@ export function runOperatingPoint(
           // into the external circuit, i.e., the source injects current INTO node p and
           // withdraws from node n.  stampCurrent(rhs, from, to, I) subtracts from "from"
           // and adds to "to", so stamp from n to p.
-          stampCurrent(rhs, n, p, parseQuantity(stripAcSpec(entry.component.value), "A"));
+          const i = isFunctionSource(entry.component.value)
+            ? parseTransientSource(entry.component.value, "A").dc
+            : parseQuantity(stripAcSpec(entry.component.value), "A");
+          stampCurrent(rhs, n, p, i);
           break;
         }
 
