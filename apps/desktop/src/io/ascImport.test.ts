@@ -145,6 +145,7 @@ describe("ltspiceTypeToKind", () => {
     expect(ltspiceTypeToKind("varactor")).toBe("diode");
     expect(ltspiceTypeToKind("SMdiode")).toBe("diode");
     expect(ltspiceTypeToKind("Misc\\battery")).toBe("vsource");
+    expect(ltspiceTypeToKind("Misc\\signal")).toBe("vsource");
     expect(ltspiceTypeToKind("RN55upright")).toBe("resistor");
     expect(ltspiceTypeToKind("UprightPowerResistor")).toBe("resistor");
   });
@@ -317,6 +318,24 @@ SYMATTR Value 2N3819`;
     expect(pins.d).toEqual({ x: 148, y: 100 });
     expect(pins.g).toEqual({ x: 100, y: 164 });
     expect(pins.s).toEqual({ x: 148, y: 196 });
+  });
+
+  it("imports a Misc/signal source carrying its SINE + AC stimulus", () => {
+    // Draft1.asc: the 'signal' voltage-source variant with a SINE value + AC spec.
+    const SIG = `Version 4
+SHEET 1 880 680
+SYMBOL Misc/signal 80 352 R0
+SYMATTR InstName V1
+SYMATTR Value SINE(0 1 1)
+SYMATTR Value2 AC 1`;
+    const doc = ascToSchematic(parseAsc(SIG));
+    const v1 = doc.components.find((c) => c.label === "V1");
+    expect(v1?.kind).toBe("vsource");
+    expect(v1?.value).toBe("SINE(0 1 1) AC 1");
+    // Pins from signal.asy +(0,16)/-(0,96) → world (80,368)/(80,448).
+    const pins = Object.fromEntries((v1?.pinOverride ?? []).map((p) => [p.id, { x: p.x, y: p.y }]));
+    expect(pins.p).toEqual({ x: 80, y: 368 });
+    expect(pins.n).toEqual({ x: 80, y: 448 });
   });
 
   it("imports a jumper as a wire net-tie (no component, no warning)", () => {

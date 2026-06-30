@@ -1,5 +1,35 @@
 # Tau Autobuilder — Progress Log
 
+## 2026-06-29T20:28Z — auto/ltspice-parity — map Misc/signal source; acceptance import 67/82 (§1)
+
+### What I did
+- Mapped LTspice's `Misc\signal` source variant (the generic DC/AC/PULSE/SINE/…
+  voltage symbol, Prefix V, +/− pins identical to `voltage`) to `vsource`. Its
+  SINE value + `AC` stimulus flow through `componentValueFromAttrs` unchanged.
+- This cleans **Draft1.asc** (a key-goal acceptance file), raising acceptance
+  import coverage to **67/82** of the user's own files importing with zero
+  unmapped-symbol warnings (measured this run; up from 66).
+
+### Files touched
+- src/io/ascImport.ts (ltspiceTypeToKind + ltPinKey: signal → vsource/voltage)
+- src/io/ascImport.test.ts (+2: type map + SINE/AC import with pins)
+- FEATURE_PARITY.md (§1 signal note + acceptance-coverage line)
+
+### Tests
+842 passing (was 841; +1 net). Typecheck clean.
+
+### FEATURE_PARITY items updated
+- §1 alias-symbols: signal→vsource; recorded 67/82 acceptance import coverage.
+
+### UX issues found
+- None (importer-only change).
+
+### Next step
+The remaining 15 unmapped acceptance files need bigger items: hierarchical-block
+import (`deadtime` used as a sub-schematic in class-d_starter — §2 hierarchy),
+DIGITAL `A`-device primitives (160.asc), and DIAC/TRIAC/IGBT kinds (dimmer/IGBT).
+Hierarchical blocks unblock the class-d key-goal file — highest leverage next.
+
 ## 2026-06-29T20:24Z — auto/ltspice-parity — bundle real LTspice JFET models by name (§3/§7)
 
 ### What I did

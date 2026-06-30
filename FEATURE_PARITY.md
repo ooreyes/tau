@@ -133,6 +133,14 @@ Status legend: ✅ done · 🟡 partial · ⬜ not started
     each one to a `WIRE` between its two pins (`+(-32,64)`/`-(32,64)`) so the
     nets merge exactly. ~26 instances across the corpus (e.g. Educational/160.asc
     uses 6). 1 test.
+  - 🟡 **`Misc\signal` → voltage source** — LTspice's "signal" source variant
+    (the generic DC/AC/PULSE/SINE/PWL/EXP/SFFM symbol, Prefix V) maps to
+    `vsource` with the same +/− pin bank as `voltage`; its SINE value + `AC`
+    stimulus flow through unchanged. Cleans **Draft1.asc** (a key-goal file).
+  - **Acceptance import coverage: 67/82 of the user's own files now import with
+    zero unmapped symbols** (was 66 before signal; the remaining 15 need
+    hierarchical-block (`deadtime` sub-schematic), DIGITAL `A`-device, or
+    DIAC/TRIAC/IGBT support — all tracked ⬜ items).
 - 🟡 Map LTspice `SYMATTR Value/Value2/SpiceModel/ModelFile` to Tau component
   values — **source AC-stimulus mapping landed** (`io/ascImport.ts`
   `componentValueFromAttrs`): for `voltage`/`current` symbols the importer now
