@@ -4,7 +4,7 @@ import { MAX_SCHEMATIC_FILE_BYTES, validateSchematicDocument } from "../schemati
 import { ComponentSymbol } from "../schematic/symbols";
 import type { SchematicComponent } from "../schematic/types";
 import { decodeParams, encodeParams, paramFields } from "../schematic/params";
-import { importAsc, decodeSchematicText } from "../io/ascImport";
+import { importAsc, decodeSchematicText, makeSubcircuitResolver } from "../io/ascImport";
 import { schematicToAsc } from "../io/ascExport";
 import { parseCir } from "../io/cirImport";
 import { EngineeringInput } from "./EngineeringInput";
@@ -200,7 +200,7 @@ export function EditorToolbar({
     URL.revokeObjectURL(url);
   };
 
-  const openCircuit = async (file: File) => {
+  const openCircuit = async (file: File, selected: File[] = [file]) => {
     try {
       if (file.size > MAX_SCHEMATIC_FILE_BYTES) {
         throw new Error(`Circuit files must be smaller than ${MAX_SCHEMATIC_FILE_BYTES / (1024 * 1024)} MB.`);
@@ -209,8 +209,22 @@ export function EditorToolbar({
       // not the UTF-8 that File.text() assumes — otherwise the parser sees garbage.
       const text = decodeSchematicText(await file.arrayBuffer());
       if (/\.asc$/i.test(file.name)) {
-        // LTspice schematic import (FEATURE_PARITY §1c).
-        const result = importAsc(text);
+        // LTspice schematic import (FEATURE_PARITY §1c). Pre-read any sibling
+        // .asy/.asc files the user also selected so a hierarchical schematic's
+        // sub-blocks (a `.asc` used as a symbol) can be inlined (§1 hierarchy).
+        const siblings = new Map<string, string>();
+        for (const f of selected) {
+          if (f === file) continue;
+          if (!/\.(asy|asc)$/i.test(f.name) || f.size > MAX_SCHEMATIC_FILE_BYTES) continue;
+          siblings.set(f.name.toLowerCase(), decodeSchematicText(await f.arrayBuffer()));
+        }
+        const resolver = siblings.size > 0
+          ? makeSubcircuitResolver((type) => {
+              const leaf = type.replace(/\\/g, "/").split("/").pop()?.toLowerCase() ?? "";
+              return { asy: siblings.get(`${leaf}.asy`), asc: siblings.get(`${leaf}.asc`) };
+            })
+          : undefined;
+        const result = importAsc(text, { resolveSubcircuit: resolver });
         if (result.components.length === 0 && result.wires.length === 0) {
           throw new Error("No schematic content found — is this a valid LTspice .asc file?");
         }
@@ -289,10 +303,15 @@ export function EditorToolbar({
         ref={fileInputRef}
         className="file-input"
         type="file"
-        accept=".tau.json,.asc,.cir,.net,.sp,application/json"
+        multiple
+        accept=".tau.json,.asc,.cir,.net,.sp,.asy,application/json"
+        title="Open a circuit. Select a hierarchical .asc together with its .asy/.asc sub-blocks to inline them."
         onChange={(event) => {
-          const file = event.currentTarget.files?.[0];
-          if (file) void openCircuit(file);
+          const files = Array.from(event.currentTarget.files ?? []);
+          // Open the first non-.asy file (a .asy is only a sub-block dependency);
+          // the rest of the selection are sibling files used to resolve subcircuits.
+          const primary = files.find((f) => !/\.asy$/i.test(f.name)) ?? files[0];
+          if (primary) void openCircuit(primary, files);
         }}
       />
       <label className="example-picker">
