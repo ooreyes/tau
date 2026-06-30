@@ -2454,3 +2454,41 @@ and decays; no-IC node starts at 0.
 ### Next step
 TS-transient PULSE/PWL/EXP source support (only sine works in the fallback today;
 class-d's V4 uses PULSE), reusing engine/sourceFunction.ts as a shared evaluator.
+
+## 2026-06-30 — auto/ltspice-parity — TS-solver time-domain source functions (§3/§4)
+
+### What I did
+- Built `simulation/sourceWaveform.ts`: `parseTransientSource(value, unit)` parses
+  an LTspice/ngspice stimulus spec (SINE/SIN, PULSE, PWL, EXP, SFFM, or plain DC,
+  trailing `AC <mag>` ignored) into `{ dc, at(time), maxFrequencyHz }` — a
+  time-domain evaluator mirroring `engine/sourceFunction.ts`'s deck emitter.
+  Handles SINE delay/damping/phase/Ncycles, PULSE finite edges + period +
+  Ncycles, PWL linear interp with flat-held ends, EXP dual time-constants, SFFM.
+- Wired it into `linearTransient.ts`: sources are parsed once into a
+  per-id map; the `.tran` loop now drives `vsource`/`isource` (and the `vac`/
+  `iac` AC symbols via `signalValue`) from the waveform instead of DC-only;
+  `inspectTransientResolution` derives the sampling requirement from a function
+  source's own frequency (previously only `vac`/`iac` set it). `operatingPoint.ts`
+  seeds the t=0 DC bias for a function-valued source so `.op` no longer NaNs.
+
+### Files touched
+- src/simulation/sourceWaveform.ts (new), src/simulation/sourceWaveform.test.ts (new, 16 tests)
+- src/simulation/linearTransient.ts (precompute map; vsource/isource/signalValue/resolution)
+- src/simulation/linearTransient.test.ts (+2 e2e: PULSE + SINE drive a node)
+- src/simulation/operatingPoint.ts (function-source DC bias)
+- FEATURE_PARITY.md (§3 sources: TS-fallback solver support landed)
+
+### Tests
+895 passing (was 877; +18). Typecheck clean. ngspice cross-check: PULSE(0 5 1m
+0 0 2m 4m) node = 0/5/0 V at t=0.5/2/3.5 ms in both Tau TS-solver and ngspice.
+
+### FEATURE_PARITY items updated
+- §3 Sources: "TS-fallback solver support for the non-DC functions" — now landed.
+
+### UX issues found
+- None (solver-internal; no UI surface changed).
+
+### Next step
+Class-d_starter.asc uses a triangle (PULSE) + sine into a comparator. With PULSE
+now driving the TS solver, verify class-d's V4/Vtri sources simulate; then tackle
+the comparator/logic component kind (§3) the class-d modulator needs.
