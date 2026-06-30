@@ -265,8 +265,16 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   (LTspice writes e.g. `SpiceLine2 IC=1`; `engine/icSpec.ts` + `componentValueFromAttrs`)
   and the native deck emits `C1 n1 n2 100p IC=1`, adding `uic` to the transient so
   the value holds at t=0 (live-verified in ngspice — cap starts at 1 V). Real
-  case: Draft10.asc. Still to add: parasitics (ESR/Rser), behavioral R/C/L,
-  TS-solver IC support.
+  case: Draft10.asc. **TS-solver IC support now landed**
+  (`simulation/linearTransient.ts`): `positiveValue` strips the `IC=` token before
+  parsing a C/L magnitude (a value like `1u IC=2` used to throw "Could not parse"),
+  and the transient seeds the backward-Euler companion state from the parsed IC so
+  the value holds at t=0 (LTspice `IC=`+`uic` semantics). Hand-computed proof
+  (`initialConditions.test.ts`): a 1µF/1kΩ cap charged to IC=2 V discharges as
+  `V[n]=IC/(1+h/RC)^(n+1)` — starts ≈2 V, reaches ≈IC·e⁻¹=0.736 V at t=RC=1 ms,
+  monotonic; an IC=1 A inductor delivers ~1 A at t=0 and decays through R; without
+  IC the node starts at 0. 3 tests. Still to add: parasitics (ESR/Rser),
+  behavioral R/C/L.
 - 🟡 Sources — DC/AC/PULSE plus **inline LTspice transient functions on V/I sources now emit to the ngspice deck: SINE (offset/amp/freq/td/damping/phase), PULSE (full 7-arg, Ncycles trimmed), PWL, EXP, SFFM** (`engine/sourceFunction.ts`; µ/meg normalized). Still missing: PWL FILE, explicit AC spec on these, noise sources, TS-fallback solver support for the non-DC functions (**arbitrary behavioral B-source `V=…`/`I=…` now landed** — see the dedicated B item below)
 - 🟡 Semiconductors — diode/BJT/MOS/zener present; **bundled LTspice standard
   models landed** (`engine/standardModels.ts`): common parts referenced by name
@@ -568,8 +576,8 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   t=0 (LTspice semantics) rather than only biasing the OP. Live-verified in ngspice
   17 (`.ic v(cap)=2` → cap starts at 2 V). 2 deck tests. **`C`/`L` per-instance
   `IC=` attribute now landed** (`engine/icSpec.ts`; deck emits `IC=` + `uic`;
-  importer reads it from `SpiceLine2` etc. — see §3 passives). **NEXT:** TS-solver
-  IC support.
+  importer reads it from `SpiceLine2` etc. — see §3 passives). **TS-solver IC
+  support landed** too (seeds the companion-model state — see §3 passives).
 - ✅ `.options` **passthrough** (reltol, etc.) — used 7× — `engine/spiceOptions.ts`:
   `parseOptionsDirectives` collects every `.options`/`.option` key=val + bare flag
   (lower-cased keys, later lines win, leading `.`/`!` + comma separators tolerated),

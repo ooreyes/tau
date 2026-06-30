@@ -5,6 +5,7 @@ import { resolveComponentValues, EMPTY_SCOPE, type ParamScope } from "./paramSco
 import { mutualTerms, type CouplingSpec, type MutualTerm } from "./coupling";
 import { linearBSourceModel, resolveBehavioralTerms, type BehavioralTerm, type LinearBehavioral } from "./behavioral";
 import { stripAcSpec } from "../engine/acSpec";
+import { parseIcValue, stripIcSpec } from "../engine/icSpec";
 
 export interface AnalysisOptions {
   stopTime: number;
@@ -173,6 +174,23 @@ export function runTransientAnalysis(
     const traceValues = nonGroundNets.map(() => [] as number[]);
     const capacitorVoltage = new Map<string, number>();
     const inductorCurrent = new Map<string, number>();
+
+    // Per-instance initial conditions (`IC=` on a C/L): seed the companion-model
+    // state so the value holds at t=0 (LTspice's `IC=` + `uic` semantics). A bad
+    // IC token is ignored rather than failing the whole run.
+    for (const entry of circuit.components) {
+      const ic = parseIcValue(entry.component.value);
+      if (ic === null) continue;
+      try {
+        if (entry.component.kind === "capacitor") {
+          capacitorVoltage.set(entry.component.id, parseQuantity(ic, "V"));
+        } else if (entry.component.kind === "inductor") {
+          inductorCurrent.set(entry.component.id, parseQuantity(ic, "A"));
+        }
+      } catch {
+        /* unparseable IC token — ignore, start from 0 */
+      }
+    }
 
     // Mutual inductance (K directives): pairwise coupling terms over the
     // inductor branch unknowns, computed once (M is time-invariant).
@@ -562,7 +580,9 @@ function resistanceToConductance(entry: ExtractedComponent): number {
 }
 
 function positiveValue(entry: ExtractedComponent, unit: string): number {
-  const value = parseQuantity(entry.component.value, unit);
+  // A C/L value may carry a per-instance `IC=` initial-condition token
+  // (e.g. "100p IC=1"); strip it before parsing the magnitude.
+  const value = parseQuantity(stripIcSpec(entry.component.value), unit);
   if (!Number.isFinite(value) || value <= 0) {
     throw new Error(`${entry.component.label || entry.component.id} must have a positive ${unit} value.`);
   }
