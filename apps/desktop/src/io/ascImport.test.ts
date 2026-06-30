@@ -694,6 +694,19 @@ TEXT 0 400 Left 2 !.op`;
     expect(ground.pins.some((p) => p.componentId.includes("X1~"))).toBe(true);
   });
 
+  it("names a bridged port net after the parent's own label, not the synthetic", () => {
+    const r = importAsc(PARENT, { resolveSubcircuit: resolver });
+    const circuit = extractCircuit(r.components, r.wires, r.netLabels);
+    // The a-port joins the parent's `vin` FLAG; the net should resolve as `vin`
+    // (the author's name) so V(vin) probes work — not the `X1:a` synthetic.
+    const ids = circuit.nets.map((n) => n.id);
+    expect(ids).toContain("vin");
+    expect(ids.some((id) => /^x1/i.test(id))).toBe(false);
+    // The R1.A pin (body a-port) must actually sit on that `vin` net.
+    const vin = circuit.nets.find((n) => n.id === "vin")!;
+    expect(vin.pins.some((p) => p.componentLabel === "X1.R1")).toBe(true);
+  });
+
   it("keeps two instances' internal nets private (no geometric short)", () => {
     const parent2 = `Version 4
 SHEET 1 880 680

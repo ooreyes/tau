@@ -764,11 +764,23 @@ function flattenSubcircuit(
   const dx = placement.nextX - minX;
   placement.nextX += maxX - minX + SUBCIRCUIT_MARGIN;
 
-  const renameNet = (text: string): string => {
-    if (isGroundNet(text)) return text;
-    const port = portRename.get(text);
-    return port ?? `${instName}/${text}`;
-  };
+  // Split the body's labels: internal nets keep a private `<inst>/…` name and
+  // stay with the block; the body side of a *port* net is renamed to the bridge
+  // synthetic and handed back separately so the caller can register it AFTER the
+  // parent's own FLAGs — letting the user's net name (e.g. `vpwm`) win over the
+  // synthetic when both land on the same node (so `V(vpwm)` resolves on import).
+  const internalLabels: NetLabel[] = [];
+  const portLabels: NetLabel[] = [];
+  for (const n of body.netLabels) {
+    const shifted = { id: `${instName}~${n.id}`, x: n.x + dx, y: n.y };
+    if (isGroundNet(n.text)) {
+      internalLabels.push({ ...shifted, text: n.text });
+    } else if (portRename.has(n.text)) {
+      portLabels.push({ ...shifted, text: portRename.get(n.text)! });
+    } else {
+      internalLabels.push({ ...shifted, text: `${instName}/${n.text}` });
+    }
+  }
 
   const result: AscImportResult = {
     components: body.components.map((c) => ({
@@ -782,19 +794,16 @@ function flattenSubcircuit(
       id: `${instName}~${w.id}`,
       points: w.points.map((p) => ({ x: p.x + dx, y: p.y })),
     })),
-    netLabels: body.netLabels.map((n) => ({
-      id: `${instName}~${n.id}`,
-      x: n.x + dx,
-      y: n.y,
-      text: renameNet(n.text),
-    })),
+    netLabels: internalLabels,
     // A subcircuit body's own directives/comments are for standalone testing of
     // the block; they must not run when the block is used inside a parent.
     directives: [],
     comments: [],
     warnings: body.warnings.map((w) => `${instName}: ${w}`),
   };
-  return { result, bridges };
+  // `bridges` (parent-side) + `portLabels` (body-side) carry the same synthetic
+  // names; both are deferred so a coincident parent FLAG names the net instead.
+  return { result, bridges: [...bridges, ...portLabels] };
 }
 
 export function ascToSchematic(doc: AscDocument, options: AscImportOptions = {}): AscImportResult {
@@ -808,6 +817,10 @@ export function ascToSchematic(doc: AscDocument, options: AscImportOptions = {})
 
   const components: SchematicComponent[] = [];
   const netLabels: NetLabel[] = [];
+  // Subcircuit port bridges, deferred until after the parent's own FLAGs so a
+  // coincident user net label (e.g. `vpwm`) wins the net's name over the
+  // synthetic `<inst>:<port>` (keeps `V(<user name>)` resolving on import).
+  const deferredBridges: NetLabel[] = [];
   const warnings: string[] = [];
 
   for (const symbol of doc.symbols) {
@@ -847,7 +860,8 @@ export function ascToSchematic(doc: AscDocument, options: AscImportOptions = {})
         );
         components.push(...result.components);
         wires.push(...result.wires);
-        netLabels.push(...result.netLabels, ...bridges);
+        netLabels.push(...result.netLabels);
+        deferredBridges.push(...bridges);
         warnings.push(...result.warnings);
         // Propagate the advanced cursor back to this scope for the next sibling.
         options._placement = placement;
@@ -893,6 +907,8 @@ export function ascToSchematic(doc: AscDocument, options: AscImportOptions = {})
       netLabels.push({ id: id("n"), x: flag.x, y: flag.y, text: flag.net });
     }
   }
+  // Register subcircuit port bridges last so a same-node parent FLAG names the net.
+  netLabels.push(...deferredBridges);
 
   const directives = doc.texts.filter((t) => t.directive).map((t) => t.text);
   const comments = doc.texts.filter((t) => !t.directive).map((t) => t.text);
