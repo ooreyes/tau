@@ -228,6 +228,60 @@ export function parseAsc(text: string): AscDocument {
   return doc;
 }
 
+/** A pin of an LTspice `.asy` symbol — its name, SpiceOrder, and symbol-local
+ *  position (the same R0 frame the `PIN` line gives). */
+export interface AsyPin {
+  name: string;
+  /** SpiceOrder — the port's index in the `.subckt` line / instance pin list. */
+  order: number;
+  x: number;
+  y: number;
+}
+
+/** A parsed LTspice `.asy` symbol. `BLOCK` symbols back a hierarchical schematic
+ *  (a `.asc` used as a subcircuit); their {@link pins} order the instance's
+ *  external connections (sorted by SpiceOrder). */
+export interface AsySymbol {
+  /** SymbolType: "BLOCK", "CELL", … (BLOCK = hierarchical sub-schematic). */
+  symbolType: string;
+  /** Pins in SpiceOrder order. */
+  pins: AsyPin[];
+}
+
+/**
+ * Parse an LTspice `.asy` symbol file into its pin list (the only part that
+ * matters for hierarchical connectivity). Grammar:
+ *   SymbolType BLOCK
+ *   PIN <x> <y> <side> <offset>
+ *   PINATTR PinName <name>
+ *   PINATTR SpiceOrder <n>
+ * Pins are returned sorted by SpiceOrder so index i is the i-th `.subckt` port.
+ */
+export function parseAsy(text: string): AsySymbol {
+  const result: AsySymbol = { symbolType: "", pins: [] };
+  let current: { x: number; y: number; name: string; order: number } | null = null;
+  const flush = () => {
+    if (current) result.pins.push({ ...current });
+    current = null;
+  };
+  for (const raw of text.replace(/\r\n?/g, "\n").split("\n")) {
+    const parts = raw.trim().split(/\s+/);
+    const tag = (parts[0] ?? "").toUpperCase();
+    if (tag === "SYMBOLTYPE") {
+      result.symbolType = parts[1] ?? "";
+    } else if (tag === "PIN") {
+      flush();
+      current = { x: num(parts[1]), y: num(parts[2]), name: "", order: result.pins.length + 1 };
+    } else if (tag === "PINATTR" && current) {
+      if ((parts[1] ?? "").toLowerCase() === "pinname") current.name = parts.slice(2).join(" ");
+      else if ((parts[1] ?? "").toLowerCase() === "spiceorder") current.order = num(parts[2]) || current.order;
+    }
+  }
+  flush();
+  result.pins.sort((a, b) => a.order - b.order);
+  return result;
+}
+
 /**
  * Map an LTspice symbol type to a Tau component kind. Case-insensitive; handles
  * the common built-ins. Vendor/library symbols (e.g. "opamps\\LT1468") return
@@ -602,7 +656,148 @@ export function componentValueFromAttrs(
   return base;
 }
 
-export function ascToSchematic(doc: AscDocument): AscImportResult {
+/** A resolved hierarchical block: the `.asy` symbol (ports) plus the `.asc`
+ *  schematic body it stands for. Returned by a {@link SubcircuitResolver}. */
+export interface SubcircuitDef {
+  symbol: AsySymbol;
+  body: AscDocument;
+}
+
+/** Resolve an LTspice symbol type (e.g. "deadtime") to its hierarchical block
+ *  definition, or `null` if it is not a sub-schematic. The Open dialog backs
+ *  this with sibling-file reads; tests back it with in-memory fixtures. */
+export type SubcircuitResolver = (symbolType: string) => SubcircuitDef | null;
+
+/** Options for {@link ascToSchematic}. */
+export interface AscImportOptions {
+  /** Resolve a symbol with no built-in kind to a hierarchical sub-schematic. */
+  resolveSubcircuit?: SubcircuitResolver;
+  /** Internal: recursion depth (guards against a symbol referencing itself). */
+  _depth?: number;
+  /** Internal: shared placement cursor so every flattened block lands in its
+   *  own disjoint X-region (no false geometric net merges between instances). */
+  _placement?: { nextX: number };
+  /** Internal: parents already on the resolution stack (cycle guard by name). */
+  _stack?: ReadonlySet<string>;
+}
+
+const MAX_SUBCIRCUIT_DEPTH = 16;
+/** Gap left between adjacent flattened blocks (LTspice grid units). */
+const SUBCIRCUIT_MARGIN = 1000;
+const isGroundNet = (text: string): boolean => {
+  const t = text.trim().toLowerCase();
+  return t === "0" || t === "gnd";
+};
+
+/** Bounding-box min-X over an already-built result (components incl. their pin
+ *  overrides, wires, net labels). Used to pack flattened blocks side by side. */
+function resultBounds(r: AscImportResult): { minX: number; maxX: number } {
+  let minX = Infinity;
+  let maxX = -Infinity;
+  const see = (x: number) => {
+    if (x < minX) minX = x;
+    if (x > maxX) maxX = x;
+  };
+  for (const c of r.components) {
+    see(c.x);
+    for (const p of c.pinOverride ?? []) see(p.x);
+  }
+  for (const w of r.wires) for (const p of w.points) see(p.x);
+  for (const n of r.netLabels) see(n.x);
+  if (minX === Infinity) {
+    minX = 0;
+    maxX = 0;
+  }
+  return { minX, maxX };
+}
+
+/**
+ * Flatten a hierarchical block instance into parent-frame schematic content.
+ *
+ * LTspice resolves an `X` instance by name-matching the `.asy` pins to the
+ * body's labelled IOPINs and substituting the parent's nets for those ports.
+ * Tau has no subcircuit device, so we inline the body instead — which reuses the
+ * full netlist/solver stack (TS *and* native) unchanged. Two rules make the
+ * inline electrically exact:
+ *   1. **Ports bridge by name.** Each `.asy` pin maps to a unique synthetic net
+ *      `<inst>:<pin>`. A net label with that name is dropped at the pin's parent
+ *      world position (so it joins the parent net there) and the body's same-
+ *      named net is renamed to it — wiring the body port to the parent net.
+ *   2. **Internals stay private.** Every other body net is prefixed `<inst>/…`
+ *      so two instances of one block never short their internals together;
+ *      ground (`0`/`GND`) is left global, exactly as ngspice treats subckt node 0.
+ * Body geometry is shifted into its own disjoint X-region (via the shared
+ * placement cursor) so no body pin/wire can coincide with parent or sibling
+ * content and forge a false net.
+ */
+function flattenSubcircuit(
+  symbol: AscSymbol,
+  def: SubcircuitDef,
+  instName: string,
+  options: AscImportOptions,
+  newId: (prefix: string) => string,
+): { result: AscImportResult; bridges: NetLabel[] } {
+  const placement = options._placement ?? { nextX: 1_000_000 };
+  const stack = options._stack ?? new Set<string>();
+
+  // Recurse first so nested blocks resolve and the body is fully flat.
+  const body = ascToSchematic(def.body, {
+    ...options,
+    _depth: (options._depth ?? 0) + 1,
+    _placement: placement,
+    _stack: new Set([...stack, symbol.type.toLowerCase()]),
+  });
+
+  // Port net renames: <asy pin name> → <inst>:<pin>, and a parent-side bridge
+  // label at each pin's world position so the body port joins the parent net.
+  const portRename = new Map<string, string>();
+  const bridges: NetLabel[] = [];
+  for (const pin of def.symbol.pins) {
+    const synthetic = `${instName}:${pin.name}`;
+    portRename.set(pin.name, synthetic);
+    const offset = transformLtPoint(pin.x, pin.y, symbol.orientation);
+    bridges.push({ id: newId("n"), x: symbol.x + offset.x, y: symbol.y + offset.y, text: synthetic });
+  }
+
+  // Pack the body into a fresh X-region; keep Y so geometry stays compact.
+  const { minX, maxX } = resultBounds(body);
+  const dx = placement.nextX - minX;
+  placement.nextX += maxX - minX + SUBCIRCUIT_MARGIN;
+
+  const renameNet = (text: string): string => {
+    if (isGroundNet(text)) return text;
+    const port = portRename.get(text);
+    return port ?? `${instName}/${text}`;
+  };
+
+  const result: AscImportResult = {
+    components: body.components.map((c) => ({
+      ...c,
+      id: `${instName}~${c.id}`,
+      label: c.label ? `${instName}.${c.label}` : c.label,
+      x: c.x + dx,
+      ...(c.pinOverride ? { pinOverride: c.pinOverride.map((p) => ({ ...p, x: p.x + dx })) } : {}),
+    })),
+    wires: body.wires.map((w) => ({
+      id: `${instName}~${w.id}`,
+      points: w.points.map((p) => ({ x: p.x + dx, y: p.y })),
+    })),
+    netLabels: body.netLabels.map((n) => ({
+      id: `${instName}~${n.id}`,
+      x: n.x + dx,
+      y: n.y,
+      text: renameNet(n.text),
+    })),
+    // A subcircuit body's own directives/comments are for standalone testing of
+    // the block; they must not run when the block is used inside a parent.
+    directives: [],
+    comments: [],
+    warnings: body.warnings.map((w) => `${instName}: ${w}`),
+  };
+  return { result, bridges };
+}
+
+export function ascToSchematic(doc: AscDocument, options: AscImportOptions = {}): AscImportResult {
   let counter = 0;
   const id = (prefix: string) => `${prefix}-${(counter += 1)}`;
 
@@ -635,6 +830,29 @@ export function ascToSchematic(doc: AscDocument): AscImportResult {
     const kind = ltspiceTypeToKind(symbol.type);
     const instName = symbol.attrs.InstName ?? "";
     if (!kind) {
+      // No built-in kind: try resolving the symbol as a hierarchical block and
+      // inline (flatten) its schematic. This is how LTspice instances a `.asc`
+      // used as a symbol (e.g. class-d_starter's `deadtime` X1).
+      const def = options.resolveSubcircuit?.(symbol.type) ?? null;
+      const depth = options._depth ?? 0;
+      if (def && def.symbol.symbolType.toUpperCase() === "BLOCK" && depth < MAX_SUBCIRCUIT_DEPTH
+        && !(options._stack ?? new Set()).has(symbol.type.toLowerCase())) {
+        const placement = options._placement ?? { nextX: 1_000_000 };
+        const { result, bridges } = flattenSubcircuit(
+          symbol,
+          def,
+          instName || `X${counter}`,
+          { ...options, _placement: placement },
+          id,
+        );
+        components.push(...result.components);
+        wires.push(...result.wires);
+        netLabels.push(...result.netLabels, ...bridges);
+        warnings.push(...result.warnings);
+        // Propagate the advanced cursor back to this scope for the next sibling.
+        options._placement = placement;
+        continue;
+      }
       warnings.push(
         `Skipped ${instName || "an unnamed part"}: no Tau equivalent for LTspice symbol "${symbol.type}".`,
       );
@@ -688,6 +906,25 @@ export function ascToSchematic(doc: AscDocument): AscImportResult {
  * dialog and tests. Throws (from `parseAsc`) only on a non-LTspice file; an
  * empty/contentless `.asc` yields an empty-but-valid result.
  */
-export function importAsc(text: string): AscImportResult {
-  return ascToSchematic(parseAsc(text));
+export function importAsc(text: string, options: AscImportOptions = {}): AscImportResult {
+  return ascToSchematic(parseAsc(text), options);
+}
+
+/**
+ * Resolve a hierarchical symbol from raw sibling-file text. Returns a
+ * {@link SubcircuitResolver} that the Open dialog can build from a "read this
+ * symbol's `.asy` + `.asc`" callback (and tests from an in-memory map), so the
+ * file-system parts stay outside this pure module. A symbol resolves only when
+ * BOTH its `.asy` (ports) and `.asc` (body) are found and the `.asy` is a BLOCK.
+ */
+export function makeSubcircuitResolver(
+  readFiles: (symbolType: string) => { asy?: string; asc?: string } | null,
+): SubcircuitResolver {
+  return (symbolType) => {
+    const files = readFiles(symbolType);
+    if (!files?.asy || !files.asc) return null;
+    const symbol = parseAsy(files.asy);
+    if (symbol.symbolType.toUpperCase() !== "BLOCK") return null;
+    return { symbol, body: parseAsc(files.asc) };
+  };
 }

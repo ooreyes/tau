@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseAsc, ltspiceTypeToKind, orientationToRotation, transformLtPoint, LTSPICE_PINS, ascToSchematic, importAsc, componentValueFromAttrs } from "./ascImport";
+import { parseAsc, parseAsy, ltspiceTypeToKind, orientationToRotation, transformLtPoint, LTSPICE_PINS, ascToSchematic, importAsc, componentValueFromAttrs, makeSubcircuitResolver, type SubcircuitResolver } from "./ascImport";
 import { extractCircuit } from "../schematic/netlist";
 import { buildParamScope, resolveComponentValues } from "../simulation/paramScope";
 
@@ -599,5 +599,150 @@ describe("componentValueFromAttrs", () => {
     expect(componentValueFromAttrs("vsource", { Value: '""' })).toBe("");
     expect(componentValueFromAttrs("vsource", { Value: '""', Value2: "AC 2" })).toBe("AC 2");
     expect(componentValueFromAttrs("isource", { Value: "''" })).toBe("");
+  });
+});
+
+describe("parseAsy", () => {
+  it("reads BLOCK pins in SpiceOrder with symbol-local positions", () => {
+    const asy = `Version 4
+SymbolType BLOCK
+RECTANGLE Normal 80 96 -112 -96
+PIN -112 0 LEFT 8
+PINATTR PinName pwm
+PINATTR SpiceOrder 1
+PIN 80 -64 RIGHT 8
+PINATTR PinName gp
+PINATTR SpiceOrder 2
+PIN -16 -96 TOP 8
+PINATTR PinName vcc
+PINATTR SpiceOrder 4
+PIN 80 64 RIGHT 8
+PINATTR PinName gn
+PINATTR SpiceOrder 3`;
+    const sym = parseAsy(asy);
+    expect(sym.symbolType).toBe("BLOCK");
+    // Returned sorted by SpiceOrder, regardless of file order.
+    expect(sym.pins.map((p) => p.name)).toEqual(["pwm", "gp", "gn", "vcc"]);
+    expect(sym.pins[0]).toMatchObject({ name: "pwm", x: -112, y: 0, order: 1 });
+    expect(sym.pins[3]).toMatchObject({ name: "vcc", x: -16, y: -96, order: 4 });
+  });
+});
+
+describe("ascToSchematic hierarchical subcircuits", () => {
+  // A 2-port block "mydiv": a→[R1]→mid→[R2]→b. `mid` is an internal
+  // geometry-only net (no port, no label) — used to prove instance isolation.
+  const DIV_ASY = `Version 4
+SymbolType BLOCK
+PIN -32 0 LEFT 8
+PINATTR PinName a
+PINATTR SpiceOrder 1
+PIN 32 0 RIGHT 8
+PINATTR PinName b
+PINATTR SpiceOrder 2`;
+  // res pins (LTSPICE_PINS) are local (16,16)/(16,96). R1@(0,-16)→(16,0)/(16,80);
+  // R2@(0,64)→(16,80)/(16,160). The shared (16,80) point is the internal `mid`.
+  const DIV_ASC = `Version 4
+SHEET 1 100 200
+FLAG 16 0 a
+FLAG 16 160 b
+SYMBOL res 0 -16 R0
+SYMATTR InstName R1
+SYMATTR Value 1k
+SYMBOL res 0 64 R0
+SYMATTR InstName R2
+SYMATTR Value 2k
+TEXT 0 50 Left 2 !.tran 1`;
+
+  const resolver: SubcircuitResolver = makeSubcircuitResolver((type) =>
+    type.toLowerCase() === "mydiv" ? { asy: DIV_ASY, asc: DIV_ASC } : null,
+  );
+
+  // Parent: X1@(200,200). asy pins → a@(168,200), b@(232,200). a wired to a
+  // `vin` flag, b wired to ground.
+  const PARENT = `Version 4
+SHEET 1 880 680
+WIRE 100 200 168 200
+WIRE 232 200 300 200
+FLAG 100 200 vin
+FLAG 300 200 0
+SYMBOL mydiv 200 200 R0
+SYMATTR InstName X1
+TEXT 0 400 Left 2 !.op`;
+
+  it("inlines a block's body with instance-prefixed labels", () => {
+    const r = importAsc(PARENT, { resolveSubcircuit: resolver });
+    expect(r.warnings).toEqual([]);
+    const labels = r.components.filter((c) => c.kind === "resistor").map((c) => c.label).sort();
+    expect(labels).toEqual(["X1.R1", "X1.R2"]);
+  });
+
+  it("drops the body's own directives but keeps the parent's", () => {
+    const r = importAsc(PARENT, { resolveSubcircuit: resolver });
+    // Parent `.op` kept; the block body's `.tran 1` (for standalone testing) gone.
+    expect(r.directives).toEqual([".op"]);
+  });
+
+  it("bridges each port to the parent net at the instance's pin position", () => {
+    const r = importAsc(PARENT, { resolveSubcircuit: resolver });
+    const circuit = extractCircuit(r.components, r.wires, r.netLabels);
+    expect(circuit.groundNetId).not.toBeNull();
+    // a→vin, b→ground, plus the internal mid: exactly three nets. Had the ports
+    // NOT bridged, a/vin and b/ground would stay split → more than three nets.
+    expect(circuit.nets).toHaveLength(3);
+    const ground = circuit.nets.find((n) => n.id === circuit.groundNetId)!;
+    // The b-port resistor (X1.R2) reaches the parent's ground through the bridge.
+    expect(ground.pins.some((p) => p.componentId.includes("X1~"))).toBe(true);
+  });
+
+  it("keeps two instances' internal nets private (no geometric short)", () => {
+    const parent2 = `Version 4
+SHEET 1 880 680
+WIRE 100 200 168 200
+WIRE 232 200 300 200
+WIRE 100 400 168 400
+WIRE 232 400 300 400
+FLAG 100 200 vin1
+FLAG 300 200 0
+FLAG 100 400 vin2
+FLAG 300 400 0
+SYMBOL mydiv 200 200 R0
+SYMATTR InstName X1
+SYMBOL mydiv 200 400 R0
+SYMATTR InstName X2`;
+    const r = importAsc(parent2, { resolveSubcircuit: resolver });
+    expect(r.warnings).toEqual([]);
+    expect(r.components.filter((c) => c.kind === "resistor")).toHaveLength(4);
+    const circuit = extractCircuit(r.components, r.wires, r.netLabels);
+    // vin1, vin2, ground, and TWO distinct internal mids → 5 nets. If the two
+    // instances' `mid` shorted together, we'd see only 4.
+    expect(circuit.nets).toHaveLength(5);
+  });
+
+  it("guards against a block that references itself (no infinite recursion)", () => {
+    const loopAsy = `Version 4
+SymbolType BLOCK
+PIN -32 0 LEFT 8
+PINATTR PinName a
+PINATTR SpiceOrder 1`;
+    const loopAsc = `Version 4
+SHEET 1 100 100
+SYMBOL loop 0 0 R0
+SYMATTR InstName X9`;
+    const selfResolver = makeSubcircuitResolver((type) =>
+      type.toLowerCase() === "loop" ? { asy: loopAsy, asc: loopAsc } : null,
+    );
+    const parent = `Version 4
+SHEET 1 200 200
+SYMBOL loop 100 100 R0
+SYMATTR InstName X1`;
+    // Must terminate; the recursion is cut and the innermost self-ref is skipped.
+    const r = importAsc(parent, { resolveSubcircuit: selfResolver });
+    expect(r.warnings.some((w) => w.includes("Skipped"))).toBe(true);
+  });
+
+  it("leaves an unmapped symbol skipped when no resolver is provided", () => {
+    const r = importAsc(PARENT);
+    expect(r.warnings.some((w) => w.includes('no Tau equivalent for LTspice symbol "mydiv"'))).toBe(true);
+    expect(r.components.filter((c) => c.kind === "resistor")).toHaveLength(0);
   });
 });
