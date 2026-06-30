@@ -128,6 +128,11 @@ describe("ltspiceTypeToKind", () => {
     expect(ltspiceTypeToKind("b2")).toBe("bsource");
   });
 
+  it("maps the LTspice tline symbol to a transmission line", () => {
+    expect(ltspiceTypeToKind("tline")).toBe("tline");
+    expect(ltspiceTypeToKind("TLINE")).toBe("tline");
+  });
+
   it("treats any opamps/* library symbol as an op-amp", () => {
     expect(ltspiceTypeToKind("opamps\\LT1468")).toBe("opamp");
     expect(ltspiceTypeToKind("Opamps\\AD8675")).toBe("opamp");
@@ -222,6 +227,36 @@ SYMATTR Value I=I(V1)*2`;
     const pins = Object.fromEntries((b1?.pinOverride ?? []).map((p) => [p.id, { x: p.x, y: p.y }]));
     expect(pins.p).toEqual({ x: 160, y: -656 });
     expect(pins.n).toEqual({ x: 160, y: -576 });
+  });
+
+  it("imports a tline carrying its Td/Z0 value and 4 LTspice-accurate pins", () => {
+    // tline T2 at (176,320) R0; tline.asy pins (SpiceOrder I1,R1,I2,R2) at
+    // (-48,-16)/(-48,16)/(48,-16)/(48,16) → world (128,304)/(128,336)/
+    // (224,304)/(224,336).
+    const TSRC = `Version 4
+SHEET 1 880 680
+SYMBOL tline 176 320 R0
+SYMATTR InstName T2
+SYMATTR Value Td=30n Z0=150`;
+    const doc = ascToSchematic(parseAsc(TSRC));
+    const t2 = doc.components.find((c) => c.label === "T2");
+    expect(t2).toBeDefined();
+    expect(t2?.kind).toBe("tline");
+    expect(t2?.value).toBe("Td=30n Z0=150");
+    const pins = Object.fromEntries((t2?.pinOverride ?? []).map((p) => [p.id, { x: p.x, y: p.y }]));
+    expect(pins.a1).toEqual({ x: 128, y: 304 });
+    expect(pins.a2).toEqual({ x: 128, y: 336 });
+    expect(pins.b1).toEqual({ x: 224, y: 304 });
+    expect(pins.b2).toEqual({ x: 224, y: 336 });
+  });
+
+  it("a tline with no SYMATTR Value adopts LTspice's .asy default (Td=50n Z0=50)", () => {
+    const T0 = `Version 4
+SHEET 1 880 680
+SYMBOL tline 176 208 R0
+SYMATTR InstName T1`;
+    const doc = ascToSchematic(parseAsc(T0));
+    expect(doc.components.find((c) => c.label === "T1")?.value).toBe("Td=50n Z0=50");
   });
 
   it("flags M* orientations as mirrored so the symbol renders flipped", () => {

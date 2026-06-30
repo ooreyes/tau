@@ -392,4 +392,20 @@ describe("buildSpiceDeck", () => {
     expect(deck.netlist).toContain("K_T1");
     expect(deck.netlist).not.toContain("TP1 ");
   });
+
+  it("emits an ideal lossless transmission line (T device, 4 nodes + Z0/TD)", () => {
+    // tline T1 at origin: a1(-32,-16) a2(-32,16) b1(32,-16) b2(32,16).
+    const components = [
+      component("tline", "T1", "Td=50n Z0=75", 0, 0),
+      component("vsource", "V1", "5", -32, 16),    // p=(-32,-16)=a1, n=(-32,48)
+      component("resistor", "R1", "75", 64, -16),  // a=(32,-16)=b1, b=(96,-16)
+      component("ground", "", "", -32, 16),        // a2 → 0
+      component("ground", "", "", 32, 16),         // b2 → 0
+      component("ground", "", "", -32, 48),        // V1 n → 0
+      component("ground", "", "", 96, -16),        // R1 b → 0
+    ];
+    const deck = buildSpiceDeck({ components, wires: [] }, { kind: "tran", stopTime: 5e-7, steps: 500 });
+    // Port-A return (a2) and port-B return (b2) are grounded → nodes 2 and 4 are 0.
+    expect(deck.netlist).toMatch(/T1 \S+ 0 \S+ 0 Z0=75 TD=5(\.0+\d*)?e-8/);
+  });
 });

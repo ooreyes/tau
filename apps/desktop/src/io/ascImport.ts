@@ -268,6 +268,8 @@ export function ltspiceTypeToKind(type: string): ComponentKind | null {
     csw: "switch",
     pot: "potentiometer",
     ind2t: "transformer",
+    tline: "tline",
+    ltline: "tline",
     "opamp": "opamp",
     "opamp2": "opamp",
     // Voltage-controlled sources (LTspice e/e2 = VCVS, g/g2 = VCCS).
@@ -323,6 +325,14 @@ export const LTSPICE_PINS: Record<string, LtPin[]> = {
   nmos: [{ name: "D", dx: 48, dy: 0 }, { name: "G", dx: 0, dy: 80 }, { name: "S", dx: 48, dy: 96 }],
   pmos: [{ name: "D", dx: 48, dy: 0 }, { name: "G", dx: 0, dy: 80 }, { name: "S", dx: 48, dy: 96 }],
   sw: [{ name: "A", dx: 0, dy: 16 }, { name: "B", dx: 0, dy: 96 }],
+  // LTspice tline.asy pins, in SpiceOrder: I1,R1 (left port) / I2,R2 (right
+  // port). Symbol-local offsets are centered; mapped to Tau's a1/a2/b1/b2.
+  tline: [
+    { name: "I1", dx: -48, dy: -16 },
+    { name: "R1", dx: -48, dy: 16 },
+    { name: "I2", dx: 48, dy: -16 },
+    { name: "R2", dx: 48, dy: 16 },
+  ],
 };
 
 /** Apply an LTspice orientation to a symbol-local point (LTspice screen Y is
@@ -383,6 +393,7 @@ function ltPinKey(type: string): keyof typeof LTSPICE_PINS | null {
     nmos: "nmos", nmos4: "nmos",
     pmos: "pmos", pmos4: "pmos",
     sw: "sw", csw: "sw",
+    tline: "tline", ltline: "tline",
     // Behavioral sources share the independent-source pin geometry: the bv
     // (voltage) symbol pins match `voltage`, bi (current) match `current`.
     bv: "voltage", bi: "current", b: "voltage", b2: "voltage",
@@ -483,6 +494,12 @@ export function componentValueFromAttrs(
       .map((s) => s?.trim())
       .filter((s): s is string => !!s);
     return [base, ...extras].filter(Boolean).join(" ");
+  }
+  // A transmission line whose `Value` is omitted inherits its .asy symbol
+  // default (LTspice's tline.asy ships `Td=50n Z0=50`), so an empty import must
+  // adopt that default rather than a bare/ambiguous value.
+  if (kind === "tline") {
+    return base || "Td=50n Z0=50";
   }
   // Capacitors/inductors may carry an initial condition in any of the spec
   // attributes (LTspice writes e.g. `SpiceLine2 IC=1`). Append just the `IC=`

@@ -39,6 +39,7 @@ export const SYMBOL_BODY: Record<ComponentKind, BodyBox> = {
   potentiometer: { minX: -28, minY: -18, maxX: 28, maxY: 12 },
   switch: { minX: -14, minY: -20, maxX: 14, maxY: 8 },
   transformer: { minX: -24, minY: -27, maxX: 24, maxY: 27 },
+  tline: { minX: -20, minY: -16, maxX: 20, maxY: 16 },
   testpoint: { minX: -11, minY: -16, maxX: 11, maxY: 14 },
   ground: { minX: -12, minY: -3, maxX: 12, maxY: 22 },
 };
@@ -70,6 +71,7 @@ export const SYMBOL_BOX: Record<ComponentKind, { halfW: number; halfH: number }>
   potentiometer: { halfW: 30, halfH: 18 },
   switch: { halfW: 14, halfH: 20 },
   transformer: { halfW: 24, halfH: 27 },
+  tline: { halfW: 20, halfH: 18 },
   testpoint: { halfW: 11, halfH: 16 },
   ground: { halfW: 12, halfH: 22 },
 };
@@ -409,6 +411,22 @@ export function ComponentSymbol({ kind }: { kind: ComponentKind }) {
           <path d="M 22 -16 A 7 7 0 0 0 22 -2 A 7 7 0 0 0 22 12 A 7 7 0 0 0 22 26" />
           <line x1={22} y1={-16} x2={32} y2={-16} />
           <line x1={22} y1={16} x2={32} y2={16} />
+        </>
+      );
+
+    case "tline":
+      return (
+        <>
+          {/* Ideal lossless line: two conductors tapering between the ports,
+              echoing LTspice's tline glyph. Port A pins left, port B right. */}
+          <line x1={-32} y1={-16} x2={-16} y2={-16} />
+          <line x1={-32} y1={16} x2={-16} y2={16} />
+          <path d="M -16 -16 L 16 -8 M -16 16 L 16 8" />
+          <path d="M -16 -8 L 16 -4 M -16 8 L 16 4" />
+          <line x1={16} y1={-16} x2={32} y2={-16} />
+          <line x1={16} y1={16} x2={32} y2={16} />
+          <line x1={16} y1={-16} x2={16} y2={-4} />
+          <line x1={16} y1={16} x2={16} y2={4} />
         </>
       );
 

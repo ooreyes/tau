@@ -211,7 +211,7 @@ Status legend: ✅ done · 🟡 partial · ⬜ not started
 
 ## 3. Component / symbol library
 Current Tau kinds (~25): R, C, L, pot, V(DC), I(DC), Vac, Iac, **Vpulse**, diode, LED,
-zener, opamp, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**, **B (behavioral)**, NMOS, PMOS, NPN, PNP, switch, transformer, testpoint, ground.
+zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**, **B (behavioral)**, NMOS, PMOS, NPN, PNP, switch, transformer, **tline**, testpoint, ground.
 - 🟡 Passives R/C/L (✅) — **C/L initial conditions (`IC=`) landed**: the importer
   pulls an `IC=` token from a cap/inductor's `Value2`/`SpiceLine`/`SpiceLine2`
   (LTspice writes e.g. `SpiceLine2 IC=1`; `engine/icSpec.ts` + `componentValueFromAttrs`)
@@ -307,7 +307,20 @@ zener, opamp, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**, **B (behav
     feedback opamps (Sallen-Key, inv/non-inv amps all pass), so the fix is a real
     **comparator kind with defined output high/low levels** (or output `limit()`
     keyed to explicit rails) — NOT a blanket clamp on the shared opamp.
-- ⬜ Transmission lines (T, LTRA, UR)
+- 🟡 Transmission lines (T, LTRA, UR) — **ideal lossless line `T` landed
+  end-to-end.** New `tline` component kind (4-terminal 2-port: port A `a1/a2`,
+  port B `b1/b2`), value carries LTspice's `Td=<s> Z0=<Ω>`. `engine/tlineSpec.ts`
+  parses the order-independent SI-suffixed value (robust fallback Z0=50/Td=1n on
+  malformed input) and `buildSpiceDeck` emits `T<name> a1 a2 b1 b2 Z0=.. TD=..`
+  (ngspice-46 verified — delayed step response on a matched 75 Ω line). Wired
+  through types/catalog (Electromechanical palette)/pins/symbol (tapered
+  two-conductor glyph). **Import**: LTspice `tline` → `tline` with the four
+  `.asy` pins (SpiceOrder I1,R1,I2,R2) banked in `LTSPICE_PINS`, and a missing
+  `SYMATTR Value` adopts the `.asy` default `Td=50n Z0=50`. Real-file proof:
+  `examples/Educational/TransmissionLineInverter.asc` imports both T1 (default)
+  and T2 (`Td=30n Z0=150`). **Native engine only** (the linear TS MNA solver has
+  no delay-element stamp — correctly excluded). 15 tests. **NEXT:** lossy line
+  (LTRA), `tline` UI param fields, TS-solver frequency-domain stamp.
 - 🟡 Coupled inductors `K` — **directive passthrough landed** (`engine/
   couplingDirectives.ts`): a document's on-canvas `K` TEXT directives
   (`K1 L1 L2 1`, `K3 L1 L2 .95`, the all-windings `K1 L1 L2 L3 L4 1`, parameterized

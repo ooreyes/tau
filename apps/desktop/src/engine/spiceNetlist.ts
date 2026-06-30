@@ -14,6 +14,7 @@ import { couplingLinesFromDirectives } from "./couplingDirectives";
 import { laplaceTransfer, laplaceSourceLines } from "./laplace";
 import { coreInductance } from "./coreInductor";
 import { standardModelLine } from "./standardModels";
+import { tlineDeckParams } from "./tlineSpec";
 import { parseTempDirective } from "../io/directiveAnalysis";
 
 export type SpiceAnalysis =
@@ -339,6 +340,12 @@ function componentLines(entry: ExtractedComponent, index: number, userModels: Se
         `K_${base} L_${base}_p L_${base}_s 0.999`,
       ];
     }
+    case "tline": {
+      // Ideal lossless transmission line: T N1 N2 N3 N4 Z0=.. TD=..
+      // Port A = (a1,a2), port B = (b1,b2). Delay/impedance element — native
+      // engine only (the linear TS MNA solver has no transmission-line stamp).
+      return [`${name} ${node("a1")} ${node("a2")} ${node("b1")} ${node("b2")} ${tlineDeckParams(component.value)}`];
+    }
     case "testpoint":
     case "ground":
       return [];
@@ -409,7 +416,7 @@ function instanceName(component: SchematicComponent, index: number): string {
   const prefix: Record<ComponentKind, string> = {
     resistor: "R", capacitor: "C", inductor: "L", vsource: "V", isource: "I", vac: "V", iac: "I", vpulse: "V",
     diode: "D", led: "D", zener: "D", opamp: "E", comparator: "B", vcvs: "E", vccs: "G", cccs: "F", ccvs: "H", bsource: "B", nmos: "M", pmos: "M", npn: "Q", pnp: "Q",
-    potentiometer: "R", switch: "R", transformer: "L", testpoint: "X", ground: "X",
+    potentiometer: "R", switch: "R", transformer: "L", tline: "T", testpoint: "X", ground: "X",
   };
   const requested = safeName(component.label);
   return requested.startsWith(prefix[component.kind]) ? requested : `${prefix[component.kind]}${index + 1}`;

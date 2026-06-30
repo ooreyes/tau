@@ -32,6 +32,7 @@ export type ComponentKind =
   | "potentiometer"
   | "switch"
   | "transformer"
+  | "tline"
   | "testpoint"
   | "ground";
 

@@ -139,6 +139,15 @@ const LOCAL_PINS: Record<ComponentKind, LocalPin[]> = {
     { id: "s1", label: "S1", x: 32, y: -16 },
     { id: "s2", label: "S2", x: 32, y: 16 },
   ],
+  // Ideal lossless transmission line (4-terminal 2-port). Port A = (a1,a2) on
+  // the left, port B = (b1,b2) on the right. Order matches LTspice's tline
+  // SpiceOrder (I1,R1,I2,R2) so imported pin overrides zip 1:1.
+  tline: [
+    { id: "a1", label: "A+", x: -32, y: -16 },
+    { id: "a2", label: "A-", x: -32, y: 16 },
+    { id: "b1", label: "B+", x: 32, y: -16 },
+    { id: "b2", label: "B-", x: 32, y: 16 },
+  ],
   testpoint: [{ id: "tp", label: "TP", x: 0, y: 0 }],
   ground: [{ id: "g", label: "0", x: 0, y: 0 }],
 };

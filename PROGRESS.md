@@ -1,5 +1,55 @@
 # Tau Autobuilder — Progress Log
 
+## 2026-06-29T20:10Z — auto/ltspice-parity — ideal lossless transmission line (`tline`) component kind (§3)
+
+### What I did
+- Added a full `tline` (ideal lossless transmission line) component kind
+  end-to-end — the most-used missing component class in the user's circuits
+  (15 `SYMBOL tline` across the corpus, incl. `examples/Educational/
+  TransmissionLineInverter.asc`); previously skipped on import with a warning.
+- `engine/tlineSpec.ts` (new): `parseTlineSpec` reads LTspice's order-independent
+  `Td=<s> Z0=<Ω>` value (SI suffixes, `TD=`/`delay=` spellings, case-insensitive),
+  with a robust fallback (Z0=50/Td=1n) that never throws on malformed text;
+  `tlineDeckParams` → `Z0=<ohm> TD=<s>`.
+- Deck: `buildSpiceDeck` emits `T<name> a1 a2 b1 b2 Z0=.. TD=..` (4-terminal
+  2-port). Live-verified in ngspice-46 (matched 75 Ω line shows the correct
+  TD-delayed step at the far end). Native engine only — added to no TS-solver
+  allowlist, so it's cleanly reported as needing the native engine (like MOS).
+- Wired through `types.ts` (kind), `pins.ts` (a1/a2/b1/b2, ordered to match
+  LTspice SpiceOrder I1,R1,I2,R2), `catalog.ts` (Electromechanical palette),
+  `symbols.tsx` (tapered two-conductor glyph + body/box), and the `.asc`
+  importer (`ltspiceTypeToKind`/`ltPinKey`/`LTSPICE_PINS["tline"]` with the real
+  `.asy` pin offsets; empty `Value` adopts the `.asy` default `Td=50n Z0=50`).
+  Export reverse-map (`kindToLtspiceType`) round-trips `tline`→`tline`.
+
+### Files touched
+- src/engine/tlineSpec.ts (new), src/engine/tlineSpec.test.ts (new, 8 tests)
+- src/schematic/types.ts, src/schematic/pins.ts, src/schematic/catalog.ts, src/schematic/symbols.tsx
+- src/engine/spiceNetlist.ts (case + prefix map), src/engine/spiceNetlist.test.ts (+1 deck test)
+- src/io/ascImport.ts (map + pins + default value), src/io/ascImport.test.ts (+3 tests)
+- src/io/ascExport.ts (round-trip map)
+- FEATURE_PARITY.md (§3 transmission lines ⬜→🟡; kinds list)
+
+### Tests
+832 passing (was 821; +11 new). Typecheck clean. Real-file proof: the
+educational `TransmissionLineInverter.asc` imports T1 (default `Td=50n Z0=50`)
+and T2 (`Td=30n Z0=150`) as `tline` with no "no Tau equivalent" warning.
+
+### FEATURE_PARITY items updated
+- §3 Transmission lines (T, LTRA, UR): ⬜ → 🟡 (ideal lossless `T` done).
+- §3 kinds list: added `tline` (and `comparator`, previously omitted).
+
+### UX issues found
+- None blocking. The `tline` palette entry has no hotkey (the obvious `t` is
+  taken by transformer); fine — it's reachable via the palette. Imported `tline`
+  renders at Tau's fixed geometry (pins are override-accurate); same known
+  cosmetic gap as other imported parts.
+
+### Next step
+Pick the next missing high-frequency component class — LTspice DIGITAL gates
+(`DIGITAL\\AND`/`INV`, ~37 uses, `A`-device XSPICE primitives) or a structured
+param editor (Td/Z0 fields) for `tline` — or move to §2 capture (multi-select).
+
 ## 2026-06-29T14:31Z — auto/ltspice-parity — overlay an LTspice .raw reference on the scope (§6/KEY GOAL)
 
 ### What I did
