@@ -2492,3 +2492,13 @@ class-d's V4 uses PULSE), reusing engine/sourceFunction.ts as a shared evaluator
 Class-d_starter.asc uses a triangle (PULSE) + sine into a comparator. With PULSE
 now driving the TS solver, verify class-d's V4/Vtri sources simulate; then tackle
 the comparator/logic component kind (§3) the class-d modulator needs.
+
+### Addendum (class-d acceptance-file recon)
+Inspected `~/Downloads/LTspice_export/class-d_starter.asc`: V3 `SINE(0 7.5 1k)`
+and V4 `PULSE(-10 10 5u 25u 25u 0u 50u)` now drive both engines. Remaining
+class-d blockers are NATIVE-ONLY: VDMOS power models `RSR015P06` (pmos M1) /
+`QS6K1` (nmos M2), the `deadtime` subckt (X1), and `UniversalOpAmp2` with
+`Avol/GBW/Slew`. The TS browser solver is linear so it can't run class-d; the
+native ngspice path needs those model definitions bundled. Next high-leverage
+native item: ship a VDMOS power-MOSFET model bundle (§7 real model bundle / §3
+MOSFET VDMOS) so class-d's M1/M2 resolve in `ngspice -b`.
