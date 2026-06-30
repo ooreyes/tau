@@ -2385,3 +2385,42 @@ collapse to single nets, directives parse.
 Wire `ascToSchematic` into an Open dialog / file picker so a user can actually
 load a `.asc` into the store (FEATURE_PARITY §1 task c), then map parsed
 `TEXT !` directives (`.tran`/`.ac`/`.param`/`.meas`) to runnable analyses (task d).
+
+## 2026-06-30 — auto/ltspice-parity — TS-solver mutual-inductance (K) stamp (§3)
+
+### What I did
+- Built `simulation/coupling.ts`: `parseCouplingSpecs` parses a document's `K`
+  directives (multi-winding `K1 L1 L2 L3 1`, fractional `.95`, `{param}` coeff,
+  `\n`-joined TEXT blocks) into specs; `mutualTerms` turns specs + the circuit's
+  inductor set into pairwise M = k·√(La·Lb) terms (|k| clamped to 1; all C(N,2)
+  pairs per line; first-spec-wins dedupe; ignores missing labels).
+- Stamped the terms in both interim solvers: `acSweep` adds −jωM to each coupled
+  inductor branch row; `linearTransient` adds the backward-Euler (M/h) companion
+  cross conductance + history RHS. M computed once (time/freq-invariant).
+- `App.tsx` memoizes `couplings = parseCouplingSpecs(directives, params)` and
+  threads it into both TS run sites (transient + AC). Native deck already carried
+  K verbatim — this is the browser/test-engine half.
+
+### Files touched
+- src/simulation/coupling.ts (new), src/simulation/coupling.test.ts (new, 15 tests)
+- src/simulation/transformerCoupling.test.ts (new, 5 e2e tests)
+- src/simulation/acSweep.ts, src/simulation/linearTransient.ts (stamp + signature)
+- src/App.tsx (couplings memo + thread to TS run sites)
+- FEATURE_PARITY.md (§3 K coupling: TS-solver stamp landed)
+
+### Tests
+874 passing (was 854; +20). Typecheck clean. Ideal 1mH:4mH open-circuit
+transformer steps 1V→2V (=√(L2/L1)) in AC (+6.02dB flat) and transient
+(V(out)=2·V(in) every step); k=0.5→0dB; uncoupled→dead secondary.
+
+### FEATURE_PARITY items updated
+- §3 coupled inductors K: TS-solver mutual-inductance stamp 🟡→landed (line stays
+  🟡 overall pending a placeable K symbol/UI).
+
+### UX issues found
+- None (no UI surface changed; coupling is invisible plumbing until a K symbol UI).
+
+### Next step
+Add a placeable K-coupling symbol/UI so a user can couple inductors without
+hand-editing a TEXT directive; or pick the next §3 item (MOSFET VDMOS power
+models — class-d's RSR015P06/QS6K1 need real VDMOS params).
