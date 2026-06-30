@@ -1,5 +1,41 @@
 # Tau Autobuilder — Progress Log
 
+## 2026-06-29T20:12Z — auto/ltspice-parity — map alias SYMBOL types to existing kinds (§1)
+
+### What I did
+- Surveyed the whole user corpus for `SYMBOL` types the importer still skipped,
+  then mapped the ones that are just packaging variants of kinds Tau already has:
+  `varactor`/`SMdiode` → diode, `Misc\battery` → vsource,
+  `RN55upright`/`UprightPowerResistor` → resistor.
+- Banked the two custom PAsystem pin layouts (`smdiode` A(0,-32)/K(0,32),
+  `rn55` A(0,-32)/B(0,0) — both vertical, unlike the standard res/diode banks)
+  in `LTSPICE_PINS`; varactor + battery reuse the existing diode/voltage banks.
+- Result: **98 previously-skipped symbol instances across the user's `.asc`
+  files now import** with pin-accurate connectivity instead of being dropped
+  with a "no Tau equivalent" warning.
+
+### Files touched
+- src/io/ascImport.ts (ltspiceTypeToKind + LTSPICE_PINS + ltPinKey)
+- src/io/ascImport.test.ts (+7 tests: type mapping + pin-geometry import)
+- FEATURE_PARITY.md (§1 alias-symbol note)
+
+### Tests
+835 passing (was 832; +3 net after the survey throwaways removed). Typecheck
+clean. A corpus re-survey confirms 98 instances now resolve a kind.
+
+### FEATURE_PARITY items updated
+- §1 import `.asy` symbols: added a 🟡 sub-bullet (alias symbols map to kinds).
+
+### UX issues found
+- A mapped varactor/SMdiode still needs its `.model` to behave correctly (it
+  imports as a generic diode); tracked under §3 model coverage. Not a regression
+  — it was fully skipped before.
+
+### Next step
+Continue chipping the unmapped list — `njf` (JFET, 15 uses) is a real new kind;
+`Misc\jumper` (26) is a short (map to a 0 Ω tie); the `PowerProducts\*` vendor
+parts need `.asy`+`.sub` import (the big ⬜). Or move to §2 capture features.
+
 ## 2026-06-29T20:10Z — auto/ltspice-parity — ideal lossless transmission line (`tline`) component kind (§3)
 
 ### What I did

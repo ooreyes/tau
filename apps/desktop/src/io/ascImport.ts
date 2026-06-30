@@ -242,6 +242,8 @@ export function ltspiceTypeToKind(type: string): ComponentKind | null {
     res: "resistor",
     res2: "resistor",
     r: "resistor",
+    rn55upright: "resistor",
+    uprightpowerresistor: "resistor",
     cap: "capacitor",
     cap2: "capacitor",
     c: "capacitor",
@@ -250,9 +252,12 @@ export function ltspiceTypeToKind(type: string): ComponentKind | null {
     ind2: "inductor",
     l: "inductor",
     voltage: "vsource",
+    battery: "vsource",
     current: "isource",
     diode: "diode",
     schottky: "diode",
+    varactor: "diode",
+    smdiode: "diode",
     zener: "zener",
     led: "led",
     npn: "npn",
@@ -312,11 +317,15 @@ export interface LtPin {
 }
 export const LTSPICE_PINS: Record<string, LtPin[]> = {
   res: [{ name: "1", dx: 16, dy: 16 }, { name: "2", dx: 16, dy: 96 }],
+  // PAsystem RN55upright/UprightPowerResistor.asy: vertical pins A(0,-32)/B(0,0).
+  rn55: [{ name: "1", dx: 0, dy: -32 }, { name: "2", dx: 0, dy: 0 }],
   cap: [{ name: "1", dx: 16, dy: 0 }, { name: "2", dx: 16, dy: 64 }],
   ind: [{ name: "1", dx: 16, dy: 16 }, { name: "2", dx: 16, dy: 96 }],
   voltage: [{ name: "+", dx: 0, dy: 16 }, { name: "-", dx: 0, dy: 96 }],
   current: [{ name: "+", dx: 0, dy: 0 }, { name: "-", dx: 0, dy: 80 }],
   diode: [{ name: "A", dx: 16, dy: 0 }, { name: "K", dx: 16, dy: 64 }],
+  // PAsystem SMdiode.asy: vertical, centered pins A(0,-32)/C(0,32).
+  smdiode: [{ name: "A", dx: 0, dy: -32 }, { name: "K", dx: 0, dy: 32 }],
   led: [{ name: "A", dx: 16, dy: 0 }, { name: "K", dx: 16, dy: 64 }],
   zener: [{ name: "A", dx: 16, dy: 0 }, { name: "K", dx: 16, dy: 64 }],
   schottky: [{ name: "A", dx: 16, dy: 0 }, { name: "K", dx: 16, dy: 64 }],
@@ -383,11 +392,13 @@ function ltPinKey(type: string): keyof typeof LTSPICE_PINS | null {
   const leaf = (type.replace(/\\/g, "/").toLowerCase().split("/").pop() ?? "");
   const map: Record<string, keyof typeof LTSPICE_PINS> = {
     res: "res", res2: "res", r: "res",
+    rn55upright: "rn55", uprightpowerresistor: "rn55",
     cap: "cap", cap2: "cap", c: "cap", polcap: "cap",
     ind: "ind", ind2: "ind", l: "ind",
-    voltage: "voltage",
+    voltage: "voltage", battery: "voltage",
     current: "current",
     diode: "diode", schottky: "schottky", zener: "zener", led: "led",
+    varactor: "diode", smdiode: "smdiode",
     npn: "npn", npn3: "npn", npn4: "npn",
     pnp: "pnp", pnp3: "pnp", pnp4: "pnp",
     nmos: "nmos", nmos4: "nmos",

@@ -118,6 +118,16 @@ Status legend: ✅ done · 🟡 partial · ⬜ not started
     hold the real LTspice symbol-local pin offsets (from `lib/sym/*.asy`) and the
     orientation transform (clockwise, Y-down, mirror-aware).
 - ⬜ **Import LTspice `.asy` symbols** (so library parts render) — 6,280 ship with LTspice.
+  - 🟡 **Alias symbols now map to existing kinds** (`ltspiceTypeToKind`): a corpus
+    survey of unmapped `SYMBOL` types found several that are just packaging
+    variants of kinds Tau already has — `varactor`/`SMdiode` → diode,
+    `Misc\battery` → DC voltage source, `RN55upright`/`UprightPowerResistor` →
+    resistor — so **98 previously-skipped symbol instances across the user's
+    files now import** with pin-accurate geometry (the SMdiode/RN55 vertical pin
+    layouts banked in `LTSPICE_PINS`; varactor/battery reuse the diode/voltage
+    banks). 7 tests. (The varactor still needs its `.model` to behave as a
+    variable-capacitance device, but it now places + connects instead of being
+    dropped.)
 - 🟡 Map LTspice `SYMATTR Value/Value2/SpiceModel/ModelFile` to Tau component
   values — **source AC-stimulus mapping landed** (`io/ascImport.ts`
   `componentValueFromAttrs`): for `voltage`/`current` symbols the importer now

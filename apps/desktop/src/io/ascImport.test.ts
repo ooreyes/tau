@@ -133,6 +133,16 @@ describe("ltspiceTypeToKind", () => {
     expect(ltspiceTypeToKind("TLINE")).toBe("tline");
   });
 
+  it("maps alias symbols to their underlying kind", () => {
+    // varactor / SMdiode are diodes; battery is a DC source; RN55upright and
+    // UprightPowerResistor are resistors (real PAsystem / corpus symbols).
+    expect(ltspiceTypeToKind("varactor")).toBe("diode");
+    expect(ltspiceTypeToKind("SMdiode")).toBe("diode");
+    expect(ltspiceTypeToKind("Misc\\battery")).toBe("vsource");
+    expect(ltspiceTypeToKind("RN55upright")).toBe("resistor");
+    expect(ltspiceTypeToKind("UprightPowerResistor")).toBe("resistor");
+  });
+
   it("treats any opamps/* library symbol as an op-amp", () => {
     expect(ltspiceTypeToKind("opamps\\LT1468")).toBe("opamp");
     expect(ltspiceTypeToKind("Opamps\\AD8675")).toBe("opamp");
@@ -248,6 +258,41 @@ SYMATTR Value Td=30n Z0=150`;
     expect(pins.a2).toEqual({ x: 128, y: 336 });
     expect(pins.b1).toEqual({ x: 224, y: 304 });
     expect(pins.b2).toEqual({ x: 224, y: 336 });
+  });
+
+  it("imports alias symbols with pin-accurate geometry from their .asy banks", () => {
+    // varactor D1 (16,0)/(16,64); battery V1 (0,16)/(0,96); RN55upright R1
+    // (0,-32)/(0,0); SMdiode D2 (0,-32)/(0,32). All R0 at (100,100).
+    const ASRC = `Version 4
+SHEET 1 880 680
+SYMBOL varactor 100 100 R0
+SYMATTR InstName D1
+SYMBOL Misc\\battery 200 100 R0
+SYMATTR InstName V1
+SYMATTR Value 12
+SYMBOL RN55upright 300 100 R0
+SYMATTR InstName R1
+SYMATTR Value 4.7k
+SYMBOL SMdiode 400 100 R0
+SYMATTR InstName D2`;
+    const doc = ascToSchematic(parseAsc(ASRC));
+    const byLabel = (l: string) => doc.components.find((c) => c.label === l);
+    const pins = (l: string) =>
+      Object.fromEntries((byLabel(l)?.pinOverride ?? []).map((p) => [p.id, { x: p.x, y: p.y }]));
+    expect(byLabel("D1")?.kind).toBe("diode");
+    expect(pins("D1").a).toEqual({ x: 116, y: 100 });
+    expect(pins("D1").k).toEqual({ x: 116, y: 164 });
+    expect(byLabel("V1")?.kind).toBe("vsource");
+    expect(byLabel("V1")?.value).toBe("12");
+    expect(pins("V1").p).toEqual({ x: 200, y: 116 });
+    expect(byLabel("R1")?.kind).toBe("resistor");
+    expect(pins("R1").a).toEqual({ x: 300, y: 68 });
+    expect(pins("R1").b).toEqual({ x: 300, y: 100 });
+    expect(byLabel("D2")?.kind).toBe("diode");
+    expect(pins("D2").a).toEqual({ x: 400, y: 68 });
+    expect(pins("D2").k).toEqual({ x: 400, y: 132 });
+    // None should warn about a missing Tau equivalent.
+    expect(doc.warnings.filter((w) => /no Tau equivalent/i.test(w))).toHaveLength(0);
   });
 
   it("a tline with no SYMATTR Value adopts LTspice's .asy default (Td=50n Z0=50)", () => {
