@@ -1,9 +1,13 @@
 # Tau → LTspice Feature Parity
 
-> **Living checklist.** Goal: Tau reaches functional parity with **LTspice 17.2.4**
-> (the version installed at `/Applications/LTspice.app` on this machine).
-> Update this file as items land — flip `⬜`/`🟡` to `✅` and add a one-line note
-> with the commit or file path. Any LLM/human can pick up the next unchecked item.
+> **Living checklist + to‑do list.** Goal: functional parity with **LTspice 17.2.4**.
+> Update as items land — flip `⬜`/`🟡` to `✅` with a one-line note (commit/file).
+> Any agent picks up the next unchecked item. Work loop + **Definition of Done**
+> live in [AGENTS.md](AGENTS.md); live status in the [PROGRESS.md](PROGRESS.md) heartbeat.
+
+> **📊 Headline metric (the finish line):** acceptance import **67 / 82** files
+> warning‑clean · **853 tests** green. **Done = ≥ 80/82 + Class‑D `.tran`/`.meas`
+> parity + signed DMG** (full checklist in AGENTS.md → Definition of Done).
 
 ---
 

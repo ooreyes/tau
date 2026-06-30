@@ -1,5 +1,23 @@
 # Tau Autobuilder — Progress Log
 
+<!-- ───────────────────────────────────────────────────────────────────────
+     ⏱ HEARTBEAT — the single source of "what is happening right now".
+     Every run REWRITES this block: at claim (Status: IN PROGRESS) and again at
+     done (Status: DONE). If you start a run and Status is still IN PROGRESS
+     from an OLD timestamp, the previous run died mid-unit — run
+     `git log --oneline -8`, recover/finish/revert that unit FIRST, then go on.
+     ─────────────────────────────────────────────────────────────────────── -->
+## ⏱ HEARTBEAT
+- **Headline metric:** acceptance import — see latest dated entry below · tests green
+- **Run started (UTC):** 2026-06-30T16:14Z (last known)
+- **Synced to origin:** auto/ltspice-parity @ latest
+- **Claimed unit:** —
+- **Status:** DONE
+- **Last checkpoint commit:** see `git log --oneline -1`
+- **Next step (for the following run):** pick the next unchecked FEATURE_PARITY item.
+
+---
+
 ## 2026-06-30T16:14Z — auto/ltspice-parity — VDMOS power MOSFETs emit 3-terminal ngspice lines (§3)
 
 ### What I did
