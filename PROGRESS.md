@@ -1,5 +1,45 @@
 # Tau Autobuilder — Progress Log
 
+## 2026-06-30T16:14Z — auto/ltspice-parity — VDMOS power MOSFETs emit 3-terminal ngspice lines (§3)
+
+### What I did
+- Implemented §3 "MOSFET level/VDMOS power models" (was ⬜): a MOSFET that
+  resolves to a `.model … VDMOS(…)` definition now emits ngspice's **3-terminal**
+  VDMOS device line `M nd ng ns model` instead of the 4-terminal level-1 MOS form.
+  ngspice's VDMOS is a 3-pin device; the 4th node it would otherwise see is the
+  model's optional thermal node, so emitting the bulk there silently mis-models
+  the device (and an LTspice 3-pin VDMOS symbol leaves Tau's `nmos`/`pmos` bulk
+  pin unconnected → floating-node deck error). Non-VDMOS MOSFETs keep 4 terminals.
+- New `definedModelTypes(directives)` in `engine/modelDirectives.ts` (name→type
+  map) and `standardModelType(name)` in `engine/standardModels.ts` so the deck
+  builder knows a model's type without re-parsing at the call site. `spiceNetlist`
+  collects the VDMOS-typed model names (from document directives + any bundled
+  standard part) and threads an `isVdmos` predicate into `componentLines`.
+
+### Files touched
+- src/engine/modelDirectives.ts (+definedModelTypes), src/engine/modelDirectives.test.ts (+4 tests)
+- src/engine/standardModels.ts (+standardModelType), src/engine/standardModels.test.ts (unchanged, still 8)
+- src/engine/spiceNetlist.ts (vdmosModels set + 3-vs-4-node nmos/pmos emission)
+- src/engine/spiceNetlist.test.ts (+2 emission tests)
+- FEATURE_PARITY.md (§3 VDMOS ⬜→🟡)
+
+### Tests
+902 passing (was 896; +6). Typecheck clean. ngspice-46 verified the 3-node VDMOS
+form (`M1 d g s nv` → Id=32.2 A at Vgs=5, Vto=2, Kp=8); generated deck for a VDMOS
+`.model` emits `M1 n n n PWRN` (3 nodes, no bulk).
+
+### FEATURE_PARITY items updated
+- §3 "MOSFET level/VDMOS power models, body diode" ⬜→🟡.
+
+### UX issues found
+- None (deck-builder internal).
+
+### Next step
+Bundle real power-MOSFET VDMOS model params by name so class-d's `RSR015P06`/
+`QS6K1` resolve to real devices instead of the generic level-1 starter (they have
+no inline `.model`); or pick a clean self-contained §6 item (probe-a-device →
+plot its current in the waveform viewer, already flagged NEXT in §4 .meas).
+
 ## 2026-06-30T02:32Z — auto/ltspice-parity — bridged port nets keep the parent's name + corpus triage (§1)
 
 ### What I did
