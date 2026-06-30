@@ -707,6 +707,27 @@ TEXT 0 400 Left 2 !.op`;
     expect(vin.pins.some((p) => p.componentLabel === "X1.R1")).toBe(true);
   });
 
+  it("bridges ports through the instance's orientation (rotated block)", () => {
+    // X1 placed R90: asy pin a(-32,0)→(0,-32) world (200,168); b(32,0)→(0,32)
+    // world (200,232). FLAGs sit on those exact port positions.
+    const rotated = `Version 4
+SHEET 1 880 680
+FLAG 200 168 vin
+FLAG 200 232 0
+SYMBOL mydiv 200 200 R90
+SYMATTR InstName X1`;
+    const r = importAsc(rotated, { resolveSubcircuit: resolver });
+    expect(r.components.filter((c) => c.kind === "resistor")).toHaveLength(2);
+    const circuit = extractCircuit(r.components, r.wires, r.netLabels);
+    // a→vin (named), b→ground, mid internal: three nets, ports correctly bridged
+    // despite the rotation.
+    expect(circuit.nets.map((n) => n.id)).toContain("vin");
+    const vin = circuit.nets.find((n) => n.id === "vin")!;
+    expect(vin.pins.some((p) => p.componentId.includes("X1~"))).toBe(true);
+    const ground = circuit.nets.find((n) => n.id === circuit.groundNetId)!;
+    expect(ground.pins.some((p) => p.componentId.includes("X1~"))).toBe(true);
+  });
+
   it("keeps two instances' internal nets private (no geometric short)", () => {
     const parent2 = `Version 4
 SHEET 1 880 680
