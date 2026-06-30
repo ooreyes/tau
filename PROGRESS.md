@@ -1,5 +1,47 @@
 # Tau Autobuilder — Progress Log
 
+## 2026-06-30T02:32Z — auto/ltspice-parity — bridged port nets keep the parent's name + corpus triage (§1)
+
+### What I did
+- Triaged the full 82-file acceptance corpus (throwaway smoke, removed): **67/82
+  import warning-clean without a resolver, effectively 68 with the new
+  hierarchy resolver** (class-d_starter's `deadtime` now inlines). The remaining
+  ~15 are a long tail of **distinct one-off symbols** (each blocks ~1 file):
+  dflop/sample (stateful digital — need a real digital engine), modulate,
+  schmtbuf, nigbt (IGBT), iso16750-2/iso7637-2 (automotive pulse-gen blocks),
+  towtom2, lt1184f (vendor subckts), xtal, diac/triac, varistor. The earlier
+  "and:26 / inv:11" tallies were per-*symbol*; only **4 files** use DIGITAL
+  devices and 2 of those also need sequential logic — so digital gates are far
+  lower file-leverage than they first looked. No single high-leverage import
+  item remains; logged for a future dedicated run.
+- Polished the hierarchy feature: a bridged port net now resolves under the
+  **user's own label** (e.g. `V(vpwm)`) instead of the synthetic `<inst>:<port>`.
+  The body-side port label and parent-side bridge are deferred and registered
+  after the parent's FLAGs, so a coincident parent net label wins the net name.
+  Verified on the real `class-d_starter.asc`: nets now read
+  `vpwm,vgp,vgn,vcc,vee,vo,vsine,vtr` (+ private `X1/vrcm`,`X1/vrcp`), 0 import
+  warnings, 0 netlist warnings.
+
+### Files touched
+- src/io/ascImport.ts (split internal vs port labels; defer bridges past FLAGs)
+- src/io/ascImport.test.ts (+1: parent net name wins over the synthetic)
+
+### Tests
+853 passing (was 852; +1 new). Typecheck clean.
+
+### FEATURE_PARITY items updated
+- §1 hierarchical (already 🟡) — port-net naming now author-faithful.
+
+### UX issues found
+- None new. UX debt unchanged (friendlier hierarchy sibling-discovery flow).
+
+### Next step
+A future run should tackle the stateful **digital A-device** engine (dflop/
+sample/schmtbuf) or render imported symbols at LTspice geometry (§1 visual
+parity); both are large enough to merit a dedicated session. Alternatively
+validate the now-clean `class-d_starter.asc` `.tran`/Efficiency `.meas` once
+the RSR015P06/QS6K1 power-MOSFET models are bundled (§7).
+
 ## 2026-06-30T02:25Z — auto/ltspice-parity — hierarchical `.asc` subcircuit flattening (§1)
 
 ### What I did
