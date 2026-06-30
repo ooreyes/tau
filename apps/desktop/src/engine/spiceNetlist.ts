@@ -9,11 +9,11 @@ import { stripIcSpec, icSpecDeckText, parseIcValue } from "./icSpec";
 import { behavioralSpecText as behavioralSpec } from "../simulation/behavioral";
 import { parseComparator, comparatorDeckLine } from "./comparatorSpec";
 import { optionsLineFromDirectives } from "./spiceOptions";
-import { modelLibLinesFromDirectives, definedModelNames } from "./modelDirectives";
+import { modelLibLinesFromDirectives, definedModelNames, definedModelTypes } from "./modelDirectives";
 import { couplingLinesFromDirectives } from "./couplingDirectives";
 import { laplaceTransfer, laplaceSourceLines } from "./laplace";
 import { coreInductance } from "./coreInductor";
-import { standardModelLine } from "./standardModels";
+import { standardModelLine, standardModelType } from "./standardModels";
 import { tlineDeckParams } from "./tlineSpec";
 import { parseTempDirective } from "../io/directiveAnalysis";
 
@@ -121,6 +121,13 @@ export function buildSpiceDeck(schematic: Schematic, analysis: SpiceAnalysis): S
   lines.push(...icLines);
 
   const userModels = definedModelNames(schematic.directives ?? []);
+  // VDMOS power-MOSFET model names (lower-cased), from the document's own
+  // `.model … VDMOS(…)` definitions. A MOSFET on one of these emits a 3-terminal
+  // VDMOS device line (the bulk node is dropped — see `componentLines`).
+  const vdmosModels = new Set<string>();
+  for (const [model, type] of definedModelTypes(schematic.directives ?? [])) {
+    if (type === "vdmos") vdmosModels.add(model);
+  }
 
   // A semiconductor may reference an LTspice standard part by name (1N4148,
   // 2N2222, …) with no inline `.model`. When the document doesn't define it but
@@ -142,6 +149,7 @@ export function buildSpiceDeck(schematic: Schematic, analysis: SpiceAnalysis): S
       lines.push(line);
       emittedStandard.add(named.toLowerCase());
       knownModels.add(named.toLowerCase());
+      if (standardModelType(named) === "vdmos") vdmosModels.add(named.toLowerCase());
     }
   }
 
@@ -154,14 +162,14 @@ export function buildSpiceDeck(schematic: Schematic, analysis: SpiceAnalysis): S
   );
 
   circuit.components.forEach((entry, index) => {
-    lines.push(...componentLines(entry, index, knownModels, schematic.params ?? EMPTY_SCOPE));
+    lines.push(...componentLines(entry, index, knownModels, schematic.params ?? EMPTY_SCOPE, vdmosModels));
   });
   lines.push(analysisLine(analysis, hasIc || hasInstanceIc), ".end");
 
   return { circuit, netlist: lines.join("\n") };
 }
 
-function componentLines(entry: ExtractedComponent, index: number, userModels: Set<string> = new Set(), params: ParamScope = EMPTY_SCOPE): string[] {
+function componentLines(entry: ExtractedComponent, index: number, userModels: Set<string> = new Set(), params: ParamScope = EMPTY_SCOPE, vdmosModels: ReadonlySet<string> = new Set()): string[] {
   const { component } = entry;
   const name = instanceName(component, index);
   const node = (pin: string) => requiredNode(entry, pin);
@@ -173,6 +181,11 @@ function componentLines(entry: ExtractedComponent, index: number, userModels: Se
     const named = component.value.trim().split(/\s+/)[0] ?? "";
     return named && userModels.has(named.toLowerCase()) ? named : fallback;
   };
+
+  // True when the MOSFET resolves to a VDMOS power-MOSFET model: ngspice's
+  // VDMOS device is 3-terminal (drain/gate/source) with no bulk node.
+  const isVdmos = (modelName: string): boolean =>
+    vdmosModels.has(modelName.toLowerCase());
 
   switch (component.kind) {
     case "resistor":
@@ -239,10 +252,19 @@ function componentLines(entry: ExtractedComponent, index: number, userModels: Se
       return [`${name} ${node("a")} ${node("k")} ${deviceModel("TAU_LED")}`];
     case "zener":
       return [`${name} ${node("a")} ${node("k")} ${deviceModel("TAU_ZENER")}`];
-    case "nmos":
-      return [`${name} ${node("d")} ${node("g")} ${node("s")} ${node("b")} ${deviceModel("TAU_NMOS")}`];
-    case "pmos":
-      return [`${name} ${node("d")} ${node("g")} ${node("s")} ${node("b")} ${deviceModel("TAU_PMOS")}`];
+    case "nmos": {
+      const model = deviceModel("TAU_NMOS");
+      // VDMOS power MOSFET → 3-terminal line (no bulk); else 4-terminal level-1 MOS.
+      return isVdmos(model)
+        ? [`${name} ${node("d")} ${node("g")} ${node("s")} ${model}`]
+        : [`${name} ${node("d")} ${node("g")} ${node("s")} ${node("b")} ${model}`];
+    }
+    case "pmos": {
+      const model = deviceModel("TAU_PMOS");
+      return isVdmos(model)
+        ? [`${name} ${node("d")} ${node("g")} ${node("s")} ${model}`]
+        : [`${name} ${node("d")} ${node("g")} ${node("s")} ${node("b")} ${model}`];
+    }
     case "njf":
       return [`${name} ${node("d")} ${node("g")} ${node("s")} ${deviceModel("TAU_NJF")}`];
     case "pjf":

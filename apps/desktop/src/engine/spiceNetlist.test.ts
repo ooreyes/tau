@@ -255,6 +255,43 @@ describe("buildSpiceDeck", () => {
     expect(deck.netlist).toContain(".op");
   });
 
+  it("emits a VDMOS power MOSFET as a 3-terminal device line (no bulk node)", () => {
+    // A document `.model … VDMOS(…)` makes the referencing MOSFET a 3-pin VDMOS
+    // (ngspice: M nd ng ns model). The bulk node must be dropped — emitting it
+    // would reinterpret the bulk as the model's optional thermal node.
+    const components = [
+      component("nmos", "M1", "IRFZ44N", 0, 0),
+      component("ground", "", "", 16, 32),
+    ];
+
+    const deck = buildSpiceDeck(
+      { components, wires: [], directives: [".model IRFZ44N VDMOS(Vto=4 Kp=20 Rd=20m)"] },
+      { kind: "op" },
+    );
+
+    // 3 nodes (d g s) then the model name — no 4th bulk node before IRFZ44N.
+    expect(deck.netlist).toMatch(/M1 n\d+ n\d+ 0 IRFZ44N\b/);
+    expect(deck.netlist).not.toMatch(/M1 n\d+ n\d+ 0 n\d+ IRFZ44N/);
+    // The VDMOS model definition is carried into the deck verbatim.
+    expect(deck.netlist).toContain(".model IRFZ44N VDMOS(Vto=4 Kp=20 Rd=20m)");
+  });
+
+  it("keeps a non-VDMOS MOSFET on its 4-terminal level-1 line", () => {
+    // A `.model … NMOS(…)` definition is a standard 4-terminal MOS, so the bulk
+    // node stays on the device line.
+    const components = [
+      component("nmos", "M1", "MYNMOS", 0, 0),
+      component("ground", "", "", 16, 32),
+    ];
+
+    const deck = buildSpiceDeck(
+      { components, wires: [], directives: [".model MYNMOS NMOS(Vto=1 Kp=2u)"] },
+      { kind: "op" },
+    );
+
+    expect(deck.netlist).toMatch(/M1 n\d+ n\d+ 0 n\d+ MYNMOS/);
+  });
+
   it("writes a proper AC source and sweep directive", () => {
     const components = [
       component("vac", "V1", "0 2 1k", 0, 32),

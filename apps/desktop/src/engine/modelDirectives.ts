@@ -59,6 +59,26 @@ export function definedModelNames(directives: ReadonlyArray<string>): Set<string
 }
 
 /**
+ * Map every document-defined `.model <name> <type>(…)` to its type token
+ * (both lower-cased). Lets the deck builder distinguish a 3-terminal **VDMOS**
+ * power MOSFET — whose ngspice device line is `M nd ng ns model` — from an
+ * ordinary 4-terminal level-1 MOS (`M nd ng ns nb model`). Emitting the 4-node
+ * form against a VDMOS model silently reinterprets the bulk node as the model's
+ * optional thermal node (or floats it), so the device must drop the bulk pin.
+ * Subckts have no model type and are skipped.
+ */
+export function definedModelTypes(directives: ReadonlyArray<string>): Map<string, string> {
+  const types = new Map<string, string>();
+  for (const raw of directives) {
+    for (const line of raw.replace(/\\n/g, "\n").split("\n")) {
+      const m = /^[.!]?model\b\s+([^\s(]+)\s+([A-Za-z][\w-]*)/i.exec(line.trim());
+      if (m) types.set(m[1].toLowerCase(), m[2].toLowerCase());
+    }
+  }
+  return types;
+}
+
+/**
  * ngspice has no lateral-BJT model types: LTspice's `LPNP`/`LNPN` (used by the
  * discrete LM741/LM308 demos) must become plain `PNP`/`NPN`, or ngspice reports
  * "Unknown model type lpnp - ignored" and every transistor on that model fails

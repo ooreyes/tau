@@ -348,7 +348,20 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   params when referenced by name (ngspice-46 verified; LTspice-extra keys it
   ignores are non-fatal), else generic `TAU_NJF`/`TAU_PJF`. **NEXT:** MESFET,
   IGBT; browser TS-solver JFET model.
-- ⬜ MOSFET level/VDMOS power models, body diode
+- 🟡 MOSFET level/VDMOS power models, body diode — **VDMOS device emission landed**
+  (`engine/spiceNetlist.ts` + `engine/modelDirectives.ts` `definedModelTypes`):
+  a MOSFET that resolves to a `.model … VDMOS(…)` definition (vendor `.lib`/`.sub`,
+  a pasted TEXT model, or a bundled standard part — `standardModelType`) now emits
+  ngspice's **3-terminal** VDMOS line `M nd ng ns model` instead of the 4-terminal
+  level-1 form. Emitting the 4th (bulk) node against a VDMOS model silently
+  reinterprets it as the model's optional thermal node (or floats it when the
+  LTspice 3-pin VDMOS symbol left the Tau `nmos`/`pmos` bulk pin unconnected), so
+  the bulk pin is dropped. Non-VDMOS MOSFETs keep their 4-terminal line. ngspice-46
+  verified the 3-node VDMOS form (`M1 d g s nv` → Id=32.2 A at Vgs=5, Vto=2, Kp=8).
+  9 tests (model-type parsing, 3-vs-4-node emission, VDMOS passthrough).
+  **NEXT:** ship real power-MOSFET VDMOS model params by name (class-d's
+  `RSR015P06`/`QS6K1` still fall back to the generic level-1 starter — they need a
+  bundled vendor model); browser TS-solver VDMOS; body-diode + thermal node.
 - 🟡 Comparators / logic gates / digital (LTspice `A` devices) — **needed for class-d_starter.asc**
   - ✅ **Dedicated `comparator` component kind landed** (`engine/comparatorSpec.ts`):
     a real open-loop comparator with **explicit output high/low levels + optional

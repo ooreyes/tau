@@ -74,3 +74,15 @@ export function standardModelLine(name: string): string | null {
   const key = name.trim().split(/\s+/)[0]?.toLowerCase() ?? "";
   return STANDARD_MODELS.get(key) ?? null;
 }
+
+/**
+ * The ngspice model *type* of a bundled standard part (e.g. `d`, `npn`, `njf`,
+ * `vdmos`), lower-cased, or `null` if the name isn't one we ship. Lets the deck
+ * builder pick the right device-line node count (a `vdmos` power MOSFET drops
+ * the bulk node) without re-parsing the model line at the call site.
+ */
+export function standardModelType(name: string): string | null {
+  const line = standardModelLine(name);
+  if (!line) return null;
+  return /^\.model\s+\S+\s+([A-Za-z][\w-]*)/i.exec(line)?.[1]?.toLowerCase() ?? null;
+}

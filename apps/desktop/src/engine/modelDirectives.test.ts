@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { modelLibLinesFromDirectives, definedModelNames } from "./modelDirectives";
+import { modelLibLinesFromDirectives, definedModelNames, definedModelTypes } from "./modelDirectives";
 
 describe("modelLibLinesFromDirectives", () => {
   it("passes a single .model line through verbatim", () => {
@@ -107,5 +107,35 @@ describe("definedModelNames", () => {
 
   it("returns an empty set when no models are defined", () => {
     expect(definedModelNames([".tran 1m", ".param x=1"]).size).toBe(0);
+  });
+});
+
+describe("definedModelTypes", () => {
+  it("maps each model name to its (lower-cased) type token", () => {
+    const types = definedModelTypes([
+      ".model 1N4148 D(Is=2.5n)",
+      ".model RSR015P06 VDMOS(pchan Vto=-2)",
+      ".model Q2N2222 NPN(Bf=200)",
+    ]);
+    expect(types.get("1n4148")).toBe("d");
+    expect(types.get("rsr015p06")).toBe("vdmos");
+    expect(types.get("q2n2222")).toBe("npn");
+  });
+
+  it("reads a model type with no space before the opening paren", () => {
+    expect(definedModelTypes([".model M1 VDMOS(Vto=2)"]).get("m1")).toBe("vdmos");
+    // a paren immediately after the type still parses the bare type token
+    expect(definedModelTypes([".model M2 NMOS(level=1)"]).get("m2")).toBe("nmos");
+  });
+
+  it("ignores .subckt (which has no model type) and non-model directives", () => {
+    const types = definedModelTypes([".subckt amp in out", ".tran 1m", ".param x=1"]);
+    expect(types.size).toBe(0);
+  });
+
+  it("reads model types from a multi-line block, leading '.'/'!' tolerated", () => {
+    const types = definedModelTypes(["!model PWR VDMOS(Rd=20m)\\n.model SW NMOS(Vto=1)"]);
+    expect(types.get("pwr")).toBe("vdmos");
+    expect(types.get("sw")).toBe("nmos");
   });
 });
