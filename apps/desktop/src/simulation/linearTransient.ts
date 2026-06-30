@@ -2,6 +2,7 @@ import type { ComponentKind, NetLabel, SchematicComponent, SchematicWire } from 
 import { extractCircuit, type ExtractedCircuit, type ExtractedComponent } from "../schematic/netlist";
 import { formatEngineering, parseQuantity } from "./quantity";
 import { resolveComponentValues, EMPTY_SCOPE, type ParamScope } from "./paramScope";
+import { mutualTerms, type CouplingSpec, type MutualTerm } from "./coupling";
 import { linearBSourceModel, resolveBehavioralTerms, type BehavioralTerm, type LinearBehavioral } from "./behavioral";
 import { stripAcSpec } from "../engine/acSpec";
 
@@ -99,7 +100,7 @@ const TRANSIENT_SUPPORTED = new Set<ComponentKind>([
 const GMIN = 1e-12;
 
 export function runTransientAnalysis(
-  schematic: { components: SchematicComponent[]; wires: SchematicWire[]; netLabels?: NetLabel[]; params?: ParamScope },
+  schematic: { components: SchematicComponent[]; wires: SchematicWire[]; netLabels?: NetLabel[]; params?: ParamScope; couplings?: CouplingSpec[] },
   options: AnalysisOptions,
 ): AnalysisResult {
   let circuit: ExtractedCircuit | undefined;
@@ -172,6 +173,19 @@ export function runTransientAnalysis(
     const traceValues = nonGroundNets.map(() => [] as number[]);
     const capacitorVoltage = new Map<string, number>();
     const inductorCurrent = new Map<string, number>();
+
+    // Mutual inductance (K directives): pairwise coupling terms over the
+    // inductor branch unknowns, computed once (M is time-invariant).
+    const mutuals: MutualTerm[] =
+      schematic.couplings && schematic.couplings.length > 0
+        ? mutualTerms(
+            inductors.map((entry) => ({
+              label: entry.component.label,
+              inductance: positiveValue(entry, "H"),
+            })),
+            schematic.couplings,
+          )
+        : [];
     // Per-component branch-current samples (SPICE sign convention), keyed by id.
     const currentSamples = new Map<string, number[]>();
     const currentRefs = new Map<string, string>();
@@ -349,6 +363,21 @@ export function runTransientAnalysis(
           case "ground":
             break;
         }
+      }
+
+      // Mutual-inductance coupling (backward-Euler companion): the flux in one
+      // winding adds (M/h)·(Iother − Iother_prev) to this winding's branch eq,
+      // mirroring the self term L/h. Stamp the cross conductance + history rhs.
+      for (const term of mutuals) {
+        const ia = inductorOffset + term.a;
+        const ib = inductorOffset + term.b;
+        const r = term.m / stepSize;
+        const iaPrev = inductorCurrent.get(inductors[term.a].component.id) ?? 0;
+        const ibPrev = inductorCurrent.get(inductors[term.b].component.id) ?? 0;
+        matrix[ia][ib] -= r;
+        matrix[ib][ia] -= r;
+        rhs[ia] -= r * ibPrev;
+        rhs[ib] -= r * iaPrev;
       }
 
       const solution = solveLinearSystem(matrix, rhs);

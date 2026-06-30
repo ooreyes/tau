@@ -42,6 +42,7 @@ import {
   type StepFamilyResult,
 } from "./simulation/stepFamily";
 import { buildParamScope, EMPTY_SCOPE, type ParamScope } from "./simulation/paramScope";
+import { parseCouplingSpecs, type CouplingSpec } from "./simulation/coupling";
 import { analysesFromDirectives } from "./io/directiveAnalysis";
 import { runMeasurements, type MeasResult } from "./simulation/measure";
 import { runFourier, type FourierResult } from "./simulation/fourier";
@@ -193,6 +194,14 @@ function App() {
     }
   }, [directives]);
 
+  // Parse the document's `K` mutual-inductance directives once so the interim TS
+  // transient/AC solvers couple transformer windings (the native deck already
+  // carries `K` lines verbatim). Empty when there are no coupling directives.
+  const couplings = useMemo<CouplingSpec[]>(
+    () => (directives.length === 0 ? [] : parseCouplingSpecs(directives, params)),
+    [directives, params],
+  );
+
   // Evaluate the document's `.meas` directives against the latest transient
   // result. Recomputed only when the result or directives change; measurements
   // chain by name through a scope seeded with the circuit's `.param` values.
@@ -235,7 +244,7 @@ function App() {
     const requestId = ++analysisRequestRef.current;
     setAnalysisRunning(true);
     try {
-      const result = await runNativeTransient({ components, wires, netLabels, params, directives }, options) ?? runTransientAnalysis({ components, wires, netLabels, params }, options);
+      const result = await runNativeTransient({ components, wires, netLabels, params, directives }, options) ?? runTransientAnalysis({ components, wires, netLabels, params, couplings }, options);
       if (analysisRequestRef.current !== requestId) return;
       setAnalysis(result);
       setRunState(result.ok ? "complete" : "error");
@@ -251,7 +260,7 @@ function App() {
     } finally {
       if (analysisRequestRef.current === requestId) setAnalysisRunning(false);
     }
-  }, [components, wires, netLabels, params, directives]);
+  }, [components, wires, netLabels, params, directives, couplings]);
 
   const runAnalysis = useCallback(async () => {
     await executeTransient(analysisOptions);
@@ -285,7 +294,7 @@ function App() {
       const result = await runNativeAcSweep(
         { components, wires, netLabels, params, directives },
         { startHz: 10, stopHz: 1e6, pointsPerDecade: 20 },
-      ) ?? runAcSweep({ components, wires, netLabels, params }, { startHz: 10, stopHz: 1e6, pointsPerDecade: 20 });
+      ) ?? runAcSweep({ components, wires, netLabels, params, couplings }, { startHz: 10, stopHz: 1e6, pointsPerDecade: 20 });
       if (analysisRequestRef.current !== requestId) return;
       setAcAnalysis(result);
     } catch (error) {
@@ -294,7 +303,7 @@ function App() {
     } finally {
       if (analysisRequestRef.current === requestId) setAnalysisRunning(false);
     }
-  }, [components, wires, netLabels, params, directives]);
+  }, [components, wires, netLabels, params, directives, couplings]);
 
   // A DC sweep needs a `.dc <src> <start> <stop> <incr>` directive to know which
   // source to sweep and over what range. Imported `.asc` files carry their own;

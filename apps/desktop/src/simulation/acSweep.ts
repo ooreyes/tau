@@ -16,6 +16,7 @@ import type { ComponentKind, NetLabel, SchematicComponent, SchematicWire } from 
 import { extractCircuit, type ExtractedCircuit } from "../schematic/netlist";
 import { parseQuantity } from "./quantity";
 import { resolveComponentValues, EMPTY_SCOPE, type ParamScope } from "./paramScope";
+import { mutualTerms, type CouplingSpec, type MutualTerm } from "./coupling";
 import { linearBSourceModel, resolveBehavioralTerms, type LinearBehavioral } from "./behavioral";
 import { parseAcSpec } from "../engine/acSpec";
 
@@ -272,7 +273,7 @@ function logFrequencies(startHz: number, stopHz: number, pointsPerDecade: number
 // ---------------------------------------------------------------------------
 
 export function runAcSweep(
-  schematic: { components: SchematicComponent[]; wires: SchematicWire[]; netLabels?: NetLabel[]; params?: ParamScope },
+  schematic: { components: SchematicComponent[]; wires: SchematicWire[]; netLabels?: NetLabel[]; params?: ParamScope; couplings?: CouplingSpec[] },
   options: AcOptions,
 ): AcResult {
   let circuit: ExtractedCircuit | undefined;
@@ -348,6 +349,20 @@ export function runAcSweep(
       vcvss.length + cccss.length + ccvss.length * 2 + vBsources.length;
 
     if (size === 0) return fail("The circuit has no unknowns to solve.", circuit);
+
+    // Mutual inductance: K directives couple inductor branch currents. M is
+    // constant in frequency, so compute the pairwise terms once (indices map
+    // into the inductors array → branch unknown inductorOffset + index).
+    const mutuals: MutualTerm[] =
+      schematic.couplings && schematic.couplings.length > 0
+        ? mutualTerms(
+            inductors.map(({ component }) => ({
+              label: component.label,
+              inductance: positiveValue(component.value, component.id, component.label, "H"),
+            })),
+            schematic.couplings,
+          )
+        : [];
 
     const freqs = logFrequencies(options.startHz, options.stopHz, options.pointsPerDecade);
 
@@ -643,6 +658,16 @@ export function runAcSweep(
           case "ground":
             break;
         }
+      }
+
+      // Mutual-inductance coupling: V_La = jωLa·Ia + jωM·Ib (and symmetric), so
+      // each pair adds the cross term −jωM to both inductor branch rows.
+      for (const term of mutuals) {
+        const ia = inductorOffset + term.a;
+        const ib = inductorOffset + term.b;
+        const negJomegaM: Complex = { re: 0, im: -omega * term.m };
+        matrix[ia][ib] = cadd(matrix[ia][ib], negJomegaM);
+        matrix[ib][ia] = cadd(matrix[ib][ia], negJomegaM);
       }
 
       // Solve complex MNA at this frequency

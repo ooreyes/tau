@@ -388,8 +388,21 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   `Kcup1 L2 L3 {Kcup}`) now flow into the native deck verbatim with any `{expr}`
   coefficient resolved against the param scope — previously dropped, which made a
   coupled transformer simulate as independent inductors. Live-verified in ngspice
-  17 (1mH:4mH, K=0.99 → 2× step-up). 8 tests. **NEXT:** TS-solver mutual-inductance
-  stamp; a placeable K symbol/UI (still must hand-edit the directive).
+  17 (1mH:4mH, K=0.99 → 2× step-up). 8 tests. **TS-solver mutual-inductance stamp
+  now landed** (`simulation/coupling.ts`): `parseCouplingSpecs` reads a document's
+  `K` directives (multi-winding `K1 L1 L2 L3 1`, fractional/`{param}` coefficients)
+  into specs, and `mutualTerms` turns them + the circuit's inductor set into
+  pairwise M = k·√(La·Lb) terms (|k| clamped to 1; all C(N,2) pairs per line;
+  first-wins dedupe). Both interim solvers stamp them: **acSweep** adds the −jωM
+  cross term to each coupled inductor branch row, **linearTransient** adds the
+  backward-Euler (M/h) companion cross term + history RHS. `App.tsx` memoizes the
+  specs (`couplings`) off the directives and threads them into both TS run sites.
+  End-to-end proof (`transformerCoupling.test.ts`): an ideal 1mH:4mH open-circuit
+  transformer steps a 1 V primary to **2 V** secondary (=√(L2/L1)) in both AC
+  (+6.02 dB, frequency-independent) and transient (V(out)=2·V(in) every step),
+  k=0.5 scales it to 0 dB, and an uncoupled pair leaves the secondary dead.
+  15 + 5 hand-computed tests. **NEXT:** a placeable K symbol/UI (still must
+  hand-edit the directive).
 - ⬜ Special functions: TRIANGLE/PWM generators, schmitt, etc.
 - 🟡 **Model/library import** (`.model`, `.lib`, `.inc`, `.subckt`) — LTspice ships 2,038 `.lib` + 2,469 `.sub`.
   **Passthrough to native ngspice landed** (`engine/modelDirectives.ts`):
