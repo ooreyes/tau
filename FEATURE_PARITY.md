@@ -111,12 +111,25 @@ Status legend: ✅ done · 🟡 partial · ⬜ not started
     banked-pin warnings logged non-fatally. Real-file proof: opening
     `class-d_starter.asc` (15 comps/46 wires/4 directives), `deadtime.asc`
     (18/59), `Draft1.asc` (4/10/1) all load.
+  - ✅ **Op-amp + E/G controlled-source pins now banked** — extracted from the
+    real LTspice 17.2.4 `lib/sym` `.asy` files. Op-amps resolve to one of two
+    geometry families (`opampC` for the centered UniversalOpAmp/UniversalOpAmp2;
+    `opampO` for the offset layout shared by `opamp.asy`, `opamp2.asy` and EVERY
+    vendor part — AD823/LT1001/LT1028/AD711/OP07…); E/E2 (VCVS) and G/G2 (VCCS)
+    map their control/output pairs (the `2` variants swap controls; G reverses
+    output polarity). This flips **22 acceptance files** from "placed without
+    pin-accurate geometry (connections may be wrong)" to pin-accurate — incl. the
+    key-goal `deadtime.asc`. Warning-clean import coverage **45→67/82**.
   - **NEXT:** map `.meas`/`.dc`/`.step` directives (need those analyses first —
-    §4); render imported symbols at their LTspice geometry; bank `.asy` pins for
-    opamps/pots/transformers (currently placed but flagged "no banked pins").
+    §4); render imported symbols at their LTspice geometry. Remaining 15
+    warned files all need NEW component kinds: hierarchical sub-block import
+    (`deadtime` used inside class-d_starter — §2), DIGITAL `A`-devices
+    (INV/XOR/dflop/SCHMTBUF — §3), SpecialFunctions (MODULATE/sample/varistor),
+    and DIAC/TRIAC/IGBT/XTAL/capmeter primitives.
   - **Pin data banked:** `LTSPICE_PINS` + `transformLtPoint()` in `io/ascImport.ts`
     hold the real LTspice symbol-local pin offsets (from `lib/sym/*.asy`) and the
-    orientation transform (clockwise, Y-down, mirror-aware).
+    orientation transform (clockwise, Y-down, mirror-aware). Now covers passives,
+    sources, semis, tline, op-amps, and E/G controlled sources.
 - ⬜ **Import LTspice `.asy` symbols** (so library parts render) — 6,280 ship with LTspice.
   - 🟡 **Alias symbols now map to existing kinds** (`ltspiceTypeToKind`): a corpus
     survey of unmapped `SYMBOL` types found several that are just packaging

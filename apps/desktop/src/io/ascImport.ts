@@ -347,6 +347,56 @@ export const LTSPICE_PINS: Record<string, LtPin[]> = {
     { name: "I2", dx: 48, dy: -16 },
     { name: "R2", dx: 48, dy: 16 },
   ],
+  // Op-amps come in two geometry families (verified across the LTspice 17.2.4
+  // OpAmps/ library). Ordered to Tau's opamp pin roles (in+, in-, out, v+, v-);
+  // the v+/v- supply pins are skipped by net extraction (Tau models an ideal
+  // 3-terminal opamp) but are carried for completeness.
+  //   • opampC — the "centered" UniversalOpAmp/UniversalOpAmp2 layout.
+  //   • opampO — the "offset" layout shared by opamp.asy, opamp2.asy and EVERY
+  //     vendor part (AD823/LT1001/LT1028/AD711/OP07/…). The 3-pin ideal
+  //     opamp.asy shares in+/in-/out with this family exactly.
+  opampC: [
+    { name: "in+", dx: -32, dy: 16 },
+    { name: "in-", dx: -32, dy: -16 },
+    { name: "out", dx: 32, dy: 0 },
+    { name: "v+", dx: 0, dy: -32 },
+    { name: "v-", dx: 0, dy: 32 },
+  ],
+  opampO: [
+    { name: "in+", dx: -32, dy: 80 },
+    { name: "in-", dx: -32, dy: 48 },
+    { name: "out", dx: 32, dy: 64 },
+    { name: "v+", dx: 0, dy: 32 },
+    { name: "v-", dx: 0, dy: 96 },
+  ],
+  // Voltage/current-controlled sources, ordered to Tau's cp,cn,op,on roles.
+  // LTspice SpiceOrder is out+,out-,ctrl+,ctrl-; e2/g2 swap the control pair.
+  // VCVS (e/e2): out at +(0,16)/-(0,96), control P/N on the left at x=-48.
+  vcvs: [
+    { name: "cp", dx: -48, dy: 32 },
+    { name: "cn", dx: -48, dy: 80 },
+    { name: "op", dx: 0, dy: 16 },
+    { name: "on", dx: 0, dy: 96 },
+  ],
+  vcvs2: [
+    { name: "cp", dx: -48, dy: 80 },
+    { name: "cn", dx: -48, dy: 32 },
+    { name: "op", dx: 0, dy: 16 },
+    { name: "on", dx: 0, dy: 96 },
+  ],
+  // VCCS (g/g2): output polarity is reversed vs e — +(0,96)/-(0,16).
+  vccs: [
+    { name: "cp", dx: -48, dy: 32 },
+    { name: "cn", dx: -48, dy: 80 },
+    { name: "op", dx: 0, dy: 96 },
+    { name: "on", dx: 0, dy: 16 },
+  ],
+  vccs2: [
+    { name: "cp", dx: -48, dy: 80 },
+    { name: "cn", dx: -48, dy: 32 },
+    { name: "op", dx: 0, dy: 96 },
+    { name: "on", dx: 0, dy: 16 },
+  ],
 };
 
 /** Apply an LTspice orientation to a symbol-local point (LTspice screen Y is
@@ -394,7 +444,14 @@ export function orientationToRotation(orientation: AscOrientation): 0 | 90 | 180
  * (vendor symbols, opamps, transformers, pots — those need `.asy` import).
  */
 function ltPinKey(type: string): keyof typeof LTSPICE_PINS | null {
-  const leaf = (type.replace(/\\/g, "/").toLowerCase().split("/").pop() ?? "");
+  const base = type.replace(/\\/g, "/").toLowerCase();
+  const leaf = (base.split("/").pop() ?? "");
+  // Any op-amp (vendor part or generic) banks to one of two geometry families:
+  // the centered UniversalOpAmp layout or the offset layout every other opamp
+  // shares. Mirrors ltspiceTypeToKind's `base.includes("opamp")` detection.
+  if (base.includes("opamp")) {
+    return leaf.includes("universalopamp") ? "opampC" : "opampO";
+  }
   const map: Record<string, keyof typeof LTSPICE_PINS> = {
     res: "res", res2: "res", r: "res",
     rn55upright: "rn55", uprightpowerresistor: "rn55",
@@ -411,6 +468,11 @@ function ltPinKey(type: string): keyof typeof LTSPICE_PINS | null {
     njf: "njf", pjf: "njf",
     sw: "sw", csw: "sw",
     tline: "tline", ltline: "tline",
+    // Controlled sources: e/e2 = VCVS, g/g2 = VCCS. The `2` variants swap the
+    // control pair (see LTSPICE_PINS). f/h (current-controlled) expose only two
+    // output pins — their control is a named device, not a pin pair — so they
+    // stay unbanked (null) and fall back to Tau geometry.
+    e: "vcvs", e2: "vcvs2", g: "vccs", g2: "vccs2",
     // Behavioral sources share the independent-source pin geometry: the bv
     // (voltage) symbol pins match `voltage`, bi (current) match `current`.
     bv: "voltage", bi: "current", b: "voltage", b2: "voltage",

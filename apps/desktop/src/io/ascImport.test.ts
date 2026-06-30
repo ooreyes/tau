@@ -267,6 +267,65 @@ SYMATTR Value Td=30n Z0=150`;
     expect(pins.b2).toEqual({ x: 224, y: 336 });
   });
 
+  it("banks the centered UniversalOpAmp2 input/output pins", () => {
+    // UniversalOpAmp2 In+(-32,16)/In-(-32,-16)/OUT(32,0) at (100,100) R0 →
+    // world (68,116)/(68,84)/(132,100). No warning (it has banked geometry).
+    const O = `Version 4
+SHEET 1 880 680
+SYMBOL OpAmps\\UniversalOpAmp2 100 100 R0
+SYMATTR InstName U1`;
+    const doc = ascToSchematic(parseAsc(O));
+    const u1 = doc.components.find((c) => c.label === "U1");
+    expect(u1?.kind).toBe("opamp");
+    const pins = Object.fromEntries((u1?.pinOverride ?? []).map((p) => [p.id, { x: p.x, y: p.y }]));
+    expect(pins["in+"]).toEqual({ x: 68, y: 116 });
+    expect(pins["in-"]).toEqual({ x: 68, y: 84 });
+    expect(pins.out).toEqual({ x: 132, y: 100 });
+    expect(doc.warnings.some((w) => w.includes("U1"))).toBe(false);
+  });
+
+  it("banks the offset vendor-opamp pins (LT1001/AD823/opamp2 share one layout)", () => {
+    // Offset family In+(-32,80)/In-(-32,48)/OUT(32,64) at (100,100) R0 →
+    // world (68,180)/(68,148)/(132,164).
+    const O = `Version 4
+SHEET 1 880 680
+SYMBOL OpAmps\\LT1001 100 100 R0
+SYMATTR InstName U1`;
+    const doc = ascToSchematic(parseAsc(O));
+    const u1 = doc.components.find((c) => c.label === "U1");
+    expect(u1?.kind).toBe("opamp");
+    const pins = Object.fromEntries((u1?.pinOverride ?? []).map((p) => [p.id, { x: p.x, y: p.y }]));
+    expect(pins["in+"]).toEqual({ x: 68, y: 180 });
+    expect(pins["in-"]).toEqual({ x: 68, y: 148 });
+    expect(pins.out).toEqual({ x: 132, y: 164 });
+    expect(doc.warnings.some((w) => w.includes("U1"))).toBe(false);
+  });
+
+  it("banks VCVS (e) and VCCS (g) control/output pins to LTspice geometry", () => {
+    // e.asy: out +(0,16)/-(0,96), control P(-48,32)/N(-48,80). g.asy reverses
+    // output polarity: +(0,96)/-(0,16). Both at (200,200) R0.
+    const EG = `Version 4
+SHEET 1 880 680
+SYMBOL e 200 200 R0
+SYMATTR InstName E1
+SYMBOL g 200 200 R0
+SYMATTR InstName G1`;
+    const doc = ascToSchematic(parseAsc(EG));
+    const e1 = doc.components.find((c) => c.label === "E1");
+    const g1 = doc.components.find((c) => c.label === "G1");
+    expect(e1?.kind).toBe("vcvs");
+    expect(g1?.kind).toBe("vccs");
+    const ep = Object.fromEntries((e1?.pinOverride ?? []).map((p) => [p.id, { x: p.x, y: p.y }]));
+    expect(ep.cp).toEqual({ x: 152, y: 232 });
+    expect(ep.cn).toEqual({ x: 152, y: 280 });
+    expect(ep.op).toEqual({ x: 200, y: 216 });
+    expect(ep.on).toEqual({ x: 200, y: 296 });
+    const gp = Object.fromEntries((g1?.pinOverride ?? []).map((p) => [p.id, { x: p.x, y: p.y }]));
+    expect(gp.op).toEqual({ x: 200, y: 296 });
+    expect(gp.on).toEqual({ x: 200, y: 216 });
+    expect(doc.warnings.length).toBe(0);
+  });
+
   it("imports alias symbols with pin-accurate geometry from their .asy banks", () => {
     // varactor D1 (16,0)/(16,64); battery V1 (0,16)/(0,96); RN55upright R1
     // (0,-32)/(0,0); SMdiode D2 (0,-32)/(0,32). All R0 at (100,100).
@@ -462,11 +521,14 @@ SYMBOL opamps\\\\LT1468 0 0 R0
 SYMATTR InstName U1
 SYMBOL exotic\\\\WidgetXYZ 0 0 R0
 SYMATTR InstName X1`));
-    // The opamp maps to a native kind (placed, but no banked pins → warned);
-    // the unknown vendor part is skipped entirely.
-    expect(doc.components.some((c) => c.kind === "opamp")).toBe(true);
+    // The opamp maps to a native kind with banked pins (no warning); the
+    // unknown vendor part is skipped entirely (one warning).
+    const u1 = doc.components.find((c) => c.label === "U1");
+    expect(u1?.kind).toBe("opamp");
+    expect((u1?.pinOverride ?? []).length).toBeGreaterThan(0);
     expect(doc.components.some((c) => c.label === "X1")).toBe(false);
-    expect(doc.warnings.length).toBeGreaterThanOrEqual(2);
+    expect(doc.warnings.some((w) => w.includes("X1"))).toBe(true);
+    expect(doc.warnings.some((w) => w.includes("U1"))).toBe(false);
   });
 
   it("joins a source's Value2 (AC spec) onto its value (Draft1/Draft2 case)", () => {
