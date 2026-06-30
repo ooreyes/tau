@@ -2424,3 +2424,33 @@ transformer steps 1V→2V (=√(L2/L1)) in AC (+6.02dB flat) and transient
 Add a placeable K-coupling symbol/UI so a user can couple inductors without
 hand-editing a TEXT directive; or pick the next §3 item (MOSFET VDMOS power
 models — class-d's RSR015P06/QS6K1 need real VDMOS params).
+
+## 2026-06-30 — auto/ltspice-parity — TS-solver per-instance IC= support (§3/§4)
+
+### What I did
+- TS transient now honors a cap/inductor `IC=` token: `positiveValue` strips it
+  before parsing the magnitude (`1u IC=2` previously threw "Could not parse"),
+  and the time loop seeds the backward-Euler companion state from the parsed IC
+  (cap → initial voltage, inductor → initial current) so the value holds at t=0
+  (LTspice `IC=`+`uic` semantics). Bad IC tokens are ignored, not fatal.
+
+### Files touched
+- src/simulation/linearTransient.ts (strip IC in positiveValue; seed state)
+- src/simulation/initialConditions.test.ts (new, 3 hand-computed tests)
+- FEATURE_PARITY.md (§3 passives + §4 .ic: TS-solver IC support landed)
+
+### Tests
+877 passing (was 874; +3). Typecheck clean. 1µF/1kΩ cap IC=2V discharges per
+V[n]=IC/(1+h/RC)^(n+1) (≈2V→0.736V at t=RC); IC=1A inductor delivers ~1A at t=0
+and decays; no-IC node starts at 0.
+
+### FEATURE_PARITY items updated
+- §3 passives C/L IC=: TS-solver IC support landed.
+- §4 .ic/.nodeset: TS-solver IC support landed.
+
+### UX issues found
+- None (solver-internal).
+
+### Next step
+TS-transient PULSE/PWL/EXP source support (only sine works in the fallback today;
+class-d's V4 uses PULSE), reusing engine/sourceFunction.ts as a shared evaluator.
