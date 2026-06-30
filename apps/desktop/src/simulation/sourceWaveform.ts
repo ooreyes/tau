@@ -115,13 +115,10 @@ export function parseTransientSource(rawValue: string, unit: SourceUnit): Transi
         }
         return levels[levels.length - 1];
       };
-      // Resolution hint from the shortest non-zero segment (treat as a half-period).
-      let minSeg = Infinity;
-      for (let i = 1; i < times.length; i++) {
-        const span = times[i] - times[i - 1];
-        if (span > 0) minSeg = Math.min(minSeg, span);
-      }
-      return { dc: first, at, maxFrequencyHz: Number.isFinite(minSeg) ? 1 / (2 * minSeg) : 0 };
+      // PWL breakpoints are user-authored; like LTspice we impose no minimum-step
+      // sampling requirement from them (a tiny segment would otherwise force an
+      // impractically high step count and reject an otherwise-fine circuit).
+      return { dc: first, at, maxFrequencyHz: 0 };
     }
     case "EXP": {
       // EXP(V1 V2 Td1 Tau1 Td2 Tau2)
