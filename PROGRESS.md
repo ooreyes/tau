@@ -1,5 +1,35 @@
 # Tau Autobuilder — Progress Log
 
+## 2026-06-29T20:24Z — auto/ltspice-parity — bundle real LTspice JFET models by name (§3/§7)
+
+### What I did
+- Extended the standard-model bundle with 7 real LTspice JFETs from
+  `lib/cmp/standard.jft` (verbatim params, `mfg=` stripped, `Vk= 80`→`Vk=80`
+  normalized): NJF 2N3819/J309/J310/2N5484/2N5486, PJF 2N5460/J175. A JFET that
+  references one of these by name now emits its real model into the deck (the
+  device line uses the part name) instead of the generic `TAU_NJF`/`TAU_PJF`.
+- Verified in ngspice-46: the models load and solve; the only warnings are
+  LTspice-extra params ngspice ignores (Isr, Alpha, Vk, …) — non-fatal, exactly
+  like the existing diode/BJT bundle.
+
+### Files touched
+- src/engine/standardModels.ts (7 JFET model lines + updated doc comment)
+- src/engine/standardModels.test.ts (+1), src/engine/spiceNetlist.test.ts (+1)
+- FEATURE_PARITY.md (§3 JFET note)
+
+### Tests
+841 passing (was 839; +2). Typecheck clean.
+
+### FEATURE_PARITY items updated
+- §3 JFET: bundled real models note added.
+
+### UX issues found
+- None (engine-only change).
+
+### Next step
+MESFET/IGBT kinds, or a browser TS-solver JFET stamp, or move to §2 capture
+features (multi-select / rubber-band wire move) for UI parity.
+
 ## 2026-06-29T20:20Z — auto/ltspice-parity — import Misc\jumper as a wire net-tie (§1)
 
 ### What I did

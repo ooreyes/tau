@@ -31,6 +31,15 @@ describe("standardModelLine", () => {
     expect(standardModelLine("1N750")).toContain("Bv=4.7");
   });
 
+  it("bundles N- and P-channel JFETs with the right model type", () => {
+    expect(standardModelLine("2N3819")).toMatch(/NJF\(/);
+    expect(standardModelLine("J309")).toMatch(/NJF\(/);
+    expect(standardModelLine("2N5460")).toMatch(/PJF\(/);
+    expect(standardModelLine("J175")).toMatch(/PJF\(/);
+    // No stray double-space ngspice could choke on (the Vk= 80 → Vk=80 fix).
+    expect(standardModelLine("2N5484")).not.toMatch(/=\s+\d/);
+  });
+
   it("every bundled line is a well-formed .model and the name matches the key", () => {
     for (const name of standardModelNames()) {
       const line = standardModelLine(name);

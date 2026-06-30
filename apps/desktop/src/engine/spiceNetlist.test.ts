@@ -407,6 +407,20 @@ describe("buildSpiceDeck", () => {
     expect(deck.netlist).toContain(".model TAU_NJF NJF(");
   });
 
+  it("emits a bundled JFET standard model when referenced by name (2N3819)", () => {
+    const components = [
+      component("njf", "J1", "2N3819", 0, 0),
+      component("vsource", "V1", "10", 16, -64),
+      component("ground", "", "", 16, -96),
+      component("ground", "", "", -32, 0),
+      component("ground", "", "", 16, 32),
+    ];
+    const deck = buildSpiceDeck({ components, wires: [] }, { kind: "op" });
+    // The device line uses the real part name, and its bundled model is emitted.
+    expect(deck.netlist).toMatch(/J1 \S+ 0 0 2N3819/);
+    expect(deck.netlist).toContain(".model 2N3819 NJF(");
+  });
+
   it("emits an ideal lossless transmission line (T device, 4 nodes + Z0/TD)", () => {
     // tline T1 at origin: a1(-32,-16) a2(-32,16) b1(32,-16) b2(32,16).
     const components = [

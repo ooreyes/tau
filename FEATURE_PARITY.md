@@ -301,8 +301,12 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   Live-verified in ngspice-46 (NJF common-source bias: Id = Beta·(Vgs−Vto)²
   = 2.25 mA exact at Vgs=−0.5). Import maps LTspice `njf`/`pjf` with the real
   `.asy` D/G/S pins (gate at dy=64) and export round-trips. Native engine only
-  (nonlinear — excluded from the linear TS solver). 5 tests. **NEXT:** MESFET,
-  IGBT; real bundled JFET models (2N3819/J309) by name.
+  (nonlinear — excluded from the linear TS solver). 5 tests. **Real LTspice
+  JFET models now bundled** (`engine/standardModels.ts`): 2N3819/J309/J310/
+  2N5484/2N5486 (NJF) + 2N5460/J175 (PJF) emit their verbatim `standard.jft`
+  params when referenced by name (ngspice-46 verified; LTspice-extra keys it
+  ignores are non-fatal), else generic `TAU_NJF`/`TAU_PJF`. **NEXT:** MESFET,
+  IGBT; browser TS-solver JFET model.
 - ⬜ MOSFET level/VDMOS power models, body diode
 - 🟡 Comparators / logic gates / digital (LTspice `A` devices) — **needed for class-d_starter.asc**
   - ✅ **Dedicated `comparator` component kind landed** (`engine/comparatorSpec.ts`):
