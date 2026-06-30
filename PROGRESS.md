@@ -1,5 +1,50 @@
 # Tau Autobuilder — Progress Log
 
+## 2026-06-30T02:00Z — auto/ltspice-parity — bank op-amp + E/G source pins from real .asy geometry (§1)
+
+### What I did
+- Ran a throwaway smoke over all 82 acceptance files: 82 import, 82 build a deck,
+  but only **45 were warning-clean**. The dominant warning was "placed without
+  pin-accurate geometry (connections may be wrong)" for **op-amps** (~18 files,
+  incl. the key-goal `deadtime.asc`) and **E/G controlled sources** (~8 files).
+- Read the real LTspice 17.2.4 `lib/sym/OpAmps/*.asy` + `e/e2/g/g2.asy` pin
+  geometry and banked it into `LTSPICE_PINS`:
+  - Two op-amp families: `opampC` (centered UniversalOpAmp/UniversalOpAmp2:
+    In+(-32,16)/In-(-32,-16)/OUT(32,0)) and `opampO` (the offset layout shared by
+    `opamp.asy`, `opamp2.asy` and EVERY vendor part — In+(-32,80)/In-(-32,48)/
+    OUT(32,64)). Verified the offset family is universal across AD711/OP07/AD823/
+    LT1001/LT1028/opamp2. Tau ignores the v+/v- supply pins (ideal 3-terminal
+    model, `netlist.ts:229`) so banking in+/in-/out is exactly right.
+  - VCVS `e`/`e2` and VCCS `g`/`g2`: control pair P/N on the left (x=-48), output
+    pair on the right; the `2` variants swap controls, and `g` reverses output
+    polarity vs `e`. Ordered to Tau's cp,cn,op,on roles.
+- `ltPinKey` now detects op-amps via `base.includes("opamp")` (mirroring
+  `ltspiceTypeToKind`) and maps e/e2/g/g2. F/H stay unbanked (their control is a
+  named device, not a pin pair).
+
+### Files touched
+- src/io/ascImport.ts (LTSPICE_PINS: opampC/opampO/vcvs/vcvs2/vccs/vccs2; ltPinKey)
+- src/io/ascImport.test.ts (+3 tests: centered opamp, offset opamp, E+G pins;
+  fixed the now-stale "unmappable symbols" test that assumed opamps warn)
+- FEATURE_PARITY.md (§1: opamp/E-G banking note; clean coverage 45→67/82)
+
+### Tests
+845 passing (was 842; +3 new). Typecheck clean.
+
+### FEATURE_PARITY items updated
+- §1 pin-banking: op-amp + E/G controlled-source geometry ✅. Warning-clean
+  import 45→67/82 (22 files flipped to pin-accurate).
+
+### UX issues found
+- None (importer-only change). Imported op-amps still render at Tau's built-in
+  symbol geometry; only the electrical pin positions are LTspice-accurate.
+
+### Next step
+The 15 still-warned files each need a NEW component kind: hierarchical sub-block
+import (`deadtime` inside class-d_starter — highest leverage, a key-goal file),
+DIGITAL `A`-devices (INV/XOR/dflop/SCHMTBUF), SpecialFunctions, DIAC/TRIAC/IGBT.
+Alternatively render imported symbols at LTspice geometry (§1 visual parity).
+
 ## 2026-06-29T20:28Z — auto/ltspice-parity — map Misc/signal source; acceptance import 67/82 (§1)
 
 ### What I did
