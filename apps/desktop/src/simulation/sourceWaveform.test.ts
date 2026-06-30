@@ -50,6 +50,14 @@ describe("parseTransientSource", () => {
       expect(s.at(0)).toBeCloseTo(2, 6);
     });
 
+    it("holds offset+amp·sin(phase) during the delay (ngspice-verified)", () => {
+      // ngspice SIN(0 2 1k 0.5m 0 90): v=2.0 for t<Td, then 1.666 V at dt=93.28µs.
+      const s = parseTransientSource("SINE(0 2 1k 0.5m 0 90)", "V");
+      expect(s.at(0)).toBeCloseTo(2, 6);
+      expect(s.at(0.4e-3)).toBeCloseTo(2, 6); // still before the 0.5ms delay
+      expect(s.at(0.5e-3 + 9.328e-5)).toBeCloseTo(1.666, 2); // matches ngspice
+    });
+
     it("applies exponential damping (theta)", () => {
       // theta = 1000 /s; at one period (1 ms) damping = e^-1
       const s = parseTransientSource("SINE(0 2 1k 0 1000 90)", "V");
