@@ -7,6 +7,7 @@ import { linearBSourceModel, resolveBehavioralTerms, type BehavioralTerm, type L
 import { stripAcSpec } from "../engine/acSpec";
 import { parseIcValue, stripIcSpec } from "../engine/icSpec";
 import { parseTransientSource, isFunctionSource, type TransientSource } from "./sourceWaveform";
+import { stripTcSpec } from "./temperature";
 
 export interface AnalysisOptions {
   stopTime: number;
@@ -616,8 +617,9 @@ function resistanceToConductance(entry: ExtractedComponent): number {
 
 function positiveValue(entry: ExtractedComponent, unit: string): number {
   // A C/L value may carry a per-instance `IC=` initial-condition token
-  // (e.g. "100p IC=1"); strip it before parsing the magnitude.
-  const value = parseQuantity(stripIcSpec(entry.component.value), unit);
+  // (e.g. "100p IC=1") and a resistor may carry a `tc=` tempco; strip both
+  // before parsing the magnitude.
+  const value = parseQuantity(stripTcSpec(stripIcSpec(entry.component.value)), unit);
   if (!Number.isFinite(value) || value <= 0) {
     throw new Error(`${entry.component.label || entry.component.id} must have a positive ${unit} value.`);
   }

@@ -396,9 +396,7 @@ function App() {
     if (!isRunnableStep(spec)) {
       setStepFamily({
         ok: false,
-        message: spec
-          ? "Temperature stepping (.step temp) isn’t supported yet."
-          : "Add a “.step param <name> <start> <stop> <incr>” or “.step <source> …” directive to sweep.",
+        message: "Add a “.step param <name> <start> <stop> <incr>”, “.step <source> …”, or “.step temp …” directive to sweep.",
         members: [],
         warnings: [],
       });
@@ -415,8 +413,12 @@ function App() {
     try {
       const members: StepFamilyMember[] = [];
       for (const ctx of contexts) {
+        // A temp sweep forwards its temperature to native ngspice as `.temp` so
+        // its device models shift too (the TS solver already saw the rescaled
+        // resistors via applyTemperature).
+        const stepDirectives = ctx.temperature !== undefined ? [`.temp ${ctx.temperature}`] : undefined;
         const result =
-          (await runNativeTransient({ components: ctx.components, wires, netLabels, params: ctx.params }, analysisOptions))
+          (await runNativeTransient({ components: ctx.components, wires, netLabels, params: ctx.params, directives: stepDirectives }, analysisOptions))
           ?? runTransientAnalysis({ components: ctx.components, wires, netLabels, params: ctx.params }, analysisOptions);
         if (analysisRequestRef.current !== requestId) return;
         members.push({ label: ctx.label, value: ctx.value, result });

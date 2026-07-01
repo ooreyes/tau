@@ -35,10 +35,10 @@ describe("formatStepValue", () => {
 });
 
 describe("isRunnableStep", () => {
-  it("accepts param and source, rejects temp and null", () => {
+  it("accepts param, source, and temp; rejects null", () => {
     expect(isRunnableStep(parseStepDirective(".step param X 1 2 1"))).toBe(true);
     expect(isRunnableStep(parseStepDirective(".step V1 0 5 1"))).toBe(true);
-    expect(isRunnableStep(parseStepDirective(".step temp 0 50 25"))).toBe(false);
+    expect(isRunnableStep(parseStepDirective(".step temp 0 50 25"))).toBe(true);
     expect(isRunnableStep(null)).toBe(false);
   });
 });
@@ -91,9 +91,19 @@ describe("stepContexts — source kind", () => {
 });
 
 describe("stepContexts — guards", () => {
-  it("throws a clear message for temp sweeps", () => {
-    const spec = parseStepDirective(".step temp 0 50 25")!;
-    expect(() => stepContexts(spec, EMPTY_SCOPE, [])).toThrow(/Temperature stepping/);
+  it("builds a temp family: rescales tc resistors and carries the temperature", () => {
+    const comps = [resistor(0, 0, "1k tc=0.01", "R1"), resistor(0, 0, "2k", "R2")];
+    const spec = parseStepDirective(".step temp 27 127 50")!; // 27, 77, 127 °C
+    const ctxs = stepContexts(spec, EMPTY_SCOPE, comps);
+    expect(ctxs.map((c) => c.label)).toEqual(["temp=27", "temp=77", "temp=127"]);
+    expect(ctxs.map((c) => c.temperature)).toEqual([27, 77, 127]);
+    // R1 with tc=0.01/°C: R(27)=1000, R(77)=1000·(1+0.01·50)=1500, R(127)=2000.
+    expect(Number(ctxs[0].components.find((c) => c.label === "R1")!.value)).toBeCloseTo(1000, 6);
+    expect(Number(ctxs[1].components.find((c) => c.label === "R1")!.value)).toBeCloseTo(1500, 6);
+    expect(Number(ctxs[2].components.find((c) => c.label === "R1")!.value)).toBeCloseTo(2000, 6);
+    // R2 has no tc — passed through untouched; base list not mutated.
+    expect(ctxs[1].components.find((c) => c.label === "R2")!.value).toBe("2k");
+    expect(comps[0].value).toBe("1k tc=0.01");
   });
 
   it("caps the family at MAX_FAMILY_MEMBERS", () => {

@@ -17,6 +17,7 @@ import type { SchematicComponent } from "../schematic/types";
 import type { ParamScope } from "./paramScope";
 import type { AnalysisResult } from "./linearTransient";
 import { withStepValue, type StepSpec } from "./paramStep";
+import { applyTemperature } from "./temperature";
 
 /** One member of a stepped transient family: a swept value and its result. */
 export interface StepFamilyMember {
@@ -49,8 +50,11 @@ export interface StepContext {
   value: number;
   /** Param scope to solve with (param-kind injects here; otherwise = base). */
   params: ParamScope;
-  /** Components to solve with (source-kind overrides here; otherwise = base). */
+  /** Components to solve with (source/temp kinds rewrite here; otherwise = base). */
   components: SchematicComponent[];
+  /** Analysis temperature (°C) for this member; set only for a `temp` sweep so
+   *  the caller can also forward it to a native `.temp` deck. */
+  temperature?: number;
 }
 
 /** Render a swept value as a compact, plain literal for a trace label / override. */
@@ -67,8 +71,9 @@ export function formatStepValue(value: number): string {
  * - **source**: the component whose ref-des (`label`) matches `spec.name`
  *   (case-insensitive) has its `value` replaced with the swept literal; the
  *   scope is unchanged.
- * - **temp**: throws — temperature sweep needs solver temp support that the
- *   interim engine does not model yet; the caller surfaces the message.
+ * - **temp**: each value sets the analysis temperature; every temperature-
+ *   dependent resistor (inline `tc=` tempco) is rescaled via {@link applyTemperature}
+ *   and the value is carried on `context.temperature`.
  *
  * Throws when a `source` spec names a component that is not present, so the
  * caller can show a precise error instead of silently sweeping nothing.
@@ -79,7 +84,13 @@ export function stepContexts(
   baseComponents: SchematicComponent[],
 ): StepContext[] {
   if (spec.kind === "temp") {
-    throw new Error("Temperature stepping (.step temp) isn’t supported by the interim solver yet.");
+    return spec.values.slice(0, MAX_FAMILY_MEMBERS).map((value) => ({
+      label: `temp=${formatStepValue(value)}`,
+      value,
+      params: baseParams,
+      components: applyTemperature(baseComponents, value),
+      temperature: value,
+    }));
   }
   if (!spec.name) {
     throw new Error(`.step ${spec.kind} is missing a name to sweep.`);
@@ -107,8 +118,8 @@ export function stepContexts(
   });
 }
 
-/** True when at least one of the spec's directives is a `.step` we can run
- *  (param or source). Temp specs are recognized by the parser but not runnable. */
+/** True when the spec is a `.step` the interim engine can run a family for
+ *  (param, source, or temp — the last via resistor tempco rescaling). */
 export function isRunnableStep(spec: StepSpec | null): spec is StepSpec {
-  return spec !== null && (spec.kind === "param" || spec.kind === "source");
+  return spec !== null && (spec.kind === "param" || spec.kind === "source" || spec.kind === "temp");
 }
