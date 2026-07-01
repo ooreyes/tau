@@ -8,13 +8,53 @@
      `git log --oneline -8`, recover/finish/revert that unit FIRST, then go on.
      ─────────────────────────────────────────────────────────────────────── -->
 ## ⏱ HEARTBEAT
-- **Headline metric:** 940 tests green (+38 this run) · expr units + group delay + stability margins + Bode phase plot
-- **Run started (UTC):** 2026-07-01T00:06Z
+- **Headline metric:** 954 tests green (+14 this run) · `.step temp` family via resistor tempco
+- **Run started (UTC):** 2026-07-01T18:10Z
 - **Synced to origin:** auto/ltspice-parity @ latest
-- **Claimed unit:** §6 Bode phase sub-plot — DONE
+- **Claimed unit:** §4 `.step temp` run path + TS resistor temperature coefficients — DONE
 - **Status:** DONE
 - **Last checkpoint commit:** see `git log --oneline -1`
-- **Next step (for the following run):** pick the next unchecked FEATURE_PARITY item (§6 log/linear axis toggle, §4 `.step temp` + TS temperature coefficients, or §6 probe-in-place).
+- **Next step (for the following run):** §6 log/linear axis toggle or probe-in-place; or §4 nested `.step` / AC-domain step families.
+
+---
+
+## 2026-07-01T18:18Z — auto/ltspice-parity — `.step temp` via resistor tempco (§4)
+
+### What I did
+- New pure `simulation/temperature.ts`: `TNOM_C=27`, `stripTcSpec`,
+  `parseResistorTemp` (splits an inline `tc=tc1[,tc2]` off a resistor value),
+  `resistanceAtTemperature` (LTspice law `R(T)=R0(1+tc1·ΔT+tc2·ΔT²)`), and
+  `applyTemperature(components, tempC)` which rescales only tc-bearing resistors
+  and passes everything else (tc-less resistors, other kinds, param-expression
+  values) through untouched.
+- `stepContexts` **temp kind no longer throws**: it builds a real family, one
+  context per temperature, with rescaled resistors + `context.temperature`.
+  `isRunnableStep` now accepts temp.
+- TS solver `positiveValue` strips `tc=` so a tc resistor doesn't crash a plain run.
+- `App.runStepAnalysis` forwards each swept temp to native ngspice as a `.temp`
+  directive (device models shift too); simplified the now-dead "not supported" msg.
+
+### Files touched
+- src/simulation/temperature.ts (new), src/simulation/temperature.test.ts (new)
+- src/simulation/stepFamily.ts, src/simulation/stepFamily.test.ts
+- src/simulation/linearTransient.ts
+- src/App.tsx
+- FEATURE_PARITY.md
+
+### Tests
+954 passing (+14 new: 14 temperature; stepFamily temp test rewritten from a
+throw-assert to a family/rescale check). typecheck clean.
+
+### FEATURE_PARITY items updated
+- §4 `.step` — temp run path 🟡 (throws → runs).
+- §4 `.temp` — TS resistor temperature coefficients 🟡 landed.
+
+### UX issues found
+- Visual QA still blocked (dev port held) — logic verified via unit tests.
+
+### Next step
+- §6 log/linear axis toggle or probe-in-place; or §4 nested `.step` / AC-domain
+  step families; interim-engine diode/BJT temperature physics.
 
 ---
 

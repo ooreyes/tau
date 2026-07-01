@@ -515,8 +515,14 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   stores a `StepFamilyResult`; a **STEP** tab in `SimulationPanel` overlays the
   probed signal across the family in a trace-variable color ramp (`StepPlot`, §6).
   10 hand-computed tests incl. a source sweep that tracks a 1:1 divider's
-  half-supply through the real OP solver. **NEXT:** temp run path; nested steps;
-  AC/DC-domain step families; per-trace pick in the overlay legend.
+  half-supply through the real OP solver. **Temp run path landed** (`simulation/
+  temperature.ts`): `.step temp` no longer throws — each swept temperature
+  rescales every inline-`tc=tc1[,tc2]` resistor per LTspice's law
+  `R(T)=R0(1+tc1·ΔT+tc2·ΔT²)` (`applyTemperature`), `stepContexts` carries
+  `context.temperature`, the TS solver strips `tc=` when parsing R, and the
+  native step path forwards the value as `.temp` so device models shift too.
+  24 tests (14 temperature + updated stepFamily temp family). **NEXT:** nested
+  steps; AC/DC-domain step families; per-trace pick in the overlay legend.
 - ✅ `.four` **Fourier analysis** — **parser + solver + UI landed** (`simulation/fourier.ts`):
   `parseFourDirective(".four 1k [Nharm] [Nperiods] V(out) …")` → `{freq, harmonics,
   outputs}` (leading `.`/`!` tolerated, bare-integer Nharmonics/Nperiods consumed,
@@ -536,8 +542,10 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   surfaced on `DirectiveAnalyses.temp`. `buildSpiceDeck` emits `.temp <°C>` from
   the document directives so **native ngspice** runs its temperature-dependent
   device models at the authored temperature (live-verified: `.temp 100` shifts a
-  diode drop). 6 tests. **NEXT:** TS-solver temperature coefficients; `.step temp`
-  sweep family (the swept-temperature path in `stepFamily` still throws).
+  diode drop). 6 tests. **TS-solver resistor temperature coefficients landed**
+  (`simulation/temperature.ts`) and the **`.step temp` sweep family now runs**
+  (no longer throws) — see the `.step` item above. **NEXT:** TS-solver
+  device-model (diode/BJT) temperature physics for the interim engine.
 - 🟡 `.meas` **Measurements** (extract gain, BW, rise time, etc.) — used 61× —
   **transient engine + UI landed** (`simulation/measure.ts`): `parseMeasDirective`
   handles `MAX/MIN/PP/AVG/RMS/INTEG` aggregates over `FROM/TO`, `PARAM` expressions,
