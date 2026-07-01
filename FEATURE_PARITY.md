@@ -527,8 +527,18 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   directive = outermost loop), composing every axis's transform (param inject /
   source override / temp rescale) onto each member, joining labels with `", "`,
   merging the innermost temperature, and capping the product at 16. `App` drives
-  it for any 1..N runnable specs. 7 more hand-computed tests. **NEXT:**
-  AC/DC-domain step families; per-trace pick in the overlay legend.
+  it for any 1..N runnable specs. 7 more hand-computed tests.
+  **AC/DC-domain step families now landed (engine)** (`simulation/stepAnalysisFamily.ts`):
+  a generic `runStepFamily<R>(specs, params, components, run, resultOk,
+  resultWarnings)` re-runs *any* synchronous solver once per nested-`.step`
+  context (reusing `nestedStepContexts`), collecting a labelled `AnalysisFamily<R>`
+  — no-spec / expansion-error paths surface a clear `ok:false` message. Thin
+  `runAcStepFamily` (family of Bode sweeps) + `runDcStepFamily` (family of DC
+  transfer curves) wrappers drive the TS `runAcSweep`/`runDcSweep`. 9 hand-computed
+  tests: an RC low-pass whose stepped R shifts the −3 dB corner (≥4 dB extra
+  attenuation for 2× R), and a divider whose stepped top resistor tracks the ratio
+  (Rt=1k→½·Vsweep, Rt=3k→¼·Vsweep). **NEXT:** wire a domain selector into the STEP
+  tab (currently transient-only in the UI); per-trace pick in the overlay legend.
 - ✅ `.four` **Fourier analysis** — **parser + solver + UI landed** (`simulation/fourier.ts`):
   `parseFourDirective(".four 1k [Nharm] [Nperiods] V(out) …")` → `{freq, harmonics,
   outputs}` (leading `.`/`!` tolerated, bare-integer Nharmonics/Nperiods consumed,

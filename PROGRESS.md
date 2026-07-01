@@ -8,13 +8,54 @@
      `git log --oneline -8`, recover/finish/revert that unit FIRST, then go on.
      ─────────────────────────────────────────────────────────────────────── -->
 ## ⏱ HEARTBEAT
-- **Headline metric:** 966 tests green · `.step temp` + expr builtins/constants + nested `.step`
-- **Run started (UTC):** 2026-07-01T18:10Z
+- **Headline metric:** 975 tests green · AC/DC-domain `.step` families (engine) + nested `.step`
+- **Run started (UTC):** 2026-07-01T18:45Z
 - **Synced to origin:** auto/ltspice-parity @ latest
-- **Claimed unit:** §4 nested `.step` (outer×inner Cartesian sweep) — DONE
+- **Claimed unit:** §4 AC/DC-domain `.step` families (engine layer) — DONE
 - **Status:** DONE
 - **Last checkpoint commit:** see `git log --oneline -1`
-- **Next step (for the following run):** §6 log/linear axis toggle or probe-in-place; or §4 AC/DC-domain step families (currently transient-only).
+- **Next step (for the following run):** wire a domain (tran/AC/DC) selector into the STEP tab so `runAcStepFamily`/`runDcStepFamily` are reachable in the UI; then §6 log/linear axis toggle or probe-in-place.
+
+> **Note on the `-wip` rescue branch:** the durability checkpoint
+> `origin/auto/ltspice-parity-wip` (d0995cb) is a *destructive* snapshot — it
+> deletes stability/temperature/groupDelay/stepFamily modules and their tests
+> (−1263 lines). Discarded as a regression; the canonical branch already has all
+> those modules green. Do not integrate it.
+
+---
+
+## 2026-07-01T18:52Z — auto/ltspice-parity — AC/DC-domain `.step` families (§4)
+
+### What I did
+- New `simulation/stepAnalysisFamily.ts`: a generic `runStepFamily<R>` core that
+  re-runs any synchronous solver once per nested-`.step` context (via
+  `nestedStepContexts`), collecting a labelled `AnalysisFamily<R>`; no-spec and
+  expansion-error paths return a clear `ok:false` message.
+- Concrete wrappers `runAcStepFamily` (family of Bode sweeps) and
+  `runDcStepFamily` (family of DC transfer curves) drive the TS
+  `runAcSweep`/`runDcSweep` with each context's params/components.
+- Decouples family-of-curves logic from the transient-only `App.runStepAnalysis`,
+  making AC/DC families a one-liner and unit-testable without a native engine.
+
+### Files touched
+- src/simulation/stepAnalysisFamily.ts (new), src/simulation/stepAnalysisFamily.test.ts (new),
+  FEATURE_PARITY.md, PROGRESS.md
+
+### Tests
+975 passing (+9 new: generic core empty/absent-source/nested/all-fail paths;
+AC RC-corner shift with stepped R; DC divider-ratio with stepped resistor).
+typecheck clean.
+
+### FEATURE_PARITY items updated
+- §4 `.step` — AC/DC-domain families (engine) 🟡 landed.
+
+### UX issues found
+- The STEP tab UI still only runs the transient family; the AC/DC family runners
+  exist but are not yet reachable from the UI (tracked as next step).
+
+### Next step
+- Wire a tran/AC/DC domain selector into the STEP tab and render an AC/DC family
+  overlay; then §6 log/linear axis toggle or probe-in-place.
 
 ---
 
