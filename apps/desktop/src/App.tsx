@@ -34,10 +34,9 @@ import { runAcSweep, type AcResult } from "./simulation/acSweep";
 import { runDcSweep, type DcSweepResult } from "./simulation/dcSweep";
 import { runTransferFunction, type TfResult } from "./simulation/transferFunction";
 import { runNoiseAnalysis, type NoiseResult } from "./simulation/noise";
-import { stepFromDirectives } from "./simulation/paramStep";
 import {
-  stepContexts,
-  isRunnableStep,
+  nestedStepContexts,
+  runnableStepsFromDirectives,
   type StepFamilyMember,
   type StepFamilyResult,
 } from "./simulation/stepFamily";
@@ -392,8 +391,11 @@ function App() {
   // directive surface a clear message instead of a silent no-op.
   const runStepAnalysis = useCallback(async () => {
     const requestId = ++analysisRequestRef.current;
-    const spec = stepFromDirectives(directives);
-    if (!isRunnableStep(spec)) {
+    // Multiple `.step` directives form an LTspice nested outer×inner sweep; a
+    // single one is the ordinary family. `runnableStepsFromDirectives` keeps them
+    // in document order (outermost first).
+    const specs = runnableStepsFromDirectives(directives);
+    if (specs.length === 0) {
       setStepFamily({
         ok: false,
         message: "Add a “.step param <name> <start> <stop> <incr>”, “.step <source> …”, or “.step temp …” directive to sweep.",
@@ -404,7 +406,7 @@ function App() {
     }
     let contexts;
     try {
-      contexts = stepContexts(spec, params, components);
+      contexts = nestedStepContexts(specs, params, components);
     } catch (error) {
       setStepFamily({ ok: false, message: error instanceof Error ? error.message : "Could not expand this .step.", members: [], warnings: [] });
       return;
@@ -424,7 +426,7 @@ function App() {
         members.push({ label: ctx.label, value: ctx.value, result });
       }
       const warnings = members.find((m) => m.result.ok)?.result.warnings ?? [];
-      setStepFamily({ ok: members.some((m) => m.result.ok), spec, members, warnings });
+      setStepFamily({ ok: members.some((m) => m.result.ok), spec: specs[0], members, warnings });
     } catch (error) {
       if (analysisRequestRef.current !== requestId) return;
       setStepFamily({ ok: false, message: error instanceof Error ? error.message : "Could not run this .step sweep.", members: [], warnings: [] });

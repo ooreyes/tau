@@ -521,8 +521,14 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   `R(T)=R0(1+tc1·ΔT+tc2·ΔT²)` (`applyTemperature`), `stepContexts` carries
   `context.temperature`, the TS solver strips `tc=` when parsing R, and the
   native step path forwards the value as `.temp` so device models shift too.
-  24 tests (14 temperature + updated stepFamily temp family). **NEXT:** nested
-  steps; AC/DC-domain step families; per-trace pick in the overlay legend.
+  24 tests (14 temperature + updated stepFamily temp family). **Nested `.step`
+  landed** (`nestedStepContexts` + `runnableStepsFromDirectives`): two-or-more
+  `.step` directives now form LTspice's outer×inner Cartesian product (first
+  directive = outermost loop), composing every axis's transform (param inject /
+  source override / temp rescale) onto each member, joining labels with `", "`,
+  merging the innermost temperature, and capping the product at 16. `App` drives
+  it for any 1..N runnable specs. 7 more hand-computed tests. **NEXT:**
+  AC/DC-domain step families; per-trace pick in the overlay legend.
 - ✅ `.four` **Fourier analysis** — **parser + solver + UI landed** (`simulation/fourier.ts`):
   `parseFourDirective(".four 1k [Nharm] [Nperiods] V(out) …")` → `{freq, harmonics,
   outputs}` (leading `.`/`!` tolerated, bare-integer Nharmonics/Nperiods consumed,

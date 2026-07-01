@@ -16,7 +16,7 @@
 import type { SchematicComponent } from "../schematic/types";
 import type { ParamScope } from "./paramScope";
 import type { AnalysisResult } from "./linearTransient";
-import { withStepValue, type StepSpec } from "./paramStep";
+import { withStepValue, parseStepDirective, type StepSpec } from "./paramStep";
 import { applyTemperature } from "./temperature";
 
 /** One member of a stepped transient family: a swept value and its result. */
@@ -83,39 +83,103 @@ export function stepContexts(
   baseParams: ParamScope,
   baseComponents: SchematicComponent[],
 ): StepContext[] {
-  if (spec.kind === "temp") {
-    return spec.values.slice(0, MAX_FAMILY_MEMBERS).map((value) => ({
-      label: `temp=${formatStepValue(value)}`,
-      value,
-      params: baseParams,
-      components: applyTemperature(baseComponents, value),
-      temperature: value,
-    }));
-  }
-  if (!spec.name) {
-    throw new Error(`.step ${spec.kind} is missing a name to sweep.`);
-  }
-  const name = spec.name;
+  validateStep(spec, baseComponents);
+  return spec.values.slice(0, MAX_FAMILY_MEMBERS).map((value) => {
+    const t = applyStepValue(spec, value, baseParams, baseComponents);
+    return { label: t.label, value, params: t.params, components: t.components, temperature: t.temperature };
+  });
+}
 
+/** Check a spec can run against the base component list, throwing a precise
+ *  message (missing sweep name; a `source` naming an absent component). Extracted
+ *  so a nested product validates each axis once, up front. */
+function validateStep(spec: StepSpec, baseComponents: SchematicComponent[]): void {
+  if (spec.kind === "temp") return;
+  if (!spec.name) throw new Error(`.step ${spec.kind} is missing a name to sweep.`);
   if (spec.kind === "source") {
-    const target = baseComponents.find((c) => c.label.toLowerCase() === name.toLowerCase());
-    if (!target) {
+    const name = spec.name;
+    if (!baseComponents.some((c) => c.label.toLowerCase() === name.toLowerCase())) {
       throw new Error(`.step ${name}: no component named “${name}” to sweep.`);
     }
   }
+}
 
-  const values = spec.values.slice(0, MAX_FAMILY_MEMBERS);
-  return values.map((value) => {
-    const label = `${name}=${formatStepValue(value)}`;
-    if (spec.kind === "param") {
-      return { label, value, params: withStepValue(baseParams, name, value), components: baseComponents };
+/** Apply one spec's swept `value` to a (params, components) base, returning the
+ *  transformed pair and a label fragment. Assumes {@link validateStep} passed. */
+function applyStepValue(
+  spec: StepSpec,
+  value: number,
+  params: ParamScope,
+  components: SchematicComponent[],
+): { label: string; params: ParamScope; components: SchematicComponent[]; temperature?: number } {
+  if (spec.kind === "temp") {
+    return { label: `temp=${formatStepValue(value)}`, params, components: applyTemperature(components, value), temperature: value };
+  }
+  const name = spec.name!;
+  const label = `${name}=${formatStepValue(value)}`;
+  if (spec.kind === "param") {
+    return { label, params: withStepValue(params, name, value), components };
+  }
+  // source: override the matched component's value, leave the scope alone.
+  const next = components.map((c) =>
+    c.label.toLowerCase() === name.toLowerCase() ? { ...c, value: formatStepValue(value) } : c,
+  );
+  return { label, params, components: next };
+}
+
+/**
+ * Expand two or more `.step` specs into the Cartesian product of contexts —
+ * LTspice's nested outer×inner sweep (the first spec is the outermost loop).
+ * Each member composes every axis's transform (param scope injection, source
+ * override, temp rescale) onto the base, joins the axis labels with `", "`, and
+ * merges the innermost temperature. The whole product is capped at
+ * {@link MAX_FAMILY_MEMBERS} so a large grid stays a readable overlay.
+ *
+ * With a single spec this is exactly {@link stepContexts}; with none it returns
+ * `[]`. `member.value` reflects the innermost axis (what the overlay colour-ramps).
+ */
+export function nestedStepContexts(
+  specs: StepSpec[],
+  baseParams: ParamScope,
+  baseComponents: SchematicComponent[],
+): StepContext[] {
+  if (specs.length === 0) return [];
+  if (specs.length === 1) return stepContexts(specs[0], baseParams, baseComponents);
+  specs.forEach((spec) => validateStep(spec, baseComponents));
+
+  let contexts: StepContext[] = [
+    { label: "", value: 0, params: baseParams, components: baseComponents },
+  ];
+  for (const spec of specs) {
+    const next: StepContext[] = [];
+    outer: for (const ctx of contexts) {
+      for (const value of spec.values) {
+        const t = applyStepValue(spec, value, ctx.params, ctx.components);
+        next.push({
+          label: ctx.label ? `${ctx.label}, ${t.label}` : t.label,
+          value,
+          params: t.params,
+          components: t.components,
+          temperature: t.temperature ?? ctx.temperature,
+        });
+        if (next.length >= MAX_FAMILY_MEMBERS) break outer;
+      }
     }
-    // source: override the matched component's value, leave the scope alone.
-    const components = baseComponents.map((c) =>
-      c.label.toLowerCase() === name.toLowerCase() ? { ...c, value: formatStepValue(value) } : c,
-    );
-    return { label, value, params: baseParams, components };
-  });
+    contexts = next;
+  }
+  return contexts.slice(0, MAX_FAMILY_MEMBERS);
+}
+
+/** Collect every runnable `.step` spec from a directive block, outermost first
+ *  (LTspice runs the first `.step` as the outer loop). Non-`.step` lines and
+ *  unparsable specs are skipped. */
+export function runnableStepsFromDirectives(directives: string[]): StepSpec[] {
+  const specs: StepSpec[] = [];
+  for (const directive of directives) {
+    const spec = parseStepDirective(directive);
+    if (isRunnableStep(spec)) specs.push(spec);
+  }
+  return specs;
 }
 
 /** True when the spec is a `.step` the interim engine can run a family for

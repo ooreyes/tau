@@ -10,6 +10,8 @@
 import { describe, it, expect } from "vitest";
 import {
   stepContexts,
+  nestedStepContexts,
+  runnableStepsFromDirectives,
   formatStepValue,
   isRunnableStep,
   MAX_FAMILY_MEMBERS,
@@ -140,5 +142,76 @@ describe("stepContexts — source sweep through the OP solver", () => {
     expect(mids[0]).toBeCloseTo(2, 3); // 4 / 2
     expect(mids[1]).toBeCloseTo(4, 3); // 8 / 2
     expect(mids[2]).toBeCloseTo(6, 3); // 12 / 2
+  });
+});
+
+describe("runnableStepsFromDirectives", () => {
+  it("collects every runnable .step in document (outermost-first) order", () => {
+    const specs = runnableStepsFromDirectives([
+      ".param A=1",
+      ".step param X 1 2 1",
+      ".tran 1m",
+      ".step V1 list 3 5",
+      ".step temp 0 50 25",
+    ]);
+    expect(specs.map((s) => s.kind)).toEqual(["param", "source", "temp"]);
+    expect(specs[0].name).toBe("X");
+  });
+  it("returns [] when no .step is present", () => {
+    expect(runnableStepsFromDirectives([".tran 1m", ".param A=2"])).toEqual([]);
+  });
+});
+
+describe("nestedStepContexts", () => {
+  it("matches stepContexts for a single spec", () => {
+    const spec = parseStepDirective(".step param X list 1 2 3")!;
+    const nested = nestedStepContexts([spec], EMPTY_SCOPE, []);
+    const single = stepContexts(spec, EMPTY_SCOPE, []);
+    expect(nested.map((c) => c.label)).toEqual(single.map((c) => c.label));
+  });
+
+  it("builds the Cartesian product of two param axes (outer×inner)", () => {
+    const outer = parseStepDirective(".step param A list 1 2")!;
+    const inner = parseStepDirective(".step param B list 10 20")!;
+    const ctxs = nestedStepContexts([outer, inner], EMPTY_SCOPE, []);
+    expect(ctxs.map((c) => c.label)).toEqual([
+      "A=1, B=10", "A=1, B=20", "A=2, B=10", "A=2, B=20",
+    ]);
+    // Both axes are injected into each member's scope.
+    expect(ctxs[3].params.scope.A).toBe(2);
+    expect(ctxs[3].params.scope.B).toBe(20);
+    // Inner axis drives member.value (what the overlay colour-ramps).
+    expect(ctxs.map((c) => c.value)).toEqual([10, 20, 10, 20]);
+  });
+
+  it("composes a source override with a temp axis and carries the temperature", () => {
+    const comps = [vsource(0, 0, "1", "V1"), resistor(0, 0, "1k tc=0.01", "R1")];
+    const src = parseStepDirective(".step V1 list 4 8")!;
+    const temp = parseStepDirective(".step temp 27 77 50")!;
+    const ctxs = nestedStepContexts([src, temp], EMPTY_SCOPE, comps);
+    expect(ctxs.map((c) => c.label)).toEqual([
+      "V1=4, temp=27", "V1=4, temp=77", "V1=8, temp=27", "V1=8, temp=77",
+    ]);
+    // Source override + temp rescale both applied in the 2nd member.
+    expect(ctxs[1].components.find((c) => c.label === "V1")!.value).toBe("4");
+    expect(Number(ctxs[1].components.find((c) => c.label === "R1")!.value)).toBeCloseTo(1500, 6);
+    expect(ctxs[1].temperature).toBe(77);
+  });
+
+  it("caps the product at MAX_FAMILY_MEMBERS", () => {
+    const a = parseStepDirective(".step param A 1 100 1")!; // 100 values
+    const b = parseStepDirective(".step param B 1 100 1")!;
+    const ctxs = nestedStepContexts([a, b], EMPTY_SCOPE, []);
+    expect(ctxs).toHaveLength(MAX_FAMILY_MEMBERS);
+  });
+
+  it("validates a source axis up front (throws on an absent component)", () => {
+    const a = parseStepDirective(".step param A list 1 2")!;
+    const bad = parseStepDirective(".step V9 list 1 2")!;
+    expect(() => nestedStepContexts([a, bad], EMPTY_SCOPE, [])).toThrow(/no component named/);
+  });
+
+  it("returns [] for no specs", () => {
+    expect(nestedStepContexts([], EMPTY_SCOPE, [])).toEqual([]);
   });
 });
