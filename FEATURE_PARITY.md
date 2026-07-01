@@ -683,8 +683,16 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   tests. **Per-trace axis/unit now landed** (`simulation/exprUnit.ts`,
   16 tests): a plotted expression is labelled by its physical dimension — `I(R1)`
   → A, `V(out)*I(R1)` → W, `V/I` → Ω — and the scope value axis shows the traces'
-  shared unit (`commonTraceUnit`) instead of always "V". **NEXT:**
-  expression traces in the AC/step panes; dual axis for mixed V+A panes.
+  shared unit (`commonTraceUnit`) instead of always "V".
+  **AC-pane expression traces now landed (engine)** (`simulation/plotExpressionAc.ts`):
+  `evaluateAcPlotExpression` reuses the `.meas ac` compiler (`compileAcExpr`, now
+  exported) so a Bode expression — a transfer `db(V(out))-db(V(in))`, `mag(V(a,b))`,
+  or a raw ratio — evaluates at every swept frequency into an overlay `AcTrace`
+  (value carried on `magDb`, plotted as written à la LTspice; flat phase). 6
+  hand-computed tests: `db(V(out))` exactly reproduces the output trace's dB,
+  `db(V(out))-db(V(in))` is a self-consistent 0 dB→rolloff transfer, empty / no-run
+  / unknown-signal / scope-scalar paths. **NEXT:** wire the AC expression bar into
+  the Bode pane UI; expression traces in the step pane; dual axis for mixed V+A.
 - ⬜ Multiple plot panes, add/remove traces, autorange, manual axis
 - ✅ **Measurement cursors** (1 & 2, delta readout) — `simulation/cursors.ts`
   (`cursorReadout`/`fractionToX`, 8 unit tests) + a collapsible **Cursors** panel

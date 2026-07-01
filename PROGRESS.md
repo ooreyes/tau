@@ -8,19 +8,50 @@
      `git log --oneline -8`, recover/finish/revert that unit FIRST, then go on.
      ─────────────────────────────────────────────────────────────────────── -->
 ## ⏱ HEARTBEAT
-- **Headline metric:** 975 tests green · AC/DC-domain `.step` families (engine) + nested `.step`
+- **Headline metric:** 981 tests green · AC/DC-domain `.step` families + AC-pane expression traces (engine)
 - **Run started (UTC):** 2026-07-01T18:45Z
 - **Synced to origin:** auto/ltspice-parity @ latest
-- **Claimed unit:** §4 AC/DC-domain `.step` families (engine layer) — DONE
+- **Claimed unit:** §6 AC-pane expression traces (engine layer) — DONE
 - **Status:** DONE
 - **Last checkpoint commit:** see `git log --oneline -1`
-- **Next step (for the following run):** wire a domain (tran/AC/DC) selector into the STEP tab so `runAcStepFamily`/`runDcStepFamily` are reachable in the UI; then §6 log/linear axis toggle or probe-in-place.
+- **Next step (for the following run):** wire the AC/DC `.step` family runners + the AC expression bar into the UI (both engine-complete, not yet reachable); then §6 log/linear axis toggle or probe-in-place.
 
 > **Note on the `-wip` rescue branch:** the durability checkpoint
 > `origin/auto/ltspice-parity-wip` (d0995cb) is a *destructive* snapshot — it
 > deletes stability/temperature/groupDelay/stepFamily modules and their tests
 > (−1263 lines). Discarded as a regression; the canonical branch already has all
 > those modules green. Do not integrate it.
+
+---
+
+## 2026-07-01T18:56Z — auto/ltspice-parity — AC-pane expression traces (§6)
+
+### What I did
+- Exported `compileAcExpr` from `measureAc.ts` (was private) and added
+  `simulation/plotExpressionAc.ts` `evaluateAcPlotExpression`: evaluates any Bode
+  expression (`db(V(out))-db(V(in))` transfer, `mag(V(a,b))`, raw ratio) against a
+  successful AC result at every swept frequency, returning an overlay `AcTrace`
+  (value on `magDb`, flat phase) — the AC-pane counterpart of the transient
+  `plotExpression`, sharing the same `.meas ac` compiler (one evaluator).
+
+### Files touched
+- src/simulation/plotExpressionAc.ts (new), src/simulation/plotExpressionAc.test.ts (new),
+  src/simulation/measureAc.ts (export compileAcExpr), FEATURE_PARITY.md, PROGRESS.md
+
+### Tests
+981 passing (+6 new: db(V(out)) reproduces trace dB exactly; transfer
+db(V(out))-db(V(in)) 0 dB→rolloff; empty / no-run / unknown-signal / scope-scalar).
+typecheck clean.
+
+### FEATURE_PARITY items updated
+- §6 plot arbitrary expressions — AC-pane traces (engine) 🟡 landed.
+
+### UX issues found
+- Both this AC expression evaluator and the AC/DC `.step` family runners are
+  engine-complete but not yet reachable from the UI — the natural next wiring step.
+
+### Next step
+- Wire the AC expression bar + AC/DC `.step` family overlays into SimulationPanel.
 
 ---
 

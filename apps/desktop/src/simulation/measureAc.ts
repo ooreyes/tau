@@ -116,7 +116,7 @@ function makeAcGetter(func: string, kind: string, arg: string, data: AcMeasData)
  * `mag(V(a,b))`, bare `V(out)`) with scalars from `scope` (earlier measurements
  * + circuit params), into a per-frequency-index evaluator.
  */
-function compileAcExpr(expr: string, data: AcMeasData, scope: Scope, funcs: Record<string, FuncDef>): CompiledExpr {
+export function compileAcExpr(expr: string, data: AcMeasData, scope: Scope, funcs: Record<string, FuncDef>): CompiledExpr {
   const getters: Array<(i: number) => number> = [];
   let idx = 0;
   const rewritten = expr.replace(
