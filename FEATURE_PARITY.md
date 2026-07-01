@@ -693,6 +693,14 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   flat phase gives 0, and an unwrapped ±180 crossing stays smooth. The AC pane's
   meter row now shows the primary trace's **peak group delay**. Still ⬜:
   log/linear axis toggle, standalone phase pane, group-delay trace overlay.
+- 🟡 **Loop-stability margins** (LTspice Bode readouts) — **landed**
+  (`simulation/stability.ts`, 10 tests): `stabilityMargins(freqs, magDb, phaseDeg)`
+  returns **phase margin** (180°+φ at the 0 dB gain crossover) and **gain margin**
+  (−gain at the −180° phase crossover), each with its crossover frequency,
+  interpolating the crossing in dB/degrees vs. **log-frequency** so it doesn't
+  snap to a swept point; `null` when the loop never crosses. The AC meter row now
+  shows **PM** and **GM** (red when negative = unstable). Hand-verified incl. a
+  geometric-mean log-space crossover and a negative-PM unstable case.
 - 🟡 `.step` family-of-curves overlay — **transient overlay landed** (`StepPlot`
   in `SimulationPanel`): the **STEP** tab re-runs the sweep and draws the probed
   signal across all step members in a color ramp; legend lists each `name=value`.

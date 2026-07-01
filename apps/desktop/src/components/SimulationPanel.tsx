@@ -26,6 +26,7 @@ import type { FourierResult } from "../simulation/fourier";
 import { evaluatePlotExpression } from "../simulation/plotExpression";
 import { commonTraceUnit } from "../simulation/exprUnit";
 import { groupDelay } from "../simulation/groupDelay";
+import { stabilityMargins } from "../simulation/stability";
 import { seriesToCsv } from "../simulation/waveformCsv";
 import { runWaveformFft, dominantFrequency, spectrumThd, type WindowFn } from "../simulation/fft";
 import { buildSpiceDeck } from "../engine/spiceNetlist";
@@ -1365,6 +1366,12 @@ function AcPlot({ result }: { result: AcResult | null }) {
       if (Number.isFinite(tau) && Math.abs(tau) > Math.abs(peakGroupDelay)) peakGroupDelay = tau;
     }
   }
+  // Loop-stability margins of the primary trace (treated as the open-loop
+  // response): phase margin at the 0 dB crossover, gain margin at −180° (§6).
+  const margins =
+    traces.length > 0
+      ? stabilityMargins(result.freqs, traces[0].magDb, traces[0].phaseDeg)
+      : null;
 
   return (
     <>
@@ -1413,6 +1420,16 @@ function AcPlot({ result }: { result: AcResult | null }) {
         <Metric label="POINTS" value={String(result.freqs.length)} tone="cyan" />
         <Metric label="PEAK" value={Number.isFinite(peak) ? `${peak.toFixed(1)} dB` : "--"} tone="cream" />
         <Metric label="GRP DELAY" value={traces.length > 0 ? formatEngineering(peakGroupDelay, "s", 2) : "--"} tone="cyan" />
+        <Metric
+          label="PM"
+          value={margins?.phaseMarginDeg != null ? `${margins.phaseMarginDeg.toFixed(1)}°` : "--"}
+          tone={margins?.phaseMarginDeg != null && margins.phaseMarginDeg < 0 ? "red" : "green"}
+        />
+        <Metric
+          label="GM"
+          value={margins?.gainMarginDb != null ? `${margins.gainMarginDb.toFixed(1)} dB` : "--"}
+          tone={margins?.gainMarginDb != null && margins.gainMarginDb < 0 ? "red" : "green"}
+        />
       </div>
     </>
   );

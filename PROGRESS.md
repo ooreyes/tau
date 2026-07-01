@@ -8,13 +8,43 @@
      `git log --oneline -8`, recover/finish/revert that unit FIRST, then go on.
      ─────────────────────────────────────────────────────────────────────── -->
 ## ⏱ HEARTBEAT
-- **Headline metric:** 930 tests green (+28 this run) · expr units + AC group delay
+- **Headline metric:** 940 tests green (+38 this run) · expr units + group delay + stability margins
 - **Run started (UTC):** 2026-07-01T00:06Z
-- **Synced to origin:** auto/ltspice-parity @ 5c8a8e4
-- **Claimed unit:** §6 AC group delay — DONE
+- **Synced to origin:** auto/ltspice-parity @ latest
+- **Claimed unit:** §6 loop-stability margins (PM/GM) — DONE
 - **Status:** DONE
-- **Last checkpoint commit:** 5c8a8e4
-- **Next step (for the following run):** pick the next unchecked FEATURE_PARITY item (§6 log-axis toggle or §4/§3 partials).
+- **Last checkpoint commit:** see `git log --oneline -1`
+- **Next step (for the following run):** pick the next unchecked FEATURE_PARITY item (§6 log-axis toggle / standalone phase pane, or §4 `.step temp` + TS temperature coefficients).
+
+---
+
+## 2026-07-01T00:16Z — auto/ltspice-parity — Bode loop-stability margins (§6)
+
+### What I did
+- New pure `simulation/stability.ts`: `stabilityMargins(freqs, magDb, phaseDeg)`
+  returns phase margin (180°+φ at the 0 dB gain crossover) and gain margin
+  (−gain at the −180° phase crossover) with each crossover frequency, found by
+  interpolating the crossing in dB/deg vs **log-frequency**; `null` when no
+  crossover. Exposes the reusable `firstCrossing` interpolator.
+- AC meter row now shows **PM** and **GM** metrics (red when negative/unstable).
+- Added a `.metric.red` CSS rule (uses `--danger`).
+
+### Files touched
+- src/simulation/stability.ts (new), src/simulation/stability.test.ts (new, 10)
+- src/components/SimulationPanel.tsx (PM/GM metrics), src/App.css (.metric.red)
+
+### Tests
+940 passing (+10 here) — all green; typecheck clean.
+
+### FEATURE_PARITY items updated
+- §6 — added "Loop-stability margins" 🟡 (PM/GM landed).
+
+### UX issues found
+- PM/GM assume the primary trace is the open-loop response; no per-trace picker
+  yet. Fine for the common single-output Bode case.
+
+### Next step
+- §6 log/linear axis toggle or standalone phase pane; or §4 `.step temp` path.
 
 ---
 

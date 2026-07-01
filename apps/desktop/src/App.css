@@ -1249,6 +1249,7 @@ body {
 .metric.green strong { color: var(--trace-green); }
 .metric.cyan strong  { color: var(--accent);       }
 .metric.cream strong { color: var(--text);          }
+.metric.red strong   { color: var(--danger);        }
 
 .analysis-meter {
   padding-top: 10px;
