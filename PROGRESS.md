@@ -8,13 +8,35 @@
      `git log --oneline -8`, recover/finish/revert that unit FIRST, then go on.
      ─────────────────────────────────────────────────────────────────────── -->
 ## ⏱ HEARTBEAT
-- **Headline metric:** 954 tests green (+14 this run) · `.step temp` family via resistor tempco
+- **Headline metric:** 957 tests green · `.step temp` family + remaining LTspice expr builtins
 - **Run started (UTC):** 2026-07-01T18:10Z
 - **Synced to origin:** auto/ltspice-parity @ latest
 - **Claimed unit:** §4 `.step temp` run path + TS resistor temperature coefficients — DONE
 - **Status:** DONE
 - **Last checkpoint commit:** see `git log --oneline -1`
 - **Next step (for the following run):** §6 log/linear axis toggle or probe-in-place; or §4 nested `.step` / AC-domain step families.
+
+---
+
+## 2026-07-01T18:24Z — auto/ltspice-parity — remaining LTspice expr builtins (§5)
+
+### What I did
+- Filled the gaps in `simulation/expr.ts` `FUNCS`: inverse hyperbolics
+  `asinh/acosh/atanh`, the `arcsin/arccos/arctan` aliases, `nint`, `db`
+  (20·log10|x|), and boolean helpers `and/or/not/xor` (operands thresholded at
+  0.5, matching `buf`/`inv`). `table` was already handled specially — verified.
+
+### Files touched
+- src/simulation/expr.ts, src/simulation/expr.test.ts, FEATURE_PARITY.md
+
+### Tests
+957 passing (+3 test cases, 10 new assertions). typecheck clean.
+
+### FEATURE_PARITY items updated
+- §5 built-in functions — note expanded (already ✅, now genuinely complete).
+
+### Next step
+- §6 log/linear axis toggle or probe-in-place; §4 nested `.step`.
 
 ---
 
