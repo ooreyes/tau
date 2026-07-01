@@ -632,7 +632,10 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   exactly as LTspice does
 - ✅ Built-in functions (sin, sqrt, if, limit, table, pwr/pwrs, min/max, floor…) +
   constants (pi, e) — `simulation/expr.ts` `FUNCS`/`CONSTS`; SI-suffixed literals
-  (1k/2.2meg/10n/1mil), comparison/logical/ternary, `^`/`**` power semantics
+  (1k/2.2meg/10n/1mil), comparison/logical/ternary, `^`/`**` power semantics.
+  **Added the remaining LTspice built-ins:** inverse hyperbolics
+  `asinh/acosh/atanh`, `arcsin/arccos/arctan` aliases, `nint`, `db` (20·log10|x|),
+  and the boolean helpers `and/or/not/xor` (0.5-thresholded like `buf`/`inv`).
 - ✅ `.step param x list/range` driving the above — `simulation/paramStep.ts`
   `runParamStep` binds each swept value into the `ParamScope` (`withStepValue`)
   so `{...}` component values re-resolve per step; **`buildParamScope` now also

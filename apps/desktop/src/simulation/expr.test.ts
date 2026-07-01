@@ -138,6 +138,38 @@ describe("evaluateExpression — functions", () => {
     expect(ev("table(99, 0,0, 10,100)")).toBe(100); // clamp high
   });
 
+  it("evaluates inverse hyperbolics and arc* aliases", () => {
+    expect(ev("asinh(0)")).toBe(0);
+    expect(ev("acosh(1)")).toBe(0);
+    expect(ev("atanh(0)")).toBe(0);
+    expect(ev("asinh(sinh(1.5))")).toBeCloseTo(1.5, 12);
+    expect(ev("arcsin(1)")).toBeCloseTo(Math.PI / 2, 12);
+    expect(ev("arccos(1)")).toBe(0);
+    expect(ev("arctan(1)")).toBeCloseTo(Math.PI / 4, 12);
+  });
+
+  it("evaluates nint and db", () => {
+    expect(ev("nint(2.4)")).toBe(2);
+    expect(ev("nint(2.6)")).toBe(3);
+    expect(ev("db(10)")).toBeCloseTo(20, 12); // 20·log10(10)
+    expect(ev("db(0.1)")).toBeCloseTo(-20, 12);
+    expect(ev("db(-100)")).toBeCloseTo(40, 12); // |x|
+  });
+
+  it("evaluates boolean functions and/or/not/xor", () => {
+    expect(ev("and(1,1)")).toBe(1);
+    expect(ev("and(1,0)")).toBe(0);
+    expect(ev("or(0,1)")).toBe(1);
+    expect(ev("or(0,0)")).toBe(0);
+    expect(ev("not(0)")).toBe(1);
+    expect(ev("not(1)")).toBe(0);
+    expect(ev("xor(1,0)")).toBe(1);
+    expect(ev("xor(1,1)")).toBe(0);
+    // Operands are thresholded at 0.5 like buf/inv (logic-level inputs).
+    expect(ev("and(0.9,0.8)")).toBe(1);
+    expect(ev("and(0.3,0.9)")).toBe(0);
+  });
+
   it("throws on unknown function", () => {
     expect(() => ev("bogus(1)")).toThrow();
   });

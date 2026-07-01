@@ -311,10 +311,18 @@ const FUNCS: Record<string, Fn> = {
   asin: ([x]) => Math.asin(x),
   acos: ([x]) => Math.acos(x),
   atan: ([x]) => Math.atan(x),
+  // LTspice arc* aliases for the inverse trig functions.
+  arcsin: ([x]) => Math.asin(x),
+  arccos: ([x]) => Math.acos(x),
+  arctan: ([x]) => Math.atan(x),
   atan2: ([y, x]) => Math.atan2(y, x),
   sinh: ([x]) => Math.sinh(x),
   cosh: ([x]) => Math.cosh(x),
   tanh: ([x]) => Math.tanh(x),
+  // Inverse hyperbolics (LTspice asinh/acosh/atanh).
+  asinh: ([x]) => Math.asinh(x),
+  acosh: ([x]) => Math.acosh(x),
+  atanh: ([x]) => Math.atanh(x),
   exp: ([x]) => Math.exp(x),
   ln: ([x]) => Math.log(x),
   log: ([x]) => Math.log(x),
@@ -327,7 +335,10 @@ const FUNCS: Record<string, Fn> = {
   flr: ([x]) => Math.floor(x),
   ceil: ([x]) => Math.ceil(x),
   round: ([x]) => Math.round(x),
+  nint: ([x]) => Math.round(x), // LTspice "nearest integer"
   int: ([x]) => Math.trunc(x),
+  // 20·log10|x| — LTspice's dB helper.
+  db: ([x]) => 20 * Math.log10(Math.abs(x)),
   hypot: (a) => Math.hypot(...a),
   min: (a) => Math.min(...a),
   max: (a) => Math.max(...a),
@@ -343,6 +354,11 @@ const FUNCS: Record<string, Fn> = {
   u: ([x]) => bool(x > 0),
   buf: ([x]) => bool(x > 0.5),
   inv: ([x]) => bool(!(x > 0.5)),
+  // LTspice boolean helper functions (operands true when > 0.5, matching buf/inv).
+  and: ([a, b]) => bool(a > 0.5 && b > 0.5),
+  or: ([a, b]) => bool(a > 0.5 || b > 0.5),
+  not: ([x]) => bool(!(x > 0.5)),
+  xor: ([a, b]) => bool((a > 0.5) !== (b > 0.5)),
 
   // LTspice statistical / Monte-Carlo functions. Tau runs a single deterministic
   // analysis, so these evaluate to their *nominal* (mean) value — the value
