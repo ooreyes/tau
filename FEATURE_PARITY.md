@@ -637,7 +637,10 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
 
 ## 6. Waveform viewer (the LTspice plot window)
 - 🟡 Transient scope — `SimulationPanel.tsx` (downsamples large native results ✅)
-- 🟡 Bode (AC mag/phase) — present
+- 🟡 Bode (AC mag/phase) — **magnitude + phase now both plotted** (`AcPlot`): a
+  second log-frequency sub-plot draws each trace's `phaseDeg` on a 45°-snapped
+  degrees axis below the dB magnitude, matching LTspice's dual Bode. Shared
+  `bodeValuePath` (generalized from `bodePath`) maps any value vs. log-f.
 - 🟡 OP results table — present
 - ⬜ **Click a node/wire on the schematic to add its trace** (LTspice probe-in-place)
 - 🟡 **Plot arbitrary expressions** (`V(a)-V(b)`, `I(R1)*V(out)`, power `V(out)*I(out)`)

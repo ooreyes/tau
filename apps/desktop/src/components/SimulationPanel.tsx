@@ -1347,7 +1347,20 @@ function AcPlot({ result }: { result: AcResult | null }) {
     const minDb = Math.floor(Math.min(rawMin, maxDb - 10) / 10) * 10;
     const f0 = Math.log10(success.freqs[0] || 1);
     const f1 = Math.log10(success.freqs[success.freqs.length - 1] || 10);
-    return { minDb, maxDb, f0, f1 };
+    // Phase axis: bound to the data, snapped to 45° gridlines, with a sane
+    // ±180° floor so a flat response still shows a readable scale.
+    let phMin = 180;
+    let phMax = -180;
+    for (const trace of traces) {
+      for (const p of trace.phaseDeg) {
+        if (!Number.isFinite(p)) continue;
+        phMin = Math.min(phMin, p);
+        phMax = Math.max(phMax, p);
+      }
+    }
+    const maxPh = Math.ceil(Math.max(phMax, 0) / 45) * 45;
+    const minPh = Math.floor(Math.min(phMin, maxPh - 45) / 45) * 45;
+    return { minDb, maxDb, f0, f1, minPh, maxPh };
   }, [success, traces]);
 
   if (!result) return null;
@@ -1402,6 +1415,37 @@ function AcPlot({ result }: { result: AcResult | null }) {
             {success ? formatEngineering(success.freqs[success.freqs.length - 1], "Hz", 0) : "f"}
           </text>
         </svg>
+        <svg className="scope-svg" viewBox={`0 0 ${PLOT_WIDTH} ${PLOT_HEIGHT}`} role="img" aria-label="Bode phase">
+          <g className="scope-grid">
+            {Array.from({ length: 6 }).map((_, i) => {
+              const x = PLOT_PAD + (i * (PLOT_WIDTH - PLOT_PAD * 2)) / 5;
+              return <line key={`px${i}`} x1={x} y1={PLOT_PAD} x2={x} y2={PLOT_HEIGHT - PLOT_PAD} />;
+            })}
+            {Array.from({ length: 5 }).map((_, i) => {
+              const y = PLOT_PAD + (i * (PLOT_HEIGHT - PLOT_PAD * 2)) / 4;
+              return <line key={`py${i}`} x1={PLOT_PAD} y1={y} x2={PLOT_WIDTH - PLOT_PAD} y2={y} />;
+            })}
+          </g>
+          <rect className="scope-frame" x={PLOT_PAD} y={PLOT_PAD} width={PLOT_WIDTH - PLOT_PAD * 2} height={PLOT_HEIGHT - PLOT_PAD * 2} />
+          {plot &&
+            traces.map((t, i) => (
+              <path
+                key={t.id}
+                className="scope-trace ref"
+                stroke={AC_COLORS[i % AC_COLORS.length]}
+                d={bodeValuePath(t.phaseDeg, success!.freqs, { min: plot.minPh, max: plot.maxPh, f0: plot.f0, f1: plot.f1 })}
+              />
+            ))}
+          <text className="scope-axis" x={PLOT_PAD} y={18}>
+            {plot ? `${plot.maxPh}°` : "phase"}
+          </text>
+          <text className="scope-axis" x={PLOT_PAD} y={PLOT_HEIGHT - 8}>
+            {plot ? `${plot.minPh}°` : ""}
+          </text>
+          <text className="scope-axis right" x={PLOT_WIDTH - PLOT_PAD} y={PLOT_HEIGHT - 8}>
+            {success ? formatEngineering(success.freqs[success.freqs.length - 1], "Hz", 0) : "f"}
+          </text>
+        </svg>
         <div className="scope-legend">
           {traces.length > 0 ? (
             traces.map((t, i) => (
@@ -1436,19 +1480,30 @@ function AcPlot({ result }: { result: AcResult | null }) {
 }
 
 function bodePath(magDb: number[], freqs: number[], plot: { minDb: number; maxDb: number; f0: number; f1: number }): string {
-  const span = plot.maxDb - plot.minDb || 1;
+  return bodeValuePath(magDb, freqs, { min: plot.minDb, max: plot.maxDb, f0: plot.f0, f1: plot.f1 });
+}
+
+// Generic "value vs. log-frequency" trace path shared by the Bode magnitude
+// (dB) and phase (degrees) sub-plots. X is log10(f); Y maps [min,max] onto the
+// plot box (clamped so out-of-range samples ride the frame instead of escaping).
+function bodeValuePath(
+  values: number[],
+  freqs: number[],
+  plot: { min: number; max: number; f0: number; f1: number },
+): string {
+  const span = plot.max - plot.min || 1;
   const fSpan = plot.f1 - plot.f0 || 1;
-  const count = Math.min(magDb.length, freqs.length);
+  const count = Math.min(values.length, freqs.length);
   let path = "";
   let started = false;
   for (const index of displaySampleIndices(count)) {
-    const db = magDb[index];
+    const v = values[index];
     const frequency = freqs[index];
-    if (!Number.isFinite(db) || !Number.isFinite(frequency) || frequency <= 0) continue;
+    if (!Number.isFinite(v) || !Number.isFinite(frequency) || frequency <= 0) continue;
     const lx = (Math.log10(frequency) - plot.f0) / fSpan;
     const x = PLOT_PAD + lx * (PLOT_WIDTH - PLOT_PAD * 2);
-    const yv = Math.max(plot.minDb, Math.min(plot.maxDb, db));
-    const y = PLOT_HEIGHT - PLOT_PAD - ((yv - plot.minDb) / span) * (PLOT_HEIGHT - PLOT_PAD * 2);
+    const yv = Math.max(plot.min, Math.min(plot.max, v));
+    const y = PLOT_HEIGHT - PLOT_PAD - ((yv - plot.min) / span) * (PLOT_HEIGHT - PLOT_PAD * 2);
     path += `${started ? "L" : "M"} ${x.toFixed(2)} ${y.toFixed(2)} `;
     started = true;
   }

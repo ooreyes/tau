@@ -8,13 +8,41 @@
      `git log --oneline -8`, recover/finish/revert that unit FIRST, then go on.
      ─────────────────────────────────────────────────────────────────────── -->
 ## ⏱ HEARTBEAT
-- **Headline metric:** 940 tests green (+38 this run) · expr units + group delay + stability margins
+- **Headline metric:** 940 tests green (+38 this run) · expr units + group delay + stability margins + Bode phase plot
 - **Run started (UTC):** 2026-07-01T00:06Z
 - **Synced to origin:** auto/ltspice-parity @ latest
-- **Claimed unit:** §6 loop-stability margins (PM/GM) — DONE
+- **Claimed unit:** §6 Bode phase sub-plot — DONE
 - **Status:** DONE
 - **Last checkpoint commit:** see `git log --oneline -1`
-- **Next step (for the following run):** pick the next unchecked FEATURE_PARITY item (§6 log-axis toggle / standalone phase pane, or §4 `.step temp` + TS temperature coefficients).
+- **Next step (for the following run):** pick the next unchecked FEATURE_PARITY item (§6 log/linear axis toggle, §4 `.step temp` + TS temperature coefficients, or §6 probe-in-place).
+
+---
+
+## 2026-07-01T00:20Z — auto/ltspice-parity — Bode phase sub-plot (§6)
+
+### What I did
+- `AcPlot` now renders a **phase** sub-plot below the magnitude plot (LTspice
+  dual Bode): each trace's `phaseDeg` on a 45°-snapped degrees axis over the same
+  log-frequency X. Generalized `bodePath` → `bodeValuePath(values, freqs, {min,
+  max,f0,f1})` and delegated magnitude through it; phase bounds computed in the
+  `plot` memo. No new numeric logic (SVG render helper, verified via typecheck +
+  the existing AcPlot tests); pure margin/delay math from earlier stays tested.
+
+### Files touched
+- src/components/SimulationPanel.tsx (bodeValuePath refactor + phase svg + phase bounds)
+
+### Tests
+940 passing (no new — render-only change); typecheck clean.
+
+### FEATURE_PARITY items updated
+- §6 "Bode (AC mag/phase)" — phase now plotted, not just magnitude.
+
+### UX issues found
+- Visual QA still blocked (dev port held, per §9) — change verified by typecheck +
+  mirroring the tested magnitude path. Would like a screenshot next interactive run.
+
+### Next step
+- §6 log/linear axis toggle or probe-in-place; or §4 `.step temp` path.
 
 ---
 
