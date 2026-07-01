@@ -8,13 +8,41 @@
      `git log --oneline -8`, recover/finish/revert that unit FIRST, then go on.
      ─────────────────────────────────────────────────────────────────────── -->
 ## ⏱ HEARTBEAT
-- **Headline metric:** 918 tests green (+16) · per-trace expression units shipped
+- **Headline metric:** 930 tests green (+28 this run) · expr units + AC group delay
 - **Run started (UTC):** 2026-07-01T00:06Z
-- **Synced to origin:** auto/ltspice-parity @ 98c1f1b
-- **Claimed unit:** §6 per-trace expression unit inference (rescued WIP) — DONE
+- **Synced to origin:** auto/ltspice-parity @ 5c8a8e4
+- **Claimed unit:** §6 AC group delay — DONE
 - **Status:** DONE
-- **Last checkpoint commit:** 98c1f1b
-- **Next step (for the following run):** pick the next unchecked FEATURE_PARITY item.
+- **Last checkpoint commit:** 5c8a8e4
+- **Next step (for the following run):** pick the next unchecked FEATURE_PARITY item (§6 log-axis toggle or §4/§3 partials).
+
+---
+
+## 2026-07-01T00:11Z — auto/ltspice-parity — AC group delay (§6)
+
+### What I did
+- New pure `simulation/groupDelay.ts`: `unwrapPhaseDeg` removes ±360° phase-wrap
+  cliffs so differentiating across a ±180° crossing doesn't spike; `groupDelay`
+  computes τ = −dφ/dω in seconds (central difference interior, one-sided ends,
+  degrees→Hz conversion τ = −dφ_deg/(360·df)); duplicate/degenerate inputs → 0.
+- Wired a **GRP DELAY** metric (primary trace's peak τ) into the AC meter row.
+
+### Files touched
+- src/simulation/groupDelay.ts (new), src/simulation/groupDelay.test.ts (new, 12)
+- src/components/SimulationPanel.tsx (import + peak-group-delay metric)
+
+### Tests
+930 passing (+12 new here) — all green; typecheck clean.
+
+### FEATURE_PARITY items updated
+- §6 "Log/linear axes, dB, phase, group delay" — group delay ⬜→🟡.
+
+### UX issues found
+- AC pane still plots magnitude only (no standalone phase/group-delay trace pane);
+  group delay currently surfaces as a single peak metric. Future §6 polish.
+
+### Next step
+- §6 log/linear axis toggle or standalone phase pane; or a §4/§3 partial.
 
 ---
 
