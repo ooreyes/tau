@@ -8,13 +8,46 @@
      `git log --oneline -8`, recover/finish/revert that unit FIRST, then go on.
      ─────────────────────────────────────────────────────────────────────── -->
 ## ⏱ HEARTBEAT
-- **Headline metric:** 957 tests green · `.step temp` family + remaining LTspice expr builtins
+- **Headline metric:** 965 tests green · `.step temp` + expr builtins + nested `.step`
 - **Run started (UTC):** 2026-07-01T18:10Z
 - **Synced to origin:** auto/ltspice-parity @ latest
-- **Claimed unit:** §4 `.step temp` run path + TS resistor temperature coefficients — DONE
+- **Claimed unit:** §4 nested `.step` (outer×inner Cartesian sweep) — DONE
 - **Status:** DONE
 - **Last checkpoint commit:** see `git log --oneline -1`
-- **Next step (for the following run):** §6 log/linear axis toggle or probe-in-place; or §4 nested `.step` / AC-domain step families.
+- **Next step (for the following run):** §6 log/linear axis toggle or probe-in-place; or §4 AC/DC-domain step families (currently transient-only).
+
+---
+
+## 2026-07-01T18:32Z — auto/ltspice-parity — nested `.step` sweep (§4)
+
+### What I did
+- Refactored `stepFamily.ts`: extracted `validateStep` (up-front error checks)
+  and `applyStepValue` (one axis's transform → label + params + components +
+  temperature) out of `stepContexts` (behavior unchanged).
+- New `nestedStepContexts(specs, …)`: two-or-more `.step` directives now form
+  LTspice's outer×inner Cartesian product (first directive = outermost), composing
+  every axis's transform onto each member, joining labels with `", "`, merging the
+  innermost temperature, capped at MAX_FAMILY_MEMBERS (16).
+- New `runnableStepsFromDirectives` collects specs outermost-first.
+- `App.runStepAnalysis` now drives 1..N runnable specs (single spec = old family;
+  dropped the now-unused `stepFromDirectives`/`stepContexts`/`isRunnableStep`
+  imports there).
+
+### Files touched
+- src/simulation/stepFamily.ts, src/simulation/stepFamily.test.ts, src/App.tsx,
+  FEATURE_PARITY.md
+
+### Tests
+965 passing (stepFamily 10→18: single-spec parity, 2-param product, source×temp
+composition, product cap, up-front source validation, empty). typecheck clean.
+(Note: an earlier full-suite run showed 2 flaky native-ngspice failures caused
+by me accidentally running two suites concurrently; a clean serial run is 965/965.)
+
+### FEATURE_PARITY items updated
+- §4 `.step` — nested sweep 🟡 landed.
+
+### Next step
+- §6 log/linear axis toggle or probe-in-place; §4 AC/DC-domain step families.
 
 ---
 
