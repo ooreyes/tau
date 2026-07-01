@@ -133,7 +133,7 @@ function tokenize(src: string): Tok[] {
 
 // --- parser (to AST) ----------------------------------------------------------
 
-type Node =
+export type Node =
   | { k: "num"; v: number }
   | { k: "var"; name: string }
   | { k: "call"; name: string; args: Node[] }

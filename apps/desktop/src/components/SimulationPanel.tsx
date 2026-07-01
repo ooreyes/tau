@@ -24,6 +24,7 @@ import type { StepFamilyResult } from "../simulation/stepFamily";
 import type { MeasResult } from "../simulation/measure";
 import type { FourierResult } from "../simulation/fourier";
 import { evaluatePlotExpression } from "../simulation/plotExpression";
+import { commonTraceUnit } from "../simulation/exprUnit";
 import { seriesToCsv } from "../simulation/waveformCsv";
 import { runWaveformFft, dominantFrequency, spectrumThd, type WindowFn } from "../simulation/fft";
 import { buildSpiceDeck } from "../engine/spiceNetlist";
@@ -789,7 +790,11 @@ function WaveformPlot({
     if (!success || traces.length === 0) return null;
     const { min, max } = waveformBounds(traces);
     const tMax = success.times[success.times.length - 1] || 1;
-    return { min, max, tMax };
+    // Label the value axis by the traces' shared physical unit (amps for a
+    // probed branch current, watts for a V·I power expression); fall back to
+    // volts when the pane mixes units or carries only node voltages.
+    const unit = commonTraceUnit(traces.map((t) => t.unit)) || "V";
+    return { min, max, tMax, unit };
   }, [success, traces]);
 
   // Prefer a user-assigned net name (V(Vout)) over the auto V(R1·C1) label.
@@ -827,10 +832,10 @@ function WaveformPlot({
             />
           ))}
         <text className="scope-axis" x={PLOT_PAD} y={18}>
-          {plot ? formatEngineering(plot.max, "V", 2) : "MAX"}
+          {plot ? formatEngineering(plot.max, plot.unit, 2) : "MAX"}
         </text>
         <text className="scope-axis" x={PLOT_PAD} y={PLOT_HEIGHT - 8}>
-          {plot ? formatEngineering(plot.min, "V", 2) : "MIN"}
+          {plot ? formatEngineering(plot.min, plot.unit, 2) : "MIN"}
         </text>
         <text className="scope-axis right" x={PLOT_WIDTH - PLOT_PAD} y={PLOT_HEIGHT - 8}>
           {success ? formatEngineering(success.stats.stopTime, "s", 2) : "TIME"}

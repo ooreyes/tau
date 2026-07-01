@@ -24,10 +24,15 @@ export interface TransientResolution {
   samplesPerCycle: number | null;
 }
 
+/** Physical unit a plotted trace carries on its axis. Node-voltage and
+ *  reference traces are volts; derived expression traces can be amps (a probed
+ *  branch current), watts (instantaneous power V·I), ohms, or dimensionless. */
+export type TraceUnit = "V" | "A" | "W" | "Ω" | "S" | "";
+
 export interface Trace {
   id: string;
   label: string;
-  unit: "V";
+  unit: TraceUnit;
   color: string;
   values: number[];
 }

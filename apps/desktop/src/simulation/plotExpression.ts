@@ -12,6 +12,7 @@
 
 import { type FuncDef, type Scope } from "./expr";
 import { compileExpr, type MeasWaveform } from "./measure";
+import { inferExpressionUnit } from "./exprUnit";
 import type { AnalysisResult, Trace } from "./linearTransient";
 
 export type PlotExpressionResult =
@@ -55,8 +56,13 @@ export function evaluatePlotExpression(
     return { ok: false, error: `“${trimmed}” has no finite values — check the signal names.` };
   }
 
+  // Label the axis by the expression's physical dimension (amps for a probed
+  // current, watts for V·I power) instead of always volts; fall back to "V" for
+  // a dimensionless/un-inferable expression so existing behaviour is preserved.
+  const unit = inferExpressionUnit(trimmed) || "V";
+
   return {
     ok: true,
-    trace: { id: `expr:${trimmed}`, label: trimmed, unit: "V", color, values },
+    trace: { id: `expr:${trimmed}`, label: trimmed, unit, color, values },
   };
 }
