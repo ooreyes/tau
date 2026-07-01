@@ -25,6 +25,7 @@ import type { MeasResult } from "../simulation/measure";
 import type { FourierResult } from "../simulation/fourier";
 import { evaluatePlotExpression } from "../simulation/plotExpression";
 import { commonTraceUnit } from "../simulation/exprUnit";
+import { groupDelay } from "../simulation/groupDelay";
 import { seriesToCsv } from "../simulation/waveformCsv";
 import { runWaveformFft, dominantFrequency, spectrumThd, type WindowFn } from "../simulation/fft";
 import { buildSpiceDeck } from "../engine/spiceNetlist";
@@ -1356,6 +1357,14 @@ function AcPlot({ result }: { result: AcResult | null }) {
       if (Number.isFinite(db)) peak = Math.max(peak, db);
     }
   }
+  // Peak group delay τ = -dφ/dω of the primary (first) output trace — the
+  // network's worst-case envelope delay in the swept band (LTspice §6).
+  let peakGroupDelay = 0;
+  if (traces.length > 0) {
+    for (const tau of groupDelay(result.freqs, traces[0].phaseDeg)) {
+      if (Number.isFinite(tau) && Math.abs(tau) > Math.abs(peakGroupDelay)) peakGroupDelay = tau;
+    }
+  }
 
   return (
     <>
@@ -1403,6 +1412,7 @@ function AcPlot({ result }: { result: AcResult | null }) {
         <Metric label="START" value={formatEngineering(result.freqs[0] ?? 0, "Hz", 0)} tone="green" />
         <Metric label="POINTS" value={String(result.freqs.length)} tone="cyan" />
         <Metric label="PEAK" value={Number.isFinite(peak) ? `${peak.toFixed(1)} dB` : "--"} tone="cream" />
+        <Metric label="GRP DELAY" value={traces.length > 0 ? formatEngineering(peakGroupDelay, "s", 2) : "--"} tone="cyan" />
       </div>
     </>
   );

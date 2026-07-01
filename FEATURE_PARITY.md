@@ -648,8 +648,11 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   instantaneous power `V(out)*I(R1)` all resolve against node-voltage traces +
   branch-current waveforms — one evaluator shared with measurements. Bad signal
   names surface a clear error; added/removed via labelled chips. 6 hand-computed
-  tests. **NEXT:** per-trace axis/unit (power shows on a "V" axis for now);
-  expression traces in the AC/step panes; cursor readout.
+  tests. **Per-trace axis/unit now landed** (`simulation/exprUnit.ts`,
+  16 tests): a plotted expression is labelled by its physical dimension — `I(R1)`
+  → A, `V(out)*I(R1)` → W, `V/I` → Ω — and the scope value axis shows the traces'
+  shared unit (`commonTraceUnit`) instead of always "V". **NEXT:**
+  expression traces in the AC/step panes; dual axis for mixed V+A panes.
 - ⬜ Multiple plot panes, add/remove traces, autorange, manual axis
 - ✅ **Measurement cursors** (1 & 2, delta readout) — `simulation/cursors.ts`
   (`cursorReadout`/`fractionToX`, 8 unit tests) + a collapsible **Cursors** panel
@@ -681,7 +684,15 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   bins nearest `2f₀,3f₀,…` to Nyquist; exact for a leakage-free signal — 50% for
   a half-amplitude 2nd harmonic, hand-verified). **NEXT:** measurement cursor on
   the FFT/transient plots (delta readout between two clicked points).
-- ⬜ Log/linear axes, dB, phase, group delay
+- 🟡 Log/linear axes, dB, phase, **group delay** — **group delay landed**
+  (`simulation/groupDelay.ts`, 12 tests): pure `groupDelay(freqs, phaseDeg)`
+  computes τ = −dφ/dω in seconds — phase is **unwrapped** first (`unwrapPhaseDeg`
+  removes ±360° cliffs so a response that sweeps past ±180° doesn't spike), then
+  central-differenced (one-sided at the ends) with the degrees→Hz conversion
+  τ = −dφ_deg/(360·df). Hand-verified: a linear-phase pure delay gives constant τ,
+  flat phase gives 0, and an unwrapped ±180 crossing stays smooth. The AC pane's
+  meter row now shows the primary trace's **peak group delay**. Still ⬜:
+  log/linear axis toggle, standalone phase pane, group-delay trace overlay.
 - 🟡 `.step` family-of-curves overlay — **transient overlay landed** (`StepPlot`
   in `SimulationPanel`): the **STEP** tab re-runs the sweep and draws the probed
   signal across all step members in a color ramp; legend lists each `name=value`.
