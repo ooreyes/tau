@@ -642,6 +642,8 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   **Added the remaining LTspice built-ins:** inverse hyperbolics
   `asinh/acosh/atanh`, `arcsin/arccos/arctan` aliases, `nint`, `db` (20·log10|x|),
   and the boolean helpers `and/or/not/xor` (0.5-thresholded like `buf`/`inv`).
+  Constants now include LTspice's spelled-out aliases `boltz`/`echarge`/`planck`/
+  `kelvin` alongside `pi`/`e`/`k`/`q`.
 - ✅ `.step param x list/range` driving the above — `simulation/paramStep.ts`
   `runParamStep` binds each swept value into the `ParamScope` (`withStepValue`)
   so `{...}` component values re-resolve per step; **`buildParamScope` now also

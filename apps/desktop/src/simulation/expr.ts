@@ -297,6 +297,11 @@ const CONSTS: Record<string, number> = {
   // Boltzmann / charge, occasionally referenced in noise/thermal expressions.
   k: 1.380649e-23,
   q: 1.602176634e-19,
+  // LTspice's fully-spelled physical-constant aliases.
+  boltz: 1.380649e-23, // Boltzmann's constant (= k)
+  echarge: 1.602176634e-19, // electron charge (= q)
+  planck: 6.62607015e-34, // Planck's constant
+  kelvin: -273.15, // 0 K in °C (LTspice's absolute-zero offset)
 };
 
 const bool = (b: boolean) => (b ? 1 : 0);

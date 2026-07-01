@@ -8,7 +8,7 @@
      `git log --oneline -8`, recover/finish/revert that unit FIRST, then go on.
      ─────────────────────────────────────────────────────────────────────── -->
 ## ⏱ HEARTBEAT
-- **Headline metric:** 965 tests green · `.step temp` + expr builtins + nested `.step`
+- **Headline metric:** 966 tests green · `.step temp` + expr builtins/constants + nested `.step`
 - **Run started (UTC):** 2026-07-01T18:10Z
 - **Synced to origin:** auto/ltspice-parity @ latest
 - **Claimed unit:** §4 nested `.step` (outer×inner Cartesian sweep) — DONE

@@ -90,6 +90,17 @@ describe("evaluateExpression — variables & constants", () => {
     expect(ev("2*pi*60")).toBeCloseTo(2 * Math.PI * 60, 9);
   });
 
+  it("knows physical constants and their LTspice aliases", () => {
+    expect(ev("k")).toBeCloseTo(1.380649e-23, 30);
+    expect(ev("boltz")).toBe(ev("k"));
+    expect(ev("q")).toBeCloseTo(1.602176634e-19, 27);
+    expect(ev("echarge")).toBe(ev("q"));
+    expect(ev("planck")).toBeCloseTo(6.62607015e-34, 40);
+    expect(ev("kelvin")).toBeCloseTo(-273.15, 12);
+    // A thermal-voltage expression kT/q at 300 K.
+    expect(ev("k*300/q")).toBeCloseTo(0.025852, 6);
+  });
+
   it("throws on unknown variable", () => {
     expect(() => ev("nope")).toThrow();
   });
