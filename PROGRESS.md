@@ -8,13 +8,48 @@
      `git log --oneline -8`, recover/finish/revert that unit FIRST, then go on.
      ─────────────────────────────────────────────────────────────────────── -->
 ## ⏱ HEARTBEAT
-- **Headline metric:** acceptance import — see latest dated entry below · tests green
-- **Run started (UTC):** 2026-06-30T16:14Z (last known)
-- **Synced to origin:** auto/ltspice-parity @ latest
-- **Claimed unit:** —
+- **Headline metric:** 918 tests green (+16) · per-trace expression units shipped
+- **Run started (UTC):** 2026-07-01T00:06Z
+- **Synced to origin:** auto/ltspice-parity @ 98c1f1b
+- **Claimed unit:** §6 per-trace expression unit inference (rescued WIP) — DONE
 - **Status:** DONE
-- **Last checkpoint commit:** see `git log --oneline -1`
+- **Last checkpoint commit:** 98c1f1b
 - **Next step (for the following run):** pick the next unchecked FEATURE_PARITY item.
+
+---
+
+## 2026-07-01T00:06Z — auto/ltspice-parity — per-trace physical unit for plotted expressions (§6)
+
+### What I did
+- Recovered the rescued WIP checkpoint (`origin/auto/ltspice-parity-wip`) which
+  added `exprUnit.ts` (dimensional inference) but died mid-wiring: the
+  `commonTraceUnit` import in `SimulationPanel` was unused (would break a clean
+  build) and the scope axis still hardcoded "V".
+- Finished the integration: the scope value-axis MAX/MIN labels now format with
+  the traces' shared unit via `commonTraceUnit(traces.map(t => t.unit)) || "V"`,
+  so a probed branch current reads in A, a `V·I` power expression in W, etc.
+- Added `exprUnit.test.ts` — 16 hand-computed cases covering V/A/W/Ω/S, scaling,
+  abs/min/max dimension preservation, transcendental unit-stripping, mismatched
+  sums, malformed input (never throws), and `commonTraceUnit` agreement/disagree.
+
+### Files touched
+- src/simulation/exprUnit.ts (from WIP), src/simulation/exprUnit.test.ts (new, 16)
+- src/simulation/expr.ts (export Node), src/simulation/linearTransient.ts (TraceUnit)
+- src/simulation/plotExpression.ts (label by inferred unit)
+- src/components/SimulationPanel.tsx (axis unit from commonTraceUnit)
+
+### Tests
+918 passing (+16 new) — all green; typecheck clean.
+
+### FEATURE_PARITY items updated
+- §6 "plot arbitrary expressions" — per-trace axis unit now correct (A/W/Ω), not always V.
+
+### UX issues found
+- None new. Scope axis still shows only one shared unit; a mixed V+A pane falls
+  back to "V" (LTspice would use a dual axis) — noted as future §6 polish.
+
+### Next step
+- Pick the next unchecked FEATURE_PARITY item (continue §6 viewer polish or §4/§3).
 
 ---
 
