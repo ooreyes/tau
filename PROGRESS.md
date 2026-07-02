@@ -10,18 +10,22 @@
 ## ⏱ HEARTBEAT
 - **Headline metric:** 1075 tests green · baseline verified this run
 - **Run started (UTC):** 2026-07-02T22:05Z
-- **Synced to origin:** auto/ltspice-parity @ 59d71cd
-- **Claimed unit:** §6 FFT measurement cursors — two log-frequency cursors on
-  the FFT spectrum with f1/f2, dB@each, ΔdB and dB/decade slope readout.
-- **Status:** DONE
-- **Files:** simulation/cursors.ts (`logFractionToX`, `dbPerDecade` + 7 tests),
-  SimulationPanel.tsx FftView, App.css, fft.ts + fourier.ts `resolveSignal`
-  label fix (+2 regression tests), FEATURE_PARITY §6.
-- **Verify:** done — hand-computed unit tests, suite 1075 green, typecheck
-  clean, Playwright screenshot of FFT open with cursors placed reviewed.
-- **Last completed sub-step:** §6 FFT cursors unit complete (this run).
-- **Next step (for the following run):** §6 DC operating point annotation on
-  the schematic (show node V / device I in-place) — the remaining ⬜ in §6.
+- **Synced to origin:** auto/ltspice-parity @ 0f63b11
+- **Claimed unit:** §6 DC operating point annotation — after an OP run, the
+  schematic (simulator mode) shows each net's voltage in place and V-source/
+  inductor branch currents at their components.
+- **Status:** IN PROGRESS
+- **Files:** new simulation/opAnnotations.ts `opAnnotations(op, circuit)`
+  (+tests, anchor = topmost-leftmost net point / component pos), App.tsx
+  (returnBranches on JS OP fallback; pass opAnalysis to Canvas), Canvas.tsx
+  (render .op-annotation texts when !interactive && op.ok), App.css.
+- **Verify:** hand-computed tests on the divider circuit (V(out)=Vin/2 at the
+  right anchor, I(V1) sign, ground skipped, null/failed op → []); suite ≥1075;
+  typecheck; Playwright screenshot of annotated schematic after OP run.
+- **Last completed sub-step:** unit claimed (previous unit §6 FFT cursors DONE
+  @ 0f63b11).
+- **Next step (if killed):** implement opAnnotations.ts + tests first, then
+  wire App/Canvas, then visual QA.
 
 ---
 
