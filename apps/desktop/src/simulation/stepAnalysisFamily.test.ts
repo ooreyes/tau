@@ -13,6 +13,9 @@ import {
   runStepFamily,
   runAcStepFamily,
   runDcStepFamily,
+  acFamilyOverlaySeries,
+  dcFamilyOverlaySeries,
+  type AnalysisFamily,
 } from "./stepAnalysisFamily";
 import type { AcResult } from "./acSweep";
 import type { DcSweepResult } from "./dcSweep";
@@ -215,5 +218,201 @@ describe("runDcStepFamily", () => {
     const fam = runDcStepFamily([spec], base, { components: steppedDivider(), wires: [] }, dcSpec);
     expect(fam.ok).toBe(true);
     expect(midSeries(fam.members[0].result, 0.5)).toEqual([0, 1, 2, 3, 4, 5]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Overlay selectors — reduce a family to the one signal the UI draws per step.
+// Hand-built members pin the selection rules exactly; one end-to-end case each
+// proves the selectors compose with the real wrappers.
+// ---------------------------------------------------------------------------
+
+const acMember = (label: string, magDb: number[]) => ({
+  label,
+  value: 0,
+  result: {
+    ok: true as const,
+    freqs: [10, 100, 1000],
+    traces: [{ id: "n1", label: "V(out)", magDb, phaseDeg: [0, -45, -90] }],
+    warnings: [],
+  },
+});
+
+const acFamily = (members: AnalysisFamily<AcResult>["members"]): AnalysisFamily<AcResult> => ({
+  ok: members.some((m) => m.result.ok),
+  members,
+  warnings: [],
+});
+
+describe("acFamilyOverlaySeries", () => {
+  it("returns null for missing or failed families", () => {
+    expect(acFamilyOverlaySeries(null)).toBeNull();
+    expect(acFamilyOverlaySeries(undefined)).toBeNull();
+    expect(acFamilyOverlaySeries({ ok: false, members: [], warnings: [] })).toBeNull();
+  });
+
+  it("picks the first ok member's first trace and follows it by id", () => {
+    const fam = acFamily([
+      { label: "R=1k", value: 1000, result: { ok: false, message: "x", warnings: [] } },
+      acMember("R=2k", [0, -3, -20]),
+      acMember("R=4k", [0, -6, -26]),
+    ]);
+    const overlay = acFamilyOverlaySeries(fam);
+    expect(overlay).not.toBeNull();
+    expect(overlay!.signal).toBe("V(out)");
+    expect(overlay!.series.map((s) => s.label)).toEqual(["R=2k", "R=4k"]);
+    expect(overlay!.series[0].magDb).toEqual([0, -3, -20]);
+    expect(overlay!.series[1].magDb).toEqual([0, -6, -26]);
+    expect(overlay!.series[0].freqs).toEqual([10, 100, 1000]);
+    expect(overlay!.series[0].phaseDeg).toEqual([0, -45, -90]);
+  });
+
+  it("prefers the first trace that responds to the step over a flat source node", () => {
+    const withInput = (label: string, outDb: number[]) => ({
+      label,
+      value: 0,
+      result: {
+        ok: true as const,
+        freqs: [10, 100, 1000],
+        traces: [
+          // The AC source node: 0 dB in every member — a useless family.
+          { id: "in", label: "V(in)", magDb: [0, 0, 0], phaseDeg: [0, 0, 0] },
+          { id: "out", label: "V(out)", magDb: outDb, phaseDeg: [0, -45, -90] },
+        ],
+        warnings: [],
+      },
+    });
+    const overlay = acFamilyOverlaySeries(
+      acFamily([withInput("R=1k", [0, -3, -20]), withInput("R=2k", [0, -7, -26])]),
+    );
+    expect(overlay!.signal).toBe("V(out)");
+    expect(overlay!.series.map((s) => s.magDb)).toEqual([[0, -3, -20], [0, -7, -26]]);
+  });
+
+  it("falls back to the first trace when every signal is flat across members", () => {
+    const overlay = acFamilyOverlaySeries(acFamily([acMember("A=1", [0, -3, -20]), acMember("A=2", [0, -3, -20])]));
+    expect(overlay!.signal).toBe("V(out)");
+    expect(overlay!.series).toHaveLength(2);
+  });
+
+  it("skips a member that lost the chosen signal instead of failing", () => {
+    const fam = acFamily([
+      acMember("A=1", [0, -1, -2]),
+      {
+        label: "A=2",
+        value: 2,
+        result: {
+          ok: true,
+          freqs: [10, 100, 1000],
+          traces: [{ id: "other", label: "V(x)", magDb: [1, 1, 1], phaseDeg: [0, 0, 0] }],
+          warnings: [],
+        },
+      },
+    ]);
+    const overlay = acFamilyOverlaySeries(fam);
+    expect(overlay!.series.map((s) => s.label)).toEqual(["A=1"]);
+  });
+
+  it("returns null when a member is ok but has no traces at all", () => {
+    const fam = acFamily([
+      { label: "A=1", value: 1, result: { ok: true, freqs: [10], traces: [], warnings: [] } },
+    ]);
+    expect(acFamilyOverlaySeries(fam)).toBeNull();
+  });
+
+  it("composes with runAcStepFamily: one curve per step, more R = more rolloff", () => {
+    const spec = parseStepDirective(".step param Rval list 1k 2k")!;
+    const fam = runAcStepFamily(
+      [spec],
+      EMPTY_SCOPE,
+      { components: rcLowpass(), wires: [] },
+      { startHz: 10, stopHz: 100_000, pointsPerDecade: 20 },
+    );
+    const overlay = acFamilyOverlaySeries(fam);
+    expect(overlay).not.toBeNull();
+    expect(overlay!.series.map((s) => s.label)).toEqual(["Rval=1000", "Rval=2000"]);
+    // The same signal is followed across members; the two curves must differ
+    // somewhere in the band (the corner moved), sharing one frequency grid.
+    const [a, b] = overlay!.series;
+    expect(a.freqs).toEqual(b.freqs);
+    expect(a.magDb.some((db, i) => Math.abs(db - b.magDb[i]) > 1)).toBe(true);
+  });
+});
+
+const dcMember = (label: string, ratio: number) => ({
+  label,
+  value: ratio,
+  result: {
+    ok: true as const,
+    source: "V1",
+    sweep: [0, 5, 10],
+    nets: [
+      { id: "gnd", label: "GND", voltages: [0, 0, 0], ground: true },
+      { id: "mid", label: "V(mid)", voltages: [0, 5 * ratio, 10 * ratio], ground: false },
+    ],
+    warnings: [],
+  },
+});
+
+describe("dcFamilyOverlaySeries", () => {
+  it("returns null for missing or failed families", () => {
+    expect(dcFamilyOverlaySeries(null)).toBeNull();
+    expect(dcFamilyOverlaySeries(undefined)).toBeNull();
+    expect(dcFamilyOverlaySeries({ ok: false, members: [], warnings: [] })).toBeNull();
+  });
+
+  it("picks the first non-ground net and follows it across members", () => {
+    const fam: AnalysisFamily<DcSweepResult> = {
+      ok: true,
+      members: [dcMember("Rt=1k", 0.5), dcMember("Rt=3k", 0.25)],
+      warnings: [],
+    };
+    const overlay = dcFamilyOverlaySeries(fam);
+    expect(overlay).not.toBeNull();
+    expect(overlay!.signal).toBe("V(mid)");
+    expect(overlay!.series.map((s) => s.label)).toEqual(["Rt=1k", "Rt=3k"]);
+    expect(overlay!.series[0].voltages).toEqual([0, 2.5, 5]);
+    expect(overlay!.series[1].voltages).toEqual([0, 1.25, 2.5]);
+    expect(overlay!.series[0].sweep).toEqual([0, 5, 10]);
+  });
+
+  it("returns null when the only nets are ground", () => {
+    const fam: AnalysisFamily<DcSweepResult> = {
+      ok: true,
+      members: [
+        {
+          label: "A=1",
+          value: 1,
+          result: {
+            ok: true,
+            source: "V1",
+            sweep: [0, 1],
+            nets: [{ id: "gnd", label: "GND", voltages: [0, 0], ground: true }],
+            warnings: [],
+          },
+        },
+      ],
+      warnings: [],
+    };
+    expect(dcFamilyOverlaySeries(fam)).toBeNull();
+  });
+
+  it("composes with runDcStepFamily: one transfer curve per step value", () => {
+    const spec = parseStepDirective(".step param Rt list 1k 3k")!;
+    const fam = runDcStepFamily(
+      [spec],
+      EMPTY_SCOPE,
+      { components: steppedDivider(), wires: [] },
+      { source: "V1", start: 0, stop: 10, step: 2 },
+    );
+    const overlay = dcFamilyOverlaySeries(fam);
+    expect(overlay).not.toBeNull();
+    expect(overlay!.series).toHaveLength(2);
+    // The selector must follow the divider midpoint (the net that responds to
+    // the step), not the swept source's own node: ratio 0.5 then 0.25.
+    const [a, b] = overlay!.series;
+    expect(a.sweep).toEqual([0, 2, 4, 6, 8, 10]);
+    a.voltages.forEach((v, k) => expect(v).toBeCloseTo(a.sweep[k] * 0.5, 9));
+    b.voltages.forEach((v, k) => expect(v).toBeCloseTo(b.sweep[k] * 0.25, 9));
   });
 });

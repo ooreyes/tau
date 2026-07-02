@@ -21,6 +21,11 @@ import type { DcSweepResult, DcSweepNet } from "../simulation/dcSweep";
 import type { TfResult } from "../simulation/transferFunction";
 import type { NoiseResult } from "../simulation/noise";
 import type { StepFamilyResult } from "../simulation/stepFamily";
+import {
+  acFamilyOverlaySeries,
+  dcFamilyOverlaySeries,
+  type AnalysisFamily,
+} from "../simulation/stepAnalysisFamily";
 import type { MeasResult } from "../simulation/measure";
 import type { FourierResult } from "../simulation/fourier";
 import { evaluatePlotExpression } from "../simulation/plotExpression";
@@ -58,6 +63,9 @@ interface SimulationPanelProps {
   tfResult: TfResult | null;
   noiseResult: NoiseResult | null;
   stepResult: StepFamilyResult | null;
+  /** `.step` families of the AC/DC analyses, drawn as extra curves on their panes. */
+  acStepFamily: AnalysisFamily<AcResult> | null;
+  dcStepFamily: AnalysisFamily<DcSweepResult> | null;
   measurements: MeasResult[];
   fourier: FourierResult[];
   acMeasurements: MeasResult[];
@@ -90,6 +98,8 @@ export function SimulationPanel({
   tfResult,
   noiseResult,
   stepResult,
+  acStepFamily,
+  dcStepFamily,
   measurements,
   fourier,
   acMeasurements,
@@ -720,6 +730,7 @@ export function SimulationPanel({
               ))}
             </div>
           )}
+          <AcFamilyPlot family={acStepFamily} />
           <MeasTable measurements={acMeasurements} />
         </>
       )}
@@ -766,6 +777,7 @@ export function SimulationPanel({
               ))}
             </div>
           )}
+          <DcFamilyPlot family={dcStepFamily} />
           <MeasTable measurements={dcMeasurements} />
         </>
       )}
@@ -2059,6 +2071,199 @@ function pickFamilyTraceId(success: Extract<AnalysisResult, { ok: true }>, probe
     if (trace) return trace.id;
   }
   return success.traces[0]?.id ?? null;
+}
+
+/**
+ * The AC counterpart of {@link StepPlot}, shown under the Bode pane when the
+ * document carries a runnable `.step`: one magnitude curve per swept value of
+ * the signal chosen by {@link acFamilyOverlaySeries}, on its own log-f/dB axes
+ * autoranged over the whole family (snapped to 10 dB like the main Bode plot).
+ */
+function AcFamilyPlot({ family }: { family: AnalysisFamily<AcResult> | null }) {
+  const overlay = useMemo(() => acFamilyOverlaySeries(family), [family]);
+  const plot = useMemo(() => {
+    if (!overlay) return null;
+    let rawMin = 0;
+    let rawMax = 0;
+    let found = false;
+    let fLo = Infinity;
+    let fHi = -Infinity;
+    for (const s of overlay.series) {
+      for (const db of s.magDb) {
+        if (!Number.isFinite(db) || db <= -250) continue;
+        if (!found) {
+          rawMin = db;
+          rawMax = db;
+          found = true;
+        } else {
+          rawMin = Math.min(rawMin, db);
+          rawMax = Math.max(rawMax, db);
+        }
+      }
+      for (const f of s.freqs) {
+        if (!Number.isFinite(f) || f <= 0) continue;
+        fLo = Math.min(fLo, f);
+        fHi = Math.max(fHi, f);
+      }
+    }
+    if (!found || !Number.isFinite(fLo)) return null;
+    const max = Math.ceil(Math.max(rawMax, 0) / 10) * 10;
+    const min = Math.floor(Math.min(rawMin, max - 10) / 10) * 10;
+    return { min, max, f0: Math.log10(fLo), f1: Math.log10(fHi > fLo ? fHi : fLo * 10) };
+  }, [overlay]);
+
+  if (!family) return null;
+  if (!family.ok) {
+    // When every member failed, surface the first member's own error (e.g. a
+    // singular matrix) instead of a generic banner.
+    const memberError = family.members.map((m) => (m.result.ok ? null : m.result.message)).find((m) => m);
+    return <div className="analysis-empty">{family.message ?? memberError ?? "The .step sweep could not run."}</div>;
+  }
+  if (!overlay || !plot) return null;
+
+  return (
+    <>
+      <div className="scope-shell">
+        <svg className="scope-svg" viewBox={`0 0 ${PLOT_WIDTH} ${PLOT_HEIGHT}`} role="img" aria-label="AC step family plot">
+          <g className="scope-grid">
+            {Array.from({ length: 6 }).map((_, i) => {
+              const x = PLOT_PAD + (i * (PLOT_WIDTH - PLOT_PAD * 2)) / 5;
+              return <line key={`x${i}`} x1={x} y1={PLOT_PAD} x2={x} y2={PLOT_HEIGHT - PLOT_PAD} />;
+            })}
+            {Array.from({ length: 5 }).map((_, i) => {
+              const y = PLOT_PAD + (i * (PLOT_HEIGHT - PLOT_PAD * 2)) / 4;
+              return <line key={`y${i}`} x1={PLOT_PAD} y1={y} x2={PLOT_WIDTH - PLOT_PAD} y2={y} />;
+            })}
+          </g>
+          <rect className="scope-frame" x={PLOT_PAD} y={PLOT_PAD} width={PLOT_WIDTH - PLOT_PAD * 2} height={PLOT_HEIGHT - PLOT_PAD * 2} />
+          {overlay.series.map((s, i) => (
+            <path
+              key={s.label}
+              className="scope-trace"
+              stroke={STEP_COLORS[i % STEP_COLORS.length]}
+              d={bodeValuePath(s.magDb, s.freqs, plot)}
+            />
+          ))}
+          <text className="scope-axis" x={PLOT_PAD} y={18}>
+            {plot.max} dB
+          </text>
+          <text className="scope-axis" x={PLOT_PAD} y={PLOT_HEIGHT - 8}>
+            {plot.min} dB
+          </text>
+          <text className="scope-axis right" x={PLOT_WIDTH - PLOT_PAD} y={PLOT_HEIGHT - 8}>
+            {formatEngineering(10 ** plot.f1, "Hz", 0)}
+          </text>
+        </svg>
+        <div className="scope-legend">
+          {overlay.series.map((s, i) => (
+            <span key={s.label}>
+              <i style={{ background: STEP_COLORS[i % STEP_COLORS.length] }} />
+              {s.label}
+            </span>
+          ))}
+        </div>
+      </div>
+      <div className="meter-row analysis-meter">
+        <Metric label="SIGNAL" value={overlay.signal} tone="green" />
+        <Metric label="STEPS" value={String(overlay.series.length)} tone="cyan" />
+        <Metric label="SWEEP" value={family.spec?.name ?? "--"} tone="cream" />
+      </div>
+    </>
+  );
+}
+
+/**
+ * The DC counterpart of {@link AcFamilyPlot}: one transfer curve per swept
+ * value of the net chosen by {@link dcFamilyOverlaySeries}, on its own linear
+ * sweep/volts axes autoranged over the whole family.
+ */
+function DcFamilyPlot({ family }: { family: AnalysisFamily<DcSweepResult> | null }) {
+  const overlay = useMemo(() => dcFamilyOverlaySeries(family), [family]);
+  const plot = useMemo(() => {
+    if (!overlay) return null;
+    let vMin = Infinity;
+    let vMax = -Infinity;
+    let xMin = Infinity;
+    let xMax = -Infinity;
+    for (const s of overlay.series) {
+      for (const v of s.voltages) {
+        if (!Number.isFinite(v)) continue;
+        vMin = Math.min(vMin, v);
+        vMax = Math.max(vMax, v);
+      }
+      for (const x of s.sweep) {
+        if (!Number.isFinite(x)) continue;
+        xMin = Math.min(xMin, x);
+        xMax = Math.max(xMax, x);
+      }
+    }
+    if (!Number.isFinite(vMin) || !Number.isFinite(xMin)) return null;
+    // Pad a flat family so it sits mid-frame instead of on an axis edge.
+    if (vMax - vMin < 1e-12) {
+      vMin -= 0.5;
+      vMax += 0.5;
+    }
+    return { vMin, vMax, xMin, xMax };
+  }, [overlay]);
+
+  if (!family) return null;
+  if (!family.ok) {
+    // When every member failed, surface the first member's own error (e.g. a
+    // singular matrix) instead of a generic banner.
+    const memberError = family.members.map((m) => (m.result.ok ? null : m.result.message)).find((m) => m);
+    return <div className="analysis-empty">{family.message ?? memberError ?? "The .step sweep could not run."}</div>;
+  }
+  if (!overlay || !plot) return null;
+
+  return (
+    <>
+      <div className="scope-shell">
+        <svg className="scope-svg" viewBox={`0 0 ${PLOT_WIDTH} ${PLOT_HEIGHT}`} role="img" aria-label="DC step family plot">
+          <g className="scope-grid">
+            {Array.from({ length: 6 }).map((_, i) => {
+              const x = PLOT_PAD + (i * (PLOT_WIDTH - PLOT_PAD * 2)) / 5;
+              return <line key={`x${i}`} x1={x} y1={PLOT_PAD} x2={x} y2={PLOT_HEIGHT - PLOT_PAD} />;
+            })}
+            {Array.from({ length: 5 }).map((_, i) => {
+              const y = PLOT_PAD + (i * (PLOT_HEIGHT - PLOT_PAD * 2)) / 4;
+              return <line key={`y${i}`} x1={PLOT_PAD} y1={y} x2={PLOT_WIDTH - PLOT_PAD} y2={y} />;
+            })}
+          </g>
+          <rect className="scope-frame" x={PLOT_PAD} y={PLOT_PAD} width={PLOT_WIDTH - PLOT_PAD * 2} height={PLOT_HEIGHT - PLOT_PAD * 2} />
+          {overlay.series.map((s, i) => (
+            <path
+              key={s.label}
+              className="scope-trace"
+              stroke={STEP_COLORS[i % STEP_COLORS.length]}
+              d={dcPath(s.voltages, s.sweep, plot)}
+            />
+          ))}
+          <text className="scope-axis" x={PLOT_PAD} y={18}>
+            {formatEngineering(plot.vMax, "V", 2)}
+          </text>
+          <text className="scope-axis" x={PLOT_PAD} y={PLOT_HEIGHT - 8}>
+            {formatEngineering(plot.vMin, "V", 2)}
+          </text>
+          <text className="scope-axis right" x={PLOT_WIDTH - PLOT_PAD} y={PLOT_HEIGHT - 8}>
+            {formatEngineering(plot.xMax, "", 2)}
+          </text>
+        </svg>
+        <div className="scope-legend">
+          {overlay.series.map((s, i) => (
+            <span key={s.label}>
+              <i style={{ background: STEP_COLORS[i % STEP_COLORS.length] }} />
+              {s.label}
+            </span>
+          ))}
+        </div>
+      </div>
+      <div className="meter-row analysis-meter">
+        <Metric label="SIGNAL" value={overlay.signal} tone="green" />
+        <Metric label="STEPS" value={String(overlay.series.length)} tone="cyan" />
+        <Metric label="SWEEP" value={family.spec?.name ?? "--"} tone="cream" />
+      </div>
+    </>
+  );
 }
 
 /** A compact table of `.meas` results, shown under the transient scope. */

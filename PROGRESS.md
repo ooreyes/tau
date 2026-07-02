@@ -8,22 +8,62 @@
      `git log --oneline -8`, recover/finish/revert that unit FIRST, then go on.
      ─────────────────────────────────────────────────────────────────────── -->
 ## ⏱ HEARTBEAT
-- **Headline metric:** 1031 tests green · recovering AC/DC `.step` family UI from wip
+- **Headline metric:** 1042 tests green · AC/DC `.step` families render under their panes
 - **Run started (UTC):** 2026-07-02T10:35Z
-- **Synced to origin:** auto/ltspice-parity @ 7dd91cf
-- **Claimed unit:** recover wip `ac2021c` (§4/§6 AC/DC `.step` family → SimulationPanel):
-  take `stepAnalysisFamily.ts` reducers + tests + `App.tsx` wiring verbatim (files
-  unchanged since wip base e5cd552); reapply SimulationPanel props by hand (file
-  gained multi-pane since); FINISH the unrendered part — draw family overlays on
-  the AC and DC panes. Verify: typecheck + tests ≥1031 + screenshot QA.
-- **Status:** IN PROGRESS
-- **Last completed sub-step:** heartbeat claim (nothing integrated yet)
-- **After this unit:** REVIEW SESSION (0 `review:` commits in last 30) — no new features.
+- **Synced to origin:** auto/ltspice-parity @ latest
+- **Claimed unit:** wip `ac2021c` recovery (§4/§6 AC/DC `.step` family UI) — DONE
+- **Status:** DONE
+- **Last completed sub-step:** family overlays rendered + screenshot-verified; unit closed
+- **Next step (this session):** REVIEW SESSION (0 `review:` commits in last 30) —
+  diff review since ~e5cd552 + full UI/UX screenshot audit; fixes prefixed `review:`.
 
-> **Note on the `-wip` rescue branch:** tip `ac2021c` (2026-07-02T10:29Z) is REAL
-> unfinished work (AC/DC family overlay reducers + tests + partial UI threading),
-> based on e5cd552 — its SimulationPanel hunk is polluted with the pre-multi-pane
-> file and must NOT be cherry-picked wholesale.
+> **Note on the `-wip` rescue branch:** tip `ac2021c` is now fully integrated
+> (reducers/tests/App wiring taken verbatim; SimulationPanel reapplied by hand on
+> top of the multi-pane scope, plus the previously-unwritten AcFamilyPlot/
+> DcFamilyPlot rendering). Nothing left to salvage.
+
+---
+
+## 2026-07-02T10:55Z — auto/ltspice-parity — AC/DC `.step` families in the UI (§4/§6)
+
+### What I did
+- Recovered wip `ac2021c` (killed mid-unit): took `stepAnalysisFamily.ts`
+  (generic `runStepFamily` core + `runAcStepFamily`/`runDcStepFamily` + the
+  `acFamilyOverlaySeries`/`dcFamilyOverlaySeries` reducers that pick the
+  step-responsive signal), its 11 new tests, and the `App.tsx` wiring verbatim
+  (both files unchanged on the branch since the wip base e5cd552).
+- The wip's SimulationPanel hunk was based on the pre-multi-pane file and would
+  have reverted `fac8fe6`; reapplied its intent by hand instead (imports + the
+  two new props threaded through).
+- Wrote the part the dead session never reached: `AcFamilyPlot` / `DcFamilyPlot`
+  render the family under the Bode/DC panes — STEP_COLORS ramp, `name=value`
+  legend, autoranged log-f/dB and sweep/volts axes, SIGNAL/STEPS/SWEEP metrics,
+  and per-member error surfacing when every member fails (found via QA: the
+  generic banner hid the real "matrix is singular" cause).
+
+### Files touched
+- apps/desktop/src/simulation/stepAnalysisFamily.ts (+ .test.ts)
+- apps/desktop/src/App.tsx
+- apps/desktop/src/components/SimulationPanel.tsx
+- FEATURE_PARITY.md, PROGRESS.md
+
+### Tests
+1042 passing (71 files), 11 new — passed. typecheck clean.
+
+### FEATURE_PARITY items updated
+- §6 `.step` family-of-curves: transient+AC+DC families now landed (stays 🟡
+  pending per-trace selection and cursor readout).
+
+### UX issues found
+- Scripted QA pipeline note: `.asc` written by hand desyncs from Tau pin
+  geometry (matrix singular) — use a `.cir` netlist for QA fixtures instead;
+  reusable script at /tmp/tau-qa-project/qa-step-family.mjs.
+- The DC family of an RC low-pass is three identical lines (physically correct
+  at DC) — could hint "curves coincide" in the legend someday; not a bug.
+
+### Next step
+- REVIEW SESSION: diff review of everything since the last review + UI/UX
+  screenshot audit of the main screens; fixes prefixed `review:`.
 
 ---
 

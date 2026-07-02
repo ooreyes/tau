@@ -40,6 +40,11 @@ import {
   type StepFamilyMember,
   type StepFamilyResult,
 } from "./simulation/stepFamily";
+import {
+  runAcStepFamily,
+  runDcStepFamily,
+  type AnalysisFamily,
+} from "./simulation/stepAnalysisFamily";
 import { buildParamScope, EMPTY_SCOPE, type ParamScope } from "./simulation/paramScope";
 import { parseCouplingSpecs, type CouplingSpec } from "./simulation/coupling";
 import { analysesFromDirectives } from "./io/directiveAnalysis";
@@ -140,6 +145,10 @@ function App() {
   const [tfAnalysis, setTfAnalysis] = useState<TfResult | null>(null);
   const [noiseAnalysis, setNoiseAnalysis] = useState<NoiseResult | null>(null);
   const [stepFamily, setStepFamily] = useState<StepFamilyResult | null>(null);
+  // `.step` families of the AC/DC analyses: computed alongside the base run
+  // whenever the document carries a runnable `.step`, overlaid on their panes.
+  const [acStepFamily, setAcStepFamily] = useState<AnalysisFamily<AcResult> | null>(null);
+  const [dcStepFamily, setDcStepFamily] = useState<AnalysisFamily<DcSweepResult> | null>(null);
   const [analysisRunning, setAnalysisRunning] = useState(false);
   const [runState, setRunState] = useState<"idle" | "complete" | "error" | "stopped">("idle");
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -177,6 +186,8 @@ function App() {
     setTfAnalysis(null);
     setNoiseAnalysis(null);
     setStepFamily(null);
+    setAcStepFamily(null);
+    setDcStepFamily(null);
     setRunState(state);
   }, []);
 
@@ -296,9 +307,23 @@ function App() {
       ) ?? runAcSweep({ components, wires, netLabels, params, couplings }, { startHz: 10, stopHz: 1e6, pointsPerDecade: 20 });
       if (analysisRequestRef.current !== requestId) return;
       setAcAnalysis(result);
+      // A runnable `.step` also produces a family of Bode curves to overlay,
+      // swept over the document's own `.ac` range when it has one (TS solver).
+      const specs = runnableStepsFromDirectives(directives);
+      setAcStepFamily(
+        specs.length > 0
+          ? runAcStepFamily(
+              specs,
+              params,
+              { components, wires, netLabels, couplings },
+              analysesFromDirectives(directives).ac ?? { startHz: 10, stopHz: 1e6, pointsPerDecade: 20 },
+            )
+          : null,
+      );
     } catch (error) {
       if (analysisRequestRef.current !== requestId) return;
       setAcAnalysis({ ok: false, message: error instanceof Error ? error.message : "ngspice could not run this AC sweep.", warnings: [] });
+      setAcStepFamily(null);
     } finally {
       if (analysisRequestRef.current === requestId) setAnalysisRunning(false);
     }
@@ -316,6 +341,7 @@ function App() {
         message: "Add a “.dc <source> <start> <stop> <increment>” directive to sweep a source.",
         warnings: [],
       });
+      setDcStepFamily(null);
       return;
     }
     setAnalysisRunning(true);
@@ -323,9 +349,15 @@ function App() {
       const result = runDcSweep({ components, wires, netLabels, params }, dc);
       if (analysisRequestRef.current !== requestId) return;
       setDcAnalysis(result);
+      // A runnable `.step` also produces a family of transfer curves to overlay.
+      const specs = runnableStepsFromDirectives(directives);
+      setDcStepFamily(
+        specs.length > 0 ? runDcStepFamily(specs, params, { components, wires, netLabels }, dc) : null,
+      );
     } catch (error) {
       if (analysisRequestRef.current !== requestId) return;
       setDcAnalysis({ ok: false, message: error instanceof Error ? error.message : "Could not run this DC sweep.", warnings: [] });
+      setDcStepFamily(null);
     } finally {
       if (analysisRequestRef.current === requestId) setAnalysisRunning(false);
     }
@@ -726,6 +758,8 @@ function App() {
                 tfResult={tfAnalysis}
                 noiseResult={noiseAnalysis}
                 stepResult={stepFamily}
+                acStepFamily={acStepFamily}
+                dcStepFamily={dcStepFamily}
                 measurements={measurements}
                 fourier={fourier}
                 acMeasurements={acMeasurements}

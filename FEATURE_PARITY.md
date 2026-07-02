@@ -760,10 +760,17 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   snap to a swept point; `null` when the loop never crosses. The AC meter row now
   shows **PM** and **GM** (red when negative = unstable). Hand-verified incl. a
   geometric-mean log-space crossover and a negative-PM unstable case.
-- 🟡 `.step` family-of-curves overlay — **transient overlay landed** (`StepPlot`
-  in `SimulationPanel`): the **STEP** tab re-runs the sweep and draws the probed
-  signal across all step members in a color ramp; legend lists each `name=value`.
-  Pending: AC/DC-domain families, per-trace selection, cursor readout.
+- 🟡 `.step` family-of-curves overlay — **transient + AC + DC families landed**.
+  Transient: `StepPlot` in `SimulationPanel` (the **STEP** tab re-runs the sweep
+  and draws the probed signal across all members in a color ramp; legend lists
+  each `name=value`). AC/DC: `simulation/stepAnalysisFamily.ts` re-runs the TS
+  `.ac`/`.dc` solvers per swept value (`runAcStepFamily`/`runDcStepFamily`,
+  generic `runStepFamily` core, nested products) and `acFamilyOverlaySeries`/
+  `dcFamilyOverlaySeries` pick the step-responsive signal; `AcFamilyPlot`/
+  `DcFamilyPlot` draw the family under the Bode/DC panes with a `name=value`
+  legend, autoranged axes, and per-member error surfacing. 11 tests with
+  hand-computed RC-corner / divider-ratio values.
+  Pending: per-trace selection, cursor readout.
 - 🟡 Save plot settings (`.plt`), export image/CSV — **CSV export landed**
   (`simulation/waveformCsv.ts` `seriesToCsv`): an **Export CSV** button on the
   transient scope writes a table of `time` + every node-voltage trace + branch

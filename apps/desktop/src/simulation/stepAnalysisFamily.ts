@@ -101,6 +101,105 @@ export function runStepFamily<R>(
   };
 }
 
+/**
+ * One curve of a family overlay: the chosen signal at one step value. The UI
+ * draws `series` with one color per step and labels each with the step value
+ * (e.g. `Rval=1000`), mirroring the transient `StepPlot`.
+ */
+export interface AcFamilyOverlay {
+  /** The signal plotted across the family (first trace of the first ok member). */
+  signal: string;
+  series: { label: string; freqs: number[]; magDb: number[]; phaseDeg: number[] }[];
+}
+
+/** True when two sampled series differ anywhere beyond numerical noise. */
+function seriesDiffer(a: number[], b: number[]): boolean {
+  const count = Math.min(a.length, b.length);
+  for (let i = 0; i < count; i += 1) {
+    if (Math.abs(a[i] - b[i]) > 1e-9) return true;
+  }
+  return a.length !== b.length;
+}
+
+/**
+ * Reduce an AC `.step` family to one plottable signal across all successful
+ * members. The chosen signal is the first trace of the first ok member that
+ * actually *responds* to the step (differs between members) — a source node
+ * pinned at 0 dB would make a useless family — falling back to the first trace
+ * when everything is flat. Members that lost the signal are skipped, not
+ * errors. Returns `null` when there is nothing to draw (no family, all-failed,
+ * no traces).
+ */
+export function acFamilyOverlaySeries(
+  family: AnalysisFamily<AcResult> | null | undefined,
+): AcFamilyOverlay | null {
+  if (!family?.ok) return null;
+  const ok: { label: string; result: Extract<AcResult, { ok: true }> }[] = [];
+  for (const member of family.members) {
+    if (member.result.ok) ok.push({ label: member.label, result: member.result });
+  }
+  const first = ok[0]?.result;
+  if (!first) return null;
+  const chosen =
+    first.traces.find((t) =>
+      ok.some((m) => {
+        const other = m.result.traces.find((o) => o.id === t.id);
+        return other !== undefined && seriesDiffer(other.magDb, t.magDb);
+      }),
+    ) ?? first.traces[0];
+  if (!chosen) return null;
+  const series: AcFamilyOverlay["series"] = [];
+  for (const member of ok) {
+    const trace = member.result.traces.find((t) => t.id === chosen.id);
+    if (!trace) continue;
+    series.push({ label: member.label, freqs: member.result.freqs, magDb: trace.magDb, phaseDeg: trace.phaseDeg });
+  }
+  return series.length > 0 ? { signal: chosen.label, series } : null;
+}
+
+/** The DC counterpart of {@link AcFamilyOverlay}: one transfer curve per step. */
+export interface DcFamilyOverlay {
+  /** The signal plotted across the family (first non-ground net of the first ok member). */
+  signal: string;
+  series: { label: string; sweep: number[]; voltages: number[] }[];
+}
+
+/**
+ * Reduce a DC `.step` family to one plottable net across all successful
+ * members. Ground (always 0 V) is excluded; among the rest the chosen net is
+ * the first that responds to the step (differs between members) — the swept
+ * source's own node is identical in every member — falling back to the first
+ * non-ground net when everything matches. Returns `null` when there is
+ * nothing to draw.
+ */
+export function dcFamilyOverlaySeries(
+  family: AnalysisFamily<DcSweepResult> | null | undefined,
+): DcFamilyOverlay | null {
+  if (!family?.ok) return null;
+  const ok: { label: string; result: Extract<DcSweepResult, { ok: true }> }[] = [];
+  for (const member of family.members) {
+    if (member.result.ok) ok.push({ label: member.label, result: member.result });
+  }
+  const first = ok[0]?.result;
+  if (!first) return null;
+  const candidates = first.nets.filter((n) => !n.ground);
+  const chosen =
+    candidates.find((n) =>
+      ok.some((m) => {
+        const other = m.result.nets.find((o) => o.id === n.id);
+        return other !== undefined && seriesDiffer(other.voltages, n.voltages);
+      }),
+    ) ?? candidates[0];
+  if (!chosen) return null;
+  const series: DcFamilyOverlay["series"] = [];
+  for (const member of ok) {
+    const net = member.result.nets.find((n) => n.id === chosen.id);
+    if (!net) continue;
+    series.push({ label: member.label, sweep: member.result.sweep, voltages: net.voltages });
+  }
+  return series.length > 0 ? { signal: chosen.label, series } : null;
+}
+
 /** Schematic inputs shared by the AC/DC family wrappers (base, un-swept). */
 export interface FamilySchematic {
   components: SchematicComponent[];
