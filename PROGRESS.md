@@ -11,15 +11,19 @@
 - **Headline metric:** 1051 tests green · baseline verified this run
 - **Run started (UTC):** 2026-07-02T16:15Z
 - **Synced to origin:** auto/ltspice-parity @ 81bba60
-- **Claimed unit:** §7 SPICE suffix semantics (recovered from wip rescue of the
-  2026-07-02T13:15Z run, finished this run).
-- **Status:** DONE
-- **Files:** simulation/quantity.ts (+test), schematic/engineering.ts (+test),
-  simulation/linearTransient.test.ts (1M→1Meg literals), FEATURE_PARITY §7.
-- **Verify:** hand-computed suffix tests (1M=1e-3, 1Meg=1e6, 1mil, 1MHz gotcha,
-  1F=femto, uppercase forms, greek mu); suite 1051 ≥ 1043; typecheck clean.
-- **Last completed sub-step:** unit complete (tests + parity flip + log).
-- **Next step (for the following run):** §6 probe-in-place (click node → plot trace).
+- **Claimed unit:** §6 probe-in-place — in simulator mode (canvas read-only),
+  clicking a wire toggles a probe there (LTspice plot-open→click-wire→trace);
+  plus `netAtPoint` fix so mid-segment probes resolve to their net at all.
+- **Status:** IN PROGRESS
+- **Files:** schematic/netlist.ts `netAtPoint` (+test), components/Canvas.tsx
+  (wire click in !interactive), components/SimulationPanel.tsx (3 resolution
+  sites use the helper), FEATURE_PARITY §6.
+- **Verify:** hand-computed netAtPoint tests (mid-segment, endpoint, ground-net
+  exclusion, off-wire null); suite ≥1051; typecheck; screenshot of simulator
+  mode probing.
+- **Last completed sub-step:** §7 unit complete (previous unit this run).
+- **Next step (for the following run):** §6 measurement cursor on FFT plot, or
+  §4 next missing analysis.
 
 ---
 
