@@ -30,7 +30,7 @@ EVERY RUN, IN ORDER:
    engine changes. Never fake a model/simulation/AI capability.
 5. COMMIT AND PUSH after the unit AND after every meaningful sub-step:
      git add -A && git commit -m "auto: <what landed> (§<section>)" \
-       -m "Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
+       -m "Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
      git push origin HEAD:auto/ltspice-parity
    NEVER hold more than one small unit uncommitted. Push is the only durable
    store — assume the run can be killed at any moment.

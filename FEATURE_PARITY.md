@@ -5,8 +5,9 @@
 > Any agent picks up the next unchecked item. Work loop + **Definition of Done**
 > live in [AGENTS.md](AGENTS.md); live status in the [PROGRESS.md](PROGRESS.md) heartbeat.
 
-> **📊 Headline metric (the finish line):** acceptance import **67 / 82** files
-> warning‑clean · **853 tests** green. **Done = ≥ 80/82 + Class‑D `.tran`/`.meas`
+> **📊 Headline metric (the finish line):** acceptance import **~71 / 82** files
+> warning‑clean (xtal/DIAC/TRIAC/varistor mappings landed; next: Comparators\*
+> vendor pin banks unblock 8 more) · **1031 tests** green. **Done = ≥ 80/82 + Class‑D `.tran`/`.meas`
 > parity + signed DMG** (full checklist in AGENTS.md → Definition of Done).
 
 ---
@@ -40,7 +41,7 @@ serves that goal.** Track progress with these circuits as the test suite.
 - Schematic is source of truth; netlists are DERIVED (`schematic/netlist.ts`).
 - Verify every change: `pnpm -C apps/desktop typecheck` and `pnpm -C apps/desktop test`.
   Validate decks with the installed `ngspice -b file.cir` CLI. ~228 tests currently pass.
-- Commit messages end with `Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>`.
+- Commit messages end with `Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>`.
 - **Worktree gotcha:** isolated agent worktrees branch from the OLD v0.1 scaffold.
   First run `git fetch origin && git merge --ff-only origin/<branch>` and confirm ~228 tests.
 
@@ -238,8 +239,13 @@ Status legend: ✅ done · 🟡 partial · ⬜ not started
   `duplicateSelected` place a `placeClone` (fresh id, next ref-des, 2-grid diagonal
   offset, `pinOverride` offset in lockstep so imported parts stay wired); both
   undoable and select the copy. Bound to Ctrl+C / Ctrl+V / Ctrl+D in `App.tsx`.
-  9 store tests. **Still ⬜: multi-select, drag-box select, group move.**
-- ⬜ **Drag wires / move with rubber-banding** (move a part, wires follow)
+  9 store tests. **Multi-select landed** — `selectedIds` + `selectMultiple`/
+  `toggleSelect` (Shift+click) in the store; drag-box select (fully-enclosed,
+  LTspice semantics, middle-mouse pans) + group move (single undo step) in
+  `Canvas.tsx`; group delete. 10 store tests.
+- ✅ **Drag wires / move with rubber-banding** — `moveGroup` rubber-bands wire
+  endpoints attached to moved pins with orthogonal elbow insertion (store-level,
+  shared by single and group moves).
 - ⬜ Bus wires / bus taps
 - ⬜ `.asc`-style `TEXT` SPICE directives placed on the canvas (free-text directive blocks)
 - ⬜ `.asc`-style `TEXT` comments
@@ -703,7 +709,10 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   bar as the transient scope — add/remove labelled chips, error surfaced inline,
   overlays drawn on the shared magnitude/voltage axis and listed in the legend.
   **NEXT:** expression traces in the step pane; dual axis for mixed V+A.
-- ⬜ Multiple plot panes, add/remove traces, autorange, manual axis
+- 🟡 Multiple plot panes, add/remove traces, autorange — **landed for the
+  transient scope** (`plotPanes.ts` pure pane model + per-pane Y autorange,
+  add/remove pane, per-trace pane selector in the legend; 27 tests). Still ⬜:
+  AC/DC panes, manual axis limits.
 - ✅ **Measurement cursors** (1 & 2, delta readout) — `simulation/cursors.ts`
   (`cursorReadout`/`fractionToX`, 8 unit tests) + a collapsible **Cursors** panel
   on the transient scope (`SimulationPanel` `CursorView`). Two sliders position

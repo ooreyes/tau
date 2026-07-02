@@ -96,7 +96,7 @@ For engine/native or release changes also run: `pnpm --filter @tau/desktop build
 `apps/desktop/src-tauri/`), plus the ignored real‑ngspice smoke test.
 
 Commit messages end with:
-`Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>`
+`Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>`
 
 ---
 
