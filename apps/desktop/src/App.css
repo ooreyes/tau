@@ -1227,6 +1227,24 @@ body {
   cursor: default;
 }
 
+.expr-add.active {
+  background: var(--accent);
+  color: var(--bg);
+}
+
+/* Vertical measurement-cursor lines on the FFT/Bode plots. */
+.plot-cursor line {
+  stroke: var(--accent);
+  stroke-width: 1;
+  stroke-dasharray: 4 3;
+  opacity: 0.8;
+}
+
+.plot-cursor text {
+  fill: var(--accent);
+  font-size: 9px;
+}
+
 .fft-view {
   margin-top: 6px;
 }

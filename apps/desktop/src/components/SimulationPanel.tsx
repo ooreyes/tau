@@ -40,7 +40,7 @@ import { seriesToCsv } from "../simulation/waveformCsv";
 import { runWaveformFft, dominantFrequency, spectrumThd, type WindowFn } from "../simulation/fft";
 import { buildSpiceDeck } from "../engine/spiceNetlist";
 import { serializeRaw, inferRawType } from "../io/rawExport";
-import { cursorReadout, fractionToX } from "../simulation/cursors";
+import { cursorReadout, dbPerDecade, fractionToX, logFractionToX } from "../simulation/cursors";
 import type { CursorTraceInput } from "../simulation/cursors";
 import { parseRaw } from "../io/rawImport";
 import type { RawData } from "../io/rawImport";
@@ -1406,6 +1406,9 @@ function FftView({ result }: { result: AnalysisResult | null }) {
   const [open, setOpen] = useState(false);
   const [signal, setSignal] = useState<string>("");
   const [windowFn, setWindowFn] = useState<WindowFn>("hann");
+  const [cursorsOn, setCursorsOn] = useState(false);
+  const [cf1, setCf1] = useState(0.25);
+  const [cf2, setCf2] = useState(0.75);
 
   const success = result?.ok ? result : null;
   const signals = useMemo(() => {
@@ -1449,6 +1452,26 @@ function FftView({ result }: { result: AnalysisResult | null }) {
     return { minDb, maxDb, f0, f1 };
   }, [spectrum]);
 
+  // Two measurement cursors along the log-frequency axis: dB at each, ΔdB, and
+  // the dB/decade slope between them (harmonic levels / filter rolloff).
+  const cursors = useMemo(() => {
+    if (!cursorsOn || !spectrum) return null;
+    const x1 = logFractionToX(spectrum.frequencies, cf1);
+    const x2 = logFractionToX(spectrum.frequencies, cf2);
+    if (!Number.isFinite(x1) || !Number.isFinite(x2)) return null;
+    try {
+      return cursorReadout(spectrum.frequencies, [{ label: chosen, values: spectrum.magnitudeDb }], x1, x2);
+    } catch {
+      return null;
+    }
+  }, [cursorsOn, spectrum, cf1, cf2, chosen]);
+
+  const cursorPixelX = (f: number): number => {
+    if (!plot || !(f > 0)) return NaN;
+    const fSpan = plot.f1 - plot.f0 || 1;
+    return PLOT_PAD + ((Math.log10(f) - plot.f0) / fSpan) * (PLOT_WIDTH - PLOT_PAD * 2);
+  };
+
   if (!success) return null;
 
   return (
@@ -1487,6 +1510,14 @@ function FftView({ result }: { result: AnalysisResult | null }) {
               <option value="blackman">Blackman</option>
               <option value="rectangular">Rectangular</option>
             </select>
+            <button
+              className={`expr-add${cursorsOn ? " active" : ""}`}
+              aria-pressed={cursorsOn}
+              aria-label="Toggle FFT cursors"
+              onClick={() => setCursorsOn((c) => !c)}
+            >
+              cursors
+            </button>
           </div>
           <div className="scope-shell">
             <svg className="scope-svg" viewBox={`0 0 ${PLOT_WIDTH} ${PLOT_HEIGHT}`} role="img" aria-label="FFT magnitude">
@@ -1504,6 +1535,17 @@ function FftView({ result }: { result: AnalysisResult | null }) {
               {plot && spectrum && (
                 <path className="scope-trace" stroke={AC_COLORS[0]} d={bodePath(spectrum.magnitudeDb, spectrum.frequencies, plot)} />
               )}
+              {cursors &&
+                [cursors.x1, cursors.x2].map((f, i) => {
+                  const x = cursorPixelX(f);
+                  if (!Number.isFinite(x)) return null;
+                  return (
+                    <g key={`c${i}`} className="plot-cursor">
+                      <line x1={x} y1={PLOT_PAD} x2={x} y2={PLOT_HEIGHT - PLOT_PAD} />
+                      <text x={x + 3} y={PLOT_PAD + 10}>{i + 1}</text>
+                    </g>
+                  );
+                })}
               <text className="scope-axis" x={PLOT_PAD} y={18}>
                 {plot ? `${plot.maxDb} dB` : "dB"}
               </text>
@@ -1525,6 +1567,44 @@ function FftView({ result }: { result: AnalysisResult | null }) {
               )}
             </div>
           </div>
+          {cursorsOn && (
+            <div className="cursor-sliders">
+              <label>
+                C1
+                <input
+                  type="range" min={0} max={1000} value={Math.round(cf1 * 1000)}
+                  aria-label="FFT cursor 1 position"
+                  onChange={(e) => setCf1(Number(e.currentTarget.value) / 1000)}
+                />
+              </label>
+              <label>
+                C2
+                <input
+                  type="range" min={0} max={1000} value={Math.round(cf2 * 1000)}
+                  aria-label="FFT cursor 2 position"
+                  onChange={(e) => setCf2(Number(e.currentTarget.value) / 1000)}
+                />
+              </label>
+            </div>
+          )}
+          {cursors && (
+            <div className="meter-row analysis-meter">
+              <Metric label="f1" value={formatEngineering(cursors.x1, "Hz", 3)} tone="cyan" />
+              <Metric label="f2" value={formatEngineering(cursors.x2, "Hz", 3)} tone="cyan" />
+              <Metric label="@C1" value={`${cursors.traces[0].y1.toFixed(1)} dB`} tone="green" />
+              <Metric label="@C2" value={`${cursors.traces[0].y2.toFixed(1)} dB`} tone="green" />
+              <Metric label="Δ" value={`${cursors.traces[0].dy.toFixed(1)} dB`} tone="cream" />
+              <Metric
+                label="SLOPE"
+                value={
+                  Number.isFinite(dbPerDecade(cursors, cursors.traces[0]))
+                    ? `${dbPerDecade(cursors, cursors.traces[0]).toFixed(1)} dB/dec`
+                    : "--"
+                }
+                tone="cream"
+              />
+            </div>
+          )}
           <div className="meter-row analysis-meter">
             <Metric
               label="PEAK f"

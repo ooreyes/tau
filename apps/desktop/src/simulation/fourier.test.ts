@@ -143,4 +143,14 @@ describe("runFourier", () => {
     const results = runFourier(waveform, { freq: f, harmonics: 10, outputs: ["V(nope)", "V(out)"] });
     expect(results.map((r) => r.output)).toEqual(["V(out)"]);
   });
+
+  it("resolves a display label whose inner name is not the net id (V(R1·C1) vs id n1)", () => {
+    const named: MeasWaveform = {
+      ...waveform,
+      traces: [{ id: "n1", label: "V(R1·C1)", values }],
+    };
+    const results = runFourier(named, { freq: f, harmonics: 10, outputs: ["V(R1·C1)"] });
+    expect(results).toHaveLength(1);
+    expect(results[0].harmonics[1].magnitude).toBeCloseTo(1, 3);
+  });
 });

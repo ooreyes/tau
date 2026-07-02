@@ -742,7 +742,7 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   traces by name, resamples onto Tau's grid, draws them dashed
   (`.scope-trace.ref`), and shows a per-signal **% RMS + pass/✗** verdict from
   `compareWaveforms`. Lets the user confirm Tau matches LTspice at a glance.
-- 🟡 **FFT of a waveform** (LTspice "View → FFT") — **landed** (`simulation/fft.ts`):
+- ✅ **FFT of a waveform** (LTspice "View → FFT") — **landed** (`simulation/fft.ts`):
   an in-place radix-2 Cooley–Tukey FFT (`fftRadix2`), window functions
   (`rectangular`/`hann`/`hamming`/`blackman`), and `waveformSpectrum` which
   linear-resamples a transient signal onto a power-of-two uniform grid over the
@@ -758,8 +758,18 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   frequency / **THD** / DC readout. `spectrumThd(spectrum, [f0])` reads THD from
   the spectrum (fundamental = supplied freq or loudest bin above DC; harmonics =
   bins nearest `2f₀,3f₀,…` to Nyquist; exact for a leakage-free signal — 50% for
-  a half-amplitude 2nd harmonic, hand-verified). **NEXT:** measurement cursor on
-  the FFT/transient plots (delta readout between two clicked points).
+  a half-amplitude 2nd harmonic, hand-verified). **FFT measurement cursors
+  landed** (2026-07-02): a `cursors` toggle in the FFT bar shows two
+  log-frequency cursors (sliders move in decades via `logFractionToX`, 3 tests)
+  with dashed lines on the plot and an f1/f2/dB@each/ΔdB readout plus the
+  **dB/decade slope** between them (`dbPerDecade`, 2 tests — reads −20 dB/dec
+  off a synthetic 1-pole rolloff exactly). Fixed en route: `resolveSignal` (in
+  both `fft.ts` and `fourier.ts`) only matched a `V(x)` output against the net
+  id or the full label, so display labels like `V(R1·C1)` — exactly what the
+  FFT signal picker feeds back — never resolved and the FFT pane showed "No
+  spectrum" for every named net; it now also matches the label's inner name
+  (2 regression tests). Live-verified: RC example FFT renders, cursors read
+  271 Hz→13.1 kHz, Δ −105.8 dB, −62.7 dB/dec.
 - 🟡 Log/linear axes, dB, phase, **group delay** — **group delay landed**
   (`simulation/groupDelay.ts`, 12 tests): pure `groupDelay(freqs, phaseDeg)`
   computes τ = −dφ/dω in seconds — phase is **unwrapped** first (`unwrapPhaseDeg`

@@ -208,9 +208,14 @@ function resolveSignal(waveform: MeasWaveform, output: string): number[] | null 
   }
   const voltage = /^v\(([^)]+)\)$/i.exec(text);
   const node = (voltage ? voltage[1] : text).trim().toLowerCase();
-  const trace = waveform.traces.find(
-    (t) => t.id.toLowerCase() === node || t.label.toLowerCase() === node,
-  );
+  // Match the net id, the bare label, or the label's inner name — trace labels
+  // are display names like `V(R1·C1)` whose inner name is NOT the net id, and
+  // the viewer's signal pickers feed those labels back here verbatim.
+  const trace = waveform.traces.find((t) => {
+    if (t.id.toLowerCase() === node || t.label.toLowerCase() === node) return true;
+    const inner = /^v\(([^)]+)\)$/i.exec(t.label);
+    return inner !== null && inner[1].trim().toLowerCase() === node;
+  });
   return trace ? trace.values : null;
 }
 

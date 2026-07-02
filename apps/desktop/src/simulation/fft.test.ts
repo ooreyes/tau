@@ -287,4 +287,17 @@ describe("runWaveformFft", () => {
   it("returns null for an unknown signal", () => {
     expect(runWaveformFft(waveform, "V(nope)")).toBeNull();
   });
+
+  it("resolves a display label whose inner name is not the net id (V(R1·C1) vs id n1)", () => {
+    // The scope's signal pickers feed trace *labels* back — nodeName-derived
+    // labels like V(R1·C1) never equal the internal net id (regression: the FFT
+    // pane showed "No spectrum" for every named net).
+    const named: MeasWaveform = {
+      ...waveform,
+      traces: [{ ...waveform.traces[0], id: "n1", label: "V(R1·C1)" }],
+    };
+    const s = runWaveformFft(named, "V(R1·C1)", { window: "rectangular", points: 128, tStart: 0, tEnd: 1 });
+    expect(s).not.toBeNull();
+    expect(s!.magnitude[4]).toBeCloseTo(1, 3);
+  });
 });

@@ -8,21 +8,72 @@
      `git log --oneline -8`, recover/finish/revert that unit FIRST, then go on.
      ─────────────────────────────────────────────────────────────────────── -->
 ## ⏱ HEARTBEAT
-- **Headline metric:** 1068 tests green · baseline verified this run
+- **Headline metric:** 1075 tests green · baseline verified this run
 - **Run started (UTC):** 2026-07-02T22:05Z
 - **Synced to origin:** auto/ltspice-parity @ 59d71cd
 - **Claimed unit:** §6 FFT measurement cursors — two log-frequency cursors on
   the FFT spectrum with f1/f2, dB@each, ΔdB and dB/decade slope readout.
-- **Status:** IN PROGRESS
-- **Files:** simulation/cursors.ts (`logFractionToX`, `dbPerDecade` + tests),
-  SimulationPanel.tsx FftView (cursor sliders + readout row + SVG cursor
-  lines), App.css (if needed), FEATURE_PARITY §6.
-- **Verify:** hand-computed unit tests (log mapping incl. DC-bin skip, slope
-  −20 dB/dec on a synthetic 1-pole rolloff, coincident cursors NaN); suite
-  ≥1068; typecheck; Playwright screenshot of FFT open with cursors placed.
-- **Last completed sub-step:** unit claimed (previous unit §6 current probe
-  DONE @ 59d71cd).
-- **Next step (if killed):** implement cursors.ts helpers first, then FftView.
+- **Status:** DONE
+- **Files:** simulation/cursors.ts (`logFractionToX`, `dbPerDecade` + 7 tests),
+  SimulationPanel.tsx FftView, App.css, fft.ts + fourier.ts `resolveSignal`
+  label fix (+2 regression tests), FEATURE_PARITY §6.
+- **Verify:** done — hand-computed unit tests, suite 1075 green, typecheck
+  clean, Playwright screenshot of FFT open with cursors placed reviewed.
+- **Last completed sub-step:** §6 FFT cursors unit complete (this run).
+- **Next step (for the following run):** §6 DC operating point annotation on
+  the schematic (show node V / device I in-place) — the remaining ⬜ in §6.
+
+---
+
+## 2026-07-02T23:10Z — auto/ltspice-parity — §6 FFT measurement cursors + FFT signal-resolution bug fix
+
+### What I did
+- **FFT measurement cursors** (LTspice-style, §6): a `cursors` toggle in the
+  FFT control bar enables two cursors along the **log-frequency** axis — equal
+  slider travel means equal decades (`logFractionToX` in `simulation/cursors.ts`,
+  skips the DC bin, NaN on no positive span). Dashed vertical lines with 1/2
+  tags render on the spectrum at the exact `bodePath` x-mapping; the readout
+  row shows f1, f2, dB at each cursor, ΔdB, and the **dB/decade slope**
+  (`dbPerDecade` — the filter-rolloff measurement; hand-verified to read
+  exactly −20 dB/dec off a synthetic 1-pole magnitude).
+- **Fixed a real pre-existing bug the cursors sat on top of:** the FFT pane
+  showed "No spectrum" for every named net. `resolveSignal` (duplicated in
+  `fft.ts` and `fourier.ts`) matched a `V(x)` output only against the net id or
+  the *full* label, but the FFT signal picker feeds back display labels like
+  `V(R1·C1)` whose inner name (`R1·C1`) is a component-derived display name,
+  not the net id. Both copies now also match the label's inner name. The
+  existing tests missed it because their fixtures used `id: "out"` +
+  `label: "V(out)"` — id and inner name identical; new regression tests use
+  `id: "n1"` + `label: "V(R1·C1)"`.
+
+### Files touched
+- apps/desktop/src/simulation/cursors.ts (+7 tests in cursors.test.ts)
+- apps/desktop/src/simulation/fft.ts (+1 regression test), fourier.ts (+1)
+- apps/desktop/src/components/SimulationPanel.tsx (FftView)
+- apps/desktop/src/App.css (.expr-add.active, .plot-cursor)
+- FEATURE_PARITY.md, PROGRESS.md
+
+### Tests
+1075 passing (72 files), 9 new — passed. typecheck clean.
+
+### FEATURE_PARITY items updated
+- §6 FFT item 🟡 → ✅ (cursors were its last "NEXT"; resolution bug documented).
+
+### Visual QA
+Playwright (RC Charging → run → open FFT → enable cursors → C1 10% / C2 90%):
+spectrum now renders (fix confirmed live — PEAK f 200 Hz / THD / DC populated),
+both dashed cursor lines at the correct log positions, readout f1 271 Hz,
+f2 13.1 kHz, @C1 −4.2 dB, @C2 −110.0 dB, Δ −105.8 dB, SLOPE −62.7 dB/dec.
+Toggle button shows a clear active state. Screenshot reviewed; layout clean.
+
+### UX issues found
+- The FFT cursor sliders sit below the plot rather than being draggable on the
+  plot itself; fine for now (matches the transient CursorView pattern) but a
+  drag-on-plot interaction would be closer to LTspice. Logged as UX debt.
+
+### Next step
+§6 DC operating point annotation on the schematic (show node V / device I
+in-place) — the remaining ⬜ in §6.
 
 ---
 
