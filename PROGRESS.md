@@ -8,18 +8,22 @@
      `git log --oneline -8`, recover/finish/revert that unit FIRST, then go on.
      ─────────────────────────────────────────────────────────────────────── -->
 ## ⏱ HEARTBEAT
-- **Headline metric:** 986 tests green · AC/DC expression bars wired into the UI
-- **Run started (UTC):** 2026-07-02T05:20Z
-- **Synced to origin:** auto/ltspice-parity @ latest
-- **Claimed unit:** §4/§6 AC/DC `.step` family runners → SimulationPanel UI
+- **Headline metric:** 1031 tests green · recovering AC/DC `.step` family UI from wip
+- **Run started (UTC):** 2026-07-02T10:35Z
+- **Synced to origin:** auto/ltspice-parity @ 7dd91cf
+- **Claimed unit:** recover wip `ac2021c` (§4/§6 AC/DC `.step` family → SimulationPanel):
+  take `stepAnalysisFamily.ts` reducers + tests + `App.tsx` wiring verbatim (files
+  unchanged since wip base e5cd552); reapply SimulationPanel props by hand (file
+  gained multi-pane since); FINISH the unrendered part — draw family overlays on
+  the AC and DC panes. Verify: typecheck + tests ≥1031 + screenshot QA.
 - **Status:** IN PROGRESS
-- **Last checkpoint commit:** see `git log --oneline -1`
-- **Next step (for the following run):** §6 log/linear axis toggle or probe-in-place.
+- **Last completed sub-step:** heartbeat claim (nothing integrated yet)
+- **After this unit:** REVIEW SESSION (0 `review:` commits in last 30) — no new features.
 
-> **Note on the `-wip` rescue branch:** stale — its tip `2af3365` is an earlier
-> snapshot of the doc updates that the canonical checkpoint `39d2856` already
-> supersedes (which also carries the SimulationPanel wiring itself). Nothing to
-> integrate. (The earlier destructive snapshot d0995cb remains discarded.)
+> **Note on the `-wip` rescue branch:** tip `ac2021c` (2026-07-02T10:29Z) is REAL
+> unfinished work (AC/DC family overlay reducers + tests + partial UI threading),
+> based on e5cd552 — its SimulationPanel hunk is polluted with the pre-multi-pane
+> file and must NOT be cherry-picked wholesale.
 
 ---
 
