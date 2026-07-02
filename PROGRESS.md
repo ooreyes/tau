@@ -8,19 +8,19 @@
      `git log --oneline -8`, recover/finish/revert that unit FIRST, then go on.
      ─────────────────────────────────────────────────────────────────────── -->
 ## ⏱ HEARTBEAT
-- **Headline metric:** 1042 tests green · AC/DC `.step` families render under their panes
-- **Run started (UTC):** 2026-07-02T10:35Z
-- **Synced to origin:** auto/ltspice-parity @ latest
-- **Claimed unit:** wip `ac2021c` recovery (§4/§6 AC/DC `.step` family UI) — DONE
-- **Status:** DONE
-- **Last completed sub-step:** review session complete (fixes committed as `review:`)
-- **Next step (for the following run):** §6 log/linear axis toggle or probe-in-place;
-  UX debt: transient expr-bar crowding, F2–F8 LTspice function keys (§8).
-
-> **Note on the `-wip` rescue branch:** tip `ac2021c` is now fully integrated
-> (reducers/tests/App wiring taken verbatim; SimulationPanel reapplied by hand on
-> top of the multi-pane scope, plus the previously-unwritten AcFamilyPlot/
-> DcFamilyPlot rendering). Nothing left to salvage.
+- **Headline metric:** 1043 tests green · baseline verified this run
+- **Run started (UTC):** 2026-07-02T13:15Z
+- **Synced to origin:** auto/ltspice-parity @ 401ede9
+- **Claimed unit:** §7 SPICE suffix semantics — `parseQuantity` goes case-insensitive
+  LTspice rules (`m`/`M`=milli, `meg`=mega, `mil`=25.4µ, uppercase N/P/U/F accepted);
+  UI prefix dropdown stores `Meg` for mega; `formatEngineering` emits `Meg`.
+- **Status:** IN PROGRESS
+- **Files:** simulation/quantity.ts (+test), schematic/engineering.ts (+test),
+  simulation/linearTransient.test.ts (1M→1Meg literals), FEATURE_PARITY §7.
+- **Verify:** hand-computed suffix tests (1M=1e-3, 1Meg=1e6, 1mil, 1MHz gotcha,
+  uppercase forms); full suite ≥1043; typecheck clean.
+- **Last completed sub-step:** unit claimed (no code yet).
+- **Next step (for the following run):** §6 probe-in-place (click node → plot trace).
 
 ---
 
