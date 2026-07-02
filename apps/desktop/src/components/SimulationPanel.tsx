@@ -16,14 +16,16 @@ import type { Probe, NetLabel } from "../schematic/types";
 import { paramFields, decodeParams, encodeParams } from "../schematic/params";
 import { EngineeringInput } from "./EngineeringInput";
 import type { OperatingPointResult } from "../simulation/operatingPoint";
-import type { AcResult } from "../simulation/acSweep";
-import type { DcSweepResult } from "../simulation/dcSweep";
+import type { AcResult, AcTrace } from "../simulation/acSweep";
+import type { DcSweepResult, DcSweepNet } from "../simulation/dcSweep";
 import type { TfResult } from "../simulation/transferFunction";
 import type { NoiseResult } from "../simulation/noise";
 import type { StepFamilyResult } from "../simulation/stepFamily";
 import type { MeasResult } from "../simulation/measure";
 import type { FourierResult } from "../simulation/fourier";
 import { evaluatePlotExpression } from "../simulation/plotExpression";
+import { evaluateAcPlotExpression } from "../simulation/plotExpressionAc";
+import { evaluateDcPlotExpression } from "../simulation/plotExpressionDc";
 import { commonTraceUnit } from "../simulation/exprUnit";
 import { groupDelay } from "../simulation/groupDelay";
 import { stabilityMargins } from "../simulation/stability";
@@ -136,6 +138,14 @@ export function SimulationPanel({
   const [exprList, setExprList] = useState<string[]>([]);
   const [exprInput, setExprInput] = useState("");
   const [exprError, setExprError] = useState<string | null>(null);
+  // Expression traces overlaid on the AC (Bode) pane, e.g. `db(V(out))-db(V(in))`
+  // for a transfer function, and on the DC pane, e.g. `V(out)-V(in)` (§6).
+  const [acExprList, setAcExprList] = useState<string[]>([]);
+  const [acExprInput, setAcExprInput] = useState("");
+  const [acExprError, setAcExprError] = useState<string | null>(null);
+  const [dcExprList, setDcExprList] = useState<string[]>([]);
+  const [dcExprInput, setDcExprInput] = useState("");
+  const [dcExprError, setDcExprError] = useState<string | null>(null);
   const [netlistError, setNetlistError] = useState<string | null>(null);
   // An LTspice `.raw` loaded as a reference to overlay against Tau's results.
   const [refData, setRefData] = useState<RawData | null>(null);
@@ -152,6 +162,27 @@ export function SimulationPanel({
     });
     return out;
   }, [exprList, result]);
+
+  // AC/DC expression overlays: evaluate each saved expression against the latest
+  // AC/DC result, dropping the ones that no longer resolve (same lifecycle as the
+  // transient overlays above).
+  const acExprTraces = useMemo<AcTrace[]>(() => {
+    const out: AcTrace[] = [];
+    acExprList.forEach((expr) => {
+      const r = evaluateAcPlotExpression(expr, acResult);
+      if (r.ok) out.push(r.trace);
+    });
+    return out;
+  }, [acExprList, acResult]);
+
+  const dcExprTraces = useMemo<DcSweepNet[]>(() => {
+    const out: DcSweepNet[] = [];
+    dcExprList.forEach((expr) => {
+      const r = evaluateDcPlotExpression(expr, dcResult);
+      if (r.ok) out.push(r.trace);
+    });
+    return out;
+  }, [dcExprList, dcResult]);
 
   // Match a loaded LTspice `.raw` to the current transient result by signal name,
   // resampling each match onto Tau's time grid for overlay + numeric comparison.
@@ -193,6 +224,32 @@ export function SimulationPanel({
     if (!exprList.includes(expr)) setExprList((prev) => [...prev, expr]);
     setExprInput("");
     setExprError(null);
+  };
+
+  const addAcExpression = () => {
+    const expr = acExprInput.trim();
+    if (!expr) return;
+    const probe = evaluateAcPlotExpression(expr, acResult);
+    if (!probe.ok) {
+      setAcExprError(probe.error);
+      return;
+    }
+    if (!acExprList.includes(expr)) setAcExprList((prev) => [...prev, expr]);
+    setAcExprInput("");
+    setAcExprError(null);
+  };
+
+  const addDcExpression = () => {
+    const expr = dcExprInput.trim();
+    if (!expr) return;
+    const probe = evaluateDcPlotExpression(expr, dcResult);
+    if (!probe.ok) {
+      setDcExprError(probe.error);
+      return;
+    }
+    if (!dcExprList.includes(expr)) setDcExprList((prev) => [...prev, expr]);
+    setDcExprInput("");
+    setDcExprError(null);
   };
 
   // Export the transient result (node voltages + branch currents + any plotted
@@ -558,23 +615,93 @@ export function SimulationPanel({
       {mode === "op" && <OpTable result={opResult} />}
       {mode === "ac" && (
         <>
-          <AcPlot result={acResult} />
+          <AcPlot result={acResult} overlays={acExprTraces} />
           <div className="expr-bar">
+            <input
+              className="expr-input"
+              type="text"
+              value={acExprInput}
+              placeholder="Plot an expression, e.g. db(V(out))-db(V(in)) or mag(V(a,b))"
+              aria-label="Plot AC expression"
+              onChange={(e) => {
+                setAcExprInput(e.currentTarget.value);
+                if (acExprError) setAcExprError(null);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") addAcExpression();
+              }}
+            />
+            <button className="expr-add" onClick={addAcExpression} disabled={!acExprInput.trim()}>
+              Add trace
+            </button>
             <button className="expr-add" onClick={exportAcCsv} disabled={!acResult?.ok} title="Export the AC sweep as a CSV table">
               Export CSV
             </button>
           </div>
+          {acExprError && <div className="expr-error" role="alert">{acExprError}</div>}
+          {acExprList.length > 0 && (
+            <div className="expr-list">
+              {acExprList.map((expr, i) => (
+                <span key={expr} className="expr-chip" style={{ borderColor: EXPR_COLORS[i % EXPR_COLORS.length] }}>
+                  <i style={{ background: EXPR_COLORS[i % EXPR_COLORS.length] }} />
+                  {expr}
+                  <button
+                    className="expr-remove"
+                    aria-label={`Remove ${expr}`}
+                    onClick={() => setAcExprList((prev) => prev.filter((e) => e !== expr))}
+                  >
+                    ×
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
           <MeasTable measurements={acMeasurements} />
         </>
       )}
       {mode === "dc" && (
         <>
-          <DcPlot result={dcResult} />
+          <DcPlot result={dcResult} overlays={dcExprTraces} />
           <div className="expr-bar">
+            <input
+              className="expr-input"
+              type="text"
+              value={dcExprInput}
+              placeholder="Plot an expression, e.g. V(out)-V(in) or V(a)/V(b)"
+              aria-label="Plot DC expression"
+              onChange={(e) => {
+                setDcExprInput(e.currentTarget.value);
+                if (dcExprError) setDcExprError(null);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") addDcExpression();
+              }}
+            />
+            <button className="expr-add" onClick={addDcExpression} disabled={!dcExprInput.trim()}>
+              Add trace
+            </button>
             <button className="expr-add" onClick={exportDcCsv} disabled={!dcResult?.ok} title="Export the DC sweep as a CSV table">
               Export CSV
             </button>
           </div>
+          {dcExprError && <div className="expr-error" role="alert">{dcExprError}</div>}
+          {dcExprList.length > 0 && (
+            <div className="expr-list">
+              {dcExprList.map((expr, i) => (
+                <span key={expr} className="expr-chip" style={{ borderColor: EXPR_COLORS[i % EXPR_COLORS.length] }}>
+                  <i style={{ background: EXPR_COLORS[i % EXPR_COLORS.length] }} />
+                  {expr}
+                  <button
+                    className="expr-remove"
+                    aria-label={`Remove ${expr}`}
+                    onClick={() => setDcExprList((prev) => prev.filter((e) => e !== expr))}
+                  >
+                    ×
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
           <MeasTable measurements={dcMeasurements} />
         </>
       )}
@@ -1322,15 +1449,17 @@ function CursorView({ result, extraTraces }: { result: AnalysisResult | null; ex
   );
 }
 
-function AcPlot({ result }: { result: AcResult | null }) {
+function AcPlot({ result, overlays = [] }: { result: AcResult | null; overlays?: AcTrace[] }) {
   const success = result?.ok ? result : null;
   const traces = success ? success.traces.slice(0, 4) : [];
+  // Expression overlays share the magnitude axis (their value rides `magDb`).
+  const magTraces = success ? [...traces, ...overlays] : [];
   const plot = useMemo(() => {
-    if (!success || traces.length === 0) return null;
+    if (!success || magTraces.length === 0) return null;
     let rawMin = 0;
     let rawMax = 0;
     let found = false;
-    for (const trace of traces) {
+    for (const trace of magTraces) {
       for (const db of trace.magDb) {
         if (!Number.isFinite(db) || db <= -250) continue;
         if (!found) {
@@ -1361,7 +1490,7 @@ function AcPlot({ result }: { result: AcResult | null }) {
     const maxPh = Math.ceil(Math.max(phMax, 0) / 45) * 45;
     const minPh = Math.floor(Math.min(phMin, maxPh - 45) / 45) * 45;
     return { minDb, maxDb, f0, f1, minPh, maxPh };
-  }, [success, traces]);
+  }, [success, traces, overlays]);
 
   if (!result) return null;
   if (!result.ok) return <div className="analysis-empty">{result.message}</div>;
@@ -1404,6 +1533,10 @@ function AcPlot({ result }: { result: AcResult | null }) {
           {plot &&
             traces.map((t, i) => (
               <path key={t.id} className="scope-trace" stroke={AC_COLORS[i % AC_COLORS.length]} d={bodePath(t.magDb, success!.freqs, plot)} />
+            ))}
+          {plot &&
+            overlays.map((t, i) => (
+              <path key={t.id} className="scope-trace" stroke={EXPR_COLORS[i % EXPR_COLORS.length]} d={bodePath(t.magDb, success!.freqs, plot)} />
             ))}
           <text className="scope-axis" x={PLOT_PAD} y={18}>
             {plot ? `${plot.maxDb} dB` : "dB"}
@@ -1457,6 +1590,12 @@ function AcPlot({ result }: { result: AcResult | null }) {
           ) : (
             <span className="muted">No traces</span>
           )}
+          {overlays.map((t, i) => (
+            <span key={t.id}>
+              <i style={{ background: EXPR_COLORS[i % EXPR_COLORS.length] }} />
+              {t.label}
+            </span>
+          ))}
         </div>
       </div>
       <div className="meter-row analysis-meter">
@@ -1515,14 +1654,16 @@ function bodeValuePath(
  * node's voltage on a linear Y axis. Mirrors {@link AcPlot} but without the log
  * frequency mapping. The ground net (label "GND") is dropped — it is always 0 V.
  */
-function DcPlot({ result }: { result: DcSweepResult | null }) {
+function DcPlot({ result, overlays = [] }: { result: DcSweepResult | null; overlays?: DcSweepNet[] }) {
   const traces = result?.ok ? result.nets.filter((n) => !n.ground).slice(0, 6) : [];
   const sweep = result?.ok ? result.sweep : [];
+  // Expression overlays share the voltage axis with the swept node curves.
+  const allTraces = result?.ok ? [...traces, ...overlays] : [];
   const plot = useMemo(() => {
-    if (traces.length === 0 || sweep.length === 0) return null;
+    if (allTraces.length === 0 || sweep.length === 0) return null;
     let vMin = Infinity;
     let vMax = -Infinity;
-    for (const net of traces) {
+    for (const net of allTraces) {
       for (const v of net.voltages) {
         if (!Number.isFinite(v)) continue;
         vMin = Math.min(vMin, v);
@@ -1538,7 +1679,7 @@ function DcPlot({ result }: { result: DcSweepResult | null }) {
     const xMin = sweep[0];
     const xMax = sweep[sweep.length - 1];
     return { vMin, vMax, xMin, xMax };
-  }, [traces, sweep]);
+  }, [traces, overlays, sweep]);
 
   if (!result) return null;
   if (!result.ok) return <div className="analysis-empty">{result.message}</div>;
@@ -1562,6 +1703,10 @@ function DcPlot({ result }: { result: DcSweepResult | null }) {
             traces.map((net, i) => (
               <path key={net.id} className="scope-trace" stroke={AC_COLORS[i % AC_COLORS.length]} d={dcPath(net.voltages, sweep, plot)} />
             ))}
+          {plot &&
+            overlays.map((net, i) => (
+              <path key={net.id} className="scope-trace" stroke={EXPR_COLORS[i % EXPR_COLORS.length]} d={dcPath(net.voltages, sweep, plot)} />
+            ))}
           <text className="scope-axis" x={PLOT_PAD} y={18}>
             {plot ? formatEngineering(plot.vMax, "V", 2) : "MAX"}
           </text>
@@ -1583,6 +1728,12 @@ function DcPlot({ result }: { result: DcSweepResult | null }) {
           ) : (
             <span className="muted">No traces</span>
           )}
+          {overlays.map((net, i) => (
+            <span key={net.id}>
+              <i style={{ background: EXPR_COLORS[i % EXPR_COLORS.length] }} />
+              {net.label}
+            </span>
+          ))}
         </div>
       </div>
       <div className="meter-row analysis-meter">

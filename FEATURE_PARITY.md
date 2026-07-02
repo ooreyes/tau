@@ -698,8 +698,11 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   of the swept node voltages (`V(out)-V(in)`, `V(a)/V(b)`, a scaled term)
   evaluates per sweep point into an overlay `DcSweepNet`. 5 hand-computed tests
   (divider: Vtop−Vmid = Vsweep/2; scaled Vmid·2 = Vsweep; empty / no-run /
-  unknown-signal). **NEXT:** wire the AC/DC expression bars into the Bode/DC pane
-  UI; expression traces in the step pane; dual axis for mixed V+A.
+  unknown-signal). **AC/DC expression bars now wired into the UI**
+  (`SimulationPanel.tsx`): the Bode and DC panes each carry the same expression
+  bar as the transient scope — add/remove labelled chips, error surfaced inline,
+  overlays drawn on the shared magnitude/voltage axis and listed in the legend.
+  **NEXT:** expression traces in the step pane; dual axis for mixed V+A.
 - ⬜ Multiple plot panes, add/remove traces, autorange, manual axis
 - ✅ **Measurement cursors** (1 & 2, delta readout) — `simulation/cursors.ts`
   (`cursorReadout`/`fractionToX`, 8 unit tests) + a collapsible **Cursors** panel

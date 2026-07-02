@@ -8,19 +8,18 @@
      `git log --oneline -8`, recover/finish/revert that unit FIRST, then go on.
      ─────────────────────────────────────────────────────────────────────── -->
 ## ⏱ HEARTBEAT
-- **Headline metric:** 986 tests green · AC/DC `.step` families + AC/DC-pane expression traces (engine)
-- **Run started (UTC):** 2026-07-01T18:45Z
+- **Headline metric:** 986 tests green · AC/DC expression bars wired into the UI
+- **Run started (UTC):** 2026-07-02T05:30Z
 - **Synced to origin:** auto/ltspice-parity @ latest
-- **Claimed unit:** §6 DC-pane expression traces (engine layer) — DONE
-- **Status:** DONE
+- **Claimed unit:** §6 AC/DC expression bars → SimulationPanel UI (rescued from `-wip` 2af3365)
+- **Status:** IN PROGRESS
 - **Last checkpoint commit:** see `git log --oneline -1`
-- **Next step (for the following run):** wire the AC/DC `.step` family runners + the AC/DC expression bars into the UI (all engine-complete, not yet reachable); then §6 log/linear axis toggle or probe-in-place.
+- **Next step (for the following run):** wire the AC/DC `.step` family runners into the UI; then §6 log/linear axis toggle or probe-in-place.
 
-> **Note on the `-wip` rescue branch:** the durability checkpoint
-> `origin/auto/ltspice-parity-wip` (d0995cb) is a *destructive* snapshot — it
-> deletes stability/temperature/groupDelay/stepFamily modules and their tests
-> (−1263 lines). Discarded as a regression; the canonical branch already has all
-> those modules green. Do not integrate it.
+> **Note on the `-wip` rescue branch:** the checkpoint `2af3365` (2026-07-02)
+> was the SimulationPanel wiring for the AC/DC expression bars — integrated this
+> run as a clean commit. (The earlier destructive snapshot d0995cb remains
+> discarded; do not integrate it.)
 
 ---
 
