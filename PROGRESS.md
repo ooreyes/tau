@@ -9,17 +9,49 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## ⏱ HEARTBEAT
 - **Headline metric:** 986 tests green · AC/DC expression bars wired into the UI
-- **Run started (UTC):** 2026-07-02T05:30Z
+- **Run started (UTC):** 2026-07-02T05:20Z
 - **Synced to origin:** auto/ltspice-parity @ latest
-- **Claimed unit:** §6 AC/DC expression bars → SimulationPanel UI (rescued from `-wip` 2af3365)
+- **Claimed unit:** §4/§6 AC/DC `.step` family runners → SimulationPanel UI
 - **Status:** IN PROGRESS
 - **Last checkpoint commit:** see `git log --oneline -1`
-- **Next step (for the following run):** wire the AC/DC `.step` family runners into the UI; then §6 log/linear axis toggle or probe-in-place.
+- **Next step (for the following run):** §6 log/linear axis toggle or probe-in-place.
 
-> **Note on the `-wip` rescue branch:** the checkpoint `2af3365` (2026-07-02)
-> was the SimulationPanel wiring for the AC/DC expression bars — integrated this
-> run as a clean commit. (The earlier destructive snapshot d0995cb remains
-> discarded; do not integrate it.)
+> **Note on the `-wip` rescue branch:** stale — its tip `2af3365` is an earlier
+> snapshot of the doc updates that the canonical checkpoint `39d2856` already
+> supersedes (which also carries the SimulationPanel wiring itself). Nothing to
+> integrate. (The earlier destructive snapshot d0995cb remains discarded.)
+
+---
+
+## 2026-07-02T05:25Z — auto/ltspice-parity — AC/DC expression bars wired into UI (§6)
+
+### What I did
+- Verified and finalized the previous run's checkpoint `39d2856`: the AC (Bode)
+  and DC panes in `SimulationPanel.tsx` now carry the same expression bar as the
+  transient scope — add/remove labelled chips, inline `role="alert"` errors,
+  overlays drawn on the shared magnitude/voltage axis and listed in the legend.
+  The prior run died right after checkpointing; this run confirmed the tree is
+  green and closed the unit (no code changes needed).
+
+### Files touched
+- PROGRESS.md (heartbeat + this entry); code landed in checkpoint 39d2856
+  (apps/desktop/src/components/SimulationPanel.tsx, FEATURE_PARITY.md)
+
+### Tests
+986 passing (70 files) — passed. typecheck clean.
+
+### FEATURE_PARITY items updated
+- §6 plot arbitrary expressions — AC/DC-pane UI wiring recorded in the
+  checkpoint's FEATURE_PARITY note (item stays 🟡 pending step-pane traces and
+  mixed V+A dual axis).
+
+### UX issues found
+- Expression lists don't persist across mode switches within a session loss —
+  acceptable for now (same lifecycle as transient expr bar).
+
+### Next step
+- Wire the AC/DC `.step` family runners into the UI (engine-complete, not yet
+  reachable from SimulationPanel).
 
 ---
 
