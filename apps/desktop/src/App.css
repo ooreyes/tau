@@ -812,6 +812,15 @@ body {
   stroke: var(--accent);
 }
 
+/* Simulator mode: clicking a wire probes its net (LTspice probe-in-place). */
+.wire-group.probe-ready {
+  cursor: crosshair;
+}
+
+.wire-group.probe-ready:hover .wire {
+  stroke: var(--accent);
+}
+
 .pin-layer {
   pointer-events: none;
 }

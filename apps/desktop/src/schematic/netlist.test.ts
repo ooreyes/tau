@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { extractCircuit } from "./netlist";
+import { extractCircuit, netAtPoint } from "./netlist";
 import type { NetLabel, SchematicComponent, SchematicWire } from "./types";
 
 const wire = (id: string, points: { x: number; y: number }[]): SchematicWire => ({ id, points });
@@ -117,5 +117,47 @@ describe("net labels are electrical", () => {
       label("l2", 268, 0, ""),
     ]);
     expect(circuit.nets).toHaveLength(4);
+  });
+});
+
+describe("netAtPoint (probe resolution)", () => {
+  // r1 spans pins (68,0)-(132,0); r2 spans (268,0)-(332,0), joined by a bus wire.
+  const r1 = resistor("r1", 100, 0);
+  const r2 = resistor("r2", 300, 0);
+  const bus = wire("bus", [{ x: 132, y: 0 }, { x: 268, y: 0 }]);
+
+  it("resolves an exact net point (wire endpoint / pin)", () => {
+    const circuit = extractCircuit([r1, r2], [bus]);
+    const net = netAtPoint(circuit.nets, [bus], { x: 132, y: 0 });
+    expect(net).not.toBeNull();
+    expect(net?.pins.map((p) => p.componentId).sort()).toEqual(["r1", "r2"]);
+  });
+
+  it("resolves a mid-segment point that is not a recorded net point", () => {
+    const circuit = extractCircuit([r1, r2], [bus]);
+    const midNet = circuit.nets.find((n) => n.pins.length === 2);
+    // Precondition for the regression: the interior grid point is NOT stored.
+    expect(midNet?.points.some((p) => p.x === 200 && p.y === 0)).toBe(false);
+    const net = netAtPoint(circuit.nets, [bus], { x: 200, y: 0 });
+    expect(net?.id).toBe(midNet?.id);
+  });
+
+  it("resolves a mid-segment point on a vertical wire", () => {
+    const drop = wire("drop", [{ x: 132, y: 0 }, { x: 132, y: 96 }]);
+    const circuit = extractCircuit([r1], [drop]);
+    const net = netAtPoint(circuit.nets, [drop], { x: 132, y: 48 });
+    expect(net?.pins.some((p) => p.componentId === "r1")).toBe(true);
+  });
+
+  it("returns null off every wire and net point", () => {
+    const circuit = extractCircuit([r1, r2], [bus]);
+    expect(netAtPoint(circuit.nets, [bus], { x: 200, y: 16 })).toBeNull();
+    expect(netAtPoint(circuit.nets, [bus], { x: 999, y: 999 })).toBeNull();
+  });
+
+  it("returns the ground net (callers decide whether to filter it)", () => {
+    const circuit = extractCircuit([r1], [bus], [label("g", 268, 0, "0")]);
+    const net = netAtPoint(circuit.nets, [bus], { x: 200, y: 0 });
+    expect(net?.isGround).toBe(true);
   });
 });

@@ -11,19 +11,64 @@
 - **Headline metric:** 1051 tests green · baseline verified this run
 - **Run started (UTC):** 2026-07-02T16:15Z
 - **Synced to origin:** auto/ltspice-parity @ 81bba60
-- **Claimed unit:** §6 probe-in-place — in simulator mode (canvas read-only),
-  clicking a wire toggles a probe there (LTspice plot-open→click-wire→trace);
-  plus `netAtPoint` fix so mid-segment probes resolve to their net at all.
-- **Status:** IN PROGRESS
-- **Files:** schematic/netlist.ts `netAtPoint` (+test), components/Canvas.tsx
-  (wire click in !interactive), components/SimulationPanel.tsx (3 resolution
-  sites use the helper), FEATURE_PARITY §6.
-- **Verify:** hand-computed netAtPoint tests (mid-segment, endpoint, ground-net
-  exclusion, off-wire null); suite ≥1051; typecheck; screenshot of simulator
-  mode probing.
-- **Last completed sub-step:** §7 unit complete (previous unit this run).
-- **Next step (for the following run):** §6 measurement cursor on FFT plot, or
-  §4 next missing analysis.
+- **Claimed unit:** §6 probe-in-place (wire click in simulator mode) +
+  `netAtPoint` mid-segment probe resolution.
+- **Status:** DONE
+- **Files:** schematic/netlist.ts (+5 tests), components/Canvas.tsx,
+  components/SimulationPanel.tsx (3 sites), components/StatusBar.tsx hint,
+  App.css cursor/hover, FEATURE_PARITY §6.
+- **Verify:** 1056 tests green (was 1051); typecheck clean; Playwright QA in
+  live app — mid-wire click adds probe + scope re-filters to that net, second
+  click toggles off, crosshair affordance present (screenshots reviewed).
+- **Last completed sub-step:** unit complete (tests + parity flip + log).
+- **Next step (for the following run):** §6 probe a component body to plot its
+  current, or §6 measurement cursor on the FFT plot.
+
+---
+
+## 2026-07-02T16:40Z — auto/ltspice-parity — §6 probe-in-place + netAtPoint mid-segment resolution
+
+### What I did
+- **Probe-in-place** (LTspice plot-open→click-wire→trace): in simulator mode the
+  canvas is read-only, so a plain left click on a wire now toggles a probe at the
+  snapped point and the transient scope immediately re-filters to the probed
+  net(s). Crosshair cursor + hover highlight on wires advertise the gesture
+  (`.wire-group.probe-ready`); the status-bar simulator hint now says "click a
+  wire to probe its net". Schematic-mode click semantics are untouched.
+- **Fixed a latent resolution bug** that probe-in-place would have hit
+  constantly: probes were matched to nets by *exact* point equality against the
+  net's DSU points (endpoints/pins/junctions), so a probe dropped mid-segment
+  never resolved and silently plotted nothing. New `netAtPoint(nets, wires, p)`
+  in `schematic/netlist.ts` falls back to point-on-any-wire-segment and names
+  the net by the segment's endpoints; the scope trace list, `WaveformPlot`, and
+  the step-family trace picker all share it now.
+
+### Files touched
+- apps/desktop/src/schematic/netlist.ts (+ netlist.test.ts, 5 new)
+- apps/desktop/src/components/Canvas.tsx, SimulationPanel.tsx, StatusBar.tsx
+- apps/desktop/src/App.css
+- FEATURE_PARITY.md, PROGRESS.md
+
+### Tests
+1056 passing (71 files), 5 new — passed. typecheck clean.
+
+### Visual QA
+Playwright drove the live app (RC Charging example → run → simulator mode):
+mid-wire click added a probe marker and the scope re-filtered from the default
+two traces to exactly `V(V1·R1)` in the probe's color; second click toggled the
+probe off; probe-ready class present. Screenshots reviewed — plot, legend, and
+marker all correct; no layout breakage.
+
+### FEATURE_PARITY items updated
+§6 "Click a node/wire on the schematic to add its trace" ⬜ → ✅ (component-body
+current probe noted as remaining sub-item)
+
+### UX issues found
+None new.
+
+### Next step
+§6 probe a component body to plot its current, or measurement cursor on the FFT
+plot.
 
 ---
 

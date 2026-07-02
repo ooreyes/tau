@@ -677,7 +677,16 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   degrees axis below the dB magnitude, matching LTspice's dual Bode. Shared
   `bodeValuePath` (generalized from `bodePath`) maps any value vs. log-f.
 - 🟡 OP results table — present
-- ⬜ **Click a node/wire on the schematic to add its trace** (LTspice probe-in-place)
+- ✅ **Click a node/wire on the schematic to add its trace** (LTspice
+  probe-in-place, 2026-07-02): in simulator mode the canvas is read-only, so a
+  plain wire click toggles a probe at the snapped point (crosshair cursor +
+  hover highlight advertise it; status-bar hint updated) and the scope plots
+  that net — LTspice's plot-open→click-wire→trace. Underneath, new
+  `netAtPoint` (`schematic/netlist.ts`, 5 tests) resolves a probe to its net
+  when the point lies **anywhere on a wire segment**, fixing the latent bug
+  where a mid-segment probe (no DSU point of its own) silently failed to plot;
+  all three resolution sites (scope trace list, WaveformPlot, step-family
+  picker) now share it. Still ⬜: click a component body to plot its current.
 - 🟡 **Plot arbitrary expressions** (`V(a)-V(b)`, `I(R1)*V(out)`, power `V(out)*I(out)`)
   — **landed** (`simulation/plotExpression.ts`): an expression bar under the
   transient scope evaluates any expression of the simulated signals at every

@@ -931,7 +931,14 @@ export function Canvas({
 
   const onWirePointerDown = (e: ReactPointerEvent<SVGElement>, wire: SchematicWire) => {
     if (e.button !== 0) return;
-    if (!interactive) return;
+    if (!interactive) {
+      // Simulator mode: the canvas is read-only, so a wire click is LTspice's
+      // probe-in-place — toggle a probe here and the scope plots that net.
+      e.stopPropagation();
+      const w = snappedCursor(e.clientX, e.clientY);
+      addProbe(w.x, w.y);
+      return;
+    }
     if (tool.mode === "probe") {
       e.stopPropagation();
       const w = snappedCursor(e.clientX, e.clientY);
@@ -1138,6 +1145,7 @@ export function Canvas({
               key={wire.id}
               wire={wire}
               selected={wire.id === selectedWireId}
+              probeReady={!interactive}
               onPointerDown={(e) => onWirePointerDown(e, wire)}
             />
           ))}
@@ -1321,15 +1329,21 @@ function ComponentLabels({ components, wires }: { components: SchematicComponent
 function WireView({
   wire,
   selected,
+  probeReady,
   onPointerDown,
 }: {
   wire: SchematicWire;
   selected: boolean;
+  /** Simulator mode: clicking probes the net, so advertise it with the probe cursor. */
+  probeReady: boolean;
   onPointerDown: (e: ReactPointerEvent<SVGElement>) => void;
 }) {
   const d = pathFromPoints(wire.points);
   return (
-    <g className={`wire-group${selected ? " selected" : ""}`} onPointerDown={onPointerDown}>
+    <g
+      className={`wire-group${selected ? " selected" : ""}${probeReady ? " probe-ready" : ""}`}
+      onPointerDown={onPointerDown}
+    >
       {/* Wide invisible stroke makes the thin wire easy to click. */}
       <path className="wire-hit" d={d} />
       <path className="wire" d={d} />

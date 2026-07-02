@@ -247,6 +247,25 @@ export function extractCircuit(
   };
 }
 
+/** Resolve which net sits under a world point: an exact net point (endpoint /
+ * pin / junction), or any point lying on a wire segment of the net. This is
+ * the probe-resolution authority — a probe dropped mid-segment (the common
+ * click) has no DSU point of its own but is still electrically on the net. */
+export function netAtPoint(nets: ExtractedNet[], wires: SchematicWire[], point: Point): ExtractedNet | null {
+  const atPoint = (net: ExtractedNet, p: Point) => net.points.some((np) => np.x === p.x && np.y === p.y);
+  const exact = nets.find((net) => atPoint(net, point));
+  if (exact) return exact;
+  for (const wire of wires) {
+    for (const segment of wireSegments(wire)) {
+      if (!pointOnSegment(point, segment)) continue;
+      // Segment endpoints are always DSU points, so either one names the net.
+      const owner = nets.find((net) => atPoint(net, segment.a) || atPoint(net, segment.b));
+      if (owner) return owner;
+    }
+  }
+  return null;
+}
+
 function wireSegments(wire: SchematicWire): Segment[] {
   const segments: Segment[] = [];
   for (let i = 1; i < wire.points.length; i += 1) {

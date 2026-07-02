@@ -12,7 +12,8 @@ import {
 } from "../simulation/linearTransient";
 import { formatEngineering } from "../simulation/quantity";
 import { OPAMP_LIBRARY, findOpAmp } from "../library/opamps";
-import type { Probe, NetLabel } from "../schematic/types";
+import type { Probe, NetLabel, SchematicWire } from "../schematic/types";
+import { netAtPoint } from "../schematic/netlist";
 import { paramFields, decodeParams, encodeParams } from "../schematic/params";
 import { EngineeringInput } from "./EngineeringInput";
 import type { OperatingPointResult } from "../simulation/operatingPoint";
@@ -248,10 +249,8 @@ export function SimulationPanel({
         : (() => {
             const ids: string[] = [];
             for (const probe of probes) {
-              const net = success.circuit.nets.find(
-                (n) => !n.isGround && n.points.some((pt) => pt.x === probe.x && pt.y === probe.y),
-              );
-              if (!net) continue;
+              const net = netAtPoint(success.circuit.nets, wires, probe);
+              if (!net || net.isGround) continue;
               const trace = success.traces.find((tr) => tr.id === net.id);
               if (trace && !ids.includes(trace.id)) ids.push(trace.id);
             }
@@ -259,7 +258,7 @@ export function SimulationPanel({
           })();
     const extraIds = scopeTraces.map((t) => t.id);
     return [...base, ...extraIds.filter((id) => !base.includes(id))];
-  }, [result, probes, scopeTraces]);
+  }, [result, probes, wires, scopeTraces]);
 
   // Keep the pane layout in sync with available traces whenever the set changes.
   useEffect(() => {
@@ -532,6 +531,7 @@ export function SimulationPanel({
           <WaveformPlot
             result={result}
             probes={probes}
+            wires={wires}
             netLabels={netLabels}
             extraTraces={scopeTraces}
             paneLayout={paneLayout}
@@ -793,7 +793,7 @@ export function SimulationPanel({
           <MeasTable measurements={noiseMeasurements} />
         </>
       )}
-      {mode === "step" && <StepPlot result={stepResult} probes={probes} />}
+      {mode === "step" && <StepPlot result={stepResult} probes={probes} wires={wires} />}
 
       <div className="selection-strip">
         <div className="strip-label">SELECT</div>
@@ -958,6 +958,7 @@ export function SimulationPanel({
 function WaveformPlot({
   result,
   probes,
+  wires,
   netLabels,
   extraTraces = [],
   paneLayout,
@@ -967,6 +968,7 @@ function WaveformPlot({
 }: {
   result: AnalysisResult | null;
   probes: Probe[];
+  wires: SchematicWire[];
   netLabels: NetLabel[];
   /** User-entered expression traces overlaid on the scope (§6). */
   extraTraces?: Trace[];
@@ -988,16 +990,14 @@ function WaveformPlot({
     } else {
       base = [];
       for (const probe of probes) {
-        const net = success.circuit.nets.find(
-          (n) => !n.isGround && n.points.some((pt) => pt.x === probe.x && pt.y === probe.y),
-        );
-        if (!net) continue;
+        const net = netAtPoint(success.circuit.nets, wires, probe);
+        if (!net || net.isGround) continue;
         const trace = success.traces.find((tr) => tr.id === net.id);
         if (trace && !base.some((o) => o.id === trace.id)) base.push({ ...trace, color: probe.color });
       }
     }
     return [...base, ...extraTraces];
-  }, [success, probes, extraTraces]);
+  }, [success, probes, wires, extraTraces]);
 
   const traceById = useMemo<Map<string, Trace>>(() => {
     const m = new Map<string, Trace>();
@@ -1979,7 +1979,7 @@ const STEP_COLORS = [
  * family-of-curves). The plotted signal follows the probe (first probed net),
  * falling back to the first trace, matching the transient scope.
  */
-function StepPlot({ result, probes }: { result: StepFamilyResult | null; probes: Probe[] }) {
+function StepPlot({ result, probes, wires }: { result: StepFamilyResult | null; probes: Probe[]; wires: SchematicWire[] }) {
   // Members whose run succeeded, paired with the chosen trace for each.
   const family = useMemo(() => {
     if (!result?.ok) return null;
@@ -1987,7 +1987,7 @@ function StepPlot({ result, probes }: { result: StepFamilyResult | null; probes:
     if (ok.length === 0) return null;
     const first = ok[0].result;
     if (!first.ok) return null;
-    const traceId = pickFamilyTraceId(first, probes);
+    const traceId = pickFamilyTraceId(first, probes, wires);
     if (!traceId) return null;
     const series = ok
       .map((m) => {
@@ -2002,7 +2002,7 @@ function StepPlot({ result, probes }: { result: StepFamilyResult | null; probes:
     const tMax = series.reduce((acc, s) => Math.max(acc, s.times[s.times.length - 1] || 0), 0) || 1;
     const signal = first.traces.find((t) => t.id === traceId)?.label ?? "V";
     return { series, min, max, tMax, signal };
-  }, [result, probes]);
+  }, [result, probes, wires]);
 
   if (!result) return null;
   if (!result.ok) return <div className="analysis-empty">{result.message ?? "No step sweep to show."}</div>;
@@ -2061,12 +2061,14 @@ function StepPlot({ result, probes }: { result: StepFamilyResult | null; probes:
 
 /** Pick the trace to plot across a step family: the first probed net's trace,
  *  else the first trace — mirroring the transient scope's selection. */
-function pickFamilyTraceId(success: Extract<AnalysisResult, { ok: true }>, probes: Probe[]): string | null {
+function pickFamilyTraceId(
+  success: Extract<AnalysisResult, { ok: true }>,
+  probes: Probe[],
+  wires: SchematicWire[],
+): string | null {
   for (const probe of probes) {
-    const net = success.circuit.nets.find(
-      (n) => !n.isGround && n.points.some((pt) => pt.x === probe.x && pt.y === probe.y),
-    );
-    if (!net) continue;
+    const net = netAtPoint(success.circuit.nets, wires, probe);
+    if (!net || net.isGround) continue;
     const trace = success.traces.find((t) => t.id === net.id);
     if (trace) return trace.id;
   }

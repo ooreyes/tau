@@ -45,7 +45,7 @@ export function StatusBar({
         engine: {engineLabel}
       </span>
       <span className="status-hints">
-        <span>{mode === "simulator" ? "probe nodes in the analysis panel" : toolLabel}</span>
+        <span>{mode === "simulator" ? "click a wire to probe its net" : toolLabel}</span>
         <span className="dot">·</span>
         <kbd>R</kbd>
         <kbd>C</kbd>
