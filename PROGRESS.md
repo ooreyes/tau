@@ -13,9 +13,9 @@
 - **Synced to origin:** auto/ltspice-parity @ latest
 - **Claimed unit:** wip `ac2021c` recovery (§4/§6 AC/DC `.step` family UI) — DONE
 - **Status:** DONE
-- **Last completed sub-step:** family overlays rendered + screenshot-verified; unit closed
-- **Next step (this session):** REVIEW SESSION (0 `review:` commits in last 30) —
-  diff review since ~e5cd552 + full UI/UX screenshot audit; fixes prefixed `review:`.
+- **Last completed sub-step:** review session complete (fixes committed as `review:`)
+- **Next step (for the following run):** §6 log/linear axis toggle or probe-in-place;
+  UX debt: transient expr-bar crowding, F2–F8 LTspice function keys (§8).
 
 > **Note on the `-wip` rescue branch:** tip `ac2021c` is now fully integrated
 > (reducers/tests/App wiring taken verbatim; SimulationPanel reapplied by hand on
@@ -24,7 +24,45 @@
 
 ---
 
-## 2026-07-02T10:55Z — auto/ltspice-parity — AC/DC `.step` families in the UI (§4/§6)
+## 2026-07-02T11:20Z — auto/ltspice-parity — REVIEW SESSION (first ever; rotation trigger)
+
+### What I did
+Code review of everything since `005f30d~1` (multi-select/group-move, multi-pane
+scope, AC/DC expr bars, step families — ~1900 lines):
+- **Real bug fixed:** `moveGroup` applied the drag's cumulative delta to the
+  *current* positions on every pointer-move, so a multi-select drag compounded
+  and ran away from the cursor (existing tests only called it once, where
+  cumulative == incremental). Now takes drag-start origins and places absolutely,
+  matching the single-move path; regression test with three successive
+  cumulative calls added.
+- Wire-only rubber-band box now selects the wire (was dead code that silently
+  cleared the selection).
+- `moveGroup` pin lookup: array `includes` → `Set`.
+- Reviewed clean: `plotPanes.ts` (pure, invariant-tested), pane reconciliation
+  effect (no loop; deps correct), AC/DC expr-bar lifecycle, family reducers.
+
+UI/UX audit (screenshot pipeline, 9 screens against the "picky Apple reviewer"
+standard): fresh empty state (intentional CTA card), schematic with rc-low-pass
+example, TRAN with results (dense, panes header, meters, FFT/cursor sections),
+OP table, AC/DC/TF/NOISE/STEP empty states — every tab shows a specific,
+actionable directive hint; no crashes, no clipped text, no overlap. AC/DC
+`.step` family panes verified earlier this session with a live 3-member family.
+
+### Files touched
+- apps/desktop/src/store/useSchematic.ts (+ .test.ts)
+- apps/desktop/src/components/Canvas.tsx
+- PROGRESS.md
+
+### Tests
+1043 passing (71 files), 1 new regression — passed. typecheck clean.
+
+### UX debt (logged, not fixed)
+- TRAN expr bar: 5 buttons crowd the input at 1440px; placeholder truncates.
+- F2–F8 LTspice function-key parity still absent (§8 feature item, not a
+  regression; Space/⌘E/⌘D etc. are in the status bar).
+
+### Next step
+- §6 log/linear axis toggle or probe-in-place (next feature session).
 
 ### What I did
 - Recovered wip `ac2021c` (killed mid-unit): took `stepAnalysisFamily.ts`
