@@ -11,18 +11,19 @@
 - **Headline metric:** 1051 tests green · baseline verified this run
 - **Run started (UTC):** 2026-07-02T16:15Z
 - **Synced to origin:** auto/ltspice-parity @ 81bba60
-- **Claimed unit:** §6 probe-in-place (wire click in simulator mode) +
-  `netAtPoint` mid-segment probe resolution.
-- **Status:** DONE
-- **Files:** schematic/netlist.ts (+5 tests), components/Canvas.tsx,
-  components/SimulationPanel.tsx (3 sites), components/StatusBar.tsx hint,
-  App.css cursor/hover, FEATURE_PARITY §6.
-- **Verify:** 1056 tests green (was 1051); typecheck clean; Playwright QA in
-  live app — mid-wire click adds probe + scope re-filters to that net, second
-  click toggles off, crosshair affordance present (screenshots reviewed).
-- **Last completed sub-step:** unit complete (tests + parity flip + log).
-- **Next step (for the following run):** §6 probe a component body to plot its
-  current, or §6 measurement cursor on the FFT plot.
+- **Claimed unit:** §6 current probe — in simulator mode, clicking a component
+  body toggles an `I(ref)` current trace on the scope (LTspice clamp-meter).
+- **Status:** IN PROGRESS
+- **Files:** schematic/types.ts (`Probe.componentId?`), documentValidation.ts,
+  store/useSchematic.ts `toggleCurrentProbe` (+test), new
+  simulation/currentProbe.ts `currentProbeTraces` (+test), Canvas.tsx
+  (component click in !interactive + live marker), SimulationPanel.tsx
+  (trace-list + WaveformPlot append current traces), FEATURE_PARITY §6.
+- **Verify:** unit tests (toggle add/remove/color, id→ref→I(ref) mapping, unit
+  "A", missing-ref/deleted-component paths); suite ≥1056; typecheck;
+  Playwright screenshot of a probed resistor current.
+- **Last completed sub-step:** §6 probe-in-place unit complete (this run).
+- **Next step (for the following run):** §6 measurement cursor on the FFT plot.
 
 ---
 
