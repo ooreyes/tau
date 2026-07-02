@@ -1002,7 +1002,7 @@ export function Canvas({
         beginChange();
         d.moved = true;
       }
-      moveGroup(d.groupIds, dx, dy, d.groupSourcePins, d.sourceWires);
+      moveGroup(d.groupOrigins, dx, dy, d.groupSourcePins, d.sourceWires);
     }
   };
 
@@ -1015,10 +1015,11 @@ export function Canvas({
           const rect = boxWorldRect(prev);
           const inRect = componentsInRect(rect);
           const wiresIn = wiresInRect(rect);
-          if (inRect.length > 0 || wiresIn.length > 0) {
+          if (inRect.length > 0) {
             selectMultiple(inRect);
-            // Wire-only box selects go through selectedWireId for single wire,
-            // but for consistency we just select the components found.
+          } else if (wiresIn.length > 0) {
+            // Wire-only box: the selection model holds one wire — take the first.
+            selectWire(wiresIn[0]);
           } else {
             clearSelection();
           }

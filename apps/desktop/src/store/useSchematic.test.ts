@@ -559,7 +559,7 @@ describe("moveGroup (group move with wire rubber-banding)", () => {
 
     useSchematic.getState().beginChange();
     useSchematic.getState().moveGroup(
-      ids,
+      new Map(useSchematic.getState().components.map((c) => [c.id, { x: c.x, y: c.y }])),
       64, 32,
       new Map(useSchematic.getState().components.map((c) => [c.id, []])),
       [],
@@ -576,7 +576,7 @@ describe("moveGroup (group move with wire rubber-banding)", () => {
 
     useSchematic.getState().beginChange();
     useSchematic.getState().moveGroup(
-      ids,
+      new Map(useSchematic.getState().components.map((c) => [c.id, { x: c.x, y: c.y }])),
       64, 0,
       new Map(ids.map((id) => [id, []])),
       [],
@@ -609,7 +609,7 @@ describe("moveGroup (group move with wire rubber-banding)", () => {
     }));
 
     useSchematic.getState().beginChange();
-    useSchematic.getState().moveGroup([r1Id], 64, 0, sourcePins, sourceWires);
+    useSchematic.getState().moveGroup(new Map([[r1Id, { x: 0, y: 0 }]]), 64, 0, sourcePins, sourceWires);
 
     const wires = useSchematic.getState().wires;
     expect(wires[0].points[0]).toEqual({ x: 96, y: 0 });
@@ -638,7 +638,7 @@ describe("moveGroup (group move with wire rubber-banding)", () => {
     }));
 
     useSchematic.getState().beginChange();
-    useSchematic.getState().moveGroup([r1Id], 0, -32, sourcePins, sourceWires);
+    useSchematic.getState().moveGroup(new Map([[r1Id, { x: 0, y: 0 }]]), 0, -32, sourcePins, sourceWires);
 
     const pts = useSchematic.getState().wires[0].points;
     // First point moved with pin.
@@ -671,10 +671,30 @@ describe("moveGroup (group move with wire rubber-banding)", () => {
     }));
 
     useSchematic.getState().beginChange();
-    useSchematic.getState().moveGroup([r1Id, r2Id], 64, 0, sourcePins, sourceWires);
+    useSchematic.getState().moveGroup(new Map([[r1Id, { x: 0, y: 0 }], [r2Id, { x: 128, y: 0 }]]), 64, 0, sourcePins, sourceWires);
 
     const pts = useSchematic.getState().wires[0].points;
     expect(pts[0]).toEqual({ x: 96, y: 0 });
     expect(pts[pts.length - 1]).toEqual({ x: 160, y: 0 });
+  });
+
+  it("does not compound cumulative deltas across successive pointer-moves", () => {
+    // During a drag, the canvas calls moveGroup once per pointer-move with the
+    // TOTAL delta from drag start. Positions must come from the drag-start
+    // origins, not the current state — otherwise the group runs away from the
+    // cursor (regression: components moved by dx each call on top of the last).
+    useSchematic.getState().loadCircuit(twoResistorDocument());
+    const comps = useSchematic.getState().components;
+    const origins = new Map(comps.map((c) => [c.id, { x: c.x, y: c.y }]));
+    const pins = new Map(comps.map((c) => [c.id, []] as [string, { x: number; y: number }[]]));
+
+    useSchematic.getState().beginChange();
+    useSchematic.getState().moveGroup(origins, 32, 0, pins, []);
+    useSchematic.getState().moveGroup(origins, 64, 0, pins, []);
+    useSchematic.getState().moveGroup(origins, 96, 16, pins, []);
+
+    const after = useSchematic.getState().components;
+    expect(after.find((c) => c.id === comps[0].id)).toMatchObject({ x: 96, y: 16 });
+    expect(after.find((c) => c.id === comps[1].id)).toMatchObject({ x: 224, y: 16 });
   });
 });

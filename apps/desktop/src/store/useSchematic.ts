@@ -74,12 +74,15 @@ interface SchematicState extends Doc {
   /** Toggle a single component in/out of the multi-selection (Shift+click). */
   toggleSelect: (id: string) => void;
   /**
-   * Move all components in `selectedIds` together by (dx, dy), rubber-banding
-   * any wire endpoints that were pinned to their pins at drag start.
+   * Move a group of components together by (dx, dy) *from their drag-start
+   * origins*, rubber-banding any wire endpoints that were pinned to their pins
+   * at drag start. Both the origins and the deltas are relative to drag start,
+   * so repeated calls during one drag are idempotent for the same (dx, dy) —
+   * matching the absolute-position single-component move path.
    * Caller must call `beginChange()` once before the first pointer-move.
    */
   moveGroup: (
-    ids: string[],
+    origins: Map<string, { x: number; y: number }>,
     dx: number,
     dy: number,
     sourcePins: Map<string, { x: number; y: number }[]>,
@@ -352,23 +355,25 @@ export const useSchematic = create<SchematicState>()((set) => {
         };
       }),
 
-    moveGroup: (ids, dx, dy, sourcePins, sourceWires) =>
+    moveGroup: (origins, dx, dy, sourcePins, sourceWires) =>
       set((s) => {
         // Collect all pin world positions for components in the selection
         const allSourcePins: Point[] = [];
         for (const [, pins] of sourcePins) {
           for (const p of pins) allSourcePins.push(p);
         }
-        const idSet = new Set(ids);
+        // Absolute placement from the drag-start origin — never from the current
+        // position, which would compound the cumulative delta on every event.
         const updatedComponents = s.components.map((c) => {
-          if (!idSet.has(c.id)) return c;
-          return { ...c, x: c.x + dx, y: c.y + dy };
+          const origin = origins.get(c.id);
+          if (!origin) return c;
+          return { ...c, x: origin.x + dx, y: origin.y + dy };
         });
         // Import translateAttachedWireEndpoints logic inline (avoid circular deps)
         // We use the exported function from Canvas — but store can't import Canvas.
         // Instead replicate the minimal logic here.
-        const pinSet = allSourcePins.map((p) => `${p.x},${p.y}`);
-        const isPinPoint = (pt: Point) => pinSet.includes(`${pt.x},${pt.y}`);
+        const pinSet = new Set(allSourcePins.map((p) => `${p.x},${p.y}`));
+        const isPinPoint = (pt: Point) => pinSet.has(`${pt.x},${pt.y}`);
         const updatedWires = sourceWires.map((wire) => {
           if (wire.points.length < 2) return wire;
           const firstMoved = isPinPoint(wire.points[0]);
