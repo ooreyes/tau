@@ -698,3 +698,54 @@ describe("moveGroup (group move with wire rubber-banding)", () => {
     expect(after.find((c) => c.id === comps[1].id)).toMatchObject({ x: 224, y: 16 });
   });
 });
+
+describe("toggleCurrentProbe (clamp-meter)", () => {
+  const withParts = () => {
+    useSchematic.setState({
+      components: [
+        { id: "r-1", kind: "resistor", x: 96, y: 0, rotation: 0, value: "1k", label: "R1" },
+        { id: "gnd-1", kind: "ground", x: 0, y: 64, rotation: 0, value: "", label: "" },
+      ],
+    });
+  };
+
+  it("adds a probe carrying the componentId at the component's position", () => {
+    withParts();
+    useSchematic.getState().toggleCurrentProbe("r-1");
+    const probes = useSchematic.getState().probes;
+    expect(probes).toHaveLength(1);
+    expect(probes[0]).toMatchObject({ componentId: "r-1", x: 96, y: 0 });
+  });
+
+  it("toggles the probe off on a second call for the same component", () => {
+    withParts();
+    useSchematic.getState().toggleCurrentProbe("r-1");
+    useSchematic.getState().toggleCurrentProbe("r-1");
+    expect(useSchematic.getState().probes).toHaveLength(0);
+  });
+
+  it("cycles probe colors together with net probes", () => {
+    withParts();
+    useSchematic.getState().addProbe(64, 0); // first color
+    useSchematic.getState().toggleCurrentProbe("r-1"); // second color
+    const probes = useSchematic.getState().probes;
+    expect(probes[0].color).toBe("var(--trace-red)");
+    expect(probes[1].color).toBe("var(--trace-purple)");
+  });
+
+  it("refuses grounds and unknown component ids", () => {
+    withParts();
+    useSchematic.getState().toggleCurrentProbe("gnd-1");
+    useSchematic.getState().toggleCurrentProbe("no-such-id");
+    expect(useSchematic.getState().probes).toHaveLength(0);
+  });
+
+  it("does not toggle a coincident net probe off via addProbe", () => {
+    withParts();
+    useSchematic.getState().toggleCurrentProbe("r-1"); // sits at (96, 0)
+    useSchematic.getState().addProbe(96, 0); // net probe at the same point
+    const probes = useSchematic.getState().probes;
+    expect(probes).toHaveLength(2);
+    expect(probes.filter((p) => p.componentId)).toHaveLength(1);
+  });
+});

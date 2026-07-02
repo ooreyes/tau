@@ -8,12 +8,12 @@
      `git log --oneline -8`, recover/finish/revert that unit FIRST, then go on.
      ─────────────────────────────────────────────────────────────────────── -->
 ## ⏱ HEARTBEAT
-- **Headline metric:** 1056 tests green · baseline verified this run
+- **Headline metric:** 1068 tests green · baseline verified this run
 - **Run started (UTC):** 2026-07-02T22:05Z
 - **Synced to origin:** auto/ltspice-parity @ 6e213bc (resuming rescued wip 883cdd1)
 - **Claimed unit:** §6 current probe — in simulator mode, clicking a component
   body toggles an `I(ref)` current trace on the scope (LTspice clamp-meter).
-- **Status:** IN PROGRESS
+- **Status:** DONE
 - **Files:** schematic/types.ts (`Probe.componentId?`), documentValidation.ts,
   store/useSchematic.ts `toggleCurrentProbe` (+test), new
   simulation/currentProbe.ts `currentProbeTraces` (+test), Canvas.tsx
@@ -22,9 +22,66 @@
 - **Verify:** unit tests (toggle add/remove/color, id→ref→I(ref) mapping, unit
   "A", missing-ref/deleted-component paths); suite ≥1056; typecheck;
   Playwright screenshot of a probed resistor current.
-- **Last completed sub-step:** rescued wip 883cdd1 (full implementation, no
-  tests yet) identified; this run cherry-picks it, adds the tests, verifies.
+- **Last completed sub-step:** §6 component-body current probe complete
+  (rescued wip finished: 12 tests added, visual QA passed, hint updated).
 - **Next step (for the following run):** §6 measurement cursor on the FFT plot.
+
+---
+
+## 2026-07-02T22:20Z — auto/ltspice-parity — §6 component-body current probe (LTspice clamp-meter)
+
+### What I did
+- **Recovered rescued wip 883cdd1** (previous session died mid-unit): full
+  implementation of the clamp-meter probe — in simulator mode clicking a
+  component body toggles an `I(ref)` current trace on the scope. Cherry-picked
+  cleanly, then finished the unit: wrote all the missing tests and did the
+  visual QA the heartbeat's verify plan called for.
+- Implementation (from the wip): `Probe.componentId?` marks a clamp probe
+  (persisted + validated in documentValidation), store `toggleCurrentProbe`
+  adds/removes it (refuses grounds/unknown ids, shares the probe color cycle),
+  `simulation/currentProbe.ts#currentProbeTraces` resolves probe→component
+  ref→`result.currents` into a plottable trace (unit "A", probe color, deduped),
+  Canvas renders a dashed-ring marker that follows the component and skips
+  deleted hosts, SimulationPanel/WaveformPlot append current traces to the
+  probed-trace set.
+- **New this run:** `currentProbe.test.ts` (7 tests — real RC transient run so
+  id→ref→current is end-to-end; physics check I(R1)@t=0 ≈ Vs/R = 5 mA and
+  decay <50 µA at 5τ; net-probe/unknown-id/unlabeled/dedup paths) and 5 store
+  tests (add carries componentId at part position, toggle-off, color cycling
+  with net probes, ground/unknown refused, coincident net probe not stolen by
+  `addProbe`). Also fixed the status-bar simulator hint to advertise both
+  gestures: "click a wire to probe voltage · a part to probe current".
+
+### Files touched
+- apps/desktop/src/simulation/currentProbe.ts (+ currentProbe.test.ts, new)
+- apps/desktop/src/store/useSchematic.ts (+ 5 tests in useSchematic.test.ts)
+- apps/desktop/src/schematic/types.ts, documentValidation.ts
+- apps/desktop/src/components/Canvas.tsx, SimulationPanel.tsx, StatusBar.tsx
+- apps/desktop/src/App.css
+- FEATURE_PARITY.md, PROGRESS.md
+
+### Tests
+1068 passing (72 files), 12 new — passed. typecheck clean.
+
+### FEATURE_PARITY items updated
+- §6 probe-in-place item: "Still ⬜ component-body current" → landed, documented.
+
+### Visual QA
+Playwright drove the live app (RC Charging → run → simulator): clicking V1's
+body added the dashed-ring marker in the probe color and the scope re-filtered
+to exactly `I(V1)` (−5.3 mA charging decay toward 0 — the correct negative of
+the 5 mA resistor current); second click removed the marker and restored the
+default voltage traces. Screenshots reviewed: plot, legend, marker, and the new
+status-bar hint all render correctly.
+
+### UX issues found
+- The RC example's R1/C1 sit underneath the simulation panel overlay at default
+  zoom in a 1440×900 window — clicks there hit the panel, not the canvas. Not
+  new to this unit (same for selection), but worth a "zoom to fit visible area"
+  pass later. Logged as UX debt.
+
+### Next step
+§6 measurement cursor on the FFT plot.
 
 ---
 

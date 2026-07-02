@@ -686,7 +686,15 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   when the point lies **anywhere on a wire segment**, fixing the latent bug
   where a mid-segment probe (no DSU point of its own) silently failed to plot;
   all three resolution sites (scope trace list, WaveformPlot, step-family
-  picker) now share it. Still ⬜: click a component body to plot its current.
+  picker) now share it. **Component-body current probe landed too**
+  (LTspice clamp-meter, 2026-07-02): in simulator mode clicking a part toggles
+  `I(ref)` on the scope — `Probe.componentId` marks a clamp probe, store
+  `toggleCurrentProbe` (5 tests), `simulation/currentProbe.ts` resolves
+  id→ref→`result.currents` with the probe's color + unit A (7 tests incl. a
+  physics check: I(R1) t=0 ≈ 5 mA in the RC example), dashed-ring marker
+  follows the component, status-bar hint advertises both gestures.
+  Live-verified via Playwright: click V1 → scope shows only I(V1) (−5.3 mA→0
+  charging decay), second click restores the default traces.
 - 🟡 **Plot arbitrary expressions** (`V(a)-V(b)`, `I(R1)*V(out)`, power `V(out)*I(out)`)
   — **landed** (`simulation/plotExpression.ts`): an expression bar under the
   transient scope evaluates any expression of the simulated signals at every
