@@ -516,15 +516,30 @@ const findFreeSpot = (
   return { x, y };
 };
 
+/** Screen-space box used while drawing a rubber-band selection rectangle. */
+interface BoxDrag {
+  startX: number; // screen coords
+  startY: number;
+  curX: number;
+  curY: number;
+}
+
 interface DragState {
-  mode: "none" | "pan" | "move";
+  mode: "none" | "pan" | "move" | "group-move" | "box";
   id?: string;
+  /** ids being moved together in group-move mode */
+  groupIds?: string[];
   lastX: number;
   lastY: number;
   moved: boolean;
   origin?: Point;
+  /** For single-component move: the component's pin positions at drag start. */
   sourcePins?: Point[];
   sourceWires?: SchematicWire[];
+  /** For group-move: map from component id → pin world positions at drag start. */
+  groupSourcePins?: Map<string, Point[]>;
+  /** For group-move: per-component world origins at drag start. */
+  groupOrigins?: Map<string, Point>;
 }
 
 export function Canvas({
@@ -542,11 +557,14 @@ export function Canvas({
   const [wireDraft, setWireDraft] = useState<{ start: Point; cursor: Point } | null>(null);
   const [snapHover, setSnapHover] = useState<{ x: number; y: number; pin: boolean } | null>(null);
   const [flowOn, setFlowOn] = useState(true);
+  /** Rubber-band box in screen coords, null when not drawing. */
+  const [boxDrag, setBoxDrag] = useState<BoxDrag | null>(null);
 
   const components = useSchematic((s) => s.components);
   const wires = useSchematic((s) => s.wires);
   const selectedId = useSchematic((s) => s.selectedId);
   const selectedWireId = useSchematic((s) => s.selectedWireId);
+  const selectedIds = useSchematic((s) => s.selectedIds);
   const tool = useSchematic((s) => s.tool);
   const placeRotation = useSchematic((s) => s.placeRotation);
   const placeMirror = useSchematic((s) => s.placeMirror);
@@ -554,6 +572,10 @@ export function Canvas({
   const addWire = useSchematic((s) => s.addWire);
   const select = useSchematic((s) => s.select);
   const selectWire = useSchematic((s) => s.selectWire);
+  const selectMultiple = useSchematic((s) => s.selectMultiple);
+  const toggleSelect = useSchematic((s) => s.toggleSelect);
+  const moveGroup = useSchematic((s) => s.moveGroup);
+  const clearSelection = useSchematic((s) => s.clearSelection);
   const beginChange = useSchematic((s) => s.beginChange);
   const setValue = useSchematic((s) => s.setValue);
   const probes = useSchematic((s) => s.probes);
@@ -774,9 +796,46 @@ export function Canvas({
     [tool, snappedCursor, wireDraft, addWire, components],
   );
 
+  /** World-coord bounds of a rubber-band box. */
+  const boxWorldRect = useCallback(
+    (box: BoxDrag): Rect => {
+      const a = screenToWorld(box.startX, box.startY);
+      const b = screenToWorld(box.curX, box.curY);
+      return { minX: Math.min(a.x, b.x), minY: Math.min(a.y, b.y), maxX: Math.max(a.x, b.x), maxY: Math.max(a.y, b.y) };
+    },
+    [screenToWorld],
+  );
+
+  /** Return component ids fully enclosed in the world rect. */
+  const componentsInRect = useCallback(
+    (rect: Rect): string[] =>
+      components
+        .filter((c) => {
+          const wr = componentWorldRect(c);
+          return wr.minX >= rect.minX && wr.maxX <= rect.maxX && wr.minY >= rect.minY && wr.maxY <= rect.maxY;
+        })
+        .map((c) => c.id),
+    [components],
+  );
+
+  /** Return wire ids where ALL points are fully inside the world rect. */
+  const wiresInRect = useCallback(
+    (rect: Rect): string[] =>
+      wires
+        .filter((w) => w.points.every((p) => p.x >= rect.minX && p.x <= rect.maxX && p.y >= rect.minY && p.y <= rect.maxY))
+        .map((w) => w.id),
+    [wires],
+  );
+
   // All selection/drag goes through one hit-test on the SVG, so z-order never
   // decides which component a click lands on (components don't intercept).
   const onBackgroundPointerDown = (e: ReactPointerEvent<SVGElement>) => {
+    // Middle-mouse button always pans (button === 1).
+    if (e.button === 1) {
+      drag.current = { mode: "pan", lastX: e.clientX, lastY: e.clientY, moved: false };
+      svgRef.current?.setPointerCapture(e.pointerId);
+      return;
+    }
     if (e.button !== 0) return;
     const world = screenToWorld(e.clientX, e.clientY);
 
@@ -807,20 +866,55 @@ export function Canvas({
 
     const hit = componentAt(components, world.x, world.y);
     if (hit) {
-      select(hit.id);
-      drag.current = {
-        mode: "move",
-        id: hit.id,
-        lastX: e.clientX,
-        lastY: e.clientY,
-        moved: false,
-        origin: { x: hit.x, y: hit.y },
-        sourcePins: getComponentPins(hit).map(({ x, y }) => ({ x, y })),
-        sourceWires: wires.map((wire) => ({ ...wire, points: wire.points.map((point) => ({ ...point })) })),
-      };
+      if (e.shiftKey) {
+        // Shift+click: toggle this component in/out of multi-select.
+        toggleSelect(hit.id);
+        drag.current = { mode: "none", lastX: e.clientX, lastY: e.clientY, moved: false };
+        return;
+      }
+      // If the clicked component is already in the multi-selection, start a
+      // group-move of the whole selection. Otherwise, start a single-component move.
+      const isInGroup = selectedIds.includes(hit.id) && selectedIds.length > 1;
+      if (isInGroup) {
+        // Group move: snapshot pin positions for all components in the selection.
+        const snapshotComps = components.filter((c) => selectedIds.includes(c.id));
+        const groupSourcePins = new Map<string, Point[]>();
+        for (const c of snapshotComps) {
+          groupSourcePins.set(c.id, getComponentPins(c).map(({ x, y }) => ({ x, y })));
+        }
+        const groupOrigins = new Map<string, Point>(snapshotComps.map((c) => [c.id, { x: c.x, y: c.y }]));
+        const frozenWires = wires.map((w) => ({ ...w, points: w.points.map((p) => ({ ...p })) }));
+        drag.current = {
+          mode: "group-move",
+          id: hit.id,
+          groupIds: selectedIds.slice(),
+          lastX: e.clientX,
+          lastY: e.clientY,
+          moved: false,
+          origin: { x: hit.x, y: hit.y },
+          groupSourcePins,
+          groupOrigins,
+          sourceWires: frozenWires,
+        };
+      } else {
+        select(hit.id);
+        drag.current = {
+          mode: "move",
+          id: hit.id,
+          lastX: e.clientX,
+          lastY: e.clientY,
+          moved: false,
+          origin: { x: hit.x, y: hit.y },
+          sourcePins: getComponentPins(hit).map(({ x, y }) => ({ x, y })),
+          sourceWires: wires.map((wire) => ({ ...wire, points: wire.points.map((point) => ({ ...point })) })),
+        };
+      }
     } else {
-      select(null);
-      drag.current = { mode: "pan", lastX: e.clientX, lastY: e.clientY, moved: false };
+      // Empty canvas click: start rubber-band box select (not pan).
+      // A plain click (no drag) clears the selection on pointer-up.
+      clearSelection();
+      drag.current = { mode: "box", lastX: e.clientX, lastY: e.clientY, moved: false };
+      setBoxDrag({ startX: e.clientX, startY: e.clientY, curX: e.clientX, curY: e.clientY });
     }
     svgRef.current?.setPointerCapture(e.pointerId);
   };
@@ -876,6 +970,9 @@ export function Canvas({
       d.lastX = e.clientX;
       d.lastY = e.clientY;
       setView((v) => ({ ...v, x: v.x + dx, y: v.y + dy }));
+    } else if (d.mode === "box") {
+      // Update rubber-band box in screen space.
+      setBoxDrag((prev) => prev ? { ...prev, curX: e.clientX, curY: e.clientY } : prev);
     } else if (d.mode === "move" && d.id && d.origin && d.sourcePins && d.sourceWires) {
       const w = screenToWorld(e.clientX, e.clientY);
       const tx = snap(w.x);
@@ -892,16 +989,52 @@ export function Canvas({
         d.moved = true;
       }
       moveComponentWithAttachedWires(d.id, tx, ty, d.sourcePins, d.sourceWires, tx - d.origin.x, ty - d.origin.y);
+    } else if (d.mode === "group-move" && d.groupIds && d.groupOrigins && d.groupSourcePins && d.sourceWires && d.origin) {
+      const w = screenToWorld(e.clientX, e.clientY);
+      // The pointer started over the anchor component (d.origin). Compute the
+      // snapped-grid offset from that origin to where the pointer is now.
+      const anchorOrigin = d.groupOrigins.get(d.id ?? "") ?? d.origin;
+      const dx = snap(w.x) - anchorOrigin.x;
+      const dy = snap(w.y) - anchorOrigin.y;
+      if (!Number.isFinite(dx) || !Number.isFinite(dy)) return;
+      if (dx === 0 && dy === 0) return;
+      if (!d.moved) {
+        beginChange();
+        d.moved = true;
+      }
+      moveGroup(d.groupIds, dx, dy, d.groupSourcePins, d.sourceWires);
     }
   };
 
   const endDrag = (e: ReactPointerEvent<SVGElement>) => {
+    const d = drag.current;
+    if (d.mode === "box") {
+      // On release, commit the box selection.
+      setBoxDrag((prev) => {
+        if (prev) {
+          const rect = boxWorldRect(prev);
+          const inRect = componentsInRect(rect);
+          const wiresIn = wiresInRect(rect);
+          if (inRect.length > 0 || wiresIn.length > 0) {
+            selectMultiple(inRect);
+            // Wire-only box selects go through selectedWireId for single wire,
+            // but for consistency we just select the components found.
+          } else {
+            clearSelection();
+          }
+        }
+        return null;
+      });
+    }
     drag.current.mode = "none";
     drag.current.id = undefined;
+    drag.current.groupIds = undefined;
     drag.current.moved = false;
     drag.current.origin = undefined;
     drag.current.sourcePins = undefined;
     drag.current.sourceWires = undefined;
+    drag.current.groupSourcePins = undefined;
+    drag.current.groupOrigins = undefined;
     const el = svgRef.current;
     if (el?.hasPointerCapture(e.pointerId)) el.releasePointerCapture(e.pointerId);
   };
@@ -1024,7 +1157,7 @@ export function Canvas({
           ))}
 
           {components.map((c) => (
-            <ComponentView key={c.id} comp={c} selected={c.id === selectedId} showPins={wiring || probing} />
+            <ComponentView key={c.id} comp={c} selected={c.id === selectedId || selectedIds.includes(c.id)} showPins={wiring || probing} />
           ))}
 
           {probes.map((p) => (
@@ -1054,6 +1187,19 @@ export function Canvas({
             </g>
           )}
         </g>
+
+        {/* Rubber-band selection rectangle — in screen space (no world transform). */}
+        {boxDrag && (() => {
+          const el = svgRef.current;
+          const r = el?.getBoundingClientRect();
+          const ox = r ? r.left : 0;
+          const oy = r ? r.top : 0;
+          const x = Math.min(boxDrag.startX, boxDrag.curX) - ox;
+          const y = Math.min(boxDrag.startY, boxDrag.curY) - oy;
+          const w = Math.abs(boxDrag.curX - boxDrag.startX);
+          const h = Math.abs(boxDrag.curY - boxDrag.startY);
+          return <rect className="select-box" x={x} y={y} width={w} height={h} />;
+        })()}
       </svg>
 
       {flowActive && (

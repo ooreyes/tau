@@ -54,6 +54,7 @@ function resetStore() {
     counters: {},
     selectedId: null,
     selectedWireId: null,
+    selectedIds: [],
     tool: { mode: "select" },
     placeRotation: 0,
     placeMirror: false,
@@ -463,5 +464,217 @@ describe("schematic document store", () => {
     expect(state.selectedId).toBeNull();
     // Wire is untouched.
     expect(state.wires).toHaveLength(1);
+  });
+});
+
+// --------------------------------------------------------------------------
+// Multi-select and group-move
+// --------------------------------------------------------------------------
+
+const twoResistorDocument = (): SchematicDocument => ({
+  components: [
+    { id: "r1", kind: "resistor", x: 0, y: 0, rotation: 0, value: "1k", label: "R1" },
+    { id: "r2", kind: "resistor", x: 128, y: 0, rotation: 0, value: "2k", label: "R2" },
+  ],
+  wires: [],
+});
+
+describe("multi-select", () => {
+  it("selectMultiple sets selectedIds and derives selectedId for single-item lists", () => {
+    useSchematic.getState().loadCircuit(twoResistorDocument());
+    const [id1, id2] = useSchematic.getState().components.map((c) => c.id);
+
+    useSchematic.getState().selectMultiple([id1, id2]);
+    expect(useSchematic.getState().selectedIds).toEqual([id1, id2]);
+    // selectedId is null when more than one item is selected.
+    expect(useSchematic.getState().selectedId).toBeNull();
+    expect(useSchematic.getState().selectedWireId).toBeNull();
+
+    useSchematic.getState().selectMultiple([id1]);
+    expect(useSchematic.getState().selectedId).toBe(id1);
+    expect(useSchematic.getState().selectedIds).toEqual([id1]);
+  });
+
+  it("toggleSelect adds and removes a component from the selection", () => {
+    useSchematic.getState().loadCircuit(twoResistorDocument());
+    const [id1, id2] = useSchematic.getState().components.map((c) => c.id);
+
+    useSchematic.getState().toggleSelect(id1);
+    expect(useSchematic.getState().selectedIds).toEqual([id1]);
+
+    useSchematic.getState().toggleSelect(id2);
+    expect(useSchematic.getState().selectedIds).toEqual([id1, id2]);
+    expect(useSchematic.getState().selectedId).toBeNull();
+
+    useSchematic.getState().toggleSelect(id1);
+    expect(useSchematic.getState().selectedIds).toEqual([id2]);
+    expect(useSchematic.getState().selectedId).toBe(id2);
+  });
+
+  it("clearSelection clears all selection kinds", () => {
+    useSchematic.getState().loadCircuit(twoResistorDocument());
+    const [id1, id2] = useSchematic.getState().components.map((c) => c.id);
+
+    useSchematic.getState().selectMultiple([id1, id2]);
+    useSchematic.getState().clearSelection();
+
+    const s = useSchematic.getState();
+    expect(s.selectedIds).toEqual([]);
+    expect(s.selectedId).toBeNull();
+    expect(s.selectedWireId).toBeNull();
+  });
+
+  it("deleteSelected removes all components in selectedIds and is undoable", () => {
+    useSchematic.getState().loadCircuit(twoResistorDocument());
+    const ids = useSchematic.getState().components.map((c) => c.id);
+
+    useSchematic.getState().selectMultiple(ids);
+    useSchematic.getState().deleteSelected();
+
+    expect(useSchematic.getState().components).toHaveLength(0);
+    expect(useSchematic.getState().selectedIds).toEqual([]);
+
+    useSchematic.getState().undo();
+    expect(useSchematic.getState().components).toHaveLength(2);
+  });
+
+  it("select() keeps single-select API working: sets selectedId and selectedIds=[id]", () => {
+    useSchematic.getState().loadCircuit(twoResistorDocument());
+    const id = useSchematic.getState().components[0].id;
+
+    useSchematic.getState().select(id);
+    expect(useSchematic.getState().selectedId).toBe(id);
+    expect(useSchematic.getState().selectedIds).toEqual([id]);
+
+    useSchematic.getState().select(null);
+    expect(useSchematic.getState().selectedId).toBeNull();
+    expect(useSchematic.getState().selectedIds).toEqual([]);
+  });
+});
+
+describe("moveGroup (group move with wire rubber-banding)", () => {
+  it("moves multiple components by (dx, dy) in one step", () => {
+    useSchematic.getState().loadCircuit(twoResistorDocument());
+    const ids = useSchematic.getState().components.map((c) => c.id);
+
+    useSchematic.getState().beginChange();
+    useSchematic.getState().moveGroup(
+      ids,
+      64, 32,
+      new Map(useSchematic.getState().components.map((c) => [c.id, []])),
+      [],
+    );
+
+    const comps = useSchematic.getState().components;
+    expect(comps.find((c) => c.id === ids[0])).toMatchObject({ x: 64, y: 32 });
+    expect(comps.find((c) => c.id === ids[1])).toMatchObject({ x: 192, y: 32 });
+  });
+
+  it("single undo reverts the whole group move", () => {
+    useSchematic.getState().loadCircuit(twoResistorDocument());
+    const ids = useSchematic.getState().components.map((c) => c.id);
+
+    useSchematic.getState().beginChange();
+    useSchematic.getState().moveGroup(
+      ids,
+      64, 0,
+      new Map(ids.map((id) => [id, []])),
+      [],
+    );
+
+    useSchematic.getState().undo();
+    const comps = useSchematic.getState().components;
+    expect(comps.find((c) => c.id === ids[0])).toMatchObject({ x: 0, y: 0 });
+    expect(comps.find((c) => c.id === ids[1])).toMatchObject({ x: 128, y: 0 });
+  });
+
+  it("rubber-bands wire endpoints that were pinned to moved component pins", () => {
+    // R1 at x=0 has right pin at (32,0). A wire from (32,0) to (96,0).
+    // Moving R1 by dx=64 should shift the wire start to (96,0) and keep the end.
+    const doc: SchematicDocument = {
+      components: [
+        { id: "r1", kind: "resistor", x: 0, y: 0, rotation: 0, value: "1k", label: "R1" },
+      ],
+      wires: [
+        { id: "w1", points: [{ x: 32, y: 0 }, { x: 96, y: 0 }] },
+      ],
+    };
+    useSchematic.getState().loadCircuit(doc);
+    const r1Id = useSchematic.getState().components[0].id;
+    // Pin "b" of a horizontal resistor is at local (32,0) → world (32,0).
+    const sourcePins = new Map([[r1Id, [{ x: 32, y: 0 }]]]);
+    const sourceWires = useSchematic.getState().wires.map((w) => ({
+      ...w,
+      points: w.points.map((p) => ({ ...p })),
+    }));
+
+    useSchematic.getState().beginChange();
+    useSchematic.getState().moveGroup([r1Id], 64, 0, sourcePins, sourceWires);
+
+    const wires = useSchematic.getState().wires;
+    expect(wires[0].points[0]).toEqual({ x: 96, y: 0 });
+    // The far end is not pinned and stays put.
+    expect(wires[0].points[wires[0].points.length - 1]).toEqual({ x: 96, y: 0 });
+  });
+
+  it("rubber-bands wire with an elbow when axis alignment is lost after move", () => {
+    // R1 at y=0, wire start at pin (32, 0), wire goes to (32, 64) — vertical.
+    // Moving R1 up by dy=-32: pin moves to (32, -32). Wire end stays at (32, 64).
+    // Wire stays axis-aligned: new points [{ x:32, y:-32 }, { x:32, y:64 }].
+    const doc: SchematicDocument = {
+      components: [
+        { id: "r1", kind: "resistor", x: 0, y: 0, rotation: 0, value: "1k", label: "R1" },
+      ],
+      wires: [
+        { id: "w1", points: [{ x: 32, y: 0 }, { x: 32, y: 64 }] },
+      ],
+    };
+    useSchematic.getState().loadCircuit(doc);
+    const r1Id = useSchematic.getState().components[0].id;
+    const sourcePins = new Map([[r1Id, [{ x: 32, y: 0 }]]]);
+    const sourceWires = useSchematic.getState().wires.map((w) => ({
+      ...w,
+      points: w.points.map((p) => ({ ...p })),
+    }));
+
+    useSchematic.getState().beginChange();
+    useSchematic.getState().moveGroup([r1Id], 0, -32, sourcePins, sourceWires);
+
+    const pts = useSchematic.getState().wires[0].points;
+    // First point moved with pin.
+    expect(pts[0]).toEqual({ x: 32, y: -32 });
+    // Last point unchanged.
+    expect(pts[pts.length - 1]).toEqual({ x: 32, y: 64 });
+  });
+
+  it("moves the whole wire when both endpoints are pinned", () => {
+    // Wire between pin of R1 (32,0) and pin of R2 (96,0).
+    // Both pins move by dx=64 → wire shifts entirely.
+    const doc: SchematicDocument = {
+      components: [
+        { id: "r1", kind: "resistor", x: 0, y: 0, rotation: 0, value: "1k", label: "R1" },
+        { id: "r2", kind: "resistor", x: 128, y: 0, rotation: 0, value: "2k", label: "R2" },
+      ],
+      wires: [
+        { id: "w1", points: [{ x: 32, y: 0 }, { x: 96, y: 0 }] },
+      ],
+    };
+    useSchematic.getState().loadCircuit(doc);
+    const [r1Id, r2Id] = useSchematic.getState().components.map((c) => c.id);
+    const sourcePins = new Map([
+      [r1Id, [{ x: 32, y: 0 }]],
+      [r2Id, [{ x: 96, y: 0 }]],
+    ]);
+    const sourceWires = useSchematic.getState().wires.map((w) => ({
+      ...w,
+      points: w.points.map((p) => ({ ...p })),
+    }));
+
+    useSchematic.getState().beginChange();
+    useSchematic.getState().moveGroup([r1Id, r2Id], 64, 0, sourcePins, sourceWires);
+
+    const pts = useSchematic.getState().wires[0].points;
+    expect(pts[0]).toEqual({ x: 96, y: 0 });
+    expect(pts[pts.length - 1]).toEqual({ x: 160, y: 0 });
   });
 });
