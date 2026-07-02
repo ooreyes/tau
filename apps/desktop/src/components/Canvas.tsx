@@ -580,6 +580,7 @@ export function Canvas({
   const setValue = useSchematic((s) => s.setValue);
   const probes = useSchematic((s) => s.probes);
   const addProbe = useSchematic((s) => s.addProbe);
+  const toggleCurrentProbe = useSchematic((s) => s.toggleCurrentProbe);
   const netLabels = useSchematic((s) => s.netLabels);
   const [editingId, setEditingId] = useState<string | null>(null);
   const editDirty = useRef(false);
@@ -840,10 +841,14 @@ export function Canvas({
     const world = screenToWorld(e.clientX, e.clientY);
 
     if (!interactive) {
-      // Read-only: select to inspect, otherwise pan to look around.
+      // Read-only (simulator mode): select to inspect AND clamp-meter the part —
+      // clicking a component body toggles its I(ref) trace, like LTspice's
+      // current probe. Empty space pans to look around.
       const hit = componentAt(components, world.x, world.y);
       select(hit?.id ?? null);
-      if (!hit) {
+      if (hit) {
+        toggleCurrentProbe(hit.id);
+      } else {
         drag.current = { mode: "pan", lastX: e.clientX, lastY: e.clientY, moved: false };
         svgRef.current?.setPointerCapture(e.pointerId);
       }
@@ -1169,12 +1174,19 @@ export function Canvas({
             <ComponentView key={c.id} comp={c} selected={c.id === selectedId || selectedIds.includes(c.id)} showPins={wiring || probing} />
           ))}
 
-          {probes.map((p) => (
-            <g key={p.id} className="probe-marker" style={{ color: p.color }}>
-              <circle className="probe-ring" cx={p.x} cy={p.y} r={7} />
-              <circle className="probe-dot" cx={p.x} cy={p.y} r={3.5} />
-            </g>
-          ))}
+          {probes.map((p) => {
+            // A clamp-meter probe follows its component; skip it if the part is gone.
+            const host = p.componentId ? components.find((c) => c.id === p.componentId) : null;
+            if (p.componentId && !host) return null;
+            const px = host ? host.x : p.x;
+            const py = host ? host.y : p.y;
+            return (
+              <g key={p.id} className={`probe-marker${p.componentId ? " current" : ""}`} style={{ color: p.color }}>
+                <circle className="probe-ring" cx={px} cy={py} r={7} />
+                <circle className="probe-dot" cx={px} cy={py} r={3.5} />
+              </g>
+            );
+          })}
 
           {netLabels.map((l) => (
             <text key={l.id} className="net-label-text" x={l.x + 6} y={l.y - 6}>

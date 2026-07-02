@@ -817,6 +817,11 @@ body {
   cursor: crosshair;
 }
 
+/* Clamp-meter (current) probe: dashed ring distinguishes it from a net probe. */
+.probe-marker.current .probe-ring {
+  stroke-dasharray: 3 2;
+}
+
 .wire-group.probe-ready:hover .wire {
   stroke: var(--accent);
 }

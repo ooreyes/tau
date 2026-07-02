@@ -93,6 +93,8 @@ interface SchematicState extends Doc {
   probes: Probe[];
   startProbing: () => void;
   addProbe: (x: number, y: number) => void;
+  /** Toggle a clamp-meter current probe on a component (plots `I(ref)`). */
+  toggleCurrentProbe: (componentId: string) => void;
   removeProbe: (id: string) => void;
   clearProbes: () => void;
   /** Replace all probes (used to restore a tab's saved probes). */
@@ -416,10 +418,22 @@ export const useSchematic = create<SchematicState>()((set) => {
     startProbing: () => set({ tool: { mode: "probe" }, selectedId: null, selectedWireId: null }),
     addProbe: (x, y) =>
       set((s) => {
-        const existing = s.probes.find((p) => p.x === x && p.y === y);
+        const existing = s.probes.find((p) => !p.componentId && p.x === x && p.y === y);
         if (existing) return { ...recordInto(s), probes: s.probes.filter((p) => p.id !== existing.id) };
         const color = PROBE_COLORS[s.probes.length % PROBE_COLORS.length];
         return { ...recordInto(s), probes: [...s.probes, { id: nanoid(6), x, y, color }] };
+      }),
+    toggleCurrentProbe: (componentId) =>
+      set((s) => {
+        const existing = s.probes.find((p) => p.componentId === componentId);
+        if (existing) return { ...recordInto(s), probes: s.probes.filter((p) => p.id !== existing.id) };
+        const target = s.components.find((c) => c.id === componentId);
+        if (!target || target.kind === "ground") return s;
+        const color = PROBE_COLORS[s.probes.length % PROBE_COLORS.length];
+        return {
+          ...recordInto(s),
+          probes: [...s.probes, { id: nanoid(6), x: target.x, y: target.y, color, componentId }],
+        };
       }),
     removeProbe: (id) => set((s) => ({ ...recordInto(s), probes: s.probes.filter((p) => p.id !== id) })),
     clearProbes: () => set((s) => ({ ...recordInto(s), probes: [] })),

@@ -93,12 +93,15 @@ export interface SchematicWire {
   points: Point[];
 }
 
-/** A meter probe pinned to a world point; resolves to whatever net sits there. */
+/** A meter probe pinned to a world point; resolves to whatever net sits there.
+ *  With `componentId` set it is a current probe (LTspice clamp-meter) instead:
+ *  it follows the component and plots its branch current `I(ref)`. */
 export interface Probe {
   id: string;
   x: number;
   y: number;
   color: string;
+  componentId?: string;
 }
 
 /** A user-assigned name for a net, pinned to a world point that lies on it. */

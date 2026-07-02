@@ -85,12 +85,16 @@ function probe(value: unknown, index: number): Probe {
   const source = record(value, `probes[${index}]`);
   const color = text(source.color, `probes[${index}].color`, 40);
   if (!PROBE_COLORS.has(color)) fail(`probes[${index}].color is not supported.`);
-  return {
+  const result: Probe = {
     id: text(source.id, `probes[${index}].id`, MAX_ID_LENGTH),
     x: coordinate(source.x, `probes[${index}].x`),
     y: coordinate(source.y, `probes[${index}].y`),
     color,
   };
+  if (source.componentId !== undefined) {
+    result.componentId = text(source.componentId, `probes[${index}].componentId`, MAX_ID_LENGTH);
+  }
+  return result;
 }
 
 function netLabel(value: unknown, index: number): NetLabel {

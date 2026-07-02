@@ -14,6 +14,7 @@ import { formatEngineering } from "../simulation/quantity";
 import { OPAMP_LIBRARY, findOpAmp } from "../library/opamps";
 import type { Probe, NetLabel, SchematicWire } from "../schematic/types";
 import { netAtPoint } from "../schematic/netlist";
+import { currentProbeTraces } from "../simulation/currentProbe";
 import { paramFields, decodeParams, encodeParams } from "../schematic/params";
 import { EngineeringInput } from "./EngineeringInput";
 import type { OperatingPointResult } from "../simulation/operatingPoint";
@@ -249,11 +250,13 @@ export function SimulationPanel({
         : (() => {
             const ids: string[] = [];
             for (const probe of probes) {
+              if (probe.componentId) continue; // clamp-meter probes resolve below
               const net = netAtPoint(success.circuit.nets, wires, probe);
               if (!net || net.isGround) continue;
               const trace = success.traces.find((tr) => tr.id === net.id);
               if (trace && !ids.includes(trace.id)) ids.push(trace.id);
             }
+            for (const trace of currentProbeTraces(success, probes)) ids.push(trace.id);
             return ids;
           })();
     const extraIds = scopeTraces.map((t) => t.id);
@@ -990,11 +993,13 @@ function WaveformPlot({
     } else {
       base = [];
       for (const probe of probes) {
+        if (probe.componentId) continue; // clamp-meter probes resolve below
         const net = netAtPoint(success.circuit.nets, wires, probe);
         if (!net || net.isGround) continue;
         const trace = success.traces.find((tr) => tr.id === net.id);
         if (trace && !base.some((o) => o.id === trace.id)) base.push({ ...trace, color: probe.color });
       }
+      base.push(...currentProbeTraces(success, probes));
     }
     return [...base, ...extraTraces];
   }, [success, probes, wires, extraTraces]);
