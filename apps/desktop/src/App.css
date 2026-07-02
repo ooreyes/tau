@@ -592,6 +592,15 @@ body {
   vector-effect: non-scaling-stroke;
 }
 
+/* Rubber-band selection rectangle drawn while drag-selecting on empty canvas. */
+.select-box {
+  fill: color-mix(in srgb, var(--accent) 10%, transparent);
+  stroke: var(--accent);
+  stroke-width: 1;
+  stroke-dasharray: 4 3;
+  pointer-events: none;
+}
+
 .wire {
   fill: none;
   stroke: #9eacbd;
@@ -1042,6 +1051,118 @@ body {
   height: 1.5px;
   border-radius: 999px;
   opacity: 0.85;
+}
+
+/* ── Multi-pane waveform viewer ────────────────────────────────────────────── */
+
+/* Pane controls bar — sits at the top of the scope shell, above all panes. */
+.pane-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 0 4px;
+}
+
+.pane-controls-label {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--faint);
+  flex: 1;
+}
+
+.pane-btn {
+  flex-shrink: 0;
+  background: var(--panel-3);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 3px 8px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: color 120ms var(--ease-out), border-color 120ms var(--ease-out);
+}
+
+.pane-btn:hover {
+  color: var(--text);
+  border-color: var(--border-strong);
+}
+
+/* Each pane is wrapped to carry its own header + plot + legend. */
+.pane-wrapper {
+  /* no extra spacing in single-pane mode — visually identical to before. */
+}
+
+.pane-wrapper--split {
+  margin-bottom: 6px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-sm);
+  padding: 4px 4px 2px;
+  background: var(--panel-3);
+}
+
+/* Per-pane header row (only shown in multi-pane mode). */
+.pane-header {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 2px 3px;
+}
+
+.pane-label {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--faint);
+  flex: 1;
+}
+
+.pane-remove-btn {
+  background: none;
+  border: none;
+  color: var(--faint);
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  padding: 0 2px;
+  transition: color 120ms var(--ease-out);
+}
+
+.pane-remove-btn:hover {
+  color: var(--danger);
+}
+
+/* Legend items now use flex so the move-selector sits inline. */
+.trace-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.trace-legend-label {
+  font-size: 10px;
+  color: var(--text);
+}
+
+/* Compact pane-selector dropdown on each legend trace. */
+.trace-pane-select {
+  height: 18px;
+  padding: 0 3px;
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--muted);
+  background: var(--panel-3);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  cursor: pointer;
+  outline: none;
+}
+
+.trace-pane-select:focus {
+  border-color: var(--accent);
 }
 
 /* Expression-trace bar (transient scope) */

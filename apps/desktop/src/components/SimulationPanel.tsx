@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import { CATALOG_BY_KIND } from "../schematic/catalog";
 import { useSchematic } from "../store/useSchematic";
@@ -41,6 +41,14 @@ import { buildReferenceOverlay } from "../simulation/rawOverlay";
 import { buildParamScope } from "../simulation/paramScope";
 import { isNativeSpiceRuntime, MAX_NATIVE_OUTPUT_POINTS } from "../engine/nativeSpice";
 import { displaySampleIndices, waveformBounds } from "../simulation/waveform";
+import {
+  type PaneLayout,
+  defaultLayout,
+  addPane,
+  removePane,
+  moveTrace,
+  reconcileLayout,
+} from "./plotPanes";
 
 interface SimulationPanelProps {
   result: AnalysisResult | null;
@@ -147,6 +155,9 @@ export function SimulationPanel({
   const [dcExprInput, setDcExprInput] = useState("");
   const [dcExprError, setDcExprError] = useState<string | null>(null);
   const [netlistError, setNetlistError] = useState<string | null>(null);
+  // Multi-pane layout for the transient scope. Starts as a single pane with all
+  // traces (preserving existing behavior). Updated via pane controls / trace moves.
+  const [paneLayout, setPaneLayout] = useState<PaneLayout>(() => defaultLayout());
   // An LTspice `.raw` loaded as a reference to overlay against Tau's results.
   const [refData, setRefData] = useState<RawData | null>(null);
   const [refError, setRefError] = useState<string | null>(null);
@@ -211,6 +222,50 @@ export function SimulationPanel({
   const scopeTraces = useMemo(
     () => (refOverlay ? [...exprTraces, ...refOverlay.traces] : exprTraces),
     [exprTraces, refOverlay],
+  );
+
+  // ── Pane layout reconciliation ──────────────────────────────────────────────
+  // Compute the full set of trace ids available for the current result.  These
+  // are the same ids used by WaveformPlot: node trace ids (from result.traces)
+  // plus expression/ref trace labels.  When the set changes, we reconcile the
+  // layout to add new traces (to pane 0) and drop stale ones.
+  const availableTraceIds = useMemo<string[]>(() => {
+    const success = result?.ok ? result : null;
+    if (!success) return scopeTraces.map((t) => t.id);
+    const base =
+      probes.length === 0
+        ? success.traces.slice(0, 6).map((t) => t.id)
+        : (() => {
+            const ids: string[] = [];
+            for (const probe of probes) {
+              const net = success.circuit.nets.find(
+                (n) => !n.isGround && n.points.some((pt) => pt.x === probe.x && pt.y === probe.y),
+              );
+              if (!net) continue;
+              const trace = success.traces.find((tr) => tr.id === net.id);
+              if (trace && !ids.includes(trace.id)) ids.push(trace.id);
+            }
+            return ids;
+          })();
+    const extraIds = scopeTraces.map((t) => t.id);
+    return [...base, ...extraIds.filter((id) => !base.includes(id))];
+  }, [result, probes, scopeTraces]);
+
+  // Keep the pane layout in sync with available traces whenever the set changes.
+  useEffect(() => {
+    setPaneLayout((prev) => reconcileLayout(prev, availableTraceIds));
+  }, [availableTraceIds]);
+
+  // Pane control callbacks — stable references for JSX handlers.
+  const handleAddPane = useCallback(() => setPaneLayout((prev) => addPane(prev)), []);
+  const handleRemovePane = useCallback(
+    (index: number) => setPaneLayout((prev) => removePane(prev, index)),
+    [],
+  );
+  const handleMoveTrace = useCallback(
+    (traceId: string, targetPaneIndex: number) =>
+      setPaneLayout((prev) => moveTrace(prev, traceId, targetPaneIndex)),
+    [],
   );
 
   const addExpression = () => {
@@ -464,7 +519,16 @@ export function SimulationPanel({
 
       {mode === "tran" && (
         <>
-          <WaveformPlot result={result} probes={probes} netLabels={netLabels} extraTraces={scopeTraces} />
+          <WaveformPlot
+            result={result}
+            probes={probes}
+            netLabels={netLabels}
+            extraTraces={scopeTraces}
+            paneLayout={paneLayout}
+            onAddPane={handleAddPane}
+            onRemovePane={handleRemovePane}
+            onMoveTrace={handleMoveTrace}
+          />
 
           <div className="expr-bar">
             <input
@@ -884,20 +948,28 @@ function WaveformPlot({
   probes,
   netLabels,
   extraTraces = [],
+  paneLayout,
+  onAddPane,
+  onRemovePane,
+  onMoveTrace,
 }: {
   result: AnalysisResult | null;
   probes: Probe[];
   netLabels: NetLabel[];
   /** User-entered expression traces overlaid on the scope (§6). */
   extraTraces?: Trace[];
+  paneLayout: PaneLayout;
+  onAddPane: () => void;
+  onRemovePane: (index: number) => void;
+  onMoveTrace: (traceId: string, targetPaneIndex: number) => void;
 }) {
   const success = result?.ok ? result : null;
 
-  // With probes, show exactly the probed nets in their probe colors; otherwise
-  // fall back to the first few node voltages. User expression traces are always
-  // overlaid on top of whichever node set is shown.
-  const traces = useMemo<Trace[]>(() => {
-    if (!success) return [];
+  // Build the full ordered trace list (all panes, all traces) the same way as
+  // before — probed nets or the first 6, then expression/ref overlays.  We keep
+  // a map from id → Trace for fast lookup when rendering per-pane subsets.
+  const allTraces = useMemo<Trace[]>(() => {
+    if (!success) return extraTraces;
     let base: Trace[];
     if (probes.length === 0) {
       base = success.traces.slice(0, 6);
@@ -915,16 +987,13 @@ function WaveformPlot({
     return [...base, ...extraTraces];
   }, [success, probes, extraTraces]);
 
-  const plot = useMemo(() => {
-    if (!success || traces.length === 0) return null;
-    const { min, max } = waveformBounds(traces);
-    const tMax = success.times[success.times.length - 1] || 1;
-    // Label the value axis by the traces' shared physical unit (amps for a
-    // probed branch current, watts for a V·I power expression); fall back to
-    // volts when the pane mixes units or carries only node voltages.
-    const unit = commonTraceUnit(traces.map((t) => t.unit)) || "V";
-    return { min, max, tMax, unit };
-  }, [success, traces]);
+  const traceById = useMemo<Map<string, Trace>>(() => {
+    const m = new Map<string, Trace>();
+    for (const t of allTraces) m.set(t.id, t);
+    return m;
+  }, [allTraces]);
+
+  const tMax = useMemo(() => (success ? success.times[success.times.length - 1] || 1 : 1), [success]);
 
   // Prefer a user-assigned net name (V(Vout)) over the auto V(R1·C1) label.
   const labelFor = (trace: Trace) => {
@@ -937,52 +1006,164 @@ function WaveformPlot({
     return trace.label;
   };
 
+  const multiPane = paneLayout.length > 1;
+
   return (
     <div className="scope-shell">
-      <svg className="scope-svg" viewBox={`0 0 ${PLOT_WIDTH} ${PLOT_HEIGHT}`} role="img" aria-label="Waveform plot">
-        <g className="scope-grid">
-          {Array.from({ length: 6 }).map((_, i) => {
-            const x = PLOT_PAD + (i * (PLOT_WIDTH - PLOT_PAD * 2)) / 5;
-            return <line key={`x${i}`} x1={x} y1={PLOT_PAD} x2={x} y2={PLOT_HEIGHT - PLOT_PAD} />;
-          })}
-          {Array.from({ length: 5 }).map((_, i) => {
-            const y = PLOT_PAD + (i * (PLOT_HEIGHT - PLOT_PAD * 2)) / 4;
-            return <line key={`y${i}`} x1={PLOT_PAD} y1={y} x2={PLOT_WIDTH - PLOT_PAD} y2={y} />;
-          })}
-        </g>
-        <rect className="scope-frame" x={PLOT_PAD} y={PLOT_PAD} width={PLOT_WIDTH - PLOT_PAD * 2} height={PLOT_HEIGHT - PLOT_PAD * 2} />
-        {plot &&
-          traces.map((trace) => (
-            <path
-              key={trace.id}
-              className={trace.id.startsWith("ref:") ? "scope-trace ref" : "scope-trace"}
-              stroke={trace.color}
-              d={tracePath(trace, success!.times, plot.min, plot.max, plot.tMax)}
-            />
-          ))}
-        <text className="scope-axis" x={PLOT_PAD} y={18}>
-          {plot ? formatEngineering(plot.max, plot.unit, 2) : "MAX"}
-        </text>
-        <text className="scope-axis" x={PLOT_PAD} y={PLOT_HEIGHT - 8}>
-          {plot ? formatEngineering(plot.min, plot.unit, 2) : "MIN"}
-        </text>
-        <text className="scope-axis right" x={PLOT_WIDTH - PLOT_PAD} y={PLOT_HEIGHT - 8}>
-          {success ? formatEngineering(success.stats.stopTime, "s", 2) : "TIME"}
-        </text>
-      </svg>
-      <div className="scope-legend">
-        {traces.length > 0 ? (
-          traces.map((trace) => (
-            <span key={trace.id}>
-              <i style={{ background: trace.color }} />
-              {labelFor(trace)}
-            </span>
-          ))
-        ) : (
-          <span className="muted">No traces</span>
-        )}
-      </div>
+      {/* "Add pane" control header — always visible when result is present. */}
+      {success && (
+        <div className="pane-controls">
+          <span className="pane-controls-label">Panes</span>
+          <button
+            className="pane-btn"
+            onClick={onAddPane}
+            title="Add a new plot pane"
+            aria-label="Add pane"
+          >
+            + Add pane
+          </button>
+        </div>
+      )}
+
+      {paneLayout.map((pane, paneIndex) => {
+        // Resolve traces for this pane (preserve insertion order within pane).
+        const paneTraces = pane.traceIds
+          .map((id) => traceById.get(id))
+          .filter((t): t is Trace => t !== undefined);
+
+        // Per-pane Y autorange.
+        const plot =
+          success && paneTraces.length > 0
+            ? (() => {
+                const { min, max } = waveformBounds(paneTraces);
+                const unit = commonTraceUnit(paneTraces.map((t) => t.unit)) || "V";
+                return { min, max, tMax, unit };
+              })()
+            : null;
+
+        return (
+          <div key={pane.id} className={`pane-wrapper${multiPane ? " pane-wrapper--split" : ""}`}>
+            {/* Per-pane header with remove button (only visible in multi-pane mode). */}
+            {multiPane && (
+              <div className="pane-header">
+                <span className="pane-label">Pane {paneIndex + 1}</span>
+                <button
+                  className="pane-remove-btn"
+                  onClick={() => onRemovePane(paneIndex)}
+                  title={`Remove pane ${paneIndex + 1}`}
+                  aria-label={`Remove pane ${paneIndex + 1}`}
+                >
+                  ×
+                </button>
+              </div>
+            )}
+
+            <svg
+              className="scope-svg"
+              viewBox={`0 0 ${PLOT_WIDTH} ${PLOT_HEIGHT}`}
+              role="img"
+              aria-label={multiPane ? `Waveform pane ${paneIndex + 1}` : "Waveform plot"}
+            >
+              <g className="scope-grid">
+                {Array.from({ length: 6 }).map((_, i) => {
+                  const x = PLOT_PAD + (i * (PLOT_WIDTH - PLOT_PAD * 2)) / 5;
+                  return <line key={`x${i}`} x1={x} y1={PLOT_PAD} x2={x} y2={PLOT_HEIGHT - PLOT_PAD} />;
+                })}
+                {Array.from({ length: 5 }).map((_, i) => {
+                  const y = PLOT_PAD + (i * (PLOT_HEIGHT - PLOT_PAD * 2)) / 4;
+                  return <line key={`y${i}`} x1={PLOT_PAD} y1={y} x2={PLOT_WIDTH - PLOT_PAD} y2={y} />;
+                })}
+              </g>
+              <rect
+                className="scope-frame"
+                x={PLOT_PAD}
+                y={PLOT_PAD}
+                width={PLOT_WIDTH - PLOT_PAD * 2}
+                height={PLOT_HEIGHT - PLOT_PAD * 2}
+              />
+              {plot &&
+                paneTraces.map((trace) => (
+                  <path
+                    key={trace.id}
+                    className={trace.id.startsWith("ref:") ? "scope-trace ref" : "scope-trace"}
+                    stroke={trace.color}
+                    d={tracePath(trace, success!.times, plot.min, plot.max, plot.tMax)}
+                  />
+                ))}
+              <text className="scope-axis" x={PLOT_PAD} y={18}>
+                {plot ? formatEngineering(plot.max, plot.unit, 2) : "MAX"}
+              </text>
+              <text className="scope-axis" x={PLOT_PAD} y={PLOT_HEIGHT - 8}>
+                {plot ? formatEngineering(plot.min, plot.unit, 2) : "MIN"}
+              </text>
+              {/* Only the bottom pane (or the only pane) shows the time axis label. */}
+              {(paneIndex === paneLayout.length - 1 || !multiPane) && (
+                <text className="scope-axis right" x={PLOT_WIDTH - PLOT_PAD} y={PLOT_HEIGHT - 8}>
+                  {success ? formatEngineering(success.stats.stopTime, "s", 2) : "TIME"}
+                </text>
+              )}
+            </svg>
+
+            {/* Per-pane legend with optional "move to pane" selector. */}
+            <div className="scope-legend">
+              {paneTraces.length > 0 ? (
+                paneTraces.map((trace) => (
+                  <TraceLegendItem
+                    key={trace.id}
+                    trace={trace}
+                    label={labelFor(trace)}
+                    paneCount={paneLayout.length}
+                    currentPaneIndex={paneIndex}
+                    onMoveTrace={onMoveTrace}
+                  />
+                ))
+              ) : (
+                <span className="muted">{multiPane ? "Empty — move a trace here" : "No traces"}</span>
+              )}
+            </div>
+          </div>
+        );
+      })}
     </div>
+  );
+}
+
+/**
+ * A single legend entry: colored swatch + label + optional pane-move selector.
+ * The selector only appears when there are ≥2 panes.
+ */
+function TraceLegendItem({
+  trace,
+  label,
+  paneCount,
+  currentPaneIndex,
+  onMoveTrace,
+}: {
+  trace: Trace;
+  label: string;
+  paneCount: number;
+  currentPaneIndex: number;
+  onMoveTrace: (traceId: string, targetPaneIndex: number) => void;
+}) {
+  return (
+    <span className="trace-legend-item">
+      <i style={{ background: trace.color }} />
+      <span className="trace-legend-label">{label}</span>
+      {paneCount > 1 && (
+        <select
+          className="trace-pane-select"
+          value={currentPaneIndex}
+          aria-label={`Move ${label} to pane`}
+          onChange={(e) => onMoveTrace(trace.id, Number(e.currentTarget.value))}
+        >
+          {Array.from({ length: paneCount }).map((_, i) => (
+            <option key={i} value={i}>
+              P{i + 1}
+            </option>
+          ))}
+        </select>
+      )}
+    </span>
   );
 }
 
