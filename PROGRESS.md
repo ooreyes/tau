@@ -61,6 +61,12 @@ actionable directive hint; no crashes, no clipped text, no overlap. AC/DC
 - F2–F8 LTspice function-key parity still absent (§8 feature item, not a
   regression; Space/⌘E/⌘D etc. are in the status bar).
 
+### Correctness debt (logged as new §7 item, needs a designed fix)
+- `parseQuantity` treats `M` as mega; SPICE/LTspice treat `M` as *milli*
+  (only `MEG` is mega). Imported netlist values like `1M` simulate 10⁹× off.
+  Not drive-by-fixed because the UI's EngineeringInput deliberately round-trips
+  `M`=mega through the same parser — needs an engine/UI parser split.
+
 ### Next step
 - §6 log/linear axis toggle or probe-in-place (next feature session).
 

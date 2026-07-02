@@ -788,6 +788,16 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
 - ✅ Source polarity matches SPICE convention; R/C/L value guards (resistors now
   allow a **negative (active) resistance** — SPICE-legal, e.g. Draft7's -1k — and
   reject only zero; C/L stay strictly positive)
+- ⬜ **SPICE suffix semantics on the engine/import path** (found in 2026-07-02
+  review): `parseQuantity` treats `M` as mega, but SPICE/LTspice suffixes are
+  case-insensitive — `M` is *milli* and only `MEG`/`Meg`/`meg` is mega (the
+  classic `1MHz` = 1 milli-hertz gotcha). An imported `.asc`/`.cir` value like
+  `1M` silently simulates 10⁹× too large. The UI's `EngineeringInput` convention
+  (`m`/`M` distinct, documented in `schematic/engineering.ts`) round-trips
+  through the same parser, so this needs a *designed* split: SPICE-semantics
+  parsing for netlist/import/engine values, UI convention preserved (or a
+  one-time migration normalizing imported `M`→`m`). Also missing: LTspice's
+  `mil` suffix (25.4 µ).
 - ⬜ Match LTspice's defaults/timestep/convergence for waveform-level agreement
   - 🟡 **Numeric agreement tooling landed** (`simulation/waveformCompare.ts`):
     `compareWaveforms(testT,testV, refT,refV)` resamples a reference series
