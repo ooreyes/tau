@@ -11,19 +11,20 @@
 - **Headline metric:** 1080 tests green · baseline verified this run
 - **Run started (UTC):** 2026-07-02T22:05Z
 - **Synced to origin:** auto/ltspice-parity @ 0f63b11
-- **Claimed unit:** §6 DC operating point annotation — after an OP run, the
-  schematic (simulator mode) shows each net's voltage in place and V-source/
-  inductor branch currents at their components.
-- **Status:** DONE
-- **Files:** new simulation/opAnnotations.ts (+5 tests), App.tsx
-  (returnBranches on JS OP fallback; op prop to Canvas), Canvas.tsx
-  (.op-annotation render, current labels centered under body), App.css.
-- **Verify:** done — hand-computed divider tests, suite 1080 green, typecheck
-  clean, Playwright screenshot of annotated divider reviewed (10 V/5 V/−5 mA).
-- **Last completed sub-step:** §6 OP annotation unit complete (this run).
-- **Next step (for the following run):** §6 has no ⬜ left — next
-  highest-leverage: work the remaining 🟡 items (OP results table polish, Bode
-  axes item, .ic) or move to §8 keyboard-parity gaps.
+- **Claimed unit:** §8 LTspice F-key shortcuts — extract a pure, unit-testable
+  shortcut resolver (`schematic/shortcuts.ts`) and bind F2 part palette,
+  F3 wire, F5 delete, F6 copy, F9 undo. F4/F7/F8 stay unbound (no net-label /
+  move / drag tools yet — no fake mappings).
+- **Status:** IN PROGRESS
+- **Files:** new schematic/shortcuts.ts `resolveShortcut` (+tests covering the
+  whole table incl. modifier combos), App.tsx keyboard effect dispatches on it,
+  StatusBar hint if needed, FEATURE_PARITY §8.
+- **Verify:** unit tests for every binding + guard cases (typing in inputs is
+  the caller's guard; modifier mismatches → null); suite ≥1080; typecheck;
+  Playwright: press F3 → wire tool hint, F2 → palette opens, F9 undoes.
+- **Last completed sub-step:** unit claimed (previous unit §6 OP annotation
+  DONE @ c8e8114).
+- **Next step (if killed):** shortcuts.ts + tests first, then App dispatch.
 
 ---
 
