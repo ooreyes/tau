@@ -8,9 +8,9 @@
      `git log --oneline -8`, recover/finish/revert that unit FIRST, then go on.
      ─────────────────────────────────────────────────────────────────────── -->
 ## ⏱ HEARTBEAT
-- **Headline metric:** 1051 tests green · baseline verified this run
-- **Run started (UTC):** 2026-07-02T16:15Z
-- **Synced to origin:** auto/ltspice-parity @ 81bba60
+- **Headline metric:** 1056 tests green · baseline verified this run
+- **Run started (UTC):** 2026-07-02T22:05Z
+- **Synced to origin:** auto/ltspice-parity @ 6e213bc (resuming rescued wip 883cdd1)
 - **Claimed unit:** §6 current probe — in simulator mode, clicking a component
   body toggles an `I(ref)` current trace on the scope (LTspice clamp-meter).
 - **Status:** IN PROGRESS
@@ -22,7 +22,8 @@
 - **Verify:** unit tests (toggle add/remove/color, id→ref→I(ref) mapping, unit
   "A", missing-ref/deleted-component paths); suite ≥1056; typecheck;
   Playwright screenshot of a probed resistor current.
-- **Last completed sub-step:** §6 probe-in-place unit complete (this run).
+- **Last completed sub-step:** rescued wip 883cdd1 (full implementation, no
+  tests yet) identified; this run cherry-picks it, adds the tests, verifies.
 - **Next step (for the following run):** §6 measurement cursor on the FFT plot.
 
 ---
