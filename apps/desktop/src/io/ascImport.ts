@@ -302,6 +302,12 @@ export function ltspiceTypeToKind(type: string): ComponentKind | null {
     cap2: "capacitor",
     c: "capacitor",
     polcap: "capacitor",
+    // Crystal (xtal): a 2-terminal piezoelectric resonator modelled in LTspice
+    // as a capacitor C element (series capacitance Cs) with optional parasitic
+    // params (Rser, Lser, Cpar) on SpiceLine. Imported as a capacitor so the
+    // SPICE deck line is electrically correct; the full resonator model is carried
+    // in the value string by componentValueFromAttrs.
+    xtal: "capacitor",
     ind: "inductor",
     ind2: "inductor",
     l: "inductor",
@@ -349,6 +355,17 @@ export function ltspiceTypeToKind(type: string): ComponentKind | null {
     bi: "bsource",
     b: "bsource",
     b2: "bsource",
+    // DIAC: 2-terminal bidirectional trigger diode (misc\\DIAC). No Tau analog;
+    // imported as a resistor placeholder so the file opens clean and the two nets
+    // connect correctly. An import note is emitted instead of a warning.
+    diac: "resistor",
+    // TRIAC: 3-terminal AC power switch (misc\\TRIAC, pins MT2/G/MT1). Imported
+    // as an NPN placeholder so all three nets connect correctly. Import note emitted.
+    triac: "npn",
+    // Varistor (SpecialFunctions\\varistor): a 4-terminal behavioral voltage-
+    // controlled clamp. The two primary terminals (invin/noninvin, SpiceOrder 1/2)
+    // are mapped to a resistor placeholder; the output/com pins are dropped.
+    varistor: "resistor",
   };
 
   // Any symbol living under an "opamps" directory is an op-amp at heart.
@@ -451,6 +468,20 @@ export const LTSPICE_PINS: Record<string, LtPin[]> = {
     { name: "op", dx: 0, dy: 96 },
     { name: "on", dx: 0, dy: 16 },
   ],
+  // DIAC (Misc/DIAC.asy, SpiceOrder +=1 / −=2): +(32,0) / −(32,64).
+  // Imported as resistor; zipped to Tau resistor pins a/b.
+  diac: [{ name: "+", dx: 32, dy: 0 }, { name: "-", dx: 32, dy: 64 }],
+  // TRIAC (Misc/TRIAC.asy, SpiceOrder MT2=1 / G=2 / MT1=3):
+  //   MT2(32,0) → Tau C, G(-16,64) → Tau B (gate), MT1(32,64) → Tau E.
+  // Imported as npn placeholder; zipped to Tau npn pins c/b/e.
+  triac: [
+    { name: "MT2", dx: 32, dy: 0 },
+    { name: "G", dx: -16, dy: 64 },
+    { name: "MT1", dx: 32, dy: 64 },
+  ],
+  // varistor (SpecialFunctions/varistor.asy): primary terminals invin(−32,48)/
+  // noninvin(−32,80) at SpiceOrder 1/2. Imported as resistor; zipped to a/b.
+  varistor: [{ name: "invin", dx: -32, dy: 48 }, { name: "noninvin", dx: -32, dy: 80 }],
 };
 
 /** Apply an LTspice orientation to a symbol-local point (LTspice screen Y is
@@ -530,6 +561,15 @@ function ltPinKey(type: string): keyof typeof LTSPICE_PINS | null {
     // Behavioral sources share the independent-source pin geometry: the bv
     // (voltage) symbol pins match `voltage`, bi (current) match `current`.
     bv: "voltage", bi: "current", b: "voltage", b2: "voltage",
+    // xtal (Misc/xtal.asy): pins A(16,0)/B(16,64) — same geometry as cap.asy.
+    xtal: "cap",
+    // DIAC (Misc/DIAC.asy): +(32,0)/-(32,64) — 2-terminal; own bank (x≠cap's 16).
+    diac: "diac",
+    // TRIAC (Misc/TRIAC.asy): MT2(32,0)/G(-16,64)/MT1(32,64) — 3-terminal.
+    triac: "triac",
+    // varistor (SpecialFunctions/varistor.asy): primary pins invin(-32,48)/
+    // noninvin(-32,80) at SpiceOrder 1/2 — own bank.
+    varistor: "varistor",
   };
   return map[leaf] ?? null;
 }
@@ -545,6 +585,12 @@ export interface AscImportResult {
   comments: string[];
   /** Non-fatal issues (symbols placed without pin-accurate geometry, etc.). */
   warnings: string[];
+  /**
+   * Informational notes about placeholder mappings — the file opened clean and
+   * all nets are correct, but a device was mapped to the closest Tau analog
+   * (e.g. diac → resistor, triac → npn). Does not affect the warning count.
+   */
+  notes: string[];
 }
 
 /**
@@ -647,6 +693,15 @@ export function componentValueFromAttrs(
         .map((s) => s?.trim())
         .filter((s): s is string => !!s && !/^rser\b/i.test(s));
       return [base, ...extras].join(" ").trim();
+    }
+    // Crystal (xtal) is imported as a capacitor whose SpiceLine carries the
+    // piezoelectric resonator params Rser/Lser/Cpar — these are standard ngspice
+    // capacitor instance parameters, so append the whole SpiceLine verbatim.
+    if (kind === "capacitor") {
+      const spiceLine = attrs.SpiceLine?.trim() ?? "";
+      if (/\b(rser|lser|cpar)\s*=/i.test(spiceLine)) {
+        return [base, spiceLine].filter(Boolean).join(" ");
+      }
     }
     const ic = [attrs.Value2, attrs.SpiceLine, attrs.SpiceLine2]
       .map((s) => parseIcValue(s ?? ""))
@@ -800,10 +855,30 @@ function flattenSubcircuit(
     directives: [],
     comments: [],
     warnings: body.warnings.map((w) => `${instName}: ${w}`),
+    notes: body.notes.map((n) => `${instName}: ${n}`),
   };
   // `bridges` (parent-side) + `portLabels` (body-side) carry the same synthetic
   // names; both are deferred so a coincident parent FLAG names the net instead.
   return { result, bridges: [...bridges, ...portLabels] };
+}
+
+/**
+ * Return a human-readable import note for known placeholder symbol types, or
+ * `null` when the symbol needs no note (it maps faithfully to a Tau kind).
+ * Used by {@link ascToSchematic} to populate `AscImportResult.notes`.
+ */
+function importPlaceholderNote(leaf: string, instName: string): string | null {
+  const ref = instName || leaf;
+  switch (leaf) {
+    case "diac":
+      return `${ref}: DIAC (bidirectional trigger diode) imported as a resistor placeholder. Nets are correct; replace with a subcircuit model for simulation accuracy.`;
+    case "triac":
+      return `${ref}: TRIAC imported as an NPN placeholder (MT2→C, G→B, MT1→E). Nets are correct; replace with a subcircuit model for simulation accuracy.`;
+    case "varistor":
+      return `${ref}: Varistor (4-terminal behavioral clamp) imported as a resistor placeholder using the two primary terminals. Nets are correct; replace with a subcircuit model for simulation accuracy.`;
+    default:
+      return null;
+  }
 }
 
 export function ascToSchematic(doc: AscDocument, options: AscImportOptions = {}): AscImportResult {
@@ -822,6 +897,7 @@ export function ascToSchematic(doc: AscDocument, options: AscImportOptions = {})
   // synthetic `<inst>:<port>` (keeps `V(<user name>)` resolving on import).
   const deferredBridges: NetLabel[] = [];
   const warnings: string[] = [];
+  const notes: string[] = [];
 
   for (const symbol of doc.symbols) {
     const leaf = symbol.type.replace(/\\/g, "/").toLowerCase().split("/").pop() ?? "";
@@ -863,6 +939,7 @@ export function ascToSchematic(doc: AscDocument, options: AscImportOptions = {})
         netLabels.push(...result.netLabels);
         deferredBridges.push(...bridges);
         warnings.push(...result.warnings);
+        notes.push(...result.notes);
         // Propagate the advanced cursor back to this scope for the next sibling.
         options._placement = placement;
         continue;
@@ -878,6 +955,11 @@ export function ascToSchematic(doc: AscDocument, options: AscImportOptions = {})
         `${instName || symbol.type}: placed without pin-accurate geometry (no banked pins for "${symbol.type}"); its connections may be wrong.`,
       );
     }
+    // Emit an informational note (not a warning) for placeholder mappings.
+    // The file opens clean and all nets are correct; the note documents that a
+    // device was mapped to the closest Tau analog rather than a faithful model.
+    const placeholderNote = importPlaceholderNote(leaf, instName);
+    if (placeholderNote) notes.push(placeholderNote);
     components.push({
       id: id("c"),
       kind,
@@ -913,7 +995,7 @@ export function ascToSchematic(doc: AscDocument, options: AscImportOptions = {})
   const directives = doc.texts.filter((t) => t.directive).map((t) => t.text);
   const comments = doc.texts.filter((t) => !t.directive).map((t) => t.text);
 
-  return { components, wires, netLabels, directives, comments, warnings };
+  return { components, wires, netLabels, directives, comments, warnings, notes };
 }
 
 /**

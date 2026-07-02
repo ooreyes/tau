@@ -157,7 +157,13 @@ describe("ltspiceTypeToKind", () => {
 
   it("returns null for unmapped vendor/library symbols", () => {
     expect(ltspiceTypeToKind("References\\LT1009")).toBeNull();
-    expect(ltspiceTypeToKind("misc\\xtal")).toBeNull();
+  });
+
+  it("maps xtal (misc\\xtal) to capacitor", () => {
+    // Crystal is imported as a capacitor so the SPICE deck C element is
+    // electrically correct; the full resonator model is in the value string.
+    expect(ltspiceTypeToKind("misc\\xtal")).toBe("capacitor");
+    expect(ltspiceTypeToKind("Misc\\Xtal")).toBe("capacitor");
   });
 });
 
@@ -589,9 +595,17 @@ describe("componentValueFromAttrs", () => {
   it("appends a C/L initial condition from SpiceLine2 (Draft10 cap)", () => {
     expect(componentValueFromAttrs("capacitor", { Value: "100p", SpiceLine2: "IC=1" })).toBe("100p IC=1");
     expect(componentValueFromAttrs("inductor", { Value: "1m", SpiceLine: "IC=0.5" })).toBe("1m IC=0.5");
-    // Only the IC token is appended, not the whole (possibly incompatible) attr.
+    // IC token extracted from Value2 when SpiceLine has only parasitics.
     expect(componentValueFromAttrs("capacitor", { Value: "1u", Value2: "Rser=0.1 IC=2" })).toBe("1u IC=2");
-    expect(componentValueFromAttrs("capacitor", { Value: "1u", SpiceLine: "Rser=0.1" })).toBe("1u");
+  });
+
+  it("appends xtal resonator params (Rser/Lser/Cpar) from SpiceLine for capacitors", () => {
+    // Crystal xtal parts are imported as capacitors; their SpiceLine carries
+    // standard ngspice capacitor instance params (Rser, Lser, Cpar).
+    expect(componentValueFromAttrs("capacitor", { Value: "1u", SpiceLine: "Rser=0.1" })).toBe("1u Rser=0.1");
+    expect(componentValueFromAttrs("capacitor", { Value: "1u", SpiceLine: "Rser=0.1 Cpar=10p" })).toBe("1u Rser=0.1 Cpar=10p");
+    // Non-resonator SpiceLine for capacitor (IC only) is not changed.
+    expect(componentValueFromAttrs("capacitor", { Value: "1u", SpiceLine: "IC=2" })).toBe("1u IC=2");
   });
 
   it("normalizes LTspice's empty source sentinel `\"\"` to empty (GFT/S-param)", () => {
@@ -778,5 +792,104 @@ SYMATTR InstName X1`;
     const r = importAsc(PARENT);
     expect(r.warnings.some((w) => w.includes('no Tau equivalent for LTspice symbol "mydiv"'))).toBe(true);
     expect(r.components.filter((c) => c.kind === "resistor")).toHaveLength(0);
+  });
+});
+
+describe("analog placeholder symbols (xtal, diac, triac, varistor)", () => {
+  it("maps misc\\xtal to capacitor with pin-accurate geometry from xtal.asy", () => {
+    // xtal.asy (Misc/): PIN A(16,0) SpiceOrder 1, PIN B(16,64) SpiceOrder 2.
+    // Placed at (200,200) R90: A → R90(16,0) = (0,16) → world (200,216);
+    // B → R90(16,64) = (-64,16) → world (136,216).
+    const src = `Version 4
+SHEET 1 880 680
+SYMBOL misc\\xtal 200 200 R90
+SYMATTR InstName Y1
+SYMATTR Value 2p
+SYMATTR SpiceLine Rser=45 Lser=1026u Cpar=10p`;
+    const doc = ascToSchematic(parseAsc(src));
+    const y1 = doc.components.find((c) => c.label === "Y1");
+    expect(y1?.kind).toBe("capacitor");
+    expect(y1?.value).toBe("2p Rser=45 Lser=1026u Cpar=10p");
+    const pins = Object.fromEntries((y1?.pinOverride ?? []).map((p) => [p.id, { x: p.x, y: p.y }]));
+    expect(pins.a).toEqual({ x: 200, y: 216 });
+    expect(pins.b).toEqual({ x: 136, y: 216 });
+    // No warning (xtal has banked pin geometry).
+    expect(doc.warnings.filter((w) => /Y1|xtal/i.test(w))).toHaveLength(0);
+  });
+
+  it("imports misc\\xtal without SpiceLine as a plain capacitor value", () => {
+    const src = `Version 4
+SHEET 1 880 680
+SYMBOL misc\\xtal 100 100 R0
+SYMATTR InstName Y2
+SYMATTR Value 0.1p`;
+    const doc = ascToSchematic(parseAsc(src));
+    const y2 = doc.components.find((c) => c.label === "Y2");
+    expect(y2?.kind).toBe("capacitor");
+    expect(y2?.value).toBe("0.1p");
+    expect(doc.warnings.filter((w) => /Y2|xtal/i.test(w))).toHaveLength(0);
+  });
+
+  it("maps misc\\DIAC to resistor placeholder with pin-accurate geometry", () => {
+    // DIAC.asy (Misc/): PIN +(32,0) SpiceOrder 1, PIN -(32,64) SpiceOrder 2.
+    // Placed at (320,176) R90: +(32,0) → R90(32,0)=(0,32) → world (320,208);
+    // -(32,64) → R90(32,64)=(-64,32) → world (256,208).
+    const src = `Version 4
+SHEET 1 880 680
+SYMBOL misc\\DIAC 320 176 R90
+SYMATTR InstName Q1
+SYMATTR Value2 VK=30`;
+    const doc = ascToSchematic(parseAsc(src));
+    const q1 = doc.components.find((c) => c.label === "Q1");
+    expect(q1?.kind).toBe("resistor");
+    const pins = Object.fromEntries((q1?.pinOverride ?? []).map((p) => [p.id, { x: p.x, y: p.y }]));
+    expect(pins.a).toEqual({ x: 320, y: 208 });
+    expect(pins.b).toEqual({ x: 256, y: 208 });
+    // Emits an import note, NOT a warning.
+    expect(doc.warnings.filter((w) => /Q1|diac/i.test(w))).toHaveLength(0);
+    expect(doc.notes.some((n) => /Q1|diac/i.test(n))).toBe(true);
+  });
+
+  it("maps misc\\TRIAC to npn placeholder with MT2/G/MT1 pin geometry", () => {
+    // TRIAC.asy (Misc/): MT2(32,0)/G(-16,64)/MT1(32,64). Placed at (336,144) R0.
+    // world: MT2(368,144), G(320,208), MT1(368,208).
+    const src = `Version 4
+SHEET 1 880 680
+SYMBOL misc\\TRIAC 336 144 R0
+SYMATTR InstName U1`;
+    const doc = ascToSchematic(parseAsc(src));
+    const u1 = doc.components.find((c) => c.label === "U1");
+    expect(u1?.kind).toBe("npn");
+    const pins = Object.fromEntries((u1?.pinOverride ?? []).map((p) => [p.id, { x: p.x, y: p.y }]));
+    // c ← MT2, b ← G, e ← MT1
+    expect(pins.c).toEqual({ x: 368, y: 144 });
+    expect(pins.b).toEqual({ x: 320, y: 208 });
+    expect(pins.e).toEqual({ x: 368, y: 208 });
+    expect(doc.warnings.filter((w) => /U1|triac/i.test(w))).toHaveLength(0);
+    expect(doc.notes.some((n) => /U1|triac/i.test(n))).toBe(true);
+  });
+
+  it("maps SpecialFunctions\\varistor to resistor placeholder with primary terminal geometry", () => {
+    // varistor.asy (SpecialFunctions/): invin(-32,48)/noninvin(-32,80). R0 at (1328,416).
+    // world: invin(1296,464), noninvin(1296,496).
+    const src = `Version 4
+SHEET 1 1700 736
+SYMBOL SPECIALFUNCTIONS\\VARISTOR 1328 416 R0
+SYMATTR InstName A1
+SYMATTR Value Rclamp=1`;
+    const doc = ascToSchematic(parseAsc(src));
+    const a1 = doc.components.find((c) => c.label === "A1");
+    expect(a1?.kind).toBe("resistor");
+    const pins = Object.fromEntries((a1?.pinOverride ?? []).map((p) => [p.id, { x: p.x, y: p.y }]));
+    expect(pins.a).toEqual({ x: 1296, y: 464 });
+    expect(pins.b).toEqual({ x: 1296, y: 496 });
+    expect(doc.warnings.filter((w) => /A1|varistor/i.test(w))).toHaveLength(0);
+    expect(doc.notes.some((n) => /A1|varistor/i.test(n))).toBe(true);
+  });
+
+  it("ltspiceTypeToKind maps diac/triac/varistor to their placeholder kinds", () => {
+    expect(ltspiceTypeToKind("misc\\DIAC")).toBe("resistor");
+    expect(ltspiceTypeToKind("misc\\TRIAC")).toBe("npn");
+    expect(ltspiceTypeToKind("SPECIALFUNCTIONS\\VARISTOR")).toBe("resistor");
   });
 });
