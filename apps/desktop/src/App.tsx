@@ -22,6 +22,7 @@ import {
 } from "./components/ShellPanels";
 import { useSchematic, type SchematicDocument, type SchematicHistory } from "./store/useSchematic";
 import { CATALOG } from "./schematic/catalog";
+import { resolveShortcut } from "./schematic/shortcuts";
 import { type ExampleCircuit } from "./examples/circuits";
 import {
   MAX_TRANSIENT_STEPS,
@@ -618,54 +619,28 @@ function App() {
         return;
       }
 
-      if (e.metaKey || e.ctrlKey) {
-        const k = e.key.toLowerCase();
-        if (k === "z") {
-          e.preventDefault();
-          if (e.shiftKey) redo();
-          else undo();
-        } else if (k === "y") {
-          e.preventDefault();
-          redo();
-        } else if (k === "k") {
-          e.preventDefault();
-          setPaletteOpen(true);
-        } else if (k === "r") {
-          e.preventDefault();
-          rotate();
-        } else if (k === "e") {
-          e.preventDefault();
-          mirror();
-        } else if (k === "c") {
-          e.preventDefault();
-          copySelected();
-        } else if (k === "v") {
-          e.preventDefault();
-          paste();
-        } else if (k === "d") {
-          e.preventDefault();
-          duplicateSelected();
+      const action = resolveShortcut({
+        key: e.key,
+        ctrlOrMeta: e.metaKey || e.ctrlKey,
+        shift: e.shiftKey,
+      });
+      if (action) {
+        if (action !== "cancel") e.preventDefault();
+        switch (action) {
+          case "undo": return undo();
+          case "redo": return redo();
+          case "palette": return setPaletteOpen(true);
+          case "rotate": return rotate();
+          case "mirror": return mirror();
+          case "copy": return copySelected();
+          case "paste": return paste();
+          case "duplicate": return duplicateSelected();
+          case "cancel": return cancel();
+          case "delete": return deleteSelected();
+          case "wire": return startWiring();
         }
-        return; // leave other OS / app shortcuts alone
       }
-
-      if (e.key === "/") {
-        e.preventDefault();
-        return setPaletteOpen(true);
-      }
-      if (e.key === "Escape") return cancel();
-      if (e.key === " ") {
-        e.preventDefault();
-        return rotate();
-      }
-      if (e.key === "Backspace" || e.key === "Delete") {
-        e.preventDefault();
-        return deleteSelected();
-      }
-      if (e.key.toLowerCase() === "w") {
-        e.preventDefault();
-        return startWiring();
-      }
+      if (e.metaKey || e.ctrlKey) return; // leave other OS / app shortcuts alone
 
       const entry = CATALOG.find((c) => c.hotkey === e.key.toLowerCase());
       if (entry) {

@@ -866,11 +866,20 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
 ## 8. UX / app
 - ✅ IDE-style shell, multi-tab, command palette, settings, status bar engine indicator
 - ⬜ **Visual QA on the actual desktop app** (currently blocked — dev port held; cannot screenshot headless)
-- ⬜ Component picker matching LTspice (F2 part browser over the full library)
-- 🟡 Keyboard shortcut parity — **Ctrl+R rotate, Ctrl+E mirror, Ctrl+C/V copy/paste,
-  Ctrl+D duplicate now bound** (`App.tsx`), alongside existing Space=rotate, W=wire,
-  hotkey placement, ⌘K palette. Still missing the LTspice function-key set (F2 part,
-  F3 wire, F4 label, F5 delete, F6 copy, F7 move, F8 drag).
+- 🟡 Component picker matching LTspice (F2 part browser over the full library)
+  — **F2 now opens the searchable part palette** (symbols, categories, hotkeys,
+  ↑↓/↵ placement); remaining: coverage audit vs. LTspice's full library tree.
+- 🟡 Keyboard shortcut parity — **LTspice function keys now bound**
+  (2026-07-02): F2 part picker, F3 wire, F5 delete, F6 copy, F9 undo /
+  Shift+F9 redo, alongside Ctrl+R rotate, Ctrl+E mirror, Ctrl+C/V/D,
+  Space=rotate, W=wire, hotkey placement, ⌘K palette. The whole table lives in
+  a pure resolver (`schematic/shortcuts.ts`, 25 tests — every binding + the
+  guard that unrelated modifier combos pass through) and `App.tsx` just
+  dispatches on it. Live-verified: F3→wire tool, F2→palette, F5 deletes the
+  selected part, F9 restores it. **Still unbound on purpose:** F4 (net label),
+  F7 (move), F8 (drag) — Tau has no distinct label/move/drag tools yet;
+  binding them to approximations would teach the wrong reflex. Those flip this
+  item ✅ when the tools land.
 - ⬜ Help / model docs, error console with SPICE messages
 - ⬜ Crash-free on large/real circuits (stack-overflow class fixed; keep stress-testing)
 

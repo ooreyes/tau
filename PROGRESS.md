@@ -8,23 +8,64 @@
      `git log --oneline -8`, recover/finish/revert that unit FIRST, then go on.
      ─────────────────────────────────────────────────────────────────────── -->
 ## ⏱ HEARTBEAT
-- **Headline metric:** 1080 tests green · baseline verified this run
+- **Headline metric:** 1105 tests green · baseline verified this run
 - **Run started (UTC):** 2026-07-02T22:05Z
 - **Synced to origin:** auto/ltspice-parity @ 0f63b11
 - **Claimed unit:** §8 LTspice F-key shortcuts — extract a pure, unit-testable
   shortcut resolver (`schematic/shortcuts.ts`) and bind F2 part palette,
   F3 wire, F5 delete, F6 copy, F9 undo. F4/F7/F8 stay unbound (no net-label /
   move / drag tools yet — no fake mappings).
-- **Status:** IN PROGRESS
-- **Files:** new schematic/shortcuts.ts `resolveShortcut` (+tests covering the
-  whole table incl. modifier combos), App.tsx keyboard effect dispatches on it,
-  StatusBar hint if needed, FEATURE_PARITY §8.
-- **Verify:** unit tests for every binding + guard cases (typing in inputs is
-  the caller's guard; modifier mismatches → null); suite ≥1080; typecheck;
-  Playwright: press F3 → wire tool hint, F2 → palette opens, F9 undoes.
-- **Last completed sub-step:** unit claimed (previous unit §6 OP annotation
-  DONE @ c8e8114).
-- **Next step (if killed):** shortcuts.ts + tests first, then App dispatch.
+- **Status:** DONE
+- **Files:** new schematic/shortcuts.ts (+25 tests), App.tsx keyboard effect
+  now dispatches on the resolver, FEATURE_PARITY §8.
+- **Verify:** done — 25 table tests, suite 1105 green, typecheck clean,
+  Playwright live check (F3 wire, F2 palette, F5 delete, F9 undo).
+- **Last completed sub-step:** §8 F-key parity unit complete (this run).
+- **Next step (for the following run):** F4 net-label tool (placement + text
+  input) — unlocks binding F4 and moves §2/§8 forward together.
+
+---
+
+## 2026-07-03T00:20Z — auto/ltspice-parity — §8 LTspice F-key shortcut parity via pure resolver
+
+### What I did
+- **Bound the LTspice function-key set** (§8): F2 part picker (opens the
+  searchable palette), F3 wire, F5 delete, F6 copy, F9 undo / Shift+F9 redo.
+  F4/F7/F8 stay deliberately unbound — Tau has no net-label/move/drag tools
+  yet, and binding approximations would teach users the wrong reflex.
+- **Extracted the whole shortcut table into a pure resolver**
+  (`schematic/shortcuts.ts` `resolveShortcut({key, ctrlOrMeta, shift})` →
+  action id | null): previously the bindings lived as untestable if-chains in
+  an App effect; now every binding has a unit test (25 — F-keys, all modifier
+  combos incl. Ctrl/Cmd interchangeability and Shift+Z, case-insensitivity,
+  unrelated-combo passthrough so OS shortcuts stay untouched, plain "r" still
+  reserved for resistor placement). `App.tsx` keyboard effect just guards
+  inputs and dispatches; catalog hotkeys unchanged.
+
+### Files touched
+- apps/desktop/src/schematic/shortcuts.ts (new, +25 tests)
+- apps/desktop/src/App.tsx
+- FEATURE_PARITY.md, PROGRESS.md
+
+### Tests
+1105 passing (74 files), 25 new — passed. typecheck clean.
+
+### FEATURE_PARITY items updated
+- §8 keyboard parity item updated (F-keys bound, remaining F4/F7/F8 gated on
+  tools); §8 component picker ⬜ → 🟡 (F2 opens the searchable browser).
+
+### Visual QA
+Playwright live check on the RC example: F3 switched the status bar to the
+Wiring tool, F2 opened the part palette (screenshot reviewed — searchable list
+with symbols/categories/hotkeys, esc closes), click-select + F5 deleted the
+component (5→4), F9 restored it (4→5).
+
+### UX issues found
+- None new. Palette renders cleanly as the F2 browser.
+
+### Next step
+F4 net-label tool (placement + text input) — unlocks binding F4 and moves
+§2/§8 forward together.
 
 ---
 
