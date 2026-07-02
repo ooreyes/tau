@@ -616,7 +616,17 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   7 hand-computed tests. All four spectral/sweep `.meas` domains
   (tran/ac/dc/noise) now run. **NEXT:** expose currents in the waveform viewer
   (probe a device → plot its current, §6).
-- ⬜ DC operating point annotation on schematic (show node V / device I in-place)
+- ✅ **DC operating point annotation on schematic** (show node V / device I
+  in-place, 2026-07-02) — after an OP run, the simulator-mode canvas labels
+  every non-ground net with its DC voltage (cyan, at the net's
+  topmost-leftmost point) and every V-source/inductor with its MNA branch
+  current (amber, centered under the body). Pure resolver
+  `simulation/opAnnotations.ts` (5 tests on a real divider run: V(out)=Vin/2
+  at the hand-computed anchor, I(V1)=−5 mA, ground skipped, stale/failed/null
+  inputs degrade to []); `runOperatingAnalysis` now requests `returnBranches`
+  from the JS solver (native ngspice path annotates voltages only). Labels
+  use a background stroke for readability over wires. Live-verified via
+  Playwright on the divider example: 10 V / 5 V / −5 mA all placed correctly.
 - 🟡 Initial conditions **`.ic` / `.nodeset`** — `buildSpiceDeck` carries both
   through to the native ngspice deck verbatim (re-prefixed, lower-cased keyword);
   when any `.ic` is present the `.tran` line gains **`uic`** so the values hold at

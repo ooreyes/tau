@@ -1245,6 +1245,25 @@ body {
   font-size: 9px;
 }
 
+/* In-place DC operating point labels on the schematic (simulator mode). A
+   background stroke keeps them readable over wires and symbol bodies. */
+.op-annotation {
+  font-size: 10px;
+  font-family: var(--mono, ui-monospace, monospace);
+  paint-order: stroke;
+  stroke: var(--bg);
+  stroke-width: 3px;
+  pointer-events: none;
+}
+
+.op-annotation.voltage {
+  fill: var(--trace-cyan);
+}
+
+.op-annotation.current {
+  fill: var(--trace-amber);
+}
+
 .fft-view {
   margin-top: 6px;
 }

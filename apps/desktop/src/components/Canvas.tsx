@@ -7,6 +7,9 @@ import type { ComponentKind, Point, SchematicComponent, SchematicWire } from "..
 import { getLocalPins, getComponentPins } from "../schematic/pins";
 import { decodeParams } from "../schematic/params";
 import type { AnalysisResult } from "../simulation/linearTransient";
+import type { OperatingPointResult } from "../simulation/operatingPoint";
+import { opAnnotations } from "../simulation/opAnnotations";
+import { extractCircuit } from "../schematic/netlist";
 import { FlowLayer, FLOW_PLAY_MS } from "./FlowLayer";
 
 interface View {
@@ -544,9 +547,13 @@ interface DragState {
 
 export function Canvas({
   analysis,
+  op = null,
   interactive = true,
 }: {
   analysis: AnalysisResult | null;
+  /** Last DC operating point; in simulator mode its node voltages / branch
+   *  currents are annotated in place on the schematic (§6). */
+  op?: OperatingPointResult | null;
   /** When false (simulator view) the canvas is a read-only reflection: pan/zoom
    *  and selecting-to-inspect only — no placing, wiring, probing, or editing. */
   interactive?: boolean;
@@ -583,6 +590,13 @@ export function Canvas({
   const toggleCurrentProbe = useSchematic((s) => s.toggleCurrentProbe);
   const netLabels = useSchematic((s) => s.netLabels);
   const [editingId, setEditingId] = useState<string | null>(null);
+
+  // In-place OP annotations (simulator mode only): re-extract geometry only
+  // when an ok OP result is actually on screen — never during schematic edits.
+  const opLabels = useMemo(() => {
+    if (interactive || !op?.ok) return [];
+    return opAnnotations(op, extractCircuit(components, wires, netLabels));
+  }, [interactive, op, components, wires, netLabels]);
   const editDirty = useRef(false);
 
   // Map of world "x,y" -> component pins there, for attributing wire current flow.
@@ -1193,6 +1207,20 @@ export function Canvas({
               {l.text}
             </text>
           ))}
+
+          {opLabels.map((a) =>
+            a.kind === "voltage" ? (
+              <text key={a.key} className="op-annotation voltage" x={a.x + 5} y={a.y - 8}>
+                {a.text}
+              </text>
+            ) : (
+              // Centered under the component body — clear of the ref/value
+              // labels, which sit beside the body.
+              <text key={a.key} className="op-annotation current" x={a.x} y={a.y + 30} textAnchor="middle">
+                {a.text}
+              </text>
+            ),
+          )}
 
           {flowActive && flowOn && analysis?.ok && (
             <FlowLayer wires={wires} legs={legs} pinIndex={pinIndex} result={analysis} playing={flowOn} />

@@ -8,24 +8,67 @@
      `git log --oneline -8`, recover/finish/revert that unit FIRST, then go on.
      ─────────────────────────────────────────────────────────────────────── -->
 ## ⏱ HEARTBEAT
-- **Headline metric:** 1075 tests green · baseline verified this run
+- **Headline metric:** 1080 tests green · baseline verified this run
 - **Run started (UTC):** 2026-07-02T22:05Z
 - **Synced to origin:** auto/ltspice-parity @ 0f63b11
 - **Claimed unit:** §6 DC operating point annotation — after an OP run, the
   schematic (simulator mode) shows each net's voltage in place and V-source/
   inductor branch currents at their components.
-- **Status:** IN PROGRESS
-- **Files:** new simulation/opAnnotations.ts `opAnnotations(op, circuit)`
-  (+tests, anchor = topmost-leftmost net point / component pos), App.tsx
-  (returnBranches on JS OP fallback; pass opAnalysis to Canvas), Canvas.tsx
-  (render .op-annotation texts when !interactive && op.ok), App.css.
-- **Verify:** hand-computed tests on the divider circuit (V(out)=Vin/2 at the
-  right anchor, I(V1) sign, ground skipped, null/failed op → []); suite ≥1075;
-  typecheck; Playwright screenshot of annotated schematic after OP run.
-- **Last completed sub-step:** unit claimed (previous unit §6 FFT cursors DONE
-  @ 0f63b11).
-- **Next step (if killed):** implement opAnnotations.ts + tests first, then
-  wire App/Canvas, then visual QA.
+- **Status:** DONE
+- **Files:** new simulation/opAnnotations.ts (+5 tests), App.tsx
+  (returnBranches on JS OP fallback; op prop to Canvas), Canvas.tsx
+  (.op-annotation render, current labels centered under body), App.css.
+- **Verify:** done — hand-computed divider tests, suite 1080 green, typecheck
+  clean, Playwright screenshot of annotated divider reviewed (10 V/5 V/−5 mA).
+- **Last completed sub-step:** §6 OP annotation unit complete (this run).
+- **Next step (for the following run):** §6 has no ⬜ left — next
+  highest-leverage: work the remaining 🟡 items (OP results table polish, Bode
+  axes item, .ic) or move to §8 keyboard-parity gaps.
+
+---
+
+## 2026-07-02T23:45Z — auto/ltspice-parity — §6 DC operating point annotation on the schematic
+
+### What I did
+- **In-place OP annotations** (§6, the section's last ⬜): after running the OP
+  tab, the simulator-mode schematic now labels every non-ground net with its DC
+  voltage (cyan, at the net's topmost-leftmost point, background-stroked for
+  readability over wires) and every voltage-source/inductor with its MNA branch
+  current (amber, centered under the component body — placed to clear the
+  ref/value labels that sit beside the body).
+- Pure resolver `opAnnotations(op, circuit)` in `simulation/opAnnotations.ts`:
+  matches OP nets/branches to extracted geometry by id, so stale results
+  degrade to fewer labels instead of misplaced ones. `runOperatingAnalysis` now
+  passes `returnBranches: true` to the JS solver (the native ngspice path
+  doesn't return branches — those runs annotate voltages only). Canvas
+  re-extracts the circuit only when a successful OP result is on screen in
+  simulator mode, never during schematic edits.
+
+### Files touched
+- apps/desktop/src/simulation/opAnnotations.ts (new, +5 tests)
+- apps/desktop/src/components/Canvas.tsx, App.tsx, App.css
+- FEATURE_PARITY.md, PROGRESS.md
+
+### Tests
+1080 passing (73 files), 5 new — passed. typecheck clean.
+
+### FEATURE_PARITY items updated
+- §6 "DC operating point annotation on schematic" ⬜ → ✅.
+
+### Visual QA
+Playwright (Voltage Divider → run → OP tab): three annotations rendered — 10 V
+on the source net, 5 V on the divider midpoint, −5 mA under V1 — all matching
+the OP table. First pass had the current label colliding with R2's ref text;
+fixed by centering it under the body and re-verified.
+
+### UX issues found
+- The divider's midpoint 5 V label sits at the canvas's right edge, mostly
+  under the simulation panel — same "schematic extends under the panel at
+  default view" debt logged last unit; a fit-to-visible-area zoom would fix
+  both. Not new to this change.
+
+### Next step
+§6 has no ⬜ left — next: remaining 🟡 polish items or §8 keyboard parity.
 
 ---
 

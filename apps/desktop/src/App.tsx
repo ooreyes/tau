@@ -286,7 +286,7 @@ function App() {
     const requestId = ++analysisRequestRef.current;
     setAnalysisRunning(true);
     try {
-      const result = await runNativeOperatingPoint({ components, wires, netLabels, params, directives }) ?? runOperatingPoint({ components, wires, netLabels, params });
+      const result = await runNativeOperatingPoint({ components, wires, netLabels, params, directives }) ?? runOperatingPoint({ components, wires, netLabels, params }, { returnBranches: true });
       if (analysisRequestRef.current !== requestId) return;
       setOpAnalysis(result);
     } catch (error) {
@@ -736,7 +736,7 @@ function App() {
             onHideSimulator={() => setMode("schematic")}
           />
           <main className="stage">
-            <Canvas analysis={analysis} interactive={mode === "schematic"} />
+            <Canvas analysis={analysis} op={opAnalysis} interactive={mode === "schematic"} />
             {components.length === 0 && wires.length === 0 && toolMode === "select" && mode === "schematic" && (
               <EmptyState />
             )}
