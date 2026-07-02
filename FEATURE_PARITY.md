@@ -691,8 +691,15 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   (value carried on `magDb`, plotted as written à la LTspice; flat phase). 6
   hand-computed tests: `db(V(out))` exactly reproduces the output trace's dB,
   `db(V(out))-db(V(in))` is a self-consistent 0 dB→rolloff transfer, empty / no-run
-  / unknown-signal / scope-scalar paths. **NEXT:** wire the AC expression bar into
-  the Bode pane UI; expression traces in the step pane; dual axis for mixed V+A.
+  / unknown-signal / scope-scalar paths.
+  **DC-pane expression traces now landed (engine)** too (`simulation/plotExpressionDc.ts`):
+  `evaluateDcPlotExpression` adapts a DC sweep into the `.meas` waveform
+  (`dcResultToWaveform`) and reuses the transient `compileExpr`, so an expression
+  of the swept node voltages (`V(out)-V(in)`, `V(a)/V(b)`, a scaled term)
+  evaluates per sweep point into an overlay `DcSweepNet`. 5 hand-computed tests
+  (divider: Vtop−Vmid = Vsweep/2; scaled Vmid·2 = Vsweep; empty / no-run /
+  unknown-signal). **NEXT:** wire the AC/DC expression bars into the Bode/DC pane
+  UI; expression traces in the step pane; dual axis for mixed V+A.
 - ⬜ Multiple plot panes, add/remove traces, autorange, manual axis
 - ✅ **Measurement cursors** (1 & 2, delta readout) — `simulation/cursors.ts`
   (`cursorReadout`/`fractionToX`, 8 unit tests) + a collapsible **Cursors** panel

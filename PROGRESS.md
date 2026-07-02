@@ -8,19 +8,44 @@
      `git log --oneline -8`, recover/finish/revert that unit FIRST, then go on.
      ─────────────────────────────────────────────────────────────────────── -->
 ## ⏱ HEARTBEAT
-- **Headline metric:** 981 tests green · AC/DC-domain `.step` families + AC-pane expression traces (engine)
+- **Headline metric:** 986 tests green · AC/DC `.step` families + AC/DC-pane expression traces (engine)
 - **Run started (UTC):** 2026-07-01T18:45Z
 - **Synced to origin:** auto/ltspice-parity @ latest
-- **Claimed unit:** §6 AC-pane expression traces (engine layer) — DONE
+- **Claimed unit:** §6 DC-pane expression traces (engine layer) — DONE
 - **Status:** DONE
 - **Last checkpoint commit:** see `git log --oneline -1`
-- **Next step (for the following run):** wire the AC/DC `.step` family runners + the AC expression bar into the UI (both engine-complete, not yet reachable); then §6 log/linear axis toggle or probe-in-place.
+- **Next step (for the following run):** wire the AC/DC `.step` family runners + the AC/DC expression bars into the UI (all engine-complete, not yet reachable); then §6 log/linear axis toggle or probe-in-place.
 
 > **Note on the `-wip` rescue branch:** the durability checkpoint
 > `origin/auto/ltspice-parity-wip` (d0995cb) is a *destructive* snapshot — it
 > deletes stability/temperature/groupDelay/stepFamily modules and their tests
 > (−1263 lines). Discarded as a regression; the canonical branch already has all
 > those modules green. Do not integrate it.
+
+---
+
+## 2026-07-01T19:00Z — auto/ltspice-parity — DC-pane expression traces (§6)
+
+### What I did
+- New `simulation/plotExpressionDc.ts` `evaluateDcPlotExpression`: adapts a DC
+  sweep into the `.meas` waveform (`dcResultToWaveform`) and reuses the transient
+  `compileExpr`, evaluating an expression of the swept node voltages per sweep
+  point into an overlay `DcSweepNet` (the DC-pane counterpart of the transient +
+  AC expression plots; one shared evaluator).
+
+### Files touched
+- src/simulation/plotExpressionDc.ts (new), src/simulation/plotExpressionDc.test.ts (new),
+  FEATURE_PARITY.md, PROGRESS.md
+
+### Tests
+986 passing (+5 new: divider Vtop−Vmid = Vsweep/2; scaled Vmid·2 = Vsweep with a
+scope scalar; empty / no-run / unknown-signal). typecheck clean.
+
+### FEATURE_PARITY items updated
+- §6 plot arbitrary expressions — DC-pane traces (engine) 🟡 landed.
+
+### Next step
+- Wire the AC/DC expression bars + AC/DC `.step` family overlays into SimulationPanel.
 
 ---
 
