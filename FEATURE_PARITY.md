@@ -788,16 +788,15 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
 - ✅ Source polarity matches SPICE convention; R/C/L value guards (resistors now
   allow a **negative (active) resistance** — SPICE-legal, e.g. Draft7's -1k — and
   reject only zero; C/L stay strictly positive)
-- ⬜ **SPICE suffix semantics on the engine/import path** (found in 2026-07-02
-  review): `parseQuantity` treats `M` as mega, but SPICE/LTspice suffixes are
-  case-insensitive — `M` is *milli* and only `MEG`/`Meg`/`meg` is mega (the
-  classic `1MHz` = 1 milli-hertz gotcha). An imported `.asc`/`.cir` value like
-  `1M` silently simulates 10⁹× too large. The UI's `EngineeringInput` convention
-  (`m`/`M` distinct, documented in `schematic/engineering.ts`) round-trips
-  through the same parser, so this needs a *designed* split: SPICE-semantics
-  parsing for netlist/import/engine values, UI convention preserved (or a
-  one-time migration normalizing imported `M`→`m`). Also missing: LTspice's
-  `mil` suffix (25.4 µ).
+- ✅ **SPICE suffix semantics on the engine/import path** (2026-07-02):
+  `parseQuantity` now follows LTspice rules — suffixes case-insensitive,
+  `m`/`M` both milli, only `meg` (any case) mega, `mil` = 25.4 µ, greek mu
+  accepted, unit letters after the prefix ignored (`1MHz` = 1 milli-hertz,
+  faithfully). `formatEngineering` emits `Meg` for 1e6 so formatted values
+  re-parse correctly. The UI dropdown (`schematic/engineering.ts`) stores
+  `Meg` for mega and maps any-case `M` to milli; values it can't represent
+  (`1mil`) survive round-trip as raw text instead of being corrupted.
+  Hand-computed tests cover the `1MHz` and `1F`-is-femto gotchas.
 - ⬜ Match LTspice's defaults/timestep/convergence for waveform-level agreement
   - 🟡 **Numeric agreement tooling landed** (`simulation/waveformCompare.ts`):
     `compareWaveforms(testT,testV, refT,refV)` resamples a reference series

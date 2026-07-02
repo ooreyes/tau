@@ -22,8 +22,38 @@ describe("parseQuantity", () => {
     expect(parseQuantity("4.7n")).toBeCloseTo(4.7e-9, 20);
   });
 
-  it('parses "1meg" as 1e6', () => {
+  it('parses "1meg" as 1e6 in any case', () => {
     expect(parseQuantity("1meg")).toBe(1e6);
+    expect(parseQuantity("1Meg")).toBe(1e6);
+    expect(parseQuantity("1MEG")).toBe(1e6);
+  });
+
+  it('parses "1M" as 1e-3 — M is milli in SPICE, not mega', () => {
+    expect(parseQuantity("1M")).toBeCloseTo(1e-3, 20);
+  });
+
+  it('parses the classic "1MHz" gotcha as 1 milli-hertz, like LTspice', () => {
+    expect(parseQuantity("1MHz")).toBeCloseTo(1e-3, 20);
+    expect(parseQuantity("1MegHz")).toBe(1e6);
+  });
+
+  it('parses "1mil" as 25.4e-6', () => {
+    expect(parseQuantity("1mil")).toBeCloseTo(25.4e-6, 20);
+    expect(parseQuantity("2MIL")).toBeCloseTo(50.8e-6, 20);
+  });
+
+  it("accepts uppercase forms of every suffix (case-insensitive)", () => {
+    expect(parseQuantity("1K")).toBe(1000);
+    expect(parseQuantity("1G")).toBe(1e9);
+    expect(parseQuantity("1N")).toBeCloseTo(1e-9, 20);
+    expect(parseQuantity("1P")).toBeCloseTo(1e-12, 20);
+    expect(parseQuantity("1U")).toBeCloseTo(1e-6, 20);
+    // The capacitance gotcha: F is femto, so "1F" is 1e-15 farads.
+    expect(parseQuantity("1F")).toBeCloseTo(1e-15, 25);
+  });
+
+  it('parses greek mu "1μ" as 1e-6 like the micro sign', () => {
+    expect(parseQuantity("1μ")).toBeCloseTo(1e-6, 20);
   });
 
   it('parses "1T" as 1e12', () => {
@@ -93,9 +123,10 @@ describe("formatEngineering", () => {
     expect(result).toMatch(/^1(\s?)k/);
   });
 
-  it('formats 1e6 starting with "1 M"', () => {
+  it('formats 1e6 as "1 Meg" so the output re-parses as mega, not milli', () => {
     const result = formatEngineering(1e6);
-    expect(result).toMatch(/^1(\s?)M/);
+    expect(result).toMatch(/^1(\s?)Meg/);
+    expect(parseQuantity(result.replace(/\s/g, ""))).toBe(1e6);
   });
 
   it('formats 1e-9 starting with "1 n"', () => {

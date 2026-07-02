@@ -61,7 +61,7 @@ function wire(points: { x: number; y: number }[]): SchematicWire {
 
 describe("Transient resolution guard", () => {
   it("calculates required samples from the highest AC source frequency", () => {
-    const source = vac(0, 32, "1 1M", "V1");
+    const source = vac(0, 32, "1 1Meg", "V1");
     const resolution = inspectTransientResolution([source], { stopTime: 10e-6, steps: 320 });
     expect(resolution.maxFrequencyHz).toBe(1e6);
     expect(resolution.requiredSteps).toBe(320);
@@ -69,7 +69,7 @@ describe("Transient resolution guard", () => {
   });
 
   it("rejects an under-sampled sine transient instead of aliasing it", () => {
-    const source = vac(0, 32, "1 1M", "V1");
+    const source = vac(0, 32, "1 1Meg", "V1");
     const gnd = ground(0, 64);
     const result = runTransientAnalysis({ components: [source, gnd], wires: [] }, { stopTime: 10e-6, steps: 100 });
     expect(result.ok).toBe(false);

@@ -8,19 +8,57 @@
      `git log --oneline -8`, recover/finish/revert that unit FIRST, then go on.
      ─────────────────────────────────────────────────────────────────────── -->
 ## ⏱ HEARTBEAT
-- **Headline metric:** 1043 tests green · baseline verified this run
-- **Run started (UTC):** 2026-07-02T13:15Z
-- **Synced to origin:** auto/ltspice-parity @ 401ede9
-- **Claimed unit:** §7 SPICE suffix semantics — `parseQuantity` goes case-insensitive
-  LTspice rules (`m`/`M`=milli, `meg`=mega, `mil`=25.4µ, uppercase N/P/U/F accepted);
-  UI prefix dropdown stores `Meg` for mega; `formatEngineering` emits `Meg`.
-- **Status:** IN PROGRESS
+- **Headline metric:** 1051 tests green · baseline verified this run
+- **Run started (UTC):** 2026-07-02T16:15Z
+- **Synced to origin:** auto/ltspice-parity @ 81bba60
+- **Claimed unit:** §7 SPICE suffix semantics (recovered from wip rescue of the
+  2026-07-02T13:15Z run, finished this run).
+- **Status:** DONE
 - **Files:** simulation/quantity.ts (+test), schematic/engineering.ts (+test),
   simulation/linearTransient.test.ts (1M→1Meg literals), FEATURE_PARITY §7.
 - **Verify:** hand-computed suffix tests (1M=1e-3, 1Meg=1e6, 1mil, 1MHz gotcha,
-  uppercase forms); full suite ≥1043; typecheck clean.
-- **Last completed sub-step:** unit claimed (no code yet).
+  1F=femto, uppercase forms, greek mu); suite 1051 ≥ 1043; typecheck clean.
+- **Last completed sub-step:** unit complete (tests + parity flip + log).
 - **Next step (for the following run):** §6 probe-in-place (click node → plot trace).
+
+---
+
+## 2026-07-02T16:15Z — auto/ltspice-parity — §7 SPICE suffix semantics (M=milli, LTspice rules)
+
+### What I did
+Recovered the previous session's wip rescue (`quantity.ts` rewrite, saved to
+`auto/ltspice-parity-wip` when that run was killed mid-unit) and finished the unit:
+- `parseQuantity` now follows LTspice suffix rules: case-insensitive, `m`/`M`
+  BOTH milli, only `meg` (any case) mega, `mil` = 25.4 µ, greek mu (U+03BC)
+  accepted alongside the micro sign, unit letters after a prefix ignored — the
+  `1MHz` = 1 milli-hertz gotcha is faithful behavior. New exported
+  `spiceSuffixMultiplier` is the single authority (mirrors expr.ts literals).
+- `formatEngineering` emits `Meg` for 1e6 (an emitted `1M` would read back 10⁹×
+  off in a deck).
+- `schematic/engineering.ts`: inspector prefix dropdown stores `Meg` for mega,
+  maps any-case `M`/aliases via the same longest-match rules, and preserves
+  unrepresentable suffixes (`1mil`, unknown letters) as raw text instead of
+  silently dropping them (old code corrupted `1mil` → `1`).
+- Fixed two `linearTransient.test.ts` literals that used `1M` to mean 1 MHz.
+
+### Files touched
+- apps/desktop/src/simulation/quantity.ts (+ .test.ts, 12 new cases)
+- apps/desktop/src/schematic/engineering.ts (+ .test.ts)
+- apps/desktop/src/simulation/linearTransient.test.ts
+- FEATURE_PARITY.md, PROGRESS.md
+
+### Tests
+1051 passing (71 files), up from 1043 — passed. typecheck clean. No UI change
+(dropdown option text `M`→`Meg` only), no screenshot needed.
+
+### FEATURE_PARITY items updated
+§7 "SPICE suffix semantics on the engine/import path" ⬜ → ✅
+
+### UX issues found
+None new.
+
+### Next step
+§6 probe-in-place: click a node on the schematic after a run → plot that trace.
 
 ---
 
