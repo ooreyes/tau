@@ -70,6 +70,32 @@ const LOCAL_PINS: Record<ComponentKind, LocalPin[]> = {
     { id: "in-", label: "-", x: -32, y: -16 },
     { id: "out", label: "OUT", x: 32, y: 0 },
   ],
+  // LTspice-style idealized digital gate (Digital\*.asy): up to five inputs on
+  // the left, true (q) and complementary (qbar) outputs on the right, and a
+  // com reference. Imported gates override this with the .asy's exact subset;
+  // natively placed gates expose the full bank (extra pins are harmless — a
+  // floating input is ignored, per LTspice semantics).
+  digitalGate: [
+    { id: "in1", label: "1", x: -32, y: -32 },
+    { id: "in2", label: "2", x: -32, y: -16 },
+    { id: "in3", label: "3", x: -32, y: 0 },
+    { id: "in4", label: "4", x: -32, y: 16 },
+    { id: "in5", label: "5", x: -32, y: 32 },
+    { id: "q", label: "Q", x: 32, y: -16 },
+    { id: "qbar", label: "Q̅", x: 32, y: 16 },
+    { id: "com", label: "COM", x: 0, y: 48 },
+  ],
+  // Edge-triggered D flip-flop (LTspice Digital\dflop.asy roles): data/clock on
+  // the left, active-high preset/clear top/bottom, complementary outputs right.
+  dflop: [
+    { id: "d", label: "D", x: -32, y: -16 },
+    { id: "clk", label: "CLK", x: -32, y: 16 },
+    { id: "pre", label: "PRE", x: 0, y: -48 },
+    { id: "clr", label: "CLR", x: 0, y: 48 },
+    { id: "q", label: "Q", x: 32, y: -16 },
+    { id: "qbar", label: "Q̅", x: 32, y: 16 },
+    { id: "com", label: "COM", x: -32, y: 48 },
+  ],
   // Voltage-controlled sources (4-terminal 2-port): control pair on the left,
   // output pair on the right. cp/cn sense the controlling voltage; op/on drive.
   vcvs: [

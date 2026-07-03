@@ -20,6 +20,8 @@ export type ComponentKind =
   | "zener"
   | "opamp"
   | "comparator"
+  | "digitalGate"
+  | "dflop"
   | "vcvs"
   | "vccs"
   | "cccs"

@@ -8,6 +8,7 @@ import { stripAcSpec, acSpecDeckText, stripSourceModifiers } from "./acSpec";
 import { stripIcSpec, icSpecDeckText, parseIcValue } from "./icSpec";
 import { behavioralSpecText as behavioralSpec } from "../simulation/behavioral";
 import { parseComparator, comparatorDeckLine } from "./comparatorSpec";
+import { parseDigitalGate, digitalGateDeckLines, dflopDeckLines } from "./digitalGateSpec";
 import { parseOpampAvol, railClampedOpampLine } from "./opampSpec";
 import { optionsLineFromDirectives } from "./spiceOptions";
 import { modelLibLinesFromDirectives, definedModelNames, definedModelTypes } from "./modelDirectives";
@@ -307,6 +308,51 @@ function componentLines(entry: ExtractedComponent, index: number, userModels: Se
       const spec = parseComparator(component.value);
       return [comparatorDeckLine(`B_${base}`, node("out"), node("in+"), node("in-"), spec)];
     }
+    case "digitalGate": {
+      // LTspice idealized digital gate → one B-source per connected output
+      // (engine/digitalGateSpec.ts). Floating inputs are ignored (LTspice
+      // semantics): a pin only counts when its net is ground or shared.
+      const base = safeName(component.label || `A${index + 1}`);
+      const spec = parseDigitalGate(component.value);
+      const connected = (pin: string): string | null => {
+        const netId = entry.pins[pin];
+        if (!netId) return null;
+        if (netId !== "0" && (netPinCount.get(netId) ?? 0) < 2) return null;
+        return netId.toLowerCase();
+      };
+      const ins = ["in1", "in2", "in3", "in4", "in5"]
+        .map(connected)
+        .filter((n): n is string => n !== null);
+      return digitalGateDeckLines(base, {
+        ins,
+        q: connected("q") ?? undefined,
+        qbar: connected("qbar") ?? undefined,
+        com: connected("com") ?? undefined,
+      }, spec);
+    }
+    case "dflop": {
+      // Stateful device — no B-source can hold edge-triggered state, so emit
+      // an XSPICE d_dff between explicit adc/dac bridges at the gate's logic
+      // levels (engine/digitalGateSpec.ts; bridges live-verified — the AUTO
+      // bridge thresholds sit above LTspice's 0..1 V levels). Unconnected
+      // control pins tie to analog ground (digital 0 = inactive).
+      const base = safeName(component.label || `A${index + 1}`);
+      const spec = parseDigitalGate(component.value);
+      const connected = (pin: string): string | undefined => {
+        const netId = entry.pins[pin];
+        if (!netId) return undefined;
+        if (netId !== "0" && (netPinCount.get(netId) ?? 0) < 2) return undefined;
+        return netId.toLowerCase();
+      };
+      return dflopDeckLines(base, {
+        d: connected("d"),
+        clk: connected("clk"),
+        pre: connected("pre"),
+        clr: connected("clr"),
+        q: connected("q"),
+        qbar: connected("qbar"),
+      }, spec);
+    }
     case "vcvs": {
       // A `Laplace=H(s)` value is a continuous transfer function, not a gain;
       // realize it as an XSPICE s_xfer (rational) or its DC gain (otherwise).
@@ -461,7 +507,7 @@ function analysisLine(analysis: SpiceAnalysis, useInitialConditions = false): st
 function instanceName(component: SchematicComponent, index: number): string {
   const prefix: Record<ComponentKind, string> = {
     resistor: "R", capacitor: "C", inductor: "L", vsource: "V", isource: "I", vac: "V", iac: "I", vpulse: "V",
-    diode: "D", led: "D", zener: "D", opamp: "E", comparator: "B", vcvs: "E", vccs: "G", cccs: "F", ccvs: "H", bsource: "B", nmos: "M", pmos: "M", njf: "J", pjf: "J", npn: "Q", pnp: "Q",
+    diode: "D", led: "D", zener: "D", opamp: "E", comparator: "B", digitalGate: "B", dflop: "A", vcvs: "E", vccs: "G", cccs: "F", ccvs: "H", bsource: "B", nmos: "M", pmos: "M", njf: "J", pjf: "J", npn: "Q", pnp: "Q",
     potentiometer: "R", switch: "R", transformer: "L", tline: "T", testpoint: "X", ground: "X",
   };
   const requested = safeName(component.label);

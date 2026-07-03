@@ -10,8 +10,8 @@
 ## ⏱ HEARTBEAT
 - **Headline metric:** 1132 tests green · corpus runner: 82 imported / 71
   warning-clean / 79 deck-built / 64 op-converged
-- **Run started (UTC):** 2026-07-03T16:50Z
-- **Synced to origin:** auto/ltspice-parity @ 7fa089a
+- **Run started (UTC):** 2026-07-03T22:30Z (resuming killed 16:50Z session)
+- **Synced to origin:** auto/ltspice-parity @ a70a8da
 - **Claimed unit:** §10 FOUNDATION recovered & landed @ 7c60bed. NOW (unit 2):
   §1 digital A-device gates — import DIGITAL\{INV,BUF,AND,OR,XOR,SCHMTBUF,
   SCHMTINV,DFLOP} (8-slot SpiceOrder: 1-5 inputs, 6=_Q, 7=Q, 8=com) + native
@@ -25,7 +25,10 @@
 - **Verify (unit 2):** live ngspice d_dff spike BEFORE coding; unit tests per
   gate; typecheck+full suite ≥1132; corpus runner import pass shows 73+
   warning-clean & floors raised.
-- **Last completed sub-step:** unit claimed, no code yet.
+- **Last completed sub-step:** rescued wip 189825f cherry-picked (engine/
+  digitalGateSpec.ts + netlist/catalog/pins/symbols/types wiring); typecheck
+  clean, 1132 green. REMAINING: ngspice live spike, ascImport mapping,
+  digitalGateSpec tests, corpus re-run.
 
 ---
 

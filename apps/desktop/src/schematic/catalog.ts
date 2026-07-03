@@ -4,7 +4,7 @@ import type { ComponentKind } from "./types";
 export interface CatalogEntry {
   kind: ComponentKind;
   name: string;
-  section: "Passives" | "Sources" | "Semiconductors" | "Analog" | "Electromechanical" | "Markers";
+  section: "Passives" | "Sources" | "Semiconductors" | "Analog" | "Digital" | "Electromechanical" | "Markers";
   /** Single-key shortcut to start placing this component. */
   hotkey: string;
   /** Reference-designator prefix, e.g. "R" → R1, R2, ... */
@@ -45,6 +45,11 @@ export const CATALOG: CatalogEntry[] = [
   { kind: "cccs",          section: "Analog",            name: "CCCS (F)",        hotkey: "f", prefix: "F",   defaultValue: "10",    unit: "A/A" },
   { kind: "ccvs",          section: "Analog",            name: "CCVS (H)",        hotkey: "n", prefix: "H",   defaultValue: "1k",    unit: "V/A" },
   { kind: "bsource",       section: "Analog",            name: "Behavioral (B)",  hotkey: "j", prefix: "B",   defaultValue: "V=1",   unit: "" },
+
+  // LTspice-style idealized digital (behavioral levels, not a logic family).
+  // The gate's value names its function: and/or/xor/buf/inv/schmtbuf/schmtinv.
+  { kind: "digitalGate",   section: "Digital",           name: "Logic Gate",      hotkey: "",  prefix: "A",   defaultValue: "and",   unit: "" },
+  { kind: "dflop",         section: "Digital",           name: "D Flip-Flop",     hotkey: "",  prefix: "A",   defaultValue: "",      unit: "" },
   { kind: "switch",        section: "Electromechanical", name: "Switch",          hotkey: "s", prefix: "S",   defaultValue: "open",  unit: "" },
   { kind: "transformer",   section: "Electromechanical", name: "Transformer",     hotkey: "t", prefix: "T",   defaultValue: "1:1",   unit: "" },
   { kind: "tline",         section: "Electromechanical", name: "Transmission Line", hotkey: "", prefix: "T",   defaultValue: "Td=50n Z0=50", unit: "Ω s" },

@@ -27,6 +27,8 @@ export const SYMBOL_BODY: Record<ComponentKind, BodyBox> = {
   zener: { minX: -13, minY: -15, maxX: 16, maxY: 15 },
   opamp: { minX: -24, minY: -26, maxX: 30, maxY: 26 },
   comparator: { minX: -24, minY: -26, maxX: 30, maxY: 26 },
+  digitalGate: { minX: -24, minY: -38, maxX: 28, maxY: 40 },
+  dflop: { minX: -24, minY: -40, maxX: 24, maxY: 40 },
   vcvs: { minX: -18, minY: -22, maxX: 18, maxY: 22 },
   vccs: { minX: -18, minY: -22, maxX: 18, maxY: 22 },
   cccs: { minX: -18, minY: -22, maxX: 18, maxY: 22 },
@@ -61,6 +63,8 @@ export const SYMBOL_BOX: Record<ComponentKind, { halfW: number; halfH: number }>
   zener: { halfW: 16, halfH: 18 },
   opamp: { halfW: 28, halfH: 28 },
   comparator: { halfW: 28, halfH: 28 },
+  digitalGate: { halfW: 28, halfH: 40 },
+  dflop: { halfW: 26, halfH: 42 },
   vcvs: { halfW: 20, halfH: 24 },
   vccs: { halfW: 20, halfH: 24 },
   cccs: { halfW: 20, halfH: 24 },
@@ -238,6 +242,49 @@ export function ComponentSymbol({ kind }: { kind: ComponentKind }) {
           <path d="M -20 -16 H -12" />
           {/* hysteresis/step glyph marks it as a comparator, not an op-amp */}
           <path d="M -8 6 H 0 V -6 H 8" fill="none" />
+        </>
+      );
+
+    case "digitalGate":
+      return (
+        <>
+          {/* Rounded-nose gate body (LTspice-style AND silhouette); the value
+              text (and/or/xor/inv/…) names the function next to the symbol. */}
+          <path d="M -24 -38 L 2 -38 A 38 38 0 0 1 2 38 L -24 38 Z" />
+          {/* input leads on the ±16 grid rows */}
+          <line x1={-32} y1={-32} x2={-24} y2={-32} />
+          <line x1={-32} y1={-16} x2={-24} y2={-16} />
+          <line x1={-32} y1={0} x2={-24} y2={0} />
+          <line x1={-32} y1={16} x2={-24} y2={16} />
+          <line x1={-32} y1={32} x2={-24} y2={32} />
+          {/* q / qbar output leads (qbar gets the inversion bubble) */}
+          <line x1={26} y1={-16} x2={32} y2={-16} />
+          <circle cx={24} cy={16} r={3} />
+          <line x1={27} y1={16} x2={32} y2={16} />
+          {/* com reference drops from the body floor */}
+          <line x1={0} y1={38} x2={0} y2={48} />
+        </>
+      );
+
+    case "dflop":
+      return (
+        <>
+          <rect x={-24} y={-40} width={48} height={80} rx={2} />
+          {/* D / CLK leads; CLK gets the edge-trigger wedge */}
+          <line x1={-32} y1={-16} x2={-24} y2={-16} />
+          <line x1={-32} y1={16} x2={-24} y2={16} />
+          <path d="M -24 10 L -16 16 L -24 22" fill="none" />
+          {/* PRE (top) / CLR (bottom) */}
+          <line x1={0} y1={-48} x2={0} y2={-40} />
+          <line x1={0} y1={40} x2={0} y2={48} />
+          {/* Q / Q̅ (bubble) */}
+          <line x1={24} y1={-16} x2={32} y2={-16} />
+          <circle cx={27} cy={16} r={3} />
+          <line x1={30} y1={16} x2={32} y2={16} />
+          {/* com */}
+          <line x1={-32} y1={48} x2={-24} y2={40} />
+          {/* D-flop glyph */}
+          <path d="M -8 -6 H 0 A 6 6 0 0 1 0 6 H -8 Z" fill="none" />
         </>
       );
 
