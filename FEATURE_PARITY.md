@@ -8,10 +8,11 @@
 > **📊 Headline metric (the finish line):** test count and current unit are
 > **only ever live in the `PROGRESS.md` heartbeat** — read that, not a number
 > copy‑pasted here, since this file is not rewritten every run and WILL drift.
-> Acceptance corpus is tracked qualitatively below (per‑symbol ⬜/🟡/✅ in §1);
-> there is no committed re‑runnable corpus script yet — **that is itself a
-> ⬜ item** (see §1). **Done = corpus script proves ≥ 80/82 + Class‑D `.tran`/
-> `.meas` parity + signed DMG** (full checklist in AGENTS.md → Definition of Done).
+> Acceptance corpus is tracked qualitatively below (per‑symbol ⬜/🟡/✅ in §1)
+> **and quantitatively by the committed runner** `scripts/acceptance-corpus.sh`
+> (✅ — see §1; measured 2026‑07‑03: 82 imported / 71 warning‑clean / 79
+> deck‑built / 64 op‑converged). **Done = corpus script proves ≥ 80/82 + Class‑D
+> `.tran`/`.meas` parity + signed DMG** (full checklist in AGENTS.md → Definition of Done).
 
 ---
 
@@ -56,7 +57,24 @@ Status legend: ✅ done · 🟡 partial · ⬜ not started
 ---
 
 ## 1. File I/O & interoperability  ← **highest leverage for the key goal**
-- 🟡 **Real-`.asc` op-deck build now 82/82** (was 34/82 at this work's start):
+- ✅ **Committed acceptance-corpus runner** (`scripts/acceptance-corpus.sh` →
+  `apps/desktop/scripts/acceptanceCorpus.corpus.ts` via `vitest.corpus.config.ts`,
+  outside the default suite): imports every `.asc` in `~/Downloads/LTspice_export`
+  + `~/Documents/LTspice` (incl. `examples/Educational`), builds an `.op` deck,
+  batch-runs `ngspice -b`, prints a per-file table + summary, and **fails on any
+  regression below the measured floors**. Pure verdict/aggregation helpers in
+  `src/io/corpusReport.ts` (8 unit tests in the default suite; ngspice's exit
+  code alone is untrustworthy — it exits 0 after "simulation(s) aborted", so the
+  verdict requires "No. of Data Rows" in the output and no failure marker).
+  **First trustworthy measurement (2026-07-03): 82 imported / 71 warning-clean /
+  79 deck-built / 64 op-converged.** This corrected the hand-typed "82/82 build"
+  claim below — 3 files still fail deck-build: Pierce.asc (XTAL `Y1` needs F
+  value), dimmer.asc (`Q1` Ohm value), varistor.asc (A-device `A1` Ohm value).
+  Knobs: `CORPUS_SKIP_NGSPICE=1` (import+deck only), `CORPUS_ALL=1` (full
+  examples tree, floors not enforced).
+- 🟡 **Real-`.asc` op-deck build now 79/82 by the committed runner** (was 34/82
+  at this work's start; the "82/82" previously recorded here predated the runner
+  and double-counted 3 files — Pierce/dimmer/varistor — that throw at deck time):
   `decodeSchematicText` falls back to **Windows-1252** when the bytes aren't valid
   UTF-8, so LTspice's single-byte `µ` (0xB5) decodes as the micro sign instead of
   U+FFFD (was the biggest blocker — 32 files); `buildParamScope` accepts the
@@ -72,7 +90,9 @@ Status legend: ✅ done · 🟡 partial · ⬜ not started
   a **Chan magnetic-core inductor** (`Hc/Bs/Br/A/Lm/Lg/N`) is sized to its
   **unsaturated linear inductance** from the gap+core reluctance
   (`engine/coreInductor.ts`; ngspice has no saturable-core primitive) — unblocked
-  NonLinearTransformer. **All 82 now build a deck.** (NonLinearTransformer is a
+  NonLinearTransformer. **79/82 build a deck per the committed runner**
+  (Pierce/dimmer/varistor throw at deck time — see the runner item above).
+  (NonLinearTransformer is a
   behavioral-magnetics demo whose flux-integrating G-source loop still hits a
   singular matrix in ngspice without the true Chan model — building ≠ converging
   for that one file; the saturable waveform is genuinely out of ngspice's reach.)
@@ -963,6 +983,6 @@ should map LTspice symbol `type` → Tau `ComponentKind`, falling back to a gene
 
 _This footer is intentionally not a live status line — see the `PROGRESS.md`
 heartbeat for the current test count and active unit. Next highest-leverage
-work: a committed acceptance-corpus runner (AGENTS.md → Definition of Done),
-the LTspice-comparator import mapping (Class-D fidelity blocker), and the
-`Comparators\*` vendor pin banks that unblock ~8 more corpus files._
+work: the LTspice-comparator import mapping (Class-D fidelity blocker), the
+`Comparators\*` vendor pin banks that unblock ~8 more corpus files, and the
+3 remaining deck-build failures (Pierce XTAL, dimmer, varistor)._

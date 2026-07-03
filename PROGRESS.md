@@ -8,28 +8,76 @@
      `git log --oneline -8`, recover/finish/revert that unit FIRST, then go on.
      ─────────────────────────────────────────────────────────────────────── -->
 ## ⏱ HEARTBEAT
-- **Headline metric:** 1110 tests green
-- **Run started (UTC):** 2026-07-02T22:35Z
-- **Synced to origin:** auto/ltspice-parity @ 53ad8b6
-- **Claimed unit:** §2/§8 F4 net-label tool — a `label` tool mode (F4 +
-  toolbar/palette/⌘K): click a snapped point → inline text input → Enter or
-  click-away commits via the undoable `upsertNetLabel` (empty deletes), Esc
-  cancels; pre-fills an existing label at the clicked point.
-- **Status:** IN PROGRESS (2nd unit this run; F4 net-label unit landed @ b3a2cad)
-- **Claimed unit 2:** §1/DoD committed acceptance-corpus runner —
-  `scripts/acceptance-corpus.sh` → vitest spec (own config, NOT in the
-  default suite) that imports all 82 user `.asc` files, builds an `.op`
-  deck for each, runs `ngspice -b`, and prints warning-clean / deck-built /
-  op-converged counts with per-file failures; pure report helpers in
-  `src/io/corpusReport.ts` (+tests, in the default suite).
-- **Files (unit 2):** apps/desktop/src/io/corpusReport.ts (+test),
-  apps/desktop/scripts/acceptanceCorpus.corpus.ts,
-  apps/desktop/vitest.corpus.config.ts, scripts/acceptance-corpus.sh.
-- **Verify (unit 2):** corpusReport unit tests in default suite; run the
-  corpus script live and record its counts here + FEATURE_PARITY §1.
-- **Last completed sub-step:** unit claimed, no code yet.
-- **Next step (for the following run):** if found IN PROGRESS, the report
-  helpers/tests land first — check for a `wip:` commit, then wire the spec.
+- **Headline metric:** 1118 tests green · corpus runner: 82 imported / 71
+  warning-clean / 79 deck-built / 64 op-converged
+- **Run started (UTC):** 2026-07-03T04:00Z
+- **Synced to origin:** auto/ltspice-parity @ 2347632
+- **Claimed unit:** §1/DoD committed acceptance-corpus runner — recovered from
+  `origin/auto/ltspice-parity-wip` (previous session killed mid-unit),
+  verified, floors corrected to measured truth, landed.
+- **Status:** DONE
+- **Last completed sub-step:** corpus runner committed; wip ref reconciled.
+- **Next step (for the following run):** Class-D fidelity — map
+  `Comparators\LT1016` et al. to the `comparator` kind with real pin banks
+  (priority #2); or fix a deck-build failure (Pierce XTAL / dimmer / varistor).
+
+---
+
+## 2026-07-03T04:15Z — auto/ltspice-parity — §1/DoD committed acceptance-corpus runner (recovered from wip, first trustworthy corpus numbers)
+
+### What I did
+- **Recovered the killed session's work** from `origin/auto/ltspice-parity-wip`
+  (rescued checkpoint d3d7a72) per STEP 0: cherry-picked, verified, finished.
+- **Committed acceptance-corpus runner** (§1 / Definition of Done, priority #1):
+  `scripts/acceptance-corpus.sh` → `apps/desktop/scripts/acceptanceCorpus.corpus.ts`
+  under its own `vitest.corpus.config.ts` (NOT in the default `pnpm test` include).
+  Walks `~/Downloads/LTspice_export` + `~/Documents/LTspice` (+`examples/
+  Educational`), imports each `.asc` with a sibling-file subcircuit resolver,
+  builds an `.op` deck, batch-runs `ngspice -b` (20 s timeout each), prints a
+  per-file ✓/✗ table + summary, and asserts the counts against recorded floors.
+- **Pure report helpers** in `src/io/corpusReport.ts` (+8 unit tests in the
+  default suite): `summarizeCorpus`, `formatCorpusReport`, and
+  `ngspiceOpSucceeded` — ngspice exits 0 even after "simulation(s) aborted", so
+  success requires "No. of Data Rows" AND no failure marker in the output.
+- **Corrected the baselines to the measured truth.** The wip draft had floors
+  from PROGRESS.md's hand-typed claims (deck-built ≥ 82); the live run measured
+  **82 imported / 71 warning-clean / 79 deck-built / 64 op-converged** — the
+  runner immediately caught the drift it was built to catch. Floors now 82/71/79/64.
+- Env knobs: `CORPUS_SKIP_NGSPICE=1` (import+deck only, also auto when ngspice
+  is missing), `CORPUS_ALL=1` (full examples tree, floors not enforced);
+  spec skips cleanly on machines without the corpus dirs.
+
+### Files touched
+- scripts/acceptance-corpus.sh (new)
+- apps/desktop/scripts/acceptanceCorpus.corpus.ts (new)
+- apps/desktop/vitest.corpus.config.ts (new)
+- apps/desktop/src/io/corpusReport.ts (+corpusReport.test.ts) (new)
+- apps/desktop/package.json (+@types/node), tsconfig.json (include scripts/), pnpm-lock.yaml
+- FEATURE_PARITY.md (§1 runner ✅; corrected the stale "82/82 build" claim to 79/82), PROGRESS.md
+
+### Tests
+1118 passing (8 new) — default suite green; corpus spec passes live
+(`total 82 · imported 82 · warning-clean 71 · deck-built 79 · op-converged 64`).
+
+### FEATURE_PARITY items updated
+- §1 committed acceptance-corpus runner: ⬜ → ✅ (was a header-note item)
+- §1 "op-deck build 82/82" claim corrected to measured 79/82 (still 🟡)
+
+### Corpus follow-ups surfaced by the runner (op failures worth fixing)
+- Deck-build (3): Pierce.asc (XTAL `Y1` needs F value), dimmer.asc (`Q1` Ohm
+  value), varistor.asc (A-device `A1` Ohm value)
+- Missing include stubs (4): TowTom2.sub, capometer.sub, opamp.sub ×2
+- Singular matrix (3): Cohn, passive, varactor2 (inductor-loop `l#branch`)
+- Timeouts (2): ISO16750-2/ISO7637-2 examples; misc (5): LoopGain2 shorted
+  VSRC, P2 netlist error, PLL/PLL2 `rand` at run-time, SoftDiodeRecovery,
+  UHFpreamp line errors
+
+### UX issues found
+none (no UI change)
+
+### Next step
+Class-D fidelity (priority #2): map LTspice `Comparators\LT1016` et al. to the
+`comparator` kind with real pin banks so the flagship circuit stops running open-loop.
 
 ---
 
