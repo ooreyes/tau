@@ -430,6 +430,49 @@ describe("buildSpiceDeck", () => {
     expect(deck.netlist).not.toContain("TP1 ");
   });
 
+  it("clamps an op-amp with driven supply pins to its rails (Class-D PWM comparator)", () => {
+    // U1 at origin: in+(-32,16) in-(-32,-16) out(32,0) v+(0,-32) v-(0,32).
+    // VP feeds v+ via a wire, v- is wired to ground — both rails driven, so the
+    // deck must emit the rail-clamped B-source with the imported Avol, not the
+    // unbounded E-source (which open-loop saturates to ~1e7 V).
+    const components = [
+      component("opamp", "U1", "Avol=1Meg GBW=10Gig Slew=10Gig", 0, 0),
+      component("vsource", "VP", "10", 128, -96),
+      component("vsource", "VIN", "1", -96, 48),
+      component("resistor", "RL", "1k", 96, 32),
+      component("ground", "", "", 0, 32), // on U1.v- → v- is the ground rail
+      component("ground", "", "", 128, -64), // VP.n
+      component("ground", "", "", -96, 80), // VIN.n
+      component("ground", "", "", 128, 32), // RL.b
+    ];
+    const wires = [
+      wire("wvp", [{ x: 0, y: -32 }, { x: 0, y: -128 }, { x: 128, y: -128 }]), // v+ → VP.p
+      wire("win", [{ x: -32, y: 16 }, { x: -96, y: 16 }]), // in+ → VIN.p
+      wire("wout", [{ x: 32, y: 0 }, { x: 64, y: 0 }, { x: 64, y: 32 }]), // out → RL.a
+    ];
+    const deck = buildSpiceDeck({ components, wires }, { kind: "op" });
+    expect(deck.netlist).toMatch(/B_U1 \S+ 0 V=\(V\(\S+\)\+V\(0\)\)\/2\+\(V\(\S+\)-V\(0\)\)\/2\*tanh\(1000000\*/);
+    expect(deck.netlist).not.toContain("E_U1");
+  });
+
+  it("keeps the unbounded ideal op-amp when the supply pins float", () => {
+    const components = [
+      component("opamp", "U1", "Ideal", 0, 0),
+      component("vsource", "VIN", "1", -96, 48),
+      component("resistor", "RL", "1k", 96, 32),
+      component("ground", "", "", -96, 80),
+      component("ground", "", "", 128, 32),
+    ];
+    const wires = [
+      wire("win", [{ x: -32, y: 16 }, { x: -96, y: 16 }]),
+      wire("wout", [{ x: 32, y: 0 }, { x: 64, y: 0 }, { x: 64, y: 32 }]),
+    ];
+    const deck = buildSpiceDeck({ components, wires }, { kind: "op" });
+    expect(deck.netlist).toContain("E_U1");
+    expect(deck.netlist).toContain("R_U1_out");
+    expect(deck.netlist).not.toContain("B_U1");
+  });
+
   it("emits a JFET (J device) with the generic NJF/PJF model", () => {
     // njf J1 at origin: d(16,-32) g(-32,0) s(16,32). Drain on a net, gate+source 0.
     const components = [

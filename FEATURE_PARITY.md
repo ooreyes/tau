@@ -400,9 +400,13 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   the bulk pin is dropped. Non-VDMOS MOSFETs keep their 4-terminal line. ngspice-46
   verified the 3-node VDMOS form (`M1 d g s nv` → Id=32.2 A at Vgs=5, Vto=2, Kp=8).
   9 tests (model-type parsing, 3-vs-4-node emission, VDMOS passthrough).
-  **NEXT:** ship real power-MOSFET VDMOS model params by name (class-d's
-  `RSR015P06`/`QS6K1` still fall back to the generic level-1 starter — they need a
-  bundled vendor model); browser TS-solver VDMOS; body-diode + thermal node.
+  ✅ **class-d's `RSR015P06`/`QS6K1` are now bundled** (2026-07-03,
+  `standardModels.ts`): verbatim LTspice `standard.mos` VDMOS lines with
+  `Cgso`→`Cgs` renamed (ngspice's parameter name — "unrecognized parameter
+  (cgso)" otherwise, live-verified) and mfg/Vds/Ron/Qg annotation keys
+  stripped; `standardModelType` reports them `vdmos` so they emit 3-terminal.
+  **NEXT:** more standard.mos parts as corpus files need them; browser
+  TS-solver VDMOS; body-diode + thermal node.
 - 🟡 Comparators / logic gates / digital (LTspice `A` devices) — **needed for class-d_starter.asc**
   - ✅ **Dedicated `comparator` component kind landed** (`engine/comparatorSpec.ts`):
     a real open-loop comparator with **explicit output high/low levels + optional
@@ -419,9 +423,14 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
     glyph)/netlist. 16 tests (parse, ternary + hysteretic deck lines, deck
     integration). Nonlinear → native-engine only (correctly excluded from the
     linear TS solver set, like MOSFETs).
-  - **NEXT:** import-map LTspice comparator symbols (`Comparators\\*`) to this
-    kind; logic gates / `A` devices; UniversalOpAmp2 open-loop rail behavior
-    (class-d's U1 — stays an op-amp since it's also used in feedback, see finding).
+  - ✅ **UniversalOpAmp2 open-loop rail behavior SOLVED (2026-07-03)** — see the
+    rail-clamped op-amp item in §7: an op-amp whose V+/V− pins are driven now
+    emits `Vmid + Vhalf·tanh(Avol·Vd/Vhalf)` and clamps to its rails in any
+    usage (feedback OR open-loop), which is exactly LTspice's behavior. The
+    finding below is resolved; the dedicated `comparator` kind remains for
+    supply-less comparator symbols.
+  - **NEXT:** import-map LTspice comparator symbols (`Comparators\\*`) to the
+    comparator kind (none appear in the current corpus); logic gates / `A` devices.
   - **Finding (2026-06-28):** class-d_starter.asc now *builds and runs* its `.tran`
     in ngspice 17 — the comparator U1 imports as the generic `opamp` and emits as
     a gain-1e6 VCVS (`E_U1 … 1e6`). But open-loop it **saturates to ~1e7 V** at
@@ -886,10 +895,27 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   (opamp/capometer/TowTom2), PLL/PLL2 use LTspice's `rand()`, SoftDiodeRecovery a
   proprietary diode `Vp` param, UHFpreamp an unbundled `mrf901`, 2 ISO demos time
   out, plus two deep loop-probe/connectivity cases (LoopGain2, P2).
+- ✅ **Class-D fidelity — the flagship circuit now SIMULATES correctly
+  (2026-07-03), proven by a committed runner** (`scripts/classdParity.corpus.ts`,
+  runs with `scripts/acceptance-corpus.sh`). Two fixes:
+  (1) **Rail-clamped op-amp** (`engine/opampSpec.ts`): an op-amp whose V+/V−
+  pins are driven (net has ≥2 pins, or is ground) emits a B-source
+  `Vmid + Vhalf·tanh(Avol·Vd/max(|Vhalf|,0.5))` — Avol parsed from the imported
+  `Avol=…` (UniversalOpamp2's Value2, now carried by `componentValueFromAttrs`),
+  default 1e6; floating-supply op-amps keep the classic unbounded E-source.
+  Formulation battle-tested against the corpus: hard min/max clamp broke 5
+  feedback circuits (singular matrix), the E+clamp-diode macro broke open-loop
+  usage (~1e5 A through the clamp), tanh with a 0.5 V divisor floor passes all
+  (a 1µ floor breaks ngspice source stepping — slope 1e12 at early steps).
+  (2) **Real power VDMOS models bundled** (QS6K1 + RSR015P06, see §3) — the
+  half-bridge previously fell back to Kp=200µ signal-level starters and made
+  ~0.1 V into 8 Ω. Measured (ngspice, .tran 0 3m): vpwm exactly ±10 (rails),
+  vo −8.3…+9.8 V tracking the 7.5 V/1 kHz program, avg −16 mV. Corpus floors
+  hold at 82/71/79/64.
 - 🟡 Ship/bundle a real device-model set — **common LTspice standard diodes/
-  zeners/BJTs bundled** (`engine/standardModels.ts`, real `standard.*` params,
-  emitted by `buildSpiceDeck` when referenced by name). Still generic for MOS and
-  any unbundled part.
+  zeners/BJTs + the class-d power VDMOS pair bundled** (`engine/standardModels.ts`,
+  real `standard.*` params, emitted by `buildSpiceDeck` when referenced by name).
+  Still generic for any unbundled part.
 - 🟡 Convergence aids — a baseline `rshunt=1e12` ships in the default `.options`
   so floating-node circuits solve; gmin/source stepping not yet surfaced to user.
 - ⬜ Per-analysis ngspice option mapping

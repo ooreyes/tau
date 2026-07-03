@@ -680,6 +680,15 @@ export function componentValueFromAttrs(
   if (kind === "tline") {
     return base || "Td=50n Z0=50";
   }
+  // An op-amp's behavioral params ride on the extra attributes (UniversalOpamp2
+  // writes `Value2 Avol=1Meg GBW=10Meg Slew=10Meg`); keep them all so the deck
+  // builder can read Avol for the rail-clamped model (engine/opampSpec.ts).
+  if (kind === "opamp") {
+    const extras = [attrs.Value2, attrs.SpiceLine, attrs.SpiceLine2]
+      .map((s) => s?.trim())
+      .filter((s): s is string => !!s);
+    return [base, ...extras].filter(Boolean).join(" ");
+  }
   // Capacitors/inductors may carry an initial condition in any of the spec
   // attributes (LTspice writes e.g. `SpiceLine2 IC=1`). Append just the `IC=`
   // token — not the whole attribute, which can hold ngspice-incompatible

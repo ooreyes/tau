@@ -13,17 +13,77 @@
 - **Run started (UTC):** 2026-07-03T04:00Z
 - **Synced to origin:** auto/ltspice-parity @ 2347632
 - **Claimed unit:** §7 Class-D fidelity (priority #2) — rail-clamped op-amp
-  emission: when both v+/v- sit on driven nets (≥2 pins), emit
-  `B V=max(min(Avol*(V(in+)-V(in-)),V(v+)),V(v-))` with Avol parsed from the
-  imported `Avol=…` value (default 1e6); floating rails keep the unbounded
-  E-source. (Note: the corpus has NO Comparators\* symbols — class-d's PWM
-  comparator is `OpAmps/UniversalOpAmp2` run open-loop; rails are the fix.)
-- **Status:** IN PROGRESS (2nd unit this run; corpus runner landed @ 464925b)
-- **Files:** engine/opampSpec.ts (+test, new), engine/spiceNetlist.ts (opamp
-  case + net-pin-count plumb), spiceNetlist.test.ts.
-- **Verify:** unit tests hand-computed; ngspice -b on imported class-d deck
-  (.op bounded to rails, .tran shows PWM switching); corpus floors hold.
-- **Last completed sub-step:** unit claimed, no code yet.
+  (tanh form) + bundled QS6K1/RSR015P06 VDMOS models + committed
+  `classdParity.corpus.ts` fidelity spec. Landed.
+- **Status:** DONE (2nd unit this run; corpus runner landed @ 464925b)
+- **Last completed sub-step:** all gates green (1128 default tests; corpus
+  82/71/79/64 at floors; class-d parity spec ✓ vpwm ±10, vo tracks program).
+- **Next step (for the following run):** §10 shadcn design system (imperative,
+  interleave one panel per session) or remaining §1 deck-build failures
+  (Pierce XTAL Y1 / dimmer Q1 / varistor A1).
+
+---
+
+## 2026-07-03T04:45Z — auto/ltspice-parity — §7 Class-D fidelity: rail-clamped op-amp + real VDMOS models (flagship circuit simulates correctly)
+
+### What I did
+- **Rail-clamped op-amp emission** (`engine/opampSpec.ts`, new): an op-amp
+  whose V+/V− supply pins are driven (pin's net is ground or has ≥2 pins —
+  floating pins get singleton nets, so pin-count is the discriminator) emits
+  `B V = Vmid + Vhalf·tanh(Avol·Vd / max(|Vhalf|, 0.5))` instead of the
+  unbounded `E … 1e6`; open-loop it clamps to the rails exactly like LTspice's
+  UniversalOpamp2 (class-d's PWM comparator — was saturating to ~1e7 V).
+  Floating-supply op-amps keep the classic unbounded E-source model.
+- **Formulation was chosen by corpus evidence, not taste** — three iterations:
+  hard `max(min(…))` clamp regressed op-converged 64→59 (zero derivative when
+  saturated kills gmin/source stepping on feedback circuits: Wien, LoopGain,
+  Howland, phono, Draft10 all "singular matrix"/"timestep too small"); the
+  classic E+clamp-diode macro fixed those but broke class-d (open loop the
+  internal node forces ~1e5 A through the clamp diodes); smooth tanh with a
+  **0.5 V divisor floor** passes everything — and the floor size matters: 1µ
+  breaks ngspice source stepping itself (early steps see slope ~1e12;
+  phono.asc live-verified: 0.5 converges via source stepping, 1µ does not).
+- **Avol imported**: `componentValueFromAttrs` now carries opamp
+  Value2/SpiceLine (`Avol=1Meg GBW=10Gig Slew=10Gig`) onto the value;
+  `parseOpampAvol` reads it (default 1e6, ignores GBW/Slew).
+- **Real power VDMOS models bundled** (`standardModels.ts`): QS6K1 (n) +
+  RSR015P06 (p) verbatim from LTspice `standard.mos` with `Cgso`→`Cgs`
+  (ngspice's name — live-verified "unrecognized parameter" otherwise) and
+  annotation keys stripped. Without them class-d's half-bridge used Kp=200µ
+  generic starters and delivered ~0.1 V into the 8 Ω load.
+- **Committed Class-D fidelity spec** (`scripts/classdParity.corpus.ts`, runs
+  under `scripts/acceptance-corpus.sh`; corpus config include widened to
+  `scripts/*.corpus.ts`): imports the real class-d_starter.asc (hierarchical
+  deadtime block via sibling resolver), runs its own `.tran 0 3m` in ngspice
+  with spliced `.meas` probes (ngspice needs `FROM=`/`TO=` key form), asserts
+  PWM clamps to ±10 V rails and the LC-filtered output tracks the 7.5 V/1 kHz
+  program. Measured: vpwmmax/min = ±10.0000, vomax +9.77 / vomin −8.34,
+  voavg −15.6 mV.
+
+### Files touched
+- apps/desktop/src/engine/opampSpec.ts (+opampSpec.test.ts) (new)
+- apps/desktop/src/engine/spiceNetlist.ts (+2 tests), standardModels.ts (+1 test)
+- apps/desktop/src/io/ascImport.ts (+1 test)
+- apps/desktop/scripts/classdParity.corpus.ts (new), vitest.corpus.config.ts
+- FEATURE_PARITY.md (§3 VDMOS ✅ / comparator-finding resolved; §7 Class-D ✅), PROGRESS.md
+
+### Tests
+1128 passing (10 new) — default suite green; corpus 82 imported / 71
+warning-clean / 79 deck-built / 64 op-converged (exactly at floors, zero
+regression); classdParity spec green.
+
+### FEATURE_PARITY items updated
+- §7 Class-D fidelity: NEW ✅ (committed-runner-proven)
+- §3 VDMOS "NEXT: bundle RSR015P06/QS6K1": ✅
+- §3 comparator finding (open-loop opamp saturation): resolved ✅
+
+### UX issues found
+none (no UI change). Engine debt: the browser TS solver still models opamps
+unbounded (linear solver can't do tanh); native path is authoritative.
+
+### Next step
+§10 design system panel migration (imperative per Omar) or the 3 remaining
+deck-build failures (Pierce XTAL Y1 F-value, dimmer Q1, varistor A1).
 
 ---
 

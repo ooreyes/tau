@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { standardModelLine, standardModelNames } from "./standardModels";
+import { standardModelLine, standardModelNames, standardModelType } from "./standardModels";
 
 describe("standardModelLine", () => {
   it("returns the LTspice 1N4148 diode model line", () => {
@@ -25,6 +25,16 @@ describe("standardModelLine", () => {
   it("bundles npn and pnp BJTs with the right model type", () => {
     expect(standardModelLine("2N3904")).toMatch(/NPN\(/);
     expect(standardModelLine("2N3906")).toMatch(/PNP\(/);
+  });
+
+  it("bundles the class-d power VDMOS pair with the vdmos type", () => {
+    // Verbatim from LTspice standard.mos except Cgso→Cgs (ngspice's name) and
+    // the mfg/Vds/Ron/Qg annotation keys stripped.
+    expect(standardModelLine("QS6K1")).toMatch(/VDMOS\(Rg=45/);
+    expect(standardModelLine("RSR015P06")).toMatch(/VDMOS\(pchan/);
+    expect(standardModelLine("QS6K1")).not.toContain("Cgso");
+    expect(standardModelType("QS6K1")).toBe("vdmos");
+    expect(standardModelType("RSR015P06")).toBe("vdmos");
   });
 
   it("bundles zeners with a breakdown voltage", () => {

@@ -8,6 +8,7 @@ import { stripAcSpec, acSpecDeckText, stripSourceModifiers } from "./acSpec";
 import { stripIcSpec, icSpecDeckText, parseIcValue } from "./icSpec";
 import { behavioralSpecText as behavioralSpec } from "../simulation/behavioral";
 import { parseComparator, comparatorDeckLine } from "./comparatorSpec";
+import { parseOpampAvol, railClampedOpampLine } from "./opampSpec";
 import { optionsLineFromDirectives } from "./spiceOptions";
 import { modelLibLinesFromDirectives, definedModelNames, definedModelTypes } from "./modelDirectives";
 import { couplingLinesFromDirectives } from "./couplingDirectives";
@@ -161,15 +162,19 @@ export function buildSpiceDeck(schematic: Schematic, analysis: SpiceAnalysis): S
       parseIcValue(component.value) !== null,
   );
 
+  // Pin count per net, so emission can tell a driven net from a floating pin's
+  // singleton net (every unconnected pin still gets its own net id).
+  const netPinCount = new Map<string, number>(circuit.nets.map((net) => [net.id, net.pins.length]));
+
   circuit.components.forEach((entry, index) => {
-    lines.push(...componentLines(entry, index, knownModels, schematic.params ?? EMPTY_SCOPE, vdmosModels));
+    lines.push(...componentLines(entry, index, knownModels, schematic.params ?? EMPTY_SCOPE, vdmosModels, netPinCount));
   });
   lines.push(analysisLine(analysis, hasIc || hasInstanceIc), ".end");
 
   return { circuit, netlist: lines.join("\n") };
 }
 
-function componentLines(entry: ExtractedComponent, index: number, userModels: Set<string> = new Set(), params: ParamScope = EMPTY_SCOPE, vdmosModels: ReadonlySet<string> = new Set()): string[] {
+function componentLines(entry: ExtractedComponent, index: number, userModels: Set<string> = new Set(), params: ParamScope = EMPTY_SCOPE, vdmosModels: ReadonlySet<string> = new Set(), netPinCount: ReadonlyMap<string, number> = new Map()): string[] {
   const { component } = entry;
   const name = instanceName(component, index);
   const node = (pin: string) => requiredNode(entry, pin);
@@ -275,6 +280,19 @@ function componentLines(entry: ExtractedComponent, index: number, userModels: Se
       return [`${name} ${node("c")} ${node("b")} ${node("e")} ${deviceModel("TAU_PNP")}`];
     case "opamp": {
       const base = safeName(component.label || `U${index + 1}`);
+      // When both supply pins are actually driven (on the ground net or a net
+      // with another pin), clamp the output to the rails like LTspice's
+      // UniversalOpamp2 — run open loop (class-d_starter's PWM comparator) the
+      // plain gain-1e6 model saturates to ~1e7 V instead of switching rail to
+      // rail. Floating supplies keep the classic unbounded ideal model.
+      const driven = (netId: string | undefined): netId is string =>
+        !!netId && (netId === "0" || (netPinCount.get(netId) ?? 0) >= 2);
+      const vPlus = entry.pins["v+"];
+      const vMinus = entry.pins["v-"];
+      if (driven(vPlus) && driven(vMinus)) {
+        const avol = parseOpampAvol(component.value);
+        return [railClampedOpampLine(`B_${base}`, node("out"), node("in+"), node("in-"), vPlus.toLowerCase(), vMinus.toLowerCase(), avol)];
+      }
       return [
         `E_${base} ${node("out")} 0 ${node("in+")} ${node("in-")} 1e6`,
         `R_${base}_out ${node("out")} 0 1e9`,

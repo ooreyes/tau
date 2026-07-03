@@ -608,6 +608,18 @@ describe("componentValueFromAttrs", () => {
     expect(componentValueFromAttrs("capacitor", { Value: "1u", SpiceLine: "IC=2" })).toBe("1u IC=2");
   });
 
+  it("carries op-amp behavioral params from Value2/SpiceLine (class-d Avol)", () => {
+    // class-d_starter.asc U1: no Value, only `Value2 Avol=1Meg GBW=10Gig Slew=10Gig`
+    // — must survive import so the deck builder can read Avol (rail clamp).
+    expect(
+      componentValueFromAttrs("opamp", { Value2: "Avol=1Meg GBW=10Gig Slew=10Gig" }),
+    ).toBe("Avol=1Meg GBW=10Gig Slew=10Gig");
+    expect(
+      componentValueFromAttrs("opamp", { Value: "level.2", Value2: "Avol=2k", SpiceLine: "GBW=1Meg" }),
+    ).toBe("level.2 Avol=2k GBW=1Meg");
+    expect(componentValueFromAttrs("opamp", {})).toBe("");
+  });
+
   it("normalizes LTspice's empty source sentinel `\"\"` to empty (GFT/S-param)", () => {
     // A source written `Value ""` is a 0 V source, often AC-only via Value2.
     expect(componentValueFromAttrs("vsource", { Value: '""' })).toBe("");
