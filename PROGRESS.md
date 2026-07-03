@@ -9,20 +9,22 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## ⏱ HEARTBEAT
 - **Headline metric:** 1105 tests green · baseline verified this run
-- **Run started (UTC):** 2026-07-02T22:05Z
-- **Synced to origin:** auto/ltspice-parity @ 0f63b11
-- **Claimed unit:** §8 LTspice F-key shortcuts — extract a pure, unit-testable
-  shortcut resolver (`schematic/shortcuts.ts`) and bind F2 part palette,
-  F3 wire, F5 delete, F6 copy, F9 undo. F4/F7/F8 stay unbound (no net-label /
-  move / drag tools yet — no fake mappings).
-- **Status:** DONE
-- **Files:** new schematic/shortcuts.ts (+25 tests), App.tsx keyboard effect
-  now dispatches on the resolver, FEATURE_PARITY §8.
-- **Verify:** done — 25 table tests, suite 1105 green, typecheck clean,
-  Playwright live check (F3 wire, F2 palette, F5 delete, F9 undo).
-- **Last completed sub-step:** §8 F-key parity unit complete (this run).
-- **Next step (for the following run):** F4 net-label tool (placement + text
-  input) — unlocks binding F4 and moves §2/§8 forward together.
+- **Run started (UTC):** 2026-07-02T22:35Z
+- **Synced to origin:** auto/ltspice-parity @ 53ad8b6
+- **Claimed unit:** §2/§8 F4 net-label tool — a `label` tool mode (F4 +
+  toolbar button): click a grid point → inline text input at that point →
+  Enter commits via the undoable `upsertNetLabel` (empty deletes), Esc
+  cancels; pre-fills an existing label at the clicked point.
+- **Status:** IN PROGRESS
+- **Files:** schematic/types.ts (Tool union), schematic/shortcuts.ts (F4 →
+  "label" + tests), store/useSchematic.ts (startLabeling + tests), App.tsx
+  dispatch, Canvas.tsx (click + input overlay), ShellPanels.tsx (button),
+  StatusBar.tsx (tool label).
+- **Verify:** unit tests (shortcut table, store action), typecheck, suite
+  ≥1105, Playwright: F4 → click canvas → type name → label renders.
+- **Last completed sub-step:** unit claimed, no code yet.
+- **Next step (for the following run):** if found IN PROGRESS, check for a
+  `wip:` commit and finish the Canvas input-overlay wiring.
 
 ---
 
