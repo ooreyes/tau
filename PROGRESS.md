@@ -12,14 +12,18 @@
   warning-clean / 79 deck-built / 64 op-converged
 - **Run started (UTC):** 2026-07-03T04:00Z
 - **Synced to origin:** auto/ltspice-parity @ 2347632
-- **Claimed unit:** §1/DoD committed acceptance-corpus runner — recovered from
-  `origin/auto/ltspice-parity-wip` (previous session killed mid-unit),
-  verified, floors corrected to measured truth, landed.
-- **Status:** DONE
-- **Last completed sub-step:** corpus runner committed; wip ref reconciled.
-- **Next step (for the following run):** Class-D fidelity — map
-  `Comparators\LT1016` et al. to the `comparator` kind with real pin banks
-  (priority #2); or fix a deck-build failure (Pierce XTAL / dimmer / varistor).
+- **Claimed unit:** §7 Class-D fidelity (priority #2) — rail-clamped op-amp
+  emission: when both v+/v- sit on driven nets (≥2 pins), emit
+  `B V=max(min(Avol*(V(in+)-V(in-)),V(v+)),V(v-))` with Avol parsed from the
+  imported `Avol=…` value (default 1e6); floating rails keep the unbounded
+  E-source. (Note: the corpus has NO Comparators\* symbols — class-d's PWM
+  comparator is `OpAmps/UniversalOpAmp2` run open-loop; rails are the fix.)
+- **Status:** IN PROGRESS (2nd unit this run; corpus runner landed @ 464925b)
+- **Files:** engine/opampSpec.ts (+test, new), engine/spiceNetlist.ts (opamp
+  case + net-pin-count plumb), spiceNetlist.test.ts.
+- **Verify:** unit tests hand-computed; ngspice -b on imported class-d deck
+  (.op bounded to rails, .tran shows PWM switching); corpus floors hold.
+- **Last completed sub-step:** unit claimed, no code yet.
 
 ---
 
