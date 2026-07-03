@@ -15,12 +15,18 @@
 - **Claimed unit:** §7 Class-D fidelity (priority #2) — rail-clamped op-amp
   (tanh form) + bundled QS6K1/RSR015P06 VDMOS models + committed
   `classdParity.corpus.ts` fidelity spec. Landed.
-- **Status:** DONE (2nd unit this run; corpus runner landed @ 464925b)
-- **Last completed sub-step:** all gates green (1128 default tests; corpus
-  82/71/79/64 at floors; class-d parity spec ✓ vpwm ±10, vo tracks program).
-- **Next step (for the following run):** §10 shadcn design system (imperative,
-  interleave one panel per session) or remaining §1 deck-build failures
-  (Pierce XTAL Y1 / dimmer Q1 / varistor A1).
+- **Status:** IN PROGRESS (3rd unit this run; Class-D landed @ e0146a5)
+- **Claimed unit 3:** §10 FOUNDATION — Tailwind v4 (+@tailwindcss/vite) +
+  shadcn scaffolding (components.json, lib/utils.ts cn) + App.css palette
+  mapped into `@theme` tokens (`--color-*` namespace ONLY — App.css's --muted
+  is a text color and must not be redefined; and NO preflight import, so the
+  current look survives pixel-identical).
+- **Files (unit 3):** apps/desktop/package.json, vite.config.ts, tsconfig
+  (@/* alias), src/styles/tokens.css (new), src/lib/utils.ts (+test, new),
+  components.json (new), main.tsx (css import).
+- **Verify (unit 3):** typecheck+tests; STEP 3.5 screenshot BEFORE and AFTER
+  must look identical; dev server must boot clean.
+- **Last completed sub-step:** unit claimed, no code yet.
 
 ---
 
