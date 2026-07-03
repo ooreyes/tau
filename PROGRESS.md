@@ -15,18 +15,21 @@
   toolbar/palette/⌘K): click a snapped point → inline text input → Enter or
   click-away commits via the undoable `upsertNetLabel` (empty deletes), Esc
   cancels; pre-fills an existing label at the clicked point.
-- **Status:** DONE
-- **Files:** schematic/types.ts, schematic/shortcuts.ts (+2 tests),
-  store/useSchematic.ts (startLabeling + no-op guards, +3 tests), App.tsx,
-  Canvas.tsx (click + input overlay), ShellPanels/StatusBar/Palette/
-  CommandPalette, FEATURE_PARITY §2/§8.
-- **Verify:** done — suite 1110 green, typecheck clean, Playwright live
-  check (F4 → click → type vcc → Enter commits; re-click pre-fills; F9
-  undoes; deferred-focus fix for the mousedown blur race verified).
-- **Last completed sub-step:** §2/§8 F4 net-label unit complete (this run).
-- **Next step (for the following run):** next §8 gap (F7 move / F8 drag
-  tools) or the committed acceptance-corpus runner (§1 / Definition of
-  Done) — the corpus runner is the higher-leverage pick.
+- **Status:** IN PROGRESS (2nd unit this run; F4 net-label unit landed @ b3a2cad)
+- **Claimed unit 2:** §1/DoD committed acceptance-corpus runner —
+  `scripts/acceptance-corpus.sh` → vitest spec (own config, NOT in the
+  default suite) that imports all 82 user `.asc` files, builds an `.op`
+  deck for each, runs `ngspice -b`, and prints warning-clean / deck-built /
+  op-converged counts with per-file failures; pure report helpers in
+  `src/io/corpusReport.ts` (+tests, in the default suite).
+- **Files (unit 2):** apps/desktop/src/io/corpusReport.ts (+test),
+  apps/desktop/scripts/acceptanceCorpus.corpus.ts,
+  apps/desktop/vitest.corpus.config.ts, scripts/acceptance-corpus.sh.
+- **Verify (unit 2):** corpusReport unit tests in default suite; run the
+  corpus script live and record its counts here + FEATURE_PARITY §1.
+- **Last completed sub-step:** unit claimed, no code yet.
+- **Next step (for the following run):** if found IN PROGRESS, the report
+  helpers/tests land first — check for a `wip:` commit, then wire the spec.
 
 ---
 
