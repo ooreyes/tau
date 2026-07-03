@@ -5,10 +5,13 @@
 > Any agent picks up the next unchecked item. Work loop + **Definition of Done**
 > live in [AGENTS.md](AGENTS.md); live status in the [PROGRESS.md](PROGRESS.md) heartbeat.
 
-> **📊 Headline metric (the finish line):** acceptance import **~71 / 82** files
-> warning‑clean (xtal/DIAC/TRIAC/varistor mappings landed; next: Comparators\*
-> vendor pin banks unblock 8 more) · **1031 tests** green. **Done = ≥ 80/82 + Class‑D `.tran`/`.meas`
-> parity + signed DMG** (full checklist in AGENTS.md → Definition of Done).
+> **📊 Headline metric (the finish line):** test count and current unit are
+> **only ever live in the `PROGRESS.md` heartbeat** — read that, not a number
+> copy‑pasted here, since this file is not rewritten every run and WILL drift.
+> Acceptance corpus is tracked qualitatively below (per‑symbol ⬜/🟡/✅ in §1);
+> there is no committed re‑runnable corpus script yet — **that is itself a
+> ⬜ item** (see §1). **Done = corpus script proves ≥ 80/82 + Class‑D `.tran`/
+> `.meas` parity + signed DMG** (full checklist in AGENTS.md → Definition of Done).
 
 ---
 
@@ -40,10 +43,13 @@ serves that goal.** Track progress with these circuits as the test suite.
   interim TS MNA solver (`simulation/*.ts`) for the browser/tests (linear only).
 - Schematic is source of truth; netlists are DERIVED (`schematic/netlist.ts`).
 - Verify every change: `pnpm -C apps/desktop typecheck` and `pnpm -C apps/desktop test`.
-  Validate decks with the installed `ngspice -b file.cir` CLI. ~228 tests currently pass.
+  Validate decks with the installed `ngspice -b file.cir` CLI. Test count is
+  live only in the `PROGRESS.md` heartbeat — do not hand-copy a number here.
 - Commit messages end with `Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>`.
-- **Worktree gotcha:** isolated agent worktrees branch from the OLD v0.1 scaffold.
-  First run `git fetch origin && git merge --ff-only origin/<branch>` and confirm ~228 tests.
+- **One branch, always:** `auto/ltspice-parity` is the only lineage — see
+  AGENTS.md "Branch discipline." There is no longer a separate scaffold branch
+  to merge from; `git fetch origin && git reset --hard origin/auto/ltspice-parity`
+  is always sufficient to be current.
 
 Status legend: ✅ done · 🟡 partial · ⬜ not started
 
@@ -914,5 +920,8 @@ should map LTspice symbol `type` → Tau `ComponentKind`, falling back to a gene
 
 ---
 
-_Last updated: 2026-06-22. Current state: 228 tests passing; native ngspice works;
-schematic editor solid. Nothing in §1 (LTspice interop) started yet — **start there.**_
+_This footer is intentionally not a live status line — see the `PROGRESS.md`
+heartbeat for the current test count and active unit. Next highest-leverage
+work: a committed acceptance-corpus runner (AGENTS.md → Definition of Done),
+the LTspice-comparator import mapping (Class-D fidelity blocker), and the
+`Comparators\*` vendor pin banks that unblock ~8 more corpus files._

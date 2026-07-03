@@ -105,10 +105,19 @@ Commit messages end with:
 Tau is a sellable LTspice replacement when **all** of these are true and proven
 in the packaged desktop app (not just `dev:web`):
 
-- [ ] **Acceptance corpus ≥ 80/82** user `.asc` files import warning‑clean
-      (headline metric tracked in `FEATURE_PARITY.md`; currently **67/82**).
+- [ ] **A committed, re‑runnable acceptance‑corpus script** (e.g.
+      `scripts/acceptance-corpus.sh`) that imports every `.asc` under
+      `~/Downloads/LTspice_export/` and `~/Documents/LTspice/**` and reports
+      warning‑clean count / deck‑builds count / op‑point‑converges count.
+      **This does not exist yet — build it before trusting any corpus number.**
+      A number in a doc that nobody can reproduce with one command is not a
+      fact; it is a claim.
+- [ ] **Acceptance corpus ≥ 80/82** per that script's own output (not a
+      hand‑typed number — the script's stdout is the source of truth).
 - [ ] **`class-d_starter.asc`** opens unmodified, runs `.tran`, and its
-      Efficiency `.meas` matches LTspice within tolerance.
+      Efficiency `.meas` matches LTspice within tolerance. (Known blocker as of
+      this writing: the imported op‑amp behaves as an open‑loop gain block —
+      LTspice comparator symbols are not yet mapped to the `comparator` kind.)
 - [ ] **Waveform parity** demonstrated on at least RC, a Colpitts oscillator,
       and the Class‑D circuit (traces match LTspice within tolerance).
 - [ ] All directives used in the corpus are supported: `.tran .ac .op .dc .step
@@ -116,7 +125,30 @@ in the packaged desktop app (not just `dev:web`):
 - [ ] Waveform viewer: arbitrary expressions, cursors, FFT/THD, stepped‑family
       overlays, CSV/image export.
 - [ ] Editor: mirror/flip, copy/paste, multi‑select, rubber‑band wire moves.
-- [ ] All gates green; **signed, notarized DMG installs on a clean Mac** and runs
-      a simulation end‑to‑end.
+- [ ] **UI is usable down to the app's own stated minimum window size** — no
+      column so narrow controls become unreachable, no header stuck above the
+      scroll position. Verify with the screenshot pipeline (STEP 3.5 in the
+      build prompt) at the minimum size, not just a comfortable one.
+- [ ] All gates green; **signed, notarized DMG installs on a clean Mac and
+      passes strict signature verification** (`codesign --verify --deep
+      --strict`), not just "the DMG opens."
 
 When every box is checked, **stop and report** — do not invent new scope.
+
+## Branch discipline (one lineage, no forks)
+
+**`auto/ltspice-parity` is the only branch in play.** Every session — cloud
+autobuilder, local scheduled run, or a human/agent reviewing the work —
+reads and writes that branch and only that branch. `main` is the eventual
+release target and is updated deliberately by a human decision, never by an
+automated merge. Do not create a second long‑lived branch for "review" or
+"parallel work" — if you need isolation for a risky change, use a short‑lived
+local branch and merge/rebase it back into `auto/ltspice-parity` within the
+same session, or don't branch at all. A second branch that anything is
+"constantly improving" in parallel is exactly the fragmentation this rule
+exists to prevent — it produces divergent metrics and unreviewable duplicate
+work. The only sanctioned exception is the ephemeral `auto/ltspice-parity-wip`
+rescue ref created by `scripts/checkpoint.sh` / `run.sh`'s durability net —
+it is force‑pushed scratch space for crash recovery, always reconciled or
+discarded within the next session (see STEP 0 in the build prompt), and is
+deleted once consumed. It is not a parallel lineage of real work.
