@@ -12,13 +12,20 @@
   warning-clean / 79 deck-built / 64 op-converged
 - **Run started (UTC):** 2026-07-03T16:50Z
 - **Synced to origin:** auto/ltspice-parity @ 7fa089a
-- **Claimed unit:** §10 FOUNDATION (recovered from `-wip` rescue ref of the
-  killed 04:00Z session) — Tailwind v4 + shadcn scaffolding + App.css palette
-  mapped into `@theme inline` tokens. Landed & re-verified this run.
-- **Status:** DONE
-- **Last completed sub-step:** unit finished — typecheck clean, 1132 tests,
-  BEFORE/AFTER screenshots byte-identical (cmp), live-probe confirmed
-  `bg-primary` resolves to App.css --accent.
+- **Claimed unit:** §10 FOUNDATION recovered & landed @ 7c60bed. NOW (unit 2):
+  §1 digital A-device gates — import DIGITAL\{INV,BUF,AND,OR,XOR,SCHMTBUF,
+  SCHMTINV,DFLOP} (8-slot SpiceOrder: 1-5 inputs, 6=_Q, 7=Q, 8=com) + native
+  deck emission: B-source ternaries for combinational/Schmitt (comparatorSpec
+  idiom), XSPICE d_dff for DFLOP (live-verify first). Flips 160.asc (41 warns)
+  + Electrometer → warning-clean 71→73. Side fix: bi2→bsource (Fc 4→1 warns).
+- **Status:** IN PROGRESS (2nd unit this run)
+- **Files (unit 2):** io/ascImport.ts (type map + pin banks), new
+  engine/digitalGateSpec.ts (+test), engine/spiceNetlist.ts, types/catalog/
+  pins/params/symbol wiring (mirroring the comparator kind), corpus floors.
+- **Verify (unit 2):** live ngspice d_dff spike BEFORE coding; unit tests per
+  gate; typecheck+full suite ≥1132; corpus runner import pass shows 73+
+  warning-clean & floors raised.
+- **Last completed sub-step:** unit claimed, no code yet.
 
 ---
 
