@@ -8,23 +8,76 @@
      `git log --oneline -8`, recover/finish/revert that unit FIRST, then go on.
      ─────────────────────────────────────────────────────────────────────── -->
 ## ⏱ HEARTBEAT
-- **Headline metric:** 1105 tests green · baseline verified this run
+- **Headline metric:** 1110 tests green
 - **Run started (UTC):** 2026-07-02T22:35Z
 - **Synced to origin:** auto/ltspice-parity @ 53ad8b6
 - **Claimed unit:** §2/§8 F4 net-label tool — a `label` tool mode (F4 +
-  toolbar button): click a grid point → inline text input at that point →
-  Enter commits via the undoable `upsertNetLabel` (empty deletes), Esc
+  toolbar/palette/⌘K): click a snapped point → inline text input → Enter or
+  click-away commits via the undoable `upsertNetLabel` (empty deletes), Esc
   cancels; pre-fills an existing label at the clicked point.
-- **Status:** IN PROGRESS
-- **Files:** schematic/types.ts (Tool union), schematic/shortcuts.ts (F4 →
-  "label" + tests), store/useSchematic.ts (startLabeling + tests), App.tsx
-  dispatch, Canvas.tsx (click + input overlay), ShellPanels.tsx (button),
-  StatusBar.tsx (tool label).
-- **Verify:** unit tests (shortcut table, store action), typecheck, suite
-  ≥1105, Playwright: F4 → click canvas → type name → label renders.
-- **Last completed sub-step:** unit claimed, no code yet.
-- **Next step (for the following run):** if found IN PROGRESS, check for a
-  `wip:` commit and finish the Canvas input-overlay wiring.
+- **Status:** DONE
+- **Files:** schematic/types.ts, schematic/shortcuts.ts (+2 tests),
+  store/useSchematic.ts (startLabeling + no-op guards, +3 tests), App.tsx,
+  Canvas.tsx (click + input overlay), ShellPanels/StatusBar/Palette/
+  CommandPalette, FEATURE_PARITY §2/§8.
+- **Verify:** done — suite 1110 green, typecheck clean, Playwright live
+  check (F4 → click → type vcc → Enter commits; re-click pre-fills; F9
+  undoes; deferred-focus fix for the mousedown blur race verified).
+- **Last completed sub-step:** §2/§8 F4 net-label unit complete (this run).
+- **Next step (for the following run):** next §8 gap (F7 move / F8 drag
+  tools) or the committed acceptance-corpus runner (§1 / Definition of
+  Done) — the corpus runner is the higher-leverage pick.
+
+---
+
+## 2026-07-02T23:00Z — auto/ltspice-parity — §2/§8 F4 net-label tool (inline placement + text input)
+
+### What I did
+- **F4 net-label tool** (§2, and the F4 gap in §8's shortcut parity): new
+  `label` tool mode — enter via F4, the toolbar tag button, the sidebar
+  palette's Tools section, or ⌘K; the canvas shows crosshair + pin markers +
+  the snap ring (shared with wire/probe), and a click on any snapped point
+  opens an inline text input right there. Enter or click-away commits through
+  the already-undoable `upsertNetLabel` (empty text deletes), Esc cancels.
+  Clicking a point that already has a label pre-fills its text for editing.
+- **Store no-op guards:** committing an empty draft where no label exists, or
+  re-committing unchanged text, no longer pushes a junk undo entry.
+- **Fixed en route (focus race):** the input mounts during the opening
+  click's pointerdown, so focusing at mount let the browser's default
+  mousedown action steal focus straight back — the blur handler closed the
+  input before it ever appeared (first Playwright run: keystrokes fell
+  through to the global part hotkeys, status bar flipped to "Placing
+  capacitor"). Focus is now deferred one animation frame.
+
+### Files touched
+- apps/desktop/src/schematic/types.ts, shortcuts.ts (+2 tests)
+- apps/desktop/src/store/useSchematic.ts (+3 tests)
+- apps/desktop/src/App.tsx, components/Canvas.tsx, ShellPanels.tsx,
+  StatusBar.tsx, Palette.tsx, CommandPalette.tsx
+- FEATURE_PARITY.md, PROGRESS.md
+
+### Tests
+1110 passing (74 files), 5 new — passed. typecheck clean.
+
+### FEATURE_PARITY items updated
+- §2 net labels: F4 tool noted on the ✅ item; §8 keyboard parity now lists
+  F4 bound (only F7/F8 remain, gated on move/drag tools).
+
+### Visual QA
+Playwright: F4 switches the status bar to "Net label — click a point, type a
+name" and highlights the toolbar button; click opens the input at the snapped
+point (placeholder "net name", accent focus ring); typing vcc + Enter renders
+the label at the point; re-click pre-fills "vcc"; F9 removes it. Screenshots
+reviewed at each step.
+
+### UX issues found
+- A label placed on empty grid (not on a wire/pin) is legal but silently
+  non-electrical until wired — LTspice behaves the same, but a subtle "not on
+  a net" hint on such labels would help. Logged as UX debt.
+
+### Next step
+Next §8 gap (F7 move / F8 drag) or the committed acceptance-corpus runner
+(§1 / Definition of Done) — corpus runner is the higher-leverage pick.
 
 ---
 

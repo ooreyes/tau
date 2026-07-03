@@ -117,4 +117,5 @@ export type Tool =
   | { mode: "select" }
   | { mode: "place"; kind: ComponentKind }
   | { mode: "wire" }
-  | { mode: "probe" };
+  | { mode: "probe" }
+  | { mode: "label" };

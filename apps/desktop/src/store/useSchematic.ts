@@ -102,6 +102,8 @@ interface SchematicState extends Doc {
 
   /** User-assigned net names, pinned to world points on the net. */
   netLabels: NetLabel[];
+  /** Enter the net-label tool (LTspice F4): click a point, type a net name. */
+  startLabeling: () => void;
   upsertNetLabel: (x: number, y: number, text: string) => void;
   /**
    * Update a net label without pushing to undo history (caller must call
@@ -439,11 +441,15 @@ export const useSchematic = create<SchematicState>()((set) => {
     clearProbes: () => set((s) => ({ ...recordInto(s), probes: [] })),
     setProbes: (probes) => set({ probes }),
 
+    startLabeling: () => set({ tool: { mode: "label" }, selectedId: null, selectedWireId: null, selectedIds: [] }),
+
     upsertNetLabel: (x, y, text) =>
       set((s) => {
         const trimmed = text.trim();
         const existing = s.netLabels.find((l) => l.x === x && l.y === y);
+        if (!trimmed && !existing) return s; // nothing to add or remove — no history entry
         if (!trimmed) return { ...recordInto(s), netLabels: s.netLabels.filter((l) => !(l.x === x && l.y === y)) };
+        if (existing?.text === trimmed) return s; // unchanged — no history entry
         if (existing) return { ...recordInto(s), netLabels: s.netLabels.map((l) => (l.id === existing.id ? { ...l, text: trimmed } : l)) };
         return { ...recordInto(s), netLabels: [...s.netLabels, { id: nanoid(6), x, y, text: trimmed }] };
       }),

@@ -21,7 +21,9 @@ export function StatusBar({
         ? "Wiring"
         : tool.mode === "probe"
           ? "Probing — click a node"
-          : "Select";
+          : tool.mode === "label"
+            ? "Net label — click a point, type a name"
+            : "Select";
   // ngspice runs only inside the native desktop build; the browser preview uses
   // the built-in TypeScript solver. Surface which one is active to avoid the
   // "ngspice isn't working" confusion when running in a browser.
@@ -56,6 +58,8 @@ export function StatusBar({
         <kbd>G</kbd> place
         <span className="dot">·</span>
         <kbd>W</kbd> wire
+        <span className="dot">·</span>
+        <kbd>F4</kbd> label
         <span className="dot">·</span>
         <kbd>Space</kbd> rotate
         <span className="dot">·</span>

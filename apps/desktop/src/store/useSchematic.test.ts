@@ -291,6 +291,42 @@ describe("schematic document store", () => {
     expect(useSchematic.getState().netLabels).toEqual([expect.objectContaining({ text: "Vout" })]);
   });
 
+  it("upsertNetLabel is a no-op (no undo entry) for empty text on an empty point or an unchanged label", () => {
+    useSchematic.getState().loadCircuit(sourceDocument());
+    const historyBefore = useSchematic.getState().past.length;
+
+    // Committing an empty label draft where nothing exists changes nothing.
+    useSchematic.getState().upsertNetLabel(64, 0, "   ");
+    expect(useSchematic.getState().past.length).toBe(historyBefore);
+    expect(useSchematic.getState().netLabels).toHaveLength(0);
+
+    // Re-committing the same text over an existing label changes nothing.
+    useSchematic.getState().upsertNetLabel(64, 0, "Vout");
+    useSchematic.getState().upsertNetLabel(64, 0, "Vout");
+    expect(useSchematic.getState().past.length).toBe(historyBefore + 1);
+    expect(useSchematic.getState().netLabels).toHaveLength(1);
+  });
+
+  it("startLabeling enters the label tool and clears any selection", () => {
+    useSchematic.getState().loadCircuit(sourceDocument());
+    const id = useSchematic.getState().components[0].id;
+    useSchematic.getState().select(id);
+
+    useSchematic.getState().startLabeling();
+
+    const state = useSchematic.getState();
+    expect(state.tool).toEqual({ mode: "label" });
+    expect(state.selectedId).toBeNull();
+    expect(state.selectedWireId).toBeNull();
+    expect(state.selectedIds).toEqual([]);
+  });
+
+  it("cancel (Escape) leaves the label tool back to select", () => {
+    useSchematic.getState().startLabeling();
+    useSchematic.getState().cancel();
+    expect(useSchematic.getState().tool).toEqual({ mode: "select" });
+  });
+
   it("undo history is capped at HISTORY_LIMIT (100) entries", () => {
     for (let n = 0; n < 110; n += 1) {
       useSchematic.getState().beginChange();

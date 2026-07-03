@@ -563,6 +563,9 @@ export function Canvas({
   const [ghost, setGhost] = useState<{ x: number; y: number } | null>(null);
   const [wireDraft, setWireDraft] = useState<{ start: Point; cursor: Point } | null>(null);
   const [snapHover, setSnapHover] = useState<{ x: number; y: number; pin: boolean } | null>(null);
+  /** Pending net label being typed (label tool): world point + draft text. */
+  const [labelDraft, setLabelDraft] = useState<{ x: number; y: number; text: string } | null>(null);
+  const labelInputRef = useRef<HTMLInputElement | null>(null);
   const [flowOn, setFlowOn] = useState(true);
   /** Rubber-band box in screen coords, null when not drawing. */
   const [boxDrag, setBoxDrag] = useState<BoxDrag | null>(null);
@@ -589,6 +592,7 @@ export function Canvas({
   const addProbe = useSchematic((s) => s.addProbe);
   const toggleCurrentProbe = useSchematic((s) => s.toggleCurrentProbe);
   const netLabels = useSchematic((s) => s.netLabels);
+  const upsertNetLabel = useSchematic((s) => s.upsertNetLabel);
   const [editingId, setEditingId] = useState<string | null>(null);
 
   // In-place OP annotations (simulator mode only): re-extract geometry only
@@ -733,8 +737,22 @@ export function Canvas({
 
   useEffect(() => {
     if (tool.mode !== "wire") setWireDraft(null);
-    if (tool.mode !== "wire" && tool.mode !== "probe") setSnapHover(null);
+    if (tool.mode !== "wire" && tool.mode !== "probe" && tool.mode !== "label") setSnapHover(null);
+    if (tool.mode !== "label") setLabelDraft(null);
   }, [tool.mode]);
+
+  // Focus the label input on the NEXT frame: it mounts during the opening
+  // click's pointerdown, and the browser's default mousedown action would
+  // immediately steal focus back (blur → instant close) if we focused at mount.
+  const labelDraftPoint = labelDraft ? `${labelDraft.x},${labelDraft.y}` : null;
+  useEffect(() => {
+    if (!labelDraftPoint) return;
+    const id = requestAnimationFrame(() => {
+      labelInputRef.current?.focus();
+      labelInputRef.current?.select();
+    });
+    return () => cancelAnimationFrame(id);
+  }, [labelDraftPoint]);
 
   const placeAtCursor = useCallback(
     (clientX: number, clientY: number) => {
@@ -882,6 +900,15 @@ export function Canvas({
       addProbe(w.x, w.y);
       return;
     }
+    if (tool.mode === "label") {
+      // A click while an input is open just blurs it (the input's onBlur
+      // commits); the next click opens a fresh one.
+      if (labelDraft) return;
+      const w = snappedCursor(e.clientX, e.clientY);
+      const existing = netLabels.find((l) => l.x === w.x && l.y === w.y);
+      setLabelDraft({ x: w.x, y: w.y, text: existing?.text ?? "" });
+      return;
+    }
 
     const hit = componentAt(components, world.x, world.y);
     if (hit) {
@@ -984,7 +1011,7 @@ export function Canvas({
       // Show the ghost where the part will actually land (collision-resolved),
       // so the preview never lies about the drop position.
       setGhost(findFreeSpot(components, snap(w.x), snap(w.y), tool.kind, placeRotation));
-    } else if (tool.mode === "wire" || tool.mode === "probe") {
+    } else if (tool.mode === "wire" || tool.mode === "probe" || tool.mode === "label") {
       const cursor = snappedCursor(e.clientX, e.clientY);
       setSnapHover({ x: cursor.x, y: cursor.y, pin: pinPoints.some((p) => p.x === cursor.x && p.y === cursor.y) });
       if (tool.mode === "wire") setWireDraft((draft) => (draft ? { ...draft, cursor } : draft));
@@ -1117,6 +1144,7 @@ export function Canvas({
   const placing = tool.mode === "place";
   const wiring = tool.mode === "wire";
   const probing = tool.mode === "probe";
+  const labeling = tool.mode === "label";
   const previewWire = wireDraft && !pointsEqual(wireDraft.start, wireDraft.cursor)
     ? routeWireSmart(wireDraft.start, wireDraft.cursor, components)
     : null;
@@ -1140,7 +1168,7 @@ export function Canvas({
       <svg
         ref={svgRef}
         className="canvas"
-        style={{ cursor: interactive && (placing || wiring || probing) ? "crosshair" : "default" }}
+        style={{ cursor: interactive && (placing || wiring || probing || labeling) ? "crosshair" : "default" }}
         onPointerDown={onBackgroundPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={endDrag}
@@ -1171,7 +1199,7 @@ export function Canvas({
 
           {previewWire && <WirePolyline points={previewWire} className="wire preview" />}
 
-          {(wiring || probing) && snapHover && (
+          {(wiring || probing || labeling) && snapHover && (
             <circle
               className={`snap-ring${snapHover.pin ? " on-pin" : ""}`}
               cx={snapHover.x}
@@ -1185,7 +1213,7 @@ export function Canvas({
           ))}
 
           {components.map((c) => (
-            <ComponentView key={c.id} comp={c} selected={c.id === selectedId || selectedIds.includes(c.id)} showPins={wiring || probing} />
+            <ComponentView key={c.id} comp={c} selected={c.id === selectedId || selectedIds.includes(c.id)} showPins={wiring || probing || labeling} />
           ))}
 
           {probes.map((p) => {
@@ -1278,6 +1306,38 @@ export function Canvas({
           ⤢ Fit
         </button>
       </div>
+
+      {labelDraft && (
+        <input
+          ref={labelInputRef}
+          className="value-edit-input net-label-input"
+          value={labelDraft.text}
+          spellCheck={false}
+          placeholder="net name"
+          aria-label="Net label name"
+          style={{
+            left: labelDraft.x * view.zoom + view.x,
+            top: (labelDraft.y + 10) * view.zoom + view.y,
+          }}
+          onChange={(e) => setLabelDraft({ ...labelDraft, text: e.currentTarget.value })}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              upsertNetLabel(labelDraft.x, labelDraft.y, labelDraft.text);
+              setLabelDraft(null);
+            } else if (e.key === "Escape") {
+              e.preventDefault();
+              e.stopPropagation();
+              setLabelDraft(null);
+            }
+          }}
+          onBlur={() => {
+            // Click-away confirms, like Enter (empty text removes the label).
+            upsertNetLabel(labelDraft.x, labelDraft.y, labelDraft.text);
+            setLabelDraft(null);
+          }}
+        />
+      )}
 
       {editingComp && (
         <input

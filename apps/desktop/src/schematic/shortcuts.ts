@@ -3,8 +3,8 @@
  * so every binding is unit-testable; `App.tsx` dispatches on the returned
  * action id. The caller is responsible for the "typing in an input" guard.
  *
- * LTspice function keys: F2 part picker, F3 wire, F5 delete, F6 copy, F9 undo
- * (Shift+F9 redo). F4 (net label), F7 (move), F8 (drag) are intentionally
+ * LTspice function keys: F2 part picker, F3 wire, F4 net label, F5 delete,
+ * F6 copy, F9 undo (Shift+F9 redo). F7 (move) and F8 (drag) are intentionally
  * unbound until Tau grows those tools — binding them to something else would
  * teach users the wrong reflex.
  */
@@ -20,7 +20,8 @@ export type ShortcutAction =
   | "duplicate"
   | "cancel"
   | "delete"
-  | "wire";
+  | "wire"
+  | "label";
 
 export interface ShortcutKey {
   key: string;
@@ -66,6 +67,8 @@ export function resolveShortcut({ key, ctrlOrMeta, shift }: ShortcutKey): Shortc
       return "palette";
     case "F3":
       return "wire";
+    case "F4":
+      return "label";
     case "F5":
     case "Backspace":
     case "Delete":

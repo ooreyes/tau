@@ -14,6 +14,7 @@ export function Palette({ focusSignal }: { focusSignal: number; onNotice: (messa
   const startPlacing = useSchematic((s) => s.startPlacing);
   const startWiring = useSchematic((s) => s.startWiring);
   const startProbing = useSchematic((s) => s.startProbing);
+  const startLabeling = useSchematic((s) => s.startLabeling);
   const activeKind = tool.mode === "place" ? tool.kind : null;
   const searchRef = useRef<HTMLInputElement | null>(null);
 
@@ -174,6 +175,24 @@ export function Palette({ focusSignal }: { focusSignal: number; onNotice: (messa
                     </svg>
                     <span className="palette-name">Probe</span>
                     <span className="palette-desc">plot net</span>
+                  </button>
+                  <button
+                    className={`palette-item${tool.mode === "label" ? " active" : ""}`}
+                    title="Name a net — press F4, click a point, type the name"
+                    onClick={(ev) => {
+                      startLabeling();
+                      ev.currentTarget.blur();
+                    }}
+                  >
+                    <svg className="palette-icon" viewBox="-40 -36 80 72">
+                      <g className="symbol">
+                        <path d="M -26 -10 H 8 L 26 0 L 8 10 H -26 Z" fill="none" />
+                        <circle cx={-18} cy={0} r={2.5} />
+                      </g>
+                    </svg>
+                    <span className="palette-name">Net label</span>
+                    <span className="palette-desc">name net</span>
+                    <kbd className="palette-key">F4</kbd>
                   </button>
                 </div>
               )}

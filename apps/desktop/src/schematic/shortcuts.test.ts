@@ -8,6 +8,7 @@ describe("resolveShortcut — LTspice function keys (§8)", () => {
   it.each<[string, ShortcutAction]>([
     ["F2", "palette"],
     ["F3", "wire"],
+    ["F4", "label"],
     ["F5", "delete"],
     ["F6", "copy"],
     ["F9", "undo"],
@@ -19,10 +20,13 @@ describe("resolveShortcut — LTspice function keys (§8)", () => {
     expect(resolveShortcut({ key: "F9", ctrlOrMeta: false, shift: true })).toBe("redo");
   });
 
-  it("keeps F4/F7/F8 unbound until label/move/drag tools exist", () => {
-    expect(plain("F4")).toBeNull();
+  it("keeps F7/F8 unbound until move/drag tools exist", () => {
     expect(plain("F7")).toBeNull();
     expect(plain("F8")).toBeNull();
+  });
+
+  it("leaves Ctrl/Cmd+F4 alone (OS window shortcut)", () => {
+    expect(mod("F4")).toBeNull();
   });
 });
 

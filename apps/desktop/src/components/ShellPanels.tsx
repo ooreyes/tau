@@ -160,6 +160,7 @@ export function EditorToolbar({
   const tool = useSchematic((s) => s.tool);
   const cancel = useSchematic((s) => s.cancel);
   const startWiring = useSchematic((s) => s.startWiring);
+  const startLabeling = useSchematic((s) => s.startLabeling);
   const startProbing = useSchematic((s) => s.startProbing);
   const undo = useSchematic((s) => s.undo);
   const redo = useSchematic((s) => s.redo);
@@ -277,6 +278,10 @@ export function EditorToolbar({
         <circle cx="4" cy="14" r="2" />
         <circle cx="14" cy="4" r="2" />
         <path d="M5.5 12.5 12.5 5.5" />
+      </IconButton>
+      <IconButton title="Net label (F4)" active={tool.mode === "label"} onClick={startLabeling}>
+        <path d="M2 5h8l4 3-4 3H2z" />
+        <circle cx="5" cy="8" r="1" />
       </IconButton>
       <IconButton title="Probe" active={tool.mode === "probe"} onClick={startProbing}>
         <circle cx="8" cy="8" r="4" />

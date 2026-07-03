@@ -5,7 +5,7 @@ import { useSchematic } from "../store/useSchematic";
 import type { ComponentKind } from "../schematic/types";
 
 interface Entry {
-  kind: ComponentKind | "__wire__" | "__probe__";
+  kind: ComponentKind | "__wire__" | "__probe__" | "__label__";
   name: string;
   section: string;
   hotkey: string;
@@ -15,12 +15,14 @@ const ENTRIES: Entry[] = [
   ...CATALOG.map((c) => ({ kind: c.kind, name: c.name, section: c.section, hotkey: c.hotkey })),
   { kind: "__wire__", name: "Wire", section: "Tools", hotkey: "w" },
   { kind: "__probe__", name: "Probe", section: "Tools", hotkey: "" },
+  { kind: "__label__", name: "Net label", section: "Tools", hotkey: "f4" },
 ];
 
 export function CommandPalette({ open, onClose }: { open: boolean; onClose: () => void }) {
   const startPlacing = useSchematic((s) => s.startPlacing);
   const startWiring = useSchematic((s) => s.startWiring);
   const startProbing = useSchematic((s) => s.startProbing);
+  const startLabeling = useSchematic((s) => s.startLabeling);
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -53,6 +55,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
     if (!entry) return;
     if (entry.kind === "__wire__") startWiring();
     else if (entry.kind === "__probe__") startProbing();
+    else if (entry.kind === "__label__") startLabeling();
     else startPlacing(entry.kind);
     onClose();
   };
@@ -101,6 +104,11 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
                   <g className="symbol">
                     <circle cx={0} cy={0} r={7} fill="none" />
                     <circle cx={0} cy={0} r={2.5} />
+                  </g>
+                ) : entry.kind === "__label__" ? (
+                  <g className="symbol">
+                    <path d="M -24 -10 H 8 L 24 0 L 8 10 H -24 Z" fill="none" />
+                    <circle cx={-16} cy={0} r={2.5} />
                   </g>
                 ) : (
                   <g className="symbol">

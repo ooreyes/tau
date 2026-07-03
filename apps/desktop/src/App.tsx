@@ -121,6 +121,7 @@ function App() {
   const toolMode = useSchematic((s) => s.tool.mode);
   const startPlacing = useSchematic((s) => s.startPlacing);
   const startWiring = useSchematic((s) => s.startWiring);
+  const startLabeling = useSchematic((s) => s.startLabeling);
   const loadCircuit = useSchematic((s) => s.loadCircuit);
   const restoreCircuit = useSchematic((s) => s.restoreCircuit);
   const newCircuit = useSchematic((s) => s.newCircuit);
@@ -638,6 +639,7 @@ function App() {
           case "cancel": return cancel();
           case "delete": return deleteSelected();
           case "wire": return startWiring();
+          case "label": return startLabeling();
         }
       }
       if (e.metaKey || e.ctrlKey) return; // leave other OS / app shortcuts alone
@@ -650,7 +652,7 @@ function App() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [startPlacing, startWiring, cancel, rotate, mirror, copySelected, paste, duplicateSelected, deleteSelected, undo, redo]);
+  }, [startPlacing, startWiring, startLabeling, cancel, rotate, mirror, copySelected, paste, duplicateSelected, deleteSelected, undo, redo]);
 
   return (
     <div className={`app app-${mode}`}>

@@ -226,7 +226,12 @@ Status legend: ✅ done · 🟡 partial · ⬜ not started
 - ✅ Wire drawing with orthogonal routing + junction dots — `Canvas.tsx` (`routeWireSmart`)
 - ✅ Net labels (name a node) — `FLAG` equivalent — store `upsertNetLabel`;
   **now electrical** (merge same-named nets, `0`/`GND`→ground, name the net) in
-  `schematic/netlist.ts` `extractCircuit`
+  `schematic/netlist.ts` `extractCircuit`. **F4 net-label tool landed**
+  (2026-07-02): a `label` tool mode (F4 / toolbar / palette / ⌘K) — click a
+  snapped point, an inline input opens there (pre-filled if a label exists),
+  Enter or click-away commits via the undoable `upsertNetLabel`, empty text
+  deletes, Esc cancels. No-op commits (empty on empty, unchanged text) skip
+  the undo history.
 - ✅ Ground symbol — ✅
 - ✅ Grid snap, pan, zoom, fit — `Canvas.tsx`
 - ✅ Undo/redo, autosave, multi-tab documents
@@ -876,16 +881,16 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   — **F2 now opens the searchable part palette** (symbols, categories, hotkeys,
   ↑↓/↵ placement); remaining: coverage audit vs. LTspice's full library tree.
 - 🟡 Keyboard shortcut parity — **LTspice function keys now bound**
-  (2026-07-02): F2 part picker, F3 wire, F5 delete, F6 copy, F9 undo /
-  Shift+F9 redo, alongside Ctrl+R rotate, Ctrl+E mirror, Ctrl+C/V/D,
+  (2026-07-02): F2 part picker, F3 wire, **F4 net label**, F5 delete, F6 copy,
+  F9 undo / Shift+F9 redo, alongside Ctrl+R rotate, Ctrl+E mirror, Ctrl+C/V/D,
   Space=rotate, W=wire, hotkey placement, ⌘K palette. The whole table lives in
-  a pure resolver (`schematic/shortcuts.ts`, 25 tests — every binding + the
+  a pure resolver (`schematic/shortcuts.ts`, 27 tests — every binding + the
   guard that unrelated modifier combos pass through) and `App.tsx` just
-  dispatches on it. Live-verified: F3→wire tool, F2→palette, F5 deletes the
-  selected part, F9 restores it. **Still unbound on purpose:** F4 (net label),
-  F7 (move), F8 (drag) — Tau has no distinct label/move/drag tools yet;
-  binding them to approximations would teach the wrong reflex. Those flip this
-  item ✅ when the tools land.
+  dispatches on it. Live-verified: F3→wire tool, F2→palette, F4→label input,
+  F5 deletes the selected part, F9 restores it. **Still unbound on purpose:**
+  F7 (move), F8 (drag) — Tau has no distinct move/drag tools yet (select+drag
+  covers both); binding them to approximations would teach the wrong reflex.
+  Those flip this item ✅ when the tools land.
 - ⬜ Help / model docs, error console with SPICE messages
 - ⬜ Crash-free on large/real circuits (stack-overflow class fixed; keep stress-testing)
 
