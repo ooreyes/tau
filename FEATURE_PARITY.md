@@ -896,9 +896,45 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
 
 ## 9. Packaging / distribution (to actually sell)
 - ⬜ Bundle `libngspice` reliably (currently git-untracked; only `.gitkeep`)
-- ⬜ macOS code signing + notarization; Windows/Linux builds
+- 🧑‍💻 macOS code signing + notarization — **HUMAN-OWNED (Omar), does not gate
+  completion** (see AGENTS.md → Definition of Done). Agent scope stops at an
+  unsigned, production-ready DMG. Windows/Linux builds: later, out of DoD.
 - ⬜ Auto-update, licensing/activation
 - ⬜ Installer + onboarding
+
+## 10. Visual design system — **IMPERATIVE (Omar's directive)**
+
+Goal: the app looks and feels **shadcn-grade** — a coherent, beautiful,
+token-driven design system, not a pile of ad-hoc CSS. This gates the
+Definition of Done. Migrate **incrementally, panel by panel**, with screenshot
+QA (STEP 3.5 pipeline) before/after every panel — never a big-bang rewrite,
+never a broken intermediate state on the branch.
+
+- ⬜ **Foundation:** Tailwind CSS v4 + shadcn/ui scaffolding in
+  `apps/desktop` (components.json, `src/lib/utils.ts` cn helper, tokens in
+  CSS `@theme`). Map the EXISTING `App.css` palette/vars into shadcn's
+  CSS-variable token layer first (`--background`, `--foreground`, `--primary`,
+  `--muted`, `--accent`, `--border`, `--ring`, radii, shadows) so the current
+  dark look survives the migration and nothing flashes unstyled.
+- ⬜ **Core primitives adopted:** Button, Input, Select, Tabs, Dialog,
+  DropdownMenu, Tooltip, ContextMenu, Separator, ScrollArea, Resizable
+  (for the three-column simulator layout), Command (replace/augment the
+  command palette), Toast/Sonner (errors + notifications).
+- ⬜ **Panel migrations** (one commit each, screenshot-verified):
+  toolbar/topbar → part palette → inspector/params → analysis tabs header →
+  SimulationPanel controls (run bar, expression bar, cursors, export) →
+  dialogs (Open/Save/settings) → empty/error states → status bar.
+- ⬜ **The schematic canvas keeps its bespoke SVG rendering** (it is the
+  product's soul) — only its chrome (zoom controls, hover cards, net-label
+  editor popover) adopts the system. Pan/zoom must stay 60fps after migration.
+- ⬜ **Type & spacing scale:** one consistent scale via tokens; kill one-off
+  px font sizes and margins as each panel migrates.
+- ⬜ **Density mode:** engineering users want dense; default compact spacing
+  tokens (LTspice users must not feel the UI wastes their pixels).
+- ⬜ **Responsive floor:** every migrated panel verified at the app's minimum
+  window size AND ~1280×720 (known problem sizes from review).
+- ⬜ **Sweep:** delete dead App.css rules as panels migrate; final pass
+  removes any remaining hardcoded colors (grep gate: no hex literals in TSX).
 
 ---
 

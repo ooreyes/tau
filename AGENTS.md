@@ -82,8 +82,9 @@ reproducing LTspice results. UI breadth without that path is not progress.
   unsupported behavior explicit.
 - User‑provided models/libraries only; never redistribute LTspice assets.
 - Proprietary license stays; do not add an OSS license file.
-- Don't hardcode colors (use CSS vars in `src/App.css`). No SPICE specifics in
-  React components.
+- Don't hardcode colors — every color goes through the design-token CSS
+  variables (`src/App.css` today; the §10 shadcn token layer once it lands).
+  No SPICE specifics in React components.
 
 ## Required gates before every push
 
@@ -102,8 +103,13 @@ Commit messages end with:
 
 ## ✅ Definition of Done (the finish line — how we know it's complete)
 
-Tau is a sellable LTspice replacement when **all** of these are true and proven
-in the packaged desktop app (not just `dev:web`):
+The finish line is split in two. **The agent-provable list below gates the
+completion signal** — every box must be true and proven in the packaged
+desktop app (not just `dev:web`), with no ifs or buts. **Signing and
+distribution are human-owned** (Omar's list, at the bottom) and must NOT block
+or gate completion: the bot finishes at "production-ready, unsigned"; the
+completion notification tells Omar it is time to create the Apple Developer
+account and sign/notarize/ship.
 
 - [ ] **A committed, re‑runnable acceptance‑corpus script** (e.g.
       `scripts/acceptance-corpus.sh`) that imports every `.asc` under
@@ -125,15 +131,30 @@ in the packaged desktop app (not just `dev:web`):
 - [ ] Waveform viewer: arbitrary expressions, cursors, FFT/THD, stepped‑family
       overlays, CSV/image export.
 - [ ] Editor: mirror/flip, copy/paste, multi‑select, rubber‑band wire moves.
+- [ ] **§10 visual design system fully adopted** (see FEATURE_PARITY §10 —
+      IMPERATIVE per Omar): shadcn‑grade component system with a design‑token
+      layer, every panel migrated, zero leftover ad‑hoc styling drift. The app
+      must *look* like a product someone pays for, not a prototype.
 - [ ] **UI is usable down to the app's own stated minimum window size** — no
       column so narrow controls become unreachable, no header stuck above the
       scroll position. Verify with the screenshot pipeline (STEP 3.5 in the
       build prompt) at the minimum size, not just a comfortable one.
-- [ ] All gates green; **signed, notarized DMG installs on a clean Mac and
-      passes strict signature verification** (`codesign --verify --deep
-      --strict`), not just "the DMG opens."
+- [ ] All gates green; **unsigned release build is production‑ready**:
+      `pnpm --filter @tau/desktop tauri build` succeeds, the DMG mounts, the
+      built Tau.app launches and stays alive, and bundled ngspice simulates
+      end‑to‑end in the packaged app. Signing is explicitly NOT required here.
 
 When every box is checked, **stop and report** — do not invent new scope.
+
+### 🧑‍💻 Human‑owned (Omar) — happens AFTER the completion signal, never gates it
+1. Create the Apple Developer account ($99/yr) and a Developer ID
+   Application certificate.
+2. Sign + hardened runtime + notarize the DMG; verify with
+   `codesign --verify --deep --strict` and `spctl -a -vv`.
+3. Install on a clean Mac and run one simulation.
+4. Distribute.
+The completion notification (run.sh) reminds Omar of this list and drops
+`~/Desktop/TAU-READY-ACTION-REQUIRED.md` with the exact steps.
 
 ## Branch discipline (one lineage, no forks)
 
