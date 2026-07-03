@@ -1,0 +1,62 @@
+/* ── §10 design-system foundation: Tailwind v4 + shadcn token layer ─────────
+ *
+ * Deliberately NOT `@import "tailwindcss"`: that would pull in preflight,
+ * whose resets (button/input/margin/border rules) would visibly change the
+ * existing hand-styled UI. This file loads only the theme + utility layers,
+ * so shipping it is pixel-neutral — panels then opt in utility-by-utility as
+ * they migrate (FEATURE_PARITY §10: incremental, never a big-bang rewrite).
+ *
+ * Every shadcn token maps onto the EXISTING App.css palette via var(), so the
+ * runtime theme switcher (which re-defines --bg/--accent/… on a scope class)
+ * re-themes Tailwind utilities automatically. Token names intentionally live
+ * only in Tailwind's `--color-*` namespace: App.css already uses `--muted`
+ * for a *text* color while shadcn's `--muted` is a *surface*, so bare shadcn
+ * `:root` variables would collide — the namespaced form cannot.
+ */
+@layer theme, base, components, utilities;
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities);
+
+@theme inline {
+  /* Wipe Tailwind's stock palette: every color must route through Tau tokens
+   * (project rule: no hardcoded colors — this makes `bg-red-500` a build
+   * error instead of a review comment). */
+  --color-*: initial;
+
+  /* Surfaces */
+  --color-background: var(--bg);
+  --color-foreground: var(--text);
+  --color-card: var(--panel);
+  --color-card-foreground: var(--text);
+  --color-popover: var(--panel-4);
+  --color-popover-foreground: var(--text);
+
+  /* Brand / interaction */
+  --color-primary: var(--accent);
+  --color-primary-foreground: var(--accent-ink);
+  --color-secondary: var(--panel-2);
+  --color-secondary-foreground: var(--text);
+  --color-muted: var(--panel-2);
+  --color-muted-foreground: var(--muted);
+  --color-accent: var(--panel-4);
+  --color-accent-foreground: var(--text);
+  --color-destructive: var(--danger);
+  --color-destructive-foreground: var(--text);
+
+  /* Lines & focus */
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-input: var(--border-strong);
+  --color-ring: var(--accent);
+
+  /* Radius scale (App.css --r-*) */
+  --radius-sm: var(--r-sm);
+  --radius-md: var(--r-md);
+  --radius-lg: var(--r-lg);
+  --radius-xl: var(--r-xl);
+}
+
+/* The `base` layer stays empty for now. Preflight's border reset
+ * (`* { border: 0 solid }` — which the `border` utility relies on) lands with
+ * the first shadcn primitive, where its effect can be screenshot-verified
+ * against real components instead of blind-shipping a global reset. */

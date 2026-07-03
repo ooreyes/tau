@@ -8,25 +8,69 @@
      `git log --oneline -8`, recover/finish/revert that unit FIRST, then go on.
      ─────────────────────────────────────────────────────────────────────── -->
 ## ⏱ HEARTBEAT
-- **Headline metric:** 1118 tests green · corpus runner: 82 imported / 71
+- **Headline metric:** 1132 tests green · corpus runner: 82 imported / 71
   warning-clean / 79 deck-built / 64 op-converged
-- **Run started (UTC):** 2026-07-03T04:00Z
-- **Synced to origin:** auto/ltspice-parity @ 2347632
-- **Claimed unit:** §7 Class-D fidelity (priority #2) — rail-clamped op-amp
-  (tanh form) + bundled QS6K1/RSR015P06 VDMOS models + committed
-  `classdParity.corpus.ts` fidelity spec. Landed.
-- **Status:** IN PROGRESS (3rd unit this run; Class-D landed @ e0146a5)
-- **Claimed unit 3:** §10 FOUNDATION — Tailwind v4 (+@tailwindcss/vite) +
-  shadcn scaffolding (components.json, lib/utils.ts cn) + App.css palette
-  mapped into `@theme` tokens (`--color-*` namespace ONLY — App.css's --muted
-  is a text color and must not be redefined; and NO preflight import, so the
-  current look survives pixel-identical).
-- **Files (unit 3):** apps/desktop/package.json, vite.config.ts, tsconfig
-  (@/* alias), src/styles/tokens.css (new), src/lib/utils.ts (+test, new),
-  components.json (new), main.tsx (css import).
-- **Verify (unit 3):** typecheck+tests; STEP 3.5 screenshot BEFORE and AFTER
-  must look identical; dev server must boot clean.
-- **Last completed sub-step:** unit claimed, no code yet.
+- **Run started (UTC):** 2026-07-03T16:50Z
+- **Synced to origin:** auto/ltspice-parity @ 7fa089a
+- **Claimed unit:** §10 FOUNDATION (recovered from `-wip` rescue ref of the
+  killed 04:00Z session) — Tailwind v4 + shadcn scaffolding + App.css palette
+  mapped into `@theme inline` tokens. Landed & re-verified this run.
+- **Status:** DONE
+- **Last completed sub-step:** unit finished — typecheck clean, 1132 tests,
+  BEFORE/AFTER screenshots byte-identical (cmp), live-probe confirmed
+  `bg-primary` resolves to App.css --accent.
+
+---
+
+## 2026-07-03T17:05Z — auto/ltspice-parity — §10 FOUNDATION: Tailwind v4 + shadcn token layer, pixel-neutral (recovered from wip rescue)
+
+### What I did
+- Recovered the killed 04:00Z session's unit 3 from `origin/auto/ltspice-parity-wip`
+  (`git cherry-pick -n 2c4aaa3`) and **re-verified everything myself** rather
+  than trusting the dead session's claims.
+- **Tailwind v4 via `@tailwindcss/vite`** + shadcn scaffolding: `components.json`
+  (new-york), `src/lib/utils.ts` `cn()` helper (+4 tests), `@/*` alias in
+  vite.config.ts + tsconfig.
+- **`src/styles/tokens.css`**: theme+utilities layers ONLY — **no preflight**,
+  so shipping is pixel-neutral. All shadcn tokens map onto the existing
+  App.css palette via `var()` refs inside `@theme inline`, so the runtime
+  theme switcher re-themes utilities for free. Stock Tailwind palette wiped
+  (`--color-*: initial`) — `bg-red-500` is a build error; all color routes
+  through Tau tokens. Tokens live only in the `--color-*` namespace because
+  App.css `--muted` is a *text* color and bare shadcn `--muted` (a surface)
+  would collide.
+- Deleted the consumed `-wip` rescue ref.
+
+### Verification (all re-run this session, not inherited)
+- typecheck clean; **1132 tests passing** (baseline 1118, +14).
+- STEP 3.5 screenshots at 1440×900 BEFORE (HEAD) vs AFTER (with unit):
+  **byte-identical** per `cmp` — pixel-neutrality proven, not claimed.
+- Live playwright probe: `bg-primary` → rgb(214,138,60) (App.css --accent),
+  `p-2` → 8px. `rounded-md` computed 0px — NOT a bug: Tailwind v4 JIT hadn't
+  generated it since no source file uses it yet (bg-primary/p-2 appear in
+  utils.test.ts, hence generated). Radius mapping will be exercised by the
+  first shadcn primitive.
+- Dev server boots warning-clean with the new vite plugin.
+
+### Files touched
+FEATURE_PARITY.md, apps/desktop/{package.json, vite.config.ts, tsconfig.json,
+components.json, src/main.tsx, src/lib/utils.ts, src/lib/utils.test.ts,
+src/styles/tokens.css}, pnpm-lock.yaml, PROGRESS.md
+
+### Tests
+1132 passing, 4 new — all green
+
+### FEATURE_PARITY items updated
+§10 Foundation ⬜ → ✅
+
+### UX issues found
+None (change is deliberately pixel-neutral).
+
+### Next step
+§10 "Core primitives adopted": bring in the first shadcn primitive (Button is
+the natural start — toolbar buttons), which also lands preflight's border
+reset — screenshot-verify that reset against real components per tokens.css
+note. Interleave with priority #4 (§1 Comparators\* pin banks).
 
 ---
 

@@ -956,12 +956,19 @@ Definition of Done. Migrate **incrementally, panel by panel**, with screenshot
 QA (STEP 3.5 pipeline) before/after every panel — never a big-bang rewrite,
 never a broken intermediate state on the branch.
 
-- ⬜ **Foundation:** Tailwind CSS v4 + shadcn/ui scaffolding in
-  `apps/desktop` (components.json, `src/lib/utils.ts` cn helper, tokens in
-  CSS `@theme`). Map the EXISTING `App.css` palette/vars into shadcn's
-  CSS-variable token layer first (`--background`, `--foreground`, `--primary`,
-  `--muted`, `--accent`, `--border`, `--ring`, radii, shadows) so the current
-  dark look survives the migration and nothing flashes unstyled.
+- ✅ **Foundation (2026-07-03):** Tailwind CSS v4 (`@tailwindcss/vite`) +
+  shadcn scaffolding (components.json new-york, `src/lib/utils.ts` cn helper
+  +4 tests, `@/*` alias in vite+tsconfig). `src/styles/tokens.css` maps the
+  EXISTING App.css palette into `@theme inline` tokens **via var() refs** —
+  so the runtime theme switcher re-themes utilities for free. Two deliberate
+  deviations from stock shadcn: tokens live ONLY in the `--color-*` namespace
+  (App.css `--muted` is a *text* color; shadcn's bare `--muted` surface var
+  would collide), and **preflight is NOT imported** (theme+utilities layers
+  only) so shipping is pixel-neutral — the BEFORE/AFTER STEP 3.5 screenshots
+  are **byte-identical** (cmp-verified). Tailwind's stock palette is wiped
+  (`--color-*: initial`): `bg-red-500` is a build error, all color goes
+  through Tau tokens. Preflight's border reset lands with the first primitive.
+  Production build green.
 - ⬜ **Core primitives adopted:** Button, Input, Select, Tabs, Dialog,
   DropdownMenu, Tooltip, ContextMenu, Separator, ScrollArea, Resizable
   (for the three-column simulator layout), Command (replace/augment the
