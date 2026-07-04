@@ -519,7 +519,15 @@ function instanceName(component: SchematicComponent, index: number): string {
     potentiometer: "R", switch: "R", transformer: "L", tline: "T", testpoint: "X", ground: "X",
   };
   const requested = safeName(component.label);
-  return requested.startsWith(prefix[component.kind]) ? requested : `${prefix[component.kind]}${index + 1}`;
+  const p = prefix[component.kind];
+  if (requested.startsWith(p)) return requested;
+  // The label doesn't match the kind's SPICE prefix — this happens when a device
+  // is remapped to a placeholder kind (diac/varistor → resistor keep their `Q1`/
+  // `A1` labels). A bare `${p}${index+1}` fallback can COLLIDE with a real
+  // component that legitimately owns that name (dimmer.asc: diac `Q1`→`R1`
+  // clashed with the actual `R1`). Suffix the sanitized label instead so the
+  // SPICE name stays unique and still traces back to the LTspice refdes.
+  return requested ? `${p}${requested}` : `${p}${index + 1}`;
 }
 
 function requiredNode(entry: ExtractedComponent, pin: string): string {

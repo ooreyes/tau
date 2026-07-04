@@ -860,6 +860,10 @@ SYMATTR Value2 VK=30`;
     // Emits an import note, NOT a warning.
     expect(doc.warnings.filter((w) => /Q1|diac/i.test(w))).toHaveLength(0);
     expect(doc.notes.some((n) => /Q1|diac/i.test(n))).toBe(true);
+    // The diac carries only `Value2 VK=30` (breakover V, no Ohm) → placeholder
+    // gets a neutral high-Z resting resistance so the deck builds (regression:
+    // an empty value used to crash deck-build with "needs a valid Ohm value").
+    expect(q1?.value).toBe("1Meg");
   });
 
   it("maps misc\\TRIAC to npn placeholder with MT2/G/MT1 pin geometry", () => {

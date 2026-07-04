@@ -1100,14 +1100,15 @@ export function ascToSchematic(doc: AscDocument, options: AscImportOptions = {})
       ...(symbol.orientation.startsWith("M") ? { mirrored: true } : {}),
       // A digital gate's function (and/or/xor/inv/…) is encoded in the symbol
       // NAME, not its value; prepend the leaf so parseDigitalGate sees it.
-      // A varistor's raw value is `Rclamp=<n>` (the CONDUCTING resistance, an
-      // A-device param), which the resistor value parser can't turn into an Ohm
-      // value — so the placeholder resistor gets a neutral high-Z resting value
-      // (a varistor is near-open below its clamp voltage). Nets stay correct;
-      // the import note already says to swap in a real model for accuracy.
+      // Voltage-triggered devices imported as a resistor placeholder (varistor
+      // `Rclamp=`, diac `VK=`) carry no parseable Ohm value — their spec is an
+      // A-device / breakover param the resistor emitter can't use. Give the
+      // placeholder a neutral high-Z resting value (both are near-open below
+      // their clamp/breakover voltage) so the deck builds and the op converges.
+      // Nets stay correct; the import note already says to swap in a real model.
       value: kind === "digitalGate"
         ? `${leaf} ${componentValueFromAttrs(kind, symbol.attrs)}`.trim()
-        : leaf === "varistor"
+        : (leaf === "varistor" || leaf === "diac") && kind === "resistor"
           ? "1Meg"
           : componentValueFromAttrs(kind, symbol.attrs),
       label: instName,

@@ -568,4 +568,22 @@ describe("buildSpiceDeck", () => {
     expect(deck.netlist).toMatch(/A_a2_dac \[a2_dq a2_dnq\] \[\S+ a2_qbnc\] a2_dac/);
     expect(deck.netlist).toContain(".model a2_dac dac_bridge(out_low=0 out_high=5)");
   });
+
+  it("gives a remapped placeholder a unique name that can't collide with a real part", () => {
+    // A diac imports as a resistor keeping its `Q1` label; the old fallback made
+    // that `R1` and clashed with a genuine `R1` (dimmer.asc). Now it's `RQ1`.
+    const components = [
+      component("vsource", "V1", "5", 0, 0),        // p(0,-32) n(0,32)
+      component("resistor", "Q1", "1Meg", 32, -32), // a(0,-32) b(64,-32) — placeholder
+      component("resistor", "R1", "1k", 32, 32),    // a(0,32)  b(64,32)  — real R1
+      component("ground", "", "", 0, 32),
+    ];
+    const wires = [wire("w1", [{ x: 64, y: -32 }, { x: 64, y: 32 }])];
+    const deck = buildSpiceDeck({ components, wires }, { kind: "op" });
+    const rLines = deck.netlist.split("\n").filter((l) => /^R\S+ /.test(l));
+    const names = rLines.map((l) => l.split(/\s+/)[0]);
+    expect(names).toContain("RQ1"); // placeholder diac, label-suffixed
+    expect(names).toContain("R1");  // real resistor keeps its name
+    expect(new Set(names).size).toBe(names.length); // no duplicates
+  });
 });
