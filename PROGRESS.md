@@ -17,21 +17,16 @@
   `SpecialFunctions\sample` A-device (SAMPLEHOLD) as a real behavioral
   track-and-hold Tau kind `sampleHold` (rescued claim from the killed
   2026-07-04T09:07Z session, resumed and finished this run).
-- **Status:** DONE — S/H mode (track/hold) and CLK mode (master-slave rising-
-  edge latch) both live-verified against hand-computed sine samples on the real
-  Educational/SampleAndHold.asc (≤0.1% off). SampleAndHold.asc now imports
-  warning-free → corpus 73→74 clean. Bonus root-cause fix: net labels count as
-  electrical endpoints, so a single-pin net probed through a bare flag is
-  connected, not floating (was silently dropping A-device emission AND emitting
-  a bogus one-pin warning on the LTspice probe idiom).
-- **Files:** NEW engine/sampleHoldSpec.ts(+.test), scripts/sampleHoldParity.corpus.ts;
-  types.ts, pins.ts, symbols.tsx, catalog.ts, schematic/netlist.ts (labelCount),
-  io/ascImport.ts, io/ascExport.ts, engine/spiceNetlist.ts,
-  scripts/acceptanceCorpus.corpus.ts (floors).
-- **Verify:** typecheck clean; 1176 default tests green (+12); corpus runner
-  82/74/82/67 (5/5 corpus specs incl. new parity gate); picker + placed-symbol
-  screenshots judged good.
-- **Last completed sub-step:** unit complete, logged, pushed.
+- **Claimed unit (2):** §10 debt — migrate `.symbol-preview` (the last
+  hardcoded-color element: cream #e9e6da chip, teal #2a7d7d stroke/label,
+  App.css ~3458-3501) onto tokens: `--accent-soft` surface + hairline
+  `--border` + `--accent` stroke/label + `--muted` hotkey hint, radius
+  `--r-md`. Flagged top §10 debt by the 03:48Z review session.
+- **Status:** IN PROGRESS (unit 1, sampleHold, is DONE and pushed @ 983921f)
+- **Files (unit 2):** apps/desktop/src/App.css only.
+- **Verify (unit 2):** typecheck+suite stay green (CSS-only); STEP 3.5
+  screenshot of the palette symbol-preview chip judged against the dark system.
+- **Last completed sub-step:** unit 1 complete/pushed; unit 2 claimed.
 
 ---
 
