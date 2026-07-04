@@ -569,6 +569,34 @@ describe("buildSpiceDeck", () => {
     expect(deck.netlist).toContain(".model a2_dac dac_bridge(out_low=0 out_high=5)");
   });
 
+  it("emits a sample-and-hold as switch + hold cap between B-source buffers", () => {
+    // A1 at origin: in+(-32,-32) sh(-32,16) out(32,0); in-/clk/com float →
+    // S/H (track-and-hold) mode, single-ended input.
+    const components = [
+      component("sampleHold", "A1", "", 0, 0),
+      component("vsource", "VA", "1", -128, 0),   // p(-128,-32) n(-128,32)
+      component("vsource", "VC", "1", -224, 64),  // p(-224,32) n(-224,96)
+      component("resistor", "RL", "1k", 96, 0),   // a(64,0) b(128,0)
+      component("ground", "", "", -128, 32),
+      component("ground", "", "", -224, 96),
+      component("ground", "", "", 128, 0),
+    ];
+    const wires = [
+      wire("w1", [{ x: -32, y: -32 }, { x: -128, y: -32 }]),
+      wire("w2", [{ x: -32, y: 16 }, { x: -160, y: 16 }, { x: -160, y: 32 }, { x: -224, y: 32 }]),
+      wire("w3", [{ x: 32, y: 0 }, { x: 64, y: 0 }]),
+    ];
+    const deck = buildSpiceDeck({ components, wires }, { kind: "op" });
+    expect(deck.netlist).toMatch(/B_a1_in a1_s 0 V=V\(\S+\)/);
+    expect(deck.netlist).toMatch(/B_a1_ctl a1_ctl 0 V=\(V\(\S+\)>0\.5\) \? 1 : 0/);
+    expect(deck.netlist).toContain("S_a1 a1_s a1_h a1_ctl 0 a1_sw");
+    expect(deck.netlist).toContain(".model a1_sw sw(vt=0.5 vh=0.2 ron=1 roff=1e12)");
+    expect(deck.netlist).toContain("C_a1_h a1_h 0 1n");
+    expect(deck.netlist).toMatch(/B_a1_out \S+ 0 V=V\(a1_h\)/);
+    // No CLK master-slave stages in S/H mode.
+    expect(deck.netlist).not.toContain("S_a1_1");
+  });
+
   it("gives a remapped placeholder a unique name that can't collide with a real part", () => {
     // A diac imports as a resistor keeping its `Q1` label; the old fallback made
     // that `R1` and clashed with a genuine `R1` (dimmer.asc). Now it's `RQ1`.

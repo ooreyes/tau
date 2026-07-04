@@ -8,29 +8,82 @@
      `git log --oneline -8`, recover/finish/revert that unit FIRST, then go on.
      ─────────────────────────────────────────────────────────────────────── -->
 ## ⏱ HEARTBEAT
-- **Headline metric:** 1164 tests green · corpus runner: 82 imported / 73
-  warning-clean / **82 deck-built (ALL)** / 67 op-converged
+- **Headline metric:** 1177 tests green (1176 default + sampleHold parity gate)
+  · corpus runner: 82 imported / **74 warning-clean** / **82 deck-built (ALL)**
+  / 67 op-converged — floors raised to 82/74/82/67
 - **Run started (UTC):** 2026-07-04T04:10Z
 - **Synced to origin:** auto/ltspice-parity @ 6ee3466
 - **Claimed unit:** §1 warning-clean push — implement the LTspice
   `SpecialFunctions\sample` A-device (SAMPLEHOLD) as a real behavioral
-  track-and-hold Tau kind `sampleHold`. Verified full warnall probe: the 9
-  non-clean files are 6 proprietary-library subckts (TOWTOM2/capmeter/
-  ISO16750-2/ISO7637-2/nigbt/LT1184F — no local defn, cannot honestly clean)
-  and 3 SpecialFunctions/Digital A-devices (sample→SampleAndHold, MODULATE→PLL,
-  PHIDET→PLL2). `sample` is the tractable, robustly-convergent one (switch+cap+
-  buffer). Pin geometry read from installed `lib/sym/SpecialFunctions/sample.asy`
-  (in+,in-,CLK,S/H,out,com — SpiceOrder 1,2,3,4,7,8).
-- **Status:** IN PROGRESS
-- **Files:** NEW engine/sampleHoldSpec.ts(+.test); types.ts, pins.ts,
-  symbols.tsx, catalog.ts (add `sampleHold` kind to every ComponentKind record);
-  io/ascImport.ts (type→kind + pin bank + id-mapped override), io/ascExport.ts
-  (reverse map), engine/spiceNetlist.ts (prefix + emission case).
-- **Verify:** typecheck clean; new sampleHoldSpec tests + full suite green;
-  corpus warnall shows SampleAndHold.asc drop to 0 warns (73→74 clean);
-  `ngspice -b` on the built deck converges.
-- **Last completed sub-step:** unit claimed; probe done; asy geometry captured.
-  Next: write sampleHoldSpec.ts + tests.
+  track-and-hold Tau kind `sampleHold` (rescued claim from the killed
+  2026-07-04T09:07Z session, resumed and finished this run).
+- **Status:** DONE — S/H mode (track/hold) and CLK mode (master-slave rising-
+  edge latch) both live-verified against hand-computed sine samples on the real
+  Educational/SampleAndHold.asc (≤0.1% off). SampleAndHold.asc now imports
+  warning-free → corpus 73→74 clean. Bonus root-cause fix: net labels count as
+  electrical endpoints, so a single-pin net probed through a bare flag is
+  connected, not floating (was silently dropping A-device emission AND emitting
+  a bogus one-pin warning on the LTspice probe idiom).
+- **Files:** NEW engine/sampleHoldSpec.ts(+.test), scripts/sampleHoldParity.corpus.ts;
+  types.ts, pins.ts, symbols.tsx, catalog.ts, schematic/netlist.ts (labelCount),
+  io/ascImport.ts, io/ascExport.ts, engine/spiceNetlist.ts,
+  scripts/acceptanceCorpus.corpus.ts (floors).
+- **Verify:** typecheck clean; 1176 default tests green (+12); corpus runner
+  82/74/82/67 (5/5 corpus specs incl. new parity gate); picker + placed-symbol
+  screenshots judged good.
+- **Last completed sub-step:** unit complete, logged, pushed.
+
+---
+
+## 2026-07-04T04:40Z — auto/ltspice-parity — sampleHold kind: SpecialFunctions\sample as a real track-and-hold (73→74 warning-clean)
+
+### What I did
+- **Recovered the killed session's claim** from `origin/auto/ltspice-parity-wip`
+  (heartbeat + warnall.corpus.ts diagnostic), cherry-picked, deleted the wip ref.
+- **New `sampleHold` component kind** end-to-end: `engine/sampleHoldSpec.ts`
+  emits S/H mode as B-buffer → ideal switch → 1n hold cap → B-buffer, and CLK
+  mode as a master-slave stage pair (master tracks while CLK low, slave tracks
+  the buffered master while CLK high ⇒ rising-edge latch). A one-shot RC window
+  was **rejected by live ngspice test**: the transient solver steps straight
+  over a ~100 ns control pulse (sampled ~0 V); the master-slave form only
+  switches on breakpoint-resolved clock crossings and reproduced hand-computed
+  sine samples to 4 digits. Vt/com/differential-input semantics follow the
+  digitalGate conventions; S/H wins if both controls are wired (documented).
+- **Importer**: `SpecialFunctions\sample` (path-gated) → `sampleHold` with the
+  id-mapped `.asy` pin bank (in+,in-,CLK,S/H,out,com @ SpiceOrder 1,2,3,4,7,8);
+  A-device params joined across Value/Value2/SpiceLine; export maps back to
+  `SpecialFunctions\\sample`.
+- **Root-cause connectivity fix**: `ExtractedNet.labelCount` — net labels now
+  count as electrical endpoints. Before, a single-pin net probed through a bare
+  flag (`FLAG … A` — the LTspice probe idiom, used by both SampleAndHold.asc
+  outputs) was treated as floating: the deck builder silently dropped the
+  A-device lines and the importer warned "only connected to one pin".
+- **Corpus floors raised** to measured 82 imported / 74 warning-clean /
+  82 deck-built / 67 op-converged; new `scripts/sampleHoldParity.corpus.ts`
+  gate runs the real Educational file through ngspice with .meas assertions.
+
+### Files touched
+engine/sampleHoldSpec.ts(+test, NEW), scripts/sampleHoldParity.corpus.ts (NEW),
+schematic/{types,pins,catalog,netlist}.ts(+netlist.test), schematic/symbols.tsx,
+io/{ascImport(+test),ascExport}.ts, engine/spiceNetlist.ts(+test),
+scripts/acceptanceCorpus.corpus.ts, PROGRESS.md, FEATURE_PARITY.md
+
+### Tests
+1176 passing (+12 new: 9 spec, 2 import, 1 netlist-emission, 1 extraction) +
+5 corpus specs green. Typecheck clean.
+
+### FEATURE_PARITY items updated
+§1: sampleHold landed (73→74 warning-clean); NEXT list now counter/srflop +
+MODULATE/PHIDET only.
+
+### UX issues found
+None new — picker row + placed symbol + inspector preview screenshot-audited
+(coherent with the dflop/gate family; CLK wedge + staircase glyph read well).
+
+### Next step
+Either MODULATE/PHIDET (PLL.asc/PLL2.asc, stateful A-devices) or the
+library-subcircuit `.asy` Prefix X path (TowTom2/capmeter/ISO16750-2/ISO7637-2)
+— the latter unblocks 4 files but needs LTspice lib `.sub` resolution.
 
 ---
 

@@ -443,9 +443,19 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
     so mapped by pin id, not positional zip). Diagonal-wire netlist fix so
     crossing diagonals don't falsely merge (Electrometer dflop feedback
     overpass). Warning-clean 71→73. 24 tests.
+  - **Landed (2026-07-04): `sampleHold` kind** — `SpecialFunctions\sample`
+    (SAMPLEHOLD) imports with its id-mapped `.asy` pin bank and emits a real
+    behavioral track-and-hold (`engine/sampleHoldSpec.ts`): S/H mode = switch +
+    hold cap between B-source buffers; CLK mode = master-slave stage pair that
+    latches on the rising edge (a one-shot window was rejected — the solver
+    steps over ~100 ns control pulses). Both modes verified against
+    hand-computed sine samples in `scripts/sampleHoldParity.corpus.ts`.
+    Net-label endpoints now count as connections (a single-pin net probed via a
+    bare flag — LTspice's probe idiom — is not "floating"). Warning-clean
+    73→**74**. 13 tests.
   - **NEXT:** import-map LTspice comparator symbols (`Comparators\\*`) to the
-    comparator kind (none appear in the current corpus); counter/srflop/
-    sample/samplehold digital A-devices still fall through to skip-warnings.
+    comparator kind (none appear in the current corpus); counter/srflop and
+    MODULATE/PHIDET (PLL.asc/PLL2.asc) still fall through to skip-warnings.
   - **Finding (2026-06-28):** class-d_starter.asc now *builds and runs* its `.tran`
     in ngspice 17 — the comparator U1 imports as the generic `opamp` and emits as
     a gain-1e6 VCVS (`E_U1 … 1e6`). But open-loop it **saturates to ~1e7 V** at

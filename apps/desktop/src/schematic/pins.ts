@@ -96,6 +96,18 @@ const LOCAL_PINS: Record<ComponentKind, LocalPin[]> = {
     { id: "qbar", label: "Q̅", x: 32, y: 16 },
     { id: "com", label: "COM", x: -32, y: 48 },
   ],
+  // Behavioral sample-and-hold (LTspice SpecialFunctions\sample): differential
+  // analog input plus CLK (rising-edge sample) and S/H (track-while-high)
+  // controls on the left, analog output right, com reference below. Imported
+  // parts override this with the .asy's exact geometry.
+  sampleHold: [
+    { id: "in+", label: "+", x: -32, y: -32 },
+    { id: "in-", label: "-", x: -32, y: -16 },
+    { id: "clk", label: "CLK", x: -32, y: 0 },
+    { id: "sh", label: "S/H", x: -32, y: 16 },
+    { id: "out", label: "OUT", x: 32, y: 0 },
+    { id: "com", label: "COM", x: 0, y: 48 },
+  ],
   // Voltage-controlled sources (4-terminal 2-port): control pair on the left,
   // output pair on the right. cp/cn sense the controlling voltage; op/on drive.
   vcvs: [

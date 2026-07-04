@@ -152,17 +152,18 @@ describe.skipIf(corpus.length === 0)("acceptance corpus (user's own LTspice file
       console.log(`\n${formatCorpusReport(rows)}\n`);
       if (skipNgspice) console.log("(ngspice runs skipped — CORPUS_SKIP_NGSPICE or ngspice not installed)");
 
-      // Floors = the counts this runner actually measured on 2026-07-03
-      // (82/71/79/64) — NOT the older hand-typed PROGRESS.md claims, which
-      // this runner disproved (deck-built was claimed 82, measured 79: Pierce
-      // Y1 crystal, dimmer Q1, varistor A1 still fail deck-build). Raise a
-      // floor only when a re-run proves the new count.
+      // Floors = the counts this runner actually measured on 2026-07-04
+      // (82/74/82/67) — never hand-typed claims; this runner once disproved
+      // those (deck-built claimed 82, measured 79). Raise a floor only when a
+      // re-run proves the new count. The 8 non-clean files are proprietary
+      // library subckts (TOWTOM2/capmeter/ISO16750-2/ISO7637-2/nigbt/LT1184F)
+      // plus the MODULATE/PHIDET A-devices.
       // Only enforced on the canonical corpus (CORPUS_ALL covers unvetted files).
       if (process.env.CORPUS_ALL !== "1") {
         expect(summary.imported).toBeGreaterThanOrEqual(82);
-        expect(summary.warningClean).toBeGreaterThanOrEqual(71);
-        expect(summary.deckBuilt).toBeGreaterThanOrEqual(79);
-        if (!skipNgspice) expect(summary.opConverged).toBeGreaterThanOrEqual(64);
+        expect(summary.warningClean).toBeGreaterThanOrEqual(74);
+        expect(summary.deckBuilt).toBeGreaterThanOrEqual(82);
+        if (!skipNgspice) expect(summary.opConverged).toBeGreaterThanOrEqual(67);
       }
     } finally {
       rmSync(tmpDir, { recursive: true, force: true });

@@ -10,6 +10,10 @@ export interface ExtractedNet {
   points: Point[];
   pins: ComponentPin[];
   isGround: boolean;
+  /** Number of (non-ground) net labels attached. A labelled single-pin net is
+   *  still "connected" — the label makes it observable and joinable (the
+   *  LTspice idiom of probing an output through a bare flag). */
+  labelCount: number;
 }
 
 export interface ExtractedComponent {
@@ -215,15 +219,23 @@ export function extractCircuit(
     }
   }
 
+  const rootLabelCount = new Map<string, number>();
+  for (const label of netLabels) {
+    if (isGroundLabel(label.text)) continue;
+    const root = dsu.find(pointKey({ x: label.x, y: label.y }));
+    rootLabelCount.set(root, (rootLabelCount.get(root) ?? 0) + 1);
+  }
+
   const nets: ExtractedNet[] = sortedRoots.map((root) => ({
     id: rootToNetId.get(root) ?? root,
     points: uniquePoints(rootToPoints.get(root) ?? []),
     pins: rootToPins.get(root) ?? [],
     isGround: root === groundRoot,
+    labelCount: rootLabelCount.get(root) ?? 0,
   }));
 
   for (const net of nets) {
-    if (!net.isGround && net.pins.length === 1) {
+    if (!net.isGround && net.pins.length === 1 && net.labelCount === 0) {
       const pin = net.pins[0];
       // The ideal op-amp ignores its supply rails, so don't nag about unconnected V+/V-.
       if (pin.kind === "opamp" && (pin.id === "v+" || pin.id === "v-")) continue;

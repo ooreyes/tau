@@ -50,6 +50,7 @@ export const CATALOG: CatalogEntry[] = [
   // The gate's value names its function: and/or/xor/buf/inv/schmtbuf/schmtinv.
   { kind: "digitalGate",   section: "Digital",           name: "Logic Gate",      hotkey: "",  prefix: "A",   defaultValue: "and",   unit: "" },
   { kind: "dflop",         section: "Digital",           name: "D Flip-Flop",     hotkey: "",  prefix: "A",   defaultValue: "",      unit: "" },
+  { kind: "sampleHold",    section: "Digital",           name: "Sample & Hold",   hotkey: "",  prefix: "A",   defaultValue: "",      unit: "" },
   { kind: "switch",        section: "Electromechanical", name: "Switch",          hotkey: "s", prefix: "S",   defaultValue: "open",  unit: "" },
   { kind: "transformer",   section: "Electromechanical", name: "Transformer",     hotkey: "t", prefix: "T",   defaultValue: "1:1",   unit: "" },
   { kind: "tline",         section: "Electromechanical", name: "Transmission Line", hotkey: "", prefix: "T",   defaultValue: "Td=50n Z0=50", unit: "Ω s" },

@@ -380,12 +380,17 @@ export function ltspiceTypeToKind(type: string): ComponentKind | null {
     if (leaf === "dflop") return "dflop";
     if (DIGITAL_GATE_LEAFS.has(leaf)) return "digitalGate";
   }
+  // LTspice behavioral A-devices under `SpecialFunctions\`. `sample` is the
+  // SAMPLEHOLD track-and-hold (engine/sampleHoldSpec.ts); path-gated because
+  // the bare leaf is too generic to claim globally.
+  if (base.includes("specialfunctions/") && leaf === "sample") return "sampleHold";
   return map[leaf] ?? null;
 }
 
 /** `Digital\*.asy` leafs that map onto the behavioral `digitalGate` kind.
- *  (counter/srflop/phidet/sample/samplehold and the diff* family are not yet
- *  modelled and fall through to the skip-warning path.) */
+ *  (counter/srflop/phidet and the diff* family are not yet modelled and fall
+ *  through to the skip-warning path; SpecialFunctions\sample maps to the
+ *  `sampleHold` kind above.) */
 const DIGITAL_GATE_LEAFS = new Set([
   "inv", "buf", "buf1", "and", "or", "xor", "schmitt", "schmtbuf", "schmtinv",
 ]);
@@ -558,6 +563,16 @@ export const LTSPICE_PINS: Record<string, LtPin[]> = {
     { name: "q", dx: 80, dy: 48 },
     { name: "com", dx: -80, dy: 144 },
   ],
+  // SpecialFunctions/sample.asy (SAMPLEHOLD): id-mapped like the digital banks.
+  // SpiceOrder in+=1, in-=2, CLK=3, S/H=4, out=7, com=8 (slots 5/6 unused).
+  sampleHold: [
+    { name: "in+", dx: -80, dy: -32 },
+    { name: "in-", dx: -80, dy: 0 },
+    { name: "clk", dx: -80, dy: 32 },
+    { name: "sh", dx: -80, dy: 64 },
+    { name: "out", dx: 96, dy: 16 },
+    { name: "com", dx: -80, dy: 96 },
+  ],
 };
 
 /** Apply an LTspice orientation to a symbol-local point (LTspice screen Y is
@@ -625,6 +640,8 @@ function ltPinKey(type: string): keyof typeof LTSPICE_PINS | null {
     };
     return digital[leaf] ?? null;
   }
+  // SpecialFunctions\sample — id-mapped bank (mirrors ltspiceTypeToKind's gate).
+  if (base.includes("specialfunctions/") && leaf === "sample") return "sampleHold";
   const map: Record<string, keyof typeof LTSPICE_PINS> = {
     res: "res", res2: "res", r: "res",
     rn55upright: "rn55", uprightpowerresistor: "rn55",
@@ -702,8 +719,8 @@ function buildPinOverride(symbol: AscSymbol, kind: ComponentKind): PinOverride[]
   // inv.asy has only in1/qbar/com), so a positional zip would misassign roles.
   // Their LTSPICE_PINS entries carry Tau pin ids as names — map by id, and emit
   // ONLY the pins the .asy actually has (the deck builder ignores absent pins,
-  // matching LTspice's floating-input semantics).
-  if (kind === "digitalGate" || kind === "dflop") {
+  // matching LTspice's floating-input semantics). sampleHold shares the scheme.
+  if (kind === "digitalGate" || kind === "dflop" || kind === "sampleHold") {
     const byId = new Map(tauPins.map((p) => [p.id, p]));
     const override: PinOverride[] = [];
     for (const lt of ltPins) {
@@ -804,7 +821,7 @@ export function componentValueFromAttrs(
   // `Value2 Trise=10n`); join them all for parseDigitalGate, which skips
   // unknown tokens. The caller prepends the gate function (from the symbol
   // path) since LTspice encodes it in the symbol name, not the value.
-  if (kind === "digitalGate" || kind === "dflop") {
+  if (kind === "digitalGate" || kind === "dflop" || kind === "sampleHold") {
     const extras = [attrs.Value2, attrs.SpiceLine, attrs.SpiceLine2]
       .map((s) => s?.trim())
       .filter((s): s is string => !!s);

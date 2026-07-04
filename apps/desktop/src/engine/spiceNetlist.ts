@@ -10,6 +10,7 @@ import { behavioralSpecText as behavioralSpec } from "../simulation/behavioral";
 import { parseComparator, comparatorDeckLine } from "./comparatorSpec";
 import { parseCrystal, crystalDeckLines } from "./crystalSpec";
 import { parseDigitalGate, digitalGateDeckLines, dflopDeckLines } from "./digitalGateSpec";
+import { sampleHoldDeckLines } from "./sampleHoldSpec";
 import { parseOpampAvol, railClampedOpampLine } from "./opampSpec";
 import { optionsLineFromDirectives } from "./spiceOptions";
 import { modelLibLinesFromDirectives, definedModelNames, definedModelTypes } from "./modelDirectives";
@@ -165,8 +166,12 @@ export function buildSpiceDeck(schematic: Schematic, analysis: SpiceAnalysis): S
   );
 
   // Pin count per net, so emission can tell a driven net from a floating pin's
-  // singleton net (every unconnected pin still gets its own net id).
-  const netPinCount = new Map<string, number>(circuit.nets.map((net) => [net.id, net.pins.length]));
+  // singleton net (every unconnected pin still gets its own net id). A net
+  // label counts as an endpoint: a single-pin net probed through a bare flag
+  // (Educational/SampleAndHold.asc's A/B outputs) is connected, not floating.
+  const netPinCount = new Map<string, number>(
+    circuit.nets.map((net) => [net.id, net.pins.length + (net.labelCount > 0 ? 1 : 0)]),
+  );
 
   circuit.components.forEach((entry, index) => {
     lines.push(...componentLines(entry, index, knownModels, schematic.params ?? EMPTY_SCOPE, vdmosModels, netPinCount));
@@ -361,6 +366,29 @@ function componentLines(entry: ExtractedComponent, index: number, userModels: Se
         qbar: connected("qbar"),
       }, spec);
     }
+    case "sampleHold": {
+      // LTspice SpecialFunctions\sample (SAMPLEHOLD): behavioral track-and-
+      // hold — S/H high tracks V(in+,in-) and holds when low; CLK latches the
+      // input at each rising edge via master-slave switch+cap stages
+      // (engine/sampleHoldSpec.ts, live-verified against the Educational
+      // SampleAndHold example). Params (Vt=…) share the A-device value syntax.
+      const base = safeName(component.label || `A${index + 1}`);
+      const spec = parseDigitalGate(component.value);
+      const connected = (pin: string): string | undefined => {
+        const netId = entry.pins[pin];
+        if (!netId) return undefined;
+        if (netId !== "0" && (netPinCount.get(netId) ?? 0) < 2) return undefined;
+        return netId.toLowerCase();
+      };
+      return sampleHoldDeckLines(base, {
+        inp: connected("in+"),
+        inn: connected("in-"),
+        clk: connected("clk"),
+        sh: connected("sh"),
+        out: connected("out"),
+        com: connected("com"),
+      }, spec);
+    }
     case "vcvs": {
       // A `Laplace=H(s)` value is a continuous transfer function, not a gain;
       // realize it as an XSPICE s_xfer (rational) or its DC gain (otherwise).
@@ -515,7 +543,7 @@ function analysisLine(analysis: SpiceAnalysis, useInitialConditions = false): st
 function instanceName(component: SchematicComponent, index: number): string {
   const prefix: Record<ComponentKind, string> = {
     resistor: "R", capacitor: "C", inductor: "L", vsource: "V", isource: "I", vac: "V", iac: "I", vpulse: "V",
-    diode: "D", led: "D", zener: "D", opamp: "E", comparator: "B", digitalGate: "B", dflop: "A", vcvs: "E", vccs: "G", cccs: "F", ccvs: "H", bsource: "B", nmos: "M", pmos: "M", njf: "J", pjf: "J", npn: "Q", pnp: "Q",
+    diode: "D", led: "D", zener: "D", opamp: "E", comparator: "B", digitalGate: "B", dflop: "A", sampleHold: "A", vcvs: "E", vccs: "G", cccs: "F", ccvs: "H", bsource: "B", nmos: "M", pmos: "M", njf: "J", pjf: "J", npn: "Q", pnp: "Q",
     potentiometer: "R", switch: "R", transformer: "L", tline: "T", testpoint: "X", ground: "X",
   };
   const requested = safeName(component.label);

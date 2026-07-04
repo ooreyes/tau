@@ -22,6 +22,7 @@ export type ComponentKind =
   | "comparator"
   | "digitalGate"
   | "dflop"
+  | "sampleHold"
   | "vcvs"
   | "vccs"
   | "cccs"

@@ -994,6 +994,37 @@ SYMATTR Value2 Trise=10n`;
     expect(doc.warnings.filter((w) => /A1/i.test(w))).toHaveLength(0);
   });
 
+  it("imports SpecialFunctions\\sample as a sampleHold with the id-mapped pin bank", () => {
+    // sample.asy: in+(-80,-32) in-(-80,0) CLK(-80,32) S/H(-80,64) out(96,16)
+    // com(-80,96). R0 at (208,96) — Educational/SampleAndHold.asc's A1. The
+    // corpus file writes the path with DOUBLED backslashes; the importer's
+    // separator normalization must accept that form.
+    const src = `Version 4
+SHEET 1 1224 680
+SYMBOL SpecialFunctions\\\\sample 208 96 R0
+SYMATTR InstName A1`;
+    const doc = ascToSchematic(parseAsc(src));
+    const a1 = doc.components.find((c) => c.label === "A1");
+    expect(a1?.kind).toBe("sampleHold");
+    expect(a1?.value).toBe("");
+    const pins = Object.fromEntries((a1?.pinOverride ?? []).map((p) => [p.id, { x: p.x, y: p.y }]));
+    expect(pins["in+"]).toEqual({ x: 128, y: 64 });
+    expect(pins["in-"]).toEqual({ x: 128, y: 96 });
+    expect(pins.clk).toEqual({ x: 128, y: 128 });
+    expect(pins.sh).toEqual({ x: 128, y: 160 });
+    expect(pins.out).toEqual({ x: 304, y: 112 });
+    expect(pins.com).toEqual({ x: 128, y: 192 });
+    expect(doc.warnings.filter((w) => /A1/i.test(w))).toHaveLength(0);
+  });
+
+  it("ltspiceTypeToKind requires the SpecialFunctions\\ path prefix for sample", () => {
+    expect(ltspiceTypeToKind("SpecialFunctions\\sample")).toBe("sampleHold");
+    expect(ltspiceTypeToKind("SPECIALFUNCTIONS\\SAMPLE")).toBe("sampleHold");
+    // Bare leaf is too generic; other SpecialFunctions stay on the skip path.
+    expect(ltspiceTypeToKind("sample")).toBeNull();
+    expect(ltspiceTypeToKind("SpecialFunctions\\modulate")).toBeNull();
+  });
+
   it("imports bi2 as a bsource with its flipped pin geometry", () => {
     // bi2.asy (B current source, alt geometry): +(0,80) / -(0,0) — bi's flip.
     const src = `Version 4

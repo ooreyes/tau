@@ -118,6 +118,20 @@ describe("net labels are electrical", () => {
     ]);
     expect(circuit.nets).toHaveLength(4);
   });
+
+  it("counts labels per net and treats a labelled single-pin net as connected", () => {
+    // r1.b carries only a bare "OUT" flag — the LTspice probe idiom
+    // (Educational/SampleAndHold.asc). The label makes the net observable, so
+    // no "only connected to one pin" warning; labelCount reports it.
+    const circuit = extractCircuit([r1], [], [label("l", 132, 0, "OUT")]);
+    const out = circuit.nets.find((n) => n.id === "OUT");
+    expect(out?.labelCount).toBe(1);
+    expect(out?.pins).toHaveLength(1);
+    expect(circuit.warnings.filter((w) => /only connected to one pin/.test(w) && /OUT|r1/.test(w))).toEqual([]);
+    // The unlabelled pin still warns.
+    const bare = extractCircuit([r1], []);
+    expect(bare.warnings.some((w) => /only connected to one pin/.test(w))).toBe(true);
+  });
 });
 
 describe("netAtPoint (probe resolution)", () => {

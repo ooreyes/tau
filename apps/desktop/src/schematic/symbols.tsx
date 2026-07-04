@@ -29,6 +29,7 @@ export const SYMBOL_BODY: Record<ComponentKind, BodyBox> = {
   comparator: { minX: -24, minY: -26, maxX: 30, maxY: 26 },
   digitalGate: { minX: -24, minY: -38, maxX: 28, maxY: 40 },
   dflop: { minX: -24, minY: -40, maxX: 24, maxY: 40 },
+  sampleHold: { minX: -24, minY: -40, maxX: 24, maxY: 40 },
   vcvs: { minX: -18, minY: -22, maxX: 18, maxY: 22 },
   vccs: { minX: -18, minY: -22, maxX: 18, maxY: 22 },
   cccs: { minX: -18, minY: -22, maxX: 18, maxY: 22 },
@@ -65,6 +66,7 @@ export const SYMBOL_BOX: Record<ComponentKind, { halfW: number; halfH: number }>
   comparator: { halfW: 28, halfH: 28 },
   digitalGate: { halfW: 28, halfH: 40 },
   dflop: { halfW: 26, halfH: 42 },
+  sampleHold: { halfW: 26, halfH: 42 },
   vcvs: { halfW: 20, halfH: 24 },
   vccs: { halfW: 20, halfH: 24 },
   cccs: { halfW: 20, halfH: 24 },
@@ -285,6 +287,27 @@ export function ComponentSymbol({ kind }: { kind: ComponentKind }) {
           <line x1={-32} y1={48} x2={-24} y2={40} />
           {/* D-flop glyph */}
           <path d="M -8 -6 H 0 A 6 6 0 0 1 0 6 H -8 Z" fill="none" />
+        </>
+      );
+
+    case "sampleHold":
+      return (
+        <>
+          {/* Box with a pointed right nose toward the analog output (echoes
+              LTspice's SpecialFunctions\sample silhouette). */}
+          <path d="M -24 -40 L 16 -40 L 24 0 L 16 40 L -24 40 Z" />
+          {/* in+ / in- / CLK / S/H leads; CLK gets the edge-trigger wedge */}
+          <line x1={-32} y1={-32} x2={-24} y2={-32} />
+          <line x1={-32} y1={-16} x2={-24} y2={-16} />
+          <line x1={-32} y1={0} x2={-24} y2={0} />
+          <path d="M -24 -6 L -16 0 L -24 6" fill="none" />
+          <line x1={-32} y1={16} x2={-24} y2={16} />
+          {/* analog output from the nose */}
+          <line x1={24} y1={0} x2={32} y2={0} />
+          {/* com drops from the body floor */}
+          <line x1={0} y1={40} x2={0} y2={48} />
+          {/* staircase glyph: a held sample */}
+          <path d="M -12 26 H -4 V 18 H 4 V 26 H 12" fill="none" />
         </>
       );
 
