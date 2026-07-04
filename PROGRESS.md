@@ -20,11 +20,19 @@
   expressions → deterministic ngspice surrogate (statFuncsToNgspice in
   simulation/behavioral.ts). PLL.asc + PLL2.asc `.op` now converge
   (op floor 67→69).
-- **Status:** DONE
-- **Last completed sub-step:** unit 2 complete — corpus proof + floors in
-  this commit. NOTE: one transient full-suite failure was observed once
-  (1194/1195) between two clean 1195 runs — not reproduced twice; watch for
-  a flaky sim-timing test in future runs.
+- **Claimed unit (3):** §10 — first shadcn primitive: `ui/button.tsx`
+  (new-york style on Tau tokens, self-contained UA resets since preflight
+  is deliberately absent) + migrate the 4 `.editor-text-btn` document
+  buttons in ShellPanels.tsx (New/Open/Save/Save .asc) — they carry
+  hardcoded colors (#08080a + white alphas), so this also advances the §10
+  sweep. Deps: +class-variance-authority +@radix-ui/react-slot. Verify:
+  typecheck, suite, screenshot QA before/after at 1440×900 (equivalent or
+  better look, tokens re-theme).
+- **Status:** IN PROGRESS (units 1+2 DONE @ cd4fe93 / d0d5687)
+- **Last completed sub-step:** unit 3 claimed; deps install next.
+- NOTE: one transient full-suite failure was observed once (1194/1195)
+  between two clean 1195 runs — not reproduced twice; watch for a flaky
+  sim-timing test in future runs.
 
 ---
 
