@@ -277,10 +277,19 @@ function wireSegments(wire: SchematicWire): Segment[] {
 }
 
 function segmentIntersections(first: Segment, second: Segment): Point[] {
+  // Diagonal wires (LTspice allows them) must be classified explicitly: a
+  // diagonal is neither vertical nor horizontal, so a "not vertical" test
+  // alone would route two X-crossing diagonals that happen to share a start
+  // row into the horizontal-overlap branch and falsely merge their endpoints
+  // (Electrometer.asc crosses its dflop feedback this way as an overpass).
+  // Diagonals connect only at shared endpoints, which the DSU handles by
+  // point key without any help from this function.
   const firstVertical = first.a.x === first.b.x;
   const secondVertical = second.a.x === second.b.x;
+  const firstHorizontal = first.a.y === first.b.y;
+  const secondHorizontal = second.a.y === second.b.y;
 
-  if (firstVertical !== secondVertical) {
+  if ((firstVertical && secondHorizontal) || (secondVertical && firstHorizontal)) {
     const vertical = firstVertical ? first : second;
     const horizontal = firstVertical ? second : first;
     const point = { x: vertical.a.x, y: horizontal.a.y };
@@ -291,7 +300,7 @@ function segmentIntersections(first: Segment, second: Segment): Point[] {
     return overlappingEndpoints(first, second, "y");
   }
 
-  if (!firstVertical && !secondVertical && first.a.y === second.a.y) {
+  if (firstHorizontal && secondHorizontal && first.a.y === second.a.y) {
     return overlappingEndpoints(first, second, "x");
   }
 

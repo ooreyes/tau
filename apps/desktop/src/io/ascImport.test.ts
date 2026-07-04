@@ -905,3 +905,99 @@ SYMATTR Value Rclamp=1`;
     expect(ltspiceTypeToKind("SPECIALFUNCTIONS\\VARISTOR")).toBe("resistor");
   });
 });
+
+describe("digital A-device symbols (Digital\\*)", () => {
+  it("ltspiceTypeToKind requires the Digital\\ path prefix", () => {
+    expect(ltspiceTypeToKind("DIGITAL\\AND")).toBe("digitalGate");
+    expect(ltspiceTypeToKind("Digital\\inv")).toBe("digitalGate");
+    expect(ltspiceTypeToKind("digital\\schmtbuf")).toBe("digitalGate");
+    expect(ltspiceTypeToKind("Digital\\dflop")).toBe("dflop");
+    // Bare leafs are too generic to claim globally.
+    expect(ltspiceTypeToKind("and")).toBeNull();
+    expect(ltspiceTypeToKind("inv")).toBeNull();
+    // Unmodelled Digital parts still fall through to the skip path.
+    expect(ltspiceTypeToKind("Digital\\counter")).toBeNull();
+    expect(ltspiceTypeToKind("Digital\\srflop")).toBeNull();
+  });
+
+  it("imports DIGITAL\\AND with the full 8-slot pin bank and the fn in the value", () => {
+    // and.asy: a..e(-32,{32,48,64,80,96}), _Q(32,80), Q(32,48), com(-16,96).
+    // R0 at (1904,208) — 160.asc's A1.
+    const src = `Version 4
+SHEET 1 880 680
+SYMBOL DIGITAL\\AND 1904 208 R0
+SYMATTR InstName A1`;
+    const doc = ascToSchematic(parseAsc(src));
+    const a1 = doc.components.find((c) => c.label === "A1");
+    expect(a1?.kind).toBe("digitalGate");
+    expect(a1?.value).toBe("and");
+    const pins = Object.fromEntries((a1?.pinOverride ?? []).map((p) => [p.id, { x: p.x, y: p.y }]));
+    expect(pins.in1).toEqual({ x: 1872, y: 240 });
+    expect(pins.in5).toEqual({ x: 1872, y: 304 });
+    expect(pins.q).toEqual({ x: 1936, y: 256 });
+    expect(pins.qbar).toEqual({ x: 1936, y: 288 });
+    expect(pins.com).toEqual({ x: 1888, y: 304 });
+    expect(doc.warnings.filter((w) => /A1/i.test(w))).toHaveLength(0);
+  });
+
+  it("imports DIGITAL\\INV with only its .asy pin subset (in1/qbar/com)", () => {
+    // inv.asy: in(0,64), _Q(64,64), com(0,80). R0 at (1776,224) — 160.asc's A6.
+    const src = `Version 4
+SHEET 1 880 680
+SYMBOL DIGITAL\\INV 1776 224 R0
+SYMATTR InstName A6`;
+    const doc = ascToSchematic(parseAsc(src));
+    const a6 = doc.components.find((c) => c.label === "A6");
+    expect(a6?.kind).toBe("digitalGate");
+    expect(a6?.value).toBe("inv");
+    const ids = (a6?.pinOverride ?? []).map((p) => p.id).sort();
+    expect(ids).toEqual(["com", "in1", "qbar"]); // no q, no in2..in5
+    const pins = Object.fromEntries((a6?.pinOverride ?? []).map((p) => [p.id, { x: p.x, y: p.y }]));
+    expect(pins.in1).toEqual({ x: 1776, y: 288 });
+    expect(pins.qbar).toEqual({ x: 1840, y: 288 });
+    expect(pins.com).toEqual({ x: 1776, y: 304 });
+    expect(doc.warnings.filter((w) => /A6/i.test(w))).toHaveLength(0);
+  });
+
+  it("imports a mirrored Digital\\dflop with params joined from Value/Value2", () => {
+    // Electrometer.asc's A1: M0 at (752,320), `Value Vhigh=0 Vlow=-5`,
+    // `Value2 Trise=10n`. dflop.asy: D(-80,48) CLK(-80,96) PRE(0,0) CLR(0,144)
+    // _Q(96,96) Q(80,48) com(-80,144). M0 mirrors x: (dx,dy) → (-dx,dy).
+    const src = `Version 4
+SHEET 1 880 680
+SYMBOL Digital\\dflop 752 320 M0
+SYMATTR InstName A1
+SYMATTR Value Vhigh=0 Vlow=-5
+SYMATTR Value2 Trise=10n`;
+    const doc = ascToSchematic(parseAsc(src));
+    const a1 = doc.components.find((c) => c.label === "A1");
+    expect(a1?.kind).toBe("dflop");
+    expect(a1?.value).toBe("Vhigh=0 Vlow=-5 Trise=10n");
+    expect(a1?.mirrored).toBe(true);
+    const pins = Object.fromEntries((a1?.pinOverride ?? []).map((p) => [p.id, { x: p.x, y: p.y }]));
+    expect(pins.d).toEqual({ x: 832, y: 368 });
+    expect(pins.clk).toEqual({ x: 832, y: 416 });
+    expect(pins.pre).toEqual({ x: 752, y: 320 });
+    expect(pins.clr).toEqual({ x: 752, y: 464 });
+    expect(pins.q).toEqual({ x: 672, y: 368 });
+    expect(pins.qbar).toEqual({ x: 656, y: 416 });
+    expect(pins.com).toEqual({ x: 832, y: 464 });
+    expect(doc.warnings.filter((w) => /A1/i.test(w))).toHaveLength(0);
+  });
+
+  it("imports bi2 as a bsource with its flipped pin geometry", () => {
+    // bi2.asy (B current source, alt geometry): +(0,80) / -(0,0) — bi's flip.
+    const src = `Version 4
+SHEET 1 880 680
+SYMBOL bi2 100 100 R0
+SYMATTR InstName B1
+SYMATTR Value I=V(a)*2`;
+    const doc = ascToSchematic(parseAsc(src));
+    const b1 = doc.components.find((c) => c.label === "B1");
+    expect(b1?.kind).toBe("bsource");
+    const pins = Object.fromEntries((b1?.pinOverride ?? []).map((p) => [p.id, { x: p.x, y: p.y }]));
+    expect(pins.p).toEqual({ x: 100, y: 180 });
+    expect(pins.n).toEqual({ x: 100, y: 100 });
+    expect(doc.warnings.filter((w) => /B1/i.test(w))).toHaveLength(0);
+  });
+});

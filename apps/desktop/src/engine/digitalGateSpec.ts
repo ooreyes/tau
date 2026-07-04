@@ -159,10 +159,13 @@ export function digitalGateDeckLines(
     cond = term(ins[0], vt); // buf / ideal schmitt
   }
 
+  // cond must be parenthesized: the Schmitt cond is itself a ternary, and
+  // ternary right-associativity would otherwise swallow `? hi : lo` into its
+  // false branch (wrong output level whenever vhigh/vlow aren't 1/0).
   const out = (hi: number, lo: number) =>
     com
-      ? `V=(${cond} ? ${hi} : ${lo})+V(${com})`
-      : `V=${cond} ? ${hi} : ${lo}`;
+      ? `V=((${cond}) ? ${hi} : ${lo})+V(${com})`
+      : `V=(${cond}) ? ${hi} : ${lo}`;
 
   const lines: string[] = [];
   if (nodes.q) lines.push(`B_${base}_Q ${nodes.q} 0 ${out(vhigh, vlow)}`);
@@ -192,7 +195,8 @@ export function dflopDeckLines(base: string, nodes: DflopNodes, spec: DigitalGat
   const { vhigh, vlow, vt, td } = spec;
   const b = base.toLowerCase();
   const a = (n: string | undefined) => n ?? "0";
-  const delay = Math.max(td, 1e-9);
+  // Round away float noise from SI-suffix parsing (100n → 1.0000…001e-7).
+  const delay = Number(Math.max(td, 1e-9).toPrecision(12));
   return [
     `A_${b}_adc [${a(nodes.d)} ${a(nodes.clk)} ${a(nodes.pre)} ${a(nodes.clr)}] [${b}_dd ${b}_dclk ${b}_dpre ${b}_dclr] ${b}_adc`,
     `.model ${b}_adc adc_bridge(in_low=${vt} in_high=${vt})`,

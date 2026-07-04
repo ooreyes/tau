@@ -516,4 +516,56 @@ describe("buildSpiceDeck", () => {
     // Port-A return (a2) and port-B return (b2) are grounded → nodes 2 and 4 are 0.
     expect(deck.netlist).toMatch(/T1 \S+ 0 \S+ 0 Z0=75 TD=5(\.0+\d*)?e-8/);
   });
+
+  it("emits a digital AND gate as one B-source per connected output", () => {
+    // A1 at origin: in1(-32,-32) in2(-32,-16) q(32,-16); qbar/com/in3-5 float.
+    const components = [
+      component("digitalGate", "A1", "and", 0, 0),
+      component("vsource", "VA", "1", -128, -96), // p(-128,-128) n(-128,-64)
+      component("vsource", "VB", "1", -224, -32), // p(-224,-64) n(-224,0)
+      component("resistor", "RL", "1k", 96, -16), // a(64,-16) b(128,-16)
+      component("ground", "", "", -128, -64),
+      component("ground", "", "", -224, 0),
+      component("ground", "", "", 128, -16),
+    ];
+    const wires = [
+      wire("w1", [{ x: -32, y: -32 }, { x: -96, y: -32 }, { x: -96, y: -128 }, { x: -128, y: -128 }]),
+      wire("w2", [{ x: -32, y: -16 }, { x: -160, y: -16 }, { x: -160, y: -64 }, { x: -224, y: -64 }]),
+      wire("w3", [{ x: 32, y: -16 }, { x: 64, y: -16 }]),
+    ];
+    const deck = buildSpiceDeck({ components, wires }, { kind: "op" });
+    // Both driven inputs appear as threshold terms ANDed together; only the
+    // connected true output emits a line (floating qbar/in3-5 are ignored).
+    expect(deck.netlist).toMatch(
+      /B_A1_Q \S+ 0 V=\(\(V\(\S+\)>0\.5\)&&\(V\(\S+\)>0\.5\)\) \? 1 : 0/,
+    );
+    expect(deck.netlist).not.toContain("B_A1_QB");
+  });
+
+  it("emits a dflop as adc bridge → XSPICE d_dff → dac bridge at its levels", () => {
+    // A2 at origin: d(-32,-16) clk(-32,16) q(32,-16); pre/clr/qbar/com float.
+    const components = [
+      component("dflop", "A2", "Vhigh=5", 0, 0),
+      component("vsource", "VD", "1", -128, 16),  // p(-128,-16) n(-128,48)
+      component("vsource", "VC", "1", -224, 48),  // p(-224,16) n(-224,80)
+      component("resistor", "RL", "1k", 96, -16), // a(64,-16) b(128,-16)
+      component("ground", "", "", -128, 48),
+      component("ground", "", "", -224, 80),
+      component("ground", "", "", 128, -16),
+    ];
+    const wires = [
+      wire("w1", [{ x: -32, y: -16 }, { x: -128, y: -16 }]),
+      wire("w2", [{ x: -32, y: 16 }, { x: -224, y: 16 }]),
+      wire("w3", [{ x: 32, y: -16 }, { x: 64, y: -16 }]),
+    ];
+    const deck = buildSpiceDeck({ components, wires }, { kind: "op" });
+    // Unconnected pre/clr tie to analog ground inside the adc bridge vector.
+    expect(deck.netlist).toMatch(/A_a2_adc \[\S+ \S+ 0 0\] \[a2_dd a2_dclk a2_dpre a2_dclr\] a2_adc/);
+    expect(deck.netlist).toContain(".model a2_adc adc_bridge(in_low=2.5 in_high=2.5)");
+    expect(deck.netlist).toContain("A_a2 a2_dd a2_dclk a2_dpre a2_dclr a2_dq a2_dnq a2_dff");
+    expect(deck.netlist).toContain(".model a2_dff d_dff(ic=0");
+    // Connected q lands on its net; unconnected qbar on a private node.
+    expect(deck.netlist).toMatch(/A_a2_dac \[a2_dq a2_dnq\] \[\S+ a2_qbnc\] a2_dac/);
+    expect(deck.netlist).toContain(".model a2_dac dac_bridge(out_low=0 out_high=5)");
+  });
 });

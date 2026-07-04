@@ -353,6 +353,7 @@ export function ltspiceTypeToKind(type: string): ComponentKind | null {
     // Behavioral (arbitrary) sources: LTspice bv = B-voltage, bi = B-current.
     bv: "bsource",
     bi: "bsource",
+    bi2: "bsource",
     b: "bsource",
     b2: "bsource",
     // DIAC: 2-terminal bidirectional trigger diode (misc\\DIAC). No Tau analog;
@@ -370,8 +371,21 @@ export function ltspiceTypeToKind(type: string): ComponentKind | null {
 
   // Any symbol living under an "opamps" directory is an op-amp at heart.
   if (base.includes("opamp")) return "opamp";
+  // LTspice idealized digital A-devices live under `Digital\`. The path prefix
+  // is required — bare leafs like "and"/"or" are too generic to claim globally.
+  if (base.includes("digital/")) {
+    if (leaf === "dflop") return "dflop";
+    if (DIGITAL_GATE_LEAFS.has(leaf)) return "digitalGate";
+  }
   return map[leaf] ?? null;
 }
+
+/** `Digital\*.asy` leafs that map onto the behavioral `digitalGate` kind.
+ *  (counter/srflop/phidet/sample/samplehold and the diff* family are not yet
+ *  modelled and fall through to the skip-warning path.) */
+const DIGITAL_GATE_LEAFS = new Set([
+  "inv", "buf", "buf1", "and", "or", "xor", "schmitt", "schmtbuf", "schmtinv",
+]);
 
 /**
  * LTspice symbol-local pin offsets (R0), extracted from the installed LTspice
@@ -482,6 +496,65 @@ export const LTSPICE_PINS: Record<string, LtPin[]> = {
   // varistor (SpecialFunctions/varistor.asy): primary terminals invin(−32,48)/
   // noninvin(−32,80) at SpiceOrder 1/2. Imported as resistor; zipped to a/b.
   varistor: [{ name: "invin", dx: -32, dy: 48 }, { name: "noninvin", dx: -32, dy: 80 }],
+  // bi2 (B current source, alternate geometry): pins are bi's flipped — +(0,80)/−(0,0).
+  bi2: [{ name: "+", dx: 0, dy: 80 }, { name: "-", dx: 0, dy: 0 }],
+  // ── Digital A-devices (`Digital\*.asy`, LTspice 17.2.4) ──────────────────
+  // Each .asy exposes a SUBSET of the 8-slot pin contract (1-5 in, 6 _Q, 7 Q,
+  // 8 com), so these banks are mapped BY PIN ID, not positionally zipped: the
+  // `name` fields below are Tau pin ids for the digitalGate/dflop kinds (see
+  // buildPinOverride). Offsets verified against the installed library.
+  // and.asy / or.asy share one geometry.
+  digAnd: [
+    { name: "in1", dx: -32, dy: 32 },
+    { name: "in2", dx: -32, dy: 48 },
+    { name: "in3", dx: -32, dy: 64 },
+    { name: "in4", dx: -32, dy: 80 },
+    { name: "in5", dx: -32, dy: 96 },
+    { name: "qbar", dx: 32, dy: 80 },
+    { name: "q", dx: 32, dy: 48 },
+    { name: "com", dx: -16, dy: 96 },
+  ],
+  // xor.asy: inputs sit at x=-48 and Q at (16,48); outputs/com match digAnd.
+  digXor: [
+    { name: "in1", dx: -48, dy: 32 },
+    { name: "in2", dx: -48, dy: 48 },
+    { name: "in3", dx: -48, dy: 64 },
+    { name: "in4", dx: -48, dy: 80 },
+    { name: "in5", dx: -48, dy: 96 },
+    { name: "qbar", dx: 32, dy: 80 },
+    { name: "q", dx: 16, dy: 48 },
+    { name: "com", dx: -16, dy: 96 },
+  ],
+  // inv.asy / schmtinv.asy: in, complementary output only.
+  digInv: [
+    { name: "in1", dx: 0, dy: 64 },
+    { name: "qbar", dx: 64, dy: 64 },
+    { name: "com", dx: 0, dy: 80 },
+  ],
+  // buf.asy / schmitt.asy: in, both outputs.
+  digBuf: [
+    { name: "in1", dx: 0, dy: 64 },
+    { name: "qbar", dx: 64, dy: 80 },
+    { name: "q", dx: 64, dy: 48 },
+    { name: "com", dx: 0, dy: 96 },
+  ],
+  // buf1.asy / schmtbuf.asy: in, true output only.
+  digBuf1: [
+    { name: "in1", dx: 0, dy: 64 },
+    { name: "q", dx: 64, dy: 64 },
+    { name: "com", dx: 0, dy: 80 },
+  ],
+  // dflop.asy (SpiceOrder D=1, CLK=3, PRE=4, CLR=5, _Q=6, Q=7, com=8 — slot 2
+  // is unused in the .asy; mapping is by name so the gap is irrelevant).
+  dflop: [
+    { name: "d", dx: -80, dy: 48 },
+    { name: "clk", dx: -80, dy: 96 },
+    { name: "pre", dx: 0, dy: 0 },
+    { name: "clr", dx: 0, dy: 144 },
+    { name: "qbar", dx: 96, dy: 96 },
+    { name: "q", dx: 80, dy: 48 },
+    { name: "com", dx: -80, dy: 144 },
+  ],
 };
 
 /** Apply an LTspice orientation to a symbol-local point (LTspice screen Y is
@@ -537,6 +610,18 @@ function ltPinKey(type: string): keyof typeof LTSPICE_PINS | null {
   if (base.includes("opamp")) {
     return leaf.includes("universalopamp") ? "opampC" : "opampO";
   }
+  // Digital A-devices (path-gated like ltspiceTypeToKind). Their banks are
+  // id-mapped, not zipped — see the digital branch of buildPinOverride.
+  if (base.includes("digital/")) {
+    const digital: Record<string, keyof typeof LTSPICE_PINS> = {
+      and: "digAnd", or: "digAnd", xor: "digXor",
+      inv: "digInv", schmtinv: "digInv",
+      buf: "digBuf", schmitt: "digBuf",
+      buf1: "digBuf1", schmtbuf: "digBuf1",
+      dflop: "dflop",
+    };
+    return digital[leaf] ?? null;
+  }
   const map: Record<string, keyof typeof LTSPICE_PINS> = {
     res: "res", res2: "res", r: "res",
     rn55upright: "rn55", uprightpowerresistor: "rn55",
@@ -560,7 +645,7 @@ function ltPinKey(type: string): keyof typeof LTSPICE_PINS | null {
     e: "vcvs", e2: "vcvs2", g: "vccs", g2: "vccs2",
     // Behavioral sources share the independent-source pin geometry: the bv
     // (voltage) symbol pins match `voltage`, bi (current) match `current`.
-    bv: "voltage", bi: "current", b: "voltage", b2: "voltage",
+    bv: "voltage", bi: "current", bi2: "bi2", b: "voltage", b2: "voltage",
     // xtal (Misc/xtal.asy): pins A(16,0)/B(16,64) — same geometry as cap.asy.
     xtal: "cap",
     // DIAC (Misc/DIAC.asy): +(32,0)/-(32,64) — 2-terminal; own bank (x≠cap's 16).
@@ -609,6 +694,28 @@ function buildPinOverride(symbol: AscSymbol, kind: ComponentKind): PinOverride[]
   const ltPins = LTSPICE_PINS[key];
   const tauPins = getLocalPins(kind);
   if (ltPins.length === 0 || tauPins.length === 0) return null;
+
+  // Digital gates expose a per-.asy SUBSET of the kind's full pin bank (e.g.
+  // inv.asy has only in1/qbar/com), so a positional zip would misassign roles.
+  // Their LTSPICE_PINS entries carry Tau pin ids as names — map by id, and emit
+  // ONLY the pins the .asy actually has (the deck builder ignores absent pins,
+  // matching LTspice's floating-input semantics).
+  if (kind === "digitalGate" || kind === "dflop") {
+    const byId = new Map(tauPins.map((p) => [p.id, p]));
+    const override: PinOverride[] = [];
+    for (const lt of ltPins) {
+      const tau = byId.get(lt.name);
+      if (!tau) continue;
+      const offset = transformLtPoint(lt.dx, lt.dy, symbol.orientation);
+      override.push({
+        id: tau.id,
+        label: tau.label,
+        x: symbol.x + offset.x,
+        y: symbol.y + offset.y,
+      });
+    }
+    return override.length > 0 ? override : null;
+  }
 
   const count = Math.min(ltPins.length, tauPins.length);
   const override: PinOverride[] = [];
@@ -684,6 +791,17 @@ export function componentValueFromAttrs(
   // writes `Value2 Avol=1Meg GBW=10Meg Slew=10Meg`); keep them all so the deck
   // builder can read Avol for the rail-clamped model (engine/opampSpec.ts).
   if (kind === "opamp") {
+    const extras = [attrs.Value2, attrs.SpiceLine, attrs.SpiceLine2]
+      .map((s) => s?.trim())
+      .filter((s): s is string => !!s);
+    return [base, ...extras].filter(Boolean).join(" ");
+  }
+  // Digital A-devices spread `Vhigh=/Vlow=/Vt=/Vhys=/Td=` across all four
+  // attribute fields (Electrometer.asc: `Value Vhigh=0 Vlow=-5` +
+  // `Value2 Trise=10n`); join them all for parseDigitalGate, which skips
+  // unknown tokens. The caller prepends the gate function (from the symbol
+  // path) since LTspice encodes it in the symbol name, not the value.
+  if (kind === "digitalGate" || kind === "dflop") {
     const extras = [attrs.Value2, attrs.SpiceLine, attrs.SpiceLine2]
       .map((s) => s?.trim())
       .filter((s): s is string => !!s);
@@ -976,7 +1094,11 @@ export function ascToSchematic(doc: AscDocument, options: AscImportOptions = {})
       y: symbol.y,
       rotation: orientationToRotation(symbol.orientation),
       ...(symbol.orientation.startsWith("M") ? { mirrored: true } : {}),
-      value: componentValueFromAttrs(kind, symbol.attrs),
+      // A digital gate's function (and/or/xor/inv/…) is encoded in the symbol
+      // NAME, not its value; prepend the leaf so parseDigitalGate sees it.
+      value: kind === "digitalGate"
+        ? `${leaf} ${componentValueFromAttrs(kind, symbol.attrs)}`.trim()
+        : componentValueFromAttrs(kind, symbol.attrs),
       label: instName,
       ...(pinOverride ? { pinOverride } : {}),
     });
