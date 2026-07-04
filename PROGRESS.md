@@ -10,22 +10,27 @@
 ## ⏱ HEARTBEAT
 - **Headline metric:** 1164 tests green · corpus runner: 82 imported / 73
   warning-clean / **82 deck-built (ALL)** / 67 op-converged
-- **Run started (UTC):** 2026-07-04T03:45Z
-- **Synced to origin:** auto/ltspice-parity @ dc0c2a0
-- **Claimed unit:** REVIEW SESSION (rotation trigger: 0 `review:` commits in
-  last 30). Correctness review of the 32-commit range `401ede9..HEAD`
-  (corpus runner, Class-D rail-clamped opamp, digital A-device gates, crystal
-  BVD model, placeholder/collision fixes, SPICE M=milli suffix semantics,
-  Tailwind/shadcn §10 foundation) + 3-screen UI/UX audit.
-- **Status:** DONE — VERDICT: diff clean, no correctness bugs found; UI
-  coherent. One §10 debt logged (see below). No code changes needed.
-- **Files:** PROGRESS.md, FEATURE_PARITY.md (audit note only).
-- **Verify:** typecheck clean; 1164 tests green; screenshot audit of empty
-  state / loaded RC schematic / simulator scope — all render dense + coherent.
-- **Last completed sub-step:** review verdict written. Next (features resume):
-  warning-clean push toward ≥80 — the 9 non-clean files are library-subcircuit
-  symbols (TowTom2/capmeter/ISO16750-2/ISO7637-2 — need `.asy` Prefix X →
-  subcircuit-instance path) and stateful A-devices (MODULATE/PHIDET).
+- **Run started (UTC):** 2026-07-04T04:10Z
+- **Synced to origin:** auto/ltspice-parity @ 6ee3466
+- **Claimed unit:** §1 warning-clean push — implement the LTspice
+  `SpecialFunctions\sample` A-device (SAMPLEHOLD) as a real behavioral
+  track-and-hold Tau kind `sampleHold`. Verified full warnall probe: the 9
+  non-clean files are 6 proprietary-library subckts (TOWTOM2/capmeter/
+  ISO16750-2/ISO7637-2/nigbt/LT1184F — no local defn, cannot honestly clean)
+  and 3 SpecialFunctions/Digital A-devices (sample→SampleAndHold, MODULATE→PLL,
+  PHIDET→PLL2). `sample` is the tractable, robustly-convergent one (switch+cap+
+  buffer). Pin geometry read from installed `lib/sym/SpecialFunctions/sample.asy`
+  (in+,in-,CLK,S/H,out,com — SpiceOrder 1,2,3,4,7,8).
+- **Status:** IN PROGRESS
+- **Files:** NEW engine/sampleHoldSpec.ts(+.test); types.ts, pins.ts,
+  symbols.tsx, catalog.ts (add `sampleHold` kind to every ComponentKind record);
+  io/ascImport.ts (type→kind + pin bank + id-mapped override), io/ascExport.ts
+  (reverse map), engine/spiceNetlist.ts (prefix + emission case).
+- **Verify:** typecheck clean; new sampleHoldSpec tests + full suite green;
+  corpus warnall shows SampleAndHold.asc drop to 0 warns (73→74 clean);
+  `ngspice -b` on the built deck converges.
+- **Last completed sub-step:** unit claimed; probe done; asy geometry captured.
+  Next: write sampleHoldSpec.ts + tests.
 
 ---
 
