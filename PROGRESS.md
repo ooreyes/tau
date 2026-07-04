@@ -20,9 +20,16 @@
   emission live-verified in ngspice (FM=0.5, mark=2K/space=1K → 1.5000 kHz
   measured), PLL.asc now warning-clean, corpus floor raised 74→75,
   screenshot QA passed (picker row + placed symbol + inspector).
-- **Status:** DONE
-- **Last completed sub-step:** unit complete — corpus re-run proof + floors
-  committed with this heartbeat.
+- **Claimed unit (2):** §1/§7 — LTspice `rand()`/`random()`/`white()` in
+  B-source expressions → deterministic ngspice surrogate
+  (frac(sin(floor(x))*43758.5453), the classic uniform hash; stepped like
+  LTspice's rand). Unblocks PLL.asc/PLL2.asc `.op` ("no such function
+  'rand'"). Files: simulation/behavioral.ts (statFuncsToNgspice + wire into
+  behavioralSpecText) + tests. Verify: unit tests, live ngspice run of the
+  emitted expression, corpus re-run (op-converged 67→68+, floors raised on
+  proof).
+- **Status:** IN PROGRESS (unit 1 modulator DONE @ cd4fe93)
+- **Last completed sub-step:** unit 2 claimed; behavioral.ts edit next.
 
 ---
 
