@@ -17,16 +17,21 @@
   `SpecialFunctions\sample` A-device (SAMPLEHOLD) as a real behavioral
   track-and-hold Tau kind `sampleHold` (rescued claim from the killed
   2026-07-04T09:07Z session, resumed and finished this run).
-- **Claimed unit (2):** §10 debt — migrate `.symbol-preview` (the last
-  hardcoded-color element) onto tokens. Flagged top §10 debt by the 03:48Z
-  review session.
-- **Status:** DONE — chip now derives from `--accent-soft`/`--border`/
-  `--accent`/`--muted`/`--r-md`; screenshot QA confirms it re-themes with the
-  active accent (renders orange under the current theme, matching the system)
-  instead of clashing cream/teal. Suite 1177 green (the unit-1 log said 1176;
-  correct count including the netlist labelCount test is 1177), typecheck clean.
-- **Files (unit 2):** apps/desktop/src/App.css, FEATURE_PARITY.md (§10 debt ✅).
-- **Last completed sub-step:** unit 2 complete; both units pushed.
+- **Claimed unit (3):** §1 warning-clean — `SpecialFunctions\MODULATE`
+  (A-device MODULATOR, behavioral VCO) as new kind `modulator`. Cleans
+  PLL.asc (74→75; PLL2 also needs PHIDET, out of scope). Emission =
+  XSPICE `sine` controlled oscillator (cntl_array=[0 1], freq_array=
+  [space mark] — LTspice's linear FM law) + B-source AM/com wrapper;
+  LIVE-VERIFIED incl. PLL.asc's space=0 edge (1kHz/500Hz/AM×0.5 all exact).
+  Pins from modulate.asy: FM=1, AM=2, out(Q)=7, com=8. modulate2 (SIN/COS
+  variant) stays on the skip path — no cos oscillator, not in corpus.
+- **Status:** IN PROGRESS (units 1+2 DONE, pushed @ 983921f / d06c63a)
+- **Files (unit 3):** NEW engine/modulatorSpec.ts(+test); types/pins/symbols/
+  catalog; ascImport (kind map + pin bank + value join), ascExport,
+  spiceNetlist (prefix + case + test), corpus floor 74→75 after re-run proof.
+- **Verify (unit 3):** spec tests; import test; full suite; corpus runner
+  proves 75 warning-clean; PLL.asc op via corpus.
+- **Last completed sub-step:** ngspice prototype verified; claiming now.
 
 ---
 
