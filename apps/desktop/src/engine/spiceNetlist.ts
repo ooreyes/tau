@@ -8,6 +8,7 @@ import { stripAcSpec, acSpecDeckText, stripSourceModifiers } from "./acSpec";
 import { stripIcSpec, icSpecDeckText, parseIcValue } from "./icSpec";
 import { behavioralSpecText as behavioralSpec } from "../simulation/behavioral";
 import { parseComparator, comparatorDeckLine } from "./comparatorSpec";
+import { parseCrystal, crystalDeckLines } from "./crystalSpec";
 import { parseDigitalGate, digitalGateDeckLines, dflopDeckLines } from "./digitalGateSpec";
 import { parseOpampAvol, railClampedOpampLine } from "./opampSpec";
 import { optionsLineFromDirectives } from "./spiceOptions";
@@ -198,8 +199,15 @@ function componentLines(entry: ExtractedComponent, index: number, userModels: Se
       // SPICE allows negative resistance (active/negative-impedance elements,
       // e.g. Draft7's -1k); reject only zero/NaN, which is a short.
       return [`${name} ${node("a")} ${node("b")} ${nonZeroNumberValue(component, "Ohm")}`];
-    case "capacitor":
+    case "capacitor": {
+      // An imported crystal (Misc\xtal) lands as a capacitor whose value carries
+      // the motional-branch params (Lser/Cpar); expand it into the real BVD
+      // model so the deck builds and a Pierce/Colpitts oscillator can resonate,
+      // instead of choking positiveNumberFromText on the param-laden value.
+      const crystal = parseCrystal(component.value);
+      if (crystal) return crystalDeckLines(name, node("a"), node("b"), crystal);
       return [`${name} ${node("a")} ${node("b")} ${positiveNumberFromText(component, stripIcSpec(component.value), "F")}${icSpecDeckText(component.value)}`];
+    }
     case "inductor": {
       // A nonlinear (Chan) magnetic-core inductor (Hc/Bs/Br/A/Lm/Lg/N) has no
       // ngspice equivalent; emit its unsaturated linear inductance instead so the

@@ -825,8 +825,9 @@ export function componentValueFromAttrs(
       return [base, ...extras].join(" ").trim();
     }
     // Crystal (xtal) is imported as a capacitor whose SpiceLine carries the
-    // piezoelectric resonator params Rser/Lser/Cpar — these are standard ngspice
-    // capacitor instance parameters, so append the whole SpiceLine verbatim.
+    // piezoelectric resonator params Rser/Lser/Cpar. ngspice's `C` device can't
+    // take these, so the value keeps them verbatim and the deck builder detects
+    // the crystal signature and expands the 4-element BVD model (crystalSpec.ts).
     if (kind === "capacitor") {
       const spiceLine = attrs.SpiceLine?.trim() ?? "";
       if (/\b(rser|lser|cpar)\s*=/i.test(spiceLine)) {
