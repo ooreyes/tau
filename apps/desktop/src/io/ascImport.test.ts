@@ -897,6 +897,11 @@ SYMATTR Value Rclamp=1`;
     expect(pins.b).toEqual({ x: 1296, y: 496 });
     expect(doc.warnings.filter((w) => /A1|varistor/i.test(w))).toHaveLength(0);
     expect(doc.notes.some((n) => /A1|varistor/i.test(n))).toBe(true);
+    // The raw `Rclamp=1` value is an A-device param the resistor emitter can't
+    // parse — the placeholder gets a neutral high-Z resting resistance instead
+    // (regression: `Rclamp=1` used to reach the deck as a bad Ohm value and
+    // crash deck-build). 1Meg ≈ open, matching a varistor below its clamp V.
+    expect(a1?.value).toBe("1Meg");
   });
 
   it("ltspiceTypeToKind maps diac/triac/varistor to their placeholder kinds", () => {

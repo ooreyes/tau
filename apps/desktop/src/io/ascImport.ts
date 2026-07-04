@@ -365,7 +365,10 @@ export function ltspiceTypeToKind(type: string): ComponentKind | null {
     triac: "npn",
     // Varistor (SpecialFunctions\\varistor): a 4-terminal behavioral voltage-
     // controlled clamp. The two primary terminals (invin/noninvin, SpiceOrder 1/2)
-    // are mapped to a resistor placeholder; the output/com pins are dropped.
+    // are mapped to a resistor placeholder; the output/com pins are dropped. Its
+    // `Rclamp=` value is an A-device param, not an Ohm value, so the placeholder
+    // is given a neutral high-Z resting resistance (see the value assignment in
+    // ascToSchematic) rather than the unparseable raw value.
     varistor: "resistor",
   };
 
@@ -1096,9 +1099,16 @@ export function ascToSchematic(doc: AscDocument, options: AscImportOptions = {})
       ...(symbol.orientation.startsWith("M") ? { mirrored: true } : {}),
       // A digital gate's function (and/or/xor/inv/…) is encoded in the symbol
       // NAME, not its value; prepend the leaf so parseDigitalGate sees it.
+      // A varistor's raw value is `Rclamp=<n>` (the CONDUCTING resistance, an
+      // A-device param), which the resistor value parser can't turn into an Ohm
+      // value — so the placeholder resistor gets a neutral high-Z resting value
+      // (a varistor is near-open below its clamp voltage). Nets stay correct;
+      // the import note already says to swap in a real model for accuracy.
       value: kind === "digitalGate"
         ? `${leaf} ${componentValueFromAttrs(kind, symbol.attrs)}`.trim()
-        : componentValueFromAttrs(kind, symbol.attrs),
+        : leaf === "varistor"
+          ? "1Meg"
+          : componentValueFromAttrs(kind, symbol.attrs),
       label: instName,
       ...(pinOverride ? { pinOverride } : {}),
     });
