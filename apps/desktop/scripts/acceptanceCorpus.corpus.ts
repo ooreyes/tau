@@ -153,7 +153,7 @@ describe.skipIf(corpus.length === 0)("acceptance corpus (user's own LTspice file
       if (skipNgspice) console.log("(ngspice runs skipped — CORPUS_SKIP_NGSPICE or ngspice not installed)");
 
       // Floors = the counts this runner actually measured on 2026-07-04
-      // (82/75/82/67) — never hand-typed claims; this runner once disproved
+      // (82/75/82/69) — never hand-typed claims; this runner once disproved
       // those (deck-built claimed 82, measured 79). Raise a floor only when a
       // re-run proves the new count. The 7 non-clean files are proprietary
       // library subckts (TOWTOM2/capmeter/ISO16750-2/ISO7637-2/nigbt/LT1184F)
@@ -163,7 +163,7 @@ describe.skipIf(corpus.length === 0)("acceptance corpus (user's own LTspice file
         expect(summary.imported).toBeGreaterThanOrEqual(82);
         expect(summary.warningClean).toBeGreaterThanOrEqual(75);
         expect(summary.deckBuilt).toBeGreaterThanOrEqual(82);
-        if (!skipNgspice) expect(summary.opConverged).toBeGreaterThanOrEqual(67);
+        if (!skipNgspice) expect(summary.opConverged).toBeGreaterThanOrEqual(69);
       }
     } finally {
       rmSync(tmpDir, { recursive: true, force: true });

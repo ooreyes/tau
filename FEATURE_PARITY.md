@@ -464,10 +464,16 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
     phase control and it's not in the corpus. PLL.asc is now warning-clean
     (its remaining `.op` failure is LTspice's `rand()` in a B-source, a
     separate unit). Warning-clean 74→**75**. 12 tests.
+  - **Landed (2026-07-04): `rand()`/`random()`/`white()` B-source surrogate**
+    — `statFuncsToNgspice` (simulation/behavioral.ts) rewrites LTspice's
+    statistical functions (which ngspice lacks) to the deterministic uniform
+    hash `frac(sin(floor(x))*43758.5453)` — a fresh [0,1) value per floor(x)
+    increment, matching `rand(x)` semantics; `white()` shifts zero-mean.
+    Live-verified (mean 0.546 over 150 bit periods). PLL.asc + PLL2.asc
+    `.op` converge: op-converged 67→**69**. 7 tests.
   - **NEXT:** import-map LTspice comparator symbols (`Comparators\\*`) to the
     comparator kind (none appear in the current corpus); counter/srflop and
-    PHIDET (PLL2.asc) still fall through to skip-warnings; PLL/PLL2 `.op`
-    needs a `rand()` → ngspice mapping.
+    PHIDET (PLL2.asc) still fall through to skip-warnings.
   - **Finding (2026-06-28):** class-d_starter.asc now *builds and runs* its `.tran`
     in ngspice 17 — the comparator U1 imports as the generic `opamp` and emits as
     a gain-1e6 VCVS (`E_U1 … 1e6`). But open-loop it **saturates to ~1e7 V** at
@@ -929,7 +935,8 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   (Draft6); and **rewriting `K` coupling refs** to renamed inductor instances
   (Electrometer). The ~12 that still don't run are genuinely out of ngspice's
   reach here: 4 reference external `.sub` libraries not present on disk
-  (opamp/capometer/TowTom2), PLL/PLL2 use LTspice's `rand()`, SoftDiodeRecovery a
+  (opamp/capometer/TowTom2), ~~PLL/PLL2 use LTspice's `rand()`~~ (fixed
+  2026-07-04: statFuncsToNgspice surrogate — both converge), SoftDiodeRecovery a
   proprietary diode `Vp` param, UHFpreamp an unbundled `mrf901`, 2 ISO demos time
   out, plus two deep loop-probe/connectivity cases (LoopGain2, P2).
 - ✅ **Class-D fidelity — the flagship circuit now SIMULATES correctly

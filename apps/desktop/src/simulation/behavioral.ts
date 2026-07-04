@@ -113,14 +113,67 @@ export function ifToTernary(expr: string): string {
 }
 
 /**
+ * Rewrite LTspice's statistical functions — `rand(x)` / `random(x)` /
+ * `white(x)` — to a deterministic surrogate ngspice can evaluate: ngspice
+ * B-sources have no random functions ("no such function 'rand'",
+ * live-verified on PLL.asc). The surrogate is the classic uniform hash
+ * `frac(sin(n)*43758.5453)` over `n = floor(x)`, matching LTspice's
+ * semantics of a fresh uniform [0,1) value each time floor(x) increments
+ * (PLL.asc drives its loop with `rand(time*500) >= .5` — a 500-baud random
+ * NRZ stream; the surrogate reproduces the distribution, live-measured
+ * mean 0.546 over 150 bit periods, not LTspice's exact seed, which LTspice
+ * itself doesn't keep stable across versions). Approximations: `random()`
+ * (LTspice's smoothed rand) keeps the stepped surrogate — the smoothing is
+ * cosmetic for data-stream uses; `white(x)` is the same hash shifted to
+ * zero-mean [-0.5, 0.5). Multi-argument calls are left untouched (not
+ * LTspice syntax), as are longer identifiers (e.g. `mybrand(...)`).
+ */
+export function statFuncsToNgspice(expr: string): string {
+  const lower = expr.toLowerCase();
+  let out = "";
+  let i = 0;
+  while (i < expr.length) {
+    const isWordBoundary = i === 0 || !/[A-Za-z0-9_.]/.test(expr[i - 1]);
+    // "random(" must be tried before its prefix "rand(".
+    const fn = ["random(", "rand(", "white("].find((f) => lower.startsWith(f, i));
+    if (isWordBoundary && fn) {
+      const open = i + fn.length - 1;
+      const close = matchParen(expr, open);
+      if (close === -1) {
+        out += expr.slice(i);
+        break;
+      }
+      const inner = expr.slice(open + 1, close);
+      if (splitTopLevel(inner).length === 1) {
+        const arg = statFuncsToNgspice(inner.trim());
+        const hash = `sin(floor(${arg}))*43758.5453`;
+        out += fn === "white("
+          ? `((${hash})-floor(${hash})-0.5)`
+          : `((${hash})-floor(${hash}))`;
+        i = close + 1;
+        continue;
+      }
+      // Multi-argument call — not LTspice's 1-arg form; leave verbatim.
+      out += expr.slice(i, close + 1);
+      i = close + 1;
+      continue;
+    }
+    out += expr[i];
+    i++;
+  }
+  return out;
+}
+
+/**
  * Normalize a behavioral value to a canonical ngspice B-source spec
  * (`"V=<expr>"` or `"I=<expr>"`). LTspice `if()` calls are rewritten to ngspice
- * ternaries. Throws when the expression body is empty.
+ * ternaries and `rand`/`random`/`white` to their deterministic surrogates.
+ * Throws when the expression body is empty.
  */
 export function behavioralSpecText(value: string): string {
   const { type, expr } = parseBehavioral(value);
   if (!expr) throw new Error("Behavioral source needs a V=/I= expression.");
-  return `${type}=${ifToTernary(expr)}`;
+  return `${type}=${statFuncsToNgspice(ifToTernary(expr))}`;
 }
 
 /**

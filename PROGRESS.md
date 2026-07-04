@@ -8,28 +8,66 @@
      `git log --oneline -8`, recover/finish/revert that unit FIRST, then go on.
      ─────────────────────────────────────────────────────────────────────── -->
 ## ⏱ HEARTBEAT
-- **Headline metric:** 1188 tests green (default suite) + 5 corpus specs
+- **Headline metric:** 1195 tests green (default suite) + 5 corpus specs
   · corpus runner: 82 imported / **75 warning-clean** / **82 deck-built (ALL)**
-  / 67 op-converged — floors raised to 82/75/82/67
+  / **69 op-converged** — floors raised to 82/75/82/69
 - **Run started (UTC):** 2026-07-04T17:35Z (resumed the modulator unit claimed
   by the killed 16:53Z session)
-- **Synced to origin:** auto/ltspice-parity @ 7dadbd3
-- **Claimed unit:** §1 warning-clean — `SpecialFunctions\MODULATE`
-  (A-device MODULATOR, behavioral VCO) as new kind `modulator`. DONE:
-  wired end-to-end (types/pins/symbols/catalog/import/export/netlist),
-  emission live-verified in ngspice (FM=0.5, mark=2K/space=1K → 1.5000 kHz
-  measured), PLL.asc now warning-clean, corpus floor raised 74→75,
-  screenshot QA passed (picker row + placed symbol + inspector).
-- **Claimed unit (2):** §1/§7 — LTspice `rand()`/`random()`/`white()` in
-  B-source expressions → deterministic ngspice surrogate
-  (frac(sin(floor(x))*43758.5453), the classic uniform hash; stepped like
-  LTspice's rand). Unblocks PLL.asc/PLL2.asc `.op` ("no such function
-  'rand'"). Files: simulation/behavioral.ts (statFuncsToNgspice + wire into
-  behavioralSpecText) + tests. Verify: unit tests, live ngspice run of the
-  emitted expression, corpus re-run (op-converged 67→68+, floors raised on
-  proof).
-- **Status:** IN PROGRESS (unit 1 modulator DONE @ cd4fe93)
-- **Last completed sub-step:** unit 2 claimed; behavioral.ts edit next.
+- **Synced to origin:** auto/ltspice-parity @ 2c55316
+- **Unit 1 (DONE @ cd4fe93):** `modulator` kind — SpecialFunctions\MODULATE
+  behavioral VCO, end-to-end, live-verified, PLL.asc warning-clean (74→75).
+- **Unit 2 (DONE):** LTspice `rand()`/`random()`/`white()` in B-source
+  expressions → deterministic ngspice surrogate (statFuncsToNgspice in
+  simulation/behavioral.ts). PLL.asc + PLL2.asc `.op` now converge
+  (op floor 67→69).
+- **Status:** DONE
+- **Last completed sub-step:** unit 2 complete — corpus proof + floors in
+  this commit. NOTE: one transient full-suite failure was observed once
+  (1194/1195) between two clean 1195 runs — not reproduced twice; watch for
+  a flaky sim-timing test in future runs.
+
+---
+
+## 2026-07-04T18:20Z — auto/ltspice-parity — rand()/random()/white() B-source surrogate (op-converged 67→69)
+
+### What I did
+- **`statFuncsToNgspice` in `simulation/behavioral.ts`**: rewrites LTspice's
+  statistical functions in B-source expressions — ngspice has no `rand()`
+  ("no such function 'rand'", the exact failure PLL.asc/PLL2.asc hit after
+  the modulator unit). Surrogate = the classic uniform hash
+  `frac(sin(floor(x))*43758.5453)`: a fresh deterministic [0,1) value each
+  time floor(x) increments, which is LTspice's `rand(x)` semantics
+  (PLL's `V=rand(time*500) >= .5` is a 500-baud random NRZ stream — the
+  surrogate reproduces the distribution; LTspice's exact seed isn't stable
+  across its own versions anyway). `random()` keeps the stepped surrogate
+  (its smoothing is cosmetic); `white()` maps zero-mean to [-0.5,0.5).
+  Word-boundary + 1-arg gated (`mybrand(...)`/multi-arg left verbatim);
+  recursive like `ifToTernary`; wired into `behavioralSpecText`.
+- **Live ngspice proof** before coding: surrogate measured vmax 0.9935 /
+  vmin 0 / mean 0.546 over 150 bit periods at 500 baud; the `>= .5` bit
+  stream toggles correctly.
+- **Corpus floors raised** to measured 82/75/82/**69** — PLL.asc and
+  PLL2.asc `.op` both converge now.
+
+### Files touched
+simulation/behavioral.ts(+test), scripts/acceptanceCorpus.corpus.ts,
+PROGRESS.md, FEATURE_PARITY.md
+
+### Tests
+1195 passing (+7 new statFuncsToNgspice specs) + 5 corpus specs green.
+Typecheck clean. NOTE: one transient failure (1194/1195) observed once
+between two consecutive clean runs — not reproducible; flagged for watch.
+
+### FEATURE_PARITY items updated
+§1 NEXT list: `rand()` mapping done; remaining are counter/srflop, PHIDET,
+and the library-subcircuit Prefix X path.
+
+### UX issues found
+None (no UI change).
+
+### Next step
+Library-subcircuit `.asy` Prefix X path (TowTom2/capmeter/ISO16750-2/
+ISO7637-2 — 4 warning-clean files) or the next §10 panel migration.
 
 ---
 

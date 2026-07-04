@@ -4,6 +4,7 @@ import {
   behavioralSpecText,
   linearizeBehavioral,
   ifToTernary,
+  statFuncsToNgspice,
 } from "./behavioral";
 
 describe("ifToTernary", () => {
@@ -48,6 +49,50 @@ describe("ifToTernary", () => {
 
   it("threads through behavioralSpecText", () => {
     expect(behavioralSpecText("V=if(V(in)>2.5, 5, 0)")).toBe("V=((V(in)>2.5) ? (5) : (0))");
+  });
+});
+
+describe("statFuncsToNgspice", () => {
+  it("leaves an expression without statistical functions untouched", () => {
+    expect(statFuncsToNgspice("2*V(a)+sin(time)")).toBe("2*V(a)+sin(time)");
+  });
+
+  it("rewrites rand(x) to the stepped uniform hash", () => {
+    expect(statFuncsToNgspice("rand(time*500)")).toBe(
+      "((sin(floor(time*500))*43758.5453)-floor(sin(floor(time*500))*43758.5453))",
+    );
+  });
+
+  it("rewrites random(x) like rand and white(x) zero-mean", () => {
+    expect(statFuncsToNgspice("random(x)")).toBe(
+      "((sin(floor(x))*43758.5453)-floor(sin(floor(x))*43758.5453))",
+    );
+    expect(statFuncsToNgspice("white(x)")).toBe(
+      "((sin(floor(x))*43758.5453)-floor(sin(floor(x))*43758.5453)-0.5)",
+    );
+  });
+
+  it("is case-insensitive and preserves surrounding operators", () => {
+    expect(statFuncsToNgspice("RAND(time*250) >= .5")).toBe(
+      "((sin(floor(time*250))*43758.5453)-floor(sin(floor(time*250))*43758.5453)) >= .5",
+    );
+  });
+
+  it("recurses into nested arguments", () => {
+    expect(statFuncsToNgspice("rand(rand(x))")).toBe(
+      "((sin(floor(((sin(floor(x))*43758.5453)-floor(sin(floor(x))*43758.5453))))*43758.5453)-floor(sin(floor(((sin(floor(x))*43758.5453)-floor(sin(floor(x))*43758.5453))))*43758.5453))",
+    );
+  });
+
+  it("does not touch longer identifiers or multi-arg calls", () => {
+    expect(statFuncsToNgspice("mybrand(1)")).toBe("mybrand(1)");
+    expect(statFuncsToNgspice("rand(1,2)")).toBe("rand(1,2)");
+  });
+
+  it("threads through behavioralSpecText (PLL.asc's bit-stream source)", () => {
+    expect(behavioralSpecText("V=rand(time*500) >= .5")).toBe(
+      "V=((sin(floor(time*500))*43758.5453)-floor(sin(floor(time*500))*43758.5453)) >= .5",
+    );
   });
 });
 
