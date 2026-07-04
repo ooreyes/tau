@@ -8,23 +8,72 @@
      `git log --oneline -8`, recover/finish/revert that unit FIRST, then go on.
      ─────────────────────────────────────────────────────────────────────── -->
 ## ⏱ HEARTBEAT
-- **Headline metric:** 1156 tests green · corpus runner: 82 imported / 73
-  warning-clean / 79 deck-built / 64 op-converged
-- **Run started (UTC):** 2026-07-04T21:40Z (recovering killed 01:44Z session)
-- **Synced to origin:** auto/ltspice-parity @ 9d1d025
-- **Claimed unit:** §1 digital A-device gates — DONE @ 9d1d025. Recovered the
-  remaining §1 work from -wip 41bedf3 (a clean child of HEAD ab11a3f):
-  ascImport mapping (path-gated Digital\ leafs → digitalGate/dflop, id-mapped
-  pin banks), Schmitt-ternary paren fix, d_dff delay rounding, diagonal-wire
-  netlist fix, bi2→bsource. Re-verified in full, not inherited.
-- **Status:** DONE (unit landed; ready to pick next unit)
-- **Files:** io/ascImport.ts, engine/digitalGateSpec.ts(+test),
-  engine/spiceNetlist.test.ts, io/ascImport.test.ts, schematic/netlist.ts.
-- **Verify:** typecheck clean; 1156 tests green (baseline 1132, +24); corpus
-  runner 82 imported / 73 warning-clean (71→73) / 79 deck-built / 64 op-conv.
-- **Last completed sub-step:** committed 9d1d025, pushed, deleted consumed
-  -wip ref. Next: pick highest-leverage FEATURE_PARITY item (Comparators\*
-  pin banks or §10 panel migration).
+- **Headline metric:** 1164 tests green · corpus runner: 82 imported / 73
+  warning-clean / **82 deck-built (ALL)** / 67 op-converged
+- **Run started (UTC):** 2026-07-04T21:40Z (recovered killed 01:44Z session)
+- **Synced to origin:** auto/ltspice-parity @ 86c2b64
+- **Claimed unit:** §1 corpus deck-build closeout — DONE. Landed 4 increments
+  this run: (1) recovered §1 digital A-device gates from -wip 41bedf3
+  (warning-clean 71→73); (2) varistor placeholder high-Z value (deck 79→80);
+  (3) real 4-element crystal BVD model, engine/crystalSpec.ts (Pierce, deck
+  80→81); (4) diac placeholder high-Z + collision-safe instance names (dimmer,
+  deck 81→82). Every corpus file now builds a deck.
+- **Status:** DONE (all 4 increments landed & pushed)
+- **Files:** io/ascImport.ts(+test), engine/digitalGateSpec.ts(+test),
+  engine/crystalSpec.ts(+test), engine/spiceNetlist.ts(+test),
+  schematic/netlist.ts.
+- **Verify:** typecheck clean; 1164 tests green (baseline 1132, +32); corpus
+  runner 82 imported / 73 warning-clean / 82 deck-built / 67 op-converged.
+- **Last completed sub-step:** committed 86c2b64, pushed. Next: warning-clean
+  push toward ≥80 — the 9 non-clean files are library-subcircuit symbols
+  (TowTom2/capmeter/ISO16750-2/ISO7637-2) and stateful SpecialFunctions/Digital
+  A-devices (MODULATE/PHIDET). Or op-convergence on the .sub-missing files.
+
+---
+
+## 2026-07-04T22:35Z — auto/ltspice-parity — corpus deck-build closeout: crystal model + placeholder value fixes → 82/82 deck-built
+
+### What I did
+Four tested increments after recovering the §1 digital gates (logged below):
+- **Varistor placeholder value** (`6cbdaf9`): `SpecialFunctions\varistor`→resistor
+  carried `Rclamp=1` (an A-device param, not Ohm) that crashed deck-build. Gave
+  the placeholder a neutral high-Z resting value (1Meg ≈ open below clamp V).
+- **Real crystal (BVD) model** (`d9205e2`): new `engine/crystalSpec.ts`. LTspice
+  `Misc\xtal` lands as a capacitor whose value carries `Cser Rser= Lser= Cpar=`
+  — ngspice's `C` can't take those and the value parse crashed. `parseCrystal`
+  detects the crystal signature and the deck builder expands the 4-element
+  Butterworth–Van Dyke branch (motional Lser-Cser-Rser in series ∥ Cpar shunt,
+  namespaced internal nodes). Real crystals now resonate (Pierce oscillator).
+- **Diac placeholder + collision-safe names** (`86c2b64`): `misc\DIAC`→resistor
+  carried only `VK=30` (no Ohm) → same high-Z fix. AND a latent bug: a device
+  remapped to a placeholder kind keeps its label (diac `Q1`), so instanceName
+  fell back to `${prefix}${index+1}` = `R1`, colliding with the real R1
+  (duplicate SPICE refdes). Now suffixes the label (`RQ1`) — unique, traceable.
+
+### Files touched
+apps/desktop/src/io/ascImport.ts (+test), apps/desktop/src/engine/crystalSpec.ts
+(new, +test), apps/desktop/src/engine/spiceNetlist.ts (+test).
+
+### Tests
+1164 passing (baseline 1132, +32 across the whole run) — all green, typecheck clean.
+
+### Corpus (committed runner, actual output)
+Start of run 82 imported / 71 warning-clean / 79 deck-built / 64 op-converged →
+**82 imported / 73 warning-clean / 82 deck-built (ALL) / 67 op-converged.**
+Deck-built reached 82/82 — every file in the acceptance corpus builds a deck.
+
+### FEATURE_PARITY items updated
+§1 crystal (Misc\xtal → BVD model) → ✅; varistor/diac deck-build robustness noted.
+
+### UX issues found
+None (no UI change this run).
+
+### Next step
+Push warning-clean toward the DoD ≥80/82: the 9 non-clean files split into
+library-subcircuit symbols (TowTom2/capmeter/ISO16750-2/ISO7637-2 — need an
+LTspice-library `.asy` `Prefix X` → subcircuit-instance path) and stateful
+A-devices (SpecialFunctions\MODULATE, Digital\PHIDET). The subcircuit-symbol
+mechanism is the higher-leverage single unit (4 files).
 
 ---
 

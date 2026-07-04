@@ -68,9 +68,11 @@ Status legend: ✅ done · 🟡 partial · ⬜ not started
   verdict requires "No. of Data Rows" in the output and no failure marker).
   **First trustworthy measurement (2026-07-03): 82 imported / 71 warning-clean /
   79 deck-built / 64 op-converged.** This corrected the hand-typed "82/82 build"
-  claim below — 3 files still fail deck-build: Pierce.asc (XTAL `Y1` needs F
-  value), dimmer.asc (`Q1` Ohm value), varistor.asc (A-device `A1` Ohm value).
-  Knobs: `CORPUS_SKIP_NGSPICE=1` (import+deck only), `CORPUS_ALL=1` (full
+  claim below. **Update 2026-07-04: 82/82 deck-built (ALL) / 73 warning-clean /
+  67 op-converged** — the 3 deck-build failures are fixed for real: Pierce XTAL
+  now expands to a 4-element crystal model (`engine/crystalSpec.ts`), and
+  varistor/diac placeholders get a valid high-Z value + collision-safe SPICE
+  names. Knobs: `CORPUS_SKIP_NGSPICE=1` (import+deck only), `CORPUS_ALL=1` (full
   examples tree, floors not enforced).
 - 🟡 **Real-`.asc` op-deck build now 79/82 by the committed runner** (was 34/82
   at this work's start; the "82/82" previously recorded here predated the runner
@@ -1028,7 +1030,9 @@ should map LTspice symbol `type` → Tau `ComponentKind`, falling back to a gene
 ---
 
 _This footer is intentionally not a live status line — see the `PROGRESS.md`
-heartbeat for the current test count and active unit. Next highest-leverage
-work: the LTspice-comparator import mapping (Class-D fidelity blocker), the
-`Comparators\*` vendor pin banks that unblock ~8 more corpus files, and the
-3 remaining deck-build failures (Pierce XTAL, dimmer, varistor)._
+heartbeat for the current test count and active unit. Deck-build is now 82/82
+(the Pierce XTAL / dimmer / varistor failures are fixed). Next highest-leverage
+work: push warning-clean toward the DoD ≥80/82 — library-subcircuit symbols
+(TowTom2/capmeter/ISO16750-2/ISO7637-2, an LTspice-library `.asy` `Prefix X` →
+subcircuit-instance path) and stateful SpecialFunctions/Digital A-devices
+(MODULATE/PHIDET)._
