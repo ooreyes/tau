@@ -8,31 +8,69 @@
      `git log --oneline -8`, recover/finish/revert that unit FIRST, then go on.
      ─────────────────────────────────────────────────────────────────────── -->
 ## ⏱ HEARTBEAT
-- **Headline metric:** 1177 tests green (1176 default + sampleHold parity gate)
-  · corpus runner: 82 imported / **74 warning-clean** / **82 deck-built (ALL)**
-  / 67 op-converged — floors raised to 82/74/82/67
-- **Run started (UTC):** 2026-07-04T17:20Z (resuming killed 16:53Z session)
-- **Synced to origin:** auto/ltspice-parity @ 6ee3466
-- **Claimed unit:** §1 warning-clean push — implement the LTspice
-  `SpecialFunctions\sample` A-device (SAMPLEHOLD) as a real behavioral
-  track-and-hold Tau kind `sampleHold` (rescued claim from the killed
-  2026-07-04T09:07Z session, resumed and finished this run).
-- **Claimed unit (3):** §1 warning-clean — `SpecialFunctions\MODULATE`
-  (A-device MODULATOR, behavioral VCO) as new kind `modulator`. Cleans
-  PLL.asc (74→75; PLL2 also needs PHIDET, out of scope). Emission =
-  XSPICE `sine` controlled oscillator (cntl_array=[0 1], freq_array=
-  [space mark] — LTspice's linear FM law) + B-source AM/com wrapper;
-  LIVE-VERIFIED incl. PLL.asc's space=0 edge (1kHz/500Hz/AM×0.5 all exact).
-  Pins from modulate.asy: FM=1, AM=2, out(Q)=7, com=8. modulate2 (SIN/COS
-  variant) stays on the skip path — no cos oscillator, not in corpus.
-- **Status:** IN PROGRESS (units 1+2 DONE, pushed @ 983921f / d06c63a)
-- **Files (unit 3):** NEW engine/modulatorSpec.ts(+test); types/pins/symbols/
-  catalog; ascImport (kind map + pin bank + value join), ascExport,
-  spiceNetlist (prefix + case + test), corpus floor 74→75 after re-run proof.
-- **Verify (unit 3):** spec tests; import test; full suite; corpus runner
-  proves 75 warning-clean; PLL.asc op via corpus.
-- **Last completed sub-step:** modulatorSpec.ts + tests rescued from -wip and
-  cherry-picked (f27a0bd); wiring types/pins/symbols/import/export/netlist next.
+- **Headline metric:** 1188 tests green (default suite) + 5 corpus specs
+  · corpus runner: 82 imported / **75 warning-clean** / **82 deck-built (ALL)**
+  / 67 op-converged — floors raised to 82/75/82/67
+- **Run started (UTC):** 2026-07-04T17:35Z (resumed the modulator unit claimed
+  by the killed 16:53Z session)
+- **Synced to origin:** auto/ltspice-parity @ 7dadbd3
+- **Claimed unit:** §1 warning-clean — `SpecialFunctions\MODULATE`
+  (A-device MODULATOR, behavioral VCO) as new kind `modulator`. DONE:
+  wired end-to-end (types/pins/symbols/catalog/import/export/netlist),
+  emission live-verified in ngspice (FM=0.5, mark=2K/space=1K → 1.5000 kHz
+  measured), PLL.asc now warning-clean, corpus floor raised 74→75,
+  screenshot QA passed (picker row + placed symbol + inspector).
+- **Status:** DONE
+- **Last completed sub-step:** unit complete — corpus re-run proof + floors
+  committed with this heartbeat.
+
+---
+
+## 2026-07-04T18:00Z — auto/ltspice-parity — modulator kind: SpecialFunctions\MODULATE as a behavioral VCO (74→75 warning-clean)
+
+### What I did
+- **Resumed the killed session's unit** (heartbeat protocol): the rescued
+  `engine/modulatorSpec.ts` (+10 tests) was already cherry-picked at f27a0bd;
+  the stale `-wip` ref (strictly older) was discarded and deleted.
+- **Wired `modulator` end-to-end**: new ComponentKind; native pin bank
+  (FM/AM left, Q right, com below); nose-box + sine-wave glyph;
+  "Modulator (VCO)" catalog entry under Analog (default `mark=1K space=1K`
+  so a bare placement oscillates at 1 kHz with FM unwired).
+- **Importer**: `SpecialFunctions\modulate` (path-gated) → `modulator` with
+  the id-mapped `.asy` pin bank (FM=1, AM=2, Q=7, com=8 @ (0,0)/(0,64)/
+  (144,32)/(0,96)); A-device params joined across Value/Value2/SpiceLine;
+  export maps back to `SpecialFunctions\\modulate`. `modulate2` (SIN/COS)
+  stays on the skip path — XSPICE `sine` has no phase control, not in corpus.
+- **Emitter**: XSPICE `sine` controlled oscillator (`cntl_array=[0 1]
+  freq_array=[space mark]` = LTspice's linear FM law) with B-source buffers
+  for the com reference and AM scaling. Live ngspice check: FM=0.5 V with
+  mark=2K/space=1K measured exactly 1.5000 kHz (zero-crossing .meas).
+- **Corpus floors raised** to measured 82/75/82/67 — PLL.asc is now
+  warning-clean; its `.op` still fails on LTspice's `rand()` in a B-source
+  (logged as a follow-up unit; PLL2 additionally needs PHIDET).
+
+### Files touched
+schematic/{types,pins,catalog}.ts, schematic/symbols.tsx,
+io/{ascImport(+test),ascExport}.ts, engine/spiceNetlist.ts(+test),
+scripts/acceptanceCorpus.corpus.ts, PROGRESS.md, FEATURE_PARITY.md
+(engine/modulatorSpec.ts+test landed earlier at f27a0bd)
+
+### Tests
+1188 passing (+2 this commit: MODULATE import w/ R0+M0 pin banks, VCO deck
+emission; +10 spec tests at f27a0bd) + 5 corpus specs green. Typecheck clean.
+
+### FEATURE_PARITY items updated
+§1: modulator landed (74→75 warning-clean); NEXT list now counter/srflop +
+PHIDET + `rand()` mapping.
+
+### UX issues found
+None — screenshot QA (1440×900): picker search row, placed symbol, and
+inspector preview are coherent with the sampleHold/gate family.
+
+### Next step
+Either the `rand()` → ngspice mapping (unblocks PLL/PLL2 `.op`), the
+library-subcircuit `.asy` Prefix X path (4 files), or the next §10 panel
+migration per the FEATURE_PARITY §10 sequence.
 
 ---
 

@@ -1017,12 +1017,49 @@ SYMATTR InstName A1`;
     expect(doc.warnings.filter((w) => /A1/i.test(w))).toHaveLength(0);
   });
 
-  it("ltspiceTypeToKind requires the SpecialFunctions\\ path prefix for sample", () => {
+  it("ltspiceTypeToKind requires the SpecialFunctions\\ path prefix for sample/modulate", () => {
     expect(ltspiceTypeToKind("SpecialFunctions\\sample")).toBe("sampleHold");
     expect(ltspiceTypeToKind("SPECIALFUNCTIONS\\SAMPLE")).toBe("sampleHold");
-    // Bare leaf is too generic; other SpecialFunctions stay on the skip path.
+    expect(ltspiceTypeToKind("SpecialFunctions\\modulate")).toBe("modulator");
+    expect(ltspiceTypeToKind("SPECIALFUNCTIONS\\MODULATE")).toBe("modulator");
+    // Bare leafs are too generic; other SpecialFunctions (incl. modulate2's
+    // SIN/COS variant) stay on the skip path.
     expect(ltspiceTypeToKind("sample")).toBeNull();
-    expect(ltspiceTypeToKind("SpecialFunctions\\modulate")).toBeNull();
+    expect(ltspiceTypeToKind("modulate")).toBeNull();
+    expect(ltspiceTypeToKind("SpecialFunctions\\modulate2")).toBeNull();
+  });
+
+  it("imports SpecialFunctions\\MODULATE as a modulator with the id-mapped pin bank", () => {
+    // modulate.asy: FM(0,0) AM(0,64) Q(144,32) com(0,96). R0 at (192,880) is
+    // PLL.asc's A1 (uppercase path, doubled backslashes — as the corpus file
+    // writes it); M0 at (1056,1056) is its A3 (mirror flips dx). SpiceLine
+    // extras must join onto the A-device value.
+    const src = `Version 4
+SHEET 1 1904 1156
+SYMBOL SPECIALFUNCTIONS\\\\MODULATE 192 880 R0
+SYMATTR InstName A1
+SYMATTR Value mark=1.1K space=.9K
+SYMATTR SpiceLine Vhigh=2
+SYMBOL SPECIALFUNCTIONS\\\\MODULATE 1056 1056 M0
+SYMATTR InstName A3
+SYMATTR Value mark=2K space=0`;
+    const doc = ascToSchematic(parseAsc(src));
+    const a1 = doc.components.find((c) => c.label === "A1");
+    expect(a1?.kind).toBe("modulator");
+    expect(a1?.value).toBe("mark=1.1K space=.9K Vhigh=2");
+    const p1 = Object.fromEntries((a1?.pinOverride ?? []).map((p) => [p.id, { x: p.x, y: p.y }]));
+    expect(p1.fm).toEqual({ x: 192, y: 880 });
+    expect(p1.am).toEqual({ x: 192, y: 944 });
+    expect(p1.out).toEqual({ x: 336, y: 912 });
+    expect(p1.com).toEqual({ x: 192, y: 976 });
+    const a3 = doc.components.find((c) => c.label === "A3");
+    expect(a3?.kind).toBe("modulator");
+    const p3 = Object.fromEntries((a3?.pinOverride ?? []).map((p) => [p.id, { x: p.x, y: p.y }]));
+    expect(p3.fm).toEqual({ x: 1056, y: 1056 });
+    expect(p3.am).toEqual({ x: 1056, y: 1120 });
+    expect(p3.out).toEqual({ x: 912, y: 1088 });
+    expect(p3.com).toEqual({ x: 1056, y: 1152 });
+    expect(doc.warnings.filter((w) => /A1|A3/i.test(w))).toHaveLength(0);
   });
 
   it("imports bi2 as a bsource with its flipped pin geometry", () => {

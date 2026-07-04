@@ -30,6 +30,7 @@ export const SYMBOL_BODY: Record<ComponentKind, BodyBox> = {
   digitalGate: { minX: -24, minY: -38, maxX: 28, maxY: 40 },
   dflop: { minX: -24, minY: -40, maxX: 24, maxY: 40 },
   sampleHold: { minX: -24, minY: -40, maxX: 24, maxY: 40 },
+  modulator: { minX: -24, minY: -32, maxX: 24, maxY: 32 },
   vcvs: { minX: -18, minY: -22, maxX: 18, maxY: 22 },
   vccs: { minX: -18, minY: -22, maxX: 18, maxY: 22 },
   cccs: { minX: -18, minY: -22, maxX: 18, maxY: 22 },
@@ -67,6 +68,7 @@ export const SYMBOL_BOX: Record<ComponentKind, { halfW: number; halfH: number }>
   digitalGate: { halfW: 28, halfH: 40 },
   dflop: { halfW: 26, halfH: 42 },
   sampleHold: { halfW: 26, halfH: 42 },
+  modulator: { halfW: 26, halfH: 34 },
   vcvs: { halfW: 20, halfH: 24 },
   vccs: { halfW: 20, halfH: 24 },
   cccs: { halfW: 20, halfH: 24 },
@@ -308,6 +310,24 @@ export function ComponentSymbol({ kind }: { kind: ComponentKind }) {
           <line x1={0} y1={40} x2={0} y2={48} />
           {/* staircase glyph: a held sample */}
           <path d="M -12 26 H -4 V 18 H 4 V 26 H 12" fill="none" />
+        </>
+      );
+
+    case "modulator":
+      return (
+        <>
+          {/* Box with a pointed right nose toward the sine output (echoes the
+              sampleHold silhouette; the wave glyph marks it as a VCO). */}
+          <path d="M -24 -32 L 16 -32 L 24 0 L 16 32 L -24 32 Z" />
+          {/* FM / AM control leads */}
+          <line x1={-32} y1={-16} x2={-24} y2={-16} />
+          <line x1={-32} y1={16} x2={-24} y2={16} />
+          {/* sine output from the nose */}
+          <line x1={24} y1={0} x2={32} y2={0} />
+          {/* com drops from the body floor */}
+          <line x1={0} y1={32} x2={0} y2={48} />
+          {/* sine-wave glyph: modulated carrier */}
+          <path d="M -14 0 Q -10 -10 -6 0 Q -2 10 2 0 Q 6 -10 10 0" fill="none" />
         </>
       );
 

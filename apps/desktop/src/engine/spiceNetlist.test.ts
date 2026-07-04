@@ -597,6 +597,28 @@ describe("buildSpiceDeck", () => {
     expect(deck.netlist).not.toContain("S_a1_1");
   });
 
+  it("emits a modulator as a buffered XSPICE sine VCO", () => {
+    // A1 at origin: fm(-32,-16) out(32,0); am/com float → unit amplitude,
+    // ground-referenced. mark/space become the oscillator's freq_array.
+    const components = [
+      component("modulator", "A1", "mark=2K space=1K", 0, 0),
+      component("vsource", "VF", "0.5", -128, 16), // p(-128,-16) n(-128,48)
+      component("resistor", "RL", "1k", 96, 0),    // a(64,0) b(128,0)
+      component("ground", "", "", -128, 48),
+      component("ground", "", "", 128, 0),
+    ];
+    const wires = [
+      wire("w1", [{ x: -32, y: -16 }, { x: -128, y: -16 }]),
+      wire("w2", [{ x: 32, y: 0 }, { x: 64, y: 0 }]),
+    ];
+    const deck = buildSpiceDeck({ components, wires }, { kind: "op" });
+    expect(deck.netlist).toMatch(/B_a1_fm a1_fm 0 V=V\(\S+\)/);
+    expect(deck.netlist).toContain("A_a1 %v(a1_fm) %v(a1_osc) a1_vco");
+    expect(deck.netlist).toContain(".model a1_vco sine(cntl_array=[0 1] freq_array=[1000 2000] out_low=-1 out_high=1)");
+    // AM unwired → no amplitude factor on the output buffer.
+    expect(deck.netlist).toMatch(/B_a1_out \S+ 0 V=V\(a1_osc\)/);
+  });
+
   it("gives a remapped placeholder a unique name that can't collide with a real part", () => {
     // A diac imports as a resistor keeping its `Q1` label; the old fallback made
     // that `R1` and clashed with a genuine `R1` (dimmer.asc). Now it's `RQ1`.

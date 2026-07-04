@@ -453,9 +453,21 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
     Net-label endpoints now count as connections (a single-pin net probed via a
     bare flag — LTspice's probe idiom — is not "floating"). Warning-clean
     73→**74**. 13 tests.
+  - **Landed (2026-07-04): `modulator` kind** — `SpecialFunctions\modulate`
+    (MODULATOR, behavioral VCO) imports with its id-mapped `.asy` pin bank
+    (FM=1, AM=2, Q=7, com=8) and emits an XSPICE `sine` controlled oscillator
+    (`engine/modulatorSpec.ts`): `cntl_array=[0 1] freq_array=[space mark]` is
+    exactly LTspice's linear FM law, wrapped in B-source buffers for the com
+    reference and AM amplitude scaling. Live-verified in ngspice (FM=0.5 with
+    mark=2K/space=1K measures 1.5000 kHz), including PLL.asc's `space=0` entry.
+    `modulate2` (SIN/COS variant) stays on the skip path — XSPICE `sine` has no
+    phase control and it's not in the corpus. PLL.asc is now warning-clean
+    (its remaining `.op` failure is LTspice's `rand()` in a B-source, a
+    separate unit). Warning-clean 74→**75**. 12 tests.
   - **NEXT:** import-map LTspice comparator symbols (`Comparators\\*`) to the
     comparator kind (none appear in the current corpus); counter/srflop and
-    MODULATE/PHIDET (PLL.asc/PLL2.asc) still fall through to skip-warnings.
+    PHIDET (PLL2.asc) still fall through to skip-warnings; PLL/PLL2 `.op`
+    needs a `rand()` → ngspice mapping.
   - **Finding (2026-06-28):** class-d_starter.asc now *builds and runs* its `.tran`
     in ngspice 17 — the comparator U1 imports as the generic `opamp` and emits as
     a gain-1e6 VCVS (`E_U1 … 1e6`). But open-loop it **saturates to ~1e7 V** at
@@ -1048,5 +1060,5 @@ heartbeat for the current test count and active unit. Deck-build is now 82/82
 (the Pierce XTAL / dimmer / varistor failures are fixed). Next highest-leverage
 work: push warning-clean toward the DoD ≥80/82 — library-subcircuit symbols
 (TowTom2/capmeter/ISO16750-2/ISO7637-2, an LTspice-library `.asy` `Prefix X` →
-subcircuit-instance path) and stateful SpecialFunctions/Digital A-devices
-(MODULATE/PHIDET)._
+subcircuit-instance path) and the remaining stateful Digital A-device
+(PHIDET)._

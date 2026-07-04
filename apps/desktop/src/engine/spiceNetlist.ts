@@ -11,6 +11,7 @@ import { parseComparator, comparatorDeckLine } from "./comparatorSpec";
 import { parseCrystal, crystalDeckLines } from "./crystalSpec";
 import { parseDigitalGate, digitalGateDeckLines, dflopDeckLines } from "./digitalGateSpec";
 import { sampleHoldDeckLines } from "./sampleHoldSpec";
+import { parseModulator, modulatorDeckLines } from "./modulatorSpec";
 import { parseOpampAvol, railClampedOpampLine } from "./opampSpec";
 import { optionsLineFromDirectives } from "./spiceOptions";
 import { modelLibLinesFromDirectives, definedModelNames, definedModelTypes } from "./modelDirectives";
@@ -389,6 +390,26 @@ function componentLines(entry: ExtractedComponent, index: number, userModels: Se
         com: connected("com"),
       }, spec);
     }
+    case "modulator": {
+      // LTspice SpecialFunctions\modulate (MODULATOR): behavioral VCO — a
+      // unit sine at `space` Hz for FM=0V, `mark` Hz for FM=1V, amplitude
+      // scaled by the AM input (engine/modulatorSpec.ts, live-verified
+      // against PLL.asc's space=0 entry).
+      const base = safeName(component.label || `A${index + 1}`);
+      const spec = parseModulator(component.value);
+      const connected = (pin: string): string | undefined => {
+        const netId = entry.pins[pin];
+        if (!netId) return undefined;
+        if (netId !== "0" && (netPinCount.get(netId) ?? 0) < 2) return undefined;
+        return netId.toLowerCase();
+      };
+      return modulatorDeckLines(base, {
+        fm: connected("fm"),
+        am: connected("am"),
+        out: connected("out"),
+        com: connected("com"),
+      }, spec);
+    }
     case "vcvs": {
       // A `Laplace=H(s)` value is a continuous transfer function, not a gain;
       // realize it as an XSPICE s_xfer (rational) or its DC gain (otherwise).
@@ -543,7 +564,7 @@ function analysisLine(analysis: SpiceAnalysis, useInitialConditions = false): st
 function instanceName(component: SchematicComponent, index: number): string {
   const prefix: Record<ComponentKind, string> = {
     resistor: "R", capacitor: "C", inductor: "L", vsource: "V", isource: "I", vac: "V", iac: "I", vpulse: "V",
-    diode: "D", led: "D", zener: "D", opamp: "E", comparator: "B", digitalGate: "B", dflop: "A", sampleHold: "A", vcvs: "E", vccs: "G", cccs: "F", ccvs: "H", bsource: "B", nmos: "M", pmos: "M", njf: "J", pjf: "J", npn: "Q", pnp: "Q",
+    diode: "D", led: "D", zener: "D", opamp: "E", comparator: "B", digitalGate: "B", dflop: "A", sampleHold: "A", modulator: "A", vcvs: "E", vccs: "G", cccs: "F", ccvs: "H", bsource: "B", nmos: "M", pmos: "M", njf: "J", pjf: "J", npn: "Q", pnp: "Q",
     potentiometer: "R", switch: "R", transformer: "L", tline: "T", testpoint: "X", ground: "X",
   };
   const requested = safeName(component.label);

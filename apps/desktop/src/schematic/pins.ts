@@ -108,6 +108,15 @@ const LOCAL_PINS: Record<ComponentKind, LocalPin[]> = {
     { id: "out", label: "OUT", x: 32, y: 0 },
     { id: "com", label: "COM", x: 0, y: 48 },
   ],
+  // Behavioral VCO/modulator (LTspice SpecialFunctions\modulate): FM and AM
+  // control inputs on the left, sine output right, com reference below.
+  // Imported parts override this with the .asy's exact geometry.
+  modulator: [
+    { id: "fm", label: "FM", x: -32, y: -16 },
+    { id: "am", label: "AM", x: -32, y: 16 },
+    { id: "out", label: "Q", x: 32, y: 0 },
+    { id: "com", label: "COM", x: 0, y: 48 },
+  ],
   // Voltage-controlled sources (4-terminal 2-port): control pair on the left,
   // output pair on the right. cp/cn sense the controlling voltage; op/on drive.
   vcvs: [

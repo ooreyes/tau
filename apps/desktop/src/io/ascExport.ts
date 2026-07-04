@@ -91,6 +91,7 @@ export function kindToLtspiceType(kind: ComponentKind): string | null {
     // LTspice writes doubled backslashes in .asc SYMBOL paths (see the corpus
     // files); the importer's separator normalization accepts either form.
     sampleHold: "SpecialFunctions\\\\sample",
+    modulator: "SpecialFunctions\\\\modulate",
     bsource: "bv",
     vcvs: "e",
     vccs: "g",

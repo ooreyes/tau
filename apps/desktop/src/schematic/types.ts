@@ -23,6 +23,7 @@ export type ComponentKind =
   | "digitalGate"
   | "dflop"
   | "sampleHold"
+  | "modulator"
   | "vcvs"
   | "vccs"
   | "cccs"

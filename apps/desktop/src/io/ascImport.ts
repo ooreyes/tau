@@ -384,6 +384,9 @@ export function ltspiceTypeToKind(type: string): ComponentKind | null {
   // SAMPLEHOLD track-and-hold (engine/sampleHoldSpec.ts); path-gated because
   // the bare leaf is too generic to claim globally.
   if (base.includes("specialfunctions/") && leaf === "sample") return "sampleHold";
+  // `modulate` is the MODULATOR behavioral VCO (engine/modulatorSpec.ts).
+  // `modulate2` (separate SIN/COS outputs) is NOT mapped — see modulatorSpec.
+  if (base.includes("specialfunctions/") && leaf === "modulate") return "modulator";
   return map[leaf] ?? null;
 }
 
@@ -573,6 +576,14 @@ export const LTSPICE_PINS: Record<string, LtPin[]> = {
     { name: "out", dx: 96, dy: 16 },
     { name: "com", dx: -80, dy: 96 },
   ],
+  // SpecialFunctions/modulate.asy (MODULATOR): id-mapped like sampleHold.
+  // SpiceOrder FM=1, AM=2, Q(out)=7, com=8 (slots 3-6 unused).
+  modulator: [
+    { name: "fm", dx: 0, dy: 0 },
+    { name: "am", dx: 0, dy: 64 },
+    { name: "out", dx: 144, dy: 32 },
+    { name: "com", dx: 0, dy: 96 },
+  ],
 };
 
 /** Apply an LTspice orientation to a symbol-local point (LTspice screen Y is
@@ -640,8 +651,10 @@ function ltPinKey(type: string): keyof typeof LTSPICE_PINS | null {
     };
     return digital[leaf] ?? null;
   }
-  // SpecialFunctions\sample — id-mapped bank (mirrors ltspiceTypeToKind's gate).
+  // SpecialFunctions\sample / \modulate — id-mapped banks (mirror
+  // ltspiceTypeToKind's path gates).
   if (base.includes("specialfunctions/") && leaf === "sample") return "sampleHold";
+  if (base.includes("specialfunctions/") && leaf === "modulate") return "modulator";
   const map: Record<string, keyof typeof LTSPICE_PINS> = {
     res: "res", res2: "res", r: "res",
     rn55upright: "rn55", uprightpowerresistor: "rn55",
@@ -719,8 +732,9 @@ function buildPinOverride(symbol: AscSymbol, kind: ComponentKind): PinOverride[]
   // inv.asy has only in1/qbar/com), so a positional zip would misassign roles.
   // Their LTSPICE_PINS entries carry Tau pin ids as names — map by id, and emit
   // ONLY the pins the .asy actually has (the deck builder ignores absent pins,
-  // matching LTspice's floating-input semantics). sampleHold shares the scheme.
-  if (kind === "digitalGate" || kind === "dflop" || kind === "sampleHold") {
+  // matching LTspice's floating-input semantics). sampleHold and modulator
+  // share the scheme.
+  if (kind === "digitalGate" || kind === "dflop" || kind === "sampleHold" || kind === "modulator") {
     const byId = new Map(tauPins.map((p) => [p.id, p]));
     const override: PinOverride[] = [];
     for (const lt of ltPins) {
@@ -821,7 +835,7 @@ export function componentValueFromAttrs(
   // `Value2 Trise=10n`); join them all for parseDigitalGate, which skips
   // unknown tokens. The caller prepends the gate function (from the symbol
   // path) since LTspice encodes it in the symbol name, not the value.
-  if (kind === "digitalGate" || kind === "dflop" || kind === "sampleHold") {
+  if (kind === "digitalGate" || kind === "dflop" || kind === "sampleHold" || kind === "modulator") {
     const extras = [attrs.Value2, attrs.SpiceLine, attrs.SpiceLine2]
       .map((s) => s?.trim())
       .filter((s): s is string => !!s);
