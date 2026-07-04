@@ -20,19 +20,57 @@
   expressions → deterministic ngspice surrogate (statFuncsToNgspice in
   simulation/behavioral.ts). PLL.asc + PLL2.asc `.op` now converge
   (op floor 67→69).
-- **Claimed unit (3):** §10 — first shadcn primitive: `ui/button.tsx`
-  (new-york style on Tau tokens, self-contained UA resets since preflight
-  is deliberately absent) + migrate the 4 `.editor-text-btn` document
-  buttons in ShellPanels.tsx (New/Open/Save/Save .asc) — they carry
-  hardcoded colors (#08080a + white alphas), so this also advances the §10
-  sweep. Deps: +class-variance-authority +@radix-ui/react-slot. Verify:
-  typecheck, suite, screenshot QA before/after at 1440×900 (equivalent or
-  better look, tokens re-theme).
-- **Status:** IN PROGRESS (units 1+2 DONE @ cd4fe93 / d0d5687)
-- **Last completed sub-step:** unit 3 claimed; deps install next.
+- **Unit 3 (DONE):** §10 — first shadcn primitive `ui/button.tsx` landed;
+  the 4 document buttons (New/Open/Save/Save .asc) migrated off
+  `.editor-text-btn`'s hardcoded colors; `.example-picker select` colors
+  tokenized in passing. DOM-verified (data-slot=button, 28px, disabled
+  states), simulator-mode hiding re-verified, before/after screenshots
+  equivalent at 1440×900.
+- **Status:** DONE
 - NOTE: one transient full-suite failure was observed once (1194/1195)
   between two clean 1195 runs — not reproduced twice; watch for a flaky
   sim-timing test in future runs.
+
+---
+
+## 2026-07-04T18:45Z — auto/ltspice-parity — §10: Button primitive + editor document buttons migrated
+
+### What I did
+- **First shadcn core primitive landed**: `components/ui/button.tsx`
+  (new-york style via cva; +class-variance-authority +@radix-ui/react-slot).
+  All color routes through the §10 token layer so it re-themes with the
+  runtime theme switcher. The base string carries its own UA resets
+  (`appearance-none`, explicit border, `[font-family:inherit]`) because
+  preflight is deliberately not imported (tokens.css). Dense sizes: sm =
+  28px row height per the §10 density rule.
+- **First adoption**: the 4 document buttons in ShellPanels.tsx
+  (New/Open/Save/Save .asc) → `<Button variant="outline" size="sm">`;
+  their old `.editor-text-btn` CSS (hardcoded `#08080a` + white alphas)
+  deleted; `.editor-doc-btn` kept only as the simulator-mode visibility
+  marker. `.example-picker select` (still native until the Select
+  primitive) had its hardcoded colors swapped to `var(--bg)`/
+  `var(--border)`/`var(--panel-4)` in passing.
+- **Verified**: DOM probe shows all 4 rendering via the primitive at
+  exactly 28px with correct disabled states; simulator mode still hides
+  them; before/after screenshots at 1440×900 visually equivalent.
+
+### Files touched
+components/ui/button.tsx (NEW), components/ShellPanels.tsx, App.css,
+package.json (+2 deps), PROGRESS.md, FEATURE_PARITY.md
+
+### Tests
+1195 passing (UI-only change; suite re-run green). Typecheck clean.
+
+### FEATURE_PARITY items updated
+§10 "Core primitives adopted" → 🟡 (Button in; Input/Select/Tabs/… remain).
+
+### UX issues found
+None — the migration is pixel-faithful by design (token values match the
+old hardcoded ones).
+
+### Next step
+Next §10 primitive (Input or Select — the example-picker select is the
+natural Select adoption) or the library-subcircuit Prefix X import path.
 
 ---
 

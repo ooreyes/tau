@@ -1013,10 +1013,14 @@ never a broken intermediate state on the branch.
   (`--color-*: initial`): `bg-red-500` is a build error, all color goes
   through Tau tokens. Preflight's border reset lands with the first primitive.
   Production build green.
-- ⬜ **Core primitives adopted:** Button, Input, Select, Tabs, Dialog,
-  DropdownMenu, Tooltip, ContextMenu, Separator, ScrollArea, Resizable
-  (for the three-column simulator layout), Command (replace/augment the
-  command palette), Toast/Sonner (errors + notifications).
+- 🟡 **Core primitives adopted:** Button ✅ (2026-07-04: `ui/button.tsx`,
+  new-york via cva on Tau tokens, self-contained UA resets since preflight
+  is absent, dense sm=28px; first adoption = the 4 document buttons in
+  ShellPanels, killing `.editor-text-btn`'s hardcoded colors). Remaining:
+  Input, Select, Tabs, Dialog, DropdownMenu, Tooltip, ContextMenu,
+  Separator, ScrollArea, Resizable (for the three-column simulator
+  layout), Command (replace/augment the command palette), Toast/Sonner
+  (errors + notifications).
 - ⬜ **Panel migrations** (one commit each, screenshot-verified):
   toolbar/topbar → part palette → inspector/params → analysis tabs header →
   SimulationPanel controls (run bar, expression bar, cursors, export) →

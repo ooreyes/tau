@@ -8,6 +8,7 @@ import { importAsc, decodeSchematicText, makeSubcircuitResolver } from "../io/as
 import { schematicToAsc } from "../io/ascExport";
 import { parseCir } from "../io/cirImport";
 import { EngineeringInput } from "./EngineeringInput";
+import { Button } from "@/components/ui/button";
 import { useSchematic, type SchematicDocument } from "../store/useSchematic";
 import { EXAMPLE_CIRCUITS, type ExampleCircuit } from "../examples/circuits";
 import type { AnalysisResult } from "../simulation/linearTransient";
@@ -300,10 +301,12 @@ export function EditorToolbar({
         <path d="M4 5h10M7 5V3h4v2M6 7v7M10 7v7M13 5l-.8 10H5.8L5 5" />
       </IconButton>
       <span className="toolbar-divider" />
-      <button className="editor-text-btn" onClick={onNewCircuit}>New</button>
-      <button className="editor-text-btn" onClick={() => fileInputRef.current?.click()}>Open</button>
-      <button className="editor-text-btn" disabled={!hasDocument} onClick={saveCircuit}>Save</button>
-      <button className="editor-text-btn" disabled={!hasDocument} onClick={saveAsc} title="Export as LTspice .asc">Save .asc</button>
+      {/* .editor-doc-btn is a marker only (simulator-mode visibility in
+          App.css) — all styling comes from the Button primitive (§10). */}
+      <Button variant="outline" size="sm" className="editor-doc-btn" onClick={onNewCircuit}>New</Button>
+      <Button variant="outline" size="sm" className="editor-doc-btn" onClick={() => fileInputRef.current?.click()}>Open</Button>
+      <Button variant="outline" size="sm" className="editor-doc-btn" disabled={!hasDocument} onClick={saveCircuit}>Save</Button>
+      <Button variant="outline" size="sm" className="editor-doc-btn" disabled={!hasDocument} onClick={saveAsc} title="Export as LTspice .asc">Save .asc</Button>
       <input
         ref={fileInputRef}
         className="file-input"

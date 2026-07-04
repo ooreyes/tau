@@ -2750,24 +2750,21 @@ body {
   background: rgba(255, 255, 255, 0.08);
 }
 
-.editor-text-btn,
+/* Document buttons (New/Open/Save/Save .asc) migrated to the §10 Button
+   primitive (components/ui/button.tsx) — .editor-doc-btn remains only as a
+   simulator-mode visibility marker below. The select migrates with the
+   Select primitive later. */
 .example-picker select {
   height: 28px;
   color: var(--text);
-  background: #08080a;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--bg);
+  border: 1px solid var(--border);
   border-radius: 7px;
   font: 500 12px "Space Grotesk", -apple-system, system-ui, sans-serif;
 }
 
-.editor-text-btn {
-  padding: 0 10px;
-  cursor: pointer;
-}
-
-.editor-text-btn:hover,
 .example-picker select:hover {
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--panel-4);
 }
 
 .editor-toolbar-spacer {
@@ -2808,7 +2805,7 @@ body {
   overflow: hidden;
 }
 
-.app-simulator .editor-toolbar .editor-text-btn,
+.app-simulator .editor-toolbar .editor-doc-btn,
 .app-simulator .editor-toolbar .example-picker,
 .app-simulator .editor-toolbar .transport {
   display: none;
@@ -3753,7 +3750,6 @@ body {
 /* interactive completion pass */
 .transport button:disabled,
 .editor-icon-btn:disabled,
-.editor-text-btn:disabled,
 .ask-composer button:disabled {
   cursor: not-allowed;
   opacity: 0.38;
