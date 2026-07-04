@@ -11,7 +11,7 @@
 - **Headline metric:** 1177 tests green (1176 default + sampleHold parity gate)
   · corpus runner: 82 imported / **74 warning-clean** / **82 deck-built (ALL)**
   / 67 op-converged — floors raised to 82/74/82/67
-- **Run started (UTC):** 2026-07-04T04:10Z
+- **Run started (UTC):** 2026-07-04T17:20Z (resuming killed 16:53Z session)
 - **Synced to origin:** auto/ltspice-parity @ 6ee3466
 - **Claimed unit:** §1 warning-clean push — implement the LTspice
   `SpecialFunctions\sample` A-device (SAMPLEHOLD) as a real behavioral
@@ -31,7 +31,8 @@
   spiceNetlist (prefix + case + test), corpus floor 74→75 after re-run proof.
 - **Verify (unit 3):** spec tests; import test; full suite; corpus runner
   proves 75 warning-clean; PLL.asc op via corpus.
-- **Last completed sub-step:** ngspice prototype verified; claiming now.
+- **Last completed sub-step:** modulatorSpec.ts + tests rescued from -wip and
+  cherry-picked (f27a0bd); wiring types/pins/symbols/import/export/netlist next.
 
 ---
 
