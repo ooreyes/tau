@@ -18,15 +18,41 @@
   track-and-hold Tau kind `sampleHold` (rescued claim from the killed
   2026-07-04T09:07Z session, resumed and finished this run).
 - **Claimed unit (2):** §10 debt — migrate `.symbol-preview` (the last
-  hardcoded-color element: cream #e9e6da chip, teal #2a7d7d stroke/label,
-  App.css ~3458-3501) onto tokens: `--accent-soft` surface + hairline
-  `--border` + `--accent` stroke/label + `--muted` hotkey hint, radius
-  `--r-md`. Flagged top §10 debt by the 03:48Z review session.
-- **Status:** IN PROGRESS (unit 1, sampleHold, is DONE and pushed @ 983921f)
-- **Files (unit 2):** apps/desktop/src/App.css only.
-- **Verify (unit 2):** typecheck+suite stay green (CSS-only); STEP 3.5
-  screenshot of the palette symbol-preview chip judged against the dark system.
-- **Last completed sub-step:** unit 1 complete/pushed; unit 2 claimed.
+  hardcoded-color element) onto tokens. Flagged top §10 debt by the 03:48Z
+  review session.
+- **Status:** DONE — chip now derives from `--accent-soft`/`--border`/
+  `--accent`/`--muted`/`--r-md`; screenshot QA confirms it re-themes with the
+  active accent (renders orange under the current theme, matching the system)
+  instead of clashing cream/teal. Suite 1177 green (the unit-1 log said 1176;
+  correct count including the netlist labelCount test is 1177), typecheck clean.
+- **Files (unit 2):** apps/desktop/src/App.css, FEATURE_PARITY.md (§10 debt ✅).
+- **Last completed sub-step:** unit 2 complete; both units pushed.
+
+---
+
+## 2026-07-04T04:55Z — auto/ltspice-parity — §10: symbol-preview chip on tokens (last hardcoded-color element cleared)
+
+### What I did
+Migrated `.symbol-preview` from hardcoded cream `#e9e6da` / teal `#2a7d7d` to
+tokens: `--accent-soft` surface, `--border` hairline, `--accent` stroke+label,
+`--muted` hotkey hint, `--r-md` radius. CSS-only.
+
+### Files touched
+apps/desktop/src/App.css, FEATURE_PARITY.md (§10 debt flipped ✅), PROGRESS.md
+
+### Tests
+1177 passing, typecheck clean (CSS-only change; suite re-run to be sure).
+
+### FEATURE_PARITY items updated
+§10 "Known debt: symbol-preview hardcoded colors" → ✅ cleared.
+
+### UX issues found
+None — screenshot QA (1440×900): the chip re-themes with the active accent
+(orange under the current theme) and finally sits inside the dark system.
+
+### Next step
+Next warning-clean push: MODULATE/PHIDET A-devices (PLL.asc/PLL2.asc), or the
+next §10 panel migration per the FEATURE_PARITY §10 sequence.
 
 ---
 
