@@ -8,27 +8,69 @@
      `git log --oneline -8`, recover/finish/revert that unit FIRST, then go on.
      ─────────────────────────────────────────────────────────────────────── -->
 ## ⏱ HEARTBEAT
-- **Headline metric:** 1132 tests green · corpus runner: 82 imported / 71
+- **Headline metric:** 1156 tests green · corpus runner: 82 imported / 73
   warning-clean / 79 deck-built / 64 op-converged
-- **Run started (UTC):** 2026-07-03T22:30Z (resuming killed 16:50Z session)
-- **Synced to origin:** auto/ltspice-parity @ a70a8da
-- **Claimed unit:** §10 FOUNDATION recovered & landed @ 7c60bed. NOW (unit 2):
-  §1 digital A-device gates — import DIGITAL\{INV,BUF,AND,OR,XOR,SCHMTBUF,
-  SCHMTINV,DFLOP} (8-slot SpiceOrder: 1-5 inputs, 6=_Q, 7=Q, 8=com) + native
-  deck emission: B-source ternaries for combinational/Schmitt (comparatorSpec
-  idiom), XSPICE d_dff for DFLOP (live-verify first). Flips 160.asc (41 warns)
-  + Electrometer → warning-clean 71→73. Side fix: bi2→bsource (Fc 4→1 warns).
-- **Status:** IN PROGRESS (2nd unit this run)
-- **Files (unit 2):** io/ascImport.ts (type map + pin banks), new
-  engine/digitalGateSpec.ts (+test), engine/spiceNetlist.ts, types/catalog/
-  pins/params/symbol wiring (mirroring the comparator kind), corpus floors.
-- **Verify (unit 2):** live ngspice d_dff spike BEFORE coding; unit tests per
-  gate; typecheck+full suite ≥1132; corpus runner import pass shows 73+
-  warning-clean & floors raised.
-- **Last completed sub-step:** rescued wip 189825f cherry-picked (engine/
-  digitalGateSpec.ts + netlist/catalog/pins/symbols/types wiring); typecheck
-  clean, 1132 green. REMAINING: ngspice live spike, ascImport mapping,
-  digitalGateSpec tests, corpus re-run.
+- **Run started (UTC):** 2026-07-04T21:40Z (recovering killed 01:44Z session)
+- **Synced to origin:** auto/ltspice-parity @ 9d1d025
+- **Claimed unit:** §1 digital A-device gates — DONE @ 9d1d025. Recovered the
+  remaining §1 work from -wip 41bedf3 (a clean child of HEAD ab11a3f):
+  ascImport mapping (path-gated Digital\ leafs → digitalGate/dflop, id-mapped
+  pin banks), Schmitt-ternary paren fix, d_dff delay rounding, diagonal-wire
+  netlist fix, bi2→bsource. Re-verified in full, not inherited.
+- **Status:** DONE (unit landed; ready to pick next unit)
+- **Files:** io/ascImport.ts, engine/digitalGateSpec.ts(+test),
+  engine/spiceNetlist.test.ts, io/ascImport.test.ts, schematic/netlist.ts.
+- **Verify:** typecheck clean; 1156 tests green (baseline 1132, +24); corpus
+  runner 82 imported / 73 warning-clean (71→73) / 79 deck-built / 64 op-conv.
+- **Last completed sub-step:** committed 9d1d025, pushed, deleted consumed
+  -wip ref. Next: pick highest-leverage FEATURE_PARITY item (Comparators\*
+  pin banks or §10 panel migration).
+
+---
+
+## 2026-07-04T21:45Z — auto/ltspice-parity — §1 digital A-device gates landed (recovered from wip rescue)
+
+### What I did
+- STEP 0 recovery: found `origin/auto/ltspice-parity-wip` @ 41bedf3, a clean
+  DIRECT child of branch HEAD ab11a3f (merge-base == HEAD == wip-parent). It
+  held the *remaining* §1 digital-gate work the prior heartbeat listed as
+  in-flight (ascImport mapping, digitalGateSpec tests, netlist diagonal fix).
+- Cherry-picked `-n` and **re-verified everything myself** rather than trusting
+  the dead session's claims. Dropped `scripts/dumpDeck.corpus.ts` (a one-off
+  debug dump the author explicitly marked "not committed").
+- Landed: path-gated `Digital\{inv,buf,buf1,and,or,xor,schmitt,schmtbuf,
+  schmtinv}`→`digitalGate` and `dflop`→`dflop`; id-mapped pin banks (each .asy
+  exposes a SUBSET of the 8-slot contract, so mapped by pin id not positional
+  zip); gate function prepended from the symbol leaf; Vhigh/Vlow/Vt/Vhys/Td
+  gathered across all attr fields for parseDigitalGate.
+- Bug fixes carried in the wip: parenthesize the Schmitt ternary `cond`
+  (right-assoc was swallowing `? hi : lo`); round d_dff event delay to kill
+  SI-suffix float noise; classify diagonal wires explicitly in
+  `segmentIntersections` so crossing diagonals don't falsely merge endpoints
+  (Electrometer dflop feedback overpass). `bi2`→`bsource` with its own bank.
+
+### Files touched
+apps/desktop/src/io/ascImport.ts, apps/desktop/src/engine/digitalGateSpec.ts,
+apps/desktop/src/engine/digitalGateSpec.test.ts (new),
+apps/desktop/src/engine/spiceNetlist.test.ts,
+apps/desktop/src/io/ascImport.test.ts, apps/desktop/src/schematic/netlist.ts
+
+### Tests
+1156 passing (baseline 1132, +24 new) — all green. typecheck clean.
+
+### FEATURE_PARITY items updated
+§1 digital A-device gates (INV/BUF/AND/OR/XOR/SCHMT*/DFLOP import + deck) → ✅.
+
+### Corpus (committed runner, actual output)
+82 imported · 73 warning-clean (71→73) · 79 deck-built · 64 op-converged.
+Runner test passes at-or-above recorded baseline.
+
+### UX issues found
+None (no UI change this unit).
+
+### Next step
+Pick highest-leverage next item: Comparators\* pin banks (unblocks ~8 corpus
+files toward Class-D) or one §10 panel migration for the interleave rhythm.
 
 ---
 

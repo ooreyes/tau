@@ -429,8 +429,21 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
     usage (feedback OR open-loop), which is exactly LTspice's behavior. The
     finding below is resolved; the dedicated `comparator` kind remains for
     supply-less comparator symbols.
+  - ✅ **Digital `A`-device gates landed (2026-07-04)** — path-gated
+    `Digital\{inv,buf,buf1,and,or,xor,schmitt,schmtbuf,schmtinv}` import onto a
+    behavioral `digitalGate` kind and `dflop` onto a `dflop` kind
+    (`engine/digitalGateSpec.ts`). Combinational/Schmitt gates emit a B-source
+    ternary per connected output (`V=((cond) ? vhigh : vlow)`, cond
+    parenthesized so the Schmitt sub-ternary doesn't get swallowed by
+    right-associativity); DFLOP emits an XSPICE `adc_bridge → d_dff →
+    dac_bridge` chain at the gate's parsed levels/threshold. Pin banks are
+    id-mapped (each `.asy` exposes a SUBSET of the 8-slot SpiceOrder contract,
+    so mapped by pin id, not positional zip). Diagonal-wire netlist fix so
+    crossing diagonals don't falsely merge (Electrometer dflop feedback
+    overpass). Warning-clean 71→73. 24 tests.
   - **NEXT:** import-map LTspice comparator symbols (`Comparators\\*`) to the
-    comparator kind (none appear in the current corpus); logic gates / `A` devices.
+    comparator kind (none appear in the current corpus); counter/srflop/
+    sample/samplehold digital A-devices still fall through to skip-warnings.
   - **Finding (2026-06-28):** class-d_starter.asc now *builds and runs* its `.tran`
     in ngspice 17 — the comparator U1 imports as the generic `opamp` and emits as
     a gain-1e6 VCVS (`E_U1 … 1e6`). But open-loop it **saturates to ~1e7 V** at
