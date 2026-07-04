@@ -10,24 +10,90 @@
 ## ⏱ HEARTBEAT
 - **Headline metric:** 1164 tests green · corpus runner: 82 imported / 73
   warning-clean / **82 deck-built (ALL)** / 67 op-converged
-- **Run started (UTC):** 2026-07-04T21:40Z (recovered killed 01:44Z session)
-- **Synced to origin:** auto/ltspice-parity @ 86c2b64
-- **Claimed unit:** §1 corpus deck-build closeout — DONE. Landed 4 increments
-  this run: (1) recovered §1 digital A-device gates from -wip 41bedf3
-  (warning-clean 71→73); (2) varistor placeholder high-Z value (deck 79→80);
-  (3) real 4-element crystal BVD model, engine/crystalSpec.ts (Pierce, deck
-  80→81); (4) diac placeholder high-Z + collision-safe instance names (dimmer,
-  deck 81→82). Every corpus file now builds a deck.
-- **Status:** DONE (all 4 increments landed & pushed)
-- **Files:** io/ascImport.ts(+test), engine/digitalGateSpec.ts(+test),
-  engine/crystalSpec.ts(+test), engine/spiceNetlist.ts(+test),
-  schematic/netlist.ts.
-- **Verify:** typecheck clean; 1164 tests green (baseline 1132, +32); corpus
-  runner 82 imported / 73 warning-clean / 82 deck-built / 67 op-converged.
-- **Last completed sub-step:** committed 86c2b64, pushed. Next: warning-clean
-  push toward ≥80 — the 9 non-clean files are library-subcircuit symbols
-  (TowTom2/capmeter/ISO16750-2/ISO7637-2) and stateful SpecialFunctions/Digital
-  A-devices (MODULATE/PHIDET). Or op-convergence on the .sub-missing files.
+- **Run started (UTC):** 2026-07-04T03:45Z
+- **Synced to origin:** auto/ltspice-parity @ dc0c2a0
+- **Claimed unit:** REVIEW SESSION (rotation trigger: 0 `review:` commits in
+  last 30). Correctness review of the 32-commit range `401ede9..HEAD`
+  (corpus runner, Class-D rail-clamped opamp, digital A-device gates, crystal
+  BVD model, placeholder/collision fixes, SPICE M=milli suffix semantics,
+  Tailwind/shadcn §10 foundation) + 3-screen UI/UX audit.
+- **Status:** DONE — VERDICT: diff clean, no correctness bugs found; UI
+  coherent. One §10 debt logged (see below). No code changes needed.
+- **Files:** PROGRESS.md, FEATURE_PARITY.md (audit note only).
+- **Verify:** typecheck clean; 1164 tests green; screenshot audit of empty
+  state / loaded RC schematic / simulator scope — all render dense + coherent.
+- **Last completed sub-step:** review verdict written. Next (features resume):
+  warning-clean push toward ≥80 — the 9 non-clean files are library-subcircuit
+  symbols (TowTom2/capmeter/ISO16750-2/ISO7637-2 — need `.asy` Prefix X →
+  subcircuit-instance path) and stateful A-devices (MODULATE/PHIDET).
+
+---
+
+## 2026-07-04T03:48Z — auto/ltspice-parity — REVIEW SESSION: 32-commit correctness pass + 3-screen UI/UX audit
+
+### Why a review session
+`git log --oneline -30 | grep -c "^\w* review:"` → 0. Per AGENTS.md review
+rotation, no new features this run. Reviewed everything since the last
+`review:` commit (`401ede9`) — 32 commits.
+
+### (a) Correctness review of the diff — VERDICT: clean, nothing to fix
+Read the substantive engine/parsing changes line-by-line:
+- **engine/crystalSpec.ts** (BVD crystal) — inert defaults for malformed fields,
+  namespaced internal nodes, Rser=0/Cpar=0 collapse handled. Sound.
+- **engine/digitalGateSpec.ts** (digital A-devices) — B-source ternary emission,
+  Schmitt self-referential state read, DFLOP adc/d_dff/dac bridge chain with a
+  ≥1 ns event-queue delay floor. The XOR ">2 inputs = exactly one true" gap is
+  documented (matches classic XOR at 2 inputs); acceptable. `com` reference is
+  applied consistently to inputs and level-shift. Sound.
+- **engine/opampSpec.ts** (rail-clamped tanh opamp) — verified small-signal gain
+  = Avol exactly (d/dx of Vhalf·tanh(Avol·Vd/Vhalf) at 0 = Avol); 0.5 V divisor
+  guard rationale (source-stepping stability) is documented and empirically
+  justified. Sound.
+- **engine/spiceNetlist.ts** — collision-safe instance name (`${p}${label}`
+  instead of colliding `${p}${index+1}`), driven-supply detection for the
+  clamped opamp swap, digitalGate/dflop emission gated on connected pins. Sound.
+- **quantity.ts / engineering.ts** — SPICE M=milli suffix semantics unified
+  through one authority; `meg`/`mil` longest-match, µ (U+00B5) + μ (U+03BC) both
+  accepted, `formatEngineering` emits `Meg`. Round-trip-safe. Sound.
+- **schematic/netlist.ts** — the diagonal-wire `segmentIntersections`
+  reclassification (explicit H/V tests instead of `!vertical`) is a genuine
+  correctness FIX preventing false endpoint-merges of crossing diagonals;
+  `netAtPoint` probe resolution is correct (segment endpoints are DSU points).
+- **store/useSchematic.ts** — probe/label toggles guard against empty undo-history
+  entries; current-probe keyed by componentId, distinct from point probes. Sound.
+
+No solver/netlist edge-case bugs, unit-handling bugs, or re-render hot paths
+found. The range is well-tested (+32 tests, 1132→1164) and carefully commented.
+
+### (b) UI/UX audit (STEP 3.5 screenshot pipeline, 1440×900)
+Screenshotted and read: empty state, loaded RC schematic (V1/R1/C1/gnd), and
+the simulator transient scope. All three are dense, aligned, dark-coherent,
+with clear intentional empty states and a full LTspice keyboard-hint status bar
+(R C L V I A G place · W wire · F4 label · rotate · mirror). A picky reviewer
+would pass these screens.
+
+### UX debt (logged, not fixed — belongs to the §10 migration)
+- **`.symbol-preview` card uses hardcoded colors** (`#e9e6da` cream fill,
+  `#2a7d7d` teal stroke/label, `App.css:3478/3487/3491/3499`). It is the single
+  element that clashes with the dark §10 design system, and it violates the
+  project's no-hardcoded-colors convention. It's a deliberate "silkscreen chip"
+  aesthetic, so restyling is a §10 design decision — the §10 panel migration
+  should map it to `tokens.css` surface/accent vars rather than a drive-by
+  restyle mid-migration. **Top item for the next §10 pass.**
+
+### Files touched
+PROGRESS.md, FEATURE_PARITY.md (audit note).
+
+### Tests
+1164 passing, typecheck clean — no code changes, baseline held.
+
+### FEATURE_PARITY items updated
+§10 note: symbol-preview hardcoded-color migration flagged as top debt.
+
+### Next step
+Features resume next session: warning-clean push toward ≥80 via the
+library-subcircuit-symbol (`.asy` Prefix X → subcircuit instance) path — unblocks
+TowTom2/capmeter/ISO16750-2/ISO7637-2 (4 files) in one mechanism.
 
 ---
 

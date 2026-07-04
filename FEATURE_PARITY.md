@@ -1003,6 +1003,10 @@ never a broken intermediate state on the branch.
   window size AND ~1280×720 (known problem sizes from review).
 - ⬜ **Sweep:** delete dead App.css rules as panels migrate; final pass
   removes any remaining hardcoded colors (grep gate: no hex literals in TSX).
+  - 🟡 **Known debt (review 2026-07-04):** `.symbol-preview` card
+    (`App.css:3478/3487/3491/3499`) hardcodes `#e9e6da` cream fill + `#2a7d7d`
+    teal — the one element that clashes with the dark system. Map to
+    `tokens.css` surface/accent vars during the part-palette panel migration.
 
 ---
 
