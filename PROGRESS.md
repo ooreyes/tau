@@ -8,46 +8,67 @@
      `git log --oneline -8`, recover/finish/revert that unit FIRST, then go on.
      ─────────────────────────────────────────────────────────────────────── -->
 ## ⏱ HEARTBEAT
-- **Headline metric:** 1227 tests green (default suite) + 5 corpus specs
+- **Headline metric:** 1240 tests green (default suite) + 5 corpus specs
   · corpus runner: 82 imported / **79 warning-clean** / **82 deck-built (ALL)**
-  / **78 op-converged** — floors 82/79/82/78
-- **Run started (UTC):** 2026-07-05T12:00Z
-- **Synced to origin:** auto/ltspice-parity @ 101ad28 + recovered wip f6fba33
-  (previous session killed mid-unit; checkpoint cherry-picked, re-verified:
-  typecheck clean, 1219 passing, corpus 82/79/82/72)
-- **Unit 1 (DONE):** library-subcircuit `.asy` Prefix X import path (§1) —
-  new `subckt` kind; TowTom2/capmeter/ISO16750-2/ISO7637-2 import as real
-  subcircuit instances. Warning-clean 75→79, op-converged 69→72.
-- **Unit 2 (DONE):** bundled `opamp.sub` + mapped `Opamps\opamp` to the subckt
-  kind (SpiceOrder invin-first) — opamp.asc/logamp.asc op-converge, 72→74.
-- **Unit 3 (DONE):** inductor-loop singular matrices (§1/§7) — default
-  `rseries=1e-3` in DEFAULT_OPTIONS (spiceOptions.ts), matching LTspice's
-  documented 1 mΩ inductor Rser default. Cohn/passive/varactor2 op-converge;
-  corpus 74→77, zero regressions (Class-D + sample-hold parity specs green).
-- **Unit 4 (DONE):** Fc.asc `{param}` in `.model` passthrough (§1) — lenient
-  `substituteKnownBraces` in paramScope.ts, applied at deck build to
-  passthrough model/lib lines outside `.subckt` bodies. Fc op-converges;
-  corpus 77→78, zero regressions.
-- **Unit 5 (DONE):** §10 toolbar/topbar migration — title-run + settings-btn
-  onto the Button primitive (new `icon-sm` 28px size), topbar CSS block
-  tokenized (mode-btn.active/live-pill/brand/toolbar now use
-  `--accent`/`--cream`/`--trace-green`/`--panel-*` instead of hardcoded hex),
-  new `--color-success` token, dead `.title-run`/`.settings-btn` rules
-  removed. Recovered from wip checkpoint cf67322 (session killed mid-unit),
-  finished + screenshot-verified at 1440×900. 1227 tests green.
-- **Unit 6 (IN PROGRESS):** §1 multiline-TEXT directive handling — root cause
-  of 3 of the 4 remaining op failures: SoftDiodeRecovery drops `.model X`
-  sharing a TEXT block with `.tran`; P2 drops `+ L6 L7 1` continuation of
-  `K1`; UHFpreamp likely drops its MRF901 `.subckt` block. Fix directive
-  splitting/passthrough so non-analysis lines and `+` continuations inside a
-  TEXT block survive op-deck builds.
-  - Files: io/ascImport.ts and/or engine/spiceNetlist.ts (+tests), corpus floor.
-  - Verify: dumpDeck shows the lines; corpus op-converged 78→(79-81).
-  - Last completed sub-step: root-cause via new scripts/dumpDeck.corpus.ts.
-- **Status:** IN PROGRESS
-- NOTE (carried): one transient full-suite failure was observed once
-  (1194/1195) between two clean 1195 runs — not reproduced; watch for a
-  flaky sim-timing test. (2026-07-05: full suite ran clean at 1219.)
+  / **81 op-converged** — floors 82/79/82/81
+- **Run started (UTC):** 2026-07-05T21:15Z
+- **Synced to origin:** auto/ltspice-parity @ 7fc06aa (recovered wip 2d2c34a
+  from the killed previous session, cherry-picked, finished, squashed into
+  7fc06aa; `auto/ltspice-parity-wip` deleted)
+- **Unit 6 (DONE):** §1 multiline-TEXT directive parity — per-physical-line
+  keyword dispatch in modelDirectives (mixed-kind TEXT blocks, `.subckt`
+  nesting, `+` continuations follow their line's keep/skip), `+` folding in
+  expandDirectiveLines (P2's K1), `type=silicon`/`mfg=` strip on diode
+  models, Q-on-subckt → X rewrite (UHFpreamp MRF901), and transformLtPoint
+  Mn = rotate-then-mirror (LoopGain2). Corpus op-converged 78→**81**;
+  only logamp (ngspice timeout) remains. 1240 tests green.
+- **Status:** DONE
+- NOTE (carried): transient single-test flake seen again this session (one
+  red run between two clean 1240 runs, name not captured — grep filter ate
+  it). Next time capture the failing test name before re-running.
+
+---
+
+## 2026-07-05T21:30Z — auto/ltspice-parity — §1: multiline-TEXT directive parity, corpus op 78→81
+
+### What I did
+- **Recovered the killed session's checkpoint** (`2d2c34a` on the wip ref):
+  per-line dispatch in `modelLibLinesFromDirectives`, `+` folding in
+  `expandDirectiveLines`, `transformLtPoint` Mn = rotate-then-mirror. Verified
+  (typecheck clean, suite green, corpus 78→79) and finished the unit.
+- **`type=silicon` strip**: LTspice diode models carry word-valued
+  informational params (`type=`, `mfg=`) that ngspice evaluates as expressions
+  and dies on ("Undefined parameter [silicon]", P2.asc). Stripped on
+  `.model … D(…)` passthrough lines only; numeric informational params left
+  alone (they only warn).
+- **Q-on-subckt → X rewrite**: LTspice lets a BJT's Value name a `.subckt`
+  (UHFpreamp's MRF901 macromodel) and silently netlists it as an X instance
+  with the same C-B-E node order; ngspice's Q line fails with "could not find
+  a valid modelname". New `definedSubcktNames()`; npn/pnp emission checks
+  document + inlined-bundled subckt names.
+- Corpus floors raised 82/79/82/78 → 82/79/82/**81** in
+  acceptanceCorpus.corpus.ts; both fixed decks verified directly with
+  `ngspice -b` (clean op solve).
+
+### Files touched
+engine/modelDirectives.ts(+test), engine/spiceNetlist.ts(+test),
+simulation/paramScope.ts(+test), io/ascImport.ts,
+scripts/acceptanceCorpus.corpus.ts, PROGRESS.md
+
+### Tests
+1240 passing (13 new) — green twice consecutively; typecheck clean; corpus
+82/82 imported, 79 warning-clean, 82 deck-built, 81 op-converged.
+
+### FEATURE_PARITY items updated
+§1 corpus row refreshed (op-converged 78→81; only logamp timeout remains).
+
+### UX issues found
+none (engine-only unit)
+
+### Next step
+Root-cause logamp.asc's ngspice op timeout (last non-converging corpus file) —
+likely the bundled opamp.sub macromodel oscillating in the log feedback loop;
+try .options itl1 bump or gmin stepping on that deck.
 
 ---
 

@@ -926,7 +926,7 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
     number, not an eyeball. `interpolateAt`/`resampleOnto` exported for the
     `.raw` scope overlay. 10 unit tests. (Still ⬜: actually tuning ngspice
     defaults so the verdict passes across the deck suite.)
-- 🟡 **Real-`.asc` op-deck *run* now 78/82** (was 45/82 when first measured this
+- 🟡 **Real-`.asc` op-deck *run* now 81/82** (was 45/82 when first measured this
   session) — i.e. how many acceptance decks ngspice actually solves an operating
   point for, not just builds. Driven up by: a **default `rshunt=1e12`** (every node
   gets a DC path — 19 op-amp/AC-coupled circuits stopped throwing "singular
@@ -943,9 +943,11 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   document `.param`s are consumed into Tau's scope, so braces on passthrough
   lines must be resolved at deck build; subckt bodies stay verbatim).
   The 4 that still don't run: ~~PLL/PLL2 use LTspice's `rand()`~~ (fixed
-  2026-07-04: statFuncsToNgspice surrogate — both converge), SoftDiodeRecovery a
-  proprietary diode `Vp` param, UHFpreamp an unbundled `mrf901`, plus two deep
-  loop-probe/connectivity cases (LoopGain2 shorted-VSRC, P2).
+  2026-07-04: statFuncsToNgspice surrogate — both converge),
+  ~~SoftDiodeRecovery/P2/UHFpreamp/LoopGain2~~ (fixed 2026-07-05: per-line
+  TEXT-block dispatch + `+` continuation folding + `type=silicon` strip +
+  Q-on-subckt → X rewrite + Mn rotate-then-mirror orientation). Sole remaining
+  op failure: **logamp** (ngspice op timeout — log-loop macromodel).
 - ✅ **Class-D fidelity — the flagship circuit now SIMULATES correctly
   (2026-07-03), proven by a committed runner** (`scripts/classdParity.corpus.ts`,
   runs with `scripts/acceptance-corpus.sh`). Two fixes:
@@ -1081,9 +1083,8 @@ should map LTspice symbol `type` → Tau `ComponentKind`, falling back to a gene
 
 _This footer is intentionally not a live status line — see the `PROGRESS.md`
 heartbeat for the current test count and active unit. Deck-build is 82/82;
-warning-clean is 79/82 and op-run 78/82 after the library-subcircuit
-`Prefix X` path, bundled opamp.sub, the LTspice-default rseries=1mΩ, and
-passthrough-`.model` `{param}` substitution landed (2026-07-05). Next
-highest-leverage work toward the DoD ≥80/82 warning-clean: the remaining
-stateful Digital A-device (PHIDET), and the misc\nigbt / LT1184F symbols;
-for op-run: LoopGain2's shorted-VSRC probe and P2._
+warning-clean is 79/82 and op-run 81/82 after multiline-TEXT directive parity
+(per-line dispatch, `+` folding, `type=` strip, Q-on-subckt → X) landed
+(2026-07-05). Next highest-leverage work toward the DoD ≥80/82 warning-clean:
+the remaining stateful Digital A-device (PHIDET), and the misc\nigbt /
+LT1184F symbols; for op-run: logamp's ngspice timeout._
