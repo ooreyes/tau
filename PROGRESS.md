@@ -8,9 +8,9 @@
      `git log --oneline -8`, recover/finish/revert that unit FIRST, then go on.
      ─────────────────────────────────────────────────────────────────────── -->
 ## ⏱ HEARTBEAT
-- **Headline metric:** 1240 tests green (default suite) + 5 corpus specs
+- **Headline metric:** 1241 tests green (default suite) + 5 corpus specs
   · corpus runner: 82 imported / **79 warning-clean** / **82 deck-built (ALL)**
-  / **81 op-converged** — floors 82/79/82/81
+  / **82 op-converged (ALL)** — floors 82/79/82/82
 - **Run started (UTC):** 2026-07-05T21:15Z
 - **Synced to origin:** auto/ltspice-parity @ 7fc06aa (recovered wip 2d2c34a
   from the killed previous session, cherry-picked, finished, squashed into
@@ -22,18 +22,57 @@
   models, Q-on-subckt → X rewrite (UHFpreamp MRF901), and transformLtPoint
   Mn = rotate-then-mirror (LoopGain2). Corpus op-converged 78→**81**;
   only logamp (ngspice timeout) remains. 1240 tests green.
-- **Unit 7 (IN PROGRESS):** logamp.asc ngspice op timeout (§1/§7) — the last
-  non-converging corpus file. Suspect the bundled opamp.sub macromodel in the
-  log feedback loop needs convergence aid (gmin stepping/itl1/src-stepping) or
-  the deck needs LTspice-style .op fallback behavior.
-  - Files: engine/spiceOptions.ts or spiceNetlist.ts analysis emission (+test),
-    corpus floor 81→82 if it converges.
-  - Verify: ngspice -b on dumped logamp deck; corpus runner re-run.
-  - Last completed sub-step: none (just claimed).
-- **Status:** IN PROGRESS
+- **Unit 7 (DONE):** logamp op timeout root-caused to **imported
+  current-source polarity** — LTspice's `−` pin (where the arrow points,
+  where current exits) must zip onto Tau's p because isource emission swaps
+  to `I n p`; the identity zip ran every imported I source backwards.
+  logamp's M180 I1 starved its bias node (−2.6e4 V via rshunt) and gmin
+  stepping hung. Fixed in LTSPICE_PINS (+`bcurrent` row so bi keeps identity),
+  end-to-end polarity regression test. **Corpus op-converged 82/82 (ALL).**
+- **Status:** DONE
 - NOTE (carried): transient single-test flake seen again this session (one
   red run between two clean 1240 runs, name not captured — grep filter ate
   it). Next time capture the failing test name before re-running.
+
+---
+
+## 2026-07-05T21:50Z — auto/ltspice-parity — §1/§7: current-source polarity fix, corpus op 82/82 (ALL)
+
+### What I did
+- Root-caused logamp's ngspice op timeout: not a convergence-aid problem —
+  **every imported current source ran backwards**. LTspice's current.asy has
+  N+ at (0,0) and the arrow toward `−` (0,80); LTspice netlists `I N+ N−`
+  (current exits `−`). Tau's isource deck emission swaps to `I n p`, so the
+  identity pin zip reversed the sign. logamp's I1 (M180) pulled its 100µA
+  bias OUT of n003 → the node floated to −2.6e4 V through rshunt and
+  `.op` hung in gmin stepping.
+- Fix: `LTSPICE_PINS.current` zips `−`→p / `+`→n; `bi` (behavioral current,
+  emitted `B p n` verbatim — no swap) keeps the identity zip via a new
+  `bcurrent` row.
+- End-to-end regression test: minimal `.asc` import → deck must carry
+  LTspice's own `I1 <top> <bottom>` node order.
+- Verified logamp solves instantly with the physically correct bias
+  (V(out)=1.95 V, n003 = Vbe above the opamp output); corpus floors raised to
+  82/79/82/**82** — every corpus file now op-converges. Class-D + sample-hold
+  numerical parity specs unaffected (green).
+
+### Files touched
+io/ascImport.ts(+test), scripts/acceptanceCorpus.corpus.ts, PROGRESS.md,
+FEATURE_PARITY.md
+
+### Tests
+1241 passing (1 new) — green; typecheck clean; corpus 82/82/79/82/82.
+
+### FEATURE_PARITY items updated
+§1 op-run row: 81→82 (ALL). Op-convergence across the corpus is complete.
+
+### UX issues found
+none (engine-only unit)
+
+### Next step
+Warning-clean 79→≥80 (DoD gate): the misc\nigbt and POWERPRODUCTS\LT1184F
+symbols, or PLL2's stateful PHIDET A-device; alternatively next §10 panel
+migration (sidebar/component panel) — check review rotation first.
 
 ---
 
