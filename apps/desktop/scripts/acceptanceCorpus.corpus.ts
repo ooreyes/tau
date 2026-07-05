@@ -153,21 +153,22 @@ describe.skipIf(corpus.length === 0)("acceptance corpus (user's own LTspice file
       if (skipNgspice) console.log("(ngspice runs skipped — CORPUS_SKIP_NGSPICE or ngspice not installed)");
 
       // Floors = the counts this runner actually measured on 2026-07-05
-      // (82/79/82/78) — never hand-typed claims; this runner once disproved
+      // (82/79/82/81) — never hand-typed claims; this runner once disproved
       // those (deck-built claimed 82, measured 79). Raise a floor only when a
       // re-run proves the new count. The 3 non-clean files are misc\nigbt,
       // POWERPRODUCTS\LT1184F, and PLL2's PHIDET A-device. Converge fixes on
       // 2026-07-05: opamp/logamp (bundled opamp.sub), Cohn/passive/varactor2
       // (default rseries=1mΩ), Fc ({param} substitution on passthrough
-      // .model lines). The 4 remaining op failures: LoopGain2 (shorted-VSRC
-      // probe), P2, SoftDiodeRecovery (proprietary diode Vp), UHFpreamp
-      // (unbundled mrf901).
+      // .model lines), LoopGain2 (Mn orientation = rotate-then-mirror),
+      // SoftDiodeRecovery+P2+UHFpreamp (per-line TEXT-block dispatch,
+      // continuation folding, type=silicon strip, Q-on-subckt → X rewrite).
+      // The 1 remaining op failure: logamp (ngspice timeout).
       // Only enforced on the canonical corpus (CORPUS_ALL covers unvetted files).
       if (process.env.CORPUS_ALL !== "1") {
         expect(summary.imported).toBeGreaterThanOrEqual(82);
         expect(summary.warningClean).toBeGreaterThanOrEqual(79);
         expect(summary.deckBuilt).toBeGreaterThanOrEqual(82);
-        if (!skipNgspice) expect(summary.opConverged).toBeGreaterThanOrEqual(78);
+        if (!skipNgspice) expect(summary.opConverged).toBeGreaterThanOrEqual(81);
       }
     } finally {
       rmSync(tmpDir, { recursive: true, force: true });

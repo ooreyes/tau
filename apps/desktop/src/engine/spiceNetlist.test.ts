@@ -437,6 +437,22 @@ describe("buildSpiceDeck", () => {
     expect(deck.netlist).not.toContain("XYZ999");
   });
 
+  it("emits a BJT whose Value names a document .subckt as an X instance (UHFpreamp MRF901)", () => {
+    const components = [
+      component("npn", "Q1", "MRF901", 0, 0),
+      component("ground", "", "", -32, 64),
+    ];
+    const directives = [
+      ".subckt MRF901 1 2 3\\nLc 1 4 0.451n\\nQA 4 2 3 QR99\\n.model QR99 NPN(BF=88)\\n.ends MRF901",
+    ];
+    const deck = buildSpiceDeck({ components, wires: [], directives }, { kind: "op" });
+    // LTspice silently netlists a subckt-valued Q as an X with the same C B E
+    // node order; a Q line would make ngspice fail with "could not find a
+    // valid modelname".
+    expect(deck.netlist).toMatch(/^XQ1 n\d+ n\d+ n\d+ MRF901$/m);
+    expect(deck.netlist).not.toMatch(/^Q1 /m);
+  });
+
   it("exports every remaining starter-library symbol to an ngspice primitive", () => {
     const components = [
       component("diode", "D1", "D", 0, 0),

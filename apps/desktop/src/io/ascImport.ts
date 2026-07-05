@@ -629,23 +629,31 @@ export const LTSPICE_PINS: Record<string, LtPin[]> = {
 };
 
 /** Apply an LTspice orientation to a symbol-local point (LTspice screen Y is
- *  down; rotations are clockwise; M* mirrors across the vertical axis first). */
+ *  down; rotations are clockwise; `Mn` rotates by n first, THEN mirrors across
+ *  the vertical axis). Mirror-then-rotate agrees for M0/M180 (mirror commutes
+ *  with a 180° turn) but silently swaps the sign for M90/M270 — proven wrong
+ *  against real wire geometry: LoopGain2's `voltage` probe at M270 must put
+ *  pin (0,16) at (-16,0) onto its feed wire (the old (+16,0) landed both pins
+ *  inside the same net segment → "shorted VSRC"), and P2's M270 caps floated. */
 export function transformLtPoint(dx: number, dy: number, orientation: AscOrientation): { x: number; y: number } {
-  const mirrored = orientation.startsWith("M");
-  const mx = mirrored ? -dx : dx;
   const z = (n: number) => (n === 0 ? 0 : n); // normalize -0 → 0
   switch (orientation) {
     case "R90":
+      return { x: z(-dy), y: z(dx) };
     case "M90":
-      return { x: z(-dy), y: z(mx) };
+      return { x: z(dy), y: z(dx) };
     case "R180":
+      return { x: z(-dx), y: z(-dy) };
     case "M180":
-      return { x: z(-mx), y: z(-dy) };
+      return { x: z(dx), y: z(-dy) };
     case "R270":
+      return { x: z(dy), y: z(-dx) };
     case "M270":
-      return { x: z(dy), y: z(-mx) };
+      return { x: z(-dy), y: z(-dx) };
+    case "M0":
+      return { x: z(-dx), y: z(dy) };
     default:
-      return { x: z(mx), y: z(dy) };
+      return { x: z(dx), y: z(dy) };
   }
 }
 

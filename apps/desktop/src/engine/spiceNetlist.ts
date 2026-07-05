@@ -14,7 +14,7 @@ import { sampleHoldDeckLines } from "./sampleHoldSpec";
 import { parseModulator, modulatorDeckLines } from "./modulatorSpec";
 import { parseOpampAvol, railClampedOpampLine } from "./opampSpec";
 import { optionsLineFromDirectives } from "./spiceOptions";
-import { modelLibLinesFromDirectives, definedModelNames, definedModelTypes } from "./modelDirectives";
+import { modelLibLinesFromDirectives, definedModelNames, definedModelTypes, definedSubcktNames } from "./modelDirectives";
 import { couplingLinesFromDirectives } from "./couplingDirectives";
 import { laplaceTransfer, laplaceSourceLines } from "./laplace";
 import { coreInductance } from "./coreInductor";
@@ -216,15 +216,21 @@ export function buildSpiceDeck(schematic: Schematic, analysis: SpiceAnalysis): S
     circuit.nets.map((net) => [net.id, net.pins.length + (net.labelCount > 0 ? 1 : 0)]),
   );
 
+  // Names a BJT's Value may reference that are actually `.subckt`s (document
+  // passthrough or an inlined bundled library): LTspice netlists such a device
+  // as an X instance with the same node order; ngspice's Q line would die with
+  // "could not find a valid modelname" (UHFpreamp's MRF901).
+  const subcktModels = new Set([...definedSubcktNames(rawDirectives), ...inlinedSubckts]);
+
   circuit.components.forEach((entry, index) => {
-    lines.push(...componentLines(entry, index, knownModels, schematic.params ?? EMPTY_SCOPE, vdmosModels, netPinCount));
+    lines.push(...componentLines(entry, index, knownModels, schematic.params ?? EMPTY_SCOPE, vdmosModels, netPinCount, subcktModels));
   });
   lines.push(analysisLine(analysis, hasIc || hasInstanceIc), ".end");
 
   return { circuit, netlist: lines.join("\n") };
 }
 
-function componentLines(entry: ExtractedComponent, index: number, userModels: Set<string> = new Set(), params: ParamScope = EMPTY_SCOPE, vdmosModels: ReadonlySet<string> = new Set(), netPinCount: ReadonlyMap<string, number> = new Map()): string[] {
+function componentLines(entry: ExtractedComponent, index: number, userModels: Set<string> = new Set(), params: ParamScope = EMPTY_SCOPE, vdmosModels: ReadonlySet<string> = new Set(), netPinCount: ReadonlyMap<string, number> = new Map(), subcktModels: ReadonlySet<string> = new Set()): string[] {
   const { component } = entry;
   const name = instanceName(component, index);
   const node = (pin: string) => requiredNode(entry, pin);
@@ -332,9 +338,16 @@ function componentLines(entry: ExtractedComponent, index: number, userModels: Se
     case "pjf":
       return [`${name} ${node("d")} ${node("g")} ${node("s")} ${deviceModel("TAU_PJF")}`];
     case "npn":
-      return [`${name} ${node("c")} ${node("b")} ${node("e")} ${deviceModel("TAU_NPN")}`];
-    case "pnp":
-      return [`${name} ${node("c")} ${node("b")} ${node("e")} ${deviceModel("TAU_PNP")}`];
+    case "pnp": {
+      // LTspice lets a BJT's Value name a `.subckt` (UHFpreamp's MRF901 macro-
+      // model) and silently emits an X instance with the same C B E node order;
+      // ngspice's Q line rejects a subckt name, so mirror that rewrite here.
+      const named = component.value.trim().split(/\s+/)[0] ?? "";
+      if (named && subcktModels.has(named.toLowerCase())) {
+        return [`X${name} ${node("c")} ${node("b")} ${node("e")} ${named}`];
+      }
+      return [`${name} ${node("c")} ${node("b")} ${node("e")} ${deviceModel(component.kind === "npn" ? "TAU_NPN" : "TAU_PNP")}`];
+    }
     case "opamp": {
       const base = safeName(component.label || `U${index + 1}`);
       // When both supply pins are actually driven (on the ground net or a net

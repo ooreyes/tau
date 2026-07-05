@@ -95,7 +95,15 @@ export function expandDirectiveLines(directives: string[]): string[] {
     for (const physical of raw.replace(/\\n/g, "\n").split("\n")) {
       const semi = physical.indexOf(";");
       const line = (semi >= 0 ? physical.slice(0, semi) : physical).trim();
-      if (line) out.push(line);
+      if (!line) continue;
+      // A leading `+` is SPICE line continuation (P2's `K1 L4 L5\n+ L6 L7 1`):
+      // fold it into the previous directive so single-line consumers see the
+      // whole logical line instead of a truncated one plus an orphan.
+      if (line.startsWith("+") && out.length > 0) {
+        out[out.length - 1] += ` ${line.slice(1).trim()}`;
+      } else {
+        out.push(line);
+      }
     }
   }
   return out;

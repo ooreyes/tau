@@ -2,11 +2,39 @@ import { describe, it, expect } from "vitest";
 import {
   buildParamScope,
   evaluateValueExpr,
+  expandDirectiveLines,
   parseParamAssignments,
   parseFuncDirective,
   isExpression,
   substituteKnownBraces,
 } from "./paramScope";
+
+describe("expandDirectiveLines", () => {
+  it("splits a multi-line TEXT block on the literal \\n escape", () => {
+    expect(expandDirectiveLines([".param x=1\\n.param y=2"])).toEqual([".param x=1", ".param y=2"]);
+  });
+
+  it("strips trailing ; comments and drops blank lines", () => {
+    expect(expandDirectiveLines([".tran 1m ; run it\\n \\n.ic v(out)=0"])).toEqual([
+      ".tran 1m",
+      ".ic v(out)=0",
+    ]);
+  });
+
+  it("folds a + continuation into the previous line (P2's K coupling)", () => {
+    expect(expandDirectiveLines(["K1 L4 L5\\n+ L6 L7 1"])).toEqual(["K1 L4 L5 L6 L7 1"]);
+  });
+
+  it("folds multiple consecutive continuations", () => {
+    expect(expandDirectiveLines([".model M NPN(Bf=10\\n+ Vaf=100\\n+ Cje=1p)"])).toEqual([
+      ".model M NPN(Bf=10 Vaf=100 Cje=1p)",
+    ]);
+  });
+
+  it("keeps an orphan leading + verbatim when there is nothing to continue", () => {
+    expect(expandDirectiveLines(["+ L6 L7 1"])).toEqual(["+ L6 L7 1"]);
+  });
+});
 
 describe("parseParamAssignments", () => {
   it("parses a single assignment", () => {

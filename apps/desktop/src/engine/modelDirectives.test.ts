@@ -80,9 +80,74 @@ describe("modelLibLinesFromDirectives", () => {
     expect(modelLibLinesFromDirectives([])).toEqual([]);
   });
 
+  it("keeps a .model that shares a TEXT block with analysis lines (SoftDiodeRecovery)", () => {
+    const block = ".tran 0 60u\\n.model X D(Rs=0 Is=1e-10 tt=3u Vp={Vp} Cjo=10n)\\n.step param Vp list 0 .2 .4";
+    expect(modelLibLinesFromDirectives([block])).toEqual([
+      ".model X D(Rs=0 Is=1e-10 tt=3u Vp={Vp} Cjo=10n)",
+    ]);
+  });
+
+  it("does not leak analysis lines out of a model-led block", () => {
+    expect(modelLibLinesFromDirectives([".model A NPN(Bf=1)\\n.tran 1m"])).toEqual([
+      ".model A NPN(Bf=1)",
+    ]);
+  });
+
+  it("finds a .subckt block opened by * comment lines (UHFpreamp's MRF901)", () => {
+    const block =
+      "* Model Copyright 1991\\n* Courtesy of someone\\n.subckt MRF901 1 2 3\\nLc 1 4 0.451n\\nQ1 4 6 5 QR99\\n.model QR99 NPN(BF=88 VAF=120\\n+ ITF=.02 VTF=4.95)\\n.ends MRF901";
+    expect(modelLibLinesFromDirectives([block])).toEqual([
+      ".subckt MRF901 1 2 3",
+      "Lc 1 4 0.451n",
+      "Q1 4 6 5 QR99",
+      ".model QR99 NPN(BF=88 VAF=120",
+      "+ ITF=.02 VTF=4.95)",
+      ".ends MRF901",
+    ]);
+  });
+
+  it("keeps + continuations of an emitted .model, drops those of a skipped line", () => {
+    expect(
+      modelLibLinesFromDirectives([
+        ".model 2N344 PNP(Is=1e-10 bf=11\\n+ Eg=.67 Rb=100 Re=10)",
+        ".tran 1m\\n+ 2m",
+      ]),
+    ).toEqual([".model 2N344 PNP(Is=1e-10 bf=11", "+ Eg=.67 Rb=100 Re=10)"]);
+  });
+
+  it("tracks nested .subckt blocks to the outer .ends", () => {
+    const block = ".subckt outer a b\\n.subckt inner c d\\nR1 c d 1k\\n.ends inner\\nX1 a b inner\\n.ends outer\\n.tran 1m";
+    expect(modelLibLinesFromDirectives([block])).toEqual([
+      ".subckt outer a b",
+      ".subckt inner c d",
+      "R1 c d 1k",
+      ".ends inner",
+      "X1 a b inner",
+      ".ends outer",
+    ]);
+  });
+
   it("does not treat a node named 'model...' in another directive as a block", () => {
     // .meas keyword is not a block kind even though a token contains 'model'.
     expect(modelLibLinesFromDirectives([".meas tran x FIND V(modelnode) AT=1m"])).toEqual([]);
+  });
+
+  it("strips word-valued informational diode params ngspice rejects (P2's type=silicon)", () => {
+    expect(modelLibLinesFromDirectives([".model 1N484 D(Rs=3 Cjo=4p type=silicon)"])).toEqual([
+      ".model 1N484 D(Rs=3 Cjo=4p)",
+    ]);
+    expect(modelLibLinesFromDirectives([".model DX D(type=germanium mfg=OnSemi Is=1n)"])).toEqual([
+      ".model DX D(Is=1n)",
+    ]);
+  });
+
+  it("leaves non-diode models and numeric diode params alone", () => {
+    expect(modelLibLinesFromDirectives([".model M NPN(Bf=10 mfg=X)"])).toEqual([
+      ".model M NPN(Bf=10 mfg=X)",
+    ]);
+    expect(modelLibLinesFromDirectives([".model D1 D(Is=1n Vpk=30)"])).toEqual([
+      ".model D1 D(Is=1n Vpk=30)",
+    ]);
   });
 });
 
