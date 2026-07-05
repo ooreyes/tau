@@ -10,26 +10,27 @@
 ## ⏱ HEARTBEAT
 - **Headline metric:** 1195 tests green (default suite) + 5 corpus specs
   · corpus runner: 82 imported / **75 warning-clean** / **82 deck-built (ALL)**
-  / **69 op-converged** — floors raised to 82/75/82/69
-- **Run started (UTC):** 2026-07-04T17:35Z (resumed the modulator unit claimed
-  by the killed 16:53Z session)
-- **Synced to origin:** auto/ltspice-parity @ 2c55316
-- **Unit 1 (DONE @ cd4fe93):** `modulator` kind — SpecialFunctions\MODULATE
-  behavioral VCO, end-to-end, live-verified, PLL.asc warning-clean (74→75).
-- **Unit 2 (DONE):** LTspice `rand()`/`random()`/`white()` in B-source
-  expressions → deterministic ngspice surrogate (statFuncsToNgspice in
-  simulation/behavioral.ts). PLL.asc + PLL2.asc `.op` now converge
-  (op floor 67→69).
-- **Unit 3 (DONE):** §10 — first shadcn primitive `ui/button.tsx` landed;
-  the 4 document buttons (New/Open/Save/Save .asc) migrated off
-  `.editor-text-btn`'s hardcoded colors; `.example-picker select` colors
-  tokenized in passing. DOM-verified (data-slot=button, 28px, disabled
-  states), simulator-mode hiding re-verified, before/after screenshots
-  equivalent at 1440×900.
-- **Status:** DONE
-- NOTE: one transient full-suite failure was observed once (1194/1195)
-  between two clean 1195 runs — not reproduced twice; watch for a flaky
-  sim-timing test in future runs.
+  / **69 op-converged** — floors 82/75/82/69
+- **Run started (UTC):** 2026-07-05T06:45Z
+- **Synced to origin:** auto/ltspice-parity @ d714a5a (baseline re-verified:
+  1195 passing, review rotation satisfied @ 6ee3466)
+- **Unit 1 (IN PROGRESS):** library-subcircuit `.asy` Prefix X import path (§1)
+  — new `subckt` kind so MISC\TowTom2, capmeter, ISO16750-2, ISO7637-2 import
+  as real subcircuit instances (warning-clean 75→79 expected).
+  - Files: engine/bundledSubcircuits.ts (NEW: 4 libs embedded pre-sanitized —
+    dash→underscore names, capometer Rpar→resistor + if()→ternary + µ→u),
+    io/ascImport.ts (4 leaf mappings + pin banks), engine/spiceNetlist.ts
+    (X-line emission + bundled block/include expansion), schematic/{types,
+    pins,symbols,catalog}.ts wiring.
+  - Verified so far (live ngspice -b, BEFORE code): dashed subckt names are
+    fatal → sanitize; TowTom2 verbatim converges on its internal .params;
+    sanitized capometer op-converges; ISO 4-6-3_12V profile .tran runs
+    (vmax 14.5 V / 20 s).
+  - Last completed sub-step: none (claim commit).
+- **Status:** IN PROGRESS
+- NOTE (carried): one transient full-suite failure was observed once
+  (1194/1195) between two clean 1195 runs — not reproduced; watch for a
+  flaky sim-timing test.
 
 ---
 
