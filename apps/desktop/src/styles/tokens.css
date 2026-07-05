@@ -42,6 +42,9 @@
   --color-accent-foreground: var(--text);
   --color-destructive: var(--danger);
   --color-destructive-foreground: var(--text);
+  /* Positive/run state (the ▶ run button, sim-live pill). App.css has no
+   * bare semantic green; --trace-green is the calmest one in the palette. */
+  --color-success: var(--trace-green);
 
   /* Lines & focus */
   --color-border: var(--border);

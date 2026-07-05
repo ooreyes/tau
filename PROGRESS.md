@@ -28,19 +28,59 @@
   `substituteKnownBraces` in paramScope.ts, applied at deck build to
   passthrough model/lib lines outside `.subckt` bodies. Fc op-converges;
   corpus 77→78, zero regressions.
-- **Unit 5 (IN PROGRESS):** §10 toolbar/topbar migration — title-run +
-  settings-btn onto the Button primitive (new icon-sm size), tokenize the
-  whole topbar block (mode-toggle/mode-btn/live-pill/brand — kills the
-  hardcoded #d68a3c orange that clashes with the runtime accent), new
-  `--color-success` token. Screenshot QA before/after at 1440×900.
-  - Files: ui/button.tsx, components/Toolbar.tsx, styles/tokens.css, App.css.
-  - Last completed sub-step: none (claim).
-- **Status:** IN PROGRESS
+- **Unit 5 (DONE):** §10 toolbar/topbar migration — title-run + settings-btn
+  onto the Button primitive (new `icon-sm` 28px size), topbar CSS block
+  tokenized (mode-btn.active/live-pill/brand/toolbar now use
+  `--accent`/`--cream`/`--trace-green`/`--panel-*` instead of hardcoded hex),
+  new `--color-success` token, dead `.title-run`/`.settings-btn` rules
+  removed. Recovered from wip checkpoint cf67322 (session killed mid-unit),
+  finished + screenshot-verified at 1440×900. 1227 tests green.
+- **Status:** DONE
 - NOTE (carried): one transient full-suite failure was observed once
   (1194/1195) between two clean 1195 runs — not reproduced; watch for a
   flaky sim-timing test. (2026-07-05: full suite ran clean at 1219.)
 
 ---
+
+## 2026-07-05T16:05Z — auto/ltspice-parity — §10: toolbar/topbar migrated onto the design system
+
+### What I did
+- **Recovered the killed session's work**: previous run died mid-unit; its
+  checkpoint was on `origin/auto/ltspice-parity-wip` (cf67322). Cherry-picked,
+  verified typecheck-clean, and finished the unit instead of restarting.
+- **Buttons → primitive** (from checkpoint): the ▶ run button and settings
+  gear in `Toolbar.tsx` now use `ui/button.tsx` (`variant="outline"`, new
+  `icon-sm` = 28px size, matching the old footprint exactly); svg styling
+  moved to utility classes; `[-webkit-app-region:no-drag]` kept.
+- **New `--color-success` token** in tokens.css (maps `--trace-green`) so
+  `text-success` exists for run/positive states.
+- **Tokenized the whole topbar CSS block** (this session): `.toolbar`
+  background → `--panel-2`, `.brand-name` → `--cream`, `.brand-file` →
+  `--faint`, `.mode-toggle` → `--panel-3`/`--border-strong`,
+  `.mode-btn.active` → `--accent`/`--accent-ink`/`--accent-glow`,
+  `.live-pill` → `--accent` (edit) / `--trace-green` (sim). The topbar now
+  follows the runtime theme switcher instead of pinning `#d68a3c`.
+- **Deleted dead CSS**: `.title-run`/`.settings-btn` rules (no TSX refs left).
+
+### Files touched
+components/Toolbar.tsx, components/ui/button.tsx, styles/tokens.css, App.css,
+FEATURE_PARITY.md, PROGRESS.md
+
+### Tests
+1227 passing — all green, typecheck clean (no new tests: CSS/markup-only
+migration; Button primitive already has coverage)
+
+### FEATURE_PARITY items updated
+§10 Panel migrations ⬜→🟡 (toolbar/topbar ✅, 7 panels remaining)
+
+### UX issues found
+Screenshot at 1440×900: topbar aligned, no clipping, run button reads clearly
+green, live pill accent-orange in edit mode. None outstanding.
+
+### Next step
+Next §10 panel: part palette (ComponentPalette) onto Input (filter box) +
+tokenized list rows; or resume §1 with the 4 remaining op-converge failures
+(LoopGain2, P2, SoftDiodeRecovery, UHFpreamp).
 
 ## 2026-07-05T12:55Z — auto/ltspice-parity — §1: {param} substitution on passthrough .model lines — Fc converges, op-run 77→78
 

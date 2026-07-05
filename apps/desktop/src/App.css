@@ -2324,7 +2324,7 @@ body {
   align-items: center;
   gap: 14px;
   padding: 0 14px;
-  background: #0c0c0f;
+  background: var(--panel-2);
   border-bottom: 1px solid var(--border);
   -webkit-app-region: drag;
   box-shadow: none;
@@ -2365,7 +2365,7 @@ body {
 }
 
 .brand-name {
-  color: #efe9d6;
+  color: var(--cream);
   font-size: 15px;
   font-weight: 700;
   letter-spacing: 0.04em;
@@ -2374,7 +2374,7 @@ body {
 
 .brand-file {
   min-width: 0;
-  color: #5a5a62;
+  color: var(--faint);
   font: 500 11px "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
   white-space: nowrap;
   overflow: hidden;
@@ -2386,9 +2386,9 @@ body {
   align-items: center;
   gap: 3px;
   padding: 4px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--border-strong);
   border-radius: 11px;
-  background: #08080a;
+  background: var(--panel-3);
   box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.45);
   -webkit-app-region: no-drag;
 }
@@ -2408,9 +2408,7 @@ body {
   transition: background 180ms var(--ease-out), color 180ms var(--ease-out), box-shadow 180ms var(--ease-out);
 }
 
-.mode-btn svg,
-.settings-btn svg,
-.title-run svg {
+.mode-btn svg {
   width: 14px;
   height: 14px;
   fill: none;
@@ -2421,47 +2419,22 @@ body {
 }
 
 .mode-btn.active {
-  background: #d68a3c;
-  color: #0a0a0c;
-  box-shadow: 0 1px 8px rgba(214, 138, 60, 0.22);
-}
-
-.title-run,
-.settings-btn {
-  width: 28px;
-  height: 28px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid var(--border);
-  border-radius: 7px;
-  color: #6b6b73;
-  background: transparent;
-  cursor: pointer;
-  -webkit-app-region: no-drag;
-}
-
-.title-run {
-  color: #71ab7e;
-}
-
-.title-run:hover,
-.settings-btn:hover {
-  color: var(--text);
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--accent);
+  color: var(--accent-ink);
+  box-shadow: 0 1px 8px var(--accent-glow);
 }
 
 .live-pill {
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  color: #d68a3c;
+  color: var(--accent);
   font: 500 11px "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
   white-space: nowrap;
 }
 
 .live-pill.sim {
-  color: #71ab7e;
+  color: var(--trace-green);
 }
 
 .live-pill i {

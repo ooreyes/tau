@@ -1,4 +1,5 @@
 import type { AnalysisResult } from "../simulation/linearTransient";
+import { Button } from "@/components/ui/button";
 
 interface ToolbarProps {
   mode: "schematic" | "simulator";
@@ -59,24 +60,37 @@ export function Toolbar({ mode, result, runState, title, onModeChange, onRun, on
       </div>
 
       <div className="titlebar-right">
-        <button
-          className="title-run"
+        <Button
+          variant="outline"
+          size="icon-sm"
+          className="text-success [-webkit-app-region:no-drag]"
           onClick={onRun}
           title="Run simulation and switch to simulator"
           aria-label="Run simulation"
         >
           ▶
-        </button>
+        </Button>
         <span className={`live-pill ${isSimulator ? "sim" : "schem"}`}>
           <i />
           {statusText}
         </span>
-        <button className="settings-btn" title="Settings" aria-label="Settings" onClick={onOpenSettings}>
-          <svg viewBox="0 0 20 20" aria-hidden="true">
+        <Button
+          variant="outline"
+          size="icon-sm"
+          className="text-muted-foreground hover:text-foreground [-webkit-app-region:no-drag]"
+          title="Settings"
+          aria-label="Settings"
+          onClick={onOpenSettings}
+        >
+          <svg
+            viewBox="0 0 20 20"
+            aria-hidden="true"
+            className="size-3.5 fill-none stroke-current [stroke-linecap:round] [stroke-linejoin:round] [stroke-width:1.5]"
+          >
             <path d="M10 2.5l1.8 1.2 2.1-.5.9 2 1.9.9-.5 2.1 1.2 1.8-1.2 1.8.5 2.1-1.9.9-.9 2-2.1-.5L10 17.5l-1.8-1.2-2.1.5-.9-2-1.9-.9.5-2.1L2.6 10l1.2-1.8-.5-2.1 1.9-.9.9-2 2.1.5z" />
             <circle cx="10" cy="10" r="2.4" />
           </svg>
-        </button>
+        </Button>
       </div>
     </header>
   );

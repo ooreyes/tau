@@ -1028,8 +1028,14 @@ never a broken intermediate state on the branch.
   Separator, ScrollArea, Resizable (for the three-column simulator
   layout), Command (replace/augment the command palette), Toast/Sonner
   (errors + notifications).
-- ⬜ **Panel migrations** (one commit each, screenshot-verified):
-  toolbar/topbar → part palette → inspector/params → analysis tabs header →
+- 🟡 **Panel migrations** (one commit each, screenshot-verified):
+  toolbar/topbar ✅ (2026-07-05: run/settings buttons onto the Button
+  primitive with a new `icon-sm` 28px size + `--color-success` token; the
+  whole topbar CSS block tokenized — hardcoded `#d68a3c`/`#efe9d6`/`#71ab7e`
+  etc. now route through `--accent`/`--cream`/`--trace-green` so the runtime
+  theme switcher re-themes it; dead `.title-run`/`.settings-btn` rules
+  deleted; 1440×900 screenshot-verified) → part palette → inspector/params →
+  analysis tabs header →
   SimulationPanel controls (run bar, expression bar, cursors, export) →
   dialogs (Open/Save/settings) → empty/error states → status bar.
 - ⬜ **The schematic canvas keeps its bespoke SVG rendering** (it is the
