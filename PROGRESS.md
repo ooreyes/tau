@@ -22,7 +22,15 @@
   models, Q-on-subckt → X rewrite (UHFpreamp MRF901), and transformLtPoint
   Mn = rotate-then-mirror (LoopGain2). Corpus op-converged 78→**81**;
   only logamp (ngspice timeout) remains. 1240 tests green.
-- **Status:** DONE
+- **Unit 7 (IN PROGRESS):** logamp.asc ngspice op timeout (§1/§7) — the last
+  non-converging corpus file. Suspect the bundled opamp.sub macromodel in the
+  log feedback loop needs convergence aid (gmin stepping/itl1/src-stepping) or
+  the deck needs LTspice-style .op fallback behavior.
+  - Files: engine/spiceOptions.ts or spiceNetlist.ts analysis emission (+test),
+    corpus floor 81→82 if it converges.
+  - Verify: ngspice -b on dumped logamp deck; corpus runner re-run.
+  - Last completed sub-step: none (just claimed).
+- **Status:** IN PROGRESS
 - NOTE (carried): transient single-test flake seen again this session (one
   red run between two clean 1240 runs, name not captured — grep filter ate
   it). Next time capture the failing test name before re-running.
