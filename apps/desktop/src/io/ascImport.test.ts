@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { parseAsc, parseAsy, ltspiceTypeToKind, orientationToRotation, transformLtPoint, LTSPICE_PINS, ascToSchematic, importAsc, componentValueFromAttrs, makeSubcircuitResolver, type SubcircuitResolver } from "./ascImport";
 import { extractCircuit } from "../schematic/netlist";
+import { buildSpiceDeck } from "../engine/spiceNetlist";
 import { buildParamScope, resolveComponentValues } from "../simulation/paramScope";
 
 // A representative slice of real LTspice .asc grammar (RC low-pass with a
@@ -232,6 +233,35 @@ TEXT 0 40 Left 2 ;a note`;
     const pins = Object.fromEntries((r1?.pinOverride ?? []).map((p) => [p.id, { x: p.x, y: p.y }]));
     expect(pins.a).toEqual({ x: 320, y: 208 });
     expect(pins.b).toEqual({ x: 240, y: 208 });
+  });
+
+  it("preserves LTspice current-source polarity through to the deck (logamp I1)", () => {
+    // current.asy: "+" = N+ at (0,0) top, "−" at (0,80) bottom, arrow toward
+    // "−". LTspice netlists `I1 <top> <bottom>`; Tau's isource emission swaps
+    // p/n, so the import must zip "−"→p / "+"→n or every imported source runs
+    // backwards (logamp's I1 then starves its log loop and .op hangs).
+    const ISRC = `Version 4
+SHEET 1 880 680
+WIRE 0 -64 0 0
+FLAG 0 -144 0
+FLAG 0 80 0
+SYMBOL current 0 0 R0
+SYMATTR InstName I1
+SYMATTR Value 1m
+SYMBOL res -16 -160 R0
+SYMATTR InstName R1
+SYMATTR Value 1k`;
+    const doc = ascToSchematic(parseAsc(ISRC));
+    const i1 = doc.components.find((c) => c.label === "I1");
+    const pins = Object.fromEntries((i1?.pinOverride ?? []).map((p) => [p.id, { x: p.x, y: p.y }]));
+    expect(pins.p).toEqual({ x: 0, y: 80 });
+    expect(pins.n).toEqual({ x: 0, y: 0 });
+    const deck = buildSpiceDeck(
+      { components: doc.components, wires: doc.wires, netLabels: doc.netLabels },
+      { kind: "op" },
+    );
+    // Same node order LTspice's own netlist has: I1 <top net> <bottom=gnd>.
+    expect(deck.netlist).toMatch(/^I1 n\d+ 0 DC 0\.001$/m);
   });
 
   it("imports a behavioral B-source carrying its V=/I= expression and pins", () => {

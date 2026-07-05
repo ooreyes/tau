@@ -434,7 +434,17 @@ export const LTSPICE_PINS: Record<string, LtPin[]> = {
   cap: [{ name: "1", dx: 16, dy: 0 }, { name: "2", dx: 16, dy: 64 }],
   ind: [{ name: "1", dx: 16, dy: 16 }, { name: "2", dx: 16, dy: 96 }],
   voltage: [{ name: "+", dx: 0, dy: 16 }, { name: "-", dx: 0, dy: 96 }],
-  current: [{ name: "+", dx: 0, dy: 0 }, { name: "-", dx: 0, dy: 80 }],
+  // LTspice current.asy: "+" = SpiceOrder 1 at (0,0), "−" at (0,80), arrow
+  // toward "−" — LTspice netlists `I N+ N−` and the current exits the "−" pin.
+  // Tau's isource deck emission swaps to `I n p` under its raises-V(p)
+  // convention, so LTspice's "−" pin must zip onto Tau's p (index 0) and "+"
+  // onto n; the identity map would flip every imported source's sign (logamp's
+  // I1 then starves the log loop and ngspice's op hangs in gmin stepping).
+  current: [{ name: "-", dx: 0, dy: 80 }, { name: "+", dx: 0, dy: 0 }],
+  // bi (B-current) has current.asy's geometry (+(0,0)/−(0,80)) but bsource
+  // emission is `B p n` verbatim (no isource swap), so it keeps the identity
+  // zip that `current` had to give up.
+  bcurrent: [{ name: "+", dx: 0, dy: 0 }, { name: "-", dx: 0, dy: 80 }],
   diode: [{ name: "A", dx: 16, dy: 0 }, { name: "K", dx: 16, dy: 64 }],
   // PAsystem SMdiode.asy: vertical, centered pins A(0,-32)/C(0,32).
   smdiode: [{ name: "A", dx: 0, dy: -32 }, { name: "K", dx: 0, dy: 32 }],
@@ -732,7 +742,7 @@ function ltPinKey(type: string): keyof typeof LTSPICE_PINS | null {
     e: "vcvs", e2: "vcvs2", g: "vccs", g2: "vccs2",
     // Behavioral sources share the independent-source pin geometry: the bv
     // (voltage) symbol pins match `voltage`, bi (current) match `current`.
-    bv: "voltage", bi: "current", bi2: "bi2", b: "voltage", b2: "voltage",
+    bv: "voltage", bi: "bcurrent", bi2: "bi2", b: "voltage", b2: "voltage",
     // xtal (Misc/xtal.asy): pins A(16,0)/B(16,64) — same geometry as cap.asy.
     xtal: "cap",
     // DIAC (Misc/DIAC.asy): +(32,0)/-(32,64) — 2-terminal; own bank (x≠cap's 16).

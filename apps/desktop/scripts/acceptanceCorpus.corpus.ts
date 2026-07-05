@@ -153,7 +153,7 @@ describe.skipIf(corpus.length === 0)("acceptance corpus (user's own LTspice file
       if (skipNgspice) console.log("(ngspice runs skipped — CORPUS_SKIP_NGSPICE or ngspice not installed)");
 
       // Floors = the counts this runner actually measured on 2026-07-05
-      // (82/79/82/81) — never hand-typed claims; this runner once disproved
+      // (82/79/82/82) — never hand-typed claims; this runner once disproved
       // those (deck-built claimed 82, measured 79). Raise a floor only when a
       // re-run proves the new count. The 3 non-clean files are misc\nigbt,
       // POWERPRODUCTS\LT1184F, and PLL2's PHIDET A-device. Converge fixes on
@@ -161,14 +161,15 @@ describe.skipIf(corpus.length === 0)("acceptance corpus (user's own LTspice file
       // (default rseries=1mΩ), Fc ({param} substitution on passthrough
       // .model lines), LoopGain2 (Mn orientation = rotate-then-mirror),
       // SoftDiodeRecovery+P2+UHFpreamp (per-line TEXT-block dispatch,
-      // continuation folding, type=silicon strip, Q-on-subckt → X rewrite).
-      // The 1 remaining op failure: logamp (ngspice timeout).
+      // continuation folding, type=silicon strip, Q-on-subckt → X rewrite),
+      // logamp (imported current-source polarity: LTspice "−" pin → Tau p).
+      // ALL 82 op-converge as of the polarity fix.
       // Only enforced on the canonical corpus (CORPUS_ALL covers unvetted files).
       if (process.env.CORPUS_ALL !== "1") {
         expect(summary.imported).toBeGreaterThanOrEqual(82);
         expect(summary.warningClean).toBeGreaterThanOrEqual(79);
         expect(summary.deckBuilt).toBeGreaterThanOrEqual(82);
-        if (!skipNgspice) expect(summary.opConverged).toBeGreaterThanOrEqual(81);
+        if (!skipNgspice) expect(summary.opConverged).toBeGreaterThanOrEqual(82);
       }
     } finally {
       rmSync(tmpDir, { recursive: true, force: true });
