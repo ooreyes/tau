@@ -24,7 +24,14 @@
   `rseries=1e-3` in DEFAULT_OPTIONS (spiceOptions.ts), matching LTspice's
   documented 1 mΩ inductor Rser default. Cohn/passive/varactor2 op-converge;
   corpus 74→77, zero regressions (Class-D + sample-hold parity specs green).
-- **Status:** DONE
+- **Unit 4 (IN PROGRESS):** Fc.asc `{param}` in `.model` passthrough (§1) —
+  the deck carries `.model DX D(Cjo={Cjo} …)` verbatim but never emits the
+  document `.param`s, so ngspice dies "Undefined parameter [cjo]". Plan: add
+  lenient `substituteKnownBraces` to simulation/paramScope.ts (unresolvable
+  braces kept verbatim) and apply it in spiceNetlist.ts to non-`.subckt`
+  passthrough lines from modelLibLinesFromDirectives. op 77→78 expected.
+  - Last completed sub-step: none (claim).
+- **Status:** IN PROGRESS
 - NOTE (carried): one transient full-suite failure was observed once
   (1194/1195) between two clean 1195 runs — not reproduced; watch for a
   flaky sim-timing test. (2026-07-05: full suite ran clean at 1219.)
