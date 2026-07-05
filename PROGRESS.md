@@ -29,7 +29,13 @@
   logamp's M180 I1 starved its bias node (−2.6e4 V via rshunt) and gmin
   stepping hung. Fixed in LTSPICE_PINS (+`bcurrent` row so bi keeps identity),
   end-to-end polarity regression test. **Corpus op-converged 82/82 (ALL).**
-- **Status:** DONE
+- **Unit 8 (IN PROGRESS):** §10 part-palette migration — next panel in the
+  §10 sequence: tokenize the palette CSS block (no hardcoded hex), adopt
+  primitives where they fit (Button/Input for search), keep density.
+  - Files: components/<palette component>.tsx, App.css, styles/tokens.css.
+  - Verify: STEP 3.5 screenshot at 1440×900 before/after, judge, fix.
+  - Last completed sub-step: none (just claimed).
+- **Status:** IN PROGRESS
 - NOTE (carried): transient single-test flake seen again this session (one
   red run between two clean 1240 runs, name not captured — grep filter ate
   it). Next time capture the failing test name before re-running.
