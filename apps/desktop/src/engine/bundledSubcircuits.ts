@@ -1,12 +1,13 @@
 /**
  * Bundled LTspice **library subcircuits** (FEATURE_PARITY §1 — the `.asy`
- * `Prefix X` import path). Four LTspice-library symbols in the acceptance
+ * `Prefix X` import path). Five LTspice-library symbols in the acceptance
  * corpus (`Misc\\TowTom2`, `SpecialFunctions\\capmeter`, `ISO16750-2`,
- * `ISO7637-2`) instantiate subcircuits whose bodies ship with LTspice 17.2.4
- * in `lib/sub/*.{sub,lib}`. Real `.asc` files reference them with either an
- * explicit `.include <file>` directive (1563.asc) or implicitly through the
- * symbol's `ModelFile` attribute (the ISO transient generators), so Tau
- * bundles the bodies the same way `standardModels.ts` bundles `.model` lines.
+ * `ISO7637-2`, `Opamps\\opamp`) instantiate subcircuits whose bodies ship
+ * with LTspice 17.2.4 in `lib/sub/*.{sub,lib}`. Real `.asc` files reference
+ * them with either an explicit `.include <file>` directive (1563.asc,
+ * opamp.asc's `.include opamp.sub`) or implicitly through the symbol's
+ * `ModelFile` attribute (the ISO transient generators), so Tau bundles the
+ * bodies the same way `standardModels.ts` bundles `.model` lines.
  *
  * The text below is taken from the LTspice library with the minimal edits
  * ngspice requires (each rejected form live-verified against ngspice-46):
@@ -34,6 +35,18 @@
 export function sanitizeSubcktName(name: string): string {
   return name.replace(/[^A-Za-z0-9_]/g, "_");
 }
+
+// --- lib/sub/opamp.sub (ideal single-pole op-amp; Opamps\opamp.asy) ---
+// LTspice keeps the Aol/GBW defaults on the SYMBOL's SpiceLine attributes, not
+// in the .sub file; ngspice rejects X-line params the .subckt line doesn't
+// declare, so the defaults are moved onto the .subckt line (live-verified:
+// follower and −10× inverting amp solve exactly, with and without X-line
+// params). Port order is 1=invin, 2=noninvin, 3=out (G1 senses V(2)−V(1)).
+const OPAMP_SUB = `.subckt opamp 1 2 3 Aol=100K GBW=10Meg
+G1 0 3 2 1 {Aol}
+R3 3 0 1.
+C3 3 0 {Aol/GBW/6.28318530717959}
+.ends opamp`;
 
 // --- lib/sub/TowTom2.sub (2nd-order Tow-Thomas filter block; Misc\TowTom2.asy) ---
 const TOWTOM2_SUB = `.subckt TowTom2 1 2 3
@@ -469,6 +482,7 @@ V3 N002 0 PWL(0 -1 {t0} -1 +1u 1 +10 1 +1u -1)
 /** Library file basename (lower-cased) → bundled ngspice-ready text. Keys are
  *  the names real `.asc` directives / `.asy` ModelFile attributes use. */
 const LIBRARY_FILES = new Map<string, string>([
+  ["opamp.sub", OPAMP_SUB],
   ["towtom2.sub", TOWTOM2_SUB],
   ["capometer.sub", CAPOMETER_SUB],
   ["iso7637-2.lib", ISO7637_LIB],

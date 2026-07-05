@@ -380,6 +380,11 @@ export function ltspiceTypeToKind(type: string): ComponentKind | null {
     "iso7637-2": "subckt",
   };
 
+  // Opamps\opamp — LTspice's ideal single-pole symbol is `SYMATTR Prefix X`
+  // onto `.subckt opamp` (opamp.sub, bundled): a true subcircuit instance,
+  // unlike the behavioral vendor-opamp mapping below. Must be checked before
+  // the directory-wide opamp rule; note its SpiceOrder puts invin FIRST.
+  if (leaf === "opamp") return "subckt";
   // Any symbol living under an "opamps" directory is an op-amp at heart.
   if (base.includes("opamp")) return "opamp";
   // LTspice idealized digital A-devices live under `Digital\`. The path prefix
@@ -527,6 +532,14 @@ export const LTSPICE_PINS: Record<string, LtPin[]> = {
     { name: "V2", dx: -32, dy: -32 },
     { name: "INV", dx: -32, dy: 160 },
   ],
+  // Opamps/opamp.asy — ideal single-pole op-amp (subckt opamp, bundled
+  // opamp.sub). SpiceOrder 1=invin, 2=noninvin, 3=out; geometry matches the
+  // opampO family but the X-line node order is inverting-input FIRST.
+  opampIdeal: [
+    { name: "invin", dx: -32, dy: 48 },
+    { name: "noninvin", dx: -32, dy: 80 },
+    { name: "out", dx: 32, dy: 64 },
+  ],
   // SpecialFunctions/capmeter.asy — vector impedance meter (subckt capometer).
   capmeter: [
     { name: "DUT+", dx: -80, dy: 32 },
@@ -662,6 +675,10 @@ export function orientationToRotation(orientation: AscOrientation): 0 | 90 | 180
 function ltPinKey(type: string): keyof typeof LTSPICE_PINS | null {
   const base = type.replace(/\\/g, "/").toLowerCase();
   const leaf = (base.split("/").pop() ?? "");
+  // Opamps\opamp (ideal single-pole, subckt kind) banks in SpiceOrder, which
+  // is invin-first — NOT the in+/in-/out role order of the opampO family.
+  // Mirrors ltspiceTypeToKind's leaf gate.
+  if (leaf === "opamp") return "opampIdeal";
   // Any op-amp (vendor part or generic) banks to one of two geometry families:
   // the centered UniversalOpAmp layout or the offset layout every other opamp
   // shares. Mirrors ltspiceTypeToKind's `base.includes("opamp")` detection.
@@ -1083,6 +1100,7 @@ function flattenSubcircuit(
  * examples' U1 instances carry no attrs at all and mean the 12 V variant).
  */
 const SUBCKT_SYMBOL_DEFAULTS: Record<string, { name: string; params?: string }> = {
+  opamp: { name: "opamp", params: "Aol=100K GBW=10Meg" },
   towtom2: { name: "TowTom2" },
   capmeter: { name: "capometer", params: "current=1m freq=3Meg C=.5µ Q=.25" },
   "iso16750-2": { name: "4-6-3_12V_StartingProfile" },

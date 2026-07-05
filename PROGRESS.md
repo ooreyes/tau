@@ -8,9 +8,9 @@
      `git log --oneline -8`, recover/finish/revert that unit FIRST, then go on.
      ─────────────────────────────────────────────────────────────────────── -->
 ## ⏱ HEARTBEAT
-- **Headline metric:** 1219 tests green (default suite) + 5 corpus specs
+- **Headline metric:** 1221 tests green (default suite) + 5 corpus specs
   · corpus runner: 82 imported / **79 warning-clean** / **82 deck-built (ALL)**
-  / **72 op-converged** — floors 82/79/82/72
+  / **74 op-converged** — floors 82/79/82/74
 - **Run started (UTC):** 2026-07-05T12:00Z
 - **Synced to origin:** auto/ltspice-parity @ 101ad28 + recovered wip f6fba33
   (previous session killed mid-unit; checkpoint cherry-picked, re-verified:
@@ -18,13 +18,54 @@
 - **Unit 1 (DONE):** library-subcircuit `.asy` Prefix X import path (§1) —
   new `subckt` kind; TowTom2/capmeter/ISO16750-2/ISO7637-2 import as real
   subcircuit instances. Warning-clean 75→79, op-converged 69→72.
-- **Unit 2 (IN PROGRESS):** bundle Educational `opamp.sub` behind the same
-  bundledSubcircuits path so opamp.asc/logamp.asc `.include opamp.sub`
-  resolves — op-converged 72→74 expected.
-- **Status:** IN PROGRESS
+- **Unit 2 (DONE):** bundled `opamp.sub` + mapped `Opamps\opamp` to the subckt
+  kind (SpiceOrder invin-first) — opamp.asc/logamp.asc op-converge, 72→74.
+- **Status:** DONE
 - NOTE (carried): one transient full-suite failure was observed once
   (1194/1195) between two clean 1195 runs — not reproduced; watch for a
   flaky sim-timing test. (2026-07-05: full suite ran clean at 1219.)
+
+---
+
+## 2026-07-05T12:25Z — auto/ltspice-parity — §1: bundled opamp.sub — opamp.asc/logamp.asc converge, op-run 72→74
+
+### What I did
+- **Bundled LTspice's ideal single-pole `opamp.sub`** in
+  `engine/bundledSubcircuits.ts` (verbatim body; the Aol=100K/GBW=10Meg
+  defaults move from the .asy SpiceLines onto the `.subckt` line because
+  ngspice rejects undeclared X-line params — live-verified with a unity
+  follower (2.000 V) and a −10× inverting amp (−5.000 V from 0.5 V), both
+  with and without X-line params).
+- **Mapped `Opamps\opamp` → `subckt` kind** (leaf gate ahead of the
+  directory-wide behavioral-opamp rule; vendor parts unaffected — corpus
+  scan shows only opamp.asc/logamp.asc use this symbol). New `opampIdeal`
+  pin bank in SpiceOrder: 1=invin(−32,48), 2=noninvin(−32,80), 3=out(32,64)
+  — NOTE this is inverting-input-FIRST, opposite of the opampO role bank;
+  fetched authoritative opamp.asy/opamp.sub to pin this down rather than
+  trusting geometry-family assumptions.
+- Corpus floors raised 72→74 op-converged; census test 30→31 blocks.
+
+### Files touched
+engine/bundledSubcircuits.ts + .test.ts, io/ascImport.ts + .test.ts,
+scripts/acceptanceCorpus.corpus.ts, FEATURE_PARITY.md, PROGRESS.md
+
+### Tests
+1221 passing (+2 new) + 5 corpus specs — all green, typecheck clean
+
+### FEATURE_PARITY items updated
+§1 op-deck-run item 72/82 → 74/82; footer updated (remaining: PHIDET,
+nigbt/LT1184F for warning-clean; Cohn/passive/varactor2 L-loop singulars
+for op-run)
+
+### UX issues found
+UX debt: the ideal opamp now renders as the generic subckt box instead of a
+triangle glyph in opamp.asc/logamp.asc — consider a triangle glyph when the
+subckt value is `opamp`.
+
+### Next step
+Either the 3 inductor-loop singular matrices (Cohn/passive/varactor2 — likely
+need ngspice `.options` or a gmin/rser strategy for L-only loops) or a §10
+panel migration per the interleave rhythm.
 
 ---
 

@@ -58,13 +58,26 @@ describe("sanitizeSubcktName", () => {
 });
 
 describe("bundled block registry", () => {
-  it("ships all 30 blocks: TowTom2 + capometer + 10 ISO7637 pulses + 18 ISO16750 profiles", () => {
+  it("ships all 31 blocks: opamp + TowTom2 + capometer + 10 ISO7637 pulses + 18 ISO16750 profiles", () => {
     const names = bundledSubcircuitNames();
-    expect(names.size).toBe(30);
+    expect(names.size).toBe(31);
+    expect(names.has("opamp")).toBe(true);
     expect(names.has("towtom2")).toBe(true);
     expect(names.has("capometer")).toBe(true);
     expect(names.has("pulse1_12v")).toBe(true);
     expect(names.has("4_6_3_24v_startingprofile")).toBe(true);
+  });
+
+  it("opamp block declares the .asy's Aol/GBW defaults on the .subckt line (X-line params need them declared)", () => {
+    const block = bundledSubcircuitBlock("opamp")!;
+    // LTspice ships the defaults on Opamps\opamp.asy's SpiceLine attrs, not in
+    // opamp.sub itself; ngspice rejects an X-line param the .subckt line does
+    // not declare, so the bundle moves them onto the header.
+    expect(block).toContain(".subckt opamp 1 2 3 Aol=100K GBW=10Meg");
+    // Port semantics: G senses V(2)−V(1) → port 1 is the INVERTING input.
+    expect(block).toContain("G1 0 3 2 1 {Aol}");
+    expect(block).toContain("C3 3 0 {Aol/GBW/6.28318530717959}");
+    expect(bundledLibraryText("opamp.sub")).toContain(".subckt opamp 1 2 3");
   });
 
   it("resolves a raw LTspice name (dashes intact) case-insensitively", () => {

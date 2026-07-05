@@ -1162,4 +1162,28 @@ SYMATTR SpiceModel 4-6-3_24V_StartingProfile`;
     expect(u2?.value).toBe("4-6-3_24V_StartingProfile");
     expect(doc.warnings).toHaveLength(0);
   });
+
+  it("Opamps\\opamp is a subckt (not the behavioral opamp kind) with SpiceOrder pins invin FIRST", () => {
+    // opamp.asy: Prefix X onto `.subckt opamp` — SpiceOrder 1=invin(-32,48),
+    // 2=noninvin(-32,80), 3=out(32,64). This is the OPPOSITE input order to
+    // Tau's opampO role bank; a swap here silently flips feedback polarity.
+    // opamp.asc places U1 R0 at (1488,16) with only an InstName.
+    expect(ltspiceTypeToKind("OPAMPS\\OPAMP")).toBe("subckt");
+    // Vendor parts under Opamps\ still map to the behavioral opamp kind.
+    expect(ltspiceTypeToKind("OPAMPS\\LT1001")).toBe("opamp");
+    const src = `Version 4
+SHEET 1 880 680
+SYMBOL OPAMPS\\OPAMP 1488 16 R0
+SYMATTR InstName U1`;
+    const doc = ascToSchematic(parseAsc(src));
+    const u1 = doc.components.find((c) => c.label === "U1");
+    expect(u1?.kind).toBe("subckt");
+    // Defaults ride the .asy SpiceLine/SpiceLine2 (Aol=100K / GBW=10Meg).
+    expect(u1?.value).toBe("opamp Aol=100K GBW=10Meg");
+    const pins = Object.fromEntries((u1?.pinOverride ?? []).map((p) => [p.id, { x: p.x, y: p.y, label: p.label }]));
+    expect(pins.p1).toEqual({ x: 1456, y: 64, label: "invin" });
+    expect(pins.p2).toEqual({ x: 1456, y: 96, label: "noninvin" });
+    expect(pins.p3).toEqual({ x: 1520, y: 80, label: "out" });
+    expect(doc.warnings).toHaveLength(0);
+  });
 });
