@@ -1,5 +1,5 @@
 import { extractCircuit, type ExtractedCircuit, type ExtractedComponent } from "../schematic/netlist";
-import { resolveComponentValues, expandDirectiveLines, EMPTY_SCOPE, type ParamScope } from "../simulation/paramScope";
+import { resolveComponentValues, expandDirectiveLines, substituteKnownBraces, EMPTY_SCOPE, type ParamScope } from "../simulation/paramScope";
 import type { ComponentKind, NetLabel, SchematicComponent, SchematicWire } from "../schematic/types";
 import { parseQuantity } from "../simulation/quantity";
 import { decodeParams } from "../schematic/params";
@@ -99,6 +99,13 @@ export function buildSpiceDeck(schematic: Schematic, analysis: SpiceAnalysis): S
   // lib/sub paths from Tau's working directory. Names those texts define are
   // tracked so the per-instance emission below doesn't duplicate the block.
   const inlinedSubckts = new Set<string>();
+  // Track `.subckt … .ends` nesting: LTspice evaluates a `{param}` on a
+  // passthrough `.model` line against the document's global `.param` scope
+  // (Fc.asc's `.model DX D(Cjo={Cjo} …)` — ngspice instead dies with
+  // "Undefined parameter"), but a brace INSIDE a document-defined subckt body
+  // must stay verbatim for ngspice to resolve against the subckt's own params.
+  let subcktDepth = 0;
+  const passthroughScope = schematic.params ?? EMPTY_SCOPE;
   for (const line of modelLibLinesFromDirectives(rawDirectives)) {
     const fileRef = /^\.(?:include|lib)\s+(.+)$/i.exec(line.trim());
     const bundled = fileRef ? bundledLibraryText(fileRef[1]) : null;
@@ -106,7 +113,9 @@ export function buildSpiceDeck(schematic: Schematic, analysis: SpiceAnalysis): S
       lines.push(bundled);
       for (const m of bundled.matchAll(/^\.subckt\s+(\S+)/gim)) inlinedSubckts.add(m[1].toLowerCase());
     } else {
-      lines.push(line);
+      if (/^\.subckt\b/i.test(line.trim())) subcktDepth += 1;
+      lines.push(subcktDepth > 0 ? line : substituteKnownBraces(line, passthroughScope));
+      if (/^\.ends\b/i.test(line.trim())) subcktDepth = Math.max(0, subcktDepth - 1);
     }
   }
 

@@ -8,9 +8,9 @@
      `git log --oneline -8`, recover/finish/revert that unit FIRST, then go on.
      ─────────────────────────────────────────────────────────────────────── -->
 ## ⏱ HEARTBEAT
-- **Headline metric:** 1222 tests green (default suite) + 5 corpus specs
+- **Headline metric:** 1227 tests green (default suite) + 5 corpus specs
   · corpus runner: 82 imported / **79 warning-clean** / **82 deck-built (ALL)**
-  / **77 op-converged** — floors 82/79/82/77
+  / **78 op-converged** — floors 82/79/82/78
 - **Run started (UTC):** 2026-07-05T12:00Z
 - **Synced to origin:** auto/ltspice-parity @ 101ad28 + recovered wip f6fba33
   (previous session killed mid-unit; checkpoint cherry-picked, re-verified:
@@ -24,17 +24,52 @@
   `rseries=1e-3` in DEFAULT_OPTIONS (spiceOptions.ts), matching LTspice's
   documented 1 mΩ inductor Rser default. Cohn/passive/varactor2 op-converge;
   corpus 74→77, zero regressions (Class-D + sample-hold parity specs green).
-- **Unit 4 (IN PROGRESS):** Fc.asc `{param}` in `.model` passthrough (§1) —
-  the deck carries `.model DX D(Cjo={Cjo} …)` verbatim but never emits the
-  document `.param`s, so ngspice dies "Undefined parameter [cjo]". Plan: add
-  lenient `substituteKnownBraces` to simulation/paramScope.ts (unresolvable
-  braces kept verbatim) and apply it in spiceNetlist.ts to non-`.subckt`
-  passthrough lines from modelLibLinesFromDirectives. op 77→78 expected.
-  - Last completed sub-step: none (claim).
-- **Status:** IN PROGRESS
+- **Unit 4 (DONE):** Fc.asc `{param}` in `.model` passthrough (§1) — lenient
+  `substituteKnownBraces` in paramScope.ts, applied at deck build to
+  passthrough model/lib lines outside `.subckt` bodies. Fc op-converges;
+  corpus 77→78, zero regressions.
+- **Status:** DONE
 - NOTE (carried): one transient full-suite failure was observed once
   (1194/1195) between two clean 1195 runs — not reproduced; watch for a
   flaky sim-timing test. (2026-07-05: full suite ran clean at 1219.)
+
+---
+
+## 2026-07-05T12:55Z — auto/ltspice-parity — §1: {param} substitution on passthrough .model lines — Fc converges, op-run 77→78
+
+### What I did
+- **Root-caused Fc.asc**: the deck carried `.model DX D(Cjo={Cjo} …)`
+  verbatim while the document's `.params Cjo=930p …` were consumed into
+  Tau's param scope and never emitted — ngspice died with "Undefined
+  parameter [cjo]".
+- **Added `substituteKnownBraces`** (simulation/paramScope.ts): substitutes
+  every `{expr}` resolvable in the scope, keeps unresolvable braces
+  VERBATIM (unlike the throwing `substituteBraces`) — matches LTspice, which
+  evaluates `{…}` against global `.param`s anywhere in the netlist.
+- **Applied it in spiceNetlist.ts** to passthrough model/lib lines while
+  tracking `.subckt…/.ends` depth: braces inside a document-defined subckt
+  body stay untouched for ngspice's own subckt-param scoping.
+- Verified: rebuilt Fc deck shows `.model DX D(Is=0 Cjo=9.3e-10 m=0.75
+  vj=1.2 Fc=0 tt=.5u)`, ngspice runs clean; corpus 78/82, no regressions.
+
+### Files touched
+simulation/paramScope.ts + .test.ts, engine/spiceNetlist.ts + .test.ts,
+scripts/acceptanceCorpus.corpus.ts (floor 77→78), FEATURE_PARITY.md,
+PROGRESS.md
+
+### Tests
+1227 passing (+5 new) + 5 corpus specs — all green, typecheck clean
+
+### FEATURE_PARITY items updated
+§1 op-deck-run item 77/82 → 78/82 (4 remaining: LoopGain2, P2,
+SoftDiodeRecovery, UHFpreamp); footer updated
+
+### UX issues found
+none (no UI change)
+
+### Next step
+§10 interleave is due this session: migrate the next editor panel onto the
+shadcn Button/primitive layer with screenshot QA.
 
 ---
 

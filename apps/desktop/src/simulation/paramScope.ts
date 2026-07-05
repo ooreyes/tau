@@ -204,6 +204,26 @@ export function substituteBraces(text: string, ctx: ParamScope = EMPTY_SCOPE): s
 }
 
 /**
+ * Like {@link substituteBraces}, but lenient: a brace whose expression cannot
+ * be evaluated in `ctx` is kept verbatim instead of throwing. For deck
+ * passthrough of document `.model`/`.lib` lines (LTspice evaluates `{…}`
+ * against the global `.param` scope there — Fc.asc's
+ * `.model DX D(Cjo={Cjo} …)`), where an unresolvable name may still be
+ * legitimate for ngspice to resolve later (e.g. inside a `.subckt` body with
+ * its own params, which the caller must NOT route through this).
+ */
+export function substituteKnownBraces(text: string, ctx: ParamScope = EMPTY_SCOPE): string {
+  if (!text.includes("{")) return text;
+  return text.replace(/\{([^{}]*)\}/g, (match, inner: string) => {
+    try {
+      return spiceNumber(evaluateExpression(inner, ctx.scope, ctx.funcs));
+    } catch {
+      return match;
+    }
+  });
+}
+
+/**
  * Return a copy of `components` with every `{expr}` in each value resolved
  * against `ctx`. Components without brace expressions are returned untouched
  * (and the whole list is returned as-is when there are no params), so the

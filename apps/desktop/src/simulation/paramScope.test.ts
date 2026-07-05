@@ -5,6 +5,7 @@ import {
   parseParamAssignments,
   parseFuncDirective,
   isExpression,
+  substituteKnownBraces,
 } from "./paramScope";
 
 describe("parseParamAssignments", () => {
@@ -160,5 +161,24 @@ describe("isExpression", () => {
     expect(isExpression("10k")).toBe(false);
     expect(isExpression("4.7u")).toBe(false);
     expect(isExpression("-5")).toBe(false);
+  });
+});
+
+describe("substituteKnownBraces", () => {
+  const ctx = buildParamScope([".param Cjo=930p m=.75"]);
+
+  it("substitutes resolvable braces and keeps unresolvable ones verbatim", () => {
+    expect(substituteKnownBraces(".model DX D(Cjo={Cjo} m={m} tt={mystery})", ctx)).toBe(
+      ".model DX D(Cjo=9.3e-10 m=0.75 tt={mystery})",
+    );
+  });
+
+  it("returns brace-free text untouched and evaluates expressions", () => {
+    expect(substituteKnownBraces(".model DX D(Is=0)", ctx)).toBe(".model DX D(Is=0)");
+    expect(substituteKnownBraces("{Cjo*2}", ctx)).toBe("1.86e-9");
+  });
+
+  it("keeps everything verbatim under an empty scope", () => {
+    expect(substituteKnownBraces("R1 1 2 {R}")).toBe("R1 1 2 {R}");
   });
 });

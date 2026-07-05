@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildSpiceDeck } from "./spiceNetlist";
+import { buildParamScope } from "../simulation/paramScope";
 import type { SchematicComponent, SchematicWire } from "../schematic/types";
 
 const component = (
@@ -274,6 +275,43 @@ describe("buildSpiceDeck", () => {
     expect(deck.netlist).not.toMatch(/M1 n\d+ n\d+ 0 n\d+ IRFZ44N/);
     // The VDMOS model definition is carried into the deck verbatim.
     expect(deck.netlist).toContain(".model IRFZ44N VDMOS(Vto=4 Kp=20 Rd=20m)");
+  });
+
+  it("resolves {param} braces on a passthrough .model line against the document scope", () => {
+    // Fc.asc: `.params Cjo=930p …` + `.model DX D(Cjo={Cjo} …)`. LTspice
+    // substitutes the global params; ngspice dies with "Undefined parameter
+    // [cjo]" if the braces reach the deck (the .param lines are consumed into
+    // Tau's scope, never emitted). Unknown names must survive verbatim.
+    const components = [
+      component("diode", "D1", "DX", 0, 0),
+      component("ground", "", "", 0, 32),
+    ];
+    const directives = [".param Cjo=930p m=.75", ".model DX D(Is=0 Cjo={Cjo} m={m} tt={notdefined})"];
+    const deck = buildSpiceDeck(
+      { components, wires: [], directives, params: buildParamScope(directives) },
+      { kind: "op" },
+    );
+    expect(deck.netlist).toContain("Cjo=9.3e-10");
+    expect(deck.netlist).toContain("m=0.75");
+    expect(deck.netlist).toContain("tt={notdefined}");
+  });
+
+  it("leaves braces inside a document-defined .subckt body for ngspice's own param scope", () => {
+    // A subckt-internal `.param R=10K` shadows nothing at document level; its
+    // `{R}` must NOT be substituted (or worse, throw) at deck build.
+    const components = [
+      component("resistor", "R1", "1k", 0, 0),
+      component("ground", "", "", 0, 32),
+    ];
+    const directives = [
+      ".param m=.75",
+      ".subckt myblk 1 2\\nR1 1 2 {R}\\n.param R=10K\\n.ends myblk",
+    ];
+    const deck = buildSpiceDeck(
+      { components, wires: [], directives, params: buildParamScope(directives) },
+      { kind: "op" },
+    );
+    expect(deck.netlist).toContain("R1 1 2 {R}");
   });
 
   it("keeps a non-VDMOS MOSFET on its 4-terminal level-1 line", () => {
