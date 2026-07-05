@@ -370,6 +370,14 @@ export function ltspiceTypeToKind(type: string): ComponentKind | null {
     // is given a neutral high-Z resting resistance (see the value assignment in
     // ascToSchematic) rather than the unparseable raw value.
     varistor: "resistor",
+    // LTspice-library subcircuit symbols (`SYMATTR Prefix X`) whose bodies are
+    // bundled in engine/bundledSubcircuits.ts. Each imports as a generic
+    // `subckt` instance carrying the `.asy`'s exact pin bank; the deck builder
+    // emits `X<ref> <nodes> <name> [params]` plus the bundled `.subckt` block.
+    towtom2: "subckt",
+    capmeter: "subckt",
+    "iso16750-2": "subckt",
+    "iso7637-2": "subckt",
   };
 
   // Any symbol living under an "opamps" directory is an op-amp at heart.
@@ -509,6 +517,27 @@ export const LTSPICE_PINS: Record<string, LtPin[]> = {
   varistor: [{ name: "invin", dx: -32, dy: 48 }, { name: "noninvin", dx: -32, dy: 80 }],
   // bi2 (B current source, alternate geometry): pins are bi's flipped — +(0,80)/−(0,0).
   bi2: [{ name: "+", dx: 0, dy: 80 }, { name: "-", dx: 0, dy: 0 }],
+  // ── LTspice-library subcircuit symbols (`SYMATTR Prefix X`) ──────────────
+  // Pins in SpiceOrder from the installed .asy files; the subckt branch of
+  // buildPinOverride assigns ids p1..pN in this order (SPICE X-line node
+  // order), with the .asy PinName kept as the display label.
+  // Misc/TowTom2.asy — 2nd-order Tow-Thomas filter block (V1, V2, INV).
+  towtom2: [
+    { name: "V1", dx: -32, dy: 64 },
+    { name: "V2", dx: -32, dy: -32 },
+    { name: "INV", dx: -32, dy: 160 },
+  ],
+  // SpecialFunctions/capmeter.asy — vector impedance meter (subckt capometer).
+  capmeter: [
+    { name: "DUT+", dx: -80, dy: 32 },
+    { name: "DUT-", dx: -80, dy: 96 },
+    { name: "bias", dx: -80, dy: -32 },
+    { name: "Resistance", dx: 288, dy: 0 },
+    { name: "Capacitance", dx: 288, dy: 64 },
+  ],
+  // ISO16750-2.asy / ISO7637-2.asy — automotive transient generators; both
+  // are 2-pin sources with identical geometry (+ at the anchor, − below).
+  isoTransient: [{ name: "+", dx: 0, dy: 0 }, { name: "-", dx: 0, dy: 80 }],
   // ── Digital A-devices (`Digital\*.asy`, LTspice 17.2.4) ──────────────────
   // Each .asy exposes a SUBSET of the 8-slot pin contract (1-5 in, 6 _Q, 7 Q,
   // 8 com), so these banks are mapped BY PIN ID, not positionally zipped: the
@@ -688,6 +717,12 @@ function ltPinKey(type: string): keyof typeof LTSPICE_PINS | null {
     // varistor (SpecialFunctions/varistor.asy): primary pins invin(-32,48)/
     // noninvin(-32,80) at SpiceOrder 1/2 — own bank.
     varistor: "varistor",
+    // Library subcircuit symbols (Prefix X) — banks are SpiceOrder-ordered;
+    // the subckt branch of buildPinOverride assigns p1..pN ids.
+    towtom2: "towtom2",
+    capmeter: "capmeter",
+    "iso16750-2": "isoTransient",
+    "iso7637-2": "isoTransient",
   };
   return map[leaf] ?? null;
 }
@@ -749,6 +784,22 @@ function buildPinOverride(symbol: AscSymbol, kind: ComponentKind): PinOverride[]
       });
     }
     return override.length > 0 ? override : null;
+  }
+
+  // A subcircuit instance has a variable pin count set by its .asy, not by the
+  // kind's default 2-port geometry: assign ids p1..pN in SpiceOrder (the deck
+  // builder emits X-line nodes in that order) and keep the .asy PinName as the
+  // display label.
+  if (kind === "subckt") {
+    return ltPins.map((lt, i) => {
+      const offset = transformLtPoint(lt.dx, lt.dy, symbol.orientation);
+      return {
+        id: `p${i + 1}`,
+        label: lt.name,
+        x: symbol.x + offset.x,
+        y: symbol.y + offset.y,
+      };
+    });
   }
 
   const count = Math.min(ltPins.length, tauPins.length);
@@ -1025,6 +1076,37 @@ function flattenSubcircuit(
 }
 
 /**
+ * Per-symbol defaults for the LTspice-library subcircuit symbols (Prefix X),
+ * taken from the installed `.asy` files' own `SYMATTR` lines. LTspice only
+ * writes an attribute into the `.asc` when the user changed it, so an instance
+ * without a `SpiceModel`/`SpiceLine` must adopt the symbol's default (the ISO
+ * examples' U1 instances carry no attrs at all and mean the 12 V variant).
+ */
+const SUBCKT_SYMBOL_DEFAULTS: Record<string, { name: string; params?: string }> = {
+  towtom2: { name: "TowTom2" },
+  capmeter: { name: "capometer", params: "current=1m freq=3Meg C=.5µ Q=.25" },
+  "iso16750-2": { name: "4-6-3_12V_StartingProfile" },
+  "iso7637-2": { name: "Pulse1_12V" },
+};
+
+/**
+ * Compose a `subckt` component value — `<subcircuit name> [param=val …]` —
+ * from an instance's attributes with the `.asy` defaults as fallback. The name
+ * comes from `SpiceModel` (how the ISO symbols select a profile) or `Value`;
+ * instance params ride on `SpiceLine`/`SpiceLine2` (Fc.asc's capmeter). The
+ * deck builder sanitizes the name and normalizes `µ` at emission time.
+ */
+function subcktValueFromSymbol(leaf: string, attrs: Record<string, string>): string {
+  const def = SUBCKT_SYMBOL_DEFAULTS[leaf];
+  const name = (attrs.SpiceModel ?? attrs.Value ?? "").trim() || def?.name || leaf;
+  const params = [attrs.SpiceLine, attrs.SpiceLine2]
+    .map((s) => s?.trim())
+    .filter((s): s is string => !!s)
+    .join(" ") || def?.params || "";
+  return params ? `${name} ${params}` : name;
+}
+
+/**
  * Return a human-readable import note for known placeholder symbol types, or
  * `null` when the symbol needs no note (it maps faithfully to a Tau kind).
  * Used by {@link ascToSchematic} to populate `AscImportResult.notes`.
@@ -1139,9 +1221,11 @@ export function ascToSchematic(doc: AscDocument, options: AscImportOptions = {})
       // Nets stay correct; the import note already says to swap in a real model.
       value: kind === "digitalGate"
         ? `${leaf} ${componentValueFromAttrs(kind, symbol.attrs)}`.trim()
-        : (leaf === "varistor" || leaf === "diac") && kind === "resistor"
-          ? "1Meg"
-          : componentValueFromAttrs(kind, symbol.attrs),
+        : kind === "subckt"
+          ? subcktValueFromSymbol(leaf, symbol.attrs)
+          : (leaf === "varistor" || leaf === "diac") && kind === "resistor"
+            ? "1Meg"
+            : componentValueFromAttrs(kind, symbol.attrs),
       label: instName,
       ...(pinOverride ? { pinOverride } : {}),
     });

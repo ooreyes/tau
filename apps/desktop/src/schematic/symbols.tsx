@@ -46,6 +46,7 @@ export const SYMBOL_BODY: Record<ComponentKind, BodyBox> = {
   switch: { minX: -14, minY: -20, maxX: 14, maxY: 8 },
   transformer: { minX: -24, minY: -27, maxX: 24, maxY: 27 },
   tline: { minX: -20, minY: -16, maxX: 20, maxY: 16 },
+  subckt: { minX: -24, minY: -20, maxX: 24, maxY: 20 },
   testpoint: { minX: -11, minY: -16, maxX: 11, maxY: 14 },
   ground: { minX: -12, minY: -3, maxX: 12, maxY: 22 },
 };
@@ -84,6 +85,7 @@ export const SYMBOL_BOX: Record<ComponentKind, { halfW: number; halfH: number }>
   switch: { halfW: 14, halfH: 20 },
   transformer: { halfW: 24, halfH: 27 },
   tline: { halfW: 20, halfH: 18 },
+  subckt: { halfW: 26, halfH: 22 },
   testpoint: { halfW: 11, halfH: 16 },
   ground: { halfW: 12, halfH: 22 },
 };
@@ -550,6 +552,20 @@ export function ComponentSymbol({ kind }: { kind: ComponentKind }) {
           <line x1={16} y1={16} x2={32} y2={16} />
           <line x1={16} y1={-16} x2={16} y2={-4} />
           <line x1={16} y1={16} x2={16} y2={4} />
+        </>
+      );
+
+    case "subckt":
+      return (
+        <>
+          {/* Generic subcircuit box (SPICE X device). Imported LTspice-library
+              parts carry their own pin geometry (pinOverride), so the body is
+              a neutral rectangle with the default 2-port leads; the X glyph
+              marks it as a subcircuit instance. */}
+          <rect x={-24} y={-20} width={48} height={40} rx={2} />
+          <line x1={-32} y1={0} x2={-24} y2={0} />
+          <line x1={24} y1={0} x2={32} y2={0} />
+          <path d="M -7 -7 L 7 7 M -7 7 L 7 -7" />
         </>
       );
 

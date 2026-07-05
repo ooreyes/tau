@@ -8,29 +8,60 @@
      `git log --oneline -8`, recover/finish/revert that unit FIRST, then go on.
      ─────────────────────────────────────────────────────────────────────── -->
 ## ⏱ HEARTBEAT
-- **Headline metric:** 1195 tests green (default suite) + 5 corpus specs
-  · corpus runner: 82 imported / **75 warning-clean** / **82 deck-built (ALL)**
-  / **69 op-converged** — floors 82/75/82/69
-- **Run started (UTC):** 2026-07-05T06:45Z
-- **Synced to origin:** auto/ltspice-parity @ d714a5a (baseline re-verified:
-  1195 passing, review rotation satisfied @ 6ee3466)
-- **Unit 1 (IN PROGRESS):** library-subcircuit `.asy` Prefix X import path (§1)
-  — new `subckt` kind so MISC\TowTom2, capmeter, ISO16750-2, ISO7637-2 import
-  as real subcircuit instances (warning-clean 75→79 expected).
-  - Files: engine/bundledSubcircuits.ts (NEW: 4 libs embedded pre-sanitized —
-    dash→underscore names, capometer Rpar→resistor + if()→ternary + µ→u),
-    io/ascImport.ts (4 leaf mappings + pin banks), engine/spiceNetlist.ts
-    (X-line emission + bundled block/include expansion), schematic/{types,
-    pins,symbols,catalog}.ts wiring.
-  - Verified so far (live ngspice -b, BEFORE code): dashed subckt names are
-    fatal → sanitize; TowTom2 verbatim converges on its internal .params;
-    sanitized capometer op-converges; ISO 4-6-3_12V profile .tran runs
-    (vmax 14.5 V / 20 s).
-  - Last completed sub-step: none (claim commit).
+- **Headline metric:** 1219 tests green (default suite) + 5 corpus specs
+  · corpus runner: 82 imported / **79 warning-clean** / **82 deck-built (ALL)**
+  / **72 op-converged** — floors 82/79/82/72
+- **Run started (UTC):** 2026-07-05T12:00Z
+- **Synced to origin:** auto/ltspice-parity @ 101ad28 + recovered wip f6fba33
+  (previous session killed mid-unit; checkpoint cherry-picked, re-verified:
+  typecheck clean, 1219 passing, corpus 82/79/82/72)
+- **Unit 1 (DONE):** library-subcircuit `.asy` Prefix X import path (§1) —
+  new `subckt` kind; TowTom2/capmeter/ISO16750-2/ISO7637-2 import as real
+  subcircuit instances. Warning-clean 75→79, op-converged 69→72.
+- **Unit 2 (IN PROGRESS):** bundle Educational `opamp.sub` behind the same
+  bundledSubcircuits path so opamp.asc/logamp.asc `.include opamp.sub`
+  resolves — op-converged 72→74 expected.
 - **Status:** IN PROGRESS
 - NOTE (carried): one transient full-suite failure was observed once
   (1194/1195) between two clean 1195 runs — not reproduced; watch for a
-  flaky sim-timing test.
+  flaky sim-timing test. (2026-07-05: full suite ran clean at 1219.)
+
+---
+
+## 2026-07-05T12:10Z — auto/ltspice-parity — §1: library-subcircuit Prefix X path (recovered + finished)
+
+### What I did
+- **Recovered the previous session's rescued checkpoint** (`f6fba33` on
+  `auto/ltspice-parity-wip`, session killed mid-unit at 09:59Z) via
+  `cherry-pick --no-commit`, then re-verified everything before committing.
+- **New `subckt` component kind + bundled-library path**:
+  `engine/bundledSubcircuits.ts` embeds 4 LTspice libs pre-sanitized
+  (dash→underscore subckt names — dashes are fatal to ngspice; capometer
+  `Rpar` → plain resistor, `if()` → ternary, `µ` → `u`). `io/ascImport.ts`
+  maps MISC\TowTom2, capmeter, ISO16750-2, ISO7637-2 leaf symbols to
+  subcircuit instances with real pin banks; `engine/spiceNetlist.ts` emits
+  X-lines and expands bundled blocks/includes; catalog/pins/symbols/types
+  wired for the new kind.
+
+### Files touched
+engine/bundledSubcircuits.ts (NEW) + .test.ts (NEW, 240 lines),
+io/ascImport.ts + .test.ts, engine/spiceNetlist.ts,
+schematic/{catalog,pins,symbols,types}, scripts/acceptanceCorpus.corpus.ts
+(floors 75→79, 69→72), FEATURE_PARITY.md, PROGRESS.md
+
+### Tests
+1219 passing (was 1195, +24 new) + 5 corpus specs — all green, typecheck clean
+
+### FEATURE_PARITY items updated
+§1 op-deck-run item: ~70/82 → 72/82 with bundled-subckt note; footer updated
+(next: opamp.sub, PHIDET, nigbt/LT1184F)
+
+### UX issues found
+none (no UI change)
+
+### Next step
+Bundle Educational `opamp.sub` via the same bundledSubcircuits path so
+opamp.asc/logamp.asc resolve their `.include` — op-converged 72→74.
 
 ---
 

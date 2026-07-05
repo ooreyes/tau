@@ -1078,3 +1078,88 @@ SYMATTR Value I=V(a)*2`;
     expect(doc.warnings.filter((w) => /B1/i.test(w))).toHaveLength(0);
   });
 });
+
+describe("library-subcircuit symbols (Prefix X: TowTom2/capmeter/ISO16750-2/ISO7637-2)", () => {
+  it("ltspiceTypeToKind maps the four bundled library symbols to subckt", () => {
+    expect(ltspiceTypeToKind("MISC\\TOWTOM2")).toBe("subckt");
+    expect(ltspiceTypeToKind("capmeter")).toBe("subckt");
+    expect(ltspiceTypeToKind("ISO16750-2")).toBe("subckt");
+    expect(ltspiceTypeToKind("ISO7637-2")).toBe("subckt");
+    // Other library X-symbols are still unmapped (no bundled body).
+    expect(ltspiceTypeToKind("POWERPRODUCTS\\LT1184F")).toBeNull();
+  });
+
+  it("imports MISC\\TOWTOM2 with SpiceOrder pins p1..p3 and the .asy default name", () => {
+    // TowTom2.asy: V1(-32,64) V2(-32,-32) INV(-32,160), Value TowTom2.
+    // 1563.asc places it R0 at (2192,1024) with no Value attr.
+    const src = `Version 4
+SHEET 1 880 680
+SYMBOL MISC\\TOWTOM2 2192 1024 R0
+SYMATTR InstName U1`;
+    const doc = ascToSchematic(parseAsc(src));
+    const u1 = doc.components.find((c) => c.label === "U1");
+    expect(u1?.kind).toBe("subckt");
+    expect(u1?.value).toBe("TowTom2");
+    const pins = Object.fromEntries((u1?.pinOverride ?? []).map((p) => [p.id, { x: p.x, y: p.y, label: p.label }]));
+    expect(pins.p1).toEqual({ x: 2160, y: 1088, label: "V1" });
+    expect(pins.p2).toEqual({ x: 2160, y: 992, label: "V2" });
+    expect(pins.p3).toEqual({ x: 2160, y: 1184, label: "INV" });
+    expect(doc.warnings).toHaveLength(0);
+  });
+
+  it("imports capmeter with 5 pins and joins the instance SpiceLine onto the name", () => {
+    // Fc.asc's U1: R0 at (2976,-640), SpiceLine current=1m freq=3Meg C=.25µ.
+    // capmeter.asy: DUT+(-80,32) DUT-(-80,96) bias(-80,-32) Resistance(288,0)
+    // Capacitance(288,64); subckt name is `capometer` (the .asy Value).
+    const src = `Version 4
+SHEET 1 880 680
+SYMBOL capmeter 2976 -640 R0
+SYMATTR InstName U1
+SYMATTR SpiceLine current=1m freq=3Meg C=.25µ`;
+    const doc = ascToSchematic(parseAsc(src));
+    const u1 = doc.components.find((c) => c.label === "U1");
+    expect(u1?.kind).toBe("subckt");
+    expect(u1?.value).toBe("capometer current=1m freq=3Meg C=.25µ");
+    const pins = Object.fromEntries((u1?.pinOverride ?? []).map((p) => [p.id, { x: p.x, y: p.y }]));
+    expect(pins.p1).toEqual({ x: 2896, y: -608 }); // DUT+
+    expect(pins.p2).toEqual({ x: 2896, y: -544 }); // DUT-
+    expect(pins.p3).toEqual({ x: 2896, y: -672 }); // bias
+    expect(pins.p4).toEqual({ x: 3264, y: -640 }); // Resistance
+    expect(pins.p5).toEqual({ x: 3264, y: -576 }); // Capacitance
+    expect(doc.warnings).toHaveLength(0);
+  });
+
+  it("ISO symbols default to the .asy SpiceModel and honor an instance override", () => {
+    // ISO7637-2_example.asc: U1 has no attrs (→ .asy default Pulse1_12V);
+    // U2 selects Pulse1_24V via SYMATTR SpiceModel. Pins +(0,0)/−(0,80).
+    const src = `Version 4
+SHEET 1 880 680
+SYMBOL ISO7637-2 80 -64 R0
+SYMATTR InstName U1
+SYMBOL ISO7637-2 368 -64 R0
+SYMATTR InstName U2
+SYMATTR SpiceModel Pulse1_24V`;
+    const doc = ascToSchematic(parseAsc(src));
+    const u1 = doc.components.find((c) => c.label === "U1");
+    const u2 = doc.components.find((c) => c.label === "U2");
+    expect(u1?.value).toBe("Pulse1_12V");
+    expect(u2?.value).toBe("Pulse1_24V");
+    const pins1 = Object.fromEntries((u1?.pinOverride ?? []).map((p) => [p.id, { x: p.x, y: p.y }]));
+    expect(pins1.p1).toEqual({ x: 80, y: -64 });
+    expect(pins1.p2).toEqual({ x: 80, y: 16 });
+    expect(doc.warnings).toHaveLength(0);
+  });
+
+  it("ISO16750-2 keeps the raw dashed profile name in the value (deck sanitizes)", () => {
+    const src = `Version 4
+SHEET 1 880 680
+SYMBOL ISO16750-2 544 -64 R0
+SYMATTR InstName U2
+SYMATTR SpiceModel 4-6-3_24V_StartingProfile`;
+    const doc = ascToSchematic(parseAsc(src));
+    const u2 = doc.components.find((c) => c.label === "U2");
+    expect(u2?.kind).toBe("subckt");
+    expect(u2?.value).toBe("4-6-3_24V_StartingProfile");
+    expect(doc.warnings).toHaveLength(0);
+  });
+});

@@ -208,6 +208,14 @@ const LOCAL_PINS: Record<ComponentKind, LocalPin[]> = {
     { id: "b1", label: "B+", x: 32, y: -16 },
     { id: "b2", label: "B-", x: 32, y: 16 },
   ],
+  // Generic subcircuit instance (SPICE X device). Pin ids are p1..pN in the
+  // subcircuit's SpiceOrder; imported LTspice-library parts (TowTom2, capmeter,
+  // ISO16750-2/ISO7637-2) override this bank with the .asy's exact pin count
+  // and geometry. A natively placed instance gets a plain 2-port default.
+  subckt: [
+    { id: "p1", label: "1", x: -32, y: 0 },
+    { id: "p2", label: "2", x: 32, y: 0 },
+  ],
   testpoint: [{ id: "tp", label: "TP", x: 0, y: 0 }],
   ground: [{ id: "g", label: "0", x: 0, y: 0 }],
 };

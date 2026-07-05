@@ -19,6 +19,7 @@ import { couplingLinesFromDirectives } from "./couplingDirectives";
 import { laplaceTransfer, laplaceSourceLines } from "./laplace";
 import { coreInductance } from "./coreInductor";
 import { standardModelLine, standardModelType } from "./standardModels";
+import { bundledSubcircuitBlock, bundledLibraryText, sanitizeSubcktName } from "./bundledSubcircuits";
 import { tlineDeckParams } from "./tlineSpec";
 import { parseTempDirective } from "../io/directiveAnalysis";
 
@@ -92,8 +93,22 @@ export function buildSpiceDeck(schematic: Schematic, analysis: SpiceAnalysis): S
 
   // Carry the document's own `.model`/`.lib`/`.inc`/`.subckt` definitions into the
   // deck so an imported `.asc` simulates against its real device models and
-  // libraries instead of only Tau's generic starter models.
-  lines.push(...modelLibLinesFromDirectives(rawDirectives));
+  // libraries instead of only Tau's generic starter models. A `.include`/`.lib`
+  // that names a BUNDLED LTspice library file (1563.asc's `.include TowTom2.sub`)
+  // is replaced by the bundled text itself — ngspice can't resolve LTspice's
+  // lib/sub paths from Tau's working directory. Names those texts define are
+  // tracked so the per-instance emission below doesn't duplicate the block.
+  const inlinedSubckts = new Set<string>();
+  for (const line of modelLibLinesFromDirectives(rawDirectives)) {
+    const fileRef = /^\.(?:include|lib)\s+(.+)$/i.exec(line.trim());
+    const bundled = fileRef ? bundledLibraryText(fileRef[1]) : null;
+    if (bundled) {
+      lines.push(bundled);
+      for (const m of bundled.matchAll(/^\.subckt\s+(\S+)/gim)) inlinedSubckts.add(m[1].toLowerCase());
+    } else {
+      lines.push(line);
+    }
+  }
 
   // Carry mutual-inductance `K` coupling directives (transformer windings) into
   // the deck with any `{expr}` coefficient resolved; without this a coupled
@@ -155,6 +170,24 @@ export function buildSpiceDeck(schematic: Schematic, analysis: SpiceAnalysis): S
       emittedStandard.add(named.toLowerCase());
       knownModels.add(named.toLowerCase());
       if (standardModelType(named) === "vdmos") vdmosModels.add(named.toLowerCase());
+    }
+  }
+
+  // A subcircuit instance references its `.subckt` by name (the value's first
+  // token). When the document neither defines that name nor `.include`s a
+  // bundled library that does, emit the bundled block (engine/
+  // bundledSubcircuits.ts) so the deck is self-contained — this is how the
+  // ISO16750-2/ISO7637-2 symbols work in LTspice, whose `.asy` ModelFile
+  // attribute pulls the library in without any on-canvas directive.
+  const emittedSubckts = new Set<string>();
+  for (const { component } of circuit.components) {
+    if (component.kind !== "subckt") continue;
+    const ref = sanitizeSubcktName(component.value.trim().split(/\s+/)[0] ?? "").toLowerCase();
+    if (!ref || userModels.has(ref) || inlinedSubckts.has(ref) || emittedSubckts.has(ref)) continue;
+    const block = bundledSubcircuitBlock(ref);
+    if (block) {
+      lines.push(block);
+      emittedSubckts.add(ref);
     }
   }
 
@@ -495,6 +528,28 @@ function componentLines(entry: ExtractedComponent, index: number, userModels: Se
       // engine only (the linear TS MNA solver has no transmission-line stamp).
       return [`${name} ${node("a1")} ${node("a2")} ${node("b1")} ${node("b2")} ${tlineDeckParams(component.value)}`];
     }
+    case "subckt": {
+      // Subcircuit instance: X <nodes in SpiceOrder> <subckt name> [params].
+      // Pin ids are p1..pN (the importer banks them in the .asy's SpiceOrder),
+      // so sort numerically — object key order is not a contract. The name is
+      // sanitized exactly like the bundled `.subckt` lines (a dash in a subckt
+      // name is fatal to ngspice's X-line lookup), and any `µ` in the instance
+      // params (Fc.asc's `C=.25µ`) becomes ngspice's `u`.
+      const tokens = component.value.trim().split(/\s+/).filter(Boolean);
+      const subName = tokens[0] ?? "";
+      if (!subName) {
+        throw new Error(`${component.label || "subcircuit"} needs a subcircuit name (the value's first token).`);
+      }
+      const params = tokens.slice(1).join(" ").replace(/µ/g, "u");
+      const nodes = Object.keys(entry.pins)
+        .filter((pin) => /^p\d+$/.test(pin))
+        .sort((a, b) => Number(a.slice(1)) - Number(b.slice(1)))
+        .map((pin) => node(pin));
+      if (nodes.length === 0) {
+        throw new Error(`${component.label || "subcircuit"} has no connected pins.`);
+      }
+      return [`${name} ${nodes.join(" ")} ${sanitizeSubcktName(subName)}${params ? ` ${params}` : ""}`];
+    }
     case "testpoint":
     case "ground":
       return [];
@@ -565,7 +620,7 @@ function instanceName(component: SchematicComponent, index: number): string {
   const prefix: Record<ComponentKind, string> = {
     resistor: "R", capacitor: "C", inductor: "L", vsource: "V", isource: "I", vac: "V", iac: "I", vpulse: "V",
     diode: "D", led: "D", zener: "D", opamp: "E", comparator: "B", digitalGate: "B", dflop: "A", sampleHold: "A", modulator: "A", vcvs: "E", vccs: "G", cccs: "F", ccvs: "H", bsource: "B", nmos: "M", pmos: "M", njf: "J", pjf: "J", npn: "Q", pnp: "Q",
-    potentiometer: "R", switch: "R", transformer: "L", tline: "T", testpoint: "X", ground: "X",
+    potentiometer: "R", switch: "R", transformer: "L", tline: "T", subckt: "X", testpoint: "X", ground: "X",
   };
   const requested = safeName(component.label);
   const p = prefix[component.kind];

@@ -926,19 +926,22 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
     number, not an eyeball. `interpolateAt`/`resampleOnto` exported for the
     `.raw` scope overlay. 10 unit tests. (Still ⬜: actually tuning ngspice
     defaults so the verdict passes across the deck suite.)
-- 🟡 **Real-`.asc` op-deck *run* now ~70/82** (was 45/82 when first measured this
+- 🟡 **Real-`.asc` op-deck *run* now 72/82** (was 45/82 when first measured this
   session) — i.e. how many acceptance decks ngspice actually solves an operating
   point for, not just builds. Driven up by: a **default `rshunt=1e12`** (every node
   gets a DC path — 19 op-amp/AC-coupled circuits stopped throwing "singular
   matrix"); **`LPNP`/`LNPN` → `PNP`/`NPN`** (discrete LM741/LM308); splitting
   **multi-directive TEXT blocks** on `\n` so `.ic`/`.tran` don't collapse
-  (Draft6); and **rewriting `K` coupling refs** to renamed inductor instances
-  (Electrometer). The ~12 that still don't run are genuinely out of ngspice's
-  reach here: 4 reference external `.sub` libraries not present on disk
-  (opamp/capometer/TowTom2), ~~PLL/PLL2 use LTspice's `rand()`~~ (fixed
+  (Draft6); **rewriting `K` coupling refs** to renamed inductor instances
+  (Electrometer); and **bundled library subcircuits** (2026-07-05:
+  `engine/bundledSubcircuits.ts` embeds TowTom2/capometer/ISO16750-2/ISO7637-2
+  pre-sanitized — capmeter + both ISO demos now converge). The 10 that still
+  don't run: 2 reference `opamp.sub` not yet bundled (opamp/logamp), 3 are
+  inductor-loop singular matrices (Cohn/passive/varactor2), Fc has `{param}`
+  braces inside a `.model` line, ~~PLL/PLL2 use LTspice's `rand()`~~ (fixed
   2026-07-04: statFuncsToNgspice surrogate — both converge), SoftDiodeRecovery a
-  proprietary diode `Vp` param, UHFpreamp an unbundled `mrf901`, 2 ISO demos time
-  out, plus two deep loop-probe/connectivity cases (LoopGain2, P2).
+  proprietary diode `Vp` param, UHFpreamp an unbundled `mrf901`, plus two deep
+  loop-probe/connectivity cases (LoopGain2 shorted-VSRC, P2).
 - ✅ **Class-D fidelity — the flagship circuit now SIMULATES correctly
   (2026-07-03), proven by a committed runner** (`scripts/classdParity.corpus.ts`,
   runs with `scripts/acceptance-corpus.sh`). Two fixes:
@@ -1067,9 +1070,9 @@ should map LTspice symbol `type` → Tau `ComponentKind`, falling back to a gene
 ---
 
 _This footer is intentionally not a live status line — see the `PROGRESS.md`
-heartbeat for the current test count and active unit. Deck-build is now 82/82
-(the Pierce XTAL / dimmer / varistor failures are fixed). Next highest-leverage
-work: push warning-clean toward the DoD ≥80/82 — library-subcircuit symbols
-(TowTom2/capmeter/ISO16750-2/ISO7637-2, an LTspice-library `.asy` `Prefix X` →
-subcircuit-instance path) and the remaining stateful Digital A-device
-(PHIDET)._
+heartbeat for the current test count and active unit. Deck-build is 82/82;
+warning-clean is 79/82 after the library-subcircuit `Prefix X` path landed
+(TowTom2/capmeter/ISO16750-2/ISO7637-2 bundled, 2026-07-05). Next
+highest-leverage work toward the DoD ≥80/82: bundle `opamp.sub`
+(unblocks opamp/logamp op-convergence), the remaining stateful Digital
+A-device (PHIDET), and the misc\nigbt / LT1184F symbols._

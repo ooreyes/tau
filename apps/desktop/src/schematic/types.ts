@@ -39,6 +39,7 @@ export type ComponentKind =
   | "switch"
   | "transformer"
   | "tline"
+  | "subckt"
   | "testpoint"
   | "ground";
 

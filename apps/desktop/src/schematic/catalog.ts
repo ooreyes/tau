@@ -58,6 +58,11 @@ export const CATALOG: CatalogEntry[] = [
   { kind: "switch",        section: "Electromechanical", name: "Switch",          hotkey: "s", prefix: "S",   defaultValue: "open",  unit: "" },
   { kind: "transformer",   section: "Electromechanical", name: "Transformer",     hotkey: "t", prefix: "T",   defaultValue: "1:1",   unit: "" },
   { kind: "tline",         section: "Electromechanical", name: "Transmission Line", hotkey: "", prefix: "T",   defaultValue: "Td=50n Z0=50", unit: "Ω s" },
+  // Generic subcircuit instance (SPICE X device): the value's first token is
+  // the .subckt name (bundled library or document-defined), the rest instance
+  // params. Imported LTspice-library symbols (TowTom2, capmeter, ISO16750-2,
+  // ISO7637-2) land on this kind with their own .asy pin geometry.
+  { kind: "subckt",        section: "Analog",            name: "Subcircuit (X)",  hotkey: "",  prefix: "X",   defaultValue: "",      unit: "" },
   { kind: "testpoint",     section: "Markers",           name: "Test Point",      hotkey: "x", prefix: "TP",  defaultValue: "",      unit: "" },
 ];
 
