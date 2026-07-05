@@ -8,9 +8,9 @@
      `git log --oneline -8`, recover/finish/revert that unit FIRST, then go on.
      ─────────────────────────────────────────────────────────────────────── -->
 ## ⏱ HEARTBEAT
-- **Headline metric:** 1221 tests green (default suite) + 5 corpus specs
+- **Headline metric:** 1222 tests green (default suite) + 5 corpus specs
   · corpus runner: 82 imported / **79 warning-clean** / **82 deck-built (ALL)**
-  / **74 op-converged** — floors 82/79/82/74
+  / **77 op-converged** — floors 82/79/82/77
 - **Run started (UTC):** 2026-07-05T12:00Z
 - **Synced to origin:** auto/ltspice-parity @ 101ad28 + recovered wip f6fba33
   (previous session killed mid-unit; checkpoint cherry-picked, re-verified:
@@ -20,19 +20,52 @@
   subcircuit instances. Warning-clean 75→79, op-converged 69→72.
 - **Unit 2 (DONE):** bundled `opamp.sub` + mapped `Opamps\opamp` to the subckt
   kind (SpiceOrder invin-first) — opamp.asc/logamp.asc op-converge, 72→74.
-- **Unit 3 (IN PROGRESS):** inductor-loop singular matrices (§1/§7) —
-  Cohn/passive/varactor2 op fails ("singular matrix: check node lN#branch").
-  Hypothesis: LTspice's default inductor damping (Rser≈1mΩ) breaks the L/V
-  loop degeneracy; plan: live-probe the failing decks with per-inductor rser,
-  then emit the LTspice-equivalent default in spiceNetlist.ts inductor path
-  (only when the instance has no explicit Rser), tests + corpus re-run.
-  - Files: engine/spiceNetlist.ts (+test), scripts/acceptanceCorpus.corpus.ts
-    floors if proven.
-  - Last completed sub-step: none (claim).
-- **Status:** IN PROGRESS
+- **Unit 3 (DONE):** inductor-loop singular matrices (§1/§7) — default
+  `rseries=1e-3` in DEFAULT_OPTIONS (spiceOptions.ts), matching LTspice's
+  documented 1 mΩ inductor Rser default. Cohn/passive/varactor2 op-converge;
+  corpus 74→77, zero regressions (Class-D + sample-hold parity specs green).
+- **Status:** DONE
 - NOTE (carried): one transient full-suite failure was observed once
   (1194/1195) between two clean 1195 runs — not reproduced; watch for a
   flaky sim-timing test. (2026-07-05: full suite ran clean at 1219.)
+
+---
+
+## 2026-07-05T12:40Z — auto/ltspice-parity — §1/§7: default rseries=1mΩ — Cohn/passive/varactor2 converge, op-run 74→77
+
+### What I did
+- **Added `rseries: "1e-3"` to `DEFAULT_OPTIONS`** (engine/spiceOptions.ts).
+  This is LTspice's own documented default (every inductor without an
+  explicit Rser gets 1 mΩ; Control Panel → Hacks), so it is simultaneously
+  the convergence fix and the parity-faithful choice. A pure-inductor loop
+  (Cohn's L2/L3+L4/L6) has an indeterminate DC current split; ngspice's op
+  throws "singular matrix: check node lN#branch" where LTspice solves.
+- Live-verified semantics first: `rseries=1e-3` adds exactly 1 mΩ per
+  inductor (V-across-L probe → 1000 A branch current), then all three
+  failing decks solved; full corpus re-run showed zero regressions and the
+  Class-D/sample-hold parity specs stayed green.
+- Documents can override (`.options rseries=0` wins over the default) —
+  covered by a new test.
+
+### Files touched
+engine/spiceOptions.ts + .test.ts, scripts/acceptanceCorpus.corpus.ts
+(floor 74→77), FEATURE_PARITY.md, PROGRESS.md
+
+### Tests
+1222 passing (+1 new) + 5 corpus specs — all green, typecheck clean
+
+### FEATURE_PARITY items updated
+§1 op-deck-run item 74/82 → 77/82 (5 remaining: Fc, LoopGain2, P2,
+SoftDiodeRecovery, UHFpreamp); footer updated
+
+### UX issues found
+none (no UI change). Pre-existing gap noted: imported inductors DROP an
+explicit `Rser=` (ascImport filters it; ngspice L has no rser instance
+param) — should expand to a series resistor like the crystal BVD path.
+
+### Next step
+§10 interleave: migrate the next panel to the shadcn Button/primitive layer,
+or attack Fc.asc's `{param}`-inside-`.model` deck passthrough.
 
 ---
 

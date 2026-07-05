@@ -42,7 +42,16 @@ describe("parseOptionsDirectives", () => {
 
 describe("mergeOptionsLine", () => {
   it("emits the defaults when no overrides are given", () => {
-    expect(mergeOptionsLine({})).toBe(`.options gmin=${DEFAULT_OPTIONS.gmin} reltol=${DEFAULT_OPTIONS.reltol} abstol=${DEFAULT_OPTIONS.abstol} vntol=${DEFAULT_OPTIONS.vntol} rshunt=${DEFAULT_OPTIONS.rshunt}`);
+    expect(mergeOptionsLine({})).toBe(`.options gmin=${DEFAULT_OPTIONS.gmin} reltol=${DEFAULT_OPTIONS.reltol} abstol=${DEFAULT_OPTIONS.abstol} vntol=${DEFAULT_OPTIONS.vntol} rshunt=${DEFAULT_OPTIONS.rshunt} rseries=${DEFAULT_OPTIONS.rseries}`);
+  });
+
+  it("includes LTspice's default 1 mΩ inductor series resistance, overridable", () => {
+    // LTspice defaults every inductor without an explicit Rser to 1 mΩ; the
+    // matching ngspice rseries also un-degenerates pure-L loops at DC
+    // (Cohn/passive/varactor2 "singular matrix" op failures).
+    expect(mergeOptionsLine({})).toContain("rseries=1e-3");
+    expect(mergeOptionsLine({ rseries: "0" })).toContain("rseries=0");
+    expect(optionsLineFromDirectives([".options rseries=1u"])).toContain("rseries=1u");
   });
 
   it("lets the document override a default in place", () => {

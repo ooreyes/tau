@@ -21,6 +21,14 @@ export const DEFAULT_OPTIONS: Record<string, string> = {
   // 1e12 Ω its effect on real node voltages is below measurement noise. The
   // document can override or disable it.
   rshunt: "1e12",
+  // 1 mΩ in series with every inductor — LTspice's own documented default
+  // (an inductor without an explicit Rser gets 1 mΩ; Control Panel → Hacks).
+  // Without it a loop of ideal inductors (or L across a V source) has an
+  // indeterminate DC current split and ngspice's op fails with "singular
+  // matrix: check node lN#branch" (Cohn/passive/varactor2 in the acceptance
+  // corpus). Matching LTspice's default is therefore both the convergence fix
+  // and the parity-faithful choice. The document can override or disable it.
+  rseries: "1e-3",
 };
 
 /**
