@@ -20,7 +20,16 @@
   subcircuit instances. Warning-clean 75→79, op-converged 69→72.
 - **Unit 2 (DONE):** bundled `opamp.sub` + mapped `Opamps\opamp` to the subckt
   kind (SpiceOrder invin-first) — opamp.asc/logamp.asc op-converge, 72→74.
-- **Status:** DONE
+- **Unit 3 (IN PROGRESS):** inductor-loop singular matrices (§1/§7) —
+  Cohn/passive/varactor2 op fails ("singular matrix: check node lN#branch").
+  Hypothesis: LTspice's default inductor damping (Rser≈1mΩ) breaks the L/V
+  loop degeneracy; plan: live-probe the failing decks with per-inductor rser,
+  then emit the LTspice-equivalent default in spiceNetlist.ts inductor path
+  (only when the instance has no explicit Rser), tests + corpus re-run.
+  - Files: engine/spiceNetlist.ts (+test), scripts/acceptanceCorpus.corpus.ts
+    floors if proven.
+  - Last completed sub-step: none (claim).
+- **Status:** IN PROGRESS
 - NOTE (carried): one transient full-suite failure was observed once
   (1194/1195) between two clean 1195 runs — not reproduced; watch for a
   flaky sim-timing test. (2026-07-05: full suite ran clean at 1219.)
