@@ -35,7 +35,16 @@
   new `--color-success` token, dead `.title-run`/`.settings-btn` rules
   removed. Recovered from wip checkpoint cf67322 (session killed mid-unit),
   finished + screenshot-verified at 1440×900. 1227 tests green.
-- **Status:** DONE
+- **Unit 6 (IN PROGRESS):** §1 multiline-TEXT directive handling — root cause
+  of 3 of the 4 remaining op failures: SoftDiodeRecovery drops `.model X`
+  sharing a TEXT block with `.tran`; P2 drops `+ L6 L7 1` continuation of
+  `K1`; UHFpreamp likely drops its MRF901 `.subckt` block. Fix directive
+  splitting/passthrough so non-analysis lines and `+` continuations inside a
+  TEXT block survive op-deck builds.
+  - Files: io/ascImport.ts and/or engine/spiceNetlist.ts (+tests), corpus floor.
+  - Verify: dumpDeck shows the lines; corpus op-converged 78→(79-81).
+  - Last completed sub-step: root-cause via new scripts/dumpDeck.corpus.ts.
+- **Status:** IN PROGRESS
 - NOTE (carried): one transient full-suite failure was observed once
   (1194/1195) between two clean 1195 runs — not reproduced; watch for a
   flaky sim-timing test. (2026-07-05: full suite ran clean at 1219.)
