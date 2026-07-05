@@ -28,7 +28,14 @@
   `substituteKnownBraces` in paramScope.ts, applied at deck build to
   passthrough model/lib lines outside `.subckt` bodies. Fc op-converges;
   corpus 77→78, zero regressions.
-- **Status:** DONE
+- **Unit 5 (IN PROGRESS):** §10 toolbar/topbar migration — title-run +
+  settings-btn onto the Button primitive (new icon-sm size), tokenize the
+  whole topbar block (mode-toggle/mode-btn/live-pill/brand — kills the
+  hardcoded #d68a3c orange that clashes with the runtime accent), new
+  `--color-success` token. Screenshot QA before/after at 1440×900.
+  - Files: ui/button.tsx, components/Toolbar.tsx, styles/tokens.css, App.css.
+  - Last completed sub-step: none (claim).
+- **Status:** IN PROGRESS
 - NOTE (carried): one transient full-suite failure was observed once
   (1194/1195) between two clean 1195 runs — not reproduced; watch for a
   flaky sim-timing test. (2026-07-05: full suite ran clean at 1219.)
