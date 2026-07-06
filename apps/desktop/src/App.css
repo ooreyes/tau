@@ -84,6 +84,8 @@
   --elev-1:   0 1px 2px rgba(0, 0, 0, 0.45);
   --elev-2:   0 6px 20px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.05);
   --elev-pop: 0 14px 44px rgba(0, 0, 0, 0.62), 0 0 0 1px rgba(255, 255, 255, 0.06);
+  /* Inset "screen" depth — instrument vignette for the scope/plot surfaces */
+  --elev-inset: inset 0 0 26px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.03);
 
   /* Motion — snappy, Apple-like */
   --motion-fast:  110ms;
@@ -1030,9 +1032,10 @@ body {
   width: 100%;
   aspect-ratio: 340 / 190;
   display: block;
-  background: var(--panel-3);
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
+  background: var(--scope-bg);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-md);
+  box-shadow: var(--elev-2), var(--elev-inset);
   overflow: visible;
 }
 
@@ -1104,6 +1107,7 @@ body {
   font-size: 10px;
   font-weight: 400;
   letter-spacing: 0.1px;
+  font-family: var(--font-mono);
 }
 
 .scope-legend span {
@@ -1211,6 +1215,7 @@ body {
 .trace-legend-label {
   font-size: 10px;
   color: var(--text);
+  font-family: var(--font-mono);
 }
 
 /* Compact pane-selector dropdown on each legend trace. */
@@ -1259,29 +1264,71 @@ body {
   border-color: var(--accent);
 }
 
+/* Export/utility buttons — neutral graphite ghost with real depth + spring lift.
+   Secondary to the accent PRIMARY "Add trace" so the row reads as a hierarchy. */
 .expr-add {
   flex-shrink: 0;
-  background: var(--accent-soft);
-  border: 1px solid var(--border-strong);
-  border-radius: 5px;
-  padding: 5px 10px;
-  color: var(--accent);
+  background: linear-gradient(180deg, var(--panel-4), var(--panel-2));
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  padding: 5px 11px;
+  color: var(--muted);
   font-size: 11px;
+  font-weight: 550;
+  letter-spacing: -0.005em;
   cursor: pointer;
+  box-shadow: var(--elev-1);
+  transition: transform var(--motion-fast) var(--spring),
+    box-shadow var(--motion-med) var(--spring),
+    color var(--motion-fast) var(--spring),
+    border-color var(--motion-fast) var(--spring),
+    background var(--motion-fast) var(--spring);
 }
 
 .expr-add:hover:not(:disabled) {
-  border-color: var(--accent);
+  color: var(--text);
+  border-color: var(--border-strong);
+  transform: translateY(-1px);
+  box-shadow: var(--elev-2);
+}
+
+.expr-add:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: var(--elev-1);
+}
+
+.expr-add:focus-visible {
+  outline: none;
+  box-shadow: var(--elev-1), 0 0 0 3px var(--accent-soft);
 }
 
 .expr-add:disabled {
   opacity: 0.4;
   cursor: default;
+  box-shadow: none;
 }
 
+/* PRIMARY action — "Add trace": solid amber, the one accent-weighted control. */
+.expr-add.primary {
+  color: var(--accent-ink);
+  background: linear-gradient(180deg, var(--accent-hover), var(--accent));
+  border-color: rgba(0, 0, 0, 0.25);
+  font-weight: 650;
+  box-shadow: var(--elev-1), 0 0 0 1px var(--accent-glow);
+}
+
+.expr-add.primary:hover:not(:disabled) {
+  background: var(--accent-hover);
+  transform: translateY(-1px);
+  box-shadow: var(--elev-2), 0 6px 18px var(--accent-glow);
+}
+
+/* Toggle-on state (cursors) — accent-filled, matches the primary weight. */
 .expr-add.active {
-  background: var(--accent);
-  color: var(--bg);
+  color: var(--accent-ink);
+  background: linear-gradient(180deg, var(--accent-hover), var(--accent));
+  border-color: rgba(0, 0, 0, 0.25);
+  box-shadow: var(--elev-1), 0 0 0 1px var(--accent-glow);
 }
 
 /* Vertical measurement-cursor lines on the FFT/Bode plots. */

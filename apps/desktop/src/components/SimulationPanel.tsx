@@ -558,7 +558,7 @@ export function SimulationPanel({
                 if (e.key === "Enter") addExpression();
               }}
             />
-            <button className="expr-add" onClick={addExpression} disabled={!exprInput.trim()}>
+            <button className="expr-add primary" onClick={addExpression} disabled={!exprInput.trim()}>
               Add trace
             </button>
             <button
