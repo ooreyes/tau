@@ -1,37 +1,41 @@
 /* ── Design tokens — the ONE foundation (graphite + a single confident amber accent).
    Consolidated: this is the sole :root. Do NOT reintroduce a second :root. ─────── */
 :root {
-  /* Surfaces — layered elevation, clean cool graphite (not muddy black) */
-  --bg:       #0b0c0e;
-  --panel:    #131519;
-  --panel-2:  #171a1f;
-  --panel-3:  #0e1013;
-  --panel-4:  #1d2027;
+  /* Surfaces — cool near-black graphite, layered like a command console (Anduril/Palantir) */
+  --bg:       #0a0c10;
+  --panel:    #11151b;
+  --panel-2:  #161b23;
+  --panel-3:  #0d1116;
+  --panel-4:  #1c222b;
 
-  /* Borders — hairline, low-opacity */
-  --border:         rgba(255, 255, 255, 0.08);
-  --border-strong:  rgba(255, 255, 255, 0.15);
-  --border-subtle:  rgba(255, 255, 255, 0.05);
+  /* Borders — crisp hairline with a faint cool-blue cast (a defined grid) */
+  --border:         rgba(170, 195, 225, 0.11);
+  --border-strong:  rgba(170, 195, 225, 0.20);
+  --border-subtle:  rgba(170, 195, 225, 0.06);
 
   /* Neutral hover overlays — theme-agnostic (white film over any dark surface) */
   --overlay-hover:        rgba(255, 255, 255, 0.045);
   --overlay-hover-faint:  rgba(255, 255, 255, 0.03);
 
-  /* Text — clean neutral, no yellow cast */
-  --text:   #edeef2;
-  --muted:  #8b919c;
-  --faint:  #565c66;
-  --canvas-label: #e7eaef;
-  --canvas-label-muted: #9aa1ad;
-  --canvas-label-halo: #08090b;
+  /* Text — high-contrast cool white/gray */
+  --text:   #e6ecf3;
+  --muted:  #7d8794;
+  --faint:  #495261;
+  --canvas-label: #e2e8f0;
+  --canvas-label-muted: #93a0b0;
+  --canvas-label-halo: #070a0e;
 
-  /* Accent — refined amber-gold, used with restraint */
-  --accent:       #eaa64d;
-  --accent-hover: #f4b566;
-  --accent-ink:   #1c1300;
-  --accent-soft:  rgba(234, 166, 77, 0.13);
-  --accent-glow:  rgba(234, 166, 77, 0.30);
-  --accent-line:  rgba(234, 166, 77, 0.32);  /* accent hairline for selected/active borders */
+  /* Accent — electric cobalt (Palantir/Anduril operator), used sparingly */
+  --accent:       #4d9dff;
+  --accent-hover: #6cb0ff;
+  --accent-ink:   #04121f;
+  --accent-soft:  rgba(77, 157, 255, 0.14);
+  --accent-glow:  rgba(77, 157, 255, 0.32);
+  --accent-line:  rgba(77, 157, 255, 0.34);  /* accent hairline for selected/active borders */
+
+  /* Amber demoted to a TACTICAL signal (active sim / alert) — never primary UI */
+  --signal:       #f0a63c;
+  --signal-soft:  rgba(240, 166, 60, 0.15);
 
   /* Semantic colors */
   --danger:       #f2564f;
@@ -44,26 +48,26 @@
   --cream-soft:   rgba(238, 240, 244, 0.07);
 
   /* Component schematic colors */
-  --comp:      #d6dae2;
-  --comp-ref:  #8b919c;
+  --comp:      #cfd6e0;
+  --comp-ref:  #7d8794;
 
   /* Grid */
-  --grid-dot:  rgba(255, 255, 255, 0.055);
+  --grid-dot:  rgba(170, 195, 225, 0.06);
 
-  /* Scope / plotter — matches panel surfaces, not "phosphor black" */
-  --scope-bg:    #0e1013;
-  --scope-grid:  #191d24;
+  /* Scope / plotter — instrument black-blue */
+  --scope-bg:    #0c1015;
+  --scope-grid:  #17202b;
 
-  /* Trace colors — clean, distinct */
-  --trace-cyan:    #4bc3e6;
-  --trace-green:   #58cc8a;
-  --trace-cream:   #dfe3ea;
-  --trace-red:     #f2564f;
-  --trace-purple:  #a48bf0;
-  --trace-amber:   #eaa64d;
+  /* Trace colors — instrument-grade, distinct on dark */
+  --trace-cyan:    #35c9ec;
+  --trace-green:   #4fd08a;
+  --trace-cream:   #d5deea;
+  --trace-red:     #ff5d52;
+  --trace-purple:  #9d8bff;
+  --trace-amber:   #f0a63c;
 
   /* Dial track */
-  --dial-track:  #23262e;
+  --dial-track:  #1e2632;
 
   /* Spacing scale — 4pt base */
   --sp-1:  4px;
