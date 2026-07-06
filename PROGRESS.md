@@ -12,19 +12,23 @@
   · corpus runner: 82 imported / **79 warning-clean** / **82 deck-built (ALL)**
   / **82 op-converged (ALL)** — floors 82/79/82/82
 - **Run started (UTC):** 2026-07-06T18:00Z
-- **Status: DONE** — §10 SimulationPanel run-bar / resolution-control landed as a
-  REAL visible upgrade (not a pixel-neutral shuffle). Discarded the
-  `-wip` sibling (02d00a3) — it regressed the palette back to Space Grotesk +
-  flat controls, banned by §10. Before/after PNGs of the ready state compared:
-  old = plain green hairline + white readout + sentence-case flat "Resolved";
-  new = 2px inset green accent bar + green status wash + green `--font-mono`
-  readout + uppercase "RESOLVED" chip; the warning path mirrors it in amber. New
-  tokens `--success`/`--success-soft`/`--success-line`/`--danger-line` added to
-  BOTH `:root` blocks with each block's correct palette values. Run-bar button
-  gained real depth (`--elev-1`), spring hover-lift (`translateY(-1px)`+`--elev-2`),
-  pressed + focus-visible states. Burned down 5 hardcoded literals
-  (`rgba(214,138,60,.5)`, `#f3c38d`, `#9eb7a2`, `rgba(240,64,96,.28)`,
-  `.bottom-errors` amber/green pair). 1241 tests green, typecheck clean.
+- **Status: DONE** — 3 §10 commits this session, foundation now clean:
+  1. **Run-bar / resolution-control real visible upgrade** (721256c^^): discarded
+     the regressive `-wip` sibling (02d00a3, reverted palette to Space Grotesk +
+     flat controls — banned). Ready-state before/after PNGs compared: old = plain
+     green hairline + white readout + flat "Resolved"; new = 2px inset green accent
+     bar + green status wash + green `--font-mono` readout + uppercase "RESOLVED"
+     chip; warning path mirrors in amber. Added `--success`/`--success-soft`/
+     `--success-line`/`--danger-line` tokens; run-bar button gained `--elev-1` rest,
+     spring hover-lift + `--elev-2`, pressed + focus-visible ring. 5 literals burned.
+  2. **Space Grotesk removal** (59796ab): 7 dead `"Space Grotesk"` refs (never
+     loaded — no @font-face anywhere) centralized onto `var(--font-ui)`. Verified
+     invisible (committed as banned-reference hygiene, not a design claim).
+  3. **:root consolidation** (721256c): merged the two partially-overlapping
+     `:root` blocks (stale teal top + premium amber bottom) into ONE, union of all
+     tokens with the winning values. before/after screenshots byte-identical
+     (same sha256) — pure structural, zero visual change. `grep ^:root` == 1.
+  Foundation rule ("one :root, no Space Grotesk") now satisfied. 1241 green.
 - **Synced to origin:** auto/ltspice-parity @ e44fac1 (prior session:
   consolidate to one premium palette + control depth/motion).
 - **Unit 6 (DONE):** §1 multiline-TEXT directive parity — per-physical-line
@@ -96,6 +100,63 @@
 - NOTE (carried, not seen this session): a transient single-test flake was
   reported last session (one red run between clean runs, name not captured).
   If it recurs, capture the failing test name before re-running.
+
+---
+
+## 2026-07-06T18:30Z — auto/ltspice-parity — §10: consolidate two :root blocks into one foundation
+
+### What I did
+- §10 foundation rule mandates ONE `:root`; App.css carried two (stale teal
+  palette at line 2, shadowed by the premium graphite+amber palette in the
+  DESIGN HANDOFF block). They only partially overlapped — top uniquely owned
+  radii/spacing/easing/overlay tokens, bottom uniquely owned fonts/motion/
+  elevation — so neither could be naively deleted.
+- Merged the union into the single top `:root` (bottom values win for every
+  color/font token, exactly as the cascade already resolved), deleted block two.
+
+### Files touched
+- apps/desktop/src/App.css
+
+### Tests
+1241 passing, 0 new. typecheck clean.
+
+### Visual proof
+before/after screenshots of the empty state AND the amplifier simulator view are
+**byte-for-byte identical (same sha256)** — pure structural consolidation, zero
+visual change. `grep "^:root"` now returns 1.
+
+### FEATURE_PARITY items updated
+§10 foundation ("one :root, no Space Grotesk") — now satisfied.
+
+### Next step
+Continue the §10 hardcoded-color burndown (283 literals remain in App.css) and
+the per-panel visible upgrades (scope/plots, dialogs, empty/error states).
+
+---
+
+## 2026-07-06T18:15Z — auto/ltspice-parity — §10: remove dead Space Grotesk font refs
+
+### What I did
+- Removed 7 stray `"Space Grotesk"` font-family refs (banned by the §10
+  foundation rule), routing `.mode-btn` / `.example-picker select` /
+  `.editor-hide` / `.ask-composer input` / `.settings-list button` /
+  `.confirm-actions button` / `.shell-toast` onto `var(--font-ui)`.
+- Discovered Space Grotesk was never actually loaded (no @font-face / web-font
+  import anywhere), so this is cosmetically invisible — committed honestly as
+  banned-reference hygiene, NOT a design-progress claim.
+
+### Files touched
+- apps/desktop/src/App.css
+
+### Tests
+1241 passing, 0 new.
+
+### Visual proof
+before/after crops of the mode toggle + Ask Sim composer pixel-identical (font
+already resolved to the SF Pro fallback). `grep "Space Grotesk"` returns 0.
+
+### Next step
+Consolidate the two :root blocks (done next commit).
 
 ---
 
