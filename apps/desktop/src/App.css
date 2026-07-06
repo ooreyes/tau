@@ -2625,7 +2625,7 @@ body {
   display: flex;
   flex-direction: column;
   min-height: 0;
-  background: #0b0b0e;
+  background: var(--panel);
   border-right: 1px solid var(--border);
 }
 
@@ -2654,7 +2654,7 @@ body {
 .explorer-icons {
   display: flex;
   gap: 9px;
-  color: #55555c;
+  color: var(--faint);
   font-size: 12px;
 }
 
@@ -2672,7 +2672,7 @@ body {
 }
 
 .explorer-icons button:hover {
-  color: #d9d4c2;
+  color: var(--text);
 }
 
 .explorer-search {
@@ -2682,9 +2682,9 @@ body {
   align-items: center;
   gap: 8px;
   padding: 0 10px;
-  color: #55555c;
-  background: #08080a;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: var(--faint);
+  background: var(--panel-3);
+  border: 1px solid var(--border);
   border-radius: 7px;
   font-size: 12px;
   width: calc(100% - 24px);
@@ -2704,7 +2704,7 @@ body {
   min-height: 0;
   overflow: auto;
   padding: 2px 6px 12px;
-  font: 500 12px "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  font: 500 12px var(--font-mono);
 }
 
 .tree-root,
@@ -2718,7 +2718,7 @@ body {
   border: 0;
   border-radius: 5px;
   background: transparent;
-  color: #8a8a92;
+  color: var(--muted);
   text-align: left;
   cursor: pointer;
   font: inherit;
@@ -2726,16 +2726,16 @@ body {
 
 .tree-root:hover,
 .tree-file:hover {
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--overlay-hover-faint);
 }
 
 .tree-folder {
-  color: #c9a05a;
+  color: var(--accent);
   font-weight: 700;
 }
 
 .tree-caret {
-  color: #5a5a62;
+  color: var(--faint);
 }
 
 .tree-children {
@@ -2750,15 +2750,15 @@ body {
   flex: none;
 }
 .tree-file i.blue,
-.editor-tab i.blue { background: #5b93c9; }
+.editor-tab i.blue { background: var(--trace-cyan); }
 .tree-file i.amber,
 .editor-tab i.amber {
-  background: #d68a3c;
-  box-shadow: 0 0 6px rgba(214, 138, 60, 0.9);
+  background: var(--accent);
+  box-shadow: 0 0 6px var(--accent-glow);
 }
 .tree-file.active {
-  color: #e6e0cf;
-  background: rgba(214, 138, 60, 0.12);
+  color: var(--cream);
+  background: var(--accent-soft);
 }
 
 /* editor */
