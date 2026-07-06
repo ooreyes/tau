@@ -56,7 +56,14 @@
   overrides needed it. Screenshot-verified at 1440×900: empty state ("No
   component selected") and a selected R1 with the Resistance field focused —
   amber focus ring, cream/muted text hierarchy, coherent with the shell.
-- **Status:** DONE
+- **Unit 10 (IN PROGRESS):** §10 analysis-tabs header — tokenize `.bottom-tabs
+  button` (`#6b6b73`→`--muted`, active `#d9d4c2`→`--text`, white overlay→
+  `--overlay-hover`) and the shared kicker-label rule (`#5a5a62`→`--faint`,
+  drives every uppercase panel label).
+  - Files: App.css (bottom-tabs + shared kicker rule).
+  - Verify: STEP 3.5 screenshot 1440×900 — tab row active/inactive.
+  - Last completed sub-step: none (just claimed).
+- **Status:** IN PROGRESS
 - NOTE (carried): transient single-test flake seen again this session (one
   red run between two clean 1240 runs, name not captured — grep filter ate
   it). Next time capture the failing test name before re-running.
