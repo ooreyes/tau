@@ -3752,10 +3752,10 @@ body {
   gap: 14px;
   padding: 0 14px;
   overflow: hidden;
-  background: #0c0c0f;
+  background: var(--panel-3);
   border-top: 1px solid var(--border);
-  color: #6b6b73;
-  font: 500 11px "JetBrains Mono", ui-monospace, monospace;
+  color: var(--muted);
+  font: 500 11px var(--font-mono);
   white-space: nowrap;
 }
 
@@ -3764,22 +3764,25 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  color: #d68a3c;
+  color: var(--accent);
+  font-weight: 600;
 }
 
 .status-mode.simulator {
-  color: #71ab7e;
+  color: var(--trace-green);
 }
 
+/* Live state dot — a soft halo so ready/running reads as an instrument light. */
 .status-mode i {
   width: 6px;
   height: 6px;
   border-radius: 50%;
   background: currentColor;
+  box-shadow: 0 0 6px currentColor;
 }
 
 .status-file {
-  color: #6b6b73;
+  color: var(--muted);
   flex: 0 1 auto;
   min-width: 0;
   overflow: hidden;
@@ -3787,7 +3790,7 @@ body {
 }
 
 .status-codec {
-  color: #45454c;
+  color: var(--faint);
   flex: 0 0 auto;
 }
 
@@ -3802,7 +3805,7 @@ body {
 }
 
 .status-count {
-  color: #9a9aa2;
+  color: var(--muted);
   flex: 0 0 auto;
 }
 
