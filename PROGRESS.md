@@ -29,20 +29,74 @@
   logamp's M180 I1 starved its bias node (−2.6e4 V via rshunt) and gmin
   stepping hung. Fixed in LTSPICE_PINS (+`bcurrent` row so bi keeps identity),
   end-to-end polarity regression test. **Corpus op-converged 82/82 (ALL).**
-- **Unit 8 (IN PROGRESS):** §10 part-palette migration — next panel in the
-  §10 sequence: tokenize the palette CSS block (no hardcoded hex), adopt
-  primitives where they fit (Button/Input for search), keep density.
-  - Files: components/<palette component>.tsx, App.css, styles/tokens.css.
-  - Verify: STEP 3.5 screenshot at 1440×900 before/after, judge, fix.
-  - Last completed sub-step: none (just claimed).
-- **Status:** IN PROGRESS
+- **Unit 8 (DONE):** §10 part-palette migration — tokenized the palette CSS,
+  killing every hardcoded color in the active rules. Root finding: the palette
+  is styled by TWO stacked blocks — the base `.palette-*` (teal-theme geometry)
+  and the later "DESIGN HANDOFF MIGRATION" override block (the amber shell that
+  actually ships). The migration block hardcoded `#0b0b0e`/`#08080a`/`#d9d4c2`/
+  `#5a5a62` (== amber `--panel`/`--panel-3`/`--text`/`--faint`) and a one-off
+  cyan selection `rgba(91,147,201,.22)` (== `--trace-cyan`) — all now route
+  through tokens, so they re-theme with the switcher. New tokens: `--accent-line`
+  (accent hairline for selected borders, both themes), `--overlay-hover`/
+  `--overlay-hover-faint` (theme-neutral white films). Selection unified onto the
+  accent system (was a bespoke blue; now amber name + `--accent-soft` fill +
+  accent hotkey badge — matches every other selected control). Search glyph
+  converted from a data-URI with a baked `#667080` stroke to a CSS-mask
+  `::before` colored by `--muted` (icon re-themes too; geometry override for the
+  32px migration field). Removed dead `.palette-head button/div` rules (no
+  buttons in the markup — carried the last stray hexes). Screenshot-verified at
+  1440×900: default + active/hover states coherent, density intact, icon aligned.
+- **Status:** DONE
 - NOTE (carried): transient single-test flake seen again this session (one
   red run between two clean 1240 runs, name not captured — grep filter ate
   it). Next time capture the failing test name before re-running.
 
 ---
 
-## 2026-07-05T21:50Z — auto/ltspice-parity — §1/§7: current-source polarity fix, corpus op 82/82 (ALL)
+## 2026-07-06T01:55Z — auto/ltspice-parity — §10: part-palette tokenization (no hardcoded color)
+
+### What I did
+- Resumed Unit 8 (prior session died right after the claim commit, no code
+  written — heartbeat said "just claimed"). Finished it.
+- Discovered the palette is styled by two stacked rule sets: the base
+  `.palette-*` block (older teal-theme geometry) and a later "DESIGN HANDOFF
+  MIGRATION" override block that is what actually ships (amber shell). The
+  override block held all the live hardcoded colors, so the real tokenization
+  had to land there — the base block's colors were dead under the active theme.
+- Tokenized every active palette color: panel/panel-3/text/faint surfaces and
+  the one-off cyan selection (`rgba(91,147,201,.22)` == `--trace-cyan`) now go
+  through `var(--…)`, so the runtime theme switcher re-themes the whole panel.
+- Added three tokens to both `:root` theme blocks / the neutral block:
+  `--accent-line` (accent hairline @ ~.22–.32 for selected borders/badges),
+  `--overlay-hover` + `--overlay-hover-faint` (theme-neutral white hover films).
+- Unified the active-item selection onto the accent system (was a bespoke blue):
+  `--accent-soft` fill, `--accent` name, accent hotkey badge — matches every
+  other selected control in the shell.
+- Converted the search magnifier from a data-URI with a baked `#667080` stroke
+  to a CSS-mask `::before` colored by `--muted` (icon now re-themes too), with a
+  geometry override for the 32px migration-shell field vs the denser base field.
+- Removed dead `.palette-head button`/`.palette-head div`/`:hover` rules (the
+  markup renders only a `<span>`; these carried the last stray hexes).
+
+### Files touched
+- apps/desktop/src/App.css
+
+### Tests
+1241 passing (82 files), 0 new — CSS-only change; typecheck clean.
+
+### FEATURE_PARITY items updated
+- §10 visual design system: part-palette panel migrated to the token layer
+  (🟡 in progress — panels landing one per session).
+
+### UX issues found
+- The palette is styled by two stacked blocks (base teal geometry + amber
+  migration override). Live for now but a future §10 pass should collapse them
+  into one token-driven rule set once every theme is switcher-driven, so a
+  single `::before`/geometry set is not duplicated per theme. Logged as UX debt.
+
+### Next step
+Migrate the next §10 panel (component inspector / parameter form, bottom-left)
+onto the token layer + primitives; same tokenize-then-screenshot rhythm.
 
 ### What I did
 - Root-caused logamp's ngspice op timeout: not a convergence-aid problem —
