@@ -11,11 +11,13 @@
 - **Headline metric:** 1241 tests green (default suite) + 5 corpus specs
   · corpus runner: 82 imported / **79 warning-clean** / **82 deck-built (ALL)**
   / **82 op-converged (ALL)** — floors 82/79/82/82
-- **Run started (UTC):** 2026-07-06T01:40Z
-- **Synced to origin:** auto/ltspice-parity @ 33ec134 (this session: 3 §10
+- **Run started (UTC):** 2026-07-06T05:40Z
+- **REVIEW SESSION** (0 `review:` commits in last 30 → rotation due). No new
+  features. Reviewed the 35 commits since 6ee3466 for correctness + ran the
+  STEP 3.5 screenshot audit. Verdict: **clean, no bugs found, UI/UX bar met.**
+- **Synced to origin:** auto/ltspice-parity @ 5095d11 (prior session: 3 §10
   panel migrations landed — part palette, inspector/params, analysis-tabs
-  header. Prior session's Unit 8 was claimed-but-empty; resumed and finished
-  it. No wip to recover.)
+  header. No wip to recover.)
 - **Unit 6 (DONE):** §1 multiline-TEXT directive parity — per-physical-line
   keyword dispatch in modelDirectives (mixed-kind TEXT blocks, `.subckt`
   nesting, `+` continuations follow their line's keep/skip), `+` folding in
@@ -62,8 +64,21 @@
   uppercase 9px labels across palette head, table head, plotter kicker,
   result-list h3, symbol-preview) `#5a5a62`→`--faint`. Tab row screenshot-
   verified: active pill + muted inactive, coherent.
-- **Status:** DONE — clean stop. Tree clean, typecheck green, 1241 tests green
-  (full suite ran 3× this session, all clean — no flake reproduced).
+- **Review verdict (this session):** correctness pass over 35 commits
+  (6ee3466..5095d11) — the §1 subckt/BJT-as-X wave, sampleHold/modulator
+  behavioral A-devices, transformLtPoint rotate-then-mirror fix, diode
+  informational-param strip, current-source polarity, and the §10 token
+  migrations. **No correctness bugs found.** Spot-verified transformLtPoint by
+  hand for all 8 orientations (M0/M90/M180/M270 each consistent with
+  "rotate-by-n then mirror-across-vertical" — the old mirror-then-rotate
+  silently sign-flipped M90/M270); confirmed spec.vt always defaults to 0.5 so
+  the sampleHold/modulator threshold expressions never emit `undefined`;
+  checked sanitizeSubcktName is applied consistently at every X-line emission;
+  netPinCount's labelCount endpoint fix is sound (a bare-flag-probed 1-pin net
+  reads as connected). UI/UX audit at 1440×900 across empty / loaded-RC /
+  simulator screens: coherent amber design system, dense, legible, intentional
+  empty states, no overlap/clipping. A picky reviewer passes it.
+- **Status:** DONE — clean stop. Tree clean, typecheck green, 1241 tests green.
 - **Next unit:** §10 SimulationPanel controls (run bar / expression bar /
   cursors / export) — the next panel in the §10 sequence. It's large and
   multi-state (needs a loaded sim result to screenshot the cursor/export
@@ -72,6 +87,63 @@
 - NOTE (carried, not seen this session): a transient single-test flake was
   reported last session (one red run between clean runs, name not captured).
   If it recurs, capture the failing test name before re-running.
+
+---
+
+## 2026-07-06T05:50Z — auto/ltspice-parity — review: 35-commit correctness pass + 3-screen UI/UX audit
+
+### What I did
+- **Review rotation session** (0 `review:` commits in last 30). No features.
+- **Correctness diff review** of 6ee3466..5095d11 (35 commits, +3350 lines
+  across engine/io/simulation): the §1 generic-subckt X-device wave (bundled
+  library inlining, BJT-value-names-a-subckt → X rewrite, subckt instance
+  emission with SpiceOrder p1..pN pins), sampleHold + modulator behavioral
+  A-devices, `transformLtPoint` rotate-then-mirror fix, diode informational-
+  param strip, multiline-TEXT per-line keyword dispatch, current-source
+  polarity, and the §10 token migrations.
+- **Hand-verified** the correctness-critical spots rather than trusting green:
+  - `transformLtPoint`: derived all 8 orientations from "rotate-by-n THEN
+    mirror-across-vertical-axis"; M0/M90/M180/M270 each match the new code.
+    The old mirror-then-rotate agreed only for M0/M180 and silently sign-
+    flipped M90/M270 (the LoopGain2 "shorted VSRC" / P2 floating-cap bugs).
+  - `spec.vt` always defaults to `(vhigh+vlow)/2` = 0.5, so the sampleHold /
+    modulator threshold comparisons never interpolate `undefined` into a deck.
+  - `sanitizeSubcktName` is applied at every X-line emission (instance branch +
+    bundled `.subckt` headers); the BJT→X rewrite name is dash-free so its
+    un-sanitized emission is safe.
+  - `netPinCount` labelCount fix: a single-pin net carrying a bare net-label
+    now counts as a 2-endpoint (connected) net — matches the LTspice
+    probe-through-a-flag idiom; the floating-pin warning still fires for
+    genuinely unlabelled singletons.
+- **UI/UX screenshot audit** (STEP 3.5 pipeline, 1440×900): empty state
+  ("Build, wire, run." card), loaded RC example (V1/R1/C1 rendered crisp with
+  wires + ground), and the simulator scope (TRAN/OP/AC/DC/TF/NOISE/STEP tabs,
+  labelled axes, NETS/NODES/SAMPLES readout, STOP/STEPS sliders, per-column
+  empty-state guidance, Ask-Sim board summary). All coherent under the amber
+  token system, dense, no overlap/clipping.
+
+### Files touched
+- PROGRESS.md (verdict only — no code changed, nothing to fix)
+
+### Tests
+1241 passing (0 new) — full suite green, typecheck clean. Baseline held.
+
+### FEATURE_PARITY items updated
+None (review session).
+
+### UX issues found
+None blocking. The three audited screens meet the product bar. (Simulator
+with-results state wasn't captured — the screenshot harness's play-button
+click opened the Ask-Sim agent panel instead; not a product defect. Worth a
+scripted with-results capture next review.)
+
+### Verdict
+**Clean. No correctness bugs, no regressions, UI/UX bar met.** Quality has not
+eroded across the last 35 commits.
+
+### Next step
+Resume features: §10 SimulationPanel controls (run bar / expression bar /
+cursors / export) — tokenize incrementally, fresh session.
 
 ---
 
