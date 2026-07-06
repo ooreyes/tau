@@ -46,7 +46,15 @@
   32px migration field). Removed dead `.palette-head button/div` rules (no
   buttons in the markup — carried the last stray hexes). Screenshot-verified at
   1440×900: default + active/hover states coherent, density intact, icon aligned.
-- **Status:** DONE
+- **Unit 9 (IN PROGRESS):** §10 inspector/params panel — next panel in the §10
+  sequence. Tokenize the active `.component-inspector`/`.inspector-summary`/
+  `.property-field` rules (hardcoded `#efe9d6`/`#8a8a92`/`#08080a`/`#e6e0cf` +
+  accent-rgba focus) onto tokens; base `.engineering-input` is already tokenized.
+  - Files: App.css (inspector block ~2982–3083 only).
+  - Verify: STEP 3.5 screenshot at 1440×900 — empty state + a selected component
+    with editable param fields (focus state); judge, fix.
+  - Last completed sub-step: none (just claimed).
+- **Status:** IN PROGRESS
 - NOTE (carried): transient single-test flake seen again this session (one
   red run between two clean 1240 runs, name not captured — grep filter ate
   it). Next time capture the failing test name before re-running.
