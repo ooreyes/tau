@@ -2555,7 +2555,7 @@ body {
   align-items: center;
   gap: 4px;
   padding: 10px 0;
-  background: #0c0c0f;
+  background: var(--panel-3);
   border-right: 1px solid var(--border);
 }
 
@@ -2567,9 +2567,11 @@ body {
   place-items: center;
   border: 0;
   border-radius: 9px;
-  color: #55555c;
+  color: var(--faint);
   background: transparent;
   cursor: pointer;
+  transition: color var(--motion-fast) var(--spring),
+    background var(--motion-fast) var(--spring);
 }
 
 .rail-btn svg {
@@ -2580,18 +2582,28 @@ body {
   stroke-width: 1.3;
   stroke-linecap: round;
   stroke-linejoin: round;
+  transition: transform var(--motion-fast) var(--spring);
 }
 
 .rail-btn:hover {
   color: var(--text);
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--overlay-hover);
+}
+
+.rail-btn:hover svg {
+  transform: scale(1.08);
+}
+
+.rail-btn:active svg {
+  transform: scale(0.94);
 }
 
 .rail-btn.active {
-  color: #d68a3c;
-  background: rgba(214, 138, 60, 0.14);
+  color: var(--accent);
+  background: var(--accent-soft);
 }
 
+/* Active indicator pill — a lit accent bar with a soft halo. */
 .rail-active {
   position: absolute;
   left: -10px;
@@ -2599,7 +2611,8 @@ body {
   width: 3px;
   height: 22px;
   border-radius: 3px;
-  background: #d68a3c;
+  background: var(--accent);
+  box-shadow: 0 0 8px var(--accent-glow);
 }
 
 .rail-spacer {
