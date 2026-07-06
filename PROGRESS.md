@@ -12,18 +12,29 @@
   · corpus runner: 82 imported / **79 warning-clean** / **82 deck-built (ALL)**
   / **82 op-converged (ALL)** — floors 82/79/82/82
 - **Run started (UTC):** 2026-07-06T19:30Z
-- **Status: IN PROGRESS** — §10 scope/plots panel (next in migration sequence
-  after run bar). Discarded obsolete `-wip` (02d00a3, already superseded — banned
-  teal/Space-Grotesk revert). Plan: (1) action-row hierarchy — split the 5 flat
-  identical `.expr-add` amber pills into a solid-amber PRIMARY "Add trace" + neutral
-  graphite ghost EXPORT utilities (Export CSV/Netlist/Save .raw/Ref .raw), all with
-  `--elev-1` rest + spring hover-lift `--elev-2` + pressed + focus ring; (2)
-  `.scope-svg` real instrument depth (`--elev-2` lift + new `--elev-inset` vignette
-  token, stronger frame, `--r-md`); (3) legend signal-name readouts → `--font-mono`.
-  Files: apps/desktop/src/App.css, SimulationPanel.tsx (add `primary` class to Add
-  trace). Verify: typecheck + full suite ≥1241, before/after 1440×900 sim-scope PNGs
-  Read + compared (must visibly differ). Prior session (below) is DONE:
-- **Status: DONE** — 3 §10 commits (prior session), foundation clean:
+- **Status: DONE** — 3 §10 panel commits this session, all screenshot-proven
+  visibly-different (NOT pixel-neutral). Discarded obsolete `-wip` (02d00a3,
+  already superseded — banned teal/Space-Grotesk revert; ref deleted). Burndown:
+  unique hex 56→**55**, color literals 249→**240**. 1241 green, typecheck clean.
+  1. **Scope/plots panel** (this session): action-row hierarchy — the 5 flat
+     identical `.expr-add` amber pills became a solid-amber PRIMARY "Add trace" +
+     neutral graphite ghost EXPORT utilities, all with `--elev-1` rest + spring
+     hover-lift `--elev-2` + pressed + focus ring; `.scope-svg` real instrument
+     depth (`--elev-2` lift + new `--elev-inset` vignette token, `--r-md`, stronger
+     frame); legend signal names → `--font-mono`. Crop Read: hierarchy + vignette +
+     mono legend all visibly differ.
+  2. **Status bar** (this session): shipping `.statusbar` override tokenized —
+     `#0c0c0f`→`--panel-3`, `#6b6b73`/`#9a9aa2`→`--muted`, `#45454c`→`--faint`,
+     mode `#d68a3c`→`--accent`, sim mode `#71ab7e`→`--trace-green`, defeated
+     "JetBrains Mono"→`--font-mono` (SF Mono). Live-dot gains a `0 0 6px`
+     currentColor halo (ready=amber, sim=green). 7 hexes burned. Both-mode crops
+     Read: glow + recolor + font visibly differ.
+  3. **Left activity rail** (this session): `#0c0c0f`→`--panel-3`, icon
+     `#55555c`→`--faint`, active `#d68a3c`→`--accent`+`--accent-soft`, pill
+     `#d68a3c`→`--accent`; added spring color/bg transition + icon hover-scale
+     1.08/press 0.94 (was dead-static) + `0 0 8px --accent-glow` on the active pill.
+     6 hexes burned. Crop Read: brighter accent + glow + motion.
+- **Prior-session status (DONE):** 3 §10 commits, foundation clean:
   1. **Run-bar / resolution-control real visible upgrade** (721256c^^): discarded
      the regressive `-wip` sibling (02d00a3, reverted palette to Space Grotesk +
      flat controls — banned). Ready-state before/after PNGs compared: old = plain
@@ -116,6 +127,44 @@
 - NOTE (carried, not seen this session): a transient single-test flake was
   reported last session (one red run between clean runs, name not captured).
   If it recurs, capture the failing test name before re-running.
+
+---
+
+## 2026-07-06T20:00Z — auto/ltspice-parity — §10: scope/plots + status bar + left rail (3 panels)
+
+### What I did
+- **Recovered orient:** the `-wip` sibling (02d00a3) was the already-discarded
+  banned teal/Space-Grotesk revert (current HEAD's log documents discarding it);
+  deleted the stale `origin/…-wip` ref, kept HEAD.
+- **Scope/plots panel:** action-row hierarchy (`.expr-add`) — one solid-amber
+  PRIMARY "Add trace" vs. neutral graphite ghost export utilities, all with
+  `--elev-1`/spring-lift/pressed/focus-ring; `.scope-svg` instrument depth via
+  new `--elev-inset` vignette token + `--elev-2` lift; legend names → `--font-mono`.
+- **Status bar:** tokenized the shipping override block, recolored to the current
+  palette (brighter accent/green), routed the defeated "JetBrains Mono" → SF Mono,
+  added a live-dot halo.
+- **Left activity rail:** tokenized, recolored active state to brighter accent,
+  added spring motion (icon hover-scale/press) + active-pill glow.
+
+### Files touched
+- apps/desktop/src/App.css
+- apps/desktop/src/components/SimulationPanel.tsx (`primary` class on Add trace)
+
+### Tests
+1241 passing (0 new — pure CSS + one className) — passed. Typecheck clean.
+
+### FEATURE_PARITY items updated
+§10 panel-migration sequence: scope/plots ✅, status bar ✅, left rail ✅ (all
+screenshot-proven visibly-different). Burndown: unique hex 56→55, literals 249→240.
+
+### UX issues found
+None blocking. Remaining hardcoded-color clusters: the "DESIGN HANDOFF MIGRATION"
+block still has 24 defeated "JetBrains Mono" refs + `#d68a3c`(11)/`#d9d4c2`(11)/
+`#6b6b73`(9)/`#08080a`/`#efe9d6` across ask-panel, bottom-output/errors, explorer.
+
+### Next step
+Continue the §10 sequence — dialogs and empty/error states, or the Ask Sim /
+bottom-output panel (biggest remaining hardcoded-color + defeated-font cluster).
 
 ---
 
