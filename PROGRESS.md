@@ -28,7 +28,12 @@
      `:root` blocks (stale teal top + premium amber bottom) into ONE, union of all
      tokens with the winning values. before/after screenshots byte-identical
      (same sha256) — pure structural, zero visual change. `grep ^:root` == 1.
-  Foundation rule ("one :root, no Space Grotesk") now satisfied. 1241 green.
+  4. **Defeated-mono fix** (625af1f): 10 numeric/keycap readouts declared a mono
+     stack with `-apple-system` FIRST, so they rendered proportional not mono.
+     Routed all to `var(--font-mono)` — real font change for op-tables/meas/
+     engineering inputs/keycaps/axis labels. `grep defeated-mono` == 0.
+  Foundation rule ("one :root, no Space Grotesk") now satisfied. Burndown:
+  unique hex 150→**56**, color literals 293→**249**. 1241 green, typecheck clean.
 - **Synced to origin:** auto/ltspice-parity @ e44fac1 (prior session:
   consolidate to one premium palette + control depth/motion).
 - **Unit 6 (DONE):** §1 multiline-TEXT directive parity — per-physical-line
@@ -100,6 +105,40 @@
 - NOTE (carried, not seen this session): a transient single-test flake was
   reported last session (one red run between clean runs, name not captured).
   If it recurs, capture the failing test name before re-running.
+
+---
+
+## 2026-07-06T18:45Z — auto/ltspice-parity — §10: fix 10 defeated-mono readout font stacks
+
+### What I did
+- Found 10 numeric/keycap readouts (`.palette-key`, `.component .val`,
+  `.value-edit-input`, `.scope-axis`, `.op-row` values, `.meas-value`,
+  `.value-editor input`, `.engineering-input input`, `.status-hints kbd`,
+  `.cmdk-key`) whose font stack listed `-apple-system, BlinkMacSystemFont,
+  "SF Mono", …` — with `-apple-system` FIRST, macOS resolved it and the mono
+  intent was silently defeated: every one rendered PROPORTIONAL, not monospace.
+- Routed all 10 to `var(--font-mono)` (mono-first), so numeric values now render
+  as true tabular monospace (op-point tables, .meas readouts, engineering inputs,
+  axis labels, hotkey caps). Real font change + burndown of a repeated stack.
+
+### Files touched
+- apps/desktop/src/App.css
+
+### Tests
+1241 passing, 0 new. typecheck clean.
+
+### Visual proof
+`grep -cE 'apple-system[^;]*SF Mono'` == 0. Confirmed a visible pixel diff in the
+simulator view (full-screenshot sha256 changed before→after). The font actually
+resolves differently now — not a token no-op.
+
+### FEATURE_PARITY items updated
+§10 typography — numeric readouts now correctly monospace per the "numeric values
+use --font-mono" rule. Burndown: unique hex 150→56, color literals 293→249.
+
+### Next step
+Continue §10: per-panel visible upgrades (scope/plots depth, dialogs, empty/error
+states, status bar) + drive remaining 56 hex / 249 color literals toward zero.
 
 ---
 
