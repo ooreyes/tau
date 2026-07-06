@@ -2514,7 +2514,7 @@ body {
   border-radius: 8px;
   background: transparent;
   color: #8a8a92;
-  font: 600 12.5px "Space Grotesk", -apple-system, system-ui, sans-serif;
+  font: 600 12.5px var(--font-ui);
   cursor: pointer;
   transition: background 180ms var(--ease-out), color 180ms var(--ease-out), box-shadow 180ms var(--ease-out);
 }
@@ -2844,7 +2844,7 @@ body {
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: 7px;
-  font: 500 12px "Space Grotesk", -apple-system, system-ui, sans-serif;
+  font: 500 12px var(--font-ui);
 }
 
 .example-picker select:hover {
@@ -2914,7 +2914,7 @@ body {
   border-right: 1px solid var(--border);
   background: transparent;
   color: #6b6b73;
-  font: 500 12px "Space Grotesk", -apple-system, system-ui, sans-serif;
+  font: 500 12px var(--font-ui);
   cursor: pointer;
 }
 
@@ -3905,7 +3905,7 @@ body {
   outline: none;
   color: #d9d4c2;
   background: transparent;
-  font: 500 12px "Space Grotesk", Inter, system-ui, sans-serif;
+  font: 500 12px var(--font-ui);
 }
 
 .ask-composer input::placeholder {
@@ -3984,7 +3984,7 @@ body {
   color: #d9d4c2;
   background: rgba(255, 255, 255, 0.025);
   cursor: pointer;
-  font: 600 12px "Space Grotesk", Inter, system-ui, sans-serif;
+  font: 600 12px var(--font-ui);
   text-align: left;
 }
 
@@ -4117,7 +4117,7 @@ body {
   color: #d9d4c2;
   background: #08080a;
   cursor: pointer;
-  font: 700 12px "Space Grotesk", Inter, system-ui, sans-serif;
+  font: 700 12px var(--font-ui);
 }
 
 .confirm-actions .danger {
@@ -4138,7 +4138,7 @@ body {
   color: #efe9d6;
   background: rgba(18, 14, 10, 0.96);
   box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35);
-  font: 600 12px "Space Grotesk", Inter, system-ui, sans-serif;
+  font: 600 12px var(--font-ui);
 }
 
 .app-recovery {
