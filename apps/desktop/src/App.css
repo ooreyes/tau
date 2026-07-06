@@ -1,67 +1,69 @@
-/* ── Design tokens ─────────────────────────────────────────────────────────── */
+/* ── Design tokens — the ONE foundation (graphite + a single confident amber accent).
+   Consolidated: this is the sole :root. Do NOT reintroduce a second :root. ─────── */
 :root {
-  /* Surfaces */
-  --bg:       #0a0c10;
-  --panel:    #0f1116;
-  --panel-2:  #14171e;
-  --panel-3:  #0c0e13;
-  --panel-4:  #1a1d25;
+  /* Surfaces — layered elevation, clean cool graphite (not muddy black) */
+  --bg:       #0b0c0e;
+  --panel:    #131519;
+  --panel-2:  #171a1f;
+  --panel-3:  #0e1013;
+  --panel-4:  #1d2027;
 
   /* Borders — hairline, low-opacity */
-  --border:         rgba(255, 255, 255, 0.07);
-  --border-strong:  rgba(255, 255, 255, 0.13);
-  --border-subtle:  rgba(255, 255, 255, 0.04);
+  --border:         rgba(255, 255, 255, 0.08);
+  --border-strong:  rgba(255, 255, 255, 0.15);
+  --border-subtle:  rgba(255, 255, 255, 0.05);
 
   /* Neutral hover overlays — theme-agnostic (white film over any dark surface) */
   --overlay-hover:        rgba(255, 255, 255, 0.045);
   --overlay-hover-faint:  rgba(255, 255, 255, 0.03);
 
-  /* Text */
-  --text:   #dde3eb;
-  --muted:  #5e6b7a;
-  --faint:  #38434f;
-  --canvas-label: #d8e1ec;
-  --canvas-label-muted: #9aa8ba;
-  --canvas-label-halo: #090b10;
+  /* Text — clean neutral, no yellow cast */
+  --text:   #edeef2;
+  --muted:  #8b919c;
+  --faint:  #565c66;
+  --canvas-label: #e7eaef;
+  --canvas-label-muted: #9aa1ad;
+  --canvas-label-halo: #08090b;
 
-  /* Accent — restrained teal */
-  --accent:       #17b89e;
-  --accent-ink:   #031a17;
-  --accent-soft:  rgba(23, 184, 158, 0.09);
-  --accent-glow:  rgba(23, 184, 158, 0.16);
-  --accent-line:  rgba(23, 184, 158, 0.22);  /* accent hairline for selected/active borders */
+  /* Accent — refined amber-gold, used with restraint */
+  --accent:       #eaa64d;
+  --accent-hover: #f4b566;
+  --accent-ink:   #1c1300;
+  --accent-soft:  rgba(234, 166, 77, 0.13);
+  --accent-glow:  rgba(234, 166, 77, 0.30);
+  --accent-line:  rgba(234, 166, 77, 0.32);  /* accent hairline for selected/active borders */
 
   /* Semantic colors */
-  --danger:       #e0455a;
-  --danger-soft:  rgba(224, 69, 90, 0.10);
-  --danger-line:  rgba(224, 69, 90, 0.30);   /* danger hairline for error borders */
-  --success:      #2db87a;                    /* == --trace-green (ready/ok state) */
-  --success-soft: rgba(45, 184, 122, 0.12);
-  --success-line: rgba(45, 184, 122, 0.34);   /* success hairline for ready borders */
-  --cream:        #c8cedb;
-  --cream-soft:   rgba(200, 206, 219, 0.07);
+  --danger:       #f2564f;
+  --danger-soft:  rgba(242, 86, 79, 0.13);
+  --danger-line:  rgba(242, 86, 79, 0.30);   /* danger hairline for error borders */
+  --success:      #58cc8a;                    /* == --trace-green (ready/ok state) */
+  --success-soft: rgba(88, 204, 138, 0.12);
+  --success-line: rgba(88, 204, 138, 0.34);   /* success hairline for ready borders */
+  --cream:        #eef0f4;
+  --cream-soft:   rgba(238, 240, 244, 0.07);
 
   /* Component schematic colors */
-  --comp:      #b8c4d4;
-  --comp-ref:  #6b7a8c;
+  --comp:      #d6dae2;
+  --comp-ref:  #8b919c;
 
   /* Grid */
-  --grid-dot:  #171b23;
+  --grid-dot:  rgba(255, 255, 255, 0.055);
 
   /* Scope / plotter — matches panel surfaces, not "phosphor black" */
-  --scope-bg:    #0f1116;
-  --scope-grid:  #1d2230;
+  --scope-bg:    #0e1013;
+  --scope-grid:  #191d24;
 
-  /* Trace colors — calmer, still distinct */
-  --trace-cyan:    #3ab8d8;
-  --trace-green:   #2db87a;
-  --trace-cream:   #c8cedb;
-  --trace-red:     #e0455a;
-  --trace-purple:  #7a70d8;
-  --trace-amber:   #c88c28;
+  /* Trace colors — clean, distinct */
+  --trace-cyan:    #4bc3e6;
+  --trace-green:   #58cc8a;
+  --trace-cream:   #dfe3ea;
+  --trace-red:     #f2564f;
+  --trace-purple:  #a48bf0;
+  --trace-amber:   #eaa64d;
 
   /* Dial track */
-  --dial-track:  #1d2230;
+  --dial-track:  #23262e;
 
   /* Spacing scale — 4pt base */
   --sp-1:  4px;
@@ -78,17 +80,30 @@
   --r-lg:  12px;
   --r-xl:  16px;
 
-  /* Typography */
-  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", system-ui, sans-serif;
-  font-feature-settings: "kern" 1, "liga" 1, "ss01" 1;
-  color: var(--text);
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+  /* Elevation — real depth for controls & floating surfaces */
+  --elev-1:   0 1px 2px rgba(0, 0, 0, 0.45);
+  --elev-2:   0 6px 20px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  --elev-pop: 0 14px 44px rgba(0, 0, 0, 0.62), 0 0 0 1px rgba(255, 255, 255, 0.06);
+
+  /* Motion — snappy, Apple-like */
+  --motion-fast:  110ms;
+  --motion-med:   190ms;
+  --spring:  cubic-bezier(0.2, 0.9, 0.25, 1);
 
   /* Easing curves */
   --ease-out:   cubic-bezier(0.25, 0.46, 0.45, 0.94);
   --ease-in:    cubic-bezier(0.55, 0.055, 0.675, 0.19);
   --ease-snap:  cubic-bezier(0.32, 0.72, 0, 1);
+
+  /* Typography — Apple system UI + a mono for numeric readouts */
+  --font-ui:    -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Inter", system-ui, sans-serif;
+  --font-mono:  "SF Mono", "JetBrains Mono", ui-monospace, "Menlo", monospace;
+  font-family: var(--font-ui);
+  font-feature-settings: "kern" 1, "liga" 1, "ss01" 1;
+  letter-spacing: -0.006em;
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 * {
@@ -2325,80 +2340,8 @@ body {
 
 /* ══════════════════════════════════════════════════════════════════════════════
    DESIGN HANDOFF MIGRATION — VS Code shell + LTspice workspace
+   (Palette tokens consolidated into the single :root at the top of this file.)
 ══════════════════════════════════════════════════════════════════════════════ */
-:root {
-  /* ── Tau premium dark — ONE coherent palette: graphite + a single confident amber accent ── */
-  /* Surfaces: layered elevation, clean cool graphite (not muddy black) */
-  --bg: #0b0c0e;
-  --panel: #131519;
-  --panel-2: #171a1f;
-  --panel-3: #0e1013;
-  --panel-4: #1d2027;
-
-  /* Hairline borders */
-  --border: rgba(255, 255, 255, 0.08);
-  --border-strong: rgba(255, 255, 255, 0.15);
-  --border-subtle: rgba(255, 255, 255, 0.05);
-
-  /* Text: clean neutral (no yellow cast) */
-  --text: #edeef2;
-  --muted: #8b919c;
-  --faint: #565c66;
-
-  /* Accent: refined amber-gold, used with restraint */
-  --accent: #eaa64d;
-  --accent-hover: #f4b566;
-  --accent-ink: #1c1300;
-  --accent-soft: rgba(234, 166, 77, 0.13);
-  --accent-glow: rgba(234, 166, 77, 0.30);
-  --accent-line: rgba(234, 166, 77, 0.32);
-
-  --danger: #f2564f;
-  --danger-soft: rgba(242, 86, 79, 0.13);
-  --danger-line: rgba(242, 86, 79, 0.30);   /* danger hairline for error borders */
-  --success: #58cc8a;                        /* == --trace-green (ready/ok state) */
-  --success-soft: rgba(88, 204, 138, 0.12);
-  --success-line: rgba(88, 204, 138, 0.34);  /* success hairline for ready borders */
-  --cream: #eef0f4;
-  --cream-soft: rgba(238, 240, 244, 0.07);
-
-  /* Schematic: crisp neutral symbols/labels */
-  --comp: #d6dae2;
-  --comp-ref: #8b919c;
-  --canvas-label: #e7eaef;
-  --canvas-label-muted: #9aa1ad;
-  --canvas-label-halo: #08090b;
-  --grid-dot: rgba(255, 255, 255, 0.055);
-
-  /* Scope */
-  --scope-bg: #0e1013;
-  --scope-grid: #191d24;
-
-  /* Traces: clean, distinct */
-  --trace-cyan: #4bc3e6;
-  --trace-green: #58cc8a;
-  --trace-cream: #dfe3ea;
-  --trace-red: #f2564f;
-  --trace-purple: #a48bf0;
-  --trace-amber: #eaa64d;
-  --dial-track: #23262e;
-
-  /* Elevation — real depth for controls & floating surfaces */
-  --elev-1: 0 1px 2px rgba(0, 0, 0, 0.45);
-  --elev-2: 0 6px 20px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.05);
-  --elev-pop: 0 14px 44px rgba(0, 0, 0, 0.62), 0 0 0 1px rgba(255, 255, 255, 0.06);
-
-  /* Motion — snappy, Apple-like */
-  --motion-fast: 110ms;
-  --motion-med: 190ms;
-  --spring: cubic-bezier(0.2, 0.9, 0.25, 1);
-
-  /* Type: Apple system UI + a mono for numeric readouts */
-  --font-ui: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Inter", system-ui, sans-serif;
-  --font-mono: "SF Mono", "JetBrains Mono", ui-monospace, "Menlo", monospace;
-  font-family: var(--font-ui);
-  letter-spacing: -0.006em;
-}
 
 .app {
   height: 100vh;
