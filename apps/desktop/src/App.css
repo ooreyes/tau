@@ -698,32 +698,48 @@ body {
 }
 
 .empty-actions button {
-  height: 32px;
-  padding: 0 14px;
+  height: 36px;
+  padding: 0 18px;
   color: var(--text);
-  background: var(--panel-4);
+  background: linear-gradient(180deg, var(--panel-4), var(--panel-2));
   border: 1px solid var(--border-strong);
-  border-radius: var(--r-sm);
-  font: 500 12px -apple-system, system-ui, sans-serif;
+  border-radius: var(--r-md);
+  font: 550 12.5px var(--font-ui);
+  letter-spacing: -0.01em;
   cursor: pointer;
-  transition: border-color 130ms var(--ease-out), background 130ms var(--ease-out);
+  box-shadow: var(--elev-1);
+  transition: transform var(--motion-fast) var(--spring),
+    box-shadow var(--motion-med) var(--spring),
+    background var(--motion-fast) var(--spring),
+    border-color var(--motion-fast) var(--spring);
 }
 
 .empty-actions button:hover {
   border-color: var(--border-strong);
-  background: rgba(255,255,255,0.06);
+  background: linear-gradient(180deg, #23262e, var(--panel-3));
+  transform: translateY(-1px);
+  box-shadow: var(--elev-2);
+}
+
+.empty-actions button:active {
+  transform: translateY(0);
+  box-shadow: var(--elev-1);
 }
 
 .empty-actions .primary-action {
   color: var(--accent-ink);
-  background: var(--accent);
-  border-color: transparent;
-  font-weight: 600;
+  background: linear-gradient(180deg, var(--accent-hover), var(--accent));
+  border-color: rgba(0, 0, 0, 0.25);
+  font-weight: 650;
+  box-shadow: var(--elev-1), 0 0 0 1px rgba(234, 166, 77, 0.25),
+    0 6px 18px var(--accent-glow);
 }
 
 .empty-actions .primary-action:hover {
-  background: var(--accent);
-  opacity: 0.88;
+  background: linear-gradient(180deg, #f6bd72, var(--accent-hover));
+  transform: translateY(-1px);
+  box-shadow: var(--elev-2), 0 0 0 1px rgba(234, 166, 77, 0.35),
+    0 10px 28px var(--accent-glow);
 }
 
 /* ── Flow controls ─────────────────────────────────────────────────────────── */
@@ -2269,42 +2285,73 @@ body {
    DESIGN HANDOFF MIGRATION — VS Code shell + LTspice workspace
 ══════════════════════════════════════════════════════════════════════════════ */
 :root {
-  --bg: #0a0a0c;
-  --panel: #0b0b0e;
-  --panel-2: #0c0c0f;
-  --panel-3: #08080a;
-  --panel-4: #0e0e12;
-  --border: rgba(255, 255, 255, 0.06);
-  --border-strong: rgba(255, 255, 255, 0.1);
-  --border-subtle: rgba(255, 255, 255, 0.045);
-  --text: #d9d4c2;
-  --muted: #6b6b73;
-  --faint: #5a5a62;
-  --accent: #d68a3c;
-  --accent-ink: #0a0a0c;
-  --accent-soft: rgba(214, 138, 60, 0.12);
-  --accent-glow: rgba(214, 138, 60, 0.26);
-  --accent-line: rgba(214, 138, 60, 0.32);
-  --danger: #cf5450;
-  --danger-soft: rgba(207, 84, 80, 0.12);
-  --cream: #efe9d6;
-  --cream-soft: rgba(217, 212, 194, 0.08);
-  --comp: #cfc9b6;
-  --comp-ref: #d9d4c2;
-  --canvas-label: #d9d4c2;
-  --canvas-label-muted: #cfc9b6;
-  --canvas-label-halo: #060608;
-  --grid-dot: rgba(255, 255, 255, 0.05);
-  --scope-bg: #0b0b0e;
-  --scope-grid: #16161a;
-  --trace-cyan: #5b93c9;
-  --trace-green: #71ab7e;
-  --trace-cream: #cfc9b6;
-  --trace-red: #cf5450;
-  --trace-purple: #9b7fd4;
-  --trace-amber: #d68a3c;
-  --dial-track: #2a2a30;
-  font-family: "Space Grotesk", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  /* ── Tau premium dark — ONE coherent palette: graphite + a single confident amber accent ── */
+  /* Surfaces: layered elevation, clean cool graphite (not muddy black) */
+  --bg: #0b0c0e;
+  --panel: #131519;
+  --panel-2: #171a1f;
+  --panel-3: #0e1013;
+  --panel-4: #1d2027;
+
+  /* Hairline borders */
+  --border: rgba(255, 255, 255, 0.08);
+  --border-strong: rgba(255, 255, 255, 0.15);
+  --border-subtle: rgba(255, 255, 255, 0.05);
+
+  /* Text: clean neutral (no yellow cast) */
+  --text: #edeef2;
+  --muted: #8b919c;
+  --faint: #565c66;
+
+  /* Accent: refined amber-gold, used with restraint */
+  --accent: #eaa64d;
+  --accent-hover: #f4b566;
+  --accent-ink: #1c1300;
+  --accent-soft: rgba(234, 166, 77, 0.13);
+  --accent-glow: rgba(234, 166, 77, 0.30);
+  --accent-line: rgba(234, 166, 77, 0.32);
+
+  --danger: #f2564f;
+  --danger-soft: rgba(242, 86, 79, 0.13);
+  --cream: #eef0f4;
+  --cream-soft: rgba(238, 240, 244, 0.07);
+
+  /* Schematic: crisp neutral symbols/labels */
+  --comp: #d6dae2;
+  --comp-ref: #8b919c;
+  --canvas-label: #e7eaef;
+  --canvas-label-muted: #9aa1ad;
+  --canvas-label-halo: #08090b;
+  --grid-dot: rgba(255, 255, 255, 0.055);
+
+  /* Scope */
+  --scope-bg: #0e1013;
+  --scope-grid: #191d24;
+
+  /* Traces: clean, distinct */
+  --trace-cyan: #4bc3e6;
+  --trace-green: #58cc8a;
+  --trace-cream: #dfe3ea;
+  --trace-red: #f2564f;
+  --trace-purple: #a48bf0;
+  --trace-amber: #eaa64d;
+  --dial-track: #23262e;
+
+  /* Elevation — real depth for controls & floating surfaces */
+  --elev-1: 0 1px 2px rgba(0, 0, 0, 0.45);
+  --elev-2: 0 6px 20px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  --elev-pop: 0 14px 44px rgba(0, 0, 0, 0.62), 0 0 0 1px rgba(255, 255, 255, 0.06);
+
+  /* Motion — snappy, Apple-like */
+  --motion-fast: 110ms;
+  --motion-med: 190ms;
+  --spring: cubic-bezier(0.2, 0.9, 0.25, 1);
+
+  /* Type: Apple system UI + a mono for numeric readouts */
+  --font-ui: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Inter", system-ui, sans-serif;
+  --font-mono: "SF Mono", "JetBrains Mono", ui-monospace, "Menlo", monospace;
+  font-family: var(--font-ui);
+  letter-spacing: -0.006em;
 }
 
 .app {
