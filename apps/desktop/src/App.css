@@ -2548,7 +2548,7 @@ body {
 .palette-table-head,
 .result-list h3,
 .symbol-preview > span {
-  color: #5a5a62;
+  color: var(--faint);
   font-size: 9px;
   font-weight: 600;
   letter-spacing: 0.14em;
@@ -2968,15 +2968,15 @@ body {
   padding: 0 10px;
   border: 0;
   border-radius: 6px;
-  color: #6b6b73;
+  color: var(--muted);
   background: transparent;
   font: inherit;
   cursor: pointer;
 }
 
 .bottom-tabs button.active {
-  color: #d9d4c2;
-  background: rgba(255, 255, 255, 0.05);
+  color: var(--text);
+  background: var(--overlay-hover);
 }
 
 .component-inspector,

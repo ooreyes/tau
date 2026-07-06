@@ -56,21 +56,43 @@
   overrides needed it. Screenshot-verified at 1440×900: empty state ("No
   component selected") and a selected R1 with the Resistance field focused —
   amber focus ring, cream/muted text hierarchy, coherent with the shell.
-- **Unit 10 (IN PROGRESS):** §10 analysis-tabs header — tokenize `.bottom-tabs
-  button` (`#6b6b73`→`--muted`, active `#d9d4c2`→`--text`, white overlay→
-  `--overlay-hover`) and the shared kicker-label rule (`#5a5a62`→`--faint`,
-  drives every uppercase panel label).
-  - Files: App.css (bottom-tabs + shared kicker rule).
-  - Verify: STEP 3.5 screenshot 1440×900 — tab row active/inactive.
-  - Last completed sub-step: none (just claimed).
-- **Status:** IN PROGRESS
+- **Unit 10 (DONE):** §10 analysis-tabs header — `.bottom-tabs button` onto
+  `--muted`/`--text`/`--overlay-hover`, and the shared kicker-label rule (the
+  uppercase 9px labels across palette head, table head, plotter kicker,
+  result-list h3, symbol-preview) `#5a5a62`→`--faint`. Tab row screenshot-
+  verified: active pill + muted inactive, coherent.
+- **Status:** DONE
 - NOTE (carried): transient single-test flake seen again this session (one
   red run between two clean 1240 runs, name not captured — grep filter ate
   it). Next time capture the failing test name before re-running.
 
 ---
 
-## 2026-07-06T02:02Z — auto/ltspice-parity — §10: inspector/params panel tokenization
+## 2026-07-06T02:07Z — auto/ltspice-parity — §10: analysis-tabs header + shared kicker-label token
+
+### What I did
+- Tokenized the bottom panel's tab row (`component`/`output`/`errors`):
+  inactive `--muted`, active `--text` on an `--overlay-hover` pill.
+- Tokenized the shared uppercase kicker-label rule (`#5a5a62`→`--faint`) that
+  drives every panel's small caps label (palette head, table head, plotter
+  kicker, result-list `h3`, symbol-preview) — one edit, re-themes them all.
+
+### Files touched
+- apps/desktop/src/App.css
+
+### Tests
+1241 passing (82 files), 0 new — CSS-only; typecheck clean.
+
+### FEATURE_PARITY items updated
+- §10 panel-migration sequence: analysis-tabs header ✅. Next: SimulationPanel
+  controls (run bar, expression bar, cursors, export).
+
+### UX issues found
+- None new.
+
+### Next step
+Migrate the §10 SimulationPanel controls (run bar / expression bar / cursors /
+export) onto the token layer; same tokenize-then-screenshot rhythm.
 
 ### What I did
 - Migrated the component inspector (bottom-left "component" tab) onto the token

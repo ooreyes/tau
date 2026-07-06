@@ -1049,7 +1049,9 @@ never a broken intermediate state on the branch.
   + `.property-field` tokenized — cream title, `--muted` secondary text,
   `--panel-3` fields, `--border-strong` borders, `--accent`/`--accent-soft`
   focus ring unified with `.engineering-input`; empty + selected-R1 states
-  screenshot-verified) →
+  screenshot-verified) → analysis tabs header ✅ (2026-07-06: `.bottom-tabs
+  button` onto `--muted`/`--text`/`--overlay-hover`, shared kicker-label rule
+  `#5a5a62`→`--faint` re-themes every small-caps panel label) →
   analysis tabs header →
   SimulationPanel controls (run bar, expression bar, cursors, export) →
   dialogs (Open/Save/settings) → empty/error states → status bar.
