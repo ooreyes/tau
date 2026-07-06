@@ -34,6 +34,10 @@
   /* Semantic colors */
   --danger:       #e0455a;
   --danger-soft:  rgba(224, 69, 90, 0.10);
+  --danger-line:  rgba(224, 69, 90, 0.30);   /* danger hairline for error borders */
+  --success:      #2db87a;                    /* == --trace-green (ready/ok state) */
+  --success-soft: rgba(45, 184, 122, 0.12);
+  --success-line: rgba(45, 184, 122, 0.34);   /* success hairline for ready borders */
   --cream:        #c8cedb;
   --cream-soft:   rgba(200, 206, 219, 0.07);
 
@@ -1463,7 +1467,7 @@ body {
 .analysis-empty {
   margin: 12px 14px 10px;
   padding: 14px;
-  border: 1px solid rgba(240, 64, 96, 0.28);
+  border: 1px solid var(--danger-line);
   border-left: 2px solid var(--danger);
   border-radius: var(--r-sm);
   color: var(--text);
@@ -1626,7 +1630,8 @@ body {
 
 .resolution-control strong {
   color: var(--text);
-  font: 600 12px -apple-system, BlinkMacSystemFont, "SF Mono", "Menlo", monospace;
+  font: 600 12.5px var(--font-mono);
+  letter-spacing: -0.01em;
 }
 
 .resolution-control small {
@@ -1635,29 +1640,66 @@ body {
   line-height: 1.35;
 }
 
+/* Status states carry a tinted border + a soft inset status wash so ready vs.
+   warning reads at a glance, not just a hairline hue shift. */
 .resolution-control.ready {
-  border-color: rgba(113, 171, 126, 0.36);
+  border-color: var(--success-line);
+  box-shadow: inset 2px 0 0 var(--success), inset 0 0 0 100px var(--success-soft);
+}
+
+.resolution-control.ready strong {
+  color: var(--success);
 }
 
 .resolution-control.warning {
-  border-color: rgba(214, 138, 60, 0.46);
+  border-color: var(--accent-line);
+  box-shadow: inset 2px 0 0 var(--accent), inset 0 0 0 100px var(--accent-soft);
+}
+
+.resolution-control.warning strong {
+  color: var(--accent);
 }
 
 .resolution-control button {
   min-height: 28px;
-  padding: 0 9px;
-  border: 1px solid rgba(214, 138, 60, 0.5);
+  padding: 0 11px;
+  border: 1px solid var(--accent-line);
   border-radius: var(--r-sm);
-  color: #f3c38d;
-  background: rgba(214, 138, 60, 0.12);
-  font: 600 10px -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  color: var(--accent);
+  background: var(--accent-soft);
+  font: 650 10px var(--font-ui);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
   cursor: pointer;
+  box-shadow: var(--elev-1);
+  transition: transform var(--motion-fast) var(--spring),
+    box-shadow var(--motion-med) var(--spring),
+    background var(--motion-fast) var(--spring),
+    border-color var(--motion-fast) var(--spring);
+}
+
+.resolution-control button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  border-color: var(--accent);
+  transform: translateY(-1px);
+  box-shadow: var(--elev-2);
+}
+
+.resolution-control button:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: var(--elev-1);
+}
+
+.resolution-control button:focus-visible {
+  outline: none;
+  box-shadow: var(--elev-1), 0 0 0 3px var(--accent-soft);
 }
 
 .resolution-control button:disabled {
-  border-color: rgba(113, 171, 126, 0.3);
-  color: #9eb7a2;
-  background: rgba(113, 171, 126, 0.1);
+  border-color: var(--success-line);
+  color: var(--success);
+  background: var(--success-soft);
+  box-shadow: none;
   cursor: default;
 }
 
@@ -2313,6 +2355,10 @@ body {
 
   --danger: #f2564f;
   --danger-soft: rgba(242, 86, 79, 0.13);
+  --danger-line: rgba(242, 86, 79, 0.30);   /* danger hairline for error borders */
+  --success: #58cc8a;                        /* == --trace-green (ready/ok state) */
+  --success-soft: rgba(88, 204, 138, 0.12);
+  --success-line: rgba(88, 204, 138, 0.34);  /* success hairline for ready borders */
   --cream: #eef0f4;
   --cream-soft: rgba(238, 240, 244, 0.07);
 
@@ -3842,13 +3888,13 @@ body {
 }
 
 .bottom-errors .warning {
-  border: 1px solid rgba(214, 138, 60, 0.42);
-  color: #d6b083;
+  border: 1px solid var(--accent-line);
+  color: var(--accent);
 }
 
 .bottom-errors p {
-  border: 1px solid rgba(113, 171, 126, 0.35);
-  color: #97c8a3;
+  border: 1px solid var(--success-line);
+  color: var(--success);
 }
 
 .ask-composer input {

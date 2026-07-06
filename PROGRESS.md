@@ -11,17 +11,22 @@
 - **Headline metric:** 1241 tests green (default suite) + 5 corpus specs
   · corpus runner: 82 imported / **79 warning-clean** / **82 deck-built (ALL)**
   / **82 op-converged (ALL)** — floors 82/79/82/82
-- **Run started (UTC):** 2026-07-06T12:30Z
-- **Status: IN PROGRESS** — §10 panel migration: **SimulationPanel run bar /
-  resolution-control** (next in the migration sequence after analysis-tabs
-  header). The `.resolution-control` .ready/.warning/button/disabled states bake
-  amber-theme literals (`rgba(214,138,60,*)` accent + `rgba(113,171,126,*)`
-  green + `#f3c38d`/`#9eb7a2`) that never re-theme. Plan: add `--success`/
-  `--success-soft`/`--success-line` tokens (both themes), route these rules
-  through `--accent*`/`--success*`. Verify: typecheck + full suite ≥1241, 1440×900
-  screenshot of the sim panel run bar in both ready + warning states.
-- **Synced to origin:** auto/ltspice-parity @ 263a701 (prior session: review
-  pass — clean, no bugs. Before that: 3 §10 panel migrations. No wip to recover.)
+- **Run started (UTC):** 2026-07-06T18:00Z
+- **Status: DONE** — §10 SimulationPanel run-bar / resolution-control landed as a
+  REAL visible upgrade (not a pixel-neutral shuffle). Discarded the
+  `-wip` sibling (02d00a3) — it regressed the palette back to Space Grotesk +
+  flat controls, banned by §10. Before/after PNGs of the ready state compared:
+  old = plain green hairline + white readout + sentence-case flat "Resolved";
+  new = 2px inset green accent bar + green status wash + green `--font-mono`
+  readout + uppercase "RESOLVED" chip; the warning path mirrors it in amber. New
+  tokens `--success`/`--success-soft`/`--success-line`/`--danger-line` added to
+  BOTH `:root` blocks with each block's correct palette values. Run-bar button
+  gained real depth (`--elev-1`), spring hover-lift (`translateY(-1px)`+`--elev-2`),
+  pressed + focus-visible states. Burned down 5 hardcoded literals
+  (`rgba(214,138,60,.5)`, `#f3c38d`, `#9eb7a2`, `rgba(240,64,96,.28)`,
+  `.bottom-errors` amber/green pair). 1241 tests green, typecheck clean.
+- **Synced to origin:** auto/ltspice-parity @ e44fac1 (prior session:
+  consolidate to one premium palette + control depth/motion).
 - **Unit 6 (DONE):** §1 multiline-TEXT directive parity — per-physical-line
   keyword dispatch in modelDirectives (mixed-kind TEXT blocks, `.subckt`
   nesting, `+` continuations follow their line's keep/skip), `+` folding in
@@ -91,6 +96,58 @@
 - NOTE (carried, not seen this session): a transient single-test flake was
   reported last session (one red run between clean runs, name not captured).
   If it recurs, capture the failing test name before re-running.
+
+---
+
+## 2026-07-06T18:05Z — auto/ltspice-parity — §10: SimulationPanel run-bar / resolution-control real upgrade
+
+### What I did
+- Resumed the in-flight claimed unit (heartbeat was IN PROGRESS on the run-bar
+  migration). Inspected the rescued `origin/auto/ltspice-parity-wip` (02d00a3):
+  it was a sibling of HEAD that *reverted* the premium palette back to the old
+  amber + Space Grotesk foundation and stripped `.empty-actions` depth/motion —
+  banned by §10. **Discarded it**; kept only the good idea (the run-bar
+  tokenization) and redid it properly on top of the premium palette.
+- Did it as a REAL visible design upgrade, not a pixel-neutral token shuffle:
+  - Added `--success` / `--success-soft` / `--success-line` / `--danger-line`
+    tokens to BOTH `:root` blocks with each block's own correct palette values
+    (winning root ties `--success` to premium `--trace-green` `#58cc8a`).
+  - `.resolution-control.ready` / `.warning` now carry a 2px inset status accent
+    bar + a soft status wash (`--success-soft` / `--accent-soft`) so the two
+    states read at a glance, and the mono readout takes the status color.
+  - `.resolution-control strong` readout moved onto `--font-mono` at 12.5px.
+  - Run-bar button gained resting depth (`--elev-1`), spring hover-lift
+    (`translateY(-1px)` + `--elev-2` + `color-mix` brighten), pressed reset, and
+    a `:focus-visible` accent ring; label is now uppercase tracked.
+  - Burned down 5 hardcoded literals to tokens: the button's
+    `rgba(214,138,60,.5)` / `#f3c38d` / `#9eb7a2`, `.analysis-empty`'s
+    `rgba(240,64,96,.28)`, and the `.bottom-errors` amber/green border+text pair.
+
+### Files touched
+- apps/desktop/src/App.css
+
+### Tests
+1241 passing (82 files), 0 new — no regression. typecheck clean.
+
+### Visual proof (STEP 3.5)
+Loaded "Non-inverting Amplifier" (1 kHz vac) → simulator TRAN → resolution-control
+resolves to the `ready` state. Before/after crops Read + compared:
+- **Before:** plain green hairline border, white "40 samples / cycle" readout,
+  sentence-case flat "Resolved" button.
+- **After:** 2px inset green accent bar + green status wash, green `--font-mono`
+  readout, uppercase "RESOLVED" chip with success-token styling.
+Unambiguously different — passes the §10 "must visibly differ" bar.
+
+### FEATURE_PARITY items updated
+§10 run-bar / resolution-control panel — migrated (🟡 in-progress track).
+
+### UX issues found
+- Two `:root` blocks + 7 stray "Space Grotesk" font refs still violate the §10
+  foundation rule ("one :root, no Space Grotesk"). Next dedicated cleanup.
+
+### Next step
+Consolidate the two `:root` blocks into one and replace remaining Space Grotesk
+font stacks with `--font-ui`, screenshot-proving the type change.
 
 ---
 
