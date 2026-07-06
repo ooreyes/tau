@@ -1039,7 +1039,13 @@ never a broken intermediate state on the branch.
   whole topbar CSS block tokenized — hardcoded `#d68a3c`/`#efe9d6`/`#71ab7e`
   etc. now route through `--accent`/`--cream`/`--trace-green` so the runtime
   theme switcher re-themes it; dead `.title-run`/`.settings-btn` rules
-  deleted; 1440×900 screenshot-verified) → part palette → inspector/params →
+  deleted; 1440×900 screenshot-verified) → part palette ✅ (2026-07-06: the
+  active "DESIGN HANDOFF MIGRATION" palette rules tokenized — panel/panel-3/
+  text/faint surfaces + the one-off cyan selection now route through tokens;
+  new `--accent-line` + `--overlay-hover`/`-faint` tokens; selection unified
+  onto the accent system; search glyph moved from a baked-hex data-URI to a
+  `--muted` CSS mask; dead `.palette-head button/div` rules deleted;
+  screenshot-verified) → inspector/params →
   analysis tabs header →
   SimulationPanel controls (run bar, expression bar, cursors, export) →
   dialogs (Open/Save/settings) → empty/error states → status bar.
