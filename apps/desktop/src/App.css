@@ -2972,22 +2972,22 @@ body {
 }
 
 .grid-dot {
-  fill: rgba(255, 255, 255, 0.05);
+  fill: var(--grid-dot);
 }
 
 .symbol {
-  stroke: #cfc9b6;
+  stroke: var(--comp);
   stroke-width: 1.55;
 }
 
 .wire {
-  stroke: #cfc9b6;
+  stroke: var(--comp);
   stroke-width: 1.8;
 }
 
 /* Connection dot where 3+ conductors meet (drawn by Canvas at junctions). */
 .junction-dot {
-  fill: #cfc9b6;
+  fill: var(--comp);
   stroke: none;
 }
 
@@ -2998,8 +2998,8 @@ body {
   flex-direction: column;
   gap: 0;
   overflow: hidden;
-  background: #0e0e12;
-  border: 1px solid rgba(255, 255, 255, 0.09);
+  background: var(--panel-3);
+  border: 1px solid var(--border-strong);
   border-radius: 9px;
 }
 
@@ -3007,10 +3007,10 @@ body {
   width: 34px;
   height: 32px;
   border: 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  border-bottom: 1px solid var(--border);
   border-radius: 0;
   background: transparent;
-  color: #9a9aa2;
+  color: var(--muted);
 }
 
 .view-btn.fit {
@@ -3031,7 +3031,7 @@ body {
   display: flex;
   flex-direction: column;
   min-height: 0;
-  background: #0b0b0e;
+  background: var(--panel);
   border-top: 1px solid var(--border);
 }
 
@@ -3039,7 +3039,7 @@ body {
   height: 7px;
   display: grid;
   place-items: center;
-  background: #0c0c0f;
+  background: var(--panel-3);
   border-bottom: 1px solid var(--border);
 }
 
@@ -3047,7 +3047,7 @@ body {
   width: 34px;
   height: 3px;
   border-radius: 3px;
-  background: #2a2a30;
+  background: var(--dial-track);
 }
 
 .bottom-tabs {
