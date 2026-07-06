@@ -11,10 +11,11 @@
 - **Headline metric:** 1241 tests green (default suite) + 5 corpus specs
   · corpus runner: 82 imported / **79 warning-clean** / **82 deck-built (ALL)**
   / **82 op-converged (ALL)** — floors 82/79/82/82
-- **Run started (UTC):** 2026-07-05T21:15Z
-- **Synced to origin:** auto/ltspice-parity @ 7fc06aa (recovered wip 2d2c34a
-  from the killed previous session, cherry-picked, finished, squashed into
-  7fc06aa; `auto/ltspice-parity-wip` deleted)
+- **Run started (UTC):** 2026-07-06T01:40Z
+- **Synced to origin:** auto/ltspice-parity @ 33ec134 (this session: 3 §10
+  panel migrations landed — part palette, inspector/params, analysis-tabs
+  header. Prior session's Unit 8 was claimed-but-empty; resumed and finished
+  it. No wip to recover.)
 - **Unit 6 (DONE):** §1 multiline-TEXT directive parity — per-physical-line
   keyword dispatch in modelDirectives (mixed-kind TEXT blocks, `.subckt`
   nesting, `+` continuations follow their line's keep/skip), `+` folding in
@@ -61,10 +62,16 @@
   uppercase 9px labels across palette head, table head, plotter kicker,
   result-list h3, symbol-preview) `#5a5a62`→`--faint`. Tab row screenshot-
   verified: active pill + muted inactive, coherent.
-- **Status:** DONE
-- NOTE (carried): transient single-test flake seen again this session (one
-  red run between two clean 1240 runs, name not captured — grep filter ate
-  it). Next time capture the failing test name before re-running.
+- **Status:** DONE — clean stop. Tree clean, typecheck green, 1241 tests green
+  (full suite ran 3× this session, all clean — no flake reproduced).
+- **Next unit:** §10 SimulationPanel controls (run bar / expression bar /
+  cursors / export) — the next panel in the §10 sequence. It's large and
+  multi-state (needs a loaded sim result to screenshot the cursor/export
+  states), so give it a fresh session; tokenize incrementally and commit per
+  sub-region.
+- NOTE (carried, not seen this session): a transient single-test flake was
+  reported last session (one red run between clean runs, name not captured).
+  If it recurs, capture the failing test name before re-running.
 
 ---
 
