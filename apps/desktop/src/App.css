@@ -525,7 +525,7 @@ body {
   padding: 1px 5px;
   letter-spacing: 0.3px;
   flex-shrink: 0;
-  font-family: -apple-system, BlinkMacSystemFont, "SF Mono", "Menlo", monospace;
+  font-family: var(--font-mono);
   line-height: 16px;
 }
 
@@ -605,7 +605,7 @@ body {
   font-weight: 500;
   fill: var(--muted);
   user-select: none;
-  font-family: -apple-system, BlinkMacSystemFont, "SF Mono", monospace;
+  font-family: var(--font-mono);
 }
 
 .component .ref {
@@ -837,7 +837,7 @@ body {
   z-index: 8;
   width: 90px;
   text-align: center;
-  font: 600 12px -apple-system, BlinkMacSystemFont, "SF Mono", monospace;
+  font: 600 12px var(--font-mono);
   color: var(--text);
   background: var(--panel-2);
   border: 1px solid var(--accent);
@@ -1086,7 +1086,7 @@ body {
   font-size: 8.5px;
   font-weight: 500;
   letter-spacing: 0.1px;
-  font-family: -apple-system, BlinkMacSystemFont, "SF Mono", "Menlo", monospace;
+  font-family: var(--font-mono);
 }
 
 .scope-axis.right {
@@ -1525,7 +1525,7 @@ body {
 
 .op-row span:last-child {
   color: var(--text);
-  font-family: -apple-system, BlinkMacSystemFont, "SF Mono", "Menlo", monospace;
+  font-family: var(--font-mono);
   font-weight: 500;
 }
 
@@ -1596,7 +1596,7 @@ body {
 
 .meas-value {
   color: var(--text);
-  font-family: -apple-system, BlinkMacSystemFont, "SF Mono", "Menlo", monospace;
+  font-family: var(--font-mono);
   font-weight: 500;
   text-align: right;
 }
@@ -1796,7 +1796,7 @@ body {
   border: 1px solid var(--border);
   border-radius: var(--r-sm);
   padding: 0 10px;
-  font: 500 12px -apple-system, BlinkMacSystemFont, "SF Mono", "Menlo", monospace;
+  font: 500 12px var(--font-mono);
   transition: border-color 130ms var(--ease-out);
   outline: none;
 }
@@ -1837,7 +1837,7 @@ body {
 
 .engineering-input input {
   padding: 0 10px;
-  font: 500 12px -apple-system, BlinkMacSystemFont, "SF Mono", "Menlo", monospace;
+  font: 500 12px var(--font-mono);
 }
 
 .engineering-input select {
@@ -1991,7 +1991,7 @@ body {
 }
 
 .status-hints kbd {
-  font: 600 9px -apple-system, BlinkMacSystemFont, "SF Mono", "Menlo", monospace;
+  font: 600 9px var(--font-mono);
   background: var(--panel-4);
   border: 1px solid var(--border);
   border-radius: 3px;
@@ -2126,7 +2126,7 @@ body {
   border: 1px solid var(--border);
   border-radius: 4px;
   padding: 1px 5px;
-  font-family: -apple-system, BlinkMacSystemFont, "SF Mono", monospace;
+  font-family: var(--font-mono);
   line-height: 16px;
 }
 
