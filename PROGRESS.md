@@ -11,8 +11,19 @@
 - **Headline metric:** 1241 tests green (default suite) + 5 corpus specs
   · corpus runner: 82 imported / **79 warning-clean** / **82 deck-built (ALL)**
   / **82 op-converged (ALL)** — floors 82/79/82/82
-- **Run started (UTC):** 2026-07-06T18:00Z
-- **Status: DONE** — 3 §10 commits this session, foundation now clean:
+- **Run started (UTC):** 2026-07-06T19:30Z
+- **Status: IN PROGRESS** — §10 scope/plots panel (next in migration sequence
+  after run bar). Discarded obsolete `-wip` (02d00a3, already superseded — banned
+  teal/Space-Grotesk revert). Plan: (1) action-row hierarchy — split the 5 flat
+  identical `.expr-add` amber pills into a solid-amber PRIMARY "Add trace" + neutral
+  graphite ghost EXPORT utilities (Export CSV/Netlist/Save .raw/Ref .raw), all with
+  `--elev-1` rest + spring hover-lift `--elev-2` + pressed + focus ring; (2)
+  `.scope-svg` real instrument depth (`--elev-2` lift + new `--elev-inset` vignette
+  token, stronger frame, `--r-md`); (3) legend signal-name readouts → `--font-mono`.
+  Files: apps/desktop/src/App.css, SimulationPanel.tsx (add `primary` class to Add
+  trace). Verify: typecheck + full suite ≥1241, before/after 1440×900 sim-scope PNGs
+  Read + compared (must visibly differ). Prior session (below) is DONE:
+- **Status: DONE** — 3 §10 commits (prior session), foundation clean:
   1. **Run-bar / resolution-control real visible upgrade** (721256c^^): discarded
      the regressive `-wip` sibling (02d00a3, reverted palette to Space Grotesk +
      flat controls — banned). Ready-state before/after PNGs compared: old = plain
