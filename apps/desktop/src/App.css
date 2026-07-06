@@ -3843,8 +3843,8 @@ body {
   display: block;
   margin-top: 8px;
   overflow: hidden;
-  color: #6b6b73;
-  font: 500 10px "JetBrains Mono", ui-monospace, monospace;
+  color: var(--muted);
+  font: 500 10px var(--font-mono);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -3854,8 +3854,8 @@ body {
   display: grid;
   gap: 8px;
   padding: 14px;
-  color: #d9d4c2;
-  font: 500 12px "JetBrains Mono", ui-monospace, monospace;
+  color: var(--text);
+  font: 500 12px var(--font-mono);
 }
 
 .bottom-output {
@@ -3865,15 +3865,15 @@ body {
 .bottom-output-row {
   min-width: 0;
   padding: 10px 12px;
-  border: 1px solid rgba(255, 255, 255, 0.07);
+  border: 1px solid var(--border);
   border-radius: 7px;
-  background: rgba(255, 255, 255, 0.025);
+  background: var(--overlay-hover-faint);
 }
 
 .bottom-output-row span {
   display: block;
   margin-bottom: 5px;
-  color: #6b6b73;
+  color: var(--muted);
   font-size: 10px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -3882,7 +3882,7 @@ body {
 .bottom-output-row strong {
   display: block;
   overflow: hidden;
-  color: #efe9d6;
+  color: var(--cream);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -3893,12 +3893,12 @@ body {
   margin: 0;
   padding: 10px 12px;
   border-radius: 7px;
-  background: rgba(255, 255, 255, 0.025);
+  background: var(--overlay-hover-faint);
 }
 
 .bottom-errors .error {
-  border: 1px solid rgba(207, 84, 80, 0.45);
-  color: #f0aaa6;
+  border: 1px solid var(--danger-line);
+  color: var(--danger);
 }
 
 .bottom-errors .warning {
