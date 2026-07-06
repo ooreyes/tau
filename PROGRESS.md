@@ -46,22 +46,50 @@
   32px migration field). Removed dead `.palette-head button/div` rules (no
   buttons in the markup — carried the last stray hexes). Screenshot-verified at
   1440×900: default + active/hover states coherent, density intact, icon aligned.
-- **Unit 9 (IN PROGRESS):** §10 inspector/params panel — next panel in the §10
-  sequence. Tokenize the active `.component-inspector`/`.inspector-summary`/
-  `.property-field` rules (hardcoded `#efe9d6`/`#8a8a92`/`#08080a`/`#e6e0cf` +
-  accent-rgba focus) onto tokens; base `.engineering-input` is already tokenized.
-  - Files: App.css (inspector block ~2982–3083 only).
-  - Verify: STEP 3.5 screenshot at 1440×900 — empty state + a selected component
-    with editable param fields (focus state); judge, fix.
-  - Last completed sub-step: none (just claimed).
-- **Status:** IN PROGRESS
+- **Unit 9 (DONE):** §10 inspector/params panel — tokenized the active
+  `.inspector-summary`/`.property-field` rules: `#efe9d6`→`--cream`,
+  `#8a8a92`/`#6f7078`→`--muted`, `#e6e0cf`→`--text`, `#08080a`→`--panel-3`,
+  input borders `rgba(255,255,255,.08)`→`--border-strong`, and the accent-rgba
+  focus ring (`rgba(214,138,60,.68/.14)`)→`--accent` + `--accent-soft` (now
+  matches the already-tokenized `.engineering-input` focus). Base
+  `.engineering-input` was already token-driven; only the `.property-field`
+  overrides needed it. Screenshot-verified at 1440×900: empty state ("No
+  component selected") and a selected R1 with the Resistance field focused —
+  amber focus ring, cream/muted text hierarchy, coherent with the shell.
+- **Status:** DONE
 - NOTE (carried): transient single-test flake seen again this session (one
   red run between two clean 1240 runs, name not captured — grep filter ate
   it). Next time capture the failing test name before re-running.
 
 ---
 
-## 2026-07-06T01:55Z — auto/ltspice-parity — §10: part-palette tokenization (no hardcoded color)
+## 2026-07-06T02:02Z — auto/ltspice-parity — §10: inspector/params panel tokenization
+
+### What I did
+- Migrated the component inspector (bottom-left "component" tab) onto the token
+  layer. Tokenized `.inspector-summary strong/span` and every `.property-field`
+  rule: cream title, muted secondary text, `--panel-3` input fields,
+  `--border-strong` input borders, and the focus ring onto `--accent` +
+  `--accent-soft` (unified with the already-tokenized `.engineering-input`).
+- Base `.engineering-input` was already token-driven; only the inspector's
+  `.property-field` overrides carried hardcoded hex, so the change is contained.
+
+### Files touched
+- apps/desktop/src/App.css (inspector block ~2982–3083)
+
+### Tests
+1241 passing (82 files), 0 new — CSS-only; typecheck clean.
+
+### FEATURE_PARITY items updated
+- §10 panel-migration sequence: inspector/params ✅ (part palette done in the
+  prior commit); next is the analysis-tabs header.
+
+### UX issues found
+- None new. (Palette two-block UX debt from the prior entry still stands.)
+
+### Next step
+Migrate the §10 analysis-tabs header (component/output/errors tab row) onto the
+token layer + Tabs primitive; same tokenize-then-screenshot rhythm.
 
 ### What I did
 - Resumed Unit 8 (prior session died right after the claim commit, no code

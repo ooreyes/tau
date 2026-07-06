@@ -1045,7 +1045,11 @@ never a broken intermediate state on the branch.
   new `--accent-line` + `--overlay-hover`/`-faint` tokens; selection unified
   onto the accent system; search glyph moved from a baked-hex data-URI to a
   `--muted` CSS mask; dead `.palette-head button/div` rules deleted;
-  screenshot-verified) → inspector/params →
+  screenshot-verified) → inspector/params ✅ (2026-07-06: `.inspector-summary`
+  + `.property-field` tokenized — cream title, `--muted` secondary text,
+  `--panel-3` fields, `--border-strong` borders, `--accent`/`--accent-soft`
+  focus ring unified with `.engineering-input`; empty + selected-R1 states
+  screenshot-verified) →
   analysis tabs header →
   SimulationPanel controls (run bar, expression bar, cursors, export) →
   dialogs (Open/Save/settings) → empty/error states → status bar.

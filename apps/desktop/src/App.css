@@ -3009,12 +3009,12 @@ body {
 }
 
 .inspector-summary strong {
-  color: #efe9d6;
+  color: var(--cream);
   font: 700 14px "JetBrains Mono", ui-monospace, monospace;
 }
 
 .inspector-summary span {
-  color: #8a8a92;
+  color: var(--muted);
   font-size: 12px;
 }
 
@@ -3045,7 +3045,7 @@ body {
 
 .property-field span {
   grid-column: 1 / -1;
-  color: #8a8a92;
+  color: var(--muted);
   font-size: 11px;
 }
 
@@ -3053,21 +3053,21 @@ body {
   height: 30px;
   min-width: 0;
   padding: 0 10px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--border-strong);
   border-radius: 7px;
-  color: #e6e0cf;
-  background: #08080a;
+  color: var(--text);
+  background: var(--panel-3);
   font: 500 13px "JetBrains Mono", ui-monospace, monospace;
 }
 
 .property-field input:not([readonly]):focus {
-  border-color: rgba(214, 138, 60, 0.68);
+  border-color: var(--accent);
   outline: none;
-  box-shadow: 0 0 0 3px rgba(214, 138, 60, 0.14);
+  box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
 .property-field em {
-  color: #6f7078;
+  color: var(--muted);
   font: 700 10px "JetBrains Mono", ui-monospace, monospace;
   font-style: normal;
 }
@@ -3078,8 +3078,8 @@ body {
 
 .property-field .engineering-input input,
 .property-field .engineering-input select {
-  background: #08080a;
-  border-color: rgba(255, 255, 255, 0.08);
+  background: var(--panel-3);
+  border-color: var(--border-strong);
 }
 
 .sim-results {
