@@ -11,13 +11,17 @@
 - **Headline metric:** 1241 tests green (default suite) + 5 corpus specs
   · corpus runner: 82 imported / **79 warning-clean** / **82 deck-built (ALL)**
   / **82 op-converged (ALL)** — floors 82/79/82/82
-- **Run started (UTC):** 2026-07-06T05:40Z
-- **REVIEW SESSION** (0 `review:` commits in last 30 → rotation due). No new
-  features. Reviewed the 35 commits since 6ee3466 for correctness + ran the
-  STEP 3.5 screenshot audit. Verdict: **clean, no bugs found, UI/UX bar met.**
-- **Synced to origin:** auto/ltspice-parity @ 5095d11 (prior session: 3 §10
-  panel migrations landed — part palette, inspector/params, analysis-tabs
-  header. No wip to recover.)
+- **Run started (UTC):** 2026-07-06T12:30Z
+- **Status: IN PROGRESS** — §10 panel migration: **SimulationPanel run bar /
+  resolution-control** (next in the migration sequence after analysis-tabs
+  header). The `.resolution-control` .ready/.warning/button/disabled states bake
+  amber-theme literals (`rgba(214,138,60,*)` accent + `rgba(113,171,126,*)`
+  green + `#f3c38d`/`#9eb7a2`) that never re-theme. Plan: add `--success`/
+  `--success-soft`/`--success-line` tokens (both themes), route these rules
+  through `--accent*`/`--success*`. Verify: typecheck + full suite ≥1241, 1440×900
+  screenshot of the sim panel run bar in both ready + warning states.
+- **Synced to origin:** auto/ltspice-parity @ 263a701 (prior session: review
+  pass — clean, no bugs. Before that: 3 §10 panel migrations. No wip to recover.)
 - **Unit 6 (DONE):** §1 multiline-TEXT directive parity — per-physical-line
   keyword dispatch in modelDirectives (mixed-kind TEXT blocks, `.subckt`
   nesting, `+` continuations follow their line's keep/skip), `+` folding in
