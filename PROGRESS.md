@@ -12,15 +12,21 @@
   · corpus runner: 82 imported / **79 warning-clean** / **82 deck-built (ALL)**
   / **82 op-converged (ALL)** — floors 82/79/82/82
 - **Run started (UTC):** 2026-07-07T14:05Z
-- **Status: IN PROGRESS** — §10 sim-panel signal-expression mono (part 2).
-  Continuing the SimulationPanel readout-typography migration. The trace
-  expressions users type/see — `.expr-input` (e.g. `V(out)`, `I(R1)`) and the
-  `.expr-chip` trace list — still use `font-family: inherit` (UI sans). These are
-  technical signal identifiers, so per the directive they belong in `--font-mono`
-  alongside the counts/dials just unified. PLAN: `apps/desktop/src/App.css` —
-  `.expr-input` + `.expr-chip` → `var(--font-mono)`, nudge letter-spacing/size to
-  keep density. VERIFY: before/after Playwright crop with a trace added (`V(out)`
-  chip visible) Read + compared for mono letterforms; typecheck; 1247.
+- **Status: DONE** — §10 sim-panel signal-expression mono (part 2).
+  Continued the SimulationPanel readout-typography migration to the trace
+  expressions users type/see: `.expr-input` (e.g. `V(out)-V(in)`) and the
+  `.expr-chip` trace list both used `font-family: inherit` (UI sans) while the
+  sibling `.scope-legend`/`.trace-legend-label` (same signal identifiers, under
+  the plot) were ALREADY `--font-mono`. FIX (`apps/desktop/src/App.css`): both →
+  `font: <size> var(--font-mono)` with `-0.01em` tracking; sizes preserved
+  (11px input / 10px chip). PROOF: before/after Playwright crop of the expr row
+  with two valid trace chips added (`V(R1·C1)*10`, `V(V1·R1)/2`) — BEFORE both
+  chips + the input tail render in proportional sans; AFTER they're mechanical
+  monospace (fixed-width digits/operators/parens; chips slightly wider to fit,
+  and the wider mono input glyphs pushed `:)` off the visible tail `-V(in)`).
+  The expr row now matches the mono legend + counts/dials. Read both crops;
+  visibly differs. Typecheck clean; only App.css changed; 1247 green.
+- **Status: DONE** — §10 SimulationPanel numeric-readout mono unification.
 - **Status: DONE** — §10 SimulationPanel numeric-readout mono unification.
   Feature session (most recent commit is `review:`, 2 in last 30). The sim panel
   had THREE numeric-readout clusters but only ONE was mono: `.resolution-control
