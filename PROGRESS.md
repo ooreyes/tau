@@ -11,7 +11,27 @@
 - **Headline metric:** 1247 tests green (default suite) + 5 corpus specs
   · corpus runner: 82 imported / **79 warning-clean** / **82 deck-built (ALL)**
   / **82 op-converged (ALL)** — floors 82/79/82/82
-- **Run started (UTC):** 2026-07-07T10:05Z
+- **Run started (UTC):** 2026-07-07T13:20Z
+- **Status: DONE** — **REVIEW SESSION** (rotation: 0 `review:` commits in last 30).
+  No new features. (a) Correctness diff review of `f8f9281..HEAD` (31 commits):
+  `circuitBounds` extraction in Canvas.tsx is pure + fully unit-tested (6 new
+  cases), the non-interactive fit-to-view `useEffect`/ResizeObserver is correct
+  (early-returns when interactive, disconnects on cleanup); SimulationPanel a11y
+  additions (`role=status`, `aria-live`, `.plotter-live--running`,
+  `.analysis-empty.warn`) all reference CSS classes that exist — PASS, no bugs.
+  (b) UI/UX audit via screenshot pipeline on 4 screens — empty state, loaded RC
+  schematic, simulator (empty scope), simulator WITH transient results: all
+  operator-grade, dense, coherent; the RC waveform is physically CORRECT
+  (V(R1·C1)=4.99 V at 6 ms, τ=RC=1 ms → verified). Confirmed the fit-to-view
+  change works visually (RC framed centered in the narrow sim column). PASS.
+  (c) One fix: found the legacy 3-column `.app` grid block (~L137) was 100%
+  shadowed by the DESIGN HANDOFF MIGRATION `.app` (~L2540) — pure dead CSS —
+  removed it (screenshot before/after pixel-identical, correct for a dead-rule
+  removal). Left an inline NOTE documenting that the rest of the legacy section
+  is NOT bulk-deletable: `.toolbar`'s backdrop-filter and `.brand`'s flex-shrink
+  leak un-overridden past their migration twins, so future dedup must be
+  property-level. Metrics steady: 36 hardcoded colors, 1 `:root`, 0 Space
+  Grotesk. Typecheck clean; 1247 tests green (no regression).
 - **Status: DONE** — §10 dead `.text-btn` sweep + Examples/Open picker focus ring.
   Investigating a missing focus ring on the toolbar file buttons revealed
   `.text-btn` (its base + `:disabled` + `:hover` rules) is DEAD CSS — grep shows
