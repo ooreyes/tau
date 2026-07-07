@@ -674,14 +674,25 @@ body {
 }
 
 .empty-panel {
+  position: relative;
   width: min(480px, calc(100% - 48px));
   padding: 28px 32px;
-  background: rgba(15, 17, 22, 0.94);
+  background: color-mix(in srgb, var(--panel) 94%, transparent);
   border: 1px solid var(--border);
   border-radius: var(--r-xl);
-  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.4);
+  box-shadow: var(--elev-2), 0 16px 48px rgba(0, 0, 0, 0.4);
   pointer-events: none;
   backdrop-filter: blur(12px);
+  overflow: hidden;
+}
+
+/* Cobalt top-edge accent — the console header hairline of the card. */
+.empty-panel::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--accent-line), transparent);
 }
 
 /* Only the actions take clicks, so clicking the card's body still reaches the
@@ -691,10 +702,9 @@ body {
 }
 
 .empty-kicker {
-  color: var(--muted);
-  font-size: 10px;
-  font-weight: 500;
-  letter-spacing: 0.6px;
+  color: var(--accent);
+  font: 600 10px var(--font-mono);
+  letter-spacing: 1px;
   text-transform: uppercase;
   margin-bottom: 10px;
 }
@@ -741,7 +751,7 @@ body {
 
 .empty-actions button:hover {
   border-color: var(--border-strong);
-  background: linear-gradient(180deg, #23262e, var(--panel-3));
+  background: linear-gradient(180deg, var(--panel-4), var(--panel-3));
   transform: translateY(-1px);
   box-shadow: var(--elev-2);
 }
@@ -756,14 +766,14 @@ body {
   background: linear-gradient(180deg, var(--accent-hover), var(--accent));
   border-color: rgba(0, 0, 0, 0.25);
   font-weight: 650;
-  box-shadow: var(--elev-1), 0 0 0 1px rgba(234, 166, 77, 0.25),
+  box-shadow: var(--elev-1), 0 0 0 1px var(--accent-line),
     0 6px 18px var(--accent-glow);
 }
 
 .empty-actions .primary-action:hover {
-  background: linear-gradient(180deg, #f6bd72, var(--accent-hover));
+  background: linear-gradient(180deg, var(--accent-hover), var(--accent));
   transform: translateY(-1px);
-  box-shadow: var(--elev-2), 0 0 0 1px rgba(234, 166, 77, 0.35),
+  box-shadow: var(--elev-2), 0 0 0 1px var(--accent),
     0 10px 28px var(--accent-glow);
 }
 
