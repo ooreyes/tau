@@ -388,6 +388,42 @@
 
 ---
 
+## 2026-07-07T14:30Z — auto/ltspice-parity — §10: sim-panel signal expressions onto --font-mono
+
+### What I did
+- Finished the SimulationPanel signal-identifier typography pass. `.expr-input`
+  (where users type plot expressions like `V(out)-V(in)`) and `.expr-chip` (the
+  plotted-trace list) still used `font-family: inherit` (UI sans), even though
+  the sibling `.scope-legend`/`.trace-legend-label` — the SAME signal
+  identifiers rendered under the plot — were already `--font-mono` from a prior
+  session. Routed both through `var(--font-mono)` with `-0.01em` tracking; sizes
+  preserved (11px input / 10px chip).
+
+### Files touched
+- apps/desktop/src/App.css (`.expr-input`, `.expr-chip`)
+
+### Tests
+1247 passing, 0 new (CSS-only) — passed. Typecheck clean; only App.css changed.
+
+### FEATURE_PARITY items updated
+§10 SimulationPanel run-bar/controls migration line — the expr-bar (expression
+input + trace chips) now typographically consistent with the mono legend and
+numeric readouts.
+
+### UX issues found
+None new. Before/after Playwright crop of the expr row with two valid trace
+chips added (`V(R1·C1)*10`, `V(V1·R1)/2`): BEFORE chips + input tail in
+proportional sans; AFTER mechanical monospace (fixed-width digits/operators/
+parens, chips slightly wider, wider mono input glyphs pushed `:)` off the
+visible tail). Verdict: visibly differs, coherent with the rest of the panel.
+
+### Next step
+Sweep the SimulationPanel for any remaining sans technical readouts (the
+`.meas`/`.fourier` tables, cursor table values), then move to the dialogs
+(Open/Save/settings) panel per the §10 panel order.
+
+---
+
 ## 2026-07-07T14:05Z — auto/ltspice-parity — §10: sim-panel numeric readouts onto --font-mono
 
 ### What I did
