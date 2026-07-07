@@ -12,17 +12,23 @@
   · corpus runner: 82 imported / **79 warning-clean** / **82 deck-built (ALL)**
   / **82 op-converged (ALL)** — floors 82/79/82/82
 - **Run started (UTC):** 2026-07-07T19:11Z
-- **Status: IN PROGRESS** — §10 scope/plot surfaces: cool-graphite instrument.
-  CLAIM: same dead-duplicate pattern as the canvas — the visible `.scope-svg`
-  surface is a flat pure-black `#060608` (App.css:3560) overriding the cool
-  `--scope-bg` at 1117; `.op-table` (3562), `.plotter` (3412 `#0b0b0e`) and
-  `.shell-body` (2569 `#08080a`) are likewise flat/warm near-blacks. PLAN — file:
-  `apps/desktop/src/App.css` only. Add `--scope-surface` (cool instrument-screen
-  vignette); route `.scope-svg`+`.op-table` → it, `.plotter`+`.shell-body` →
-  `--canvas-bg`; burns down the last `#060608`, `#0b0b0e`, `#08080a`. VERIFY:
-  typecheck + `test --run` 1247 green; Playwright driver opens RC example → runs →
-  simulator tab → before/after crop of the scope; Read both, confirm visibly
-  differs.
+- **Status: DONE** — §10 scope/plot surfaces: cool-graphite instrument.
+  Same dead-duplicate pattern as the canvas — the visible `.scope-svg` surface
+  was a flat pure-black `#060608` (App.css:3560) overriding the cool `--scope-bg`
+  at 1117; `.op-table`, `.plotter` (`#0b0b0e`) and `.shell-body` (`#08080a`) were
+  likewise flat/warm near-blacks. FIX (`apps/desktop/src/App.css`, only file):
+  added a `--scope-surface` token — `radial-gradient(120% 100% at 50% 0%, #0a0f18
+  → #070b12 → #05080d)`, a cool near-black glass with a faint top-lit glow, a
+  touch bluer/deeper than `--canvas-surface` so the two panes read distinctly.
+  Routed `.scope-svg`+`.op-table` → `--scope-surface`, `.plotter`+`.shell-body` →
+  `--canvas-bg`. Burns down the LAST near-black hexes outside `:root`: `#060608`,
+  `#0b0b0e`, `#08080a` — only real hardcoded color left in App.css outside the
+  palette is the `.wire` stroke `#9eacbd` (674). PROOF: Playwright driver (opens
+  RC example → Run → simulator tab), then an exact `.scope-svg` element crop via
+  its bounding box (x683 y167 412×230): BEFORE flat pure-black screen; AFTER cool
+  graphite glass with a visible top-lit glow (top lighter/bluer, deepening down),
+  grid lines a touch more legible — reads as a lit oscilloscope face. Read both;
+  visibly differs. Typecheck clean; only App.css changed; 1247 green.
 - **Status: DONE** — §10 schematic canvas surface: cool-graphite vignette.
   The *active* `.stage`/`.canvas` rules painted a FLAT near-pure-black `#060608`
   (the earlier cool gradient at App.css:601 was dead — overridden by the later

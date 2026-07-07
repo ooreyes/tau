@@ -66,6 +66,11 @@
   --canvas-bg:      #080b12;
   --canvas-surface:
     radial-gradient(135% 92% at 50% -12%, #0c1119 0%, #080b12 56%, #05070c 100%);
+  /* Scope / op-table instrument screen — a cool near-black glass with a faint
+     top-lit glow, so waveforms read as if on a lit oscilloscope face. Slightly
+     bluer + deeper than the schematic surface to distinguish the two panes. */
+  --scope-surface:
+    radial-gradient(120% 100% at 50% 0%, #0a0f18 0%, #070b12 58%, #05080d 100%);
 
   /* Scope / plotter — instrument black-blue */
   --scope-bg:    #0c1015;
@@ -2571,7 +2576,7 @@ body {
   display: flex;
   position: relative;
   overflow: hidden;
-  background: #08080a;
+  background: var(--canvas-bg);
 }
 
 /* title bar */
@@ -3409,7 +3414,7 @@ body {
   width: 400px;
   flex: none;
   grid-area: auto;
-  background: #0b0b0e;
+  background: var(--canvas-bg);
   border-left: 1px solid var(--border);
 }
 
@@ -3559,7 +3564,7 @@ body {
 
 .scope-svg,
 .op-table {
-  background: #060608;
+  background: var(--scope-surface);
   border-color: rgba(255, 255, 255, 0.08);
   border-radius: 8px;
 }
