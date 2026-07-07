@@ -12,6 +12,14 @@
   · corpus runner: 82 imported / **79 warning-clean** / **82 deck-built (ALL)**
   / **82 op-converged (ALL)** — floors 82/79/82/82
 - **Run started (UTC):** 2026-07-07T10:05Z
+- **Status: IN PROGRESS** — §10 toolbar file buttons: `.text-btn` (New/Open/
+  Save/Save .asc) + `.example-picker select` (Examples/Open dropdown) — the app's
+  most prominent control row — have hover only, NO `:active` and NO
+  `:focus-visible`. Keyboard users get zero focus feedback on the primary file
+  ops (STEP-4 a11y gap); clicks feel dead. PLAN: add a pressed settle (`--panel-3`
+  bg + `--accent-line` border) and the app-standard cobalt focus ring (`--bg` 2px
+  + `--accent-line` 4px, matching `.empty-actions`). VERIFY: interactive
+  Playwright capture of focused + pressed toolbar button. CSS-only; typecheck + 1247.
 - **Status: DONE** — §10 canvas zoom cluster: `.view-controls`/`.view-btn`
   (the top-right zoom-in/out/fit stack) were each defined TWICE (App.css L2310+
   L3146 / L2319+L3158) AND the three focusable buttons had NO `:active` and NO
