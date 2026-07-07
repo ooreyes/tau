@@ -1265,7 +1265,7 @@ function TfTable({ result }: { result: TfResult | null }) {
         </div>
       </div>
       {result.warnings.length > 0 && (
-        <div className="analysis-empty">{result.warnings.join(" ")}</div>
+        <div className="analysis-empty warn" role="status">{result.warnings.join(" ")}</div>
       )}
     </>
   );
@@ -1348,7 +1348,7 @@ function NoisePlot({ result }: { result: NoiseResult | null }) {
         <Metric label="TOT INOISE" value={formatEngineering(result.totalInputNoise, result.inoiseUnit.replace("/√Hz", ""), 3)} tone="cyan" />
         <Metric label="POINTS" value={String(result.freqs.length)} tone="cream" />
       </div>
-      {result.warnings.length > 0 && <div className="analysis-empty">{result.warnings.join(" ")}</div>}
+      {result.warnings.length > 0 && <div className="analysis-empty warn" role="status">{result.warnings.join(" ")}</div>}
     </>
   );
 }

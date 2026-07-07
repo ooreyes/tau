@@ -1664,6 +1664,14 @@ body {
   line-height: 1.5;
 }
 
+/* Amber caution variant — reused for warnings so they don't read as hard errors
+   (red). Matches the app-wide semantic: red=error, amber=warning. */
+.analysis-empty.warn {
+  border-color: var(--signal-line);
+  border-left-color: var(--signal);
+  background: var(--signal-soft);
+}
+
 .op-table {
   margin: 6px 14px 12px;
   border: 1px solid var(--border);

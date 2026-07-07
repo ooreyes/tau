@@ -12,14 +12,16 @@
   · corpus runner: 82 imported / **79 warning-clean** / **82 deck-built (ALL)**
   / **82 op-converged (ALL)** — floors 82/79/82/82
 - **Run started (UTC):** 2026-07-07T09:30Z
-- **Status: IN PROGRESS** — §10 warnings pt.2: `.analysis-empty` (the red hard-
-  error box) is REUSED verbatim for `.tf`/`.ac` warnings (SimulationPanel L1268,
-  L1351: `warnings.join(" ")`), so those warnings render RED — contradicting the
-  amber warning semantic just landed. PLAN: add an amber `.analysis-empty.warn`
-  modifier (signal border/rail/text over signal-soft) + `role=status`; apply
-  `warn` class to the two warning-join sites. FILES: App.css + SimulationPanel.tsx.
-  VERIFY: typecheck + test (≥1247); harness screenshot proving the warn variant is
-  amber vs the red error variant.
+- **Status: DONE** — §10 warnings pt.2: `.analysis-empty` (the red hard-error
+  box) was REUSED verbatim for `.tf`/`.ac` warnings (SimulationPanel L1268,
+  L1351: `warnings.join(" ")`), rendering those warnings RED — contradicting the
+  amber warning semantic just landed. FIX: added an amber `.analysis-empty.warn`
+  modifier (`--signal-line` border, `--signal` left rail, `--signal-soft` fill) +
+  `role="status"`; applied `warn` to the two warning-join sites. SCREENSHOT PROOF
+  (harness, both variants): the error box stays red, the warn box is amber with an
+  amber left rail — visibly distinct. Closes the last red-warning leak; the app
+  now has ONE coherent semantic: red=error, amber=warning, green=ok, cobalt=info.
+  Typecheck clean; 1247 green.
 - **Status: DONE** — §10 semantic warnings: unify caution states onto the amber
   tactical `--signal`. FOUND warnings styled THREE inconsistent ways, none amber:
   `.bottom-errors .warning` + `.resolution-control.warning` used cobalt `--accent`
@@ -275,6 +277,34 @@
 - NOTE (carried, not seen this session): a transient single-test flake was
   reported last session (one red run between clean runs, name not captured).
   If it recurs, capture the failing test name before re-running.
+
+---
+
+## 2026-07-07T10:24Z — auto/ltspice-parity — §10: amber .analysis-empty.warn variant (last red-warning leak)
+
+### What I did
+- Added `.analysis-empty.warn` amber modifier (`--signal-line`/`--signal`/
+  `--signal-soft`) — the `.analysis-empty` red error box was reused verbatim for
+  `.tf` and `.ac` warnings, so those warnings rendered as hard errors (red).
+- Applied `warn` + `role="status"` to the two warning-join sites in
+  SimulationPanel (`.tf` outputImpedance block L1268; `.ac` points block L1351).
+
+### Files touched
+- apps/desktop/src/App.css
+- apps/desktop/src/components/SimulationPanel.tsx
+
+### Tests
+1247 passing (82 files), 0 new — CSS/markup only; typecheck clean. No regression.
+
+### FEATURE_PARITY items updated
+- §10 error/empty-states: warning semantics now fully coherent app-wide.
+
+### UX issues found
+- `.empty-actions` New/Open buttons still lack `:focus-visible` rings.
+
+### Next step
+Add `:focus-visible` rings to the empty-state action buttons, then sweep the
+cmdk palette's hardcoded backdrop/panel literals.
 
 ---
 
