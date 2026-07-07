@@ -12,19 +12,23 @@
   · corpus runner: 82 imported / **79 warning-clean** / **82 deck-built (ALL)**
   / **82 op-converged (ALL)** — floors 82/79/82/82
 - **Run started (UTC):** 2026-07-07T08:52Z
-- **Status: IN PROGRESS** — §10 run-bar live status pill + dead-rule sweep.
-  UNIT: `.plotter-live` (the "Ready"/"Running" pill in the SimulationPanel run
-  bar) is styled IDENTICALLY in both states — a dead active indicator. Per the
-  directive amber `--signal` is the tactical active/alert color; a running sim is
-  exactly that. PLAN: (1) SimulationPanel.tsx — add a `plotter-live--running`
-  modifier when `isRunning`; (2) App.css — running pill lights amber (`--signal`
-  text over `--signal-soft` on a `--signal-line` border) with a pulsing live dot
-  (`::before` + `@keyframes live-pulse`, reduced-motion-guarded), idle stays calm
-  muted; add `--signal-line`/`--signal-glow` tokens; (3) SWEEP: delete the dead
-  `.plotter-stop`/`.plotter-pause` rules (never rendered — real buttons use
-  `.plotter-icon-action`/`.plotter-run`), killing hardcoded `#f0aaa6`/`#edc08a` +
-  4 hardcoded rgba. VERIFY: typecheck + tests ≥1247; screenshot idle vs running
-  run bar (Read both) — must visibly differ (muted pill → amber pulsing pill).
+- **Status: DONE** — §10 run-bar live status pill + dead-rule sweep. FOUND:
+  `.plotter-live` (the "Ready"/"Running" pill in the SimulationPanel run bar,
+  shown in non-tran modes) was styled IDENTICALLY in both states — a dead active
+  indicator. Per the directive amber `--signal` is the TACTICAL active/alert
+  color; a running sim is exactly that. FIX: (1) SimulationPanel.tsx adds a
+  `plotter-live--running` modifier when `isRunning` + `role=status`/`aria-live`;
+  (2) running pill lights amber (`--signal` text over `--signal-soft` on a
+  `--signal-line` border) with a pulsing live dot (`::before` + `@keyframes
+  live-pulse`, `prefers-reduced-motion`-guarded) — idle stays calm/muted; pill
+  text → `--font-mono`; new `--signal-line`/`--signal-glow` tokens. (3) SWEEP:
+  deleted dead `.plotter-stop`/`.plotter-pause` rules (never rendered — real
+  buttons use `.plotter-icon-action`/`.plotter-run`), killing hardcoded
+  `#f0aaa6`/`#edc08a` + 4 hardcoded rgba (unique App.css hex 38→**36**).
+  SCREENSHOT PROOF (1440×900, AC-sweep run bar): before = muted gray "READY"
+  pill (no dot); after = amber "● RUNNING" pill with live dot, amber text/fill/
+  border — visibly distinct. Typecheck clean; 1247 green (no regression); dev
+  server killed.
 
 - **Prev Status: DONE** — 5 §10 commits prior session, every one screenshot-proven
   visibly-different (NOT pixel-neutral). Recurring theme: **dead interactive
@@ -195,6 +199,49 @@
 - NOTE (carried, not seen this session): a transient single-test flake was
   reported last session (one red run between clean runs, name not captured).
   If it recurs, capture the failing test name before re-running.
+
+---
+
+## 2026-07-07T08:52Z — auto/ltspice-parity — §10: run-bar live pill lights amber when running + dead-rule sweep
+
+### What I did
+- Gave the `.plotter-live` status pill (run bar, non-tran modes) a real active
+  state: it was styled identically for "Ready" and "Running" — a dead indicator.
+  Running now lights amber (the directive's tactical `--signal` active color):
+  `--signal` text over `--signal-soft` fill on a `--signal-line` border, plus a
+  pulsing live dot (`::before` + `@keyframes live-pulse`, `prefers-reduced-motion`
+  guarded). Idle stays calm/muted. Pill text moved to `--font-mono`.
+- SimulationPanel.tsx: added a `plotter-live--running` modifier gated on
+  `isRunning`, plus `role="status"`/`aria-live="polite"` for screen readers.
+- Added `--signal-line` / `--signal-glow` tokens to complete the signal family
+  (parity with the danger/success families).
+- SWEEP: deleted the dead `.plotter-stop` / `.plotter-pause` rules — grep proved
+  neither class is rendered in any TSX (the real run-bar buttons are
+  `.plotter-icon-action` and `.plotter-run`). This killed hardcoded `#f0aaa6`
+  and `#edc08a` text colors plus 4 hardcoded `rgba(...)` fills/borders.
+
+### Files touched
+- apps/desktop/src/App.css
+- apps/desktop/src/components/SimulationPanel.tsx
+
+### Tests
+1247 passing (unchanged, no regression) — typecheck clean. No new unit tests:
+this is a CSS/markup design change verified by screenshot, not new logic.
+
+### FEATURE_PARITY items updated
+§10 "Sweep: delete dead App.css rules" — advanced (unique App.css hex 38→36);
+§10 SimulationPanel run-bar polish — live-state indicator added.
+
+### UX issues found
+- The `.plotter-live` pill previously gave zero feedback that a sim was running
+  in AC/DC/etc modes — fixed. (Screenshot-proven: muted "READY" → amber "●
+  RUNNING" with live dot.)
+
+### Next step
+Continue §10 SimulationPanel run bar: audit the expression/cursor/export
+controls (§10 checklist "SimulationPanel controls") for dead interactive states
+and hardcoded colors; or migrate the status bar (bottom-of-window) which is
+still unmigrated per the §10 panel-order list.
 
 ---
 
