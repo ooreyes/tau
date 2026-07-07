@@ -3236,11 +3236,11 @@ body {
   height: 7px;
   flex: none;
   border-radius: 2px;
-  background: #d68a3c;
+  background: var(--accent);
 }
 
 .result-row strong {
-  color: #efe9d6;
+  color: var(--cream);
   font-weight: 700;
   white-space: nowrap;
 }
@@ -3300,7 +3300,7 @@ body {
 }
 
 .plotter-title {
-  color: #efe9d6;
+  color: var(--cream);
   font-size: 13px;
   font-weight: 600;
 }
@@ -3310,14 +3310,16 @@ body {
 }
 
 .plotter-tabs-inner {
-  background: #08080a;
-  border-color: rgba(255, 255, 255, 0.08);
+  background: var(--panel-3);
+  border-color: var(--border);
   border-radius: 8px;
 }
 
+/* Active analysis tab rode a stale pre-migration amber (#d68a3c) — an amber
+   selection in a cobalt console. Now the design-system accent. */
 .plotter-tab.active {
-  color: #0a0a0c;
-  background: #d68a3c;
+  color: var(--accent-ink);
+  background: var(--accent);
 }
 
 .plotter-run,
