@@ -12,13 +12,27 @@
   · corpus runner: 82 imported / **79 warning-clean** / **82 deck-built (ALL)**
   / **82 op-converged (ALL)** — floors 82/79/82/82
 - **Run started (UTC):** 2026-07-07T06:17Z
-- **Status: IN PROGRESS** — REVIEW SESSION (0 `review:` commits in last 30).
-  Scope: 263a701..HEAD (33 §10 CSS/design commits). Plan:
-  (a) correctness pass over App.css — stale/undefined tokens, dup rules, broken
-  selectors, hardcoded-hex burndown regressions; integrate rescued `-wip`
-  `--mono`→`--font-mono` fix; (b) UI/UX screenshot audit (empty state + main
-  screens) judged like a picky Apple reviewer; (c) fix each finding, gates
-  green, commit prefixed `review:`. Verify: typecheck + 1241 tests + screenshots.
+- **Status: DONE** — REVIEW SESSION (0 `review:` commits in prior 30). Scope
+  263a701..HEAD (33 §10 CSS/design commits). 2 real findings fixed, gates green.
+  **(a) Correctness pass — App.css:** grep-diffed defined vs used CSS tokens.
+  3 used-but-undefined (`--ask-w`/`--scope-w`/`--fill`) are legitimately set
+  via JS inline style (App.tsx:670, SimulationPanel.tsx:2452, +fallback) — no
+  bug. `--trace-purple`/`--trace-cream` "unused" in CSS but used from JS trace
+  palettes — keep. Fixed: **9 `.brand-file`/`.inspector-summary`/… readouts**
+  used a raw `"JetBrains Mono"` font stack, bypassing `--font-mono` (SF-Mono-
+  first) → converted to `var(--font-mono)`; **`.op-annotation`** used
+  `var(--mono, …)` — `--mono` is undefined, silently fell back to ui-monospace →
+  `var(--font-mono)` (integrated rescued `-wip` fix); 2 stale "amber accent"
+  comments → cobalt. **(b) UI/UX audit (picky-Apple bar)** — 4 screenshots Read:
+  empty-state hero, RC schematic (V1/R1/C1 cyan wires + mono labels), simulator
+  idle (clear "No traces", mono NETS/NODES/SAMPLES, Ask-Sim BOARD SUMMARY), and
+  **simulator post-Run** (RC charge curve, on-brand cyan/green traces, mono axes
+  5.4V/−400mV/6ms, color-coded CURRENT/VOLTAGE/POWER dock). VERDICT: **PASS —
+  coherent operator-grade console, ships.** One finding: hotkey-less palette
+  parts (njf/pjf/comparator/dflop/… — 9 with `hotkey:""`) rendered an **empty
+  `<kbd class=palette-key>`** = a stray dash in the rail → now render the keycap
+  only when a hotkey exists (screenshot-proven blank vs dash). typecheck clean,
+  1241/1241 green, no regression, dev server killed.
 - **Prev Status: DONE** — 5 §10 commits prior session, every one screenshot-proven
   visibly-different (NOT pixel-neutral). Recurring theme: **dead interactive
   states** — controls with no hover feedback (inert until clicked) got real
@@ -188,6 +202,50 @@
 - NOTE (carried, not seen this session): a transient single-test flake was
   reported last session (one red run between clean runs, name not captured).
   If it recurs, capture the failing test name before re-running.
+
+---
+
+## 2026-07-07T06:17Z — auto/ltspice-parity — review: CSS correctness pass + 4-screen UI/UX audit
+
+### What I did
+- **REVIEW SESSION** (rotation: 0 `review:` commits in the prior 30). No new
+  features — correctness + UI/UX audit of the 33 §10 CSS/design commits since
+  the last review (263a701..HEAD).
+- **Correctness pass over App.css**: grep-diffed defined-vs-used CSS custom
+  properties. Confirmed the 3 used-but-undefined tokens
+  (`--ask-w`/`--scope-w`/`--fill`) are set via JS inline style (not bugs) and
+  the 2 CSS-"unused" trace colors are consumed from JS palettes. Fixed real
+  finds: 9 numeric readouts using a raw `"JetBrains Mono"` stack → `--font-mono`
+  (SF-Mono-first); `.op-annotation`'s undefined `var(--mono,…)` → `--font-mono`
+  (integrated the rescued `-wip` checkpoint); 2 stale "amber accent" comments.
+- **UI/UX audit** with the STEP 3.5 pipeline: Read 4 screenshots — empty hero,
+  loaded RC schematic, simulator idle, and simulator post-Run with live
+  waveforms. Judged operator-grade / picky-Apple.
+- **Found + fixed**: hotkey-less palette parts rendered an empty `<kbd>` keycap
+  (stray dash in the rail) → conditional render.
+
+### Files touched
+- apps/desktop/src/App.css
+- apps/desktop/src/components/Palette.tsx
+- PROGRESS.md
+
+### Tests
+1241 passing (82 files), 0 new — no regression. typecheck clean.
+
+### FEATURE_PARITY items updated
+None flipped (review session — no feature scope). §10 quality reaffirmed.
+
+### UX issues found
+- Empty keycap box for hotkey-less palette parts (FIXED).
+- Raw JetBrains-Mono stacks bypassing the SF-Mono-first token (FIXED).
+- Undefined `--mono` token falling back off-brand (FIXED).
+- Audit verdict on empty/schematic/simulator-idle/simulator-run screens: PASS —
+  coherent operator-grade console, ships.
+
+### Next step
+Resume §10 feature track: dialogs (settings/open) depth+spring pass, then the
+global typography+spacing sweep, then delete dead App.css rules (STEP 3 panel
+order). Or advance §1 Comparator pin banks to unblock corpus warning-clean count.
 
 ---
 
