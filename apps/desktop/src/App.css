@@ -1657,10 +1657,8 @@ body {
   display: block;
   margin-top: 3px;
   color: var(--text);
-  font-size: 17px;
-  font-weight: 500;
-  line-height: 1;
-  letter-spacing: -0.4px;
+  font: 500 17px/1 var(--font-mono);
+  letter-spacing: -0.02em;
   font-variant-numeric: tabular-nums;
 }
 
@@ -2395,8 +2393,8 @@ body {
   color: var(--muted);
 }
 .param-value {
-  font-size: 13px;
-  font-weight: 500;
+  font: 500 13px var(--font-mono);
+  letter-spacing: -0.01em;
   color: var(--text);
   font-variant-numeric: tabular-nums;
 }

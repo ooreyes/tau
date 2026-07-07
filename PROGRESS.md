@@ -12,17 +12,24 @@
   · corpus runner: 82 imported / **79 warning-clean** / **82 deck-built (ALL)**
   / **82 op-converged (ALL)** — floors 82/79/82/82
 - **Run started (UTC):** 2026-07-07T14:05Z
-- **Status: IN PROGRESS** — §10 SimulationPanel numeric-readout mono unification.
+- **Status: DONE** — §10 SimulationPanel numeric-readout mono unification.
   Feature session (most recent commit is `review:`, 2 in last 30). The sim panel
-  has THREE numeric-readout clusters: `.resolution-control strong` already went
-  `--font-mono` (2026-07-06), but its siblings `.metric strong` (NETS/NODES/
-  SAMPLES counts) and `.param-value` (STOP time / STEPS dial readouts) still use
-  the UI sans + tabular-nums — a directive violation ("MONOSPACE for ALL
-  technical/numeric readouts … counts") and an intra-panel inconsistency.
-  PLAN: `apps/desktop/src/App.css` — switch `.metric strong` + `.param-value` to
-  `var(--font-mono)` (keep sizes/weights/tone). VERIFY: before/after Playwright
-  screenshot of the simulator controls (STOP/STEPS visible without a run; counts
-  show once RC runs) Read + compared for visibly-mono digits; typecheck; 1247.
+  had THREE numeric-readout clusters but only ONE was mono: `.resolution-control
+  strong` went `--font-mono` on 2026-07-06, while its siblings `.metric strong`
+  (NETS/NODES/SAMPLES counts) and `.param-value` (STOP time / STEPS dial
+  readouts) still rendered in the UI sans — a directive violation ("MONOSPACE for
+  ALL technical/numeric readouts … counts") and a visible intra-panel
+  inconsistency. FIX (`apps/desktop/src/App.css`): both now
+  `font: <wt> <size> var(--font-mono)` with tightened `letter-spacing`, keeping
+  size/weight/tone (`.metric strong` 500/17px, `.param-value` 500/13px) and
+  `tabular-nums`. PROOF: before/after Playwright crop of the plotter (simulator
+  tab, RC loaded). BEFORE — STOP `6 ms` / STEPS `240` in proportional sans, NOT
+  matching the mono `DC / static` box directly below; NETS/NODES/SAMPLES `--` thin
+  sans dashes. AFTER — `6 ms`/`240` render in mechanical monospace digits
+  aligned with `DC / static`, and the metric dashes are visibly wider/heavier
+  mono — the entire readout column now reads consistently monospace. Read both
+  crops; visibly differs. Typecheck clean; 1247 green (no regression). Metrics
+  steady: 1 `:root`, 0 Space Grotesk.
 - **Status: DONE** — **REVIEW SESSION** (rotation: 0 `review:` commits in last 30).
   No new features. (a) Correctness diff review of `f8f9281..HEAD` (31 commits):
   `circuitBounds` extraction in Canvas.tsx is pure + fully unit-tested (6 new
