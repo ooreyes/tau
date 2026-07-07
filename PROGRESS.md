@@ -12,7 +12,20 @@
   · corpus runner: 82 imported / **79 warning-clean** / **82 deck-built (ALL)**
   / **82 op-converged (ALL)** — floors 82/79/82/82
 - **Run started (UTC):** 2026-07-07T08:52Z
-- **Status: DONE** — §10 run-bar live status pill + dead-rule sweep. FOUND:
+- **Status: IN PROGRESS** — §10 status-bar duplicate-CSS sweep + perf. FOUND:
+  TWO `.statusbar` rule sets (App.css ~2066 and ~3910) with duplicate
+  `.status-mode`/`.status-hints`/`.status-count`. The second wins the cascade,
+  but the first leaks a wasteful `backdrop-filter: blur(18px) saturate(1.2)`
+  onto an OPAQUE (`--panel-3`) bar — the compositor re-blurs it on every canvas
+  pan/zoom (a 60fps footgun, STEP 4). Only `.status-hints kbd`/`.status-hints
+  .dot` in the first block are live. PLAN: delete the first block's duplicate
+  `.statusbar`/`.status-mode`/`.status-hints`/`.status-count` (drops the stray
+  backdrop-filter + leaked letter-spacing), move the two live `kbd`/`.dot` rules
+  next to the real block. VERIFY: typecheck + tests ≥1247; screenshot the status
+  bar to confirm NO visual regression (this is a correctness/perf sweep, not a
+  visible design commit).
+
+- **Prev Status: DONE** — §10 run-bar live status pill + dead-rule sweep. FOUND:
   `.plotter-live` (the "Ready"/"Running" pill in the SimulationPanel run bar,
   shown in non-tran modes) was styled IDENTICALLY in both states — a dead active
   indicator. Per the directive amber `--signal` is the TACTICAL active/alert
