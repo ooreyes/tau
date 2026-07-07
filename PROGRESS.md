@@ -12,13 +12,16 @@
   · corpus runner: 82 imported / **79 warning-clean** / **82 deck-built (ALL)**
   / **82 op-converged (ALL)** — floors 82/79/82/82
 - **Run started (UTC):** 2026-07-07T10:05Z
-- **Status: IN PROGRESS** — §10 palette keycaps: the shortcut badges (R/C/L/V…)
-  are defined TWICE (`.palette-key` at App.css L531 AND L3707) — the ad-hoc dup
-  the directive targets — and render as FLAT outlined boxes. PLAN: consolidate
-  into one rule + give them physical-keycap depth (top bevel via `--overlay-hover`
-  inset + bottom drop via `--elev-1`, top→bottom panel gradient). VERIFY:
-  before/after upscaled crop of the palette keycaps — flat box → raised beveled
-  key. CSS-only; typecheck + 1247.
+- **Status: DONE** — §10 palette keycaps: the shortcut badges (R/C/L/V…) were
+  defined TWICE (`.palette-key` at App.css L531 AND L3707 — the ad-hoc dup the
+  directive targets, later block silently overriding the first) and rendered as
+  FLAT outlined boxes with a uniform panel-4 fill. FIX: deleted the bottom
+  duplicate; consolidated into one rule and gave them physical-keycap depth — a
+  top→bottom panel gradient (`--panel-4`→`--panel-3`), a lit top bevel
+  (`inset 0 1px 0 var(--overlay-hover)`) and a soft bottom drop (`--elev-1`), on
+  a `--border-strong` hairline, mono 10px/600. SCREENSHOT PROOF (3× upscaled crop
+  of the R/C/L/H column, before/after): flat uniform boxes → raised beveled keys
+  that sit on a shadow. Fully tokenized (no new hex); typecheck clean; 1247 green.
 - **Status: DONE** — §10 left icon rail: the operator-console active indicator
   bar (`.rail-active`) sat at `left: -10px`. The 38px button is centered in the
   54px rail (left edge 8px in), so the bar rendered at rail-x ≈ -2px — clipped
