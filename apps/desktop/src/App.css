@@ -2743,16 +2743,21 @@ body {
   background: var(--accent-soft);
 }
 
-/* Active indicator pill — a lit accent bar with a soft halo. */
+/* Active indicator pill — a lit accent bar flush to the rail's left edge (the
+   targeting affordance in an Anduril/Palantir console). The button is 38px
+   centered in the 54px rail, so its left edge sits 8px in; -8px pulls the bar
+   out to the rail's own left edge where it reads as a lit margin marker.
+   (Was -10px → rail-x ≈ -2px → clipped off-screen and invisible.) Left corners
+   square so it emerges from the edge; right corners rounded. */
 .rail-active {
   position: absolute;
-  left: -10px;
-  top: 8px;
+  left: -8px;
+  top: 7px;
   width: 3px;
-  height: 22px;
-  border-radius: 3px;
+  height: 24px;
+  border-radius: 0 3px 3px 0;
   background: var(--accent);
-  box-shadow: 0 0 8px var(--accent-glow);
+  box-shadow: 0 0 10px var(--accent-glow);
 }
 
 .rail-spacer {

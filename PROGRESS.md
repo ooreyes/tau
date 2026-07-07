@@ -12,13 +12,17 @@
   · corpus runner: 82 imported / **79 warning-clean** / **82 deck-built (ALL)**
   / **82 op-converged (ALL)** — floors 82/79/82/82
 - **Run started (UTC):** 2026-07-07T10:05Z
-- **Status: IN PROGRESS** — §10 left icon rail: the operator-console active
-  indicator pill (`.rail-active`) sits at `left: -10px` → rail-x ≈ -2px, clipped
-  off the rail's left edge → the intended "lit accent targeting bar" is INVISIBLE
-  (active icon shows only accent-soft bg). PLAN: reposition `.rail-active` flush
-  to the rail's left edge (fully visible 3px lit bar, VS Code / Lattice style) in
-  `App.css`. VERIFY: before/after screenshot of the rail active state (chip icon)
-  — the lit bar must appear where there was none. CSS-only; typecheck + 1247.
+- **Status: DONE** — §10 left icon rail: the operator-console active indicator
+  bar (`.rail-active`) sat at `left: -10px`. The 38px button is centered in the
+  54px rail (left edge 8px in), so the bar rendered at rail-x ≈ -2px — clipped
+  off the left edge to a thin ~1px hairline sliver (a rendering artifact, not an
+  intentional marker). FIX: `left: -8px` pulls it flush to the rail's own left
+  edge (fully on-screen 3px bar, VS Code / Lattice activity-bar style); squared
+  left corners + rounded right (`border-radius: 0 3px 3px 0`) so it reads as
+  emerging from the margin; height 22→24, glow 8→10px for a defined lit marker.
+  SCREENSHOT PROOF (6× upscaled crop of the active chip icon, before/after): the
+  thin clipped edge-sliver becomes a full, defined 3px cobalt bar with a rounded
+  right corner. CSS-only; typecheck clean; 1247 green.
 - **Status: DONE** — §10 empty-state a11y: `.empty-actions` New/Open/example
   buttons had hover+active but NO `:focus-visible` ring — keyboard users hit the
   primary onboarding CTAs with zero focus feedback. FIX: cobalt focus ring on the
