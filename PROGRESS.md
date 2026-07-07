@@ -11,28 +11,15 @@
 - **Headline metric:** 1241 tests green (default suite) + 5 corpus specs
   · corpus runner: 82 imported / **79 warning-clean** / **82 deck-built (ALL)**
   / **82 op-converged (ALL)** — floors 82/79/82/82
-- **Run started (UTC):** 2026-07-07T06:17Z
-- **Status: DONE** — REVIEW SESSION (0 `review:` commits in prior 30). Scope
-  263a701..HEAD (33 §10 CSS/design commits). 2 real findings fixed, gates green.
-  **(a) Correctness pass — App.css:** grep-diffed defined vs used CSS tokens.
-  3 used-but-undefined (`--ask-w`/`--scope-w`/`--fill`) are legitimately set
-  via JS inline style (App.tsx:670, SimulationPanel.tsx:2452, +fallback) — no
-  bug. `--trace-purple`/`--trace-cream` "unused" in CSS but used from JS trace
-  palettes — keep. Fixed: **9 `.brand-file`/`.inspector-summary`/… readouts**
-  used a raw `"JetBrains Mono"` font stack, bypassing `--font-mono` (SF-Mono-
-  first) → converted to `var(--font-mono)`; **`.op-annotation`** used
-  `var(--mono, …)` — `--mono` is undefined, silently fell back to ui-monospace →
-  `var(--font-mono)` (integrated rescued `-wip` fix); 2 stale "amber accent"
-  comments → cobalt. **(b) UI/UX audit (picky-Apple bar)** — 4 screenshots Read:
-  empty-state hero, RC schematic (V1/R1/C1 cyan wires + mono labels), simulator
-  idle (clear "No traces", mono NETS/NODES/SAMPLES, Ask-Sim BOARD SUMMARY), and
-  **simulator post-Run** (RC charge curve, on-brand cyan/green traces, mono axes
-  5.4V/−400mV/6ms, color-coded CURRENT/VOLTAGE/POWER dock). VERDICT: **PASS —
-  coherent operator-grade console, ships.** One finding: hotkey-less palette
-  parts (njf/pjf/comparator/dflop/… — 9 with `hotkey:""`) rendered an **empty
-  `<kbd class=palette-key>`** = a stray dash in the rail → now render the keycap
-  only when a hotkey exists (screenshot-proven blank vs dash). typecheck clean,
-  1241/1241 green, no regression, dev server killed.
+- **Run started (UTC):** 2026-07-07T06:40Z
+- **Status: IN PROGRESS** — §8/§10 simulator fit-to-view. The read-only
+  simulator canvas reused the schematic pan/zoom; in the narrow left column
+  the circuit sat off-screen (just "V1 5V" at the edge). Plan: extract a pure
+  `circuitBounds()` helper (Canvas.tsx) + unit-test it; auto-frame the circuit
+  whenever the canvas is the read-only reflection (mount + ResizeObserver on
+  column resize), leaving the interactive schematic pan untouched.
+  Verify: typecheck, vitest (new circuitBounds tests), 1280×720 sim screenshot.
+
 - **Prev Status: DONE** — 5 §10 commits prior session, every one screenshot-proven
   visibly-different (NOT pixel-neutral). Recurring theme: **dead interactive
   states** — controls with no hover feedback (inert until clicked) got real
