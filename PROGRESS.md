@@ -12,18 +12,20 @@
   · corpus runner: 82 imported / **79 warning-clean** / **82 deck-built (ALL)**
   / **82 op-converged (ALL)** — floors 82/79/82/82
 - **Run started (UTC):** 2026-07-07T08:52Z
-- **Status: IN PROGRESS** — §10 status-bar duplicate-CSS sweep + perf. FOUND:
-  TWO `.statusbar` rule sets (App.css ~2066 and ~3910) with duplicate
-  `.status-mode`/`.status-hints`/`.status-count`. The second wins the cascade,
-  but the first leaks a wasteful `backdrop-filter: blur(18px) saturate(1.2)`
-  onto an OPAQUE (`--panel-3`) bar — the compositor re-blurs it on every canvas
-  pan/zoom (a 60fps footgun, STEP 4). Only `.status-hints kbd`/`.status-hints
-  .dot` in the first block are live. PLAN: delete the first block's duplicate
-  `.statusbar`/`.status-mode`/`.status-hints`/`.status-count` (drops the stray
-  backdrop-filter + leaked letter-spacing), move the two live `kbd`/`.dot` rules
-  next to the real block. VERIFY: typecheck + tests ≥1247; screenshot the status
-  bar to confirm NO visual regression (this is a correctness/perf sweep, not a
-  visible design commit).
+- **Status: DONE** — §10 status-bar duplicate-CSS sweep + perf. FOUND: TWO
+  `.statusbar` rule sets (App.css ~2066 and ~3910) with duplicate
+  `.status-mode`/`.status-hints`/`.status-count`. The second won the cascade,
+  but the first leaked a wasteful `backdrop-filter: blur(18px) saturate(1.2)`
+  onto an OPAQUE (`--panel-3`) bar — the compositor re-blurred it on every canvas
+  pan/zoom for zero visual benefit (a 60fps footgun, STEP 4). Only `.status-hints
+  kbd`/`.status-hints .dot` in the first block were live. FIX: deleted the first
+  block's duplicate `.statusbar`/`.status-mode`/`.status-hints`/`.status-count`
+  (drops the stray backdrop-filter, a leaked `letter-spacing`, and an unused
+  `var(--sp-3)` gap); relocated the two live keycap rules beside the real block.
+  VERIFIED: screenshot-confirmed NO visual regression (identical bar — cobalt
+  state dot, 17 keycap chips, right-aligned count); computed `backdrop-filter`
+  now `none`. Correctness/perf sweep, NOT a visible design commit. Typecheck
+  clean; 1247 green.
 
 - **Prev Status: DONE** — §10 run-bar live status pill + dead-rule sweep. FOUND:
   `.plotter-live` (the "Ready"/"Running" pill in the SimulationPanel run bar,
@@ -212,6 +214,43 @@
 - NOTE (carried, not seen this session): a transient single-test flake was
   reported last session (one red run between clean runs, name not captured).
   If it recurs, capture the failing test name before re-running.
+
+---
+
+## 2026-07-07T09:10Z — auto/ltspice-parity — §10: dedup status-bar CSS, drop wasteful backdrop-filter
+
+### What I did
+- Found and removed a duplicate `.statusbar` rule set (App.css had two: ~2066
+  and ~3910, each with its own `.status-mode`/`.status-hints`/`.status-count`).
+  The second block wins the cascade for shared properties, but the first leaked
+  a `backdrop-filter: blur(18px) saturate(1.2)` onto a fully-opaque `--panel-3`
+  bar — the compositor re-blurred it on every canvas pan/zoom for zero visual
+  gain (a 60fps footgun per STEP 4's perf bar). Also leaked a `letter-spacing`
+  and an unused `var(--sp-3)` gap.
+- Deleted the first block's duplicate rules; relocated the two genuinely-live
+  rules (`.status-hints kbd` / `.status-hints .dot` keycap chips) next to the
+  real status-bar block, with a breadcrumb comment where the old block sat.
+
+### Files touched
+- apps/desktop/src/App.css
+
+### Tests
+1247 passing (unchanged) — typecheck clean. No new unit tests: pure CSS dedup.
+
+### FEATURE_PARITY items updated
+§10 "Sweep: delete dead App.css rules as panels migrate" — advanced (one
+duplicate rule set removed; single source of truth for the status bar).
+
+### UX issues found
+- Wasteful backdrop-filter on the opaque status bar (perf) — removed.
+- Verified NO visual regression via screenshot (bar identical: cobalt state dot,
+  keycap chips, right-aligned count); computed `backdrop-filter` now `none`.
+
+### Next step
+Continue §10 SimulationPanel run bar / plotter-footer controls (`.plotter-footer`
+~1991): audit expression/cursor/export controls for dead interactive states and
+hardcoded colors — the last unmigrated run-bar cluster before the global
+typography+spacing pass.
 
 ---
 
