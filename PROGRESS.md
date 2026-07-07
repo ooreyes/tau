@@ -11,7 +11,18 @@
 - **Headline metric:** 1247 tests green (default suite) + 5 corpus specs
   · corpus runner: 82 imported / **79 warning-clean** / **82 deck-built (ALL)**
   / **82 op-converged (ALL)** — floors 82/79/82/82
-- **Run started (UTC):** 2026-07-07T14:05Z
+- **Run started (UTC):** 2026-07-07T19:11Z
+- **Status: IN PROGRESS** — §10 schematic canvas surface: cool-graphite vignette.
+  CLAIM: the *active* `.stage`/`.canvas` rules paint a flat near-pure-black
+  `#060608` (the earlier cool gradient at App.css:601 is dead — overridden by the
+  later duplicate). Flat + warm-black violates the operator-grade "cool near-black
+  graphite console" directive. PLAN — files: `apps/desktop/src/App.css` only. Add
+  `--canvas-bg` + `--canvas-surface` (subtle top-lit cool-graphite vignette) to
+  the single `:root`; route the active `.stage` (App.css:3151) + `.canvas`
+  (3155), plus the dead 593/601, onto them; burns down `#060608`/`#080a0f`/
+  `#0a0d13`/`#07090d`. VERIFY: typecheck + `test --run` stay 1247 green; Playwright
+  before/after crop of the empty schematic — flat pure-black → cool graphite with
+  a subtle instrument vignette; Read both, confirm visibly differs.
 - **Status: DONE** — §10 status-bar metrics readout mono (part 4).
   Extended the numeric-readout mono theme to the bottom status bar. The
   right-aligned `.status-count` strip ("grid 0.1 in · N components · M wires ·
