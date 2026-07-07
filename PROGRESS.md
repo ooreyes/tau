@@ -12,6 +12,14 @@
   · corpus runner: 82 imported / **79 warning-clean** / **82 deck-built (ALL)**
   / **82 op-converged (ALL)** — floors 82/79/82/82
 - **Run started (UTC):** 2026-07-07T09:30Z
+- **Status: IN PROGRESS** — §10 warnings pt.2: `.analysis-empty` (the red hard-
+  error box) is REUSED verbatim for `.tf`/`.ac` warnings (SimulationPanel L1268,
+  L1351: `warnings.join(" ")`), so those warnings render RED — contradicting the
+  amber warning semantic just landed. PLAN: add an amber `.analysis-empty.warn`
+  modifier (signal border/rail/text over signal-soft) + `role=status`; apply
+  `warn` class to the two warning-join sites. FILES: App.css + SimulationPanel.tsx.
+  VERIFY: typecheck + test (≥1247); harness screenshot proving the warn variant is
+  amber vs the red error variant.
 - **Status: DONE** — §10 semantic warnings: unify caution states onto the amber
   tactical `--signal`. FOUND warnings styled THREE inconsistent ways, none amber:
   `.bottom-errors .warning` + `.resolution-control.warning` used cobalt `--accent`
