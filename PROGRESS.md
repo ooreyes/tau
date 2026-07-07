@@ -11,7 +11,14 @@
 - **Headline metric:** 1247 tests green (default suite) + 5 corpus specs
   · corpus runner: 82 imported / **79 warning-clean** / **82 deck-built (ALL)**
   / **82 op-converged (ALL)** — floors 82/79/82/82
-- **Run started (UTC):** 2026-07-07T09:30Z
+- **Run started (UTC):** 2026-07-07T10:05Z
+- **Status: IN PROGRESS** — §10 left icon rail: the operator-console active
+  indicator pill (`.rail-active`) sits at `left: -10px` → rail-x ≈ -2px, clipped
+  off the rail's left edge → the intended "lit accent targeting bar" is INVISIBLE
+  (active icon shows only accent-soft bg). PLAN: reposition `.rail-active` flush
+  to the rail's left edge (fully visible 3px lit bar, VS Code / Lattice style) in
+  `App.css`. VERIFY: before/after screenshot of the rail active state (chip icon)
+  — the lit bar must appear where there was none. CSS-only; typecheck + 1247.
 - **Status: DONE** — §10 empty-state a11y: `.empty-actions` New/Open/example
   buttons had hover+active but NO `:focus-visible` ring — keyboard users hit the
   primary onboarding CTAs with zero focus feedback. FIX: cobalt focus ring on the
