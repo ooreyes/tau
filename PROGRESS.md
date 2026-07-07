@@ -11,10 +11,17 @@
 - **Headline metric:** 1241 tests green (default suite) + 5 corpus specs
   · corpus runner: 82 imported / **79 warning-clean** / **82 deck-built (ALL)**
   / **82 op-converged (ALL)** — floors 82/79/82/82
-- **Run started (UTC):** 2026-07-06T19:30Z
-- **Status: DONE** — 3 §10 panel commits this session, all screenshot-proven
-  visibly-different (NOT pixel-neutral). Discarded obsolete `-wip` (02d00a3,
-  already superseded — banned teal/Space-Grotesk revert; ref deleted). Burndown:
+- **Run started (UTC):** 2026-07-07T00:20Z
+- **Status: IN PROGRESS** — §10 part-palette rows: real operator-console
+  targeting affordance (visible, NOT pixel-neutral). Plan: add a left inset
+  accent-indicator rail that appears on hover + turns solid `--accent` when
+  active, spring motion, and hotkey-keycap brighten on hover, on the active
+  `.palette-item` block (App.css ~3466+). Verify: screenshot before/after crop
+  Read of the Component Selection list must visibly differ; typecheck + 1241
+  tests green. Discarded rescued `-wip` (66c0868 — banned amber-as-primary
+  palette revert; ref deleted).
+- **Prior session (DONE):** 3 §10 panel commits, all screenshot-proven
+  visibly-different (NOT pixel-neutral). Burndown:
   unique hex 56→**55**, color literals 249→**240**. 1241 green, typecheck clean.
   1. **Scope/plots panel** (this session): action-row hierarchy — the 5 flat
      identical `.expr-add` amber pills became a solid-amber PRIMARY "Add trace" +
