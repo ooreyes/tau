@@ -12,17 +12,25 @@
   · corpus runner: 82 imported / **79 warning-clean** / **82 deck-built (ALL)**
   / **82 op-converged (ALL)** — floors 82/79/82/82
 - **Run started (UTC):** 2026-07-07T19:11Z
-- **Status: IN PROGRESS** — §10 schematic canvas surface: cool-graphite vignette.
-  CLAIM: the *active* `.stage`/`.canvas` rules paint a flat near-pure-black
-  `#060608` (the earlier cool gradient at App.css:601 is dead — overridden by the
-  later duplicate). Flat + warm-black violates the operator-grade "cool near-black
-  graphite console" directive. PLAN — files: `apps/desktop/src/App.css` only. Add
-  `--canvas-bg` + `--canvas-surface` (subtle top-lit cool-graphite vignette) to
-  the single `:root`; route the active `.stage` (App.css:3151) + `.canvas`
-  (3155), plus the dead 593/601, onto them; burns down `#060608`/`#080a0f`/
-  `#0a0d13`/`#07090d`. VERIFY: typecheck + `test --run` stay 1247 green; Playwright
-  before/after crop of the empty schematic — flat pure-black → cool graphite with
-  a subtle instrument vignette; Read both, confirm visibly differs.
+- **Status: DONE** — §10 schematic canvas surface: cool-graphite vignette.
+  The *active* `.stage`/`.canvas` rules painted a FLAT near-pure-black `#060608`
+  (the earlier cool gradient at App.css:601 was dead — overridden by the later
+  duplicate `.canvas`). Flat + warm-black is exactly what the operator-grade
+  directive forbids ("cool near-black graphite console", not flat). FIX
+  (`apps/desktop/src/App.css`, only file): added two `:root` tokens —
+  `--canvas-bg: #080b12` (cool graphite base) and `--canvas-surface`, a
+  `radial-gradient(135% 92% at 50% -12%, #0c1119 → #080b12 → #05070c)` top-lit
+  vignette so the workspace reads as a lit instrument panel. Routed the active
+  `.stage` (was 3151) → `--canvas-bg` and `.canvas` (was 3155) →
+  `--canvas-surface`; also migrated the dead-but-duplicated 593/601 pair onto the
+  same tokens. Burned down 4 hardcoded hexes (`#080a0f`, `#0a0d13`, `#07090d`,
+  and the schematic `#060608` ×2); the only remaining `#060608` is the scope/
+  op-table surface (App.css:3562) — a separate surface, next commit. PROOF:
+  Playwright 1440×900 empty-schematic before/after, then identical top-center
+  band crops of the open canvas (`/tmp/band-{before,after}.png`): BEFORE uniform
+  flat pure-black; AFTER a cool-graphite surface with a visible top-lit vignette
+  (lighter cool-blue tint toward top-center, deepening downward). Read both;
+  visibly differs. Typecheck clean; only App.css changed; 1247 green.
 - **Status: DONE** — §10 status-bar metrics readout mono (part 4).
   Extended the numeric-readout mono theme to the bottom status bar. The
   right-aligned `.status-count` strip ("grid 0.1 in · N components · M wires ·
