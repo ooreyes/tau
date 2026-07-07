@@ -12,7 +12,18 @@
   · corpus runner: 82 imported / **79 warning-clean** / **82 deck-built (ALL)**
   / **82 op-converged (ALL)** — floors 82/79/82/82
 - **Run started (UTC):** 2026-07-07T08:52Z
-- **Status: DONE** — §10 status-bar duplicate-CSS sweep + perf. FOUND: TWO
+- **Status: IN PROGRESS** — §10 plotter controls: dead interactive states on
+  `.pane-btn` + `.fft-toggle`. FOUND: both are live buttons with hover-only
+  states — no pressed settle, no focus-visible ring; `.fft-toggle` (full-width
+  FFT disclosure) has NO `transition` at all (instant color swap). Their siblings
+  (`.expr-add`, `.plotter-icon-action`) already got the full snap. PLAN: `.pane-btn`
+  (small chip) → spring hover-lift + `--elev-1`, `:active` settle, focus ring;
+  `.fft-toggle` (full-width bar) → `--overlay-hover` fill on hover (no lift — a
+  bar shouldn't jump), `:active` faint fill, focus ring; both get proper
+  `--motion-fast/--spring` transitions. VERIFY: typecheck + tests ≥1247;
+  screenshot fft-toggle rest vs hover (Read both) — must visibly differ.
+
+- **Prev Status: DONE** — §10 status-bar duplicate-CSS sweep + perf. FOUND: TWO
   `.statusbar` rule sets (App.css ~2066 and ~3910) with duplicate
   `.status-mode`/`.status-hints`/`.status-count`. The second won the cascade,
   but the first leaked a wasteful `backdrop-filter: blur(18px) saturate(1.2)`
