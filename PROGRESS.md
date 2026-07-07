@@ -11,14 +11,22 @@
 - **Headline metric:** 1241 tests green (default suite) + 5 corpus specs
   · corpus runner: 82 imported / **79 warning-clean** / **82 deck-built (ALL)**
   / **82 op-converged (ALL)** — floors 82/79/82/82
-- **Run started (UTC):** 2026-07-07T06:40Z
-- **Status: IN PROGRESS** — §8/§10 simulator fit-to-view. The read-only
-  simulator canvas reused the schematic pan/zoom; in the narrow left column
-  the circuit sat off-screen (just "V1 5V" at the edge). Plan: extract a pure
-  `circuitBounds()` helper (Canvas.tsx) + unit-test it; auto-frame the circuit
-  whenever the canvas is the read-only reflection (mount + ResizeObserver on
-  column resize), leaving the interactive schematic pan untouched.
-  Verify: typecheck, vitest (new circuitBounds tests), 1280×720 sim screenshot.
+- **Run started (UTC):** 2026-07-07T06:44Z
+- **Status: DONE** — §8/§10 simulator fit-to-view. FOUND: the single Canvas is
+  reused for both views with `interactive={mode==="schematic"}`; its local pan/
+  zoom persisted across the mode switch, so in the narrow simulator left column
+  the whole circuit sat off-screen — only "V1 5V" showed at the edge (a picky-
+  reviewer eyesore, screenshot-confirmed at 1280×720). FIX: extracted a pure,
+  unit-tested `circuitBounds(components, wires, margin)` helper (Canvas.tsx),
+  refactored `fitView` onto it (now `useCallback`, guards 0-size rect), and added
+  a read-only-only effect that frames the circuit on mount-into-simulator AND on
+  every column resize via a ResizeObserver — the interactive editor's pan is left
+  untouched (early-return when interactive). SCREENSHOT PROOF (1280×720): before =
+  bare "V1 5V" at the left edge / empty dark column; after = full RC (V1 5V, R1
+  1kΩ, C1 1µF, grounds, net-dotted wires) centered & framed in BOTH idle and post-
+  Run states. 6 new circuitBounds tests (empty→null, single-part margin, multi-
+  part span, wire+comp, wire-only, custom margin); typecheck clean; 1247 green
+  (was 1241, +6, no regression); dev server killed.
 
 - **Prev Status: DONE** — 5 §10 commits prior session, every one screenshot-proven
   visibly-different (NOT pixel-neutral). Recurring theme: **dead interactive
@@ -189,6 +197,44 @@
 - NOTE (carried, not seen this session): a transient single-test flake was
   reported last session (one red run between clean runs, name not captured).
   If it recurs, capture the failing test name before re-running.
+
+---
+
+## 2026-07-07T06:40Z — auto/ltspice-parity — §8/§10: auto-frame circuit in the simulator canvas
+
+### What I did
+- Fixed a picky-reviewer eyesore caught in the STEP 3.5 1280×720 audit: in the
+  simulator view the mini-schematic showed the circuit off-screen (only "V1 5V"
+  floated at the left edge). Root cause: `App.tsx` mounts a single `<Canvas>`
+  with `interactive={mode === "schematic"}`; its local pan/zoom persisted across
+  the mode switch, so the wide-editor view left the circuit outside the narrow
+  read-only column.
+- Extracted a pure `circuitBounds(components, wires, margin=40)` helper (padded
+  world bbox; null for empty), refactored `fitView` onto it (`useCallback`, now
+  bails on a 0-size rect), and added a read-only-only effect that frames the
+  circuit on mount-into-simulator and on every column resize (ResizeObserver).
+  The interactive editor keeps the user's pan (early-return when interactive).
+
+### Files touched
+- apps/desktop/src/components/Canvas.tsx (circuitBounds export, fitView refactor, auto-fit effect)
+- apps/desktop/src/components/Canvas.geometry.test.ts (6 new circuitBounds tests)
+
+### Tests
+1247 passing (was 1241, +6) — all green, typecheck clean.
+
+### FEATURE_PARITY items updated
+- §8 responsive-floor / §10 simulator-view framing: simulator canvas now
+  auto-fits at the app's small/known-bad sizes.
+
+### UX issues found
+- (fixed) circuit off-screen in the simulator column. Screenshot-proven before
+  (bare "V1 5V" at edge) vs after (full RC framed & centered) in both idle and
+  post-Run states at 1280×720.
+
+### Next step
+- Continue §10 sweep: burn down the ~10 remaining non-`:root` hardcoded hex in
+  App.css (near-black surfaces #060608/#08080a/#080a0f/#0b0b0e, wire #9eacbd)
+  into named tokens for palette coherence.
 
 ---
 
