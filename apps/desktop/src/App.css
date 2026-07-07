@@ -134,16 +134,13 @@ body {
 }
 
 /* ── Root layout ───────────────────────────────────────────────────────────── */
-.app {
-  height: 100vh;
-  display: grid;
-  grid-template-columns: 212px minmax(400px, 1fr) 356px;
-  grid-template-rows: 44px 1fr 28px;
-  grid-template-areas:
-    "toolbar toolbar  toolbar"
-    "palette stage    plotter"
-    "status  status   status";
-}
+/* NOTE: the live `.app` layout is the single-column VS Code shell defined in the
+   DESIGN HANDOFF MIGRATION block below (~L2540); the legacy 3-column grid that
+   used to live here was fully shadowed by it (every property re-set) and is
+   removed. Other legacy selectors in this section are NOT safe to bulk-delete —
+   several leak un-overridden properties (e.g. .toolbar's backdrop-filter,
+   .brand's flex-shrink) past their migration counterparts. Dedup at the
+   property level, never by ripping out the whole legacy half. */
 
 /* ══════════════════════════════════════════════════════════════════════════════
    TOOLBAR
