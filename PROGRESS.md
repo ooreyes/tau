@@ -12,6 +12,17 @@
   · corpus runner: 82 imported / **79 warning-clean** / **82 deck-built (ALL)**
   / **82 op-converged (ALL)** — floors 82/79/82/82
 - **Run started (UTC):** 2026-07-07T19:11Z
+- **Status: IN PROGRESS** — §10 scope/plot surfaces: cool-graphite instrument.
+  CLAIM: same dead-duplicate pattern as the canvas — the visible `.scope-svg`
+  surface is a flat pure-black `#060608` (App.css:3560) overriding the cool
+  `--scope-bg` at 1117; `.op-table` (3562), `.plotter` (3412 `#0b0b0e`) and
+  `.shell-body` (2569 `#08080a`) are likewise flat/warm near-blacks. PLAN — file:
+  `apps/desktop/src/App.css` only. Add `--scope-surface` (cool instrument-screen
+  vignette); route `.scope-svg`+`.op-table` → it, `.plotter`+`.shell-body` →
+  `--canvas-bg`; burns down the last `#060608`, `#0b0b0e`, `#08080a`. VERIFY:
+  typecheck + `test --run` 1247 green; Playwright driver opens RC example → runs →
+  simulator tab → before/after crop of the scope; Read both, confirm visibly
+  differs.
 - **Status: DONE** — §10 schematic canvas surface: cool-graphite vignette.
   The *active* `.stage`/`.canvas` rules painted a FLAT near-pure-black `#060608`
   (the earlier cool gradient at App.css:601 was dead — overridden by the later
