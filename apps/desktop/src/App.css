@@ -1024,7 +1024,15 @@ body {
   font-weight: 600;
   letter-spacing: 0.3px;
   cursor: pointer;
-  transition: color 120ms var(--ease-out), background 120ms var(--ease-out);
+  transition: color var(--motion-fast) var(--spring),
+    background var(--motion-fast) var(--spring);
+}
+
+/* Inactive analysis tabs had no hover — OP/AC/DC/TF/NOISE/STEP were inert
+   until clicked. Brighten to --text over an --overlay-hover fill on hover. */
+.plotter-tab:not(.active):not(:disabled):hover {
+  color: var(--text);
+  background: var(--overlay-hover);
 }
 
 .plotter-tab.active {
