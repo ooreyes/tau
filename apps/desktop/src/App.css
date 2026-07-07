@@ -1565,6 +1565,14 @@ body {
   color: var(--text);
 }
 
+/* Data cells — signal identifiers + per-cursor voltages — are technical
+   readouts, so monospace them like .meas-value and the trace legend. Headers
+   (th) stay in the UI small-caps. */
+.cursor-table td {
+  font-family: var(--font-mono);
+  letter-spacing: -0.01em;
+}
+
 .cursor-table th {
   color: var(--muted);
   font-weight: 600;

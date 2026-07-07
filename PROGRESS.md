@@ -12,6 +12,18 @@
   · corpus runner: 82 imported / **79 warning-clean** / **82 deck-built (ALL)**
   / **82 op-converged (ALL)** — floors 82/79/82/82
 - **Run started (UTC):** 2026-07-07T14:05Z
+- **Status: DONE** — §10 sim-panel cursor-table mono (part 3).
+  Closed the last sans readout in the SimulationPanel: `.cursor-table` (the
+  measurement-cursor readout — Signal / @C1 / @C2 / Δ) had `tabular-nums` but
+  UI-sans cells while its sibling `.meas-value` was already mono. FIX
+  (`apps/desktop/src/App.css`): `.cursor-table td` → `var(--font-mono)` (data
+  cells only — signal labels + per-cursor voltages; `th` headers stay UI
+  small-caps). Deduped nothing new; kept the existing `th`/`:first-child` rules
+  intact. PROOF: before/after Playwright crop of the open Cursors table (RC run,
+  5 traces): BEFORE labels+voltages proportional sans; AFTER monospace with
+  tighter tabular column alignment, matching the meas-table + legend. Read both;
+  visibly differs. Typecheck clean; only App.css changed; 1247 green. The sim
+  panel is now fully mono for every numeric/technical readout.
 - **Status: DONE** — §10 sim-panel signal-expression mono (part 2).
   Continued the SimulationPanel readout-typography migration to the trace
   expressions users type/see: `.expr-input` (e.g. `V(out)-V(in)`) and the
@@ -385,6 +397,39 @@
 - NOTE (carried, not seen this session): a transient single-test flake was
   reported last session (one red run between clean runs, name not captured).
   If it recurs, capture the failing test name before re-running.
+
+---
+
+## 2026-07-07T14:45Z — auto/ltspice-parity — §10: sim-panel cursor table onto --font-mono
+
+### What I did
+- Closed the last sans numeric readout in the SimulationPanel. The measurement-
+  cursor table (`.cursor-table`: Signal / @C1 / @C2 / Δ) had `tabular-nums` but
+  UI-sans cells, while the sibling `.meas-value` was already mono. Made
+  `.cursor-table td` (data cells — signal labels + per-cursor voltages)
+  `var(--font-mono)`; headers (`th`) stay UI small-caps.
+- Together with parts 1–2 this session, every numeric/technical readout in the
+  sim panel — counts, dial values, expression input, trace chips, meas values,
+  cursor values, legend — is now consistently monospace.
+
+### Files touched
+- apps/desktop/src/App.css (`.cursor-table td`)
+
+### Tests
+1247 passing, 0 new (CSS-only) — passed. Typecheck clean; only App.css changed.
+
+### FEATURE_PARITY items updated
+§10 SimulationPanel run-bar/controls migration — numeric-readout typography pass
+complete across the panel.
+
+### UX issues found
+None new. Before/after Playwright crop of the open Cursors table (RC run, 5
+traces): BEFORE labels+voltages proportional sans; AFTER monospace with tighter
+tabular column alignment matching the meas-table + legend. Visibly differs.
+
+### Next step
+Move to the dialogs (Open/Save/settings) panel per the §10 panel order, or do a
+global type/spacing scale pass — the sim panel's readout typography is now done.
 
 ---
 
