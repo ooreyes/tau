@@ -13,18 +13,24 @@
   / **82 op-converged (ALL)** — floors 82/79/82/82
   · App.css hardcoded-color burndown: **0 hex outside the single `:root`** ✅
 - **Run started (UTC):** 2026-07-07T21:40Z
-- **Status: IN PROGRESS** — §10 empty/error states (panel-order next item):
-  the inspector "No component selected" empty state is bare stacked text (a cream
-  `strong` + a muted `span`, no icon, no visual intent) — fails the "empty states
-  look intentional / operator-grade" bar. PLAN: add an intentional operator-grade
-  treatment to `.inspector-summary.empty` in `apps/desktop/src/App.css` — a large
-  dim crosshair/aim glyph (CSS `mask` data-URI, no TSX change) above the text,
-  centered column, tightened type hierarchy. VERIFY: STEP 3.5 before/after crop of
-  the inspector panel (component tab), Read both, confirm visibly differs; CSS-only
-  so 1247 suite unaffected; typecheck clean.
-- **Next step:** continue panel-order list (error states → status bar → left icon
-  rail → global type/spacing pass), or the dead duplicate-rule sweep (early ~560–690
-  vs later ~2543+ blocks). Verify each with the STEP 3.5 before/after pipeline.
+- **Status: DONE** — §10 empty/error states: inspector "No component selected".
+  DESIGN commit — screenshot-proven visible change. BEFORE: bare top-left stacked
+  text (cream `strong` + muted `span`) marooned in the top-left of a large empty
+  dark panel, no icon, no visual intent — failed the operator-grade "empty states
+  look intentional" bar. FIX (`apps/desktop/src/App.css`, only file, CSS-only):
+  (1) new `--icon-reticle` :root token — an inline SVG aiming crosshair as a
+  `mask` (stroke='black' is only the alpha source, tinted at use-site by `--muted`,
+  so NO baked hex — burndown stays 0); (2) `.inspector-summary.empty` now spans the
+  full inspector width (`grid-column: 1 / -1`), centers as a column, and renders a
+  52px dim reticle glyph above tightened type (mono 13px title in `--text`, faint
+  11.5px guidance). Reads as a precision instrument "acquire a target" state.
+  PROOF: Playwright element crop of `.inspector-summary.empty` — BEFORE 300px-wide
+  left-aligned bare text; AFTER 896px-wide centered reticle + hierarchy. Read both;
+  visibly differs. Typecheck clean; only App.css changed; 1247 green (CSS-only).
+- **Next step:** continue panel-order list (status bar → left icon rail → global
+  type/spacing pass); the `output`/`errors` bottom tabs also have empty states worth
+  the same reticle treatment. Or the dead duplicate-rule sweep (early ~560–690 vs
+  later ~2543+ blocks). Verify each with the STEP 3.5 before/after pipeline.
 - **Status: DONE** — §10 cleanup: consolidate duplicate `.wire` rule → 0
   hardcoded colors. NOT a design commit (no pixel change claimed) — an honest
   dead-rule consolidation, one of the listed §10 tasks. `.wire` was defined
