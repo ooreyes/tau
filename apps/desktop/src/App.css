@@ -36,6 +36,8 @@
   /* Amber demoted to a TACTICAL signal (active sim / alert) — never primary UI */
   --signal:       #f0a63c;
   --signal-soft:  rgba(240, 166, 60, 0.15);
+  --signal-line:  rgba(240, 166, 60, 0.34);   /* tactical hairline for active/alert borders */
+  --signal-glow:  rgba(240, 166, 60, 0.28);   /* tactical halo for the live/running pulse */
 
   /* Semantic colors */
   --danger:       #f2564f;
@@ -983,14 +985,45 @@ body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 6px;
   border: 1px solid var(--border);
   border-radius: var(--r-sm);
   color: var(--muted);
   background: transparent;
-  font-size: 10px;
-  font-weight: 600;
+  font: 600 10px var(--font-mono);
   letter-spacing: 0.4px;
   text-transform: uppercase;
+  transition: color var(--motion-med) var(--spring),
+    background var(--motion-med) var(--spring),
+    border-color var(--motion-med) var(--spring);
+}
+
+/* Running is a TACTICAL active state — light it amber (--signal) with a pulsing
+   live dot so an operator reads "sim is live" at a glance; idle stays calm/muted. */
+.plotter-live--running {
+  color: var(--signal);
+  background: var(--signal-soft);
+  border-color: var(--signal-line);
+}
+
+.plotter-live--running::before {
+  content: "";
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--signal);
+  box-shadow: 0 0 0 0 var(--signal-glow);
+  animation: live-pulse 1.4s var(--ease-out) infinite;
+}
+
+@keyframes live-pulse {
+  0%   { box-shadow: 0 0 0 0 var(--signal-glow); opacity: 1; }
+  70%  { box-shadow: 0 0 0 5px transparent; opacity: 0.6; }
+  100% { box-shadow: 0 0 0 0 transparent; opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .plotter-live--running::before { animation: none; }
 }
 
 /* Analysis tabs — segment control style */
@@ -3400,17 +3433,6 @@ body {
   box-shadow: var(--elev-1), 0 0 0 1px var(--success-line);
 }
 
-.plotter-stop {
-  width: 31px;
-  height: 30px;
-  border: 1px solid rgba(207, 84, 80, 0.38);
-  border-radius: 7px;
-  color: #f0aaa6;
-  background: rgba(207, 84, 80, 0.12);
-  cursor: pointer;
-  font: 800 11px var(--font-mono), monospace;
-}
-
 .plotter-icon-action,
 .plotter-close,
 .panel-close {
@@ -3463,27 +3485,6 @@ body {
 .plotter-close,
 .panel-close {
   font-size: 14px;
-}
-
-.plotter-stop:hover {
-  border-color: rgba(207, 84, 80, 0.66);
-  background: rgba(207, 84, 80, 0.2);
-}
-
-.plotter-pause {
-  width: 31px;
-  height: 30px;
-  border: 1px solid rgba(214, 138, 60, 0.38);
-  border-radius: 7px;
-  color: #edc08a;
-  background: rgba(214, 138, 60, 0.12);
-  cursor: pointer;
-  font: 800 11px var(--font-mono), monospace;
-}
-
-.plotter-pause:hover {
-  border-color: rgba(214, 138, 60, 0.66);
-  background: rgba(214, 138, 60, 0.2);
 }
 
 .scope-svg,

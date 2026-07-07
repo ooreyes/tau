@@ -444,7 +444,7 @@ export function SimulationPanel({
               </button>
             </>
           ) : (
-            <div className="plotter-live">{isRunning ? "Running" : "Ready"}</div>
+            <div className={`plotter-live${isRunning ? " plotter-live--running" : ""}`} role="status" aria-live="polite">{isRunning ? "Running" : "Ready"}</div>
           )}
         </div>
       </div>
