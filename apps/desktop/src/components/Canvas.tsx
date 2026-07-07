@@ -20,6 +20,36 @@ interface View {
 
 const snap = (v: number) => Math.round(v / GRID) * GRID;
 const clampZoom = (z: number) => Math.min(5, Math.max(0.25, z));
+
+/** World-space bounding box of a circuit, with a per-symbol margin so parts are
+ *  never flush against the frame. Returns null for an empty schematic. Pure so
+ *  the fit-to-view math is unit-testable without a DOM. */
+export function circuitBounds(
+  components: readonly SchematicComponent[],
+  wires: readonly SchematicWire[],
+  margin = 40,
+): { minX: number; minY: number; maxX: number; maxY: number } | null {
+  if (components.length === 0 && wires.length === 0) return null;
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (const c of components) {
+    minX = Math.min(minX, c.x - margin);
+    minY = Math.min(minY, c.y - margin);
+    maxX = Math.max(maxX, c.x + margin);
+    maxY = Math.max(maxY, c.y + margin);
+  }
+  for (const w of wires) {
+    for (const p of w.points) {
+      minX = Math.min(minX, p.x);
+      minY = Math.min(minY, p.y);
+      maxX = Math.max(maxX, p.x);
+      maxY = Math.max(maxY, p.y);
+    }
+  }
+  return { minX, minY, maxX, maxY };
+}
 const pointsEqual = (a: Point, b: Point) => a.x === b.x && a.y === b.y;
 const pointKey = (point: Point) => `${point.x},${point.y}`;
 const pathFromPoints = (points: Point[]) =>
@@ -1106,40 +1136,38 @@ export function Canvas({
   };
 
   // Frame the whole circuit in the viewport (home / zoom-to-fit).
-  const fitView = () => {
+  const fitView = useCallback(() => {
     const el = svgRef.current;
     if (!el) return;
     const r = el.getBoundingClientRect();
-    if (components.length === 0 && wires.length === 0) {
+    if (r.width === 0 || r.height === 0) return;
+    const b = circuitBounds(components, wires);
+    if (!b) {
       setView({ x: r.width / 2, y: r.height / 2, zoom: 1 });
       return;
     }
-    let minX = Infinity;
-    let minY = Infinity;
-    let maxX = -Infinity;
-    let maxY = -Infinity;
-    for (const c of components) {
-      minX = Math.min(minX, c.x - 40);
-      minY = Math.min(minY, c.y - 40);
-      maxX = Math.max(maxX, c.x + 40);
-      maxY = Math.max(maxY, c.y + 40);
-    }
-    for (const w of wires) {
-      for (const p of w.points) {
-        minX = Math.min(minX, p.x);
-        minY = Math.min(minY, p.y);
-        maxX = Math.max(maxX, p.x);
-        maxY = Math.max(maxY, p.y);
-      }
-    }
     const pad = 80;
     const zoom = clampZoom(
-      Math.min((r.width - pad * 2) / Math.max(maxX - minX, 1), (r.height - pad * 2) / Math.max(maxY - minY, 1)),
+      Math.min((r.width - pad * 2) / Math.max(b.maxX - b.minX, 1), (r.height - pad * 2) / Math.max(b.maxY - b.minY, 1)),
     );
-    const cx = (minX + maxX) / 2;
-    const cy = (minY + maxY) / 2;
+    const cx = (b.minX + b.maxX) / 2;
+    const cy = (b.minY + b.maxY) / 2;
     setView({ zoom, x: r.width / 2 - cx * zoom, y: r.height / 2 - cy * zoom });
-  };
+  }, [components, wires]);
+
+  // The read-only simulator reflection always frames the whole circuit: it lives
+  // in a narrow left column, so the schematic-editor pan/zoom would leave parts
+  // off-screen. Re-fit on mount into simulator and whenever the column resizes
+  // (mode switch / drag). The interactive editor keeps the user's pan untouched.
+  useEffect(() => {
+    if (interactive) return;
+    const el = svgRef.current;
+    if (!el) return;
+    fitView();
+    const ro = new ResizeObserver(() => fitView());
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [interactive, fitView]);
 
   const placing = tool.mode === "place";
   const wiring = tool.mode === "wire";

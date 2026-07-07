@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { routeWireSmart, translateAttachedWireEndpoints } from "./Canvas";
+import { circuitBounds, routeWireSmart, translateAttachedWireEndpoints } from "./Canvas";
+import type { SchematicComponent } from "../schematic/types";
+
+const comp = (id: string, x: number, y: number): SchematicComponent =>
+  ({ id, kind: "resistor", x, y, rotation: 0, value: "1k" }) as SchematicComponent;
 
 describe("Canvas wire geometry", () => {
   it("keeps an identical wire preview inert instead of dereferencing an empty route", () => {
@@ -66,5 +70,47 @@ describe("Canvas wire geometry", () => {
     const wire = { id: "w1", points: [{ x: 0, y: 0 }] };
     const moved = translateAttachedWireEndpoints([wire], [{ x: 0, y: 0 }], 16, 0);
     expect(moved[0].points).toEqual([{ x: 0, y: 0 }]);
+  });
+});
+
+describe("circuitBounds (fit-to-view math)", () => {
+  it("returns null for a completely empty schematic", () => {
+    expect(circuitBounds([], [])).toBeNull();
+  });
+
+  it("pads a single component by the symbol margin on every side", () => {
+    expect(circuitBounds([comp("r1", 100, 200)], [])).toEqual({
+      minX: 60,
+      minY: 160,
+      maxX: 140,
+      maxY: 240,
+    });
+  });
+
+  it("spans the extremes of multiple components", () => {
+    const b = circuitBounds([comp("r1", 0, 0), comp("r2", 320, 160)], []);
+    expect(b).toEqual({ minX: -40, minY: -40, maxX: 360, maxY: 200 });
+  });
+
+  it("includes bare wire points (no extra margin) alongside components", () => {
+    const b = circuitBounds(
+      [comp("r1", 100, 100)],
+      [{ id: "w1", points: [{ x: 100, y: 100 }, { x: 400, y: 300 }] }],
+    );
+    expect(b).toEqual({ minX: 60, minY: 60, maxX: 400, maxY: 300 });
+  });
+
+  it("frames a wire-only schematic (e.g. a stray net) without components", () => {
+    const b = circuitBounds([], [{ id: "w1", points: [{ x: -50, y: 20 }, { x: 50, y: 80 }] }]);
+    expect(b).toEqual({ minX: -50, minY: 20, maxX: 50, maxY: 80 });
+  });
+
+  it("honors a custom margin", () => {
+    expect(circuitBounds([comp("r1", 0, 0)], [], 10)).toEqual({
+      minX: -10,
+      minY: -10,
+      maxX: 10,
+      maxY: 10,
+    });
   });
 });
