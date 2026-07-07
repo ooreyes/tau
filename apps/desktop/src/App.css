@@ -3478,10 +3478,28 @@ body {
   border: 0;
   border-radius: 0;
   background: transparent;
+  /* Operator-console left indicator rail — invisible at rest, lights on
+     hover, goes solid accent when active (the targeting affordance in an
+     Anduril/Palantir selectable list). */
+  box-shadow: inset 2px 0 0 transparent;
+  transition: background var(--motion-fast) var(--ease-out),
+              box-shadow var(--motion-fast) var(--ease-out);
 }
 
 .palette-item:hover {
   background: var(--overlay-hover);
+  box-shadow: inset 3px 0 0 var(--accent-line);
+}
+
+.palette-item:active {
+  background: var(--overlay-hover-faint);
+}
+
+/* Hotkey brightens from faint → readable when the row is targeted, so the
+   operator can see the shortcut without hunting. */
+.palette-item:hover .palette-key {
+  color: var(--muted);
+  border-color: var(--border-strong);
 }
 
 /* Selection now rides the design-system accent (was a one-off hardcoded
@@ -3489,6 +3507,7 @@ body {
    control in the shell. */
 .palette-item.active {
   background: var(--accent-soft);
+  box-shadow: inset 3px 0 0 var(--accent);
 }
 
 .palette-icon {
@@ -3522,10 +3541,17 @@ body {
   color: var(--text);
 }
 
+/* Hotkey chip — was a barely-legible 9px --faint glyph; promoted to a real
+   readable keycap so the operator can act on the shortcut at a glance. */
 .palette-key {
   justify-self: end;
-  color: var(--faint);
-  background: var(--panel-3);
+  min-width: 18px;
+  padding: 1px 0;
+  text-align: center;
+  font-size: 10px;
+  color: var(--muted);
+  background: var(--panel-4);
+  border-color: var(--border-strong);
 }
 
 .symbol-preview {
