@@ -13,6 +13,15 @@
   / **82 op-converged (ALL)** — floors 82/79/82/82
   · App.css hardcoded-color burndown: **0 hex outside the single `:root`** ✅
 - **Run started (UTC):** 2026-07-07T19:11Z
+- **Next step:** §10 surface work is now unified cool-graphite (canvas + scope +
+  panels). App.css has TWO parallel duplicate stylesheet blocks (early ~560–690
+  vs later ~2543+) where the later silently overrides the earlier — the source of
+  the dead `.stage`/`.canvas`/`.wire` rules found this session. Next high-leverage
+  §10 item: a careful, test-guarded reconciliation/deletion of those dead
+  duplicate rules (panel-order's final "delete dead App.css rules" pass), or
+  continue the panel-order list (dialogs → error states → status bar → left icon
+  rail → global type/spacing pass). Verify each with the STEP 3.5 before/after
+  screenshot pipeline.
 - **Status: DONE** — §10 cleanup: consolidate duplicate `.wire` rule → 0
   hardcoded colors. NOT a design commit (no pixel change claimed) — an honest
   dead-rule consolidation, one of the listed §10 tasks. `.wire` was defined
