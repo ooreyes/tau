@@ -1270,16 +1270,29 @@ body {
 .pane-remove-btn {
   background: none;
   border: none;
+  border-radius: 4px;
   color: var(--faint);
   cursor: pointer;
   font-size: 14px;
   line-height: 1;
   padding: 0 2px;
-  transition: color 120ms var(--ease-out);
+  transition: color var(--motion-fast) var(--spring),
+    box-shadow var(--motion-fast) var(--spring);
 }
 
 .pane-remove-btn:hover {
   color: var(--danger);
+}
+
+.pane-remove-btn:active {
+  color: var(--danger);
+  opacity: 0.7;
+}
+
+.pane-remove-btn:focus-visible {
+  outline: none;
+  color: var(--danger);
+  box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--danger-line);
 }
 
 /* Legend items now use flex so the move-selector sits inline. */
@@ -1564,15 +1577,30 @@ body {
 .expr-remove {
   background: none;
   border: none;
+  border-radius: 4px;
   color: var(--muted);
   cursor: pointer;
   font-size: 13px;
   line-height: 1;
-  padding: 0 0 0 2px;
+  padding: 0 1px 0 3px;
+  transition: color var(--motion-fast) var(--spring),
+    box-shadow var(--motion-fast) var(--spring);
 }
 
 .expr-remove:hover {
   color: var(--danger);
+}
+
+.expr-remove:active {
+  color: var(--danger);
+  opacity: 0.7;
+}
+
+/* Destructive × was keyboard-invisible — a rounded danger ring makes focus read. */
+.expr-remove:focus-visible {
+  outline: none;
+  color: var(--danger);
+  box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--danger-line);
 }
 
 /* Metrics row */
