@@ -238,7 +238,8 @@ body {
 }
 
 /* Text buttons (New / Open / Save) */
-.text-btn,
+/* The Examples/Open dropdown. (The old `.text-btn` toolbar buttons migrated to
+   the shadcn Button primitive; those rules are deleted as dead CSS.) */
 .example-picker select {
   height: 27px;
   color: var(--text);
@@ -247,23 +248,27 @@ body {
   border-radius: var(--r-sm);
   font: 500 12px -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
   cursor: pointer;
-  transition: border-color 140ms var(--ease-out), background 140ms var(--ease-out);
+  transition: border-color 140ms var(--ease-out), background 140ms var(--ease-out),
+    box-shadow 140ms var(--ease-out);
 }
 
-.text-btn {
-  padding: 0 10px;
-  letter-spacing: -0.1px;
-}
-
-.text-btn:disabled {
-  opacity: 0.3;
-  cursor: not-allowed;
-}
-
-.text-btn:hover:not(:disabled),
 .example-picker select:hover {
   border-color: var(--border-strong);
   background: var(--panel-4);
+}
+
+/* pressed: settle darker with a cobalt hairline so the picker reads as firing */
+.example-picker select:active {
+  background: var(--panel-3);
+  border-color: var(--accent-line);
+}
+
+/* app-standard cobalt focus ring (matches .empty-actions) — the picker was
+   keyboard-focusable with no visible focus at all */
+.example-picker select:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent-line);
 }
 
 .file-input {

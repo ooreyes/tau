@@ -12,14 +12,19 @@
   · corpus runner: 82 imported / **79 warning-clean** / **82 deck-built (ALL)**
   / **82 op-converged (ALL)** — floors 82/79/82/82
 - **Run started (UTC):** 2026-07-07T10:05Z
-- **Status: IN PROGRESS** — §10 toolbar file buttons: `.text-btn` (New/Open/
-  Save/Save .asc) + `.example-picker select` (Examples/Open dropdown) — the app's
-  most prominent control row — have hover only, NO `:active` and NO
-  `:focus-visible`. Keyboard users get zero focus feedback on the primary file
-  ops (STEP-4 a11y gap); clicks feel dead. PLAN: add a pressed settle (`--panel-3`
-  bg + `--accent-line` border) and the app-standard cobalt focus ring (`--bg` 2px
-  + `--accent-line` 4px, matching `.empty-actions`). VERIFY: interactive
-  Playwright capture of focused + pressed toolbar button. CSS-only; typecheck + 1247.
+- **Status: DONE** — §10 dead `.text-btn` sweep + Examples/Open picker focus ring.
+  Investigating a missing focus ring on the toolbar file buttons revealed
+  `.text-btn` (its base + `:disabled` + `:hover` rules) is DEAD CSS — grep shows
+  it's referenced ONLY in App.css (New/Save/Save .asc migrated to the shadcn
+  Button primitive long ago; `.text-btn` DOM count = 0). The shared base rule was
+  still keeping the dead selector alive. FIX: (a) deleted every `.text-btn` rule
+  (§10 dead-rule sweep); (b) the live co-tenant `.example-picker select` (the
+  Examples/Open dropdown) genuinely HAD no `:active`/`:focus-visible`, so it kept
+  a pressed settle (`--panel-3` + `--accent-line`) and gained the app-standard
+  cobalt focus ring. PROOF: `.text-btn` refs in src now 0 (only a comment);
+  interactive Playwright shows the picker focus boxShadow =
+  `rgb(10,12,16) 0 0 0 2px, rgba(77,157,255,0.34) 0 0 0 4px` (screenshot: crisp
+  cobalt ring around "Open…", was none). Typecheck clean; 1247 green.
 - **Status: DONE** — §10 canvas zoom cluster: `.view-controls`/`.view-btn`
   (the top-right zoom-in/out/fit stack) were each defined TWICE (App.css L2310+
   L3146 / L2319+L3158) AND the three focusable buttons had NO `:active` and NO
