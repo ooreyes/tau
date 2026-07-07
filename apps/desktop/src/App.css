@@ -3244,8 +3244,8 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  color: #8a8a92;
-  font: 500 11px "JetBrains Mono", ui-monospace, monospace;
+  color: var(--muted);
+  font: 500 11px var(--font-mono);
 }
 
 .result-row span {
@@ -3274,7 +3274,7 @@ body {
 
 .result-list p {
   margin: 0;
-  color: #5a5a62;
+  color: var(--muted);
   font-size: 11px;
   line-height: 1.5;
 }
