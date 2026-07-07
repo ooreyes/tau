@@ -12,6 +12,17 @@
   · corpus runner: 82 imported / **79 warning-clean** / **82 deck-built (ALL)**
   / **82 op-converged (ALL)** — floors 82/79/82/82
 - **Run started (UTC):** 2026-07-07T09:30Z
+- **Status: IN PROGRESS** — §10 semantic warnings: unify caution states onto the
+  amber tactical `--signal`. FOUND warnings styled THREE inconsistent ways, none
+  amber: `.bottom-errors .warning` + `.resolution-control.warning` use cobalt
+  `--accent` (indistinguishable from normal info UI), while `.warning-list div`
+  screams red `--danger` (over-alarms — warnings ≠ hard errors). Directive:
+  amber `--signal` IS the tactical alert/caution color. PLAN: route all three
+  onto `--signal`/`--signal-soft`/`--signal-line`, yielding a clean hierarchy
+  (red=error, amber=warning, green=ok, cobalt=info). FILES: App.css only.
+  VERIFY: typecheck + test (≥1247); harness screenshot of the error console
+  (error+warning+ok rows) before/after to prove the warning row shifts
+  cobalt→amber and the sim warning-list shifts red→amber.
 - **Status: DONE** — §10 dialogs: real interactive states + cool the warm toast
   + tokenize scrims. FOUND: (a) `.shell-toast` was WARM BROWN
   `rgba(18,14,10,0.96)` (R>G>B) — a direct violation of the cool-graphite
