@@ -2063,57 +2063,11 @@ body {
 /* ══════════════════════════════════════════════════════════════════════════════
    STATUS BAR
 ══════════════════════════════════════════════════════════════════════════════ */
-.statusbar {
-  grid-area: status;
-  display: flex;
-  align-items: center;
-  gap: var(--sp-3);
-  padding: 0 14px;
-  background: rgba(15, 17, 22, 0.88);
-  border-top: 1px solid var(--border);
-  font-size: 10px;
-  color: var(--muted);
-  backdrop-filter: blur(18px) saturate(1.2);
-}
-
-.status-mode {
-  color: var(--text);
-  font-weight: 600;
-  font-size: 11px;
-  min-width: 90px;
-  letter-spacing: -0.1px;
-}
-
-.status-hints {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  flex: 1;
-  flex-wrap: nowrap;
-  overflow: hidden;
-}
-
-.status-hints kbd {
-  font: 600 9px var(--font-mono);
-  background: var(--panel-4);
-  border: 1px solid var(--border);
-  border-radius: 3px;
-  padding: 1px 4px;
-  color: var(--muted);
-  flex-shrink: 0;
-}
-
-.status-hints .dot {
-  opacity: 0.3;
-  flex-shrink: 0;
-}
-
-.status-count {
-  margin-left: auto;
-  flex-shrink: 0;
-  font-variant-numeric: tabular-nums;
-  color: var(--faint);
-}
+/* NOTE: the live `.statusbar` rule set lives in the "interactive completion
+   pass" block below (search `.statusbar {`). A duplicate set once lived here and
+   leaked a wasteful backdrop-filter blur onto the opaque bar — deleted; the two
+   unique keycap rules (`.status-hints kbd` / `.status-hints .dot`) moved down
+   beside the real block. */
 
 /* ══════════════════════════════════════════════════════════════════════════════
    COMMAND PALETTE (⌘K)
@@ -3970,6 +3924,22 @@ body {
 .status-count {
   color: var(--muted);
   flex: 0 0 auto;
+}
+
+/* Keycaps in the hint strip — small mono chips on the deepest surface tier. */
+.status-hints kbd {
+  font: 600 9px var(--font-mono);
+  background: var(--panel-4);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 1px 4px;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+
+.status-hints .dot {
+  opacity: 0.3;
+  flex-shrink: 0;
 }
 
 /* interactive completion pass */
