@@ -12,16 +12,18 @@
   · corpus runner: 82 imported / **79 warning-clean** / **82 deck-built (ALL)**
   / **82 op-converged (ALL)** — floors 82/79/82/82
 - **Run started (UTC):** 2026-07-07T08:52Z
-- **Status: IN PROGRESS** — §10 plotter controls: dead interactive states on
-  `.pane-btn` + `.fft-toggle`. FOUND: both are live buttons with hover-only
-  states — no pressed settle, no focus-visible ring; `.fft-toggle` (full-width
-  FFT disclosure) has NO `transition` at all (instant color swap). Their siblings
-  (`.expr-add`, `.plotter-icon-action`) already got the full snap. PLAN: `.pane-btn`
-  (small chip) → spring hover-lift + `--elev-1`, `:active` settle, focus ring;
-  `.fft-toggle` (full-width bar) → `--overlay-hover` fill on hover (no lift — a
-  bar shouldn't jump), `:active` faint fill, focus ring; both get proper
-  `--motion-fast/--spring` transitions. VERIFY: typecheck + tests ≥1247;
-  screenshot fft-toggle rest vs hover (Read both) — must visibly differ.
+- **Status: DONE** — §10 plotter controls: dead interactive states on
+  `.pane-btn` + `.fft-toggle`. FOUND: both are live buttons stuck hover-only —
+  no pressed settle, no focus-visible ring; `.fft-toggle` (full-width FFT
+  disclosure) had NO `transition` at all (instant color swap). Siblings
+  (`.expr-add`, `.plotter-icon-action`) already had full snap. FIX: `.pane-btn`
+  (small chip) → spring hover-lift + `--elev-1` over `--overlay-hover` fill,
+  `:active` settle, cobalt focus ring; `.fft-toggle` (full-width bar) →
+  `--overlay-hover` fill + brighten on hover (no lift — a bar shouldn't jump),
+  `:active` faint fill, focus ring + accent border; both `--motion-fast/--spring`.
+  SCREENSHOT PROOF (fft-toggle rest vs hover): rest = muted bar; hover = brighter
+  `--text`, lighter `--overlay-hover` fill, stronger border — visibly distinct.
+  Typecheck clean; 1247 green.
 
 - **Prev Status: DONE** — §10 status-bar duplicate-CSS sweep + perf. FOUND: TWO
   `.statusbar` rule sets (App.css ~2066 and ~3910) with duplicate
@@ -225,6 +227,43 @@
 - NOTE (carried, not seen this session): a transient single-test flake was
   reported last session (one red run between clean runs, name not captured).
   If it recurs, capture the failing test name before re-running.
+
+---
+
+## 2026-07-07T09:28Z — auto/ltspice-parity — §10: plotter .pane-btn/.fft-toggle real pressed + focus states
+
+### What I did
+- Two live plotter buttons were stuck in hover-only limbo (no pressed settle, no
+  focus-visible ring), inconsistent with their already-snapped siblings
+  (`.expr-add`, `.plotter-icon-action`). `.fft-toggle` additionally had NO
+  `transition` at all — an instant, un-sprung color swap.
+- `.pane-btn` (small split-view chip): now spring hover-lift + `--elev-1` over an
+  `--overlay-hover` fill on a stronger hairline, `:active` settle, cobalt
+  `:focus-visible` ring.
+- `.fft-toggle` (full-width FFT disclosure bar): `--overlay-hover` fill + brighten
+  on hover — deliberately NO lift, since a full-width bar jumping looks wrong —
+  plus `:active` faint fill and a focus ring with accent border. Added the
+  missing `--motion-fast`/`--spring` transitions to both.
+
+### Files touched
+- apps/desktop/src/App.css
+
+### Tests
+1247 passing (unchanged) — typecheck clean. CSS-only interaction polish.
+
+### FEATURE_PARITY items updated
+§10 SimulationPanel controls — continued (dead interactive states burned down on
+the pane + FFT controls; motion now consistent across the plotter).
+
+### UX issues found
+- `.fft-toggle` had no transition (janky instant swap) — fixed.
+- Verified via screenshot: fft-toggle rest (muted bar) vs hover (brighter text +
+  `--overlay-hover` fill + stronger border) visibly differ.
+
+### Next step
+Continue §10 SimulationPanel controls: audit `.expr-remove` (pane trace remove)
+and the cursor-slider controls for the same hover-only pattern; then the global
+typography+spacing pass called for in the §10 panel order.
 
 ---
 
