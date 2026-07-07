@@ -12,6 +12,15 @@
   · corpus runner: 82 imported / **79 warning-clean** / **82 deck-built (ALL)**
   / **82 op-converged (ALL)** — floors 82/79/82/82
 - **Run started (UTC):** 2026-07-07T14:05Z
+- **Status: IN PROGRESS** — §10 sim-panel signal-expression mono (part 2).
+  Continuing the SimulationPanel readout-typography migration. The trace
+  expressions users type/see — `.expr-input` (e.g. `V(out)`, `I(R1)`) and the
+  `.expr-chip` trace list — still use `font-family: inherit` (UI sans). These are
+  technical signal identifiers, so per the directive they belong in `--font-mono`
+  alongside the counts/dials just unified. PLAN: `apps/desktop/src/App.css` —
+  `.expr-input` + `.expr-chip` → `var(--font-mono)`, nudge letter-spacing/size to
+  keep density. VERIFY: before/after Playwright crop with a trace added (`V(out)`
+  chip visible) Read + compared for mono letterforms; typecheck; 1247.
 - **Status: DONE** — §10 SimulationPanel numeric-readout mono unification.
   Feature session (most recent commit is `review:`, 2 in last 30). The sim panel
   had THREE numeric-readout clusters but only ONE was mono: `.resolution-control
