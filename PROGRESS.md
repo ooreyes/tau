@@ -11,8 +11,19 @@
 - **Headline metric:** 1241 tests green (default suite) + 5 corpus specs
   · corpus runner: 82 imported / **79 warning-clean** / **82 deck-built (ALL)**
   / **82 op-converged (ALL)** — floors 82/79/82/82
-- **Run started (UTC):** 2026-07-07T08:52Z
-- **Status: DONE** — §10 a11y: focus rings on destructive × buttons. FOUND:
+- **Run started (UTC):** 2026-07-07T09:30Z
+- **Status: IN PROGRESS** — §10 dialogs: real interactive states + cool the warm
+  toast + tokenize scrims. PLAN: (1) add `--scrim`/`--scrim-strong` cool-neutral
+  black backdrop tokens; route `.settings-backdrop`/`.confirm-backdrop` +
+  panel bgs through tokens (kill `rgba(0,0,0,…)` / `rgba(14,14,18,…)`);
+  (2) `.shell-toast` warm-brown `rgba(18,14,10,0.96)` → cool graphite `--panel-2`
+  (directive: no warm primary UI); (3) `.confirm-actions button` + `.confirm-dialog
+  header button` gain hover-lift/`--elev-1`, `:active` settle, focus-visible ring
+  (cobalt; `.danger` → danger ring) — currently ZERO interactive states on a
+  destructive dialog (STEP 4 gap). FILES: apps/desktop/src/App.css only. VERIFY:
+  typecheck + test (≥1247), screenshot the confirm dialog (before/after Read) to
+  prove buttons/toast visibly differ.
+- **Prev Status: DONE** — §10 a11y: focus rings on destructive × buttons. FOUND:
   `.expr-remove` (remove-trace ×) and `.pane-remove-btn` (remove-pane ×) were
   borderless buttons that swap to `--danger` on hover with NO transition and NO
   `:focus-visible` ring — keyboard users had zero focus feedback on destructive
