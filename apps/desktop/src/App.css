@@ -44,6 +44,7 @@
   --success:      #58cc8a;                    /* == --trace-green (ready/ok state) */
   --success-soft: rgba(88, 204, 138, 0.12);
   --success-line: rgba(88, 204, 138, 0.34);   /* success hairline for ready borders */
+  --success-glow: rgba(88, 204, 138, 0.30);   /* success halo for the Run action */
   --cream:        #eef0f4;
   --cream-soft:   rgba(238, 240, 244, 0.07);
 
@@ -3322,10 +3323,33 @@ body {
   background: var(--accent);
 }
 
+/* Primary Run action — was a flat green fill with a dead opacity fade. Now
+   real depth: elevation at rest, spring lift + green halo on hover, pressed
+   settle. Green routes through the --success token (was #71ab7e). */
 .plotter-run,
 .run-btn {
-  background: #71ab7e;
-  color: #07100a;
+  background: var(--success);
+  color: var(--bg);
+  box-shadow: var(--elev-1), 0 0 0 1px var(--success-line),
+    0 5px 16px var(--success-glow);
+  transition: transform var(--motion-fast) var(--spring),
+    box-shadow var(--motion-med) var(--spring),
+    background var(--motion-fast) var(--ease-out);
+}
+
+.plotter-run:hover:not(:disabled),
+.run-btn:hover:not(:disabled) {
+  opacity: 1;
+  background: color-mix(in srgb, var(--success) 90%, white);
+  transform: translateY(-1px);
+  box-shadow: var(--elev-2), 0 0 0 1px var(--success-line),
+    0 9px 24px var(--success-glow);
+}
+
+.plotter-run:active:not(:disabled),
+.run-btn:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: var(--elev-1), 0 0 0 1px var(--success-line);
 }
 
 .plotter-stop {
