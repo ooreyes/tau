@@ -11,8 +11,14 @@
 - **Headline metric:** 1241 tests green (default suite) + 5 corpus specs
   · corpus runner: 82 imported / **79 warning-clean** / **82 deck-built (ALL)**
   / **82 op-converged (ALL)** — floors 82/79/82/82
-- **Run started (UTC):** 2026-07-07T00:20Z
-- **Status: DONE** — 4 §10 commits this session, all screenshot-proven
+- **Run started (UTC):** 2026-07-07T02:36Z
+- **Status: IN PROGRESS** — §10 segmented view toggle (`.mode-btn`/`.mode-toggle`).
+  Plan: burn hardcoded `#8a8a92` → `--muted`; add missing hover (brighten +
+  `--overlay-hover` + spring lift) & pressed states; retire hardcoded `180ms
+  var(--ease-out)` → `--motion-fast var(--spring)`; `.live-pill` "JetBrains
+  Mono" literal → `--font-mono`. Verify: before/after top-bar crop Read must
+  visibly differ (rest hover legibility + motion), typecheck + 1241 tests.
+- **Prev Status: DONE** — 4 §10 commits prior session, all screenshot-proven
   visibly-different (NOT pixel-neutral). Two were stale-token BUG fixes surfaced
   by the cobalt migration (amber selection in a cobalt console). Discarded
   rescued `-wip` (66c0868 — banned amber-as-primary palette revert; ref deleted).
