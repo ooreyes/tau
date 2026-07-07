@@ -671,8 +671,8 @@ body {
 
 .wire {
   fill: none;
-  stroke: #9eacbd;
-  stroke-width: 1.65;
+  stroke: var(--comp);
+  stroke-width: 1.8;
   stroke-linecap: round;
   stroke-linejoin: round;
   vector-effect: non-scaling-stroke;
@@ -3172,11 +3172,6 @@ body {
 .symbol {
   stroke: var(--comp);
   stroke-width: 1.55;
-}
-
-.wire {
-  stroke: var(--comp);
-  stroke-width: 1.8;
 }
 
 /* Connection dot where 3+ conductors meet (drawn by Canvas at junctions). */

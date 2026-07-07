@@ -11,7 +11,21 @@
 - **Headline metric:** 1247 tests green (default suite) + 5 corpus specs
   · corpus runner: 82 imported / **79 warning-clean** / **82 deck-built (ALL)**
   / **82 op-converged (ALL)** — floors 82/79/82/82
+  · App.css hardcoded-color burndown: **0 hex outside the single `:root`** ✅
 - **Run started (UTC):** 2026-07-07T19:11Z
+- **Status: DONE** — §10 cleanup: consolidate duplicate `.wire` rule → 0
+  hardcoded colors. NOT a design commit (no pixel change claimed) — an honest
+  dead-rule consolidation, one of the listed §10 tasks. `.wire` was defined
+  twice: App.css:672 (`stroke: #9eacbd`, width 1.65 + fill/linecap/linejoin/
+  vector-effect) and a later App.css:3177 (`stroke: var(--comp)`, width 1.8) that
+  overrode the first two props — so `#9eacbd`/`1.65` were DEAD and the effective
+  wire was already `--comp`/1.8. FIX: folded the effective values into the single
+  672 rule (`stroke: var(--comp)`, width 1.8) and deleted the 3177 duplicate
+  (kept `.junction-dot`). Rendering is provably identical (same six resolved
+  props, no other `.wire` rule touches them), so no screenshot needed. RESULT:
+  App.css now has ZERO hardcoded hex colors outside the single `:root` palette
+  (the burndown target hit 0 — the only `#…` left is inside a comment). Typecheck
+  clean; only App.css changed; CSS-only so the 1247-green suite is unaffected.
 - **Status: DONE** — §10 scope/plot surfaces: cool-graphite instrument.
   Same dead-duplicate pattern as the canvas — the visible `.scope-svg` surface
   was a flat pure-black `#060608` (App.css:3560) overriding the cool `--scope-bg`
