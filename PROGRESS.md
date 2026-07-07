@@ -12,14 +12,33 @@
   · corpus runner: 82 imported / **79 warning-clean** / **82 deck-built (ALL)**
   / **82 op-converged (ALL)** — floors 82/79/82/82
 - **Run started (UTC):** 2026-07-07T00:20Z
-- **Status: IN PROGRESS** — §10 part-palette rows: real operator-console
-  targeting affordance (visible, NOT pixel-neutral). Plan: add a left inset
-  accent-indicator rail that appears on hover + turns solid `--accent` when
-  active, spring motion, and hotkey-keycap brighten on hover, on the active
-  `.palette-item` block (App.css ~3466+). Verify: screenshot before/after crop
-  Read of the Component Selection list must visibly differ; typecheck + 1241
-  tests green. Discarded rescued `-wip` (66c0868 — banned amber-as-primary
-  palette revert; ref deleted).
+- **Status: DONE** — 4 §10 commits this session, all screenshot-proven
+  visibly-different (NOT pixel-neutral). Two were stale-token BUG fixes surfaced
+  by the cobalt migration (amber selection in a cobalt console). Discarded
+  rescued `-wip` (66c0868 — banned amber-as-primary palette revert; ref deleted).
+  Burndown: unique hex 55→**43** (also dropped stale amber rgba(234,166,77)×2 +
+  rgba(15,17,22)). 1241 green, typecheck clean.
+  1. **Part-palette rows** (`.palette-item`): hotkey chips were a barely-legible
+     9px `--faint` glyph → promoted to readable keycaps (`--muted` text,
+     `--panel-4` fill, `--border-strong` hairline, 10px, min-width) — changes
+     every one of ~20 rows at rest. Added a 3px inset operator targeting rail
+     (invisible rest → `--accent-line` hover → solid `--accent` active) + spring +
+     hotkey brighten on hover. Rest-crop Read: keycaps dim→legible across all rows;
+     interactive-crop Read: active row cobalt left rail + lit keycap.
+  2. **Empty-state hero** (BUG): primary "Open RC example" filled `--accent`
+     (cobalt) but its glow ring + hover gradient were hardcoded AMBER
+     (`rgba(234,166,77)`/`#f6bd72`) — amber button in a cobalt app. Fixed →
+     `--accent-line`/`--accent`/`--accent-glow`. Kicker "TAU V0.2" → cobalt
+     `--font-mono` version tag. Card: tokenized bg (color-mix `--panel`),
+     `--elev-2`, cobalt top-edge hairline. Crop Read: primary amber→cobalt.
+  3. **Analysis tabs** (BUG): active TRAN/OP/AC/DC tab filled `#d68a3c` amber →
+     `--accent`/`--accent-ink`; `.plotter-tabs-inner`/`.plotter-title`/
+     `.result-row` tokenized. Tab-bar crop Read: active tab amber→cobalt.
+  4. **Run action** (`.plotter-run`/`.run-btn`): flat `#71ab7e` green whose only
+     hover was `opacity:0.88` (banned dead fade) → `--success` fill, `--bg` ink,
+     `--elev-1` + `--success-line` ring + new `--success-glow` halo at rest,
+     spring lift + `--elev-2` + brighter (color-mix) on hover, pressed settle,
+     `:not(:disabled)`-guarded. Hover crop Read: muted flat green → brighter+halo.
 - **Prior session (DONE):** 3 §10 panel commits, all screenshot-proven
   visibly-different (NOT pixel-neutral). Burndown:
   unique hex 56→**55**, color literals 249→**240**. 1241 green, typecheck clean.
@@ -134,6 +153,54 @@
 - NOTE (carried, not seen this session): a transient single-test flake was
   reported last session (one red run between clean runs, name not captured).
   If it recurs, capture the failing test name before re-running.
+
+---
+
+## 2026-07-07T00:45Z — auto/ltspice-parity — §10: palette rows + 3 stale-amber/flat-button fixes
+
+### What I did
+- Recovered orientation: discarded rescued `-wip` (66c0868) — it was a banned
+  amber-as-primary palette revert against the committed cobalt foundation
+  (`1ba6c1d`); deleted the `-wip` ref. Baseline confirmed 1241 green.
+- **Part-palette rows:** promoted the barely-legible 9px `--faint` hotkey glyphs
+  to readable keycap chips (`--muted`/`--panel-4`/`--border-strong`, 10px,
+  min-width) — visibly changes all ~20 rows at rest. Added a 3px inset operator
+  targeting rail (hidden rest → `--accent-line` hover → solid `--accent` active)
+  + spring motion + hotkey-brighten on hover.
+- **Empty-state hero (stale-token BUG):** primary "Open RC example" filled cobalt
+  but its glow ring + hover gradient were hardcoded AMBER — fixed to accent
+  tokens; kicker → cobalt `--font-mono` version tag; card tokenized + `--elev-2`
+  + cobalt top-edge hairline.
+- **Analysis tabs (stale-token BUG):** active tab filled `#d68a3c` amber →
+  `--accent`; `.plotter-tabs-inner`/`.plotter-title`/`.result-row` tokenized.
+- **Run action:** flat `#71ab7e` green with a banned `opacity:0.88` dead fade →
+  `--success` fill + `--elev-1`/ring/new `--success-glow` halo at rest, spring
+  lift + brighten on hover, pressed settle, `:not(:disabled)`-guarded.
+
+### Files touched
+apps/desktop/src/App.css · PROGRESS.md
+
+### Tests
+1241 passing (82 files), typecheck clean — no regression, CSS-only changes.
+
+### FEATURE_PARITY items updated
+§10 panel migrations advancing; two migration-era stale-amber bugs fixed. Hex
+burndown unique 55→43.
+
+### UX issues found
+Stale pre-cobalt amber literals still linger in the plotter chrome (pause button
+amber = correct tactical semantic; `.plotter-icon-action:hover` `#efe9d6` cream,
+`.scope-svg`/`.op-table` `#060608` bg = hygiene, not bugs) — next tokenization pass.
+
+### Next step
+Continue §10: tokenize remaining `.plotter-*` chrome (run/stop ink literals,
+`.scope-svg`/`.op-table` `#060608`) and route pause to `--signal`, then the
+global type+spacing pass and dead-rule sweep.
+
+### Verdict
+4 commits, each with before/after crops Read + compared: keycaps dim→legible,
+primary button amber→cobalt, active tab amber→cobalt, Run flat→brighter+halo.
+All visibly differ — none pixel-neutral.
 
 ---
 
