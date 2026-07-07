@@ -17,6 +17,10 @@
   --overlay-hover:        rgba(255, 255, 255, 0.045);
   --overlay-hover-faint:  rgba(255, 255, 255, 0.03);
 
+  /* Modal scrims — cool-neutral black (dim the console behind a dialog) */
+  --scrim:         rgba(6, 8, 11, 0.42);   /* side/settings sheet — light dim */
+  --scrim-strong:  rgba(6, 8, 11, 0.62);   /* centered alert — heavier dim */
+
   /* Text — high-contrast cool white/gray */
   --text:   #e6ecf3;
   --muted:  #7d8794;
@@ -4110,7 +4114,7 @@ body {
   z-index: 80;
   display: flex;
   justify-content: flex-end;
-  background: rgba(0, 0, 0, 0.18);
+  background: var(--scrim);
 }
 
 .settings-panel {
@@ -4119,7 +4123,7 @@ body {
   margin: 48px 12px 0 0;
   border: 1px solid var(--border-strong);
   border-radius: 10px;
-  background: rgba(14, 14, 18, 0.98);
+  background: var(--panel-2);
   box-shadow: var(--elev-pop);
   color: var(--text);
 }
@@ -4156,6 +4160,18 @@ body {
   color: var(--text);
   background: var(--panel-3);
   cursor: pointer;
+  transition: border-color var(--motion-fast) var(--spring),
+    background var(--motion-fast) var(--spring);
+}
+
+.settings-panel header button:active {
+  background: var(--overlay-hover);
+}
+
+.settings-list button:focus-visible,
+.settings-panel header button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent-line);
 }
 
 .settings-list {
@@ -4251,7 +4267,7 @@ body {
   z-index: 110;
   display: grid;
   place-items: center;
-  background: rgba(0, 0, 0, 0.42);
+  background: var(--scrim-strong);
 }
 
 .confirm-dialog {
@@ -4286,6 +4302,24 @@ body {
   color: var(--muted);
   background: var(--panel-3);
   cursor: pointer;
+  transition: color var(--motion-fast) var(--spring),
+    border-color var(--motion-fast) var(--spring),
+    background var(--motion-fast) var(--spring);
+}
+
+.confirm-dialog header button:hover {
+  color: var(--text);
+  border-color: var(--border-strong);
+  background: var(--overlay-hover);
+}
+
+.confirm-dialog header button:active {
+  background: var(--overlay-hover-faint);
+}
+
+.confirm-dialog header button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent-line);
 }
 
 .confirm-dialog p {
@@ -4312,12 +4346,47 @@ body {
   background: var(--panel-3);
   cursor: pointer;
   font: 700 12px var(--font-ui);
+  transition: transform var(--motion-fast) var(--spring),
+    border-color var(--motion-fast) var(--spring),
+    background var(--motion-fast) var(--spring),
+    box-shadow var(--motion-fast) var(--spring);
+}
+
+.confirm-actions button:hover {
+  border-color: var(--border-strong);
+  background: var(--panel-4);
+  transform: translateY(-1px);
+  box-shadow: var(--elev-1);
+}
+
+.confirm-actions button:active {
+  transform: translateY(0);
+  box-shadow: none;
+  background: var(--panel-3);
+}
+
+.confirm-actions button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent-line);
 }
 
 .confirm-actions .danger {
   border-color: var(--danger-line);
   color: var(--danger);
   background: var(--danger-soft);
+}
+
+.confirm-actions .danger:hover {
+  border-color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 22%, transparent);
+}
+
+.confirm-actions .danger:active {
+  background: var(--danger-soft);
+}
+
+.confirm-actions .danger:focus-visible {
+  box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--danger-line);
 }
 
 .shell-toast {
@@ -4330,7 +4399,7 @@ body {
   border: 1px solid var(--accent-line);
   border-radius: 9px;
   color: var(--cream);
-  background: rgba(18, 14, 10, 0.96);
+  background: var(--panel-2);
   box-shadow: var(--elev-pop);
   font: 600 12px var(--font-ui);
 }

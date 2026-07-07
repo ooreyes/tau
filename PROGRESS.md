@@ -12,17 +12,23 @@
   · corpus runner: 82 imported / **79 warning-clean** / **82 deck-built (ALL)**
   / **82 op-converged (ALL)** — floors 82/79/82/82
 - **Run started (UTC):** 2026-07-07T09:30Z
-- **Status: IN PROGRESS** — §10 dialogs: real interactive states + cool the warm
-  toast + tokenize scrims. PLAN: (1) add `--scrim`/`--scrim-strong` cool-neutral
-  black backdrop tokens; route `.settings-backdrop`/`.confirm-backdrop` +
-  panel bgs through tokens (kill `rgba(0,0,0,…)` / `rgba(14,14,18,…)`);
-  (2) `.shell-toast` warm-brown `rgba(18,14,10,0.96)` → cool graphite `--panel-2`
-  (directive: no warm primary UI); (3) `.confirm-actions button` + `.confirm-dialog
-  header button` gain hover-lift/`--elev-1`, `:active` settle, focus-visible ring
-  (cobalt; `.danger` → danger ring) — currently ZERO interactive states on a
-  destructive dialog (STEP 4 gap). FILES: apps/desktop/src/App.css only. VERIFY:
-  typecheck + test (≥1247), screenshot the confirm dialog (before/after Read) to
-  prove buttons/toast visibly differ.
+- **Status: DONE** — §10 dialogs: real interactive states + cool the warm toast
+  + tokenize scrims. FOUND: (a) `.shell-toast` was WARM BROWN
+  `rgba(18,14,10,0.96)` (R>G>B) — a direct violation of the cool-graphite
+  directive on the app's only notification surface; (b) `.confirm-actions button`
+  (Cancel + the DESTRUCTIVE "Clear all") + `.confirm-dialog header ×` had ZERO
+  interactive states — no hover, no press, no focus ring on a destructive alert
+  (STEP 4 a11y/feel gap); (c) three untokenized backdrop/panel literals
+  (`rgba(0,0,0,0.18/0.42)`, `rgba(14,14,18,0.98)`). FIX: added `--scrim`
+  (0.42) / `--scrim-strong` (0.62) cool-neutral black tokens; routed both
+  backdrops + settings panel bg through tokens; toast → cool graphite
+  `--panel-2`; confirm buttons gain spring hover-lift + `--elev-1`, `:active`
+  settle, cobalt `:focus-visible` ring; the `.danger` button gets a danger hover
+  fill + a **danger** focus ring; header × + settings × gain hover/active/focus
+  too. SCREENSHOT + COMPUTED PROOF: toast visibly shifts warm-brown → cool
+  graphite (resting-state diff); focused "Clear all" gains red danger ring
+  (`rgb(10,12,16) 0 0 0 2px, rgba(242,86,79,0.3) 0 0 0 4px` — was `none`); Cancel
+  hover lifts (`translateY(-1px)`). Typecheck clean; 1247 green.
 - **Prev Status: DONE** — §10 a11y: focus rings on destructive × buttons. FOUND:
   `.expr-remove` (remove-trace ×) and `.pane-remove-btn` (remove-pane ×) were
   borderless buttons that swap to `--danger` on hover with NO transition and NO
@@ -249,6 +255,43 @@
 - NOTE (carried, not seen this session): a transient single-test flake was
   reported last session (one red run between clean runs, name not captured).
   If it recurs, capture the failing test name before re-running.
+
+---
+
+## 2026-07-07T09:55Z — auto/ltspice-parity — §10: dialog interactive states + cool the warm toast
+
+### What I did
+- Added `--scrim` (0.42) / `--scrim-strong` (0.62) cool-neutral black backdrop
+  tokens and routed `.settings-backdrop` (→ `--scrim`), `.confirm-backdrop`
+  (→ `--scrim-strong`), and `.settings-panel` bg (→ `--panel-2`) through them —
+  killing `rgba(0,0,0,0.18)`, `rgba(0,0,0,0.42)`, `rgba(14,14,18,0.98)`.
+- `.shell-toast` background warm-brown `rgba(18,14,10,0.96)` → cool graphite
+  `--panel-2` (directive: no warm primary UI; the toast is the app's only
+  notification surface and was the last warm-tinted chrome).
+- `.confirm-actions button` (Cancel + destructive "Clear all") gained a spring
+  hover-lift (`translateY(-1px)` + `--elev-1` over `--panel-4`), an `:active`
+  settle, and a cobalt `:focus-visible` ring. The `.danger` variant gets a
+  danger hover fill (`color-mix` 22% danger) + a **danger** focus ring.
+- `.confirm-dialog header ×` and `.settings-panel header ×` gained hover/active/
+  focus-visible states (previously static).
+
+### Files touched
+- apps/desktop/src/App.css
+
+### Tests
+1247 passing (82 files), 0 new — CSS-only; typecheck clean. No regression.
+
+### FEATURE_PARITY items updated
+- §10 "Panel migrations … → dialogs (Open/Save/settings)": dialog chrome
+  interactive states + tokenization advanced (still 🟡 pending Open/Save sheets).
+
+### UX issues found
+- The Open/Save file sheets still use bespoke chrome not yet audited — next
+  dialog-track candidate.
+
+### Next step
+Audit the Open/Save file-picker sheet chrome for the same dead-state /
+hardcoded-color gaps, then the empty/error states panel.
 
 ---
 
