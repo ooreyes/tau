@@ -11,8 +11,15 @@
 - **Headline metric:** 1241 tests green (default suite) + 5 corpus specs
   · corpus runner: 82 imported / **79 warning-clean** / **82 deck-built (ALL)**
   / **82 op-converged (ALL)** — floors 82/79/82/82
-- **Run started (UTC):** 2026-07-07T02:36Z
-- **Status: DONE** — 5 §10 commits this session, every one screenshot-proven
+- **Run started (UTC):** 2026-07-07T06:17Z
+- **Status: IN PROGRESS** — REVIEW SESSION (0 `review:` commits in last 30).
+  Scope: 263a701..HEAD (33 §10 CSS/design commits). Plan:
+  (a) correctness pass over App.css — stale/undefined tokens, dup rules, broken
+  selectors, hardcoded-hex burndown regressions; integrate rescued `-wip`
+  `--mono`→`--font-mono` fix; (b) UI/UX screenshot audit (empty state + main
+  screens) judged like a picky Apple reviewer; (c) fix each finding, gates
+  green, commit prefixed `review:`. Verify: typecheck + 1241 tests + screenshots.
+- **Prev Status: DONE** — 5 §10 commits prior session, every one screenshot-proven
   visibly-different (NOT pixel-neutral). Recurring theme: **dead interactive
   states** — controls with no hover feedback (inert until clicked) got real
   snap. Burndown: unique App.css hex 43→**38** (killed #8a8a92, #5a5a62, #fff).
