@@ -11,22 +11,20 @@
 - **Headline metric:** 1241 tests green (default suite) + 5 corpus specs
   · corpus runner: 82 imported / **79 warning-clean** / **82 deck-built (ALL)**
   / **82 op-converged (ALL)** — floors 82/79/82/82
-- **Run started (UTC):** 2026-07-07T06:44Z
-- **Status: DONE** — §8/§10 simulator fit-to-view. FOUND: the single Canvas is
-  reused for both views with `interactive={mode==="schematic"}`; its local pan/
-  zoom persisted across the mode switch, so in the narrow simulator left column
-  the whole circuit sat off-screen — only "V1 5V" showed at the edge (a picky-
-  reviewer eyesore, screenshot-confirmed at 1280×720). FIX: extracted a pure,
-  unit-tested `circuitBounds(components, wires, margin)` helper (Canvas.tsx),
-  refactored `fitView` onto it (now `useCallback`, guards 0-size rect), and added
-  a read-only-only effect that frames the circuit on mount-into-simulator AND on
-  every column resize via a ResizeObserver — the interactive editor's pan is left
-  untouched (early-return when interactive). SCREENSHOT PROOF (1280×720): before =
-  bare "V1 5V" at the left edge / empty dark column; after = full RC (V1 5V, R1
-  1kΩ, C1 1µF, grounds, net-dotted wires) centered & framed in BOTH idle and post-
-  Run states. 6 new circuitBounds tests (empty→null, single-part margin, multi-
-  part span, wire+comp, wire-only, custom margin); typecheck clean; 1247 green
-  (was 1241, +6, no regression); dev server killed.
+- **Run started (UTC):** 2026-07-07T08:52Z
+- **Status: IN PROGRESS** — §10 run-bar live status pill + dead-rule sweep.
+  UNIT: `.plotter-live` (the "Ready"/"Running" pill in the SimulationPanel run
+  bar) is styled IDENTICALLY in both states — a dead active indicator. Per the
+  directive amber `--signal` is the tactical active/alert color; a running sim is
+  exactly that. PLAN: (1) SimulationPanel.tsx — add a `plotter-live--running`
+  modifier when `isRunning`; (2) App.css — running pill lights amber (`--signal`
+  text over `--signal-soft` on a `--signal-line` border) with a pulsing live dot
+  (`::before` + `@keyframes live-pulse`, reduced-motion-guarded), idle stays calm
+  muted; add `--signal-line`/`--signal-glow` tokens; (3) SWEEP: delete the dead
+  `.plotter-stop`/`.plotter-pause` rules (never rendered — real buttons use
+  `.plotter-icon-action`/`.plotter-run`), killing hardcoded `#f0aaa6`/`#edc08a` +
+  4 hardcoded rgba. VERIFY: typecheck + tests ≥1247; screenshot idle vs running
+  run bar (Read both) — must visibly differ (muted pill → amber pulsing pill).
 
 - **Prev Status: DONE** — 5 §10 commits prior session, every one screenshot-proven
   visibly-different (NOT pixel-neutral). Recurring theme: **dead interactive
