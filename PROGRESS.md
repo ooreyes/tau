@@ -12,6 +12,14 @@
   · corpus runner: 82 imported / **79 warning-clean** / **82 deck-built (ALL)**
   / **82 op-converged (ALL)** — floors 82/79/82/82
 - **Run started (UTC):** 2026-07-07T09:30Z
+- **Status: DONE** — §10 empty-state a11y: `.empty-actions` New/Open/example
+  buttons had hover+active but NO `:focus-visible` ring — keyboard users hit the
+  primary onboarding CTAs with zero focus feedback. FIX: cobalt focus ring on the
+  secondary buttons (`--bg` 2px + `--accent-line` 4px) and a brighter solid-accent
+  ring + glow on the `.primary-action` (so focus stands out over its resting accent
+  glow). SCREENSHOT + COMPUTED PROOF: focused "New schematic" gains
+  `rgb(10,12,16) 2px, rgb(77,157,255) 4px, glow`; resting state unchanged (bright
+  cobalt fill verified). CSS-only; typecheck clean; 1247 green.
 - **Status: DONE** — §10 warnings pt.2: `.analysis-empty` (the red hard-error
   box) was REUSED verbatim for `.tf`/`.ac` warnings (SimulationPanel L1268,
   L1351: `warnings.join(" ")`), rendering those warnings RED — contradicting the
@@ -277,6 +285,38 @@
 - NOTE (carried, not seen this session): a transient single-test flake was
   reported last session (one red run between clean runs, name not captured).
   If it recurs, capture the failing test name before re-running.
+
+---
+
+## 2026-07-07T10:33Z — auto/ltspice-parity — §10: focus rings on empty-state onboarding CTAs
+
+### What I did
+- Added `.empty-actions button:focus-visible` (cobalt ring: `--bg` 2px +
+  `--accent-line` 4px) — the New/Open/example onboarding buttons had hover+active
+  but no keyboard focus ring.
+- Added `.empty-actions .primary-action:focus-visible` with a brighter
+  solid-`--accent` ring + glow so focus is distinguishable from the button's
+  resting accent glow.
+
+### Files touched
+- apps/desktop/src/App.css
+
+### Tests
+1247 passing (82 files), 0 new — CSS-only; typecheck clean. No regression.
+
+### FEATURE_PARITY items updated
+- §10 empty/error-states + accessibility: onboarding CTAs now keyboard-focusable
+  with a visible ring.
+
+### UX issues found
+- cmdk palette still carries hardcoded backdrop/panel literals (`rgba(4,6,10,…)`,
+  `rgba(13,16,24,…)`) and a raw `-apple-system` input font instead of `--font-ui`.
+
+### Next step
+Sweep the cmdk palette: route its backdrop/panel literals through `--scrim`/
+`--panel` tokens and its input font through `--font-ui` (verify no visible
+regression — pixel-neutral there is acceptable since it's a pure literal→token
+burndown, but pair it with the input-font fix which IS visible).
 
 ---
 

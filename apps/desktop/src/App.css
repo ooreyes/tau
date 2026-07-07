@@ -768,6 +768,12 @@ body {
   box-shadow: var(--elev-1);
 }
 
+/* Keyboard focus ring — the secondary New/Open actions had none (a11y gap). */
+.empty-actions button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent-line);
+}
+
 .empty-actions .primary-action {
   color: var(--accent-ink);
   background: linear-gradient(180deg, var(--accent-hover), var(--accent));
@@ -782,6 +788,12 @@ body {
   transform: translateY(-1px);
   box-shadow: var(--elev-2), 0 0 0 1px var(--accent),
     0 10px 28px var(--accent-glow);
+}
+
+.empty-actions .primary-action:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent),
+    0 8px 22px var(--accent-glow);
 }
 
 /* ── Flow controls ─────────────────────────────────────────────────────────── */
