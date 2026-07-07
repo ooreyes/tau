@@ -12,17 +12,18 @@
   · corpus runner: 82 imported / **79 warning-clean** / **82 deck-built (ALL)**
   / **82 op-converged (ALL)** — floors 82/79/82/82
 - **Run started (UTC):** 2026-07-07T09:30Z
-- **Status: IN PROGRESS** — §10 semantic warnings: unify caution states onto the
-  amber tactical `--signal`. FOUND warnings styled THREE inconsistent ways, none
-  amber: `.bottom-errors .warning` + `.resolution-control.warning` use cobalt
-  `--accent` (indistinguishable from normal info UI), while `.warning-list div`
-  screams red `--danger` (over-alarms — warnings ≠ hard errors). Directive:
-  amber `--signal` IS the tactical alert/caution color. PLAN: route all three
-  onto `--signal`/`--signal-soft`/`--signal-line`, yielding a clean hierarchy
-  (red=error, amber=warning, green=ok, cobalt=info). FILES: App.css only.
-  VERIFY: typecheck + test (≥1247); harness screenshot of the error console
-  (error+warning+ok rows) before/after to prove the warning row shifts
-  cobalt→amber and the sim warning-list shifts red→amber.
+- **Status: DONE** — §10 semantic warnings: unify caution states onto the amber
+  tactical `--signal`. FOUND warnings styled THREE inconsistent ways, none amber:
+  `.bottom-errors .warning` + `.resolution-control.warning` used cobalt `--accent`
+  (indistinguishable from normal info UI), while `.warning-list div` screamed red
+  `--danger` (over-alarmed — warnings ≠ hard errors). Directive: amber `--signal`
+  IS the tactical alert/caution color. FIX: routed all three onto
+  `--signal`/`--signal-soft`/`--signal-line`, giving a clean semantic hierarchy
+  (red=error, amber=warning, green=ok, cobalt=info). SCREENSHOT PROOF (harness,
+  error+warning rows + warning-list + resolution control): warning rows shift
+  cobalt→amber, the sim warning-list shifts red→amber — visibly distinct; the red
+  hard-error row is now unambiguously separate from amber caution. Typecheck
+  clean; 1247 green.
 - **Status: DONE** — §10 dialogs: real interactive states + cool the warm toast
   + tokenize scrims. FOUND: (a) `.shell-toast` was WARM BROWN
   `rgba(18,14,10,0.96)` (R>G>B) — a direct violation of the cool-graphite
@@ -266,6 +267,39 @@
 - NOTE (carried, not seen this session): a transient single-test flake was
   reported last session (one red run between clean runs, name not captured).
   If it recurs, capture the failing test name before re-running.
+
+---
+
+## 2026-07-07T10:12Z — auto/ltspice-parity — §10: unify warnings onto the amber tactical signal
+
+### What I did
+- `.bottom-errors .warning`: cobalt `--accent-line`/`--accent` → amber
+  `--signal-line`/`--signal`.
+- `.resolution-control.warning`: cobalt accent (border + inset rail + text) →
+  amber `--signal`/`--signal-soft`.
+- `.warning-list div` (SimulationPanel): red `--danger`/`--danger-soft` → amber
+  `--signal`/`--signal-soft` (warnings were over-alarming as hard errors).
+- Result: one coherent semantic color language — red=error, amber=warning,
+  green=ok, cobalt=info/accent — matching the directive that amber `--signal`
+  is the tactical alert/caution color and cobalt is reserved for primary UI.
+
+### Files touched
+- apps/desktop/src/App.css
+
+### Tests
+1247 passing (82 files), 0 new — CSS-only; typecheck clean. No regression.
+
+### FEATURE_PARITY items updated
+- §10 empty/error-states track: warning semantics unified (part of the
+  error-states panel migration).
+
+### UX issues found
+- The `.empty-actions` buttons still lack a `:focus-visible` ring (a11y gap) —
+  candidate for a follow-up focus-ring pass.
+
+### Next step
+Add `:focus-visible` rings to the empty-state New/Open action buttons, then
+sweep the remaining hardcoded backdrop/panel literals in the cmdk palette.
 
 ---
 

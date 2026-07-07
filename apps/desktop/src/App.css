@@ -1840,12 +1840,12 @@ body {
 }
 
 .resolution-control.warning {
-  border-color: var(--accent-line);
-  box-shadow: inset 2px 0 0 var(--accent), inset 0 0 0 100px var(--accent-soft);
+  border-color: var(--signal-line);
+  box-shadow: inset 2px 0 0 var(--signal), inset 0 0 0 100px var(--signal-soft);
 }
 
 .resolution-control.warning strong {
-  color: var(--accent);
+  color: var(--signal);
 }
 
 .resolution-control button {
@@ -2121,9 +2121,9 @@ body {
 }
 
 .warning-list div {
-  color: var(--danger);
-  background: var(--danger-soft);
-  border-left: 2px solid var(--danger);
+  color: var(--signal);
+  background: var(--signal-soft);
+  border-left: 2px solid var(--signal);
   padding: 5px 8px;
   font-size: 10px;
   line-height: 1.4;
@@ -4084,8 +4084,8 @@ body {
 }
 
 .bottom-errors .warning {
-  border: 1px solid var(--accent-line);
-  color: var(--accent);
+  border: 1px solid var(--signal-line);
+  color: var(--signal);
 }
 
 .bottom-errors p {
