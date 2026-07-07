@@ -12,6 +12,19 @@
   · corpus runner: 82 imported / **79 warning-clean** / **82 deck-built (ALL)**
   / **82 op-converged (ALL)** — floors 82/79/82/82
 - **Run started (UTC):** 2026-07-07T10:05Z
+- **Status: DONE** — §10 canvas zoom cluster: `.view-controls`/`.view-btn`
+  (the top-right zoom-in/out/fit stack) were each defined TWICE (App.css L2310+
+  L3146 / L2319+L3158) AND the three focusable buttons had NO `:active` and NO
+  `:focus-visible` — a STEP-4 a11y + feel gap (keyboard users got zero focus
+  feedback on the canvas view controls; no pressed feedback on a zoom action).
+  FIX: consolidated each into one rule (deleted the lower duplicates); added a
+  cobalt pressed state (`--accent-soft` fill + accent glyph), an INSET cobalt
+  focus ring (inset because the container clips outer rings via overflow:hidden),
+  spring transitions, and `:last-child{border-bottom:0}` to kill the stray
+  separator under the ⌂ fit button. PROOF: interactive Playwright capture (rest/
+  focus/pressed) — focus boxShadow = `rgb(77,157,255) 0 0 0 1.5px inset`, pressed
+  bg = `rgba(77,157,255,0.14)`; screenshots show the cobalt ring on `+` and the
+  accent fill on ⌂, rest cluster clean. Fully tokenized; typecheck clean; 1247.
 - **Status: DONE** — §10 palette keycaps: the shortcut badges (R/C/L/V…) were
   defined TWICE (`.palette-key` at App.css L531 AND L3707 — the ad-hoc dup the
   directive targets, later block silently overriding the first) and rendered as

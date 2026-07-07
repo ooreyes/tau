@@ -2307,36 +2307,57 @@ body {
 }
 
 /* ── View controls (zoom / fit) ────────────────────────── */
+/* Canvas view controls — a segmented vertical cluster (zoom in / out / fit)
+   pinned top-right of the schematic. Consolidated here; the old duplicate lower
+   in the file is deleted. */
 .view-controls {
   position: absolute;
-  right: 14px;
-  bottom: 14px;
+  top: 16px;
+  right: 16px;
   z-index: 6;
   display: flex;
-  gap: 4px;
-  align-items: center;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--panel-3);
+  border: 1px solid var(--border-strong);
+  border-radius: 9px;
 }
 .view-btn {
-  height: 28px;
-  min-width: 28px;
-  padding: 0 9px;
+  width: 34px;
+  height: 32px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   font-size: 13px;
   font-weight: 600;
   color: var(--muted);
-  background: var(--panel-2);
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm, 6px);
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
   cursor: pointer;
-  transition: color 140ms var(--ease-out, ease), border-color 140ms var(--ease-out, ease),
-    background 140ms var(--ease-out, ease);
+  transition: color var(--motion-fast) var(--spring),
+    background var(--motion-fast) var(--spring),
+    box-shadow var(--motion-fast) var(--spring);
+}
+/* last cell has no separator so it meets the container's rounded base cleanly */
+.view-btn:last-child {
+  border-bottom: 0;
 }
 .view-btn:hover {
   color: var(--text);
-  border-color: var(--border-strong);
-  background: var(--panel-4, var(--panel-2));
+  background: var(--overlay-hover);
+}
+/* pressed: settle into the accent so a zoom action reads as firing */
+.view-btn:active {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+/* focus ring is INSET — the container clips outer rings via overflow:hidden */
+.view-btn:focus-visible {
+  outline: none;
+  color: var(--text);
+  box-shadow: inset 0 0 0 1.5px var(--accent);
 }
 
 /* ── Wire / probe snap ring ────────────────────────────── */
@@ -3143,30 +3164,7 @@ body {
   stroke: none;
 }
 
-.view-controls {
-  top: 16px;
-  right: 16px;
-  bottom: auto;
-  flex-direction: column;
-  gap: 0;
-  overflow: hidden;
-  background: var(--panel-3);
-  border: 1px solid var(--border-strong);
-  border-radius: 9px;
-}
-
-.view-btn {
-  width: 34px;
-  height: 32px;
-  border: 0;
-  border-bottom: 1px solid var(--border);
-  border-radius: 0;
-  background: transparent;
-  color: var(--muted);
-}
-
 .view-btn.fit {
-  width: 34px;
   padding: 0;
   font-size: 0;
 }
