@@ -12,12 +12,34 @@
   · corpus runner: 82 imported / **79 warning-clean** / **82 deck-built (ALL)**
   / **82 op-converged (ALL)** — floors 82/79/82/82
 - **Run started (UTC):** 2026-07-07T02:36Z
-- **Status: IN PROGRESS** — §10 segmented view toggle (`.mode-btn`/`.mode-toggle`).
-  Plan: burn hardcoded `#8a8a92` → `--muted`; add missing hover (brighten +
-  `--overlay-hover` + spring lift) & pressed states; retire hardcoded `180ms
-  var(--ease-out)` → `--motion-fast var(--spring)`; `.live-pill` "JetBrains
-  Mono" literal → `--font-mono`. Verify: before/after top-bar crop Read must
-  visibly differ (rest hover legibility + motion), typecheck + 1241 tests.
+- **Status: DONE** — 5 §10 commits this session, every one screenshot-proven
+  visibly-different (NOT pixel-neutral). Recurring theme: **dead interactive
+  states** — controls with no hover feedback (inert until clicked) got real
+  snap. Burndown: unique App.css hex 43→**38** (killed #8a8a92, #5a5a62, #fff).
+  1241 green, typecheck clean.
+  1. **Segmented view toggle** (`.mode-btn`): inactive "simulator" had NO hover
+     (before-rest == before-hover). Added `:not(.active):hover` — brighten to
+     `--text`, `--overlay-hover` fill, spring `translateY(-0.5px)`; `:active`
+     settle; focus-visible ring. `#8a8a92`→`--muted`, `180ms/--ease-out`→
+     `--motion-fast/--spring`, `.live-pill` "JetBrains Mono"→`--font-mono`.
+  2. **Panel-header icon buttons** (`.plotter-icon-action/-close/.panel-close`,
+     the ■◐↗× in scope/Ask-Sim headers): instant flat color swap → tokenized
+     (`#6b6b73`→`--muted`, `#efe9d6`→`--cream`, border→`--border`, "JetBrains
+     Mono"→`--font-mono`) + spring `translateY(-1px)` lift with `--elev-1` +
+     `--border-strong` hairline; `:active` settle; focus ring. After-hover crop:
+     close × visibly lifts with a drop shadow.
+  3. **Results panel** (`.result-list p` / `.result-row`): empty-state guidance
+     text `#5a5a62` (dim warm) → `--muted` (brighter cool, legible); readout row
+     `#8a8a92`→`--muted` + "JetBrains Mono"→`--font-mono`. Crop: body copy
+     visibly brighter/cooler.
+  4. **Param sliders** (`.param-slider` thumb): bare `#fff` dot w/ inert 1.1
+     scale → `--cream` thumb ringed in `--accent-line`, hover springs to
+     scale(1.15) inside a 5px `--accent-glow` halo, `:active` settle,
+     focus-visible cobalt ring. Crop: thumb gains cobalt glow halo.
+  5. **Analysis tabs** (`.plotter-tab`): inactive OP/AC/DC/TF/NOISE/STEP had no
+     hover (inert). Added `:not(.active):not(:disabled):hover` → `--text` over
+     `--overlay-hover`; transition → `--motion-fast/--spring`. Crop: hovered
+     "OP" lights to a legible pill.
 - **Prev Status: DONE** — 4 §10 commits prior session, all screenshot-proven
   visibly-different (NOT pixel-neutral). Two were stale-token BUG fixes surfaced
   by the cobalt migration (amber selection in a cobalt console). Discarded
@@ -159,6 +181,52 @@
 - NOTE (carried, not seen this session): a transient single-test flake was
   reported last session (one red run between clean runs, name not captured).
   If it recurs, capture the failing test name before re-running.
+
+---
+
+## 2026-07-07T02:36Z — auto/ltspice-parity — §10: five dead-interactive-state fixes + hex burndown
+
+### What I did
+- **Segmented view toggle** (`.mode-btn`): the inactive "simulator" segment had
+  NO hover — before-rest and before-hover crops were pixel-identical. Added a
+  real `:not(.active):hover` (brighten to `--text`, `--overlay-hover` fill,
+  spring `translateY(-0.5px)`) + `:active` settle + focus-visible ring; burned
+  `#8a8a92`→`--muted`, `180ms/--ease-out`→`--motion-fast/--spring`, `.live-pill`
+  "JetBrains Mono"→`--font-mono`.
+- **Panel-header icon buttons** (`.plotter-icon-action`/`.plotter-close`/
+  `.panel-close`): instant flat color swap → tokenized + spring
+  `translateY(-1px)` lift with `--elev-1` + `--border-strong` hairline, `:active`
+  settle, focus ring. After-hover crop: close × visibly lifts with a shadow.
+- **Results panel** (`.result-list p`/`.result-row`): dim `#5a5a62` empty-state
+  guidance → `--muted` (legible cool), readout `#8a8a92`→`--muted` +
+  "JetBrains Mono"→`--font-mono`.
+- **Param sliders** (`.param-slider` thumb): bare `#fff` dot → `--cream` thumb
+  ringed in `--accent-line`, hover springs to scale(1.15) inside a 5px
+  `--accent-glow` halo, `:active` + focus-visible cobalt ring.
+- **Analysis tabs** (`.plotter-tab`): inactive OP/AC/DC/TF/NOISE/STEP had no
+  hover → added `:not(.active):not(:disabled):hover` + spring transition.
+
+### Files touched
+apps/desktop/src/App.css · PROGRESS.md
+
+### Tests
+1241 passing (0 new — CSS-only) — passed. Typecheck clean each commit.
+
+### FEATURE_PARITY items updated
+§10 panel migrations — progressed segmented toggle + analysis tabs + sim-panel
+controls (sliders, header icons, results); no checkbox flips (each panel still
+has residual work) but all screenshot-proven visibly-different.
+
+### UX issues found
+Recurring: multiple prominent controls shipped with NO hover feedback (view
+toggle, analysis tabs) — inert until clicked. All fixed this session. Remaining
+`.plotter-stop`/`.plotter-pause` (running-sim-only) still hold hardcoded rgba
+danger/amber — deferred (can't screenshot headless without a live sim).
+
+### Next step
+Continue §10: cool the warm-black surfaces (`.plotter` `#0b0b0e`, `.stage`
+`#060608` chrome) to cool panel tokens with a whole-panel before/after, then
+tokenize the stop/pause running-state buttons via a scripted live-sim capture.
 
 ---
 
