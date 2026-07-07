@@ -373,6 +373,47 @@
 
 ---
 
+## 2026-07-07T14:05Z — auto/ltspice-parity — §10: sim-panel numeric readouts onto --font-mono
+
+### What I did
+- Unified the SimulationPanel's numeric-readout typography. The panel had three
+  numeric clusters but only one was monospace: `.resolution-control strong`
+  migrated to `--font-mono` on 2026-07-06, while the sibling `.metric strong`
+  (NETS/NODES/SAMPLES counts) and `.param-value` (STOP time / STEPS dial
+  readouts) still rendered in the UI sans. That's both a directive violation
+  ("MONOSPACE for ALL technical/numeric readouts … counts") and a visible
+  intra-panel inconsistency (sans digits sitting right above the mono
+  `DC / static` box).
+- Switched both to `font: <weight> <size> var(--font-mono)` with tightened
+  letter-spacing; preserved size/weight/tone (`.metric strong` 500/17px,
+  `.param-value` 500/13px) and kept `tabular-nums`.
+
+### Files touched
+- apps/desktop/src/App.css (`.metric strong`, `.param-value`)
+
+### Tests
+1247 passing, 0 new (CSS-only) — passed. Typecheck clean.
+
+### FEATURE_PARITY items updated
+§10 "Type & spacing scale: kill one-off … font sizes" — incremental progress on
+the SimulationPanel run-bar/controls migration line (numeric readouts now
+consistently mono).
+
+### UX issues found
+None new. Before/after Playwright crops (simulator tab, RC loaded): BEFORE STOP
+`6 ms` / STEPS `240` in proportional sans not matching the mono `DC / static`
+directly below; AFTER both render in mechanical monospace aligned with it, and
+the metric `--` dashes read visibly heavier/wider mono. Verdict: visibly
+differs, operator-grade, consistent.
+
+### Next step
+Continue the SimulationPanel run-bar migration: the `.expr-input` where users
+type signal expressions (`V(out)`, `I(R1)`) and the `.expr-chip` trace list
+still use `font-family: inherit` (UI sans) — these are technical signal
+identifiers and should also go `--font-mono` per the directive.
+
+---
+
 ## 2026-07-07T10:33Z — auto/ltspice-parity — §10: focus rings on empty-state onboarding CTAs
 
 ### What I did
