@@ -229,7 +229,11 @@ function PaletteItem({ kind, name, hotkey, active, onPlace }: PaletteItemProps) 
   return (
     <button
       className={`palette-item${active ? " active" : ""}`}
-      title={`Place ${name.toLowerCase()} — press ${hotkey.toUpperCase()}`}
+      title={
+        hotkey
+          ? `Place ${name.toLowerCase()} — press ${hotkey.toUpperCase()}`
+          : `Place ${name.toLowerCase()}`
+      }
       onClick={(ev) => {
         onPlace();
         ev.currentTarget.blur();
@@ -242,7 +246,7 @@ function PaletteItem({ kind, name, hotkey, active, onPlace }: PaletteItemProps) 
       </svg>
       <span className="palette-name">{name}</span>
       <span className="palette-desc">{kind}</span>
-      <kbd className="palette-key">{hotkey.toUpperCase()}</kbd>
+      {hotkey ? <kbd className="palette-key">{hotkey.toUpperCase()}</kbd> : null}
     </button>
   );
 }
