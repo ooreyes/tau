@@ -11,7 +11,18 @@
 - **Headline metric:** 1247 tests green (default suite) + 5 corpus specs
   · corpus runner: 82 imported / **79 warning-clean** / **82 deck-built (ALL)**
   / **82 op-converged (ALL)** — floors 82/79/82/82
-- **Run started (UTC):** 2026-07-07T13:20Z
+- **Run started (UTC):** 2026-07-07T14:05Z
+- **Status: IN PROGRESS** — §10 SimulationPanel numeric-readout mono unification.
+  Feature session (most recent commit is `review:`, 2 in last 30). The sim panel
+  has THREE numeric-readout clusters: `.resolution-control strong` already went
+  `--font-mono` (2026-07-06), but its siblings `.metric strong` (NETS/NODES/
+  SAMPLES counts) and `.param-value` (STOP time / STEPS dial readouts) still use
+  the UI sans + tabular-nums — a directive violation ("MONOSPACE for ALL
+  technical/numeric readouts … counts") and an intra-panel inconsistency.
+  PLAN: `apps/desktop/src/App.css` — switch `.metric strong` + `.param-value` to
+  `var(--font-mono)` (keep sizes/weights/tone). VERIFY: before/after Playwright
+  screenshot of the simulator controls (STOP/STEPS visible without a run; counts
+  show once RC runs) Read + compared for visibly-mono digits; typecheck; 1247.
 - **Status: DONE** — **REVIEW SESSION** (rotation: 0 `review:` commits in last 30).
   No new features. (a) Correctness diff review of `f8f9281..HEAD` (31 commits):
   `circuitBounds` extraction in Canvas.tsx is pure + fully unit-tested (6 new
