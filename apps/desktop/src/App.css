@@ -3396,19 +3396,46 @@ body {
   height: 30px;
   display: grid;
   place-items: center;
-  border: 1px solid rgba(255, 255, 255, 0.09);
+  border: 1px solid var(--border);
   border-radius: 7px;
-  color: #6b6b73;
+  color: var(--muted);
   background: transparent;
   cursor: pointer;
-  font: 800 11px "JetBrains Mono", ui-monospace, monospace;
+  font: 800 11px var(--font-mono);
+  transition: color var(--motion-fast) var(--spring),
+    background var(--motion-fast) var(--spring),
+    border-color var(--motion-fast) var(--spring),
+    box-shadow var(--motion-fast) var(--spring),
+    transform var(--motion-fast) var(--spring);
 }
 
+/* These header utility buttons swapped color/bg instantly with no depth. Now
+   real snap: brighten to --cream, seat an --overlay-hover fill on a stronger
+   hairline, spring lift + --elev-1, and a pressed settle. */
 .plotter-icon-action:hover,
 .plotter-close:hover,
 .panel-close:hover {
-  color: #efe9d6;
-  background: rgba(255, 255, 255, 0.06);
+  color: var(--cream);
+  background: var(--overlay-hover);
+  border-color: var(--border-strong);
+  box-shadow: var(--elev-1);
+  transform: translateY(-1px);
+}
+
+.plotter-icon-action:active,
+.plotter-close:active,
+.panel-close:active {
+  transform: translateY(0);
+  background: var(--overlay-hover-faint);
+  box-shadow: none;
+}
+
+.plotter-icon-action:focus-visible,
+.plotter-close:focus-visible,
+.panel-close:focus-visible {
+  outline: none;
+  color: var(--cream);
+  box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent-line);
 }
 
 .plotter-close,
