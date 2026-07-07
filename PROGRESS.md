@@ -12,14 +12,16 @@
   · corpus runner: 82 imported / **79 warning-clean** / **82 deck-built (ALL)**
   / **82 op-converged (ALL)** — floors 82/79/82/82
 - **Run started (UTC):** 2026-07-07T08:52Z
-- **Status: IN PROGRESS** — §10 a11y: focus rings on destructive × buttons.
-  FOUND: `.expr-remove` (remove-trace ×) and `.pane-remove-btn` (remove-pane ×)
-  are borderless buttons that swap to `--danger` on hover with NO transition and
-  NO `:focus-visible` ring — keyboard users can't see focus on destructive
-  controls (STEP 4 a11y gap). PLAN: add `--motion-fast/--spring` color
-  transition, a `:active` press feedback, and a rounded danger focus-visible
-  ring to both. VERIFY: typecheck + tests ≥1247; screenshot the focused × to
-  confirm the ring renders.
+- **Status: DONE** — §10 a11y: focus rings on destructive × buttons. FOUND:
+  `.expr-remove` (remove-trace ×) and `.pane-remove-btn` (remove-pane ×) were
+  borderless buttons that swap to `--danger` on hover with NO transition and NO
+  `:focus-visible` ring — keyboard users had zero focus feedback on destructive
+  controls (STEP 4 a11y gap). FIX: added a `--motion-fast/--spring` color
+  transition, an `:active` press (opacity settle), a rounded danger focus-visible
+  ring (`--bg` 2px + `--danger-line` 4px), and a `border-radius` so the ring
+  reads on the borderless button. SCREENSHOT + COMPUTED-STYLE PROOF: focused ×
+  gains the red danger ring (box-shadow `rgb(10,12,16) 0 0 0 2px, rgba(242,86,79,
+  0.3) 0 0 0 4px`), absent at rest. Typecheck clean; 1247 green.
 
 - **Prev Status: DONE** — §10 plotter controls: dead interactive states on
   `.pane-btn` + `.fft-toggle`. FOUND: both are live buttons stuck hover-only —
@@ -236,6 +238,39 @@
 - NOTE (carried, not seen this session): a transient single-test flake was
   reported last session (one red run between clean runs, name not captured).
   If it recurs, capture the failing test name before re-running.
+
+---
+
+## 2026-07-07T09:44Z — auto/ltspice-parity — §10: a11y focus rings on destructive × buttons
+
+### What I did
+- `.expr-remove` (remove-trace ×) and `.pane-remove-btn` (remove-pane ×) were
+  borderless destructive buttons with an instant color swap, no transition, and
+  crucially no `:focus-visible` ring — keyboard users got zero focus feedback on
+  controls that delete plotted data.
+- Added to both: a `--motion-fast`/`--spring` color transition, an `:active`
+  press (opacity settle), and a rounded danger focus-visible ring (`--bg` 2px +
+  `--danger-line` 4px). Added a small `border-radius` so the ring reads cleanly
+  around the otherwise-borderless glyph.
+
+### Files touched
+- apps/desktop/src/App.css
+
+### Tests
+1247 passing (unchanged) — typecheck clean. CSS-only a11y polish.
+
+### FEATURE_PARITY items updated
+§10 accessibility (STEP 4 focus-ring requirement) — destructive plotter controls
+now keyboard-focus-visible; motion consistent with the rest of the run bar.
+
+### UX issues found
+- Destructive × buttons were keyboard-invisible — fixed and screenshot +
+  computed-style verified (focus box-shadow renders the danger ring at rest=none).
+
+### Next step
+Continue §10: sweep the remaining hover-only cursor-slider controls, then the
+global typography+spacing pass on the 4pt scale called for in the §10 panel
+order (kill one-off px font sizes/margins as each cluster migrates).
 
 ---
 
