@@ -12,6 +12,17 @@
   · corpus runner: 82 imported / **79 warning-clean** / **82 deck-built (ALL)**
   / **82 op-converged (ALL)** — floors 82/79/82/82
 - **Run started (UTC):** 2026-07-07T14:05Z
+- **Status: DONE** — §10 status-bar metrics readout mono (part 4).
+  Extended the numeric-readout mono theme to the bottom status bar. The
+  right-aligned `.status-count` strip ("grid 0.1 in · N components · M wires ·
+  zoom 100%") was UI sans; it's a compact metrics readout dominated by numbers.
+  FIX (`apps/desktop/src/App.css`): `.status-count` → `var(--font-mono)` +
+  `tabular-nums` (stable width as counts change, no reflow jitter, reads as a
+  console status line — on-brand for the operator-grade directive). The hint
+  keycaps were already mono; the prose hint stays UI sans. PROOF: before/after
+  Playwright crop of the status bar's right end on the default screen: BEFORE
+  proportional sans; AFTER monospace fixed-width glyphs (mono `0.1`/`100%`).
+  Read both; visibly differs. Typecheck clean; only App.css changed; 1247 green.
 - **Status: DONE** — §10 sim-panel cursor-table mono (part 3).
   Closed the last sans readout in the SimulationPanel: `.cursor-table` (the
   measurement-cursor readout — Signal / @C1 / @C2 / Δ) had `tabular-nums` but
@@ -397,6 +408,37 @@
 - NOTE (carried, not seen this session): a transient single-test flake was
   reported last session (one red run between clean runs, name not captured).
   If it recurs, capture the failing test name before re-running.
+
+---
+
+## 2026-07-07T15:00Z — auto/ltspice-parity — §10: status-bar metrics readout onto --font-mono
+
+### What I did
+- Extended the session's numeric-readout mono theme to the bottom status bar.
+  The right-aligned `.status-count` strip ("grid 0.1 in · N components · M wires
+  · zoom 100%") was UI sans — a compact, number-dominated metrics readout.
+  Made it `var(--font-mono)` + `tabular-nums` so it holds a stable width as
+  counts change (no reflow jitter) and reads as a console status line, matching
+  the already-mono hint keycaps. The prose hint stays UI sans.
+
+### Files touched
+- apps/desktop/src/App.css (`.status-count`)
+
+### Tests
+1247 passing, 0 new (CSS-only) — passed. Typecheck clean; only App.css changed.
+
+### FEATURE_PARITY items updated
+§10 status bar — numeric metrics readout tokenized/mono. Advances the "Type &
+spacing scale: kill one-off … font" panel-order tail (status bar).
+
+### UX issues found
+None new. Before/after Playwright crop of the status bar's right end (default
+screen): BEFORE proportional sans; AFTER monospace fixed-width glyphs (mono
+`0.1`/`100%`). Visibly differs; reads as an operator console status line.
+
+### Next step
+The dialogs (Open/Save/settings) panel is the last un-migrated §10 panel, then a
+global type/spacing scale pass and the dead-App.css / hardcoded-color sweep.
 
 ---
 

@@ -4020,9 +4020,15 @@ body {
   text-overflow: ellipsis;
 }
 
+/* Right-aligned metrics readout (grid pitch · counts · zoom) — an instrument-
+   panel numeric strip, so monospace it: stable width as counts change, no
+   reflow jitter, and it reads as a console status line. */
 .status-count {
   color: var(--muted);
   flex: 0 0 auto;
+  font-family: var(--font-mono);
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
 }
 
 /* Keycaps in the hint strip — small mono chips on the deepest surface tier. */
