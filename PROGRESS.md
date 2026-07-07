@@ -12,7 +12,16 @@
   · corpus runner: 82 imported / **79 warning-clean** / **82 deck-built (ALL)**
   / **82 op-converged (ALL)** — floors 82/79/82/82
 - **Run started (UTC):** 2026-07-07T08:52Z
-- **Status: DONE** — §10 plotter controls: dead interactive states on
+- **Status: IN PROGRESS** — §10 a11y: focus rings on destructive × buttons.
+  FOUND: `.expr-remove` (remove-trace ×) and `.pane-remove-btn` (remove-pane ×)
+  are borderless buttons that swap to `--danger` on hover with NO transition and
+  NO `:focus-visible` ring — keyboard users can't see focus on destructive
+  controls (STEP 4 a11y gap). PLAN: add `--motion-fast/--spring` color
+  transition, a `:active` press feedback, and a rounded danger focus-visible
+  ring to both. VERIFY: typecheck + tests ≥1247; screenshot the focused × to
+  confirm the ring renders.
+
+- **Prev Status: DONE** — §10 plotter controls: dead interactive states on
   `.pane-btn` + `.fft-toggle`. FOUND: both are live buttons stuck hover-only —
   no pressed settle, no focus-visible ring; `.fft-toggle` (full-width FFT
   disclosure) had NO `transition` at all (instant color swap). Siblings
