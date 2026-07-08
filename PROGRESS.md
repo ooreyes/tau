@@ -108,7 +108,7 @@ families) — no tick values, no units on most labels, no zoom, no pan.
   hand-verified (throwaway Playwright script, not committed) that AC
   magnitude/phase, DC sweep, and multi-pane TRAN all render correct
   per-context tick labels once the analysis has real data.
-- **Commit:** (hash filled in below after commit)
+- **Commit:** `d85254f`.
 
 ### Commit 2 — `auto: scope zoom/pan — cursor-anchored wheel zoom, drag pan, auto-fit (§UX)`
 (see below once landed)

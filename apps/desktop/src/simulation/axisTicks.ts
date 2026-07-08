@@ -120,6 +120,13 @@ export function logTicks(min: number, max: number, targetCount = 6): number[] {
         if (v >= min * 0.999 && v <= max * 1.001) ticks.push(cleanFloat(v));
       }
     }
+    // Deep zoom on a log axis (Desmos-style wheel zoom can shrink the window
+    // to well under a decade) can leave a window with NO 1/2/5×10^n value
+    // inside it at all — e.g. a 3.10kHz–3.14kHz window contains none of
+    // {1,2,3,5}×10^{2,3,4}. Rather than render zero ticks, degrade
+    // gracefully to plain nice-number ticks over the actual (now near-linear
+    // at this scale) visible range.
+    if (ticks.length < 2) return niceTicks(min, max, targetCount);
     return ticks;
   }
 

@@ -866,6 +866,81 @@ body {
   border-radius: var(--r-md);
   box-shadow: var(--elev-2), var(--elev-inset);
   overflow: visible;
+  /* Desmos-style zoom/pan (§UX Unit B) — grab to pan, wheel to zoom.
+     user-select:none stops a pan drag from also native-selecting the tick
+     label <text> elements it passes over. */
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.scope-svg.panning {
+  cursor: grabbing;
+}
+
+/* Wraps a single interactive scope `<svg>` so the zoom cluster can overlay
+   its corner without disturbing the svg's own aspect-ratio/width layout. */
+.scope-plot-wrap {
+  position: relative;
+}
+
+.scope-zoom-controls {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  z-index: 2;
+  display: flex;
+  overflow: hidden;
+  background: var(--panel-3);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-sm);
+  opacity: 0.5;
+  transition: opacity var(--motion-fast) var(--spring);
+}
+
+.scope-plot-wrap:hover .scope-zoom-controls,
+.scope-zoom-controls:focus-within {
+  opacity: 1;
+}
+
+.scope-zoom-btn {
+  width: 18px;
+  height: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--muted);
+  background: transparent;
+  border: 0;
+  border-right: 1px solid var(--border);
+  border-radius: 0;
+  cursor: pointer;
+  transition: color var(--motion-fast) var(--spring), background var(--motion-fast) var(--spring);
+}
+
+.scope-zoom-btn:last-child {
+  border-right: 0;
+}
+
+.scope-zoom-btn:hover {
+  color: var(--text);
+  background: var(--overlay-hover);
+}
+
+.scope-zoom-btn:active {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.scope-zoom-btn:focus-visible {
+  outline: none;
+  color: var(--text);
+  box-shadow: inset 0 0 0 1px var(--accent);
 }
 
 .scope-grid line {

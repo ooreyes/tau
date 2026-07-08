@@ -121,6 +121,18 @@ describe("logTicks", () => {
     expect(Math.min(...ticks)).toBeLessThanOrEqual(1e3);
     expect(Math.max(...ticks)).toBeGreaterThanOrEqual(1e4);
   });
+
+  it("degrades to nice-number ticks when a deeply-zoomed window contains no 1/2/5x10^n value at all", () => {
+    // A Desmos-style wheel-zoom can shrink a log axis to a window this
+    // narrow; the 1/2/5 sub-decade grid alone would render zero ticks here
+    // since no {1,2,5}x10^n value falls in [3100,3140].
+    const ticks = logTicks(3100, 3140, 5);
+    expect(ticks.length).toBeGreaterThanOrEqual(2);
+    for (const t of ticks) {
+      expect(t).toBeGreaterThan(0);
+      expect(Number.isFinite(t)).toBe(true);
+    }
+  });
 });
 
 describe("valueToFraction / fractionToValue", () => {

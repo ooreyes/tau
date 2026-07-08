@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { computeAxisTicks, type AxisScale } from "../simulation/axisTicks";
 
 /**
@@ -115,6 +116,39 @@ export function PlotAxes({
           );
         })}
       </g>
+    </>
+  );
+}
+
+/**
+ * Clips its children (trace `<path>`s) to the plot's inner box. Needed once
+ * zoom/pan can put data outside the visible window — without it, an SVG
+ * path just keeps drawing past the frame into the tick-label margins
+ * (`.scope-svg` uses `overflow: visible` for the zoom-cluster overlay, so
+ * nothing else would stop it). `id` must be unique per rendered `<svg>`
+ * (pass a `useId()` value) since multiple scope panes can be on screen at once.
+ */
+export function ScopeClip({
+  id,
+  width,
+  height,
+  pad,
+  children,
+}: {
+  id: string;
+  width: number;
+  height: number;
+  pad: number;
+  children: ReactNode;
+}) {
+  return (
+    <>
+      <defs>
+        <clipPath id={id}>
+          <rect x={pad} y={pad} width={width - pad * 2} height={height - pad * 2} />
+        </clipPath>
+      </defs>
+      <g clipPath={`url(#${id})`}>{children}</g>
     </>
   );
 }

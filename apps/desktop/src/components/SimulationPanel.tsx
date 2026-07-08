@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import { CATALOG_BY_KIND } from "../schematic/catalog";
 import { useSchematic } from "../store/useSchematic";
@@ -61,8 +61,11 @@ import {
   moveTrace,
   reconcileLayout,
 } from "./plotPanes";
-import { PlotAxes } from "./PlotAxes";
+import { PlotAxes, ScopeClip } from "./PlotAxes";
 import { useMeasuredSize, tickCountsFromSize } from "./useMeasuredSize";
+import { usePlotViewport } from "./usePlotViewport";
+import { ScopeZoomCluster } from "./ScopeZoomCluster";
+import type { Viewport } from "../simulation/plotViewport";
 
 interface SimulationPanelProps {
   result: AnalysisResult | null;
@@ -1124,6 +1127,12 @@ export function WaveformPlot({
               times={success ? success.times : []}
               ariaLabel={multiPane ? `Waveform pane ${paneIndex + 1}` : "Waveform plot"}
               showXAxis={paneIndex === paneLayout.length - 1 || !multiPane}
+              // Not just `success`: on the render where a run first resolves,
+              // `plot` can still be null for one tick before `paneLayout`
+              // catches up with the new trace ids — folding `plot`'s presence
+              // into the reset key means the viewport reset effect fires
+              // exactly when this pane actually has data to fit, not before.
+              runKey={plot ? success : null}
             />
 
             {/* Per-pane legend with optional "move to pane" selector. */}
@@ -1152,9 +1161,11 @@ export function WaveformPlot({
 
 /**
  * One TRAN scope pane's `<svg>`: real tick axes (via {@link PlotAxes}) plus
- * the trace paths. Split out of {@link WaveformPlot}'s per-pane `.map()` so
- * each pane can own its own `useMeasuredSize` hook (and, later, its own zoom
- * viewport) — hooks can't live inside a `.map()` callback in the parent.
+ * the trace paths, with Desmos-style cursor-anchored wheel zoom, drag pan,
+ * and an auto-fit ⌂ button (`usePlotViewport`). Split out of
+ * {@link WaveformPlot}'s per-pane `.map()` so each pane can own its own
+ * hooks — hooks can't live inside a `.map()` callback in the parent, and
+ * each pane needs an independent zoom viewport anyway.
  */
 function TranScopePane({
   paneTraces,
@@ -1162,42 +1173,77 @@ function TranScopePane({
   times,
   ariaLabel,
   showXAxis,
+  runKey,
 }: {
   paneTraces: Trace[];
   plot: { min: number; max: number; tMax: number; unit: string } | null;
   times: number[];
   ariaLabel: string;
   showXAxis: boolean;
+  /** Identity of the current run — changing it resets this pane's zoom to full-fit. */
+  runKey: unknown;
 }) {
-  const [svgRef, size] = useMeasuredSize<SVGSVGElement>();
+  const clipId = useId();
+  const [measureRef, size] = useMeasuredSize<SVGSVGElement>();
   const { targetXTicks, targetYTicks } = tickCountsFromSize(size);
-  const xMax = plot ? plot.tMax : 1;
+  const domain = useMemo<Viewport>(
+    () => ({ xMin: 0, xMax: plot ? plot.tMax : 1, yMin: plot ? plot.min : -1, yMax: plot ? plot.max : 1 }),
+    [plot],
+  );
+  const { viewport, attachSvg, isPanning, fit, zoomBy, dragHandlers } = usePlotViewport({
+    domain,
+    resetKey: runKey,
+    width: PLOT_WIDTH,
+    height: PLOT_HEIGHT,
+    pad: PLOT_PAD,
+  });
+  const setRefs = useCallback(
+    (el: SVGSVGElement | null) => {
+      measureRef.current = el;
+      attachSvg(el);
+    },
+    [measureRef, attachSvg],
+  );
+
   return (
-    <svg ref={svgRef} className="scope-svg" viewBox={`0 0 ${PLOT_WIDTH} ${PLOT_HEIGHT}`} role="img" aria-label={ariaLabel}>
-      <PlotAxes
-        width={PLOT_WIDTH}
-        height={PLOT_HEIGHT}
-        pad={PLOT_PAD}
-        xMin={0}
-        xMax={xMax}
-        yMin={plot ? plot.min : -1}
-        yMax={plot ? plot.max : 1}
-        xUnit="s"
-        yUnit={plot ? plot.unit : "V"}
-        targetXTicks={targetXTicks}
-        targetYTicks={targetYTicks}
-        showXTicks={showXAxis}
-      />
-      {plot &&
-        paneTraces.map((trace) => (
-          <path
-            key={trace.id}
-            className={trace.id.startsWith("ref:") ? "scope-trace ref" : "scope-trace"}
-            stroke={trace.color}
-            d={tracePath(trace, times, plot.min, plot.max, plot.tMax)}
-          />
-        ))}
-    </svg>
+    <div className="scope-plot-wrap">
+      <svg
+        ref={setRefs}
+        className={isPanning ? "scope-svg panning" : "scope-svg"}
+        viewBox={`0 0 ${PLOT_WIDTH} ${PLOT_HEIGHT}`}
+        role="img"
+        aria-label={ariaLabel}
+        {...dragHandlers}
+      >
+        <PlotAxes
+          width={PLOT_WIDTH}
+          height={PLOT_HEIGHT}
+          pad={PLOT_PAD}
+          xMin={viewport.xMin}
+          xMax={viewport.xMax}
+          yMin={viewport.yMin}
+          yMax={viewport.yMax}
+          xUnit="s"
+          yUnit={plot ? plot.unit : "V"}
+          targetXTicks={targetXTicks}
+          targetYTicks={targetYTicks}
+          showXTicks={showXAxis}
+        />
+        {plot && (
+          <ScopeClip id={clipId} width={PLOT_WIDTH} height={PLOT_HEIGHT} pad={PLOT_PAD}>
+            {paneTraces.map((trace) => (
+              <path
+                key={trace.id}
+                className={trace.id.startsWith("ref:") ? "scope-trace ref" : "scope-trace"}
+                stroke={trace.color}
+                d={tracePath(trace, times, viewport.xMin, viewport.xMax, viewport.yMin, viewport.yMax)}
+              />
+            ))}
+          </ScopeClip>
+        )}
+      </svg>
+      {plot && <ScopeZoomCluster onZoomIn={() => zoomBy(0.7)} onZoomOut={() => zoomBy(1 / 0.7)} onFit={fit} />}
+    </div>
   );
 }
 
@@ -1240,15 +1286,19 @@ function TraceLegendItem({
   );
 }
 
-function tracePath(trace: Trace, times: number[], min: number, max: number, tMax: number): string {
+/** Map a transient trace to an SVG path over an explicit `[xMin,xMax]` time
+ *  window (not always `[0,tMax]` — zoom/pan can move the visible window to
+ *  a non-zero start). `tMax`-only callers (unzoomed) pass `xMin=0`. */
+function tracePath(trace: Trace, times: number[], xMin: number, xMax: number, min: number, max: number): string {
   const sampleCount = Math.min(trace.values.length, times.length);
+  const xSpan = xMax - xMin || 1;
   let path = "";
   let started = false;
   for (const index of displaySampleIndices(sampleCount)) {
     const value = trace.values[index];
     const time = times[index];
     if (!Number.isFinite(value) || !Number.isFinite(time)) continue;
-    const x = PLOT_PAD + (time / tMax) * (PLOT_WIDTH - PLOT_PAD * 2);
+    const x = PLOT_PAD + ((time - xMin) / xSpan) * (PLOT_WIDTH - PLOT_PAD * 2);
     const y = PLOT_HEIGHT - PLOT_PAD - ((value - min) / (max - min || 1)) * (PLOT_HEIGHT - PLOT_PAD * 2);
     path += `${started ? "L" : "M"} ${x.toFixed(2)} ${y.toFixed(2)} `;
     started = true;
@@ -1336,7 +1386,8 @@ function TfTable({ result }: { result: TfResult | null }) {
  */
 export function NoisePlot({ result }: { result: NoiseResult | null }) {
   const success = result?.ok ? result : null;
-  const [svgRef, size] = useMeasuredSize<SVGSVGElement>();
+  const clipId = useId();
+  const [measureRef, size] = useMeasuredSize<SVGSVGElement>();
   const { targetXTicks, targetYTicks } = tickCountsFromSize(size);
   const plot = useMemo(() => {
     if (!success) return null;
@@ -1361,32 +1412,79 @@ export function NoisePlot({ result }: { result: NoiseResult | null }) {
     return { yMin, yMax, f0, f1 };
   }, [success]);
 
+  const domain = useMemo<Viewport>(
+    () => ({
+      xMin: plot ? 10 ** plot.f0 : 1,
+      xMax: plot ? 10 ** plot.f1 : 10,
+      yMin: plot ? 10 ** plot.yMin : 1e-9,
+      yMax: plot ? 10 ** plot.yMax : 1e-6,
+    }),
+    [plot],
+  );
+  const { viewport, attachSvg, isPanning, fit, zoomBy, dragHandlers } = usePlotViewport({
+    domain,
+    xScale: "log",
+    yScale: "log",
+    resetKey: plot ? success : null,
+    width: PLOT_WIDTH,
+    height: PLOT_HEIGHT,
+    pad: PLOT_PAD,
+  });
+  const setRefs = useCallback(
+    (el: SVGSVGElement | null) => {
+      measureRef.current = el;
+      attachSvg(el);
+    },
+    [measureRef, attachSvg],
+  );
+
   if (!result) return null;
   if (!result.ok) return <div className="analysis-empty">{result.message}</div>;
 
-  const path = plot ? noisePath(result.onoise, result.freqs, plot) : "";
+  const path = plot
+    ? noisePath(result.onoise, result.freqs, {
+        yMin: Math.log10(viewport.yMin),
+        yMax: Math.log10(viewport.yMax),
+        f0: Math.log10(viewport.xMin),
+        f1: Math.log10(viewport.xMax),
+      })
+    : "";
 
   return (
     <>
       <div className="scope-shell">
-        <svg ref={svgRef} className="scope-svg" viewBox={`0 0 ${PLOT_WIDTH} ${PLOT_HEIGHT}`} role="img" aria-label="Output noise density">
-          <PlotAxes
-            width={PLOT_WIDTH}
-            height={PLOT_HEIGHT}
-            pad={PLOT_PAD}
-            xMin={plot ? 10 ** plot.f0 : 1}
-            xMax={plot ? 10 ** plot.f1 : 10}
-            yMin={plot ? 10 ** plot.yMin : 1e-9}
-            yMax={plot ? 10 ** plot.yMax : 1e-6}
-            xScale="log"
-            yScale="log"
-            xUnit="Hz"
-            yUnit="V/√Hz"
-            targetXTicks={targetXTicks}
-            targetYTicks={targetYTicks}
-          />
-          {path && <path className="scope-trace" stroke="var(--trace-red)" d={path} />}
-        </svg>
+        <div className="scope-plot-wrap">
+          <svg
+            ref={setRefs}
+            className={isPanning ? "scope-svg panning" : "scope-svg"}
+            viewBox={`0 0 ${PLOT_WIDTH} ${PLOT_HEIGHT}`}
+            role="img"
+            aria-label="Output noise density"
+            {...dragHandlers}
+          >
+            <PlotAxes
+              width={PLOT_WIDTH}
+              height={PLOT_HEIGHT}
+              pad={PLOT_PAD}
+              xMin={viewport.xMin}
+              xMax={viewport.xMax}
+              yMin={viewport.yMin}
+              yMax={viewport.yMax}
+              xScale="log"
+              yScale="log"
+              xUnit="Hz"
+              yUnit="V/√Hz"
+              targetXTicks={targetXTicks}
+              targetYTicks={targetYTicks}
+            />
+            {path && (
+              <ScopeClip id={clipId} width={PLOT_WIDTH} height={PLOT_HEIGHT} pad={PLOT_PAD}>
+                <path className="scope-trace" stroke="var(--trace-red)" d={path} />
+              </ScopeClip>
+            )}
+          </svg>
+          {plot && <ScopeZoomCluster onZoomIn={() => zoomBy(0.7)} onZoomOut={() => zoomBy(1 / 0.7)} onFit={fit} />}
+        </div>
         <div className="scope-legend">
           <span>
             <i style={{ background: "var(--trace-red)" }} />
@@ -1461,7 +1559,8 @@ export function FftView({ result }: { result: AnalysisResult | null }) {
   const [cursorsOn, setCursorsOn] = useState(false);
   const [cf1, setCf1] = useState(0.25);
   const [cf2, setCf2] = useState(0.75);
-  const [svgRef, size] = useMeasuredSize<SVGSVGElement>();
+  const clipId = useId();
+  const [measureRef, size] = useMeasuredSize<SVGSVGElement>();
   const { targetXTicks, targetYTicks } = tickCountsFromSize(size);
 
   const success = result?.ok ? result : null;
@@ -1520,10 +1619,38 @@ export function FftView({ result }: { result: AnalysisResult | null }) {
     }
   }, [cursorsOn, spectrum, cf1, cf2, chosen]);
 
-  const cursorPixelX = (f: number): number => {
-    if (!plot || !(f > 0)) return NaN;
-    const fSpan = plot.f1 - plot.f0 || 1;
-    return PLOT_PAD + ((Math.log10(f) - plot.f0) / fSpan) * (PLOT_WIDTH - PLOT_PAD * 2);
+  const domain = useMemo<Viewport>(
+    () => ({ xMin: plot ? 10 ** plot.f0 : 1, xMax: plot ? 10 ** plot.f1 : 10, yMin: plot ? plot.minDb : -60, yMax: plot ? plot.maxDb : 0 }),
+    [plot],
+  );
+  const { viewport, attachSvg, isPanning, fit, zoomBy, dragHandlers } = usePlotViewport({
+    domain,
+    xScale: "log",
+    resetKey: plot ? spectrum : null,
+    width: PLOT_WIDTH,
+    height: PLOT_HEIGHT,
+    pad: PLOT_PAD,
+  });
+  const setRefs = useCallback(
+    (el: SVGSVGElement | null) => {
+      measureRef.current = el;
+      attachSvg(el);
+    },
+    [measureRef, attachSvg],
+  );
+
+  // Cursor pixel position from the LIVE (possibly zoomed/panned) viewport, not
+  // the static full-spectrum domain — a cursor placed via the 0-100% slider
+  // stays anchored to its actual frequency and simply scrolls off-plot
+  // (returns null, hidden) once zoom/pan moves it outside the visible window.
+  const cursorPixelX = (f: number): number | null => {
+    if (!(f > 0) || !(viewport.xMin > 0) || !(viewport.xMax > 0)) return null;
+    const f0 = Math.log10(viewport.xMin);
+    const f1 = Math.log10(viewport.xMax);
+    const fSpan = f1 - f0 || 1;
+    const frac = (Math.log10(f) - f0) / fSpan;
+    if (frac < 0 || frac > 1) return null;
+    return PLOT_PAD + frac * (PLOT_WIDTH - PLOT_PAD * 2);
   };
 
   if (!success) return null;
@@ -1577,36 +1704,57 @@ export function FftView({ result }: { result: AnalysisResult | null }) {
             </Button>
           </div>
           <div className="scope-shell">
-            <svg ref={svgRef} className="scope-svg" viewBox={`0 0 ${PLOT_WIDTH} ${PLOT_HEIGHT}`} role="img" aria-label="FFT magnitude">
-              <PlotAxes
-                width={PLOT_WIDTH}
-                height={PLOT_HEIGHT}
-                pad={PLOT_PAD}
-                xMin={plot ? 10 ** plot.f0 : 1}
-                xMax={plot ? 10 ** plot.f1 : 10}
-                yMin={plot ? plot.minDb : -60}
-                yMax={plot ? plot.maxDb : 0}
-                xScale="log"
-                xUnit="Hz"
-                yUnit="dB"
-                targetXTicks={targetXTicks}
-                targetYTicks={targetYTicks}
-              />
-              {plot && spectrum && (
-                <path className="scope-trace" stroke={AC_COLORS[0]} d={bodePath(spectrum.magnitudeDb, spectrum.frequencies, plot)} />
-              )}
-              {cursors &&
-                [cursors.x1, cursors.x2].map((f, i) => {
-                  const x = cursorPixelX(f);
-                  if (!Number.isFinite(x)) return null;
-                  return (
-                    <g key={`c${i}`} className="plot-cursor">
-                      <line x1={x} y1={PLOT_PAD} x2={x} y2={PLOT_HEIGHT - PLOT_PAD} />
-                      <text x={x + 3} y={PLOT_PAD + 10}>{i + 1}</text>
-                    </g>
-                  );
-                })}
-            </svg>
+            <div className="scope-plot-wrap">
+              <svg
+                ref={setRefs}
+                className={isPanning ? "scope-svg panning" : "scope-svg"}
+                viewBox={`0 0 ${PLOT_WIDTH} ${PLOT_HEIGHT}`}
+                role="img"
+                aria-label="FFT magnitude"
+                {...dragHandlers}
+              >
+                <PlotAxes
+                  width={PLOT_WIDTH}
+                  height={PLOT_HEIGHT}
+                  pad={PLOT_PAD}
+                  xMin={viewport.xMin}
+                  xMax={viewport.xMax}
+                  yMin={viewport.yMin}
+                  yMax={viewport.yMax}
+                  xScale="log"
+                  xUnit="Hz"
+                  yUnit="dB"
+                  targetXTicks={targetXTicks}
+                  targetYTicks={targetYTicks}
+                />
+                {plot && spectrum && (
+                  <ScopeClip id={clipId} width={PLOT_WIDTH} height={PLOT_HEIGHT} pad={PLOT_PAD}>
+                    <path
+                      className="scope-trace"
+                      stroke={AC_COLORS[0]}
+                      d={bodePath(spectrum.magnitudeDb, spectrum.frequencies, {
+                        minDb: viewport.yMin,
+                        maxDb: viewport.yMax,
+                        f0: Math.log10(viewport.xMin),
+                        f1: Math.log10(viewport.xMax),
+                      })}
+                    />
+                  </ScopeClip>
+                )}
+                {cursors &&
+                  [cursors.x1, cursors.x2].map((f, i) => {
+                    const x = cursorPixelX(f);
+                    if (x === null) return null;
+                    return (
+                      <g key={`c${i}`} className="plot-cursor">
+                        <line x1={x} y1={PLOT_PAD} x2={x} y2={PLOT_HEIGHT - PLOT_PAD} />
+                        <text x={x + 3} y={PLOT_PAD + 10}>{i + 1}</text>
+                      </g>
+                    );
+                  })}
+              </svg>
+              {plot && <ScopeZoomCluster onZoomIn={() => zoomBy(0.7)} onZoomOut={() => zoomBy(1 / 0.7)} onFit={fit} />}
+            </div>
             <div className="scope-legend">
               {spectrum ? (
                 <span>
@@ -1782,8 +1930,10 @@ function CursorView({ result, extraTraces }: { result: AnalysisResult | null; ex
 
 export function AcPlot({ result, overlays = [] }: { result: AcResult | null; overlays?: AcTrace[] }) {
   const success = result?.ok ? result : null;
-  const [magSvgRef, magSize] = useMeasuredSize<SVGSVGElement>();
-  const [phaseSvgRef, phaseSize] = useMeasuredSize<SVGSVGElement>();
+  const magClipId = useId();
+  const phaseClipId = useId();
+  const [magMeasureRef, magSize] = useMeasuredSize<SVGSVGElement>();
+  const [phaseMeasureRef, phaseSize] = useMeasuredSize<SVGSVGElement>();
   const magTicks = tickCountsFromSize(magSize);
   const phaseTicks = tickCountsFromSize(phaseSize);
   const traces = success ? success.traces.slice(0, 4) : [];
@@ -1827,6 +1977,49 @@ export function AcPlot({ result, overlays = [] }: { result: AcResult | null; ove
     return { minDb, maxDb, f0, f1, minPh, maxPh };
   }, [success, traces, overlays]);
 
+  // Independent zoom per pane — magnitude and phase don't share an x-viewport
+  // in this pass (a documented scoping decision, see PROGRESS.md): they're
+  // visually stacked halves of one Bode plot but each is its own `<svg>` with
+  // its own `usePlotViewport`, so zooming one doesn't move the other.
+  const magDomain = useMemo<Viewport>(
+    () => ({ xMin: plot ? 10 ** plot.f0 : 1, xMax: plot ? 10 ** plot.f1 : 10, yMin: plot ? plot.minDb : -60, yMax: plot ? plot.maxDb : 0 }),
+    [plot],
+  );
+  const phaseDomain = useMemo<Viewport>(
+    () => ({ xMin: plot ? 10 ** plot.f0 : 1, xMax: plot ? 10 ** plot.f1 : 10, yMin: plot ? plot.minPh : -180, yMax: plot ? plot.maxPh : 180 }),
+    [plot],
+  );
+  const magVp = usePlotViewport({
+    domain: magDomain,
+    xScale: "log",
+    resetKey: plot ? success : null,
+    width: PLOT_WIDTH,
+    height: PLOT_HEIGHT,
+    pad: PLOT_PAD,
+  });
+  const phaseVp = usePlotViewport({
+    domain: phaseDomain,
+    xScale: "log",
+    resetKey: plot ? success : null,
+    width: PLOT_WIDTH,
+    height: PLOT_HEIGHT,
+    pad: PLOT_PAD,
+  });
+  const setMagRefs = useCallback(
+    (el: SVGSVGElement | null) => {
+      magMeasureRef.current = el;
+      magVp.attachSvg(el);
+    },
+    [magMeasureRef, magVp.attachSvg],
+  );
+  const setPhaseRefs = useCallback(
+    (el: SVGSVGElement | null) => {
+      phaseMeasureRef.current = el;
+      phaseVp.attachSvg(el);
+    },
+    [phaseMeasureRef, phaseVp.attachSvg],
+  );
+
   if (!result) return null;
   if (!result.ok) return <div className="analysis-empty">{result.message}</div>;
   let peak = -Infinity;
@@ -1853,56 +2046,93 @@ export function AcPlot({ result, overlays = [] }: { result: AcResult | null; ove
   return (
     <>
       <div className="scope-shell">
-        <svg ref={magSvgRef} className="scope-svg" viewBox={`0 0 ${PLOT_WIDTH} ${PLOT_HEIGHT}`} role="img" aria-label="Bode magnitude">
-          <PlotAxes
-            width={PLOT_WIDTH}
-            height={PLOT_HEIGHT}
-            pad={PLOT_PAD}
-            xMin={plot ? 10 ** plot.f0 : 1}
-            xMax={plot ? 10 ** plot.f1 : 10}
-            yMin={plot ? plot.minDb : -60}
-            yMax={plot ? plot.maxDb : 0}
-            xScale="log"
-            xUnit="Hz"
-            yUnit="dB"
-            targetXTicks={magTicks.targetXTicks}
-            targetYTicks={magTicks.targetYTicks}
-            showXTicks={false}
-          />
-          {plot &&
-            traces.map((t, i) => (
-              <path key={t.id} className="scope-trace" stroke={AC_COLORS[i % AC_COLORS.length]} d={bodePath(t.magDb, success!.freqs, plot)} />
-            ))}
-          {plot &&
-            overlays.map((t, i) => (
-              <path key={t.id} className="scope-trace" stroke={EXPR_COLORS[i % EXPR_COLORS.length]} d={bodePath(t.magDb, success!.freqs, plot)} />
-            ))}
-        </svg>
-        <svg ref={phaseSvgRef} className="scope-svg" viewBox={`0 0 ${PLOT_WIDTH} ${PLOT_HEIGHT}`} role="img" aria-label="Bode phase">
-          <PlotAxes
-            width={PLOT_WIDTH}
-            height={PLOT_HEIGHT}
-            pad={PLOT_PAD}
-            xMin={plot ? 10 ** plot.f0 : 1}
-            xMax={plot ? 10 ** plot.f1 : 10}
-            yMin={plot ? plot.minPh : -180}
-            yMax={plot ? plot.maxPh : 180}
-            xScale="log"
-            xUnit="Hz"
-            yUnit="°"
-            targetXTicks={phaseTicks.targetXTicks}
-            targetYTicks={phaseTicks.targetYTicks}
-          />
-          {plot &&
-            traces.map((t, i) => (
-              <path
-                key={t.id}
-                className="scope-trace ref"
-                stroke={AC_COLORS[i % AC_COLORS.length]}
-                d={bodeValuePath(t.phaseDeg, success!.freqs, { min: plot.minPh, max: plot.maxPh, f0: plot.f0, f1: plot.f1 })}
-              />
-            ))}
-        </svg>
+        <div className="scope-plot-wrap">
+          <svg
+            ref={setMagRefs}
+            className={magVp.isPanning ? "scope-svg panning" : "scope-svg"}
+            viewBox={`0 0 ${PLOT_WIDTH} ${PLOT_HEIGHT}`}
+            role="img"
+            aria-label="Bode magnitude"
+            {...magVp.dragHandlers}
+          >
+            <PlotAxes
+              width={PLOT_WIDTH}
+              height={PLOT_HEIGHT}
+              pad={PLOT_PAD}
+              xMin={magVp.viewport.xMin}
+              xMax={magVp.viewport.xMax}
+              yMin={magVp.viewport.yMin}
+              yMax={magVp.viewport.yMax}
+              xScale="log"
+              xUnit="Hz"
+              yUnit="dB"
+              targetXTicks={magTicks.targetXTicks}
+              targetYTicks={magTicks.targetYTicks}
+              showXTicks={false}
+            />
+            {plot && (
+              <ScopeClip id={magClipId} width={PLOT_WIDTH} height={PLOT_HEIGHT} pad={PLOT_PAD}>
+                {(() => {
+                  const magPlot = { minDb: magVp.viewport.yMin, maxDb: magVp.viewport.yMax, f0: Math.log10(magVp.viewport.xMin), f1: Math.log10(magVp.viewport.xMax) };
+                  return (
+                    <>
+                      {traces.map((t, i) => (
+                        <path key={t.id} className="scope-trace" stroke={AC_COLORS[i % AC_COLORS.length]} d={bodePath(t.magDb, success!.freqs, magPlot)} />
+                      ))}
+                      {overlays.map((t, i) => (
+                        <path key={t.id} className="scope-trace" stroke={EXPR_COLORS[i % EXPR_COLORS.length]} d={bodePath(t.magDb, success!.freqs, magPlot)} />
+                      ))}
+                    </>
+                  );
+                })()}
+              </ScopeClip>
+            )}
+          </svg>
+          {plot && <ScopeZoomCluster onZoomIn={() => magVp.zoomBy(0.7)} onZoomOut={() => magVp.zoomBy(1 / 0.7)} onFit={magVp.fit} />}
+        </div>
+        <div className="scope-plot-wrap">
+          <svg
+            ref={setPhaseRefs}
+            className={phaseVp.isPanning ? "scope-svg panning" : "scope-svg"}
+            viewBox={`0 0 ${PLOT_WIDTH} ${PLOT_HEIGHT}`}
+            role="img"
+            aria-label="Bode phase"
+            {...phaseVp.dragHandlers}
+          >
+            <PlotAxes
+              width={PLOT_WIDTH}
+              height={PLOT_HEIGHT}
+              pad={PLOT_PAD}
+              xMin={phaseVp.viewport.xMin}
+              xMax={phaseVp.viewport.xMax}
+              yMin={phaseVp.viewport.yMin}
+              yMax={phaseVp.viewport.yMax}
+              xScale="log"
+              xUnit="Hz"
+              yUnit="°"
+              targetXTicks={phaseTicks.targetXTicks}
+              targetYTicks={phaseTicks.targetYTicks}
+            />
+            {plot && (
+              <ScopeClip id={phaseClipId} width={PLOT_WIDTH} height={PLOT_HEIGHT} pad={PLOT_PAD}>
+                {traces.map((t, i) => (
+                  <path
+                    key={t.id}
+                    className="scope-trace ref"
+                    stroke={AC_COLORS[i % AC_COLORS.length]}
+                    d={bodeValuePath(t.phaseDeg, success!.freqs, {
+                      min: phaseVp.viewport.yMin,
+                      max: phaseVp.viewport.yMax,
+                      f0: Math.log10(phaseVp.viewport.xMin),
+                      f1: Math.log10(phaseVp.viewport.xMax),
+                    })}
+                  />
+                ))}
+              </ScopeClip>
+            )}
+          </svg>
+          {plot && <ScopeZoomCluster onZoomIn={() => phaseVp.zoomBy(0.7)} onZoomOut={() => phaseVp.zoomBy(1 / 0.7)} onFit={phaseVp.fit} />}
+        </div>
         <div className="scope-legend">
           {traces.length > 0 ? (
             traces.map((t, i) => (
@@ -1979,7 +2209,8 @@ function bodeValuePath(
  * frequency mapping. The ground net (label "GND") is dropped — it is always 0 V.
  */
 export function DcPlot({ result, overlays = [] }: { result: DcSweepResult | null; overlays?: DcSweepNet[] }) {
-  const [svgRef, size] = useMeasuredSize<SVGSVGElement>();
+  const clipId = useId();
+  const [measureRef, size] = useMeasuredSize<SVGSVGElement>();
   const { targetXTicks, targetYTicks } = tickCountsFromSize(size);
   const traces = result?.ok ? result.nets.filter((n) => !n.ground).slice(0, 6) : [];
   const sweep = result?.ok ? result.sweep : [];
@@ -2007,34 +2238,67 @@ export function DcPlot({ result, overlays = [] }: { result: DcSweepResult | null
     return { vMin, vMax, xMin, xMax };
   }, [traces, overlays, sweep]);
 
+  const domain = useMemo<Viewport>(
+    () => ({ xMin: plot ? plot.xMin : 0, xMax: plot ? plot.xMax : 1, yMin: plot ? plot.vMin : -1, yMax: plot ? plot.vMax : 1 }),
+    [plot],
+  );
+  const { viewport, attachSvg, isPanning, fit, zoomBy, dragHandlers } = usePlotViewport({
+    domain,
+    resetKey: plot ? result : null,
+    width: PLOT_WIDTH,
+    height: PLOT_HEIGHT,
+    pad: PLOT_PAD,
+  });
+  const setRefs = useCallback(
+    (el: SVGSVGElement | null) => {
+      measureRef.current = el;
+      attachSvg(el);
+    },
+    [measureRef, attachSvg],
+  );
+
   if (!result) return null;
   if (!result.ok) return <div className="analysis-empty">{result.message}</div>;
+
+  const viewPlot = { vMin: viewport.yMin, vMax: viewport.yMax, xMin: viewport.xMin, xMax: viewport.xMax };
 
   return (
     <>
       <div className="scope-shell">
-        <svg ref={svgRef} className="scope-svg" viewBox={`0 0 ${PLOT_WIDTH} ${PLOT_HEIGHT}`} role="img" aria-label="DC sweep plot">
-          <PlotAxes
-            width={PLOT_WIDTH}
-            height={PLOT_HEIGHT}
-            pad={PLOT_PAD}
-            xMin={plot ? plot.xMin : 0}
-            xMax={plot ? plot.xMax : 1}
-            yMin={plot ? plot.vMin : -1}
-            yMax={plot ? plot.vMax : 1}
-            yUnit="V"
-            targetXTicks={targetXTicks}
-            targetYTicks={targetYTicks}
-          />
-          {plot &&
-            traces.map((net, i) => (
-              <path key={net.id} className="scope-trace" stroke={AC_COLORS[i % AC_COLORS.length]} d={dcPath(net.voltages, sweep, plot)} />
-            ))}
-          {plot &&
-            overlays.map((net, i) => (
-              <path key={net.id} className="scope-trace" stroke={EXPR_COLORS[i % EXPR_COLORS.length]} d={dcPath(net.voltages, sweep, plot)} />
-            ))}
-        </svg>
+        <div className="scope-plot-wrap">
+          <svg
+            ref={setRefs}
+            className={isPanning ? "scope-svg panning" : "scope-svg"}
+            viewBox={`0 0 ${PLOT_WIDTH} ${PLOT_HEIGHT}`}
+            role="img"
+            aria-label="DC sweep plot"
+            {...dragHandlers}
+          >
+            <PlotAxes
+              width={PLOT_WIDTH}
+              height={PLOT_HEIGHT}
+              pad={PLOT_PAD}
+              xMin={viewport.xMin}
+              xMax={viewport.xMax}
+              yMin={viewport.yMin}
+              yMax={viewport.yMax}
+              yUnit="V"
+              targetXTicks={targetXTicks}
+              targetYTicks={targetYTicks}
+            />
+            {plot && (
+              <ScopeClip id={clipId} width={PLOT_WIDTH} height={PLOT_HEIGHT} pad={PLOT_PAD}>
+                {traces.map((net, i) => (
+                  <path key={net.id} className="scope-trace" stroke={AC_COLORS[i % AC_COLORS.length]} d={dcPath(net.voltages, sweep, viewPlot)} />
+                ))}
+                {overlays.map((net, i) => (
+                  <path key={net.id} className="scope-trace" stroke={EXPR_COLORS[i % EXPR_COLORS.length]} d={dcPath(net.voltages, sweep, viewPlot)} />
+                ))}
+              </ScopeClip>
+            )}
+          </svg>
+          {plot && <ScopeZoomCluster onZoomIn={() => zoomBy(0.7)} onZoomOut={() => zoomBy(1 / 0.7)} onFit={fit} />}
+        </div>
         <div className="scope-legend">
           {traces.length > 0 ? (
             traces.map((net, i) => (
@@ -2157,7 +2421,7 @@ export function StepPlot({ result, probes, wires }: { result: StepFamilyResult |
               key={s.label}
               className="scope-trace"
               stroke={STEP_COLORS[i % STEP_COLORS.length]}
-              d={tracePath(s.trace, s.times, family.min, family.max, family.tMax)}
+              d={tracePath(s.trace, s.times, 0, family.tMax, family.min, family.max)}
             />
           ))}
         </svg>
