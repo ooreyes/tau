@@ -929,6 +929,24 @@ body {
   text-anchor: end;
 }
 
+/* Per-tick axis labels (PlotAxes.tsx) — smaller and dimmer than the old
+   corner min/max labels since there are many more of them now; `.mono-num`
+   (applied alongside this class) carries the tabular-nums font. */
+.scope-tick {
+  fill: var(--muted);
+  font-size: 7.5px;
+  font-weight: 500;
+  letter-spacing: 0.1px;
+}
+
+/* Zero-line: same gridline color family but stronger + fully opaque so the
+   reference axis reads at a glance, LTspice-style. */
+.scope-axis-zero {
+  stroke: var(--border-strong);
+  stroke-width: 0.8;
+  opacity: 0.9;
+}
+
 .scope-legend {
   min-height: 22px;
   display: flex;

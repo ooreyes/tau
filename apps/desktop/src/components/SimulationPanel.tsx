@@ -61,6 +61,8 @@ import {
   moveTrace,
   reconcileLayout,
 } from "./plotPanes";
+import { PlotAxes } from "./PlotAxes";
+import { useMeasuredSize, tickCountsFromSize } from "./useMeasuredSize";
 
 interface SimulationPanelProps {
   result: AnalysisResult | null;
@@ -999,7 +1001,7 @@ export function SimulationPanel({
   );
 }
 
-function WaveformPlot({
+export function WaveformPlot({
   result,
   probes,
   wires,
@@ -1116,51 +1118,13 @@ function WaveformPlot({
               </div>
             )}
 
-            <svg
-              className="scope-svg"
-              viewBox={`0 0 ${PLOT_WIDTH} ${PLOT_HEIGHT}`}
-              role="img"
-              aria-label={multiPane ? `Waveform pane ${paneIndex + 1}` : "Waveform plot"}
-            >
-              <g className="scope-grid">
-                {Array.from({ length: 6 }).map((_, i) => {
-                  const x = PLOT_PAD + (i * (PLOT_WIDTH - PLOT_PAD * 2)) / 5;
-                  return <line key={`x${i}`} x1={x} y1={PLOT_PAD} x2={x} y2={PLOT_HEIGHT - PLOT_PAD} />;
-                })}
-                {Array.from({ length: 5 }).map((_, i) => {
-                  const y = PLOT_PAD + (i * (PLOT_HEIGHT - PLOT_PAD * 2)) / 4;
-                  return <line key={`y${i}`} x1={PLOT_PAD} y1={y} x2={PLOT_WIDTH - PLOT_PAD} y2={y} />;
-                })}
-              </g>
-              <rect
-                className="scope-frame"
-                x={PLOT_PAD}
-                y={PLOT_PAD}
-                width={PLOT_WIDTH - PLOT_PAD * 2}
-                height={PLOT_HEIGHT - PLOT_PAD * 2}
-              />
-              {plot &&
-                paneTraces.map((trace) => (
-                  <path
-                    key={trace.id}
-                    className={trace.id.startsWith("ref:") ? "scope-trace ref" : "scope-trace"}
-                    stroke={trace.color}
-                    d={tracePath(trace, success!.times, plot.min, plot.max, plot.tMax)}
-                  />
-                ))}
-              <text className="scope-axis" x={PLOT_PAD} y={18}>
-                {plot ? formatEngineering(plot.max, plot.unit, 2) : "MAX"}
-              </text>
-              <text className="scope-axis" x={PLOT_PAD} y={PLOT_HEIGHT - 8}>
-                {plot ? formatEngineering(plot.min, plot.unit, 2) : "MIN"}
-              </text>
-              {/* Only the bottom pane (or the only pane) shows the time axis label. */}
-              {(paneIndex === paneLayout.length - 1 || !multiPane) && (
-                <text className="scope-axis right" x={PLOT_WIDTH - PLOT_PAD} y={PLOT_HEIGHT - 8}>
-                  {success ? formatEngineering(success.stats.stopTime, "s", 2) : "TIME"}
-                </text>
-              )}
-            </svg>
+            <TranScopePane
+              paneTraces={paneTraces}
+              plot={plot}
+              times={success ? success.times : []}
+              ariaLabel={multiPane ? `Waveform pane ${paneIndex + 1}` : "Waveform plot"}
+              showXAxis={paneIndex === paneLayout.length - 1 || !multiPane}
+            />
 
             {/* Per-pane legend with optional "move to pane" selector. */}
             <div className="scope-legend">
@@ -1183,6 +1147,57 @@ function WaveformPlot({
         );
       })}
     </div>
+  );
+}
+
+/**
+ * One TRAN scope pane's `<svg>`: real tick axes (via {@link PlotAxes}) plus
+ * the trace paths. Split out of {@link WaveformPlot}'s per-pane `.map()` so
+ * each pane can own its own `useMeasuredSize` hook (and, later, its own zoom
+ * viewport) — hooks can't live inside a `.map()` callback in the parent.
+ */
+function TranScopePane({
+  paneTraces,
+  plot,
+  times,
+  ariaLabel,
+  showXAxis,
+}: {
+  paneTraces: Trace[];
+  plot: { min: number; max: number; tMax: number; unit: string } | null;
+  times: number[];
+  ariaLabel: string;
+  showXAxis: boolean;
+}) {
+  const [svgRef, size] = useMeasuredSize<SVGSVGElement>();
+  const { targetXTicks, targetYTicks } = tickCountsFromSize(size);
+  const xMax = plot ? plot.tMax : 1;
+  return (
+    <svg ref={svgRef} className="scope-svg" viewBox={`0 0 ${PLOT_WIDTH} ${PLOT_HEIGHT}`} role="img" aria-label={ariaLabel}>
+      <PlotAxes
+        width={PLOT_WIDTH}
+        height={PLOT_HEIGHT}
+        pad={PLOT_PAD}
+        xMin={0}
+        xMax={xMax}
+        yMin={plot ? plot.min : -1}
+        yMax={plot ? plot.max : 1}
+        xUnit="s"
+        yUnit={plot ? plot.unit : "V"}
+        targetXTicks={targetXTicks}
+        targetYTicks={targetYTicks}
+        showXTicks={showXAxis}
+      />
+      {plot &&
+        paneTraces.map((trace) => (
+          <path
+            key={trace.id}
+            className={trace.id.startsWith("ref:") ? "scope-trace ref" : "scope-trace"}
+            stroke={trace.color}
+            d={tracePath(trace, times, plot.min, plot.max, plot.tMax)}
+          />
+        ))}
+    </svg>
   );
 }
 
@@ -1319,8 +1334,10 @@ function TfTable({ result }: { result: TfResult | null }) {
  * {@link AcPlot}'s log-frequency mapping but maps a single positive density
  * trace through log10 rather than dB.
  */
-function NoisePlot({ result }: { result: NoiseResult | null }) {
+export function NoisePlot({ result }: { result: NoiseResult | null }) {
   const success = result?.ok ? result : null;
+  const [svgRef, size] = useMeasuredSize<SVGSVGElement>();
+  const { targetXTicks, targetYTicks } = tickCountsFromSize(size);
   const plot = useMemo(() => {
     if (!success) return null;
     let lo = Infinity;
@@ -1348,33 +1365,27 @@ function NoisePlot({ result }: { result: NoiseResult | null }) {
   if (!result.ok) return <div className="analysis-empty">{result.message}</div>;
 
   const path = plot ? noisePath(result.onoise, result.freqs, plot) : "";
-  const decadeLabel = (exp: number) => formatEngineering(Math.pow(10, exp), "V/√Hz", 1);
 
   return (
     <>
       <div className="scope-shell">
-        <svg className="scope-svg" viewBox={`0 0 ${PLOT_WIDTH} ${PLOT_HEIGHT}`} role="img" aria-label="Output noise density">
-          <g className="scope-grid">
-            {Array.from({ length: 6 }).map((_, i) => {
-              const x = PLOT_PAD + (i * (PLOT_WIDTH - PLOT_PAD * 2)) / 5;
-              return <line key={`x${i}`} x1={x} y1={PLOT_PAD} x2={x} y2={PLOT_HEIGHT - PLOT_PAD} />;
-            })}
-            {Array.from({ length: 5 }).map((_, i) => {
-              const y = PLOT_PAD + (i * (PLOT_HEIGHT - PLOT_PAD * 2)) / 4;
-              return <line key={`y${i}`} x1={PLOT_PAD} y1={y} x2={PLOT_WIDTH - PLOT_PAD} y2={y} />;
-            })}
-          </g>
-          <rect className="scope-frame" x={PLOT_PAD} y={PLOT_PAD} width={PLOT_WIDTH - PLOT_PAD * 2} height={PLOT_HEIGHT - PLOT_PAD * 2} />
+        <svg ref={svgRef} className="scope-svg" viewBox={`0 0 ${PLOT_WIDTH} ${PLOT_HEIGHT}`} role="img" aria-label="Output noise density">
+          <PlotAxes
+            width={PLOT_WIDTH}
+            height={PLOT_HEIGHT}
+            pad={PLOT_PAD}
+            xMin={plot ? 10 ** plot.f0 : 1}
+            xMax={plot ? 10 ** plot.f1 : 10}
+            yMin={plot ? 10 ** plot.yMin : 1e-9}
+            yMax={plot ? 10 ** plot.yMax : 1e-6}
+            xScale="log"
+            yScale="log"
+            xUnit="Hz"
+            yUnit="V/√Hz"
+            targetXTicks={targetXTicks}
+            targetYTicks={targetYTicks}
+          />
           {path && <path className="scope-trace" stroke="var(--trace-red)" d={path} />}
-          <text className="scope-axis" x={PLOT_PAD} y={18}>
-            {plot ? decadeLabel(plot.yMax) : "V/√Hz"}
-          </text>
-          <text className="scope-axis" x={PLOT_PAD} y={PLOT_HEIGHT - 8}>
-            {plot ? decadeLabel(plot.yMin) : ""}
-          </text>
-          <text className="scope-axis right" x={PLOT_WIDTH - PLOT_PAD} y={PLOT_HEIGHT - 8}>
-            {formatEngineering(result.freqs[result.freqs.length - 1] ?? 0, "Hz", 0)}
-          </text>
         </svg>
         <div className="scope-legend">
           <span>
@@ -1443,13 +1454,15 @@ const REF_COLORS = ["var(--trace-amber)", "var(--trace-purple)", "var(--trace-cr
  * transform only runs when the user opens it. Reuses {@link bodePath} for the
  * log-frequency / dB mapping it shares with the Bode plot.
  */
-function FftView({ result }: { result: AnalysisResult | null }) {
+export function FftView({ result }: { result: AnalysisResult | null }) {
   const [open, setOpen] = useState(false);
   const [signal, setSignal] = useState<string>("");
   const [windowFn, setWindowFn] = useState<WindowFn>("hann");
   const [cursorsOn, setCursorsOn] = useState(false);
   const [cf1, setCf1] = useState(0.25);
   const [cf2, setCf2] = useState(0.75);
+  const [svgRef, size] = useMeasuredSize<SVGSVGElement>();
+  const { targetXTicks, targetYTicks } = tickCountsFromSize(size);
 
   const success = result?.ok ? result : null;
   const signals = useMemo(() => {
@@ -1564,18 +1577,21 @@ function FftView({ result }: { result: AnalysisResult | null }) {
             </Button>
           </div>
           <div className="scope-shell">
-            <svg className="scope-svg" viewBox={`0 0 ${PLOT_WIDTH} ${PLOT_HEIGHT}`} role="img" aria-label="FFT magnitude">
-              <g className="scope-grid">
-                {Array.from({ length: 6 }).map((_, i) => {
-                  const x = PLOT_PAD + (i * (PLOT_WIDTH - PLOT_PAD * 2)) / 5;
-                  return <line key={`x${i}`} x1={x} y1={PLOT_PAD} x2={x} y2={PLOT_HEIGHT - PLOT_PAD} />;
-                })}
-                {Array.from({ length: 5 }).map((_, i) => {
-                  const y = PLOT_PAD + (i * (PLOT_HEIGHT - PLOT_PAD * 2)) / 4;
-                  return <line key={`y${i}`} x1={PLOT_PAD} y1={y} x2={PLOT_WIDTH - PLOT_PAD} y2={y} />;
-                })}
-              </g>
-              <rect className="scope-frame" x={PLOT_PAD} y={PLOT_PAD} width={PLOT_WIDTH - PLOT_PAD * 2} height={PLOT_HEIGHT - PLOT_PAD * 2} />
+            <svg ref={svgRef} className="scope-svg" viewBox={`0 0 ${PLOT_WIDTH} ${PLOT_HEIGHT}`} role="img" aria-label="FFT magnitude">
+              <PlotAxes
+                width={PLOT_WIDTH}
+                height={PLOT_HEIGHT}
+                pad={PLOT_PAD}
+                xMin={plot ? 10 ** plot.f0 : 1}
+                xMax={plot ? 10 ** plot.f1 : 10}
+                yMin={plot ? plot.minDb : -60}
+                yMax={plot ? plot.maxDb : 0}
+                xScale="log"
+                xUnit="Hz"
+                yUnit="dB"
+                targetXTicks={targetXTicks}
+                targetYTicks={targetYTicks}
+              />
               {plot && spectrum && (
                 <path className="scope-trace" stroke={AC_COLORS[0]} d={bodePath(spectrum.magnitudeDb, spectrum.frequencies, plot)} />
               )}
@@ -1590,15 +1606,6 @@ function FftView({ result }: { result: AnalysisResult | null }) {
                     </g>
                   );
                 })}
-              <text className="scope-axis" x={PLOT_PAD} y={18}>
-                {plot ? `${plot.maxDb} dB` : "dB"}
-              </text>
-              <text className="scope-axis" x={PLOT_PAD} y={PLOT_HEIGHT - 8}>
-                {plot ? `${plot.minDb} dB` : ""}
-              </text>
-              <text className="scope-axis right" x={PLOT_WIDTH - PLOT_PAD} y={PLOT_HEIGHT - 8}>
-                {spectrum ? formatEngineering(spectrum.frequencies[spectrum.frequencies.length - 1], "Hz", 0) : "f"}
-              </text>
             </svg>
             <div className="scope-legend">
               {spectrum ? (
@@ -1773,8 +1780,12 @@ function CursorView({ result, extraTraces }: { result: AnalysisResult | null; ex
   );
 }
 
-function AcPlot({ result, overlays = [] }: { result: AcResult | null; overlays?: AcTrace[] }) {
+export function AcPlot({ result, overlays = [] }: { result: AcResult | null; overlays?: AcTrace[] }) {
   const success = result?.ok ? result : null;
+  const [magSvgRef, magSize] = useMeasuredSize<SVGSVGElement>();
+  const [phaseSvgRef, phaseSize] = useMeasuredSize<SVGSVGElement>();
+  const magTicks = tickCountsFromSize(magSize);
+  const phaseTicks = tickCountsFromSize(phaseSize);
   const traces = success ? success.traces.slice(0, 4) : [];
   // Expression overlays share the magnitude axis (their value rides `magDb`).
   const magTraces = success ? [...traces, ...overlays] : [];
@@ -1842,18 +1853,22 @@ function AcPlot({ result, overlays = [] }: { result: AcResult | null; overlays?:
   return (
     <>
       <div className="scope-shell">
-        <svg className="scope-svg" viewBox={`0 0 ${PLOT_WIDTH} ${PLOT_HEIGHT}`} role="img" aria-label="Bode magnitude">
-          <g className="scope-grid">
-            {Array.from({ length: 6 }).map((_, i) => {
-              const x = PLOT_PAD + (i * (PLOT_WIDTH - PLOT_PAD * 2)) / 5;
-              return <line key={`x${i}`} x1={x} y1={PLOT_PAD} x2={x} y2={PLOT_HEIGHT - PLOT_PAD} />;
-            })}
-            {Array.from({ length: 5 }).map((_, i) => {
-              const y = PLOT_PAD + (i * (PLOT_HEIGHT - PLOT_PAD * 2)) / 4;
-              return <line key={`y${i}`} x1={PLOT_PAD} y1={y} x2={PLOT_WIDTH - PLOT_PAD} y2={y} />;
-            })}
-          </g>
-          <rect className="scope-frame" x={PLOT_PAD} y={PLOT_PAD} width={PLOT_WIDTH - PLOT_PAD * 2} height={PLOT_HEIGHT - PLOT_PAD * 2} />
+        <svg ref={magSvgRef} className="scope-svg" viewBox={`0 0 ${PLOT_WIDTH} ${PLOT_HEIGHT}`} role="img" aria-label="Bode magnitude">
+          <PlotAxes
+            width={PLOT_WIDTH}
+            height={PLOT_HEIGHT}
+            pad={PLOT_PAD}
+            xMin={plot ? 10 ** plot.f0 : 1}
+            xMax={plot ? 10 ** plot.f1 : 10}
+            yMin={plot ? plot.minDb : -60}
+            yMax={plot ? plot.maxDb : 0}
+            xScale="log"
+            xUnit="Hz"
+            yUnit="dB"
+            targetXTicks={magTicks.targetXTicks}
+            targetYTicks={magTicks.targetYTicks}
+            showXTicks={false}
+          />
           {plot &&
             traces.map((t, i) => (
               <path key={t.id} className="scope-trace" stroke={AC_COLORS[i % AC_COLORS.length]} d={bodePath(t.magDb, success!.freqs, plot)} />
@@ -1862,28 +1877,22 @@ function AcPlot({ result, overlays = [] }: { result: AcResult | null; overlays?:
             overlays.map((t, i) => (
               <path key={t.id} className="scope-trace" stroke={EXPR_COLORS[i % EXPR_COLORS.length]} d={bodePath(t.magDb, success!.freqs, plot)} />
             ))}
-          <text className="scope-axis" x={PLOT_PAD} y={18}>
-            {plot ? `${plot.maxDb} dB` : "dB"}
-          </text>
-          <text className="scope-axis" x={PLOT_PAD} y={PLOT_HEIGHT - 8}>
-            {plot ? `${plot.minDb} dB` : ""}
-          </text>
-          <text className="scope-axis right" x={PLOT_WIDTH - PLOT_PAD} y={PLOT_HEIGHT - 8}>
-            {success ? formatEngineering(success.freqs[success.freqs.length - 1], "Hz", 0) : "f"}
-          </text>
         </svg>
-        <svg className="scope-svg" viewBox={`0 0 ${PLOT_WIDTH} ${PLOT_HEIGHT}`} role="img" aria-label="Bode phase">
-          <g className="scope-grid">
-            {Array.from({ length: 6 }).map((_, i) => {
-              const x = PLOT_PAD + (i * (PLOT_WIDTH - PLOT_PAD * 2)) / 5;
-              return <line key={`px${i}`} x1={x} y1={PLOT_PAD} x2={x} y2={PLOT_HEIGHT - PLOT_PAD} />;
-            })}
-            {Array.from({ length: 5 }).map((_, i) => {
-              const y = PLOT_PAD + (i * (PLOT_HEIGHT - PLOT_PAD * 2)) / 4;
-              return <line key={`py${i}`} x1={PLOT_PAD} y1={y} x2={PLOT_WIDTH - PLOT_PAD} y2={y} />;
-            })}
-          </g>
-          <rect className="scope-frame" x={PLOT_PAD} y={PLOT_PAD} width={PLOT_WIDTH - PLOT_PAD * 2} height={PLOT_HEIGHT - PLOT_PAD * 2} />
+        <svg ref={phaseSvgRef} className="scope-svg" viewBox={`0 0 ${PLOT_WIDTH} ${PLOT_HEIGHT}`} role="img" aria-label="Bode phase">
+          <PlotAxes
+            width={PLOT_WIDTH}
+            height={PLOT_HEIGHT}
+            pad={PLOT_PAD}
+            xMin={plot ? 10 ** plot.f0 : 1}
+            xMax={plot ? 10 ** plot.f1 : 10}
+            yMin={plot ? plot.minPh : -180}
+            yMax={plot ? plot.maxPh : 180}
+            xScale="log"
+            xUnit="Hz"
+            yUnit="°"
+            targetXTicks={phaseTicks.targetXTicks}
+            targetYTicks={phaseTicks.targetYTicks}
+          />
           {plot &&
             traces.map((t, i) => (
               <path
@@ -1893,15 +1902,6 @@ function AcPlot({ result, overlays = [] }: { result: AcResult | null; overlays?:
                 d={bodeValuePath(t.phaseDeg, success!.freqs, { min: plot.minPh, max: plot.maxPh, f0: plot.f0, f1: plot.f1 })}
               />
             ))}
-          <text className="scope-axis" x={PLOT_PAD} y={18}>
-            {plot ? `${plot.maxPh}°` : "phase"}
-          </text>
-          <text className="scope-axis" x={PLOT_PAD} y={PLOT_HEIGHT - 8}>
-            {plot ? `${plot.minPh}°` : ""}
-          </text>
-          <text className="scope-axis right" x={PLOT_WIDTH - PLOT_PAD} y={PLOT_HEIGHT - 8}>
-            {success ? formatEngineering(success.freqs[success.freqs.length - 1], "Hz", 0) : "f"}
-          </text>
         </svg>
         <div className="scope-legend">
           {traces.length > 0 ? (
@@ -1978,7 +1978,9 @@ function bodeValuePath(
  * node's voltage on a linear Y axis. Mirrors {@link AcPlot} but without the log
  * frequency mapping. The ground net (label "GND") is dropped — it is always 0 V.
  */
-function DcPlot({ result, overlays = [] }: { result: DcSweepResult | null; overlays?: DcSweepNet[] }) {
+export function DcPlot({ result, overlays = [] }: { result: DcSweepResult | null; overlays?: DcSweepNet[] }) {
+  const [svgRef, size] = useMeasuredSize<SVGSVGElement>();
+  const { targetXTicks, targetYTicks } = tickCountsFromSize(size);
   const traces = result?.ok ? result.nets.filter((n) => !n.ground).slice(0, 6) : [];
   const sweep = result?.ok ? result.sweep : [];
   // Expression overlays share the voltage axis with the swept node curves.
@@ -2011,18 +2013,19 @@ function DcPlot({ result, overlays = [] }: { result: DcSweepResult | null; overl
   return (
     <>
       <div className="scope-shell">
-        <svg className="scope-svg" viewBox={`0 0 ${PLOT_WIDTH} ${PLOT_HEIGHT}`} role="img" aria-label="DC sweep plot">
-          <g className="scope-grid">
-            {Array.from({ length: 6 }).map((_, i) => {
-              const x = PLOT_PAD + (i * (PLOT_WIDTH - PLOT_PAD * 2)) / 5;
-              return <line key={`x${i}`} x1={x} y1={PLOT_PAD} x2={x} y2={PLOT_HEIGHT - PLOT_PAD} />;
-            })}
-            {Array.from({ length: 5 }).map((_, i) => {
-              const y = PLOT_PAD + (i * (PLOT_HEIGHT - PLOT_PAD * 2)) / 4;
-              return <line key={`y${i}`} x1={PLOT_PAD} y1={y} x2={PLOT_WIDTH - PLOT_PAD} y2={y} />;
-            })}
-          </g>
-          <rect className="scope-frame" x={PLOT_PAD} y={PLOT_PAD} width={PLOT_WIDTH - PLOT_PAD * 2} height={PLOT_HEIGHT - PLOT_PAD * 2} />
+        <svg ref={svgRef} className="scope-svg" viewBox={`0 0 ${PLOT_WIDTH} ${PLOT_HEIGHT}`} role="img" aria-label="DC sweep plot">
+          <PlotAxes
+            width={PLOT_WIDTH}
+            height={PLOT_HEIGHT}
+            pad={PLOT_PAD}
+            xMin={plot ? plot.xMin : 0}
+            xMax={plot ? plot.xMax : 1}
+            yMin={plot ? plot.vMin : -1}
+            yMax={plot ? plot.vMax : 1}
+            yUnit="V"
+            targetXTicks={targetXTicks}
+            targetYTicks={targetYTicks}
+          />
           {plot &&
             traces.map((net, i) => (
               <path key={net.id} className="scope-trace" stroke={AC_COLORS[i % AC_COLORS.length]} d={dcPath(net.voltages, sweep, plot)} />
@@ -2031,15 +2034,6 @@ function DcPlot({ result, overlays = [] }: { result: DcSweepResult | null; overl
             overlays.map((net, i) => (
               <path key={net.id} className="scope-trace" stroke={EXPR_COLORS[i % EXPR_COLORS.length]} d={dcPath(net.voltages, sweep, plot)} />
             ))}
-          <text className="scope-axis" x={PLOT_PAD} y={18}>
-            {plot ? formatEngineering(plot.vMax, "V", 2) : "MAX"}
-          </text>
-          <text className="scope-axis" x={PLOT_PAD} y={PLOT_HEIGHT - 8}>
-            {plot ? formatEngineering(plot.vMin, "V", 2) : "MIN"}
-          </text>
-          <text className="scope-axis right" x={PLOT_WIDTH - PLOT_PAD} y={PLOT_HEIGHT - 8}>
-            {plot ? `${result.source} ${formatEngineering(plot.xMax, "", 2)}` : result.source}
-          </text>
         </svg>
         <div className="scope-legend">
           {traces.length > 0 ? (
@@ -2110,7 +2104,9 @@ const STEP_COLORS = [
  * family-of-curves). The plotted signal follows the probe (first probed net),
  * falling back to the first trace, matching the transient scope.
  */
-function StepPlot({ result, probes, wires }: { result: StepFamilyResult | null; probes: Probe[]; wires: SchematicWire[] }) {
+export function StepPlot({ result, probes, wires }: { result: StepFamilyResult | null; probes: Probe[]; wires: SchematicWire[] }) {
+  const [svgRef, size] = useMeasuredSize<SVGSVGElement>();
+  const { targetXTicks, targetYTicks } = tickCountsFromSize(size);
   // Members whose run succeeded, paired with the chosen trace for each.
   const family = useMemo(() => {
     if (!result?.ok) return null;
@@ -2142,18 +2138,20 @@ function StepPlot({ result, probes, wires }: { result: StepFamilyResult | null; 
   return (
     <>
       <div className="scope-shell">
-        <svg className="scope-svg" viewBox={`0 0 ${PLOT_WIDTH} ${PLOT_HEIGHT}`} role="img" aria-label="Step family plot">
-          <g className="scope-grid">
-            {Array.from({ length: 6 }).map((_, i) => {
-              const x = PLOT_PAD + (i * (PLOT_WIDTH - PLOT_PAD * 2)) / 5;
-              return <line key={`x${i}`} x1={x} y1={PLOT_PAD} x2={x} y2={PLOT_HEIGHT - PLOT_PAD} />;
-            })}
-            {Array.from({ length: 5 }).map((_, i) => {
-              const y = PLOT_PAD + (i * (PLOT_HEIGHT - PLOT_PAD * 2)) / 4;
-              return <line key={`y${i}`} x1={PLOT_PAD} y1={y} x2={PLOT_WIDTH - PLOT_PAD} y2={y} />;
-            })}
-          </g>
-          <rect className="scope-frame" x={PLOT_PAD} y={PLOT_PAD} width={PLOT_WIDTH - PLOT_PAD * 2} height={PLOT_HEIGHT - PLOT_PAD * 2} />
+        <svg ref={svgRef} className="scope-svg" viewBox={`0 0 ${PLOT_WIDTH} ${PLOT_HEIGHT}`} role="img" aria-label="Step family plot">
+          <PlotAxes
+            width={PLOT_WIDTH}
+            height={PLOT_HEIGHT}
+            pad={PLOT_PAD}
+            xMin={0}
+            xMax={family.tMax}
+            yMin={family.min}
+            yMax={family.max}
+            xUnit="s"
+            yUnit="V"
+            targetXTicks={targetXTicks}
+            targetYTicks={targetYTicks}
+          />
           {family.series.map((s, i) => (
             <path
               key={s.label}
@@ -2162,15 +2160,6 @@ function StepPlot({ result, probes, wires }: { result: StepFamilyResult | null; 
               d={tracePath(s.trace, s.times, family.min, family.max, family.tMax)}
             />
           ))}
-          <text className="scope-axis" x={PLOT_PAD} y={18}>
-            {formatEngineering(family.max, "V", 2)}
-          </text>
-          <text className="scope-axis" x={PLOT_PAD} y={PLOT_HEIGHT - 8}>
-            {formatEngineering(family.min, "V", 2)}
-          </text>
-          <text className="scope-axis right" x={PLOT_WIDTH - PLOT_PAD} y={PLOT_HEIGHT - 8}>
-            {formatEngineering(family.tMax, "s", 2)}
-          </text>
         </svg>
         <div className="scope-legend">
           {family.series.map((s, i) => (
@@ -2212,7 +2201,9 @@ function pickFamilyTraceId(
  * the signal chosen by {@link acFamilyOverlaySeries}, on its own log-f/dB axes
  * autoranged over the whole family (snapped to 10 dB like the main Bode plot).
  */
-function AcFamilyPlot({ family }: { family: AnalysisFamily<AcResult> | null }) {
+export function AcFamilyPlot({ family }: { family: AnalysisFamily<AcResult> | null }) {
+  const [svgRef, size] = useMeasuredSize<SVGSVGElement>();
+  const { targetXTicks, targetYTicks } = tickCountsFromSize(size);
   const overlay = useMemo(() => acFamilyOverlaySeries(family), [family]);
   const plot = useMemo(() => {
     if (!overlay) return null;
@@ -2257,18 +2248,21 @@ function AcFamilyPlot({ family }: { family: AnalysisFamily<AcResult> | null }) {
   return (
     <>
       <div className="scope-shell">
-        <svg className="scope-svg" viewBox={`0 0 ${PLOT_WIDTH} ${PLOT_HEIGHT}`} role="img" aria-label="AC step family plot">
-          <g className="scope-grid">
-            {Array.from({ length: 6 }).map((_, i) => {
-              const x = PLOT_PAD + (i * (PLOT_WIDTH - PLOT_PAD * 2)) / 5;
-              return <line key={`x${i}`} x1={x} y1={PLOT_PAD} x2={x} y2={PLOT_HEIGHT - PLOT_PAD} />;
-            })}
-            {Array.from({ length: 5 }).map((_, i) => {
-              const y = PLOT_PAD + (i * (PLOT_HEIGHT - PLOT_PAD * 2)) / 4;
-              return <line key={`y${i}`} x1={PLOT_PAD} y1={y} x2={PLOT_WIDTH - PLOT_PAD} y2={y} />;
-            })}
-          </g>
-          <rect className="scope-frame" x={PLOT_PAD} y={PLOT_PAD} width={PLOT_WIDTH - PLOT_PAD * 2} height={PLOT_HEIGHT - PLOT_PAD * 2} />
+        <svg ref={svgRef} className="scope-svg" viewBox={`0 0 ${PLOT_WIDTH} ${PLOT_HEIGHT}`} role="img" aria-label="AC step family plot">
+          <PlotAxes
+            width={PLOT_WIDTH}
+            height={PLOT_HEIGHT}
+            pad={PLOT_PAD}
+            xMin={10 ** plot.f0}
+            xMax={10 ** plot.f1}
+            yMin={plot.min}
+            yMax={plot.max}
+            xScale="log"
+            xUnit="Hz"
+            yUnit="dB"
+            targetXTicks={targetXTicks}
+            targetYTicks={targetYTicks}
+          />
           {overlay.series.map((s, i) => (
             <path
               key={s.label}
@@ -2277,15 +2271,6 @@ function AcFamilyPlot({ family }: { family: AnalysisFamily<AcResult> | null }) {
               d={bodeValuePath(s.magDb, s.freqs, plot)}
             />
           ))}
-          <text className="scope-axis" x={PLOT_PAD} y={18}>
-            {plot.max} dB
-          </text>
-          <text className="scope-axis" x={PLOT_PAD} y={PLOT_HEIGHT - 8}>
-            {plot.min} dB
-          </text>
-          <text className="scope-axis right" x={PLOT_WIDTH - PLOT_PAD} y={PLOT_HEIGHT - 8}>
-            {formatEngineering(10 ** plot.f1, "Hz", 0)}
-          </text>
         </svg>
         <div className="scope-legend">
           {overlay.series.map((s, i) => (
@@ -2310,7 +2295,9 @@ function AcFamilyPlot({ family }: { family: AnalysisFamily<AcResult> | null }) {
  * value of the net chosen by {@link dcFamilyOverlaySeries}, on its own linear
  * sweep/volts axes autoranged over the whole family.
  */
-function DcFamilyPlot({ family }: { family: AnalysisFamily<DcSweepResult> | null }) {
+export function DcFamilyPlot({ family }: { family: AnalysisFamily<DcSweepResult> | null }) {
+  const [svgRef, size] = useMeasuredSize<SVGSVGElement>();
+  const { targetXTicks, targetYTicks } = tickCountsFromSize(size);
   const overlay = useMemo(() => dcFamilyOverlaySeries(family), [family]);
   const plot = useMemo(() => {
     if (!overlay) return null;
@@ -2351,18 +2338,19 @@ function DcFamilyPlot({ family }: { family: AnalysisFamily<DcSweepResult> | null
   return (
     <>
       <div className="scope-shell">
-        <svg className="scope-svg" viewBox={`0 0 ${PLOT_WIDTH} ${PLOT_HEIGHT}`} role="img" aria-label="DC step family plot">
-          <g className="scope-grid">
-            {Array.from({ length: 6 }).map((_, i) => {
-              const x = PLOT_PAD + (i * (PLOT_WIDTH - PLOT_PAD * 2)) / 5;
-              return <line key={`x${i}`} x1={x} y1={PLOT_PAD} x2={x} y2={PLOT_HEIGHT - PLOT_PAD} />;
-            })}
-            {Array.from({ length: 5 }).map((_, i) => {
-              const y = PLOT_PAD + (i * (PLOT_HEIGHT - PLOT_PAD * 2)) / 4;
-              return <line key={`y${i}`} x1={PLOT_PAD} y1={y} x2={PLOT_WIDTH - PLOT_PAD} y2={y} />;
-            })}
-          </g>
-          <rect className="scope-frame" x={PLOT_PAD} y={PLOT_PAD} width={PLOT_WIDTH - PLOT_PAD * 2} height={PLOT_HEIGHT - PLOT_PAD * 2} />
+        <svg ref={svgRef} className="scope-svg" viewBox={`0 0 ${PLOT_WIDTH} ${PLOT_HEIGHT}`} role="img" aria-label="DC step family plot">
+          <PlotAxes
+            width={PLOT_WIDTH}
+            height={PLOT_HEIGHT}
+            pad={PLOT_PAD}
+            xMin={plot.xMin}
+            xMax={plot.xMax}
+            yMin={plot.vMin}
+            yMax={plot.vMax}
+            yUnit="V"
+            targetXTicks={targetXTicks}
+            targetYTicks={targetYTicks}
+          />
           {overlay.series.map((s, i) => (
             <path
               key={s.label}
@@ -2371,15 +2359,6 @@ function DcFamilyPlot({ family }: { family: AnalysisFamily<DcSweepResult> | null
               d={dcPath(s.voltages, s.sweep, plot)}
             />
           ))}
-          <text className="scope-axis" x={PLOT_PAD} y={18}>
-            {formatEngineering(plot.vMax, "V", 2)}
-          </text>
-          <text className="scope-axis" x={PLOT_PAD} y={PLOT_HEIGHT - 8}>
-            {formatEngineering(plot.vMin, "V", 2)}
-          </text>
-          <text className="scope-axis right" x={PLOT_WIDTH - PLOT_PAD} y={PLOT_HEIGHT - 8}>
-            {formatEngineering(plot.xMax, "", 2)}
-          </text>
         </svg>
         <div className="scope-legend">
           {overlay.series.map((s, i) => (

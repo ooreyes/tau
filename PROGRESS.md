@@ -8,12 +8,17 @@
      `git log --oneline -8`, recover/finish/revert that unit FIRST, then go on.
      ─────────────────────────────────────────────────────────────────────── -->
 ## ⏱ HEARTBEAT
-- **Headline metric:** 1300 tests green (default suite, +41 from this unit)
+- **Headline metric:** 1338 tests green (default suite, +38 from this unit)
   + 5 corpus specs · corpus runner: 82 imported / **79 warning-clean** /
   **82 deck-built (ALL)** / **82 op-converged (ALL)** — floors 82/79/82/82
   · App.css hardcoded-color burndown: **0 hex outside the single `:root`** ✅
-- **Run started (UTC):** 2026-07-08T19:09Z
-- **Status: DONE** — UX-correctness unit (owner feedback: the app "lacks
+- **Run started (UTC):** 2026-07-08T19:43Z
+- **Status: IN PROGRESS** — Unit B, §UX scope axes + zoom (owner feedback:
+  "the table is completely devoid of x/y labels…LTspice makes it
+  significantly easier to zoom into plots…Desmos: auto-center, and x/y axis
+  remain persistent"). Commit 1 (real tick axes, all plot contexts) landed;
+  commit 2 (Desmos-style zoom/pan) in progress — see the dated log entry below.
+- **Prior unit (DONE):** UX-correctness unit (owner feedback: the app "lacks
   intuitiveness a real LTspice company would have"), three one-commit-each
   interaction fixes, all landed. See the dated log entry below for full
   root-cause writeups; summary:
@@ -42,6 +47,71 @@
   for file/test/commit-hash detail per commit.
 
 ---
+
+## 2026-07-08T19:43Z — auto/ltspice-parity — §UX Unit B: scope real axes + Desmos-style zoom/pan
+
+### Why
+Owner feedback (verbatim intent): "The table is completely devoid of x/y
+labels and makes it incredibly difficult to see. LTspice makes it
+significantly easier to zoom into plots and zoom out. Almost like Desmos:
+auto-center, and x/y axis remain persistent." The scope had only 3 corner
+text labels (y-max, y-min, x-end) and a fixed unlabeled 6×5 grid across
+every plot context (TRAN, AC mag/phase, DC sweep, FFT, noise, step
+families) — no tick values, no units on most labels, no zoom, no pan.
+
+### Commit 1 — `auto: scope axes — nice-number ticks, SI labels, all plot contexts (§UX)`
+- **New pure module** `simulation/axisTicks.ts`: `niceTicks` (Heckbert
+  1/2/5×10^n step algorithm), `logTicks` (decade ticks, with 1/2/5
+  sub-decade marks for spans under ~2 decades and integer-stride thinning
+  for spans over the target tick count), `valueToFraction`/`fractionToValue`
+  (linear + log axis position mapping), `formatTickLabel` (reuses
+  `formatEngineering` from `simulation/quantity.ts` for SI-prefixed units;
+  dB/°/% are never SI-scaled), `computeAxisTicks` (the one-stop tick+label+
+  zero-flag list), `pickTickCount` (collision-avoidance from a measured
+  pixel size). 33 unit tests: tiny (sub-nV) and huge (multi-GV) ranges,
+  negative/zero-span/zero-crossing domains, reversed domains, log
+  single-decade/multi-decade/many-decade spans, NaN/degenerate inputs.
+- **New shared component** `components/PlotAxes.tsx`: renders gridlines AT
+  the actual tick positions (replacing the old fixed 6×5 grid), tick-value
+  text along both edges (`.mono-num`, `--muted`), a stronger zero-line
+  (`--border-strong`) when zero is in range, and the frame rect — one
+  authority instead of 8 copy-pasted grid+label blocks.
+- **New hook** `components/useMeasuredSize.ts` (`ResizeObserver`-backed,
+  SSR/test-safe) + `tickCountsFromSize` — shrinks the target tick count as a
+  plot pane's *rendered* pixel size shrinks (multi-pane splits, the app's
+  900×600 minimum window), so labels never collide at small sizes.
+- **Wired into all 8 plot render sites**: TRAN (`WaveformPlot`, extracted a
+  `TranScopePane` subcomponent so each pane in multi-pane mode can own its
+  own `useMeasuredSize` — hooks can't live inside a `.map()`), AC magnitude +
+  phase (`AcPlot`, log-Hz x shared visually — phase pane shows the x labels,
+  magnitude pane suppresses them since they're stacked halves of one Bode
+  plot), DC sweep (`DcPlot`), FFT (`FftView`, cursor pixel math untouched),
+  noise density (`NoisePlot`, log-log: both axes log-scaled), and the three
+  `.step` family plots (`StepPlot`, `AcFamilyPlot`, `DcFamilyPlot`).
+  `WaveformPlot`/`AcPlot`/`DcPlot`/`NoisePlot`/`FftView`/`StepPlot`/
+  `AcFamilyPlot`/`DcFamilyPlot` are now exported (were file-private) purely
+  for component testability.
+- **New component tests** `components/SimulationPanel.axes.test.tsx` (5
+  tests): mounts `WaveformPlot` (single + multi-pane), `AcPlot`, `DcPlot`,
+  `NoisePlot` with synthetic-but-valid results and asserts real unit-bearing
+  tick labels render (not just the old corner min/max), and that the
+  zero-line class appears when 0 is in range.
+- No simulation math or trace data touched — only the axis/grid chrome.
+  Cursors, export, and legends are unaffected (spot-checked FFT cursor
+  pixel math, still domain-driven).
+- **Tests:** 1300 → 1338 (33 `axisTicks.test.ts` + 5 `SimulationPanel.axes.test.tsx`).
+  Gates green: `pnpm -C apps/desktop typecheck`, `pnpm -C apps/desktop test`.
+- **Screenshot proof:** `node scripts/design-shot.mjs unitB-scope-axes` →
+  `screenshots/unitB-scope-axes/simulator-{1440x900,1280x720,900x600}.png`
+  show labelled ticks on both axes (e.g. "0V 2V 4V" / "0s 2ms 4ms 6ms") at
+  every viewport including the 900×600 minimum, no collisions. Also
+  hand-verified (throwaway Playwright script, not committed) that AC
+  magnitude/phase, DC sweep, and multi-pane TRAN all render correct
+  per-context tick labels once the analysis has real data.
+- **Commit:** (hash filled in below after commit)
+
+### Commit 2 — `auto: scope zoom/pan — cursor-anchored wheel zoom, drag pan, auto-fit (§UX)`
+(see below once landed)
 
 ## 2026-07-08T19:09Z — auto/ltspice-parity — §UX: 3-commit interaction-bug unit (edit lock, probe dedup, comparator label/inspector)
 

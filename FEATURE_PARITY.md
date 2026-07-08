@@ -934,6 +934,18 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   snap to a swept point; `null` when the loop never crosses. The AC meter row now
   shows **PM** and **GM** (red when negative = unstable). Hand-verified incl. a
   geometric-mean log-space crossover and a negative-PM unstable case.
+- ✅ **Real tick axes on every plot context** (§UX Unit B, owner feedback: "the
+  table is completely devoid of x/y labels") — new pure `simulation/axisTicks.ts`
+  (nice-number 1/2/5×10^n ticks, log-decade ticks, SI-prefixed unit labels
+  reusing `formatEngineering`, 33 tests) rendered via a shared
+  `components/PlotAxes.tsx` (gridlines AT tick positions, stronger zero-line,
+  tick count shrinks with measured pixel size so labels never collide down to
+  the 900×600 minimum window). Wired into all 8 plot render sites — TRAN
+  (incl. multi-pane, one `useMeasuredSize` per pane), AC mag+phase, DC sweep,
+  FFT, noise density, and the three `.step` family plots. 5 component tests
+  (`SimulationPanel.axes.test.tsx`). **Desmos-style zoom/pan** (cursor-anchored
+  wheel zoom, drag pan, auto-fit ⌂) — see `simulation/plotViewport.ts` — lands
+  in the same unit's second commit.
 - 🟡 `.step` family-of-curves overlay — **transient + AC + DC families landed**.
   Transient: `StepPlot` in `SimulationPanel` (the **STEP** tab re-runs the sweep
   and draws the probed signal across all members in a color ramp; legend lists
