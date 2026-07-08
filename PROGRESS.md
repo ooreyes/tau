@@ -8,11 +8,55 @@
      `git log --oneline -8`, recover/finish/revert that unit FIRST, then go on.
      ─────────────────────────────────────────────────────────────────────── -->
 ## ⏱ HEARTBEAT
-- **Headline metric:** 1258 tests green (default suite) + 5 corpus specs
+- **Headline metric:** 1259 tests green (default suite) + 5 corpus specs
   · corpus runner: 82 imported / **79 warning-clean** / **82 deck-built (ALL)**
   / **82 op-converged (ALL)** — floors 82/79/82/82
   · App.css hardcoded-color burndown: **0 hex outside the single `:root`** ✅
-- **Run started (UTC):** 2026-07-08T16:38Z
+- **Run started (UTC):** 2026-07-08T17:05Z
+- **Status: DONE** — §10 Phase 3d unit A: dialogs + sheets on the ui/ `Dialog`
+  primitive (`apps/desktop/src/components/ShellPanels.tsx`'s `SettingsPanel`
+  + `ConfirmDialog`). A new `ui/sheet.tsx` primitive lands (`Sheet`,
+  `SheetContent`, `SheetHeader`, `SheetTitle`, `SheetDescription`) — a
+  right-anchored slide-in variant of `ui/dialog.tsx`'s Radix `Dialog` (same
+  focus trap / Escape / outside-click / true-black-popover / `--elev-pop`
+  hairline-ring recipe) with real slide-from-edge motion instead of
+  Dialog's scale-pop (`tau-slide-in/out-right` keyframes + `--animate-slide-
+  in/out-right`, `tokens.css`) — the settings sheet's existing top-right,
+  fit-content-height position is now driven by the primitive, not a bespoke
+  `.settings-backdrop`/`.settings-panel` pair. `SettingsPanel` rows are dense
+  hairline rows (`.settings-row`: micro-label + one-line hint on the left,
+  a real ui/ `Button` action on the right, `border-bottom` hairline instead
+  of the old individually-bordered card-button-per-row look) — replacing 4
+  giant `<button>` rows that were the entire clickable row with 4 rows whose
+  ONLY interactive element is the actual `Button` (Command palette → Open,
+  Meter probes → Clear, Local autosave → Clear, Document → destructive `New
+  blank`). `ConfirmDialog` moved onto `ui/dialog.tsx`'s `Dialog` outright
+  (no new primitive needed — it was always a centered alert, which is
+  exactly what Dialog already is): manual `onPointerDown`/`onKeyDown`
+  Escape-handling deleted (Radix's focus trap + Escape + outside-click
+  replace it for free), the "autoFocus Cancel not Confirm so a stray Enter
+  can't fire the destructive action" behavior preserved via `onOpenAutoFocus`
+  + a `data-autofocus` query (Radix focuses its own Content by default;
+  the old bare `autoFocus` JSX prop wouldn't have survived the migration
+  reliably) and Cancel/Confirm are now real `Button` `outline`/`destructive`
+  variants instead of a hand-rolled `.danger` class. Net `App.css`: the old
+  `.settings-backdrop`/`.settings-panel`/`.settings-list`/`.confirm-backdrop`/
+  `.confirm-dialog`/`.confirm-actions` rule families (⁓210 lines) are gone —
+  `.confirm-dialog`/`.confirm-actions` survive only as identity-marker
+  classNames (every visual property now comes from the primitives) and a
+  small new `.settings-row`/`.settings-sheet-kicker` block replaces them.
+  Added a `Sheet` smoke test to `ui/primitives.test.tsx` (renders open,
+  forwards `className`, close button carries the caller's `closeLabel`) —
+  1259/1259 green (was 1258). Screenshot-verified: `node scripts/design-
+  shot.mjs phase3d-chrome`'s `dialog-*.png` at 1440×900/1280×720/900×600 —
+  the settings sheet visibly differs from `screenshots/phase3c-simulator-
+  fix/dialog-*.png` (dense hairline rows with real buttons vs. card-button
+  rows), the pipeline's own `.settings-panel[role="dialog"]` open/detached
+  wait and `button[aria-label="Close settings"]` click still pass unmodified
+  (Radix's `DialogPrimitive.Content` sets `role="dialog"` itself). No
+  hardcoded colors introduced (`git diff` grepped for hex/rgba outside
+  `var(--...)`, zero hits). Gates: typecheck clean, 1259/1259 tests green.
+  → Phase 3d unit B (status bar, rail, command palette, empty/error states).
 - **Status: DONE** — §10 Phase 3c: instrument scope chrome — analysis tabs,
   header run bar, and secondary controls in `SimulationPanel.tsx`
   (`apps/desktop/src/components/SimulationPanel.tsx` + the SIMULATION PANEL

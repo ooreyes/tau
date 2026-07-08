@@ -74,6 +74,13 @@
   --animate-fade-out: tau-fade-out var(--motion-fast) var(--spring) both;
   --animate-pop-in:   tau-pop-in var(--motion-fast) var(--spring) both;
   --animate-pop-out:  tau-pop-out var(--motion-fast) var(--spring) both;
+  /* Corner-sheet motion (ui/sheet.tsx's Settings sheet) — a slide-from-edge
+   * variant of pop-in/out for a panel that's anchored to the window's edge
+   * instead of centered, so it should arrive FROM that edge, not scale from
+   * its own center. `--motion-med` (not `-fast`): a sheet travels further
+   * than a small popover, so it reads as a deliberate slide, not a flicker. */
+  --animate-slide-in-right:  tau-slide-in-right var(--motion-med) var(--spring) both;
+  --animate-slide-out-right: tau-slide-out-right var(--motion-fast) var(--spring) both;
 }
 
 @keyframes tau-fade-in {
@@ -91,6 +98,14 @@
 @keyframes tau-pop-out {
   from { opacity: 1; transform: scale(1) translateY(0); }
   to   { opacity: 0; transform: scale(0.96) translateY(2px); }
+}
+@keyframes tau-slide-in-right {
+  from { opacity: 0; transform: translateX(18px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes tau-slide-out-right {
+  from { opacity: 1; transform: translateX(0); }
+  to   { opacity: 0; transform: translateX(18px); }
 }
 
 /* The `base` layer stays empty for now. Preflight's border reset

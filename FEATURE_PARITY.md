@@ -1185,7 +1185,15 @@ never a broken intermediate state on the branch.
   FFT signal/window `<select>`s and the op-amp model `<select>` (native,
   not yet ui/ `Select`); native range sliders keep their existing styling
   per the brief. →
-  dialogs (Open/Save/settings) → empty/error states → status bar.
+  **dialogs ✅ (2026-07-08, Phase 3d unit A):** `SettingsPanel` migrated onto
+  a new `ui/sheet.tsx` (Radix `Dialog`-based right-anchored slide-in sheet,
+  same true-black-popover/hairline-ring/`--elev-pop` recipe as `ui/dialog.tsx`
+  with slide-from-edge motion) with dense hairline settings rows (micro-label
+  + hint + real `Button` action, not a card-per-row); `ConfirmDialog` moved
+  onto `ui/dialog.tsx`'s `Dialog` directly (manual Escape/focus-trap code
+  deleted, Cancel/Confirm are real `Button` `outline`/`destructive`
+  variants). ⁓210 lines of `.settings-*`/`.confirm-*` CSS deleted. →
+  empty/error states → status bar → rail → command palette.
 - ⬜ **The schematic canvas keeps its bespoke SVG rendering** (it is the
   product's soul) — only its chrome (zoom controls, hover cards, net-label
   editor popover) adopts the system. Pan/zoom must stay 60fps after migration.

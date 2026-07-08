@@ -9,6 +9,8 @@ import { schematicToAsc } from "../io/ascExport";
 import { parseCir } from "../io/cirImport";
 import { EngineeringInput } from "./EngineeringInput";
 import { Button } from "@/components/ui/button";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
+import { Dialog, DialogContent, DialogHeader, DialogFooter, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { useSchematic, type SchematicDocument } from "../store/useSchematic";
 import { EXAMPLE_CIRCUITS, type ExampleCircuit } from "../examples/circuits";
 import type { AnalysisResult } from "../simulation/linearTransient";
@@ -827,48 +829,58 @@ export function SettingsPanel({
   };
 
   return (
-    <div
-      className="settings-backdrop"
-      onPointerDown={onClose}
-      onKeyDown={(e) => { if (e.key === "Escape") { e.stopPropagation(); onClose(); } }}
-    >
-      <section className="settings-panel" role="dialog" aria-label="Tau settings" onPointerDown={(event) => event.stopPropagation()}>
-        <header>
-          <div>
-            <span>settings</span>
-            <strong>{title}</strong>
-          </div>
-          <button aria-label="Close settings" onClick={onClose}>×</button>
-        </header>
+    <Sheet open onOpenChange={(next) => { if (!next) onClose(); }}>
+      <SheetContent className="settings-panel" closeLabel="Close settings">
+        <SheetHeader>
+          <span className="settings-sheet-kicker">Settings</span>
+          <SheetTitle>{title}</SheetTitle>
+          <SheetDescription className="sr-only">Workspace and document settings for this scratchpad.</SheetDescription>
+        </SheetHeader>
         <div className="settings-list">
-          <button onClick={onOpenCommandPalette}>
-            <span>Command palette</span>
-            <strong>Open</strong>
-          </button>
-          <button
-            onClick={() => {
-              clearProbes();
-              onNotice(probes.length > 0 ? "Cleared all probes." : "No probes to clear.");
-            }}
-          >
-            <span>Meter probes</span>
-            <strong>Clear {probes.length}</strong>
-          </button>
-          <button onClick={clearAutosave}>
-            <span>Local autosave</span>
-            <strong>Clear</strong>
-          </button>
-          <button
-            onClick={() => {
-              onNewCircuit();
-              onClose();
-            }}
-          >
-            <span>Document</span>
-            <strong>New blank</strong>
-          </button>
+          <SettingsRow label="Command palette" hint="⌘K · F2 · / — search & place parts">
+            <Button size="sm" variant="outline" onClick={onOpenCommandPalette}>Open</Button>
+          </SettingsRow>
+          <SettingsRow label="Meter probes" hint={`${probes.length} placed on this schematic`}>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                clearProbes();
+                onNotice(probes.length > 0 ? "Cleared all probes." : "No probes to clear.");
+              }}
+            >
+              Clear
+            </Button>
+          </SettingsRow>
+          <SettingsRow label="Local autosave" hint="browser localStorage snapshot">
+            <Button size="sm" variant="outline" onClick={clearAutosave}>Clear</Button>
+          </SettingsRow>
+          <SettingsRow label="Document" hint="discard this scratchpad, start blank">
+            <Button
+              size="sm"
+              variant="destructive"
+              onClick={() => {
+                onNewCircuit();
+                onClose();
+              }}
+            >
+              New blank
+            </Button>
+          </SettingsRow>
         </div>
-      </section>
+      </SheetContent>
+    </Sheet>
+  );
+}
+
+function SettingsRow({ label, hint, children }: { label: string; hint: string; children: ReactNode }) {
+  return (
+    <div className="settings-row">
+      <div className="settings-row-copy">
+        <span className="settings-row-label">{label}</span>
+        <span className="settings-row-hint">{hint}</span>
+      </div>
+      {children}
     </div>
   );
 }
@@ -921,31 +933,26 @@ export function ConfirmDialog({
   onCancel: () => void;
 }) {
   return (
-    <div
-      className="confirm-backdrop"
-      role="presentation"
-      onPointerDown={onCancel}
-      onKeyDown={(e) => { if (e.key === "Escape") { e.stopPropagation(); onCancel(); } }}
-    >
-      <section
-        className="confirm-dialog"
+    <Dialog open onOpenChange={(next) => { if (!next) onCancel(); }}>
+      <DialogContent
         role="alertdialog"
-        aria-modal="true"
-        aria-labelledby="confirm-title"
-        aria-describedby="confirm-body"
-        onPointerDown={(event) => event.stopPropagation()}
+        className="confirm-dialog"
+        // Focus Cancel, not Confirm, on open so a stray Enter can't fire the
+        // destructive action — Radix otherwise focuses the content itself.
+        onOpenAutoFocus={(event) => {
+          event.preventDefault();
+          (event.currentTarget as HTMLElement).querySelector<HTMLButtonElement>("[data-autofocus]")?.focus();
+        }}
       >
-        <header>
-          <strong id="confirm-title">{title}</strong>
-          <button aria-label="Cancel" onClick={onCancel}>×</button>
-        </header>
-        <p id="confirm-body">{body}</p>
-        <div className="confirm-actions">
-          {/* autoFocus on Cancel (not Confirm) so Enter doesn't accidentally confirm. */}
-          <button autoFocus onClick={onCancel}>Cancel</button>
-          <button className="danger" onClick={onConfirm}>{confirmLabel}</button>
-        </div>
-      </section>
-    </div>
+        <DialogHeader>
+          <DialogTitle>{title}</DialogTitle>
+        </DialogHeader>
+        <DialogDescription className="confirm-dialog-body">{body}</DialogDescription>
+        <DialogFooter className="confirm-actions">
+          <Button data-autofocus variant="outline" onClick={onCancel}>Cancel</Button>
+          <Button variant="destructive" onClick={onConfirm}>{confirmLabel}</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

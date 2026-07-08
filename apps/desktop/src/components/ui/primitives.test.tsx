@@ -8,6 +8,7 @@ import { Separator } from "./separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./tabs";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./tooltip";
 import { Dialog, DialogContent, DialogTitle } from "./dialog";
+import { Sheet, SheetContent, SheetTitle } from "./sheet";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "./dropdown-menu";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./select";
 import { ScrollArea } from "./scroll-area";
@@ -112,6 +113,21 @@ describe("Dialog", () => {
     );
     expect(screen.getByText("Settings")).toBeTruthy();
     expect(document.querySelector('[data-slot="dialog-content"]')?.className).toContain("extra-class");
+  });
+});
+
+describe("Sheet", () => {
+  it("renders content when open and forwards className", () => {
+    render(
+      <Sheet open>
+        <SheetContent className="extra-class" closeLabel="Close settings">
+          <SheetTitle>Settings</SheetTitle>
+        </SheetContent>
+      </Sheet>,
+    );
+    expect(screen.getByText("Settings")).toBeTruthy();
+    expect(document.querySelector('[data-slot="sheet-content"]')?.className).toContain("extra-class");
+    expect(screen.getByRole("button", { name: "Close settings" })).toBeTruthy();
   });
 });
 

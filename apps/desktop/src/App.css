@@ -3986,105 +3986,61 @@ body {
   color: var(--muted);
 }
 
-.settings-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 80;
-  display: flex;
-  justify-content: flex-end;
-  background: var(--scrim);
-}
-
-.settings-panel {
-  width: min(360px, calc(100vw - 24px));
-  height: fit-content;
-  margin: 48px 12px 0 0;
-  border: 1px solid var(--border-strong);
-  border-radius: 10px;
-  background: var(--panel-2);
-  box-shadow: var(--elev-pop);
-  color: var(--text);
-}
-
-.settings-panel header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 14px;
-  border-bottom: 1px solid var(--border);
-}
-
-.settings-panel header span {
-  display: block;
-  color: var(--muted);
-  font: 700 10px var(--font-mono);
-  letter-spacing: 0.16em;
+/* Settings sheet body (ui/sheet.tsx supplies the panel chrome — true-black
+   popover surface, hairline ring, --elev-pop, slide-in motion; these rules
+   are only the settings-specific dense row content). */
+.settings-sheet-kicker {
+  color: var(--faint);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
 }
 
-.settings-panel header strong {
-  display: block;
-  margin-top: 3px;
-  color: var(--cream);
-  font-size: 14px;
-}
-
-.settings-panel header button {
-  width: 28px;
-  height: 28px;
-  border: 1px solid var(--border-strong);
-  border-radius: 7px;
-  color: var(--text);
-  background: var(--panel-3);
-  cursor: pointer;
-  transition: border-color var(--motion-fast) var(--spring),
-    background var(--motion-fast) var(--spring);
-}
-
-.settings-panel header button:active {
-  background: var(--overlay-hover);
-}
-
-.settings-list button:focus-visible,
-.settings-panel header button:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent-line);
-}
-
 .settings-list {
-  display: grid;
-  gap: 8px;
-  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  padding: 4px 0;
 }
 
-.settings-list button {
+/* Dense hairline row: a micro-label + one-line hint on the left, the real
+   ui/Button action on the right — the same "spec-sheet row" language as
+   .property-field, not a stack of card-styled buttons. */
+.settings-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  width: 100%;
-  padding: 11px 12px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  color: var(--text);
-  background: var(--overlay-hover-faint);
-  cursor: pointer;
-  font: 600 12px var(--font-ui);
-  text-align: left;
-  transition: border-color var(--motion-fast) var(--spring),
-    background var(--motion-fast) var(--spring);
+  gap: var(--sp-3);
+  min-height: 44px;
+  padding: 0 var(--sp-4);
+  border-bottom: 1px solid var(--border);
 }
 
-.settings-list button:hover,
-.settings-panel header button:hover {
-  border-color: var(--accent-line);
-  background: var(--accent-soft);
+.settings-row:last-child {
+  border-bottom: none;
 }
 
-.settings-list strong {
-  color: var(--accent);
-  font: 700 11px var(--font-mono);
+.settings-row-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.settings-row-label {
+  color: var(--faint);
+  font: 600 9.5px var(--font-mono);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.settings-row-hint {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .minimized-panel-dock {
@@ -4139,133 +4095,10 @@ body {
   transform: translateY(-1px);
 }
 
-.confirm-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 110;
-  display: grid;
-  place-items: center;
-  background: var(--scrim-strong);
-}
-
-.confirm-dialog {
-  width: min(430px, calc(100vw - 32px));
-  overflow: hidden;
-  border: 1px solid var(--border-strong);
-  border-radius: 12px;
-  background: var(--panel);
-  color: var(--text);
-  box-shadow: var(--elev-pop);
-}
-
-.confirm-dialog header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 14px 16px;
-  border-bottom: 1px solid var(--border);
-}
-
-.confirm-dialog header strong {
-  color: var(--cream);
-  font-size: 15px;
-}
-
-.confirm-dialog header button {
-  width: 28px;
-  height: 28px;
-  border: 1px solid var(--border-strong);
-  border-radius: 7px;
-  color: var(--muted);
-  background: var(--panel-3);
-  cursor: pointer;
-  transition: color var(--motion-fast) var(--spring),
-    border-color var(--motion-fast) var(--spring),
-    background var(--motion-fast) var(--spring);
-}
-
-.confirm-dialog header button:hover {
-  color: var(--text);
-  border-color: var(--border-strong);
-  background: var(--overlay-hover);
-}
-
-.confirm-dialog header button:active {
-  background: var(--overlay-hover-faint);
-}
-
-.confirm-dialog header button:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent-line);
-}
-
-.confirm-dialog p {
-  margin: 0;
-  padding: 16px;
-  color: var(--muted);
-  font-size: 13px;
-  line-height: 1.55;
-}
-
-.confirm-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-  padding: 0 16px 16px;
-}
-
-.confirm-actions button {
-  height: 32px;
-  padding: 0 13px;
-  border: 1px solid var(--border-strong);
-  border-radius: 8px;
-  color: var(--text);
-  background: var(--panel-3);
-  cursor: pointer;
-  font: 700 12px var(--font-ui);
-  transition: transform var(--motion-fast) var(--spring),
-    border-color var(--motion-fast) var(--spring),
-    background var(--motion-fast) var(--spring),
-    box-shadow var(--motion-fast) var(--spring);
-}
-
-.confirm-actions button:hover {
-  border-color: var(--border-strong);
-  background: var(--panel-4);
-  transform: translateY(-1px);
-  box-shadow: var(--elev-1);
-}
-
-.confirm-actions button:active {
-  transform: translateY(0);
-  box-shadow: none;
-  background: var(--panel-3);
-}
-
-.confirm-actions button:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent-line);
-}
-
-.confirm-actions .danger {
-  border-color: var(--danger-line);
-  color: var(--danger);
-  background: var(--danger-soft);
-}
-
-.confirm-actions .danger:hover {
-  border-color: var(--danger);
-  background: color-mix(in srgb, var(--danger) 22%, transparent);
-}
-
-.confirm-actions .danger:active {
-  background: var(--danger-soft);
-}
-
-.confirm-actions .danger:focus-visible {
-  box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--danger-line);
-}
+/* .confirm-dialog / .confirm-actions are now identity markers only — every
+   visual property (true-black popover, hairline ring, --elev-pop, --scrim-
+   strong backdrop, pop-in motion, Cancel/destructive-Confirm buttons) comes
+   from ui/dialog.tsx + ui/button.tsx (§10). */
 
 .shell-toast {
   position: fixed;
