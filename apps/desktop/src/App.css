@@ -972,9 +972,14 @@ body {
   border-color: var(--accent);
 }
 
-/* Expression-trace bar (transient scope) */
+/* Expression-trace bar (transient scope). Wraps at narrow panel widths so the
+   export button row (Export CSV/Netlist/Save .raw/Ref .raw…) flows onto a
+   second line instead of squeezing the expression input to nothing — the
+   input keeps a real usable minimum width (see `.expr-bar` Input's
+   `min-w-40` in SimulationPanel.tsx) rather than shrinking past legibility. */
 .expr-bar {
   display: flex;
+  flex-wrap: wrap;
   gap: 6px;
   padding: 4px 0 2px;
 }

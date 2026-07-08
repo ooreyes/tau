@@ -100,6 +100,18 @@
   single `:root`, zero hits — the one pre-existing `"#000"` literal in
   `addExpression`'s placeholder-probe-color argument predates this run and
   is analysis logic, not chrome).
+  **Addendum (2026-07-08, same-day fix, commit after `e5048ef`):** a review
+  caught that the "zero clipped controls" claim above was wrong — the TRAN/
+  AC/DC "Plot an expression…" `Input` (`flex-1` + Tailwind `min-w-0`) really
+  did collapse to ~20px ("Pl") at 1440×900 once the five export buttons ate
+  the narrow center column's width; it was equally cramped before Phase 3c
+  but the old plain `<input>` never had literal `min-w-0`, so the failure
+  mode is new even though the squeeze isn't. Fixed by giving all three
+  expression inputs a real `min-w-40` (160px) floor and letting `.expr-bar`
+  wrap (`flex-wrap: wrap`) so Save .raw/Ref .raw flow to a second line
+  instead of starving the input. Screenshot-reverified at all three
+  viewports (`phase3c-simulator-fix`) — placeholder now fully legible,
+  same RC-charging trace, gates still green.
 - **Next step:** continue the §10 panel-migration checklist — dialogs
   (Open/Save/settings) and empty/error states are next per FEATURE_PARITY
   §10, followed by the status bar and the global type/spacing sweep.

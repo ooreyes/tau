@@ -558,7 +558,7 @@ export function SimulationPanel({
             <Input
               variant="mono"
               size="sm"
-              className="flex-1"
+              className="flex-1 min-w-40"
               type="text"
               value={exprInput}
               placeholder="Plot an expression, e.g. V(out)-V(in) or V(out)*I(R1)"
@@ -719,7 +719,7 @@ export function SimulationPanel({
             <Input
               variant="mono"
               size="sm"
-              className="flex-1"
+              className="flex-1 min-w-40"
               type="text"
               value={acExprInput}
               placeholder="Plot an expression, e.g. db(V(out))-db(V(in)) or mag(V(a,b))"
@@ -773,7 +773,7 @@ export function SimulationPanel({
             <Input
               variant="mono"
               size="sm"
-              className="flex-1"
+              className="flex-1 min-w-40"
               type="text"
               value={dcExprInput}
               placeholder="Plot an expression, e.g. V(out)-V(in) or V(a)/V(b)"
