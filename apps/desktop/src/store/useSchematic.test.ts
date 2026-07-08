@@ -736,6 +736,71 @@ describe("moveGroup (group move with wire rubber-banding)", () => {
   });
 });
 
+describe("addProbe — one probe per net, net-identity dedup (§UX)", () => {
+  it("adds a probe when a net has none", () => {
+    useSchematic.setState({ wires: [{ id: "w1", points: [{ x: 0, y: 0 }, { x: 64, y: 0 }] }] });
+    useSchematic.getState().addProbe(32, 0);
+    expect(useSchematic.getState().probes).toHaveLength(1);
+    expect(useSchematic.getState().probes[0]).toMatchObject({ x: 32, y: 0 });
+  });
+
+  it("removes the probe when the SAME point is clicked again (toggle off)", () => {
+    useSchematic.setState({ wires: [{ id: "w1", points: [{ x: 0, y: 0 }, { x: 64, y: 0 }] }] });
+    useSchematic.getState().addProbe(32, 0);
+    useSchematic.getState().addProbe(32, 0);
+    expect(useSchematic.getState().probes).toHaveLength(0);
+  });
+
+  it("moves (does not duplicate) the probe when a DIFFERENT point on the same net is clicked", () => {
+    // An L-shaped wire: (32, 0) and (64, 32) are two different points on the
+    // one net. Clicking a net that already has a probe relocates the marker
+    // instead of stacking a second ring — a net carries at most one probe.
+    useSchematic.setState({
+      wires: [{ id: "w1", points: [{ x: 0, y: 0 }, { x: 64, y: 0 }, { x: 64, y: 64 }] }],
+    });
+    useSchematic.getState().addProbe(32, 0);
+    const firstId = useSchematic.getState().probes[0].id;
+    useSchematic.getState().addProbe(64, 32);
+    const probes = useSchematic.getState().probes;
+    expect(probes).toHaveLength(1);
+    expect(probes[0].id).toBe(firstId); // same probe, relocated — not a new one
+    expect(probes[0]).toMatchObject({ x: 64, y: 32 });
+  });
+
+  it("does nothing when clicking a component BODY (no pin/wire under the cursor)", () => {
+    // Owner feedback: "probing an opamp makes no sense". The opamp's own
+    // (x, y) is its body center — none of its pins sit there — so a probe
+    // click must not attach a probe at a point that isn't on any net.
+    useSchematic.setState({
+      components: [{ id: "u1", kind: "opamp", x: 0, y: 0, rotation: 0, value: "ideal", label: "U1" }],
+    });
+    useSchematic.getState().addProbe(0, 0);
+    expect(useSchematic.getState().probes).toHaveLength(0);
+  });
+
+  it("still probes an isolated pin with no wire attached (a valid, if unconnected, net)", () => {
+    useSchematic.setState({
+      components: [{ id: "u1", kind: "opamp", x: 0, y: 0, rotation: 0, value: "ideal", label: "U1" }],
+    });
+    useSchematic.getState().addProbe(-32, 16); // opamp's "in+" pin
+    expect(useSchematic.getState().probes).toHaveLength(1);
+  });
+
+  it("does nothing when clicking empty canvas (no net at all)", () => {
+    useSchematic.getState().addProbe(500, 500);
+    expect(useSchematic.getState().probes).toHaveLength(0);
+  });
+
+  it("keeps current-probe (component) dedup independent of net-probe dedup", () => {
+    useSchematic.setState({
+      components: [{ id: "r-1", kind: "resistor", x: 96, y: 0, rotation: 0, value: "1k", label: "R1" }],
+    });
+    useSchematic.getState().toggleCurrentProbe("r-1");
+    useSchematic.getState().toggleCurrentProbe("r-1");
+    expect(useSchematic.getState().probes).toHaveLength(0); // still toggles independently
+  });
+});
+
 describe("toggleCurrentProbe (clamp-meter)", () => {
   const withParts = () => {
     useSchematic.setState({
@@ -743,6 +808,10 @@ describe("toggleCurrentProbe (clamp-meter)", () => {
         { id: "r-1", kind: "resistor", x: 96, y: 0, rotation: 0, value: "1k", label: "R1" },
         { id: "gnd-1", kind: "ground", x: 0, y: 64, rotation: 0, value: "", label: "" },
       ],
+      // Wire across R1's pins so (96, 0) — R1's own body position, where its
+      // current probe sits — also resolves to a net (mid-segment) for the
+      // "coincident net probe" test below; addProbe now requires a net.
+      wires: [{ id: "w-1", points: [{ x: 64, y: 0 }, { x: 128, y: 0 }] }],
     });
   };
 

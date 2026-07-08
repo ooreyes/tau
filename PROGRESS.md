@@ -8,7 +8,7 @@
      `git log --oneline -8`, recover/finish/revert that unit FIRST, then go on.
      ─────────────────────────────────────────────────────────────────────── -->
 ## ⏱ HEARTBEAT
-- **Headline metric:** 1285 tests green (default suite, +26 from this unit so
+- **Headline metric:** 1292 tests green (default suite, +33 from this unit so
   far) + 5 corpus specs · corpus runner: 82 imported / **79 warning-clean** /
   **82 deck-built (ALL)** / **82 op-converged (ALL)** — floors 82/79/82/82
   · App.css hardcoded-color burndown: **0 hex outside the single `:root`** ✅
@@ -22,10 +22,13 @@
      (ShellPanels.tsx) renders unconditionally regardless of `mode` — its
      Wire/Label/Undo/Redo/Clear-scratchpad buttons were live and clickable
      while viewing the simulator, with Undo/Redo/Clear able to mutate/wipe
-     the document with zero canvas interaction at all. See dated entry below
-     for the full writeup.
-  2. ⏳ Probe dedup by net identity, no body probing — next.
-  3. ⏳ Comparator/opamp value label + inspector param fields — after (2).
+     the document with zero canvas interaction at all.
+  2. ✅ **Probe dedup by net identity**: `addProbe` deduped on exact
+     position; now resolves through `netAtPoint` so a net carries at most
+     one voltage probe (toggle off on the same point, move on a different
+     point), and clicking a component body (no pin/wire under the cursor)
+     is a no-op — "probing an opamp makes no sense."
+  3. ⏳ Comparator/opamp value label + inspector param fields — next.
 - Not pushed yet (orchestrator reviews per-commit); see dated log entries for
   file/test/commit-hash detail as each lands.
 

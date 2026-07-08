@@ -804,6 +804,19 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   follows the component, status-bar hint advertises both gestures.
   Live-verified via Playwright: click V1 → scope shows only I(V1) (−5.3 mA→0
   charging decay), second click restores the default traces.
+  **One probe per net (§UX, dedup by net identity, not exact position)**:
+  `addProbe` previously deduped on exact `x===x && y===y`, but wire clicks
+  snap to varying midpoints, so re-probing the same net from a different
+  point stacked a second probe ring on it. Now resolves both the click and
+  every existing voltage probe through `netAtPoint` (the same net-identity
+  authority §6's plot-open→click-wire→trace path already uses) and keeps at
+  most one voltage probe per net: same point again removes it (toggle off),
+  a different point on the same net **moves** the marker there instead of
+  duplicating. Clicking off any net — empty canvas or a component **body**
+  with no pin/wire under the cursor — is a no-op ("probing an opamp makes no
+  sense," per owner feedback); an isolated pin with no wire still probes
+  (a valid, if unconnected, net). Current/clamp probes are unaffected — they
+  already dedup per component in `toggleCurrentProbe`. 7 new store tests.
 - 🟡 **Plot arbitrary expressions** (`V(a)-V(b)`, `I(R1)*V(out)`, power `V(out)*I(out)`)
   — **landed** (`simulation/plotExpression.ts`): an expression bar under the
   transient scope evaluates any expression of the simulated signals at every

@@ -12,6 +12,7 @@ import type {
 } from "../schematic/types";
 import { CATALOG_BY_KIND } from "../schematic/catalog";
 import { validateSchematicDocument } from "../schematic/documentValidation";
+import { extractCircuit, netAtPoint } from "../schematic/netlist";
 
 /** The undoable document slice. Everything else in the store is ephemeral UI. */
 interface Doc {
@@ -418,10 +419,34 @@ export const useSchematic = create<SchematicState>()((set) => {
       }),
 
     startProbing: () => set({ tool: { mode: "probe" }, selectedId: null, selectedWireId: null }),
+    // A net carries AT MOST ONE voltage probe (current/clamp probes dedup
+    // separately, per component, in toggleCurrentProbe below). Resolve the
+    // click through the same net-identity authority the netlist extractor
+    // and the waveform viewer use (`netAtPoint`) rather than exact-position
+    // matching — wire clicks snap to varying midpoints, so two clicks on the
+    // same net rarely land on the same pixel. Semantics: clicking a net with
+    // no probe adds one; clicking the SAME point again removes it (toggle
+    // off); clicking a DIFFERENT point on a net that already has a probe
+    // MOVES the probe there instead of stacking a second ring on one net.
+    // Clicking off any net (empty canvas, a component body with no pin/wire
+    // under the cursor) is a no-op — probes only attach to nets/wires/pins,
+    // so "probing an opamp" body does nothing.
     addProbe: (x, y) =>
       set((s) => {
-        const existing = s.probes.find((p) => !p.componentId && p.x === x && p.y === y);
-        if (existing) return { ...recordInto(s), probes: s.probes.filter((p) => p.id !== existing.id) };
+        const nets = extractCircuit(s.components, s.wires, s.netLabels).nets;
+        const clickedNet = netAtPoint(nets, s.wires, { x, y });
+        if (!clickedNet) return s;
+        const netOfProbe = (p: Probe) => netAtPoint(nets, s.wires, { x: p.x, y: p.y });
+        const existing = s.probes.find((p) => !p.componentId && netOfProbe(p)?.id === clickedNet.id);
+        if (existing) {
+          if (existing.x === x && existing.y === y) {
+            return { ...recordInto(s), probes: s.probes.filter((p) => p.id !== existing.id) };
+          }
+          return {
+            ...recordInto(s),
+            probes: s.probes.map((p) => (p.id === existing.id ? { ...p, x, y } : p)),
+          };
+        }
         const color = PROBE_COLORS[s.probes.length % PROBE_COLORS.length];
         return { ...recordInto(s), probes: [...s.probes, { id: nanoid(6), x, y, color }] };
       }),
