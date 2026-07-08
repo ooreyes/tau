@@ -54,6 +54,7 @@
   --danger:       #ff453a;
   --danger-soft:  rgba(255, 69, 58, 0.13);
   --danger-line:  rgba(255, 69, 58, 0.30);   /* danger hairline for error borders */
+  --danger-glow:  rgba(255, 69, 58, 0.32);   /* danger halo for the error lamp */
   --success:      #32d74b;                    /* == --trace-green (ready/ok state) */
   --success-soft: rgba(50, 215, 75, 0.12);
   --success-line: rgba(50, 215, 75, 0.34);   /* success hairline for ready borders */
@@ -168,102 +169,14 @@ body {
 /* NOTE: the live `.app` layout is the single-column VS Code shell defined in the
    DESIGN HANDOFF MIGRATION block below (~L2540); the legacy 3-column grid that
    used to live here was fully shadowed by it (every property re-set) and is
-   removed. Other legacy selectors in this section are NOT safe to bulk-delete —
-   several leak un-overridden properties (e.g. .toolbar's backdrop-filter,
-   .brand's flex-shrink) past their migration counterparts. Dedup at the
-   property level, never by ripping out the whole legacy half. */
-
-/* ══════════════════════════════════════════════════════════════════════════════
-   TOOLBAR
-══════════════════════════════════════════════════════════════════════════════ */
-.toolbar {
-  grid-area: toolbar;
-  display: flex;
-  align-items: center;
-  gap: var(--sp-3);
-  padding: 0 var(--sp-3) 0 14px;
-  background: rgba(15, 17, 22, 0.86);
-  border-bottom: 1px solid var(--border);
-  backdrop-filter: blur(20px) saturate(1.25);
-  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.025) inset;
-}
-
-.brand {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-shrink: 0;
-  padding-right: 4px;
-}
-
-.brand-mark {
-  font-size: 20px;
-  font-weight: 700;
-  color: var(--accent);
-  line-height: 1;
-  letter-spacing: -0.5px;
-  /* no glow — let the color speak */
-}
-
-.brand-name {
-  font-size: 14px;
-  font-weight: 600;
-  letter-spacing: -0.2px;
-  color: var(--text);
-}
-
-.brand-sub {
-  font-size: 11px;
-  color: var(--faint);
-  font-weight: 400;
-  letter-spacing: 0.1px;
-}
-
-.toolbar-spacer {
-  flex: 1;
-}
-
-/* Toolbar button groups */
-.toolbar-group {
-  display: flex;
-  align-items: center;
-  gap: 3px;
-  padding-left: var(--sp-3);
-  margin-left: 2px;
-  border-left: 1px solid var(--border);
-}
-
-/* Icon buttons (undo/redo) */
-.tool-btn {
-  width: 27px;
-  height: 27px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 14px;
-  line-height: 1;
-  color: var(--muted);
-  background: var(--panel-2);
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  cursor: pointer;
-  transition: color 140ms var(--ease-out), background 140ms var(--ease-out), border-color 140ms var(--ease-out);
-}
-
-.tool-btn:hover:not(:disabled) {
-  color: var(--text);
-  background: var(--panel-4);
-  border-color: var(--border-strong);
-}
-
-.tool-btn:active:not(:disabled) {
-  transform: scale(0.95);
-}
-
-.tool-btn:disabled {
-  opacity: 0.22;
-  cursor: not-allowed;
-}
+   removed. The legacy top-bar rules that used to live here (`.toolbar`,
+   `.brand`, `.brand-mark`, `.brand-name`, `.brand-sub`, `.toolbar-spacer`,
+   `.toolbar-group`, `.tool-btn`) were §10-Phase-3a'd: the two properties that
+   leaked past their migration counterparts (`.toolbar`'s `backdrop-filter`,
+   `.brand`'s `flex-shrink`) are now folded directly into the live rules in the
+   DESIGN HANDOFF MIGRATION block, and the fully-shadowed/fully-dead legacy
+   rules are deleted outright. Other legacy selectors past this point are
+   still NOT safe to bulk-delete without the same per-property audit. */
 
 /* Text buttons (New / Open / Save) */
 /* The Examples/Open dropdown. (The old `.text-btn` toolbar buttons migrated to
@@ -320,41 +233,6 @@ body {
   min-width: 128px;
   padding: 0 8px;
   color: var(--muted);
-}
-
-/* Run button */
-.run-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 0 14px;
-  height: 28px;
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: -0.1px;
-  color: var(--accent-ink);
-  background: var(--accent);
-  border: none;
-  border-radius: var(--r-sm);
-  cursor: pointer;
-  transition: opacity 140ms var(--ease-out);
-}
-
-.run-btn:hover:not(:disabled) {
-  opacity: 0.88;
-}
-
-.run-btn:disabled {
-  opacity: 0.35;
-  cursor: not-allowed;
-}
-
-.version-tag {
-  font-size: 10px;
-  font-weight: 500;
-  color: var(--faint);
-  letter-spacing: 0.2px;
-  flex-shrink: 0;
 }
 
 /* ══════════════════════════════════════════════════════════════════════════════
@@ -2599,16 +2477,23 @@ body {
   background: var(--canvas-bg);
 }
 
-/* title bar */
+/* ══════════════════════════════════════════════════════════════════════════════
+   TOOLBAR — operator console title bar (§10 Phase 3a)
+   Flat --panel surface (one notch off true black), a single bottom hairline,
+   4pt-rhythm contents. Mono instrument readouts + a real indicator lamp
+   (green=ok, amber=running, red=error, off=idle) replace the old plain-text
+   status pill; the segmented mode toggle drops its embossed-pill look for a
+   crisp hairline-bordered track, matching the flat Braun/OP-1 reference.
+══════════════════════════════════════════════════════════════════════════════ */
 .toolbar {
   grid-area: toolbar;
   height: 40px;
   display: grid;
   grid-template-columns: minmax(260px, 1fr) auto minmax(260px, 1fr);
   align-items: center;
-  gap: 14px;
-  padding: 0 14px;
-  background: var(--panel-2);
+  gap: var(--sp-4);
+  padding: 0 var(--sp-3);
+  background: var(--panel);
   border-bottom: 1px solid var(--border);
   -webkit-app-region: drag;
   box-shadow: none;
@@ -2622,19 +2507,23 @@ body {
 }
 
 .titlebar-left {
-  gap: 14px;
+  gap: var(--sp-4);
 }
 
 .titlebar-right {
   justify-content: flex-end;
-  gap: 10px;
+  gap: var(--sp-3);
 }
 
+/* leaked from the legacy pre-migration `.brand` (see the Root layout NOTE
+   above) — keeps the brand cluster from being squeezed by the mode toggle
+   at the 900px minimum width. */
 .brand {
   min-width: 0;
   display: flex;
   align-items: baseline;
-  gap: 9px;
+  gap: var(--sp-2);
+  flex-shrink: 0;
   padding: 0;
   -webkit-app-region: no-drag;
 }
@@ -2656,48 +2545,57 @@ body {
   text-transform: lowercase;
 }
 
+/* Instrument-label filename readout — monospace + tabular figures via
+   `.mono-num` (applied in Toolbar.tsx); this rule only carries what
+   `.mono-num` doesn't (color, size, tracking, truncation). Case is left
+   alone (real filenames, not app-authored copy — forcing a transform would
+   misrepresent a user's actual file on disk). */
 .brand-file {
   min-width: 0;
   color: var(--faint);
-  font: 500 11px var(--font-mono), SFMono-Regular, Menlo, monospace;
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
+/* Segmented mode control — a crisp hairline track on --panel-3 (one step
+   below the bar's own --panel so the track still reads as a component, not
+   a color-block), flat (no inset groove, no permanent glow on the active
+   segment — glows are reserved for the status lamp's functional states). */
 .mode-toggle {
   display: flex;
   align-items: center;
-  gap: 3px;
-  padding: 4px;
-  border: 1px solid var(--border-strong);
-  border-radius: 11px;
+  height: var(--row-h);
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
   background: var(--panel-3);
-  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.45);
   -webkit-app-region: no-drag;
 }
 
 .mode-btn {
-  height: 28px;
+  height: 100%;
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 0 18px;
+  gap: var(--sp-2);
+  padding: 0 var(--sp-4);
   border: 0;
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   background: transparent;
   color: var(--muted);
-  font: 600 12.5px var(--font-ui);
+  font: 600 12px var(--font-ui);
   cursor: pointer;
   transition: background var(--motion-fast) var(--spring),
     color var(--motion-fast) var(--spring),
-    box-shadow var(--motion-fast) var(--spring),
     transform var(--motion-fast) var(--spring);
 }
 
 .mode-btn svg {
-  width: 14px;
-  height: 14px;
+  width: 13px;
+  height: 13px;
   fill: none;
   stroke: currentColor;
   stroke-width: 1.5;
@@ -2711,11 +2609,9 @@ body {
 .mode-btn:not(.active):hover {
   color: var(--text);
   background: var(--overlay-hover);
-  transform: translateY(-0.5px);
 }
 
 .mode-btn:not(.active):active {
-  transform: translateY(0);
   background: var(--overlay-hover-faint);
 }
 
@@ -2727,32 +2623,87 @@ body {
 .mode-btn.active {
   background: var(--accent);
   color: var(--accent-ink);
-  box-shadow: 0 1px 8px var(--accent-glow), var(--elev-1);
 }
 
 .mode-btn.active:focus-visible {
-  box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent), 0 1px 8px var(--accent-glow);
+  box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent);
 }
 
-.live-pill {
+/* Status lamp — a real OP-1-style transport indicator, not a decorative dot.
+   Color is entirely state-driven (idle=off, running=amber, ok=green,
+   error=red, warn=amber-static for a stale/invalidated result) so the lamp
+   alone communicates run state at a glance. Label is a tracked, uppercase
+   mono instrument caption (app-authored copy, safe to transform). */
+.status-lamp {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  color: var(--accent);
-  font: 500 11px var(--font-mono);
+  gap: var(--sp-2);
   white-space: nowrap;
 }
 
-.live-pill.sim {
-  color: var(--trace-green);
+.status-lamp-text {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--muted);
 }
 
-.live-pill i {
+.status-lamp-dot {
   width: 6px;
   height: 6px;
+  flex: none;
   border-radius: 50%;
-  background: currentColor;
-  box-shadow: 0 0 7px currentColor;
+  background: var(--faint);
+  box-shadow: none;
+  transition: background var(--motion-med) var(--ease-out),
+    box-shadow var(--motion-med) var(--ease-out);
+}
+
+.status-lamp--idle .status-lamp-dot {
+  background: var(--faint);
+}
+
+.status-lamp--running .status-lamp-text {
+  color: var(--signal);
+}
+
+.status-lamp--running .status-lamp-dot {
+  background: var(--signal);
+  box-shadow: 0 0 6px var(--signal-glow);
+  animation: status-lamp-pulse 1.1s var(--ease-in-out, ease-in-out) infinite;
+}
+
+.status-lamp--ok .status-lamp-text {
+  color: var(--success);
+}
+
+.status-lamp--ok .status-lamp-dot {
+  background: var(--success);
+  box-shadow: 0 0 6px var(--success-glow);
+}
+
+.status-lamp--error .status-lamp-text {
+  color: var(--danger);
+}
+
+.status-lamp--error .status-lamp-dot {
+  background: var(--danger);
+  box-shadow: 0 0 6px var(--danger-glow);
+}
+
+.status-lamp--warn .status-lamp-text {
+  color: var(--signal);
+}
+
+.status-lamp--warn .status-lamp-dot {
+  background: var(--signal);
+  box-shadow: 0 0 4px var(--signal-line);
+}
+
+@keyframes status-lamp-pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.4; }
 }
 
 /* activity rail + explorer */

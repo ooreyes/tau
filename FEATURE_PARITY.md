@@ -1079,7 +1079,33 @@ never a broken intermediate state on the branch.
   whole topbar CSS block tokenized — hardcoded `#d68a3c`/`#efe9d6`/`#71ab7e`
   etc. now route through `--accent`/`--cream`/`--trace-green` so the runtime
   theme switcher re-themes it; dead `.title-run`/`.settings-btn` rules
-  deleted; 1440×900 screenshot-verified) → part palette ✅ (2026-07-06: the
+  deleted; 1440×900 screenshot-verified) → **toolbar/topbar + mode toggle,
+  Phase 3a ✅ (2026-07-08):** operator-grade rework, not just re-tokenizing —
+  bar surface `--panel-2`→`--panel` (one notch darker); the plain-text
+  live-pill replaced with a real `.status-lamp` (off/idle, amber/running
+  with a `status-lamp-pulse` animation, green/ok, red/error, amber-static/
+  warn for a stale result) driving a new uppercase-tracked mono instrument
+  label + a new `--danger-glow` token (mirrors `--success-glow`/
+  `--signal-glow`); Run became a labelled transport control (`▶ run`,
+  `--color-success`-tinted outline `Button` at `size="sm"`, new
+  `--color-warning`→`--signal` Tailwind mapping) that disables while a sim
+  is in flight (`analysisRunning` now threaded into `Toolbar` as
+  `isRunning`) — confirmed no cancel/abort path exists anywhere in the repo
+  (grepped `src/` and `src-tauri/src/`), so no fake Stop button was added,
+  per the brief; the segmented `.mode-toggle` flattened (embossed inset
+  shadow + 11px pill radius → hairline `--border` track on `--panel-3` +
+  `--r-md`, active segment glow dropped for a flat `--accent` fill); both
+  Settings and Run now wrapped in `Tooltip`. Dead-CSS sweep in the same
+  commit: the legacy pre-migration `.toolbar`/`.brand`/`.brand-mark`/
+  `.brand-name` duplicates plus the fully-unused `.brand-sub`/
+  `.toolbar-spacer`/`.toolbar-group`/`.tool-btn`/`.run-btn`/`.version-tag`
+  rules deleted (~110 lines; the two properties that actually leaked past
+  their migration counterparts — `.toolbar`'s dead `backdrop-filter` and
+  `.brand`'s load-bearing `flex-shrink: 0` — were audited per-property, the
+  former dropped, the latter folded into the live rule) — net **App.css −49
+  lines** even after adding the 5-state lamp system. Verified at
+  900×600 (no clipping/overflow of the toggle, lamp, or transport button).
+  → part palette ✅ (2026-07-06: the
   active "DESIGN HANDOFF MIGRATION" palette rules tokenized — panel/panel-3/
   text/faint surfaces + the one-off cyan selection now route through tokens;
   new `--accent-line` + `--overlay-hover`/`-faint` tokens; selection unified

@@ -12,7 +12,77 @@
   · corpus runner: 82 imported / **79 warning-clean** / **82 deck-built (ALL)**
   / **82 op-converged (ALL)** — floors 82/79/82/82
   · App.css hardcoded-color burndown: **0 hex outside the single `:root`** ✅
-- **Run started (UTC):** 2026-07-08T15:31Z
+- **Run started (UTC):** 2026-07-08T15:52Z
+- **Status: DONE** — §10 Phase 3a: operator-grade top bar (toolbar + segmented
+  schematic/simulator mode toggle + status cluster). Migrated
+  `apps/desktop/src/components/Toolbar.tsx` + its live App.css rules (the
+  `.toolbar`/`.brand`/`.mode-toggle`/`.mode-btn`/`.live-pill` block in the
+  "DESIGN HANDOFF MIGRATION" section — the ONLY block that actually renders;
+  Phase 2's own note flagged a pre-migration duplicate of the same selectors
+  higher in the file that was NOT safe to bulk-delete without a per-property
+  audit, done in this run, see below).
+  BEFORE: bar on `--panel-2`; status was a plain `.live-pill` — a colored dot
+  + lowercase text, only ever accent-blue (schematic) or `--trace-green`
+  (simulator), no error/running states; mode toggle was an embossed pill
+  (`--panel-3` + `inset 0 1px 3px` groove + 11px border-radius + a permanent
+  `--accent-glow` box-shadow on the active segment); Run was an icon-only
+  28px outline square (a bare "▶" glyph, no label) with no running/disabled
+  state at all — clicking Run mid-run just re-fired it.
+  AFTER: bar darkened to `--panel` (one notch toward true black). The status
+  readout is now a real `.status-lamp`: a 6px indicator dot + an
+  uppercase-tracked `.mono-num` instrument-label caption, with 5 functional
+  states — idle/off (`--faint`, schematic mode or simulator-not-yet-run),
+  running (`--signal` amber, animated pulse via a new `status-lamp-pulse`
+  keyframe), ok (`--success` green + `--success-glow` halo), error
+  (`--danger` red + a new `--danger-glow` token, mirroring the existing
+  `--success-glow`/`--signal-glow` pair), warn (`--signal` amber, static —
+  for a stale/invalidated result after an edit). Mode toggle flattened: the
+  inset groove and permanent glow are gone, radius down to `--r-md`/`--r-sm`,
+  height now reads `var(--row-h)` instead of a hardcoded `28px`. Run is now
+  a labelled transport control — `▶ run`, an outline `Button` at `size="sm"`
+  tinted with the existing `--color-success` Tailwind mapping (plus a new
+  `--color-warning`→`--signal` mapping added to `tokens.css` for the same
+  reason) — and **disables while a sim is running** (`App.tsx`'s
+  `analysisRunning` is now threaded through as a new `Toolbar` prop,
+  `isRunning`, previously not passed at all). Settings gained a `Tooltip` to
+  match Run. CANCEL AUDIT (per the brief: don't fake a Stop affordance): grepped
+  both `apps/desktop/src/` and `apps/desktop/src-tauri/src/` for
+  `cancel`/`abort` — zero hits; `executeTransient`/`runAnalysis`/etc. in
+  `App.tsx` are plain `await`s with no `AbortController` and no Tauri command
+  to interrupt an in-flight ngspice call. Confirmed: no cancel path exists,
+  so Run only ever goes idle→disabled-while-running→idle again; the "amber
+  running lamp" the brief asked for IS the status lamp, not a fake red Stop
+  button on Run itself. DEAD CSS: Phase 2's note in the "Root layout" comment
+  called out two pre-migration legacy selectors (`.toolbar`, `.brand`,
+  `.brand-mark`, `.brand-name` — shadowed by the live block below them, but
+  two properties leaked through un-overridden: `.toolbar`'s `backdrop-filter`
+  and `.brand`'s `flex-shrink: 0`) plus four fully-dead ones never referenced
+  by any TSX (`.brand-sub`, `.toolbar-spacer`, `.toolbar-group`, `.tool-btn`)
+  and a second fully-dead pair discovered in this run (`.run-btn`,
+  `.version-tag` — an old accent-fill Run button and an unused version
+  label, both zero TSX hits). Audited property-by-property as instructed
+  (never bulk-deleted blind): `flex-shrink: 0` folded into the live `.brand`
+  rule (it's load-bearing at the 900px floor — without it the brand cluster
+  could get squeezed by the mode toggle); `backdrop-filter` dropped outright
+  (inert dead weight — the live `.toolbar` background is already fully
+  opaque, so the blur never painted anything). All ~110 dead lines then
+  deleted outright. Net `App.css`: **−49 lines** even after adding the whole
+  5-state lamp system (116 insertions / 165 deletions, `git diff --numstat`).
+  PROOF: `node scripts/design-shot.mjs phase3a-toolbar` → 15/15 PNGs;
+  `schematic`/`simulator` at 1440×900, 1280×720, and 900×600 all
+  visually read the bar/toggle/lamp/Run changes described above (darker bar,
+  flat hairline toggle, uppercase mono lamp caption, labelled green Run
+  button) with zero clipping/overflow of any toolbar control at 900×600;
+  `empty`/`dialog`/`command` states re-checked for regressions (none — the
+  toolbar behind the Settings dialog and command palette renders correctly).
+  Gates: `pnpm -C apps/desktop typecheck` clean; `pnpm -C apps/desktop test`
+  → 1258/1258 green (no test count change — no test depends on the
+  `.live-pill`/`.mode-btn`/`.brand-file` class names). Committed, not pushed
+  (per the run instructions for this unit).
+- **Next step:** continue the §10 panel-migration checklist — the analysis
+  tabs header / SimulationPanel controls (run bar, expression bar, cursors,
+  export) are the next unmigrated block per FEATURE_PARITY §10, followed by
+  dialogs (Open/Save/settings), empty/error states, and the status bar.
 - **Status: DONE** — §10 Phase 2: shadcn primitive set on Tau tokens +
   mono-num/density utilities. Added the remaining priority-order primitives to
   `apps/desktop/src/components/ui/`: `input.tsx` (28px sm default, `mono`

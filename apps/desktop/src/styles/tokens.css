@@ -45,6 +45,10 @@
   /* Positive/run state (the ▶ run button, sim-live pill). App.css has no
    * bare semantic green; --trace-green is the calmest one in the palette. */
   --color-success: var(--trace-green);
+  /* Tactical/amber signal (armed, running, warning) — the OP-1-style amber
+   * transport lamp. Bare name so callers get `bg-warning`/`text-warning`/
+   * `border-warning` utilities the same way `success`/`destructive` do. */
+  --color-warning: var(--signal);
 
   /* Lines & focus */
   --color-border: var(--border);

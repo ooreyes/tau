@@ -660,6 +660,7 @@ function App() {
         mode={mode}
         result={analysis}
         runState={runState}
+        isRunning={analysisRunning}
         title={documentTitle}
         onModeChange={setMode}
         onRun={runAndShowSimulator}
