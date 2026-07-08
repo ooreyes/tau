@@ -106,6 +106,38 @@
   --sp-6:  24px;
   --sp-8:  32px;
 
+  /* Type scale — §10 Phase 4a. Derived from an audit of every font-size in
+     this file (`rg -n "font-size|^\s*font:" App.css`): the app already
+     clustered on five sizes for ~90% of its text (9/10/11/12/13px), so this
+     scale names exactly those steps instead of inventing new ones. Every
+     rule below is re-pointed to the nearest step; odd one-offs (8.5, 9.5,
+     10.5, 11.5, 12.5px) are gone except where a selector is genuinely part
+     of the schematic/scope's own bespoke SVG rendering (documented at each
+     use-site — the canvas keeps its own sizing, per the §10 brief). */
+  --fs-micro:   9px;   /* micro-labels, keycaps, smallest instrument text */
+  --fs-caption: 10px;  /* secondary/mono readouts, hints, filenames */
+  --fs-body:    11px;  /* default UI text */
+  --fs-label:   12px;  /* emphasized labels, control values, catalog names */
+  --fs-title:   13px;  /* panel/section titles, emphasized mono readouts */
+  /* Two larger steps used consistently (not one-offs) by a handful of
+     short, high-emphasis strings: bold close-glyphs (14px) and prominent
+     standalone text like the search field / brand wordmark (15px). Kept
+     distinct from the 9-13px chrome scale rather than folded in, since
+     collapsing them would either shrink close buttons or under-size the
+     command-palette input relative to what it's replacing. */
+  --fs-heading: 14px;
+  --fs-display: 15px;
+
+  /* Letter-spacing — micro-label tracking, consolidated from the same
+     audit (uppercase tracked labels had drifted across 0.04em/0.07em/
+     0.08em/0.09em/0.1em/0.12em/0.14em/0.4px/0.5px/0.55px for visually
+     identical roles). Two tiers cover every remaining case:
+     --tracking-micro for plain small-caps captions (mono or UI font,
+     weight 500/600) and --tracking-wide for the slightly more open
+     "kicker" chips (explorer/palette/plotter section heads). */
+  --tracking-micro: 0.5px;
+  --tracking-wide:  0.14em;
+
   /* Density — control row heights shared by the §10 shadcn primitive set
      (button.tsx's sm=28px is the reference; these name that height and its
      denser sibling so new primitives don't re-derive a magic number). A
@@ -185,12 +217,12 @@ body {
 /* The Examples/Open dropdown. (The old `.text-btn` toolbar buttons migrated to
    the shadcn Button primitive; those rules are deleted as dead CSS.) */
 .example-picker select {
-  height: 27px;
+  height: var(--row-h);
   color: var(--text);
   background: var(--panel-2);
   border: 1px solid var(--border);
   border-radius: var(--r-sm);
-  font: 500 12px -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  font: 500 var(--fs-label) -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
   cursor: pointer;
   transition: border-color 140ms var(--ease-out), background 140ms var(--ease-out),
     box-shadow 140ms var(--ease-out);
@@ -227,7 +259,7 @@ body {
 
 .example-picker span {
   color: var(--faint);
-  font-size: 11px;
+  font-size: var(--fs-body);
   font-weight: 500;
   letter-spacing: 0.2px;
 }
@@ -286,6 +318,8 @@ body {
   cursor: pointer;
 }
 
+/* Schematic canvas SVG text — the canvas keeps its own bespoke rendering
+   (§10 brief); kept outside the App.css type scale on purpose. */
 .component .ref,
 .component .val {
   font-size: 9px;
@@ -381,12 +415,15 @@ body {
 .empty-kicker {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--sp-1);
   color: var(--faint);
-  font: 600 10px var(--font-mono);
-  letter-spacing: 0.14em;
+  /* 10px -> --fs-micro: matches every other section-kicker in the app
+     (.explorer-head, .palette-head, .plotter-kicker, etc.) now that the
+     type scale makes the drift visible. */
+  font: 600 var(--fs-micro) var(--font-mono);
+  letter-spacing: var(--tracking-wide);
   text-transform: uppercase;
-  margin-bottom: 12px;
+  margin-bottom: var(--sp-3);
 }
 
 .empty-kicker i {
@@ -398,6 +435,9 @@ body {
   box-shadow: 0 0 5px var(--success-glow);
 }
 
+/* Kept outside the §10 type scale on purpose: the app's one welcome-screen
+   headline, sized once for this single use rather than folded into a
+   5-step chrome scale meant for repeating instrument/panel text. */
 .empty-panel h1 {
   margin: 0 0 10px;
   color: var(--text);
@@ -410,7 +450,7 @@ body {
 .empty-panel p {
   margin: 0;
   color: var(--muted);
-  font-size: 13px;
+  font-size: var(--fs-title);
   line-height: 1.6;
 }
 
@@ -427,14 +467,14 @@ body {
 .empty-actions button {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--sp-2);
   height: 34px;
-  padding: 0 14px;
+  padding: 0 var(--sp-3);
   color: var(--text);
   background: transparent;
   border: 1px solid var(--border-strong);
   border-radius: var(--r-md);
-  font: 600 12.5px var(--font-ui);
+  font: 600 var(--fs-label) var(--font-ui);
   letter-spacing: -0.01em;
   cursor: pointer;
   transition: border-color var(--motion-fast) var(--spring),
@@ -495,7 +535,7 @@ body {
 }
 
 .flow-rate {
-  font-size: 10px;
+  font-size: var(--fs-caption);
   font-weight: 500;
   color: var(--muted);
   background: rgba(13, 16, 24, 0.82);
@@ -511,7 +551,7 @@ body {
   align-items: center;
   gap: 6px;
   padding: 6px 12px;
-  font-size: 11px;
+  font-size: var(--fs-body);
   font-weight: 600;
   letter-spacing: -0.1px;
   color: var(--muted);
@@ -539,7 +579,7 @@ body {
 }
 
 .flow-toggle .flow-bolt {
-  font-size: 12px;
+  font-size: var(--fs-label);
 }
 
 /* ── Inline value editor ───────────────────────────────────────────────────── */
@@ -549,7 +589,7 @@ body {
   z-index: 8;
   width: 90px;
   text-align: center;
-  font: 600 12px var(--font-mono);
+  font: 600 var(--fs-label) var(--font-mono);
   color: var(--text);
   background: var(--panel-2);
   border: 1px solid var(--accent);
@@ -628,7 +668,7 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: var(--sp-3);
-  padding: 8px 14px;
+  padding: var(--sp-2) var(--sp-3);
   border-bottom: 1px solid var(--border);
 }
 
@@ -640,7 +680,7 @@ body {
 }
 
 .plotter-title {
-  font-size: 13px;
+  font-size: var(--fs-title);
   font-weight: 600;
   color: var(--cream);
   letter-spacing: -0.2px;
@@ -648,8 +688,8 @@ body {
 }
 
 .plotter-live {
-  height: 24px;
-  padding: 0 10px;
+  height: var(--row-h-dense);
+  padding: 0 var(--sp-2);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -658,7 +698,7 @@ body {
   border-radius: var(--r-sm);
   color: var(--muted);
   background: transparent;
-  font: 600 10px var(--font-mono);
+  font: 600 var(--fs-caption) var(--font-mono);
   letter-spacing: 0.4px;
   text-transform: uppercase;
   transition: color var(--motion-med) var(--spring),
@@ -703,7 +743,7 @@ body {
    so it wins over the Tailwind utility classes tabs.tsx ships by default. */
 .plotter-tabs {
   flex-shrink: 0;
-  padding: 8px 14px;
+  padding: var(--sp-2) var(--sp-3);
   border-bottom: 1px solid var(--border);
   background: transparent;
 }
@@ -719,14 +759,14 @@ body {
 
 .plotter-tab {
   flex: none;
-  height: 24px;
+  height: var(--row-h-dense);
   padding: 0 13px;
   border: none;
   border-radius: 5px;
   background: transparent;
   color: var(--muted);
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: var(--fs-body);
   font-weight: 600;
   letter-spacing: 0.06em;
   cursor: pointer;
@@ -811,9 +851,9 @@ body {
 .ref-compare {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--sp-2);
   padding: 4px 2px 2px;
-  font-size: 10px;
+  font-size: var(--fs-caption);
   font-variant-numeric: tabular-nums;
 }
 
@@ -825,6 +865,9 @@ body {
   color: var(--danger);
 }
 
+/* Plot SVG axis text, positioned against the pane's own PLOT_PAD/PLOT_HEIGHT
+   geometry (SimulationPanel.tsx) — kept outside the App.css type scale, same
+   as the schematic canvas's own text. */
 .scope-axis {
   fill: var(--muted);
   font-size: 8.5px;
@@ -846,7 +889,7 @@ body {
   gap: 4px 12px;
   padding: 6px 0 2px;
   color: var(--text);
-  font-size: 10px;
+  font-size: var(--fs-caption);
   font-weight: 400;
   letter-spacing: 0.1px;
   font-family: var(--font-mono);
@@ -855,7 +898,7 @@ body {
 .scope-legend span {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: var(--sp-1);
 }
 
 /* Trace-legend swatches read as small indicator lamps (OP-1 style), not thin
@@ -877,12 +920,23 @@ body {
   padding: 0 0 4px;
 }
 
-.pane-controls-label {
-  font-size: 9px;
+/* Shared micro-label treatment — plain small-caps captions (weight 600,
+   `--tracking-micro`). Was five byte-identical declarations copy-pasted
+   across the pane/op-table/meas-table/selection-strip chrome; each
+   selector below now only carries what's actually unique to it. */
+.pane-controls-label,
+.pane-label,
+.op-head,
+.meas-table-head,
+.strip-label {
+  font-size: var(--fs-micro);
   font-weight: 600;
-  letter-spacing: 0.5px;
+  letter-spacing: var(--tracking-micro);
   text-transform: uppercase;
   color: var(--faint);
+}
+
+.pane-controls-label {
   flex: 1;
 }
 
@@ -903,16 +957,11 @@ body {
 .pane-header {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--sp-1);
   padding: 0 2px 3px;
 }
 
 .pane-label {
-  font-size: 9px;
-  font-weight: 600;
-  letter-spacing: 0.5px;
-  text-transform: uppercase;
-  color: var(--faint);
   flex: 1;
 }
 
@@ -922,7 +971,7 @@ body {
   border-radius: 4px;
   color: var(--faint);
   cursor: pointer;
-  font-size: 14px;
+  font-size: var(--fs-heading);
   line-height: 1;
   padding: 0 2px;
   transition: color var(--motion-fast) var(--spring),
@@ -948,11 +997,11 @@ body {
 .trace-legend-item {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: var(--sp-1);
 }
 
 .trace-legend-label {
-  font-size: 10px;
+  font-size: var(--fs-caption);
   color: var(--text);
   font-family: var(--font-mono);
 }
@@ -961,7 +1010,7 @@ body {
 .trace-pane-select {
   height: 18px;
   padding: 0 3px;
-  font-size: 9px;
+  font-size: var(--fs-micro);
   font-weight: 600;
   color: var(--muted);
   background: var(--panel-3);
@@ -993,10 +1042,10 @@ body {
   background: var(--panel-3);
   border: 1px solid var(--border);
   border-radius: 5px;
-  padding: 5px 8px;
+  padding: var(--sp-1) var(--sp-2);
   color: var(--text);
   /* Signal expressions (V(out), I(R1)…) are technical identifiers — monospace. */
-  font: 11px var(--font-mono);
+  font: var(--fs-body) var(--font-mono);
   letter-spacing: -0.01em;
 }
 
@@ -1018,7 +1067,7 @@ body {
   border-radius: var(--r-sm);
   padding: 5px 11px;
   color: var(--muted);
-  font-size: 11px;
+  font-size: var(--fs-body);
   font-weight: 550;
   letter-spacing: -0.005em;
   cursor: pointer;
@@ -1084,13 +1133,15 @@ body {
   opacity: 0.8;
 }
 
+/* Plot SVG text — kept outside the App.css type scale (canvas/plot text). */
 .plot-cursor text {
   fill: var(--accent);
   font-size: 9px;
 }
 
 /* In-place DC operating point labels on the schematic (simulator mode). A
-   background stroke keeps them readable over wires and symbol bodies. */
+   background stroke keeps them readable over wires and symbol bodies. Kept
+   outside the App.css type scale (schematic canvas SVG text). */
 .op-annotation {
   font-size: 10px;
   font-family: var(--font-mono);
@@ -1119,9 +1170,9 @@ body {
 .disclosure-header {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--sp-2);
   width: 100%;
-  height: 24px;
+  height: var(--row-h-dense);
   margin: 2px 0;
   padding: 0 2px;
   background: transparent;
@@ -1130,12 +1181,26 @@ body {
   text-align: left;
 }
 
+/* Shared micro-label treatment, "kicker chip" tier (weight 600,
+   `--tracking-wide`) — six near-identical declarations (0.09em/0.12em
+   tracking drift across mono vs. UI font) consolidated into one rule;
+   each selector below keeps only its font-family and layout extras. */
+.disclosure-label,
+.cmdk-section,
+.property-field span,
+.palette-title,
+.chat-message span,
+.settings-row-label {
+  font-size: var(--fs-micro);
+  font-weight: 600;
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
 .disclosure-label {
   flex: none;
-  color: var(--faint);
-  font: 600 9.5px var(--font-mono);
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
+  font-family: var(--font-mono);
   white-space: nowrap;
 }
 
@@ -1148,7 +1213,7 @@ body {
 .disclosure-chevron {
   flex: none;
   color: var(--faint);
-  font-size: 10px;
+  font-size: var(--fs-caption);
   line-height: 1;
   transition: transform 200ms var(--ease-out), color 200ms var(--ease-out);
 }
@@ -1176,13 +1241,13 @@ body {
   background: var(--danger-soft);
   border-radius: 5px;
   padding: 4px 8px;
-  font-size: 10px;
+  font-size: var(--fs-caption);
   margin-top: 2px;
 }
 
 .cursor-sliders {
   display: flex;
-  gap: 12px;
+  gap: var(--sp-3);
   padding: 6px 2px 2px;
 }
 
@@ -1191,7 +1256,7 @@ body {
   align-items: center;
   gap: 6px;
   flex: 1;
-  font-size: 10px;
+  font-size: var(--fs-caption);
   color: var(--muted);
   letter-spacing: 0.04em;
 }
@@ -1204,8 +1269,8 @@ body {
 .cursor-table {
   width: 100%;
   border-collapse: collapse;
-  margin-top: 4px;
-  font-size: 10px;
+  margin-top: var(--sp-1);
+  font-size: var(--fs-caption);
   font-variant-numeric: tabular-nums;
 }
 
@@ -1239,19 +1304,19 @@ body {
 .expr-list {
   display: flex;
   flex-wrap: wrap;
-  gap: 5px;
+  gap: var(--sp-1);
   padding: 4px 0 2px;
 }
 
 .expr-chip {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: var(--sp-1);
   border: 1px solid var(--border-strong);
   border-radius: 999px;
   padding: 2px 6px 2px 7px;
   /* The plotted-trace identifiers echo the mono expression input. */
-  font: 10px var(--font-mono);
+  font: var(--fs-caption) var(--font-mono);
   letter-spacing: -0.01em;
   color: var(--text);
 }
@@ -1268,7 +1333,7 @@ body {
   border-radius: 4px;
   color: var(--muted);
   cursor: pointer;
-  font-size: 13px;
+  font-size: var(--fs-title);
   line-height: 1;
   padding: 0 1px 0 3px;
   transition: color var(--motion-fast) var(--spring),
@@ -1307,20 +1372,30 @@ body {
   border-top: 1px solid var(--border);
 }
 
+/* Shared micro-label treatment, lighter weight tier (500, `--tracking-micro`)
+   for labels that sit directly above a bold readout value. */
+.metric span,
+.value-editor span,
+.param-label {
+  font-size: var(--fs-micro);
+  font-weight: 500;
+  letter-spacing: var(--tracking-micro);
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
 .metric span {
   display: block;
-  font-size: 9px;
-  font-weight: 500;
-  color: var(--faint);
-  letter-spacing: 0.5px;
-  text-transform: uppercase;
 }
 
 /* Font/tabular-figure declarations now live in the shared `.mono-num` utility
    (applied in SimulationPanel.tsx's Metric component) — this rule only
    carries what `.mono-num` doesn't (size, weight, color, layout). The
    instrument-cluster read (big mono number, tiny micro-label above) is the
-   NETS/NODES/SAMPLES row's whole point — see `.metric span` below. */
+   NETS/NODES/SAMPLES row's whole point — see `.metric span` below. Kept
+   outside the §10 type scale: the one big-digit instrument readout in the
+   app, deliberately larger than the 13px "emphasized readout" ceiling used
+   everywhere else. */
 .metric strong {
   display: block;
   margin-top: 3px;
@@ -1336,18 +1411,18 @@ body {
 .metric.red strong   { color: var(--danger);        }
 
 .analysis-meter {
-  padding-top: 10px;
+  padding-top: var(--sp-2);
 }
 
 .analysis-empty {
   margin: 12px 14px 10px;
-  padding: 14px;
+  padding: var(--sp-3);
   border: 1px solid var(--danger-line);
   border-left: 2px solid var(--danger);
   border-radius: var(--r-sm);
   color: var(--text);
   background: var(--danger-soft);
-  font-size: 11px;
+  font-size: var(--fs-body);
   line-height: 1.5;
 }
 
@@ -1372,13 +1447,13 @@ body {
 .op-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: 12px;
+  gap: var(--sp-3);
   align-items: center;
-  min-height: 28px;
-  padding: 0 10px;
+  min-height: var(--row-h);
+  padding: 0 var(--sp-2);
   border-top: 1px solid var(--border-subtle);
   color: var(--text);
-  font-size: 11px;
+  font-size: var(--fs-body);
   font-variant-numeric: tabular-nums;
 }
 
@@ -1400,13 +1475,8 @@ body {
 }
 
 .op-head {
-  min-height: 24px;
-  color: var(--faint);
+  min-height: var(--row-h-dense);
   background: var(--panel-4);
-  font-size: 9px;
-  font-weight: 600;
-  letter-spacing: 0.5px;
-  text-transform: uppercase;
   border-bottom: 1px solid var(--border);
 }
 
@@ -1429,22 +1499,17 @@ body {
 .meas-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: 12px;
+  gap: var(--sp-3);
   align-items: center;
-  min-height: 26px;
-  padding: 0 10px;
-  font-size: 11px;
+  min-height: var(--row-h);
+  padding: 0 var(--sp-2);
+  font-size: var(--fs-body);
   font-variant-numeric: tabular-nums;
 }
 
 .meas-table-head {
-  min-height: 22px;
-  color: var(--faint);
+  min-height: var(--row-h-dense);
   background: var(--panel-4);
-  font-size: 9px;
-  font-weight: 600;
-  letter-spacing: 0.5px;
-  text-transform: uppercase;
   border-bottom: 1px solid var(--border);
 }
 
@@ -1482,7 +1547,7 @@ body {
   flex-shrink: 0;
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 12px;
+  gap: var(--sp-3);
   padding: 10px 14px 12px;
   border-top: 1px solid var(--border-subtle);
 }
@@ -1493,8 +1558,8 @@ body {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: 12px;
-  padding: 9px 10px;
+  gap: var(--sp-3);
+  padding: var(--sp-2);
   border: 1px solid var(--border);
   border-radius: var(--r-sm);
   background: var(--panel-3);
@@ -1508,22 +1573,22 @@ body {
 
 .resolution-control span {
   color: var(--faint);
-  font-size: 9px;
+  font-size: var(--fs-micro);
   font-weight: 600;
-  letter-spacing: 0.55px;
+  letter-spacing: var(--tracking-micro);
 }
 
 /* Font declarations now live in the shared `.mono-num` utility (applied in
    SimulationPanel.tsx's ResolutionControl) — this rule only carries size/color. */
 .resolution-control strong {
   color: var(--text);
-  font-size: 12.5px;
+  font-size: var(--fs-title);
   font-weight: 600;
 }
 
 .resolution-control small {
   color: var(--muted);
-  font-size: 10px;
+  font-size: var(--fs-caption);
   line-height: 1.35;
 }
 
@@ -1548,13 +1613,13 @@ body {
 }
 
 .resolution-control button {
-  min-height: 28px;
-  padding: 0 11px;
+  min-height: var(--row-h);
+  padding: 0 var(--sp-3);
   border: 1px solid var(--accent-line);
   border-radius: var(--r-sm);
   color: var(--accent);
   background: var(--accent-soft);
-  font: 650 10px var(--font-ui);
+  font: 650 var(--fs-caption) var(--font-ui);
   letter-spacing: 0.04em;
   text-transform: uppercase;
   cursor: pointer;
@@ -1612,11 +1677,6 @@ body {
 }
 
 .strip-label {
-  color: var(--faint);
-  font-size: 9px;
-  font-weight: 600;
-  letter-spacing: 0.5px;
-  text-transform: uppercase;
   padding-top: 3px;
 }
 
@@ -1629,14 +1689,14 @@ body {
 }
 
 .selected-part span {
-  font-size: 13px;
+  font-size: var(--fs-title);
   font-weight: 500;
   letter-spacing: -0.1px;
 }
 
 .selected-part small {
   color: var(--muted);
-  font-size: 10px;
+  font-size: var(--fs-caption);
   font-weight: 400;
 }
 
@@ -1649,26 +1709,18 @@ body {
   display: grid;
   grid-template-columns: 56px 1fr 28px;
   align-items: center;
-  gap: 10px;
-}
-
-.value-editor span {
-  color: var(--faint);
-  font-size: 9px;
-  font-weight: 500;
-  letter-spacing: 0.5px;
-  text-transform: uppercase;
+  gap: var(--sp-2);
 }
 
 .value-editor input {
   min-width: 0;
-  height: 28px;
+  height: var(--row-h);
   color: var(--text);
   background: var(--panel-3);
   border: 1px solid var(--border);
   border-radius: var(--r-sm);
-  padding: 0 10px;
-  font: 500 12px var(--font-mono);
+  padding: 0 var(--sp-2);
+  font: 500 var(--fs-label) var(--font-mono);
   transition: border-color 130ms var(--ease-out);
   outline: none;
 }
@@ -1681,7 +1733,7 @@ body {
 .value-editor em {
   color: var(--faint);
   font-style: normal;
-  font-size: 11px;
+  font-size: var(--fs-body);
   font-weight: 500;
 }
 
@@ -1714,15 +1766,15 @@ body {
 }
 
 .eng-input input {
-  padding: 0 10px;
-  font-size: 12px;
+  padding: 0 var(--sp-2);
+  font-size: var(--fs-label);
   font-weight: 500;
 }
 
 .eng-input select {
   min-width: 58px;
   padding: 0 6px;
-  font: 600 11px var(--font-mono);
+  font: 600 var(--fs-body) var(--font-mono);
   cursor: pointer;
 }
 
@@ -1738,13 +1790,13 @@ body {
 
 .value-editor select {
   min-width: 0;
-  height: 28px;
+  height: var(--row-h);
   color: var(--text);
   background: var(--panel-3);
   border: 1px solid var(--border);
   border-radius: var(--r-sm);
   padding: 0 8px;
-  font: 500 12px -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  font: 500 var(--fs-label) -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
   cursor: pointer;
   outline: none;
   transition: border-color 130ms var(--ease-out);
@@ -1758,7 +1810,7 @@ body {
 .opamp-spec {
   width: 100%;
   margin-top: 6px;
-  font-size: 10px;
+  font-size: var(--fs-caption);
   line-height: 1.5;
   color: var(--faint);
   letter-spacing: 0.1px;
@@ -1770,7 +1822,7 @@ body {
   flex-shrink: 0;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--sp-2);
   padding: 10px 16px;
   border-top: 1px solid var(--border);
 }
@@ -1804,14 +1856,14 @@ body {
 
 .plotter-message strong {
   color: var(--text);
-  font-size: 11px;
+  font-size: var(--fs-body);
   font-weight: 500;
   letter-spacing: -0.1px;
 }
 
 .plotter-message span {
   color: var(--muted);
-  font-size: 10px;
+  font-size: var(--fs-caption);
   line-height: 1.4;
   font-variant-numeric: tabular-nums;
 }
@@ -1823,15 +1875,15 @@ body {
   overflow: auto;
   padding: 0 14px 12px;
   display: grid;
-  gap: 4px;
+  gap: var(--sp-1);
 }
 
 .warning-list div {
   color: var(--signal);
   background: var(--signal-soft);
   border-left: 2px solid var(--signal);
-  padding: 5px 8px;
-  font-size: 10px;
+  padding: var(--sp-1) var(--sp-2);
+  font-size: var(--fs-caption);
   line-height: 1.4;
   border-radius: 0 var(--r-sm) var(--r-sm) 0;
 }
@@ -1883,7 +1935,7 @@ body {
   outline: none;
   background: transparent;
   color: var(--text);
-  font: 400 15px -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  font: 400 var(--fs-display) -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
   padding: 16px 18px;
   border-bottom: 1px solid var(--border);
   letter-spacing: -0.1px;
@@ -1891,7 +1943,7 @@ body {
 
 .cmdk-input::placeholder {
   color: var(--faint);
-  font-size: 13px;
+  font-size: var(--fs-title);
 }
 
 .cmdk-list {
@@ -1908,8 +1960,8 @@ body {
 .cmdk-item {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 7px 10px;
+  gap: var(--sp-2);
+  padding: var(--sp-2);
   border-radius: var(--r-sm);
   cursor: pointer;
   box-shadow: inset 2px 0 0 transparent;
@@ -1924,7 +1976,7 @@ body {
 
 .cmdk-icon {
   width: 34px;
-  height: 24px;
+  height: var(--row-h-dense);
   flex-shrink: 0;
   opacity: 0.8;
 }
@@ -1934,7 +1986,7 @@ body {
 .cmdk-name {
   flex: 1;
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: var(--fs-label);
   font-weight: 500;
   color: var(--text);
   letter-spacing: -0.01em;
@@ -1946,18 +1998,13 @@ body {
 
 .cmdk-section {
   font-family: var(--font-mono);
-  font-size: 9.5px;
-  font-weight: 600;
-  color: var(--faint);
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
 }
 
 .cmdk-empty {
   padding: 24px 18px;
   text-align: center;
   color: var(--faint);
-  font-size: 13px;
+  font-size: var(--fs-title);
 }
 
 /* ── Meter probes ──────────────────────────────────────── */
@@ -1997,7 +2044,7 @@ body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 13px;
+  font-size: var(--fs-title);
   font-weight: 600;
   color: var(--muted);
   background: transparent;
@@ -2047,27 +2094,18 @@ body {
 .param-control {
   display: flex;
   flex-direction: column;
-  gap: 7px;
+  gap: var(--sp-2);
 }
 .param-head {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
 }
-/* Micro-label: uppercase, tracked, --faint — matches every other instrument
-   caption in the panel (was --muted, a step too bright for a micro-label). */
-.param-label {
-  font-size: 9px;
-  font-weight: 500;
-  letter-spacing: 0.4px;
-  text-transform: uppercase;
-  color: var(--faint);
-}
 /* Font/tabular-figure declarations now live in the shared `.mono-num` utility
    (applied in SimulationPanel.tsx's DialControl) — this rule only carries
    what `.mono-num` doesn't (size, color). */
 .param-value {
-  font-size: 13px;
+  font-size: var(--fs-title);
   font-weight: 500;
   color: var(--text);
 }
@@ -2118,7 +2156,7 @@ body {
 .param-fields {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--sp-2);
   width: 100%;
   min-width: 0;
 }
@@ -2138,9 +2176,10 @@ body {
 .plotter-actions {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--sp-2);
 }
 /* ── Net labels (named nodes) ──────────────────────────── */
+/* Schematic canvas SVG text — kept outside the App.css type scale. */
 .net-label-text {
   fill: var(--accent);
   font: 650 9px -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
@@ -2152,6 +2191,9 @@ body {
 }
 
 /* ── Component labels (always-on-top, never obscured) ──── */
+/* Schematic canvas SVG text — kept outside the App.css type scale (the
+   8.5/9.5px sizes here are load-bearing for legibility at the schematic's
+   default zoom; the canvas owns its own rendering per the §10 brief). */
 .label-layer {
   pointer-events: none;
 }
@@ -2199,7 +2241,7 @@ body {
   overflow: hidden;
   background: var(--bg);
   color: var(--text);
-  font-size: 13px;
+  font-size: var(--fs-title);
 }
 
 .shell-body {
@@ -2263,6 +2305,8 @@ body {
   -webkit-app-region: no-drag;
 }
 
+/* Brand lockup (mark + .brand-name below) — kept outside the §10 type
+   scale on purpose: a logo/wordmark pair, not repeating chrome text. */
 .brand .brand-mark {
   font-size: 16px;
   font-weight: 600;
@@ -2274,7 +2318,7 @@ body {
 
 .brand-name {
   color: var(--cream);
-  font-size: 15px;
+  font-size: var(--fs-display);
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: lowercase;
@@ -2288,7 +2332,7 @@ body {
 .brand-file {
   min-width: 0;
   color: var(--faint);
-  font-size: 10.5px;
+  font-size: var(--fs-caption);
   font-weight: 500;
   letter-spacing: 0.02em;
   white-space: nowrap;
@@ -2321,7 +2365,7 @@ body {
   border-radius: var(--r-sm);
   background: transparent;
   color: var(--muted);
-  font: 600 12px var(--font-ui);
+  font: 600 var(--fs-label) var(--font-ui);
   cursor: pointer;
   transition: background var(--motion-fast) var(--spring),
     color var(--motion-fast) var(--spring),
@@ -2377,7 +2421,7 @@ body {
 }
 
 .status-lamp-text {
-  font-size: 10px;
+  font-size: var(--fs-caption);
   font-weight: 600;
   letter-spacing: 0.07em;
   text-transform: uppercase;
@@ -2448,7 +2492,7 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
+  gap: var(--sp-1);
   padding: 10px 0;
   background: var(--panel-3);
   border-right: 1px solid var(--border);
@@ -2513,7 +2557,7 @@ body {
   left: -8px;
   top: 7px;
   width: 3px;
-  height: 24px;
+  height: var(--row-h-dense);
   border-radius: 0 3px 3px 0;
   background: var(--accent);
   box-shadow: 0 0 10px var(--accent-glow);
@@ -2535,7 +2579,7 @@ body {
 
 .explorer-head {
   height: 38px;
-  padding: 0 14px;
+  padding: 0 var(--sp-3);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -2548,17 +2592,17 @@ body {
 .result-list h3,
 .symbol-preview > span {
   color: var(--faint);
-  font-size: 9px;
+  font-size: var(--fs-micro);
   font-weight: 600;
-  letter-spacing: 0.14em;
+  letter-spacing: var(--tracking-wide);
   text-transform: uppercase;
 }
 
 .explorer-icons {
   display: flex;
-  gap: 9px;
+  gap: var(--sp-2);
   color: var(--faint);
-  font-size: 12px;
+  font-size: var(--fs-label);
 }
 
 .explorer-icons button {
@@ -2580,16 +2624,16 @@ body {
 
 .explorer-search {
   margin: 0 12px 8px;
-  height: 30px;
+  height: var(--row-h);
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 0 10px;
+  gap: var(--sp-2);
+  padding: 0 var(--sp-2);
   color: var(--faint);
   background: var(--panel-3);
   border: 1px solid var(--border);
   border-radius: 7px;
-  font-size: 12px;
+  font-size: var(--fs-label);
   width: calc(100% - 24px);
   cursor: pointer;
 }
@@ -2607,16 +2651,16 @@ body {
   min-height: 0;
   overflow: auto;
   padding: 2px 6px 12px;
-  font: 500 12px var(--font-mono);
+  font: 500 var(--fs-label) var(--font-mono);
 }
 
 .tree-root,
 .tree-file {
   width: 100%;
-  min-height: 24px;
+  min-height: var(--row-h-dense);
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: var(--sp-2);
   padding: 3px 6px;
   border: 0;
   border-radius: 5px;
@@ -2709,7 +2753,7 @@ body {
 
 .editor-icon-btn {
   width: 30px;
-  height: 30px;
+  height: var(--row-h);
   display: grid;
   place-items: center;
   border: 0;
@@ -2756,12 +2800,12 @@ body {
    simulator-mode visibility marker below. The select migrates with the
    Select primitive later. */
 .example-picker select {
-  height: 28px;
+  height: var(--row-h);
   color: var(--text);
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: 7px;
-  font: 500 12px var(--font-ui);
+  font: 500 var(--fs-label) var(--font-ui);
 }
 
 .example-picker select:hover {
@@ -2782,6 +2826,9 @@ body {
   border-radius: 8px;
 }
 
+/* Square-ish icon control, not a list/table row — kept outside
+   --row-h/--row-h-dense on purpose (width and height are both bespoke to
+   this compact transport cluster). */
 .transport button {
   width: 27px;
   height: 26px;
@@ -2789,7 +2836,7 @@ body {
   border-radius: 6px;
   color: var(--muted);
   background: transparent;
-  font: 700 11px var(--font-mono);
+  font: 700 var(--fs-body) var(--font-mono);
   cursor: pointer;
 }
 
@@ -2825,13 +2872,13 @@ body {
 .editor-hide {
   display: inline-flex;
   align-items: center;
-  gap: 9px;
-  padding: 0 18px;
+  gap: var(--sp-2);
+  padding: 0 var(--sp-4);
   border: 0;
   border-right: 1px solid var(--border);
   background: transparent;
   color: var(--muted);
-  font: 500 12px var(--font-ui);
+  font: 500 var(--fs-label) var(--font-ui);
   cursor: pointer;
 }
 
@@ -2852,7 +2899,7 @@ body {
   color: var(--muted);
   background: transparent;
   cursor: pointer;
-  font: 700 13px var(--font-mono);
+  font: 700 var(--fs-title) var(--font-mono);
 }
 
 .tab-close:hover {
@@ -2907,7 +2954,7 @@ body {
 
 .view-btn.fit::before {
   content: "⌂";
-  font-size: 13px;
+  font-size: var(--fs-title);
 }
 
 /* bottom inspector / results */
@@ -2946,8 +2993,8 @@ body {
 }
 
 .bottom-tabs button {
-  height: 24px;
-  padding: 0 10px;
+  height: var(--row-h-dense);
+  padding: 0 var(--sp-2);
   border: 0;
   border-radius: 6px;
   color: var(--muted);
@@ -2966,7 +3013,7 @@ body {
   flex: 1;
   min-height: 0;
   display: grid;
-  gap: 16px;
+  gap: var(--sp-4);
   padding: 10px 14px 12px;
   overflow: hidden;
 }
@@ -2991,7 +3038,7 @@ body {
 
   .inspector-summary {
     grid-template-columns: 44px 1fr;
-    column-gap: 8px;
+    column-gap: var(--sp-2);
   }
 
   .inspector-summary svg {
@@ -3004,7 +3051,7 @@ body {
   display: grid;
   grid-template-columns: 60px 1fr;
   grid-template-rows: 1fr auto auto 1fr;
-  column-gap: 12px;
+  column-gap: var(--sp-3);
   align-items: center;
   min-width: 0;
 }
@@ -3017,12 +3064,12 @@ body {
 
 .inspector-summary strong {
   color: var(--cream);
-  font: 700 13px var(--font-mono), monospace;
+  font: 700 var(--fs-title) var(--font-mono), monospace;
 }
 
 .inspector-summary span {
   color: var(--muted);
-  font-size: 11px;
+  font-size: var(--fs-body);
 }
 
 .inspector-summary.empty {
@@ -3031,8 +3078,8 @@ body {
   grid-template-rows: auto auto auto;
   justify-items: center;
   align-content: center;
-  gap: 11px;
-  padding: 12px;
+  gap: var(--sp-3);
+  padding: var(--sp-3);
   text-align: center;
 }
 
@@ -3050,7 +3097,7 @@ body {
 
 .inspector-summary.empty strong {
   white-space: nowrap;
-  font: 700 13px var(--font-mono), monospace;
+  font: 700 var(--fs-title) var(--font-mono), monospace;
   letter-spacing: 0.01em;
   color: var(--text);
 }
@@ -3058,7 +3105,7 @@ body {
 .inspector-summary.empty span {
   max-width: 30ch;
   color: var(--faint);
-  font-size: 11.5px;
+  font-size: var(--fs-body);
   line-height: 1.45;
 }
 
@@ -3075,7 +3122,7 @@ body {
   /* A fixed cap (not a %) so the label column tracks its own content instead
      of ballooning on a wide panel or starving the value on a narrow one. */
   grid-template-columns: minmax(64px, 112px) minmax(0, 1fr);
-  column-gap: 10px;
+  column-gap: var(--sp-2);
   align-items: center;
   height: var(--row-h);
   border-bottom: 1px solid var(--border-subtle);
@@ -3086,10 +3133,7 @@ body {
 }
 
 .property-field span {
-  color: var(--faint);
-  font: 600 9.5px var(--font-ui);
-  letter-spacing: 0.09em;
-  text-transform: uppercase;
+  font-family: var(--font-ui);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -3099,12 +3143,12 @@ body {
   height: 22px;
   min-width: 0;
   max-width: 168px;
-  padding: 0 7px;
+  padding: 0 var(--sp-2);
   border: 1px solid transparent;
   border-radius: var(--r-sm);
   color: var(--text);
   background: transparent;
-  font-size: 12px;
+  font-size: var(--fs-label);
   font-weight: 500;
   transition: background var(--motion-fast) var(--ease-out),
     border-color var(--motion-fast) var(--ease-out);
@@ -3161,20 +3205,20 @@ body {
 }
 
 .result-row {
-  min-height: 25px;
+  min-height: var(--row-h-dense);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
+  gap: var(--sp-2);
   color: var(--muted);
-  font: 500 11px var(--font-mono);
+  font: 500 var(--fs-body) var(--font-mono);
 }
 
 .result-row span {
   min-width: 0;
   display: inline-flex;
   align-items: center;
-  gap: 7px;
+  gap: var(--sp-2);
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
@@ -3197,7 +3241,7 @@ body {
 .result-list p {
   margin: 0;
   color: var(--muted);
-  font-size: 11px;
+  font-size: var(--fs-body);
   line-height: 1.5;
 }
 
@@ -3255,6 +3299,9 @@ body {
    effective padding/color values those dead rules used to carry (14px header
    gutter, --cream title, accent-filled active tab, --scope-surface scope
    face) are folded directly into the primary rules above. */
+/* 30px kept outside --row-h/--row-h-dense on purpose: a deliberately larger
+   tap target for the primary panel-close affordance (the ask-head/composer
+   variant below overrides down to --row-h for its denser toolbar context). */
 .panel-close {
   width: 30px;
   height: 30px;
@@ -3265,7 +3312,7 @@ body {
   color: var(--muted);
   background: transparent;
   cursor: pointer;
-  font: 800 14px var(--font-mono);
+  font: 800 var(--fs-heading) var(--font-mono);
   transition: color var(--motion-fast) var(--spring),
     background var(--motion-fast) var(--spring),
     border-color var(--motion-fast) var(--spring),
@@ -3382,11 +3429,11 @@ body {
 .palette-section-header {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--sp-2);
   width: 100%;
   height: 22px;
-  margin-top: 4px;
-  padding: 0 10px;
+  margin-top: var(--sp-1);
+  padding: 0 var(--sp-2);
   background: transparent;
   border: none;
   cursor: pointer;
@@ -3399,10 +3446,7 @@ body {
 
 .palette-title {
   flex: none;
-  color: var(--faint);
-  font: 600 9.5px var(--font-mono);
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
+  font-family: var(--font-mono);
   white-space: nowrap;
 }
 
@@ -3415,7 +3459,7 @@ body {
 .palette-chevron {
   flex: none;
   color: var(--faint);
-  font-size: 10px;
+  font-size: var(--fs-caption);
   line-height: 1;
   transition: transform 200ms var(--ease-out), color 200ms var(--ease-out);
 }
@@ -3443,9 +3487,9 @@ body {
   display: grid;
   grid-template-columns: 22px minmax(56px, 1.4fr) minmax(0, 1fr) auto;
   align-items: center;
-  column-gap: 8px;
+  column-gap: var(--sp-2);
   height: var(--row-h-dense);
-  padding: 0 10px;
+  padding: 0 var(--sp-2);
   border: 0;
   background: transparent;
   color: var(--text);
@@ -3496,13 +3540,13 @@ body {
 
 .palette-name {
   color: var(--text);
-  font: 500 11.5px var(--font-mono);
+  font: 500 var(--fs-label) var(--font-mono);
   letter-spacing: -0.01em;
 }
 
 .palette-desc {
   color: var(--faint);
-  font-size: 10.5px;
+  font-size: var(--fs-caption);
 }
 
 .palette-item.active .palette-name {
@@ -3540,7 +3584,7 @@ body {
   padding: 1px 5px;
   text-align: center;
   font-family: var(--font-mono);
-  font-size: 9.5px;
+  font-size: var(--fs-micro);
   font-weight: 600;
   line-height: 14px;
   letter-spacing: 0.15px;
@@ -3569,7 +3613,7 @@ body {
   padding: 20px 14px;
   text-align: center;
   color: var(--faint);
-  font-size: 12px;
+  font-size: var(--fs-label);
   line-height: 1.5;
 }
 
@@ -3584,7 +3628,7 @@ body {
 
 .symbol-preview > span {
   display: block;
-  margin-bottom: 8px;
+  margin-bottom: var(--sp-2);
 }
 
 .symbol-preview > div {
@@ -3612,7 +3656,7 @@ body {
 
 .symbol-preview strong {
   color: var(--accent);
-  font: 700 13px var(--font-mono);
+  font: 700 var(--fs-title) var(--font-mono);
 }
 
 .symbol-preview em {
@@ -3639,8 +3683,8 @@ body {
   flex: none;
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 0 14px;
+  gap: var(--sp-2);
+  padding: 0 var(--sp-3);
   border-bottom: 1px solid var(--border);
 }
 
@@ -3650,19 +3694,19 @@ body {
 
 .ask-head strong {
   color: var(--cream);
-  font-size: 13px;
+  font-size: var(--fs-title);
   font-weight: 600;
 }
 
 .ask-head small {
   margin-left: auto;
   color: var(--faint);
-  font: 500 10px var(--font-mono);
+  font: 500 var(--fs-caption) var(--font-mono);
 }
 
 .ask-head .panel-close {
   width: 28px;
-  height: 28px;
+  height: var(--row-h);
   margin-left: 4px;
   flex: none;
 }
@@ -3671,23 +3715,15 @@ body {
   flex: 1;
   min-height: 0;
   overflow: auto;
-  padding: 14px;
+  padding: var(--sp-3);
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--sp-3);
 }
 
 .chat-message {
   display: grid;
-  gap: 5px;
-}
-
-.chat-message span {
-  color: var(--faint);
-  font-size: 9px;
-  font-weight: 600;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
+  gap: var(--sp-1);
 }
 
 .chat-message.user {
@@ -3697,12 +3733,12 @@ body {
 .chat-message p {
   max-width: 94%;
   margin: 0;
-  padding: 10px 12px;
+  padding: var(--sp-2) var(--sp-3);
   border: 1px solid var(--border);
   border-radius: 10px;
   color: var(--text);
   background: var(--overlay-hover);
-  font-size: 12px;
+  font-size: var(--fs-label);
   line-height: 1.55;
 }
 
@@ -3724,10 +3760,10 @@ body {
   padding: 8px 12px;
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: var(--sp-2);
   color: var(--accent);
   background: var(--accent-soft);
-  font-size: 10px;
+  font-size: var(--fs-caption);
   font-weight: 600;
   letter-spacing: 0.1em;
   text-transform: uppercase;
@@ -3743,16 +3779,16 @@ body {
 
 .board-summary dl {
   margin: 0;
-  padding: 10px 12px;
+  padding: var(--sp-2) var(--sp-3);
   display: grid;
-  gap: 7px;
-  font: 500 11px var(--font-mono);
+  gap: var(--sp-2);
+  font: 500 var(--fs-body) var(--font-mono);
 }
 
 .board-summary dl div {
   display: flex;
   justify-content: space-between;
-  gap: 12px;
+  gap: var(--sp-3);
 }
 
 .board-summary dt {
@@ -3767,7 +3803,7 @@ body {
 .ask-composer {
   flex: none;
   margin: 0 14px 14px;
-  padding: 10px 12px;
+  padding: var(--sp-2) var(--sp-3);
   border: 1px solid var(--border-strong);
   border-radius: 10px;
   background: var(--panel-3);
@@ -3775,15 +3811,15 @@ body {
 
 .ask-composer > span {
   display: block;
-  margin-bottom: 10px;
+  margin-bottom: var(--sp-2);
   color: var(--faint);
-  font-size: 12px;
+  font-size: var(--fs-label);
 }
 
 .ask-composer div {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: var(--sp-2);
 }
 
 .ask-composer i {
@@ -3791,13 +3827,13 @@ body {
   border: 1px solid var(--border-strong);
   border-radius: 6px;
   color: var(--muted);
-  font: 500 10px var(--font-mono);
+  font: 500 var(--fs-caption) var(--font-mono);
   font-style: normal;
 }
 
 .ask-composer button {
   width: 28px;
-  height: 28px;
+  height: var(--row-h);
   margin-left: auto;
   border: 0;
   border-radius: 7px;
@@ -3815,18 +3851,20 @@ body {
 }
 
 /* status */
+/* App-chrome bar (fixed shell region, not a repeating row) — kept outside
+   --row-h/--row-h-dense on purpose. */
 .statusbar {
   grid-area: status;
   height: 26px;
   display: flex;
   align-items: center;
-  gap: 14px;
-  padding: 0 14px;
+  gap: var(--sp-3);
+  padding: 0 var(--sp-3);
   overflow: hidden;
   background: var(--panel-3);
   border-top: 1px solid var(--border);
   color: var(--muted);
-  font: 500 11px var(--font-mono);
+  font: 500 var(--fs-body) var(--font-mono);
   white-space: nowrap;
 }
 
@@ -3850,7 +3888,7 @@ body {
 .status-hints {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: var(--sp-1);
   min-width: 0;
   flex: 1;
   overflow: hidden;
@@ -3885,10 +3923,10 @@ body {
 
 .attached-libraries {
   display: block;
-  margin-top: 8px;
+  margin-top: var(--sp-2);
   overflow: hidden;
   color: var(--muted);
-  font: 500 10px var(--font-mono);
+  font: 500 var(--fs-caption) var(--font-mono);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -3896,10 +3934,10 @@ body {
 .bottom-output,
 .bottom-errors {
   display: grid;
-  gap: 8px;
-  padding: 14px;
+  gap: var(--sp-2);
+  padding: var(--sp-3);
   color: var(--text);
-  font: 500 12px var(--font-mono);
+  font: 500 var(--fs-label) var(--font-mono);
 }
 
 .bottom-output {
@@ -3908,7 +3946,7 @@ body {
 
 .bottom-output-row {
   min-width: 0;
-  padding: 10px 12px;
+  padding: var(--sp-2) var(--sp-3);
   border: 1px solid var(--border);
   border-radius: 7px;
   background: var(--overlay-hover-faint);
@@ -3916,9 +3954,9 @@ body {
 
 .bottom-output-row span {
   display: block;
-  margin-bottom: 5px;
+  margin-bottom: var(--sp-1);
   color: var(--muted);
-  font-size: 10px;
+  font-size: var(--fs-caption);
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
@@ -3934,7 +3972,7 @@ body {
 .bottom-errors .error,
 .bottom-errors .warning {
   margin: 0;
-  padding: 10px 12px;
+  padding: var(--sp-2) var(--sp-3);
   border-radius: 7px;
   background: var(--overlay-hover-faint);
 }
@@ -3958,10 +3996,10 @@ body {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 10px;
+  gap: var(--sp-2);
   height: 100%;
   min-height: 96px;
-  padding: 12px;
+  padding: var(--sp-3);
   text-align: center;
 }
 
@@ -3975,7 +4013,7 @@ body {
 }
 
 .panel-empty strong {
-  font: 700 12px var(--font-mono), monospace;
+  font: 700 var(--fs-label) var(--font-mono), monospace;
   letter-spacing: 0.01em;
   color: var(--text);
   text-transform: uppercase;
@@ -3984,7 +4022,7 @@ body {
 .panel-empty span {
   max-width: 34ch;
   color: var(--faint);
-  font-size: 11px;
+  font-size: var(--fs-body);
   line-height: 1.45;
 }
 
@@ -3996,7 +4034,7 @@ body {
   outline: none;
   color: var(--text);
   background: transparent;
-  font: 500 12px var(--font-ui);
+  font: 500 var(--fs-label) var(--font-ui);
 }
 
 .ask-composer input::placeholder {
@@ -4008,7 +4046,7 @@ body {
    are only the settings-specific dense row content). */
 .settings-sheet-kicker {
   color: var(--faint);
-  font-size: 9px;
+  font-size: var(--fs-micro);
   font-weight: 600;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -4045,17 +4083,14 @@ body {
 }
 
 .settings-row-label {
-  color: var(--faint);
-  font: 600 9.5px var(--font-mono);
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
+  font-family: var(--font-mono);
 }
 
 .settings-row-hint {
   min-width: 0;
   overflow: hidden;
   color: var(--muted);
-  font-size: 11px;
+  font-size: var(--fs-body);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -4066,7 +4101,7 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 14px;
+  gap: var(--sp-3);
   padding: 18px 10px;
   background: var(--panel);
   border-left: 1px solid var(--border);
@@ -4077,18 +4112,18 @@ body {
   min-height: 86px;
   display: grid;
   justify-items: center;
-  gap: 7px;
+  gap: var(--sp-2);
   border: 0;
   color: var(--text);
   background: transparent;
   cursor: pointer;
-  font: 700 10px var(--font-mono);
+  font: 700 var(--fs-caption) var(--font-mono);
 }
 
 .restore-orb svg {
   width: 58px;
   height: 58px;
-  padding: 16px;
+  padding: var(--sp-4);
   border: 2px solid currentColor;
   border-radius: 50%;
   fill: none;
@@ -4129,7 +4164,7 @@ body {
   color: var(--cream);
   background: var(--panel-2);
   box-shadow: var(--elev-pop);
-  font: 600 12px var(--font-ui);
+  font: 600 var(--fs-label) var(--font-ui);
 }
 
 .app-recovery {

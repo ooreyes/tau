@@ -12,7 +12,48 @@
   · corpus runner: 82 imported / **79 warning-clean** / **82 deck-built (ALL)**
   / **82 op-converged (ALL)** — floors 82/79/82/82
   · App.css hardcoded-color burndown: **0 hex outside the single `:root`** ✅
-- **Run started (UTC):** 2026-07-08T17:35Z
+- **Run started (UTC):** 2026-07-08T17:29Z
+- **Status: DONE** — §10 Phase 4a: global type scale + 4pt spacing rhythm +
+  dense-default sweep across `App.css` (~4200 lines). Type: audited all 118
+  `font-size`/`font:` declarations — the app already clustered on 9/10/11/
+  12/13px for ~90% of its text, so `:root` gained a named 5-step scale
+  (`--fs-micro` 9 / `--fs-caption` 10 / `--fs-body` 11 / `--fs-label` 12 /
+  `--fs-title` 13) plus two larger steps used consistently, not as one-offs
+  (`--fs-heading` 14 for close-glyphs, `--fs-display` 15 for the search
+  input/brand wordmark). 109 declarations re-pointed (91 clean bulk repoints
+  + 16 odd sizes like 8.5/9.5/10.5/11.5/12.5px snapped to the nearest
+  role-appropriate step — e.g. `.palette-name` 11.5→12px now actually
+  matches `.cmdk-name`, which a stale comment already claimed it did). 11
+  odd sizes kept as documented, commented exceptions — all schematic/scope
+  canvas SVG text plus the brand lockup, the one welcome headline, and the
+  one big-digit instrument readout (never touched canvas rendering/
+  geometry, per the brief). Letter-spacing: ten drifted tracking values for
+  visually-identical uppercase micro-labels consolidated to two tokens
+  (`--tracking-micro` 0.5px, `--tracking-wide` 0.14em); three sets of
+  N-copies-of-the-same-rule micro-labels (14 selectors total) folded into
+  shared multi-selector rules, same pattern as Phase 3d's keycap
+  consolidation. Spacing: audited every padding/margin/gap; snapped 57
+  arbitrary values (5/7/9/10/11/14/18px) onto `--sp-*` and tokenized 31 more
+  that already matched the scale numerically. Density: swept 21 control-row
+  heights onto `--row-h`/`--row-h-dense`, fixed two real drift cases where a
+  table header didn't match its own commented "mirrors X" sibling
+  (`.meas-table-head`/`.meas-row`), tightened two oversized controls one
+  notch (`.explorer-search`, `.editor-icon-btn`: 30→28px); resolved
+  "density mode" as dense-by-default (no runtime toggle — out of scope per
+  the brief), documented the handful of rows that intentionally stay below
+  `--row-h-dense` (22px table/section headers, the transport cluster, the
+  status bar) so a real header/data-row hierarchy isn't flattened. Verified
+  with `node scripts/design-shot.mjs phase4a-type-spacing` against
+  `screenshots/phase3d-chrome/`: consistent rhythm visible (tighter tab
+  strip, tab palette, board-summary card, command-palette rows now show
+  fewer items per viewport at the new row height) at 1440×900/1280×720/
+  900×600, zero clipped controls, schematic/scope trace geometry pixel-
+  identical (canvas untouched). Gates: typecheck clean, 1259/1259 tests
+  green (unchanged — pure chrome, no new test surface). Net `App.css`:
+  +319/−284 lines (comments + new tokens absorb net growth). This closes
+  the FEATURE_PARITY §10 "Type & spacing scale" and "Density mode" items.
+  Remaining §10 scope: the schematic canvas's own chrome (zoom controls,
+  hover cards, net-label popover) and a final hardcoded-color grep pass. →
 - **Status: DONE** — §10 Phase 3d unit B: instrument footer, activity rail,
   command palette, and reticle-language empty/error states
   (`StatusBar.tsx`, `ShellPanels.tsx`'s `ActivityRail`/`RailButton`/

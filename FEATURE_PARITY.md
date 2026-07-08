@@ -1214,15 +1214,48 @@ never a broken intermediate state on the branch.
   `.cmdk-key`/`.empty-actions kbd`) now shares one CSS rule instead of
   three near-duplicates that had drifted. **This closes §10 Phase 3d.**
   Remaining §10 scope: the schematic canvas's own chrome (zoom controls,
-  hover cards, net-label popover), the type/spacing sweep, and a final
-  hardcoded-color grep pass.
+  hover cards, net-label popover) and a final hardcoded-color grep pass.
+  (The type/spacing sweep closed in Phase 4a, below.)
 - ⬜ **The schematic canvas keeps its bespoke SVG rendering** (it is the
   product's soul) — only its chrome (zoom controls, hover cards, net-label
   editor popover) adopts the system. Pan/zoom must stay 60fps after migration.
-- ⬜ **Type & spacing scale:** one consistent scale via tokens; kill one-off
-  px font sizes and margins as each panel migrates.
-- ⬜ **Density mode:** engineering users want dense; default compact spacing
-  tokens (LTspice users must not feel the UI wastes their pixels).
+- ✅ **Type & spacing scale (2026-07-08, Phase 4a):** audited every
+  `font-size` in `App.css` (118 declarations across `font-size:`/`font:`
+  shorthand) — the app had already clustered on 9/10/11/12/13px for ~90% of
+  its text, so the scale names exactly those five steps (`--fs-micro`
+  9/`--fs-caption` 10/`--fs-body` 11/`--fs-label` 12/`--fs-title` 13) plus
+  two larger steps used consistently by short high-emphasis strings
+  (`--fs-heading` 14 for close-glyphs, `--fs-display` 15 for the search
+  input/brand wordmark). 109 declarations re-pointed to a token (91 clean
+  bulk repoints + 16 odd one-offs snapped to the nearest role-appropriate
+  step, e.g. `.palette-name` 11.5px→12px now matches `.cmdk-name` per its
+  own "same treatment" comment, `.inspector-summary.empty span` 11.5px→11px
+  now matches its populated-state sibling). 11 odd sizes kept as documented
+  exceptions — all schematic/scope canvas SVG text (`.label-layer`,
+  `.scope-axis`, `.op-annotation`, `.net-label-text`, `.plot-cursor text`,
+  `.component .ref/.val`), the brand lockup, the one welcome headline, and
+  the one big-digit instrument readout — each has an inline comment
+  explaining why. Spacing: audited every `padding`/`margin`/`gap`, snapped
+  57 arbitrary values (5/7/9/10/11/14/18px one-offs) to `--sp-*`, plus
+  tokenized 31 more that already matched the scale numerically but were
+  still raw px. Letter-spacing: uppercase micro-labels had drifted across
+  ten different tracking values for visually identical roles — consolidated
+  to two tokens (`--tracking-micro` 0.5px, `--tracking-wide` 0.14em) and
+  folded three separate N-copies-of-the-same-rule micro-label groups into
+  three shared multi-selector rules (14 selectors deduplicated), the same
+  pattern Phase 3d used for keycaps.
+- ✅ **Density mode (2026-07-08, Phase 4a):** resolved as "dense is the
+  default," not a runtime toggle — swept remaining control-row heights onto
+  `--row-h`/`--row-h-dense` (21 sites) and fixed two real drift cases where
+  a table's header row didn't match its own explicitly-commented sibling
+  (`.meas-table-head` 22px → now matches `.op-head`'s 24px; `.meas-row`
+  26px → now matches `.op-row`'s 28px), plus tightened two oversized
+  controls by one notch (`.explorer-search`, `.editor-icon-btn`: 30px→28px).
+  No runtime density toggle was built (out of scope per the brief); a
+  handful of rows stayed intentionally below `--row-h-dense` (22px table/
+  section headers, the compact transport cluster, the app-chrome status
+  bar) since forcing them onto the two-tier scale would have erased a
+  deliberate header/data-row size hierarchy — each is commented in place.
 - ⬜ **Responsive floor:** every migrated panel verified at the app's minimum
   window size AND ~1280×720 (known problem sizes from review).
 - ⬜ **Sweep:** delete dead App.css rules as panels migrate; final pass
