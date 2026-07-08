@@ -17,6 +17,11 @@ import { netAtPoint } from "../schematic/netlist";
 import { currentProbeTraces } from "../simulation/currentProbe";
 import { paramFields, decodeParams, encodeParams } from "../schematic/params";
 import { EngineeringInput } from "./EngineeringInput";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { cn } from "@/lib/utils";
 import type { OperatingPointResult } from "../simulation/operatingPoint";
 import type { AcResult, AcTrace } from "../simulation/acSweep";
 import type { DcSweepResult, DcSweepNet } from "../simulation/dcSweep";
@@ -412,6 +417,21 @@ export function SimulationPanel({
     }
   }, [components, options]);
 
+  // Selecting an analysis tab both switches the visible pane and (for every
+  // analysis but the transient scope, which already has its own Run button)
+  // kicks off that analysis immediately — matches the prior per-tab onClick
+  // behavior, now driven by the Tabs primitive's controlled value.
+  const handleModeChange = (value: string) => {
+    const next = value as typeof mode;
+    setMode(next);
+    if (next === "op") void onRunOperatingPoint();
+    else if (next === "ac") void onRunAcSweep();
+    else if (next === "dc") void onRunDcSweep();
+    else if (next === "tf") void onRunTf();
+    else if (next === "noise") void onRunNoise();
+    else if (next === "step") void onRunStep();
+  };
+
   return (
     <aside className={`plotter${maximized ? " maximized" : ""}`} aria-label="Analysis plotter" aria-busy={isRunning}>
       <div className="plotter-header">
@@ -420,113 +440,104 @@ export function SimulationPanel({
           <div className="plotter-title">{title}</div>
         </div>
         <div className="plotter-actions">
-          <button className="plotter-icon-action" onClick={onStop} title="Clear transient result" aria-label="Stop simulation">
-            ■
-          </button>
-          <button className="plotter-icon-action" onClick={onStep} title="Re-run transient at finer resolution" aria-label="Refine transient resolution" disabled={isRunning}>
-            ◔
-          </button>
-          <button
-            className="plotter-max"
-            onClick={() => setMaximized((m) => !m)}
-            title={maximized ? "Restore panel" : "Maximize analysis"}
-            aria-label="Toggle maximized analysis"
-          >
-            {maximized ? "⤡" : "⤢"}
-          </button>
-          <button className="plotter-close" onClick={onClose} title="Minimize graphs" aria-label="Minimize graphs">
-            ×
-          </button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="outline"
+                size="icon-sm"
+                className="text-muted-foreground hover:text-foreground"
+                onClick={onStop}
+                aria-label="Stop simulation"
+              >
+                <span aria-hidden="true">■</span>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Clear transient result</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="outline"
+                size="icon-sm"
+                className="text-muted-foreground hover:text-foreground"
+                onClick={onStep}
+                disabled={isRunning}
+                aria-label="Refine transient resolution"
+              >
+                <span aria-hidden="true">◔</span>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Re-run transient at finer resolution</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="outline"
+                size="icon-sm"
+                className="text-muted-foreground hover:text-foreground"
+                onClick={() => setMaximized((m) => !m)}
+                aria-label="Toggle maximized analysis"
+              >
+                <span aria-hidden="true">{maximized ? "⤡" : "⤢"}</span>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>{maximized ? "Restore panel" : "Maximize analysis"}</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="outline"
+                size="icon-sm"
+                className="text-muted-foreground hover:text-foreground"
+                onClick={onClose}
+                aria-label="Minimize graphs"
+              >
+                <span aria-hidden="true">×</span>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Minimize graphs</TooltipContent>
+          </Tooltip>
           {mode === "tran" ? (
-            <>
-              <button className="plotter-run" onClick={() => void onRun()} title="Run transient analysis" disabled={isRunning}>
-                {isRunning ? "Running" : "▶ Run"}
-              </button>
-            </>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={isRunning}
+                  className={cn(
+                    "gap-1.5 border-success/35 bg-success/10 text-success",
+                    "hover:bg-success/15 hover:border-success/55",
+                    "disabled:border-success/15 disabled:bg-success/5 disabled:text-success/40",
+                  )}
+                  onClick={() => void onRun()}
+                  aria-label="Run transient analysis"
+                >
+                  <svg viewBox="0 0 12 12" aria-hidden="true" className="size-2.5 fill-current">
+                    <path d="M2.5 1.4v9.2c0 .5.55.8.98.55l7.4-4.6a.64.64 0 0 0 0-1.1l-7.4-4.6a.64.64 0 0 0-.98.55Z" />
+                  </svg>
+                  {isRunning ? "running" : "run"}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>{isRunning ? "Simulation running…" : "Run transient analysis"}</TooltipContent>
+            </Tooltip>
           ) : (
             <div className={`plotter-live${isRunning ? " plotter-live--running" : ""}`} role="status" aria-live="polite">{isRunning ? "Running" : "Ready"}</div>
           )}
         </div>
       </div>
 
-      <div className="plotter-tabs" role="tablist" aria-label="Analysis modes">
-        <div className="plotter-tabs-inner">
-          <button className={`plotter-tab${mode === "tran" ? " active" : ""}`} role="tab" aria-selected={mode === "tran"} onClick={() => setMode("tran")} disabled={isRunning}>
-            TRAN
-          </button>
-          <button
-            className={`plotter-tab${mode === "op" ? " active" : ""}`}
-            role="tab"
-            aria-selected={mode === "op"}
-            disabled={isRunning}
-            onClick={() => {
-              setMode("op");
-              void onRunOperatingPoint();
-            }}
-          >
-            OP
-          </button>
-          <button
-            className={`plotter-tab${mode === "ac" ? " active" : ""}`}
-            role="tab"
-            aria-selected={mode === "ac"}
-            disabled={isRunning}
-            onClick={() => {
-              setMode("ac");
-              void onRunAcSweep();
-            }}
-          >
-            AC
-          </button>
-          <button
-            className={`plotter-tab${mode === "dc" ? " active" : ""}`}
-            role="tab"
-            aria-selected={mode === "dc"}
-            disabled={isRunning}
-            onClick={() => {
-              setMode("dc");
-              void onRunDcSweep();
-            }}
-          >
-            DC
-          </button>
-          <button
-            className={`plotter-tab${mode === "tf" ? " active" : ""}`}
-            role="tab"
-            aria-selected={mode === "tf"}
-            disabled={isRunning}
-            onClick={() => {
-              setMode("tf");
-              void onRunTf();
-            }}
-          >
-            TF
-          </button>
-          <button
-            className={`plotter-tab${mode === "noise" ? " active" : ""}`}
-            role="tab"
-            aria-selected={mode === "noise"}
-            disabled={isRunning}
-            onClick={() => {
-              setMode("noise");
-              void onRunNoise();
-            }}
-          >
-            NOISE
-          </button>
-          <button
-            className={`plotter-tab${mode === "step" ? " active" : ""}`}
-            role="tab"
-            aria-selected={mode === "step"}
-            disabled={isRunning}
-            onClick={() => {
-              setMode("step");
-              void onRunStep();
-            }}
-          >
-            STEP
-          </button>
-        </div>
+      <div className="plotter-tabs">
+        <Tabs value={mode} onValueChange={handleModeChange}>
+          <TabsList aria-label="Analysis modes" className="plotter-tabs-inner">
+            <TabsTrigger className="plotter-tab" value="tran" disabled={isRunning}>TRAN</TabsTrigger>
+            <TabsTrigger className="plotter-tab" value="op" disabled={isRunning}>OP</TabsTrigger>
+            <TabsTrigger className="plotter-tab" value="ac" disabled={isRunning}>AC</TabsTrigger>
+            <TabsTrigger className="plotter-tab" value="dc" disabled={isRunning}>DC</TabsTrigger>
+            <TabsTrigger className="plotter-tab" value="tf" disabled={isRunning}>TF</TabsTrigger>
+            <TabsTrigger className="plotter-tab" value="noise" disabled={isRunning}>NOISE</TabsTrigger>
+            <TabsTrigger className="plotter-tab" value="step" disabled={isRunning}>STEP</TabsTrigger>
+          </TabsList>
+        </Tabs>
       </div>
 
       {mode === "tran" && (
@@ -544,8 +555,10 @@ export function SimulationPanel({
           />
 
           <div className="expr-bar">
-            <input
-              className="expr-input"
+            <Input
+              variant="mono"
+              size="sm"
+              className="flex-1"
               type="text"
               value={exprInput}
               placeholder="Plot an expression, e.g. V(out)-V(in) or V(out)*I(R1)"
@@ -558,45 +571,54 @@ export function SimulationPanel({
                 if (e.key === "Enter") addExpression();
               }}
             />
-            <button className="expr-add primary" onClick={addExpression} disabled={!exprInput.trim()}>
+            <Button size="sm" onClick={addExpression} disabled={!exprInput.trim()}>
               Add trace
-            </button>
-            <button
-              className="expr-add"
-              onClick={exportCsv}
-              disabled={!result?.ok}
-              title="Export the transient waveforms as a CSV table"
-            >
-              Export CSV
-            </button>
-            <button
-              className="expr-add"
-              onClick={exportNetlist}
-              disabled={components.length === 0}
-              title="Export the generated SPICE netlist as a .cir file"
-            >
-              Netlist
-            </button>
-            <button
-              className="expr-add"
-              onClick={exportRaw}
-              disabled={!result?.ok}
-              title="Export the transient waveforms as an LTspice .raw file"
-            >
-              Save .raw
-            </button>
-            <button
-              className="expr-add"
-              onClick={() => refInputRef.current?.click()}
-              disabled={!result?.ok}
-              title="Overlay an LTspice .raw reference waveform and compare"
-            >
-              {refData ? "Ref .raw ✓" : "Ref .raw"}
-            </button>
+            </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="outline" size="sm" onClick={exportCsv} disabled={!result?.ok}>
+                  Export CSV
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Export the transient waveforms as a CSV table</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="outline" size="sm" onClick={exportNetlist} disabled={components.length === 0}>
+                  Netlist
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Export the generated SPICE netlist as a .cir file</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="outline" size="sm" onClick={exportRaw} disabled={!result?.ok}>
+                  Save .raw
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Export the transient waveforms as an LTspice .raw file</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="outline" size="sm" onClick={() => refInputRef.current?.click()} disabled={!result?.ok}>
+                  {refData ? "Ref .raw ✓" : "Ref .raw"}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Overlay an LTspice .raw reference waveform and compare</TooltipContent>
+            </Tooltip>
             {refData && (
-              <button className="expr-add" onClick={() => { setRefData(null); setRefError(null); }} title="Remove the reference overlay">
-                Clear ref
-              </button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => { setRefData(null); setRefError(null); }}
+                  >
+                    Clear ref
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Remove the reference overlay</TooltipContent>
+              </Tooltip>
             )}
             <input
               ref={refInputRef}
@@ -694,8 +716,10 @@ export function SimulationPanel({
         <>
           <AcPlot result={acResult} overlays={acExprTraces} />
           <div className="expr-bar">
-            <input
-              className="expr-input"
+            <Input
+              variant="mono"
+              size="sm"
+              className="flex-1"
               type="text"
               value={acExprInput}
               placeholder="Plot an expression, e.g. db(V(out))-db(V(in)) or mag(V(a,b))"
@@ -708,12 +732,17 @@ export function SimulationPanel({
                 if (e.key === "Enter") addAcExpression();
               }}
             />
-            <button className="expr-add" onClick={addAcExpression} disabled={!acExprInput.trim()}>
+            <Button size="sm" onClick={addAcExpression} disabled={!acExprInput.trim()}>
               Add trace
-            </button>
-            <button className="expr-add" onClick={exportAcCsv} disabled={!acResult?.ok} title="Export the AC sweep as a CSV table">
-              Export CSV
-            </button>
+            </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="outline" size="sm" onClick={exportAcCsv} disabled={!acResult?.ok}>
+                  Export CSV
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Export the AC sweep as a CSV table</TooltipContent>
+            </Tooltip>
           </div>
           {acExprError && <div className="expr-error" role="alert">{acExprError}</div>}
           {acExprList.length > 0 && (
@@ -741,8 +770,10 @@ export function SimulationPanel({
         <>
           <DcPlot result={dcResult} overlays={dcExprTraces} />
           <div className="expr-bar">
-            <input
-              className="expr-input"
+            <Input
+              variant="mono"
+              size="sm"
+              className="flex-1"
               type="text"
               value={dcExprInput}
               placeholder="Plot an expression, e.g. V(out)-V(in) or V(a)/V(b)"
@@ -755,12 +786,17 @@ export function SimulationPanel({
                 if (e.key === "Enter") addDcExpression();
               }}
             />
-            <button className="expr-add" onClick={addDcExpression} disabled={!dcExprInput.trim()}>
+            <Button size="sm" onClick={addDcExpression} disabled={!dcExprInput.trim()}>
               Add trace
-            </button>
-            <button className="expr-add" onClick={exportDcCsv} disabled={!dcResult?.ok} title="Export the DC sweep as a CSV table">
-              Export CSV
-            </button>
+            </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="outline" size="sm" onClick={exportDcCsv} disabled={!dcResult?.ok}>
+                  Export CSV
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Export the DC sweep as a CSV table</TooltipContent>
+            </Tooltip>
           </div>
           {dcExprError && <div className="expr-error" role="alert">{dcExprError}</div>}
           {dcExprList.length > 0 && (
@@ -789,9 +825,14 @@ export function SimulationPanel({
         <>
           <NoisePlot result={noiseResult} />
           <div className="expr-bar">
-            <button className="expr-add" onClick={exportNoiseCsv} disabled={!noiseResult?.ok} title="Export the noise spectrum as a CSV table">
-              Export CSV
-            </button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="outline" size="sm" onClick={exportNoiseCsv} disabled={!noiseResult?.ok}>
+                  Export CSV
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Export the noise spectrum as a CSV table</TooltipContent>
+            </Tooltip>
           </div>
           <MeasTable measurements={noiseMeasurements} />
         </>
@@ -1031,14 +1072,14 @@ function WaveformPlot({
       {success && (
         <div className="pane-controls">
           <span className="pane-controls-label">Panes</span>
-          <button
-            className="pane-btn"
-            onClick={onAddPane}
-            title="Add a new plot pane"
-            aria-label="Add pane"
-          >
-            + Add pane
-          </button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button variant="outline" size="sm" onClick={onAddPane} aria-label="Add pane">
+                + Add pane
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Add a new plot pane</TooltipContent>
+          </Tooltip>
         </div>
       )}
 
@@ -1477,12 +1518,14 @@ function FftView({ result }: { result: AnalysisResult | null }) {
   return (
     <div className="fft-view">
       <button
-        className="fft-toggle"
+        className="disclosure-header"
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
         aria-label="Toggle FFT spectrum"
       >
-        {open ? "▾" : "▸"} FFT spectrum
+        <span className="disclosure-label">FFT spectrum</span>
+        <span className="disclosure-rule" aria-hidden="true" />
+        <span className={`disclosure-chevron${open ? " open" : ""}`}>›</span>
       </button>
       {open && (
         <>
@@ -1510,14 +1553,15 @@ function FftView({ result }: { result: AnalysisResult | null }) {
               <option value="blackman">Blackman</option>
               <option value="rectangular">Rectangular</option>
             </select>
-            <button
-              className={`expr-add${cursorsOn ? " active" : ""}`}
+            <Button
+              variant={cursorsOn ? "default" : "outline"}
+              size="sm"
               aria-pressed={cursorsOn}
               aria-label="Toggle FFT cursors"
               onClick={() => setCursorsOn((c) => !c)}
             >
               cursors
-            </button>
+            </Button>
           </div>
           <div className="scope-shell">
             <svg className="scope-svg" viewBox={`0 0 ${PLOT_WIDTH} ${PLOT_HEIGHT}`} role="img" aria-label="FFT magnitude">
@@ -1665,12 +1709,14 @@ function CursorView({ result, extraTraces }: { result: AnalysisResult | null; ex
   return (
     <div className="fft-view">
       <button
-        className="fft-toggle"
+        className="disclosure-header"
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
         aria-label="Toggle measurement cursors"
       >
-        {open ? "▾" : "▸"} Cursors
+        <span className="disclosure-label">Cursors</span>
+        <span className="disclosure-rule" aria-hidden="true" />
+        <span className={`disclosure-chevron${open ? " open" : ""}`}>›</span>
       </button>
       {open && (
         <>
@@ -2412,7 +2458,7 @@ function Metric({ label, value, tone }: { label: string; value: string; tone: st
   return (
     <div className={`metric ${tone}`}>
       <span>{label}</span>
-      <strong>{value}</strong>
+      <strong className="mono-num">{value}</strong>
     </div>
   );
 }
@@ -2439,7 +2485,7 @@ function DialControl({
     <label className="param-control">
       <div className="param-head">
         <span className="param-label">{label}</span>
-        <span className="param-value">{value}</span>
+        <span className="param-value mono-num">{value}</span>
       </div>
       <input
         className="param-slider"
@@ -2470,7 +2516,7 @@ function ResolutionControl({
     return (
       <div className="resolution-control neutral">
         <span>RESOLUTION</span>
-        <strong>DC / static</strong>
+        <strong className="mono-num">DC / static</strong>
         <small>Add an AC source to calculate samples per cycle.</small>
       </div>
     );
@@ -2483,7 +2529,7 @@ function ResolutionControl({
     <div className={`resolution-control${ready ? " ready" : " warning"}`}>
       <div>
         <span>RESOLUTION</span>
-        <strong>{formatSamples(samples)} samples / cycle</strong>
+        <strong className="mono-num">{formatSamples(samples)} samples / cycle</strong>
         <small>
           {formatEngineering(resolution.maxFrequencyHz, "Hz", 3)} requires {formatCount(resolution.requiredSteps)} steps for {MIN_SAMPLES_PER_CYCLE}× sampling.
         </small>

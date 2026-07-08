@@ -79,8 +79,11 @@
      any gradient glow. */
   --scope-surface:  #060608;
 
-  /* Scope / plotter — instrument true black */
-  --scope-bg:    #030304;
+  /* Scope grid lines — kept subtle against --scope-surface per §10 intent
+     ("grid lines stay subtle"); the scope face itself is --scope-surface
+     above (the former standalone --scope-bg was consolidated into it in
+     §10 Phase 3c — the two were a near-duplicate near-black pair that only
+     existed because an earlier migration draft never reconciled them). */
   --scope-grid:  #17202b;
 
   /* Trace colors — instrument-grade, distinct on dark */
@@ -617,53 +620,28 @@ body {
 /* Plotter header */
 .plotter-header {
   flex-shrink: 0;
+  min-height: 45px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--sp-3);
-  padding: 12px 16px 10px;
+  padding: 8px 14px;
   border-bottom: 1px solid var(--border);
 }
 
+/* Braun-style micro-label — shares the same rule as the palette/explorer/Ask
+   Sim section captions (search this file for ".plotter-kicker" further down
+   in the shared micro-label selector group). */
 .plotter-kicker {
-  font-size: 9px;
-  font-weight: 600;
-  letter-spacing: 0.8px;
-  color: var(--muted);
-  text-transform: uppercase;
   margin-bottom: 2px;
 }
 
 .plotter-title {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
-  color: var(--text);
+  color: var(--cream);
   letter-spacing: -0.2px;
   line-height: 1;
-}
-
-/* Run button in plotter — matches toolbar style, no glow */
-.plotter-run {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-  height: 28px;
-  padding: 0 14px;
-  border-radius: var(--r-sm);
-  color: var(--accent-ink);
-  background: var(--accent);
-  border: none;
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: -0.1px;
-  cursor: pointer;
-  transition: opacity 140ms var(--ease-out);
-  flex-shrink: 0;
-}
-
-.plotter-run:hover {
-  opacity: 0.88;
 }
 
 .plotter-live {
@@ -713,36 +691,41 @@ body {
   .plotter-live--running::before { animation: none; }
 }
 
-/* Analysis tabs — segment control style */
+/* Analysis tabs — segment control style, on the ui/ Tabs (Radix) primitive
+   (§10 Phase 3c: first real consumer of ui/tabs.tsx). Mono uppercase labels
+   read as instrument abbreviations (TRAN/OP/AC/…), distinct from the
+   toolbar's word-label schematic/simulator segmented toggle. Active state
+   keys off Radix's own `data-state` attribute rather than a hand-toggled
+   "active" class. As with every §10 primitive, this plain rule is unlayered
+   so it wins over the Tailwind utility classes tabs.tsx ships by default. */
 .plotter-tabs {
   flex-shrink: 0;
-  display: flex;
-  padding: 8px 16px;
+  padding: 8px 14px;
   border-bottom: 1px solid var(--border);
-  gap: 1px;
   background: transparent;
 }
 
-/* Segment pill wrapper */
 .plotter-tabs-inner {
   display: flex;
   background: var(--panel-3);
   border: 1px solid var(--border);
-  border-radius: var(--r-sm);
+  border-radius: var(--r-md);
   padding: 2px;
   gap: 1px;
 }
 
 .plotter-tab {
+  flex: none;
   height: 24px;
   padding: 0 13px;
   border: none;
   border-radius: 5px;
   background: transparent;
   color: var(--muted);
+  font-family: var(--font-mono);
   font-size: 11px;
   font-weight: 600;
-  letter-spacing: 0.3px;
+  letter-spacing: 0.06em;
   cursor: pointer;
   transition: color var(--motion-fast) var(--spring),
     background var(--motion-fast) var(--spring);
@@ -750,14 +733,21 @@ body {
 
 /* Inactive analysis tabs had no hover — OP/AC/DC/TF/NOISE/STEP were inert
    until clicked. Brighten to --text over an --overlay-hover fill on hover. */
-.plotter-tab:not(.active):not(:disabled):hover {
+.plotter-tab:not([data-state="active"]):not(:disabled):hover {
   color: var(--text);
   background: var(--overlay-hover);
 }
 
-.plotter-tab.active {
-  color: var(--text);
-  background: var(--panel-4);
+/* Active tab reads as a flat cobalt fill — the same accent-filled language as
+   the toolbar's `.mode-btn.active` segmented toggle. */
+.plotter-tab[data-state="active"] {
+  color: var(--accent-ink);
+  background: var(--accent);
+}
+
+.plotter-tab:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent-line);
 }
 
 .plotter-tab:disabled {
@@ -775,7 +765,12 @@ body {
   width: 100%;
   aspect-ratio: 340 / 190;
   display: block;
-  background: var(--scope-bg);
+  /* The scope face is the "oscilloscope screen" — flat instrument black, one
+     notch lighter than the schematic canvas so the two stay distinguishable
+     without a gradient glow, framed by a real hairline (not a barely-there
+     rgba(255,255,255,0.08) leftover from the migration draft — see the
+     SIMULATION PANEL note at the top of this file for that consolidation). */
+  background: var(--scope-surface);
   border: 1px solid var(--border-strong);
   border-radius: var(--r-md);
   box-shadow: var(--elev-2), var(--elev-inset);
@@ -833,6 +828,7 @@ body {
   font-weight: 500;
   letter-spacing: 0.1px;
   font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
 }
 
 .scope-axis.right {
@@ -859,11 +855,13 @@ body {
   gap: 5px;
 }
 
+/* Trace-legend swatches read as small indicator lamps (OP-1 style), not thin
+   color-key underlines — a solid square per trace, not a rounded line. */
 .scope-legend i {
-  width: 14px;
-  height: 1.5px;
-  border-radius: 999px;
-  opacity: 0.85;
+  width: 8px;
+  height: 8px;
+  flex: none;
+  border-radius: 2px;
 }
 
 /* ── Multi-pane waveform viewer ────────────────────────────────────────────── */
@@ -883,45 +881,6 @@ body {
   text-transform: uppercase;
   color: var(--faint);
   flex: 1;
-}
-
-.pane-btn {
-  flex-shrink: 0;
-  background: var(--panel-3);
-  border: 1px solid var(--border);
-  border-radius: 5px;
-  padding: 3px 8px;
-  color: var(--muted);
-  font-size: 10px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: color var(--motion-fast) var(--spring),
-    background var(--motion-fast) var(--spring),
-    border-color var(--motion-fast) var(--spring),
-    box-shadow var(--motion-fast) var(--spring),
-    transform var(--motion-fast) var(--spring);
-}
-
-/* Was hover-only (inert until clicked). Now real snap: brighten + seat an
-   --overlay-hover fill on a stronger hairline, spring lift + --elev-1. */
-.pane-btn:hover {
-  color: var(--text);
-  background: var(--overlay-hover);
-  border-color: var(--border-strong);
-  box-shadow: var(--elev-1);
-  transform: translateY(-1px);
-}
-
-.pane-btn:active {
-  transform: translateY(0);
-  background: var(--overlay-hover-faint);
-  box-shadow: none;
-}
-
-.pane-btn:focus-visible {
-  outline: none;
-  color: var(--text);
-  box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent-line);
 }
 
 /* Each pane is wrapped to carry its own header + plot + legend. */
@@ -1145,40 +1104,63 @@ body {
   margin-top: 6px;
 }
 
-.fft-toggle {
+/* FFT spectrum / Cursors disclosure headers — the same Braun-style micro-label
+   + hairline-rule + chevron affordance as the Palette's `.palette-section-header`
+   (search this file for "Section header — a Braun-style micro-label"), not a
+   bordered pill button. Shared by any collapsible sub-section of the plotter. */
+.disclosure-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   width: 100%;
-  text-align: left;
-  background: var(--panel-3);
-  border: 1px solid var(--border);
-  border-radius: 5px;
-  padding: 5px 8px;
-  color: var(--muted);
-  font-size: 11px;
-  font-family: inherit;
-  letter-spacing: 0.04em;
+  height: 24px;
+  margin: 2px 0;
+  padding: 0 2px;
+  background: transparent;
+  border: none;
   cursor: pointer;
-  transition: color var(--motion-fast) var(--spring),
-    background var(--motion-fast) var(--spring),
-    border-color var(--motion-fast) var(--spring);
+  text-align: left;
 }
 
-/* A full-width disclosure bar shouldn't jump — feedback is a fill + brighten,
-   not a lift. Previously had no transition at all (instant swap). */
-.fft-toggle:hover {
-  color: var(--text);
-  background: var(--overlay-hover);
-  border-color: var(--border-strong);
+.disclosure-label {
+  flex: none;
+  color: var(--faint);
+  font: 600 9.5px var(--font-mono);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  white-space: nowrap;
 }
 
-.fft-toggle:active {
-  background: var(--overlay-hover-faint);
+.disclosure-rule {
+  flex: 1;
+  height: 1px;
+  background: var(--border-subtle);
 }
 
-.fft-toggle:focus-visible {
+.disclosure-chevron {
+  flex: none;
+  color: var(--faint);
+  font-size: 10px;
+  line-height: 1;
+  transition: transform 200ms var(--ease-out), color 200ms var(--ease-out);
+}
+
+.disclosure-chevron.open {
+  transform: rotate(90deg);
+}
+
+.disclosure-header:hover .disclosure-label,
+.disclosure-header:hover .disclosure-chevron {
+  color: var(--muted);
+}
+
+.disclosure-header:focus-visible {
   outline: none;
-  color: var(--text);
-  border-color: var(--accent-line);
-  box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent-line);
+}
+
+.disclosure-header:focus-visible .disclosure-label,
+.disclosure-header:focus-visible .disclosure-chevron {
+  color: var(--accent);
 }
 
 .expr-error {
@@ -1326,13 +1308,18 @@ body {
   text-transform: uppercase;
 }
 
+/* Font/tabular-figure declarations now live in the shared `.mono-num` utility
+   (applied in SimulationPanel.tsx's Metric component) — this rule only
+   carries what `.mono-num` doesn't (size, weight, color, layout). The
+   instrument-cluster read (big mono number, tiny micro-label above) is the
+   NETS/NODES/SAMPLES row's whole point — see `.metric span` below. */
 .metric strong {
   display: block;
   margin-top: 3px;
   color: var(--text);
-  font: 500 17px/1 var(--font-mono);
-  letter-spacing: -0.02em;
-  font-variant-numeric: tabular-nums;
+  font-size: 17px;
+  line-height: 1;
+  font-weight: 500;
 }
 
 .metric.green strong { color: var(--trace-green); }
@@ -1364,12 +1351,14 @@ body {
   background: var(--signal-soft);
 }
 
+/* Same instrument-screen family as .scope-svg (flat --scope-surface black),
+   one radius step up from --r-sm so the two "screens" read as siblings. */
 .op-table {
   margin: 6px 14px 12px;
   border: 1px solid var(--border);
-  border-radius: var(--r-sm);
+  border-radius: var(--r-md);
   overflow: hidden;
-  background: var(--panel-3);
+  background: var(--scope-surface);
 }
 
 .op-row {
@@ -1516,10 +1505,12 @@ body {
   letter-spacing: 0.55px;
 }
 
+/* Font declarations now live in the shared `.mono-num` utility (applied in
+   SimulationPanel.tsx's ResolutionControl) — this rule only carries size/color. */
 .resolution-control strong {
   color: var(--text);
-  font: 600 12.5px var(--font-mono);
-  letter-spacing: -0.01em;
+  font-size: 12.5px;
+  font-weight: 600;
 }
 
 .resolution-control small {
@@ -2065,18 +2056,22 @@ body {
   align-items: baseline;
   justify-content: space-between;
 }
+/* Micro-label: uppercase, tracked, --faint — matches every other instrument
+   caption in the panel (was --muted, a step too bright for a micro-label). */
 .param-label {
   font-size: 9px;
   font-weight: 500;
   letter-spacing: 0.4px;
   text-transform: uppercase;
-  color: var(--muted);
+  color: var(--faint);
 }
+/* Font/tabular-figure declarations now live in the shared `.mono-num` utility
+   (applied in SimulationPanel.tsx's DialControl) — this rule only carries
+   what `.mono-num` doesn't (size, color). */
 .param-value {
-  font: 500 13px var(--font-mono);
-  letter-spacing: -0.01em;
+  font-size: 13px;
+  font-weight: 500;
   color: var(--text);
-  font-variant-numeric: tabular-nums;
 }
 .param-slider {
   -webkit-appearance: none;
@@ -2147,25 +2142,6 @@ body {
   align-items: center;
   gap: 8px;
 }
-.plotter-max {
-  width: 28px;
-  height: 28px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 14px;
-  color: var(--muted);
-  background: var(--panel-2);
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm, 6px);
-  cursor: pointer;
-  transition: color 140ms var(--ease-out, ease), border-color 140ms var(--ease-out, ease);
-}
-.plotter-max:hover {
-  color: var(--text);
-  border-color: var(--border-strong);
-}
-
 /* ── Net labels (named nodes) ──────────────────────────── */
 .net-label-text {
   fill: var(--accent);
@@ -3265,65 +3241,18 @@ body {
   background: var(--accent);
 }
 
-.plotter-header {
-  min-height: 45px;
-  padding: 8px 14px;
-}
-
-.plotter-title {
-  color: var(--cream);
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.plotter-tabs {
-  padding: 8px 14px;
-}
-
-.plotter-tabs-inner {
-  background: var(--panel-3);
-  border-color: var(--border);
-  border-radius: 8px;
-}
-
-/* Active analysis tab rode a stale pre-migration amber (#d68a3c) — an amber
-   selection in a cobalt console. Now the design-system accent. */
-.plotter-tab.active {
-  color: var(--accent-ink);
-  background: var(--accent);
-}
-
-/* Primary Run action — was a flat green fill with a dead opacity fade. Now
-   real depth: elevation at rest, spring lift + green halo on hover, pressed
-   settle. Green routes through the --success token (was #71ab7e). */
-.plotter-run,
-.run-btn {
-  background: var(--success);
-  color: var(--bg);
-  box-shadow: var(--elev-1), 0 0 0 1px var(--success-line),
-    0 5px 16px var(--success-glow);
-  transition: transform var(--motion-fast) var(--spring),
-    box-shadow var(--motion-med) var(--spring),
-    background var(--motion-fast) var(--ease-out);
-}
-
-.plotter-run:hover:not(:disabled),
-.run-btn:hover:not(:disabled) {
-  opacity: 1;
-  background: color-mix(in srgb, var(--success) 90%, white);
-  transform: translateY(-1px);
-  box-shadow: var(--elev-2), 0 0 0 1px var(--success-line),
-    0 9px 24px var(--success-glow);
-}
-
-.plotter-run:active:not(:disabled),
-.run-btn:active:not(:disabled) {
-  transform: translateY(0);
-  box-shadow: var(--elev-1), 0 0 0 1px var(--success-line);
-}
-
-.plotter-icon-action,
-.plotter-close,
+/* §10 Phase 3c: the plotter header/tabs/run-button/icon-action rules that
+   used to live here (duplicating and re-overriding the primary SIMULATION
+   PANEL rules above) are gone — the run button and every header icon button
+   (stop/step/maximize/close) now render the real shadcn `Button` primitive
+   (SimulationPanel.tsx), matching the toolbar's Run button exactly, so their
+   chrome lives in button.tsx's own token-driven variants instead of a
+   parallel `.plotter-run`/`.run-btn`/`.plotter-icon-action`/`.plotter-close`
+   CSS family. `.panel-close` (Ask Sim's own minimize button, ShellPanels.tsx
+   — untouched by this migration) keeps its rule below, now standalone. The
+   effective padding/color values those dead rules used to carry (14px header
+   gutter, --cream title, accent-filled active tab, --scope-surface scope
+   face) are folded directly into the primary rules above. */
 .panel-close {
   width: 30px;
   height: 30px;
@@ -3334,7 +3263,7 @@ body {
   color: var(--muted);
   background: transparent;
   cursor: pointer;
-  font: 800 11px var(--font-mono);
+  font: 800 14px var(--font-mono);
   transition: color var(--motion-fast) var(--spring),
     background var(--motion-fast) var(--spring),
     border-color var(--motion-fast) var(--spring),
@@ -3342,11 +3271,6 @@ body {
     transform var(--motion-fast) var(--spring);
 }
 
-/* These header utility buttons swapped color/bg instantly with no depth. Now
-   real snap: brighten to --cream, seat an --overlay-hover fill on a stronger
-   hairline, spring lift + --elev-1, and a pressed settle. */
-.plotter-icon-action:hover,
-.plotter-close:hover,
 .panel-close:hover {
   color: var(--cream);
   background: var(--overlay-hover);
@@ -3355,32 +3279,16 @@ body {
   transform: translateY(-1px);
 }
 
-.plotter-icon-action:active,
-.plotter-close:active,
 .panel-close:active {
   transform: translateY(0);
   background: var(--overlay-hover-faint);
   box-shadow: none;
 }
 
-.plotter-icon-action:focus-visible,
-.plotter-close:focus-visible,
 .panel-close:focus-visible {
   outline: none;
   color: var(--cream);
   box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent-line);
-}
-
-.plotter-close,
-.panel-close {
-  font-size: 14px;
-}
-
-.scope-svg,
-.op-table {
-  background: var(--scope-surface);
-  border-color: rgba(255, 255, 255, 0.08);
-  border-radius: 8px;
 }
 
 /* ══════════════════════════════════════════════════════════════════════════════

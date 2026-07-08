@@ -12,7 +12,97 @@
   · corpus runner: 82 imported / **79 warning-clean** / **82 deck-built (ALL)**
   / **82 op-converged (ALL)** — floors 82/79/82/82
   · App.css hardcoded-color burndown: **0 hex outside the single `:root`** ✅
-- **Run started (UTC):** 2026-07-08T16:05Z
+- **Run started (UTC):** 2026-07-08T16:38Z
+- **Status: DONE** — §10 Phase 3c: instrument scope chrome — analysis tabs,
+  header run bar, and secondary controls in `SimulationPanel.tsx`
+  (`apps/desktop/src/components/SimulationPanel.tsx` + the SIMULATION PANEL
+  section of `App.css`, ~L592–1160). Analysis tabs (TRAN/OP/AC/DC/TF/NOISE/
+  STEP) migrated onto the ui/ `Tabs` primitive (`@radix-ui/react-tabs` via
+  `components/ui/tabs.tsx` — first real consumer anywhere in the repo,
+  previously only smoke-tested) with a controlled `value`/`onValueChange`
+  that both switches the pane and fires each analysis's run callback, same
+  as the old per-button onClick; labels went from a UI-font pill row to
+  mono uppercase (`font-family: var(--font-mono)`, tracked 0.06em) — reads
+  as instrument abbreviations, not a segmented word-toggle — and the active
+  state now keys off Radix's own `[data-state="active"]` instead of a
+  hand-toggled class. Header run bar: the four icon actions (stop/step/
+  maximize/close) and the transient Run button are now the real shadcn
+  `Button` primitive wrapped in `Tooltip` (hairline `variant="outline"`
+  chrome + on-hover tooltips, where before they were bare glyphs with only a
+  native `title` attribute); the Run button is now *the same component and
+  Tailwind utility classes* as the toolbar's Run button (`Toolbar.tsx`) —
+  literally copied, not just visually matched — so any future toolbar Run
+  restyle carries over here for free. Secondary control row (Add trace/
+  Export CSV/Netlist/Save .raw/Ref .raw/Clear ref/+ Add pane/FFT cursors
+  toggle) migrated onto shadcn `Button` (`sm`/`outline`, `default` for the
+  one accent-weighted primary action per row) with `Tooltip`s carrying what
+  used to be inline `title` text; the three expression text inputs (TRAN/AC/
+  DC "Plot an expression…") now render the ui/ `Input` `variant="mono"`.
+  FFT spectrum / Cursors collapsible headers dropped their bordered-pill
+  look for the same Braun micro-label + hairline-rule + chevron affordance
+  as the Palette's section headers (`.disclosure-header`/`-label`/`-rule`/
+  `-chevron`, mirroring `.palette-section-header` 1:1). Instrument stat
+  cluster (NETS/NODES/SAMPLES `Metric`, STOP/STEPS `DialControl`,
+  RESOLUTION `ResolutionControl`) now routes its numeric readouts through
+  the shared `.mono-num` utility class instead of re-declaring
+  `font-family`/`letter-spacing`/`font-variant-numeric` ad hoc in three
+  separate CSS rules; `.param-label`'s micro-label color corrected
+  `--muted` → `--faint` to match every other micro-label in the app. Scope
+  face: reconciled a real conflict — the primary `.scope-svg` rule painted
+  `--scope-bg` (`#030304`) while a "DESIGN HANDOFF MIGRATION" leftover
+  further down the file silently overrode it to `--scope-surface`
+  (`#060608`) *and* replaced the border with a raw `rgba(255,255,255,0.08)`
+  (a hardcoded-color violation nobody had caught because the override was
+  visually subtle) — now `.scope-svg`/`.op-table` declare `--scope-surface`
+  and `var(--border-strong)` directly, the now-fully-unused `--scope-bg`
+  token is deleted from `:root`, and the border reads noticeably crisper
+  (0.24 alpha vs. the leftover's 0.08). Trace-legend swatches
+  (`.scope-legend i`, shared by every plot's legend — transient, AC, DC,
+  noise, step, FFT) went from a 14×1.5px color-key underline to an 8×8px
+  square "indicator lamp," the OP-1 read the brief asked for. DEAD CSS:
+  `.plotter-run`/`.run-btn` (the latter had **zero** TSX call sites —
+  a leftover from the Toolbar's own Phase 3a migration to `Button` that
+  never got its orphaned CSS twin cleaned up), `.plotter-icon-action`,
+  `.plotter-max`, `.pane-btn`, and `.fft-toggle` all deleted outright now
+  that every call site renders a shadcn primitive instead;
+  `.plotter-header`/`.plotter-title`/`.plotter-tabs`/`.plotter-tabs-inner`'s
+  duplicate "DESIGN HANDOFF MIGRATION" overrides folded into their single
+  primary rule (`.panel-close` — Ask Sim's own minimize button in
+  `ShellPanels.tsx`, untouched by this migration — kept its rule standalone
+  once split out of the old combined selector). Net `App.css`: **−92 lines**
+  (133 insertions / 225 deletions, `git diff --numstat`). LEFT FOR LATER
+  (explicitly out of this unit's scope, per the brief): the FFT
+  signal/window `<select>`s and the OP-amp model `<select>` stay native
+  (not migrated to ui/ `Select` — two small selects, low leverage, real
+  Radix-Select markup risk for a unit already touching this much); native
+  range sliders (STOP/STEPS, cursor position, FFT cursor position) keep
+  their existing custom-token styling untouched per the brief ("do NOT
+  build a custom slider primitive now"); OP/MEAS/FFT table INTERNALS
+  (columns, math) untouched — only their surface/font/micro-label chrome
+  moved, per the scope limit. PROOF: `node scripts/design-shot.mjs
+  phase3c-simulator` → `simulator` at 1440×900/1280×720/900×600 all
+  visibly differ from `screenshots/phase3b-palette-inspector/simulator-*`
+  (mono uppercase tabs, outline-chrome icon buttons + accent-outline "run"
+  button replacing the old solid-green pill, square lamp swatches on the
+  trace legend, restyled Export CSV/Netlist/Save .raw/Ref .raw button row,
+  FFT SPECTRUM/CURSORS micro-label rows with a hairline rule); same RC-
+  charging curve renders identically (trace math untouched, only chrome);
+  zero clipped controls at 900×600 (pre-existing minor cosmetic quirk,
+  NOT a regression: the TRAN expr-input's placeholder text was already
+  heavily truncated in the Phase 3b baseline at this width — same
+  `flex-1 min-w-0` shrink behavior before and after, just a couple of
+  pixels of padding difference from swapping to the shadcn `Input`).
+  Gates: `pnpm -C apps/desktop typecheck` clean; `pnpm -C apps/desktop
+  test` → 1258/1258 green (grepped first for any test depending on
+  `.plotter-tab`/`.expr-add`/`.fft-toggle`/etc. class names or the old
+  `▶ Run`/`title=` strings — none found). No hardcoded colors introduced
+  (`git diff` grepped for hex/rgba outside `var(--...)` and outside the
+  single `:root`, zero hits — the one pre-existing `"#000"` literal in
+  `addExpression`'s placeholder-probe-color argument predates this run and
+  is analysis logic, not chrome).
+- **Next step:** continue the §10 panel-migration checklist — dialogs
+  (Open/Save/settings) and empty/error states are next per FEATURE_PARITY
+  §10, followed by the status bar and the global type/spacing sweep.
 - **Status: DONE** — §10 Phase 3b: operator-grade component palette + bottom
   inspector (`Palette.tsx` right column, `ShellPanels.tsx`'s
   `ComponentInspector`, `EngineeringInput.tsx`). Dense hairline rows at

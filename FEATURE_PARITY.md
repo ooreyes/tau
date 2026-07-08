@@ -1154,8 +1154,37 @@ never a broken intermediate state on the branch.
   floor size as a side effect of the palette's narrower breakpoint);
   manual QA on a 3-field component (AC Voltage: Offset/Amplitude/Frequency)
   confirmed row alignment and focus-ring correctness) →
-  analysis tabs header →
-  SimulationPanel controls (run bar, expression bar, cursors, export) →
+  **analysis tabs + SimulationPanel controls, Phase 3c ✅ (2026-07-08):**
+  the TRAN/OP/AC/DC/TF/NOISE/STEP tabs are now the ui/ `Tabs` primitive
+  (Radix, first real consumer in the repo) with mono-uppercase instrument-
+  abbreviation labels and an accent-filled `[data-state="active"]` tab,
+  matching the toolbar's segmented-toggle language; the header's stop/step/
+  maximize/close icon actions and the transient Run button are the real
+  shadcn `Button` + `Tooltip` primitives — the Run button literally shares
+  the toolbar Run button's component and Tailwind classes now, not just its
+  look; the secondary control row (Add trace/Export CSV/Netlist/Save .raw/
+  Ref .raw/+ Add pane/FFT cursors) is `Button` `sm`/`outline`, expression
+  inputs are the `Input` `variant="mono"`; FFT spectrum/Cursors disclosure
+  headers dropped their bordered-pill look for the Palette's Braun micro-
+  label + hairline-rule + chevron pattern; the NETS/NODES/SAMPLES/STOP/
+  STEPS/RESOLUTION instrument readouts route through the shared `.mono-num`
+  utility instead of three separate ad-hoc font declarations; the scope
+  face (`.scope-svg`/`.op-table`) now consistently paints `--scope-surface`
+  with a `var(--border-strong)` hairline (a migration-era override had
+  silently replaced it with a hardcoded `rgba(255,255,255,0.08)` border —
+  fixed, and the now-fully-dead `--scope-bg` token removed); trace-legend
+  swatches are 8×8px indicator-lamp squares, not 14×1.5px underlines. Dead
+  CSS: `.plotter-run`/`.run-btn` (the latter had zero TSX usages — an
+  orphan from the Toolbar's own earlier `Button` migration),
+  `.plotter-icon-action`, `.plotter-max`, `.pane-btn`, `.fft-toggle` all
+  deleted; the `.plotter-header`/`-title`/`-tabs`/`-tabs-inner` "DESIGN
+  HANDOFF MIGRATION" duplicate overrides folded into their single primary
+  rule. Net `App.css` **−92 lines**. Screenshot-verified at 1440×900,
+  1280×720, and 900×600 (zero clipped controls; same RC-charging trace
+  renders identically — only chrome changed). Left for a later pass: the
+  FFT signal/window `<select>`s and the op-amp model `<select>` (native,
+  not yet ui/ `Select`); native range sliders keep their existing styling
+  per the brief. →
   dialogs (Open/Save/settings) → empty/error states → status bar.
 - ⬜ **The schematic canvas keeps its bespoke SVG rendering** (it is the
   product's soul) — only its chrome (zoom controls, hover cards, net-label
