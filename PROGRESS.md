@@ -12,7 +12,42 @@
   · corpus runner: 82 imported / **79 warning-clean** / **82 deck-built (ALL)**
   / **82 op-converged (ALL)** — floors 82/79/82/82
   · App.css hardcoded-color burndown: **0 hex outside the single `:root`** ✅
-- **Run started (UTC):** 2026-07-07T21:40Z
+- **Run started (UTC):** 2026-07-08T15:15Z
+- **Status: DONE** — §10 screenshot pipeline (STEP 3.5): re-runnable Playwright
+  driver + committed BEFORE baseline. NOT a design commit (no pixel change) —
+  infra so every future design commit can prove it visibly changed the UI, per
+  the AGENTS.md/CLAUDE.md STEP 3.5 mandate. Added `playwright` as an
+  `apps/desktop` devDependency (chromium browser installed to the local
+  Playwright cache; no `@playwright/test` — kept clear of the vitest configs)
+  and `scripts/design-shot.mjs` (repo root, alongside `acceptance-corpus.sh`):
+  starts `pnpm dev:web` as its own process group (reuses an already-listening
+  :1420 instead of double-starting, kills the group on exit), launches headless
+  chromium, and for each of 5 named app states — `empty` (fresh scratchpad),
+  `schematic` (RC Charging example loaded), `simulator` (after clicking Run),
+  `dialog` (settings panel), `command` (Add-component palette) — captures a
+  full-page PNG at three viewports: 1440×900, 1280×720, and 900×600 (the LATTER
+  read live from `tauri.conf.json`'s `minWidth`/`minHeight`, not hardcoded, so
+  it tracks the real responsive floor). Root `package.json` gained a
+  `design:shot` script. Playwright resolves via `createRequire` against
+  `apps/desktop/package.json` (CJS require, not ESM import — pnpm's isolated
+  node_modules means a bare import from a root-level script wouldn't resolve
+  it, and playwright's dynamic exports don't survive ESM/CJS static interop
+  cleanly) rather than hoisting the dependency to the workspace root. RAN:
+  `node scripts/design-shot.mjs baseline` → 15/15 PNGs (100–230 KB each, all
+  visually verified — real UI, not blank) committed under `screenshots/
+  baseline/`. NOTABLE FINDING: `simulator` shows REAL traces in plain
+  `dev:web` (no Tauri) — `isNativeSpiceRuntime()` correctly falls back to the
+  TS transient solver in-browser, so the baseline scope screenshot is a true
+  "sim complete · 241 samples" RC charging curve, not a degraded/error state.
+  Typecheck clean, 1247/1247 green (script is plain `.mjs`, touches no app
+  source). Gitignore already left `screenshots/` untouched (baselines are the
+  proof record and belong in history).
+- **Next step:** every future §10 design commit runs `node scripts/design-shot.mjs
+  <label>` before and after the change and diffs the relevant state/viewport
+  PNGs as the visible-change proof (folding that into the per-panel workflow
+  in FEATURE_PARITY §10 and CURSOR_DO_THIS.md item 90–96). Continue the panel
+  checklist: status bar → left icon rail → global type/spacing pass, or the
+  `output`/`errors` bottom-tab empty states noted in the prior entry.
 - **Status: DONE** — §10 empty/error states: inspector "No component selected".
   DESIGN commit — screenshot-proven visible change. BEFORE: bare top-left stacked
   text (cream `strong` + muted `span`) marooned in the top-left of a large empty

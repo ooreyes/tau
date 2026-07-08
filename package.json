@@ -9,6 +9,7 @@
     "dev:web": "pnpm --filter @tau/desktop dev",
     "build": "pnpm --filter @tau/desktop tauri build",
     "typecheck": "pnpm --filter @tau/desktop exec tsc --noEmit",
-    "test": "pnpm --filter @tau/desktop test"
+    "test": "pnpm --filter @tau/desktop test",
+    "design:shot": "node scripts/design-shot.mjs"
   }
 }
