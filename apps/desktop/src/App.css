@@ -746,10 +746,21 @@ body {
   padding: var(--sp-2) var(--sp-3);
   border-bottom: 1px solid var(--border);
   background: transparent;
+  /* §10 responsive floor: seven analysis tabs (TRAN/OP/AC/DC/TF/NOISE/STEP)
+     don't all fit at the scope column's narrowest usable width (300px) even
+     with the compact padding below — scroll rather than hard-clip the last
+     tab(s) so every analysis mode stays reachable. Invisible at comfortable
+     widths since nothing overflows. */
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.plotter-tabs::-webkit-scrollbar {
+  display: none;
 }
 
 .plotter-tabs-inner {
   display: flex;
+  width: max-content;
   background: var(--panel-3);
   border: 1px solid var(--border);
   border-radius: var(--r-md);
@@ -791,6 +802,16 @@ body {
 .plotter-tab:focus-visible {
   outline: none;
   box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent-line);
+}
+
+/* At the 900px minimum-window floor the scope column can be as narrow as
+   300px — tighten tab padding/tracking so TRAN/OP/AC/DC/TF/NOISE/STEP fit
+   (or come close to fitting) without relying solely on the scroll above. */
+@media (max-width: 1023px) {
+  .plotter-tab {
+    padding: 0 7px;
+    letter-spacing: 0;
+  }
 }
 
 .plotter-tab:disabled {
@@ -2711,7 +2732,14 @@ body {
 /* editor */
 .editor-shell {
   flex: 1;
-  min-width: 0;
+  /* §10 responsive floor: the schematic column (tabs, canvas overlays, and
+     the simulator bottom panel's results table) needs real room to stay
+     usable — App.tsx's ResizeObserver keeps the scope/Ask Sim columns
+     within a budget that respects this floor at any window width down to
+     the 900px minimum, so in practice this never has to bite. It's a CSS
+     backstop for the brief pre-layout-effect frame, not the primary
+     mechanism. */
+  min-width: 260px;
   min-height: 0;
   display: flex;
   flex-direction: column;
@@ -3186,7 +3214,12 @@ body {
 }
 
 .sim-results {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  /* 64px floor keeps a name + engineering-notation value pair
+     (e.g. "R1  12.3mA") from collapsing into single-letter headers when the
+     schematic column is narrow — the column scrolls internally
+     (.result-list below) rather than starving to 0. */
+  grid-template-columns: repeat(3, minmax(64px, 1fr));
+  overflow-x: auto;
 }
 
 .result-list {
@@ -3258,10 +3291,12 @@ body {
    Widths are driven by CSS vars set on .shell-body and dragged via handles. */
 .app-simulator .shell-body > .plotter {
   width: var(--scope-w, 440px);
+  min-width: 300px;
   border-left: 0;
 }
 .app-simulator .shell-body > .ask-panel {
   width: var(--ask-w, 330px);
+  min-width: 260px;
 }
 
 .col-resize-handle {

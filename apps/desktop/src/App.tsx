@@ -81,6 +81,18 @@ const clamp = (v: number, min: number, max: number) => Math.min(max, Math.max(mi
 const blankDocument = (): SchematicDocument => ({ components: [], wires: [], probes: [], netLabels: [] });
 const emptyHistory = (): SchematicHistory => ({ past: [], future: [] });
 
+// §10 responsive floor (simulator's schematic/scope/Ask Sim three-column
+// layout — App.css's `.editor-shell`/`.plotter`/`.ask-panel` mirror these as
+// a CSS backstop). The schematic column must stay usable — tabs, canvas
+// overlays, and the results table — down to the app's stated 900px minimum
+// window width, so the scope and Ask Sim columns budget around it instead of
+// squeezing it to nothing.
+const RAIL_W = 54; // .activity-rail
+const HANDLE_W = 8; // .col-resize-handle, one per open column
+const EDITOR_MIN = 260; // schematic column floor
+const SCOPE_MIN = 300; // analysis scope column floor (matches old drag clamp)
+const ASK_MIN = 260; // Ask Sim column floor (matches old drag clamp)
+
 /** A draggable vertical divider that reports horizontal deltas while dragged. */
 function ColumnResizeHandle({ onResize, label }: { onResize: (dx: number) => void; label: string }) {
   const lastX = useRef(0);
@@ -167,6 +179,8 @@ function App() {
   const [scopeWidth, setScopeWidth] = useState(440);
   const [askWidth, setAskWidth] = useState(330);
   const [notice, setNotice] = useState<string | null>(null);
+  const shellBodyRef = useRef<HTMLDivElement | null>(null);
+  const [shellWidth, setShellWidth] = useState(0);
   // ngspice runs outside React's lifecycle. A request version prevents a late
   // result from an edited, closed, or stopped circuit overwriting current UI.
   const analysisRequestRef = useRef(0);
@@ -654,6 +668,51 @@ function App() {
     return () => window.removeEventListener("keydown", onKey);
   }, [startPlacing, startWiring, startLabeling, cancel, rotate, mirror, copySelected, paste, duplicateSelected, deleteSelected, undo, redo]);
 
+  // Track the shell body's real width so the simulator column budget below
+  // reacts to the actual window size (including the 900px minimum), not just
+  // a value read once at mount.
+  useEffect(() => {
+    const el = shellBodyRef.current;
+    if (!el) return;
+    const observer = new ResizeObserver((entries) => {
+      const width = entries[0]?.contentRect.width;
+      if (typeof width === "number") setShellWidth(width);
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  // §10 responsive floor: whenever the window narrows (or a column opens/
+  // closes), re-clamp the scope/Ask Sim widths so the schematic column never
+  // drops below EDITOR_MIN. If there truly isn't room for all three columns
+  // even at their floors, auto-collapse Ask Sim (the supplementary panel —
+  // still one click away via MinimizedPanelDock) rather than leave the
+  // schematic column unusable. This only ever shrinks toward the current
+  // values, so it never fights a manual drag that already fits.
+  useEffect(() => {
+    if (mode !== "simulator" || shellWidth === 0) return;
+    if (graphOpen && aiOpen) {
+      const budget = shellWidth - RAIL_W - EDITOR_MIN - HANDLE_W * 2;
+      if (budget < SCOPE_MIN + ASK_MIN) {
+        setAiOpen(false);
+        return;
+      }
+      setScopeWidth((w) => Math.min(w, Math.max(SCOPE_MIN, budget - ASK_MIN)));
+      setAskWidth((w) => Math.min(w, Math.max(ASK_MIN, budget - scopeWidth)));
+    } else if (graphOpen) {
+      const budget = shellWidth - RAIL_W - EDITOR_MIN - HANDLE_W;
+      setScopeWidth((w) => Math.min(w, Math.max(SCOPE_MIN, budget)));
+    } else if (aiOpen) {
+      const budget = shellWidth - RAIL_W - EDITOR_MIN - HANDLE_W;
+      setAskWidth((w) => Math.min(w, Math.max(ASK_MIN, budget)));
+    }
+    // scopeWidth/askWidth are intentionally excluded: this effect only reacts
+    // to layout changes (window size, panel open/close), and reads the
+    // latest widths via the functional updater / closure without needing to
+    // re-run on every drag-driven width change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shellWidth, mode, graphOpen, aiOpen]);
+
   return (
     <div className={`app app-${mode}`}>
       <Toolbar
@@ -667,6 +726,7 @@ function App() {
         onOpenSettings={() => setSettingsOpen(true)}
       />
       <div
+        ref={shellBodyRef}
         className="shell-body"
         style={{ "--scope-w": `${scopeWidth}px`, "--ask-w": `${askWidth}px` } as CSSProperties}
       >
@@ -725,7 +785,13 @@ function App() {
           <>
             <ColumnResizeHandle
               label="Resize analysis panel"
-              onResize={(dx) => setScopeWidth((w) => clamp(w - dx, 300, 820))}
+              onResize={(dx) => setScopeWidth((w) => {
+                const next = clamp(w - dx, SCOPE_MIN, 820);
+                if (shellWidth === 0) return next;
+                const reserved = aiOpen ? HANDLE_W + askWidth : 0;
+                const maxAllowed = Math.max(SCOPE_MIN, shellWidth - RAIL_W - HANDLE_W - EDITOR_MIN - reserved);
+                return Math.min(next, maxAllowed);
+              })}
             />
             <AnalysisErrorBoundary>
               <SimulationPanel
@@ -764,7 +830,13 @@ function App() {
           <>
             <ColumnResizeHandle
               label="Resize Ask Sim panel"
-              onResize={(dx) => setAskWidth((w) => clamp(w - dx, 260, 640))}
+              onResize={(dx) => setAskWidth((w) => {
+                const next = clamp(w - dx, ASK_MIN, 640);
+                if (shellWidth === 0) return next;
+                const reserved = graphOpen ? HANDLE_W + scopeWidth : 0;
+                const maxAllowed = Math.max(ASK_MIN, shellWidth - RAIL_W - HANDLE_W - EDITOR_MIN - reserved);
+                return Math.min(next, maxAllowed);
+              })}
             />
             <AskSimPanel result={analysis} onClose={() => setAiOpen(false)} />
           </>
