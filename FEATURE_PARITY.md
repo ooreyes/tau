@@ -1039,11 +1039,40 @@ never a broken intermediate state on the branch.
 - 🟡 **Core primitives adopted:** Button ✅ (2026-07-04: `ui/button.tsx`,
   new-york via cva on Tau tokens, self-contained UA resets since preflight
   is absent, dense sm=28px; first adoption = the 4 document buttons in
-  ShellPanels, killing `.editor-text-btn`'s hardcoded colors). Remaining:
-  Input, Select, Tabs, Dialog, DropdownMenu, Tooltip, ContextMenu,
-  Separator, ScrollArea, Resizable (for the three-column simulator
-  layout), Command (replace/augment the command palette), Toast/Sonner
-  (errors + notifications).
+  ShellPanels, killing `.editor-text-btn`'s hardcoded colors). Phase 2
+  (2026-07-08) added the rest of the priority set, all hand-ported from
+  shadcn new-york onto Tau tokens (no stock shadcn colors, self-contained UA
+  resets, dense sizing): **Input** (`ui/input.tsx`, 28px sm default +
+  `mono` variant → `.mono-num`), **Separator**, **Tabs**, **Tooltip**,
+  **Dialog** (true-black `--popover` panel, hairline ring, `--elev-pop`
+  shadow, `--scrim-strong` backdrop), **DropdownMenu**, **Select**,
+  **ScrollArea**, **ContextMenu** — 8 new Radix packages installed
+  (`@radix-ui/react-{separator,tabs,tooltip,dialog,dropdown-menu,select,
+  scroll-area,context-menu}`) plus `lucide-react` (components.json's
+  declared icon library; first real usage). Open/close motion for every
+  popover-style primitive routes through two new `tokens.css` `@theme`
+  animations (`animate-pop-in/out`, `animate-fade-in/out`) built from the
+  existing `--motion-fast`/`--spring` tokens instead of the
+  tailwindcss-animate plugin, so it stays on the app's own motion language.
+  New shared utilities: `.mono-num` (App.css — tabular-nums + tuned
+  tracking for numeric readouts; the 15+ existing ad-hoc mono call-sites
+  still migrate per-panel in Phase 3) and density tokens `--row-h`(28px)/
+  `--row-h-dense`(24px) in the single `:root` block. First adoption proof:
+  the toolbar Run button now uses `Tooltip` (`Toolbar.tsx`, aria-label
+  "Run simulation" unchanged); the Palette filter input was evaluated for
+  the `Input` primitive but skipped — `.palette-search` has a custom
+  search-glyph mask + a second density override at the responsive
+  "DESIGN HANDOFF MIGRATION" breakpoint (~L3626) that `Input` doesn't
+  model, so adopting it there now would cascade into a layout change
+  outside this phase's scope. Remaining: Resizable (for the three-column
+  simulator layout), Command (replace/augment the command palette),
+  Toast/Sonner (errors + notifications) — deferred to a later phase per
+  the brief. New vitest suite `ui/primitives.test.tsx` (11 tests, jsdom via
+  a per-file `// @vitest-environment jsdom` pragma — every other suite
+  stays on the fast default `node` environment) added `@testing-library/
+  react` + `jsdom` as devDependencies; `vitest.config.ts` now also includes
+  `*.test.tsx` and resolves the `@/` alias (previously only needed by
+  `.test.ts` files, which never imported components).
 - 🟡 **Panel migrations** (one commit each, screenshot-verified):
   toolbar/topbar ✅ (2026-07-05: run/settings buttons onto the Button
   primitive with a new `icon-sm` 28px size + `--color-success` token; the

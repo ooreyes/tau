@@ -1,5 +1,6 @@
 import type { AnalysisResult } from "../simulation/linearTransient";
 import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface ToolbarProps {
   mode: "schematic" | "simulator";
@@ -60,16 +61,20 @@ export function Toolbar({ mode, result, runState, title, onModeChange, onRun, on
       </div>
 
       <div className="titlebar-right">
-        <Button
-          variant="outline"
-          size="icon-sm"
-          className="text-success [-webkit-app-region:no-drag]"
-          onClick={onRun}
-          title="Run simulation and switch to simulator"
-          aria-label="Run simulation"
-        >
-          ▶
-        </Button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="outline"
+              size="icon-sm"
+              className="text-success [-webkit-app-region:no-drag]"
+              onClick={onRun}
+              aria-label="Run simulation"
+            >
+              ▶
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Run simulation and switch to simulator</TooltipContent>
+        </Tooltip>
         <span className={`live-pill ${isSimulator ? "sim" : "schem"}`}>
           <i />
           {statusText}

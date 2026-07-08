@@ -102,6 +102,13 @@
   --sp-6:  24px;
   --sp-8:  32px;
 
+  /* Density — control row heights shared by the §10 shadcn primitive set
+     (button.tsx's sm=28px is the reference; these name that height and its
+     denser sibling so new primitives don't re-derive a magic number). A
+     future data-compact mode (dense tables/inspectors) reads --row-h-dense. */
+  --row-h:        28px;
+  --row-h-dense:  24px;
+
   /* Iconography — inline SVG masks (tinted at use-site by a color token, so
      no baked hex; `stroke='black'` is only the mask's alpha source). */
   --icon-reticle: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.4' stroke-linecap='round'%3E%3Ccircle cx='12' cy='12' r='6'/%3E%3Cpath d='M12 1.75v3.5M12 18.75v3.5M1.75 12h3.5M18.75 12h3.5'/%3E%3C/svg%3E");
@@ -4517,4 +4524,19 @@ body {
   font: inherit;
   font-weight: 700;
   cursor: pointer;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   §10 SHARED UTILITIES — plain CSS (not Tailwind @utility) so every existing
+   ad-hoc `font-family: var(--font-mono)` site can adopt it later without a
+   build-tooling change. Lives here, not in tokens.css: tokens.css is reserved
+   for the Tailwind `@theme` bridge (--color- and --radius- names Tailwind
+   uses to generate utilities) — a real CSS class with declarations does not
+   belong in that contract. This is the ONLY site that defines it; the 15+
+   existing ad-hoc mono call-sites migrate per-panel in Phase 3.
+══════════════════════════════════════════════════════════════════════════════ */
+.mono-num {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
 }

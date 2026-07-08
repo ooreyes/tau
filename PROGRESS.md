@@ -8,11 +8,91 @@
      `git log --oneline -8`, recover/finish/revert that unit FIRST, then go on.
      ─────────────────────────────────────────────────────────────────────── -->
 ## ⏱ HEARTBEAT
-- **Headline metric:** 1247 tests green (default suite) + 5 corpus specs
+- **Headline metric:** 1258 tests green (default suite) + 5 corpus specs
   · corpus runner: 82 imported / **79 warning-clean** / **82 deck-built (ALL)**
   / **82 op-converged (ALL)** — floors 82/79/82/82
   · App.css hardcoded-color burndown: **0 hex outside the single `:root`** ✅
-- **Run started (UTC):** 2026-07-08T15:24Z
+- **Run started (UTC):** 2026-07-08T15:31Z
+- **Status: DONE** — §10 Phase 2: shadcn primitive set on Tau tokens +
+  mono-num/density utilities. Added the remaining priority-order primitives to
+  `apps/desktop/src/components/ui/`: `input.tsx` (28px sm default, `mono`
+  variant → `.mono-num`), `separator.tsx`, `tabs.tsx`, `tooltip.tsx`,
+  `dialog.tsx` (true-black `--popover` panel, hairline ring, `--elev-pop`
+  shadow, `--scrim-strong` backdrop), `dropdown-menu.tsx`, `select.tsx`,
+  `scroll-area.tsx`, `context-menu.tsx` — every one hand-ported from shadcn
+  new-york onto Tau tokens (the CLI would emit stock-palette classes, a build
+  error here), following `button.tsx`'s pattern exactly: Tau tokens only,
+  self-contained UA resets (no preflight), dense sizing. Installed 8 Radix
+  packages (`@radix-ui/react-{separator,tabs,tooltip,dialog,dropdown-menu,
+  select,scroll-area,context-menu}`) plus `lucide-react` (components.json
+  already declared it as the icon library; this is its first real use — for
+  the check/chevron/circle/X glyphs the new menus need). Open/close motion:
+  rather than pull in the tailwindcss-animate plugin (which ships its own
+  duration/easing scale), added `--animate-pop-in/out` + `--animate-fade-in/
+  out` to `tokens.css`'s `@theme` block, built from App.css's own
+  `--motion-fast`/`--spring` tokens — Tailwind v4's `--animate-*` namespace
+  generates the matching `animate-*` utilities for free, Radix drives them
+  via its own `data-state` attributes, no JS animation library. New shared
+  utilities: `.mono-num` (font-mono + tabular-nums + tuned tracking) lives in
+  App.css, NOT tokens.css — tokens.css is reserved for the Tailwind `@theme`
+  bridge, a real CSS class with declarations doesn't belong in that
+  contract; density tokens `--row-h`(28px)/`--row-h-dense`(24px) added to the
+  single existing `:root` block (no second `:root`). Adoption proof: the
+  toolbar Run button (`Toolbar.tsx`) now wraps in `Tooltip`/`TooltipTrigger`/
+  `TooltipContent` (native `title` attr removed, aria-label unchanged).
+  Evaluated adopting `Input` on the Palette filter field but SKIPPED it —
+  `.palette-search` has a search-glyph CSS mask positioned off the field
+  padding plus a second override at the "DESIGN HANDOFF MIGRATION" responsive
+  breakpoint (~App.css L3626) that `Input` doesn't model; wiring it there now
+  would cascade into a layout change outside this phase's low-risk scope
+  (Phase 3's job). TESTING: new `ui/primitives.test.tsx` (11 tests — Button
+  baseline + one render/className-forwarding test per new primitive, several
+  forced open via controlled `open`/`defaultOpen` props to reach portalled
+  content) needed jsdom + `@testing-library/react` (both new devDependencies
+  — neither existed before; this is the FIRST React component test in the
+  repo). Added a `// @vitest-environment jsdom` pragma scoped to that one
+  file so every other suite keeps the fast default `node` environment
+  unchanged. `vitest.config.ts` updated: `include` now also matches
+  `*.test.tsx` (was `*.test.ts`-only, so the new file was silently not
+  running until this fixed it), and a `resolve.alias` mirroring vite.config's
+  `@/` → `src/` (test files importing `@/lib/utils` failed to resolve
+  without it — no prior `.test.ts` file ever imported through the alias).
+  Radix + jsdom needs a few DOM polyfills (ResizeObserver stub,
+  hasPointerCapture/setPointerCapture/releasePointerCapture/scrollIntoView
+  stubs) or ScrollArea/Select throw on mount — added once in a `beforeAll` in
+  the test file. BUG CAUGHT + FIXED before any of this shipped: my first
+  App.css edit (`.mono-num` doc-comment) accidentally embedded the literal
+  substring `*/` inside a `/* … */` comment (`--color-*/--radius-*`), which
+  silently truncated the comment early and fed the remaining comment prose
+  to the CSS parser as real rules — broke the dev server AND (more subtly)
+  Tailwind's candidate scanner threw a confusing "Unterminated string"
+  first, before the real "Invalid custom property" parse error surfaced;
+  root-caused with a standalone `lightningcss` transform of just App.css
+  (pinpointed exact line:col) rather than guessing from the dev-server
+  message. Fixed by rewording the comment to avoid the `-*/-` collision.
+  Verified with `node -e "require('lightningcss').transform(...)"` on both
+  App.css and tokens.css post-fix (both parse clean) before re-running the
+  screenshot pipeline. PROOF: `node scripts/design-shot.mjs
+  phase2-primitives` → 15/15 PNGs; diffed byte sizes + a visual read of
+  `empty`/`simulator` at 1440×900 and `empty` at 900×600 against
+  `screenshots/phase1-true-black/` — `empty`/`schematic` are byte-identical,
+  the rest differ by only tens to a couple hundred bytes (simulator's scope
+  trace has a few dynamic pixels), confirming this phase is additive with NO
+  layout regression at any of the 3 viewports (this phase's own primitives
+  aren't yet wired into a visible always-on site besides the Run tooltip,
+  which by nature doesn't show in a static screenshot). Gates:
+  `pnpm -C apps/desktop typecheck` clean; `pnpm -C apps/desktop test` →
+  1258/1258 green (1247 prior + 11 new).
+- **Next step:** continue the §10 visual-design overhaul with Phase 3 — wire
+  the newly-added primitives into real panels (Select for analysis-mode
+  pickers, DropdownMenu/ContextMenu for the explorer tree and canvas
+  right-click menus, Tabs for the analysis-mode switcher, ScrollArea for the
+  explorer/palette scroll regions, Dialog to replace the hand-rolled
+  `.settings-panel`/`.confirm-dialog`), migrate the 15+ existing ad-hoc
+  `font-family: var(--font-mono)` call-sites onto `.mono-num`, and keep
+  working the panel-migration checklist (status bar → left icon rail →
+  global type/spacing pass). Resizable/Command/Sonner remain deliberately
+  deferred (per the Phase 2 brief) until a layout big enough to need them.
 - **Status: DONE** — §10 true-black palette retune (Phase 1 of the visual-design
   overhaul; DESIGN commit, screenshot-proven). Surgical edit of the single
   `:root` block in `apps/desktop/src/App.css` (no other file touched, no

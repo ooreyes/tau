@@ -57,6 +57,36 @@
   --radius-md: var(--r-md);
   --radius-lg: var(--r-lg);
   --radius-xl: var(--r-xl);
+
+  /* §10 Radix primitive motion — ties Tailwind v4's `--animate-*` theme
+   * namespace (which generates `animate-*` utilities) to App.css's own
+   * --motion-fast/--motion-med/--spring tokens instead of pulling in the
+   * tailwindcss-animate plugin (which would ship its own easing/duration
+   * scale, drifting from the rest of the app's motion language). `pop` is
+   * for small popover-surfaces (tooltip/select/dropdown/context-menu);
+   * `fade` is for dialog's scrim. Radix drives these via its own
+   * `data-[state=open|closed]` attributes — no JS animation library. */
+  --animate-fade-in:  tau-fade-in var(--motion-fast) var(--spring) both;
+  --animate-fade-out: tau-fade-out var(--motion-fast) var(--spring) both;
+  --animate-pop-in:   tau-pop-in var(--motion-fast) var(--spring) both;
+  --animate-pop-out:  tau-pop-out var(--motion-fast) var(--spring) both;
+}
+
+@keyframes tau-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes tau-fade-out {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}
+@keyframes tau-pop-in {
+  from { opacity: 0; transform: scale(0.96) translateY(2px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+@keyframes tau-pop-out {
+  from { opacity: 1; transform: scale(1) translateY(0); }
+  to   { opacity: 0; transform: scale(0.96) translateY(2px); }
 }
 
 /* The `base` layer stays empty for now. Preflight's border reset
