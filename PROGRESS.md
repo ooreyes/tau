@@ -8,14 +8,15 @@
      `git log --oneline -8`, recover/finish/revert that unit FIRST, then go on.
      ─────────────────────────────────────────────────────────────────────── -->
 ## ⏱ HEARTBEAT
-- **Headline metric:** 1292 tests green (default suite, +33 from this unit so
-  far) + 5 corpus specs · corpus runner: 82 imported / **79 warning-clean** /
+- **Headline metric:** 1300 tests green (default suite, +41 from this unit)
+  + 5 corpus specs · corpus runner: 82 imported / **79 warning-clean** /
   **82 deck-built (ALL)** / **82 op-converged (ALL)** — floors 82/79/82/82
   · App.css hardcoded-color burndown: **0 hex outside the single `:root`** ✅
 - **Run started (UTC):** 2026-07-08T19:09Z
-- **Status: IN PROGRESS** — UX-correctness unit (owner feedback: the app
-  "lacks intuitiveness a real LTspice company would have"), three
-  one-commit-each interaction fixes:
+- **Status: DONE** — UX-correctness unit (owner feedback: the app "lacks
+  intuitiveness a real LTspice company would have"), three one-commit-each
+  interaction fixes, all landed. See the dated log entry below for full
+  root-cause writeups; summary:
   1. ✅ **Edit lock**: schematic read-only outside the schematic tab. Fixed
      the keyboard gate (App.tsx's keydown handler had no `mode` check) AND a
      second, more severe bypass the exploration missed: `EditorToolbar`
@@ -28,9 +29,162 @@
      one voltage probe (toggle off on the same point, move on a different
      point), and clicking a component body (no pin/wire under the cursor)
      is a no-op — "probing an opamp makes no sense."
-  3. ⏳ Comparator/opamp value label + inspector param fields — next.
-- Not pushed yet (orchestrator reviews per-commit); see dated log entries for
-  file/test/commit-hash detail as each lands.
+  3. ✅ **Comparator/opamp value label + inspector param fields**: the canvas
+     label suffixed the catalog's `unit` blindly onto multi-field values
+     ("1 0Vhi Vlo"); each multi-field kind (comparator, vpulse; tline too)
+     now gets a bespoke formatter. The inspector bug was a different,
+     broader CSS bug than it looked: `.selection-strip`'s `.param-fields`
+     (used by EVERY component kind's structured params in the simulator
+     view, not just the comparator) was missing `grid-column: 1/-1` and
+     auto-placed into the 52px label rail, collapsing every value input to
+     ~18px. `.value-editor` already had the fix; `.param-fields` didn't.
+- Not pushed yet (orchestrator reviews per-commit); see dated log entry below
+  for file/test/commit-hash detail per commit.
+
+---
+
+## 2026-07-08T19:09Z — auto/ltspice-parity — §UX: 3-commit interaction-bug unit (edit lock, probe dedup, comparator label/inspector)
+
+### Why
+Owner feedback: the app "lacks intuitiveness a real LTspice company would
+have." A prior exploration pass produced a code map of three concrete
+interaction bugs; this run verified each claim against the actual code
+before fixing (two of the three root causes were more/different than the
+map described — see below) and landed one commit per bug, tests-first where
+practical, gates green on every commit.
+
+### Commit 1 — `auto: schematic read-only outside schematic view — gate keyboard mutations (§UX)`
+- **Map claim:** keyboard handler in `App.tsx` has no `mode` guard.
+  **Confirmed** — Delete/Backspace, undo/redo, rotate/mirror, copy/paste/
+  duplicate, and catalog place-hotkeys (R/C/L/V/…) all dispatched regardless
+  of `mode`.
+- **Found beyond the map:** `EditorToolbar` (`ShellPanels.tsx`) renders
+  unconditionally regardless of `mode` (only `.editor-doc-btn`/example-picker/
+  transport are CSS-hidden in simulator mode). Its Wire/Label/Undo/Redo/
+  Clear-scratchpad `IconButton`s stayed live and clickable while viewing the
+  simulator — Undo/Redo/Clear could mutate or wipe the document via a mouse
+  click with **zero** canvas interaction, a more severe bypass than the
+  keyboard one.
+- **Fix:** extracted the mode gate into a pure, exported pair in
+  `schematic/shortcuts.ts` — `isEditingAction` (cancel/palette are
+  view-level; everything else is an editing action) and
+  `dispatchShortcutAction` (applies the gate, then dispatches to the same
+  callback shape `App.tsx` already had). `App.tsx`'s keydown effect now
+  calls it instead of switching directly, and also gates the catalog-hotkey
+  placement lookup. `EditorToolbar` gained a `mode` prop; Wire/Label/Undo/
+  Redo/Clear-scratchpad get `disabled={readOnly}`; Select (cancel) and Probe
+  stay enabled (non-mutating / probing must keep working in simulator view).
+- **Tests:** 20 new (`shortcuts.test.ts`: `isEditingAction`/
+  `dispatchShortcutAction` unit coverage; `useSchematic.test.ts`: a new
+  describe block wires `dispatchShortcutAction` to the REAL store's bound
+  actions — the same callback graph `App.tsx` uses, not mocks — and proves
+  Delete/undo/rotate/mirror/duplicate/paste/wire/label are no-ops in
+  simulator mode while cancel still works, plus a schematic-mode positive
+  control) + 6 new (`components/ShellPanels.test.tsx`, new file: renders
+  `EditorToolbar` and asserts the disabled buttons don't fire their store
+  callback on click, and Select/Probe stay enabled).
+- **Gates:** typecheck clean; 1285/1285 tests green.
+- **Commit:** `503da95`.
+
+### Commit 2 — `auto: one probe per net — net-identity dedup, no body probing (§UX)`
+- **Map claim:** `addProbe` dedups on exact `x===x && y===y`; `netAtPoint`
+  exists in `schematic/netlist.ts` as the net-resolution authority.
+  **Confirmed**, both.
+- **Fix:** `addProbe` now resolves the click AND every existing voltage
+  probe through `netAtPoint` (via a freshly `extractCircuit`'d net list) so
+  a net carries at most one voltage probe. Toggle semantics chosen: the
+  SAME point clicked again removes the probe (preserves the old toggle-off
+  feel for the common case); a DIFFERENT point on a net that already has a
+  probe **moves** the marker there instead of stacking a second ring.
+  Clicking off any net entirely (empty canvas, or a component body with no
+  pin/wire under the cursor) is a no-op — chose the stricter "nothing"
+  behavior per the brief; "probing an opamp makes no sense" now literally
+  does nothing rather than dropping a stray, disconnected probe. An isolated
+  pin with no wire still probes (a valid, if unconnected, net — pins are DSU
+  nodes even without a wire). Current/clamp probes are unaffected
+  (`toggleCurrentProbe` already dedups per component).
+- **Tests:** 7 new (`useSchematic.test.ts`, new describe block): net dedup
+  at two different points (moves, doesn't duplicate), same-point toggle-off,
+  component-body no-op, isolated-pin still probes, empty-canvas no-op,
+  current/net-probe independence preserved. Also updated one existing
+  fixture (`toggleCurrentProbe` describe block) to add a wire so a
+  pre-existing "coincident probe" test's click point still resolves to a
+  net under the new, stricter rule.
+- **Gates:** typecheck clean; 1292/1292 tests green.
+- **Commit:** `bc9aeb9`.
+
+### Commit 3 — `auto: fix comparator/opamp value labels + inspector param fields (§UX)`
+- **Map claim (a):** canvas label garbled ("1 0Vhi Vlo") because
+  `catalog.ts`'s comparator `unit: "Vhi Vlo"` gets blindly suffixed onto the
+  joined value tokens in `Canvas.tsx`'s `sourceValueLabel`. **Confirmed**,
+  and the same bug class was ALSO latent for `vpulse` (`unit: "V"` suffixed
+  onto its 4-token PULSE spec) and `tline` (`unit: "Ω s"` suffixed onto its
+  "Td=/Z0=" key=value spec) — opamp's `unit` is already `""` so it was never
+  actually broken, just correctly named as a suspect to check.
+- **Map claim (b):** inspector pills for OUTPUT HIGH/LOW/HYSTERESIS render
+  empty; values decode fine; CSS/layout bug. **Confirmed the symptom, but
+  the map's location was wrong**: the SCHEMATIC-mode `ComponentInspector`
+  (`.property-grid`, `ShellPanels.tsx`) — the one `design-shot.mjs`'s
+  `inspector` state actually screenshots — renders comparator params fine
+  (verified live). The real bug is in the SIMULATOR view's separate
+  "selection strip" (`SimulationPanel.tsx`, `.selection-strip`/
+  `.param-fields`), which has NO screenshot coverage in the pipeline. Root
+  cause: `.selection-strip` is a 2-column CSS grid (52px label rail + 1fr
+  content); `.param-fields` — the 3rd+ grid child, used for EVERY selected
+  component's structured params, not just the comparator — had no explicit
+  `grid-column` and CSS grid auto-placement wrapped it into row 2, **column
+  1** (the narrow 52px rail) instead of the wide content column, collapsing
+  every value input to ~18px (just the SI-prefix select arrow, no room for
+  the mantissa — exactly the "value-less pill outline" screenshot). Found by
+  dumping computed `gridTemplateColumns`/`getBoundingClientRect()` via a
+  headless-Chromium probe, not by guessing at the CSS. `.value-editor` (the
+  MODEL-picker/single-field sibling) already had `grid-column: 1/-1`;
+  `.param-fields` was just missing the same line.
+- **Fix (a):** `catalog.ts`'s comparator/vpulse/tline entries now have
+  `unit: ""` (the field is reserved for genuine single-quantity kinds).
+  `Canvas.tsx`'s `sourceValueLabel` gives each multi-field kind its own
+  formatter built from `decodeParams` (the same structured fields the
+  inspector uses): comparator → `"1V/0V"` (`"±0.1V"` appended only when
+  hysteresis is non-zero), vpulse → `"0V→5V @ 100kHz"`, tline → the raw
+  `"Td=50n Z0=50"` text unmodified (LTspice shows it as-is; no unit ever
+  applied). vac/iac's pre-existing "amp @ freq" bespoke formatter is
+  unchanged, now sitting alongside these instead of being the one exception.
+- **Fix (b):** added `grid-column: 1 / -1;` to `.param-fields` in
+  `App.css`, mirroring `.value-editor`'s existing rule.
+- **Behavior chosen:** comparator canvas label is `high/low` in volts (LTspice
+  doesn't show a "model name" for Tau's native ideal comparator — there
+  isn't one, the value line IS the spec), matching the brief's suggested
+  `"1V/0V"` format.
+- **Tests:** 8 new (`components/Canvas.labels.test.ts`, new file):
+  resistor's plain unit-suffix path unchanged, no double-suffix on an
+  already-unitted value, vac/iac's existing bespoke format unchanged,
+  comparator default/explicit/hysteresis cases, vpulse's 4-token format,
+  tline's raw-text format, opamp's untouched empty-unit path.
+- **Screenshot proof:** `screenshots/unitA-comparator/` — before/after pairs
+  at 1440×900 and the app's 900×600 floor:
+  `comparator-selection-strip-before-*-crop.png` (empty pill outlines, only
+  the SI-arrow visible) vs. `comparator-selection-strip-after-*-crop.png`
+  (values "1"/"0"/"0" visible and editable); `comparator-inspector-after-*`
+  and `comparator-simulator-after-*` for full-panel context. Captured via a
+  throwaway Playwright driver (not committed) that placed a comparator via
+  the command palette, selected it in both schematic and simulator view,
+  and screenshotted `.bottom-panel` / `.selection-strip`.
+- **Gates:** typecheck clean; 1300/1300 tests green.
+- **Commit:** (recorded after this entry lands — see `git log`).
+
+### Bookkeeping
+- `FEATURE_PARITY.md`: annotated §2 (schematic capture — edit-lock,
+  comparator label/inspector), §6 (probe dedup by net identity), and
+  corrected a §10 Phase-3b/4a entry that had claimed the selection-strip
+  editors were "untouched" (true, but that concealed the layout bug above —
+  now cross-referenced).
+- Not pushed — orchestrator reviews per commit. No `wip: checkpoint` auto-
+  commit was created during this run (checked `git log` after each commit).
+
+### Next step
+Unit complete; return to `FEATURE_PARITY.md`'s Definition-of-Done backlog
+(acceptance-corpus script, `class-d_starter.asc` comparator-in-loop
+waveform parity, remaining §6 waveform-viewer items) for the next run.
 
 ---
 

@@ -258,6 +258,31 @@ Status legend: ✅ done · 🟡 partial · ⬜ not started
 - ✅ Grid snap, pan, zoom, fit — `Canvas.tsx`
 - ✅ Undo/redo, autosave, multi-tab documents
 - ✅ Component value editing (double-click) + structured params
+- ✅ **Comparator/opamp value label + inspector param fields fixed (§UX)**:
+  two bugs, both traced to multi-field values getting treated like a single
+  quantity. (a) The canvas label blindly suffixed the catalog's `unit`
+  string onto the whole value, so a comparator's default "1 0" + the
+  `unit: "Vhi Vlo"` hint rendered as garbled "1 0Vhi Vlo" (same class of bug
+  also latent for `vpulse`'s 4-token PULSE spec and `tline`'s "Td=/Z0=" key=
+  value spec). `unit` is now reserved for genuine single-quantity kinds;
+  `Canvas.tsx`'s `sourceValueLabel` gives each multi-field kind its own
+  formatter built from the same `decodeParams` the inspector uses —
+  comparator → "1V/0V" (± hysteresis when set), vpulse → "0V→5V @ 100kHz",
+  tline → the raw "Td=50n Z0=50" text as-is (no unit ever applied to it).
+  (b) The simulator view's "selection strip" (`SimulationPanel.tsx`)
+  OUTPUT HIGH/OUTPUT LOW/HYSTERESIS fields rendered as empty pill outlines —
+  values decoded fine ("1"/"0"/"0"), so this was a pure CSS bug, and a
+  different one than it looked: `.selection-strip` is a 2-column CSS grid
+  (52px label rail + 1fr content); `.param-fields` (the 3rd+ grid child,
+  wrapping every structured-param field for ANY selected component, not
+  just the comparator) had no explicit `grid-column`, so it auto-placed into
+  row 2 / **column 1** — the narrow 52px rail — collapsing every value input
+  to ~18px (just the SI-prefix arrow). `.value-editor` (the single-field/
+  MODEL-picker sibling) already carried the fix (`grid-column: 1/-1`);
+  `.param-fields` was just missing the same line. Fixed at 1440×900 and the
+  app's 900×600 floor; screenshots (before/after) under
+  `screenshots/unitA-comparator/`. 8 new label-formatter tests
+  (`Canvas.labels.test.ts`).
 - ✅ Probe tool (click node → plot) — `probes`
 - ✅ **Mirror/flip components** (LTspice Ctrl+E) — `mirrored` flag on
   `SchematicComponent` (flip across the vertical axis, applied BEFORE rotation to
@@ -1181,6 +1206,12 @@ checklist for the authoritative list.
   renamed `.eng-input` (matches its component file) and now uses
   `var(--row-h)` + `.mono-num` throughout (shared with SimulationPanel's
   selection-strip editors — those unify for free, untouched otherwise).
+  **Correction (§UX, 2026-07-08)**: "untouched" concealed a real, more severe
+  bug in the selection-strip's OWN layout that this pass never exercised —
+  `design-shot.mjs`'s `inspector` state only ever selects a component in
+  SCHEMATIC view (`.property-grid`), never in the simulator view
+  (`.selection-strip`), so the bug had no screenshot coverage. See the dated
+  entry below for the root cause and fix.
   `scripts/design-shot.mjs` gained a permanent `inspector` state (selects
   the first canvas component so the populated property grid, not just its
   empty state, is screenshot-verified going forward). Dead-CSS sweep: the

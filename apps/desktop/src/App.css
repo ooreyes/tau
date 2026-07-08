@@ -2206,6 +2206,13 @@ body {
 
 /* ── Structured parameter fields (selection strip) ─────── */
 .param-fields {
+  /* `.selection-strip` is a 2-column grid (52px label rail + 1fr content);
+     without an explicit column span this 3rd+ grid child auto-placed into
+     row 2 / column 1 — the narrow 52px label rail, not the wide content
+     column — collapsing every field's value input to ~18px (just the SI
+     select arrow, no room for the mantissa). Same fix `.value-editor`
+     already has, just missing here. */
+  grid-column: 1 / -1;
   display: flex;
   flex-direction: column;
   gap: var(--sp-2);

@@ -83,14 +83,36 @@ const explicitUnit = (value: string, unit: string) => {
   return `${v}${unit}`;
 };
 
-const sourceValueLabel = (kind: ComponentKind, value: string) => {
-  if (kind !== "vac" && kind !== "iac") {
-    const unit = CATALOG_BY_KIND[kind].unit;
-    return explicitUnit(value, unit);
+/**
+ * Canvas value label per component kind. Most kinds are a single quantity, so
+ * the catalog's `unit` is simply suffixed onto the value (`explicitUnit`
+ * below). A handful of kinds store several fields in one value string
+ * (AC sources' "amplitude freq", a comparator's "vhigh vlow vhyst", a pulse
+ * source's "low high freq duty") — for those, suffixing one unit onto the
+ * whole joined string is meaningless (or actively garbled, e.g. a
+ * comparator's "1 0" + a literal "Vhi Vlo" unit hint). Each gets its own
+ * formatter built from the same structured fields the inspector uses
+ * (`decodeParams`), instead of the catalog abusing `unit` as a display hint.
+ */
+export const sourceValueLabel = (kind: ComponentKind, value: string): string => {
+  if (kind === "vac" || kind === "iac") {
+    const params = decodeParams(kind, value);
+    const ampUnit = kind === "vac" ? "V" : "A";
+    return `${explicitUnit(params.amplitude ?? "1", ampUnit)} @ ${explicitUnit(params.frequency ?? "1k", "Hz")}`;
   }
-  const params = decodeParams(kind, value);
-  const ampUnit = kind === "vac" ? "V" : "A";
-  return `${explicitUnit(params.amplitude ?? "1", ampUnit)} @ ${explicitUnit(params.frequency ?? "1k", "Hz")}`;
+  if (kind === "vpulse") {
+    const params = decodeParams(kind, value);
+    const low = explicitUnit(params.low ?? "0", "V");
+    const high = explicitUnit(params.high ?? "5", "V");
+    return `${low}→${high} @ ${explicitUnit(params.frequency ?? "100k", "Hz")}`;
+  }
+  if (kind === "comparator") {
+    const params = decodeParams(kind, value);
+    const base = `${explicitUnit(params.vhigh ?? "1", "V")}/${explicitUnit(params.vlow ?? "0", "V")}`;
+    const hyst = Number(params.vhyst ?? "0");
+    return hyst ? `${base} ±${explicitUnit(String(hyst), "V")}` : base;
+  }
+  return explicitUnit(value, CATALOG_BY_KIND[kind].unit);
 };
 
 const componentBounds = (component: SchematicComponent) => {
