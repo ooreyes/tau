@@ -12,7 +12,100 @@
   · corpus runner: 82 imported / **79 warning-clean** / **82 deck-built (ALL)**
   / **82 op-converged (ALL)** — floors 82/79/82/82
   · App.css hardcoded-color burndown: **0 hex outside the single `:root`** ✅
-- **Run started (UTC):** 2026-07-08T15:52Z
+- **Run started (UTC):** 2026-07-08T16:05Z
+- **Status: DONE** — §10 Phase 3b: operator-grade component palette + bottom
+  inspector (`Palette.tsx` right column, `ShellPanels.tsx`'s
+  `ComponentInspector`, `EngineeringInput.tsx`). Dense hairline rows at
+  `--row-h-dense` (24px) replace the old ~27px flexible rows; hotkey badges
+  went from an embossed gradient/bevel keycap to a flat hairline mono badge;
+  section headers ("Passives"/"Sources"/…) dropped the "— X —" em-dash
+  bracketing for an uppercase-tracked micro-label + a hairline rule filling
+  the row (Braun-style); selection is now an accent hairline on the row's
+  left edge + accent name text (`--overlay-hover-faint`, not the old
+  `--accent-soft` fill — "never a heavy fill" per the brief). BEFORE: names
+  truncated badly even at 1440×900 ("DC Volta…", "Potentio…") because the
+  316px-looking `.palette` rule was fully shadowed by a higher-specificity
+  `.shell-body > .palette { width: 236px }` nobody had reconciled — the real
+  panel was already narrower than it looked, split 50/50 between a name and
+  description column. AFTER: that rule is now the single source of truth
+  (264px comfortable / 208px at the 900px floor), the row grid favors the
+  name (`minmax(56px,1.4fr)` vs `minmax(0,1fr)` for the description), and a
+  `@container palette-list (max-width: 220px)` query drops the description
+  column entirely rather than ellipsizing both — at 208px (900×600) every
+  name now renders in full ("DC Voltage", "Pulse Voltage", "Potentiometer",
+  no clipping); at 264px (1440×900/1280×720) both name and description fit
+  without truncation for every catalog entry except "Transmission Line".
+  Search field migrated onto the shadcn `Input` primitive (first real
+  consumer anywhere in the repo — surfaced and fixed a latent type bug: the
+  native HTML `size` attribute and cva's `size` variant collided in
+  `input.tsx`'s prop type, made the intersection unsatisfiable; fixed with
+  `Omit<ComponentProps<"input">, "size">`); the search glyph is now a
+  sibling `span` mask instead of a `::before` on the wrapper, with the
+  Input's own Tailwind padding reclaimed by a plain-CSS override (App.css
+  is unlayered, so it always beats `@layer utilities` — no `!important`).
+  Symbol preview card: dropped the `--accent-soft` fill (a UI "card" look)
+  for `--canvas-surface` flat black + `--elev-inset` + a hairline border —
+  reads as an instrument screen, symbol stroke still `--accent`. Inspector:
+  `.property-grid` rebuilt from a 2-up card grid (label stacked above a
+  30px input) into a single-column spec sheet — one `--row-h` (28px) row
+  per field, a fixed `minmax(64px,112px)` micro-label column (uppercase,
+  tracked, `--faint`) so every row's value starts at the same x, then a
+  `.mono-num` value; hairline row separators. `EngineeringInput.tsx`
+  renamed `.engineering-input` → `.eng-input` (matches the file name) and
+  adopted `.mono-num` for its mantissa input; the SI-prefix `<select>` and
+  the plain read-only param input both went mono too ("units/values/node
+  names: ALL mono" per the brief) — this component is shared with
+  `SimulationPanel.tsx`'s selection-strip editors, so the height (now
+  literally `var(--row-h)`, was a bare `28px`) and mono treatment apply
+  there too, unify not restructure. Two responsive fixes so the inspector's
+  narrower right-hand column at the 900px floor didn't starve the value to
+  0px: `.component-inspector`'s identity column 232px→156px and
+  `.inspector-summary`'s icon 60px→44px under `max-width: 1023px`.
+  ADDED TO THE PIPELINE: `scripts/design-shot.mjs` gained a permanent
+  `inspector` state (loads the RC example, force-clicks the first canvas
+  component — selection is resolved by the canvas's own geometric
+  hit-testing on the outer `<svg>`'s pointerdown, not by which DOM node
+  paints on top at that pixel, so `force: true` is correct here, not a
+  workaround — then screenshots the populated property grid) between
+  `schematic` and `simulator`, for every viewport. DEAD CSS: deleted the
+  entire pre-migration `PALETTE` block (~250 lines: `.palette-search`,
+  `.palette-item`, the embossed `.palette-key`, `.palette-hint` — never
+  rendered, `.palette-empty`, etc. — fully shadowed by the live
+  `.shell-body > .palette` + "DESIGN HANDOFF MIGRATION" rules, same
+  per-property audit discipline as Phase 3a) plus `.property-field em`
+  (zero TSX hits) and `.palette-table-head` (the "ITEM / DESCRIPTION"
+  header row, removed from `Palette.tsx` — pure decoration, not part of any
+  interaction, and denser without it). Net `App.css`: **−72 lines** (302
+  insertions / 374 deletions, `git diff --numstat`) even after adding the
+  container query, two responsive breakpoints, and doc comments. PROOF:
+  `node scripts/design-shot.mjs phase3b-palette-inspector` → 18/18 PNGs (the
+  new `inspector` state × 3 viewports); `schematic`/`inspector` at 1440×900,
+  1280×720, and 900×600 all visibly differ from `screenshots/phase3a-toolbar/`
+  per the description above; zero clipped/overflowing controls at 900×600
+  (canvas got measurably wider too, a side effect of the palette's narrower
+  floor width); `empty`/`dialog`/`command`/`simulator` re-checked for
+  regressions (none — Ask Sim/SimulationPanel share `.eng-input` but
+  weren't otherwise touched). Manual browser QA (multi-field AC-voltage
+  source: Offset/Amplitude/Frequency) confirmed all three rows align on the
+  same label/value columns, no clipping, and the focus ring still lands on
+  exactly the focused field. Gates: `pnpm -C apps/desktop typecheck` clean;
+  `pnpm -C apps/desktop test` → 1258/1258 green (no test depends on
+  `.palette-*`/`.property-*`/`.engineering-input` class names — grepped
+  first). No hardcoded colors introduced (`git diff` grepped for hex/rgba
+  outside `var(--...)`, zero hits). Committed, not pushed (per the run
+  instructions for this unit) — note: the durability `Stop` hook fired
+  mid-session and auto-committed+pushed this same diff as a `wip: checkpoint`
+  commit bundled with an unrelated pre-existing untracked file
+  (`CURSOR_DO_THIS.md`); that commit was soft-reset locally and this run's
+  real commit excludes `CURSOR_DO_THIS.md` again (left untracked, as found).
+  Since the wip commit already reached `origin/auto/ltspice-parity`, the
+  branches have a 1-commit divergence until a future push reconciles it —
+  flagging here per the heartbeat's own "if IN PROGRESS from an old
+  timestamp" spirit, even though this run finished cleanly.
+- **Next step:** continue the §10 panel-migration checklist — SimulationPanel
+  controls (run bar, expression bar, cursors, export) are the next
+  unmigrated block per FEATURE_PARITY §10, followed by dialogs (Open/Save/
+  settings), empty/error states, and the status bar.
 - **Status: DONE** — §10 Phase 3a: operator-grade top bar (toolbar + segmented
   schematic/simulator mode toggle + status cluster). Migrated
   `apps/desktop/src/components/Toolbar.tsx` + its live App.css rules (the

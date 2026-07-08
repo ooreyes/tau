@@ -1115,9 +1115,45 @@ never a broken intermediate state on the branch.
   + `.property-field` tokenized — cream title, `--muted` secondary text,
   `--panel-3` fields, `--border-strong` borders, `--accent`/`--accent-soft`
   focus ring unified with `.engineering-input`; empty + selected-R1 states
-  screenshot-verified) → analysis tabs header ✅ (2026-07-06: `.bottom-tabs
-  button` onto `--muted`/`--text`/`--overlay-hover`, shared kicker-label rule
-  `#5a5a62`→`--faint` re-themes every small-caps panel label) →
+  screenshot-verified) → **part palette + inspector, Phase 3b ✅ (2026-07-08):**
+  operator-grade density, not just re-tokenizing — palette rows moved to
+  `--row-h-dense` (24px), hotkeys flattened from an embossed gradient keycap
+  to a crisp hairline mono badge, section headers dropped the "— X —"
+  em-dash bracketing for an uppercase-tracked micro-label + a hairline rule,
+  selection reads as an accent hairline + accent text (`--overlay-hover-faint`,
+  never the old `--accent-soft` heavy fill). Fixed the actual bug behind the
+  panel's bad truncation ("DC Volta…", "Potentio…" at every viewport): the
+  `.palette` rule that looked authoritative (316px) was fully shadowed by a
+  higher-specificity `.shell-body > .palette { width: 236px }` nobody had
+  reconciled since the flex-shell migration — the panel was already narrower
+  than it looked. That rule is now the single source of truth (264px
+  comfortable / 208px at the 900px floor); the item grid favors the name
+  column over the description; and a `@container palette-list` query drops
+  the description entirely below 220px rather than ellipsizing both — every
+  catalog name now renders in full at every viewport except "Transmission
+  Line" at the narrowest. Search field migrated onto the shadcn `Input`
+  primitive (first real consumer in the repo — fixed a latent `size`
+  prop-collision type bug in `input.tsx` in the process: `Omit<...,"size">`).
+  Symbol preview dropped its `--accent-soft` card fill for flat
+  `--canvas-surface` + `--elev-inset` (an instrument screen, not a UI card).
+  `.property-grid` rebuilt from a 2-up card grid into a single-column spec
+  sheet: one `--row-h` row per field, a fixed micro-label column so every
+  row's value aligns at the same x, `.mono-num` values. `.engineering-input`
+  renamed `.eng-input` (matches its component file) and now uses
+  `var(--row-h)` + `.mono-num` throughout (shared with SimulationPanel's
+  selection-strip editors — those unify for free, untouched otherwise).
+  `scripts/design-shot.mjs` gained a permanent `inspector` state (selects
+  the first canvas component so the populated property grid, not just its
+  empty state, is screenshot-verified going forward). Dead-CSS sweep: the
+  entire pre-migration `PALETTE` block (~250 lines, fully shadowed) +
+  `.property-field em` (zero TSX hits) deleted; `.palette-table-head` (the
+  decorative "ITEM / DESCRIPTION" header) removed from `Palette.tsx` for
+  density — net `App.css` **−72 lines** even after the container query and
+  two new responsive breakpoints. Screenshot-verified at 1440×900, 1280×720,
+  and 900×600 (zero clipped controls; canvas got measurably wider at the
+  floor size as a side effect of the palette's narrower breakpoint);
+  manual QA on a 3-field component (AC Voltage: Offset/Amplitude/Frequency)
+  confirmed row alignment and focus-ring correctness) →
   analysis tabs header →
   SimulationPanel controls (run bar, expression bar, cursors, export) →
   dialogs (Open/Save/settings) → empty/error states → status bar.

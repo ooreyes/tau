@@ -18,6 +18,9 @@
  * States captured:
  *   empty      — fresh app, blank scratchpad, schematic view.
  *   schematic  — the "RC Charging" example loaded, schematic view.
+ *   inspector  — same circuit with the first component selected, so the
+ *                bottom component-inspector (property grid, not its empty
+ *                "no selection" state) is visible.
  *   simulator  — same circuit after clicking Run; simulator/scope view.
  *                Web mode has no Tauri/native ngspice bridge, but
  *                `runTransientAnalysis` (the TS fallback solver, see
@@ -161,6 +164,19 @@ async function shootViewport(page, viewport) {
   await page.waitForSelector(".stage .component", { timeout: STATE_TIMEOUT_MS }).catch(() => {});
   await page.waitForTimeout(200);
   await page.screenshot({ path: path.join(outDir, `schematic-${viewport.name}.png`), fullPage: true });
+
+  // --- inspector: select a component so the property grid renders --------
+  // Selection is resolved by geometric hit-testing on the canvas's own
+  // pointerdown handler (world coordinates → component bounding boxes), not
+  // by which DOM node paints on top at the exact pixel — so `force: true`
+  // (skip Playwright's topmost-element check, which the background grid
+  // rect can otherwise fail depending on where a symbol's stroke falls
+  // inside its bounding box) is correct here, not a workaround.
+  const firstComponent = page.locator(".stage .component").first();
+  await firstComponent.click({ force: true });
+  await page.waitForSelector(".inspector-summary:not(.empty)", { timeout: STATE_TIMEOUT_MS }).catch(() => {});
+  await page.waitForTimeout(150);
+  await page.screenshot({ path: path.join(outDir, `inspector-${viewport.name}.png`), fullPage: true });
 
   // --- simulator: click Run, switch to scope view -------------------------
   const runButton = page.locator('button[aria-label="Run simulation"]').first();

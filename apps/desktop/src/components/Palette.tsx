@@ -3,6 +3,7 @@ import { useSchematic } from "../store/useSchematic";
 import { CATALOG } from "../schematic/catalog";
 import { ComponentSymbol } from "../schematic/symbols";
 import type { ComponentKind } from "../schematic/types";
+import { Input } from "@/components/ui/input";
 
 const sections = [...new Set(CATALOG.map((entry) => entry.section))];
 
@@ -54,8 +55,10 @@ export function Palette({ focusSignal }: { focusSignal: number; onNotice: (messa
       </div>
 
       <div className="palette-search-wrap">
-        <input
+        <span className="palette-search-icon" aria-hidden="true" />
+        <Input
           ref={searchRef}
+          size="sm"
           className="palette-search"
           type="search"
           placeholder="Filter"
@@ -64,11 +67,6 @@ export function Palette({ focusSignal }: { focusSignal: number; onNotice: (messa
           spellCheck={false}
           aria-label="Filter components"
         />
-      </div>
-
-      <div className="palette-table-head">
-        <span>item</span>
-        <span>description</span>
       </div>
 
       <div className="palette-scroll">
@@ -109,6 +107,7 @@ export function Palette({ focusSignal }: { focusSignal: number; onNotice: (messa
                     aria-expanded={isOpen}
                   >
                     <span className="palette-title">{section}</span>
+                    <span className="palette-title-rule" aria-hidden="true" />
                     <span className={`palette-chevron${isOpen ? " open" : ""}`}>›</span>
                   </button>
                   {isOpen && (
@@ -140,6 +139,7 @@ export function Palette({ focusSignal }: { focusSignal: number; onNotice: (messa
                 aria-expanded={openSections["__tools__"] !== false}
               >
                 <span className="palette-title">Tools</span>
+                <span className="palette-title-rule" aria-hidden="true" />
                 <span className={`palette-chevron${openSections["__tools__"] !== false ? " open" : ""}`}>›</span>
               </button>
               {openSections["__tools__"] !== false && (

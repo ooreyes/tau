@@ -48,8 +48,9 @@ export function EngineeringInput({ value, unit, label, onValueChange, onBeginCha
   };
 
   return (
-    <div className="engineering-input" onFocus={onFocus} onBlur={onBlur}>
+    <div className="eng-input" onFocus={onFocus} onBlur={onBlur}>
       <input
+        className="mono-num"
         aria-label={label}
         value={parts.mantissa}
         inputMode="decimal"

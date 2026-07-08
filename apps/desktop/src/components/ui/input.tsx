@@ -36,7 +36,10 @@ function Input({
   size,
   type = "text",
   ...props
-}: React.ComponentProps<"input"> & VariantProps<typeof inputVariants>) {
+}: Omit<React.ComponentProps<"input">, "size"> & VariantProps<typeof inputVariants>) {
+  // `size` is a real HTML input attribute (a number, the visible character
+  // width) that collides with cva's own `size` density variant (a string) —
+  // `Omit` above drops the native one so callers can pass `size="sm"`.
   return (
     <input
       type={type}

@@ -638,6 +638,7 @@ function ComponentInspector({ selected }: { selected: SchematicComponent | null 
                 />
               ) : (
                 <input
+                  className="mono-num"
                   value={field.value}
                   readOnly={!field.editable}
                   aria-readonly={!field.editable}

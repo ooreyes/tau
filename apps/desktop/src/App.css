@@ -235,261 +235,15 @@ body {
   color: var(--muted);
 }
 
-/* ══════════════════════════════════════════════════════════════════════════════
-   PALETTE
-══════════════════════════════════════════════════════════════════════════════ */
-.palette {
-  grid-area: palette;
-  background: color-mix(in srgb, var(--panel) 88%, transparent);
-  border-right: 1px solid var(--border);
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  overflow: hidden;
-  backdrop-filter: blur(18px) saturate(1.2);
-}
-
-/* Search field */
-.palette-search-wrap {
-  position: relative;
-  flex-shrink: 0;
-  padding: 10px 10px 8px;
-  border-bottom: 1px solid var(--border-subtle);
-}
-
-.palette-search {
-  width: 100%;
-  height: 28px;
-  background: color-mix(in srgb, var(--bg) 78%, transparent);
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  color: var(--text);
-  font: 13px -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
-  padding: 0 9px 0 28px;
-  outline: none;
-  transition: border-color 160ms var(--ease-out), background 160ms var(--ease-out);
-}
-
-/* Search glyph — CSS mask so the icon inherits a theme token instead of a
-   baked-in hex inside the data-URI (project rule: no hardcoded colors). */
-.palette-search-wrap::before {
-  content: "";
-  position: absolute;
-  left: 18px;
-  top: 18px;
-  width: 13px;
-  height: 13px;
-  background-color: var(--muted);
-  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cpath d='m21 21-4.35-4.35'/%3E%3C/svg%3E") no-repeat center / contain;
-  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cpath d='m21 21-4.35-4.35'/%3E%3C/svg%3E") no-repeat center / contain;
-  pointer-events: none;
-}
-
-.palette-search:focus {
-  border-color: var(--border-strong);
-  background-color: var(--panel-2);
-}
-
-.palette-search::placeholder {
-  color: var(--faint);
-}
-
-/* Scrollable body */
-.palette-scroll {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  overflow-x: hidden;
-  padding: 4px 0 8px;
-  /* Custom scrollbar */
-  scrollbar-width: thin;
-  scrollbar-color: var(--panel-4) transparent;
-}
-
-.palette-scroll::-webkit-scrollbar {
-  width: 3px;
-}
-
-.palette-scroll::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.palette-scroll::-webkit-scrollbar-thumb {
-  background: var(--panel-4);
-  border-radius: 3px;
-}
-
-/* Section */
-.palette-section {
-  padding: 0 8px;
-}
-
-.palette-section + .palette-section {
-  margin-top: 2px;
-  padding-top: 4px;
-  border-top: 1px solid var(--border-subtle);
-}
-
-/* Section header button (clickable for collapse) */
-.palette-section-header {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  width: 100%;
-  padding: 5px 4px 4px;
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  text-align: left;
-  border-radius: var(--r-sm);
-  transition: background 120ms var(--ease-out);
-}
-
-.palette-section-header:hover {
-  background: var(--overlay-hover-faint);
-}
-
-.palette-title {
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.7px;
-  text-transform: uppercase;
-  color: var(--faint);
-  flex: 1;
-}
-
-.palette-chevron {
-  color: var(--faint);
-  font-size: 10px;
-  line-height: 1;
-  transition: transform 200ms var(--ease-out), color 200ms var(--ease-out);
-  flex-shrink: 0;
-}
-
-.palette-chevron.open {
-  transform: rotate(90deg);
-}
-
-.palette-section-header:hover .palette-chevron {
-  color: var(--muted);
-}
-
-/* Part list */
-.palette-list {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  padding-bottom: 4px;
-}
-
-/* Individual item */
-.palette-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 5px 6px;
-  background: transparent;
-  border: 1px solid transparent;
-  border-radius: var(--r-sm);
-  color: var(--text);
-  cursor: pointer;
-  text-align: left;
-  width: 100%;
-  transition: background 110ms var(--ease-out), border-color 110ms var(--ease-out);
-}
-
-.palette-item:hover {
-  background: var(--overlay-hover);
-  border-color: var(--border-subtle);
-}
-
-.palette-item.active {
-  background: var(--accent-soft);
-  border-color: var(--accent-line);
-}
-
-.palette-item.active .palette-name {
-  color: var(--accent);
-}
-
-.palette-item.active .palette-key {
-  border-color: var(--accent-line);
-  color: var(--accent);
-}
-
-/* SVG icon */
-.palette-icon {
-  width: 36px;
-  height: 24px;
-  flex-shrink: 0;
-  overflow: visible;
-}
-
-/* Part name */
-.palette-name {
-  flex: 1;
-  font-size: 12px;
-  font-weight: 450;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--comp);
-  letter-spacing: -0.1px;
-}
-
-/* Hotkey badge — a physical keycap: a top-lit panel gradient, a bright top
-   bevel (inset highlight) and a soft bottom drop so it reads as a raised key
-   rather than a flat outlined box. Consolidated here (the old duplicate at the
-   bottom of the file is deleted). */
-.palette-key {
-  justify-self: end;
-  flex-shrink: 0;
-  min-width: 18px;
-  padding: 1px 5px;
-  text-align: center;
-  font-family: var(--font-mono);
-  font-size: 10px;
-  font-weight: 600;
-  line-height: 16px;
-  letter-spacing: 0.3px;
-  color: var(--muted);
-  background: linear-gradient(180deg, var(--panel-4), var(--panel-3));
-  border: 1px solid var(--border-strong);
-  border-radius: 4px;
-  box-shadow: inset 0 1px 0 var(--overlay-hover), var(--elev-1);
-}
-
-/* Wire icon */
+/* Wire icon — shared by the Palette "Tools" row icons and the schematic
+   itself; the PALETTE chrome rules live in the live "DESIGN HANDOFF
+   MIGRATION" section below (search this file for "PALETTE — operator-grade"). */
 .wire-icon {
   fill: none;
   stroke: var(--comp);
   stroke-width: 2;
   stroke-linecap: round;
   stroke-linejoin: round;
-}
-
-.palette-item.active .wire-icon {
-  stroke: var(--accent);
-}
-
-/* Bottom hint */
-.palette-hint {
-  flex-shrink: 0;
-  font-size: 10px;
-  line-height: 1.55;
-  color: var(--faint);
-  padding: 8px 14px 10px;
-  border-top: 1px solid var(--border-subtle);
-}
-
-/* No-results state */
-.palette-empty {
-  padding: 20px 14px;
-  text-align: center;
-  color: var(--faint);
-  font-size: 12px;
-  line-height: 1.5;
 }
 
 /* ══════════════════════════════════════════════════════════════════════════════
@@ -1936,17 +1690,23 @@ body {
   grid-template-columns: 56px minmax(0, 1fr);
 }
 
-.engineering-input {
+/* SI-prefixed numeric input (mantissa + prefix picker), shared by the
+   selection-strip param editors (SimulationPanel) and the bottom inspector's
+   property grid (ShellPanels — scoped overrides at `.property-field
+   .eng-input`). Height matches the shadcn Input primitive's `sm` size
+   (`--row-h`, 28px) and the focus ring follows the same accent-hairline +
+   soft halo language every other Tau field uses. */
+.eng-input {
   min-width: 0;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 6px;
 }
 
-.engineering-input input,
-.engineering-input select {
+.eng-input input,
+.eng-input select {
   min-width: 0;
-  height: 28px;
+  height: var(--row-h);
   color: var(--text);
   background: var(--panel-3);
   border: 1px solid var(--border);
@@ -1954,26 +1714,27 @@ body {
   outline: none;
 }
 
-.engineering-input input {
+.eng-input input {
   padding: 0 10px;
-  font: 500 12px var(--font-mono);
+  font-size: 12px;
+  font-weight: 500;
 }
 
-.engineering-input select {
+.eng-input select {
   min-width: 58px;
   padding: 0 6px;
-  font: 600 11px -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  font: 600 11px var(--font-mono);
   cursor: pointer;
 }
 
-.engineering-input input:focus,
-.engineering-input select:focus {
+.eng-input input:focus,
+.eng-input select:focus {
   border-color: var(--accent);
   box-shadow: 0 0 0 2px var(--accent-soft);
 }
 
-.engineering-input input[aria-invalid="true"] {
-  border-color: var(--trace-red);
+.eng-input input[aria-invalid="true"] {
+  border-color: var(--danger);
 }
 
 .value-editor select {
@@ -2806,7 +2567,6 @@ body {
 .palette-head > span,
 .plotter-kicker,
 .bottom-tabs,
-.palette-table-head,
 .result-list h3,
 .symbol-preview > span {
   color: var(--faint);
@@ -2937,14 +2697,25 @@ body {
 }
 
 /* Component parts catalogue — a fixed right column inside the flex shell-body
-   (the legacy `grid-area: palette` is inert here, so size it explicitly). */
+   (the legacy `grid-area: palette` is inert here, so size it explicitly).
+   264px comfortably fits icon + name + description + keycap (§10 Phase 3b —
+   see the PALETTE rules below); at the 900px minimum-window floor it narrows
+   to 208px, which drops the container query's threshold and the row sheds
+   its description column rather than clipping the name (verified via
+   design-shot at 900×600). */
 .shell-body > .palette {
   flex: none;
-  width: 236px;
+  width: 264px;
   border-left: 1px solid var(--border);
   border-right: 0;
   background: var(--panel-3);
   backdrop-filter: none;
+}
+
+@media (max-width: 1023px) {
+  .shell-body > .palette {
+    width: 208px;
+  }
 }
 
 .editor-toolbar {
@@ -3217,38 +2988,63 @@ body {
   flex: 1;
   min-height: 0;
   display: grid;
-  gap: 14px;
-  padding: 12px 14px 14px;
+  gap: 16px;
+  padding: 10px 14px 12px;
   overflow: hidden;
 }
 
+/* ── Component inspector — operator spec-sheet (§10 Phase 3b) ────────────
+   A fixed identity column (symbol + label) beside a dense label/value grid:
+   each row is a micro-label (uppercase, tracked, --faint) paired with a
+   mono value, separated by hairlines — an instrument spec sheet, not a
+   stack of form-card fields. */
 .component-inspector {
-  grid-template-columns: 300px 1fr;
+  grid-template-columns: 232px 1fr;
+}
+
+/* At the 900px minimum-window floor the bottom panel itself is narrow (the
+   explorer + palette columns eat most of it) — shrink the identity column
+   further so the property grid still has room for a value, not just a label
+   and a starved 0px input. */
+@media (max-width: 1023px) {
+  .component-inspector {
+    grid-template-columns: 156px 1fr;
+  }
+
+  .inspector-summary {
+    grid-template-columns: 44px 1fr;
+    column-gap: 8px;
+  }
+
+  .inspector-summary svg {
+    width: 44px;
+    height: 44px;
+  }
 }
 
 .inspector-summary {
   display: grid;
-  grid-template-columns: 72px 1fr;
+  grid-template-columns: 60px 1fr;
   grid-template-rows: 1fr auto auto 1fr;
-  column-gap: 14px;
+  column-gap: 12px;
   align-items: center;
   min-width: 0;
 }
 
 .inspector-summary svg {
   grid-row: 1 / -1;
-  width: 72px;
-  height: 72px;
+  width: 60px;
+  height: 60px;
 }
 
 .inspector-summary strong {
   color: var(--cream);
-  font: 700 14px var(--font-mono), monospace;
+  font: 700 13px var(--font-mono), monospace;
 }
 
 .inspector-summary span {
   color: var(--muted);
-  font-size: 12px;
+  font-size: 11px;
 }
 
 .inspector-summary.empty {
@@ -3289,56 +3085,82 @@ body {
 }
 
 .property-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow-y: auto;
 }
 
 .property-field {
   min-width: 0;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 5px;
+  /* A fixed cap (not a %) so the label column tracks its own content instead
+     of ballooning on a wide panel or starving the value on a narrow one. */
+  grid-template-columns: minmax(64px, 112px) minmax(0, 1fr);
+  column-gap: 10px;
   align-items: center;
+  height: var(--row-h);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.property-field:last-child {
+  border-bottom: 0;
 }
 
 .property-field span {
-  grid-column: 1 / -1;
-  color: var(--muted);
-  font-size: 11px;
+  color: var(--faint);
+  font: 600 9.5px var(--font-ui);
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .property-field input {
-  height: 30px;
+  height: 22px;
   min-width: 0;
-  padding: 0 10px;
-  border: 1px solid var(--border-strong);
-  border-radius: 7px;
+  max-width: 168px;
+  padding: 0 7px;
+  border: 1px solid transparent;
+  border-radius: var(--r-sm);
   color: var(--text);
-  background: var(--panel-3);
-  font: 500 13px var(--font-mono), monospace;
+  background: transparent;
+  font-size: 12px;
+  font-weight: 500;
+  transition: background var(--motion-fast) var(--ease-out),
+    border-color var(--motion-fast) var(--ease-out);
+}
+
+.property-field input:hover:not(:focus) {
+  background: var(--overlay-hover-faint);
 }
 
 .property-field input:not([readonly]):focus {
   border-color: var(--accent);
+  background: var(--panel-3);
   outline: none;
   box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
-.property-field em {
+.property-field input[readonly] {
   color: var(--muted);
-  font: 700 10px var(--font-mono), monospace;
-  font-style: normal;
 }
 
-.property-field .engineering-input {
-  grid-column: 1 / -1;
+.property-field .eng-input {
+  grid-column: 2;
+  max-width: 168px;
 }
 
-.property-field .engineering-input input,
-.property-field .engineering-input select {
-  background: var(--panel-3);
-  border-color: var(--border-strong);
+.property-field .eng-input input:not(:focus),
+.property-field .eng-input select:not(:focus) {
+  background: transparent;
+  border-color: transparent;
+}
+
+.property-field .eng-input input:hover:not(:focus),
+.property-field .eng-input select:hover:not(:focus) {
+  background: var(--overlay-hover-faint);
 }
 
 .sim-results {
@@ -3561,105 +3383,168 @@ body {
   border-radius: 8px;
 }
 
-/* component library right column */
+/* ══════════════════════════════════════════════════════════════════════════════
+   PALETTE — operator-grade component selection (§10 Phase 3b)
+   Dense hairline rows at --row-h-dense (24px): icon, name (priority column),
+   muted description, mono keycap. Selection reads as an accent hairline +
+   accent name text — never a heavy fill — the targeting affordance of an
+   Anduril/Palantir selectable list, not a highlighted list box. Below a
+   220px container width the description column drops out entirely so the
+   name never truncates (see the `@container palette-list` rule below).
+══════════════════════════════════════════════════════════════════════════════ */
+/* Structural-only: width/background/border are set at higher specificity by
+   `.shell-body > .palette` above (the flex shell's real geometry) — kept
+   separate so those two properties aren't duplicated across both rules. */
 .palette {
-  width: 316px;
-  flex: none;
-  grid-area: auto;
-  background: var(--panel);
-  border-left: 1px solid var(--border);
-  border-right: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 
 .palette-head {
-  height: 44px;
+  height: 34px;
   flex: none;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 10px;
   padding: 0 12px;
 }
 
 .palette-search-wrap {
-  padding: 0 12px 10px;
-  border-bottom: 0;
+  position: relative;
+  flex-shrink: 0;
+  padding: 0 10px 8px;
 }
 
-.palette-search {
-  height: 32px;
-  background-color: var(--panel-3);
-  border-color: var(--border-strong);
-  border-radius: 7px;
-  color: var(--text);
-}
-
-/* Search glyph re-anchored to this shell's wrap padding (0 12px 10px) and the
-   32px field height (base rule targets the denser teal-theme geometry). */
-.palette-search-wrap::before {
+/* Search glyph — CSS mask so the icon inherits a theme token instead of a
+   baked-in hex inside the data-URI (project rule: no hardcoded colors). */
+.palette-search-icon {
+  position: absolute;
   left: 20px;
-  top: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 12px;
+  height: 12px;
+  background-color: var(--muted);
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cpath d='m21 21-4.35-4.35'/%3E%3C/svg%3E") no-repeat center / contain;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cpath d='m21 21-4.35-4.35'/%3E%3C/svg%3E") no-repeat center / contain;
+  pointer-events: none;
 }
 
-.palette-table-head {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 24px;
-  gap: 10px;
-  padding: 0 12px 6px;
+/* The Input primitive's own Tailwind padding (`px-2.5`) is unlayered-vs-
+   layered-losing against this plain CSS rule (App.css loads outside any
+   `@layer`, so it always wins over `@layer utilities` — see tokens.css), so
+   this single declaration cleanly reclaims room for the icon without an
+   `!important` fighting the primitive. */
+.palette-search {
+  padding-left: 28px;
 }
 
 .palette-scroll {
-  padding: 0 0 8px;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-bottom: 6px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--panel-4) transparent;
 }
 
-.palette-section {
-  padding: 0;
+.palette-scroll::-webkit-scrollbar {
+  width: 3px;
+}
+
+.palette-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.palette-scroll::-webkit-scrollbar-thumb {
+  background: var(--panel-4);
+  border-radius: 3px;
 }
 
 .palette-section + .palette-section {
-  border-top: 0;
-  margin-top: 0;
-  padding-top: 0;
+  margin-top: 2px;
 }
 
+/* Section header — a Braun-style micro-label: uppercase, tracked, --faint,
+   with a hairline rule filling the rest of the row (replaces the old
+   "— Passives —" em-dash bracketing). */
 .palette-section-header {
-  min-height: 25px;
-  padding: 6px 12px 2px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  height: 22px;
+  margin-top: 4px;
+  padding: 0 10px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+}
+
+.palette-section:first-child .palette-section-header {
+  margin-top: 0;
 }
 
 .palette-title {
+  flex: none;
   color: var(--faint);
-  font: 500 10px var(--font-mono), monospace;
-  letter-spacing: 0;
-  text-transform: none;
+  font: 600 9.5px var(--font-mono);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  white-space: nowrap;
 }
 
-.palette-title::before {
-  content: "— ";
+.palette-title-rule {
+  flex: 1;
+  height: 1px;
+  background: var(--border-subtle);
 }
 
-.palette-title::after {
-  content: " —";
+.palette-chevron {
+  flex: none;
+  color: var(--faint);
+  font-size: 10px;
+  line-height: 1;
+  transition: transform 200ms var(--ease-out), color 200ms var(--ease-out);
+}
+
+.palette-chevron.open {
+  transform: rotate(90deg);
+}
+
+.palette-section-header:hover .palette-title,
+.palette-section-header:hover .palette-chevron {
+  color: var(--muted);
 }
 
 .palette-list {
-  gap: 0;
-  padding: 0;
+  display: flex;
+  flex-direction: column;
+  /* Container queries key off this content-box width so a row can drop its
+     description column once the panel (or a future resize) narrows — see
+     the `@container` rule below. */
+  container-type: inline-size;
+  container-name: palette-list;
 }
 
 .palette-item {
   display: grid;
-  grid-template-columns: 34px minmax(0, 1fr) minmax(0, 1fr) 24px;
+  grid-template-columns: 22px minmax(56px, 1.4fr) minmax(0, 1fr) auto;
   align-items: center;
-  gap: 10px;
-  min-height: 27px;
-  padding: 3px 12px;
+  column-gap: 8px;
+  height: var(--row-h-dense);
+  padding: 0 10px;
   border: 0;
-  border-radius: 0;
   background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  text-align: left;
+  width: 100%;
   /* Operator-console left indicator rail — invisible at rest, lights on
-     hover, goes solid accent when active (the targeting affordance in an
-     Anduril/Palantir selectable list). */
+     hover, goes solid accent when selected (the targeting affordance in an
+     Anduril/Palantir selectable list, never a heavy fill). */
   box-shadow: inset 2px 0 0 transparent;
   transition: background var(--motion-fast) var(--ease-out),
               box-shadow var(--motion-fast) var(--ease-out);
@@ -3667,31 +3552,28 @@ body {
 
 .palette-item:hover {
   background: var(--overlay-hover);
-  box-shadow: inset 3px 0 0 var(--accent-line);
+  box-shadow: inset 2px 0 0 var(--border-strong);
 }
 
 .palette-item:active {
   background: var(--overlay-hover-faint);
 }
 
-/* Hotkey brightens from faint → readable when the row is targeted, so the
-   operator can see the shortcut without hunting. */
 .palette-item:hover .palette-key {
   color: var(--muted);
   border-color: var(--border-strong);
 }
 
-/* Selection now rides the design-system accent (was a one-off hardcoded
-   cyan), so it re-themes with the switcher and matches every other selected
-   control in the shell. */
 .palette-item.active {
-  background: var(--accent-soft);
-  box-shadow: inset 3px 0 0 var(--accent);
+  background: var(--overlay-hover-faint);
+  box-shadow: inset 2px 0 0 var(--accent);
 }
 
 .palette-icon {
-  width: 30px;
-  height: 20px;
+  width: 20px;
+  height: 14px;
+  flex-shrink: 0;
+  overflow: visible;
 }
 
 .palette-name,
@@ -3704,39 +3586,84 @@ body {
 
 .palette-name {
   color: var(--text);
-  font: 500 11px var(--font-mono), monospace;
+  font: 500 11.5px var(--font-mono);
+  letter-spacing: -0.01em;
 }
 
 .palette-desc {
-  color: var(--muted);
-  font-size: 11px;
+  color: var(--faint);
+  font-size: 10.5px;
 }
 
 .palette-item.active .palette-name {
   color: var(--accent);
 }
 
-.palette-item.active .palette-desc {
-  color: var(--text);
+.palette-item.active .wire-icon {
+  stroke: var(--accent);
 }
 
+/* Truncation fix: the name column always wins. Below this container width
+   there isn't room for a description too, so it drops out rather than
+   ellipsizing both columns into mush (was: "DC Volta…" / "Potentio…"). */
+@container palette-list (max-width: 220px) {
+  .palette-item {
+    grid-template-columns: 22px minmax(0, 1fr) auto;
+  }
 
+  .palette-desc {
+    display: none;
+  }
+}
+
+/* Flat hairline keycap — no embossed gradient/bevel; a crisp mono badge that
+   reads as a console legend rather than a physical button. */
+.palette-key {
+  justify-self: end;
+  flex-shrink: 0;
+  min-width: 16px;
+  padding: 1px 5px;
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  font-weight: 600;
+  line-height: 14px;
+  letter-spacing: 0.15px;
+  color: var(--faint);
+  background: transparent;
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+}
+
+.palette-item.active .palette-key {
+  border-color: var(--accent-line);
+  color: var(--accent);
+}
+
+.palette-empty {
+  padding: 20px 14px;
+  text-align: center;
+  color: var(--faint);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+/* Symbol preview — reads as an instrument screen: flat --canvas-surface
+   black, a hairline border, the symbol stroke in --accent. No soft-blue
+   fill (that read as a UI "card", not a screen). */
 .symbol-preview {
   flex: none;
-  padding: 10px 12px 12px;
+  padding: 10px 10px 12px;
   border-top: 1px solid var(--border);
 }
 
 .symbol-preview > span {
   display: block;
-  margin-bottom: 9px;
+  margin-bottom: 8px;
 }
 
-/* The preview chip was the last hardcoded-color element (cream/teal
- * "silkscreen"); it now derives from the accent tokens so the theme switcher
- * re-themes it and it sits inside the dark system instead of beside it. */
 .symbol-preview > div {
-  height: 108px;
+  height: 96px;
   position: relative;
   display: flex;
   flex-direction: column;
@@ -3745,12 +3672,13 @@ body {
   gap: 6px;
   border-radius: var(--r-md);
   border: 1px solid var(--border);
-  background: var(--accent-soft);
+  background: var(--canvas-surface);
+  box-shadow: var(--elev-inset);
 }
 
 .symbol-preview svg {
-  width: 92px;
-  height: 48px;
+  width: 88px;
+  height: 44px;
 }
 
 .symbol-preview .symbol {
@@ -3759,12 +3687,12 @@ body {
 
 .symbol-preview strong {
   color: var(--accent);
-  font: 700 14px var(--font-mono), monospace;
+  font: 700 13px var(--font-mono);
 }
 
 .symbol-preview em {
   position: absolute;
-  right: 10px;
+  right: 9px;
   bottom: 7px;
   color: var(--muted);
   font-style: normal;
