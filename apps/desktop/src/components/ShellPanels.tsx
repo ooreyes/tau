@@ -11,6 +11,7 @@ import { EngineeringInput } from "./EngineeringInput";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Dialog, DialogContent, DialogHeader, DialogFooter, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useSchematic, type SchematicDocument } from "../store/useSchematic";
 import { EXAMPLE_CIRCUITS, type ExampleCircuit } from "../examples/circuits";
 import type { AnalysisResult } from "../simulation/linearTransient";
@@ -29,22 +30,22 @@ interface ModeProps {
 export function ActivityRail({ mode, partsOpen, onModeChange, onSearch, onFocusComponents, onOpenSettings }: ModeProps) {
   return (
     <nav className="activity-rail" aria-label="Workspace sections">
-      <RailButton active={mode === "schematic"} title="Explorer" onClick={() => onModeChange("schematic")}>
+      <RailButton active={mode === "schematic"} label="Explorer" onClick={() => onModeChange("schematic")}>
         <path d="M3 3h7l2 2h5v12H3z" />
       </RailButton>
-      <RailButton title="Search" onClick={onSearch}>
+      <RailButton label="Search" shortcut="⌘K" onClick={onSearch}>
         <circle cx="9" cy="9" r="6" />
         <path d="M13.5 13.5 18 18" />
       </RailButton>
-      <RailButton active={partsOpen} title="Components" onClick={onFocusComponents}>
+      <RailButton active={partsOpen} label="Components" onClick={onFocusComponents}>
         <rect x="5" y="5" width="10" height="10" rx="1.5" />
         <path d="M8 2v3M12 2v3M8 15v3M12 15v3M2 8h3M2 12h3M15 8h3M15 12h3" />
       </RailButton>
-      <RailButton active={mode === "simulator"} title="Waveforms" onClick={() => onModeChange("simulator")}>
+      <RailButton active={mode === "simulator"} label="Waveforms" onClick={() => onModeChange("simulator")}>
         <path d="M3 14 8 7l3 3 6-7" />
       </RailButton>
       <div className="rail-spacer" />
-      <RailButton title="Settings" onClick={onOpenSettings}>
+      <RailButton label="Settings" onClick={onOpenSettings}>
         <path d="M10 2.5l1.8 1.2 2.1-.5.9 2 1.9.9-.5 2.1 1.2 1.8-1.2 1.8.5 2.1-1.9.9-.9 2-2.1-.5L10 17.5l-1.8-1.2-2.1.5-.9-2-1.9-.9.5-2.1L2.6 10l1.2-1.8-.5-2.1 1.9-.9.9-2 2.1.5z" />
         <circle cx="10" cy="10" r="2.4" />
       </RailButton>
@@ -54,22 +55,29 @@ export function ActivityRail({ mode, partsOpen, onModeChange, onSearch, onFocusC
 
 function RailButton({
   active = false,
-  title,
+  label,
+  shortcut,
   onClick,
   children,
 }: {
   active?: boolean;
-  title: string;
+  label: string;
+  shortcut?: string;
   onClick?: () => void;
   children: ReactNode;
 }) {
   return (
-    <button className={`rail-btn${active ? " active" : ""}`} title={title} aria-label={title} onClick={onClick}>
-      {active && <span className="rail-active" />}
-      <svg viewBox="0 0 20 20" aria-hidden="true">
-        {children}
-      </svg>
-    </button>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button className={`rail-btn${active ? " active" : ""}`} aria-label={label} onClick={onClick}>
+          {active && <span className="rail-active" />}
+          <svg viewBox="0 0 20 20" aria-hidden="true">
+            {children}
+          </svg>
+        </button>
+      </TooltipTrigger>
+      <TooltipContent side="right">{shortcut ? `${label} — ${shortcut}` : label}</TooltipContent>
+    </Tooltip>
   );
 }
 
@@ -570,7 +578,14 @@ function ErrorPanel({ result }: { result: AnalysisResult | null }) {
           {message}
         </div>
       )) : (
-        <p>No errors or warnings.</p>
+        // Same reticle language as the inspector's "No component selected"
+        // state (search App.css for ".panel-empty") — dim aiming glyph, mono
+        // uppercase title, faint guidance.
+        <div className="panel-empty">
+          <span className="panel-empty-glyph" aria-hidden="true" />
+          <strong>No errors</strong>
+          <span>Run an analysis or edit the schematic — build issues surface here.</span>
+        </div>
       )}
     </div>
   );

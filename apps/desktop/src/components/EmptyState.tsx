@@ -10,7 +10,10 @@ export function EmptyState() {
   return (
     <section className="empty-state" aria-label="Start a circuit">
       <div className="empty-panel">
-        <div className="empty-kicker">Tau v0.2</div>
+        <div className="empty-kicker">
+          <i aria-hidden="true" />
+          Tau v0.2 · idle
+        </div>
         <h1>Build, wire, run.</h1>
         <p>
           Start with a known-good RC transient circuit, or place parts manually.
@@ -22,8 +25,14 @@ export function EmptyState() {
               Open RC example
             </button>
           )}
-          <button onClick={() => startPlacing("resistor")}>Place resistor</button>
-          <button onClick={startWiring}>Wire</button>
+          <button onClick={() => startPlacing("resistor")}>
+            Place resistor
+            <kbd>R</kbd>
+          </button>
+          <button onClick={startWiring}>
+            Wire
+            <kbd>W</kbd>
+          </button>
         </div>
       </div>
     </section>

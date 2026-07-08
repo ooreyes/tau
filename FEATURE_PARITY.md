@@ -1193,7 +1193,29 @@ never a broken intermediate state on the branch.
   onto `ui/dialog.tsx`'s `Dialog` directly (manual Escape/focus-trap code
   deleted, Cancel/Confirm are real `Button` `outline`/`destructive`
   variants). ⁓210 lines of `.settings-*`/`.confirm-*` CSS deleted. →
-  empty/error states → status bar → rail → command palette.
+  **empty/error states, status bar, rail, command palette ✅ (2026-07-08,
+  Phase 3d unit B):** canvas `EmptyState.tsx` onboarding card is now a flat
+  `--panel-3` card (hairline ring, `--elev-pop`, no blur/gradient) with an
+  idle status lamp in its kicker and hairline mono keycaps on its actions;
+  `ErrorPanel`'s empty fallback extends the inspector's reticle language
+  (dim `--icon-reticle` glyph + mono uppercase title + faint guidance) via
+  a new `.panel-empty` class; status bar's mode indicator is now the same
+  `.status-lamp` component as the toolbar's transport lamp (was a static
+  per-mode color, not run-state-driven), every other readout carries
+  `.mono-num`; activity rail buttons wrap a real `ui/Tooltip` (with the
+  real ⌘K shortcut for Search), hover is a hairline ring not a filled
+  patch, and the active state drops its `--accent-soft` fill (icon color +
+  the existing left accent edge carry it alone); command palette
+  (`.cmdk-*`) had 3 hardcoded rgba literals + 2 `backdrop-filter: blur()`
+  glass effects removed for the same true-black-pop-surface recipe
+  `ui/dialog.tsx` uses, item names went mono (matching `.palette-name`),
+  and selection is now an accent-hairline edge, not a flat fill; every
+  shortcut keycap in the app (`.palette-key`/`.status-hints kbd`/
+  `.cmdk-key`/`.empty-actions kbd`) now shares one CSS rule instead of
+  three near-duplicates that had drifted. **This closes §10 Phase 3d.**
+  Remaining §10 scope: the schematic canvas's own chrome (zoom controls,
+  hover cards, net-label popover), the type/spacing sweep, and a final
+  hardcoded-color grep pass.
 - ⬜ **The schematic canvas keeps its bespoke SVG rendering** (it is the
   product's soul) — only its chrome (zoom controls, hover cards, net-label
   editor popover) adopts the system. Pan/zoom must stay 60fps after migration.

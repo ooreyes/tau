@@ -12,7 +12,80 @@
   · corpus runner: 82 imported / **79 warning-clean** / **82 deck-built (ALL)**
   / **82 op-converged (ALL)** — floors 82/79/82/82
   · App.css hardcoded-color burndown: **0 hex outside the single `:root`** ✅
-- **Run started (UTC):** 2026-07-08T17:05Z
+- **Run started (UTC):** 2026-07-08T17:35Z
+- **Status: DONE** — §10 Phase 3d unit B: instrument footer, activity rail,
+  command palette, and reticle-language empty/error states
+  (`StatusBar.tsx`, `ShellPanels.tsx`'s `ActivityRail`/`RailButton`/
+  `ErrorPanel`, `EmptyState.tsx`, `App.css`'s `.cmdk-*`/`.rail-*`/
+  `.status-*`/`.empty-*` rules). Status bar: the mode/run-state indicator
+  is now the shared `.status-lamp` component (idle/ok/error color-coded
+  dot + uppercase mono text) — the exact same treatment as the toolbar's
+  transport lamp (`Toolbar.tsx`), replacing a `.status-mode`/
+  `.status-mode.simulator` pair whose color was hardwired to which *mode*
+  you were in (blue=schematic, green=simulator) regardless of whether the
+  last run actually succeeded; every other readout (filename, engine
+  label, grid/component/wire counts + zoom) now carries `.mono-num`, and
+  `.status-count`'s duplicate hand-rolled mono/tabular-nums declarations
+  were deleted now that the utility supplies them (same pattern as
+  `.metric`/`.param-value`/`.brand-file` from earlier phases). Activity
+  rail: `RailButton` now wraps a real `ui/Tooltip` (side="right") instead
+  of a bare `title` attribute, with the real ⌘K/F2// shortcut surfaced for
+  Search; hover changed from a filled `--overlay-hover` patch to a
+  hairline `inset ring` (never a heavy fill, matching the palette's own
+  selection rule), and `.rail-btn.active`'s `--accent-soft` background
+  fill is gone — the active state is carried by icon color + the existing
+  `.rail-active` left accent edge alone. Command palette: `.cmdk`/
+  `.cmdk-backdrop` had THREE hardcoded rgba literals (`rgba(4,6,10,.65)`,
+  `rgba(13,16,24,.96)`, plus two shadow rgbas) and two `backdrop-filter:
+  blur()` glass effects — replaced with `var(--scrim-strong)` / `var(
+  --panel-4)` / `var(--elev-pop)` (the exact same true-black-pop-surface
+  recipe `ui/dialog.tsx` already uses) and flat surfaces, no blur;
+  `.cmdk-item.active` went from a flat `--panel-4` fill to the accent-
+  hairline-on-the-left selection language (`.palette-item.active`'s
+  `inset 2px 0 0 var(--accent)`); `.cmdk-name` is now mono (matching
+  `.palette-name` — the command palette and the palette list the same
+  parts catalog, so they now read as the same catalog); `.cmdk-section`
+  is now a proper Braun micro-label (mono, tracked). Keycaps: every
+  shortcut badge in the app (`.palette-key`, `.status-hints kbd`,
+  `.cmdk-key`, and the new `.empty-actions kbd`) now shares ONE hairline-
+  mono-keycap CSS rule instead of three near-duplicate declarations that
+  had quietly drifted (filled vs. transparent background, 3px vs. 4px
+  radius, `--muted` vs. `--faint` text). Empty/error states: the canvas
+  `EmptyState.tsx` onboarding card is now a flat `--panel-3` surface with
+  a `--border-strong` hairline + `--elev-pop` (was a blurred, gradient-
+  edged, alpha-blended `color-mix` card) — no backdrop blur, no gradient
+  fade; the micro-label kicker gained a small idle status lamp ("TAU V0.2
+  · IDLE" with a green dot, echoing `.status-lamp`'s language); actions
+  are flat hairline buttons (no embossed gradient pill) and "Place
+  resistor"/"Wire" now carry the same hairline mono keycap (`R`/`W`) as
+  every other shortcut affordance in the app. `ErrorPanel`'s "No errors or
+  warnings" fallback (bottom errors tab, schematic + simulator modes) now
+  extends the *same* reticle language as `.inspector-summary.empty`'s "No
+  component selected" (dim aiming-crosshair glyph via the shared
+  `--icon-reticle` mask, mono uppercase title, faint guidance) via a new
+  `.panel-empty` class, instead of a plain success-tinted bordered `<p>`.
+  Fixed `scripts/design-shot.mjs`'s command-palette trigger selector
+  (`.activity-rail button[title="Search"]` → `[aria-label="Search"]`)
+  since the rail button no longer carries a native `title` attribute now
+  that it has a real Tooltip. Net `App.css`: **−56 lines** even after all
+  of the above (`git diff --numstat` across both Phase 3d units: 195+216
+  insertions / 345+? deletions). Screenshot-verified: `node scripts/
+  design-shot.mjs phase3d-chrome` — `command-*.png`, `empty-*.png`,
+  `schematic-*.png` at 1440×900/1280×720/900×600 all visibly differ from
+  `screenshots/phase3c-simulator-fix/` (flat vs. blurred/gradient
+  surfaces, mono vs. proportional catalog names, hairline vs. filled
+  selection/hover, uppercase lamp-driven status text); zero clipped
+  controls at 900×600; the settings sheet from unit A still opens/closes
+  correctly through the full pipeline. No hardcoded colors introduced —
+  the pre-existing ones in `.cmdk`/`.cmdk-backdrop`/`.empty-panel` were
+  REMOVED, not added to (`git diff` grepped for hex/rgba outside `var(--
+  ...)`, zero net-new hits). Gates: typecheck clean, 1259/1259 tests
+  green (unchanged — this unit is pure chrome, no new test surface).
+  **This closes out §10 Phase 3d** (dialogs/sheets, status bar, rail,
+  command palette, empty/error states) — remaining §10 scope per
+  FEATURE_PARITY: the schematic canvas's own chrome (zoom controls, hover
+  cards, net-label popover — NOT the SVG rendering itself), the global
+  type/spacing sweep, and a final hardcoded-color grep sweep.
 - **Status: DONE** — §10 Phase 3d unit A: dialogs + sheets on the ui/ `Dialog`
   primitive (`apps/desktop/src/components/ShellPanels.tsx`'s `SettingsPanel`
   + `ConfirmDialog`). A new `ui/sheet.tsx` primitive lands (`Sheet`,

@@ -354,26 +354,19 @@ body {
   pointer-events: none;
 }
 
+/* Flat operator-console onboarding card — true-black surface, hairline ring,
+   --elev-pop (the same recipe as the dialogs/sheets, not a translucent glass
+   card). No backdrop blur, no gradient fade: flat surfaces only. */
 .empty-panel {
   position: relative;
   width: min(480px, calc(100% - 48px));
   padding: 28px 32px;
-  background: color-mix(in srgb, var(--panel) 94%, transparent);
-  border: 1px solid var(--border);
-  border-radius: var(--r-xl);
-  box-shadow: var(--elev-2), 0 16px 48px rgba(0, 0, 0, 0.4);
+  background: var(--panel-3);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-lg);
+  box-shadow: var(--elev-pop);
   pointer-events: none;
-  backdrop-filter: blur(12px);
   overflow: hidden;
-}
-
-/* Cobalt top-edge accent — the console header hairline of the card. */
-.empty-panel::before {
-  content: "";
-  position: absolute;
-  inset: 0 0 auto 0;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, var(--accent-line), transparent);
 }
 
 /* Only the actions take clicks, so clicking the card's body still reaches the
@@ -382,12 +375,27 @@ body {
   pointer-events: auto;
 }
 
+/* Braun micro-label kicker + a small idle lamp — the same instrument-lamp
+   language as .status-lamp, so even the onboarding card reads as a console
+   readout ("system idle, ready to build") rather than marketing copy. */
 .empty-kicker {
-  color: var(--accent);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--faint);
   font: 600 10px var(--font-mono);
-  letter-spacing: 1px;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
-  margin-bottom: 10px;
+  margin-bottom: 12px;
+}
+
+.empty-kicker i {
+  width: 5px;
+  height: 5px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--success);
+  box-shadow: 0 0 5px var(--success-glow);
 }
 
 .empty-panel h1 {
@@ -413,33 +421,33 @@ body {
   margin-top: var(--sp-5);
 }
 
+/* Flat hairline buttons — no embossed gradient pill, matching the operator
+   console bar (Button primitive's own outline variant, hand-rolled here
+   since these sit directly on the canvas, not inside a primitive tree). */
 .empty-actions button {
-  height: 36px;
-  padding: 0 18px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 34px;
+  padding: 0 14px;
   color: var(--text);
-  background: linear-gradient(180deg, var(--panel-4), var(--panel-2));
+  background: transparent;
   border: 1px solid var(--border-strong);
   border-radius: var(--r-md);
-  font: 550 12.5px var(--font-ui);
+  font: 600 12.5px var(--font-ui);
   letter-spacing: -0.01em;
   cursor: pointer;
-  box-shadow: var(--elev-1);
-  transition: transform var(--motion-fast) var(--spring),
-    box-shadow var(--motion-med) var(--spring),
-    background var(--motion-fast) var(--spring),
-    border-color var(--motion-fast) var(--spring);
+  transition: border-color var(--motion-fast) var(--spring),
+    background var(--motion-fast) var(--spring);
 }
 
 .empty-actions button:hover {
-  border-color: var(--border-strong);
-  background: linear-gradient(180deg, var(--panel-4), var(--panel-3));
-  transform: translateY(-1px);
-  box-shadow: var(--elev-2);
+  border-color: var(--accent-line);
+  background: var(--overlay-hover);
 }
 
 .empty-actions button:active {
-  transform: translateY(0);
-  box-shadow: var(--elev-1);
+  background: var(--overlay-hover-faint);
 }
 
 /* Keyboard focus ring — the secondary New/Open actions had none (a11y gap). */
@@ -450,24 +458,19 @@ body {
 
 .empty-actions .primary-action {
   color: var(--accent-ink);
-  background: linear-gradient(180deg, var(--accent-hover), var(--accent));
-  border-color: rgba(0, 0, 0, 0.25);
+  background: var(--accent);
+  border-color: var(--accent);
   font-weight: 650;
-  box-shadow: var(--elev-1), 0 0 0 1px var(--accent-line),
-    0 6px 18px var(--accent-glow);
 }
 
 .empty-actions .primary-action:hover {
-  background: linear-gradient(180deg, var(--accent-hover), var(--accent));
-  transform: translateY(-1px);
-  box-shadow: var(--elev-2), 0 0 0 1px var(--accent),
-    0 10px 28px var(--accent-glow);
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
 }
 
 .empty-actions .primary-action:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent),
-    0 8px 22px var(--accent-glow);
+  box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent);
 }
 
 /* ── Flow controls ─────────────────────────────────────────────────────────── */
@@ -1838,9 +1841,9 @@ body {
 ══════════════════════════════════════════════════════════════════════════════ */
 /* NOTE: the live `.statusbar` rule set lives in the "interactive completion
    pass" block below (search `.statusbar {`). A duplicate set once lived here and
-   leaked a wasteful backdrop-filter blur onto the opaque bar — deleted; the two
-   unique keycap rules (`.status-hints kbd` / `.status-hints .dot`) moved down
-   beside the real block. */
+   leaked a wasteful backdrop-filter blur onto the opaque bar — deleted. The
+   hint strip's `kbd` now shares the app-wide keycap recipe (search this file
+   for ".palette-key,"); `.status-hints .dot` lives beside the real block. */
 
 /* ══════════════════════════════════════════════════════════════════════════════
    COMMAND PALETTE (⌘K)
@@ -1853,36 +1856,25 @@ body {
   justify-content: center;
   align-items: flex-start;
   padding-top: 13vh;
-  background: rgba(4, 6, 10, 0.65);
-  backdrop-filter: blur(4px);
-  animation: cmdk-fade-in 120ms var(--ease-out) both;
+  background: var(--scrim-strong);
+  animation: tau-fade-in var(--motion-fast) var(--spring) both;
 }
 
-@keyframes cmdk-fade-in {
-  from { opacity: 0; }
-  to   { opacity: 1; }
-}
-
+/* True-black pop surface — same recipe as ui/dialog.tsx's DialogContent
+   (--panel-4 popover, hairline ring, --elev-pop), restyled in place rather
+   than migrated onto the primitive (the arrow-key + pointer selection model
+   here is bespoke, not a Dialog). No backdrop blur: flat surfaces only. */
 .cmdk {
   width: min(540px, 90vw);
   max-height: 58vh;
   display: flex;
   flex-direction: column;
-  background: rgba(13, 16, 24, 0.96);
+  background: var(--panel-4);
   border: 1px solid var(--border-strong);
-  border-radius: var(--r-xl);
-  box-shadow:
-    0 0 0 1px rgba(255,255,255,0.03) inset,
-    0 32px 80px rgba(0, 0, 0, 0.65),
-    0 8px 24px rgba(0, 0, 0, 0.4);
+  border-radius: var(--r-lg);
+  box-shadow: var(--elev-pop);
   overflow: hidden;
-  backdrop-filter: blur(20px);
-  animation: cmdk-slide-in 160ms var(--ease-snap) both;
-}
-
-@keyframes cmdk-slide-in {
-  from { opacity: 0; transform: translateY(-6px) scale(0.98); }
-  to   { opacity: 1; transform: translateY(0)    scale(1);    }
+  animation: tau-pop-in var(--motion-fast) var(--spring) both;
 }
 
 .cmdk-input {
@@ -1911,18 +1903,23 @@ body {
   scrollbar-color: var(--panel-4) transparent;
 }
 
+/* Accent-hairline selection (never a heavy fill) — the same "targeting"
+   language as .palette-item.active's left accent edge. */
 .cmdk-item {
   display: flex;
   align-items: center;
   gap: 10px;
   padding: 7px 10px;
-  border-radius: var(--r-md);
+  border-radius: var(--r-sm);
   cursor: pointer;
-  transition: background 80ms var(--ease-out);
+  box-shadow: inset 2px 0 0 transparent;
+  transition: background var(--motion-fast) var(--ease-out),
+    box-shadow var(--motion-fast) var(--ease-out);
 }
 
 .cmdk-item.active {
-  background: var(--panel-4);
+  background: var(--overlay-hover-faint);
+  box-shadow: inset 2px 0 0 var(--accent);
 }
 
 .cmdk-icon {
@@ -1932,32 +1929,28 @@ body {
   opacity: 0.8;
 }
 
+/* Mono instrument identifier — the same treatment as .palette-name, so the
+   palette and the command palette read as the same parts catalog. */
 .cmdk-name {
   flex: 1;
-  font-size: 13px;
-  font-weight: 450;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 500;
   color: var(--text);
-  letter-spacing: -0.1px;
+  letter-spacing: -0.01em;
+}
+
+.cmdk-item.active .cmdk-name {
+  color: var(--accent);
 }
 
 .cmdk-section {
-  font-size: 10px;
-  font-weight: 500;
-  color: var(--faint);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.cmdk-key {
-  font-size: 9px;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
   font-weight: 600;
   color: var(--faint);
-  background: var(--panel-3);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  padding: 1px 5px;
-  font-family: var(--font-mono);
-  line-height: 16px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
 }
 
 .cmdk-empty {
@@ -2472,8 +2465,9 @@ body {
   color: var(--faint);
   background: transparent;
   cursor: pointer;
+  box-shadow: inset 0 0 0 1px transparent;
   transition: color var(--motion-fast) var(--spring),
-    background var(--motion-fast) var(--spring);
+    box-shadow var(--motion-fast) var(--spring);
 }
 
 .rail-btn svg {
@@ -2487,9 +2481,11 @@ body {
   transition: transform var(--motion-fast) var(--spring);
 }
 
+/* Hairline hover — an outline, never a filled patch (the same "never a heavy
+   fill" rule the palette's selection state follows). */
 .rail-btn:hover {
   color: var(--text);
-  background: var(--overlay-hover);
+  box-shadow: inset 0 0 0 1px var(--border-strong);
 }
 
 .rail-btn:hover svg {
@@ -2500,9 +2496,10 @@ body {
   transform: scale(0.94);
 }
 
+/* Active state is carried entirely by the icon color + `.rail-active` left
+   accent edge below — no background fill, matching `.palette-item.active`. */
 .rail-btn.active {
   color: var(--accent);
-  background: var(--accent-soft);
 }
 
 /* Active indicator pill — a lit accent bar flush to the rail's left edge (the
@@ -3529,11 +3526,16 @@ body {
   }
 }
 
-/* Flat hairline keycap — no embossed gradient/bevel; a crisp mono badge that
-   reads as a console legend rather than a physical button. */
-.palette-key {
-  justify-self: end;
-  flex-shrink: 0;
+/* Flat hairline mono keycap — no embossed gradient/bevel; a crisp badge that
+   reads as a console legend rather than a physical button. ONE recipe shared
+   by every shortcut badge in the app: the palette's hotkey column, the
+   status-bar hint strip, the command palette's result row, and the canvas
+   empty-state's onboarding actions (search this file for "kbd" if adding a
+   new one — extend this selector, don't fork a new rule). */
+.palette-key,
+.status-hints kbd,
+.cmdk-key,
+.empty-actions kbd {
   min-width: 16px;
   padding: 1px 5px;
   text-align: center;
@@ -3546,6 +3548,16 @@ body {
   background: transparent;
   border: 1px solid var(--border-strong);
   border-radius: 4px;
+}
+
+.palette-key {
+  justify-self: end;
+  flex-shrink: 0;
+}
+
+.status-hints kbd,
+.empty-actions kbd {
+  flex-shrink: 0;
 }
 
 .palette-item.active .palette-key {
@@ -3818,27 +3830,9 @@ body {
   white-space: nowrap;
 }
 
-.status-mode {
-  min-width: auto;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--accent);
-  font-weight: 600;
-}
-
-.status-mode.simulator {
-  color: var(--trace-green);
-}
-
-/* Live state dot — a soft halo so ready/running reads as an instrument light. */
-.status-mode i {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: currentColor;
-  box-shadow: 0 0 6px currentColor;
-}
+/* The mode/run-state indicator is the shared `.status-lamp` component
+   (search this file for "Status lamp —") — the same treatment as the
+   toolbar's transport lamp, so idle/ok/error read identically everywhere. */
 
 .status-file {
   color: var(--muted);
@@ -3864,27 +3858,17 @@ body {
 }
 
 /* Right-aligned metrics readout (grid pitch · counts · zoom) — an instrument-
-   panel numeric strip, so monospace it: stable width as counts change, no
-   reflow jitter, and it reads as a console status line. */
+   panel numeric strip. Font/tabular-figure declarations now live in the
+   shared `.mono-num` utility (applied alongside this class in StatusBar.tsx,
+   same as `.status-file`/`.status-codec`) — this rule only carries what
+   `.mono-num` doesn't (color, layout). */
 .status-count {
   color: var(--muted);
   flex: 0 0 auto;
-  font-family: var(--font-mono);
-  letter-spacing: -0.01em;
-  font-variant-numeric: tabular-nums;
 }
 
-/* Keycaps in the hint strip — small mono chips on the deepest surface tier. */
-.status-hints kbd {
-  font: 600 9px var(--font-mono);
-  background: var(--panel-4);
-  border: 1px solid var(--border);
-  border-radius: 3px;
-  padding: 1px 4px;
-  color: var(--muted);
-  flex-shrink: 0;
-}
-
+/* Keycaps in the hint strip now share the app-wide flat hairline mono
+   keycap recipe (search this file for ".palette-key," above). */
 .status-hints .dot {
   opacity: 0.3;
   flex-shrink: 0;
@@ -3948,8 +3932,7 @@ body {
 }
 
 .bottom-errors .error,
-.bottom-errors .warning,
-.bottom-errors p {
+.bottom-errors .warning {
   margin: 0;
   padding: 10px 12px;
   border-radius: 7px;
@@ -3966,9 +3949,43 @@ body {
   color: var(--signal);
 }
 
-.bottom-errors p {
-  border: 1px solid var(--success-line);
-  color: var(--success);
+/* Reticle-language empty state — the same recipe as
+   .inspector-summary.empty (dim aiming glyph + mono uppercase title + faint
+   guidance), reused here so every "nothing to show yet" panel in the app
+   reads as one consistent idiom. */
+.panel-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  height: 100%;
+  min-height: 96px;
+  padding: 12px;
+  text-align: center;
+}
+
+.panel-empty-glyph {
+  width: 40px;
+  height: 40px;
+  background: var(--muted);
+  -webkit-mask: var(--icon-reticle) center / contain no-repeat;
+  mask: var(--icon-reticle) center / contain no-repeat;
+  opacity: 0.34;
+}
+
+.panel-empty strong {
+  font: 700 12px var(--font-mono), monospace;
+  letter-spacing: 0.01em;
+  color: var(--text);
+  text-transform: uppercase;
+}
+
+.panel-empty span {
+  max-width: 34ch;
+  color: var(--faint);
+  font-size: 11px;
+  line-height: 1.45;
 }
 
 .ask-composer input {

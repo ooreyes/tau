@@ -1,6 +1,9 @@
+import { cn } from "@/lib/utils";
 import { useSchematic } from "../store/useSchematic";
 import type { AnalysisResult } from "../simulation/linearTransient";
 import { isNativeSpiceRuntime } from "../engine/nativeSpice";
+
+type LampState = "idle" | "ok" | "error";
 
 export function StatusBar({
   mode,
@@ -28,6 +31,15 @@ export function StatusBar({
   // the built-in TypeScript solver. Surface which one is active to avoid the
   // "ngspice isn't working" confusion when running in a browser.
   const engineLabel = isNativeSpiceRuntime() ? "ngspice" : "built-in solver";
+  // Same lamp semantics as the toolbar's transport indicator (Toolbar.tsx):
+  // color is entirely state-driven, not tied to which mode you're in.
+  const lampState: LampState = mode === "simulator"
+    ? result?.ok
+      ? "ok"
+      : result
+        ? "error"
+        : "idle"
+    : "idle";
   const state = mode === "simulator"
     ? result?.ok
       ? "sim complete"
@@ -38,12 +50,15 @@ export function StatusBar({
 
   return (
     <footer className="statusbar">
-      <span className={`status-mode ${mode}`}>
-        <i />
-        {state}
+      <span className={cn("status-lamp", `status-lamp--${lampState}`)}>
+        <i className="status-lamp-dot" aria-hidden="true" />
+        <span className="status-lamp-text mono-num">{state}</span>
       </span>
-      <span className="status-file">{title}</span>
-      <span className="status-codec" title={isNativeSpiceRuntime() ? "Native ngspice engine" : "Built-in TypeScript solver — ngspice runs in the desktop app"}>
+      <span className="status-file mono-num">{title}</span>
+      <span
+        className="status-codec mono-num"
+        title={isNativeSpiceRuntime() ? "Native ngspice engine" : "Built-in TypeScript solver — ngspice runs in the desktop app"}
+      >
         engine: {engineLabel}
       </span>
       <span className="status-hints">
@@ -73,7 +88,7 @@ export function StatusBar({
         <span className="dot">·</span>
         <kbd>⌘</kbd>+scroll zoom · two-finger pan
       </span>
-      <span className="status-count">
+      <span className="status-count mono-num">
         grid 0.1 in · {componentCount} component{componentCount === 1 ? "" : "s"} · {wireCount} wire
         {wireCount === 1 ? "" : "s"} · zoom 100%
       </span>

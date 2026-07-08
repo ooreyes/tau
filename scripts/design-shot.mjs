@@ -206,7 +206,7 @@ async function shootViewport(page, viewport) {
   // Drive it via the always-visible rail search button rather than the
   // Cmd/Ctrl+K shortcut: Chromium can swallow that combo as a browser-level
   // binding before it reaches the page's keydown listener.
-  await page.locator('.activity-rail button[title="Search"]').click();
+  await page.locator('.activity-rail button[aria-label="Search"]').click();
   await page.waitForSelector('.cmdk[role="dialog"]', { timeout: STATE_TIMEOUT_MS });
   await page.waitForTimeout(150);
   await page.screenshot({ path: path.join(outDir, `command-${viewport.name}.png`), fullPage: true });
