@@ -12,7 +12,60 @@
   · corpus runner: 82 imported / **79 warning-clean** / **82 deck-built (ALL)**
   / **82 op-converged (ALL)** — floors 82/79/82/82
   · App.css hardcoded-color burndown: **0 hex outside the single `:root`** ✅
-- **Run started (UTC):** 2026-07-08T15:15Z
+- **Run started (UTC):** 2026-07-08T15:24Z
+- **Status: DONE** — §10 true-black palette retune (Phase 1 of the visual-design
+  overhaul; DESIGN commit, screenshot-proven). Surgical edit of the single
+  `:root` block in `apps/desktop/src/App.css` (no other file touched, no
+  second `:root` introduced) — the cool BLUE-tinted graphite console
+  (`--bg:#0a0c10`, radial-gradient "glass" canvas/scope surfaces) is replaced
+  with a flat true-solid-black operator console per the Braun "systems"
+  poster / Teenage Engineering OP-1 / u-he reference direction Omar confirmed.
+  BEFORE: navy-graphite panels with a blue-tinted glow vignette on the
+  schematic/scope surfaces. AFTER: `--bg:#000000`, neutral near-black panel
+  steps (`--panel #060607` / `--panel-2 #0b0b0d` / `--panel-3 #030304` /
+  `--panel-4 #121215` — relative lightness order bg<panel-3<panel<panel-2<
+  panel-4 preserved from the old palette), `--canvas-bg #020203` / `--scope-bg
+  #030304` as the darkest "instrument screen" surfaces, and `--canvas-surface`
+  / `--scope-surface` converted from radial-gradients to flat solids (`#050506`
+  / `#060608`) — token names unchanged so no use-site moved. Hairlines
+  (`--border*`) kept their cool-blue cast (by design, hairline-only per the
+  brief) with alphas bumped (0.11→0.14, 0.20→0.24, 0.06→0.07) so structure
+  stays crisp on true black. `--text`/`--muted`/`--faint` had their blue cast
+  neutralized slightly. `--accent` (#4d9dff electric cobalt) is UNCHANGED —
+  locked decision. `--success`/`--danger`/`--signal` hues unchanged but
+  brightened/saturated (Apple-dark-mode-adjacent: #32d74b / #ff453a / #ffb020)
+  so they read as vivid OP-1-style indicator lamps on true black; their
+  `-soft`/`-line`/`-glow` derived rgba tuples updated to match (alphas
+  untouched). `--elev-1` changed from an invisible black drop-shadow to a
+  hairline top-sheen (`inset 0 1px 0 rgba(255,255,255,0.04)`); `--elev-2`
+  reduced; `--elev-pop` keeps a real (slightly stronger) shadow + ring since
+  dialogs are the one place true depth still needs to read. Two small
+  consistency-only extra touches beyond the explicit list: `--canvas-label-halo`
+  (a text-shadow color for schematic net labels — must match `--canvas-bg` to
+  blend) and `--dial-track` (a solid control-track fill, not a hairline) were
+  both neutralized to match the new neutral-black direction; nothing else was
+  touched. Grepped for a runtime JS/TS theme switcher (`--bg`/`--panel`/
+  `--accent` set from `.ts`/`.tsx`) — NONE EXISTS; `tokens.css`'s comment
+  referencing "the runtime theme switcher" is aspirational/future, so nothing
+  else needed updating for typecheck. `apps/desktop/src/styles/tokens.css`
+  verified untouched and still bridges correctly (it only reads these vars via
+  `var()`, doesn't hardcode them). PROOF: `node scripts/design-shot.mjs
+  phase1-true-black` → `screenshots/phase1-true-black/` (15 PNGs), visually
+  diffed against `screenshots/baseline/` for `empty`/`simulator`/`dialog` at
+  1440×900 — schematic/scope backgrounds visibly shift from navy-black to true
+  black, cyan/green scope traces still pop, hairlines around the explorer tree
+  and settings dialog remain crisply visible, muted secondary text stays
+  readable on the darker panels, and the settings dialog still separates
+  cleanly from the dimmed backdrop via its border + elev-pop shadow/ring.
+  Gates: `pnpm -C apps/desktop typecheck` clean; `pnpm -C apps/desktop test` →
+  1247/1247 green, no regressions (a pure-CSS-values change, no test coupling
+  expected or found).
+- **Next step:** continue the §10 visual-design overhaul with Phase 2 —
+  apply the true-black retune across any remaining ad-hoc CSS that isn't yet
+  fully token-driven (sweep item in FEATURE_PARITY §10), then resume the
+  panel-migration checklist: status bar → left icon rail → global type/
+  spacing pass, or the `output`/`errors` bottom-tab empty states noted in an
+  earlier entry.
 - **Status: DONE** — §10 screenshot pipeline (STEP 3.5): re-runnable Playwright
   driver + committed BEFORE baseline. NOT a design commit (no pixel change) —
   infra so every future design commit can prove it visibly changed the UI, per

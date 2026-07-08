@@ -1012,6 +1012,17 @@ Definition of Done. Migrate **incrementally, panel by panel**, with screenshot
 QA (STEP 3.5 pipeline) before/after every panel — never a big-bang rewrite,
 never a broken intermediate state on the branch.
 
+- ✅ **True-black palette retune (2026-07-08):** the single `:root` token block
+  in `App.css` retuned from a cool blue-tinted graphite console (`--bg:
+  #0a0c10`, radial-gradient "glass" canvas/scope surfaces) to a flat
+  true-solid-black operator console (Braun "systems" poster / OP-1 / u-he
+  reference direction) — `--bg:#000000`, neutral near-black panel steps,
+  `--canvas-surface`/`--scope-surface` converted from gradients to flat
+  solids, hairline alphas bumped for crispness on true black, `--success`/
+  `--danger`/`--signal` brightened into vivid indicator-lamp colors (hues
+  unchanged), `--accent` untouched (locked). Screenshot-verified against
+  `screenshots/baseline/` via `screenshots/phase1-true-black/`. No runtime
+  theme switcher exists yet (grepped, none found).
 - ✅ **Foundation (2026-07-03):** Tailwind CSS v4 (`@tailwindcss/vite`) +
   shadcn scaffolding (components.json new-york, `src/lib/utils.ts` cn helper
   +4 tests, `@/*` alias in vite+tsconfig). `src/styles/tokens.css` maps the
