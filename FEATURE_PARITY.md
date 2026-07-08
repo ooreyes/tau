@@ -1004,13 +1004,23 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
 - ⬜ Auto-update, licensing/activation
 - ⬜ Installer + onboarding
 
-## 10. Visual design system — **IMPERATIVE (Omar's directive)**
+## 10. Visual design system — **IMPERATIVE (Omar's directive)** — ✅ FULLY ADOPTED (2026-07-08, Phase 4c)
 
 Goal: the app looks and feels **shadcn-grade** — a coherent, beautiful,
 token-driven design system, not a pile of ad-hoc CSS. This gates the
 Definition of Done. Migrate **incrementally, panel by panel**, with screenshot
 QA (STEP 3.5 pipeline) before/after every panel — never a big-bang rewrite,
 never a broken intermediate state on the branch.
+
+**Status: every bullet below is ✅.** Phase 4c (canvas chrome — the zoom
+cluster, the "Current flow" toggle/readout, the inline value/net-label
+editor) was the last open item; see its bullet below for what changed. This
+closes the §10 line item of the AGENTS.md Definition of Done. Honest
+accounting of what's still open in the wider DoD (none of it is §10 scope):
+the re-runnable acceptance-corpus script, the `class-d_starter.asc`
+comparator-parity fix, cross-tool waveform-parity screenshots, and the
+final packaged-build/signing gates — see AGENTS.md's Definition of Done
+checklist for the authoritative list.
 
 - ✅ **True-black palette retune (2026-07-08):** the single `:root` token block
   in `App.css` retuned from a cool blue-tinted graphite console (`--bg:
@@ -1216,9 +1226,35 @@ never a broken intermediate state on the branch.
   Remaining §10 scope: the schematic canvas's own chrome (zoom controls,
   hover cards, net-label popover) and a final hardcoded-color grep pass.
   (The type/spacing sweep closed in Phase 4a, below.)
-- ⬜ **The schematic canvas keeps its bespoke SVG rendering** (it is the
-  product's soul) — only its chrome (zoom controls, hover cards, net-label
-  editor popover) adopts the system. Pan/zoom must stay 60fps after migration.
+- ✅ **The schematic canvas keeps its bespoke SVG rendering** (it is the
+  product's soul, untouched) — its chrome now adopts the system
+  (2026-07-08, Phase 4c). Found exactly four chrome surfaces in `Canvas.tsx`
+  (`App.tsx`/`ShellPanels.tsx` have none, confirmed by grep): the zoom
+  cluster (`.view-controls`, already mostly on-system from an earlier pass —
+  tightened raw `9px`/`16px` radius/inset to `--r-md`/`--sp-4`, glyphs to
+  `--font-mono`, native `title`s to real `ui/Tooltip`s, and deleted the dead
+  `.view-btn.fit` hack that hid a button's literal text via `font-size: 0`
+  and painted a different glyph over it via `::before`); the "Current flow"
+  toggle + "slowed ×" readout (`.flow-controls` — the real gap: rebuilt from
+  a stadium-shaped, `backdrop-filter: blur()`'d glass pill with an orphaned
+  hardcoded `rgba(23,184,158,…)` teal glow when ON — a color with no entry
+  in the token `:root`, invisible to the hex-only color-gate since it wasn't
+  `#hex` — into a flat hairline `--panel-3` chip with a real indicator lamp
+  dot for the ON state, cobalt `--accent-line`, and a `.mono-num` readout
+  chip); the inline value/net-label-name editor (`.value-edit-input` — the
+  closest thing to a "net-label popover" this codebase has; no separate
+  popover component exists) moved onto the same `--panel-4`/`--elev-pop`
+  true-black pop-surface recipe every other floating surface uses instead of
+  a `--panel-2` + raw `rgba(0,0,0,0.5)` shadow. No hover cards exist on the
+  canvas today (only `.snap-ring`, an SVG wire/pin snap indicator — geometry,
+  not chrome, left alone). Zero backdrop-filter remains on any canvas
+  overlay (pan/zoom stays 60fps — nothing new added, one blur removed).
+  Verified via `node scripts/design-shot.mjs canvas-chrome` against
+  `screenshots/phase4b-floor/` at 1440×900 and 900×600: the flow pill is an
+  obvious, large visual diff (rounded teal glow → flat cobalt hairline +
+  lamp); the zoom cluster's diff is intentionally subtle since most of it
+  was already migrated. **This was the last open §10 sub-item — §10 is now
+  fully adopted**, see the section header note below.
 - ✅ **Type & spacing scale (2026-07-08, Phase 4a):** audited every
   `font-size` in `App.css` (118 declarations across `font-size:`/`font:`
   shorthand) — the app had already clustered on 9/10/11/12/13px for ~90% of
@@ -1312,11 +1348,11 @@ never a broken intermediate state on the branch.
   `focus-visible:ring-2 focus-visible:ring-ring/50`, `--color-ring: var(--accent)`
   = electric cobalt) verified visible on true black via a headless
   keyboard-tab screenshot of the settings sheet — clear blue ring around the
-  focused button, good contrast. Remaining §10 scope (not part of this
-  unit, not touched — canvas SVG rendering is explicitly out of bounds per
-  the build contract): the schematic canvas's own chrome (zoom controls,
-  hover cards, net-label popover), noted since Phase 3d and still open —
-  **§10 is not 100% closed**; every other panel/bullet in this section is.
+  focused button, good contrast. At the time of this unit, the schematic
+  canvas's own chrome (zoom controls, hover cards, net-label popover) was
+  the one remaining §10 scope item, noted since Phase 3d — **closed in
+  Phase 4c** (see "The schematic canvas keeps its bespoke SVG rendering"
+  bullet above); §10 is now fully adopted end to end.
   - ✅ **Cleared (2026-07-04):** `.symbol-preview` card now derives from
     tokens (`--accent-soft` surface + `--border` hairline + `--accent`
     stroke/label + `--muted` hotkey, radius `--r-md`) — screenshot-verified

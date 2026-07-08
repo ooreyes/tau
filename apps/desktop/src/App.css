@@ -525,64 +525,93 @@ body {
 
 .flow-controls {
   position: absolute;
-  left: 14px;
-  bottom: 14px;
+  left: var(--sp-4);
+  bottom: var(--sp-4);
   z-index: 6;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 6px;
+  gap: var(--sp-2);
 }
 
+/* Speed readout is an instrument reading, not a label — mono figures in a
+   flat hairline chip. No blur: this sits directly over the canvas (a hot,
+   60fps layer), and a fully-opaque `--panel-3` reads as crisply as glass
+   without the repaint cost. */
 .flow-rate {
+  height: var(--row-h-dense);
+  display: inline-flex;
+  align-items: center;
   font-size: var(--fs-caption);
   font-weight: 500;
   color: var(--muted);
-  background: rgba(13, 16, 24, 0.82);
-  border: 1px solid var(--border);
-  border-radius: 20px;
-  padding: 3px 9px;
-  letter-spacing: 0.1px;
-  backdrop-filter: blur(6px);
+  background: var(--panel-3);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-md);
+  padding: 0 var(--sp-2);
 }
 
+/* An operator control, not a glowy "feature enabled" consumer pill: flat
+   --panel surface at rest, a real indicator lamp (dot + hairline, cobalt —
+   this is a view toggle, not a run-state signal) carries the ON state
+   instead of a tinted glass fill. */
 .flow-toggle {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
+  gap: var(--sp-2);
+  height: var(--row-h-dense);
+  padding: 0 var(--sp-3);
   font-size: var(--fs-body);
   font-weight: 600;
   letter-spacing: -0.1px;
   color: var(--muted);
-  background: rgba(13, 16, 24, 0.82);
-  border: 1px solid var(--border);
-  border-radius: 20px;
+  background: var(--panel-3);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-md);
   cursor: pointer;
-  transition: color 160ms var(--ease-out), border-color 160ms var(--ease-out), background 160ms var(--ease-out), box-shadow 160ms var(--ease-out);
-  backdrop-filter: blur(6px);
+  transition: color var(--motion-fast) var(--ease-out),
+    border-color var(--motion-fast) var(--ease-out),
+    background var(--motion-fast) var(--ease-out);
 }
 
 .flow-toggle:hover {
   color: var(--text);
-  border-color: var(--border-strong);
+  background: var(--overlay-hover);
 }
 
 .flow-toggle.on {
   color: var(--accent);
-  border-color: rgba(23, 184, 158, 0.28);
-  background: rgba(23, 184, 158, 0.06);
-}
-
-.flow-toggle.on:hover {
-  color: var(--accent);
+  border-color: var(--accent-line);
 }
 
 .flow-toggle .flow-bolt {
   font-size: var(--fs-label);
 }
 
-/* ── Inline value editor ───────────────────────────────────────────────────── */
+/* Lamp dot — same idle/lit language as `.status-lamp-dot`, scoped here since
+   this toggle isn't a run-state indicator (cobalt accent, not signal amber). */
+.flow-lamp {
+  width: 5px;
+  height: 5px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--faint);
+  transition: background var(--motion-med) var(--ease-out),
+    box-shadow var(--motion-med) var(--ease-out);
+}
+
+.flow-toggle.on .flow-lamp {
+  background: var(--accent);
+  box-shadow: 0 0 5px var(--accent-glow);
+}
+
+/* ── Inline value editor (component value + net-label name) ─────────────────
+   Same true-black pop-surface recipe the rest of the system uses for
+   floating surfaces (`--panel-4` + `--elev-pop`, see ui/dialog.tsx and
+   ui/tooltip.tsx) instead of a one-off panel shade + a raw rgba drop
+   shadow — an accent-cobalt border (not a neutral hairline) is kept since
+   this reads as an active edit affordance, matching every other focused
+   input in the app. */
 .value-edit-input {
   position: absolute;
   transform: translateX(-50%);
@@ -591,14 +620,12 @@ body {
   text-align: center;
   font: 600 var(--fs-label) var(--font-mono);
   color: var(--text);
-  background: var(--panel-2);
+  background: var(--panel-4);
   border: 1px solid var(--accent);
   border-radius: var(--r-sm);
   padding: 3px 6px;
   outline: none;
-  box-shadow:
-    0 0 0 3px var(--accent-soft),
-    0 8px 24px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 0 0 3px var(--accent-soft), var(--elev-pop);
 }
 
 /* ── Wire / hit targets ─────────────────────────────────────────────────────── */
@@ -2046,18 +2073,21 @@ body {
 /* ── View controls (zoom / fit) ────────────────────────── */
 /* Canvas view controls — a segmented vertical cluster (zoom in / out / fit)
    pinned top-right of the schematic. Consolidated here; the old duplicate lower
-   in the file is deleted. */
+   in the file is deleted. Matches the ui/Button outline/icon language
+   (hairline-bordered group, --overlay-hover on hover, real Tooltips per
+   button rather than a native `title`), hand-rolled here since these float
+   directly over the canvas rather than inside a primitive tree. */
 .view-controls {
   position: absolute;
-  top: 16px;
-  right: 16px;
+  top: var(--sp-4);
+  right: var(--sp-4);
   z-index: 6;
   display: flex;
   flex-direction: column;
   overflow: hidden;
   background: var(--panel-3);
   border: 1px solid var(--border-strong);
-  border-radius: 9px;
+  border-radius: var(--r-md);
 }
 .view-btn {
   width: 34px;
@@ -2065,6 +2095,7 @@ body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  font-family: var(--font-mono);
   font-size: var(--fs-title);
   font-weight: 600;
   color: var(--muted);
@@ -2972,16 +3003,6 @@ body {
 .junction-dot {
   fill: var(--comp);
   stroke: none;
-}
-
-.view-btn.fit {
-  padding: 0;
-  font-size: 0;
-}
-
-.view-btn.fit::before {
-  content: "⌂";
-  font-size: var(--fs-title);
 }
 
 /* bottom inspector / results */

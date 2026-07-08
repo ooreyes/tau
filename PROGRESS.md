@@ -12,8 +12,76 @@
   · corpus runner: 82 imported / **79 warning-clean** / **82 deck-built (ALL)**
   / **82 op-converged (ALL)** — floors 82/79/82/82
   · App.css hardcoded-color burndown: **0 hex outside the single `:root`** ✅
-  · App.css size: 4511 (original) → **4243 lines** after Phase 4b's dead-rule sweep
-- **Run started (UTC):** 2026-07-08T17:58Z
+  · App.css size: 4511 (original) → **4264 lines** (net +21 after Phase 4c's
+  canvas-chrome migration added documenting comments and a lamp-dot rule,
+  offset by deleting the dead `.view-btn.fit` hack)
+- **Run started (UTC):** 2026-07-08T18:23Z
+- **Status: DONE** — §10 Phase 4c (the final §10 unit): the schematic canvas's
+  own CHROME — the one honest gap flagged since Phase 3d and left open through
+  4a/4b. Canvas SVG rendering (components, wires, grid, labels, the current-flow
+  dots in `FlowLayer.tsx`) is untouched, exactly as scoped. Explored
+  `Canvas.tsx` (App.tsx/ShellPanels.tsx have no canvas-chrome — confirmed by
+  grep, nothing to migrate there) and found exactly four chrome surfaces, all
+  in one component:
+  1. **Zoom cluster** (`.view-controls`/`.view-btn`, top-right) was already
+     mostly on-system from an earlier pass (hairline `--panel-3` group,
+     `--overlay-hover`/`--accent-soft` states, inset focus ring) — tightened
+     the remaining drift: `9px`/`16px` raw radius/inset → `--r-md`/`--sp-4`,
+     glyphs → `--font-mono` (design brief: "mono glyphs"), and native `title`
+     tooltips → real `ui/Tooltip` (same `TooltipTrigger asChild` pattern
+     `ShellPanels.tsx`'s rail buttons use). Deleted a genuinely dead rule:
+     `.view-btn.fit` had `font-size: 0` hiding the button's literal text
+     ("⤢ Fit") and used a `::before { content: "⌂" }` to paint a *different*
+     glyph in its place — confusing indirection for a static icon. The button
+     now just renders `⌂` directly; the `.fit` modifier class and both CSS
+     rules are gone.
+  2. **"Current flow" toggle + "slowed ×" readout** (`.flow-controls`) were
+     the real gap: a stadium-shaped (`border-radius: 20px`) glassy pill with
+     `backdrop-filter: blur(6px)` and, when ON, an undocumented hardcoded
+     `rgba(23, 184, 158, …)` teal-green glow that exists nowhere in the token
+     `:root` (an orphan from a pre-tokens design, invisible to the hex-only
+     `rg "#[0-9a-fA-F]{3,8}"` gate since it's `rgba()` not `#hex` — worth
+     flagging: that gate has a blind spot for non-hex color literals). Rebuilt
+     as an operator control: flat `--panel-3` hairline chip (`--r-md`,
+     `--row-h-dense`), no blur (this floats directly over the 60fps canvas —
+     a genuinely hot repaint layer), ON state reads as a real indicator lamp
+     (new `.flow-lamp` dot + `--accent-line` hairline, cobalt — a view toggle,
+     not a run-state signal, so intentionally NOT the amber `--signal` family
+     `.status-lamp--running` uses) instead of a tinted glass fill. The
+     "slowed ≈N× vs real time" readout gained `.mono-num` and moved from the
+     same glassy pill to a `--panel-3`/`--border-strong` hairline chip.
+  3. **Inline value editor** (`.value-edit-input`, shared by the component
+     value editor and the net-label name input — the closest thing to a
+     "net-label editor popover" in this codebase; there's no separate
+     `NetLabel`/`Popover` component) had one hardcoded literal in its drop
+     shadow (`0 8px 24px rgba(0,0,0,0.5)`) and sat on `--panel-2` rather than
+     the `--panel-4` "true-black pop surface" recipe every other floating
+     surface uses (`ui/dialog.tsx`, `ui/tooltip.tsx`, `ui/dropdown-menu.tsx`)
+     — repointed to `--panel-4` + `var(--elev-pop)`, kept the accent-cobalt
+     border (an active-edit affordance, matching every other focused input
+     in the app, not a neutral hairline).
+  4. **Hover cards**: none exist on the canvas today (the only hover-adjacent
+     affordance is `.snap-ring`, an SVG wire/pin snap indicator — canvas
+     geometry, not chrome, left untouched).
+  Zero hardcoded colors added (`git diff | grep -E '^\+' | grep -E
+  '#[0-9a-fA-F]{3,8}|rgba\('` on the changed files returns nothing); the two
+  pre-existing orphan `rgba()` literals above are now gone instead of merely
+  undetected. Verified with `node scripts/design-shot.mjs canvas-chrome`:
+  compared schematic (zoom cluster) and simulator (flow pill + readout)
+  states against `screenshots/phase4b-floor/` at 1440×900 and 900×600 via
+  cropped pixel diffs — the flow pill visibly changed from a rounded
+  teal-glow stadium to a flat cobalt-hairline chip with a lamp dot (large,
+  obvious diff); the zoom cluster's radius/font/tooltip changes are
+  intentionally subtle (it was already mostly on-system) but present at both
+  sizes; nothing clipped or unreachable at the 900×600 floor. Gates:
+  typecheck clean, 1259/1259 tests green (no canvas-chrome test coverage
+  existed or was added — `Canvas.geometry.test.ts` only covers pure geometry
+  math, confirmed by grep before touching anything). **This closes the LAST
+  open §10 sub-item** — every §10 bullet in `FEATURE_PARITY.md` is now ✅.
+  §10 full adoption is honest, not aspirational: the acceptance-corpus script,
+  `class-d_starter.asc` comparator parity, and waveform-parity Definition-of-
+  Done items are separate, still-open sections of the DoD, unaffected by this
+  unit. →
 - **Status: DONE** — §10 Phase 4b (final phase): the responsive floor + final
   sweep. Orchestrator's review had flagged a concrete bug: in the SIMULATOR
   view at the app's stated 900×600 minimum window, the schematic column

@@ -11,6 +11,7 @@ import type { OperatingPointResult } from "../simulation/operatingPoint";
 import { opAnnotations } from "../simulation/opAnnotations";
 import { extractCircuit } from "../schematic/netlist";
 import { FlowLayer, FLOW_PLAY_MS } from "./FlowLayer";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface View {
   x: number;
@@ -1312,27 +1313,44 @@ export function Canvas({
           <button
             className={`flow-toggle${flowOn ? " on" : ""}`}
             onClick={() => setFlowOn((v) => !v)}
+            aria-pressed={flowOn}
             title="Animate conventional current along wires and through components"
           >
-            <span className="flow-bolt">⚡</span>
+            <i className="flow-lamp" aria-hidden="true" />
+            <span className="flow-bolt" aria-hidden="true">⚡</span>
             {flowOn ? "Current flow" : "Flow paused"}
           </button>
           {flowOn && flowSlowdown > 0 && (
-            <span className="flow-rate">slowed ≈{Math.round(flowSlowdown).toLocaleString()}× vs real time</span>
+            <span className="flow-rate mono-num">slowed ≈{Math.round(flowSlowdown).toLocaleString()}× vs real time</span>
           )}
         </div>
       )}
 
       <div className="view-controls">
-        <button className="view-btn" onClick={() => zoomBy(1.25)} title="Zoom in" aria-label="Zoom in">
-          +
-        </button>
-        <button className="view-btn" onClick={() => zoomBy(0.8)} title="Zoom out" aria-label="Zoom out">
-          −
-        </button>
-        <button className="view-btn fit" onClick={fitView} title="Fit circuit to view (home)" aria-label="Fit circuit to view">
-          ⤢ Fit
-        </button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button className="view-btn" onClick={() => zoomBy(1.25)} aria-label="Zoom in">
+              +
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="left">Zoom in</TooltipContent>
+        </Tooltip>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button className="view-btn" onClick={() => zoomBy(0.8)} aria-label="Zoom out">
+              −
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="left">Zoom out</TooltipContent>
+        </Tooltip>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button className="view-btn" onClick={fitView} aria-label="Fit circuit to view">
+              ⌂
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="left">Fit to view</TooltipContent>
+        </Tooltip>
       </div>
 
       {labelDraft && (
