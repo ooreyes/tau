@@ -16,6 +16,7 @@ import {
   type SchematicDocument,
   type SchematicHistory,
 } from "./useSchematic";
+import { dispatchShortcutAction, resolveShortcut, type ShortcutHandlers } from "../schematic/shortcuts";
 
 const sourceDocument = (): SchematicDocument => ({
   components: [
@@ -783,5 +784,89 @@ describe("toggleCurrentProbe (clamp-meter)", () => {
     const probes = useSchematic.getState().probes;
     expect(probes).toHaveLength(2);
     expect(probes.filter((p) => p.componentId)).toHaveLength(1);
+  });
+});
+
+describe("keyboard shortcuts are read-only outside the schematic view (§UX)", () => {
+  // Wired the same way App.tsx wires dispatchShortcutAction to the store, so
+  // this exercises the exact production callback graph against the real
+  // store — not mocks — and proves the store genuinely doesn't change.
+  const realHandlers = (): ShortcutHandlers => ({
+    undo: () => useSchematic.getState().undo(),
+    redo: () => useSchematic.getState().redo(),
+    openPalette: () => {},
+    rotate: () => useSchematic.getState().rotate(),
+    mirror: () => useSchematic.getState().mirror(),
+    copy: () => useSchematic.getState().copySelected(),
+    paste: () => useSchematic.getState().paste(),
+    duplicate: () => useSchematic.getState().duplicateSelected(),
+    cancel: () => useSchematic.getState().cancel(),
+    remove: () => useSchematic.getState().deleteSelected(),
+    wire: () => useSchematic.getState().startWiring(),
+    label: () => useSchematic.getState().startLabeling(),
+  });
+
+  const withSelectedResistor = () => {
+    useSchematic.setState({
+      components: [{ id: "r-1", kind: "resistor", x: 96, y: 0, rotation: 0, value: "1k", label: "R1" }],
+      selectedId: "r-1",
+    });
+  };
+
+  it("does not delete the selected component on Delete/Backspace in simulator mode", () => {
+    withSelectedResistor();
+    const action = resolveShortcut({ key: "Delete", ctrlOrMeta: false, shift: false })!;
+    dispatchShortcutAction(action, "simulator", realHandlers());
+    expect(useSchematic.getState().components).toHaveLength(1);
+  });
+
+  it("does not undo/redo the document from the simulator view", () => {
+    withSelectedResistor();
+    useSchematic.getState().rotate(); // schematic-mode edit, produces its own history entry
+    const rotatedComponents = useSchematic.getState().components;
+    const undoAction = resolveShortcut({ key: "z", ctrlOrMeta: true, shift: false })!;
+    dispatchShortcutAction(undoAction, "simulator", realHandlers());
+    expect(useSchematic.getState().components).toEqual(rotatedComponents);
+    expect(useSchematic.getState().past.length).toBeGreaterThan(0); // history untouched
+  });
+
+  it("does not rotate/mirror/duplicate/paste from the simulator view", () => {
+    withSelectedResistor();
+    const before = useSchematic.getState().components;
+    const handlers = realHandlers();
+    for (const key of [
+      { key: "r", ctrlOrMeta: true, shift: false },
+      { key: "e", ctrlOrMeta: true, shift: false },
+      { key: "d", ctrlOrMeta: true, shift: false },
+      { key: "v", ctrlOrMeta: true, shift: false },
+      { key: " ", ctrlOrMeta: false, shift: false },
+    ]) {
+      const action = resolveShortcut(key);
+      if (action) dispatchShortcutAction(action, "simulator", handlers);
+    }
+    expect(useSchematic.getState().components).toEqual(before);
+  });
+
+  it("does not arm the wire/label tool from the simulator view", () => {
+    withSelectedResistor();
+    const handlers = realHandlers();
+    dispatchShortcutAction(resolveShortcut({ key: "w", ctrlOrMeta: false, shift: false })!, "simulator", handlers);
+    expect(useSchematic.getState().tool).toEqual({ mode: "select" });
+    dispatchShortcutAction(resolveShortcut({ key: "F4", ctrlOrMeta: false, shift: false })!, "simulator", handlers);
+    expect(useSchematic.getState().tool).toEqual({ mode: "select" });
+  });
+
+  it("still allows the same actions from the schematic view (positive control)", () => {
+    withSelectedResistor();
+    const action = resolveShortcut({ key: "Delete", ctrlOrMeta: false, shift: false })!;
+    dispatchShortcutAction(action, "schematic", realHandlers());
+    expect(useSchematic.getState().components).toHaveLength(0);
+  });
+
+  it("still allows cancel (Escape) from the simulator view", () => {
+    useSchematic.setState({ tool: { mode: "wire" }, selectedId: "r-1" });
+    const action = resolveShortcut({ key: "Escape", ctrlOrMeta: false, shift: false })!;
+    dispatchShortcutAction(action, "simulator", realHandlers());
+    expect(useSchematic.getState().tool).toEqual({ mode: "select" });
   });
 });

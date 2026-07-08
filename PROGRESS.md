@@ -8,14 +8,31 @@
      `git log --oneline -8`, recover/finish/revert that unit FIRST, then go on.
      ─────────────────────────────────────────────────────────────────────── -->
 ## ⏱ HEARTBEAT
-- **Headline metric:** 1259 tests green (default suite) + 5 corpus specs
-  · corpus runner: 82 imported / **79 warning-clean** / **82 deck-built (ALL)**
-  / **82 op-converged (ALL)** — floors 82/79/82/82
+- **Headline metric:** 1285 tests green (default suite, +26 from this unit so
+  far) + 5 corpus specs · corpus runner: 82 imported / **79 warning-clean** /
+  **82 deck-built (ALL)** / **82 op-converged (ALL)** — floors 82/79/82/82
   · App.css hardcoded-color burndown: **0 hex outside the single `:root`** ✅
-  · App.css size: 4511 (original) → **4264 lines** (net +21 after Phase 4c's
-  canvas-chrome migration added documenting comments and a lamp-dot rule,
-  offset by deleting the dead `.view-btn.fit` hack)
-- **Run started (UTC):** 2026-07-08T18:23Z
+- **Run started (UTC):** 2026-07-08T19:09Z
+- **Status: IN PROGRESS** — UX-correctness unit (owner feedback: the app
+  "lacks intuitiveness a real LTspice company would have"), three
+  one-commit-each interaction fixes:
+  1. ✅ **Edit lock**: schematic read-only outside the schematic tab. Fixed
+     the keyboard gate (App.tsx's keydown handler had no `mode` check) AND a
+     second, more severe bypass the exploration missed: `EditorToolbar`
+     (ShellPanels.tsx) renders unconditionally regardless of `mode` — its
+     Wire/Label/Undo/Redo/Clear-scratchpad buttons were live and clickable
+     while viewing the simulator, with Undo/Redo/Clear able to mutate/wipe
+     the document with zero canvas interaction at all. See dated entry below
+     for the full writeup.
+  2. ⏳ Probe dedup by net identity, no body probing — next.
+  3. ⏳ Comparator/opamp value label + inspector param fields — after (2).
+- Not pushed yet (orchestrator reviews per-commit); see dated log entries for
+  file/test/commit-hash detail as each lands.
+
+---
+
+## 2026-07-08T18:23Z — auto/ltspice-parity — §10: canvas chrome (Phase 4c, final §10 unit)
+
 - **Status: DONE** — §10 Phase 4c (the final §10 unit): the schematic canvas's
   own CHROME — the one honest gap flagged since Phase 3d and left open through
   4a/4b. Canvas SVG rendering (components, wires, grid, labels, the current-flow

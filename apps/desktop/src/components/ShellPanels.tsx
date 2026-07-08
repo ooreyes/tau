@@ -144,6 +144,7 @@ export function ExplorerPanel({
 }
 
 export function EditorToolbar({
+  mode,
   isRunning,
   onRun,
   onStep,
@@ -153,6 +154,7 @@ export function EditorToolbar({
   onOpenCircuit,
   onOpenExample,
 }: {
+  mode: "schematic" | "simulator";
   isRunning: boolean;
   onRun: () => void;
   onStep: () => void;
@@ -162,6 +164,12 @@ export function EditorToolbar({
   onOpenCircuit: (doc: SchematicDocument, title: string) => void;
   onOpenExample: (example: ExampleCircuit) => void;
 }) {
+  // The simulator view is read-only (pan/zoom/probe only — see Canvas's
+  // `interactive` prop and App.tsx's keydown gate); every editing control in
+  // this toolbar must be inert there too. Select (cancel) and Probe stay
+  // enabled: cancel doesn't mutate the document, and probing is how traces
+  // get added while viewing the simulator.
+  const readOnly = mode !== "schematic";
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const components = useSchematic((s) => s.components);
   const wires = useSchematic((s) => s.wires);
@@ -285,12 +293,12 @@ export function EditorToolbar({
       <IconButton title="Select" active={tool.mode === "select"} onClick={cancel}>
         <path d="M4 3l10 5-4.2 1.4L8 14.5z" />
       </IconButton>
-      <IconButton title="Wire" active={tool.mode === "wire"} onClick={startWiring}>
+      <IconButton title="Wire" active={tool.mode === "wire"} disabled={readOnly} onClick={startWiring}>
         <circle cx="4" cy="14" r="2" />
         <circle cx="14" cy="4" r="2" />
         <path d="M5.5 12.5 12.5 5.5" />
       </IconButton>
-      <IconButton title="Net label (F4)" active={tool.mode === "label"} onClick={startLabeling}>
+      <IconButton title="Net label (F4)" active={tool.mode === "label"} disabled={readOnly} onClick={startLabeling}>
         <path d="M2 5h8l4 3-4 3H2z" />
         <circle cx="5" cy="8" r="1" />
       </IconButton>
@@ -299,15 +307,15 @@ export function EditorToolbar({
         <path d="M8 1v3M8 12v3M1 8h3M12 8h3" />
       </IconButton>
       <span className="toolbar-divider" />
-      <IconButton title="Undo" disabled={!canUndo} onClick={undo}>
+      <IconButton title="Undo" disabled={!canUndo || readOnly} onClick={undo}>
         <path d="M6 4 2 8l4 4" />
         <path d="M2 8h9a4 4 0 0 1 4 4v2" />
       </IconButton>
-      <IconButton title="Redo" disabled={!canRedo} onClick={redo}>
+      <IconButton title="Redo" disabled={!canRedo || readOnly} onClick={redo}>
         <path d="M12 4l4 4-4 4" />
         <path d="M16 8H7a4 4 0 0 0-4 4v2" />
       </IconButton>
-      <IconButton title="Clear scratchpad" onClick={onClearScratchpad}>
+      <IconButton title="Clear scratchpad" disabled={readOnly} onClick={onClearScratchpad}>
         <path d="M4 5h10M7 5V3h4v2M6 7v7M10 7v7M13 5l-.8 10H5.8L5 5" />
       </IconButton>
       <span className="toolbar-divider" />

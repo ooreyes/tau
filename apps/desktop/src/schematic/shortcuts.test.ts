@@ -1,5 +1,11 @@
-import { describe, it, expect } from "vitest";
-import { resolveShortcut, type ShortcutAction } from "./shortcuts";
+import { describe, it, expect, vi } from "vitest";
+import {
+  dispatchShortcutAction,
+  isEditingAction,
+  resolveShortcut,
+  type ShortcutAction,
+  type ShortcutHandlers,
+} from "./shortcuts";
 
 const plain = (key: string) => resolveShortcut({ key, ctrlOrMeta: false, shift: false });
 const mod = (key: string, shift = false) => resolveShortcut({ key, ctrlOrMeta: true, shift });
@@ -71,5 +77,81 @@ describe("resolveShortcut — plain keys", () => {
   it("returns null for unbound keys (catalog hotkeys handled elsewhere)", () => {
     expect(plain("r")).toBeNull(); // resistor placement, not rotate
     expect(plain("F1")).toBeNull();
+  });
+});
+
+const ALL_ACTIONS: ShortcutAction[] = [
+  "undo", "redo", "palette", "rotate", "mirror", "copy", "paste",
+  "duplicate", "cancel", "delete", "wire", "label",
+];
+
+const noopHandlers = (): ShortcutHandlers => ({
+  undo: vi.fn(),
+  redo: vi.fn(),
+  openPalette: vi.fn(),
+  rotate: vi.fn(),
+  mirror: vi.fn(),
+  copy: vi.fn(),
+  paste: vi.fn(),
+  duplicate: vi.fn(),
+  cancel: vi.fn(),
+  remove: vi.fn(),
+  wire: vi.fn(),
+  label: vi.fn(),
+});
+
+describe("isEditingAction — schematic read-only-outside-schematic-view gate (§UX)", () => {
+  it("treats cancel and palette as view-level (always allowed)", () => {
+    expect(isEditingAction("cancel")).toBe(false);
+    expect(isEditingAction("palette")).toBe(false);
+  });
+
+  it.each<ShortcutAction>(["undo", "redo", "rotate", "mirror", "copy", "paste", "duplicate", "delete", "wire", "label"])(
+    "treats %s as an editing action",
+    (action) => {
+      expect(isEditingAction(action)).toBe(true);
+    },
+  );
+});
+
+describe("dispatchShortcutAction — mode gate (§UX)", () => {
+  it("dispatches every action in schematic mode", () => {
+    const handlers = noopHandlers();
+    for (const action of ALL_ACTIONS) dispatchShortcutAction(action, "schematic", handlers);
+    expect(handlers.undo).toHaveBeenCalledTimes(1);
+    expect(handlers.redo).toHaveBeenCalledTimes(1);
+    expect(handlers.openPalette).toHaveBeenCalledTimes(1);
+    expect(handlers.rotate).toHaveBeenCalledTimes(1);
+    expect(handlers.mirror).toHaveBeenCalledTimes(1);
+    expect(handlers.copy).toHaveBeenCalledTimes(1);
+    expect(handlers.paste).toHaveBeenCalledTimes(1);
+    expect(handlers.duplicate).toHaveBeenCalledTimes(1);
+    expect(handlers.cancel).toHaveBeenCalledTimes(1);
+    expect(handlers.remove).toHaveBeenCalledTimes(1);
+    expect(handlers.wire).toHaveBeenCalledTimes(1);
+    expect(handlers.label).toHaveBeenCalledTimes(1);
+  });
+
+  it("blocks every editing action in simulator mode", () => {
+    const handlers = noopHandlers();
+    for (const action of ALL_ACTIONS) dispatchShortcutAction(action, "simulator", handlers);
+    expect(handlers.undo).not.toHaveBeenCalled();
+    expect(handlers.redo).not.toHaveBeenCalled();
+    expect(handlers.rotate).not.toHaveBeenCalled();
+    expect(handlers.mirror).not.toHaveBeenCalled();
+    expect(handlers.copy).not.toHaveBeenCalled();
+    expect(handlers.paste).not.toHaveBeenCalled();
+    expect(handlers.duplicate).not.toHaveBeenCalled();
+    expect(handlers.remove).not.toHaveBeenCalled();
+    expect(handlers.wire).not.toHaveBeenCalled();
+    expect(handlers.label).not.toHaveBeenCalled();
+  });
+
+  it("still lets cancel and palette (⌘K) through in simulator mode", () => {
+    const handlers = noopHandlers();
+    dispatchShortcutAction("cancel", "simulator", handlers);
+    dispatchShortcutAction("palette", "simulator", handlers);
+    expect(handlers.cancel).toHaveBeenCalledTimes(1);
+    expect(handlers.openPalette).toHaveBeenCalledTimes(1);
   });
 });

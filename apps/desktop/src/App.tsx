@@ -22,7 +22,7 @@ import {
 } from "./components/ShellPanels";
 import { useSchematic, type SchematicDocument, type SchematicHistory } from "./store/useSchematic";
 import { CATALOG } from "./schematic/catalog";
-import { resolveShortcut } from "./schematic/shortcuts";
+import { dispatchShortcutAction, resolveShortcut } from "./schematic/shortcuts";
 import { type ExampleCircuit } from "./examples/circuits";
 import {
   MAX_TRANSIENT_STEPS,
@@ -641,22 +641,26 @@ function App() {
       });
       if (action) {
         if (action !== "cancel") e.preventDefault();
-        switch (action) {
-          case "undo": return undo();
-          case "redo": return redo();
-          case "palette": return setPaletteOpen(true);
-          case "rotate": return rotate();
-          case "mirror": return mirror();
-          case "copy": return copySelected();
-          case "paste": return paste();
-          case "duplicate": return duplicateSelected();
-          case "cancel": return cancel();
-          case "delete": return deleteSelected();
-          case "wire": return startWiring();
-          case "label": return startLabeling();
-        }
+        // Simulator view is read-only (pan/zoom/probe only — see Canvas's
+        // `interactive` prop); every editing action requires schematic view.
+        dispatchShortcutAction(action, mode, {
+          undo,
+          redo,
+          openPalette: () => setPaletteOpen(true),
+          rotate,
+          mirror,
+          copy: copySelected,
+          paste,
+          duplicate: duplicateSelected,
+          cancel,
+          remove: deleteSelected,
+          wire: startWiring,
+          label: startLabeling,
+        });
+        return;
       }
       if (e.metaKey || e.ctrlKey) return; // leave other OS / app shortcuts alone
+      if (mode !== "schematic") return; // place-shortcuts (R/C/L/V/…) are schematic-only edits
 
       const entry = CATALOG.find((c) => c.hotkey === e.key.toLowerCase());
       if (entry) {
@@ -666,7 +670,7 @@ function App() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [startPlacing, startWiring, startLabeling, cancel, rotate, mirror, copySelected, paste, duplicateSelected, deleteSelected, undo, redo]);
+  }, [mode, startPlacing, startWiring, startLabeling, cancel, rotate, mirror, copySelected, paste, duplicateSelected, deleteSelected, undo, redo]);
 
   // Track the shell body's real width so the simulator column budget below
   // reacts to the actual window size (including the 900px minimum), not just
@@ -755,6 +759,7 @@ function App() {
         )}
         <section className="editor-shell" aria-label="Schematic editor">
           <EditorToolbar
+            mode={mode}
             isRunning={analysisRunning}
             onRun={runAndShowSimulator}
             onStep={stepAnalysis}

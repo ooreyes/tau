@@ -279,6 +279,22 @@ Status legend: ✅ done · 🟡 partial · ⬜ not started
 - ✅ **Drag wires / move with rubber-banding** — `moveGroup` rubber-bands wire
   endpoints attached to moved pins with orthogonal elbow insertion (store-level,
   shared by single and group moves).
+- ✅ **Schematic is read-only outside the schematic tab (§UX)**: the simulator
+  view only permits pan/zoom/probe. Canvas mouse interactions were already
+  gated by `interactive={mode==="schematic"}`, but two bypasses let the
+  simulator view mutate the document: (1) `App.tsx`'s keydown handler had no
+  `mode` check — Delete/Backspace, undo/redo, rotate/mirror, copy/paste/
+  duplicate, and place-shortcuts (R/C/L/V/…) all fired regardless of view;
+  (2) `EditorToolbar` (`ShellPanels.tsx`) renders unconditionally and its
+  Wire/Label/Undo/Redo/Clear-scratchpad buttons stayed live in simulator
+  mode — Undo/Redo/Clear could mutate or wipe the document with **zero**
+  canvas interaction. Fixed via a pure, unit-tested gate
+  (`schematic/shortcuts.ts` `isEditingAction`/`dispatchShortcutAction`) plus
+  a `mode` prop on `EditorToolbar` that disables the mutating buttons; Select
+  (cancel) and Probe stay enabled (non-mutating / probing must keep working
+  in simulator view). 26 new tests wire the real store (not mocks) through
+  the same callback graph `App.tsx` uses and assert the document is
+  unchanged when gated.
 - ⬜ Bus wires / bus taps
 - ⬜ `.asc`-style `TEXT` SPICE directives placed on the canvas (free-text directive blocks)
 - ⬜ `.asc`-style `TEXT` comments
