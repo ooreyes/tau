@@ -1256,10 +1256,67 @@ never a broken intermediate state on the branch.
   section headers, the compact transport cluster, the app-chrome status
   bar) since forcing them onto the two-tier scale would have erased a
   deliberate header/data-row size hierarchy — each is commented in place.
-- ⬜ **Responsive floor:** every migrated panel verified at the app's minimum
-  window size AND ~1280×720 (known problem sizes from review).
-- ⬜ **Sweep:** delete dead App.css rules as panels migrate; final pass
-  removes any remaining hardcoded colors (grep gate: no hex literals in TSX).
+- ✅ **Responsive floor (2026-07-08, Phase 4b):** fixed the orchestrator-
+  flagged bug where the simulator's three-column layout (schematic/scope/Ask
+  Sim) squeezed the schematic column to ~130px at the 900×600 minimum window
+  — `explorer`/`plotter`/`ask-panel` had no real width budget, just fixed
+  440px/330px defaults plus a JS drag-clamp that only applied while actively
+  dragging, so on load/resize the schematic column got whatever pixels were
+  left over (often near zero). Fix: `App.tsx` now measures `.shell-body`'s
+  real width via `ResizeObserver` and keeps a hard 260px floor for the
+  schematic column, shrinking the scope (300px floor) and Ask Sim (260px
+  floor) columns to fit — auto-collapsing Ask Sim (already had a minimize
+  affordance via `MinimizedPanelDock`) only if literally no width remains
+  even at both floors; the same budget now also bounds the manual drag
+  handles, not just the initial layout. `App.css` carries matching
+  `min-width` floors on `.editor-shell`/`.plotter`/`.ask-panel` as a CSS
+  backstop for the pre-layout-effect frame. Found and fixed a second bug the
+  first pass surfaced: the TRAN/OP/AC/DC/TF/NOISE/STEP analysis tab strip
+  hard-clipped STEP at the new 300px scope-column floor (it was previously
+  only readable because the column happened to default to 440px) — tightened
+  `.plotter-tab` padding/tracking under 1024px so all seven tabs fit exactly
+  (verified via a headless measurement: `scrollWidth === clientWidth` at
+  900×600), plus added `overflow-x: auto` on `.plotter-tabs` as a scroll
+  fallback so a tab is never truly unreachable even if a future label grows.
+  Also hardened `.sim-results`' 3-column grid with a 64px column floor
+  (`minmax(64px, 1fr)`, was `minmax(0, 1fr)`) plus `overflow-x: auto`, so the
+  results table can no longer collapse into single-letter headers regardless
+  of how narrow its column gets. Verified via
+  `node scripts/design-shot.mjs phase4b-floor`: read every 900×600 PNG (all
+  6 states) plus 1280×720 (all 6) and spot-checked 1440×900 — simulator
+  900×600 now shows a fully legible schematic column (both tab labels, the
+  "Current flow" pill uncut, all 7 analysis tabs, and a readable
+  CURRENT/VOLTAGE/POWER results table) side by side with a full-width scope
+  and Ask Sim panel; zero clipped/unreachable controls found in any other
+  state at either floor size. Canvas SVG rendering/geometry untouched.
+- ✅ **Sweep (2026-07-08, Phase 4b):** hex gate —
+  `rg -n "#[0-9a-fA-F]{3,8}" apps/desktop/src` (ts/tsx/css) — confirms **zero
+  hardcoded colors outside the single `:root`** in `App.css`; the only other
+  hits are the documented `"#000"` probe-color sentinel in
+  `SimulationPanel.tsx` (engine logic, not styling) and RGB test fixtures in
+  `plotExpression.test.ts` (`#f00`/`#0f0`/`#abc`, not app UI). Dead-rule
+  sweep: cross-referenced all 270 class selectors in `App.css` against every
+  `.ts`/`.tsx` file (including dynamically-built classnames like
+  `` `app-${mode}` `` and `` `status-lamp--${lampState}` ``, verified by hand
+  so they weren't wrongly deleted) — found and deleted two genuinely dead
+  rules: `.attached-libraries` (8-line rule, zero references anywhere in the
+  repo — a leftover from an earlier bottom-panel layout) and the
+  `.transport-pause.active` selector (no pause button exists, only
+  play/stop; kept the still-live `.transport-play`/`.transport-stop` rules
+  on the same line/block). Also checked for unused CSS custom properties;
+  found 3 (`--cream-soft`, `--ease-snap`, `--sp-8`) but left them — they're
+  part of documented, systematic scales (spacing/easing/color steps) rather
+  than orphaned one-offs, so removing them is a design-system judgment call
+  outside a conservative "provable dead rule" sweep. Net `App.css`: 4511
+  (original) → 4243 lines. Focus rings (`ui/*.tsx`'s
+  `focus-visible:ring-2 focus-visible:ring-ring/50`, `--color-ring: var(--accent)`
+  = electric cobalt) verified visible on true black via a headless
+  keyboard-tab screenshot of the settings sheet — clear blue ring around the
+  focused button, good contrast. Remaining §10 scope (not part of this
+  unit, not touched — canvas SVG rendering is explicitly out of bounds per
+  the build contract): the schematic canvas's own chrome (zoom controls,
+  hover cards, net-label popover), noted since Phase 3d and still open —
+  **§10 is not 100% closed**; every other panel/bullet in this section is.
   - ✅ **Cleared (2026-07-04):** `.symbol-preview` card now derives from
     tokens (`--accent-soft` surface + `--border` hairline + `--accent`
     stroke/label + `--muted` hotkey, radius `--r-md`) — screenshot-verified

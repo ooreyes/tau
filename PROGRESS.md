@@ -12,7 +12,63 @@
   · corpus runner: 82 imported / **79 warning-clean** / **82 deck-built (ALL)**
   / **82 op-converged (ALL)** — floors 82/79/82/82
   · App.css hardcoded-color burndown: **0 hex outside the single `:root`** ✅
-- **Run started (UTC):** 2026-07-08T17:29Z
+  · App.css size: 4511 (original) → **4243 lines** after Phase 4b's dead-rule sweep
+- **Run started (UTC):** 2026-07-08T17:58Z
+- **Status: DONE** — §10 Phase 4b (final phase): the responsive floor + final
+  sweep. Orchestrator's review had flagged a concrete bug: in the SIMULATOR
+  view at the app's stated 900×600 minimum window, the schematic column
+  collapsed to ~130px (explorer tab clipped to "boost convert…", the
+  "Current flow" pill wrapped to "Curre flow", the results table showed
+  single-letter headers "CU VO P…"). Root cause: `.editor-shell` (flex:1,
+  min-width:0) and the fixed-width `.plotter`/`.ask-panel` scope/Ask-Sim
+  columns had a JS drag-clamp (300px/260px) that only applied while
+  actively dragging — on load/resize the columns just used their 440px/330px
+  defaults regardless of available width, so the schematic column got
+  whatever was left over (often near-zero at 900px). Fix (candidate (b) from
+  the brief, "auto-collapse below a width threshold"; landed as a live
+  width-budget rather than a static breakpoint): `App.tsx` now measures
+  `.shell-body`'s real width via `ResizeObserver` and keeps a hard 260px
+  floor for the schematic column at all times, shrinking scope (300px
+  floor) and Ask Sim (260px floor) to fit, auto-collapsing Ask Sim via its
+  existing `MinimizedPanelDock` restore-orb affordance only if literally no
+  width remains even at both floors — this bounds both the initial layout
+  and the manual drag handles (previously only the latter was clamped).
+  `App.css` mirrors these as CSS `min-width` floors on `.editor-shell`/
+  `.plotter`/`.ask-panel` (defense for the pre-effect frame). Fixing the
+  primary bug surfaced a second, follow-on clipping bug at the new 300px
+  scope-column floor: the TRAN/OP/AC/DC/TF/NOISE/STEP tab strip hard-clipped
+  STEP (it only fit before because the column happened to default to
+  440px) — tightened `.plotter-tab` padding/tracking under 1024px so all
+  seven fit exactly (verified headlessly: `scrollWidth === clientWidth` at
+  900×600) and added `overflow-x:auto` on `.plotter-tabs` as a scroll
+  fallback. Also hardened `.sim-results`'s 3-column grid with a 64px column
+  floor (was `minmax(0,1fr)`, could collapse to 0) plus `overflow-x:auto`.
+  Sweep: hex gate confirms 0 hardcoded colors outside `:root` (unchanged,
+  already clean going in — only the documented `SimulationPanel.tsx` `"#000"`
+  engine sentinel and test-fixture colors exist outside it); cross-referenced
+  all 270 `App.css` class selectors against every `.ts`/`.tsx` usage
+  (including dynamically-built classnames, checked by hand) and deleted 2
+  provably dead rules — `.attached-libraries` (8 lines, zero refs anywhere in
+  the repo) and `.transport-pause.active` (no pause button exists). Left 3
+  unused custom properties (`--cream-soft`/`--ease-snap`/`--sp-8`) alone —
+  part of documented systematic scales, not one-off orphans, so removing
+  them is a judgment call outside a conservative dead-*rule* sweep. Focus
+  rings (`ui/*`'s `focus-visible:ring-2 ring-ring/50` → `--color-ring: var(
+  --accent)`, electric cobalt) verified visible on true black via a headless
+  keyboard-tab screenshot of the settings sheet. Verified with
+  `node scripts/design-shot.mjs phase4b-floor`: read all 6 states at
+  900×600 and 1280×720 plus spot-checked 1440×900 — simulator 900×600 now
+  shows the full schematic column (both tabs, "Current flow" pill,
+  CURRENT/VOLTAGE/POWER results table) legible alongside a full scope and
+  Ask Sim column; zero clipped/unreachable controls anywhere else at either
+  floor size. Gates: typecheck clean, 1259/1259 tests green (unchanged — no
+  new test surface), `pnpm --filter @tau/desktop build` (tsc + vite build)
+  succeeds. Canvas SVG rendering/geometry and simulation logic untouched.
+  This closes the FEATURE_PARITY §10 "Responsive floor" and "Sweep" bullets.
+  **§10 is NOT fully closed**: the schematic canvas's own chrome (zoom
+  controls, hover cards, net-label popover) remains open — flagged since
+  Phase 3d, explicitly out of scope for this unit (canvas SVG is off-limits
+  per the build contract), and is the one remaining §10 item. →
 - **Status: DONE** — §10 Phase 4a: global type scale + 4pt spacing rhythm +
   dense-default sweep across `App.css` (~4200 lines). Type: audited all 118
   `font-size`/`font:` declarations — the app already clustered on 9/10/11/

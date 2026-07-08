@@ -2874,7 +2874,6 @@ body {
 }
 
 .transport .transport-play { color: var(--trace-green); }
-.transport .transport-pause.active { color: var(--accent); background: var(--accent-soft); }
 .transport .transport-stop { color: var(--danger); }
 
 .app-simulator .editor-toolbar {
@@ -3954,16 +3953,6 @@ body {
   cursor: not-allowed;
   opacity: 0.38;
   filter: grayscale(0.5);
-}
-
-.attached-libraries {
-  display: block;
-  margin-top: var(--sp-2);
-  overflow: hidden;
-  color: var(--muted);
-  font: 500 var(--fs-caption) var(--font-mono);
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .bottom-output,
