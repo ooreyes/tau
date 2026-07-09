@@ -899,7 +899,7 @@ function App() {
               <EmptyState />
             )}
           </main>
-          <BottomPanel mode={mode} result={analysis} />
+          <BottomPanel result={analysis} />
         </section>
         )}
         {mode === "simulator" && graphOpen && (

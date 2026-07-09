@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   Folder,
   FolderOpen,
@@ -33,8 +33,7 @@ import { useSchematic } from "../store/useSchematic";
 import { useProject } from "../store/useProject";
 import { basename, isAscFile } from "../project/types";
 import type { AnalysisResult } from "../simulation/linearTransient";
-import { componentCurrents } from "../simulation/currents";
-import { formatEngineering, parseQuantity } from "../simulation/quantity";
+import { formatEngineering } from "../simulation/quantity";
 
 interface ModeProps {
   mode: "schematic" | "simulator";
@@ -541,128 +540,43 @@ export function EditorTabs({
   );
 }
 
-export function BottomPanel({ mode, result }: { mode: "schematic" | "simulator"; result: AnalysisResult | null }) {
-  const components = useSchematic((s) => s.components);
-  const wires = useSchematic((s) => s.wires);
-  const probes = useSchematic((s) => s.probes);
-  const selectedId = useSchematic((s) => s.selectedId);
-  const selectedWireId = useSchematic((s) => s.selectedWireId);
-  const selected = components.find((component) => component.id === selectedId) ?? null;
-  const [activeTab, setActiveTab] = useState<"output" | "errors">("output");
-
-  useEffect(() => {
-    setActiveTab("output");
-  }, [mode]);
-
-  const hasError = result && !result.ok;
-  // Component/wire editing lives in the right-rail Properties tab only.
-  // Bottom panel is output + errors (plus simulator results under Output).
-  const content = activeTab === "output"
-    ? (
-      <div className="bottom-output-stack">
-        {mode === "simulator" && <SimulatorResults result={result} />}
-        <OutputPanel
-          mode={mode}
-          componentCount={components.length}
-          wireCount={wires.length}
-          probeCount={probes.length}
-          selectedLabel={selected?.label || selectedWireId || "none"}
-          result={result}
-        />
-      </div>
-    )
-    : <ErrorPanel result={result} />;
-
-  return (
-    <section className="bottom-panel" aria-label={mode === "simulator" ? "Simulation results" : "Output"}>
-      <div className="bottom-resize-handle"><span /></div>
-      <div className="bottom-tabs" role="tablist" aria-label="Panel tabs">
-        <button
-          className={activeTab === "output" ? "active" : ""}
-          role="tab"
-          aria-selected={activeTab === "output"}
-          onClick={() => setActiveTab("output")}
-        >
-          output
-        </button>
-        <button
-          className={activeTab === "errors" ? "active" : ""}
-          role="tab"
-          aria-selected={activeTab === "errors"}
-          onClick={() => setActiveTab("errors")}
-        >
-          errors{hasError ? " •" : ""}
-        </button>
-      </div>
-      {content}
-    </section>
-  );
-}
-
-function OutputPanel({
-  mode,
-  componentCount,
-  wireCount,
-  probeCount,
-  selectedLabel,
-  result,
-}: {
-  mode: "schematic" | "simulator";
-  componentCount: number;
-  wireCount: number;
-  probeCount: number;
-  selectedLabel: string;
-  result: AnalysisResult | null;
-}) {
-  const rows = mode === "simulator" && result?.ok
-    ? [
-        ["status", "transient complete"],
-        ["samples", String(result.stats.sampleCount)],
-        ["stop", formatEngineering(result.stats.stopTime, "s", 3)],
-        ["step", formatEngineering(result.stats.stepSize, "s", 3)],
-      ]
-    : [
-        ["parts", String(componentCount)],
-        ["wires", String(wireCount)],
-        ["probes", String(probeCount)],
-        ["selected", selectedLabel],
-      ];
-
-  return (
-    <div className="bottom-output">
-      {rows.map(([label, value]) => (
-        <div key={label} className="bottom-output-row">
-          <span>{label}</span>
-          <strong>{value}</strong>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function ErrorPanel({ result }: { result: AnalysisResult | null }) {
+export function BottomPanel({ result }: { mode?: "schematic" | "simulator"; result: AnalysisResult | null }) {
   const messages = [
     ...(result && !result.ok ? [result.message] : []),
     ...(result?.warnings ?? []),
   ];
+  const hasIssues = messages.length > 0;
 
   return (
-    <div className="bottom-errors">
-      {messages.length > 0 ? messages.map((message, index) => (
-        <div key={`${message}-${index}`} className={result && !result.ok && index === 0 ? "error" : "warning"}>
-          {message}
-        </div>
-      )) : (
-        // Same reticle language as the inspector's "No component selected"
-        // state (search App.css for ".panel-empty") — dim aiming glyph, mono
-        // uppercase title, faint guidance.
-        <div className="panel-empty">
-          <span className="panel-empty-glyph" aria-hidden="true" />
-          <strong>No errors</strong>
-          <span>Run an analysis or edit the schematic — build issues surface here.</span>
-        </div>
-      )}
-    </div>
+    <section
+      className={`bottom-panel${hasIssues ? " has-issues" : ""}`}
+      aria-label="Errors"
+    >
+      <div className="bottom-panel-head">
+        <span className="bottom-panel-title">Errors</span>
+        {hasIssues ? (
+          <span className="bottom-panel-count" aria-live="polite">
+            {messages.length}
+          </span>
+        ) : (
+          <span className="bottom-panel-clear">Clear</span>
+        )}
+      </div>
+      <div className="bottom-errors">
+        {hasIssues ? (
+          messages.map((message, index) => (
+            <div
+              key={`${message}-${index}`}
+              className={result && !result.ok && index === 0 ? "error" : "warning"}
+            >
+              {message}
+            </div>
+          ))
+        ) : (
+          <p className="bottom-errors-idle">No build or simulation issues.</p>
+        )}
+      </div>
+    </section>
   );
 }
 
@@ -920,70 +834,6 @@ export function ComponentsRail({
         )}
       </div>
     </aside>
-  );
-}
-
-function SimulatorResults({ result }: { result: AnalysisResult | null }) {
-  const ok = result?.ok ? result : null;
-  const sampleIndex = ok ? Math.max(0, ok.times.length - 1) : 0;
-  const currents = useMemo(() => (ok ? componentCurrents(ok, sampleIndex) : new Map<string, number>()), [ok, sampleIndex]);
-  const currentRows = ok
-    ? [...currents.entries()].slice(0, 5).map(([id, current]) => {
-        const component = ok.circuit.components.find((entry) => entry.component.id === id)?.component;
-        return { name: component?.label || id, value: formatEngineering(current, "A", 3) };
-      })
-    : [];
-  const voltageRows = ok
-    ? ok.traces.slice(0, 5).map((trace) => ({
-        name: trace.label.replace(/^V\(|\)$/g, ""),
-        value: formatEngineering(trace.values[sampleIndex] ?? 0, "V", 3),
-        color: trace.color,
-      }))
-    : [];
-  const powerRows = ok
-    ? [...currents.entries()].flatMap(([id, current]) => {
-        const entry = ok.circuit.components.find((candidate) => candidate.component.id === id);
-        if (!entry || entry.component.kind !== "resistor") return [];
-        try {
-          const resistance = parseQuantity(entry.component.value, "Ω");
-          return [{ name: entry.component.label || id, value: formatEngineering(current * current * resistance, "W", 3) }];
-        } catch {
-          return [];
-        }
-      }).slice(0, 5)
-    : [];
-
-  return (
-    <div className="sim-results">
-      <ResultList title="current" rows={currentRows} empty="Run a transient analysis to derive branch currents." />
-      <ResultList title="voltage" rows={voltageRows} empty="Voltage traces appear here after Run." />
-      <ResultList title="power" rows={powerRows} empty="Resistor power estimates appear after Run." />
-    </div>
-  );
-}
-
-function ResultList({
-  title,
-  rows,
-  empty,
-}: {
-  title: string;
-  rows: { name: string; value: string; color?: string }[];
-  empty: string;
-}) {
-  return (
-    <div className="result-list">
-      <h3>{title}</h3>
-      {rows.length > 0 ? rows.map((row) => (
-        <div key={`${title}-${row.name}`} className="result-row">
-          <span style={{ color: row.color }}>
-            <i style={{ background: row.color }} />
-            {row.name}
-          </span>
-          <strong>{row.value}</strong>
-        </div>
-      )) : <p>{empty}</p>}
-    </div>
   );
 }
 

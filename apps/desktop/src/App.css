@@ -639,6 +639,15 @@ body {
   box-shadow: 0 0 0 3px var(--accent-soft), var(--elev-pop);
 }
 
+.value-edit-input.net-label-input {
+  width: auto;
+  min-width: 72px;
+  max-width: 180px;
+  text-align: left;
+  letter-spacing: 0.02em;
+  text-transform: none;
+}
+
 /* ── Wire / hit targets ─────────────────────────────────────────────────────── */
 .wire-group {
   cursor: pointer;
@@ -2374,14 +2383,20 @@ body {
   gap: var(--sp-2);
 }
 /* ── Net labels (named nodes) ──────────────────────────── */
-/* Schematic canvas SVG text — kept outside the App.css type scale. */
+/* Schematic canvas SVG text — SF Mono, instrument-grade (not rounded UI). */
 .net-label-text {
   fill: var(--accent);
-  font: 650 9px -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
-  paint-order: stroke;
-  stroke: var(--canvas-label-halo);
-  stroke-width: 3px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  paint-order: stroke fill;
+  stroke: var(--canvas-bg);
+  stroke-width: 2.5px;
   stroke-linejoin: round;
+  dominant-baseline: alphabetic;
+  text-rendering: geometricPrecision;
+  -webkit-font-smoothing: antialiased;
   user-select: none;
 }
 
@@ -2395,12 +2410,12 @@ body {
 .label-layer .ref,
 .label-layer .val {
   fill: var(--canvas-label-muted);
-  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+  font-family: var(--font-mono);
   font-size: 8.5px;
   font-weight: 500;
-  letter-spacing: 0.1px;
-  paint-order: stroke;
-  stroke: var(--canvas-label-halo);
+  letter-spacing: 0.02em;
+  paint-order: stroke fill;
+  stroke: var(--canvas-bg);
   stroke-width: 2px;
   stroke-linejoin: round;
   dominant-baseline: middle;
@@ -2411,7 +2426,7 @@ body {
 .label-layer .ref {
   fill: var(--canvas-label);
   font-size: 9.5px;
-  font-weight: 680;
+  font-weight: 600;
 }
 .label-layer .val {
   fill: var(--canvas-label-muted);
@@ -2790,7 +2805,6 @@ body {
 .explorer-head > span,
 .palette-head > span,
 .plotter-kicker,
-.bottom-tabs,
 .result-list h3,
 .symbol-preview > span {
   color: var(--faint);
@@ -3435,55 +3449,70 @@ body {
   r: 2.8;
 }
 
-/* bottom inspector / results */
+/* Errors strip — compact; expands only when there are issues. */
 .bottom-panel {
-  height: 212px;
   flex: none;
   display: flex;
   flex-direction: column;
   min-height: 0;
+  max-height: 140px;
   background: var(--panel);
   border-top: 1px solid var(--border);
 }
 
-.bottom-resize-handle {
-  height: 7px;
-  display: grid;
-  place-items: center;
-  background: var(--panel-3);
-  border-bottom: 1px solid var(--border);
+.bottom-panel:not(.has-issues) {
+  max-height: 72px;
 }
 
-.bottom-resize-handle span {
-  width: 34px;
-  height: 3px;
-  border-radius: 3px;
-  background: var(--dial-track);
-}
-
-.bottom-tabs {
-  height: 34px;
+.bottom-panel-head {
+  flex: none;
+  height: 28px;
   display: flex;
   align-items: center;
-  gap: 3px;
+  gap: var(--sp-2);
   padding: 0 12px;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--border-subtle);
 }
 
-.bottom-tabs button {
-  height: var(--row-h-dense);
-  padding: 0 var(--sp-2);
-  border: 0;
-  border-radius: 6px;
+.bottom-panel-title {
+  font: 600 var(--fs-caption) var(--font-ui);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
   color: var(--muted);
-  background: transparent;
-  font: inherit;
-  cursor: pointer;
 }
 
-.bottom-tabs button.active {
-  color: var(--text);
-  background: var(--overlay-hover);
+.bottom-panel-count {
+  min-width: 18px;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 9px;
+  display: inline-grid;
+  place-items: center;
+  font: 650 var(--fs-micro) var(--font-mono);
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 18%, transparent);
+}
+
+.bottom-panel-clear {
+  margin-left: auto;
+  font: 500 var(--fs-caption) var(--font-ui);
+  color: var(--faint);
+}
+
+.bottom-errors {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 12px 10px;
+}
+
+.bottom-errors-idle {
+  margin: 0;
+  color: var(--faint);
+  font: 500 var(--fs-body) var(--font-ui);
 }
 
 .component-inspector,
@@ -4487,62 +4516,13 @@ body {
   filter: grayscale(0.5);
 }
 
-.bottom-output-stack {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  overflow: auto;
-}
-
-.bottom-output-stack > .sim-results {
-  flex: none;
-  border-bottom: 1px solid var(--border-subtle);
-}
-
-.bottom-output,
-.bottom-errors {
-  display: grid;
-  gap: var(--sp-2);
-  padding: var(--sp-3);
-  color: var(--text);
-  font: 500 var(--fs-label) var(--font-mono);
-}
-
-.bottom-output {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.bottom-output-row {
-  min-width: 0;
-  padding: var(--sp-2) var(--sp-3);
-  border: 1px solid var(--border);
-  border-radius: 7px;
-  background: var(--overlay-hover-faint);
-}
-
-.bottom-output-row span {
-  display: block;
-  margin-bottom: var(--sp-1);
-  color: var(--muted);
-  font-size: var(--fs-caption);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.bottom-output-row strong {
-  display: block;
-  overflow: hidden;
-  color: var(--cream);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .bottom-errors .error,
 .bottom-errors .warning {
   margin: 0;
-  padding: var(--sp-2) var(--sp-3);
-  border-radius: 7px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  font: 500 var(--fs-body) var(--font-ui);
+  line-height: 1.35;
   background: var(--overlay-hover-faint);
 }
 
