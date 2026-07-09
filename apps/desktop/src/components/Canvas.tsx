@@ -707,6 +707,12 @@ export function Canvas({
 
   const components = useSchematic((s) => s.components);
   const wires = useSchematic((s) => s.wires);
+  // Keep latest geometry in refs so fitView stays stable and does NOT re-fit
+  // the camera on every component/wire edit (only on fitSignal / home / resize).
+  const componentsRef = useRef(components);
+  const wiresRef = useRef(wires);
+  componentsRef.current = components;
+  wiresRef.current = wires;
   const selectedId = useSchematic((s) => s.selectedId);
   const selectedWireId = useSchematic((s) => s.selectedWireId);
   const selectedWireIds = useSchematic((s) => s.selectedWireIds);
@@ -1287,7 +1293,7 @@ export function Canvas({
     if (!el) return;
     const r = el.getBoundingClientRect();
     if (r.width === 0 || r.height === 0) return;
-    const b = circuitBounds(components, wires);
+    const b = circuitBounds(componentsRef.current, wiresRef.current);
     if (!b) {
       setView({ x: r.width / 2, y: r.height / 2, zoom: 1 });
       return;
@@ -1299,15 +1305,14 @@ export function Canvas({
     const cx = (b.minX + b.maxX) / 2;
     const cy = (b.minY + b.maxY) / 2;
     setView({ zoom, x: r.width / 2 - cx * zoom, y: r.height / 2 - cy * zoom });
-  }, [components, wires]);
+  }, []);
 
-  // Auto-fit when the document identity changes (open / new / tab switch) and
-  // whenever the canvas first lays out. User pan/zoom after that is preserved —
-  // we do NOT re-fit on every component edit.
+  // Auto-fit when the document identity changes (open / new / tab switch).
+  // Deliberately does NOT depend on components/wires — user pan is preserved
+  // across edits; ⌂ and fitSignal are the only re-fit triggers in schematic mode.
   useEffect(() => {
     const el = svgRef.current;
     if (!el) return;
-    // Defer one frame so getBoundingClientRect sees the post-layout size.
     const id = requestAnimationFrame(() => fitView());
     return () => cancelAnimationFrame(id);
   }, [fitSignal, fitView]);
@@ -1360,13 +1365,17 @@ export function Canvas({
         }}
       >
         <defs>
-          {/* Minor grid every GRID; major every 5 cells for readable alignment. */}
+          {/*
+            Circles must be centered in each tile — SVG patterns clip at the
+            tile edge, so a dot at (0,0) renders as a quarter-circle (the bug
+            visible on the schematic stage).
+          */}
           <pattern id="grid-minor" width={GRID} height={GRID} patternUnits="userSpaceOnUse">
-            <circle cx={0} cy={0} r={1.15} className="grid-dot" />
+            <circle cx={GRID / 2} cy={GRID / 2} r={1.35} className="grid-dot" />
           </pattern>
           <pattern id="grid" width={GRID * 5} height={GRID * 5} patternUnits="userSpaceOnUse">
             <rect width={GRID * 5} height={GRID * 5} fill="url(#grid-minor)" />
-            <circle cx={0} cy={0} r={1.65} className="grid-dot-major" />
+            <circle cx={GRID / 2} cy={GRID / 2} r={2.1} className="grid-dot-major" />
           </pattern>
         </defs>
 
@@ -1395,7 +1404,7 @@ export function Canvas({
                   className={`snap-dot${isPin ? " pin" : ""}`}
                   cx={p.x}
                   cy={p.y}
-                  r={isPin ? 2.6 : 1.8}
+                  r={isPin ? 3.2 : 2.2}
                 />
               );
             })}
@@ -1405,7 +1414,7 @@ export function Canvas({
               className={`snap-ring${snapHover.pin ? " on-pin" : ""}`}
               cx={snapHover.x}
               cy={snapHover.y}
-              r={snapHover.pin ? 7 : 5.5}
+              r={snapHover.pin ? 8 : 6.5}
             />
           )}
 

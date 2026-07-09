@@ -507,13 +507,13 @@ export function EditorToolbar({
         <path d="M4 3l10 5-4.2 1.4L8 14.5z" />
       </IconButton>
       <IconButton title="Wire" active={tool.mode === "wire"} disabled={readOnly} onClick={startWiring}>
-        <circle cx="4" cy="14" r="2" />
-        <circle cx="14" cy="4" r="2" />
-        <path d="M5.5 12.5 12.5 5.5" />
+        <circle cx="4" cy="13" r="2" />
+        <circle cx="13" cy="4" r="2" />
+        <path d="M5.5 11.5 11.5 5.5" />
       </IconButton>
       <IconButton title="Net label (F4)" active={tool.mode === "label"} disabled={readOnly} onClick={startLabeling}>
-        <path d="M3 4h7l5 4-5 4H3z" />
-        <path d="M5.5 6.5v3M7.5 6.5v3" />
+        <path d="M2.5 4h8.5l5 4-5 4H2.5z" />
+        <path d="M5 6.2v3.6M7.5 6.2v3.6" />
       </IconButton>
       <IconButton title="Probe" active={tool.mode === "probe"} onClick={startProbing}>
         <circle cx="8" cy="8" r="4" />

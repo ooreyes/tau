@@ -66,9 +66,9 @@
   --comp:      #cfd6e0;
   --comp-ref:  #7d8794;
 
-  /* Grid — readable on true-black canvas without competing with symbols */
-  --grid-dot:        rgba(170, 195, 225, 0.20);
-  --grid-dot-major:  rgba(170, 195, 225, 0.38);
+  /* Grid — full circular dots, readable on true black */
+  --grid-dot:        rgba(180, 205, 235, 0.32);
+  --grid-dot-major:  rgba(180, 205, 235, 0.55);
   /* Schematic stage surface — flat true black, the darkest surface in the app
      (the schematic is the "instrument screen"). Flat per the Braun/OP-1
      reference imagery — no radial "glass glow"; kept a solid instead of a
@@ -2196,13 +2196,13 @@ body {
   border-radius: var(--r-md);
 }
 .view-btn {
-  width: 40px;
-  height: 36px;
+  width: 44px;
+  height: 40px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   font-family: var(--font-mono);
-  font-size: var(--fs-heading);
+  font-size: 18px;
   font-weight: 600;
   color: var(--muted);
   background: transparent;
@@ -2237,28 +2237,28 @@ body {
 /* ── Wire / probe snap markers ─────────────────────────── */
 .snap-dot {
   fill: var(--accent);
-  opacity: 0.35;
+  opacity: 0.45;
   pointer-events: none;
 }
 .snap-dot.pin {
-  opacity: 0.55;
-  fill: var(--cream);
+  opacity: 0.9;
+  fill: color-mix(in srgb, var(--cream) 70%, var(--accent));
   stroke: var(--accent);
-  stroke-width: 1;
+  stroke-width: 1.25;
   vector-effect: non-scaling-stroke;
 }
 .snap-ring {
-  fill: color-mix(in srgb, var(--accent) 12%, transparent);
+  fill: color-mix(in srgb, var(--accent) 18%, transparent);
   stroke: var(--accent);
-  stroke-width: 1.75;
-  opacity: 0.55;
+  stroke-width: 2;
+  opacity: 0.85;
   vector-effect: non-scaling-stroke;
   pointer-events: none;
 }
 .snap-ring.on-pin {
   opacity: 1;
-  stroke-width: 2.25;
-  fill: color-mix(in srgb, var(--accent) 22%, transparent);
+  stroke-width: 2.5;
+  fill: color-mix(in srgb, var(--accent) 28%, transparent);
 }
 
 /* ── Analysis parameter sliders ────────────────────────── */
@@ -3164,8 +3164,8 @@ body {
 }
 
 .editor-icon-btn {
-  width: 30px;
-  height: var(--row-h);
+  width: 34px;
+  height: 30px;
   display: grid;
   place-items: center;
   border: 0;
@@ -3176,11 +3176,11 @@ body {
 }
 
 .editor-icon-btn svg {
-  width: 16px;
-  height: 16px;
+  width: 18px;
+  height: 18px;
   fill: none;
   stroke: currentColor;
-  stroke-width: 1.4;
+  stroke-width: 1.5;
   stroke-linecap: round;
   stroke-linejoin: round;
 }
@@ -3360,6 +3360,7 @@ body {
 .junction-dot {
   fill: var(--comp);
   stroke: none;
+  r: 2.8;
 }
 
 /* bottom inspector / results */

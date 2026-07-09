@@ -144,6 +144,7 @@ function App() {
   const components = useSchematic((s) => s.components);
   const wires = useSchematic((s) => s.wires);
   const toolMode = useSchematic((s) => s.tool.mode);
+  const selectedId = useSchematic((s) => s.selectedId);
   const startPlacing = useSchematic((s) => s.startPlacing);
   const startWiring = useSchematic((s) => s.startWiring);
   const startLabeling = useSchematic((s) => s.startLabeling);
@@ -202,6 +203,11 @@ function App() {
   // ngspice runs outside React's lifecycle. A request version prevents a late
   // result from an edited, closed, or stopped circuit overwriting current UI.
   const analysisRequestRef = useRef(0);
+
+  // Selecting a part opens the Components rail so Properties is immediately usable.
+  useEffect(() => {
+    if (selectedId && mode === "schematic") setPartsOpen(true);
+  }, [selectedId, mode]);
 
   const writeSim = useProject((s) => s.writeSim);
   const projectRoot = useProject((s) => s.rootPath);
