@@ -1,22 +1,36 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  Folder,
+  FolderOpen,
+  Search,
+  Plus,
+  FilePlus,
+  FolderPlus,
+  FileInput,
+  Trash2,
+  MousePointer2,
+  Spline,
+  Tag,
+  Crosshair,
+  Undo2,
+  Redo2,
+  Settings,
+  CircuitBoard,
+  Activity,
+} from "lucide-react";
 import { CATALOG_BY_KIND } from "../schematic/catalog";
-import { MAX_SCHEMATIC_FILE_BYTES, validateSchematicDocument } from "../schematic/documentValidation";
 import { ComponentSymbol } from "../schematic/symbols";
-import type { SchematicComponent } from "../schematic/types";
+import type { SchematicComponent, SchematicWire } from "../schematic/types";
 import { decodeParams, encodeParams, paramFields } from "../schematic/params";
-import { importAsc, decodeSchematicText, makeSubcircuitResolver } from "../io/ascImport";
-import { schematicToAsc } from "../io/ascExport";
-import { parseCir } from "../io/cirImport";
 import { EngineeringInput } from "./EngineeringInput";
 import { Palette } from "./Palette";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Dialog, DialogContent, DialogHeader, DialogFooter, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { useSchematic, type SchematicDocument } from "../store/useSchematic";
+import { useSchematic } from "../store/useSchematic";
 import { useProject } from "../store/useProject";
-import { basename } from "../project/types";
-import { EXAMPLE_CIRCUITS, type ExampleCircuit } from "../examples/circuits";
+import { basename, isAscFile } from "../project/types";
 import type { AnalysisResult } from "../simulation/linearTransient";
 import { componentCurrents } from "../simulation/currents";
 import { formatEngineering, parseQuantity } from "../simulation/quantity";
@@ -34,23 +48,20 @@ export function ActivityRail({ mode, partsOpen, onModeChange, onSearch, onFocusC
   return (
     <nav className="activity-rail" aria-label="Workspace sections">
       <RailButton active={mode === "schematic"} label="Explorer" onClick={() => onModeChange("schematic")}>
-        <path d="M3 3h7l2 2h5v12H3z" />
+        <FolderOpen size={18} strokeWidth={1.75} />
       </RailButton>
       <RailButton label="Search" shortcut="⌘K" onClick={onSearch}>
-        <circle cx="9" cy="9" r="6" />
-        <path d="M13.5 13.5 18 18" />
+        <Search size={18} strokeWidth={1.75} />
       </RailButton>
       <RailButton active={partsOpen} label="Components" onClick={onFocusComponents}>
-        <rect x="5" y="5" width="10" height="10" rx="1.5" />
-        <path d="M8 2v3M12 2v3M8 15v3M12 15v3M2 8h3M2 12h3M15 8h3M15 12h3" />
+        <CircuitBoard size={18} strokeWidth={1.75} />
       </RailButton>
       <RailButton active={mode === "simulator"} label="Waveforms" onClick={() => onModeChange("simulator")}>
-        <path d="M3 14 8 7l3 3 6-7" />
+        <Activity size={18} strokeWidth={1.75} />
       </RailButton>
       <div className="rail-spacer" />
       <RailButton label="Settings" onClick={onOpenSettings}>
-        <path d="M10 2.5l1.8 1.2 2.1-.5.9 2 1.9.9-.5 2.1 1.2 1.8-1.2 1.8.5 2.1-1.9.9-.9 2-2.1-.5L10 17.5l-1.8-1.2-2.1.5-.9-2-1.9-.9.5-2.1L2.6 10l1.2-1.8-.5-2.1 1.9-.9.9-2 2.1.5z" />
-        <circle cx="10" cy="10" r="2.4" />
+        <Settings size={18} strokeWidth={1.75} />
       </RailButton>
     </nav>
   );
@@ -74,9 +85,9 @@ function RailButton({
       <TooltipTrigger asChild>
         <button className={`rail-btn${active ? " active" : ""}`} aria-label={label} onClick={onClick}>
           {active && <span className="rail-active" />}
-          <svg viewBox="0 0 20 20" aria-hidden="true">
+          <span className="rail-lucide" aria-hidden="true">
             {children}
-          </svg>
+          </span>
         </button>
       </TooltipTrigger>
       <TooltipContent side="right">{shortcut ? `${label} — ${shortcut}` : label}</TooltipContent>
@@ -87,14 +98,12 @@ function RailButton({
 export function ExplorerPanel({
   activeFilePath,
   onOpenSimFile,
-  onNewCircuit,
-  onSearch,
+  onOpenAscText,
   onNotice,
 }: {
   activeFilePath: string | null;
   onOpenSimFile: (path: string, title: string, json: string) => void;
-  onNewCircuit: () => void;
-  onSearch: () => void;
+  onOpenAscText: (path: string, title: string, text: string) => void;
   onNotice: (message: string) => void;
 }) {
   const rootPath = useProject((s) => s.rootPath);
@@ -104,22 +113,27 @@ export function ExplorerPanel({
   const error = useProject((s) => s.error);
   const capability = useProject((s) => s.capability);
   const detectCapability = useProject((s) => s.detectCapability);
+  const ensureDefaultWorkspace = useProject((s) => s.ensureDefaultWorkspace);
   const openFolder = useProject((s) => s.openFolder);
-  const newProject = useProject((s) => s.newProject);
   const toggleExpanded = useProject((s) => s.toggleExpanded);
   const createFolder = useProject((s) => s.createFolder);
   const createSimFile = useProject((s) => s.createSimFile);
+  const importAscFile = useProject((s) => s.importAscFile);
   const deleteNode = useProject((s) => s.deleteNode);
   const readSim = useProject((s) => s.readSim);
+  const ascInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
-    void detectCapability();
-  }, [detectCapability]);
+    void detectCapability().then(() => {
+      ensureDefaultWorkspace();
+    });
+  }, [detectCapability, ensureDefaultWorkspace]);
 
   const openNode = async (path: string, name: string) => {
     try {
-      const json = await readSim(path);
-      onOpenSimFile(path, name, json);
+      const text = await readSim(path);
+      if (isAscFile(name)) onOpenAscText(path, name, text);
+      else onOpenSimFile(path, name, text);
     } catch (err) {
       onNotice(err instanceof Error ? err.message : "Could not open file.");
     }
@@ -130,141 +144,149 @@ export function ExplorerPanel({
     return value?.trim() || null;
   };
 
+  if (!rootPath) {
+    return (
+      <aside className="explorer-panel" aria-label="Project explorer">
+        <div className="explorer-head">
+          <span>project</span>
+        </div>
+        <div className="explorer-empty">
+          <p>Loading workspace…</p>
+        </div>
+      </aside>
+    );
+  }
+
   return (
     <aside className="explorer-panel" aria-label="Project explorer">
       <div className="explorer-head">
-        <span>{rootName ?? "project"}</span>
+        <span>{rootName ?? "Powerboard"}</span>
         <div className="explorer-icons">
           <button
-            title="Open folder"
-            aria-label="Open folder"
+            title="Open folder on disk"
+            aria-label="Open folder on disk"
             onClick={async () => {
               if (capability === "none") {
-                onNotice("Open folder requires the Tau desktop app (or a Chromium browser with folder access).");
+                onNotice("Opening a disk folder needs the Tau desktop app.");
                 return;
               }
               const ok = await openFolder();
-              if (ok) onNotice("Project folder opened.");
+              if (ok) onNotice("Opened project folder.");
             }}
           >
-            ⌁
+            <Folder size={14} strokeWidth={1.75} />
           </button>
           <button
-            title="New project"
-            aria-label="New project"
+            title="New folder"
+            aria-label="New folder"
             onClick={async () => {
-              if (capability === "none") {
-                onNotice("New project requires the Tau desktop app.");
-                return;
-              }
-              const ok = await newProject();
-              if (ok) onNotice("Created new project.");
+              const name = promptName("Folder name", "circuits");
+              if (!name) return;
+              const path = await createFolder(rootPath, name);
+              if (path) onNotice(`Created ${name}`);
             }}
           >
-            ＋
+            <FolderPlus size={14} strokeWidth={1.75} />
           </button>
-          <button title="New scratchpad" aria-label="New scratchpad" onClick={onNewCircuit}>
-            ⎙
+          <button
+            title="New simulation"
+            aria-label="New simulation"
+            onClick={async () => {
+              const name = promptName("Simulation name", "untitled.sim");
+              if (!name) return;
+              const path = await createSimFile(rootPath, name);
+              if (path) {
+                onNotice(`Created ${basename(path)}`);
+                await openNode(path, basename(path));
+              }
+            }}
+          >
+            <FilePlus size={14} strokeWidth={1.75} />
           </button>
-          <button title="Search commands" aria-label="Search commands" onClick={onSearch}>
-            ▣
+          <button
+            title="Import LTspice .asc"
+            aria-label="Import LTspice .asc"
+            onClick={() => ascInputRef.current?.click()}
+          >
+            <FileInput size={14} strokeWidth={1.75} />
           </button>
+          <input
+            ref={ascInputRef}
+            className="file-input"
+            type="file"
+            accept=".asc"
+            title="Import LTspice schematic"
+            onChange={async (event) => {
+              const file = event.currentTarget.files?.[0];
+              event.currentTarget.value = "";
+              if (!file) return;
+              const path = await importAscFile(rootPath, file);
+              if (path) {
+                onNotice(`Imported ${basename(path)}`);
+                await openNode(path, basename(path));
+              }
+            }}
+          />
         </div>
       </div>
 
-      {!rootPath && (
-        <div className="explorer-empty">
-          <p>Open a folder to work like VS Code — create subfolders and `.sim` files on disk.</p>
-          {capability === "none" && (
-            <p className="explorer-empty-hint">Folder projects need the desktop app (`pnpm dev`).</p>
-          )}
-          <div className="explorer-empty-actions">
-            <Button
-              size="sm"
-              onClick={async () => {
-                if (capability === "none") {
-                  onNotice("Open folder requires the Tau desktop app.");
-                  return;
-                }
-                await openFolder();
-              }}
-            >
-              Open Folder
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={async () => {
-                if (capability === "none") {
-                  onNotice("New project requires the Tau desktop app.");
-                  return;
-                }
-                await newProject();
-              }}
-            >
-              New Project
-            </Button>
-          </div>
-        </div>
-      )}
+      <div className="explorer-actions">
+        <button
+          type="button"
+          onClick={async () => {
+            const name = promptName("Folder name", "circuits");
+            if (!name) return;
+            const path = await createFolder(rootPath, name);
+            if (path) onNotice(`Created folder ${name}`);
+          }}
+        >
+          <FolderPlus size={12} strokeWidth={1.75} /> New Folder
+        </button>
+        <button
+          type="button"
+          onClick={async () => {
+            const name = promptName("Simulation name", "untitled.sim");
+            if (!name) return;
+            const path = await createSimFile(rootPath, name);
+            if (path) {
+              onNotice(`Created ${basename(path)}`);
+              await openNode(path, basename(path));
+            }
+          }}
+        >
+          <Plus size={12} strokeWidth={1.75} /> New .sim
+        </button>
+        <button type="button" onClick={() => ascInputRef.current?.click()}>
+          <FileInput size={12} strokeWidth={1.75} /> Import .asc
+        </button>
+      </div>
 
-      {rootPath && (
-        <>
-          <div className="explorer-actions">
-            <button
-              type="button"
-              onClick={async () => {
-                const name = promptName("New folder name", "circuits");
-                if (!name) return;
-                const path = await createFolder(rootPath, name);
-                if (path) onNotice(`Created folder ${name}`);
-              }}
-            >
-              New Folder
-            </button>
-            <button
-              type="button"
-              onClick={async () => {
-                const name = promptName("New simulation name", "untitled.sim");
-                if (!name) return;
-                const path = await createSimFile(rootPath, name);
-                if (path) {
-                  onNotice(`Created ${basename(path)}`);
-                  await openNode(path, basename(path));
-                }
-              }}
-            >
-              New .sim
-            </button>
-          </div>
-          <div className="tree-list">
-            <ProjectTree
-              nodes={tree}
-              depth={0}
-              expanded={expanded}
-              activeFilePath={activeFilePath}
-              onToggle={toggleExpanded}
-              onOpenFile={openNode}
-              onNewFolder={async (parent) => {
-                const name = promptName("New folder name", "circuits");
-                if (!name) return;
-                await createFolder(parent, name);
-              }}
-              onNewSim={async (parent) => {
-                const name = promptName("New simulation name", "untitled.sim");
-                if (!name) return;
-                const path = await createSimFile(parent, name);
-                if (path) await openNode(path, basename(path));
-              }}
-              onDelete={async (path, name) => {
-                if (!window.confirm(`Delete “${name}”?`)) return;
-                await deleteNode(path);
-                onNotice(`Deleted ${name}`);
-              }}
-            />
-          </div>
-        </>
-      )}
+      <div className="tree-list">
+        <ProjectTree
+          nodes={tree}
+          depth={0}
+          expanded={expanded}
+          activeFilePath={activeFilePath}
+          onToggle={toggleExpanded}
+          onOpenFile={openNode}
+          onNewFolder={async (parent) => {
+            const name = promptName("Folder name", "circuits");
+            if (!name) return;
+            await createFolder(parent, name);
+          }}
+          onNewSim={async (parent) => {
+            const name = promptName("Simulation name", "untitled.sim");
+            if (!name) return;
+            const path = await createSimFile(parent, name);
+            if (path) await openNode(path, basename(path));
+          }}
+          onDelete={async (path, name) => {
+            if (!window.confirm(`Delete “${name}”?`)) return;
+            await deleteNode(path);
+            onNotice(`Deleted ${name}`);
+          }}
+        />
+      </div>
 
       {error && <p className="explorer-error" role="alert">{error}</p>}
     </aside>
@@ -360,22 +382,14 @@ export function EditorToolbar({
   onRun,
   onStep,
   onStop,
-  onNewCircuit,
   onClearScratchpad,
-  onOpenCircuit,
-  onOpenExample,
-  onSaveProjectFile,
 }: {
   mode: "schematic" | "simulator";
   isRunning: boolean;
   onRun: () => void;
   onStep: () => void;
   onStop: () => void;
-  onNewCircuit: () => void;
   onClearScratchpad: () => void;
-  onOpenCircuit: (doc: SchematicDocument, title: string) => void;
-  onOpenExample: (example: ExampleCircuit) => void;
-  onSaveProjectFile?: () => void;
 }) {
   // The simulator view is read-only (pan/zoom/probe only — see Canvas's
   // `interactive` prop and App.tsx's keydown gate); every editing control in
@@ -383,12 +397,6 @@ export function EditorToolbar({
   // enabled: cancel doesn't mutate the document, and probing is how traces
   // get added while viewing the simulator.
   const readOnly = mode !== "schematic";
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const components = useSchematic((s) => s.components);
-  const wires = useSchematic((s) => s.wires);
-  const probes = useSchematic((s) => s.probes);
-  const netLabels = useSchematic((s) => s.netLabels);
-  const directives = useSchematic((s) => s.directives);
   const tool = useSchematic((s) => s.tool);
   const cancel = useSchematic((s) => s.cancel);
   const startWiring = useSchematic((s) => s.startWiring);
@@ -398,191 +406,31 @@ export function EditorToolbar({
   const redo = useSchematic((s) => s.redo);
   const canUndo = useSchematic((s) => s.past.length > 0);
   const canRedo = useSchematic((s) => s.future.length > 0);
-  const hasDocument = components.length > 0 || wires.length > 0;
-
-  const saveCircuit = () => {
-    const payload = {
-      app: "Tau",
-      version: 1,
-      savedAt: new Date().toISOString(),
-      components,
-      wires,
-      probes,
-      netLabels,
-    };
-    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `tau-circuit-${new Date().toISOString().slice(0, 10)}.tau.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  const saveAsc = () => {
-    const { text, warnings } = schematicToAsc({ components, wires, netLabels, directives });
-    if (warnings.length > 0) {
-      console.warn(`Exported .asc with ${warnings.length} warning(s):`, warnings);
-    }
-    const blob = new Blob([text], { type: "text/plain" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `tau-circuit-${new Date().toISOString().slice(0, 10)}.asc`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  const openCircuit = async (file: File, selected: File[] = [file]) => {
-    try {
-      if (file.size > MAX_SCHEMATIC_FILE_BYTES) {
-        throw new Error(`Circuit files must be smaller than ${MAX_SCHEMATIC_FILE_BYTES / (1024 * 1024)} MB.`);
-      }
-      // Decode by actual byte encoding (LTspice writes some .asc files as UTF-16),
-      // not the UTF-8 that File.text() assumes — otherwise the parser sees garbage.
-      const text = decodeSchematicText(await file.arrayBuffer());
-      if (/\.asc$/i.test(file.name)) {
-        // LTspice schematic import (FEATURE_PARITY §1c). Pre-read any sibling
-        // .asy/.asc files the user also selected so a hierarchical schematic's
-        // sub-blocks (a `.asc` used as a symbol) can be inlined (§1 hierarchy).
-        const siblings = new Map<string, string>();
-        for (const f of selected) {
-          if (f === file) continue;
-          if (!/\.(asy|asc)$/i.test(f.name) || f.size > MAX_SCHEMATIC_FILE_BYTES) continue;
-          siblings.set(f.name.toLowerCase(), decodeSchematicText(await f.arrayBuffer()));
-        }
-        const resolver = siblings.size > 0
-          ? makeSubcircuitResolver((type) => {
-              const leaf = type.replace(/\\/g, "/").split("/").pop()?.toLowerCase() ?? "";
-              return { asy: siblings.get(`${leaf}.asy`), asc: siblings.get(`${leaf}.asc`) };
-            })
-          : undefined;
-        const result = importAsc(text, { resolveSubcircuit: resolver });
-        if (result.components.length === 0 && result.wires.length === 0) {
-          throw new Error("No schematic content found — is this a valid LTspice .asc file?");
-        }
-        const document: SchematicDocument = {
-          components: result.components,
-          wires: result.wires,
-          netLabels: result.netLabels,
-          directives: result.directives,
-        };
-        onOpenCircuit(document, file.name.replace(/\.asc$/i, ".sim"));
-        if (result.warnings.length > 0) {
-          // Non-fatal: some vendor symbols lack banked pin geometry.
-          console.warn(`Imported ${file.name} with ${result.warnings.length} warning(s):`, result.warnings);
-        }
-        return;
-      }
-      if (/\.(cir|net|sp|spice)$/i.test(file.name)) {
-        // SPICE netlist import (FEATURE_PARITY §1 "import .cir").
-        const result = parseCir(text);
-        if (result.components.length === 0) {
-          throw new Error("No devices found — is this a valid SPICE netlist?");
-        }
-        const document: SchematicDocument = {
-          components: result.components,
-          wires: result.wires,
-          netLabels: result.netLabels,
-          directives: result.directives,
-        };
-        onOpenCircuit(document, file.name.replace(/\.[^.]+$/i, ".sim"));
-        if (result.warnings.length > 0) {
-          console.warn(`Imported ${file.name} with ${result.warnings.length} warning(s):`, result.warnings);
-        }
-        return;
-      }
-      const document = validateSchematicDocument(JSON.parse(text));
-      onOpenCircuit(document, file.name.replace(/\.tau\.json$/i, ".sim"));
-    } catch (error) {
-      window.alert(error instanceof Error ? error.message : "Could not open circuit file.");
-    } finally {
-      if (fileInputRef.current) fileInputRef.current.value = "";
-    }
-  };
 
   return (
     <div className="editor-toolbar" aria-label="Editor toolbar">
       <IconButton title="Select" active={tool.mode === "select"} onClick={cancel}>
-        <path d="M4 3l10 5-4.2 1.4L8 14.5z" />
+        <MousePointer2 size={16} strokeWidth={1.75} />
       </IconButton>
       <IconButton title="Wire" active={tool.mode === "wire"} disabled={readOnly} onClick={startWiring}>
-        <circle cx="4" cy="13" r="2" />
-        <circle cx="13" cy="4" r="2" />
-        <path d="M5.5 11.5 11.5 5.5" />
+        <Spline size={16} strokeWidth={1.75} />
       </IconButton>
       <IconButton title="Net label (F4)" active={tool.mode === "label"} disabled={readOnly} onClick={startLabeling}>
-        <path d="M2.5 4h8.5l5 4-5 4H2.5z" />
-        <path d="M5 6.2v3.6M7.5 6.2v3.6" />
+        <Tag size={16} strokeWidth={1.75} />
       </IconButton>
       <IconButton title="Probe" active={tool.mode === "probe"} onClick={startProbing}>
-        <circle cx="8" cy="8" r="4" />
-        <path d="M8 1v3M8 12v3M1 8h3M12 8h3" />
+        <Crosshair size={16} strokeWidth={1.75} />
       </IconButton>
       <span className="toolbar-divider" />
       <IconButton title="Undo" disabled={!canUndo || readOnly} onClick={undo}>
-        <path d="M6 4 2 8l4 4" />
-        <path d="M2 8h9a4 4 0 0 1 4 4v2" />
+        <Undo2 size={16} strokeWidth={1.75} />
       </IconButton>
       <IconButton title="Redo" disabled={!canRedo || readOnly} onClick={redo}>
-        <path d="M12 4l4 4-4 4" />
-        <path d="M16 8H7a4 4 0 0 0-4 4v2" />
+        <Redo2 size={16} strokeWidth={1.75} />
       </IconButton>
       <IconButton title="Clear scratchpad" disabled={readOnly} onClick={onClearScratchpad}>
-        <path d="M4 5h10M7 5V3h4v2M6 7v7M10 7v7M13 5l-.8 10H5.8L5 5" />
+        <Trash2 size={16} strokeWidth={1.75} />
       </IconButton>
-      <span className="toolbar-divider" />
-      {/* .editor-doc-btn is a marker only (simulator-mode visibility in
-          App.css) — all styling comes from the Button primitive (§10). */}
-      <Button variant="outline" size="sm" className="editor-doc-btn" onClick={onNewCircuit}>New</Button>
-      <Button variant="outline" size="sm" className="editor-doc-btn" onClick={() => fileInputRef.current?.click()}>Open</Button>
-      <Button
-        variant="outline"
-        size="sm"
-        className="editor-doc-btn"
-        disabled={!hasDocument && !onSaveProjectFile}
-        onClick={() => {
-          if (onSaveProjectFile) onSaveProjectFile();
-          else saveCircuit();
-        }}
-      >
-        Save
-      </Button>
-      <Button variant="outline" size="sm" className="editor-doc-btn" disabled={!hasDocument} onClick={saveCircuit} title="Download .tau.json">
-        Download
-      </Button>
-      <Button variant="outline" size="sm" className="editor-doc-btn" disabled={!hasDocument} onClick={saveAsc} title="Export as LTspice .asc">Save .asc</Button>
-      <input
-        ref={fileInputRef}
-        className="file-input"
-        type="file"
-        multiple
-        accept=".tau.json,.asc,.cir,.net,.sp,.asy,application/json"
-        title="Open a circuit. Select a hierarchical .asc together with its .asy/.asc sub-blocks to inline them."
-        onChange={(event) => {
-          const files = Array.from(event.currentTarget.files ?? []);
-          // Open the first non-.asy file (a .asy is only a sub-block dependency);
-          // the rest of the selection are sibling files used to resolve subcircuits.
-          const primary = files.find((f) => !/\.asy$/i.test(f.name)) ?? files[0];
-          if (primary) void openCircuit(primary, files);
-        }}
-      />
-      <label className="example-picker">
-        <span>Examples</span>
-        <select
-          value=""
-          onChange={(event) => {
-            const example = EXAMPLE_CIRCUITS.find((circuit) => circuit.id === event.currentTarget.value);
-            if (example) onOpenExample(example);
-          }}
-          aria-label="Open example circuit"
-        >
-          <option value="" disabled>Open...</option>
-          {EXAMPLE_CIRCUITS.map((circuit) => (
-            <option key={circuit.id} value={circuit.id}>{circuit.name}</option>
-          ))}
-        </select>
-      </label>
       <div className="editor-toolbar-spacer" />
       <div className="transport">
         <button className="transport-play" title="Run simulation" aria-label="Run simulation" onClick={onRun} disabled={isRunning}>▶</button>
@@ -628,7 +476,7 @@ function IconButton({
       aria-label={title}
       onClick={onClick}
     >
-      <svg viewBox="0 0 18 18" aria-hidden="true">{children}</svg>
+      <span className="editor-lucide" aria-hidden="true">{children}</span>
     </button>
   );
 }
@@ -699,6 +547,7 @@ export function BottomPanel({ mode, result }: { mode: "schematic" | "simulator";
   const selectedId = useSchematic((s) => s.selectedId);
   const selectedWireId = useSchematic((s) => s.selectedWireId);
   const selected = components.find((component) => component.id === selectedId) ?? null;
+  const selectedWire = wires.find((w) => w.id === selectedWireId) ?? null;
   const [activeTab, setActiveTab] = useState<"primary" | "secondary" | "errors">("primary");
 
   useEffect(() => {
@@ -711,7 +560,11 @@ export function BottomPanel({ mode, result }: { mode: "schematic" | "simulator";
   const content = activeTab === "primary"
     ? mode === "simulator"
       ? <SimulatorResults result={result} />
-      : <ComponentInspector selected={selected} />
+      : selected
+        ? <ComponentInspector selected={selected} />
+        : selectedWire
+          ? <WireInspector wire={selectedWire} />
+          : <ComponentInspector selected={null} />
     : activeTab === "secondary"
       ? (
         <OutputPanel
@@ -944,6 +797,45 @@ function ComponentInspector({ selected }: { selected: SchematicComponent | null 
   );
 }
 
+function WireInspector({ wire }: { wire: SchematicWire }) {
+  const setWireResistance = useSchematic((s) => s.setWireResistance);
+  const beginChange = useSchematic((s) => s.beginChange);
+  const editKeyRef = useRef<string | null>(null);
+  const resistance = wire.resistance ?? "";
+
+  return (
+    <div className="component-inspector">
+      <div className="inspector-summary">
+        <strong>Wire</strong>
+        <span>{resistance ? `Series ${resistance}Ω` : "Ideal conductor"}</span>
+      </div>
+      <div className="property-grid">
+        <label className="property-field">
+          <span>Resistance</span>
+          <input
+            className="mono-num"
+            value={resistance}
+            placeholder="0 (ideal)"
+            aria-label="Wire series resistance"
+            spellCheck={false}
+            onFocus={() => {
+              editKeyRef.current = null;
+            }}
+            onChange={(event) => {
+              if (editKeyRef.current !== wire.id) {
+                beginChange();
+                editKeyRef.current = wire.id;
+              }
+              setWireResistance(wire.id, event.currentTarget.value);
+            }}
+          />
+        </label>
+        <p className="property-hint">Leave empty for an ideal short. Non-zero values (e.g. 10m) insert a series resistor in the netlist.</p>
+      </div>
+    </div>
+  );
+}
+
 /** Right-rail panel: Properties (inspector) + Library (place palette). */
 export function ComponentsRail({
   focusSignal,
@@ -953,13 +845,18 @@ export function ComponentsRail({
   onNotice: (message: string) => void;
 }) {
   const selectedId = useSchematic((s) => s.selectedId);
+  const selectedWireId = useSchematic((s) => s.selectedWireId);
   const components = useSchematic((s) => s.components);
+  const wires = useSchematic((s) => s.wires);
   const selected = components.find((c) => c.id === selectedId) ?? null;
-  const [segment, setSegment] = useState<"properties" | "library">(selected ? "properties" : "library");
+  const selectedWire = wires.find((w) => w.id === selectedWireId) ?? null;
+  const [segment, setSegment] = useState<"properties" | "library">(
+    selected || selectedWire ? "properties" : "library",
+  );
 
   useEffect(() => {
-    if (selected) setSegment("properties");
-  }, [selected?.id]);
+    if (selected || selectedWire) setSegment("properties");
+  }, [selected?.id, selectedWire?.id]);
 
   return (
     <aside className="components-rail" aria-label="Components">
@@ -985,7 +882,13 @@ export function ComponentsRail({
       </div>
       <div className="components-rail-body">
         {segment === "properties" ? (
-          <ComponentInspector selected={selected} />
+          selected ? (
+            <ComponentInspector selected={selected} />
+          ) : selectedWire ? (
+            <WireInspector wire={selectedWire} />
+          ) : (
+            <ComponentInspector selected={null} />
+          )
         ) : (
           <Palette focusSignal={focusSignal} onNotice={onNotice} />
         )}

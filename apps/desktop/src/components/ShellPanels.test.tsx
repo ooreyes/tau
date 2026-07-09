@@ -44,10 +44,7 @@ const noopToolbarProps = {
   onRun: () => {},
   onStep: () => {},
   onStop: () => {},
-  onNewCircuit: () => {},
   onClearScratchpad: () => {},
-  onOpenCircuit: () => {},
-  onOpenExample: () => {},
 };
 
 describe("EditorToolbar — read-only outside schematic view (§UX)", () => {

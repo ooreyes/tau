@@ -4,7 +4,7 @@
  * API in the browser; otherwise reports that a desktop app is required.
  */
 
-import { basename, isSimFile, joinPath, type ProjectNode } from "./types";
+import { basename, isProjectFile, joinPath, type ProjectNode } from "./types";
 
 export type FsCapability = "tauri" | "web" | "none";
 
@@ -110,7 +110,7 @@ async function readTauriTree(
     if (entry.isDirectory) {
       const children = await readTauriTree(path, readDir);
       nodes.push({ name, path, kind: "dir", children });
-    } else if (entry.isFile && isSimFile(name)) {
+    } else if (entry.isFile && isProjectFile(name)) {
       nodes.push({ name, path, kind: "file" });
     }
   }
@@ -127,7 +127,7 @@ async function readWebTree(dirPath: string, handle: any): Promise<ProjectNode[]>
       webHandles.set(path, child);
       const children = await readWebTree(path, child);
       nodes.push({ name, path, kind: "dir", children });
-    } else if (child.kind === "file" && isSimFile(name)) {
+    } else if (child.kind === "file" && isProjectFile(name)) {
       nodes.push({ name, path, kind: "file" });
     }
   }

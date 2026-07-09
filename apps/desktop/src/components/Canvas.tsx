@@ -1671,6 +1671,7 @@ function WireView({
   onPointerDown: (e: ReactPointerEvent<SVGElement>) => void;
 }) {
   const d = pathFromPoints(wire.points);
+  const resistive = Boolean(wire.resistance?.trim() && wire.resistance.trim() !== "0");
   return (
     <g
       className={`wire-group${selected ? " selected" : ""}${probeReady ? " probe-ready" : ""}`}
@@ -1678,7 +1679,7 @@ function WireView({
     >
       {/* Wide invisible stroke makes the thin wire easy to click. */}
       <path className="wire-hit" d={d} />
-      <path className="wire" d={d} />
+      <path className={`wire${resistive ? " resistive" : ""}`} d={d} />
     </g>
   );
 }

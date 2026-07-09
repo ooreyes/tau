@@ -142,6 +142,8 @@ interface SchematicState extends Doc {
   setValue: (id: string, value: string) => void;
   /** Rename a component's reference designator (canvas label). */
   setLabel: (id: string, label: string) => void;
+  /** Set optional series resistance on a wire (empty / "0" = ideal). */
+  setWireResistance: (id: string, resistance: string) => void;
 
   /** SPICE directives carried by the document (built into the param scope at run time). */
   directives: string[];
@@ -686,6 +688,18 @@ export const useSchematic = create<SchematicState>()((set) => {
     setLabel: (id, label) =>
       set((s) => ({
         components: s.components.map((c) => (c.id === id ? { ...c, label } : c)),
+      })),
+    setWireResistance: (id, resistance) =>
+      set((s) => ({
+        wires: s.wires.map((w) => {
+          if (w.id !== id) return w;
+          const trimmed = resistance.trim();
+          if (!trimmed || trimmed === "0") {
+            const { resistance: _drop, ...rest } = w;
+            return rest;
+          }
+          return { ...w, resistance: trimmed };
+        }),
       })),
 
     loadCircuit: (doc) =>

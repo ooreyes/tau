@@ -48,6 +48,16 @@ export function isSimFile(name: string): boolean {
   return /\.(sim|tau\.json)$/i.test(name);
 }
 
+/** LTspice schematic — importable into a Tau tab from the project tree. */
+export function isAscFile(name: string): boolean {
+  return /\.asc$/i.test(name);
+}
+
+/** Any file the explorer should list (native Tau + LTspice import). */
+export function isProjectFile(name: string): boolean {
+  return isSimFile(name) || isAscFile(name);
+}
+
 export function basename(path: string): string {
   const parts = path.replace(/\\/g, "/").split("/");
   return parts[parts.length - 1] || path;

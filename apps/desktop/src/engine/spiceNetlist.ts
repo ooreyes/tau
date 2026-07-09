@@ -1,4 +1,4 @@
-import { extractCircuit, type ExtractedCircuit, type ExtractedComponent } from "../schematic/netlist";
+import { extractCircuit, isResistiveWire, netAtPoint, type ExtractedCircuit, type ExtractedComponent } from "../schematic/netlist";
 import { resolveComponentValues, expandDirectiveLines, substituteKnownBraces, EMPTY_SCOPE, type ParamScope } from "../simulation/paramScope";
 import type { ComponentKind, NetLabel, SchematicComponent, SchematicWire } from "../schematic/types";
 import { parseQuantity } from "../simulation/quantity";
@@ -225,6 +225,26 @@ export function buildSpiceDeck(schematic: Schematic, analysis: SpiceAnalysis): S
   circuit.components.forEach((entry, index) => {
     lines.push(...componentLines(entry, index, knownModels, schematic.params ?? EMPTY_SCOPE, vdmosModels, netPinCount, subcktModels));
   });
+
+  // Non-ideal wires: series resistors between the nets at each endpoint.
+  // Ideal wires already shorted those nets in extractCircuit.
+  let wireRIndex = 0;
+  for (const wire of schematic.wires) {
+    if (!isResistiveWire(wire) || wire.points.length < 2) continue;
+    const a = wire.points[0];
+    const b = wire.points[wire.points.length - 1];
+    const netA = netAtPoint(circuit.nets, schematic.wires, a);
+    const netB = netAtPoint(circuit.nets, schematic.wires, b);
+    if (!netA || !netB) continue;
+    const nodeA = (netA.isGround ? "0" : netA.id).toLowerCase();
+    const nodeB = (netB.isGround ? "0" : netB.id).toLowerCase();
+    if (nodeA === nodeB) continue;
+    wireRIndex += 1;
+    const ohms = parseWireResistanceOhms(wire.resistance ?? "0");
+    if (!(ohms > 0)) continue;
+    lines.push(`RWIRE${wireRIndex} ${nodeA} ${nodeB} ${ohms}`);
+  }
+
   lines.push(analysisLine(analysis, hasIc || hasInstanceIc), ".end");
 
   return { circuit, netlist: lines.join("\n") };
@@ -737,6 +757,15 @@ function mosfetInstanceParams(mos: Record<string, string>): string {
   // on M lines; KP/VTO on the instance are ignored by some engines — keep
   // them in the value string for the UI and only emit W/L on the deck line).
   return parts.length ? ` ${parts.join(" ")}` : "";
+}
+
+function parseWireResistanceOhms(text: string): number {
+  try {
+    const value = parseQuantity(text.trim(), "Ohm");
+    return Number.isFinite(value) && value > 0 ? value : 0;
+  } catch {
+    return 0;
+  }
 }
 
 function sourceSignal(component: SchematicComponent, unit: "V" | "A") {

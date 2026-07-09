@@ -92,10 +92,15 @@ export interface Point {
   y: number;
 }
 
-/** A wire drawn as an orthogonal polyline. Nets are derived from wires later. */
+/** A wire drawn as an orthogonal polyline. Nets are derived from wires later.
+ *  Optional `resistance` (engineering string, e.g. `"10m"`) models a non-ideal
+ *  conductor: the wire no longer shorts its endpoints in the netlist and a
+ *  series resistor is emitted instead. Empty / omitted = ideal (0 Ω). */
 export interface SchematicWire {
   id: string;
   points: Point[];
+  /** Series resistance in ohms (engineering notation). Ideal when absent/empty/0. */
+  resistance?: string;
 }
 
 /** A meter probe pinned to a world point; resolves to whatever net sits there.

@@ -135,25 +135,39 @@ export function extractCircuit(
   }
 
   const segments = wires.flatMap(wireSegments);
+  // Ideal wires short their endpoints. Resistive (non-ideal) wires do NOT —
+  // they only contribute endpoints as DSU nodes so netAtPoint can resolve them;
+  // spiceNetlist emits a series R between the endpoint nets.
+  const idealSegmentIndexes: number[] = [];
+  {
+    let segIdx = 0;
+    for (const wire of wires) {
+      const segs = wireSegments(wire);
+      if (!isResistiveWire(wire)) {
+        for (let k = 0; k < segs.length; k += 1) idealSegmentIndexes.push(segIdx + k);
+      } else {
+        if (wire.points.length >= 1) dsu.add(pointKey(wire.points[0]));
+        if (wire.points.length >= 2) dsu.add(pointKey(wire.points[wire.points.length - 1]));
+      }
+      segIdx += segs.length;
+    }
+  }
   const breakpoints = segments.map((segment) => [segment.a, segment.b]);
 
-  for (let i = 0; i < segments.length; i += 1) {
+  for (const i of idealSegmentIndexes) {
     for (const pin of allPins) {
       if (pointOnSegment(pin, segments[i])) breakpoints[i].push(pin);
     }
-    // A label dropped mid-wire (not at an endpoint) must still split the wire
-    // there so the label's net joins the segment, mirroring pin handling.
     for (const point of labelPoints) {
       if (pointOnSegment(point, segments[i])) breakpoints[i].push(point);
     }
   }
 
-  for (let i = 0; i < segments.length; i += 1) {
-    for (let j = i + 1; j < segments.length; j += 1) {
+  for (let a = 0; a < idealSegmentIndexes.length; a += 1) {
+    for (let b = a + 1; b < idealSegmentIndexes.length; b += 1) {
+      const i = idealSegmentIndexes[a];
+      const j = idealSegmentIndexes[b];
       for (const point of segmentIntersections(segments[i], segments[j])) {
-        // A plain crossing is an overpass. It becomes a junction only when a
-        // wire was explicitly terminated/turned there; pins were already
-        // added as breakpoints above and therefore also create a junction.
         if (!isSegmentEndpoint(point, segments[i]) && !isSegmentEndpoint(point, segments[j])) continue;
         breakpoints[i].push(point);
         breakpoints[j].push(point);
@@ -161,7 +175,7 @@ export function extractCircuit(
     }
   }
 
-  for (let i = 0; i < segments.length; i += 1) {
+  for (const i of idealSegmentIndexes) {
     const segmentPoints = uniquePoints(breakpoints[i]).sort((p1, p2) =>
       segments[i].a.x === segments[i].b.x ? p1.y - p2.y : p1.x - p2.x,
     );
@@ -268,9 +282,10 @@ export function netAtPoint(nets: ExtractedNet[], wires: SchematicWire[], point: 
   const exact = nets.find((net) => atPoint(net, point));
   if (exact) return exact;
   for (const wire of wires) {
+    // Resistive wires are not a single net — only endpoints resolve (exact match above).
+    if (isResistiveWire(wire)) continue;
     for (const segment of wireSegments(wire)) {
       if (!pointOnSegment(point, segment)) continue;
-      // Segment endpoints are always DSU points, so either one names the net.
       const owner = nets.find((net) => atPoint(net, segment.a) || atPoint(net, segment.b));
       if (owner) return owner;
     }
@@ -286,6 +301,13 @@ function wireSegments(wire: SchematicWire): Segment[] {
     if (a.x !== b.x || a.y !== b.y) segments.push({ a, b });
   }
   return segments;
+}
+
+/** True when the wire carries a non-zero series resistance (non-ideal conductor). */
+export function isResistiveWire(wire: SchematicWire): boolean {
+  const raw = (wire.resistance ?? "").trim();
+  if (!raw || raw === "0") return false;
+  return true;
 }
 
 function segmentIntersections(first: Segment, second: Segment): Point[] {

@@ -23,7 +23,6 @@ import {
 import { useSchematic, type SchematicDocument, type SchematicHistory } from "./store/useSchematic";
 import { CATALOG } from "./schematic/catalog";
 import { dispatchShortcutAction, resolveShortcut } from "./schematic/shortcuts";
-import { type ExampleCircuit } from "./examples/circuits";
 import {
   MAX_TRANSIENT_STEPS,
   runTransientAnalysis,
@@ -72,6 +71,7 @@ import {
 import { useProject } from "./store/useProject";
 import { basename } from "./project/types";
 import { validateSchematicDocument } from "./schematic/documentValidation";
+import { importAsc } from "./io/ascImport";
 
 const DEFAULT_ANALYSIS_OPTIONS: AnalysisOptions = {
   stopTime: 0.006,
@@ -211,6 +211,10 @@ function App() {
 
   const writeSim = useProject((s) => s.writeSim);
   const projectRoot = useProject((s) => s.rootPath);
+  const projectTree = useProject((s) => s.tree);
+  const ensureDefaultWorkspace = useProject((s) => s.ensureDefaultWorkspace);
+  const readSim = useProject((s) => s.readSim);
+  const didOpenDefaultRef = useRef(false);
 
   const documentTitle = (tabs.find((tab) => tab.id === activeId) ?? tabs[0])?.title ?? "untitled.sim";
   const activeFilePath = (tabs.find((tab) => tab.id === activeId) ?? tabs[0])?.filePath ?? null;
@@ -219,6 +223,11 @@ function App() {
     setNotice(message);
     window.setTimeout(() => setNotice((current) => (current === message ? null : current)), 2600);
   }, []);
+
+  // Seed Powerboard workspace on first launch (explorer shows a real project tree).
+  useEffect(() => {
+    ensureDefaultWorkspace();
+  }, [ensureDefaultWorkspace]);
 
   const invalidateAnalysis = useCallback((state: "idle" | "stopped" = "idle") => {
     analysisRequestRef.current += 1;
@@ -526,6 +535,7 @@ function App() {
   }, []);
 
   // Open a document: focus its tab if already open, otherwise add a new one.
+  // If the only tab is still the blank untitled starter, replace it in place.
   const openDocument = useCallback((doc: SchematicDocument, title: string, filePath?: string | null) => {
     const snap = snapshotActive(tabs);
     const existing = snap.find((tab) => (filePath ? tab.filePath === filePath : tab.title === title));
@@ -538,17 +548,36 @@ function App() {
       setActiveId(existing.id);
       loadCircuit(doc);
     } else {
-      const id = newTabId();
-      setTabs([...snap, { id, title, doc, history: emptyHistory(), filePath: filePath ?? null, dirty: false }]);
-      setActiveId(id);
-      loadCircuit(doc);
+      const blankStarter =
+        snap.length === 1 &&
+        !snap[0].filePath &&
+        /^untitled/i.test(snap[0].title) &&
+        components.length === 0 &&
+        wires.length === 0;
+      if (blankStarter) {
+        setTabs([{
+          id: snap[0].id,
+          title,
+          doc,
+          history: emptyHistory(),
+          filePath: filePath ?? null,
+          dirty: false,
+        }]);
+        setActiveId(snap[0].id);
+        loadCircuit(doc);
+      } else {
+        const id = newTabId();
+        setTabs([...snap, { id, title, doc, history: emptyHistory(), filePath: filePath ?? null, dirty: false }]);
+        setActiveId(id);
+        loadCircuit(doc);
+      }
     }
     adoptDirectiveOptions(doc);
     invalidateAnalysis();
     setMode("schematic");
     setFitSignal((n) => n + 1);
     showNotice(`Opened ${title}`);
-  }, [tabs, snapshotActive, loadCircuit, adoptDirectiveOptions, invalidateAnalysis, showNotice]);
+  }, [tabs, snapshotActive, loadCircuit, adoptDirectiveOptions, invalidateAnalysis, showNotice, components.length, wires.length]);
 
   const openSimFromProject = useCallback((path: string, title: string, json: string) => {
     try {
@@ -560,12 +589,57 @@ function App() {
     }
   }, [openDocument, showNotice]);
 
+  const openAscFromProject = useCallback((path: string, title: string, text: string) => {
+    try {
+      const result = importAsc(text);
+      const doc: SchematicDocument = {
+        components: result.components,
+        wires: result.wires,
+        netLabels: result.netLabels,
+        directives: result.directives,
+        probes: [],
+      };
+      openDocument(doc, title.replace(/\.asc$/i, ".sim"), path);
+      if (result.warnings.length > 0) {
+        console.warn(`Imported ${title} with ${result.warnings.length} warning(s):`, result.warnings);
+      }
+    } catch (error) {
+      showNotice(error instanceof Error ? error.message : "Could not import .asc file.");
+    }
+  }, [openDocument, showNotice]);
+
+  // Open the first Powerboard .sim once so launch isn't a blank untitled canvas.
+  useEffect(() => {
+    if (didOpenDefaultRef.current || !projectRoot || projectTree.length === 0) return;
+    const firstFile = (() => {
+      const walk = (nodes: typeof projectTree): { path: string; name: string } | null => {
+        for (const n of nodes) {
+          if (n.kind === "file" && /\.sim$/i.test(n.name)) return { path: n.path, name: n.name };
+          if (n.children) {
+            const hit = walk(n.children);
+            if (hit) return hit;
+          }
+        }
+        return null;
+      };
+      return walk(projectTree);
+    })();
+    if (!firstFile) return;
+    didOpenDefaultRef.current = true;
+    let cancelled = false;
+    void readSim(firstFile.path).then((json) => {
+      if (cancelled) return;
+      openSimFromProject(firstFile.path, firstFile.name, json);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [projectRoot, projectTree, readSim, openSimFromProject]);
+
   const saveActiveToProject = useCallback(async () => {
     const tab = tabs.find((t) => t.id === activeId);
     if (!tab?.filePath) {
-      showNotice(projectRoot
-        ? "Use New .sim in the explorer, or Save .tau.json from the toolbar for a download."
-        : "Open a project folder to save .sim files on disk.");
+      showNotice("Create or open a .sim from the Project column, then Save.");
       return;
     }
     const payload = {
@@ -586,10 +660,6 @@ function App() {
       showNotice(error instanceof Error ? error.message : "Save failed.");
     }
   }, [tabs, activeId, projectRoot, components, wires, probes, netLabels, directives, writeSim, showNotice]);
-
-  const openExample = useCallback((example: ExampleCircuit) => {
-    openDocument(example, `${example.name.toLowerCase().replace(/\s+/g, "-")}.sim`);
-  }, [openDocument]);
 
   // Switch to an already-open tab, preserving each tab's content in memory.
   const switchTab = useCallback((id: string) => {
@@ -701,6 +771,11 @@ function App() {
         });
         return;
       }
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s") {
+        e.preventDefault();
+        void saveActiveToProject();
+        return;
+      }
       if (e.metaKey || e.ctrlKey) return; // leave other OS / app shortcuts alone
       if (mode !== "schematic") return; // place-shortcuts (R/C/L/V/…) are schematic-only edits
 
@@ -712,7 +787,7 @@ function App() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [mode, startPlacing, startWiring, startLabeling, cancel, rotate, mirror, copySelected, paste, duplicateSelected, deleteSelected, undo, redo]);
+  }, [mode, startPlacing, startWiring, startLabeling, cancel, rotate, mirror, copySelected, paste, duplicateSelected, deleteSelected, undo, redo, saveActiveToProject]);
 
   // Track the shell body's real width so the simulator column budget below
   // reacts to the actual window size (including the 900px minimum), not just
@@ -795,8 +870,7 @@ function App() {
           <ExplorerPanel
             activeFilePath={activeFilePath}
             onOpenSimFile={openSimFromProject}
-            onNewCircuit={startNewCircuit}
-            onSearch={() => setPaletteOpen(true)}
+            onOpenAscText={openAscFromProject}
             onNotice={showNotice}
           />
         )}
@@ -808,11 +882,7 @@ function App() {
             onRun={runAndShowSimulator}
             onStep={stepAnalysis}
             onStop={stopAnalysis}
-            onNewCircuit={startNewCircuit}
             onClearScratchpad={() => setConfirmClearOpen(true)}
-            onOpenCircuit={(doc, title) => openDocument(doc, title)}
-            onOpenExample={openExample}
-            onSaveProjectFile={() => { void saveActiveToProject(); }}
           />
           <EditorTabs
             tabs={tabs}

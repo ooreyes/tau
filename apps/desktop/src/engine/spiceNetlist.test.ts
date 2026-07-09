@@ -341,6 +341,24 @@ describe("buildSpiceDeck", () => {
     expect(deck.netlist).toMatch(/M1 n\d+ n\d+ 0 n\d+ TAU_NMOS W=20u L=2u/);
   });
 
+  it("emits a series resistor for a non-ideal wire with resistance", () => {
+    const components = [
+      component("vsource", "V1", "5", 0, 32),
+      component("resistor", "R1", "1k", 96, 0),
+      component("ground", "", "", 0, 64),
+    ];
+    const wires = [
+      wire("w1", [
+        { x: 0, y: 0 },
+        { x: 64, y: 0 },
+      ]),
+    ];
+    wires[0].resistance = "10m";
+
+    const deck = buildSpiceDeck({ components, wires }, { kind: "op" });
+    expect(deck.netlist).toMatch(/RWIRE1 \S+ \S+ 0\.01/);
+  });
+
   it("writes a proper AC source and sweep directive", () => {
     const components = [
       component("vac", "V1", "0 2 1k", 0, 32),

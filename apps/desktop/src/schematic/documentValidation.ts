@@ -78,7 +78,11 @@ function wire(value: unknown, index: number, remainingPoints: { value: number })
     const current = points[pointIndex];
     if (previous.x !== current.x && previous.y !== current.y) fail(`wires[${index}] must be orthogonal.`);
   }
-  return { id: text(source.id, `wires[${index}].id`, MAX_ID_LENGTH), points };
+  const resistance =
+    source.resistance === undefined || source.resistance === null || source.resistance === ""
+      ? undefined
+      : text(source.resistance, `wires[${index}].resistance`, 40);
+  return { id: text(source.id, `wires[${index}].id`, MAX_ID_LENGTH), points, ...(resistance ? { resistance } : {}) };
 }
 
 function probe(value: unknown, index: number): Probe {
