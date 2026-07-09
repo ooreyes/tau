@@ -1,104 +1,84 @@
-/* ── Design tokens — the ONE foundation (graphite + a single electric-cobalt accent).
-   Consolidated: this is the sole :root. Do NOT reintroduce a second :root. ─────── */
+/* ── Design tokens — Apple HIG dark materials + SF typography.
+   Sole :root. Engineering-instrument density on macOS/iOS system colors. ─── */
 :root {
-  /* Surfaces — true-solid-black operator console (Braun poster / OP-1 / u-he):
-     flat neutral near-blacks, no blue cast. Relative lightness order preserved
-     from the prior graphite palette: bg < panel-3 < panel < panel-2 < panel-4. */
-  --bg:       #000000;
-  --panel:    #060607;
-  --panel-2:  #0b0b0d;
-  --panel-3:  #030304;
-  --panel-4:  #121215;
+  /* Surfaces — Apple dark hierarchy (systemBackground → tertiary).
+     Canvas stays true black (instrument screen); chrome uses elevated grays. */
+  --bg:       #000000;           /* systemBackground */
+  --panel:    #1c1c1e;           /* secondarySystemBackground */
+  --panel-2:  #2c2c2e;           /* tertiarySystemBackground */
+  --panel-3:  #161617;           /* sidebar / toolbar underlay */
+  --panel-4:  #3a3a3c;           /* elevated control / popover fill */
 
-  /* Borders — crisp hairline with a faint cool-blue cast (a defined grid).
-     Alphas bumped so structure stays crisply visible on true black. */
-  --border:         rgba(170, 195, 225, 0.14);
-  --border-strong:  rgba(170, 195, 225, 0.24);
-  --border-subtle:  rgba(170, 195, 225, 0.07);
+  /* Separators — Apple opaqueSeparator / separator */
+  --border:         rgba(84, 84, 88, 0.65);
+  --border-strong:  rgba(142, 142, 147, 0.45);
+  --border-subtle:  rgba(84, 84, 88, 0.36);
 
-  /* Neutral hover overlays — theme-agnostic (white film over any dark surface) */
-  --overlay-hover:        rgba(255, 255, 255, 0.045);
-  --overlay-hover-faint:  rgba(255, 255, 255, 0.03);
+  /* Neutral hover overlays — Apple fill materials */
+  --overlay-hover:        rgba(120, 120, 128, 0.24);
+  --overlay-hover-faint:  rgba(120, 120, 128, 0.14);
 
-  /* Modal scrims — cool-neutral black (dim the console behind a dialog) */
-  --scrim:         rgba(6, 8, 11, 0.42);   /* side/settings sheet — light dim */
-  --scrim-strong:  rgba(6, 8, 11, 0.62);   /* centered alert — heavier dim */
+  /* Modal scrims */
+  --scrim:         rgba(0, 0, 0, 0.36);
+  --scrim-strong:  rgba(0, 0, 0, 0.55);
 
-  /* Text — high-contrast white/gray, blue cast neutralized for true black */
-  --text:   #e8ecef;
-  --muted:  #838a93;
-  --faint:  #4e535c;
-  --canvas-label: #e2e8f0;
-  --canvas-label-muted: #93a0b0;
-  --canvas-label-halo: #020203;
+  /* Labels — Apple label / secondaryLabel / tertiaryLabel */
+  --text:   #f5f5f7;
+  --muted:  rgba(235, 235, 245, 0.6);
+  --faint:  rgba(235, 235, 245, 0.3);
+  --canvas-label: #f5f5f7;
+  --canvas-label-muted: rgba(235, 235, 245, 0.55);
+  --canvas-label-halo: #000000;
 
-  /* Accent — electric cobalt (Palantir/Anduril operator), used sparingly */
-  --accent:       #4d9dff;
-  --accent-hover: #6cb0ff;
-  --accent-ink:   #04121f;
-  --accent-soft:  rgba(77, 157, 255, 0.14);
-  --accent-glow:  rgba(77, 157, 255, 0.32);
-  --accent-line:  rgba(77, 157, 255, 0.34);  /* accent hairline for selected/active borders */
+  /* Accent — Apple systemBlue (dark) */
+  --accent:       #0a84ff;
+  --accent-hover: #409cff;
+  --accent-ink:   #ffffff;
+  --accent-soft:  rgba(10, 132, 255, 0.18);
+  --accent-glow:  rgba(10, 132, 255, 0.28);
+  --accent-line:  rgba(10, 132, 255, 0.45);
 
-  /* Amber demoted to a TACTICAL signal (active sim / alert) — never primary UI.
-     Tuned brighter/more saturated so it reads as a vivid OP-1-style indicator
-     lamp against true black (hue unchanged, brightness/saturation up). */
-  --signal:       #ffb020;
-  --signal-soft:  rgba(255, 176, 32, 0.15);
-  --signal-line:  rgba(255, 176, 32, 0.34);   /* tactical hairline for active/alert borders */
-  --signal-glow:  rgba(255, 176, 32, 0.28);   /* tactical halo for the live/running pulse */
+  /* Signal — Apple systemOrange */
+  --signal:       #ff9f0a;
+  --signal-soft:  rgba(255, 159, 10, 0.16);
+  --signal-line:  rgba(255, 159, 10, 0.4);
+  --signal-glow:  rgba(255, 159, 10, 0.28);
 
-  /* Semantic colors — vivid indicator-lamp red/green tuned for true black
-     (hues unchanged; brightness/saturation up so they pop like OP-1 transport
-     dots instead of washing out). */
+  /* Semantic — Apple systemRed / systemGreen */
   --danger:       #ff453a;
-  --danger-soft:  rgba(255, 69, 58, 0.13);
-  --danger-line:  rgba(255, 69, 58, 0.30);   /* danger hairline for error borders */
-  --danger-glow:  rgba(255, 69, 58, 0.32);   /* danger halo for the error lamp */
-  --success:      #32d74b;                    /* == --trace-green (ready/ok state) */
-  --success-soft: rgba(50, 215, 75, 0.12);
-  --success-line: rgba(50, 215, 75, 0.34);   /* success hairline for ready borders */
-  --success-glow: rgba(50, 215, 75, 0.30);   /* success halo for the Run action */
-  --cream:        #eef0f4;
-  --cream-soft:   rgba(238, 240, 244, 0.07);
+  --danger-soft:  rgba(255, 69, 58, 0.16);
+  --danger-line:  rgba(255, 69, 58, 0.4);
+  --danger-glow:  rgba(255, 69, 58, 0.3);
+  --success:      #30d158;
+  --success-soft: rgba(48, 209, 88, 0.14);
+  --success-line: rgba(48, 209, 88, 0.4);
+  --success-glow: rgba(48, 209, 88, 0.28);
+  --cream:        #f5f5f7;
+  --cream-soft:   rgba(245, 245, 247, 0.08);
 
-  /* Component schematic colors */
-  --comp:      #cfd6e0;
-  --comp-ref:  #7d8794;
+  /* Schematic strokes — light label on black instrument face */
+  --comp:      #d1d1d6;
+  --comp-ref:  rgba(235, 235, 245, 0.45);
 
-  /* Grid — full circular dots, readable on true black */
-  --grid-dot:        rgba(180, 205, 235, 0.32);
-  --grid-dot-major:  rgba(180, 205, 235, 0.55);
-  /* Schematic stage surface — flat true black, the darkest surface in the app
-     (the schematic is the "instrument screen"). Flat per the Braun/OP-1
-     reference imagery — no radial "glass glow"; kept a solid instead of a
-     gradient (the token name is unchanged so use-sites don't move). */
-  --canvas-bg:      #020203;
-  --canvas-surface: #050506;
-  /* Scope / op-table instrument screen — flat true black, one notch lighter
-     than the schematic surface so the two panes stay distinguishable without
-     any gradient glow. */
-  --scope-surface:  #060608;
+  /* Grid — quiet Apple-style dots */
+  --grid-dot:        rgba(235, 235, 245, 0.14);
+  --grid-dot-major:  rgba(235, 235, 245, 0.28);
+  --canvas-bg:      #000000;
+  --canvas-surface: #0a0a0a;
+  --scope-surface:  #0c0c0e;
+  --scope-grid:  #1c1c1e;
 
-  /* Scope grid lines — kept subtle against --scope-surface per §10 intent
-     ("grid lines stay subtle"); the scope face itself is --scope-surface
-     above (the former standalone --scope-bg was consolidated into it in
-     §10 Phase 3c — the two were a near-duplicate near-black pair that only
-     existed because an earlier migration draft never reconciled them). */
-  --scope-grid:  #17202b;
+  /* Traces — Apple system palette (distinct on black) */
+  --trace-cyan:    #64d2ff;   /* systemTeal */
+  --trace-green:   #30d158;   /* systemGreen */
+  --trace-cream:   #f5f5f7;
+  --trace-red:     #ff453a;   /* systemRed */
+  --trace-purple:  #bf5af2;   /* systemPurple */
+  --trace-amber:   #ff9f0a;   /* systemOrange */
 
-  /* Trace colors — instrument-grade, distinct on dark */
-  --trace-cyan:    #35c9ec;
-  --trace-green:   #4fd08a;
-  --trace-cream:   #d5deea;
-  --trace-red:     #ff5d52;
-  --trace-purple:  #9d8bff;
-  --trace-amber:   #f0a63c;
+  --dial-track:  #3a3a3c;
 
-  /* Dial track */
-  --dial-track:  #1c1c1f;
-
-  /* Spacing scale — 4pt base */
+  /* Spacing — 4pt Apple grid */
   --sp-1:  4px;
   --sp-2:  8px;
   --sp-3:  12px;
@@ -107,84 +87,54 @@
   --sp-6:  24px;
   --sp-8:  32px;
 
-  /* Type scale — §10 Phase 4a. Derived from an audit of every font-size in
-     this file (`rg -n "font-size|^\s*font:" App.css`): the app already
-     clustered on five sizes for ~90% of its text (9/10/11/12/13px), so this
-     scale names exactly those steps instead of inventing new ones. Every
-     rule below is re-pointed to the nearest step; odd one-offs (8.5, 9.5,
-     10.5, 11.5, 12.5px) are gone except where a selector is genuinely part
-     of the schematic/scope's own bespoke SVG rendering (documented at each
-     use-site — the canvas keeps its own sizing, per the §10 brief). */
-  --fs-micro:   9px;   /* micro-labels, keycaps, smallest instrument text */
-  --fs-caption: 10px;  /* secondary/mono readouts, hints, filenames */
-  --fs-body:    11px;  /* default UI text */
-  --fs-label:   12px;  /* emphasized labels, control values, catalog names */
-  --fs-title:   13px;  /* panel/section titles, emphasized mono readouts */
-  /* Two larger steps used consistently (not one-offs) by a handful of
-     short, high-emphasis strings: bold close-glyphs (14px) and prominent
-     standalone text like the search field / brand wordmark (15px). Kept
-     distinct from the 9-13px chrome scale rather than folded in, since
-     collapsing them would either shrink close buttons or under-size the
-     command-palette input relative to what it's replacing. */
-  --fs-heading: 14px;
-  --fs-display: 15px;
+  /* Type — SF Pro optical sizes (dense engineering chrome) */
+  --fs-micro:   9px;
+  --fs-caption: 10px;
+  --fs-body:    11px;
+  --fs-label:   12px;
+  --fs-title:   13px;
+  --fs-heading: 15px;
+  --fs-display: 17px;
 
-  /* Letter-spacing — micro-label tracking, consolidated from the same
-     audit (uppercase tracked labels had drifted across 0.04em/0.07em/
-     0.08em/0.09em/0.1em/0.12em/0.14em/0.4px/0.5px/0.55px for visually
-     identical roles). Two tiers cover every remaining case:
-     --tracking-micro for plain small-caps captions (mono or UI font,
-     weight 500/600) and --tracking-wide for the slightly more open
-     "kicker" chips (explorer/palette/plotter section heads). */
-  --tracking-micro: 0.5px;
-  --tracking-wide:  0.14em;
+  --tracking-micro: 0.02em;
+  --tracking-wide:  0.06em;
 
-  /* Density — control row heights shared by the §10 shadcn primitive set
-     (button.tsx's sm=28px is the reference; these name that height and its
-     denser sibling so new primitives don't re-derive a magic number). A
-     future data-compact mode (dense tables/inspectors) reads --row-h-dense. */
   --row-h:        28px;
   --row-h-dense:  24px;
 
-  /* Iconography — inline SVG masks (tinted at use-site by a color token, so
-     no baked hex; `stroke='black'` is only the mask's alpha source). */
   --icon-reticle: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.4' stroke-linecap='round'%3E%3Ccircle cx='12' cy='12' r='6'/%3E%3Cpath d='M12 1.75v3.5M12 18.75v3.5M1.75 12h3.5M18.75 12h3.5'/%3E%3C/svg%3E");
 
-  /* Radius */
+  /* Continuous-corner-ish radii (macOS controls) */
   --r-sm:  6px;
   --r-md:  8px;
-  --r-lg:  12px;
-  --r-xl:  16px;
+  --r-lg:  10px;
+  --r-xl:  14px;
 
-  /* Elevation — on true black, drop shadows barely read (black-on-black is
-     invisible). elev-1/2 are reduced to near-nothing / a hairline top-sheen;
-     real depth is reserved for elev-pop (dialogs/popovers), where a slightly
-     stronger hairline ring does the separating work a shadow can't. */
-  --elev-1:   inset 0 1px 0 rgba(255, 255, 255, 0.04);
-  --elev-2:   0 1px 3px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.05);
-  --elev-pop: 0 14px 44px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.08);
-  /* Inset "screen" depth — instrument vignette for the scope/plot surfaces */
-  --elev-inset: inset 0 0 26px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  /* Materials / elevation — soft Apple shadows, not neon glow */
+  --elev-1:   inset 0 0.5px 0 rgba(255, 255, 255, 0.06);
+  --elev-2:   0 1px 2px rgba(0, 0, 0, 0.35), inset 0 0.5px 0 rgba(255, 255, 255, 0.06);
+  --elev-pop: 0 16px 40px rgba(0, 0, 0, 0.55), 0 0 0 0.5px rgba(255, 255, 255, 0.12);
+  --elev-inset: inset 0 1px 2px rgba(0, 0, 0, 0.35);
 
-  /* Motion — snappy, Apple-like */
-  --motion-fast:  110ms;
-  --motion-med:   190ms;
-  --spring:  cubic-bezier(0.2, 0.9, 0.25, 1);
-
-  /* Easing curves */
-  --ease-out:   cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  /* Motion — Apple spring / ease */
+  --motion-fast:  120ms;
+  --motion-med:   220ms;
+  --spring:  cubic-bezier(0.25, 0.1, 0.25, 1);
+  --ease-out:   cubic-bezier(0.16, 1, 0.3, 1);
   --ease-in:    cubic-bezier(0.55, 0.055, 0.675, 0.19);
   --ease-snap:  cubic-bezier(0.32, 0.72, 0, 1);
 
-  /* Typography — Apple system UI + a mono for numeric readouts */
-  --font-ui:    -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Inter", system-ui, sans-serif;
-  --font-mono:  "SF Mono", "JetBrains Mono", ui-monospace, "Menlo", monospace;
+  /* SF Pro / SF Mono only — no Inter */
+  --font-ui:    -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Helvetica Neue", system-ui, sans-serif;
+  --font-display: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", system-ui, sans-serif;
+  --font-mono:  "SF Mono", ui-monospace, Menlo, Monaco, "Courier New", monospace;
   font-family: var(--font-ui);
-  font-feature-settings: "kern" 1, "liga" 1, "ss01" 1;
-  letter-spacing: -0.006em;
+  font-feature-settings: "kern" 1, "liga" 1, "calt" 1;
+  letter-spacing: -0.01em;
   color: var(--text);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
 
 * {
@@ -404,65 +354,56 @@ body {
    card). No backdrop blur, no gradient fade: flat surfaces only. */
 .empty-panel {
   position: relative;
-  width: min(480px, calc(100% - 48px));
+  width: min(420px, calc(100% - 48px));
   padding: 28px 32px;
-  background: var(--panel-3);
-  border: 1px solid var(--border-strong);
-  border-radius: var(--r-lg);
+  background: var(--panel);
+  border: 0.5px solid var(--border);
+  border-radius: var(--r-xl);
   box-shadow: var(--elev-pop);
   pointer-events: none;
   overflow: hidden;
 }
 
-/* Only the actions take clicks, so clicking the card's body still reaches the
-   canvas underneath (so a first part can be dropped anywhere). */
 .empty-actions button {
   pointer-events: auto;
 }
 
-/* Braun micro-label kicker + a small idle lamp — the same instrument-lamp
-   language as .status-lamp, so even the onboarding card reads as a console
-   readout ("system idle, ready to build") rather than marketing copy. */
 .empty-kicker {
   display: inline-flex;
   align-items: center;
   gap: var(--sp-1);
-  color: var(--faint);
-  /* 10px -> --fs-micro: matches every other section-kicker in the app
-     (.explorer-head, .palette-head, .plotter-kicker, etc.) now that the
-     type scale makes the drift visible. */
-  font: 600 var(--fs-micro) var(--font-mono);
-  letter-spacing: var(--tracking-wide);
-  text-transform: uppercase;
+  color: var(--muted);
+  font: 510 var(--fs-caption) var(--font-ui);
+  letter-spacing: -0.01em;
+  text-transform: none;
   margin-bottom: var(--sp-3);
 }
 
 .empty-kicker i {
-  width: 5px;
-  height: 5px;
+  width: 6px;
+  height: 6px;
   flex: none;
   border-radius: 50%;
   background: var(--success);
-  box-shadow: 0 0 5px var(--success-glow);
+  box-shadow: none;
 }
 
-/* Kept outside the §10 type scale on purpose: the app's one welcome-screen
-   headline, sized once for this single use rather than folded into a
-   5-step chrome scale meant for repeating instrument/panel text. */
 .empty-panel h1 {
-  margin: 0 0 10px;
+  margin: 0 0 8px;
   color: var(--text);
-  font-size: 24px;
+  font-family: var(--font-display);
+  font-size: 22px;
   font-weight: 600;
-  line-height: 1.1;
-  letter-spacing: -0.4px;
+  line-height: 1.15;
+  letter-spacing: -0.022em;
 }
 
 .empty-panel p {
   margin: 0;
   color: var(--muted);
-  font-size: var(--fs-title);
-  line-height: 1.6;
+  font-size: var(--fs-label);
+  line-height: 1.45;
+  letter-spacing: -0.01em;
 }
 
 .empty-actions {
@@ -2443,7 +2384,7 @@ body {
   width: 100vw;
   display: grid;
   grid-template-columns: 1fr;
-  grid-template-rows: 40px 1fr 26px;
+  grid-template-rows: 44px 1fr 28px;
   grid-template-areas:
     "toolbar"
     "body"
@@ -2451,7 +2392,7 @@ body {
   overflow: hidden;
   background: var(--bg);
   color: var(--text);
-  font-size: var(--fs-title);
+  font-size: var(--fs-label);
 }
 
 .shell-body {
@@ -2474,15 +2415,17 @@ body {
 ══════════════════════════════════════════════════════════════════════════════ */
 .toolbar {
   grid-area: toolbar;
-  height: 40px;
+  height: 44px;
   display: grid;
   grid-template-columns: minmax(260px, 1fr) auto minmax(260px, 1fr);
   align-items: center;
   gap: var(--sp-4);
   padding: 0 var(--sp-3);
-  background: var(--panel);
-  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--panel) 88%, transparent);
+  border-bottom: 0.5px solid var(--border);
   -webkit-app-region: drag;
+  backdrop-filter: saturate(180%) blur(20px);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
   box-shadow: none;
 }
 
@@ -2518,20 +2461,22 @@ body {
 /* Brand lockup (mark + .brand-name below) — kept outside the §10 type
    scale on purpose: a logo/wordmark pair, not repeating chrome text. */
 .brand .brand-mark {
-  font-size: 16px;
+  font-size: 17px;
   font-weight: 600;
   line-height: 1;
   color: var(--accent);
-  font-family: "Times New Roman", "Georgia", serif;
+  font-family: var(--font-display);
+  letter-spacing: -0.02em;
   align-self: center;
 }
 
 .brand-name {
-  color: var(--cream);
+  color: var(--text);
+  font-family: var(--font-display);
   font-size: var(--fs-display);
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: lowercase;
+  font-weight: 600;
+  letter-spacing: -0.022em;
+  text-transform: none;
 }
 
 /* Instrument-label filename readout — monospace + tabular figures via
@@ -2557,11 +2502,11 @@ body {
 .mode-toggle {
   display: flex;
   align-items: center;
-  height: var(--row-h);
+  height: 28px;
   padding: 2px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-md);
-  background: var(--panel-3);
+  border: 0.5px solid var(--border);
+  border-radius: 8px;
+  background: rgba(120, 120, 128, 0.16);
   -webkit-app-region: no-drag;
 }
 
@@ -2569,17 +2514,17 @@ body {
   height: 100%;
   display: inline-flex;
   align-items: center;
-  gap: var(--sp-2);
-  padding: 0 var(--sp-4);
+  gap: 6px;
+  padding: 0 12px;
   border: 0;
-  border-radius: var(--r-sm);
+  border-radius: 6px;
   background: transparent;
   color: var(--muted);
-  font: 600 var(--fs-label) var(--font-ui);
+  font: 510 var(--fs-label) var(--font-ui);
+  letter-spacing: -0.01em;
   cursor: pointer;
-  transition: background var(--motion-fast) var(--spring),
-    color var(--motion-fast) var(--spring),
-    transform var(--motion-fast) var(--spring);
+  transition: background var(--motion-fast) var(--ease-out),
+    color var(--motion-fast) var(--ease-out);
 }
 
 .mode-btn svg {
@@ -2610,8 +2555,9 @@ body {
 }
 
 .mode-btn.active {
-  background: var(--accent);
-  color: var(--accent-ink);
+  background: var(--panel-4);
+  color: var(--text);
+  box-shadow: 0 0.5px 1px rgba(0, 0, 0, 0.35), inset 0 0.5px 0 rgba(255, 255, 255, 0.12);
 }
 
 .mode-btn.active:focus-visible {
@@ -2632,9 +2578,9 @@ body {
 
 .status-lamp-text {
   font-size: var(--fs-caption);
-  font-weight: 600;
-  letter-spacing: 0.07em;
-  text-transform: uppercase;
+  font-weight: 510;
+  letter-spacing: -0.01em;
+  text-transform: none;
   color: var(--muted);
 }
 
@@ -2697,37 +2643,36 @@ body {
 
 /* activity rail + explorer */
 .activity-rail {
-  width: 54px;
+  width: 52px;
   flex: none;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: var(--sp-1);
+  gap: 2px;
   padding: 10px 0;
   background: var(--panel-3);
-  border-right: 1px solid var(--border);
+  border-right: 0.5px solid var(--border);
 }
 
 .rail-btn {
-  width: 38px;
-  height: 38px;
+  width: 36px;
+  height: 36px;
   position: relative;
   display: grid;
   place-items: center;
   border: 0;
-  border-radius: 9px;
+  border-radius: 8px;
   color: var(--faint);
   background: transparent;
   cursor: pointer;
-  box-shadow: inset 0 0 0 1px transparent;
-  transition: color var(--motion-fast) var(--spring),
-    box-shadow var(--motion-fast) var(--spring);
+  transition: color var(--motion-fast) var(--ease-out),
+    background var(--motion-fast) var(--ease-out);
 }
 
 .rail-btn svg,
 .rail-lucide {
-  width: 19px;
-  height: 19px;
+  width: 18px;
+  height: 18px;
   display: grid;
   place-items: center;
   color: inherit;
@@ -2736,48 +2681,34 @@ body {
 .rail-btn svg {
   fill: none;
   stroke: currentColor;
-  stroke-width: 1.75;
+  stroke-width: 1.6;
   stroke-linecap: round;
   stroke-linejoin: round;
-  transition: transform var(--motion-fast) var(--spring);
 }
 
-/* Hairline hover — an outline, never a filled patch (the same "never a heavy
-   fill" rule the palette's selection state follows). */
 .rail-btn:hover {
   color: var(--text);
-  box-shadow: inset 0 0 0 1px var(--border-strong);
+  background: var(--overlay-hover-faint);
 }
 
-.rail-btn:hover svg {
-  transform: scale(1.08);
+.rail-btn:active {
+  background: var(--overlay-hover);
 }
 
-.rail-btn:active svg {
-  transform: scale(0.94);
-}
-
-/* Active state is carried entirely by the icon color + `.rail-active` left
-   accent edge below — no background fill, matching `.palette-item.active`. */
 .rail-btn.active {
   color: var(--accent);
+  background: var(--accent-soft);
 }
 
-/* Active indicator pill — a lit accent bar flush to the rail's left edge (the
-   targeting affordance in an Anduril/Palantir console). The button is 38px
-   centered in the 54px rail, so its left edge sits 8px in; -8px pulls the bar
-   out to the rail's own left edge where it reads as a lit margin marker.
-   (Was -10px → rail-x ≈ -2px → clipped off-screen and invisible.) Left corners
-   square so it emerges from the edge; right corners rounded. */
 .rail-active {
   position: absolute;
   left: -8px;
-  top: 7px;
+  top: 8px;
   width: 3px;
-  height: var(--row-h-dense);
-  border-radius: 0 3px 3px 0;
+  height: 20px;
+  border-radius: 0 2px 2px 0;
   background: var(--accent);
-  box-shadow: 0 0 10px var(--accent-glow);
+  box-shadow: none;
 }
 
 .rail-spacer {
@@ -2791,7 +2722,7 @@ body {
   flex-direction: column;
   min-height: 0;
   background: var(--panel);
-  border-right: 1px solid var(--border);
+  border-right: 0.5px solid var(--border);
 }
 
 .explorer-head {
@@ -3133,9 +3064,9 @@ body {
 .shell-body > .components-rail {
   flex: none;
   width: 264px;
-  border-left: 1px solid var(--border);
+  border-left: 0.5px solid var(--border);
   border-right: 0;
-  background: var(--panel-3);
+  background: var(--panel);
   backdrop-filter: none;
 }
 
@@ -3156,31 +3087,37 @@ body {
 .components-rail-tabs {
   display: flex;
   flex: none;
-  border-bottom: 1px solid var(--border);
+  gap: 0;
+  padding: 0 8px;
+  border-bottom: 0.5px solid var(--border);
+  background: var(--panel);
 }
 
 .components-rail-tabs button {
   flex: 1;
-  height: 34px;
+  height: 32px;
   font-family: var(--font-ui);
-  font-size: var(--fs-caption);
-  font-weight: 500;
-  letter-spacing: 0.02em;
+  font-size: var(--fs-label);
+  font-weight: 510;
+  letter-spacing: -0.01em;
   color: var(--muted);
   background: transparent;
   border: 0;
   border-bottom: 2px solid transparent;
+  margin-bottom: -0.5px;
   cursor: pointer;
+  transition: color var(--motion-fast) var(--ease-out);
 }
 
 .components-rail-tabs button:hover {
   color: var(--text);
-  background: var(--overlay-hover);
+  background: transparent;
 }
 
 .components-rail-tabs button.active {
-  color: var(--text);
+  color: var(--accent);
   border-bottom-color: var(--accent);
+  font-weight: 590;
 }
 
 .components-rail-body {
@@ -3233,32 +3170,34 @@ body {
 }
 
 .editor-toolbar {
-  height: 42px;
+  height: 40px;
   flex: none;
   display: flex;
   align-items: center;
-  gap: 2px;
-  padding: 0 12px;
+  gap: 1px;
+  padding: 0 10px;
   background: var(--panel-3);
-  border-bottom: 1px solid var(--border);
+  border-bottom: 0.5px solid var(--border);
 }
 
 .editor-icon-btn {
-  width: 34px;
-  height: 30px;
+  width: 32px;
+  height: 28px;
   display: grid;
   place-items: center;
   border: 0;
-  border-radius: 7px;
+  border-radius: 6px;
   color: var(--muted);
   background: transparent;
   cursor: pointer;
+  transition: color var(--motion-fast) var(--ease-out),
+    background var(--motion-fast) var(--ease-out);
 }
 
 .editor-icon-btn svg,
 .editor-lucide {
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
   display: grid;
   place-items: center;
 }
@@ -3266,29 +3205,29 @@ body {
 .editor-icon-btn svg {
   fill: none;
   stroke: currentColor;
-  stroke-width: 1.75;
+  stroke-width: 1.6;
   stroke-linecap: round;
   stroke-linejoin: round;
 }
 
-.editor-icon-btn:hover:not(:disabled),
-.editor-icon-btn.active {
+.editor-icon-btn:hover:not(:disabled) {
   color: var(--text);
-  background: var(--overlay-hover);
+  background: var(--overlay-hover-faint);
 }
 
 .editor-icon-btn.active {
   color: var(--accent);
+  background: var(--accent-soft);
 }
 
 .editor-icon-btn:disabled {
-  opacity: 0.25;
+  opacity: 0.28;
   cursor: not-allowed;
 }
 
 .toolbar-divider {
-  width: 1px;
-  height: 18px;
+  width: 0.5px;
+  height: 16px;
   margin: 0 6px;
   background: var(--border);
 }
@@ -3317,10 +3256,10 @@ body {
 .transport {
   display: flex;
   align-items: center;
-  gap: 2px;
-  padding: 3px;
-  background: var(--panel-3);
-  border: 1px solid var(--border);
+  gap: 1px;
+  padding: 2px;
+  background: rgba(120, 120, 128, 0.16);
+  border: 0.5px solid var(--border);
   border-radius: 8px;
 }
 
@@ -3357,12 +3296,12 @@ body {
 }
 
 .editor-tabs {
-  height: 36px;
+  height: 34px;
   flex: none;
   display: flex;
   align-items: stretch;
-  background: var(--bg);
-  border-bottom: 1px solid var(--border);
+  background: var(--panel-3);
+  border-bottom: 0.5px solid var(--border);
 }
 
 .editor-tab,
@@ -3370,19 +3309,21 @@ body {
   display: inline-flex;
   align-items: center;
   gap: var(--sp-2);
-  padding: 0 var(--sp-4);
+  padding: 0 14px;
   border: 0;
-  border-right: 1px solid var(--border);
+  border-right: 0.5px solid var(--border);
   background: transparent;
   color: var(--muted);
-  font: 500 var(--fs-label) var(--font-ui);
+  font: 510 var(--fs-label) var(--font-ui);
+  letter-spacing: -0.01em;
   cursor: pointer;
 }
 
 .editor-tab.active {
-  color: var(--cream);
-  background: var(--panel-3);
-  border-top: 2px solid var(--accent);
+  color: var(--text);
+  background: var(--canvas-bg);
+  border-top: 0;
+  box-shadow: inset 0 -2px 0 var(--accent);
 }
 
 .tab-close {
@@ -3457,7 +3398,7 @@ body {
   min-height: 0;
   max-height: 140px;
   background: var(--panel);
-  border-top: 1px solid var(--border);
+  border-top: 0.5px solid var(--border);
 }
 
 .bottom-panel:not(.has-issues) {
@@ -4450,17 +4391,20 @@ body {
    --row-h/--row-h-dense on purpose. */
 .statusbar {
   grid-area: status;
-  height: 26px;
+  height: 28px;
   display: flex;
   align-items: center;
   gap: var(--sp-3);
   padding: 0 var(--sp-3);
   overflow: hidden;
-  background: var(--panel-3);
-  border-top: 1px solid var(--border);
+  background: color-mix(in srgb, var(--panel) 92%, transparent);
+  border-top: 0.5px solid var(--border);
   color: var(--muted);
-  font: 500 var(--fs-body) var(--font-mono);
+  font: 500 var(--fs-caption) var(--font-ui);
+  letter-spacing: -0.01em;
   white-space: nowrap;
+  backdrop-filter: saturate(160%) blur(16px);
+  -webkit-backdrop-filter: saturate(160%) blur(16px);
 }
 
 /* The mode/run-state indicator is the shared `.status-lamp` component
@@ -4764,5 +4708,6 @@ body {
 .mono-num {
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
-  letter-spacing: -0.01em;
+  font-feature-settings: "tnum" 1, "lnum" 1;
+  letter-spacing: -0.02em;
 }

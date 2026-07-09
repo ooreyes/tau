@@ -48,20 +48,20 @@ export function ActivityRail({ mode, partsOpen, onModeChange, onSearch, onFocusC
   return (
     <nav className="activity-rail" aria-label="Workspace sections">
       <RailButton active={mode === "schematic"} label="Explorer" onClick={() => onModeChange("schematic")}>
-        <FolderOpen size={18} strokeWidth={1.75} />
+        <FolderOpen size={18} strokeWidth={1.6} />
       </RailButton>
       <RailButton label="Search" shortcut="⌘K" onClick={onSearch}>
-        <Search size={18} strokeWidth={1.75} />
+        <Search size={18} strokeWidth={1.6} />
       </RailButton>
       <RailButton active={partsOpen} label="Components" onClick={onFocusComponents}>
-        <CircuitBoard size={18} strokeWidth={1.75} />
+        <CircuitBoard size={18} strokeWidth={1.6} />
       </RailButton>
       <RailButton active={mode === "simulator"} label="Waveforms" onClick={() => onModeChange("simulator")}>
-        <Activity size={18} strokeWidth={1.75} />
+        <Activity size={18} strokeWidth={1.6} />
       </RailButton>
       <div className="rail-spacer" />
       <RailButton label="Settings" onClick={onOpenSettings}>
-        <Settings size={18} strokeWidth={1.75} />
+        <Settings size={18} strokeWidth={1.6} />
       </RailButton>
     </nav>
   );
@@ -174,7 +174,7 @@ export function ExplorerPanel({
               if (ok) onNotice("Opened project folder.");
             }}
           >
-            <Folder size={14} strokeWidth={1.75} />
+            <Folder size={14} strokeWidth={1.6} />
           </button>
           <button
             title="New folder"
@@ -186,7 +186,7 @@ export function ExplorerPanel({
               if (path) onNotice(`Created ${name}`);
             }}
           >
-            <FolderPlus size={14} strokeWidth={1.75} />
+            <FolderPlus size={14} strokeWidth={1.6} />
           </button>
           <button
             title="New simulation"
@@ -201,14 +201,14 @@ export function ExplorerPanel({
               }
             }}
           >
-            <FilePlus size={14} strokeWidth={1.75} />
+            <FilePlus size={14} strokeWidth={1.6} />
           </button>
           <button
             title="Import LTspice .asc"
             aria-label="Import LTspice .asc"
             onClick={() => ascInputRef.current?.click()}
           >
-            <FileInput size={14} strokeWidth={1.75} />
+            <FileInput size={14} strokeWidth={1.6} />
           </button>
           <input
             ref={ascInputRef}
@@ -240,7 +240,7 @@ export function ExplorerPanel({
             if (path) onNotice(`Created folder ${name}`);
           }}
         >
-          <FolderPlus size={12} strokeWidth={1.75} /> New Folder
+          <FolderPlus size={12} strokeWidth={1.6} /> New Folder
         </button>
         <button
           type="button"
@@ -254,10 +254,10 @@ export function ExplorerPanel({
             }
           }}
         >
-          <Plus size={12} strokeWidth={1.75} /> New .sim
+          <Plus size={12} strokeWidth={1.6} /> New .sim
         </button>
         <button type="button" onClick={() => ascInputRef.current?.click()}>
-          <FileInput size={12} strokeWidth={1.75} /> Import .asc
+          <FileInput size={12} strokeWidth={1.6} /> Import .asc
         </button>
       </div>
 
@@ -410,26 +410,26 @@ export function EditorToolbar({
   return (
     <div className="editor-toolbar" aria-label="Editor toolbar">
       <IconButton title="Select" active={tool.mode === "select"} onClick={cancel}>
-        <MousePointer2 size={16} strokeWidth={1.75} />
+        <MousePointer2 size={16} strokeWidth={1.6} />
       </IconButton>
       <IconButton title="Wire" active={tool.mode === "wire"} disabled={readOnly} onClick={startWiring}>
-        <Spline size={16} strokeWidth={1.75} />
+        <Spline size={16} strokeWidth={1.6} />
       </IconButton>
       <IconButton title="Net label (F4)" active={tool.mode === "label"} disabled={readOnly} onClick={startLabeling}>
-        <Tag size={16} strokeWidth={1.75} />
+        <Tag size={16} strokeWidth={1.6} />
       </IconButton>
       <IconButton title="Probe" active={tool.mode === "probe"} onClick={startProbing}>
-        <Crosshair size={16} strokeWidth={1.75} />
+        <Crosshair size={16} strokeWidth={1.6} />
       </IconButton>
       <span className="toolbar-divider" />
       <IconButton title="Undo" disabled={!canUndo || readOnly} onClick={undo}>
-        <Undo2 size={16} strokeWidth={1.75} />
+        <Undo2 size={16} strokeWidth={1.6} />
       </IconButton>
       <IconButton title="Redo" disabled={!canRedo || readOnly} onClick={redo}>
-        <Redo2 size={16} strokeWidth={1.75} />
+        <Redo2 size={16} strokeWidth={1.6} />
       </IconButton>
       <IconButton title="Clear scratchpad" disabled={readOnly} onClick={onClearScratchpad}>
-        <Trash2 size={16} strokeWidth={1.75} />
+        <Trash2 size={16} strokeWidth={1.6} />
       </IconButton>
       <div className="editor-toolbar-spacer" />
       <div className="transport">
