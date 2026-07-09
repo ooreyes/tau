@@ -24,6 +24,7 @@ import type { SchematicComponent, SchematicWire } from "../schematic/types";
 import { decodeParams, encodeParams, paramFields } from "../schematic/params";
 import { EngineeringInput } from "./EngineeringInput";
 import { Palette } from "./Palette";
+import { OPAMP_LIBRARY, findOpAmp } from "../library/opamps";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Dialog, DialogContent, DialogHeader, DialogFooter, DialogTitle, DialogDescription } from "@/components/ui/dialog";
@@ -547,26 +548,19 @@ export function BottomPanel({ mode, result }: { mode: "schematic" | "simulator";
   const selectedId = useSchematic((s) => s.selectedId);
   const selectedWireId = useSchematic((s) => s.selectedWireId);
   const selected = components.find((component) => component.id === selectedId) ?? null;
-  const selectedWire = wires.find((w) => w.id === selectedWireId) ?? null;
-  const [activeTab, setActiveTab] = useState<"primary" | "secondary" | "errors">("primary");
+  const [activeTab, setActiveTab] = useState<"output" | "errors">("output");
 
   useEffect(() => {
-    setActiveTab("primary");
+    setActiveTab("output");
   }, [mode]);
 
-  const primaryLabel = mode === "simulator" ? "results" : "component";
-  const secondaryLabel = mode === "simulator" ? "log" : "output";
   const hasError = result && !result.ok;
-  const content = activeTab === "primary"
-    ? mode === "simulator"
-      ? <SimulatorResults result={result} />
-      : selected
-        ? <ComponentInspector selected={selected} />
-        : selectedWire
-          ? <WireInspector wire={selectedWire} />
-          : <ComponentInspector selected={null} />
-    : activeTab === "secondary"
-      ? (
+  // Component/wire editing lives in the right-rail Properties tab only.
+  // Bottom panel is output + errors (plus simulator results under Output).
+  const content = activeTab === "output"
+    ? (
+      <div className="bottom-output-stack">
+        {mode === "simulator" && <SimulatorResults result={result} />}
         <OutputPanel
           mode={mode}
           componentCount={components.length}
@@ -575,28 +569,21 @@ export function BottomPanel({ mode, result }: { mode: "schematic" | "simulator";
           selectedLabel={selected?.label || selectedWireId || "none"}
           result={result}
         />
-      )
-      : <ErrorPanel result={result} />;
+      </div>
+    )
+    : <ErrorPanel result={result} />;
 
   return (
-    <section className="bottom-panel" aria-label={mode === "simulator" ? "Simulation results" : "Component inspector"}>
+    <section className="bottom-panel" aria-label={mode === "simulator" ? "Simulation results" : "Output"}>
       <div className="bottom-resize-handle"><span /></div>
       <div className="bottom-tabs" role="tablist" aria-label="Panel tabs">
         <button
-          className={activeTab === "primary" ? "active" : ""}
+          className={activeTab === "output" ? "active" : ""}
           role="tab"
-          aria-selected={activeTab === "primary"}
-          onClick={() => setActiveTab("primary")}
+          aria-selected={activeTab === "output"}
+          onClick={() => setActiveTab("output")}
         >
-          {primaryLabel}
-        </button>
-        <button
-          className={activeTab === "secondary" ? "active" : ""}
-          role="tab"
-          aria-selected={activeTab === "secondary"}
-          onClick={() => setActiveTab("secondary")}
-        >
-          {secondaryLabel}
+          output
         </button>
         <button
           className={activeTab === "errors" ? "active" : ""}
@@ -686,7 +673,11 @@ function ComponentInspector({ selected }: { selected: SchematicComponent | null 
   const beginChange = useSchematic((s) => s.beginChange);
   const editKeyRef = useRef<string | null>(null);
   const fields = selected && entry ? paramFields(selected.kind) : [];
-  const decoded = selected ? decodeParams(selected.kind, selected.value) : {};
+  // Empty catalog values (e.g. Class-D MOSFETs) still show editable defaults.
+  const valueSource = selected
+    ? (selected.value.trim() || entry?.defaultValue || "")
+    : "";
+  const decoded = selected ? decodeParams(selected.kind, valueSource) : {};
   const visibleFields = fields.map((field) => ({
     ...field,
     value: decoded[field.key] ?? "",
@@ -704,8 +695,11 @@ function ComponentInspector({ selected }: { selected: SchematicComponent | null 
 
   const updateParam = (key: string, value: string) => {
     if (!selected) return;
-    setValue(selected.id, encodeParams(selected.kind, { ...decodeParams(selected.kind, selected.value), [key]: value }));
+    const base = selected.value.trim() || entry?.defaultValue || "";
+    setValue(selected.id, encodeParams(selected.kind, { ...decodeParams(selected.kind, base), [key]: value }));
   };
+
+  const opampPart = selected?.kind === "opamp" ? findOpAmp(selected.value) : null;
 
   return (
     <div className="component-inspector">
@@ -745,51 +739,84 @@ function ComponentInspector({ selected }: { selected: SchematicComponent | null 
               }}
             />
           </label>
-          {visibleFields.map((field) => (
-            <label key={field.key} className="property-field">
-              <span>{field.label}</span>
-              {field.unit ? (
-                <EngineeringInput
-                  label={field.label}
-                  value={field.value}
-                  unit={field.unit}
-                  onBeginChange={() => beginParamChange(field.key)}
-                  onValueChange={(value) => updateParam(field.key, value)}
-                />
-              ) : (
-                <input
+          {selected.kind === "opamp" ? (
+            <>
+              <label className="property-field">
+                <span>Model</span>
+                <select
                   className="mono-num"
-                  value={field.value}
-                  aria-label={field.label}
-                  spellCheck={false}
-                  onFocus={() => {
-                    editKeyRef.current = null;
-                  }}
+                  aria-label="Op-amp model"
+                  value={OPAMP_LIBRARY.some((p) => p.part === selected.value) ? selected.value : "Ideal"}
                   onChange={(event) => {
-                    beginParamChange(field.key);
-                    updateParam(field.key, event.currentTarget.value);
+                    beginParamChange("model");
+                    setValue(selected.id, event.currentTarget.value);
                   }}
-                />
+                >
+                  {OPAMP_LIBRARY.map((p) => (
+                    <option key={p.part} value={p.part}>
+                      {p.part}
+                      {p.part === "Ideal" ? "" : ` · ${p.manufacturer}`}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {opampPart && (
+                <p className="property-hint">
+                  {Number.isFinite(opampPart.gbwHz) && opampPart.gbwHz > 0
+                    ? `${formatEngineering(opampPart.gbwHz, "Hz", 2)} GBW · ${opampPart.slewRate} V/µs · ±${opampPart.supplyMax} V · ${opampPart.package}`
+                    : "Ideal — infinite gain & bandwidth"}
+                </p>
               )}
-            </label>
-          ))}
-          {visibleFields.length === 0 && entry && (
-            <label className="property-field">
-              <span>Value</span>
-              <input
-                className="mono-num"
-                value={selected.value}
-                aria-label="Value"
-                spellCheck={false}
-                onFocus={() => {
-                  editKeyRef.current = null;
-                }}
-                onChange={(event) => {
-                  beginParamChange("value");
-                  setValue(selected.id, event.currentTarget.value);
-                }}
-              />
-            </label>
+            </>
+          ) : (
+            <>
+              {visibleFields.map((field) => (
+                <label key={field.key} className="property-field">
+                  <span>{field.label}</span>
+                  {field.unit ? (
+                    <EngineeringInput
+                      label={field.label}
+                      value={field.value}
+                      unit={field.unit}
+                      onBeginChange={() => beginParamChange(field.key)}
+                      onValueChange={(value) => updateParam(field.key, value)}
+                    />
+                  ) : (
+                    <input
+                      className="mono-num"
+                      value={field.value}
+                      aria-label={field.label}
+                      spellCheck={false}
+                      onFocus={() => {
+                        editKeyRef.current = null;
+                      }}
+                      onChange={(event) => {
+                        beginParamChange(field.key);
+                        updateParam(field.key, event.currentTarget.value);
+                      }}
+                    />
+                  )}
+                </label>
+              ))}
+              {visibleFields.length === 0 && entry && (
+                <label className="property-field">
+                  <span>Value</span>
+                  <input
+                    className="mono-num"
+                    value={selected.value}
+                    aria-label="Value"
+                    spellCheck={false}
+                    onFocus={() => {
+                      editKeyRef.current = null;
+                    }}
+                    onChange={(event) => {
+                      beginParamChange("value");
+                      setValue(selected.id, event.currentTarget.value);
+                    }}
+                  />
+                </label>
+              )}
+            </>
           )}
         </div>
       )}
@@ -802,35 +829,34 @@ function WireInspector({ wire }: { wire: SchematicWire }) {
   const beginChange = useSchematic((s) => s.beginChange);
   const editKeyRef = useRef<string | null>(null);
   const resistance = wire.resistance ?? "";
+  const ideal = !resistance.trim() || resistance.trim() === "0";
 
   return (
     <div className="component-inspector">
       <div className="inspector-summary">
         <strong>Wire</strong>
-        <span>{resistance ? `Series ${resistance}Ω` : "Ideal conductor"}</span>
+        <span>{ideal ? "Ideal conductor" : `Series ${resistance}Ω`}</span>
       </div>
       <div className="property-grid">
         <label className="property-field">
           <span>Resistance</span>
-          <input
-            className="mono-num"
-            value={resistance}
-            placeholder="0 (ideal)"
-            aria-label="Wire series resistance"
-            spellCheck={false}
-            onFocus={() => {
-              editKeyRef.current = null;
-            }}
-            onChange={(event) => {
+          <EngineeringInput
+            label="Wire series resistance"
+            value={ideal ? "0" : resistance}
+            unit="Ω"
+            onBeginChange={() => {
               if (editKeyRef.current !== wire.id) {
                 beginChange();
                 editKeyRef.current = wire.id;
               }
-              setWireResistance(wire.id, event.currentTarget.value);
+            }}
+            onValueChange={(value) => {
+              const trimmed = value.trim();
+              setWireResistance(wire.id, trimmed === "0" ? "" : trimmed);
             }}
           />
         </label>
-        <p className="property-hint">Leave empty for an ideal short. Non-zero values (e.g. 10m) insert a series resistor in the netlist.</p>
+        <p className="property-hint">0 / empty = ideal short. Non-zero (e.g. 10 mΩ) inserts a series resistor in the netlist.</p>
       </div>
     </div>
   );

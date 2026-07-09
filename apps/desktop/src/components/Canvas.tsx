@@ -80,7 +80,8 @@ const explicitUnit = (value: string, unit: string) => {
   if (!v) return "";
   if (unit === "Ω" && /(Ω|ohm|ohms)$/i.test(v)) return v;
   if (unit !== "Ω" && new RegExp(`${unit}$`, "i").test(v)) return v;
-  return `${v}${unit}`;
+  // Thin space keeps the unit adjacent without colliding with trailing digits.
+  return `${v}\u2009${unit}`;
 };
 
 /**

@@ -366,18 +366,18 @@ body {
 .wire {
   fill: none;
   stroke: var(--comp);
-  /* Match visual weight of component symbols (non-scaling stroke). */
-  stroke-width: 3;
+  /* World-space stroke so wires thicken/thin with zoom (unlike symbols,
+     which keep a constant screen weight via non-scaling-stroke). */
+  stroke-width: 1.75;
   stroke-linecap: round;
   stroke-linejoin: round;
-  vector-effect: non-scaling-stroke;
 }
 
 .wire.preview {
   stroke: var(--accent);
   stroke-dasharray: 4 3;
   opacity: 0.9;
-  stroke-width: 3;
+  stroke-width: 1.75;
 }
 
 .wire.resistive {
@@ -647,7 +647,9 @@ body {
 .wire-hit {
   fill: none;
   stroke: transparent;
+  /* Hit target stays roughly constant on screen while the visible wire scales. */
   stroke-width: 12;
+  vector-effect: non-scaling-stroke;
 }
 
 .wire-group.selected .wire {
@@ -1909,9 +1911,10 @@ body {
    soft halo language every other Tau field uses. */
 .eng-input {
   min-width: 0;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
 }
 
 .eng-input input,
@@ -1926,14 +1929,22 @@ body {
 }
 
 .eng-input input {
-  padding: 0 var(--sp-2);
+  /* Grow with digit count; unit stays immediately to the right. */
+  width: auto;
+  min-width: 2.5ch;
+  max-width: 14ch;
+  field-sizing: content;
+  padding: 0 6px;
   font-size: var(--fs-label);
   font-weight: 500;
 }
 
 .eng-input select {
-  min-width: 58px;
-  padding: 0 6px;
+  flex: none;
+  width: auto;
+  min-width: 0;
+  max-width: 7.5ch;
+  padding: 0 4px;
   font: 600 var(--fs-body) var(--font-mono);
   cursor: pointer;
 }
@@ -3174,7 +3185,37 @@ body {
 }
 
 .components-rail-body > .component-inspector {
+  /* Right rail is ~264px — stack identity above the property grid instead of
+     the bottom-panel's side-by-side 232px + 1fr layout (which starved fields). */
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
   padding: 12px;
+  overflow: auto;
+  grid-template-columns: none;
+}
+
+.components-rail-body > .component-inspector .inspector-summary {
+  flex: none;
+  grid-template-columns: 48px 1fr;
+  grid-template-rows: auto auto;
+  column-gap: var(--sp-2);
+  padding-bottom: var(--sp-2);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.components-rail-body > .component-inspector .inspector-summary svg {
+  width: 48px;
+  height: 48px;
+}
+
+.components-rail-body > .component-inspector .property-grid {
+  flex: 1;
+  min-height: 0;
+}
+
+.components-rail-body > .component-inspector .property-field {
+  grid-template-columns: minmax(56px, 88px) minmax(0, 1fr);
 }
 
 .editor-toolbar {
@@ -3553,6 +3594,28 @@ body {
   overflow-y: auto;
 }
 
+.property-field select {
+  min-width: 0;
+  height: var(--row-h);
+  color: var(--text);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--r-sm);
+  outline: none;
+  padding: 0 6px;
+  font: 500 var(--fs-label) var(--font-mono);
+}
+
+.property-field select:hover:not(:focus) {
+  background: var(--overlay-hover-faint);
+}
+
+.property-field select:focus {
+  background: var(--panel-3);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
 .property-hint {
   margin: 4px 0 0;
   padding: 0 2px;
@@ -3616,9 +3679,9 @@ body {
 
 .property-field .eng-input {
   grid-column: 2;
-  min-width: 120px;
-  max-width: none;
-  width: 100%;
+  justify-self: start;
+  width: auto;
+  max-width: 100%;
 }
 
 .property-field .eng-input input,
@@ -4422,6 +4485,19 @@ body {
   cursor: not-allowed;
   opacity: 0.38;
   filter: grayscale(0.5);
+}
+
+.bottom-output-stack {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: auto;
+}
+
+.bottom-output-stack > .sim-results {
+  flex: none;
+  border-bottom: 1px solid var(--border-subtle);
 }
 
 .bottom-output,

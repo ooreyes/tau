@@ -20,6 +20,8 @@ export function EngineeringInput({ value, unit, label, onValueChange, onBeginCha
   const focused = useRef(false);
   const changeStarted = useRef(false);
   const valid = isEngineeringMantissa(parts.mantissa);
+  // Keep the unit tucked against the number; grow as digits are typed.
+  const inputSize = Math.max(2, Math.min(14, parts.mantissa.length + 1));
 
   useEffect(() => {
     if (!focused.current) setParts(splitEngineeringValue(value, unit));
@@ -53,6 +55,7 @@ export function EngineeringInput({ value, unit, label, onValueChange, onBeginCha
         className="mono-num"
         aria-label={label}
         value={parts.mantissa}
+        size={inputSize}
         inputMode="decimal"
         spellCheck={false}
         aria-invalid={!valid}
