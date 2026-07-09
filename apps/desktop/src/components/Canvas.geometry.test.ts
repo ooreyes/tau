@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { circuitBounds, countRouteBodyHits, routeWireSmart, rerouteMovedWires, translateAttachedWireEndpoints } from "./Canvas";
+import { circuitBounds, countRouteBodyHits, routeWireSmart, rerouteMovedWires, translateAttachedWireEndpoints } from "./Canvas.geometry";
 import type { SchematicComponent } from "../schematic/types";
 
 const comp = (id: string, x: number, y: number): SchematicComponent =>

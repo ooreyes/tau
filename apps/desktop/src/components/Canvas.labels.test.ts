@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { sourceValueLabel } from "./Canvas";
+import { sourceValueLabel } from "./Canvas.geometry";
 
 const thin = "\u2009";
 
