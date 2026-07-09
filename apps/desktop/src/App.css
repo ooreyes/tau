@@ -66,8 +66,9 @@
   --comp:      #cfd6e0;
   --comp-ref:  #7d8794;
 
-  /* Grid */
-  --grid-dot:  rgba(170, 195, 225, 0.06);
+  /* Grid — readable on true-black canvas without competing with symbols */
+  --grid-dot:        rgba(170, 195, 225, 0.20);
+  --grid-dot-major:  rgba(170, 195, 225, 0.38);
   /* Schematic stage surface — flat true black, the darkest surface in the app
      (the schematic is the "instrument screen"). Flat per the Braun/OP-1
      reference imagery — no radial "glass glow"; kept a solid instead of a
@@ -301,7 +302,10 @@ body {
 
 .grid-dot {
   fill: var(--grid-dot);
-  opacity: 0.72;
+}
+
+.grid-dot-major {
+  fill: var(--grid-dot-major);
 }
 
 /* Component symbols */
@@ -343,10 +347,11 @@ body {
 }
 
 .pin-target {
-  fill: var(--cream);
+  fill: color-mix(in srgb, var(--cream) 85%, transparent);
   stroke: var(--accent);
   stroke-width: 1.5;
   vector-effect: non-scaling-stroke;
+  opacity: 0.95;
 }
 
 /* Rubber-band selection rectangle drawn while drag-selecting on empty canvas. */
@@ -361,7 +366,7 @@ body {
 .wire {
   fill: none;
   stroke: var(--comp);
-  stroke-width: 1.8;
+  stroke-width: 1.65;
   stroke-linecap: round;
   stroke-linejoin: round;
   vector-effect: non-scaling-stroke;
@@ -369,8 +374,8 @@ body {
 
 .wire.preview {
   stroke: var(--accent);
-  stroke-dasharray: 5 4;
-  opacity: 0.75;
+  stroke-dasharray: 4 3;
+  opacity: 0.85;
 }
 
 .ghost .symbol {
@@ -2229,23 +2234,31 @@ body {
   box-shadow: inset 0 0 0 1.5px var(--accent);
 }
 
-/* ── Wire / probe snap ring ────────────────────────────── */
+/* ── Wire / probe snap markers ─────────────────────────── */
 .snap-dot {
   fill: var(--accent);
-  opacity: 0.28;
+  opacity: 0.35;
   pointer-events: none;
 }
-.snap-ring {
-  fill: none;
+.snap-dot.pin {
+  opacity: 0.55;
+  fill: var(--cream);
   stroke: var(--accent);
-  stroke-width: 1.5;
-  opacity: 0.4;
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+.snap-ring {
+  fill: color-mix(in srgb, var(--accent) 12%, transparent);
+  stroke: var(--accent);
+  stroke-width: 1.75;
+  opacity: 0.55;
   vector-effect: non-scaling-stroke;
   pointer-events: none;
 }
 .snap-ring.on-pin {
-  opacity: 0.95;
-  stroke-width: 2;
+  opacity: 1;
+  stroke-width: 2.25;
+  fill: color-mix(in srgb, var(--accent) 22%, transparent);
 }
 
 /* ── Analysis parameter sliders ────────────────────────── */
@@ -3332,6 +3345,10 @@ body {
 
 .grid-dot {
   fill: var(--grid-dot);
+}
+
+.grid-dot-major {
+  fill: var(--grid-dot-major);
 }
 
 .symbol {

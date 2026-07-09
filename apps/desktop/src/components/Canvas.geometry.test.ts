@@ -90,6 +90,13 @@ describe("Canvas wire geometry", () => {
     expect(rerouted[0].points[0]).toEqual({ x: 0, y: 0 });
     expect(rerouted[0].points[rerouted[0].points.length - 1]).toEqual({ x: 96, y: 0 });
   });
+
+  it("routes around a body even when start and end share an axis", () => {
+    const blocker = comp("r1", 48, 0);
+    const route = routeWireSmart({ x: 0, y: 0 }, { x: 96, y: 0 }, [blocker]);
+    expect(countRouteBodyHits(route, [blocker])).toBe(0);
+    expect(route.length).toBeGreaterThan(2);
+  });
 });
 
 describe("circuitBounds (fit-to-view math)", () => {

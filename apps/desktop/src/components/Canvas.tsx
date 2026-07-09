@@ -428,8 +428,14 @@ const segmentHitsBody = (a: Point, b: Point, components: SchematicComponent[]): 
     const isEndpointComponent = getComponentPins(c).some((pin) => pointsEqual(pin, a) || pointsEqual(pin, b));
     if (isEndpointComponent) return false;
     const box = bodyBoxAt(c.kind, c.x, c.y, c.rotation);
-    // Shrink the body slightly so a wire ending exactly on a pin/edge is fine.
-    return rectsOverlap(seg, { minX: box.minX + 2, minY: box.minY + 2, maxX: box.maxX - 2, maxY: box.maxY - 2 });
+    // Keep a small clearance so wires don't graze symbol strokes.
+    const pad = 1;
+    return rectsOverlap(seg, {
+      minX: box.minX + pad,
+      minY: box.minY + pad,
+      maxX: box.maxX - pad,
+      maxY: box.maxY - pad,
+    });
   });
 };
 
@@ -521,9 +527,8 @@ const routeHitCount = (points: Point[], components: SchematicComponent[]) =>
 /** Exported for tests — count how many orthogonal segments cross a body. */
 export const countRouteBodyHits = routeHitCount;
 
-/** Route an orthogonal wire between two points. It first tries direct/L paths,
- *  then doglegs on grid channels just outside component bodies, and picks the
- *  shortest non-crossing candidate. */
+/** Route an orthogonal wire between two points. Prefers clear channels around
+ *  component bodies, then shorter length, then fewer corners. */
 export const routeWireSmart = (start: Point, end: Point, components: SchematicComponent[]): Point[] => {
   if (pointsEqual(start, end)) return [start];
   const candidates: Point[][] = [];
@@ -542,22 +547,40 @@ export const routeWireSmart = (start: Point, end: Point, components: SchematicCo
   const yChannels = new Set<number>([start.y, end.y]);
   for (const component of components) {
     const box = bodyBoxAt(component.kind, component.x, component.y, component.rotation);
-    xChannels.add(snap(box.minX - GRID));
-    xChannels.add(snap(box.maxX + GRID));
-    yChannels.add(snap(box.minY - GRID));
-    yChannels.add(snap(box.maxY + GRID));
+    // One and two grid cells outside the body — gives the router room to skirt
+    // symbols without hugging the stroke.
+    for (const pad of [GRID, GRID * 2]) {
+      xChannels.add(snap(box.minX - pad));
+      xChannels.add(snap(box.maxX + pad));
+      yChannels.add(snap(box.minY - pad));
+      yChannels.add(snap(box.maxY + pad));
+    }
   }
 
-  for (const y of yChannels) push([start, { x: start.x, y }, { x: end.x, y }, end]);
-  for (const x of xChannels) push([start, { x, y: start.y }, { x, y: end.y }, end]);
+  for (const y of yChannels) {
+    push([start, { x: start.x, y }, { x: end.x, y }, end]);
+    // U-shaped detour when start/end share an axis but a body sits between them.
+    push([start, { x: start.x, y }, { x: end.x, y }, { x: end.x, y: end.y }, end]);
+  }
+  for (const x of xChannels) {
+    push([start, { x, y: start.y }, { x, y: end.y }, end]);
+    push([start, { x, y: start.y }, { x, y: end.y }, { x: end.x, y: end.y }, end]);
+  }
 
   return candidates
     .map((points) => ({
       points,
       hits: routeHitCount(points, components),
       length: routeLength(points),
+      corners: Math.max(0, points.length - 2),
     }))
-    .sort((a, b) => a.hits - b.hits || a.length - b.length || a.points.length - b.points.length)[0]?.points
+    .sort(
+      (a, b) =>
+        a.hits - b.hits ||
+        a.length - b.length ||
+        a.corners - b.corners ||
+        a.points.length - b.points.length,
+    )[0]?.points
     ?? [start, end];
 };
 
@@ -577,6 +600,31 @@ export function rerouteMovedWires(
     const end = wire.points[wire.points.length - 1];
     return { ...wire, points: routeWireSmart(start, end, components) };
   });
+}
+
+/** Wires whose endpoints currently sit on any of the given world pin points. */
+export function wiresTouchingPins(wires: SchematicWire[], pinPoints: Point[]): Set<string> {
+  const pins = new Set(pinPoints.map((p) => `${p.x},${p.y}`));
+  const out = new Set<string>();
+  for (const wire of wires) {
+    if (wire.points.length < 2) continue;
+    const a = wire.points[0];
+    const b = wire.points[wire.points.length - 1];
+    if (pins.has(`${a.x},${a.y}`) || pins.has(`${b.x},${b.y}`)) out.add(wire.id);
+  }
+  return out;
+}
+
+/** World pin positions for a set of components (after orientation). */
+export function worldPinsFor(components: SchematicComponent[]): Point[] {
+  const out: Point[] = [];
+  for (const c of components) {
+    for (const pin of getLocalPins(c.kind)) {
+      const local = transformPoint({ x: pin.x, y: pin.y }, c.rotation, c.mirrored ?? false);
+      out.push({ x: c.x + local.x, y: c.y + local.y });
+    }
+  }
+  return out;
 }
 
 /** Nearest grid spot (spiralling out) where a new body won't overlap an existing one. */
@@ -771,10 +819,18 @@ export function Canvas({
   const moveComponentWithAttachedWires = useCallback(
     (id: string, x: number, y: number, sourcePins: Point[], sourceWires: SchematicWire[], dx: number, dy: number) => {
       const wiresWithMovedEndpoints = translateAttachedWireEndpoints(sourceWires, sourcePins, dx, dy);
-      useSchematic.setState((state) => ({
-        components: state.components.map((component) => (component.id === id ? { ...component, x, y } : component)),
-        wires: wiresWithMovedEndpoints,
-      }));
+      useSchematic.setState((state) => {
+        const components = state.components.map((component) =>
+          component.id === id ? { ...component, x, y } : component,
+        );
+        const moved = components.find((c) => c.id === id);
+        const pins = moved ? worldPinsFor([moved]) : [];
+        const affected = wiresTouchingPins(wiresWithMovedEndpoints, pins);
+        return {
+          components,
+          wires: rerouteMovedWires(wiresWithMovedEndpoints, components, affected),
+        };
+      });
     },
     [],
   );
@@ -855,17 +911,41 @@ export function Canvas({
   // Snap targets: every component pin plus every wire vertex, so wiring/probing
   // latch onto terminals and existing wires instead of being pixel-finicky.
   const snapTargets = useMemo(() => {
-    const pts = [...pinPoints];
-    for (const wire of wires) for (const p of wire.points) pts.push(p);
+    const seen = new Set<string>();
+    const pts: Point[] = [];
+    const add = (p: Point) => {
+      const key = `${p.x},${p.y}`;
+      if (seen.has(key)) return;
+      seen.add(key);
+      pts.push(p);
+    };
+    for (const p of pinPoints) add(p);
+    for (const wire of wires) for (const p of wire.points) add(p);
     return pts;
   }, [pinPoints, wires]);
+
+  const pinKeySet = useMemo(
+    () => new Set(pinPoints.map((p) => `${p.x},${p.y}`)),
+    [pinPoints],
+  );
 
   const snappedCursor = useCallback(
     (clientX: number, clientY: number): Point => {
       const w = screenToWorld(clientX, clientY);
       let best: Point | null = null;
-      let bestD = 20 * 20; // ~1.25 grid cells of forgiveness
+      let bestD = 22 * 22; // ~1.4 grid cells of forgiveness
+      // Prefer pins over wire midpoints so terminals are easy to hit.
+      for (const p of pinPoints) {
+        const dx = p.x - w.x;
+        const dy = p.y - w.y;
+        const d = (dx * dx + dy * dy) * 0.82; // ~18% preference for pins
+        if (d < bestD) {
+          bestD = d;
+          best = p;
+        }
+      }
       for (const p of snapTargets) {
+        if (pinKeySet.has(`${p.x},${p.y}`)) continue;
         const dx = p.x - w.x;
         const dy = p.y - w.y;
         const d = dx * dx + dy * dy;
@@ -902,7 +982,7 @@ export function Canvas({
       }
       return best ?? { x: snap(w.x), y: snap(w.y) };
     },
-    [screenToWorld, snapTargets, wires],
+    [screenToWorld, snapTargets, pinPoints, pinKeySet, wires],
   );
 
   const wireAtCursor = useCallback(
@@ -1132,6 +1212,15 @@ export function Canvas({
         d.moved = true;
       }
       moveGroup(d.groupOrigins, dx, dy, d.groupSourcePins, d.sourceWires);
+      // Live re-route so group moves don't leave wires cutting through bodies.
+      const state = useSchematic.getState();
+      const movedComps = state.components.filter((c) => d.groupIds!.includes(c.id));
+      const affected = wiresTouchingPins(state.wires, worldPinsFor(movedComps));
+      if (affected.size > 0) {
+        useSchematic.setState({
+          wires: rerouteMovedWires(state.wires, state.components, affected),
+        });
+      }
     }
   };
 
@@ -1155,28 +1244,11 @@ export function Canvas({
         return null;
       });
     } else if ((d.mode === "move" || d.mode === "group-move") && d.moved) {
-      // Re-route attached wires so intermediate elbows avoid component bodies.
+      // Final re-route pass (live routing already ran during the drag).
       const state = useSchematic.getState();
-      // Match wires by current endpoints (already translated) against current pins.
-      const currentPins = new Set<string>();
       const movedIds = d.groupIds ?? (d.id ? [d.id] : []);
-      for (const id of movedIds) {
-        const c = state.components.find((comp) => comp.id === id);
-        if (!c) continue;
-        for (const pin of getLocalPins(c.kind)) {
-          const world = transformPoint({ x: pin.x, y: pin.y }, c.rotation, c.mirrored ?? false);
-          currentPins.add(`${c.x + world.x},${c.y + world.y}`);
-        }
-      }
-      const affected = new Set<string>();
-      for (const wire of state.wires) {
-        if (wire.points.length < 2) continue;
-        const a = wire.points[0];
-        const b = wire.points[wire.points.length - 1];
-        if (currentPins.has(`${a.x},${a.y}`) || currentPins.has(`${b.x},${b.y}`)) {
-          affected.add(wire.id);
-        }
-      }
+      const movedComps = state.components.filter((c) => movedIds.includes(c.id));
+      const affected = wiresTouchingPins(state.wires, worldPinsFor(movedComps));
       if (affected.size > 0) {
         useSchematic.setState({
           wires: rerouteMovedWires(state.wires, state.components, affected),
@@ -1288,8 +1360,13 @@ export function Canvas({
         }}
       >
         <defs>
-          <pattern id="grid" width={GRID} height={GRID} patternUnits="userSpaceOnUse">
-            <circle cx={0} cy={0} r={0.9} className="grid-dot" />
+          {/* Minor grid every GRID; major every 5 cells for readable alignment. */}
+          <pattern id="grid-minor" width={GRID} height={GRID} patternUnits="userSpaceOnUse">
+            <circle cx={0} cy={0} r={1.15} className="grid-dot" />
+          </pattern>
+          <pattern id="grid" width={GRID * 5} height={GRID * 5} patternUnits="userSpaceOnUse">
+            <rect width={GRID * 5} height={GRID * 5} fill="url(#grid-minor)" />
+            <circle cx={0} cy={0} r={1.65} className="grid-dot-major" />
           </pattern>
         </defs>
 
@@ -1310,22 +1387,25 @@ export function Canvas({
 
           {/* Soft snap markers while wiring / placing / moving / probing / labeling */}
           {interactive && (wiring || probing || labeling || placing || movingParts) &&
-            snapTargets.map((p) => (
-              <circle
-                key={`snap-${p.x}-${p.y}`}
-                className="snap-dot"
-                cx={p.x}
-                cy={p.y}
-                r={2.2}
-              />
-            ))}
+            snapTargets.map((p) => {
+              const isPin = pinKeySet.has(`${p.x},${p.y}`);
+              return (
+                <circle
+                  key={`snap-${p.x}-${p.y}`}
+                  className={`snap-dot${isPin ? " pin" : ""}`}
+                  cx={p.x}
+                  cy={p.y}
+                  r={isPin ? 2.6 : 1.8}
+                />
+              );
+            })}
 
           {(wiring || probing || labeling) && snapHover && (
             <circle
               className={`snap-ring${snapHover.pin ? " on-pin" : ""}`}
               cx={snapHover.x}
               cy={snapHover.y}
-              r={6}
+              r={snapHover.pin ? 7 : 5.5}
             />
           )}
 
