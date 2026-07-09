@@ -81,63 +81,73 @@ function RailButton({
   );
 }
 
-const exampleFileName = (example: ExampleCircuit) => `${example.name.toLowerCase().replace(/\s+/g, "-")}.sim`;
-
 export function ExplorerPanel({
-  activeTitle,
-  onOpenExample,
+  tabs,
+  activeId,
+  onSelectTab,
+  onCloseTab,
   onNewCircuit,
   onSearch,
 }: {
-  activeTitle: string;
-  onOpenExample: (example: ExampleCircuit) => void;
+  tabs: { id: string; title: string }[];
+  activeId: string;
+  onSelectTab: (id: string) => void;
+  onCloseTab: (id: string) => void;
   onNewCircuit: () => void;
   onSearch: () => void;
 }) {
-  const examples = EXAMPLE_CIRCUITS.slice(0, 4);
-  const firstExample = examples[0];
-
   return (
-    <aside className="explorer-panel" aria-label="Project explorer">
+    <aside className="explorer-panel" aria-label="Open documents">
       <div className="explorer-head">
-        <span>explorer</span>
+        <span>open</span>
         <div className="explorer-icons">
           <button title="New scratchpad" aria-label="New scratchpad" onClick={onNewCircuit}>＋</button>
           <button title="Search commands" aria-label="Search commands" onClick={onSearch}>▣</button>
-          {firstExample && (
-            <button title="Reload first example" aria-label="Reload first example" onClick={() => onOpenExample(firstExample)}>↻</button>
-          )}
         </div>
       </div>
-      <button className="explorer-search" aria-label="Search schematics and commands" onClick={onSearch}>
+      <button className="explorer-search" aria-label="Search commands" onClick={onSearch}>
         <svg viewBox="0 0 16 16" aria-hidden="true">
           <circle cx="7" cy="7" r="4.5" />
           <path d="M10.5 10.5 14 14" />
         </svg>
-        <span>find schematic</span>
+        <span>search</span>
       </button>
       <div className="tree-list">
-        <div className="tree-root">
-          <span className="tree-caret">▸</span>
-          <span className="tree-folder">Powerboard</span>
-        </div>
-        <div className="tree-children">
-          {examples.map((example) => {
-            const fileName = exampleFileName(example);
-            const active = fileName === activeTitle;
-            return (
-              <button
-                key={example.id}
-                className={`tree-file${active ? " active" : ""}`}
-                aria-current={active ? "page" : undefined}
-                onClick={() => onOpenExample(example)}
-              >
-                <i className={active ? "amber" : "blue"} />
-                {fileName}
-              </button>
-            );
-          })}
-        </div>
+        {tabs.map((tab) => {
+          const active = tab.id === activeId;
+          return (
+            <button
+              key={tab.id}
+              className={`tree-file${active ? " active" : ""}`}
+              aria-current={active ? "page" : undefined}
+              onClick={() => onSelectTab(tab.id)}
+            >
+              <i className={active ? "amber" : "blue"} />
+              <span className="tree-file-name">{tab.title}</span>
+              {tabs.length > 1 && (
+                <span
+                  className="tree-file-close"
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`Close ${tab.title}`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onCloseTab(tab.id);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      onCloseTab(tab.id);
+                    }
+                  }}
+                >
+                  ×
+                </span>
+              )}
+            </button>
+          );
+        })}
       </div>
     </aside>
   );

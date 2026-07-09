@@ -32,9 +32,9 @@ import {
 } from "./simulation/linearTransient";
 import { runOperatingPoint, type OperatingPointResult } from "./simulation/operatingPoint";
 import { runAcSweep, type AcResult } from "./simulation/acSweep";
-import { runDcSweep, type DcSweepResult } from "./simulation/dcSweep";
-import { runTransferFunction, type TfResult } from "./simulation/transferFunction";
-import { runNoiseAnalysis, type NoiseResult } from "./simulation/noise";
+import { runDcSweep, type DcSweepResult, type DcSweepSpec } from "./simulation/dcSweep";
+import { runTransferFunction, type TfResult, type TfSpec } from "./simulation/transferFunction";
+import { runNoiseAnalysis, type NoiseResult, type NoiseSpec } from "./simulation/noise";
 import {
   nestedStepContexts,
   runnableStepsFromDirectives,
@@ -49,6 +49,14 @@ import {
 import { buildParamScope, EMPTY_SCOPE, type ParamScope } from "./simulation/paramScope";
 import { parseCouplingSpecs, type CouplingSpec } from "./simulation/coupling";
 import { analysesFromDirectives } from "./io/directiveAnalysis";
+import {
+  defaultDcSetup,
+  defaultNoiseSetup,
+  defaultStepSetupUi,
+  defaultTfSetup,
+  stepSetupToSpec,
+  type StepSetupUi,
+} from "./simulation/analysisSetup";
 import { runMeasurements, type MeasResult } from "./simulation/measure";
 import { runFourier, type FourierResult } from "./simulation/fourier";
 import { runAcMeasurements } from "./simulation/measureAc";
@@ -89,7 +97,6 @@ const emptyHistory = (): SchematicHistory => ({ past: [], future: [] });
 // squeezing it to nothing.
 const RAIL_W = 54; // .activity-rail
 const HANDLE_W = 8; // .col-resize-handle, one per open column
-const EDITOR_MIN = 260; // schematic column floor
 const SCOPE_MIN = 300; // analysis scope column floor (matches old drag clamp)
 const ASK_MIN = 260; // Ask Sim column floor (matches old drag clamp)
 
@@ -167,7 +174,7 @@ function App() {
   const [runState, setRunState] = useState<"idle" | "complete" | "error" | "stopped">("idle");
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [mode, setMode] = useState<"schematic" | "simulator">("schematic");
-  const [tabs, setTabs] = useState<OpenTab[]>([{ id: "tab-0", title: "boost converter.sim", doc: null, history: emptyHistory() }]);
+  const [tabs, setTabs] = useState<OpenTab[]>([{ id: "tab-0", title: "untitled.sim", doc: null, history: emptyHistory() }]);
   const [activeId, setActiveId] = useState("tab-0");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [confirmClearOpen, setConfirmClearOpen] = useState(false);
@@ -178,6 +185,10 @@ function App() {
   const [partsOpen, setPartsOpen] = useState(true);
   const [scopeWidth, setScopeWidth] = useState(440);
   const [askWidth, setAskWidth] = useState(330);
+  const [dcSetup, setDcSetup] = useState<DcSweepSpec>(() => defaultDcSetup([]));
+  const [tfSetup, setTfSetup] = useState<TfSpec>(() => defaultTfSetup([]));
+  const [noiseSetup, setNoiseSetup] = useState<NoiseSpec>(() => defaultNoiseSetup([]));
+  const [stepSetupUi, setStepSetupUi] = useState<StepSetupUi>(() => defaultStepSetupUi([]));
   const [notice, setNotice] = useState<string | null>(null);
   const shellBodyRef = useRef<HTMLDivElement | null>(null);
   const [shellWidth, setShellWidth] = useState(0);
@@ -345,21 +356,18 @@ function App() {
     }
   }, [components, wires, netLabels, params, directives, couplings]);
 
-  // A DC sweep needs a `.dc <src> <start> <stop> <incr>` directive to know which
-  // source to sweep and over what range. Imported `.asc` files carry their own;
-  // a hand-built circuit gets a clear prompt instead of a silent no-op.
+  useEffect(() => {
+    setDcSetup((d) => defaultDcSetup(components, d));
+    setTfSetup((t) => defaultTfSetup(components, t));
+    setNoiseSetup((n) => defaultNoiseSetup(components, n));
+    setStepSetupUi((s) => defaultStepSetupUi(components, s));
+  }, [components]);
+
+  // A DC sweep uses the UI setup panel, falling back to an imported `.dc`
+  // directive when the document carries one from LTspice.
   const runDcAnalysis = useCallback(async () => {
     const requestId = ++analysisRequestRef.current;
-    const { dc } = analysesFromDirectives(directives);
-    if (!dc) {
-      setDcAnalysis({
-        ok: false,
-        message: "Add a “.dc <source> <start> <stop> <increment>” directive to sweep a source.",
-        warnings: [],
-      });
-      setDcStepFamily(null);
-      return;
-    }
+    const dc = analysesFromDirectives(directives).dc ?? dcSetup;
     setAnalysisRunning(true);
     try {
       const result = runDcSweep({ components, wires, netLabels, params }, dc);
@@ -377,22 +385,11 @@ function App() {
     } finally {
       if (analysisRequestRef.current === requestId) setAnalysisRunning(false);
     }
-  }, [components, wires, netLabels, params, directives]);
+  }, [components, wires, netLabels, params, directives, dcSetup]);
 
-  // A `.tf` transfer function needs a `.tf <output> <source>` directive to know
-  // the output variable and the input source. Imported `.asc` files carry their
-  // own; a hand-built circuit gets a clear prompt instead of a silent no-op.
   const runTfAnalysis = useCallback(async () => {
     const requestId = ++analysisRequestRef.current;
-    const { tf } = analysesFromDirectives(directives);
-    if (!tf) {
-      setTfAnalysis({
-        ok: false,
-        message: "Add a “.tf V(out) <source>” directive to compute a small-signal transfer function.",
-        warnings: [],
-      });
-      return;
-    }
+    const tf = analysesFromDirectives(directives).tf ?? tfSetup;
     setAnalysisRunning(true);
     try {
       const result = runTransferFunction({ components, wires, netLabels, params }, tf);
@@ -404,22 +401,11 @@ function App() {
     } finally {
       if (analysisRequestRef.current === requestId) setAnalysisRunning(false);
     }
-  }, [components, wires, netLabels, params, directives]);
+  }, [components, wires, netLabels, params, directives, tfSetup]);
 
-  // `.noise` needs a `.noise <output> <source> <dec|oct|lin> <N> <fstart> <fstop>`
-  // directive. Imported `.asc` files carry their own; a hand-built circuit gets a
-  // clear prompt instead of a silent no-op. TS-only (small-signal adjoint solver).
   const runNoiseAnalysis_ = useCallback(async () => {
     const requestId = ++analysisRequestRef.current;
-    const { noise } = analysesFromDirectives(directives);
-    if (!noise) {
-      setNoiseAnalysis({
-        ok: false,
-        message: "Add a “.noise V(out) <source> dec <N> <fstart> <fstop>” directive to compute output and input-referred noise.",
-        warnings: [],
-      });
-      return;
-    }
+    const noise = analysesFromDirectives(directives).noise ?? noiseSetup;
     setAnalysisRunning(true);
     try {
       const result = runNoiseAnalysis({ components, wires, netLabels, params }, noise);
@@ -431,22 +417,17 @@ function App() {
     } finally {
       if (analysisRequestRef.current === requestId) setAnalysisRunning(false);
     }
-  }, [components, wires, netLabels, params, directives]);
+  }, [components, wires, netLabels, params, directives, noiseSetup]);
 
-  // A `.step` sweep re-runs the transient once per swept value, producing a
-  // family of overlaid curves. Needs a `.step param|source …` directive on the
-  // document (imported `.asc` files carry their own); temp sweeps and a missing
-  // directive surface a clear message instead of a silent no-op.
   const runStepAnalysis = useCallback(async () => {
     const requestId = ++analysisRequestRef.current;
-    // Multiple `.step` directives form an LTspice nested outer×inner sweep; a
-    // single one is the ordinary family. `runnableStepsFromDirectives` keeps them
-    // in document order (outermost first).
-    const specs = runnableStepsFromDirectives(directives);
+    const directiveSpecs = runnableStepsFromDirectives(directives);
+    const uiSpec = stepSetupToSpec(stepSetupUi);
+    const specs = directiveSpecs.length > 0 ? directiveSpecs : uiSpec ? [uiSpec] : [];
     if (specs.length === 0) {
       setStepFamily({
         ok: false,
-        message: "Add a “.step param <name> <start> <stop> <incr>”, “.step <source> …”, or “.step temp …” directive to sweep.",
+        message: "Configure the step sweep below (source, start, stop, increment) then run again.",
         members: [],
         warnings: [],
       });
@@ -481,7 +462,7 @@ function App() {
     } finally {
       if (analysisRequestRef.current === requestId) setAnalysisRunning(false);
     }
-  }, [components, wires, netLabels, params, directives, analysisOptions]);
+  }, [components, wires, netLabels, params, directives, analysisOptions, stepSetupUi]);
 
   const stepAnalysis = useCallback(async () => {
     // Native ngspice may return an endpoint in addition to requested samples.
@@ -688,7 +669,7 @@ function App() {
 
   // §10 responsive floor: whenever the window narrows (or a column opens/
   // closes), re-clamp the scope/Ask Sim widths so the schematic column never
-  // drops below EDITOR_MIN. If there truly isn't room for all three columns
+  // drops below a usable width. If there truly isn't room for all columns
   // even at their floors, auto-collapse Ask Sim (the supplementary panel —
   // still one click away via MinimizedPanelDock) rather than leave the
   // schematic column unusable. This only ever shrinks toward the current
@@ -696,7 +677,7 @@ function App() {
   useEffect(() => {
     if (mode !== "simulator" || shellWidth === 0) return;
     if (graphOpen && aiOpen) {
-      const budget = shellWidth - RAIL_W - EDITOR_MIN - HANDLE_W * 2;
+      const budget = shellWidth - RAIL_W - HANDLE_W * 2;
       if (budget < SCOPE_MIN + ASK_MIN) {
         setAiOpen(false);
         return;
@@ -704,10 +685,10 @@ function App() {
       setScopeWidth((w) => Math.min(w, Math.max(SCOPE_MIN, budget - ASK_MIN)));
       setAskWidth((w) => Math.min(w, Math.max(ASK_MIN, budget - scopeWidth)));
     } else if (graphOpen) {
-      const budget = shellWidth - RAIL_W - EDITOR_MIN - HANDLE_W;
+      const budget = shellWidth - RAIL_W - HANDLE_W;
       setScopeWidth((w) => Math.min(w, Math.max(SCOPE_MIN, budget)));
     } else if (aiOpen) {
-      const budget = shellWidth - RAIL_W - EDITOR_MIN - HANDLE_W;
+      const budget = shellWidth - RAIL_W - HANDLE_W;
       setAskWidth((w) => Math.min(w, Math.max(ASK_MIN, budget)));
     }
     // scopeWidth/askWidth are intentionally excluded: this effect only reacts
@@ -751,12 +732,15 @@ function App() {
         />
         {mode === "schematic" && (
           <ExplorerPanel
-            activeTitle={documentTitle}
-            onOpenExample={openExample}
+            tabs={tabs}
+            activeId={activeId}
+            onSelectTab={switchTab}
+            onCloseTab={(id) => setConfirmCloseTabId(id)}
             onNewCircuit={startNewCircuit}
             onSearch={() => setPaletteOpen(true)}
           />
         )}
+        {mode === "schematic" && (
         <section className="editor-shell" aria-label="Schematic editor">
           <EditorToolbar
             mode={mode}
@@ -779,22 +763,22 @@ function App() {
             onHideSimulator={() => setMode("schematic")}
           />
           <main className="stage">
-            <Canvas analysis={analysis} op={opAnalysis} interactive={mode === "schematic"} />
-            {components.length === 0 && wires.length === 0 && toolMode === "select" && mode === "schematic" && (
+            <Canvas analysis={analysis} op={opAnalysis} interactive />
+            {components.length === 0 && wires.length === 0 && toolMode === "select" && (
               <EmptyState />
             )}
           </main>
           <BottomPanel mode={mode} result={analysis} />
         </section>
+        )}
         {mode === "simulator" && graphOpen && (
           <>
             <ColumnResizeHandle
               label="Resize analysis panel"
-              onResize={(dx) => setScopeWidth((w) => {
-                const next = clamp(w - dx, SCOPE_MIN, 820);
+              onResize={(dx) => setAskWidth((w) => {
+                const next = clamp(w + dx, ASK_MIN, 640);
                 if (shellWidth === 0) return next;
-                const reserved = aiOpen ? HANDLE_W + askWidth : 0;
-                const maxAllowed = Math.max(SCOPE_MIN, shellWidth - RAIL_W - HANDLE_W - EDITOR_MIN - reserved);
+                const maxAllowed = Math.max(ASK_MIN, shellWidth - RAIL_W - HANDLE_W - SCOPE_MIN);
                 return Math.min(next, maxAllowed);
               })}
             />
@@ -827,6 +811,14 @@ function App() {
                 onStop={stopAnalysis}
                 onStep={stepAnalysis}
                 onClose={() => setGraphOpen(false)}
+                dcSetup={dcSetup}
+                onDcSetupChange={setDcSetup}
+                tfSetup={tfSetup}
+                onTfSetupChange={setTfSetup}
+                noiseSetup={noiseSetup}
+                onNoiseSetupChange={setNoiseSetup}
+                stepSetupUi={stepSetupUi}
+                onStepSetupUiChange={setStepSetupUi}
               />
             </AnalysisErrorBoundary>
           </>
@@ -839,7 +831,7 @@ function App() {
                 const next = clamp(w - dx, ASK_MIN, 640);
                 if (shellWidth === 0) return next;
                 const reserved = graphOpen ? HANDLE_W + scopeWidth : 0;
-                const maxAllowed = Math.max(ASK_MIN, shellWidth - RAIL_W - HANDLE_W - EDITOR_MIN - reserved);
+                const maxAllowed = Math.max(ASK_MIN, shellWidth - RAIL_W - HANDLE_W - reserved);
                 return Math.min(next, maxAllowed);
               })}
             />

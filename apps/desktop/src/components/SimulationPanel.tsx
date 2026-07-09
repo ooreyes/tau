@@ -24,9 +24,16 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { cn } from "@/lib/utils";
 import type { OperatingPointResult } from "../simulation/operatingPoint";
 import type { AcResult, AcTrace } from "../simulation/acSweep";
-import type { DcSweepResult, DcSweepNet } from "../simulation/dcSweep";
-import type { TfResult } from "../simulation/transferFunction";
-import type { NoiseResult } from "../simulation/noise";
+import type { DcSweepResult, DcSweepNet, DcSweepSpec } from "../simulation/dcSweep";
+import type { TfResult, TfSpec } from "../simulation/transferFunction";
+import type { NoiseResult, NoiseSpec } from "../simulation/noise";
+import type { StepSetupUi } from "../simulation/analysisSetup";
+import {
+  DcSetupForm,
+  NoiseSetupForm,
+  StepSetupForm,
+  TfSetupForm,
+} from "./AnalysisSetupForms";
 import type { StepFamilyResult } from "../simulation/stepFamily";
 import {
   acFamilyOverlaySeries,
@@ -96,11 +103,19 @@ interface SimulationPanelProps {
   onStop: () => void;
   onStep: () => void | Promise<void>;
   onClose: () => void;
+  dcSetup: DcSweepSpec;
+  onDcSetupChange: (next: DcSweepSpec) => void;
+  tfSetup: TfSpec;
+  onTfSetupChange: (next: TfSpec) => void;
+  noiseSetup: NoiseSpec;
+  onNoiseSetupChange: (next: NoiseSpec) => void;
+  stepSetupUi: StepSetupUi;
+  onStepSetupUiChange: (next: StepSetupUi) => void;
 }
 
 const PLOT_WIDTH = 340;
 const PLOT_HEIGHT = 210;
-const PLOT_PAD = 26;
+const PLOT_PAD = 34;
 
 export function SimulationPanel({
   result,
@@ -130,6 +145,14 @@ export function SimulationPanel({
   onStop,
   onStep,
   onClose,
+  dcSetup,
+  onDcSetupChange,
+  tfSetup,
+  onTfSetupChange,
+  noiseSetup,
+  onNoiseSetupChange,
+  stepSetupUi,
+  onStepSetupUiChange,
 }: SimulationPanelProps) {
   const components = useSchematic((s) => s.components);
   const wires = useSchematic((s) => s.wires);
@@ -773,6 +796,7 @@ export function SimulationPanel({
       )}
       {mode === "dc" && (
         <>
+          <DcSetupForm setup={dcSetup} components={components} onChange={onDcSetupChange} />
           <DcPlot result={dcResult} overlays={dcExprTraces} />
           <div className="expr-bar">
             <Input
@@ -825,9 +849,15 @@ export function SimulationPanel({
           <MeasTable measurements={dcMeasurements} />
         </>
       )}
-      {mode === "tf" && <TfTable result={tfResult} />}
+      {mode === "tf" && (
+        <>
+          <TfSetupForm setup={tfSetup} components={components} onChange={onTfSetupChange} />
+          <TfTable result={tfResult} />
+        </>
+      )}
       {mode === "noise" && (
         <>
+          <NoiseSetupForm setup={noiseSetup} components={components} onChange={onNoiseSetupChange} />
           <NoisePlot result={noiseResult} />
           <div className="expr-bar">
             <Tooltip>
@@ -842,7 +872,12 @@ export function SimulationPanel({
           <MeasTable measurements={noiseMeasurements} />
         </>
       )}
-      {mode === "step" && <StepPlot result={stepResult} probes={probes} wires={wires} />}
+      {mode === "step" && (
+        <>
+          <StepSetupForm setup={stepSetupUi} components={components} onChange={onStepSetupUiChange} />
+          <StepPlot result={stepResult} probes={probes} wires={wires} />
+        </>
+      )}
 
       <div className="selection-strip">
         <div className="strip-label">SELECT</div>
@@ -1225,6 +1260,8 @@ function TranScopePane({
           yMax={viewport.yMax}
           xUnit="s"
           yUnit={plot ? plot.unit : "V"}
+          xAxisTitle="Time"
+          yAxisTitle="Voltage"
           targetXTicks={targetXTicks}
           targetYTicks={targetYTicks}
           showXTicks={showXAxis}

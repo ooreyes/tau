@@ -11,6 +11,7 @@ import type {
   NetLabel,
 } from "../schematic/types";
 import { CATALOG_BY_KIND } from "../schematic/catalog";
+import { canCurrentProbe } from "../simulation/analysisSetup";
 import { validateSchematicDocument } from "../schematic/documentValidation";
 import { extractCircuit, netAtPoint } from "../schematic/netlist";
 
@@ -436,26 +437,37 @@ export const useSchematic = create<SchematicState>()((set) => {
         const nets = extractCircuit(s.components, s.wires, s.netLabels).nets;
         const clickedNet = netAtPoint(nets, s.wires, { x, y });
         if (!clickedNet) return s;
-        const netOfProbe = (p: Probe) => netAtPoint(nets, s.wires, { x: p.x, y: p.y });
-        const existing = s.probes.find((p) => !p.componentId && netOfProbe(p)?.id === clickedNet.id);
+        const netOfProbe = (p: Probe) =>
+          p.netId ?? netAtPoint(nets, s.wires, { x: p.x, y: p.y })?.id;
+        const existing = s.probes.find(
+          (p) => !p.componentId && netOfProbe(p) === clickedNet.id,
+        );
         if (existing) {
           if (existing.x === x && existing.y === y) {
             return { ...recordInto(s), probes: s.probes.filter((p) => p.id !== existing.id) };
           }
           return {
             ...recordInto(s),
-            probes: s.probes.map((p) => (p.id === existing.id ? { ...p, x, y } : p)),
+            probes: s.probes.map((p) =>
+              p.id === existing.id ? { ...p, x, y, netId: clickedNet.id } : p,
+            ),
           };
         }
         const color = PROBE_COLORS[s.probes.length % PROBE_COLORS.length];
-        return { ...recordInto(s), probes: [...s.probes, { id: nanoid(6), x, y, color }] };
+        const withoutDupes = s.probes.filter(
+          (p) => p.componentId || netOfProbe(p) !== clickedNet.id,
+        );
+        return {
+          ...recordInto(s),
+          probes: [...withoutDupes, { id: nanoid(6), x, y, color, netId: clickedNet.id }],
+        };
       }),
     toggleCurrentProbe: (componentId) =>
       set((s) => {
         const existing = s.probes.find((p) => p.componentId === componentId);
         if (existing) return { ...recordInto(s), probes: s.probes.filter((p) => p.id !== existing.id) };
         const target = s.components.find((c) => c.id === componentId);
-        if (!target || target.kind === "ground") return s;
+        if (!target || target.kind === "ground" || !canCurrentProbe(target.kind)) return s;
         const color = PROBE_COLORS[s.probes.length % PROBE_COLORS.length];
         return {
           ...recordInto(s),

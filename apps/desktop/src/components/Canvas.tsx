@@ -643,7 +643,6 @@ export function Canvas({
   const setValue = useSchematic((s) => s.setValue);
   const probes = useSchematic((s) => s.probes);
   const addProbe = useSchematic((s) => s.addProbe);
-  const toggleCurrentProbe = useSchematic((s) => s.toggleCurrentProbe);
   const netLabels = useSchematic((s) => s.netLabels);
   const upsertNetLabel = useSchematic((s) => s.upsertNetLabel);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -926,17 +925,10 @@ export function Canvas({
     const world = screenToWorld(e.clientX, e.clientY);
 
     if (!interactive) {
-      // Read-only (simulator mode): select to inspect AND clamp-meter the part —
-      // clicking a component body toggles its I(ref) trace, like LTspice's
-      // current probe. Empty space pans to look around.
-      const hit = componentAt(components, world.x, world.y);
-      select(hit?.id ?? null);
-      if (hit) {
-        toggleCurrentProbe(hit.id);
-      } else {
-        drag.current = { mode: "pan", lastX: e.clientX, lastY: e.clientY, moved: false };
-        svgRef.current?.setPointerCapture(e.pointerId);
-      }
+      // Simulator view no longer hosts the schematic canvas (§UX). If this
+      // branch is ever hit, only pan — no probing or clamp-meter toggles.
+      drag.current = { mode: "pan", lastX: e.clientX, lastY: e.clientY, moved: false };
+      svgRef.current?.setPointerCapture(e.pointerId);
       return;
     }
 
@@ -1030,14 +1022,7 @@ export function Canvas({
 
   const onWirePointerDown = (e: ReactPointerEvent<SVGElement>, wire: SchematicWire) => {
     if (e.button !== 0) return;
-    if (!interactive) {
-      // Simulator mode: the canvas is read-only, so a wire click is LTspice's
-      // probe-in-place — toggle a probe here and the scope plots that net.
-      e.stopPropagation();
-      const w = snappedCursor(e.clientX, e.clientY);
-      addProbe(w.x, w.y);
-      return;
-    }
+    if (!interactive) return;
     if (tool.mode === "probe") {
       e.stopPropagation();
       const w = snappedCursor(e.clientX, e.clientY);

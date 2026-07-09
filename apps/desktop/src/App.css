@@ -1008,10 +1008,18 @@ body {
    corner min/max labels since there are many more of them now; `.mono-num`
    (applied alongside this class) carries the tabular-nums font. */
 .scope-tick {
-  fill: var(--muted);
-  font-size: 7.5px;
+  fill: var(--text);
+  font-size: var(--fs-micro);
   font-weight: 500;
   letter-spacing: 0.1px;
+}
+
+.scope-axis-title {
+  fill: var(--muted);
+  font-size: var(--fs-caption);
+  font-weight: 600;
+  letter-spacing: var(--tracking-micro);
+  text-transform: uppercase;
 }
 
 /* Zero-line: same gridline color family but stronger + fully opaque so the
@@ -2860,6 +2868,94 @@ body {
   background: var(--accent-soft);
 }
 
+.tree-file {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+.tree-file-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
+}
+
+.tree-file-close {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--r-sm);
+  color: var(--muted);
+  font-size: var(--fs-body);
+  line-height: 1;
+}
+
+.tree-file-close:hover {
+  color: var(--text);
+  background: var(--overlay-hover);
+}
+
+/* Analysis setup forms (DC / TF / Noise / Step) — replaces typing .directives */
+.analysis-setup {
+  margin: var(--sp-2) 0;
+  padding: var(--sp-2) var(--sp-3);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--panel-3);
+}
+
+.analysis-setup-head {
+  font-size: var(--fs-caption);
+  font-weight: 600;
+  letter-spacing: var(--tracking-micro);
+  text-transform: uppercase;
+  color: var(--faint);
+  margin-bottom: var(--sp-2);
+}
+
+.analysis-setup-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: var(--sp-2);
+}
+
+.analysis-setup-field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.analysis-setup-field > span {
+  font-size: var(--fs-micro);
+  font-weight: 600;
+  letter-spacing: var(--tracking-micro);
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.analysis-setup-select {
+  height: var(--row-h);
+  min-width: 0;
+  padding: 0 var(--sp-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--panel-2);
+  color: var(--text);
+  font-size: var(--fs-label);
+}
+
+.analysis-setup-hint {
+  margin: var(--sp-2) 0 0;
+  font-size: var(--fs-caption);
+  color: var(--muted);
+}
+
 /* editor */
 .editor-shell {
   flex: 1;
@@ -3319,7 +3415,14 @@ body {
 
 .property-field .eng-input {
   grid-column: 2;
-  max-width: 168px;
+  min-width: 120px;
+  max-width: none;
+  width: 100%;
+}
+
+.property-field .eng-input input,
+.property-field .eng-input select {
+  min-width: 0;
 }
 
 .property-field .eng-input input:not(:focus),
@@ -3410,7 +3513,8 @@ body {
 /* Resizable simulator columns: circuit (flex), analysis scope, and Ask Sim.
    Widths are driven by CSS vars set on .shell-body and dragged via handles. */
 .app-simulator .shell-body > .plotter {
-  width: var(--scope-w, 440px);
+  flex: 1;
+  width: auto;
   min-width: 300px;
   border-left: 0;
 }

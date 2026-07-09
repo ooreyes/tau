@@ -25,6 +25,9 @@ export interface PlotAxesProps {
   yScale?: AxisScale;
   xUnit?: string;
   yUnit?: string;
+  /** Persistent axis title (e.g. "Time", "Voltage") — LTspice/Desmos-style. */
+  xAxisTitle?: string;
+  yAxisTitle?: string;
   /** Target tick counts — lower this as the rendered plot shrinks (see
    *  `axisTicks.pickTickCount`) so labels don't collide at small sizes. */
   targetXTicks?: number;
@@ -46,6 +49,8 @@ export function PlotAxes({
   yScale = "linear",
   xUnit = "",
   yUnit = "",
+  xAxisTitle = "Time",
+  yAxisTitle = "Value",
   targetXTicks = 5,
   targetYTicks = 5,
   showXTicks = true,
@@ -116,6 +121,22 @@ export function PlotAxes({
           );
         })}
       </g>
+      {xAxisTitle && (
+        <text className="scope-axis-title mono-num" x={pad + innerW / 2} y={height - 2} textAnchor="middle">
+          {xUnit ? `${xAxisTitle} (${xUnit})` : xAxisTitle}
+        </text>
+      )}
+      {yAxisTitle && (
+        <text
+          className="scope-axis-title mono-num"
+          x={8}
+          y={pad + innerH / 2}
+          textAnchor="middle"
+          transform={`rotate(-90 8 ${pad + innerH / 2})`}
+        >
+          {yUnit ? `${yAxisTitle} (${yUnit})` : yAxisTitle}
+        </text>
+      )}
     </>
   );
 }

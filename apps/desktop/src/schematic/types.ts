@@ -106,6 +106,8 @@ export interface Probe {
   x: number;
   y: number;
   color: string;
+  /** Resolved net id at placement — stabilizes dedup when the probe drifts off a wire segment. */
+  netId?: string;
   componentId?: string;
 }
 
