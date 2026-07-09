@@ -186,8 +186,8 @@ export function Palette({ focusSignal }: { focusSignal: number; onNotice: (messa
                   >
                     <svg className="palette-icon" viewBox="-40 -36 80 72">
                       <g className="symbol">
-                        <path d="M -26 -10 H 8 L 26 0 L 8 10 H -26 Z" fill="none" />
-                        <circle cx={-18} cy={0} r={2.5} />
+                        <path d="M -26 -12 H 6 L 24 0 L 6 12 H -26 Z" fill="none" />
+                        <path d="M -18 -5 V 5 M -10 -5 V 5" fill="none" />
                       </g>
                     </svg>
                     <span className="palette-name">Net label</span>

@@ -2191,13 +2191,13 @@ body {
   border-radius: var(--r-md);
 }
 .view-btn {
-  width: 34px;
-  height: 32px;
+  width: 40px;
+  height: 36px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   font-family: var(--font-mono);
-  font-size: var(--fs-title);
+  font-size: var(--fs-heading);
   font-weight: 600;
   color: var(--muted);
   background: transparent;
@@ -2230,6 +2230,11 @@ body {
 }
 
 /* ── Wire / probe snap ring ────────────────────────────── */
+.snap-dot {
+  fill: var(--accent);
+  opacity: 0.28;
+  pointer-events: none;
+}
 .snap-ring {
   fill: none;
   stroke: var(--accent);
@@ -2900,6 +2905,87 @@ body {
   background: var(--overlay-hover);
 }
 
+.explorer-empty {
+  padding: var(--sp-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  color: var(--muted);
+  font-size: var(--fs-caption);
+  line-height: 1.45;
+}
+
+.explorer-empty-hint {
+  color: var(--faint);
+  margin: 0;
+}
+
+.explorer-empty-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}
+
+.explorer-actions {
+  display: flex;
+  gap: var(--sp-1);
+  padding: var(--sp-1) var(--sp-2);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.explorer-actions button {
+  flex: 1;
+  height: var(--row-h-dense);
+  font-size: var(--fs-micro);
+  font-weight: 600;
+  letter-spacing: var(--tracking-micro);
+  text-transform: uppercase;
+  color: var(--muted);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  cursor: pointer;
+}
+
+.explorer-actions button:hover {
+  color: var(--text);
+  border-color: var(--border-strong);
+  background: var(--overlay-hover);
+}
+
+.explorer-error {
+  margin: var(--sp-2);
+  padding: var(--sp-2);
+  color: var(--danger);
+  font-size: var(--fs-caption);
+  border: 1px solid var(--danger-line);
+  border-radius: var(--r-sm);
+  background: var(--danger-soft);
+}
+
+.tree-folder-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+  width: 100%;
+  height: var(--row-h-dense);
+  padding-right: var(--sp-2);
+  color: var(--muted);
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  text-align: left;
+}
+
+.tree-folder-row:hover {
+  color: var(--text);
+  background: var(--overlay-hover);
+}
+
+.tree-dir {
+  min-width: 0;
+}
+
 /* Analysis setup forms (DC / TF / Noise / Step) — replaces typing .directives */
 .analysis-setup {
   margin: var(--sp-2) 0;
@@ -2980,7 +3066,8 @@ body {
    to 208px, which drops the container query's threshold and the row sheds
    its description column rather than clipping the name (verified via
    design-shot at 900×600). */
-.shell-body > .palette {
+.shell-body > .palette,
+.shell-body > .components-rail {
   flex: none;
   width: 264px;
   border-left: 1px solid var(--border);
@@ -2990,9 +3077,66 @@ body {
 }
 
 @media (max-width: 1023px) {
-  .shell-body > .palette {
+  .shell-body > .palette,
+  .shell-body > .components-rail {
     width: 208px;
   }
+}
+
+.components-rail {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.components-rail-tabs {
+  display: flex;
+  flex: none;
+  border-bottom: 1px solid var(--border);
+}
+
+.components-rail-tabs button {
+  flex: 1;
+  height: 34px;
+  font-family: var(--font-ui);
+  font-size: var(--fs-caption);
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  color: var(--muted);
+  background: transparent;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+}
+
+.components-rail-tabs button:hover {
+  color: var(--text);
+  background: var(--overlay-hover);
+}
+
+.components-rail-tabs button.active {
+  color: var(--text);
+  border-bottom-color: var(--accent);
+}
+
+.components-rail-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.components-rail-body > .palette {
+  flex: 1;
+  width: auto;
+  border: 0;
+  background: transparent;
+}
+
+.components-rail-body > .component-inspector {
+  padding: 12px;
 }
 
 .editor-toolbar {
@@ -3780,6 +3924,49 @@ body {
 .palette-item.active {
   background: var(--overlay-hover-faint);
   box-shadow: inset 2px 0 0 var(--accent);
+}
+
+.palette-item.active:hover {
+  background: var(--overlay-hover-faint);
+}
+
+.probe-swatch-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 4px 12px 12px;
+}
+
+.probe-swatch-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.probe-swatch-label {
+  font-family: var(--font-mono);
+  font-size: var(--fs-caption);
+  color: var(--muted);
+}
+
+.probe-swatches {
+  display: flex;
+  gap: 4px;
+}
+
+.probe-swatch {
+  width: 14px;
+  height: 14px;
+  border-radius: 2px;
+  border: 1px solid var(--border-strong);
+  padding: 0;
+  cursor: pointer;
+}
+
+.probe-swatch.active {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
 }
 
 .palette-icon {

@@ -23,6 +23,7 @@ function resetStore() {
     counters: {},
     selectedId: null,
     selectedWireId: null,
+    selectedWireIds: [],
     selectedIds: [],
     tool: { mode: "select" },
     placeRotation: 0,

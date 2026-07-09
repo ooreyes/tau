@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
 import "./App.css";
 import { Toolbar } from "./components/Toolbar";
-import { Palette } from "./components/Palette";
 import { Canvas } from "./components/Canvas";
 import { StatusBar } from "./components/StatusBar";
 import { SimulationPanel } from "./components/SimulationPanel";
@@ -13,6 +12,7 @@ import {
   ActivityRail,
   AskSimPanel,
   BottomPanel,
+  ComponentsRail,
   ConfirmDialog,
   EditorTabs,
   EditorToolbar,
@@ -69,6 +69,9 @@ import {
   runNativeOperatingPoint,
   runNativeTransient,
 } from "./engine/nativeSpice";
+import { useProject } from "./store/useProject";
+import { basename } from "./project/types";
+import { validateSchematicDocument } from "./schematic/documentValidation";
 
 const DEFAULT_ANALYSIS_OPTIONS: AnalysisOptions = {
   stopTime: 0.006,
@@ -82,6 +85,9 @@ interface OpenTab {
   title: string;
   doc: SchematicDocument | null;
   history: SchematicHistory;
+  /** Absolute path when opened from a project folder; null for scratchpads. */
+  filePath?: string | null;
+  dirty?: boolean;
 }
 
 const newTabId = () => `tab-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
@@ -183,6 +189,7 @@ function App() {
   const [aiOpen, setAiOpen] = useState(true);
   const [componentFocusSignal, setComponentFocusSignal] = useState(0);
   const [partsOpen, setPartsOpen] = useState(true);
+  const [fitSignal, setFitSignal] = useState(0);
   const [scopeWidth, setScopeWidth] = useState(440);
   const [askWidth, setAskWidth] = useState(330);
   const [dcSetup, setDcSetup] = useState<DcSweepSpec>(() => defaultDcSetup([]));
@@ -196,7 +203,11 @@ function App() {
   // result from an edited, closed, or stopped circuit overwriting current UI.
   const analysisRequestRef = useRef(0);
 
+  const writeSim = useProject((s) => s.writeSim);
+  const projectRoot = useProject((s) => s.rootPath);
+
   const documentTitle = (tabs.find((tab) => tab.id === activeId) ?? tabs[0])?.title ?? "untitled.sim";
+  const activeFilePath = (tabs.find((tab) => tab.id === activeId) ?? tabs[0])?.filePath ?? null;
 
   const showNotice = useCallback((message: string) => {
     setNotice(message);
@@ -509,24 +520,66 @@ function App() {
   }, []);
 
   // Open a document: focus its tab if already open, otherwise add a new one.
-  const openDocument = useCallback((doc: SchematicDocument, title: string) => {
+  const openDocument = useCallback((doc: SchematicDocument, title: string, filePath?: string | null) => {
     const snap = snapshotActive(tabs);
-    const existing = snap.find((tab) => tab.title === title);
+    const existing = snap.find((tab) => (filePath ? tab.filePath === filePath : tab.title === title));
     if (existing) {
-      setTabs(snap.map((tab) => (tab.id === existing.id ? { ...tab, doc, history: emptyHistory() } : tab)));
+      setTabs(snap.map((tab) =>
+        tab.id === existing.id
+          ? { ...tab, doc, history: emptyHistory(), filePath: filePath ?? tab.filePath, dirty: false }
+          : tab,
+      ));
       setActiveId(existing.id);
       loadCircuit(doc);
     } else {
       const id = newTabId();
-      setTabs([...snap, { id, title, doc, history: emptyHistory() }]);
+      setTabs([...snap, { id, title, doc, history: emptyHistory(), filePath: filePath ?? null, dirty: false }]);
       setActiveId(id);
       loadCircuit(doc);
     }
     adoptDirectiveOptions(doc);
     invalidateAnalysis();
     setMode("schematic");
+    setFitSignal((n) => n + 1);
     showNotice(`Opened ${title}`);
   }, [tabs, snapshotActive, loadCircuit, adoptDirectiveOptions, invalidateAnalysis, showNotice]);
+
+  const openSimFromProject = useCallback((path: string, title: string, json: string) => {
+    try {
+      const parsed = JSON.parse(json) as unknown;
+      const doc = validateSchematicDocument(parsed);
+      openDocument(doc, title, path);
+    } catch (error) {
+      showNotice(error instanceof Error ? error.message : "Could not open .sim file.");
+    }
+  }, [openDocument, showNotice]);
+
+  const saveActiveToProject = useCallback(async () => {
+    const tab = tabs.find((t) => t.id === activeId);
+    if (!tab?.filePath) {
+      showNotice(projectRoot
+        ? "Use New .sim in the explorer, or Save .tau.json from the toolbar for a download."
+        : "Open a project folder to save .sim files on disk.");
+      return;
+    }
+    const payload = {
+      app: "Tau",
+      version: 1,
+      savedAt: new Date().toISOString(),
+      components,
+      wires,
+      probes,
+      netLabels,
+      directives,
+    };
+    try {
+      await writeSim(tab.filePath, JSON.stringify(payload, null, 2));
+      setTabs((list) => list.map((t) => (t.id === activeId ? { ...t, dirty: false } : t)));
+      showNotice(`Saved ${basename(tab.filePath)}`);
+    } catch (error) {
+      showNotice(error instanceof Error ? error.message : "Save failed.");
+    }
+  }, [tabs, activeId, projectRoot, components, wires, probes, netLabels, directives, writeSim, showNotice]);
 
   const openExample = useCallback((example: ExampleCircuit) => {
     openDocument(example, `${example.name.toLowerCase().replace(/\s+/g, "-")}.sim`);
@@ -544,6 +597,7 @@ function App() {
     restoreCircuit(restored, target.history);
     adoptDirectiveOptions(restored);
     invalidateAnalysis();
+    setFitSignal((n) => n + 1);
   }, [activeId, tabs, snapshotActive, restoreCircuit, adoptDirectiveOptions, invalidateAnalysis]);
 
   const startNewCircuit = useCallback(() => {
@@ -559,6 +613,7 @@ function App() {
     setMode("schematic");
     setGraphOpen(true);
     setAiOpen(true);
+    setFitSignal((n) => n + 1);
     showNotice("Started a new blank circuit.");
   }, [tabs, snapshotActive, newCircuit, invalidateAnalysis, showNotice]);
 
@@ -732,12 +787,11 @@ function App() {
         />
         {mode === "schematic" && (
           <ExplorerPanel
-            tabs={tabs}
-            activeId={activeId}
-            onSelectTab={switchTab}
-            onCloseTab={(id) => setConfirmCloseTabId(id)}
+            activeFilePath={activeFilePath}
+            onOpenSimFile={openSimFromProject}
             onNewCircuit={startNewCircuit}
             onSearch={() => setPaletteOpen(true)}
+            onNotice={showNotice}
           />
         )}
         {mode === "schematic" && (
@@ -752,6 +806,7 @@ function App() {
             onClearScratchpad={() => setConfirmClearOpen(true)}
             onOpenCircuit={(doc, title) => openDocument(doc, title)}
             onOpenExample={openExample}
+            onSaveProjectFile={() => { void saveActiveToProject(); }}
           />
           <EditorTabs
             tabs={tabs}
@@ -763,7 +818,7 @@ function App() {
             onHideSimulator={() => setMode("schematic")}
           />
           <main className="stage">
-            <Canvas analysis={analysis} op={opAnalysis} interactive />
+            <Canvas analysis={analysis} op={opAnalysis} interactive fitSignal={fitSignal} />
             {components.length === 0 && wires.length === 0 && toolMode === "select" && (
               <EmptyState />
             )}
@@ -847,7 +902,7 @@ function App() {
           />
         )}
         {mode === "schematic" && partsOpen && (
-          <Palette focusSignal={componentFocusSignal} onNotice={showNotice} />
+          <ComponentsRail focusSignal={componentFocusSignal} onNotice={showNotice} />
         )}
       </div>
       <StatusBar mode={mode} result={analysis} title={documentTitle} />

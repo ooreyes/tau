@@ -8,11 +8,14 @@ import { importAsc, decodeSchematicText, makeSubcircuitResolver } from "../io/as
 import { schematicToAsc } from "../io/ascExport";
 import { parseCir } from "../io/cirImport";
 import { EngineeringInput } from "./EngineeringInput";
+import { Palette } from "./Palette";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Dialog, DialogContent, DialogHeader, DialogFooter, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useSchematic, type SchematicDocument } from "../store/useSchematic";
+import { useProject } from "../store/useProject";
+import { basename } from "../project/types";
 import { EXAMPLE_CIRCUITS, type ExampleCircuit } from "../examples/circuits";
 import type { AnalysisResult } from "../simulation/linearTransient";
 import { componentCurrents } from "../simulation/currents";
@@ -82,74 +85,272 @@ function RailButton({
 }
 
 export function ExplorerPanel({
-  tabs,
-  activeId,
-  onSelectTab,
-  onCloseTab,
+  activeFilePath,
+  onOpenSimFile,
   onNewCircuit,
   onSearch,
+  onNotice,
 }: {
-  tabs: { id: string; title: string }[];
-  activeId: string;
-  onSelectTab: (id: string) => void;
-  onCloseTab: (id: string) => void;
+  activeFilePath: string | null;
+  onOpenSimFile: (path: string, title: string, json: string) => void;
   onNewCircuit: () => void;
   onSearch: () => void;
+  onNotice: (message: string) => void;
 }) {
+  const rootPath = useProject((s) => s.rootPath);
+  const rootName = useProject((s) => s.rootName);
+  const tree = useProject((s) => s.tree);
+  const expanded = useProject((s) => s.expanded);
+  const error = useProject((s) => s.error);
+  const capability = useProject((s) => s.capability);
+  const detectCapability = useProject((s) => s.detectCapability);
+  const openFolder = useProject((s) => s.openFolder);
+  const newProject = useProject((s) => s.newProject);
+  const toggleExpanded = useProject((s) => s.toggleExpanded);
+  const createFolder = useProject((s) => s.createFolder);
+  const createSimFile = useProject((s) => s.createSimFile);
+  const deleteNode = useProject((s) => s.deleteNode);
+  const readSim = useProject((s) => s.readSim);
+
+  useEffect(() => {
+    void detectCapability();
+  }, [detectCapability]);
+
+  const openNode = async (path: string, name: string) => {
+    try {
+      const json = await readSim(path);
+      onOpenSimFile(path, name, json);
+    } catch (err) {
+      onNotice(err instanceof Error ? err.message : "Could not open file.");
+    }
+  };
+
+  const promptName = (label: string, fallback: string) => {
+    const value = window.prompt(label, fallback);
+    return value?.trim() || null;
+  };
+
   return (
-    <aside className="explorer-panel" aria-label="Open documents">
+    <aside className="explorer-panel" aria-label="Project explorer">
       <div className="explorer-head">
-        <span>open</span>
+        <span>{rootName ?? "project"}</span>
         <div className="explorer-icons">
-          <button title="New scratchpad" aria-label="New scratchpad" onClick={onNewCircuit}>＋</button>
-          <button title="Search commands" aria-label="Search commands" onClick={onSearch}>▣</button>
+          <button
+            title="Open folder"
+            aria-label="Open folder"
+            onClick={async () => {
+              if (capability === "none") {
+                onNotice("Open folder requires the Tau desktop app (or a Chromium browser with folder access).");
+                return;
+              }
+              const ok = await openFolder();
+              if (ok) onNotice("Project folder opened.");
+            }}
+          >
+            ⌁
+          </button>
+          <button
+            title="New project"
+            aria-label="New project"
+            onClick={async () => {
+              if (capability === "none") {
+                onNotice("New project requires the Tau desktop app.");
+                return;
+              }
+              const ok = await newProject();
+              if (ok) onNotice("Created new project.");
+            }}
+          >
+            ＋
+          </button>
+          <button title="New scratchpad" aria-label="New scratchpad" onClick={onNewCircuit}>
+            ⎙
+          </button>
+          <button title="Search commands" aria-label="Search commands" onClick={onSearch}>
+            ▣
+          </button>
         </div>
       </div>
-      <button className="explorer-search" aria-label="Search commands" onClick={onSearch}>
-        <svg viewBox="0 0 16 16" aria-hidden="true">
-          <circle cx="7" cy="7" r="4.5" />
-          <path d="M10.5 10.5 14 14" />
-        </svg>
-        <span>search</span>
-      </button>
-      <div className="tree-list">
-        {tabs.map((tab) => {
-          const active = tab.id === activeId;
-          return (
-            <button
-              key={tab.id}
-              className={`tree-file${active ? " active" : ""}`}
-              aria-current={active ? "page" : undefined}
-              onClick={() => onSelectTab(tab.id)}
+
+      {!rootPath && (
+        <div className="explorer-empty">
+          <p>Open a folder to work like VS Code — create subfolders and `.sim` files on disk.</p>
+          {capability === "none" && (
+            <p className="explorer-empty-hint">Folder projects need the desktop app (`pnpm dev`).</p>
+          )}
+          <div className="explorer-empty-actions">
+            <Button
+              size="sm"
+              onClick={async () => {
+                if (capability === "none") {
+                  onNotice("Open folder requires the Tau desktop app.");
+                  return;
+                }
+                await openFolder();
+              }}
             >
-              <i className={active ? "amber" : "blue"} />
-              <span className="tree-file-name">{tab.title}</span>
-              {tabs.length > 1 && (
-                <span
-                  className="tree-file-close"
-                  role="button"
-                  tabIndex={0}
-                  aria-label={`Close ${tab.title}`}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onCloseTab(tab.id);
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      onCloseTab(tab.id);
-                    }
-                  }}
-                >
-                  ×
-                </span>
-              )}
+              Open Folder
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={async () => {
+                if (capability === "none") {
+                  onNotice("New project requires the Tau desktop app.");
+                  return;
+                }
+                await newProject();
+              }}
+            >
+              New Project
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {rootPath && (
+        <>
+          <div className="explorer-actions">
+            <button
+              type="button"
+              onClick={async () => {
+                const name = promptName("New folder name", "circuits");
+                if (!name) return;
+                const path = await createFolder(rootPath, name);
+                if (path) onNotice(`Created folder ${name}`);
+              }}
+            >
+              New Folder
             </button>
-          );
-        })}
-      </div>
+            <button
+              type="button"
+              onClick={async () => {
+                const name = promptName("New simulation name", "untitled.sim");
+                if (!name) return;
+                const path = await createSimFile(rootPath, name);
+                if (path) {
+                  onNotice(`Created ${basename(path)}`);
+                  await openNode(path, basename(path));
+                }
+              }}
+            >
+              New .sim
+            </button>
+          </div>
+          <div className="tree-list">
+            <ProjectTree
+              nodes={tree}
+              depth={0}
+              expanded={expanded}
+              activeFilePath={activeFilePath}
+              onToggle={toggleExpanded}
+              onOpenFile={openNode}
+              onNewFolder={async (parent) => {
+                const name = promptName("New folder name", "circuits");
+                if (!name) return;
+                await createFolder(parent, name);
+              }}
+              onNewSim={async (parent) => {
+                const name = promptName("New simulation name", "untitled.sim");
+                if (!name) return;
+                const path = await createSimFile(parent, name);
+                if (path) await openNode(path, basename(path));
+              }}
+              onDelete={async (path, name) => {
+                if (!window.confirm(`Delete “${name}”?`)) return;
+                await deleteNode(path);
+                onNotice(`Deleted ${name}`);
+              }}
+            />
+          </div>
+        </>
+      )}
+
+      {error && <p className="explorer-error" role="alert">{error}</p>}
     </aside>
+  );
+}
+
+function ProjectTree({
+  nodes,
+  depth,
+  expanded,
+  activeFilePath,
+  onToggle,
+  onOpenFile,
+  onNewFolder,
+  onNewSim,
+  onDelete,
+}: {
+  nodes: import("../project/types").ProjectNode[];
+  depth: number;
+  expanded: string[];
+  activeFilePath: string | null;
+  onToggle: (path: string) => void;
+  onOpenFile: (path: string, name: string) => void;
+  onNewFolder: (parent: string) => void;
+  onNewSim: (parent: string) => void;
+  onDelete: (path: string, name: string) => void;
+}) {
+  return (
+    <>
+      {nodes.map((node) => {
+        if (node.kind === "dir") {
+          const open = expanded.includes(node.path);
+          return (
+            <div key={node.path} className="tree-dir">
+              <button
+                type="button"
+                className="tree-folder-row"
+                style={{ paddingLeft: 8 + depth * 12 }}
+                onClick={() => onToggle(node.path)}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  const action = window.prompt(`Folder “${node.name}”: type folder / sim / delete`, "folder");
+                  if (action === "folder") onNewFolder(node.path);
+                  else if (action === "sim") onNewSim(node.path);
+                  else if (action === "delete") onDelete(node.path, node.name);
+                }}
+              >
+                <span className="tree-caret">{open ? "▾" : "▸"}</span>
+                <span className="tree-folder">{node.name}</span>
+              </button>
+              {open && node.children && (
+                <ProjectTree
+                  nodes={node.children}
+                  depth={depth + 1}
+                  expanded={expanded}
+                  activeFilePath={activeFilePath}
+                  onToggle={onToggle}
+                  onOpenFile={onOpenFile}
+                  onNewFolder={onNewFolder}
+                  onNewSim={onNewSim}
+                  onDelete={onDelete}
+                />
+              )}
+            </div>
+          );
+        }
+        const active = node.path === activeFilePath;
+        return (
+          <button
+            key={node.path}
+            type="button"
+            className={`tree-file${active ? " active" : ""}`}
+            style={{ paddingLeft: 8 + depth * 12 }}
+            aria-current={active ? "page" : undefined}
+            onClick={() => onOpenFile(node.path, node.name)}
+            onContextMenu={(e) => {
+              e.preventDefault();
+              if (window.confirm(`Delete “${node.name}”?`)) onDelete(node.path, node.name);
+            }}
+          >
+            <i className={active ? "amber" : "blue"} />
+            <span className="tree-file-name">{node.name}</span>
+          </button>
+        );
+      })}
+    </>
   );
 }
 
@@ -163,6 +364,7 @@ export function EditorToolbar({
   onClearScratchpad,
   onOpenCircuit,
   onOpenExample,
+  onSaveProjectFile,
 }: {
   mode: "schematic" | "simulator";
   isRunning: boolean;
@@ -173,6 +375,7 @@ export function EditorToolbar({
   onClearScratchpad: () => void;
   onOpenCircuit: (doc: SchematicDocument, title: string) => void;
   onOpenExample: (example: ExampleCircuit) => void;
+  onSaveProjectFile?: () => void;
 }) {
   // The simulator view is read-only (pan/zoom/probe only — see Canvas's
   // `interactive` prop and App.tsx's keydown gate); every editing control in
@@ -309,8 +512,8 @@ export function EditorToolbar({
         <path d="M5.5 12.5 12.5 5.5" />
       </IconButton>
       <IconButton title="Net label (F4)" active={tool.mode === "label"} disabled={readOnly} onClick={startLabeling}>
-        <path d="M2 5h8l4 3-4 3H2z" />
-        <circle cx="5" cy="8" r="1" />
+        <path d="M3 4h7l5 4-5 4H3z" />
+        <path d="M5.5 6.5v3M7.5 6.5v3" />
       </IconButton>
       <IconButton title="Probe" active={tool.mode === "probe"} onClick={startProbing}>
         <circle cx="8" cy="8" r="4" />
@@ -333,7 +536,21 @@ export function EditorToolbar({
           App.css) — all styling comes from the Button primitive (§10). */}
       <Button variant="outline" size="sm" className="editor-doc-btn" onClick={onNewCircuit}>New</Button>
       <Button variant="outline" size="sm" className="editor-doc-btn" onClick={() => fileInputRef.current?.click()}>Open</Button>
-      <Button variant="outline" size="sm" className="editor-doc-btn" disabled={!hasDocument} onClick={saveCircuit}>Save</Button>
+      <Button
+        variant="outline"
+        size="sm"
+        className="editor-doc-btn"
+        disabled={!hasDocument && !onSaveProjectFile}
+        onClick={() => {
+          if (onSaveProjectFile) onSaveProjectFile();
+          else saveCircuit();
+        }}
+      >
+        Save
+      </Button>
+      <Button variant="outline" size="sm" className="editor-doc-btn" disabled={!hasDocument} onClick={saveCircuit} title="Download .tau.json">
+        Download
+      </Button>
       <Button variant="outline" size="sm" className="editor-doc-btn" disabled={!hasDocument} onClick={saveAsc} title="Export as LTspice .asc">Save .asc</Button>
       <input
         ref={fileInputRef}
@@ -612,17 +829,16 @@ function ErrorPanel({ result }: { result: AnalysisResult | null }) {
 function ComponentInspector({ selected }: { selected: SchematicComponent | null }) {
   const entry = selected ? CATALOG_BY_KIND[selected.kind] : null;
   const setValue = useSchematic((s) => s.setValue);
+  const setLabel = useSchematic((s) => s.setLabel);
   const beginChange = useSchematic((s) => s.beginChange);
   const editKeyRef = useRef<string | null>(null);
   const fields = selected && entry ? paramFields(selected.kind) : [];
   const decoded = selected ? decodeParams(selected.kind, selected.value) : {};
-  const visibleFields = fields.length > 0
-    ? fields.map((field) => ({
-        ...field,
-        value: decoded[field.key] ?? "",
-        editable: true,
-      }))
-    : [{ key: "value", label: "Value", unit: "", value: selected?.value || "—", editable: false }];
+  const visibleFields = fields.map((field) => ({
+    ...field,
+    value: decoded[field.key] ?? "",
+    editable: true,
+  }));
 
   const beginParamChange = (key: string) => {
     if (!selected) return;
@@ -660,10 +876,26 @@ function ComponentInspector({ selected }: { selected: SchematicComponent | null 
       </div>
       {selected && (
         <div className="property-grid">
-          {visibleFields.slice(0, 6).map((field) => (
-            <label key={field.label} className="property-field">
+          <label className="property-field">
+            <span>Refdes</span>
+            <input
+              className="mono-num"
+              value={selected.label}
+              aria-label="Reference designator"
+              spellCheck={false}
+              onFocus={() => {
+                editKeyRef.current = null;
+              }}
+              onChange={(event) => {
+                beginParamChange("label");
+                setLabel(selected.id, event.currentTarget.value);
+              }}
+            />
+          </label>
+          {visibleFields.map((field) => (
+            <label key={field.key} className="property-field">
               <span>{field.label}</span>
-              {field.editable && field.unit ? (
+              {field.unit ? (
                 <EngineeringInput
                   label={field.label}
                   value={field.value}
@@ -675,27 +907,90 @@ function ComponentInspector({ selected }: { selected: SchematicComponent | null 
                 <input
                   className="mono-num"
                   value={field.value}
-                  readOnly={!field.editable}
-                  aria-readonly={!field.editable}
+                  aria-label={field.label}
+                  spellCheck={false}
                   onFocus={() => {
                     editKeyRef.current = null;
                   }}
-                  onBlur={() => {
-                    editKeyRef.current = null;
-                  }}
                   onChange={(event) => {
-                    if (!field.editable) return;
                     beginParamChange(field.key);
                     updateParam(field.key, event.currentTarget.value);
                   }}
-                  spellCheck={false}
                 />
               )}
             </label>
           ))}
+          {visibleFields.length === 0 && entry && (
+            <label className="property-field">
+              <span>Value</span>
+              <input
+                className="mono-num"
+                value={selected.value}
+                aria-label="Value"
+                spellCheck={false}
+                onFocus={() => {
+                  editKeyRef.current = null;
+                }}
+                onChange={(event) => {
+                  beginParamChange("value");
+                  setValue(selected.id, event.currentTarget.value);
+                }}
+              />
+            </label>
+          )}
         </div>
       )}
     </div>
+  );
+}
+
+/** Right-rail panel: Properties (inspector) + Library (place palette). */
+export function ComponentsRail({
+  focusSignal,
+  onNotice,
+}: {
+  focusSignal: number;
+  onNotice: (message: string) => void;
+}) {
+  const selectedId = useSchematic((s) => s.selectedId);
+  const components = useSchematic((s) => s.components);
+  const selected = components.find((c) => c.id === selectedId) ?? null;
+  const [segment, setSegment] = useState<"properties" | "library">(selected ? "properties" : "library");
+
+  useEffect(() => {
+    if (selected) setSegment("properties");
+  }, [selected?.id]);
+
+  return (
+    <aside className="components-rail" aria-label="Components">
+      <div className="components-rail-tabs" role="tablist">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={segment === "properties"}
+          className={segment === "properties" ? "active" : undefined}
+          onClick={() => setSegment("properties")}
+        >
+          Properties
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={segment === "library"}
+          className={segment === "library" ? "active" : undefined}
+          onClick={() => setSegment("library")}
+        >
+          Library
+        </button>
+      </div>
+      <div className="components-rail-body">
+        {segment === "properties" ? (
+          <ComponentInspector selected={selected} />
+        ) : (
+          <Palette focusSignal={focusSignal} onNotice={onNotice} />
+        )}
+      </div>
+    </aside>
   );
 }
 
@@ -851,6 +1146,16 @@ export function SettingsPanel({
 }) {
   const probes = useSchematic((s) => s.probes);
   const clearProbes = useSchematic((s) => s.clearProbes);
+  const setProbeColor = useSchematic((s) => s.setProbeColor);
+
+  const PROBE_SWATCHES = [
+    "var(--trace-red)",
+    "var(--trace-purple)",
+    "var(--trace-cyan)",
+    "var(--trace-green)",
+    "var(--trace-amber)",
+    "var(--trace-cream)",
+  ];
 
   const clearAutosave = () => {
     try {
@@ -885,6 +1190,30 @@ export function SettingsPanel({
               Clear
             </Button>
           </SettingsRow>
+          {probes.length > 0 && (
+            <div className="probe-swatch-list" aria-label="Probe colors">
+              {probes.map((probe, index) => (
+                <div key={probe.id} className="probe-swatch-row">
+                  <span className="probe-swatch-label">
+                    {probe.componentId ? `I(${probe.componentId})` : `V${index + 1}`}
+                  </span>
+                  <div className="probe-swatches" role="group" aria-label={`Color for probe ${index + 1}`}>
+                    {PROBE_SWATCHES.map((color) => (
+                      <button
+                        key={color}
+                        type="button"
+                        className={`probe-swatch${probe.color === color ? " active" : ""}`}
+                        style={{ background: color }}
+                        aria-label={color.replace("var(--", "").replace(")", "")}
+                        aria-pressed={probe.color === color}
+                        onClick={() => setProbeColor(probe.id, color)}
+                      />
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
           <SettingsRow label="Local autosave" hint="browser localStorage snapshot">
             <Button size="sm" variant="outline" onClick={clearAutosave}>Clear</Button>
           </SettingsRow>

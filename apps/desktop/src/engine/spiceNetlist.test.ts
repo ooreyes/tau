@@ -330,6 +330,17 @@ describe("buildSpiceDeck", () => {
     expect(deck.netlist).toMatch(/M1 n\d+ n\d+ 0 n\d+ MYNMOS/);
   });
 
+  it("appends MOSFET instance W/L from the structured value encoding", () => {
+    const components = [
+      component("nmos", "M1", "NMOS W=20u L=2u", 0, 0),
+      component("ground", "", "", 16, 32),
+    ];
+
+    const deck = buildSpiceDeck({ components, wires: [] }, { kind: "op" });
+
+    expect(deck.netlist).toMatch(/M1 n\d+ n\d+ 0 n\d+ TAU_NMOS W=20u L=2u/);
+  });
+
   it("writes a proper AC source and sweep directive", () => {
     const components = [
       component("vac", "V1", "0 2 1k", 0, 32),

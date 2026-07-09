@@ -50,6 +50,8 @@ interface SchematicState extends Doc {
   // ephemeral UI state (never recorded in history)
   selectedId: string | null;
   selectedWireId: string | null;
+  /** Multi-wire selection (box-select); selectedWireId is the primary / first. */
+  selectedWireIds: string[];
   /** Multi-selection: all selected component ids (superset of selectedId). */
   selectedIds: string[];
   tool: Tool;
@@ -71,6 +73,8 @@ interface SchematicState extends Doc {
   cancel: () => void;
   select: (id: string | null) => void;
   selectWire: (id: string | null) => void;
+  /** Replace the wire multi-selection (clears component selection). */
+  selectWires: (ids: string[]) => void;
   /** Replace the entire multi-selection (clears single-select and wire select). */
   selectMultiple: (ids: string[]) => void;
   /** Toggle a single component in/out of the multi-selection (Shift+click). */
@@ -101,6 +105,8 @@ interface SchematicState extends Doc {
   clearProbes: () => void;
   /** Replace all probes (used to restore a tab's saved probes). */
   setProbes: (probes: Probe[]) => void;
+  /** Change a probe's trace color (token CSS var). */
+  setProbeColor: (id: string, color: string) => void;
 
   /** User-assigned net names, pinned to world points on the net. */
   netLabels: NetLabel[];
@@ -134,6 +140,8 @@ interface SchematicState extends Doc {
   /** Clear any active selection (single, multi, or wire). */
   clearSelection: () => void;
   setValue: (id: string, value: string) => void;
+  /** Rename a component's reference designator (canvas label). */
+  setLabel: (id: string, label: string) => void;
 
   /** SPICE directives carried by the document (built into the param scope at run time). */
   directives: string[];
@@ -293,6 +301,7 @@ export const useSchematic = create<SchematicState>()((set) => {
     counters: initialDoc ? deriveCounters(initialDoc.components) : {},
     selectedId: null,
     selectedWireId: null,
+    selectedWireIds: [],
     selectedIds: [],
     tool: { mode: "select" },
     placeRotation: 0,
@@ -318,6 +327,7 @@ export const useSchematic = create<SchematicState>()((set) => {
           future: [docOf(s), ...s.future].slice(0, HISTORY_LIMIT),
           selectedId: null,
           selectedWireId: null,
+          selectedWireIds: [],
           selectedIds: [],
         };
       }),
@@ -332,22 +342,31 @@ export const useSchematic = create<SchematicState>()((set) => {
           future: s.future.slice(1),
           selectedId: null,
           selectedWireId: null,
+          selectedWireIds: [],
           selectedIds: [],
         };
       }),
 
-    startPlacing: (kind) => set({ tool: { mode: "place", kind }, selectedId: null, selectedWireId: null, selectedIds: [] }),
-    startWiring: () => set({ tool: { mode: "wire" }, selectedId: null, selectedWireId: null, selectedIds: [] }),
+    startPlacing: (kind) => set({ tool: { mode: "place", kind }, selectedId: null, selectedWireId: null, selectedWireIds: [], selectedIds: [] }),
+    startWiring: () => set({ tool: { mode: "wire" }, selectedId: null, selectedWireId: null, selectedWireIds: [], selectedIds: [] }),
     cancel: () => set({ tool: { mode: "select" } }),
 
-    select: (id) => set({ selectedId: id, selectedWireId: null, selectedIds: id ? [id] : [] }),
-    selectWire: (id) => set({ selectedWireId: id, selectedId: null, selectedIds: [] }),
+    select: (id) => set({ selectedId: id, selectedWireId: null, selectedWireIds: [], selectedIds: id ? [id] : [] }),
+    selectWire: (id) => set({ selectedWireId: id, selectedWireIds: id ? [id] : [], selectedId: null, selectedIds: [] }),
+    selectWires: (ids) =>
+      set({
+        selectedWireIds: ids,
+        selectedWireId: ids[0] ?? null,
+        selectedId: null,
+        selectedIds: [],
+      }),
 
     selectMultiple: (ids) =>
       set({
         selectedIds: ids,
         selectedId: ids.length === 1 ? ids[0] : null,
         selectedWireId: null,
+        selectedWireIds: [],
       }),
 
     toggleSelect: (id) =>
@@ -358,6 +377,7 @@ export const useSchematic = create<SchematicState>()((set) => {
           selectedIds: next,
           selectedId: next.length === 1 ? next[0] : null,
           selectedWireId: null,
+          selectedWireIds: [],
         };
       }),
 
@@ -419,7 +439,7 @@ export const useSchematic = create<SchematicState>()((set) => {
         return { components: updatedComponents, wires: updatedWires };
       }),
 
-    startProbing: () => set({ tool: { mode: "probe" }, selectedId: null, selectedWireId: null }),
+    startProbing: () => set({ tool: { mode: "probe" }, selectedId: null, selectedWireId: null, selectedWireIds: [], selectedIds: [] }),
     // A net carries AT MOST ONE voltage probe (current/clamp probes dedup
     // separately, per component, in toggleCurrentProbe below). Resolve the
     // click through the same net-identity authority the netlist extractor
@@ -477,8 +497,12 @@ export const useSchematic = create<SchematicState>()((set) => {
     removeProbe: (id) => set((s) => ({ ...recordInto(s), probes: s.probes.filter((p) => p.id !== id) })),
     clearProbes: () => set((s) => ({ ...recordInto(s), probes: [] })),
     setProbes: (probes) => set({ probes }),
+    setProbeColor: (id, color) =>
+      set((s) => ({
+        probes: s.probes.map((p) => (p.id === id ? { ...p, color } : p)),
+      })),
 
-    startLabeling: () => set({ tool: { mode: "label" }, selectedId: null, selectedWireId: null, selectedIds: [] }),
+    startLabeling: () => set({ tool: { mode: "label" }, selectedId: null, selectedWireId: null, selectedWireIds: [], selectedIds: [] }),
 
     upsertNetLabel: (x, y, text) =>
       set((s) => {
@@ -520,6 +544,7 @@ export const useSchematic = create<SchematicState>()((set) => {
           counters: { ...s.counters, [entry.prefix]: n },
           selectedId: comp.id,
           selectedWireId: null,
+          selectedWireIds: [],
           selectedIds: [comp.id],
         };
       }),
@@ -587,6 +612,7 @@ export const useSchematic = create<SchematicState>()((set) => {
           counters: { ...s.counters, [prefix]: next },
           selectedId: comp.id,
           selectedWireId: null,
+          selectedWireIds: [],
           selectedIds: [comp.id],
         };
       }),
@@ -603,6 +629,7 @@ export const useSchematic = create<SchematicState>()((set) => {
           counters: { ...s.counters, [prefix]: next },
           selectedId: comp.id,
           selectedWireId: null,
+          selectedWireIds: [],
           selectedIds: [comp.id],
         };
       }),
@@ -617,6 +644,8 @@ export const useSchematic = create<SchematicState>()((set) => {
             components: s.components.filter((c) => !idSet.has(c.id)),
             selectedId: null,
             selectedIds: [],
+            selectedWireId: null,
+            selectedWireIds: [],
           };
         }
         if (s.selectedId) {
@@ -625,24 +654,38 @@ export const useSchematic = create<SchematicState>()((set) => {
             components: s.components.filter((c) => c.id !== s.selectedId),
             selectedId: null,
             selectedIds: [],
+            selectedWireId: null,
+            selectedWireIds: [],
           };
         }
-        if (s.selectedWireId) {
+        const wireIds =
+          s.selectedWireIds.length > 0
+            ? s.selectedWireIds
+            : s.selectedWireId
+              ? [s.selectedWireId]
+              : [];
+        if (wireIds.length > 0) {
+          const idSet = new Set(wireIds);
           return {
             ...recordInto(s),
-            wires: s.wires.filter((w) => w.id !== s.selectedWireId),
+            wires: s.wires.filter((w) => !idSet.has(w.id)),
             selectedWireId: null,
+            selectedWireIds: [],
           };
         }
         return {};
       }),
 
-    clearSelection: () => set({ selectedId: null, selectedWireId: null, selectedIds: [] }),
+    clearSelection: () => set({ selectedId: null, selectedWireId: null, selectedWireIds: [], selectedIds: [] }),
 
     // History for a value edit is captured once by the caller via beginChange() on first keystroke.
     setValue: (id, value) =>
       set((s) => ({
         components: s.components.map((c) => (c.id === id ? { ...c, value } : c)),
+      })),
+    setLabel: (id, label) =>
+      set((s) => ({
+        components: s.components.map((c) => (c.id === id ? { ...c, label } : c)),
       })),
 
     loadCircuit: (doc) =>
@@ -659,6 +702,7 @@ export const useSchematic = create<SchematicState>()((set) => {
           future: [],
           selectedId: null,
           selectedWireId: null,
+          selectedWireIds: [],
           selectedIds: [],
           tool: { mode: "select" },
         };
@@ -678,6 +722,7 @@ export const useSchematic = create<SchematicState>()((set) => {
           future: history.future.map(copyHistoryEntry).slice(0, HISTORY_LIMIT),
           selectedId: null,
           selectedWireId: null,
+          selectedWireIds: [],
           selectedIds: [],
           tool: { mode: "select" },
         };
@@ -695,6 +740,7 @@ export const useSchematic = create<SchematicState>()((set) => {
         future: [],
         selectedId: null,
         selectedWireId: null,
+        selectedWireIds: [],
         selectedIds: [],
         tool: { mode: "select" },
       })),

@@ -4,7 +4,7 @@ import { useSchematic } from "../store/useSchematic";
 import { ComponentSymbol, GRID, SYMBOL_BODY, SYMBOL_BOX } from "../schematic/symbols";
 import { CATALOG_BY_KIND } from "../schematic/catalog";
 import type { ComponentKind, Point, SchematicComponent, SchematicWire } from "../schematic/types";
-import { getLocalPins, getComponentPins } from "../schematic/pins";
+import { getLocalPins, getComponentPins, transformPoint } from "../schematic/pins";
 import { decodeParams } from "../schematic/params";
 import type { AnalysisResult } from "../simulation/linearTransient";
 import type { OperatingPointResult } from "../simulation/operatingPoint";
@@ -111,6 +111,14 @@ export const sourceValueLabel = (kind: ComponentKind, value: string): string => 
     const base = `${explicitUnit(params.vhigh ?? "1", "V")}/${explicitUnit(params.vlow ?? "0", "V")}`;
     const hyst = Number(params.vhyst ?? "0");
     return hyst ? `${base} ±${explicitUnit(String(hyst), "V")}` : base;
+  }
+  if (kind === "nmos" || kind === "pmos") {
+    const params = decodeParams(kind, value);
+    const model = params.model || (kind === "nmos" ? "NMOS" : "PMOS");
+    const w = params.w?.trim();
+    const l = params.l?.trim();
+    if (w || l) return `${model} W=${w || "?"} L=${l || "?"}`;
+    return model;
   }
   return explicitUnit(value, CATALOG_BY_KIND[kind].unit);
 };
@@ -510,6 +518,9 @@ const routeHitCount = (points: Point[], components: SchematicComponent[]) =>
     return total + (segmentHitsBody(prev, point, components) ? 1 : 0);
   }, 0);
 
+/** Exported for tests — count how many orthogonal segments cross a body. */
+export const countRouteBodyHits = routeHitCount;
+
 /** Route an orthogonal wire between two points. It first tries direct/L paths,
  *  then doglegs on grid channels just outside component bodies, and picks the
  *  shortest non-crossing candidate. */
@@ -549,6 +560,24 @@ export const routeWireSmart = (start: Point, end: Point, components: SchematicCo
     .sort((a, b) => a.hits - b.hits || a.length - b.length || a.points.length - b.points.length)[0]?.points
     ?? [start, end];
 };
+
+/**
+ * After a component move, rebuild intermediate elbows for wires whose endpoints
+ * moved, preserving pin endpoints while avoiding component bodies.
+ */
+export function rerouteMovedWires(
+  wires: SchematicWire[],
+  components: SchematicComponent[],
+  affectedWireIds?: Set<string>,
+): SchematicWire[] {
+  return wires.map((wire) => {
+    if (affectedWireIds && !affectedWireIds.has(wire.id)) return wire;
+    if (wire.points.length < 2) return wire;
+    const start = wire.points[0];
+    const end = wire.points[wire.points.length - 1];
+    return { ...wire, points: routeWireSmart(start, end, components) };
+  });
+}
 
 /** Nearest grid spot (spiralling out) where a new body won't overlap an existing one. */
 const findFreeSpot = (
@@ -602,6 +631,7 @@ export function Canvas({
   analysis,
   op = null,
   interactive = true,
+  fitSignal = 0,
 }: {
   analysis: AnalysisResult | null;
   /** Last DC operating point; in simulator mode its node voltages / branch
@@ -610,6 +640,8 @@ export function Canvas({
   /** When false (simulator view) the canvas is a read-only reflection: pan/zoom
    *  and selecting-to-inspect only — no placing, wiring, probing, or editing. */
   interactive?: boolean;
+  /** Bumped by App on open/new/tab switch so the schematic auto-fits once. */
+  fitSignal?: number;
 }) {
   const svgRef = useRef<SVGSVGElement | null>(null);
   const [view, setView] = useState<View>({ x: 0, y: 0, zoom: 1 });
@@ -622,11 +654,14 @@ export function Canvas({
   const [flowOn, setFlowOn] = useState(true);
   /** Rubber-band box in screen coords, null when not drawing. */
   const [boxDrag, setBoxDrag] = useState<BoxDrag | null>(null);
+  /** True while a component (or group) is being dragged — drives snap-dot visibility. */
+  const [movingParts, setMovingParts] = useState(false);
 
   const components = useSchematic((s) => s.components);
   const wires = useSchematic((s) => s.wires);
   const selectedId = useSchematic((s) => s.selectedId);
   const selectedWireId = useSchematic((s) => s.selectedWireId);
+  const selectedWireIds = useSchematic((s) => s.selectedWireIds);
   const selectedIds = useSchematic((s) => s.selectedIds);
   const tool = useSchematic((s) => s.tool);
   const placeRotation = useSchematic((s) => s.placeRotation);
@@ -635,6 +670,7 @@ export function Canvas({
   const addWire = useSchematic((s) => s.addWire);
   const select = useSchematic((s) => s.select);
   const selectWire = useSchematic((s) => s.selectWire);
+  const selectWires = useSchematic((s) => s.selectWires);
   const selectMultiple = useSchematic((s) => s.selectMultiple);
   const toggleSelect = useSchematic((s) => s.toggleSelect);
   const moveGroup = useSchematic((s) => s.moveGroup);
@@ -987,6 +1023,7 @@ export function Canvas({
           groupOrigins,
           sourceWires: frozenWires,
         };
+        setMovingParts(true);
       } else {
         select(hit.id);
         drag.current = {
@@ -999,6 +1036,7 @@ export function Canvas({
           sourcePins: getComponentPins(hit).map(({ x, y }) => ({ x, y })),
           sourceWires: wires.map((wire) => ({ ...wire, points: wire.points.map((point) => ({ ...point })) })),
         };
+        setMovingParts(true);
       }
     } else {
       // Empty canvas click: start rubber-band box select (not pan).
@@ -1109,15 +1147,43 @@ export function Canvas({
           if (inRect.length > 0) {
             selectMultiple(inRect);
           } else if (wiresIn.length > 0) {
-            // Wire-only box: the selection model holds one wire — take the first.
-            selectWire(wiresIn[0]);
+            selectWires(wiresIn);
           } else {
             clearSelection();
           }
         }
         return null;
       });
+    } else if ((d.mode === "move" || d.mode === "group-move") && d.moved) {
+      // Re-route attached wires so intermediate elbows avoid component bodies.
+      const state = useSchematic.getState();
+      // Match wires by current endpoints (already translated) against current pins.
+      const currentPins = new Set<string>();
+      const movedIds = d.groupIds ?? (d.id ? [d.id] : []);
+      for (const id of movedIds) {
+        const c = state.components.find((comp) => comp.id === id);
+        if (!c) continue;
+        for (const pin of getLocalPins(c.kind)) {
+          const world = transformPoint({ x: pin.x, y: pin.y }, c.rotation, c.mirrored ?? false);
+          currentPins.add(`${c.x + world.x},${c.y + world.y}`);
+        }
+      }
+      const affected = new Set<string>();
+      for (const wire of state.wires) {
+        if (wire.points.length < 2) continue;
+        const a = wire.points[0];
+        const b = wire.points[wire.points.length - 1];
+        if (currentPins.has(`${a.x},${a.y}`) || currentPins.has(`${b.x},${b.y}`)) {
+          affected.add(wire.id);
+        }
+      }
+      if (affected.size > 0) {
+        useSchematic.setState({
+          wires: rerouteMovedWires(state.wires, state.components, affected),
+        });
+      }
     }
+    setMovingParts(false);
     drag.current.mode = "none";
     drag.current.id = undefined;
     drag.current.groupIds = undefined;
@@ -1163,15 +1229,22 @@ export function Canvas({
     setView({ zoom, x: r.width / 2 - cx * zoom, y: r.height / 2 - cy * zoom });
   }, [components, wires]);
 
-  // The read-only simulator reflection always frames the whole circuit: it lives
-  // in a narrow left column, so the schematic-editor pan/zoom would leave parts
-  // off-screen. Re-fit on mount into simulator and whenever the column resizes
-  // (mode switch / drag). The interactive editor keeps the user's pan untouched.
+  // Auto-fit when the document identity changes (open / new / tab switch) and
+  // whenever the canvas first lays out. User pan/zoom after that is preserved —
+  // we do NOT re-fit on every component edit.
+  useEffect(() => {
+    const el = svgRef.current;
+    if (!el) return;
+    // Defer one frame so getBoundingClientRect sees the post-layout size.
+    const id = requestAnimationFrame(() => fitView());
+    return () => cancelAnimationFrame(id);
+  }, [fitSignal, fitView]);
+
+  // Read-only simulator reflection also re-fits when its column resizes.
   useEffect(() => {
     if (interactive) return;
     const el = svgRef.current;
     if (!el) return;
-    fitView();
     const ro = new ResizeObserver(() => fitView());
     ro.observe(el);
     return () => ro.disconnect();
@@ -1227,13 +1300,25 @@ export function Canvas({
             <WireView
               key={wire.id}
               wire={wire}
-              selected={wire.id === selectedWireId}
+              selected={wire.id === selectedWireId || selectedWireIds.includes(wire.id)}
               probeReady={!interactive}
               onPointerDown={(e) => onWirePointerDown(e, wire)}
             />
           ))}
 
           {previewWire && <WirePolyline points={previewWire} className="wire preview" />}
+
+          {/* Soft snap markers while wiring / placing / moving / probing / labeling */}
+          {interactive && (wiring || probing || labeling || placing || movingParts) &&
+            snapTargets.map((p) => (
+              <circle
+                key={`snap-${p.x}-${p.y}`}
+                className="snap-dot"
+                cx={p.x}
+                cy={p.y}
+                r={2.2}
+              />
+            ))}
 
           {(wiring || probing || labeling) && snapHover && (
             <circle
@@ -1249,7 +1334,12 @@ export function Canvas({
           ))}
 
           {components.map((c) => (
-            <ComponentView key={c.id} comp={c} selected={c.id === selectedId || selectedIds.includes(c.id)} showPins={wiring || probing || labeling} />
+            <ComponentView
+              key={c.id}
+              comp={c}
+              selected={c.id === selectedId || selectedIds.includes(c.id)}
+              showPins={wiring || probing || labeling || placing}
+            />
           ))}
 
           {probes.map((p) => {

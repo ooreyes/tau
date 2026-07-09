@@ -47,6 +47,22 @@ const SCHEMA: Partial<Record<ComponentKind, ParamField[]>> = {
     { key: "vlow", label: "Output low", unit: "V" },
     { key: "vhyst", label: "Hysteresis", unit: "V" },
   ],
+  // MOSFET instance params encoded as: `MODEL W=<w> L=<l> KP=<kp> VTO=<vto>`
+  // (order fixed; omitted keys keep netlist defaults). Model name is the first token.
+  nmos: [
+    { key: "model", label: "Model", unit: "" },
+    { key: "w", label: "Width (W)", unit: "m" },
+    { key: "l", label: "Length (L)", unit: "m" },
+    { key: "kp", label: "KP", unit: "A/V²" },
+    { key: "vto", label: "Vt (VTO)", unit: "V" },
+  ],
+  pmos: [
+    { key: "model", label: "Model", unit: "" },
+    { key: "w", label: "Width (W)", unit: "m" },
+    { key: "l", label: "Length (L)", unit: "m" },
+    { key: "kp", label: "KP", unit: "A/V²" },
+    { key: "vto", label: "Vt (VTO)", unit: "V" },
+  ],
   // opamp uses a dedicated model chooser; testpoint / ground take no parameters.
 };
 
@@ -85,7 +101,38 @@ export function decodeParams(kind: ComponentKind, value: string): Record<string,
       vhyst: String(spec.vhyst),
     };
   }
+  if (kind === "nmos" || kind === "pmos") {
+    return decodeMosfetParams(value, kind === "nmos" ? "NMOS" : "PMOS");
+  }
   return {};
+}
+
+/** Parse `MODEL W=… L=… KP=… VTO=…` (any subset; first bare token = model). */
+function decodeMosfetParams(value: string, fallbackModel: string): Record<string, string> {
+  const tokens = value.trim().split(/\s+/).filter(Boolean);
+  const out: Record<string, string> = {
+    model: fallbackModel,
+    w: "",
+    l: "",
+    kp: "",
+    vto: "",
+  };
+  if (tokens.length === 0) return out;
+  let i = 0;
+  if (!/^(W|L|KP|VTO)=/i.test(tokens[0])) {
+    out.model = tokens[0];
+    i = 1;
+  }
+  for (; i < tokens.length; i += 1) {
+    const m = tokens[i].match(/^(W|L|KP|VTO)=(.+)$/i);
+    if (!m) continue;
+    const key = m[1].toLowerCase();
+    if (key === "w") out.w = m[2];
+    else if (key === "l") out.l = m[2];
+    else if (key === "kp") out.kp = m[2];
+    else if (key === "vto") out.vto = m[2];
+  }
+  return out;
 }
 
 /** Re-assemble a value string from structured fields (solver-compatible form). */
@@ -112,6 +159,19 @@ export function encodeParams(kind: ComponentKind, values: Record<string, string>
     const vhyst = (values.vhyst ?? "").trim() || "0";
     // Drop a zero hysteresis so the common ideal comparator stays "vhi vlo".
     return Number(vhyst) ? `${vhigh} ${vlow} ${vhyst}` : `${vhigh} ${vlow}`;
+  }
+  if (kind === "nmos" || kind === "pmos") {
+    const model = (values.model ?? "").trim() || (kind === "nmos" ? "NMOS" : "PMOS");
+    const parts = [model];
+    const w = (values.w ?? "").trim();
+    const l = (values.l ?? "").trim();
+    const kp = (values.kp ?? "").trim();
+    const vto = (values.vto ?? "").trim();
+    if (w) parts.push(`W=${w}`);
+    if (l) parts.push(`L=${l}`);
+    if (kp) parts.push(`KP=${kp}`);
+    if (vto) parts.push(`VTO=${vto}`);
+    return parts.join(" ");
   }
   return "";
 }

@@ -321,17 +321,26 @@ function componentLines(entry: ExtractedComponent, index: number, userModels: Se
     case "zener":
       return [`${name} ${node("a")} ${node("k")} ${deviceModel("TAU_ZENER")}`];
     case "nmos": {
-      const model = deviceModel("TAU_NMOS");
+      const mos = decodeParams("nmos", component.value);
+      // Prefer a user `.model` named in the value; else the TAU starter.
+      const named = (mos.model ?? "").trim();
+      const model =
+        named && userModels.has(named.toLowerCase()) ? named : deviceModel("TAU_NMOS");
+      const geom = mosfetInstanceParams(mos);
       // VDMOS power MOSFET → 3-terminal line (no bulk); else 4-terminal level-1 MOS.
       return isVdmos(model)
-        ? [`${name} ${node("d")} ${node("g")} ${node("s")} ${model}`]
-        : [`${name} ${node("d")} ${node("g")} ${node("s")} ${node("b")} ${model}`];
+        ? [`${name} ${node("d")} ${node("g")} ${node("s")} ${model}${geom}`]
+        : [`${name} ${node("d")} ${node("g")} ${node("s")} ${node("b")} ${model}${geom}`];
     }
     case "pmos": {
-      const model = deviceModel("TAU_PMOS");
+      const mos = decodeParams("pmos", component.value);
+      const named = (mos.model ?? "").trim();
+      const model =
+        named && userModels.has(named.toLowerCase()) ? named : deviceModel("TAU_PMOS");
+      const geom = mosfetInstanceParams(mos);
       return isVdmos(model)
-        ? [`${name} ${node("d")} ${node("g")} ${node("s")} ${model}`]
-        : [`${name} ${node("d")} ${node("g")} ${node("s")} ${node("b")} ${model}`];
+        ? [`${name} ${node("d")} ${node("g")} ${node("s")} ${model}${geom}`]
+        : [`${name} ${node("d")} ${node("g")} ${node("s")} ${node("b")} ${model}${geom}`];
     }
     case "njf":
       return [`${name} ${node("d")} ${node("g")} ${node("s")} ${deviceModel("TAU_NJF")}`];
@@ -716,6 +725,18 @@ function nonZeroNumberValue(component: SchematicComponent, unit: string): string
     throw new Error(`${component.label || component.kind} needs a non-zero ${unit} value.`);
   }
   return value.toString();
+}
+
+/** Append MOSFET geometry / model params from the structured value encoding. */
+function mosfetInstanceParams(mos: Record<string, string>): string {
+  const parts: string[] = [];
+  if (mos.w?.trim()) parts.push(`W=${mos.w.trim()}`);
+  if (mos.l?.trim()) parts.push(`L=${mos.l.trim()}`);
+  // KP/VTO are model parameters in SPICE; when the user sets them on the
+  // instance we still emit them as instance overrides (ngspice accepts W/L
+  // on M lines; KP/VTO on the instance are ignored by some engines — keep
+  // them in the value string for the UI and only emit W/L on the deck line).
+  return parts.length ? ` ${parts.join(" ")}` : "";
 }
 
 function sourceSignal(component: SchematicComponent, unit: "V" | "A") {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { circuitBounds, routeWireSmart, translateAttachedWireEndpoints } from "./Canvas";
+import { circuitBounds, countRouteBodyHits, routeWireSmart, rerouteMovedWires, translateAttachedWireEndpoints } from "./Canvas";
 import type { SchematicComponent } from "../schematic/types";
 
 const comp = (id: string, x: number, y: number): SchematicComponent =>
@@ -70,6 +70,25 @@ describe("Canvas wire geometry", () => {
     const wire = { id: "w1", points: [{ x: 0, y: 0 }] };
     const moved = translateAttachedWireEndpoints([wire], [{ x: 0, y: 0 }], 16, 0);
     expect(moved[0].points).toEqual([{ x: 0, y: 0 }]);
+  });
+
+  it("re-routes a wire around a body after a move when a clear channel exists", () => {
+    // Resistor body sits on the straight path between endpoints; smart route
+    // should dogleg around it so routeHitCount is 0.
+    const blocker = comp("r1", 48, 0);
+    const throughBody: { id: string; points: { x: number; y: number }[] } = {
+      id: "w1",
+      points: [
+        { x: 0, y: 0 },
+        { x: 96, y: 0 },
+      ],
+    };
+    expect(countRouteBodyHits(throughBody.points, [blocker])).toBeGreaterThan(0);
+
+    const rerouted = rerouteMovedWires([throughBody], [blocker], new Set(["w1"]));
+    expect(countRouteBodyHits(rerouted[0].points, [blocker])).toBe(0);
+    expect(rerouted[0].points[0]).toEqual({ x: 0, y: 0 });
+    expect(rerouted[0].points[rerouted[0].points.length - 1]).toEqual({ x: 96, y: 0 });
   });
 });
 

@@ -55,6 +55,7 @@ function resetStore() {
     counters: {},
     selectedId: null,
     selectedWireId: null,
+    selectedWireIds: [],
     selectedIds: [],
     tool: { mode: "select" },
     placeRotation: 0,
@@ -501,6 +502,26 @@ describe("schematic document store", () => {
     expect(state.selectedId).toBeNull();
     // Wire is untouched.
     expect(state.wires).toHaveLength(1);
+  });
+
+  it("deleteSelected removes all wires in selectedWireIds", () => {
+    useSchematic.setState({
+      components: [],
+      wires: [
+        { id: "w1", points: [{ x: 0, y: 0 }, { x: 32, y: 0 }] },
+        { id: "w2", points: [{ x: 0, y: 32 }, { x: 32, y: 32 }] },
+        { id: "w3", points: [{ x: 0, y: 64 }, { x: 32, y: 64 }] },
+      ],
+      selectedWireIds: ["w1", "w2"],
+      selectedWireId: "w1",
+      selectedId: null,
+      selectedIds: [],
+    });
+    useSchematic.getState().deleteSelected();
+    const state = useSchematic.getState();
+    expect(state.wires.map((w) => w.id)).toEqual(["w3"]);
+    expect(state.selectedWireIds).toEqual([]);
+    expect(state.selectedWireId).toBeNull();
   });
 });
 
