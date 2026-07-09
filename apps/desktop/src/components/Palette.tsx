@@ -51,7 +51,7 @@ export function Palette({ focusSignal }: { focusSignal: number; onNotice: (messa
   return (
     <aside className="palette">
       <div className="palette-head">
-        <span>component selection</span>
+        <span>Components</span>
       </div>
 
       <div className="palette-search-wrap">

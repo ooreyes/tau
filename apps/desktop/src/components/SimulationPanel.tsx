@@ -880,7 +880,7 @@ export function SimulationPanel({
       )}
 
       <div className="selection-strip">
-        <div className="strip-label">SELECT</div>
+        <div className="strip-label">Select</div>
         {selected && selectedEntry ? (
           <>
             <div className="selected-part">

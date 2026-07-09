@@ -3,7 +3,6 @@ import {
   Folder,
   FolderOpen,
   Search,
-  Plus,
   FilePlus,
   FolderPlus,
   FileInput,
@@ -148,7 +147,7 @@ export function ExplorerPanel({
     return (
       <aside className="explorer-panel" aria-label="Project explorer">
         <div className="explorer-head">
-          <span>project</span>
+          <span>Project</span>
         </div>
         <div className="explorer-empty">
           <p>Loading workspace…</p>
@@ -228,37 +227,6 @@ export function ExplorerPanel({
             }}
           />
         </div>
-      </div>
-
-      <div className="explorer-actions">
-        <button
-          type="button"
-          onClick={async () => {
-            const name = promptName("Folder name", "circuits");
-            if (!name) return;
-            const path = await createFolder(rootPath, name);
-            if (path) onNotice(`Created folder ${name}`);
-          }}
-        >
-          <FolderPlus size={12} strokeWidth={1.6} /> New Folder
-        </button>
-        <button
-          type="button"
-          onClick={async () => {
-            const name = promptName("Simulation name", "untitled.sim");
-            if (!name) return;
-            const path = await createSimFile(rootPath, name);
-            if (path) {
-              onNotice(`Created ${basename(path)}`);
-              await openNode(path, basename(path));
-            }
-          }}
-        >
-          <Plus size={12} strokeWidth={1.6} /> New .sim
-        </button>
-        <button type="button" onClick={() => ascInputRef.current?.click()}>
-          <FileInput size={12} strokeWidth={1.6} /> Import .asc
-        </button>
       </div>
 
       <div className="tree-list">
@@ -546,10 +514,11 @@ export function BottomPanel({ result }: { mode?: "schematic" | "simulator"; resu
     ...(result?.warnings ?? []),
   ];
   const hasIssues = messages.length > 0;
+  const hasError = Boolean(result && !result.ok);
 
   return (
     <section
-      className={`bottom-panel${hasIssues ? " has-issues" : ""}`}
+      className={`bottom-panel${hasIssues ? " has-issues" : ""}${hasError ? " has-error" : ""}`}
       aria-label="Errors"
     >
       <div className="bottom-panel-head">
@@ -568,6 +537,7 @@ export function BottomPanel({ result }: { mode?: "schematic" | "simulator"; resu
             <div
               key={`${message}-${index}`}
               className={result && !result.ok && index === 0 ? "error" : "warning"}
+              role={result && !result.ok && index === 0 ? "alert" : undefined}
             >
               {message}
             </div>

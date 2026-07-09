@@ -1041,11 +1041,11 @@ body {
 .op-head,
 .meas-table-head,
 .strip-label {
-  font-size: var(--fs-micro);
-  font-weight: 600;
-  letter-spacing: var(--tracking-micro);
-  text-transform: uppercase;
-  color: var(--faint);
+  font-size: var(--fs-caption);
+  font-weight: 510;
+  letter-spacing: -0.01em;
+  text-transform: none;
+  color: var(--muted);
 }
 
 .pane-controls-label {
@@ -1303,11 +1303,11 @@ body {
 .palette-title,
 .chat-message span,
 .settings-row-label {
-  font-size: var(--fs-micro);
-  font-weight: 600;
-  letter-spacing: var(--tracking-wide);
-  text-transform: uppercase;
-  color: var(--faint);
+  font-size: var(--fs-caption);
+  font-weight: 510;
+  letter-spacing: -0.01em;
+  text-transform: none;
+  color: var(--muted);
 }
 
 .disclosure-label {
@@ -2324,16 +2324,20 @@ body {
   gap: var(--sp-2);
 }
 /* ── Net labels (named nodes) ──────────────────────────── */
-/* Schematic canvas SVG text — SF Mono, instrument-grade (not rounded UI). */
+/* Drawn under component ref/value labels; softer so collisions don't win. */
+.net-label-layer {
+  pointer-events: none;
+}
+
 .net-label-text {
-  fill: var(--accent);
+  fill: color-mix(in srgb, var(--accent) 72%, transparent);
   font-family: var(--font-mono);
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
+  font-size: 9.5px;
+  font-weight: 510;
+  letter-spacing: -0.01em;
   paint-order: stroke fill;
   stroke: var(--canvas-bg);
-  stroke-width: 2.5px;
+  stroke-width: 3px;
   stroke-linejoin: round;
   dominant-baseline: alphabetic;
   text-rendering: geometricPrecision;
@@ -2342,9 +2346,6 @@ body {
 }
 
 /* ── Component labels (always-on-top, never obscured) ──── */
-/* Schematic canvas SVG text — kept outside the App.css type scale (the
-   8.5/9.5px sizes here are load-bearing for legibility at the schematic's
-   default zoom; the canvas owns its own rendering per the §10 brief). */
 .label-layer {
   pointer-events: none;
 }
@@ -2357,7 +2358,7 @@ body {
   letter-spacing: 0.02em;
   paint-order: stroke fill;
   stroke: var(--canvas-bg);
-  stroke-width: 2px;
+  stroke-width: 3.5px;
   stroke-linejoin: round;
   dominant-baseline: middle;
   text-rendering: geometricPrecision;
@@ -2738,11 +2739,11 @@ body {
 .plotter-kicker,
 .result-list h3,
 .symbol-preview > span {
-  color: var(--faint);
-  font-size: var(--fs-micro);
-  font-weight: 600;
-  letter-spacing: var(--tracking-wide);
-  text-transform: uppercase;
+  color: var(--muted);
+  font-size: var(--fs-caption);
+  font-weight: 590;
+  letter-spacing: -0.01em;
+  text-transform: none;
 }
 
 .explorer-icons {
@@ -2920,33 +2921,6 @@ body {
   gap: var(--sp-2);
 }
 
-.explorer-actions {
-  display: flex;
-  gap: var(--sp-1);
-  padding: var(--sp-1) var(--sp-2);
-  border-bottom: 1px solid var(--border-subtle);
-}
-
-.explorer-actions button {
-  flex: 1;
-  height: var(--row-h-dense);
-  font-size: var(--fs-micro);
-  font-weight: 600;
-  letter-spacing: var(--tracking-micro);
-  text-transform: uppercase;
-  color: var(--muted);
-  background: transparent;
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  cursor: pointer;
-}
-
-.explorer-actions button:hover {
-  color: var(--text);
-  border-color: var(--border-strong);
-  background: var(--overlay-hover);
-}
-
 .explorer-error {
   margin: var(--sp-2);
   padding: var(--sp-2);
@@ -3012,11 +2986,11 @@ body {
 }
 
 .analysis-setup-field > span {
-  font-size: var(--fs-micro);
-  font-weight: 600;
-  letter-spacing: var(--tracking-micro);
-  text-transform: uppercase;
-  color: var(--faint);
+  font-size: var(--fs-caption);
+  font-weight: 510;
+  letter-spacing: -0.01em;
+  text-transform: none;
+  color: var(--muted);
 }
 
 .analysis-setup-select {
@@ -3416,10 +3390,19 @@ body {
 }
 
 .bottom-panel-title {
-  font: 600 var(--fs-caption) var(--font-ui);
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--muted);
+  font: 590 var(--fs-label) var(--font-ui);
+  letter-spacing: -0.01em;
+  text-transform: none;
+  color: var(--text);
+}
+
+.bottom-panel.has-error .bottom-panel-head {
+  background: color-mix(in srgb, var(--danger) 14%, transparent);
+  border-bottom-color: color-mix(in srgb, var(--danger) 35%, transparent);
+}
+
+.bottom-panel.has-error .bottom-panel-title {
+  color: #ff6961;
 }
 
 .bottom-panel-count {
@@ -3430,8 +3413,8 @@ body {
   display: inline-grid;
   place-items: center;
   font: 650 var(--fs-micro) var(--font-mono);
-  color: var(--danger);
-  background: color-mix(in srgb, var(--danger) 18%, transparent);
+  color: #fff;
+  background: var(--danger);
 }
 
 .bottom-panel-clear {
@@ -3446,8 +3429,12 @@ body {
   overflow: auto;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
   padding: 8px 12px 10px;
+}
+
+.bottom-panel.has-error .bottom-errors {
+  background: color-mix(in srgb, var(--danger) 8%, transparent);
 }
 
 .bottom-errors-idle {
@@ -4463,21 +4450,24 @@ body {
 .bottom-errors .error,
 .bottom-errors .warning {
   margin: 0;
-  padding: 6px 10px;
-  border-radius: 6px;
-  font: 500 var(--fs-body) var(--font-ui);
+  padding: 10px 12px;
+  border-radius: 10px;
+  font: 510 var(--fs-label) var(--font-ui);
   line-height: 1.35;
-  background: var(--overlay-hover-faint);
+  letter-spacing: -0.01em;
 }
 
 .bottom-errors .error {
-  border: 1px solid var(--danger-line);
-  color: var(--danger);
+  border: 0.5px solid color-mix(in srgb, var(--danger) 55%, transparent);
+  color: #ffd0cd;
+  background: color-mix(in srgb, var(--danger) 28%, #1c1c1e);
+  box-shadow: inset 0 0 0 0.5px color-mix(in srgb, var(--danger) 25%, transparent);
 }
 
 .bottom-errors .warning {
-  border: 1px solid var(--signal-line);
-  color: var(--signal);
+  border: 0.5px solid color-mix(in srgb, var(--signal) 45%, transparent);
+  color: #ffe3b0;
+  background: color-mix(in srgb, var(--signal) 18%, #1c1c1e);
 }
 
 /* Reticle-language empty state — the same recipe as

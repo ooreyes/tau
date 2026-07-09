@@ -839,11 +839,15 @@ export function Canvas({
             );
           })}
 
-          {netLabels.map((l) => (
-            <text key={l.id} className="net-label-text" x={l.x + 6} y={l.y - 6}>
-              {l.text}
-            </text>
-          ))}
+          {/* Net names sit under component ref/value labels so collisions
+              (e.g. "Output" vs "Rf") keep the part label readable. */}
+          <g className="net-label-layer" aria-hidden="true">
+            {netLabels.map((l) => (
+              <text key={l.id} className="net-label-text" x={l.x + 6} y={l.y - 6}>
+                {l.text}
+              </text>
+            ))}
+          </g>
 
           {opLabels.map((a) =>
             a.kind === "voltage" ? (
