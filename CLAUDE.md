@@ -8,10 +8,13 @@
 Quick orientation for an interactive session:
 
 - **Canonical branch:** `auto/ltspice-parity` (a superset of all prior work).
-- **Omar's next-session context:** read
-  [CLAUDE_HANDOFF_FOR_1239AM_RESET.md](CLAUDE_HANDOFF_FOR_1239AM_RESET.md)
-  before choosing the next unit. It captures the simulator/schematic UX scope
-  requested for the post-limit-reset Claude startup.
+- **Current priority mission (§11 in the autobuilder's prompt, 2026-07-10):**
+  simulator UX + measurements — resizable panels, fit-to-view padding, errors
+  tab, dashboard-style simulator layout, auto simulation settings, per-component
+  voltage/current/power measurements, oscillation detection, plot statistics.
+  Full spec lives in the autobuilder's actual driver
+  (`~/.tau-autobuilder/prompt.md` §11) — that file is what the autonomous bot
+  reads; this doc is for interactive sessions.
 - **To‑do list:** [FEATURE_PARITY.md](FEATURE_PARITY.md) — pick the next item.
 - **Live status + heartbeat:** top of [PROGRESS.md](PROGRESS.md) — shows the
   active unit and whether the last run finished or died mid‑change.

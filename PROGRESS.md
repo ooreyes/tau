@@ -9,21 +9,17 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## ⏱ HEARTBEAT
 - **Headline metric:** 1383 tests green · corpus 82/82 import · 82/82 op-converge · 79/82 warning-clean
-- **Run started (UTC):** 2026-07-10T02:30Z
-- **Synced to origin:** auto/ltspice-parity @ f019ed9 (wip checkpoints reconciled by continuing on top)
-- **Claimed unit:** Omar's schematic-editor hardening checklist (§UX): net-label
-  node uniqueness · mixed intersect marquee + unified delete · stable current
-  arrows (10 Hz, hysteresis, honest speed label) · top-bar cleanup + Ask Sim
-  removal (fake-agent panel) · grid tone-down · casing pass. Four commits.
+- **Run started (UTC):** 2026-07-10T12:15Z
+- **Synced to origin:** auto/ltspice-parity @ latest (bot was idle 07-07→07-10; relaunched)
+- **Claimed unit:** — (mission handoff — bot claims its first §11 unit next fire)
 - **Status:** DONE
 - **Last checkpoint commit:** see `git log --oneline -1`
-- **Next step (for the following run):** Omar requested the post-limit-reset
-  Claude session focus simulator/schematic UX polish: resizable side panels,
-  no-selection properties empty state, fit-to-view padding, errors/status polish,
-  simulator dashboard layout, collapsed advanced settings, automatic simulation
-  settings, node/component measurements, oscillation detection, and compact plot
-  stats. Read `CLAUDE_HANDOFF_FOR_1239AM_RESET.md`, then pick one small vertical
-  unit and follow the normal AGENTS loop.
+- **Next step (for the following run):** §11 in the bot's prompt.md is now the
+  TOP PRIORITY override (Omar's simulator-UX + measurements mission, requested
+  2026-07-10). Work Unit A (schematic polish: empty properties state, fit-to-view
+  padding, errors tab) → B (resizable panels) → C (simulator layout) → D
+  (measurement system) in order, top to bottom, before returning to the old
+  §1/§7/§6/§8/§9 priority list.
 
 ---
 
