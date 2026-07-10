@@ -184,6 +184,9 @@ export function SimulationPanel({
   const warnings = result?.warnings ?? [];
 
   const [mode, setMode] = useState<"tran" | "op" | "ac" | "dc" | "tf" | "noise" | "step">("tran");
+  // Advanced Simulation Settings disclosure — closed by default (§11 Unit C7):
+  // Tau picks stop time / step count automatically unless the user overrides.
+  const [advancedOpen, setAdvancedOpen] = useState(false);
   const [maximized, setMaximized] = useState(false);
   // User-entered expression traces overlaid on the transient scope (§6), e.g.
   // `V(out)-V(in)` or power `V(out)*I(R1)`.
@@ -684,34 +687,53 @@ export function SimulationPanel({
           <FftView result={result} />
           <CursorView result={result} extraTraces={exprTraces} />
 
-          <div className="plotter-controls">
-            <DialControl
-              label="STOP"
-              value={`${formatEngineering(options.stopTime, "s", 2)}`}
-              min={0.1}
-              max={200}
-              step={0.1}
-              numericValue={options.stopTime * 1000}
-              onChange={(value) => onOptionsChange({ ...options, stopTime: value / 1000 })}
-            />
-            <DialControl
-              label="STEPS"
-              value={String(options.steps)}
-              min={32}
-              max={maxTransientSteps}
-              step={1}
-              numericValue={options.steps}
-              onChange={(value) => onOptionsChange({ ...options, steps: Math.round(value) })}
-            />
-            <ResolutionControl
-              resolution={resolution}
-              steps={options.steps}
-              maxSteps={maxTransientSteps}
-              onApply={() => {
-                if (!resolution || resolution.requiredSteps <= 0 || resolution.requiredSteps > maxTransientSteps) return;
-                onOptionsChange({ ...options, steps: Math.max(32, resolution.requiredSteps) });
-              }}
-            />
+          <div className="advanced-settings">
+            <button
+              className="disclosure-header"
+              onClick={() => setAdvancedOpen((o) => !o)}
+              aria-expanded={advancedOpen}
+              aria-label="Toggle advanced simulation settings"
+            >
+              <span className="disclosure-label">Advanced simulation settings</span>
+              <span className="disclosure-rule" aria-hidden="true" />
+              <span className={`disclosure-chevron${advancedOpen ? " open" : ""}`}>›</span>
+            </button>
+            {advancedOpen && (
+              <>
+                <p className="advanced-settings-help">
+                  Tau automatically chooses simulation settings unless overridden.
+                </p>
+                <div className="plotter-controls">
+                  <DialControl
+                    label="STOP"
+                    value={`${formatEngineering(options.stopTime, "s", 2)}`}
+                    min={0.1}
+                    max={200}
+                    step={0.1}
+                    numericValue={options.stopTime * 1000}
+                    onChange={(value) => onOptionsChange({ ...options, stopTime: value / 1000 })}
+                  />
+                  <DialControl
+                    label="STEPS"
+                    value={String(options.steps)}
+                    min={32}
+                    max={maxTransientSteps}
+                    step={1}
+                    numericValue={options.steps}
+                    onChange={(value) => onOptionsChange({ ...options, steps: Math.round(value) })}
+                  />
+                  <ResolutionControl
+                    resolution={resolution}
+                    steps={options.steps}
+                    maxSteps={maxTransientSteps}
+                    onApply={() => {
+                      if (!resolution || resolution.requiredSteps <= 0 || resolution.requiredSteps > maxTransientSteps) return;
+                      onOptionsChange({ ...options, steps: Math.max(32, resolution.requiredSteps) });
+                    }}
+                  />
+                </div>
+              </>
+            )}
           </div>
         </>
       )}

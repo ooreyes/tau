@@ -116,3 +116,26 @@ describe("SimulationPanel — no redundant Run button (§11 Unit C5)", { timeout
     expect(handlers.onStep).toHaveBeenCalledTimes(1);
   });
 });
+
+describe("SimulationPanel — advanced settings disclosure (§11 Unit C7)", { timeout: 20_000 }, () => {
+  it("hides the STOP/STEPS/resolution controls behind a closed-by-default disclosure", () => {
+    renderPanel();
+    const toggle = screen.getByRole("button", { name: "Toggle advanced simulation settings" });
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    expect(screen.queryByText("STOP")).toBeNull();
+    expect(screen.queryByText("STEPS")).toBeNull();
+    expect(screen.queryByText("Tau automatically chooses simulation settings unless overridden.")).toBeNull();
+  });
+
+  it("reveals the dials and the auto-settings helper text when opened", () => {
+    renderPanel();
+    const toggle = screen.getByRole("button", { name: "Toggle advanced simulation settings" });
+    fireEvent.click(toggle);
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    expect(screen.getByText("STOP")).toBeTruthy();
+    expect(screen.getByText("STEPS")).toBeTruthy();
+    expect(
+      screen.getByText("Tau automatically chooses simulation settings unless overridden."),
+    ).toBeTruthy();
+  });
+});

@@ -1652,14 +1652,29 @@ body {
   font-weight: 400;
 }
 
+/* Advanced Simulation Settings — collapsed by default (§11 Unit C7). The
+   header reuses the shared .disclosure-header affordance; when open, the
+   helper line states the auto-settings contract before the dials. */
+.advanced-settings {
+  flex-shrink: 0;
+  padding: 0 12px 4px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.advanced-settings-help {
+  margin: 0;
+  padding: 0 2px var(--sp-2);
+  font-size: var(--fs-caption);
+  color: var(--faint);
+}
+
 /* Parameter controls (formerly "dial controls") */
 .plotter-controls {
   flex-shrink: 0;
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: var(--sp-3);
-  padding: 10px 14px 12px;
-  border-top: 1px solid var(--border-subtle);
+  padding: 0 2px 10px;
 }
 
 .resolution-control {

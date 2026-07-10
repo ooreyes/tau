@@ -15,10 +15,11 @@
 - **Claimed unit:** §11 Unit C — simulator layout redesign (remove redundant
   Run button, dashboard layout, advanced-settings disclosure, auto-resolution).
 - **Status:** IN PROGRESS
-- **Last completed sub-step:** C5 — redundant in-panel Run button removed;
-  tab selection is the run gesture for all seven tabs, top-toolbar Run is the
-  single primary; status pill in all modes — 1410 tests green. Next: C6
-  dashboard layout (empty scope dominates viewport, bottom axis label clips).
+- **Last completed sub-step:** C7 — STOP/STEPS/resolution dials behind a
+  closed-by-default "Advanced simulation settings" disclosure with the
+  auto-settings helper line — 1412 tests green. Next: C6 dashboard layout
+  (empty scope dominates viewport, bottom axis label clips), then C8
+  auto-resolution.
 - **Plan:** C5 remove SimulationPanel's redundant run/stop primary; C6
   dashboard layout (status header → plot cards → measurements → settings); C7
   collapsed Advanced Simulation Settings disclosure; C8 auto-resolution from
