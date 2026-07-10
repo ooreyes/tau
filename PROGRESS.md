@@ -11,19 +11,59 @@
 - **Headline metric:** 1383 tests green · corpus 82/82 import · 82/82 op-converge · 79/82 warning-clean
 - **Run started (UTC):** 2026-07-10T14:20Z
 - **Synced to origin:** auto/ltspice-parity @ 9eefc29 (clean, no WIP ref)
-- **Claimed unit:** §11 Unit A — schematic UI polish (A1 empty-properties state,
-  A2 fit-to-view padding, A3 errors-tab states), one commit per sub-item.
+- **Claimed unit:** §11 Unit B — resizable side panels (properties rail +
+  project tree, drag borders, clamps, localStorage persistence).
 - **Status:** IN PROGRESS
-- **Last completed sub-step:** none yet (claim commit)
-- **Plan:** A1 `ShellPanels.tsx` no-selection state → A2 `Canvas.geometry.ts`
-  padding + geometry tests → A3 `ShellPanels.tsx` errors tab w/ Toolbar lamp
-  tokens. Verify: typecheck + vitest + screenshot pipeline per sub-item.
+- **Last completed sub-step:** Unit A DONE (A1 5e95514→dbda551, A2 7bfecc7,
+  A3 5c7b86c) — 1395 tests green.
+- **Plan:** small reusable resize-handle hook/component; wire into the right
+  properties rail + left explorer tree in App/ShellPanels; persist widths in
+  localStorage; clamp min/max; tests for clamp+persist math.
 - **Note:** review-rotation counter is at 0 `review:` in last 30 — owed a
   dedicated review session after §11 ships (Omar's 2026-07-10 override wins).
 - **Next step (if this run dies):** finish the first unchecked sub-item above;
   partial work is on this branch as `wip:` commits.
 
 ---
+
+## 2026-07-10T14:45Z — auto/ltspice-parity — §11 Unit A: schematic UI polish (empty properties, fit padding, errors tab)
+
+### What I did
+- **A1 (dbda551):** Fixed the no-selection properties state. Root cause: the
+  rail-scoped `.inspector-summary` rule out-specified `.inspector-summary.empty`,
+  collapsing the empty state into a clipped 48px+1fr two-column layout (title
+  clipped at the rail edge, helper wrapping in a ragged 10ch column). Restored
+  the centered single-column stack, removed the title's nowrap clip, made it
+  fill the rail height, and adopted the spec copy: "No Selection" / "Select a
+  component, wire, node, or label to view and edit its properties."
+- **A2 (7bfecc7):** Fit-to-view breathing room. `fitView` clipped long labels
+  ("U1 ideal" cut by the right rail) because `circuitBounds` ignores label
+  text. New pure `fitViewTransform` (12% viewport padding per axis, 48px floor,
+  0.25–5 zoom clamps, degenerate-safe) + `circuitBoundsWithLabels` (unions the
+  real `buildLabelPlacements` boxes). Canvas.fitView now uses both.
+- **A3 (5c7b86c):** Errors tab semantic states. Clear: checkmark + "No errors"
+  in desaturated success (role=status), replacing the ambiguous "Clear" text.
+  Error: existing loud danger head + count. New warnings-only amber `--signal`
+  badge for successful runs with warnings. Burned hardcoded `#ff6961`.
+
+### Files touched
+ShellPanels.tsx, ShellPanels.test.tsx, Canvas.tsx, Canvas.geometry.ts,
+Canvas.geometry.test.ts, App.css, screenshots/unitA-*.
+
+### Tests
+1383 → 1395 (2 empty-state + 7 fit/bounds + 3 errors-tab). Typecheck clean.
+
+### FEATURE_PARITY items updated
+§11 Unit A (mission list in prompt.md) — all three sub-items done.
+
+### UX issues found
+Screenshot-verified before/after each commit: empty state now a centered
+reticle stack; schematic fit no longer clips labels; errors strip shows a
+quiet green all-clear. Review-rotation debt: 0 `review:` in last 30 commits —
+owed after §11.
+
+### Next step
+§11 Unit B — resizable properties rail + project tree with persisted widths.
 
 ## 2026-07-08T19:43Z — auto/ltspice-parity — §UX Unit B: scope real axes + Desmos-style zoom/pan
 
