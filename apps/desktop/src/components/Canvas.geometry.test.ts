@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   circuitBounds,
+  circuitBoundsWithLabels,
   countRouteBodyHits,
+  fitViewTransform,
   rectsOverlap,
   rerouteMovedWires,
   routeWireSmart,
@@ -147,6 +149,82 @@ describe("circuitBounds (fit-to-view math)", () => {
       maxX: 10,
       maxY: 10,
     });
+  });
+});
+
+describe("circuitBoundsWithLabels (§11 Unit A2)", () => {
+  it("returns null for an empty schematic, matching circuitBounds", () => {
+    expect(circuitBoundsWithLabels([], [])).toBeNull();
+  });
+
+  it("is a superset of circuitBounds when a component carries label text", () => {
+    const c = { ...comp("r1", 100, 200), label: "R1", value: "10k" } as SchematicComponent;
+    const base = circuitBounds([c], [])!;
+    const withLabels = circuitBoundsWithLabels([c], [])!;
+    expect(withLabels.minX).toBeLessThanOrEqual(base.minX);
+    expect(withLabels.minY).toBeLessThanOrEqual(base.minY);
+    expect(withLabels.maxX).toBeGreaterThanOrEqual(base.maxX);
+    expect(withLabels.maxY).toBeGreaterThanOrEqual(base.maxY);
+    // The label must actually widen the box on at least one side — otherwise
+    // this helper would be indistinguishable from circuitBounds.
+    const widened =
+      withLabels.minX < base.minX || withLabels.maxX > base.maxX ||
+      withLabels.minY < base.minY || withLabels.maxY > base.maxY;
+    expect(widened).toBe(true);
+  });
+});
+
+describe("fitViewTransform padding (§11 Unit A2)", () => {
+  const bounds = { minX: 0, minY: 0, maxX: 1000, maxY: 500 };
+
+  it("keeps 12% of the viewport clear on the constrained axis", () => {
+    // 1000x800 viewport: padX = 120, availW = 760 → zoom = 0.76 (width-bound,
+    // since availH/500 = 608/500 = 1.216). Left edge of the circuit lands at
+    // exactly padX; centering is exact on both axes.
+    const t = fitViewTransform(bounds, 1000, 800);
+    expect(t.zoom).toBeCloseTo(0.76, 10);
+    expect(t.x + bounds.minX * t.zoom).toBeCloseTo(120, 10); // screen-x of minX
+    expect(t.x + bounds.maxX * t.zoom).toBeCloseTo(880, 10);
+    // Vertically centered: equal slack above and below.
+    const top = t.y + bounds.minY * t.zoom;
+    const bottom = 800 - (t.y + bounds.maxY * t.zoom);
+    expect(top).toBeCloseTo(bottom, 10);
+  });
+
+  it("enforces the 48px floor when 12% of a small viewport would be less", () => {
+    // 300x200 viewport: 12% → 36/24px, both floored to 48. availW=204,
+    // availH=104 → height-bound zoom for a 100x100 circuit = 1.04, and the
+    // constrained (vertical) edges sit exactly 48px in.
+    const square = { minX: 0, minY: 0, maxX: 100, maxY: 100 };
+    const t = fitViewTransform(square, 300, 200);
+    expect(t.zoom).toBeCloseTo(1.04, 10);
+    expect(t.y + square.minY * t.zoom).toBeCloseTo(48, 10);
+    expect(200 - (t.y + square.maxY * t.zoom)).toBeCloseTo(48, 10);
+  });
+
+  it("clamps zoom for tiny and huge circuits", () => {
+    const point = { minX: 0, minY: 0, maxX: 8, maxY: 8 };
+    expect(fitViewTransform(point, 1440, 900).zoom).toBe(5);
+    const huge = { minX: 0, minY: 0, maxX: 1e6, maxY: 1e6 };
+    expect(fitViewTransform(huge, 1440, 900).zoom).toBe(0.25);
+  });
+
+  it("stays finite for degenerate zero-size bounds and tiny viewports", () => {
+    const point = { minX: 50, minY: 50, maxX: 50, maxY: 50 };
+    const t = fitViewTransform(point, 60, 40); // viewport smaller than 2×minPad
+    expect(Number.isFinite(t.zoom)).toBe(true);
+    expect(Number.isFinite(t.x)).toBe(true);
+    expect(Number.isFinite(t.y)).toBe(true);
+    // A point circuit centers in the viewport.
+    expect(t.x + 50 * t.zoom).toBeCloseTo(30, 10);
+    expect(t.y + 50 * t.zoom).toBeCloseTo(20, 10);
+  });
+
+  it("honors custom padding options", () => {
+    const t = fitViewTransform(bounds, 1000, 800, { paddingFraction: 0, minPaddingPx: 0 });
+    // No padding: width-bound zoom fills the viewport exactly.
+    expect(t.zoom).toBeCloseTo(1000 / 1000, 10);
+    expect(t.x + bounds.minX * t.zoom).toBeCloseTo(0, 10);
   });
 });
 

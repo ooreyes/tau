@@ -12,8 +12,9 @@ import { FlowLayer, flowSpeedLabel } from "./FlowLayer";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   buildLabelPlacements,
-  circuitBounds,
+  circuitBoundsWithLabels,
   collides,
+  fitViewTransform,
   componentAt,
   componentWorldRect,
   findFreeSpot,
@@ -704,18 +705,14 @@ export function Canvas({
     if (!el) return;
     const r = el.getBoundingClientRect();
     if (r.width === 0 || r.height === 0) return;
-    const b = circuitBounds(componentsRef.current, wiresRef.current);
+    // Label-aware bounds + 12%/48px viewport padding so long refdes/value
+    // text never touches (or clips at) the canvas edge (§11 Unit A2).
+    const b = circuitBoundsWithLabels(componentsRef.current, wiresRef.current);
     if (!b) {
       setView({ x: r.width / 2, y: r.height / 2, zoom: 1 });
       return;
     }
-    const pad = 80;
-    const zoom = clampZoom(
-      Math.min((r.width - pad * 2) / Math.max(b.maxX - b.minX, 1), (r.height - pad * 2) / Math.max(b.maxY - b.minY, 1)),
-    );
-    const cx = (b.minX + b.maxX) / 2;
-    const cy = (b.minY + b.maxY) / 2;
-    setView({ zoom, x: r.width / 2 - cx * zoom, y: r.height / 2 - cy * zoom });
+    setView(fitViewTransform(b, r.width, r.height, { minZoom: 0.25, maxZoom: 5 }));
   }, []);
 
   // Auto-fit when the document identity changes (open / new / tab switch).

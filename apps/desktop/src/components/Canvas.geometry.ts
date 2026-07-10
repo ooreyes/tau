@@ -362,6 +362,61 @@ export const buildLabelPlacements = (components: SchematicComponent[], wires: Sc
   return placements;
 };
 
+/** Circuit bounds extended to cover the refdes/value text next to each symbol.
+ *  `circuitBounds`' fixed per-symbol margin does not account for label text,
+ *  so fit-to-view used to clip long labels (e.g. "U1 ideal") at the viewport
+ *  edge. Uses the same placement engine the canvas renders with. */
+export function circuitBoundsWithLabels(
+  components: SchematicComponent[],
+  wires: SchematicWire[],
+): Rect | null {
+  const base = circuitBounds(components, wires);
+  if (!base) return base;
+  let { minX, minY, maxX, maxY } = base;
+  for (const placement of buildLabelPlacements(components, wires).values()) {
+    minX = Math.min(minX, placement.box.minX);
+    minY = Math.min(minY, placement.box.minY);
+    maxX = Math.max(maxX, placement.box.maxX);
+    maxY = Math.max(maxY, placement.box.maxY);
+  }
+  return { minX, minY, maxX, maxY };
+}
+
+export interface FitViewOptions {
+  /** Fraction of each viewport dimension kept clear around the circuit. */
+  paddingFraction?: number;
+  /** Absolute floor for that padding, so small windows still breathe. */
+  minPaddingPx?: number;
+  minZoom?: number;
+  maxZoom?: number;
+}
+
+/** Zoom + translation that frames `bounds` in a viewport with breathing room:
+ *  12% of each viewport dimension, never less than 48px (§11 Unit A2). Pure so
+ *  the padding math is unit-testable without a DOM. Degenerate (point-sized)
+ *  bounds and zero-sized viewports resolve to a clamped, finite transform. */
+export function fitViewTransform(
+  bounds: Rect,
+  viewportWidth: number,
+  viewportHeight: number,
+  options: FitViewOptions = {},
+): { zoom: number; x: number; y: number } {
+  const frac = options.paddingFraction ?? 0.12;
+  const minPad = options.minPaddingPx ?? 48;
+  const minZoom = options.minZoom ?? 0.25;
+  const maxZoom = options.maxZoom ?? 5;
+  const padX = Math.max(viewportWidth * frac, minPad);
+  const padY = Math.max(viewportHeight * frac, minPad);
+  const availW = Math.max(viewportWidth - padX * 2, 1);
+  const availH = Math.max(viewportHeight - padY * 2, 1);
+  const w = Math.max(bounds.maxX - bounds.minX, 1);
+  const h = Math.max(bounds.maxY - bounds.minY, 1);
+  const zoom = Math.min(maxZoom, Math.max(minZoom, Math.min(availW / w, availH / h)));
+  const cx = (bounds.minX + bounds.maxX) / 2;
+  const cy = (bounds.minY + bounds.maxY) / 2;
+  return { zoom, x: viewportWidth / 2 - cx * zoom, y: viewportHeight / 2 - cy * zoom };
+}
+
 /** A component's drawn body box, rotated to its orientation (still centred on origin). */
 const rotatedBodyBox = (kind: ComponentKind, rotation: number): Rect => {
   const b = SYMBOL_BODY[kind];
