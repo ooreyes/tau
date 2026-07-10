@@ -8,7 +8,6 @@ import {
   FileInput,
   Trash2,
   MousePointer2,
-  Spline,
   Tag,
   Crosshair,
   Undo2,
@@ -381,7 +380,13 @@ export function EditorToolbar({
         <MousePointer2 size={16} strokeWidth={1.6} />
       </IconButton>
       <IconButton title="Wire" active={tool.mode === "wire"} disabled={readOnly} onClick={startWiring}>
-        <Spline size={16} strokeWidth={1.6} />
+        {/* Orthogonal wire with junction endpoints — schematic wires are
+            axis-aligned, so the glyph is a dogleg, not a freeform spline. */}
+        <svg width={16} height={16} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M3.2 12.2 H8 V3.8 H12.8" />
+          <circle cx="3.2" cy="12.2" r="1.7" fill="currentColor" stroke="none" />
+          <circle cx="12.8" cy="3.8" r="1.7" fill="currentColor" stroke="none" />
+        </svg>
       </IconButton>
       <IconButton title="Net label (F4)" active={tool.mode === "label"} disabled={readOnly} onClick={startLabeling}>
         <Tag size={16} strokeWidth={1.6} />
