@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
-import { CATALOG_BY_KIND } from "../schematic/catalog";
+import { Maximize2, Minimize2, RefreshCw, Square, X } from "lucide-react";
 import { useSchematic } from "../store/useSchematic";
 import {
   MAX_TRANSIENT_STEPS,
@@ -11,12 +11,9 @@ import {
   type Trace,
 } from "../simulation/linearTransient";
 import { formatEngineering } from "../simulation/quantity";
-import { OPAMP_LIBRARY, findOpAmp } from "../library/opamps";
 import type { Probe, NetLabel, SchematicWire } from "../schematic/types";
 import { netAtPoint } from "../schematic/netlist";
 import { currentProbeTraces } from "../simulation/currentProbe";
-import { paramFields, decodeParams, encodeParams } from "../schematic/params";
-import { EngineeringInput } from "./EngineeringInput";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -62,16 +59,23 @@ import { displaySampleIndices, waveformBounds } from "../simulation/waveform";
 import {
   type PaneLayout,
   defaultLayout,
+  automaticLayout,
   addPane,
   removePane,
   moveTrace,
-  reconcileLayout,
 } from "./plotPanes";
 import { PlotAxes, ScopeClip } from "./PlotAxes";
 import { useMeasuredSize, tickCountsFromSize } from "./useMeasuredSize";
 import { usePlotViewport } from "./usePlotViewport";
 import { ScopeZoomCluster } from "./ScopeZoomCluster";
 import type { Viewport } from "../simulation/plotViewport";
+import {
+  classifySignal,
+  componentMeasurements,
+  traceStatistics,
+  type ComponentMeasurement,
+  type MeasuredSeries,
+} from "../simulation/measurementModel";
 
 interface SimulationPanelProps {
   result: AnalysisResult | null;
@@ -162,32 +166,16 @@ export function SimulationPanel({
   const components = useSchematic((s) => s.components);
   const wires = useSchematic((s) => s.wires);
   const selectedId = useSchematic((s) => s.selectedId);
-  const setValue = useSchematic((s) => s.setValue);
-  const beginChange = useSchematic((s) => s.beginChange);
+  const select = useSchematic((s) => s.select);
   const probes = useSchematic((s) => s.probes);
-  const selectedWireId = useSchematic((s) => s.selectedWireId);
   const netLabels = useSchematic((s) => s.netLabels);
   const directives = useSchematic((s) => s.directives);
-  const setNetLabelDirect = useSchematic((s) => s.setNetLabelDirect);
-  const editingRef = useRef(false);
-  const netLabelEditingRef = useRef(false);
-  const selected = components.find((component) => component.id === selectedId) ?? null;
-  const selectedWire = wires.find((w) => w.id === selectedWireId) ?? null;
-  // Reset undo-tracking refs whenever the selection changes so each new component
-  // or wire edit gets its own undo entry from the first keystroke.
-  const prevSelectedIdRef = useRef<string | null>(null);
-  if (prevSelectedIdRef.current !== selectedId) {
-    prevSelectedIdRef.current = selectedId;
-    editingRef.current = false;
-  }
-  const prevWireIdRef = useRef<string | null>(null);
-  if (prevWireIdRef.current !== selectedWireId) {
-    prevWireIdRef.current = selectedWireId;
-    netLabelEditingRef.current = false;
-  }
-  const selectedEntry = selected ? CATALOG_BY_KIND[selected.kind] : null;
-  const opampPart = selected && selected.kind === "opamp" ? findOpAmp(selected.value) : null;
   const warnings = result?.warnings ?? [];
+
+  const componentRows = useMemo<ComponentMeasurement[]>(
+    () => (result?.ok ? componentMeasurements(result) : []),
+    [result],
+  );
 
   const [mode, setMode] = useState<"tran" | "op" | "ac" | "dc" | "tf" | "noise" | "step">("tran");
   // Advanced Simulation Settings disclosure — closed by default (§11 Unit C7):
@@ -304,10 +292,14 @@ export function SimulationPanel({
     return [...base, ...extraIds.filter((id) => !base.includes(id))];
   }, [result, probes, wires, scopeTraces]);
 
-  // Keep the pane layout in sync with available traces whenever the set changes.
+  // Auto-create one readable plot card per signal whenever the interest set
+  // changes. A rerun with the same signals preserves manual pane assignments.
+  const availableTraceKey = availableTraceIds.join("\u0000");
   useEffect(() => {
-    setPaneLayout((prev) => reconcileLayout(prev, availableTraceIds));
-  }, [availableTraceIds]);
+    setPaneLayout(automaticLayout(availableTraceIds));
+    // The stable key deliberately ignores a new result object's identity.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [availableTraceKey]);
 
   // Pane control callbacks — stable references for JSX handlers.
   const handleAddPane = useCallback(() => setPaneLayout((prev) => addPane(prev)), []);
@@ -512,7 +504,7 @@ export function SimulationPanel({
                 onClick={onStop}
                 aria-label="Stop simulation"
               >
-                <span aria-hidden="true">■</span>
+                <Square size={13} strokeWidth={1.8} aria-hidden="true" />
               </Button>
             </TooltipTrigger>
             <TooltipContent>Clear transient result</TooltipContent>
@@ -527,7 +519,7 @@ export function SimulationPanel({
                 disabled={isRunning}
                 aria-label="Refine transient resolution"
               >
-                <span aria-hidden="true">◔</span>
+                <RefreshCw size={13} strokeWidth={1.8} aria-hidden="true" />
               </Button>
             </TooltipTrigger>
             <TooltipContent>Re-run transient at finer resolution</TooltipContent>
@@ -541,7 +533,9 @@ export function SimulationPanel({
                 onClick={() => setMaximized((m) => !m)}
                 aria-label="Toggle maximized analysis"
               >
-                <span aria-hidden="true">{maximized ? "⤡" : "⤢"}</span>
+                {maximized
+                  ? <Minimize2 size={13} strokeWidth={1.8} aria-hidden="true" />
+                  : <Maximize2 size={13} strokeWidth={1.8} aria-hidden="true" />}
               </Button>
             </TooltipTrigger>
             <TooltipContent>{maximized ? "Restore panel" : "Maximize analysis"}</TooltipContent>
@@ -555,7 +549,7 @@ export function SimulationPanel({
                 onClick={onClose}
                 aria-label="Minimize graphs"
               >
-                <span aria-hidden="true">×</span>
+                <X size={14} strokeWidth={1.8} aria-hidden="true" />
               </Button>
             </TooltipTrigger>
             <TooltipContent>Minimize graphs</TooltipContent>
@@ -925,126 +919,11 @@ export function SimulationPanel({
         </>
       )}
 
-      <div className="selection-strip">
-        <div className="strip-label">Select</div>
-        {selected && selectedEntry ? (
-          <>
-            <div className="selected-part">
-              <span>{selected.label || selectedEntry.name}</span>
-              <small>{selectedEntry.name}</small>
-            </div>
-            {selected.kind === "opamp" ? (
-              <>
-                <label className="value-editor">
-                  <span>MODEL</span>
-                  <select
-                    value={OPAMP_LIBRARY.some((p) => p.part === selected.value) ? selected.value : "Ideal"}
-                    onChange={(event) => {
-                      beginChange();
-                      setValue(selected.id, event.currentTarget.value);
-                    }}
-                  >
-                    {OPAMP_LIBRARY.map((p) => (
-                      <option key={p.part} value={p.part}>
-                        {p.part}
-                        {p.part === "Ideal" ? "" : ` · ${p.manufacturer}`}
-                      </option>
-                    ))}
-                  </select>
-                  <em>IC</em>
-                </label>
-                {opampPart && (
-                  <div className="opamp-spec">
-                    {Number.isFinite(opampPart.gbwHz) && opampPart.gbwHz > 0
-                      ? `${formatEngineering(opampPart.gbwHz, "Hz", 2)} GBW · ${opampPart.slewRate} V/µs · ±${opampPart.supplyMax} V · ${opampPart.package}`
-                      : "ideal — infinite gain & bandwidth"}
-                  </div>
-                )}
-              </>
-            ) : paramFields(selected.kind).length > 0 ? (
-              <div className="param-fields">
-                {paramFields(selected.kind).map((f) => (
-                  <label key={f.key} className={`value-editor${f.unit ? " engineering-value-editor" : ""}`}>
-                    <span>{f.label}</span>
-                    {f.unit ? (
-                      <EngineeringInput
-                        label={f.label}
-                        value={decodeParams(selected.kind, selected.value)[f.key] ?? ""}
-                        unit={f.unit}
-                        onBeginChange={() => {
-                          if (!editingRef.current) {
-                            beginChange();
-                            editingRef.current = true;
-                          }
-                        }}
-                        onValueChange={(value) => {
-                          const next = {
-                            ...decodeParams(selected.kind, selected.value),
-                            [f.key]: value,
-                          };
-                          setValue(selected.id, encodeParams(selected.kind, next));
-                        }}
-                      />
-                    ) : (
-                      <input
-                        value={decodeParams(selected.kind, selected.value)[f.key] ?? ""}
-                        onFocus={() => {
-                          editingRef.current = false;
-                        }}
-                        onChange={(event) => {
-                          if (!editingRef.current) {
-                            beginChange();
-                            editingRef.current = true;
-                          }
-                          const next = {
-                            ...decodeParams(selected.kind, selected.value),
-                            [f.key]: event.currentTarget.value,
-                          };
-                          setValue(selected.id, encodeParams(selected.kind, next));
-                        }}
-                        spellCheck={false}
-                      />
-                    )}
-                  </label>
-                ))}
-              </div>
-            ) : (
-              <div className="selected-part muted">No parameters</div>
-            )}
-          </>
-        ) : selectedWire ? (
-          <>
-            <div className="selected-part">
-              <span>Net</span>
-              <small>wire segment</small>
-            </div>
-            <label className="value-editor">
-              <span>NET NAME</span>
-              <input
-                value={
-                  netLabels.find((l) => l.x === selectedWire.points[0].x && l.y === selectedWire.points[0].y)?.text ?? ""
-                }
-                placeholder="e.g. Vout"
-                onFocus={() => { netLabelEditingRef.current = false; }}
-                onBlur={() => {
-                  // On blur, commit a final upsert so deletion (empty text) is recorded cleanly.
-                  netLabelEditingRef.current = false;
-                }}
-                onChange={(event) => {
-                  if (!netLabelEditingRef.current) {
-                    beginChange();
-                    netLabelEditingRef.current = true;
-                  }
-                  setNetLabelDirect(selectedWire.points[0].x, selectedWire.points[0].y, event.currentTarget.value);
-                }}
-                spellCheck={false}
-              />
-            </label>
-          </>
-        ) : (
-          <div className="selected-part muted">No selection</div>
-        )}
-      </div>
+      <ComponentMeasurementsTable
+        rows={componentRows}
+        selectedId={selectedId}
+        onSelect={select}
+      />
 
       <div className="plotter-footer">
         <div className="tiny-leds" aria-hidden="true">
@@ -1082,6 +961,124 @@ export function SimulationPanel({
         </div>
       )}
     </aside>
+  );
+}
+
+function formatMeasuredValue(series: MeasuredSeries | undefined): string {
+  if (!series) return "—";
+  return formatEngineering(series.statistics.final, series.unit, 3);
+}
+
+function SeriesSparkline({ series }: { series: MeasuredSeries }) {
+  const width = 72;
+  const height = 22;
+  const values = series.values;
+  if (values.length < 2) return null;
+  const stride = Math.max(1, Math.floor(values.length / 48));
+  const sampled = values.filter(
+    (value, index) => Number.isFinite(value) && (index % stride === 0 || index === values.length - 1),
+  );
+  if (sampled.length < 2) return null;
+  let min = Infinity;
+  let max = -Infinity;
+  for (const value of sampled) {
+    if (value < min) min = value;
+    if (value > max) max = value;
+  }
+  const range = max - min || 1;
+  const path = sampled
+    .map((value, index) => {
+      const x = (index / Math.max(1, sampled.length - 1)) * width;
+      const y = height - 2 - ((value - min) / range) * (height - 4);
+      return `${index === 0 ? "M" : "L"}${x.toFixed(1)} ${y.toFixed(1)}`;
+    })
+    .join(" ");
+  return (
+    <svg className="measurement-sparkline" viewBox={`0 0 ${width} ${height}`} aria-hidden="true">
+      <path d={path} />
+    </svg>
+  );
+}
+
+function ComponentMeasurementsTable({
+  rows,
+  selectedId,
+  onSelect,
+}: {
+  rows: ComponentMeasurement[];
+  selectedId: string | null;
+  onSelect: (id: string | null) => void;
+}) {
+  return (
+    <section className="component-measurements" aria-labelledby="component-measurements-title">
+      <div className="component-measurements-heading">
+        <div>
+          <span className="plotter-kicker">Circuit telemetry</span>
+          <h3 id="component-measurements-title">Component measurements</h3>
+        </div>
+        <span className="measurement-count mono-num">{rows.length} parts</span>
+      </div>
+      {rows.length === 0 ? (
+        <div className="measurement-empty">
+          Run a transient analysis to calculate voltage, current, and power for each named component.
+        </div>
+      ) : (
+        <div className="measurement-table-wrap">
+          <table className="measurement-table">
+            <thead>
+              <tr>
+                <th>Component</th>
+                <th>Voltage across</th>
+                <th>Current through</th>
+                <th title="Positive power is absorbed by the component; negative power is delivered to the circuit.">
+                  Power
+                </th>
+                <th>Signal</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row) => {
+                const primary = row.voltage ?? row.current ?? row.power;
+                const selected = row.componentId === selectedId;
+                return (
+                  <tr
+                    key={row.componentId}
+                    className={selected ? "selected" : undefined}
+                    aria-current={selected ? "true" : undefined}
+                    onClick={() => onSelect(row.componentId)}
+                  >
+                    <td>
+                      <strong>{row.ref}</strong>
+                      <small>{row.kind}</small>
+                    </td>
+                    <td className="mono-num">{formatMeasuredValue(row.voltage)}</td>
+                    <td className="mono-num">{formatMeasuredValue(row.current)}</td>
+                    <td className="mono-num">{formatMeasuredValue(row.power)}</td>
+                    <td>
+                      {primary ? (
+                        <div className="measurement-signal">
+                          <SeriesSparkline series={primary} />
+                          <span className={`signal-class signal-class--${primary.classification.kind}`}>
+                            {primary.classification.kind === "periodic" && primary.classification.frequency
+                              ? `${formatEngineering(primary.classification.frequency, "Hz", 2)} periodic`
+                              : primary.classification.kind}
+                          </span>
+                        </div>
+                      ) : (
+                        <span className="muted">unavailable</span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <p className="measurement-sign-note">
+        Power sign: positive is absorbed by a component; negative is delivered to the circuit.
+      </p>
+    </section>
   );
 }
 
@@ -1190,7 +1187,9 @@ export function WaveformPlot({
             {/* Per-pane header with remove button (only visible in multi-pane mode). */}
             {multiPane && (
               <div className="pane-header">
-                <span className="pane-label">Pane {paneIndex + 1}</span>
+                <span className="pane-label">
+                  {paneTraces.length === 1 ? labelFor(paneTraces[0]) : `Plot ${paneIndex + 1}`}
+                </span>
                 <button
                   className="pane-remove-btn"
                   onClick={() => onRemovePane(paneIndex)}
@@ -1227,6 +1226,7 @@ export function WaveformPlot({
                     paneCount={paneLayout.length}
                     currentPaneIndex={paneIndex}
                     onMoveTrace={onMoveTrace}
+                    times={success ? success.times : []}
                   />
                 ))
               ) : (
@@ -1307,7 +1307,7 @@ function TranScopePane({
           xUnit="s"
           yUnit={plot ? plot.unit : "V"}
           xAxisTitle="Time"
-          yAxisTitle="Voltage"
+          yAxisTitle={plot?.unit === "A" ? "Current" : plot?.unit === "W" ? "Power" : "Voltage"}
           targetXTicks={targetXTicks}
           targetYTicks={targetYTicks}
           showXTicks={showXAxis}
@@ -1340,30 +1340,50 @@ function TraceLegendItem({
   paneCount,
   currentPaneIndex,
   onMoveTrace,
+  times,
 }: {
   trace: Trace;
   label: string;
   paneCount: number;
   currentPaneIndex: number;
   onMoveTrace: (traceId: string, targetPaneIndex: number) => void;
+  times: number[];
 }) {
+  const statistics = useMemo(() => traceStatistics(times, trace.values), [times, trace.values]);
+  const classification = useMemo(() => classifySignal(times, trace.values), [times, trace.values]);
   return (
     <span className="trace-legend-item">
-      <i style={{ background: trace.color }} />
-      <span className="trace-legend-label">{label}</span>
-      {paneCount > 1 && (
-        <select
-          className="trace-pane-select"
-          value={currentPaneIndex}
-          aria-label={`Move ${label} to pane`}
-          onChange={(e) => onMoveTrace(trace.id, Number(e.currentTarget.value))}
-        >
-          {Array.from({ length: paneCount }).map((_, i) => (
-            <option key={i} value={i}>
-              P{i + 1}
-            </option>
-          ))}
-        </select>
+      <span className="trace-legend-primary">
+        <i style={{ background: trace.color }} />
+        <span className="trace-legend-label">{label}</span>
+        <span className={`signal-class signal-class--${classification.kind}`}>
+          {classification.kind === "periodic" && classification.frequency
+            ? `${formatEngineering(classification.frequency, "Hz", 2)}`
+            : classification.kind}
+        </span>
+        {paneCount > 1 && (
+          <select
+            className="trace-pane-select"
+            value={currentPaneIndex}
+            aria-label={`Move ${label} to pane`}
+            onChange={(e) => onMoveTrace(trace.id, Number(e.currentTarget.value))}
+          >
+            {Array.from({ length: paneCount }).map((_, i) => (
+              <option key={i} value={i}>
+                P{i + 1}
+              </option>
+            ))}
+          </select>
+        )}
+      </span>
+      {statistics && (
+        <span className="trace-statistics mono-num">
+          <span>MIN {formatEngineering(statistics.min, trace.unit, 2)}</span>
+          <span>MAX {formatEngineering(statistics.max, trace.unit, 2)}</span>
+          <span>AVG {formatEngineering(statistics.average, trace.unit, 2)}</span>
+          <span>RMS {formatEngineering(statistics.rms, trace.unit, 2)}</span>
+          <span>FINAL {formatEngineering(statistics.final, trace.unit, 2)}</span>
+        </span>
       )}
     </span>
   );

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
+import { Eye, ScanSearch } from "lucide-react";
 import "./App.css";
 import { Toolbar } from "./components/Toolbar";
 import { Canvas } from "./components/Canvas";
@@ -800,7 +801,10 @@ function App() {
         runState={runState}
         isRunning={analysisRunning}
         title={documentTitle}
-        onModeChange={setMode}
+        onModeChange={(nextMode) => {
+          setMode(nextMode);
+          if (nextMode === "simulator") setFitSignal((value) => value + 1);
+        }}
         onRun={runAndShowSimulator}
         onOpenSettings={() => setSettingsOpen(true)}
       />
@@ -852,7 +856,7 @@ function App() {
             onHideSimulator={() => setMode("schematic")}
           />
           <main className="stage">
-            <Canvas analysis={analysis} op={opAnalysis} interactive fitSignal={fitSignal} />
+            <Canvas op={opAnalysis} interactive fitSignal={fitSignal} />
             {components.length === 0 && wires.length === 0 && toolMode === "select" && (
               <EmptyState />
             )}
@@ -862,6 +866,21 @@ function App() {
         )}
         {mode === "simulator" && graphOpen && (
           <>
+            <section className="sim-schematic-pane" aria-label="Circuit overview">
+              <header className="sim-schematic-header">
+                <div className="sim-schematic-title">
+                  <Eye size={14} strokeWidth={1.7} aria-hidden="true" />
+                  <span>Circuit</span>
+                </div>
+                <span className="sim-view-only">
+                  <ScanSearch size={12} strokeWidth={1.7} aria-hidden="true" />
+                  View only
+                </span>
+              </header>
+              <div className="sim-schematic-canvas">
+                <Canvas op={opAnalysis} interactive={false} fitSignal={fitSignal} />
+              </div>
+            </section>
             <AnalysisErrorBoundary>
               <SimulationPanel
                 result={analysis}

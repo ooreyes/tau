@@ -467,99 +467,6 @@ body {
   box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent);
 }
 
-/* ── Flow controls ─────────────────────────────────────────────────────────── */
-.flow-layer {
-  pointer-events: none;
-}
-
-.flow-arrow {
-  fill: var(--accent);
-  transition: opacity 180ms ease;
-  /* no glow filter — keeps canvas clean */
-}
-
-.flow-controls {
-  position: absolute;
-  left: var(--sp-4);
-  bottom: var(--sp-4);
-  z-index: 6;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: var(--sp-2);
-}
-
-/* Speed readout is an instrument reading, not a label — mono figures in a
-   flat hairline chip. No blur: this sits directly over the canvas (a hot,
-   60fps layer), and a fully-opaque `--panel-3` reads as crisply as glass
-   without the repaint cost. */
-.flow-rate {
-  height: var(--row-h-dense);
-  display: inline-flex;
-  align-items: center;
-  font-size: var(--fs-caption);
-  font-weight: 500;
-  color: var(--muted);
-  background: var(--panel-3);
-  border: 1px solid var(--border-strong);
-  border-radius: var(--r-md);
-  padding: 0 var(--sp-2);
-}
-
-/* An operator control, not a glowy "feature enabled" consumer pill: flat
-   --panel surface at rest, a real indicator lamp (dot + hairline, cobalt —
-   this is a view toggle, not a run-state signal) carries the ON state
-   instead of a tinted glass fill. */
-.flow-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--sp-2);
-  height: var(--row-h-dense);
-  padding: 0 var(--sp-3);
-  font-size: var(--fs-body);
-  font-weight: 600;
-  letter-spacing: -0.1px;
-  color: var(--muted);
-  background: var(--panel-3);
-  border: 1px solid var(--border-strong);
-  border-radius: var(--r-md);
-  cursor: pointer;
-  transition: color var(--motion-fast) var(--ease-out),
-    border-color var(--motion-fast) var(--ease-out),
-    background var(--motion-fast) var(--ease-out);
-}
-
-.flow-toggle:hover {
-  color: var(--text);
-  background: var(--overlay-hover);
-}
-
-.flow-toggle.on {
-  color: var(--accent);
-  border-color: var(--accent-line);
-}
-
-.flow-toggle .flow-bolt {
-  font-size: var(--fs-label);
-}
-
-/* Lamp dot — same idle/lit language as `.status-lamp-dot`, scoped here since
-   this toggle isn't a run-state indicator (cobalt accent, not signal amber). */
-.flow-lamp {
-  width: 5px;
-  height: 5px;
-  flex: none;
-  border-radius: 50%;
-  background: var(--faint);
-  transition: background var(--motion-med) var(--ease-out),
-    box-shadow var(--motion-med) var(--ease-out);
-}
-
-.flow-toggle.on .flow-lamp {
-  background: var(--accent);
-  box-shadow: 0 0 5px var(--accent-glow);
-}
-
 /* ── Inline value editor (component value + net-label name) ─────────────────
    Same true-black pop-surface recipe the rest of the system uses for
    floating surfaces (`--panel-4` + `--elev-pop`, see ui/dialog.tsx and
@@ -877,6 +784,18 @@ body {
   width: 100%;
   max-width: 920px;
   margin: 0 auto;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--sp-2);
+}
+
+.app-simulator .scope-shell .pane-controls {
+  grid-column: 1 / -1;
+}
+
+.app-simulator .scope-shell .pane-wrapper--split {
+  min-width: 0;
+  margin-bottom: 0;
 }
 
 .plotter.maximized .scope-shell {
@@ -1176,6 +1095,19 @@ body {
 /* Legend items now use flex so the move-selector sits inline. */
 .trace-legend-item {
   display: inline-flex;
+  flex: 1 1 280px;
+  min-width: 0;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 3px;
+  padding: var(--sp-2);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-sm);
+  background: var(--panel-3);
+}
+
+.scope-legend .trace-legend-primary {
+  display: flex;
   align-items: center;
   gap: var(--sp-1);
 }
@@ -1184,6 +1116,54 @@ body {
   font-size: var(--fs-caption);
   color: var(--text);
   font-family: var(--font-mono);
+}
+
+.scope-legend .trace-statistics {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(max-content, 1fr));
+  gap: var(--sp-2);
+  color: var(--muted);
+  font-size: var(--fs-micro);
+  line-height: 1.4;
+}
+
+.scope-legend .trace-statistics span {
+  display: inline;
+  white-space: nowrap;
+}
+
+.signal-class {
+  display: inline-flex;
+  align-items: center;
+  width: max-content;
+  height: 17px;
+  padding: 0 5px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--muted);
+  background: transparent;
+  font: 600 var(--fs-micro) var(--font-mono);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.signal-class--periodic {
+  color: var(--accent);
+  border-color: var(--accent-line);
+  background: var(--accent-soft);
+}
+
+.signal-class--steady {
+  color: var(--success);
+  border-color: var(--success-line);
+  background: var(--success-soft);
+}
+
+.signal-class--transient {
+  color: var(--signal);
+  border-color: var(--signal-line);
+  background: var(--signal-soft);
 }
 
 /* Compact pane-selector dropdown on each legend trace. */
@@ -1875,7 +1855,147 @@ body {
   grid-column: 1 / -1;
 }
 
-/* Selection strip */
+/* Component telemetry replaces the simulator's old parameter-editing strip.
+   The simulator is now a read-only analysis surface; editing stays in the
+   schematic Properties rail. */
+.component-measurements {
+  flex: none;
+  width: calc(100% - 28px);
+  max-width: 920px;
+  margin: var(--sp-3) auto;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--panel-2);
+  overflow: hidden;
+}
+
+.component-measurements-heading {
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  padding: var(--sp-2) var(--sp-3);
+  border-bottom: 1px solid var(--border);
+}
+
+.component-measurements-heading h3 {
+  margin: 1px 0 0;
+  color: var(--text);
+  font-size: var(--fs-title);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.measurement-count {
+  color: var(--muted);
+  font-size: var(--fs-caption);
+}
+
+.measurement-table-wrap {
+  max-height: 288px;
+  overflow: auto;
+}
+
+.measurement-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.measurement-table th,
+.measurement-table td {
+  padding: 7px var(--sp-3);
+  text-align: left;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.measurement-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  color: var(--muted);
+  background: var(--panel-3);
+  font-size: var(--fs-caption);
+  font-weight: 600;
+}
+
+.measurement-table tbody tr {
+  cursor: pointer;
+  transition: background var(--motion-fast) var(--ease-out),
+    box-shadow var(--motion-fast) var(--ease-out);
+}
+
+.measurement-table tbody tr:hover {
+  background: var(--overlay-hover);
+}
+
+.measurement-table tbody tr.selected {
+  background: var(--accent-soft);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+.measurement-table td {
+  color: var(--text);
+  font-size: var(--fs-caption);
+}
+
+.measurement-table td:first-child {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.measurement-table td strong {
+  color: var(--text);
+  font: 600 var(--fs-label) var(--font-mono);
+}
+
+.measurement-table td small {
+  color: var(--muted);
+  font-size: var(--fs-micro);
+  text-transform: capitalize;
+}
+
+.measurement-signal {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+.measurement-sparkline {
+  width: 72px;
+  height: 22px;
+  flex: none;
+  overflow: visible;
+}
+
+.measurement-sparkline path {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+}
+
+.measurement-empty,
+.measurement-sign-note {
+  color: var(--muted);
+  font-size: var(--fs-caption);
+}
+
+.measurement-empty {
+  padding: var(--sp-5) var(--sp-3);
+  text-align: center;
+}
+
+.measurement-sign-note {
+  margin: 0;
+  padding: 6px var(--sp-3);
+  border-top: 1px solid var(--border-subtle);
+  background: var(--panel-3);
+}
+
+/* Legacy selector retained for old screenshots/tests outside the simulator. */
 .selection-strip {
   flex-shrink: 0;
   border-top: 1px solid var(--border);
@@ -3917,6 +4037,63 @@ body {
   border-left: 1px solid var(--border);
 }
 
+/* Simulator workspace: preserve circuit context beside the analysis instead
+   of replacing the editor with a full-window oscilloscope. The schematic is
+   intentionally read-only here; it remains selectable for measurement focus
+   and supports pan/zoom, but exposes no editing tools. Liquid-glass-like
+   material is limited to the compact header/control layer — the schematic and
+   plots stay on opaque content surfaces for legibility. */
+.sim-schematic-pane {
+  flex: 0 1 38%;
+  min-width: 280px;
+  max-width: 560px;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--canvas-bg);
+  border-right: 1px solid var(--border);
+}
+
+.sim-schematic-header {
+  flex: none;
+  height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  padding: 0 var(--sp-3);
+  color: var(--text);
+  background: color-mix(in srgb, var(--panel) 88%, transparent);
+  border-bottom: 1px solid var(--border);
+  backdrop-filter: saturate(160%) blur(18px);
+  -webkit-backdrop-filter: saturate(160%) blur(18px);
+}
+
+.sim-schematic-title,
+.sim-view-only {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+.sim-schematic-title {
+  font-size: var(--fs-label);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.sim-view-only {
+  color: var(--muted);
+  font: 500 var(--fs-caption) var(--font-ui);
+}
+
+.sim-schematic-canvas {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
 /* Resizable simulator columns: circuit (flex), analysis scope, and Ask Sim.
    Widths are driven by CSS vars set on .shell-body and dragged via handles. */
 .app-simulator .shell-body > .plotter {
@@ -3924,6 +4101,17 @@ body {
   width: auto;
   min-width: 300px;
   border-left: 0;
+}
+
+@media (max-width: 1023px) {
+  .sim-schematic-pane {
+    flex-basis: 34%;
+    min-width: 250px;
+  }
+
+  .app-simulator .plotter .scope-shell {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 .col-resize-handle {

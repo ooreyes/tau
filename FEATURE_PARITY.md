@@ -805,7 +805,13 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   end-to-end through `runOperatingPoint`; UI dispatch/overlay tracked in §4/§6.
 
 ## 6. Waveform viewer (the LTspice plot window)
-- 🟡 Transient scope — `SimulationPanel.tsx` (downsamples large native results ✅)
+- 🟡 Transient scope — `SimulationPanel.tsx` (downsamples large native results ✅).
+  **§11 simulator workspace landed (2026-07-10):** the simulator keeps a
+  selectable, topology-read-only schematic beside the analysis, automatically
+  creates one plot card per probed/default signal, uses a responsive 2-column
+  grid at comfortable widths / 1-column at the 900px floor, and labels V/A/W
+  axes semantically. Current-flow arrows/toggle/readout were removed until the
+  electrical model is mature enough to represent them without confusion.
 - 🟡 Bode (AC mag/phase) — **magnitude + phase now both plotted** (`AcPlot`): a
   second log-frequency sub-plot draws each trace's `phaseDeg` on a 45°-snapped
   degrees axis below the dB magnitude, matching LTspice's dual Bode. Shared
@@ -875,8 +881,20 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   **NEXT:** expression traces in the step pane; dual axis for mixed V+A.
 - 🟡 Multiple plot panes, add/remove traces, autorange — **landed for the
   transient scope** (`plotPanes.ts` pure pane model + per-pane Y autorange,
-  add/remove pane, per-trace pane selector in the legend; 27 tests). Still ⬜:
-  AC/DC panes, manual axis limits.
+  add/remove pane, per-trace pane selector in the legend). **Automatic signal
+  cards + default statistics landed (§11 D9/D11/D12):** each visible trace gets
+  its own initial card, steady/transient/periodic classification, estimated
+  frequency for periodic data, and compact min/max/average/RMS/final readouts
+  using engineering units (`measurementModel.ts`; 29 pane-model + 6 measurement
+  tests). Still ⬜: AC/DC panes, manual axis limits.
+- ✅ **Per-component simulator telemetry (§11 D10, 2026-07-10):** every named
+  component receives a selectable row with voltage across, current through,
+  instantaneous power, sparkline, and signal class. Voltage polarity follows
+  the component's positive→negative terminal convention; current reuses the
+  solver/native branch-current authority; positive power is absorbed and
+  negative power is delivered. Selecting a part in the read-only schematic
+  focuses its row and toggles its current probe; wire clicks toggle voltage
+  probes without exposing any schematic editing controls.
 - ✅ **Measurement cursors** (1 & 2, delta readout) — `simulation/cursors.ts`
   (`cursorReadout`/`fractionToX`, 8 unit tests) + a collapsible **Cursors** panel
   on the transient scope (`SimulationPanel` `CursorView`). Two sliders position
@@ -1079,8 +1097,9 @@ QA (STEP 3.5 pipeline) before/after every panel — never a big-bang rewrite,
 never a broken intermediate state on the branch.
 
 **Status: every bullet below is ✅.** Phase 4c (canvas chrome — the zoom
-cluster, the "Current flow" toggle/readout, the inline value/net-label
-editor) was the last open item; see its bullet below for what changed. This
+cluster and inline value/net-label editor) was the last open item; the former
+"Current flow" animation/control was intentionally removed on 2026-07-10 until
+simulation fidelity justifies it. This
 closes the §10 line item of the AGENTS.md Definition of Done. Honest
 accounting of what's still open in the wider DoD (none of it is §10 scope):
 the re-runnable acceptance-corpus script, the `class-d_starter.asc`

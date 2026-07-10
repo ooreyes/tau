@@ -62,7 +62,7 @@ export function StatusBar({
         engine: {engineLabel}
       </span>
       <span className="status-hints">
-        <span>{mode === "simulator" ? "click a wire to probe voltage · a part to probe current" : toolLabel}</span>
+        <span>{mode === "simulator" ? "click a wire to toggle voltage · select a part to focus current" : toolLabel}</span>
         <span className="dot">·</span>
         <kbd>R</kbd>
         <kbd>C</kbd>

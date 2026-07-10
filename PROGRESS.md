@@ -8,27 +8,65 @@
      `git log --oneline -8`, recover/finish/revert that unit FIRST, then go on.
      ─────────────────────────────────────────────────────────────────────── -->
 ## ⏱ HEARTBEAT
-- **Headline metric:** 1406 tests green · corpus 82/82 import · 82/82 op-converge · 79/82 warning-clean
-- **Run started (UTC):** 2026-07-10T14:30Z
-- **Synced to origin:** auto/ltspice-parity @ feb8e1c; recovered Unit B work
-  from `-wip` rescue ref (prev session died mid-unit at 17:59Z checkpoint).
+- **Headline metric:** 1437 tests green · corpus 82/82 import · 82/82 op-converge · 79/82 warning-clean
+- **Run started (UTC):** 2026-07-10T22:00Z
+- **Synced to origin:** auto/ltspice-parity @ ed751c2.
 - **Claimed unit:** §11 Unit D — measurement system (probe/trace parity,
   per-component V/I/P, oscillation detection, plot statistics).
-- **Status:** IN PROGRESS
-- **Last completed sub-step:** Unit C DONE (C5 b0dfdb0, C7 380aea2, C6
-  51f1721, C8 this commit) — auto transient resolution from RC/RL time
-  constants + source frequencies (documented heuristic in autoResolution.ts),
-  auto AC sweep brackets, AUTO badge + Reset-to-auto override flow —
-  1428 tests green.
-- **Plan:** D9 verify probe color/name parity end-to-end; D10 per-component
-  V/I/P measurements table (reuse currentProbe + device currents), selection
-  focuses row; D11 steady/transient/periodic classification (zero-crossing
-  heuristic, fft.ts if present); D12 per-trace max/min/avg/RMS/final stats in
-  legend/hover via quantity.ts formatter.
+- **Status:** DONE
+- **Last completed sub-step:** Unit D DONE — read-only circuit + auto plot-card
+  workspace, probe/name/color parity retained, per-component V/I/P telemetry,
+  steady/transient/periodic classification, and per-trace min/max/AVG/RMS/final
+  statistics. Current-flow animation/control removed per Omar's direction.
+- **Plan:** dedicated review session owed next, then resume the post-§11
+  acceptance/parity list in AGENTS.md/FEATURE_PARITY.md.
 - **Note:** review-rotation counter is at 0 `review:` in last 30 — owed a
   dedicated review session after §11 ships (Omar's 2026-07-10 override wins).
-- **Next step (if this run dies):** finish the first unchecked sub-item above;
-  partial work is on this branch as `wip:` commits.
+- **Next step:** run the owed dedicated review session; §11 is complete.
+
+---
+
+## 2026-07-10T22:22Z — auto/ltspice-parity — §11 Unit D: simulator workspace + measurement system
+
+### What I did
+- Rebuilt the simulator as a two-surface workspace: a pan/zoom/select-only
+  schematic stays visible beside compact plot cards. Wire clicks toggle voltage
+  probes; part clicks focus telemetry and toggle available current probes. No
+  simulator control can edit circuit topology or parameters.
+- Removed the current-flow animation end-to-end: arrows, speed model, toggle,
+  readout, CSS, dead `FlowLayer`, and animation-only current samplers. Static
+  probes, branch-current traces, and operating-point annotations remain.
+- Auto-generated one plot card per visible/probed signal, arranged as a
+  responsive 2-column grid (one column at 900px). Plot axes now say Voltage,
+  Current, or Power from the actual unit instead of always saying Voltage.
+- Added `measurementModel.ts`: time-weighted min/max/AVG/RMS/final summaries,
+  steady/transient/periodic classification with frequency estimation, and
+  per-component signed voltage/current/power series. The UI exposes those in a
+  compact telemetry table with sparklines and a documented power sign rule.
+- Replaced Unicode simulator action glyphs with the existing Lucide icon system
+  and limited glass material to navigation/control chrome, following Apple's
+  materials guidance rather than putting translucency behind data.
+
+### Files
+`App.tsx`, `App.css`, `Canvas.tsx`, `SimulationPanel.tsx`, `StatusBar.tsx`,
+`plotPanes.ts`, `simulation/measurementModel.ts`, `simulation/currents.ts`,
+tests; deleted `FlowLayer.tsx`.
+
+### Tests / visual QA
+- `pnpm -C apps/desktop typecheck` — pass.
+- `pnpm -C apps/desktop test` — 93 files, 1437/1437 pass.
+- `pnpm --filter @tau/desktop build` — pass (1975 modules).
+- Live Vite QA at 1440×900 and the stated 900×600 minimum: circuit remains
+  visible, plots are reachable and legible, cards collapse cleanly, no flow UI.
+- Tauri development binary compiled and launched. Computer-use attached to the
+  separately installed `/Applications/Tau.app` (an older build), so current-code
+  pixel QA was correctly performed against the live development frontend.
+
+### Parity items
+§11 D9/D10/D11/D12 complete; FEATURE_PARITY §6 updated. §11 mission complete.
+
+### Next step
+Run the owed dedicated review session, then resume the agent-provable DoD list.
 
 ---
 

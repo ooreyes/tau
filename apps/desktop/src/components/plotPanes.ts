@@ -32,6 +32,16 @@ export function defaultLayout(traceIds: string[] = []): PaneLayout {
   return [{ id: "p0", traceIds: [...traceIds] }];
 }
 
+/**
+ * Build the dashboard's automatic layout: one signal per plot card. This is
+ * the glanceable default after a run or probe-set change; users can still
+ * combine signals with the pane selectors afterward.
+ */
+export function automaticLayout(traceIds: string[]): PaneLayout {
+  if (traceIds.length === 0) return defaultLayout();
+  return traceIds.map((traceId, index) => ({ id: `auto-p${index}`, traceIds: [traceId] }));
+}
+
 // ---------------------------------------------------------------------------
 // Read helpers
 // ---------------------------------------------------------------------------

@@ -4,11 +4,9 @@ import { useSchematic } from "../store/useSchematic";
 import { ComponentSymbol, GRID, SYMBOL_BOX } from "../schematic/symbols";
 import type { Point, SchematicComponent, SchematicWire } from "../schematic/types";
 import { getLocalPins, getComponentPins } from "../schematic/pins";
-import type { AnalysisResult } from "../simulation/linearTransient";
 import type { OperatingPointResult } from "../simulation/operatingPoint";
 import { opAnnotations } from "../simulation/opAnnotations";
 import { extractCircuit } from "../schematic/netlist";
-import { FlowLayer, flowSpeedLabel } from "./FlowLayer";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   buildLabelPlacements,
@@ -74,12 +72,10 @@ interface DragState {
 }
 
 export function Canvas({
-  analysis,
   op = null,
   interactive = true,
   fitSignal = 0,
 }: {
-  analysis: AnalysisResult | null;
   /** Last DC operating point; in simulator mode its node voltages / branch
    *  currents are annotated in place on the schematic (§6). */
   op?: OperatingPointResult | null;
@@ -97,7 +93,6 @@ export function Canvas({
   /** Pending net label being typed (label tool): world point + draft text. */
   const [labelDraft, setLabelDraft] = useState<{ x: number; y: number; text: string } | null>(null);
   const labelInputRef = useRef<HTMLInputElement | null>(null);
-  const [flowOn, setFlowOn] = useState(true);
   /** Rubber-band box in screen coords, null when not drawing. */
   const [boxDrag, setBoxDrag] = useState<BoxDrag | null>(null);
   /** True while a component (or group) is being dragged — drives snap-dot visibility. */
@@ -132,6 +127,7 @@ export function Canvas({
   const setValue = useSchematic((s) => s.setValue);
   const probes = useSchematic((s) => s.probes);
   const addProbe = useSchematic((s) => s.addProbe);
+  const toggleCurrentProbe = useSchematic((s) => s.toggleCurrentProbe);
   const netLabels = useSchematic((s) => s.netLabels);
   const upsertNetLabel = useSchematic((s) => s.upsertNetLabel);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -156,19 +152,6 @@ export function Canvas({
       }
     }
     return m;
-  }, [components]);
-
-  // World pin endpoints of two-terminal R/C/L parts, so charge also flows through the body.
-  const legs = useMemo(() => {
-    const out: { id: string; a: Point; b: Point }[] = [];
-    for (const c of components) {
-      if (c.kind !== "resistor" && c.kind !== "capacitor" && c.kind !== "inductor") continue;
-      const pins = getComponentPins(c);
-      const a = pins.find((p) => p.id === "a");
-      const b = pins.find((p) => p.id === "b");
-      if (a && b) out.push({ id: c.id, a: { x: a.x, y: a.y }, b: { x: b.x, y: b.y } });
-    }
-    return out;
   }, [components]);
 
   // Flat list of pin world points, for snapping wires/probes onto terminals.
@@ -457,8 +440,16 @@ export function Canvas({
     const world = screenToWorld(e.clientX, e.clientY);
 
     if (!interactive) {
-      // Simulator view no longer hosts the schematic canvas (§UX). If this
-      // branch is ever hit, only pan — no probing or clamp-meter toggles.
+      // Simulator canvas is view-only, but selection is inspection rather
+      // than editing: focusing a part drives its measurement row. Empty-space
+      // drags remain pan gestures and never mutate circuit geometry.
+      const hit = componentAt(components, world.x, world.y);
+      if (hit) {
+        select(hit.id);
+        toggleCurrentProbe(hit.id);
+        drag.current = { mode: "none", lastX: e.clientX, lastY: e.clientY, moved: false };
+        return;
+      }
       drag.current = { mode: "pan", lastX: e.clientX, lastY: e.clientY, moved: false };
       svgRef.current?.setPointerCapture(e.pointerId);
       return;
@@ -556,7 +547,13 @@ export function Canvas({
 
   const onWirePointerDown = (e: ReactPointerEvent<SVGElement>, wire: SchematicWire) => {
     if (e.button !== 0) return;
-    if (!interactive) return;
+    if (!interactive) {
+      e.stopPropagation();
+      const point = snappedCursor(e.clientX, e.clientY);
+      addProbe(point.x, point.y);
+      selectWire(wire.id);
+      return;
+    }
     if (tool.mode === "probe") {
       e.stopPropagation();
       const w = snappedCursor(e.clientX, e.clientY);
@@ -742,10 +739,6 @@ export function Canvas({
   const previewWire = wireDraft && !pointsEqual(wireDraft.start, wireDraft.cursor)
     ? routeWireSmart(wireDraft.start, wireDraft.cursor, components)
     : null;
-  const flowActive = analysis?.ok === true;
-  const flowEndTime = analysis?.ok ? analysis.times[analysis.times.length - 1] ?? 0 : 0;
-  const flowSpeedText = flowSpeedLabel(flowEndTime);
-
   const editingComp = editingId ? components.find((c) => c.id === editingId) ?? null : null;
   const editBox = editingComp ? SYMBOL_BOX[editingComp.kind] : null;
   const editVert =
@@ -888,10 +881,6 @@ export function Canvas({
             ),
           )}
 
-          {flowActive && flowOn && analysis?.ok && (
-            <FlowLayer wires={wires} legs={legs} pinIndex={pinIndex} result={analysis} playing={flowOn} />
-          )}
-
           <ComponentLabels components={components} wires={wires} />
 
           {placing && ghost && (
@@ -916,24 +905,6 @@ export function Canvas({
           return <rect className="select-box" x={x} y={y} width={w} height={h} />;
         })()}
       </svg>
-
-      {flowActive && (
-        <div className="flow-controls">
-          <button
-            className={`flow-toggle${flowOn ? " on" : ""}`}
-            onClick={() => setFlowOn((v) => !v)}
-            aria-pressed={flowOn}
-            title="Animate conventional current along wires and through components"
-          >
-            <i className="flow-lamp" aria-hidden="true" />
-            <span className="flow-bolt" aria-hidden="true">⚡</span>
-            {flowOn ? "Current flow" : "Flow paused"}
-          </button>
-          {flowOn && flowSpeedText && (
-            <span className="flow-rate mono-num">{flowSpeedText}</span>
-          )}
-        </div>
-      )}
 
       <div className="view-controls">
         <Tooltip>

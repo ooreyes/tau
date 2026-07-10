@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   defaultLayout,
+  automaticLayout,
   addPane,
   removePane,
   moveTrace,
@@ -28,6 +29,19 @@ describe("defaultLayout", () => {
     expect(layout).toHaveLength(1);
     expect(layout[0].traceIds).toEqual([]);
     expect(isValidLayout(layout)).toBe(true);
+  });
+});
+
+describe("automaticLayout", () => {
+  it("creates one plot card per available signal", () => {
+    const layout = automaticLayout(["v:out", "i:R1", "p:R1"]);
+    expect(layout).toHaveLength(3);
+    expect(layout.map((pane) => pane.traceIds)).toEqual([["v:out"], ["i:R1"], ["p:R1"]]);
+    expect(isValidLayout(layout)).toBe(true);
+  });
+
+  it("keeps an empty dashboard structurally valid", () => {
+    expect(automaticLayout([])).toEqual(defaultLayout());
   });
 });
 
