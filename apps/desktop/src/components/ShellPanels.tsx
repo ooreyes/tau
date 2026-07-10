@@ -555,7 +555,8 @@ export function BottomPanel({ result }: { mode?: "schematic" | "simulator"; resu
   );
 }
 
-function ComponentInspector({ selected }: { selected: SchematicComponent | null }) {
+// Exported for component tests only (same pattern as the plot components).
+export function ComponentInspector({ selected }: { selected: SchematicComponent | null }) {
   const entry = selected ? CATALOG_BY_KIND[selected.kind] : null;
   const setValue = useSchematic((s) => s.setValue);
   const setLabel = useSchematic((s) => s.setLabel);
@@ -605,8 +606,8 @@ function ComponentInspector({ selected }: { selected: SchematicComponent | null 
           </>
         ) : (
           <>
-            <strong>No component selected</strong>
-            <span>Select a symbol to edit parameters.</span>
+            <strong>No Selection</strong>
+            <span>Select a component, wire, node, or label to view and edit its properties.</span>
           </>
         )}
       </div>

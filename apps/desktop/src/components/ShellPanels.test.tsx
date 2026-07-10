@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 
-import { EditorToolbar } from "./ShellPanels";
+import { ComponentInspector, EditorToolbar } from "./ShellPanels";
 import { useSchematic } from "../store/useSchematic";
 
 /**
@@ -98,5 +98,24 @@ describe("EditorToolbar — read-only outside schematic view (§UX)", () => {
     for (const name of ["Wire", "Net label (F4)", "Undo", "Clear scratchpad"]) {
       expect((screen.getByRole("button", { name }) as HTMLButtonElement).disabled).toBe(false);
     }
+  });
+});
+
+describe("ComponentInspector — no-selection empty state (§11 Unit A)", () => {
+  it("shows the No Selection title and full helper text when nothing is selected", () => {
+    render(<ComponentInspector selected={null} />);
+    expect(screen.getByText("No Selection")).toBeTruthy();
+    expect(
+      screen.getByText(
+        "Select a component, wire, node, or label to view and edit its properties.",
+      ),
+    ).toBeTruthy();
+  });
+
+  it("renders no input fields or dead controls when nothing is selected", () => {
+    const { container } = render(<ComponentInspector selected={null} />);
+    expect(container.querySelectorAll("input, select, button").length).toBe(0);
+    expect(container.querySelector(".property-grid")).toBeNull();
+    expect(container.querySelector(".inspector-summary.empty")).toBeTruthy();
   });
 });

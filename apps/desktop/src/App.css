@@ -3146,6 +3146,18 @@ body {
   height: 48px;
 }
 
+/* The rail rule above out-specifies .inspector-summary.empty's centered
+   single-column layout, which used to leave the no-selection state as a
+   clipped 48px+1fr two-column mess. Restore the stacked, centered state and
+   let it fill the rail so it reads as intentional. */
+.components-rail-body > .component-inspector .inspector-summary.empty {
+  flex: 1;
+  grid-template-columns: 1fr;
+  grid-template-rows: auto auto auto;
+  align-content: center;
+  border-bottom: 0;
+}
+
 .components-rail-body > .component-inspector .property-grid {
   flex: 1;
   min-height: 0;
@@ -3543,7 +3555,6 @@ body {
 }
 
 .inspector-summary.empty strong {
-  white-space: nowrap;
   font: 700 var(--fs-title) var(--font-mono), monospace;
   letter-spacing: 0.01em;
   color: var(--text);
