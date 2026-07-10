@@ -8,6 +8,10 @@
 Quick orientation for an interactive session:
 
 - **Canonical branch:** `auto/ltspice-parity` (a superset of all prior work).
+- **Omar's next-session context:** read
+  [CLAUDE_HANDOFF_FOR_1239AM_RESET.md](CLAUDE_HANDOFF_FOR_1239AM_RESET.md)
+  before choosing the next unit. It captures the simulator/schematic UX scope
+  requested for the post-limit-reset Claude startup.
 - **To‑do list:** [FEATURE_PARITY.md](FEATURE_PARITY.md) — pick the next item.
 - **Live status + heartbeat:** top of [PROGRESS.md](PROGRESS.md) — shows the
   active unit and whether the last run finished or died mid‑change.

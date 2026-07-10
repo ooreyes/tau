@@ -17,10 +17,13 @@
   removal (fake-agent panel) · grid tone-down · casing pass. Four commits.
 - **Status:** DONE
 - **Last checkpoint commit:** see `git log --oneline -1`
-- **Next step (for the following run):** checklist leftovers — replace remaining
-  toy node/wire tool icons with 1.5px stroke SF-style glyphs; verify light-mode
-  grid token (8–12%) if/when a light theme lands; consider `.asc` import
-  connectivity-diff warning UI (extractor warnings already surface per-file).
+- **Next step (for the following run):** Omar requested the post-limit-reset
+  Claude session focus simulator/schematic UX polish: resizable side panels,
+  no-selection properties empty state, fit-to-view padding, errors/status polish,
+  simulator dashboard layout, collapsed advanced settings, automatic simulation
+  settings, node/component measurements, oscillation detection, and compact plot
+  stats. Read `CLAUDE_HANDOFF_FOR_1239AM_RESET.md`, then pick one small vertical
+  unit and follow the normal AGENTS loop.
 
 ---
 
