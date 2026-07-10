@@ -9,17 +9,19 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## ⏱ HEARTBEAT
 - **Headline metric:** 1383 tests green · corpus 82/82 import · 82/82 op-converge · 79/82 warning-clean
-- **Run started (UTC):** 2026-07-10T12:15Z
-- **Synced to origin:** auto/ltspice-parity @ latest (bot was idle 07-07→07-10; relaunched)
-- **Claimed unit:** — (mission handoff — bot claims its first §11 unit next fire)
-- **Status:** DONE
-- **Last checkpoint commit:** see `git log --oneline -1`
-- **Next step (for the following run):** §11 in the bot's prompt.md is now the
-  TOP PRIORITY override (Omar's simulator-UX + measurements mission, requested
-  2026-07-10). Work Unit A (schematic polish: empty properties state, fit-to-view
-  padding, errors tab) → B (resizable panels) → C (simulator layout) → D
-  (measurement system) in order, top to bottom, before returning to the old
-  §1/§7/§6/§8/§9 priority list.
+- **Run started (UTC):** 2026-07-10T14:20Z
+- **Synced to origin:** auto/ltspice-parity @ 9eefc29 (clean, no WIP ref)
+- **Claimed unit:** §11 Unit A — schematic UI polish (A1 empty-properties state,
+  A2 fit-to-view padding, A3 errors-tab states), one commit per sub-item.
+- **Status:** IN PROGRESS
+- **Last completed sub-step:** none yet (claim commit)
+- **Plan:** A1 `ShellPanels.tsx` no-selection state → A2 `Canvas.geometry.ts`
+  padding + geometry tests → A3 `ShellPanels.tsx` errors tab w/ Toolbar lamp
+  tokens. Verify: typecheck + vitest + screenshot pipeline per sub-item.
+- **Note:** review-rotation counter is at 0 `review:` in last 30 — owed a
+  dedicated review session after §11 ships (Omar's 2026-07-10 override wins).
+- **Next step (if this run dies):** finish the first unchecked sub-item above;
+  partial work is on this branch as `wip:` commits.
 
 ---
 
