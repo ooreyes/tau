@@ -8,7 +8,7 @@ import type { AnalysisResult } from "../simulation/linearTransient";
 import type { OperatingPointResult } from "../simulation/operatingPoint";
 import { opAnnotations } from "../simulation/opAnnotations";
 import { extractCircuit } from "../schematic/netlist";
-import { FlowLayer, FLOW_PLAY_MS } from "./FlowLayer";
+import { FlowLayer, flowSpeedLabel } from "./FlowLayer";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   buildLabelPlacements,
@@ -747,7 +747,7 @@ export function Canvas({
     : null;
   const flowActive = analysis?.ok === true;
   const flowEndTime = analysis?.ok ? analysis.times[analysis.times.length - 1] ?? 0 : 0;
-  const flowSlowdown = flowEndTime > 0 ? FLOW_PLAY_MS / 1000 / flowEndTime : 0;
+  const flowSpeedText = flowSpeedLabel(flowEndTime);
 
   const editingComp = editingId ? components.find((c) => c.id === editingId) ?? null : null;
   const editBox = editingComp ? SYMBOL_BOX[editingComp.kind] : null;
@@ -932,8 +932,8 @@ export function Canvas({
             <span className="flow-bolt" aria-hidden="true">⚡</span>
             {flowOn ? "Current flow" : "Flow paused"}
           </button>
-          {flowOn && flowSlowdown > 0 && (
-            <span className="flow-rate mono-num">slowed ≈{Math.round(flowSlowdown).toLocaleString()}× vs real time</span>
+          {flowOn && flowSpeedText && (
+            <span className="flow-rate mono-num">{flowSpeedText}</span>
           )}
         </div>
       )}

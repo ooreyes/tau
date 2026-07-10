@@ -470,8 +470,9 @@ body {
   pointer-events: none;
 }
 
-.flow-dot {
+.flow-arrow {
   fill: var(--accent);
+  transition: opacity 180ms ease;
   /* no glow filter — keeps canvas clean */
 }
 

@@ -13,12 +13,6 @@ export interface FlowLeg {
   b: Point;
 }
 
-interface Dot {
-  x: number;
-  y: number;
-  o: number;
-}
-
 const keyOf = (x: number, y: number) => `${x},${y}`;
 
 function measure(points: Point[]): { lengths: number[]; total: number } {
@@ -29,20 +23,33 @@ function measure(points: Point[]): { lengths: number[]; total: number } {
   return { lengths, total: lengths[lengths.length - 1] };
 }
 
-function posAt(points: Point[], lengths: number[], total: number, distance: number): Point {
-  if (total <= 0) return points[0];
-  const d = ((distance % total) + total) % total;
+/** Position AND unit tangent at arc-distance `d` along a polyline. */
+function pointAndTangentAt(
+  points: Point[],
+  lengths: number[],
+  total: number,
+  distance: number,
+): { x: number; y: number; tx: number; ty: number } {
+  const d = Math.max(0, Math.min(total, distance));
   for (let i = 1; i < points.length; i += 1) {
     if (d <= lengths[i]) {
       const segLen = lengths[i] - lengths[i - 1] || 1;
       const t = (d - lengths[i - 1]) / segLen;
+      const dx = points[i].x - points[i - 1].x;
+      const dy = points[i].y - points[i - 1].y;
+      const len = Math.hypot(dx, dy) || 1;
       return {
-        x: points[i - 1].x + (points[i].x - points[i - 1].x) * t,
-        y: points[i - 1].y + (points[i].y - points[i - 1].y) * t,
+        x: points[i - 1].x + dx * t,
+        y: points[i - 1].y + dy * t,
+        tx: dx / len,
+        ty: dy / len,
       };
     }
   }
-  return points[points.length - 1];
+  const a = points[points.length - 2] ?? points[0];
+  const b = points[points.length - 1];
+  const len = Math.hypot(b.x - a.x, b.y - a.y) || 1;
+  return { x: b.x, y: b.y, tx: (b.x - a.x) / len, ty: (b.y - a.y) / len };
 }
 
 /**
@@ -65,10 +72,48 @@ function wireFlow(wire: SchematicWire, pins: PinIndex, currents: Map<string, num
   return end ?? 0;
 }
 
+/** |I|/peak below which a conductor reads as carrying no current. */
 const MIN_MAG = 4e-3;
 /** ms to sweep the whole transient window once (then it loops). Larger = slower. */
 export const FLOW_PLAY_MS = 9000;
+/** Visual state updates are throttled to this period — direction/strength may
+ *  only change 10× a second, so oscillating sims read as steady arrows that
+ *  flip occasionally instead of strobing dot streams. */
+const UPDATE_MS = 100;
+/** World-unit spacing between direction arrows along a conductor. */
+const ARROW_SPACING = 44;
 
+/**
+ * "Current speed: N×" label text for the viz playhead: the fraction of real
+ * simulated time shown per wall-clock second. Honest and compact — no
+ * "1,000× vs real time" scare figures.
+ */
+export function flowSpeedLabel(tEndSeconds: number): string {
+  if (tEndSeconds <= 0) return "";
+  const f = tEndSeconds / (FLOW_PLAY_MS / 1000);
+  const shown = f >= 0.95 ? "1" : f >= 0.01 ? f.toFixed(2).replace(/0$/, "") : f.toExponential(1);
+  return `Current speed: ${shown}×`;
+}
+
+interface Arrow {
+  x: number;
+  y: number;
+  angle: number; // degrees, direction of positive flow at this anchor
+}
+
+interface ConductorState {
+  dir: 1 | -1;
+  mag: number; // EMA-smoothed |I|/peak
+  live: boolean; // above threshold this sample?
+}
+
+/**
+ * Stable directional current arrows (§UX checklist 4). Fixed arrowheads along
+ * every conducting wire/leg point in the instantaneous flow direction; opacity
+ * and size encode relative magnitude. No travelling dots, no per-frame churn:
+ * the sim playhead advances in real simulation time, and the rendered state is
+ * throttled + hysteresis-smoothed so nothing strobes.
+ */
 export function FlowLayer({
   wires,
   legs,
@@ -82,80 +127,108 @@ export function FlowLayer({
   result: OkResult;
   playing: boolean;
 }) {
-  const [dots, setDots] = useState<Dot[]>([]);
-  const phase = useRef<Map<string, number>>(new Map());
+  const [states, setStates] = useState<Map<string, ConductorState>>(new Map());
   const raf = useRef<number | undefined>(undefined);
   const last = useRef<number>(0);
+  const lastEmit = useRef<number>(0);
   const playT = useRef<number>(0);
+  const smoothed = useRef<Map<string, ConductorState>>(new Map());
 
-  const geom = useMemo(
-    () => wires.map((w) => ({ wire: w, ...measure(w.points) })).filter((g) => g.total > 1),
-    [wires],
-  );
-  const legGeom = useMemo(
-    () => legs.map((l) => ({ ...l, total: Math.hypot(l.b.x - l.a.x, l.b.y - l.a.y) })).filter((g) => g.total > 1),
-    [legs],
-  );
+  // Fixed arrow anchors (position + tangent) per conductor — geometry only,
+  // computed once per schematic edit, never per animation frame.
+  const anchors = useMemo(() => {
+    const out = new Map<string, Arrow[]>();
+    for (const w of wires) {
+      const { lengths, total } = measure(w.points);
+      if (total <= 1) continue;
+      const count = Math.max(1, Math.floor(total / ARROW_SPACING));
+      const arrows: Arrow[] = [];
+      for (let k = 0; k < count; k += 1) {
+        const d = (total * (k + 0.5)) / count;
+        const p = pointAndTangentAt(w.points, lengths, total, d);
+        arrows.push({ x: p.x, y: p.y, angle: (Math.atan2(p.ty, p.tx) * 180) / Math.PI });
+      }
+      out.set(`w${w.id}`, arrows);
+    }
+    for (const l of legs) {
+      const total = Math.hypot(l.b.x - l.a.x, l.b.y - l.a.y);
+      if (total <= 1) continue;
+      const angle = (Math.atan2(l.b.y - l.a.y, l.b.x - l.a.x) * 180) / Math.PI;
+      out.set(`l${l.id}`, [{ x: (l.a.x + l.b.x) / 2, y: (l.a.y + l.b.y) / 2, angle }]);
+    }
+    return out;
+  }, [wires, legs]);
+
   const peak = useMemo(() => peakCurrent(result), [result]);
 
   useEffect(() => {
     if (!playing) {
-      setDots([]);
+      setStates(new Map());
+      smoothed.current = new Map();
       return;
     }
     const tEnd = result.times[result.times.length - 1] || 1;
-    const playMs = FLOW_PLAY_MS; // sweep the whole transient once, then loop
     const norm = peak > 0 ? peak : 1;
 
-    const emit = (next: Dot[], key: string, total: number, signed: number, dtMs: number, at: (t: number) => Point) => {
-      const mag = Math.abs(signed) / norm;
-      if (mag < MIN_MAG) return;
-      const dir = signed >= 0 ? 1 : -1;
-      const speed = 9 + mag * 60; // world units / second — gentle so flow is readable
-      const advanced = (phase.current.get(key) ?? 0) + dir * speed * (dtMs / 1000);
-      phase.current.set(key, advanced);
-      const count = Math.min(16, Math.max(1, Math.round(total / 24)));
-      const o = Math.min(1, 0.45 + mag * 0.85);
-      for (let k = 0; k < count; k += 1) {
-        const d = (((advanced + (k * total) / count) % total) + total) % total;
-        next.push({ ...at(d), o });
-      }
+    const fold = (key: string, signed: number, next: Map<string, ConductorState>) => {
+      const prev = smoothed.current.get(key);
+      const rawMag = Math.abs(signed) / norm;
+      const live = rawMag >= MIN_MAG;
+      // Hysteresis: below threshold the arrow keeps its last direction and
+      // just fades — a current wobbling around zero can't flip-flop the glyphs.
+      const dir: 1 | -1 = live ? (signed >= 0 ? 1 : -1) : (prev?.dir ?? 1);
+      const mag = prev ? prev.mag + 0.5 * (rawMag - prev.mag) : rawMag; // EMA
+      next.set(key, { dir, mag, live });
     };
 
     const tick = (now: number) => {
       const dtMs = Math.min(64, now - (last.current || now));
       last.current = now;
-      playT.current = (playT.current + (dtMs / playMs) * tEnd) % tEnd;
-      const idx = Math.round((playT.current / tEnd) * (result.times.length - 1));
-      const currents = componentCurrents(result, Math.max(0, Math.min(result.times.length - 1, idx)));
+      // The playhead sweeps REAL simulation time (0 → tEnd), looping.
+      playT.current = (playT.current + (dtMs / FLOW_PLAY_MS) * tEnd) % tEnd;
 
-      const next: Dot[] = [];
-      for (const g of geom) {
-        const signed = wireFlow(g.wire, pinIndex, currents);
-        emit(next, `w${g.wire.id}`, g.total, signed, dtMs, (d) => posAt(g.wire.points, g.lengths, g.total, d));
+      if (now - lastEmit.current >= UPDATE_MS) {
+        lastEmit.current = now;
+        const idx = Math.round((playT.current / tEnd) * (result.times.length - 1));
+        const currents = componentCurrents(result, Math.max(0, Math.min(result.times.length - 1, idx)));
+        const next = new Map<string, ConductorState>();
+        for (const w of wires) {
+          if (!anchors.has(`w${w.id}`)) continue;
+          fold(`w${w.id}`, wireFlow(w, pinIndex, currents), next);
+        }
+        for (const l of legs) {
+          if (!anchors.has(`l${l.id}`)) continue;
+          const signed = currents.get(l.id);
+          if (signed !== undefined) fold(`l${l.id}`, signed, next);
+        }
+        smoothed.current = next;
+        setStates(next);
       }
-      for (const g of legGeom) {
-        const signed = currents.get(g.id);
-        if (signed === undefined) continue;
-        emit(next, `l${g.id}`, g.total, signed, dtMs, (d) => {
-          const t = d / g.total;
-          return { x: g.a.x + (g.b.x - g.a.x) * t, y: g.a.y + (g.b.y - g.a.y) * t };
-        });
-      }
-      setDots(next);
       raf.current = requestAnimationFrame(tick);
     };
     raf.current = requestAnimationFrame(tick);
     return () => {
       if (raf.current) cancelAnimationFrame(raf.current);
     };
-  }, [playing, geom, legGeom, pinIndex, result, peak]);
+  }, [playing, anchors, wires, legs, pinIndex, result, peak]);
 
   return (
     <g className="flow-layer" aria-hidden="true">
-      {dots.map((d, i) => (
-        <circle key={i} className="flow-dot" cx={d.x} cy={d.y} r={2.4} style={{ opacity: d.o }} />
-      ))}
+      {[...states].map(([key, s]) => {
+        const glyphs = anchors.get(key);
+        if (!glyphs || (!s.live && s.mag < MIN_MAG)) return null;
+        const opacity = s.live ? Math.min(1, 0.4 + Math.sqrt(s.mag) * 0.6) : 0.15;
+        const scale = 0.85 + Math.min(1, s.mag) * 0.5;
+        return glyphs.map((a, i) => (
+          <path
+            key={`${key}:${i}`}
+            className="flow-arrow"
+            d="M 4.5 0 L -3 3.4 L -1.4 0 L -3 -3.4 Z"
+            transform={`translate(${a.x} ${a.y}) rotate(${s.dir === 1 ? a.angle : a.angle + 180}) scale(${scale})`}
+            style={{ opacity }}
+          />
+        ));
+      })}
     </g>
   );
 }
