@@ -21,7 +21,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { cn } from "@/lib/utils";
 import type { OperatingPointResult } from "../simulation/operatingPoint";
 import type { AcResult, AcTrace } from "../simulation/acSweep";
 import type { DcSweepResult, DcSweepNet, DcSweepSpec } from "../simulation/dcSweep";
@@ -445,14 +444,14 @@ export function SimulationPanel({
     }
   }, [components, options]);
 
-  // Selecting an analysis tab both switches the visible pane and (for every
-  // analysis but the transient scope, which already has its own Run button)
-  // kicks off that analysis immediately — matches the prior per-tab onClick
-  // behavior, now driven by the Tabs primitive's controlled value.
+  // Selecting an analysis tab both switches the visible pane and kicks off
+  // that analysis immediately — the one primary Run control lives in the top
+  // toolbar (§11 Unit C); in here tab selection IS the run gesture.
   const handleModeChange = (value: string) => {
     const next = value as typeof mode;
     setMode(next);
-    if (next === "op") void onRunOperatingPoint();
+    if (next === "tran") void onRun();
+    else if (next === "op") void onRunOperatingPoint();
     else if (next === "ac") void onRunAcSweep();
     else if (next === "dc") void onRunDcSweep();
     else if (next === "tf") void onRunTf();
@@ -525,32 +524,10 @@ export function SimulationPanel({
             </TooltipTrigger>
             <TooltipContent>Minimize graphs</TooltipContent>
           </Tooltip>
-          {mode === "tran" ? (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={isRunning}
-                  className={cn(
-                    "gap-1.5 border-success/35 bg-success/10 text-success",
-                    "hover:bg-success/15 hover:border-success/55",
-                    "disabled:border-success/15 disabled:bg-success/5 disabled:text-success/40",
-                  )}
-                  onClick={() => void onRun()}
-                  aria-label="Run transient analysis"
-                >
-                  <svg viewBox="0 0 12 12" aria-hidden="true" className="size-2.5 fill-current">
-                    <path d="M2.5 1.4v9.2c0 .5.55.8.98.55l7.4-4.6a.64.64 0 0 0 0-1.1l-7.4-4.6a.64.64 0 0 0-.98.55Z" />
-                  </svg>
-                  {isRunning ? "running" : "run"}
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>{isRunning ? "Simulation running…" : "Run transient analysis"}</TooltipContent>
-            </Tooltip>
-          ) : (
-            <div className={`plotter-live${isRunning ? " plotter-live--running" : ""}`} role="status" aria-live="polite">{isRunning ? "Running" : "Ready"}</div>
-          )}
+          {/* No Run button here — the single primary Run lives in the top
+              toolbar (§11 Unit C). The refine control above is the only
+              in-panel rerun affordance, deliberately secondary. */}
+          <div className={`plotter-live${isRunning ? " plotter-live--running" : ""}`} role="status" aria-live="polite">{isRunning ? "Running" : "Ready"}</div>
         </div>
       </div>
 
