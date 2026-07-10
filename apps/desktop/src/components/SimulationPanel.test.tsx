@@ -183,4 +183,20 @@ describe("SimulationPanel — advanced settings disclosure (§11 Unit C7)", { ti
       screen.getByText("Tau automatically chooses simulation settings unless overridden."),
     ).toBeTruthy();
   });
+
+  it("shows the AUTO badge while resolution is auto-derived, with no reset control", () => {
+    renderPanel({ optionsAuto: true, onResetOptions: vi.fn() });
+    expect(screen.getByText("AUTO")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Toggle advanced simulation settings" }));
+    expect(screen.queryByRole("button", { name: "Reset to auto" })).toBeNull();
+  });
+
+  it("offers Reset to auto once the user has overridden the resolution", () => {
+    const onResetOptions = vi.fn();
+    renderPanel({ optionsAuto: false, onResetOptions });
+    expect(screen.queryByText("AUTO")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Toggle advanced simulation settings" }));
+    fireEvent.click(screen.getByRole("button", { name: "Reset to auto" }));
+    expect(onResetOptions).toHaveBeenCalledTimes(1);
+  });
 });

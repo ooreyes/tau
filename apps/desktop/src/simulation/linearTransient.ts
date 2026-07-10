@@ -564,19 +564,8 @@ export function inspectTransientResolution(
 ): TransientResolution {
   let maxFrequencyHz = 0;
   for (const component of components) {
-    const isAcSymbol = component.kind === "vac" || component.kind === "iac";
-    const isPlainSource = component.kind === "vsource" || component.kind === "isource";
-    if (!isAcSymbol && !isPlainSource) continue;
-    const unit: "V" | "A" = component.kind === "vac" || component.kind === "vsource" ? "V" : "A";
-    let frequency: number;
-    if (isFunctionSource(component.value)) {
-      // SINE/PULSE/SFFM etc. on any source symbol contributes its own frequency.
-      frequency = parseTransientSource(component.value, unit).maxFrequencyHz;
-    } else if (isAcSymbol) {
-      frequency = parseSineSource(component.value, unit).frequency;
-    } else {
-      continue; // a plain DC vsource/isource imposes no sampling requirement
-    }
+    const frequency = periodicSourceFrequencyHz(component);
+    if (frequency === null) continue;
     if (!Number.isFinite(frequency) || frequency < 0) {
       throw new Error(`${component.label || component.id} needs a non-negative frequency.`);
     }
@@ -588,6 +577,23 @@ export function inspectTransientResolution(
     requiredSteps: maxFrequencyHz > 0 ? Math.ceil(options.stopTime * maxFrequencyHz * MIN_SAMPLES_PER_CYCLE) : 0,
     samplesPerCycle,
   };
+}
+
+/** Dominant frequency a source imposes on transient sampling, or null when the
+ *  component is not a source / is plain DC. May return NaN/negative for a
+ *  malformed value — callers decide whether that is an error (the resolution
+ *  inspector throws) or a skip (the auto-resolution heuristic). */
+export function periodicSourceFrequencyHz(component: SchematicComponent): number | null {
+  const isAcSymbol = component.kind === "vac" || component.kind === "iac";
+  const isPlainSource = component.kind === "vsource" || component.kind === "isource";
+  if (!isAcSymbol && !isPlainSource) return null;
+  const unit: "V" | "A" = component.kind === "vac" || component.kind === "vsource" ? "V" : "A";
+  if (isFunctionSource(component.value)) {
+    // SINE/PULSE/SFFM etc. on any source symbol contributes its own frequency.
+    return parseTransientSource(component.value, unit).maxFrequencyHz;
+  }
+  if (isAcSymbol) return parseSineSource(component.value, unit).frequency;
+  return null; // a plain DC vsource/isource imposes no sampling requirement
 }
 
 function validateTransientResolution(resolution: TransientResolution, options: AnalysisOptions) {

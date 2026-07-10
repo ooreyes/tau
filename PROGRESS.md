@@ -12,18 +12,19 @@
 - **Run started (UTC):** 2026-07-10T14:30Z
 - **Synced to origin:** auto/ltspice-parity @ feb8e1c; recovered Unit B work
   from `-wip` rescue ref (prev session died mid-unit at 17:59Z checkpoint).
-- **Claimed unit:** §11 Unit C — simulator layout redesign (remove redundant
-  Run button, dashboard layout, advanced-settings disclosure, auto-resolution).
+- **Claimed unit:** §11 Unit D — measurement system (probe/trace parity,
+  per-component V/I/P, oscillation detection, plot statistics).
 - **Status:** IN PROGRESS
-- **Last completed sub-step:** C6 — dashboard status strip (Idle/Running/
-  Complete/Error lamp + last-run figures, one status voice, header pill
-  removed) + scope capped to a centered 920px card in the wide simulator
-  view — 1415 tests green. Next: C8 auto-resolution from circuit time
-  constants/source frequencies, then Unit D (measurements).
-- **Plan:** C5 remove SimulationPanel's redundant run/stop primary; C6
-  dashboard layout (status header → plot cards → measurements → settings); C7
-  collapsed Advanced Simulation Settings disclosure; C8 auto-resolution from
-  RC/RL constants + source freqs in analysisSetup/linearTransient.
+- **Last completed sub-step:** Unit C DONE (C5 b0dfdb0, C7 380aea2, C6
+  51f1721, C8 this commit) — auto transient resolution from RC/RL time
+  constants + source frequencies (documented heuristic in autoResolution.ts),
+  auto AC sweep brackets, AUTO badge + Reset-to-auto override flow —
+  1428 tests green.
+- **Plan:** D9 verify probe color/name parity end-to-end; D10 per-component
+  V/I/P measurements table (reuse currentProbe + device currents), selection
+  focuses row; D11 steady/transient/periodic classification (zero-crossing
+  heuristic, fft.ts if present); D12 per-trace max/min/avg/RMS/final stats in
+  legend/hover via quantity.ts formatter.
 - **Note:** review-rotation counter is at 0 `review:` in last 30 — owed a
   dedicated review session after §11 ships (Omar's 2026-07-10 override wins).
 - **Next step (if this run dies):** finish the first unchecked sub-item above;

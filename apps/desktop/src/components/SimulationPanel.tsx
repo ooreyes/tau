@@ -90,8 +90,12 @@ interface SimulationPanelProps {
   dcMeasurements: MeasResult[];
   noiseMeasurements: MeasResult[];
   options: AnalysisOptions;
+  /** True while transient resolution is auto-derived from the circuit (§11 C8). */
+  optionsAuto?: boolean;
   isRunning: boolean;
   onOptionsChange: (options: AnalysisOptions) => void;
+  /** Return transient resolution to automatic (clears a manual override). */
+  onResetOptions?: () => void;
   onRun: () => void | Promise<void>;
   onRunOperatingPoint: () => void | Promise<void>;
   onRunAcSweep: () => void | Promise<void>;
@@ -132,8 +136,10 @@ export function SimulationPanel({
   dcMeasurements,
   noiseMeasurements,
   options,
+  optionsAuto,
   isRunning,
   onOptionsChange,
+  onResetOptions,
   onRun,
   onRunOperatingPoint,
   onRunAcSweep,
@@ -728,14 +734,22 @@ export function SimulationPanel({
               aria-label="Toggle advanced simulation settings"
             >
               <span className="disclosure-label">Advanced simulation settings</span>
+              {optionsAuto && <span className="advanced-settings-auto">AUTO</span>}
               <span className="disclosure-rule" aria-hidden="true" />
               <span className={`disclosure-chevron${advancedOpen ? " open" : ""}`}>›</span>
             </button>
             {advancedOpen && (
               <>
-                <p className="advanced-settings-help">
-                  Tau automatically chooses simulation settings unless overridden.
-                </p>
+                <div className="advanced-settings-help-row">
+                  <p className="advanced-settings-help">
+                    Tau automatically chooses simulation settings unless overridden.
+                  </p>
+                  {!optionsAuto && onResetOptions && (
+                    <Button variant="outline" size="sm" onClick={onResetOptions}>
+                      Reset to auto
+                    </Button>
+                  )}
+                </div>
                 <div className="plotter-controls">
                   <DialControl
                     label="STOP"

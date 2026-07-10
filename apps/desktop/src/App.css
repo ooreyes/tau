@@ -1726,11 +1726,31 @@ body {
   border-top: 1px solid var(--border-subtle);
 }
 
+.advanced-settings-help-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  padding: 0 2px var(--sp-2);
+}
+
 .advanced-settings-help {
   margin: 0;
-  padding: 0 2px var(--sp-2);
   font-size: var(--fs-caption);
   color: var(--faint);
+}
+
+/* Auto badge on the disclosure header: quiet mono chip that tells the user
+   resolution is being derived from the circuit without opening the panel. */
+.advanced-settings-auto {
+  flex: none;
+  padding: 1px 5px;
+  border: 1px solid var(--accent-line);
+  border-radius: var(--r-sm);
+  color: var(--accent);
+  background: var(--accent-soft);
+  font: 600 10px var(--font-mono);
+  letter-spacing: 0.5px;
 }
 
 /* Parameter controls (formerly "dial controls") */

@@ -55,6 +55,7 @@ import {
   stepSetupToSpec,
   type StepSetupUi,
 } from "./simulation/analysisSetup";
+import { suggestAcSweep, suggestTransientOptions } from "./simulation/autoResolution";
 import { runMeasurements, type MeasResult } from "./simulation/measure";
 import { runFourier, type FourierResult } from "./simulation/fourier";
 import { runAcMeasurements } from "./simulation/measureAc";
@@ -128,6 +129,17 @@ function App() {
   const undo = useSchematic((s) => s.undo);
   const redo = useSchematic((s) => s.redo);
   const [analysisOptions, setAnalysisOptions] = useState<AnalysisOptions>(DEFAULT_ANALYSIS_OPTIONS);
+  // §11 Unit C8 — Tau chooses transient resolution automatically (from the
+  // circuit's time constants + source frequencies) until the user touches a
+  // dial; manual state then sticks until "Reset to auto".
+  const [optionsOverridden, setOptionsOverridden] = useState(false);
+  const autoAnalysisOptions = useMemo(() => suggestTransientOptions(components), [components]);
+  const effectiveAnalysisOptions = optionsOverridden ? analysisOptions : autoAnalysisOptions;
+  const overrideAnalysisOptions = useCallback((next: AnalysisOptions) => {
+    setAnalysisOptions(next);
+    setOptionsOverridden(true);
+  }, []);
+  const resetAnalysisOptions = useCallback(() => setOptionsOverridden(false), []);
   const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
   const [opAnalysis, setOpAnalysis] = useState<OperatingPointResult | null>(null);
   const [acAnalysis, setAcAnalysis] = useState<AcResult | null>(null);
@@ -286,14 +298,14 @@ function App() {
   }, [components, wires, netLabels, params, directives, couplings]);
 
   const runAnalysis = useCallback(async () => {
-    await executeTransient(analysisOptions);
-  }, [analysisOptions, executeTransient]);
+    await executeTransient(effectiveAnalysisOptions);
+  }, [effectiveAnalysisOptions, executeTransient]);
 
   const runAndShowSimulator = useCallback(async () => {
     setMode("simulator");
     setGraphOpen(true);
-    await executeTransient(analysisOptions);
-  }, [analysisOptions, executeTransient]);
+    await executeTransient(effectiveAnalysisOptions);
+  }, [effectiveAnalysisOptions, executeTransient]);
 
   const runOperatingAnalysis = useCallback(async () => {
     const requestId = ++analysisRequestRef.current;
@@ -314,10 +326,13 @@ function App() {
     const requestId = ++analysisRequestRef.current;
     setAnalysisRunning(true);
     try {
+      // §11 Unit C8 — sweep defaults bracket the circuit's own source
+      // frequencies (a document .ac directive still wins for step families).
+      const acSweep = suggestAcSweep(components);
       const result = await runNativeAcSweep(
         { components, wires, netLabels, params, directives },
-        { startHz: 10, stopHz: 1e6, pointsPerDecade: 20 },
-      ) ?? runAcSweep({ components, wires, netLabels, params, couplings }, { startHz: 10, stopHz: 1e6, pointsPerDecade: 20 });
+        acSweep,
+      ) ?? runAcSweep({ components, wires, netLabels, params, couplings }, acSweep);
       if (analysisRequestRef.current !== requestId) return;
       setAcAnalysis(result);
       // A runnable `.step` also produces a family of Bode curves to overlay,
@@ -329,7 +344,7 @@ function App() {
               specs,
               params,
               { components, wires, netLabels, couplings },
-              analysesFromDirectives(directives).ac ?? { startHz: 10, stopHz: 1e6, pointsPerDecade: 20 },
+              analysesFromDirectives(directives).ac ?? acSweep,
             )
           : null,
       );
@@ -435,8 +450,8 @@ function App() {
         // resistors via applyTemperature).
         const stepDirectives = ctx.temperature !== undefined ? [`.temp ${ctx.temperature}`] : undefined;
         const result =
-          (await runNativeTransient({ components: ctx.components, wires, netLabels, params: ctx.params, directives: stepDirectives }, analysisOptions))
-          ?? runTransientAnalysis({ components: ctx.components, wires, netLabels, params: ctx.params }, analysisOptions);
+          (await runNativeTransient({ components: ctx.components, wires, netLabels, params: ctx.params, directives: stepDirectives }, effectiveAnalysisOptions))
+          ?? runTransientAnalysis({ components: ctx.components, wires, netLabels, params: ctx.params }, effectiveAnalysisOptions);
         if (analysisRequestRef.current !== requestId) return;
         members.push({ label: ctx.label, value: ctx.value, result });
       }
@@ -448,21 +463,21 @@ function App() {
     } finally {
       if (analysisRequestRef.current === requestId) setAnalysisRunning(false);
     }
-  }, [components, wires, netLabels, params, directives, analysisOptions, stepSetupUi]);
+  }, [components, wires, netLabels, params, directives, effectiveAnalysisOptions, stepSetupUi]);
 
   const stepAnalysis = useCallback(async () => {
     // Native ngspice may return an endpoint in addition to requested samples.
     const maxSteps = isNativeSpiceRuntime() ? MAX_NATIVE_OUTPUT_POINTS - 1 : MAX_TRANSIENT_STEPS;
     const nextOptions = {
-      ...analysisOptions,
-      steps: Math.min(maxSteps, Math.max(analysisOptions.steps + 1, Math.ceil(analysisOptions.steps * 1.25))),
+      ...effectiveAnalysisOptions,
+      steps: Math.min(maxSteps, Math.max(effectiveAnalysisOptions.steps + 1, Math.ceil(effectiveAnalysisOptions.steps * 1.25))),
     };
-    setAnalysisOptions(nextOptions);
+    overrideAnalysisOptions(nextOptions);
     setMode("simulator");
     setGraphOpen(true);
     await executeTransient(nextOptions);
     showNotice(`Re-ran transient at ${nextOptions.steps.toLocaleString()} samples.`);
-  }, [analysisOptions, executeTransient, showNotice]);
+  }, [effectiveAnalysisOptions, overrideAnalysisOptions, executeTransient, showNotice]);
 
   const stopAnalysis = useCallback(() => {
     if (!analysis && !analysisRunning) {
@@ -863,9 +878,11 @@ function App() {
                 acMeasurements={acMeasurements}
                 dcMeasurements={dcMeasurements}
                 noiseMeasurements={noiseMeasurements}
-                options={analysisOptions}
+                options={effectiveAnalysisOptions}
+                optionsAuto={!optionsOverridden}
                 isRunning={analysisRunning}
-                onOptionsChange={setAnalysisOptions}
+                onOptionsChange={overrideAnalysisOptions}
+                onResetOptions={resetAnalysisOptions}
                 onRun={runAnalysis}
                 onRunOperatingPoint={runOperatingAnalysis}
                 onRunAcSweep={runAcAnalysis}
