@@ -20,8 +20,10 @@ import {
   isWireEndpoint,
   pathFromPoints,
   pointKey,
+  pointInRect,
   pointOnWireSegment,
   pointsEqual,
+  rectsOverlap,
   rerouteMovedWires,
   routeWireSmart,
   segmentIntersections,
@@ -29,6 +31,7 @@ import {
   sourceValueLabel,
   symbolTransform,
   translateAttachedWireEndpoints,
+  wireIntersectsRect,
   wireSegments,
   wiresTouchingPins,
   worldPinsFor,
@@ -118,8 +121,9 @@ export function Canvas({
   const addWire = useSchematic((s) => s.addWire);
   const select = useSchematic((s) => s.select);
   const selectWire = useSchematic((s) => s.selectWire);
-  const selectWires = useSchematic((s) => s.selectWires);
-  const selectMultiple = useSchematic((s) => s.selectMultiple);
+  const selectMixed = useSchematic((s) => s.selectMixed);
+  const selectedLabelIds = useSchematic((s) => s.selectedLabelIds);
+  const selectedProbeIds = useSchematic((s) => s.selectedProbeIds);
   const toggleSelect = useSchematic((s) => s.toggleSelect);
   const moveGroup = useSchematic((s) => s.moveGroup);
   const clearSelection = useSchematic((s) => s.clearSelection);
@@ -407,25 +411,36 @@ export function Canvas({
     [screenToWorld],
   );
 
-  /** Return component ids fully enclosed in the world rect. */
+  // Marquee semantics: anything INSIDE OR INTERSECTING the box selects —
+  // components by body overlap, wires when ANY segment crosses the box
+  // (selected as complete wires, never fragments), labels/probes by anchor.
   const componentsInRect = useCallback(
     (rect: Rect): string[] =>
-      components
-        .filter((c) => {
-          const wr = componentWorldRect(c);
-          return wr.minX >= rect.minX && wr.maxX <= rect.maxX && wr.minY >= rect.minY && wr.maxY <= rect.maxY;
-        })
-        .map((c) => c.id),
+      components.filter((c) => rectsOverlap(componentWorldRect(c), rect)).map((c) => c.id),
     [components],
   );
 
-  /** Return wire ids where ALL points are fully inside the world rect. */
   const wiresInRect = useCallback(
-    (rect: Rect): string[] =>
-      wires
-        .filter((w) => w.points.every((p) => p.x >= rect.minX && p.x <= rect.maxX && p.y >= rect.minY && p.y <= rect.maxY))
-        .map((w) => w.id),
+    (rect: Rect): string[] => wires.filter((w) => wireIntersectsRect(w, rect)).map((w) => w.id),
     [wires],
+  );
+
+  const labelsInRect = useCallback(
+    (rect: Rect): string[] =>
+      netLabels.filter((l) => pointInRect({ x: l.x, y: l.y }, rect)).map((l) => l.id),
+    [netLabels],
+  );
+
+  const probesInRect = useCallback(
+    (rect: Rect): string[] =>
+      probes
+        .filter((p) => {
+          const host = p.componentId ? components.find((c) => c.id === p.componentId) : null;
+          if (p.componentId && !host) return false;
+          return pointInRect({ x: host ? host.x : p.x, y: host ? host.y : p.y }, rect);
+        })
+        .map((p) => p.id),
+    [probes, components],
   );
 
   // All selection/drag goes through one hit-test on the SVG, so z-order never
@@ -631,12 +646,14 @@ export function Canvas({
       setBoxDrag((prev) => {
         if (prev) {
           const rect = boxWorldRect(prev);
-          const inRect = componentsInRect(rect);
-          const wiresIn = wiresInRect(rect);
-          if (inRect.length > 0) {
-            selectMultiple(inRect);
-          } else if (wiresIn.length > 0) {
-            selectWires(wiresIn);
+          const sel = {
+            componentIds: componentsInRect(rect),
+            wireIds: wiresInRect(rect),
+            labelIds: labelsInRect(rect),
+            probeIds: probesInRect(rect),
+          };
+          if (sel.componentIds.length || sel.wireIds.length || sel.labelIds.length || sel.probeIds.length) {
+            selectMixed(sel);
           } else {
             clearSelection();
           }
@@ -831,8 +848,14 @@ export function Canvas({
             if (p.componentId && !host) return null;
             const px = host ? host.x : p.x;
             const py = host ? host.y : p.y;
+            const probeSelected = selectedProbeIds.includes(p.id);
             return (
-              <g key={p.id} className={`probe-marker${p.componentId ? " current" : ""}`} style={{ color: p.color }}>
+              <g
+                key={p.id}
+                className={`probe-marker${p.componentId ? " current" : ""}${probeSelected ? " selected" : ""}`}
+                style={{ color: p.color }}
+              >
+                {probeSelected && <circle className="probe-select-ring" cx={px} cy={py} r={11} />}
                 <circle className="probe-ring" cx={px} cy={py} r={7} />
                 <circle className="probe-dot" cx={px} cy={py} r={3.5} />
               </g>
@@ -843,7 +866,12 @@ export function Canvas({
               (e.g. "Output" vs "Rf") keep the part label readable. */}
           <g className="net-label-layer" aria-hidden="true">
             {netLabels.map((l) => (
-              <text key={l.id} className="net-label-text" x={l.x + 6} y={l.y - 6}>
+              <text
+                key={l.id}
+                className={`net-label-text${selectedLabelIds.includes(l.id) ? " selected" : ""}`}
+                x={l.x + 6}
+                y={l.y - 6}
+              >
                 {l.text}
               </text>
             ))}

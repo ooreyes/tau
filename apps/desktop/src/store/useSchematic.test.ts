@@ -822,6 +822,61 @@ describe("addProbe — one probe per net, net-identity dedup (§UX)", () => {
   });
 });
 
+describe("selectMixed + deleteSelected — marquee selects and deletes ALL object kinds (§UX)", () => {
+  const populate = () => {
+    useSchematic.setState({
+      components: [{ id: "r1", kind: "resistor", x: 0, y: 0, rotation: 0, value: "1k", label: "R1" }],
+      wires: [{ id: "w1", points: [{ x: 64, y: 0 }, { x: 128, y: 0 }] }],
+      netLabels: [{ id: "l1", x: 96, y: 0, text: "vout" }],
+      probes: [{ id: "p1", x: 96, y: 0, color: "red" }],
+    });
+  };
+
+  it("selectMixed marks every object kind at once", () => {
+    populate();
+    useSchematic.getState().selectMixed({ componentIds: ["r1"], wireIds: ["w1"], labelIds: ["l1"], probeIds: ["p1"] });
+    const s = useSchematic.getState();
+    expect(s.selectedIds).toEqual(["r1"]);
+    expect(s.selectedWireIds).toEqual(["w1"]);
+    expect(s.selectedLabelIds).toEqual(["l1"]);
+    expect(s.selectedProbeIds).toEqual(["p1"]);
+  });
+
+  it("deleteSelected removes components, wires, labels, and probes together in ONE undo step", () => {
+    populate();
+    useSchematic.getState().selectMixed({ componentIds: ["r1"], wireIds: ["w1"], labelIds: ["l1"], probeIds: ["p1"] });
+    useSchematic.getState().deleteSelected();
+    const s = useSchematic.getState();
+    expect(s.components).toHaveLength(0);
+    expect(s.wires).toHaveLength(0);
+    expect(s.netLabels).toHaveLength(0);
+    expect(s.probes).toHaveLength(0);
+    useSchematic.getState().undo();
+    const restored = useSchematic.getState();
+    expect(restored.components).toHaveLength(1);
+    expect(restored.wires).toHaveLength(1);
+    expect(restored.netLabels).toHaveLength(1);
+    expect(restored.probes).toHaveLength(1);
+  });
+
+  it("component-only and wire-only selections still delete (no regression)", () => {
+    populate();
+    useSchematic.getState().selectMixed({ componentIds: ["r1"], wireIds: [], labelIds: [], probeIds: [] });
+    useSchematic.getState().deleteSelected();
+    expect(useSchematic.getState().components).toHaveLength(0);
+    expect(useSchematic.getState().wires).toHaveLength(1); // untouched
+  });
+
+  it("single-select paths clear stale mixed selection", () => {
+    populate();
+    useSchematic.getState().selectMixed({ componentIds: [], wireIds: [], labelIds: ["l1"], probeIds: ["p1"] });
+    useSchematic.getState().select("r1");
+    const s = useSchematic.getState();
+    expect(s.selectedLabelIds).toEqual([]);
+    expect(s.selectedProbeIds).toEqual([]);
+  });
+});
+
 describe("upsertNetLabel — one label per physically-connected node (§UX)", () => {
   const lWire = () => {
     // One L-shaped wire: (32, 0) and (64, 32) are two points on the same node.

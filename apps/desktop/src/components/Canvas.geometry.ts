@@ -158,6 +158,37 @@ export const wireSegments = (wires: SchematicWire[]): WireSegment[] => {
   return segments;
 };
 
+/** Axis-aligned rect overlap (touching edges counts — marquee semantics). */
+export const rectsOverlap = (a: Rect, b: Rect): boolean =>
+  a.minX <= b.maxX && a.maxX >= b.minX && a.minY <= b.maxY && a.maxY >= b.minY;
+
+/** Point inside (or on the edge of) an axis-aligned rect. */
+export const pointInRect = (p: Point, r: Rect): boolean =>
+  p.x >= r.minX && p.x <= r.maxX && p.y >= r.minY && p.y <= r.maxY;
+
+/**
+ * Does an orthogonal wire segment intersect an axis-aligned rect? True when
+ * ANY part of the segment crosses or touches the rect (marquee semantics:
+ * "inside or intersecting" selects). Wires are axis-aligned so this reduces
+ * to interval checks — no general line clipping needed.
+ */
+export const segmentIntersectsRect = (segment: WireSegment, rect: Rect): boolean => {
+  const loX = Math.min(segment.a.x, segment.b.x);
+  const hiX = Math.max(segment.a.x, segment.b.x);
+  const loY = Math.min(segment.a.y, segment.b.y);
+  const hiY = Math.max(segment.a.y, segment.b.y);
+  return loX <= rect.maxX && hiX >= rect.minX && loY <= rect.maxY && hiY >= rect.minY;
+};
+
+/** Does any segment of a wire's polyline intersect the rect? */
+export const wireIntersectsRect = (wire: SchematicWire, rect: Rect): boolean => {
+  for (let i = 1; i < wire.points.length; i += 1) {
+    if (segmentIntersectsRect({ a: wire.points[i - 1], b: wire.points[i] }, rect)) return true;
+  }
+  // Degenerate single-point wire.
+  return wire.points.length === 1 && pointInRect(wire.points[0], rect);
+};
+
 export const pointOnWireSegment = (point: Point, segment: WireSegment): boolean => {
   if (segment.a.x === segment.b.x) {
     return point.x === segment.a.x
@@ -354,7 +385,10 @@ const bodyBoxAt = (kind: ComponentKind, x: number, y: number, rotation: number):
   return { minX: x + box.minX, minY: y + box.minY, maxX: x + box.maxX, maxY: y + box.maxY };
 };
 
-const rectsOverlap = (a: Rect, b: Rect) =>
+/** STRICT overlap (touching edges do NOT count) — used for placement/route
+ *  collision, where bodies placed flush against each other are legal. The
+ *  exported `rectsOverlap` above is inclusive (marquee: touch selects). */
+const rectsOverlapStrict = (a: Rect, b: Rect) =>
   a.minX < b.maxX && b.minX < a.maxX && a.minY < b.maxY && b.minY < a.maxY;
 
 /** Click slack around a body, in world px, for selecting thin symbols. */
@@ -395,7 +429,7 @@ export const collides = (
   const a = bodyBoxAt(kind, x, y, rotation);
   for (const c of components) {
     if (c.id === excludeId) continue;
-    if (rectsOverlap(a, bodyBoxAt(c.kind, c.x, c.y, c.rotation))) return true;
+    if (rectsOverlapStrict(a, bodyBoxAt(c.kind, c.x, c.y, c.rotation))) return true;
   }
   return false;
 };
@@ -415,7 +449,7 @@ const segmentHitsBody = (a: Point, b: Point, components: SchematicComponent[]): 
     const box = bodyBoxAt(c.kind, c.x, c.y, c.rotation);
     // Keep a small clearance so wires don't graze symbol strokes.
     const pad = 1;
-    return rectsOverlap(seg, {
+    return rectsOverlapStrict(seg, {
       minX: box.minX + pad,
       minY: box.minY + pad,
       maxX: box.maxX - pad,

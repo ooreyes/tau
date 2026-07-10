@@ -1,5 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { circuitBounds, countRouteBodyHits, routeWireSmart, rerouteMovedWires, translateAttachedWireEndpoints } from "./Canvas.geometry";
+import {
+  circuitBounds,
+  countRouteBodyHits,
+  rectsOverlap,
+  rerouteMovedWires,
+  routeWireSmart,
+  segmentIntersectsRect,
+  translateAttachedWireEndpoints,
+  wireIntersectsRect,
+} from "./Canvas.geometry";
 import type { SchematicComponent } from "../schematic/types";
 
 const comp = (id: string, x: number, y: number): SchematicComponent =>
@@ -138,5 +147,36 @@ describe("circuitBounds (fit-to-view math)", () => {
       maxX: 10,
       maxY: 10,
     });
+  });
+});
+
+describe("marquee intersection geometry (§UX checklist 3)", () => {
+  const rect = { minX: 0, minY: 0, maxX: 100, maxY: 100 };
+
+  it("rectsOverlap: overlap, containment, touch, and miss", () => {
+    expect(rectsOverlap(rect, { minX: 50, minY: 50, maxX: 150, maxY: 150 })).toBe(true); // partial
+    expect(rectsOverlap(rect, { minX: 20, minY: 20, maxX: 30, maxY: 30 })).toBe(true); // contained
+    expect(rectsOverlap(rect, { minX: 100, minY: 0, maxX: 120, maxY: 10 })).toBe(true); // edge touch
+    expect(rectsOverlap(rect, { minX: 101, minY: 0, maxX: 120, maxY: 10 })).toBe(false); // miss
+  });
+
+  it("segmentIntersectsRect: a horizontal segment crossing THROUGH the box selects", () => {
+    expect(segmentIntersectsRect({ a: { x: -50, y: 50 }, b: { x: 150, y: 50 } }, rect)).toBe(true);
+  });
+
+  it("segmentIntersectsRect: a segment that only clips a corner region selects", () => {
+    expect(segmentIntersectsRect({ a: { x: 90, y: -20 }, b: { x: 90, y: 20 } }, rect)).toBe(true);
+  });
+
+  it("segmentIntersectsRect: a segment fully outside does not select", () => {
+    expect(segmentIntersectsRect({ a: { x: -50, y: 150 }, b: { x: 150, y: 150 } }, rect)).toBe(false);
+    expect(segmentIntersectsRect({ a: { x: 120, y: 0 }, b: { x: 120, y: 100 } }, rect)).toBe(false);
+  });
+
+  it("wireIntersectsRect: an L-wire counts when ANY segment intersects", () => {
+    const wire = { id: "w1", points: [{ x: -50, y: 50 }, { x: 50, y: 50 }, { x: 50, y: 300 }] };
+    expect(wireIntersectsRect(wire, rect)).toBe(true);
+    const missWire = { id: "w2", points: [{ x: -50, y: 150 }, { x: 50, y: 150 }, { x: 50, y: 300 }] };
+    expect(wireIntersectsRect(missWire, rect)).toBe(false);
   });
 });
