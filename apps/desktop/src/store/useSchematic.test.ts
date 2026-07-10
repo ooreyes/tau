@@ -822,6 +822,73 @@ describe("addProbe — one probe per net, net-identity dedup (§UX)", () => {
   });
 });
 
+describe("upsertNetLabel — one label per physically-connected node (§UX)", () => {
+  const lWire = () => {
+    // One L-shaped wire: (32, 0) and (64, 32) are two points on the same node.
+    useSchematic.setState({
+      wires: [{ id: "w1", points: [{ x: 0, y: 0 }, { x: 64, y: 0 }, { x: 64, y: 64 }] }],
+    });
+  };
+
+  it("labeling a DIFFERENT point on the same node MOVES the existing label (no duplicate)", () => {
+    lWire();
+    useSchematic.getState().upsertNetLabel(32, 0, "vout");
+    const firstId = useSchematic.getState().netLabels[0].id;
+    useSchematic.getState().upsertNetLabel(64, 32, "vout");
+    const labels = useSchematic.getState().netLabels;
+    expect(labels).toHaveLength(1); // never stacked
+    expect(labels[0].id).toBe(firstId); // same label object, relocated
+    expect(labels[0]).toMatchObject({ x: 64, y: 32, text: "vout" });
+  });
+
+  it("re-labeling the same node with a new name replaces the text in place", () => {
+    lWire();
+    useSchematic.getState().upsertNetLabel(32, 0, "vout");
+    useSchematic.getState().upsertNetLabel(64, 32, "vmid");
+    const labels = useSchematic.getState().netLabels;
+    expect(labels).toHaveLength(1);
+    expect(labels[0].text).toBe("vmid");
+  });
+
+  it("the SAME net name may still label two physically DISCONNECTED nodes (named-net connect)", () => {
+    useSchematic.setState({
+      wires: [
+        { id: "w1", points: [{ x: 0, y: 0 }, { x: 64, y: 0 }] },
+        { id: "w2", points: [{ x: 0, y: 128 }, { x: 64, y: 128 }] },
+      ],
+    });
+    useSchematic.getState().upsertNetLabel(32, 0, "vcc");
+    useSchematic.getState().upsertNetLabel(32, 128, "vcc");
+    expect(useSchematic.getState().netLabels).toHaveLength(2); // this is the by-name connection feature
+  });
+
+  it("an empty commit anywhere on the node removes its label", () => {
+    lWire();
+    useSchematic.getState().upsertNetLabel(32, 0, "vout");
+    useSchematic.getState().upsertNetLabel(64, 32, "   "); // different point, same node
+    expect(useSchematic.getState().netLabels).toHaveLength(0);
+  });
+
+  it("a label move is undoable back to the original anchor", () => {
+    lWire();
+    useSchematic.getState().upsertNetLabel(32, 0, "vout");
+    useSchematic.getState().upsertNetLabel(64, 32, "vout");
+    useSchematic.getState().undo();
+    const labels = useSchematic.getState().netLabels;
+    expect(labels).toHaveLength(1);
+    expect(labels[0]).toMatchObject({ x: 32, y: 0 });
+  });
+
+  it("setNetLabelDirect edits the node's existing label instead of duplicating", () => {
+    lWire();
+    useSchematic.getState().upsertNetLabel(32, 0, "v");
+    useSchematic.getState().setNetLabelDirect(64, 32, "vo");
+    const labels = useSchematic.getState().netLabels;
+    expect(labels).toHaveLength(1);
+    expect(labels[0]).toMatchObject({ x: 64, y: 32, text: "vo" });
+  });
+});
+
 describe("toggleCurrentProbe (clamp-meter)", () => {
   const withParts = () => {
     useSchematic.setState({

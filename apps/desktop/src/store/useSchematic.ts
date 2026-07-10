@@ -506,22 +506,46 @@ export const useSchematic = create<SchematicState>()((set) => {
 
     startLabeling: () => set({ tool: { mode: "label" }, selectedId: null, selectedWireId: null, selectedWireIds: [], selectedIds: [] }),
 
+    // A physically-connected node carries AT MOST ONE net label (mirrors the
+    // one-probe-per-net rule). Node identity comes from extraction with the
+    // labels EXCLUDED — labels merge nets by name, so including them would
+    // wrongly dedup a same-name label placed on a separate, disconnected node
+    // (the legitimate "connect nets by name" workflow). Semantics: labeling a
+    // bare node adds; re-labeling the same node edits/MOVES the existing label
+    // to the new anchor instead of stacking a duplicate; an empty commit
+    // removes the node's label. Off-net points keep exact-position matching
+    // (a floating label is harmless and self-evident).
     upsertNetLabel: (x, y, text) =>
       set((s) => {
         const trimmed = text.trim();
-        const existing = s.netLabels.find((l) => l.x === x && l.y === y);
+        const physicalNets = extractCircuit(s.components, s.wires, []).nets;
+        const clickedNet = netAtPoint(physicalNets, s.wires, { x, y });
+        const nodeOf = (l: NetLabel) => netAtPoint(physicalNets, s.wires, { x: l.x, y: l.y })?.id;
+        const existing = clickedNet
+          ? s.netLabels.find((l) => nodeOf(l) === clickedNet.id)
+          : s.netLabels.find((l) => l.x === x && l.y === y);
         if (!trimmed && !existing) return s; // nothing to add or remove — no history entry
-        if (!trimmed) return { ...recordInto(s), netLabels: s.netLabels.filter((l) => !(l.x === x && l.y === y)) };
-        if (existing?.text === trimmed) return s; // unchanged — no history entry
-        if (existing) return { ...recordInto(s), netLabels: s.netLabels.map((l) => (l.id === existing.id ? { ...l, text: trimmed } : l)) };
+        if (!trimmed) return { ...recordInto(s), netLabels: s.netLabels.filter((l) => l.id !== existing!.id) };
+        if (existing?.text === trimmed && existing.x === x && existing.y === y) return s; // unchanged
+        if (existing) {
+          return {
+            ...recordInto(s),
+            netLabels: s.netLabels.map((l) => (l.id === existing.id ? { ...l, x, y, text: trimmed } : l)),
+          };
+        }
         return { ...recordInto(s), netLabels: [...s.netLabels, { id: nanoid(6), x, y, text: trimmed }] };
       }),
 
     setNetLabelDirect: (x, y, text) =>
       set((s) => {
-        const existing = s.netLabels.find((l) => l.x === x && l.y === y);
-        if (!text) return { netLabels: s.netLabels.filter((l) => !(l.x === x && l.y === y)) };
-        if (existing) return { netLabels: s.netLabels.map((l) => (l.id === existing.id ? { ...l, text } : l)) };
+        const physicalNets = extractCircuit(s.components, s.wires, []).nets;
+        const clickedNet = netAtPoint(physicalNets, s.wires, { x, y });
+        const nodeOf = (l: NetLabel) => netAtPoint(physicalNets, s.wires, { x: l.x, y: l.y })?.id;
+        const existing = clickedNet
+          ? s.netLabels.find((l) => nodeOf(l) === clickedNet.id)
+          : s.netLabels.find((l) => l.x === x && l.y === y);
+        if (!text) return existing ? { netLabels: s.netLabels.filter((l) => l.id !== existing.id) } : {};
+        if (existing) return { netLabels: s.netLabels.map((l) => (l.id === existing.id ? { ...l, x, y, text } : l)) };
         return { netLabels: [...s.netLabels, { id: nanoid(6), x, y, text }] };
       }),
 
