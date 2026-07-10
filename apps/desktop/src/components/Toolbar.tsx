@@ -35,17 +35,20 @@ export function Toolbar({ mode, result, runState, isRunning, title, onModeChange
             ? "warn"
             : "idle";
 
+  // Quiet by design (§UX checklist 5): the schematic editor shows NO status
+  // chatter — "ready · edit mode" told the user nothing. Only genuinely useful
+  // simulator state is surfaced, in sentence case, and idle stays blank.
   const statusText = isRunning
-    ? "running…"
+    ? "Running…"
     : !isSimulator
-      ? "ready · edit mode"
+      ? ""
       : result?.ok
-        ? `sim complete · ${result.stats.sampleCount} samples`
+        ? `${result.stats.sampleCount.toLocaleString()} samples`
         : runState === "error"
-          ? "sim error"
+          ? "Error"
           : runState === "stopped"
-            ? "sim stopped"
-            : "simulator ready";
+            ? "Stopped"
+            : "";
 
   return (
     <header className="toolbar">
@@ -68,7 +71,7 @@ export function Toolbar({ mode, result, runState, isRunning, title, onModeChange
             <circle cx="12" cy="12" r="2" />
             <path d="M6 4h6v6" />
           </svg>
-          schematic
+          Schematic
         </button>
         <button
           className={`mode-btn${mode === "simulator" ? " active" : ""}`}
@@ -79,15 +82,17 @@ export function Toolbar({ mode, result, runState, isRunning, title, onModeChange
             <path d="M1 12l4-5 3 2 5-6" />
             <path d="M11 3h2v2" />
           </svg>
-          simulator
+          Simulator
         </button>
       </div>
 
       <div className="titlebar-right">
-        <span className={cn("status-lamp", `status-lamp--${lampState}`)}>
-          <i className="status-lamp-dot" aria-hidden="true" />
-          <span className="status-lamp-text mono-num">{statusText}</span>
-        </span>
+        {statusText && (
+          <span className={cn("status-lamp", `status-lamp--${lampState}`)}>
+            <i className="status-lamp-dot" aria-hidden="true" />
+            <span className="status-lamp-text mono-num">{statusText}</span>
+          </span>
+        )}
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
@@ -106,7 +111,7 @@ export function Toolbar({ mode, result, runState, isRunning, title, onModeChange
               <svg viewBox="0 0 12 12" aria-hidden="true" className="size-2.5 fill-current">
                 <path d="M2.5 1.4v9.2c0 .5.55.8.98.55l7.4-4.6a.64.64 0 0 0 0-1.1l-7.4-4.6a.64.64 0 0 0-.98.55Z" />
               </svg>
-              run
+              Run
             </Button>
           </TooltipTrigger>
           <TooltipContent>{isRunning ? "Simulation running…" : "Run simulation and switch to simulator"}</TooltipContent>

@@ -42,11 +42,11 @@ export function StatusBar({
     : "idle";
   const state = mode === "simulator"
     ? result?.ok
-      ? "sim complete"
+      ? "Sim complete"
       : result
-        ? "sim error"
-        : "sim ready"
-    : "ready · edit mode";
+        ? "Sim error"
+        : "Sim ready"
+    : "Ready";
 
   return (
     <footer className="statusbar">

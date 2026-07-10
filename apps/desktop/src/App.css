@@ -61,8 +61,10 @@
   --comp-ref:  rgba(235, 235, 245, 0.45);
 
   /* Grid — quiet Apple-style dots */
-  --grid-dot:        rgba(235, 235, 245, 0.14);
-  --grid-dot-major:  rgba(235, 235, 245, 0.28);
+  /* §UX checklist 7: subtle dots (dark mode 6–10% white) — snap stays visible,
+     wires/components keep clearly higher contrast than the grid. */
+  --grid-dot:        rgba(235, 235, 245, 0.08);
+  --grid-dot-major:  rgba(235, 235, 245, 0.13);
   --canvas-bg:      #000000;
   --canvas-surface: #0a0a0a;
   --scope-surface:  #0c0c0e;
@@ -1294,15 +1296,10 @@ body {
   text-align: left;
 }
 
-/* Shared micro-label treatment, "kicker chip" tier (weight 600,
-   `--tracking-wide`) — six near-identical declarations (0.09em/0.12em
-   tracking drift across mono vs. UI font) consolidated into one rule;
-   each selector below keeps only its font-family and layout extras. */
 .disclosure-label,
 .cmdk-section,
 .property-field span,
 .palette-title,
-.chat-message span,
 .settings-row-label {
   font-size: var(--fs-caption);
   font-weight: 510;
@@ -3754,10 +3751,6 @@ body {
   min-width: 300px;
   border-left: 0;
 }
-.app-simulator .shell-body > .ask-panel {
-  width: var(--ask-w, 330px);
-  min-width: 260px;
-}
 
 .col-resize-handle {
   flex: none;
@@ -4204,190 +4197,6 @@ body {
   color: var(--muted);
   font-style: normal;
 }
-
-/* Ask Sim */
-.ask-panel {
-  width: 316px;
-  flex: none;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  background: var(--panel);
-  border-left: 1px solid var(--border);
-}
-
-.ask-head {
-  height: 50px;
-  flex: none;
-  display: flex;
-  align-items: center;
-  gap: var(--sp-2);
-  padding: 0 var(--sp-3);
-  border-bottom: 1px solid var(--border);
-}
-
-.ask-head .spark {
-  color: var(--accent);
-}
-
-.ask-head strong {
-  color: var(--cream);
-  font-size: var(--fs-title);
-  font-weight: 600;
-}
-
-.ask-head small {
-  margin-left: auto;
-  color: var(--faint);
-  font: 500 var(--fs-caption) var(--font-mono);
-}
-
-.ask-head .panel-close {
-  width: 28px;
-  height: var(--row-h);
-  margin-left: 4px;
-  flex: none;
-}
-
-.chat-scroll {
-  flex: 1;
-  min-height: 0;
-  overflow: auto;
-  padding: var(--sp-3);
-  display: flex;
-  flex-direction: column;
-  gap: var(--sp-3);
-}
-
-.chat-message {
-  display: grid;
-  gap: var(--sp-1);
-}
-
-.chat-message.user {
-  justify-items: end;
-}
-
-.chat-message p {
-  max-width: 94%;
-  margin: 0;
-  padding: var(--sp-2) var(--sp-3);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  color: var(--text);
-  background: var(--overlay-hover);
-  font-size: var(--fs-label);
-  line-height: 1.55;
-}
-
-.chat-message.assistant p {
-  color: var(--cream);
-  background: var(--accent-soft);
-  border-color: var(--accent-line);
-}
-
-.board-summary {
-  overflow: hidden;
-  border: 1px solid var(--accent-line);
-  border-radius: 10px;
-  background: var(--accent-soft);
-}
-
-.board-summary h3 {
-  margin: 0;
-  padding: 8px 12px;
-  display: flex;
-  align-items: center;
-  gap: var(--sp-2);
-  color: var(--accent);
-  background: var(--accent-soft);
-  font-size: var(--fs-caption);
-  font-weight: 600;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-}
-
-.board-summary h3 i {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--accent);
-  box-shadow: 0 0 6px var(--accent-glow);
-}
-
-.board-summary dl {
-  margin: 0;
-  padding: var(--sp-2) var(--sp-3);
-  display: grid;
-  gap: var(--sp-2);
-  font: 500 var(--fs-body) var(--font-mono);
-}
-
-.board-summary dl div {
-  display: flex;
-  justify-content: space-between;
-  gap: var(--sp-3);
-}
-
-.board-summary dt {
-  color: var(--muted);
-}
-
-.board-summary dd {
-  margin: 0;
-  color: var(--text);
-}
-
-.ask-composer {
-  flex: none;
-  margin: 0 14px 14px;
-  padding: var(--sp-2) var(--sp-3);
-  border: 1px solid var(--border-strong);
-  border-radius: 10px;
-  background: var(--panel-3);
-}
-
-.ask-composer > span {
-  display: block;
-  margin-bottom: var(--sp-2);
-  color: var(--faint);
-  font-size: var(--fs-label);
-}
-
-.ask-composer div {
-  display: flex;
-  align-items: center;
-  gap: var(--sp-2);
-}
-
-.ask-composer i {
-  padding: 3px 8px;
-  border: 1px solid var(--border-strong);
-  border-radius: 6px;
-  color: var(--muted);
-  font: 500 var(--fs-caption) var(--font-mono);
-  font-style: normal;
-}
-
-.ask-composer button {
-  width: 28px;
-  height: var(--row-h);
-  margin-left: auto;
-  border: 0;
-  border-radius: 7px;
-  color: var(--accent-ink);
-  background: var(--accent);
-  font-weight: 800;
-  cursor: pointer;
-  transition: background var(--motion-fast) var(--spring),
-    transform var(--motion-fast) var(--spring);
-}
-
-.ask-composer button:hover:not(:disabled) {
-  background: var(--accent-hover);
-  transform: translateY(-1px);
-}
-
 /* status */
 /* App-chrome bar (fixed shell region, not a repeating row) — kept outside
    --row-h/--row-h-dense on purpose. */
@@ -4455,8 +4264,7 @@ body {
 
 /* interactive completion pass */
 .transport button:disabled,
-.editor-icon-btn:disabled,
-.ask-composer button:disabled {
+.editor-icon-btn:disabled {
   cursor: not-allowed;
   opacity: 0.38;
   filter: grayscale(0.5);
@@ -4523,22 +4331,6 @@ body {
   font-size: var(--fs-body);
   line-height: 1.45;
 }
-
-.ask-composer input {
-  width: 100%;
-  min-width: 0;
-  height: 26px;
-  border: 0;
-  outline: none;
-  color: var(--text);
-  background: transparent;
-  font: 500 var(--fs-label) var(--font-ui);
-}
-
-.ask-composer input::placeholder {
-  color: var(--muted);
-}
-
 /* Settings sheet body (ui/sheet.tsx supplies the panel chrome — true-black
    popover surface, hairline ring, --elev-pop, slide-in motion; these rules
    are only the settings-specific dense row content). */
@@ -4634,10 +4426,6 @@ body {
 
 .restore-orb.graph {
   color: var(--trace-green);
-}
-
-.restore-orb.ai {
-  color: var(--accent);
 }
 
 .restore-orb:hover svg {

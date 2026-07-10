@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
+import type { CSSProperties } from "react";
 import "./App.css";
 import { Toolbar } from "./components/Toolbar";
 import { Canvas } from "./components/Canvas";
@@ -10,7 +10,6 @@ import { EmptyState } from "./components/EmptyState";
 import { CommandPalette } from "./components/CommandPalette";
 import {
   ActivityRail,
-  AskSimPanel,
   BottomPanel,
   ComponentsRail,
   ConfirmDialog,
@@ -91,54 +90,17 @@ interface OpenTab {
 }
 
 const newTabId = () => `tab-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-const clamp = (v: number, min: number, max: number) => Math.min(max, Math.max(min, v));
 const blankDocument = (): SchematicDocument => ({ components: [], wires: [], probes: [], netLabels: [] });
 const emptyHistory = (): SchematicHistory => ({ past: [], future: [] });
 
-// §10 responsive floor (simulator's schematic/scope/Ask Sim three-column
-// layout — App.css's `.editor-shell`/`.plotter`/`.ask-panel` mirror these as
-// a CSS backstop). The schematic column must stay usable — tabs, canvas
+// §10 responsive floor — App.css's `.editor-shell`/`.plotter` mirror these as
+// a CSS backstop. The schematic column must stay usable — tabs, canvas
 // overlays, and the results table — down to the app's stated 900px minimum
-// window width, so the scope and Ask Sim columns budget around it instead of
-// squeezing it to nothing.
+// window width, so the scope column budgets around it instead of squeezing
+// it to nothing.
 const RAIL_W = 54; // .activity-rail
 const HANDLE_W = 8; // .col-resize-handle, one per open column
 const SCOPE_MIN = 300; // analysis scope column floor (matches old drag clamp)
-const ASK_MIN = 260; // Ask Sim column floor (matches old drag clamp)
-
-/** A draggable vertical divider that reports horizontal deltas while dragged. */
-function ColumnResizeHandle({ onResize, label }: { onResize: (dx: number) => void; label: string }) {
-  const lastX = useRef(0);
-  const dragging = useRef(false);
-  const onDown = (e: ReactPointerEvent<HTMLDivElement>) => {
-    dragging.current = true;
-    lastX.current = e.clientX;
-    e.currentTarget.setPointerCapture(e.pointerId);
-  };
-  const onMove = (e: ReactPointerEvent<HTMLDivElement>) => {
-    if (!dragging.current) return;
-    const dx = e.clientX - lastX.current;
-    lastX.current = e.clientX;
-    if (dx !== 0) onResize(dx);
-  };
-  const onUp = (e: ReactPointerEvent<HTMLDivElement>) => {
-    dragging.current = false;
-    if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
-  };
-  return (
-    <div
-      className="col-resize-handle"
-      role="separator"
-      aria-orientation="vertical"
-      aria-label={label}
-      onPointerDown={onDown}
-      onPointerMove={onMove}
-      onPointerUp={onUp}
-    >
-      <span />
-    </div>
-  );
-}
 
 function App() {
   const components = useSchematic((s) => s.components);
@@ -187,12 +149,10 @@ function App() {
   const [confirmClearOpen, setConfirmClearOpen] = useState(false);
   const [confirmCloseTabId, setConfirmCloseTabId] = useState<string | null>(null);
   const [graphOpen, setGraphOpen] = useState(true);
-  const [aiOpen, setAiOpen] = useState(true);
   const [componentFocusSignal, setComponentFocusSignal] = useState(0);
   const [partsOpen, setPartsOpen] = useState(true);
   const [fitSignal, setFitSignal] = useState(0);
   const [scopeWidth, setScopeWidth] = useState(440);
-  const [askWidth, setAskWidth] = useState(330);
   const [dcSetup, setDcSetup] = useState<DcSweepSpec>(() => defaultDcSetup([]));
   const [tfSetup, setTfSetup] = useState<TfSpec>(() => defaultTfSetup([]));
   const [noiseSetup, setNoiseSetup] = useState<NoiseSpec>(() => defaultNoiseSetup([]));
@@ -688,7 +648,6 @@ function App() {
     invalidateAnalysis();
     setMode("schematic");
     setGraphOpen(true);
-    setAiOpen(true);
     setFitSignal((n) => n + 1);
     showNotice("Started a new blank circuit.");
   }, [tabs, snapshotActive, newCircuit, invalidateAnalysis, showNotice]);
@@ -731,7 +690,6 @@ function App() {
     setMode("schematic");
     setConfirmClearOpen(false);
     setGraphOpen(true);
-    setAiOpen(true);
     showNotice("Scratchpad cleared.");
   }, [activeId, newCircuit, invalidateAnalysis, showNotice]);
 
@@ -803,36 +761,21 @@ function App() {
     return () => observer.disconnect();
   }, []);
 
-  // §10 responsive floor: whenever the window narrows (or a column opens/
-  // closes), re-clamp the scope/Ask Sim widths so the schematic column never
-  // drops below a usable width. If there truly isn't room for all columns
-  // even at their floors, auto-collapse Ask Sim (the supplementary panel —
-  // still one click away via MinimizedPanelDock) rather than leave the
-  // schematic column unusable. This only ever shrinks toward the current
-  // values, so it never fights a manual drag that already fits.
+  // §10 responsive floor: whenever the window narrows (or the scope opens/
+  // closes), re-clamp the scope width so the layout never drops below a
+  // usable width. This only ever shrinks toward the current values, so it
+  // never fights a manual drag that already fits.
   useEffect(() => {
     if (mode !== "simulator" || shellWidth === 0) return;
-    if (graphOpen && aiOpen) {
-      const budget = shellWidth - RAIL_W - HANDLE_W * 2;
-      if (budget < SCOPE_MIN + ASK_MIN) {
-        setAiOpen(false);
-        return;
-      }
-      setScopeWidth((w) => Math.min(w, Math.max(SCOPE_MIN, budget - ASK_MIN)));
-      setAskWidth((w) => Math.min(w, Math.max(ASK_MIN, budget - scopeWidth)));
-    } else if (graphOpen) {
+    if (graphOpen) {
       const budget = shellWidth - RAIL_W - HANDLE_W;
       setScopeWidth((w) => Math.min(w, Math.max(SCOPE_MIN, budget)));
-    } else if (aiOpen) {
-      const budget = shellWidth - RAIL_W - HANDLE_W;
-      setAskWidth((w) => Math.min(w, Math.max(ASK_MIN, budget)));
     }
-    // scopeWidth/askWidth are intentionally excluded: this effect only reacts
-    // to layout changes (window size, panel open/close), and reads the
-    // latest widths via the functional updater / closure without needing to
-    // re-run on every drag-driven width change.
+    // scopeWidth is intentionally excluded: this effect only reacts to layout
+    // changes (window size, panel open/close), and reads the latest width via
+    // the functional updater without re-running on every drag-driven change.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [shellWidth, mode, graphOpen, aiOpen]);
+  }, [shellWidth, mode, graphOpen]);
 
   return (
     <div className={`app app-${mode}`}>
@@ -849,7 +792,7 @@ function App() {
       <div
         ref={shellBodyRef}
         className="shell-body"
-        style={{ "--scope-w": `${scopeWidth}px`, "--ask-w": `${askWidth}px` } as CSSProperties}
+        style={{ "--scope-w": `${scopeWidth}px` } as CSSProperties}
       >
         <ActivityRail
           mode={mode}
@@ -904,15 +847,6 @@ function App() {
         )}
         {mode === "simulator" && graphOpen && (
           <>
-            <ColumnResizeHandle
-              label="Resize analysis panel"
-              onResize={(dx) => setAskWidth((w) => {
-                const next = clamp(w + dx, ASK_MIN, 640);
-                if (shellWidth === 0) return next;
-                const maxAllowed = Math.max(ASK_MIN, shellWidth - RAIL_W - HANDLE_W - SCOPE_MIN);
-                return Math.min(next, maxAllowed);
-              })}
-            />
             <AnalysisErrorBoundary>
               <SimulationPanel
                 result={analysis}
@@ -954,27 +888,10 @@ function App() {
             </AnalysisErrorBoundary>
           </>
         )}
-        {mode === "simulator" && aiOpen && (
-          <>
-            <ColumnResizeHandle
-              label="Resize Ask Sim panel"
-              onResize={(dx) => setAskWidth((w) => {
-                const next = clamp(w - dx, ASK_MIN, 640);
-                if (shellWidth === 0) return next;
-                const reserved = graphOpen ? HANDLE_W + scopeWidth : 0;
-                const maxAllowed = Math.max(ASK_MIN, shellWidth - RAIL_W - HANDLE_W - reserved);
-                return Math.min(next, maxAllowed);
-              })}
-            />
-            <AskSimPanel result={analysis} onClose={() => setAiOpen(false)} />
-          </>
-        )}
-        {mode === "simulator" && (!graphOpen || !aiOpen) && (
+        {mode === "simulator" && !graphOpen && (
           <MinimizedPanelDock
             graphHidden={!graphOpen}
-            aiHidden={!aiOpen}
             onRestoreGraph={() => setGraphOpen(true)}
-            onRestoreAi={() => setAiOpen(true)}
           />
         )}
         {mode === "schematic" && partsOpen && (

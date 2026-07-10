@@ -807,79 +807,6 @@ export function ComponentsRail({
   );
 }
 
-export function AskSimPanel({ result, onClose }: { result: AnalysisResult | null; onClose: () => void }) {
-  const componentCount = useSchematic((s) => s.components.length);
-  const wireCount = useSchematic((s) => s.wires.length);
-  const state = result?.ok ? "analysis ready" : result && !result.ok ? "needs attention" : "waiting for run";
-  const [draft, setDraft] = useState("Summarize my board.");
-  const [messages, setMessages] = useState<Array<{ role: "user" | "assistant"; text: string }>>([
-    { role: "user", text: "Summarize my board." },
-  ]);
-  const summary = result?.ok
-    ? `This schematic has ${componentCount} parts, ${wireCount} wires, and ${result.stats.sampleCount} transient samples across ${formatEngineering(result.stats.stopTime, "s", 3)}.`
-    : result && !result.ok
-      ? `The last run needs attention: ${result.message}`
-      : `This schematic has ${componentCount} parts and ${wireCount} wires. Run TRAN, OP, or AC analysis, then probe a node for focused measurements.`;
-
-  const send = () => {
-    const question = draft.trim();
-    if (!question) return;
-    setMessages((current) => [
-      ...current,
-      { role: "user", text: question },
-      { role: "assistant", text: summary },
-    ]);
-    setDraft("");
-  };
-
-  return (
-    <aside className="ask-panel" aria-label="Ask Sim">
-      <div className="ask-head">
-        <span className="spark">✦</span>
-        <strong>Ask Sim</strong>
-        <small>analysis · agent</small>
-        <button className="panel-close" aria-label="Minimize Ask Sim" title="Minimize Ask Sim" onClick={onClose}>×</button>
-      </div>
-      <div className="chat-scroll">
-        {messages.map((message, index) => (
-          <div key={`${message.role}-${index}-${message.text}`} className={`chat-message ${message.role}`}>
-            <span>{message.role === "user" ? "you" : "sim"}</span>
-            <p>{message.text}</p>
-          </div>
-        ))}
-        <div className="board-summary">
-          <h3><i />board summary</h3>
-          <dl>
-            <div><dt>state</dt><dd>{state}</dd></div>
-            <div><dt>parts</dt><dd>{componentCount}</dd></div>
-            <div><dt>wires</dt><dd>{wireCount}</dd></div>
-            <div><dt>samples</dt><dd>{result?.ok ? result.stats.sampleCount : "—"}</dd></div>
-          </dl>
-        </div>
-      </div>
-      <form
-        className="ask-composer"
-        onSubmit={(event) => {
-          event.preventDefault();
-          send();
-        }}
-      >
-        <input
-          value={draft}
-          onChange={(event) => setDraft(event.currentTarget.value)}
-          placeholder="Summarize my board..."
-          aria-label="Ask Sim prompt"
-        />
-        <div>
-          <i>datasheet</i>
-          <i>sim · temp</i>
-          <button aria-label="Send" disabled={!draft.trim()}>↑</button>
-        </div>
-      </form>
-    </aside>
-  );
-}
-
 export function SettingsPanel({
   title,
   onClose,
@@ -998,14 +925,10 @@ function SettingsRow({ label, hint, children }: { label: string; hint: string; c
 
 export function MinimizedPanelDock({
   graphHidden,
-  aiHidden,
   onRestoreGraph,
-  onRestoreAi,
 }: {
   graphHidden: boolean;
-  aiHidden: boolean;
   onRestoreGraph: () => void;
-  onRestoreAi: () => void;
 }) {
   return (
     <aside className="minimized-panel-dock" aria-label="Minimized panels">
@@ -1016,14 +939,6 @@ export function MinimizedPanelDock({
             <path d="M20 4h4v4" />
           </svg>
           <span>Graphs</span>
-        </button>
-      )}
-      {aiHidden && (
-        <button className="restore-orb ai" aria-label="Restore Ask Sim panel" title="Restore Ask Sim panel" onClick={onRestoreAi}>
-          <svg viewBox="0 0 28 28" aria-hidden="true">
-            <path d="M14 3 16.5 11.5 25 14 16.5 16.5 14 25 11.5 16.5 3 14 11.5 11.5z" />
-          </svg>
-          <span>Ask Sim</span>
         </button>
       )}
     </aside>
