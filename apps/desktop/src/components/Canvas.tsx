@@ -6,7 +6,7 @@ import type { Point, SchematicComponent, SchematicWire } from "../schematic/type
 import { getLocalPins, getComponentPins } from "../schematic/pins";
 import type { OperatingPointResult } from "../simulation/operatingPoint";
 import { opAnnotations } from "../simulation/opAnnotations";
-import { extractCircuit } from "../schematic/netlist";
+import { extractCircuit, netAtPoint } from "../schematic/netlist";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   buildLabelPlacements,
@@ -127,7 +127,7 @@ export function Canvas({
   const setValue = useSchematic((s) => s.setValue);
   const probes = useSchematic((s) => s.probes);
   const addProbe = useSchematic((s) => s.addProbe);
-  const toggleCurrentProbe = useSchematic((s) => s.toggleCurrentProbe);
+  const removeProbe = useSchematic((s) => s.removeProbe);
   const netLabels = useSchematic((s) => s.netLabels);
   const upsertNetLabel = useSchematic((s) => s.upsertNetLabel);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -429,6 +429,22 @@ export function Canvas({
 
   // All selection/drag goes through one hit-test on the SVG, so z-order never
   // decides which component a click lands on (components don't intercept).
+  const handleSimulatorNodeAction = (clientX: number, clientY: number): boolean => {
+    if (interactive || (tool.mode !== "probe" && tool.mode !== "label")) return false;
+    const point = snappedCursor(clientX, clientY);
+    const physicalNets = extractCircuit(components, wires, []).nets;
+    if (!netAtPoint(physicalNets, wires, point)) return false;
+    if (tool.mode === "probe") {
+      addProbe(point.x, point.y);
+    } else if (!labelDraft) {
+      const existing = netLabels.find((label) =>
+        netAtPoint(physicalNets, wires, label)?.id === netAtPoint(physicalNets, wires, point)?.id,
+      );
+      setLabelDraft({ x: point.x, y: point.y, text: existing?.text ?? "" });
+    }
+    return true;
+  };
+
   const onBackgroundPointerDown = (e: ReactPointerEvent<SVGElement>) => {
     // Middle-mouse button always pans (button === 1).
     if (e.button === 1) {
@@ -440,13 +456,12 @@ export function Canvas({
     const world = screenToWorld(e.clientX, e.clientY);
 
     if (!interactive) {
-      // Simulator canvas is view-only, but selection is inspection rather
-      // than editing: focusing a part drives its measurement row. Empty-space
-      // drags remain pan gestures and never mutate circuit geometry.
+      if (handleSimulatorNodeAction(e.clientX, e.clientY)) return;
+      // Selection is inspection rather than editing: focusing a part drives
+      // its telemetry row. Empty-space drags remain pan gestures.
       const hit = componentAt(components, world.x, world.y);
-      if (hit) {
+      if (hit && tool.mode === "select") {
         select(hit.id);
-        toggleCurrentProbe(hit.id);
         drag.current = { mode: "none", lastX: e.clientX, lastY: e.clientY, moved: false };
         return;
       }
@@ -549,9 +564,7 @@ export function Canvas({
     if (e.button !== 0) return;
     if (!interactive) {
       e.stopPropagation();
-      const point = snappedCursor(e.clientX, e.clientY);
-      addProbe(point.x, point.y);
-      selectWire(wire.id);
+      if (!handleSimulatorNodeAction(e.clientX, e.clientY) && tool.mode === "select") selectWire(wire.id);
       return;
     }
     if (tool.mode === "probe") {
@@ -567,6 +580,15 @@ export function Canvas({
 
   const onPointerMove = (e: ReactPointerEvent<SVGElement>) => {
     if (!interactive) {
+      if (tool.mode === "probe" || tool.mode === "label") {
+        const cursor = snappedCursor(e.clientX, e.clientY);
+        const physicalNets = extractCircuit(components, wires, []).nets;
+        setSnapHover({
+          x: cursor.x,
+          y: cursor.y,
+          pin: Boolean(netAtPoint(physicalNets, wires, cursor)),
+        });
+      }
       const d = drag.current;
       if (d.mode === "pan") {
         setView((v) => ({ ...v, x: v.x + (e.clientX - d.lastX), y: v.y + (e.clientY - d.lastY) }));
@@ -755,7 +777,7 @@ export function Canvas({
       <svg
         ref={svgRef}
         className="canvas"
-        style={{ cursor: interactive && (placing || wiring || probing || labeling) ? "crosshair" : "default" }}
+        style={{ cursor: (interactive && (placing || wiring)) || probing || labeling ? "crosshair" : "default" }}
         onPointerDown={onBackgroundPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={endDrag}
@@ -788,7 +810,7 @@ export function Canvas({
               key={wire.id}
               wire={wire}
               selected={wire.id === selectedWireId || selectedWireIds.includes(wire.id)}
-              probeReady={!interactive}
+              probeReady={!interactive && (probing || labeling)}
               onPointerDown={(e) => onWirePointerDown(e, wire)}
             />
           ))}
@@ -842,8 +864,21 @@ export function Canvas({
             return (
               <g
                 key={p.id}
-                className={`probe-marker${p.componentId ? " current" : ""}${probeSelected ? " selected" : ""}`}
+                className={`probe-marker${p.componentId ? " current" : ""}${probeSelected ? " selected" : ""}${!interactive ? " simulator-removable" : ""}`}
                 style={{ color: p.color }}
+                role={!interactive ? "button" : undefined}
+                tabIndex={!interactive ? 0 : undefined}
+                aria-label={!interactive ? `Remove ${p.componentId ? "current" : "voltage"} probe` : undefined}
+                onPointerDown={!interactive ? (event) => {
+                  event.stopPropagation();
+                  removeProbe(p.id);
+                } : undefined}
+                onKeyDown={!interactive ? (event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    removeProbe(p.id);
+                  }
+                } : undefined}
               >
                 {probeSelected && <circle className="probe-select-ring" cx={px} cy={py} r={11} />}
                 <circle className="probe-ring" cx={px} cy={py} r={7} />
@@ -854,13 +889,26 @@ export function Canvas({
 
           {/* Net names sit under component ref/value labels so collisions
               (e.g. "Output" vs "Rf") keep the part label readable. */}
-          <g className="net-label-layer" aria-hidden="true">
+          <g className={`net-label-layer${!interactive && labeling ? " simulator-editable" : ""}`} aria-hidden={interactive ? "true" : undefined}>
             {netLabels.map((l) => (
               <text
                 key={l.id}
                 className={`net-label-text${selectedLabelIds.includes(l.id) ? " selected" : ""}`}
                 x={l.x + 6}
                 y={l.y - 6}
+                role={!interactive && labeling ? "button" : undefined}
+                tabIndex={!interactive && labeling ? 0 : undefined}
+                aria-label={!interactive && labeling ? `Rename node ${l.text}` : undefined}
+                onPointerDown={!interactive && labeling ? (event) => {
+                  event.stopPropagation();
+                  setLabelDraft({ x: l.x, y: l.y, text: l.text });
+                } : undefined}
+                onKeyDown={!interactive && labeling ? (event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    setLabelDraft({ x: l.x, y: l.y, text: l.text });
+                  }
+                } : undefined}
               >
                 {l.text}
               </text>

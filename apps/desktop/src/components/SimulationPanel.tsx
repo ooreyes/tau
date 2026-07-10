@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
-import { Maximize2, Minimize2, RefreshCw, Square, X } from "lucide-react";
+import { Crosshair, Maximize2, Minimize2, RefreshCw, Square, X } from "lucide-react";
 import { useSchematic } from "../store/useSchematic";
 import {
   MAX_TRANSIENT_STEPS,
@@ -13,7 +13,6 @@ import {
 import { formatEngineering } from "../simulation/quantity";
 import type { Probe, NetLabel, SchematicWire } from "../schematic/types";
 import { netAtPoint } from "../schematic/netlist";
-import { currentProbeTraces } from "../simulation/currentProbe";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -60,15 +59,13 @@ import {
   type PaneLayout,
   defaultLayout,
   automaticLayout,
-  addPane,
-  removePane,
-  moveTrace,
 } from "./plotPanes";
 import { PlotAxes, ScopeClip } from "./PlotAxes";
 import { useMeasuredSize, tickCountsFromSize } from "./useMeasuredSize";
 import { usePlotViewport } from "./usePlotViewport";
 import { ScopeZoomCluster } from "./ScopeZoomCluster";
 import type { Viewport } from "../simulation/plotViewport";
+import { visibleTransientTraces } from "../simulation/visibleTraces";
 import {
   classifySignal,
   componentMeasurements,
@@ -172,12 +169,11 @@ export function SimulationPanel({
   const directives = useSchematic((s) => s.directives);
   const warnings = result?.warnings ?? [];
 
-  const componentRows = useMemo<ComponentMeasurement[]>(
-    () => (result?.ok ? componentMeasurements(result) : []),
-    [result],
-  );
-
   const [mode, setMode] = useState<"tran" | "op" | "ac" | "dc" | "tf" | "noise" | "step">("tran");
+  const componentRows = useMemo<ComponentMeasurement[]>(
+    () => (mode === "tran" && result?.ok ? componentMeasurements(result) : []),
+    [mode, result],
+  );
   // Advanced Simulation Settings disclosure — closed by default (§11 Unit C7):
   // Tau picks stop time / step count automatically unless the user overrides.
   const [advancedOpen, setAdvancedOpen] = useState(false);
@@ -265,32 +261,21 @@ export function SimulationPanel({
     [exprTraces, refOverlay],
   );
 
+  const baseTraces = useMemo(
+    () => (result?.ok ? visibleTransientTraces(result, probes, wires, netLabels) : []),
+    [result, probes, wires, netLabels],
+  );
+
   // ── Pane layout reconciliation ──────────────────────────────────────────────
   // Compute the full set of trace ids available for the current result.  These
   // are the same ids used by WaveformPlot: node trace ids (from result.traces)
   // plus expression/ref trace labels.  When the set changes, we reconcile the
   // layout to add new traces (to pane 0) and drop stale ones.
   const availableTraceIds = useMemo<string[]>(() => {
-    const success = result?.ok ? result : null;
-    if (!success) return scopeTraces.map((t) => t.id);
-    const base =
-      probes.length === 0
-        ? success.traces.slice(0, 6).map((t) => t.id)
-        : (() => {
-            const ids: string[] = [];
-            for (const probe of probes) {
-              if (probe.componentId) continue; // clamp-meter probes resolve below
-              const net = netAtPoint(success.circuit.nets, wires, probe);
-              if (!net || net.isGround) continue;
-              const trace = success.traces.find((tr) => tr.id === net.id);
-              if (trace && !ids.includes(trace.id)) ids.push(trace.id);
-            }
-            for (const trace of currentProbeTraces(success, probes)) ids.push(trace.id);
-            return ids;
-          })();
+    const base = baseTraces.map((trace) => trace.id);
     const extraIds = scopeTraces.map((t) => t.id);
     return [...base, ...extraIds.filter((id) => !base.includes(id))];
-  }, [result, probes, wires, scopeTraces]);
+  }, [baseTraces, scopeTraces]);
 
   // Auto-create one readable plot card per signal whenever the interest set
   // changes. A rerun with the same signals preserves manual pane assignments.
@@ -300,18 +285,6 @@ export function SimulationPanel({
     // The stable key deliberately ignores a new result object's identity.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [availableTraceKey]);
-
-  // Pane control callbacks — stable references for JSX handlers.
-  const handleAddPane = useCallback(() => setPaneLayout((prev) => addPane(prev)), []);
-  const handleRemovePane = useCallback(
-    (index: number) => setPaneLayout((prev) => removePane(prev, index)),
-    [],
-  );
-  const handleMoveTrace = useCallback(
-    (traceId: string, targetPaneIndex: number) =>
-      setPaneLayout((prev) => moveTrace(prev, traceId, targetPaneIndex)),
-    [],
-  );
 
   const addExpression = () => {
     const expr = exprInput.trim();
@@ -495,20 +468,22 @@ export function SimulationPanel({
           <div className="plotter-title">{title}</div>
         </div>
         <div className="plotter-actions">
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="outline"
-                size="icon-sm"
-                className="text-muted-foreground hover:text-foreground"
-                onClick={onStop}
-                aria-label="Stop simulation"
-              >
-                <Square size={13} strokeWidth={1.8} aria-hidden="true" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Clear transient result</TooltipContent>
-          </Tooltip>
+          {isRunning && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="icon-sm"
+                  className="text-muted-foreground hover:text-foreground"
+                  onClick={onStop}
+                  aria-label="Stop simulation"
+                >
+                  <Square size={13} strokeWidth={1.8} aria-hidden="true" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Stop the running analysis</TooltipContent>
+            </Tooltip>
+          )}
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
@@ -585,16 +560,19 @@ export function SimulationPanel({
         <>
           <WaveformPlot
             result={result}
-            probes={probes}
-            wires={wires}
+            baseTraces={baseTraces}
             netLabels={netLabels}
             extraTraces={scopeTraces}
             paneLayout={paneLayout}
-            onAddPane={handleAddPane}
-            onRemovePane={handleRemovePane}
-            onMoveTrace={handleMoveTrace}
           />
 
+          <details className="plot-tools advanced-settings">
+            <summary className="disclosure-header">
+              <span className="disclosure-label">Advanced plot tools</span>
+              <span className="disclosure-rule" aria-hidden="true" />
+              <span className="disclosure-chevron">›</span>
+            </summary>
+            <div className="plot-tools-body">
           <div className="expr-bar">
             <Input
               variant="mono"
@@ -708,12 +686,8 @@ export function SimulationPanel({
               ))}
             </div>
           )}
-
-          <div className="meter-row">
-            <Metric label="NETS" value={result?.ok ? String(result.stats.netCount) : "--"} tone="green" />
-            <Metric label="NODES" value={result?.ok ? String(Math.max(0, result.stats.netCount - 1)) : "--"} tone="cyan" />
-            <Metric label="SAMPLES" value={result?.ok ? String(result.stats.sampleCount) : "--"} tone="cream" />
-          </div>
+            </div>
+          </details>
 
           <MeasTable measurements={measurements} />
           <FourierTable results={fourier} />
@@ -919,18 +893,15 @@ export function SimulationPanel({
         </>
       )}
 
-      <ComponentMeasurementsTable
-        rows={componentRows}
-        selectedId={selectedId}
-        onSelect={select}
-      />
+      {mode === "tran" && (
+        <ComponentMeasurementsTable
+          rows={componentRows}
+          selectedId={selectedId}
+          onSelect={select}
+        />
+      )}
 
       <div className="plotter-footer">
-        <div className="tiny-leds" aria-hidden="true">
-          <span className={components.length ? "on green" : ""} />
-          <span className={wires.length ? "on cyan" : ""} />
-          <span className={result?.ok ? "on cream" : result && !result.ok ? "on red" : ""} />
-        </div>
         <div className="plotter-message">
           {result ? (
             result.ok ? (
@@ -964,9 +935,21 @@ export function SimulationPanel({
   );
 }
 
-function formatMeasuredValue(series: MeasuredSeries | undefined): string {
-  if (!series) return "—";
-  return formatEngineering(series.statistics.final, series.unit, 3);
+function MeasurementValue({ series }: { series: MeasuredSeries | undefined }) {
+  if (!series) return <span className="muted">—</span>;
+  const periodic = series.classification.kind === "periodic";
+  const averagePower = periodic && series.unit === "W";
+  const value = averagePower
+    ? series.statistics.average
+    : periodic
+      ? series.statistics.rms
+      : series.statistics.final;
+  return (
+    <span className="measurement-reading">
+      <span>{formatEngineering(value, series.unit, 3)}</span>
+      <small>{averagePower ? "AVG" : periodic ? "RMS" : "final"}</small>
+    </span>
+  );
 }
 
 function SeriesSparkline({ series }: { series: MeasuredSeries }) {
@@ -1045,15 +1028,20 @@ function ComponentMeasurementsTable({
                     key={row.componentId}
                     className={selected ? "selected" : undefined}
                     aria-current={selected ? "true" : undefined}
-                    onClick={() => onSelect(row.componentId)}
                   >
                     <td>
-                      <strong>{row.ref}</strong>
-                      <small>{row.kind}</small>
+                      <button
+                        className="measurement-component-button"
+                        onClick={() => onSelect(row.componentId)}
+                        aria-pressed={selected}
+                      >
+                        <strong>{row.ref}</strong>
+                        <small>{row.kind}</small>
+                      </button>
                     </td>
-                    <td className="mono-num">{formatMeasuredValue(row.voltage)}</td>
-                    <td className="mono-num">{formatMeasuredValue(row.current)}</td>
-                    <td className="mono-num">{formatMeasuredValue(row.power)}</td>
+                    <td className="mono-num"><MeasurementValue series={row.voltage} /></td>
+                    <td className="mono-num"><MeasurementValue series={row.current} /></td>
+                    <td className="mono-num"><MeasurementValue series={row.power} /></td>
                     <td>
                       {primary ? (
                         <div className="measurement-signal">
@@ -1075,34 +1063,23 @@ function ComponentMeasurementsTable({
           </table>
         </div>
       )}
-      <p className="measurement-sign-note">
-        Power sign: positive is absorbed by a component; negative is delivered to the circuit.
-      </p>
     </section>
   );
 }
 
 export function WaveformPlot({
   result,
-  probes,
-  wires,
+  baseTraces,
   netLabels,
   extraTraces = [],
   paneLayout,
-  onAddPane,
-  onRemovePane,
-  onMoveTrace,
 }: {
   result: AnalysisResult | null;
-  probes: Probe[];
-  wires: SchematicWire[];
+  baseTraces: Trace[];
   netLabels: NetLabel[];
   /** User-entered expression traces overlaid on the scope (§6). */
   extraTraces?: Trace[];
   paneLayout: PaneLayout;
-  onAddPane: () => void;
-  onRemovePane: (index: number) => void;
-  onMoveTrace: (traceId: string, targetPaneIndex: number) => void;
 }) {
   const success = result?.ok ? result : null;
 
@@ -1110,23 +1087,8 @@ export function WaveformPlot({
   // before — probed nets or the first 6, then expression/ref overlays.  We keep
   // a map from id → Trace for fast lookup when rendering per-pane subsets.
   const allTraces = useMemo<Trace[]>(() => {
-    if (!success) return extraTraces;
-    let base: Trace[];
-    if (probes.length === 0) {
-      base = success.traces.slice(0, 6);
-    } else {
-      base = [];
-      for (const probe of probes) {
-        if (probe.componentId) continue; // clamp-meter probes resolve below
-        const net = netAtPoint(success.circuit.nets, wires, probe);
-        if (!net || net.isGround) continue;
-        const trace = success.traces.find((tr) => tr.id === net.id);
-        if (trace && !base.some((o) => o.id === trace.id)) base.push({ ...trace, color: probe.color });
-      }
-      base.push(...currentProbeTraces(success, probes));
-    }
-    return [...base, ...extraTraces];
-  }, [success, probes, wires, extraTraces]);
+    return [...baseTraces, ...extraTraces];
+  }, [baseTraces, extraTraces]);
 
   const traceById = useMemo<Map<string, Trace>>(() => {
     const m = new Map<string, Trace>();
@@ -1151,22 +1113,15 @@ export function WaveformPlot({
 
   return (
     <div className="scope-shell">
-      {/* "Add pane" control header — always visible when result is present. */}
-      {success && (
-        <div className="pane-controls">
-          <span className="pane-controls-label">Panes</span>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button variant="outline" size="sm" onClick={onAddPane} aria-label="Add pane">
-                + Add pane
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Add a new plot pane</TooltipContent>
-          </Tooltip>
+      {success && allTraces.length === 0 && (
+        <div className="scope-empty-state">
+          <Crosshair size={20} strokeWidth={1.5} aria-hidden="true" />
+          <strong>Choose signals on the circuit</strong>
+          <span>Add a probe dot or name a node to create its plot automatically.</span>
         </div>
       )}
 
-      {paneLayout.map((pane, paneIndex) => {
+      {allTraces.length > 0 && paneLayout.map((pane, paneIndex) => {
         // Resolve traces for this pane (preserve insertion order within pane).
         const paneTraces = pane.traceIds
           .map((id) => traceById.get(id))
@@ -1190,14 +1145,6 @@ export function WaveformPlot({
                 <span className="pane-label">
                   {paneTraces.length === 1 ? labelFor(paneTraces[0]) : `Plot ${paneIndex + 1}`}
                 </span>
-                <button
-                  className="pane-remove-btn"
-                  onClick={() => onRemovePane(paneIndex)}
-                  title={`Remove pane ${paneIndex + 1}`}
-                  aria-label={`Remove pane ${paneIndex + 1}`}
-                >
-                  ×
-                </button>
               </div>
             )}
 
@@ -1223,9 +1170,6 @@ export function WaveformPlot({
                     key={trace.id}
                     trace={trace}
                     label={labelFor(trace)}
-                    paneCount={paneLayout.length}
-                    currentPaneIndex={paneIndex}
-                    onMoveTrace={onMoveTrace}
                     times={success ? success.times : []}
                   />
                 ))
@@ -1337,20 +1281,17 @@ function TranScopePane({
 function TraceLegendItem({
   trace,
   label,
-  paneCount,
-  currentPaneIndex,
-  onMoveTrace,
   times,
 }: {
   trace: Trace;
   label: string;
-  paneCount: number;
-  currentPaneIndex: number;
-  onMoveTrace: (traceId: string, targetPaneIndex: number) => void;
   times: number[];
 }) {
   const statistics = useMemo(() => traceStatistics(times, trace.values), [times, trace.values]);
   const classification = useMemo(() => classifySignal(times, trace.values), [times, trace.values]);
+  const primaryValue = statistics
+    ? classification.kind === "periodic" ? statistics.rms : statistics.final
+    : null;
   return (
     <span className="trace-legend-item">
       <span className="trace-legend-primary">
@@ -1361,29 +1302,23 @@ function TraceLegendItem({
             ? `${formatEngineering(classification.frequency, "Hz", 2)}`
             : classification.kind}
         </span>
-        {paneCount > 1 && (
-          <select
-            className="trace-pane-select"
-            value={currentPaneIndex}
-            aria-label={`Move ${label} to pane`}
-            onChange={(e) => onMoveTrace(trace.id, Number(e.currentTarget.value))}
-          >
-            {Array.from({ length: paneCount }).map((_, i) => (
-              <option key={i} value={i}>
-                P{i + 1}
-              </option>
-            ))}
-          </select>
+        {primaryValue !== null && (
+          <span className="trace-primary-value mono-num">
+            {formatEngineering(primaryValue, trace.unit, 2)} {classification.kind === "periodic" ? "RMS" : "final"}
+          </span>
         )}
       </span>
       {statistics && (
-        <span className="trace-statistics mono-num">
-          <span>MIN {formatEngineering(statistics.min, trace.unit, 2)}</span>
-          <span>MAX {formatEngineering(statistics.max, trace.unit, 2)}</span>
-          <span>AVG {formatEngineering(statistics.average, trace.unit, 2)}</span>
-          <span>RMS {formatEngineering(statistics.rms, trace.unit, 2)}</span>
-          <span>FINAL {formatEngineering(statistics.final, trace.unit, 2)}</span>
-        </span>
+        <details className="trace-stat-details">
+          <summary>Statistics</summary>
+          <span className="trace-statistics mono-num">
+            <span>MIN {formatEngineering(statistics.min, trace.unit, 2)}</span>
+            <span>MAX {formatEngineering(statistics.max, trace.unit, 2)}</span>
+            <span>AVG {formatEngineering(statistics.average, trace.unit, 2)}</span>
+            <span>RMS {formatEngineering(statistics.rms, trace.unit, 2)}</span>
+            <span>FINAL {formatEngineering(statistics.final, trace.unit, 2)}</span>
+          </span>
+        </details>
       )}
     </span>
   );

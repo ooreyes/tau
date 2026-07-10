@@ -540,7 +540,7 @@ body {
 .plotter {
   grid-area: plotter;
   min-width: 0;
-  background: rgba(15, 17, 22, 0.9);
+  background: var(--canvas-bg);
   border-left: 1px solid var(--border);
   display: flex;
   flex-direction: column;
@@ -548,7 +548,7 @@ body {
   overflow-x: hidden;
   scrollbar-width: thin;
   scrollbar-color: var(--panel-4) transparent;
-  backdrop-filter: blur(18px) saturate(1.2);
+  backdrop-filter: none;
 }
 
 .plotter::-webkit-scrollbar {
@@ -796,6 +796,33 @@ body {
 .app-simulator .scope-shell .pane-wrapper--split {
   min-width: 0;
   margin-bottom: 0;
+}
+
+.scope-empty-state {
+  grid-column: 1 / -1;
+  min-height: 210px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-2);
+  color: var(--muted);
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--r-md);
+  background: var(--scope-surface);
+  text-align: center;
+}
+
+.scope-empty-state strong {
+  color: var(--text);
+  font-size: var(--fs-title);
+  font-weight: 600;
+}
+
+.scope-empty-state span {
+  max-width: 34ch;
+  font-size: var(--fs-caption);
+  line-height: 1.45;
 }
 
 .plotter.maximized .scope-shell {
@@ -1116,6 +1143,32 @@ body {
   font-size: var(--fs-caption);
   color: var(--text);
   font-family: var(--font-mono);
+}
+
+.trace-primary-value {
+  margin-left: auto;
+  color: var(--text);
+  font-size: var(--fs-caption);
+  white-space: nowrap;
+}
+
+.trace-stat-details {
+  color: var(--muted);
+  font-size: var(--fs-micro);
+}
+
+.trace-stat-details summary {
+  width: max-content;
+  cursor: pointer;
+  user-select: none;
+}
+
+.trace-stat-details summary:hover {
+  color: var(--text);
+}
+
+.trace-stat-details[open] summary {
+  margin-bottom: 3px;
 }
 
 .scope-legend .trace-statistics {
@@ -1706,6 +1759,22 @@ body {
   border-top: 1px solid var(--border-subtle);
 }
 
+.plot-tools summary {
+  list-style: none;
+}
+
+.plot-tools summary::-webkit-details-marker {
+  display: none;
+}
+
+.plot-tools[open] .disclosure-chevron {
+  transform: rotate(90deg);
+}
+
+.plot-tools-body {
+  padding: 0 2px var(--sp-2);
+}
+
 .advanced-settings-help-row {
   display: flex;
   align-items: center;
@@ -1899,9 +1968,16 @@ body {
 
 .measurement-table {
   width: 100%;
+  min-width: 680px;
   border-collapse: collapse;
   table-layout: fixed;
 }
+
+.measurement-table th:nth-child(1) { width: 18%; }
+.measurement-table th:nth-child(2),
+.measurement-table th:nth-child(3),
+.measurement-table th:nth-child(4) { width: 17%; }
+.measurement-table th:nth-child(5) { width: 31%; }
 
 .measurement-table th,
 .measurement-table td {
@@ -1921,7 +1997,6 @@ body {
 }
 
 .measurement-table tbody tr {
-  cursor: pointer;
   transition: background var(--motion-fast) var(--ease-out),
     box-shadow var(--motion-fast) var(--ease-out);
 }
@@ -1941,20 +2016,51 @@ body {
 }
 
 .measurement-table td:first-child {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
+  padding: 0;
 }
 
-.measurement-table td strong {
+.measurement-component-button {
+  width: 100%;
+  min-height: 42px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 1px;
+  padding: 7px var(--sp-3);
+  color: inherit;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  text-align: left;
+}
+
+.measurement-component-button:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
+
+.measurement-component-button strong {
   color: var(--text);
   font: 600 var(--fs-label) var(--font-mono);
 }
 
-.measurement-table td small {
+.measurement-component-button small {
   color: var(--muted);
   font-size: var(--fs-micro);
   text-transform: capitalize;
+}
+
+.measurement-reading {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+}
+
+.measurement-reading small {
+  color: var(--muted);
+  font: 500 var(--fs-micro) var(--font-ui);
+  text-transform: uppercase;
 }
 
 .measurement-signal {
@@ -2350,6 +2456,15 @@ body {
 .probe-marker {
   pointer-events: none;
 }
+.sim-schematic-canvas .probe-marker.simulator-removable {
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.sim-schematic-canvas .probe-marker.simulator-removable:focus-visible .probe-ring {
+  stroke-width: 2.5;
+  opacity: 1;
+}
 .probe-dot {
   fill: currentColor;
 }
@@ -2545,6 +2660,18 @@ body {
 /* Drawn under component ref/value labels; softer so collisions don't win. */
 .net-label-layer {
   pointer-events: none;
+}
+
+.sim-schematic-canvas .net-label-layer.simulator-editable,
+.sim-schematic-canvas .net-label-layer.simulator-editable .net-label-text {
+  pointer-events: auto;
+  cursor: text;
+}
+
+.sim-schematic-canvas .net-label-layer.simulator-editable .net-label-text:focus-visible {
+  fill: var(--accent);
+  outline: none;
+  text-decoration: underline;
 }
 
 /* Marquee-selected markers — accent halo, consistent with wire/component selection. */
@@ -4070,7 +4197,7 @@ body {
 }
 
 .sim-schematic-title,
-.sim-view-only {
+.sim-topology-lock {
   display: inline-flex;
   align-items: center;
   gap: var(--sp-2);
@@ -4082,9 +4209,58 @@ body {
   letter-spacing: -0.01em;
 }
 
-.sim-view-only {
+.sim-topology-lock {
+  flex: none;
   color: var(--muted);
   font: 500 var(--fs-caption) var(--font-ui);
+}
+
+.sim-circuit-tools {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--panel-3);
+}
+
+.sim-circuit-tools button {
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 7px;
+  color: var(--muted);
+  background: transparent;
+  border: 0;
+  border-radius: var(--r-sm);
+  font: 550 var(--fs-caption) var(--font-ui);
+  cursor: pointer;
+}
+
+.sim-circuit-tools button:hover {
+  color: var(--text);
+  background: var(--overlay-hover);
+}
+
+.sim-circuit-tools button.active {
+  color: var(--text);
+  background: var(--panel-4);
+  box-shadow: var(--elev-inset);
+}
+
+.sim-circuit-tools button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--accent-line);
+}
+
+@media (max-width: 1180px) {
+  .sim-circuit-tools button span,
+  .sim-topology-lock {
+    display: none;
+  }
 }
 
 .sim-schematic-canvas {

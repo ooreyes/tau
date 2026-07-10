@@ -48,13 +48,9 @@ describe("WaveformPlot (TRAN) — real tick axes", () => {
     const { container } = render(
       <WaveformPlot
         result={result}
-        probes={[]}
-        wires={[]}
+        baseTraces={result.traces}
         netLabels={[]}
         paneLayout={defaultLayout(["n1"])}
-        onAddPane={() => {}}
-        onRemovePane={() => {}}
-        onMoveTrace={() => {}}
       />,
     );
     const ticks = container.querySelectorAll(".scope-tick");
@@ -73,13 +69,9 @@ describe("WaveformPlot (TRAN) — real tick axes", () => {
     const { container } = render(
       <WaveformPlot
         result={result}
-        probes={[]}
-        wires={[]}
+        baseTraces={result.traces}
         netLabels={[]}
         paneLayout={twoPane}
-        onAddPane={() => {}}
-        onRemovePane={() => {}}
-        onMoveTrace={() => {}}
       />,
     );
     const svgs = container.querySelectorAll(".scope-svg");

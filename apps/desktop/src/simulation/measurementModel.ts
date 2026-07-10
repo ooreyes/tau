@@ -33,6 +33,7 @@ export interface MeasuredSeries {
   id: string;
   label: string;
   unit: TraceUnit;
+  /** Bounded samples for the UI sparkline; full native vectors are never retained. */
   values: number[];
   statistics: TraceStatistics;
   classification: SignalClassification;
@@ -54,16 +55,22 @@ export interface ComponentMeasurement {
  */
 export function traceStatistics(times: readonly number[], values: readonly number[]): TraceStatistics | null {
   const count = Math.min(times.length, values.length);
-  const finite: number[] = [];
   let min = Infinity;
   let max = -Infinity;
+  let validCount = 0;
+  let sampleSum = 0;
+  let sampleSquareSum = 0;
+  let final = Number.NaN;
   for (let i = 0; i < count; i++) {
-    if (!Number.isFinite(values[i])) continue;
-    finite.push(values[i]);
+    if (!Number.isFinite(times[i]) || !Number.isFinite(values[i])) continue;
+    validCount += 1;
+    sampleSum += values[i];
+    sampleSquareSum += values[i] * values[i];
+    final = values[i];
     if (values[i] < min) min = values[i];
     if (values[i] > max) max = values[i];
   }
-  if (finite.length === 0) return null;
+  if (validCount === 0) return null;
 
   let duration = 0;
   let integral = 0;
@@ -78,14 +85,14 @@ export function traceStatistics(times: readonly number[], values: readonly numbe
     squareIntegral += ((a * a + b * b) / 2) * dt;
   }
 
-  const sampleAverage = finite.reduce((sum, value) => sum + value, 0) / finite.length;
-  const sampleRms = Math.sqrt(finite.reduce((sum, value) => sum + value * value, 0) / finite.length);
+  const sampleAverage = sampleSum / validCount;
+  const sampleRms = Math.sqrt(sampleSquareSum / validCount);
   return {
     min,
     max,
     average: duration > 0 ? integral / duration : sampleAverage,
     rms: duration > 0 ? Math.sqrt(squareIntegral / duration) : sampleRms,
-    final: finite[finite.length - 1],
+    final,
   };
 }
 
@@ -98,32 +105,38 @@ export function traceStatistics(times: readonly number[], values: readonly numbe
  */
 export function classifySignal(times: readonly number[], values: readonly number[]): SignalClassification {
   const count = Math.min(times.length, values.length);
-  const points: Array<{ t: number; v: number }> = [];
-  for (let i = 0; i < count; i++) {
-    if (Number.isFinite(times[i]) && Number.isFinite(values[i])) points.push({ t: times[i], v: values[i] });
-  }
-  if (points.length < 2) return { kind: "steady" };
-
   let min = Infinity;
   let max = -Infinity;
   let sum = 0;
-  for (const { v } of points) {
+  let validCount = 0;
+  for (let i = 0; i < count; i++) {
+    const t = times[i];
+    const v = values[i];
+    if (!Number.isFinite(t) || !Number.isFinite(v)) continue;
     if (v < min) min = v;
     if (v > max) max = v;
     sum += v;
+    validCount += 1;
   }
+  if (validCount < 2) return { kind: "steady" };
   const range = max - min;
   const scale = Math.max(Math.abs(min), Math.abs(max));
   if (range <= Math.max(scale * 1e-9, 1e-30)) return { kind: "steady" };
 
-  const mean = sum / points.length;
+  const mean = sum / validCount;
   const crossings: number[] = [];
-  for (let i = 1; i < points.length; i++) {
-    const a = points[i - 1];
-    const b = points[i];
-    if (!(a.v < mean && b.v >= mean) || !(b.t > a.t)) continue;
-    const fraction = (mean - a.v) / (b.v - a.v);
-    crossings.push(a.t + fraction * (b.t - a.t));
+  let previousTime: number | null = null;
+  let previousValue: number | null = null;
+  for (let i = 0; i < count; i++) {
+    const time = times[i];
+    const value = values[i];
+    if (!Number.isFinite(time) || !Number.isFinite(value)) continue;
+    if (previousTime !== null && previousValue !== null && previousValue < mean && value >= mean && time > previousTime) {
+      const fraction = (mean - previousValue) / (value - previousValue);
+      crossings.push(previousTime + fraction * (time - previousTime));
+    }
+    previousTime = time;
+    previousValue = value;
   }
 
   if (crossings.length >= 4) {
@@ -136,15 +149,19 @@ export function classifySignal(times: readonly number[], values: readonly number
     }
     // Stable crossing intervals alone also describe a damped ringing transient.
     // Require broadly stable amplitude between the first and second halves.
-    const halfway = Math.floor(points.length / 2);
-    const halfRange = (slice: Array<{ t: number; v: number }>): number => {
+    const halfway = Math.floor(count / 2);
+    const halfRange = (start: number, end: number): number => {
       let lo = Infinity;
       let hi = -Infinity;
-      for (const { v } of slice) { if (v < lo) lo = v; if (v > hi) hi = v; }
+      for (let i = start; i < end; i++) {
+        if (!Number.isFinite(times[i]) || !Number.isFinite(values[i])) continue;
+        if (values[i] < lo) lo = values[i];
+        if (values[i] > hi) hi = values[i];
+      }
       return hi - lo;
     };
-    const earlyRange = halfRange(points.slice(0, halfway));
-    const lateRange = halfRange(points.slice(halfway));
+    const earlyRange = halfRange(0, halfway);
+    const lateRange = halfRange(halfway, count);
     const amplitudeRatio = Math.min(earlyRange, lateRange) / Math.max(earlyRange, lateRange);
     if (Number.isFinite(period) && period > 0 && maxRelativeError <= 0.08 && amplitudeRatio >= 0.75) {
       return { kind: "periodic", period, frequency: 1 / period };
@@ -180,7 +197,25 @@ function makeSeries(
 ): MeasuredSeries | undefined {
   const statistics = traceStatistics(times, values);
   if (!statistics) return undefined;
-  return { id, label, unit, values, statistics, classification: classifySignal(times, values) };
+  return {
+    id,
+    label,
+    unit,
+    values: decimateFinite(values, 96),
+    statistics,
+    classification: classifySignal(times, values),
+  };
+}
+
+function decimateFinite(values: readonly number[], maxSamples: number): number[] {
+  if (values.length <= maxSamples) return values.filter(Number.isFinite);
+  const out: number[] = [];
+  const step = (values.length - 1) / (maxSamples - 1);
+  for (let i = 0; i < maxSamples; i++) {
+    const value = values[Math.round(i * step)];
+    if (Number.isFinite(value)) out.push(value);
+  }
+  return out;
 }
 
 /** Build one measurement row per labelled schematic component. */
@@ -205,22 +240,29 @@ export function componentMeasurements(result: SuccessResult): ComponentMeasureme
     const row: ComponentMeasurement = { componentId: component.id, ref, kind: component.kind };
 
     const pair = terminalPair(pins);
+    let voltageValues: number[] | null = null;
     if (pair) {
       const positive = netValues(pair[0]);
       const negative = netValues(pair[1]);
       if (positive && negative) {
-        const values = result.times.map((_, i) => (positive[i] ?? 0) - (negative[i] ?? 0));
-        row.voltage = makeSeries(result.times, `V(${ref})`, `V(${ref})`, "V", values);
+        voltageValues = result.times.map((_, i) =>
+          Number.isFinite(positive[i]) && Number.isFinite(negative[i]) ? positive[i] - negative[i] : Number.NaN,
+        );
+        row.voltage = makeSeries(result.times, `V(${ref})`, `V(${ref})`, "V", voltageValues);
       }
     }
 
-    const currentValues = currentByRef.get(ref.toLowerCase());
-    if (currentValues) {
-      row.current = makeSeries(result.times, `I(${ref})`, `I(${ref})`, "A", [...currentValues]);
-    }
-    if (row.voltage && row.current) {
-      const values = result.times.map((_, i) => (row.voltage!.values[i] ?? 0) * (row.current!.values[i] ?? 0));
-      row.power = makeSeries(result.times, `P(${ref})`, `P(${ref})`, "W", values);
+    const rawCurrent = currentByRef.get(ref.toLowerCase());
+    const currentSign = component.kind === "isource" || component.kind === "iac" ? -1 : 1;
+    const passiveCurrent = rawCurrent?.map((value) => value * currentSign);
+    if (passiveCurrent) row.current = makeSeries(result.times, `I(${ref})`, `I(${ref})`, "A", passiveCurrent);
+    if (voltageValues && passiveCurrent) {
+      const power = voltageValues.map((voltage, i) =>
+        Number.isFinite(voltage) && Number.isFinite(passiveCurrent[i])
+          ? voltage * passiveCurrent[i]
+          : Number.NaN,
+      );
+      row.power = makeSeries(result.times, `P(${ref})`, `P(${ref})`, "W", power);
     }
     rows.push(row);
   }

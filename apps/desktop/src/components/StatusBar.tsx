@@ -27,6 +27,11 @@ export function StatusBar({
           : tool.mode === "label"
             ? "Net label — click a point, type a name"
             : "Select";
+  const simulatorHint = tool.mode === "probe"
+    ? "Probe — click a wire to add; click a probe dot to remove"
+    : tool.mode === "label"
+      ? "Node name — click a node or existing name; empty text removes it"
+      : "Inspect — select a component to focus telemetry · topology locked";
   // ngspice runs only inside the native desktop build; the browser preview uses
   // the built-in TypeScript solver. Surface which one is active to avoid the
   // "ngspice isn't working" confusion when running in a browser.
@@ -62,31 +67,27 @@ export function StatusBar({
         engine: {engineLabel}
       </span>
       <span className="status-hints">
-        <span>{mode === "simulator" ? "click a wire to toggle voltage · select a part to focus current" : toolLabel}</span>
-        <span className="dot">·</span>
-        <kbd>R</kbd>
-        <kbd>C</kbd>
-        <kbd>L</kbd>
-        <kbd>V</kbd>
-        <kbd>I</kbd>
-        <kbd>A</kbd>
-        <kbd>G</kbd> place
-        <span className="dot">·</span>
-        <kbd>W</kbd> wire
-        <span className="dot">·</span>
-        <kbd>F4</kbd> label
-        <span className="dot">·</span>
-        <kbd>Space</kbd> rotate
-        <span className="dot">·</span>
-        <kbd>⌘</kbd>+<kbd>E</kbd> mirror
-        <span className="dot">·</span>
-        <kbd>⌘</kbd>+<kbd>D</kbd> duplicate
-        <span className="dot">·</span>
-        <kbd>⌫</kbd> delete
-        <span className="dot">·</span>
-        <kbd>Esc</kbd> cancel
-        <span className="dot">·</span>
-        <kbd>⌘</kbd>+scroll zoom · two-finger pan
+        {mode === "simulator" ? (
+          <>
+            <span>{simulatorHint}</span>
+            <span className="dot">·</span>
+            <kbd>⌘</kbd>+scroll zoom · two-finger pan
+          </>
+        ) : (
+          <>
+            <span>{toolLabel}</span>
+            <span className="dot">·</span>
+            <kbd>R</kbd><kbd>C</kbd><kbd>L</kbd><kbd>V</kbd><kbd>I</kbd><kbd>A</kbd><kbd>G</kbd> place
+            <span className="dot">·</span><kbd>W</kbd> wire
+            <span className="dot">·</span><kbd>F4</kbd> label
+            <span className="dot">·</span><kbd>Space</kbd> rotate
+            <span className="dot">·</span><kbd>⌘</kbd>+<kbd>E</kbd> mirror
+            <span className="dot">·</span><kbd>⌘</kbd>+<kbd>D</kbd> duplicate
+            <span className="dot">·</span><kbd>⌫</kbd> delete
+            <span className="dot">·</span><kbd>Esc</kbd> cancel
+            <span className="dot">·</span><kbd>⌘</kbd>+scroll zoom · two-finger pan
+          </>
+        )}
       </span>
       <span className="status-count mono-num">
         grid 0.1 in · {componentCount} component{componentCount === 1 ? "" : "s"} · {wireCount} wire

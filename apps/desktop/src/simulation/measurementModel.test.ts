@@ -17,6 +17,10 @@ describe("traceStatistics", () => {
     expect(traceStatistics([0, 1, 2], [1, Number.NaN, 3])).toMatchObject({ min: 1, max: 3, final: 3 });
     expect(traceStatistics([0], [Number.NaN])).toBeNull();
   });
+
+  it("excludes values whose timestamps are not finite", () => {
+    expect(traceStatistics([0, Number.NaN, 2], [1, 100, 3])).toMatchObject({ min: 1, max: 3, final: 3 });
+  });
 });
 
 describe("classifySignal", () => {
@@ -87,5 +91,31 @@ describe("componentMeasurements", () => {
     expect(row.voltage).toBeDefined();
     expect(row.current).toBeUndefined();
     expect(row.power).toBeUndefined();
+  });
+
+  it("uses passive sign convention for independent current-source power", () => {
+    const result = resultFixture();
+    result.circuit.components[0].component = {
+      ...result.circuit.components[0].component,
+      id: "i1",
+      label: "I1",
+      kind: "isource",
+    };
+    result.currents = [{ ref: "I1", label: "I(I1)", values: [2, 1, 0] }];
+    const [row] = componentMeasurements(result);
+    expect(row.current?.values).toEqual([-2, -1, -0]);
+    expect(row.power?.values).toEqual([-8, -2, -0]);
+    expect(row.power?.statistics.min).toBe(-8);
+  });
+
+  it("bounds retained sparkline samples for large native results", () => {
+    const result = resultFixture();
+    result.times = Array.from({ length: 10_000 }, (_, index) => index / 10_000);
+    result.traces[0].values = result.times.map((time) => Math.sin(time));
+    result.currents[0].values = result.times.map(() => 1);
+    const [row] = componentMeasurements(result);
+    expect(row.voltage?.values.length).toBeLessThanOrEqual(96);
+    expect(row.current?.values.length).toBeLessThanOrEqual(96);
+    expect(row.power?.values.length).toBeLessThanOrEqual(96);
   });
 });

@@ -8,21 +8,66 @@
      `git log --oneline -8`, recover/finish/revert that unit FIRST, then go on.
      ─────────────────────────────────────────────────────────────────────── -->
 ## ⏱ HEARTBEAT
-- **Headline metric:** 1437 tests green · corpus 82/82 import · 82/82 op-converge · 79/82 warning-clean
-- **Run started (UTC):** 2026-07-10T22:00Z
-- **Synced to origin:** auto/ltspice-parity @ ed751c2.
-- **Claimed unit:** §11 Unit D — measurement system (probe/trace parity,
-  per-component V/I/P, oscillation detection, plot statistics).
+- **Headline metric:** 1445 tests green · corpus 82/82 import · 82/82 op-converge · 79/82 warning-clean
+- **Run started (UTC):** 2026-07-10T22:46Z
+- **Synced to origin:** auto/ltspice-parity @ ca23dcc.
+- **Claimed unit:** Review session — simulator interaction contract + UI/UX
+  simplification after §11 Unit D.
 - **Status:** DONE
-- **Last completed sub-step:** Unit D DONE — read-only circuit + auto plot-card
-  workspace, probe/name/color parity retained, per-component V/I/P telemetry,
-  steady/transient/periodic classification, and per-trace min/max/AVG/RMS/final
-  statistics. Current-flow animation/control removed per Omar's direction.
-- **Plan:** dedicated review session owed next, then resume the post-§11
-  acceptance/parity list in AGENTS.md/FEATURE_PARITY.md.
-- **Note:** review-rotation counter is at 0 `review:` in last 30 — owed a
-  dedicated review session after §11 ships (Omar's 2026-07-10 override wins).
-- **Next step:** run the owed dedicated review session; §11 is complete.
+- **Last completed sub-step:** dedicated simulator review DONE — strict
+  probe/name mutation boundary, named/probed plot authority, simplified default
+  hierarchy, corrected/scaled telemetry, 1440×900 + 900×600 QA; typecheck and
+  all 1445 tests green.
+- **Plan:** resume the post-§11 acceptance/parity list in
+  AGENTS.md/FEATURE_PARITY.md.
+- **Note:** review-rotation debt paid (`review:` session completed).
+- **Next step:** resume the highest-leverage agent-provable DoD item.
+
+---
+
+## 2026-07-10T23:05Z — auto/ltspice-parity — review: simulator interaction contract + UI simplification
+
+### What I did
+- Audited the prior delegated flow-removal, measurement-model, and simulator UI
+  work with three focused reviewers; fixed every P0 and the material P1 issues.
+- Enforced a strict simulator circuit contract with three explicit modes:
+  Inspect (selection only), Probe (voltage dots only), and Name (one name per
+  physical node). Component clicks no longer create current probes. Probe dots
+  and node names are directly click/keyboard removable; topology/value/wire
+  mutation remains unreachable.
+- Made named nodes + explicit probe dots the only default trace authority.
+  Removed arbitrary first-six-net plots and manual pane add/remove/move chrome;
+  the quiet empty state explains how to create a plot. Derived expressions,
+  RAW comparison, netlist/CSV/RAW export remain available under closed
+  **Advanced plot tools** for LTspice-grade depth without default clutter.
+- Simplified plot cards: compact primary RMS/final reading, classification and
+  frequency; full min/max/AVG/RMS/final moves behind each card's Statistics
+  disclosure. Removed duplicate meter/LED noise and limited Stop to live runs.
+- Hardened telemetry: periodic V/I show RMS, periodic power shows average real
+  power, independent current-source polarity follows passive sign convention,
+  transient telemetry is hidden outside TRAN, rows are keyboard-operable, and
+  stored sparkline samples are bounded to 96 instead of retaining full native
+  vectors. Classification/statistics now avoid per-sample object/array growth
+  and reject non-finite time/value pairs consistently.
+
+### Files
+`App.tsx`, `App.css`, `Canvas.tsx`, `SimulationPanel.tsx`, `StatusBar.tsx`,
+`simulation/measurementModel.ts`, new `simulation/visibleTraces.ts`, and tests.
+
+### Tests / visual QA
+- `pnpm -C apps/desktop typecheck` — pass.
+- `pnpm -C apps/desktop test` — 94 files, 1445/1445 pass.
+- `pnpm --filter @tau/desktop build` — pass (1976 modules).
+- Live interaction QA: Inspect/Probe/Name modes, wire probe → automatic plot,
+  1440×900 and 900×600 DOM/layout. Screenshot capture later timed out in the
+  browser bridge; earlier wide visual capture plus fresh DOM checks confirmed
+  the final hierarchy and reachability.
+
+### Parity items
+§6 transient signal selection/plot cards and §11 measurement UI notes updated.
+
+### Next step
+Resume the highest-leverage agent-provable Definition-of-Done item.
 
 ---
 

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
-import { Eye, ScanSearch } from "lucide-react";
+import { Crosshair, Eye, MousePointer2, Tag } from "lucide-react";
 import "./App.css";
 import { Toolbar } from "./components/Toolbar";
 import { Canvas } from "./components/Canvas";
@@ -111,6 +111,7 @@ function App() {
   const selectedId = useSchematic((s) => s.selectedId);
   const startPlacing = useSchematic((s) => s.startPlacing);
   const startWiring = useSchematic((s) => s.startWiring);
+  const startProbing = useSchematic((s) => s.startProbing);
   const startLabeling = useSchematic((s) => s.startLabeling);
   const loadCircuit = useSchematic((s) => s.loadCircuit);
   const restoreCircuit = useSchematic((s) => s.restoreCircuit);
@@ -711,7 +712,21 @@ function App() {
 
   useEffect(() => {
     invalidateAnalysis();
-  }, [components, wires, invalidateAnalysis]);
+  }, [components, wires, directives, invalidateAnalysis]);
+
+  // Simulator node naming is an analysis annotation and should rename/create
+  // its plot immediately from the current result. Once back in the schematic,
+  // labels regain their electrical net-merging meaning and invalidate results.
+  useEffect(() => {
+    if (mode === "schematic") invalidateAnalysis();
+  }, [mode, netLabels, invalidateAnalysis]);
+
+  // The simulator's circuit surface has exactly three safe modes: inspect,
+  // voltage probe, and node name. Never carry a topology-editing tool across
+  // from the schematic editor.
+  useEffect(() => {
+    if (mode === "simulator" && !["select", "probe", "label"].includes(toolMode)) cancel();
+  }, [mode, toolMode, cancel]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -872,10 +887,36 @@ function App() {
                   <Eye size={14} strokeWidth={1.7} aria-hidden="true" />
                   <span>Circuit</span>
                 </div>
-                <span className="sim-view-only">
-                  <ScanSearch size={12} strokeWidth={1.7} aria-hidden="true" />
-                  View only
-                </span>
+                <div className="sim-circuit-tools" role="toolbar" aria-label="Circuit inspection tools">
+                  <button
+                    className={toolMode === "select" ? "active" : undefined}
+                    onClick={cancel}
+                    aria-pressed={toolMode === "select"}
+                    title="Inspect components without editing"
+                  >
+                    <MousePointer2 size={13} strokeWidth={1.7} aria-hidden="true" />
+                    <span>Inspect</span>
+                  </button>
+                  <button
+                    className={toolMode === "probe" ? "active" : undefined}
+                    onClick={startProbing}
+                    aria-pressed={toolMode === "probe"}
+                    title="Add or remove a voltage probe"
+                  >
+                    <Crosshair size={13} strokeWidth={1.7} aria-hidden="true" />
+                    <span>Probe</span>
+                  </button>
+                  <button
+                    className={toolMode === "label" ? "active" : undefined}
+                    onClick={startLabeling}
+                    aria-pressed={toolMode === "label"}
+                    title="Add, rename, or remove a node name"
+                  >
+                    <Tag size={13} strokeWidth={1.7} aria-hidden="true" />
+                    <span>Name</span>
+                  </button>
+                </div>
+                <span className="sim-topology-lock">Topology locked</span>
               </header>
               <div className="sim-schematic-canvas">
                 <Canvas op={opAnalysis} interactive={false} fitSignal={fitSignal} />

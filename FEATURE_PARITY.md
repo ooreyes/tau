@@ -808,7 +808,7 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
 - 🟡 Transient scope — `SimulationPanel.tsx` (downsamples large native results ✅).
   **§11 simulator workspace landed (2026-07-10):** the simulator keeps a
   selectable, topology-read-only schematic beside the analysis, automatically
-  creates one plot card per probed/default signal, uses a responsive 2-column
+  creates one plot card per named/probed signal, uses a responsive 2-column
   grid at comfortable widths / 1-column at the 900px floor, and labels V/A/W
   axes semantically. Current-flow arrows/toggle/readout were removed until the
   electrical model is mature enough to represent them without confusion.
@@ -848,6 +848,11 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   sense," per owner feedback); an isolated pin with no wire still probes
   (a valid, if unconnected, net). Current/clamp probes are unaffected — they
   already dedup per component in `toggleCurrentProbe`. 7 new store tests.
+  **Interaction contract tightened (review pass, 2026-07-10):** simulator
+  component clicks now select/focus telemetry only and never create a current
+  probe implicitly. The explicit Probe tool adds voltage dots; dots themselves
+  are keyboard/click removable. The Name tool adds/renames/removes the one name
+  per physical node. Components, values, wires, and topology remain immutable.
 - 🟡 **Plot arbitrary expressions** (`V(a)-V(b)`, `I(R1)*V(out)`, power `V(out)*I(out)`)
   — **landed** (`simulation/plotExpression.ts`): an expression bar under the
   transient scope evaluates any expression of the simulated signals at every
@@ -878,23 +883,27 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   (`SimulationPanel.tsx`): the Bode and DC panes each carry the same expression
   bar as the transient scope — add/remove labelled chips, error surfaced inline,
   overlays drawn on the shared magnitude/voltage axis and listed in the legend.
+  Transient derived traces/reference/export controls now live under a
+  closed-by-default **Advanced plot tools** disclosure.
   **NEXT:** expression traces in the step pane; dual axis for mixed V+A.
-- 🟡 Multiple plot panes, add/remove traces, autorange — **landed for the
+- 🟡 Multiple plot panes and autorange — **landed for the
   transient scope** (`plotPanes.ts` pure pane model + per-pane Y autorange,
-  add/remove pane, per-trace pane selector in the legend). **Automatic signal
+  with manual pane add/remove/move removed from the default UI so plots remain
+  consequences of node names/probes). **Automatic signal
   cards + default statistics landed (§11 D9/D11/D12):** each visible trace gets
   its own initial card, steady/transient/periodic classification, estimated
   frequency for periodic data, and compact min/max/average/RMS/final readouts
-  using engineering units (`measurementModel.ts`; 29 pane-model + 6 measurement
+  using engineering units (`measurementModel.ts`; 29 pane-model + 9 measurement
   tests). Still ⬜: AC/DC panes, manual axis limits.
 - ✅ **Per-component simulator telemetry (§11 D10, 2026-07-10):** every named
   component receives a selectable row with voltage across, current through,
   instantaneous power, sparkline, and signal class. Voltage polarity follows
   the component's positive→negative terminal convention; current reuses the
   solver/native branch-current authority; positive power is absorbed and
-  negative power is delivered. Selecting a part in the read-only schematic
-  focuses its row and toggles its current probe; wire clicks toggle voltage
-  probes without exposing any schematic editing controls.
+  negative power is delivered. Periodic V/I use RMS; periodic power uses
+  average real power. Selecting a part in the read-only schematic focuses its
+  row without changing probes; explicit probe/name tools are the only circuit
+  mutations exposed in the simulator.
 - ✅ **Measurement cursors** (1 & 2, delta readout) — `simulation/cursors.ts`
   (`cursorReadout`/`fractionToX`, 8 unit tests) + a collapsible **Cursors** panel
   on the transient scope (`SimulationPanel` `CursorView`). Two sliders position

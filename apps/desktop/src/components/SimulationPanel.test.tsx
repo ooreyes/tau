@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 
 import { SimulationPanel } from "./SimulationPanel";
+import { visibleTransientTraces } from "../simulation/visibleTraces";
 import {
   defaultDcSetup,
   defaultNoiseSetup,
@@ -187,16 +188,64 @@ describe("SimulationPanel — component telemetry (§11 Unit D)", { timeout: 20_
     },
   } as import("../simulation/linearTransient").AnalysisResult;
 
-  it("shows V/I/P, trace statistics, and focuses a row without editing the circuit", () => {
+  it("shows V/I/P and provides a keyboard-operable component focus control", () => {
     renderPanel({ result: measuredResult });
     expect(screen.getByRole("heading", { name: "Component measurements" })).toBeTruthy();
     expect(screen.getByText("R1")).toBeTruthy();
     expect(screen.getByText("Power")).toBeTruthy();
-    expect(screen.getByText(/MIN/)).toBeTruthy();
-    expect(screen.getByText(/RMS/)).toBeTruthy();
+    expect(screen.getByText("Choose signals on the circuit")).toBeTruthy();
 
-    fireEvent.click(screen.getByText("R1").closest("tr")!);
+    fireEvent.click(screen.getByRole("button", { name: /R1.*resistor/i }));
     expect(useSchematic.getState().selectedId).toBe("r1");
+  });
+});
+
+describe("visibleTransientTraces — node names and probes are the plot authority", () => {
+  const wires = Array.from({ length: 7 }, (_, index) => ({
+    id: `w${index + 1}`,
+    points: [{ x: index * 20, y: 0 }, { x: index * 20 + 10, y: 0 }],
+  }));
+  const result = {
+    ok: true,
+    title: "Transient",
+    times: [0, 1],
+    traces: Array.from({ length: 7 }, (_, index) => ({
+      id: `n${index + 1}`,
+      label: `V(n${index + 1})`,
+      unit: "V" as const,
+      color: `var(--trace-${index + 1})`,
+      values: [0, index + 1],
+    })),
+    currents: [],
+    stats: { netCount: 7, componentCount: 0, sampleCount: 2, stopTime: 1, stepSize: 1 },
+    warnings: [],
+    circuit: {
+      groundNetId: null,
+      warnings: [],
+      nets: Array.from({ length: 7 }, (_, index) => ({
+        id: `n${index + 1}`,
+        points: [{ x: index * 20, y: 0 }, { x: index * 20 + 10, y: 0 }],
+        pins: [],
+        isGround: false,
+        labelCount: 0,
+      })),
+      components: [],
+    },
+  } as Extract<import("../simulation/linearTransient").AnalysisResult, { ok: true }>;
+
+  it("plots a named seventh net and a probed first net, with probe color winning", () => {
+    const traces = visibleTransientTraces(
+      result,
+      [{ id: "p1", x: 0, y: 0, netId: "n1", color: "var(--probe-color)" }],
+      wires,
+      [{ id: "l7", x: 120, y: 0, text: "output" }],
+    );
+    expect(traces.map((trace) => trace.id)).toEqual(["n7", "n1"]);
+    expect(traces[1].color).toBe("var(--probe-color)");
+  });
+
+  it("shows no arbitrary fallback nets when no node is named or probed", () => {
+    expect(visibleTransientTraces(result, [], wires, [])).toEqual([]);
   });
 });
 
