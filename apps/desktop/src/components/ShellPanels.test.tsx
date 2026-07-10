@@ -2,7 +2,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 
-import { ComponentInspector, EditorToolbar } from "./ShellPanels";
+import { BottomPanel, ComponentInspector, EditorToolbar } from "./ShellPanels";
+import type { AnalysisResult } from "../simulation/linearTransient";
 import { useSchematic } from "../store/useSchematic";
 
 /**
@@ -117,5 +118,51 @@ describe("ComponentInspector — no-selection empty state (§11 Unit A)", () => 
     expect(container.querySelectorAll("input, select, button").length).toBe(0);
     expect(container.querySelector(".property-grid")).toBeNull();
     expect(container.querySelector(".inspector-summary.empty")).toBeTruthy();
+  });
+});
+
+describe("BottomPanel — errors tab states (§11 Unit A3)", () => {
+  const failed = {
+    ok: false,
+    title: "Transient",
+    message: "singular matrix at t=0",
+    warnings: ["floating node n3"],
+  } as AnalysisResult;
+
+  it("shows a quiet success checkmark + No errors when there are no issues", () => {
+    const { container } = render(<BottomPanel result={null} />);
+    const clear = screen.getByRole("status");
+    expect(clear.textContent).toContain("No errors");
+    expect(clear.querySelector("svg")).toBeTruthy(); // the checkmark glyph
+    expect(container.querySelector(".bottom-panel.has-error")).toBeNull();
+    expect(container.querySelector(".bottom-panel-count")).toBeNull();
+  });
+
+  it("goes loud with an error token and a count when the run fails", () => {
+    const { container } = render(<BottomPanel result={failed} />);
+    expect(container.querySelector(".bottom-panel.has-error")).toBeTruthy();
+    // message + warning = 2, in the alarm-red (not warnings-only) badge
+    const count = container.querySelector(".bottom-panel-count")!;
+    expect(count.textContent).toBe("2");
+    expect(count.classList.contains("warnings-only")).toBe(false);
+    expect(screen.getByRole("alert").textContent).toBe("singular matrix at t=0");
+  });
+
+  it("uses the amber warnings-only badge when the run succeeded with warnings", () => {
+    const ok = {
+      ok: true,
+      title: "Transient",
+      times: [0],
+      traces: [],
+      currents: [],
+      stats: { netCount: 1, componentCount: 1, sampleCount: 1, stopTime: 1, stepSize: 1 },
+      warnings: ["R2 shorted by wire"],
+      circuit: {} as never,
+    } as AnalysisResult;
+    const { container } = render(<BottomPanel result={ok} />);
+    const count = container.querySelector(".bottom-panel-count")!;
+    expect(count.textContent).toBe("1");
+    expect(count.classList.contains("warnings-only")).toBe(true);
+    expect(container.querySelector(".bottom-panel.has-error")).toBeNull();
   });
 });

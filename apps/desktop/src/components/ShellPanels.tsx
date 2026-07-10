@@ -528,12 +528,13 @@ export function BottomPanel({ result }: { mode?: "schematic" | "simulator"; resu
     >
       <div className="bottom-panel-head">
         <span className="bottom-panel-title">Errors</span>
-        {hasIssues ? (
-          <span className="bottom-panel-count" aria-live="polite">
+        {hasIssues && (
+          <span
+            className={`bottom-panel-count${hasError ? "" : " warnings-only"}`}
+            aria-live="polite"
+          >
             {messages.length}
           </span>
-        ) : (
-          <span className="bottom-panel-clear">Clear</span>
         )}
       </div>
       <div className="bottom-errors">
@@ -548,7 +549,12 @@ export function BottomPanel({ result }: { mode?: "schematic" | "simulator"; resu
             </div>
           ))
         ) : (
-          <p className="bottom-errors-idle">No build or simulation issues.</p>
+          <p className="bottom-errors-clear" role="status">
+            <svg viewBox="0 0 12 12" aria-hidden="true">
+              <path d="M2 6.5 L4.8 9.2 L10 3.4" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            No errors
+          </p>
         )}
       </div>
     </section>

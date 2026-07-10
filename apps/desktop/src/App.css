@@ -3426,7 +3426,7 @@ body {
 }
 
 .bottom-panel.has-error .bottom-panel-title {
-  color: #ff6961;
+  color: color-mix(in srgb, var(--danger) 78%, white);
 }
 
 .bottom-panel-count {
@@ -3437,14 +3437,14 @@ body {
   display: inline-grid;
   place-items: center;
   font: 650 var(--fs-micro) var(--font-mono);
-  color: #fff;
+  color: white;
   background: var(--danger);
 }
 
-.bottom-panel-clear {
-  margin-left: auto;
-  font: 500 var(--fs-caption) var(--font-ui);
-  color: var(--faint);
+/* Warnings without a hard error: tactical amber, not alarm red. */
+.bottom-panel-count.warnings-only {
+  color: var(--bg);
+  background: var(--signal);
 }
 
 .bottom-errors {
@@ -3461,10 +3461,21 @@ body {
   background: color-mix(in srgb, var(--danger) 8%, transparent);
 }
 
-.bottom-errors-idle {
+/* All-clear state: quiet success — same lamp language as the Run button's
+   status lamp, desaturated so it reads as ambient state, not celebration. */
+.bottom-errors-clear {
   margin: 0;
-  color: var(--faint);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  color: color-mix(in srgb, var(--success) 62%, var(--muted));
   font: 500 var(--fs-body) var(--font-ui);
+}
+
+.bottom-errors-clear svg {
+  width: 12px;
+  height: 12px;
+  flex: none;
 }
 
 .component-inspector,
