@@ -8,43 +8,19 @@
      `git log --oneline -8`, recover/finish/revert that unit FIRST, then go on.
      ─────────────────────────────────────────────────────────────────────── -->
 ## ⏱ HEARTBEAT
-- **Headline metric:** 1338 tests green (default suite, +38 from this unit)
-  + 5 corpus specs · corpus runner: 82 imported / **79 warning-clean** /
-  **82 deck-built (ALL)** / **82 op-converged (ALL)** — floors 82/79/82/82
-  · App.css hardcoded-color burndown: **0 hex outside the single `:root`** ✅
-- **Run started (UTC):** 2026-07-08T19:43Z
-- **Status: IN PROGRESS** — Unit B, §UX scope axes + zoom (owner feedback:
-  "the table is completely devoid of x/y labels…LTspice makes it
-  significantly easier to zoom into plots…Desmos: auto-center, and x/y axis
-  remain persistent"). Commit 1 (real tick axes, all plot contexts) landed;
-  commit 2 (Desmos-style zoom/pan) in progress — see the dated log entry below.
-- **Prior unit (DONE):** UX-correctness unit (owner feedback: the app "lacks
-  intuitiveness a real LTspice company would have"), three one-commit-each
-  interaction fixes, all landed. See the dated log entry below for full
-  root-cause writeups; summary:
-  1. ✅ **Edit lock**: schematic read-only outside the schematic tab. Fixed
-     the keyboard gate (App.tsx's keydown handler had no `mode` check) AND a
-     second, more severe bypass the exploration missed: `EditorToolbar`
-     (ShellPanels.tsx) renders unconditionally regardless of `mode` — its
-     Wire/Label/Undo/Redo/Clear-scratchpad buttons were live and clickable
-     while viewing the simulator, with Undo/Redo/Clear able to mutate/wipe
-     the document with zero canvas interaction at all.
-  2. ✅ **Probe dedup by net identity**: `addProbe` deduped on exact
-     position; now resolves through `netAtPoint` so a net carries at most
-     one voltage probe (toggle off on the same point, move on a different
-     point), and clicking a component body (no pin/wire under the cursor)
-     is a no-op — "probing an opamp makes no sense."
-  3. ✅ **Comparator/opamp value label + inspector param fields**: the canvas
-     label suffixed the catalog's `unit` blindly onto multi-field values
-     ("1 0Vhi Vlo"); each multi-field kind (comparator, vpulse; tline too)
-     now gets a bespoke formatter. The inspector bug was a different,
-     broader CSS bug than it looked: `.selection-strip`'s `.param-fields`
-     (used by EVERY component kind's structured params in the simulator
-     view, not just the comparator) was missing `grid-column: 1/-1` and
-     auto-placed into the 52px label rail, collapsing every value input to
-     ~18px. `.value-editor` already had the fix; `.param-fields` didn't.
-- Not pushed yet (orchestrator reviews per-commit); see dated log entry below
-  for file/test/commit-hash detail per commit.
+- **Headline metric:** 1383 tests green · corpus 82/82 import · 82/82 op-converge · 79/82 warning-clean
+- **Run started (UTC):** 2026-07-10T02:30Z
+- **Synced to origin:** auto/ltspice-parity @ f019ed9 (wip checkpoints reconciled by continuing on top)
+- **Claimed unit:** Omar's schematic-editor hardening checklist (§UX): net-label
+  node uniqueness · mixed intersect marquee + unified delete · stable current
+  arrows (10 Hz, hysteresis, honest speed label) · top-bar cleanup + Ask Sim
+  removal (fake-agent panel) · grid tone-down · casing pass. Four commits.
+- **Status:** DONE
+- **Last checkpoint commit:** see `git log --oneline -1`
+- **Next step (for the following run):** checklist leftovers — replace remaining
+  toy node/wire tool icons with 1.5px stroke SF-style glyphs; verify light-mode
+  grid token (8–12%) if/when a light theme lands; consider `.asc` import
+  connectivity-diff warning UI (extractor warnings already surface per-file).
 
 ---
 
