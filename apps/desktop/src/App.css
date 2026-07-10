@@ -2729,6 +2729,7 @@ body {
 }
 
 .explorer-panel {
+  position: relative;
   width: 226px;
   flex: none;
   display: flex;
@@ -3064,10 +3065,61 @@ body {
 }
 
 .components-rail {
+  position: relative;
   display: flex;
   flex-direction: column;
   min-height: 0;
   overflow: hidden;
+}
+
+/* ── Panel resize handles (§11 Unit B) ─────────────────────────────────────
+   An 8px grab strip inside the panel's resizable edge. Invisible at rest —
+   the panel border carries the visual line — with a cobalt hairline on
+   hover/drag/focus so the affordance appears exactly when relevant. */
+.panel-resize-handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 8px;
+  cursor: ew-resize;
+  z-index: 6;
+  touch-action: none;
+}
+
+.panel-resize-handle--left {
+  left: 0;
+}
+
+.panel-resize-handle--right {
+  right: 0;
+}
+
+.panel-resize-handle::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: transparent;
+  transition: background var(--motion-fast) var(--ease-out);
+}
+
+.panel-resize-handle--left::after {
+  left: 0;
+}
+
+.panel-resize-handle--right::after {
+  right: 0;
+}
+
+.panel-resize-handle:hover::after,
+.panel-resize-handle.dragging::after,
+.panel-resize-handle:focus-visible::after {
+  background: var(--accent);
+}
+
+.panel-resize-handle:focus-visible {
+  outline: none;
 }
 
 .components-rail-tabs {

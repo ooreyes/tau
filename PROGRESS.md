@@ -8,21 +8,71 @@
      `git log --oneline -8`, recover/finish/revert that unit FIRST, then go on.
      ─────────────────────────────────────────────────────────────────────── -->
 ## ⏱ HEARTBEAT
-- **Headline metric:** 1383 tests green · corpus 82/82 import · 82/82 op-converge · 79/82 warning-clean
-- **Run started (UTC):** 2026-07-10T14:20Z
-- **Synced to origin:** auto/ltspice-parity @ 9eefc29 (clean, no WIP ref)
-- **Claimed unit:** §11 Unit B — resizable side panels (properties rail +
-  project tree, drag borders, clamps, localStorage persistence).
+- **Headline metric:** 1406 tests green · corpus 82/82 import · 82/82 op-converge · 79/82 warning-clean
+- **Run started (UTC):** 2026-07-10T14:30Z
+- **Synced to origin:** auto/ltspice-parity @ feb8e1c; recovered Unit B work
+  from `-wip` rescue ref (prev session died mid-unit at 17:59Z checkpoint).
+- **Claimed unit:** §11 Unit C — simulator layout redesign (remove redundant
+  Run button, dashboard layout, advanced-settings disclosure, auto-resolution).
 - **Status:** IN PROGRESS
-- **Last completed sub-step:** Unit A DONE (A1 5e95514→dbda551, A2 7bfecc7,
-  A3 5c7b86c) — 1395 tests green.
-- **Plan:** small reusable resize-handle hook/component; wire into the right
-  properties rail + left explorer tree in App/ShellPanels; persist widths in
-  localStorage; clamp min/max; tests for clamp+persist math.
+- **Last completed sub-step:** Unit B DONE (panelResize hook + handles on
+  explorer tree and properties rail, clamps, localStorage persistence,
+  drag/reload proven via playwright) — 1406 tests green.
+- **Plan:** C5 remove SimulationPanel's redundant run/stop primary; C6
+  dashboard layout (status header → plot cards → measurements → settings); C7
+  collapsed Advanced Simulation Settings disclosure; C8 auto-resolution from
+  RC/RL constants + source freqs in analysisSetup/linearTransient.
 - **Note:** review-rotation counter is at 0 `review:` in last 30 — owed a
   dedicated review session after §11 ships (Omar's 2026-07-10 override wins).
 - **Next step (if this run dies):** finish the first unchecked sub-item above;
   partial work is on this branch as `wip:` commits.
+
+---
+
+## 2026-07-10T14:55Z — auto/ltspice-parity — §11 Unit B: resizable side panels (recovered from -wip rescue)
+
+### What I did
+- Recovered the previous session's mid-unit work from the durability ref
+  `origin/auto/ltspice-parity-wip` (session killed at its 17:59Z checkpoint),
+  cherry-picked it, verified it complete, and finished the unit.
+- **panelResize.tsx** — one small authority for side-panel resizing: pure
+  `clampPanelWidth`/`loadPanelWidth`/`savePanelWidth` (storage-safe: missing,
+  unparsable, quota, SSR), `usePanelWidth` hook (pointer-capture drag, config
+  min/max clamps, save-on-release), `PanelResizeHandle` (role=separator with
+  aria-valuenow/min/max, ArrowLeft/ArrowRight keyboard resize per the
+  WAI-ARIA window-splitter pattern, 16px steps).
+- Wired into both panels in ShellPanels.tsx: explorer tree (right edge,
+  168–420px, key `tau.ui.explorerWidth`) and properties rail (left edge,
+  208–480px, key `tau.ui.componentsRailWidth`).
+- CSS: 8px grab strip, `ew-resize` cursor, invisible at rest, cobalt hairline
+  on hover/drag/focus-visible. No hardcoded hex; tokens only.
+
+### Files touched
+panelResize.tsx (new), panelResize.test.tsx (new), ShellPanels.tsx, App.css,
+screenshots/unitB-resize/.
+
+### Tests
+1395 → 1406 (11 new: clamp math, storage round-trip + corrupt/missing/quota
+paths, hook drag + keyboard behavior). Typecheck clean. One full-suite run
+had a 5s-timeout flake in an unrelated ShellPanels toolbar test under load;
+passes in isolation and the follow-up full run was 1406/1406 — no regression.
+
+### Visual QA (playwright-scripted, screenshots in repo)
+Dragged both handles headlessly: explorer 226→346px, rail 264→364px; both
+widths survive reload from localStorage (`before-drag.png` /
+`after-drag-persisted.png`). Layout reflows cleanly, no jitter, hairline
+affordance appears only on hover/drag.
+
+### FEATURE_PARITY items updated
+§11 Unit B (mission list in prompt.md) — done.
+
+### UX issues found
+None new. Canvas does not auto-refit when panels resize — acceptable
+(fit-to-view is an explicit user action), noting for a possible Unit C touch.
+
+### Next step
+§11 Unit C: remove SimulationPanel's redundant Run button, then the
+dashboard-style simulator layout.
 
 ---
 

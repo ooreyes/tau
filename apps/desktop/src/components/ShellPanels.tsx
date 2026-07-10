@@ -32,6 +32,26 @@ import { useProject } from "../store/useProject";
 import { basename, isAscFile } from "../project/types";
 import type { AnalysisResult } from "../simulation/linearTransient";
 import { formatEngineering } from "../simulation/quantity";
+import { PanelResizeHandle, usePanelWidth, type PanelWidthConfig } from "./panelResize";
+
+/** Drag-to-resize bounds for the two side panels (§11 Unit B). Minimums keep
+ *  every control usable (tree rows, property fields); maximums keep the canvas
+ *  from being starved even at the 900px minimum window. */
+const EXPLORER_PANEL_WIDTH: PanelWidthConfig = {
+  storageKey: "tau.ui.explorerWidth",
+  defaultWidth: 226,
+  minWidth: 168,
+  maxWidth: 420,
+  edge: "right",
+};
+
+const COMPONENTS_RAIL_WIDTH: PanelWidthConfig = {
+  storageKey: "tau.ui.componentsRailWidth",
+  defaultWidth: 264,
+  minWidth: 208,
+  maxWidth: 480,
+  edge: "left",
+};
 
 interface ModeProps {
   mode: "schematic" | "simulator";
@@ -120,6 +140,19 @@ export function ExplorerPanel({
   const deleteNode = useProject((s) => s.deleteNode);
   const readSim = useProject((s) => s.readSim);
   const ascInputRef = useRef<HTMLInputElement | null>(null);
+  const resize = usePanelWidth(EXPLORER_PANEL_WIDTH);
+  const resizeHandle = (
+    <PanelResizeHandle
+      edge="right"
+      label="Resize project explorer"
+      width={resize.width}
+      minWidth={EXPLORER_PANEL_WIDTH.minWidth}
+      maxWidth={EXPLORER_PANEL_WIDTH.maxWidth}
+      dragging={resize.dragging}
+      onPointerDown={resize.onPointerDown}
+      onKeyDown={resize.onKeyDown}
+    />
+  );
 
   useEffect(() => {
     void detectCapability().then(() => {
@@ -144,19 +177,20 @@ export function ExplorerPanel({
 
   if (!rootPath) {
     return (
-      <aside className="explorer-panel" aria-label="Project explorer">
+      <aside className="explorer-panel" aria-label="Project explorer" style={{ width: resize.width }}>
         <div className="explorer-head">
           <span>Project</span>
         </div>
         <div className="explorer-empty">
           <p>Loading workspace…</p>
         </div>
+        {resizeHandle}
       </aside>
     );
   }
 
   return (
-    <aside className="explorer-panel" aria-label="Project explorer">
+    <aside className="explorer-panel" aria-label="Project explorer" style={{ width: resize.width }}>
       <div className="explorer-head">
         <span>{rootName ?? "Powerboard"}</span>
         <div className="explorer-icons">
@@ -256,6 +290,7 @@ export function ExplorerPanel({
       </div>
 
       {error && <p className="explorer-error" role="alert">{error}</p>}
+      {resizeHandle}
     </aside>
   );
 }
@@ -780,8 +815,20 @@ export function ComponentsRail({
     if (selected || selectedWire) setSegment("properties");
   }, [selected?.id, selectedWire?.id]);
 
+  const resize = usePanelWidth(COMPONENTS_RAIL_WIDTH);
+
   return (
-    <aside className="components-rail" aria-label="Components">
+    <aside className="components-rail" aria-label="Components" style={{ width: resize.width }}>
+      <PanelResizeHandle
+        edge="left"
+        label="Resize properties panel"
+        width={resize.width}
+        minWidth={COMPONENTS_RAIL_WIDTH.minWidth}
+        maxWidth={COMPONENTS_RAIL_WIDTH.maxWidth}
+        dragging={resize.dragging}
+        onPointerDown={resize.onPointerDown}
+        onKeyDown={resize.onKeyDown}
+      />
       <div className="components-rail-tabs" role="tablist">
         <button
           type="button"
