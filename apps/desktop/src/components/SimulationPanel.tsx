@@ -447,6 +447,33 @@ export function SimulationPanel({
     }
   }, [components, options]);
 
+  // §11 Unit C6 — one status voice for the whole panel: the dashboard strip
+  // under the tabs. Idle (nothing run), Running (amber, tactical), Complete
+  // (success + last-run figures), Error (danger, details live in the Errors
+  // panel). Each tab reads its own result object; no invented values.
+  const activeResult: { ok: boolean } | null =
+    mode === "tran" ? result
+    : mode === "op" ? opResult
+    : mode === "ac" ? acResult
+    : mode === "dc" ? dcResult
+    : mode === "tf" ? tfResult
+    : mode === "noise" ? noiseResult
+    : stepResult;
+  const runStatus = isRunning ? "running" : activeResult ? (activeResult.ok ? "complete" : "error") : "idle";
+  const statusLabel =
+    runStatus === "running" ? "Running"
+    : runStatus === "complete" ? "Complete"
+    : runStatus === "error" ? "Error"
+    : "Idle";
+  const lastRunInfo =
+    runStatus === "complete" && mode === "tran" && result?.ok
+      ? `${formatEngineering(result.stats.stopTime, "s", 2)} · ${result.stats.sampleCount} samples · ${result.stats.netCount} nets · ${result.stats.componentCount} parts`
+      : runStatus === "error"
+        ? "Simulation failed — details in the Errors panel"
+        : runStatus === "idle"
+          ? "No results yet — press Run in the toolbar or pick an analysis tab"
+          : null;
+
   // Selecting an analysis tab both switches the visible pane and kicks off
   // that analysis immediately — the one primary Run control lives in the top
   // toolbar (§11 Unit C); in here tab selection IS the run gesture.
@@ -529,8 +556,8 @@ export function SimulationPanel({
           </Tooltip>
           {/* No Run button here — the single primary Run lives in the top
               toolbar (§11 Unit C). The refine control above is the only
-              in-panel rerun affordance, deliberately secondary. */}
-          <div className={`plotter-live${isRunning ? " plotter-live--running" : ""}`} role="status" aria-live="polite">{isRunning ? "Running" : "Ready"}</div>
+              in-panel rerun affordance, deliberately secondary; run status
+              lives in the dashboard strip under the tabs (Unit C6). */}
         </div>
       </div>
 
@@ -546,6 +573,12 @@ export function SimulationPanel({
             <TabsTrigger className="plotter-tab" value="step" disabled={isRunning}>STEP</TabsTrigger>
           </TabsList>
         </Tabs>
+      </div>
+
+      <div className={`plotter-status plotter-status--${runStatus}`} role="status" aria-live="polite">
+        <span className="plotter-status-lamp" aria-hidden="true" />
+        <span className="plotter-status-state">{statusLabel}</span>
+        {lastRunInfo && <span className="plotter-status-info">{lastRunInfo}</span>}
       </div>
 
       {mode === "tran" && (

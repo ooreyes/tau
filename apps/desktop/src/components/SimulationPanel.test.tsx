@@ -87,17 +87,16 @@ function renderPanel(overrides: Partial<Parameters<typeof SimulationPanel>[0]> =
 // First render of the full panel is slow when the suite collects in parallel
 // under load — the 5s default flakes; these are render-once assertions.
 describe("SimulationPanel — no redundant Run button (§11 Unit C5)", { timeout: 20_000 }, () => {
-  it("renders no Run button in the transient pane, only the Ready status pill", () => {
+  it("renders no Run button in the transient pane, only the status strip", () => {
     renderPanel();
     expect(screen.queryByRole("button", { name: /run transient/i })).toBeNull();
     expect(screen.queryByRole("button", { name: /^run/i })).toBeNull();
-    const pill = screen.getByRole("status", { name: "" });
-    expect(pill.textContent).toBe("Ready");
+    expect(screen.getByRole("status").textContent).toContain("Idle");
   });
 
-  it("shows Running in the status pill while a simulation is in flight", () => {
+  it("shows Running in the status strip while a simulation is in flight", () => {
     renderPanel({ isRunning: true });
-    expect(screen.getByRole("status", { name: "" }).textContent).toBe("Running");
+    expect(screen.getByRole("status").textContent).toContain("Running");
     expect(screen.queryByRole("button", { name: /run/i })).toBeNull();
   });
 
@@ -114,6 +113,52 @@ describe("SimulationPanel — no redundant Run button (§11 Unit C5)", { timeout
     const handlers = renderPanel();
     fireEvent.click(screen.getByRole("button", { name: "Refine transient resolution" }));
     expect(handlers.onStep).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("SimulationPanel — dashboard status strip (§11 Unit C6)", { timeout: 20_000 }, () => {
+  const okResult = {
+    ok: true,
+    title: "Transient",
+    times: [0, 0.003, 0.006],
+    traces: [],
+    currents: [],
+    stats: { netCount: 4, componentCount: 6, sampleCount: 241, stopTime: 0.006, stepSize: 0.000025 },
+    warnings: [],
+    circuit: {} as never,
+  } as import("../simulation/linearTransient").AnalysisResult;
+
+  it("shows Complete with last-run figures after a successful transient", () => {
+    renderPanel({ result: okResult });
+    const strip = screen.getByRole("status");
+    expect(strip.textContent).toContain("Complete");
+    expect(strip.textContent).toContain("6 ms");
+    expect(strip.textContent).toContain("241 samples");
+    expect(strip.textContent).toContain("4 nets");
+    expect(strip.textContent).toContain("6 parts");
+    expect(strip.classList.contains("plotter-status--complete")).toBe(true);
+  });
+
+  it("goes to the danger Error state and points at the Errors panel on failure", () => {
+    const failed = {
+      ok: false,
+      title: "Transient",
+      message: "singular matrix at t=0",
+      warnings: [],
+    } as import("../simulation/linearTransient").AnalysisResult;
+    renderPanel({ result: failed });
+    const strip = screen.getByRole("status");
+    expect(strip.textContent).toContain("Error");
+    expect(strip.textContent).toContain("details in the Errors panel");
+    expect(strip.classList.contains("plotter-status--error")).toBe(true);
+  });
+
+  it("stays Idle with a pointer at the toolbar Run before anything has run", () => {
+    renderPanel();
+    const strip = screen.getByRole("status");
+    expect(strip.textContent).toContain("Idle");
+    expect(strip.textContent).toContain("press Run in the toolbar");
+    expect(strip.classList.contains("plotter-status--idle")).toBe(true);
   });
 });
 

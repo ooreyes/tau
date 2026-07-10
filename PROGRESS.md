@@ -15,11 +15,11 @@
 - **Claimed unit:** §11 Unit C — simulator layout redesign (remove redundant
   Run button, dashboard layout, advanced-settings disclosure, auto-resolution).
 - **Status:** IN PROGRESS
-- **Last completed sub-step:** C7 — STOP/STEPS/resolution dials behind a
-  closed-by-default "Advanced simulation settings" disclosure with the
-  auto-settings helper line — 1412 tests green. Next: C6 dashboard layout
-  (empty scope dominates viewport, bottom axis label clips), then C8
-  auto-resolution.
+- **Last completed sub-step:** C6 — dashboard status strip (Idle/Running/
+  Complete/Error lamp + last-run figures, one status voice, header pill
+  removed) + scope capped to a centered 920px card in the wide simulator
+  view — 1415 tests green. Next: C8 auto-resolution from circuit time
+  constants/source frequencies, then Unit D (measurements).
 - **Plan:** C5 remove SimulationPanel's redundant run/stop primary; C6
   dashboard layout (status header → plot cards → measurements → settings); C7
   collapsed Advanced Simulation Settings disclosure; C8 auto-resolution from

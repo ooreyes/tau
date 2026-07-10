@@ -699,22 +699,73 @@ body {
     border-color var(--motion-med) var(--spring);
 }
 
-/* Running is a TACTICAL active state — light it amber (--signal) with a pulsing
-   live dot so an operator reads "sim is live" at a glance; idle stays calm/muted. */
-.plotter-live--running {
-  color: var(--signal);
-  background: var(--signal-soft);
-  border-color: var(--signal-line);
+/* ── Dashboard status strip (§11 Unit C6) ─────────────────────────────────
+   The panel's single status voice, under the analysis tabs: a semantic lamp
+   + mono state word + last-run figures. Running is the TACTICAL amber active
+   state (--signal) with the pulsing live dot; Complete is quiet success,
+   Error is loud danger, Idle stays calm/muted. */
+.plotter-status {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: 6px 14px 2px;
+  min-width: 0;
 }
 
-.plotter-live--running::before {
-  content: "";
-  width: 5px;
-  height: 5px;
+.plotter-status-lamp {
+  flex: none;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
+  background: var(--faint);
+}
+
+.plotter-status-state {
+  flex: none;
+  font: 600 var(--fs-caption) var(--font-mono);
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.plotter-status-info {
+  font: 400 var(--fs-caption) var(--font-mono);
+  color: var(--faint);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.plotter-status--running .plotter-status-lamp {
   background: var(--signal);
   box-shadow: 0 0 0 0 var(--signal-glow);
   animation: live-pulse 1.4s var(--ease-out) infinite;
+}
+
+.plotter-status--running .plotter-status-state {
+  color: var(--signal);
+}
+
+.plotter-status--complete .plotter-status-lamp {
+  background: var(--success);
+}
+
+.plotter-status--complete .plotter-status-state {
+  color: var(--success);
+}
+
+.plotter-status--error .plotter-status-lamp {
+  background: var(--danger);
+  box-shadow: 0 0 0 3px var(--danger-soft);
+}
+
+.plotter-status--error .plotter-status-state {
+  color: var(--danger);
+}
+
+.plotter-status--error .plotter-status-info {
+  color: var(--muted);
 }
 
 @keyframes live-pulse {
@@ -724,7 +775,7 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .plotter-live--running::before { animation: none; }
+  .plotter-status--running .plotter-status-lamp { animation: none; }
 }
 
 /* Analysis tabs — segment control style, on the ui/ Tabs (Radix) primitive
@@ -816,6 +867,20 @@ body {
 .scope-shell {
   flex-shrink: 0;
   padding: 10px 14px 4px;
+}
+
+/* §11 Unit C6 — dashboard: in the full-width simulator view the scope is a
+   centered card, not a viewport-filling sheet. Capping the card's width caps
+   a pane's height too (the svg keeps its 340/190 aspect), so the expression
+   bar and measurements stay above the fold. Maximized view is exempt. */
+.app-simulator .plotter .scope-shell {
+  width: 100%;
+  max-width: 920px;
+  margin: 0 auto;
+}
+
+.plotter.maximized .scope-shell {
+  max-width: none;
 }
 
 .scope-svg {
