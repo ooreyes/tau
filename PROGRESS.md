@@ -8,16 +8,57 @@
      `git log --oneline -8`, recover/finish/revert that unit FIRST, then go on.
      ─────────────────────────────────────────────────────────────────────── -->
 ## ⏱ HEARTBEAT
-- **Headline metric:** 1445 tests green · corpus 82/82 import · 82/82 op-converge · 79/82 warning-clean
+- **Headline metric:** 1471 tests green · corpus 82/82 import · 82/82 op-converge · 79/82 warning-clean
 - **Run started (UTC):** 2026-07-12T00:34Z
 - **Synced to origin:** auto/ltspice-parity @ 41ff25f.
 - **Claimed unit:** §6 simulator analysis workspace — instrument-grade plots,
   detailed FFT, and spacious component measurements.
-- **Status:** IN PROGRESS
-- **Last completed sub-step:** synced, scoped §6, and claimed the design overhaul.
-- **Plan:** delegate bounded plot/FFT/telemetry changes, integrate under the
-  token system, visually verify wide + minimum layouts, test, review, push.
-- **Next step:** inspect plot architecture and merge delegated vertical slices.
+- **Status:** DONE
+- **Last completed sub-step:** instrument-grade §6 overhaul integrated,
+  independently reviewed, hardened, visually verified at wide + 900×600, and
+  pushed through aaef801; 1471 tests + production web build green.
+- **Plan:** resume the highest-leverage agent-provable DoD item.
+- **Note:** review-rotation debt paid (`review:` aaef801).
+- **Next step:** return to waveform-parity/acceptance work after this UI unit.
+
+---
+
+## 2026-07-12T00:54Z — auto/ltspice-parity — §6 instrument-grade simulator plots
+
+### What I did
+- Rebuilt the simulator analysis column around full-width, vertically stacked
+  engineering plots with shared time zoom/pan, independent Y autorange,
+  adjustable height, real zoom-responsive intervals, and MIN/AVG/MAX reference
+  annotations.
+- Added compact per-signal instrument readouts (RMS/final, peak-to-peak,
+  frequency) with full statistics behind an accessible disclosure.
+- Replaced the dense telemetry table with searchable semantic component cards,
+  spacious V/I/P readings, bounded sparklines, dedicated selection controls,
+  and shared sign-convention help.
+- Expanded FFT into a spectrum inspector with dominant-tone/harmonic markers,
+  resolution, DC, noise floor, SFDR, THD, THD+N, and a harmonic dB/dBc table.
+  Hardened harmonic lookup to O(n log n + h log n) and covered 131k bins.
+- Followed Apple chart hierarchy/accessibility guidance, LTspice plot-window
+  conventions, and Tau's shadcn/token layer. Three subagents implemented
+  bounded slices; a separate review found and drove the final hardening pass.
+
+### Files
+- `apps/desktop/src/components/SimulationPanel.tsx`, `App.css`,
+  `usePlotViewport.ts`
+- New `EngineeringTraceReadout.tsx`, `ComponentMeasurementsPanel.tsx`,
+  `simulation/engineeringTraceReadout.ts`, `simulation/spectrumInsights.ts`
+  and their focused tests
+- `FEATURE_PARITY.md`, `PROGRESS.md`
+
+### Tests / verification
+- `pnpm -C apps/desktop typecheck` — pass.
+- `pnpm -C apps/desktop test` — 98 files / 1471 tests pass.
+- `pnpm --filter @tau/desktop build` — pass (existing chunk-size advisory).
+- Browser QA — normal workspace and 900×600 minimum; no horizontal overflow;
+  probe-created sine plot, FFT metrics, and semantic telemetry verified.
+
+### Next step
+- Resume the highest-leverage waveform-parity / acceptance-corpus item.
 
 ---
 

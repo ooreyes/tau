@@ -808,9 +808,14 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
 - 🟡 Transient scope — `SimulationPanel.tsx` (downsamples large native results ✅).
   **§11 simulator workspace landed (2026-07-10):** the simulator keeps a
   selectable, topology-read-only schematic beside the analysis, automatically
-  creates one plot card per named/probed signal, uses a responsive 2-column
-  grid at comfortable widths / 1-column at the 900px floor, and labels V/A/W
-  axes semantically. Current-flow arrows/toggle/readout were removed until the
+  creates one plot card per named/probed signal and labels V/A/W axes
+  semantically. **Instrument plot overhaul (2026-07-12):** signal cards now
+  stack vertically for time correlation, share their horizontal zoom/pan
+  window, retain independent Y autorange, expose 190–340 px plot-height
+  controls, and show familiar zoom-responsive tick intervals plus in-plot
+  MIN/AVG/MAX reference lines. Each card has a compact RMS/final, peak-to-peak,
+  and frequency readout; complete statistics stay in a disclosure. Current-flow
+  arrows/toggle/readout were removed until the
   electrical model is mature enough to represent them without confusion.
 - 🟡 Bode (AC mag/phase) — **magnitude + phase now both plotted** (`AcPlot`): a
   second log-frequency sub-plot draws each trace's `phaseDeg` on a 45°-snapped
@@ -894,7 +899,9 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   its own initial card, steady/transient/periodic classification, estimated
   frequency for periodic data, and compact min/max/average/RMS/final readouts
   using engineering units (`measurementModel.ts`; 29 pane-model + 9 measurement
-  tests). Still ⬜: AC/DC panes, manual axis limits.
+  tests). The 2026-07-12 overhaul replaced the former two-column cards with
+  full-width, vertically aligned instrument panes and synchronized time zoom.
+  Still ⬜: AC/DC panes, manual axis limits.
 - ✅ **Per-component simulator telemetry (§11 D10, 2026-07-10):** every named
   component receives a selectable row with voltage across, current through,
   instantaneous power, sparkline, and signal class. Voltage polarity follows
@@ -903,7 +910,10 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   negative power is delivered. Periodic V/I use RMS; periodic power uses
   average real power. Selecting a part in the read-only schematic focuses its
   row without changing probes; explicit probe/name tools are the only circuit
-  mutations exposed in the simulator.
+  mutations exposed in the simulator. **Telemetry presentation overhaul
+  (2026-07-12):** searchable semantic component cards provide spacious V/I/P
+  readings, bounded waveform previews, an explicit Select control, and one
+  shared sign-convention disclosure instead of repeated per-row prose.
 - ✅ **Measurement cursors** (1 & 2, delta readout) — `simulation/cursors.ts`
   (`cursorReadout`/`fractionToX`, 8 unit tests) + a collapsible **Cursors** panel
   on the transient scope (`SimulationPanel` `CursorView`). Two sliders position
@@ -944,6 +954,11 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   spectrum" for every named net; it now also matches the label's inner name
   (2 regression tests). Live-verified: RC example FFT renders, cursors read
   271 Hz→13.1 kHz, Δ −105.8 dB, −62.7 dB/dec.
+  **Detailed spectrum inspector (2026-07-12):** FFT now annotates the dominant
+  tone and first five harmonics on the plot, reports resolution, DC, median
+  per-bin noise floor, SFDR, THD, and THD+N, and lists up to eight harmonic
+  peaks with dB/dBc values. Harmonic lookup is binary-search based and covered
+  by a 131k-bin regression, avoiding quadratic work on large native spectra.
 - 🟡 Log/linear axes, dB, phase, **group delay** — **group delay landed**
   (`simulation/groupDelay.ts`, 12 tests): pure `groupDelay(freqs, phaseDeg)`
   computes τ = −dφ/dω in seconds — phase is **unwrapped** first (`unwrapPhaseDeg`
