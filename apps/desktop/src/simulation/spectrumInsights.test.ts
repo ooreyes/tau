@@ -174,4 +174,18 @@ describe("spectrumInsights", () => {
     expect(insight.harmonics[0].dBc).toBeCloseTo(-20, 8);
     expect(insight.thd?.ratio).toBeCloseTo(0.1, 8);
   });
+
+  it("resolves harmonics across a 131k-bin spectrum without quadratic scanning", { timeout: 10_000 }, () => {
+    const binCount = 131_073;
+    const magnitudes = new Array<number>(binCount).fill(0);
+    magnitudes[1] = 1;
+
+    const insight = spectrumInsights(spectrum(magnitudes, 1), { exclusionBins: 0 });
+
+    expect(insight.fundamental?.frequencyHz).toBe(1);
+    expect(insight.harmonics).toHaveLength(8);
+    expect(insight.harmonics[0]).toMatchObject({ order: 2, frequencyHz: 2 });
+    expect(insight.harmonics[7]).toMatchObject({ order: 9, frequencyHz: 9 });
+    expect(insight.thd).toMatchObject({ ratio: 0, percent: 0, db: -300 });
+  });
 });

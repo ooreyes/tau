@@ -195,7 +195,7 @@ describe("SimulationPanel — component telemetry (§11 Unit D)", { timeout: 20_
     expect(screen.getByText("Power")).toBeTruthy();
     expect(screen.getByText("Choose signals on the circuit")).toBeTruthy();
 
-    fireEvent.click(screen.getByRole("button", { name: /R1.*resistor/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Select R1" }));
     expect(useSchematic.getState().selectedId).toBe("r1");
   });
 });

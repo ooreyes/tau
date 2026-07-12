@@ -967,6 +967,11 @@ export function WaveformPlot({
   }, [allTraces]);
 
   const tMax = useMemo(() => (success ? success.times[success.times.length - 1] || 1 : 1), [success]);
+  const [sharedX, setSharedX] = useState({ xMin: 0, xMax: tMax });
+  useEffect(() => setSharedX({ xMin: 0, xMax: tMax }), [success, tMax]);
+  const shareXViewport = useCallback((next: { xMin: number; xMax: number }) => {
+    setSharedX((current) => current.xMin === next.xMin && current.xMax === next.xMax ? current : next);
+  }, []);
 
   // Prefer a user-assigned net name (V(Vout)) over the auto V(R1·C1) label.
   const labelFor = (trace: Trace) => {
@@ -1030,6 +1035,8 @@ export function WaveformPlot({
               // into the reset key means the viewport reset effect fires
               // exactly when this pane actually has data to fit, not before.
               runKey={plot ? success : null}
+              sharedX={sharedX}
+              onSharedXChange={shareXViewport}
             />
 
             {/* Per-pane legend with optional "move to pane" selector. */}
@@ -1068,6 +1075,8 @@ function TranScopePane({
   ariaLabel,
   showXAxis,
   runKey,
+  sharedX,
+  onSharedXChange,
 }: {
   paneTraces: Trace[];
   plot: { min: number; max: number; tMax: number; unit: string } | null;
@@ -1076,6 +1085,8 @@ function TranScopePane({
   showXAxis: boolean;
   /** Identity of the current run — changing it resets this pane's zoom to full-fit. */
   runKey: unknown;
+  sharedX: { xMin: number; xMax: number };
+  onSharedXChange: (x: { xMin: number; xMax: number }) => void;
 }) {
   const clipId = useId();
   const [plotHeight, setPlotHeight] = useState(190);
@@ -1091,6 +1102,8 @@ function TranScopePane({
     width: PLOT_WIDTH,
     height: plotHeight,
     pad: PLOT_PAD,
+    sharedX,
+    onXViewportChange: onSharedXChange,
   });
   const setRefs = useCallback(
     (el: SVGSVGElement | null) => {
@@ -1707,7 +1720,7 @@ export function FftView({ result, preferredSignals = [] }: { result: AnalysisRes
                     );
                   })}
                 {plot && insights && [
-                  insights.fundamental && { ...insights.fundamental, label: "F1" },
+                  insights.fundamental && { ...insights.fundamental, label: "PEAK" },
                   ...insights.harmonics.slice(0, 5).map((harmonic) => ({ ...harmonic, label: `H${harmonic.order}` })),
                 ].filter((tone): tone is NonNullable<typeof tone> => Boolean(tone)).map((tone) => {
                   if (
@@ -1805,9 +1818,9 @@ function SpectrumInsightsPanel({
     <section className="fft-insights" aria-label="FFT measurements">
       <div className="fft-insight-grid">
         <SpectrumMetric
-          label="Fundamental"
+          label="Dominant tone"
           value={hasSignal && insights.fundamental ? formatEngineering(insights.fundamental.frequencyHz, "Hz", 3) : "No tone"}
-          detail={hasSignal && insights.fundamental ? `${insights.fundamental.amplitudeDb.toFixed(1)} dB · ${formatEngineering(insights.fundamental.amplitude, unit, 3)}` : "No spectral energy above the FFT floor"}
+          detail={hasSignal && insights.fundamental ? `${insights.fundamental.amplitudeDb.toFixed(1)} dB · ${formatEngineering(insights.fundamental.amplitude, unit, 3)} · auto-picked` : "No spectral energy above the FFT floor"}
         />
         <SpectrumMetric label="THD" value={percent(insights.thd?.percent)} detail={db(insights.thd?.db)} />
         <SpectrumMetric label="THD + noise" value={percent(insights.thdPlusNoise?.percent)} detail={db(insights.thdPlusNoise?.db)} />
@@ -1827,7 +1840,7 @@ function SpectrumInsightsPanel({
       {insights.harmonics.length > 0 && (
         <div className="fft-harmonics-wrap">
           <table className="fft-harmonics">
-            <caption>Harmonic peaks</caption>
+            <caption>Harmonics relative to dominant tone</caption>
             <thead><tr><th>Order</th><th>Frequency</th><th>Level</th><th>Relative</th></tr></thead>
             <tbody>
               {insights.harmonics.map((harmonic) => (

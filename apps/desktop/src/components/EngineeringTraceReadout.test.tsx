@@ -6,7 +6,7 @@ import { EngineeringTraceReadout } from "./EngineeringTraceReadout";
 afterEach(cleanup);
 
 describe("EngineeringTraceReadout", () => {
-  it("renders an accessible compact engineering summary", () => {
+  it("keeps the transient final and peak-to-peak values primary, with detail on demand", () => {
     render(
       <EngineeringTraceReadout
         trace={{ id: "out", label: "V(out)", unit: "V", values: [-2, 2, 0] }}
@@ -16,14 +16,37 @@ describe("EngineeringTraceReadout", () => {
     );
 
     const readout = screen.getByRole("region", { name: "V(out) engineering readout" });
-    expect(within(readout).getByText("MIN")).toBeTruthy();
-    expect(within(readout).getByText("MAX")).toBeTruthy();
-    expect(within(readout).getByText("AVG")).toBeTruthy();
-    expect(within(readout).getByText("RMS")).toBeTruthy();
+    const disclosure = within(readout).getByText("More measurements").closest("details");
+    expect(disclosure?.open).toBe(false);
+    expect(within(readout).getAllByText("FINAL")).toHaveLength(2);
     expect(within(readout).getByText("P–P")).toBeTruthy();
-    expect(within(readout).getByText("FINAL")).toBeTruthy();
-    expect(within(readout).getByText("C1")).toBeTruthy();
-    expect(within(readout).getByText("125 mV @ 500 ms")).toBeTruthy();
+    expect(within(disclosure!).getByText("MIN")).toBeTruthy();
+    expect(within(disclosure!).getByText("MAX")).toBeTruthy();
+    expect(within(disclosure!).getByText("AVG")).toBeTruthy();
+    expect(within(disclosure!).getByText("RMS")).toBeTruthy();
+    expect(within(disclosure!).getByText("C1")).toBeTruthy();
+    expect(within(disclosure!).getByText("125 mV @ 500 ms")).toBeTruthy();
+  });
+
+  it("uses RMS as the primary value and keeps frequency visible for periodic signals", () => {
+    const times = Array.from({ length: 401 }, (_, index) => index / 100);
+    render(
+      <EngineeringTraceReadout
+        trace={{
+          id: "ac",
+          label: "V(ac)",
+          unit: "V",
+          values: times.map((time) => Math.sin(2 * Math.PI * 2 * time)),
+        }}
+        times={times}
+      />,
+    );
+
+    const readout = screen.getByRole("region", { name: "V(ac) engineering readout" });
+    const disclosure = within(readout).getByText("More measurements").closest("details")!;
+    expect(within(readout).getAllByText("RMS")).toHaveLength(2);
+    expect(within(readout).getByText("FREQ")).toBeTruthy();
+    expect(within(disclosure).getByText("PERIOD")).toBeTruthy();
   });
 
   it("renders nothing for an unavailable trace", () => {

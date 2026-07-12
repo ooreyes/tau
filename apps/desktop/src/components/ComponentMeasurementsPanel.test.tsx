@@ -50,7 +50,12 @@ describe("ComponentMeasurementsPanel", () => {
     expect(screen.getAllByText("RMS")).toHaveLength(2);
     expect(screen.getByText("AVG")).toBeTruthy();
     expect(screen.getByRole("img", { name: "V(R1): Periodic · 1 kHz" }).querySelectorAll("path")).toHaveLength(1);
-    expect(screen.getByText("Positive power means absorbed")).toBeTruthy();
+    expect(screen.getByRole("article", { name: "R1" })).toBeTruthy();
+    expect(screen.getAllByText("Voltage").every((element) => element.closest("dt") !== null)).toBe(true);
+
+    fireEvent.click(screen.getByText("Reading and sign conventions"));
+    expect(screen.getByText("Positive power is absorbed; negative power is delivered.")).toBeTruthy();
+    expect(screen.getAllByText(/component positive terminal/)).toHaveLength(1);
   });
 
   it("filters by reference and kind with a live result count", () => {
@@ -62,17 +67,35 @@ describe("ComponentMeasurementsPanel", () => {
     expect(screen.getByText("1 shown")).toBeTruthy();
   });
 
-  it("uses native buttons for keyboard-accessible selection and toggles the selected row", () => {
+  it("uses a dedicated native button for selection without making the whole card interactive", () => {
     const onSelect = vi.fn();
     const { rerender } = render(<ComponentMeasurementsPanel rows={rows} selectedId={null} onSelect={onSelect} />);
-    fireEvent.click(screen.getByRole("button", { name: "Select R1, resistor" }));
+    const card = screen.getByRole("article", { name: "R1" });
+    expect(card.tagName).toBe("ARTICLE");
+    expect(card.getAttribute("aria-label")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Select R1" }));
     expect(onSelect).toHaveBeenCalledWith("r1");
 
     rerender(<ComponentMeasurementsPanel rows={rows} selectedId="r1" onSelect={onSelect} />);
-    const selected = screen.getByRole("button", { name: "Selected R1, resistor" });
+    const selected = screen.getByRole("button", { name: "Deselect R1" });
     expect(selected.getAttribute("aria-pressed")).toBe("true");
     fireEvent.click(selected);
     expect(onSelect).toHaveBeenLastCalledWith(null);
+  });
+
+  it("does not describe a negative nonperiodic FINAL power value as average power", () => {
+    const negativePowerRow: ComponentMeasurement = {
+      componentId: "v1",
+      ref: "V1",
+      kind: "vsource",
+      power: series("P(V1)", "W", [-1, -2, -3], "transient"),
+    };
+    render(<ComponentMeasurementsPanel rows={[negativePowerRow]} selectedId={null} onSelect={() => {}} />);
+
+    expect(screen.getByText("FINAL")).toBeTruthy();
+    expect(screen.queryByText(/delivering average power/i)).toBeNull();
+    fireEvent.click(screen.getByText("Reading and sign conventions"));
+    expect(screen.getByText("FINAL is the instantaneous value at the simulation stop time.")).toBeTruthy();
   });
 
   it("announces empty and no-match states", () => {

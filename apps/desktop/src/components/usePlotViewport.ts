@@ -29,6 +29,10 @@ export interface UsePlotViewportOptions {
   width: number;
   height: number;
   pad: number;
+  /** Optional shared horizontal window for aligned multi-pane plots. */
+  sharedX?: { xMin: number; xMax: number };
+  /** Publishes horizontal zoom/pan so sibling panes can follow it. */
+  onXViewportChange?: (x: { xMin: number; xMax: number }) => void;
 }
 
 export interface PlotViewportHandle {
@@ -70,6 +74,8 @@ export function usePlotViewport({
   width,
   height,
   pad,
+  sharedX,
+  onXViewportChange,
 }: UsePlotViewportOptions): PlotViewportHandle {
   const [viewport, setViewport] = useState<Viewport>(domain);
   const [isPanning, setIsPanning] = useState(false);
@@ -90,6 +96,17 @@ export function usePlotViewport({
     // fight the user's zoom.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resetKey]);
+
+  useEffect(() => {
+    if (!sharedX) return;
+    setViewport((current) => current.xMin === sharedX.xMin && current.xMax === sharedX.xMax
+      ? current
+      : { ...current, xMin: sharedX.xMin, xMax: sharedX.xMax });
+  }, [sharedX?.xMin, sharedX?.xMax]);
+
+  useEffect(() => {
+    onXViewportChange?.({ xMin: viewport.xMin, xMax: viewport.xMax });
+  }, [onXViewportChange, viewport.xMin, viewport.xMax]);
 
   const fit = useCallback(() => setViewport(fitViewport(domainRef.current)), []);
 

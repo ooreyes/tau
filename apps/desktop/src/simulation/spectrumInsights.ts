@@ -86,17 +86,21 @@ function distortion(ratio: number, floor: number): DistortionMetric {
   };
 }
 
+/** Closest frequency in an ascending bin array, found in O(log n). */
 function closestBin(bins: Bin[], targetHz: number): Bin | null {
-  let closest: Bin | null = null;
-  let distance = Infinity;
-  for (const bin of bins) {
-    const nextDistance = Math.abs(bin.frequencyHz - targetHz);
-    if (nextDistance < distance) {
-      closest = bin;
-      distance = nextDistance;
-    }
+  if (bins.length === 0) return null;
+  let low = 0;
+  let high = bins.length;
+  while (low < high) {
+    const middle = low + ((high - low) >> 1);
+    if (bins[middle].frequencyHz < targetHz) low = middle + 1;
+    else high = middle;
   }
-  return closest;
+  if (low === 0) return bins[0];
+  if (low === bins.length) return bins[bins.length - 1];
+  const before = bins[low - 1];
+  const after = bins[low];
+  return targetHz - before.frequencyHz <= after.frequencyHz - targetHz ? before : after;
 }
 
 function strongest(bins: Bin[]): Bin | null {
@@ -170,9 +174,14 @@ export function spectrumInsights(
   const binWidthHz = median(spacings);
   const dc = bins.find((bin) => bin.frequencyHz === 0) ?? null;
   const nonDc = bins.filter((bin) => bin.frequencyHz > 0);
+  // Malformed spectra may arrive out of order. Keep source indices for guards,
+  // but sort a separate view so repeated harmonic lookup remains logarithmic.
+  const frequencyBins = [...nonDc].sort(
+    (a, b) => a.frequencyHz - b.frequencyHz || a.binIndex - b.binIndex,
+  );
   const dominant = strongest(nonDc);
   const hintedFundamental = Number.isFinite(options.fundamentalHz) && options.fundamentalHz! > 0
-    ? closestBin(nonDc, options.fundamentalHz!)
+    ? closestBin(frequencyBins, options.fundamentalHz!)
     : null;
   const fundamental = hintedFundamental ?? dominant;
 
@@ -194,7 +203,7 @@ export function spectrumInsights(
   const harmonicBins: Array<{ order: number; bin: Bin }> = [];
   const usedHarmonicIndices = new Set<number>();
   for (let order = 2; order * fundamental.frequencyHz <= nyquistHz; order++) {
-    const bin = closestBin(nonDc, order * fundamental.frequencyHz);
+    const bin = closestBin(frequencyBins, order * fundamental.frequencyHz);
     if (!bin || bin.binIndex === fundamental.binIndex || usedHarmonicIndices.has(bin.binIndex)) continue;
     usedHarmonicIndices.add(bin.binIndex);
     harmonicBins.push({ order, bin });

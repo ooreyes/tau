@@ -1,6 +1,7 @@
 import { Activity, Search } from "lucide-react";
 import { useId, useMemo, useState } from "react";
 
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
@@ -101,13 +102,13 @@ function Reading({ label, series }: { label: "Voltage" | "Current" | "Power"; se
   const reading = series ? primaryReading(series) : null;
   return (
     <div className="min-w-0 rounded-md bg-muted px-3 py-2">
-      <div className="flex items-baseline justify-between gap-2 text-[0.6875rem] font-medium uppercase tracking-wide text-muted-foreground">
+      <dt className="flex items-baseline justify-between gap-2 text-[0.6875rem] font-medium uppercase tracking-wide text-muted-foreground">
         <span>{label}</span>
         <span>{reading?.qualifier ?? "—"}</span>
-      </div>
-      <div className={cn("mt-1 truncate font-mono text-sm font-semibold tabular-nums", series ? "text-foreground" : "text-muted-foreground")}>
+      </dt>
+      <dd className={cn("m-0 mt-1 truncate font-mono text-sm font-semibold tabular-nums", series ? "text-foreground" : "text-muted-foreground")}>
         {readingText(series)}
-      </div>
+      </dd>
     </div>
   );
 }
@@ -121,52 +122,51 @@ function MeasurementCard({
   selected: boolean;
   onSelect: (componentId: string | null) => void;
 }) {
+  const titleId = useId();
   const primary = row.voltage ?? row.current ?? row.power;
-  const powerReading = row.power ? primaryReading(row.power) : null;
-  const polarity = powerReading && powerReading.value < 0
-    ? `Delivering average power (${powerReading.qualifier})`
-    : "Positive power means absorbed";
 
   return (
     <li>
-      <button
-        type="button"
+      <article
         className={cn(
-          "group grid w-full cursor-pointer appearance-none gap-3 rounded-lg border bg-card p-4 text-left text-card-foreground [border-style:solid] [font-family:inherit] outline-none transition-colors",
-          "hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring/50",
+          "grid w-full gap-3 rounded-lg border bg-card p-4 text-card-foreground [border-style:solid]",
           selected ? "border-primary bg-accent" : "border-border",
         )}
-        aria-pressed={selected}
-        aria-label={`${selected ? "Selected" : "Select"} ${row.ref}, ${row.kind}`}
-        onClick={() => onSelect(selected ? null : row.componentId)}
+        aria-labelledby={titleId}
       >
-        <div className="flex min-w-0 items-start justify-between gap-4">
+        <div className="flex min-w-0 flex-wrap items-start justify-between gap-4">
           <div className="min-w-0">
-            <div className="truncate font-mono text-sm font-semibold text-foreground">{row.ref}</div>
+            <h3 id={titleId} className="m-0 truncate font-mono text-sm font-semibold text-foreground">{row.ref}</h3>
             <div className="mt-0.5 truncate text-xs capitalize text-muted-foreground">{row.kind}</div>
           </div>
-          {primary && (
-            <div className="flex shrink-0 items-center gap-3">
-              <Sparkline series={primary} />
-              <span className="rounded-full border border-border px-2 py-1 text-[0.6875rem] font-medium text-muted-foreground [border-style:solid]">
-                {classificationText(primary)}
-              </span>
-            </div>
-          )}
+          <div className="flex shrink-0 flex-wrap items-center justify-end gap-3">
+            {primary && (
+              <>
+                <Sparkline series={primary} />
+                <span className="rounded-full border border-border px-2 py-1 text-[0.6875rem] font-medium text-muted-foreground [border-style:solid]">
+                  {classificationText(primary)}
+                </span>
+              </>
+            )}
+            <Button
+              type="button"
+              size="sm"
+              variant={selected ? "secondary" : "outline"}
+              aria-pressed={selected}
+              aria-label={(selected ? "Deselect " : "Select ") + row.ref}
+              onClick={() => onSelect(selected ? null : row.componentId)}
+            >
+              {selected ? "Deselect" : "Select"}
+            </Button>
+          </div>
         </div>
 
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+        <dl className="m-0 grid grid-cols-1 gap-2 sm:grid-cols-3">
           <Reading label="Voltage" series={row.voltage} />
           <Reading label="Current" series={row.current} />
           <Reading label="Power" series={row.power} />
-        </div>
-
-        <div className="flex flex-wrap gap-x-4 gap-y-1 text-[0.6875rem] text-muted-foreground">
-          <span>V: component positive terminal → negative terminal</span>
-          <span>I: positive in the displayed I({row.ref}) direction</span>
-          {row.power && <span>{polarity}</span>}
-        </div>
-      </button>
+        </dl>
+      </article>
     </li>
   );
 }
@@ -224,8 +224,19 @@ export function ComponentMeasurementsPanel({
         </div>
       </header>
 
-      <div className="flex items-center justify-between gap-3 border-b border-border px-5 py-2 text-[0.6875rem] text-muted-foreground [border-bottom-style:solid]">
-          <span>Periodic voltage/current show RMS; periodic power shows average real power.</span>
+      <div className="flex items-start justify-between gap-4 border-b border-border px-5 text-[0.6875rem] text-muted-foreground [border-bottom-style:solid]">
+        <details className="min-w-0 flex-1 py-2">
+          <summary className="w-fit cursor-pointer font-medium text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring/50">
+            Reading and sign conventions
+          </summary>
+          <div className="mt-2 grid gap-1 pb-1 sm:grid-cols-2">
+            <span>Periodic voltage/current use RMS; periodic power uses average real power.</span>
+            <span>FINAL is the instantaneous value at the simulation stop time.</span>
+            <span>Voltage is measured from the component positive terminal to its negative terminal.</span>
+            <span>Current is positive in the displayed I(reference) direction.</span>
+            <span>Positive power is absorbed; negative power is delivered.</span>
+          </div>
+        </details>
         <span aria-live="polite">{visibleRows.length} shown</span>
       </div>
 
