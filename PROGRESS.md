@@ -9,19 +9,15 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## ⏱ HEARTBEAT
 - **Headline metric:** 1445 tests green · corpus 82/82 import · 82/82 op-converge · 79/82 warning-clean
-- **Run started (UTC):** 2026-07-10T22:46Z
-- **Synced to origin:** auto/ltspice-parity @ ca23dcc.
-- **Claimed unit:** Review session — simulator interaction contract + UI/UX
-  simplification after §11 Unit D.
-- **Status:** DONE
-- **Last completed sub-step:** dedicated simulator review DONE — strict
-  probe/name mutation boundary, named/probed plot authority, simplified default
-  hierarchy, corrected/scaled telemetry, 1440×900 + 900×600 QA; typecheck and
-  all 1445 tests green.
-- **Plan:** resume the post-§11 acceptance/parity list in
-  AGENTS.md/FEATURE_PARITY.md.
-- **Note:** review-rotation debt paid (`review:` session completed).
-- **Next step:** resume the highest-leverage agent-provable DoD item.
+- **Run started (UTC):** 2026-07-12T00:34Z
+- **Synced to origin:** auto/ltspice-parity @ 41ff25f.
+- **Claimed unit:** §6 simulator analysis workspace — instrument-grade plots,
+  detailed FFT, and spacious component measurements.
+- **Status:** IN PROGRESS
+- **Last completed sub-step:** synced, scoped §6, and claimed the design overhaul.
+- **Plan:** delegate bounded plot/FFT/telemetry changes, integrate under the
+  token system, visually verify wide + minimum layouts, test, review, push.
+- **Next step:** inspect plot architecture and merge delegated vertical slices.
 
 ---
 
