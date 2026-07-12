@@ -44,7 +44,8 @@ import { commonTraceUnit } from "../simulation/exprUnit";
 import { groupDelay } from "../simulation/groupDelay";
 import { stabilityMargins } from "../simulation/stability";
 import { seriesToCsv } from "../simulation/waveformCsv";
-import { runWaveformFft, dominantFrequency, spectrumThd, type WindowFn } from "../simulation/fft";
+import { runWaveformFft, type WindowFn } from "../simulation/fft";
+import { spectrumInsights } from "../simulation/spectrumInsights";
 import { buildSpiceDeck } from "../engine/spiceNetlist";
 import { serializeRaw, inferRawType } from "../io/rawExport";
 import { cursorReadout, dbPerDecade, fractionToX, logFractionToX } from "../simulation/cursors";
@@ -66,12 +67,12 @@ import { usePlotViewport } from "./usePlotViewport";
 import { ScopeZoomCluster } from "./ScopeZoomCluster";
 import type { Viewport } from "../simulation/plotViewport";
 import { visibleTransientTraces } from "../simulation/visibleTraces";
+import { EngineeringTraceReadout } from "./EngineeringTraceReadout";
+import { ComponentMeasurementsPanel } from "./ComponentMeasurementsPanel";
 import {
-  classifySignal,
   componentMeasurements,
   traceStatistics,
   type ComponentMeasurement,
-  type MeasuredSeries,
 } from "../simulation/measurementModel";
 
 interface SimulationPanelProps {
@@ -119,7 +120,7 @@ interface SimulationPanelProps {
 
 const PLOT_WIDTH = 340;
 const PLOT_HEIGHT = 210;
-const PLOT_PAD = 34;
+const PLOT_PAD = 40;
 
 export function SimulationPanel({
   result,
@@ -691,7 +692,7 @@ export function SimulationPanel({
 
           <MeasTable measurements={measurements} />
           <FourierTable results={fourier} />
-          <FftView result={result} />
+          <FftView result={result} preferredSignals={baseTraces.map((trace) => trace.label)} />
           <CursorView result={result} extraTraces={exprTraces} />
 
           <div className="advanced-settings">
@@ -894,10 +895,11 @@ export function SimulationPanel({
       )}
 
       {mode === "tran" && (
-        <ComponentMeasurementsTable
+        <ComponentMeasurementsPanel
           rows={componentRows}
           selectedId={selectedId}
           onSelect={select}
+          className="component-measurements"
         />
       )}
 
@@ -932,138 +934,6 @@ export function SimulationPanel({
         </div>
       )}
     </aside>
-  );
-}
-
-function MeasurementValue({ series }: { series: MeasuredSeries | undefined }) {
-  if (!series) return <span className="muted">—</span>;
-  const periodic = series.classification.kind === "periodic";
-  const averagePower = periodic && series.unit === "W";
-  const value = averagePower
-    ? series.statistics.average
-    : periodic
-      ? series.statistics.rms
-      : series.statistics.final;
-  return (
-    <span className="measurement-reading">
-      <span>{formatEngineering(value, series.unit, 3)}</span>
-      <small>{averagePower ? "AVG" : periodic ? "RMS" : "final"}</small>
-    </span>
-  );
-}
-
-function SeriesSparkline({ series }: { series: MeasuredSeries }) {
-  const width = 72;
-  const height = 22;
-  const values = series.values;
-  if (values.length < 2) return null;
-  const stride = Math.max(1, Math.floor(values.length / 48));
-  const sampled = values.filter(
-    (value, index) => Number.isFinite(value) && (index % stride === 0 || index === values.length - 1),
-  );
-  if (sampled.length < 2) return null;
-  let min = Infinity;
-  let max = -Infinity;
-  for (const value of sampled) {
-    if (value < min) min = value;
-    if (value > max) max = value;
-  }
-  const range = max - min || 1;
-  const path = sampled
-    .map((value, index) => {
-      const x = (index / Math.max(1, sampled.length - 1)) * width;
-      const y = height - 2 - ((value - min) / range) * (height - 4);
-      return `${index === 0 ? "M" : "L"}${x.toFixed(1)} ${y.toFixed(1)}`;
-    })
-    .join(" ");
-  return (
-    <svg className="measurement-sparkline" viewBox={`0 0 ${width} ${height}`} aria-hidden="true">
-      <path d={path} />
-    </svg>
-  );
-}
-
-function ComponentMeasurementsTable({
-  rows,
-  selectedId,
-  onSelect,
-}: {
-  rows: ComponentMeasurement[];
-  selectedId: string | null;
-  onSelect: (id: string | null) => void;
-}) {
-  return (
-    <section className="component-measurements" aria-labelledby="component-measurements-title">
-      <div className="component-measurements-heading">
-        <div>
-          <span className="plotter-kicker">Circuit telemetry</span>
-          <h3 id="component-measurements-title">Component measurements</h3>
-        </div>
-        <span className="measurement-count mono-num">{rows.length} parts</span>
-      </div>
-      {rows.length === 0 ? (
-        <div className="measurement-empty">
-          Run a transient analysis to calculate voltage, current, and power for each named component.
-        </div>
-      ) : (
-        <div className="measurement-table-wrap">
-          <table className="measurement-table">
-            <thead>
-              <tr>
-                <th>Component</th>
-                <th>Voltage across</th>
-                <th>Current through</th>
-                <th title="Positive power is absorbed by the component; negative power is delivered to the circuit.">
-                  Power
-                </th>
-                <th>Signal</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row) => {
-                const primary = row.voltage ?? row.current ?? row.power;
-                const selected = row.componentId === selectedId;
-                return (
-                  <tr
-                    key={row.componentId}
-                    className={selected ? "selected" : undefined}
-                    aria-current={selected ? "true" : undefined}
-                  >
-                    <td>
-                      <button
-                        className="measurement-component-button"
-                        onClick={() => onSelect(row.componentId)}
-                        aria-pressed={selected}
-                      >
-                        <strong>{row.ref}</strong>
-                        <small>{row.kind}</small>
-                      </button>
-                    </td>
-                    <td className="mono-num"><MeasurementValue series={row.voltage} /></td>
-                    <td className="mono-num"><MeasurementValue series={row.current} /></td>
-                    <td className="mono-num"><MeasurementValue series={row.power} /></td>
-                    <td>
-                      {primary ? (
-                        <div className="measurement-signal">
-                          <SeriesSparkline series={primary} />
-                          <span className={`signal-class signal-class--${primary.classification.kind}`}>
-                            {primary.classification.kind === "periodic" && primary.classification.frequency
-                              ? `${formatEngineering(primary.classification.frequency, "Hz", 2)} periodic`
-                              : primary.classification.kind}
-                          </span>
-                        </div>
-                      ) : (
-                        <span className="muted">unavailable</span>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </section>
   );
 }
 
@@ -1153,7 +1023,7 @@ export function WaveformPlot({
               plot={plot}
               times={success ? success.times : []}
               ariaLabel={multiPane ? `Waveform pane ${paneIndex + 1}` : "Waveform plot"}
-              showXAxis={paneIndex === paneLayout.length - 1 || !multiPane}
+              showXAxis
               // Not just `success`: on the render where a run first resolves,
               // `plot` can still be null for one tick before `paneLayout`
               // catches up with the new trace ids — folding `plot`'s presence
@@ -1163,13 +1033,12 @@ export function WaveformPlot({
             />
 
             {/* Per-pane legend with optional "move to pane" selector. */}
-            <div className="scope-legend">
+            <div className="scope-legend" aria-label="Trace measurements">
               {paneTraces.length > 0 ? (
                 paneTraces.map((trace) => (
-                  <TraceLegendItem
+                  <EngineeringTraceReadout
                     key={trace.id}
-                    trace={trace}
-                    label={labelFor(trace)}
+                    trace={{ ...trace, label: labelFor(trace) }}
                     times={success ? success.times : []}
                   />
                 ))
@@ -1209,6 +1078,7 @@ function TranScopePane({
   runKey: unknown;
 }) {
   const clipId = useId();
+  const [plotHeight, setPlotHeight] = useState(190);
   const [measureRef, size] = useMeasuredSize<SVGSVGElement>();
   const { targetXTicks, targetYTicks } = tickCountsFromSize(size);
   const domain = useMemo<Viewport>(
@@ -1219,7 +1089,7 @@ function TranScopePane({
     domain,
     resetKey: runKey,
     width: PLOT_WIDTH,
-    height: PLOT_HEIGHT,
+    height: plotHeight,
     pad: PLOT_PAD,
   });
   const setRefs = useCallback(
@@ -1232,17 +1102,39 @@ function TranScopePane({
 
   return (
     <div className="scope-plot-wrap">
+      <div className="scope-size-controls" aria-label="Plot size">
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          disabled={plotHeight <= 190}
+          aria-label="Decrease plot height"
+          onClick={() => setPlotHeight((height) => Math.max(190, height - 50))}
+        >
+          <Minimize2 size={13} aria-hidden="true" />
+        </Button>
+        <span className="mono-num" aria-live="polite">{plotHeight}px</span>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          disabled={plotHeight >= 340}
+          aria-label="Increase plot height"
+          onClick={() => setPlotHeight((height) => Math.min(340, height + 50))}
+        >
+          <Maximize2 size={13} aria-hidden="true" />
+        </Button>
+      </div>
       <svg
         ref={setRefs}
         className={isPanning ? "scope-svg panning" : "scope-svg"}
-        viewBox={`0 0 ${PLOT_WIDTH} ${PLOT_HEIGHT}`}
+        viewBox={`0 0 ${PLOT_WIDTH} ${plotHeight}`}
+        style={{ aspectRatio: `${PLOT_WIDTH} / ${plotHeight}` }}
         role="img"
         aria-label={ariaLabel}
         {...dragHandlers}
       >
         <PlotAxes
           width={PLOT_WIDTH}
-          height={PLOT_HEIGHT}
+          height={plotHeight}
           pad={PLOT_PAD}
           xMin={viewport.xMin}
           xMax={viewport.xMax}
@@ -1257,16 +1149,26 @@ function TranScopePane({
           showXTicks={showXAxis}
         />
         {plot && (
-          <ScopeClip id={clipId} width={PLOT_WIDTH} height={PLOT_HEIGHT} pad={PLOT_PAD}>
-            {paneTraces.map((trace) => (
-              <path
-                key={trace.id}
-                className={trace.id.startsWith("ref:") ? "scope-trace ref" : "scope-trace"}
-                stroke={trace.color}
-                d={tracePath(trace, times, viewport.xMin, viewport.xMax, viewport.yMin, viewport.yMax)}
+          <>
+            <ScopeClip id={clipId} width={PLOT_WIDTH} height={plotHeight} pad={PLOT_PAD}>
+              {paneTraces.map((trace) => (
+                <path
+                  key={trace.id}
+                  className={trace.id.startsWith("ref:") ? "scope-trace ref" : "scope-trace"}
+                  stroke={trace.color}
+                  d={tracePath(trace, times, viewport.xMin, viewport.xMax, viewport.yMin, viewport.yMax, plotHeight)}
+                />
+              ))}
+            </ScopeClip>
+            {paneTraces.length === 1 && (
+              <ScopeStatisticsOverlay
+                trace={paneTraces[0]}
+                times={times}
+                viewport={viewport}
+                height={plotHeight}
               />
-            ))}
-          </ScopeClip>
+            )}
+          </>
         )}
       </svg>
       {plot && <ScopeZoomCluster onZoomIn={() => zoomBy(0.7)} onZoomOut={() => zoomBy(1 / 0.7)} onFit={fit} />}
@@ -1274,60 +1176,68 @@ function TranScopePane({
   );
 }
 
-/**
- * A single legend entry: colored swatch + label + optional pane-move selector.
- * The selector only appears when there are ≥2 panes.
- */
-function TraceLegendItem({
+function ScopeStatisticsOverlay({
   trace,
-  label,
   times,
+  viewport,
+  height,
 }: {
   trace: Trace;
-  label: string;
   times: number[];
+  viewport: Viewport;
+  height: number;
 }) {
   const statistics = useMemo(() => traceStatistics(times, trace.values), [times, trace.values]);
-  const classification = useMemo(() => classifySignal(times, trace.values), [times, trace.values]);
-  const primaryValue = statistics
-    ? classification.kind === "periodic" ? statistics.rms : statistics.final
-    : null;
+  if (!statistics) return null;
+  const rawMarks = [
+    { label: "MAX", value: statistics.max, kind: "limit" },
+    { label: "AVG", value: statistics.average, kind: "average" },
+    { label: "MIN", value: statistics.min, kind: "limit" },
+  ];
+  const marks = rawMarks.reduce<Array<{ label: string; value: number; kind: string }>>((groups, mark) => {
+    const tolerance = Math.max(1, Math.abs(mark.value)) * 1e-10;
+    const existing = groups.find((group) => Math.abs(group.value - mark.value) <= tolerance);
+    if (existing) {
+      existing.label += ` · ${mark.label}`;
+      if (mark.kind === "average") existing.kind = "average";
+    } else {
+      groups.push({ ...mark });
+    }
+    return groups;
+  }, []);
+  const innerHeight = height - PLOT_PAD * 2;
+  const ySpan = viewport.yMax - viewport.yMin || 1;
+
   return (
-    <span className="trace-legend-item">
-      <span className="trace-legend-primary">
-        <i style={{ background: trace.color }} />
-        <span className="trace-legend-label">{label}</span>
-        <span className={`signal-class signal-class--${classification.kind}`}>
-          {classification.kind === "periodic" && classification.frequency
-            ? `${formatEngineering(classification.frequency, "Hz", 2)}`
-            : classification.kind}
-        </span>
-        {primaryValue !== null && (
-          <span className="trace-primary-value mono-num">
-            {formatEngineering(primaryValue, trace.unit, 2)} {classification.kind === "periodic" ? "RMS" : "final"}
-          </span>
-        )}
-      </span>
-      {statistics && (
-        <details className="trace-stat-details">
-          <summary>Statistics</summary>
-          <span className="trace-statistics mono-num">
-            <span>MIN {formatEngineering(statistics.min, trace.unit, 2)}</span>
-            <span>MAX {formatEngineering(statistics.max, trace.unit, 2)}</span>
-            <span>AVG {formatEngineering(statistics.average, trace.unit, 2)}</span>
-            <span>RMS {formatEngineering(statistics.rms, trace.unit, 2)}</span>
-            <span>FINAL {formatEngineering(statistics.final, trace.unit, 2)}</span>
-          </span>
-        </details>
-      )}
-    </span>
+    <g className="scope-stat-overlay" style={{ color: trace.color }} aria-hidden="true">
+      {marks.map((mark) => {
+        if (mark.value < viewport.yMin || mark.value > viewport.yMax) return null;
+        const y = height - PLOT_PAD - ((mark.value - viewport.yMin) / ySpan) * innerHeight;
+        return (
+          <g key={mark.label} className={`scope-stat-mark scope-stat-mark--${mark.kind}`}>
+            <line x1={PLOT_PAD} x2={PLOT_WIDTH - PLOT_PAD} y1={y} y2={y} />
+            <text x={PLOT_WIDTH - PLOT_PAD - 3} y={Math.max(PLOT_PAD + 9, y - 3)}>
+              {mark.label} {formatEngineering(mark.value, trace.unit, 2)}
+            </text>
+          </g>
+        );
+      })}
+    </g>
   );
 }
 
 /** Map a transient trace to an SVG path over an explicit `[xMin,xMax]` time
  *  window (not always `[0,tMax]` — zoom/pan can move the visible window to
  *  a non-zero start). `tMax`-only callers (unzoomed) pass `xMin=0`. */
-function tracePath(trace: Trace, times: number[], xMin: number, xMax: number, min: number, max: number): string {
+function tracePath(
+  trace: Trace,
+  times: number[],
+  xMin: number,
+  xMax: number,
+  min: number,
+  max: number,
+  height = PLOT_HEIGHT,
+): string {
   const sampleCount = Math.min(trace.values.length, times.length);
   const xSpan = xMax - xMin || 1;
   let path = "";
@@ -1337,7 +1247,7 @@ function tracePath(trace: Trace, times: number[], xMin: number, xMax: number, mi
     const time = times[index];
     if (!Number.isFinite(value) || !Number.isFinite(time)) continue;
     const x = PLOT_PAD + ((time - xMin) / xSpan) * (PLOT_WIDTH - PLOT_PAD * 2);
-    const y = PLOT_HEIGHT - PLOT_PAD - ((value - min) / (max - min || 1)) * (PLOT_HEIGHT - PLOT_PAD * 2);
+    const y = height - PLOT_PAD - ((value - min) / (max - min || 1)) * (height - PLOT_PAD * 2);
     path += `${started ? "L" : "M"} ${x.toFixed(2)} ${y.toFixed(2)} `;
     started = true;
   }
@@ -1590,7 +1500,7 @@ const REF_COLORS = ["var(--trace-amber)", "var(--trace-purple)", "var(--trace-cr
  * transform only runs when the user opens it. Reuses {@link bodePath} for the
  * log-frequency / dB mapping it shares with the Bode plot.
  */
-export function FftView({ result }: { result: AnalysisResult | null }) {
+export function FftView({ result, preferredSignals = [] }: { result: AnalysisResult | null; preferredSignals?: string[] }) {
   const [open, setOpen] = useState(false);
   const [signal, setSignal] = useState<string>("");
   const [windowFn, setWindowFn] = useState<WindowFn>("hann");
@@ -1604,8 +1514,9 @@ export function FftView({ result }: { result: AnalysisResult | null }) {
   const success = result?.ok ? result : null;
   const signals = useMemo(() => {
     if (!success) return [];
-    return [...success.traces.map((t) => t.label), ...success.currents.map((c) => c.label)];
-  }, [success]);
+    const all = [...new Set([...success.traces.map((t) => t.label), ...success.currents.map((c) => c.label)])];
+    return [...preferredSignals.filter((label) => all.includes(label)), ...all.filter((label) => !preferredSignals.includes(label))];
+  }, [success, preferredSignals]);
   const chosen = signal && signals.includes(signal) ? signal : signals[0] ?? "";
 
   const spectrum = useMemo(() => {
@@ -1616,6 +1527,7 @@ export function FftView({ result }: { result: AnalysisResult | null }) {
       return null;
     }
   }, [open, success, chosen, windowFn]);
+  const insights = useMemo(() => (spectrum ? spectrumInsights(spectrum) : null), [spectrum]);
 
   const plot = useMemo(() => {
     if (!spectrum) return null;
@@ -1707,30 +1619,32 @@ export function FftView({ result }: { result: AnalysisResult | null }) {
       </button>
       {open && (
         <>
-          <div className="expr-bar">
-            <select
-              className="expr-input"
-              value={chosen}
-              aria-label="FFT signal"
-              onChange={(e) => setSignal(e.currentTarget.value)}
-            >
-              {signals.map((s) => (
-                <option key={s} value={s}>
-                  {s}
-                </option>
-              ))}
-            </select>
-            <select
-              className="expr-add"
-              value={windowFn}
-              aria-label="FFT window"
-              onChange={(e) => setWindowFn(e.currentTarget.value as WindowFn)}
-            >
-              <option value="hann">Hann</option>
-              <option value="hamming">Hamming</option>
-              <option value="blackman">Blackman</option>
-              <option value="rectangular">Rectangular</option>
-            </select>
+          <div className="fft-control-bar">
+            <label>
+              <span>Signal</span>
+              <select
+                value={chosen}
+                aria-label="FFT signal"
+                onChange={(e) => setSignal(e.currentTarget.value)}
+              >
+                {signals.map((s) => (
+                  <option key={s} value={s}>{s}</option>
+                ))}
+              </select>
+            </label>
+            <label>
+              <span>Window</span>
+              <select
+                value={windowFn}
+                aria-label="FFT window"
+                onChange={(e) => setWindowFn(e.currentTarget.value as WindowFn)}
+              >
+                <option value="hann">Hann</option>
+                <option value="hamming">Hamming</option>
+                <option value="blackman">Blackman</option>
+                <option value="rectangular">Rectangular</option>
+              </select>
+            </label>
             <Button
               variant={cursorsOn ? "default" : "outline"}
               size="sm"
@@ -1738,7 +1652,7 @@ export function FftView({ result }: { result: AnalysisResult | null }) {
               aria-label="Toggle FFT cursors"
               onClick={() => setCursorsOn((c) => !c)}
             >
-              cursors
+              Cursors
             </Button>
           </div>
           <div className="scope-shell">
@@ -1762,6 +1676,8 @@ export function FftView({ result }: { result: AnalysisResult | null }) {
                   xScale="log"
                   xUnit="Hz"
                   yUnit="dB"
+                  xAxisTitle="Frequency"
+                  yAxisTitle="Magnitude"
                   targetXTicks={targetXTicks}
                   targetYTicks={targetYTicks}
                 />
@@ -1790,6 +1706,28 @@ export function FftView({ result }: { result: AnalysisResult | null }) {
                       </g>
                     );
                   })}
+                {plot && insights && [
+                  insights.fundamental && { ...insights.fundamental, label: "F1" },
+                  ...insights.harmonics.slice(0, 5).map((harmonic) => ({ ...harmonic, label: `H${harmonic.order}` })),
+                ].filter((tone): tone is NonNullable<typeof tone> => Boolean(tone)).map((tone) => {
+                  if (
+                    !(tone.frequencyHz > 0)
+                    || tone.frequencyHz < viewport.xMin
+                    || tone.frequencyHz > viewport.xMax
+                    || tone.amplitudeDb < viewport.yMin
+                    || tone.amplitudeDb > viewport.yMax
+                  ) return null;
+                  const x = PLOT_PAD + ((Math.log10(tone.frequencyHz) - Math.log10(viewport.xMin))
+                    / (Math.log10(viewport.xMax) - Math.log10(viewport.xMin) || 1)) * (PLOT_WIDTH - PLOT_PAD * 2);
+                  const y = PLOT_HEIGHT - PLOT_PAD - ((tone.amplitudeDb - viewport.yMin)
+                    / (viewport.yMax - viewport.yMin || 1)) * (PLOT_HEIGHT - PLOT_PAD * 2);
+                  return (
+                    <g key={tone.label} className="fft-tone-marker" transform={`translate(${x} ${y})`}>
+                      <circle r="2.4" />
+                      <text x="4" y="-4">{tone.label}</text>
+                    </g>
+                  );
+                })}
               </svg>
               {plot && <ScopeZoomCluster onZoomIn={() => zoomBy(0.7)} onZoomOut={() => zoomBy(1 / 0.7)} onFit={fit} />}
             </div>
@@ -1842,25 +1780,78 @@ export function FftView({ result }: { result: AnalysisResult | null }) {
               />
             </div>
           )}
-          <div className="meter-row analysis-meter">
-            <Metric
-              label="PEAK f"
-              value={spectrum ? formatEngineering(dominantFrequency(spectrum), "Hz", 1) : "--"}
-              tone="green"
-            />
-            <Metric
-              label="THD"
-              value={spectrum ? `${(spectrumThd(spectrum).thd * 100).toFixed(2)}%` : "--"}
-              tone="cyan"
-            />
-            <Metric
-              label="DC"
-              value={spectrum ? formatEngineering(spectrum.magnitude[0], "V", 2) : "--"}
-              tone="cream"
-            />
-          </div>
+          {insights && <SpectrumInsightsPanel insights={insights} unit={chosen.startsWith("I(") ? "A" : "V"} />}
         </>
       )}
+    </div>
+  );
+}
+
+function SpectrumInsightsPanel({
+  insights,
+  unit,
+}: {
+  insights: ReturnType<typeof spectrumInsights>;
+  unit: "V" | "A";
+}) {
+  const percent = (value: number | null | undefined) => value === null || value === undefined
+    ? "—"
+    : `${value.toFixed(3)}%`;
+  const db = (value: number | null | undefined) => value === null || value === undefined
+    ? "—"
+    : `${value.toFixed(1)} dB`;
+  const hasSignal = Boolean(insights.fundamental && insights.fundamental.amplitude > 0);
+  return (
+    <section className="fft-insights" aria-label="FFT measurements">
+      <div className="fft-insight-grid">
+        <SpectrumMetric
+          label="Fundamental"
+          value={hasSignal && insights.fundamental ? formatEngineering(insights.fundamental.frequencyHz, "Hz", 3) : "No tone"}
+          detail={hasSignal && insights.fundamental ? `${insights.fundamental.amplitudeDb.toFixed(1)} dB · ${formatEngineering(insights.fundamental.amplitude, unit, 3)}` : "No spectral energy above the FFT floor"}
+        />
+        <SpectrumMetric label="THD" value={percent(insights.thd?.percent)} detail={db(insights.thd?.db)} />
+        <SpectrumMetric label="THD + noise" value={percent(insights.thdPlusNoise?.percent)} detail={db(insights.thdPlusNoise?.db)} />
+        <SpectrumMetric label="SFDR" value={db(insights.sfdrDb)} detail="Fundamental to largest spur" />
+        <SpectrumMetric label="Noise floor" value={db(insights.noiseFloorDb)} detail="Median per FFT bin" />
+        <SpectrumMetric
+          label="Resolution"
+          value={insights.frequencyResolutionHz ? formatEngineering(insights.frequencyResolutionHz, "Hz", 3) : "—"}
+          detail="FFT bin width"
+        />
+        <SpectrumMetric
+          label="DC"
+          value={insights.dc ? formatEngineering(insights.dc.amplitude, unit, 3) : "—"}
+          detail={insights.dc ? `${insights.dc.amplitudeDb.toFixed(1)} dB` : undefined}
+        />
+      </div>
+      {insights.harmonics.length > 0 && (
+        <div className="fft-harmonics-wrap">
+          <table className="fft-harmonics">
+            <caption>Harmonic peaks</caption>
+            <thead><tr><th>Order</th><th>Frequency</th><th>Level</th><th>Relative</th></tr></thead>
+            <tbody>
+              {insights.harmonics.map((harmonic) => (
+                <tr key={harmonic.order}>
+                  <td>H{harmonic.order}</td>
+                  <td>{formatEngineering(harmonic.frequencyHz, "Hz", 3)}</td>
+                  <td>{harmonic.amplitudeDb.toFixed(1)} dB</td>
+                  <td>{harmonic.dBc.toFixed(1)} dBc</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function SpectrumMetric({ label, value, detail }: { label: string; value: string; detail?: string }) {
+  return (
+    <div className="fft-insight-item">
+      <span>{label}</span>
+      <strong className="mono-num">{value}</strong>
+      {detail && <small>{detail}</small>}
     </div>
   );
 }

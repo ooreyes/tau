@@ -1,0 +1,258 @@
+import { Activity, Search } from "lucide-react";
+import { useId, useMemo, useState } from "react";
+
+import { Input } from "@/components/ui/input";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { cn } from "@/lib/utils";
+import type { ComponentMeasurement, MeasuredSeries } from "../simulation/measurementModel";
+import { formatEngineering } from "../simulation/quantity";
+
+export interface ComponentMeasurementsPanelProps {
+  rows: readonly ComponentMeasurement[];
+  selectedId: string | null;
+  onSelect: (componentId: string | null) => void;
+  className?: string;
+  /** Limits the telemetry viewport without constraining the containing layout. */
+  maxHeight?: number | string;
+}
+
+interface PrimaryReading {
+  value: number;
+  qualifier: "AVG" | "RMS" | "FINAL";
+}
+
+/** Periodic V/I use RMS; periodic power uses average real power. */
+export function primaryReading(series: MeasuredSeries): PrimaryReading {
+  if (series.classification.kind !== "periodic") {
+    return { value: series.statistics.final, qualifier: "FINAL" };
+  }
+  return series.unit === "W"
+    ? { value: series.statistics.average, qualifier: "AVG" }
+    : { value: series.statistics.rms, qualifier: "RMS" };
+}
+
+function readingText(series: MeasuredSeries | undefined): string {
+  if (!series) return "Unavailable";
+  const reading = primaryReading(series);
+  return formatEngineering(reading.value, series.unit, 3);
+}
+
+function classificationText(series: MeasuredSeries): string {
+  if (series.classification.kind !== "periodic") return series.classification.kind;
+  const frequency = series.classification.frequency;
+  return frequency && Number.isFinite(frequency)
+    ? `Periodic · ${formatEngineering(frequency, "Hz", 3)}`
+    : "Periodic";
+}
+
+/** A bounded path builder so a telemetry row never emits an SVG point per simulation sample. */
+export function sparklinePath(values: readonly number[], width = 112, height = 32, maxPoints = 64): string {
+  if (values.length < 2 || maxPoints < 2) return "";
+  const lastIndex = values.length - 1;
+  const sampleCount = Math.min(maxPoints, values.length);
+  const samples: Array<{ index: number; value: number }> = [];
+  for (let i = 0; i < sampleCount; i += 1) {
+    const index = Math.round((i / (sampleCount - 1)) * lastIndex);
+    const value = values[index];
+    if (Number.isFinite(value)) samples.push({ index, value });
+  }
+  if (samples.length < 2) return "";
+
+  let min = Infinity;
+  let max = -Infinity;
+  for (const sample of samples) {
+    min = Math.min(min, sample.value);
+    max = Math.max(max, sample.value);
+  }
+  const span = max - min || 1;
+  return samples
+    .map((sample, index) => {
+      const x = (sample.index / lastIndex) * width;
+      const y = height - 2 - ((sample.value - min) / span) * (height - 4);
+      return `${index === 0 ? "M" : "L"}${x.toFixed(1)} ${y.toFixed(1)}`;
+    })
+    .join(" ");
+}
+
+function Sparkline({ series }: { series: MeasuredSeries }) {
+  const path = sparklinePath(series.values);
+  if (!path) return <span className="text-xs text-muted-foreground">No waveform</span>;
+  const description = `${series.label}: ${classificationText(series)}`;
+  return (
+    <svg
+      className="h-8 w-28 shrink-0 overflow-visible text-primary"
+      viewBox="0 0 112 32"
+      role="img"
+      aria-label={description}
+    >
+      <title>{description}</title>
+      <path
+        d={path}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        vectorEffect="non-scaling-stroke"
+      />
+    </svg>
+  );
+}
+
+function Reading({ label, series }: { label: "Voltage" | "Current" | "Power"; series?: MeasuredSeries }) {
+  const reading = series ? primaryReading(series) : null;
+  return (
+    <div className="min-w-0 rounded-md bg-muted px-3 py-2">
+      <div className="flex items-baseline justify-between gap-2 text-[0.6875rem] font-medium uppercase tracking-wide text-muted-foreground">
+        <span>{label}</span>
+        <span>{reading?.qualifier ?? "—"}</span>
+      </div>
+      <div className={cn("mt-1 truncate font-mono text-sm font-semibold tabular-nums", series ? "text-foreground" : "text-muted-foreground")}>
+        {readingText(series)}
+      </div>
+    </div>
+  );
+}
+
+function MeasurementCard({
+  row,
+  selected,
+  onSelect,
+}: {
+  row: ComponentMeasurement;
+  selected: boolean;
+  onSelect: (componentId: string | null) => void;
+}) {
+  const primary = row.voltage ?? row.current ?? row.power;
+  const powerReading = row.power ? primaryReading(row.power) : null;
+  const polarity = powerReading && powerReading.value < 0
+    ? `Delivering average power (${powerReading.qualifier})`
+    : "Positive power means absorbed";
+
+  return (
+    <li>
+      <button
+        type="button"
+        className={cn(
+          "group grid w-full cursor-pointer appearance-none gap-3 rounded-lg border bg-card p-4 text-left text-card-foreground [border-style:solid] [font-family:inherit] outline-none transition-colors",
+          "hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring/50",
+          selected ? "border-primary bg-accent" : "border-border",
+        )}
+        aria-pressed={selected}
+        aria-label={`${selected ? "Selected" : "Select"} ${row.ref}, ${row.kind}`}
+        onClick={() => onSelect(selected ? null : row.componentId)}
+      >
+        <div className="flex min-w-0 items-start justify-between gap-4">
+          <div className="min-w-0">
+            <div className="truncate font-mono text-sm font-semibold text-foreground">{row.ref}</div>
+            <div className="mt-0.5 truncate text-xs capitalize text-muted-foreground">{row.kind}</div>
+          </div>
+          {primary && (
+            <div className="flex shrink-0 items-center gap-3">
+              <Sparkline series={primary} />
+              <span className="rounded-full border border-border px-2 py-1 text-[0.6875rem] font-medium text-muted-foreground [border-style:solid]">
+                {classificationText(primary)}
+              </span>
+            </div>
+          )}
+        </div>
+
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+          <Reading label="Voltage" series={row.voltage} />
+          <Reading label="Current" series={row.current} />
+          <Reading label="Power" series={row.power} />
+        </div>
+
+        <div className="flex flex-wrap gap-x-4 gap-y-1 text-[0.6875rem] text-muted-foreground">
+          <span>V: component positive terminal → negative terminal</span>
+          <span>I: positive in the displayed I({row.ref}) direction</span>
+          {row.power && <span>{polarity}</span>}
+        </div>
+      </button>
+    </li>
+  );
+}
+
+export function ComponentMeasurementsPanel({
+  rows,
+  selectedId,
+  onSelect,
+  className,
+  maxHeight = 520,
+}: ComponentMeasurementsPanelProps) {
+  const filterId = useId();
+  const [query, setQuery] = useState("");
+  const normalizedQuery = query.trim().toLocaleLowerCase();
+  const visibleRows = useMemo(
+    () => normalizedQuery
+      ? rows.filter((row) => `${row.ref} ${row.kind}`.toLocaleLowerCase().includes(normalizedQuery))
+      : rows,
+    [normalizedQuery, rows],
+  );
+  const completeCount = useMemo(
+    () => rows.filter((row) => row.voltage && row.current && row.power).length,
+    [rows],
+  );
+
+  return (
+    <section
+      className={cn("overflow-hidden rounded-xl border border-border bg-card text-card-foreground [border-style:solid]", className)}
+      aria-labelledby={`${filterId}-title`}
+    >
+      <header className="flex flex-wrap items-center justify-between gap-4 border-b border-border px-5 py-4 [border-bottom-style:solid]">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <Activity className="size-4 text-primary" aria-hidden="true" />
+            <h2 id={`${filterId}-title`} className="m-0 text-sm font-semibold text-foreground">
+              Component measurements
+            </h2>
+          </div>
+          <p className="m-0 mt-1 text-xs text-muted-foreground">
+            {rows.length} components · {completeCount} with complete V/I/P telemetry
+          </p>
+        </div>
+
+        <div className="relative w-full sm:w-64">
+          <label className="sr-only" htmlFor={filterId}>Filter component measurements</label>
+          <Search className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+          <Input
+            id={filterId}
+            value={query}
+            onChange={(event) => setQuery(event.currentTarget.value)}
+            placeholder="Filter by reference or type"
+            className="pl-8"
+            aria-controls={`${filterId}-results`}
+          />
+        </div>
+      </header>
+
+      <div className="flex items-center justify-between gap-3 border-b border-border px-5 py-2 text-[0.6875rem] text-muted-foreground [border-bottom-style:solid]">
+          <span>Periodic voltage/current show RMS; periodic power shows average real power.</span>
+        <span aria-live="polite">{visibleRows.length} shown</span>
+      </div>
+
+      <ScrollArea style={{ height: maxHeight }}>
+        <div id={`${filterId}-results`} className="p-3">
+          {visibleRows.length > 0 ? (
+            <ul className="m-0 grid list-none grid-cols-1 gap-3 p-0 xl:grid-cols-2">
+              {visibleRows.map((row) => (
+                <MeasurementCard
+                  key={row.componentId}
+                  row={row}
+                  selected={row.componentId === selectedId}
+                  onSelect={onSelect}
+                />
+              ))}
+            </ul>
+          ) : (
+            <div className="grid min-h-36 place-items-center px-5 text-center text-sm text-muted-foreground" aria-live="polite">
+              {rows.length === 0
+                ? "Run a transient analysis to populate component telemetry."
+                : `No components match “${query.trim()}”.`}
+            </div>
+          )}
+        </div>
+      </ScrollArea>
+    </section>
+  );
+}
+
+export default ComponentMeasurementsPanel;

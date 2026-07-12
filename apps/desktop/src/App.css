@@ -776,17 +776,16 @@ body {
   padding: 10px 14px 4px;
 }
 
-/* §11 Unit C6 — dashboard: in the full-width simulator view the scope is a
-   centered card, not a viewport-filling sheet. Capping the card's width caps
-   a pane's height too (the svg keeps its 340/190 aspect), so the expression
-   bar and measurements stay above the fold. Maximized view is exempt. */
+/* Instrument workspace: plots share one time axis vertically, like a bench
+   scope or LTspice plot window. Side-by-side cards made correlation difficult
+   and starved each trace of pixels beside the schematic. */
 .app-simulator .plotter .scope-shell {
   width: 100%;
-  max-width: 920px;
+  max-width: 1080px;
   margin: 0 auto;
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--sp-2);
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-3);
 }
 
 .app-simulator .scope-shell .pane-controls {
@@ -860,6 +859,39 @@ body {
    its corner without disturbing the svg's own aspect-ratio/width layout. */
 .scope-plot-wrap {
   position: relative;
+}
+
+.scope-size-controls {
+  position: absolute;
+  top: 5px;
+  left: 5px;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  padding: 1px;
+  color: var(--muted);
+  background: var(--panel-3);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-sm);
+  opacity: 0.55;
+  transition: opacity var(--motion-fast) var(--spring);
+}
+
+.scope-size-controls:hover,
+.scope-size-controls:focus-within {
+  opacity: 1;
+}
+
+.scope-size-controls span {
+  min-width: 38px;
+  text-align: center;
+  font-size: var(--fs-micro);
+}
+
+.scope-size-controls button {
+  width: 22px;
+  height: 20px;
 }
 
 .scope-zoom-controls {
@@ -948,6 +980,32 @@ body {
   opacity: 0.85;
 }
 
+/* Bench-instrument reference marks. MIN/MAX remain quiet limit lines while
+   AVG is stronger; the numeric readout makes the encoding independent of
+   line style or color. Marks naturally leave the viewport as the user zooms. */
+.scope-stat-mark line {
+  stroke: currentColor;
+  stroke-width: 0.55;
+  stroke-dasharray: 1.5 3;
+  opacity: 0.3;
+}
+
+.scope-stat-mark--average line {
+  stroke-width: 0.8;
+  stroke-dasharray: 5 3;
+  opacity: 0.58;
+}
+
+.scope-stat-mark text {
+  fill: currentColor;
+  font: 500 7.5px var(--font-mono);
+  text-anchor: end;
+  paint-order: stroke;
+  stroke: var(--scope-surface);
+  stroke-width: 2.5px;
+  opacity: 0.82;
+}
+
 .ref-compare {
   display: flex;
   flex-wrap: wrap;
@@ -1009,22 +1067,106 @@ body {
 
 .scope-legend {
   min-height: 22px;
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 4px 12px;
-  padding: 6px 0 2px;
+  display: block;
+  padding: var(--sp-2) 0 0;
   color: var(--text);
-  font-size: var(--fs-caption);
-  font-weight: 400;
-  letter-spacing: 0.1px;
-  font-family: var(--font-mono);
 }
 
 .scope-legend span {
   display: inline-flex;
   align-items: center;
   gap: var(--sp-1);
+}
+
+.engineering-trace-readout {
+  display: grid;
+  grid-template-columns: minmax(150px, 0.8fr) minmax(0, 3.2fr);
+  align-items: stretch;
+  gap: var(--sp-2);
+  padding: var(--sp-2);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-sm);
+  background: var(--panel-3);
+}
+
+.engineering-trace-readout__header {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: var(--sp-1);
+  padding: 0 var(--sp-2);
+  border-right: 1px solid var(--border-subtle);
+}
+
+.engineering-trace-readout__name {
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--text);
+  font: 600 var(--fs-label) var(--font-mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.engineering-trace-readout__classification {
+  display: inline-flex !important;
+  color: var(--muted);
+  font: 500 var(--fs-micro) var(--font-mono);
+  text-transform: uppercase;
+}
+
+.engineering-trace-readout__classification--periodic {
+  color: var(--accent);
+}
+
+.engineering-trace-readout__metrics {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(78px, 1fr));
+  gap: 1px;
+  margin: 0;
+  overflow: hidden;
+  border-radius: var(--r-sm);
+  background: var(--border-subtle);
+}
+
+.engineering-trace-readout__item {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  padding: 7px var(--sp-2);
+  background: var(--panel-2);
+}
+
+.engineering-trace-readout__item dt {
+  color: var(--muted);
+  font: 500 var(--fs-micro) var(--font-ui);
+  letter-spacing: var(--tracking-micro);
+}
+
+.engineering-trace-readout__item dd {
+  margin: 0;
+  overflow: hidden;
+  color: var(--text);
+  font: 600 var(--fs-caption) var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 1080px) {
+  .engineering-trace-readout {
+    grid-template-columns: 1fr;
+  }
+
+  .engineering-trace-readout__header {
+    flex-direction: row;
+    justify-content: space-between;
+    border-right: 0;
+  }
 }
 
 /* Trace-legend swatches read as small indicator lamps (OP-1 style), not thin
@@ -1373,7 +1515,145 @@ body {
 }
 
 .fft-view {
-  margin-top: 6px;
+  margin-top: var(--sp-3);
+}
+
+.fft-control-bar {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: var(--sp-2) 14px 0;
+  display: flex;
+  align-items: end;
+  gap: var(--sp-2);
+}
+
+.fft-control-bar label {
+  min-width: 0;
+  display: flex;
+  flex: 1 1 180px;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--muted);
+  font-size: var(--fs-micro);
+  font-weight: 500;
+}
+
+.fft-control-bar select {
+  width: 100%;
+  height: var(--control-h-sm);
+  padding: 0 var(--sp-2);
+  color: var(--text);
+  background: var(--panel-3);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  font: 500 var(--fs-caption) var(--font-mono);
+}
+
+.fft-tone-marker circle {
+  fill: var(--scope-surface);
+  stroke: var(--accent);
+  stroke-width: 1.2;
+}
+
+.fft-tone-marker text {
+  fill: var(--text);
+  font: 600 7.5px var(--font-mono);
+  paint-order: stroke;
+  stroke: var(--scope-surface);
+  stroke-width: 2px;
+}
+
+.fft-insights {
+  width: calc(100% - 28px);
+  max-width: 1052px;
+  margin: 0 auto var(--sp-3);
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) minmax(260px, 0.75fr);
+  gap: var(--sp-3);
+}
+
+.fft-insight-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+  gap: 1px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--border-subtle);
+}
+
+.fft-insight-item {
+  min-height: 72px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 3px;
+  padding: var(--sp-2) var(--sp-3);
+  background: var(--panel-2);
+}
+
+.fft-insight-item > span,
+.fft-insight-item small {
+  color: var(--muted);
+  font-size: var(--fs-micro);
+}
+
+.fft-insight-item strong {
+  color: var(--text);
+  font-size: var(--fs-label);
+  font-weight: 600;
+}
+
+.fft-harmonics-wrap {
+  max-height: 230px;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--panel-2);
+}
+
+.fft-harmonics {
+  width: 100%;
+  border-collapse: collapse;
+  color: var(--text);
+  font: 500 var(--fs-caption) var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.fft-harmonics caption {
+  padding: var(--sp-2) var(--sp-3);
+  color: var(--text);
+  font-family: var(--font-ui);
+  font-weight: 600;
+  text-align: left;
+}
+
+.fft-harmonics th,
+.fft-harmonics td {
+  padding: 6px var(--sp-2);
+  border-top: 1px solid var(--border-subtle);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.fft-harmonics th {
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.fft-harmonics th:first-child,
+.fft-harmonics td:first-child {
+  text-align: left;
+}
+
+@media (max-width: 1080px) {
+  .fft-insights {
+    grid-template-columns: 1fr;
+  }
+
+  .fft-control-bar {
+    flex-wrap: wrap;
+  }
 }
 
 /* FFT spectrum / Cursors disclosure headers — the same Braun-style micro-label
