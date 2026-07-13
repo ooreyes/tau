@@ -1,11 +1,9 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
-  Folder,
   FolderOpen,
   Search,
   FilePlus,
   FolderPlus,
-  FileInput,
   Trash2,
   MousePointer2,
   Tag,
@@ -133,13 +131,21 @@ export function ExplorerPanel({
   const detectCapability = useProject((s) => s.detectCapability);
   const ensureDefaultWorkspace = useProject((s) => s.ensureDefaultWorkspace);
   const openFolder = useProject((s) => s.openFolder);
+  const refresh = useProject((s) => s.refresh);
   const toggleExpanded = useProject((s) => s.toggleExpanded);
+  const collapseAll = useProject((s) => s.collapseAll);
   const createFolder = useProject((s) => s.createFolder);
   const createSimFile = useProject((s) => s.createSimFile);
   const importAscFile = useProject((s) => s.importAscFile);
   const deleteNode = useProject((s) => s.deleteNode);
   const readSim = useProject((s) => s.readSim);
   const ascInputRef = useRef<HTMLInputElement | null>(null);
+  const createInputRef = useRef<HTMLInputElement | null>(null);
+  const [createDraft, setCreateDraft] = useState<{
+    kind: "file" | "folder";
+    parentPath: string;
+    name: string;
+  } | null>(null);
   const resize = usePanelWidth(EXPLORER_PANEL_WIDTH);
   const resizeHandle = (
     <PanelResizeHandle
@@ -170,9 +176,28 @@ export function ExplorerPanel({
     }
   };
 
-  const promptName = (label: string, fallback: string) => {
-    const value = window.prompt(label, fallback);
-    return value?.trim() || null;
+  useEffect(() => {
+    if (!createDraft) return;
+    createInputRef.current?.focus();
+    createInputRef.current?.select();
+  }, [createDraft?.kind, createDraft?.parentPath]);
+
+  const commitCreateDraft = async () => {
+    if (!createDraft) return;
+    const draft = createDraft;
+    const name = draft.name.trim();
+    if (!name) return;
+    setCreateDraft(null);
+    if (draft.kind === "folder") {
+      const path = await createFolder(draft.parentPath, name);
+      if (path) onNotice(`Created ${name}`);
+      return;
+    }
+    const path = await createSimFile(draft.parentPath, name);
+    if (path) {
+      onNotice(`Created ${basename(path)}`);
+      await openNode(path, basename(path));
+    }
   };
 
   if (!rootPath) {
@@ -195,74 +220,93 @@ export function ExplorerPanel({
         <span>{rootName ?? "Powerboard"}</span>
         <div className="explorer-icons">
           <button
-            title="Open folder on disk"
-            aria-label="Open folder on disk"
-            onClick={async () => {
-              if (capability === "none") {
-                onNotice("Opening a disk folder needs the Tau desktop app.");
-                return;
-              }
-              const ok = await openFolder();
-              if (ok) onNotice("Opened project folder.");
-            }}
+            type="button"
+            title="New simulation file"
+            aria-label="New simulation file"
+            onClick={() => setCreateDraft({ kind: "file", parentPath: rootPath, name: "untitled.sim" })}
           >
-            <Folder size={14} strokeWidth={1.6} />
+            <FilePlus size={15} strokeWidth={1.7} />
           </button>
           <button
+            type="button"
             title="New folder"
             aria-label="New folder"
-            onClick={async () => {
-              const name = promptName("Folder name", "circuits");
-              if (!name) return;
-              const path = await createFolder(rootPath, name);
-              if (path) onNotice(`Created ${name}`);
-            }}
+            onClick={() => setCreateDraft({ kind: "folder", parentPath: rootPath, name: "New Folder" })}
           >
-            <FolderPlus size={14} strokeWidth={1.6} />
+            <FolderPlus size={15} strokeWidth={1.7} />
           </button>
           <button
-            title="New simulation"
-            aria-label="New simulation"
+            type="button"
+            title="Refresh explorer"
+            aria-label="Refresh explorer"
             onClick={async () => {
-              const name = promptName("Simulation name", "untitled.sim");
-              if (!name) return;
-              const path = await createSimFile(rootPath, name);
-              if (path) {
-                onNotice(`Created ${basename(path)}`);
-                await openNode(path, basename(path));
-              }
+              const ok = await refresh();
+              if (ok) onNotice("Explorer refreshed.");
             }}
           >
-            <FilePlus size={14} strokeWidth={1.6} />
+            <svg viewBox="0 0 16 16" aria-hidden="true">
+              <path d="M13.2 5.4A5.5 5.5 0 1 0 13.1 11" />
+              <path d="M10.2 5.4h3.2V2.2" />
+            </svg>
           </button>
           <button
-            title="Import LTspice .asc"
-            aria-label="Import LTspice .asc"
-            onClick={() => ascInputRef.current?.click()}
+            type="button"
+            title="Collapse folders in explorer"
+            aria-label="Collapse folders in explorer"
+            onClick={collapseAll}
           >
-            <FileInput size={14} strokeWidth={1.6} />
+            <svg viewBox="0 0 16 16" aria-hidden="true">
+              <rect x="2.2" y="3" width="9.5" height="9.5" rx="1.4" />
+              <path d="M5.2 1.5h7.1a2.2 2.2 0 0 1 2.2 2.2v7.1" />
+              <path d="M4.7 8h4.5" />
+            </svg>
           </button>
-          <input
-            ref={ascInputRef}
-            className="file-input"
-            type="file"
-            accept=".asc"
-            title="Import LTspice schematic"
-            onChange={async (event) => {
-              const file = event.currentTarget.files?.[0];
-              event.currentTarget.value = "";
-              if (!file) return;
-              const path = await importAscFile(rootPath, file);
-              if (path) {
-                onNotice(`Imported ${basename(path)}`);
-                await openNode(path, basename(path));
-              }
-            }}
-          />
         </div>
       </div>
 
+      <input
+        ref={ascInputRef}
+        className="file-input"
+        type="file"
+        accept=".asc"
+        title="Import LTspice schematic"
+        onChange={async (event) => {
+          const file = event.currentTarget.files?.[0];
+          event.currentTarget.value = "";
+          if (!file) return;
+          const path = await importAscFile(rootPath, file);
+          if (path) {
+            onNotice(`Imported ${basename(path)}`);
+            await openNode(path, basename(path));
+          }
+        }}
+      />
+
       <div className="tree-list">
+        {createDraft && (
+          <div className="tree-create-row" data-kind={createDraft.kind}>
+            <span className="tree-create-icon" aria-hidden="true">
+              {createDraft.kind === "folder" ? "▸" : "•"}
+            </span>
+            <input
+              ref={createInputRef}
+              value={createDraft.name}
+              aria-label={createDraft.kind === "folder" ? "New folder name" : "New simulation name"}
+              spellCheck={false}
+              onChange={(event) => setCreateDraft({ ...createDraft, name: event.currentTarget.value })}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  void commitCreateDraft();
+                } else if (event.key === "Escape") {
+                  event.preventDefault();
+                  setCreateDraft(null);
+                }
+              }}
+              onBlur={() => setCreateDraft(null)}
+            />
+          </div>
+        )}
         <ProjectTree
           nodes={tree}
           depth={0}
@@ -271,15 +315,10 @@ export function ExplorerPanel({
           onToggle={toggleExpanded}
           onOpenFile={openNode}
           onNewFolder={async (parent) => {
-            const name = promptName("Folder name", "circuits");
-            if (!name) return;
-            await createFolder(parent, name);
+            setCreateDraft({ kind: "folder", parentPath: parent, name: "New Folder" });
           }}
           onNewSim={async (parent) => {
-            const name = promptName("Simulation name", "untitled.sim");
-            if (!name) return;
-            const path = await createSimFile(parent, name);
-            if (path) await openNode(path, basename(path));
+            setCreateDraft({ kind: "file", parentPath: parent, name: "untitled.sim" });
           }}
           onDelete={async (path, name) => {
             if (!window.confirm(`Delete “${name}”?`)) return;
@@ -287,6 +326,25 @@ export function ExplorerPanel({
             onNotice(`Deleted ${name}`);
           }}
         />
+      </div>
+
+      <div className="explorer-secondary-actions" aria-label="Project actions">
+        <button
+          type="button"
+          onClick={async () => {
+            if (capability === "none") {
+              onNotice("Opening a disk folder needs the Tau desktop app.");
+              return;
+            }
+            const ok = await openFolder();
+            if (ok) onNotice("Opened project folder.");
+          }}
+        >
+          Open Folder…
+        </button>
+        <button type="button" onClick={() => ascInputRef.current?.click()}>
+          Import .asc…
+        </button>
       </div>
 
       {error && <p className="explorer-error" role="alert">{error}</p>}
@@ -555,16 +613,30 @@ export function BottomPanel({ result }: { mode?: "schematic" | "simulator"; resu
   ];
   const hasIssues = messages.length > 0;
   const hasError = Boolean(result && !result.ok);
-  // Green only means "a run happened and came back clean" — an idle panel
-  // stays neutral so the color always reflects real evidence.
-  const isClean = Boolean(result?.ok) && !hasIssues;
+  const isClean = !hasIssues;
+  const issueSignature = messages.join("\u0000");
+  const [expanded, setExpanded] = useState(true);
+
+  // A newly reported issue must never stay hidden because the user collapsed
+  // an earlier all-clear panel.
+  useEffect(() => {
+    if (issueSignature) setExpanded(true);
+  }, [issueSignature]);
 
   return (
     <section
-      className={`bottom-panel${hasIssues ? " has-issues" : ""}${hasError ? " has-error" : ""}${isClean ? " is-clean" : ""}`}
+      className={`bottom-panel${hasIssues ? " has-issues" : ""}${hasError ? " has-error" : ""}${isClean ? " is-clean" : ""}${expanded ? "" : " is-collapsed"}`}
       aria-label="Errors"
     >
-      <div className="bottom-panel-head">
+      <button
+        type="button"
+        className="bottom-panel-head"
+        aria-expanded={expanded}
+        onClick={() => setExpanded((value) => !value)}
+      >
+        <svg className="bottom-panel-chevron" viewBox="0 0 12 12" aria-hidden="true">
+          <path d="M2.5 4.2 6 7.8l3.5-3.6" />
+        </svg>
         <span className="bottom-panel-title">Errors</span>
         {hasIssues && (
           <span
@@ -574,8 +646,8 @@ export function BottomPanel({ result }: { mode?: "schematic" | "simulator"; resu
             {messages.length}
           </span>
         )}
-      </div>
-      <div className="bottom-errors">
+      </button>
+      {expanded && <div className="bottom-errors">
         {hasIssues ? (
           messages.map((message, index) => (
             <div
@@ -594,7 +666,7 @@ export function BottomPanel({ result }: { mode?: "schematic" | "simulator"; resu
             No errors
           </p>
         )}
-      </div>
+      </div>}
     </section>
   );
 }

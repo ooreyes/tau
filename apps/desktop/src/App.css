@@ -3406,20 +3406,26 @@ body {
    saturated CTA slab. The lamp dot follows suit via currentColor-free vars. */
 .run-button--ok {
   background: linear-gradient(
-    to bottom,
-    color-mix(in srgb, var(--success) 18%, var(--panel-2)),
-    color-mix(in srgb, var(--success) 8%, var(--panel-2))
+    135deg,
+    color-mix(in srgb, var(--success) 42%, var(--panel-2)),
+    color-mix(in srgb, var(--success) 16%, var(--panel-2))
   ) !important;
-  border-color: color-mix(in srgb, var(--success) 40%, transparent) !important;
+  color: color-mix(in srgb, var(--success) 32%, white) !important;
+  border-color: color-mix(in srgb, var(--success) 62%, transparent) !important;
+  box-shadow: inset 0 1px 0 color-mix(in srgb, white 10%, transparent),
+    0 0 12px color-mix(in srgb, var(--success) 12%, transparent);
 }
 
 .run-button--error {
   background: linear-gradient(
-    to bottom,
-    color-mix(in srgb, var(--danger) 20%, var(--panel-2)),
-    color-mix(in srgb, var(--danger) 9%, var(--panel-2))
+    135deg,
+    color-mix(in srgb, var(--danger) 46%, var(--panel-2)),
+    color-mix(in srgb, var(--danger) 18%, var(--panel-2))
   ) !important;
-  border-color: color-mix(in srgb, var(--danger) 42%, transparent) !important;
+  color: color-mix(in srgb, var(--danger) 24%, white) !important;
+  border-color: color-mix(in srgb, var(--danger) 66%, transparent) !important;
+  box-shadow: inset 0 1px 0 color-mix(in srgb, white 9%, transparent),
+    0 0 12px color-mix(in srgb, var(--danger) 14%, transparent);
 }
 
 .run-button--error .run-lamp-dot {
@@ -3534,7 +3540,7 @@ body {
 
 .explorer-icons {
   display: flex;
-  gap: var(--sp-2);
+  gap: 2px;
   color: var(--faint);
   font-size: var(--fs-label);
 }
@@ -3566,6 +3572,76 @@ body {
 
 .explorer-icons button:hover {
   color: var(--text);
+  background: var(--panel-4);
+}
+
+.explorer-icons button:focus-visible {
+  outline: none;
+  color: var(--text);
+  box-shadow: 0 0 0 2px var(--accent-line);
+}
+
+.explorer-icons button svg {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.explorer-secondary-actions {
+  flex: none;
+  display: flex;
+  gap: var(--sp-2);
+  padding: 8px 10px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.explorer-secondary-actions button {
+  flex: 1;
+  min-width: 0;
+  height: 26px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--muted);
+  background: var(--panel-2);
+  font: 550 var(--fs-caption) var(--font-ui);
+  cursor: pointer;
+}
+
+.explorer-secondary-actions button:hover {
+  color: var(--text);
+  border-color: var(--border-strong);
+  background: var(--panel-4);
+}
+
+.tree-create-row {
+  height: var(--row-h);
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr);
+  align-items: center;
+  gap: 3px;
+  padding: 0 7px;
+}
+
+.tree-create-icon {
+  color: var(--accent);
+  text-align: center;
+  font: 600 var(--fs-caption) var(--font-mono);
+}
+
+.tree-create-row input {
+  width: 100%;
+  min-width: 0;
+  height: 23px;
+  padding: 0 5px;
+  border: 1px solid var(--accent);
+  border-radius: 3px;
+  outline: none;
+  color: var(--text);
+  background: var(--canvas-bg);
+  font: 500 var(--fs-label) var(--font-mono);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 18%, transparent);
 }
 
 .explorer-search {
@@ -4236,6 +4312,28 @@ body {
   gap: var(--sp-2);
   padding: 0 12px;
   border-bottom: 1px solid var(--border-subtle);
+  width: 100%;
+  border-top: 0;
+  border-right: 0;
+  border-left: 0;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.bottom-panel-chevron {
+  width: 12px;
+  height: 12px;
+  fill: none;
+  stroke: var(--muted);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: transform var(--motion-fast) var(--spring);
+}
+
+.bottom-panel.is-collapsed .bottom-panel-chevron {
+  transform: rotate(-90deg);
 }
 
 .bottom-panel-title {
@@ -4248,8 +4346,8 @@ body {
 .bottom-panel.has-error .bottom-panel-head {
   background: linear-gradient(
     to right,
-    color-mix(in srgb, var(--danger) 22%, transparent),
-    color-mix(in srgb, var(--danger) 8%, transparent) 55%,
+    color-mix(in srgb, var(--danger) 38%, var(--panel)),
+    color-mix(in srgb, var(--danger) 14%, var(--panel)) 62%,
     transparent
   );
   border-bottom-color: color-mix(in srgb, var(--danger) 35%, transparent);
@@ -4264,8 +4362,8 @@ body {
 .bottom-panel.is-clean .bottom-panel-head {
   background: linear-gradient(
     to right,
-    color-mix(in srgb, var(--success) 16%, transparent),
-    color-mix(in srgb, var(--success) 6%, transparent) 55%,
+    color-mix(in srgb, var(--success) 32%, var(--panel)),
+    color-mix(in srgb, var(--success) 11%, var(--panel)) 62%,
     transparent
   );
   border-bottom-color: color-mix(in srgb, var(--success) 30%, transparent);

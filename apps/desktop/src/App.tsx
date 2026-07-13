@@ -157,6 +157,7 @@ function App() {
   const [runState, setRunState] = useState<"idle" | "complete" | "error" | "stopped">("idle");
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [mode, setMode] = useState<"schematic" | "simulator">("schematic");
+  const modeRef = useRef(mode);
   const [tabs, setTabs] = useState<OpenTab[]>([{ id: "tab-0", title: "untitled.sim", doc: null, history: emptyHistory() }]);
   const [activeId, setActiveId] = useState("tab-0");
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -714,12 +715,18 @@ function App() {
     invalidateAnalysis();
   }, [components, wires, directives, invalidateAnalysis]);
 
+  useEffect(() => {
+    modeRef.current = mode;
+  }, [mode]);
+
   // Simulator node naming is an analysis annotation and should rename/create
   // its plot immediately from the current result. Once back in the schematic,
   // labels regain their electrical net-merging meaning and invalidate results.
+  // `mode` itself is intentionally tracked through a ref: changing views must
+  // preserve the last result so Run/Errors keep their truthful status color.
   useEffect(() => {
-    if (mode === "schematic") invalidateAnalysis();
-  }, [mode, netLabels, invalidateAnalysis]);
+    if (modeRef.current === "schematic") invalidateAnalysis();
+  }, [netLabels, invalidateAnalysis]);
 
   // The simulator's circuit surface has exactly three safe modes: inspect,
   // voltage probe, and node name. Never carry a topology-editing tool across

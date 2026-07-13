@@ -18,6 +18,8 @@ type LampState = "idle" | "running" | "ok" | "error" | "warn";
 
 export function Toolbar({ mode, result, runState, isRunning, title, onModeChange, onRun, onOpenSettings }: ToolbarProps) {
   const isSimulator = mode === "simulator";
+  const runHasError = runState === "error" || result?.ok === false;
+  const runIsAcceptable = !runHasError && runState !== "stopped";
 
   // The status lamp is the single source of truth for run state — no cancel
   // path exists (nothing in the codebase can interrupt an in-flight ngspice
@@ -95,10 +97,8 @@ export function Toolbar({ mode, result, runState, isRunning, title, onModeChange
         )}
         <Tooltip>
           <TooltipTrigger asChild>
-            {/* Quiet panel fill + hairline border; the fill picks up a subtle
-                status gradient once there is real evidence — green after a
-                clean run, red after a failed one, neutral before any run —
-                so "is this circuit acceptable?" reads from the button itself. */}
+            {/* The Run control is also the schematic health indicator: green
+                while the circuit has no known error, red after a failed run. */}
             <Button
               variant="outline"
               size="sm"
@@ -106,8 +106,8 @@ export function Toolbar({ mode, result, runState, isRunning, title, onModeChange
               className={cn(
                 "gap-1.5 bg-secondary hover:bg-accent",
                 "[-webkit-app-region:no-drag]",
-                !isRunning && runState === "error" && "run-button--error",
-                !isRunning && runState === "complete" && result?.ok && "run-button--ok",
+                runHasError && "run-button--error",
+                runIsAcceptable && "run-button--ok",
               )}
               onClick={onRun}
               aria-label="Run simulation"

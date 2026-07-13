@@ -771,9 +771,14 @@ export const countRouteBodyHits = routeHitCount;
 const routeClutter = (
   points: Point[],
   existing: readonly SchematicWire[],
-): { crossings: number; overlap: number } => {
+): { crossings: number; overlap: number; nearParallel: number; nodeContacts: number } => {
   let crossings = 0;
   let overlap = 0;
+  let nearParallel = 0;
+  const nodeContactKeys = new Set<string>();
+  const routeStart = points[0];
+  const routeEnd = points[points.length - 1];
+  const internalRoutePoints = points.slice(1, -1);
   const existingSegments = wireSegments(existing as SchematicWire[]);
   for (let i = 1; i < points.length; i += 1) {
     const seg = { a: points[i - 1], b: points[i] };
@@ -783,19 +788,38 @@ const routeClutter = (
       const otherVertical = other.a.x === other.b.x;
       if (vertical !== otherVertical) {
         const hit = segmentIntersections(seg, other);
-        if (hit.length > 0 && !isWireEndpoint(hit[0], seg) && !isWireEndpoint(hit[0], other)) crossings += 1;
+        if (hit.length > 0) {
+          const point = hit[0];
+          // A route may deliberately begin/end on an existing wire (a branch).
+          // Any other contact with an existing endpoint is an accidental-looking
+          // node and is more confusing than a plain mid-segment crossing.
+          if (pointsEqual(point, routeStart) || pointsEqual(point, routeEnd)) continue;
+          if (
+            isWireEndpoint(point, other) ||
+            internalRoutePoints.some((routePoint) => pointsEqual(routePoint, point))
+          ) nodeContactKeys.add(`${point.x},${point.y}`);
+          else crossings += 1;
+        }
       } else if (vertical && seg.a.x === other.a.x) {
         const lo = Math.max(Math.min(seg.a.y, seg.b.y), Math.min(other.a.y, other.b.y));
         const hi = Math.min(Math.max(seg.a.y, seg.b.y), Math.max(other.a.y, other.b.y));
         overlap += Math.max(0, hi - lo);
+      } else if (vertical && Math.abs(seg.a.x - other.a.x) < GRID) {
+        const lo = Math.max(Math.min(seg.a.y, seg.b.y), Math.min(other.a.y, other.b.y));
+        const hi = Math.min(Math.max(seg.a.y, seg.b.y), Math.max(other.a.y, other.b.y));
+        nearParallel += Math.max(0, hi - lo);
       } else if (!vertical && seg.a.y === other.a.y) {
         const lo = Math.max(Math.min(seg.a.x, seg.b.x), Math.min(other.a.x, other.b.x));
         const hi = Math.min(Math.max(seg.a.x, seg.b.x), Math.max(other.a.x, other.b.x));
         overlap += Math.max(0, hi - lo);
+      } else if (!vertical && Math.abs(seg.a.y - other.a.y) < GRID) {
+        const lo = Math.max(Math.min(seg.a.x, seg.b.x), Math.min(other.a.x, other.b.x));
+        const hi = Math.min(Math.max(seg.a.x, seg.b.x), Math.max(other.a.x, other.b.x));
+        nearParallel += Math.max(0, hi - lo);
       }
     }
   }
-  return { crossings, overlap };
+  return { crossings, overlap, nearParallel, nodeContacts: nodeContactKeys.size };
 };
 
 export const routeWireSmart = (
@@ -872,6 +896,8 @@ export const routeWireSmart = (
         // Riding on top of another wire is worse than crossing it — an
         // overlapped run is unreadable, a crossing at least gets a hop arc.
         overlap: clutter.overlap,
+        nearParallel: clutter.nearParallel,
+        nodeContacts: clutter.nodeContacts,
         crossings: clutter.crossings,
         length: routeLength(points),
         corners: Math.max(0, points.length - 2),
@@ -881,6 +907,8 @@ export const routeWireSmart = (
       (a, b) =>
         a.hits - b.hits ||
         a.overlap - b.overlap ||
+        a.nodeContacts - b.nodeContacts ||
+        a.nearParallel - b.nearParallel ||
         a.crossings - b.crossings ||
         a.length - b.length ||
         a.corners - b.corners ||

@@ -27,8 +27,9 @@ interface ProjectStore extends ProjectState {
   openFolder: () => Promise<boolean>;
   newProject: (suggestedName?: string) => Promise<boolean>;
   closeProject: () => void;
-  refresh: () => Promise<void>;
+  refresh: () => Promise<boolean>;
   toggleExpanded: (path: string) => void;
+  collapseAll: () => void;
   createFolder: (parentPath: string, name: string) => Promise<string | null>;
   createSimFile: (parentPath: string, name: string) => Promise<string | null>;
   importAscFile: (parentPath: string, file: File) => Promise<string | null>;
@@ -136,16 +137,18 @@ export const useProject = create<ProjectStore>((set, get) => ({
 
   refresh: async () => {
     const { rootPath, workspaceFiles } = get();
-    if (!rootPath) return;
+    if (!rootPath) return false;
     if (isWorkspacePath(rootPath)) {
       set({ tree: rebuildWorkspaceTree(workspaceFiles), error: null });
-      return;
+      return true;
     }
     try {
       const tree = await fs.readProjectTree(rootPath);
       set({ tree, error: null });
+      return true;
     } catch (error) {
       set({ error: error instanceof Error ? error.message : "Could not refresh project." });
+      return false;
     }
   },
 
@@ -155,6 +158,8 @@ export const useProject = create<ProjectStore>((set, get) => ({
         ? s.expanded.filter((p) => p !== path)
         : [...s.expanded, path],
     })),
+
+  collapseAll: () => set({ expanded: [] }),
 
   createFolder: async (parentPath, name) => {
     const folderName = name.trim() || "New Folder";

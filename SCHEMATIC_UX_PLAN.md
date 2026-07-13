@@ -97,3 +97,27 @@ Items get checked off as they land in the working tree (verify with git diff). R
 - Staged-only detached-worktree gate also passed: typecheck, 115 focused schematic/store tests,
   and production build. This proves the schematic commit does not depend on unrelated dirty-tree
   simulator/dashboard changes.
+
+## Screenshot follow-up — 2026-07-13 UTC
+
+- [x] Routing clearance hardened: a candidate route now treats an existing wire endpoint in the
+  middle of its path as an accidental node contact, penalizes close parallel projection as well
+  as exact collinear overlap, and still permits an intentional branch at the route's own start or
+  end. Priority is component hits, exact overlap, accidental node contact, near-parallel run,
+  ordinary crossing, then length/corners — small unconnected crossings remain the preferred
+  compromise and keep their hop arc.
+- [x] Explorer header now matches the four requested VS Code actions: New simulation, New folder,
+  Refresh, and Collapse All. New items use an inline focused name field (Enter commits, Escape or
+  blur cancels) instead of browser prompts; Open Folder and Import `.asc` remain available below
+  the tree.
+- [x] Run and Errors are real controls, not decorative states: Run invokes the existing simulation
+  callback and is green until a known validation failure makes it red; Errors expands/collapses
+  from its header and automatically reopens when a new issue arrives. Switching between Schematic
+  and Simulator no longer discards the last result, so the red state remains visible on return.
+- [x] Verification: 41 routing geometry tests, focused Explorer/Toolbar/Errors interaction tests,
+  staged-only 100-file / 1499-test Vitest suite, TypeScript typecheck, production web build, and
+  in-app browser checks of all four Explorer actions plus both green and red status states. The
+  shared dirty tree's additional in-progress units also passed (104 files / 1550 tests), but are
+  deliberately excluded from this schematic commit. An independent staged-diff review additionally
+  caught and closed candidate-elbow junctions, changed-error re-expansion, and false refresh-success
+  notices before publish.

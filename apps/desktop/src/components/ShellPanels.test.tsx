@@ -135,7 +135,30 @@ describe("BottomPanel — errors tab states (§11 Unit A3)", () => {
     expect(clear.textContent).toContain("No errors");
     expect(clear.querySelector("svg")).toBeTruthy(); // the checkmark glyph
     expect(container.querySelector(".bottom-panel.has-error")).toBeNull();
+    expect(container.querySelector(".bottom-panel.is-clean")).toBeTruthy();
     expect(container.querySelector(".bottom-panel-count")).toBeNull();
+  });
+
+  it("toggles the Errors body from its gradient header button", () => {
+    render(<BottomPanel result={null} />);
+    const toggle = screen.getByRole("button", { name: /^Errors/ });
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    fireEvent.click(toggle);
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    expect(screen.queryByRole("status")).toBeNull();
+    fireEvent.click(toggle);
+    expect(screen.getByRole("status").textContent).toContain("No errors");
+  });
+
+  it("reopens when a newly reported issue replaces a collapsed one", () => {
+    const { rerender } = render(<BottomPanel result={failed} />);
+    const toggle = screen.getByRole("button", { name: /^Errors/ });
+    fireEvent.click(toggle);
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+
+    rerender(<BottomPanel result={{ ...failed, message: "timestep too small" } as AnalysisResult} />);
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    expect(screen.getByRole("alert").textContent).toBe("timestep too small");
   });
 
   it("goes loud with an error token and a count when the run fails", () => {

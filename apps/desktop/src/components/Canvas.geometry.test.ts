@@ -16,6 +16,7 @@ import {
   wireIntersectsRect,
 } from "./Canvas.geometry";
 import type { SchematicComponent } from "../schematic/types";
+import { GRID } from "../schematic/symbols";
 
 const comp = (id: string, x: number, y: number): SchematicComponent =>
   ({ id, kind: "resistor", x, y, rotation: 0, value: "1k" }) as SchematicComponent;
@@ -131,6 +132,46 @@ describe("Canvas wire geometry", () => {
     const route = routeWireSmart({ x: 0, y: 0 }, { x: 96, y: 0 }, [], existing);
     expect(route.length).toBeGreaterThan(2);
     expect(route.some((point) => Math.abs(point.y) >= 32)).toBe(true);
+  });
+
+  it("does not pass through a pre-existing wire endpoint in the middle of a route", () => {
+    const existing = [{
+      id: "existing",
+      points: [{ x: 48, y: 0 }, { x: 48, y: 32 }],
+    }];
+    const route = routeWireSmart({ x: 0, y: 0 }, { x: 96, y: 0 }, [], existing);
+    expect(route.length).toBeGreaterThan(2);
+    expect(route.some((point) => point.y !== 0)).toBe(true);
+  });
+
+  it("allows an intentional connection when the existing node is the route endpoint", () => {
+    const existing = [{
+      id: "existing",
+      points: [{ x: 48, y: 0 }, { x: 48, y: 32 }],
+    }];
+    expect(routeWireSmart({ x: 0, y: 0 }, { x: 48, y: 0 }, [], existing)).toEqual([
+      { x: 0, y: 0 },
+      { x: 48, y: 0 },
+    ]);
+  });
+
+  it("does not place a candidate elbow on the interior of an existing wire", () => {
+    const existing = [{
+      id: "existing",
+      points: [{ x: 48, y: -32 }, { x: 48, y: 64 }],
+    }];
+    const route = routeWireSmart({ x: 0, y: 0 }, { x: 48, y: 96 }, [], existing);
+    expect(route.slice(1, -1)).not.toContainEqual({ x: 48, y: 0 });
+  });
+
+  it("moves imported off-grid parallel runs onto a visibly separate lane", () => {
+    const existing = [{
+      id: "existing",
+      points: [{ x: 16, y: 8 }, { x: 80, y: 8 }],
+    }];
+    const route = routeWireSmart({ x: 0, y: 0 }, { x: 96, y: 0 }, [], existing);
+    expect(route.length).toBeGreaterThan(2);
+    expect(route.some((point) => Math.abs(point.y) >= GRID)).toBe(true);
   });
 });
 
