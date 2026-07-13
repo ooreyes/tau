@@ -10,14 +10,14 @@
 ## ⏱ HEARTBEAT
 - **Headline metric:** 1540 tests green · corpus 82/82 import · 82/82 op-converge · 79/82 warning-clean
 - **Run started (UTC):** 2026-07-13T05:10Z
-- **Synced to origin:** auto/ltspice-parity @ 303a2ce.
+- **Synced to origin:** auto/ltspice-parity @ 1df019b.
 - **Claimed unit:** §2 schematic legibility — collision-aware labels, clean
   wire routing/crossing semantics, direct deletion, typography, status color.
 - **Status:** DONE
 - **Last completed sub-step:** §2 schematic legibility pass implemented,
-  interaction-verified, and passed 1540 tests plus the production web build.
-- **Plan:** selectively commit only the schematic hunks amid unrelated
-  simulator/dashboard work, then resume the highest-leverage DoD item.
+  interaction-verified, passed 1540 tests plus the production web build, and
+  pushed through 1df019b without unrelated working-tree edits.
+- **Plan:** resume the highest-leverage agent-provable DoD item.
 - **Note:** continuation detail lives in `SCHEMATIC_UX_PLAN.md`.
 - **Next step:** resume waveform-parity/acceptance work after this UI unit.
 
