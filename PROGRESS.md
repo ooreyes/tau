@@ -8,18 +8,56 @@
      `git log --oneline -8`, recover/finish/revert that unit FIRST, then go on.
      ─────────────────────────────────────────────────────────────────────── -->
 ## ⏱ HEARTBEAT
-- **Headline metric:** 1540 tests green · corpus 82/82 import · 82/82 op-converge · 79/82 warning-clean
-- **Run started (UTC):** 2026-07-13T05:10Z
-- **Synced to origin:** auto/ltspice-parity @ 1df019b.
-- **Claimed unit:** §2 schematic legibility — collision-aware labels, clean
-  wire routing/crossing semantics, direct deletion, typography, status color.
+- **Headline metric:** 1499 committed-branch tests green · corpus 82/82 import · 82/82 op-converge · 79/82 warning-clean
+- **Run started (UTC):** 2026-07-13T14:22Z
+- **Synced to origin:** auto/ltspice-parity @ e6c20ca.
+- **Claimed unit:** §2 schematic follow-up — hard parallel-wire/node clearance,
+  visible Run/Errors state gradients, and functional VS Code-style Explorer actions.
 - **Status:** DONE
-- **Last completed sub-step:** §2 schematic legibility pass implemented,
-  interaction-verified, passed 1540 tests plus the production web build, and
-  pushed through 1df019b without unrelated working-tree edits.
-- **Plan:** resume the highest-leverage agent-provable DoD item.
-- **Note:** continuation detail lives in `SCHEMATIC_UX_PLAN.md`.
-- **Next step:** resume waveform-parity/acceptance work after this UI unit.
+- **Last completed sub-step:** committed and pushed `5f69f6e` after independent
+  staged-diff review, in-app browser verification, and isolated full gates.
+- **Plan:** unit complete; continue with the next highest-leverage parity item.
+- **Note:** preserve LTspice import access while matching the four VS Code actions.
+- **Next step:** resume the active `FEATURE_PARITY.md` queue.
+
+---
+
+## 2026-07-13T14:49Z — auto/ltspice-parity — §2 schematic routing and controls follow-up
+
+### What I did
+- Hardened automatic wire routing against exact/near-parallel runs, accidental
+  contacts with existing nodes, and candidate elbows that would create an
+  unintended electrical junction; ordinary unavoidable crossings remain legal
+  and retain hop-over arcs.
+- Replaced the Explorer's inert/prompt-based header controls with working
+  VS Code-style New File, New Folder, Refresh, and Collapse All actions. New
+  items use a focused inline editor; Open Folder and `.asc` import remain.
+- Made Run and Errors visibly green in the acceptable state and red after a
+  failed validation, made Errors collapsible, reopens it for changed issues,
+  and preserves the result when switching views.
+- Prevented Refresh from reporting success when the project-store refresh fails.
+
+### Files
+- `apps/desktop/src/components/Canvas.geometry.ts` + tests
+- `apps/desktop/src/components/Toolbar.tsx` + tests
+- `apps/desktop/src/components/ShellPanels.tsx` + Explorer/Errors tests
+- `apps/desktop/src/store/useProject.ts`, `apps/desktop/src/App.tsx`, `apps/desktop/src/App.css`
+- `SCHEMATIC_UX_PLAN.md`, `FEATURE_PARITY.md`
+
+### Tests
+- Focused UI/geometry: 4 files / 61 tests passed.
+- Isolated staged-only: typecheck passed; 100 files / 1499 tests passed;
+  production Vite build passed (existing chunk-size advisory only).
+- In-app browser: all four Explorer actions, inline creation, collapse/refresh,
+  Errors toggle, valid green state, and real validation-error red state verified.
+
+### Parity items
+- §2 schematic capture: routing readability and core schematic controls hardened.
+- Commit: `5f69f6e` pushed to `origin/auto/ltspice-parity`.
+
+### Next step
+- Continue the active `FEATURE_PARITY.md` queue; keep the unrelated shared-tree
+  simulator/assistant work in its own separately reviewed units.
 
 ---
 
