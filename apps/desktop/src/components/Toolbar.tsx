@@ -95,22 +95,24 @@ export function Toolbar({ mode, result, runState, isRunning, title, onModeChange
         )}
         <Tooltip>
           <TooltipTrigger asChild>
+            {/* Quiet panel fill + hairline border; the fill picks up a subtle
+                status gradient once there is real evidence — green after a
+                clean run, red after a failed one, neutral before any run —
+                so "is this circuit acceptable?" reads from the button itself. */}
             <Button
               variant="outline"
               size="sm"
               disabled={isRunning}
               className={cn(
-                "gap-1.5 border-success/35 bg-success/10 text-success",
-                "hover:bg-success/15 hover:border-success/55",
-                "disabled:border-success/15 disabled:bg-success/5 disabled:text-success/40",
+                "gap-1.5 bg-secondary hover:bg-accent",
                 "[-webkit-app-region:no-drag]",
+                !isRunning && runState === "error" && "run-button--error",
+                !isRunning && runState === "complete" && result?.ok && "run-button--ok",
               )}
               onClick={onRun}
               aria-label="Run simulation"
             >
-              <svg viewBox="0 0 12 12" aria-hidden="true" className="size-2.5 fill-current">
-                <path d="M2.5 1.4v9.2c0 .5.55.8.98.55l7.4-4.6a.64.64 0 0 0 0-1.1l-7.4-4.6a.64.64 0 0 0-.98.55Z" />
-              </svg>
+              <i className={cn("run-lamp-dot", isRunning && "run-lamp-dot--running")} aria-hidden="true" />
               Run
             </Button>
           </TooltipTrigger>

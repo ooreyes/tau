@@ -245,7 +245,15 @@ Status legend: ✅ done · 🟡 partial · ⬜ not started
 
 ## 2. Schematic capture
 - ✅ Place / move / rotate / mirror / delete components — `Canvas.tsx`, `store/useSchematic.ts` (mirror = horizontal flip, applied before rotation; Ctrl+E)
-- ✅ Wire drawing with orthogonal routing + junction dots — `Canvas.tsx` (`routeWireSmart`)
+- ✅ Wire drawing with orthogonal routing + junction dots — `Canvas.tsx` (`routeWireSmart`).
+  **Schematic legibility pass (2026-07-13):** automatic routes score component
+  hits, collinear overlap, crossings, length, and corners, with clearance/end
+  channels generated around existing wires; unavoidable unconnected crossings
+  render a hop-over arc while connected joins retain junction dots. Net names
+  avoid components, wires, probes, and one another; selected parts/wires/labels/
+  probes expose a 30×30 one-click delete control. Component symbols use corrected
+  filled device arrows and crisp token-backed canvas typography. Run/error states
+  use restrained success/danger gradients. 37 geometry tests plus browser QA.
 - ✅ Net labels (name a node) — `FLAG` equivalent — store `upsertNetLabel`;
   **now electrical** (merge same-named nets, `0`/`GND`→ground, name the net) in
   `schematic/netlist.ts` `extractCircuit`. **F4 net-label tool landed**

@@ -283,6 +283,52 @@ describe("schematic document store", () => {
     expect(useSchematic.getState().netLabels).toHaveLength(0);
   });
 
+  it("setNetLabelOffsetDirect updates dx/dy without adding an undo entry (drag, mid-gesture)", () => {
+    useSchematic.setState({ netLabels: [{ id: "label-1", x: 64, y: 0, text: "OUT" }] });
+    const historyBefore = useSchematic.getState().past.length;
+
+    useSchematic.getState().setNetLabelOffsetDirect("label-1", 18, -4);
+
+    const state = useSchematic.getState();
+    expect(state.netLabels).toEqual([{ id: "label-1", x: 64, y: 0, text: "OUT", dx: 18, dy: -4 }]);
+    expect(state.past.length).toBe(historyBefore);
+  });
+
+  it("a net label drag (beginChange once + repeated setNetLabelOffsetDirect) collapses into one undo entry", () => {
+    // Mirrors the drag convention documented on setNetLabelDirect/moveComponent:
+    // beginChange() once before the first move, then the no-undo setter for
+    // every subsequent move — Canvas.tsx's net label drag handler (Fix 2)
+    // follows this exact sequence.
+    useSchematic.setState({ netLabels: [{ id: "label-1", x: 64, y: 0, text: "OUT", dx: 6, dy: -6 }] });
+    const historyBefore = useSchematic.getState().past.length;
+
+    useSchematic.getState().beginChange();
+    useSchematic.getState().setNetLabelOffsetDirect("label-1", 10, -2);
+    useSchematic.getState().setNetLabelOffsetDirect("label-1", 14, 3);
+    useSchematic.getState().setNetLabelOffsetDirect("label-1", 20, 9);
+
+    const state = useSchematic.getState();
+    expect(state.netLabels[0]).toEqual({ id: "label-1", x: 64, y: 0, text: "OUT", dx: 20, dy: 9 });
+    // One undo entry for the whole drag, not one per pointermove.
+    expect(state.past.length).toBe(historyBefore + 1);
+
+    useSchematic.getState().undo();
+    expect(useSchematic.getState().netLabels[0]).toEqual({ id: "label-1", x: 64, y: 0, text: "OUT", dx: 6, dy: -6 });
+  });
+
+  it("round-trips a net label's dx/dy offset through loadCircuit (Fix 2 persistence)", () => {
+    const withOffset: SchematicDocument = {
+      ...sourceDocument(),
+      netLabels: [{ id: "source-label", x: 64, y: 0, text: "OUT", dx: 12, dy: -30 }],
+    };
+
+    useSchematic.getState().loadCircuit(withOffset);
+
+    expect(useSchematic.getState().netLabels).toEqual([
+      expect.objectContaining({ x: 64, y: 0, text: "OUT", dx: 12, dy: -30 }),
+    ]);
+  });
+
   it("upsertNetLabel always records an undo entry so full-label operations can be undone", () => {
     useSchematic.getState().loadCircuit(sourceDocument());
     const historyBefore = useSchematic.getState().past.length;

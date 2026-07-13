@@ -555,10 +555,13 @@ export function BottomPanel({ result }: { mode?: "schematic" | "simulator"; resu
   ];
   const hasIssues = messages.length > 0;
   const hasError = Boolean(result && !result.ok);
+  // Green only means "a run happened and came back clean" — an idle panel
+  // stays neutral so the color always reflects real evidence.
+  const isClean = Boolean(result?.ok) && !hasIssues;
 
   return (
     <section
-      className={`bottom-panel${hasIssues ? " has-issues" : ""}${hasError ? " has-error" : ""}`}
+      className={`bottom-panel${hasIssues ? " has-issues" : ""}${hasError ? " has-error" : ""}${isClean ? " is-clean" : ""}`}
       aria-label="Errors"
     >
       <div className="bottom-panel-head">

@@ -125,6 +125,15 @@ interface SchematicState extends Doc {
    * subsequent characters so the whole edit is a single undo entry).
    */
   setNetLabelDirect: (x: number, y: number, text: string) => void;
+  /**
+   * Reposition a net label's text relative to its net anchor (drag-to-move,
+   * by id — distinct from `setNetLabelDirect`'s anchor-lookup-by-point,
+   * which is for the rename-draft flow). No undo entry: caller calls
+   * `beginChange()` once before the first pointermove of a drag, then this
+   * for every subsequent move, so the whole drag collapses into one undo
+   * entry (same convention as `moveComponent`).
+   */
+  setNetLabelOffsetDirect: (id: string, dx: number, dy: number) => void;
 
   addComponent: (kind: ComponentKind, x: number, y: number) => void;
   addWire: (points: Point[]) => void;
@@ -564,6 +573,11 @@ export const useSchematic = create<SchematicState>()((set) => {
         if (existing) return { netLabels: s.netLabels.map((l) => (l.id === existing.id ? { ...l, x, y, text } : l)) };
         return { netLabels: [...s.netLabels, { id: nanoid(6), x, y, text }] };
       }),
+
+    setNetLabelOffsetDirect: (id, dx, dy) =>
+      set((s) => ({
+        netLabels: s.netLabels.map((l) => (l.id === id ? { ...l, dx, dy } : l)),
+      })),
 
     addComponent: (kind, x, y) =>
       set((s) => {

@@ -8,18 +8,56 @@
      `git log --oneline -8`, recover/finish/revert that unit FIRST, then go on.
      ─────────────────────────────────────────────────────────────────────── -->
 ## ⏱ HEARTBEAT
-- **Headline metric:** 1471 tests green · corpus 82/82 import · 82/82 op-converge · 79/82 warning-clean
-- **Run started (UTC):** 2026-07-12T00:34Z
-- **Synced to origin:** auto/ltspice-parity @ 41ff25f.
-- **Claimed unit:** §6 simulator analysis workspace — instrument-grade plots,
-  detailed FFT, and spacious component measurements.
+- **Headline metric:** 1540 tests green · corpus 82/82 import · 82/82 op-converge · 79/82 warning-clean
+- **Run started (UTC):** 2026-07-13T05:10Z
+- **Synced to origin:** auto/ltspice-parity @ 303a2ce.
+- **Claimed unit:** §2 schematic legibility — collision-aware labels, clean
+  wire routing/crossing semantics, direct deletion, typography, status color.
 - **Status:** DONE
-- **Last completed sub-step:** instrument-grade §6 overhaul integrated,
-  independently reviewed, hardened, visually verified at wide + 900×600, and
-  pushed through aaef801; 1471 tests + production web build green.
-- **Plan:** resume the highest-leverage agent-provable DoD item.
-- **Note:** review-rotation debt paid (`review:` aaef801).
-- **Next step:** return to waveform-parity/acceptance work after this UI unit.
+- **Last completed sub-step:** §2 schematic legibility pass implemented,
+  interaction-verified, and passed 1540 tests plus the production web build.
+- **Plan:** selectively commit only the schematic hunks amid unrelated
+  simulator/dashboard work, then resume the highest-leverage DoD item.
+- **Note:** continuation detail lives in `SCHEMATIC_UX_PLAN.md`.
+- **Next step:** resume waveform-parity/acceptance work after this UI unit.
+
+---
+
+## 2026-07-13T05:10Z — auto/ltspice-parity — §2 schematic legibility
+
+### What I did
+- Made net-name placement deterministic and collision-aware across component
+  bodies, wires, probe dots, manually positioned labels, and other automatic
+  labels.
+- Added electrical-drawing hop arcs for unconnected wire crossings while
+  preserving junction dots for connected joins.
+- Extended orthogonal auto-routing to score overlap/crossings and generate
+  clearance/end-run lanes around existing wires; fixed its stale wire-list
+  callback dependency.
+- Added a 30×30 floating one-click delete control for every schematic selection,
+  corrected filled transistor/FET arrows, and made reference/value/net-name
+  typography crisp at normal zoom.
+- Added restrained success/danger gradients to Run and Errors state surfaces.
+  The complete continuation/audit checklist is in `SCHEMATIC_UX_PLAN.md`.
+
+### Files
+- `apps/desktop/src/components/Canvas.geometry.ts` and focused tests
+- `apps/desktop/src/components/Canvas.tsx`, `Toolbar.tsx`, `ShellPanels.tsx`
+- `apps/desktop/src/schematic/symbols.tsx`, `apps/desktop/src/App.css`
+- `SCHEMATIC_UX_PLAN.md`, `FEATURE_PARITY.md`, `PROGRESS.md`
+
+### Tests / verification
+- `pnpm -C apps/desktop typecheck` — pass.
+- `pnpm -C apps/desktop test` — 102 files / 1540 tests pass.
+- `pnpm --filter @tau/desktop build` — pass (existing advisories only).
+- Staged-only detached-worktree check — typecheck, 115 focused tests, and
+  production build pass; no dependency on unrelated working-tree edits.
+- In-app browser QA — schematic loaded at 1280×720; component reference text
+  measured 11px with 1.5px halo; selected `Rin`, measured 30×30 delete target,
+  deleted it, and restored via Undo; successful run applied the green gradient.
+
+### Next step
+- Resume the highest-leverage waveform-parity / acceptance-corpus item.
 
 ---
 

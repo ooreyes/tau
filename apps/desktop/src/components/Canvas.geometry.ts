@@ -1,6 +1,6 @@
 import { GRID, SYMBOL_BODY, SYMBOL_BOX } from "../schematic/symbols";
 import { CATALOG_BY_KIND } from "../schematic/catalog";
-import type { ComponentKind, Point, SchematicComponent, SchematicWire } from "../schematic/types";
+import type { ComponentKind, NetLabel, Point, SchematicComponent, SchematicWire } from "../schematic/types";
 import { getLocalPins, getComponentPins, transformPoint } from "../schematic/pins";
 import { decodeParams } from "../schematic/params";
 
@@ -39,6 +39,44 @@ export const pointsEqual = (a: Point, b: Point) => a.x === b.x && a.y === b.y;
 export const pointKey = (point: Point) => `${point.x},${point.y}`;
 export const pathFromPoints = (points: Point[]) =>
   points.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x} ${p.y}`).join(" ");
+
+export const HOP_RADIUS = 4;
+
+/**
+ * SVG path for a wire polyline where horizontal segments arc over the given
+ * x positions — the classic "hop" that marks an UNCONNECTED crossing (a
+ * connected join gets a junction dot instead). The bump always points up
+ * (−y): sweep=1 while traveling +x, sweep=0 while traveling −x. Hops within
+ * HOP_RADIUS of a segment end are dropped so elbows keep their corners.
+ * Keyed by segment index (segment i = points[i] → points[i+1]).
+ */
+export const pathWithHops = (
+  points: Point[],
+  hopsBySegment: ReadonlyMap<number, readonly number[]>,
+): string => {
+  if (points.length === 0) return "";
+  let d = `M ${points[0].x} ${points[0].y}`;
+  for (let i = 1; i < points.length; i += 1) {
+    const a = points[i - 1];
+    const b = points[i];
+    const hops = hopsBySegment.get(i - 1);
+    if (!hops || hops.length === 0 || a.y !== b.y || a.x === b.x) {
+      d += ` L ${b.x} ${b.y}`;
+      continue;
+    }
+    const dir = Math.sign(b.x - a.x);
+    const usable = [...hops]
+      .filter((x) => Math.abs(x - a.x) > HOP_RADIUS && Math.abs(b.x - x) > HOP_RADIUS)
+      .sort((p, q) => (p - q) * dir);
+    const sweep = dir > 0 ? 1 : 0;
+    for (const x of usable) {
+      d += ` L ${x - dir * HOP_RADIUS} ${a.y}`;
+      d += ` A ${HOP_RADIUS} ${HOP_RADIUS} 0 0 ${sweep} ${x + dir * HOP_RADIUS} ${a.y}`;
+    }
+    d += ` L ${b.x} ${b.y}`;
+  }
+  return d;
+};
 
 const rotateLocalPoint = (point: Point, rotation: number): Point => {
   switch (rotation) {
@@ -382,6 +420,130 @@ export function circuitBoundsWithLabels(
   return { minX, minY, maxX, maxY };
 }
 
+// ── Net label auto-placement (Fix 2) ──────────────────────────────────────
+// Font size matches `.net-label-text` in App.css (9.5px mono) — keep in sync;
+// this is a character-count estimate, not a DOM measurement (auto-placement
+// runs on every render of an unpositioned label, so it must stay cheap).
+const NET_LABEL_CHAR_W = 5.8;
+const NET_LABEL_HEIGHT = 11;
+
+/** World-space bbox a net label's text would occupy at a given anchor+offset.
+ *  Matches the actual render in Canvas.tsx (`<text x={anchor.x+dx}
+ *  y={anchor.y+dy}>`, default start-anchor — text extends rightward from x,
+ *  y is the baseline so most of the glyph height sits above it). */
+const netLabelTextRect = (anchor: Point, dx: number, dy: number, text: string): Rect => {
+  const w = Math.max(8, text.length * NET_LABEL_CHAR_W);
+  const x = anchor.x + dx;
+  const y = anchor.y + dy;
+  return padRect({ minX: x, minY: y - NET_LABEL_HEIGHT, maxX: x + w, maxY: y + 2 }, 1);
+};
+
+/** Candidate (dx, dy) offsets tried in priority order when auto-placing a
+ *  net label: right-above (the old fixed default) first, then right-below,
+ *  left-above/below, then progressively further out in each direction. `w`
+ *  folds into the "left" candidates so they clear the anchor by the text's
+ *  own width instead of just nudging a few px past it. */
+const netLabelOffsetCandidates = (w: number): Array<{ dx: number; dy: number }> => [
+  { dx: 6, dy: -6 },
+  { dx: 6, dy: NET_LABEL_HEIGHT + 8 },
+  { dx: -(w + 6), dy: -6 },
+  { dx: -(w + 6), dy: NET_LABEL_HEIGHT + 8 },
+  { dx: 6, dy: -(NET_LABEL_HEIGHT + 20) },
+  { dx: 6, dy: 2 * NET_LABEL_HEIGHT + 16 },
+  { dx: -(w + 6), dy: -(NET_LABEL_HEIGHT + 20) },
+  { dx: -(w + 6), dy: 2 * NET_LABEL_HEIGHT + 16 },
+  { dx: w + 24, dy: -6 },
+  { dx: -(2 * w + 24), dy: -6 },
+];
+
+/**
+ * Auto-placement for a net label with no explicit `dx`/`dy` (old .sim files,
+ * or a label that has never been dragged): the first candidate offset whose
+ * text bbox clears every component's bounding box, else the lowest-overlap
+ * fallback. Mirrors `buildLabelPlacements`' candidate-scoring approach
+ * (score = summed overlap area, cheapest wins) but scoped to net labels vs.
+ * component bodies only — a schematic has few labels and few components, so
+ * scoring every candidate against every component per render is deterministic
+ * and cheap (§Fix2, "Net labels: broken placement").
+ */
+/** Length of `segment` that passes through `rect` (0 when it misses). Only
+ *  axis-aligned segments occur in Tau wires, so this is a cheap clip. */
+const segmentLengthInRect = (segment: WireSegment, rect: Rect): number => {
+  const { a, b } = segment;
+  if (a.x === b.x) {
+    if (a.x < rect.minX || a.x > rect.maxX) return 0;
+    const lo = Math.max(Math.min(a.y, b.y), rect.minY);
+    const hi = Math.min(Math.max(a.y, b.y), rect.maxY);
+    return Math.max(0, hi - lo);
+  }
+  if (a.y === b.y) {
+    if (a.y < rect.minY || a.y > rect.maxY) return 0;
+    const lo = Math.max(Math.min(a.x, b.x), rect.minX);
+    const hi = Math.min(Math.max(a.x, b.x), rect.maxX);
+    return Math.max(0, hi - lo);
+  }
+  return 0;
+};
+
+export function autoNetLabelOffset(
+  anchor: Point,
+  text: string,
+  components: readonly SchematicComponent[],
+  /** Optional extra obstacles: wires under the text read as "label on a wire"
+   *  and probe dots (r≈8) get fully hidden — both score as overlap. */
+  wires: readonly SchematicWire[] = [],
+  probePoints: readonly Point[] = [],
+  occupiedLabelRects: readonly Rect[] = [],
+): { dx: number; dy: number } {
+  const w = Math.max(8, text.length * NET_LABEL_CHAR_W);
+  const candidates = netLabelOffsetCandidates(w);
+  const obstacles = components.map(componentWorldRect);
+  const probeRects: Rect[] = probePoints.map((p) => ({ minX: p.x - 8, minY: p.y - 8, maxX: p.x + 8, maxY: p.y + 8 }));
+  if (obstacles.length === 0 && wires.length === 0 && probeRects.length === 0 && occupiedLabelRects.length === 0) return candidates[0];
+  const segments = wireSegments(wires as SchematicWire[]);
+  const scored = candidates.map((offset) => {
+    const box = netLabelTextRect(anchor, offset.dx, offset.dy, text);
+    let score = obstacles.reduce((total, rect) => total + overlapArea(box, rect), 0);
+    score += probeRects.reduce((total, rect) => total + overlapArea(box, rect) * 2, 0);
+    score += occupiedLabelRects.reduce((total, rect) => total + overlapArea(box, rect) * 3, 0);
+    // A wire crossing the text box is linear, not areal — weight it so a
+    // couple of grid units of wire-under-text loses to a clear spot.
+    score += segments.reduce((total, segment) => total + segmentLengthInRect(segment, box) * 4, 0);
+    return { offset, score };
+  });
+  return scored.find((entry) => entry.score === 0)?.offset ?? scored.sort((a, b) => a.score - b.score)[0].offset;
+}
+
+/** Place all automatic net labels as one deterministic set so two labels do
+ * not independently choose the same clear-looking slot. Explicitly dragged
+ * labels reserve their real boxes first; automatic labels then fill the
+ * remaining candidates in document order. */
+export function autoNetLabelOffsets(
+  labels: readonly NetLabel[],
+  components: readonly SchematicComponent[],
+  wires: readonly SchematicWire[] = [],
+  probePoints: readonly Point[] = [],
+): Map<string, { dx: number; dy: number }> {
+  const offsets = new Map<string, { dx: number; dy: number }>();
+  const occupied: Rect[] = [];
+
+  // User placements are authoritative obstacles, regardless of document order.
+  for (const label of labels) {
+    if (label.dx === undefined || label.dy === undefined) continue;
+    const offset = { dx: label.dx, dy: label.dy };
+    offsets.set(label.id, offset);
+    occupied.push(netLabelTextRect(label, offset.dx, offset.dy, label.text));
+  }
+
+  for (const label of labels) {
+    if (offsets.has(label.id)) continue;
+    const offset = autoNetLabelOffset(label, label.text, components, wires, probePoints, occupied);
+    offsets.set(label.id, offset);
+    occupied.push(netLabelTextRect(label, offset.dx, offset.dy, label.text));
+  }
+  return offsets;
+}
+
 export interface FitViewOptions {
   /** Fraction of each viewport dimension kept clear around the circuit. */
   paddingFraction?: number;
@@ -603,7 +765,45 @@ export const countRouteBodyHits = routeHitCount;
 
 /** Route an orthogonal wire between two points. Prefers clear channels around
  *  component bodies, then shorter length, then fewer corners. */
-export const routeWireSmart = (start: Point, end: Point, components: SchematicComponent[]): Point[] => {
+/** Crossing count + collinear-overlap length of a candidate route against the
+ *  existing wires — the "visual nightmare" metrics. Endpoint touches are
+ *  ignored (they're legitimate connections, not clutter). */
+const routeClutter = (
+  points: Point[],
+  existing: readonly SchematicWire[],
+): { crossings: number; overlap: number } => {
+  let crossings = 0;
+  let overlap = 0;
+  const existingSegments = wireSegments(existing as SchematicWire[]);
+  for (let i = 1; i < points.length; i += 1) {
+    const seg = { a: points[i - 1], b: points[i] };
+    if (pointsEqual(seg.a, seg.b)) continue;
+    const vertical = seg.a.x === seg.b.x;
+    for (const other of existingSegments) {
+      const otherVertical = other.a.x === other.b.x;
+      if (vertical !== otherVertical) {
+        const hit = segmentIntersections(seg, other);
+        if (hit.length > 0 && !isWireEndpoint(hit[0], seg) && !isWireEndpoint(hit[0], other)) crossings += 1;
+      } else if (vertical && seg.a.x === other.a.x) {
+        const lo = Math.max(Math.min(seg.a.y, seg.b.y), Math.min(other.a.y, other.b.y));
+        const hi = Math.min(Math.max(seg.a.y, seg.b.y), Math.max(other.a.y, other.b.y));
+        overlap += Math.max(0, hi - lo);
+      } else if (!vertical && seg.a.y === other.a.y) {
+        const lo = Math.max(Math.min(seg.a.x, seg.b.x), Math.min(other.a.x, other.b.x));
+        const hi = Math.min(Math.max(seg.a.x, seg.b.x), Math.max(other.a.x, other.b.x));
+        overlap += Math.max(0, hi - lo);
+      }
+    }
+  }
+  return { crossings, overlap };
+};
+
+export const routeWireSmart = (
+  start: Point,
+  end: Point,
+  components: SchematicComponent[],
+  existingWires: readonly SchematicWire[] = [],
+): Point[] => {
   if (pointsEqual(start, end)) return [start];
   const candidates: Point[][] = [];
   const push = (points: Point[]) => {
@@ -631,6 +831,28 @@ export const routeWireSmart = (start: Point, end: Point, components: SchematicCo
     }
   }
 
+  // Existing wires create usable routing channels too. A one-grid clearance
+  // from a parallel run avoids visually merging two different nets; a channel
+  // just beyond each segment end gives the router a way around a finite wire
+  // instead of accepting a crossing simply because no component was nearby.
+  for (const wire of existingWires) {
+    for (let index = 1; index < wire.points.length; index += 1) {
+      const a = wire.points[index - 1];
+      const b = wire.points[index];
+      if (a.y === b.y) {
+        yChannels.add(snap(a.y - GRID));
+        yChannels.add(snap(a.y + GRID));
+        xChannels.add(snap(Math.min(a.x, b.x) - GRID));
+        xChannels.add(snap(Math.max(a.x, b.x) + GRID));
+      } else if (a.x === b.x) {
+        xChannels.add(snap(a.x - GRID));
+        xChannels.add(snap(a.x + GRID));
+        yChannels.add(snap(Math.min(a.y, b.y) - GRID));
+        yChannels.add(snap(Math.max(a.y, b.y) + GRID));
+      }
+    }
+  }
+
   for (const y of yChannels) {
     push([start, { x: start.x, y }, { x: end.x, y }, end]);
     // U-shaped detour when start/end share an axis but a body sits between them.
@@ -642,15 +864,24 @@ export const routeWireSmart = (start: Point, end: Point, components: SchematicCo
   }
 
   return candidates
-    .map((points) => ({
-      points,
-      hits: routeHitCount(points, components),
-      length: routeLength(points),
-      corners: Math.max(0, points.length - 2),
-    }))
+    .map((points) => {
+      const clutter = routeClutter(points, existingWires);
+      return {
+        points,
+        hits: routeHitCount(points, components),
+        // Riding on top of another wire is worse than crossing it — an
+        // overlapped run is unreadable, a crossing at least gets a hop arc.
+        overlap: clutter.overlap,
+        crossings: clutter.crossings,
+        length: routeLength(points),
+        corners: Math.max(0, points.length - 2),
+      };
+    })
     .sort(
       (a, b) =>
         a.hits - b.hits ||
+        a.overlap - b.overlap ||
+        a.crossings - b.crossings ||
         a.length - b.length ||
         a.corners - b.corners ||
         a.points.length - b.points.length,
@@ -672,7 +903,9 @@ export function rerouteMovedWires(
     if (wire.points.length < 2) return wire;
     const start = wire.points[0];
     const end = wire.points[wire.points.length - 1];
-    return { ...wire, points: routeWireSmart(start, end, components) };
+    // Score against the OTHER wires — a wire must not penalize its own path.
+    const others = wires.filter((other) => other.id !== wire.id);
+    return { ...wire, points: routeWireSmart(start, end, components, others) };
   });
 }
 

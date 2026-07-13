@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 
 import { Canvas } from "./Canvas";
@@ -9,6 +9,16 @@ class ResizeObserverStub {
   observe() {}
   disconnect() {}
 }
+
+// Net label drag (Fix 2) captures the pointer on the dragged `<text>` so a
+// fast drag still delivers pointermove/up to it — jsdom doesn't implement
+// pointer capture at all (see ui/primitives.test.tsx for the same gap on
+// Radix primitives), so every test in this file needs the same no-op stubs.
+beforeAll(() => {
+  Element.prototype.hasPointerCapture = () => false;
+  Element.prototype.setPointerCapture = () => {};
+  Element.prototype.releasePointerCapture = () => {};
+});
 
 beforeEach(() => {
   vi.stubGlobal("ResizeObserver", ResizeObserverStub);
@@ -82,10 +92,65 @@ describe("Canvas — simulator mutation boundary", () => {
     fireEvent.keyDown(input, { key: "Enter" });
     expect(useSchematic.getState().netLabels.map((label) => label.text)).toEqual(["output"]);
 
-    fireEvent.pointerDown(screen.getByRole("button", { name: "Rename node output" }));
+    // Click-without-drag: label text now supports drag-to-reposition (Fix 2),
+    // so opening the rename draft is a pointerdown+pointerup pair below the
+    // drag threshold, not pointerdown alone.
+    const labelText = screen.getByRole("button", { name: "Rename node output" });
+    fireEvent.pointerDown(labelText, { clientX: 0, clientY: 0 });
+    fireEvent.pointerUp(labelText, { clientX: 0, clientY: 0 });
     const rename = screen.getByRole("textbox", { name: "Net label name" });
     fireEvent.change(rename, { target: { value: "" } });
     fireEvent.keyDown(rename, { key: "Enter" });
     expect(useSchematic.getState().netLabels).toEqual([]);
+  });
+});
+
+describe("Canvas — net label drag (Fix 2)", () => {
+  it("drags a net label's text to a new dx/dy with exactly one undo entry, not one per pointermove", () => {
+    useSchematic.setState({
+      tool: { mode: "label" },
+      netLabels: [{ id: "l1", x: 0, y: 20, text: "OUT", dx: 10, dy: -10 }],
+    });
+    render(<Canvas interactive={false} />);
+    const historyBefore = useSchematic.getState().past.length;
+
+    const labelText = screen.getByRole("button", { name: "Rename node OUT" });
+    fireEvent.pointerDown(labelText, { clientX: 100, clientY: 100 });
+    fireEvent.pointerMove(labelText, { clientX: 108, clientY: 106 }); // past the click/drag threshold
+    fireEvent.pointerMove(labelText, { clientX: 115, clientY: 112 }); // still mid-drag — no extra undo entry
+    fireEvent.pointerUp(labelText, { clientX: 115, clientY: 112 });
+
+    const label = useSchematic.getState().netLabels[0];
+    expect(label.dx).toBeCloseTo(10 + 15);
+    expect(label.dy).toBeCloseTo(-10 + 12);
+    expect(useSchematic.getState().past.length).toBe(historyBefore + 1);
+    // A drag must not also open the rename draft.
+    expect(screen.queryByRole("textbox", { name: "Net label name" })).toBeNull();
+
+    useSchematic.getState().undo();
+    expect(useSchematic.getState().netLabels[0]).toMatchObject({ dx: 10, dy: -10 });
+  });
+
+  it("click-without-drag on a net label selects it in the schematic editor's select tool", () => {
+    useSchematic.setState({
+      tool: { mode: "select" },
+      netLabels: [{ id: "l1", x: 0, y: 20, text: "OUT", dx: 10, dy: -10 }],
+    });
+    render(<Canvas interactive fitSignal={0} />);
+
+    const labelText = screen.getByRole("button", { name: "Net label OUT" });
+    fireEvent.pointerDown(labelText, { clientX: 50, clientY: 50 });
+    fireEvent.pointerUp(labelText, { clientX: 50, clientY: 50 });
+    expect(useSchematic.getState().selectedLabelIds).toEqual(["l1"]);
+
+    // A second gesture that moves past the threshold drags instead of re-selecting.
+    const historyBefore = useSchematic.getState().past.length;
+    fireEvent.pointerDown(labelText, { clientX: 50, clientY: 50 });
+    fireEvent.pointerMove(labelText, { clientX: 62, clientY: 44 });
+    fireEvent.pointerUp(labelText, { clientX: 62, clientY: 44 });
+    const label = useSchematic.getState().netLabels[0];
+    expect(label.dx).toBeCloseTo(10 + 12);
+    expect(label.dy).toBeCloseTo(-10 - 6);
+    expect(useSchematic.getState().past.length).toBe(historyBefore + 1);
   });
 });

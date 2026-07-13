@@ -2,13 +2,15 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from "react";
 import { useSchematic } from "../store/useSchematic";
 import { ComponentSymbol, GRID, SYMBOL_BOX } from "../schematic/symbols";
-import type { Point, SchematicComponent, SchematicWire } from "../schematic/types";
+import type { NetLabel, Point, SchematicComponent, SchematicWire } from "../schematic/types";
 import { getLocalPins, getComponentPins } from "../schematic/pins";
 import type { OperatingPointResult } from "../simulation/operatingPoint";
 import { opAnnotations } from "../simulation/opAnnotations";
 import { extractCircuit, netAtPoint } from "../schematic/netlist";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
+  autoNetLabelOffset,
+  autoNetLabelOffsets,
   buildLabelPlacements,
   circuitBoundsWithLabels,
   collides,
@@ -18,6 +20,7 @@ import {
   findFreeSpot,
   isWireEndpoint,
   pathFromPoints,
+  pathWithHops,
   pointKey,
   pointInRect,
   pointOnWireSegment,
@@ -124,12 +127,14 @@ export function Canvas({
   const moveGroup = useSchematic((s) => s.moveGroup);
   const clearSelection = useSchematic((s) => s.clearSelection);
   const beginChange = useSchematic((s) => s.beginChange);
+  const deleteSelected = useSchematic((s) => s.deleteSelected);
   const setValue = useSchematic((s) => s.setValue);
   const probes = useSchematic((s) => s.probes);
   const addProbe = useSchematic((s) => s.addProbe);
   const removeProbe = useSchematic((s) => s.removeProbe);
   const netLabels = useSchematic((s) => s.netLabels);
   const upsertNetLabel = useSchematic((s) => s.upsertNetLabel);
+  const setNetLabelOffsetDirect = useSchematic((s) => s.setNetLabelOffsetDirect);
   const [editingId, setEditingId] = useState<string | null>(null);
 
   // In-place OP annotations (simulator mode only): re-extract geometry only
@@ -195,6 +200,94 @@ export function Canvas({
     }
     return out;
   }, [wires, pinIndex, pinPoints]);
+
+  // Unconnected crossings per wire: a horizontal segment crossing a DIFFERENT
+  // wire's vertical segment strictly interior-to-interior, at a point that is
+  // not a junction, hops over it. T-touches and 3+-way meets are junctions
+  // (dots) and are excluded, so hop vs dot is always unambiguous.
+  const wireHops = useMemo(() => {
+    const junctionKeys = new Set(junctions.map(pointKey));
+    const out = new Map<string, Map<number, number[]>>();
+    const verticals: Array<{ owner: string; x: number; minY: number; maxY: number }> = [];
+    for (const wire of wires) {
+      for (let i = 1; i < wire.points.length; i += 1) {
+        const a = wire.points[i - 1];
+        const b = wire.points[i];
+        if (a.x === b.x && a.y !== b.y) {
+          verticals.push({ owner: wire.id, x: a.x, minY: Math.min(a.y, b.y), maxY: Math.max(a.y, b.y) });
+        }
+      }
+    }
+    if (verticals.length === 0) return out;
+    for (const wire of wires) {
+      for (let i = 1; i < wire.points.length; i += 1) {
+        const a = wire.points[i - 1];
+        const b = wire.points[i];
+        if (a.y !== b.y || a.x === b.x) continue;
+        const minX = Math.min(a.x, b.x);
+        const maxX = Math.max(a.x, b.x);
+        for (const v of verticals) {
+          if (v.owner === wire.id) continue;
+          if (v.x <= minX || v.x >= maxX) continue;
+          if (a.y <= v.minY || a.y >= v.maxY) continue;
+          if (junctionKeys.has(pointKey({ x: v.x, y: a.y }))) continue;
+          let perWire = out.get(wire.id);
+          if (!perWire) {
+            perWire = new Map();
+            out.set(wire.id, perWire);
+          }
+          const list = perWire.get(i - 1) ?? [];
+          list.push(v.x);
+          perWire.set(i - 1, list);
+        }
+      }
+    }
+    return out;
+  }, [wires, junctions]);
+
+  // World-space bbox of everything selected — anchors the floating delete
+  // pill. Mirrors deleteSelected's own single-vs-multi selection fallbacks so
+  // the pill appears exactly when a delete would do something.
+  const selectionBounds = useMemo(() => {
+    if (!interactive) return null;
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+    let any = false;
+    const include = (x1: number, y1: number, x2: number, y2: number) => {
+      any = true;
+      minX = Math.min(minX, x1);
+      minY = Math.min(minY, y1);
+      maxX = Math.max(maxX, x2);
+      maxY = Math.max(maxY, y2);
+    };
+    const compIds = new Set(selectedIds.length > 0 ? selectedIds : selectedId ? [selectedId] : []);
+    for (const component of components) {
+      if (!compIds.has(component.id)) continue;
+      const rect = componentWorldRect(component);
+      include(rect.minX, rect.minY, rect.maxX, rect.maxY);
+    }
+    const wireIds = new Set(selectedWireIds.length > 0 ? selectedWireIds : selectedWireId ? [selectedWireId] : []);
+    for (const wire of wires) {
+      if (!wireIds.has(wire.id)) continue;
+      for (const point of wire.points) include(point.x, point.y, point.x, point.y);
+    }
+    for (const label of netLabels) {
+      if (!selectedLabelIds.includes(label.id)) continue;
+      include(label.x, label.y - 12, label.x + 36, label.y + 4);
+    }
+    for (const probe of probes) {
+      if (!selectedProbeIds.includes(probe.id)) continue;
+      include(probe.x - 8, probe.y - 8, probe.x + 8, probe.y + 8);
+    }
+    return any ? { minX, minY, maxX, maxY } : null;
+  }, [interactive, components, wires, netLabels, probes, selectedId, selectedIds, selectedWireId, selectedWireIds, selectedLabelIds, selectedProbeIds]);
+
+  const netLabelOffsets = useMemo(
+    () => autoNetLabelOffsets(netLabels, components, wires, probes),
+    [netLabels, components, wires, probes],
+  );
 
   // Interaction kept in a ref so dragging/panning doesn't trigger re-renders.
   const drag = useRef<DragState>({
@@ -378,11 +471,11 @@ export function Canvas({
       if (tool.mode !== "wire") return;
       const end = snappedCursor(clientX, clientY);
       if (wireDraft && !pointsEqual(wireDraft.start, end)) {
-        addWire(routeWireSmart(wireDraft.start, end, components));
+        addWire(routeWireSmart(wireDraft.start, end, components, wires));
       }
       setWireDraft({ start: end, cursor: end });
     },
-    [tool, snappedCursor, wireDraft, addWire, components],
+    [tool, snappedCursor, wireDraft, addWire, components, wires],
   );
 
   /** World-coord bounds of a rubber-band box. */
@@ -758,8 +851,79 @@ export function Canvas({
   const wiring = tool.mode === "wire";
   const probing = tool.mode === "probe";
   const labeling = tool.mode === "label";
+
+  // Net label text is draggable (repositions dx/dy from the fixed net
+  // anchor) in exactly the two contexts that already have some kind of
+  // click interaction on it: the schematic editor's select tool, and the
+  // simulator's label tool. Kept separate from the big `drag` state machine
+  // above (DragState/onPointerMove/endDrag) because it mutates an offset by
+  // id, not (x,y) by drag delta, and needs its own click-vs-drag threshold.
+  const labelsInteractive = (!interactive && labeling) || (interactive && tool.mode === "select");
+  const netLabelDrag = useRef<{
+    id: string;
+    startClientX: number;
+    startClientY: number;
+    startDx: number;
+    startDy: number;
+    moved: boolean;
+  } | null>(null);
+  // Screen pixels of movement below which a pointerdown+up is a click
+  // (rename/select), not a drag — small enough not to feel laggy, large
+  // enough to absorb hand tremor on a trackpad tap.
+  const LABEL_DRAG_THRESHOLD = 4;
+
+  const activateNetLabel = (l: NetLabel) => {
+    if (!interactive && labeling) {
+      // Click-without-drag opens the rename draft — unchanged from before
+      // labels were draggable.
+      setLabelDraft({ x: l.x, y: l.y, text: l.text });
+    } else if (interactive && tool.mode === "select") {
+      selectMixed({ componentIds: [], wireIds: [], labelIds: [l.id], probeIds: [] });
+    }
+  };
+
+  const onNetLabelPointerDown = (l: NetLabel, offset: { dx: number; dy: number }) =>
+    (event: ReactPointerEvent<SVGTextElement>) => {
+      if (event.button !== 0) return;
+      event.stopPropagation();
+      netLabelDrag.current = {
+        id: l.id,
+        startClientX: event.clientX,
+        startClientY: event.clientY,
+        startDx: offset.dx,
+        startDy: offset.dy,
+        moved: false,
+      };
+      event.currentTarget.setPointerCapture?.(event.pointerId);
+    };
+
+  const onNetLabelPointerMove = (event: ReactPointerEvent<SVGTextElement>) => {
+    const drag = netLabelDrag.current;
+    if (!drag) return;
+    const dxScreen = event.clientX - drag.startClientX;
+    const dyScreen = event.clientY - drag.startClientY;
+    if (!drag.moved && Math.hypot(dxScreen, dyScreen) < LABEL_DRAG_THRESHOLD) return;
+    if (!drag.moved) {
+      drag.moved = true;
+      // One undo snapshot for the whole drag, on the first move only — same
+      // convention as component drag (onPointerMove's "move" case above).
+      beginChange();
+    }
+    setNetLabelOffsetDirect(drag.id, drag.startDx + dxScreen / view.zoom, drag.startDy + dyScreen / view.zoom);
+  };
+
+  const onNetLabelPointerUp = (l: NetLabel) => (event: ReactPointerEvent<SVGTextElement>) => {
+    const drag = netLabelDrag.current;
+    if (event.currentTarget.hasPointerCapture?.(event.pointerId)) {
+      event.currentTarget.releasePointerCapture?.(event.pointerId);
+    }
+    netLabelDrag.current = null;
+    if (drag?.moved) return; // already committed live via setNetLabelOffsetDirect
+    activateNetLabel(l);
+  };
+
   const previewWire = wireDraft && !pointsEqual(wireDraft.start, wireDraft.cursor)
-    ? routeWireSmart(wireDraft.start, wireDraft.cursor, components)
+    ? routeWireSmart(wireDraft.start, wireDraft.cursor, components, wires)
     : null;
   const editingComp = editingId ? components.find((c) => c.id === editingId) ?? null : null;
   const editBox = editingComp ? SYMBOL_BOX[editingComp.kind] : null;
@@ -811,6 +975,7 @@ export function Canvas({
               wire={wire}
               selected={wire.id === selectedWireId || selectedWireIds.includes(wire.id)}
               probeReady={!interactive && (probing || labeling)}
+              hops={wireHops.get(wire.id)}
               onPointerDown={(e) => onWirePointerDown(e, wire)}
             />
           ))}
@@ -888,31 +1053,47 @@ export function Canvas({
           })}
 
           {/* Net names sit under component ref/value labels so collisions
-              (e.g. "Output" vs "Rf") keep the part label readable. */}
-          <g className={`net-label-layer${!interactive && labeling ? " simulator-editable" : ""}`} aria-hidden={interactive ? "true" : undefined}>
-            {netLabels.map((l) => (
-              <text
-                key={l.id}
-                className={`net-label-text${selectedLabelIds.includes(l.id) ? " selected" : ""}`}
-                x={l.x + 6}
-                y={l.y - 6}
-                role={!interactive && labeling ? "button" : undefined}
-                tabIndex={!interactive && labeling ? 0 : undefined}
-                aria-label={!interactive && labeling ? `Rename node ${l.text}` : undefined}
-                onPointerDown={!interactive && labeling ? (event) => {
-                  event.stopPropagation();
-                  setLabelDraft({ x: l.x, y: l.y, text: l.text });
-                } : undefined}
-                onKeyDown={!interactive && labeling ? (event) => {
-                  if (event.key === "Enter" || event.key === " ") {
-                    event.preventDefault();
-                    setLabelDraft({ x: l.x, y: l.y, text: l.text });
-                  }
-                } : undefined}
-              >
-                {l.text}
-              </text>
-            ))}
+              (e.g. "Output" vs "Rf") keep the part label readable. Each
+              label's screen position is anchor + (dx,dy): dx/dy undefined
+              (never dragged, or an old .sim file predating this field) falls
+              back to `autoNetLabelOffset`'s collision-avoiding placement;
+              once dragged, the explicit offset wins forever so auto-place
+              never fights a placement the user chose (§Fix2). */}
+          <g className={`net-label-layer${labelsInteractive ? " labels-interactive" : ""}`} aria-hidden={labelsInteractive ? undefined : "true"}>
+            {netLabels.map((l) => {
+              const offset = netLabelOffsets.get(l.id)
+                ?? autoNetLabelOffset({ x: l.x, y: l.y }, l.text, components, wires, probes);
+              const tx = l.x + offset.dx;
+              const ty = l.y + offset.dy;
+              // Anchor and text drift apart once dragged far — a leader line
+              // keeps the net connection legible instead of a label reading
+              // as floating and unattached.
+              const showLeader = Math.hypot(offset.dx, offset.dy) > 24;
+              return (
+                <g key={l.id}>
+                  {showLeader && <line className="net-label-leader" x1={l.x} y1={l.y} x2={tx} y2={ty} />}
+                  <text
+                    className={`net-label-text${selectedLabelIds.includes(l.id) ? " selected" : ""}`}
+                    x={tx}
+                    y={ty}
+                    role={labelsInteractive ? "button" : undefined}
+                    tabIndex={labelsInteractive ? 0 : undefined}
+                    aria-label={labelsInteractive ? (labeling ? `Rename node ${l.text}` : `Net label ${l.text}`) : undefined}
+                    onPointerDown={labelsInteractive ? onNetLabelPointerDown(l, offset) : undefined}
+                    onPointerMove={labelsInteractive ? onNetLabelPointerMove : undefined}
+                    onPointerUp={labelsInteractive ? onNetLabelPointerUp(l) : undefined}
+                    onKeyDown={labelsInteractive ? (event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        activateNetLabel(l);
+                      }
+                    } : undefined}
+                  >
+                    {l.text}
+                  </text>
+                </g>
+              );
+            })}
           </g>
 
           {opLabels.map((a) =>
@@ -980,6 +1161,29 @@ export function Canvas({
           <TooltipContent side="left">Fit to view</TooltipContent>
         </Tooltip>
       </div>
+
+      {interactive && selectionBounds && !labelDraft && (
+        // Floating delete affordance: the Delete key already works, but a
+        // visible ✕ beside the selection makes removal a one-click action.
+        // pointerdown stops here so the click can't start a canvas pan/drag.
+        <button
+          type="button"
+          className="selection-delete-pill"
+          style={{
+            left: selectionBounds.maxX * view.zoom + view.x + 10,
+            top: selectionBounds.minY * view.zoom + view.y - 12,
+          }}
+          aria-label="Delete selection"
+          title="Delete selection (Del)"
+          onPointerDown={(event) => event.stopPropagation()}
+          onClick={(event) => {
+            event.stopPropagation();
+            deleteSelected();
+          }}
+        >
+          ✕
+        </button>
+      )}
 
       {labelDraft && (
         <input
@@ -1104,15 +1308,19 @@ function WireView({
   wire,
   selected,
   probeReady,
+  hops,
   onPointerDown,
 }: {
   wire: SchematicWire;
   selected: boolean;
   /** Simulator mode: clicking probes the net, so advertise it with the probe cursor. */
   probeReady: boolean;
+  /** Unconnected-crossing x positions per horizontal segment index — drawn
+   *  as hop-over arcs so a crossing never reads as a connection. */
+  hops?: ReadonlyMap<number, readonly number[]>;
   onPointerDown: (e: ReactPointerEvent<SVGElement>) => void;
 }) {
-  const d = pathFromPoints(wire.points);
+  const d = hops && hops.size > 0 ? pathWithHops(wire.points, hops) : pathFromPoints(wire.points);
   const resistive = Boolean(wire.resistance?.trim() && wire.resistance.trim() !== "0");
   return (
     <g

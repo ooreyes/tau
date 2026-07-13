@@ -270,6 +270,18 @@ body {
   vector-effect: non-scaling-stroke;
 }
 
+/* Polarity arrows inside transistor/JFET symbols are FILLED triangles — as
+   unfilled open paths they read as stray broken strokes. They inherit the
+   symbol's stroke color (normal or selected) as their fill. */
+.symbol .symbol-arrow {
+  fill: var(--comp);
+  stroke: none;
+}
+
+.component.selected .symbol .symbol-arrow {
+  fill: var(--accent);
+}
+
 .component {
   cursor: pointer;
 }
@@ -497,6 +509,41 @@ body {
   text-align: left;
   letter-spacing: 0.02em;
   text-transform: none;
+}
+
+/* Floating ✕ beside the current selection — one-click delete without
+   reaching for the keyboard. Sits in canvas overlay space (same coordinate
+   math as the net-label input above). */
+.selection-delete-pill {
+  position: absolute;
+  z-index: 4;
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: 50%;
+  background: var(--panel-4);
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: var(--elev-2);
+  transition: color var(--motion-fast) var(--spring),
+    border-color var(--motion-fast) var(--spring),
+    background var(--motion-fast) var(--spring);
+}
+
+.selection-delete-pill:hover {
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--danger) 55%, transparent);
+  background: color-mix(in srgb, var(--danger) 22%, var(--panel-4));
+}
+
+.selection-delete-pill:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--accent-line);
 }
 
 /* ── Wire / hit targets ─────────────────────────────────────────────────────── */
@@ -2985,13 +3032,17 @@ body {
   pointer-events: none;
 }
 
-.sim-schematic-canvas .net-label-layer.simulator-editable,
-.sim-schematic-canvas .net-label-layer.simulator-editable .net-label-text {
+/* Draggable + clickable in exactly the two contexts Canvas.tsx computes as
+   `labelsInteractive` (schematic editor select tool, simulator label tool) —
+   not scoped to a container class, since the schematic editor's own Canvas
+   has no `.sim-schematic-canvas` wrapper. */
+.net-label-layer.labels-interactive,
+.net-label-layer.labels-interactive .net-label-text {
   pointer-events: auto;
-  cursor: text;
+  cursor: move;
 }
 
-.sim-schematic-canvas .net-label-layer.simulator-editable .net-label-text:focus-visible {
+.net-label-layer.labels-interactive .net-label-text:focus-visible {
   fill: var(--accent);
   outline: none;
   text-decoration: underline;
@@ -3001,6 +3052,15 @@ body {
 .net-label-text.selected {
   fill: var(--accent);
   stroke: color-mix(in srgb, var(--accent) 24%, var(--canvas-bg));
+}
+
+/* Connects a label back to its net anchor once it's been dragged far enough
+   that the two would otherwise read as unrelated (Canvas.tsx: offset
+   magnitude > 24). Hairline, not a wire — must never be mistaken for one. */
+.net-label-leader {
+  stroke: var(--faint);
+  stroke-width: 1;
+  pointer-events: none;
 }
 
 .probe-select-ring {
@@ -3014,12 +3074,12 @@ body {
 .net-label-text {
   fill: color-mix(in srgb, var(--accent) 72%, transparent);
   font-family: var(--font-mono);
-  font-size: 9.5px;
+  font-size: 11px;
   font-weight: 510;
   letter-spacing: -0.01em;
   paint-order: stroke fill;
   stroke: var(--canvas-bg);
-  stroke-width: 3px;
+  stroke-width: 1.5px;
   stroke-linejoin: round;
   dominant-baseline: alphabetic;
   text-rendering: geometricPrecision;
@@ -3035,12 +3095,14 @@ body {
 .label-layer .val {
   fill: var(--canvas-label-muted);
   font-family: var(--font-mono);
-  font-size: 8.5px;
+  font-size: 10px;
   font-weight: 500;
   letter-spacing: 0.02em;
   paint-order: stroke fill;
+  /* Halo must stay well under ~25% of the glyph size — the old 3.5px stroke
+     on 8.5px text ate the counters and read as broken rendering. */
   stroke: var(--canvas-bg);
-  stroke-width: 3.5px;
+  stroke-width: 1.5px;
   stroke-linejoin: round;
   dominant-baseline: middle;
   text-rendering: geometricPrecision;
@@ -3049,12 +3111,12 @@ body {
 }
 .label-layer .ref {
   fill: var(--canvas-label);
-  font-size: 9.5px;
+  font-size: 11px;
   font-weight: 600;
 }
 .label-layer .val {
   fill: var(--canvas-label-muted);
-  font-size: 8.5px;
+  font-size: 10px;
 }
 
 /* ══════════════════════════════════════════════════════════════════════════════
@@ -3322,6 +3384,47 @@ body {
 @keyframes status-lamp-pulse {
   0%, 100% { opacity: 1; }
   50%      { opacity: 0.4; }
+}
+
+/* Run button's own lamp dot: ready/running stays green; a failed run swaps it
+   to danger through `.run-button--error` below. */
+.run-lamp-dot {
+  width: 6px;
+  height: 6px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--success);
+  box-shadow: 0 0 4px var(--success-glow);
+}
+
+.run-lamp-dot--running {
+  animation: status-lamp-pulse 1.1s var(--ease-in-out, ease-in-out) infinite;
+}
+
+/* Run button status gradients — evidence-based color: green after a clean
+   run, red after a failed one. Kept subtle (fill tint + hairline), never a
+   saturated CTA slab. The lamp dot follows suit via currentColor-free vars. */
+.run-button--ok {
+  background: linear-gradient(
+    to bottom,
+    color-mix(in srgb, var(--success) 18%, var(--panel-2)),
+    color-mix(in srgb, var(--success) 8%, var(--panel-2))
+  ) !important;
+  border-color: color-mix(in srgb, var(--success) 40%, transparent) !important;
+}
+
+.run-button--error {
+  background: linear-gradient(
+    to bottom,
+    color-mix(in srgb, var(--danger) 20%, var(--panel-2)),
+    color-mix(in srgb, var(--danger) 9%, var(--panel-2))
+  ) !important;
+  border-color: color-mix(in srgb, var(--danger) 42%, transparent) !important;
+}
+
+.run-button--error .run-lamp-dot {
+  background: var(--danger);
+  box-shadow: 0 0 4px var(--danger-glow);
 }
 
 /* activity rail + explorer */
@@ -4143,12 +4246,33 @@ body {
 }
 
 .bottom-panel.has-error .bottom-panel-head {
-  background: color-mix(in srgb, var(--danger) 14%, transparent);
+  background: linear-gradient(
+    to right,
+    color-mix(in srgb, var(--danger) 22%, transparent),
+    color-mix(in srgb, var(--danger) 8%, transparent) 55%,
+    transparent
+  );
   border-bottom-color: color-mix(in srgb, var(--danger) 35%, transparent);
 }
 
 .bottom-panel.has-error .bottom-panel-title {
   color: color-mix(in srgb, var(--danger) 78%, white);
+}
+
+/* Clean run: the same gradient language in success green, so the strip
+   answers "is this circuit acceptable?" at a glance. */
+.bottom-panel.is-clean .bottom-panel-head {
+  background: linear-gradient(
+    to right,
+    color-mix(in srgb, var(--success) 16%, transparent),
+    color-mix(in srgb, var(--success) 6%, transparent) 55%,
+    transparent
+  );
+  border-bottom-color: color-mix(in srgb, var(--success) 30%, transparent);
+}
+
+.bottom-panel.is-clean .bottom-panel-title {
+  color: color-mix(in srgb, var(--success) 70%, white);
 }
 
 .bottom-panel-count {

@@ -122,6 +122,16 @@ export interface NetLabel {
   x: number;
   y: number;
   text: string;
+  /**
+   * Text offset from the electrical anchor `(x, y)`, in world units. Both
+   * undefined (never dragged, or an old .sim file predating this field) means
+   * "auto-place" — Canvas.tsx resolves it via `autoNetLabelOffset` every
+   * render instead of baking a placement into the document. Once the user
+   * drags the label, dx/dy become explicit and auto-placement never runs
+   * again for it, even if a component later moves into the old spot.
+   */
+  dx?: number;
+  dy?: number;
 }
 
 /** The active editing tool. */

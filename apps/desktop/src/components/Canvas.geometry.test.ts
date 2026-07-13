@@ -1,9 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
+  autoNetLabelOffset,
+  autoNetLabelOffsets,
   circuitBounds,
   circuitBoundsWithLabels,
+  componentWorldRect,
   countRouteBodyHits,
   fitViewTransform,
+  pathWithHops,
   rectsOverlap,
   rerouteMovedWires,
   routeWireSmart,
@@ -108,6 +112,26 @@ describe("Canvas wire geometry", () => {
     expect(countRouteBodyHits(route, [blocker])).toBe(0);
     expect(route.length).toBeGreaterThan(2);
   });
+
+  it("uses a clear channel instead of overlapping an existing wire", () => {
+    const existing = [{
+      id: "existing",
+      points: [{ x: 16, y: 0 }, { x: 80, y: 0 }],
+    }];
+    const route = routeWireSmart({ x: 0, y: 0 }, { x: 96, y: 0 }, [], existing);
+    expect(route.length).toBeGreaterThan(2);
+    expect(route.some((point) => point.y !== 0)).toBe(true);
+  });
+
+  it("routes around a finite crossing wire when a clear channel exists", () => {
+    const existing = [{
+      id: "existing",
+      points: [{ x: 48, y: -16 }, { x: 48, y: 16 }],
+    }];
+    const route = routeWireSmart({ x: 0, y: 0 }, { x: 96, y: 0 }, [], existing);
+    expect(route.length).toBeGreaterThan(2);
+    expect(route.some((point) => Math.abs(point.y) >= 32)).toBe(true);
+  });
 });
 
 describe("circuitBounds (fit-to-view math)", () => {
@@ -171,6 +195,57 @@ describe("circuitBoundsWithLabels (§11 Unit A2)", () => {
       withLabels.minX < base.minX || withLabels.maxX > base.maxX ||
       withLabels.minY < base.minY || withLabels.maxY > base.maxY;
     expect(widened).toBe(true);
+  });
+});
+
+describe("autoNetLabelOffset (Fix 2 — net label auto-placement)", () => {
+  it("defaults to the right-above offset (today's old fixed default) when nothing obstructs it", () => {
+    expect(autoNetLabelOffset({ x: 0, y: 0 }, "OUT", [])).toEqual({ dx: 6, dy: -6 });
+  });
+
+  it("picks a candidate whose text bbox clears the component when the default position collides", () => {
+    const blocker = comp("r1", 0, 0);
+    const blockerRect = componentWorldRect(blocker);
+    // Sanity: the default right-above candidate's start point (anchor + 6,-6)
+    // does land inside this blocker's own bbox for this placement — otherwise
+    // this test isn't actually exercising the collision-avoidance path.
+    expect(blockerRect.minX).toBeLessThanOrEqual(6);
+    expect(blockerRect.maxX).toBeGreaterThanOrEqual(6);
+    expect(blockerRect.minY).toBeLessThanOrEqual(-6);
+    expect(blockerRect.maxY).toBeGreaterThanOrEqual(-6);
+
+    const offset = autoNetLabelOffset({ x: 0, y: 0 }, "OUT", [blocker]);
+    expect(offset).not.toEqual({ dx: 6, dy: -6 });
+    const startX = offset.dx;
+    const startY = offset.dy;
+    const clearsBbox = startX < blockerRect.minX || startX > blockerRect.maxX
+      || startY < blockerRect.minY || startY > blockerRect.maxY;
+    expect(clearsBbox).toBe(true);
+  });
+
+  it("is deterministic for identical inputs (no randomness, no dependence on call order)", () => {
+    const blocker = comp("r1", 0, 0);
+    const first = autoNetLabelOffset({ x: 10, y: 10 }, "VOUT", [blocker]);
+    const second = autoNetLabelOffset({ x: 10, y: 10 }, "VOUT", [blocker]);
+    expect(first).toEqual(second);
+  });
+
+  it("places automatic labels as a set so they do not choose the same slot", () => {
+    const offsets = autoNetLabelOffsets([
+      { id: "a", x: 0, y: 0, text: "INPUT" },
+      { id: "b", x: 0, y: 0, text: "SENSE" },
+    ], []);
+    expect(offsets.get("a")).toEqual({ dx: 6, dy: -6 });
+    expect(offsets.get("b")).not.toEqual(offsets.get("a"));
+  });
+
+  it("keeps an explicit user label fixed and routes automatic labels around it", () => {
+    const offsets = autoNetLabelOffsets([
+      { id: "fixed", x: 0, y: 0, text: "INPUT", dx: 6, dy: -6 },
+      { id: "auto", x: 0, y: 0, text: "SENSE" },
+    ], []);
+    expect(offsets.get("fixed")).toEqual({ dx: 6, dy: -6 });
+    expect(offsets.get("auto")).not.toEqual({ dx: 6, dy: -6 });
   });
 });
 
@@ -256,5 +331,35 @@ describe("marquee intersection geometry (§UX checklist 3)", () => {
     expect(wireIntersectsRect(wire, rect)).toBe(true);
     const missWire = { id: "w2", points: [{ x: -50, y: 150 }, { x: 50, y: 150 }, { x: 50, y: 300 }] };
     expect(wireIntersectsRect(missWire, rect)).toBe(false);
+  });
+});
+
+describe("pathWithHops — hop-over arcs at unconnected crossings", () => {
+  it("arcs over each crossing on a left-to-right horizontal segment, in order", () => {
+    const d = pathWithHops(
+      [{ x: 0, y: 0 }, { x: 100, y: 0 }],
+      new Map([[0, [64, 32]]]),
+    );
+    // Crossings sorted along travel: 32 before 64; sweep 1 bulges the arc up.
+    expect(d).toBe("M 0 0 L 28 0 A 4 4 0 0 1 36 0 L 60 0 A 4 4 0 0 1 68 0 L 100 0");
+  });
+
+  it("flips the sweep on right-to-left travel so the bump still points up", () => {
+    const d = pathWithHops(
+      [{ x: 100, y: 0 }, { x: 0, y: 0 }],
+      new Map([[0, [40]]]),
+    );
+    expect(d).toBe("M 100 0 L 44 0 A 4 4 0 0 0 36 0 L 0 0");
+  });
+
+  it("drops hops that would deform a corner and leaves vertical segments straight", () => {
+    const d = pathWithHops(
+      [{ x: 0, y: 0 }, { x: 40, y: 0 }, { x: 40, y: 80 }],
+      new Map([
+        [0, [2, 39]], // both within HOP_RADIUS of an endpoint → dropped
+        [1, [50]], // vertical segment: hops don't apply
+      ]),
+    );
+    expect(d).toBe("M 0 0 L 40 0 L 40 80");
   });
 });
