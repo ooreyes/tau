@@ -70,7 +70,13 @@ import {
   runNativeTransient,
 } from "./engine/nativeSpice";
 import { useProject } from "./store/useProject";
-import { basename } from "./project/types";
+import {
+  ascRewriteRisks,
+  ascSaveBlockReason,
+  basename,
+  isAscFile,
+  serializeSchematicFile,
+} from "./project/types";
 import { validateSchematicDocument } from "./schematic/documentValidation";
 import { importAsc } from "./io/ascImport";
 
@@ -89,6 +95,8 @@ interface OpenTab {
   /** Absolute path when opened from a project folder; null for scratchpads. */
   filePath?: string | null;
   dirty?: boolean;
+  /** Reasons an imported ASC cannot be rewritten losslessly by Tau yet. */
+  ascRewriteRisks?: string[];
 }
 
 const newTabId = () => `tab-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
@@ -158,7 +166,7 @@ function App() {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [mode, setMode] = useState<"schematic" | "simulator">("schematic");
   const modeRef = useRef(mode);
-  const [tabs, setTabs] = useState<OpenTab[]>([{ id: "tab-0", title: "untitled.sim", doc: null, history: emptyHistory() }]);
+  const [tabs, setTabs] = useState<OpenTab[]>([{ id: "tab-0", title: "untitled.asc", doc: null, history: emptyHistory() }]);
   const [activeId, setActiveId] = useState("tab-0");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [confirmClearOpen, setConfirmClearOpen] = useState(false);
@@ -185,24 +193,14 @@ function App() {
   }, [selectedId, mode]);
 
   const writeSim = useProject((s) => s.writeSim);
-  const projectRoot = useProject((s) => s.rootPath);
-  const projectTree = useProject((s) => s.tree);
-  const ensureDefaultWorkspace = useProject((s) => s.ensureDefaultWorkspace);
-  const readSim = useProject((s) => s.readSim);
-  const didOpenDefaultRef = useRef(false);
 
-  const documentTitle = (tabs.find((tab) => tab.id === activeId) ?? tabs[0])?.title ?? "untitled.sim";
+  const documentTitle = (tabs.find((tab) => tab.id === activeId) ?? tabs[0])?.title ?? "untitled.asc";
   const activeFilePath = (tabs.find((tab) => tab.id === activeId) ?? tabs[0])?.filePath ?? null;
 
   const showNotice = useCallback((message: string) => {
     setNotice(message);
     window.setTimeout(() => setNotice((current) => (current === message ? null : current)), 2600);
   }, []);
-
-  // Seed Powerboard workspace on first launch (explorer shows a real project tree).
-  useEffect(() => {
-    ensureDefaultWorkspace();
-  }, [ensureDefaultWorkspace]);
 
   const invalidateAnalysis = useCallback((state: "idle" | "stopped" = "idle") => {
     analysisRequestRef.current += 1;
@@ -514,13 +512,25 @@ function App() {
 
   // Open a document: focus its tab if already open, otherwise add a new one.
   // If the only tab is still the blank untitled starter, replace it in place.
-  const openDocument = useCallback((doc: SchematicDocument, title: string, filePath?: string | null) => {
+  const openDocument = useCallback((
+    doc: SchematicDocument,
+    title: string,
+    filePath?: string | null,
+    rewriteRisks: string[] = [],
+  ) => {
     const snap = snapshotActive(tabs);
     const existing = snap.find((tab) => (filePath ? tab.filePath === filePath : tab.title === title));
     if (existing) {
       setTabs(snap.map((tab) =>
         tab.id === existing.id
-          ? { ...tab, doc, history: emptyHistory(), filePath: filePath ?? tab.filePath, dirty: false }
+          ? {
+              ...tab,
+              doc,
+              history: emptyHistory(),
+              filePath: filePath ?? tab.filePath,
+              dirty: false,
+              ascRewriteRisks: rewriteRisks,
+            }
           : tab,
       ));
       setActiveId(existing.id);
@@ -540,12 +550,21 @@ function App() {
           history: emptyHistory(),
           filePath: filePath ?? null,
           dirty: false,
+          ascRewriteRisks: rewriteRisks,
         }]);
         setActiveId(snap[0].id);
         loadCircuit(doc);
       } else {
         const id = newTabId();
-        setTabs([...snap, { id, title, doc, history: emptyHistory(), filePath: filePath ?? null, dirty: false }]);
+        setTabs([...snap, {
+          id,
+          title,
+          doc,
+          history: emptyHistory(),
+          filePath: filePath ?? null,
+          dirty: false,
+          ascRewriteRisks: rewriteRisks,
+        }]);
         setActiveId(id);
         loadCircuit(doc);
       }
@@ -577,67 +596,50 @@ function App() {
         directives: result.directives,
         probes: [],
       };
-      openDocument(doc, title.replace(/\.asc$/i, ".sim"), path);
+      openDocument(doc, title, path, ascRewriteRisks(text));
       if (result.warnings.length > 0) {
         console.warn(`Imported ${title} with ${result.warnings.length} warning(s):`, result.warnings);
+        showNotice(`Opened ${title} with ${result.warnings.length} import warning(s).`);
       }
     } catch (error) {
       showNotice(error instanceof Error ? error.message : "Could not import .asc file.");
     }
   }, [openDocument, showNotice]);
 
-  // Open the first Powerboard .sim once so launch isn't a blank untitled canvas.
-  useEffect(() => {
-    if (didOpenDefaultRef.current || !projectRoot || projectTree.length === 0) return;
-    const firstFile = (() => {
-      const walk = (nodes: typeof projectTree): { path: string; name: string } | null => {
-        for (const n of nodes) {
-          if (n.kind === "file" && /\.sim$/i.test(n.name)) return { path: n.path, name: n.name };
-          if (n.children) {
-            const hit = walk(n.children);
-            if (hit) return hit;
-          }
-        }
-        return null;
-      };
-      return walk(projectTree);
-    })();
-    if (!firstFile) return;
-    didOpenDefaultRef.current = true;
-    let cancelled = false;
-    void readSim(firstFile.path).then((json) => {
-      if (cancelled) return;
-      openSimFromProject(firstFile.path, firstFile.name, json);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [projectRoot, projectTree, readSim, openSimFromProject]);
-
   const saveActiveToProject = useCallback(async () => {
     const tab = tabs.find((t) => t.id === activeId);
     if (!tab?.filePath) {
-      showNotice("Create or open a .sim from the Project column, then Save.");
+      showNotice("Create or open a schematic from the Explorer, then Save.");
       return;
     }
-    const payload = {
-      app: "Tau",
-      version: 1,
-      savedAt: new Date().toISOString(),
-      components,
-      wires,
-      probes,
-      netLabels,
-      directives,
-    };
     try {
-      await writeSim(tab.filePath, JSON.stringify(payload, null, 2));
+      const serialized = serializeSchematicFile(tab.filePath, {
+        components,
+        wires,
+        probes,
+        netLabels,
+        directives,
+      });
+      const blockReason = isAscFile(tab.filePath)
+        ? ascSaveBlockReason(tab.ascRewriteRisks ?? [], probes.length, serialized.warnings)
+        : null;
+      if (blockReason) {
+        console.warn(`Blocked lossy save for ${basename(tab.filePath)}: ${blockReason}`);
+        showNotice(`Save blocked: ${blockReason}`);
+        return;
+      }
+      await writeSim(tab.filePath, serialized.contents);
       setTabs((list) => list.map((t) => (t.id === activeId ? { ...t, dirty: false } : t)));
-      showNotice(`Saved ${basename(tab.filePath)}`);
+      if (serialized.warnings.length > 0) {
+        console.warn(`Saved ${basename(tab.filePath)} with export warnings:`, serialized.warnings);
+        showNotice(`Saved with ${serialized.warnings.length} export warning(s).`);
+      } else {
+        showNotice(`Saved ${basename(tab.filePath)}`);
+      }
     } catch (error) {
       showNotice(error instanceof Error ? error.message : "Save failed.");
     }
-  }, [tabs, activeId, projectRoot, components, wires, probes, netLabels, directives, writeSim, showNotice]);
+  }, [tabs, activeId, components, wires, probes, netLabels, directives, writeSim, showNotice]);
 
   // Switch to an already-open tab, preserving each tab's content in memory.
   const switchTab = useCallback((id: string) => {
@@ -657,8 +659,8 @@ function App() {
   const startNewCircuit = useCallback(() => {
     const snap = snapshotActive(tabs);
     const taken = new Set(snap.map((tab) => tab.title));
-    let title = "untitled.sim";
-    for (let n = 2; taken.has(title); n += 1) title = `untitled-${n}.sim`;
+    let title = "untitled.asc";
+    for (let n = 2; taken.has(title); n += 1) title = `untitled-${n}.asc`;
     const id = newTabId();
     setTabs([...snap, { id, title, doc: blankDocument(), history: emptyHistory() }]);
     setActiveId(id);
@@ -683,7 +685,7 @@ function App() {
     }
     const remaining = snap.filter((tab) => tab.id !== id);
     if (remaining.length === 0) {
-      const blank: OpenTab = { id: newTabId(), title: "untitled.sim", doc: blankDocument(), history: emptyHistory() };
+      const blank: OpenTab = { id: newTabId(), title: "untitled.asc", doc: blankDocument(), history: emptyHistory() };
       setTabs([blank]);
       setActiveId(blank.id);
       newCircuit();

@@ -1,8 +1,10 @@
 import { create } from "zustand";
 import {
   basename,
+  blankAscText,
   blankSimJson,
   EMPTY_PROJECT,
+  isAscFile,
   joinPath,
   type ProjectNode,
   type ProjectState,
@@ -16,13 +18,14 @@ import {
   type WorkspaceFile,
 } from "../project/defaultWorkspace";
 import * as fs from "../project/fsBridge";
+import { decodeSchematicText } from "../io/ascImport";
 
 interface ProjectStore extends ProjectState {
   capability: fs.FsCapability;
-  /** In-memory file map for the seeded Powerboard workspace (and edits to it). */
+  /** In-memory files for the temporary browser-only Schematics workspace. */
   workspaceFiles: Record<string, WorkspaceFile>;
   detectCapability: () => Promise<void>;
-  /** Ensure a project is open — seeds Powerboard if nothing is loaded. */
+  /** Open an empty fallback only when no real filesystem is available. */
   ensureDefaultWorkspace: () => void;
   openFolder: () => Promise<boolean>;
   newProject: (suggestedName?: string) => Promise<boolean>;
@@ -31,7 +34,7 @@ interface ProjectStore extends ProjectState {
   toggleExpanded: (path: string) => void;
   collapseAll: () => void;
   createFolder: (parentPath: string, name: string) => Promise<string | null>;
-  createSimFile: (parentPath: string, name: string) => Promise<string | null>;
+  createSchematicFile: (parentPath: string, name: string) => Promise<string | null>;
   importAscFile: (parentPath: string, file: File) => Promise<string | null>;
   renameNode: (path: string, newName: string) => Promise<string | null>;
   deleteNode: (path: string) => Promise<void>;
@@ -39,10 +42,27 @@ interface ProjectStore extends ProjectState {
   writeSim: (path: string, contents: string) => Promise<void>;
 }
 
-function ensureSimExtension(name: string): string {
+function ensureSchematicExtension(name: string): string {
   const trimmed = name.trim();
-  if (/\.(sim|tau\.json)$/i.test(trimmed)) return trimmed;
-  return `${trimmed || "untitled"}.sim`;
+  if (/\.(asc|sim|tau\.json)$/i.test(trimmed)) return trimmed;
+  return `${trimmed || "untitled"}.asc`;
+}
+
+function isSafeLeafName(name: string): boolean {
+  const trimmed = name.trim();
+  return trimmed !== "" && trimmed !== "." && trimmed !== ".." && !/[\\/]/.test(trimmed);
+}
+
+function numberedName(name: string, index: number): string {
+  if (/\.tau\.json$/i.test(name)) return `${name.slice(0, -9)}-${index}.tau.json`;
+  const dot = name.lastIndexOf(".");
+  if (dot <= 0) return `${name}-${index}`;
+  return `${name.slice(0, dot)}-${index}${name.slice(dot)}`;
+}
+
+function newFileContents(name: string): Pick<WorkspaceFile, "kind" | "contents"> {
+  if (/\.asc$/i.test(name)) return { kind: "asc", contents: blankAscText() };
+  return { kind: "sim", contents: blankSimJson() };
 }
 
 function seedWorkspace(): Pick<ProjectStore, "rootPath" | "rootName" | "tree" | "expanded" | "workspaceFiles" | "error"> {
@@ -68,6 +88,17 @@ function rebuildWorkspaceTree(files: Record<string, WorkspaceFile>): ProjectNode
   return defaultWorkspaceTree(Object.values(files));
 }
 
+async function availableFilePath(parentPath: string, desiredName: string): Promise<{ path: string; name: string }> {
+  for (let index = 1; ; index += 1) {
+    const name = index === 1 ? desiredName : numberedName(desiredName, index);
+    const path = joinPath(parentPath, name);
+    const exists = isWorkspacePath(parentPath)
+      ? Object.prototype.hasOwnProperty.call(useProject.getState().workspaceFiles, path)
+      : await fs.pathExists(path);
+    if (!exists) return { path, name };
+  }
+}
+
 export const useProject = create<ProjectStore>((set, get) => ({
   ...EMPTY_PROJECT,
   capability: "none",
@@ -79,7 +110,7 @@ export const useProject = create<ProjectStore>((set, get) => ({
   },
 
   ensureDefaultWorkspace: () => {
-    if (get().rootPath) return;
+    if (get().rootPath || get().capability !== "none") return;
     set(seedWorkspace());
   },
 
@@ -103,20 +134,14 @@ export const useProject = create<ProjectStore>((set, get) => ({
     }
   },
 
-  newProject: async (suggestedName = "Powerboard") => {
+  newProject: async (suggestedName = DEFAULT_WORKSPACE_NAME) => {
     try {
       if ((await fs.detectFsCapability()) === "none") {
-        // Stay in the seeded workspace; just rename display.
-        set({
-          ...seedWorkspace(),
-          rootName: suggestedName.trim() || DEFAULT_WORKSPACE_NAME,
-        });
+        set(seedWorkspace());
         return true;
       }
       const path = await fs.createProjectFolder(suggestedName);
       if (!path) return false;
-      const simPath = joinPath(path, "untitled.sim");
-      await fs.writeTextFile(simPath, blankSimJson());
       const tree = await fs.readProjectTree(path);
       set({
         rootPath: path,
@@ -133,7 +158,12 @@ export const useProject = create<ProjectStore>((set, get) => ({
     }
   },
 
-  closeProject: () => set({ ...seedWorkspace(), capability: get().capability }),
+  closeProject: () => {
+    const capability = get().capability;
+    set(capability === "none"
+      ? { ...seedWorkspace(), capability }
+      : { ...EMPTY_PROJECT, capability, workspaceFiles: {} });
+  },
 
   refresh: async () => {
     const { rootPath, workspaceFiles } = get();
@@ -170,7 +200,7 @@ export const useProject = create<ProjectStore>((set, get) => ({
         const markerPath = joinPath(path, ".keep");
         const files = {
           ...get().workspaceFiles,
-          [markerPath]: { path: markerPath, name: ".keep", kind: "sim" as const, contents: "" },
+          [markerPath]: { path: markerPath, name: ".keep", kind: "asc" as const, contents: "" },
         };
         set({
           workspaceFiles: files,
@@ -195,14 +225,19 @@ export const useProject = create<ProjectStore>((set, get) => ({
     }
   },
 
-  createSimFile: async (parentPath, name) => {
-    const fileName = ensureSimExtension(name);
-    const path = joinPath(parentPath, fileName);
+  createSchematicFile: async (parentPath, name) => {
+    if (!isSafeLeafName(name)) {
+      set({ error: "Schematic names cannot contain folder paths." });
+      return null;
+    }
+    const desiredName = ensureSchematicExtension(name);
     try {
+      const { path, name: fileName } = await availableFilePath(parentPath, desiredName);
+      const file = newFileContents(fileName);
       if (isWorkspacePath(parentPath)) {
         const files = {
           ...get().workspaceFiles,
-          [path]: { path, name: fileName, kind: "sim" as const, contents: blankSimJson() },
+          [path]: { path, name: fileName, ...file },
         };
         // Drop .keep markers in the same folder once a real file exists.
         for (const key of Object.keys(files)) {
@@ -215,23 +250,27 @@ export const useProject = create<ProjectStore>((set, get) => ({
         });
         return path;
       }
-      await fs.writeTextFile(path, blankSimJson());
+      await fs.writeTextFile(path, file.contents);
       await get().refresh();
       set((s) => ({
         expanded: s.expanded.includes(parentPath) ? s.expanded : [...s.expanded, parentPath],
       }));
       return path;
     } catch (error) {
-      set({ error: error instanceof Error ? error.message : "Could not create simulation." });
+      set({ error: error instanceof Error ? error.message : "Could not create schematic." });
       return null;
     }
   },
 
   importAscFile: async (parentPath, file) => {
-    const name = file.name.endsWith(".asc") || file.name.endsWith(".ASC") ? file.name : `${file.name}.asc`;
-    const path = joinPath(parentPath, name);
+    if (!isSafeLeafName(file.name)) {
+      set({ error: "Imported filenames cannot contain folder paths." });
+      return null;
+    }
+    const desiredName = /\.asc$/i.test(file.name) ? file.name : `${file.name}.asc`;
     try {
-      const text = await file.text();
+      const { path, name } = await availableFilePath(parentPath, desiredName);
+      const text = decodeSchematicText(await file.arrayBuffer());
       if (isWorkspacePath(parentPath)) {
         const files = {
           ...get().workspaceFiles,
@@ -310,7 +349,7 @@ export const useProject = create<ProjectStore>((set, get) => ({
         [path]: {
           path,
           name: basename(path),
-          kind: (prev?.kind ?? "sim") as "sim" | "asc",
+          kind: prev?.kind ?? (isAscFile(path) ? "asc" : "sim"),
           contents,
         },
       };

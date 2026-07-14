@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ChangeEvent, type ReactNode } from "react";
 import {
   FolderOpen,
   Search,
@@ -131,11 +131,12 @@ export function ExplorerPanel({
   const detectCapability = useProject((s) => s.detectCapability);
   const ensureDefaultWorkspace = useProject((s) => s.ensureDefaultWorkspace);
   const openFolder = useProject((s) => s.openFolder);
+  const newProject = useProject((s) => s.newProject);
   const refresh = useProject((s) => s.refresh);
   const toggleExpanded = useProject((s) => s.toggleExpanded);
   const collapseAll = useProject((s) => s.collapseAll);
   const createFolder = useProject((s) => s.createFolder);
-  const createSimFile = useProject((s) => s.createSimFile);
+  const createSchematicFile = useProject((s) => s.createSchematicFile);
   const importAscFile = useProject((s) => s.importAscFile);
   const deleteNode = useProject((s) => s.deleteNode);
   const readSim = useProject((s) => s.readSim);
@@ -193,9 +194,33 @@ export function ExplorerPanel({
       if (path) onNotice(`Created ${name}`);
       return;
     }
-    const path = await createSimFile(draft.parentPath, name);
+    const path = await createSchematicFile(draft.parentPath, name);
     if (path) {
       onNotice(`Created ${basename(path)}`);
+      await openNode(path, basename(path));
+    }
+  };
+
+  const importAscFromInput = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.currentTarget.files?.[0];
+    event.currentTarget.value = "";
+    if (!file) return;
+
+    let destination = useProject.getState().rootPath;
+    if (!destination) {
+      const created = capability === "tauri"
+        ? await newProject("Schematics")
+        : await openFolder();
+      destination = created ? useProject.getState().rootPath : null;
+    }
+    if (!destination) {
+      onNotice("Choose a Schematics folder to import this file.");
+      return;
+    }
+
+    const path = await importAscFile(destination, file);
+    if (path) {
+      onNotice(`Imported ${basename(path)}`);
       await openNode(path, basename(path));
     }
   };
@@ -204,10 +229,46 @@ export function ExplorerPanel({
     return (
       <aside className="explorer-panel" aria-label="Project explorer" style={{ width: resize.width }}>
         <div className="explorer-head">
-          <span>Project</span>
+          <span>Schematics</span>
         </div>
+        <input
+          ref={ascInputRef}
+          className="file-input"
+          type="file"
+          accept=".asc"
+          title="Import LTspice schematic"
+          onChange={importAscFromInput}
+        />
         <div className="explorer-empty">
-          <p>Loading workspace…</p>
+          <p className="explorer-empty-hint">Open a folder of LTspice schematics, or create one for Tau.</p>
+          <div className="explorer-empty-actions">
+            <Button
+              type="button"
+              size="sm"
+              onClick={async () => {
+                const ok = await openFolder();
+                if (ok) onNotice("Opened Schematics folder.");
+              }}
+            >
+              Open Folder
+            </Button>
+            {capability === "tauri" && (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={async () => {
+                  const ok = await newProject("Schematics");
+                  if (ok) onNotice("Created Schematics folder.");
+                }}
+              >
+                Create Folder
+              </Button>
+            )}
+            <Button type="button" size="sm" variant="ghost" onClick={() => ascInputRef.current?.click()}>
+              Import .asc…
+            </Button>
+          </div>
         </div>
         {resizeHandle}
       </aside>
@@ -217,13 +278,13 @@ export function ExplorerPanel({
   return (
     <aside className="explorer-panel" aria-label="Project explorer" style={{ width: resize.width }}>
       <div className="explorer-head">
-        <span>{rootName ?? "Powerboard"}</span>
+        <span>{rootName ?? "Schematics"}</span>
         <div className="explorer-icons">
           <button
             type="button"
-            title="New simulation file"
-            aria-label="New simulation file"
-            onClick={() => setCreateDraft({ kind: "file", parentPath: rootPath, name: "untitled.sim" })}
+            title="New schematic file"
+            aria-label="New schematic file"
+            onClick={() => setCreateDraft({ kind: "file", parentPath: rootPath, name: "untitled.asc" })}
           >
             <FilePlus size={15} strokeWidth={1.7} />
           </button>
@@ -270,16 +331,7 @@ export function ExplorerPanel({
         type="file"
         accept=".asc"
         title="Import LTspice schematic"
-        onChange={async (event) => {
-          const file = event.currentTarget.files?.[0];
-          event.currentTarget.value = "";
-          if (!file) return;
-          const path = await importAscFile(rootPath, file);
-          if (path) {
-            onNotice(`Imported ${basename(path)}`);
-            await openNode(path, basename(path));
-          }
-        }}
+        onChange={importAscFromInput}
       />
 
       <div className="tree-list">
@@ -291,7 +343,7 @@ export function ExplorerPanel({
             <input
               ref={createInputRef}
               value={createDraft.name}
-              aria-label={createDraft.kind === "folder" ? "New folder name" : "New simulation name"}
+              aria-label={createDraft.kind === "folder" ? "New folder name" : "New schematic name"}
               spellCheck={false}
               onChange={(event) => setCreateDraft({ ...createDraft, name: event.currentTarget.value })}
               onKeyDown={(event) => {
@@ -317,8 +369,8 @@ export function ExplorerPanel({
           onNewFolder={async (parent) => {
             setCreateDraft({ kind: "folder", parentPath: parent, name: "New Folder" });
           }}
-          onNewSim={async (parent) => {
-            setCreateDraft({ kind: "file", parentPath: parent, name: "untitled.sim" });
+          onNewFile={async (parent) => {
+            setCreateDraft({ kind: "file", parentPath: parent, name: "untitled.asc" });
           }}
           onDelete={async (path, name) => {
             if (!window.confirm(`Delete “${name}”?`)) return;
@@ -361,7 +413,7 @@ function ProjectTree({
   onToggle,
   onOpenFile,
   onNewFolder,
-  onNewSim,
+  onNewFile,
   onDelete,
 }: {
   nodes: import("../project/types").ProjectNode[];
@@ -371,7 +423,7 @@ function ProjectTree({
   onToggle: (path: string) => void;
   onOpenFile: (path: string, name: string) => void;
   onNewFolder: (parent: string) => void;
-  onNewSim: (parent: string) => void;
+  onNewFile: (parent: string) => void;
   onDelete: (path: string, name: string) => void;
 }) {
   return (
@@ -388,9 +440,9 @@ function ProjectTree({
                 onClick={() => onToggle(node.path)}
                 onContextMenu={(e) => {
                   e.preventDefault();
-                  const action = window.prompt(`Folder “${node.name}”: type folder / sim / delete`, "folder");
+                  const action = window.prompt(`Folder “${node.name}”: type folder / asc / delete`, "folder");
                   if (action === "folder") onNewFolder(node.path);
-                  else if (action === "sim") onNewSim(node.path);
+                  else if (action === "asc") onNewFile(node.path);
                   else if (action === "delete") onDelete(node.path, node.name);
                 }}
               >
@@ -406,7 +458,7 @@ function ProjectTree({
                   onToggle={onToggle}
                   onOpenFile={onOpenFile}
                   onNewFolder={onNewFolder}
-                  onNewSim={onNewSim}
+                  onNewFile={onNewFile}
                   onDelete={onDelete}
                 />
               )}

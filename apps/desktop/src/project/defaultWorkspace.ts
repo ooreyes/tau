@@ -1,111 +1,38 @@
 /**
- * Built-in starter workspace shown in the Project explorer on first launch.
- * Mimics a real board folder (Powerboard) with subfolders and `.sim` files so
- * LTspice users land in a familiar project tree instead of an empty prompt.
+ * Empty in-memory workspace used only when Tau cannot access a real folder
+ * (for example, the Vite browser preview). Native Tau starts without a root so
+ * the Explorer can ask the user to open or create a Schematics folder.
  */
 
-import { EXAMPLE_CIRCUITS } from "../examples/circuits";
 import type { ProjectNode } from "./types";
-import type { SchematicDocument } from "../store/useSchematic";
 
-export const DEFAULT_WORKSPACE_ID = "workspace://Powerboard";
-export const DEFAULT_WORKSPACE_NAME = "Powerboard";
+export const DEFAULT_WORKSPACE_ID = "workspace://Schematics";
+export const DEFAULT_WORKSPACE_NAME = "Schematics";
 
 export interface WorkspaceFile {
   path: string;
   name: string;
-  /** JSON body for `.sim` files; ASC text for `.asc` imports. */
+  /** Tau JSON for legacy `.sim` files; LTspice text for `.asc` files. */
   contents: string;
   kind: "sim" | "asc";
 }
 
-function simDocFromExample(id: string): SchematicDocument {
-  const ex = EXAMPLE_CIRCUITS.find((c) => c.id === id);
-  if (!ex) {
-    return { components: [], wires: [], probes: [], netLabels: [], directives: [] };
-  }
-  return {
-    components: ex.components,
-    wires: ex.wires,
-    probes: [],
-    netLabels: [],
-    directives: [],
-  };
-}
-
-function simJson(doc: SchematicDocument): string {
-  return JSON.stringify(
-    {
-      app: "Tau",
-      version: 1,
-      components: doc.components,
-      wires: doc.wires,
-      probes: doc.probes ?? [],
-      netLabels: doc.netLabels ?? [],
-      directives: doc.directives ?? [],
-    },
-    null,
-    2,
-  );
-}
-
-const ROOT = DEFAULT_WORKSPACE_ID;
-
-/** Seed files for the default Powerboard workspace. */
+/** The temporary browser workspace intentionally contains no examples. */
 export function defaultWorkspaceFiles(): WorkspaceFile[] {
-  return [
-    {
-      path: `${ROOT}/LED Board/rc-charging.sim`,
-      name: "rc-charging.sim",
-      kind: "sim",
-      contents: simJson(simDocFromExample("rc.v1")),
-    },
-    {
-      path: `${ROOT}/LED Board/rc-lowpass.sim`,
-      name: "rc-lowpass.sim",
-      kind: "sim",
-      contents: simJson(simDocFromExample("rc-lpf.v1")),
-    },
-    {
-      path: `${ROOT}/Charging Circuit/voltage-divider.sim`,
-      name: "voltage-divider.sim",
-      kind: "sim",
-      contents: simJson(simDocFromExample("divider.v1")),
-    },
-    {
-      path: `${ROOT}/Charging Circuit/rlc-series.sim`,
-      name: "rlc-series.sim",
-      kind: "sim",
-      contents: simJson(simDocFromExample("rlc.v1")),
-    },
-    {
-      path: `${ROOT}/Analog/non-inverting-amp.sim`,
-      name: "non-inverting-amp.sim",
-      kind: "sim",
-      contents: simJson(simDocFromExample("opamp-noninv.v1")),
-    },
-    {
-      path: `${ROOT}/Analog/inverting-amp.sim`,
-      name: "inverting-amp.sim",
-      kind: "sim",
-      contents: simJson(simDocFromExample("opamp-inv.v1")),
-    },
-    {
-      path: `${ROOT}/Power Stage/class-d.sim`,
-      name: "class-d.sim",
-      kind: "sim",
-      contents: simJson(simDocFromExample("classd.v1")),
-    },
-  ];
+  return [];
 }
 
-/** Build a ProjectNode tree from the seeded workspace files. */
-export function defaultWorkspaceTree(files: WorkspaceFile[] = defaultWorkspaceFiles()): ProjectNode[] {
+/** Build a ProjectNode tree from the temporary workspace's in-memory files. */
+export function defaultWorkspaceTree(files: WorkspaceFile[] = []): ProjectNode[] {
   type DirAcc = { name: string; path: string; children: Map<string, DirAcc | ProjectNode> };
-  const root: DirAcc = { name: DEFAULT_WORKSPACE_NAME, path: ROOT, children: new Map() };
+  const root: DirAcc = {
+    name: DEFAULT_WORKSPACE_NAME,
+    path: DEFAULT_WORKSPACE_ID,
+    children: new Map(),
+  };
 
   for (const file of files) {
-    const rel = file.path.slice(ROOT.length + 1);
+    const rel = file.path.slice(DEFAULT_WORKSPACE_ID.length + 1);
     const parts = rel.split("/");
     let cur = root;
     for (let i = 0; i < parts.length - 1; i += 1) {

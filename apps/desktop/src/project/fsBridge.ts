@@ -5,6 +5,7 @@
  */
 
 import { basename, isProjectFile, joinPath, type ProjectNode } from "./types";
+import { decodeSchematicText } from "../io/ascImport";
 
 export type FsCapability = "tauri" | "web" | "none";
 
@@ -88,6 +89,20 @@ async function webFile(path: string, create = false) {
   return dir.getFileHandle(name, { create });
 }
 
+/** Check for a file without creating it, across native and browser projects. */
+export async function pathExists(path: string): Promise<boolean> {
+  if (path.startsWith("web://")) {
+    try {
+      await webFile(path);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+  const { exists } = await import("@tauri-apps/plugin-fs");
+  return exists(path);
+}
+
 /** Recursively list a project folder (dirs + .sim / .tau.json files). */
 export async function readProjectTree(rootPath: string): Promise<ProjectNode[]> {
   if (rootPath.startsWith("web://")) {
@@ -144,10 +159,10 @@ function sortNodes(nodes: ProjectNode[]): ProjectNode[] {
 export async function readTextFile(path: string): Promise<string> {
   if (path.startsWith("web://")) {
     const file = await (await webFile(path)).getFile();
-    return file.text();
+    return decodeSchematicText(await file.arrayBuffer());
   }
-  const { readTextFile: read } = await import("@tauri-apps/plugin-fs");
-  return read(path);
+  const { readFile: read } = await import("@tauri-apps/plugin-fs");
+  return decodeSchematicText(await read(path));
 }
 
 export async function writeTextFile(path: string, contents: string): Promise<void> {
