@@ -188,3 +188,59 @@ until labels or controls become unreachable.
 5. Material/palette/type/icon consistency sweep and light/high-contrast variants.
 6. Packaged Tauri screenshot and native ngspice acceptance pass.
 
+## 10. Baseline UI/UX audit — 2026-07-14
+
+Live review covered the supplied analysis-tab screenshot plus Tau at the normal
+desktop viewport and the declared 900×600 minimum, before this contract's new
+units landed.
+
+### What is already working
+
+- The simulator keeps a read-only circuit beside analysis instead of replacing
+  the editor with an unrelated full-screen chart.
+- The current seven-mode rail is keyboard/ARIA-addressable and, in the dirty
+  working build, fits the 542 px analysis column at 900×600.
+- Run state, Errors, and component telemetry already derive from real analysis
+  data. The inverting-amplifier example produced 321 real samples and four
+  component measurement cards.
+- The palette has a coherent neutral-black base, semantic status colors, a
+  separate trace palette, SF Pro/SF Mono roles, and tokenized surfaces.
+
+### P0/P1 usability problems
+
+1. **Seeded demo masquerades as a project (P0).** Launch opens a hardcoded
+   `Powerboard` tree and `inverting-amp.sim`, which obscures the real folder/ASC
+   mental model and risks making Tau feel like a demo.
+2. **ASC save corruption path (P0).** Opening an `.asc` retains its path but
+   changes the tab title to `.sim`; Save serializes Tau JSON to that `.asc` path.
+   This must be fixed before `.asc` can be called first-class.
+3. **Telemetry requires horizontal scrolling (P1).** At 900×600,
+   `.telemetry-strip` measured 872 px of content inside a 281 px viewport. Only
+   the first card and part of the second are visible, directly violating the
+   “all primary data visible” requirement.
+4. **No useful first plot (P1).** A successful run presents a large empty card
+   until a probe or node name exists. The guidance is correct, but the primary
+   workspace feels broken. Provide direct “Probe on circuit” focus and a clear
+   list of available named/probed signals; never fabricate a default trace.
+5. **Circuit context collapses too far (P1).** At the minimum window the circuit
+   column is about 306 px wide and shares its height with telemetry, shrinking
+   the actual topology to a small island. Telemetry should reflow below/alongside
+   plots rather than consume the circuit's primary vertical context.
+
+### Visual consistency problems
+
+6. The base is coherent but almost entirely opaque and flat. Add material only
+   to the title/mode strip, floating zoom cluster, transient menus, and popovers;
+   keep schematic/plot/data cards opaque.
+7. UI copy and engineering values are both frequently rendered as small mono
+   text. Reserve mono for domain values; promote panel titles, instructions, and
+   button labels to SF Pro at 12–13 px.
+8. Some controls still mix Lucide, Unicode (`+`, `−`, `⌂`, `›`), and text glyphs.
+   Migrate them to one accessible icon-button primitive.
+9. The analysis rail in the supplied screenshot is visually oversized and
+   distributes short labels across a large pill. The compact implementation
+   target is content-sized, 28–32 px high, quiet inactive labels, and a restrained
+   selected segment — never a full-width billboard.
+10. Empty and advanced states use large unused black areas without local actions
+    or hierarchy. A plot/dashboard should read as a prepared instrument even
+    before data exists: title, signal source, shortcut, and next action.
