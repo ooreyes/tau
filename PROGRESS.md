@@ -8,19 +8,44 @@
      `git log --oneline -8`, recover/finish/revert that unit FIRST, then go on.
      ─────────────────────────────────────────────────────────────────────── -->
 ## ⏱ HEARTBEAT
-- **Headline metric:** 1499 committed-branch tests green · corpus 82/82 import · 82/82 op-converge · 79/82 warning-clean
+- **Headline metric:** 1536 committed-branch tests green · corpus 82/82 import · 82/82 op-converge · 79/82 warning-clean
 - **Run started (UTC):** 2026-07-14T05:05Z
 - **Synced to origin:** auto/ltspice-parity @ de5359e (dirty shared tree preserved).
-- **Claimed unit:** §2 `.asc`-native Schematics workspace — remove seeded Powerboard
-  content, create/open/import/save real `.asc`, and establish the durable UI vision.
-- **Status:** IN PROGRESS
-- **Last completed sub-step:** audited the project store, `.asc` open/save path,
-  simulator analysis rail, current visual tokens, and the supplied screenshot.
-- **Plan:** commit the design contract, delegate disjoint implementation tracks,
-  land `.asc` workflow first, then integrate reviewed simulator/control units.
+- **Claimed unit:** §1/§6/§10 `.asc`-native workspace and simulator information architecture.
+- **Status:** DONE
+- **Last completed sub-step:** landed the ASC-native Schematics explorer, compact
+  analysis rail, unified instrument icons, and responsive V/I/P telemetry dock.
+- **Plan:** continue the plot-card/cursor/FFT sequence in `TAU_DESIGN_VISION.md`.
 - **Note:** existing simulator/assistant worktree edits belong to earlier units and
   must remain intact; stage only reviewed hunks.
-- **Next step:** implement and test `.asc`-native project semantics.
+- **Next step:** unify plot-card axes/cursors and complete FFT engineering readouts.
+
+---
+
+## 2026-07-14T05:50Z — auto/ltspice-parity — UI architecture and ASC-native workspace
+
+### What I did
+- Published `TAU_DESIGN_VISION.md` as the durable Apple/LTspice/Desmos design contract and recorded the live 900×600 baseline audit.
+- Removed the seeded Powerboard/examples workflow. Tau now starts with a real Schematics-folder choice, creates valid `.asc` files by default, preserves imported filenames/encodings, and keeps `.sim` explicitly legacy.
+- Made ASC saves format-aware and loss-aware: complex source records, probe dots, and exporter-skipped parts block before disk writes; collisions are suffixed and traversal-like filenames rejected.
+- Replaced the oversized analysis slab with a 32px accessible directive rail; all seven modes fit the 300px analysis floor with zero overflow.
+- Added one responsive, resizable component telemetry dock with selectable V/I/P cards. At 900×600, four cards measured 281px client/scroll width (no horizontal carousel); dock height preserves circuit context.
+- Unified simulator zoom controls on the reusable Lucide instrument-icon button.
+
+### Tests / verification
+- Isolated committed snapshot: typecheck passed; 106 files / 1536 tests passed.
+- Production Vite builds passed for each landed unit (existing chunk-size advisory only).
+- In-app browser at 900×600: ASC-first empty state, seven analysis modes, run/result telemetry, zero horizontal telemetry overflow, and edit-locked simulator interactions verified.
+- Independent review found and closed destructive ASC save, overwrite/path traversal, duplicate telemetry computation, and minimum-height regressions before handoff.
+
+### Commits
+- `52f7263`, `ce269dc` — design contract and baseline audit.
+- `46f146d`, `d0f36a2` — icon controls and compact analysis rail.
+- `dd27fab` — ASC-native Schematics workspace.
+- `e16456c`, `edafa30` — responsive telemetry dock and review fixes.
+
+### Next step
+- Continue `TAU_DESIGN_VISION.md` sequence 3–4: unified plot cards/axes/cursors, then FFT/THD detail. Complex vendor ASC editing remains explicitly blocked from lossy in-place save until the exporter preserves the original structured records.
 
 ---
 

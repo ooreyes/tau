@@ -244,3 +244,22 @@ units landed.
 10. Empty and advanced states use large unused black areas without local actions
     or hierarchy. A plot/dashboard should read as a prepared instrument even
     before data exists: title, signal source, shortcut, and next action.
+
+## 11. Implementation status — 2026-07-14
+
+Landed and independently reviewed:
+
+- ASC-native Schematics-folder startup with no seeded Powerboard/examples.
+- Valid `.asc` creation, real-name import, multi-encoding reads, legacy `.sim`
+  compatibility, collision/path safety, and pre-write loss-awareness gates.
+- Content-sized 32px analysis rail with all seven directive modes visible at
+  the 300px analysis floor.
+- Reusable 28px Lucide instrument controls for plot zoom/fit.
+- One selectable V/I/P component telemetry dock. Cards reflow vertically at the
+  900×600 floor; measured horizontal overflow is zero, and dock height is capped
+  to retain meaningful circuit context.
+
+Next implementation slice: unify the existing plot-card variants around shared
+axes, direct cursors, persistent resize/reorder, and visible statistics; then
+finish FFT/THD engineering detail. Tau intentionally blocks lossy in-place saves
+for complex vendor ASC records until those records can be preserved structurally.

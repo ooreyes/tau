@@ -925,6 +925,11 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   (2026-07-12):** searchable semantic component cards provide spacious V/I/P
   readings, bounded waveform previews, an explicit Select control, and one
   shared sign-convention disclosure instead of repeated per-row prose.
+  **Responsive dock follow-up (2026-07-14):** the primary V/I/P cards now live
+  once beneath the read-only circuit, reflow to one column at the 300px floor,
+  never require horizontal scrolling, persist a keyboard-resizable height, and
+  cap that height so the circuit canvas remains usable at 900×600. The former
+  duplicate analysis-column telemetry computation/UI was removed.
 - ✅ **Measurement cursors** (1 & 2, delta readout) — `simulation/cursors.ts`
   (`cursorReadout`/`fractionToX`, 8 unit tests) + a collapsible **Cursors** panel
   on the transient scope (`SimulationPanel` `CursorView`). Two sliders position
