@@ -372,6 +372,20 @@ describe("fitViewTransform padding (§11 Unit A2)", () => {
     expect(t.zoom).toBeCloseTo(1000 / 1000, 10);
     expect(t.x + bounds.minX * t.zoom).toBeCloseTo(0, 10);
   });
+
+  it("keeps an explicit topology center fixed when label bounds are asymmetric", () => {
+    const labelHeavyBounds = { minX: -180, minY: -50, maxX: 120, maxY: 50 };
+    const t = fitViewTransform(labelHeavyBounds, 600, 300, {
+      paddingFraction: 0,
+      minPaddingPx: 0,
+      center: { x: 0, y: 0 },
+    });
+
+    expect(t.x).toBeCloseTo(300, 10);
+    expect(t.y).toBeCloseTo(150, 10);
+    expect(t.x + labelHeavyBounds.minX * t.zoom).toBeGreaterThanOrEqual(0);
+    expect(t.x + labelHeavyBounds.maxX * t.zoom).toBeLessThanOrEqual(600);
+  });
 });
 
 describe("marquee intersection geometry (§UX checklist 3)", () => {

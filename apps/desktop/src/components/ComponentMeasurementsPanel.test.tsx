@@ -98,6 +98,25 @@ describe("ComponentMeasurementsPanel", () => {
     expect(screen.getByText("FINAL is the instantaneous value at the simulation stop time.")).toBeTruthy();
   });
 
+  it("renders model-provided component safety advisories", () => {
+    const warningRow: ComponentMeasurement = {
+      ...rows[0],
+      componentId: "d1",
+      ref: "D1",
+      kind: "led",
+      advisories: [{
+        kind: "high-led-current-no-limiter",
+        severity: "warning",
+        title: "High LED current · no limiter",
+        message: "D1 reaches 315 mA with V1 directly across it. Add a series resistor or current regulator, and verify the LED model rating.",
+      }],
+    };
+    render(<ComponentMeasurementsPanel rows={[warningRow]} selectedId={null} onSelect={() => {}} />);
+
+    expect(screen.getByRole("status").textContent).toContain("High LED current · no limiter");
+    expect(screen.getByRole("status").textContent).toContain("D1 reaches 315 mA");
+  });
+
   it("announces empty and no-match states", () => {
     const { rerender } = render(<ComponentMeasurementsPanel rows={[]} selectedId={null} onSelect={() => {}} />);
     expect(screen.getByText(/Run a transient analysis/)).toBeTruthy();

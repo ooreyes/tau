@@ -95,6 +95,77 @@ describe("schematic document store", () => {
     ]);
   });
 
+  it("inserts a vertical two-terminal part into a collinear wire and undo restores the bypass", () => {
+    useSchematic.setState({
+      wires: [{ id: "vertical", points: [{ x: 0, y: -96 }, { x: 0, y: 96 }] }],
+      tool: { mode: "place", kind: "resistor" },
+      placeRotation: 90,
+    });
+
+    useSchematic.getState().addComponent("resistor", 0, 0);
+
+    const state = useSchematic.getState();
+    expect(state.components[0]).toMatchObject({ kind: "resistor", x: 0, y: 0, rotation: 90 });
+    expect(state.wires).toHaveLength(2);
+    expect(state.wires.map((wire) => wire.points)).toEqual([
+      [{ x: 0, y: -96 }, expect.objectContaining({ x: 0, y: -32 })],
+      [expect.objectContaining({ x: 0, y: 32 }), { x: 0, y: 96 }],
+    ]);
+    expect(state.wires.some((wire) => wire.points.some((point) => point.x === 0 && point.y === 0))).toBe(false);
+
+    state.undo();
+    expect(useSchematic.getState().components).toEqual([]);
+    expect(useSchematic.getState().wires).toEqual([
+      { id: "vertical", points: [{ x: 0, y: -96 }, { x: 0, y: 96 }] },
+    ]);
+  });
+
+  it("inserts a horizontal two-terminal part into a collinear wire", () => {
+    useSchematic.setState({
+      wires: [{ id: "horizontal", points: [{ x: -96, y: 0 }, { x: 96, y: 0 }] }],
+      tool: { mode: "place", kind: "resistor" },
+      placeRotation: 0,
+    });
+
+    useSchematic.getState().addComponent("resistor", 0, 0);
+
+    expect(useSchematic.getState().wires.map((wire) => wire.points)).toEqual([
+      [{ x: -96, y: 0 }, expect.objectContaining({ x: -32, y: 0 })],
+      [expect.objectContaining({ x: 32, y: 0 }), { x: 96, y: 0 }],
+    ]);
+  });
+
+  it("does not duplicate a non-ideal wire's resistance across inserted pieces", () => {
+    const original = {
+      id: "lossy",
+      points: [{ x: -96, y: 0 }, { x: 96, y: 0 }],
+      resistance: "10m",
+    };
+    useSchematic.setState({
+      wires: [original],
+      tool: { mode: "place", kind: "resistor" },
+      placeRotation: 0,
+    });
+
+    useSchematic.getState().addComponent("resistor", 0, 0);
+
+    expect(useSchematic.getState().components).toHaveLength(1);
+    expect(useSchematic.getState().wires).toEqual([original]);
+  });
+
+  it("leaves a crossing wire intact when the placed part is not collinear", () => {
+    useSchematic.setState({
+      wires: [{ id: "vertical", points: [{ x: 0, y: -96 }, { x: 0, y: 96 }] }],
+      tool: { mode: "place", kind: "resistor" },
+      placeRotation: 0,
+    });
+
+    useSchematic.getState().addComponent("resistor", 0, 0);
+    expect(useSchematic.getState().wires).toEqual([
+      { id: "vertical", points: [{ x: 0, y: -96 }, { x: 0, y: 96 }] },
+    ]);
+  });
+
   it("clears circuit-scoped probes and labels when another document loads", () => {
     useSchematic.setState({
       probes: [{ id: "probe-1", x: 64, y: 0, color: "var(--trace-red)" }],

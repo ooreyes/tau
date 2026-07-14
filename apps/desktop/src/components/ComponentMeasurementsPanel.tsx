@@ -1,11 +1,11 @@
-import { Activity, Search } from "lucide-react";
+import { Activity, Search, TriangleAlert } from "lucide-react";
 import { useId, useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
-import type { ComponentMeasurement, MeasuredSeries } from "../simulation/measurementModel";
+import type { ComponentAdvisory, ComponentMeasurement, MeasuredSeries } from "../simulation/measurementModel";
 import { formatEngineering } from "../simulation/quantity";
 
 export interface ComponentMeasurementsPanelProps {
@@ -118,6 +118,30 @@ function Reading({ label, series }: { label: "Voltage" | "Current" | "Power"; se
   );
 }
 
+function MeasurementAdvisories({ advisories, compact = false }: { advisories?: readonly ComponentAdvisory[]; compact?: boolean }) {
+  if (!advisories?.length) return null;
+  return (
+    <div className={cn("grid gap-2", compact && "mt-2")}>
+      {advisories.map((advisory) => (
+        <div
+          key={`${advisory.kind}:${advisory.message}`}
+          className={cn(
+            "flex items-start gap-2 rounded-md border border-[var(--signal-line)] bg-[var(--signal-soft)] text-left text-foreground [border-style:solid]",
+            compact ? "px-2 py-1.5 text-[0.6875rem] leading-snug" : "px-3 py-2 text-xs leading-relaxed",
+          )}
+          role="status"
+        >
+          <TriangleAlert className="mt-0.5 size-3.5 shrink-0 text-[var(--signal)]" aria-hidden="true" />
+          <span>
+            <strong className="font-semibold">{advisory.title}</strong>
+            <span className={cn("text-muted-foreground", compact ? "sr-only" : "ml-1")}>{advisory.message}</span>
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function MeasurementCard({
   row,
   selected,
@@ -171,6 +195,7 @@ function MeasurementCard({
           <Reading label="Current" series={row.current} />
           <Reading label="Power" series={row.power} />
         </dl>
+        <MeasurementAdvisories advisories={row.advisories} />
       </article>
     </li>
   );
@@ -270,6 +295,7 @@ function CompactMeasurementCard({
           <CompactReading label="Current" series={row.current} />
           <CompactReading label="Power" series={row.power} />
         </dl>
+        <MeasurementAdvisories advisories={row.advisories} compact />
       </button>
     </li>
   );

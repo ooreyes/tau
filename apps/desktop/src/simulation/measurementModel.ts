@@ -9,6 +9,7 @@
 
 import type { ComponentKind } from "../schematic/types";
 import type { AnalysisResult, TraceUnit } from "./linearTransient";
+import { formatEngineering } from "./quantity";
 
 type SuccessResult = Extract<AnalysisResult, { ok: true }>;
 
@@ -46,6 +47,14 @@ export interface ComponentMeasurement {
   voltage?: MeasuredSeries;
   current?: MeasuredSeries;
   power?: MeasuredSeries;
+  advisories?: ComponentAdvisory[];
+}
+
+export interface ComponentAdvisory {
+  kind: "high-led-current-no-limiter";
+  severity: "warning";
+  title: string;
+  message: string;
 }
 
 /**
@@ -188,6 +197,114 @@ function terminalPair(pins: Record<string, string>): readonly [string, string] |
   return null;
 }
 
+interface OrientedBranch {
+  componentId: string;
+  positiveNet: string;
+  negativeNet: string;
+}
+
+interface BranchIncidence {
+  branch: OrientedBranch;
+  /** +1 at the positive terminal and -1 at the negative terminal. */
+  sign: 1 | -1;
+}
+
+/**
+ * Fill branch currents that are exactly determined by KCL at an unbranched
+ * two-pin net. ngspice normally retains source/inductor branch vectors but not
+ * semiconductor currents in a transient plot. In a source-LED loop, for
+ * example, the source current therefore proves the LED current sample-for-
+ * sample. We deliberately do not guess at a branched node or a net containing
+ * a multi-terminal device.
+ */
+function deriveSeriesBranchCurrents(
+  circuitComponents: SuccessResult["circuit"]["components"],
+  currentsByComponentId: Map<string, number[]>,
+): Map<string, number[]> {
+  const branches: OrientedBranch[] = [];
+  const pinCountByNet = new Map<string, number>();
+
+  for (const { component, pins } of circuitComponents) {
+    // Ground/test-point symbols name or observe a net; they are not conductive
+    // branches and therefore do not make an otherwise two-branch node a KCL
+    // junction.
+    if (component.kind !== "ground" && component.kind !== "testpoint") {
+      for (const net of Object.values(pins)) {
+        pinCountByNet.set(net, (pinCountByNet.get(net) ?? 0) + 1);
+      }
+    }
+    const pair = terminalPair(pins);
+    if (!pair || pair[0] === pair[1]) continue;
+    branches.push({ componentId: component.id, positiveNet: pair[0], negativeNet: pair[1] });
+  }
+
+  const incidencesByNet = new Map<string, BranchIncidence[]>();
+  const addIncidence = (net: string, incidence: BranchIncidence) => {
+    const incidences = incidencesByNet.get(net) ?? [];
+    incidences.push(incidence);
+    incidencesByNet.set(net, incidences);
+  };
+  for (const branch of branches) {
+    addIncidence(branch.positiveNet, { branch, sign: 1 });
+    addIncidence(branch.negativeNet, { branch, sign: -1 });
+  }
+
+  // A known current can propagate through a chain of unbranched two-terminal
+  // parts, so repeat until a pass adds nothing. The map grows monotonically.
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const [net, incidences] of incidencesByNet) {
+      if (pinCountByNet.get(net) !== 2 || incidences.length !== 2) continue;
+      if (incidences[0].branch.componentId === incidences[1].branch.componentId) continue;
+      const known = incidences.filter(({ branch }) => currentsByComponentId.has(branch.componentId));
+      if (known.length !== 1) continue;
+      const missing = incidences.find(({ branch }) => !currentsByComponentId.has(branch.componentId));
+      if (!missing) continue;
+      const source = currentsByComponentId.get(known[0].branch.componentId);
+      if (!source) continue;
+      const scale = -(known[0].sign / missing.sign);
+      currentsByComponentId.set(missing.branch.componentId, source.map((value) => value * scale));
+      changed = true;
+    }
+  }
+  return currentsByComponentId;
+}
+
+const DIRECT_IDEAL_VOLTAGE_SOURCE_KINDS: ReadonlySet<ComponentKind> = new Set(["vsource", "vac", "vpulse"]);
+// This is a conservative diagnostic threshold, not a claimed absolute device
+// rating. The warning explicitly tells the user to verify the selected model.
+const HIGH_LED_CURRENT_A = 0.05;
+
+function sameUnorderedPair(a: readonly [string, string], b: readonly [string, string]): boolean {
+  return (a[0] === b[0] && a[1] === b[1]) || (a[0] === b[1] && a[1] === b[0]);
+}
+
+function ledAdvisories(
+  entry: SuccessResult["circuit"]["components"][number],
+  current: MeasuredSeries | undefined,
+  circuitComponents: SuccessResult["circuit"]["components"],
+): ComponentAdvisory[] | undefined {
+  if (entry.component.kind !== "led" || !current) return undefined;
+  const ledPair = terminalPair(entry.pins);
+  if (!ledPair) return undefined;
+  const source = circuitComponents.find((candidate) => {
+    if (!DIRECT_IDEAL_VOLTAGE_SOURCE_KINDS.has(candidate.component.kind)) return false;
+    const sourcePair = terminalPair(candidate.pins);
+    return sourcePair ? sameUnorderedPair(ledPair, sourcePair) : false;
+  });
+  const peakCurrent = Math.max(Math.abs(current.statistics.min), Math.abs(current.statistics.max));
+  if (!source || peakCurrent < HIGH_LED_CURRENT_A) return undefined;
+
+  const sourceName = source.component.label || "ideal voltage source";
+  return [{
+    kind: "high-led-current-no-limiter",
+    severity: "warning",
+    title: "High LED current · no limiter",
+    message: `${entry.component.label || "LED"} reaches ${formatEngineering(peakCurrent, "A", 3)} with ${sourceName} directly across it. Add a series resistor or current regulator, and verify the LED model rating.`,
+  }];
+}
+
 function makeSeries(
   times: readonly number[],
   id: string,
@@ -227,6 +344,15 @@ export function componentMeasurements(result: SuccessResult): ComponentMeasureme
   const circuitComponents = result.circuit?.components ?? [];
   const groundNets = new Set(nets.filter((net) => net.isGround).map((net) => net.id));
   const currentByRef = new Map(result.currents.map((trace) => [trace.ref.toLowerCase(), trace.values]));
+  const passiveCurrentsByComponentId = new Map<string, number[]>();
+  for (const { component } of circuitComponents) {
+    if (!component.label) continue;
+    const rawCurrent = currentByRef.get(component.label.toLowerCase());
+    if (!rawCurrent) continue;
+    const currentSign = component.kind === "isource" || component.kind === "iac" ? -1 : 1;
+    passiveCurrentsByComponentId.set(component.id, rawCurrent.map((value) => value * currentSign));
+  }
+  deriveSeriesBranchCurrents(circuitComponents, passiveCurrentsByComponentId);
   const zeros = new Array(result.times.length).fill(0) as number[];
   const netValues = (net: string): readonly number[] | null => {
     if (net === "0" || groundNets.has(net)) return zeros;
@@ -234,7 +360,8 @@ export function componentMeasurements(result: SuccessResult): ComponentMeasureme
   };
 
   const rows: ComponentMeasurement[] = [];
-  for (const { component, pins } of circuitComponents) {
+  for (const entry of circuitComponents) {
+    const { component, pins } = entry;
     if (!component.label) continue;
     const ref = component.label;
     const row: ComponentMeasurement = { componentId: component.id, ref, kind: component.kind };
@@ -252,9 +379,7 @@ export function componentMeasurements(result: SuccessResult): ComponentMeasureme
       }
     }
 
-    const rawCurrent = currentByRef.get(ref.toLowerCase());
-    const currentSign = component.kind === "isource" || component.kind === "iac" ? -1 : 1;
-    const passiveCurrent = rawCurrent?.map((value) => value * currentSign);
+    const passiveCurrent = passiveCurrentsByComponentId.get(component.id);
     if (passiveCurrent) row.current = makeSeries(result.times, `I(${ref})`, `I(${ref})`, "A", passiveCurrent);
     if (voltageValues && passiveCurrent) {
       const power = voltageValues.map((voltage, i) =>
@@ -264,6 +389,7 @@ export function componentMeasurements(result: SuccessResult): ComponentMeasureme
       );
       row.power = makeSeries(result.times, `P(${ref})`, `P(${ref})`, "W", power);
     }
+    row.advisories = ledAdvisories(entry, row.current, circuitComponents);
     rows.push(row);
   }
   return rows;

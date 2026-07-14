@@ -554,6 +554,9 @@ export interface FitViewOptions {
   minPaddingPx?: number;
   minZoom?: number;
   maxZoom?: number;
+  /** Optional topology center. Bounds can include asymmetric labels while the
+   *  electrical drawing itself remains centered in the viewport. */
+  center?: Point;
 }
 
 /** Zoom + translation that frames `bounds` in a viewport with breathing room:
@@ -574,11 +577,22 @@ export function fitViewTransform(
   const padY = Math.max(viewportHeight * frac, minPad);
   const availW = Math.max(viewportWidth - padX * 2, 1);
   const availH = Math.max(viewportHeight - padY * 2, 1);
-  const w = Math.max(bounds.maxX - bounds.minX, 1);
-  const h = Math.max(bounds.maxY - bounds.minY, 1);
+  const naturalCx = (bounds.minX + bounds.maxX) / 2;
+  const naturalCy = (bounds.minY + bounds.maxY) / 2;
+  const cx = options.center?.x ?? naturalCx;
+  const cy = options.center?.y ?? naturalCy;
+  // When an explicit topology center is used, reserve equal screen space on
+  // both sides for the furthest label edge. This keeps every label visible
+  // without letting asymmetric ref/value text push the circuit body off-center.
+  const w = Math.max(
+    options.center ? Math.max(cx - bounds.minX, bounds.maxX - cx) * 2 : bounds.maxX - bounds.minX,
+    1,
+  );
+  const h = Math.max(
+    options.center ? Math.max(cy - bounds.minY, bounds.maxY - cy) * 2 : bounds.maxY - bounds.minY,
+    1,
+  );
   const zoom = Math.min(maxZoom, Math.max(minZoom, Math.min(availW / w, availH / h)));
-  const cx = (bounds.minX + bounds.maxX) / 2;
-  const cy = (bounds.minY + bounds.maxY) / 2;
   return { zoom, x: viewportWidth / 2 - cx * zoom, y: viewportHeight / 2 - cy * zoom };
 }
 

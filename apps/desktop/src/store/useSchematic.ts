@@ -14,6 +14,7 @@ import { CATALOG_BY_KIND } from "../schematic/catalog";
 import { canCurrentProbe } from "../simulation/analysisSetup";
 import { validateSchematicDocument } from "../schematic/documentValidation";
 import { extractCircuit, netAtPoint } from "../schematic/netlist";
+import { getComponentPins } from "../schematic/pins";
 
 /** The undoable document slice. Everything else in the store is ephemeral UI. */
 interface Doc {
@@ -301,6 +302,57 @@ function cleanGroupRoute(points: Point[]): Point[] {
     }
   }
   return out;
+}
+
+const pointOnOrthogonalSegment = (point: Point, a: Point, b: Point) =>
+  a.x === b.x
+    ? point.x === a.x && point.y >= Math.min(a.y, b.y) && point.y <= Math.max(a.y, b.y)
+    : a.y === b.y
+      ? point.y === a.y && point.x >= Math.min(a.x, b.x) && point.x <= Math.max(a.x, b.x)
+      : false;
+
+/**
+ * Placing a two-terminal component directly on a collinear wire inserts it
+ * electrically: the covered conductor is removed and the remaining wire ends
+ * terminate at the component pins. Leaving the original segment in place
+ * would short/bypass the new part even though the drawing looked connected.
+ */
+function wiresWithInsertedComponent(wires: SchematicWire[], component: SchematicComponent): SchematicWire[] {
+  const pins = getComponentPins(component);
+  if (pins.length !== 2 || (pins[0].x === pins[1].x && pins[0].y === pins[1].y)) return wires;
+
+  for (let wireIndex = 0; wireIndex < wires.length; wireIndex += 1) {
+    const wire = wires[wireIndex];
+    // A wire-level resistance models the entire original polyline. Copying it
+    // onto both pieces would silently double that impedance, while assigning
+    // it to one side would invent a location. Leave non-ideal wires untouched
+    // until the model carries segment-level resistance.
+    if (wire.resistance?.trim()) continue;
+    for (let segmentIndex = 0; segmentIndex < wire.points.length - 1; segmentIndex += 1) {
+      const a = wire.points[segmentIndex];
+      const b = wire.points[segmentIndex + 1];
+      if (!pointOnOrthogonalSegment(pins[0], a, b) || !pointOnOrthogonalSegment(pins[1], a, b)) continue;
+
+      const distanceFromA = (point: Point) => Math.abs(point.x - a.x) + Math.abs(point.y - a.y);
+      const [firstPin, secondPin] = distanceFromA(pins[0]) <= distanceFromA(pins[1])
+        ? [pins[0], pins[1]]
+        : [pins[1], pins[0]];
+      // ComponentPin carries identity metadata; wire vertices are deliberately
+      // plain geometry and must not persist componentId/label/kind fields.
+      const firstPoint = { x: firstPin.x, y: firstPin.y };
+      const secondPoint = { x: secondPin.x, y: secondPin.y };
+      const before = cleanGroupRoute([...wire.points.slice(0, segmentIndex + 1), firstPoint]);
+      const after = cleanGroupRoute([secondPoint, ...wire.points.slice(segmentIndex + 1)]);
+      const pieces = [before, after].filter((points) => points.length >= 2);
+      const replacement = pieces.map((points, index) => ({
+        ...wire,
+        id: index === 0 ? wire.id : nanoid(6),
+        points,
+      }));
+      return [...wires.slice(0, wireIndex), ...replacement, ...wires.slice(wireIndex + 1)];
+    }
+  }
+  return wires;
 }
 
 const initialDoc = loadPersisted();
@@ -597,6 +649,7 @@ export const useSchematic = create<SchematicState>()((set) => {
         return {
           ...recordInto(s),
           components: [...s.components, comp],
+          wires: wiresWithInsertedComponent(s.wires, comp),
           counters: { ...s.counters, [entry.prefix]: n },
           selectedId: comp.id,
           selectedWireId: null,

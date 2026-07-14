@@ -1,13 +1,26 @@
 // @vitest-environment jsdom
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 
 import { Canvas } from "./Canvas";
 import { useSchematic } from "../store/useSchematic";
 
 class ResizeObserverStub {
-  observe() {}
+  static instances: ResizeObserverStub[] = [];
+  readonly observed: Element[] = [];
+
+  constructor(private readonly callback: ResizeObserverCallback) {
+    ResizeObserverStub.instances.push(this);
+  }
+
+  observe(target: Element) {
+    this.observed.push(target);
+  }
   disconnect() {}
+
+  trigger() {
+    this.callback([], this as unknown as ResizeObserver);
+  }
 }
 
 // Net label drag (Fix 2) captures the pointer on the dragged `<text>` so a
@@ -21,6 +34,7 @@ beforeAll(() => {
 });
 
 beforeEach(() => {
+  ResizeObserverStub.instances = [];
   vi.stubGlobal("ResizeObserver", ResizeObserverStub);
   useSchematic.setState({
     components: [{ id: "r1", kind: "resistor", x: 0, y: 0, rotation: 0, value: "1k", label: "R1" }],
@@ -102,6 +116,90 @@ describe("Canvas — simulator mutation boundary", () => {
     fireEvent.change(rename, { target: { value: "" } });
     fireEvent.keyDown(rename, { key: "Enter" });
     expect(useSchematic.getState().netLabels).toEqual([]);
+  });
+});
+
+describe("Canvas — simulator fit viewport", () => {
+  it("centers topology in the visible SVG and refits after its wrapper resizes", () => {
+    vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
+      callback(0);
+      return 1;
+    });
+    vi.stubGlobal("cancelAnimationFrame", vi.fn());
+    useSchematic.setState({
+      components: [
+        { id: "v1", kind: "vsource", x: 0, y: 0, rotation: 0, value: "5", label: "VERY_LONG_INPUT_SOURCE" },
+        { id: "r1", kind: "resistor", x: 160, y: 0, rotation: 0, value: "1k", label: "R1" },
+      ],
+      wires: [{ id: "w1", points: [{ x: 0, y: 0 }, { x: 160, y: 0 }] }],
+    });
+
+    render(<Canvas interactive={false} />);
+    const canvas = document.querySelector<SVGSVGElement>("svg.canvas")!;
+    let width = 400;
+    let height = 260;
+    Object.defineProperty(canvas, "getBoundingClientRect", {
+      configurable: true,
+      value: () => ({ x: 0, y: 0, left: 0, top: 0, right: width, bottom: height, width, height, toJSON: () => ({}) }),
+    });
+    const observer = ResizeObserverStub.instances[ResizeObserverStub.instances.length - 1];
+    expect(observer.observed).toContain(canvas);
+    expect(observer.observed).toContain(canvas.parentElement);
+
+    const transform = () => {
+      const group = [...canvas.children].find((child) => child.tagName.toLowerCase() === "g" && child.hasAttribute("transform"));
+      const match = group?.getAttribute("transform")?.match(/translate\(([-\d.]+) ([-\d.]+)\) scale\(([-\d.]+)\)/);
+      if (!match) throw new Error("Canvas transform missing");
+      return { x: Number(match[1]), y: Number(match[2]), zoom: Number(match[3]) };
+    };
+
+    act(() => observer.trigger());
+    let view = transform();
+    // Topology spans x=0…160, so its electrical center is 80 even though the
+    // deliberately long V1 label makes the full label bounds asymmetric.
+    expect(view.x + 80 * view.zoom).toBeCloseTo(width / 2, 6);
+    expect(view.y).toBeCloseTo(height / 2, 6);
+
+    height = 160; // telemetry dock grew; only the black SVG remains visible.
+    act(() => observer.trigger());
+    view = transform();
+    expect(view.x + 80 * view.zoom).toBeCloseTo(width / 2, 6);
+    expect(view.y).toBeCloseTo(height / 2, 6);
+  });
+});
+
+describe("Canvas — placement preview", () => {
+  it("centers a vertical resistor on the pointer and removes the stale dashed ghost after placement", () => {
+    useSchematic.setState({
+      components: [],
+      wires: [{ id: "vertical", points: [{ x: 0, y: -96 }, { x: 0, y: 96 }] }],
+      tool: { mode: "place", kind: "resistor" },
+      placeRotation: 90,
+    });
+    render(<Canvas interactive />);
+    const canvas = document.querySelector<SVGSVGElement>("svg.canvas")!;
+
+    // jsdom's zero-size canvas keeps screen/world origin at (0,0).
+    fireEvent.pointerMove(canvas, { clientX: 0, clientY: 0, pointerId: 11 });
+    const ghost = document.querySelector<SVGGElement>(".ghost")!;
+    expect(ghost.getAttribute("transform")).toBe("translate(0 0)");
+    expect(ghost.querySelector(".symbol")?.getAttribute("transform")).toBe("rotate(90)");
+
+    fireEvent.pointerDown(canvas, { button: 0, clientX: 0, clientY: 0, pointerId: 11 });
+
+    expect(document.querySelector(".ghost")).toBeNull();
+    expect(useSchematic.getState().components[0]).toMatchObject({
+      kind: "resistor",
+      x: 0,
+      y: 0,
+      rotation: 90,
+    });
+    // The original conductor is cut back to the two pins, so the resistor is
+    // not visually or electrically bypassed by a wire through its center.
+    expect(useSchematic.getState().wires.map((wire) => wire.points)).toEqual([
+      [{ x: 0, y: -96 }, { x: 0, y: -32 }],
+      [{ x: 0, y: 32 }, { x: 0, y: 96 }],
+    ]);
   });
 });
 

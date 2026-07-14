@@ -93,6 +93,79 @@ describe("componentMeasurements", () => {
     expect(row.power).toBeUndefined();
   });
 
+  it("derives an LED current from source branch current by KCL and reports an unsafe direct drive", () => {
+    const result = resultFixture();
+    result.traces[0] = {
+      ...result.traces[0],
+      id: "hot",
+      label: "V(hot)",
+      values: [5, 5, 5],
+    };
+    result.currents = [{ ref: "V1", label: "I(V1)", values: [-0.315, -0.315, -0.315] }];
+    result.circuit.nets = [
+      { id: "hot", points: [], pins: [], isGround: false, labelCount: 0 },
+      { id: "gnd", points: [], pins: [], isGround: true, labelCount: 0 },
+    ];
+    result.circuit.components = [
+      {
+        component: { id: "v1", kind: "vsource", x: 0, y: 0, rotation: 0, value: "5", label: "V1" },
+        pins: { p: "hot", n: "gnd" },
+      },
+      {
+        component: { id: "d1", kind: "led", x: 0, y: 0, rotation: 0, value: "LED", label: "D1" },
+        pins: { a: "hot", k: "gnd" },
+      },
+      {
+        component: { id: "g1", kind: "ground", x: 0, y: 0, rotation: 0, value: "", label: "" },
+        pins: { g: "gnd" },
+      },
+    ];
+
+    const [source, led] = componentMeasurements(result);
+    expect(source.current?.values).toEqual([-0.315, -0.315, -0.315]);
+    expect(led.current?.values).toEqual([0.315, 0.315, 0.315]);
+    expect(led.power?.statistics.final).toBeCloseTo(1.575);
+    expect(led.advisories).toEqual([
+      expect.objectContaining({
+        kind: "high-led-current-no-limiter",
+        severity: "warning",
+        title: "High LED current · no limiter",
+        message: expect.stringMatching(/D1 reaches 315 mA.+V1 directly across it.+series resistor/i),
+      }),
+    ]);
+  });
+
+  it("does not claim a current-limiter warning when a resistor is in series", () => {
+    const result = resultFixture();
+    result.traces = [
+      { ...result.traces[0], id: "source", label: "V(source)", values: [5, 5, 5] },
+      { ...result.traces[0], id: "led-anode", label: "V(led-anode)", values: [2, 2, 2] },
+    ];
+    result.currents = [{ ref: "V1", label: "I(V1)", values: [-0.315, -0.315, -0.315] }];
+    result.circuit.components = [
+      {
+        component: { id: "v1", kind: "vsource", x: 0, y: 0, rotation: 0, value: "5", label: "V1" },
+        pins: { p: "source", n: "gnd" },
+      },
+      {
+        component: { id: "r1", kind: "resistor", x: 0, y: 0, rotation: 0, value: "10", label: "R1" },
+        pins: { a: "source", b: "led-anode" },
+      },
+      {
+        component: { id: "d1", kind: "led", x: 0, y: 0, rotation: 0, value: "LED", label: "D1" },
+        pins: { a: "led-anode", k: "gnd" },
+      },
+      {
+        component: { id: "g1", kind: "ground", x: 0, y: 0, rotation: 0, value: "", label: "" },
+        pins: { g: "gnd" },
+      },
+    ];
+
+    const led = componentMeasurements(result).find((row) => row.ref === "D1");
+    expect(led?.current?.statistics.final).toBeCloseTo(0.315);
+    expect(led?.advisories).toBeUndefined();
+  });
+
   it("uses passive sign convention for independent current-source power", () => {
     const result = resultFixture();
     result.circuit.components[0].component = {

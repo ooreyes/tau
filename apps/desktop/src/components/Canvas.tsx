@@ -12,6 +12,7 @@ import {
   autoNetLabelOffset,
   autoNetLabelOffsets,
   buildLabelPlacements,
+  circuitBounds,
   circuitBoundsWithLabels,
   collides,
   fitViewTransform,
@@ -349,6 +350,11 @@ export function Canvas({
       const w = screenToWorld(clientX, clientY);
       const spot = findFreeSpot(components, snap(w.x), snap(w.y), tool.kind, placeRotation);
       addComponent(tool.kind, spot.x, spot.y);
+      // The store remains in place mode for rapid repeated placement, but the
+      // preview at this exact point is now stale: leaving it mounted draws a
+      // dashed duplicate over the newly created solid symbol until the pointer
+      // moves. The next pointermove will create the next valid preview.
+      setGhost(null);
     },
     [tool, screenToWorld, addComponent, components, placeRotation],
   );
@@ -790,12 +796,23 @@ export function Canvas({
     if (r.width === 0 || r.height === 0) return;
     // Label-aware bounds + 12%/48px viewport padding so long refdes/value
     // text never touches (or clips at) the canvas edge (§11 Unit A2).
-    const b = circuitBoundsWithLabels(componentsRef.current, wiresRef.current);
-    if (!b) {
+    const framingBounds = circuitBoundsWithLabels(componentsRef.current, wiresRef.current);
+    if (!framingBounds) {
       setView({ x: r.width / 2, y: r.height / 2, zoom: 1 });
       return;
     }
-    setView(fitViewTransform(b, r.width, r.height, { minZoom: 0.25, maxZoom: 5 }));
+    const topologyBounds = circuitBounds(componentsRef.current, wiresRef.current);
+    const center = topologyBounds
+      ? {
+          x: (topologyBounds.minX + topologyBounds.maxX) / 2,
+          y: (topologyBounds.minY + topologyBounds.maxY) / 2,
+        }
+      : undefined;
+    setView(fitViewTransform(framingBounds, r.width, r.height, {
+      minZoom: 0.25,
+      maxZoom: 5,
+      center,
+    }));
   }, []);
 
   // Auto-fit when the document identity changes (open / new / tab switch).
@@ -813,9 +830,23 @@ export function Canvas({
     if (interactive) return;
     const el = svgRef.current;
     if (!el) return;
-    const ro = new ResizeObserver(() => fitView());
+    let frame = 0;
+    const scheduleFit = () => {
+      cancelAnimationFrame(frame);
+      // ResizeObserver can fire while flexbox is still resolving the telemetry
+      // dock and sibling columns. Measure on the next painted layout instead.
+      frame = requestAnimationFrame(() => fitView());
+    };
+    const ro = new ResizeObserver(scheduleFit);
     ro.observe(el);
-    return () => ro.disconnect();
+    // Safari/WebKit has historically been less reliable when observing a
+    // sized SVG directly. The wrapper is the actual visible canvas slot and
+    // excludes the telemetry dock, so observe it as the authoritative layout.
+    if (el.parentElement) ro.observe(el.parentElement);
+    return () => {
+      cancelAnimationFrame(frame);
+      ro.disconnect();
+    };
   }, [interactive, fitView]);
 
   const placing = tool.mode === "place";
