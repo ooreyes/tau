@@ -104,9 +104,9 @@ describe("SimulationPanel — no redundant Run button (§11 Unit C5)", { timeout
   it("treats TRAN tab selection as the run gesture, like every other tab", () => {
     const handlers = renderPanel();
     // Radix TabsTrigger activates on mousedown, not click.
-    fireEvent.mouseDown(screen.getByRole("tab", { name: "OP" }), { button: 0 });
+    fireEvent.mouseDown(screen.getByRole("tab", { name: "Operating point (.op)" }), { button: 0 });
     expect(handlers.onRunOperatingPoint).toHaveBeenCalledTimes(1);
-    fireEvent.mouseDown(screen.getByRole("tab", { name: "TRAN" }), { button: 0 });
+    fireEvent.mouseDown(screen.getByRole("tab", { name: "Transient analysis (.tran)" }), { button: 0 });
     expect(handlers.onRun).toHaveBeenCalledTimes(1);
   });
 

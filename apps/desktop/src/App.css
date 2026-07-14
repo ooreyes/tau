@@ -741,46 +741,43 @@ body {
    so it wins over the Tailwind utility classes tabs.tsx ships by default. */
 .plotter-tabs {
   flex-shrink: 0;
-  padding: var(--sp-2) var(--sp-3);
+  padding: var(--sp-1) var(--sp-3);
   border-bottom: 1px solid var(--border);
   background: transparent;
-  /* §10 responsive floor: seven analysis tabs (TRAN/OP/AC/DC/TF/NOISE/STEP)
-     don't all fit at the scope column's narrowest usable width (300px) even
-     with the compact padding below — scroll rather than hard-clip the last
-     tab(s) so every analysis mode stays reachable. Invisible at comfortable
-     widths since nothing overflows. */
-  overflow-x: auto;
-  scrollbar-width: none;
-}
-.plotter-tabs::-webkit-scrollbar {
-  display: none;
 }
 
-.plotter-tabs-inner {
-  display: flex;
+.analysis-mode-rail {
+  display: inline-flex;
+  align-items: center;
+  height: 32px;
   width: max-content;
-  background: var(--panel-3);
+  max-width: 100%;
+  background: var(--material-thin, var(--panel-3));
   border: 1px solid var(--border);
-  border-radius: var(--r-md);
-  padding: 2px;
-  gap: 1px;
+  border-radius: var(--r-lg);
+  padding: 1px;
+  gap: 0;
+  box-shadow: var(--elev-inset);
 }
 
 .plotter-tab {
   flex: none;
-  height: var(--row-h-dense);
-  padding: 0 13px;
-  border: none;
-  border-radius: 5px;
+  min-width: 0;
+  height: 28px;
+  padding: 0 7px;
+  border: 1px solid transparent;
+  border-radius: var(--r-sm);
   background: transparent;
   color: var(--muted);
   font-family: var(--font-mono);
-  font-size: var(--fs-body);
+  font-size: var(--fs-label);
   font-weight: 600;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.025em;
+  line-height: 1;
   cursor: pointer;
   transition: color var(--motion-fast) var(--spring),
-    background var(--motion-fast) var(--spring);
+    background var(--motion-fast) var(--spring),
+    border-color var(--motion-fast) var(--spring);
 }
 
 /* Inactive analysis tabs had no hover — OP/AC/DC/TF/NOISE/STEP were inert
@@ -790,30 +787,22 @@ body {
   background: var(--overlay-hover);
 }
 
-/* Active tab reads as a flat cobalt fill — the same accent-filled language as
-   the toolbar's `.mode-btn.active` segmented toggle. */
+/* Retheme: a subtle accent-soft fill + hairline accent border, not a solid
+   accent-filled pill — color marks the selection, it doesn't shout it. */
 .plotter-tab[data-state="active"] {
-  color: var(--accent-ink);
-  background: var(--accent);
+  color: var(--text);
+  background: var(--accent-soft);
+  border-color: var(--accent-line);
 }
 
 .plotter-tab:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent-line);
-}
-
-/* At the 900px minimum-window floor the scope column can be as narrow as
-   300px — tighten tab padding/tracking so TRAN/OP/AC/DC/TF/NOISE/STEP fit
-   (or come close to fitting) without relying solely on the scroll above. */
-@media (max-width: 1023px) {
-  .plotter-tab {
-    padding: 0 7px;
-    letter-spacing: 0;
-  }
+  box-shadow: inset 0 0 0 2px var(--accent-line);
 }
 
 .plotter-tab:disabled {
-  opacity: 0.3;
+  color: var(--faint);
+  opacity: 0.55;
   cursor: not-allowed;
 }
 

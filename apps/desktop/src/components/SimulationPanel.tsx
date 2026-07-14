@@ -15,7 +15,6 @@ import type { Probe, NetLabel, SchematicWire } from "../schematic/types";
 import { netAtPoint } from "../schematic/netlist";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { OperatingPointResult } from "../simulation/operatingPoint";
 import type { AcResult, AcTrace } from "../simulation/acSweep";
@@ -74,6 +73,7 @@ import {
   traceStatistics,
   type ComponentMeasurement,
 } from "../simulation/measurementModel";
+import { AnalysisModeRail, type AnalysisMode } from "./AnalysisModeRail";
 
 interface SimulationPanelProps {
   result: AnalysisResult | null;
@@ -170,7 +170,7 @@ export function SimulationPanel({
   const directives = useSchematic((s) => s.directives);
   const warnings = result?.warnings ?? [];
 
-  const [mode, setMode] = useState<"tran" | "op" | "ac" | "dc" | "tf" | "noise" | "step">("tran");
+  const [mode, setMode] = useState<AnalysisMode>("tran");
   const componentRows = useMemo<ComponentMeasurement[]>(
     () => (mode === "tran" && result?.ok ? componentMeasurements(result) : []),
     [mode, result],
@@ -449,8 +449,7 @@ export function SimulationPanel({
   // Selecting an analysis tab both switches the visible pane and kicks off
   // that analysis immediately — the one primary Run control lives in the top
   // toolbar (§11 Unit C); in here tab selection IS the run gesture.
-  const handleModeChange = (value: string) => {
-    const next = value as typeof mode;
+  const handleModeChange = (next: AnalysisMode) => {
     setMode(next);
     if (next === "tran") void onRun();
     else if (next === "op") void onRunOperatingPoint();
@@ -538,17 +537,7 @@ export function SimulationPanel({
       </div>
 
       <div className="plotter-tabs">
-        <Tabs value={mode} onValueChange={handleModeChange}>
-          <TabsList aria-label="Analysis modes" className="plotter-tabs-inner">
-            <TabsTrigger className="plotter-tab" value="tran" disabled={isRunning}>TRAN</TabsTrigger>
-            <TabsTrigger className="plotter-tab" value="op" disabled={isRunning}>OP</TabsTrigger>
-            <TabsTrigger className="plotter-tab" value="ac" disabled={isRunning}>AC</TabsTrigger>
-            <TabsTrigger className="plotter-tab" value="dc" disabled={isRunning}>DC</TabsTrigger>
-            <TabsTrigger className="plotter-tab" value="tf" disabled={isRunning}>TF</TabsTrigger>
-            <TabsTrigger className="plotter-tab" value="noise" disabled={isRunning}>NOISE</TabsTrigger>
-            <TabsTrigger className="plotter-tab" value="step" disabled={isRunning}>STEP</TabsTrigger>
-          </TabsList>
-        </Tabs>
+        <AnalysisModeRail value={mode} onValueChange={handleModeChange} disabled={isRunning} />
       </div>
 
       <div className={`plotter-status plotter-status--${runStatus}`} role="status" aria-live="polite">
