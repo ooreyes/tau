@@ -16,6 +16,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             greet,
             project_fs::authorize_project_directory,
+            project_fs::create_project_text_file_exclusive,
             project_fs::move_project_entry,
             spice::simulate_spice
         ])

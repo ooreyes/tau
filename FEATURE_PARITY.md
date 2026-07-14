@@ -244,11 +244,13 @@ Status legend: ✅ done · 🟡 partial · ⬜ not started
 - ⬜ Save/Open Tau-native `.tau.json` — **partial** (toolbar Save/Open exists); verify robustness.
 - ✅ **Native Schematics-folder Explorer (2026-07-14):** Tau opens a user-picked
   folder as the project root, recursively authorizes only that selected root,
-  and can create real blank `.asc` files and subfolders there. The Tauri
-  capability now grants the exact `write_text_file` command used by the bridge
-  (the missing permission behind the generic “Could not create schematic”
-  failure), while string-valued native errors remain visible instead of being
-  discarded. Files and folders are draggable between Explorer directories via
+  and can create real blank `.asc` files and subfolders there. Native file
+  creation now crosses a project-root-constrained Rust command that uses
+  `OpenOptions::create_new(true)`: another Tau window or process can win a name
+  race, but it can never be overwritten or truncated; Tau retries the numbered
+  filename instead. Browser File System Access remains explicitly non-atomic.
+  String-valued native errors remain visible instead of being discarded. Files
+  and folders are draggable between Explorer directories via
   a traversal/collision/symlink-safe native move command; matching open-tab
   paths are remapped so the next Save follows the move. Explorer chrome uses
   the VS Code action set and density (New File, New Folder, Refresh, Collapse;
@@ -257,7 +259,9 @@ Status legend: ✅ done · 🟡 partial · ⬜ not started
   collision-safe real `.asc` in the open Schematics folder; failed or blocked
   first saves clean up the placeholder instead of leaving a ghost file. File
   reservation is serialized, so two rapid `+` activations create
-  `untitled.asc` and `untitled-2.asc` instead of racing onto one path.
+  `untitled.asc` and `untitled-2.asc` instead of racing onto one path. A real
+  two-thread Rust race test proves one exclusive winner and one explicit
+  `AlreadyExists` result while preserving the winning file byte-for-byte.
   Packaged macOS QA created and opened a real `native-create-check.asc` with the
   canonical 26-byte blank LTspice document; store, panel, path-remap, and Rust
   boundary tests cover moves and creation.
@@ -274,7 +278,9 @@ Status legend: ✅ done · 🟡 partial · ⬜ not started
   probes use a stable toolbar/Delete-key action. Component symbols use corrected
   filled device arrows and crisp token-backed canvas typography. Run/error states
   use evidence-based gradients: neutral before validation, amber while running,
-  green after a clean run, and red on failure. Explorer actions mirror VS Code's
+  green after a clean run, and red on failure. Diagnostics now receives the same
+  live running signal and suppresses stale success/error content during a rerun.
+  Explorer actions mirror VS Code's
   New File, New Folder, Refresh, and Collapse All behavior. **Grid/routing
   hardening (2026-07-14):** free wire endpoints are normalized before routing,
   while exact imported pins and off-grid wire junctions remain untouched; the

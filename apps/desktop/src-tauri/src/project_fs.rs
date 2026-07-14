@@ -1,10 +1,22 @@
 use std::{
     fs,
+    fs::OpenOptions,
+    io::Write,
     path::{Component, Path, PathBuf},
 };
 
+use serde::Serialize;
 use tauri::AppHandle;
 use tauri_plugin_fs::FsExt;
+
+const MAX_CREATED_TEXT_BYTES: usize = 5 * 1024 * 1024;
+
+#[derive(Debug, PartialEq, Eq, Serialize)]
+#[serde(tag = "status", rename_all = "camelCase")]
+pub enum CreateProjectTextFileResult {
+    Created { path: String },
+    AlreadyExists,
+}
 
 fn canonical_directory(path: &Path, label: &str) -> Result<PathBuf, String> {
     let canonical =
@@ -26,6 +38,50 @@ fn safe_leaf_name(name: &str) -> bool {
 
 fn inside(root: &Path, path: &Path) -> bool {
     path != root && path.starts_with(root)
+}
+
+fn create_project_text_file_exclusive_inner(
+    project_root: &Path,
+    parent_path: &Path,
+    name: &str,
+    contents: &str,
+) -> Result<CreateProjectTextFileResult, String> {
+    let root = canonical_directory(project_root, "project root")?;
+    let parent = canonical_directory(parent_path, "target folder")?;
+    if parent != root && !inside(&root, &parent) {
+        return Err("The target folder must be inside the open project.".into());
+    }
+    let leaf = name.trim();
+    if !safe_leaf_name(leaf) {
+        return Err("The filename must be a single name without path separators.".into());
+    }
+    if contents.len() > MAX_CREATED_TEXT_BYTES {
+        return Err(format!(
+            "The initial file contents exceed Tau's {MAX_CREATED_TEXT_BYTES} byte limit."
+        ));
+    }
+
+    let destination = parent.join(leaf);
+    let mut file = match OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&destination)
+    {
+        Ok(file) => file,
+        Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
+            return Ok(CreateProjectTextFileResult::AlreadyExists)
+        }
+        Err(error) => return Err(format!("Could not create the schematic: {error}")),
+    };
+
+    if let Err(error) = file.write_all(contents.as_bytes()) {
+        drop(file);
+        let _ = fs::remove_file(&destination);
+        return Err(format!("Could not write the new schematic: {error}"));
+    }
+    Ok(CreateProjectTextFileResult::Created {
+        path: destination.to_string_lossy().into_owned(),
+    })
 }
 
 fn move_project_entry_inner(
@@ -95,6 +151,27 @@ pub fn authorize_project_directory(app: AppHandle, project_root: String) -> Resu
         .map_err(|error| format!("Could not authorize the project folder: {error}"))
 }
 
+/// Atomically reserve and initialize a project text file. `create_new(true)`
+/// makes the existence check and creation one filesystem operation, so a file
+/// created by another Tau window or process between name selection and write is
+/// never truncated.
+#[tauri::command]
+pub fn create_project_text_file_exclusive(
+    app: AppHandle,
+    project_root: String,
+    parent_path: String,
+    name: String,
+    contents: String,
+) -> Result<CreateProjectTextFileResult, String> {
+    let root = canonical_directory(Path::new(&project_root), "project root")?;
+    if !app.fs_scope().is_allowed(&root) {
+        return Err(
+            "The project folder is not authorized. Reopen it before creating files.".into(),
+        );
+    }
+    create_project_text_file_exclusive_inner(&root, Path::new(&parent_path), &name, &contents)
+}
+
 /// Move or rename one project entry without permitting arbitrary filesystem
 /// access. The project root must already be authorized by Tauri's filesystem
 /// scope (normally by the folder picker), and both resolved paths must remain
@@ -154,6 +231,105 @@ mod tests {
         assert_eq!(fs::read_to_string(moved).unwrap(), "Version 4\n");
         assert!(!source.exists());
         fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn exclusively_creates_text_without_overwriting_an_existing_file() {
+        let root = sandbox("exclusive-create");
+        let first =
+            create_project_text_file_exclusive_inner(&root, &root, "untitled.asc", "Version 4\n")
+                .unwrap();
+        assert!(matches!(first, CreateProjectTextFileResult::Created { .. }));
+
+        let second = create_project_text_file_exclusive_inner(
+            &root,
+            &root,
+            "untitled.asc",
+            "must not replace\n",
+        )
+        .unwrap();
+        assert_eq!(second, CreateProjectTextFileResult::AlreadyExists);
+        assert_eq!(
+            fs::read_to_string(root.join("untitled.asc")).unwrap(),
+            "Version 4\n"
+        );
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn concurrent_exclusive_creates_have_exactly_one_winner() {
+        use std::sync::{Arc, Barrier};
+
+        let root = sandbox("exclusive-race");
+        let barrier = Arc::new(Barrier::new(2));
+        let handles = ["first\n", "second\n"].map(|contents| {
+            let root = root.clone();
+            let barrier = barrier.clone();
+            std::thread::spawn(move || {
+                barrier.wait();
+                create_project_text_file_exclusive_inner(&root, &root, "untitled.asc", contents)
+                    .unwrap()
+            })
+        });
+        let results = handles.map(|handle| handle.join().unwrap());
+
+        assert_eq!(
+            results
+                .iter()
+                .filter(|result| matches!(result, CreateProjectTextFileResult::Created { .. }))
+                .count(),
+            1
+        );
+        assert_eq!(
+            results
+                .iter()
+                .filter(|result| matches!(result, CreateProjectTextFileResult::AlreadyExists))
+                .count(),
+            1
+        );
+        let contents = fs::read_to_string(root.join("untitled.asc")).unwrap();
+        assert!(contents == "first\n" || contents == "second\n");
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn exclusive_create_result_has_a_stable_ipc_shape() {
+        assert_eq!(
+            serde_json::to_value(CreateProjectTextFileResult::AlreadyExists).unwrap(),
+            serde_json::json!({ "status": "alreadyExists" })
+        );
+        assert_eq!(
+            serde_json::to_value(CreateProjectTextFileResult::Created {
+                path: "/project/filter.asc".into(),
+            })
+            .unwrap(),
+            serde_json::json!({ "status": "created", "path": "/project/filter.asc" })
+        );
+    }
+
+    #[test]
+    fn exclusive_create_rejects_escape_paths_and_unsafe_names() {
+        let root = sandbox("exclusive-root");
+        let outside = sandbox("exclusive-outside");
+        assert!(create_project_text_file_exclusive_inner(
+            &root,
+            &outside,
+            "escape.asc",
+            "Version 4\n",
+        )
+        .unwrap_err()
+        .contains("inside the open project"));
+        assert!(create_project_text_file_exclusive_inner(
+            &root,
+            &root,
+            "../escape.asc",
+            "Version 4\n",
+        )
+        .unwrap_err()
+        .contains("single name"));
+        assert!(!outside.join("escape.asc").exists());
+        fs::remove_dir_all(root).unwrap();
+        fs::remove_dir_all(outside).unwrap();
     }
 
     #[test]

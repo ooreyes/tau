@@ -142,8 +142,11 @@ describe("ASC-native project workspace", () => {
 
   it("uses the native write bridge for a real blank ASC and clears stale failures", async () => {
     const root = "/Users/test/Tau_Design";
-    vi.spyOn(fs, "pathExists").mockResolvedValue(false);
-    const write = vi.spyOn(fs, "writeTextFile").mockResolvedValue(undefined);
+    const reserve = vi.spyOn(fs, "reserveProjectTextFile").mockResolvedValue({
+      status: "created",
+      path: `${root}/filter.asc`,
+      atomic: true,
+    });
     vi.spyOn(fs, "readProjectTree").mockResolvedValue([
       { name: "filter.asc", path: `${root}/filter.asc`, kind: "file" },
     ]);
@@ -156,14 +159,17 @@ describe("ASC-native project workspace", () => {
     });
 
     await expect(useProject.getState().createSchematicFile(root, "filter")).resolves.toBe(`${root}/filter.asc`);
-    expect(write).toHaveBeenCalledWith(`${root}/filter.asc`, "Version 4\nSHEET 1 880 680\n");
+    expect(reserve).toHaveBeenCalledWith(root, root, "filter.asc", "Version 4\nSHEET 1 880 680\n");
     expect(useProject.getState().error).toBeNull();
   });
 
   it("creates editor-tab schematics in the open project root", async () => {
     const root = "/Users/test/Tau_Design";
-    vi.spyOn(fs, "pathExists").mockResolvedValue(false);
-    const write = vi.spyOn(fs, "writeTextFile").mockResolvedValue(undefined);
+    const reserve = vi.spyOn(fs, "reserveProjectTextFile").mockResolvedValue({
+      status: "created",
+      path: `${root}/untitled.asc`,
+      atomic: true,
+    });
     vi.spyOn(fs, "readProjectTree").mockResolvedValue([
       { name: "untitled.asc", path: `${root}/untitled.asc`, kind: "file" },
     ]);
@@ -175,8 +181,49 @@ describe("ASC-native project workspace", () => {
     });
 
     await expect(useProject.getState().createSchematicInRoot()).resolves.toBe(`${root}/untitled.asc`);
-    expect(write).toHaveBeenCalledWith(`${root}/untitled.asc`, "Version 4\nSHEET 1 880 680\n");
+    expect(reserve).toHaveBeenCalledWith(root, root, "untitled.asc", "Version 4\nSHEET 1 880 680\n");
     expect(useProject.getState().error).toBeNull();
+  });
+
+  it("retries the collision-numbered name after an atomic native AlreadyExists result", async () => {
+    const root = "/Users/test/Tau_Design";
+    const reserve = vi.spyOn(fs, "reserveProjectTextFile")
+      .mockResolvedValueOnce({ status: "already-exists", atomic: true })
+      .mockResolvedValueOnce({ status: "created", path: `${root}/filter-2.asc`, atomic: true });
+    vi.spyOn(fs, "readProjectTree").mockResolvedValue([
+      { name: "filter.asc", path: `${root}/filter.asc`, kind: "file" },
+      { name: "filter-2.asc", path: `${root}/filter-2.asc`, kind: "file" },
+    ]);
+    useProject.setState({
+      capability: "tauri",
+      rootPath: root,
+      rootName: "Tau_Design",
+      expanded: [root],
+    });
+
+    await expect(useProject.getState().createSchematicFile(root, "filter.asc"))
+      .resolves.toBe(`${root}/filter-2.asc`);
+    expect(reserve.mock.calls.map((call) => call[2])).toEqual(["filter.asc", "filter-2.asc"]);
+  });
+
+  it("atomically imports ASC text without replacing an external collision", async () => {
+    const root = "/Users/test/Tau_Design";
+    const reserve = vi.spyOn(fs, "reserveProjectTextFile")
+      .mockResolvedValueOnce({ status: "already-exists", atomic: true })
+      .mockResolvedValueOnce({ status: "created", path: `${root}/source-2.asc`, atomic: true });
+    vi.spyOn(fs, "readProjectTree").mockResolvedValue([
+      { name: "source.asc", path: `${root}/source.asc`, kind: "file" },
+      { name: "source-2.asc", path: `${root}/source-2.asc`, kind: "file" },
+    ]);
+    useProject.setState({ capability: "tauri", rootPath: root, rootName: "Tau_Design", expanded: [root] });
+    const bytes = new TextEncoder().encode(ASC_SOURCE);
+    const file = { name: "source.asc", arrayBuffer: async () => bytes.buffer } as File;
+
+    await expect(useProject.getState().importAscFile(root, file)).resolves.toBe(`${root}/source-2.asc`);
+    expect(reserve.mock.calls.map((call) => [call[2], call[3]])).toEqual([
+      ["source.asc", ASC_SOURCE],
+      ["source-2.asc", ASC_SOURCE],
+    ]);
   });
 
   it("refuses a pathless editor tab when no Schematics folder is open", async () => {
@@ -186,26 +233,28 @@ describe("ASC-native project workspace", () => {
 
   it("uses the same safe bridge contract for a picked browser directory", async () => {
     const root = "web://Tau_Design";
-    vi.spyOn(fs, "pathExists").mockResolvedValue(false);
-    const write = vi.spyOn(fs, "writeTextFile").mockResolvedValue(undefined);
+    const reserve = vi.spyOn(fs, "reserveProjectTextFile").mockResolvedValue({
+      status: "created",
+      path: `${root}/browser.asc`,
+      atomic: false,
+    });
     vi.spyOn(fs, "readProjectTree").mockResolvedValue([
       { name: "browser.asc", path: `${root}/browser.asc`, kind: "file" },
     ]);
     useProject.setState({ capability: "web", rootPath: root, rootName: "Tau_Design", expanded: [root] });
 
     await expect(useProject.getState().createSchematicFile(root, "browser")).resolves.toBe(`${root}/browser.asc`);
-    expect(write).toHaveBeenCalledWith(`${root}/browser.asc`, "Version 4\nSHEET 1 880 680\n");
+    expect(reserve).toHaveBeenCalledWith(root, root, "browser.asc", "Version 4\nSHEET 1 880 680\n");
     expect(useProject.getState().error).toBeNull();
   });
 
   it("surfaces a Tauri string rejection instead of hiding the native permission failure", async () => {
     const root = "/Users/test/Tau_Design";
-    vi.spyOn(fs, "pathExists").mockResolvedValue(false);
-    vi.spyOn(fs, "writeTextFile").mockRejectedValue("fs.write_text_file not allowed");
+    vi.spyOn(fs, "reserveProjectTextFile").mockRejectedValue("project folder is not authorized");
     useProject.setState({ capability: "tauri", rootPath: root, rootName: "Tau_Design" });
 
     await expect(useProject.getState().createSchematicFile(root, "blocked.asc")).resolves.toBeNull();
-    expect(useProject.getState().error).toBe("fs.write_text_file not allowed");
+    expect(useProject.getState().error).toBe("project folder is not authorized");
   });
 });
 

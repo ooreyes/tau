@@ -209,6 +209,35 @@ describe("BottomPanel — errors tab states (§11 Unit A3)", () => {
     expect(container.querySelector(".bottom-panel.is-idle")).toBeNull();
   });
 
+  it("uses the amber running state instead of stale idle, success, or error diagnostics", () => {
+    const clean = {
+      ok: true,
+      title: "Transient",
+      times: [0],
+      traces: [],
+      currents: [],
+      stats: { netCount: 0, componentCount: 0, sampleCount: 1, stopTime: 0, stepSize: 0 },
+      warnings: [],
+      circuit: {} as never,
+    } as AnalysisResult;
+    const { container, rerender } = render(<BottomPanel result={clean} isRunning />);
+
+    const assertRunningOnly = () => {
+      expect(screen.getByRole("status").textContent).toBe("Running");
+      expect(container.querySelector(".bottom-panel.is-running")).toBeTruthy();
+      expect(container.querySelector(".bottom-panel.is-idle")).toBeNull();
+      expect(container.querySelector(".bottom-panel.is-clean")).toBeNull();
+      expect(container.querySelector(".bottom-panel.has-error")).toBeNull();
+      expect(container.querySelector(".bottom-errors")).toBeNull();
+    };
+
+    assertRunningOnly();
+    rerender(<BottomPanel result={null} isRunning />);
+    assertRunningOnly();
+    rerender(<BottomPanel result={failed} isRunning />);
+    assertRunningOnly();
+  });
+
   it("toggles an issue body from its emphasized header button", () => {
     render(<BottomPanel result={failed} />);
     const toggle = screen.getByRole("button", { name: /^Errors/ });

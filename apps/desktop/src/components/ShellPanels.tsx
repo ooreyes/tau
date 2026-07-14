@@ -848,15 +848,24 @@ export function EditorTabs({
   );
 }
 
-export function BottomPanel({ result }: { mode?: "schematic" | "simulator"; result: AnalysisResult | null }) {
-  const messages = [
+export function BottomPanel({
+  result,
+  isRunning = false,
+}: {
+  mode?: "schematic" | "simulator";
+  result: AnalysisResult | null;
+  isRunning?: boolean;
+}) {
+  // A live run supersedes the previous result's diagnostics. Keeping stale
+  // success/error classes during a rerun would contradict the amber Run state.
+  const messages = isRunning ? [] : [
     ...(result && !result.ok ? [result.message] : []),
     ...(result?.warnings ?? []),
   ];
   const hasIssues = messages.length > 0;
-  const hasError = Boolean(result && !result.ok);
-  const isIdle = result === null;
-  const isClean = Boolean(result?.ok) && !hasIssues;
+  const hasError = !isRunning && Boolean(result && !result.ok);
+  const isIdle = !isRunning && result === null;
+  const isClean = !isRunning && Boolean(result?.ok) && !hasIssues;
   const issueSignature = messages.join("\u0000");
   const [expanded, setExpanded] = useState(hasIssues);
 
@@ -870,19 +879,23 @@ export function BottomPanel({ result }: { mode?: "schematic" | "simulator"; resu
 
   return (
     <section
-      className={`bottom-panel${hasIssues ? " has-issues" : ""}${hasError ? " has-error" : ""}${hasIssues && !hasError ? " has-warning" : ""}${isClean ? " is-clean" : ""}${isIdle ? " is-idle" : ""}${panelExpanded ? "" : " is-collapsed"}`}
+      className={`bottom-panel${isRunning ? " is-running" : ""}${hasIssues ? " has-issues" : ""}${hasError ? " has-error" : ""}${hasIssues && !hasError ? " has-warning" : ""}${isClean ? " is-clean" : ""}${isIdle ? " is-idle" : ""}${panelExpanded ? "" : " is-collapsed"}`}
       aria-label="Simulation diagnostics"
     >
-      {isIdle || isClean ? (
+      {isRunning || isIdle || isClean ? (
         <div className="bottom-panel-head bottom-panel-head--static">
           <span className="bottom-panel-state" aria-hidden="true">
             <svg viewBox="0 0 12 12">
-              {isIdle ? <path d="M3 6h6" /> : <path d="M2.3 6.3 4.8 8.8 9.8 3.5" />}
+              {isRunning
+                ? <circle cx="6" cy="6" r="3.2" />
+                : isIdle
+                  ? <path d="M3 6h6" />
+                  : <path d="M2.3 6.3 4.8 8.8 9.8 3.5" />}
             </svg>
           </span>
           <span className="bottom-panel-title">Diagnostics</span>
           <span className="bottom-panel-clear" role="status">
-            {isIdle ? "Not run" : "No issues"}
+            {isRunning ? "Running" : isIdle ? "Not run" : "No issues"}
           </span>
         </div>
       ) : (

@@ -1027,7 +1027,7 @@ function App() {
               <EmptyState />
             )}
           </main>
-          <BottomPanel result={analysis} />
+          <BottomPanel result={analysis} isRunning={analysisRunning} />
         </section>
         )}
         {mode === "simulator" && graphOpen && (

@@ -8,20 +8,62 @@
      `git log --oneline -8`, recover/finish/revert that unit FIRST, then go on.
      ─────────────────────────────────────────────────────────────────────── -->
 ## ⏱ HEARTBEAT
-- **Headline metric:** 1617 committed-snapshot tests green · corpus 82/82 import · 82/82 op-converge · 79/82 warning-clean
-- **Run started (UTC):** 2026-07-14T18:00Z
-- **Synced to origin:** auto/ltspice-parity @ 99bf803 (dirty shared tree preserved).
-- **Claimed unit:** §2/§10/§11 correctness follow-up: rendered-geometry Home fit,
-  truthful direct-drive LED telemetry, and coordinated Explorer/Components width containment.
+- **Headline metric:** 1623 committed-snapshot tests green · corpus 82/82 import · 82/82 op-converge · 79/82 warning-clean
+- **Run started (UTC):** 2026-07-14T18:27Z
+- **Synced to origin:** auto/ltspice-parity @ 063c527 (dirty shared tree preserved).
+- **Claimed unit:** §1/§8/§10/§11 correctness follow-up: atomic native ASC
+  creation/import and synchronized Diagnostics running state.
 - **Status:** DONE
-- **Last completed sub-step:** reviewed three narrow subagent diffs; full shared
-  tree typecheck/1649-test/build gates and exact staged-snapshot gates are green.
-- **Plan:** follow-up complete; preserve the unrelated simulator-dashboard
-  worktree and repeat native-window QA when the Mac is unlocked.
+- **Last completed sub-step:** reviewed both narrow subagent diffs; exact staged
+  snapshot typecheck/1623-test/build gates, Rust fmt/clippy/tests, and the real
+  bundled-ngspice ignored smoke test are green (shared tree: 1655 tests).
+- **Plan:** commit/push only the reviewed atomic-create and Diagnostics hunks;
+  preserve the unrelated simulator-dashboard worktree and repeat native-window
+  QA when the Mac is unlocked.
 - **Note:** existing simulator/assistant worktree edits belong to earlier units and
   must remain intact; stage only reviewed hunks.
-- **Next step:** verify real folder creation through the unlocked Tauri window,
-  then reconcile the existing simulator-dashboard worktree unit.
+- **Next step:** verify `+`, New Circuit, Cmd-S, numbered collisions, and disk
+  persistence through the unlocked Tauri window, then reconcile the existing
+  simulator-dashboard worktree unit.
+
+---
+
+## 2026-07-14T18:27Z — auto/ltspice-parity — atomic files and synchronized diagnostics (§1/§8/§10/§11)
+
+### What I did
+- Replaced the native renderer-side exists-then-write sequence with an
+  authorized, project-root-constrained Rust reservation command using
+  `OpenOptions::create_new(true)`. Creation and ASC import now retry explicit
+  `AlreadyExists` results with numbered names and never truncate an external
+  winner; the browser fallback is labeled non-atomic instead of overclaiming.
+- Added the missing Diagnostics running state. A rerun now shows the same amber
+  in-progress semantics as Run and suppresses stale clean/error messages until
+  current evidence returns.
+- Re-audited the single cross-mode assistant: validated ASC remains an explicit
+  confirmed action, private simulation operations read actual result vectors,
+  tool payloads remain hidden, and no second mode-specific chat exists.
+
+### Tests and QA
+- Exact staged snapshot: typecheck pass, 112 files / 1623 tests pass, production
+  web build pass, Rust fmt/Clippy/11 tests pass, and the bundled-ngspice ignored
+  smoke passes. The staged snapshot was tested in an isolated detached worktree.
+- Full shared tree: typecheck pass, 113 files / 1655 tests pass, production web
+  build pass (existing SDK externalization/chunk-size warnings only).
+- Native: `cargo fmt --check`, Clippy with warnings denied, and 11 Rust tests
+  pass. The ignored operating-point smoke also passes against Tau's bundled
+  `libngspice.0.dylib`.
+- New regressions cover native IPC shape, safe root/leaf boundaries, sequential
+  no-overwrite, a real two-thread one-winner race, numbered create/import retry,
+  honest browser fallback behavior, and running-over-stale Diagnostics.
+- Chrome hot-reload QA shows one assistant, generic view-only topology wording,
+  a green successful Run state, `Diagnostics — No issues`, responsive 900×600
+  containment, and no new console warnings/errors after a clean reload.
+- Native Computer Use remains blocked by the locked macOS session; no new
+  click-through/disk-persistence result is claimed.
+
+### Next step
+- Unlock macOS and exercise native `+`, Settings New Circuit, Cmd-S, concurrent
+  collision numbering, and Finder-visible persistence in the Tauri window.
 
 ---
 

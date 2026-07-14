@@ -192,6 +192,53 @@ export async function writeTextFile(path: string, contents: string): Promise<voi
   await write(path, contents);
 }
 
+export type ProjectTextFileReservation =
+  | { status: "created"; path: string; atomic: boolean }
+  | { status: "already-exists"; atomic: boolean };
+
+type NativeProjectTextFileReservation =
+  | { status: "created"; path: string }
+  | { status: "alreadyExists" };
+
+/**
+ * Reserve a new project file without replacing an existing one. Native Tau
+ * delegates to Rust's `create_new(true)` path and is atomic across processes.
+ * The browser File System Access API exposes no exclusive-create primitive, so
+ * its fallback is explicitly marked non-atomic; the project store still
+ * serializes Tau's own concurrent creation requests.
+ */
+export async function reserveProjectTextFile(
+  projectRoot: string,
+  parentPath: string,
+  name: string,
+  contents: string,
+): Promise<ProjectTextFileReservation> {
+  if (await isTauri()) {
+    const { invoke } = await import("@tauri-apps/api/core");
+    const result = await invoke<NativeProjectTextFileReservation>("create_project_text_file_exclusive", {
+      projectRoot,
+      parentPath,
+      name,
+      contents,
+    });
+    return result.status === "created"
+      ? { status: "created", path: result.path, atomic: true }
+      : { status: "already-exists", atomic: true };
+  }
+
+  if (!projectRoot.startsWith("web://") || (!parentPath.startsWith(`${projectRoot}/`) && parentPath !== projectRoot)) {
+    throw new Error("Exclusive project file creation requires Tau desktop or an open browser folder.");
+  }
+  const path = joinPath(parentPath, name);
+  // Non-atomic browser fallback: another process can win after this check.
+  // Returning `atomic: false` keeps callers and tests honest about that limit.
+  if (await pathExists(path)) return { status: "already-exists", atomic: false };
+  // Do not attempt cleanup after a failed write: without exclusive creation we
+  // cannot prove the handle still belongs to this request rather than a racer.
+  await writeTextFile(path, contents);
+  return { status: "created", path, atomic: false };
+}
+
 export async function mkdirPath(path: string): Promise<void> {
   if (path.startsWith("web://")) {
     const parent = path.replace(/\\/g, "/").replace(/\/[^/]+$/, "");

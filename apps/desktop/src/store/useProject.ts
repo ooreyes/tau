@@ -275,9 +275,9 @@ export const useProject = create<ProjectStore>((set, get) => ({
     }
     const desiredName = ensureSchematicExtension(name);
     try {
-      const { path, name: fileName } = await availableFilePath(parentPath, desiredName);
-      const file = newFileContents(fileName);
       if (isWorkspacePath(parentPath)) {
+        const { path, name: fileName } = await availableFilePath(parentPath, desiredName);
+        const file = newFileContents(fileName);
         const files = {
           ...get().workspaceFiles,
           [path]: { path, name: fileName, ...file },
@@ -294,7 +294,17 @@ export const useProject = create<ProjectStore>((set, get) => ({
         });
         return path;
       }
-      await fs.writeTextFile(path, file.contents);
+      const rootPath = get().rootPath;
+      if (!rootPath) throw new Error("Open a Schematics folder before creating a circuit.");
+      let path = "";
+      for (let index = 1; ; index += 1) {
+        const fileName = index === 1 ? desiredName : numberedName(desiredName, index);
+        const file = newFileContents(fileName);
+        const reservation = await fs.reserveProjectTextFile(rootPath, parentPath, fileName, file.contents);
+        if (reservation.status === "already-exists") continue;
+        path = reservation.path;
+        break;
+      }
       await get().refresh();
       set((s) => ({
         expanded: s.expanded.includes(parentPath) ? s.expanded : [...s.expanded, parentPath],
@@ -323,9 +333,9 @@ export const useProject = create<ProjectStore>((set, get) => ({
     }
     const desiredName = /\.asc$/i.test(file.name) ? file.name : `${file.name}.asc`;
     try {
-      const { path, name } = await availableFilePath(parentPath, desiredName);
       const text = decodeSchematicText(await file.arrayBuffer());
       if (isWorkspacePath(parentPath)) {
+        const { path, name } = await availableFilePath(parentPath, desiredName);
         const files = {
           ...get().workspaceFiles,
           [path]: { path, name, kind: "asc" as const, contents: text },
@@ -337,7 +347,16 @@ export const useProject = create<ProjectStore>((set, get) => ({
         });
         return path;
       }
-      await fs.writeTextFile(path, text);
+      const rootPath = get().rootPath;
+      if (!rootPath) throw new Error("Open a Schematics folder before importing a circuit.");
+      let path = "";
+      for (let index = 1; ; index += 1) {
+        const name = index === 1 ? desiredName : numberedName(desiredName, index);
+        const reservation = await fs.reserveProjectTextFile(rootPath, parentPath, name, text);
+        if (reservation.status === "already-exists") continue;
+        path = reservation.path;
+        break;
+      }
       await get().refresh();
       return path;
     } catch (error) {

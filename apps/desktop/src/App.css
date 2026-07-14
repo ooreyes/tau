@@ -4507,6 +4507,18 @@ body {
   --diagnostic-glow: var(--overlay-hover-faint);
 }
 
+.bottom-panel.is-running {
+  --diagnostic-color: var(--diagnostic-warning);
+  --diagnostic-text: var(--diagnostic-warning-text);
+  --diagnostic-soft: var(--diagnostic-warning-soft);
+  --diagnostic-line: var(--diagnostic-warning-line);
+  --diagnostic-glow: var(--diagnostic-warning-glow);
+}
+
+.bottom-panel.is-running .bottom-panel-state {
+  animation: status-lamp-pulse 1.1s var(--ease-in-out, ease-in-out) infinite;
+}
+
 .bottom-panel.has-warning {
   --diagnostic-color: var(--diagnostic-warning);
   --diagnostic-text: var(--diagnostic-warning-text);
