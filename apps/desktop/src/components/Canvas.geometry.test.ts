@@ -62,6 +62,36 @@ describe("Canvas wire geometry", () => {
     expect(route).toEqual([{ x: 0, y: 32 }, { x: 96, y: 32 }]);
   });
 
+  it("snaps a slightly off-axis gesture onto a component pin without a tiny dogleg", () => {
+    const resistor = comp("r1", 64, 0); // left pin is exactly (32, 0)
+    const route = routeWireSmart({ x: -31.7, y: 0.3 }, { x: 31.6, y: -0.4 }, [resistor]);
+
+    expect(route).toEqual([{ x: -32, y: 0 }, { x: 32, y: 0 }]);
+  });
+
+  it("keeps obstacle detours on full grid segments when the pointer is fractionally off-axis", () => {
+    const route = routeWireSmart({ x: 0.2, y: -0.3 }, { x: 96.3, y: 0.4 }, [comp("r1", 48, 0)]);
+
+    expect(countRouteBodyHits(route, [comp("r1", 48, 0)])).toBe(0);
+    for (const point of route) {
+      expect(Math.abs(point.x % GRID)).toBe(0);
+      expect(Math.abs(point.y % GRID)).toBe(0);
+    }
+    for (let index = 1; index < route.length; index += 1) {
+      const a = route[index - 1];
+      const b = route[index];
+      expect(a.x === b.x || a.y === b.y).toBe(true);
+      expect(Math.abs(a.x - b.x) + Math.abs(a.y - b.y)).toBeGreaterThanOrEqual(GRID);
+    }
+  });
+
+  it("preserves an exact off-grid imported-wire junction instead of snapping it away", () => {
+    const existing = [{ id: "imported", points: [{ x: 20, y: 5 }, { x: 100, y: 5 }] }];
+    const route = routeWireSmart({ x: 20, y: 5 }, { x: 20, y: 69 }, [], existing);
+
+    expect(route[0]).toEqual({ x: 20, y: 5 });
+  });
+
   it("routes an L-shaped wire for diagonal endpoints with no components", () => {
     const route = routeWireSmart({ x: 0, y: 0 }, { x: 96, y: 64 }, []);
     // Must be at least 2 points (start + end) and all segments must be axis-aligned.

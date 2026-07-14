@@ -252,11 +252,15 @@ Status legend: ✅ done · 🟡 partial · ⬜ not started
   channels generated around existing wires; unavoidable unconnected crossings
   render a hop-over arc while connected joins retain junction dots. Net names
   avoid components, wires, probes, and one another; selected parts/wires/labels/
-  probes expose a 30×30 one-click delete control. Component symbols use corrected
+  probes use a stable toolbar/Delete-key action. Component symbols use corrected
   filled device arrows and crisp token-backed canvas typography. Run/error states
   use restrained success/danger gradients. Explorer actions mirror VS Code's
-  New File, New Folder, Refresh, and Collapse All behavior. 41 geometry tests
-  plus browser QA.
+  New File, New Folder, Refresh, and Collapse All behavior. **Grid/routing
+  hardening (2026-07-14):** free wire endpoints are normalized before routing,
+  while exact imported pins and off-grid wire junctions remain untouched; the
+  store also collapses redundant collinear vertices before persistence. This
+  prevents fractional pointer drift from becoming a tiny pin-adjacent dogleg.
+  44 geometry tests plus browser QA.
 - ✅ Net labels (name a node) — `FLAG` equivalent — store `upsertNetLabel`;
   **now electrical** (merge same-named nets, `0`/`GND`→ground, name the net) in
   `schematic/netlist.ts` `extractCircuit`. **F4 net-label tool landed**
@@ -311,7 +315,12 @@ Status legend: ✅ done · 🟡 partial · ⬜ not started
   9 store tests. **Multi-select landed** — `selectedIds` + `selectMultiple`/
   `toggleSelect` (Shift+click) in the store; drag-box select (fully-enclosed,
   LTspice semantics, middle-mouse pans) + group move (single undo step) in
-  `Canvas.tsx`; group delete. 10 store tests.
+  `Canvas.tsx`; group delete. **Selection regression hardening (2026-07-14):**
+  individual and marquee gestures now have end-to-end pointer/Zustand tests;
+  marquee geometry stays synchronous through pointer-up, and document selection
+  commits outside React state updaters. Selected symbols/wires and the drag box
+  use high-contrast neutral weight/halo treatment instead of a nearly invisible
+  82/18 neutral mix. 10 store tests.
 - ✅ **Drag wires / move with rubber-banding** — `moveGroup` rubber-bands wire
   endpoints attached to moved pins with orthogonal elbow insertion (store-level,
   shared by single and group moves).

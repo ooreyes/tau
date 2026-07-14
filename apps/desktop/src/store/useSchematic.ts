@@ -607,13 +607,11 @@ export const useSchematic = create<SchematicState>()((set) => {
 
     addWire: (points) =>
       set((s) => {
-        const uniquePoints = points.filter(
-          (p, i) => i === 0 || p.x !== points[i - 1].x || p.y !== points[i - 1].y,
-        );
-        if (uniquePoints.length < 2) return {};
+        const cleanPoints = cleanGroupRoute(points);
+        if (cleanPoints.length < 2) return {};
         return {
           ...recordInto(s),
-          wires: [...s.wires, { id: nanoid(6), points: uniquePoints }],
+          wires: [...s.wires, { id: nanoid(6), points: cleanPoints }],
         };
       }),
 

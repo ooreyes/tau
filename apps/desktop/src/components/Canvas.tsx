@@ -98,6 +98,10 @@ export function Canvas({
   const labelInputRef = useRef<HTMLInputElement | null>(null);
   /** Rubber-band box in screen coords, null when not drawing. */
   const [boxDrag, setBoxDrag] = useState<BoxDrag | null>(null);
+  // Pointer move/up can arrive before React has committed the visual state
+  // update. Keep the gesture geometry synchronously available as well, and
+  // never mutate the Zustand selection store from inside a React state updater.
+  const boxDragRef = useRef<BoxDrag | null>(null);
   /** True while a component (or group) is being dragged — drives snap-dot visibility. */
   const [movingParts, setMovingParts] = useState(false);
 
@@ -598,7 +602,9 @@ export function Canvas({
       // A plain click (no drag) clears the selection on pointer-up.
       clearSelection();
       drag.current = { mode: "box", lastX: e.clientX, lastY: e.clientY, moved: false };
-      setBoxDrag({ startX: e.clientX, startY: e.clientY, curX: e.clientX, curY: e.clientY });
+      const nextBox = { startX: e.clientX, startY: e.clientY, curX: e.clientX, curY: e.clientY };
+      boxDragRef.current = nextBox;
+      setBoxDrag(nextBox);
     }
     svgRef.current?.setPointerCapture(e.pointerId);
   };
@@ -669,7 +675,12 @@ export function Canvas({
       setView((v) => ({ ...v, x: v.x + dx, y: v.y + dy }));
     } else if (d.mode === "box") {
       // Update rubber-band box in screen space.
-      setBoxDrag((prev) => prev ? { ...prev, curX: e.clientX, curY: e.clientY } : prev);
+      const currentBox = boxDragRef.current;
+      if (currentBox) {
+        const nextBox = { ...currentBox, curX: e.clientX, curY: e.clientY };
+        boxDragRef.current = nextBox;
+        setBoxDrag(nextBox);
+      }
     } else if (d.mode === "move" && d.id && d.origin && d.sourcePins && d.sourceWires) {
       const w = screenToWorld(e.clientX, e.clientY);
       const tx = snap(w.x);
@@ -716,23 +727,23 @@ export function Canvas({
     const d = drag.current;
     if (d.mode === "box") {
       // On release, commit the box selection.
-      setBoxDrag((prev) => {
-        if (prev) {
-          const rect = boxWorldRect(prev);
-          const sel = {
-            componentIds: componentsInRect(rect),
-            wireIds: wiresInRect(rect),
-            labelIds: labelsInRect(rect),
-            probeIds: probesInRect(rect),
-          };
-          if (sel.componentIds.length || sel.wireIds.length || sel.labelIds.length || sel.probeIds.length) {
-            selectMixed(sel);
-          } else {
-            clearSelection();
-          }
+      const completedBox = boxDragRef.current;
+      boxDragRef.current = null;
+      setBoxDrag(null);
+      if (completedBox) {
+        const rect = boxWorldRect(completedBox);
+        const sel = {
+          componentIds: componentsInRect(rect),
+          wireIds: wiresInRect(rect),
+          labelIds: labelsInRect(rect),
+          probeIds: probesInRect(rect),
+        };
+        if (sel.componentIds.length || sel.wireIds.length || sel.labelIds.length || sel.probeIds.length) {
+          selectMixed(sel);
+        } else {
+          clearSelection();
         }
-        return null;
-      });
+      }
     } else if ((d.mode === "move" || d.mode === "group-move") && d.moved) {
       // Final re-route pass (live routing already ran during the drag).
       const state = useSchematic.getState();

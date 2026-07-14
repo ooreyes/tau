@@ -81,6 +81,20 @@ afterEach(() => {
 });
 
 describe("schematic document store", () => {
+  it("does not persist redundant collinear routing vertices", () => {
+    useSchematic.getState().addWire([
+      { x: 0, y: 0 },
+      { x: 16, y: 0 },
+      { x: 32, y: 0 },
+      { x: 32, y: 0 },
+    ]);
+
+    expect(useSchematic.getState().wires[0].points).toEqual([
+      { x: 0, y: 0 },
+      { x: 32, y: 0 },
+    ]);
+  });
+
   it("clears circuit-scoped probes and labels when another document loads", () => {
     useSchematic.setState({
       probes: [{ id: "probe-1", x: 64, y: 0, color: "var(--trace-red)" }],

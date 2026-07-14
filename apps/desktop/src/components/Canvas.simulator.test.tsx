@@ -106,6 +106,42 @@ describe("Canvas — simulator mutation boundary", () => {
 });
 
 describe("Canvas — schematic selection chrome", () => {
+  it("selects an individual component through the canvas pointer gesture", () => {
+    useSchematic.setState({ wires: [] });
+    render(<Canvas interactive />);
+    const canvas = document.querySelector("svg.canvas")!;
+
+    // jsdom's zero-size SVG leaves the initial world origin at client (0, 0),
+    // which lets this exercise Canvas's real componentAt → Zustand path.
+    fireEvent.pointerDown(canvas, { button: 0, clientX: 0, clientY: 0, pointerId: 1 });
+    fireEvent.pointerUp(canvas, { button: 0, clientX: 0, clientY: 0, pointerId: 1 });
+
+    expect(useSchematic.getState().selectedId).toBe("r1");
+    expect(useSchematic.getState().selectedIds).toEqual(["r1"]);
+    expect(document.querySelector(".component.selected")).not.toBeNull();
+  });
+
+  it("draws a marquee and commits its component selection to Zustand", () => {
+    useSchematic.setState({ wires: [] });
+    render(<Canvas interactive />);
+    const canvas = document.querySelector("svg.canvas")!;
+
+    fireEvent.pointerDown(canvas, { button: 0, clientX: -50, clientY: -50, pointerId: 2 });
+    fireEvent.pointerMove(canvas, { clientX: 50, clientY: 50, pointerId: 2 });
+
+    const marquee = document.querySelector(".select-box");
+    expect(marquee).not.toBeNull();
+    expect(marquee?.getAttribute("width")).toBe("100");
+    expect(marquee?.getAttribute("height")).toBe("100");
+
+    fireEvent.pointerUp(canvas, { button: 0, clientX: 50, clientY: 50, pointerId: 2 });
+
+    expect(document.querySelector(".select-box")).toBeNull();
+    expect(useSchematic.getState().selectedId).toBe("r1");
+    expect(useSchematic.getState().selectedIds).toEqual(["r1"]);
+    expect(document.querySelector(".component.selected")).not.toBeNull();
+  });
+
   it("keeps deletion out of the drawing overlay", () => {
     useSchematic.setState({ selectedId: "r1", selectedIds: ["r1"] });
     render(<Canvas interactive />);

@@ -292,7 +292,7 @@ body {
 }
 
 .component.selected .symbol .symbol-arrow {
-  fill: color-mix(in srgb, var(--comp) 82%, var(--accent));
+  fill: var(--text);
 }
 
 .component {
@@ -315,8 +315,12 @@ body {
 }
 
 .component.selected .symbol {
-  stroke: color-mix(in srgb, var(--comp) 82%, var(--accent));
-  filter: drop-shadow(0 0 0.75px var(--accent-line));
+  /* A neutral selection cannot rely on hue alone: the old 82/18 mix was
+     visually indistinguishable from --comp. Weight + luminance + a restrained
+     halo make the selected part obvious without bringing cobalt back. */
+  stroke: var(--text);
+  stroke-width: 2.35;
+  filter: drop-shadow(0 0 2.5px var(--accent-glow));
 }
 
 .component.selected .ref,
@@ -334,10 +338,11 @@ body {
 
 /* Rubber-band selection rectangle drawn while drag-selecting on empty canvas. */
 .select-box {
-  fill: var(--overlay-hover-faint);
-  stroke: var(--accent-line);
-  stroke-width: 1;
-  stroke-dasharray: 4 3;
+  fill: color-mix(in srgb, var(--accent) 14%, transparent);
+  stroke: var(--accent-hover);
+  stroke-width: 1.5;
+  stroke-dasharray: 6 3;
+  filter: drop-shadow(0 0 2px var(--accent-glow));
   pointer-events: none;
 }
 
@@ -539,8 +544,9 @@ body {
 }
 
 .wire-group.selected .wire {
-  stroke: color-mix(in srgb, var(--comp) 82%, var(--accent));
-  filter: drop-shadow(0 0 0.75px var(--accent-line));
+  stroke: var(--text);
+  stroke-width: 2.75;
+  filter: drop-shadow(0 0 2.5px var(--accent-glow));
 }
 
 /* Simulator mode: clicking a wire probes its net (LTspice probe-in-place). */

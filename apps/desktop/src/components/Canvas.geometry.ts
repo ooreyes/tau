@@ -4,7 +4,10 @@ import type { ComponentKind, NetLabel, Point, SchematicComponent, SchematicWire 
 import { getLocalPins, getComponentPins, transformPoint } from "../schematic/pins";
 import { decodeParams } from "../schematic/params";
 
-export const snap = (v: number) => Math.round(v / GRID) * GRID;
+export const snap = (v: number) => {
+  const snapped = Math.round(v / GRID) * GRID;
+  return Object.is(snapped, -0) ? 0 : snapped;
+};
 
 /** World-space bounding box of a circuit, with a per-symbol margin so parts are
  *  never flush against the frame. Returns null for an empty schematic. Pure so
@@ -828,6 +831,25 @@ export const routeWireSmart = (
   components: SchematicComponent[],
   existingWires: readonly SchematicWire[] = [],
 ): Point[] => {
+  // Pointer/world transforms can leave a nominally snapped gesture a fraction
+  // off-grid. If those raw coordinates reach the orthogonal candidates, the
+  // router faithfully creates a tiny final elbow. Preserve exact imported pin
+  // and wire connections, but normalize every free endpoint to the grid before
+  // generating/scoring candidates.
+  const isExistingConnection = (point: Point) =>
+    components.some((component) => getComponentPins(component).some((pin) => pointsEqual(pin, point))) ||
+    existingWires.some((wire) => wire.points.slice(1).some((b, index) => {
+      const a = wire.points[index];
+      return a.x === b.x
+        ? point.x === a.x && point.y >= Math.min(a.y, b.y) && point.y <= Math.max(a.y, b.y)
+        : a.y === b.y && point.y === a.y && point.x >= Math.min(a.x, b.x) && point.x <= Math.max(a.x, b.x);
+    }));
+  const normalizeEndpoint = (point: Point): Point => isExistingConnection(point)
+    ? point
+    : { x: snap(point.x), y: snap(point.y) };
+  start = normalizeEndpoint(start);
+  end = normalizeEndpoint(end);
+
   if (pointsEqual(start, end)) return [start];
   const candidates: Point[][] = [];
   const push = (points: Point[]) => {

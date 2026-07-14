@@ -8,17 +8,50 @@
      `git log --oneline -8`, recover/finish/revert that unit FIRST, then go on.
      ─────────────────────────────────────────────────────────────────────── -->
 ## ⏱ HEARTBEAT
-- **Headline metric:** 1547 committed-snapshot tests green · corpus 82/82 import · 82/82 op-converge · 79/82 warning-clean
-- **Run started (UTC):** 2026-07-14T06:08Z
-- **Synced to origin:** auto/ltspice-parity @ 771d500 (dirty shared tree preserved).
-- **Claimed unit:** §6/§10 simulator semantic clarity and visual-noise reduction.
+- **Headline metric:** 1553 committed-snapshot tests green · corpus 82/82 import · 82/82 op-converge · 79/82 warning-clean
+- **Run started (UTC):** 2026-07-14T15:43Z
+- **Synced to origin:** auto/ltspice-parity @ 9fc7b78 (dirty shared tree preserved).
+- **Claimed unit:** §2/§10 schematic selection and grid-clean wire-routing regression.
 - **Status:** DONE
-- **Last completed sub-step:** landed truthful signal semantics, plain-language
-  analysis guidance, neutral selection chrome, and a compact clean-state strip.
-- **Plan:** continue the plot-card/cursor/FFT sequence in `TAU_DESIGN_VISION.md`.
+- **Last completed sub-step:** staged snapshot passed typecheck and all 1553
+  tests after restoring stable marquee commits and grid-clean routing.
+- **Plan:** resume the plot-card/cursor/FFT sequence in `TAU_DESIGN_VISION.md`.
 - **Note:** existing simulator/assistant worktree edits belong to earlier units and
   must remain intact; stage only reviewed hunks.
 - **Next step:** unify plot axes/cursors and finish FFT engineering readouts.
+
+---
+
+## 2026-07-14T15:49Z — auto/ltspice-parity — schematic selection/routing regression
+
+### What I did
+- Restored unmistakable neutral selection feedback for components, wires, and
+  the rubber-band rectangle without reintroducing saturated blue.
+- Kept marquee geometry synchronous through pointer-up and moved the Zustand
+  selection commit outside React's state-updater callback.
+- Grid-normalized free routing endpoints before candidate scoring, while
+  preserving exact imported component pins and off-grid wire junctions.
+- Collapsed duplicate/collinear route vertices before new wires enter the store.
+
+### Files
+- `apps/desktop/src/components/Canvas.tsx`, `Canvas.geometry.ts`, `App.css`
+- `apps/desktop/src/store/useSchematic.ts`
+- focused Canvas geometry/interaction and store regression tests
+- `FEATURE_PARITY.md`, `PROGRESS.md`
+
+### Tests
+- `pnpm -C apps/desktop typecheck` — PASS (isolated staged snapshot)
+- `pnpm -C apps/desktop test` — PASS, 106 files / 1553 tests (isolated staged snapshot)
+- full shared dirty tree — PASS, 109 files / 1597 tests
+- `git diff --cached --check` — PASS
+
+### Parity items
+- §2 Grid snap / orthogonal wire routing: regression hardened.
+- §2 Multi-select / drag-box select: regression hardened.
+- §10 token-backed schematic selection chrome: restored and verified.
+
+### Next step
+- Continue the simulator plot-card, cursor, and FFT engineering-readout work.
 
 ---
 
