@@ -9,16 +9,18 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## ⏱ HEARTBEAT
 - **Headline metric:** 1499 committed-branch tests green · corpus 82/82 import · 82/82 op-converge · 79/82 warning-clean
-- **Run started (UTC):** 2026-07-13T14:22Z
-- **Synced to origin:** auto/ltspice-parity @ e6c20ca.
-- **Claimed unit:** §2 schematic follow-up — hard parallel-wire/node clearance,
-  visible Run/Errors state gradients, and functional VS Code-style Explorer actions.
-- **Status:** DONE
-- **Last completed sub-step:** committed and pushed `5f69f6e` after independent
-  staged-diff review, in-app browser verification, and isolated full gates.
-- **Plan:** unit complete; continue with the next highest-leverage parity item.
-- **Note:** preserve LTspice import access while matching the four VS Code actions.
-- **Next step:** resume the active `FEATURE_PARITY.md` queue.
+- **Run started (UTC):** 2026-07-14T05:05Z
+- **Synced to origin:** auto/ltspice-parity @ de5359e (dirty shared tree preserved).
+- **Claimed unit:** §2 `.asc`-native Schematics workspace — remove seeded Powerboard
+  content, create/open/import/save real `.asc`, and establish the durable UI vision.
+- **Status:** IN PROGRESS
+- **Last completed sub-step:** audited the project store, `.asc` open/save path,
+  simulator analysis rail, current visual tokens, and the supplied screenshot.
+- **Plan:** commit the design contract, delegate disjoint implementation tracks,
+  land `.asc` workflow first, then integrate reviewed simulator/control units.
+- **Note:** existing simulator/assistant worktree edits belong to earlier units and
+  must remain intact; stage only reviewed hunks.
+- **Next step:** implement and test `.asc`-native project semantics.
 
 ---
 
