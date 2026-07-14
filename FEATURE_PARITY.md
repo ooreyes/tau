@@ -242,6 +242,19 @@ Status legend: ✅ done · 🟡 partial · ⬜ not started
   time grid, draws it dashed, and shows a per-signal **% RMS + pass/✗** readout
   via `compareWaveforms` — a direct LTspice-vs-Tau acceptance check in the UI.
 - ⬜ Save/Open Tau-native `.tau.json` — **partial** (toolbar Save/Open exists); verify robustness.
+- ✅ **Native Schematics-folder Explorer (2026-07-14):** Tau opens a user-picked
+  folder as the project root, recursively authorizes only that selected root,
+  and can create real blank `.asc` files and subfolders there. The Tauri
+  capability now grants the exact `write_text_file` command used by the bridge
+  (the missing permission behind the generic “Could not create schematic”
+  failure), while string-valued native errors remain visible instead of being
+  discarded. Files and folders are draggable between Explorer directories via
+  a traversal/collision/symlink-safe native move command; matching open-tab
+  paths are remapped so the next Save follows the move. Explorer chrome uses
+  the VS Code action set and density (New File, New Folder, Refresh, Collapse;
+  compact Lucide file/folder/chevron rows). Packaged macOS QA created and opened
+  a real `native-create-check.asc` with the canonical 26-byte blank LTspice
+  document; store, panel, path-remap, and Rust boundary tests cover moves.
 
 ## 2. Schematic capture
 - ✅ Place / move / rotate / mirror / delete components — `Canvas.tsx`, `store/useSchematic.ts` (mirror = horizontal flip, applied before rotation; Ctrl+E)

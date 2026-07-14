@@ -8,19 +8,58 @@
      `git log --oneline -8`, recover/finish/revert that unit FIRST, then go on.
      ─────────────────────────────────────────────────────────────────────── -->
 ## ⏱ HEARTBEAT
-- **Headline metric:** 1553 committed-snapshot tests green · corpus 82/82 import · 82/82 op-converge · 79/82 warning-clean
-- **Run started (UTC):** 2026-07-14T15:43Z
-- **Synced to origin:** auto/ltspice-parity @ 9fc7b78 (dirty shared tree preserved).
-- **Claimed unit:** §2/§10 schematic selection and grid-clean wire-routing regression.
+- **Headline metric:** 1566 committed-snapshot tests green · corpus 82/82 import · 82/82 op-converge · 79/82 warning-clean
+- **Run started (UTC):** 2026-07-14T15:59Z
+- **Synced to origin:** auto/ltspice-parity @ 57db2b7 (dirty shared tree preserved).
+- **Claimed unit:** §1/§8/§10 native Explorer creation, mouse move, and VS Code density.
 - **Status:** DONE
-- **Last completed sub-step:** staged snapshot passed typecheck and all 1553
-  tests after restoring stable marquee commits and grid-clean routing.
+- **Last completed sub-step:** packaged macOS QA opened an isolated project and
+  created/opened a real blank `.asc`; staged snapshot passed all required gates.
 - **Plan:** resume the plot-card/cursor/FFT sequence in `TAU_DESIGN_VISION.md`.
 - **Note:** existing simulator/assistant worktree edits belong to earlier units and
   must remain intact; stage only reviewed hunks.
 - **Next step:** unify plot axes/cursors and finish FFT engineering readouts.
 
 ---
+
+## 2026-07-14T16:24Z — auto/ltspice-parity — native Explorer create/move (§1/§8/§10)
+
+### What I did
+- Fixed real `.asc` creation by granting Tauri's `write_text_file` capability,
+  recursively authorizing only a user-picked project root, and preserving
+  actionable string-valued native errors.
+- Added safe file/folder drag-to-move through a native boundary that rejects
+  traversal, symlink escape, self/descendant moves, and overwrites; open editor
+  tab paths follow moved files and folders.
+- Matched VS Code's compact Explorer language with Lucide New File, New Folder,
+  Refresh, Collapse, chevron, folder, and file icons plus dense UI-font rows and
+  clear focus/drag/drop states.
+- Verified the packaged macOS app against an isolated folder: Open Folder,
+  create subfolder, create `native-create-check.asc`, open it, and confirm the
+  canonical `Version 4` / `SHEET 1 880 680` file on disk.
+
+### Files
+- `apps/desktop/src/project/{fsBridge,types}.ts`, `store/useProject.ts`
+- `apps/desktop/src/components/ShellPanels.tsx`, `App.tsx`, `App.css`
+- `apps/desktop/src-tauri/{capabilities/default.json,src/project_fs.rs,src/lib.rs}`
+- focused Explorer/store/path/native tests, `FEATURE_PARITY.md`, `PROGRESS.md`
+
+### Tests
+- `pnpm -C apps/desktop typecheck` — PASS
+- `pnpm -C apps/desktop test` — PASS, 109 files / 1610 tests in the shared tree;
+  1566 tests in the isolated staged snapshot
+- `pnpm --filter @tau/desktop build` — PASS
+- `cargo fmt --check`, `cargo clippy -- -D warnings`, `cargo test` — PASS
+- ignored real-ngspice operating-point smoke — PASS with bundled dylib
+- `pnpm -C apps/desktop tauri build --debug --bundles app` — PASS; native file
+  creation verified through Computer Use in the packaged app
+
+### Parity items
+- §1 native Schematics-folder Explorer ✅; §8 mouse file/folder move ✅; §10
+  compact, token-backed VS Code Explorer language ✅.
+
+### Next step
+Resume the simulator plot-card/cursor/FFT sequence in `TAU_DESIGN_VISION.md`.
 
 ## 2026-07-14T15:49Z — auto/ltspice-parity — schematic selection/routing regression
 

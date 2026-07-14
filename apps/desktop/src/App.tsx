@@ -77,6 +77,7 @@ import {
   ascSaveBlockReason,
   basename,
   isAscFile,
+  remapMovedProjectPath,
   serializeSchematicFile,
 } from "./project/types";
 import { validateSchematicDocument } from "./schematic/documentValidation";
@@ -196,6 +197,22 @@ function App() {
   }, [selectedId, mode]);
 
   const writeSim = useProject((s) => s.writeSim);
+  const moveProjectNodeInStore = useProject((s) => s.moveNode);
+
+  const moveProjectNode = useCallback(async (sourcePath: string, destinationDirectoryPath: string) => {
+    const movedRoot = await moveProjectNodeInStore(sourcePath, destinationDirectoryPath);
+    if (!movedRoot) return null;
+
+    // A folder move can affect several open tabs. Remap every matching path so
+    // the next Save follows the file instead of recreating it at its old path.
+    setTabs((openTabs) => openTabs.map((tab) => {
+      if (!tab.filePath) return tab;
+      const nextPath = remapMovedProjectPath(tab.filePath, sourcePath, movedRoot);
+      if (nextPath === tab.filePath) return tab;
+      return { ...tab, filePath: nextPath, title: basename(nextPath) };
+    }));
+    return movedRoot;
+  }, [moveProjectNodeInStore]);
 
   const documentTitle = (tabs.find((tab) => tab.id === activeId) ?? tabs[0])?.title ?? "untitled.asc";
   const activeFilePath = (tabs.find((tab) => tab.id === activeId) ?? tabs[0])?.filePath ?? null;
@@ -871,6 +888,7 @@ function App() {
             onOpenSimFile={openSimFromProject}
             onOpenAscText={openAscFromProject}
             onNotice={showNotice}
+            onMoveNode={moveProjectNode}
           />
         )}
         {mode === "schematic" && (

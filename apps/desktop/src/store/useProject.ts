@@ -6,6 +6,7 @@ import {
   EMPTY_PROJECT,
   isAscFile,
   joinPath,
+  remapMovedProjectPath,
   type ProjectNode,
   type ProjectState,
 } from "../project/types";
@@ -36,6 +37,7 @@ interface ProjectStore extends ProjectState {
   createFolder: (parentPath: string, name: string) => Promise<string | null>;
   createSchematicFile: (parentPath: string, name: string) => Promise<string | null>;
   importAscFile: (parentPath: string, file: File) => Promise<string | null>;
+  moveNode: (sourcePath: string, destinationDir: string) => Promise<string | null>;
   renameNode: (path: string, newName: string) => Promise<string | null>;
   deleteNode: (path: string) => Promise<void>;
   readSim: (path: string) => Promise<string>;
@@ -51,6 +53,28 @@ function ensureSchematicExtension(name: string): string {
 function isSafeLeafName(name: string): boolean {
   const trimmed = name.trim();
   return trimmed !== "" && trimmed !== "." && trimmed !== ".." && !/[\\/]/.test(trimmed);
+}
+
+function failureMessage(error: unknown, fallback: string): string {
+  if (error instanceof Error && error.message.trim()) return error.message;
+  // Tauri IPC command rejections are commonly plain strings. Keeping the
+  // command/permission detail is essential when the desktop capability is wrong.
+  if (typeof error === "string" && error.trim()) return error.trim();
+  return fallback;
+}
+
+function normalizedPath(path: string): string {
+  return path.replace(/\\/g, "/").replace(/\/+$/, "");
+}
+
+function isPathInside(path: string, ancestor: string): boolean {
+  const normalized = normalizedPath(path);
+  const root = normalizedPath(ancestor);
+  return normalized === root || normalized.startsWith(`${root}/`);
+}
+
+function parentPath(path: string): string {
+  return normalizedPath(path).replace(/\/[^/]+$/, "");
 }
 
 function numberedName(name: string, index: number): string {
@@ -192,7 +216,11 @@ export const useProject = create<ProjectStore>((set, get) => ({
   collapseAll: () => set({ expanded: [] }),
 
   createFolder: async (parentPath, name) => {
-    const folderName = name.trim() || "New Folder";
+    if (!isSafeLeafName(name)) {
+      set({ error: "Folder names cannot contain folder paths." });
+      return null;
+    }
+    const folderName = name.trim();
     const path = joinPath(parentPath, folderName);
     try {
       if (isWorkspacePath(parentPath)) {
@@ -210,6 +238,7 @@ export const useProject = create<ProjectStore>((set, get) => ({
               ? get().expanded
               : [...get().expanded, path]
             : [...get().expanded, parentPath, path],
+          error: null,
         });
         return path;
       }
@@ -217,10 +246,11 @@ export const useProject = create<ProjectStore>((set, get) => ({
       await get().refresh();
       set((s) => ({
         expanded: s.expanded.includes(parentPath) ? s.expanded : [...s.expanded, parentPath],
+        error: null,
       }));
       return path;
     } catch (error) {
-      set({ error: error instanceof Error ? error.message : "Could not create folder." });
+      set({ error: failureMessage(error, "Could not create folder.") });
       return null;
     }
   },
@@ -247,6 +277,7 @@ export const useProject = create<ProjectStore>((set, get) => ({
           workspaceFiles: files,
           tree: rebuildWorkspaceTree(files),
           expanded: get().expanded.includes(parentPath) ? get().expanded : [...get().expanded, parentPath],
+          error: null,
         });
         return path;
       }
@@ -254,10 +285,11 @@ export const useProject = create<ProjectStore>((set, get) => ({
       await get().refresh();
       set((s) => ({
         expanded: s.expanded.includes(parentPath) ? s.expanded : [...s.expanded, parentPath],
+        error: null,
       }));
       return path;
     } catch (error) {
-      set({ error: error instanceof Error ? error.message : "Could not create schematic." });
+      set({ error: failureMessage(error, "Could not create schematic.") });
       return null;
     }
   },
@@ -288,6 +320,78 @@ export const useProject = create<ProjectStore>((set, get) => ({
       return path;
     } catch (error) {
       set({ error: error instanceof Error ? error.message : "Could not import .asc." });
+      return null;
+    }
+  },
+
+  moveNode: async (sourcePath, destinationDir) => {
+    const { rootPath, tree } = get();
+    const source = normalizedPath(sourcePath);
+    const destination = normalizedPath(destinationDir);
+    const root = rootPath ? normalizedPath(rootPath) : null;
+    const nodes = flattenTree(tree);
+    const sourceNode = nodes.find((node) => normalizedPath(node.path) === source);
+    const destinationNode = destination === root
+      ? { kind: "dir" as const }
+      : nodes.find((node) => normalizedPath(node.path) === destination);
+
+    if (!root || !sourceNode || destinationNode?.kind !== "dir"
+      || !isPathInside(source, root) || !isPathInside(destination, root)) {
+      set({ error: "Move must stay inside the open Schematics folder." });
+      return null;
+    }
+    if (source === root || (sourceNode.kind === "dir" && isPathInside(destination, source))) {
+      set({ error: "A folder cannot be moved into itself." });
+      return null;
+    }
+    if (parentPath(source) === destination) {
+      set({ error: null });
+      return sourcePath;
+    }
+
+    const targetPath = joinPath(destinationDir, basename(sourcePath));
+    const target = normalizedPath(targetPath);
+    try {
+      if (isWorkspacePath(sourcePath)) {
+        const current = get().workspaceFiles;
+        const moving = Object.entries(current).filter(([path]) => isPathInside(path, sourcePath));
+        if (moving.length === 0) throw new Error("The selected item no longer exists.");
+        if (Object.keys(current).some((path) => !isPathInside(path, sourcePath) && isPathInside(path, target))) {
+          throw new Error(`“${basename(sourcePath)}” already exists in that folder.`);
+        }
+        const files = { ...current };
+        for (const [path] of moving) delete files[path];
+        for (const [path, file] of moving) {
+          const nextPath = `${target}${normalizedPath(path).slice(source.length)}`;
+          files[nextPath] = { ...file, path: nextPath, name: basename(nextPath) };
+        }
+        set({
+          workspaceFiles: files,
+          tree: rebuildWorkspaceTree(files),
+          expanded: [...new Set([
+            ...get().expanded.map((path) => remapMovedProjectPath(path, sourcePath, target)),
+            destinationDir,
+          ])],
+          error: null,
+        });
+        return target;
+      }
+
+      if (await fs.pathExists(targetPath)) {
+        throw new Error(`“${basename(sourcePath)}” already exists in that folder.`);
+      }
+      const movedPath = await fs.moveProjectEntry(rootPath!, sourcePath, destinationDir, sourceNode.kind);
+      await get().refresh();
+      set((state) => ({
+        expanded: [...new Set([
+          ...state.expanded.map((path) => remapMovedProjectPath(path, sourcePath, movedPath)),
+          destinationDir,
+        ])],
+        error: null,
+      }));
+      return movedPath;
+    } catch (error) {
+      set({ error: failureMessage(error, "Could not move item.") });
       return null;
     }
   },

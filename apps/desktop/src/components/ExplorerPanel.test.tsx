@@ -39,7 +39,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-const renderExplorer = () => {
+const renderExplorer = ({ onMoveNode }: { onMoveNode?: (sourcePath: string, destinationDirectoryPath: string) => Promise<string | null> } = {}) => {
   const onOpenSimFile = vi.fn();
   const onOpenAscText = vi.fn();
   const onNotice = vi.fn();
@@ -49,10 +49,21 @@ const renderExplorer = () => {
       onOpenSimFile={onOpenSimFile}
       onOpenAscText={onOpenAscText}
       onNotice={onNotice}
+      onMoveNode={onMoveNode}
     />,
   );
   return { onOpenSimFile, onOpenAscText, onNotice };
 };
+
+function dataTransferStub(): DataTransfer {
+  const values = new Map<string, string>();
+  return {
+    effectAllowed: "uninitialized",
+    dropEffect: "none",
+    setData: vi.fn((type: string, value: string) => values.set(type, value)),
+    getData: vi.fn((type: string) => values.get(type) ?? ""),
+  } as unknown as DataTransfer;
+}
 
 describe("ExplorerPanel VS Code action row", () => {
   it("exposes New File, New Folder, Refresh, and Collapse as working controls", async () => {
@@ -65,6 +76,8 @@ describe("ExplorerPanel VS Code action row", () => {
     ]) {
       expect(screen.getByRole("button", { name })).toBeTruthy();
     }
+    expect(screen.getByRole("button", { name: "Refresh explorer" }).querySelector(".lucide-refresh-cw")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Collapse folders in explorer" }).querySelector(".lucide-copy-minus")).toBeTruthy();
 
     expect(useProject.getState().expanded.length).toBeGreaterThan(0);
     fireEvent.click(screen.getByRole("button", { name: "Collapse folders in explorer" }));
@@ -171,5 +184,82 @@ describe("ExplorerPanel VS Code action row", () => {
 
     expect(screen.getByRole("button", { name: "Open Folder" })).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Create Folder" })).toBeNull();
+  });
+
+  it("moves a draggable file onto a folder through the explicit project move contract", async () => {
+    const root = useProject.getState().rootPath!;
+    const source = await useProject.getState().createSchematicFile(root, "gain.asc");
+    const folder = await useProject.getState().createFolder(root, "Filters");
+    const onMoveNode = vi.fn().mockResolvedValue(`${folder}/gain.asc`);
+    const { onNotice } = renderExplorer({ onMoveNode });
+    const fileRow = screen.getByRole("button", { name: "gain.asc" });
+    const folderRow = screen.getByRole("button", { name: "Filters" });
+    const dataTransfer = dataTransferStub();
+
+    expect(fileRow.getAttribute("draggable")).toBe("true");
+    expect(fileRow.getAttribute("aria-describedby")).toBe("explorer-drag-help");
+    expect(screen.getByText(/Drag a file or folder onto a folder/)).toBeTruthy();
+
+    fireEvent.dragStart(fileRow, { dataTransfer });
+    expect(fileRow.getAttribute("data-dragging")).toBe("true");
+    fireEvent.dragOver(folderRow, { dataTransfer });
+    expect(folderRow.getAttribute("data-drop-target")).toBe("true");
+    expect(dataTransfer.dropEffect).toBe("move");
+    fireEvent.drop(folderRow, { dataTransfer });
+
+    await waitFor(() => expect(onMoveNode).toHaveBeenCalledWith(source, folder));
+    expect(onNotice).toHaveBeenCalledWith("Moved gain.asc");
+    expect(folderRow.getAttribute("data-drop-target")).toBeNull();
+  });
+
+  it("supports moving a nested explorer item back to the project root", async () => {
+    const root = useProject.getState().rootPath!;
+    const folder = await useProject.getState().createFolder(root, "Filters");
+    const source = await useProject.getState().createSchematicFile(folder!, "nested.asc");
+    const onMoveNode = vi.fn().mockResolvedValue(`${root}/nested.asc`);
+    renderExplorer({ onMoveNode });
+    const fileRow = screen.getByRole("button", { name: "nested.asc" });
+    const tree = document.querySelector<HTMLElement>(".tree-list")!;
+    const dataTransfer = dataTransferStub();
+
+    fireEvent.dragStart(fileRow, { dataTransfer });
+    fireEvent.dragOver(tree, { dataTransfer });
+    expect(tree.getAttribute("data-drop-target")).toBe("true");
+    fireEvent.drop(tree, { dataTransfer });
+
+    await waitFor(() => expect(onMoveNode).toHaveBeenCalledWith(source, root));
+  });
+
+  it("rejects dropping a folder into its own descendant", async () => {
+    const root = useProject.getState().rootPath!;
+    const parent = await useProject.getState().createFolder(root, "Parent");
+    await useProject.getState().createFolder(parent!, "Child");
+    const onMoveNode = vi.fn().mockResolvedValue("unused");
+    renderExplorer({ onMoveNode });
+    const parentRow = screen.getByRole("button", { name: "Parent" });
+    const childRow = screen.getByRole("button", { name: "Child" });
+    const dataTransfer = dataTransferStub();
+
+    fireEvent.dragStart(parentRow, { dataTransfer });
+    fireEvent.dragOver(childRow, { dataTransfer });
+    expect(dataTransfer.dropEffect).toBe("none");
+    expect(childRow.getAttribute("data-drop-target")).toBeNull();
+    fireEvent.drop(childRow, { dataTransfer });
+
+    expect(onMoveNode).not.toHaveBeenCalled();
+  });
+
+  it("explains the missing persistence capability instead of faking a move", async () => {
+    const root = useProject.getState().rootPath!;
+    await useProject.getState().createSchematicFile(root, "gain.asc");
+    await useProject.getState().createFolder(root, "Filters");
+    const { onNotice } = renderExplorer();
+    const dataTransfer = dataTransferStub();
+
+    fireEvent.dragStart(screen.getByRole("button", { name: "gain.asc" }), { dataTransfer });
+    fireEvent.dragOver(screen.getByRole("button", { name: "Filters" }), { dataTransfer });
+    fireEvent.drop(screen.getByRole("button", { name: "Filters" }), { dataTransfer });
+
+    await waitFor(() => expect(onNotice).toHaveBeenCalledWith("Moving explorer items needs a project move action."));
   });
 });

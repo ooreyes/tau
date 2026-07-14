@@ -28,8 +28,15 @@ export async function detectFsCapability(): Promise<FsCapability> {
 export async function pickProjectFolder(): Promise<string | null> {
   if (await isTauri()) {
     const { open } = await import("@tauri-apps/plugin-dialog");
-    const selected = await open({ directory: true, multiple: false, title: "Open Project Folder" });
-    return typeof selected === "string" ? selected : null;
+    const selected = await open({
+      directory: true,
+      multiple: false,
+      recursive: true,
+      title: "Open Project Folder",
+    });
+    if (typeof selected !== "string") return null;
+    await authorizeProjectDirectory(selected);
+    return selected;
   }
   // Web File System Access API — we keep a handle map keyed by a synthetic path.
   if (typeof window !== "undefined" && "showDirectoryPicker" in window) {
@@ -53,6 +60,7 @@ export async function createProjectFolder(suggestedName = "Tau Project"): Promis
     const parent = await open({
       directory: true,
       multiple: false,
+      recursive: true,
       title: "Choose parent folder for new project",
     });
     if (typeof parent !== "string") return null;
@@ -60,9 +68,16 @@ export async function createProjectFolder(suggestedName = "Tau Project"): Promis
     const path = joinPath(parent, name);
     const { mkdir } = await import("@tauri-apps/plugin-fs");
     await mkdir(path, { recursive: true });
+    await authorizeProjectDirectory(path);
     return path;
   }
   return pickProjectFolder();
+}
+
+/** Promote a folder-picker grant to the recursive project scope Tau needs. */
+async function authorizeProjectDirectory(projectRoot: string): Promise<void> {
+  const { invoke } = await import("@tauri-apps/api/core");
+  await invoke("authorize_project_directory", { projectRoot });
 }
 
 // ── Web directory-handle cache (session only) ───────────────────────────────
@@ -217,4 +232,33 @@ export async function renamePath(from: string, to: string): Promise<void> {
   }
   const { rename } = await import("@tauri-apps/plugin-fs");
   await rename(from, to);
+}
+
+/**
+ * Atomically move an Explorer entry. Native Tau delegates validation and the
+ * rename to Rust so traversal, symlink escape, descendant moves, and overwrite
+ * races are checked at the filesystem boundary. The web File System Access API
+ * can move files by copy/delete but cannot safely move directory handles.
+ */
+export async function moveProjectEntry(
+  projectRoot: string,
+  sourcePath: string,
+  targetDirectory: string,
+  kind: "file" | "dir",
+): Promise<string> {
+  if (await isTauri()) {
+    const { invoke } = await import("@tauri-apps/api/core");
+    return invoke<string>("move_project_entry", {
+      projectRoot,
+      sourcePath,
+      targetDirectory,
+      newName: null,
+    });
+  }
+  if (kind === "dir") {
+    throw new Error("This browser cannot move folders. Use the Tau desktop app.");
+  }
+  const targetPath = joinPath(targetDirectory, basename(sourcePath));
+  await renamePath(sourcePath, targetPath);
+  return targetPath;
 }

@@ -170,3 +170,13 @@ export function joinPath(parent: string, child: string): string {
   const sep = parent.includes("\\") && !parent.includes("/") ? "\\" : "/";
   return parent.endsWith(sep) ? `${parent}${child}` : `${parent}${sep}${child}`;
 }
+
+/** Remap a file or descendant path after an Explorer file/folder move. */
+export function remapMovedProjectPath(path: string, sourcePath: string, movedPath: string): string {
+  const normalize = (value: string) => value.replace(/\\/g, "/").replace(/\/+$/, "");
+  const current = normalize(path);
+  const source = normalize(sourcePath);
+  const moved = normalize(movedPath);
+  if (current === source) return moved;
+  return current.startsWith(`${source}/`) ? `${moved}${current.slice(source.length)}` : path;
+}

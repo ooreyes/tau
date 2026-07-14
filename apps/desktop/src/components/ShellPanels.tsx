@@ -1,9 +1,14 @@
-import { useEffect, useRef, useState, type ChangeEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ChangeEvent, type DragEvent, type ReactNode } from "react";
 import {
+  ChevronRight,
+  CopyMinus,
+  File,
   FolderOpen,
+  Folder,
   Search,
   FilePlus,
   FolderPlus,
+  RefreshCw,
   Trash2,
   Eraser,
   MousePointer2,
@@ -28,7 +33,7 @@ import { Dialog, DialogContent, DialogHeader, DialogFooter, DialogTitle, DialogD
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useSchematic } from "../store/useSchematic";
 import { useProject } from "../store/useProject";
-import { basename, isAscFile } from "../project/types";
+import { basename, isAscFile, type ProjectNode } from "../project/types";
 import type { AnalysisResult } from "../simulation/linearTransient";
 import { formatEngineering } from "../simulation/quantity";
 import { PanelResizeHandle, usePanelWidth, type PanelWidthConfig } from "./panelResize";
@@ -112,16 +117,52 @@ function RailButton({
   );
 }
 
+/**
+ * Persistence contract for Explorer drag/drop. This is intentionally a move
+ * operation, not `renameNode`: the project layer updates the source path,
+ * destination directory, virtual-workspace metadata, and refreshed tree as
+ * one operation.
+ */
+export type MoveProjectNode = (
+  sourcePath: string,
+  destinationDirectoryPath: string,
+) => Promise<string | null>;
+
+function normalizedExplorerPath(path: string): string {
+  return path.replace(/\\/g, "/").replace(/\/+$/, "");
+}
+
+function explorerParentPath(path: string): string {
+  const normalized = normalizedExplorerPath(path);
+  const separator = normalized.lastIndexOf("/");
+  return separator > 0 ? normalized.slice(0, separator) : "";
+}
+
+function canMoveProjectNode(sourcePath: string, destinationDirectoryPath: string): boolean {
+  const source = normalizedExplorerPath(sourcePath);
+  const destination = normalizedExplorerPath(destinationDirectoryPath);
+  return Boolean(
+    source
+    && destination
+    && source !== destination
+    && explorerParentPath(source) !== destination
+    && !destination.startsWith(`${source}/`)
+  );
+}
+
 export function ExplorerPanel({
   activeFilePath,
   onOpenSimFile,
   onOpenAscText,
   onNotice,
+  onMoveNode,
 }: {
   activeFilePath: string | null;
   onOpenSimFile: (path: string, title: string, json: string) => void;
   onOpenAscText: (path: string, title: string, text: string) => void;
   onNotice: (message: string) => void;
+  /** Atomic project-store move action; optional only for isolated panel hosts. */
+  onMoveNode?: MoveProjectNode;
 }) {
   const rootPath = useProject((s) => s.rootPath);
   const rootName = useProject((s) => s.rootName);
@@ -148,6 +189,8 @@ export function ExplorerPanel({
     parentPath: string;
     name: string;
   } | null>(null);
+  const [draggedNode, setDraggedNode] = useState<ProjectNode | null>(null);
+  const [dropTargetPath, setDropTargetPath] = useState<string | null>(null);
   const resize = usePanelWidth(EXPLORER_PANEL_WIDTH);
   const resizeHandle = (
     <PanelResizeHandle
@@ -224,6 +267,48 @@ export function ExplorerPanel({
       onNotice(`Imported ${basename(path)}`);
       await openNode(path, basename(path));
     }
+  };
+
+  const beginNodeDrag = (event: DragEvent<HTMLButtonElement>, node: ProjectNode) => {
+    setDraggedNode(node);
+    setDropTargetPath(null);
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("application/x-tau-project-node", node.path);
+    event.dataTransfer.setData("text/plain", node.path);
+  };
+
+  const endNodeDrag = () => {
+    setDraggedNode(null);
+    setDropTargetPath(null);
+  };
+
+  const clearDropTarget = () => setDropTargetPath(null);
+
+  const moveDraggedNode = async (destinationDirectoryPath: string) => {
+    const source = draggedNode;
+    endNodeDrag();
+    if (!source || !canMoveProjectNode(source.path, destinationDirectoryPath)) return;
+    if (!onMoveNode) {
+      onNotice("Moving explorer items needs a project move action.");
+      return;
+    }
+    try {
+      const movedPath = await onMoveNode(source.path, destinationDirectoryPath);
+      if (movedPath) onNotice(`Moved ${source.name}`);
+    } catch (err) {
+      onNotice(err instanceof Error ? err.message : `Could not move ${source.name}.`);
+    }
+  };
+
+  const markDropTarget = (event: DragEvent<HTMLElement>, destinationDirectoryPath: string) => {
+    if (!draggedNode || !canMoveProjectNode(draggedNode.path, destinationDirectoryPath)) {
+      event.dataTransfer.dropEffect = "none";
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    event.dataTransfer.dropEffect = "move";
+    setDropTargetPath(destinationDirectoryPath);
   };
 
   if (!rootPath) {
@@ -306,10 +391,7 @@ export function ExplorerPanel({
               if (ok) onNotice("Explorer refreshed.");
             }}
           >
-            <svg viewBox="0 0 16 16" aria-hidden="true">
-              <path d="M13.2 5.4A5.5 5.5 0 1 0 13.1 11" />
-              <path d="M10.2 5.4h3.2V2.2" />
-            </svg>
+            <RefreshCw size={15} strokeWidth={1.7} />
           </button>
           <button
             type="button"
@@ -317,11 +399,7 @@ export function ExplorerPanel({
             aria-label="Collapse folders in explorer"
             onClick={collapseAll}
           >
-            <svg viewBox="0 0 16 16" aria-hidden="true">
-              <rect x="2.2" y="3" width="9.5" height="9.5" rx="1.4" />
-              <path d="M5.2 1.5h7.1a2.2 2.2 0 0 1 2.2 2.2v7.1" />
-              <path d="M4.7 8h4.5" />
-            </svg>
+            <CopyMinus size={15} strokeWidth={1.7} />
           </button>
         </div>
       </div>
@@ -335,11 +413,30 @@ export function ExplorerPanel({
         onChange={importAscFromInput}
       />
 
-      <div className="tree-list">
+      <p id="explorer-drag-help" className="sr-only">
+        Drag a file or folder onto a folder, or onto empty explorer space, to move it.
+      </p>
+
+      <div
+        className="tree-list"
+        data-drop-target={dropTargetPath === rootPath || undefined}
+        onDragOver={(event) => markDropTarget(event, rootPath)}
+        onDragLeave={(event) => {
+          if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDropTargetPath(null);
+        }}
+        onDrop={(event) => {
+          if (!draggedNode || !canMoveProjectNode(draggedNode.path, rootPath)) return;
+          event.preventDefault();
+          event.stopPropagation();
+          void moveDraggedNode(rootPath);
+        }}
+      >
         {createDraft && (
           <div className="tree-create-row" data-kind={createDraft.kind}>
             <span className="tree-create-icon" aria-hidden="true">
-              {createDraft.kind === "folder" ? "▸" : "•"}
+              {createDraft.kind === "folder"
+                ? <FolderPlus size={14} strokeWidth={1.6} />
+                : <FilePlus size={14} strokeWidth={1.6} />}
             </span>
             <input
               ref={createInputRef}
@@ -378,6 +475,13 @@ export function ExplorerPanel({
             await deleteNode(path);
             onNotice(`Deleted ${name}`);
           }}
+          draggedPath={draggedNode?.path ?? null}
+          dropTargetPath={dropTargetPath}
+          onDragStart={beginNodeDrag}
+          onDragEnd={endNodeDrag}
+          onDragOverFolder={markDropTarget}
+          onDragLeaveFolder={clearDropTarget}
+          onDropFolder={moveDraggedNode}
         />
       </div>
 
@@ -416,8 +520,15 @@ function ProjectTree({
   onNewFolder,
   onNewFile,
   onDelete,
+  draggedPath,
+  dropTargetPath,
+  onDragStart,
+  onDragEnd,
+  onDragOverFolder,
+  onDragLeaveFolder,
+  onDropFolder,
 }: {
-  nodes: import("../project/types").ProjectNode[];
+  nodes: ProjectNode[];
   depth: number;
   expanded: string[];
   activeFilePath: string | null;
@@ -426,6 +537,13 @@ function ProjectTree({
   onNewFolder: (parent: string) => void;
   onNewFile: (parent: string) => void;
   onDelete: (path: string, name: string) => void;
+  draggedPath: string | null;
+  dropTargetPath: string | null;
+  onDragStart: (event: DragEvent<HTMLButtonElement>, node: ProjectNode) => void;
+  onDragEnd: () => void;
+  onDragOverFolder: (event: DragEvent<HTMLElement>, destinationDirectoryPath: string) => void;
+  onDragLeaveFolder: () => void;
+  onDropFolder: (destinationDirectoryPath: string) => void;
 }) {
   return (
     <>
@@ -438,7 +556,23 @@ function ProjectTree({
                 type="button"
                 className="tree-folder-row"
                 style={{ paddingLeft: 8 + depth * 12 }}
+                draggable
+                data-dragging={draggedPath === node.path || undefined}
+                data-drop-target={dropTargetPath === node.path || undefined}
+                aria-describedby="explorer-drag-help"
+                title={`Drag ${node.name} onto another folder to move it`}
                 onClick={() => onToggle(node.path)}
+                onDragStart={(event) => onDragStart(event, node)}
+                onDragEnd={onDragEnd}
+                onDragOver={(event) => onDragOverFolder(event, node.path)}
+                onDragLeave={(event) => {
+                  if (!event.currentTarget.contains(event.relatedTarget as Node | null)) onDragLeaveFolder();
+                }}
+                onDrop={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  onDropFolder(node.path);
+                }}
                 onContextMenu={(e) => {
                   e.preventDefault();
                   const action = window.prompt(`Folder “${node.name}”: type folder / asc / delete`, "folder");
@@ -447,7 +581,12 @@ function ProjectTree({
                   else if (action === "delete") onDelete(node.path, node.name);
                 }}
               >
-                <span className="tree-caret">{open ? "▾" : "▸"}</span>
+                <span className={`tree-caret${open ? " open" : ""}`} aria-hidden="true">
+                  <ChevronRight size={13} strokeWidth={1.6} />
+                </span>
+                {open
+                  ? <FolderOpen className="tree-folder-icon" size={14} strokeWidth={1.5} aria-hidden="true" />
+                  : <Folder className="tree-folder-icon" size={14} strokeWidth={1.5} aria-hidden="true" />}
                 <span className="tree-folder">{node.name}</span>
               </button>
               {open && node.children && (
@@ -461,6 +600,13 @@ function ProjectTree({
                   onNewFolder={onNewFolder}
                   onNewFile={onNewFile}
                   onDelete={onDelete}
+                  draggedPath={draggedPath}
+                  dropTargetPath={dropTargetPath}
+                  onDragStart={onDragStart}
+                  onDragEnd={onDragEnd}
+                  onDragOverFolder={onDragOverFolder}
+                  onDragLeaveFolder={onDragLeaveFolder}
+                  onDropFolder={onDropFolder}
                 />
               )}
             </div>
@@ -474,13 +620,19 @@ function ProjectTree({
             className={`tree-file${active ? " active" : ""}`}
             style={{ paddingLeft: 8 + depth * 12 }}
             aria-current={active ? "page" : undefined}
+            draggable
+            data-dragging={draggedPath === node.path || undefined}
+            aria-describedby="explorer-drag-help"
+            title={`Drag ${node.name} onto a folder to move it`}
             onClick={() => onOpenFile(node.path, node.name)}
+            onDragStart={(event) => onDragStart(event, node)}
+            onDragEnd={onDragEnd}
             onContextMenu={(e) => {
               e.preventDefault();
               if (window.confirm(`Delete “${node.name}”?`)) onDelete(node.path, node.name);
             }}
           >
-            <i className={active ? "amber" : "blue"} />
+            <File className="tree-file-icon" size={14} strokeWidth={1.5} aria-hidden="true" />
             <span className="tree-file-name">{node.name}</span>
           </button>
         );

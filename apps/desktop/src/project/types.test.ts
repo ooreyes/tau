@@ -1,7 +1,13 @@
 import { describe, expect, it } from "vitest";
 
 import { importAsc } from "../io/ascImport";
-import { ascRewriteRisks, ascSaveBlockReason, blankAscText, serializeSchematicFile } from "./types";
+import {
+  ascRewriteRisks,
+  ascSaveBlockReason,
+  blankAscText,
+  remapMovedProjectPath,
+  serializeSchematicFile,
+} from "./types";
 
 const ASC_SOURCE = `Version 4
 SHEET 1 880 680
@@ -78,5 +84,23 @@ describe("project schematic file formats", () => {
     expect(ascSaveBlockReason([], 1, [])).toBe(".asc cannot preserve Tau probe dots yet.");
     expect(ascSaveBlockReason([], 0, ["X1: unsupported"])).toBe("X1: unsupported");
     expect(ascSaveBlockReason([], 0, [])).toBeNull();
+  });
+
+  it("remaps open file paths when a file or containing folder moves", () => {
+    expect(remapMovedProjectPath(
+      "/Schematics/Analog/filter.asc",
+      "/Schematics/Analog",
+      "/Schematics/Archive/Analog",
+    )).toBe("/Schematics/Archive/Analog/filter.asc");
+    expect(remapMovedProjectPath(
+      "/Schematics/filter.asc",
+      "/Schematics/filter.asc",
+      "/Schematics/Archive/filter.asc",
+    )).toBe("/Schematics/Archive/filter.asc");
+    expect(remapMovedProjectPath(
+      "/Schematics/unrelated.asc",
+      "/Schematics/filter.asc",
+      "/Schematics/Archive/filter.asc",
+    )).toBe("/Schematics/unrelated.asc");
   });
 });

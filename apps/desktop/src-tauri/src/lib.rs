@@ -1,3 +1,4 @@
+mod project_fs;
 mod spice;
 
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
@@ -12,7 +13,12 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .manage(spice::NativeSpiceState::default())
-        .invoke_handler(tauri::generate_handler![greet, spice::simulate_spice])
+        .invoke_handler(tauri::generate_handler![
+            greet,
+            project_fs::authorize_project_directory,
+            project_fs::move_project_entry,
+            spice::simulate_spice
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
