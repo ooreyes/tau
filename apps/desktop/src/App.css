@@ -4853,6 +4853,7 @@ body {
   display: flex;
   flex-direction: column;
   min-height: 0;
+  max-height: min(300px, calc(100% - 180px));
   border-top: 1px solid var(--border);
   background: var(--panel);
 }

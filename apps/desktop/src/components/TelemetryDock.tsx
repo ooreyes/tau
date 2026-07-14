@@ -15,7 +15,8 @@ const DOCK_HEIGHT_CONFIG: PanelWidthConfig = {
   storageKey: "tau.telemetryDock.height",
   defaultWidth: 200,
   minWidth: 120,
-  maxWidth: 400,
+  // Preserve at least ~180px of circuit canvas at Tau's 600px window floor.
+  maxWidth: 300,
   edge: "top",
 };
 

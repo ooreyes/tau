@@ -163,43 +163,6 @@ describe("SimulationPanel — dashboard status strip (§11 Unit C6)", { timeout:
   });
 });
 
-describe("SimulationPanel — component telemetry (§11 Unit D)", { timeout: 20_000 }, () => {
-  const measuredResult = {
-    ok: true,
-    title: "Transient",
-    times: [0, 1, 2],
-    traces: [{ id: "out", label: "V(out)", unit: "V", color: "var(--trace-cyan)", values: [4, 2, 0] }],
-    currents: [{ ref: "R1", label: "I(R1)", values: [2, 1, 0] }],
-    stats: { netCount: 2, componentCount: 2, sampleCount: 3, stopTime: 2, stepSize: 1 },
-    warnings: [],
-    circuit: {
-      groundNetId: "gnd",
-      warnings: [],
-      nets: [
-        { id: "out", points: [], pins: [], isGround: false, labelCount: 1 },
-        { id: "gnd", points: [], pins: [], isGround: true, labelCount: 0 },
-      ],
-      components: [
-        {
-          component: { id: "r1", kind: "resistor", x: 0, y: 0, rotation: 0, value: "2", label: "R1" },
-          pins: { a: "out", b: "gnd" },
-        },
-      ],
-    },
-  } as import("../simulation/linearTransient").AnalysisResult;
-
-  it("shows V/I/P and provides a keyboard-operable component focus control", () => {
-    renderPanel({ result: measuredResult });
-    expect(screen.getByRole("heading", { name: "Component measurements" })).toBeTruthy();
-    expect(screen.getByText("R1")).toBeTruthy();
-    expect(screen.getByText("Power")).toBeTruthy();
-    expect(screen.getByText("Choose signals on the circuit")).toBeTruthy();
-
-    fireEvent.click(screen.getByRole("button", { name: "Select R1" }));
-    expect(useSchematic.getState().selectedId).toBe("r1");
-  });
-});
-
 describe("visibleTransientTraces — node names and probes are the plot authority", () => {
   const wires = Array.from({ length: 7 }, (_, index) => ({
     id: `w${index + 1}`,

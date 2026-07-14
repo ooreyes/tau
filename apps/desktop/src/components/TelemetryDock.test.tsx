@@ -79,7 +79,8 @@ describe("TelemetryDock", () => {
 
   it("exposes a draggable top-edge resize handle while expanded, not while collapsed", () => {
     const { rerender } = render(<TelemetryDock rows={rows} selectedId={null} onSelect={() => {}} />);
-    expect(screen.getByRole("separator", { name: "Resize component telemetry dock" })).toBeTruthy();
+    const handle = screen.getByRole("separator", { name: "Resize component telemetry dock" });
+    expect(handle.getAttribute("aria-valuemax")).toBe("300");
 
     fireEvent.click(screen.getByRole("button", { name: "Toggle component telemetry" }));
     rerender(<TelemetryDock rows={rows} selectedId={null} onSelect={() => {}} />);

@@ -67,12 +67,7 @@ import { ScopeZoomCluster } from "./ScopeZoomCluster";
 import type { Viewport } from "../simulation/plotViewport";
 import { visibleTransientTraces } from "../simulation/visibleTraces";
 import { EngineeringTraceReadout } from "./EngineeringTraceReadout";
-import { ComponentMeasurementsPanel } from "./ComponentMeasurementsPanel";
-import {
-  componentMeasurements,
-  traceStatistics,
-  type ComponentMeasurement,
-} from "../simulation/measurementModel";
+import { traceStatistics } from "../simulation/measurementModel";
 import { AnalysisModeRail, type AnalysisMode } from "./AnalysisModeRail";
 
 interface SimulationPanelProps {
@@ -163,18 +158,12 @@ export function SimulationPanel({
 }: SimulationPanelProps) {
   const components = useSchematic((s) => s.components);
   const wires = useSchematic((s) => s.wires);
-  const selectedId = useSchematic((s) => s.selectedId);
-  const select = useSchematic((s) => s.select);
   const probes = useSchematic((s) => s.probes);
   const netLabels = useSchematic((s) => s.netLabels);
   const directives = useSchematic((s) => s.directives);
   const warnings = result?.warnings ?? [];
 
   const [mode, setMode] = useState<AnalysisMode>("tran");
-  const componentRows = useMemo<ComponentMeasurement[]>(
-    () => (mode === "tran" && result?.ok ? componentMeasurements(result) : []),
-    [mode, result],
-  );
   // Advanced Simulation Settings disclosure — closed by default (§11 Unit C7):
   // Tau picks stop time / step count automatically unless the user overrides.
   const [advancedOpen, setAdvancedOpen] = useState(false);
@@ -881,15 +870,6 @@ export function SimulationPanel({
           <StepSetupForm setup={stepSetupUi} components={components} onChange={onStepSetupUiChange} />
           <StepPlot result={stepResult} probes={probes} wires={wires} />
         </>
-      )}
-
-      {mode === "tran" && (
-        <ComponentMeasurementsPanel
-          rows={componentRows}
-          selectedId={selectedId}
-          onSelect={select}
-          className="component-measurements"
-        />
       )}
 
       <div className="plotter-footer">
