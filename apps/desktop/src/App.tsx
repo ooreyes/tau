@@ -6,6 +6,7 @@ import { Toolbar } from "./components/Toolbar";
 import { Canvas } from "./components/Canvas";
 import { StatusBar } from "./components/StatusBar";
 import { SimulationPanel } from "./components/SimulationPanel";
+import { TelemetryDock } from "./components/TelemetryDock";
 import { AnalysisErrorBoundary } from "./components/AnalysisErrorBoundary";
 import { EmptyState } from "./components/EmptyState";
 import { CommandPalette } from "./components/CommandPalette";
@@ -59,6 +60,7 @@ import {
 import { suggestAcSweep, suggestTransientOptions } from "./simulation/autoResolution";
 import { runMeasurements, type MeasResult } from "./simulation/measure";
 import { runFourier, type FourierResult } from "./simulation/fourier";
+import { componentMeasurements, type ComponentMeasurement } from "./simulation/measurementModel";
 import { runAcMeasurements } from "./simulation/measureAc";
 import { runDcMeasurements } from "./simulation/measureDc";
 import { runNoiseMeasurements } from "./simulation/measureNoise";
@@ -117,6 +119,7 @@ function App() {
   const wires = useSchematic((s) => s.wires);
   const toolMode = useSchematic((s) => s.tool.mode);
   const selectedId = useSchematic((s) => s.selectedId);
+  const select = useSchematic((s) => s.select);
   const startPlacing = useSchematic((s) => s.startPlacing);
   const startWiring = useSchematic((s) => s.startWiring);
   const startProbing = useSchematic((s) => s.startProbing);
@@ -254,6 +257,16 @@ function App() {
     if (!four) return [];
     return runFourier(analysis, four);
   }, [analysis, directives]);
+
+  // Per-component V/I/P telemetry for the simulator's always-visible dock
+  // (lifted out of SimulationPanel so it can render alongside the read-only
+  // schematic, not just inside the analysis column's Advanced disclosure).
+  // Tracks the transient result specifically — it's the only analysis kind
+  // with per-timestep node/branch data to derive component readings from.
+  const componentRows = useMemo<ComponentMeasurement[]>(
+    () => (analysis?.ok ? componentMeasurements(analysis) : []),
+    [analysis],
+  );
 
   // Evaluate the document's `.meas ac …` directives against the latest AC sweep.
   // Mirrors the transient measurements but on the frequency axis (db/mag/phase).
@@ -930,6 +943,7 @@ function App() {
               <div className="sim-schematic-canvas">
                 <Canvas op={opAnalysis} interactive={false} fitSignal={fitSignal} />
               </div>
+              <TelemetryDock rows={componentRows} selectedId={selectedId} onSelect={select} />
             </section>
             <AnalysisErrorBoundary>
               <SimulationPanel

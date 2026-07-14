@@ -159,3 +159,46 @@ describe("usePanelWidth drag behavior", () => {
     expect(handle.getAttribute("aria-orientation")).toBe("vertical");
   });
 });
+
+// edge="top"/"bottom" repurpose the same machinery for a *height* (the
+// simulator's telemetry dock drags its top edge) — the field names stay
+// width-flavored (see PanelWidthConfig) but the pointer axis and ARIA
+// orientation both flip to vertical/horizontal respectively.
+describe("usePanelWidth drag behavior — vertical edges (dock height)", () => {
+  it("edge=top (bottom-docked panel): dragging the border up grows the height", () => {
+    render(<Harness cfg={config({ edge: "top", defaultWidth: 200, minWidth: 120, maxWidth: 400 })} />);
+    const handle = screen.getByRole("separator");
+    fireEvent.pointerDown(handle, { button: 0, clientY: 400, pointerId: 1 });
+    fireEvent.pointerMove(window, { clientY: 340, pointerId: 1 }); // 60px up
+    expect(panelWidth()).toBe(260);
+    fireEvent.pointerUp(window, { pointerId: 1 });
+    expect(loadPanelWidth(config({ edge: "top", defaultWidth: 200, minWidth: 120, maxWidth: 400 }))).toBe(260);
+  });
+
+  it("clamps a vertical drag to min/max", () => {
+    render(<Harness cfg={config({ edge: "top", defaultWidth: 200, minWidth: 120, maxWidth: 400 })} />);
+    const handle = screen.getByRole("separator");
+    fireEvent.pointerDown(handle, { button: 0, clientY: 400, pointerId: 1 });
+    fireEvent.pointerMove(window, { clientY: -2000, pointerId: 1 });
+    expect(panelWidth()).toBe(400); // max
+    fireEvent.pointerMove(window, { clientY: 4000, pointerId: 1 });
+    expect(panelWidth()).toBe(120); // min
+    fireEvent.pointerUp(window, { pointerId: 1 });
+  });
+
+  it("resizes via ArrowUp/ArrowDown, not ArrowLeft/ArrowRight", () => {
+    render(<Harness cfg={config({ edge: "top", defaultWidth: 200, minWidth: 120, maxWidth: 400 })} />);
+    const handle = screen.getByRole("separator");
+    fireEvent.keyDown(handle, { key: "ArrowLeft" }); // wrong axis — no-op
+    expect(panelWidth()).toBe(200);
+    fireEvent.keyDown(handle, { key: "ArrowUp" }); // border up = taller
+    expect(panelWidth()).toBe(216);
+    fireEvent.keyDown(handle, { key: "ArrowDown" });
+    expect(panelWidth()).toBe(200);
+  });
+
+  it("exposes a horizontal ARIA orientation for a vertical-drag handle", () => {
+    render(<Harness cfg={config({ edge: "top" })} />);
+    expect(screen.getByRole("separator").getAttribute("aria-orientation")).toBe("horizontal");
+  });
+});

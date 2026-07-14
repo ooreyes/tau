@@ -15,6 +15,11 @@ export interface ComponentMeasurementsPanelProps {
   className?: string;
   /** Limits the telemetry viewport without constraining the containing layout. */
   maxHeight?: number | string;
+  /** "full" (default) is the searchable card grid used standalone. "compact"
+   *  renders the same rows as a responsive grid of small cards
+   *  for the simulator's telemetry dock — same data/selection model, a
+   *  different shell entirely (no search, no sign-convention disclosure). */
+  variant?: "full" | "compact";
 }
 
 interface PrimaryReading {
@@ -171,12 +176,136 @@ function MeasurementCard({
   );
 }
 
+/** Human names for the schematic kind strings ("vac" → "AC source") so the
+ *  dock reads like a spec sheet, not an internal enum. Unmapped kinds fall
+ *  back to a capitalized identifier rather than leaking raw lowercase. */
+const KIND_DISPLAY: Partial<Record<ComponentMeasurement["kind"], string>> = {
+  resistor: "Resistor",
+  capacitor: "Capacitor",
+  inductor: "Inductor",
+  potentiometer: "Potentiometer",
+  vsource: "DC source",
+  isource: "Current source",
+  vac: "AC source",
+  iac: "AC current source",
+  vpulse: "Pulse source",
+  diode: "Diode",
+  led: "LED",
+  zener: "Zener diode",
+  opamp: "Op-amp",
+  comparator: "Comparator",
+  nmos: "NMOS",
+  pmos: "PMOS",
+  npn: "NPN BJT",
+  pnp: "PNP BJT",
+  njf: "N-JFET",
+  pjf: "P-JFET",
+  bsource: "Behavioral source",
+  switch: "Switch",
+  transformer: "Transformer",
+  tline: "Transmission line",
+  subckt: "Subcircuit",
+  digitalGate: "Logic gate",
+  dflop: "D flip-flop",
+  sampleHold: "Sample & hold",
+  modulator: "Modulator",
+  testpoint: "Test point",
+  ground: "Ground",
+};
+
+function displayKind(kind: ComponentMeasurement["kind"]): string {
+  return KIND_DISPLAY[kind] ?? kind.charAt(0).toUpperCase() + kind.slice(1);
+}
+
+/** One row of the compact card's spec table: full-word quantity on the left
+ *  (with the qualifier the value actually carries — RMS/AVG/final; the data
+ *  model picks it per series), engineering value + unit right-aligned. The
+ *  whole card is the button (unlike the full card's dedicated Select
+ *  button) — in the dock, clicking a card IS "focus this on canvas". */
+function CompactReading({ label, series }: { label: "Voltage" | "Current" | "Power"; series?: MeasuredSeries }) {
+  const reading = series ? primaryReading(series) : null;
+  return (
+    <div className="telemetry-card-row">
+      <dt>
+        {label}
+        {reading && (
+          <span className="telemetry-card-qualifier">
+            {reading.qualifier === "FINAL" ? "final" : reading.qualifier}
+          </span>
+        )}
+      </dt>
+      <dd className={reading ? undefined : "muted"}>
+        {series && reading ? formatEngineering(reading.value, series.unit, 3) : "—"}
+      </dd>
+    </div>
+  );
+}
+
+function CompactMeasurementCard({
+  row,
+  selected,
+  onSelect,
+}: {
+  row: ComponentMeasurement;
+  selected: boolean;
+  onSelect: (componentId: string | null) => void;
+}) {
+  return (
+    <li className="telemetry-card-item">
+      <button
+        type="button"
+        className={cn("telemetry-card", selected && "telemetry-card--selected")}
+        aria-pressed={selected}
+        onClick={() => onSelect(selected ? null : row.componentId)}
+      >
+        <div className="telemetry-card-head">
+          <span className="telemetry-card-ref">{row.ref}</span>
+          <span className="telemetry-card-kind">{displayKind(row.kind)}</span>
+        </div>
+        <dl className="telemetry-card-rows">
+          <CompactReading label="Voltage" series={row.voltage} />
+          <CompactReading label="Current" series={row.current} />
+          <CompactReading label="Power" series={row.power} />
+        </dl>
+      </button>
+    </li>
+  );
+}
+
+function CompactMeasurementsGrid({
+  rows,
+  selectedId,
+  onSelect,
+  className,
+}: Pick<ComponentMeasurementsPanelProps, "rows" | "selectedId" | "onSelect" | "className">) {
+  if (rows.length === 0) {
+    return (
+      <p className={cn("telemetry-strip-empty", className)} aria-live="polite">
+        Run a simulation to see per-component telemetry.
+      </p>
+    );
+  }
+  return (
+    <ul className={cn("telemetry-strip", className)}>
+      {rows.map((row) => (
+        <CompactMeasurementCard
+          key={row.componentId}
+          row={row}
+          selected={row.componentId === selectedId}
+          onSelect={onSelect}
+        />
+      ))}
+    </ul>
+  );
+}
+
 export function ComponentMeasurementsPanel({
   rows,
   selectedId,
   onSelect,
   className,
   maxHeight = 520,
+  variant = "full",
 }: ComponentMeasurementsPanelProps) {
   const filterId = useId();
   const [query, setQuery] = useState("");
@@ -191,6 +320,10 @@ export function ComponentMeasurementsPanel({
     () => rows.filter((row) => row.voltage && row.current && row.power).length,
     [rows],
   );
+
+  if (variant === "compact") {
+    return <CompactMeasurementsGrid rows={rows} selectedId={selectedId} onSelect={onSelect} className={className} />;
+  }
 
   return (
     <section

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { ComponentMeasurement, MeasuredSeries } from "../simulation/measurementModel";
@@ -105,6 +105,52 @@ describe("ComponentMeasurementsPanel", () => {
     rerender(<ComponentMeasurementsPanel rows={rows} selectedId={null} onSelect={() => {}} />);
     fireEvent.change(screen.getByRole("textbox", { name: "Filter component measurements" }), { target: { value: "L99" } });
     expect(screen.getByText(/No components match/)).toBeTruthy();
+  });
+});
+
+describe("ComponentMeasurementsPanel — variant=\"compact\" (telemetry dock grid)", () => {
+  it("renders the same rows as responsive small cards, no search or disclosure chrome", () => {
+    render(<ComponentMeasurementsPanel rows={rows} selectedId={null} onSelect={() => {}} variant="compact" />);
+    expect(screen.getByText("R1")).toBeTruthy();
+    expect(screen.getByText("C1")).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: "Component measurements" })).toBeNull();
+    expect(screen.queryByRole("textbox", { name: "Filter component measurements" })).toBeNull();
+    expect(screen.queryByText("Reading and sign conventions")).toBeNull();
+  });
+
+  it("labels each spec row with the full quantity word, its qualifier, and a unit-bearing value", () => {
+    render(<ComponentMeasurementsPanel rows={rows} selectedId={null} onSelect={() => {}} variant="compact" />);
+    // One row per quantity per card — never bare "V"/"I"/"P".
+    expect(screen.getAllByText("Voltage")).toHaveLength(2);
+    expect(screen.getAllByText("Current")).toHaveLength(2);
+    expect(screen.getAllByText("Power")).toHaveLength(2);
+    // Kind strings are humanized, not raw enum values.
+    expect(screen.getByText("Resistor")).toBeTruthy();
+    expect(screen.getByText("Capacitor")).toBeTruthy();
+    expect(screen.queryByText("resistor")).toBeNull();
+    // Periodic V carries an RMS qualifier and an engineering unit; missing
+    // series render an em-dash placeholder (C1 has no current/power).
+    const r1Card = screen.getByText("R1").closest("button") as HTMLElement;
+    expect(within(r1Card).getAllByText("RMS").length).toBeGreaterThanOrEqual(2);
+    expect(within(r1Card).getByText("AVG")).toBeTruthy();
+    const c1Card = screen.getByText("C1").closest("button") as HTMLElement;
+    expect(within(c1Card).getAllByText("—")).toHaveLength(2);
+  });
+
+  it("makes the whole card the click target (no dedicated Select button)", () => {
+    const onSelect = vi.fn();
+    const { rerender } = render(<ComponentMeasurementsPanel rows={rows} selectedId={null} onSelect={onSelect} variant="compact" />);
+    fireEvent.click(screen.getByText("R1"));
+    expect(onSelect).toHaveBeenCalledWith("r1");
+
+    rerender(<ComponentMeasurementsPanel rows={rows} selectedId="r1" onSelect={onSelect} variant="compact" />);
+    const card = screen.getByText("R1").closest("button") as HTMLElement;
+    expect(card.getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("shows a one-line empty hint distinct from the full variant's copy", () => {
+    render(<ComponentMeasurementsPanel rows={[]} selectedId={null} onSelect={() => {}} variant="compact" />);
+    expect(screen.getByText("Run a simulation to see per-component telemetry.")).toBeTruthy();
   });
 });
 

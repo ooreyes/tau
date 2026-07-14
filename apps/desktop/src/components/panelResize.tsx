@@ -15,8 +15,12 @@ export interface PanelWidthConfig {
   maxWidth: number;
   /** Which edge of the panel carries the drag handle: the properties rail
    *  (docked right) resizes from its "left" edge, the explorer (docked left)
-   *  from its "right" edge. Determines the drag direction that widens. */
-  edge: "left" | "right";
+   *  from its "right" edge. Determines the drag direction that widens.
+   *  "top"/"bottom" repurpose the same clamp/pointer/persistence machinery
+   *  for a *height* instead (e.g. the simulator's telemetry dock, anchored to
+   *  the bottom of its column, drags from its "top" edge) — the field names
+   *  stay width-flavored since the math is dimension-agnostic. */
+  edge: "left" | "right" | "top" | "bottom";
 }
 
 export const clampPanelWidth = (width: number, min: number, max: number): number =>
@@ -70,8 +74,9 @@ export function usePanelWidth(config: PanelWidthConfig) {
       if (event.button !== 0) return;
       event.preventDefault();
       const cfg = configRef.current;
+      const vertical = cfg.edge === "top" || cfg.edge === "bottom";
       const target = event.currentTarget;
-      const startX = event.clientX;
+      const startPos = vertical ? event.clientY : event.clientX;
       const startWidth = widthRef.current;
       try {
         target.setPointerCapture(event.pointerId);
@@ -81,7 +86,10 @@ export function usePanelWidth(config: PanelWidthConfig) {
       }
       setDragging(true);
       const onMove = (e: PointerEvent) => {
-        const delta = cfg.edge === "left" ? startX - e.clientX : e.clientX - startX;
+        const pos = vertical ? e.clientY : e.clientX;
+        // Same "toward the panel narrows, away widens" convention as the
+        // horizontal case, generalized to whichever edge carries the handle.
+        const delta = (cfg.edge === "left" || cfg.edge === "top") ? startPos - pos : pos - startPos;
         applyWidth(startWidth + delta);
       };
       const onUp = () => {
@@ -100,13 +108,17 @@ export function usePanelWidth(config: PanelWidthConfig) {
 
   const onKeyDown = useCallback(
     (event: ReactKeyboardEvent<HTMLElement>) => {
-      if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
-      event.preventDefault();
       const cfg = configRef.current;
+      const vertical = cfg.edge === "top" || cfg.edge === "bottom";
+      const startKey = vertical ? "ArrowUp" : "ArrowLeft";
+      const endKey = vertical ? "ArrowDown" : "ArrowRight";
+      if (event.key !== startKey && event.key !== endKey) return;
+      event.preventDefault();
       // Arrow keys move the BORDER, matching the pointer: moving it toward the
       // panel narrows, away widens — regardless of which side the panel docks.
-      const towardLeft = event.key === "ArrowLeft";
-      const delta = (cfg.edge === "left") === towardLeft ? KEY_STEP : -KEY_STEP;
+      const towardStart = event.key === startKey;
+      const startEdge = cfg.edge === "left" || cfg.edge === "top";
+      const delta = startEdge === towardStart ? KEY_STEP : -KEY_STEP;
       savePanelWidth(cfg.storageKey, applyWidth(widthRef.current + delta));
     },
     [applyWidth],
@@ -125,7 +137,7 @@ export function PanelResizeHandle({
   onPointerDown,
   onKeyDown,
 }: {
-  edge: "left" | "right";
+  edge: "left" | "right" | "top" | "bottom";
   label: string;
   width: number;
   minWidth: number;
@@ -134,11 +146,12 @@ export function PanelResizeHandle({
   onPointerDown: (event: ReactPointerEvent<HTMLElement>) => void;
   onKeyDown: (event: ReactKeyboardEvent<HTMLElement>) => void;
 }) {
+  const vertical = edge === "top" || edge === "bottom";
   return (
     <div
       className={`panel-resize-handle panel-resize-handle--${edge}${dragging ? " dragging" : ""}`}
       role="separator"
-      aria-orientation="vertical"
+      aria-orientation={vertical ? "horizontal" : "vertical"}
       aria-label={label}
       aria-valuenow={width}
       aria-valuemin={minWidth}
