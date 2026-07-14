@@ -284,6 +284,16 @@ Status legend: ✅ done · 🟡 partial · ⬜ not started
   the undo history.
 - ✅ Ground symbol — ✅
 - ✅ Grid snap, pan, zoom, fit — `Canvas.tsx`
+  **Fit/placement correctness follow-up (2026-07-14):** fit-to-view now sizes
+  against labels but centers the electrical topology, so an asymmetric ref/value
+  does not pull the circuit sideways; simulator resize fitting measures the
+  visible SVG after the telemetry/flex layout settles. Dropping a two-terminal
+  part collinearly onto an ideal wire now removes the covered conductor and
+  terminates the two remaining wire pieces at the part pins in the same undo
+  step. Perpendicular crossings and non-ideal resistive wires stay untouched,
+  and the used placement ghost clears immediately instead of drawing a dashed
+  duplicate over the newly placed symbol. Horizontal, vertical, undo,
+  resistance-preservation, ghost-lifecycle, and resize regressions are covered.
 - ✅ Undo/redo, autosave, multi-tab documents
 - ✅ Component value editing (double-click) + structured params
 - ✅ **Comparator/opamp value label + inspector param fields fixed (§UX)**:
@@ -951,7 +961,16 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   once beneath the read-only circuit, reflow to one column at the 300px floor,
   never require horizontal scrolling, persist a keyboard-resizable height, and
   cap that height so the circuit canvas remains usable at 900×600. The former
-  duplicate analysis-column telemetry computation/UI was removed.
+  duplicate analysis-column telemetry computation/UI was removed. **Current
+  integrity follow-up (2026-07-14):** when ngspice omits a semiconductor branch
+  vector, telemetry may recover it only by exact sample-by-sample KCL at an
+  unbranched two-terminal net; junctions and multi-terminal paths are never
+  guessed. A direct 5 V source/LED loop now reports the LED's +315 mA and
+  +1.575 W instead of dashes while preserving the source's passive-sign
+  −315 mA/−1.575 W. LEDs directly across an ideal voltage source at ≥50 mA
+  receive a visible high-current/no-limiter advisory with series-resistor or
+  current-regulator guidance; a series-resistor case is covered against false
+  positives.
 - ✅ **Measurement cursors** (1 & 2, delta readout) — `simulation/cursors.ts`
   (`cursorReadout`/`fractionToX`, 8 unit tests) + a collapsible **Cursors** panel
   on the transient scope (`SimulationPanel` `CursorView`). Two sliders position

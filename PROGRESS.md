@@ -8,19 +8,58 @@
      `git log --oneline -8`, recover/finish/revert that unit FIRST, then go on.
      ─────────────────────────────────────────────────────────────────────── -->
 ## ⏱ HEARTBEAT
-- **Headline metric:** 1566 committed-snapshot tests green · corpus 82/82 import · 82/82 op-converge · 79/82 warning-clean
-- **Run started (UTC):** 2026-07-14T15:59Z
-- **Synced to origin:** auto/ltspice-parity @ 57db2b7 (dirty shared tree preserved).
-- **Claimed unit:** §1/§8/§10 native Explorer creation, mouse move, and VS Code density.
+- **Headline metric:** 1576 committed-snapshot tests green · corpus 82/82 import · 82/82 op-converge · 79/82 warning-clean
+- **Run started (UTC):** 2026-07-14T16:31Z
+- **Synced to origin:** auto/ltspice-parity @ 545afd2 (dirty shared tree preserved).
+- **Claimed unit:** §2/§11 fit-center correctness and component-current safety telemetry.
 - **Status:** DONE
-- **Last completed sub-step:** packaged macOS QA opened an isolated project and
-  created/opened a real blank `.asc`; staged snapshot passed all required gates.
+- **Last completed sub-step:** pushed `5736a61`; topology-centered fit, true
+  component-on-wire insertion, +315 mA LED telemetry, and the no-limiter warning
+  are covered by focused regressions and live hot-reload QA.
 - **Plan:** resume the plot-card/cursor/FFT sequence in `TAU_DESIGN_VISION.md`.
 - **Note:** existing simulator/assistant worktree edits belong to earlier units and
   must remain intact; stage only reviewed hunks.
 - **Next step:** unify plot axes/cursors and finish FFT engineering readouts.
 
 ---
+
+## 2026-07-14T16:50Z — auto/ltspice-parity — centered fit and truthful LED current (§2/§11)
+
+### What I did
+- Centered the electrical topology inside the simulator's actual visible SVG
+  while retaining label-aware fit padding and refitting after telemetry/flex
+  resize settles.
+- Made collinear two-terminal placement electrically insert the component by
+  removing the covered ideal-wire segment; preserved one-step undo,
+  perpendicular crossings, and non-ideal wire impedance.
+- Cleared the stale dashed placement ghost immediately after a drop.
+- Recovered otherwise-missing semiconductor current only where exact KCL on an
+  unbranched two-terminal net proves it. The reported 5 V direct LED case now
+  shows +315 mA / +1.575 W and a visible high-current/no-limiter advisory.
+
+### Files
+- `components/Canvas{,.geometry,.simulator}` and focused tests
+- `store/useSchematic.ts` and store regressions
+- `simulation/measurementModel.ts`, `ComponentMeasurementsPanel.tsx`, and tests
+
+### Tests
+- Focused viewport/placement/telemetry suite — PASS, 154 tests before final edge
+  additions; final placement/store subset PASS, 88 tests.
+- `pnpm -C apps/desktop typecheck` — PASS.
+- `pnpm -C apps/desktop test` — PASS, 109 files / 1620 tests in the shared tree;
+  committed snapshot gains 10 regressions (1576 total).
+- `pnpm --filter @tau/desktop build` — PASS (existing SDK externalization and
+  chunk-size advisories only).
+- In-app hot-reload QA — PASS; the topology is visually centered in the black
+  circuit viewport and the telemetry dock is excluded from fit height.
+
+### Parity items
+- §2 grid/pan/zoom/fit and component placement correctness hardened.
+- §11 per-component voltage/current/power telemetry made internally
+  consistent for exact series-current inference with explicit LED safety UI.
+
+### Next step
+Resume the simulator plot-card/cursor/FFT sequence in `TAU_DESIGN_VISION.md`.
 
 ## 2026-07-14T16:24Z — auto/ltspice-parity — native Explorer create/move (§1/§8/§10)
 
