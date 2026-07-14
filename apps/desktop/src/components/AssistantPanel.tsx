@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent } from "react";
 import { nanoid } from "nanoid";
-import { Check, FilePlus2, RotateCcw, Sparkles, Square, X } from "lucide-react";
+import { Check, FilePlus2, RefreshCw, RotateCcw, Sparkles, Square, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
@@ -11,7 +11,11 @@ import type { AnalysisResult } from "../simulation/linearTransient";
 import type { ComponentMeasurement } from "../simulation/measurementModel";
 import type { MeasResult } from "../simulation/measure";
 import { buildAssistantContext } from "../lib/assistantContext";
-import type { AssistantCreateAscAction } from "../lib/assistantActions";
+import type {
+  AssistantApplyCurrentAscAction,
+  AssistantAscAction,
+  AssistantCreateAscAction,
+} from "../lib/assistantActions";
 import {
   ASSISTANT_MODEL_LABEL,
   streamAssistantReply,
@@ -60,16 +64,13 @@ interface ChatMessage {
   id: string;
   role: "user" | "assistant";
   content: string;
-  actions?: AssistantCreateAscAction[];
+  actions?: AssistantAscAction[];
 }
 
 type AssistantActionState = "idle" | "working" | "done";
 
 export type AssistantCreateAscHandler = (action: AssistantCreateAscAction) => void | Promise<void>;
-export type AssistantApplyDocumentHandler = (
-  document: AssistantCreateAscAction["document"],
-  action: AssistantCreateAscAction,
-) => void | Promise<void>;
+export type AssistantApplyCurrentHandler = (action: AssistantApplyCurrentAscAction) => void | Promise<void>;
 
 type ResizeState = ReturnType<typeof usePanelWidth>;
 
@@ -88,8 +89,10 @@ export interface AssistantPanelProps {
   onClose: () => void;
   /** Preferred native boundary: create this validated source in the active project. */
   onCreateAsc?: AssistantCreateAscHandler;
-  /** In-memory fallback for hosts that do not own a project-folder file boundary. */
-  onApplyDocument?: AssistantApplyDocumentHandler;
+  /** Undoable document boundary for a validated replacement of the current circuit. */
+  onApplyCurrent?: AssistantApplyCurrentHandler;
+  /** When inside the shared right dock, the dock owns width and the resize handle. */
+  embedded?: boolean;
 }
 
 export function AssistantPanel({
@@ -106,7 +109,8 @@ export function AssistantPanel({
   onOpenSettings,
   onClose,
   onCreateAsc,
-  onApplyDocument,
+  onApplyCurrent,
+  embedded = false,
 }: AssistantPanelProps) {
   const apiKey = useAssistantApiKey();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -140,7 +144,7 @@ export function AssistantPanel({
     setInput("");
     setStreaming(true);
 
-    const { text: contextText } = buildAssistantContext({
+    const { text: contextText, canApplyCurrent } = buildAssistantContext({
       components,
       wires,
       netLabels,
@@ -183,7 +187,7 @@ export function AssistantPanel({
         // an empty assistant turn would otherwise sit in the transcript.
         setMessages((list) => list.filter((m) => m.id !== assistantMessage.id || m.content !== ""));
       },
-    }, { analysis, params });
+    }, { analysis, params }, { allowCurrentApply: canApplyCurrent });
   }, [messages, streaming, apiKey, components, wires, netLabels, directives, params, analysis, componentRows, measurements, selectedId]);
 
   const stop = useCallback(() => {
@@ -199,23 +203,34 @@ export function AssistantPanel({
     setError(null);
   }, [stop]);
 
-  const confirmAction = useCallback(async (action: AssistantCreateAscAction) => {
+  const confirmAction = useCallback(async (action: AssistantAscAction) => {
     if (actionStates[action.id] === "working" || actionStates[action.id] === "done") return;
-    if (!onCreateAsc && !onApplyDocument) {
-      setError({ kind: "invalid_action", message: "Circuit creation is not connected to the active project." });
+    const handler = action.type === "create_asc" ? onCreateAsc : onApplyCurrent;
+    if (!handler) {
+      setError({
+        kind: "invalid_action",
+        message: action.type === "create_asc"
+          ? "Circuit creation is not connected to the active project."
+          : "Current-circuit editing is not connected to the active document.",
+      });
       return;
     }
     setError(null);
     setActionStates((states) => ({ ...states, [action.id]: "working" }));
     try {
-      if (onCreateAsc) await onCreateAsc(action);
-      else await onApplyDocument?.(action.document, action);
+      if (action.type === "create_asc") await onCreateAsc?.(action);
+      else await onApplyCurrent?.(action);
       setActionStates((states) => ({ ...states, [action.id]: "done" }));
     } catch {
       setActionStates((states) => ({ ...states, [action.id]: "idle" }));
-      setError({ kind: "unknown", message: `Couldn't create ${action.filename}. Check the active Schematics folder and try again.` });
+      setError({
+        kind: "unknown",
+        message: action.type === "create_asc"
+          ? `Couldn't create ${action.filename}. Check the active Schematics folder and try again.`
+          : "Couldn't apply the proposed changes to the current circuit. Try asking for a revised proposal.",
+      });
     }
-  }, [actionStates, onApplyDocument, onCreateAsc]);
+  }, [actionStates, onApplyCurrent, onCreateAsc]);
 
   const onComposerKeyDown = (event: ReactKeyboardEvent<HTMLTextAreaElement>) => {
     if (event.key === "Enter" && !event.shiftKey) {
@@ -229,17 +244,23 @@ export function AssistantPanel({
   const hasContent = messages.length > 0 || error;
 
   return (
-    <aside className="assistant-panel" aria-label="Assistant" style={{ "--assistant-w": `${resize.width}px` } as CSSProperties}>
-      <PanelResizeHandle
-        edge="left"
-        label="Resize assistant panel"
-        width={resize.width}
-        minWidth={ASSISTANT_PANEL_WIDTH.minWidth}
-        maxWidth={ASSISTANT_PANEL_WIDTH.maxWidth}
-        dragging={resize.dragging}
-        onPointerDown={resize.onPointerDown}
-        onKeyDown={resize.onKeyDown}
-      />
+    <aside
+      className={cn("assistant-panel", embedded && "assistant-panel--embedded")}
+      aria-label="Assistant"
+      style={embedded ? undefined : { "--assistant-w": `${resize.width}px` } as CSSProperties}
+    >
+      {!embedded && (
+        <PanelResizeHandle
+          edge="left"
+          label="Resize assistant panel"
+          width={resize.width}
+          minWidth={ASSISTANT_PANEL_WIDTH.minWidth}
+          maxWidth={ASSISTANT_PANEL_WIDTH.maxWidth}
+          dragging={resize.dragging}
+          onPointerDown={resize.onPointerDown}
+          onKeyDown={resize.onKeyDown}
+        />
+      )}
       <header className="assistant-header">
         <div>
           <div className="assistant-kicker">Assistant</div>
@@ -296,23 +317,32 @@ export function AssistantPanel({
                     : <p>{message.content}</p>}
                   {message.role === "assistant" && message.actions?.map((action) => {
                     const status = actionStates[action.id] ?? "idle";
+                    const isCreate = action.type === "create_asc";
+                    const handlerAvailable = isCreate ? Boolean(onCreateAsc) : Boolean(onApplyCurrent);
+                    const actionLabel = isCreate ? action.filename : "Current circuit";
                     return (
                       <div className="assistant-action" key={action.id} data-status={status}>
-                        <FilePlus2 size={17} strokeWidth={1.7} aria-hidden="true" />
+                        {isCreate
+                          ? <FilePlus2 size={17} strokeWidth={1.7} aria-hidden="true" />
+                          : <RefreshCw size={17} strokeWidth={1.7} aria-hidden="true" />}
                         <div className="assistant-action-copy">
-                          <strong>{action.filename}</strong>
+                          <strong>{actionLabel}</strong>
                           <span>{action.componentCount} components · {action.wireCount} wires</span>
                         </div>
                         <Button
                           type="button"
                           size="sm"
                           variant={status === "done" ? "outline" : "default"}
-                          disabled={status !== "idle" || (!onCreateAsc && !onApplyDocument)}
+                          disabled={status !== "idle" || !handlerAvailable}
                           onClick={() => void confirmAction(action)}
-                          aria-label={`Create ${action.filename}`}
+                          aria-label={isCreate ? `Create ${action.filename}` : "Apply to current circuit"}
                         >
                           {status === "done" ? <Check size={12} aria-hidden="true" /> : null}
-                          {status === "working" ? "Creating…" : status === "done" ? "Created" : "Create"}
+                          {status === "working"
+                            ? isCreate ? "Creating…" : "Applying…"
+                            : status === "done"
+                              ? isCreate ? "Created" : "Applied"
+                              : isCreate ? "Create" : "Apply to current"}
                         </Button>
                       </div>
                     );

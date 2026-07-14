@@ -135,14 +135,14 @@ describe("VCCS (G) — voltage-controlled current source", () => {
 });
 
 describe("controlled sources in transient analysis", () => {
-  it("VCVS tracks a DC control level over time", () => {
+  it("VCVS tracks a DC control level over time", async () => {
     const components = [
       part("vsource", "1", "V1", { p: CP, n: GND }),
       part("vcvs", "10", "E1", { cp: CP, cn: GND, op: OUT, on: GND }),
       part("resistor", "1k", "R1", { a: OUT, b: GND }),
       ground(),
     ];
-    const result = runTransientAnalysis({ components, wires: [] }, { stopTime: 1e-3, steps: 16 });
+    const result = await runTransientAnalysis({ components, wires: [] }, { stopTime: 1e-3, steps: 16 });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     const out = result.traces.find((t) => Math.abs(t.values[t.values.length - 1] - 10) < 1e-6);
@@ -255,14 +255,14 @@ describe("CCVS (H) — current-controlled voltage source", () => {
 });
 
 describe("current-controlled sources in transient & AC", () => {
-  it("CCCS holds a DC output and reports gain·I_sense as its branch current", () => {
+  it("CCCS holds a DC output and reports gain·I_sense as its branch current", async () => {
     const components = [
       part("isource", "1m", "I1", { p: CP, n: GND }),
       part("cccs", "10", "F1", { cp: CP, cn: GND, op: OUT, on: GND }),
       part("resistor", "1k", "R1", { a: OUT, b: GND }),
       ground(),
     ];
-    const result = runTransientAnalysis({ components, wires: [] }, { stopTime: 1e-3, steps: 16 });
+    const result = await runTransientAnalysis({ components, wires: [] }, { stopTime: 1e-3, steps: 16 });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     const out = result.traces.find((t) => Math.abs(t.values[t.values.length - 1] + 10) < 1e-6);

@@ -72,4 +72,22 @@ describe("schematic document validation", () => {
     bad.components[0].rotation = 45;
     expect(() => validateSchematicDocument(bad)).toThrow(/0, 90, 180, or 270/i);
   });
+
+  it("round-trips a net label's dx/dy offset (Fix 2 — manual placement)", () => {
+    const withOffset: ReturnType<typeof validDocument> & { netLabels: Array<Record<string, unknown>> } = validDocument();
+    withOffset.netLabels[0] = { ...withOffset.netLabels[0], dx: 12, dy: -30 };
+    const result = validateSchematicDocument(withOffset);
+    expect(result.netLabels?.[0]).toEqual({ id: "n1", x: 64, y: 0, text: "OUT", dx: 12, dy: -30 });
+  });
+
+  it("leaves dx/dy undefined for a net label that never set them, so old .sim files keep loading as auto-placed", () => {
+    // `validDocument()`'s net label has no dx/dy — the shape saved before
+    // Fix 2 existed.
+    const result = validateSchematicDocument(validDocument());
+    const label = result.netLabels?.[0];
+    expect(label).toBeDefined();
+    expect(label!.dx).toBeUndefined();
+    expect(label!.dy).toBeUndefined();
+    expect(Object.prototype.hasOwnProperty.call(label, "dx")).toBe(false);
+  });
 });

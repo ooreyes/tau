@@ -102,7 +102,7 @@ describe("behavioral B-source (V=) — linear voltage", () => {
 });
 
 describe("behavioral B-source — transient", () => {
-  it("an ideal behavioral amplifier holds 2·V(ctrl) across the sweep", () => {
+  it("an ideal behavioral amplifier holds 2·V(ctrl) across the sweep", async () => {
     const components = [
       part("vsource", "1.5", "V1", { p: CTRL, n: GND }),
       part("bsource", "V=2*V(ctrl)", "B1", { p: OUT, n: GND }),
@@ -110,7 +110,7 @@ describe("behavioral B-source — transient", () => {
       part("resistor", "1k", "R1", { a: OUT, b: GND }),
       ground(),
     ];
-    const result = runTransientAnalysis(
+    const result = await runTransientAnalysis(
       { components, wires: [], netLabels: [labelAt("ctrl", CTRL)] },
       { stopTime: 1e-3, steps: 16 },
     );

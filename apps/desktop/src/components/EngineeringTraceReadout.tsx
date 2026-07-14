@@ -60,7 +60,7 @@ export function EngineeringTraceReadout({
   if (!model) return null;
   const value = (measurement: number) => formatEngineering(measurement, model.unit, 3);
   const periodic = model.classification.kind === "periodic";
-  const primaryLabel = periodic ? "RMS" : "FINAL";
+  const primaryLabel = periodic ? "RMS" : "Final value";
   const primaryValue = periodic ? model.rms : model.final;
 
   return (
@@ -79,21 +79,21 @@ export function EngineeringTraceReadout({
           value={value(primaryValue)}
           title={periodic ? "Root mean square" : "Final finite sample"}
         />
-        <ReadoutItem label="P–P" value={value(model.peakToPeak)} title="Peak to peak" />
+        <ReadoutItem label="Peak-to-peak" value={value(model.peakToPeak)} title="Peak to peak" />
         {model.frequency !== undefined && (
-          <ReadoutItem label="FREQ" value={formatEngineering(model.frequency, "Hz", 3)} title="Estimated frequency" />
+          <ReadoutItem label="Frequency" value={formatEngineering(model.frequency, "Hz", 3)} title="Estimated frequency" />
         )}
       </dl>
       <details className="engineering-trace-readout__details">
         <summary className="engineering-trace-readout__details-summary">More measurements</summary>
         <dl className="engineering-trace-readout__metrics">
-          <ReadoutItem label="MIN" value={value(model.minimum)} title="Minimum" />
-          <ReadoutItem label="MAX" value={value(model.maximum)} title="Maximum" />
-          <ReadoutItem label="AVG" value={value(model.average)} title="Time-weighted average" />
+          <ReadoutItem label="Minimum" value={value(model.minimum)} title="Minimum" />
+          <ReadoutItem label="Maximum" value={value(model.maximum)} title="Maximum" />
+          <ReadoutItem label="Average" value={value(model.average)} title="Time-weighted average" />
           <ReadoutItem label="RMS" value={value(model.rms)} title="Root mean square" />
-          <ReadoutItem label="FINAL" value={value(model.final)} title="Final finite sample" />
+          <ReadoutItem label="Final value" value={value(model.final)} title="Final finite sample" />
           {model.period !== undefined && (
-            <ReadoutItem label="PERIOD" value={formatEngineering(model.period, "s", 3)} title="Estimated period" />
+            <ReadoutItem label="Period" value={formatEngineering(model.period, "s", 3)} title="Estimated period" />
           )}
           {model.cursor && (
             <ReadoutItem

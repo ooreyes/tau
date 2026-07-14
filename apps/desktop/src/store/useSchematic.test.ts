@@ -246,6 +246,31 @@ describe("schematic document store", () => {
     expect(useSchematic.getState().directives).toEqual([".param a=2", ".func f(x)=x*2"]);
   });
 
+  it("replaces the current document as one undoable assistant-style edit", () => {
+    useSchematic.getState().loadCircuit({ ...sourceDocument(), directives: [".tran 1m"] });
+    const replacement: SchematicDocument = {
+      components: [{ id: "replacement-r1", kind: "resistor", x: 96, y: 32, rotation: 0, value: "4.7k", label: "R1" }],
+      wires: [],
+      probes: [],
+      netLabels: [{ id: "replacement-label", x: 96, y: 32, text: "OUT" }],
+      directives: [".tran 5m"],
+    };
+
+    useSchematic.getState().replaceCircuit(replacement);
+    expect(useSchematic.getState().components[0].value).toBe("4.7k");
+    expect(useSchematic.getState().netLabels[0].text).toBe("OUT");
+    expect(useSchematic.getState().directives).toEqual([".tran 5m"]);
+    expect(useSchematic.getState().past).toHaveLength(1);
+
+    useSchematic.getState().undo();
+    expect(useSchematic.getState().components[0].value).toBe("1k");
+    expect(useSchematic.getState().directives).toEqual([".tran 1m"]);
+
+    useSchematic.getState().redo();
+    expect(useSchematic.getState().components[0].value).toBe("4.7k");
+    expect(useSchematic.getState().directives).toEqual([".tran 5m"]);
+  });
+
   it("starts each fresh document without residual directives", () => {
     useSchematic.getState().loadCircuit({ ...sourceDocument(), directives: [".param a=1"] });
     useSchematic.getState().newCircuit();

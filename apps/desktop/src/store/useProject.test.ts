@@ -315,7 +315,7 @@ describe("project node moves", () => {
     });
     vi.spyOn(fs, "pathExists").mockResolvedValue(false);
     const move = vi.spyOn(fs, "moveProjectEntry").mockResolvedValue(`${destination}/filter.asc`);
-    vi.spyOn(fs, "readProjectTree").mockResolvedValue([
+    const readTree = vi.spyOn(fs, "readProjectTree").mockResolvedValue([
       {
         name: "Archive",
         path: destination,
@@ -326,7 +326,9 @@ describe("project node moves", () => {
 
     await expect(useProject.getState().moveNode(source, destination)).resolves.toBe(`${destination}/filter.asc`);
     expect(move).toHaveBeenCalledWith(root, source, destination, "file");
+    expect(readTree).toHaveBeenCalledWith(root);
     expect(useProject.getState().expanded).toContain(destination);
+    expect(flattenTree(useProject.getState().tree).map((node) => node.path)).toContain(`${destination}/filter.asc`);
     expect(useProject.getState().error).toBeNull();
   });
 });

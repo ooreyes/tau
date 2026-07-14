@@ -68,18 +68,18 @@ describe("Transient resolution guard", () => {
     expect(resolution.samplesPerCycle).toBeCloseTo(32, 10);
   });
 
-  it("rejects an under-sampled sine transient instead of aliasing it", () => {
+  it("rejects an under-sampled sine transient instead of aliasing it", async () => {
     const source = vac(0, 32, "1 1Meg", "V1");
     const gnd = ground(0, 64);
-    const result = runTransientAnalysis({ components: [source, gnd], wires: [] }, { stopTime: 10e-6, steps: 100 });
+    const result = await runTransientAnalysis({ components: [source, gnd], wires: [] }, { stopTime: 10e-6, steps: 100 });
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.message).toContain("Transient resolution is too low");
   });
 
-  it("rejects a request that exceeds the interactive high-speed ceiling", () => {
+  it("rejects a request that exceeds the interactive high-speed ceiling", async () => {
     const source = vac(0, 32, "1 1G", "V1");
     const gnd = ground(0, 64);
-    const result = runTransientAnalysis({ components: [source, gnd], wires: [] }, { stopTime: 1e-3, steps: 200_000 });
+    const result = await runTransientAnalysis({ components: [source, gnd], wires: [] }, { stopTime: 1e-3, steps: 200_000 });
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.message).toContain("interactive solver is capped");
   });
@@ -159,21 +159,21 @@ describe("RC charging — analytic validation", () => {
     wire([{ x: 128, y: 0 }, { x: 192, y: 0 }]),
   ];
 
-  it("runs successfully (ok=true)", () => {
-    const result = runTransientAnalysis({ components, wires }, { stopTime, steps });
+  it("runs successfully (ok=true)", async () => {
+    const result = await runTransientAnalysis({ components, wires }, { stopTime, steps });
     expect(result.ok).toBe(true);
   });
 
-  it("has exactly one non-ground trace (the capacitor node)", () => {
-    const result = runTransientAnalysis({ components, wires }, { stopTime, steps });
+  it("has exactly one non-ground trace (the capacitor node)", async () => {
+    const result = await runTransientAnalysis({ components, wires }, { stopTime, steps });
     if (!result.ok) throw new Error(result.message);
     // There are two non-ground nets: the VS+ / R.a node and the R.b / C.a node.
     // The solver returns both; we need the capacitor node (the one with the cap).
     expect(result.traces.length).toBeGreaterThanOrEqual(1);
   });
 
-  it("capacitor voltage ≈ 0.632 × Vs at t = τ (within 2%)", () => {
-    const result = runTransientAnalysis({ components, wires }, { stopTime, steps });
+  it("capacitor voltage ≈ 0.632 × Vs at t = τ (within 2%)", async () => {
+    const result = await runTransientAnalysis({ components, wires }, { stopTime, steps });
     if (!result.ok) throw new Error(result.message);
 
     // Find the capacitor-node trace: it starts at 0 and charges.
@@ -197,8 +197,8 @@ describe("RC charging — analytic validation", () => {
     expect(Math.abs(bestVal - analytic) / analytic).toBeLessThan(0.02); // within 2%
   });
 
-  it("capacitor voltage ≈ 0.993 × Vs at t = 5τ (within 2%)", () => {
-    const result = runTransientAnalysis({ components, wires }, { stopTime, steps });
+  it("capacitor voltage ≈ 0.993 × Vs at t = 5τ (within 2%)", async () => {
+    const result = await runTransientAnalysis({ components, wires }, { stopTime, steps });
     if (!result.ok) throw new Error(result.message);
 
     const analytic5tau = Vs * (1 - Math.exp(-5)); // ≈ 4.966
@@ -218,8 +218,8 @@ describe("RC charging — analytic validation", () => {
     expect(Math.abs(bestVal - analytic5tau) / analytic5tau).toBeLessThan(0.02); // within 2%
   });
 
-  it("capacitor voltage starts near 0 V at t=0", () => {
-    const result = runTransientAnalysis({ components, wires }, { stopTime, steps });
+  it("capacitor voltage starts near 0 V at t=0", async () => {
+    const result = await runTransientAnalysis({ components, wires }, { stopTime, steps });
     if (!result.ok) throw new Error(result.message);
 
     for (const trace of result.traces) {
@@ -268,13 +268,13 @@ describe("Voltage divider — DC steady state", () => {
     wire([{ x: 128, y: 0 }, { x: 160, y: 0 }]),
   ];
 
-  it("runs successfully", () => {
-    const result = runTransientAnalysis({ components, wires }, { stopTime: 1e-3, steps: 100 });
+  it("runs successfully", async () => {
+    const result = await runTransientAnalysis({ components, wires }, { stopTime: 1e-3, steps: 100 });
     expect(result.ok).toBe(true);
   });
 
-  it("mid-node voltage settles to 5 V (within 1%)", () => {
-    const result = runTransientAnalysis({ components, wires }, { stopTime: 1e-3, steps: 100 });
+  it("mid-node voltage settles to 5 V (within 1%)", async () => {
+    const result = await runTransientAnalysis({ components, wires }, { stopTime: 1e-3, steps: 100 });
     if (!result.ok) throw new Error(result.message);
 
     // Mid-node is between R1.b and R2.a — it should read ~5V immediately
@@ -290,8 +290,8 @@ describe("Voltage divider — DC steady state", () => {
     }
   });
 
-  it("source node voltage is 10 V throughout (within 1%)", () => {
-    const result = runTransientAnalysis({ components, wires }, { stopTime: 1e-3, steps: 100 });
+  it("source node voltage is 10 V throughout (within 1%)", async () => {
+    const result = await runTransientAnalysis({ components, wires }, { stopTime: 1e-3, steps: 100 });
     if (!result.ok) throw new Error(result.message);
 
     const sourceTrace = result.traces.find(t => {
@@ -344,13 +344,13 @@ describe("RLC series — under-damped oscillation", () => {
   const stopTime = 600e-6; // 600 µs ≈ 3 periods
   const steps = 500;
 
-  it("runs successfully", () => {
-    const result = runTransientAnalysis({ components, wires }, { stopTime, steps });
+  it("runs successfully", async () => {
+    const result = await runTransientAnalysis({ components, wires }, { stopTime, steps });
     expect(result.ok).toBe(true);
   });
 
-  it("capacitor node voltage is bounded within [-15, 25] V (energy constraint)", () => {
-    const result = runTransientAnalysis({ components, wires }, { stopTime, steps });
+  it("capacitor node voltage is bounded within [-15, 25] V (energy constraint)", async () => {
+    const result = await runTransientAnalysis({ components, wires }, { stopTime, steps });
     if (!result.ok) throw new Error(result.message);
 
     // Find the cap node: it's the one that oscillates and isn't pinned to VS
@@ -369,8 +369,8 @@ describe("RLC series — under-damped oscillation", () => {
     }
   });
 
-  it("capacitor node voltage is oscillatory (multiple sign changes in first difference)", () => {
-    const result = runTransientAnalysis({ components, wires }, { stopTime, steps });
+  it("capacitor node voltage is oscillatory (multiple sign changes in first difference)", async () => {
+    const result = await runTransientAnalysis({ components, wires }, { stopTime, steps });
     if (!result.ok) throw new Error(result.message);
 
     // Find the trace that oscillates most (highest number of sign changes in diff)
@@ -389,8 +389,8 @@ describe("RLC series — under-damped oscillation", () => {
     expect(maxSignChanges).toBeGreaterThan(2);
   });
 
-  it("capacitor node voltage overshoots VS (under-damped characteristic)", () => {
-    const result = runTransientAnalysis({ components, wires }, { stopTime, steps });
+  it("capacitor node voltage overshoots VS (under-damped characteristic)", async () => {
+    const result = await runTransientAnalysis({ components, wires }, { stopTime, steps });
     if (!result.ok) throw new Error(result.message);
 
     // Under-damped RLC: the capacitor voltage peaks above the source voltage
@@ -410,7 +410,7 @@ describe("RLC series — under-damped oscillation", () => {
 // Test 4 — Graceful failure cases (ok === false, no throw)
 // ---------------------------------------------------------------------------
 describe("Graceful failure cases", () => {
-  it("missing ground → ok=false", () => {
+  it("missing ground → ok=false", async () => {
     // VS connected to a resistor, no GND symbol at all
     const VS = vsource(0, 32, "5V", "V1");
     const R = resistor(96, 0, "1k", "R1");
@@ -418,22 +418,22 @@ describe("Graceful failure cases", () => {
     // Wire VS.p(0,0)→R.a(64,0)
     const wires = [wire([{ x: 0, y: 0 }, { x: 64, y: 0 }])];
 
-    const result = runTransientAnalysis({ components, wires }, { stopTime: 1e-3, steps: 100 });
+    const result = await runTransientAnalysis({ components, wires }, { stopTime: 1e-3, steps: 100 });
     expect(result.ok).toBe(false);
   });
 
-  it("missing source → ok=false", () => {
+  it("missing source → ok=false", async () => {
     // Just a resistor and ground, no voltage source
     const R = resistor(96, 0, "1k", "R1");
     const GND = ground(256, 0);
     const components = [R, GND];
     const wires = [wire([{ x: 128, y: 0 }, { x: 256, y: 0 }])];
 
-    const result = runTransientAnalysis({ components, wires }, { stopTime: 1e-3, steps: 100 });
+    const result = await runTransientAnalysis({ components, wires }, { stopTime: 1e-3, steps: 100 });
     expect(result.ok).toBe(false);
   });
 
-  it("single floating node (no connections) → ok=false", () => {
+  it("single floating node (no connections) → ok=false", async () => {
     // A resistor with its b pin floating (connected nowhere), plus VS+GND
     // VS at (0,32): p=(0,0), n=(0,64)
     // R at (96, 200): a=(64,200), b=(128,200)  — in a different area, floating
@@ -447,12 +447,12 @@ describe("Graceful failure cases", () => {
 
     // VS.p=(0,0) and VS.n=(0,64) connects to GND.g=(0,64); R is floating.
     // The circuit has a floating node → singular matrix
-    const result = runTransientAnalysis({ components, wires }, { stopTime: 1e-3, steps: 100 });
+    const result = await runTransientAnalysis({ components, wires }, { stopTime: 1e-3, steps: 100 });
     // Should be ok=false (floating node causes singular matrix or only-single-pin net)
     expect(result.ok).toBe(false);
   });
 
-  it("singular matrix (VS with both terminals on same net) → ok=false", () => {
+  it("singular matrix (VS with both terminals on same net) → ok=false", async () => {
     // VS with p and n tied together via wire (zero-voltage loop) — singular
     // VS at (0, 0): p=(0,-32), n=(0,32)
     // Wire from p(0,-32) to n(0,32): creates short
@@ -464,15 +464,15 @@ describe("Graceful failure cases", () => {
     const components = [VS, GND_n, GND_p];
     const wires: SchematicWire[] = [];
 
-    const result = runTransientAnalysis({ components, wires }, { stopTime: 1e-3, steps: 100 });
+    const result = await runTransientAnalysis({ components, wires }, { stopTime: 1e-3, steps: 100 });
     expect(result.ok).toBe(false);
   });
 
-  it("unsupported model part → ok=false with a clear message", () => {
+  it("unsupported model part → ok=false with a clear message", async () => {
     const U1 = opamp(96, 0);
     const GND = ground(0, 32);
 
-    const result = runTransientAnalysis({ components: [U1, GND], wires: [] }, { stopTime: 1e-3, steps: 100 });
+    const result = await runTransientAnalysis({ components: [U1, GND], wires: [] }, { stopTime: 1e-3, steps: 100 });
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.message).toContain("interim solver");
   });
@@ -482,11 +482,11 @@ describe("Graceful failure cases", () => {
 // Test 5 — New source primitives
 // ---------------------------------------------------------------------------
 describe("Transient source primitives", () => {
-  it("AC voltage source drives a sine waveform", () => {
+  it("AC voltage source drives a sine waveform", async () => {
     const V1 = vac(0, 32, "1 1k", "V1");
     const GND = ground(0, 64);
 
-    const result = runTransientAnalysis({ components: [V1, GND], wires: [] }, { stopTime: 1e-3, steps: 200 });
+    const result = await runTransientAnalysis({ components: [V1, GND], wires: [] }, { stopTime: 1e-3, steps: 200 });
     expect(result.ok).toBe(true);
     if (!result.ok) throw new Error(result.message);
 
@@ -496,7 +496,7 @@ describe("Transient source primitives", () => {
     expect(trace.values.reduce((a, b) => (b < a ? b : a), Infinity)).toBeLessThan(-0.98);
   });
 
-  it("DC current source through resistor produces Ohm-law voltage", () => {
+  it("DC current source through resistor produces Ohm-law voltage", async () => {
     // I1(1 mA) at (0,32): p=(0,0), n=(0,64)=GND.  R1(1k) from (64,0) to (128,0)=GND.
     // SPICE convention: 1 mA exits the + (p) terminal into the network.
     // V(p→R1→GND) = I × R = 1 mA × 1 kΩ = +1 V.
@@ -506,7 +506,7 @@ describe("Transient source primitives", () => {
     const GND_resistor = ground(128, 0);
     const wires = [wire([{ x: 0, y: 0 }, { x: 64, y: 0 }])];
 
-    const result = runTransientAnalysis(
+    const result = await runTransientAnalysis(
       { components: [I1, R1, GND_source, GND_resistor], wires },
       { stopTime: 1e-3, steps: 100 },
     );
@@ -542,16 +542,16 @@ describe("Branch currents — I(...) exposure", () => {
     wire([{ x: 128, y: 0 }, { x: 160, y: 0 }]),
   ];
 
-  function lastCurrent(ref: string): number {
-    const result = runTransientAnalysis({ components, wires }, { stopTime: 1e-3, steps: 100 });
+  async function lastCurrent(ref: string): Promise<number> {
+    const result = await runTransientAnalysis({ components, wires }, { stopTime: 1e-3, steps: 100 });
     if (!result.ok) throw new Error(result.message);
     const cur = result.currents.find((c) => c.ref === ref);
     if (!cur) throw new Error(`no current trace for ${ref}; got ${result.currents.map((c) => c.ref).join(",")}`);
     return cur.values[cur.values.length - 1];
   }
 
-  it("exposes a current trace per labelled R / V part", () => {
-    const result = runTransientAnalysis({ components, wires }, { stopTime: 1e-3, steps: 100 });
+  it("exposes a current trace per labelled R / V part", async () => {
+    const result = await runTransientAnalysis({ components, wires }, { stopTime: 1e-3, steps: 100 });
     if (!result.ok) throw new Error(result.message);
     const refs = result.currents.map((c) => c.ref).sort();
     expect(refs).toEqual(["R1", "R2", "V1"]);
@@ -559,16 +559,16 @@ describe("Branch currents — I(...) exposure", () => {
     expect(result.currents.find((c) => c.ref === "R1")?.label).toBe("I(R1)");
   });
 
-  it("resistor currents equal V/R = 5 mA (a→b sign)", () => {
-    expect(lastCurrent("R1")).toBeCloseTo(0.005, 6);
-    expect(lastCurrent("R2")).toBeCloseTo(0.005, 6);
+  it("resistor currents equal V/R = 5 mA (a→b sign)", async () => {
+    expect(await lastCurrent("R1")).toBeCloseTo(0.005, 6);
+    expect(await lastCurrent("R2")).toBeCloseTo(0.005, 6);
   });
 
-  it("voltage-source current is -5 mA (SPICE: current into + terminal)", () => {
-    expect(lastCurrent("V1")).toBeCloseTo(-0.005, 6);
+  it("voltage-source current is -5 mA (SPICE: current into + terminal)", async () => {
+    expect(await lastCurrent("V1")).toBeCloseTo(-0.005, 6);
   });
 
-  it("capacitor current is C·dV/dt and starts at 0", () => {
+  it("capacitor current is C·dV/dt and starts at 0", async () => {
     // RC charging: V1=5 V, R1=1k, C1=1µF. At t=0 the cap current = 0 (defined),
     // then I_C = (Vs - Vc)/R. First post-step current ≈ Vs/R = 5 mA (cap ~0 V).
     const Vs = vsource(0, 32, "5V", "V1");
@@ -581,7 +581,7 @@ describe("Branch currents — I(...) exposure", () => {
       wire([{ x: 0, y: 0 }, { x: 64, y: 0 }]),
       wire([{ x: 128, y: 0 }, { x: 160, y: 0 }]),
     ];
-    const result = runTransientAnalysis({ components: comps, wires: ws }, { stopTime: 5e-3, steps: 500 });
+    const result = await runTransientAnalysis({ components: comps, wires: ws }, { stopTime: 5e-3, steps: 500 });
     if (!result.ok) throw new Error(result.message);
     const ic = result.currents.find((c) => c.ref === "C1");
     expect(ic).toBeDefined();
@@ -614,12 +614,12 @@ describe("PULSE/SINE stimulus drives the TS transient solver", () => {
     return { components, wires };
   }
 
-  it("a PULSE source steps the node between V1 and V2 on schedule", () => {
+  it("a PULSE source steps the node between V1 and V2 on schedule", async () => {
     // PULSE(0 5 1m 0 0 2m 4m): low until 1ms, high for the next 2ms, low again.
     const { components, wires } = driveNode("PULSE(0 5 1m 0 0 2m 4m)");
     const stopTime = 4e-3;
     const steps = 400; // 10µs sample spacing
-    const result = runTransientAnalysis({ components, wires }, { stopTime, steps });
+    const result = await runTransientAnalysis({ components, wires }, { stopTime, steps });
     if (!result.ok) throw new Error(result.message);
 
     const node = result.traces.find((t) => {
@@ -634,11 +634,11 @@ describe("PULSE/SINE stimulus drives the TS transient solver", () => {
     expect(at(3.5e-3)).toBeCloseTo(0, 6); // after the 2ms width → back to V1
   });
 
-  it("a SINE source on a plain vsource produces a sine node voltage", () => {
+  it("a SINE source on a plain vsource produces a sine node voltage", async () => {
     const { components, wires } = driveNode("SINE(0 2 1k)");
     const stopTime = 2e-3;
     const steps = 400;
-    const result = runTransientAnalysis({ components, wires }, { stopTime, steps });
+    const result = await runTransientAnalysis({ components, wires }, { stopTime, steps });
     if (!result.ok) throw new Error(result.message);
 
     const node = result.traces.find((t) => Math.max(...t.values) > 1.9 && Math.min(...t.values) < -1.9);
@@ -647,5 +647,87 @@ describe("PULSE/SINE stimulus drives the TS transient solver", () => {
     expect(at(0)).toBeCloseTo(0, 5);
     expect(at(250e-6)).toBeCloseTo(2, 3); // quarter period → peak
     expect(at(750e-6)).toBeCloseTo(-2, 3); // three-quarter → trough
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Cooperative async solve: progress + abort (Fix 3 — "runs block the UI")
+// ---------------------------------------------------------------------------
+
+describe("runTransientAnalysis — async progress/abort (Fix 3)", () => {
+  function simpleRcCircuit(steps: number) {
+    const v1 = vsource(0, 32, "5", "V1");
+    const r1 = resistor(96, 0, "1k", "R1");
+    const c1 = capacitor(224, 0, "1u", "C1");
+    const gndV = ground(0, 64);
+    const gndC = ground(256, 0);
+    const components = [v1, r1, c1, gndV, gndC];
+    const wires = [
+      wire([{ x: 0, y: 0 }, { x: 64, y: 0 }]),
+      wire([{ x: 128, y: 0 }, { x: 192, y: 0 }]),
+    ];
+    return { components, wires, stopTime: 5e-3, steps };
+  }
+
+  it("calls onProgress with a monotonically non-decreasing sequence from 0 to 1 across a full run", async () => {
+    const { components, wires, stopTime, steps } = simpleRcCircuit(1000);
+    const fractions: number[] = [];
+
+    const result = await runTransientAnalysis(
+      { components, wires },
+      { stopTime, steps },
+      { onProgress: (fraction) => fractions.push(fraction) },
+    );
+
+    expect(result.ok).toBe(true);
+    // At minimum the first (step 0) and last (step === steps) yield
+    // checkpoints, both multiples of the 250-step interval here.
+    expect(fractions.length).toBeGreaterThanOrEqual(2);
+    expect(fractions[0]).toBe(0);
+    expect(fractions[fractions.length - 1]).toBe(1);
+    for (let i = 1; i < fractions.length; i += 1) {
+      expect(fractions[i]).toBeGreaterThanOrEqual(fractions[i - 1]);
+    }
+  });
+
+  it("stops early on abort and finalizes a partial result with correct stats and a warning", async () => {
+    const { components, wires, stopTime, steps } = simpleRcCircuit(1000);
+    const controller = new AbortController();
+
+    const result = await runTransientAnalysis(
+      { components, wires },
+      { stopTime, steps },
+      {
+        signal: controller.signal,
+        // Abort partway through — onProgress fires before the loop checks
+        // `signal.aborted`, so this deterministically stops the run instead
+        // of racing a real timer.
+        onProgress: (fraction) => {
+          if (fraction >= 0.3) controller.abort();
+        },
+      },
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    // Fewer samples than a full run (1001 = steps + 1), but some real work
+    // was still done.
+    expect(result.stats.sampleCount).toBeGreaterThan(0);
+    expect(result.stats.sampleCount).toBeLessThan(steps + 1);
+    expect(result.times).toHaveLength(result.stats.sampleCount);
+    // Stats describe the run that actually happened, not the requested one.
+    expect(result.stats.stopTime).toBeLessThan(stopTime);
+    expect(result.stats.stopTime).toBeCloseTo(result.times[result.times.length - 1], 12);
+    expect(result.warnings.some((w) => /stopped early/i.test(w))).toBe(true);
+  });
+
+  it("never aborts (signal absent) — behaves exactly as a plain run", async () => {
+    const { components, wires, stopTime, steps } = simpleRcCircuit(200);
+    const result = await runTransientAnalysis({ components, wires }, { stopTime, steps });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.stats.sampleCount).toBe(steps + 1);
+    expect(result.stats.stopTime).toBe(stopTime);
+    expect(result.warnings.some((w) => /stopped early/i.test(w))).toBe(false);
   });
 });

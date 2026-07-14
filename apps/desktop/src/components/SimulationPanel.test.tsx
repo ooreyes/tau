@@ -74,6 +74,7 @@ function renderPanel(overrides: Partial<Parameters<typeof SimulationPanel>[0]> =
       noiseMeasurements={[]}
       options={{ stopTime: 0.006, steps: 240 }}
       isRunning={false}
+      runProgress={null}
       dcSetup={defaultDcSetup([])}
       tfSetup={defaultTfSetup([])}
       noiseSetup={defaultNoiseSetup([])}
@@ -111,8 +112,29 @@ describe("SimulationPanel — no redundant Run button (§11 Unit C5)", { timeout
     expect(handlers.onRun).toHaveBeenCalledTimes(1);
   });
 
-  it("keeps the refine control as a subtle secondary rerun affordance", () => {
+  it("preserves the last result while moving between analysis modes", () => {
+    const okResult = {
+      ok: true,
+      title: "Transient",
+      times: [0, 0.003, 0.006],
+      traces: [],
+      currents: [],
+      stats: { netCount: 4, componentCount: 6, sampleCount: 241, stopTime: 0.006, stepSize: 0.000025 },
+      warnings: [],
+      circuit: {} as never,
+    } as import("../simulation/linearTransient").AnalysisResult;
+    renderPanel({ result: okResult });
+
+    expect(screen.getByRole("status").textContent).toContain("241 samples");
+    fireEvent.mouseDown(screen.getByRole("tab", { name: "Operating point (.op)" }), { button: 0 });
+    expect(screen.getByRole("status").textContent).toContain("No results yet");
+    fireEvent.mouseDown(screen.getByRole("tab", { name: "Transient analysis (.tran)" }), { button: 0 });
+    expect(screen.getByRole("status").textContent).toContain("241 samples");
+  });
+
+  it("keeps the refine control as a subtle secondary rerun affordance, tucked in Advanced ▸ Simulation settings", () => {
     const handlers = renderPanel();
+    fireEvent.click(screen.getByRole("button", { name: "Toggle advanced settings" }));
     fireEvent.click(screen.getByRole("button", { name: "Refine transient resolution" }));
     expect(handlers.onStep).toHaveBeenCalledTimes(1);
   });
@@ -141,7 +163,7 @@ describe("SimulationPanel — dashboard status strip (§11 Unit C6)", { timeout:
     expect(strip.classList.contains("plotter-status--complete")).toBe(true);
   });
 
-  it("goes to the danger Error state and points at the Errors panel on failure", () => {
+  it("goes to the danger Error state and surfaces the failure message inline", () => {
     const failed = {
       ok: false,
       title: "Transient",
@@ -151,8 +173,11 @@ describe("SimulationPanel — dashboard status strip (§11 Unit C6)", { timeout:
     renderPanel({ result: failed });
     const strip = screen.getByRole("status");
     expect(strip.textContent).toContain("Error");
-    expect(strip.textContent).toContain("details in the Errors panel");
+    expect(strip.textContent).toContain("details below");
     expect(strip.classList.contains("plotter-status--error")).toBe(true);
+    // The pointer must not dangle: the failed run's own message renders in
+    // the scope area (the footer that used to carry it is gone).
+    expect(screen.getByRole("alert").textContent).toContain("singular matrix at t=0");
   });
 
   it("stays Idle with a pointer at the toolbar Run before anything has run", () => {
@@ -161,6 +186,133 @@ describe("SimulationPanel — dashboard status strip (§11 Unit C6)", { timeout:
     expect(strip.textContent).toContain("Idle");
     expect(strip.textContent).toContain("press Run in the toolbar");
     expect(strip.classList.contains("plotter-status--idle")).toBe(true);
+  });
+
+  it("uses success semantics for the operating-point ground check", () => {
+    renderPanel({ opResult: { ok: true, nets: [{ id: "0", label: "0", voltage: 0 }], warnings: [] } });
+    fireEvent.mouseDown(screen.getByRole("tab", { name: "Operating point (.op)" }), { button: 0 });
+
+    expect(screen.getByText("GROUND").closest(".metric")?.classList.contains("green")).toBe(true);
+    expect(screen.getByText("GROUND").closest(".metric")?.classList.contains("cyan")).toBe(false);
+  });
+});
+
+describe("SimulationPanel — component telemetry moved to the always-visible dock", { timeout: 20_000 }, () => {
+  // Per-component V/I/P now lives in App.tsx's TelemetryDock (see
+  // TelemetryDock.test.tsx), rendered beside the read-only schematic instead
+  // of tucked inside this panel's Advanced disclosure. This is a regression
+  // guard: the Advanced ▸ Component telemetry group must stay gone.
+  it("no longer renders a component measurements group anywhere in the panel", () => {
+    renderPanel({
+      result: {
+        ok: true,
+        title: "Transient",
+        times: [0, 1, 2],
+        traces: [{ id: "out", label: "V(out)", unit: "V", color: "var(--trace-cyan)", values: [4, 2, 0] }],
+        currents: [{ ref: "R1", label: "I(R1)", values: [2, 1, 0] }],
+        stats: { netCount: 2, componentCount: 2, sampleCount: 3, stopTime: 2, stepSize: 1 },
+        warnings: [],
+        circuit: {
+          groundNetId: "gnd",
+          warnings: [],
+          nets: [
+            { id: "out", points: [], pins: [], isGround: false, labelCount: 1 },
+            { id: "gnd", points: [], pins: [], isGround: true, labelCount: 0 },
+          ],
+          components: [
+            {
+              component: { id: "r1", kind: "resistor", x: 0, y: 0, rotation: 0, value: "2", label: "R1" },
+              pins: { a: "out", b: "gnd" },
+            },
+          ],
+        },
+      } as import("../simulation/linearTransient").AnalysisResult,
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Toggle advanced settings" }));
+    expect(screen.queryByRole("heading", { name: "Component measurements" })).toBeNull();
+    expect(screen.queryByText("Component telemetry")).toBeNull();
+  });
+});
+
+describe("SimulationPanel — TRAN snap-tiling dashboard grid", { timeout: 20_000 }, () => {
+  // Two probed nets so `visibleTransientTraces` (store-driven — SimulationPanel
+  // reads probes/wires/netLabels from useSchematic, not props) resolves two
+  // plot panes automatically, the scenario the grid's "2+ panes -> half
+  // width" default is meant for.
+  const twoTraces = [
+    { id: "n1", label: "V(n1)", unit: "V" as const, color: "var(--trace-cyan)", values: [0, 1, 2] },
+    { id: "n2", label: "V(n2)", unit: "V" as const, color: "var(--trace-green)", values: [2, 1, 0] },
+  ];
+  const twoNets = [
+    { id: "n1", points: [{ x: 0, y: 0 }], pins: [], isGround: false, labelCount: 0 },
+    { id: "n2", points: [{ x: 100, y: 0 }], pins: [], isGround: false, labelCount: 0 },
+  ];
+  const makeResult = (traceCount: 1 | 2): import("../simulation/linearTransient").AnalysisResult => ({
+    ok: true,
+    title: "Transient",
+    times: [0, 1, 2],
+    traces: twoTraces.slice(0, traceCount),
+    currents: [],
+    stats: { netCount: traceCount, componentCount: 0, sampleCount: 3, stopTime: 2, stepSize: 1 },
+    warnings: [],
+    circuit: {
+      groundNetId: null,
+      warnings: [],
+      nets: twoNets.slice(0, traceCount),
+      components: [],
+    } as never,
+  });
+  const twoTraceResult = makeResult(2);
+
+  beforeEach(() => {
+    useSchematic.setState({
+      probes: [
+        { id: "p1", x: 0, y: 0, netId: "n1", color: "var(--trace-cyan)" },
+        { id: "p2", x: 100, y: 0, netId: "n2", color: "var(--trace-green)" },
+      ],
+    });
+  });
+
+  it("defaults two-or-more plot panes to half width so they tile two-up", () => {
+    renderPanel({ result: twoTraceResult });
+    const cards = document.querySelectorAll(".dashboard-card");
+    expect(cards).toHaveLength(2);
+    expect(Array.from(cards).every((card) => card.classList.contains("dashboard-card--half"))).toBe(true);
+  });
+
+  it("toggling a card's width flips its class between half and full", () => {
+    renderPanel({ result: twoTraceResult });
+    const toggle = screen.getByRole("button", { name: "Widen V(n1) to full width" });
+    const card = toggle.closest(".dashboard-card") as HTMLElement;
+    expect(card.classList.contains("dashboard-card--half")).toBe(true);
+
+    fireEvent.click(toggle);
+    expect(card.classList.contains("dashboard-card--full")).toBe(true);
+    expect(screen.getByRole("button", { name: "Narrow V(n1) to half width" })).toBeTruthy();
+  });
+
+  it("dragging a card's handle onto another card reorders the grid", () => {
+    renderPanel({ result: twoTraceResult });
+    const cardsBefore = Array.from(document.querySelectorAll("[data-card-id]")).map((el) => el.getAttribute("data-card-id"));
+    expect(cardsBefore).toEqual(["plot:n1", "plot:n2"]);
+
+    const handle = screen.getByRole("button", { name: "Reorder V(n1)" });
+    const targetCard = document.querySelector('[data-card-id="plot:n2"]') as HTMLElement;
+
+    fireEvent.pointerDown(handle, { button: 0, pointerId: 1 });
+    fireEvent.pointerMove(targetCard, { clientX: 500, pointerId: 1 });
+    fireEvent.pointerUp(window, { pointerId: 1 });
+
+    const cardsAfter = Array.from(document.querySelectorAll("[data-card-id]")).map((el) => el.getAttribute("data-card-id"));
+    expect(cardsAfter).toEqual(["plot:n2", "plot:n1"]);
+  });
+
+  it("gives a lone plot pane full width by default", () => {
+    useSchematic.setState({ probes: [{ id: "p1", x: 0, y: 0, netId: "n1", color: "var(--trace-cyan)" }] });
+    renderPanel({ result: makeResult(1) });
+    const cards = document.querySelectorAll(".dashboard-card");
+    expect(cards).toHaveLength(1);
+    expect(cards[0].classList.contains("dashboard-card--full")).toBe(true);
   });
 });
 
@@ -213,10 +365,10 @@ describe("visibleTransientTraces — node names and probes are the plot authorit
   });
 });
 
-describe("SimulationPanel — advanced settings disclosure (§11 Unit C7)", { timeout: 20_000 }, () => {
+describe("SimulationPanel — one Advanced disclosure per tab (simplify pass)", { timeout: 20_000 }, () => {
   it("hides the STOP/STEPS/resolution controls behind a closed-by-default disclosure", () => {
     renderPanel();
-    const toggle = screen.getByRole("button", { name: "Toggle advanced simulation settings" });
+    const toggle = screen.getByRole("button", { name: "Toggle advanced settings" });
     expect(toggle.getAttribute("aria-expanded")).toBe("false");
     expect(screen.queryByText("STOP")).toBeNull();
     expect(screen.queryByText("STEPS")).toBeNull();
@@ -225,7 +377,7 @@ describe("SimulationPanel — advanced settings disclosure (§11 Unit C7)", { ti
 
   it("reveals the dials and the auto-settings helper text when opened", () => {
     renderPanel();
-    const toggle = screen.getByRole("button", { name: "Toggle advanced simulation settings" });
+    const toggle = screen.getByRole("button", { name: "Toggle advanced settings" });
     fireEvent.click(toggle);
     expect(toggle.getAttribute("aria-expanded")).toBe("true");
     expect(screen.getByText("STOP")).toBeTruthy();
@@ -238,7 +390,7 @@ describe("SimulationPanel — advanced settings disclosure (§11 Unit C7)", { ti
   it("shows the AUTO badge while resolution is auto-derived, with no reset control", () => {
     renderPanel({ optionsAuto: true, onResetOptions: vi.fn() });
     expect(screen.getByText("AUTO")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Toggle advanced simulation settings" }));
+    fireEvent.click(screen.getByRole("button", { name: "Toggle advanced settings" }));
     expect(screen.queryByRole("button", { name: "Reset to auto" })).toBeNull();
   });
 
@@ -246,8 +398,42 @@ describe("SimulationPanel — advanced settings disclosure (§11 Unit C7)", { ti
     const onResetOptions = vi.fn();
     renderPanel({ optionsAuto: false, onResetOptions });
     expect(screen.queryByText("AUTO")).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Toggle advanced simulation settings" }));
+    fireEvent.click(screen.getByRole("button", { name: "Toggle advanced settings" }));
     fireEvent.click(screen.getByRole("button", { name: "Reset to auto" }));
     expect(onResetOptions).toHaveBeenCalledTimes(1);
+  });
+
+  it("also tucks the AC expression bar and CSV export behind AC's own Advanced disclosure", () => {
+    renderPanel();
+    fireEvent.mouseDown(screen.getByRole("tab", { name: "AC sweep (.ac)" }), { button: 0 });
+    expect(screen.queryByLabelText("Plot AC expression")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Toggle advanced settings" }));
+    expect(screen.getByLabelText("Plot AC expression")).toBeTruthy();
+  });
+});
+
+describe("SimulationPanel — run-in-progress overlay (Fix 3)", () => {
+  it("is absent when idle", () => {
+    renderPanel({ isRunning: false, runProgress: null });
+    expect(screen.queryByRole("progressbar")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Stop" })).toBeNull();
+  });
+
+  it("shows a determinate progressbar and a Stop button wired to onStop when running with a known fraction", () => {
+    const handlers = renderPanel({ isRunning: true, runProgress: 0.4 });
+    const bar = screen.getByRole("progressbar");
+    expect(bar.getAttribute("aria-valuenow")).toBe("40");
+    expect(screen.getByText("40%")).toBeTruthy();
+
+    const stop = screen.getByRole("button", { name: "Stop" });
+    fireEvent.click(stop);
+    expect(handlers.onStop).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows an indeterminate progressbar (no aria-valuenow) when running with an unknown fraction (native ngspice)", () => {
+    renderPanel({ isRunning: true, runProgress: null });
+    const bar = screen.getByRole("progressbar");
+    expect(bar.hasAttribute("aria-valuenow")).toBe(false);
+    expect(screen.getByText("Working…")).toBeTruthy();
   });
 });

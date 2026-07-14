@@ -103,12 +103,19 @@ function probe(value: unknown, index: number): Probe {
 
 function netLabel(value: unknown, index: number): NetLabel {
   const source = record(value, `netLabels[${index}]`);
-  return {
+  const result: NetLabel = {
     id: text(source.id, `netLabels[${index}].id`, MAX_ID_LENGTH),
     x: coordinate(source.x, `netLabels[${index}].x`),
     y: coordinate(source.y, `netLabels[${index}].y`),
     text: text(source.text, `netLabels[${index}].text`, 80),
   };
+  // dx/dy are optional (absent on labels never dragged, and on any .sim file
+  // saved before manual placement existed) — omitting them here (rather than
+  // defaulting to 0) preserves "auto-place" as a distinct state from an
+  // explicit zero offset the user actually dragged onto the anchor.
+  if (source.dx !== undefined) result.dx = coordinate(source.dx, `netLabels[${index}].dx`);
+  if (source.dy !== undefined) result.dy = coordinate(source.dy, `netLabels[${index}].dy`);
+  return result;
 }
 
 /** Parse only the versioned schematic shape Tau can safely render and simulate. */

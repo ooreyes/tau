@@ -144,7 +144,7 @@ describe("ComponentInspector — no-selection empty state (§11 Unit A)", () => 
 });
 
 describe("ComponentsRail — responsive shell budget", () => {
-  function Harness({ maxWidth }: { maxWidth: number }) {
+  function Harness({ maxWidth, embedded = false }: { maxWidth: number; embedded?: boolean }) {
     const resize = usePanelWidth({
       storageKey: "tau.test.componentsRailWidth",
       defaultWidth: 264,
@@ -152,7 +152,7 @@ describe("ComponentsRail — responsive shell budget", () => {
       maxWidth,
       edge: "left",
     });
-    return <ComponentsRail focusSignal={0} onNotice={() => {}} resize={resize} maxWidth={maxWidth} />;
+    return <ComponentsRail focusSignal={0} onNotice={() => {}} resize={resize} maxWidth={maxWidth} embedded={embedded} />;
   }
 
   it("renders the responsive maximum immediately when the shell tightens", () => {
@@ -165,6 +165,12 @@ describe("ComponentsRail — responsive shell budget", () => {
     rerender(<Harness maxWidth={208} />);
     expect(panel.style.width).toBe("208px");
     expect(screen.getByRole("separator", { name: "Resize properties panel" }).getAttribute("aria-valuemax")).toBe("208");
+  });
+
+  it("delegates its width boundary to the shared dock when embedded", () => {
+    render(<Harness maxWidth={340} embedded />);
+    expect(screen.getByRole("complementary", { name: "Components" }).classList.contains("components-rail--embedded")).toBe(true);
+    expect(screen.queryByRole("separator", { name: "Resize properties panel" })).toBeNull();
   });
 });
 

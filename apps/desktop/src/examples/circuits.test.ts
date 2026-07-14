@@ -89,7 +89,7 @@ describe("EXAMPLE_CIRCUITS", () => {
         }
       });
 
-      it("simulates without error", () => {
+      it("simulates without error", async () => {
         if (circuit.nativeOnly) {
           // Nonlinear (native-engine) circuit: the TS solver rejects it by
           // design, so validate the builder produces a runnable ngspice deck.
@@ -102,7 +102,7 @@ describe("EXAMPLE_CIRCUITS", () => {
           expect(deck.circuit.warnings).toEqual([]);
           return;
         }
-        const result = runTransientAnalysis(
+        const result = await runTransientAnalysis(
           { components: circuit.components, wires: circuit.wires },
           OPTIONS,
         );
@@ -112,7 +112,7 @@ describe("EXAMPLE_CIRCUITS", () => {
         ).toBe(true);
       });
 
-      it("has at least one trace with real variation", () => {
+      it("has at least one trace with real variation", async () => {
         if (circuit.nativeOnly) {
           // Validate the derived netlist's topology instead of TS-simulating.
           const deck = buildSpiceDeck(
@@ -123,7 +123,7 @@ describe("EXAMPLE_CIRCUITS", () => {
           expect(nonGround.length).toBeGreaterThanOrEqual(4);
           return;
         }
-        const result = runTransientAnalysis(
+        const result = await runTransientAnalysis(
           { components: circuit.components, wires: circuit.wires },
           OPTIONS,
         );

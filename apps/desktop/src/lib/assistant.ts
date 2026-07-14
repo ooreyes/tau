@@ -8,9 +8,10 @@
 import { useEffect, useState } from "react";
 import Anthropic from "@anthropic-ai/sdk";
 import {
+  APPLY_CURRENT_ASC_TOOL,
   CREATE_ASC_TOOL,
   parseAssistantActions,
-  type AssistantCreateAscAction,
+  type AssistantAscAction,
 } from "./assistantActions";
 import {
   executeAssistantOperation,
@@ -40,7 +41,7 @@ The circuit context and any SPICE directives are internal working data. Answer w
 
 If an exact transient waveform fact is necessary but absent from the summary, call inspect_simulation_signal. Do not announce the operation or expose its expression/tool payload. After it returns, answer the user's actual engineering question directly. It is read-only and cannot run a missing simulation; if no result exists, state what analysis the user needs to run.
 
-When the user asks you to create a circuit, call create_asc_circuit with a complete LTspice Version 4 schematic. Do not paste ASC text into your prose. The tool creates a proposal only: Tau validates it and the user must explicitly confirm before any file is written.`;
+When the user asks you to create a new circuit or file, call create_asc_circuit with a complete LTspice Version 4 schematic. When the user asks to add, remove, revise, or reconnect something in the currently open circuit, call apply_current_asc_circuit with the complete resulting schematic: preserve the current layout and include every existing part, wire, label, and directive that should remain. Never use the create tool for a requested edit, and never represent an edit as a partial patch. Do not paste ASC text into your prose. Both tools create proposals only: Tau validates them and the user must explicitly confirm before a file is created or the current document is replaced.`;
 
 const API_KEY_EVENT = "tau:assistant-api-key-changed";
 let sessionApiKey = "";
@@ -83,7 +84,7 @@ export interface AssistantCompletedReply {
   /** User-visible prose only; thinking and tool payloads are never included. */
   text: string;
   /** Validated actions which still require an explicit user confirmation. */
-  actions: AssistantCreateAscAction[];
+  actions: AssistantAscAction[];
   /** Count only: raw validation details stay out of the ordinary transcript. */
   rejectedActionCount: number;
 }
@@ -99,6 +100,11 @@ export interface AssistantStreamHandlers {
 
 export interface AssistantStreamHandle {
   abort: () => void;
+}
+
+export interface AssistantStreamOptions {
+  /** Omit the destructive proposal tool when the current ASC could not be serialized completely. */
+  allowCurrentApply?: boolean;
 }
 
 function classifyAssistantError(error: unknown): AssistantError {
@@ -129,6 +135,7 @@ export function streamAssistantReply(
   history: readonly AssistantChatMessage[],
   handlers: AssistantStreamHandlers,
   operationContext?: AssistantOperationContext,
+  options: AssistantStreamOptions = {},
 ): AssistantStreamHandle {
   const client = new Anthropic({ apiKey, dangerouslyAllowBrowser: true });
   let userAborted = false;
@@ -142,6 +149,9 @@ export function streamAssistantReply(
     role: message.role,
     content: message.content,
   }));
+  const tools = options.allowCurrentApply === false
+    ? [CREATE_ASC_TOOL, INSPECT_SIGNAL_TOOL]
+    : [CREATE_ASC_TOOL, APPLY_CURRENT_ASC_TOOL, INSPECT_SIGNAL_TOOL];
 
   const run = (messages: Anthropic.MessageParam[], operationsRemaining: number): void => {
     if (userAborted) return;
@@ -150,7 +160,7 @@ export function streamAssistantReply(
       max_tokens: MAX_TOKENS,
       thinking: { type: "adaptive" },
       system,
-      tools: [CREATE_ASC_TOOL, INSPECT_SIGNAL_TOOL],
+      tools,
       tool_choice: { type: "auto", disable_parallel_tool_use: true },
       messages,
     });

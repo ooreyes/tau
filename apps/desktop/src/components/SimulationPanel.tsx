@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
-import type { CSSProperties } from "react";
+import type { CSSProperties, PointerEvent as ReactPointerEvent, ReactNode } from "react";
 import { Crosshair, Maximize2, Minimize2, RefreshCw, Square } from "lucide-react";
 import { useSchematic } from "../store/useSchematic";
 import {
@@ -54,12 +54,32 @@ import type { RawData } from "../io/rawImport";
 import { buildReferenceOverlay } from "../simulation/rawOverlay";
 import { buildParamScope } from "../simulation/paramScope";
 import { isNativeSpiceRuntime, MAX_NATIVE_OUTPUT_POINTS } from "../engine/nativeSpice";
-import { displaySampleIndices, waveformBounds } from "../simulation/waveform";
+import {
+  displaySampleIndices,
+  visibleWaveformBounds,
+  waveformBounds,
+  waveformEnvelopeIndices,
+} from "../simulation/waveform";
 import {
   type PaneLayout,
   defaultLayout,
   automaticLayout,
 } from "./plotPanes";
+import {
+  type CardHeight,
+  type CardLayoutState,
+  type CardSpec,
+  type CardWidth,
+  type DropTarget,
+  PLOT_HEIGHT_PX,
+  applyDrop,
+  cycleCardHeight,
+  dropTargetFor,
+  loadCardLayout,
+  reconcileCardLayout,
+  saveCardLayout,
+  toggleCardWidth,
+} from "./cardLayout";
 import { PlotAxes, ScopeClip } from "./PlotAxes";
 import { useMeasuredSize, tickCountsFromSize } from "./useMeasuredSize";
 import { usePlotViewport } from "./usePlotViewport";
@@ -71,6 +91,11 @@ import { traceStatistics } from "../simulation/measurementModel";
 import { AnalysisModeRail, type AnalysisMode } from "./AnalysisModeRail";
 
 interface SimulationPanelProps {
+  /** Active circuit tab's title — a best-effort key for persisting the TRAN
+   *  grid's per-card layout (order/width/height) across reruns of the same
+   *  circuit. Falls back to a shared key when omitted (e.g. in isolated
+   *  WaveformPlot tests that don't model a tabbed document at all). */
+  circuitTitle?: string;
   result: AnalysisResult | null;
   opResult: OperatingPointResult | null;
   acResult: AcResult | null;
@@ -90,6 +115,12 @@ interface SimulationPanelProps {
   /** True while transient resolution is auto-derived from the circuit (§11 C8). */
   optionsAuto?: boolean;
   isRunning: boolean;
+  /** Fraction in [0, 1] while the web TS transient solver is reporting real
+   *  progress; null before the first callback and for the whole run when
+   *  native ngspice handles it (no progress channel — App.tsx/executeTransient
+   *  passes null through in that case) — the run overlay below shows an
+   *  indeterminate bar instead of a percentage in that state. */
+  runProgress: number | null;
   onOptionsChange: (options: AnalysisOptions) => void;
   /** Return transient resolution to automatic (clears a manual override). */
   onResetOptions?: () => void;
@@ -118,6 +149,7 @@ const PLOT_HEIGHT = 210;
 const PLOT_PAD = 40;
 
 export function SimulationPanel({
+  circuitTitle,
   result,
   opResult,
   acResult,
@@ -135,6 +167,7 @@ export function SimulationPanel({
   options,
   optionsAuto,
   isRunning,
+  runProgress,
   onOptionsChange,
   onResetOptions,
   onRun,
@@ -163,9 +196,16 @@ export function SimulationPanel({
   const warnings = result?.warnings ?? [];
 
   const [mode, setMode] = useState<AnalysisMode>("tran");
-  // Advanced Simulation Settings disclosure — closed by default (§11 Unit C7):
-  // Tau picks stop time / step count automatically unless the user overrides.
+  // Each analysis tab collapses its power-user controls behind ONE Advanced
+  // disclosure, closed by default — the default view stays a calm read of
+  // plots + status, not a stacked instrument panel.
   const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [acAdvancedOpen, setAcAdvancedOpen] = useState(false);
+  const [dcAdvancedOpen, setDcAdvancedOpen] = useState(false);
+  const [noiseAdvancedOpen, setNoiseAdvancedOpen] = useState(false);
+  // MIN/AVG/MAX overlay on single-trace panes — opt-in (Advanced ▸ Plot tools)
+  // so the default scope reads as a clean waveform, not a measurement grid.
+  const [showStats, setShowStats] = useState(false);
   const [maximized, setMaximized] = useState(false);
   // User-entered expression traces overlaid on the transient scope (§6), e.g.
   // `V(out)-V(in)` or power `V(out)*I(R1)`.
@@ -429,7 +469,7 @@ export function SimulationPanel({
     runStatus === "complete" && mode === "tran" && result?.ok
       ? `${formatEngineering(result.stats.stopTime, "s", 2)} · ${result.stats.sampleCount} samples · ${result.stats.netCount} nets · ${result.stats.componentCount} parts`
       : runStatus === "error"
-        ? "Simulation failed — details in the Errors panel"
+        ? "Simulation failed — details below"
         : runStatus === "idle"
           ? "No results yet — press Run in the toolbar or pick an analysis tab"
           : null;
@@ -447,6 +487,19 @@ export function SimulationPanel({
     else if (next === "noise") void onRunNoise();
     else if (next === "step") void onRunStep();
   };
+
+  // Fix 3 — a run long enough to need a Stop button also deserves copy that
+  // says what's actually running, not just a generic "Running…" (the status
+  // strip below already covers the generic case; this is the loud overlay).
+  const runningLabel =
+    mode === "tran" ? "Running transient analysis…"
+    : mode === "op" ? "Running operating point…"
+    : mode === "ac" ? "Running AC sweep…"
+    : mode === "dc" ? "Running DC sweep…"
+    : mode === "tf" ? "Running transfer function…"
+    : mode === "noise" ? "Running noise analysis…"
+    : "Running step sweep…";
+  const runPercent = runProgress != null ? Math.round(runProgress * 100) : null;
 
   return (
     <aside className={`plotter${maximized ? " maximized" : ""}`} aria-label="Analysis plotter" aria-busy={isRunning}>
@@ -478,21 +531,6 @@ export function SimulationPanel({
                 variant="outline"
                 size="icon-sm"
                 className="text-muted-foreground hover:text-foreground"
-                onClick={onStep}
-                disabled={isRunning}
-                aria-label="Refine transient resolution"
-              >
-                <RefreshCw size={13} strokeWidth={1.8} aria-hidden="true" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Re-run transient at finer resolution</TooltipContent>
-          </Tooltip>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="outline"
-                size="icon-sm"
-                className="text-muted-foreground hover:text-foreground"
                 onClick={() => setMaximized((m) => !m)}
                 aria-label="Toggle maximized analysis"
               >
@@ -504,8 +542,8 @@ export function SimulationPanel({
             <TooltipContent>{maximized ? "Restore panel" : "Maximize analysis"}</TooltipContent>
           </Tooltip>
           {/* No Run button here — the single primary Run lives in the top
-              toolbar (§11 Unit C). The refine control above is the only
-              in-panel rerun affordance, deliberately secondary; run status
+              toolbar (§11 Unit C). Refine transient resolution moved into
+              Advanced ▸ Simulation settings (niche, TRAN-only); run status
               lives in the dashboard strip under the tabs (Unit C6). */}
         </div>
       </div>
@@ -520,6 +558,37 @@ export function SimulationPanel({
         {lastRunInfo && <span className="plotter-status-info">{lastRunInfo}</span>}
       </div>
 
+      {/* `.plotter-body` is the positioning root for the run overlay below —
+          it needs to center over the plots specifically, not the whole
+          panel (which would cover the header/tabs/status strip too). */}
+      <div className="plotter-body">
+        {isRunning && (
+          <div className="run-overlay">
+            <div className="run-overlay-card">
+              <div className="run-overlay-title">{runningLabel}</div>
+              <div
+                className="run-overlay-track"
+                role="progressbar"
+                aria-label="Simulation progress"
+                aria-valuemin={0}
+                aria-valuemax={100}
+                {...(runPercent != null ? { "aria-valuenow": runPercent } : {})}
+              >
+                <div
+                  className={`run-overlay-fill${runPercent == null ? " indeterminate" : ""}`}
+                  style={runPercent != null ? { width: `${runPercent}%` } : undefined}
+                />
+              </div>
+              <div className="run-overlay-meta">
+                <span className="run-overlay-percent">{runPercent != null ? `${runPercent}%` : "Working…"}</span>
+                <Button variant="outline" size="sm" onClick={onStop} className="run-overlay-stop">
+                  Stop
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
       {mode === "tran" && (
         <>
           <WaveformPlot
@@ -528,190 +597,229 @@ export function SimulationPanel({
             netLabels={netLabels}
             extraTraces={scopeTraces}
             paneLayout={paneLayout}
+            showStatistics={showStats}
+            measurements={measurements}
+            fourier={fourier}
+            layoutKey={circuitTitle ?? "default"}
           />
-
-          <details className="plot-tools advanced-settings">
-            <summary className="disclosure-header">
-              <span className="disclosure-label">Advanced plot tools</span>
-              <span className="disclosure-rule" aria-hidden="true" />
-              <span className="disclosure-chevron">›</span>
-            </summary>
-            <div className="plot-tools-body">
-          <div className="expr-bar">
-            <Input
-              variant="mono"
-              size="sm"
-              className="flex-1 min-w-40"
-              type="text"
-              value={exprInput}
-              placeholder="Plot an expression, e.g. V(out)-V(in) or V(out)*I(R1)"
-              aria-label="Plot expression"
-              onChange={(e) => {
-                setExprInput(e.currentTarget.value);
-                if (exprError) setExprError(null);
-              }}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") addExpression();
-              }}
-            />
-            <Button size="sm" onClick={addExpression} disabled={!exprInput.trim()}>
-              Add trace
-            </Button>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button variant="outline" size="sm" onClick={exportCsv} disabled={!result?.ok}>
-                  Export CSV
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Export the transient waveforms as a CSV table</TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button variant="outline" size="sm" onClick={exportNetlist} disabled={components.length === 0}>
-                  Netlist
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Export the generated SPICE netlist as a .cir file</TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button variant="outline" size="sm" onClick={exportRaw} disabled={!result?.ok}>
-                  Save .raw
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Export the transient waveforms as an LTspice .raw file</TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button variant="outline" size="sm" onClick={() => refInputRef.current?.click()} disabled={!result?.ok}>
-                  {refData ? "Ref .raw ✓" : "Ref .raw"}
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Overlay an LTspice .raw reference waveform and compare</TooltipContent>
-            </Tooltip>
-            {refData && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => { setRefData(null); setRefError(null); }}
-                  >
-                    Clear ref
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>Remove the reference overlay</TooltipContent>
-              </Tooltip>
-            )}
-            <input
-              ref={refInputRef}
-              className="file-input"
-              type="file"
-              accept=".raw"
-              onChange={(e) => {
-                const file = e.currentTarget.files?.[0];
-                if (file) void loadReferenceRaw(file);
-              }}
-            />
-          </div>
-          {refError && <div className="expr-error" role="alert">{refError}</div>}
-          {refOverlay && (
-            <div className="ref-compare">
-              {refOverlay.comparisons.length === 0 ? (
-                <span className="muted">
-                  No reference signal matched a plotted trace
-                  {refOverlay.unmatched.length > 0 ? ` (${refOverlay.unmatched.slice(0, 4).join(", ")}…)` : ""}.
-                </span>
-              ) : (
-                refOverlay.comparisons.map((c) => (
-                  <span key={c.label} className={c.pass ? "ref-pass" : "ref-fail"}>
-                    {c.label}: {(c.normalizedRms * 100).toFixed(2)}% RMS {c.pass ? "✓" : "✗"}
-                  </span>
-                ))
-              )}
-            </div>
-          )}
-          {exprError && <div className="expr-error" role="alert">{exprError}</div>}
-          {netlistError && <div className="expr-error" role="alert">{netlistError}</div>}
-          {exprList.length > 0 && (
-            <div className="expr-list">
-              {exprList.map((expr, i) => (
-                <span key={expr} className="expr-chip" style={{ borderColor: EXPR_COLORS[i % EXPR_COLORS.length] }}>
-                  <i style={{ background: EXPR_COLORS[i % EXPR_COLORS.length] }} />
-                  {expr}
-                  <button
-                    className="expr-remove"
-                    aria-label={`Remove ${expr}`}
-                    onClick={() => setExprList((prev) => prev.filter((e) => e !== expr))}
-                  >
-                    ×
-                  </button>
-                </span>
-              ))}
-            </div>
-          )}
-            </div>
-          </details>
-
-          <MeasTable measurements={measurements} />
-          <FourierTable results={fourier} />
-          <FftView result={result} preferredSignals={baseTraces.map((trace) => trace.label)} />
-          <CursorView result={result} extraTraces={exprTraces} />
 
           <div className="advanced-settings">
             <button
               className="disclosure-header"
               onClick={() => setAdvancedOpen((o) => !o)}
               aria-expanded={advancedOpen}
-              aria-label="Toggle advanced simulation settings"
+              aria-label="Toggle advanced settings"
             >
-              <span className="disclosure-label">Advanced simulation settings</span>
+              <span className="disclosure-label">Advanced</span>
               {optionsAuto && <span className="advanced-settings-auto">AUTO</span>}
               <span className="disclosure-rule" aria-hidden="true" />
               <span className={`disclosure-chevron${advancedOpen ? " open" : ""}`}>›</span>
             </button>
             {advancedOpen && (
-              <>
-                <div className="advanced-settings-help-row">
-                  <p className="advanced-settings-help">
-                    Tau automatically chooses simulation settings unless overridden.
-                  </p>
-                  {!optionsAuto && onResetOptions && (
-                    <Button variant="outline" size="sm" onClick={onResetOptions}>
-                      Reset to auto
+              <div className="advanced-body">
+                <section className="advanced-group">
+                  <h4 className="advanced-group-title">Plot tools</h4>
+                  <div className="expr-bar">
+                    <Input
+                      variant="mono"
+                      size="sm"
+                      className="flex-1 min-w-40"
+                      type="text"
+                      value={exprInput}
+                      placeholder="Plot an expression, e.g. V(out)-V(in) or V(out)*I(R1)"
+                      aria-label="Plot expression"
+                      onChange={(e) => {
+                        setExprInput(e.currentTarget.value);
+                        if (exprError) setExprError(null);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") addExpression();
+                      }}
+                    />
+                    <Button size="sm" onClick={addExpression} disabled={!exprInput.trim()}>
+                      Add trace
                     </Button>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button variant="outline" size="sm" onClick={() => refInputRef.current?.click()} disabled={!result?.ok}>
+                          {refData ? "Ref .raw ✓" : "Ref .raw"}
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>Overlay an LTspice .raw reference waveform and compare</TooltipContent>
+                    </Tooltip>
+                    {refData && (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => { setRefData(null); setRefError(null); }}
+                          >
+                            Clear ref
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>Remove the reference overlay</TooltipContent>
+                      </Tooltip>
+                    )}
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          type="button"
+                          variant={showStats ? "secondary" : "outline"}
+                          size="sm"
+                          aria-pressed={showStats}
+                          onClick={() => setShowStats((s) => !s)}
+                        >
+                          Plot statistics
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>Show MIN/AVG/MAX reference lines on single-trace panes</TooltipContent>
+                    </Tooltip>
+                    <input
+                      ref={refInputRef}
+                      className="file-input"
+                      type="file"
+                      accept=".raw"
+                      onChange={(e) => {
+                        const file = e.currentTarget.files?.[0];
+                        if (file) void loadReferenceRaw(file);
+                      }}
+                    />
+                  </div>
+                  {refError && <div className="expr-error" role="alert">{refError}</div>}
+                  {refOverlay && (
+                    <div className="ref-compare">
+                      {refOverlay.comparisons.length === 0 ? (
+                        <span className="muted">
+                          No reference signal matched a plotted trace
+                          {refOverlay.unmatched.length > 0 ? ` (${refOverlay.unmatched.slice(0, 4).join(", ")}…)` : ""}.
+                        </span>
+                      ) : (
+                        refOverlay.comparisons.map((c) => (
+                          <span key={c.label} className={c.pass ? "ref-pass" : "ref-fail"}>
+                            {c.label}: {(c.normalizedRms * 100).toFixed(2)}% RMS {c.pass ? "✓" : "✗"}
+                          </span>
+                        ))
+                      )}
+                    </div>
                   )}
-                </div>
-                <div className="plotter-controls">
-                  <DialControl
-                    label="STOP"
-                    value={`${formatEngineering(options.stopTime, "s", 2)}`}
-                    min={0.1}
-                    max={200}
-                    step={0.1}
-                    numericValue={options.stopTime * 1000}
-                    onChange={(value) => onOptionsChange({ ...options, stopTime: value / 1000 })}
-                  />
-                  <DialControl
-                    label="STEPS"
-                    value={String(options.steps)}
-                    min={32}
-                    max={maxTransientSteps}
-                    step={1}
-                    numericValue={options.steps}
-                    onChange={(value) => onOptionsChange({ ...options, steps: Math.round(value) })}
-                  />
-                  <ResolutionControl
-                    resolution={resolution}
-                    steps={options.steps}
-                    maxSteps={maxTransientSteps}
-                    onApply={() => {
-                      if (!resolution || resolution.requiredSteps <= 0 || resolution.requiredSteps > maxTransientSteps) return;
-                      onOptionsChange({ ...options, steps: Math.max(32, resolution.requiredSteps) });
-                    }}
-                  />
-                </div>
-              </>
+                  {exprError && <div className="expr-error" role="alert">{exprError}</div>}
+                  {exprList.length > 0 && (
+                    <div className="expr-list">
+                      {exprList.map((expr, i) => (
+                        <span key={expr} className="expr-chip" style={{ borderColor: EXPR_COLORS[i % EXPR_COLORS.length] }}>
+                          <i style={{ background: EXPR_COLORS[i % EXPR_COLORS.length] }} />
+                          {expr}
+                          <button
+                            className="expr-remove"
+                            aria-label={`Remove ${expr}`}
+                            onClick={() => setExprList((prev) => prev.filter((e) => e !== expr))}
+                          >
+                            ×
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </section>
+
+                <section className="advanced-group">
+                  <h4 className="advanced-group-title">Spectrum &amp; cursors</h4>
+                  <FftView result={result} preferredSignals={baseTraces.map((trace) => trace.label)} />
+                  <CursorView result={result} extraTraces={exprTraces} />
+                </section>
+
+                <section className="advanced-group">
+                  <h4 className="advanced-group-title">Export</h4>
+                  <div className="expr-bar">
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button variant="outline" size="sm" onClick={exportCsv} disabled={!result?.ok}>
+                          Export CSV
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>Export the transient waveforms as a CSV table</TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button variant="outline" size="sm" onClick={exportNetlist} disabled={components.length === 0}>
+                          Netlist
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>Export the generated SPICE netlist as a .cir file</TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button variant="outline" size="sm" onClick={exportRaw} disabled={!result?.ok}>
+                          Save .raw
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>Export the transient waveforms as an LTspice .raw file</TooltipContent>
+                    </Tooltip>
+                  </div>
+                  {netlistError && <div className="expr-error" role="alert">{netlistError}</div>}
+                </section>
+
+                <section className="advanced-group">
+                  <h4 className="advanced-group-title">Simulation settings</h4>
+                  <div className="advanced-settings-help-row">
+                    <p className="advanced-settings-help">
+                      Tau automatically chooses simulation settings unless overridden.
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={onStep}
+                            disabled={isRunning}
+                            aria-label="Refine transient resolution"
+                          >
+                            <RefreshCw size={13} strokeWidth={1.8} aria-hidden="true" />
+                            Refine
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>Re-run transient at finer resolution</TooltipContent>
+                      </Tooltip>
+                      {!optionsAuto && onResetOptions && (
+                        <Button variant="outline" size="sm" onClick={onResetOptions}>
+                          Reset to auto
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                  <div className="plotter-controls">
+                    <DialControl
+                      label="STOP"
+                      value={`${formatEngineering(options.stopTime, "s", 2)}`}
+                      min={0.1}
+                      max={200}
+                      step={0.1}
+                      numericValue={options.stopTime * 1000}
+                      onChange={(value) => onOptionsChange({ ...options, stopTime: value / 1000 })}
+                    />
+                    <DialControl
+                      label="STEPS"
+                      value={String(options.steps)}
+                      min={32}
+                      max={maxTransientSteps}
+                      step={1}
+                      numericValue={options.steps}
+                      onChange={(value) => onOptionsChange({ ...options, steps: Math.round(value) })}
+                    />
+                    <ResolutionControl
+                      resolution={resolution}
+                      steps={options.steps}
+                      maxSteps={maxTransientSteps}
+                      onApply={() => {
+                        if (!resolution || resolution.requiredSteps <= 0 || resolution.requiredSteps > maxTransientSteps) return;
+                        onOptionsChange({ ...options, steps: Math.max(32, resolution.requiredSteps) });
+                      }}
+                    />
+                  </div>
+                </section>
+              </div>
             )}
           </div>
         </>
@@ -721,110 +829,148 @@ export function SimulationPanel({
       {mode === "ac" && (
         <>
           <AcPlot result={acResult} overlays={acExprTraces} />
-          <div className="expr-bar">
-            <Input
-              variant="mono"
-              size="sm"
-              className="flex-1 min-w-40"
-              type="text"
-              value={acExprInput}
-              placeholder="Plot an expression, e.g. db(V(out))-db(V(in)) or mag(V(a,b))"
-              aria-label="Plot AC expression"
-              onChange={(e) => {
-                setAcExprInput(e.currentTarget.value);
-                if (acExprError) setAcExprError(null);
-              }}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") addAcExpression();
-              }}
-            />
-            <Button size="sm" onClick={addAcExpression} disabled={!acExprInput.trim()}>
-              Add trace
-            </Button>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button variant="outline" size="sm" onClick={exportAcCsv} disabled={!acResult?.ok}>
-                  Export CSV
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Export the AC sweep as a CSV table</TooltipContent>
-            </Tooltip>
-          </div>
-          {acExprError && <div className="expr-error" role="alert">{acExprError}</div>}
-          {acExprList.length > 0 && (
-            <div className="expr-list">
-              {acExprList.map((expr, i) => (
-                <span key={expr} className="expr-chip" style={{ borderColor: EXPR_COLORS[i % EXPR_COLORS.length] }}>
-                  <i style={{ background: EXPR_COLORS[i % EXPR_COLORS.length] }} />
-                  {expr}
-                  <button
-                    className="expr-remove"
-                    aria-label={`Remove ${expr}`}
-                    onClick={() => setAcExprList((prev) => prev.filter((e) => e !== expr))}
-                  >
-                    ×
-                  </button>
-                </span>
-              ))}
-            </div>
-          )}
           <AcFamilyPlot family={acStepFamily} />
           <MeasTable measurements={acMeasurements} />
+
+          <div className="advanced-settings">
+            <button
+              className="disclosure-header"
+              onClick={() => setAcAdvancedOpen((o) => !o)}
+              aria-expanded={acAdvancedOpen}
+              aria-label="Toggle advanced settings"
+            >
+              <span className="disclosure-label">Advanced</span>
+              <span className="disclosure-rule" aria-hidden="true" />
+              <span className={`disclosure-chevron${acAdvancedOpen ? " open" : ""}`}>›</span>
+            </button>
+            {acAdvancedOpen && (
+              <div className="advanced-body">
+                <section className="advanced-group">
+                  <div className="expr-bar">
+                    <Input
+                      variant="mono"
+                      size="sm"
+                      className="flex-1 min-w-40"
+                      type="text"
+                      value={acExprInput}
+                      placeholder="Plot an expression, e.g. db(V(out))-db(V(in)) or mag(V(a,b))"
+                      aria-label="Plot AC expression"
+                      onChange={(e) => {
+                        setAcExprInput(e.currentTarget.value);
+                        if (acExprError) setAcExprError(null);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") addAcExpression();
+                      }}
+                    />
+                    <Button size="sm" onClick={addAcExpression} disabled={!acExprInput.trim()}>
+                      Add trace
+                    </Button>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button variant="outline" size="sm" onClick={exportAcCsv} disabled={!acResult?.ok}>
+                          Export CSV
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>Export the AC sweep as a CSV table</TooltipContent>
+                    </Tooltip>
+                  </div>
+                  {acExprError && <div className="expr-error" role="alert">{acExprError}</div>}
+                  {acExprList.length > 0 && (
+                    <div className="expr-list">
+                      {acExprList.map((expr, i) => (
+                        <span key={expr} className="expr-chip" style={{ borderColor: EXPR_COLORS[i % EXPR_COLORS.length] }}>
+                          <i style={{ background: EXPR_COLORS[i % EXPR_COLORS.length] }} />
+                          {expr}
+                          <button
+                            className="expr-remove"
+                            aria-label={`Remove ${expr}`}
+                            onClick={() => setAcExprList((prev) => prev.filter((e) => e !== expr))}
+                          >
+                            ×
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </section>
+              </div>
+            )}
+          </div>
         </>
       )}
       {mode === "dc" && (
         <>
           <DcSetupForm setup={dcSetup} components={components} onChange={onDcSetupChange} />
           <DcPlot result={dcResult} overlays={dcExprTraces} />
-          <div className="expr-bar">
-            <Input
-              variant="mono"
-              size="sm"
-              className="flex-1 min-w-40"
-              type="text"
-              value={dcExprInput}
-              placeholder="Plot an expression, e.g. V(out)-V(in) or V(a)/V(b)"
-              aria-label="Plot DC expression"
-              onChange={(e) => {
-                setDcExprInput(e.currentTarget.value);
-                if (dcExprError) setDcExprError(null);
-              }}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") addDcExpression();
-              }}
-            />
-            <Button size="sm" onClick={addDcExpression} disabled={!dcExprInput.trim()}>
-              Add trace
-            </Button>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button variant="outline" size="sm" onClick={exportDcCsv} disabled={!dcResult?.ok}>
-                  Export CSV
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Export the DC sweep as a CSV table</TooltipContent>
-            </Tooltip>
-          </div>
-          {dcExprError && <div className="expr-error" role="alert">{dcExprError}</div>}
-          {dcExprList.length > 0 && (
-            <div className="expr-list">
-              {dcExprList.map((expr, i) => (
-                <span key={expr} className="expr-chip" style={{ borderColor: EXPR_COLORS[i % EXPR_COLORS.length] }}>
-                  <i style={{ background: EXPR_COLORS[i % EXPR_COLORS.length] }} />
-                  {expr}
-                  <button
-                    className="expr-remove"
-                    aria-label={`Remove ${expr}`}
-                    onClick={() => setDcExprList((prev) => prev.filter((e) => e !== expr))}
-                  >
-                    ×
-                  </button>
-                </span>
-              ))}
-            </div>
-          )}
           <DcFamilyPlot family={dcStepFamily} />
           <MeasTable measurements={dcMeasurements} />
+
+          <div className="advanced-settings">
+            <button
+              className="disclosure-header"
+              onClick={() => setDcAdvancedOpen((o) => !o)}
+              aria-expanded={dcAdvancedOpen}
+              aria-label="Toggle advanced settings"
+            >
+              <span className="disclosure-label">Advanced</span>
+              <span className="disclosure-rule" aria-hidden="true" />
+              <span className={`disclosure-chevron${dcAdvancedOpen ? " open" : ""}`}>›</span>
+            </button>
+            {dcAdvancedOpen && (
+              <div className="advanced-body">
+                <section className="advanced-group">
+                  <div className="expr-bar">
+                    <Input
+                      variant="mono"
+                      size="sm"
+                      className="flex-1 min-w-40"
+                      type="text"
+                      value={dcExprInput}
+                      placeholder="Plot an expression, e.g. V(out)-V(in) or V(a)/V(b)"
+                      aria-label="Plot DC expression"
+                      onChange={(e) => {
+                        setDcExprInput(e.currentTarget.value);
+                        if (dcExprError) setDcExprError(null);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") addDcExpression();
+                      }}
+                    />
+                    <Button size="sm" onClick={addDcExpression} disabled={!dcExprInput.trim()}>
+                      Add trace
+                    </Button>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button variant="outline" size="sm" onClick={exportDcCsv} disabled={!dcResult?.ok}>
+                          Export CSV
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>Export the DC sweep as a CSV table</TooltipContent>
+                    </Tooltip>
+                  </div>
+                  {dcExprError && <div className="expr-error" role="alert">{dcExprError}</div>}
+                  {dcExprList.length > 0 && (
+                    <div className="expr-list">
+                      {dcExprList.map((expr, i) => (
+                        <span key={expr} className="expr-chip" style={{ borderColor: EXPR_COLORS[i % EXPR_COLORS.length] }}>
+                          <i style={{ background: EXPR_COLORS[i % EXPR_COLORS.length] }} />
+                          {expr}
+                          <button
+                            className="expr-remove"
+                            aria-label={`Remove ${expr}`}
+                            onClick={() => setDcExprList((prev) => prev.filter((e) => e !== expr))}
+                          >
+                            ×
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </section>
+              </div>
+            )}
+          </div>
         </>
       )}
       {mode === "tf" && (
@@ -837,17 +983,36 @@ export function SimulationPanel({
         <>
           <NoiseSetupForm setup={noiseSetup} components={components} onChange={onNoiseSetupChange} />
           <NoisePlot result={noiseResult} />
-          <div className="expr-bar">
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button variant="outline" size="sm" onClick={exportNoiseCsv} disabled={!noiseResult?.ok}>
-                  Export CSV
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Export the noise spectrum as a CSV table</TooltipContent>
-            </Tooltip>
-          </div>
           <MeasTable measurements={noiseMeasurements} />
+
+          <div className="advanced-settings">
+            <button
+              className="disclosure-header"
+              onClick={() => setNoiseAdvancedOpen((o) => !o)}
+              aria-expanded={noiseAdvancedOpen}
+              aria-label="Toggle advanced settings"
+            >
+              <span className="disclosure-label">Advanced</span>
+              <span className="disclosure-rule" aria-hidden="true" />
+              <span className={`disclosure-chevron${noiseAdvancedOpen ? " open" : ""}`}>›</span>
+            </button>
+            {noiseAdvancedOpen && (
+              <div className="advanced-body">
+                <section className="advanced-group">
+                  <div className="expr-bar">
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button variant="outline" size="sm" onClick={exportNoiseCsv} disabled={!noiseResult?.ok}>
+                          Export CSV
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>Export the noise spectrum as a CSV table</TooltipContent>
+                    </Tooltip>
+                  </div>
+                </section>
+              </div>
+            )}
+          </div>
         </>
       )}
       {mode === "step" && (
@@ -857,29 +1022,6 @@ export function SimulationPanel({
         </>
       )}
 
-      <div className="plotter-footer">
-        <div className="plotter-message">
-          {result ? (
-            result.ok ? (
-              <>
-                <strong>{result.title}</strong>
-                <span>{formatEngineering(result.stats.stepSize, "s", 2)} step</span>
-              </>
-            ) : (
-              <>
-                <strong>{result.title}</strong>
-                <span>{result.message}</span>
-              </>
-            )
-          ) : (
-            <>
-              <strong>Idle</strong>
-              <span>{components.length} parts · {wires.length} wires</span>
-            </>
-          )}
-        </div>
-      </div>
-
       {warnings.length > 0 && (
         <div className="warning-list">
           {warnings.slice(0, 3).map((warning) => (
@@ -887,6 +1029,7 @@ export function SimulationPanel({
           ))}
         </div>
       )}
+      </div>
     </aside>
   );
 }
@@ -897,6 +1040,10 @@ export function WaveformPlot({
   netLabels,
   extraTraces = [],
   paneLayout,
+  showStatistics = false,
+  measurements = [],
+  fourier = [],
+  layoutKey = "default",
 }: {
   result: AnalysisResult | null;
   baseTraces: Trace[];
@@ -904,6 +1051,17 @@ export function WaveformPlot({
   /** User-entered expression traces overlaid on the scope (§6). */
   extraTraces?: Trace[];
   paneLayout: PaneLayout;
+  /** MIN/AVG/MAX overlay on single-trace panes — opt-in, off by default. */
+  showStatistics?: boolean;
+  /** Non-empty tables become their own snap-tiling dashboard cards, ordered
+   *  and sized alongside the plot panes (see cardLayout.ts). Defaulting to
+   *  `[]` keeps every prior direct-render caller (the axes tests) rendering
+   *  no table cards, exactly as before this dashboard existed. */
+  measurements?: MeasResult[];
+  fourier?: FourierResult[];
+  /** Best-effort localStorage key for the dashboard's card order/width/
+   *  height, one per circuit tab (App.tsx's active document title). */
+  layoutKey?: string;
 }) {
   const success = result?.ok ? result : null;
 
@@ -938,10 +1096,102 @@ export function WaveformPlot({
     return trace.label;
   };
 
-  const multiPane = paneLayout.length > 1;
+  // ── Dashboard card model (snap-tiling grid) ──────────────────────────────
+  // One card per pane (even an empty one — a pane always gets its own scope
+  // face) plus one card per non-empty table. Cards are keyed by TRACE id, not
+  // pane id/index: automaticLayout regenerates pane ids as `auto-p${index}`
+  // whenever the signal set changes, so keying by pane id would silently
+  // reassign one probe's saved width/height to whatever trace lands at that
+  // index next. Recomputed plainly (no memo) every render — cheap, and
+  // memoizing would need `labelFor` in the deps, which closes over `success`/
+  // `netLabels` and is recreated every render anyway.
+  const cardSpecs: CardSpec[] = paneLayout.map((pane) => {
+    const traceId = pane.traceIds[0];
+    const trace = traceId ? traceById.get(traceId) : undefined;
+    return {
+      id: traceId ? `plot:${traceId}` : `plot:${pane.id}`,
+      kind: "plot",
+      title: trace ? labelFor(trace) : "Empty pane",
+    };
+  });
+  if (measurements.length > 0) cardSpecs.push({ id: "measurements", kind: "table", title: "Measurements" });
+  if (fourier.length > 0) cardSpecs.push({ id: "fourier", kind: "table", title: "Fourier" });
+  const cardById = new Map(cardSpecs.map((c) => [c.id, c]));
+  const paneByCardId = new Map(paneLayout.map((pane) => {
+    const traceId = pane.traceIds[0];
+    return [traceId ? `plot:${traceId}` : `plot:${pane.id}`, pane] as const;
+  }));
+
+  const [cardLayout, setCardLayout] = useState<CardLayoutState>(() => loadCardLayout(layoutKey));
+  const loadedKeyRef = useRef(layoutKey);
+  useEffect(() => {
+    // Switching circuit tabs loads THAT tab's own saved grid instead of
+    // carrying the previous tab's card order/sizes across.
+    if (loadedKeyRef.current === layoutKey) return;
+    loadedKeyRef.current = layoutKey;
+    setCardLayout(loadCardLayout(layoutKey));
+  }, [layoutKey]);
+
+  const cardSpecsKey = cardSpecs.map((c) => `${c.id}:${c.kind}`).join("|");
+  const reconciled = useMemo(
+    () => reconcileCardLayout(cardLayout, cardSpecs),
+    // cardSpecs is a fresh array every render; cardSpecsKey is the stable
+    // "same set of cards" signal (same trick as availableTraceKey above).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [cardLayout, cardSpecsKey],
+  );
+  useEffect(() => {
+    saveCardLayout(layoutKey, reconciled);
+  }, [layoutKey, reconciled]);
+
+  // ── Drag-to-tile ─────────────────────────────────────────────────────────
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [dropPreview, setDropPreviewState] = useState<{ id: string; side: "start" | "end" } | null>(null);
+  const dropPreviewRef = useRef(dropPreview);
+  const setDropPreview = (next: typeof dropPreview) => {
+    dropPreviewRef.current = next;
+    setDropPreviewState(next);
+  };
+
+  const handleDragStart = (id: string) => (event: ReactPointerEvent<HTMLButtonElement>) => {
+    if (event.button !== 0) return;
+    event.preventDefault();
+    setDraggingId(id);
+    const onUp = () => {
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
+      const preview = dropPreviewRef.current;
+      if (preview) {
+        const target: DropTarget = dropTargetFor(
+          { id: preview.id, width: reconciled.widths[preview.id] ?? "full" },
+          preview.side,
+        );
+        setCardLayout(() => applyDrop(reconciled, id, target));
+      }
+      setDraggingId(null);
+      setDropPreview(null);
+    };
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
+  };
+
+  const handleCardPointerMove = (id: string) => (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (!draggingId || draggingId === id) return;
+    const rect = event.currentTarget.getBoundingClientRect();
+    const side: "start" | "end" = event.clientX < rect.left + rect.width / 2 ? "start" : "end";
+    if (dropPreviewRef.current?.id === id && dropPreviewRef.current.side === side) return;
+    setDropPreview({ id, side });
+  };
+
+  const clearDropPreview = () => setDropPreview(null);
 
   return (
     <div className="scope-shell">
+      {/* The failed-run message used to live in the (removed) footer strip;
+          every other tab surfaces result.message inline, so TRAN does too. */}
+      {result && !result.ok && (
+        <div className="analysis-empty" role="alert">{result.message}</div>
+      )}
       {success && allTraces.length === 0 && (
         <div className="scope-empty-state">
           <Crosshair size={20} strokeWidth={1.5} aria-hidden="true" />
@@ -950,73 +1200,172 @@ export function WaveformPlot({
         </div>
       )}
 
-      {allTraces.length > 0 && paneLayout.map((pane, paneIndex) => {
-        // Resolve traces for this pane (preserve insertion order within pane).
-        const paneTraces = pane.traceIds
-          .map((id) => traceById.get(id))
-          .filter((t): t is Trace => t !== undefined);
+      {allTraces.length > 0 && (
+        <div className="plot-dashboard-grid" onPointerLeave={clearDropPreview}>
+          {reconciled.order.map((id) => {
+            const card = cardById.get(id);
+            if (!card) return null;
+            const width = reconciled.widths[id] ?? "full";
+            const dropSide = dropPreview?.id === id ? dropPreview.side : null;
+            const shellProps = {
+              card,
+              width,
+              dragging: draggingId === id,
+              dropSide,
+              onDragStart: handleDragStart(id),
+              onPointerMove: handleCardPointerMove(id),
+              onToggleWidth: () => setCardLayout(() => toggleCardWidth(reconciled, id)),
+            };
 
-        // Per-pane Y autorange.
-        const plot =
-          success && paneTraces.length > 0
-            ? (() => {
-                const { min, max } = waveformBounds(paneTraces);
-                const unit = commonTraceUnit(paneTraces.map((t) => t.unit)) || "V";
-                return { min, max, tMax, unit };
-              })()
-            : null;
+            if (card.kind === "table") {
+              return (
+                <DashboardCard key={id} {...shellProps}>
+                  {id === "measurements" ? <MeasTable measurements={measurements} /> : <FourierTable results={fourier} />}
+                </DashboardCard>
+              );
+            }
 
-        return (
-          <div key={pane.id} className={`pane-wrapper${multiPane ? " pane-wrapper--split" : ""}`}>
-            {/* Per-pane header with remove button (only visible in multi-pane mode). */}
-            {multiPane && (
-              <div className="pane-header">
-                <span className="pane-label">
-                  {paneTraces.length === 1 ? labelFor(paneTraces[0]) : `Plot ${paneIndex + 1}`}
-                </span>
-              </div>
-            )}
+            const pane = paneByCardId.get(id);
+            if (!pane) return null;
+            const paneIndex = paneLayout.indexOf(pane);
+            const paneTraces = pane.traceIds
+              .map((traceId) => traceById.get(traceId))
+              .filter((t): t is Trace => t !== undefined);
+            const plot =
+              success && paneTraces.length > 0
+                ? (() => {
+                    const { min, max } = waveformBounds(paneTraces);
+                    const unit = commonTraceUnit(paneTraces.map((t) => t.unit)) || "V";
+                    return { min, max, tMax, unit };
+                  })()
+                : null;
+            const height = reconciled.heights[id] ?? "M";
 
-            <TranScopePane
-              paneTraces={paneTraces}
-              plot={plot}
-              times={success ? success.times : []}
-              ariaLabel={multiPane ? `Waveform pane ${paneIndex + 1}` : "Waveform plot"}
-              showXAxis
-              // Not just `success`: on the render where a run first resolves,
-              // `plot` can still be null for one tick before `paneLayout`
-              // catches up with the new trace ids — folding `plot`'s presence
-              // into the reset key means the viewport reset effect fires
-              // exactly when this pane actually has data to fit, not before.
-              runKey={plot ? success : null}
-              sharedX={sharedX}
-              onSharedXChange={shareXViewport}
-            />
+            return (
+              <DashboardCard
+                key={id}
+                {...shellProps}
+                height={height}
+                onCycleHeight={() => setCardLayout(() => cycleCardHeight(reconciled, id))}
+              >
+                <TranScopePane
+                  paneTraces={paneTraces}
+                  plot={plot}
+                  times={success ? success.times : []}
+                  ariaLabel={`Waveform pane ${paneIndex + 1}`}
+                  showXAxis
+                  // Not just `success`: on the render where a run first
+                  // resolves, `plot` can still be null for one tick before
+                  // `paneLayout` catches up with the new trace ids — folding
+                  // `plot`'s presence into the reset key means the viewport
+                  // reset effect fires exactly when this pane actually has
+                  // data to fit, not before.
+                  runKey={plot ? success : null}
+                  sharedX={sharedX}
+                  onSharedXChange={shareXViewport}
+                  showStatistics={showStatistics}
+                  plotHeight={PLOT_HEIGHT_PX[height]}
+                />
+                <div className="scope-legend" aria-label="Trace measurements">
+                  {paneTraces.length > 0 ? (
+                    paneTraces.map((trace) => (
+                      <EngineeringTraceReadout
+                        key={trace.id}
+                        trace={{ ...trace, label: labelFor(trace) }}
+                        times={success ? success.times : []}
+                      />
+                    ))
+                  ) : (
+                    <span className="muted">Empty — move a trace here</span>
+                  )}
+                </div>
+              </DashboardCard>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
 
-            {/* Per-pane legend with optional "move to pane" selector. */}
-            <div className="scope-legend" aria-label="Trace measurements">
-              {paneTraces.length > 0 ? (
-                paneTraces.map((trace) => (
-                  <EngineeringTraceReadout
-                    key={trace.id}
-                    trace={{ ...trace, label: labelFor(trace) }}
-                    times={success ? success.times : []}
-                  />
-                ))
-              ) : (
-                <span className="muted">{multiPane ? "Empty — move a trace here" : "No traces"}</span>
-              )}
-            </div>
-          </div>
-        );
-      })}
+/**
+ * Slim header chrome shared by every dashboard card (plot panes AND the
+ * measurements/Fourier tables): a drag handle, title, optional height cycle
+ * (plots only — tables auto-height), and a width toggle. Owns none of the
+ * layout state itself — purely presentational plus the pointer-down that
+ * starts a drag, so {@link WaveformPlot} stays the single source of truth
+ * for card order/width/height.
+ */
+function DashboardCard({
+  card,
+  width,
+  height,
+  dragging,
+  dropSide,
+  onDragStart,
+  onPointerMove,
+  onToggleWidth,
+  onCycleHeight,
+  children,
+}: {
+  card: CardSpec;
+  width: CardWidth;
+  height?: CardHeight;
+  dragging: boolean;
+  dropSide: "start" | "end" | null;
+  onDragStart: (event: ReactPointerEvent<HTMLButtonElement>) => void;
+  onPointerMove: (event: ReactPointerEvent<HTMLDivElement>) => void;
+  onToggleWidth: () => void;
+  onCycleHeight?: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <div
+      className={`dashboard-card dashboard-card--${width}${dragging ? " dashboard-card--dragging" : ""}`}
+      data-card-id={card.id}
+      onPointerMove={onPointerMove}
+    >
+      {dropSide && <div className={`dashboard-card-drop dashboard-card-drop--${dropSide}`} aria-hidden="true" />}
+      <div className="dashboard-card-header">
+        <button
+          type="button"
+          className="dashboard-card-handle"
+          aria-label={`Reorder ${card.title}`}
+          onPointerDown={onDragStart}
+        >
+          ⋮⋮
+        </button>
+        <span className="dashboard-card-title">{card.title}</span>
+        {onCycleHeight && (
+          <button
+            type="button"
+            className="dashboard-card-btn"
+            onClick={onCycleHeight}
+            aria-label={`Cycle ${card.title} plot height`}
+            title="Cycle plot height (S/M/L)"
+          >
+            {height}
+          </button>
+        )}
+        <button
+          type="button"
+          className="dashboard-card-btn"
+          onClick={onToggleWidth}
+          aria-label={width === "half" ? `Widen ${card.title} to full width` : `Narrow ${card.title} to half width`}
+          title="Toggle card width"
+        >
+          {width === "half" ? "½" : "Full"}
+        </button>
+      </div>
+      <div className="dashboard-card-body">{children}</div>
     </div>
   );
 }
 
 /**
  * One TRAN scope pane's `<svg>`: real tick axes (via {@link PlotAxes}) plus
- * the trace paths, with Desmos-style cursor-anchored wheel zoom, drag pan,
+ * the trace paths, with Desmos-style cursor-anchored ⌘/pinch-wheel zoom
+ * (plain wheel scrolls the panel instead — see `usePlotViewport`), drag pan,
  * and an auto-fit ⌂ button (`usePlotViewport`). Split out of
  * {@link WaveformPlot}'s per-pane `.map()` so each pane can own its own
  * hooks — hooks can't live inside a `.map()` callback in the parent, and
@@ -1031,6 +1380,8 @@ function TranScopePane({
   runKey,
   sharedX,
   onSharedXChange,
+  showStatistics,
+  plotHeight = 190,
 }: {
   paneTraces: Trace[];
   plot: { min: number; max: number; tMax: number; unit: string } | null;
@@ -1041,23 +1392,32 @@ function TranScopePane({
   runKey: unknown;
   sharedX: { xMin: number; xMax: number };
   onSharedXChange: (x: { xMin: number; xMax: number }) => void;
+  /** MIN/AVG/MAX overlay on this pane, when it carries exactly one trace. */
+  showStatistics: boolean;
+  /** Dashboard card height (S/M/L → 160/190/260, see cardLayout.ts). Defaults
+   *  to the old fixed 190 for any caller that doesn't specify one. */
+  plotHeight?: number;
 }) {
   const clipId = useId();
-  const [plotHeight, setPlotHeight] = useState(190);
   const [measureRef, size] = useMeasuredSize<SVGSVGElement>();
   const { targetXTicks, targetYTicks } = tickCountsFromSize(size);
+  // Placeholder domain for a pane with no traces yet (e.g. just added via
+  // "move to pane", data not resolved this tick) — 0..1 is arbitrary and must
+  // never be shared: `onXViewportChange` below is only wired up when `plot`
+  // is real, so this placeholder can't leak into `sharedX` and drag siblings
+  // with real (e.g. millisecond-scale) data onto a bogus 0–1s window.
   const domain = useMemo<Viewport>(
     () => ({ xMin: 0, xMax: plot ? plot.tMax : 1, yMin: plot ? plot.min : -1, yMax: plot ? plot.max : 1 }),
     [plot],
   );
-  const { viewport, attachSvg, isPanning, fit, zoomBy, dragHandlers } = usePlotViewport({
+  const { viewport, attachSvg, isPanning, fit, fitY, zoomBy, dragHandlers } = usePlotViewport({
     domain,
     resetKey: runKey,
     width: PLOT_WIDTH,
     height: plotHeight,
     pad: PLOT_PAD,
     sharedX,
-    onXViewportChange: onSharedXChange,
+    onXViewportChange: plot ? onSharedXChange : undefined,
   });
   const setRefs = useCallback(
     (el: SVGSVGElement | null) => {
@@ -1066,30 +1426,12 @@ function TranScopePane({
     },
     [measureRef, attachSvg],
   );
+  const autoScaleVisible = useCallback(() => {
+    fitY(visibleWaveformBounds(times, paneTraces, viewport.xMin, viewport.xMax));
+  }, [fitY, paneTraces, times, viewport.xMax, viewport.xMin]);
 
   return (
     <div className="scope-plot-wrap">
-      <div className="scope-size-controls" aria-label="Plot size">
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          disabled={plotHeight <= 190}
-          aria-label="Decrease plot height"
-          onClick={() => setPlotHeight((height) => Math.max(190, height - 50))}
-        >
-          <Minimize2 size={13} aria-hidden="true" />
-        </Button>
-        <span className="mono-num" aria-live="polite">{plotHeight}px</span>
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          disabled={plotHeight >= 340}
-          aria-label="Increase plot height"
-          onClick={() => setPlotHeight((height) => Math.min(340, height + 50))}
-        >
-          <Maximize2 size={13} aria-hidden="true" />
-        </Button>
-      </div>
       <svg
         ref={setRefs}
         className={isPanning ? "scope-svg panning" : "scope-svg"}
@@ -1123,11 +1465,12 @@ function TranScopePane({
                   key={trace.id}
                   className={trace.id.startsWith("ref:") ? "scope-trace ref" : "scope-trace"}
                   stroke={trace.color}
+                  fill="none"
                   d={tracePath(trace, times, viewport.xMin, viewport.xMax, viewport.yMin, viewport.yMax, plotHeight)}
                 />
               ))}
             </ScopeClip>
-            {paneTraces.length === 1 && (
+            {showStatistics && paneTraces.length === 1 && (
               <ScopeStatisticsOverlay
                 trace={paneTraces[0]}
                 times={times}
@@ -1138,7 +1481,14 @@ function TranScopePane({
           </>
         )}
       </svg>
-      {plot && <ScopeZoomCluster onZoomIn={() => zoomBy(0.7)} onZoomOut={() => zoomBy(1 / 0.7)} onFit={fit} />}
+      {plot && (
+        <ScopeZoomCluster
+          onZoomIn={() => zoomBy(0.7)}
+          onZoomOut={() => zoomBy(1 / 0.7)}
+          onFit={fit}
+          onAutoScaleVisible={autoScaleVisible}
+        />
+      )}
     </div>
   );
 }
@@ -1205,11 +1555,10 @@ function tracePath(
   max: number,
   height = PLOT_HEIGHT,
 ): string {
-  const sampleCount = Math.min(trace.values.length, times.length);
   const xSpan = xMax - xMin || 1;
   let path = "";
   let started = false;
-  for (const index of displaySampleIndices(sampleCount)) {
+  for (const index of waveformEnvelopeIndices(times, trace.values, xMin, xMax, PLOT_WIDTH - PLOT_PAD * 2)) {
     const value = trace.values[index];
     const time = times[index];
     if (!Number.isFinite(value) || !Number.isFinite(time)) continue;

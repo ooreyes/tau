@@ -18,11 +18,11 @@ describe("EngineeringTraceReadout", () => {
     const readout = screen.getByRole("region", { name: "V(out) engineering readout" });
     const disclosure = within(readout).getByText("More measurements").closest("details");
     expect(disclosure?.open).toBe(false);
-    expect(within(readout).getAllByText("FINAL")).toHaveLength(2);
-    expect(within(readout).getByText("P–P")).toBeTruthy();
-    expect(within(disclosure!).getByText("MIN")).toBeTruthy();
-    expect(within(disclosure!).getByText("MAX")).toBeTruthy();
-    expect(within(disclosure!).getByText("AVG")).toBeTruthy();
+    expect(within(readout).getAllByText("Final value")).toHaveLength(2);
+    expect(within(readout).getByText("Peak-to-peak")).toBeTruthy();
+    expect(within(disclosure!).getByText("Minimum")).toBeTruthy();
+    expect(within(disclosure!).getByText("Maximum")).toBeTruthy();
+    expect(within(disclosure!).getByText("Average")).toBeTruthy();
     expect(within(disclosure!).getByText("RMS")).toBeTruthy();
     expect(within(disclosure!).getByText("C1")).toBeTruthy();
     expect(within(disclosure!).getByText("125 mV @ 500 ms")).toBeTruthy();
@@ -47,8 +47,8 @@ describe("EngineeringTraceReadout", () => {
     expect(within(readout).getByText("Periodic · 2 Hz")).toBeTruthy();
     expect(within(readout).queryByText(/sine/i)).toBeNull();
     expect(within(readout).getAllByText("RMS")).toHaveLength(2);
-    expect(within(readout).getByText("FREQ")).toBeTruthy();
-    expect(within(disclosure).getByText("PERIOD")).toBeTruthy();
+    expect(within(readout).getByText("Frequency")).toBeTruthy();
+    expect(within(disclosure).getByText("Period")).toBeTruthy();
   });
 
   it("renders nothing for an unavailable trace", () => {

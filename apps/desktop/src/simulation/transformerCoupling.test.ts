@@ -99,12 +99,12 @@ describe("mutual inductance — AC (acSweep)", () => {
 });
 
 describe("mutual inductance — transient (linearTransient)", () => {
-  it("holds V(out) = 2·V(in) at every step for an ideal open-circuit transformer", () => {
+  it("holds V(out) = 2·V(in) at every step for an ideal open-circuit transformer", async () => {
     // DC primary: I₂ = 0 (open secondary) and I₁ ramps, so the flux-coupling
     // relation V(out) = (M/L1)·V(in) = 2·V(in) holds instantaneously.
     const { components, wires, netLabels } = transformer("1");
     const couplings = parseCouplingSpecs(["K1 L1 L2 1"]);
-    const result = runTransientAnalysis(
+    const result = await runTransientAnalysis(
       { components, wires, netLabels, couplings },
       { stopTime: 1e-3, steps: 50 },
     );
@@ -120,9 +120,9 @@ describe("mutual inductance — transient (linearTransient)", () => {
     }
   });
 
-  it("produces no secondary voltage when the windings are uncoupled", () => {
+  it("produces no secondary voltage when the windings are uncoupled", async () => {
     const { components, wires, netLabels } = transformer("1");
-    const result = runTransientAnalysis(
+    const result = await runTransientAnalysis(
       { components, wires, netLabels, couplings: [] },
       { stopTime: 1e-3, steps: 50 },
     );

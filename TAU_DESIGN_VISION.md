@@ -94,7 +94,7 @@ Window
 ├── Schematic workspace
 │   ├── Schematics folder explorer
 │   ├── editable canvas
-│   ├── properties / component library
+│   ├── shared properties / components / assistant dock
 │   └── errors strip
 └── Simulator workspace
     ├── read-only circuit context
@@ -164,6 +164,47 @@ until labels or controls become unreachable.
 - Use LTspice interaction expectations as compatibility guidance, including
   probe-on-wire plotting and two measurement cursors:
   [Analog Devices LTspice getting started](https://ez.analog.com/design-tools-and-calculators/ltspice/a/faqs-docs/c/getting-started-with-ltspice).
+
+### Assistant and local inference
+
+- Components and the Assistant are independent tools. Opening the Assistant must
+  not hide the component library; when both are open they share one right-side
+  width and stack vertically so the canvas keeps a usable minimum width.
+- The Assistant always receives a bounded, serialized view of the active
+  schematic. A request to change the circuit produces a typed operation or a
+  complete validated ASC proposal, never direct filesystem writes or hidden
+  canvas mutation. Tau owns symbol legality, grid placement, routing,
+  connectivity, duplicate-name checks, undo, dirty state, and analysis
+  invalidation. The user sees the proposed action and confirms before apply.
+- Cloud and local inference use the same provider-neutral action boundary. A
+  local provider binds only to loopback by default and is opt-in; Tau must not
+  silently download multi-gigabyte weights, expose the server to the LAN, or
+  describe a small model as an autonomous electrical engineer.
+- Apple Silicon reference runtime: Apple's
+  [MLX LM](https://github.com/ml-explore/mlx-lm), which supports quantized
+  models, streaming, prompt caching, and an OpenAI-compatible localhost server.
+  Recommended starting tiers are the official Apache-2.0
+  [Qwen3 1.7B MLX 4-bit](https://huggingface.co/Qwen/Qwen3-1.7B-MLX-4bit)
+  for an 8 GB M1 advisory experience and
+  [Qwen3 4B MLX 4-bit](https://huggingface.co/Qwen/Qwen3-4B-MLX-4bit)
+  for structured edit proposals on 16 GB or more.
+
+#### Reproducible M1 Pro benchmark (2026-07-14)
+
+Hardware: M1 Pro, 16 GB unified memory, macOS 26.5; `mlx-lm` 0.31.3 and
+MLX 0.32.0. Both models ran locally with thinking disabled.
+
+| Model | Download shown by model card | Prompt | Generation | Peak model memory | Tau edit result |
+| --- | ---: | ---: | ---: | ---: | --- |
+| Qwen3 1.7B MLX 4-bit | 914 MB | 92.4 tok/s | 52.9 tok/s | 1.40 GB | Failed whole-ASC task; a narrow typed resistor operation succeeded separately at 70.2 tok/s and 1.12 GB |
+| Qwen3 4B MLX 4-bit | about 2.3 GB | 150.3 tok/s | 42.5 tok/s | 2.77 GB | Produced bounded ASC-like output; a separate localhost request returned the exact requested typed resistor operation |
+
+The benchmark establishes feasibility, not electrical correctness. The 1.7B
+model is suitable for explanations and narrow typed operations on an 8 GB Mac,
+but is below Tau's bar for whole-document generation. The 4B model is the
+default local candidate on 16 GB or more for broader typed edit proposals,
+still behind strict validation and confirmation. A full ASC replacement remains
+a compatibility fallback, not the preferred local-LLM protocol.
 
 ## 7. Motion and feedback
 
@@ -272,8 +313,19 @@ Landed and independently reviewed:
 - A clean Errors state is a static 28px line instead of an expandable green
   banner. Real warnings/errors keep amber/red semantics. Canvas delete moved
   from a floating overlay to the stable toolbar while the Delete key remains.
+- Transient plots are unfilled engineering traces. Full Home fit and
+  visible-window Y autoscale are separate controls, and dense waveforms retain
+  pulse extrema through min/max envelope reduction instead of becoming a solid
+  polygon.
+- Components and Assistant coexist in a single-width vertical dock. The
+  Assistant receives the active ASC privately and may propose a validated,
+  confirmed, undoable current-document replacement without writing files or
+  bypassing Tau's connectivity rules.
+- Explorer moves survive native drag payload timing and refresh the destination;
+  the duplicate open/import project footer is removed while the compact toolbar
+  actions remain.
 
-Next implementation slice: unify the existing plot-card variants around shared
-axes, direct cursors, persistent resize/reorder, and visible statistics; then
-finish FFT/THD engineering detail. Tau intentionally blocks lossy in-place saves
-for complex vendor ASC records until those records can be preserved structurally.
+Next implementation slice: add the opt-in MLX local-provider adapter behind the
+same typed-operation protocol, then finish persistent plot resize/reorder and
+`.plt`/image export. Tau intentionally blocks lossy in-place saves for complex
+vendor ASC records until those records can be preserved structurally.

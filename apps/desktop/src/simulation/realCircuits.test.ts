@@ -179,10 +179,10 @@ describe("RC charging (R=1k, C=1µ → τ=1 ms)", () => {
   ];
   const wires = [W({ x: 96, y: 64 }, { x: 160, y: 64 })];
 
-  it("V_C(τ) ≈ 5·(1−1/e) = 3.16 V", () => {
+  it("V_C(τ) ≈ 5·(1−1/e) = 3.16 V", async () => {
     const stopTime = 5e-3;
     const steps = 2000;
-    const res = runTransientAnalysis({ components: comps, wires }, { stopTime, steps });
+    const res = await runTransientAnalysis({ components: comps, wires }, { stopTime, steps });
     expect(res.ok).toBe(true);
     if (!res.ok) return;
     const out = res.traces.find((t) => t.label.includes("C1"));
@@ -209,10 +209,10 @@ describe("RL transient (R=1k, L=1H → τ=1 ms)", () => {
     W({ x: 224, y: 128 }, { x: 288, y: 128 }),
   ];
 
-  it("v_L(τ) ≈ 5/e = 1.84 V and decays toward 0", () => {
+  it("v_L(τ) ≈ 5/e = 1.84 V and decays toward 0", async () => {
     const stopTime = 5e-3;
     const steps = 2000;
-    const res = runTransientAnalysis({ components: comps, wires }, { stopTime, steps });
+    const res = await runTransientAnalysis({ components: comps, wires }, { stopTime, steps });
     expect(res.ok).toBe(true);
     if (!res.ok) return;
     const vL = res.traces.find((t) => t.label.includes("L1"));
@@ -239,10 +239,10 @@ describe("RLC series under-damped ringing (ζ=0.5, f₀≈1.6 kHz)", () => {
     W({ x: 224, y: 128 }, { x: 288, y: 128 }),
   ];
 
-  it("capacitor voltage overshoots the rail then settles near 5 V", () => {
+  it("capacitor voltage overshoots the rail then settles near 5 V", async () => {
     const stopTime = 5e-3;
     const steps = 4000;
-    const res = runTransientAnalysis({ components: comps, wires }, { stopTime, steps });
+    const res = await runTransientAnalysis({ components: comps, wires }, { stopTime, steps });
     expect(res.ok).toBe(true);
     if (!res.ok) return;
     const vC = res.traces.find((t) => t.label.includes("C1"));

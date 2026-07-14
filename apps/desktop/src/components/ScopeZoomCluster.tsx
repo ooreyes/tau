@@ -1,4 +1,4 @@
-import { Scan, ZoomIn, ZoomOut } from "lucide-react";
+import { Scan, ScanLine, ZoomIn, ZoomOut } from "lucide-react";
 
 import { InstrumentIconButton } from "@/components/ui/instrument-icon-button";
 
@@ -14,10 +14,13 @@ export function ScopeZoomCluster({
   onZoomIn,
   onZoomOut,
   onFit,
+  onAutoScaleVisible,
 }: {
   onZoomIn: () => void;
   onZoomOut: () => void;
   onFit: () => void;
+  /** Optional Y-only fit for the signals inside the current horizontal window. */
+  onAutoScaleVisible?: () => void;
 }) {
   return (
     <div className="scope-zoom-controls">
@@ -47,6 +50,15 @@ export function ScopeZoomCluster({
         tooltipSide="left"
         onClick={onFit}
       />
+      {onAutoScaleVisible && (
+        <InstrumentIconButton
+          icon={ScanLine}
+          label="Auto scale visible signals"
+          tooltip="Auto scale visible signals (preserves the current time window)"
+          tooltipSide="left"
+          onClick={onAutoScaleVisible}
+        />
+      )}
     </div>
   );
 }

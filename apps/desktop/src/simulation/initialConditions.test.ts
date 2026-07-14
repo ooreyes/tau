@@ -69,9 +69,9 @@ function rcDischarge(capValue: string): {
 }
 
 describe("initial conditions — capacitor IC=", () => {
-  it("a charged cap discharges through R from its IC (does not throw on `1u IC=2`)", () => {
+  it("a charged cap discharges through R from its IC (does not throw on `1u IC=2`)", async () => {
     const { components, wires, netLabels } = rcDischarge("1u IC=2");
-    const result = runTransientAnalysis({ components, wires, netLabels }, { stopTime: 1e-3, steps: 1000 });
+    const result = await runTransientAnalysis({ components, wires, netLabels }, { stopTime: 1e-3, steps: 1000 });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     const cap = result.traces.find((t) => t.id === "cap")!;
@@ -87,9 +87,9 @@ describe("initial conditions — capacitor IC=", () => {
     }
   });
 
-  it("without IC the same node starts at 0 (no source to charge it)", () => {
+  it("without IC the same node starts at 0 (no source to charge it)", async () => {
     const { components, wires, netLabels } = rcDischarge("1u");
-    const result = runTransientAnalysis({ components, wires, netLabels }, { stopTime: 1e-3, steps: 100 });
+    const result = await runTransientAnalysis({ components, wires, netLabels }, { stopTime: 1e-3, steps: 100 });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     const cap = result.traces.find((t) => t.id === "cap")!;
@@ -98,7 +98,7 @@ describe("initial conditions — capacitor IC=", () => {
 });
 
 describe("initial conditions — inductor IC=", () => {
-  it("an inductor seeded with IC delivers that current at t=0 and decays through R", () => {
+  it("an inductor seeded with IC delivers that current at t=0 and decays through R", async () => {
     // RL loop: L (IC=1 A) and R=1Ω from node `n1` to ground ⇒ τ = L/R = 1 s.
     // I(L1)[0] ≈ IC, decaying as I = IC·e^(−tR/L).
     const components: SchematicComponent[] = [
@@ -114,7 +114,7 @@ describe("initial conditions — inductor IC=", () => {
       labelAt("n1", { x: 64, y: 96 }),
       labelAt("n1", { x: 200, y: -32 }),
     ];
-    const result = runTransientAnalysis({ components, wires: [], netLabels }, { stopTime: 1, steps: 1000 });
+    const result = await runTransientAnalysis({ components, wires: [], netLabels }, { stopTime: 1, steps: 1000 });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     const il = result.currents.find((c) => c.ref === "L1");

@@ -24,8 +24,8 @@ const wires: SchematicWire[] = [
   { id: "w-2", points: [{ x: 128, y: 0 }, { x: 192, y: 0 }] },
 ];
 
-function runCircuit() {
-  const result = runTransientAnalysis(
+async function runCircuit() {
+  const result = await runTransientAnalysis(
     { components: [VS, R, C, GND_VS, GND_C], wires },
     { stopTime: 5e-3, steps: 500 },
   );
@@ -49,8 +49,8 @@ describe("isCurrentProbe", () => {
 });
 
 describe("currentProbeTraces", () => {
-  it("maps a probed resistor to its I(ref) trace with unit A and the probe's color", () => {
-    const result = runCircuit();
+  it("maps a probed resistor to its I(ref) trace with unit A and the probe's color", async () => {
+    const result = await runCircuit();
     const traces = currentProbeTraces(result, [probe("r-1", "var(--trace-purple)")]);
     expect(traces).toHaveLength(1);
     expect(traces[0].id).toBe("I(R1)");
@@ -59,33 +59,33 @@ describe("currentProbeTraces", () => {
     expect(traces[0].values).toHaveLength(result.times.length);
   });
 
-  it("resolves the physically correct current: I(R1) at t=0 ≈ Vs/R = 5 mA", () => {
-    const result = runCircuit();
+  it("resolves the physically correct current: I(R1) at t=0 ≈ Vs/R = 5 mA", async () => {
+    const result = await runCircuit();
     const [trace] = currentProbeTraces(result, [probe("r-1")]);
     expect(Math.abs(trace.values[0])).toBeCloseTo(5e-3, 4);
     // After 5τ the capacitor is charged and the current has decayed to ~0.
     expect(Math.abs(trace.values[trace.values.length - 1])).toBeLessThan(5e-5);
   });
 
-  it("ignores plain net probes and probes on unknown component ids", () => {
-    const result = runCircuit();
+  it("ignores plain net probes and probes on unknown component ids", async () => {
+    const result = await runCircuit();
     const netProbe: Probe = { id: "p-net", x: 160, y: 0, color: "var(--trace-cyan)" };
     expect(currentProbeTraces(result, [netProbe, probe("deleted-id")])).toHaveLength(0);
   });
 
-  it("ignores probes on components without a ref-des (unlabeled/ground)", () => {
-    const result = runCircuit();
+  it("ignores probes on components without a ref-des (unlabeled/ground)", async () => {
+    const result = await runCircuit();
     expect(currentProbeTraces(result, [probe("g-1")])).toHaveLength(0);
   });
 
-  it("deduplicates two probes on the same component", () => {
-    const result = runCircuit();
+  it("deduplicates two probes on the same component", async () => {
+    const result = await runCircuit();
     const traces = currentProbeTraces(result, [probe("r-1"), { ...probe("r-1"), id: "p-dup" }]);
     expect(traces).toHaveLength(1);
   });
 
-  it("resolves multiple distinct probes to distinct traces", () => {
-    const result = runCircuit();
+  it("resolves multiple distinct probes to distinct traces", async () => {
+    const result = await runCircuit();
     const traces = currentProbeTraces(result, [probe("r-1"), probe("c-1")]);
     expect(traces.map((t) => t.id).sort()).toEqual(["I(C1)", "I(R1)"]);
   });

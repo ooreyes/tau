@@ -76,7 +76,7 @@ describe("buildAssistantContext", () => {
     const componentRows: ComponentMeasurement[] = [
       { componentId: "r1", ref: "R1", kind: "resistor", voltage: series("V", 5), current: series("A", 0.005) },
     ];
-    const { text, truncated } = buildAssistantContext(baseInput({
+    const { text, truncated, canApplyCurrent } = buildAssistantContext(baseInput({
       analysis: successAnalysis(),
       componentRows,
       measurements: [{ name: "vout_max", value: 4.98 }, { name: "bad_meas", value: null, error: "not found" }],
@@ -84,6 +84,9 @@ describe("buildAssistantContext", () => {
     }));
 
     expect(truncated).toBe(false);
+    expect(canApplyCurrent).toBe(true);
+    expect(text).toContain("Current serialized LTspice ASC (complete");
+    expect(text).toContain("Version 4\nSHEET 1 880 680");
     expect(text).toContain("SPICE netlist:");
     expect(text).toContain("R1"); // netlist emits the ref
     expect(text).toContain("Components (3):");
@@ -128,14 +131,28 @@ describe("buildAssistantContext", () => {
     expect(text).toContain("Components: none placed.");
   });
 
+  it("withholds the current-circuit apply tool when serialization would skip a part", () => {
+    const { text, canApplyCurrent } = buildAssistantContext(baseInput({
+      components: [
+        component("ground", "g1", "", "", 0, 64),
+        component("testpoint", "tp1", "TP1", "", 0, 0),
+      ],
+      wires: [],
+    }));
+    expect(canApplyCurrent).toBe(false);
+    expect(text).toContain("unavailable for safe revision");
+    expect(text).not.toContain("SYMBOL testpoint");
+  });
+
   it("truncates the whole context and flags it when the analysis section alone blows the cap", () => {
     // A step sweep or a directive-heavy .meas block can produce hundreds of
     // measurement rows — enough alone (on top of the netlist + component
-    // sections) to exceed the ~4000 char budget on a small, valid circuit.
-    const measurements = Array.from({ length: 400 }, (_, i) => ({ name: `meas_${i}_of_a_long_name`, value: 1.2345 + i }));
+    // sections) to exceed the bounded context on a small, valid circuit.
+    const measurements = Array.from({ length: 800 }, (_, i) => ({ name: `meas_${i}_of_a_long_name`, value: 1.2345 + i }));
     const { text, truncated } = buildAssistantContext(baseInput({ analysis: successAnalysis(), measurements }));
     expect(truncated).toBe(true);
-    expect(text.length).toBeLessThan(4100); // capped text plus the short trailing note
+    expect(text.length).toBeLessThan(16_100); // capped text plus the short trailing note
     expect(text).toContain("context truncated");
+    expect(text).toContain("Current serialized LTspice ASC (complete");
   });
 });

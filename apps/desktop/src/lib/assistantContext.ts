@@ -11,6 +11,7 @@ import type { AnalysisResult } from "../simulation/linearTransient";
 import type { ComponentMeasurement } from "../simulation/measurementModel";
 import type { MeasResult } from "../simulation/measure";
 import { buildSpiceDeck } from "../engine/spiceNetlist";
+import { schematicToAsc } from "../io/ascExport";
 import { formatEngineering } from "../simulation/quantity";
 import { primaryReading } from "../components/ComponentMeasurementsPanel";
 
@@ -31,12 +32,15 @@ export interface AssistantContext {
   text: string;
   /** True if the context was cut down to fit the overall cap. */
   truncated: boolean;
+  /** False when Tau cannot provide a complete serialized current circuit. */
+  canApplyCurrent: boolean;
 }
 
-// ~4000 chars keeps the per-turn context cheap while still holding a small-
-// to-medium netlist in full; NETLIST_CAP gives the deck itself a generous
-// slice of that budget before the whole-context backstop below ever bites.
-const CONTEXT_CHAR_CAP = 4000;
+// A complete current ASC is more important than verbose analysis summaries for
+// circuit revision: it carries exact layout/connectivity and is kept at the
+// front of the context so the whole-context backstop never cuts through it.
+const CONTEXT_CHAR_CAP = 16_000;
+const CURRENT_ASC_CHAR_CAP = 10_000;
 const NETLIST_CHAR_CAP = 2000;
 
 /** Nominal `.tran` line for a context-only deck build — the actual stop
@@ -66,6 +70,32 @@ function buildNetlistSection(input: AssistantContextInput): string {
   } catch (error) {
     return `Netlist unavailable: ${error instanceof Error ? error.message : "could not build a netlist from this circuit."}`;
   }
+}
+
+function buildCurrentAscSection(input: AssistantContextInput): { text: string; canApplyCurrent: boolean } {
+  const serialized = schematicToAsc({
+    components: input.components,
+    wires: input.wires,
+    netLabels: input.netLabels,
+    directives: input.directives,
+  });
+  const skipped = serialized.warnings.filter((warning) => /skipped|no LTspice symbol/i.test(warning));
+  if (skipped.length > 0) {
+    return {
+      text: "Current serialized LTspice ASC: unavailable for safe revision because Tau cannot serialize every placed part.",
+      canApplyCurrent: false,
+    };
+  }
+  if (serialized.text.length > CURRENT_ASC_CHAR_CAP) {
+    return {
+      text: `Current serialized LTspice ASC: unavailable for safe revision because it exceeds ${CURRENT_ASC_CHAR_CAP.toLocaleString()} characters.`,
+      canApplyCurrent: false,
+    };
+  }
+  return {
+    text: `Current serialized LTspice ASC (complete; use this exact layout as the base for apply_current_asc_circuit):\n${serialized.text.trimEnd()}`,
+    canApplyCurrent: true,
+  };
 }
 
 function componentLine(component: SchematicComponent, row: ComponentMeasurement | undefined): string {
@@ -114,17 +144,22 @@ function buildSelectionSection(input: AssistantContextInput): string {
 }
 
 export function buildAssistantContext(input: AssistantContextInput): AssistantContext {
+  const currentAsc = buildCurrentAscSection(input);
   const sections = [
+    currentAsc.text,
     buildNetlistSection(input),
     buildComponentSection(input),
     buildAnalysisSection(input),
     buildSelectionSection(input),
   ];
   const text = sections.join("\n\n");
-  if (text.length <= CONTEXT_CHAR_CAP) return { text, truncated: false };
-  // Backstop beyond the netlist's own middle-truncation (e.g. a very long
-  // component list) — keep the head (netlist + components, what most
-  // questions actually need) and note the cut rather than silently dropping it.
+  if (text.length <= CONTEXT_CHAR_CAP) return { text, truncated: false, canApplyCurrent: currentAsc.canApplyCurrent };
+  // The full ASC is first and individually bounded, so this backstop trims only
+  // later summaries (e.g. hundreds of .meas rows), never the revision source.
   const omitted = text.length - CONTEXT_CHAR_CAP;
-  return { text: `${text.slice(0, CONTEXT_CHAR_CAP)}\n… [context truncated — ${omitted} chars omitted]`, truncated: true };
+  return {
+    text: `${text.slice(0, CONTEXT_CHAR_CAP)}\n… [context truncated — ${omitted} chars omitted]`,
+    truncated: true,
+    canApplyCurrent: currentAsc.canApplyCurrent,
+  };
 }

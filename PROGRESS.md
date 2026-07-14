@@ -8,23 +8,71 @@
      `git log --oneline -8`, recover/finish/revert that unit FIRST, then go on.
      ─────────────────────────────────────────────────────────────────────── -->
 ## ⏱ HEARTBEAT
-- **Headline metric:** 1623 committed-snapshot tests green · corpus 82/82 import · 82/82 op-converge · 79/82 warning-clean
-- **Run started (UTC):** 2026-07-14T18:27Z
-- **Synced to origin:** auto/ltspice-parity @ 063c527 (dirty shared tree preserved).
-- **Claimed unit:** §1/§8/§10/§11 correctness follow-up: atomic native ASC
-  creation/import and synchronized Diagnostics running state.
+- **Headline metric:** 1674 reviewed-tree tests green · corpus 82/82 import · 82/82 op-converge · 79/82 warning-clean
+- **Run started (UTC):** 2026-07-14T22:11Z
+- **Synced to origin:** auto/ltspice-parity @ 60f2516 (dirty shared tree preserved).
+- **Claimed unit:** §1/§6/§8/§10 workspace correctness: pulse-safe plots and
+  visible-window autoscale, Explorer move reliability, and a simultaneous
+  Components/Assistant dock with confirmed active-circuit edits.
 - **Status:** DONE
-- **Last completed sub-step:** reviewed both narrow subagent diffs; exact staged
-  snapshot typecheck/1623-test/build gates, Rust fmt/clippy/tests, and the real
-  bundled-ngspice ignored smoke test are green (shared tree: 1655 tests).
-- **Plan:** commit/push only the reviewed atomic-create and Diagnostics hunks;
-  preserve the unrelated simulator-dashboard worktree and repeat native-window
-  QA when the Mac is unlocked.
-- **Note:** existing simulator/assistant worktree edits belong to earlier units and
-  must remain intact; stage only reviewed hunks.
-- **Next step:** verify `+`, New Circuit, Cmd-S, numbered collisions, and disk
-  persistence through the unlocked Tauri window, then reconcile the existing
-  simulator-dashboard worktree unit.
+- **Last completed sub-step:** root review and every required gate passed; the
+  fresh unsigned Tau.app/DMG built, the packaged app stayed alive and created a
+  canonical ASC on disk, and live hot reload held exactly 900px with Components
+  and Assistant simultaneously reachable.
+- **Plan:** commit/push this reconciled unit, then continue with the opt-in local
+  provider adapter and persistent plot-layout/export work.
+- **Note:** the existing simulator-dashboard worktree remains part of the current
+  reconciliation unit; inspect and stage intentionally rather than resetting it.
+- **Next step:** add a loopback-only MLX provider that emits strict typed
+  operations; keep Tau responsible for placement, routing, validation,
+  confirmation, undo, and saving.
+
+---
+
+## 2026-07-14T22:33Z — auto/ltspice-parity — trustworthy plots, files, and current-circuit assistance (§1/§6/§8/§10)
+
+### What I did
+- Replaced the transient scope's filled waveform polygon with unfilled traces,
+  full-result Home fit, visible-window Y autoscale, signal-relative padding,
+  and min/max envelope reduction that preserves pulse extrema at high density.
+- Hardened Explorer drag/drop against React/dataTransfer timing, refreshed and
+  expanded successful destinations, surfaced failed moves, and removed the
+  redundant open/import footer from an already-open project.
+- Made Components and Assistant simultaneous, vertically split tools within one
+  width budget. Added a private, validated, confirmation-gated active-ASC edit
+  operation with one-step undo, dirty/analysis state correctness, and probe
+  reconciliation.
+- Benchmarked official Qwen3 1.7B and 4B MLX 4-bit models on the local 16 GB M1
+  Pro and recorded the provider-neutral design in `TAU_DESIGN_VISION.md`. Small
+  models are approved for narrow typed operations, not direct whole-document or
+  filesystem authority.
+
+### Tests and QA
+- `pnpm -C apps/desktop typecheck`: pass.
+- Desktop Vitest: 115 files / 1674 tests pass. Production web build: pass
+  (existing SDK externalization/chunk-size warnings only).
+- Native gates: `cargo fmt --check`, Clippy with warnings denied, 11 Rust tests,
+  and the ignored real-ngspice smoke against bundled `libngspice.0.dylib`: pass.
+- Fresh `tauri build`: pass; produced Tau.app and the arm64 DMG. Packaged-app
+  Computer Use QA confirmed the shared Components/Assistant dock, real folder
+  Explorer actions without the duplicate footer, and a real canonical ASC file
+  created in `/tmp/Tau-Native-QA-20260714`.
+- Chrome hot-reload QA at 900×600 measured body `scrollWidth === 900` and kept
+  the canvas, Components, Assistant, and their single resize boundary reachable.
+  OS pointer automation could not synthesize an HTML5 dataTransfer drop, so the
+  drag claim rests on focused native-payload/race/move tests rather than a false
+  click-through claim.
+
+### Parity items
+- §1 Explorer/file workflow: reliability follow-up complete.
+- §6 transient plot readability/autoscale: complete for the current scope.
+- §8 one active-circuit Assistant plus simultaneous Components: complete.
+- §10 responsive shared-dock design: complete; local provider adapter remains a
+  separate next unit.
+
+### Next step
+- Implement the opt-in loopback MLX provider using strict typed edit operations,
+  then persist plot-card resize/reorder and add `.plt`/image export.
 
 ---
 

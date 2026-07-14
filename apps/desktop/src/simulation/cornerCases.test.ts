@@ -287,12 +287,12 @@ describe("zero-ohm resistor", () => {
   const comps = [Vdc(0, 32, "5"), R(96, 0, "0", "R1"), GND(0, 64), GND(128, 0)];
   const wires = [W({ x: 0, y: 0 }, { x: 64, y: 0 })];
 
-  it("fails gracefully (no 1/0 → Infinity) for DC, AC, and transient", () => {
+  it("fails gracefully (no 1/0 → Infinity) for DC, AC, and transient", async () => {
     const op = runOperatingPoint({ components: comps, wires });
     expect(op.ok).toBe(false);
     expect(allFinite(op)).toBe(true);
 
-    const tran = runTransientAnalysis({ components: comps, wires }, { stopTime: 1e-3, steps: 100 });
+    const tran = await runTransientAnalysis({ components: comps, wires }, { stopTime: 1e-3, steps: 100 });
     expect(tran.ok).toBe(false);
   });
 });
@@ -358,8 +358,8 @@ describe("isource polarity: current exits + terminal, raising the p node", () =>
     expect(node!.voltage).toBeCloseTo(1, 6);
   });
 
-  it("transient: steady-state p-node voltage = +1 V", () => {
-    const res = runTransientAnalysis({ components: comps, wires }, { stopTime: 1e-3, steps: 200 });
+  it("transient: steady-state p-node voltage = +1 V", async () => {
+    const res = await runTransientAnalysis({ components: comps, wires }, { stopTime: 1e-3, steps: 200 });
     expect(res.ok).toBe(true);
     if (!res.ok) return;
     const trace = res.traces[0];
@@ -397,7 +397,7 @@ describe("iac polarity: AC current exits + terminal (consistent with isource and
 // ---------------------------------------------------------------------------
 
 describe("malformed inputs never throw", () => {
-  it("each path returns a typed {ok} result", () => {
+  it("each path returns a typed {ok} result", async () => {
     const broken: { components: SchematicComponent[]; wires: SchematicWire[] }[] = [
       { components: [], wires: [] },
       { components: [R(0, 0, "oops", "R1"), GND(32, 0)], wires: [] },
@@ -405,7 +405,12 @@ describe("malformed inputs never throw", () => {
     ];
     for (const schematic of broken) {
       expect(() => runOperatingPoint(schematic)).not.toThrow();
-      expect(() => runTransientAnalysis(schematic, { stopTime: 1e-3, steps: 100 })).not.toThrow();
+      // runTransientAnalysis is async now (Fix 3) — `.not.toThrow()` doesn't
+      // apply to a function that returns a promise (it would trivially pass
+      // regardless of a rejection). Awaiting it directly is the equivalent
+      // check: an unhandled rejection here fails the test the same way a
+      // synchronous throw used to.
+      await runTransientAnalysis(schematic, { stopTime: 1e-3, steps: 100 });
       expect(() => runAcSweep(schematic, { startHz: 1, stopHz: 1e3, pointsPerDecade: 5 })).not.toThrow();
     }
   });
@@ -418,10 +423,10 @@ describe("malformed inputs never throw", () => {
     expect(() => runOperatingPoint({ components: [Vdc(0, 32, "5"), infR, GND(0, 64)], wires: [] })).not.toThrow();
   });
 
-  it("extremely large stop-time rejects gracefully without hanging", () => {
+  it("extremely large stop-time rejects gracefully without hanging", async () => {
     const comps = [Vdc(0, 32, "5"), R(96, 0, "1k", "R1"), GND(0, 64), GND(128, 0)];
     const wires = [W({ x: 0, y: 0 }, { x: 64, y: 0 })];
-    const res = runTransientAnalysis({ components: comps, wires }, { stopTime: 1e100, steps: 100 });
+    const res = await runTransientAnalysis({ components: comps, wires }, { stopTime: 1e100, steps: 100 });
     // stopTime is finite but huge — solver should run without producing NaN.
     if (res.ok) {
       for (const trace of res.traces) {

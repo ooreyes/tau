@@ -167,6 +167,8 @@ interface SchematicState extends Doc {
   setDirectives: (directives: string[]) => void;
 
   loadCircuit: (doc: SchematicDocument) => void;
+  /** Replace the active document as one undoable edit (assistant/import transforms). */
+  replaceCircuit: (doc: SchematicDocument) => void;
   /** Restore a trusted in-memory tab snapshot without leaking history between tabs. */
   restoreCircuit: (doc: SchematicDocument, history: SchematicHistory) => void;
   newCircuit: () => void;
@@ -800,6 +802,25 @@ export const useSchematic = create<SchematicState>()((set) => {
           directives: cloned.directives ?? [],
           past: [],
           future: [],
+          selectedId: null,
+          selectedWireId: null,
+          selectedWireIds: [], selectedLabelIds: [], selectedProbeIds: [],
+          selectedIds: [],
+          tool: { mode: "select" },
+        };
+      }),
+
+    replaceCircuit: (doc) =>
+      set((s) => {
+        const replacement = cloneDocument(doc);
+        return {
+          ...recordInto(s),
+          components: replacement.components,
+          wires: replacement.wires,
+          counters: deriveCounters(replacement.components),
+          probes: replacement.probes ?? [],
+          netLabels: replacement.netLabels ?? [],
+          directives: replacement.directives ?? [],
           selectedId: null,
           selectedWireId: null,
           selectedWireIds: [], selectedLabelIds: [], selectedProbeIds: [],

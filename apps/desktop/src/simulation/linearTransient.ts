@@ -107,10 +107,43 @@ const TRANSIENT_SUPPORTED = new Set<ComponentKind>([
  *  Prevents singular matrices caused by floating nodes (e.g. unconnected op-amp rails). */
 const GMIN = 1e-12;
 
-export function runTransientAnalysis(
+/** Progress/cancellation hooks for a transient run (Fix 3 — no more frozen
+ *  UI on a long solve). Both optional so every existing caller (production
+ *  or test) that doesn't care about either keeps working unchanged, just
+ *  now behind a `Promise` (the solve loop yields to the event loop
+ *  periodically, so the function can no longer return synchronously). */
+export interface TransientRunControl {
+  /** Called with a fraction in [0, 1], monotonically non-decreasing, at each
+   *  cooperative-yield checkpoint (see the loop below) — cheap and safe to
+   *  call often; throttle on the receiving end (App.tsx) if needed. */
+  onProgress?: (fraction: number) => void;
+  /** Checked at each yield checkpoint. When aborted, the loop stops and the
+   *  function resolves (never rejects) with a PARTIAL `ok: true` result built
+   *  from whatever samples were already computed, plus a warning — abort is
+   *  a normal user action (Stop button), not an error. */
+  signal?: AbortSignal;
+}
+
+/** One macrotask yield so the browser can paint (progress bar) and deliver
+ *  input (Stop button click) mid-solve. A microtask (`Promise.resolve().then`)
+ *  would resume before the next paint and defeat the point; `setTimeout`
+ *  works identically in the browser and in Node (tests). */
+function yieldToEventLoop(): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+/** How often the solve loop checks in with `onProgress`/`signal`: every 250
+ *  steps, or every ~16ms of wall time if a single step is expensive enough
+ *  that 250 of them would otherwise stall the UI thread noticeably longer
+ *  than one frame. */
+const YIELD_STEP_INTERVAL = 250;
+const YIELD_TIME_INTERVAL_MS = 16;
+
+export async function runTransientAnalysis(
   schematic: { components: SchematicComponent[]; wires: SchematicWire[]; netLabels?: NetLabel[]; params?: ParamScope; couplings?: CouplingSpec[] },
   options: AnalysisOptions,
-): AnalysisResult {
+  control?: TransientRunControl,
+): Promise<AnalysisResult> {
   let circuit: ExtractedCircuit | undefined;
   try {
     // Resolve {param} expressions in component values before extraction so the
@@ -237,6 +270,12 @@ export function runTransientAnalysis(
       }
       arr.push(value);
     };
+
+    // Set once the run is stopped early (Stop button / AbortSignal) — the
+    // loop below breaks out and falls through to the same result-building
+    // code as a completed run, just with fewer samples and a warning.
+    let aborted = false;
+    let lastYieldAt = Date.now();
 
     for (let step = 0; step <= options.steps; step += 1) {
       const time = step * stepSize;
@@ -496,13 +535,45 @@ export function runTransientAnalysis(
           }
         }
       }
+
+      // Cooperative yield: this step's samples are already fully committed
+      // above (times/traceValues/currentSamples), so it's always safe to
+      // stop right here — never mid-step. Checked by step count first (cheap)
+      // before the `Date.now()` call so the fast-per-step-large-circuit case
+      // isn't paying a clock read every single iteration.
+      if (step % YIELD_STEP_INTERVAL === 0 || Date.now() - lastYieldAt >= YIELD_TIME_INTERVAL_MS) {
+        control?.onProgress?.(step / options.steps);
+        if (control?.signal?.aborted) {
+          aborted = true;
+          break;
+        }
+        await yieldToEventLoop();
+        lastYieldAt = Date.now();
+        if (control?.signal?.aborted) {
+          aborted = true;
+          break;
+        }
+      }
     }
+
+    if (!aborted) control?.onProgress?.(1);
 
     const currents: CurrentTrace[] = [];
     for (const [id, values] of currentSamples) {
       const ref = currentRefs.get(id) ?? id;
       currents.push({ ref, label: `I(${ref})`, values });
     }
+
+    // Reached stop time on an early abort is whatever the last committed
+    // sample says, not the originally requested `options.stopTime` — the
+    // stats/warning must describe what the user is actually looking at.
+    const reachedStopTime = times.length > 0 ? times[times.length - 1] : 0;
+    const warnings = aborted
+      ? [
+          ...circuit.warnings,
+          `Stopped early at ${formatEngineering(reachedStopTime, "s", 2)} of ${formatEngineering(options.stopTime, "s", 2)}.`,
+        ]
+      : circuit.warnings;
 
     return {
       ok: true,
@@ -520,10 +591,10 @@ export function runTransientAnalysis(
         netCount: circuit.nets.length,
         componentCount: circuit.components.length,
         sampleCount: times.length,
-        stopTime: options.stopTime,
+        stopTime: aborted ? reachedStopTime : options.stopTime,
         stepSize,
       },
-      warnings: circuit.warnings,
+      warnings,
       circuit,
     };
   } catch (error) {

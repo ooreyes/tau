@@ -102,7 +102,7 @@ describe("Inverting amplifier — gain = -Rf/Rin = -10", () => {
     expect(Math.abs((outNet!.voltage - (-10)) / -10)).toBeLessThan(0.01);
   });
 
-  it("transient last-sample: Vout ≈ -10 V (within 1%)", () => {
+  it("transient last-sample: Vout ≈ -10 V (within 1%)", async () => {
     // Add a load cap for transient variation
     const Cout = capacitor(352, 128, "100n", "Cout");
     const gndCout = ground(352, 160); // Cout.b (rot=90 → b at (352, 160))
@@ -111,7 +111,7 @@ describe("Inverting amplifier — gain = -Rf/Rin = -10", () => {
       // out(288,96) → Cout.a(352,96)
       wire([{ x: 288, y: 96 }, { x: 352, y: 96 }]),
     ];
-    const result = runTransientAnalysis(
+    const result = await runTransientAnalysis(
       { components: [...components, Cout, gndCout], wires: wires2 },
       { stopTime: 2e-4, steps: 200 },
     );
@@ -180,14 +180,14 @@ describe("Non-inverting amplifier — gain = 1 + Rf/Rg = 11", () => {
     }
   });
 
-  it("transient last-sample: Vout ≈ 11 V (within 1%)", () => {
+  it("transient last-sample: Vout ≈ 11 V (within 1%)", async () => {
     const Cout = capacitor(352, 128, "100n", "Cout");
     const gndCout = ground(352, 160);
     const wires2 = [
       ...wires,
       wire([{ x: 288, y: 96 }, { x: 352, y: 96 }]),
     ];
-    const result = runTransientAnalysis(
+    const result = await runTransientAnalysis(
       { components: [...components, Cout, gndCout], wires: wires2 },
       { stopTime: 2e-4, steps: 200 },
     );
@@ -248,7 +248,7 @@ describe("Unity buffer — gain = 1", () => {
     }
   });
 
-  it("transient last-sample: Vout ≈ 1 V (within 1%)", () => {
+  it("transient last-sample: Vout ≈ 1 V (within 1%)", async () => {
     const Cout = capacitor(288, 128, "100n", "Cout");
     const gndCout = ground(288, 160);
     const wires2 = [
@@ -256,7 +256,7 @@ describe("Unity buffer — gain = 1", () => {
       // out(224,96) → Cout.a(288,96)
       wire([{ x: 224, y: 96 }, { x: 288, y: 96 }]),
     ];
-    const result = runTransientAnalysis(
+    const result = await runTransientAnalysis(
       { components: [...components, Cout, gndCout], wires: wires2 },
       { stopTime: 2e-4, steps: 200 },
     );
@@ -305,8 +305,8 @@ describe("gmin smoke test — unconnected op-amp power rails", () => {
     wire([{ x: 288, y: 80 }, { x: 288, y: 96 }]),   // Rf.b → out
   ];
 
-  it("transient solver returns ok=true despite floating v+/v- rails", () => {
-    const result = runTransientAnalysis(
+  it("transient solver returns ok=true despite floating v+/v- rails", async () => {
+    const result = await runTransientAnalysis(
       { components, wires },
       { stopTime: 1e-4, steps: 50 },
     );

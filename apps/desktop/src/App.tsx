@@ -9,6 +9,12 @@ import { SimulationPanel } from "./components/SimulationPanel";
 import { TelemetryDock } from "./components/TelemetryDock";
 import { AssistantPanel, ASSISTANT_PANEL_WIDTH, loadAssistantOpen, saveAssistantOpen } from "./components/AssistantPanel";
 import { clampPanelWidth, usePanelWidth } from "./components/panelResize";
+import {
+  SHELL_LAYOUT,
+  WorkspaceRightDock,
+  workspaceExplorerMax,
+  workspaceRightDockMax,
+} from "./components/WorkspaceRightDock";
 import { AnalysisErrorBoundary } from "./components/AnalysisErrorBoundary";
 import { EmptyState } from "./components/EmptyState";
 import { CommandPalette } from "./components/CommandPalette";
@@ -27,6 +33,7 @@ import {
 import { useSchematic, type SchematicDocument, type SchematicHistory } from "./store/useSchematic";
 import { CATALOG } from "./schematic/catalog";
 import { dispatchShortcutAction, resolveShortcut } from "./schematic/shortcuts";
+import { extractCircuit } from "./schematic/netlist";
 import {
   MAX_TRANSIENT_STEPS,
   runTransientAnalysis,
@@ -85,12 +92,23 @@ import {
 } from "./project/types";
 import { validateSchematicDocument } from "./schematic/documentValidation";
 import { importAsc } from "./io/ascImport";
-import type { AssistantCreateAscAction } from "./lib/assistantActions";
+import {
+  carryAssistantProbes,
+  type AssistantApplyCurrentAscAction,
+  type AssistantCreateAscAction,
+} from "./lib/assistantActions";
 
 const DEFAULT_ANALYSIS_OPTIONS: AnalysisOptions = {
   stopTime: 0.006,
   steps: 240,
 };
+
+// Pre-run confirmation thresholds (Fix 3 — "may take a while" guard). The
+// web TS solver blocks-then-yields cooperatively and is the slower path;
+// native ngspice runs out-of-process and tolerates far more samples before
+// the run feels risky to kick off without warning.
+const LARGE_RUN_WEB_STEPS = 150_000;
+const LARGE_RUN_NATIVE_STEPS = 500_000;
 
 /** One open editor tab. `doc` is the in-memory snapshot of its schematic; the
  *  active tab's live content is held in the store and snapshotted on switch. */
@@ -115,19 +133,11 @@ const emptyHistory = (): SchematicHistory => ({ past: [], future: [] });
 // overlays, and the results table — down to the app's stated 900px minimum
 // window width, so the scope column budgets around it instead of squeezing
 // it to nothing.
-const RAIL_W = 54; // .activity-rail
-const HANDLE_W = 8; // .col-resize-handle, one per open column
+const RAIL_W = SHELL_LAYOUT.railWidth; // .activity-rail
+const HANDLE_W = SHELL_LAYOUT.handleWidth; // .col-resize-handle, one per open column
 const SCOPE_MIN = 300; // analysis scope column floor (matches old drag clamp)
-const SCHEMATIC_EDITOR_MIN = 260;
-const EXPLORER_MIN = 168;
-// Floors used only to keep the Assistant column from starving its neighbors
-// (see the Assistant-width clamp effect below) — mirror the CSS floors on
-// .sim-schematic-pane and .app-simulator .shell-body > .plotter so the JS
-// budget matches what the layout can actually give up before it, not the
-// Assistant column, has to shrink.
-const SIM_SCHEMATIC_MIN = 250;
-const PLOTTER_MIN = 280;
-
+const SCHEMATIC_EDITOR_MIN = SHELL_LAYOUT.schematicEditorMin;
+const EXPLORER_MIN = SHELL_LAYOUT.explorerMin;
 function App() {
   const components = useSchematic((s) => s.components);
   const wires = useSchematic((s) => s.wires);
@@ -139,6 +149,7 @@ function App() {
   const startProbing = useSchematic((s) => s.startProbing);
   const startLabeling = useSchematic((s) => s.startLabeling);
   const loadCircuit = useSchematic((s) => s.loadCircuit);
+  const replaceCircuit = useSchematic((s) => s.replaceCircuit);
   const restoreCircuit = useSchematic((s) => s.restoreCircuit);
   const newCircuit = useSchematic((s) => s.newCircuit);
   const probes = useSchematic((s) => s.probes);
@@ -179,7 +190,17 @@ function App() {
   const [acStepFamily, setAcStepFamily] = useState<AnalysisFamily<AcResult> | null>(null);
   const [dcStepFamily, setDcStepFamily] = useState<AnalysisFamily<DcSweepResult> | null>(null);
   const [analysisRunning, setAnalysisRunning] = useState(false);
+  // Determinate while the web TS solver is reporting real fractions; null
+  // (indeterminate bar) before the first callback and for the whole run when
+  // native ngspice ends up handling it (no progress channel — see
+  // executeTransient/engine/nativeSpice.ts).
+  const [runProgress, setRunProgress] = useState<number | null>(null);
   const [runState, setRunState] = useState<"idle" | "complete" | "error" | "stopped">("idle");
+  // Pending confirmation for a transient run large enough to warrant a
+  // "this may take a while" pause (Fix 3 pre-run guard) — null when no
+  // confirmation is pending. `run` is the deferred action to take if the
+  // user picks "Run anyway".
+  const [confirmLargeRun, setConfirmLargeRun] = useState<{ steps: number; netCount: number; run: () => void } | null>(null);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [mode, setMode] = useState<"schematic" | "simulator">("schematic");
   const modeRef = useRef(mode);
@@ -203,7 +224,6 @@ function App() {
   const toggleAssistant = useCallback(() => {
     setAssistantOpen((open) => {
       const next = !open;
-      if (next) setPartsOpen(false);
       saveAssistantOpen(next);
       return next;
     });
@@ -240,6 +260,13 @@ function App() {
   // ngspice runs outside React's lifecycle. A request version prevents a late
   // result from an edited, closed, or stopped circuit overwriting current UI.
   const analysisRequestRef = useRef(0);
+  // Live transient run's abort handle (web TS solver only — see
+  // executeTransient). Deliberately NOT tied to analysisRequestRef: aborting
+  // must let the in-flight run's own partial result still reach setAnalysis,
+  // whereas bumping analysisRequestRef (invalidateAnalysis) is for "a
+  // genuinely different run/document superseded this one" and discards
+  // whatever comes back.
+  const transientAbortRef = useRef<AbortController | null>(null);
 
   // Selecting a part opens the Components rail so Properties is immediately usable.
   useEffect(() => {
@@ -361,11 +388,41 @@ function App() {
   const executeTransient = useCallback(async (options: AnalysisOptions) => {
     const requestId = ++analysisRequestRef.current;
     setAnalysisRunning(true);
+    setRunProgress(null); // indeterminate until the web solver's first onProgress call (native never gets one)
+    const controller = new AbortController();
+    transientAbortRef.current = controller;
+    let lastProgressAt = 0;
+    const onProgress = (fraction: number) => {
+      // Throttle to ~10/sec (100ms) — the solver yields far more often than
+      // a progress bar needs to repaint, and 0/1 always get through so the
+      // bar starts and finishes in sync with the actual run.
+      const now = Date.now();
+      if (fraction > 0 && fraction < 1 && now - lastProgressAt < 100) return;
+      lastProgressAt = now;
+      setRunProgress(fraction);
+    };
     try {
-      const result = await runNativeTransient({ components, wires, netLabels, params, directives }, options) ?? runTransientAnalysis({ components, wires, netLabels, params, couplings }, options);
+      const nativeResult = await runNativeTransient({ components, wires, netLabels, params, directives }, options);
+      if (nativeResult) {
+        // Native has no abort mechanism (no process kill — see
+        // engine/nativeSpice.ts). If Stop was clicked while this was in
+        // flight, `controller` is aborted but analysisRequestRef is NOT
+        // (see stopAnalysis) — so this check is what actually discards a
+        // native result the user no longer wants.
+        if (analysisRequestRef.current !== requestId || controller.signal.aborted) return;
+        setAnalysis(nativeResult);
+        setRunState(nativeResult.ok ? "complete" : "error");
+        return;
+      }
+      const result = await runTransientAnalysis(
+        { components, wires, netLabels, params, couplings },
+        options,
+        { onProgress, signal: controller.signal },
+      );
       if (analysisRequestRef.current !== requestId) return;
       setAnalysis(result);
       setRunState(result.ok ? "complete" : "error");
+      if (controller.signal.aborted) showNotice("Stopped early — showing partial result.");
     } catch (error) {
       if (analysisRequestRef.current !== requestId) return;
       setAnalysis({
@@ -376,19 +433,43 @@ function App() {
       });
       setRunState("error");
     } finally {
-      if (analysisRequestRef.current === requestId) setAnalysisRunning(false);
+      if (analysisRequestRef.current === requestId) {
+        setAnalysisRunning(false);
+        setRunProgress(null);
+      }
+      // Only clear the ref if it's still ours — a newer executeTransient call
+      // (re-run before this one settled) already installed its own
+      // controller, and clearing that out from under it would make
+      // stopAnalysis fall back to the non-abortable invalidate path for a
+      // run that's actually still abortable.
+      if (transientAbortRef.current === controller) transientAbortRef.current = null;
     }
-  }, [components, wires, netLabels, params, directives, couplings]);
+  }, [components, wires, netLabels, params, directives, couplings, showNotice]);
+
+  // Pre-run guard (Fix 3): a step count big enough to genuinely stall the UI
+  // for a while gets a confirmation instead of launching silently. Native is
+  // out-of-process and far faster per sample, hence the higher ceiling.
+  const confirmLargeRunIfNeeded = useCallback((options: AnalysisOptions, run: () => void) => {
+    const limit = isNativeSpiceRuntime() ? LARGE_RUN_NATIVE_STEPS : LARGE_RUN_WEB_STEPS;
+    if (options.steps <= limit) {
+      run();
+      return;
+    }
+    const netCount = extractCircuit(components, wires, netLabels).nets.length;
+    setConfirmLargeRun({ steps: options.steps, netCount, run });
+  }, [components, wires, netLabels]);
 
   const runAnalysis = useCallback(async () => {
-    await executeTransient(effectiveAnalysisOptions);
-  }, [effectiveAnalysisOptions, executeTransient]);
+    confirmLargeRunIfNeeded(effectiveAnalysisOptions, () => { void executeTransient(effectiveAnalysisOptions); });
+  }, [effectiveAnalysisOptions, executeTransient, confirmLargeRunIfNeeded]);
 
   const runAndShowSimulator = useCallback(async () => {
-    setMode("simulator");
-    setGraphOpen(true);
-    await executeTransient(effectiveAnalysisOptions);
-  }, [effectiveAnalysisOptions, executeTransient]);
+    confirmLargeRunIfNeeded(effectiveAnalysisOptions, () => {
+      setMode("simulator");
+      setGraphOpen(true);
+      void executeTransient(effectiveAnalysisOptions);
+    });
+  }, [effectiveAnalysisOptions, executeTransient, confirmLargeRunIfNeeded]);
 
   const runOperatingAnalysis = useCallback(async () => {
     const requestId = ++analysisRequestRef.current;
@@ -534,7 +615,7 @@ function App() {
         const stepDirectives = ctx.temperature !== undefined ? [`.temp ${ctx.temperature}`] : undefined;
         const result =
           (await runNativeTransient({ components: ctx.components, wires, netLabels, params: ctx.params, directives: stepDirectives }, effectiveAnalysisOptions))
-          ?? runTransientAnalysis({ components: ctx.components, wires, netLabels, params: ctx.params }, effectiveAnalysisOptions);
+          ?? (await runTransientAnalysis({ components: ctx.components, wires, netLabels, params: ctx.params }, effectiveAnalysisOptions));
         if (analysisRequestRef.current !== requestId) return;
         members.push({ label: ctx.label, value: ctx.value, result });
       }
@@ -563,6 +644,21 @@ function App() {
   }, [effectiveAnalysisOptions, overrideAnalysisOptions, executeTransient, showNotice]);
 
   const stopAnalysis = useCallback(() => {
+    // transientAbortRef is non-null ONLY while executeTransient's own run is
+    // in flight (set at its start, cleared in its finally) — every other
+    // analysis kind (OP/AC/DC/TF/Noise/Step) leaves it null, so a live one of
+    // those still falls through to the old invalidate-based Stop below.
+    if (analysisRunning && transientAbortRef.current) {
+      // A transient run can now actually be interrupted mid-solve (Fix 3) —
+      // abort the web solver's cooperative loop. This deliberately does NOT
+      // go through invalidateAnalysis: that bumps analysisRequestRef, which
+      // would make executeTransient discard the partial result this abort is
+      // about to produce. See executeTransient for how a native (unabortable)
+      // run still gets its stale result discarded correctly via the same
+      // controller's `aborted` flag.
+      transientAbortRef.current.abort();
+      return;
+    }
     if (!analysis && !analysisRunning) {
       showNotice("No simulation result to stop.");
       return;
@@ -702,6 +798,38 @@ function App() {
     openAscFromProject(path, basename(path), action.source);
     showNotice(`Created ${basename(path)}`);
   }, [createSchematicInRoot, deleteProjectNode, openAscFromProject, showNotice, writeSim]);
+
+  const applyAssistantCircuit = useCallback((action: AssistantApplyCurrentAscAction) => {
+    replaceCircuit({
+      ...action.document,
+      probes: carryAssistantProbes(components, probes, action.document),
+    });
+    const next = useSchematic.getState();
+    const appliedDocument: SchematicDocument = {
+      components: next.components,
+      wires: next.wires,
+      probes: next.probes,
+      netLabels: next.netLabels,
+      directives: next.directives,
+    };
+    const appliedHistory: SchematicHistory = { past: next.past, future: next.future };
+    setTabs((openTabs) => openTabs.map((tab) => (
+      tab.id === activeId
+        ? {
+            ...tab,
+            doc: appliedDocument,
+            history: appliedHistory,
+            dirty: true,
+            ascRewriteRisks: ascRewriteRisks(action.source),
+          }
+        : tab
+    )));
+    adoptDirectiveOptions(appliedDocument);
+    invalidateAnalysis();
+    setMode("schematic");
+    setFitSignal((value) => value + 1);
+    showNotice("Applied assistant changes to the current circuit.");
+  }, [activeId, adoptDirectiveOptions, components, invalidateAnalysis, probes, replaceCircuit, showNotice]);
 
   const saveActiveToProject = useCallback(async () => {
     const tab = tabs.find((t) => t.id === activeId);
@@ -932,25 +1060,26 @@ function App() {
   // analysis unreachable when the window returns at its 900px minimum.
   useEffect(() => {
     if (shellWidth === 0 || !assistantOpen) return;
-    const reserved = mode === "simulator"
-      ? RAIL_W + HANDLE_W + SIM_SCHEMATIC_MIN + PLOTTER_MIN
-      : RAIL_W + (HANDLE_W * 2) + EXPLORER_MIN + SCHEMATIC_EDITOR_MIN;
-    const budget = Math.max(ASSISTANT_PANEL_WIDTH.minWidth, shellWidth - reserved);
+    const budget = workspaceRightDockMax(shellWidth, mode, ASSISTANT_PANEL_WIDTH);
     if (assistantResize.width > budget) assistantResize.setWidth(budget);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [shellWidth, mode, assistantOpen, assistantResize.width]);
 
+  const assistantResponsiveMax = workspaceRightDockMax(shellWidth, mode, ASSISTANT_PANEL_WIDTH);
+  const effectiveAssistantWidth = clampPanelWidth(
+    assistantResize.width,
+    ASSISTANT_PANEL_WIDTH.minWidth,
+    assistantResponsiveMax,
+  );
   const schematicRightPanelWidth = assistantOpen
-    ? assistantResize.width
+    ? effectiveAssistantWidth
     : partsOpen
       ? effectiveComponentsRailWidth
       : 0;
-  const explorerResponsiveMax = mode === "schematic" && shellWidth > 0
-    ? Math.max(
-        EXPLORER_MIN,
-        shellWidth - RAIL_W - (HANDLE_W * 2) - SCHEMATIC_EDITOR_MIN - schematicRightPanelWidth,
-      )
+  const explorerResponsiveMax = mode === "schematic"
+    ? workspaceExplorerMax(shellWidth, schematicRightPanelWidth)
     : undefined;
+  const sharedRightDockOpen = mode === "schematic" && partsOpen && assistantOpen;
 
   return (
     <div className={`app app-${mode}`}>
@@ -984,7 +1113,6 @@ function App() {
             setPartsOpen((open) => {
               const next = !open;
               if (next) {
-                closeAssistant();
                 setComponentFocusSignal((value) => value + 1);
               }
               return next;
@@ -1082,6 +1210,7 @@ function App() {
             </section>
             <AnalysisErrorBoundary>
               <SimulationPanel
+                circuitTitle={documentTitle}
                 result={analysis}
                 opResult={opAnalysis}
                 acResult={acAnalysis}
@@ -1099,6 +1228,7 @@ function App() {
                 options={effectiveAnalysisOptions}
                 optionsAuto={!optionsOverridden}
                 isRunning={analysisRunning}
+                runProgress={runProgress}
                 onOptionsChange={overrideAnalysisOptions}
                 onResetOptions={resetAnalysisOptions}
                 onRun={runAnalysis}
@@ -1129,7 +1259,40 @@ function App() {
             onRestoreGraph={() => setGraphOpen(true)}
           />
         )}
-        {assistantOpen && (
+        {sharedRightDockOpen && (
+          <WorkspaceRightDock
+            width={effectiveAssistantWidth}
+            resize={assistantResize}
+            minWidth={ASSISTANT_PANEL_WIDTH.minWidth}
+            maxWidth={assistantResponsiveMax}
+          >
+            <ComponentsRail
+              focusSignal={componentFocusSignal}
+              onNotice={showNotice}
+              resize={componentsRailResize}
+              maxWidth={assistantResponsiveMax}
+              embedded
+            />
+            <AssistantPanel
+              components={components}
+              wires={wires}
+              netLabels={netLabels}
+              directives={directives}
+              params={params}
+              analysis={analysis}
+              componentRows={componentRows}
+              measurements={measurements}
+              selectedId={selectedId}
+              resize={assistantResize}
+              onCreateAsc={createAssistantCircuit}
+              onApplyCurrent={applyAssistantCircuit}
+              onOpenSettings={() => setSettingsOpen(true)}
+              onClose={closeAssistant}
+              embedded
+            />
+          </WorkspaceRightDock>
+        )}
+        {assistantOpen && !sharedRightDockOpen && (
           <AssistantPanel
             components={components}
             wires={wires}
@@ -1142,6 +1305,7 @@ function App() {
             selectedId={selectedId}
             resize={assistantResize}
             onCreateAsc={createAssistantCircuit}
+            onApplyCurrent={applyAssistantCircuit}
             onOpenSettings={() => setSettingsOpen(true)}
             onClose={closeAssistant}
           />
@@ -1188,6 +1352,19 @@ function App() {
             setConfirmCloseTabId(null);
           }}
           onCancel={() => setConfirmCloseTabId(null)}
+        />
+      )}
+      {confirmLargeRun && (
+        <ConfirmDialog
+          title="Large transient run"
+          body={`This run computes ${confirmLargeRun.steps.toLocaleString()} samples across ${confirmLargeRun.netCount.toLocaleString()} nets and may take a while.`}
+          confirmLabel="Run anyway"
+          onConfirm={() => {
+            const { run } = confirmLargeRun;
+            setConfirmLargeRun(null);
+            run();
+          }}
+          onCancel={() => setConfirmLargeRun(null)}
         />
       )}
       {notice && <div className="shell-toast" role="status">{notice}</div>}

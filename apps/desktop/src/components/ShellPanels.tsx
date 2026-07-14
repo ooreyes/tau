@@ -7,6 +7,8 @@ import {
   Folder,
   Search,
   FilePlus,
+  FileInput,
+  FolderInput,
   FolderPlus,
   RefreshCw,
   Trash2,
@@ -159,6 +161,18 @@ function canMoveProjectNode(sourcePath: string, destinationDirectoryPath: string
   );
 }
 
+const PROJECT_NODE_DRAG_TYPE = "application/x-tau-project-node";
+
+function findProjectNode(nodes: readonly ProjectNode[], path: string): ProjectNode | null {
+  const normalized = normalizedExplorerPath(path);
+  for (const node of nodes) {
+    if (normalizedExplorerPath(node.path) === normalized) return node;
+    const nested = node.children ? findProjectNode(node.children, normalized) : null;
+    if (nested) return nested;
+  }
+  return null;
+}
+
 export function ExplorerPanel({
   activeFilePath,
   onOpenSimFile,
@@ -203,6 +217,10 @@ export function ExplorerPanel({
     name: string;
   } | null>(null);
   const [draggedNode, setDraggedNode] = useState<ProjectNode | null>(null);
+  // Drag events can reach dragover/drop before React commits setDraggedNode.
+  // Keep a synchronous source and also write the path into dataTransfer so a
+  // rerender (for example, creating the destination folder) cannot lose it.
+  const draggedNodeRef = useRef<ProjectNode | null>(null);
   const [dropTargetPath, setDropTargetPath] = useState<string | null>(null);
   const explorerWidthConfig = {
     ...EXPLORER_PANEL_WIDTH,
@@ -295,22 +313,33 @@ export function ExplorerPanel({
   };
 
   const beginNodeDrag = (event: DragEvent<HTMLButtonElement>, node: ProjectNode) => {
+    draggedNodeRef.current = node;
     setDraggedNode(node);
     setDropTargetPath(null);
     event.dataTransfer.effectAllowed = "move";
-    event.dataTransfer.setData("application/x-tau-project-node", node.path);
+    event.dataTransfer.setData(PROJECT_NODE_DRAG_TYPE, node.path);
     event.dataTransfer.setData("text/plain", node.path);
   };
 
   const endNodeDrag = () => {
+    draggedNodeRef.current = null;
     setDraggedNode(null);
     setDropTargetPath(null);
   };
 
   const clearDropTarget = () => setDropTargetPath(null);
 
-  const moveDraggedNode = async (destinationDirectoryPath: string) => {
-    const source = draggedNode;
+  const dragSource = (event?: DragEvent<HTMLElement>): ProjectNode | null => {
+    const payloadPath = event?.dataTransfer.getData(PROJECT_NODE_DRAG_TYPE)
+      || event?.dataTransfer.getData("text/plain")
+      || "";
+    return (payloadPath ? findProjectNode(tree, payloadPath) : null)
+      ?? draggedNodeRef.current
+      ?? draggedNode;
+  };
+
+  const moveDraggedNode = async (destinationDirectoryPath: string, event?: DragEvent<HTMLElement>) => {
+    const source = dragSource(event);
     endNodeDrag();
     if (!source || !canMoveProjectNode(source.path, destinationDirectoryPath)) return;
     if (!onMoveNode) {
@@ -319,14 +348,19 @@ export function ExplorerPanel({
     }
     try {
       const movedPath = await onMoveNode(source.path, destinationDirectoryPath);
-      if (movedPath) onNotice(`Moved ${source.name}`);
+      if (movedPath) {
+        onNotice(`Moved ${source.name}`);
+      } else {
+        onNotice(useProject.getState().error ?? `Could not move ${source.name}.`);
+      }
     } catch (err) {
       onNotice(err instanceof Error ? err.message : `Could not move ${source.name}.`);
     }
   };
 
   const markDropTarget = (event: DragEvent<HTMLElement>, destinationDirectoryPath: string) => {
-    if (!draggedNode || !canMoveProjectNode(draggedNode.path, destinationDirectoryPath)) {
+    const source = dragSource(event);
+    if (!source || !canMoveProjectNode(source.path, destinationDirectoryPath)) {
       event.dataTransfer.dropEffect = "none";
       return;
     }
@@ -409,6 +443,29 @@ export function ExplorerPanel({
           </button>
           <button
             type="button"
+            title="Import LTspice schematic"
+            aria-label="Import LTspice schematic"
+            onClick={() => ascInputRef.current?.click()}
+          >
+            <FileInput size={15} strokeWidth={1.7} />
+          </button>
+          <button
+            type="button"
+            title="Open Schematics folder"
+            aria-label="Open Schematics folder"
+            onClick={async () => {
+              if (capability === "none") {
+                onNotice("Opening a disk folder needs the Tau desktop app.");
+                return;
+              }
+              const ok = await openFolder();
+              if (ok) onNotice("Opened project folder.");
+            }}
+          >
+            <FolderInput size={15} strokeWidth={1.7} />
+          </button>
+          <button
+            type="button"
             title="Refresh explorer"
             aria-label="Refresh explorer"
             onClick={async () => {
@@ -450,10 +507,11 @@ export function ExplorerPanel({
           if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDropTargetPath(null);
         }}
         onDrop={(event) => {
-          if (!draggedNode || !canMoveProjectNode(draggedNode.path, rootPath)) return;
+          const source = dragSource(event);
+          if (!source || !canMoveProjectNode(source.path, rootPath)) return;
           event.preventDefault();
           event.stopPropagation();
-          void moveDraggedNode(rootPath);
+          void moveDraggedNode(rootPath, event);
         }}
       >
         {createDraft && (
@@ -506,27 +564,8 @@ export function ExplorerPanel({
           onDragEnd={endNodeDrag}
           onDragOverFolder={markDropTarget}
           onDragLeaveFolder={clearDropTarget}
-          onDropFolder={moveDraggedNode}
+          onDropFolder={(event, destination) => { void moveDraggedNode(destination, event); }}
         />
-      </div>
-
-      <div className="explorer-secondary-actions" aria-label="Project actions">
-        <button
-          type="button"
-          onClick={async () => {
-            if (capability === "none") {
-              onNotice("Opening a disk folder needs the Tau desktop app.");
-              return;
-            }
-            const ok = await openFolder();
-            if (ok) onNotice("Opened project folder.");
-          }}
-        >
-          Open Folder…
-        </button>
-        <button type="button" onClick={() => ascInputRef.current?.click()}>
-          Import .asc…
-        </button>
       </div>
 
       {error && <p className="explorer-error" role="alert">{error}</p>}
@@ -568,7 +607,7 @@ function ProjectTree({
   onDragEnd: () => void;
   onDragOverFolder: (event: DragEvent<HTMLElement>, destinationDirectoryPath: string) => void;
   onDragLeaveFolder: () => void;
-  onDropFolder: (destinationDirectoryPath: string) => void;
+  onDropFolder: (event: DragEvent<HTMLElement>, destinationDirectoryPath: string) => void;
 }) {
   return (
     <>
@@ -596,7 +635,7 @@ function ProjectTree({
                 onDrop={(event) => {
                   event.preventDefault();
                   event.stopPropagation();
-                  onDropFolder(node.path);
+                  onDropFolder(event, node.path);
                 }}
                 onContextMenu={(e) => {
                   e.preventDefault();
@@ -1156,6 +1195,7 @@ export function ComponentsRail({
   onNotice,
   resize,
   maxWidth,
+  embedded = false,
 }: {
   focusSignal: number;
   onNotice: (message: string) => void;
@@ -1163,6 +1203,8 @@ export function ComponentsRail({
   resize: ReturnType<typeof usePanelWidth>;
   /** Responsive ceiling supplied by the shell after reserving Explorer and the editor. */
   maxWidth?: number;
+  /** When inside the shared right dock, the dock owns width and the resize handle. */
+  embedded?: boolean;
 }) {
   const selectedId = useSchematic((s) => s.selectedId);
   const selectedWireId = useSchematic((s) => s.selectedWireId);
@@ -1189,17 +1231,23 @@ export function ComponentsRail({
   );
 
   return (
-    <aside className="components-rail" aria-label="Components" style={{ width: componentsWidth }}>
-      <PanelResizeHandle
-        edge="left"
-        label="Resize properties panel"
-        width={componentsWidth}
-        minWidth={COMPONENTS_RAIL_WIDTH.minWidth}
-        maxWidth={responsiveMaxWidth}
-        dragging={resize.dragging}
-        onPointerDown={resize.onPointerDown}
-        onKeyDown={resize.onKeyDown}
-      />
+    <aside
+      className={`components-rail${embedded ? " components-rail--embedded" : ""}`}
+      aria-label="Components"
+      style={embedded ? undefined : { width: componentsWidth }}
+    >
+      {!embedded && (
+        <PanelResizeHandle
+          edge="left"
+          label="Resize properties panel"
+          width={componentsWidth}
+          minWidth={COMPONENTS_RAIL_WIDTH.minWidth}
+          maxWidth={responsiveMaxWidth}
+          dragging={resize.dragging}
+          onPointerDown={resize.onPointerDown}
+          onKeyDown={resize.onKeyDown}
+        />
+      )}
       <div className="components-rail-tabs" role="tablist">
         <button
           type="button"

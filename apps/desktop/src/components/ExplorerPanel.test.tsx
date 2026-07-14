@@ -71,6 +71,8 @@ describe("ExplorerPanel VS Code action row", () => {
     for (const name of [
       "New schematic file",
       "New folder",
+      "Import LTspice schematic",
+      "Open Schematics folder",
       "Refresh explorer",
       "Collapse folders in explorer",
     ]) {
@@ -148,10 +150,13 @@ describe("ExplorerPanel VS Code action row", () => {
     expect(onNotice).not.toHaveBeenCalledWith("Explorer refreshed.");
   });
 
-  it("keeps Open Folder and LTspice import available as secondary project actions", () => {
-    renderExplorer();
-    expect(screen.getByRole("button", { name: "Open Folder…" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Import .asc…" })).toBeTruthy();
+  it("keeps folder opening and LTspice import in the compact toolbar without a redundant footer", () => {
+    const { onNotice } = renderExplorer();
+    expect(screen.getByRole("button", { name: "Open Schematics folder" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Import LTspice schematic" })).toBeTruthy();
+    expect(document.querySelector(".explorer-secondary-actions")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Open Schematics folder" }));
+    expect(onNotice).toHaveBeenCalledWith("Opening a disk folder needs the Tau desktop app.");
   });
 
   it("offers real-folder actions when native Tau has no project open", () => {
@@ -210,6 +215,40 @@ describe("ExplorerPanel VS Code action row", () => {
     await waitFor(() => expect(onMoveNode).toHaveBeenCalledWith(source, folder));
     expect(onNotice).toHaveBeenCalledWith("Moved gain.asc");
     expect(folderRow.getAttribute("data-drop-target")).toBeNull();
+  });
+
+  it("uses the drag payload when React drag state has not committed yet", async () => {
+    const root = useProject.getState().rootPath!;
+    const source = await useProject.getState().createSchematicFile(root, "race.asc");
+    const folder = await useProject.getState().createFolder(root, "New Destination");
+    const onMoveNode = vi.fn().mockResolvedValue(`${folder}/race.asc`);
+    renderExplorer({ onMoveNode });
+    const dataTransfer = dataTransferStub();
+    dataTransfer.setData("application/x-tau-project-node", source!);
+
+    // A drop backed only by dataTransfer reproduces the browser ordering where
+    // dragover/drop can precede React's setDraggedNode commit.
+    fireEvent.drop(screen.getByRole("button", { name: "New Destination" }), { dataTransfer });
+
+    await waitFor(() => expect(onMoveNode).toHaveBeenCalledWith(source, folder));
+  });
+
+  it("makes a failed move visible instead of silently clearing the drag", async () => {
+    const root = useProject.getState().rootPath!;
+    await useProject.getState().createSchematicFile(root, "blocked.asc");
+    await useProject.getState().createFolder(root, "Destination");
+    const onMoveNode = vi.fn(async () => {
+      useProject.setState({ error: "A file named blocked.asc already exists in Destination." });
+      return null;
+    });
+    const { onNotice } = renderExplorer({ onMoveNode });
+    const dataTransfer = dataTransferStub();
+
+    fireEvent.dragStart(screen.getByRole("button", { name: "blocked.asc" }), { dataTransfer });
+    fireEvent.drop(screen.getByRole("button", { name: "Destination" }), { dataTransfer });
+
+    await waitFor(() => expect(onNotice).toHaveBeenCalledWith("A file named blocked.asc already exists in Destination."));
+    expect(screen.getByRole("alert").textContent).toContain("already exists");
   });
 
   it("supports moving a nested explorer item back to the project root", async () => {

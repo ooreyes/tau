@@ -264,7 +264,13 @@ Status legend: ✅ done · 🟡 partial · ⬜ not started
   `AlreadyExists` result while preserving the winning file byte-for-byte.
   Packaged macOS QA created and opened a real `native-create-check.asc` with the
   canonical 26-byte blank LTspice document; store, panel, path-remap, and Rust
-  boundary tests cover moves and creation.
+  boundary tests cover moves and creation. **Explorer reliability follow-up
+  (2026-07-14):** drag state is captured synchronously and recovered from both
+  Tau's custom payload and native `dataTransfer`, so a quick drop into a newly
+  created folder cannot lose its source to React timing. Failed moves stay
+  visible, destination folders refresh/expand after success, and the redundant
+  project-open `Open Folder…` / `Import .asc…` footer is gone; those actions
+  remain available as compact toolbar controls.
 
 ## 2. Schematic capture
 - ✅ Place / move / rotate / mirror / delete components — `Canvas.tsx`, `store/useSchematic.ts` (mirror = horizontal flip, applied before rotation; Ctrl+E)
@@ -1063,7 +1069,13 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   FFT, noise density, and the three `.step` family plots. 5 component tests
   (`SimulationPanel.axes.test.tsx`). **Desmos-style zoom/pan** (cursor-anchored
   wheel zoom, drag pan, auto-fit ⌂) — see `simulation/plotViewport.ts` — lands
-  in the same unit's second commit.
+  in the same unit's second commit. **Transient scope follow-up (2026-07-14):**
+  traces are always unfilled lines, dense periodic/pulse data is reduced with a
+  per-pixel min/max envelope so narrow extrema survive, Home fits the full X/Y
+  result, and a separate Auto scale control fits Y to only the signals and time
+  interval currently visible. Flat, negative-only, tiny-range, outlier, and
+  dense-square-wave regressions keep padding useful without inventing a giant
+  zero-based area.
 - 🟡 `.step` family-of-curves overlay — **transient + AC + DC families landed**.
   Transient: `StepPlot` in `SimulationPanel` (the **STEP** tab re-runs the sweep
   and draws the probed signal across all members in a color ramp; legend lists
@@ -1166,8 +1178,12 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   stays alive on `auto/ltspice-parity`; live browser QA verified centered
   simulator fit/Home, the cross-mode assistant, and no horizontal overflow at
   900×600. A persisted-width stress pass maximized Explorer and Assistant and
-  still held `shell.scrollWidth === 900` with the editor reachable. Remaining:
-  repeat the full screenshot matrix in a packaged build.
+  still held `shell.scrollWidth === 900` with the editor reachable. A fresh
+  unsigned release bundle now also launches and stays alive, created a canonical
+  ASC on disk in the selected native folder, and exposed the same Components +
+  Assistant stack; the live 900×600 check measured body `scrollWidth === 900`
+  with both tools reachable. Remaining: repeat the *full* screenshot matrix in
+  the packaged build.
 - ✅ **One circuit-aware assistant in both modes (2026-07-14):** a single
   top-right toolbar entry opens the same assistant beside Schematic or
   Simulator. Context is built from the real document/result; Anthropic tool
@@ -1178,7 +1194,15 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   vectors/expressions and returns min/max/average/RMS/final/classification to the
   model; tool syntax and payloads never appear in chat. CSP, action validation,
   collision-safe disk creation, private tool continuation, and mocked streaming
-  paths are covered.
+  paths are covered. **Current-circuit editing follow-up:** Components and the
+  Assistant can now stay open together in one vertically split, single-width
+  dock. A complete validated `apply_current_asc_circuit` proposal replaces the
+  active document only after confirmation, records one undo step, preserves
+  resolvable probes, marks the file dirty, and invalidates stale analyses;
+  incomplete/lossy/oversize serialization disables the operation. Local-model
+  feasibility is documented in `TAU_DESIGN_VISION.md`: MLX Qwen3 1.7B/4B
+  benchmarks support a future provider-neutral, typed-operation boundary, not
+  unvalidated whole-ASC generation.
 - 🟡 Component picker matching LTspice (F2 part browser over the full library)
   — **F2 now opens the searchable part palette** (symbols, categories, hotkeys,
   ↑↓/↵ placement); remaining: coverage audit vs. LTspice's full library tree.

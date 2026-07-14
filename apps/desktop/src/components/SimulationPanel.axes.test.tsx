@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it } from "vitest";
-import { cleanup, render } from "@testing-library/react";
+import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import {
   WaveformPlot,
   AcPlot,
@@ -76,6 +76,99 @@ describe("WaveformPlot (TRAN) — real tick axes", () => {
     );
     const svgs = container.querySelectorAll(".scope-svg");
     expect(svgs.length).toBe(2);
+  });
+
+  it("does not let a newly-mounted empty second pane override the data pane's shared X window", () => {
+    // Regression for a feedback loop: a pane with no data (`plot === null`)
+    // used to initialize its viewport to a 0–1 fallback domain and broadcast
+    // that into `sharedX` on mount, snapping every sibling pane's real
+    // (millisecond-scale) time axis to a bogus 0–1s window (and, once the
+    // data pane's resulting adoption fed back into the empty pane, the two
+    // panes' effects never stopped fighting — the old code hung indefinitely
+    // on this exact repro instead of settling). Mirrors the real repro: a
+    // pane with data is rendered and settles first, THEN a second, empty
+    // pane is added (e.g. probing another net) — mounting both together in
+    // one render doesn't trigger the loop, so the two-step `rerender` here
+    // is essential to reproducing it.
+    const result = makeTranResult();
+    const layout = defaultLayout(["n1"]);
+    const { container, rerender } = render(
+      <WaveformPlot
+        result={result}
+        baseTraces={result.traces}
+        netLabels={[]}
+        paneLayout={layout}
+      />,
+    );
+
+    const twoPane = [...layout, { id: "pane-2", traceIds: [] }];
+    rerender(
+      <WaveformPlot
+        result={result}
+        baseTraces={result.traces}
+        netLabels={[]}
+        paneLayout={twoPane}
+      />,
+    );
+
+    const svgs = container.querySelectorAll(".scope-svg");
+    expect(svgs.length).toBe(2);
+    const dataPaneTicks = Array.from(svgs[0].querySelectorAll(".scope-tick")).map((t) => t.textContent ?? "");
+    // The data pane's real range is 0–6ms; if the empty sibling's fallback
+    // domain leaked into the shared X window, the max tick would read "1s".
+    expect(dataPaneTicks.some((t) => /ms/.test(t))).toBe(true);
+    expect(dataPaneTicks.every((t) => !/^1\s?s$/.test(t.trim()))).toBe(true);
+  });
+
+  it("renders a dense square wave as an unfilled min/max line envelope", () => {
+    const sampleCount = 20_000;
+    const times = Array.from({ length: sampleCount }, (_, index) => index / (sampleCount - 1));
+    const values = times.map((_, index) => index % 2 === 0 ? 0 : 5);
+    const base = makeTranResult();
+    const result: Extract<AnalysisResult, { ok: true }> = {
+      ...base,
+      times,
+      traces: [makeTrace("pulse", "V(pulse)", values)],
+      stats: { ...base.stats, sampleCount, stopTime: 1, stepSize: times[1] },
+    };
+    const { container } = render(
+      <WaveformPlot
+        result={result}
+        baseTraces={result.traces}
+        netLabels={[]}
+        paneLayout={defaultLayout(["pulse"])}
+      />,
+    );
+
+    const path = container.querySelector<SVGPathElement>(".scope-trace");
+    expect(path).not.toBeNull();
+    expect(path?.getAttribute("fill")).toBe("none");
+    const d = path?.getAttribute("d") ?? "";
+    expect(d).not.toMatch(/[zZ]/);
+    const points = [...d.matchAll(/[ML]\s+(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)/g)];
+    const yValues = points.map((match) => Number(match[2]));
+    expect(points.length).toBeLessThanOrEqual(1_042);
+    expect(Math.max(...yValues) - Math.min(...yValues)).toBeGreaterThan(80);
+  });
+
+  it("keeps zoom/pan controls and resets the full plot domain on Fit", async () => {
+    const result = makeTranResult();
+    const { container, getByRole } = render(
+      <WaveformPlot
+        result={result}
+        baseTraces={result.traces}
+        netLabels={[]}
+        paneLayout={defaultLayout(["n1"])}
+      />,
+    );
+    const trace = container.querySelector<SVGPathElement>(".scope-trace");
+    const initialPath = trace?.getAttribute("d");
+
+    expect(getByRole("button", { name: "Auto scale visible signals" })).toBeTruthy();
+    fireEvent.click(getByRole("button", { name: "Zoom in" }));
+    await waitFor(() => expect(trace?.getAttribute("d")).not.toBe(initialPath));
+    fireEvent.click(getByRole("button", { name: "Fit plot to data" }));
+    await waitFor(() => expect(trace?.getAttribute("d")).toBe(initialPath));
   });
 });
 

@@ -122,6 +122,28 @@ const completedAnalysis = (): AnalysisResult => ({
   circuit: { nets: [], components: [], groundNetId: "0", warnings: [] },
 });
 
+const ASSISTANT_ASC = `Version 4
+SHEET 1 880 680
+WIRE 144 96 80 96
+WIRE 304 96 224 96
+WIRE 304 144 304 96
+WIRE 80 192 80 96
+WIRE 304 240 304 224
+FLAG 80 192 0
+FLAG 304 240 0
+FLAG 304 96 vout
+SYMBOL res 240 80 R90
+SYMATTR InstName R1
+SYMATTR Value 1k
+SYMBOL cap 288 144 R0
+SYMATTR InstName C1
+SYMATTR Value 1u
+SYMBOL voltage 80 80 R0
+SYMATTR InstName V1
+SYMATTR Value 5
+TEXT 0 0 Left 2 !.tran 5m
+`;
+
 function baseProps(overrides: Partial<AssistantPanelProps> = {}): AssistantPanelProps {
   return {
     components: [],
@@ -152,6 +174,13 @@ describe("AssistantPanel", () => {
     expect(onOpenSettings).toHaveBeenCalledTimes(1);
   });
 
+  it("delegates its width boundary to the shared dock when embedded", () => {
+    render(<AssistantPanel {...baseProps({ embedded: true })} />);
+    const panel = screen.getByRole("complementary", { name: "Assistant" });
+    expect(panel.classList.contains("assistant-panel--embedded")).toBe(true);
+    expect(screen.queryByRole("separator", { name: "Resize assistant panel" })).toBeNull();
+  });
+
   it("sending a message appends the user turn and streams mock deltas into an assistant bubble", async () => {
     saveAssistantApiKey("test-key");
     render(<AssistantPanel {...baseProps()} />);
@@ -164,6 +193,7 @@ describe("AssistantPanel", () => {
     expect(streamRequests[0]).toEqual(expect.objectContaining({
       tools: expect.arrayContaining([
         expect.objectContaining({ name: "create_asc_circuit", strict: true }),
+        expect.objectContaining({ name: "apply_current_asc_circuit", strict: true }),
         expect.objectContaining({ name: "inspect_simulation_signal", strict: true }),
       ]),
       tool_choice: { type: "auto", disable_parallel_tool_use: true },
@@ -221,6 +251,29 @@ describe("AssistantPanel", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Why does R1 behave this way?" }));
     expect(screen.getByText("Why does R1 behave this way, based on the current circuit and results?")).toBeTruthy();
+  });
+
+  it("withholds current-circuit apply when the live schematic cannot be serialized completely", () => {
+    saveAssistantApiKey("test-key");
+    const unsupported: SchematicComponent = {
+      id: "tp1",
+      kind: "testpoint",
+      label: "TP1",
+      value: "",
+      x: 0,
+      y: 0,
+      rotation: 0,
+    };
+    render(<AssistantPanel {...baseProps({ components: [unsupported] })} />);
+
+    fireEvent.change(screen.getByRole("textbox", { name: "Message the assistant" }), {
+      target: { value: "Add a resistor to this circuit" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+
+    const request = streamRequests[0] as { tools: Array<{ name: string }> };
+    expect(request.tools.map((tool) => tool.name)).not.toContain("apply_current_asc_circuit");
+    expect(request.tools.map((tool) => tool.name)).toContain("create_asc_circuit");
   });
 
   it("runs a private waveform inspection and renders only the final engineering answer", async () => {
@@ -301,34 +354,15 @@ describe("AssistantPanel", () => {
   it("keeps model-authored ASC behind a validated, user-confirmed creation callback", async () => {
     saveAssistantApiKey("test-key");
     const onCreateAsc = vi.fn();
-    render(<AssistantPanel {...baseProps({ onCreateAsc })} />);
+    const onApplyCurrent = vi.fn();
+    render(<AssistantPanel {...baseProps({ onCreateAsc, onApplyCurrent })} />);
 
     fireEvent.change(screen.getByRole("textbox", { name: "Message the assistant" }), {
       target: { value: "Create an RC low-pass filter" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Send" }));
 
-    const source = `Version 4
-SHEET 1 880 680
-WIRE 144 96 80 96
-WIRE 304 96 224 96
-WIRE 304 144 304 96
-WIRE 80 192 80 96
-WIRE 304 240 304 224
-FLAG 80 192 0
-FLAG 304 240 0
-FLAG 304 96 vout
-SYMBOL res 240 80 R90
-SYMATTR InstName R1
-SYMATTR Value 1k
-SYMBOL cap 288 144 R0
-SYMATTR InstName C1
-SYMATTR Value 1u
-SYMBOL voltage 80 80 R0
-SYMATTR InstName V1
-SYMATTR Value 5
-TEXT 72 280 Left 2 !.tran 5m
-`;
+    const source = ASSISTANT_ASC;
     await act(async () => {
       streams[0].resolveContent([
         { type: "text", text: "I prepared an RC low-pass schematic." },
@@ -347,6 +381,7 @@ TEXT 72 280 Left 2 !.tran 5m
     // Raw file content is deliberately absent from the ordinary transcript.
     expect(screen.queryByText(source)).toBeNull();
     expect(onCreateAsc).not.toHaveBeenCalled();
+    expect(onApplyCurrent).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole("button", { name: "Create rc-filter.asc" }));
     await waitFor(() => expect(onCreateAsc).toHaveBeenCalledTimes(1));
@@ -356,14 +391,54 @@ TEXT 72 280 Left 2 !.tran 5m
       source,
       componentCount: 3,
     }));
+    expect(onApplyCurrent).not.toHaveBeenCalled();
     expect(await screen.findByText("Created")).toBeTruthy();
+  });
+
+  it("keeps a current-circuit revision private until Apply and selects only the apply handler", async () => {
+    saveAssistantApiKey("test-key");
+    const onCreateAsc = vi.fn();
+    const onApplyCurrent = vi.fn();
+    render(<AssistantPanel {...baseProps({ onCreateAsc, onApplyCurrent })} />);
+
+    fireEvent.change(screen.getByRole("textbox", { name: "Message the assistant" }), {
+      target: { value: "Add a load resistor to the current circuit" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    await act(async () => {
+      streams[0].resolveContent([
+        { type: "text", text: "I prepared the revised circuit." },
+        {
+          type: "tool_use",
+          id: "apply-1",
+          name: "apply_current_asc_circuit",
+          input: { source: ASSISTANT_ASC },
+        },
+      ]);
+      await streams[0].finalMessage();
+    });
+
+    expect(await screen.findByText("Current circuit")).toBeTruthy();
+    expect(screen.queryByText(ASSISTANT_ASC)).toBeNull();
+    expect(onApplyCurrent).not.toHaveBeenCalled();
+    expect(onCreateAsc).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Apply to current circuit" }));
+    await waitFor(() => expect(onApplyCurrent).toHaveBeenCalledTimes(1));
+    expect(onApplyCurrent.mock.calls[0][0]).toEqual(expect.objectContaining({
+      type: "apply_current_asc",
+      source: ASSISTANT_ASC,
+      componentCount: 3,
+    }));
+    expect(onCreateAsc).not.toHaveBeenCalled();
+    expect(await screen.findByText("Applied")).toBeTruthy();
   });
 
   it("rejects an invalid creation tool payload without invoking either apply boundary", async () => {
     saveAssistantApiKey("test-key");
     const onCreateAsc = vi.fn();
-    const onApplyDocument = vi.fn();
-    render(<AssistantPanel {...baseProps({ onCreateAsc, onApplyDocument })} />);
+    const onApplyCurrent = vi.fn();
+    render(<AssistantPanel {...baseProps({ onCreateAsc, onApplyCurrent })} />);
 
     fireEvent.change(screen.getByRole("textbox", { name: "Message the assistant" }), {
       target: { value: "Create anything" },
@@ -381,6 +456,6 @@ TEXT 72 280 Left 2 !.tran 5m
 
     expect((await screen.findByRole("alert")).textContent).toContain("couldn't validate that circuit proposal");
     expect(onCreateAsc).not.toHaveBeenCalled();
-    expect(onApplyDocument).not.toHaveBeenCalled();
+    expect(onApplyCurrent).not.toHaveBeenCalled();
   });
 });
