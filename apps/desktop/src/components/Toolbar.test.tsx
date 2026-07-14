@@ -13,8 +13,10 @@ const baseProps = {
   runState: "idle" as const,
   isRunning: false,
   title: "test.sim",
+  assistantOpen: false,
   onModeChange: vi.fn(),
   onRun: vi.fn(),
+  onToggleAssistant: vi.fn(),
   onOpenSettings: vi.fn(),
 };
 
@@ -39,5 +41,20 @@ describe("Toolbar Run health control", () => {
     const run = screen.getByRole("button", { name: "Run simulation" });
     expect(run.classList.contains("run-button--error")).toBe(true);
     expect(run.classList.contains("run-button--ok")).toBe(false);
+  });
+
+  it("keeps the one Assistant entry point in the top-right toolbar in both modes", () => {
+    const onToggleAssistant = vi.fn();
+    const { rerender } = render(<Toolbar {...baseProps} onToggleAssistant={onToggleAssistant} />);
+
+    const open = screen.getByRole("button", { name: "Open Tau assistant" });
+    expect(open.getAttribute("aria-pressed")).toBe("false");
+    fireEvent.click(open);
+    expect(onToggleAssistant).toHaveBeenCalledOnce();
+
+    rerender(<Toolbar {...baseProps} mode="simulator" assistantOpen onToggleAssistant={onToggleAssistant} />);
+    const close = screen.getByRole("button", { name: "Close Tau assistant" });
+    expect(close.getAttribute("aria-pressed")).toBe("true");
+    expect(close.classList.contains("assistant-toolbar-button--active")).toBe(true);
   });
 });

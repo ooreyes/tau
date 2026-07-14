@@ -51,7 +51,7 @@ export interface ComponentMeasurement {
 }
 
 export interface ComponentAdvisory {
-  kind: "high-led-current-no-limiter";
+  kind: "direct-led-drive";
   severity: "warning";
   title: string;
   message: string;
@@ -233,6 +233,12 @@ function deriveSeriesBranchCurrents(
         pinCountByNet.set(net, (pinCountByNet.get(net) ?? 0) + 1);
       }
     }
+    // A voltage polarity can be meaningful across one pair of a transistor,
+    // op-amp, or other multi-terminal device, but one terminal current cannot
+    // be propagated through that device by series KCL (Ic != Ie when Ib is
+    // nonzero). Only components whose extracted circuit truly has two pins
+    // participate in exact branch-current inference.
+    if (Object.keys(pins).length !== 2) continue;
     const pair = terminalPair(pins);
     if (!pair || pair[0] === pair[1]) continue;
     branches.push({ componentId: component.id, positiveNet: pair[0], negativeNet: pair[1] });
@@ -272,9 +278,6 @@ function deriveSeriesBranchCurrents(
 }
 
 const DIRECT_IDEAL_VOLTAGE_SOURCE_KINDS: ReadonlySet<ComponentKind> = new Set(["vsource", "vac", "vpulse"]);
-// This is a conservative diagnostic threshold, not a claimed absolute device
-// rating. The warning explicitly tells the user to verify the selected model.
-const HIGH_LED_CURRENT_A = 0.05;
 
 function sameUnorderedPair(a: readonly [string, string], b: readonly [string, string]): boolean {
   return (a[0] === b[0] && a[1] === b[1]) || (a[0] === b[1] && a[1] === b[0]);
@@ -294,14 +297,14 @@ function ledAdvisories(
     return sourcePair ? sameUnorderedPair(ledPair, sourcePair) : false;
   });
   const peakCurrent = Math.max(Math.abs(current.statistics.min), Math.abs(current.statistics.max));
-  if (!source || peakCurrent < HIGH_LED_CURRENT_A) return undefined;
+  if (!source || !Number.isFinite(peakCurrent)) return undefined;
 
   const sourceName = source.component.label || "ideal voltage source";
   return [{
-    kind: "high-led-current-no-limiter",
+    kind: "direct-led-drive",
     severity: "warning",
-    title: "High LED current · no limiter",
-    message: `${entry.component.label || "LED"} reaches ${formatEngineering(peakCurrent, "A", 3)} with ${sourceName} directly across it. Add a series resistor or current regulator, and verify the LED model rating.`,
+    title: "Direct LED drive · no external limiter",
+    message: `${entry.component.label || "LED"} model predicts ${formatEngineering(peakCurrent, "A", 3)} with ${sourceName} directly across it. Tau has no device-rating data for this part, so this is not an overcurrent determination. Add a series resistor or current regulator, then compare against the selected LED rating.`,
   }];
 }
 

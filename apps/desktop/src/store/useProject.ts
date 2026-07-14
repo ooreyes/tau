@@ -36,6 +36,8 @@ interface ProjectStore extends ProjectState {
   collapseAll: () => void;
   createFolder: (parentPath: string, name: string) => Promise<string | null>;
   createSchematicFile: (parentPath: string, name: string) => Promise<string | null>;
+  /** Create a disk-backed schematic at the open project's root. */
+  createSchematicInRoot: (name?: string) => Promise<string | null>;
   importAscFile: (parentPath: string, file: File) => Promise<string | null>;
   moveNode: (sourcePath: string, destinationDir: string) => Promise<string | null>;
   renameNode: (path: string, newName: string) => Promise<string | null>;
@@ -292,6 +294,15 @@ export const useProject = create<ProjectStore>((set, get) => ({
       set({ error: failureMessage(error, "Could not create schematic.") });
       return null;
     }
+  },
+
+  createSchematicInRoot: async (name = "untitled.asc") => {
+    const { rootPath } = get();
+    if (!rootPath) {
+      set({ error: "Open a Schematics folder before creating a circuit." });
+      return null;
+    }
+    return get().createSchematicFile(rootPath, name);
   },
 
   importAscFile: async (parentPath, file) => {

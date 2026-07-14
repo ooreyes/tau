@@ -105,16 +105,16 @@ describe("ComponentMeasurementsPanel", () => {
       ref: "D1",
       kind: "led",
       advisories: [{
-        kind: "high-led-current-no-limiter",
+        kind: "direct-led-drive",
         severity: "warning",
-        title: "High LED current · no limiter",
-        message: "D1 reaches 315 mA with V1 directly across it. Add a series resistor or current regulator, and verify the LED model rating.",
+        title: "Direct LED drive · no external limiter",
+        message: "D1 model predicts 315 mA with V1 directly across it. Tau has no device-rating data for this part, so this is not an overcurrent determination.",
       }],
     };
     render(<ComponentMeasurementsPanel rows={[warningRow]} selectedId={null} onSelect={() => {}} />);
 
-    expect(screen.getByRole("status").textContent).toContain("High LED current · no limiter");
-    expect(screen.getByRole("status").textContent).toContain("D1 reaches 315 mA");
+    expect(screen.getByRole("status").textContent).toContain("Direct LED drive · no external limiter");
+    expect(screen.getByRole("status").textContent).toContain("D1 model predicts 315 mA");
   });
 
   it("announces empty and no-match states", () => {

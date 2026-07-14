@@ -150,17 +150,37 @@ describe("BottomPanel — errors tab states (§11 Unit A3)", () => {
     warnings: ["floating node n3"],
   } as AnalysisResult;
 
-  it("shows a compact neutral all-clear strip with no expandable empty body", () => {
+  it("shows a compact neutral diagnostic before a simulation has run", () => {
     const { container } = render(<BottomPanel result={null} />);
+    expect(screen.getByRole("region", { name: "Simulation diagnostics" })).toBeTruthy();
     const clear = screen.getByRole("status");
-    expect(clear.textContent).toContain("No errors");
-    expect(clear.querySelector("svg")).toBeTruthy(); // the checkmark glyph
+    expect(clear.textContent).toContain("Not run");
+    expect(container.querySelector(".bottom-panel-state svg")).toBeTruthy();
+    expect(screen.getByText("Diagnostics")).toBeTruthy();
     expect(container.querySelector(".bottom-panel.has-error")).toBeNull();
-    expect(container.querySelector(".bottom-panel.is-clean")).toBeTruthy();
+    expect(container.querySelector(".bottom-panel.is-idle")).toBeTruthy();
+    expect(container.querySelector(".bottom-panel.is-clean")).toBeNull();
     expect(container.querySelector(".bottom-panel.is-collapsed")).toBeTruthy();
     expect(container.querySelector(".bottom-panel-count")).toBeNull();
     expect(screen.queryByRole("button", { name: /^Errors/ })).toBeNull();
     expect(container.querySelector(".bottom-errors")).toBeNull();
+  });
+
+  it("uses the mint all-clear state only after a successful run", () => {
+    const result: AnalysisResult = {
+      ok: true,
+      title: "Transient",
+      times: [0],
+      traces: [],
+      currents: [],
+      stats: { netCount: 0, componentCount: 0, sampleCount: 1, stopTime: 0, stepSize: 0 },
+      warnings: [],
+      circuit: {} as never,
+    };
+    const { container } = render(<BottomPanel result={result} />);
+    expect(screen.getByRole("status").textContent).toContain("No issues");
+    expect(container.querySelector(".bottom-panel.is-clean")).toBeTruthy();
+    expect(container.querySelector(".bottom-panel.is-idle")).toBeNull();
   });
 
   it("toggles an issue body from its emphasized header button", () => {
@@ -207,6 +227,8 @@ describe("BottomPanel — errors tab states (§11 Unit A3)", () => {
       circuit: {} as never,
     } as AnalysisResult;
     const { container } = render(<BottomPanel result={ok} />);
+    expect(container.querySelector(".bottom-panel.has-warning")).toBeTruthy();
+    expect(screen.getByRole("button", { name: /^Warnings/ })).toBeTruthy();
     const count = container.querySelector(".bottom-panel-count")!;
     expect(count.textContent).toBe("1");
     expect(count.classList.contains("warnings-only")).toBe(true);

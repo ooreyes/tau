@@ -28,6 +28,7 @@ import { EngineeringInput } from "./EngineeringInput";
 import { Palette } from "./Palette";
 import { OPAMP_LIBRARY, findOpAmp } from "../library/opamps";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Dialog, DialogContent, DialogHeader, DialogFooter, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -36,6 +37,7 @@ import { useProject } from "../store/useProject";
 import { basename, isAscFile, type ProjectNode } from "../project/types";
 import type { AnalysisResult } from "../simulation/linearTransient";
 import { formatEngineering } from "../simulation/quantity";
+import { loadAssistantApiKey, saveAssistantApiKey } from "../lib/assistant";
 import { PanelResizeHandle, usePanelWidth, type PanelWidthConfig } from "./panelResize";
 
 /** Drag-to-resize bounds for the two side panels (§11 Unit B). Minimums keep
@@ -66,7 +68,14 @@ interface ModeProps {
   onOpenSettings: () => void;
 }
 
-export function ActivityRail({ mode, partsOpen, onModeChange, onSearch, onFocusComponents, onOpenSettings }: ModeProps) {
+export function ActivityRail({
+  mode,
+  partsOpen,
+  onModeChange,
+  onSearch,
+  onFocusComponents,
+  onOpenSettings,
+}: ModeProps) {
   return (
     <nav className="activity-rail" aria-label="Workspace sections">
       <RailButton active={mode === "schematic"} label="Explorer" onClick={() => onModeChange("schematic")}>
@@ -830,7 +839,8 @@ export function BottomPanel({ result }: { mode?: "schematic" | "simulator"; resu
   ];
   const hasIssues = messages.length > 0;
   const hasError = Boolean(result && !result.ok);
-  const isClean = !hasIssues;
+  const isIdle = result === null;
+  const isClean = Boolean(result?.ok) && !hasIssues;
   const issueSignature = messages.join("\u0000");
   const [expanded, setExpanded] = useState(hasIssues);
 
@@ -844,17 +854,19 @@ export function BottomPanel({ result }: { mode?: "schematic" | "simulator"; resu
 
   return (
     <section
-      className={`bottom-panel${hasIssues ? " has-issues" : ""}${hasError ? " has-error" : ""}${isClean ? " is-clean" : ""}${panelExpanded ? "" : " is-collapsed"}`}
-      aria-label="Errors"
+      className={`bottom-panel${hasIssues ? " has-issues" : ""}${hasError ? " has-error" : ""}${hasIssues && !hasError ? " has-warning" : ""}${isClean ? " is-clean" : ""}${isIdle ? " is-idle" : ""}${panelExpanded ? "" : " is-collapsed"}`}
+      aria-label="Simulation diagnostics"
     >
-      {isClean ? (
+      {isIdle || isClean ? (
         <div className="bottom-panel-head bottom-panel-head--static">
-          <span className="bottom-panel-title">Errors</span>
-          <span className="bottom-panel-clear" role="status">
-            <svg viewBox="0 0 12 12" aria-hidden="true">
-              <path d="M2 6.5 L4.8 9.2 L10 3.4" />
+          <span className="bottom-panel-state" aria-hidden="true">
+            <svg viewBox="0 0 12 12">
+              {isIdle ? <path d="M3 6h6" /> : <path d="M2.3 6.3 4.8 8.8 9.8 3.5" />}
             </svg>
-            No errors
+          </span>
+          <span className="bottom-panel-title">Diagnostics</span>
+          <span className="bottom-panel-clear" role="status">
+            {isIdle ? "Not run" : "No issues"}
           </span>
         </div>
       ) : (
@@ -867,7 +879,16 @@ export function BottomPanel({ result }: { mode?: "schematic" | "simulator"; resu
           <svg className="bottom-panel-chevron" viewBox="0 0 12 12" aria-hidden="true">
             <path d="M2.5 4.2 6 7.8l3.5-3.6" />
           </svg>
-          <span className="bottom-panel-title">Errors</span>
+          <span className="bottom-panel-state" aria-hidden="true">
+            <svg viewBox="0 0 12 12">
+              {hasError ? (
+                <path d="m4.2 4.2 3.6 3.6m0-3.6L4.2 7.8" />
+              ) : (
+                <path d="M6 1.8 10.4 10H1.6L6 1.8Zm0 2.9v2.5M6 8.7v.1" />
+              )}
+            </svg>
+          </span>
+          <span className="bottom-panel-title">{hasError ? "Errors" : "Warnings"}</span>
           <span
             className={`bottom-panel-count${hasError ? "" : " warnings-only"}`}
             aria-live="polite"
@@ -877,15 +898,27 @@ export function BottomPanel({ result }: { mode?: "schematic" | "simulator"; resu
         </button>
       )}
       {panelExpanded && <div className="bottom-errors">
-        {messages.map((message, index) => (
-          <div
-            key={`${message}-${index}`}
-            className={result && !result.ok && index === 0 ? "error" : "warning"}
-            role={result && !result.ok && index === 0 ? "alert" : undefined}
-          >
-            {message}
-          </div>
-        ))}
+        {messages.map((message, index) => {
+          const isErrorMessage = Boolean(result && !result.ok && index === 0);
+          return (
+            <div
+              key={`${message}-${index}`}
+              className={isErrorMessage ? "error" : "warning"}
+              role={isErrorMessage ? "alert" : undefined}
+            >
+              <span className="bottom-error-glyph" aria-hidden="true">
+                <svg viewBox="0 0 12 12">
+                  {isErrorMessage ? (
+                    <path d="m4.2 4.2 3.6 3.6m0-3.6L4.2 7.8" />
+                  ) : (
+                    <path d="M6 1.8 10.4 10H1.6L6 1.8Zm0 2.9v2.5M6 8.7v.1" />
+                  )}
+                </svg>
+              </span>
+              <span className="bottom-error-message">{message}</span>
+            </div>
+          );
+        })}
       </div>}
     </section>
   );
@@ -1177,6 +1210,7 @@ export function SettingsPanel({
   const probes = useSchematic((s) => s.probes);
   const clearProbes = useSchematic((s) => s.clearProbes);
   const setProbeColor = useSchematic((s) => s.setProbeColor);
+  const [apiKeyInput, setApiKeyInput] = useState(loadAssistantApiKey);
 
   const PROBE_SWATCHES = [
     "var(--trace-red)",
@@ -1205,6 +1239,27 @@ export function SettingsPanel({
           <SheetDescription className="sr-only">Workspace and document settings for this scratchpad.</SheetDescription>
         </SheetHeader>
         <div className="settings-list">
+          <div className="settings-section">
+            <span className="settings-sheet-kicker">Assistant</span>
+            <label className="settings-field" htmlFor="assistant-api-key">
+              <span>Anthropic API key</span>
+              <Input
+                id="assistant-api-key"
+                type="password"
+                variant="mono"
+                autoComplete="off"
+                spellCheck={false}
+                placeholder="sk-ant-…"
+                value={apiKeyInput}
+                onChange={(event) => {
+                  const next = event.currentTarget.value;
+                  setApiKeyInput(next);
+                  saveAssistantApiKey(next);
+                }}
+              />
+              <span className="settings-field-hint">Kept only for this Tau session and sent only to api.anthropic.com.</span>
+            </label>
+          </div>
           <SettingsRow label="Command palette" hint="⌘K · F2 · / — search & place parts">
             <Button size="sm" variant="outline" onClick={onOpenCommandPalette}>Open</Button>
           </SettingsRow>

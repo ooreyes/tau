@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
-import { Crosshair, Eye, MousePointer2, Tag } from "lucide-react";
+import { Crosshair, Eye, LockKeyhole, MousePointer2, Tag } from "lucide-react";
 import "./App.css";
 import { Toolbar } from "./components/Toolbar";
 import { Canvas } from "./components/Canvas";
 import { StatusBar } from "./components/StatusBar";
 import { SimulationPanel } from "./components/SimulationPanel";
 import { TelemetryDock } from "./components/TelemetryDock";
+import { AssistantPanel, ASSISTANT_PANEL_WIDTH, loadAssistantOpen, saveAssistantOpen } from "./components/AssistantPanel";
+import { usePanelWidth } from "./components/panelResize";
 import { AnalysisErrorBoundary } from "./components/AnalysisErrorBoundary";
 import { EmptyState } from "./components/EmptyState";
 import { CommandPalette } from "./components/CommandPalette";
@@ -82,6 +84,7 @@ import {
 } from "./project/types";
 import { validateSchematicDocument } from "./schematic/documentValidation";
 import { importAsc } from "./io/ascImport";
+import type { AssistantCreateAscAction } from "./lib/assistantActions";
 
 const DEFAULT_ANALYSIS_OPTIONS: AnalysisOptions = {
   stopTime: 0.006,
@@ -114,6 +117,13 @@ const emptyHistory = (): SchematicHistory => ({ past: [], future: [] });
 const RAIL_W = 54; // .activity-rail
 const HANDLE_W = 8; // .col-resize-handle, one per open column
 const SCOPE_MIN = 300; // analysis scope column floor (matches old drag clamp)
+// Floors used only to keep the Assistant column from starving its neighbors
+// (see the Assistant-width clamp effect below) — mirror the CSS floors on
+// .sim-schematic-pane and .app-simulator .shell-body > .plotter so the JS
+// budget matches what the layout can actually give up before it, not the
+// Assistant column, has to shrink.
+const SIM_SCHEMATIC_MIN = 250;
+const PLOTTER_MIN = 280;
 
 function App() {
   const components = useSchematic((s) => s.components);
@@ -180,6 +190,25 @@ function App() {
   const [partsOpen, setPartsOpen] = useState(true);
   const [fitSignal, setFitSignal] = useState(0);
   const [scopeWidth, setScopeWidth] = useState(440);
+  // Closed by default (§ AI assistant column) — persists across sessions
+  // like graphOpen/partsOpen, but doesn't reset on a schematic/simulator mode
+  // switch since it's not view-specific. Width is lifted (not owned by
+  // AssistantPanel itself) so the responsive-floor effect below can read and
+  // shrink it, the same reason scopeWidth lives here instead of in SimulationPanel.
+  const [assistantOpen, setAssistantOpen] = useState(loadAssistantOpen);
+  const assistantResize = usePanelWidth(ASSISTANT_PANEL_WIDTH);
+  const toggleAssistant = useCallback(() => {
+    setAssistantOpen((open) => {
+      const next = !open;
+      if (next) setPartsOpen(false);
+      saveAssistantOpen(next);
+      return next;
+    });
+  }, []);
+  const closeAssistant = useCallback(() => {
+    setAssistantOpen(false);
+    saveAssistantOpen(false);
+  }, []);
   const [dcSetup, setDcSetup] = useState<DcSweepSpec>(() => defaultDcSetup([]));
   const [tfSetup, setTfSetup] = useState<TfSpec>(() => defaultTfSetup([]));
   const [noiseSetup, setNoiseSetup] = useState<NoiseSpec>(() => defaultNoiseSetup([]));
@@ -197,6 +226,8 @@ function App() {
   }, [selectedId, mode]);
 
   const writeSim = useProject((s) => s.writeSim);
+  const createSchematicInRoot = useProject((s) => s.createSchematicInRoot);
+  const deleteProjectNode = useProject((s) => s.deleteNode);
   const moveProjectNodeInStore = useProject((s) => s.moveNode);
 
   const moveProjectNode = useCallback(async (sourcePath: string, destinationDirectoryPath: string) => {
@@ -636,40 +667,69 @@ function App() {
     }
   }, [openDocument, showNotice]);
 
+  const createAssistantCircuit = useCallback(async (action: AssistantCreateAscAction) => {
+    const path = await createSchematicInRoot(action.filename);
+    if (!path) throw new Error(useProject.getState().error ?? "Could not create schematic.");
+    try {
+      await writeSim(path, action.source);
+    } catch (error) {
+      // The assistant action is all-or-nothing: don't leave a misleading empty
+      // placeholder if the second half of the native write fails.
+      await deleteProjectNode(path);
+      throw error;
+    }
+    openAscFromProject(path, basename(path), action.source);
+    showNotice(`Created ${basename(path)}`);
+  }, [createSchematicInRoot, deleteProjectNode, openAscFromProject, showNotice, writeSim]);
+
   const saveActiveToProject = useCallback(async () => {
     const tab = tabs.find((t) => t.id === activeId);
-    if (!tab?.filePath) {
-      showNotice("Create or open a schematic from the Explorer, then Save.");
-      return;
+    if (!tab) return;
+    let filePath = tab.filePath ?? null;
+    let createdForSave = false;
+    if (!filePath) {
+      filePath = await createSchematicInRoot(tab.title);
+      if (!filePath) {
+        showNotice(useProject.getState().error ?? "Open a Schematics folder before saving.");
+        return;
+      }
+      createdForSave = true;
     }
+    const savePath = filePath;
     try {
-      const serialized = serializeSchematicFile(tab.filePath, {
+      const serialized = serializeSchematicFile(savePath, {
         components,
         wires,
         probes,
         netLabels,
         directives,
       });
-      const blockReason = isAscFile(tab.filePath)
+      const blockReason = isAscFile(savePath)
         ? ascSaveBlockReason(tab.ascRewriteRisks ?? [], probes.length, serialized.warnings)
         : null;
       if (blockReason) {
-        console.warn(`Blocked lossy save for ${basename(tab.filePath)}: ${blockReason}`);
+        if (createdForSave) await deleteProjectNode(savePath);
+        console.warn(`Blocked lossy save for ${basename(savePath)}: ${blockReason}`);
         showNotice(`Save blocked: ${blockReason}`);
         return;
       }
-      await writeSim(tab.filePath, serialized.contents);
-      setTabs((list) => list.map((t) => (t.id === activeId ? { ...t, dirty: false } : t)));
+      await writeSim(savePath, serialized.contents);
+      setTabs((list) => list.map((t) => (
+        t.id === activeId
+          ? { ...t, title: basename(savePath), filePath: savePath, dirty: false }
+          : t
+      )));
       if (serialized.warnings.length > 0) {
-        console.warn(`Saved ${basename(tab.filePath)} with export warnings:`, serialized.warnings);
+        console.warn(`Saved ${basename(savePath)} with export warnings:`, serialized.warnings);
         showNotice(`Saved with ${serialized.warnings.length} export warning(s).`);
       } else {
-        showNotice(`Saved ${basename(tab.filePath)}`);
+        showNotice(`${createdForSave ? "Created" : "Saved"} ${basename(savePath)}`);
       }
     } catch (error) {
+      if (createdForSave) await deleteProjectNode(savePath);
       showNotice(error instanceof Error ? error.message : "Save failed.");
     }
-  }, [tabs, activeId, components, wires, probes, netLabels, directives, writeSim, showNotice]);
+  }, [tabs, activeId, components, wires, probes, netLabels, directives, createSchematicInRoot, deleteProjectNode, writeSim, showNotice]);
 
   // Switch to an already-open tab, preserving each tab's content in memory.
   const switchTab = useCallback((id: string) => {
@@ -686,21 +746,20 @@ function App() {
     setFitSignal((n) => n + 1);
   }, [activeId, tabs, snapshotActive, restoreCircuit, adoptDirectiveOptions, invalidateAnalysis]);
 
-  const startNewCircuit = useCallback(() => {
-    const snap = snapshotActive(tabs);
-    const taken = new Set(snap.map((tab) => tab.title));
-    let title = "untitled.asc";
-    for (let n = 2; taken.has(title); n += 1) title = `untitled-${n}.asc`;
-    const id = newTabId();
-    setTabs([...snap, { id, title, doc: blankDocument(), history: emptyHistory() }]);
-    setActiveId(id);
-    newCircuit();
-    invalidateAnalysis();
-    setMode("schematic");
+  const startNewCircuit = useCallback(async () => {
+    const path = await createSchematicInRoot();
+    if (!path) {
+      showNotice(useProject.getState().error ?? "Could not create schematic.");
+      return;
+    }
+
+    // Opening through the normal document path gives the tab its real filePath
+    // immediately. The first ⌘S therefore updates the newly-created .asc
+    // instead of falling back to the old pathless scratchpad warning.
+    openDocument(blankDocument(), basename(path), path);
     setGraphOpen(true);
-    setFitSignal((n) => n + 1);
-    showNotice("Started a new blank circuit.");
-  }, [tabs, snapshotActive, newCircuit, invalidateAnalysis, showNotice]);
+    showNotice(`Created ${basename(path)}`);
+  }, [createSchematicInRoot, openDocument, showNotice]);
 
   const closeTab = useCallback((id: string, confirmed = false) => {
     const snap = snapshotActive(tabs);
@@ -847,6 +906,19 @@ function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [shellWidth, mode, graphOpen]);
 
+  // Same responsive floor, for the Assistant column: the schematic (circuit)
+  // and scope columns already shrink themselves gracefully via flex down to
+  // their own CSS floors, so Assistant — the newest, most dispensable column
+  // — is the one asked to give up space first when everything's floor still
+  // wouldn't fit. Also one-way (only ever shrinks), same rationale as above.
+  useEffect(() => {
+    if (mode !== "simulator" || shellWidth === 0 || !assistantOpen) return;
+    const reserved = RAIL_W + HANDLE_W + SIM_SCHEMATIC_MIN + PLOTTER_MIN;
+    const budget = Math.max(ASSISTANT_PANEL_WIDTH.minWidth, shellWidth - reserved);
+    if (assistantResize.width > budget) assistantResize.setWidth(budget);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shellWidth, mode, assistantOpen, assistantResize.width]);
+
   return (
     <div className={`app app-${mode}`}>
       <Toolbar
@@ -860,12 +932,14 @@ function App() {
           if (nextMode === "simulator") setFitSignal((value) => value + 1);
         }}
         onRun={runAndShowSimulator}
+        assistantOpen={assistantOpen}
+        onToggleAssistant={toggleAssistant}
         onOpenSettings={() => setSettingsOpen(true)}
       />
       <div
         ref={shellBodyRef}
         className="shell-body"
-        style={{ "--scope-w": `${scopeWidth}px` } as CSSProperties}
+        style={{ "--scope-w": `${scopeWidth}px`, "--assistant-w": `${assistantResize.width}px` } as CSSProperties}
       >
         <ActivityRail
           mode={mode}
@@ -876,7 +950,10 @@ function App() {
             setMode("schematic");
             setPartsOpen((open) => {
               const next = !open;
-              if (next) setComponentFocusSignal((value) => value + 1);
+              if (next) {
+                closeAssistant();
+                setComponentFocusSignal((value) => value + 1);
+              }
               return next;
             });
           }}
@@ -956,7 +1033,13 @@ function App() {
                     <span>Name</span>
                   </button>
                 </div>
-                <span className="sim-topology-lock">Topology locked</span>
+                <span
+                  className="sim-view-only"
+                  aria-label="View-only circuit topology"
+                  title="View-only circuit topology"
+                >
+                  <LockKeyhole size={13} strokeWidth={1.8} aria-hidden="true" />
+                </span>
               </header>
               <div className="sim-schematic-canvas">
                 <Canvas op={opAnalysis} interactive={false} fitSignal={fitSignal} />
@@ -1012,7 +1095,24 @@ function App() {
             onRestoreGraph={() => setGraphOpen(true)}
           />
         )}
-        {mode === "schematic" && partsOpen && (
+        {assistantOpen && (
+          <AssistantPanel
+            components={components}
+            wires={wires}
+            netLabels={netLabels}
+            directives={directives}
+            params={params}
+            analysis={analysis}
+            componentRows={componentRows}
+            measurements={measurements}
+            selectedId={selectedId}
+            resize={assistantResize}
+            onCreateAsc={createAssistantCircuit}
+            onOpenSettings={() => setSettingsOpen(true)}
+            onClose={closeAssistant}
+          />
+        )}
+        {mode === "schematic" && partsOpen && !assistantOpen && (
           <ComponentsRail focusSignal={componentFocusSignal} onNotice={showNotice} />
         )}
       </div>

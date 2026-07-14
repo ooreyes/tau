@@ -8,18 +8,69 @@
      `git log --oneline -8`, recover/finish/revert that unit FIRST, then go on.
      ─────────────────────────────────────────────────────────────────────── -->
 ## ⏱ HEARTBEAT
-- **Headline metric:** 1576 committed-snapshot tests green · corpus 82/82 import · 82/82 op-converge · 79/82 warning-clean
-- **Run started (UTC):** 2026-07-14T16:31Z
-- **Synced to origin:** auto/ltspice-parity @ 545afd2 (dirty shared tree preserved).
-- **Claimed unit:** §2/§11 fit-center correctness and component-current safety telemetry.
+- **Headline metric:** 1601 committed-snapshot tests green · corpus 82/82 import · 82/82 op-converge · 79/82 warning-clean
+- **Run started (UTC):** 2026-07-14T17:04Z
+- **Synced to origin:** auto/ltspice-parity @ adf66f8 (dirty shared tree preserved).
+- **Claimed unit:** §1/§10/§11 durable new-file save, vibrant semantic chrome,
+  and one cross-mode circuit-aware assistant.
 - **Status:** DONE
-- **Last completed sub-step:** pushed `5736a61`; topology-centered fit, true
-  component-on-wire insertion, +315 mA LED telemetry, and the no-limiter warning
-  are covered by focused regressions and live hot-reload QA.
-- **Plan:** resume the plot-card/cursor/FFT sequence in `TAU_DESIGN_VISION.md`.
+- **Last completed sub-step:** completed live hot-reload/minimum-viewport QA;
+  verified centered fit/Home, one assistant entry in both modes, real ASC
+  creation, truthful LED current, and neutral-before-run diagnostics.
+- **Plan:** unit complete; preserve unrelated simulator worktree changes and
+  continue with the next highest-leverage acceptance-parity item.
 - **Note:** existing simulator/assistant worktree edits belong to earlier units and
   must remain intact; stage only reviewed hunks.
-- **Next step:** unify plot axes/cursors and finish FFT engineering readouts.
+- **Next step:** reconcile the existing simulator-dashboard worktree unit, then
+  run packaged-app screenshot QA across the full viewport matrix.
+
+---
+
+## 2026-07-14T17:38Z — auto/ltspice-parity — durable ASC creation and cross-mode circuit assistant (§1/§8/§10/§11)
+
+### What I did
+- Made New Circuit and a first Cmd-S create a collision-safe real `.asc` in the
+  user-selected Schematics root, update the open tab path, and remove a newly
+  created placeholder if export is blocked or writing fails.
+- Consolidated the assistant into one top-right control available in Schematic
+  and Simulator, with real document/simulation context, strict ASC tool-action
+  validation, explicit user-confirmed creation, and a session-memory API key.
+- Added topology-safe simulator node naming: view-only users may add names and
+  probes, but cannot accidentally join or split physical nodes by renaming.
+- Preserved explicit ngspice diode current vectors and constrained fallback KCL
+  inference to truly two-terminal devices. Direct LED drive now shows the
+  model's +315 mA/+1.575 W with a no-external-limiter advisory, without claiming
+  a device rating Tau does not possess.
+- Refined token-backed diagnostic/run chrome: idle is neutral “Not run,” mint is
+  reserved for a successful clean run, and warning/error states are semantic.
+  Reduced responsive column floors and verified no 900×600 horizontal overflow.
+
+### Files
+- `App.tsx`, `App.css`, `Toolbar.tsx`, `ShellPanels.tsx`, `Canvas.tsx`
+- `store/useProject.ts`, `engine/nativeSpice.ts`, `simulation/measurementModel.ts`
+- `components/AssistantPanel.tsx`, `lib/assistant*.ts`, `lib/miniMarkdown.tsx`
+- focused component/store/engine/assistant regression tests and Tauri CSP
+
+### Tests and QA
+- `pnpm -C apps/desktop typecheck` — pass.
+- `pnpm -C apps/desktop test` — 110 files / 1633 tests pass.
+- Exact staged snapshot in a detached worktree — typecheck plus 109 files /
+  1601 tests pass (proves the commit does not depend on unrelated dirty work).
+- `pnpm --filter @tau/desktop build` — pass (known SDK/chunk-size warnings only).
+- `cargo fmt --check`, `cargo clippy -- -D warnings`, `cargo test` — pass
+  (7 native tests pass, 1 opt-in test ignored in the ordinary run).
+- Real-ngspice ignored smoke test — pass with the bundled dylib.
+- Live Tauri hot reload stayed running; browser QA verified fit/Home, assistant
+  reachability in both modes, no console errors, and 900×600 layout containment.
+
+### Parity items
+- §1: every user-facing new-circuit/save entry is now disk-backed `.asc`.
+- §8/§10: one cross-mode assistant and honest semantic status chrome.
+- §11: explicit semiconductor current authority and topology-safe simulator names.
+
+### Next step
+- Finish/review the already-present simulator dashboard unit, then repeat the
+  1440×900, 1280×720, and 900×600 matrix in the packaged application.
 
 ---
 

@@ -60,8 +60,39 @@
   --success-soft: rgba(79, 174, 107, 0.10);
   --success-line: rgba(79, 174, 107, 0.35);
   --success-glow: rgba(79, 174, 107, 0.20);
+
+  /* Assistant — a deliberate violet→aqua identity used only for the single
+     top-level AI action and its focused state. Like Apple's stained-glass
+     primary controls, color lives on the functional control layer rather
+     than washing the circuit or plot content surfaces. */
+  --assistant:       #a78bfa;
+  --assistant-alt:   #52e0c4;
+  --assistant-soft:  rgba(167, 139, 250, 0.13);
+  --assistant-line:  rgba(167, 139, 250, 0.42);
+  --assistant-glow:  rgba(82, 224, 196, 0.20);
   --cream:        #f5f5f7;
   --cream-soft:   rgba(245, 245, 247, 0.08);
+
+  /* Diagnostics — vivid Apple dark-mode semantics, constrained to lamps,
+     hairlines and shallow glass tint. These are intentionally brighter than
+     the general-purpose semantic tokens above so status is glanceable without
+     flooding an entire panel with color. */
+  --diagnostic-ok:          #30d158;
+  --diagnostic-ok-text:     #8ff0aa;
+  --diagnostic-ok-soft:     rgba(48, 209, 88, 0.10);
+  --diagnostic-ok-line:     rgba(48, 209, 88, 0.42);
+  --diagnostic-ok-glow:     rgba(48, 209, 88, 0.26);
+  --diagnostic-warning:     #ff9f0a;
+  --diagnostic-warning-text: #ffd27a;
+  --diagnostic-warning-soft: rgba(255, 159, 10, 0.11);
+  --diagnostic-warning-line: rgba(255, 159, 10, 0.42);
+  --diagnostic-warning-glow: rgba(255, 159, 10, 0.25);
+  --diagnostic-error:       #ff453a;
+  --diagnostic-error-text:  #ff9b94;
+  --diagnostic-error-soft:  rgba(255, 69, 58, 0.11);
+  --diagnostic-error-line:  rgba(255, 69, 58, 0.44);
+  --diagnostic-error-glow:  rgba(255, 69, 58, 0.26);
+  --diagnostic-glass-shine: rgba(255, 255, 255, 0.055);
 
   /* Schematic strokes — light label on black instrument face */
   --comp:      #d1d1d6;
@@ -528,6 +559,22 @@ body {
   text-align: left;
   letter-spacing: 0.02em;
   text-transform: none;
+}
+
+.net-label-input-error {
+  position: absolute;
+  z-index: 22;
+  width: min(260px, calc(100% - 24px));
+  transform: translateX(-50%);
+  padding: 6px 8px;
+  border: 1px solid var(--danger-line);
+  border-radius: var(--r-sm);
+  color: color-mix(in srgb, var(--danger) 34%, var(--text));
+  background: color-mix(in srgb, var(--danger-soft) 64%, var(--panel-4));
+  box-shadow: var(--elev-pop);
+  font: 550 var(--fs-caption) var(--font-ui);
+  line-height: 1.35;
+  pointer-events: none;
 }
 
 /* ── Wire / hit targets ─────────────────────────────────────────────────────── */
@@ -3399,6 +3446,35 @@ body {
   box-shadow: 0 0 4px var(--danger-glow);
 }
 
+/* The single cross-mode Assistant entry point. A restrained stained-glass
+   gradient makes this product-level action discoverable without turning the
+   surrounding toolbar into a rainbow; the panel itself stays a legible,
+   higher-opacity material. */
+.assistant-toolbar-button {
+  color: color-mix(in srgb, var(--assistant) 72%, var(--text));
+  border-color: var(--assistant-line) !important;
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--assistant) 16%, var(--panel-2)),
+    color-mix(in srgb, var(--assistant-alt) 9%, var(--panel-2))
+  ) !important;
+}
+
+.assistant-toolbar-button:hover,
+.assistant-toolbar-button--active {
+  color: var(--text) !important;
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--assistant) 48%, var(--panel-2)),
+    color-mix(in srgb, var(--assistant-alt) 30%, var(--panel-2))
+  ) !important;
+  box-shadow: var(--elev-1), 0 0 12px var(--assistant-glow);
+}
+
+.assistant-toolbar-button:focus-visible {
+  box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--assistant-line), 0 0 14px var(--assistant-glow);
+}
+
 /* activity rail + explorer */
 .activity-rail {
   width: 52px;
@@ -3496,6 +3572,7 @@ body {
 .explorer-head > span,
 .palette-head > span,
 .plotter-kicker,
+.assistant-kicker,
 .result-list h3,
 .symbol-preview > span {
   color: var(--muted);
@@ -4376,13 +4453,62 @@ body {
 
 /* Errors strip — compact; expands only when there are issues. */
 .bottom-panel {
+  --diagnostic-color: var(--diagnostic-ok);
+  --diagnostic-text: var(--diagnostic-ok-text);
+  --diagnostic-soft: var(--diagnostic-ok-soft);
+  --diagnostic-line: var(--diagnostic-ok-line);
+  --diagnostic-glow: var(--diagnostic-ok-glow);
   flex: none;
   display: flex;
   flex-direction: column;
   min-height: 0;
-  max-height: 140px;
-  background: var(--panel);
-  border-top: 0.5px solid var(--border);
+  max-height: 156px;
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  background:
+    linear-gradient(180deg, var(--diagnostic-glass-shine), transparent 22px),
+    color-mix(in srgb, var(--panel) 96%, var(--diagnostic-color));
+  border-top: 0.5px solid var(--diagnostic-line);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--diagnostic-color) 7%, transparent),
+    0 -8px 24px color-mix(in srgb, var(--diagnostic-glow) 18%, transparent);
+  backdrop-filter: saturate(145%) blur(16px);
+  -webkit-backdrop-filter: saturate(145%) blur(16px);
+}
+
+.bottom-panel.is-idle {
+  --diagnostic-color: var(--muted);
+  --diagnostic-text: var(--muted);
+  --diagnostic-soft: var(--overlay-hover-faint);
+  --diagnostic-line: var(--border-subtle);
+  --diagnostic-glow: var(--overlay-hover-faint);
+}
+
+.bottom-panel.has-warning {
+  --diagnostic-color: var(--diagnostic-warning);
+  --diagnostic-text: var(--diagnostic-warning-text);
+  --diagnostic-soft: var(--diagnostic-warning-soft);
+  --diagnostic-line: var(--diagnostic-warning-line);
+  --diagnostic-glow: var(--diagnostic-warning-glow);
+}
+
+.bottom-panel.has-error {
+  --diagnostic-color: var(--diagnostic-error);
+  --diagnostic-text: var(--diagnostic-error-text);
+  --diagnostic-soft: var(--diagnostic-error-soft);
+  --diagnostic-line: var(--diagnostic-error-line);
+  --diagnostic-glow: var(--diagnostic-error-glow);
+}
+
+.bottom-panel::before {
+  content: "";
+  position: absolute;
+  z-index: 2;
+  inset: -0.5px 0 auto;
+  height: 1px;
+  pointer-events: none;
+  background: linear-gradient(90deg, transparent, var(--diagnostic-color) 16%, var(--diagnostic-line) 56%, transparent 92%);
 }
 
 .bottom-panel:not(.has-issues) {
@@ -4396,7 +4522,7 @@ body {
   align-items: center;
   gap: var(--sp-2);
   padding: 0 12px;
-  border-bottom: 1px solid var(--border-subtle);
+  border-bottom: 1px solid color-mix(in srgb, var(--diagnostic-line) 50%, var(--border-subtle));
   width: 100%;
   border-top: 0;
   border-right: 0;
@@ -4404,6 +4530,21 @@ body {
   color: inherit;
   text-align: left;
   cursor: pointer;
+  background:
+    radial-gradient(ellipse 150px 26px at 36px 50%, var(--diagnostic-soft), transparent 72%),
+    transparent;
+  transition: background var(--motion-fast) var(--spring);
+}
+
+button.bottom-panel-head:hover {
+  background:
+    radial-gradient(ellipse 170px 28px at 42px 50%, color-mix(in srgb, var(--diagnostic-soft) 84%, transparent), transparent 74%),
+    var(--overlay-hover-faint);
+}
+
+button.bottom-panel-head:focus-visible {
+  outline: 1px solid var(--diagnostic-line);
+  outline-offset: -2px;
 }
 
 .bottom-panel-head--static {
@@ -4433,36 +4574,35 @@ body {
   color: var(--text);
 }
 
-.bottom-panel.has-error .bottom-panel-head {
-  background: linear-gradient(
-    to right,
-    color-mix(in srgb, var(--danger) 38%, var(--panel)),
-    color-mix(in srgb, var(--danger) 14%, var(--panel)) 62%,
-    transparent
-  );
-  border-bottom-color: color-mix(in srgb, var(--danger) 35%, transparent);
+.bottom-panel-state {
+  width: 17px;
+  height: 17px;
+  flex: 0 0 17px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: var(--diagnostic-color);
+  border: 0.5px solid var(--diagnostic-line);
+  background: var(--diagnostic-soft);
+  box-shadow: 0 0 12px var(--diagnostic-glow), inset 0 0.5px 0 var(--diagnostic-glass-shine);
 }
 
-.bottom-panel.has-error .bottom-panel-title {
-  color: color-mix(in srgb, var(--danger) 78%, white);
+.bottom-panel-state svg {
+  width: 11px;
+  height: 11px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.65;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .bottom-panel-clear {
   display: inline-flex;
   align-items: center;
   gap: var(--sp-1);
-  color: color-mix(in srgb, var(--success) 58%, var(--muted));
+  color: color-mix(in srgb, var(--diagnostic-text) 70%, var(--muted));
   font: 500 var(--fs-caption) var(--font-ui);
-}
-
-.bottom-panel-clear svg {
-  width: 11px;
-  height: 11px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.6;
-  stroke-linecap: round;
-  stroke-linejoin: round;
 }
 
 .bottom-panel-count {
@@ -4473,14 +4613,16 @@ body {
   display: inline-grid;
   place-items: center;
   font: 650 var(--fs-micro) var(--font-mono);
-  color: white;
-  background: var(--danger);
+  color: var(--text);
+  border: 0.5px solid var(--diagnostic-line);
+  background: var(--diagnostic-soft);
+  box-shadow: inset 0 0.5px 0 var(--diagnostic-glass-shine), 0 0 10px var(--diagnostic-glow);
 }
 
 /* Warnings without a hard error: tactical amber, not alarm red. */
 .bottom-panel-count.warnings-only {
-  color: var(--bg);
-  background: var(--signal);
+  color: var(--diagnostic-warning-text);
+  background: var(--diagnostic-warning-soft);
 }
 
 .bottom-errors {
@@ -4494,7 +4636,7 @@ body {
 }
 
 .bottom-panel.has-error .bottom-errors {
-  background: color-mix(in srgb, var(--danger) 8%, transparent);
+  background: color-mix(in srgb, var(--diagnostic-error-soft) 55%, transparent);
 }
 
 .component-inspector,
@@ -4817,7 +4959,7 @@ body {
 }
 
 .sim-schematic-title,
-.sim-topology-lock {
+.sim-view-only {
   display: inline-flex;
   align-items: center;
   gap: var(--sp-2);
@@ -4829,10 +4971,15 @@ body {
   letter-spacing: -0.01em;
 }
 
-.sim-topology-lock {
+.sim-view-only {
   flex: none;
+  width: 26px;
+  height: 26px;
+  justify-content: center;
   color: var(--muted);
-  font: 500 var(--fs-caption) var(--font-ui);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--panel-3);
 }
 
 .sim-circuit-tools {
@@ -4877,8 +5024,7 @@ body {
 }
 
 @media (max-width: 1180px) {
-  .sim-circuit-tools button span,
-  .sim-topology-lock {
+  .sim-circuit-tools button span {
     display: none;
   }
 }
@@ -5072,13 +5218,388 @@ body {
   color: var(--faint);
 }
 
-/* Resizable simulator columns: circuit (flex), analysis scope, and Ask Sim.
-   Widths are driven by CSS vars set on .shell-body and dragged via handles. */
+/* Resizable simulator columns: circuit (flex), analysis scope, and Assistant.
+   The scope column (.plotter) still auto-fills remaining space (flex: 1) —
+   only the Assistant column (below) is actually width-driven by a dragged
+   CSS var today; --scope-w stays reserved on .shell-body for a future scope
+   drag handle without another rename. */
 .app-simulator .shell-body > .plotter {
   flex: 1;
   width: auto;
-  min-width: 300px;
+  min-width: 280px;
   border-left: 0;
+}
+
+/* ── Assistant column (§ AI assistant) ────────────────────────────────────
+   Docks to the right of the scope column, same "resizable side panel"
+   language as the Components rail (panelResize.tsx, edge="left" widens away
+   from the window edge). Width is set inline as --assistant-w by the panel
+   itself (AssistantPanel.tsx) from its own usePanelWidth() state, which
+   App.tsx lifts so the responsive-floor effect can read it too. */
+.assistant-panel {
+  position: relative;
+  flex: none;
+  width: var(--assistant-w, 340px);
+  min-width: 280px;
+  max-width: 520px;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--canvas-bg);
+  border-left: 1px solid var(--border);
+}
+
+.assistant-header {
+  flex: none;
+  min-height: 45px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  padding: var(--sp-2) var(--sp-3);
+  border-bottom: 1px solid var(--border);
+}
+
+.assistant-title-row {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-2);
+}
+
+.assistant-title {
+  font-size: var(--fs-title);
+  font-weight: 600;
+  color: var(--cream);
+  letter-spacing: -0.2px;
+  line-height: 1;
+}
+
+.assistant-model-badge {
+  padding: 2px 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  color: var(--faint);
+  font: 600 var(--fs-micro) var(--font-mono);
+  letter-spacing: var(--tracking-micro);
+}
+
+.assistant-actions {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+.assistant-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+
+.assistant-body .panel-empty {
+  flex: 1;
+}
+
+.assistant-messages {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  padding: var(--sp-3);
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: var(--panel-4) transparent;
+}
+
+.assistant-messages::-webkit-scrollbar {
+  width: 3px;
+}
+
+.assistant-messages::-webkit-scrollbar-thumb {
+  background: var(--panel-4);
+  border-radius: 3px;
+}
+
+.assistant-intro {
+  align-self: center;
+  margin: auto;
+  max-width: 30ch;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-6) var(--sp-4);
+  text-align: center;
+  color: var(--faint);
+}
+
+.assistant-intro svg {
+  opacity: 0.5;
+}
+
+.assistant-intro p {
+  margin: 0;
+  font-size: var(--fs-body);
+  line-height: 1.5;
+}
+
+.assistant-message {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.assistant-message--user {
+  align-self: flex-end;
+  max-width: 88%;
+}
+
+.assistant-message--assistant {
+  align-self: stretch;
+  max-width: 100%;
+}
+
+.assistant-bubble {
+  min-width: 0;
+  color: var(--text);
+  font: 450 var(--fs-body) var(--font-ui);
+  line-height: 1.55;
+}
+
+.assistant-message--user .assistant-bubble {
+  padding: 7px 11px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-lg);
+  background: var(--panel-3);
+}
+
+.assistant-bubble p {
+  margin: 0 0 8px;
+}
+
+.assistant-bubble p:last-child {
+  margin-bottom: 0;
+}
+
+.assistant-bubble ul,
+.assistant-bubble ol {
+  margin: 2px 0 8px;
+  padding-left: 18px;
+}
+
+.assistant-bubble li {
+  margin: 3px 0;
+}
+
+.assistant-bubble li:last-child {
+  margin-bottom: 0;
+}
+
+.assistant-bubble strong {
+  color: var(--cream);
+  font-weight: 650;
+}
+
+.assistant-bubble code {
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--panel-4);
+  color: var(--trace-cream);
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+}
+
+.assistant-action {
+  margin-top: var(--sp-3);
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-2);
+  border: 1px solid var(--assistant-line);
+  border-radius: var(--r-md);
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--assistant) 10%, var(--panel-3)),
+    color-mix(in srgb, var(--assistant-alt) 5%, var(--panel-3))
+  );
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--cream) 5%, transparent);
+}
+
+.assistant-action > svg {
+  color: color-mix(in srgb, var(--assistant-alt) 72%, var(--text));
+}
+
+.assistant-action[data-status="working"] {
+  opacity: 0.72;
+}
+
+.assistant-action[data-status="done"] {
+  border-color: var(--success-line);
+  background: color-mix(in srgb, var(--success-soft) 78%, var(--panel-3));
+}
+
+.assistant-action-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.assistant-action-copy strong,
+.assistant-action-copy span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.assistant-action-copy strong {
+  color: var(--text);
+  font: 600 var(--fs-label) var(--font-ui);
+}
+
+.assistant-action-copy span {
+  color: var(--muted);
+  font: 500 var(--fs-caption) var(--font-mono);
+}
+
+.assistant-bubble pre {
+  margin: 6px 0;
+  padding: var(--sp-2) var(--sp-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-md);
+  background: var(--panel-3);
+  overflow-x: auto;
+}
+
+.assistant-bubble pre code {
+  padding: 0;
+  background: transparent;
+  color: var(--text);
+}
+
+/* Blinking insertion caret appended to the last assistant bubble only while
+   its reply is still streaming in — a quiet "still typing" signal instead of
+   a spinner, consistent with the run-lamp-dot idiom used elsewhere. */
+.assistant-caret {
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  margin-left: 2px;
+  vertical-align: text-bottom;
+  background: var(--accent);
+  animation: assistant-caret-blink 900ms steps(1) infinite;
+}
+
+@keyframes assistant-caret-blink {
+  0%, 49%  { opacity: 1; }
+  50%, 100% { opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .assistant-caret { animation: none; opacity: 0.6; }
+}
+
+.assistant-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-3);
+  border: 1px solid var(--danger-line);
+  border-radius: var(--r-md);
+  background: var(--danger-soft);
+  color: var(--text);
+  font-size: var(--fs-body);
+}
+
+.assistant-chips {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 0 var(--sp-3) var(--sp-3);
+}
+
+.assistant-chip {
+  height: var(--row-h-dense);
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font: 550 var(--fs-caption) var(--font-ui);
+  letter-spacing: -0.01em;
+  cursor: pointer;
+  transition: color var(--motion-fast) var(--ease-out),
+    background var(--motion-fast) var(--ease-out),
+    border-color var(--motion-fast) var(--ease-out);
+}
+
+.assistant-chip:hover:not(:disabled) {
+  color: var(--text);
+  background: var(--overlay-hover-faint);
+  border-color: var(--border-strong);
+}
+
+.assistant-chip:active:not(:disabled) {
+  background: var(--overlay-hover);
+}
+
+.assistant-chip:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.assistant-chip:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--accent-line);
+}
+
+.assistant-composer {
+  flex: none;
+  display: flex;
+  align-items: flex-end;
+  gap: var(--sp-2);
+  padding: var(--sp-3);
+  border-top: 1px solid var(--border);
+  background: color-mix(in srgb, var(--panel) 88%, transparent);
+}
+
+.assistant-textarea {
+  flex: 1;
+  min-width: 0;
+  resize: none;
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--panel-2);
+  color: var(--text);
+  font: 450 var(--fs-label) var(--font-ui);
+  line-height: 1.45;
+  outline: none;
+  transition: border-color var(--motion-fast) var(--ease-out);
+}
+
+.assistant-textarea::placeholder {
+  color: var(--faint);
+}
+
+.assistant-textarea:hover {
+  border-color: var(--border-strong);
+}
+
+.assistant-textarea:focus-visible,
+.assistant-textarea:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-line);
+}
+
+.assistant-textarea:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 @media (max-width: 1023px) {
@@ -5087,9 +5608,9 @@ body {
     min-width: 250px;
   }
 
-  .app-simulator .plotter .scope-shell {
-    grid-template-columns: minmax(0, 1fr);
-  }
+  /* The dashboard grid's own column count now reacts to the panel's actual
+     width via a container query (`@container plot-dashboard`, see the
+     ".scope-shell" rule) rather than this page-level breakpoint. */
 }
 
 .col-resize-handle {
@@ -5122,14 +5643,14 @@ body {
    (SimulationPanel.tsx), matching the toolbar's Run button exactly, so their
    chrome lives in button.tsx's own token-driven variants instead of a
    parallel `.plotter-run`/`.run-btn`/`.plotter-icon-action`/`.plotter-close`
-   CSS family. `.panel-close` (Ask Sim's own minimize button, ShellPanels.tsx
-   — untouched by this migration) keeps its rule below, now standalone. The
-   effective padding/color values those dead rules used to carry (14px header
-   gutter, --cream title, accent-filled active tab, --scope-surface scope
-   face) are folded directly into the primary rules above. */
+   CSS family. `.panel-close` (now the Assistant panel's own close button,
+   AssistantPanel.tsx — untouched by this migration) keeps its rule below,
+   now standalone. The effective padding/color values those dead rules used
+   to carry (14px header gutter, --cream title, accent-filled active tab,
+   --scope-surface scope face) are folded directly into the primary rules
+   above. */
 /* 30px kept outside --row-h/--row-h-dense on purpose: a deliberately larger
-   tap target for the primary panel-close affordance (the ask-head/composer
-   variant below overrides down to --row-h for its denser toolbar context). */
+   tap target for the primary panel-close affordance. */
 .panel-close {
   width: 30px;
   height: 30px;
@@ -5613,24 +6134,52 @@ body {
 .bottom-errors .error,
 .bottom-errors .warning {
   margin: 0;
-  padding: 10px 12px;
+  padding: 8px 10px;
   border-radius: 10px;
   font: 510 var(--fs-label) var(--font-ui);
   line-height: 1.35;
   letter-spacing: -0.01em;
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  align-items: center;
+  gap: var(--sp-2);
+  box-shadow: inset 0 0.5px 0 var(--diagnostic-glass-shine);
 }
 
 .bottom-errors .error {
-  border: 0.5px solid color-mix(in srgb, var(--danger) 55%, transparent);
-  color: #ffd0cd;
-  background: color-mix(in srgb, var(--danger) 28%, #1c1c1e);
-  box-shadow: inset 0 0 0 0.5px color-mix(in srgb, var(--danger) 25%, transparent);
+  border: 0.5px solid var(--diagnostic-error-line);
+  color: var(--diagnostic-error-text);
+  background: color-mix(in srgb, var(--diagnostic-error-soft) 78%, var(--panel));
 }
 
 .bottom-errors .warning {
-  border: 0.5px solid color-mix(in srgb, var(--signal) 45%, transparent);
-  color: #ffe3b0;
-  background: color-mix(in srgb, var(--signal) 18%, #1c1c1e);
+  border: 0.5px solid var(--diagnostic-warning-line);
+  color: var(--diagnostic-warning-text);
+  background: color-mix(in srgb, var(--diagnostic-warning-soft) 72%, var(--panel));
+}
+
+.bottom-error-glyph {
+  width: 18px;
+  height: 18px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  border: 0.5px solid currentColor;
+  background: color-mix(in srgb, currentColor 8%, transparent);
+}
+
+.bottom-error-glyph svg {
+  width: 11px;
+  height: 11px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+}
+
+.bottom-error-message {
+  min-width: 0;
+  color: color-mix(in srgb, currentColor 82%, var(--text));
 }
 
 /* Reticle-language empty state — the same recipe as
@@ -5723,6 +6272,35 @@ body {
   font-size: var(--fs-body);
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* A settings block that needs more than the label+hint+button spec-sheet
+   row above (Assistant's API key field: label, input, and a caveat line). */
+.settings-section {
+  padding: var(--sp-3) var(--sp-4);
+  border-bottom: 1px solid var(--border);
+}
+
+.settings-section .settings-sheet-kicker {
+  display: block;
+  margin-bottom: var(--sp-3);
+}
+
+.settings-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.settings-field > span:first-child {
+  font: 550 var(--fs-caption) var(--font-ui);
+  color: var(--muted);
+}
+
+.settings-field-hint {
+  font-size: var(--fs-caption);
+  line-height: 1.4;
+  color: var(--faint);
 }
 
 .minimized-panel-dock {

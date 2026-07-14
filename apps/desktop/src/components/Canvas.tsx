@@ -83,8 +83,8 @@ export function Canvas({
   /** Last DC operating point; in simulator mode its node voltages / branch
    *  currents are annotated in place on the schematic (§6). */
   op?: OperatingPointResult | null;
-  /** When false (simulator view) the canvas is a read-only reflection: pan/zoom
-   *  and selecting-to-inspect only — no placing, wiring, probing, or editing. */
+  /** When false (simulator view) topology is read-only: pan/zoom, inspection,
+   *  probe dots, and topology-neutral node aliases remain available. */
   interactive?: boolean;
   /** Bumped by App on open/new/tab switch so the schematic auto-fits once. */
   fitSignal?: number;
@@ -95,7 +95,7 @@ export function Canvas({
   const [wireDraft, setWireDraft] = useState<{ start: Point; cursor: Point } | null>(null);
   const [snapHover, setSnapHover] = useState<{ x: number; y: number; pin: boolean } | null>(null);
   /** Pending net label being typed (label tool): world point + draft text. */
-  const [labelDraft, setLabelDraft] = useState<{ x: number; y: number; text: string } | null>(null);
+  const [labelDraft, setLabelDraft] = useState<{ x: number; y: number; text: string; error?: string } | null>(null);
   const labelInputRef = useRef<HTMLInputElement | null>(null);
   /** Rubber-band box in screen coords, null when not drawing. */
   const [boxDrag, setBoxDrag] = useState<BoxDrag | null>(null);
@@ -505,6 +505,41 @@ export function Canvas({
       );
       setLabelDraft({ x: point.x, y: point.y, text: existing?.text ?? "" });
     }
+    return true;
+  };
+
+  const commitLabelDraft = (): boolean => {
+    if (!labelDraft) return true;
+    const trimmed = labelDraft.text.trim();
+    if (!interactive) {
+      const physicalNets = extractCircuit(components, wires, []).nets;
+      const clickedNet = netAtPoint(physicalNets, wires, labelDraft);
+      const nodeOf = (label: NetLabel) => netAtPoint(physicalNets, wires, label)?.id;
+      const existing = clickedNet
+        ? netLabels.find((label) => nodeOf(label) === clickedNet.id)
+        : undefined;
+      const normalizedExisting = existing?.text.trim().toLowerCase();
+      const existingIsShared = Boolean(existing && netLabels.some((label) => (
+        label.id !== existing.id
+        && label.text.trim().toLowerCase() === normalizedExisting
+        && nodeOf(label) !== clickedNet?.id
+      )));
+      const targetJoinsAnotherNode = Boolean(trimmed && netLabels.some((label) => (
+        label.id !== existing?.id
+        && label.text.trim().toLowerCase() === trimmed.toLowerCase()
+        && nodeOf(label) !== clickedNet?.id
+      )));
+      const unchanged = existing?.text === trimmed;
+      if ((!unchanged && existingIsShared) || targetJoinsAnotherNode) {
+        setLabelDraft({
+          ...labelDraft,
+          error: "That name would join or split electrical nodes. Change shared net names in Schematic.",
+        });
+        return false;
+      }
+    }
+    upsertNetLabel(labelDraft.x, labelDraft.y, trimmed);
+    setLabelDraft(null);
     return true;
   };
 
@@ -1176,12 +1211,13 @@ export function Canvas({
             left: labelDraft.x * view.zoom + view.x,
             top: (labelDraft.y + 10) * view.zoom + view.y,
           }}
-          onChange={(e) => setLabelDraft({ ...labelDraft, text: e.currentTarget.value })}
+          aria-invalid={labelDraft.error ? "true" : undefined}
+          aria-describedby={labelDraft.error ? "net-label-input-error" : undefined}
+          onChange={(e) => setLabelDraft({ ...labelDraft, text: e.currentTarget.value, error: undefined })}
           onKeyDown={(e) => {
             if (e.key === "Enter") {
               e.preventDefault();
-              upsertNetLabel(labelDraft.x, labelDraft.y, labelDraft.text);
-              setLabelDraft(null);
+              commitLabelDraft();
             } else if (e.key === "Escape") {
               e.preventDefault();
               e.stopPropagation();
@@ -1190,10 +1226,22 @@ export function Canvas({
           }}
           onBlur={() => {
             // Click-away confirms, like Enter (empty text removes the label).
-            upsertNetLabel(labelDraft.x, labelDraft.y, labelDraft.text);
-            setLabelDraft(null);
+            commitLabelDraft();
           }}
         />
+      )}
+      {labelDraft?.error && (
+        <div
+          id="net-label-input-error"
+          className="net-label-input-error"
+          role="alert"
+          style={{
+            left: labelDraft.x * view.zoom + view.x,
+            top: (labelDraft.y + 28) * view.zoom + view.y,
+          }}
+        >
+          {labelDraft.error}
+        </div>
       )}
 
       {editingComp && (

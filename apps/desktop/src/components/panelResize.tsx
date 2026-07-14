@@ -124,7 +124,13 @@ export function usePanelWidth(config: PanelWidthConfig) {
     [applyWidth],
   );
 
-  return { width, dragging, onPointerDown, onKeyDown };
+  // Exposes the same clamped setter the drag/keyboard handlers use — for a
+  // caller that lifts this hook (App.tsx's Assistant column) and needs to
+  // shrink the panel programmatically as the window narrows, the way the
+  // scope column's own width state already does. Intentionally does NOT
+  // persist to storage (a resize-driven shrink isn't a user's own choice of
+  // width, same rationale as the scope column's clamp effect).
+  return { width, dragging, onPointerDown, onKeyDown, setWidth: applyWidth };
 }
 
 export function PanelResizeHandle({

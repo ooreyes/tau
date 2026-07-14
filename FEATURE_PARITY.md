@@ -252,9 +252,13 @@ Status legend: ✅ done · 🟡 partial · ⬜ not started
   a traversal/collision/symlink-safe native move command; matching open-tab
   paths are remapped so the next Save follows the move. Explorer chrome uses
   the VS Code action set and density (New File, New Folder, Refresh, Collapse;
-  compact Lucide file/folder/chevron rows). Packaged macOS QA created and opened
-  a real `native-create-check.asc` with the canonical 26-byte blank LTspice
-  document; store, panel, path-remap, and Rust boundary tests cover moves.
+  compact Lucide file/folder/chevron rows). The editor-tab `+`, Settings New
+  Circuit, and Cmd-S on a pathless startup/scratch tab now all materialize a
+  collision-safe real `.asc` in the open Schematics folder; failed or blocked
+  first saves clean up the placeholder instead of leaving a ghost file.
+  Packaged macOS QA created and opened a real `native-create-check.asc` with the
+  canonical 26-byte blank LTspice document; store, panel, path-remap, and Rust
+  boundary tests cover moves and creation.
 
 ## 2. Schematic capture
 - ✅ Place / move / rotate / mirror / delete components — `Canvas.tsx`, `store/useSchematic.ts` (mirror = horizontal flip, applied before rotation; Ctrl+E)
@@ -967,10 +971,11 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   unbranched two-terminal net; junctions and multi-terminal paths are never
   guessed. A direct 5 V source/LED loop now reports the LED's +315 mA and
   +1.575 W instead of dashes while preserving the source's passive-sign
-  −315 mA/−1.575 W. LEDs directly across an ideal voltage source at ≥50 mA
-  receive a visible high-current/no-limiter advisory with series-resistor or
-  current-regulator guidance; a series-resistor case is covered against false
-  positives.
+  −315 mA/−1.575 W. LEDs directly across an ideal voltage source receive a
+  visible **direct drive · no external limiter** advisory that reports the
+  model-predicted current and recommends a series resistor/current regulator;
+  Tau does not invent a part-rating threshold it does not know. A
+  series-resistor case is covered against false positives.
 - ✅ **Measurement cursors** (1 & 2, delta readout) — `simulation/cursors.ts`
   (`cursorReadout`/`fractionToX`, 8 unit tests) + a collapsible **Cursors** panel
   on the transient scope (`SimulationPanel` `CursorView`). Two sliders position
@@ -1143,7 +1148,17 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
 
 ## 8. UX / app
 - ✅ IDE-style shell, multi-tab, command palette, settings, status bar engine indicator
-- ⬜ **Visual QA on the actual desktop app** (currently blocked — dev port held; cannot screenshot headless)
+- 🟡 **Visual QA on the actual desktop app:** the current Tauri hot-reload app
+  stays alive on `auto/ltspice-parity`; live browser QA verified centered
+  simulator fit/Home, the cross-mode assistant, and no horizontal overflow at
+  900×600. Remaining: repeat the full screenshot matrix in a packaged build.
+- ✅ **One circuit-aware assistant in both modes (2026-07-14):** a single
+  top-right toolbar entry opens the same assistant beside Schematic or
+  Simulator. Context is built from the real document/result; Anthropic tool
+  output is parsed/validated as supported LTspice ASC and shown as an explicit
+  Create action rather than silently changing the circuit. The API key is kept
+  in memory for the current Tau session only. CSP, action validation,
+  collision-safe disk creation, and mocked streaming/tool paths are covered.
 - 🟡 Component picker matching LTspice (F2 part browser over the full library)
   — **F2 now opens the searchable part palette** (symbols, categories, hotkeys,
   ↑↓/↵ placement); remaining: coverage audit vs. LTspice's full library tree.

@@ -66,16 +66,18 @@ export async function runNativeTransient(
 
   if (traces.length === 0) throw new Error("ngspice completed, but returned no node-voltage traces.");
 
-  // Branch currents: voltage-source/inductor currents come straight from ngspice
-  // `<ref>#branch` vectors; resistor/capacitor currents are derived from the node
-  // voltages we already pulled, so `.meas`/plot can resolve `I(ref)`.
+  // Branch currents: voltage-source/inductor currents normally arrive as
+  // `<ref>#branch`. Some ngspice decks also retain a two-terminal
+  // semiconductor's explicit `@ref[id]` device vector; preserve it when it is
+  // present instead of leaving that component's telemetry blank. Resistor and
+  // capacitor currents are derived from the node voltages below.
   const nodeVoltages = new Map<string, number[]>(traces.map((t) => [t.id, t.values]));
   const currents: CurrentTrace[] = [];
   const seen = new Set<string>();
   for (const { component } of execution.deck.circuit.components) {
     const ref = component.label;
     if (!ref || seen.has(ref.toLowerCase())) continue;
-    const branch = vector(execution.result, `${ref}#branch`)?.real;
+    const branch = componentCurrentVector(execution.result, component.kind, ref)?.real;
     if (branch && branch.length === time.real.length) {
       currents.push({ ref, label: `I(${ref})`, values: branch });
       seen.add(ref.toLowerCase());
@@ -104,6 +106,22 @@ export async function runNativeTransient(
     warnings: [...execution.deck.circuit.warnings, ...engineWarnings(execution.result.messages)],
     circuit: execution.deck.circuit,
   };
+}
+
+function componentCurrentVector(
+  result: NativeSpiceResult,
+  kind: SchematicComponent["kind"],
+  ref: string,
+): NativeVector | undefined {
+  const candidates = [`${ref}#branch`, `i(${ref})`];
+  if (kind === "diode" || kind === "led" || kind === "zener") {
+    candidates.push(`@${ref}[id]`);
+  }
+  for (const candidate of candidates) {
+    const found = vector(result, candidate);
+    if (found) return found;
+  }
+  return undefined;
 }
 
 export async function runNativeOperatingPoint(schematic: Schematic): Promise<OperatingPointResult | null> {

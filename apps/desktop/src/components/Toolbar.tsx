@@ -1,4 +1,5 @@
 import type { AnalysisResult } from "../simulation/linearTransient";
+import { Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
@@ -9,14 +10,16 @@ interface ToolbarProps {
   runState: "idle" | "complete" | "error" | "stopped";
   isRunning: boolean;
   title: string;
+  assistantOpen: boolean;
   onModeChange: (mode: "schematic" | "simulator") => void;
   onRun: () => void;
+  onToggleAssistant: () => void;
   onOpenSettings: () => void;
 }
 
 type LampState = "idle" | "running" | "ok" | "error" | "warn";
 
-export function Toolbar({ mode, result, runState, isRunning, title, onModeChange, onRun, onOpenSettings }: ToolbarProps) {
+export function Toolbar({ mode, result, runState, isRunning, title, assistantOpen, onModeChange, onRun, onToggleAssistant, onOpenSettings }: ToolbarProps) {
   const isSimulator = mode === "simulator";
   const runHasError = runState === "error" || result?.ok === false;
   const runIsAcceptable = !runHasError && runState !== "stopped";
@@ -117,6 +120,24 @@ export function Toolbar({ mode, result, runState, isRunning, title, onModeChange
             </Button>
           </TooltipTrigger>
           <TooltipContent>{isRunning ? "Simulation running…" : "Run simulation and switch to simulator"}</TooltipContent>
+        </Tooltip>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="outline"
+              size="icon-sm"
+              className={cn(
+                "assistant-toolbar-button [-webkit-app-region:no-drag]",
+                assistantOpen && "assistant-toolbar-button--active",
+              )}
+              aria-label={assistantOpen ? "Close Tau assistant" : "Open Tau assistant"}
+              aria-pressed={assistantOpen}
+              onClick={onToggleAssistant}
+            >
+              <Sparkles size={14} strokeWidth={1.8} aria-hidden="true" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>{assistantOpen ? "Close Tau assistant" : "Ask Tau"}</TooltipContent>
         </Tooltip>
         <Tooltip>
           <TooltipTrigger asChild>

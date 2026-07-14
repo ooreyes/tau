@@ -38,6 +38,17 @@ const rcSchematic = () => ({
   ],
 });
 
+/** A deliberately direct LED drive used to verify retained device current. */
+const directLedSchematic = () => ({
+  components: [
+    component("vsource", "v2", "V2", "5", 0, 32),
+    { ...component("led", "d2", "D2", "LED", 128, 32), rotation: 90 as const },
+    component("ground", "g1", "", "", 0, 64),
+    component("ground", "g2", "", "", 128, 64),
+  ],
+  wires: [wire("w1", [{ x: 0, y: 0 }, { x: 128, y: 0 }])],
+});
+
 const nativeResult = (vectors: { name: string; real: number[]; imaginary: number[] | null }[], messages: string[] = []) => ({
   plot: "tran1",
   vectors,
@@ -83,6 +94,25 @@ describe("native ngspice adapter", () => {
       expect.objectContaining({ id: "N002", label: "V(R1.C1)", values: [0, 3.2, 4.3] }),
     ]));
     expect(result.warnings).toEqual(["Warning: internal timestep reduced"]);
+  });
+
+  it("retains an explicit ngspice diode current vector for component telemetry", async () => {
+    enableNativeRuntime();
+    invoke.mockResolvedValueOnce(nativeResult([
+      { name: "time", real: [0, 0.001, 0.002], imaginary: null },
+      { name: "v(n001)", real: [5, 5, 5], imaginary: null },
+      { name: "v2#branch", real: [-0.315, -0.315, -0.315], imaginary: null },
+      { name: "@d2[id]", real: [0.315, 0.315, 0.315], imaginary: null },
+    ]));
+
+    const result = await runNativeTransient(directLedSchematic(), { stopTime: 0.002, steps: 200 });
+
+    expect(result).not.toBeNull();
+    if (!result || !result.ok) return;
+    expect(result.currents).toEqual(expect.arrayContaining([
+      { ref: "V2", label: "I(V2)", values: [-0.315, -0.315, -0.315] },
+      { ref: "D2", label: "I(D2)", values: [0.315, 0.315, 0.315] },
+    ]));
   });
 
   it("returns all finite operating-point voltages, with GND prepended at 0 V", async () => {

@@ -145,6 +145,30 @@ describe("ASC-native project workspace", () => {
     expect(useProject.getState().error).toBeNull();
   });
 
+  it("creates editor-tab schematics in the open project root", async () => {
+    const root = "/Users/test/Tau_Design";
+    vi.spyOn(fs, "pathExists").mockResolvedValue(false);
+    const write = vi.spyOn(fs, "writeTextFile").mockResolvedValue(undefined);
+    vi.spyOn(fs, "readProjectTree").mockResolvedValue([
+      { name: "untitled.asc", path: `${root}/untitled.asc`, kind: "file" },
+    ]);
+    useProject.setState({
+      capability: "tauri",
+      rootPath: root,
+      rootName: "Tau_Design",
+      expanded: [root],
+    });
+
+    await expect(useProject.getState().createSchematicInRoot()).resolves.toBe(`${root}/untitled.asc`);
+    expect(write).toHaveBeenCalledWith(`${root}/untitled.asc`, "Version 4\nSHEET 1 880 680\n");
+    expect(useProject.getState().error).toBeNull();
+  });
+
+  it("refuses a pathless editor tab when no Schematics folder is open", async () => {
+    await expect(useProject.getState().createSchematicInRoot()).resolves.toBeNull();
+    expect(useProject.getState().error).toBe("Open a Schematics folder before creating a circuit.");
+  });
+
   it("uses the same safe bridge contract for a picked browser directory", async () => {
     const root = "web://Tau_Design";
     vi.spyOn(fs, "pathExists").mockResolvedValue(false);

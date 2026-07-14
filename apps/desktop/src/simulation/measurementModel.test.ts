@@ -127,10 +127,10 @@ describe("componentMeasurements", () => {
     expect(led.power?.statistics.final).toBeCloseTo(1.575);
     expect(led.advisories).toEqual([
       expect.objectContaining({
-        kind: "high-led-current-no-limiter",
+        kind: "direct-led-drive",
         severity: "warning",
-        title: "High LED current · no limiter",
-        message: expect.stringMatching(/D1 reaches 315 mA.+V1 directly across it.+series resistor/i),
+        title: "Direct LED drive · no external limiter",
+        message: expect.stringMatching(/D1 model predicts 315 mA.+not an overcurrent determination.+series resistor/i),
       }),
     ]);
   });
@@ -164,6 +164,31 @@ describe("componentMeasurements", () => {
     const led = componentMeasurements(result).find((row) => row.ref === "D1");
     expect(led?.current?.statistics.final).toBeCloseTo(0.315);
     expect(led?.advisories).toBeUndefined();
+  });
+
+  it("does not infer one branch current through a multi-terminal transistor", () => {
+    const result = resultFixture();
+    result.traces = [
+      { ...result.traces[0], id: "collector", label: "V(collector)", values: [5, 5, 5] },
+      { ...result.traces[0], id: "emitter", label: "V(emitter)", values: [0.7, 0.7, 0.7] },
+      { ...result.traces[0], id: "base", label: "V(base)", values: [1.4, 1.4, 1.4] },
+    ];
+    result.currents = [{ ref: "V1", label: "I(V1)", values: [-0.02, -0.02, -0.02] }];
+    result.circuit.components = [
+      {
+        component: { id: "v1", kind: "vsource", x: 0, y: 0, rotation: 0, value: "5", label: "V1" },
+        pins: { p: "emitter", n: "gnd" },
+      },
+      {
+        component: { id: "q1", kind: "npn", x: 0, y: 0, rotation: 0, value: "2N3904", label: "Q1" },
+        pins: { c: "collector", b: "base", e: "emitter" },
+      },
+    ];
+
+    const transistor = componentMeasurements(result).find((row) => row.ref === "Q1");
+    expect(transistor?.voltage).toBeDefined();
+    expect(transistor?.current).toBeUndefined();
+    expect(transistor?.power).toBeUndefined();
   });
 
   it("uses passive sign convention for independent current-source power", () => {

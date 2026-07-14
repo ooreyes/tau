@@ -117,6 +117,30 @@ describe("Canvas — simulator mutation boundary", () => {
     fireEvent.keyDown(rename, { key: "Enter" });
     expect(useSchematic.getState().netLabels).toEqual([]);
   });
+
+  it("keeps simulator node naming topology-neutral by rejecting a shared net name", () => {
+    useSchematic.setState({
+      tool: { mode: "label" },
+      wires: [
+        { id: "w1", points: [{ x: 0, y: 20 }, { x: 20, y: 20 }] },
+        { id: "w2", points: [{ x: 100, y: 20 }, { x: 120, y: 20 }] },
+      ],
+      netLabels: [{ id: "l1", x: 10, y: 20, text: "OUT" }],
+    });
+    render(<Canvas interactive={false} />);
+
+    fireEvent.pointerDown(document.querySelectorAll(".wire-group")[1], { button: 0, clientX: 110, clientY: 20 });
+    const input = screen.getByRole("textbox", { name: "Net label name" });
+    fireEvent.change(input, { target: { value: "out" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+
+    expect(screen.getByRole("alert").textContent).toContain("join or split electrical nodes");
+    expect(useSchematic.getState().netLabels).toEqual([{ id: "l1", x: 10, y: 20, text: "OUT" }]);
+
+    fireEvent.change(input, { target: { value: "SENSE" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(useSchematic.getState().netLabels.map((label) => label.text)).toEqual(["OUT", "SENSE"]);
+  });
 });
 
 describe("Canvas — simulator fit viewport", () => {
