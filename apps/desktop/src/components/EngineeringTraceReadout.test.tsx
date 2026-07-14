@@ -44,6 +44,8 @@ describe("EngineeringTraceReadout", () => {
 
     const readout = screen.getByRole("region", { name: "V(ac) engineering readout" });
     const disclosure = within(readout).getByText("More measurements").closest("details")!;
+    expect(within(readout).getByText("Periodic · 2 Hz")).toBeTruthy();
+    expect(within(readout).queryByText(/sine/i)).toBeNull();
     expect(within(readout).getAllByText("RMS")).toHaveLength(2);
     expect(within(readout).getByText("FREQ")).toBeTruthy();
     expect(within(disclosure).getByText("PERIOD")).toBeTruthy();

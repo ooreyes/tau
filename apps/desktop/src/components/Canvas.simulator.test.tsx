@@ -105,6 +105,16 @@ describe("Canvas — simulator mutation boundary", () => {
   });
 });
 
+describe("Canvas — schematic selection chrome", () => {
+  it("keeps deletion out of the drawing overlay", () => {
+    useSchematic.setState({ selectedId: "r1", selectedIds: ["r1"] });
+    render(<Canvas interactive />);
+
+    expect(screen.queryByRole("button", { name: "Delete selection" })).toBeNull();
+    expect(document.querySelector(".selection-delete-pill")).toBeNull();
+  });
+});
+
 describe("Canvas — net label drag (Fix 2)", () => {
   it("drags a net label's text to a new dx/dy with exactly one undo entry, not one per pointermove", () => {
     useSchematic.setState({

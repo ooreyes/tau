@@ -30,29 +30,36 @@
   --canvas-label-muted: rgba(235, 235, 245, 0.55);
   --canvas-label-halo: #000000;
 
-  /* Accent — Apple systemBlue (dark) */
-  --accent:       #0a84ff;
-  --accent-hover: #409cff;
-  --accent-ink:   #ffffff;
-  --accent-soft:  rgba(10, 132, 255, 0.18);
-  --accent-glow:  rgba(10, 132, 255, 0.28);
-  --accent-line:  rgba(10, 132, 255, 0.45);
+  /* Interaction accent — warm ice/graphite, deliberately neutral. Chrome,
+     selection and focus use this family; color remains reserved for measured
+     traces and semantic status. The dark ink keeps filled primary controls
+     legible against the light neutral face. */
+  --accent:       #d6d3ca;
+  --accent-hover: #ebe8df;
+  --accent-ink:   #121214;
+  --accent-soft:  rgba(214, 211, 202, 0.10);
+  --accent-glow:  rgba(214, 211, 202, 0.16);
+  --accent-line:  rgba(214, 211, 202, 0.38);
 
-  /* Signal — Apple systemOrange */
-  --signal:       #ff9f0a;
-  --signal-soft:  rgba(255, 159, 10, 0.16);
-  --signal-line:  rgba(255, 159, 10, 0.4);
-  --signal-glow:  rgba(255, 159, 10, 0.28);
+  /* Signal — tactical amber, desaturated off Apple's systemOrange so the
+     "running" lamp reads as an instrument indicator, not a warning siren. */
+  --signal:       #e6a23c;
+  --signal-soft:  rgba(230, 162, 60, 0.12);
+  --signal-line:  rgba(230, 162, 60, 0.35);
+  --signal-glow:  rgba(230, 162, 60, 0.22);
 
-  /* Semantic — Apple systemRed / systemGreen */
-  --danger:       #ff453a;
-  --danger-soft:  rgba(255, 69, 58, 0.16);
-  --danger-line:  rgba(255, 69, 58, 0.4);
-  --danger-glow:  rgba(255, 69, 58, 0.3);
-  --success:      #30d158;
-  --success-soft: rgba(48, 209, 88, 0.14);
-  --success-line: rgba(48, 209, 88, 0.4);
-  --success-glow: rgba(48, 209, 88, 0.28);
+  /* Semantic — desaturated off Apple systemRed/systemGreen. These read as
+     lamps, hairlines and small text now (never a full-saturation text run or
+     a large tinted fill — see the status strip / Toolbar retheme), so the
+     quieter base value is legible without shouting. */
+  --danger:       #e6564b;
+  --danger-soft:  rgba(230, 86, 75, 0.10);
+  --danger-line:  rgba(230, 86, 75, 0.35);
+  --danger-glow:  rgba(230, 86, 75, 0.22);
+  --success:      #4fae6b;
+  --success-soft: rgba(79, 174, 107, 0.10);
+  --success-line: rgba(79, 174, 107, 0.35);
+  --success-glow: rgba(79, 174, 107, 0.20);
   --cream:        #f5f5f7;
   --cream-soft:   rgba(245, 245, 247, 0.08);
 
@@ -70,13 +77,19 @@
   --scope-surface:  #0c0c0e;
   --scope-grid:  #1c1c1e;
 
-  /* Traces — Apple system palette (distinct on black) */
-  --trace-cyan:    #64d2ff;   /* systemTeal */
-  --trace-green:   #30d158;   /* systemGreen */
-  --trace-cream:   #f5f5f7;
-  --trace-red:     #ff453a;   /* systemRed */
-  --trace-purple:  #bf5af2;   /* systemPurple */
-  --trace-amber:   #ff9f0a;   /* systemOrange */
+  /* Traces — instrument palette, desaturated off Apple's system colors
+     (retheme: neon system-color traces read like a toy on a near-black
+     scope face; a muted, "measured" hue set still stays clearly
+     distinguishable at this contrast). Red stays visually close to
+     --danger's family — reserved for error/limit reads elsewhere in the
+     panel — so it stays the least saturated of the six even though it's
+     first in the expression-trace rotation. */
+  --trace-cyan:    #6fb8db;   /* steel cyan */
+  --trace-green:   #7cb88a;   /* sage green */
+  --trace-cream:   #e8e6de;   /* graphite cream */
+  --trace-red:     #d97468;   /* muted signal red */
+  --trace-purple:  #9e88c4;   /* dimmed purple */
+  --trace-amber:   #d9a15a;   /* muted amber */
 
   --dial-track:  #3a3a3c;
 
@@ -186,13 +199,13 @@ body {
   background: var(--panel-4);
 }
 
-/* pressed: settle darker with a cobalt hairline so the picker reads as firing */
+/* pressed: settle darker with a neutral accent hairline so the picker reads as firing */
 .example-picker select:active {
   background: var(--panel-3);
   border-color: var(--accent-line);
 }
 
-/* app-standard cobalt focus ring (matches .empty-actions) — the picker was
+/* app-standard neutral focus ring (matches .empty-actions) — the picker was
    keyboard-focusable with no visible focus at all */
 .example-picker select:focus-visible {
   outline: none;
@@ -279,7 +292,7 @@ body {
 }
 
 .component.selected .symbol .symbol-arrow {
-  fill: var(--accent);
+  fill: color-mix(in srgb, var(--comp) 82%, var(--accent));
 }
 
 .component {
@@ -302,26 +315,27 @@ body {
 }
 
 .component.selected .symbol {
-  stroke: var(--accent);
+  stroke: color-mix(in srgb, var(--comp) 82%, var(--accent));
+  filter: drop-shadow(0 0 0.75px var(--accent-line));
 }
 
 .component.selected .ref,
 .component.selected .val {
-  fill: var(--accent);
+  fill: var(--text);
 }
 
 .pin-target {
-  fill: color-mix(in srgb, var(--cream) 85%, transparent);
-  stroke: var(--accent);
-  stroke-width: 1.5;
+  fill: color-mix(in srgb, var(--text) 16%, transparent);
+  stroke: var(--accent-line);
+  stroke-width: 1.25;
   vector-effect: non-scaling-stroke;
-  opacity: 0.95;
+  opacity: 0.9;
 }
 
 /* Rubber-band selection rectangle drawn while drag-selecting on empty canvas. */
 .select-box {
-  fill: color-mix(in srgb, var(--accent) 10%, transparent);
-  stroke: var(--accent);
+  fill: var(--overlay-hover-faint);
+  stroke: var(--accent-line);
   stroke-width: 1;
   stroke-dasharray: 4 3;
   pointer-events: none;
@@ -511,41 +525,6 @@ body {
   text-transform: none;
 }
 
-/* Floating ✕ beside the current selection — one-click delete without
-   reaching for the keyboard. Sits in canvas overlay space (same coordinate
-   math as the net-label input above). */
-.selection-delete-pill {
-  position: absolute;
-  z-index: 4;
-  width: 30px;
-  height: 30px;
-  display: grid;
-  place-items: center;
-  padding: 0;
-  border: 1px solid var(--border-strong);
-  border-radius: 50%;
-  background: var(--panel-4);
-  color: var(--muted);
-  font-size: 13px;
-  line-height: 1;
-  cursor: pointer;
-  box-shadow: var(--elev-2);
-  transition: color var(--motion-fast) var(--spring),
-    border-color var(--motion-fast) var(--spring),
-    background var(--motion-fast) var(--spring);
-}
-
-.selection-delete-pill:hover {
-  color: var(--text);
-  border-color: color-mix(in srgb, var(--danger) 55%, transparent);
-  background: color-mix(in srgb, var(--danger) 22%, var(--panel-4));
-}
-
-.selection-delete-pill:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 2px var(--accent-line);
-}
-
 /* ── Wire / hit targets ─────────────────────────────────────────────────────── */
 .wire-group {
   cursor: pointer;
@@ -560,7 +539,8 @@ body {
 }
 
 .wire-group.selected .wire {
-  stroke: var(--accent);
+  stroke: color-mix(in srgb, var(--comp) 82%, var(--accent));
+  filter: drop-shadow(0 0 0.75px var(--accent-line));
 }
 
 /* Simulator mode: clicking a wire probes its net (LTspice probe-in-place). */
@@ -697,25 +677,13 @@ body {
   animation: live-pulse 1.4s var(--ease-out) infinite;
 }
 
-.plotter-status--running .plotter-status-state {
-  color: var(--signal);
-}
-
 .plotter-status--complete .plotter-status-lamp {
   background: var(--success);
-}
-
-.plotter-status--complete .plotter-status-state {
-  color: var(--success);
 }
 
 .plotter-status--error .plotter-status-lamp {
   background: var(--danger);
   box-shadow: 0 0 0 3px var(--danger-soft);
-}
-
-.plotter-status--error .plotter-status-state {
-  color: var(--danger);
 }
 
 .plotter-status--error .plotter-status-info {
@@ -787,12 +755,13 @@ body {
   background: var(--overlay-hover);
 }
 
-/* Retheme: a subtle accent-soft fill + hairline accent border, not a solid
-   accent-filled pill — color marks the selection, it doesn't shout it. */
+/* The active analysis is structural navigation, not semantic status: keep it
+   neutral and reserve measured/semantic color for engineering data. */
 .plotter-tab[data-state="active"] {
   color: var(--text);
-  background: var(--accent-soft);
-  border-color: var(--accent-line);
+  background: var(--panel-4);
+  border-color: var(--border-strong);
+  box-shadow: var(--elev-inset);
 }
 
 .plotter-tab:focus-visible {
@@ -2966,7 +2935,7 @@ body {
     box-shadow var(--motion-fast) var(--spring);
 }
 /* Bare white dot with a barely-there 1.1 scale → cool --cream thumb ringed in
-   cobalt, spring-grows into an --accent-glow halo on grab, settles when pressed. */
+   the neutral accent, spring-grows into an --accent-glow halo on grab. */
 .param-slider::-webkit-slider-thumb:hover {
   transform: scale(1.15);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4), 0 0 0 1px var(--accent),
@@ -3039,8 +3008,10 @@ body {
 
 /* Marquee-selected markers — accent halo, consistent with wire/component selection. */
 .net-label-text.selected {
-  fill: var(--accent);
-  stroke: color-mix(in srgb, var(--accent) 24%, var(--canvas-bg));
+  fill: var(--text);
+  stroke: var(--accent-line);
+  stroke-width: 0.35;
+  paint-order: stroke;
 }
 
 /* Connects a label back to its net anchor once it's been dragged far enough
@@ -3912,7 +3883,7 @@ body {
 
 /* ── Panel resize handles (§11 Unit B) ─────────────────────────────────────
    An 8px grab strip inside the panel's resizable edge. Invisible at rest —
-   the panel border carries the visual line — with a cobalt hairline on
+   the panel border carries the visual line — with a neutral accent hairline on
    hover/drag/focus so the affordance appears exactly when relevant. */
 .panel-resize-handle {
   position: absolute;
@@ -4329,7 +4300,7 @@ body {
 }
 
 .bottom-panel:not(.has-issues) {
-  max-height: 72px;
+  max-height: 28px;
 }
 
 .bottom-panel-head {
@@ -4347,6 +4318,11 @@ body {
   color: inherit;
   text-align: left;
   cursor: pointer;
+}
+
+.bottom-panel-head--static {
+  border-bottom: 0;
+  cursor: default;
 }
 
 .bottom-panel-chevron {
@@ -4385,20 +4361,22 @@ body {
   color: color-mix(in srgb, var(--danger) 78%, white);
 }
 
-/* Clean run: the same gradient language in success green, so the strip
-   answers "is this circuit acceptable?" at a glance. */
-.bottom-panel.is-clean .bottom-panel-head {
-  background: linear-gradient(
-    to right,
-    color-mix(in srgb, var(--success) 32%, var(--panel)),
-    color-mix(in srgb, var(--success) 11%, var(--panel)) 62%,
-    transparent
-  );
-  border-bottom-color: color-mix(in srgb, var(--success) 30%, transparent);
+.bottom-panel-clear {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  color: color-mix(in srgb, var(--success) 58%, var(--muted));
+  font: 500 var(--fs-caption) var(--font-ui);
 }
 
-.bottom-panel.is-clean .bottom-panel-title {
-  color: color-mix(in srgb, var(--success) 70%, white);
+.bottom-panel-clear svg {
+  width: 11px;
+  height: 11px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .bottom-panel-count {
@@ -4431,23 +4409,6 @@ body {
 
 .bottom-panel.has-error .bottom-errors {
   background: color-mix(in srgb, var(--danger) 8%, transparent);
-}
-
-/* All-clear state: quiet success — same lamp language as the Run button's
-   status lamp, desaturated so it reads as ambient state, not celebration. */
-.bottom-errors-clear {
-  margin: 0;
-  display: inline-flex;
-  align-items: center;
-  gap: var(--sp-2);
-  color: color-mix(in srgb, var(--success) 62%, var(--muted));
-  font: 500 var(--fs-body) var(--font-ui);
-}
-
-.bottom-errors-clear svg {
-  width: 12px;
-  height: 12px;
-  flex: none;
 }
 
 .component-inspector,

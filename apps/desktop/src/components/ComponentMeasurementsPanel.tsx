@@ -186,8 +186,11 @@ const KIND_DISPLAY: Partial<Record<ComponentMeasurement["kind"], string>> = {
   potentiometer: "Potentiometer",
   vsource: "DC source",
   isource: "Current source",
-  vac: "AC source",
-  iac: "AC current source",
+  // Tau's dedicated AC source symbols carry amplitude + frequency and produce
+  // an actual sinusoid in transient analysis. Generic vsource/isource entries
+  // stay generic because a periodic classifier alone cannot prove wave shape.
+  vac: "Sine voltage source",
+  iac: "Sine current source",
   vpulse: "Pulse source",
   diode: "Diode",
   led: "LED",

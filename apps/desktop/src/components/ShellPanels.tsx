@@ -5,6 +5,7 @@ import {
   FilePlus,
   FolderPlus,
   Trash2,
+  Eraser,
   MousePointer2,
   Tag,
   Crosshair,
@@ -518,6 +519,15 @@ export function EditorToolbar({
   const redo = useSchematic((s) => s.redo);
   const canUndo = useSchematic((s) => s.past.length > 0);
   const canRedo = useSchematic((s) => s.future.length > 0);
+  const deleteSelected = useSchematic((s) => s.deleteSelected);
+  const hasSelection = useSchematic((s) => Boolean(
+    s.selectedId
+    || s.selectedIds.length > 0
+    || s.selectedWireId
+    || s.selectedWireIds.length > 0
+    || s.selectedLabelIds.length > 0
+    || s.selectedProbeIds.length > 0
+  ));
 
   return (
     <div className="editor-toolbar" aria-label="Editor toolbar">
@@ -546,8 +556,11 @@ export function EditorToolbar({
       <IconButton title="Redo" disabled={!canRedo || readOnly} onClick={redo}>
         <Redo2 size={16} strokeWidth={1.6} />
       </IconButton>
-      <IconButton title="Clear scratchpad" disabled={readOnly} onClick={onClearScratchpad}>
+      <IconButton title="Delete selection (Delete)" disabled={!hasSelection || readOnly} onClick={deleteSelected}>
         <Trash2 size={16} strokeWidth={1.6} />
+      </IconButton>
+      <IconButton title="Clear scratchpad" disabled={readOnly} onClick={onClearScratchpad}>
+        <Eraser size={16} strokeWidth={1.6} />
       </IconButton>
       <div className="editor-toolbar-spacer" />
       <div className="transport">
@@ -667,57 +680,60 @@ export function BottomPanel({ result }: { mode?: "schematic" | "simulator"; resu
   const hasError = Boolean(result && !result.ok);
   const isClean = !hasIssues;
   const issueSignature = messages.join("\u0000");
-  const [expanded, setExpanded] = useState(true);
+  const [expanded, setExpanded] = useState(hasIssues);
 
-  // A newly reported issue must never stay hidden because the user collapsed
-  // an earlier all-clear panel.
+  // New issues must never remain hidden; returning to all-clear collapses the
+  // panel back to its quiet one-line status rather than keeping empty chrome.
   useEffect(() => {
-    if (issueSignature) setExpanded(true);
+    setExpanded(Boolean(issueSignature));
   }, [issueSignature]);
+
+  const panelExpanded = hasIssues && expanded;
 
   return (
     <section
-      className={`bottom-panel${hasIssues ? " has-issues" : ""}${hasError ? " has-error" : ""}${isClean ? " is-clean" : ""}${expanded ? "" : " is-collapsed"}`}
+      className={`bottom-panel${hasIssues ? " has-issues" : ""}${hasError ? " has-error" : ""}${isClean ? " is-clean" : ""}${panelExpanded ? "" : " is-collapsed"}`}
       aria-label="Errors"
     >
-      <button
-        type="button"
-        className="bottom-panel-head"
-        aria-expanded={expanded}
-        onClick={() => setExpanded((value) => !value)}
-      >
-        <svg className="bottom-panel-chevron" viewBox="0 0 12 12" aria-hidden="true">
-          <path d="M2.5 4.2 6 7.8l3.5-3.6" />
-        </svg>
-        <span className="bottom-panel-title">Errors</span>
-        {hasIssues && (
+      {isClean ? (
+        <div className="bottom-panel-head bottom-panel-head--static">
+          <span className="bottom-panel-title">Errors</span>
+          <span className="bottom-panel-clear" role="status">
+            <svg viewBox="0 0 12 12" aria-hidden="true">
+              <path d="M2 6.5 L4.8 9.2 L10 3.4" />
+            </svg>
+            No errors
+          </span>
+        </div>
+      ) : (
+        <button
+          type="button"
+          className="bottom-panel-head"
+          aria-expanded={panelExpanded}
+          onClick={() => setExpanded((value) => !value)}
+        >
+          <svg className="bottom-panel-chevron" viewBox="0 0 12 12" aria-hidden="true">
+            <path d="M2.5 4.2 6 7.8l3.5-3.6" />
+          </svg>
+          <span className="bottom-panel-title">Errors</span>
           <span
             className={`bottom-panel-count${hasError ? "" : " warnings-only"}`}
             aria-live="polite"
           >
             {messages.length}
           </span>
-        )}
-      </button>
-      {expanded && <div className="bottom-errors">
-        {hasIssues ? (
-          messages.map((message, index) => (
-            <div
-              key={`${message}-${index}`}
-              className={result && !result.ok && index === 0 ? "error" : "warning"}
-              role={result && !result.ok && index === 0 ? "alert" : undefined}
-            >
-              {message}
-            </div>
-          ))
-        ) : (
-          <p className="bottom-errors-clear" role="status">
-            <svg viewBox="0 0 12 12" aria-hidden="true">
-              <path d="M2 6.5 L4.8 9.2 L10 3.4" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-            No errors
-          </p>
-        )}
+        </button>
+      )}
+      {panelExpanded && <div className="bottom-errors">
+        {messages.map((message, index) => (
+          <div
+            key={`${message}-${index}`}
+            className={result && !result.ok && index === 0 ? "error" : "warning"}
+            role={result && !result.ok && index === 0 ? "alert" : undefined}
+          >
+            {message}
+          </div>
+        ))}
       </div>}
     </section>
   );

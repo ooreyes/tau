@@ -26,6 +26,8 @@ function resetStore() {
     selectedWireId: null,
     selectedWireIds: [],
     selectedIds: [],
+    selectedLabelIds: [],
+    selectedProbeIds: [],
     tool: { mode: "select" },
     placeRotation: 0,
     placeMirror: false,
@@ -49,14 +51,14 @@ const noopToolbarProps = {
 };
 
 describe("EditorToolbar — read-only outside schematic view (§UX)", () => {
-  it("disables Wire, Net label, Undo, Redo, and Clear scratchpad in simulator mode", () => {
+  it("disables Wire, Net label, Undo, Redo, selection deletion, and Clear scratchpad in simulator mode", () => {
     const emptyDoc = { components: [], wires: [], counters: {}, probes: [], netLabels: [], directives: [] };
     // Both past and future populated so canUndo/canRedo would be true if the
     // mode gate weren't there — proves the gate, not just an empty history.
     useSchematic.setState({ past: [emptyDoc], future: [emptyDoc] });
     render(<EditorToolbar mode="simulator" {...noopToolbarProps} />);
 
-    for (const name of ["Wire", "Net label (F4)", "Undo", "Redo", "Clear scratchpad"]) {
+    for (const name of ["Wire", "Net label (F4)", "Undo", "Redo", "Delete selection (Delete)", "Clear scratchpad"]) {
       expect((screen.getByRole("button", { name }) as HTMLButtonElement).disabled).toBe(true);
     }
   });
@@ -100,6 +102,25 @@ describe("EditorToolbar — read-only outside schematic view (§UX)", () => {
       expect((screen.getByRole("button", { name }) as HTMLButtonElement).disabled).toBe(false);
     }
   });
+
+  it("offers a direct toolbar action for the selected object", () => {
+    useSchematic.setState({
+      components: [{ id: "r-1", kind: "resistor", x: 96, y: 0, rotation: 0, value: "1k", label: "R1" }],
+      selectedId: "r-1",
+      selectedIds: ["r-1"],
+    });
+    render(<EditorToolbar mode="schematic" {...noopToolbarProps} />);
+
+    const remove = screen.getByRole("button", { name: "Delete selection (Delete)" }) as HTMLButtonElement;
+    expect(remove.disabled).toBe(false);
+    fireEvent.click(remove);
+    expect(useSchematic.getState().components).toEqual([]);
+  });
+
+  it("keeps the selection action disabled when there is nothing to remove", () => {
+    render(<EditorToolbar mode="schematic" {...noopToolbarProps} />);
+    expect((screen.getByRole("button", { name: "Delete selection (Delete)" }) as HTMLButtonElement).disabled).toBe(true);
+  });
 });
 
 describe("ComponentInspector — no-selection empty state (§11 Unit A)", () => {
@@ -129,25 +150,28 @@ describe("BottomPanel — errors tab states (§11 Unit A3)", () => {
     warnings: ["floating node n3"],
   } as AnalysisResult;
 
-  it("shows a quiet success checkmark + No errors when there are no issues", () => {
+  it("shows a compact neutral all-clear strip with no expandable empty body", () => {
     const { container } = render(<BottomPanel result={null} />);
     const clear = screen.getByRole("status");
     expect(clear.textContent).toContain("No errors");
     expect(clear.querySelector("svg")).toBeTruthy(); // the checkmark glyph
     expect(container.querySelector(".bottom-panel.has-error")).toBeNull();
     expect(container.querySelector(".bottom-panel.is-clean")).toBeTruthy();
+    expect(container.querySelector(".bottom-panel.is-collapsed")).toBeTruthy();
     expect(container.querySelector(".bottom-panel-count")).toBeNull();
+    expect(screen.queryByRole("button", { name: /^Errors/ })).toBeNull();
+    expect(container.querySelector(".bottom-errors")).toBeNull();
   });
 
-  it("toggles the Errors body from its gradient header button", () => {
-    render(<BottomPanel result={null} />);
+  it("toggles an issue body from its emphasized header button", () => {
+    render(<BottomPanel result={failed} />);
     const toggle = screen.getByRole("button", { name: /^Errors/ });
     expect(toggle.getAttribute("aria-expanded")).toBe("true");
     fireEvent.click(toggle);
     expect(toggle.getAttribute("aria-expanded")).toBe("false");
-    expect(screen.queryByRole("status")).toBeNull();
+    expect(screen.queryByRole("alert")).toBeNull();
     fireEvent.click(toggle);
-    expect(screen.getByRole("status").textContent).toContain("No errors");
+    expect(screen.getByRole("alert").textContent).toContain("singular matrix");
   });
 
   it("reopens when a newly reported issue replaces a collapsed one", () => {

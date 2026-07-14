@@ -127,7 +127,6 @@ export function Canvas({
   const moveGroup = useSchematic((s) => s.moveGroup);
   const clearSelection = useSchematic((s) => s.clearSelection);
   const beginChange = useSchematic((s) => s.beginChange);
-  const deleteSelected = useSchematic((s) => s.deleteSelected);
   const setValue = useSchematic((s) => s.setValue);
   const probes = useSchematic((s) => s.probes);
   const addProbe = useSchematic((s) => s.addProbe);
@@ -244,45 +243,6 @@ export function Canvas({
     }
     return out;
   }, [wires, junctions]);
-
-  // World-space bbox of everything selected — anchors the floating delete
-  // pill. Mirrors deleteSelected's own single-vs-multi selection fallbacks so
-  // the pill appears exactly when a delete would do something.
-  const selectionBounds = useMemo(() => {
-    if (!interactive) return null;
-    let minX = Infinity;
-    let minY = Infinity;
-    let maxX = -Infinity;
-    let maxY = -Infinity;
-    let any = false;
-    const include = (x1: number, y1: number, x2: number, y2: number) => {
-      any = true;
-      minX = Math.min(minX, x1);
-      minY = Math.min(minY, y1);
-      maxX = Math.max(maxX, x2);
-      maxY = Math.max(maxY, y2);
-    };
-    const compIds = new Set(selectedIds.length > 0 ? selectedIds : selectedId ? [selectedId] : []);
-    for (const component of components) {
-      if (!compIds.has(component.id)) continue;
-      const rect = componentWorldRect(component);
-      include(rect.minX, rect.minY, rect.maxX, rect.maxY);
-    }
-    const wireIds = new Set(selectedWireIds.length > 0 ? selectedWireIds : selectedWireId ? [selectedWireId] : []);
-    for (const wire of wires) {
-      if (!wireIds.has(wire.id)) continue;
-      for (const point of wire.points) include(point.x, point.y, point.x, point.y);
-    }
-    for (const label of netLabels) {
-      if (!selectedLabelIds.includes(label.id)) continue;
-      include(label.x, label.y - 12, label.x + 36, label.y + 4);
-    }
-    for (const probe of probes) {
-      if (!selectedProbeIds.includes(probe.id)) continue;
-      include(probe.x - 8, probe.y - 8, probe.x + 8, probe.y + 8);
-    }
-    return any ? { minX, minY, maxX, maxY } : null;
-  }, [interactive, components, wires, netLabels, probes, selectedId, selectedIds, selectedWireId, selectedWireIds, selectedLabelIds, selectedProbeIds]);
 
   const netLabelOffsets = useMemo(
     () => autoNetLabelOffsets(netLabels, components, wires, probes),
@@ -1161,29 +1121,6 @@ export function Canvas({
           <TooltipContent side="left">Fit to view</TooltipContent>
         </Tooltip>
       </div>
-
-      {interactive && selectionBounds && !labelDraft && (
-        // Floating delete affordance: the Delete key already works, but a
-        // visible ✕ beside the selection makes removal a one-click action.
-        // pointerdown stops here so the click can't start a canvas pan/drag.
-        <button
-          type="button"
-          className="selection-delete-pill"
-          style={{
-            left: selectionBounds.maxX * view.zoom + view.x + 10,
-            top: selectionBounds.minY * view.zoom + view.y - 12,
-          }}
-          aria-label="Delete selection"
-          title="Delete selection (Del)"
-          onPointerDown={(event) => event.stopPropagation()}
-          onClick={(event) => {
-            event.stopPropagation();
-            deleteSelected();
-          }}
-        >
-          ✕
-        </button>
-      )}
 
       {labelDraft && (
         <input

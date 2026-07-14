@@ -33,4 +33,17 @@ describe("AnalysisModeRail", () => {
     for (const tab of screen.getAllByRole("tab")) expect((tab as HTMLButtonElement).disabled).toBe(true);
     expect(screen.getByRole("tab", { name: "AC sweep (.ac)" }).getAttribute("data-state")).toBe("active");
   });
+
+  it.each([
+    ["tran", "Voltage and current over time."],
+    ["op", "DC starting voltages and currents."],
+    ["ac", "Small-signal frequency response: gain and phase."],
+    ["dc", "Circuit response while a source value is swept."],
+    ["tf", "Small-signal gain plus input and output resistance."],
+    ["noise", "Output and input-referred noise across frequency."],
+    ["step", "Repeat an analysis across parameter values."],
+  ] as const)("explains the user value of %s without adding another control", (value, description) => {
+    render(<AnalysisModeRail value={value} onValueChange={() => undefined} />);
+    expect(screen.getByText(description).getAttribute("aria-live")).toBe("polite");
+  });
 });

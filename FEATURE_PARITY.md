@@ -1155,9 +1155,20 @@ checklist for the authoritative list.
   `--canvas-surface`/`--scope-surface` converted from gradients to flat
   solids, hairline alphas bumped for crispness on true black, `--success`/
   `--danger`/`--signal` brightened into vivid indicator-lamp colors (hues
-  unchanged), `--accent` untouched (locked). Screenshot-verified against
+  unchanged). The interaction accent was later retuned on 2026-07-14 from
+  saturated system blue to warm ice/graphite; signal, danger/success, and trace
+  families remain separate semantic tokens. Screenshot-verified against
   `screenshots/baseline/` via `screenshots/phase1-true-black/`. No runtime
   theme switcher exists yet (grepped, none found).
+- ✅ **Semantic chrome refinement (2026-07-14):** the clean Errors panel is a
+  static 28px status line (no success-green wash or empty expandable body),
+  while warning/error states retain amber/red emphasis. Analysis navigation
+  uses a neutral active material with one purpose sentence per LTspice mode.
+  Dedicated AC sources identify as sine sources; inferred repeating traces say
+  periodic. The selection-following delete bubble was removed in favor of a
+  stable selection-aware toolbar action and the existing Delete key. Shared
+  Button/Tabs foregrounds now consume `--accent-ink`, preserving 12.5:1
+  contrast against the light interaction accent.
 - ✅ **Foundation (2026-07-03):** Tailwind CSS v4 (`@tailwindcss/vite`) +
   shadcn scaffolding (components.json new-york, `src/lib/utils.ts` cn helper
   +4 tests, `@/*` alias in vite+tsconfig). `src/styles/tokens.css` maps the

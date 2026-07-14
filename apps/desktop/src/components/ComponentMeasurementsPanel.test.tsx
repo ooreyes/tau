@@ -148,6 +148,19 @@ describe("ComponentMeasurementsPanel — variant=\"compact\" (telemetry dock gri
     expect(card.getAttribute("aria-pressed")).toBe("true");
   });
 
+  it("names dedicated AC source metadata as sine without calling classified traces sinusoidal", () => {
+    const sourceRows: ComponentMeasurement[] = [
+      { ...rows[0], componentId: "vac1", ref: "V1", kind: "vac" },
+      { ...rows[0], componentId: "v1", ref: "V2", kind: "vsource" },
+    ];
+    render(<ComponentMeasurementsPanel rows={sourceRows} selectedId={null} onSelect={() => {}} variant="compact" />);
+
+    expect(screen.getByText("Sine voltage source")).toBeTruthy();
+    expect(screen.getByText("DC source")).toBeTruthy();
+    expect(screen.getAllByText("RMS").length).toBeGreaterThan(0);
+    expect(screen.queryByText("Sine", { exact: true })).toBeNull();
+  });
+
   it("shows a one-line empty hint distinct from the full variant's copy", () => {
     render(<ComponentMeasurementsPanel rows={[]} selectedId={null} onSelect={() => {}} variant="compact" />);
     expect(screen.getByText("Run a simulation to see per-component telemetry.")).toBeTruthy();

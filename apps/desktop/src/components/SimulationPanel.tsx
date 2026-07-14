@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
-import { Crosshair, Maximize2, Minimize2, RefreshCw, Square, X } from "lucide-react";
+import { Crosshair, Maximize2, Minimize2, RefreshCw, Square } from "lucide-react";
 import { useSchematic } from "../store/useSchematic";
 import {
   MAX_TRANSIENT_STEPS,
@@ -146,7 +146,6 @@ export function SimulationPanel({
   onRunStep,
   onStop,
   onStep,
-  onClose,
   dcSetup,
   onDcSetupChange,
   tfSetup,
@@ -503,20 +502,6 @@ export function SimulationPanel({
               </Button>
             </TooltipTrigger>
             <TooltipContent>{maximized ? "Restore panel" : "Maximize analysis"}</TooltipContent>
-          </Tooltip>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="outline"
-                size="icon-sm"
-                className="text-muted-foreground hover:text-foreground"
-                onClick={onClose}
-                aria-label="Minimize graphs"
-              >
-                <X size={14} strokeWidth={1.8} aria-hidden="true" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Minimize graphs</TooltipContent>
           </Tooltip>
           {/* No Run button here — the single primary Run lives in the top
               toolbar (§11 Unit C). The refine control above is the only
@@ -1245,7 +1230,7 @@ function OpTable({ result }: { result: OperatingPointResult | null }) {
     <>
       <div className="meter-row analysis-meter">
         <Metric label="NODES" value={String(Math.max(0, result.nets.length - 1))} tone="green" />
-        <Metric label="GROUND" value="OK" tone="cyan" />
+        <Metric label="GROUND" value="OK" tone="green" />
         <Metric label="MAX" value={formatEngineering(maxAbs, "V", 2)} tone="cream" />
       </div>
       <div className="op-table">

@@ -39,10 +39,11 @@ graphite/black content layer with selective depth:
   inspectors, and transient popovers may use a restrained glass material: subtle
   translucency, 0.5–1 px highlight edge, muted background blend, and a small
   elevation shadow. Glass communicates hierarchy; it is never wallpaper.
-- **Selection:** cobalt accent edge + faint fill. Accent is not reused for passive
-  headings or ordinary data.
+- **Selection:** warm ice/graphite edge + faint neutral fill. Selection and focus
+  remain obvious without turning the schematic or chrome blue.
 - **Status:** green = valid/complete, amber = running/warning/stale, red = invalid/
-  failed, blue = selection/navigation. Always pair color with icon/text.
+  failed. Status color belongs on a small lamp, count, or local message—not a
+  full-width success wash. Always pair color with icon/text.
 - **Traces:** a colorblind-considered ordered palette with luminance separation;
   repeated traces also vary dash/marker treatment. Trace colors never become UI
   accent colors.
@@ -129,10 +130,14 @@ until labels or controls become unreachable.
 
 - Replace the oversized equal-width `TRAN / OP / AC / DC / TF / NOISE / STEP`
   slab with a compact, content-sized segmented rail (28–32 px high).
-- Active mode uses accent edge/fill and stronger text; inactive modes remain
-  quiet but legible. All modes fit at the minimum width without horizontal
-  scrolling. Overflow, if ever needed, becomes a named “More” menu.
+- Active mode uses a neutral raised material and stronger text; inactive modes
+  remain quiet but legible. All modes fit at the minimum width without
+  horizontal scrolling. The selected mode includes one plain-language sentence
+  describing why an engineer would use it.
 - A mode switch never destroys its last result or user layout.
+- Dedicated sine-source metadata may say “Sine source.” Sampled waveforms are
+  described as “Periodic” unless Tau can prove their shape; never infer sine
+  from repetition alone.
 
 ### Plot cards
 
@@ -258,6 +263,15 @@ Landed and independently reviewed:
 - One selectable V/I/P component telemetry dock. Cards reflow vertically at the
   900×600 floor; measured horizontal overflow is zero, and dock height is capped
   to retain meaningful circuit context.
+- Warm ice/graphite interaction chrome replaces cobalt selection blue; the trace
+  palette remains independently color-coded. Primary primitives use the paired
+  dark foreground token for 12.5:1 contrast.
+- Every analysis abbreviation now has a concise purpose statement. Dedicated AC
+  sources identify as sine sources, generic repeating results identify as
+  periodic, and the redundant plotter close button is gone.
+- A clean Errors state is a static 28px line instead of an expandable green
+  banner. Real warnings/errors keep amber/red semantics. Canvas delete moved
+  from a floating overlay to the stable toolbar while the Delete key remains.
 
 Next implementation slice: unify the existing plot-card variants around shared
 axes, direct cursors, persistent resize/reorder, and visible statistics; then

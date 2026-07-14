@@ -8,17 +8,54 @@
      `git log --oneline -8`, recover/finish/revert that unit FIRST, then go on.
      ─────────────────────────────────────────────────────────────────────── -->
 ## ⏱ HEARTBEAT
-- **Headline metric:** 1536 committed-branch tests green · corpus 82/82 import · 82/82 op-converge · 79/82 warning-clean
-- **Run started (UTC):** 2026-07-14T05:05Z
-- **Synced to origin:** auto/ltspice-parity @ de5359e (dirty shared tree preserved).
-- **Claimed unit:** §1/§6/§10 `.asc`-native workspace and simulator information architecture.
+- **Headline metric:** 1547 committed-snapshot tests green · corpus 82/82 import · 82/82 op-converge · 79/82 warning-clean
+- **Run started (UTC):** 2026-07-14T06:08Z
+- **Synced to origin:** auto/ltspice-parity @ 771d500 (dirty shared tree preserved).
+- **Claimed unit:** §6/§10 simulator semantic clarity and visual-noise reduction.
 - **Status:** DONE
-- **Last completed sub-step:** landed the ASC-native Schematics explorer, compact
-  analysis rail, unified instrument icons, and responsive V/I/P telemetry dock.
+- **Last completed sub-step:** landed truthful signal semantics, plain-language
+  analysis guidance, neutral selection chrome, and a compact clean-state strip.
 - **Plan:** continue the plot-card/cursor/FFT sequence in `TAU_DESIGN_VISION.md`.
 - **Note:** existing simulator/assistant worktree edits belong to earlier units and
   must remain intact; stage only reviewed hunks.
-- **Next step:** unify plot-card axes/cursors and complete FFT engineering readouts.
+- **Next step:** unify plot axes/cursors and finish FFT engineering readouts.
+
+---
+
+## 2026-07-14T06:28Z — auto/ltspice-parity — semantic simulator/chrome cleanup
+
+### What I did
+- Replaced saturated cobalt interaction chrome with a warm ice/graphite token
+  family while keeping measured traces and semantic status independently colored.
+- Added one-line purpose copy for TRAN/OP/AC/DC/TF/NOISE/STEP and made signal
+  wording truthful: dedicated sources say sine; inferred repetition says periodic.
+- Removed the redundant plotter close button and made operating-point Ground OK
+  use success semantics.
+- Collapsed the clean Errors state to a static 28px line. Actual failures retain
+  the red gradient and warnings retain amber.
+- Removed the selection-following delete bubble; deletion is now a stable,
+  selection-aware toolbar action plus the existing Delete-key path.
+- Corrected shared button/tab primitives to use the tokenized dark foreground on
+  the new light interaction accent.
+
+### Tests / verification
+- Reviewed staged snapshot: typecheck passed; 106 files / 1547 tests passed.
+- Full dirty integration tree: 109 files / 1591 tests passed; production Vite
+  build passed (existing chunk-size and unrelated SDK externalization advisories).
+- Focused UI integration: 8 files / 85 tests passed.
+- Warm accent contrast: 12.50:1 against its ink, 14.03:1 on canvas, 11.37:1 on panel.
+- In-app browser live visual QA was unavailable because its localhost URL policy
+  rejected the already-open Tau tab; no alternate-browser bypass was attempted.
+
+### Files
+- `apps/desktop/src/App.css`
+- `apps/desktop/src/components/{AnalysisModeRail,Canvas,ComponentMeasurementsPanel,EngineeringTraceReadout,ShellPanels,SimulationPanel}.tsx`
+- Related component tests and shared `ui/button.tsx` / `ui/tabs.tsx` primitives.
+- `TAU_DESIGN_VISION.md`
+
+### Next step
+- Complete shared plot axes, two-cursor measurement, and FFT/THD detail, then run
+  packaged Tauri visual QA when the browser security policy permits localhost.
 
 ---
 

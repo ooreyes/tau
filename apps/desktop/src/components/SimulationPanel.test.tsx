@@ -92,6 +92,7 @@ describe("SimulationPanel — no redundant Run button (§11 Unit C5)", { timeout
     renderPanel();
     expect(screen.queryByRole("button", { name: /run transient/i })).toBeNull();
     expect(screen.queryByRole("button", { name: /^run/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Minimize graphs" })).toBeNull();
     expect(screen.getByRole("status").textContent).toContain("Idle");
   });
 
