@@ -1,12 +1,14 @@
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Scan, ZoomIn, ZoomOut } from "lucide-react";
+
+import { InstrumentIconButton } from "@/components/ui/instrument-icon-button";
 
 /**
- * Small hairline zoom cluster (+, −, ⌂) overlaid on a scope plot — the same
- * visual language as the schematic canvas's `.view-controls`/`.view-btn`
- * (Canvas.tsx), scaled down to fit inside a scope pane instead of the whole
- * viewport. The ⌂ button's tooltip documents the full interaction set
- * (wheel/shift-wheel/alt-wheel/drag) since there's no other persistent UI
- * real estate for it.
+ * Small hairline zoom cluster overlaid on a scope plot. Its Lucide zoom/scan
+ * actions follow the same SF Symbol semantics as Tau's other instrument
+ * controls. The fit button's tooltip documents the full interaction set
+ * (⌘/pinch-wheel, shift/alt locks, drag) since there's no other persistent UI
+ * real estate for it. Plain wheel is deliberately absent from that list — it
+ * scrolls the analysis panel, not the plot (usePlotViewport.ts).
  */
 export function ScopeZoomCluster({
   onZoomIn,
@@ -19,33 +21,32 @@ export function ScopeZoomCluster({
 }) {
   return (
     <div className="scope-zoom-controls">
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <button type="button" className="scope-zoom-btn" onClick={onZoomIn} aria-label="Zoom in">
-            +
-          </button>
-        </TooltipTrigger>
-        <TooltipContent side="left">Zoom in (scroll up)</TooltipContent>
-      </Tooltip>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <button type="button" className="scope-zoom-btn" onClick={onZoomOut} aria-label="Zoom out">
-            −
-          </button>
-        </TooltipTrigger>
-        <TooltipContent side="left">Zoom out (scroll down)</TooltipContent>
-      </Tooltip>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <button type="button" className="scope-zoom-btn" onClick={onFit} aria-label="Fit plot to data">
-            ⌂
-          </button>
-        </TooltipTrigger>
-        <TooltipContent side="left">
-          Fit to data (double-click) · Scroll to zoom about cursor · Shift/⇧-scroll = X only ·
-          Option/Alt-scroll = Y only · Drag to pan
-        </TooltipContent>
-      </Tooltip>
+      <InstrumentIconButton
+        icon={ZoomIn}
+        label="Zoom in"
+        tooltip="Zoom in (⌘+scroll or pinch)"
+        tooltipSide="left"
+        onClick={onZoomIn}
+      />
+      <InstrumentIconButton
+        icon={ZoomOut}
+        label="Zoom out"
+        tooltip="Zoom out (⌘+scroll or pinch)"
+        tooltipSide="left"
+        onClick={onZoomOut}
+      />
+      <InstrumentIconButton
+        icon={Scan}
+        label="Fit plot to data"
+        tooltip={
+          <>
+            Fit to data (double-click) · ⌘/pinch-scroll to zoom about cursor · Shift+⌘-scroll = X only ·
+            Option+⌘-scroll = Y only · Drag to pan
+          </>
+        }
+        tooltipSide="left"
+        onClick={onFit}
+      />
     </div>
   );
 }
