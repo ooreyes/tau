@@ -1,4 +1,4 @@
-import { GRID, SYMBOL_BODY, SYMBOL_BOX } from "../schematic/symbols";
+import { GRID, SYMBOL_BODY } from "../schematic/symbols";
 import { CATALOG_BY_KIND } from "../schematic/catalog";
 import type { ComponentKind, NetLabel, Point, SchematicComponent, SchematicWire } from "../schematic/types";
 import { getLocalPins, getComponentPins, transformPoint } from "../schematic/pins";
@@ -9,13 +9,40 @@ export const snap = (v: number) => {
   return Object.is(snapped, -0) ? 0 : snapped;
 };
 
-/** World-space bounding box of a circuit, with a per-symbol margin so parts are
- *  never flush against the frame. Returns null for an empty schematic. Pure so
- *  the fit-to-view math is unit-testable without a DOM. */
+/** Local-space AABB of everything that establishes a component's visible
+ * footprint: transformed symbol body plus its real pins. `getComponentPins`
+ * is intentional here — imported LTspice parts can carry absolute pin
+ * overrides that are much farther from the component origin than Tau's
+ * built-in bank. */
+function componentGeometryBounds(component: SchematicComponent): Rect {
+  const box = SYMBOL_BODY[component.kind];
+  const bodyCorners: Point[] = [
+    { x: box.minX, y: box.minY },
+    { x: box.maxX, y: box.minY },
+    { x: box.maxX, y: box.maxY },
+    { x: box.minX, y: box.maxY },
+  ].map((point) => transformPoint(point, component.rotation, component.mirrored ?? false));
+  const pins = getComponentPins(component).map((pin) => ({
+    x: pin.x - component.x,
+    y: pin.y - component.y,
+  }));
+  const points = [...bodyCorners, ...pins];
+  return {
+    minX: Math.min(...points.map((point) => point.x)),
+    minY: Math.min(...points.map((point) => point.y)),
+    maxX: Math.max(...points.map((point) => point.x)),
+    maxY: Math.max(...points.map((point) => point.y)),
+  };
+}
+
+/** World-space bounding box of a circuit, with a small margin around each
+ * transformed symbol/pin footprint so parts are never flush against the
+ * frame. Returns null for an empty schematic. Pure so fit-to-view stays
+ * independently testable without a DOM. */
 export function circuitBounds(
   components: readonly SchematicComponent[],
   wires: readonly SchematicWire[],
-  margin = 40,
+  margin = 16,
 ): { minX: number; minY: number; maxX: number; maxY: number } | null {
   if (components.length === 0 && wires.length === 0) return null;
   let minX = Infinity;
@@ -23,10 +50,11 @@ export function circuitBounds(
   let maxX = -Infinity;
   let maxY = -Infinity;
   for (const c of components) {
-    minX = Math.min(minX, c.x - margin);
-    minY = Math.min(minY, c.y - margin);
-    maxX = Math.max(maxX, c.x + margin);
-    maxY = Math.max(maxY, c.y + margin);
+    const bounds = componentGeometryBounds(c);
+    minX = Math.min(minX, c.x + bounds.minX - margin);
+    minY = Math.min(minY, c.y + bounds.minY - margin);
+    maxX = Math.max(maxX, c.x + bounds.maxX + margin);
+    maxY = Math.max(maxY, c.y + bounds.maxY + margin);
   }
   for (const w of wires) {
     for (const p of w.points) {
@@ -149,26 +177,10 @@ export const sourceValueLabel = (kind: ComponentKind, value: string): string => 
   return explicitUnit(value, CATALOG_BY_KIND[kind].unit);
 };
 
-const componentBounds = (component: SchematicComponent) => {
-  const box = SYMBOL_BOX[component.kind];
-  const bodyCorners: Point[] = [
-    { x: -box.halfW, y: -box.halfH },
-    { x: box.halfW, y: -box.halfH },
-    { x: box.halfW, y: box.halfH },
-    { x: -box.halfW, y: box.halfH },
-  ];
-  const pins = getLocalPins(component.kind).map((pin) => ({ x: pin.x, y: pin.y }));
-  const points = [...bodyCorners, ...pins].map((point) => rotateLocalPoint(point, component.rotation));
-  return {
-    minX: Math.min(...points.map((point) => point.x)),
-    maxX: Math.max(...points.map((point) => point.x)),
-    minY: Math.min(...points.map((point) => point.y)),
-    maxY: Math.max(...points.map((point) => point.y)),
-  };
-};
+const componentBounds = (component: SchematicComponent) => componentGeometryBounds(component);
 
 const labelAxis = (component: SchematicComponent) => {
-  const pins = getLocalPins(component.kind).map((pin) => rotateLocalPoint({ x: pin.x, y: pin.y }, component.rotation));
+  const pins = getComponentPins(component);
   if (pins.length !== 2) return "center";
   const dx = Math.abs(pins[0].x - pins[1].x);
   const dy = Math.abs(pins[0].y - pins[1].y);

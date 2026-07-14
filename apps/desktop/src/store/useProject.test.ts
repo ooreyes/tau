@@ -102,6 +102,21 @@ describe("ASC-native project workspace", () => {
     await expect(useProject.getState().readSim(first!)).resolves.toBe(ASC_SOURCE);
   });
 
+  it("serializes rapid plus-button creation into distinct files", async () => {
+    useProject.getState().ensureDefaultWorkspace();
+    const [first, second] = await Promise.all([
+      useProject.getState().createSchematicInRoot(),
+      useProject.getState().createSchematicInRoot(),
+    ]);
+
+    expect(first).toBe(`${DEFAULT_WORKSPACE_ID}/untitled.asc`);
+    expect(second).toBe(`${DEFAULT_WORKSPACE_ID}/untitled-2.asc`);
+    expect(flattenTree(useProject.getState().tree).map((node) => node.name)).toEqual([
+      "untitled-2.asc",
+      "untitled.asc",
+    ]);
+  });
+
   it("keeps .tau.json as one extension when resolving a collision", async () => {
     useProject.getState().ensureDefaultWorkspace();
     await useProject.getState().createSchematicFile(DEFAULT_WORKSPACE_ID, "legacy.tau.json");

@@ -93,7 +93,7 @@ describe("componentMeasurements", () => {
     expect(row.power).toBeUndefined();
   });
 
-  it("derives an LED current from source branch current by KCL and reports an unsafe direct drive", () => {
+  it("derives an LED current from source branch current by KCL and reports the measured direct drive", () => {
     const result = resultFixture();
     result.traces[0] = {
       ...result.traces[0],
@@ -133,6 +133,36 @@ describe("componentMeasurements", () => {
         message: expect.stringMatching(/D1 model predicts 315 mA.+not an overcurrent determination.+series resistor/i),
       }),
     ]);
+  });
+
+  it("does not fabricate a direct-drive current advisory from topology alone", () => {
+    const result = resultFixture();
+    result.traces[0] = {
+      ...result.traces[0],
+      id: "hot",
+      label: "V(hot)",
+      values: [0, 0, 0],
+    };
+    result.currents = [{ ref: "V1", label: "I(V1)", values: [0, 0, 0] }];
+    result.circuit.nets = [
+      { id: "hot", points: [], pins: [], isGround: false, labelCount: 0 },
+      { id: "gnd", points: [], pins: [], isGround: true, labelCount: 0 },
+    ];
+    result.circuit.components = [
+      {
+        component: { id: "v1", kind: "vsource", x: 0, y: 0, rotation: 0, value: "0", label: "V1" },
+        pins: { p: "hot", n: "gnd" },
+      },
+      {
+        component: { id: "d1", kind: "led", x: 0, y: 0, rotation: 0, value: "LED", label: "D1" },
+        pins: { a: "hot", k: "gnd" },
+      },
+    ];
+
+    const led = componentMeasurements(result).find((row) => row.ref === "D1");
+    expect(led?.current?.statistics.final).toBe(0);
+    expect(led?.power?.statistics.final).toBe(0);
+    expect(led?.advisories).toBeUndefined();
   });
 
   it("does not claim a current-limiter warning when a resistor is in series", () => {

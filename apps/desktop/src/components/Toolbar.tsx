@@ -21,8 +21,8 @@ type LampState = "idle" | "running" | "ok" | "error" | "warn";
 
 export function Toolbar({ mode, result, runState, isRunning, title, assistantOpen, onModeChange, onRun, onToggleAssistant, onOpenSettings }: ToolbarProps) {
   const isSimulator = mode === "simulator";
-  const runHasError = runState === "error" || result?.ok === false;
-  const runIsAcceptable = !runHasError && runState !== "stopped";
+  const runHasError = !isRunning && (runState === "error" || result?.ok === false);
+  const runIsAcceptable = !isRunning && runState === "complete" && result?.ok === true;
 
   // The status lamp is the single source of truth for run state — no cancel
   // path exists (nothing in the codebase can interrupt an in-flight ngspice
@@ -100,8 +100,9 @@ export function Toolbar({ mode, result, runState, isRunning, title, assistantOpe
         )}
         <Tooltip>
           <TooltipTrigger asChild>
-            {/* The Run control is also the schematic health indicator: green
-                while the circuit has no known error, red after a failed run. */}
+            {/* The Run control is also the simulation health indicator: neutral
+                before validation, amber while running, green after a clean run,
+                and red after a failed run. */}
             <Button
               variant="outline"
               size="sm"
@@ -111,6 +112,7 @@ export function Toolbar({ mode, result, runState, isRunning, title, assistantOpe
                 "[-webkit-app-region:no-drag]",
                 runHasError && "run-button--error",
                 runIsAcceptable && "run-button--ok",
+                isRunning && "run-button--running",
               )}
               onClick={onRun}
               aria-label="Run simulation"

@@ -72,6 +72,7 @@ vi.mock("@anthropic-ai/sdk", () => {
 import { AssistantPanel, type AssistantPanelProps } from "./AssistantPanel";
 import { saveAssistantApiKey } from "../lib/assistant";
 import { EMPTY_SCOPE } from "../simulation/paramScope";
+import type { AnalysisResult } from "../simulation/linearTransient";
 import type { SchematicComponent } from "../schematic/types";
 
 // This jsdom build has localStorage disabled — install an in-memory Storage
@@ -108,6 +109,17 @@ const resistor = (id: string, label: string): SchematicComponent => ({
   x: 0,
   y: 0,
   rotation: 0,
+});
+
+const completedAnalysis = (): AnalysisResult => ({
+  ok: true,
+  title: "Transient",
+  times: [0, 0.25, 0.5, 0.75, 1],
+  traces: [{ id: "out", label: "V(out)", unit: "V", color: "var(--trace-cyan)", values: [0, 2, 0, -2, 0] }],
+  currents: [],
+  stats: { netCount: 1, componentCount: 1, sampleCount: 5, stopTime: 1, stepSize: 0.25 },
+  warnings: [],
+  circuit: { nets: [], components: [], groundNetId: "0", warnings: [] },
 });
 
 function baseProps(overrides: Partial<AssistantPanelProps> = {}): AssistantPanelProps {
@@ -150,7 +162,10 @@ describe("AssistantPanel", () => {
     expect(screen.getByText("What does R1 do?")).toBeTruthy();
     expect(streams).toHaveLength(1);
     expect(streamRequests[0]).toEqual(expect.objectContaining({
-      tools: [expect.objectContaining({ name: "create_asc_circuit", strict: true })],
+      tools: expect.arrayContaining([
+        expect.objectContaining({ name: "create_asc_circuit", strict: true }),
+        expect.objectContaining({ name: "inspect_simulation_signal", strict: true }),
+      ]),
       tool_choice: { type: "auto", disable_parallel_tool_use: true },
     }));
     const request = streamRequests[0] as { system: Array<{ text: string }> };
@@ -206,6 +221,60 @@ describe("AssistantPanel", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Why does R1 behave this way?" }));
     expect(screen.getByText("Why does R1 behave this way, based on the current circuit and results?")).toBeTruthy();
+  });
+
+  it("runs a private waveform inspection and renders only the final engineering answer", async () => {
+    saveAssistantApiKey("test-key");
+    render(<AssistantPanel {...baseProps({ analysis: completedAnalysis() })} />);
+
+    fireEvent.change(screen.getByRole("textbox", { name: "Message the assistant" }), {
+      target: { value: "What is the exact RMS output voltage?" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+
+    act(() => streams[0].emitText("Let me inspect that.", "Let me inspect that."));
+    expect(await screen.findByText("Let me inspect that.")).toBeTruthy();
+
+    await act(async () => {
+      streams[0].resolveContent([{
+        type: "tool_use",
+        id: "inspect-1",
+        name: "inspect_simulation_signal",
+        input: { expression: "V(out)" },
+      }]);
+      await streams[0].finalMessage();
+    });
+    await waitFor(() => expect(streams).toHaveLength(2));
+
+    // The intermediate operation and payload stay out of the ordinary chat.
+    expect(screen.queryByText("Let me inspect that.")).toBeNull();
+    expect(screen.queryByText("inspect_simulation_signal")).toBeNull();
+    expect(screen.queryByText("V(out)")).toBeNull();
+
+    const continuation = streamRequests[1] as {
+      messages: Array<{ role: string; content: Array<Record<string, unknown>> }>;
+    };
+    const resultTurn = continuation.messages[continuation.messages.length - 1];
+    expect(resultTurn.role).toBe("user");
+    const toolResult = resultTurn.content[0];
+    expect(toolResult).toEqual(expect.objectContaining({
+      type: "tool_result",
+      tool_use_id: "inspect-1",
+      is_error: false,
+    }));
+    expect(JSON.parse(String(toolResult.content))).toEqual(expect.objectContaining({
+      expression: "V(out)",
+      rms: Math.SQRT2,
+      unit: "V",
+    }));
+
+    const answer = "The output RMS voltage is 1.41 V.";
+    await act(async () => {
+      streams[1].emitText(answer, answer);
+      streams[1].resolve(answer);
+      await streams[1].finalMessage();
+    });
+    expect(await screen.findByText(answer)).toBeTruthy();
   });
 
   it("renders an auth error with a Settings hint and wires it to onOpenSettings", async () => {

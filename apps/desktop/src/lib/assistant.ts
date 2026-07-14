@@ -12,6 +12,12 @@ import {
   parseAssistantActions,
   type AssistantCreateAscAction,
 } from "./assistantActions";
+import {
+  executeAssistantOperation,
+  findAssistantOperation,
+  INSPECT_SIGNAL_TOOL,
+  type AssistantOperationContext,
+} from "./assistantOperations";
 
 /** Exact model id — no date suffix. Keep every call site pointed at this
  *  one constant so a future model bump is a one-line change. */
@@ -31,6 +37,8 @@ Ground every answer in the netlist, component list, and analysis data provided b
 Refer to parts by their reference designators (R1, C2, ...) and to nets by name, not vague descriptions. Prefer a few precise sentences over a lecture; use short bullet lists for steps or checklists, and inline code for refs, values, and expressions.
 
 The circuit context and any SPICE directives are internal working data. Answer with the engineering conclusion a user wants; do not reveal hidden reasoning, raw .meas/.tran directives, or internal analysis instructions unless the user explicitly asks for that syntax. Never claim an analysis ran when the supplied context does not contain its result.
+
+If an exact transient waveform fact is necessary but absent from the summary, call inspect_simulation_signal. Do not announce the operation or expose its expression/tool payload. After it returns, answer the user's actual engineering question directly. It is read-only and cannot run a missing simulation; if no result exists, state what analysis the user needs to run.
 
 When the user asks you to create a circuit, call create_asc_circuit with a complete LTspice Version 4 schematic. Do not paste ASC text into your prose. The tool creates a proposal only: Tau validates it and the user must explicitly confirm before any file is written.`;
 
@@ -120,47 +128,97 @@ export function streamAssistantReply(
   contextText: string,
   history: readonly AssistantChatMessage[],
   handlers: AssistantStreamHandlers,
+  operationContext?: AssistantOperationContext,
 ): AssistantStreamHandle {
   const client = new Anthropic({ apiKey, dangerouslyAllowBrowser: true });
   let userAborted = false;
+  let activeStream: { abort: () => void } | null = null;
 
-  const stream = client.messages.stream({
-    model: ASSISTANT_MODEL,
-    max_tokens: MAX_TOKENS,
-    thinking: { type: "adaptive" },
-    system: [
-      { type: "text", text: SYSTEM_PROMPT, cache_control: { type: "ephemeral" } },
-      { type: "text", text: contextText },
-    ],
-    tools: [CREATE_ASC_TOOL],
-    tool_choice: { type: "auto", disable_parallel_tool_use: true },
-    messages: history.map((m) => ({ role: m.role, content: m.content })),
-  });
+  const system = [
+    { type: "text" as const, text: SYSTEM_PROMPT, cache_control: { type: "ephemeral" as const } },
+    { type: "text" as const, text: contextText },
+  ];
+  const initialMessages: Anthropic.MessageParam[] = history.map((message) => ({
+    role: message.role,
+    content: message.content,
+  }));
 
-  stream.on("text", (_delta, snapshot) => handlers.onDelta(snapshot));
-  stream
-    .finalMessage()
-    .then((message) => {
-      const text = message.content
-        .filter((block): block is Anthropic.TextBlock => block.type === "text")
-        .map((block) => block.text)
-        .join("");
-      const parsed = parseAssistantActions(message.content);
-      handlers.onDone({
-        text,
-        actions: parsed.actions,
-        rejectedActionCount: parsed.rejected.length,
-      });
-    })
-    .catch((error: unknown) => {
-      if (userAborted) return; // Stop button — not a real error, nothing to surface.
-      handlers.onError(classifyAssistantError(error));
+  const run = (messages: Anthropic.MessageParam[], operationsRemaining: number): void => {
+    if (userAborted) return;
+    const stream = client.messages.stream({
+      model: ASSISTANT_MODEL,
+      max_tokens: MAX_TOKENS,
+      thinking: { type: "adaptive" },
+      system,
+      tools: [CREATE_ASC_TOOL, INSPECT_SIGNAL_TOOL],
+      tool_choice: { type: "auto", disable_parallel_tool_use: true },
+      messages,
     });
+    activeStream = stream;
+
+    stream.on("text", (_delta, snapshot) => handlers.onDelta(snapshot));
+    stream
+      .finalMessage()
+      .then((message) => {
+        if (userAborted) return;
+        const operation = findAssistantOperation(message.content);
+        if (operation) {
+          if (operationsRemaining <= 0) {
+            handlers.onError({ kind: "unknown", message: "The assistant requested too many internal checks. Try a narrower question." });
+            return;
+          }
+          const result = operationContext
+            ? executeAssistantOperation(operation, operationContext)
+            : { ok: false, content: JSON.stringify({ ok: false, error: "No simulation snapshot is available." }) };
+          // Any intermediate prose (for example, “let me check”) is replaced;
+          // the ordinary transcript receives only the final engineering answer.
+          handlers.onDelta("");
+          const continuedMessages: Anthropic.MessageParam[] = [
+            ...messages,
+            {
+              role: "assistant",
+              content: message.content as Anthropic.ContentBlockParam[],
+            },
+            {
+              role: "user",
+              content: [{
+                type: "tool_result",
+                tool_use_id: operation.id,
+                content: result.content,
+                is_error: !result.ok,
+              }],
+            },
+          ];
+          run(continuedMessages, operationsRemaining - 1);
+          return;
+        }
+
+        activeStream = null;
+        const text = message.content
+          .filter((block): block is Anthropic.TextBlock => block.type === "text")
+          .map((block) => block.text)
+          .join("");
+        const parsed = parseAssistantActions(message.content);
+        handlers.onDone({
+          text,
+          actions: parsed.actions,
+          rejectedActionCount: parsed.rejected.length,
+        });
+      })
+      .catch((error: unknown) => {
+        if (userAborted) return; // Stop button — not a real error, nothing to surface.
+        activeStream = null;
+        handlers.onError(classifyAssistantError(error));
+      });
+  };
+
+  run(initialMessages, 4);
 
   return {
     abort: () => {
       userAborted = true;
-      stream.abort();
+      activeStream?.abort();
+      activeStream = null;
     },
   };
 }

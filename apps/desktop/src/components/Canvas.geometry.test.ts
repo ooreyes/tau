@@ -210,18 +210,18 @@ describe("circuitBounds (fit-to-view math)", () => {
     expect(circuitBounds([], [])).toBeNull();
   });
 
-  it("pads a single component by the symbol margin on every side", () => {
+  it("pads the real horizontal symbol footprint instead of a fixed square around its origin", () => {
     expect(circuitBounds([comp("r1", 100, 200)], [])).toEqual({
-      minX: 60,
-      minY: 160,
-      maxX: 140,
-      maxY: 240,
+      minX: 52,
+      minY: 172,
+      maxX: 148,
+      maxY: 228,
     });
   });
 
   it("spans the extremes of multiple components", () => {
     const b = circuitBounds([comp("r1", 0, 0), comp("r2", 320, 160)], []);
-    expect(b).toEqual({ minX: -40, minY: -40, maxX: 360, maxY: 200 });
+    expect(b).toEqual({ minX: -48, minY: -28, maxX: 368, maxY: 188 });
   });
 
   it("includes bare wire points (no extra margin) alongside components", () => {
@@ -229,7 +229,7 @@ describe("circuitBounds (fit-to-view math)", () => {
       [comp("r1", 100, 100)],
       [{ id: "w1", points: [{ x: 100, y: 100 }, { x: 400, y: 300 }] }],
     );
-    expect(b).toEqual({ minX: 60, minY: 60, maxX: 400, maxY: 300 });
+    expect(b).toEqual({ minX: 52, minY: 72, maxX: 400, maxY: 300 });
   });
 
   it("frames a wire-only schematic (e.g. a stray net) without components", () => {
@@ -239,11 +239,69 @@ describe("circuitBounds (fit-to-view math)", () => {
 
   it("honors a custom margin", () => {
     expect(circuitBounds([comp("r1", 0, 0)], [], 10)).toEqual({
-      minX: -10,
-      minY: -10,
-      maxX: 10,
-      maxY: 10,
+      minX: -42,
+      minY: -22,
+      maxX: 42,
+      maxY: 22,
     });
+  });
+
+  it("rotates the fitted footprint through every resistor orientation, including vertical", () => {
+    for (const rotation of [0, 180] as const) {
+      expect(circuitBounds([{ ...comp(`r-${rotation}`, 100, 200), rotation }], [], 0)).toEqual({
+        minX: 68,
+        minY: 188,
+        maxX: 132,
+        maxY: 212,
+      });
+    }
+    for (const rotation of [90, 270] as const) {
+      expect(circuitBounds([{ ...comp(`r-${rotation}`, 100, 200), rotation }], [], 0)).toEqual({
+        minX: 88,
+        minY: 168,
+        maxX: 112,
+        maxY: 232,
+      });
+    }
+    const vertical = { ...comp("r1", 100, 200), rotation: 90 as const };
+    expect(circuitBounds([vertical], [])).toEqual({
+      minX: 72,
+      minY: 152,
+      maxX: 128,
+      maxY: 248,
+    });
+  });
+
+  it("includes absolute imported pin overrides in the fit frame", () => {
+    const imported = {
+      ...comp("r1", 100, 200),
+      pinOverride: [
+        { id: "a", label: "A", x: -50, y: 20 },
+        { id: "b", label: "B", x: 400, y: 500 },
+      ],
+    };
+    expect(circuitBounds([imported], [], 0)).toEqual({
+      minX: -50,
+      minY: 20,
+      maxX: 400,
+      maxY: 500,
+    });
+  });
+
+  it("keeps asymmetric symbols centered from their rendered orientation, not their origin", () => {
+    const ground = (rotation: 0 | 90 | 180 | 270): SchematicComponent => ({
+      id: `g-${rotation}`,
+      kind: "ground",
+      x: 0,
+      y: 0,
+      rotation,
+      value: "",
+      label: "",
+    });
+    expect(circuitBounds([ground(0)], [], 0)).toEqual({ minX: -12, minY: -3, maxX: 12, maxY: 22 });
+    expect(circuitBounds([ground(90)], [], 0)).toEqual({ minX: -22, minY: -12, maxX: 3, maxY: 12 });
+    expect(circuitBounds([ground(180)], [], 0)).toEqual({ minX: -12, minY: -22, maxX: 12, maxY: 3 });
+    expect(circuitBounds([ground(270)], [], 0)).toEqual({ minX: -3, minY: -12, maxX: 22, maxY: 12 });
   });
 });
 

@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { KeyboardEvent as ReactKeyboardEvent, PointerEvent as ReactPointerEvent } from "react";
 
 /**
@@ -68,6 +68,13 @@ export function usePanelWidth(config: PanelWidthConfig) {
     setWidth(clamped);
     return clamped;
   }, []);
+
+  // Responsive hosts may tighten a panel's maximum after a window resize.
+  // Clamp the live value immediately instead of leaving a persisted desktop
+  // width to push a minimum-size window behind `overflow: hidden`.
+  useEffect(() => {
+    applyWidth(widthRef.current);
+  }, [applyWidth, config.minWidth, config.maxWidth]);
 
   const onPointerDown = useCallback(
     (event: ReactPointerEvent<HTMLElement>) => {

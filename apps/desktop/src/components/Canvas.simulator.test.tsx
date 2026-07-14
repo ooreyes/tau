@@ -179,16 +179,50 @@ describe("Canvas — simulator fit viewport", () => {
 
     act(() => observer.trigger());
     let view = transform();
-    // Topology spans x=0…160, so its electrical center is 80 even though the
-    // deliberately long V1 label makes the full label bounds asymmetric.
-    expect(view.x + 80 * view.zoom).toBeCloseTo(width / 2, 6);
+    // The rendered topology spans x=-32…208 after its real symbol footprints
+    // and frame margin are included, so its visual center is 88. The
+    // deliberately long V1 label must not pull that center toward the label.
+    expect(view.x + 88 * view.zoom).toBeCloseTo(width / 2, 6);
     expect(view.y).toBeCloseTo(height / 2, 6);
 
     height = 160; // telemetry dock grew; only the black SVG remains visible.
     act(() => observer.trigger());
     view = transform();
-    expect(view.x + 80 * view.zoom).toBeCloseTo(width / 2, 6);
+    expect(view.x + 88 * view.zoom).toBeCloseTo(width / 2, 6);
     expect(view.y).toBeCloseTo(height / 2, 6);
+  });
+
+  it("Home centers and fits the full rotated footprint of a vertical resistor", () => {
+    vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
+      callback(0);
+      return 1;
+    });
+    vi.stubGlobal("cancelAnimationFrame", vi.fn());
+    useSchematic.setState({
+      components: [{ id: "r1", kind: "resistor", x: 100, y: 200, rotation: 90, value: "", label: "" }],
+      wires: [],
+    });
+
+    render(<Canvas interactive={false} />);
+    const canvas = document.querySelector<SVGSVGElement>("svg.canvas")!;
+    Object.defineProperty(canvas, "getBoundingClientRect", {
+      configurable: true,
+      value: () => ({ x: 0, y: 0, left: 0, top: 0, right: 400, bottom: 300, width: 400, height: 300, toJSON: () => ({}) }),
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Fit circuit to view" }));
+    const group = [...canvas.children].find((child) => child.tagName.toLowerCase() === "g" && child.hasAttribute("transform"));
+    const match = group?.getAttribute("transform")?.match(/translate\(([-\d.]+) ([-\d.]+)\) scale\(([-\d.]+)\)/);
+    if (!match) throw new Error("Canvas transform missing");
+    const view = { x: Number(match[1]), y: Number(match[2]), zoom: Number(match[3]) };
+
+    // Rotated body+pins span 56×96 including the world margin. The 300px-high
+    // viewport has 204px after fit padding, so height is the constrained axis.
+    expect(view.zoom).toBeCloseTo(204 / 96, 6);
+    expect(view.x + 100 * view.zoom).toBeCloseTo(200, 6);
+    expect(view.y + 200 * view.zoom).toBeCloseTo(150, 6);
+    expect(view.y + 152 * view.zoom).toBeCloseTo(48, 6);
+    expect(300 - (view.y + 248 * view.zoom)).toBeCloseTo(48, 6);
   });
 });
 

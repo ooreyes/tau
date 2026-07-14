@@ -98,6 +98,15 @@ const panelWidth = () =>
   Number.parseInt((screen.getByTestId("panel") as HTMLElement).style.width, 10);
 
 describe("usePanelWidth drag behavior", () => {
+  it("reclamps a persisted width when a responsive host tightens its maximum", () => {
+    const { rerender } = render(<Harness cfg={config({ defaultWidth: 420, maxWidth: 480 })} />);
+    expect(panelWidth()).toBe(420);
+
+    rerender(<Harness cfg={config({ defaultWidth: 420, maxWidth: 260 })} />);
+    expect(panelWidth()).toBe(260);
+    expect(screen.getByRole("separator").getAttribute("aria-valuemax")).toBe("260");
+  });
+
   it("edge=left (right-docked panel): dragging the border left widens", () => {
     render(<Harness cfg={config({ edge: "left" })} />);
     const handle = screen.getByRole("separator");

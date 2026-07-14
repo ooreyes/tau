@@ -255,7 +255,9 @@ Status legend: ✅ done · 🟡 partial · ⬜ not started
   compact Lucide file/folder/chevron rows). The editor-tab `+`, Settings New
   Circuit, and Cmd-S on a pathless startup/scratch tab now all materialize a
   collision-safe real `.asc` in the open Schematics folder; failed or blocked
-  first saves clean up the placeholder instead of leaving a ghost file.
+  first saves clean up the placeholder instead of leaving a ghost file. File
+  reservation is serialized, so two rapid `+` activations create
+  `untitled.asc` and `untitled-2.asc` instead of racing onto one path.
   Packaged macOS QA created and opened a real `native-create-check.asc` with the
   canonical 26-byte blank LTspice document; store, panel, path-remap, and Rust
   boundary tests cover moves and creation.
@@ -271,7 +273,8 @@ Status legend: ✅ done · 🟡 partial · ⬜ not started
   avoid components, wires, probes, and one another; selected parts/wires/labels/
   probes use a stable toolbar/Delete-key action. Component symbols use corrected
   filled device arrows and crisp token-backed canvas typography. Run/error states
-  use restrained success/danger gradients. Explorer actions mirror VS Code's
+  use evidence-based gradients: neutral before validation, amber while running,
+  green after a clean run, and red on failure. Explorer actions mirror VS Code's
   New File, New Folder, Refresh, and Collapse All behavior. **Grid/routing
   hardening (2026-07-14):** free wire endpoints are normalized before routing,
   while exact imported pins and off-grid wire junctions remain untouched; the
@@ -291,13 +294,17 @@ Status legend: ✅ done · 🟡 partial · ⬜ not started
   **Fit/placement correctness follow-up (2026-07-14):** fit-to-view now sizes
   against labels but centers the electrical topology, so an asymmetric ref/value
   does not pull the circuit sideways; simulator resize fitting measures the
-  visible SVG after the telemetry/flex layout settles. Dropping a two-terminal
-  part collinearly onto an ideal wire now removes the covered conductor and
-  terminates the two remaining wire pieces at the part pins in the same undo
-  step. Perpendicular crossings and non-ideal resistive wires stay untouched,
-  and the used placement ghost clears immediately instead of drawing a dashed
-  duplicate over the newly placed symbol. Horizontal, vertical, undo,
-  resistance-preservation, ghost-lifecycle, and resize regressions are covered.
+  visible SVG after the telemetry/flex layout settles. Home framing now uses
+  each symbol's transformed rendered body and real pins—including rotated,
+  mirrored, asymmetric, and imported absolute-pin geometry—instead of a fixed
+  square around the component origin. Dropping a two-terminal part collinearly
+  onto an ideal wire removes the covered conductor and terminates the two
+  remaining wire pieces at the part pins in the same undo step. Perpendicular
+  crossings and non-ideal resistive wires stay untouched, and the used placement
+  ghost clears immediately instead of drawing a dashed duplicate over the newly
+  placed symbol. All resistor rotations, asymmetric ground rotations, imported
+  pin overrides, direct Home activation, horizontal/vertical insertion, undo,
+  resistance preservation, ghost lifecycle, and resize regressions are covered.
 - ✅ Undo/redo, autosave, multi-tab documents
 - ✅ Component value editing (double-click) + structured params
 - ✅ **Comparator/opamp value label + inspector param fields fixed (§UX)**:
@@ -974,7 +981,8 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   −315 mA/−1.575 W. LEDs directly across an ideal voltage source receive a
   visible **direct drive · no external limiter** advisory that reports the
   model-predicted current and recommends a series resistor/current regulator;
-  Tau does not invent a part-rating threshold it does not know. A
+  Tau does not invent a part-rating threshold it does not know. A completed
+  zero-current direct-drive result remains `0 A`/`0 W` with no advisory, and a
   series-resistor case is covered against false positives.
 - ✅ **Measurement cursors** (1 & 2, delta readout) — `simulation/cursors.ts`
   (`cursorReadout`/`fractionToX`, 8 unit tests) + a collapsible **Cursors** panel
@@ -1151,14 +1159,20 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
 - 🟡 **Visual QA on the actual desktop app:** the current Tauri hot-reload app
   stays alive on `auto/ltspice-parity`; live browser QA verified centered
   simulator fit/Home, the cross-mode assistant, and no horizontal overflow at
-  900×600. Remaining: repeat the full screenshot matrix in a packaged build.
+  900×600. A persisted-width stress pass maximized Explorer and Assistant and
+  still held `shell.scrollWidth === 900` with the editor reachable. Remaining:
+  repeat the full screenshot matrix in a packaged build.
 - ✅ **One circuit-aware assistant in both modes (2026-07-14):** a single
   top-right toolbar entry opens the same assistant beside Schematic or
   Simulator. Context is built from the real document/result; Anthropic tool
   output is parsed/validated as supported LTspice ASC and shown as an explicit
   Create action rather than silently changing the circuit. The API key is kept
-  in memory for the current Tau session only. CSP, action validation,
-  collision-safe disk creation, and mocked streaming/tool paths are covered.
+  in memory for the current Tau session only. For exact post-run questions, a
+  bounded private `inspect_simulation_signal` operation evaluates real transient
+  vectors/expressions and returns min/max/average/RMS/final/classification to the
+  model; tool syntax and payloads never appear in chat. CSP, action validation,
+  collision-safe disk creation, private tool continuation, and mocked streaming
+  paths are covered.
 - 🟡 Component picker matching LTspice (F2 part browser over the full library)
   — **F2 now opens the searchable part palette** (symbols, categories, hotkeys,
   ↑↓/↵ placement); remaining: coverage audit vs. LTspice's full library tree.
@@ -1512,6 +1526,10 @@ checklist for the authoritative list.
   (verified via a headless measurement: `scrollWidth === clientWidth` at
   900×600), plus added `overflow-x: auto` on `.plotter-tabs` as a scroll
   fallback so a tab is never truly unreachable even if a future label grows.
+  **Schematic-panel follow-up (2026-07-14):** Explorer, Components, and the
+  Assistant now share the measured shell budget. Persisted desktop widths are
+  synchronously clamped at the 900px minimum so the schematic editor keeps its
+  260px floor without a one-frame overflow or an unreachable resize handle.
   Also hardened `.sim-results`' 3-column grid with a 64px column floor
   (`minmax(64px, 1fr)`, was `minmax(0, 1fr)`) plus `overflow-x: auto`, so the
   results table can no longer collapse into single-letter headers regardless

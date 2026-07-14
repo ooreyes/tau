@@ -8,21 +8,89 @@
      `git log --oneline -8`, recover/finish/revert that unit FIRST, then go on.
      ─────────────────────────────────────────────────────────────────────── -->
 ## ⏱ HEARTBEAT
-- **Headline metric:** 1601 committed-snapshot tests green · corpus 82/82 import · 82/82 op-converge · 79/82 warning-clean
-- **Run started (UTC):** 2026-07-14T17:04Z
-- **Synced to origin:** auto/ltspice-parity @ adf66f8 (dirty shared tree preserved).
-- **Claimed unit:** §1/§10/§11 durable new-file save, vibrant semantic chrome,
-  and one cross-mode circuit-aware assistant.
+- **Headline metric:** 1617 committed-snapshot tests green · corpus 82/82 import · 82/82 op-converge · 79/82 warning-clean
+- **Run started (UTC):** 2026-07-14T18:00Z
+- **Synced to origin:** auto/ltspice-parity @ 99bf803 (dirty shared tree preserved).
+- **Claimed unit:** §2/§10/§11 correctness follow-up: rendered-geometry Home fit,
+  truthful direct-drive LED telemetry, and coordinated Explorer/Components width containment.
 - **Status:** DONE
-- **Last completed sub-step:** completed live hot-reload/minimum-viewport QA;
-  verified centered fit/Home, one assistant entry in both modes, real ASC
-  creation, truthful LED current, and neutral-before-run diagnostics.
-- **Plan:** unit complete; preserve unrelated simulator worktree changes and
-  continue with the next highest-leverage acceptance-parity item.
+- **Last completed sub-step:** reviewed three narrow subagent diffs; full shared
+  tree typecheck/1649-test/build gates and exact staged-snapshot gates are green.
+- **Plan:** follow-up complete; preserve the unrelated simulator-dashboard
+  worktree and repeat native-window QA when the Mac is unlocked.
 - **Note:** existing simulator/assistant worktree edits belong to earlier units and
   must remain intact; stage only reviewed hunks.
-- **Next step:** reconcile the existing simulator-dashboard worktree unit, then
-  run packaged-app screenshot QA across the full viewport matrix.
+- **Next step:** verify real folder creation through the unlocked Tauri window,
+  then reconcile the existing simulator-dashboard worktree unit.
+
+---
+
+## 2026-07-14T18:12Z — auto/ltspice-parity — fit and direct-drive truthfulness (§2/§10/§11)
+
+### What I did
+- Replaced origin-square Home framing with actual transformed symbol-body and
+  real-pin bounds. Vertical resistors, asymmetric ground symbols, mirrored/
+  rotated parts, and imported LTspice absolute-pin overrides now center and fit
+  from what is actually drawn.
+- Kept direct-drive LED telemetry evidence-based: the native diode vector wins
+  when present, exact two-terminal KCL supplies it when ngspice omits it, and
+  zero-current results no longer receive a topology-only warning or signed zero.
+- Coordinated Explorer and Components rail widths in one shell-owned budget.
+  Persisted wide-panel values clamp synchronously at 900px while retaining the
+  schematic editor's 260px minimum.
+- Reviewed each Luna subagent change at the source and test level before staging.
+
+### Tests and QA
+- Exact staged snapshot: typecheck pass, 111 files / 1617 tests pass, production
+  web build pass (existing SDK externalization/chunk-size warnings only).
+- Full shared working tree: 112 files / 1649 tests pass, typecheck pass, and
+  production web build pass.
+- Focused regressions include direct Home-button math for a 90° resistor, every
+  resistor/ground rotation, imported pins, native `@D[id]`, exact LED KCL,
+  zero-current false-positive prevention, and responsive Components clamping.
+- Vite/Tauri hot reload remained alive on localhost:1420. Native Computer Use
+  remains blocked by the locked macOS session; no native interaction was claimed.
+
+### Next step
+- Unlock macOS and exercise the native Home, `+`, Cmd-S, and disk-persistence
+  flow, then reconcile the existing simulator-dashboard worktree unit.
+
+---
+
+## 2026-07-14T17:53Z — auto/ltspice-parity — completion audit hardening (§1/§8/§10)
+
+### What I did
+- Removed the last literal “topology locked” phrase from the simulator status
+  bar; the compact lock icon and accessible “View-only circuit topology” label
+  are now the sole topology-state treatment.
+- Made Run color evidence-based: neutral before validation, amber while active,
+  green only after a completed clean result, red after a failed result. The
+  Diagnostics strip remains neutral “Not run” until a result exists.
+- Serialized schematic filename reservation so rapid `+`/Cmd-S actions cannot
+  overwrite or open the same path; successive actions receive numbered ASC names.
+- Added private assistant waveform inspection. The model can request a bounded
+  read-only V/I/derived expression calculation against the real completed
+  transient vector and receive min/max/average/RMS/final/frequency internally;
+  only the final engineering answer is rendered.
+- Added responsive Explorer/Assistant clamping in schematic mode, including
+  dynamic reclamping of a width persisted from a larger window.
+
+### Tests and QA
+- Exact staged snapshot: typecheck pass, 111 files / 1611 tests pass, production
+  web build pass (existing SDK externalization/chunk-size warnings only).
+- Full shared working tree: 112 files / 1643 tests pass and typecheck pass.
+- Live hot reload at 900×600: after dragging Explorer and Assistant to their
+  largest allowed widths, Explorer=168px, Assistant=402px, editor remained
+  reachable, and shell client/scroll width both stayed 900px.
+- Normal viewport restored at 1512×828: no horizontal overflow, view-only icon
+  present, literal topology text absent, clean Run rendered its green gradient,
+  and browser console had no errors/warnings.
+- Computer Use could not inspect the native Tau window because macOS was locked;
+  the Tauri hot-reload process and localhost renderer remained alive.
+
+### Next step
+- After the Mac is unlocked, exercise `+`, Cmd-S, and real-folder persistence in
+  the native window, then continue the already-present dashboard unit.
 
 ---
 

@@ -38,7 +38,7 @@ import { basename, isAscFile, type ProjectNode } from "../project/types";
 import type { AnalysisResult } from "../simulation/linearTransient";
 import { formatEngineering } from "../simulation/quantity";
 import { loadAssistantApiKey, saveAssistantApiKey } from "../lib/assistant";
-import { PanelResizeHandle, usePanelWidth, type PanelWidthConfig } from "./panelResize";
+import { clampPanelWidth, PanelResizeHandle, usePanelWidth, type PanelWidthConfig } from "./panelResize";
 
 /** Drag-to-resize bounds for the two side panels (§11 Unit B). Minimums keep
  *  every control usable (tree rows, property fields); maximums keep the canvas
@@ -51,7 +51,7 @@ const EXPLORER_PANEL_WIDTH: PanelWidthConfig = {
   edge: "right",
 };
 
-const COMPONENTS_RAIL_WIDTH: PanelWidthConfig = {
+export const COMPONENTS_RAIL_WIDTH: PanelWidthConfig = {
   storageKey: "tau.ui.componentsRailWidth",
   defaultWidth: 264,
   minWidth: 208,
@@ -165,6 +165,7 @@ export function ExplorerPanel({
   onOpenAscText,
   onNotice,
   onMoveNode,
+  maxWidth,
 }: {
   activeFilePath: string | null;
   onOpenSimFile: (path: string, title: string, json: string) => void;
@@ -172,6 +173,9 @@ export function ExplorerPanel({
   onNotice: (message: string) => void;
   /** Atomic project-store move action; optional only for isolated panel hosts. */
   onMoveNode?: MoveProjectNode;
+  /** Responsive ceiling supplied by the shell after reserving the editor and
+   *  whichever right-side panel is visible. */
+  maxWidth?: number;
 }) {
   const rootPath = useProject((s) => s.rootPath);
   const rootName = useProject((s) => s.rootName);
@@ -200,14 +204,26 @@ export function ExplorerPanel({
   } | null>(null);
   const [draggedNode, setDraggedNode] = useState<ProjectNode | null>(null);
   const [dropTargetPath, setDropTargetPath] = useState<string | null>(null);
-  const resize = usePanelWidth(EXPLORER_PANEL_WIDTH);
+  const explorerWidthConfig = {
+    ...EXPLORER_PANEL_WIDTH,
+    maxWidth: Math.max(
+      EXPLORER_PANEL_WIDTH.minWidth,
+      Math.min(EXPLORER_PANEL_WIDTH.maxWidth, maxWidth ?? EXPLORER_PANEL_WIDTH.maxWidth),
+    ),
+  };
+  const resize = usePanelWidth(explorerWidthConfig);
+  const explorerWidth = clampPanelWidth(
+    resize.width,
+    explorerWidthConfig.minWidth,
+    explorerWidthConfig.maxWidth,
+  );
   const resizeHandle = (
     <PanelResizeHandle
       edge="right"
       label="Resize project explorer"
-      width={resize.width}
+      width={explorerWidth}
       minWidth={EXPLORER_PANEL_WIDTH.minWidth}
-      maxWidth={EXPLORER_PANEL_WIDTH.maxWidth}
+      maxWidth={explorerWidthConfig.maxWidth}
       dragging={resize.dragging}
       onPointerDown={resize.onPointerDown}
       onKeyDown={resize.onKeyDown}
@@ -322,7 +338,7 @@ export function ExplorerPanel({
 
   if (!rootPath) {
     return (
-      <aside className="explorer-panel" aria-label="Project explorer" style={{ width: resize.width }}>
+      <aside className="explorer-panel" aria-label="Project explorer" style={{ width: explorerWidth }}>
         <div className="explorer-head">
           <span>Schematics</span>
         </div>
@@ -371,7 +387,7 @@ export function ExplorerPanel({
   }
 
   return (
-    <aside className="explorer-panel" aria-label="Project explorer" style={{ width: resize.width }}>
+    <aside className="explorer-panel" aria-label="Project explorer" style={{ width: explorerWidth }}>
       <div className="explorer-head">
         <span>{rootName ?? "Schematics"}</span>
         <div className="explorer-icons">
@@ -1125,9 +1141,15 @@ function WireInspector({ wire }: { wire: SchematicWire }) {
 export function ComponentsRail({
   focusSignal,
   onNotice,
+  resize,
+  maxWidth,
 }: {
   focusSignal: number;
   onNotice: (message: string) => void;
+  /** Width state is shell-owned so Explorer and this rail update in one render. */
+  resize: ReturnType<typeof usePanelWidth>;
+  /** Responsive ceiling supplied by the shell after reserving Explorer and the editor. */
+  maxWidth?: number;
 }) {
   const selectedId = useSchematic((s) => s.selectedId);
   const selectedWireId = useSchematic((s) => s.selectedWireId);
@@ -1143,16 +1165,24 @@ export function ComponentsRail({
     if (selected || selectedWire) setSegment("properties");
   }, [selected?.id, selectedWire?.id]);
 
-  const resize = usePanelWidth(COMPONENTS_RAIL_WIDTH);
+  const responsiveMaxWidth = Math.max(
+    COMPONENTS_RAIL_WIDTH.minWidth,
+    Math.min(COMPONENTS_RAIL_WIDTH.maxWidth, maxWidth ?? COMPONENTS_RAIL_WIDTH.maxWidth),
+  );
+  const componentsWidth = clampPanelWidth(
+    resize.width,
+    COMPONENTS_RAIL_WIDTH.minWidth,
+    responsiveMaxWidth,
+  );
 
   return (
-    <aside className="components-rail" aria-label="Components" style={{ width: resize.width }}>
+    <aside className="components-rail" aria-label="Components" style={{ width: componentsWidth }}>
       <PanelResizeHandle
         edge="left"
         label="Resize properties panel"
-        width={resize.width}
+        width={componentsWidth}
         minWidth={COMPONENTS_RAIL_WIDTH.minWidth}
-        maxWidth={COMPONENTS_RAIL_WIDTH.maxWidth}
+        maxWidth={responsiveMaxWidth}
         dragging={resize.dragging}
         onPointerDown={resize.onPointerDown}
         onKeyDown={resize.onKeyDown}

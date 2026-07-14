@@ -125,6 +125,17 @@ async function availableFilePath(parentPath: string, desiredName: string): Promi
   }
 }
 
+// Filename selection is a check-then-create transaction. Serialize it so two
+// rapid `+`/Cmd-S actions cannot both reserve the same `untitled.asc` before
+// either write becomes visible to the filesystem or temporary workspace.
+let schematicCreationQueue: Promise<void> = Promise.resolve();
+
+function enqueueSchematicCreation<T>(create: () => Promise<T>): Promise<T> {
+  const next = schematicCreationQueue.then(create, create);
+  schematicCreationQueue = next.then(() => undefined, () => undefined);
+  return next;
+}
+
 export const useProject = create<ProjectStore>((set, get) => ({
   ...EMPTY_PROJECT,
   capability: "none",
@@ -257,7 +268,7 @@ export const useProject = create<ProjectStore>((set, get) => ({
     }
   },
 
-  createSchematicFile: async (parentPath, name) => {
+  createSchematicFile: (parentPath, name) => enqueueSchematicCreation(async () => {
     if (!isSafeLeafName(name)) {
       set({ error: "Schematic names cannot contain folder paths." });
       return null;
@@ -294,7 +305,7 @@ export const useProject = create<ProjectStore>((set, get) => ({
       set({ error: failureMessage(error, "Could not create schematic.") });
       return null;
     }
-  },
+  }),
 
   createSchematicInRoot: async (name = "untitled.asc") => {
     const { rootPath } = get();

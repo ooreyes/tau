@@ -31,7 +31,7 @@ export function StatusBar({
     ? "Probe — click a wire to add; click a probe dot to remove"
     : tool.mode === "label"
       ? "Node name — click a node or existing name; empty text removes it"
-      : "Inspect — select a component to focus telemetry · topology locked";
+      : "Inspect — select a component to focus telemetry";
   // ngspice runs only inside the native desktop build; the browser preview uses
   // the built-in TypeScript solver. Surface which one is active to avoid the
   // "ngspice isn't working" confusion when running in a browser.

@@ -8,13 +8,14 @@ import { StatusBar } from "./components/StatusBar";
 import { SimulationPanel } from "./components/SimulationPanel";
 import { TelemetryDock } from "./components/TelemetryDock";
 import { AssistantPanel, ASSISTANT_PANEL_WIDTH, loadAssistantOpen, saveAssistantOpen } from "./components/AssistantPanel";
-import { usePanelWidth } from "./components/panelResize";
+import { clampPanelWidth, usePanelWidth } from "./components/panelResize";
 import { AnalysisErrorBoundary } from "./components/AnalysisErrorBoundary";
 import { EmptyState } from "./components/EmptyState";
 import { CommandPalette } from "./components/CommandPalette";
 import {
   ActivityRail,
   BottomPanel,
+  COMPONENTS_RAIL_WIDTH,
   ComponentsRail,
   ConfirmDialog,
   EditorTabs,
@@ -117,6 +118,8 @@ const emptyHistory = (): SchematicHistory => ({ past: [], future: [] });
 const RAIL_W = 54; // .activity-rail
 const HANDLE_W = 8; // .col-resize-handle, one per open column
 const SCOPE_MIN = 300; // analysis scope column floor (matches old drag clamp)
+const SCHEMATIC_EDITOR_MIN = 260;
+const EXPLORER_MIN = 168;
 // Floors used only to keep the Assistant column from starving its neighbors
 // (see the Assistant-width clamp effect below) — mirror the CSS floors on
 // .sim-schematic-pane and .app-simulator .shell-body > .plotter so the JS
@@ -216,6 +219,24 @@ function App() {
   const [notice, setNotice] = useState<string | null>(null);
   const shellBodyRef = useRef<HTMLDivElement | null>(null);
   const [shellWidth, setShellWidth] = useState(0);
+  const componentsRailResponsiveMax = mode === "schematic" && shellWidth > 0 && partsOpen && !assistantOpen
+    ? Math.max(
+        COMPONENTS_RAIL_WIDTH.minWidth,
+        Math.min(
+          COMPONENTS_RAIL_WIDTH.maxWidth,
+          shellWidth - RAIL_W - (HANDLE_W * 2) - SCHEMATIC_EDITOR_MIN - EXPLORER_MIN,
+        ),
+      )
+    : COMPONENTS_RAIL_WIDTH.maxWidth;
+  const componentsRailResize = usePanelWidth({
+    ...COMPONENTS_RAIL_WIDTH,
+    maxWidth: componentsRailResponsiveMax,
+  });
+  const effectiveComponentsRailWidth = clampPanelWidth(
+    componentsRailResize.width,
+    COMPONENTS_RAIL_WIDTH.minWidth,
+    componentsRailResponsiveMax,
+  );
   // ngspice runs outside React's lifecycle. A request version prevents a late
   // result from an edited, closed, or stopped circuit overwriting current UI.
   const analysisRequestRef = useRef(0);
@@ -906,18 +927,30 @@ function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [shellWidth, mode, graphOpen]);
 
-  // Same responsive floor, for the Assistant column: the schematic (circuit)
-  // and scope columns already shrink themselves gracefully via flex down to
-  // their own CSS floors, so Assistant — the newest, most dispensable column
-  // — is the one asked to give up space first when everything's floor still
-  // wouldn't fit. Also one-way (only ever shrinks), same rationale as above.
+  // Same responsive floor for the Assistant column in both modes. Persisted
+  // desktop widths must not make either the schematic editor or simulator
+  // analysis unreachable when the window returns at its 900px minimum.
   useEffect(() => {
-    if (mode !== "simulator" || shellWidth === 0 || !assistantOpen) return;
-    const reserved = RAIL_W + HANDLE_W + SIM_SCHEMATIC_MIN + PLOTTER_MIN;
+    if (shellWidth === 0 || !assistantOpen) return;
+    const reserved = mode === "simulator"
+      ? RAIL_W + HANDLE_W + SIM_SCHEMATIC_MIN + PLOTTER_MIN
+      : RAIL_W + (HANDLE_W * 2) + EXPLORER_MIN + SCHEMATIC_EDITOR_MIN;
     const budget = Math.max(ASSISTANT_PANEL_WIDTH.minWidth, shellWidth - reserved);
     if (assistantResize.width > budget) assistantResize.setWidth(budget);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [shellWidth, mode, assistantOpen, assistantResize.width]);
+
+  const schematicRightPanelWidth = assistantOpen
+    ? assistantResize.width
+    : partsOpen
+      ? effectiveComponentsRailWidth
+      : 0;
+  const explorerResponsiveMax = mode === "schematic" && shellWidth > 0
+    ? Math.max(
+        EXPLORER_MIN,
+        shellWidth - RAIL_W - (HANDLE_W * 2) - SCHEMATIC_EDITOR_MIN - schematicRightPanelWidth,
+      )
+    : undefined;
 
   return (
     <div className={`app app-${mode}`}>
@@ -966,6 +999,7 @@ function App() {
             onOpenAscText={openAscFromProject}
             onNotice={showNotice}
             onMoveNode={moveProjectNode}
+            maxWidth={explorerResponsiveMax}
           />
         )}
         {mode === "schematic" && (
@@ -1113,7 +1147,12 @@ function App() {
           />
         )}
         {mode === "schematic" && partsOpen && !assistantOpen && (
-          <ComponentsRail focusSignal={componentFocusSignal} onNotice={showNotice} />
+          <ComponentsRail
+            focusSignal={componentFocusSignal}
+            onNotice={showNotice}
+            resize={componentsRailResize}
+            maxWidth={componentsRailResponsiveMax}
+          />
         )}
       </div>
       <StatusBar mode={mode} result={analysis} title={documentTitle} />

@@ -183,7 +183,7 @@ export function AssistantPanel({
         // an empty assistant turn would otherwise sit in the transcript.
         setMessages((list) => list.filter((m) => m.id !== assistantMessage.id || m.content !== ""));
       },
-    });
+    }, { analysis, params });
   }, [messages, streaming, apiKey, components, wires, netLabels, directives, params, analysis, componentRows, measurements, selectedId]);
 
   const stop = useCallback(() => {

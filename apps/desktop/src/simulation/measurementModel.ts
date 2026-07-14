@@ -270,7 +270,10 @@ function deriveSeriesBranchCurrents(
       const source = currentsByComponentId.get(known[0].branch.componentId);
       if (!source) continue;
       const scale = -(known[0].sign / missing.sign);
-      currentsByComponentId.set(missing.branch.componentId, source.map((value) => value * scale));
+      currentsByComponentId.set(missing.branch.componentId, source.map((value) => {
+        const inferred = value * scale;
+        return inferred === 0 ? 0 : inferred;
+      }));
       changed = true;
     }
   }
@@ -297,7 +300,11 @@ function ledAdvisories(
     return sourcePair ? sameUnorderedPair(ledPair, sourcePair) : false;
   });
   const peakCurrent = Math.max(Math.abs(current.statistics.min), Math.abs(current.statistics.max));
-  if (!source || !Number.isFinite(peakCurrent)) return undefined;
+  // Direct topology alone is not evidence of high current: a reverse-biased or
+  // sub-threshold LED can legitimately have a completed, zero-current result.
+  // Require a real measured/modelled current before surfacing the advisory,
+  // while deliberately avoiding an invented device-rating threshold.
+  if (!source || !Number.isFinite(peakCurrent) || peakCurrent <= Number.EPSILON) return undefined;
 
   const sourceName = source.component.label || "ideal voltage source";
   return [{

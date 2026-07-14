@@ -2,9 +2,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 
-import { BottomPanel, ComponentInspector, EditorToolbar } from "./ShellPanels";
+import { BottomPanel, ComponentInspector, ComponentsRail, EditorToolbar } from "./ShellPanels";
 import type { AnalysisResult } from "../simulation/linearTransient";
 import { useSchematic } from "../store/useSchematic";
+import { usePanelWidth } from "./panelResize";
 
 /**
  * The simulator view is read-only outside the schematic tab (pan/zoom/probe
@@ -139,6 +140,31 @@ describe("ComponentInspector — no-selection empty state (§11 Unit A)", () => 
     expect(container.querySelectorAll("input, select, button").length).toBe(0);
     expect(container.querySelector(".property-grid")).toBeNull();
     expect(container.querySelector(".inspector-summary.empty")).toBeTruthy();
+  });
+});
+
+describe("ComponentsRail — responsive shell budget", () => {
+  function Harness({ maxWidth }: { maxWidth: number }) {
+    const resize = usePanelWidth({
+      storageKey: "tau.test.componentsRailWidth",
+      defaultWidth: 264,
+      minWidth: 208,
+      maxWidth,
+      edge: "left",
+    });
+    return <ComponentsRail focusSignal={0} onNotice={() => {}} resize={resize} maxWidth={maxWidth} />;
+  }
+
+  it("renders the responsive maximum immediately when the shell tightens", () => {
+    const { rerender } = render(<Harness maxWidth={240} />);
+
+    const panel = screen.getByRole("complementary", { name: "Components" });
+    expect(panel.style.width).toBe("240px");
+    expect(screen.getByRole("separator", { name: "Resize properties panel" }).getAttribute("aria-valuemax")).toBe("240");
+
+    rerender(<Harness maxWidth={208} />);
+    expect(panel.style.width).toBe("208px");
+    expect(screen.getByRole("separator", { name: "Resize properties panel" }).getAttribute("aria-valuemax")).toBe("208");
   });
 });
 

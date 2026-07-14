@@ -21,13 +21,37 @@ const baseProps = {
 };
 
 describe("Toolbar Run health control", () => {
-  it("is visibly acceptable before a known error and still invokes Run", () => {
+  it("stays neutral before validation and still invokes Run", () => {
     const onRun = vi.fn();
     render(<Toolbar {...baseProps} onRun={onRun} />);
     const run = screen.getByRole("button", { name: "Run simulation" });
-    expect(run.classList.contains("run-button--ok")).toBe(true);
+    expect(run.classList.contains("run-button--ok")).toBe(false);
+    expect(run.classList.contains("run-button--error")).toBe(false);
+    expect(run.classList.contains("run-button--running")).toBe(false);
     fireEvent.click(run);
     expect(onRun).toHaveBeenCalledOnce();
+  });
+
+  it("uses the success gradient only after a completed clean run", () => {
+    const complete = {
+      ok: true,
+      title: "Transient",
+      times: [0],
+      traces: [],
+      currents: [],
+      stats: { netCount: 0, componentCount: 0, sampleCount: 1, stopTime: 0, stepSize: 0 },
+      warnings: [],
+      circuit: {} as never,
+    } as AnalysisResult;
+    render(<Toolbar {...baseProps} mode="simulator" result={complete} runState="complete" />);
+    expect(screen.getByRole("button", { name: "Run simulation" }).classList.contains("run-button--ok")).toBe(true);
+  });
+
+  it("uses the active gradient while a run is in progress", () => {
+    render(<Toolbar {...baseProps} mode="simulator" isRunning />);
+    const run = screen.getByRole("button", { name: "Run simulation" });
+    expect(run.classList.contains("run-button--running")).toBe(true);
+    expect(run.classList.contains("run-button--ok")).toBe(false);
   });
 
   it("switches to the danger gradient after a failed run", () => {
