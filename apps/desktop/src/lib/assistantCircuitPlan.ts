@@ -145,11 +145,11 @@ export const GOLDEN_CLASS_D_ASSISTANT_PLAN = {
     { ref: "Vtri", kind: "vsource" as const, value: "SINE(0 1 100k)" },
     { ref: "Vdd", kind: "vsource" as const, value: "10" },
     { ref: "U1", kind: "comparator" as const, value: "10 0 0" },
-    { ref: "M1", kind: "nmos" as const, value: "NMOS" },
-    { ref: "M2", kind: "pmos" as const, value: "PMOS" },
+    { ref: "M1", kind: "nmos" as const, value: "NMOS W=0.1 L=1u" },
+    { ref: "M2", kind: "pmos" as const, value: "PMOS W=0.25 L=1u" },
     { ref: "L1", kind: "inductor" as const, value: "100u" },
     { ref: "C1", kind: "capacitor" as const, value: "1u" },
-    { ref: "R1", kind: "resistor" as const, value: "8" },
+    { ref: "R_L", kind: "resistor" as const, value: "8" },
   ],
   nets: [
     { name: "IN", pins: ["Vsig.p", "U1.in+"] },
@@ -157,13 +157,15 @@ export const GOLDEN_CLASS_D_ASSISTANT_PLAN = {
     { name: "PWM", pins: ["U1.out", "M1.g", "M2.g"] },
     { name: "VDD", pins: ["Vdd.p", "M2.s", "M2.b"] },
     { name: "SW", pins: ["M1.d", "M2.d", "L1.a"] },
-    { name: "OUT", pins: ["L1.b", "C1.a", "R1.a"] },
+    { name: "OUT", pins: ["L1.b", "C1.a", "R_L.a"] },
     {
       name: "0",
-      pins: ["Vsig.n", "Vtri.n", "Vdd.n", "M1.s", "M1.b", "C1.b", "R1.b"],
+      pins: ["Vsig.n", "Vtri.n", "Vdd.n", "M1.s", "M1.b", "C1.b", "R_L.b"],
     },
   ],
-  directives: [".tran 200m"],
+  // Explicit Tstep/Tmax keep the 100 kHz carrier resolved across a 100 ms
+  // audio window (one 10 Hz cycle) so PWM is dense switching, not two gaps.
+  directives: [".tran 1u 100m 0 1u"],
 };
 
 /**
@@ -349,6 +351,88 @@ function autoRepairMosSourceAndBulk(
   return mutable;
 }
 
+/**
+ * Dual-NMOS half-bridges cannot switch the high side from a 0–VDD gate drive
+ * (needs bootstrap / level shift). Live Class-D failures used two nmos with a
+ * shared PWM gate — rewrite the second device to pmos and park its source/bulk
+ * on the positive rail so the complementary golden topology is recovered.
+ */
+function autoRepairDualNmosHalfBridge(
+  components: CircuitPlanComponent[],
+  nets: CircuitPlanNet[],
+): { components: CircuitPlanComponent[]; nets: CircuitPlanNet[] } {
+  const nmos = components.filter((component) => component.kind === "nmos");
+  const pmos = components.filter((component) => component.kind === "pmos");
+  if (nmos.length < 2 || pmos.length > 0) return { components, nets };
+
+  const mutableNets = nets.map((net) => ({ name: net.name, pins: [...net.pins] }));
+  const pinNet = (pinKey: string): string | undefined =>
+    mutableNets.find((net) => net.pins.some((pin) => pin.toLowerCase() === pinKey))?.name;
+
+  // Prefer a shared gate net — that is the PWM comparator drive.
+  const gateNets = new Map<string, string[]>();
+  for (const fet of nmos) {
+    const gateNet = pinNet(`${fet.ref}.g`.toLowerCase());
+    if (!gateNet) continue;
+    const refs = gateNets.get(gateNet) ?? [];
+    refs.push(fet.ref);
+    gateNets.set(gateNet, refs);
+  }
+  const shared = [...gateNets.values()].find((refs) => refs.length >= 2);
+  if (!shared) return { components, nets };
+
+  const supplyNet = mutableNets.find((net) => net.name !== "0" && isPositiveSupplyNetName(net.name))?.name
+    ?? mutableNets.find((net) => {
+      if (net.name === "0") return false;
+      return net.pins.some((token) => {
+        const split = token.lastIndexOf(".");
+        if (split <= 0) return false;
+        const ref = token.slice(0, split);
+        const pinId = token.slice(split + 1).toLowerCase();
+        return pinId === "p" && components.some((c) => c.ref.toLowerCase() === ref.toLowerCase() && c.kind === "vsource");
+      });
+    })?.name;
+  if (!supplyNet) return { components, nets };
+
+  // Convert the last shared-gate nmos into the high-side pmos.
+  const highRef = shared[shared.length - 1];
+  const nextComponents = components.map((component) =>
+    component.ref === highRef
+      ? {
+          ...component,
+          kind: "pmos" as const,
+          value: component.value?.includes("W=") ? component.value.replace(/NMOS/i, "PMOS") : "PMOS W=0.25 L=1u",
+        }
+      : component.kind === "nmos" && !component.value?.includes("W=")
+        ? { ...component, value: "NMOS W=0.1 L=1u" }
+        : component,
+  );
+
+  const movePin = (pin: string, toNet: string) => {
+    const key = pin.toLowerCase();
+    for (const net of mutableNets) {
+      net.pins = net.pins.filter((entry) => entry.toLowerCase() !== key);
+    }
+    const target = mutableNets.find((net) => net.name === toNet);
+    if (target && !target.pins.some((entry) => entry.toLowerCase() === key)) {
+      target.pins.push(pin);
+    }
+  };
+  movePin(`${highRef}.s`, supplyNet);
+  movePin(`${highRef}.b`, supplyNet);
+
+  // High-side drain must share the switch node with the low-side drain / inductor,
+  // not sit on VDD (series-stack dual-nmos mistake).
+  const highDrainNet = pinNet(`${highRef}.d`.toLowerCase());
+  const lowRef = shared[0];
+  const lowDrainNet = pinNet(`${lowRef}.d`.toLowerCase());
+  if (highDrainNet && lowDrainNet && highDrainNet !== lowDrainNet && isPositiveSupplyNetName(highDrainNet)) {
+    movePin(`${highRef}.d`, lowDrainNet);
+  }
+
+  return { components: nextComponents, nets: mutableNets.filter((net) => net.pins.length > 0 || net.name === "0") };
+}
+
 /** Repair-loop hint when pins remain uncovered after MOS auto-repair. */
 function formatUncoveredPinsHint(uncoveredPins: string[], components: CircuitPlanComponent[]): string {
   const verb = uncoveredPins.length === 1 ? "is" : "are";
@@ -432,7 +516,7 @@ function parsePlan(input: unknown): CircuitPlan {
 
   const kindSet = new Set<string>(ASSISTANT_GENERATABLE_KINDS);
   const refs = new Set<string>();
-  const components = source.components.map((raw, index): CircuitPlanComponent => {
+  let components = source.components.map((raw, index): CircuitPlanComponent => {
     const component = record(raw);
     if (!component || Object.keys(component).some((key) => !["ref", "kind", "value"].includes(key))) {
       throw new Error(`components[${index}] is invalid`);
@@ -580,7 +664,12 @@ function parsePlan(input: unknown): CircuitPlan {
   // Models routinely wire MOSFET gates/drains and omit source/bulk. Auto-repair
   // those two pins when the topology is unambiguous (see autoRepairMosSourceAndBulk);
   // remaining floaters still reject with an explicit MOSFET fix pattern.
-  const repairedNets = autoRepairMosSourceAndBulk(components, nets);
+  const afterMosPins = autoRepairMosSourceAndBulk(components, nets);
+  // Dual-NMOS half-bridges (shared PWM gate, no pmos) cannot switch from a
+  // 0–VDD gate drive — rewrite to complementary nmos+pmos before validation.
+  const repaired = autoRepairDualNmosHalfBridge(components, afterMosPins);
+  components = repaired.components;
+  const repairedNets = repaired.nets;
 
   const connectedPins = new Set(
     repairedNets.flatMap((net) => net.pins.map((pin) => pin.toLowerCase())),

@@ -147,6 +147,47 @@ export function Canvas({
     if (interactive || !op?.ok) return [];
     return opAnnotations(op, extractCircuit(components, wires, netLabels));
   }, [interactive, op, components, wires, netLabels]);
+
+  // Probe color → every wire/label on that net, matching the waveform palette.
+  const probeColorByNetId = useMemo(() => {
+    const nets = extractCircuit(components, wires, netLabels).nets;
+    const colors = new Map<string, string>();
+    for (const probe of probes) {
+      if (probe.componentId) continue;
+      const netId = probe.netId ?? netAtPoint(nets, wires, { x: probe.x, y: probe.y })?.id;
+      if (!netId || colors.has(netId)) continue;
+      colors.set(netId, probe.color);
+    }
+    return colors;
+  }, [components, wires, netLabels, probes]);
+
+  const wireProbeColor = useMemo(() => {
+    if (probeColorByNetId.size === 0) return new Map<string, string>();
+    const nets = extractCircuit(components, wires, netLabels).nets;
+    const byWire = new Map<string, string>();
+    for (const wire of wires) {
+      const anchor = wire.points[0];
+      if (!anchor) continue;
+      const net = netAtPoint(nets, wires, anchor);
+      if (!net) continue;
+      const color = probeColorByNetId.get(net.id);
+      if (color) byWire.set(wire.id, color);
+    }
+    return byWire;
+  }, [components, wires, netLabels, probeColorByNetId]);
+
+  const labelProbeColor = useMemo(() => {
+    if (probeColorByNetId.size === 0) return new Map<string, string>();
+    const nets = extractCircuit(components, wires, netLabels).nets;
+    const byLabel = new Map<string, string>();
+    for (const label of netLabels) {
+      const net = netAtPoint(nets, wires, label);
+      if (!net) continue;
+      const color = probeColorByNetId.get(net.id);
+      if (color) byLabel.set(label.id, color);
+    }
+    return byLabel;
+  }, [components, wires, netLabels, probeColorByNetId]);
   const editDirty = useRef(false);
 
   // Map of world "x,y" -> component pins there, for attributing wire current flow.
@@ -1012,6 +1053,7 @@ export function Canvas({
               wire={wire}
               selected={wire.id === selectedWireId || selectedWireIds.includes(wire.id)}
               probeReady={!interactive && (probing || labeling)}
+              probeColor={wireProbeColor.get(wire.id)}
               hops={wireHops.get(wire.id)}
               onPointerDown={(e) => onWirePointerDown(e, wire)}
             />
@@ -1106,11 +1148,13 @@ export function Canvas({
               // keeps the net connection legible instead of a label reading
               // as floating and unattached.
               const showLeader = Math.hypot(offset.dx, offset.dy) > 24;
+              const probeColor = labelProbeColor.get(l.id);
               return (
                 <g key={l.id}>
                   {showLeader && <line className="net-label-leader" x1={l.x} y1={l.y} x2={tx} y2={ty} />}
                   <text
-                    className={`net-label-text${selectedLabelIds.includes(l.id) ? " selected" : ""}`}
+                    className={`net-label-text${selectedLabelIds.includes(l.id) ? " selected" : ""}${probeColor ? " probed" : ""}`}
+                    style={probeColor ? { color: probeColor, fill: "currentColor" } : undefined}
                     x={tx}
                     y={ty}
                     role={labelsInteractive ? "button" : undefined}
@@ -1335,6 +1379,7 @@ function WireView({
   wire,
   selected,
   probeReady,
+  probeColor,
   hops,
   onPointerDown,
 }: {
@@ -1342,6 +1387,8 @@ function WireView({
   selected: boolean;
   /** Simulator mode: clicking probes the net, so advertise it with the probe cursor. */
   probeReady: boolean;
+  /** Palette token for a probed net — same CSS var as the waveform trace. */
+  probeColor?: string;
   /** Unconnected-crossing x positions per horizontal segment index — drawn
    *  as hop-over arcs so a crossing never reads as a connection. */
   hops?: ReadonlyMap<number, readonly number[]>;
@@ -1351,7 +1398,8 @@ function WireView({
   const resistive = Boolean(wire.resistance?.trim() && wire.resistance.trim() !== "0");
   return (
     <g
-      className={`wire-group${selected ? " selected" : ""}${probeReady ? " probe-ready" : ""}`}
+      className={`wire-group${selected ? " selected" : ""}${probeReady ? " probe-ready" : ""}${probeColor ? " probed" : ""}`}
+      style={probeColor ? { color: probeColor } : undefined}
       onPointerDown={onPointerDown}
     >
       {/* Wide invisible stroke makes the thin wire easy to click. */}

@@ -107,10 +107,12 @@ export function traceStatistics(times: readonly number[], values: readonly numbe
 
 /**
  * Classify a trace as constant/steady, repeating, or a one-shot transient.
- * Periodicity is intentionally based on interpolated rising mean crossings:
- * it works for sine, square, and clipped circuit waveforms without treating a
- * large DC offset as the oscillation threshold. Three stable periods are
- * required, which avoids labelling a single overshoot as periodic.
+ *
+ * Periodicity uses interpolated mean crossings in both directions so a single
+ * clean cycle (e.g. 10 Hz over 100 ms) still yields a period estimate: rising
+ * crossings alone need ≥2 full cycles for one interval, while half-periods from
+ * rise+fall crossings resolve one cycle. Amplitude must stay broadly stable so
+ * a single overshoot or damped ring is not labelled periodic.
  */
 export function classifySignal(times: readonly number[], values: readonly number[]): SignalClassification {
   const count = Math.min(times.length, values.length);
@@ -118,6 +120,8 @@ export function classifySignal(times: readonly number[], values: readonly number
   let max = -Infinity;
   let sum = 0;
   let validCount = 0;
+  let firstTime = Number.NaN;
+  let lastTime = Number.NaN;
   for (let i = 0; i < count; i++) {
     const t = times[i];
     const v = values[i];
@@ -126,6 +130,8 @@ export function classifySignal(times: readonly number[], values: readonly number
     if (v > max) max = v;
     sum += v;
     validCount += 1;
+    if (!Number.isFinite(firstTime)) firstTime = t;
+    lastTime = t;
   }
   if (validCount < 2) return { kind: "steady" };
   const range = max - min;
@@ -140,7 +146,14 @@ export function classifySignal(times: readonly number[], values: readonly number
     const time = times[i];
     const value = values[i];
     if (!Number.isFinite(time) || !Number.isFinite(value)) continue;
-    if (previousTime !== null && previousValue !== null && previousValue < mean && value >= mean && time > previousTime) {
+    if (
+      previousTime !== null
+      && previousValue !== null
+      && time > previousTime
+      && previousValue !== mean
+      && value !== mean
+      && (previousValue - mean) * (value - mean) < 0
+    ) {
       const fraction = (mean - previousValue) / (value - previousValue);
       crossings.push(previousTime + fraction * (time - previousTime));
     }
@@ -148,32 +161,49 @@ export function classifySignal(times: readonly number[], values: readonly number
     previousValue = value;
   }
 
-  if (crossings.length >= 4) {
-    const periods = crossings.slice(1).map((crossing, i) => crossing - crossings[i]).filter((p) => p > 0);
-    const ordered = [...periods].sort((a, b) => a - b);
-    const period = ordered[Math.floor(ordered.length / 2)];
-    let maxRelativeError = 0;
-    for (const candidate of periods) {
-      maxRelativeError = Math.max(maxRelativeError, Math.abs(candidate - period) / period);
-    }
-    // Stable crossing intervals alone also describe a damped ringing transient.
-    // Require broadly stable amplitude between the first and second halves.
-    const halfway = Math.floor(count / 2);
-    const halfRange = (start: number, end: number): number => {
-      let lo = Infinity;
-      let hi = -Infinity;
-      for (let i = start; i < end; i++) {
-        if (!Number.isFinite(times[i]) || !Number.isFinite(values[i])) continue;
-        if (values[i] < lo) lo = values[i];
-        if (values[i] > hi) hi = values[i];
+  // ≥2 half-period intervals (3 crossings) is the strong path; a single clean
+  // half-period is accepted only when amplitude is stable and the window covers
+  // roughly one period (audio/sine over a short .tran).
+  if (crossings.length >= 2) {
+    const halfPeriods = crossings.slice(1).map((crossing, i) => crossing - crossings[i]).filter((p) => p > 0);
+    if (halfPeriods.length >= 1) {
+      const ordered = [...halfPeriods].sort((a, b) => a - b);
+      const halfPeriod = ordered[Math.floor(ordered.length / 2)];
+      let maxRelativeError = 0;
+      for (const candidate of halfPeriods) {
+        maxRelativeError = Math.max(maxRelativeError, Math.abs(candidate - halfPeriod) / halfPeriod);
       }
-      return hi - lo;
-    };
-    const earlyRange = halfRange(0, halfway);
-    const lateRange = halfRange(halfway, count);
-    const amplitudeRatio = Math.min(earlyRange, lateRange) / Math.max(earlyRange, lateRange);
-    if (Number.isFinite(period) && period > 0 && maxRelativeError <= 0.08 && amplitudeRatio >= 0.75) {
-      return { kind: "periodic", period, frequency: 1 / period };
+      const period = 2 * halfPeriod;
+      const halfway = Math.floor(count / 2);
+      const halfRange = (start: number, end: number): number => {
+        let lo = Infinity;
+        let hi = -Infinity;
+        for (let i = start; i < end; i++) {
+          if (!Number.isFinite(times[i]) || !Number.isFinite(values[i])) continue;
+          if (values[i] < lo) lo = values[i];
+          if (values[i] > hi) hi = values[i];
+        }
+        return hi - lo;
+      };
+      const earlyRange = halfRange(0, halfway);
+      const lateRange = halfRange(halfway, count);
+      const amplitudeRatio = Math.min(earlyRange, lateRange) / Math.max(earlyRange, lateRange);
+      const duration = lastTime - firstTime;
+      const cyclesInWindow = period > 0 && duration > 0 ? duration / period : 0;
+      const stableIntervals = halfPeriods.length >= 2 && maxRelativeError <= 0.08;
+      const singleCycleOk = halfPeriods.length === 1
+        && maxRelativeError <= 0.08
+        && amplitudeRatio >= 0.85
+        && cyclesInWindow >= 0.75
+        && cyclesInWindow <= 1.6;
+      if (
+        Number.isFinite(period)
+        && period > 0
+        && amplitudeRatio >= 0.75
+        && (stableIntervals || singleCycleOk)
+      ) {
+        return { kind: "periodic", period, frequency: 1 / period };
+      }
     }
   }
   return { kind: "transient" };

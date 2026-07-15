@@ -688,12 +688,13 @@ describe("assistant circuit plan", () => {
       { name: "PWM", pins: ["U1.out", "M1.g", "M2.g"] },
       { name: "VDD", pins: ["Vdd.p", "M2.s", "M2.b"] },
       { name: "SW", pins: ["M1.d", "M2.d", "L1.a"] },
-      { name: "OUT", pins: ["L1.b", "C1.a", "R1.a"] },
+      { name: "OUT", pins: ["L1.b", "C1.a", "R_L.a"] },
       {
         name: "0",
-        pins: ["Vsig.n", "Vtri.n", "Vdd.n", "M1.s", "M1.b", "C1.b", "R1.b"],
+        pins: ["Vsig.n", "Vtri.n", "Vdd.n", "M1.s", "M1.b", "C1.b", "R_L.b"],
       },
     ]);
+    expect(GOLDEN_CLASS_D_ASSISTANT_PLAN.directives).toEqual([".tran 1u 100m 0 1u"]);
     const action = compileAssistantCircuitPlan("golden-class-d", GOLDEN_CLASS_D_ASSISTANT_PLAN);
     expect(action.type).toBe("create_asc");
     if (action.type !== "create_asc") throw new Error("expected create action");
@@ -708,7 +709,9 @@ describe("assistant circuit plan", () => {
     expect(byRef.get("M1")).toMatchObject({ g: "PWM", d: "SW", s: "0", b: "0" });
     expect(byRef.get("M2")).toMatchObject({ g: "PWM", d: "SW", s: "VDD", b: "VDD" });
     expect(byRef.get("L1")).toMatchObject({ a: "SW", b: "OUT" });
-    expect(byRef.get("R1")).toMatchObject({ a: "OUT", b: "0" });
+    expect(byRef.get("R_L")).toMatchObject({ a: "OUT", b: "0" });
+    expect(action.document.netLabels?.some((label) => label.text === "IN")).toBe(true);
+    expect(action.document.netLabels?.some((label) => label.text === "OUT")).toBe(true);
   });
 
   it("REGRESSION: Class-D survives combined model mistakes (aliases + missing s/b + dual-net returns)", () => {
@@ -725,13 +728,13 @@ describe("assistant circuit plan", () => {
         { name: "PWM", pins: ["U1.out", "M1.gate", "M2.g"] },
         { name: "VDD", pins: ["Vdd.p", "M2.s"] },
         { name: "SW", pins: ["M1.drain", "M2.d", "L1.a", "M1.s"] },
-        { name: "OUT", pins: ["L1.b", "C1.a", "R1.a"] },
+        { name: "OUT", pins: ["L1.b", "C1.a", "R_L.a"] },
         {
           name: "0",
-          pins: ["Vsig.n", "Vtri.n", "Vdd.n", "M1.s", "M2.s", "C1.b", "R1.b"],
+          pins: ["Vsig.n", "Vtri.n", "Vdd.n", "M1.s", "M2.s", "C1.b", "R_L.b"],
         },
       ],
-      directives: [".tran 200m"],
+      directives: [".tran 1u 100m 0 1u"],
     });
     const circuit = extractCircuit(
       action.document.components,
@@ -743,6 +746,49 @@ describe("assistant circuit plan", () => {
     expect(byRef.get("M1")).toMatchObject({ g: "PWM", d: "SW", s: "0", b: "0" });
     expect(byRef.get("M2")).toMatchObject({ g: "PWM", d: "SW", s: "VDD", b: "VDD" });
     expect(byRef.get("B_U1")?.p).toBe("PWM");
+  });
+
+  it("REGRESSION: dual-NMOS shared-gate half-bridge rewrites to complementary nmos+pmos", () => {
+    // Live Class-D failure: both FETs nmos on one PWM gate — high side cannot
+    // switch from a 0–VDD drive. Compiler must recover the golden topology.
+    const action = compileAssistantCircuitPlan("class-d-dual-nmos", {
+      mode: "create",
+      filename: "class-d-approx.asc",
+      components: [
+        { ref: "Vsig", kind: "vsource", value: "SINE(0 1 10)" },
+        { ref: "Vtri", kind: "vsource", value: "SINE(0 1 100k)" },
+        { ref: "Vdd", kind: "vsource", value: "10" },
+        { ref: "U1", kind: "comparator", value: "10 0 0" },
+        { ref: "M1", kind: "nmos", value: "NMOS" },
+        { ref: "M2", kind: "nmos", value: "NMOS" },
+        { ref: "L1", kind: "inductor", value: "100u" },
+        { ref: "C1", kind: "capacitor", value: "1u" },
+        { ref: "R_L", kind: "resistor", value: "8" },
+      ],
+      nets: [
+        { name: "IN", pins: ["Vsig.p", "U1.in+"] },
+        { name: "TRI", pins: ["Vtri.p", "U1.in-"] },
+        { name: "PWM", pins: ["U1.out", "M1.g", "M2.g"] },
+        { name: "VDD", pins: ["Vdd.p", "M2.d"] },
+        { name: "SW", pins: ["M1.d", "M2.s", "L1.a"] },
+        { name: "OUT", pins: ["L1.b", "C1.a", "R_L.a"] },
+        {
+          name: "0",
+          pins: ["Vsig.n", "Vtri.n", "Vdd.n", "M1.s", "M1.b", "M2.b", "C1.b", "R_L.b"],
+        },
+      ],
+      directives: [".tran 1u 100m 0 1u"],
+    });
+    const circuit = extractCircuit(
+      action.document.components,
+      action.document.wires,
+      action.document.netLabels,
+    );
+    const m2 = circuit.components.find(({ component }) => component.label === "M2");
+    expect(m2?.component.kind).toBe("pmos");
+    expect(m2?.pins).toMatchObject({ g: "PWM", d: "SW", s: "VDD", b: "VDD" });
+    expect(circuit.components.find(({ component }) => component.label === "M1")?.pins)
+      .toMatchObject({ g: "PWM", d: "SW", s: "0", b: "0" });
   });
 
   it("compiles a multi-stage amplifier + RC filter with clean native connectivity", () => {

@@ -95,10 +95,11 @@ describe("LocalMlxAssistant", () => {
     expect(body.messages[0].content).toContain("never call a tool");
     expect(body.messages[0].content).toContain("a voltage source");
     expect(body.messages[0].content).toContain("Class-D-style approximation");
-    expect(body.messages[0].content).toContain("comparator + MOS + LC");
+    expect(body.messages[0].content).toContain("comparator + complementary MOS + LC");
     expect(body.messages[0].content).toContain("VDD=[Vdd.p,M2.s,M2.b]");
     expect(body.messages[0].content).toContain("M1.s,M1.b");
-    expect(body.messages[0].content).toContain("Never dual-assign M*.s/M*.b");
+    expect(body.messages[0].content).toContain("NEVER two nmos");
+    expect(body.messages[0].content).toContain("name the audio input net IN");
     expect(body.messages[0].content).toContain("never invent comparator supply pins");
     expect(body.messages[0].content).toContain("never list both U1.v- and U1.vee");
   });

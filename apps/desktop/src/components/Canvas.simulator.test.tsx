@@ -89,9 +89,13 @@ describe("Canvas — simulator mutation boundary", () => {
     fireEvent.pointerDown(document.querySelector(".wire-group")!, { button: 0, clientX: 10, clientY: 20 });
     expect(useSchematic.getState().probes).toHaveLength(1);
     expect(useSchematic.getState().probes[0].componentId).toBeUndefined();
+    expect(document.querySelector(".wire-group.probed")).not.toBeNull();
+    expect((document.querySelector(".wire-group.probed") as HTMLElement | null)?.style.color)
+      .toMatch(/var\(--trace-/);
 
     fireEvent.keyDown(screen.getByRole("button", { name: "Remove voltage probe" }), { key: "Enter" });
     expect(useSchematic.getState().probes).toEqual([]);
+    expect(document.querySelector(".wire-group.probed")).toBeNull();
     expect(useSchematic.getState().components[0].value).toBe("1k");
     expect(useSchematic.getState().wires).toHaveLength(1);
   });

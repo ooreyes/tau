@@ -8,15 +8,37 @@
      `git log --oneline -8`, recover/finish/revert that unit FIRST, then go on.
      ─────────────────────────────────────────────────────────────────────── -->
 ## ⏱ HEARTBEAT
-- **Headline metric:** 1759 reviewed-tree tests green · corpus 82/82 import · 82/82 op-converge · 79/82 warning-clean
-- **Run started (UTC):** 2026-07-15T02:28Z
-- **Synced to origin:** auto/ltspice-parity @ c19b46e.
-- **Claimed unit:** §9 first-run local AI install + setup dialog (CURSOR EDITS).
+- **Headline metric:** 1776 reviewed-tree tests green · corpus 82/82 import · 82/82 op-converge · 79/82 warning-clean
+- **Run started (UTC):** 2026-07-15T04:00Z
+- **Synced to origin:** auto/ltspice-parity (pending push).
+- **Claimed unit:** §6/§8/§11 frequency readout + Class-D golden sim + probe net colors (CURSOR EDITS).
 - **Status:** DONE
-- **Last completed sub-step:** unsigned DMG rebuilt; first-run Local AI setup
-  and Install MLX LM pushed.
-- **Plan:** keep polishing assistant layout/clarifying questions and ship path.
+- **Last completed sub-step:** few-cycle frequency detection; complementary Class-D
+  with wide MOS + ngspice smoke; probed wires/labels use --trace-* palette.
+- **Plan:** keep assistant Class-D fidelity and measurement polish.
 - **Next step:** Omar signs/notarizes when ready; continue corpus/DoD leftovers.
+
+---
+
+## 2026-07-15T04:00Z — auto/ltspice-parity — CURSOR EDITS: frequency + Class-D + probe colors
+
+### What I did
+- Fixed `classifySignal` to use bidirectional mean crossings so a single clean
+  10 Hz cycle over 100 ms reports FREQUENCY (~10 Hz) instead of TRANSIENT.
+- Hardened golden Class-D: complementary nmos+pmos with wide W/L, named IN/OUT,
+  `.tran 1u 100m 0 1u`, dual-NMOS auto-repair, MLX prompt updates; ngspice smoke
+  proves PWM rail switching and mid-supply filtered OUT at Vin≈0.
+- Probed nets color their wires and net labels with the same `--trace-*` token
+  as the probe/waveform.
+
+### Tests and QA
+- Desktop typecheck + Vitest: 1776 passed / 6 skipped (incl. golden Class-D ngspice smoke).
+
+### Parity items
+- §6 plot statistics / §8 assistant Class-D / §11 measurements → advanced.
+
+### Next step
+- Continue DoD leftovers; signing remains human-owned.
 
 ---
 

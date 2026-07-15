@@ -595,6 +595,16 @@ body {
   filter: drop-shadow(0 0 2.5px var(--accent-glow));
 }
 
+/* Probed net: wire takes the same --trace-* token as its waveform / probe. */
+.wire-group.probed .wire {
+  stroke: currentColor;
+  stroke-width: 2.25;
+}
+.wire-group.probed.selected .wire {
+  stroke: currentColor;
+  filter: drop-shadow(0 0 2.5px color-mix(in srgb, currentColor 55%, transparent));
+}
+
 /* Simulator mode: clicking a wire probes its net (LTspice probe-in-place). */
 .wire-group.probe-ready {
   cursor: crosshair;
@@ -3161,6 +3171,12 @@ body {
   stroke: var(--accent-line);
   stroke-width: 0.35;
   paint-order: stroke;
+}
+
+/* Probed net label: same --trace-* token as the probe / waveform. */
+.net-label-text.probed {
+  fill: currentColor;
+  font-weight: 600;
 }
 
 /* Connects a label back to its net anchor once it's been dragged far enough

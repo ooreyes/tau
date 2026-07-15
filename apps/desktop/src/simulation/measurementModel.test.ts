@@ -40,6 +40,26 @@ describe("classifySignal", () => {
     const values = times.map((time) => Math.exp(-time) * Math.sin(2 * Math.PI * 2 * time));
     expect(classifySignal(times, values)).toEqual({ kind: "transient" });
   });
+
+  it("reports frequency for a single 10 Hz sine cycle over 100 ms", () => {
+    // Auto-resolution for Class-D (10 Hz audio + 100 kHz carrier) often lands
+    // on a 100 ms window — exactly one audio cycle. Rising-only detection
+    // previously needed ≥3 periods and labelled this transient.
+    const times = Array.from({ length: 1001 }, (_, i) => i * 0.0001);
+    const values = times.map((time) => Math.sin(2 * Math.PI * 10 * time));
+    const classification = classifySignal(times, values);
+    expect(classification.kind).toBe("periodic");
+    expect(classification.frequency).toBeCloseTo(10, 1);
+    expect(classification.period).toBeCloseTo(0.1, 2);
+  });
+
+  it("still reports frequency for a dense multi-cycle carrier", () => {
+    const times = Array.from({ length: 2001 }, (_, i) => i * 1e-7);
+    const values = times.map((time) => Math.sin(2 * Math.PI * 100_000 * time));
+    const classification = classifySignal(times, values);
+    expect(classification.kind).toBe("periodic");
+    expect(classification.frequency).toBeCloseTo(100_000, -2);
+  });
 });
 
 function resultFixture(): Extract<AnalysisResult, { ok: true }> {
