@@ -4,12 +4,13 @@ export function EmptyState() {
       <div className="empty-panel">
         <div className="empty-kicker">
           <i aria-hidden="true" />
-          Tau Schematics
+          Tau
         </div>
-        <h1>Open or create a schematic</h1>
+        <h1>Open, create, or ask AI</h1>
         <p>
-          Choose a Schematics folder in the Explorer, import an LTspice .asc,
-          or create a blank .asc file. Then place, wire, and simulate your circuit.
+          Choose a Schematics folder in Explorer, import an LTspice .asc, or open
+          Assistant and describe the circuit. Tau lays out parts, routes wires,
+          and can run the analysis after you confirm.
         </p>
       </div>
     </section>

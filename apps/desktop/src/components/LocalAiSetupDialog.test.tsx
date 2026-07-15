@@ -1,0 +1,118 @@
+// @vitest-environment jsdom
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+const runtime = vi.hoisted(() => ({
+  isNative: vi.fn(),
+  getStatus: vi.fn(),
+  start: vi.fn(),
+  install: vi.fn(),
+}));
+
+vi.mock("../lib/localAiRuntime", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../lib/localAiRuntime")>()),
+  isNativeDesktopApp: runtime.isNative,
+  getLocalAiStatus: runtime.getStatus,
+  startLocalAi: runtime.start,
+  installLocalAiRuntime: runtime.install,
+}));
+
+import { LocalAiSetupDialog } from "./LocalAiSetupDialog";
+import { saveAssistantPreferences } from "../lib/assistantPreferences";
+import type { LocalAiStatus } from "../lib/localAiRuntime";
+
+const storage = new Map<string, string>();
+Object.defineProperty(globalThis, "localStorage", {
+  configurable: true,
+  value: {
+    getItem: (key: string) => storage.get(key) ?? null,
+    setItem: (key: string, value: string) => void storage.set(key, String(value)),
+    removeItem: (key: string) => void storage.delete(key),
+    clear: () => storage.clear(),
+  },
+});
+
+function status(overrides: Partial<LocalAiStatus> & {
+  installed?: boolean;
+  downloaded?: boolean;
+} = {}): LocalAiStatus {
+  const installed = overrides.installed ?? true;
+  const downloaded = overrides.downloaded ?? false;
+  return {
+    state: overrides.state ?? "stopped",
+    endpoint: "http://127.0.0.1:8080/v1",
+    managed: overrides.managed ?? false,
+    installed,
+    modelId: null,
+    modelRepository: null,
+    detail: overrides.detail ?? "Choose a model.",
+    presets: [
+      {
+        id: "qwen3-4b-4bit",
+        repository: "Qwen/Qwen3-4B-MLX-4bit",
+        label: "Qwen3 4B · 4-bit",
+        downloadMb: 2_300,
+        downloaded,
+      },
+      {
+        id: "qwen3-1.7b-4bit",
+        repository: "Qwen/Qwen3-1.7B-MLX-4bit",
+        label: "Qwen3 1.7B · 4-bit",
+        downloadMb: 914,
+        downloaded: false,
+      },
+    ],
+  };
+}
+
+afterEach(() => cleanup());
+beforeEach(() => {
+  storage.clear();
+  runtime.isNative.mockReset();
+  runtime.getStatus.mockReset();
+  runtime.start.mockReset();
+  runtime.install.mockReset();
+  saveAssistantPreferences({ provider: "local-mlx", localModel: "qwen3-4b-4bit" });
+});
+
+describe("LocalAiSetupDialog", () => {
+  it("stays closed in the browser", async () => {
+    runtime.isNative.mockResolvedValue(false);
+    render(<LocalAiSetupDialog />);
+    await waitFor(() => expect(runtime.isNative).toHaveBeenCalled());
+    expect(screen.queryByText("Set up local AI")).toBeNull();
+  });
+
+  it("opens on first native launch and installs the runtime", async () => {
+    runtime.isNative.mockResolvedValue(true);
+    runtime.getStatus.mockResolvedValue(status({ installed: false }));
+    runtime.install.mockResolvedValue(status({ installed: true }));
+    render(<LocalAiSetupDialog />);
+
+    expect(await screen.findByText("Set up local AI")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Install MLX LM" }));
+    await waitFor(() => expect(runtime.install).toHaveBeenCalledTimes(1));
+  });
+
+  it("downloads and starts the selected model after the runtime is present", async () => {
+    runtime.isNative.mockResolvedValue(true);
+    runtime.getStatus.mockResolvedValue(status({ installed: true, downloaded: false }));
+    runtime.start.mockResolvedValue(status({ state: "starting", managed: true, installed: true }));
+    render(<LocalAiSetupDialog />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /Download Qwen3 4B/ }));
+    await waitFor(() => expect(runtime.start).toHaveBeenCalledWith("qwen3-4b-4bit", true));
+  });
+
+  it("skips and does not reopen after dismiss", async () => {
+    runtime.isNative.mockResolvedValue(true);
+    runtime.getStatus.mockResolvedValue(status({ installed: false }));
+    const { unmount } = render(<LocalAiSetupDialog />);
+    fireEvent.click(await screen.findByRole("button", { name: "Skip for now" }));
+    expect(screen.queryByText("Set up local AI")).toBeNull();
+    unmount();
+    render(<LocalAiSetupDialog />);
+    await waitFor(() => expect(runtime.getStatus).toHaveBeenCalled());
+    expect(screen.queryByText("Set up local AI")).toBeNull();
+  });
+});

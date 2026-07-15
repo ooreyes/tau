@@ -17,6 +17,7 @@ import {
 } from "./components/WorkspaceRightDock";
 import { AnalysisErrorBoundary } from "./components/AnalysisErrorBoundary";
 import { EmptyState } from "./components/EmptyState";
+import { LocalAiSetupDialog } from "./components/LocalAiSetupDialog";
 import { CommandPalette } from "./components/CommandPalette";
 import {
   ActivityRail,
@@ -1380,6 +1381,7 @@ function App() {
       </div>
       <StatusBar mode={mode} result={analysis} title={documentTitle} />
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
+      <LocalAiSetupDialog onReady={() => showNotice("Local AI is ready on this Mac.")} />
       {settingsOpen && (
         <SettingsPanel
           title={documentTitle}

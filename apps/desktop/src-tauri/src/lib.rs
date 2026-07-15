@@ -18,6 +18,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             greet,
             local_ai::local_ai_status,
+            local_ai::install_local_ai_runtime,
             local_ai::start_local_ai,
             local_ai::stop_local_ai,
             project_fs::authorize_project_directory,

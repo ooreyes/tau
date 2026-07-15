@@ -100,6 +100,17 @@ fn executable_in_path(name: &str) -> Option<PathBuf> {
     })
 }
 
+fn require_apple_silicon() -> Result<(), String> {
+    #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
+    {
+        Ok(())
+    }
+    #[cfg(not(all(target_os = "macos", target_arch = "aarch64")))]
+    {
+        Err("Local MLX inference requires an Apple silicon Mac.".to_string())
+    }
+}
+
 fn mlx_server_executable() -> Option<PathBuf> {
     if let Some(explicit) = env::var_os("TAU_MLX_LM_SERVER").filter(|value| !value.is_empty()) {
         let path = PathBuf::from(explicit);
@@ -118,6 +129,57 @@ fn mlx_server_executable() -> Option<PathBuf> {
         Some(PathBuf::from("/usr/local/bin/mlx_lm.server")),
     ];
     candidates.into_iter().flatten().find(|path| path.is_file())
+}
+
+fn uv_executable() -> Option<PathBuf> {
+    if let Some(explicit) = env::var_os("TAU_UV").filter(|value| !value.is_empty()) {
+        let path = PathBuf::from(explicit);
+        if path.is_file() {
+            return Some(path);
+        }
+    }
+
+    if let Some(path) = executable_in_path("uv") {
+        return Some(path);
+    }
+
+    let candidates = [
+        home_dir().map(|home| home.join(".local/bin/uv")),
+        home_dir().map(|home| home.join(".cargo/bin/uv")),
+        Some(PathBuf::from("/opt/homebrew/bin/uv")),
+        Some(PathBuf::from("/usr/local/bin/uv")),
+    ];
+    candidates.into_iter().flatten().find(|path| path.is_file())
+}
+
+/// Installs the audited MLX LM tool only. Arguments are fixed; the renderer
+/// cannot pass a package name, index URL, or shell string.
+fn install_mlx_lm_with_uv(uv: &Path) -> Result<(), String> {
+    let output = Command::new(uv)
+        .args(["tool", "install", "mlx-lm"])
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .output()
+        .map_err(|error| format!("Could not launch uv to install MLX LM: {error}"))?;
+
+    if output.status.success() {
+        if mlx_server_executable().is_some() {
+            return Ok(());
+        }
+        return Err(
+            "uv reported success, but mlx_lm.server is still missing from PATH. Reopen Tau after installing."
+                .to_string(),
+        );
+    }
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let detail = [stderr.trim(), stdout.trim()]
+        .into_iter()
+        .find(|text| !text.is_empty())
+        .unwrap_or("uv tool install mlx-lm failed.");
+    Err(format!("Could not install MLX LM: {detail}"))
 }
 
 fn hugging_face_cache_root() -> Option<PathBuf> {
@@ -250,7 +312,7 @@ fn local_ai_status_inner(slot: &mut Option<LocalAiProcess>) -> LocalAiStatus {
         if installed {
             "MLX LM is installed. Choose a model to start local inference."
         } else {
-            "MLX LM is not installed. Install it with `uv tool install mlx-lm`."
+            "MLX LM is not installed. Choose Install MLX LM to set up local inference on this Mac."
         },
     )
 }
@@ -265,11 +327,45 @@ pub fn local_ai_status(state: State<'_, LocalAiState>) -> Result<LocalAiStatus, 
 }
 
 #[tauri::command]
+pub async fn install_local_ai_runtime(
+    state: State<'_, LocalAiState>,
+) -> Result<LocalAiStatus, String> {
+    require_apple_silicon()?;
+
+    {
+        let mut slot = state
+            .0
+            .lock()
+            .map_err(|_| "The local AI process state is unavailable.".to_string())?;
+        if mlx_server_executable().is_some() {
+            return Ok(local_ai_status_inner(&mut slot));
+        }
+    }
+
+    let uv = uv_executable().ok_or_else(|| {
+        "uv is not installed. Install uv from https://docs.astral.sh/uv/, then choose Install MLX LM in Tau."
+            .to_string()
+    })?;
+
+    let uv_path = uv.clone();
+    tauri::async_runtime::spawn_blocking(move || install_mlx_lm_with_uv(&uv_path))
+        .await
+        .map_err(|error| format!("MLX LM install task failed: {error}"))??;
+
+    let mut slot = state
+        .0
+        .lock()
+        .map_err(|_| "The local AI process state is unavailable.".to_string())?;
+    Ok(local_ai_status_inner(&mut slot))
+}
+
+#[tauri::command]
 pub fn start_local_ai(
     state: State<'_, LocalAiState>,
     model_id: String,
     allow_download: bool,
 ) -> Result<LocalAiStatus, String> {
+    require_apple_silicon()?;
     let preset = preset_by_id(&model_id)?;
     if !allow_download && !model_is_downloaded(preset) {
         return Err(format!(
@@ -279,7 +375,7 @@ pub fn start_local_ai(
     }
 
     let executable = mlx_server_executable().ok_or_else(|| {
-        "MLX LM is not installed. Install it with `uv tool install mlx-lm`, then reopen Settings."
+        "MLX LM is not installed. Choose Install MLX LM in Settings, or run `uv tool install mlx-lm`."
             .to_string()
     })?;
     let mut slot = state
@@ -401,5 +497,14 @@ mod tests {
         assert_eq!(LOCAL_AI_HOST, "127.0.0.1");
         assert_eq!(LOCAL_AI_ENDPOINT, "http://127.0.0.1:8080/v1");
         assert!(!ALLOWED_ORIGINS.contains('*'));
+    }
+
+    #[test]
+    fn apple_silicon_gate_matches_host_architecture() {
+        let result = require_apple_silicon();
+        #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
+        assert!(result.is_ok());
+        #[cfg(not(all(target_os = "macos", target_arch = "aarch64")))]
+        assert!(result.is_err());
     }
 }

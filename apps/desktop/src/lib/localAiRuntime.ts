@@ -54,6 +54,10 @@ async function isTauriRuntime(): Promise<boolean> {
   }
 }
 
+export async function isNativeDesktopApp(): Promise<boolean> {
+  return isTauriRuntime();
+}
+
 async function invokeNative<T>(command: string, args?: Record<string, unknown>): Promise<T> {
   const { invoke } = await import("@tauri-apps/api/core");
   return invoke<T>(command, args);
@@ -97,6 +101,13 @@ export async function getLocalAiStatus(): Promise<LocalAiStatus> {
   return (await isTauriRuntime())
     ? invokeNative<LocalAiStatus>("local_ai_status")
     : browserLocalAiStatus();
+}
+
+export async function installLocalAiRuntime(): Promise<LocalAiStatus> {
+  if (!(await isTauriRuntime())) {
+    throw new Error("Tau desktop is required to install the local MLX runtime.");
+  }
+  return invokeNative<LocalAiStatus>("install_local_ai_runtime");
 }
 
 export async function startLocalAi(

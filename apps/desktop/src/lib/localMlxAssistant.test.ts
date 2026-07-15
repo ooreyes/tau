@@ -92,6 +92,21 @@ describe("LocalMlxAssistant", () => {
     expect(body.messages[1]).toEqual({ role: "user", content: "What does R1 do?" });
     expect(body.tools.map((tool) => tool.function.name)).toEqual(["build_tau_circuit", "inspect_simulation_signal"]);
     expect(body.tools.every((tool) => typeof tool.function.parameters === "object")).toBe(true);
+    expect(body.messages[0].content).toContain("never call a tool");
+    expect(body.messages[0].content).toContain("a voltage source");
+  });
+
+  it("returns a clarifying question as plain text without fabricating a circuit", async () => {
+    const fetchImpl = vi.fn(async () => completion({
+      content: "What should the voltage source drive, and at what voltage?",
+    }));
+    const provider = new LocalMlxAssistant({ model: "qwen3-4b-4bit", fetchImpl });
+    const reply = await provider.complete(request({
+      history: [{ role: "user", content: "a voltage source" }],
+    }));
+    expect(reply.actions).toEqual([]);
+    expect(reply.text).toMatch(/voltage/i);
+    expect(reply.rejectedActionCount).toBe(0);
   });
 
   it("offers both native-runtime Qwen3 presets at the fixed loopback endpoint", async () => {

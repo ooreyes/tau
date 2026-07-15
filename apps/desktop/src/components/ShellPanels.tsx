@@ -48,6 +48,7 @@ import {
 import {
   LOCAL_AI_PRESETS,
   getLocalAiStatus,
+  installLocalAiRuntime,
   startLocalAi,
   stopLocalAi,
   type LocalAiPresetInfo,
@@ -1524,11 +1525,20 @@ export function SettingsPanel({
                           >
                             Stop
                           </Button>
+                        ) : !localAiStatus.installed ? (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={localAiBusy}
+                            onClick={() => void runLocalAiAction(installLocalAiRuntime)}
+                          >
+                            Install MLX LM
+                          </Button>
                         ) : (
                           <Button
                             size="sm"
                             variant="outline"
-                            disabled={localAiBusy || !localAiStatus.installed}
+                            disabled={localAiBusy}
                             onClick={() => void runLocalAiAction(() => startLocalAi(
                               assistantPreferences.localModel,
                               !selectedLocalPreset.downloaded,

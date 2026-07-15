@@ -8,22 +8,15 @@
      `git log --oneline -8`, recover/finish/revert that unit FIRST, then go on.
      ─────────────────────────────────────────────────────────────────────── -->
 ## ⏱ HEARTBEAT
-- **Headline metric:** 1734 reviewed-tree tests green · corpus 82/82 import · 82/82 op-converge · 79/82 warning-clean
-- **Run started (UTC):** 2026-07-15T00:23Z
-- **Synced to origin:** auto/ltspice-parity @ fabef45.
-- **Claimed unit:** §1/§6/§8/§10 local generation breadth, periodic waveform
-  framing, durable folders, and simultaneous AI/Components workspace.
-- **Status:** DONE
-- **Last completed sub-step:** rebuilt the unsigned release, verified the DMG,
-  launched Tau.app from the mounted image, and shut it down cleanly.
-- **Plan:** map every faithful Tau/LTspice component through pin-accurate ASC,
-  expand the model contract only where round-trip tests prove connectivity, and
-  exercise broader local-model circuit topologies in hot reload and Tau.app.
-- **Note:** model output remains a proposal. Tau owns legal catalog mapping,
-  placement/routing, ASC validation, confirmation, undo, and filesystem writes.
-- **Next step:** add opt-in synthesis for user-defined subcircuits only when a
-  concrete symbol and pin contract is available; keep arbitrary `.subckt`
-  generation outside the model's authority.
+- **Headline metric:** 1759 reviewed-tree tests green · corpus 82/82 import · 82/82 op-converge · 79/82 warning-clean
+- **Run started (UTC):** 2026-07-15T02:28Z
+- **Synced to origin:** auto/ltspice-parity @ 59e2bd4.
+- **Claimed unit:** §9 first-run local AI install + setup dialog (CURSOR EDITS).
+- **Status:** IN PROGRESS
+- **Last completed sub-step:** native `install_local_ai_runtime`, LocalAiSetupDialog,
+  Install MLX LM in Settings, clarifying-question + passive-rotation layout already on branch.
+- **Plan:** finish gates, commit/push, verify unsigned DMG path.
+- **Next step:** packaged-app smoke after this unit lands.
 
 ---
 

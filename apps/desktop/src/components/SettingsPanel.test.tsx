@@ -6,6 +6,7 @@ const runtime = vi.hoisted(() => ({
   getStatus: vi.fn(),
   start: vi.fn(),
   stop: vi.fn(),
+  install: vi.fn(),
 }));
 
 vi.mock("../lib/localAiRuntime", async (importOriginal) => ({
@@ -13,6 +14,7 @@ vi.mock("../lib/localAiRuntime", async (importOriginal) => ({
   getLocalAiStatus: runtime.getStatus,
   startLocalAi: runtime.start,
   stopLocalAi: runtime.stop,
+  installLocalAiRuntime: runtime.install,
 }));
 
 import { SettingsPanel } from "./ShellPanels";
@@ -84,10 +86,21 @@ beforeEach(() => {
   runtime.getStatus.mockReset();
   runtime.start.mockReset();
   runtime.stop.mockReset();
+  runtime.install.mockReset();
   saveAssistantPreferences({ provider: "local-mlx", localModel: "qwen3-1.7b-4bit" });
 });
 
 describe("SettingsPanel local assistant lifecycle", () => {
+  it("offers Install MLX LM when the runtime is missing", async () => {
+    runtime.getStatus.mockResolvedValue(status({ installed: false }));
+    runtime.install.mockResolvedValue(status({ installed: true }));
+    render(<SettingsPanel {...props} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Install MLX LM" }));
+    await waitFor(() => expect(runtime.install).toHaveBeenCalledTimes(1));
+    expect(runtime.start).not.toHaveBeenCalled();
+  });
+
   it("defaults to Local MLX and requires an explicit size-labeled download start", async () => {
     const stopped = status();
     runtime.getStatus.mockResolvedValue(stopped);

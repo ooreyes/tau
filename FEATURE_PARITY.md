@@ -1261,7 +1261,9 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   completion** (see AGENTS.md → Definition of Done). Agent scope stops at an
   unsigned, production-ready DMG. Windows/Linux builds: later, out of DoD.
 - ⬜ Auto-update, licensing/activation
-- ⬜ Installer + onboarding
+- 🟡 Installer + onboarding — first-run Local AI setup dialog + one-click
+  `Install MLX LM` (uv tool install) in the native app; unsigned DMG already
+  builds. Signing/notarization remains human-owned.
 
 ## 10. Visual design system — **IMPERATIVE (Omar's directive)** — ✅ FULLY ADOPTED (2026-07-08, Phase 4c)
 
