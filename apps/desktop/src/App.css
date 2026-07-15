@@ -5601,6 +5601,22 @@ button.bottom-panel-head:focus-visible {
   font: 500 var(--fs-caption) var(--font-mono);
 }
 
+.assistant-run-meta {
+  margin-top: var(--sp-2);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  color: var(--faint);
+  font: 500 var(--fs-caption) var(--font-mono);
+}
+
+.assistant-run-meta span:not(:first-child)::before {
+  content: "·";
+  margin-right: 10px;
+  color: var(--border-strong);
+}
+
 .assistant-bubble pre {
   margin: 6px 0;
   padding: var(--sp-2) var(--sp-3);
@@ -5705,6 +5721,49 @@ button.bottom-panel-head:focus-visible {
   animation: assistant-progress-sweep 1.45s var(--ease-in-out) infinite;
 }
 
+.assistant-progress-steps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--sp-2);
+}
+
+.assistant-progress-steps > span {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--faint);
+  font: 550 var(--fs-caption) var(--font-ui);
+}
+
+.assistant-progress-steps i {
+  width: 6px;
+  height: 6px;
+  flex: none;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-pill);
+  background: transparent;
+}
+
+.assistant-progress-steps > span.current {
+  color: var(--text);
+}
+
+.assistant-progress-steps > span.current i {
+  border-color: var(--assistant-alt);
+  background: var(--assistant-alt);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--assistant-alt) 14%, transparent);
+}
+
+.assistant-progress-steps > span.complete {
+  color: var(--muted);
+}
+
+.assistant-progress-steps > span.complete i {
+  border-color: var(--success);
+  background: var(--success);
+}
+
 @keyframes assistant-progress-spin {
   to { transform: rotate(360deg); }
 }
@@ -5732,6 +5791,18 @@ button.bottom-panel-head:focus-visible {
   background: var(--danger-soft);
   color: var(--text);
   font-size: var(--fs-body);
+}
+
+.assistant-error > span {
+  min-width: 0;
+  line-height: 1.4;
+}
+
+.assistant-error-actions {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
 }
 
 /* First-run local AI onboarding card (AssistantPanel) — same proposal-card

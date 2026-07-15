@@ -20,6 +20,7 @@ const { streams, streamRequests, MockAuthenticationError, MockRateLimitError, Mo
       emitThinking: () => void;
       emitStreamEvent: (event: Record<string, unknown>) => void;
       resolve: (text: string) => void;
+      resolveWithUsage: (text: string, usage: Record<string, number>) => void;
       resolveContent: (content: Array<Record<string, unknown>>) => void;
       reject: (error: unknown) => void;
     }>,
@@ -37,9 +38,9 @@ vi.mock("@anthropic-ai/sdk", () => {
       stream: vi.fn((request: unknown) => {
         streamRequests.push(request);
         const listeners: Record<string, Array<(...args: unknown[]) => void>> = {};
-        let resolveFinal: (message: { content: Array<Record<string, unknown>> }) => void;
+        let resolveFinal: (message: { content: Array<Record<string, unknown>>; usage?: Record<string, number> }) => void;
         let rejectFinal: (error: unknown) => void;
-        const finalPromise = new Promise<{ content: Array<Record<string, unknown>> }>((resolve, reject) => {
+        const finalPromise = new Promise<{ content: Array<Record<string, unknown>>; usage?: Record<string, number> }>((resolve, reject) => {
           resolveFinal = resolve;
           rejectFinal = reject;
         });
@@ -54,6 +55,7 @@ vi.mock("@anthropic-ai/sdk", () => {
           emitThinking: () => listeners.thinking?.forEach((cb) => cb("private", "private")),
           emitStreamEvent: (event: Record<string, unknown>) => listeners.streamEvent?.forEach((cb) => cb(event, {})),
           resolve: (text: string) => resolveFinal({ content: [{ type: "text", text }] }),
+          resolveWithUsage: (text: string, usage: Record<string, number>) => resolveFinal({ content: [{ type: "text", text }], usage }),
           resolveContent: (content: Array<Record<string, unknown>>) => resolveFinal({ content }),
           reject: (error: unknown) => rejectFinal(error),
         };
@@ -92,10 +94,17 @@ vi.mock("../lib/localAiRuntime", async (importOriginal) => ({
 import { AssistantPanel, type AssistantPanelProps } from "./AssistantPanel";
 import {
   ASSISTANT_CONNECT_TIMEOUT_MS,
+  ASSISTANT_HISTORY_CHAR_LIMIT,
+  ASSISTANT_HISTORY_MESSAGE_LIMIT,
+  ASSISTANT_MAX_OUTPUT_TOKENS,
+  ASSISTANT_QUESTION_MAX_OUTPUT_TOKENS,
+  ASSISTANT_REQUEST_TIMEOUT_MS,
+  compactAssistantHistory,
   saveAssistantApiKey,
   streamAssistantReply,
 } from "../lib/assistant";
 import { saveAssistantPreferences } from "../lib/assistantPreferences";
+import { saveAssistantRecovery } from "../lib/assistantMemory";
 import { EMPTY_SCOPE } from "../simulation/paramScope";
 import type { AnalysisResult } from "../simulation/linearTransient";
 import type { SchematicComponent } from "../schematic/types";
@@ -207,6 +216,22 @@ SYMATTR Value 5
 TEXT 0 0 Left 2 !.tran 5m
 `;
 
+const ASSISTANT_PLAN = {
+  mode: "create",
+  filename: "rc-filter.asc",
+  components: [
+    { ref: "V1", kind: "vsource", value: "5" },
+    { ref: "R1", kind: "resistor", value: "1k" },
+    { ref: "C1", kind: "capacitor", value: "1u" },
+  ],
+  nets: [
+    { name: "VIN", pins: ["V1.p", "R1.a"] },
+    { name: "OUT", pins: ["R1.b", "C1.a"] },
+    { name: "0", pins: ["V1.n", "C1.b"] },
+  ],
+  directives: [".tran 5m"],
+};
+
 function baseProps(overrides: Partial<AssistantPanelProps> = {}): AssistantPanelProps {
   return {
     components: [],
@@ -242,6 +267,38 @@ describe("AssistantPanel", () => {
       kind: "network",
       message: expect.stringMatching(/45 seconds/i),
     }));
+  });
+  it("enforces one overall deadline across active streaming and repair work", () => {
+    vi.useFakeTimers();
+    const onError = vi.fn();
+    streamAssistantReply("test-key", "Circuit context", [{ role: "user", content: "Build an amplifier" }], {
+      onDelta: vi.fn(),
+      onDone: vi.fn(),
+      onError,
+    });
+    streams[0].emitThinking(); // proves connection; the first-event timer is no longer relevant
+
+    vi.advanceTimersByTime(ASSISTANT_REQUEST_TIMEOUT_MS);
+
+    expect(streams[0].abort).toHaveBeenCalledTimes(1);
+    expect(onError).toHaveBeenCalledWith(expect.objectContaining({
+      kind: "network",
+      message: expect.stringMatching(/90 seconds.*No file was created/i),
+    }));
+  });
+  it("bounds recurring provider history without losing the newest user request", () => {
+    const history = Array.from({ length: 30 }, (_, index) => ({
+      role: index % 2 === 0 ? "user" as const : "assistant" as const,
+      content: `${index}: ${"x".repeat(1500)}`,
+    }));
+    // The real send path always ends in the new user turn.
+    history.push({ role: "user", content: "Build the requested LC tank now." });
+    const compacted = compactAssistantHistory(history);
+
+    expect(compacted.length).toBeLessThanOrEqual(ASSISTANT_HISTORY_MESSAGE_LIMIT);
+    expect(compacted.reduce((sum, message) => sum + message.content.length, 0)).toBeLessThanOrEqual(ASSISTANT_HISTORY_CHAR_LIMIT);
+    expect(compacted[0].role).toBe("user");
+    expect(compacted[compacted.length - 1]?.content).toBe("Build the requested LC tank now.");
   });
   it("shows the no-API-key empty state and never renders the composer without a key", () => {
     const onOpenSettings = vi.fn();
@@ -306,7 +363,7 @@ describe("AssistantPanel", () => {
 
     expect(await screen.findByText("I prepared a local RC circuit.")).toBeTruthy();
     expect(screen.getByText("local-rc.asc")).toBeTruthy();
-    expect(screen.getByRole("alert").textContent).toContain("couldn't validate that circuit proposal");
+    expect(screen.getByRole("alert").textContent).toContain("No file was created");
     const request = JSON.parse(String(fetchMock.mock.calls[0][1]?.body)) as { model: string; stream: boolean };
     expect(request).toEqual(expect.objectContaining({
       model: "Qwen/Qwen3-4B-MLX-4bit",
@@ -356,16 +413,16 @@ describe("AssistantPanel", () => {
     expect(screen.getByText("What does R1 do?")).toBeTruthy();
     expect(streams).toHaveLength(1);
     expect(streamRequests[0]).toEqual(expect.objectContaining({
-      tools: expect.arrayContaining([
-        expect.objectContaining({ name: "create_asc_circuit", strict: true }),
-        expect.objectContaining({ name: "apply_current_asc_circuit", strict: true }),
-        expect.objectContaining({ name: "inspect_simulation_signal", strict: true }),
-      ]),
+      tools: [expect.objectContaining({ name: "inspect_simulation_signal", strict: true })],
       tool_choice: { type: "auto", disable_parallel_tool_use: true },
+      max_tokens: ASSISTANT_QUESTION_MAX_OUTPUT_TOKENS,
+      output_config: { effort: "low" },
+      cache_control: { type: "ephemeral" },
     }));
     const request = streamRequests[0] as { system: Array<{ text: string }> };
     expect(request.system[0].text).toContain("SPICE directives are internal working data");
     expect(request.system[0].text).toContain("Never claim an analysis ran");
+    expect(JSON.stringify((streamRequests[0] as { tools: unknown[] }).tools[0])).not.toMatch(/minItems|maxItems/);
 
     act(() => streams[0].emitText("It sets the", "It sets the"));
     await waitFor(() => expect(screen.getByText("It sets the")).toBeTruthy());
@@ -376,12 +433,18 @@ describe("AssistantPanel", () => {
     const full = "It sets the RC time constant with C1.";
     await act(async () => {
       streams[0].emitText(full.slice("It sets the".length), full);
-      streams[0].resolve(full);
+      streams[0].resolveWithUsage(full, {
+        input_tokens: 24,
+        output_tokens: 310,
+        cache_creation_input_tokens: 5_800,
+        cache_read_input_tokens: 0,
+      });
       await streams[0].finalMessage();
     });
     await waitFor(() => expect(screen.getByText(full)).toBeTruthy());
     // Streaming ended — composer is usable again for the next turn.
     expect(screen.getByRole("button", { name: "Send" })).toBeTruthy();
+    expect(screen.getByLabelText("Assistant request usage").textContent).toContain("5.8k cache write");
   });
 
   it("shows honest request phases and automatically repairs one rejected cloud proposal", async () => {
@@ -393,46 +456,61 @@ describe("AssistantPanel", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "Send" }));
 
+    expect(streamRequests[0]).toEqual(expect.objectContaining({
+      tools: expect.arrayContaining([
+        expect.objectContaining({ name: "build_tau_circuit", strict: true }),
+        expect.objectContaining({ name: "apply_current_asc_circuit", strict: true }),
+        expect.objectContaining({ name: "inspect_simulation_signal", strict: true }),
+      ]),
+      max_tokens: ASSISTANT_MAX_OUTPUT_TOKENS,
+      output_config: { effort: "medium" },
+    }));
+
     expect(await screen.findByText("Connecting to Sonnet 5")).toBeTruthy();
-    expect(screen.getByText("0s · Working")).toBeTruthy();
+    expect(screen.getByText(`0s · ${ASSISTANT_REQUEST_TIMEOUT_MS / 1000}s safety limit`)).toBeTruthy();
+    expect(screen.getByText("Plan").classList.contains("current")).toBe(true);
     expect(screen.getByRole("button", { name: "Stop" })).toBeTruthy();
 
     act(() => streams[0].emitThinking());
     expect(await screen.findByText("Designing the circuit")).toBeTruthy();
     act(() => streams[0].emitStreamEvent({
       type: "content_block_start",
-      content_block: { type: "tool_use", id: "bad-create", name: "create_asc_circuit" },
+      content_block: { type: "tool_use", id: "bad-plan", name: "build_tau_circuit" },
     }));
-    expect(await screen.findByText("Writing the LTspice schematic")).toBeTruthy();
+    expect(await screen.findByText("Building a compact circuit plan")).toBeTruthy();
 
     await act(async () => {
       streams[0].resolveContent([{
         type: "tool_use",
-        id: "bad-create",
-        name: "create_asc_circuit",
-        input: { filename: "class-d.asc", source: "not an ASC file" },
+        id: "bad-plan",
+        name: "build_tau_circuit",
+        input: {
+          mode: "create",
+          filename: "class-d.asc",
+          components: [{ ref: "R1", kind: "resistor", value: "1k" }],
+          nets: [{ name: "0", pins: ["R1.a"] }],
+          directives: [],
+        },
       }]);
       await streams[0].finalMessage();
     });
     await waitFor(() => expect(streams).toHaveLength(2));
-    expect(screen.getByText("Fixing a validation issue")).toBeTruthy();
+    expect(screen.getByText("Correcting the circuit plan")).toBeTruthy();
+    expect(screen.getByText("Validate").classList.contains("current")).toBe(true);
     expect(screen.queryByRole("alert")).toBeNull();
 
     const repairRequest = streamRequests[1] as {
-      messages: Array<{ role: string; content: Array<Record<string, unknown>> }>;
+      messages: Array<{ role: string; content: string }>;
     };
-    expect(repairRequest.messages[repairRequest.messages.length - 1]?.content[0]).toEqual(expect.objectContaining({
-      type: "tool_result",
-      tool_use_id: "bad-create",
-      is_error: true,
-    }));
+    expect(repairRequest.messages[repairRequest.messages.length - 1]?.content).toMatch(/R1\.b.*not connected/i);
+    expect(JSON.stringify(repairRequest.messages)).not.toContain("bad-plan");
 
     await act(async () => {
       streams[1].resolveContent([{
         type: "tool_use",
-        id: "fixed-create",
-        name: "create_asc_circuit",
-        input: { filename: "class-d.asc", source: ASSISTANT_ASC },
+        id: "fixed-plan",
+        name: "build_tau_circuit",
+        input: { ...ASSISTANT_PLAN, filename: "class-d.asc" },
       }]);
       await streams[1].finalMessage();
     });
@@ -495,7 +573,7 @@ describe("AssistantPanel", () => {
 
     const request = streamRequests[0] as { tools: Array<{ name: string }> };
     expect(request.tools.map((tool) => tool.name)).not.toContain("apply_current_asc_circuit");
-    expect(request.tools.map((tool) => tool.name)).toContain("create_asc_circuit");
+    expect(request.tools.map((tool) => tool.name)).toContain("build_tau_circuit");
   });
 
   it("runs a private waveform inspection and renders only the final engineering answer", async () => {
@@ -509,6 +587,11 @@ describe("AssistantPanel", () => {
 
     act(() => streams[0].emitText("Let me inspect that.", "Let me inspect that."));
     expect(await screen.findByText("Let me inspect that.")).toBeTruthy();
+    act(() => streams[0].emitStreamEvent({
+      type: "content_block_start",
+      content_block: { type: "tool_use", id: "inspect-1", name: "inspect_simulation_signal" },
+    }));
+    expect(await screen.findByText("Inspecting simulation data")).toBeTruthy();
 
     await act(async () => {
       streams[0].resolveContent([{
@@ -573,7 +656,36 @@ describe("AssistantPanel", () => {
     expect(onOpenSettings).toHaveBeenCalledTimes(1);
   });
 
-  it("keeps model-authored ASC behind a validated, user-confirmed creation callback", async () => {
+  it("keeps raw Anthropic request bodies out of the user-facing failure card", async () => {
+    saveAssistantApiKey("test-key");
+    render(<AssistantPanel {...baseProps()} />);
+    fireEvent.change(screen.getByRole("textbox", { name: "Message the assistant" }), { target: { value: "Build a tank" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+
+    await act(async () => {
+      streams[0].reject(new MockAPIError("400 {\"error\":{\"message\":\"internal schema detail\"}}"));
+      await streams[0].finalMessage().catch(() => {});
+    });
+
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toContain("Anthropic rejected the assistant request");
+    expect(alert.textContent).not.toContain("internal schema detail");
+    expect(screen.getByRole("button", { name: "Retry" })).toBeTruthy();
+  });
+
+  it("restores an interrupted run as a visible exact retry instead of losing it on reload", () => {
+    saveAssistantApiKey("test-key");
+    saveAssistantRecovery("tank.asc", { status: "running", prompt: "Build an LC tank" });
+    render(<AssistantPanel {...baseProps({ memoryKey: "tank.asc" })} />);
+
+    expect(screen.getByRole("alert").textContent).toContain("previous assistant run was interrupted");
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+
+    expect(streams).toHaveLength(1);
+    expect(screen.getByText("Build an LC tank")).toBeTruthy();
+  });
+
+  it("compiles a compact cloud plan locally and keeps creation behind confirmation", async () => {
     saveAssistantApiKey("test-key");
     const onCreateAsc = vi.fn();
     const onApplyCurrent = vi.fn();
@@ -584,24 +696,23 @@ describe("AssistantPanel", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "Send" }));
 
-    const source = ASSISTANT_ASC;
     await act(async () => {
       streams[0].resolveContent([
         { type: "text", text: "I prepared an RC low-pass schematic." },
         {
           type: "tool_use",
-          id: "create-1",
-          name: "create_asc_circuit",
-          input: { filename: "rc-filter.asc", source },
+          id: "plan-1",
+          name: "build_tau_circuit",
+          input: ASSISTANT_PLAN,
         },
       ]);
       await streams[0].finalMessage();
     });
 
     expect(await screen.findByText("rc-filter.asc")).toBeTruthy();
-    expect(screen.getByText("3 components · 5 wires")).toBeTruthy();
-    // Raw file content is deliberately absent from the ordinary transcript.
-    expect(screen.queryByText(source)).toBeNull();
+    expect(screen.getByText(/3 components · \d+ wires/)).toBeTruthy();
+    // Plan JSON and locally generated ASC stay out of the transcript.
+    expect(screen.queryByText(JSON.stringify(ASSISTANT_PLAN))).toBeNull();
     expect(onCreateAsc).not.toHaveBeenCalled();
     expect(onApplyCurrent).not.toHaveBeenCalled();
 
@@ -610,9 +721,10 @@ describe("AssistantPanel", () => {
     expect(onCreateAsc.mock.calls[0][0]).toEqual(expect.objectContaining({
       type: "create_asc",
       filename: "rc-filter.asc",
-      source,
       componentCount: 3,
     }));
+    expect(onCreateAsc.mock.calls[0][0].source).toMatch(/^Version 4\nSHEET /);
+    expect(onCreateAsc.mock.calls[0][0].document.components.some((component: SchematicComponent) => component.label === "R1")).toBe(true);
     expect(onApplyCurrent).not.toHaveBeenCalled();
     expect(await screen.findByText("Created")).toBeTruthy();
   });
@@ -656,7 +768,7 @@ describe("AssistantPanel", () => {
     expect(await screen.findByText("Applied")).toBeTruthy();
   });
 
-  it("rejects an invalid creation tool payload without invoking either apply boundary", async () => {
+  it("keeps a rejected plan visible with one-click retry and never invokes a mutation boundary", async () => {
     saveAssistantApiKey("test-key");
     const onCreateAsc = vi.fn();
     const onApplyCurrent = vi.fn();
@@ -669,9 +781,9 @@ describe("AssistantPanel", () => {
     await act(async () => {
       streams[0].resolveContent([{
         type: "tool_use",
-        id: "bad-create",
-        name: "create_asc_circuit",
-        input: { filename: "../../escape.asc", source: "not an ASC file" },
+        id: "bad-plan",
+        name: "build_tau_circuit",
+        input: { mode: "create", filename: "bad.asc", components: [{ ref: "R1", kind: "resistor" }], nets: [{ name: "0", pins: ["R1.a"] }] },
       }]);
       await streams[0].finalMessage();
     });
@@ -680,14 +792,17 @@ describe("AssistantPanel", () => {
     await act(async () => {
       streams[1].resolveContent([{
         type: "tool_use",
-        id: "still-bad-create",
-        name: "create_asc_circuit",
-        input: { filename: "../../escape.asc", source: "still not an ASC file" },
+        id: "still-bad-plan",
+        name: "build_tau_circuit",
+        input: { mode: "create", filename: "bad.asc", components: [{ ref: "R1", kind: "resistor" }], nets: [{ name: "0", pins: ["R1.a"] }] },
       }]);
       await streams[1].finalMessage();
     });
 
-    expect((await screen.findByRole("alert")).textContent).toContain("couldn't validate that circuit proposal");
+    expect((await screen.findByRole("alert")).textContent).toContain("No file was created");
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    expect(streams).toHaveLength(3);
+    expect(screen.getAllByText("Create anything")).toHaveLength(2);
     expect(onCreateAsc).not.toHaveBeenCalled();
     expect(onApplyCurrent).not.toHaveBeenCalled();
   });

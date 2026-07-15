@@ -8,15 +8,58 @@
      `git log --oneline -8`, recover/finish/revert that unit FIRST, then go on.
      ─────────────────────────────────────────────────────────────────────── -->
 ## ⏱ HEARTBEAT
-- **Headline metric:** 1795 reviewed-tree tests green · corpus 82/82 import · 82/82 op-converge · 79/82 warning-clean
-- **Run started (UTC):** 2026-07-15T16:09Z
+- **Headline metric:** 1802 reviewed-tree tests green · corpus 82/82 import · 82/82 op-converge · 79/82 warning-clean
+- **Run started (UTC):** 2026-07-15T16:30Z
 - **Synced to origin:** auto/ltspice-parity @ HEAD.
-- **Claimed unit:** Persistent wiring, direct probe selection, complete marquee movement, and Sonnet connect deadline.
+- **Claimed unit:** End-to-end cloud assistant architecture, fast schematic generation, and persistent recovery UX.
 - **Status:** DONE
-- **Last completed sub-step:** Rebuilt Tau.app and proved a packaged editor probe click selects only the marker;
-  conductors remain neutral and the Delete-selection action becomes available.
-- **Plan:** Landed and verified.
+- **Last completed sub-step:** Packaged Tau launched without a Keychain/UI-thread freeze after the final
+  build; full TypeScript/Vitest, Rust, release, and live cloud/ngspice gates passed.
+- **Plan:** Replaced raw-ASC cloud generation with Tau's deterministic logical-plan compiler, bounded
+  build/question budgets separately, persisted recovery/actions, and verified LC plus Class-D journeys.
 - **Next step:** Continue the highest-leverage unfinished Definition-of-Done item.
+
+---
+
+## 2026-07-15T17:26Z — auto/ltspice-parity — Fast, bounded cloud circuit architecture
+
+### What I did
+- Replaced coordinate-heavy Sonnet ASC generation with the compact logical
+  `ref.pin` plan already proven by local MLX; Tau now validates, lays out,
+  routes, exports, and re-imports cloud-created schematics deterministically.
+- Split cloud work into medium-effort 6k/90s mutation requests and low-effort
+  read-only 2.5k/60s questions; capped recurring history, omitted current ASC
+  outside edit intent, enabled prompt caching, and removed recursive failed
+  payloads from the one bounded correction pass.
+- Added Plan → Validate → Ready/inspection progress, live safety countdown,
+  sanitized persistent errors with exact Retry, and duration/pass/input/output/
+  cache receipts. Validated proposals, receipts, and interrupted runs now
+  survive app reloads.
+- Moved synchronous macOS Keychain reads/writes to Tauri blocking workers so an
+  unsigned rebuild's SecurityAgent authorization cannot freeze the UI.
+
+### Files
+- `apps/desktop/src/lib/assistant.ts`, `assistantContext.ts`,
+  `assistantMemory.ts`, `assistantProvider.ts`, and their tests
+- `apps/desktop/src/components/AssistantPanel.tsx`, panel tests, `App.css`
+- `apps/desktop/src-tauri/src/credentials.rs`, `FEATURE_PARITY.md`
+
+### Tests and QA
+- Desktop typecheck and full Vitest: 1802 passed / 6 skipped.
+- Rust fmt/Clippy `-D warnings`/tests: 19 passed / 1 ignored real-ngspice smoke.
+- Desktop production build and fresh `tauri build --bundles app`: pass; final
+  packaged Tau.app launched and rendered while Keychain authorization waited.
+- Packaged Sonnet: 10 kHz LC plan created in ~15s, AC + 1,152-sample transient
+  simulated, and results analyzed in 22s. Complex Class-D created in ~25s as
+  13 parts/21 wires; ngspice completed 200,012 samples with measured 1 kHz
+  input, 100 kHz carrier, ±15 V PWM, and a candid low-efficiency diagnosis.
+
+### Parity items
+- §8 cloud assistant generation, speed/cost controls, progress UX, durable
+  recovery, and packaged Keychain behavior advanced.
+
+### Next step
+- Continue the highest-leverage unfinished Definition-of-Done item.
 
 ---
 

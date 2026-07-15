@@ -10,7 +10,7 @@ import type { ParamScope } from "../simulation/paramScope";
 import type { AnalysisResult } from "../simulation/linearTransient";
 import type { ComponentMeasurement } from "../simulation/measurementModel";
 import type { MeasResult } from "../simulation/measure";
-import { buildAssistantContext } from "../lib/assistantContext";
+import { assistantRequestNeedsCurrentAsc, buildAssistantContext } from "../lib/assistantContext";
 import type {
   AssistantApplyCurrentAscAction,
   AssistantAscAction,
@@ -18,6 +18,8 @@ import type {
 } from "../lib/assistantActions";
 import {
   ASSISTANT_MODEL_LABEL,
+  ASSISTANT_REQUEST_TIMEOUT_MS,
+  assistantRequestTimeoutMs,
   streamAssistantReply,
   useAssistantApiKey,
   type AssistantChatMessage,
@@ -27,10 +29,17 @@ import {
 } from "../lib/assistant";
 import { useAssistantPreferences } from "../lib/assistantPreferences";
 import { AssistantProviderError, type AssistantProviderReply } from "../lib/assistantProvider";
+import type { AssistantRunMetrics } from "../lib/assistantProvider";
 import { LocalMlxAssistant, LOCAL_MLX_MODEL_PRESETS } from "../lib/localMlxAssistant";
 import { getLocalAiStatus, startLocalAi, LOCAL_AI_PRESETS, type LocalAiStatus } from "../lib/localAiRuntime";
 import { renderMiniMarkdown } from "../lib/miniMarkdown";
-import { loadAssistantHistory, saveAssistantHistory } from "../lib/assistantMemory";
+import {
+  clearAssistantRecovery,
+  loadAssistantHistory,
+  loadAssistantRecovery,
+  saveAssistantHistory,
+  saveAssistantRecovery,
+} from "../lib/assistantMemory";
 import { PanelResizeHandle, usePanelWidth, type PanelWidthConfig } from "./panelResize";
 
 /** Docked at the far right of the simulator shell, same "edge=left widens"
@@ -71,6 +80,7 @@ interface ChatMessage {
   role: "user" | "assistant";
   content: string;
   actions?: AssistantAscAction[];
+  metrics?: AssistantRunMetrics;
 }
 
 type AssistantActionState = "idle" | "working" | "done";
@@ -78,15 +88,29 @@ type AssistantActionState = "idle" | "working" | "done";
 const PROGRESS_LABELS: Record<AssistantProgressPhase, string> = {
   connecting: "Connecting to Sonnet 5",
   reasoning: "Designing the circuit",
-  drafting: "Writing the LTspice schematic",
-  validating: "Checking parts, wires, and ASC",
-  repairing: "Fixing a validation issue",
+  drafting: "Building a compact circuit plan",
+  inspecting: "Inspecting simulation data",
+  validating: "Laying out and checking the circuit",
+  repairing: "Correcting the circuit plan",
   responding: "Preparing the response",
 };
+
+const PROGRESS_STEPS = ["Plan", "Validate", "Ready"] as const;
+
+function progressStep(phase: AssistantProgressPhase): number {
+  if (phase === "inspecting" || phase === "validating" || phase === "repairing") return 1;
+  if (phase === "responding") return 2;
+  return 0;
+}
 
 function elapsedLabel(seconds: number): string {
   if (seconds < 60) return `${seconds}s`;
   return `${Math.floor(seconds / 60)}m ${String(seconds % 60).padStart(2, "0")}s`;
+}
+
+function tokenLabel(value: number): string {
+  if (value < 1000) return String(value);
+  return `${(value / 1000).toFixed(value < 10_000 ? 1 : 0)}k`;
 }
 
 function localProviderError(error: unknown): AssistantError {
@@ -150,6 +174,7 @@ export function AssistantPanel({
 }: AssistantPanelProps) {
   const apiKey = useAssistantApiKey();
   const preferences = useAssistantPreferences();
+  const restoredRecovery = useMemo(() => loadAssistantRecovery(memoryKey), [memoryKey]);
   const localAssistant = useMemo(
     () => new LocalMlxAssistant({ model: preferences.localModel }),
     [preferences.localModel],
@@ -161,7 +186,18 @@ export function AssistantPanel({
   const [streaming, setStreaming] = useState(false);
   const [progressPhase, setProgressPhase] = useState<AssistantProgressPhase>("connecting");
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
-  const [error, setError] = useState<AssistantError | null>(null);
+  const [requestTimeoutMs, setRequestTimeoutMs] = useState(ASSISTANT_REQUEST_TIMEOUT_MS);
+  const [error, setError] = useState<AssistantError | null>(() => (
+    restoredRecovery
+      ? {
+          kind: restoredRecovery.status === "running" ? "network" : restoredRecovery.kind ?? "unknown",
+          message: restoredRecovery.status === "running"
+            ? "The previous assistant run was interrupted. No file was created."
+            : restoredRecovery.message ?? "The previous assistant run did not complete. No file was created.",
+        }
+      : null
+  ));
+  const [retryPrompt, setRetryPrompt] = useState<string | null>(() => restoredRecovery?.prompt ?? null);
   const [actionStates, setActionStates] = useState<Record<string, AssistantActionState>>({});
   const streamRef = useRef<AssistantStreamHandle | null>(null);
   const localAbortRef = useRef<AbortController | null>(null);
@@ -240,7 +276,12 @@ export function AssistantPanel({
 
   useEffect(() => {
     const timer = globalThis.setTimeout(() => {
-      saveAssistantHistory(memoryKey, messages.map(({ role, content }) => ({ role, content })));
+      saveAssistantHistory(memoryKey, messages.map(({ role, content, actions, metrics }) => ({
+        role,
+        content,
+        actions,
+        metrics,
+      })));
     }, 250);
     return () => globalThis.clearTimeout(timer);
   }, [memoryKey, messages]);
@@ -265,6 +306,7 @@ export function AssistantPanel({
     const text = raw.trim();
     if (!text || streaming || (preferences.provider === "anthropic" && !apiKey)) return;
     setError(null);
+    setRetryPrompt(null);
 
     const userMessage: ChatMessage = { id: nanoid(), role: "user", content: text };
     const assistantMessage: ChatMessage = { id: nanoid(), role: "assistant", content: "" };
@@ -274,8 +316,10 @@ export function AssistantPanel({
     setInput("");
     requestStartedAtRef.current = Date.now();
     setElapsedSeconds(0);
+    setRequestTimeoutMs(assistantRequestTimeoutMs(text));
     setProgressPhase(preferences.provider === "anthropic" ? "connecting" : "reasoning");
     setStreaming(true);
+    saveAssistantRecovery(memoryKey, { status: "running", prompt: text });
 
     const { text: contextText, canApplyCurrent } = buildAssistantContext({
       components,
@@ -287,6 +331,8 @@ export function AssistantPanel({
       componentRows,
       measurements,
       selectedId,
+    }, {
+      includeCurrentAsc: components.length > 0 && assistantRequestNeedsCurrentAsc(text),
     });
 
     const completeTurn = (reply: AssistantProviderReply) => {
@@ -296,14 +342,23 @@ export function AssistantPanel({
               ...message,
               content: reply.text || message.content,
               ...(reply.actions.length > 0 ? { actions: reply.actions } : {}),
+              ...(reply.metrics ? { metrics: reply.metrics } : {}),
             }
           : message
       )));
       if (reply.rejectedActionCount > 0) {
+        const message = preferences.provider === "anthropic"
+          ? "Tau rejected Sonnet's circuit plan after one automatic correction. No file was created."
+          : "Tau rejected the local model's circuit plan. No file was created.";
+        setRetryPrompt(text);
         setError({
           kind: "invalid_action",
-          message: "I couldn't validate that circuit proposal. Ask me to revise it before creating a file.",
+          message,
         });
+        saveAssistantRecovery(memoryKey, { status: "failed", prompt: text, kind: "invalid_action", message });
+      } else {
+        setRetryPrompt(null);
+        clearAssistantRecovery(memoryKey);
       }
       setStreaming(false);
     };
@@ -311,6 +366,8 @@ export function AssistantPanel({
     const failTurn = (err: AssistantError) => {
       setStreaming(false);
       setError(err);
+      setRetryPrompt(text);
+      saveAssistantRecovery(memoryKey, { status: "failed", prompt: text, kind: err.kind, message: err.message });
       // Drop the placeholder bubble if nothing ever reached it — an empty
       // assistant turn would otherwise sit invisibly in the transcript.
       setMessages((list) => list.filter((message) => (
@@ -369,7 +426,7 @@ export function AssistantPanel({
       },
       onProgress: setProgressPhase,
     }, { analysis, params }, { allowCurrentApply: canApplyCurrent });
-  }, [messages, streaming, preferences.provider, apiKey, components, wires, netLabels, directives, params, analysis, componentRows, measurements, selectedId, localAssistant]);
+  }, [messages, streaming, preferences.provider, apiKey, components, wires, netLabels, directives, params, analysis, componentRows, measurements, selectedId, localAssistant, memoryKey]);
 
   const stop = useCallback(() => {
     streamRef.current?.abort();
@@ -377,13 +434,15 @@ export function AssistantPanel({
     localAbortRef.current?.abort();
     localAbortRef.current = null;
     setStreaming(false);
-  }, []);
+    clearAssistantRecovery(memoryKey);
+  }, [memoryKey]);
 
   const clearConversation = useCallback(() => {
     stop();
     setMessages([]);
     setActionStates({});
     setError(null);
+    setRetryPrompt(null);
   }, [stop]);
 
   const confirmAction = useCallback(async (action: AssistantAscAction) => {
@@ -558,6 +617,20 @@ export function AssistantPanel({
                       </div>
                     );
                   })}
+                  {message.role === "assistant" && message.metrics && (
+                    <div className="assistant-run-meta" aria-label="Assistant request usage">
+                      <span>{elapsedLabel(Math.max(1, Math.round(message.metrics.durationMs / 1000)))}</span>
+                      <span>{message.metrics.attempts === 1 ? "1 pass" : `${message.metrics.attempts} passes`}</span>
+                      <span>{tokenLabel(message.metrics.inputTokens)} in</span>
+                      <span>{tokenLabel(message.metrics.outputTokens)} out</span>
+                      {message.metrics.cacheCreationInputTokens > 0 && (
+                        <span>{tokenLabel(message.metrics.cacheCreationInputTokens)} cache write</span>
+                      )}
+                      {message.metrics.cacheReadInputTokens > 0 && (
+                        <span>{tokenLabel(message.metrics.cacheReadInputTokens)} cache hit</span>
+                      )}
+                    </div>
+                  )}
                   {streaming && message.role === "assistant" && index === messages.length - 1 && (
                     <div className="assistant-progress" role="status" aria-live="polite">
                       <div className="assistant-progress-head">
@@ -566,12 +639,27 @@ export function AssistantPanel({
                           <strong>{preferences.provider === "anthropic" ? PROGRESS_LABELS[progressPhase] : "Planning on this Mac"}</strong>
                           <span>
                             {elapsedLabel(elapsedSeconds)}
-                            {elapsedSeconds >= 45 ? " · Complex builds can take a minute" : " · Working"}
+                            {preferences.provider === "anthropic"
+                              ? ` · ${Math.max(0, Math.ceil(requestTimeoutMs / 1000) - elapsedSeconds)}s safety limit`
+                              : " · Running locally"}
                           </span>
                         </div>
                       </div>
                       <div className="assistant-progress-track" aria-hidden="true">
                         <span />
+                      </div>
+                      <div className="assistant-progress-steps" aria-hidden="true">
+                        {PROGRESS_STEPS.map((step, stepIndex) => (
+                          <span
+                            key={step}
+                            className={cn(
+                              stepIndex < progressStep(progressPhase) && "complete",
+                              stepIndex === progressStep(progressPhase) && "current",
+                            )}
+                          >
+                            <i />{step}
+                          </span>
+                        ))}
                       </div>
                     </div>
                   )}
@@ -581,9 +669,16 @@ export function AssistantPanel({
             {error && (
               <div className="assistant-error" role="alert">
                 <span>{error.message}</span>
-                {error.kind === "auth" && (
-                  <Button size="sm" variant="outline" onClick={onOpenSettings}>Open Settings</Button>
-                )}
+                <div className="assistant-error-actions">
+                  {error.kind === "auth" && (
+                    <Button size="sm" variant="outline" onClick={onOpenSettings}>Open Settings</Button>
+                  )}
+                  {error.kind !== "auth" && retryPrompt && !streaming && (
+                    <Button size="sm" variant="outline" onClick={() => send(retryPrompt)}>
+                      <RefreshCw size={12} aria-hidden="true" /> Retry
+                    </Button>
+                  )}
+                </div>
               </div>
             )}
           </div>

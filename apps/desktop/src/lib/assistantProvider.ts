@@ -26,6 +26,18 @@ export interface AssistantProviderReply {
   actions: AssistantAscAction[];
   /** Count only; validation details and raw tool arguments stay private. */
   rejectedActionCount: number;
+  /** Optional provider-reported footprint for a completed turn. Kept out of
+   *  persisted chat history; the UI uses it as a compact speed/cost receipt. */
+  metrics?: AssistantRunMetrics;
+}
+
+export interface AssistantRunMetrics {
+  durationMs: number;
+  attempts: number;
+  inputTokens: number;
+  outputTokens: number;
+  cacheCreationInputTokens: number;
+  cacheReadInputTokens: number;
 }
 
 export type AssistantProviderErrorKind = "aborted" | "offline" | "server" | "invalid_response" | "unknown";

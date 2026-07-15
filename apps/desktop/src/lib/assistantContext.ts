@@ -36,6 +36,12 @@ export interface AssistantContext {
   canApplyCurrent: boolean;
 }
 
+export interface AssistantContextOptions {
+  /** Exact ASC is needed only for an edit of the open document. New-circuit
+   *  generation and ordinary Q&A use the smaller netlist/component summary. */
+  includeCurrentAsc?: boolean;
+}
+
 // A complete current ASC is more important than verbose analysis summaries for
 // circuit revision: it carries exact layout/connectivity and is kept at the
 // front of the context so the whole-context backstop never cuts through it.
@@ -48,6 +54,21 @@ const NETLIST_CHAR_CAP = 2000;
  *  numbers are preferred when available, purely for a more representative
  *  netlist header. */
 const FALLBACK_TRAN = { stopTime: 0.006, steps: 240 };
+
+/** Cheap intent gate that prevents every question/new build from paying to
+ * send a complete coordinate-heavy ASC file. False negatives are preferable
+ * to silently treating a new build as an edit; explicit current-document
+ * language and edit verbs cover the normal revision commands. */
+export function assistantRequestNeedsCurrentAsc(request: string): boolean {
+  const text = request.trim().toLowerCase();
+  if (!text) return false;
+  const explicitNew = /\b(?:create|build|design|generate|make)\b[\s\S]{0,48}\b(?:new\s+)?(?:circuit|schematic|filter|amplifier|oscillator|tank|divider|supply)\b/.test(text)
+    && !/\b(?:this|current|existing|open)\b/.test(text);
+  if (explicitNew) return false;
+  return /\b(?:add|insert|remove|delete|change|edit|revise|replace|reconnect|rewire|rename|move|rotate|mirror|fix|update|set)\b/.test(text)
+    || /\b(?:this|current|existing|open)\s+(?:circuit|schematic|design)\b/.test(text)
+    || /\b(?:make|turn)\s+(?:it|this|r\d+|c\d+|l\d+|v\d+|q\d+|m\d+|u\d+)\b/.test(text);
+}
 
 function truncateMiddle(text: string, cap: number): string {
   if (text.length <= cap) return text;
@@ -143,10 +164,13 @@ function buildSelectionSection(input: AssistantContextInput): string {
   return component ? `Selection: ${component.label || component.id} (${component.kind}).` : "Selection: none.";
 }
 
-export function buildAssistantContext(input: AssistantContextInput): AssistantContext {
+export function buildAssistantContext(
+  input: AssistantContextInput,
+  options: AssistantContextOptions = {},
+): AssistantContext {
   const currentAsc = buildCurrentAscSection(input);
   const sections = [
-    currentAsc.text,
+    ...(options.includeCurrentAsc === false ? [] : [currentAsc.text]),
     buildNetlistSection(input),
     buildComponentSection(input),
     buildAnalysisSection(input),

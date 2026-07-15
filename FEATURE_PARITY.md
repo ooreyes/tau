@@ -1252,19 +1252,26 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   Op-amps export as LTspice `opamp2` and MOSFETs as `nmos4`/`pmos4` so the
   five-pin native role bank survives save/reopen; kinds without equivalent pin
   geometry are never silently advertised as a stock symbol.
-  Cloud requests now show honest lifecycle phases (connect, design, write ASC,
-  validate, repair, respond), elapsed time, an indeterminate token-driven
-  activity bar, and a persistent Stop control. A rejected Anthropic ASC tool
-  call receives exactly one private validator-guided repair pass before Tau
-  surfaces an error, eliminating the former wait-then-manually-reprompt dead end.
-  Direct cloud ASC proposals must also pass Tau's electrical graph warnings, so
-  dangling generated pins are repaired/rejected before a misleading Create card
-  can reach disk. The packaged app now uses a circuit-trace Tau icon at every
-  platform asset size instead of the placeholder mark. **Connection watchdog
-  follow-up (2026-07-15):** if Sonnet emits no stream event within 45 seconds,
-  Tau aborts the request and surfaces a retryable connection error instead of
-  leaving the user in a five-minute fake-infinite “Connecting” state; once any
-  real event arrives, long design/validation work remains allowed and stoppable.
+  **Cloud architecture follow-up (2026-07-15):** Sonnet now emits the same
+  compact logical `ref.pin` circuit plan as local MLX; Tau owns validation,
+  layout, obstacle routing, ASC export, and re-import proof. This replaces the
+  slow coordinate-heavy raw-ASC generation/recursive-payload repair path while
+  retaining exact ASC only for current-document edits. One validator-guided
+  correction is bounded to the original compact transcript; full failed tool
+  payloads are never echoed back. New builds use medium effort/6k output/90s,
+  while ordinary questions get only the read-only inspection tool at low
+  effort/2.5k output/60s. Recurring history is capped at 12 messages/12k chars,
+  current ASC is sent only for edit intent, and static prompt/tool content uses
+  Anthropic prompt caching. The shadcn-grade run card shows Plan → Validate →
+  Ready, a real countdown/Stop action, and a duration/pass/token/cache receipt.
+  Failed/interrupted turns restore as an exact Retry after reload; validated
+  Create/Apply cards and their receipts also survive reload. The packaged app
+  created and simulated a 10 kHz LC tank in ~15s (1,152 transient samples plus
+  AC) and a 13-part/21-wire Class-D plan in ~25s (200,012 ngspice samples,
+  measured 1 kHz input/100 kHz carrier/±15 V PWM). Keychain reads/writes now run
+  off Tauri's UI thread, so an unsigned-build SecurityAgent authorization can no
+  longer leave a black frozen window. The packaged app also uses the circuit-
+  trace Tau icon at every platform asset size instead of the placeholder mark.
 - 🟡 Component picker matching LTspice (F2 part browser over the full library)
   — **F2 now opens the searchable part palette** (symbols, categories, hotkeys,
   ↑↓/↵ placement); remaining: coverage audit vs. LTspice's full library tree.

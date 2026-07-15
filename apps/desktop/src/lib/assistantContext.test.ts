@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { buildAssistantContext, type AssistantContextInput } from "./assistantContext";
+import {
+  assistantRequestNeedsCurrentAsc,
+  buildAssistantContext,
+  type AssistantContextInput,
+} from "./assistantContext";
 import type { SchematicComponent, SchematicWire } from "../schematic/types";
 import type { ComponentMeasurement, MeasuredSeries } from "../simulation/measurementModel";
 import type { AnalysisResult } from "../simulation/linearTransient";
@@ -107,6 +111,20 @@ describe("buildAssistantContext", () => {
     const { text } = buildAssistantContext(baseInput());
     expect(text).toContain("Analysis: no simulation has been run yet.");
     expect(text).toContain("Selection: none.");
+  });
+
+  it("omits coordinate-heavy ASC for new builds and Q&A while retaining safe-edit capability", () => {
+    const compact = buildAssistantContext(baseInput(), { includeCurrentAsc: false });
+    expect(compact.canApplyCurrent).toBe(true);
+    expect(compact.text).not.toContain("Current serialized LTspice ASC");
+    expect(compact.text).not.toContain("Version 4\nSHEET");
+    expect(compact.text).toContain("SPICE netlist:");
+
+    expect(assistantRequestNeedsCurrentAsc("Build me a 10 kHz LC tank")).toBe(false);
+    expect(assistantRequestNeedsCurrentAsc("Explain the current results")).toBe(false);
+    expect(assistantRequestNeedsCurrentAsc("Add a 10 ohm resistor to this circuit")).toBe(true);
+    expect(assistantRequestNeedsCurrentAsc("Make R1 2k")).toBe(true);
+    expect(assistantRequestNeedsCurrentAsc("Fix the current schematic")).toBe(true);
   });
 
   it("surfaces a failed transient run's message instead of stats", () => {
