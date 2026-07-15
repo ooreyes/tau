@@ -173,6 +173,119 @@ describe("assistant circuit plan", () => {
     })).toThrow(/V1\.p, R2\.a are not connected to any net/);
   });
 
+  it("auto-repairs MOSFET source/bulk pins omitted by the model (Class-D miss)", () => {
+    // Live failure: M1.s, M2.s not connected — gates/drains present, sources
+    // forgotten. Compiler ties nmos s/b → 0 and pmos s/b → VDD (vsource.p).
+    const action = compileAssistantCircuitPlan("mos-float-repair", {
+      mode: "create",
+      filename: "half-bridge.asc",
+      components: [
+        { ref: "Vdd", kind: "vsource", value: "10" },
+        { ref: "M1", kind: "nmos", value: "NMOS" },
+        { ref: "M2", kind: "pmos", value: "PMOS" },
+        { ref: "R1", kind: "resistor", value: "1k" },
+      ],
+      nets: [
+        { name: "PWM", pins: ["M1.g", "M2.g"] },
+        { name: "VDD", pins: ["Vdd.p"] },
+        { name: "SW", pins: ["M1.d", "M2.d", "R1.a"] },
+        { name: "0", pins: ["Vdd.n", "R1.b"] },
+      ],
+      directives: [".tran 1m"],
+    });
+    const circuit = extractCircuit(
+      action.document.components,
+      action.document.wires,
+      action.document.netLabels,
+    );
+    const byRef = new Map(circuit.components.map(({ component, pins }) => [component.label, pins]));
+    expect(byRef.get("M1")).toMatchObject({ g: "PWM", d: "SW", s: "0", b: "0" });
+    expect(byRef.get("M2")).toMatchObject({ g: "PWM", d: "SW", s: "VDD", b: "VDD" });
+  });
+
+  it("compiles a Class-D-ish plan even when MOSFET s/b pins are omitted", () => {
+    const action = compileAssistantCircuitPlan("class-d-missing-source", {
+      mode: "create",
+      filename: "class-d-approx.asc",
+      components: [
+        { ref: "Vsig", kind: "vsource", value: "SINE(0 1 10)" },
+        { ref: "Vtri", kind: "vsource", value: "SINE(0 1 100k)" },
+        { ref: "Vdd", kind: "vsource", value: "10" },
+        { ref: "U1", kind: "comparator", value: "10 0 0" },
+        { ref: "M1", kind: "nmos", value: "NMOS" },
+        { ref: "M2", kind: "pmos", value: "PMOS" },
+        { ref: "L1", kind: "inductor", value: "100u" },
+        { ref: "C1", kind: "capacitor", value: "1u" },
+        { ref: "R1", kind: "resistor", value: "8" },
+      ],
+      nets: [
+        { name: "IN", pins: ["Vsig.p", "U1.in+"] },
+        { name: "TRI", pins: ["Vtri.p", "U1.in-"] },
+        { name: "PWM", pins: ["U1.out", "M1.g", "M2.g"] },
+        // Model forgot M2.s/M2.b on VDD and M1.s/M1.b on ground.
+        { name: "VDD", pins: ["Vdd.p"] },
+        { name: "SW", pins: ["M1.d", "M2.d", "L1.a"] },
+        { name: "OUT", pins: ["L1.b", "C1.a", "R1.a"] },
+        { name: "0", pins: ["Vsig.n", "Vtri.n", "Vdd.n", "C1.b", "R1.b"] },
+      ],
+      directives: [".tran 200m"],
+    });
+    expect(action.type).toBe("create_asc");
+    if (action.type !== "create_asc") throw new Error("expected create action");
+    assertAssistantDrawingIntegrity(action.document.components, action.document.wires);
+    const circuit = extractCircuit(
+      action.document.components,
+      action.document.wires,
+      action.document.netLabels,
+    );
+    const byRef = new Map(circuit.components.map(({ component, pins }) => [component.label, pins]));
+    expect(byRef.get("M1")).toMatchObject({ g: "PWM", d: "SW", s: "0", b: "0" });
+    expect(byRef.get("M2")).toMatchObject({ g: "PWM", d: "SW", s: "VDD", b: "VDD" });
+    expect(byRef.get("L1")).toMatchObject({ a: "SW", b: "OUT" });
+  });
+
+  it("ties uncovered MOSFET bulk to source and still rejects non-MOS floaters with a MOSFET fix hint", () => {
+    const action = compileAssistantCircuitPlan("mos-bulk-only", {
+      mode: "create",
+      filename: "nmos.asc",
+      components: [
+        { ref: "V1", kind: "vsource", value: "5" },
+        { ref: "M1", kind: "nmos", value: "NMOS" },
+        { ref: "R1", kind: "resistor", value: "1k" },
+      ],
+      nets: [
+        { name: "G", pins: ["M1.g"] },
+        { name: "D", pins: ["M1.d", "R1.a"] },
+        { name: "0", pins: ["V1.n", "M1.s", "R1.b", "V1.p"] },
+      ],
+    });
+    const circuit = extractCircuit(
+      action.document.components,
+      action.document.wires,
+      action.document.netLabels,
+    );
+    expect(circuit.components.find(({ component }) => component.label === "M1")?.pins).toMatchObject({
+      s: "0",
+      b: "0",
+    });
+
+    expect(() => compileAssistantCircuitPlan("pmos-no-rail", {
+      mode: "create",
+      filename: "pmos-float.asc",
+      components: [
+        { ref: "M1", kind: "nmos", value: "NMOS" },
+        { ref: "M2", kind: "pmos", value: "PMOS" },
+        { ref: "R1", kind: "resistor", value: "1k" },
+      ],
+      nets: [
+        { name: "PWM", pins: ["M1.g", "M2.g"] },
+        { name: "SW", pins: ["M1.d", "M2.d", "R1.a"] },
+        // No vsource.p rail — nmos s/b auto-repair to 0, but pmos s stays floating.
+        { name: "0", pins: ["R1.b"] },
+      ],
+    })).toThrow(/M2\.s[\s\S]*MOSFET fix pattern/);
+  });
+
   it("rejects path-like values and unsafe simulator directives", () => {
     expect(() => compileAssistantCircuitPlan("x", {
       ...divider,

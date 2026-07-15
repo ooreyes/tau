@@ -96,6 +96,8 @@ describe("LocalMlxAssistant", () => {
     expect(body.messages[0].content).toContain("a voltage source");
     expect(body.messages[0].content).toContain("Class-D-style approximation");
     expect(body.messages[0].content).toContain("comparator + MOS + LC");
+    expect(body.messages[0].content).toContain("VDD=[Vdd.p,M2.s,M2.b]");
+    expect(body.messages[0].content).toContain("M1.s,M1.b");
     expect(body.messages[0].content).toContain("never list both U1.v- and U1.vee");
   });
 
@@ -328,6 +330,71 @@ describe("LocalMlxAssistant", () => {
     expect(bodies[1]).toContain("more than one net");
     expect(bodies[1]).toContain("each ref.pin appears in exactly one net");
     expect(bodies[1]).toContain("opamp pins are in+,in-,out,v+,v-");
+  });
+
+  it("enriches floating MOSFET repair hints with the half-bridge fix pattern", async () => {
+    // Gate-only MOS plan: after compiler auto-repair still fails (no pmos rail),
+    // the repair loop must surface the exact M2.s / VDD fix pattern.
+    const floatingMosPlan = {
+      mode: "create",
+      filename: "mos-float.asc",
+      components: [
+        { ref: "M1", kind: "nmos", value: "NMOS" },
+        { ref: "M2", kind: "pmos", value: "PMOS" },
+        { ref: "R1", kind: "resistor", value: "1k" },
+      ],
+      nets: [
+        { name: "PWM", pins: ["M1.g", "M2.g"] },
+        { name: "SW", pins: ["M1.d", "M2.d", "R1.a"] },
+        { name: "0", pins: ["R1.b"] },
+      ],
+    };
+    const fixedPlan = {
+      mode: "create",
+      filename: "mos-float.asc",
+      components: [
+        { ref: "Vdd", kind: "vsource", value: "10" },
+        { ref: "M1", kind: "nmos", value: "NMOS" },
+        { ref: "M2", kind: "pmos", value: "PMOS" },
+        { ref: "R1", kind: "resistor", value: "1k" },
+      ],
+      nets: [
+        { name: "PWM", pins: ["M1.g", "M2.g"] },
+        { name: "VDD", pins: ["Vdd.p", "M2.s", "M2.b"] },
+        { name: "SW", pins: ["M1.d", "M2.d", "R1.a"] },
+        { name: "0", pins: ["Vdd.n", "M1.s", "M1.b", "R1.b"] },
+      ],
+    };
+    const responses = [
+      completion({
+        content: "",
+        tool_calls: [{
+          id: "float",
+          type: "function",
+          function: { name: "build_tau_circuit", arguments: JSON.stringify(floatingMosPlan) },
+        }],
+      }),
+      completion({
+        content: "",
+        tool_calls: [{
+          id: "fixed",
+          type: "function",
+          function: { name: "build_tau_circuit", arguments: JSON.stringify(fixedPlan) },
+        }],
+      }),
+    ];
+    const bodies: string[] = [];
+    const provider = new LocalMlxAssistant({ fetchImpl: vi.fn(async (_input, init) => {
+      bodies.push(String(init?.body));
+      return responses.shift()!;
+    }) });
+
+    const reply = await provider.complete(request());
+    expect(reply.actions).toHaveLength(1);
+    expect(bodies[1]).toContain("M2.s");
+    expect(bodies[1]).toContain("MOSFET fix pattern");
+    expect(bodies[1]).toContain("M2.s+M2.b on VDD");
+    expect(bodies[1]).toContain("never leave s or b off every net");
   });
 
   it("executes an inspect_simulation_signal round-trip and answers from the tool result, never the raw payload", async () => {

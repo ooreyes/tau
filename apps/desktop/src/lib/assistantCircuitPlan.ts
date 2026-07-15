@@ -216,6 +216,106 @@ function formatPinConflictHint(
   );
 }
 
+const MOS_KINDS = new Set<ComponentKind>(["nmos", "pmos"]);
+
+/** Positive-rail names models use for half-bridge / Class-D supplies. */
+function isPositiveSupplyNetName(name: string): boolean {
+  return /^(?:vdd|vcc|vp|v\+|avdd|dvdd|pvdd|supply|vs\+)$/i.test(name);
+}
+
+/**
+ * Safe MOS pin defaults when the model omits source/bulk (classic Class-D miss:
+ * gates+drains wired, M1.s/M2.s left floating → compile rejection).
+ *
+ * Rules (documented product behavior):
+ * - Uncovered nmos `s` → attach to ground net `0` (low-side / common-source return).
+ * - Uncovered pmos `s` → attach to a positive supply net: prefer a net named
+ *   VDD/VCC/…, else any non-ground net that already holds a vsource `.p`.
+ * - Uncovered `b` (bulk) → tie to that device's source net (after source repair).
+ * Gate/drain are never invented — those stay hard failures for the repair loop.
+ */
+function autoRepairMosSourceAndBulk(
+  components: CircuitPlanComponent[],
+  nets: CircuitPlanNet[],
+): CircuitPlanNet[] {
+  const mutable = nets.map((net) => ({ name: net.name, pins: [...net.pins] }));
+  const connected = new Set(mutable.flatMap((net) => net.pins.map((pin) => pin.toLowerCase())));
+  const byRef = new Map(components.map((component) => [component.ref.toLowerCase(), component]));
+
+  const attach = (netName: string, pin: string): boolean => {
+    const net = mutable.find((entry) => entry.name === netName);
+    if (!net) return false;
+    const key = pin.toLowerCase();
+    if (connected.has(key)) return true;
+    net.pins.push(pin);
+    connected.add(key);
+    return true;
+  };
+
+  const netHolding = (pinKey: string): string | undefined =>
+    mutable.find((net) => net.pins.some((pin) => pin.toLowerCase() === pinKey))?.name;
+
+  const resolvePmosSourceNet = (): string | undefined => {
+    const named = mutable.find((net) => net.name !== "0" && isPositiveSupplyNetName(net.name));
+    if (named) return named.name;
+    for (const net of mutable) {
+      if (net.name === "0") continue;
+      for (const token of net.pins) {
+        const split = token.lastIndexOf(".");
+        if (split <= 0) continue;
+        const ref = token.slice(0, split);
+        const pinId = token.slice(split + 1).toLowerCase();
+        if (pinId === "p" && byRef.get(ref.toLowerCase())?.kind === "vsource") {
+          return net.name;
+        }
+      }
+    }
+    return undefined;
+  };
+
+  for (const component of components) {
+    if (!MOS_KINDS.has(component.kind)) continue;
+    const sourcePin = `${component.ref}.s`;
+    const bulkPin = `${component.ref}.b`;
+    const sourceKey = sourcePin.toLowerCase();
+    const bulkKey = bulkPin.toLowerCase();
+
+    if (!connected.has(sourceKey)) {
+      const target = component.kind === "nmos" ? "0" : resolvePmosSourceNet();
+      if (!target || !attach(target, sourcePin)) continue;
+    }
+
+    if (!connected.has(bulkKey)) {
+      const sourceNet = netHolding(sourceKey);
+      if (sourceNet) attach(sourceNet, bulkPin);
+    }
+  }
+
+  return mutable;
+}
+
+/** Repair-loop hint when pins remain uncovered after MOS auto-repair. */
+function formatUncoveredPinsHint(uncoveredPins: string[], components: CircuitPlanComponent[]): string {
+  const verb = uncoveredPins.length === 1 ? "is" : "are";
+  const base = (
+    `${uncoveredPins.join(", ")} ${verb} not connected to any net; every pin needs a net `
+    + `(use a dedicated single-pin net for a deliberately unused pin)`
+  );
+  const byRef = new Map(components.map((component) => [component.ref.toLowerCase(), component]));
+  const hasMos = uncoveredPins.some((token) => {
+    const split = token.lastIndexOf(".");
+    const kind = byRef.get(token.slice(0, split).toLowerCase())?.kind;
+    return kind === "nmos" || kind === "pmos";
+  });
+  if (!hasMos) return base;
+  return (
+    `${base}. MOSFET fix pattern: nmos source+bulk on ground `
+    + `(add M1.s,M1.b to net 0); pmos source+bulk on the positive rail `
+    + `(add M2.s,M2.b next to Vdd.p). Half-bridge example: `
+    + `VDD=[Vdd.p,M2.s,M2.b], SW=[M1.d,M2.d,L1.a], 0=[Vdd.n,M1.s,M1.b,...].`
+  );
+}
+
 export function canonicalizeAssistantPin(kind: ComponentKind, pin: string): string {
   const aliases = PIN_ALIASES[kind];
   const aliased = aliases?.[pin.toLowerCase()];
@@ -406,8 +506,13 @@ function parsePlan(input: unknown): CircuitPlan {
   }
   if (!nets.some((net) => net.name === "0")) throw new Error("circuit plan needs a 0 ground net");
 
+  // Models routinely wire MOSFET gates/drains and omit source/bulk. Auto-repair
+  // those two pins when the topology is unambiguous (see autoRepairMosSourceAndBulk);
+  // remaining floaters still reject with an explicit MOSFET fix pattern.
+  const repairedNets = autoRepairMosSourceAndBulk(components, nets);
+
   const connectedPins = new Set(
-    nets.flatMap((net) => net.pins.map((pin) => pin.toLowerCase())),
+    repairedNets.flatMap((net) => net.pins.map((pin) => pin.toLowerCase())),
   );
 
   // A pin absent from every net is a silently floating part — the simulation
@@ -422,9 +527,7 @@ function parsePlan(input: unknown): CircuitPlan {
       .filter((pin) => !connectedPins.has(pin.toLowerCase())),
   );
   if (uncoveredPins.length > 0) {
-    throw new Error(
-      `${uncoveredPins.join(", ")} ${uncoveredPins.length === 1 ? "is" : "are"} not connected to any net; every pin needs a net (use a dedicated single-pin net for a deliberately unused pin)`,
-    );
+    throw new Error(formatUncoveredPinsHint(uncoveredPins, components));
   }
 
   const rawDirectives = source.directives ?? [];
@@ -441,7 +544,7 @@ function parsePlan(input: unknown): CircuitPlan {
   const filename = source.mode === "create"
     ? cleanText(source.filename ?? "untitled.asc", "filename", 120)
     : undefined;
-  return { mode: source.mode, filename, components, nets, directives };
+  return { mode: source.mode, filename, components, nets: repairedNets, directives };
 }
 
 function finiteQuantity(value: string, ref: string, unit: string): number {
