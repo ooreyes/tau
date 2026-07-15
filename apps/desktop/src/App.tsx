@@ -789,9 +789,12 @@ function App() {
       throw error;
     }
     pendingAutoRunRef.current = pickAutoRunAnalysis(action.document.directives ?? []);
-    openAscFromProject(path, basename(path), action.source);
+    // Open the Tau-native document (wires meet symbol pins). The ASC on disk
+    // remains the durable interchange file; re-importing it here would attach
+    // LTspice pin overrides and visually detach wires from Tau glyphs.
+    openDocument(action.document, basename(path), path, ascRewriteRisks(action.source));
     showNotice(`Created ${basename(path)}`);
-  }, [createSchematicInRoot, deleteProjectNode, openAscFromProject, showNotice, writeSim]);
+  }, [createSchematicInRoot, deleteProjectNode, openDocument, showNotice, writeSim]);
 
   const applyAssistantCircuit = useCallback((action: AssistantApplyCurrentAscAction) => {
     pendingAutoRunRef.current = pickAutoRunAnalysis(action.document.directives ?? []);

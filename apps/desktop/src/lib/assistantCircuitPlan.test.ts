@@ -5,6 +5,8 @@ import {
   ASSISTANT_COMPOSITE_KINDS,
   ASSISTANT_DIRECT_GENERATABLE_KINDS,
   ASSISTANT_GENERATABLE_KINDS,
+  assertAssistantDrawingIntegrity,
+  assistantSchematicSvg,
   compileAssistantCircuitPlan,
 } from "./assistantCircuitPlan";
 
@@ -387,10 +389,42 @@ describe("assistant circuit plan", () => {
     expect(action.type).toBe("create_asc");
     if (action.type !== "create_asc") throw new Error("expected create action");
     const byLabel = new Map(action.document.components.map((component) => [component.label, component]));
-    // Series R1 bridges two signal nets between levels → horizontal.
-    expect(byLabel.get("R1")?.rotation).toBe(270);
-    // Shunt R2 bridges signal to ground → vertical, current top-to-bottom.
-    expect(byLabel.get("R2")?.rotation).toBe(0);
+    // Series R1 bridges two signal nets between levels → native horizontal.
+    expect(byLabel.get("R1")?.rotation).toBe(0);
+    // Shunt R2 bridges signal to ground → native vertical (a on top).
+    expect(byLabel.get("R2")?.rotation).toBe(90);
+  });
+
+  it("draws a connected LED circuit with wires on native symbol pins", () => {
+    const action = compileAssistantCircuitPlan("led-layout", {
+      mode: "create",
+      filename: "led.asc",
+      components: [
+        { ref: "V1", kind: "vsource", value: "5" },
+        { ref: "R1", kind: "resistor", value: "330" },
+        { ref: "D1", kind: "led", value: "LED" },
+      ],
+      nets: [
+        { name: "VIN", pins: ["V1.p", "R1.a"] },
+        { name: "LED_A", pins: ["R1.b", "D1.a"] },
+        { name: "0", pins: ["D1.k", "V1.n"] },
+      ],
+      directives: [".tran 10m"],
+    });
+    expect(action.type).toBe("create_asc");
+    if (action.type !== "create_asc") throw new Error("expected create action");
+    // Document must be native Tau geometry (no LTspice pin overrides).
+    expect(action.document.components.every((component) => !component.pinOverride?.length)).toBe(true);
+    assertAssistantDrawingIntegrity(action.document.components, action.document.wires);
+    const svg = assistantSchematicSvg(
+      action.document.components,
+      action.document.wires,
+      action.document.netLabels ?? [],
+    );
+    expect(svg).toContain("<svg");
+    expect(svg).toContain("V1");
+    expect(svg).toContain("R1");
+    expect(svg).toContain("D1");
   });
 
   it("preserves both ports of a terminated transmission line", () => {

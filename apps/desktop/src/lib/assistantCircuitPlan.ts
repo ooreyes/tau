@@ -1,5 +1,4 @@
 import { routeWireSmart } from "../components/Canvas.geometry";
-import { importAsc } from "../io/ascImport";
 import { schematicToAsc } from "../io/ascExport";
 import { CATALOG_BY_KIND } from "../schematic/catalog";
 import { extractCircuit } from "../schematic/netlist";
@@ -422,25 +421,19 @@ function lowerCompositePlan(plan: CircuitPlan): DirectCircuitPlan {
   return { ...plan, components, nets, directives: [...plan.directives, ...internalDirectives] };
 }
 
-// Column/row pitch for the level-based grid. Chosen generously relative to
-// every symbol's body box (see schematic/symbols.ts SYMBOL_BODY, largest
-// half-extent ~30) so components never collide regardless of the rotation
-// chosen below, without needing per-rotation clearance adjustments.
-const COLUMN_PITCH = 176;
-const ROW_PITCH = 128;
+// Column/row pitch for the level-based grid. Sized for Tau's native symbol
+// bodies (see schematic/symbols.ts) so parts never collide and wires have
+// room to run between them like a hand-drawn schematic.
+const COLUMN_PITCH = 256;
+const ROW_PITCH = 208;
 
-// Two-pin passives whose LTspice symbol (see io/ascImport.ts LTSPICE_PINS)
-// round-trips cleanly through resolveAscPinGeometry at every rotation: pin
-// positions stay grid-aligned and the resolved rotation always matches the
-// requested one (verified empirically — see report). Multi-pin kinds
-// (opamp, transistors, mos, controlled sources, …) are intentionally left
-// out: their pin banks are asymmetric enough that a wrong rotation choice
-// risks misreading which physical pin lands where post-round-trip.
+// Two-pin passives Tau draws natively with left/right pins at rotation 0.
+// Rotation below uses Tau's native pin transform (NOT LTspice ASC banks).
 const ROTATABLE_TWO_PIN_KINDS = new Set<ComponentKind>([
   "resistor", "capacitor", "inductor", "diode", "led", "zener",
 ]);
 
-/** ref -> refs of every OTHER component sharing at least one net with it. */
+/** net name → refs of every component on that net. */
 function netMembership(plan: DirectCircuitPlan): Map<string, string[]> {
   const members = new Map<string, string[]>();
   for (const net of plan.nets) {
@@ -451,19 +444,9 @@ function netMembership(plan: DirectCircuitPlan): Map<string, string[]> {
 }
 
 /**
- * Choose a rotation for a two-pin passive so its induced wire reads as a
- * person would draw it, using the SAME rotation values Tau's editor and ASC
- * round-trip already use (0/90/180/270 — see schematic/types.ts Rotation).
- *
- * Empirically (via schematicToAsc → importAsc → getComponentPins on a
- * resistor/capacitor/inductor/diode/led/zener), these kinds' first local pin
- * (a) and second local pin (b/k) resolve as: rotation 0 → a above b (top to
- * bottom); rotation 180 → b above a; rotation 270 → a left of b; rotation 90
- * → b left of a. So: a part bridging a signal net down to ground stays
- * vertical (0, or 180 if the plan wired ground to pin a instead of b/k) so
- * current reads top-to-bottom; a part in series between two different
- * component levels goes horizontal (270/90, whichever puts its lower-level
- * neighbor on the left) so current reads left-to-right with its neighbors.
+ * Orient two-pin passives for Tau's native symbols (horizontal at rotation 0):
+ * - Series between different levels → horizontal, pin a toward the source.
+ * - Shunt to ground → vertical, pin a on top / pin b|k on bottom (rotation 90).
  */
 function rotationForComponent(
   component: DirectCircuitPlan["components"][number],
@@ -478,10 +461,8 @@ function rotationForComponent(
   if (!net0 || !net1 || net0 === net1) return 0;
 
   if (net0 === "0" || net1 === "0") {
-    // Bridges a signal net (the non-ground pin) to ground: keep it vertical.
-    // pin1 (b/k) already resolves below pin0 (a) at rotation 0, so only flip
-    // to 180 when the plan connected ground to pin0 instead.
-    return net1 === "0" ? 0 : 180;
+    // Native rot 90 puts pin0 (a) above pin1 (b/k). Flip to 270 if ground is on a.
+    return net1 === "0" ? 90 : 270;
   }
 
   const ownLevel = levels.get(component.ref) ?? 0;
@@ -493,8 +474,8 @@ function rotationForComponent(
   const level0 = neighborLevel(net0);
   const level1 = neighborLevel(net1);
   if (level0 === null || level1 === null || level0 === level1) return 0;
-  // pin0 should face its lower-level (leftward) neighbor.
-  return level0 < level1 ? 270 : 90;
+  // Native rot 0: pin0 on the left. Prefer that when pin0 faces the upstream level.
+  return level0 < level1 ? 0 : 180;
 }
 
 function componentLevels(plan: DirectCircuitPlan): Map<string, number> {
@@ -538,31 +519,11 @@ function layoutComponents(plan: DirectCircuitPlan): SchematicComponent[] {
       id: `ai-component-${index + 1}`,
       kind: component.kind,
       x: 160 + level * COLUMN_PITCH,
-      y: 128 + row * ROW_PITCH,
+      y: 192 + row * ROW_PITCH,
       rotation: rotationForComponent(component, levels, netByPin, netMembers),
       value: component.value ?? CATALOG_BY_KIND[component.kind].defaultValue,
       label: component.ref,
     };
-  });
-}
-
-/** Resolve the actual LTspice symbol-local pin banks before routing. Tau's
- * native symbols are center-anchored while ASC SYMBOL records use library
- * origins; routing against native pins and importing afterward would leave
- * visually plausible wires detached from the re-imported electrical pins. */
-function resolveAscPinGeometry(components: SchematicComponent[]): SchematicComponent[] {
-  const exported = schematicToAsc({ components, wires: [], netLabels: [] });
-  const lossy = exported.warnings.find((warning) => /skipped|no LTspice symbol/i.test(warning));
-  if (lossy) throw new Error(lossy);
-  const imported = importAsc(exported.text);
-  if (imported.warnings.length > 0) throw new Error(imported.warnings[0]);
-  const byLabel = new Map(imported.components.map((component) => [component.label, component]));
-  return components.map((component) => {
-    const resolved = byLabel.get(component.label);
-    if (!resolved || resolved.kind !== component.kind) {
-      throw new Error(`${component.label} cannot round-trip through Tau's ASC symbol library`);
-    }
-    return resolved;
   });
 }
 
@@ -576,12 +537,86 @@ function pinPoint(components: readonly SchematicComponent[], token: string): Poi
   return { x: pin.x, y: pin.y };
 }
 
+function pointsEqual(a: Point, b: Point): boolean {
+  return a.x === b.x && a.y === b.y;
+}
+
+/**
+ * Reject drawings where wires miss the symbols they claim to connect. This is
+ * the geometric stand-in for a screenshot QA pass: every wire end must land on
+ * a real Tau pin (or the ground origin), and no two parts may share a center.
+ */
+export function assertAssistantDrawingIntegrity(
+  components: readonly SchematicComponent[],
+  wires: readonly SchematicWire[],
+): void {
+  const pinPoints: Point[] = [];
+  const centers = new Set<string>();
+  for (const component of components) {
+    const key = `${component.x},${component.y}`;
+    if (centers.has(key)) {
+      throw new Error(`Tau layout overlapped components at (${component.x}, ${component.y})`);
+    }
+    centers.add(key);
+    for (const pin of getComponentPins(component)) pinPoints.push({ x: pin.x, y: pin.y });
+  }
+  for (const wire of wires) {
+    if (wire.points.length < 2) throw new Error("Tau layout produced an empty wire");
+    for (const end of [wire.points[0], wire.points[wire.points.length - 1]]) {
+      const onPin = pinPoints.some((pin) => pointsEqual(pin, end));
+      if (!onPin) {
+        throw new Error(
+          `Tau layout left a wire floating at (${end.x}, ${end.y}) — not attached to any symbol pin`,
+        );
+      }
+    }
+  }
+}
+
+/**
+ * SVG snapshot of an assistant layout for visual regression / human QA.
+ * Coordinates match the schematic canvas (y grows downward).
+ */
+export function assistantSchematicSvg(
+  components: readonly SchematicComponent[],
+  wires: readonly SchematicWire[],
+  netLabels: readonly NetLabel[] = [],
+): string {
+  const pins = components.flatMap((component) => getComponentPins(component));
+  const xs = [...components.map((c) => c.x), ...wires.flatMap((w) => w.points.map((p) => p.x)), 0];
+  const ys = [...components.map((c) => c.y), ...wires.flatMap((w) => w.points.map((p) => p.y)), 0];
+  const minX = Math.min(...xs) - 64;
+  const minY = Math.min(...ys) - 64;
+  const maxX = Math.max(...xs) + 64;
+  const maxY = Math.max(...ys) + 64;
+  const body = [
+    ...wires.map((wire) => {
+      const d = wire.points.map((p, i) => `${i === 0 ? "M" : "L"}${p.x} ${p.y}`).join(" ");
+      return `<path d="${d}" fill="none" stroke="#ccc" stroke-width="2"/>`;
+    }),
+    ...components.map((component) =>
+      `<g transform="translate(${component.x} ${component.y}) rotate(${component.rotation})">`
+      + `<rect x="-24" y="-16" width="48" height="32" fill="none" stroke="#8cf" stroke-width="2"/>`
+      + `<text y="4" text-anchor="middle" fill="#8cf" font-size="12">${component.label || component.kind}</text>`
+      + `</g>`,
+    ),
+    ...pins.map((pin) => `<circle cx="${pin.x}" cy="${pin.y}" r="3" fill="#f66"/>`),
+    ...netLabels.map((label) =>
+      `<text x="${label.x + 6}" y="${label.y - 6}" fill="#8f8" font-size="11">${label.text}</text>`,
+    ),
+  ].join("");
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${minX} ${minY} ${maxX - minX} ${maxY - minY}">${body}</svg>`;
+}
+
 function compileDocument(plan: DirectCircuitPlan): {
   components: SchematicComponent[];
   wires: SchematicWire[];
   netLabels: NetLabel[];
 } {
-  const components = resolveAscPinGeometry(layoutComponents(plan));
+  // Layout and route against Tau's native pin banks only. Routing against
+  // LTspice ASC pin overrides made wires attach to coordinates the canvas
+  // symbols do not draw — the "disconnected spaghetti" failure mode.
+  const components = layoutComponents(plan);
   const groundNet = plan.nets.find((net) => net.name === "0");
   if (!groundNet) throw new Error("circuit plan needs a 0 ground net");
   const groundOrigin = pinPoint(components, groundNet.pins[0]);
@@ -589,7 +624,7 @@ function compileDocument(plan: DirectCircuitPlan): {
     id: "ai-ground-1",
     kind: "ground",
     x: Math.round(groundOrigin.x / GRID) * GRID,
-    y: Math.round((groundOrigin.y + 80) / GRID) * GRID,
+    y: Math.round((groundOrigin.y + 96) / GRID) * GRID,
     rotation: 0,
     value: "",
     label: "",
@@ -606,10 +641,6 @@ function compileDocument(plan: DirectCircuitPlan): {
     const anchor = points[0];
     const connected = [anchor];
     for (const target of points.slice(1)) {
-      // Grow a compact electrical tree instead of fanning every branch from
-      // the first pin. The star layout creates long duplicate trunks; when the
-      // router avoids those same-net trunks it can choose a shorter overlap
-      // with a different net and silently short the exported circuit.
       const source = connected.reduce((nearest, candidate) => {
         const candidateDistance = Math.abs(candidate.x - target.x) + Math.abs(candidate.y - target.y);
         const nearestDistance = Math.abs(nearest.x - target.x) + Math.abs(nearest.y - target.y);
@@ -623,16 +654,22 @@ function compileDocument(plan: DirectCircuitPlan): {
       netLabels.push({ id: `ai-label-${labelIndex++}`, x: anchor.x, y: anchor.y, text: net.name });
     }
   }
+  assertAssistantDrawingIntegrity(components, wires);
   return { components, wires, netLabels };
 }
 
-/** Prove that ASC serialization preserved the requested physical node
- * partition. A route can remain visually plausible while overlapping another
- * wire; comparing partitions prevents Tau from returning that silently
- * shorted or disconnected proposal. */
-function validateRoundTripTopology(plan: DirectCircuitPlan, source: string): void {
-  const document = importAsc(source);
-  const circuit = extractCircuit(document.components, document.wires, document.netLabels);
+/** Prove the on-canvas (native Tau) document preserves the requested nets. */
+function validateNativeTopology(
+  plan: DirectCircuitPlan,
+  components: readonly SchematicComponent[],
+  wires: readonly SchematicWire[],
+  netLabels: readonly NetLabel[],
+): void {
+  const circuit = extractCircuit(
+    [...components],
+    [...wires],
+    [...netLabels],
+  );
   const pinsByRef = new Map(circuit.components.map(({ component, pins }) => [component.label, pins]));
   const actualToExpected = new Map<string, string>();
 
@@ -662,12 +699,31 @@ export function compileAssistantCircuitPlan(id: string, input: unknown): Assista
   if (!id || id.length > 160) throw new Error("tool call has no valid id");
   const plan = parsePlan(input);
   const loweredPlan = lowerCompositePlan(plan);
-  const document = compileDocument(loweredPlan);
-  const exported = schematicToAsc({ ...document, directives: loweredPlan.directives });
+  const native = compileDocument(loweredPlan);
+  validateNativeTopology(loweredPlan, native.components, native.wires, native.netLabels);
+  assertAssistantDrawingIntegrity(native.components, native.wires);
+
+  const exported = schematicToAsc({ ...native, directives: loweredPlan.directives });
   const lossy = exported.warnings.filter((warning) => /skipped|no LTspice symbol/i.test(warning));
   if (lossy.length > 0) throw new Error(lossy[0]);
-  validateRoundTripTopology(loweredPlan, exported.text);
-  return plan.mode === "create"
+
+  // ASC is the durable file format; the in-app document must stay on Tau's
+  // native pin geometry so the canvas symbols and wires actually meet.
+  const nativeDocument = {
+    components: native.components,
+    wires: native.wires,
+    probes: [] as [],
+    netLabels: native.netLabels,
+    directives: loweredPlan.directives,
+  };
+  const action = plan.mode === "create"
     ? parseCreateAscAction(id, { filename: plan.filename, source: exported.text })
     : parseApplyCurrentAscAction(id, { source: exported.text });
+  return {
+    ...action,
+    document: nativeDocument,
+    componentCount: native.components.filter((component) => component.kind !== "ground").length,
+    wireCount: native.wires.length,
+  };
 }
+
