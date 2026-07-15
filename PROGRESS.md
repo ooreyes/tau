@@ -10,13 +10,34 @@
 ## ⏱ HEARTBEAT
 - **Headline metric:** 1759 reviewed-tree tests green · corpus 82/82 import · 82/82 op-converge · 79/82 warning-clean
 - **Run started (UTC):** 2026-07-15T02:28Z
-- **Synced to origin:** auto/ltspice-parity @ 59e2bd4.
+- **Synced to origin:** auto/ltspice-parity @ c19b46e.
 - **Claimed unit:** §9 first-run local AI install + setup dialog (CURSOR EDITS).
-- **Status:** IN PROGRESS
-- **Last completed sub-step:** native `install_local_ai_runtime`, LocalAiSetupDialog,
-  Install MLX LM in Settings, clarifying-question + passive-rotation layout already on branch.
-- **Plan:** finish gates, commit/push, verify unsigned DMG path.
-- **Next step:** packaged-app smoke after this unit lands.
+- **Status:** DONE
+- **Last completed sub-step:** unsigned DMG rebuilt; first-run Local AI setup
+  and Install MLX LM pushed.
+- **Plan:** keep polishing assistant layout/clarifying questions and ship path.
+- **Next step:** Omar signs/notarizes when ready; continue corpus/DoD leftovers.
+
+---
+
+## 2026-07-15T02:40Z — auto/ltspice-parity — CURSOR EDITS: first-run Local AI Mac setup (§9)
+
+### What I did
+- Pushed prior assistant auto-run + human-like passive rotation work.
+- Added native `install_local_ai_runtime` (audited `uv tool install mlx-lm` only),
+  first-run `LocalAiSetupDialog`, Settings **Install MLX LM**, and empty-state
+  copy oriented around the desktop app + assistant — not a website flow.
+
+### Tests and QA
+- Desktop typecheck + Vitest: 1759 passed / 6 skipped.
+- Rust fmt/clippy/`cargo test`: pass (18 + 1 ignored ngspice smoke).
+- `pnpm --filter @tau/desktop tauri build`: Tau.app + `Tau_0.2.0_aarch64.dmg`.
+
+### Parity items
+- §9: Installer + onboarding → 🟡 (unsigned DMG + first-run local AI; signing human-owned).
+
+### Next step
+- Apple signing/notarization (Omar). Broader DoD corpus/waveform items remain.
 
 ---
 
