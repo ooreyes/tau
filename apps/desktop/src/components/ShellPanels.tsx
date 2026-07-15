@@ -40,6 +40,19 @@ import { basename, isAscFile, type ProjectNode } from "../project/types";
 import type { AnalysisResult } from "../simulation/linearTransient";
 import { formatEngineering } from "../simulation/quantity";
 import { loadAssistantApiKey, saveAssistantApiKey } from "../lib/assistant";
+import {
+  saveAssistantPreferences,
+  useAssistantPreferences,
+  type AssistantProviderChoice,
+} from "../lib/assistantPreferences";
+import {
+  LOCAL_AI_PRESETS,
+  getLocalAiStatus,
+  startLocalAi,
+  stopLocalAi,
+  type LocalAiPresetInfo,
+  type LocalAiStatus,
+} from "../lib/localAiRuntime";
 import { clampPanelWidth, PanelResizeHandle, usePanelWidth, type PanelWidthConfig } from "./panelResize";
 
 /** Drag-to-resize bounds for the two side panels (§11 Unit B). Minimums keep
@@ -429,7 +442,10 @@ export function ExplorerPanel({
             type="button"
             title="New schematic file"
             aria-label="New schematic file"
-            onClick={() => setCreateDraft({ kind: "file", parentPath: rootPath, name: "untitled.asc" })}
+            onClick={() => {
+              if (!expanded.includes(rootPath)) toggleExpanded(rootPath);
+              setCreateDraft({ kind: "file", parentPath: rootPath, name: "untitled.asc" });
+            }}
           >
             <FilePlus size={15} strokeWidth={1.7} />
           </button>
@@ -437,7 +453,10 @@ export function ExplorerPanel({
             type="button"
             title="New folder"
             aria-label="New folder"
-            onClick={() => setCreateDraft({ kind: "folder", parentPath: rootPath, name: "New Folder" })}
+            onClick={() => {
+              if (!expanded.includes(rootPath)) toggleExpanded(rootPath);
+              setCreateDraft({ kind: "folder", parentPath: rootPath, name: "New Folder" });
+            }}
           >
             <FolderPlus size={15} strokeWidth={1.7} />
           </button>
@@ -496,7 +515,7 @@ export function ExplorerPanel({
       />
 
       <p id="explorer-drag-help" className="sr-only">
-        Drag a file or folder onto a folder, or onto empty explorer space, to move it.
+        Drag a file or folder onto another folder, or onto the visible project root row, to move it.
       </p>
 
       <div
@@ -514,6 +533,34 @@ export function ExplorerPanel({
           void moveDraggedNode(rootPath, event);
         }}
       >
+        <button
+          type="button"
+          className="tree-folder-row tree-project-root-row"
+          data-drop-target={dropTargetPath === rootPath || undefined}
+          aria-label={`Project root ${rootName ?? "Schematics"}; drop files or folders here`}
+          aria-describedby="explorer-drag-help"
+          title="Project root — drop files or folders here; click to collapse or expand"
+          aria-expanded={expanded.includes(rootPath)}
+          onClick={() => toggleExpanded(rootPath)}
+          onDragOver={(event) => markDropTarget(event, rootPath)}
+          onDragLeave={(event) => {
+            if (!event.currentTarget.contains(event.relatedTarget as Node | null)) clearDropTarget();
+          }}
+          onDrop={(event) => {
+            const source = dragSource(event);
+            if (!source || !canMoveProjectNode(source.path, rootPath)) return;
+            event.preventDefault();
+            event.stopPropagation();
+            void moveDraggedNode(rootPath, event);
+          }}
+        >
+          <span className={`tree-caret${expanded.includes(rootPath) ? " open" : ""}`} aria-hidden="true">
+            <ChevronRight size={13} strokeWidth={1.6} />
+          </span>
+          <FolderOpen className="tree-folder-icon" size={14} strokeWidth={1.5} aria-hidden="true" />
+          <span className="tree-folder">{rootName ?? "Schematics"}</span>
+          <span className="tree-project-root-kind" aria-hidden="true">Project root</span>
+        </button>
         {createDraft && (
           <div className="tree-create-row" data-kind={createDraft.kind}>
             <span className="tree-create-icon" aria-hidden="true">
@@ -540,32 +587,34 @@ export function ExplorerPanel({
             />
           </div>
         )}
-        <ProjectTree
-          nodes={tree}
-          depth={0}
-          expanded={expanded}
-          activeFilePath={activeFilePath}
-          onToggle={toggleExpanded}
-          onOpenFile={openNode}
-          onNewFolder={async (parent) => {
-            setCreateDraft({ kind: "folder", parentPath: parent, name: "New Folder" });
-          }}
-          onNewFile={async (parent) => {
-            setCreateDraft({ kind: "file", parentPath: parent, name: "untitled.asc" });
-          }}
-          onDelete={async (path, name) => {
-            if (!window.confirm(`Delete “${name}”?`)) return;
-            await deleteNode(path);
-            onNotice(`Deleted ${name}`);
-          }}
-          draggedPath={draggedNode?.path ?? null}
-          dropTargetPath={dropTargetPath}
-          onDragStart={beginNodeDrag}
-          onDragEnd={endNodeDrag}
-          onDragOverFolder={markDropTarget}
-          onDragLeaveFolder={clearDropTarget}
-          onDropFolder={(event, destination) => { void moveDraggedNode(destination, event); }}
-        />
+        {expanded.includes(rootPath) && (
+          <ProjectTree
+            nodes={tree}
+            depth={0}
+            expanded={expanded}
+            activeFilePath={activeFilePath}
+            onToggle={toggleExpanded}
+            onOpenFile={openNode}
+            onNewFolder={async (parent) => {
+              setCreateDraft({ kind: "folder", parentPath: parent, name: "New Folder" });
+            }}
+            onNewFile={async (parent) => {
+              setCreateDraft({ kind: "file", parentPath: parent, name: "untitled.asc" });
+            }}
+            onDelete={async (path, name) => {
+              if (!window.confirm(`Delete “${name}”?`)) return;
+              await deleteNode(path);
+              onNotice(`Deleted ${name}`);
+            }}
+            draggedPath={draggedNode?.path ?? null}
+            dropTargetPath={dropTargetPath}
+            onDragStart={beginNodeDrag}
+            onDragEnd={endNodeDrag}
+            onDragOverFolder={markDropTarget}
+            onDragLeaveFolder={clearDropTarget}
+            onDropFolder={(event, destination) => { void moveDraggedNode(destination, event); }}
+          />
+        )}
       </div>
 
       {error && <p className="explorer-error" role="alert">{error}</p>}
@@ -622,6 +671,7 @@ function ProjectTree({
                 style={{ paddingLeft: 8 + depth * 12 }}
                 draggable
                 data-dragging={draggedPath === node.path || undefined}
+                aria-grabbed={draggedPath === node.path}
                 data-drop-target={dropTargetPath === node.path || undefined}
                 aria-describedby="explorer-drag-help"
                 title={`Drag ${node.name} onto another folder to move it`}
@@ -686,6 +736,7 @@ function ProjectTree({
             aria-current={active ? "page" : undefined}
             draggable
             data-dragging={draggedPath === node.path || undefined}
+            aria-grabbed={draggedPath === node.path}
             aria-describedby="explorer-drag-help"
             title={`Drag ${node.name} onto a folder to move it`}
             onClick={() => onOpenFile(node.path, node.name)}
@@ -1302,6 +1353,68 @@ export function SettingsPanel({
   const clearProbes = useSchematic((s) => s.clearProbes);
   const setProbeColor = useSchematic((s) => s.setProbeColor);
   const [apiKeyInput, setApiKeyInput] = useState(loadAssistantApiKey);
+  const assistantPreferences = useAssistantPreferences();
+  const [localAiStatus, setLocalAiStatus] = useState<LocalAiStatus | null>(null);
+  const [localAiBusy, setLocalAiBusy] = useState(false);
+  const [localAiError, setLocalAiError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (assistantPreferences.provider !== "local-mlx") return;
+    let cancelled = false;
+    setLocalAiStatus(null);
+    setLocalAiError(null);
+    void getLocalAiStatus().then((status) => {
+      if (!cancelled) setLocalAiStatus(status);
+    }).catch((error: unknown) => {
+      if (!cancelled) {
+        setLocalAiError(error instanceof Error ? error.message : "Could not inspect the local MLX runtime.");
+      }
+    });
+    return () => { cancelled = true; };
+  }, [assistantPreferences.provider, assistantPreferences.localModel]);
+
+  // Starting is asynchronous in native code: poll only while weights are
+  // loading, and stop immediately once the endpoint reports ready/error.
+  useEffect(() => {
+    if (assistantPreferences.provider !== "local-mlx" || localAiStatus?.state !== "starting") return;
+    let cancelled = false;
+    const timer = globalThis.setInterval(() => {
+      void getLocalAiStatus().then((status) => {
+        if (!cancelled) setLocalAiStatus(status);
+      }).catch((error: unknown) => {
+        if (!cancelled) setLocalAiError(error instanceof Error ? error.message : "Could not inspect the local MLX runtime.");
+      });
+    }, 900);
+    return () => {
+      cancelled = true;
+      globalThis.clearInterval(timer);
+    };
+  }, [assistantPreferences.provider, localAiStatus?.state]);
+
+  const runLocalAiAction = async (action: () => Promise<LocalAiStatus>) => {
+    setLocalAiBusy(true);
+    setLocalAiError(null);
+    try {
+      setLocalAiStatus(await action());
+    } catch (error) {
+      setLocalAiError(error instanceof Error ? error.message : "The local MLX runtime action failed.");
+    } finally {
+      setLocalAiBusy(false);
+    }
+  };
+
+  const localPresets = localAiStatus?.presets.length ? localAiStatus.presets : LOCAL_AI_PRESETS;
+  const selectedLocalPreset = localPresets.find((preset) => preset.id === assistantPreferences.localModel)
+    ?? LOCAL_AI_PRESETS.find((preset) => preset.id === assistantPreferences.localModel)!;
+  const localStateLabel = localAiStatus
+    ? localAiStatus.state === "ready"
+      ? "Ready"
+      : localAiStatus.state === "starting"
+        ? "Starting"
+        : localAiStatus.state === "error"
+          ? "Error"
+          : "Stopped"
+    : "Checking";
 
   const PROBE_SWATCHES = [
     "var(--trace-red)",
@@ -1332,24 +1445,114 @@ export function SettingsPanel({
         <div className="settings-list">
           <div className="settings-section">
             <span className="settings-sheet-kicker">Assistant</span>
-            <label className="settings-field" htmlFor="assistant-api-key">
-              <span>Anthropic API key</span>
-              <Input
-                id="assistant-api-key"
-                type="password"
-                variant="mono"
-                autoComplete="off"
-                spellCheck={false}
-                placeholder="sk-ant-…"
-                value={apiKeyInput}
-                onChange={(event) => {
-                  const next = event.currentTarget.value;
-                  setApiKeyInput(next);
-                  saveAssistantApiKey(next);
-                }}
-              />
-              <span className="settings-field-hint">Kept only for this Tau session and sent only to api.anthropic.com.</span>
-            </label>
+            <div className="settings-field-grid">
+              <label className="settings-field" htmlFor="assistant-provider">
+                <span>Provider</span>
+                <select
+                  id="assistant-provider"
+                  className="settings-select"
+                  aria-label="Provider"
+                  value={assistantPreferences.provider}
+                  onChange={(event) => saveAssistantPreferences({
+                    ...assistantPreferences,
+                    provider: event.currentTarget.value as AssistantProviderChoice,
+                  })}
+                >
+                  <option value="local-mlx">Local MLX</option>
+                  <option value="anthropic">Anthropic</option>
+                </select>
+                <span className="settings-field-hint">
+                  {assistantPreferences.provider === "local-mlx"
+                    ? "Runs on this Mac through Tau's fixed loopback endpoint. Circuit context stays local."
+                    : "Uses Claude through api.anthropic.com with your session-only key."}
+                </span>
+              </label>
+
+              {assistantPreferences.provider === "local-mlx" ? (
+                <>
+                  <label className="settings-field" htmlFor="assistant-local-model">
+                    <span>Local model</span>
+                    <select
+                      id="assistant-local-model"
+                      className="settings-select"
+                      aria-label="Local model"
+                      value={assistantPreferences.localModel}
+                      onChange={(event) => saveAssistantPreferences({
+                        ...assistantPreferences,
+                        localModel: event.currentTarget.value as LocalAiPresetInfo["id"],
+                      })}
+                    >
+                      {localPresets.map((preset) => (
+                        <option key={preset.id} value={preset.id}>{preset.label}</option>
+                      ))}
+                    </select>
+                    <span className="settings-field-hint">4B is recommended for circuit proposals and fits 8 GB Macs; 1.7B is a lighter explanation-first fallback.</span>
+                  </label>
+
+                  <div className="settings-local-runtime" data-state={localAiStatus?.state ?? "checking"}>
+                    <div className="settings-local-runtime-head">
+                      <span className="settings-local-state-dot" aria-hidden="true" />
+                      <strong>Local inference · {localStateLabel}</strong>
+                    </div>
+                    <p role="status">
+                      {localAiStatus?.detail ?? "Checking the native MLX runtime and model cache…"}
+                    </p>
+                    {localAiStatus && !selectedLocalPreset.downloaded && localAiStatus.state !== "ready" && (
+                      <span className="settings-local-download">
+                        Download size: {selectedLocalPreset.downloadMb.toLocaleString("en-US")} MB
+                      </span>
+                    )}
+                    {localAiError && <span className="settings-local-error" role="alert">{localAiError}</span>}
+                    {localAiStatus && (
+                      <div className="settings-local-actions">
+                        {localAiStatus.state === "ready" || localAiStatus.state === "starting" ? (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={localAiBusy || !localAiStatus.managed}
+                            onClick={() => void runLocalAiAction(stopLocalAi)}
+                          >
+                            Stop
+                          </Button>
+                        ) : (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={localAiBusy || !localAiStatus.installed}
+                            onClick={() => void runLocalAiAction(() => startLocalAi(
+                              assistantPreferences.localModel,
+                              !selectedLocalPreset.downloaded,
+                            ))}
+                          >
+                            {selectedLocalPreset.downloaded ? "Start" : "Download & Start"}
+                          </Button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </>
+              ) : (
+                <label className="settings-field" htmlFor="assistant-api-key">
+                  <span>Anthropic API key</span>
+                  <Input
+                    id="assistant-api-key"
+                    aria-label="Anthropic API key"
+                    type="password"
+                    variant="mono"
+                    autoComplete="off"
+                    spellCheck={false}
+                    placeholder="sk-ant-…"
+                    value={apiKeyInput}
+                    onChange={(event) => {
+                      const next = event.currentTarget.value;
+                      setApiKeyInput(next);
+                      saveAssistantApiKey(next);
+                    }}
+                  />
+                  <span className="settings-field-hint">Kept only for this Tau session and sent only to api.anthropic.com.</span>
+                </label>
+              )}
+            </div>
           </div>
           <SettingsRow label="Command palette" hint="⌘K · F2 · / — search & place parts">
             <Button size="sm" variant="outline" onClick={onOpenCommandPalette}>Open</Button>

@@ -8,24 +8,69 @@
      `git log --oneline -8`, recover/finish/revert that unit FIRST, then go on.
      ─────────────────────────────────────────────────────────────────────── -->
 ## ⏱ HEARTBEAT
-- **Headline metric:** 1674 reviewed-tree tests green · corpus 82/82 import · 82/82 op-converge · 79/82 warning-clean
-- **Run started (UTC):** 2026-07-14T22:11Z
-- **Synced to origin:** auto/ltspice-parity @ 60f2516 (dirty shared tree preserved).
-- **Claimed unit:** §1/§6/§8/§10 workspace correctness: pulse-safe plots and
-  visible-window autoscale, Explorer move reliability, and a simultaneous
-  Components/Assistant dock with confirmed active-circuit edits.
+- **Headline metric:** 1707 reviewed-tree tests green · corpus 82/82 import · 82/82 op-converge · 79/82 warning-clean
+- **Run started (UTC):** 2026-07-14T22:36Z
+- **Synced to origin:** auto/ltspice-parity @ f437b6f.
+- **Claimed unit:** §1/§8/§10 local circuit generation and workspace truth:
+  loopback MLX inference grounded in Tau's component library, an independent
+  collapsible Assistant column, and bidirectional Explorer folder moves.
 - **Status:** DONE
-- **Last completed sub-step:** root review and every required gate passed; the
-  fresh unsigned Tau.app/DMG built, the packaged app stayed alive and created a
-  canonical ASC on disk, and live hot reload held exactly 900px with Components
-  and Assistant simultaneously reachable.
-- **Plan:** commit/push this reconciled unit, then continue with the opt-in local
-  provider adapter and persistent plot-layout/export work.
-- **Note:** the existing simulator-dashboard worktree remains part of the current
-  reconciliation unit; inspect and stage intentionally rather than resetting it.
-- **Next step:** add a loopback-only MLX provider that emits strict typed
-  operations; keep Tau responsible for placement, routing, validation,
-  confirmation, undo, and saving.
+- **Last completed sub-step:** every required gate passed; the live Qwen3 4B
+  plan generated a protected LED circuit, all 22 advertised kinds passed real
+  ASC pin round-trip tests, and the fresh DMG mounted while its Tau.app launched
+  and stayed alive from the volume.
+- **Plan:** commit and push this reviewed unit, then continue with persistent
+  plot-card resize/reorder and `.plt`/image export.
+- **Note:** model output remains a proposal. Tau owns legal catalog mapping,
+  placement/routing, ASC validation, confirmation, undo, and filesystem writes.
+- **Next step:** persist user plot layouts and add `.plt`/image export; widen the
+  local circuit catalog only after each additional kind is lossless through ASC.
+
+---
+
+## 2026-07-15T00:14Z — auto/ltspice-parity — local circuit planning and round-trip workspace moves (§1/§8/§10)
+
+### What I did
+- Added an opt-in native MLX-LM lifecycle fixed to loopback, audited Qwen3 4B
+  and 1.7B presets, explicit cache/download state, and Settings provider/model
+  controls. Anthropic remains available through the same Assistant surface.
+- Replaced local-model raw-ASC authority with a strict logical circuit-plan
+  tool. Tau validates 22 lossless component kinds and exact pins, places and
+  routes the graph, round-trips it through ASC, then presents the existing
+  confirmation action. Two bounded private repair attempts handle malformed
+  local plans; the model never writes files or directly changes the canvas.
+- Made Components and Assistant independent right-side sibling columns with
+  separate resize boundaries. The exact 900px fallback preserves the editor and
+  explicitly opened Assistant without overlay, then restores Components when
+  Assistant closes.
+- Added a visible Explorer project-root drop target and native/store handling
+  for nested-to-root, root-to-nested, and sibling folder/file moves, including
+  collision, descendant, refresh-error, open-tab, and `.keep` safeguards.
+- Corrected native op-amp export to LTspice `opamp2`, whose five-pin geometry
+  re-imports as Tau's op-amp instead of the incompatible `opamp` subcircuit.
+
+### Tests and QA
+- `pnpm -C apps/desktop typecheck`: pass; desktop Vitest: 120 files / 1707
+  tests pass, with the opt-in real-model test skipped in the normal suite.
+- Live Qwen3 4B MLX request: pass; returned source, resistor, LED, and ground to
+  Tau's compiler, which validated and produced the confirmation-gated action.
+- `cargo fmt --check`, Clippy with warnings denied, 16 Rust tests, and the
+  ignored real-ngspice operating-point smoke against the bundled dylib: pass.
+- Fresh `tauri build`: pass. The DMG checksum verified and mounted; Tau.app
+  launched from the mounted volume and stayed alive before controlled shutdown.
+- Hot-reload browser QA proved separate Components/Assistant columns at 1280px
+  and the non-overlay fallback at 900px. Native pointer QA was unavailable only
+  because the Mac session was locked; DOM, store, native, and package gates ran.
+
+### Parity items
+- §1 Explorer/file workflow: root/nested round-trip moves complete.
+- §8 Assistant: local MLX provider and Tau-owned circuit compiler complete for
+  the currently advertised lossless library subset.
+- §10 responsive workspace: independent-column design complete.
+
+### Next step
+- Persist plot-card resize/reorder and implement `.plt`/image export, then add
+  more AI-generatable parts only alongside pin-accurate LTspice round-trip data.
 
 ---
 

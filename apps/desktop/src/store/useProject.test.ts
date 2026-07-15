@@ -259,6 +259,24 @@ describe("ASC-native project workspace", () => {
 });
 
 describe("project node moves", () => {
+  it("moves a root file into a nested folder and back to the project root", async () => {
+    useProject.getState().ensureDefaultWorkspace();
+    const root = useProject.getState().rootPath!;
+    const analog = await useProject.getState().createFolder(root, "Analog");
+    const filters = await useProject.getState().createFolder(analog!, "Filters");
+    const source = await useProject.getState().createSchematicFile(root, "round-trip.asc");
+
+    const nested = await useProject.getState().moveNode(source!, filters!);
+    expect(nested).toBe(`${filters}/round-trip.asc`);
+    expect(flattenTree(useProject.getState().tree).map((node) => node.path)).not.toContain(source);
+    await expect(useProject.getState().readSim(nested!)).resolves.toBe("Version 4\nSHEET 1 880 680\n");
+
+    const returned = await useProject.getState().moveNode(nested!, root);
+    expect(returned).toBe(source);
+    expect(flattenTree(useProject.getState().tree).map((node) => node.path)).toContain(source);
+    await expect(useProject.getState().readSim(source!)).resolves.toBe("Version 4\nSHEET 1 880 680\n");
+  });
+
   it("moves a temporary-workspace folder and all of its files", async () => {
     useProject.getState().ensureDefaultWorkspace();
     const sourceDir = await useProject.getState().createFolder(DEFAULT_WORKSPACE_ID, "Analog");
@@ -330,5 +348,35 @@ describe("project node moves", () => {
     expect(useProject.getState().expanded).toContain(destination);
     expect(flattenTree(useProject.getState().tree).map((node) => node.path)).toContain(`${destination}/filter.asc`);
     expect(useProject.getState().error).toBeNull();
+  });
+
+  it("returns the real moved path for tab remapping when the post-move refresh fails", async () => {
+    const root = "/Users/test/Tau_Design";
+    const sourceDir = `${root}/Analog`;
+    const destination = `${root}/Archive`;
+    const source = `${sourceDir}/filter.asc`;
+    useProject.setState({
+      capability: "tauri",
+      rootPath: root,
+      rootName: "Tau_Design",
+      tree: [
+        {
+          name: "Analog",
+          path: sourceDir,
+          kind: "dir",
+          children: [{ name: "filter.asc", path: source, kind: "file" }],
+        },
+        { name: "Archive", path: destination, kind: "dir", children: [] },
+      ],
+      expanded: [root, sourceDir],
+    });
+    vi.spyOn(fs, "pathExists").mockResolvedValue(false);
+    vi.spyOn(fs, "moveProjectEntry").mockResolvedValue(`${destination}/filter.asc`);
+    vi.spyOn(fs, "readProjectTree").mockRejectedValue(new Error("Disk refresh failed."));
+
+    await expect(useProject.getState().moveNode(source, destination))
+      .resolves.toBe(`${destination}/filter.asc`);
+    expect(useProject.getState().expanded).toContain(destination);
+    expect(useProject.getState().error).toBe("Disk refresh failed.");
   });
 });

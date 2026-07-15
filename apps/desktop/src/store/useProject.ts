@@ -75,7 +75,7 @@ function isPathInside(path: string, ancestor: string): boolean {
   return normalized === root || normalized.startsWith(`${root}/`);
 }
 
-function parentPath(path: string): string {
+function projectParentPath(path: string): string {
   return normalizedPath(path).replace(/\/[^/]+$/, "");
 }
 
@@ -282,9 +282,11 @@ export const useProject = create<ProjectStore>((set, get) => ({
           ...get().workspaceFiles,
           [path]: { path, name: fileName, ...file },
         };
-        // Drop .keep markers in the same folder once a real file exists.
+        // Drop only this folder's placeholder once it has a real file. A
+        // prefix check also matched descendant `.keep` files and silently
+        // erased newly created nested folders when a root file was created.
         for (const key of Object.keys(files)) {
-          if (key.startsWith(parentPath + "/") && key.endsWith("/.keep")) delete files[key];
+          if (projectParentPath(key) === normalizedPath(parentPath) && basename(key) === ".keep") delete files[key];
         }
         set({
           workspaceFiles: files,
@@ -385,7 +387,7 @@ export const useProject = create<ProjectStore>((set, get) => ({
       set({ error: "A folder cannot be moved into itself." });
       return null;
     }
-    if (parentPath(source) === destination) {
+    if (projectParentPath(source) === destination) {
       set({ error: null });
       return sourcePath;
     }
@@ -422,13 +424,18 @@ export const useProject = create<ProjectStore>((set, get) => ({
         throw new Error(`“${basename(sourcePath)}” already exists in that folder.`);
       }
       const movedPath = await fs.moveProjectEntry(rootPath!, sourcePath, destinationDir, sourceNode.kind);
-      await get().refresh();
+      // A single root-tree refresh updates both the old parent and the new
+      // destination. The filesystem move has already succeeded at this point,
+      // so return its path even if refresh fails: callers must still remap open
+      // tabs to the real on-disk location. Preserve the refresh error for the
+      // Explorer instead of replacing it with a false success state.
+      const refreshed = await get().refresh();
       set((state) => ({
         expanded: [...new Set([
           ...state.expanded.map((path) => remapMovedProjectPath(path, sourcePath, movedPath)),
           destinationDir,
         ])],
-        error: null,
+        ...(refreshed ? { error: null } : {}),
       }));
       return movedPath;
     } catch (error) {

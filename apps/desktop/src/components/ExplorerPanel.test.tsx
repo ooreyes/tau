@@ -203,10 +203,11 @@ describe("ExplorerPanel VS Code action row", () => {
 
     expect(fileRow.getAttribute("draggable")).toBe("true");
     expect(fileRow.getAttribute("aria-describedby")).toBe("explorer-drag-help");
-    expect(screen.getByText(/Drag a file or folder onto a folder/)).toBeTruthy();
+    expect(screen.getByText(/Drag a file or folder onto another folder/)).toBeTruthy();
 
     fireEvent.dragStart(fileRow, { dataTransfer });
     expect(fileRow.getAttribute("data-dragging")).toBe("true");
+    expect(fileRow.getAttribute("aria-grabbed")).toBe("true");
     fireEvent.dragOver(folderRow, { dataTransfer });
     expect(folderRow.getAttribute("data-drop-target")).toBe("true");
     expect(dataTransfer.dropEffect).toBe("move");
@@ -258,15 +259,51 @@ describe("ExplorerPanel VS Code action row", () => {
     const onMoveNode = vi.fn().mockResolvedValue(`${root}/nested.asc`);
     renderExplorer({ onMoveNode });
     const fileRow = screen.getByRole("button", { name: "nested.asc" });
-    const tree = document.querySelector<HTMLElement>(".tree-list")!;
+    const rootTarget = screen.getByRole("button", {
+      name: /Project root .+; drop files or folders here/i,
+    });
     const dataTransfer = dataTransferStub();
 
     fireEvent.dragStart(fileRow, { dataTransfer });
-    fireEvent.dragOver(tree, { dataTransfer });
-    expect(tree.getAttribute("data-drop-target")).toBe("true");
-    fireEvent.drop(tree, { dataTransfer });
+    fireEvent.dragOver(rootTarget, { dataTransfer });
+    expect(rootTarget.getAttribute("data-drop-target")).toBe("true");
+    expect(dataTransfer.dropEffect).toBe("move");
+    fireEvent.drop(rootTarget, { dataTransfer });
 
     await waitFor(() => expect(onMoveNode).toHaveBeenCalledWith(source, root));
+  });
+
+  it("moves a root file into a nested folder", async () => {
+    const root = useProject.getState().rootPath!;
+    const parent = await useProject.getState().createFolder(root, "Analog");
+    const destination = await useProject.getState().createFolder(parent!, "Filters");
+    const source = await useProject.getState().createSchematicFile(root, "root-filter.asc");
+    const onMoveNode = vi.fn().mockResolvedValue(`${destination}/root-filter.asc`);
+    renderExplorer({ onMoveNode });
+    const dataTransfer = dataTransferStub();
+
+    fireEvent.dragStart(screen.getByRole("button", { name: "root-filter.asc" }), { dataTransfer });
+    fireEvent.dragOver(screen.getByRole("button", { name: "Filters" }), { dataTransfer });
+    fireEvent.drop(screen.getByRole("button", { name: "Filters" }), { dataTransfer });
+
+    await waitFor(() => expect(onMoveNode).toHaveBeenCalledWith(source, destination));
+  });
+
+  it("moves a folder and its contents across sibling folders", async () => {
+    const root = useProject.getState().rootPath!;
+    const sourceParent = await useProject.getState().createFolder(root, "Analog");
+    const destination = await useProject.getState().createFolder(root, "Archive");
+    const movingFolder = await useProject.getState().createFolder(sourceParent!, "Filters");
+    await useProject.getState().createSchematicFile(movingFolder!, "low-pass.asc");
+    const onMoveNode = vi.fn().mockResolvedValue(`${destination}/Filters`);
+    renderExplorer({ onMoveNode });
+    const dataTransfer = dataTransferStub();
+
+    fireEvent.dragStart(screen.getByRole("button", { name: "Filters" }), { dataTransfer });
+    fireEvent.dragOver(screen.getByRole("button", { name: "Archive" }), { dataTransfer });
+    fireEvent.drop(screen.getByRole("button", { name: "Archive" }), { dataTransfer });
+
+    await waitFor(() => expect(onMoveNode).toHaveBeenCalledWith(movingFolder, destination));
   });
 
   it("rejects dropping a folder into its own descendant", async () => {

@@ -79,6 +79,7 @@ describe("kindToLtspiceType", () => {
     expect(kindToLtspiceType("nmos")).toBe("nmos");
     expect(kindToLtspiceType("bsource")).toBe("bv");
     expect(kindToLtspiceType("vcvs")).toBe("e");
+    expect(kindToLtspiceType("opamp")).toBe("opamp2");
   });
 
   it("returns null for kinds with no LTspice symbol of their own", () => {

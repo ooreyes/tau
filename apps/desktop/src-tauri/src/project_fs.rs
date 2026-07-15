@@ -234,6 +234,39 @@ mod tests {
     }
 
     #[test]
+    fn moves_a_nested_file_to_root_and_a_folder_across_folders_on_disk() {
+        let root = sandbox("move-round-trip");
+        let analog = root.join("Analog");
+        let archive = root.join("Archive");
+        let filters = analog.join("Filters");
+        fs::create_dir_all(&filters).unwrap();
+        fs::create_dir_all(&archive).unwrap();
+        let nested_file = filters.join("low-pass.asc");
+        fs::write(&nested_file, "Version 4\n").unwrap();
+
+        let returned = move_project_entry_inner(&root, &nested_file, &root, None).unwrap();
+        assert_eq!(
+            returned,
+            fs::canonicalize(&root).unwrap().join("low-pass.asc")
+        );
+        assert_eq!(fs::read_to_string(&returned).unwrap(), "Version 4\n");
+        assert!(!nested_file.exists());
+
+        fs::write(filters.join("high-pass.asc"), "Version 4\n").unwrap();
+        let moved_folder = move_project_entry_inner(&root, &filters, &archive, None).unwrap();
+        assert_eq!(
+            moved_folder,
+            fs::canonicalize(&archive).unwrap().join("Filters")
+        );
+        assert_eq!(
+            fs::read_to_string(moved_folder.join("high-pass.asc")).unwrap(),
+            "Version 4\n"
+        );
+        assert!(!filters.exists());
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
     fn exclusively_creates_text_without_overwriting_an_existing_file() {
         let root = sandbox("exclusive-create");
         let first =
@@ -338,6 +371,10 @@ mod tests {
         let outside = sandbox("escape-outside");
         let source = root.join("safe.asc");
         fs::write(&source, "Version 4\n").unwrap();
+
+        assert!(move_project_entry_inner(&root, &root, &root, None)
+            .unwrap_err()
+            .contains("cannot be the project root"));
 
         assert!(move_project_entry_inner(&root, &source, &outside, None)
             .unwrap_err()

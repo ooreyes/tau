@@ -4038,6 +4038,28 @@ body {
   color: var(--text);
 }
 
+/* A persistent, named target makes "move back to project root" discoverable.
+   Blank Explorer space remains a convenience target, but is no longer the
+   only way to perform the move. */
+.tree-project-root-row {
+  height: 26px;
+  margin-bottom: 2px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.tree-project-root-kind {
+  flex: none;
+  margin-left: auto;
+  color: var(--faint);
+  font: 600 var(--fs-micro) var(--font-mono);
+  letter-spacing: var(--tracking-micro);
+  text-transform: uppercase;
+}
+
+.tree-project-root-row[data-drop-target="true"] .tree-project-root-kind {
+  color: var(--text);
+}
+
 .tree-dir {
   min-width: 0;
 }
@@ -4145,36 +4167,6 @@ body {
   flex-direction: column;
   min-height: 0;
   overflow: hidden;
-}
-
-/* Components/Properties and Assistant are independent tools. When both are
-   open they share this one right-side width budget and stack vertically,
-   preserving the same editor/explorer floors as either tool alone. */
-.workspace-right-dock {
-  position: relative;
-  flex: none;
-  width: var(--workspace-dock-w, 340px);
-  min-width: 0;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  border-left: 0.5px solid var(--border);
-  background: var(--panel);
-}
-
-.workspace-right-dock > .components-rail,
-.workspace-right-dock > .assistant-panel {
-  flex: 1 1 50%;
-  width: 100%;
-  min-width: 0;
-  max-width: none;
-  min-height: 0;
-  border-left: 0;
-}
-
-.workspace-right-dock > .assistant-panel {
-  border-top: 0.5px solid var(--border);
 }
 
 /* ── Panel resize handles (§11 Unit B) ─────────────────────────────────────
@@ -5363,11 +5355,10 @@ button.bottom-panel-head:focus-visible {
   color: var(--faint);
 }
 
-/* Resizable simulator columns: circuit (flex), analysis scope, and Assistant.
-   The scope column (.plotter) still auto-fills remaining space (flex: 1) —
-   only the Assistant column (below) is actually width-driven by a dragged
-   CSS var today; --scope-w stays reserved on .shell-body for a future scope
-   drag handle without another rename. */
+/* Resizable simulator columns: circuit (flex), analysis scope, and the same
+   independent Assistant column used by the schematic workspace. The scope
+   column (.plotter) still auto-fills remaining space (flex: 1); Assistant is
+   the width-driven right edge. */
 .app-simulator .shell-body > .plotter {
   flex: 1;
   width: auto;
@@ -5378,9 +5369,9 @@ button.bottom-panel-head:focus-visible {
 /* ── Assistant column (§ AI assistant) ────────────────────────────────────
    Docks to the right of the scope column, same "resizable side panel"
    language as the Components rail (panelResize.tsx, edge="left" widens away
-   from the window edge). Width is set inline as --assistant-w by the panel
-   itself (AssistantPanel.tsx) from its own usePanelWidth() state, which
-   App.tsx lifts so the responsive-floor effect can read it too. */
+   from the window edge). It is always a direct flex column — never an overlay
+   and never vertically combined with Components. App.tsx owns its measured
+   responsive width so editor/analysis floors remain reachable. */
 .assistant-panel {
   position: relative;
   flex: none;
@@ -6437,6 +6428,11 @@ button.bottom-panel-head:focus-visible {
   gap: 6px;
 }
 
+.settings-field-grid {
+  display: grid;
+  gap: var(--sp-3);
+}
+
 .settings-field > span:first-child {
   font: 550 var(--fs-caption) var(--font-ui);
   color: var(--muted);
@@ -6446,6 +6442,82 @@ button.bottom-panel-head:focus-visible {
   font-size: var(--fs-caption);
   line-height: 1.4;
   color: var(--faint);
+}
+
+.settings-select {
+  width: 100%;
+  height: var(--row-h);
+  padding: 0 var(--sp-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--panel-2);
+  color: var(--text);
+  font: 500 var(--fs-label) var(--font-ui);
+  outline: none;
+}
+
+.settings-select:focus-visible {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-line);
+}
+
+.settings-local-runtime {
+  display: grid;
+  gap: var(--sp-2);
+  padding: var(--sp-3);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--panel-2);
+}
+
+.settings-local-runtime-head {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  color: var(--text);
+  font: 600 var(--fs-label) var(--font-ui);
+}
+
+.settings-local-state-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--faint);
+}
+
+.settings-local-runtime[data-state="ready"] .settings-local-state-dot {
+  background: var(--success);
+}
+
+.settings-local-runtime[data-state="starting"] .settings-local-state-dot {
+  background: var(--signal);
+}
+
+.settings-local-runtime[data-state="error"] .settings-local-state-dot {
+  background: var(--danger);
+}
+
+.settings-local-runtime p,
+.settings-local-download,
+.settings-local-error {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--fs-caption);
+  line-height: 1.4;
+}
+
+.settings-local-download {
+  color: var(--text);
+  font-family: var(--font-mono);
+}
+
+.settings-local-error {
+  color: var(--danger);
+}
+
+.settings-local-actions {
+  display: flex;
+  justify-content: flex-end;
 }
 
 .minimized-panel-dock {

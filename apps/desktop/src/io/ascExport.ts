@@ -87,7 +87,10 @@ export function kindToLtspiceType(kind: ComponentKind): string | null {
     potentiometer: "pot",
     transformer: "ind2t",
     tline: "tline",
-    opamp: "opamp",
+    // Bare `opamp` is LTspice's X-prefix subcircuit symbol and re-imports as a
+    // generic subckt. `opamp2` is the native five-pin op-amp symbol Tau can
+    // bank and round-trip as an opamp without changing its electrical role.
+    opamp: "opamp2",
     // LTspice writes doubled backslashes in .asc SYMBOL paths (see the corpus
     // files); the importer's separator normalization accepts either form.
     sampleHold: "SpecialFunctions\\\\sample",

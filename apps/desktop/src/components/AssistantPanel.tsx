@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent } from "react";
 import { nanoid } from "nanoid";
 import { Check, FilePlus2, RefreshCw, RotateCcw, Sparkles, Square, X } from "lucide-react";
@@ -24,6 +24,9 @@ import {
   type AssistantError,
   type AssistantStreamHandle,
 } from "../lib/assistant";
+import { useAssistantPreferences } from "../lib/assistantPreferences";
+import { AssistantProviderError, type AssistantProviderReply } from "../lib/assistantProvider";
+import { LocalMlxAssistant, LOCAL_MLX_MODEL_PRESETS } from "../lib/localMlxAssistant";
 import { renderMiniMarkdown } from "../lib/miniMarkdown";
 import { PanelResizeHandle, usePanelWidth, type PanelWidthConfig } from "./panelResize";
 
@@ -69,6 +72,19 @@ interface ChatMessage {
 
 type AssistantActionState = "idle" | "working" | "done";
 
+function localProviderError(error: unknown): AssistantError {
+  if (error instanceof AssistantProviderError) {
+    return {
+      kind: error.kind === "offline" ? "network" : "unknown",
+      message: error.message,
+    };
+  }
+  return {
+    kind: "unknown",
+    message: error instanceof Error ? error.message : "The local assistant request failed.",
+  };
+}
+
 export type AssistantCreateAscHandler = (action: AssistantCreateAscAction) => void | Promise<void>;
 export type AssistantApplyCurrentHandler = (action: AssistantApplyCurrentAscAction) => void | Promise<void>;
 
@@ -113,12 +129,18 @@ export function AssistantPanel({
   embedded = false,
 }: AssistantPanelProps) {
   const apiKey = useAssistantApiKey();
+  const preferences = useAssistantPreferences();
+  const localAssistant = useMemo(
+    () => new LocalMlxAssistant({ model: preferences.localModel }),
+    [preferences.localModel],
+  );
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
   const [error, setError] = useState<AssistantError | null>(null);
   const [actionStates, setActionStates] = useState<Record<string, AssistantActionState>>({});
   const streamRef = useRef<AssistantStreamHandle | null>(null);
+  const localAbortRef = useRef<AbortController | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -126,14 +148,17 @@ export function AssistantPanel({
     if (el) el.scrollTop = el.scrollHeight;
   }, [messages, streaming]);
 
-  // A live stream must not outlive its panel — Stop's abort() is defensive
-  // even without this, but an unmounted panel (assistant column closed
-  // mid-reply) would otherwise keep calling setState on gone state.
-  useEffect(() => () => streamRef.current?.abort(), []);
+  // Neither provider request may outlive its panel. Anthropic owns a stream
+  // handle; the local OpenAI-compatible request uses the platform-standard
+  // AbortController passed through LocalMlxAssistant.complete().
+  useEffect(() => () => {
+    streamRef.current?.abort();
+    localAbortRef.current?.abort();
+  }, []);
 
   const send = useCallback((raw: string) => {
     const text = raw.trim();
-    if (!text || streaming || !apiKey) return;
+    if (!text || streaming || (preferences.provider === "anthropic" && !apiKey)) return;
     setError(null);
 
     const userMessage: ChatMessage = { id: nanoid(), role: "user", content: text };
@@ -156,43 +181,76 @@ export function AssistantPanel({
       selectedId,
     });
 
+    const completeTurn = (reply: AssistantProviderReply) => {
+      setMessages((list) => list.map((message) => (
+        message.id === assistantMessage.id
+          ? {
+              ...message,
+              content: reply.text || message.content,
+              ...(reply.actions.length > 0 ? { actions: reply.actions } : {}),
+            }
+          : message
+      )));
+      if (reply.rejectedActionCount > 0) {
+        setError({
+          kind: "invalid_action",
+          message: "I couldn't validate that circuit proposal. Ask me to revise it before creating a file.",
+        });
+      }
+      setStreaming(false);
+    };
+
+    const failTurn = (err: AssistantError) => {
+      setStreaming(false);
+      setError(err);
+      // Drop the placeholder bubble if nothing ever reached it — an empty
+      // assistant turn would otherwise sit invisibly in the transcript.
+      setMessages((list) => list.filter((message) => (
+        message.id !== assistantMessage.id || message.content !== "" || Boolean(message.actions?.length)
+      )));
+    };
+
+    if (preferences.provider === "local-mlx") {
+      const controller = new AbortController();
+      localAbortRef.current = controller;
+      void localAssistant.complete({
+        contextText,
+        history,
+        allowCurrentApply: canApplyCurrent,
+      }, controller.signal).then((reply) => {
+        if (controller.signal.aborted || localAbortRef.current !== controller) return;
+        localAbortRef.current = null;
+        completeTurn(reply);
+      }).catch((localError: unknown) => {
+        if (controller.signal.aborted
+          || (localError instanceof AssistantProviderError && localError.kind === "aborted")
+          || localAbortRef.current !== controller) return;
+        localAbortRef.current = null;
+        failTurn(localProviderError(localError));
+      });
+      return;
+    }
+
     streamRef.current = streamAssistantReply(apiKey, contextText, history, {
       onDelta: (snapshot) => {
         setMessages((list) => list.map((m) => (m.id === assistantMessage.id ? { ...m, content: snapshot } : m)));
       },
       onDone: (reply) => {
-        setMessages((list) => list.map((message) => (
-          message.id === assistantMessage.id
-            ? {
-                ...message,
-                content: reply.text || message.content,
-                ...(reply.actions.length > 0 ? { actions: reply.actions } : {}),
-              }
-            : message
-        )));
-        if (reply.rejectedActionCount > 0) {
-          setError({
-            kind: "invalid_action",
-            message: "I couldn't validate that circuit proposal. Ask me to revise it before creating a file.",
-          });
-        }
-        setStreaming(false);
+        completeTurn(reply);
         streamRef.current = null;
       },
       onError: (err) => {
-        setStreaming(false);
         streamRef.current = null;
-        setError(err);
-        // Drop the placeholder bubble if nothing ever streamed into it —
-        // an empty assistant turn would otherwise sit in the transcript.
-        setMessages((list) => list.filter((m) => m.id !== assistantMessage.id || m.content !== ""));
+        failTurn(err);
       },
     }, { analysis, params }, { allowCurrentApply: canApplyCurrent });
-  }, [messages, streaming, apiKey, components, wires, netLabels, directives, params, analysis, componentRows, measurements, selectedId]);
+  }, [messages, streaming, preferences.provider, apiKey, components, wires, netLabels, directives, params, analysis, componentRows, measurements, selectedId, localAssistant]);
 
   const stop = useCallback(() => {
     streamRef.current?.abort();
     streamRef.current = null;
+    localAbortRef.current?.abort();
+    localAbortRef.current = null;
     setStreaming(false);
   }, []);
 
@@ -242,6 +300,10 @@ export function AssistantPanel({
   const selectedComponent = selectedId ? components.find((c) => c.id === selectedId) ?? null : null;
   const selectedRef = selectedComponent ? (selectedComponent.label || selectedComponent.id) : null;
   const hasContent = messages.length > 0 || error;
+  const modelBadge = preferences.provider === "local-mlx"
+    ? `Local · ${LOCAL_MLX_MODEL_PRESETS[preferences.localModel].label}`
+    : `Claude · ${ASSISTANT_MODEL_LABEL}`;
+  const needsCloudKey = preferences.provider === "anthropic" && !apiKey;
 
   return (
     <aside
@@ -266,7 +328,7 @@ export function AssistantPanel({
           <div className="assistant-kicker">Assistant</div>
           <div className="assistant-title-row">
             <span className="assistant-title">Ask Tau</span>
-            <span className="assistant-model-badge">{ASSISTANT_MODEL_LABEL}</span>
+            <span className="assistant-model-badge">{modelBadge}</span>
           </div>
         </div>
         <div className="assistant-actions">
@@ -291,7 +353,7 @@ export function AssistantPanel({
         </div>
       </header>
 
-      {!apiKey ? (
+      {needsCloudKey ? (
         <div className="assistant-body">
           <div className="panel-empty">
             <div className="panel-empty-glyph" aria-hidden="true" />

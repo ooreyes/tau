@@ -102,5 +102,10 @@ describe("project schematic file formats", () => {
       "/Schematics/filter.asc",
       "/Schematics/Archive/filter.asc",
     )).toBe("/Schematics/unrelated.asc");
+    expect(remapMovedProjectPath(
+      "/Schematics/Analog/filter.asc",
+      "/Schematics/Analog/filter.asc",
+      "/Schematics/filter.asc",
+    )).toBe("/Schematics/filter.asc");
   });
 });

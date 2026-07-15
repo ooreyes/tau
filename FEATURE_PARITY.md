@@ -270,7 +270,14 @@ Status legend: ✅ done · 🟡 partial · ⬜ not started
   created folder cannot lose its source to React timing. Failed moves stay
   visible, destination folders refresh/expand after success, and the redundant
   project-open `Open Folder…` / `Import .asc…` footer is gone; those actions
-  remain available as compact toolbar controls.
+  remain available as compact toolbar controls. **Round-trip move follow-up
+  (2026-07-14):** the project root is now a persistent, named drop target, so a
+  file can move into a newly-created nested folder and back to root without
+  aiming at blank Explorer space. Files and whole folders move across siblings;
+  invalid descendant/collision/root-source moves stay blocked. Root-file
+  creation no longer removes a descendant folder's `.keep` marker, and a
+  successful native move still remaps open tabs even if the subsequent refresh
+  reports an error.
 
 ## 2. Schematic capture
 - ✅ Place / move / rotate / mirror / delete components — `Canvas.tsx`, `store/useSchematic.ts` (mirror = horizontal flip, applied before rotation; Ctrl+E)
@@ -1195,14 +1202,27 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   model; tool syntax and payloads never appear in chat. CSP, action validation,
   collision-safe disk creation, private tool continuation, and mocked streaming
   paths are covered. **Current-circuit editing follow-up:** Components and the
-  Assistant can now stay open together in one vertically split, single-width
-  dock. A complete validated `apply_current_asc_circuit` proposal replaces the
+  Assistant are separate sibling columns with independent resize boundaries;
+  neither is an overlay and opening Assistant does not replace the component
+  library at normal desktop widths. At the exact 900px minimum an explicitly
+  opened Assistant temporarily displaces Components because both minimum widths
+  cannot physically fit; closing Assistant restores the Components preference.
+  A complete validated `apply_current_asc_circuit` proposal replaces the
   active document only after confirmation, records one undo step, preserves
   resolvable probes, marks the file dirty, and invalidates stale analyses;
-  incomplete/lossy/oversize serialization disables the operation. Local-model
-  feasibility is documented in `TAU_DESIGN_VISION.md`: MLX Qwen3 1.7B/4B
-  benchmarks support a future provider-neutral, typed-operation boundary, not
-  unvalidated whole-ASC generation.
+  incomplete/lossy/oversize serialization disables the operation. **Local MLX
+  provider follow-up:** Settings now offers local Qwen3 4B (recommended) and
+  1.7B presets plus Anthropic, with cache-aware Start/Stop and an explicit
+  download-size confirmation. Native inference is fixed to `127.0.0.1:8080`
+  with audited repositories and allowed origins. The model emits only logical
+  22 pin-accurate, lossless Tau library part kinds and exact `ref.pin` nets;
+  Tau validates, auto-places,
+  obstacle-routes, serializes, re-imports, and asks for confirmation. A live 4B
+  test created a protected 5 V LED + 330 Ω proposal through this boundary.
+  Malformed/missing-part plans receive at most two private repair attempts and
+  never reach the canvas or disk. Op-amps export as LTspice `opamp2` so the
+  five-pin native role bank survives save/reopen; kinds without equivalent pin
+  geometry are deliberately not advertised yet.
 - 🟡 Component picker matching LTspice (F2 part browser over the full library)
   — **F2 now opens the searchable part palette** (symbols, categories, hotkeys,
   ↑↓/↵ placement); remaining: coverage audit vs. LTspice's full library tree.
@@ -1571,6 +1591,12 @@ checklist for the authoritative list.
   CURRENT/VOLTAGE/POWER results table) side by side with a full-width scope
   and Ask Sim panel; zero clipped/unreachable controls found in any other
   state at either floor size. Canvas SVG rendering/geometry untouched.
+  **Independent-column follow-up (2026-07-14):** the old vertically shared
+  Components/Assistant dock is removed. At 1280px both appear as direct sibling
+  columns with their own handles; at 900px the deterministic budget preserves
+  Explorer, editor, and the explicitly opened Assistant with zero overlay, then
+  restores Components when Assistant closes. Focused DOM tests and live
+  hot-reload screenshots prove both breakpoints.
 - ✅ **Sweep (2026-07-08, Phase 4b):** hex gate —
   `rg -n "#[0-9a-fA-F]{3,8}" apps/desktop/src` (ts/tsx/css) — confirms **zero
   hardcoded colors outside the single `:root`** in `App.css`; the only other

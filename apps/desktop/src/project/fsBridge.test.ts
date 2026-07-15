@@ -7,7 +7,7 @@ const tauri = vi.hoisted(() => ({
 
 vi.mock("@tauri-apps/api/core", () => tauri);
 
-import { reserveProjectTextFile } from "./fsBridge";
+import { moveProjectEntry, reserveProjectTextFile } from "./fsBridge";
 
 afterEach(() => {
   tauri.isTauri.mockReturnValue(true);
@@ -85,5 +85,24 @@ describe("native project text-file reservation bridge", () => {
       "must not replace\n",
     )).resolves.toEqual({ status: "already-exists", atomic: false });
     expect(written).toBe("Version 4\n");
+  });
+});
+
+describe("native project move bridge", () => {
+  it("forwards the authorized root, source, and target directory to Rust", async () => {
+    tauri.invoke.mockResolvedValueOnce("/project/Archive/Filters");
+
+    await expect(moveProjectEntry(
+      "/project",
+      "/project/Analog/Filters",
+      "/project/Archive",
+      "dir",
+    )).resolves.toBe("/project/Archive/Filters");
+    expect(tauri.invoke).toHaveBeenCalledWith("move_project_entry", {
+      projectRoot: "/project",
+      sourcePath: "/project/Analog/Filters",
+      targetDirectory: "/project/Archive",
+      newName: null,
+    });
   });
 });

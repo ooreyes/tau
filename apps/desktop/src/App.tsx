@@ -11,9 +11,9 @@ import { AssistantPanel, ASSISTANT_PANEL_WIDTH, loadAssistantOpen, saveAssistant
 import { clampPanelWidth, usePanelWidth } from "./components/panelResize";
 import {
   SHELL_LAYOUT,
-  WorkspaceRightDock,
+  workspaceCanFitIndependentColumns,
   workspaceExplorerMax,
-  workspaceRightDockMax,
+  workspaceRightColumnMax,
 } from "./components/WorkspaceRightDock";
 import { AnalysisErrorBoundary } from "./components/AnalysisErrorBoundary";
 import { EmptyState } from "./components/EmptyState";
@@ -136,8 +136,6 @@ const emptyHistory = (): SchematicHistory => ({ past: [], future: [] });
 const RAIL_W = SHELL_LAYOUT.railWidth; // .activity-rail
 const HANDLE_W = SHELL_LAYOUT.handleWidth; // .col-resize-handle, one per open column
 const SCOPE_MIN = 300; // analysis scope column floor (matches old drag clamp)
-const SCHEMATIC_EDITOR_MIN = SHELL_LAYOUT.schematicEditorMin;
-const EXPLORER_MIN = SHELL_LAYOUT.explorerMin;
 function App() {
   const components = useSchematic((s) => s.components);
   const wires = useSchematic((s) => s.wires);
@@ -239,24 +237,7 @@ function App() {
   const [notice, setNotice] = useState<string | null>(null);
   const shellBodyRef = useRef<HTMLDivElement | null>(null);
   const [shellWidth, setShellWidth] = useState(0);
-  const componentsRailResponsiveMax = mode === "schematic" && shellWidth > 0 && partsOpen && !assistantOpen
-    ? Math.max(
-        COMPONENTS_RAIL_WIDTH.minWidth,
-        Math.min(
-          COMPONENTS_RAIL_WIDTH.maxWidth,
-          shellWidth - RAIL_W - (HANDLE_W * 2) - SCHEMATIC_EDITOR_MIN - EXPLORER_MIN,
-        ),
-      )
-    : COMPONENTS_RAIL_WIDTH.maxWidth;
-  const componentsRailResize = usePanelWidth({
-    ...COMPONENTS_RAIL_WIDTH,
-    maxWidth: componentsRailResponsiveMax,
-  });
-  const effectiveComponentsRailWidth = clampPanelWidth(
-    componentsRailResize.width,
-    COMPONENTS_RAIL_WIDTH.minWidth,
-    componentsRailResponsiveMax,
-  );
+  const componentsRailResize = usePanelWidth(COMPONENTS_RAIL_WIDTH);
   // ngspice runs outside React's lifecycle. A request version prevents a late
   // result from an edited, closed, or stopped circuit overwriting current UI.
   const analysisRequestRef = useRef(0);
@@ -1055,31 +1036,70 @@ function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [shellWidth, mode, graphOpen]);
 
-  // Same responsive floor for the Assistant column in both modes. Persisted
-  // desktop widths must not make either the schematic editor or simulator
-  // analysis unreachable when the window returns at its 900px minimum.
-  useEffect(() => {
-    if (shellWidth === 0 || !assistantOpen) return;
-    const budget = workspaceRightDockMax(shellWidth, mode, ASSISTANT_PANEL_WIDTH);
-    if (assistantResize.width > budget) assistantResize.setWidth(budget);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [shellWidth, mode, assistantOpen, assistantResize.width]);
-
-  const assistantResponsiveMax = workspaceRightDockMax(shellWidth, mode, ASSISTANT_PANEL_WIDTH);
+  const independentColumnsFit = workspaceCanFitIndependentColumns(shellWidth, [
+    COMPONENTS_RAIL_WIDTH.minWidth,
+    ASSISTANT_PANEL_WIDTH.minWidth,
+  ]);
+  // At the 900px floor both independent columns physically cannot coexist
+  // with Explorer + editor at their usable minimums. Keep the explicitly
+  // opened Assistant available and temporarily collapse Components; closing
+  // Assistant or widening the shell restores Components without mutating the
+  // user's Components preference.
+  const componentsColumnOpen = mode === "schematic"
+    && partsOpen
+    && (!assistantOpen || independentColumnsFit);
+  const assistantResponsiveMax = workspaceRightColumnMax(
+    shellWidth,
+    mode,
+    ASSISTANT_PANEL_WIDTH,
+    mode === "schematic" && assistantOpen && componentsColumnOpen
+      ? [COMPONENTS_RAIL_WIDTH.minWidth]
+      : [],
+  );
   const effectiveAssistantWidth = clampPanelWidth(
     assistantResize.width,
     ASSISTANT_PANEL_WIDTH.minWidth,
     assistantResponsiveMax,
   );
-  const schematicRightPanelWidth = assistantOpen
-    ? effectiveAssistantWidth
-    : partsOpen
-      ? effectiveComponentsRailWidth
-      : 0;
+  const componentsRailResponsiveMax = workspaceRightColumnMax(
+    shellWidth,
+    "schematic",
+    COMPONENTS_RAIL_WIDTH,
+    assistantOpen ? [effectiveAssistantWidth] : [],
+  );
+  const effectiveComponentsRailWidth = clampPanelWidth(
+    componentsRailResize.width,
+    COMPONENTS_RAIL_WIDTH.minWidth,
+    componentsRailResponsiveMax,
+  );
   const explorerResponsiveMax = mode === "schematic"
-    ? workspaceExplorerMax(shellWidth, schematicRightPanelWidth)
+    ? workspaceExplorerMax(shellWidth, [
+        ...(componentsColumnOpen ? [effectiveComponentsRailWidth] : []),
+        ...(assistantOpen ? [effectiveAssistantWidth] : []),
+      ])
     : undefined;
-  const sharedRightDockOpen = mode === "schematic" && partsOpen && assistantOpen;
+
+  // Same responsive floor for the independent Assistant column in both modes.
+  // Persisted desktop widths must not make either the schematic editor or
+  // simulator analysis unreachable when the window returns at 900px.
+  useEffect(() => {
+    if (shellWidth === 0 || !assistantOpen) return;
+    if (assistantResize.width > assistantResponsiveMax) assistantResize.setWidth(assistantResponsiveMax);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shellWidth, mode, assistantOpen, assistantResize.width, assistantResponsiveMax]);
+
+  useEffect(() => {
+    if (shellWidth === 0 || !componentsColumnOpen) return;
+    if (componentsRailResize.width > componentsRailResponsiveMax) {
+      componentsRailResize.setWidth(componentsRailResponsiveMax);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shellWidth, componentsColumnOpen, componentsRailResize.width, componentsRailResponsiveMax]);
+
+  const effectiveAssistantResize = {
+    ...assistantResize,
+    width: effectiveAssistantWidth,
+  };
 
   return (
     <div className={`app app-${mode}`}>
@@ -1101,11 +1121,11 @@ function App() {
       <div
         ref={shellBodyRef}
         className="shell-body"
-        style={{ "--scope-w": `${scopeWidth}px`, "--assistant-w": `${assistantResize.width}px` } as CSSProperties}
+        style={{ "--scope-w": `${scopeWidth}px`, "--assistant-w": `${effectiveAssistantWidth}px` } as CSSProperties}
       >
         <ActivityRail
           mode={mode}
-          partsOpen={partsOpen && mode === "schematic"}
+          partsOpen={componentsColumnOpen}
           onModeChange={setMode}
           onSearch={() => setPaletteOpen(true)}
           onFocusComponents={() => {
@@ -1259,40 +1279,15 @@ function App() {
             onRestoreGraph={() => setGraphOpen(true)}
           />
         )}
-        {sharedRightDockOpen && (
-          <WorkspaceRightDock
-            width={effectiveAssistantWidth}
-            resize={assistantResize}
-            minWidth={ASSISTANT_PANEL_WIDTH.minWidth}
-            maxWidth={assistantResponsiveMax}
-          >
-            <ComponentsRail
-              focusSignal={componentFocusSignal}
-              onNotice={showNotice}
-              resize={componentsRailResize}
-              maxWidth={assistantResponsiveMax}
-              embedded
-            />
-            <AssistantPanel
-              components={components}
-              wires={wires}
-              netLabels={netLabels}
-              directives={directives}
-              params={params}
-              analysis={analysis}
-              componentRows={componentRows}
-              measurements={measurements}
-              selectedId={selectedId}
-              resize={assistantResize}
-              onCreateAsc={createAssistantCircuit}
-              onApplyCurrent={applyAssistantCircuit}
-              onOpenSettings={() => setSettingsOpen(true)}
-              onClose={closeAssistant}
-              embedded
-            />
-          </WorkspaceRightDock>
+        {componentsColumnOpen && (
+          <ComponentsRail
+            focusSignal={componentFocusSignal}
+            onNotice={showNotice}
+            resize={componentsRailResize}
+            maxWidth={componentsRailResponsiveMax}
+          />
         )}
-        {assistantOpen && !sharedRightDockOpen && (
+        {assistantOpen && (
           <AssistantPanel
             components={components}
             wires={wires}
@@ -1303,19 +1298,11 @@ function App() {
             componentRows={componentRows}
             measurements={measurements}
             selectedId={selectedId}
-            resize={assistantResize}
+            resize={effectiveAssistantResize}
             onCreateAsc={createAssistantCircuit}
             onApplyCurrent={applyAssistantCircuit}
             onOpenSettings={() => setSettingsOpen(true)}
             onClose={closeAssistant}
-          />
-        )}
-        {mode === "schematic" && partsOpen && !assistantOpen && (
-          <ComponentsRail
-            focusSignal={componentFocusSignal}
-            onNotice={showNotice}
-            resize={componentsRailResize}
-            maxWidth={componentsRailResponsiveMax}
           />
         )}
       </div>

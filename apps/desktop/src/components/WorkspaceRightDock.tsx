@@ -1,5 +1,4 @@
-import type { CSSProperties, ReactNode } from "react";
-import { PanelResizeHandle, type PanelWidthConfig, usePanelWidth } from "./panelResize";
+import type { PanelWidthConfig } from "./panelResize";
 
 export const SHELL_LAYOUT = {
   railWidth: 54,
@@ -10,12 +9,29 @@ export const SHELL_LAYOUT = {
   plotterMin: 280,
 } as const;
 
-/** Maximum width a shared Assistant/Components dock may consume without
- * starving the rest of the application at Tau's minimum window width. */
-export function workspaceRightDockMax(
+/**
+ * Whether independent right-side columns fit beside the Explorer and editor
+ * at their usable floors. A zero shell width is the pre-measurement frame and
+ * is treated as fitting so panels do not flash closed during mount.
+ */
+export function workspaceCanFitIndependentColumns(shellWidth: number, columnMinWidths: readonly number[]): boolean {
+  if (shellWidth <= 0) return true;
+  const handleCount = 1 + columnMinWidths.length; // Explorer + each right column.
+  const reserved = SHELL_LAYOUT.railWidth
+    + SHELL_LAYOUT.explorerMin
+    + SHELL_LAYOUT.schematicEditorMin
+    + SHELL_LAYOUT.handleWidth * handleCount
+    + columnMinWidths.reduce((sum, width) => sum + width, 0);
+  return reserved <= shellWidth;
+}
+
+/** Maximum width for one independent right-side column after reserving any
+ * sibling columns plus the editor/analysis floors. */
+export function workspaceRightColumnMax(
   shellWidth: number,
   mode: "schematic" | "simulator",
   config: Pick<PanelWidthConfig, "minWidth" | "maxWidth">,
+  siblingWidths: readonly number[] = [],
 ): number {
   if (shellWidth <= 0) return config.maxWidth;
   const reserved = mode === "simulator"
@@ -24,58 +40,22 @@ export function workspaceRightDockMax(
       + SHELL_LAYOUT.simulatorSchematicMin
       + SHELL_LAYOUT.plotterMin
     : SHELL_LAYOUT.railWidth
-      + (SHELL_LAYOUT.handleWidth * 2)
+      + (SHELL_LAYOUT.handleWidth * (2 + siblingWidths.length))
       + SHELL_LAYOUT.explorerMin
-      + SHELL_LAYOUT.schematicEditorMin;
+      + SHELL_LAYOUT.schematicEditorMin
+      + siblingWidths.reduce((sum, width) => sum + width, 0);
   return Math.min(config.maxWidth, Math.max(config.minWidth, shellWidth - reserved));
 }
-/** Explorer budget after the shared right dock has taken its single column. */
-export function workspaceExplorerMax(shellWidth: number, rightDockWidth: number): number | undefined {
+
+/** Explorer budget after all independently sized right columns are reserved. */
+export function workspaceExplorerMax(shellWidth: number, rightColumnWidths: readonly number[]): number | undefined {
   if (shellWidth <= 0) return undefined;
   return Math.max(
     SHELL_LAYOUT.explorerMin,
     shellWidth
       - SHELL_LAYOUT.railWidth
-      - (SHELL_LAYOUT.handleWidth * 2)
+      - (SHELL_LAYOUT.handleWidth * (1 + rightColumnWidths.length))
       - SHELL_LAYOUT.schematicEditorMin
-      - rightDockWidth,
-  );
-}
-
-type ResizeState = ReturnType<typeof usePanelWidth>;
-
-/** One right-side width boundary with vertically stacked independent tools. */
-export function WorkspaceRightDock({
-  width,
-  resize,
-  minWidth,
-  maxWidth,
-  children,
-}: {
-  width: number;
-  resize: ResizeState;
-  minWidth: number;
-  maxWidth: number;
-  children: ReactNode;
-}) {
-  return (
-    <div
-      className="workspace-right-dock"
-      role="group"
-      aria-label="Workspace tools"
-      style={{ "--workspace-dock-w": `${width}px` } as CSSProperties}
-    >
-      <PanelResizeHandle
-        edge="left"
-        label="Resize workspace tools"
-        width={width}
-        minWidth={minWidth}
-        maxWidth={maxWidth}
-        dragging={resize.dragging}
-        onPointerDown={resize.onPointerDown}
-        onKeyDown={resize.onKeyDown}
-      />
-      {children}
-    </div>
+      - rightColumnWidths.reduce((sum, width) => sum + width, 0),
   );
 }

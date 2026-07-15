@@ -71,6 +71,7 @@ vi.mock("@anthropic-ai/sdk", () => {
 
 import { AssistantPanel, type AssistantPanelProps } from "./AssistantPanel";
 import { saveAssistantApiKey } from "../lib/assistant";
+import { saveAssistantPreferences } from "../lib/assistantPreferences";
 import { EMPTY_SCOPE } from "../simulation/paramScope";
 import type { AnalysisResult } from "../simulation/linearTransient";
 import type { SchematicComponent } from "../schematic/types";
@@ -93,10 +94,14 @@ Object.defineProperty(globalThis, "localStorage", {
   } as Storage,
 });
 
-afterEach(() => cleanup());
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
 beforeEach(() => {
   localStorage.clear();
   saveAssistantApiKey("");
+  saveAssistantPreferences({ provider: "anthropic", localModel: "qwen3-1.7b-4bit" });
   streams.length = 0;
   streamRequests.length = 0;
 });
@@ -172,6 +177,91 @@ describe("AssistantPanel", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Open Settings" }));
     expect(onOpenSettings).toHaveBeenCalledTimes(1);
+    expect(screen.getByText("Claude · Opus 4.8")).toBeTruthy();
+  });
+
+  it("uses the selected local preset without a cloud key and consumes its non-streaming reply", async () => {
+    saveAssistantPreferences({ provider: "local-mlx", localModel: "qwen3-4b-4bit" });
+    const fetchMock = vi.fn(async (_input: string | URL | Request, _init?: RequestInit) => new Response(JSON.stringify({
+      choices: [{
+        message: {
+          role: "assistant",
+          content: "I prepared a local RC circuit.",
+          tool_calls: [
+            {
+              id: "local-create",
+              type: "function",
+              function: {
+                name: "build_tau_circuit",
+                arguments: JSON.stringify({
+                  mode: "create",
+                  filename: "local-rc.asc",
+                  components: [
+                    { ref: "V1", kind: "vsource", value: "5" },
+                    { ref: "R1", kind: "resistor", value: "1k" },
+                  ],
+                  nets: [
+                    { name: "vin", pins: ["V1.p", "R1.a"] },
+                    { name: "0", pins: ["V1.n", "R1.b"] },
+                  ],
+                  directives: [".op"],
+                }),
+              },
+            },
+            {
+              id: "rejected-tool",
+              type: "function",
+              function: { name: "write_any_file", arguments: "{}" },
+            },
+          ],
+        },
+      }],
+    }), { status: 200, headers: { "Content-Type": "application/json" } }));
+    vi.stubGlobal("fetch", fetchMock);
+    render(<AssistantPanel {...baseProps()} />);
+
+    expect(screen.getByText("Local · Qwen3 4B")).toBeTruthy();
+    expect(screen.getByRole("textbox", { name: "Message the assistant" })).toBeTruthy();
+    expect(screen.queryByText("No API Key")).toBeNull();
+
+    fireEvent.change(screen.getByRole("textbox", { name: "Message the assistant" }), {
+      target: { value: "Create an RC circuit locally" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+
+    expect(await screen.findByText("I prepared a local RC circuit.")).toBeTruthy();
+    expect(screen.getByText("local-rc.asc")).toBeTruthy();
+    expect(screen.getByRole("alert").textContent).toContain("couldn't validate that circuit proposal");
+    const request = JSON.parse(String(fetchMock.mock.calls[0][1]?.body)) as { model: string; stream: boolean };
+    expect(request).toEqual(expect.objectContaining({
+      model: "Qwen/Qwen3-4B-MLX-4bit",
+      stream: false,
+    }));
+  });
+
+  it("aborts a local request from Stop and when the panel unmounts", () => {
+    saveAssistantPreferences({ provider: "local-mlx", localModel: "qwen3-1.7b-4bit" });
+    const signals: AbortSignal[] = [];
+    const fetchMock = vi.fn((_input: string | URL | Request, init?: RequestInit) => new Promise<Response>((_resolve, reject) => {
+      const signal = init?.signal;
+      if (!signal) throw new Error("missing signal");
+      signals.push(signal);
+      signal.addEventListener("abort", () => reject(new DOMException("stopped", "AbortError")), { once: true });
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const first = render(<AssistantPanel {...baseProps()} />);
+    fireEvent.change(screen.getByRole("textbox", { name: "Message the assistant" }), { target: { value: "Explain this" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    fireEvent.click(screen.getByRole("button", { name: "Stop" }));
+    expect(signals[0].aborted).toBe(true);
+    first.unmount();
+
+    const second = render(<AssistantPanel {...baseProps()} />);
+    fireEvent.change(screen.getByRole("textbox", { name: "Message the assistant" }), { target: { value: "Explain again" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    second.unmount();
+    expect(signals[1].aborted).toBe(true);
   });
 
   it("delegates its width boundary to the shared dock when embedded", () => {
