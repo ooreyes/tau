@@ -1238,6 +1238,11 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   Op-amps export as LTspice `opamp2` and MOSFETs as `nmos4`/`pmos4` so the
   five-pin native role bank survives save/reopen; kinds without equivalent pin
   geometry are never silently advertised as a stock symbol.
+  Cloud requests now show honest lifecycle phases (connect, design, write ASC,
+  validate, repair, respond), elapsed time, an indeterminate token-driven
+  activity bar, and a persistent Stop control. A rejected Anthropic ASC tool
+  call receives exactly one private validator-guided repair pass before Tau
+  surfaces an error, eliminating the former wait-then-manually-reprompt dead end.
 - 🟡 Component picker matching LTspice (F2 part browser over the full library)
   — **F2 now opens the searchable part palette** (symbols, categories, hotkeys,
   ↑↓/↵ placement); remaining: coverage audit vs. LTspice's full library tree.

@@ -8,16 +8,43 @@
      `git log --oneline -8`, recover/finish/revert that unit FIRST, then go on.
      ─────────────────────────────────────────────────────────────────────── -->
 ## ⏱ HEARTBEAT
-- **Headline metric:** 1776 reviewed-tree tests green · corpus 82/82 import · 82/82 op-converge · 79/82 warning-clean
+- **Headline metric:** 1786 reviewed-tree tests green · corpus 82/82 import · 82/82 op-converge · 79/82 warning-clean
 - **Run started (UTC):** 2026-07-15T15:14Z
 - **Synced to origin:** auto/ltspice-parity @ HEAD.
 - **Claimed unit:** Assistant visible progress + bounded Anthropic proposal repair.
-- **Status:** IN PROGRESS
-- **Last completed sub-step:** Reproduced the hidden-thinking wait and invalid Class-D
-  proposal in the packaged Sonnet 5 app.
-- **Plan:** surface honest phases/elapsed time/Stop; auto-repair one rejected ASC
-  proposal; test in Vitest, Chrome, and the packaged native app.
+- **Status:** DONE
+- **Last completed sub-step:** Packaged Tau.app shows visible Sonnet phases,
+  elapsed time, activity, and Stop; rejected ASC receives one bounded repair.
+- **Plan:** continue DoD leftovers; keep cloud live tests opt-in to protect credits.
 - **Next step:** Omar signs/notarizes when ready; continue corpus/DoD leftovers.
+
+---
+
+## 2026-07-15T15:14Z — auto/ltspice-parity — Assistant progress + proposal repair
+
+### What I did
+- Replaced the invisible empty assistant turn with coarse lifecycle phases,
+  elapsed time, a token-driven indeterminate activity bar, and persistent Stop.
+- Kept hidden reasoning private: the UI reports only lifecycle, never content.
+- Added one bounded Anthropic repair continuation when Tau rejects an ASC tool
+  payload; the validator error stays private and a second rejection exits cleanly.
+
+### Files
+- `apps/desktop/src/lib/assistant.ts`
+- `apps/desktop/src/lib/assistantActions.ts`
+- `apps/desktop/src/components/AssistantPanel.tsx`
+- `apps/desktop/src/App.css`
+- Assistant/action tests, `FEATURE_PARITY.md`
+
+### Tests and QA
+- Desktop typecheck + full Vitest: 1786 passed / 6 skipped.
+- Chrome at 900×600: document width 900, assistant 280, progress card 255,
+  one Stop control, no horizontal overflow.
+- `tauri build --bundles app`: pass; rebuilt Tau.app launched and displayed the
+  Sonnet progress card immediately, then recovered from a fake-key auth failure.
+
+### Next step
+- Continue DoD leftovers; signing/notarization remains human-owned.
 
 ---
 
