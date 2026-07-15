@@ -151,10 +151,20 @@ const PIN_ALIASES: Partial<Record<ComponentKind, Record<string, string>>> = {
     vss: "v-",
     "vs+": "v+",
     "vs-": "v-",
+    vsplus: "v+",
+    vsminus: "v-",
+    "supply+": "v+",
+    "supply-": "v-",
+    avdd: "v+",
+    avss: "v-",
+    dvdd: "v+",
+    dvss: "v-",
     vcc: "v+",
     vee: "v-",
     vp: "v+",
     vn: "v-",
+    "v+": "v+",
+    "v-": "v-",
   },
   comparator: {
     n: "in-",
@@ -166,12 +176,45 @@ const PIN_ALIASES: Partial<Record<ComponentKind, Record<string, string>>> = {
     in: "in-",
     outp: "out",
     output: "out",
+    // Comparators have no drawable supply pins — rails live in the value
+    // string. Map supply nicknames away so models do not invent U1.v+/-.
   },
   npn: { base: "b", collector: "c", emitter: "e", b: "b", c: "c", e: "e" },
   pnp: { base: "b", collector: "c", emitter: "e", b: "b", c: "c", e: "e" },
-  nmos: { gate: "g", drain: "d", source: "s", bulk: "b", g: "g", d: "d", s: "s", b: "b" },
-  pmos: { gate: "g", drain: "d", source: "s", bulk: "b", g: "g", d: "d", s: "s", b: "b" },
+  nmos: {
+    gate: "g", drain: "d", source: "s", bulk: "b",
+    g: "g", d: "d", s: "s", b: "b",
+    gnd: "s", substrate: "b", body: "b",
+  },
+  pmos: {
+    gate: "g", drain: "d", source: "s", bulk: "b",
+    g: "g", d: "d", s: "s", b: "b",
+    gnd: "s", substrate: "b", body: "b",
+  },
 };
+
+/** Prefer a named rail over ground when the model lists the same pin twice. */
+function netAssignmentScore(netName: string, pinCountOnNet: number): number {
+  if (netName === "0") return pinCountOnNet;
+  // Named nets always beat ground. Pin count breaks ties among named nets so a
+  // denser intentional rail wins over a singleton leftover — equal counts stay
+  // ambiguous and reject below.
+  return 1000 + pinCountOnNet;
+}
+
+function formatPinConflictHint(
+  canonical: string,
+  netNames: string[],
+  kind: ComponentKind,
+): string {
+  const validIds = getLocalPins(kind).map((pin) => pin.id).join(", ");
+  return (
+    `${canonical} is connected to more than one net (${netNames.join(", ")}). `
+    + `Each pin may appear in exactly one net — aliases like vee/vss/v- collapse to the same pin. `
+    + `Keep ${canonical} only on the intended net and remove it from the others. `
+    + `${kind} pins: ${validIds}.`
+  );
+}
 
 export function canonicalizeAssistantPin(kind: ComponentKind, pin: string): string {
   const aliases = PIN_ALIASES[kind];
@@ -260,9 +303,16 @@ function parsePlan(input: unknown): CircuitPlan {
   });
 
   const byRef = new Map(components.map((component) => [component.ref.toLowerCase(), component]));
-  const connectedPins = new Set<string>();
   const netNames = new Set<string>();
-  const nets = source.nets.map((raw, index): CircuitPlanNet => {
+  // First pass: canonicalize + within-net dedupe (U1.vee + U1.v- on the same
+  // net is one connection, not a conflict). Track every net each pin lands on
+  // so a later pass can auto-prefer a named rail over ground or reject.
+  const draftNets: CircuitPlanNet[] = [];
+  const pinToNets = new Map<string, string[]>();
+  const pinMeta = new Map<string, { canonical: string; kind: ComponentKind }>();
+
+  for (let index = 0; index < source.nets.length; index += 1) {
+    const raw = source.nets[index];
     const net = record(raw);
     if (!net || Object.keys(net).some((key) => !["name", "pins"].includes(key))) {
       throw new Error(`nets[${index}] is invalid`);
@@ -275,7 +325,10 @@ function parsePlan(input: unknown): CircuitPlan {
     if (!Array.isArray(net.pins) || net.pins.length < 1 || net.pins.length > MAX_COMPONENTS) {
       throw new Error(`${name} must connect at least one pin`);
     }
-    const pins = net.pins.map((rawPinToken, pinIndex) => {
+    const seenOnNet = new Set<string>();
+    const pins: string[] = [];
+    for (let pinIndex = 0; pinIndex < net.pins.length; pinIndex += 1) {
+      const rawPinToken = net.pins[pinIndex];
       const token = cleanText(rawPinToken, `${name}.pins[${pinIndex}]`, 64);
       const split = token.lastIndexOf(".");
       if (split <= 0 || split === token.length - 1) throw new Error(`${token} is not a ref.pin connection`);
@@ -292,13 +345,70 @@ function parsePlan(input: unknown): CircuitPlan {
       }
       const canonical = `${component.ref}.${pin}`;
       const key = canonical.toLowerCase();
-      if (connectedPins.has(key)) throw new Error(`${canonical} is connected to more than one net`);
-      connectedPins.add(key);
-      return canonical;
-    });
-    return { name, pins };
-  });
+      // Identical after aliasing → keep once on this net.
+      if (seenOnNet.has(key)) continue;
+      seenOnNet.add(key);
+      pins.push(canonical);
+      pinMeta.set(key, { canonical, kind: component.kind });
+      const netsForPin = pinToNets.get(key) ?? [];
+      netsForPin.push(name);
+      pinToNets.set(key, netsForPin);
+    }
+    draftNets.push({ name, pins });
+  }
+
+  // Across-net conflicts: prefer a named / denser net over ground when the
+  // model double-listed a supply pin (classic Class-D failure: U1.v- on vee
+  // and again on 0 via U1.vee). Ambiguous equal-score conflicts still reject
+  // with a repair hint that lists both nets and the legal pin ids.
+  const drop = new Map<string, Set<string>>(); // netName → pin keys to remove
+  for (const [key, netsForPin] of pinToNets) {
+    if (netsForPin.length < 2) continue;
+    const uniqueNets = [...new Set(netsForPin)];
+    if (uniqueNets.length < 2) continue;
+    const scored = uniqueNets
+      .map((netName) => {
+        const pinCount = draftNets.find((net) => net.name === netName)?.pins.length ?? 0;
+        return { netName, score: netAssignmentScore(netName, pinCount) };
+      })
+      .sort((a, b) => b.score - a.score);
+    const best = scored[0];
+    const contested = scored.filter((entry) => entry.score === best.score);
+    if (contested.length > 1) {
+      const meta = pinMeta.get(key);
+      throw new Error(formatPinConflictHint(
+        meta?.canonical ?? key,
+        uniqueNets,
+        meta?.kind ?? "opamp",
+      ));
+    }
+    for (const loser of scored.slice(1)) {
+      const removals = drop.get(loser.netName) ?? new Set<string>();
+      removals.add(key);
+      drop.set(loser.netName, removals);
+    }
+  }
+
+  const nets: CircuitPlanNet[] = [];
+  for (const draft of draftNets) {
+    const removals = drop.get(draft.name);
+    const pins = removals
+      ? draft.pins.filter((pin) => !removals.has(pin.toLowerCase()))
+      : draft.pins;
+    if (pins.length === 0) {
+      if (draft.name === "0") {
+        throw new Error("circuit plan needs a 0 ground net with at least one pin after deduplicating supply aliases");
+      }
+      // Drop empty leftover nets created solely by a conflicting duplicate pin.
+      continue;
+    }
+    nets.push({ name: draft.name, pins });
+  }
   if (!nets.some((net) => net.name === "0")) throw new Error("circuit plan needs a 0 ground net");
+
+  const connectedPins = new Set(
+    nets.flatMap((net) => net.pins.map((pin) => pin.toLowerCase())),
+  );
 
   // A pin absent from every net is a silently floating part — the simulation
   // would read 0 V / 0 A and the schematic would look plausible but be wrong.
@@ -596,12 +706,12 @@ function alignConnectedPins(plan: DirectCircuitPlan, components: SchematicCompon
           const dy = right.pin.y - left.pin.y;
           // Move the downstream (higher level) part toward the upstream pin.
           const [anchor, mobile] = left.level <= right.level ? [left, right] : [right, left];
-          // Only micro-align for native pin-bank offsets (typically 16–32).
-          // Large slides collapse dense graphs onto the same cell.
-          if (Math.abs(dx) >= Math.abs(dy) && dy !== 0 && Math.abs(dy) <= 48) {
+          // Micro-align native pin-bank offsets so series chains stay on one
+          // axis (straight wires). Cap the slide so dense graphs do not collapse.
+          if (Math.abs(dx) >= Math.abs(dy) && dy !== 0 && Math.abs(dy) <= 64) {
             moveComponent(components, mobile.ref, 0, anchor.pin.y - mobile.pin.y);
             moved = true;
-          } else if (Math.abs(dy) > Math.abs(dx) && dx !== 0 && Math.abs(dx) <= 48) {
+          } else if (Math.abs(dy) > Math.abs(dx) && dx !== 0 && Math.abs(dx) <= 64) {
             moveComponent(components, mobile.ref, anchor.pin.x - mobile.pin.x, 0);
             moved = true;
           }

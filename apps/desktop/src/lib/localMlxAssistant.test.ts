@@ -94,6 +94,9 @@ describe("LocalMlxAssistant", () => {
     expect(body.tools.every((tool) => typeof tool.function.parameters === "object")).toBe(true);
     expect(body.messages[0].content).toContain("never call a tool");
     expect(body.messages[0].content).toContain("a voltage source");
+    expect(body.messages[0].content).toContain("Class-D-style approximation");
+    expect(body.messages[0].content).toContain("comparator + MOS + LC");
+    expect(body.messages[0].content).toContain("never list both U1.v- and U1.vee");
   });
 
   it("returns a clarifying question as plain text without fabricating a circuit", async () => {
@@ -279,6 +282,52 @@ describe("LocalMlxAssistant", () => {
     expect(reply.rejectedActionCount).toBe(0);
     expect(bodies).toHaveLength(2);
     expect(bodies[1]).toContain("references an unknown component");
+  });
+
+  it("enriches pin/net repair hints so the model gets legal pin ids", async () => {
+    const conflictPlan = {
+      mode: "create",
+      filename: "conflict.asc",
+      components: [
+        { ref: "V1", kind: "vsource", value: "5" },
+        { ref: "R1", kind: "resistor", value: "1k" },
+        { ref: "R2", kind: "resistor", value: "1k" },
+      ],
+      nets: [
+        { name: "left", pins: ["V1.n", "R1.a"] },
+        { name: "right", pins: ["V1.n", "R2.a"] },
+        { name: "0", pins: ["V1.p", "R1.b", "R2.b"] },
+      ],
+    };
+    const responses = [
+      completion({
+        content: "",
+        tool_calls: [{
+          id: "conflict",
+          type: "function",
+          function: { name: "build_tau_circuit", arguments: JSON.stringify(conflictPlan) },
+        }],
+      }),
+      completion({
+        content: "",
+        tool_calls: [{
+          id: "fixed",
+          type: "function",
+          function: { name: "build_tau_circuit", arguments: JSON.stringify(VALID_PLAN) },
+        }],
+      }),
+    ];
+    const bodies: string[] = [];
+    const provider = new LocalMlxAssistant({ fetchImpl: vi.fn(async (_input, init) => {
+      bodies.push(String(init?.body));
+      return responses.shift()!;
+    }) });
+
+    const reply = await provider.complete(request());
+    expect(reply.actions).toHaveLength(1);
+    expect(bodies[1]).toContain("more than one net");
+    expect(bodies[1]).toContain("each ref.pin appears in exactly one net");
+    expect(bodies[1]).toContain("opamp pins are in+,in-,out,v+,v-");
   });
 
   it("executes an inspect_simulation_signal round-trip and answers from the tool result, never the raw payload", async () => {
