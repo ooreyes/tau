@@ -89,8 +89,8 @@ describe("LocalAiSetupDialog", () => {
     runtime.install.mockResolvedValue(status({ installed: true }));
     render(<LocalAiSetupDialog />);
 
-    expect(await screen.findByText("Set up local AI")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Install MLX LM" }));
+    expect(await screen.findByRole("heading", { name: "Set up local AI" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Set up local AI" }));
     await waitFor(() => expect(runtime.install).toHaveBeenCalledTimes(1));
   });
 
@@ -100,8 +100,9 @@ describe("LocalAiSetupDialog", () => {
     runtime.start.mockResolvedValue(status({ state: "starting", managed: true, installed: true }));
     render(<LocalAiSetupDialog />);
 
-    fireEvent.click(await screen.findByRole("button", { name: /Download Qwen3 4B/ }));
-    await waitFor(() => expect(runtime.start).toHaveBeenCalledWith("qwen3-4b-4bit", true));
+    // First-run prefers the smaller 1.7B download for tryouts.
+    fireEvent.click(await screen.findByRole("button", { name: /Download Qwen3 1\.7B/ }));
+    await waitFor(() => expect(runtime.start).toHaveBeenCalledWith("qwen3-1.7b-4bit", true));
   });
 
   it("skips and does not reopen after dismiss", async () => {
@@ -109,10 +110,10 @@ describe("LocalAiSetupDialog", () => {
     runtime.getStatus.mockResolvedValue(status({ installed: false }));
     const { unmount } = render(<LocalAiSetupDialog />);
     fireEvent.click(await screen.findByRole("button", { name: "Skip for now" }));
-    expect(screen.queryByText("Set up local AI")).toBeNull();
+    expect(screen.queryByRole("heading", { name: "Set up local AI" })).toBeNull();
     unmount();
     render(<LocalAiSetupDialog />);
     await waitFor(() => expect(runtime.getStatus).toHaveBeenCalled());
-    expect(screen.queryByText("Set up local AI")).toBeNull();
+    expect(screen.queryByRole("heading", { name: "Set up local AI" })).toBeNull();
   });
 });

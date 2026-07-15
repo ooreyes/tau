@@ -1532,7 +1532,7 @@ export function SettingsPanel({
                             disabled={localAiBusy}
                             onClick={() => void runLocalAiAction(installLocalAiRuntime)}
                           >
-                            Install MLX LM
+                            Set up local AI
                           </Button>
                         ) : (
                           <Button

@@ -111,6 +111,26 @@ fn require_apple_silicon() -> Result<(), String> {
     }
 }
 
+/// Pinned Astral uv release used when the Mac has no uv yet. URL + sha256 are
+/// fixed so the installer never follows a floating "latest" redirect.
+#[cfg(all(target_os = "macos", target_arch = "aarch64"))]
+const UV_BOOTSTRAP_VERSION: &str = "0.11.28";
+#[cfg(all(target_os = "macos", target_arch = "aarch64"))]
+const UV_BOOTSTRAP_URL: &str =
+    "https://github.com/astral-sh/uv/releases/download/0.11.28/uv-aarch64-apple-darwin.tar.gz";
+#[cfg(all(target_os = "macos", target_arch = "aarch64"))]
+const UV_BOOTSTRAP_SHA256: &str =
+    "33540eb7c883ab857eff79bd5ac2aa31fe27b595abecb4a9c003a2c998447232";
+
+fn tau_support_bin_dir() -> Option<PathBuf> {
+    home_dir().map(|home| {
+        home.join("Library")
+            .join("Application Support")
+            .join("com.tau.desktop")
+            .join("bin")
+    })
+}
+
 fn mlx_server_executable() -> Option<PathBuf> {
     if let Some(explicit) = env::var_os("TAU_MLX_LM_SERVER").filter(|value| !value.is_empty()) {
         let path = PathBuf::from(explicit);
@@ -144,12 +164,132 @@ fn uv_executable() -> Option<PathBuf> {
     }
 
     let candidates = [
+        tau_support_bin_dir().map(|dir| dir.join("uv")),
         home_dir().map(|home| home.join(".local/bin/uv")),
         home_dir().map(|home| home.join(".cargo/bin/uv")),
         Some(PathBuf::from("/opt/homebrew/bin/uv")),
         Some(PathBuf::from("/usr/local/bin/uv")),
     ];
     candidates.into_iter().flatten().find(|path| path.is_file())
+}
+
+fn sha256_hex(path: &Path) -> Result<String, String> {
+    let output = Command::new("/usr/bin/shasum")
+        .args(["-a", "256"])
+        .arg(path)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .output()
+        .map_err(|error| format!("Could not checksum download: {error}"))?;
+    if !output.status.success() {
+        return Err("Could not checksum the uv download.".to_string());
+    }
+    let text = String::from_utf8_lossy(&output.stdout);
+    let hash = text
+        .split_whitespace()
+        .next()
+        .ok_or_else(|| "Could not parse uv download checksum.".to_string())?;
+    Ok(hash.to_ascii_lowercase())
+}
+
+/// Downloads the pinned Apple-silicon uv binary into Tau's Application Support
+/// bin directory when none is already on PATH. Uses only /usr/bin/curl and
+/// /usr/bin/tar with a fixed URL and sha256.
+#[cfg(all(target_os = "macos", target_arch = "aarch64"))]
+fn bootstrap_uv() -> Result<PathBuf, String> {
+    let bin_dir = tau_support_bin_dir()
+        .ok_or_else(|| "Could not resolve Tau's Application Support directory.".to_string())?;
+    fs::create_dir_all(&bin_dir)
+        .map_err(|error| format!("Could not create Tau support directory: {error}"))?;
+    let dest = bin_dir.join("uv");
+    if dest.is_file() {
+        return Ok(dest);
+    }
+
+    let staging = env::temp_dir().join(format!(
+        "tau-uv-bootstrap-{}-{}",
+        UV_BOOTSTRAP_VERSION,
+        std::process::id()
+    ));
+    let _ = fs::remove_dir_all(&staging);
+    fs::create_dir_all(&staging)
+        .map_err(|error| format!("Could not create uv bootstrap staging: {error}"))?;
+    let archive = staging.join("uv-aarch64-apple-darwin.tar.gz");
+
+    let curl = Command::new("/usr/bin/curl")
+        .args([
+            "-fsSL",
+            "--proto",
+            "=https",
+            "--tlsv1.2",
+            UV_BOOTSTRAP_URL,
+            "-o",
+        ])
+        .arg(&archive)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::piped())
+        .status()
+        .map_err(|error| format!("Could not download uv: {error}"))?;
+    if !curl.success() {
+        let _ = fs::remove_dir_all(&staging);
+        return Err(format!(
+            "Could not download uv {UV_BOOTSTRAP_VERSION}. Check your network and try again."
+        ));
+    }
+
+    let actual = sha256_hex(&archive)?;
+    if actual != UV_BOOTSTRAP_SHA256 {
+        let _ = fs::remove_dir_all(&staging);
+        return Err("Downloaded uv failed checksum verification. Aborting install.".to_string());
+    }
+
+    let extract = Command::new("/usr/bin/tar")
+        .args(["-xzf"])
+        .arg(&archive)
+        .arg("-C")
+        .arg(&staging)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::piped())
+        .status()
+        .map_err(|error| format!("Could not extract uv: {error}"))?;
+    if !extract.success() {
+        let _ = fs::remove_dir_all(&staging);
+        return Err("Could not extract the uv archive.".to_string());
+    }
+
+    let extracted = staging.join("uv");
+    if !extracted.is_file() {
+        let _ = fs::remove_dir_all(&staging);
+        return Err("uv archive did not contain the expected binary.".to_string());
+    }
+    fs::copy(&extracted, &dest).map_err(|error| format!("Could not install uv: {error}"))?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut perms = fs::metadata(&dest)
+            .map_err(|error| format!("Could not read uv permissions: {error}"))?
+            .permissions();
+        perms.set_mode(0o755);
+        fs::set_permissions(&dest, perms)
+            .map_err(|error| format!("Could not set uv executable bit: {error}"))?;
+    }
+    let _ = fs::remove_dir_all(&staging);
+    Ok(dest)
+}
+
+#[cfg(not(all(target_os = "macos", target_arch = "aarch64")))]
+fn bootstrap_uv() -> Result<PathBuf, String> {
+    Err("Automatic uv install is only available on Apple silicon Macs.".to_string())
+}
+
+fn ensure_uv() -> Result<PathBuf, String> {
+    if let Some(existing) = uv_executable() {
+        return Ok(existing);
+    }
+    bootstrap_uv()
 }
 
 /// Installs the audited MLX LM tool only. Arguments are fixed; the renderer
@@ -312,7 +452,7 @@ fn local_ai_status_inner(slot: &mut Option<LocalAiProcess>) -> LocalAiStatus {
         if installed {
             "MLX LM is installed. Choose a model to start local inference."
         } else {
-            "MLX LM is not installed. Choose Install MLX LM to set up local inference on this Mac."
+            "MLX LM is not installed. Choose Install MLX LM — Tau will set up the local runtime on this Mac."
         },
     )
 }
@@ -342,10 +482,7 @@ pub async fn install_local_ai_runtime(
         }
     }
 
-    let uv = uv_executable().ok_or_else(|| {
-        "uv is not installed. Install uv from https://docs.astral.sh/uv/, then choose Install MLX LM in Tau."
-            .to_string()
-    })?;
+    let uv = ensure_uv()?;
 
     let uv_path = uv.clone();
     tauri::async_runtime::spawn_blocking(move || install_mlx_lm_with_uv(&uv_path))
@@ -506,5 +643,16 @@ mod tests {
         assert!(result.is_ok());
         #[cfg(not(all(target_os = "macos", target_arch = "aarch64")))]
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn pinned_uv_bootstrap_constants_are_consistent() {
+        #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
+        {
+            assert!(UV_BOOTSTRAP_URL.contains(UV_BOOTSTRAP_VERSION));
+            assert!(UV_BOOTSTRAP_URL.contains("uv-aarch64-apple-darwin.tar.gz"));
+            assert_eq!(UV_BOOTSTRAP_SHA256.len(), 64);
+            assert!(UV_BOOTSTRAP_SHA256.chars().all(|c| c.is_ascii_hexdigit()));
+        }
     }
 }

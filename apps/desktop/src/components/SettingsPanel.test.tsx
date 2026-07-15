@@ -91,12 +91,12 @@ beforeEach(() => {
 });
 
 describe("SettingsPanel local assistant lifecycle", () => {
-  it("offers Install MLX LM when the runtime is missing", async () => {
+  it("offers Set up local AI when the runtime is missing", async () => {
     runtime.getStatus.mockResolvedValue(status({ installed: false }));
     runtime.install.mockResolvedValue(status({ installed: true }));
     render(<SettingsPanel {...props} />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Install MLX LM" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Set up local AI" }));
     await waitFor(() => expect(runtime.install).toHaveBeenCalledTimes(1));
     expect(runtime.start).not.toHaveBeenCalled();
   });

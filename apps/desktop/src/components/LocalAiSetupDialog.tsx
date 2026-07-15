@@ -59,6 +59,14 @@ export function LocalAiSetupDialog({ onReady }: LocalAiSetupDialogProps) {
   }, []);
 
   useEffect(() => {
+    if (!open || !status) return;
+    const noneDownloaded = status.presets.every((preset) => !preset.downloaded);
+    if (noneDownloaded && preferences.localModel !== "qwen3-1.7b-4bit") {
+      saveAssistantPreferences({ ...preferences, localModel: "qwen3-1.7b-4bit" });
+    }
+  }, [open, preferences, status]);
+
+  useEffect(() => {
     if (!open || status?.state !== "starting") return;
     let cancelled = false;
     const timer = window.setInterval(() => {
@@ -102,7 +110,7 @@ export function LocalAiSetupDialog({ onReady }: LocalAiSetupDialogProps) {
   };
 
   const primaryLabel = !status?.installed
-    ? "Install MLX LM"
+    ? "Set up local AI"
     : selected && !selected.downloaded
       ? `Download ${selected.label} & Start`
       : "Start local model";
@@ -129,8 +137,9 @@ export function LocalAiSetupDialog({ onReady }: LocalAiSetupDialogProps) {
         <DialogHeader>
           <DialogTitle>Set up local AI</DialogTitle>
           <DialogDescription id="local-ai-setup-desc">
-            Tau runs on your Mac. Install the local model once, then ask the assistant to build
-            schematics, lay them out, and simulate — no cloud required for the default path.
+            Apple silicon only. One click installs the on-device runtime, then downloads a
+            small local model. After that, open Assistant and describe a circuit — Tau lays
+            it out and can simulate once you confirm. No account required.
           </DialogDescription>
         </DialogHeader>
 
@@ -177,7 +186,9 @@ export function LocalAiSetupDialog({ onReady }: LocalAiSetupDialogProps) {
                 <option key={preset.id} value={preset.id}>{preset.label}</option>
               ))}
             </select>
-            <span className="settings-field-hint">4B is recommended for circuit proposals on 8 GB+ Macs.</span>
+            <span className="settings-field-hint">
+              Start with 1.7B (~900 MB) for a quick try; switch to 4B for better circuit proposals if you have 8 GB+ RAM.
+            </span>
           </label>
         )}
 
