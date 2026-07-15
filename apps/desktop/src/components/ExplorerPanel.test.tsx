@@ -170,9 +170,10 @@ describe("ExplorerPanel VS Code action row", () => {
     });
     renderExplorer();
 
-    expect(screen.getByRole("button", { name: "Open Folder" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Create Folder" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Import .asc…" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Open Schematics folder" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Create Schematics folder" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Import LTspice schematic" })).toBeTruthy();
+    expect(document.querySelector(".explorer-empty-actions")).toBeNull();
     expect(screen.getByText("Schematics")).toBeTruthy();
   });
 
@@ -187,8 +188,8 @@ describe("ExplorerPanel VS Code action row", () => {
     });
     renderExplorer();
 
-    expect(screen.getByRole("button", { name: "Open Folder" })).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "Create Folder" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Open Schematics folder" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Create Schematics folder" })).toBeNull();
   });
 
   it("moves a draggable file onto a folder through the explicit project move contract", async () => {

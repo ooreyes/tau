@@ -277,7 +277,11 @@ Status legend: ✅ done · 🟡 partial · ⬜ not started
   invalid descendant/collision/root-source moves stay blocked. Root-file
   creation no longer removes a descendant folder's `.keep` marker, and a
   successful native move still remaps open tabs even if the subsequent refresh
-  reports an error.
+  reports an error. **Native-directory follow-up (2026-07-15):** folder creation
+  now uses a validated `create_project_directory` Rust command instead of the
+  webview filesystem plugin. Real temporary-disk tests create nested folders,
+  create ASC files inside them, and move both files and folders into/out of the
+  new destinations while preserving bytes.
 
 ## 2. Schematic capture
 - ✅ Place / move / rotate / mirror / delete components — `Canvas.tsx`, `store/useSchematic.ts` (mirror = horizontal flip, applied before rotation; Ctrl+E)
@@ -1079,10 +1083,13 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   in the same unit's second commit. **Transient scope follow-up (2026-07-14):**
   traces are always unfilled lines, dense periodic/pulse data is reduced with a
   per-pixel min/max envelope so narrow extrema survive, Home fits the full X/Y
-  result, and a separate Auto scale control fits Y to only the signals and time
-  interval currently visible. Flat, negative-only, tiny-range, outlier, and
-  dense-square-wave regressions keep padding useful without inventing a giant
-  zero-based area.
+  result. **Interest-frame follow-up (2026-07-15):** Auto Frame classifies the
+  waveform, shows the final four cycles of the slowest periodic trace, fits Y to
+  only that window, and publishes X to every shared pane; nonperiodic data keeps
+  the user's current X window and fits visible Y. Show Full Run remains a
+  distinct action. Flat, negative-only, tiny-range, startup-outlier, 100 kHz / 7
+  ms density, and dense-square-wave regressions keep padding useful without
+  inventing a giant zero-based area or an opaque 700-cycle block.
 - 🟡 `.step` family-of-curves overlay — **transient + AC + DC families landed**.
   Transient: `StepPlot` in `SimulationPanel` (the **STEP** tab re-runs the sweep
   and draws the probed signal across all members in a color ramp; legend lists
@@ -1205,8 +1212,10 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   Assistant are separate sibling columns with independent resize boundaries;
   neither is an overlay and opening Assistant does not replace the component
   library at normal desktop widths. At the exact 900px minimum an explicitly
-  opened Assistant temporarily displaces Components because both minimum widths
-  cannot physically fit; closing Assistant restores the Components preference.
+  opened Assistant keeps Components beside it; the passive Explorer yields
+  first because all three minimum widths cannot physically fit. Selecting
+  Explorer explicitly swaps it with Components, while closing Assistant restores
+  Explorer without an overlay.
   A complete validated `apply_current_asc_circuit` proposal replaces the
   active document only after confirmation, records one undo step, preserves
   resolvable probes, marks the file dirty, and invalidates stale analyses;
@@ -1215,14 +1224,20 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   1.7B presets plus Anthropic, with cache-aware Start/Stop and an explicit
   download-size confirmation. Native inference is fixed to `127.0.0.1:8080`
   with audited repositories and allowed origins. The model emits only logical
-  22 pin-accurate, lossless Tau library part kinds and exact `ref.pin` nets;
+  plans and exact `ref.pin` nets for 29 safe library kinds;
   Tau validates, auto-places,
-  obstacle-routes, serializes, re-imports, and asks for confirmation. A live 4B
-  test created a protected 5 V LED + 330 Ω proposal through this boundary.
+  obstacle-routes, serializes, re-imports, proves requested net connectivity and
+  isolation, and asks for confirmation. Comparator, potentiometer, transformer,
+  static switch, CCCS, and CCVS requests lower into portable LTspice primitive
+  networks instead of false single-symbol mappings. Live 4B tests created a
+  protected 5 V LED, a powered inverting amplifier, and a loaded 1:2 transformer
+  through this boundary.
   Malformed/missing-part plans receive at most two private repair attempts and
-  never reach the canvas or disk. Op-amps export as LTspice `opamp2` so the
+  never reach the canvas or disk; an MLX server bug that reports a tool-call
+  finish without returning the payload recovers via strict whole-body JSON.
+  Op-amps export as LTspice `opamp2` and MOSFETs as `nmos4`/`pmos4` so the
   five-pin native role bank survives save/reopen; kinds without equivalent pin
-  geometry are deliberately not advertised yet.
+  geometry are never silently advertised as a stock symbol.
 - 🟡 Component picker matching LTspice (F2 part browser over the full library)
   — **F2 now opens the searchable part palette** (symbols, categories, hotkeys,
   ↑↓/↵ placement); remaining: coverage audit vs. LTspice's full library tree.
@@ -1594,9 +1609,13 @@ checklist for the authoritative list.
   **Independent-column follow-up (2026-07-14):** the old vertically shared
   Components/Assistant dock is removed. At 1280px both appear as direct sibling
   columns with their own handles; at 900px the deterministic budget preserves
-  Explorer, editor, and the explicitly opened Assistant with zero overlay, then
-  restores Components when Assistant closes. Focused DOM tests and live
-  hot-reload screenshots prove both breakpoints.
+  editor plus the simultaneously open Components and Assistant with zero
+  overlay by yielding passive Explorer first. Explicitly opening Explorer swaps
+  it into the constrained workspace. Focused DOM tests and live hot-reload
+  screenshots prove both breakpoints.
+  **Creation-tools follow-up (2026-07-15):** Components and Assistant now remain
+  simultaneously reachable at 900px by yielding Explorer first; the Explorer
+  rail action explicitly swaps the passive/creation column when requested.
 - ✅ **Sweep (2026-07-08, Phase 4b):** hex gate —
   `rg -n "#[0-9a-fA-F]{3,8}" apps/desktop/src` (ts/tsx/css) — confirms **zero
   hardcoded colors outside the single `:root`** in `App.css`; the only other

@@ -51,21 +51,27 @@ describe("App schematic workspace tools", () => {
     expect(screen.getByRole("complementary", { name: "Assistant" })).toBeTruthy();
   });
 
-  it("collapses only the physically conflicting Components column at 900px and restores it", () => {
+  it("keeps AI and Components together at 900px, yielding Explorer until explicitly requested", () => {
     shellWidth = 900;
     render(<App />);
 
     expect(screen.getByRole("complementary", { name: "Assistant" })).toBeTruthy();
+    expect(screen.getByRole("complementary", { name: "Components" })).toBeTruthy();
+    expect(screen.queryByRole("complementary", { name: "Project explorer" })).toBeNull();
+    expect(screen.getAllByRole("separator")).toHaveLength(2); // Components + Assistant.
+
+    fireEvent.click(screen.getByRole("button", { name: "Explorer" }));
+    expect(screen.getByRole("complementary", { name: "Project explorer" })).toBeTruthy();
     expect(screen.queryByRole("complementary", { name: "Components" })).toBeNull();
-    expect(screen.getAllByRole("separator")).toHaveLength(2); // Explorer + Assistant.
+
+    fireEvent.click(screen.getByRole("button", { name: "Components" }));
+    expect(screen.getByRole("complementary", { name: "Components" })).toBeTruthy();
+    expect(screen.queryByRole("complementary", { name: "Project explorer" })).toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: "Close assistant" }));
     expect(screen.queryByRole("complementary", { name: "Assistant" })).toBeNull();
     expect(screen.getByRole("complementary", { name: "Components" })).toBeTruthy();
-
-    fireEvent.click(screen.getByRole("button", { name: "Open Tau assistant" }));
-    expect(screen.getByRole("complementary", { name: "Assistant" })).toBeTruthy();
-    expect(screen.queryByRole("complementary", { name: "Components" })).toBeNull();
+    expect(screen.getByRole("complementary", { name: "Project explorer" })).toBeTruthy();
   });
 
   it("uses the same independent Assistant column in simulator mode", () => {

@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import { extractCircuit } from "../schematic/netlist";
 import {
   ASSISTANT_CATALOG_PROMPT,
+  ASSISTANT_COMPOSITE_KINDS,
+  ASSISTANT_DIRECT_GENERATABLE_KINDS,
   ASSISTANT_GENERATABLE_KINDS,
   compileAssistantCircuitPlan,
 } from "./assistantCircuitPlan";
@@ -21,6 +23,36 @@ const divider = {
   ],
   directives: [".op", ".tran 10m"],
 };
+
+interface TopologyPlan {
+  mode: "create";
+  filename: string;
+  components: Array<{ ref: string; kind: string; value?: string }>;
+  nets: Array<{ name: string; pins: string[] }>;
+  directives?: string[];
+}
+
+/** Compile through ASC and assert the re-imported electrical graph, not just
+ * the generated text. This catches routes that look plausible but terminate
+ * beside a real LTspice pin, and routes that accidentally cross another pin. */
+function expectRoundTripConnectivity(id: string, plan: TopologyPlan) {
+  const action = compileAssistantCircuitPlan(id, plan);
+  expect(action.type).toBe("create_asc");
+  if (action.type !== "create_asc") throw new Error("expected create action");
+
+  const circuit = extractCircuit(action.document.components, action.document.wires, action.document.netLabels);
+  const byRef = new Map(circuit.components.map(({ component, pins }) => [component.label, pins]));
+  for (const net of plan.nets) {
+    for (const token of net.pins) {
+      const split = token.lastIndexOf(".");
+      const ref = token.slice(0, split);
+      const pin = token.slice(split + 1);
+      expect(byRef.get(ref)?.[pin], token).toBe(net.name);
+    }
+  }
+  expect(circuit.groundNetId).toBe("0");
+  return action;
+}
 
 describe("assistant circuit plan", () => {
   it("compiles a logical library plan into a validated ASC proposal", () => {
@@ -92,24 +124,264 @@ describe("assistant circuit plan", () => {
     }
   });
 
+  it("advertises safe composite macros but withholds unresolved symbol contracts", () => {
+    expect(ASSISTANT_GENERATABLE_KINDS).toEqual(expect.arrayContaining([...ASSISTANT_COMPOSITE_KINDS]));
+    expect(ASSISTANT_GENERATABLE_KINDS).not.toContain("subckt");
+  });
+
   it("round-trips every advertised kind through real ASC pin geometry", () => {
     const failures: string[] = [];
     for (const entry of ASSISTANT_CATALOG_PROMPT) {
       const ref = `${entry.refPrefix}1`;
       let action;
       try {
+        const nets = entry.kind === "comparator"
+          ? [
+              { name: "positive", pins: [`${ref}.in+`] },
+              { name: "0", pins: [`${ref}.in-`] },
+              { name: "output", pins: [`${ref}.out`] },
+            ]
+          : [{ name: "0", pins: [`${ref}.${entry.pins[0].id}`] }];
         action = compileAssistantCircuitPlan(`kind-${entry.kind}`, {
           mode: "create",
           filename: `${entry.kind}.asc`,
           components: [{ ref, kind: entry.kind }],
-          nets: [{ name: "0", pins: [`${ref}.${entry.pins[0].id}`] }],
+          nets,
         });
       } catch (error) {
         failures.push(`${entry.kind}: ${error instanceof Error ? error.message : String(error)}`);
         continue;
       }
-      expect(action.document.components.some((component) => component.kind === entry.kind), entry.kind).toBe(true);
+      if ((ASSISTANT_DIRECT_GENERATABLE_KINDS as readonly string[]).includes(entry.kind)) {
+        expect(action.document.components.some((component) => component.kind === entry.kind), entry.kind).toBe(true);
+      } else {
+        expect(action.document.components.length, entry.kind).toBeGreaterThan(0);
+      }
     }
     expect(failures).toEqual([]);
+  });
+
+  it("lowers a potentiometer into two connected resistor halves", () => {
+    const action = compileAssistantCircuitPlan("macro-pot", {
+      mode: "create",
+      filename: "potentiometer.asc",
+      components: [{ ref: "RV1", kind: "potentiometer", value: "10k" }],
+      nets: [
+        { name: "top", pins: ["RV1.a"] },
+        { name: "wiper", pins: ["RV1.w"] },
+        { name: "0", pins: ["RV1.b"] },
+      ],
+    });
+    const circuit = extractCircuit(action.document.components, action.document.wires, action.document.netLabels);
+    const byRef = new Map(circuit.components.map(({ component, pins }) => [component.label, pins]));
+    expect(byRef.get("R_RV1_A")).toMatchObject({ a: "top", b: "wiper" });
+    expect(byRef.get("R_RV1_B")).toMatchObject({ a: "wiper", b: "0" });
+    expect(action.source.match(/SYMATTR Value 5000/g)).toHaveLength(2);
+  });
+
+  it("lowers a transformer into coupled inductors with all four terminals", () => {
+    const action = compileAssistantCircuitPlan("macro-transformer", {
+      mode: "create",
+      filename: "transformer.asc",
+      components: [{ ref: "T1", kind: "transformer", value: "1:2" }],
+      nets: [
+        { name: "primary", pins: ["T1.p1"] },
+        { name: "0", pins: ["T1.p2", "T1.s2"] },
+        { name: "secondary", pins: ["T1.s1"] },
+      ],
+    });
+    const circuit = extractCircuit(action.document.components, action.document.wires, action.document.netLabels);
+    const byRef = new Map(circuit.components.map(({ component, pins }) => [component.label, pins]));
+    expect(byRef.get("L_T1_P")).toMatchObject({ a: "primary", b: "0" });
+    expect(byRef.get("L_T1_S")).toMatchObject({ a: "secondary", b: "0" });
+    expect(action.source).toMatch(/TEXT \S+ \S+ Left 2 !K_T1 L_T1_P L_T1_S 0\.999/);
+  });
+
+  it("lowers current-controlled sources into an explicit sense branch and behavioral output", () => {
+    for (const [kind, ref, outputKind, expression] of [
+      ["cccs", "F1", "bi", "I=I(V_F1_SENSE)*3"],
+      ["ccvs", "H1", "bv", "V=I(V_H1_SENSE)*2000"],
+    ] as const) {
+      const action = compileAssistantCircuitPlan(`macro-${kind}`, {
+        mode: "create",
+        filename: `${kind}.asc`,
+        components: [{ ref, kind, value: kind === "cccs" ? "3" : "2k" }],
+        nets: [
+          { name: "control_plus", pins: [`${ref}.cp`] },
+          { name: "0", pins: [`${ref}.cn`, `${ref}.on`] },
+          { name: "output", pins: [`${ref}.op`] },
+        ],
+      });
+      const circuit = extractCircuit(action.document.components, action.document.wires, action.document.netLabels);
+      const byRef = new Map(circuit.components.map(({ component, pins }) => [component.label, pins]));
+      expect(byRef.get(`V_${ref}_SENSE`)).toMatchObject({ p: "control_plus", n: "0" });
+      expect(byRef.get(`B_${ref}_OUT`)).toMatchObject({ p: "output", n: "0" });
+      expect(action.source).toContain(`SYMBOL ${outputKind}`);
+      expect(action.source).toContain(`SYMATTR Value ${expression}`);
+    }
+  });
+
+  it("lowers a comparator into a clamped behavioral output with high-impedance input anchors", () => {
+    const action = compileAssistantCircuitPlan("macro-comparator", {
+      mode: "create",
+      filename: "comparator.asc",
+      components: [
+        { ref: "U1", kind: "comparator", value: "5 0 0.1" },
+        { ref: "V1", kind: "vsource", value: "1" },
+      ],
+      nets: [
+        { name: "positive", pins: ["V1.p", "U1.in+"] },
+        { name: "negative", pins: ["U1.in-"] },
+        { name: "output", pins: ["U1.out"] },
+        { name: "0", pins: ["V1.n"] },
+      ],
+    });
+    const circuit = extractCircuit(action.document.components, action.document.wires, action.document.netLabels);
+    const byRef = new Map(circuit.components.map(({ component, pins }) => [component.label, pins]));
+    expect(byRef.get("R_U1_INP")).toMatchObject({ a: "positive", b: "0" });
+    expect(byRef.get("R_U1_INM")).toMatchObject({ a: "negative", b: "0" });
+    expect(byRef.get("B_U1")).toMatchObject({ p: "output", n: "0" });
+    expect(action.source).toContain("V=if(V(output)>2.5");
+    expect(action.source).toContain("V(positive)-V(negative)");
+  });
+
+  it("lowers a static switch without claiming LTspice voltage-control pins", () => {
+    for (const [state, resistance] of [["open", "1e12"], ["closed", "1m"]] as const) {
+      const action = compileAssistantCircuitPlan(`macro-switch-${state}`, {
+        mode: "create",
+        filename: `switch-${state}.asc`,
+        components: [{ ref: "S1", kind: "switch", value: state }],
+        nets: [{ name: "signal", pins: ["S1.a"] }, { name: "0", pins: ["S1.b"] }],
+      });
+      expect(action.source).toContain("SYMATTR InstName R_S1");
+      expect(action.source).toContain(`SYMATTR Value ${resistance}`);
+      expect(action.source).not.toContain("SYMBOL sw");
+    }
+  });
+
+  it("preserves a powered op-amp feedback network through ASC routing", () => {
+    const action = expectRoundTripConnectivity("topology-opamp", {
+      mode: "create",
+      filename: "inverting-amplifier.asc",
+      components: [
+        { ref: "V1", kind: "vsource", value: "SINE(0 1 1k)" },
+        { ref: "V2", kind: "vsource", value: "15" },
+        { ref: "V3", kind: "vsource", value: "15" },
+        { ref: "R1", kind: "resistor", value: "10k" },
+        { ref: "R2", kind: "resistor", value: "100k" },
+        { ref: "R3", kind: "resistor", value: "10k" },
+        { ref: "U1", kind: "opamp", value: "ideal" },
+      ],
+      nets: [
+        { name: "vin", pins: ["V1.p", "R1.a"] },
+        { name: "inverting", pins: ["R1.b", "R2.a", "U1.in-"] },
+        { name: "vout", pins: ["R2.b", "R3.a", "U1.out"] },
+        { name: "vcc", pins: ["V2.p", "U1.v+"] },
+        { name: "vee", pins: ["V3.n", "U1.v-"] },
+        { name: "0", pins: ["V1.n", "V2.n", "V3.p", "R3.b", "U1.in+"] },
+      ],
+      directives: [".tran 5m"],
+    });
+    expect(action.source).toContain("SYMBOL opamp2");
+  });
+
+  it("preserves every node of a capacitor-coupled NPN bias stage", () => {
+    const action = expectRoundTripConnectivity("topology-npn", {
+      mode: "create",
+      filename: "common-emitter.asc",
+      components: [
+        { ref: "V1", kind: "vsource", value: "12" },
+        { ref: "V2", kind: "vsource", value: "SINE(0 10m 1k)" },
+        { ref: "C1", kind: "capacitor", value: "1u" },
+        { ref: "R1", kind: "resistor", value: "100k" },
+        { ref: "R2", kind: "resistor", value: "22k" },
+        { ref: "R3", kind: "resistor", value: "4.7k" },
+        { ref: "R4", kind: "resistor", value: "1k" },
+        { ref: "Q1", kind: "npn", value: "2N3904" },
+      ],
+      nets: [
+        { name: "vcc", pins: ["V1.p", "R1.a", "R3.a"] },
+        { name: "input", pins: ["V2.p", "C1.a"] },
+        { name: "base", pins: ["C1.b", "R1.b", "R2.a", "Q1.b"] },
+        { name: "collector", pins: ["R3.b", "Q1.c"] },
+        { name: "emitter", pins: ["Q1.e", "R4.a"] },
+        { name: "0", pins: ["V1.n", "V2.n", "R2.b", "R4.b"] },
+      ],
+      directives: [".op", ".tran 10m"],
+    });
+    expect(action.source).toContain("SYMBOL npn");
+  });
+
+  it("keeps controlled and behavioral source input/output nets isolated", () => {
+    const action = expectRoundTripConnectivity("topology-controlled", {
+      mode: "create",
+      filename: "controlled-sources.asc",
+      components: [
+        { ref: "V1", kind: "vsource", value: "1" },
+        { ref: "E1", kind: "vcvs", value: "10" },
+        { ref: "G1", kind: "vccs", value: "2m" },
+        { ref: "B1", kind: "bsource", value: "V=V(ctrl)*V(eout)" },
+        { ref: "R1", kind: "resistor", value: "1k" },
+        { ref: "R2", kind: "resistor", value: "1k" },
+        { ref: "R3", kind: "resistor", value: "1k" },
+      ],
+      nets: [
+        { name: "ctrl", pins: ["V1.p", "E1.cp", "G1.cp"] },
+        { name: "eout", pins: ["E1.op", "R1.a"] },
+        { name: "gout", pins: ["G1.op", "R2.a"] },
+        { name: "bout", pins: ["B1.p", "R3.a"] },
+        {
+          name: "0",
+          pins: ["V1.n", "E1.cn", "E1.on", "G1.cn", "G1.on", "B1.n", "R1.b", "R2.b", "R3.b"],
+        },
+      ],
+      directives: [".op"],
+    });
+    expect(action.source).toContain("SYMBOL e");
+    expect(action.source).toContain("SYMBOL g");
+    expect(action.source).toContain("SYMBOL bv");
+  });
+
+  it("rejects a routed ASC when dense wires merge requested net partitions", () => {
+    expect(() => compileAssistantCircuitPlan("dense-short", {
+      mode: "create",
+      filename: "dense-short.asc",
+      components: [
+        { ref: "V1", kind: "vsource", value: "5" },
+        ...Array.from({ length: 12 }, (_, index) => ({
+          ref: `R${index + 1}`,
+          kind: "resistor",
+          value: "1k",
+        })),
+      ],
+      nets: [
+        { name: "0", pins: ["V1.n", "R10.b"] },
+        { name: "n1", pins: ["V1.p", "R1.a", "R4.a", "R5.a", "R7.a", "R9.a"] },
+        { name: "n2", pins: ["R3.a", "R11.b"] },
+        { name: "n3", pins: ["R9.b"] },
+        { name: "n4", pins: ["R1.b", "R5.b", "R6.a", "R8.a", "R12.a"] },
+        { name: "n5", pins: ["R2.b", "R3.b", "R7.b", "R11.a", "R12.b"] },
+        { name: "n6", pins: ["R2.a", "R4.b", "R6.b", "R8.b", "R10.a"] },
+      ],
+    })).toThrow(/could not preserve requested isolation/i);
+  });
+
+  it("preserves both ports of a terminated transmission line", () => {
+    const action = expectRoundTripConnectivity("topology-tline", {
+      mode: "create",
+      filename: "switched-tline.asc",
+      components: [
+        { ref: "V1", kind: "vsource", value: "PULSE(0 5 0 1n 1n 100n 200n)" },
+        { ref: "T1", kind: "tline", value: "Td=50n Z0=50" },
+        { ref: "R1", kind: "resistor", value: "50" },
+      ],
+      nets: [
+        { name: "line_in", pins: ["V1.p", "T1.a1"] },
+        { name: "remote", pins: ["T1.b1", "R1.a"] },
+        { name: "0", pins: ["V1.n", "T1.a2", "T1.b2", "R1.b"] },
+      ],
+      directives: [".tran 500n"],
+    });
+    expect(action.source).toContain("SYMBOL tline");
   });
 });

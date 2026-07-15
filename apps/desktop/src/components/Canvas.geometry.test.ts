@@ -144,6 +144,28 @@ describe("Canvas wire geometry", () => {
     expect(route.length).toBeGreaterThan(2);
   });
 
+  it("does not use another terminal of the endpoint component as an elbow", () => {
+    const importedVerticalResistor: SchematicComponent = {
+      ...comp("r1", 80, 0),
+      pinOverride: [
+        { id: "a", label: "A", x: 96, y: 16 },
+        { id: "b", label: "B", x: 96, y: 96 },
+      ],
+    };
+    const unintendedPin = { x: 96, y: 96 };
+    const route = routeWireSmart({ x: 0, y: 96 }, { x: 96, y: 16 }, [importedVerticalResistor]);
+
+    expect(route.slice(1, -1)).not.toContainEqual(unintendedPin);
+    for (let index = 1; index < route.length; index += 1) {
+      const a = route[index - 1];
+      const b = route[index];
+      const touches = a.x === b.x
+        ? unintendedPin.x === a.x && unintendedPin.y >= Math.min(a.y, b.y) && unintendedPin.y <= Math.max(a.y, b.y)
+        : unintendedPin.y === a.y && unintendedPin.x >= Math.min(a.x, b.x) && unintendedPin.x <= Math.max(a.x, b.x);
+      expect(touches).toBe(false);
+    }
+  });
+
   it("uses a clear channel instead of overlapping an existing wire", () => {
     const existing = [{
       id: "existing",

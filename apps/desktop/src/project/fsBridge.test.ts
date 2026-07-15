@@ -7,7 +7,7 @@ const tauri = vi.hoisted(() => ({
 
 vi.mock("@tauri-apps/api/core", () => tauri);
 
-import { moveProjectEntry, reserveProjectTextFile } from "./fsBridge";
+import { createProjectDirectory, moveProjectEntry, reserveProjectTextFile } from "./fsBridge";
 
 afterEach(() => {
   tauri.isTauri.mockReturnValue(true);
@@ -103,6 +103,23 @@ describe("native project move bridge", () => {
       sourcePath: "/project/Analog/Filters",
       targetDirectory: "/project/Archive",
       newName: null,
+    });
+  });
+});
+
+describe("native project directory bridge", () => {
+  it("creates a nested folder through the authorized root command", async () => {
+    tauri.invoke.mockResolvedValueOnce("/project/Analog/Filters");
+
+    await expect(createProjectDirectory(
+      "/project",
+      "/project/Analog",
+      "Filters",
+    )).resolves.toBe("/project/Analog/Filters");
+    expect(tauri.invoke).toHaveBeenCalledWith("create_project_directory", {
+      projectRoot: "/project",
+      parentPath: "/project/Analog",
+      name: "Filters",
     });
   });
 });

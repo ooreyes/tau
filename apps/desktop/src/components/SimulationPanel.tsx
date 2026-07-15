@@ -56,7 +56,7 @@ import { buildParamScope } from "../simulation/paramScope";
 import { isNativeSpiceRuntime, MAX_NATIVE_OUTPUT_POINTS } from "../engine/nativeSpice";
 import {
   displaySampleIndices,
-  visibleWaveformBounds,
+  autoFrameWaveform,
   waveformBounds,
   waveformEnvelopeIndices,
 } from "../simulation/waveform";
@@ -1410,7 +1410,7 @@ function TranScopePane({
     () => ({ xMin: 0, xMax: plot ? plot.tMax : 1, yMin: plot ? plot.min : -1, yMax: plot ? plot.max : 1 }),
     [plot],
   );
-  const { viewport, attachSvg, isPanning, fit, fitY, zoomBy, dragHandlers } = usePlotViewport({
+  const { viewport, attachSvg, isPanning, fit, fitTo, zoomBy, dragHandlers } = usePlotViewport({
     domain,
     resetKey: runKey,
     width: PLOT_WIDTH,
@@ -1426,9 +1426,9 @@ function TranScopePane({
     },
     [measureRef, attachSvg],
   );
-  const autoScaleVisible = useCallback(() => {
-    fitY(visibleWaveformBounds(times, paneTraces, viewport.xMin, viewport.xMax));
-  }, [fitY, paneTraces, times, viewport.xMax, viewport.xMin]);
+  const autoFrame = useCallback(() => {
+    fitTo(autoFrameWaveform(times, paneTraces, viewport));
+  }, [fitTo, paneTraces, times, viewport]);
 
   return (
     <div className="scope-plot-wrap">
@@ -1486,7 +1486,8 @@ function TranScopePane({
           onZoomIn={() => zoomBy(0.7)}
           onZoomOut={() => zoomBy(1 / 0.7)}
           onFit={fit}
-          onAutoScaleVisible={autoScaleVisible}
+          onAutoFrame={autoFrame}
+          fitLabel="Show full run"
         />
       )}
     </div>

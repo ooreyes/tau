@@ -185,6 +185,53 @@ describe("ASC-native project workspace", () => {
     expect(useProject.getState().error).toBeNull();
   });
 
+  it("creates a native folder and moves a disk-backed file into and back out of it", async () => {
+    const root = "/Users/test/Tau_Design";
+    const folder = `${root}/New Folder`;
+    const source = `${root}/filter.asc`;
+    const nested = `${folder}/filter.asc`;
+    const rootTree = [{ name: "filter.asc", path: source, kind: "file" as const }];
+    const folderTree = [
+      { name: "New Folder", path: folder, kind: "dir" as const, children: [] },
+      ...rootTree,
+    ];
+    const nestedTree = [{
+      name: "New Folder",
+      path: folder,
+      kind: "dir" as const,
+      children: [{ name: "filter.asc", path: nested, kind: "file" as const }],
+    }];
+    const createDirectory = vi.spyOn(fs, "createProjectDirectory").mockResolvedValue(folder);
+    vi.spyOn(fs, "readProjectTree")
+      .mockResolvedValueOnce(folderTree)
+      .mockResolvedValueOnce(nestedTree)
+      .mockResolvedValueOnce(folderTree);
+    vi.spyOn(fs, "pathExists").mockResolvedValue(false);
+    const move = vi.spyOn(fs, "moveProjectEntry")
+      .mockResolvedValueOnce(nested)
+      .mockResolvedValueOnce(source);
+    useProject.setState({
+      capability: "tauri",
+      rootPath: root,
+      rootName: "Tau_Design",
+      tree: rootTree,
+      expanded: [root],
+    });
+
+    await expect(useProject.getState().createFolder(root, "New Folder")).resolves.toBe(folder);
+    expect(createDirectory).toHaveBeenCalledWith(root, root, "New Folder");
+    expect(useProject.getState().expanded).toEqual(expect.arrayContaining([root, folder]));
+
+    await expect(useProject.getState().moveNode(source, folder)).resolves.toBe(nested);
+    expect(move).toHaveBeenNthCalledWith(1, root, source, folder, "file");
+    expect(flattenTree(useProject.getState().tree).map((node) => node.path)).toContain(nested);
+
+    await expect(useProject.getState().moveNode(nested, root)).resolves.toBe(source);
+    expect(move).toHaveBeenNthCalledWith(2, root, nested, root, "file");
+    expect(flattenTree(useProject.getState().tree).map((node) => node.path)).toContain(source);
+    expect(useProject.getState().error).toBeNull();
+  });
+
   it("retries the collision-numbered name after an atomic native AlreadyExists result", async () => {
     const root = "/Users/test/Tau_Design";
     const reserve = vi.spyOn(fs, "reserveProjectTextFile")

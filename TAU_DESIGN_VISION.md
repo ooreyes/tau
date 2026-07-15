@@ -2,7 +2,7 @@
 
 **Status:** Active implementation contract  
 **Owner:** Root orchestrator; all agents must read this file before UI work  
-**Updated:** 2026-07-14  
+**Updated:** 2026-07-15
 **North star:** a macOS-first, engineering-grade LTspice replacement that opens,
 edits, simulates, and saves unmodified `.asc` files without making the user learn
 Tau-specific project conventions.
@@ -123,6 +123,10 @@ until labels or controls become unreachable.
    are visible and actionable; unsupported content is never silently discarded.
 6. Folder actions mirror a real editor: new file/folder, rename, delete, refresh,
    collapse all, reveal/open folder, and keyboard navigation.
+7. Once a project is open, Open/Import are compact toolbar actions—not a large
+   footer that competes with the file tree. Native folder creation, file
+   creation, and moves all cross the same root-scoped command boundary; a newly
+   created folder accepts nested files immediately and moves round-trip to root.
 
 ## 6. Simulator architecture
 
@@ -151,6 +155,11 @@ until labels or controls become unreachable.
 - Plots use real major/minor ticks that refine as the user zooms. Pointer-centered
   wheel/pinch zoom, drag pan, box zoom, axis-only zoom, home/fit, and reset are
   consistent across TRAN/AC/DC/FFT.
+- **Auto Frame** means “show the interesting signal”: for a classified periodic
+  trace, frame the last four periods and fit Y to visible samples; for aperiodic
+  data, use the full run. **Full Run** remains a distinct action. A 100 kHz trace
+  over 7 ms must not look like an opaque block merely because 700 cycles were
+  compressed into one viewport.
 
 ### Cursors and FFT
 
@@ -170,9 +179,9 @@ until labels or controls become unreachable.
 - Components and the Assistant are independent tools. Opening the Assistant must
   not hide the component library. At normal desktop widths they are direct,
   independently resizable sibling columns—not an overlay and not a vertically
-  split pseudo-panel. At Tau's exact 900px minimum, the explicitly opened
-  Assistant may temporarily displace Components to preserve a reachable editor;
-  closing it restores the prior Components preference.
+  split pseudo-panel. At Tau's exact 900px minimum, Components + Assistant stay
+  together and the passive Explorer yields first; explicitly selecting Explorer
+  swaps it with Components, and closing Assistant restores Explorer.
 - The Assistant always receives a bounded, serialized view of the active
   schematic. A request to change the circuit produces a typed operation or a
   complete validated ASC proposal, never direct filesystem writes or hidden
@@ -196,12 +205,16 @@ until labels or controls become unreachable.
 
 The shipped local protocol is not free-form ASC. Qwen calls
 `build_tau_circuit` with catalog kinds, values, and exact `ref.pin` net members.
-Tau validates references, kinds, values, pins, single-net membership, ground,
-and directives; assigns a deterministic graph layout; obstacle-routes the
-wires; serializes to ASC; re-imports through the normal parser; and exposes only
-the resulting confirmation card. An invalid plan gets at most two private,
-validation-specific repair attempts. No model response writes a file or mutates
-the canvas directly.
+Tau now accepts 29 fixed-pin/library kinds. Twenty-three round-trip as exact
+stock symbols; comparator, potentiometer, transformer, static switch, CCCS, and
+CCVS lower into electrically equivalent LTspice primitives (including explicit
+sense branches and K coupling). Tau validates references, kinds, values, pins,
+single-net membership, ground, and directives; assigns a deterministic graph
+layout; obstacle-routes the wires; serializes and re-imports ASC; then proves the
+requested physical net partition is still connected and isolated. An invalid
+plan gets at most two private, validation-specific repair attempts. If MLX drops
+a native tool payload, Tau retries as one whole-body JSON operation through the
+same compiler. No model response writes a file or mutates the canvas directly.
 
 #### Reproducible M1 Pro benchmark (2026-07-14)
 
@@ -211,7 +224,7 @@ MLX 0.32.0. Both models ran locally with thinking disabled.
 | Model | Download shown by model card | Prompt | Generation | Peak model memory | Tau edit result |
 | --- | ---: | ---: | ---: | ---: | --- |
 | Qwen3 1.7B MLX 4-bit | 914 MB | 92.4 tok/s | 52.9 tok/s | 1.40 GB | Failed whole-ASC task; a narrow typed resistor operation succeeded separately at 70.2 tok/s and 1.12 GB |
-| Qwen3 4B MLX 4-bit | about 2.3 GB | 150.3 tok/s | 42.5 tok/s | 2.77 GB benchmark / 3.5 GB live-plan peak | Passed the live Tau plan compiler with a 5 V source, 330 Ω limiter, LED, ground, placement, routing, ASC validation, and confirmation-gated action |
+| Qwen3 4B MLX 4-bit | about 2.3 GB | 150.3 tok/s | 42.5 tok/s | 2.77 GB benchmark / 3.5 GB live-plan peak | Passed live protected-LED, powered inverting-amplifier, and 1:2 transformer requests through placement, routing, ASC/topology validation, and confirmation-gated actions |
 
 The benchmark establishes feasibility, not electrical correctness. The 1.7B
 model is suitable for explanations and narrow typed operations, but is below

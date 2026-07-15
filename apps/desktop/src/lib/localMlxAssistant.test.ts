@@ -72,6 +72,8 @@ describe("LocalMlxAssistant", () => {
     expect(body.messages[0].content).toContain("<tau_context>\nSPICE netlist:");
     expect(body.messages[0].content).toContain('"kind":"resistor"');
     expect(body.messages[0].content).toContain('"kind":"opamp"');
+    expect(body.messages[0].content).toContain('vsource value "SINE(0 1 1k)"');
+    expect(body.messages[0].content).toContain('vsource value "PULSE(0 5 0 1n 1n 5u 10u)"');
     expect(body.messages[1]).toEqual({ role: "user", content: "What does R1 do?" });
     expect(body.tools.map((tool) => tool.function.name)).toEqual(["build_tau_circuit"]);
     expect(body.tools.every((tool) => typeof tool.function.parameters === "object")).toBe(true);
@@ -249,6 +251,34 @@ describe("LocalMlxAssistant", () => {
     expect(bodies[1]).toContain("references an unknown component");
   });
 
+  it("falls back to canonical whole-body JSON when MLX drops a native tool call", async () => {
+    const responses = [
+      completion({ content: undefined }),
+      completion({
+        content: JSON.stringify({
+          name: "build_tau_circuit",
+          arguments: VALID_PLAN,
+        }),
+      }),
+    ];
+    const first = await responses[0].json() as { choices: Array<Record<string, unknown>> };
+    first.choices[0].finish_reason = "tool_calls";
+    responses[0] = new Response(JSON.stringify(first), { status: 200, headers: { "Content-Type": "application/json" } });
+    const bodies: Array<Record<string, unknown>> = [];
+    const provider = new LocalMlxAssistant({ fetchImpl: vi.fn(async (_input, init) => {
+      bodies.push(JSON.parse(String(init?.body)) as Record<string, unknown>);
+      return responses.shift()!;
+    }) });
+
+    const reply = await provider.complete(request());
+
+    expect(reply.actions).toHaveLength(1);
+    expect(bodies).toHaveLength(2);
+    expect(bodies[0]).toHaveProperty("tools");
+    expect(bodies[1]).not.toHaveProperty("tools");
+    expect(JSON.stringify(bodies[1].messages)).toContain("plain JSON object");
+  });
+
   it("classifies aborts, an offline server, HTTP failures, and malformed JSON distinctly", async () => {
     const aborted = new LocalMlxAssistant({
       fetchImpl: vi.fn(async () => { throw new DOMException("stopped", "AbortError"); }),
@@ -297,6 +327,52 @@ describe("LocalMlxAssistant", () => {
       expect(reply.actions[0]?.document.components.map((component) => component.kind)).toEqual(
         expect.arrayContaining(["vsource", "resistor", "led", "ground"]),
       );
+    },
+    60_000,
+  );
+
+  it.runIf(process.env.TAU_REAL_MLX === "1")(
+    "live: Qwen 4B produces a powered inverting amplifier with feedback",
+    async () => {
+      const provider = new LocalMlxAssistant({ model: "qwen3-4b-4bit" });
+      const reply = await provider.complete(request({
+        contextText: "Current serialized LTspice ASC: unavailable. Components: none placed.",
+        history: [{
+          role: "user",
+          content: "Create a powered inverting op-amp amplifier with gain -10, a 1 kHz sine input, realistic input and feedback resistors, and transient analysis.",
+        }],
+        allowCurrentApply: false,
+      }));
+      expect(reply.actions, JSON.stringify(reply)).toHaveLength(1);
+      const components = reply.actions[0]?.document.components ?? [];
+      expect(components.map((component) => component.kind)).toEqual(expect.arrayContaining([
+        "opamp", "vsource", "resistor", "ground",
+      ]));
+      expect(components.filter((component) => component.kind === "resistor").length).toBeGreaterThanOrEqual(2);
+      expect(reply.actions[0]?.document.directives).toContainEqual(expect.stringMatching(/^tran\b/i));
+    },
+    60_000,
+  );
+
+  it.runIf(process.env.TAU_REAL_MLX === "1")(
+    "live: Qwen 4B uses Tau's transformer macro and emits coupled inductors",
+    async () => {
+      const provider = new LocalMlxAssistant({ model: "qwen3-4b-4bit" });
+      const reply = await provider.complete(request({
+        contextText: "Current serialized LTspice ASC: unavailable. Components: none placed.",
+        history: [{
+          role: "user",
+          content: "Create a grounded 1:2 transformer circuit driven by a 1 kHz sine voltage source, with a resistive load on the secondary and transient analysis.",
+        }],
+        allowCurrentApply: false,
+      }));
+      expect(reply.actions).toHaveLength(1);
+      const action = reply.actions[0];
+      expect(action?.document.components.filter((component) => component.kind === "inductor")).toHaveLength(2);
+      expect(action?.document.components.map((component) => component.kind)).toEqual(expect.arrayContaining([
+        "vsource", "resistor", "ground",
+      ]));
+      expect(action?.document.directives).toContainEqual(expect.stringMatching(/^K_/));
     },
     60_000,
   );

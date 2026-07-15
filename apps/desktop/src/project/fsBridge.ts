@@ -239,6 +239,30 @@ export async function reserveProjectTextFile(
   return { status: "created", path, atomic: false };
 }
 
+/** Create a real Explorer folder inside the authorized project root. Native
+ * Tau performs validation and `create_dir` in one Rust command; the browser
+ * fallback uses the already-authorized File System Access directory handle. */
+export async function createProjectDirectory(
+  projectRoot: string,
+  parentPath: string,
+  name: string,
+): Promise<string> {
+  if (await isTauri()) {
+    const { invoke } = await import("@tauri-apps/api/core");
+    return invoke<string>("create_project_directory", {
+      projectRoot,
+      parentPath,
+      name,
+    });
+  }
+  if (!projectRoot.startsWith("web://") || (!parentPath.startsWith(`${projectRoot}/`) && parentPath !== projectRoot)) {
+    throw new Error("Project folder creation requires Tau desktop or an open browser folder.");
+  }
+  const path = joinPath(parentPath, name);
+  await mkdirPath(path);
+  return path;
+}
+
 export async function mkdirPath(path: string): Promise<void> {
   if (path.startsWith("web://")) {
     const parent = path.replace(/\\/g, "/").replace(/\/[^/]+$/, "");

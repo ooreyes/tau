@@ -455,6 +455,12 @@ export const LTSPICE_PINS: Record<string, LtPin[]> = {
   pnp: [{ name: "C", dx: 64, dy: 0 }, { name: "B", dx: 0, dy: 48 }, { name: "E", dx: 64, dy: 96 }],
   nmos: [{ name: "D", dx: 48, dy: 0 }, { name: "G", dx: 0, dy: 80 }, { name: "S", dx: 48, dy: 96 }],
   pmos: [{ name: "D", dx: 48, dy: 0 }, { name: "G", dx: 0, dy: 80 }, { name: "S", dx: 48, dy: 96 }],
+  mos4: [
+    { name: "D", dx: 48, dy: 0 },
+    { name: "G", dx: 0, dy: 80 },
+    { name: "S", dx: 48, dy: 96 },
+    { name: "B", dx: 48, dy: 48 },
+  ],
   // LTspice njf/pjf.asy pins (SpiceOrder D,G,S): gate at dy=64 (vs MOS dy=80).
   njf: [{ name: "D", dx: 48, dy: 0 }, { name: "G", dx: 0, dy: 64 }, { name: "S", dx: 48, dy: 96 }],
   sw: [{ name: "A", dx: 0, dy: 16 }, { name: "B", dx: 0, dy: 96 }],
@@ -730,8 +736,8 @@ function ltPinKey(type: string): keyof typeof LTSPICE_PINS | null {
     varactor: "diode", smdiode: "smdiode",
     npn: "npn", npn3: "npn", npn4: "npn",
     pnp: "pnp", pnp3: "pnp", pnp4: "pnp",
-    nmos: "nmos", nmos4: "nmos",
-    pmos: "pmos", pmos4: "pmos",
+    nmos: "nmos", nmos4: "mos4",
+    pmos: "pmos", pmos4: "mos4",
     njf: "njf", pjf: "njf",
     sw: "sw", csw: "sw",
     tline: "tline", ltline: "tline",

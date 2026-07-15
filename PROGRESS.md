@@ -8,23 +8,77 @@
      `git log --oneline -8`, recover/finish/revert that unit FIRST, then go on.
      ─────────────────────────────────────────────────────────────────────── -->
 ## ⏱ HEARTBEAT
-- **Headline metric:** 1707 reviewed-tree tests green · corpus 82/82 import · 82/82 op-converge · 79/82 warning-clean
-- **Run started (UTC):** 2026-07-14T22:36Z
-- **Synced to origin:** auto/ltspice-parity @ f437b6f.
-- **Claimed unit:** §1/§8/§10 local circuit generation and workspace truth:
-  loopback MLX inference grounded in Tau's component library, an independent
-  collapsible Assistant column, and bidirectional Explorer folder moves.
+- **Headline metric:** 1734 reviewed-tree tests green · corpus 82/82 import · 82/82 op-converge · 79/82 warning-clean
+- **Run started (UTC):** 2026-07-15T00:23Z
+- **Synced to origin:** auto/ltspice-parity @ fabef45.
+- **Claimed unit:** §1/§6/§8/§10 local generation breadth, periodic waveform
+  framing, durable folders, and simultaneous AI/Components workspace.
 - **Status:** DONE
-- **Last completed sub-step:** every required gate passed; the live Qwen3 4B
-  plan generated a protected LED circuit, all 22 advertised kinds passed real
-  ASC pin round-trip tests, and the fresh DMG mounted while its Tau.app launched
-  and stayed alive from the volume.
-- **Plan:** commit and push this reviewed unit, then continue with persistent
-  plot-card resize/reorder and `.plt`/image export.
+- **Last completed sub-step:** rebuilt the unsigned release, verified the DMG,
+  launched Tau.app from the mounted image, and shut it down cleanly.
+- **Plan:** map every faithful Tau/LTspice component through pin-accurate ASC,
+  expand the model contract only where round-trip tests prove connectivity, and
+  exercise broader local-model circuit topologies in hot reload and Tau.app.
 - **Note:** model output remains a proposal. Tau owns legal catalog mapping,
   placement/routing, ASC validation, confirmation, undo, and filesystem writes.
-- **Next step:** persist user plot layouts and add `.plt`/image export; widen the
-  local circuit catalog only after each additional kind is lossless through ASC.
+- **Next step:** add opt-in synthesis for user-defined subcircuits only when a
+  concrete symbol and pin contract is available; keep arbitrary `.subckt`
+  generation outside the model's authority.
+
+---
+
+## 2026-07-15T01:11Z — auto/ltspice-parity — broad local circuit planning, Auto Frame, and native folders (§1/§6/§8/§10)
+
+### What I did
+- Expanded the Tau-owned AI circuit compiler from 22 direct parts to all 29
+  safe fixed-pin library operations: 23 direct components plus validated
+  composite lowering for potentiometers, transformers, static switches,
+  CCCS/CCVS controlled sources, and comparators. Source aliases normalize to
+  canonical waveform syntax. Generic user-defined subcircuits remain excluded
+  because their pin count and symbol contract cannot be inferred safely.
+- Added exact MOS4 and behavioral-source ASC symbol handling, nearest-pin
+  routing, incidental-pin avoidance, and a post-export/re-import topology proof
+  that rejects plans whose requested nets become split or accidentally joined.
+- Hardened Qwen3 MLX responses with a strict whole-body JSON retry when the
+  server omits or corrupts a native tool-call payload. Live opt-in tests now
+  cover a protected LED circuit, powered inverting amplifier, and grounded 1:2
+  transformer; all return through Tau's compiler and confirmation boundary.
+- Added transient **Auto Frame**: it detects the slowest stable periodic signal,
+  displays its final four cycles, and fits Y to the visible interval. **Full
+  Run** remains a separate control. Non-periodic signals retain the current X
+  window and fit only the visible Y data.
+- Kept Components and Assistant simultaneously visible as independently
+  resizable columns. At 900px passive Explorer yields first; explicitly opening
+  Explorer swaps it into the constrained workspace without an overlay.
+- Replaced the large empty Explorer actions with compact VS Code-density header
+  icons. Native folder creation now goes through a root-scoped Rust command;
+  real disk tests create files inside new nested folders and move them into,
+  out of, and across directories without changing their bytes.
+
+### Tests and QA
+- Desktop typecheck: pass. Vitest: 121 files, 1734 passed, 3 opt-in live-model
+  tests skipped in the normal suite; the separate live Qwen3 4B run passed all
+  13 tests, including the three generated-circuit topologies.
+- `cargo fmt --check`, Clippy with warnings denied, 17 Rust tests, and the
+  ignored real-ngspice operating-point smoke against the bundled dylib: pass.
+- Web build and fresh `tauri build`: pass. The 0.2.0 DMG checksum verified,
+  mounted, and launched `/Volumes/Tau/Tau.app`; the process stayed alive before
+  controlled shutdown and clean eject.
+- Hot-reload QA at 1440×900 and 900×600 found no shell overflow. Auto Frame and
+  Full Run produced distinct waveform viewports. Native pointer QA remained
+  unavailable because the Mac UI session was locked; browser, store, Rust,
+  ngspice, and packaged-app gates all ran.
+
+### Parity items
+- §1: native, disk-backed folder creation and bidirectional Explorer moves.
+- §6: periodic Auto Frame plus explicit Full Run.
+- §8: fixed-pin library-wide safe generation with topology validation.
+- §10: simultaneous AI/Components columns and compact Explorer empty state.
+
+### Next step
+- Persist plot-card resize/reorder and implement `.plt`/image export. Add
+  user-defined subcircuit synthesis only from an explicit imported symbol/pin
+  contract; never ask the local model to guess variable-pin `.subckt` geometry.
 
 ---
 

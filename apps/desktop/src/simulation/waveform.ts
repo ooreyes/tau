@@ -1,4 +1,6 @@
 import type { Trace } from "./linearTransient";
+import { classifySignal } from "./measurementModel";
+import type { Viewport } from "./plotViewport";
 
 export const MAX_WAVEFORM_RENDER_POINTS = 4_096;
 
@@ -74,6 +76,76 @@ export function visibleWaveformBounds(
   // A window between sparse samples has no in-window extrema. Falling back
   // to the full signal is safer than producing an arbitrary or invalid axis.
   return Number.isFinite(rawMin) ? paddedWaveformBounds(rawMin, rawMax) : waveformBounds(traces);
+}
+
+/**
+ * Frame the portion of a transient waveform that carries useful visual detail.
+ *
+ * A full-run view of a fast periodic signal can contain hundreds of cycles, so
+ * even a correct unfilled min/max envelope becomes a visually solid band. For
+ * periodic data, Auto Frame shows the final 3–5 cycles (four by default) and
+ * computes Y from only that time window. The final cycles are intentional: they
+ * retain steady-state behavior while leaving startup visible through the
+ * separate Full Run/Home action.
+ *
+ * Non-periodic data keeps the caller's current X window and only recomputes Y,
+ * preserving the previous "autoscale visible" behavior after a manual zoom.
+ */
+export function autoFrameWaveform(
+  times: ReadonlyArray<number>,
+  traces: ReadonlyArray<Pick<Trace, "values">>,
+  currentX: { xMin: number; xMax: number },
+  requestedCycles = 4,
+): Viewport {
+  let timeMin = Number.POSITIVE_INFINITY;
+  let timeMax = Number.NEGATIVE_INFINITY;
+  for (const time of times) {
+    if (!Number.isFinite(time)) continue;
+    if (time < timeMin) timeMin = time;
+    if (time > timeMax) timeMax = time;
+  }
+
+  const fallbackX = Number.isFinite(currentX.xMin)
+    && Number.isFinite(currentX.xMax)
+    && currentX.xMax > currentX.xMin
+    ? currentX
+    : Number.isFinite(timeMin) && timeMax > timeMin
+      ? { xMin: timeMin, xMax: timeMax }
+      : { xMin: 0, xMax: 1 };
+
+  // Use the slowest periodic trace in a multi-trace pane. Its four cycles give
+  // every faster trace at least four cycles too, avoiding a frame that hides a
+  // legitimate low-frequency signal just because another trace oscillates fast.
+  let period = 0;
+  for (const trace of traces) {
+    const sampleCount = Math.min(times.length, trace.values.length);
+    // First classify the complete run. If startup behavior makes that honestly
+    // transient, retry progressively smaller trailing windows: Auto Frame is a
+    // steady-state inspection command, and four stable cycles at the end are
+    // enough even when oscillator startup or one initial spike is not periodic.
+    const starts = [0, Math.floor(sampleCount / 2), Math.floor(sampleCount * 3 / 4)];
+    for (const start of starts) {
+      const classification = classifySignal(
+        start === 0 ? times : times.slice(start, sampleCount),
+        start === 0 ? trace.values : trace.values.slice(start, sampleCount),
+      );
+      if (classification.kind === "periodic" && classification.period && Number.isFinite(classification.period)) {
+        period = Math.max(period, classification.period);
+        break;
+      }
+    }
+  }
+
+  let xMin = fallbackX.xMin;
+  let xMax = fallbackX.xMax;
+  if (period > 0 && Number.isFinite(timeMin) && Number.isFinite(timeMax) && timeMax > timeMin) {
+    const cycles = Math.min(5, Math.max(3, Number.isFinite(requestedCycles) ? requestedCycles : 4));
+    xMax = timeMax;
+    xMin = Math.max(timeMin, xMax - period * cycles);
+  }
+
+  const y = visibleWaveformBounds(times, traces, xMin, xMax);
+  return { xMin, xMax, yMin: y.min, yMax: y.max };
 }
 
 /**

@@ -789,6 +789,29 @@ const routeHitCount = (points: Point[], components: SchematicComponent[]) =>
     return total + (segmentHitsBody(prev, point, components) ? 1 : 0);
   }, 0);
 
+/** Count component pins touched anywhere except the two requested terminals.
+ * A visually valid orthogonal route may otherwise turn on (or run through) a
+ * different pin of its endpoint component, silently shorting that pin when
+ * the schematic is netlisted. */
+const routeIncidentalPinCount = (points: Point[], components: SchematicComponent[]) => {
+  if (points.length < 2) return 0;
+  const start = points[0];
+  const end = points[points.length - 1];
+  const contacts = new Set<string>();
+  for (const component of components) {
+    for (const pin of getComponentPins(component)) {
+      if (pointsEqual(pin, start) || pointsEqual(pin, end)) continue;
+      for (let index = 1; index < points.length; index += 1) {
+        if (pointOnWireSegment(pin, { a: points[index - 1], b: points[index] })) {
+          contacts.add(`${component.id}:${pin.id}`);
+          break;
+        }
+      }
+    }
+  }
+  return contacts.size;
+};
+
 /** Exported for tests — count how many orthogonal segments cross a body. */
 export const countRouteBodyHits = routeHitCount;
 
@@ -940,6 +963,7 @@ export const routeWireSmart = (
       const clutter = routeClutter(points, existingWires);
       return {
         points,
+        incidentalPins: routeIncidentalPinCount(points, components),
         hits: routeHitCount(points, components),
         // Riding on top of another wire is worse than crossing it — an
         // overlapped run is unreadable, a crossing at least gets a hop arc.
@@ -953,6 +977,7 @@ export const routeWireSmart = (
     })
     .sort(
       (a, b) =>
+        a.incidentalPins - b.incidentalPins ||
         a.hits - b.hits ||
         a.overlap - b.overlap ||
         a.nodeContacts - b.nodeContacts ||

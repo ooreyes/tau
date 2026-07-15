@@ -76,7 +76,9 @@ export const COMPONENTS_RAIL_WIDTH: PanelWidthConfig = {
 
 interface ModeProps {
   mode: "schematic" | "simulator";
+  explorerOpen: boolean;
   partsOpen: boolean;
+  onFocusExplorer: () => void;
   onModeChange: (mode: "schematic" | "simulator") => void;
   onSearch: () => void;
   onFocusComponents: () => void;
@@ -85,7 +87,9 @@ interface ModeProps {
 
 export function ActivityRail({
   mode,
+  explorerOpen,
   partsOpen,
+  onFocusExplorer,
   onModeChange,
   onSearch,
   onFocusComponents,
@@ -93,7 +97,7 @@ export function ActivityRail({
 }: ModeProps) {
   return (
     <nav className="activity-rail" aria-label="Workspace sections">
-      <RailButton active={mode === "schematic"} label="Explorer" onClick={() => onModeChange("schematic")}>
+      <RailButton active={mode === "schematic" && explorerOpen} label="Explorer" onClick={onFocusExplorer}>
         <FolderOpen size={18} strokeWidth={1.6} />
       </RailButton>
       <RailButton label="Search" shortcut="⌘K" onClick={onSearch}>
@@ -388,6 +392,40 @@ export function ExplorerPanel({
       <aside className="explorer-panel" aria-label="Project explorer" style={{ width: explorerWidth }}>
         <div className="explorer-head">
           <span>Schematics</span>
+          <div className="explorer-icons">
+            <button
+              type="button"
+              title="Open Schematics folder"
+              aria-label="Open Schematics folder"
+              onClick={async () => {
+                const ok = await openFolder();
+                if (ok) onNotice("Opened Schematics folder.");
+              }}
+            >
+              <FolderInput size={15} strokeWidth={1.7} />
+            </button>
+            {capability === "tauri" && (
+              <button
+                type="button"
+                title="Create Schematics folder"
+                aria-label="Create Schematics folder"
+                onClick={async () => {
+                  const ok = await newProject("Schematics");
+                  if (ok) onNotice("Created Schematics folder.");
+                }}
+              >
+                <FolderPlus size={15} strokeWidth={1.7} />
+              </button>
+            )}
+            <button
+              type="button"
+              title="Import LTspice schematic"
+              aria-label="Import LTspice schematic"
+              onClick={() => ascInputRef.current?.click()}
+            >
+              <FileInput size={15} strokeWidth={1.7} />
+            </button>
+          </div>
         </div>
         <input
           ref={ascInputRef}
@@ -398,35 +436,7 @@ export function ExplorerPanel({
           onChange={importAscFromInput}
         />
         <div className="explorer-empty">
-          <p className="explorer-empty-hint">Open a folder of LTspice schematics, or create one for Tau.</p>
-          <div className="explorer-empty-actions">
-            <Button
-              type="button"
-              size="sm"
-              onClick={async () => {
-                const ok = await openFolder();
-                if (ok) onNotice("Opened Schematics folder.");
-              }}
-            >
-              Open Folder
-            </Button>
-            {capability === "tauri" && (
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                onClick={async () => {
-                  const ok = await newProject("Schematics");
-                  if (ok) onNotice("Created Schematics folder.");
-                }}
-              >
-                Create Folder
-              </Button>
-            )}
-            <Button type="button" size="sm" variant="ghost" onClick={() => ascInputRef.current?.click()}>
-              Import .asc…
-            </Button>
-          </div>
+          <p className="explorer-empty-hint">Choose, create, or import a Schematics folder from the toolbar.</p>
         </div>
         {resizeHandle}
       </aside>

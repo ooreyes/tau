@@ -21,6 +21,7 @@ pub fn run() {
             local_ai::start_local_ai,
             local_ai::stop_local_ai,
             project_fs::authorize_project_directory,
+            project_fs::create_project_directory,
             project_fs::create_project_text_file_exclusive,
             project_fs::move_project_entry,
             spice::simulate_spice

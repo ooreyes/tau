@@ -3971,12 +3971,6 @@ body {
   margin: 0;
 }
 
-.explorer-empty-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--sp-2);
-}
-
 .explorer-error {
   margin: var(--sp-2);
   padding: var(--sp-2);

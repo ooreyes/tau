@@ -1040,14 +1040,14 @@ function App() {
     COMPONENTS_RAIL_WIDTH.minWidth,
     ASSISTANT_PANEL_WIDTH.minWidth,
   ]);
-  // At the 900px floor both independent columns physically cannot coexist
-  // with Explorer + editor at their usable minimums. Keep the explicitly
-  // opened Assistant available and temporarily collapse Components; closing
-  // Assistant or widening the shell restores Components without mutating the
-  // user's Components preference.
-  const componentsColumnOpen = mode === "schematic"
-    && partsOpen
-    && (!assistantOpen || independentColumnsFit);
+  // At the 900px floor Explorer + Components + Assistant cannot all coexist.
+  // Components and Assistant are the active creation tools, so keep them
+  // together and temporarily yield the passive Explorer column. Selecting
+  // Explorer explicitly below swaps Components out; widening restores all
+  // three without mutating the user's Components preference.
+  const componentsColumnOpen = mode === "schematic" && partsOpen;
+  const explorerColumnOpen = mode === "schematic"
+    && (!assistantOpen || !componentsColumnOpen || independentColumnsFit);
   const assistantResponsiveMax = workspaceRightColumnMax(
     shellWidth,
     mode,
@@ -1072,7 +1072,7 @@ function App() {
     COMPONENTS_RAIL_WIDTH.minWidth,
     componentsRailResponsiveMax,
   );
-  const explorerResponsiveMax = mode === "schematic"
+  const explorerResponsiveMax = explorerColumnOpen
     ? workspaceExplorerMax(shellWidth, [
         ...(componentsColumnOpen ? [effectiveComponentsRailWidth] : []),
         ...(assistantOpen ? [effectiveAssistantWidth] : []),
@@ -1125,7 +1125,12 @@ function App() {
       >
         <ActivityRail
           mode={mode}
+          explorerOpen={explorerColumnOpen}
           partsOpen={componentsColumnOpen}
+          onFocusExplorer={() => {
+            setMode("schematic");
+            if (assistantOpen && !independentColumnsFit) setPartsOpen(false);
+          }}
           onModeChange={setMode}
           onSearch={() => setPaletteOpen(true)}
           onFocusComponents={() => {
@@ -1140,7 +1145,7 @@ function App() {
           }}
           onOpenSettings={() => setSettingsOpen(true)}
         />
-        {mode === "schematic" && (
+        {explorerColumnOpen && (
           <ExplorerPanel
             activeFilePath={activeFilePath}
             onOpenSimFile={openSimFromProject}

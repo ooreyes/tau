@@ -79,13 +79,12 @@ export function kindToLtspiceType(kind: ComponentKind): string | null {
     led: "led",
     npn: "npn",
     pnp: "pnp",
-    nmos: "nmos",
-    pmos: "pmos",
+    // Tau exposes an explicit bulk terminal, so use LTspice's four-pin symbols;
+    // the three-pin variants would silently tie bulk to source on re-import.
+    nmos: "nmos4",
+    pmos: "pmos4",
     njf: "njf",
     pjf: "pjf",
-    switch: "sw",
-    potentiometer: "pot",
-    transformer: "ind2t",
     tline: "tline",
     // Bare `opamp` is LTspice's X-prefix subcircuit symbol and re-imports as a
     // generic subckt. `opamp2` is the native five-pin op-amp symbol Tau can
@@ -95,13 +94,60 @@ export function kindToLtspiceType(kind: ComponentKind): string | null {
     // files); the importer's separator normalization accepts either form.
     sampleHold: "SpecialFunctions\\\\sample",
     modulator: "SpecialFunctions\\\\modulate",
+    dflop: "Digital\\\\dflop",
     bsource: "bv",
     vcvs: "e",
     vccs: "g",
-    cccs: "f",
-    ccvs: "h",
+    // Do not map Tau's static two-terminal switch to LTspice sw: sw has two
+    // additional voltage-control pins and different semantics. Likewise, do
+    // not map Tau's four-terminal CCCS/CCVS to LTspice f/h. The installed
+    // LTspice symbols expose only the two output pins; their controlling
+    // current is named by a separate zero-volt source, so a single-symbol
+    // export would drop Tau's cp/cn branch. Potentiometers and transformers are
+    // composite circuits in LTspice (two resistors; coupled L parts + K text),
+    // not lossless single-symbol mappings either. These kinds return null until
+    // the exporter can expand and re-collapse faithful composite circuits.
   };
   return map[kind] ?? null;
+}
+
+/** Digital gate symbol leafs Tau can import with an exact, role-aware pin bank.
+ * The leaf is part of the component's value rather than its kind, so this
+ * mapping must run with the whole component instead of `kindToLtspiceType`.
+ * Keep the aliases distinct: `inv` exposes qbar while `buf1` exposes q, and
+ * collapsing either to their shared behavioral function would change pins. */
+const DIGITAL_GATE_LEAFS = new Set([
+  "and", "or", "xor", "buf", "buf1", "inv", "schmitt", "schmtbuf", "schmtinv",
+]);
+
+interface LtspiceComponentSymbol {
+  type: string;
+  value: string;
+}
+
+function componentToLtspiceSymbol(component: SchematicComponent): LtspiceComponentSymbol | null {
+  if (component.kind === "bsource" && /^\s*I\s*=/i.test(component.value)) {
+    // Use LTspice's behavioral-current glyph when the expression drives
+    // current. The generic `bv` symbol is electrically a B source too, but its
+    // voltage-source artwork misrepresents the generated circuit.
+    return { type: "bi", value: component.value };
+  }
+  if (component.kind === "digitalGate") {
+    const value = component.value.trim();
+    const match = /^([^\s,]+)(?:[\s,]+|$)/.exec(value);
+    const candidate = match?.[1].toLowerCase() ?? "";
+    // Never reinterpret an unknown function as an AND gate. That would emit a
+    // syntactically valid ASC whose electrical behavior differs from Tau.
+    if (!DIGITAL_GATE_LEAFS.has(candidate)) return null;
+    const leaf = candidate;
+    // LTspice encodes the function in `SYMBOL Digital\\<leaf>`, not Value.
+    // Leaving it in Value would re-import as e.g. `and and Vhigh=5` because
+    // the importer correctly prepends the symbol leaf.
+    const params = value.slice(match?.[0].length ?? 0).trim();
+    return { type: `Digital\\\\${leaf}`, value: params };
+  }
+  const type = kindToLtspiceType(component.kind);
+  return type ? { type, value: component.value } : null;
 }
 
 /**
@@ -168,16 +214,16 @@ export function schematicToAsc(input: SchematicExportInput): SchematicToAscResul
       doc.flags.push({ x: c.x, y: c.y, net: "0" });
       continue;
     }
-    const type = kindToLtspiceType(c.kind);
-    if (!type) {
+    const symbol = componentToLtspiceSymbol(c);
+    if (!symbol) {
       warnings.push(`${c.label || c.id}: no LTspice symbol for kind "${c.kind}"; skipped.`);
       continue;
     }
     const attrs: Record<string, string> = {};
     if (c.label) attrs.InstName = c.label;
-    if (c.value) attrs.Value = c.value;
+    if (symbol.value) attrs.Value = symbol.value;
     doc.symbols.push({
-      type,
+      type: symbol.type,
       x: c.x,
       y: c.y,
       orientation: rotationToOrientation(c.rotation, c.mirrored),

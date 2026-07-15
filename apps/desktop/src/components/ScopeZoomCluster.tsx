@@ -14,13 +14,15 @@ export function ScopeZoomCluster({
   onZoomIn,
   onZoomOut,
   onFit,
-  onAutoScaleVisible,
+  onAutoFrame,
+  fitLabel = "Fit plot to data",
 }: {
   onZoomIn: () => void;
   onZoomOut: () => void;
   onFit: () => void;
-  /** Optional Y-only fit for the signals inside the current horizontal window. */
-  onAutoScaleVisible?: () => void;
+  /** Optional periodic-aware engineering frame; distinct from full-data Home. */
+  onAutoFrame?: () => void;
+  fitLabel?: string;
 }) {
   return (
     <div className="scope-zoom-controls">
@@ -40,7 +42,7 @@ export function ScopeZoomCluster({
       />
       <InstrumentIconButton
         icon={Scan}
-        label="Fit plot to data"
+        label={fitLabel}
         tooltip={
           <>
             Fit to data (double-click) · ⌘/pinch-scroll to zoom about cursor · Shift+⌘-scroll = X only ·
@@ -50,13 +52,13 @@ export function ScopeZoomCluster({
         tooltipSide="left"
         onClick={onFit}
       />
-      {onAutoScaleVisible && (
+      {onAutoFrame && (
         <InstrumentIconButton
           icon={ScanLine}
-          label="Auto scale visible signals"
-          tooltip="Auto scale visible signals (preserves the current time window)"
+          label="Auto frame signal"
+          tooltip="Auto frame: show the final four cycles of a periodic signal and scale Y to that window"
           tooltipSide="left"
-          onClick={onAutoScaleVisible}
+          onClick={onAutoFrame}
         />
       )}
     </div>

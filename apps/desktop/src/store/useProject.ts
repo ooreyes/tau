@@ -255,13 +255,15 @@ export const useProject = create<ProjectStore>((set, get) => ({
         });
         return path;
       }
-      await fs.mkdirPath(path);
+      const rootPath = get().rootPath;
+      if (!rootPath) throw new Error("Open a Schematics folder before creating a folder.");
+      const createdPath = await fs.createProjectDirectory(rootPath, parentPath, folderName);
       await get().refresh();
       set((s) => ({
-        expanded: s.expanded.includes(parentPath) ? s.expanded : [...s.expanded, parentPath],
+        expanded: [...new Set([...s.expanded, parentPath, createdPath])],
         error: null,
       }));
-      return path;
+      return createdPath;
     } catch (error) {
       set({ error: failureMessage(error, "Could not create folder.") });
       return null;

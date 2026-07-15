@@ -62,6 +62,8 @@ export interface PlotViewportHandle {
   isPanning: boolean;
   /** Reset to the full data domain (⌂ button / double-click). */
   fit: () => void;
+  /** Frame an explicit engineering-interest window and publish its X range. */
+  fitTo: (domain: Viewport) => void;
   /** Fit Y to a caller-computed signal domain while preserving the visible X window. */
   fitY: (domain: { min: number; max: number }) => void;
   /** Zoom both axes about the plot's current center by `factor` (+/− buttons). */
@@ -141,10 +143,20 @@ export function usePlotViewport({
     onXViewportChangeRef.current?.({ xMin: viewport.xMin, xMax: viewport.xMax });
   }, [viewport.xMin, viewport.xMax]);
 
-  const fit = useCallback(() => {
-    publishXPendingRef.current = true;
-    setViewport(fitViewport(domainRef.current));
+  const fitTo = useCallback((nextDomain: Viewport) => {
+    if (![nextDomain.xMin, nextDomain.xMax, nextDomain.yMin, nextDomain.yMax].every(Number.isFinite)
+      || nextDomain.xMax <= nextDomain.xMin
+      || nextDomain.yMax <= nextDomain.yMin) return;
+    const fitted = fitViewport(nextDomain);
+    setViewport((current) => {
+      // A Y-only refit does not trigger the X-keyed publish effect. Clear the
+      // flag here so a later shared-X adoption cannot emit a stale gesture.
+      publishXPendingRef.current = current.xMin !== fitted.xMin || current.xMax !== fitted.xMax;
+      return fitted;
+    });
   }, []);
+
+  const fit = useCallback(() => fitTo(domainRef.current), [fitTo]);
 
   const fitY = useCallback((nextDomain: { min: number; max: number }) => {
     if (!Number.isFinite(nextDomain.min) || !Number.isFinite(nextDomain.max) || nextDomain.max <= nextDomain.min) return;
@@ -283,6 +295,7 @@ export function usePlotViewport({
     attachSvg,
     isPanning,
     fit,
+    fitTo,
     fitY,
     zoomBy,
     dragHandlers: {

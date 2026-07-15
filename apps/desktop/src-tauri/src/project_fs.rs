@@ -84,6 +84,33 @@ fn create_project_text_file_exclusive_inner(
     })
 }
 
+fn create_project_directory_inner(
+    project_root: &Path,
+    parent_path: &Path,
+    name: &str,
+) -> Result<PathBuf, String> {
+    let root = canonical_directory(project_root, "project root")?;
+    let parent = canonical_directory(parent_path, "target folder")?;
+    if parent != root && !inside(&root, &parent) {
+        return Err("The target folder must be inside the open project.".into());
+    }
+    let leaf = name.trim();
+    if !safe_leaf_name(leaf) {
+        return Err("The folder name must be a single name without path separators.".into());
+    }
+
+    let destination = parent.join(leaf);
+    fs::create_dir(&destination).map_err(|error| {
+        if error.kind() == std::io::ErrorKind::AlreadyExists {
+            "An item with that name already exists in the target folder.".to_string()
+        } else {
+            format!("Could not create the project folder: {error}")
+        }
+    })?;
+    fs::canonicalize(&destination)
+        .map_err(|error| format!("Could not resolve the new project folder: {error}"))
+}
+
 fn move_project_entry_inner(
     project_root: &Path,
     source_path: &Path,
@@ -170,6 +197,26 @@ pub fn create_project_text_file_exclusive(
         );
     }
     create_project_text_file_exclusive_inner(&root, Path::new(&parent_path), &name, &contents)
+}
+
+/// Create one folder immediately beneath an authorized project directory.
+/// Keeping the validation and disk mutation in the same native command avoids
+/// a newly-created destination depending on webview filesystem-scope timing.
+#[tauri::command]
+pub fn create_project_directory(
+    app: AppHandle,
+    project_root: String,
+    parent_path: String,
+    name: String,
+) -> Result<String, String> {
+    let root = canonical_directory(Path::new(&project_root), "project root")?;
+    if !app.fs_scope().is_allowed(&root) {
+        return Err(
+            "The project folder is not authorized. Reopen it before creating folders.".into(),
+        );
+    }
+    create_project_directory_inner(&root, Path::new(&parent_path), &name)
+        .map(|path| path.to_string_lossy().into_owned())
 }
 
 /// Move or rename one project entry without permitting arbitrary filesystem
@@ -263,6 +310,57 @@ mod tests {
             "Version 4\n"
         );
         assert!(!filters.exists());
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn creates_nested_disk_entries_and_moves_the_file_into_and_out_of_the_new_folder() {
+        let root = sandbox("create-and-move-round-trip");
+        let created = create_project_directory_inner(&root, &root, "New Folder").unwrap();
+        assert!(created.is_dir());
+        let archive = create_project_directory_inner(&root, &root, "Archive").unwrap();
+        let child = create_project_directory_inner(&root, &created, "Child").unwrap();
+        fs::write(child.join("inside.asc"), "Version 4\n").unwrap();
+
+        let moved_child = move_project_entry_inner(&root, &child, &archive, None).unwrap();
+        assert_eq!(moved_child, archive.join("Child"));
+        assert_eq!(
+            fs::read_to_string(moved_child.join("inside.asc")).unwrap(),
+            "Version 4\n"
+        );
+        let returned_child = move_project_entry_inner(&root, &moved_child, &created, None).unwrap();
+        assert_eq!(returned_child, created.join("Child"));
+
+        let nested = create_project_text_file_exclusive_inner(
+            &root,
+            &created,
+            "generated.asc",
+            "Version 4\nSHEET 1 880 680\n",
+        )
+        .unwrap();
+        let nested_path = match nested {
+            CreateProjectTextFileResult::Created { path } => PathBuf::from(path),
+            CreateProjectTextFileResult::AlreadyExists => panic!("new file unexpectedly existed"),
+        };
+        assert_eq!(nested_path.parent(), Some(created.as_path()));
+        assert_eq!(
+            fs::read_to_string(&nested_path).unwrap(),
+            "Version 4\nSHEET 1 880 680\n"
+        );
+
+        let at_root = move_project_entry_inner(&root, &nested_path, &root, None).unwrap();
+        assert_eq!(
+            at_root,
+            fs::canonicalize(&root).unwrap().join("generated.asc")
+        );
+        assert!(!nested_path.exists());
+
+        let returned = move_project_entry_inner(&root, &at_root, &created, None).unwrap();
+        assert_eq!(returned, created.join("generated.asc"));
+        assert_eq!(
+            fs::read_to_string(returned).unwrap(),
+            "Version 4\nSHEET 1 880 680\n"
+        );
         fs::remove_dir_all(root).unwrap();
     }
 

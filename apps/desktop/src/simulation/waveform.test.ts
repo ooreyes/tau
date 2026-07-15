@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   displaySampleIndices,
+  autoFrameWaveform,
   MAX_WAVEFORM_RENDER_POINTS,
   visibleWaveformBounds,
   waveformBounds,
@@ -69,6 +70,48 @@ describe("waveform display data", () => {
     const bounds = visibleWaveformBounds([0, 1, 2], [{ values: [1, 2, 1000] }], 0, 1);
     expect(bounds.min).toBeCloseTo(0.92, 10);
     expect(bounds.max).toBeCloseTo(2.08, 10);
+  });
+
+  it("auto-frames the final four cycles of a dense periodic run", () => {
+    const frequency = 100_000;
+    const stopTime = 0.007;
+    const step = 0.5e-6;
+    const times = Array.from({ length: Math.round(stopTime / step) + 1 }, (_, index) => index * step);
+    const values = times.map((time) => 2 + 3 * Math.sin(2 * Math.PI * frequency * time));
+
+    const frame = autoFrameWaveform(times, [{ values }], { xMin: 0, xMax: stopTime });
+
+    expect(frame.xMax).toBeCloseTo(stopTime, 10);
+    expect(frame.xMax - frame.xMin).toBeCloseTo(4 / frequency, 8);
+    expect(frame.yMin).toBeCloseTo(-1.48, 2);
+    expect(frame.yMax).toBeCloseTo(5.48, 2);
+  });
+
+  it("uses the slowest periodic trace and ignores startup outliers when framing Y", () => {
+    const times = Array.from({ length: 2_001 }, (_, index) => index / 100_000);
+    const slow = times.map((time, index) => index === 0 ? 1_000 : Math.sin(2 * Math.PI * 1_000 * time));
+    const fast = times.map((time) => 0.25 * Math.sin(2 * Math.PI * 5_000 * time));
+
+    const frame = autoFrameWaveform(
+      times,
+      [{ values: slow }, { values: fast }],
+      { xMin: 0, xMax: 0.02 },
+    );
+
+    expect(frame.xMax - frame.xMin).toBeCloseTo(0.004, 6);
+    expect(frame.yMax).toBeLessThan(2);
+    expect(frame.yMin).toBeGreaterThan(-2);
+  });
+
+  it("keeps the current X window for non-periodic data and only fits visible Y", () => {
+    const times = [0, 1, 2, 3, 4];
+    const values = [100, 10, 2, 3, 4];
+    const frame = autoFrameWaveform(times, [{ values }], { xMin: 2, xMax: 4 });
+
+    expect(frame.xMin).toBe(2);
+    expect(frame.xMax).toBe(4);
+    expect(frame.yMin).toBeCloseTo(1.84, 10);
+    expect(frame.yMax).toBeCloseTo(4.16, 10);
   });
 
   it("preserves both square-wave levels in every dense pixel bucket", () => {

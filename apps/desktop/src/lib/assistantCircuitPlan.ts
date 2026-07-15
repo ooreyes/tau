@@ -2,7 +2,10 @@ import { routeWireSmart } from "../components/Canvas.geometry";
 import { importAsc } from "../io/ascImport";
 import { schematicToAsc } from "../io/ascExport";
 import { CATALOG_BY_KIND } from "../schematic/catalog";
+import { extractCircuit } from "../schematic/netlist";
 import { getComponentPins, getLocalPins } from "../schematic/pins";
+import { parseComparator } from "../engine/comparatorSpec";
+import { parseQuantity } from "../simulation/quantity";
 import type {
   ComponentKind,
   NetLabel,
@@ -32,14 +35,28 @@ const GRID = 16;
 // These kinds round-trip through Tau's LTspice exporter/importer without a
 // proprietary symbol library. Native-only markers and the kinds whose ASC
 // symbol mapping is not yet lossless stay out of the model-facing contract.
-export const ASSISTANT_GENERATABLE_KINDS = [
+export const ASSISTANT_DIRECT_GENERATABLE_KINDS = [
   "resistor", "capacitor", "inductor", "vsource", "isource",
   "diode", "led", "zener", "opamp", "vcvs", "vccs",
   "bsource", "nmos", "pmos", "njf", "pjf", "npn", "pnp",
-  "switch", "tline", "sampleHold", "modulator",
+  "tline", "sampleHold", "modulator",
+  "digitalGate", "dflop",
+] as const satisfies readonly ComponentKind[];
+
+/** Tau-native parts whose pin contract cannot be represented by one stock
+ * LTspice symbol. The compiler lowers these macros into portable primitives
+ * before layout/export, retaining every requested terminal electrically. */
+export const ASSISTANT_COMPOSITE_KINDS = [
+  "cccs", "ccvs", "comparator", "potentiometer", "switch", "transformer",
+] as const satisfies readonly ComponentKind[];
+
+export const ASSISTANT_GENERATABLE_KINDS = [
+  ...ASSISTANT_DIRECT_GENERATABLE_KINDS,
+  ...ASSISTANT_COMPOSITE_KINDS,
 ] as const satisfies readonly ComponentKind[];
 
 type GeneratableKind = (typeof ASSISTANT_GENERATABLE_KINDS)[number];
+type DirectGeneratableKind = (typeof ASSISTANT_DIRECT_GENERATABLE_KINDS)[number];
 
 export const TAU_CIRCUIT_PLAN_TOOL = {
   type: "function" as const,
@@ -131,6 +148,10 @@ interface CircuitPlan {
   components: CircuitPlanComponent[];
   nets: CircuitPlanNet[];
   directives: string[];
+}
+
+interface DirectCircuitPlan extends Omit<CircuitPlan, "components"> {
+  components: Array<Omit<CircuitPlanComponent, "kind"> & { kind: DirectGeneratableKind }>;
 }
 
 function record(value: unknown): Record<string, unknown> | null {
@@ -242,7 +263,148 @@ function parsePlan(input: unknown): CircuitPlan {
   return { mode: source.mode, filename, components, nets, directives };
 }
 
-function componentLevels(plan: CircuitPlan): Map<string, number> {
+function finiteQuantity(value: string, ref: string, unit: string): number {
+  try {
+    const parsed = parseQuantity(value, unit);
+    if (Number.isFinite(parsed)) return parsed;
+  } catch {
+    // Re-throw one component-aware validation message below.
+  }
+  throw new Error(`${ref} needs a valid ${unit || "numeric"} value`);
+}
+
+/** Expand library macros into stock LTspice parts while preserving a mapping
+ * from every logical ref.pin to one or more physical ref.pin endpoints. */
+function lowerCompositePlan(plan: CircuitPlan): DirectCircuitPlan {
+  const directKinds = new Set<string>(ASSISTANT_DIRECT_GENERATABLE_KINDS);
+  const reservedRefs = new Set(plan.components.map((component) => component.ref.toLowerCase()));
+  const logicalNetByPin = new Map(plan.nets.flatMap((net) => net.pins.map((pin) => [pin.toLowerCase(), net.name] as const)));
+  const pinMap = new Map<string, string[]>();
+  const components: DirectCircuitPlan["components"] = [];
+  const internalDirectives: string[] = [];
+  const internalGroundPins: string[] = [];
+
+  const uniqueRef = (candidate: string): string => {
+    let ref = candidate;
+    let suffix = 2;
+    while (reservedRefs.has(ref.toLowerCase())) ref = `${candidate}_${suffix++}`;
+    reservedRefs.add(ref.toLowerCase());
+    return ref;
+  };
+  const mapPin = (logical: string, ...physical: string[]) => pinMap.set(logical.toLowerCase(), physical);
+  const add = (ref: string, kind: DirectGeneratableKind, value: string) => components.push({ ref, kind, value });
+
+  for (const component of plan.components) {
+    if (directKinds.has(component.kind)) {
+      const direct = component as Omit<CircuitPlanComponent, "kind"> & { kind: DirectGeneratableKind };
+      components.push(direct);
+      for (const pin of getLocalPins(component.kind)) mapPin(`${component.ref}.${pin.id}`, `${component.ref}.${pin.id}`);
+      continue;
+    }
+
+    const value = component.value ?? CATALOG_BY_KIND[component.kind].defaultValue;
+    switch (component.kind) {
+      case "potentiometer": {
+        const total = finiteQuantity(value, component.ref, "Ohm");
+        if (total <= 0) throw new Error(`${component.ref} needs a positive Ohm value`);
+        const upper = uniqueRef(`R_${component.ref}_A`);
+        const lower = uniqueRef(`R_${component.ref}_B`);
+        add(upper, "resistor", String(total / 2));
+        add(lower, "resistor", String(total / 2));
+        mapPin(`${component.ref}.a`, `${upper}.a`);
+        mapPin(`${component.ref}.w`, `${upper}.b`, `${lower}.a`);
+        mapPin(`${component.ref}.b`, `${lower}.b`);
+        break;
+      }
+      case "switch": {
+        const state = value.trim().toLowerCase();
+        if (!/^(?:open|off|0|closed|on|1)$/.test(state)) {
+          throw new Error(`${component.ref} switch value must be open or closed`);
+        }
+        const resistor = uniqueRef(`R_${component.ref}`);
+        add(resistor, "resistor", /^(?:closed|on|1)$/.test(state) ? "1m" : "1e12");
+        mapPin(`${component.ref}.a`, `${resistor}.a`);
+        mapPin(`${component.ref}.b`, `${resistor}.b`);
+        break;
+      }
+      case "transformer": {
+        const ratio = /^\s*(\d+(?:\.\d+)?)\s*:\s*(\d+(?:\.\d+)?)\s*$/.exec(value);
+        const primaryTurns = Number(ratio?.[1]);
+        const secondaryTurns = Number(ratio?.[2]);
+        if (!ratio || primaryTurns <= 0 || secondaryTurns <= 0) {
+          throw new Error(`${component.ref} needs a positive turns ratio such as 1:2`);
+        }
+        const primary = uniqueRef(`L_${component.ref}_P`);
+        const secondary = uniqueRef(`L_${component.ref}_S`);
+        const primaryInductance = 10e-3;
+        const secondaryInductance = primaryInductance * (secondaryTurns / primaryTurns) ** 2;
+        add(primary, "inductor", String(primaryInductance));
+        add(secondary, "inductor", String(secondaryInductance));
+        mapPin(`${component.ref}.p1`, `${primary}.a`);
+        mapPin(`${component.ref}.p2`, `${primary}.b`);
+        mapPin(`${component.ref}.s1`, `${secondary}.a`);
+        mapPin(`${component.ref}.s2`, `${secondary}.b`);
+        internalDirectives.push(`K_${component.ref} ${primary} ${secondary} 0.999`);
+        break;
+      }
+      case "cccs":
+      case "ccvs": {
+        const unit = component.kind === "cccs" ? "A/A" : "V/A";
+        const gain = finiteQuantity(value, component.ref, unit);
+        const sense = uniqueRef(`V_${component.ref}_SENSE`);
+        const output = uniqueRef(`B_${component.ref}_OUT`);
+        add(sense, "vsource", "0");
+        add(output, "bsource", `${component.kind === "cccs" ? "I" : "V"}=I(${sense})*${gain}`);
+        mapPin(`${component.ref}.cp`, `${sense}.p`);
+        mapPin(`${component.ref}.cn`, `${sense}.n`);
+        mapPin(`${component.ref}.op`, `${output}.p`);
+        mapPin(`${component.ref}.on`, `${output}.n`);
+        break;
+      }
+      case "comparator": {
+        const inPlus = logicalNetByPin.get(`${component.ref}.in+`.toLowerCase());
+        const inMinus = logicalNetByPin.get(`${component.ref}.in-`.toLowerCase());
+        const outputNet = logicalNetByPin.get(`${component.ref}.out`.toLowerCase());
+        if (!inPlus || !inMinus || !outputNet) {
+          throw new Error(`${component.ref} comparator needs in+, in-, and out connected`);
+        }
+        const spec = parseComparator(value);
+        const output = uniqueRef(`B_${component.ref}`);
+        const inputPlus = uniqueRef(`R_${component.ref}_INP`);
+        const inputMinus = uniqueRef(`R_${component.ref}_INM`);
+        const diff = `(V(${inPlus})-V(${inMinus}))`;
+        const expression = spec.vhyst <= 0
+          ? `V=if(${diff}>0,${spec.vhigh},${spec.vlow})`
+          : `V=if(V(${outputNet})>${(spec.vhigh + spec.vlow) / 2},if(${diff}>${-spec.vhyst},${spec.vhigh},${spec.vlow}),if(${diff}>${spec.vhyst},${spec.vhigh},${spec.vlow}))`;
+        add(output, "bsource", expression);
+        // Stock LTspice B sources reference input nets by expression and have
+        // no drawable input terminals. Two effectively-open shunts provide
+        // explicit pin anchors in the generated schematic without materially
+        // loading the circuit (1 PΩ each).
+        add(inputPlus, "resistor", "1e15");
+        add(inputMinus, "resistor", "1e15");
+        mapPin(`${component.ref}.out`, `${output}.p`);
+        mapPin(`${component.ref}.in+`, `${inputPlus}.a`);
+        mapPin(`${component.ref}.in-`, `${inputMinus}.a`);
+        internalGroundPins.push(`${output}.n`, `${inputPlus}.b`, `${inputMinus}.b`);
+        break;
+      }
+    }
+  }
+
+  const nets = plan.nets.map((net) => ({
+    ...net,
+    pins: net.pins.flatMap((pin) => {
+      const physical = pinMap.get(pin.toLowerCase());
+      if (!physical) throw new Error(`Tau could not lower ${pin} to an LTspice primitive`);
+      return physical;
+    }),
+  }));
+  nets.find((net) => net.name === "0")?.pins.push(...internalGroundPins);
+  return { ...plan, components, nets, directives: [...plan.directives, ...internalDirectives] };
+}
+
+function componentLevels(plan: DirectCircuitPlan): Map<string, number> {
   const neighbors = new Map(plan.components.map((component) => [component.ref, new Set<string>()]));
   for (const net of plan.nets) {
     const refs = [...new Set(net.pins.map((pin) => pin.slice(0, pin.lastIndexOf("."))))];
@@ -267,7 +429,7 @@ function componentLevels(plan: CircuitPlan): Map<string, number> {
   return levels;
 }
 
-function layoutComponents(plan: CircuitPlan): SchematicComponent[] {
+function layoutComponents(plan: DirectCircuitPlan): SchematicComponent[] {
   const levels = componentLevels(plan);
   const rowsByLevel = new Map<number, number>();
   return plan.components.map((component, index) => {
@@ -316,7 +478,7 @@ function pinPoint(components: readonly SchematicComponent[], token: string): Poi
   return { x: pin.x, y: pin.y };
 }
 
-function compileDocument(plan: CircuitPlan): {
+function compileDocument(plan: DirectCircuitPlan): {
   components: SchematicComponent[];
   wires: SchematicWire[];
   netLabels: NetLabel[];
@@ -344,9 +506,20 @@ function compileDocument(plan: CircuitPlan): {
     const ground = components[components.length - 1];
     if (net.name === "0") points.push({ x: ground.x, y: ground.y });
     const anchor = points[0];
+    const connected = [anchor];
     for (const target of points.slice(1)) {
-      const route = routeWireSmart(anchor, target, components, wires);
+      // Grow a compact electrical tree instead of fanning every branch from
+      // the first pin. The star layout creates long duplicate trunks; when the
+      // router avoids those same-net trunks it can choose a shorter overlap
+      // with a different net and silently short the exported circuit.
+      const source = connected.reduce((nearest, candidate) => {
+        const candidateDistance = Math.abs(candidate.x - target.x) + Math.abs(candidate.y - target.y);
+        const nearestDistance = Math.abs(nearest.x - target.x) + Math.abs(nearest.y - target.y);
+        return candidateDistance < nearestDistance ? candidate : nearest;
+      }, connected[0]);
+      const route = routeWireSmart(source, target, components, wires);
       if (route.length > 1) wires.push({ id: `ai-wire-${wireIndex++}`, points: route });
+      connected.push(target);
     }
     if (net.name !== "0") {
       netLabels.push({ id: `ai-label-${labelIndex++}`, x: anchor.x, y: anchor.y, text: net.name });
@@ -355,13 +528,47 @@ function compileDocument(plan: CircuitPlan): {
   return { components, wires, netLabels };
 }
 
+/** Prove that ASC serialization preserved the requested physical node
+ * partition. A route can remain visually plausible while overlapping another
+ * wire; comparing partitions prevents Tau from returning that silently
+ * shorted or disconnected proposal. */
+function validateRoundTripTopology(plan: DirectCircuitPlan, source: string): void {
+  const document = importAsc(source);
+  const circuit = extractCircuit(document.components, document.wires, document.netLabels);
+  const pinsByRef = new Map(circuit.components.map(({ component, pins }) => [component.label, pins]));
+  const actualToExpected = new Map<string, string>();
+
+  for (const net of plan.nets) {
+    const actualNodes = new Set<string>();
+    for (const token of net.pins) {
+      const split = token.lastIndexOf(".");
+      const ref = token.slice(0, split);
+      const pin = token.slice(split + 1);
+      const actualNode = pinsByRef.get(ref)?.[pin];
+      if (!actualNode) throw new Error(`Tau could not preserve requested connectivity for ${token}`);
+      actualNodes.add(actualNode);
+    }
+    if (actualNodes.size !== 1) {
+      throw new Error(`Tau could not preserve requested connectivity for net ${net.name}`);
+    }
+    const actualNode = [...actualNodes][0];
+    const otherNet = actualToExpected.get(actualNode);
+    if (otherNet && otherNet !== net.name) {
+      throw new Error(`Tau could not preserve requested isolation between nets ${otherNet} and ${net.name}`);
+    }
+    actualToExpected.set(actualNode, net.name);
+  }
+}
+
 export function compileAssistantCircuitPlan(id: string, input: unknown): AssistantAscAction {
   if (!id || id.length > 160) throw new Error("tool call has no valid id");
   const plan = parsePlan(input);
-  const document = compileDocument(plan);
-  const exported = schematicToAsc({ ...document, directives: plan.directives });
+  const loweredPlan = lowerCompositePlan(plan);
+  const document = compileDocument(loweredPlan);
+  const exported = schematicToAsc({ ...document, directives: loweredPlan.directives });
   const lossy = exported.warnings.filter((warning) => /skipped|no LTspice symbol/i.test(warning));
   if (lossy.length > 0) throw new Error(lossy[0]);
+  validateRoundTripTopology(loweredPlan, exported.text);
   return plan.mode === "create"
     ? parseCreateAscAction(id, { filename: plan.filename, source: exported.text })
     : parseApplyCurrentAscAction(id, { source: exported.text });

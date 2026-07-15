@@ -164,11 +164,42 @@ describe("WaveformPlot (TRAN) — real tick axes", () => {
     const trace = container.querySelector<SVGPathElement>(".scope-trace");
     const initialPath = trace?.getAttribute("d");
 
-    expect(getByRole("button", { name: "Auto scale visible signals" })).toBeTruthy();
+    expect(getByRole("button", { name: "Auto frame signal" })).toBeTruthy();
     fireEvent.click(getByRole("button", { name: "Zoom in" }));
     await waitFor(() => expect(trace?.getAttribute("d")).not.toBe(initialPath));
-    fireEvent.click(getByRole("button", { name: "Fit plot to data" }));
+    fireEvent.click(getByRole("button", { name: "Show full run" }));
     await waitFor(() => expect(trace?.getAttribute("d")).toBe(initialPath));
+  });
+
+  it("auto-frames a dense periodic run while keeping Full Run as a distinct action", async () => {
+    const frequency = 100_000;
+    const stopTime = 0.007;
+    const step = 0.5e-6;
+    const times = Array.from({ length: Math.round(stopTime / step) + 1 }, (_, index) => index * step);
+    const values = times.map((time) => Math.sin(2 * Math.PI * frequency * time));
+    const base = makeTranResult();
+    const result: Extract<AnalysisResult, { ok: true }> = {
+      ...base,
+      times,
+      traces: [makeTrace("carrier", "V(carrier)", values)],
+      stats: { ...base.stats, sampleCount: times.length, stopTime, stepSize: step },
+    };
+    const { container, getByRole } = render(
+      <WaveformPlot
+        result={result}
+        baseTraces={result.traces}
+        netLabels={[]}
+        paneLayout={defaultLayout(["carrier"])}
+      />,
+    );
+    const trace = container.querySelector<SVGPathElement>(".scope-trace");
+    const fullRunPath = trace?.getAttribute("d");
+
+    fireEvent.click(getByRole("button", { name: "Auto frame signal" }));
+    await waitFor(() => expect(trace?.getAttribute("d")).not.toBe(fullRunPath));
+
+    fireEvent.click(getByRole("button", { name: "Show full run" }));
+    await waitFor(() => expect(trace?.getAttribute("d")).toBe(fullRunPath));
   });
 });
 

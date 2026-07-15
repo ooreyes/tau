@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { extractCircuit } from "../schematic/netlist";
 import { parseAsc, ascToSchematic, importAsc } from "./ascImport";
 import {
   serializeAscDocument,
@@ -76,15 +77,29 @@ describe("kindToLtspiceType", () => {
     expect(kindToLtspiceType("vsource")).toBe("voltage");
     expect(kindToLtspiceType("isource")).toBe("current");
     expect(kindToLtspiceType("npn")).toBe("npn");
-    expect(kindToLtspiceType("nmos")).toBe("nmos");
+    expect(kindToLtspiceType("nmos")).toBe("nmos4");
+    expect(kindToLtspiceType("pmos")).toBe("pmos4");
     expect(kindToLtspiceType("bsource")).toBe("bv");
     expect(kindToLtspiceType("vcvs")).toBe("e");
     expect(kindToLtspiceType("opamp")).toBe("opamp2");
+    expect(kindToLtspiceType("dflop")).toBe("Digital\\\\dflop");
   });
 
   it("returns null for kinds with no LTspice symbol of their own", () => {
     expect(kindToLtspiceType("ground")).toBeNull();
     expect(kindToLtspiceType("testpoint")).toBeNull();
+    // The exact Digital symbol is selected from the function in Value, so a
+    // kind-only query cannot choose one without the complete component.
+    expect(kindToLtspiceType("digitalGate")).toBeNull();
+  });
+
+  it("rejects composite or electrically incompatible single-symbol mappings", () => {
+    // LTspice f/h have only two output pins and name an external voltage source
+    // as their controller, whereas Tau's CCCS/CCVS own a four-pin sense branch.
+    // LTspice models pots as resistor networks and transformers as L+K networks.
+    for (const kind of ["cccs", "ccvs", "potentiometer", "switch", "transformer"] as const) {
+      expect(kindToLtspiceType(kind), kind).toBeNull();
+    }
   });
 });
 
@@ -164,6 +179,157 @@ describe("schematicToAsc", () => {
     });
     expect(warnings).toHaveLength(1);
     expect(warnings[0]).toContain("testpoint");
+  });
+
+  it("warns instead of silently emitting lossy composite source symbols", () => {
+    const components = ([
+      ["cccs", "F1"],
+      ["ccvs", "H1"],
+      ["potentiometer", "RV1"],
+      ["transformer", "T1"],
+      ["switch", "S1"],
+    ] as const).map(([kind, label], index) => ({
+      id: `c${index}`,
+      kind,
+      x: index * 64,
+      y: 0,
+      rotation: 0 as const,
+      value: "1",
+      label,
+    }));
+    const { text, warnings } = schematicToAsc({ components, wires: [], netLabels: [] });
+
+    expect(parseAsc(text).symbols).toEqual([]);
+    expect(warnings).toHaveLength(5);
+    expect(warnings).toEqual(expect.arrayContaining([
+      expect.stringContaining("F1"),
+      expect.stringContaining("H1"),
+      expect.stringContaining("RV1"),
+      expect.stringContaining("T1"),
+      expect.stringContaining("S1"),
+    ]));
+  });
+
+  it("warns instead of silently converting an unsupported digital function to AND", () => {
+    const { text, warnings } = schematicToAsc({
+      components: [{
+        id: "gate-1",
+        kind: "digitalGate",
+        x: 0,
+        y: 0,
+        rotation: 0,
+        value: "nand Vhigh=5",
+        label: "A1",
+      }],
+      wires: [],
+      netLabels: [],
+    });
+
+    expect(parseAsc(text).symbols).toEqual([]);
+    expect(warnings).toEqual([expect.stringContaining("A1")]);
+  });
+
+  it("round-trips every digital gate leaf with exact pin roles and no duplicated function attribute", () => {
+    const cases = [
+      { leaf: "and", pins: ["in1", "in2", "in3", "in4", "in5", "qbar", "q", "com"] },
+      { leaf: "or", pins: ["in1", "in2", "in3", "in4", "in5", "qbar", "q", "com"] },
+      { leaf: "xor", pins: ["in1", "in2", "in3", "in4", "in5", "qbar", "q", "com"] },
+      { leaf: "buf", pins: ["in1", "qbar", "q", "com"] },
+      { leaf: "buf1", pins: ["in1", "q", "com"] },
+      { leaf: "inv", pins: ["in1", "qbar", "com"] },
+      { leaf: "schmitt", pins: ["in1", "qbar", "q", "com"] },
+      { leaf: "schmtbuf", pins: ["in1", "q", "com"] },
+      { leaf: "schmtinv", pins: ["in1", "qbar", "com"] },
+    ] as const;
+    const params = "Vhigh=5 Vlow=0 Vt=2.5 Vhys=0.2 Td=10n";
+
+    for (const gate of cases) {
+      const seed = importAsc(`Version 4\nSHEET 1 880 680\nSYMBOL Digital\\${gate.leaf} 320 256 R0\nSYMATTR InstName A1\nSYMATTR Value ${params}\n`);
+      expect(seed.warnings, gate.leaf).toEqual([]);
+      const component = seed.components[0];
+      expect(component.kind).toBe("digitalGate");
+      expect(component.pinOverride?.map((pin) => pin.id), gate.leaf).toEqual(gate.pins);
+
+      const names = new Map<string, string>();
+      const netLabels = (component.pinOverride ?? []).map((pin, index) => {
+        const name = `gate_${index + 1}`;
+        names.set(pin.id, name);
+        return { id: `label-${index}`, x: pin.x, y: pin.y, text: name };
+      });
+      const exported = schematicToAsc({ components: [component], wires: [], netLabels });
+      expect(exported.warnings, gate.leaf).toEqual([]);
+      const symbol = parseAsc(exported.text).symbols[0];
+      expect(symbol.type, gate.leaf).toBe(`Digital\\\\${gate.leaf}`);
+      expect(symbol.attrs.Value, gate.leaf).toBe(params);
+
+      const round = importAsc(exported.text);
+      expect(round.warnings, gate.leaf).toEqual([]);
+      const roundComponent = round.components[0];
+      expect(roundComponent.value, gate.leaf).toBe(`${gate.leaf} ${params}`);
+      expect(roundComponent.pinOverride?.map((pin) => pin.id), gate.leaf).toEqual(gate.pins);
+      const extracted = extractCircuit(round.components, round.wires, round.netLabels);
+      const pins = extracted.components.find((entry) => entry.component.label === "A1")?.pins;
+      for (const pin of gate.pins) expect(pins?.[pin], `${gate.leaf}.${pin}`).toBe(names.get(pin));
+    }
+  });
+
+  it("round-trips a dflop with exact role connectivity through Digital\\dflop", () => {
+    const params = "Vhigh=5 Vlow=0 Vt=2.5 Td=10n";
+    const seed = importAsc(`Version 4\nSHEET 1 880 680\nSYMBOL Digital\\dflop 320 256 R0\nSYMATTR InstName A1\nSYMATTR Value ${params}\n`);
+    expect(seed.warnings).toEqual([]);
+    const component = seed.components[0];
+    const expectedPins = ["d", "clk", "pre", "clr", "qbar", "q", "com"];
+    expect(component.kind).toBe("dflop");
+    expect(component.pinOverride?.map((pin) => pin.id)).toEqual(expectedPins);
+
+    const names = new Map<string, string>();
+    const netLabels = (component.pinOverride ?? []).map((pin, index) => {
+      const name = `dff_${index + 1}`;
+      names.set(pin.id, name);
+      return { id: `label-${index}`, x: pin.x, y: pin.y, text: name };
+    });
+    const exported = schematicToAsc({ components: [component], wires: [], netLabels });
+    expect(exported.warnings).toEqual([]);
+    const symbol = parseAsc(exported.text).symbols[0];
+    expect(symbol.type).toBe("Digital\\\\dflop");
+    expect(symbol.attrs.Value).toBe(params);
+
+    const round = importAsc(exported.text);
+    expect(round.warnings).toEqual([]);
+    expect(round.components[0].kind).toBe("dflop");
+    expect(round.components[0].value).toBe(params);
+    expect(round.components[0].pinOverride?.map((pin) => pin.id)).toEqual(expectedPins);
+    const extracted = extractCircuit(round.components, round.wires, round.netLabels);
+    const pins = extracted.components.find((entry) => entry.component.label === "A1")?.pins;
+    for (const pin of expectedPins) expect(pins?.[pin], `dflop.${pin}`).toBe(names.get(pin));
+  });
+
+  it("preserves distinct drain, gate, source, and bulk nets for four-pin MOSFETs", () => {
+    for (const [kind, type, label] of [
+      ["nmos", "nmos4", "M1"],
+      ["pmos", "pmos4", "M2"],
+    ] as const) {
+      const seed = importAsc(`Version 4\nSHEET 1 880 680\nSYMBOL ${type} 320 256 R0\nSYMATTR InstName ${label}\nSYMATTR Value ${kind.toUpperCase()}\n`);
+      expect(seed.warnings, kind).toEqual([]);
+      const component = seed.components[0];
+      const expectedPins = ["d", "g", "s", "b"];
+      expect(component.pinOverride?.map((pin) => pin.id), kind).toEqual(expectedPins);
+      const netLabels = (component.pinOverride ?? []).map((pin, index) => ({
+        id: `${kind}-label-${index}`,
+        x: pin.x,
+        y: pin.y,
+        text: `${kind}_${pin.id}`,
+      }));
+
+      const exported = schematicToAsc({ components: [component], wires: [], netLabels });
+      expect(exported.warnings, kind).toEqual([]);
+      expect(parseAsc(exported.text).symbols[0].type, kind).toBe(type);
+      const round = importAsc(exported.text);
+      expect(round.warnings, kind).toEqual([]);
+      const extracted = extractCircuit(round.components, round.wires, round.netLabels);
+      const pins = extracted.components.find((entry) => entry.component.label === label)?.pins;
+      for (const pin of expectedPins) expect(pins?.[pin], `${kind}.${pin}`).toBe(`${kind}_${pin}`);
+    }
   });
 
   it("preserves the netlist a round-tripped schematic extracts", () => {
