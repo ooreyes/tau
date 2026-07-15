@@ -97,6 +97,7 @@ import {
   type AssistantApplyCurrentAscAction,
   type AssistantCreateAscAction,
 } from "./lib/assistantActions";
+import { pickAutoRunAnalysis, type AutoRunAnalysis } from "./lib/assistantAutoRun";
 
 const DEFAULT_ANALYSIS_OPTIONS: AnalysisOptions = {
   stopTime: 0.006,
@@ -248,6 +249,16 @@ function App() {
   // genuinely different run/document superseded this one" and discards
   // whatever comes back.
   const transientAbortRef = useRef<AbortController | null>(null);
+
+  // Analysis to auto-start after an assistant-confirmed circuit lands, latched
+  // by createAssistantCircuit/applyAssistantCircuit and consumed once by the
+  // effect below. A ref (not state): replaceCircuit/loadCircuit update the
+  // schematic store synchronously, but this component's own closures
+  // (directives, and every run callback that reads them) only refresh on the
+  // *next* render — so setting a ref here and reading it from an effect keyed
+  // on `directives` lets the auto-run fire against freshly-rendered closures
+  // instead of the stale ones captured before the circuit swapped.
+  const pendingAutoRunRef = useRef<AutoRunAnalysis | null>(null);
 
   // Selecting a part opens the Components rail so Properties is immediately usable.
   useEffect(() => {
@@ -776,11 +787,13 @@ function App() {
       await deleteProjectNode(path);
       throw error;
     }
+    pendingAutoRunRef.current = pickAutoRunAnalysis(action.document.directives ?? []);
     openAscFromProject(path, basename(path), action.source);
     showNotice(`Created ${basename(path)}`);
   }, [createSchematicInRoot, deleteProjectNode, openAscFromProject, showNotice, writeSim]);
 
   const applyAssistantCircuit = useCallback((action: AssistantApplyCurrentAscAction) => {
+    pendingAutoRunRef.current = pickAutoRunAnalysis(action.document.directives ?? []);
     replaceCircuit({
       ...action.document,
       probes: carryAssistantProbes(components, probes, action.document),
@@ -811,6 +824,60 @@ function App() {
     setFitSignal((value) => value + 1);
     showNotice("Applied assistant changes to the current circuit.");
   }, [activeId, adoptDirectiveOptions, components, invalidateAnalysis, probes, replaceCircuit, showNotice]);
+
+  // Auto-starts the analysis an assistant-confirmed circuit's directives
+  // request (ask -> confirm -> data appears), reusing the exact per-mode run
+  // callbacks the simulator's own Run buttons use so pre-run guards, abort,
+  // progress, and dashboards all behave identically. Keyed on `directives`
+  // (not the confirm handlers themselves) so it fires once the store — and
+  // every callback that closes over it — has actually caught up with the
+  // just-applied circuit; see pendingAutoRunRef above.
+  useEffect(() => {
+    const pending = pendingAutoRunRef.current;
+    if (!pending) return;
+    pendingAutoRunRef.current = null;
+    if (analysisRunning) return; // don't stack an auto-run under one already in flight
+
+    showNotice(`Running ${pending.directive} from the assistant's plan…`);
+    switch (pending.kind) {
+      case "tran": {
+        const tran = analysesFromDirectives(directives).tran;
+        if (!tran) return;
+        confirmLargeRunIfNeeded(tran, () => {
+          setMode("simulator");
+          setGraphOpen(true);
+          void executeTransient(tran);
+        });
+        break;
+      }
+      case "ac":
+        setMode("simulator");
+        setGraphOpen(true);
+        void runAcAnalysis();
+        break;
+      case "dc":
+        setMode("simulator");
+        setGraphOpen(true);
+        void runDcAnalysis();
+        break;
+      case "tf":
+        setMode("simulator");
+        setGraphOpen(true);
+        void runTfAnalysis();
+        break;
+      case "noise":
+        setMode("simulator");
+        setGraphOpen(true);
+        void runNoiseAnalysis_();
+        break;
+      case "op":
+        setMode("simulator");
+        setGraphOpen(true);
+        void runOperatingAnalysis();
+        break;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [directives]);
 
   const saveActiveToProject = useCallback(async () => {
     const tab = tabs.find((t) => t.id === activeId);

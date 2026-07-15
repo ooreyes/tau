@@ -217,6 +217,7 @@ export function AssistantPanel({
         contextText,
         history,
         allowCurrentApply: canApplyCurrent,
+        operationContext: { analysis, params },
       }, controller.signal).then((reply) => {
         if (controller.signal.aborted || localAbortRef.current !== controller) return;
         localAbortRef.current = null;

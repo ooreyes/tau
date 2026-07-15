@@ -105,6 +105,25 @@ describe("assistant circuit plan", () => {
     })).toThrow(/ground net/i);
   });
 
+  it("rejects a plan that leaves a pin out of every net", () => {
+    // The exact malformed shape Qwen3-4B produced live (2026-07-14): V1.p and
+    // R2.a silently floating, which simulated as a plausible-looking 0 V / 0 A
+    // "divider". The rejection message feeds the provider's repair loop.
+    expect(() => compileAssistantCircuitPlan("uncovered", {
+      mode: "create",
+      filename: "divider.asc",
+      components: [
+        { ref: "V1", kind: "vsource", value: "5" },
+        { ref: "R1", kind: "resistor", value: "1k" },
+        { ref: "R2", kind: "resistor", value: "2k" },
+      ],
+      nets: [
+        { name: "out", pins: ["R1.b", "R2.b"] },
+        { name: "0", pins: ["V1.n", "R1.a"] },
+      ],
+    })).toThrow(/V1\.p, R2\.a are not connected to any net/);
+  });
+
   it("rejects path-like values and unsafe simulator directives", () => {
     expect(() => compileAssistantCircuitPlan("x", {
       ...divider,
@@ -135,13 +154,10 @@ describe("assistant circuit plan", () => {
       const ref = `${entry.refPrefix}1`;
       let action;
       try {
-        const nets = entry.kind === "comparator"
-          ? [
-              { name: "positive", pins: [`${ref}.in+`] },
-              { name: "0", pins: [`${ref}.in-`] },
-              { name: "output", pins: [`${ref}.out`] },
-            ]
-          : [{ name: "0", pins: [`${ref}.${entry.pins[0].id}`] }];
+        // Every pin must land in a net (coverage rule); joining them all in
+        // net 0 keeps the fixture electrically meaningless but geometrically
+        // complete, which is all this round-trip test measures.
+        const nets = [{ name: "0", pins: entry.pins.map((pin) => `${ref}.${pin.id}`) }];
         action = compileAssistantCircuitPlan(`kind-${entry.kind}`, {
           mode: "create",
           filename: `${entry.kind}.asc`,
@@ -342,10 +358,10 @@ describe("assistant circuit plan", () => {
     expect(action.source).toContain("SYMBOL bv");
   });
 
-  it("rejects a routed ASC when dense wires merge requested net partitions", () => {
-    expect(() => compileAssistantCircuitPlan("dense-short", {
+  it("preserves isolation on a dense multi-net resistor mesh", () => {
+    expectRoundTripConnectivity("dense-mesh", {
       mode: "create",
-      filename: "dense-short.asc",
+      filename: "dense-mesh.asc",
       components: [
         { ref: "V1", kind: "vsource", value: "5" },
         ...Array.from({ length: 12 }, (_, index) => ({
@@ -363,7 +379,18 @@ describe("assistant circuit plan", () => {
         { name: "n5", pins: ["R2.b", "R3.b", "R7.b", "R11.a", "R12.b"] },
         { name: "n6", pins: ["R2.a", "R4.b", "R6.b", "R8.b", "R10.a"] },
       ],
-    })).toThrow(/could not preserve requested isolation/i);
+    });
+  });
+
+  it("orients series and shunt passives like a hand-drawn schematic", () => {
+    const action = compileAssistantCircuitPlan("layout-1", divider);
+    expect(action.type).toBe("create_asc");
+    if (action.type !== "create_asc") throw new Error("expected create action");
+    const byLabel = new Map(action.document.components.map((component) => [component.label, component]));
+    // Series R1 bridges two signal nets between levels → horizontal.
+    expect(byLabel.get("R1")?.rotation).toBe(270);
+    // Shunt R2 bridges signal to ground → vertical, current top-to-bottom.
+    expect(byLabel.get("R2")?.rotation).toBe(0);
   });
 
   it("preserves both ports of a terminated transmission line", () => {

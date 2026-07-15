@@ -1,6 +1,21 @@
 import { describe, expect, it, vi } from "vitest";
+import type { AnalysisResult } from "../simulation/linearTransient";
+import { EMPTY_SCOPE } from "../simulation/paramScope";
 import type { AssistantProvider } from "./assistantProvider";
 import { LocalMlxAssistant, LOCAL_MLX_MODEL_PRESETS } from "./localMlxAssistant";
+
+function successfulAnalysis(): AnalysisResult {
+  return {
+    ok: true,
+    title: "Transient",
+    times: [0, 0.001, 0.002, 0.003, 0.004],
+    traces: [{ id: "out", label: "V(out)", unit: "V", color: "var(--trace-cyan)", values: [0, 1.5, 3, 3.3, 3.3] }],
+    currents: [],
+    stats: { netCount: 1, componentCount: 1, sampleCount: 5, stopTime: 0.004, stepSize: 0.001 },
+    warnings: [],
+    circuit: { nets: [], components: [], groundNetId: "0", warnings: [] },
+  };
+}
 
 const VALID_ASC = `Version 4
 SHEET 1 880 680
@@ -75,7 +90,7 @@ describe("LocalMlxAssistant", () => {
     expect(body.messages[0].content).toContain('vsource value "SINE(0 1 1k)"');
     expect(body.messages[0].content).toContain('vsource value "PULSE(0 5 0 1n 1n 5u 10u)"');
     expect(body.messages[1]).toEqual({ role: "user", content: "What does R1 do?" });
-    expect(body.tools.map((tool) => tool.function.name)).toEqual(["build_tau_circuit"]);
+    expect(body.tools.map((tool) => tool.function.name)).toEqual(["build_tau_circuit", "inspect_simulation_signal"]);
     expect(body.tools.every((tool) => typeof tool.function.parameters === "object")).toBe(true);
   });
 
@@ -213,7 +228,7 @@ describe("LocalMlxAssistant", () => {
     const secondBody = JSON.parse(unavailableBodies[0]) as {
       tools: Array<{ function: { name: string } }>;
     };
-    expect(secondBody.tools.map((tool) => tool.function.name)).toEqual(["build_tau_circuit"]);
+    expect(secondBody.tools.map((tool) => tool.function.name)).toEqual(["build_tau_circuit", "inspect_simulation_signal"]);
   });
 
   it("repairs a model plan with a missing component before exposing a proposal", async () => {
@@ -249,6 +264,100 @@ describe("LocalMlxAssistant", () => {
     expect(reply.rejectedActionCount).toBe(0);
     expect(bodies).toHaveLength(2);
     expect(bodies[1]).toContain("references an unknown component");
+  });
+
+  it("executes an inspect_simulation_signal round-trip and answers from the tool result, never the raw payload", async () => {
+    const bodies: Array<Record<string, unknown>> = [];
+    const responses = [
+      completion({
+        content: "",
+        tool_calls: [{
+          id: "inspect-1",
+          type: "function",
+          function: { name: "inspect_simulation_signal", arguments: JSON.stringify({ expression: "V(out)" }) },
+        }],
+      }),
+      completion({ content: "VOUT settles at about 3.3 V." }),
+    ];
+    const fetchImpl = vi.fn(async (_input: string | URL | Request, init?: RequestInit) => {
+      bodies.push(JSON.parse(String(init?.body)) as Record<string, unknown>);
+      return responses.shift()!;
+    });
+    const provider = new LocalMlxAssistant({ fetchImpl });
+
+    const reply = await provider.complete(request({
+      operationContext: { analysis: successfulAnalysis(), params: EMPTY_SCOPE },
+    }));
+
+    expect(reply).toEqual({ text: "VOUT settles at about 3.3 V.", actions: [], rejectedActionCount: 0 });
+    expect(bodies).toHaveLength(2);
+    expect((bodies[0].tools as Array<{ function: { name: string } }>).map((tool) => tool.function.name)).toEqual([
+      "build_tau_circuit", "inspect_simulation_signal",
+    ]);
+    const secondMessages = bodies[1].messages as Array<Record<string, unknown>>;
+    const assistantEcho = secondMessages.find((m) => m.role === "assistant" && Array.isArray(m.tool_calls));
+    expect(assistantEcho).toBeTruthy();
+    const toolMessage = secondMessages.find((m) => m.role === "tool") as { tool_call_id: string; content: string } | undefined;
+    expect(toolMessage?.tool_call_id).toBe("inspect-1");
+    expect(JSON.parse(String(toolMessage?.content))).toEqual(expect.objectContaining({
+      ok: true,
+      expression: "V(out)",
+      maximum: 3.3,
+      final: 3.3,
+    }));
+  });
+
+  it("returns Tau's private unavailable-snapshot error to the model when no operationContext is supplied, and still completes", async () => {
+    const bodies: Array<Record<string, unknown>> = [];
+    const responses = [
+      completion({
+        content: "",
+        tool_calls: [{
+          id: "inspect-2",
+          type: "function",
+          function: { name: "inspect_simulation_signal", arguments: JSON.stringify({ expression: "V(out)" }) },
+        }],
+      }),
+      completion({ content: "I don't have that simulation data yet." }),
+    ];
+    const fetchImpl = vi.fn(async (_input: string | URL | Request, init?: RequestInit) => {
+      bodies.push(JSON.parse(String(init?.body)) as Record<string, unknown>);
+      return responses.shift()!;
+    });
+    const provider = new LocalMlxAssistant({ fetchImpl });
+
+    const reply = await provider.complete(request());
+
+    expect(reply).toEqual({ text: "I don't have that simulation data yet.", actions: [], rejectedActionCount: 0 });
+    const secondMessages = bodies[1].messages as Array<Record<string, unknown>>;
+    const toolMessage = secondMessages.find((m) => m.role === "tool") as { tool_call_id: string; content: string } | undefined;
+    expect(toolMessage?.tool_call_id).toBe("inspect-2");
+    expect(JSON.parse(String(toolMessage?.content))).toEqual({ ok: false, error: "No simulation snapshot is available." });
+  });
+
+  it("caps inspect_simulation_signal round-trips instead of looping forever", async () => {
+    const fetchImpl = vi.fn(async () => completion({
+      content: "",
+      tool_calls: [{
+        id: "inspect-loop",
+        type: "function",
+        function: { name: "inspect_simulation_signal", arguments: JSON.stringify({ expression: "V(out)" }) },
+      }],
+    }));
+    const provider = new LocalMlxAssistant({ fetchImpl });
+
+    const reply = await provider.complete(request({
+      operationContext: { analysis: successfulAnalysis(), params: EMPTY_SCOPE },
+    }));
+
+    expect(reply).toEqual({
+      text: "The assistant requested too many internal checks. Try a narrower question.",
+      actions: [],
+      rejectedActionCount: 0,
+    });
+    // 1 initial fetch + 4 permitted inspect round-trips, then the cap trips
+    // on the 5th response without a 6th fetch.
+    expect(fetchImpl).toHaveBeenCalledTimes(5);
   });
 
   it("falls back to canonical whole-body JSON when MLX drops a native tool call", async () => {

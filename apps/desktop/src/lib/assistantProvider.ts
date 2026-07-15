@@ -1,4 +1,5 @@
 import type { AssistantAscAction } from "./assistantActions";
+import type { AssistantOperationContext } from "./assistantOperations";
 
 /** Provider-neutral conversation input. Tool payloads deliberately never enter history. */
 export interface AssistantProviderMessage {
@@ -13,6 +14,9 @@ export interface AssistantProviderRequest {
   history: readonly AssistantProviderMessage[];
   /** Omit current-document replacement when Tau could not serialize it losslessly. */
   allowCurrentApply?: boolean;
+  /** Snapshot a provider may query via read-only inspection operations. Omit
+   *  when no simulation snapshot is available for this turn. */
+  operationContext?: AssistantOperationContext;
 }
 
 export interface AssistantProviderReply {
@@ -38,7 +42,8 @@ export class AssistantProviderError extends Error {
   }
 }
 
-/** A provider can inspect context and return pending proposals, but owns no Tau mutation callbacks. */
+/** A provider may execute read-only inspection operations against `operationContext`
+ *  and return pending proposals, but owns no Tau mutation callbacks. */
 export interface AssistantProvider {
   readonly id: string;
   complete(request: AssistantProviderRequest, signal?: AbortSignal): Promise<AssistantProviderReply>;

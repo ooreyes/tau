@@ -10,6 +10,7 @@ import type {
   ComponentKind,
   NetLabel,
   Point,
+  Rotation,
   SchematicComponent,
   SchematicWire,
 } from "../schematic/types";
@@ -246,6 +247,23 @@ function parsePlan(input: unknown): CircuitPlan {
   });
   if (!nets.some((net) => net.name === "0")) throw new Error("circuit plan needs a 0 ground net");
 
+  // A pin absent from every net is a silently floating part — the simulation
+  // would read 0 V / 0 A and the schematic would look plausible but be wrong.
+  // Rejecting here feeds the provider's repair loop, so the model corrects
+  // its own plan instead of shipping a broken circuit. Report every floating
+  // pin at once: a small model given one pin per attempt burns its limited
+  // repair attempts without converging.
+  const uncoveredPins = components.flatMap((component) =>
+    getLocalPins(component.kind)
+      .map(({ id }) => `${component.ref}.${id}`)
+      .filter((pin) => !connectedPins.has(pin.toLowerCase())),
+  );
+  if (uncoveredPins.length > 0) {
+    throw new Error(
+      `${uncoveredPins.join(", ")} ${uncoveredPins.length === 1 ? "is" : "are"} not connected to any net; every pin needs a net (use a dedicated single-pin net for a deliberately unused pin)`,
+    );
+  }
+
   const rawDirectives = source.directives ?? [];
   if (!Array.isArray(rawDirectives) || rawDirectives.length > MAX_DIRECTIVES) {
     throw new Error(`circuit plan supports at most ${MAX_DIRECTIVES} directives`);
@@ -404,6 +422,81 @@ function lowerCompositePlan(plan: CircuitPlan): DirectCircuitPlan {
   return { ...plan, components, nets, directives: [...plan.directives, ...internalDirectives] };
 }
 
+// Column/row pitch for the level-based grid. Chosen generously relative to
+// every symbol's body box (see schematic/symbols.ts SYMBOL_BODY, largest
+// half-extent ~30) so components never collide regardless of the rotation
+// chosen below, without needing per-rotation clearance adjustments.
+const COLUMN_PITCH = 176;
+const ROW_PITCH = 128;
+
+// Two-pin passives whose LTspice symbol (see io/ascImport.ts LTSPICE_PINS)
+// round-trips cleanly through resolveAscPinGeometry at every rotation: pin
+// positions stay grid-aligned and the resolved rotation always matches the
+// requested one (verified empirically — see report). Multi-pin kinds
+// (opamp, transistors, mos, controlled sources, …) are intentionally left
+// out: their pin banks are asymmetric enough that a wrong rotation choice
+// risks misreading which physical pin lands where post-round-trip.
+const ROTATABLE_TWO_PIN_KINDS = new Set<ComponentKind>([
+  "resistor", "capacitor", "inductor", "diode", "led", "zener",
+]);
+
+/** ref -> refs of every OTHER component sharing at least one net with it. */
+function netMembership(plan: DirectCircuitPlan): Map<string, string[]> {
+  const members = new Map<string, string[]>();
+  for (const net of plan.nets) {
+    const refs = [...new Set(net.pins.map((pin) => pin.slice(0, pin.lastIndexOf("."))))];
+    members.set(net.name, refs);
+  }
+  return members;
+}
+
+/**
+ * Choose a rotation for a two-pin passive so its induced wire reads as a
+ * person would draw it, using the SAME rotation values Tau's editor and ASC
+ * round-trip already use (0/90/180/270 — see schematic/types.ts Rotation).
+ *
+ * Empirically (via schematicToAsc → importAsc → getComponentPins on a
+ * resistor/capacitor/inductor/diode/led/zener), these kinds' first local pin
+ * (a) and second local pin (b/k) resolve as: rotation 0 → a above b (top to
+ * bottom); rotation 180 → b above a; rotation 270 → a left of b; rotation 90
+ * → b left of a. So: a part bridging a signal net down to ground stays
+ * vertical (0, or 180 if the plan wired ground to pin a instead of b/k) so
+ * current reads top-to-bottom; a part in series between two different
+ * component levels goes horizontal (270/90, whichever puts its lower-level
+ * neighbor on the left) so current reads left-to-right with its neighbors.
+ */
+function rotationForComponent(
+  component: DirectCircuitPlan["components"][number],
+  levels: Map<string, number>,
+  netByPin: Map<string, string>,
+  netMembers: Map<string, string[]>,
+): Rotation {
+  if (!ROTATABLE_TWO_PIN_KINDS.has(component.kind)) return 0;
+  const [pin0, pin1] = getLocalPins(component.kind);
+  const net0 = netByPin.get(`${component.ref}.${pin0.id}`.toLowerCase());
+  const net1 = netByPin.get(`${component.ref}.${pin1.id}`.toLowerCase());
+  if (!net0 || !net1 || net0 === net1) return 0;
+
+  if (net0 === "0" || net1 === "0") {
+    // Bridges a signal net (the non-ground pin) to ground: keep it vertical.
+    // pin1 (b/k) already resolves below pin0 (a) at rotation 0, so only flip
+    // to 180 when the plan connected ground to pin0 instead.
+    return net1 === "0" ? 0 : 180;
+  }
+
+  const ownLevel = levels.get(component.ref) ?? 0;
+  const neighborLevel = (net: string): number | null => {
+    const others = (netMembers.get(net) ?? []).filter((ref) => ref !== component.ref);
+    if (others.length === 0) return null;
+    return Math.min(...others.map((ref) => levels.get(ref) ?? ownLevel));
+  };
+  const level0 = neighborLevel(net0);
+  const level1 = neighborLevel(net1);
+  if (level0 === null || level1 === null || level0 === level1) return 0;
+  // pin0 should face its lower-level (leftward) neighbor.
+  return level0 < level1 ? 270 : 90;
+}
+
 function componentLevels(plan: DirectCircuitPlan): Map<string, number> {
   const neighbors = new Map(plan.components.map((component) => [component.ref, new Set<string>()]));
   for (const net of plan.nets) {
@@ -431,6 +524,11 @@ function componentLevels(plan: DirectCircuitPlan): Map<string, number> {
 
 function layoutComponents(plan: DirectCircuitPlan): SchematicComponent[] {
   const levels = componentLevels(plan);
+  const netMembers = netMembership(plan);
+  const netByPin = new Map<string, string>();
+  for (const net of plan.nets) {
+    for (const pin of net.pins) netByPin.set(pin.toLowerCase(), net.name);
+  }
   const rowsByLevel = new Map<number, number>();
   return plan.components.map((component, index) => {
     const level = levels.get(component.ref) ?? index;
@@ -439,9 +537,9 @@ function layoutComponents(plan: DirectCircuitPlan): SchematicComponent[] {
     return {
       id: `ai-component-${index + 1}`,
       kind: component.kind,
-      x: 160 + level * 176,
-      y: 128 + row * 128,
-      rotation: 0,
+      x: 160 + level * COLUMN_PITCH,
+      y: 128 + row * ROW_PITCH,
+      rotation: rotationForComponent(component, levels, netByPin, netMembers),
       value: component.value ?? CATALOG_BY_KIND[component.kind].defaultValue,
       label: component.ref,
     };
