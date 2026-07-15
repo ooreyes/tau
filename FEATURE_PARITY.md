@@ -303,7 +303,12 @@ Status legend: ✅ done · 🟡 partial · ⬜ not started
   while exact imported pins and off-grid wire junctions remain untouched; the
   store also collapses redundant collinear vertices before persistence. This
   prevents fractional pointer drift from becoming a tiny pin-adjacent dogleg.
-  44 geometry tests plus browser QA.
+  **Persistent-wire follow-up (2026-07-15):** landing on a pin or existing
+  conductor now finishes the current run while keeping Wire active for the next
+  connection; empty-grid clicks remain explicit waypoints, and clicking the
+  active start again cancels only that run. Probe colors no longer repaint whole
+  conductors or node labels, so topology retains one neutral visual language.
+  44 geometry tests plus browser/packaged-app QA.
 - ✅ Net labels (name a node) — `FLAG` equivalent — store `upsertNetLabel`;
   **now electrical** (merge same-named nets, `0`/`GND`→ground, name the net) in
   `schematic/netlist.ts` `extractCircuit`. **F4 net-label tool landed**
@@ -355,7 +360,11 @@ Status legend: ✅ done · 🟡 partial · ⬜ not started
   app's 900×600 floor; screenshots (before/after) under
   `screenshots/unitA-comparator/`. 8 new label-formatter tests
   (`Canvas.labels.test.ts`).
-- ✅ Probe tool (click node → plot) — `probes`
+- ✅ Probe tool (click node → plot) — `probes`. **Editor hit-target follow-up
+  (2026-07-15):** each colored probe marker is directly selectable by pointer or
+  keyboard and Delete removes that marker, never the wire beneath it. The
+  marker owns pointer events in the editor and exposes an accessible button
+  target; packaged-app QA proved the wire selection no longer changes.
 - ✅ **Mirror/flip components** (LTspice Ctrl+E) — `mirrored` flag on
   `SchematicComponent` (flip across the vertical axis, applied BEFORE rotation to
   match LTspice `M*`); `transformPoint` in `schematic/pins.ts` drives connectivity,
@@ -377,7 +386,11 @@ Status legend: ✅ done · 🟡 partial · ⬜ not started
   marquee geometry stays synchronous through pointer-up, and document selection
   commits outside React state updaters. Selected symbols/wires and the drag box
   use high-contrast neutral weight/halo treatment instead of a nearly invisible
-  82/18 neutral mix. 10 store tests.
+  82/18 neutral mix. **Complete mixed-move follow-up (2026-07-15):** dragging a
+  marquee selection now translates explicitly selected standalone wires, net
+  labels, and probes with its components in one undo step. A selected wire can
+  start that group drag, and the pointer-down grid point is the anchor so the
+  circuit does not jump when grabbed away from a symbol center. 10 store tests.
 - ✅ **Drag wires / move with rubber-banding** — `moveGroup` rubber-bands wire
   endpoints attached to moved pins with orthogonal elbow insertion (store-level,
   shared by single and group moves).
@@ -1247,7 +1260,11 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   Direct cloud ASC proposals must also pass Tau's electrical graph warnings, so
   dangling generated pins are repaired/rejected before a misleading Create card
   can reach disk. The packaged app now uses a circuit-trace Tau icon at every
-  platform asset size instead of the placeholder mark.
+  platform asset size instead of the placeholder mark. **Connection watchdog
+  follow-up (2026-07-15):** if Sonnet emits no stream event within 45 seconds,
+  Tau aborts the request and surfaces a retryable connection error instead of
+  leaving the user in a five-minute fake-infinite “Connecting” state; once any
+  real event arrives, long design/validation work remains allowed and stoppable.
 - 🟡 Component picker matching LTspice (F2 part browser over the full library)
   — **F2 now opens the searchable part palette** (symbols, categories, hotkeys,
   ↑↓/↵ placement); remaining: coverage audit vs. LTspice's full library tree.

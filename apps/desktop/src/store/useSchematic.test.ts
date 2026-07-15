@@ -911,6 +911,42 @@ describe("moveGroup (group move with wire rubber-banding)", () => {
     expect(after.find((c) => c.id === comps[0].id)).toMatchObject({ x: 96, y: 16 });
     expect(after.find((c) => c.id === comps[1].id)).toMatchObject({ x: 224, y: 16 });
   });
+
+  it("translates marquee-selected wires, labels, and probes with the component group", () => {
+    useSchematic.setState({
+      components: [{ id: "r1", kind: "resistor", x: 0, y: 0, rotation: 0, value: "1k", label: "R1" }],
+      wires: [{ id: "w1", points: [{ x: 32, y: 0 }, { x: 96, y: 0 }] }],
+      netLabels: [{ id: "l1", x: 64, y: 0, text: "OUT" }],
+      probes: [{ id: "p1", x: 80, y: 0, color: "var(--trace-red)" }],
+    });
+    useSchematic.getState().selectMixed({
+      componentIds: ["r1"],
+      wireIds: ["w1"],
+      labelIds: ["l1"],
+      probeIds: ["p1"],
+    });
+    const sourceWires = structuredClone(useSchematic.getState().wires);
+
+    useSchematic.getState().beginChange();
+    useSchematic.getState().moveGroup(
+      new Map([["r1", { x: 0, y: 0 }]]),
+      64,
+      32,
+      new Map([["r1", [{ x: 32, y: 0 }]]]),
+      sourceWires,
+      new Map([["l1", { x: 64, y: 0 }]]),
+      new Map([["p1", { x: 80, y: 0 }]]),
+    );
+
+    const moved = useSchematic.getState();
+    expect(moved.components[0]).toMatchObject({ x: 64, y: 32 });
+    expect(moved.wires[0].points).toEqual([{ x: 96, y: 32 }, { x: 160, y: 32 }]);
+    expect(moved.netLabels[0]).toMatchObject({ x: 128, y: 32 });
+    expect(moved.probes[0]).toMatchObject({ x: 144, y: 32 });
+
+    useSchematic.getState().undo();
+    expect(useSchematic.getState().wires[0].points).toEqual([{ x: 32, y: 0 }, { x: 96, y: 0 }]);
+  });
 });
 
 describe("addProbe — one probe per net, net-identity dedup (§UX)", () => {

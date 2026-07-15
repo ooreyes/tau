@@ -89,9 +89,9 @@ describe("Canvas — simulator mutation boundary", () => {
     fireEvent.pointerDown(document.querySelector(".wire-group")!, { button: 0, clientX: 10, clientY: 20 });
     expect(useSchematic.getState().probes).toHaveLength(1);
     expect(useSchematic.getState().probes[0].componentId).toBeUndefined();
-    expect(document.querySelector(".wire-group.probed")).not.toBeNull();
-    expect((document.querySelector(".wire-group.probed") as HTMLElement | null)?.style.color)
-      .toMatch(/var\(--trace-/);
+    // Probe identity lives on the marker/waveform; schematic conductors stay
+    // neutral so a trace color never looks like electrical wire state.
+    expect(document.querySelector(".wire-group.probed")).toBeNull();
 
     fireEvent.keyDown(screen.getByRole("button", { name: "Remove voltage probe" }), { key: "Enter" });
     expect(useSchematic.getState().probes).toEqual([]);
@@ -300,6 +300,71 @@ describe("Canvas — schematic selection chrome", () => {
     expect(useSchematic.getState().selectedId).toBe("r1");
     expect(useSchematic.getState().selectedIds).toEqual(["r1"]);
     expect(document.querySelector(".component.selected")).not.toBeNull();
+  });
+
+  it("selects and deletes an individual probe without selecting or deleting its wire", () => {
+    useSchematic.setState({
+      probes: [{ id: "p1", x: 10, y: 20, color: "var(--trace-red)", netId: "N001" }],
+      tool: { mode: "select" },
+    });
+    render(<Canvas interactive />);
+
+    const marker = screen.getByRole("button", { name: "Select voltage probe" });
+    expect(marker.classList.contains("actionable")).toBe(true);
+    // Accessibility activation emits click without pointerdown; it must still
+    // select the marker instead of falling through to the conductor.
+    fireEvent.click(marker);
+    expect(useSchematic.getState().selectedProbeIds).toEqual(["p1"]);
+    expect(useSchematic.getState().selectedWireIds).toEqual([]);
+
+    useSchematic.getState().deleteSelected();
+    expect(useSchematic.getState().probes).toEqual([]);
+    expect(useSchematic.getState().wires.map((wire) => wire.id)).toEqual(["w1"]);
+  });
+
+  it("drags every object in a mixed marquee selection as one circuit", () => {
+    useSchematic.setState({
+      netLabels: [{ id: "l1", x: 10, y: 20, text: "OUT" }],
+      probes: [{ id: "p1", x: 10, y: 20, color: "var(--trace-red)" }],
+      tool: { mode: "select" },
+    });
+    useSchematic.getState().selectMixed({
+      componentIds: ["r1"], wireIds: ["w1"], labelIds: ["l1"], probeIds: ["p1"],
+    });
+    render(<Canvas interactive />);
+    const canvas = document.querySelector("svg.canvas")!;
+
+    fireEvent.pointerDown(canvas, { button: 0, clientX: 0, clientY: 0, pointerId: 8 });
+    fireEvent.pointerMove(canvas, { clientX: 32, clientY: 32, pointerId: 8 });
+    fireEvent.pointerUp(canvas, { button: 0, clientX: 32, clientY: 32, pointerId: 8 });
+
+    const moved = useSchematic.getState();
+    expect(moved.components[0]).toMatchObject({ x: 32, y: 32 });
+    expect(moved.wires[0].points).toEqual([{ x: 32, y: 52 }, { x: 52, y: 52 }]);
+    expect(moved.netLabels[0]).toMatchObject({ x: 42, y: 52 });
+    expect(moved.probes[0]).toMatchObject({ x: 42, y: 52 });
+  });
+
+  it("finishes a wire on a component pin while keeping the Wire tool active", () => {
+    useSchematic.setState({
+      components: [
+        { id: "r1", kind: "resistor", x: 0, y: 0, rotation: 0, value: "1k", label: "R1" },
+        { id: "r2", kind: "resistor", x: 128, y: 0, rotation: 0, value: "1k", label: "R2" },
+      ],
+      wires: [],
+      tool: { mode: "wire" },
+    });
+    render(<Canvas interactive />);
+    const canvas = document.querySelector("svg.canvas")!;
+
+    fireEvent.pointerDown(canvas, { button: 0, clientX: 32, clientY: 0 });
+    fireEvent.pointerMove(canvas, { clientX: 96, clientY: 0 });
+    fireEvent.pointerDown(canvas, { button: 0, clientX: 96, clientY: 0 });
+
+    expect(useSchematic.getState().wires).toHaveLength(1);
+    expect(useSchematic.getState().wires[0].points).toEqual([{ x: 32, y: 0 }, { x: 96, y: 0 }]);
+    expect(useSchematic.getState().tool).toEqual({ mode: "wire" });
+    expect(document.querySelector(".wire.preview")).toBeNull();
   });
 
   it("keeps deletion out of the drawing overlay", () => {

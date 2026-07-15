@@ -8,15 +8,48 @@
      `git log --oneline -8`, recover/finish/revert that unit FIRST, then go on.
      ─────────────────────────────────────────────────────────────────────── -->
 ## ⏱ HEARTBEAT
-- **Headline metric:** 1786 reviewed-tree tests green · corpus 82/82 import · 82/82 op-converge · 79/82 warning-clean
-- **Run started (UTC):** 2026-07-15T15:34Z
+- **Headline metric:** 1795 reviewed-tree tests green · corpus 82/82 import · 82/82 op-converge · 79/82 warning-clean
+- **Run started (UTC):** 2026-07-15T16:09Z
 - **Synced to origin:** auto/ltspice-parity @ HEAD.
-- **Claimed unit:** Persistent assistant credentials/history + electrically safe AI proposals + Tau app icon.
+- **Claimed unit:** Persistent wiring, direct probe selection, complete marquee movement, and Sonnet connect deadline.
 - **Status:** DONE
-- **Last completed sub-step:** Fresh release Tau.app launched with the new icon assets and exposed the
-  Keychain-protected Anthropic setting; all desktop/Rust gates passed.
-- **Plan:** continue DoD leftovers; keep cloud live tests opt-in to protect credits.
-- **Next step:** re-enter the Anthropic key once; subsequent launches restore it from the OS keychain.
+- **Last completed sub-step:** Rebuilt Tau.app and proved a packaged editor probe click selects only the marker;
+  conductors remain neutral and the Delete-selection action becomes available.
+- **Plan:** Landed and verified.
+- **Next step:** Continue the highest-leverage unfinished Definition-of-Done item.
+
+---
+
+## 2026-07-15T16:22Z — auto/ltspice-parity — Predictable wiring + complete circuit moves
+
+### What I did
+- Made pin/wire landings finish the active wire run while keeping Wire active;
+  empty clicks remain waypoints and a repeated start-point click cancels the run.
+- Made probe markers real editor hit targets selectable by pointer/keyboard and
+  deletable independently; removed probe-driven recoloring of wires/net labels.
+- Extended marquee moves across components, explicit wires, labels, and probes,
+  using the actual grab point to prevent the circuit from jumping on drag start.
+- Added a 45-second no-first-event Sonnet watchdog with abort and retryable error;
+  active streams may still reason/build beyond the connection deadline.
+
+### Files
+- `apps/desktop/src/components/Canvas.tsx`, `apps/desktop/src/App.css`
+- `apps/desktop/src/store/useSchematic.ts`, `apps/desktop/src/lib/assistant.ts`
+- Canvas/store/assistant regression tests and `FEATURE_PARITY.md`
+
+### Tests and QA
+- Desktop typecheck and full Vitest: 1795 passed / 6 skipped.
+- Focused editor/assistant/store suite: 117 passed.
+- Desktop production build and fresh `tauri build --bundles app`: pass.
+- Packaged Tau.app: direct probe activation enables Delete selection without
+  selecting the underlying wire; net conductors render neutral.
+
+### Parity items
+- §2 persistent wiring, direct probe manipulation, and complete mixed marquee
+  movement advanced; §8 cloud assistant failure recovery advanced.
+
+### Next step
+- Continue the highest-leverage unfinished Definition-of-Done item.
 
 ---
 

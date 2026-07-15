@@ -595,16 +595,6 @@ body {
   filter: drop-shadow(0 0 2.5px var(--accent-glow));
 }
 
-/* Probed net: wire takes the same --trace-* token as its waveform / probe. */
-.wire-group.probed .wire {
-  stroke: currentColor;
-  stroke-width: 2.25;
-}
-.wire-group.probed.selected .wire {
-  stroke: currentColor;
-  filter: drop-shadow(0 0 2.5px color-mix(in srgb, currentColor 55%, transparent));
-}
-
 /* Simulator mode: clicking a wire probes its net (LTspice probe-in-place). */
 .wire-group.probe-ready {
   cursor: crosshair;
@@ -2943,12 +2933,12 @@ body {
 .probe-marker {
   pointer-events: none;
 }
-.sim-schematic-canvas .probe-marker.simulator-removable {
+.probe-marker.actionable {
   pointer-events: auto;
   cursor: pointer;
 }
 
-.sim-schematic-canvas .probe-marker.simulator-removable:focus-visible .probe-ring {
+.probe-marker.actionable:focus-visible .probe-ring {
   stroke-width: 2.5;
   opacity: 1;
 }

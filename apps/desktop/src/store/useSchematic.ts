@@ -100,6 +100,8 @@ interface SchematicState extends Doc {
     dy: number,
     sourcePins: Map<string, { x: number; y: number }[]>,
     sourceWires: import("../schematic/types").SchematicWire[],
+    labelOrigins?: Map<string, { x: number; y: number }>,
+    probeOrigins?: Map<string, { x: number; y: number }>,
   ) => void;
 
   /** Meter probes (ephemeral): each pins to a world point and plots whatever net is there. */
@@ -462,7 +464,7 @@ export const useSchematic = create<SchematicState>()((set) => {
         };
       }),
 
-    moveGroup: (origins, dx, dy, sourcePins, sourceWires) =>
+    moveGroup: (origins, dx, dy, sourcePins, sourceWires, labelOrigins = new Map(), probeOrigins = new Map()) =>
       set((s) => {
         // Collect all pin world positions for components in the selection
         const allSourcePins: Point[] = [];
@@ -481,8 +483,14 @@ export const useSchematic = create<SchematicState>()((set) => {
         // Instead replicate the minimal logic here.
         const pinSet = new Set(allSourcePins.map((p) => `${p.x},${p.y}`));
         const isPinPoint = (pt: Point) => pinSet.has(`${pt.x},${pt.y}`);
+        const selectedWireIds = new Set(s.selectedWireIds);
         const updatedWires = sourceWires.map((wire) => {
           if (wire.points.length < 2) return wire;
+          // A marquee-selected wire is part of the object being translated,
+          // even when it has no component pin at either end.
+          if (selectedWireIds.has(wire.id)) {
+            return { ...wire, points: wire.points.map((p) => ({ x: p.x + dx, y: p.y + dy })) };
+          }
           const firstMoved = isPinPoint(wire.points[0]);
           const lastMoved = isPinPoint(wire.points[wire.points.length - 1]);
           if (!firstMoved && !lastMoved) return wire;
@@ -517,7 +525,20 @@ export const useSchematic = create<SchematicState>()((set) => {
             return { ...wire, points: cleanGroupRoute([...pts.slice(0, -1), elbow, target]) };
           }
         });
-        return { components: updatedComponents, wires: updatedWires };
+        const updatedLabels = s.netLabels.map((label) => {
+          const origin = labelOrigins.get(label.id);
+          return origin ? { ...label, x: origin.x + dx, y: origin.y + dy } : label;
+        });
+        const updatedProbes = s.probes.map((probe) => {
+          const origin = probeOrigins.get(probe.id);
+          return origin ? { ...probe, x: origin.x + dx, y: origin.y + dy } : probe;
+        });
+        return {
+          components: updatedComponents,
+          wires: updatedWires,
+          netLabels: updatedLabels,
+          probes: updatedProbes,
+        };
       }),
 
     startProbing: () => set({ tool: { mode: "probe" }, selectedId: null, selectedWireId: null, selectedWireIds: [], selectedLabelIds: [], selectedProbeIds: [], selectedIds: [] }),

@@ -73,6 +73,9 @@ interface DragState {
   groupSourcePins?: Map<string, Point[]>;
   /** For group-move: per-component world origins at drag start. */
   groupOrigins?: Map<string, Point>;
+  /** Selected topology-neutral anchors translated with the group. */
+  groupLabelOrigins?: Map<string, Point>;
+  groupProbeOrigins?: Map<string, Point>;
 }
 
 export function Canvas({
@@ -148,46 +151,6 @@ export function Canvas({
     return opAnnotations(op, extractCircuit(components, wires, netLabels));
   }, [interactive, op, components, wires, netLabels]);
 
-  // Probe color → every wire/label on that net, matching the waveform palette.
-  const probeColorByNetId = useMemo(() => {
-    const nets = extractCircuit(components, wires, netLabels).nets;
-    const colors = new Map<string, string>();
-    for (const probe of probes) {
-      if (probe.componentId) continue;
-      const netId = probe.netId ?? netAtPoint(nets, wires, { x: probe.x, y: probe.y })?.id;
-      if (!netId || colors.has(netId)) continue;
-      colors.set(netId, probe.color);
-    }
-    return colors;
-  }, [components, wires, netLabels, probes]);
-
-  const wireProbeColor = useMemo(() => {
-    if (probeColorByNetId.size === 0) return new Map<string, string>();
-    const nets = extractCircuit(components, wires, netLabels).nets;
-    const byWire = new Map<string, string>();
-    for (const wire of wires) {
-      const anchor = wire.points[0];
-      if (!anchor) continue;
-      const net = netAtPoint(nets, wires, anchor);
-      if (!net) continue;
-      const color = probeColorByNetId.get(net.id);
-      if (color) byWire.set(wire.id, color);
-    }
-    return byWire;
-  }, [components, wires, netLabels, probeColorByNetId]);
-
-  const labelProbeColor = useMemo(() => {
-    if (probeColorByNetId.size === 0) return new Map<string, string>();
-    const nets = extractCircuit(components, wires, netLabels).nets;
-    const byLabel = new Map<string, string>();
-    for (const label of netLabels) {
-      const net = netAtPoint(nets, wires, label);
-      if (!net) continue;
-      const color = probeColorByNetId.get(net.id);
-      if (color) byLabel.set(label.id, color);
-    }
-    return byLabel;
-  }, [components, wires, netLabels, probeColorByNetId]);
   const editDirty = useRef(false);
 
   // Map of world "x,y" -> component pins there, for attributing wire current flow.
@@ -481,12 +444,23 @@ export function Canvas({
     (clientX: number, clientY: number) => {
       if (tool.mode !== "wire") return;
       const end = snappedCursor(clientX, clientY);
-      if (wireDraft && !pointsEqual(wireDraft.start, end)) {
-        addWire(routeWireSmart(wireDraft.start, end, components, wires));
+      if (!wireDraft) {
+        setWireDraft({ start: end, cursor: end });
+        return;
       }
-      setWireDraft({ start: end, cursor: end });
+      if (pointsEqual(wireDraft.start, end)) {
+        setWireDraft(null);
+        return;
+      }
+      addWire(routeWireSmart(wireDraft.start, end, components, wires));
+      const landedOnCircuit = pinKeySet.has(`${end.x},${end.y}`)
+        || wireSegments(wires).some((segment) => pointOnWireSegment(end, segment));
+      // Finishing on a pin/wire closes this run but leaves the Wire tool active
+      // for the next wire. Empty-grid clicks are explicit waypoints and keep
+      // the current run alive.
+      setWireDraft(landedOnCircuit ? null : { start: end, cursor: end });
     },
-    [tool, snappedCursor, wireDraft, addWire, components, wires],
+    [tool, snappedCursor, wireDraft, addWire, components, wires, pinKeySet],
   );
 
   /** World-coord bounds of a rubber-band box. */
@@ -584,6 +558,45 @@ export function Canvas({
     return true;
   };
 
+  const beginSelectedGroupDrag = (event: ReactPointerEvent<SVGElement>, anchor: Point, id?: string) => {
+    const snapshotComps = components.filter((component) => selectedIds.includes(component.id));
+    const groupSourcePins = new Map<string, Point[]>();
+    for (const component of snapshotComps) {
+      groupSourcePins.set(component.id, getComponentPins(component).map(({ x, y }) => ({ x, y })));
+    }
+    const groupOrigins = new Map<string, Point>(
+      snapshotComps.map((component) => [component.id, { x: component.x, y: component.y }]),
+    );
+    const groupLabelOrigins = new Map<string, Point>(
+      netLabels
+        .filter((label) => selectedLabelIds.includes(label.id))
+        .map((label) => [label.id, { x: label.x, y: label.y }]),
+    );
+    const groupProbeOrigins = new Map<string, Point>(
+      probes
+        .filter((probe) => selectedProbeIds.includes(probe.id))
+        .map((probe) => [probe.id, { x: probe.x, y: probe.y }]),
+    );
+    drag.current = {
+      mode: "group-move",
+      id,
+      groupIds: selectedIds.slice(),
+      lastX: event.clientX,
+      lastY: event.clientY,
+      moved: false,
+      // Anchor at the actual pointer-down grid point, not a component center;
+      // otherwise the group jumps on the first move when the user grabbed an edge.
+      origin: { x: snap(anchor.x), y: snap(anchor.y) },
+      groupSourcePins,
+      groupOrigins,
+      groupLabelOrigins,
+      groupProbeOrigins,
+      sourceWires: wires.map((wire) => ({ ...wire, points: wire.points.map((point) => ({ ...point })) })),
+    };
+    setMovingParts(true);
+    svgRef.current?.setPointerCapture(event.pointerId);
+  };
+
   const onBackgroundPointerDown = (e: ReactPointerEvent<SVGElement>) => {
     // Middle-mouse button always pans (button === 1).
     if (e.button === 1) {
@@ -642,29 +655,10 @@ export function Canvas({
       }
       // If the clicked component is already in the multi-selection, start a
       // group-move of the whole selection. Otherwise, start a single-component move.
-      const isInGroup = selectedIds.includes(hit.id) && selectedIds.length > 1;
+      const selectedObjectCount = selectedIds.length + selectedWireIds.length + selectedLabelIds.length + selectedProbeIds.length;
+      const isInGroup = selectedIds.includes(hit.id) && selectedObjectCount > 1;
       if (isInGroup) {
-        // Group move: snapshot pin positions for all components in the selection.
-        const snapshotComps = components.filter((c) => selectedIds.includes(c.id));
-        const groupSourcePins = new Map<string, Point[]>();
-        for (const c of snapshotComps) {
-          groupSourcePins.set(c.id, getComponentPins(c).map(({ x, y }) => ({ x, y })));
-        }
-        const groupOrigins = new Map<string, Point>(snapshotComps.map((c) => [c.id, { x: c.x, y: c.y }]));
-        const frozenWires = wires.map((w) => ({ ...w, points: w.points.map((p) => ({ ...p })) }));
-        drag.current = {
-          mode: "group-move",
-          id: hit.id,
-          groupIds: selectedIds.slice(),
-          lastX: e.clientX,
-          lastY: e.clientY,
-          moved: false,
-          origin: { x: hit.x, y: hit.y },
-          groupSourcePins,
-          groupOrigins,
-          sourceWires: frozenWires,
-        };
-        setMovingParts(true);
+        beginSelectedGroupDrag(e, world, hit.id);
       } else {
         select(hit.id);
         drag.current = {
@@ -716,6 +710,10 @@ export function Canvas({
     }
     if (tool.mode !== "select") return; // let place/wire/pan handle via bubbling
     e.stopPropagation();
+    if (selectedWireIds.includes(wire.id)) {
+      beginSelectedGroupDrag(e, screenToWorld(e.clientX, e.clientY));
+      return;
+    }
     selectWire(wire.id);
   };
 
@@ -783,16 +781,23 @@ export function Canvas({
       const w = screenToWorld(e.clientX, e.clientY);
       // The pointer started over the anchor component (d.origin). Compute the
       // snapped-grid offset from that origin to where the pointer is now.
-      const anchorOrigin = d.groupOrigins.get(d.id ?? "") ?? d.origin;
-      const dx = snap(w.x) - anchorOrigin.x;
-      const dy = snap(w.y) - anchorOrigin.y;
+      const dx = snap(w.x) - d.origin.x;
+      const dy = snap(w.y) - d.origin.y;
       if (!Number.isFinite(dx) || !Number.isFinite(dy)) return;
       if (dx === 0 && dy === 0) return;
       if (!d.moved) {
         beginChange();
         d.moved = true;
       }
-      moveGroup(d.groupOrigins, dx, dy, d.groupSourcePins, d.sourceWires);
+      moveGroup(
+        d.groupOrigins,
+        dx,
+        dy,
+        d.groupSourcePins,
+        d.sourceWires,
+        d.groupLabelOrigins,
+        d.groupProbeOrigins,
+      );
       // Live re-route so group moves don't leave wires cutting through bodies.
       const state = useSchematic.getState();
       const movedComps = state.components.filter((c) => d.groupIds!.includes(c.id));
@@ -848,6 +853,8 @@ export function Canvas({
     drag.current.sourceWires = undefined;
     drag.current.groupSourcePins = undefined;
     drag.current.groupOrigins = undefined;
+    drag.current.groupLabelOrigins = undefined;
+    drag.current.groupProbeOrigins = undefined;
     const el = svgRef.current;
     if (el?.hasPointerCapture(e.pointerId)) el.releasePointerCapture(e.pointerId);
   };
@@ -1053,7 +1060,6 @@ export function Canvas({
               wire={wire}
               selected={wire.id === selectedWireId || selectedWireIds.includes(wire.id)}
               probeReady={!interactive && (probing || labeling)}
-              probeColor={wireProbeColor.get(wire.id)}
               hops={wireHops.get(wire.id)}
               onPointerDown={(e) => onWirePointerDown(e, wire)}
             />
@@ -1105,22 +1111,38 @@ export function Canvas({
             const px = host ? host.x : p.x;
             const py = host ? host.y : p.y;
             const probeSelected = selectedProbeIds.includes(p.id);
+            const probeCanSelect = interactive && tool.mode === "select";
+            const probeCanRemove = !interactive || (interactive && tool.mode === "probe");
             return (
               <g
                 key={p.id}
-                className={`probe-marker${p.componentId ? " current" : ""}${probeSelected ? " selected" : ""}${!interactive ? " simulator-removable" : ""}`}
+                className={`probe-marker${p.componentId ? " current" : ""}${probeSelected ? " selected" : ""}${probeCanSelect || probeCanRemove ? " actionable" : ""}`}
                 style={{ color: p.color }}
-                role={!interactive ? "button" : undefined}
-                tabIndex={!interactive ? 0 : undefined}
-                aria-label={!interactive ? `Remove ${p.componentId ? "current" : "voltage"} probe` : undefined}
-                onPointerDown={!interactive ? (event) => {
+                role={probeCanSelect || probeCanRemove ? "button" : undefined}
+                tabIndex={probeCanSelect || probeCanRemove ? 0 : undefined}
+                aria-label={probeCanRemove
+                  ? `Remove ${p.componentId ? "current" : "voltage"} probe`
+                  : probeCanSelect ? `Select ${p.componentId ? "current" : "voltage"} probe` : undefined}
+                onPointerDown={probeCanSelect || probeCanRemove ? (event) => {
                   event.stopPropagation();
-                  removeProbe(p.id);
+                  if (probeCanRemove) removeProbe(p.id);
+                  else selectMixed({ componentIds: [], wireIds: [], labelIds: [], probeIds: [p.id] });
                 } : undefined}
-                onKeyDown={!interactive ? (event) => {
+                onClick={probeCanSelect || probeCanRemove ? (event) => {
+                  // Accessibility activation may dispatch click without a
+                  // pointerdown. Keep it from falling through to the wire;
+                  // pointer activation already completed the same idempotent
+                  // selection (or unmounted the removed marker).
+                  event.stopPropagation();
+                  if (probeCanSelect) {
+                    selectMixed({ componentIds: [], wireIds: [], labelIds: [], probeIds: [p.id] });
+                  }
+                } : undefined}
+                onKeyDown={probeCanSelect || probeCanRemove ? (event) => {
                   if (event.key === "Enter" || event.key === " ") {
                     event.preventDefault();
-                    removeProbe(p.id);
+                    if (probeCanRemove) removeProbe(p.id);
+                    else selectMixed({ componentIds: [], wireIds: [], labelIds: [], probeIds: [p.id] });
                   }
                 } : undefined}
               >
@@ -1148,13 +1170,11 @@ export function Canvas({
               // keeps the net connection legible instead of a label reading
               // as floating and unattached.
               const showLeader = Math.hypot(offset.dx, offset.dy) > 24;
-              const probeColor = labelProbeColor.get(l.id);
               return (
                 <g key={l.id}>
                   {showLeader && <line className="net-label-leader" x1={l.x} y1={l.y} x2={tx} y2={ty} />}
                   <text
-                    className={`net-label-text${selectedLabelIds.includes(l.id) ? " selected" : ""}${probeColor ? " probed" : ""}`}
-                    style={probeColor ? { color: probeColor, fill: "currentColor" } : undefined}
+                    className={`net-label-text${selectedLabelIds.includes(l.id) ? " selected" : ""}`}
                     x={tx}
                     y={ty}
                     role={labelsInteractive ? "button" : undefined}
@@ -1379,7 +1399,6 @@ function WireView({
   wire,
   selected,
   probeReady,
-  probeColor,
   hops,
   onPointerDown,
 }: {
@@ -1387,8 +1406,6 @@ function WireView({
   selected: boolean;
   /** Simulator mode: clicking probes the net, so advertise it with the probe cursor. */
   probeReady: boolean;
-  /** Palette token for a probed net — same CSS var as the waveform trace. */
-  probeColor?: string;
   /** Unconnected-crossing x positions per horizontal segment index — drawn
    *  as hop-over arcs so a crossing never reads as a connection. */
   hops?: ReadonlyMap<number, readonly number[]>;
@@ -1398,8 +1415,7 @@ function WireView({
   const resistive = Boolean(wire.resistance?.trim() && wire.resistance.trim() !== "0");
   return (
     <g
-      className={`wire-group${selected ? " selected" : ""}${probeReady ? " probe-ready" : ""}${probeColor ? " probed" : ""}`}
-      style={probeColor ? { color: probeColor } : undefined}
+      className={`wire-group${selected ? " selected" : ""}${probeReady ? " probe-ready" : ""}`}
       onPointerDown={onPointerDown}
     >
       {/* Wide invisible stroke makes the thin wire easy to click. */}

@@ -27,6 +27,7 @@ export const ASSISTANT_MODEL = "claude-sonnet-5";
 export const ASSISTANT_MODEL_LABEL = "Sonnet 5";
 
 const MAX_TOKENS = 16_000;
+export const ASSISTANT_CONNECT_TIMEOUT_MS = 45_000;
 
 // Persona + response rules: static across the whole session, so this is the
 // FIRST system block and carries the cache breakpoint. The circuit itself
@@ -190,6 +191,7 @@ export function streamAssistantReply(
   const client = new Anthropic({ apiKey, dangerouslyAllowBrowser: true });
   let userAborted = false;
   let activeStream: { abort: () => void } | null = null;
+  let clearActiveDeadline = () => {};
 
   const system = [
     { type: "text" as const, text: SYSTEM_PROMPT, cache_control: { type: "ephemeral" as const } },
@@ -220,20 +222,46 @@ export function streamAssistantReply(
     });
     activeStream = stream;
 
-    stream.on("thinking", () => handlers.onProgress?.("reasoning"));
+    let requestSettled = false;
+    let connectTimer: ReturnType<typeof setTimeout> | null = globalThis.setTimeout(() => {
+      connectTimer = null;
+      if (userAborted || requestSettled || activeStream !== stream) return;
+      requestSettled = true;
+      stream.abort();
+      activeStream = null;
+      handlers.onError({
+        kind: "network",
+        message: "Sonnet didn't start responding within 45 seconds. Tau stopped the request — retry when your connection is stable.",
+      });
+    }, ASSISTANT_CONNECT_TIMEOUT_MS);
+    const clearDeadline = () => {
+      if (connectTimer) globalThis.clearTimeout(connectTimer);
+      connectTimer = null;
+    };
+    clearActiveDeadline = clearDeadline;
+    const markConnected = () => clearDeadline();
+
+    stream.on("thinking", () => {
+      markConnected();
+      handlers.onProgress?.("reasoning");
+    });
     stream.on("streamEvent", (event) => {
+      markConnected();
       if (event.type === "content_block_start" && event.content_block.type === "tool_use") {
         handlers.onProgress?.("drafting");
       }
     });
     stream.on("text", (_delta, snapshot) => {
+      markConnected();
       handlers.onProgress?.("responding");
       handlers.onDelta(snapshot);
     });
     stream
       .finalMessage()
       .then((message) => {
-        if (userAborted) return;
+        if (userAborted || requestSettled) return;
+        requestSettled = true;
+        clearDeadline();
         const operation = findAssistantOperation(message.content);
         if (operation) {
           if (operationsRemaining <= 0) {
@@ -303,7 +331,9 @@ export function streamAssistantReply(
         });
       })
       .catch((error: unknown) => {
-        if (userAborted) return; // Stop button — not a real error, nothing to surface.
+        if (userAborted || requestSettled) return; // Stop/timeout already handled.
+        requestSettled = true;
+        clearDeadline();
         activeStream = null;
         handlers.onError(classifyAssistantError(error));
       });
@@ -315,6 +345,7 @@ export function streamAssistantReply(
   return {
     abort: () => {
       userAborted = true;
+      clearActiveDeadline();
       activeStream?.abort();
       activeStream = null;
     },

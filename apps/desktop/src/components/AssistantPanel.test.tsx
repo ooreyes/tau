@@ -90,7 +90,11 @@ vi.mock("../lib/localAiRuntime", async (importOriginal) => ({
 }));
 
 import { AssistantPanel, type AssistantPanelProps } from "./AssistantPanel";
-import { saveAssistantApiKey } from "../lib/assistant";
+import {
+  ASSISTANT_CONNECT_TIMEOUT_MS,
+  saveAssistantApiKey,
+  streamAssistantReply,
+} from "../lib/assistant";
 import { saveAssistantPreferences } from "../lib/assistantPreferences";
 import { EMPTY_SCOPE } from "../simulation/paramScope";
 import type { AnalysisResult } from "../simulation/linearTransient";
@@ -146,6 +150,7 @@ Object.defineProperty(globalThis, "localStorage", {
 
 afterEach(() => {
   cleanup();
+  vi.useRealTimers();
   vi.unstubAllGlobals();
 });
 beforeEach(() => {
@@ -221,6 +226,23 @@ function baseProps(overrides: Partial<AssistantPanelProps> = {}): AssistantPanel
 }
 
 describe("AssistantPanel", () => {
+  it("stops a cloud request that never starts responding instead of hanging for minutes", () => {
+    vi.useFakeTimers();
+    const onError = vi.fn();
+    streamAssistantReply("test-key", "Circuit context", [{ role: "user", content: "Build an amplifier" }], {
+      onDelta: vi.fn(),
+      onDone: vi.fn(),
+      onError,
+    });
+
+    vi.advanceTimersByTime(ASSISTANT_CONNECT_TIMEOUT_MS);
+
+    expect(streams[0].abort).toHaveBeenCalledTimes(1);
+    expect(onError).toHaveBeenCalledWith(expect.objectContaining({
+      kind: "network",
+      message: expect.stringMatching(/45 seconds/i),
+    }));
+  });
   it("shows the no-API-key empty state and never renders the composer without a key", () => {
     const onOpenSettings = vi.fn();
     render(<AssistantPanel {...baseProps({ onOpenSettings })} />);
