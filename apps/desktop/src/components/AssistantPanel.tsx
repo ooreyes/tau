@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent } from "react";
 import { nanoid } from "nanoid";
-import { Check, FilePlus2, RefreshCw, RotateCcw, Sparkles, Square, X } from "lucide-react";
+import { Check, FilePlus2, LoaderCircle, RefreshCw, RotateCcw, Sparkles, Square, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
@@ -22,6 +22,7 @@ import {
   useAssistantApiKey,
   type AssistantChatMessage,
   type AssistantError,
+  type AssistantProgressPhase,
   type AssistantStreamHandle,
 } from "../lib/assistant";
 import { useAssistantPreferences } from "../lib/assistantPreferences";
@@ -72,6 +73,20 @@ interface ChatMessage {
 }
 
 type AssistantActionState = "idle" | "working" | "done";
+
+const PROGRESS_LABELS: Record<AssistantProgressPhase, string> = {
+  connecting: "Connecting to Sonnet 5",
+  reasoning: "Designing the circuit",
+  drafting: "Writing the LTspice schematic",
+  validating: "Checking parts, wires, and ASC",
+  repairing: "Fixing a validation issue",
+  responding: "Preparing the response",
+};
+
+function elapsedLabel(seconds: number): string {
+  if (seconds < 60) return `${seconds}s`;
+  return `${Math.floor(seconds / 60)}m ${String(seconds % 60).padStart(2, "0")}s`;
+}
 
 function localProviderError(error: unknown): AssistantError {
   if (error instanceof AssistantProviderError) {
@@ -138,11 +153,14 @@ export function AssistantPanel({
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
+  const [progressPhase, setProgressPhase] = useState<AssistantProgressPhase>("connecting");
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [error, setError] = useState<AssistantError | null>(null);
   const [actionStates, setActionStates] = useState<Record<string, AssistantActionState>>({});
   const streamRef = useRef<AssistantStreamHandle | null>(null);
   const localAbortRef = useRef<AbortController | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
+  const requestStartedAtRef = useRef(0);
 
   // First-run local AI onboarding: proactively surface setup instead of
   // letting the first send() fail. Only tracked for the local-mlx provider —
@@ -214,6 +232,14 @@ export function AssistantPanel({
     if (el) el.scrollTop = el.scrollHeight;
   }, [messages, streaming]);
 
+  useEffect(() => {
+    if (!streaming) return;
+    const update = () => setElapsedSeconds(Math.floor((Date.now() - requestStartedAtRef.current) / 1000));
+    update();
+    const timer = globalThis.setInterval(update, 1000);
+    return () => globalThis.clearInterval(timer);
+  }, [streaming]);
+
   // Neither provider request may outlive its panel. Anthropic owns a stream
   // handle; the local OpenAI-compatible request uses the platform-standard
   // AbortController passed through LocalMlxAssistant.complete().
@@ -233,6 +259,9 @@ export function AssistantPanel({
 
     setMessages((list) => [...list, userMessage, assistantMessage]);
     setInput("");
+    requestStartedAtRef.current = Date.now();
+    setElapsedSeconds(0);
+    setProgressPhase(preferences.provider === "anthropic" ? "connecting" : "reasoning");
     setStreaming(true);
 
     const { text: contextText, canApplyCurrent } = buildAssistantContext({
@@ -325,6 +354,7 @@ export function AssistantPanel({
         streamRef.current = null;
         failTurn(err);
       },
+      onProgress: setProgressPhase,
     }, { analysis, params }, { allowCurrentApply: canApplyCurrent });
   }, [messages, streaming, preferences.provider, apiKey, components, wires, netLabels, directives, params, analysis, componentRows, measurements, selectedId, localAssistant]);
 
@@ -516,7 +546,21 @@ export function AssistantPanel({
                     );
                   })}
                   {streaming && message.role === "assistant" && index === messages.length - 1 && (
-                    <span className="assistant-caret" aria-hidden="true" />
+                    <div className="assistant-progress" role="status" aria-live="polite">
+                      <div className="assistant-progress-head">
+                        <LoaderCircle size={15} strokeWidth={1.8} aria-hidden="true" />
+                        <div className="assistant-progress-copy">
+                          <strong>{preferences.provider === "anthropic" ? PROGRESS_LABELS[progressPhase] : "Planning on this Mac"}</strong>
+                          <span>
+                            {elapsedLabel(elapsedSeconds)}
+                            {elapsedSeconds >= 45 ? " · Complex builds can take a minute" : " · Working"}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="assistant-progress-track" aria-hidden="true">
+                        <span />
+                      </div>
+                    </div>
                   )}
                 </div>
               </div>

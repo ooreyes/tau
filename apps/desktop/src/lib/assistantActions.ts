@@ -131,6 +131,8 @@ export interface AssistantActionParseResult {
   actions: AssistantAscAction[];
   /** Deliberately kept out of the transcript; useful for a safe generic UI error. */
   rejected: string[];
+  /** Rejected mutation calls that can be returned to the model for one bounded repair pass. */
+  rejectedToolUses: Array<{ id: string; error: string }>;
 }
 
 interface ToolUseLike {
@@ -239,11 +241,14 @@ export function parseApplyCurrentAscAction(id: string, input: unknown): Assistan
 export function parseAssistantActions(content: readonly unknown[]): AssistantActionParseResult {
   const actions: AssistantAscAction[] = [];
   const rejected: string[] = [];
+  const rejectedToolUses: Array<{ id: string; error: string }> = [];
   for (const block of content) {
     const call = toolUse(block);
     if (!call || (call.name !== CREATE_ASC_TOOL_NAME && call.name !== APPLY_CURRENT_ASC_TOOL_NAME)) continue;
     if (actions.length > 0) {
-      rejected.push("Only one circuit change can be proposed in a turn.");
+      const error = "Only one circuit change can be proposed in a turn.";
+      rejected.push(error);
+      rejectedToolUses.push({ id: call.id, error });
       continue;
     }
     try {
@@ -251,8 +256,10 @@ export function parseAssistantActions(content: readonly unknown[]): AssistantAct
         ? parseCreateAscAction(call.id, call.input)
         : parseApplyCurrentAscAction(call.id, call.input));
     } catch (error) {
-      rejected.push(error instanceof Error ? error.message : "Invalid circuit proposal.");
+      const message = error instanceof Error ? error.message : "Invalid circuit proposal.";
+      rejected.push(message);
+      rejectedToolUses.push({ id: call.id, error: message });
     }
   }
-  return { actions, rejected };
+  return { actions, rejected, rejectedToolUses };
 }

@@ -5560,7 +5560,7 @@ button.bottom-panel-head:focus-visible {
 .assistant-action {
   margin-top: var(--sp-3);
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
   gap: var(--sp-2);
   padding: var(--sp-2);
@@ -5646,6 +5646,89 @@ button.bottom-panel-head:focus-visible {
 
 @media (prefers-reduced-motion: reduce) {
   .assistant-caret { animation: none; opacity: 0.6; }
+}
+
+.assistant-progress {
+  display: grid;
+  gap: var(--sp-2);
+  padding: var(--sp-3);
+  border: 1px solid var(--assistant-line);
+  border-radius: var(--r-md);
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--assistant) 11%, var(--panel-3)),
+    color-mix(in srgb, var(--assistant-alt) 6%, var(--panel-3))
+  );
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--cream) 5%, transparent);
+}
+
+.assistant-progress-head {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+.assistant-progress-head > svg {
+  color: color-mix(in srgb, var(--assistant-alt) 78%, var(--text));
+  animation: assistant-progress-spin 900ms linear infinite;
+}
+
+.assistant-progress-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.assistant-progress-copy strong,
+.assistant-progress-copy span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.assistant-progress-copy strong {
+  color: var(--text);
+  font: 600 var(--fs-label) var(--font-ui);
+}
+
+.assistant-progress-copy span {
+  color: var(--muted);
+  font: 500 var(--fs-caption) var(--font-mono);
+}
+
+.assistant-progress-track {
+  height: 3px;
+  overflow: hidden;
+  border-radius: var(--r-pill);
+  background: color-mix(in srgb, var(--assistant-line) 60%, transparent);
+}
+
+.assistant-progress-track span {
+  display: block;
+  width: 38%;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--assistant), var(--assistant-alt));
+  animation: assistant-progress-sweep 1.45s var(--ease-in-out) infinite;
+}
+
+@keyframes assistant-progress-spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes assistant-progress-sweep {
+  0% { transform: translateX(-115%); }
+  50% { transform: translateX(82%); }
+  100% { transform: translateX(265%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .assistant-progress-head > svg,
+  .assistant-progress-track span { animation: none; }
+  .assistant-progress-track span { width: 100%; opacity: 0.55; }
 }
 
 .assistant-error {

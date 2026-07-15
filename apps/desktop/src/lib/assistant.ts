@@ -98,9 +98,19 @@ export interface AssistantStreamHandlers {
    *  the caller can just assign it, no manual concatenation). */
   onDelta: (snapshot: string) => void;
   onDone: (reply: AssistantCompletedReply) => void;
+  /** Coarse, non-sensitive lifecycle only; never exposes hidden reasoning. */
+  onProgress?: (phase: AssistantProgressPhase) => void;
   /** Never called for a user-initiated abort() — see AssistantStreamHandle. */
   onError: (error: AssistantError) => void;
 }
+
+export type AssistantProgressPhase =
+  | "connecting"
+  | "reasoning"
+  | "drafting"
+  | "validating"
+  | "repairing"
+  | "responding";
 
 export interface AssistantStreamHandle {
   abort: () => void;
@@ -157,7 +167,11 @@ export function streamAssistantReply(
     ? [CREATE_ASC_TOOL, INSPECT_SIGNAL_TOOL]
     : [CREATE_ASC_TOOL, APPLY_CURRENT_ASC_TOOL, INSPECT_SIGNAL_TOOL];
 
-  const run = (messages: Anthropic.MessageParam[], operationsRemaining: number): void => {
+  const run = (
+    messages: Anthropic.MessageParam[],
+    operationsRemaining: number,
+    repairsRemaining: number,
+  ): void => {
     if (userAborted) return;
     const stream = client.messages.stream({
       model: ASSISTANT_MODEL,
@@ -170,7 +184,16 @@ export function streamAssistantReply(
     });
     activeStream = stream;
 
-    stream.on("text", (_delta, snapshot) => handlers.onDelta(snapshot));
+    stream.on("thinking", () => handlers.onProgress?.("reasoning"));
+    stream.on("streamEvent", (event) => {
+      if (event.type === "content_block_start" && event.content_block.type === "tool_use") {
+        handlers.onProgress?.("drafting");
+      }
+    });
+    stream.on("text", (_delta, snapshot) => {
+      handlers.onProgress?.("responding");
+      handlers.onDelta(snapshot);
+    });
     stream
       .finalMessage()
       .then((message) => {
@@ -203,16 +226,40 @@ export function streamAssistantReply(
               }],
             },
           ];
-          run(continuedMessages, operationsRemaining - 1);
+          run(continuedMessages, operationsRemaining - 1, repairsRemaining);
           return;
         }
 
         activeStream = null;
+        handlers.onProgress?.("validating");
         const text = message.content
           .filter((block): block is Anthropic.TextBlock => block.type === "text")
           .map((block) => block.text)
           .join("");
         const parsed = parseAssistantActions(message.content);
+        if (parsed.actions.length === 0 && parsed.rejectedToolUses.length > 0 && repairsRemaining > 0) {
+          const rejected = parsed.rejectedToolUses[0];
+          handlers.onDelta("");
+          handlers.onProgress?.("repairing");
+          const repairMessages: Anthropic.MessageParam[] = [
+            ...messages,
+            {
+              role: "assistant",
+              content: message.content as Anthropic.ContentBlockParam[],
+            },
+            {
+              role: "user",
+              content: [{
+                type: "tool_result",
+                tool_use_id: rejected.id,
+                content: `Tau rejected this proposal: ${rejected.error}. Return a corrected complete proposal now.`,
+                is_error: true,
+              }],
+            },
+          ];
+          run(repairMessages, operationsRemaining, repairsRemaining - 1);
+          return;
+        }
         handlers.onDone({
           text,
           actions: parsed.actions,
@@ -226,7 +273,8 @@ export function streamAssistantReply(
       });
   };
 
-  run(initialMessages, 4);
+  handlers.onProgress?.("connecting");
+  run(initialMessages, 4, 1);
 
   return {
     abort: () => {

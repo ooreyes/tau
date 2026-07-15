@@ -9,13 +9,14 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## ⏱ HEARTBEAT
 - **Headline metric:** 1776 reviewed-tree tests green · corpus 82/82 import · 82/82 op-converge · 79/82 warning-clean
-- **Run started (UTC):** 2026-07-15T14:55Z
-- **Synced to origin:** auto/ltspice-parity @ HEAD (push pending this unit).
-- **Claimed unit:** Assistant Anthropic default → Claude Sonnet 5 (`claude-sonnet-5`).
-- **Status:** DONE
-- **Last completed sub-step:** Swapped ASSISTANT_MODEL from Opus 4.8 to Sonnet 5;
-  Settings + panel label updated; typecheck + assistant tests green.
-- **Plan:** keep local MLX as option; Anthropic path uses Sonnet 5.
+- **Run started (UTC):** 2026-07-15T15:14Z
+- **Synced to origin:** auto/ltspice-parity @ HEAD.
+- **Claimed unit:** Assistant visible progress + bounded Anthropic proposal repair.
+- **Status:** IN PROGRESS
+- **Last completed sub-step:** Reproduced the hidden-thinking wait and invalid Class-D
+  proposal in the packaged Sonnet 5 app.
+- **Plan:** surface honest phases/elapsed time/Stop; auto-repair one rejected ASC
+  proposal; test in Vitest, Chrome, and the packaged native app.
 - **Next step:** Omar signs/notarizes when ready; continue corpus/DoD leftovers.
 
 ---

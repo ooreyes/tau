@@ -79,7 +79,7 @@ describe("assistant ASC action boundary", () => {
 
   it("never treats ordinary assistant prose or a fenced source block as a file action", () => {
     const prose = parseAssistantActions([{ type: "text", text: `Here is the file:\n\`\`\`\n${VALID_ASC}\`\`\`` }]);
-    expect(prose).toEqual({ actions: [], rejected: [] });
+    expect(prose).toEqual({ actions: [], rejected: [], rejectedToolUses: [] });
 
     const fenced = parseAssistantActions([{
       type: "tool_use",

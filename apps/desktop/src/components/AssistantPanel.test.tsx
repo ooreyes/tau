@@ -17,6 +17,8 @@ const { streams, streamRequests, MockAuthenticationError, MockRateLimitError, Mo
       finalMessage: () => Promise<{ content: Array<Record<string, unknown>> }>;
       abort: ReturnType<typeof vi.fn>;
       emitText: (delta: string, snapshot: string) => void;
+      emitThinking: () => void;
+      emitStreamEvent: (event: Record<string, unknown>) => void;
       resolve: (text: string) => void;
       resolveContent: (content: Array<Record<string, unknown>>) => void;
       reject: (error: unknown) => void;
@@ -49,6 +51,8 @@ vi.mock("@anthropic-ai/sdk", () => {
           finalMessage: () => finalPromise,
           abort: vi.fn(),
           emitText: (delta: string, snapshot: string) => listeners.text?.forEach((cb) => cb(delta, snapshot)),
+          emitThinking: () => listeners.thinking?.forEach((cb) => cb("private", "private")),
+          emitStreamEvent: (event: Record<string, unknown>) => listeners.streamEvent?.forEach((cb) => cb(event, {})),
           resolve: (text: string) => resolveFinal({ content: [{ type: "text", text }] }),
           resolveContent: (content: Array<Record<string, unknown>>) => resolveFinal({ content }),
           reject: (error: unknown) => rejectFinal(error),
@@ -358,6 +362,63 @@ describe("AssistantPanel", () => {
     expect(screen.getByRole("button", { name: "Send" })).toBeTruthy();
   });
 
+  it("shows honest request phases and automatically repairs one rejected cloud proposal", async () => {
+    saveAssistantApiKey("test-key");
+    render(<AssistantPanel {...baseProps()} />);
+
+    fireEvent.change(screen.getByRole("textbox", { name: "Message the assistant" }), {
+      target: { value: "Create a Class-D amplifier" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+
+    expect(await screen.findByText("Connecting to Sonnet 5")).toBeTruthy();
+    expect(screen.getByText("0s · Working")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Stop" })).toBeTruthy();
+
+    act(() => streams[0].emitThinking());
+    expect(await screen.findByText("Designing the circuit")).toBeTruthy();
+    act(() => streams[0].emitStreamEvent({
+      type: "content_block_start",
+      content_block: { type: "tool_use", id: "bad-create", name: "create_asc_circuit" },
+    }));
+    expect(await screen.findByText("Writing the LTspice schematic")).toBeTruthy();
+
+    await act(async () => {
+      streams[0].resolveContent([{
+        type: "tool_use",
+        id: "bad-create",
+        name: "create_asc_circuit",
+        input: { filename: "class-d.asc", source: "not an ASC file" },
+      }]);
+      await streams[0].finalMessage();
+    });
+    await waitFor(() => expect(streams).toHaveLength(2));
+    expect(screen.getByText("Fixing a validation issue")).toBeTruthy();
+    expect(screen.queryByRole("alert")).toBeNull();
+
+    const repairRequest = streamRequests[1] as {
+      messages: Array<{ role: string; content: Array<Record<string, unknown>> }>;
+    };
+    expect(repairRequest.messages[repairRequest.messages.length - 1]?.content[0]).toEqual(expect.objectContaining({
+      type: "tool_result",
+      tool_use_id: "bad-create",
+      is_error: true,
+    }));
+
+    await act(async () => {
+      streams[1].resolveContent([{
+        type: "tool_use",
+        id: "fixed-create",
+        name: "create_asc_circuit",
+        input: { filename: "class-d.asc", source: ASSISTANT_ASC },
+      }]);
+      await streams[1].finalMessage();
+    });
+    expect(await screen.findByText("class-d.asc")).toBeTruthy();
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Stop" })).toBeNull();
+  });
+
   it("Stop aborts the in-flight stream and re-enables the composer without waiting on the network", async () => {
     saveAssistantApiKey("test-key");
     render(<AssistantPanel {...baseProps()} />);
@@ -591,6 +652,17 @@ describe("AssistantPanel", () => {
         input: { filename: "../../escape.asc", source: "not an ASC file" },
       }]);
       await streams[0].finalMessage();
+    });
+
+    await waitFor(() => expect(streams).toHaveLength(2));
+    await act(async () => {
+      streams[1].resolveContent([{
+        type: "tool_use",
+        id: "still-bad-create",
+        name: "create_asc_circuit",
+        input: { filename: "../../escape.asc", source: "still not an ASC file" },
+      }]);
+      await streams[1].finalMessage();
     });
 
     expect((await screen.findByRole("alert")).textContent).toContain("couldn't validate that circuit proposal");
