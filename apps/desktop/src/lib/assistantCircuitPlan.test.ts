@@ -416,6 +416,9 @@ describe("assistant circuit plan", () => {
     // Document must be native Tau geometry (no LTspice pin overrides).
     expect(action.document.components.every((component) => !component.pinOverride?.length)).toBe(true);
     assertAssistantDrawingIntegrity(action.document.components, action.document.wires);
+    // Pin-aligned layout: series VIN and LED_A wires should be single straight segments.
+    const straight = action.document.wires.filter((wire) => wire.points.length === 2);
+    expect(straight.length).toBeGreaterThanOrEqual(2);
     const svg = assistantSchematicSvg(
       action.document.components,
       action.document.wires,
@@ -425,6 +428,46 @@ describe("assistant circuit plan", () => {
     expect(svg).toContain("V1");
     expect(svg).toContain("R1");
     expect(svg).toContain("D1");
+  });
+
+  it("accepts common op-amp pin nicknames so Class-D plans can create files", () => {
+    const action = compileAssistantCircuitPlan("opamp-aliases", {
+      mode: "create",
+      filename: "inverting.asc",
+      components: [
+        { ref: "V1", kind: "vsource", value: "SINE(0 1 10)" },
+        { ref: "V2", kind: "vsource", value: "15" },
+        { ref: "V3", kind: "vsource", value: "15" },
+        { ref: "R1", kind: "resistor", value: "10k" },
+        { ref: "R2", kind: "resistor", value: "100k" },
+        { ref: "U1", kind: "opamp", value: "ideal" },
+      ],
+      nets: [
+        // Model-ish nicknames: U1.n / U1.p / U1.vcc instead of in-/in+/v+
+        { name: "vin", pins: ["V1.p", "R1.a"] },
+        { name: "inverting", pins: ["R1.b", "R2.a", "U1.n"] },
+        { name: "vout", pins: ["R2.b", "U1.out"] },
+        { name: "vcc", pins: ["V2.p", "U1.vcc"] },
+        { name: "vee", pins: ["V3.n", "U1.vee"] },
+        { name: "0", pins: ["V1.n", "V2.n", "V3.p", "U1.p"] },
+      ],
+      directives: [".tran 200m"],
+    });
+    expect(action.type).toBe("create_asc");
+    if (action.type !== "create_asc") throw new Error("expected create action");
+    const circuit = extractCircuit(
+      action.document.components,
+      action.document.wires,
+      action.document.netLabels,
+    );
+    const u1 = circuit.components.find(({ component }) => component.label === "U1");
+    expect(u1?.pins).toMatchObject({
+      "in-": "inverting",
+      "in+": "0",
+      out: "vout",
+      "v+": "vcc",
+      "v-": "vee",
+    });
   });
 
   it("preserves both ports of a terminated transmission line", () => {

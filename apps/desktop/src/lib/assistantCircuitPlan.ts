@@ -131,6 +131,56 @@ export const ASSISTANT_CATALOG_PROMPT = ASSISTANT_GENERATABLE_KINDS.map((kind) =
   pins: getLocalPins(kind).map(({ id, label }) => ({ id, label })),
 }));
 
+/**
+ * Models often emit spice-ish pin nicknames (U1.n, U1.+, VDD). Map those onto
+ * Tau's exact pin ids before validation so Class-D / op-amp plans don't die on
+ * a naming mismatch.
+ */
+const PIN_ALIASES: Partial<Record<ComponentKind, Record<string, string>>> = {
+  opamp: {
+    n: "in-",
+    p: "in+",
+    "+": "in+",
+    "-": "in-",
+    inn: "in-",
+    inp: "in+",
+    in: "in-",
+    outp: "out",
+    output: "out",
+    vdd: "v+",
+    vss: "v-",
+    "vs+": "v+",
+    "vs-": "v-",
+    vcc: "v+",
+    vee: "v-",
+    vp: "v+",
+    vn: "v-",
+  },
+  comparator: {
+    n: "in-",
+    p: "in+",
+    "+": "in+",
+    "-": "in-",
+    inn: "in-",
+    inp: "in+",
+    in: "in-",
+    outp: "out",
+    output: "out",
+  },
+  npn: { base: "b", collector: "c", emitter: "e", b: "b", c: "c", e: "e" },
+  pnp: { base: "b", collector: "c", emitter: "e", b: "b", c: "c", e: "e" },
+  nmos: { gate: "g", drain: "d", source: "s", bulk: "b", g: "g", d: "d", s: "s", b: "b" },
+  pmos: { gate: "g", drain: "d", source: "s", bulk: "b", g: "g", d: "d", s: "s", b: "b" },
+};
+
+export function canonicalizeAssistantPin(kind: ComponentKind, pin: string): string {
+  const aliases = PIN_ALIASES[kind];
+  const aliased = aliases?.[pin.toLowerCase()];
+  if (aliased) return aliased;
+  const exact = getLocalPins(kind).find((candidate) => candidate.id.toLowerCase() === pin.toLowerCase());
+  return exact?.id ?? pin;
+}
+
 interface CircuitPlanComponent {
   ref: string;
   kind: GeneratableKind;
@@ -225,16 +275,20 @@ function parsePlan(input: unknown): CircuitPlan {
     if (!Array.isArray(net.pins) || net.pins.length < 1 || net.pins.length > MAX_COMPONENTS) {
       throw new Error(`${name} must connect at least one pin`);
     }
-    const pins = net.pins.map((rawPin, pinIndex) => {
-      const token = cleanText(rawPin, `${name}.pins[${pinIndex}]`, 64);
+    const pins = net.pins.map((rawPinToken, pinIndex) => {
+      const token = cleanText(rawPinToken, `${name}.pins[${pinIndex}]`, 64);
       const split = token.lastIndexOf(".");
       if (split <= 0 || split === token.length - 1) throw new Error(`${token} is not a ref.pin connection`);
       const ref = token.slice(0, split);
-      const pin = token.slice(split + 1);
+      const rawPin = token.slice(split + 1);
       const component = byRef.get(ref.toLowerCase());
       if (!component) throw new Error(`${token} references an unknown component`);
-      if (!getLocalPins(component.kind).some((candidate) => candidate.id === pin)) {
-        throw new Error(`${token} is not a valid ${component.kind} pin`);
+      const pin = canonicalizeAssistantPin(component.kind, rawPin);
+      const validIds = getLocalPins(component.kind).map((candidate) => candidate.id);
+      if (!validIds.includes(pin)) {
+        throw new Error(
+          `${component.ref}.${rawPin} is not a valid ${component.kind} pin (use ${validIds.join(", ")})`,
+        );
       }
       const canonical = `${component.ref}.${pin}`;
       const key = canonical.toLowerCase();
@@ -421,11 +475,10 @@ function lowerCompositePlan(plan: CircuitPlan): DirectCircuitPlan {
   return { ...plan, components, nets, directives: [...plan.directives, ...internalDirectives] };
 }
 
-// Column/row pitch for the level-based grid. Sized for Tau's native symbol
-// bodies (see schematic/symbols.ts) so parts never collide and wires have
-// room to run between them like a hand-drawn schematic.
-const COLUMN_PITCH = 256;
-const ROW_PITCH = 208;
+// Moderate pitch — pin-alignment below keeps wires straight so we do not need
+// huge empty rectangles between parts.
+const COLUMN_PITCH = 208;
+const ROW_PITCH = 144;
 
 // Two-pin passives Tau draws natively with left/right pins at rotation 0.
 // Rotation below uses Tau's native pin transform (NOT LTspice ASC banks).
@@ -503,6 +556,62 @@ function componentLevels(plan: DirectCircuitPlan): Map<string, number> {
   return levels;
 }
 
+function moveComponent(
+  components: SchematicComponent[],
+  label: string,
+  dx: number,
+  dy: number,
+): void {
+  const component = components.find((candidate) => candidate.label === label);
+  if (!component || (dx === 0 && dy === 0)) return;
+  component.x = Math.round((component.x + dx) / GRID) * GRID;
+  component.y = Math.round((component.y + dy) / GRID) * GRID;
+}
+
+/**
+ * After coarse level placement, slide parts so connected pins share an axis.
+ * That turns L-shaped router jogs into single straight wires — the difference
+ * between a hand-drawn LED loop and a sparse rectangle with stair-steps.
+ */
+function alignConnectedPins(plan: DirectCircuitPlan, components: SchematicComponent[]): void {
+  const levels = componentLevels(plan);
+  for (let pass = 0; pass < 12; pass += 1) {
+    let moved = false;
+    for (const net of plan.nets) {
+      const endpoints = net.pins.map((token) => {
+        const split = token.lastIndexOf(".");
+        const ref = token.slice(0, split);
+        const pinId = token.slice(split + 1);
+        const component = components.find((candidate) => candidate.label === ref);
+        const pin = component && getComponentPins(component).find((candidate) => candidate.id === pinId);
+        if (!component || !pin) return null;
+        return { ref, level: levels.get(ref) ?? 0, pin, component };
+      }).filter((endpoint): endpoint is NonNullable<typeof endpoint> => endpoint !== null);
+
+      for (let i = 0; i < endpoints.length; i += 1) {
+        for (let j = i + 1; j < endpoints.length; j += 1) {
+          const left = endpoints[i];
+          const right = endpoints[j];
+          const dx = right.pin.x - left.pin.x;
+          const dy = right.pin.y - left.pin.y;
+          // Move the downstream (higher level) part toward the upstream pin.
+          const [anchor, mobile] = left.level <= right.level ? [left, right] : [right, left];
+          // Only micro-align for native pin-bank offsets (typically 16–32).
+          // Large slides collapse dense graphs onto the same cell.
+          if (Math.abs(dx) >= Math.abs(dy) && dy !== 0 && Math.abs(dy) <= 48) {
+            moveComponent(components, mobile.ref, 0, anchor.pin.y - mobile.pin.y);
+            moved = true;
+          } else if (Math.abs(dy) > Math.abs(dx) && dx !== 0 && Math.abs(dx) <= 48) {
+            moveComponent(components, mobile.ref, anchor.pin.x - mobile.pin.x, 0);
+            moved = true;
+          }
+        }
+      }
+    }
+    if (!moved) break;
+  }
+}
+
 function layoutComponents(plan: DirectCircuitPlan): SchematicComponent[] {
   const levels = componentLevels(plan);
   const netMembers = netMembership(plan);
@@ -511,7 +620,7 @@ function layoutComponents(plan: DirectCircuitPlan): SchematicComponent[] {
     for (const pin of net.pins) netByPin.set(pin.toLowerCase(), net.name);
   }
   const rowsByLevel = new Map<number, number>();
-  return plan.components.map((component, index) => {
+  const components = plan.components.map((component, index) => {
     const level = levels.get(component.ref) ?? index;
     const row = rowsByLevel.get(level) ?? 0;
     rowsByLevel.set(level, row + 1);
@@ -519,12 +628,14 @@ function layoutComponents(plan: DirectCircuitPlan): SchematicComponent[] {
       id: `ai-component-${index + 1}`,
       kind: component.kind,
       x: 160 + level * COLUMN_PITCH,
-      y: 192 + row * ROW_PITCH,
+      y: 208 + row * ROW_PITCH,
       rotation: rotationForComponent(component, levels, netByPin, netMembers),
       value: component.value ?? CATALOG_BY_KIND[component.kind].defaultValue,
       label: component.ref,
     };
   });
+  alignConnectedPins(plan, components);
+  return components;
 }
 
 function pinPoint(components: readonly SchematicComponent[], token: string): Point {
@@ -624,7 +735,7 @@ function compileDocument(plan: DirectCircuitPlan): {
     id: "ai-ground-1",
     kind: "ground",
     x: Math.round(groundOrigin.x / GRID) * GRID,
-    y: Math.round((groundOrigin.y + 96) / GRID) * GRID,
+    y: Math.round((groundOrigin.y + 64) / GRID) * GRID,
     rotation: 0,
     value: "",
     label: "",
