@@ -21,9 +21,11 @@ import {
 } from "./assistantOperations";
 
 /** Exact model id — no date suffix. Keep every call site pointed at this
- *  one constant so a future model bump is a one-line change. */
-export const ASSISTANT_MODEL = "claude-opus-4-8";
-export const ASSISTANT_MODEL_LABEL = "Opus 4.8";
+ *  one constant so a future model bump is a one-line change.
+ *  Sonnet 5 is the capable cheap default for Tau's Anthropic path
+ *  (cheaper than Opus, strong enough for circuit Q&A + tool use). */
+export const ASSISTANT_MODEL = "claude-sonnet-5";
+export const ASSISTANT_MODEL_LABEL = "Sonnet 5";
 
 const MAX_TOKENS = 16_000;
 

@@ -1475,7 +1475,7 @@ export function SettingsPanel({
                 <span className="settings-field-hint">
                   {assistantPreferences.provider === "local-mlx"
                     ? "Runs on this Mac through Tau's fixed loopback endpoint. Circuit context stays local."
-                    : "Uses Claude through api.anthropic.com with your session-only key."}
+                    : "Uses Claude Sonnet 5 through api.anthropic.com with your session-only key."}
                 </span>
               </label>
 

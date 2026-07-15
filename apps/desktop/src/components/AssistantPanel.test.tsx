@@ -226,7 +226,7 @@ describe("AssistantPanel", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Open Settings" }));
     expect(onOpenSettings).toHaveBeenCalledTimes(1);
-    expect(screen.getByText("Claude · Opus 4.8")).toBeTruthy();
+    expect(screen.getByText("Claude · Sonnet 5")).toBeTruthy();
   });
 
   it("uses the selected local preset without a cloud key and consumes its non-streaming reply", async () => {

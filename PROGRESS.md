@@ -9,14 +9,36 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## ⏱ HEARTBEAT
 - **Headline metric:** 1776 reviewed-tree tests green · corpus 82/82 import · 82/82 op-converge · 79/82 warning-clean
-- **Run started (UTC):** 2026-07-15T04:00Z
-- **Synced to origin:** auto/ltspice-parity (pending push).
-- **Claimed unit:** §6/§8/§11 frequency readout + Class-D golden sim + probe net colors (CURSOR EDITS).
+- **Run started (UTC):** 2026-07-15T14:55Z
+- **Synced to origin:** auto/ltspice-parity @ HEAD (push pending this unit).
+- **Claimed unit:** Assistant Anthropic default → Claude Sonnet 5 (`claude-sonnet-5`).
 - **Status:** DONE
-- **Last completed sub-step:** few-cycle frequency detection; complementary Class-D
-  with wide MOS + ngspice smoke; probed wires/labels use --trace-* palette.
-- **Plan:** keep assistant Class-D fidelity and measurement polish.
+- **Last completed sub-step:** Swapped ASSISTANT_MODEL from Opus 4.8 to Sonnet 5;
+  Settings + panel label updated; typecheck + assistant tests green.
+- **Plan:** keep local MLX as option; Anthropic path uses Sonnet 5.
 - **Next step:** Omar signs/notarizes when ready; continue corpus/DoD leftovers.
+
+---
+
+## 2026-07-15T14:55Z — auto/ltspice-parity — Assistant cloud model → Sonnet 5
+
+### What I did
+- Default Anthropic assistant model is now `claude-sonnet-5` (label “Sonnet 5”),
+  replacing hardcoded `claude-opus-4-8` / “Opus 4.8”.
+- Settings hint and Assistant panel badge reflect Sonnet 5; local MLX unchanged.
+- Adaptive thinking already in use — compatible with Sonnet 5 API constraints.
+
+### Files
+- `apps/desktop/src/lib/assistant.ts`
+- `apps/desktop/src/components/ShellPanels.tsx`
+- `apps/desktop/src/components/AssistantPanel.test.tsx`
+
+### Tests
+- `pnpm -C apps/desktop typecheck`
+- Vitest: AssistantPanel + SettingsPanel + assistantPreferences (27 passed)
+
+### Next step
+- Continue DoD / corpus leftovers as needed.
 
 ---
 
