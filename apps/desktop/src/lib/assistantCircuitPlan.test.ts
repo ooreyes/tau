@@ -5,6 +5,7 @@ import {
   ASSISTANT_COMPOSITE_KINDS,
   ASSISTANT_DIRECT_GENERATABLE_KINDS,
   ASSISTANT_GENERATABLE_KINDS,
+  GOLDEN_CLASS_D_ASSISTANT_PLAN,
   assertAssistantDrawingIntegrity,
   assistantSchematicSvg,
   compileAssistantCircuitPlan,
@@ -93,7 +94,31 @@ describe("assistant circuit plan", () => {
     expect(() => compileAssistantCircuitPlan("x", {
       ...divider,
       nets: [{ name: "0", pins: ["V1.nope"] }],
-    })).toThrow(/not a valid/i);
+    })).toThrow(/not a valid vsource pin \(use p, n\)/);
+    expect(() => compileAssistantCircuitPlan("x", {
+      mode: "create",
+      filename: "bad-opamp-pin.asc",
+      components: [
+        { ref: "V1", kind: "vsource", value: "5" },
+        { ref: "U1", kind: "opamp", value: "ideal" },
+      ],
+      nets: [
+        { name: "out", pins: ["U1.out"] },
+        { name: "0", pins: ["V1.n", "V1.p", "U1.in+", "U1.in-", "U1.v+", "U1.foo"] },
+      ],
+    })).toThrow(/U1\.foo is not a valid opamp pin \(use in\+, in-, out, v\+, v-\)/);
+    expect(() => compileAssistantCircuitPlan("x", {
+      mode: "create",
+      filename: "bad-comp-supply.asc",
+      components: [
+        { ref: "V1", kind: "vsource", value: "5" },
+        { ref: "U1", kind: "comparator", value: "5 0 0" },
+      ],
+      nets: [
+        { name: "out", pins: ["U1.out"] },
+        { name: "0", pins: ["V1.n", "V1.p", "U1.in+", "U1.in-", "U1.v+"] },
+      ],
+    })).toThrow(/NO supply pins/);
     // Equal-score conflict on two named nets — must reject with a repair hint.
     expect(() => compileAssistantCircuitPlan("x", {
       mode: "create",
@@ -611,33 +636,7 @@ describe("assistant circuit plan", () => {
       ],
     });
     const dividerAction = compileAssistantCircuitPlan("svg-divider", divider);
-    const classD = compileAssistantCircuitPlan("svg-class-d", {
-      mode: "create",
-      filename: "class-d-approx.asc",
-      components: [
-        { ref: "Vsig", kind: "vsource", value: "SINE(0 1 10)" },
-        { ref: "Vtri", kind: "vsource", value: "SINE(0 1 100k)" },
-        { ref: "Vdd", kind: "vsource", value: "10" },
-        { ref: "U1", kind: "comparator", value: "10 0 0" },
-        { ref: "M1", kind: "nmos", value: "NMOS" },
-        { ref: "M2", kind: "pmos", value: "PMOS" },
-        { ref: "L1", kind: "inductor", value: "100u" },
-        { ref: "C1", kind: "capacitor", value: "1u" },
-        { ref: "R1", kind: "resistor", value: "8" },
-      ],
-      nets: [
-        { name: "IN", pins: ["Vsig.p", "U1.in+"] },
-        { name: "TRI", pins: ["Vtri.p", "U1.in-"] },
-        { name: "PWM", pins: ["U1.out", "M1.g", "M2.g"] },
-        { name: "VDD", pins: ["Vdd.p", "M2.s", "M2.b"] },
-        { name: "SW", pins: ["M1.d", "M2.d", "L1.a"] },
-        { name: "OUT", pins: ["L1.b", "C1.a", "R1.a"] },
-        {
-          name: "0",
-          pins: ["Vsig.n", "Vtri.n", "Vdd.n", "M1.s", "M1.b", "C1.b", "R1.b"],
-        },
-      ],
-    });
+    const classD = compileAssistantCircuitPlan("svg-class-d", GOLDEN_CLASS_D_ASSISTANT_PLAN);
     for (const [name, action] of [
       ["led", led],
       ["divider", dividerAction],
@@ -656,34 +655,7 @@ describe("assistant circuit plan", () => {
   });
 
   it("compiles a multi-stage comparator + MOSFET Class-D approximation", () => {
-    const action = compileAssistantCircuitPlan("class-d-approx", {
-      mode: "create",
-      filename: "class-d-approx.asc",
-      components: [
-        { ref: "Vsig", kind: "vsource", value: "SINE(0 1 10)" },
-        { ref: "Vtri", kind: "vsource", value: "SINE(0 1 100k)" },
-        { ref: "Vdd", kind: "vsource", value: "10" },
-        { ref: "U1", kind: "comparator", value: "10 0 0" },
-        { ref: "M1", kind: "nmos", value: "NMOS" },
-        { ref: "M2", kind: "pmos", value: "PMOS" },
-        { ref: "L1", kind: "inductor", value: "100u" },
-        { ref: "C1", kind: "capacitor", value: "1u" },
-        { ref: "R1", kind: "resistor", value: "8" },
-      ],
-      nets: [
-        { name: "IN", pins: ["Vsig.p", "U1.in+"] },
-        { name: "TRI", pins: ["Vtri.p", "U1.in-"] },
-        { name: "PWM", pins: ["U1.out", "M1.g", "M2.g"] },
-        { name: "VDD", pins: ["Vdd.p", "M2.s", "M2.b"] },
-        { name: "SW", pins: ["M1.d", "M2.d", "L1.a"] },
-        { name: "OUT", pins: ["L1.b", "C1.a", "R1.a"] },
-        {
-          name: "0",
-          pins: ["Vsig.n", "Vtri.n", "Vdd.n", "M1.s", "M1.b", "C1.b", "R1.b"],
-        },
-      ],
-      directives: [".tran 200m"],
-    });
+    const action = compileAssistantCircuitPlan("class-d-approx", GOLDEN_CLASS_D_ASSISTANT_PLAN);
     expect(action.type).toBe("create_asc");
     if (action.type !== "create_asc") throw new Error("expected create action");
     assertAssistantDrawingIntegrity(action.document.components, action.document.wires);
@@ -695,8 +667,8 @@ describe("assistant circuit plan", () => {
     const byRef = new Map(circuit.components.map(({ component, pins }) => [component.label, pins]));
     // Comparator lowers to B_U1 + input anchors; MOS/LC remain direct.
     expect(byRef.get("B_U1")?.p).toBe("PWM");
-    expect(byRef.get("M1")).toMatchObject({ g: "PWM", d: "SW", s: "0" });
-    expect(byRef.get("M2")).toMatchObject({ g: "PWM", d: "SW", s: "VDD" });
+    expect(byRef.get("M1")).toMatchObject({ g: "PWM", d: "SW", s: "0", b: "0" });
+    expect(byRef.get("M2")).toMatchObject({ g: "PWM", d: "SW", s: "VDD", b: "VDD" });
     expect(byRef.get("L1")).toMatchObject({ a: "SW", b: "OUT" });
     const svg = assistantSchematicSvg(
       action.document.components,
@@ -705,6 +677,72 @@ describe("assistant circuit plan", () => {
     );
     expect(svg).toContain("M1");
     expect(svg).toContain("L1");
+  });
+
+  it("REGRESSION: golden Class-D plan mirrors the MLX system-prompt topology", () => {
+    // Lock the exported golden plan to the exact nets the prompt teaches so
+    // prompt/compiler drift cannot resurrect floating-pin rejections.
+    expect(GOLDEN_CLASS_D_ASSISTANT_PLAN.nets).toEqual([
+      { name: "IN", pins: ["Vsig.p", "U1.in+"] },
+      { name: "TRI", pins: ["Vtri.p", "U1.in-"] },
+      { name: "PWM", pins: ["U1.out", "M1.g", "M2.g"] },
+      { name: "VDD", pins: ["Vdd.p", "M2.s", "M2.b"] },
+      { name: "SW", pins: ["M1.d", "M2.d", "L1.a"] },
+      { name: "OUT", pins: ["L1.b", "C1.a", "R1.a"] },
+      {
+        name: "0",
+        pins: ["Vsig.n", "Vtri.n", "Vdd.n", "M1.s", "M1.b", "C1.b", "R1.b"],
+      },
+    ]);
+    const action = compileAssistantCircuitPlan("golden-class-d", GOLDEN_CLASS_D_ASSISTANT_PLAN);
+    expect(action.type).toBe("create_asc");
+    if (action.type !== "create_asc") throw new Error("expected create action");
+    expect(action.filename).toBe("class-d-approx.asc");
+    assertAssistantDrawingIntegrity(action.document.components, action.document.wires);
+    const circuit = extractCircuit(
+      action.document.components,
+      action.document.wires,
+      action.document.netLabels,
+    );
+    const byRef = new Map(circuit.components.map(({ component, pins }) => [component.label, pins]));
+    expect(byRef.get("M1")).toMatchObject({ g: "PWM", d: "SW", s: "0", b: "0" });
+    expect(byRef.get("M2")).toMatchObject({ g: "PWM", d: "SW", s: "VDD", b: "VDD" });
+    expect(byRef.get("L1")).toMatchObject({ a: "SW", b: "OUT" });
+    expect(byRef.get("R1")).toMatchObject({ a: "OUT", b: "0" });
+  });
+
+  it("REGRESSION: Class-D survives combined model mistakes (aliases + missing s/b + dual-net returns)", () => {
+    // Stack every live Class-D failure mode in one plan: MOS pin nicknames,
+    // omitted sources/bulks, nmos source dual-listed on SW+0, pmos source
+    // dual-listed on VDD+0, comparator input nicknames.
+    const action = compileAssistantCircuitPlan("class-d-combined-mistakes", {
+      mode: "create",
+      filename: "class-d-approx.asc",
+      components: GOLDEN_CLASS_D_ASSISTANT_PLAN.components,
+      nets: [
+        { name: "IN", pins: ["Vsig.p", "U1.p"] },
+        { name: "TRI", pins: ["Vtri.p", "U1.n"] },
+        { name: "PWM", pins: ["U1.out", "M1.gate", "M2.g"] },
+        { name: "VDD", pins: ["Vdd.p", "M2.s"] },
+        { name: "SW", pins: ["M1.drain", "M2.d", "L1.a", "M1.s"] },
+        { name: "OUT", pins: ["L1.b", "C1.a", "R1.a"] },
+        {
+          name: "0",
+          pins: ["Vsig.n", "Vtri.n", "Vdd.n", "M1.s", "M2.s", "C1.b", "R1.b"],
+        },
+      ],
+      directives: [".tran 200m"],
+    });
+    const circuit = extractCircuit(
+      action.document.components,
+      action.document.wires,
+      action.document.netLabels,
+    );
+    const byRef = new Map(circuit.components.map(({ component, pins }) => [component.label, pins]));
+    // Dual-net MOS returns: nmos keeps ground; pmos keeps VDD; bulks auto-tied.
+    expect(byRef.get("M1")).toMatchObject({ g: "PWM", d: "SW", s: "0", b: "0" });
+    expect(byRef.get("M2")).toMatchObject({ g: "PWM", d: "SW", s: "VDD", b: "VDD" });
+    expect(byRef.get("B_U1")?.p).toBe("PWM");
   });
 
   it("compiles a multi-stage amplifier + RC filter with clean native connectivity", () => {

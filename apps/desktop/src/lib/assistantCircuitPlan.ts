@@ -132,6 +132,41 @@ export const ASSISTANT_CATALOG_PROMPT = ASSISTANT_GENERATABLE_KINDS.map((kind) =
 }));
 
 /**
+ * Canonical Class-D approximation the system prompt teaches and the compiler
+ * must accept end-to-end (1 V 10 Hz → ~10 V filtered half-bridge). Tests and
+ * the MLX prompt stay locked to this topology so prompt drift cannot silently
+ * reintroduce floating-pin / dual-net failures.
+ */
+export const GOLDEN_CLASS_D_ASSISTANT_PLAN = {
+  mode: "create" as const,
+  filename: "class-d-approx.asc",
+  components: [
+    { ref: "Vsig", kind: "vsource" as const, value: "SINE(0 1 10)" },
+    { ref: "Vtri", kind: "vsource" as const, value: "SINE(0 1 100k)" },
+    { ref: "Vdd", kind: "vsource" as const, value: "10" },
+    { ref: "U1", kind: "comparator" as const, value: "10 0 0" },
+    { ref: "M1", kind: "nmos" as const, value: "NMOS" },
+    { ref: "M2", kind: "pmos" as const, value: "PMOS" },
+    { ref: "L1", kind: "inductor" as const, value: "100u" },
+    { ref: "C1", kind: "capacitor" as const, value: "1u" },
+    { ref: "R1", kind: "resistor" as const, value: "8" },
+  ],
+  nets: [
+    { name: "IN", pins: ["Vsig.p", "U1.in+"] },
+    { name: "TRI", pins: ["Vtri.p", "U1.in-"] },
+    { name: "PWM", pins: ["U1.out", "M1.g", "M2.g"] },
+    { name: "VDD", pins: ["Vdd.p", "M2.s", "M2.b"] },
+    { name: "SW", pins: ["M1.d", "M2.d", "L1.a"] },
+    { name: "OUT", pins: ["L1.b", "C1.a", "R1.a"] },
+    {
+      name: "0",
+      pins: ["Vsig.n", "Vtri.n", "Vdd.n", "M1.s", "M1.b", "C1.b", "R1.b"],
+    },
+  ],
+  directives: [".tran 200m"],
+};
+
+/**
  * Models often emit spice-ish pin nicknames (U1.n, U1.+, VDD). Map those onto
  * Tau's exact pin ids before validation so Class-D / op-amp plans don't die on
  * a naming mismatch.
@@ -193,8 +228,35 @@ const PIN_ALIASES: Partial<Record<ComponentKind, Record<string, string>>> = {
   },
 };
 
-/** Prefer a named rail over ground when the model lists the same pin twice. */
-function netAssignmentScore(netName: string, pinCountOnNet: number): number {
+const MOS_KINDS = new Set<ComponentKind>(["nmos", "pmos"]);
+
+/** Positive-rail names models use for half-bridge / Class-D supplies. */
+function isPositiveSupplyNetName(name: string): boolean {
+  return /^(?:vdd|vcc|vp|v\+|avdd|dvdd|pvdd|supply|vs\+)$/i.test(name);
+}
+
+/** Prefer a named rail over ground when the model lists the same pin twice.
+ * MOSFET source/bulk are special: nmos return wants ground; pmos wants the
+ * positive rail — otherwise a dual-listed M1.s on SW+0 would stick to SW. */
+function netAssignmentScore(
+  netName: string,
+  pinCountOnNet: number,
+  pinContext?: { kind: ComponentKind; pinId: string },
+): number {
+  const pinId = pinContext?.pinId.toLowerCase();
+  const isMosReturn = pinContext
+    && MOS_KINDS.has(pinContext.kind)
+    && (pinId === "s" || pinId === "b");
+  if (isMosReturn) {
+    if (pinContext!.kind === "nmos") {
+      // Low-side return: ground wins over any accidental named-net duplicate.
+      return netName === "0" ? 10_000 + pinCountOnNet : pinCountOnNet;
+    }
+    // High-side return: named supply / denser rail beats ground.
+    if (netName === "0") return pinCountOnNet;
+    if (isPositiveSupplyNetName(netName)) return 10_000 + pinCountOnNet;
+    return 1000 + pinCountOnNet;
+  }
   if (netName === "0") return pinCountOnNet;
   // Named nets always beat ground. Pin count breaks ties among named nets so a
   // denser intentional rail wins over a singleton leftover — equal counts stay
@@ -214,13 +276,6 @@ function formatPinConflictHint(
     + `Keep ${canonical} only on the intended net and remove it from the others. `
     + `${kind} pins: ${validIds}.`
   );
-}
-
-const MOS_KINDS = new Set<ComponentKind>(["nmos", "pmos"]);
-
-/** Positive-rail names models use for half-bridge / Class-D supplies. */
-function isPositiveSupplyNetName(name: string): boolean {
-  return /^(?:vdd|vcc|vp|v\+|avdd|dvdd|pvdd|supply|vs\+)$/i.test(name);
 }
 
 /**
@@ -439,6 +494,13 @@ function parsePlan(input: unknown): CircuitPlan {
       const pin = canonicalizeAssistantPin(component.kind, rawPin);
       const validIds = getLocalPins(component.kind).map((candidate) => candidate.id);
       if (!validIds.includes(pin)) {
+        const supplyLike = /^(?:v\+|v-|vcc|vee|vdd|vss|vp|vn|avdd|avss)$/i.test(rawPin);
+        if (component.kind === "comparator" && supplyLike) {
+          throw new Error(
+            `${component.ref}.${rawPin} is not a valid comparator pin — comparators have NO supply pins `
+            + `(use ${validIds.join(", ")}; put high/low rails in the value string, e.g. "10 0 0")`,
+          );
+        }
         throw new Error(
           `${component.ref}.${rawPin} is not a valid ${component.kind} pin (use ${validIds.join(", ")})`,
         );
@@ -469,7 +531,16 @@ function parsePlan(input: unknown): CircuitPlan {
     const scored = uniqueNets
       .map((netName) => {
         const pinCount = draftNets.find((net) => net.name === netName)?.pins.length ?? 0;
-        return { netName, score: netAssignmentScore(netName, pinCount) };
+        const meta = pinMeta.get(key);
+        const pinId = meta?.canonical.slice(meta.canonical.lastIndexOf(".") + 1) ?? "";
+        return {
+          netName,
+          score: netAssignmentScore(
+            netName,
+            pinCount,
+            meta ? { kind: meta.kind, pinId } : undefined,
+          ),
+        };
       })
       .sort((a, b) => b.score - a.score);
     const best = scored[0];

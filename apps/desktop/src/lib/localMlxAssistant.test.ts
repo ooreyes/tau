@@ -98,6 +98,8 @@ describe("LocalMlxAssistant", () => {
     expect(body.messages[0].content).toContain("comparator + MOS + LC");
     expect(body.messages[0].content).toContain("VDD=[Vdd.p,M2.s,M2.b]");
     expect(body.messages[0].content).toContain("M1.s,M1.b");
+    expect(body.messages[0].content).toContain("Never dual-assign M*.s/M*.b");
+    expect(body.messages[0].content).toContain("never invent comparator supply pins");
     expect(body.messages[0].content).toContain("never list both U1.v- and U1.vee");
   });
 
@@ -330,6 +332,33 @@ describe("LocalMlxAssistant", () => {
     expect(bodies[1]).toContain("more than one net");
     expect(bodies[1]).toContain("each ref.pin appears in exactly one net");
     expect(bodies[1]).toContain("opamp pins are in+,in-,out,v+,v-");
+    expect(bodies[1]).toContain("Never double-assign rails");
+  });
+
+  it("accepts the golden Class-D plan through the provider without a repair round", async () => {
+    const { GOLDEN_CLASS_D_ASSISTANT_PLAN } = await import("./assistantCircuitPlan");
+    const fetchImpl = vi.fn(async () => completion({
+      content: "",
+      tool_calls: [{
+        id: "class-d",
+        type: "function",
+        function: {
+          name: "build_tau_circuit",
+          arguments: JSON.stringify(GOLDEN_CLASS_D_ASSISTANT_PLAN),
+        },
+      }],
+    }));
+    const provider = new LocalMlxAssistant({ fetchImpl });
+    const reply = await provider.complete(request({
+      history: [{ role: "user", content: "Create a Class-D amp: 10Hz 1V in to 10V out" }],
+    }));
+    expect(reply.actions).toHaveLength(1);
+    expect(reply.rejectedActionCount).toBe(0);
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(reply.actions[0]).toEqual(expect.objectContaining({
+      type: "create_asc",
+      filename: "class-d-approx.asc",
+    }));
   });
 
   it("enriches floating MOSFET repair hints with the half-bridge fix pattern", async () => {
