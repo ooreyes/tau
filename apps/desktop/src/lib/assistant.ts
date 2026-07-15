@@ -1,11 +1,10 @@
 /**
  * Anthropic API integration for Tau's assistant column. The key is the
- * user's own and entered in Settings. It is held only in renderer memory for
- * the current Tau session and sent only to api.anthropic.com. A future native
- * credential boundary can add Keychain persistence without ever placing the
- * bearer token in web storage.
+ * user's own and entered in Settings. Native Tau stores it in the operating
+ * system keychain; it is never placed in web storage or a project file.
  */
 import { useEffect, useState } from "react";
+import { invoke, isTauri } from "@tauri-apps/api/core";
 import Anthropic from "@anthropic-ai/sdk";
 import {
   APPLY_CURRENT_ASC_TOOL,
@@ -49,15 +48,51 @@ When the user asks you to create a new circuit or file, call create_asc_circuit 
 
 const API_KEY_EVENT = "tau:assistant-api-key-changed";
 let sessionApiKey = "";
+let credentialHydration: Promise<void> | null = null;
+let credentialSaveTimer: ReturnType<typeof setTimeout> | null = null;
+let credentialRevision = 0;
 
 export function loadAssistantApiKey(): string {
   return sessionApiKey;
 }
 
-/** Keeps the key only for this process and notifies mounted consumers. */
+function notifyApiKeyChanged(): void {
+  if (typeof window !== "undefined") window.dispatchEvent(new Event(API_KEY_EVENT));
+}
+
+/** Hydrates once per renderer lifetime from the native credential boundary. */
+export function hydrateAssistantApiKey(): Promise<void> {
+  if (!isTauri()) return Promise.resolve();
+  if (!credentialHydration) {
+    const revisionAtStart = credentialRevision;
+    credentialHydration = invoke<string | null>("load_assistant_api_key")
+      .then((key) => {
+        // A user edit made while the native read was in flight wins.
+        if (credentialRevision !== revisionAtStart) return;
+        sessionApiKey = key?.trim() ?? "";
+        notifyApiKeyChanged();
+      })
+      .catch(() => {
+        // The assistant stays usable for a key entered during this session.
+      });
+  }
+  return credentialHydration;
+}
+
+/** Updates this process immediately and debounces a native keychain write. */
 export function saveAssistantApiKey(key: string): void {
   sessionApiKey = key.trim();
-  if (typeof window !== "undefined") window.dispatchEvent(new Event(API_KEY_EVENT));
+  credentialRevision += 1;
+  notifyApiKeyChanged();
+  if (!isTauri()) return;
+  if (credentialSaveTimer) globalThis.clearTimeout(credentialSaveTimer);
+  credentialSaveTimer = globalThis.setTimeout(() => {
+    credentialSaveTimer = null;
+    const apiKey = sessionApiKey;
+    void invoke("save_assistant_api_key", { apiKey }).catch(() => {
+      // Settings remains responsive; a later edit retries the keychain write.
+    });
+  }, 350);
 }
 
 /** Reactive read of the stored API key — updates when Settings saves a new
@@ -67,6 +102,7 @@ export function useAssistantApiKey(): string {
   useEffect(() => {
     const onChange = () => setKey(loadAssistantApiKey());
     window.addEventListener(API_KEY_EVENT, onChange);
+    void hydrateAssistantApiKey();
     return () => window.removeEventListener(API_KEY_EVENT, onChange);
   }, []);
   return key;

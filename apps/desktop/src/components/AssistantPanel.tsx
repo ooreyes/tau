@@ -30,6 +30,7 @@ import { AssistantProviderError, type AssistantProviderReply } from "../lib/assi
 import { LocalMlxAssistant, LOCAL_MLX_MODEL_PRESETS } from "../lib/localMlxAssistant";
 import { getLocalAiStatus, startLocalAi, LOCAL_AI_PRESETS, type LocalAiStatus } from "../lib/localAiRuntime";
 import { renderMiniMarkdown } from "../lib/miniMarkdown";
+import { loadAssistantHistory, saveAssistantHistory } from "../lib/assistantMemory";
 import { PanelResizeHandle, usePanelWidth, type PanelWidthConfig } from "./panelResize";
 
 /** Docked at the far right of the simulator shell, same "edge=left widens"
@@ -125,6 +126,8 @@ export interface AssistantPanelProps {
   onApplyCurrent?: AssistantApplyCurrentHandler;
   /** When inside the shared right dock, the dock owns width and the resize handle. */
   embedded?: boolean;
+  /** Stable document identity used to keep each schematic's transcript separate. */
+  memoryKey?: string;
 }
 
 export function AssistantPanel({
@@ -143,6 +146,7 @@ export function AssistantPanel({
   onCreateAsc,
   onApplyCurrent,
   embedded = false,
+  memoryKey = "untitled.asc",
 }: AssistantPanelProps) {
   const apiKey = useAssistantApiKey();
   const preferences = useAssistantPreferences();
@@ -150,7 +154,9 @@ export function AssistantPanel({
     () => new LocalMlxAssistant({ model: preferences.localModel }),
     [preferences.localModel],
   );
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [messages, setMessages] = useState<ChatMessage[]>(() => (
+    loadAssistantHistory(memoryKey).map((message) => ({ ...message, id: nanoid() }))
+  ));
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
   const [progressPhase, setProgressPhase] = useState<AssistantProgressPhase>("connecting");
@@ -231,6 +237,13 @@ export function AssistantPanel({
     const el = listRef.current;
     if (el) el.scrollTop = el.scrollHeight;
   }, [messages, streaming]);
+
+  useEffect(() => {
+    const timer = globalThis.setTimeout(() => {
+      saveAssistantHistory(memoryKey, messages.map(({ role, content }) => ({ role, content })));
+    }, 250);
+    return () => globalThis.clearTimeout(timer);
+  }, [memoryKey, messages]);
 
   useEffect(() => {
     if (!streaming) return;

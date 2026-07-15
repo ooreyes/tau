@@ -1378,6 +1378,8 @@ function App() {
         )}
         {assistantOpen && (
           <AssistantPanel
+            key={activeFilePath ?? documentTitle}
+            memoryKey={activeFilePath ?? documentTitle}
             components={components}
             wires={wires}
             netLabels={netLabels}

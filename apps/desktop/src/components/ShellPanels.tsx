@@ -39,7 +39,7 @@ import { useProject } from "../store/useProject";
 import { basename, isAscFile, type ProjectNode } from "../project/types";
 import type { AnalysisResult } from "../simulation/linearTransient";
 import { formatEngineering } from "../simulation/quantity";
-import { loadAssistantApiKey, saveAssistantApiKey } from "../lib/assistant";
+import { loadAssistantApiKey, saveAssistantApiKey, useAssistantApiKey } from "../lib/assistant";
 import {
   saveAssistantPreferences,
   useAssistantPreferences,
@@ -1363,11 +1363,14 @@ export function SettingsPanel({
   const probes = useSchematic((s) => s.probes);
   const clearProbes = useSchematic((s) => s.clearProbes);
   const setProbeColor = useSchematic((s) => s.setProbeColor);
+  const storedApiKey = useAssistantApiKey();
   const [apiKeyInput, setApiKeyInput] = useState(loadAssistantApiKey);
   const assistantPreferences = useAssistantPreferences();
   const [localAiStatus, setLocalAiStatus] = useState<LocalAiStatus | null>(null);
   const [localAiBusy, setLocalAiBusy] = useState(false);
   const [localAiError, setLocalAiError] = useState<string | null>(null);
+
+  useEffect(() => setApiKeyInput(storedApiKey), [storedApiKey]);
 
   useEffect(() => {
     if (assistantPreferences.provider !== "local-mlx") return;
@@ -1475,7 +1478,7 @@ export function SettingsPanel({
                 <span className="settings-field-hint">
                   {assistantPreferences.provider === "local-mlx"
                     ? "Runs on this Mac through Tau's fixed loopback endpoint. Circuit context stays local."
-                    : "Uses Claude Sonnet 5 through api.anthropic.com with your session-only key."}
+                    : "Uses Claude Sonnet 5 through api.anthropic.com with your Keychain-protected key."}
                 </span>
               </label>
 
@@ -1569,7 +1572,7 @@ export function SettingsPanel({
                       saveAssistantApiKey(next);
                     }}
                   />
-                  <span className="settings-field-hint">Kept only for this Tau session and sent only to api.anthropic.com.</span>
+                  <span className="settings-field-hint">Stored securely in your system keychain and sent only to api.anthropic.com.</span>
                 </label>
               )}
             </div>

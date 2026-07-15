@@ -15,7 +15,7 @@ WIRE 144 96 80 96
 WIRE 304 96 224 96
 WIRE 304 144 304 96
 WIRE 80 192 80 96
-WIRE 304 240 304 224
+WIRE 304 240 304 208
 FLAG 80 192 0
 FLAG 304 240 0
 FLAG 304 96 vout
@@ -101,6 +101,14 @@ describe("assistant ASC action boundary", () => {
       filename: "floating.asc",
       source: VALID_ASC.replace(/FLAG \d+ \d+ 0\n/g, ""),
     })).toThrow(/ground reference/i);
+  });
+
+  it("rejects electrically dangling pins before a generated file can be created", () => {
+    const disconnected = VALID_ASC.replace("WIRE 144 96 80 96\n", "");
+    expect(() => parseCreateAscAction("tool-dangling", {
+      filename: "broken.asc",
+      source: disconnected,
+    })).toThrow(/electrically incomplete.*only connected to one pin/i);
   });
 
   it("accepts no more than one create-or-apply action in a model turn", () => {

@@ -378,7 +378,9 @@ fn endpoint_is_listening() -> bool {
     }
     let mut first_bytes = [0u8; 12];
     match stream.read(&mut first_bytes) {
-        Ok(read) if read >= 12 => first_bytes.starts_with(b"HTTP/1.1 200") || first_bytes.starts_with(b"HTTP/1.0 200"),
+        Ok(read) if read >= 12 => {
+            first_bytes.starts_with(b"HTTP/1.1 200") || first_bytes.starts_with(b"HTTP/1.0 200")
+        }
         _ => false,
     }
 }

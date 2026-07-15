@@ -168,7 +168,7 @@ function safeFilename(value: unknown): string {
   return `${trimmed}.asc`;
 }
 
-function validatedAscSource(value: unknown): {
+function validatedAscSource(value: unknown, validateElectrical: boolean): {
   source: string;
   document: SchematicDocument;
   componentCount: number;
@@ -199,6 +199,12 @@ function validatedAscSource(value: unknown): {
   if (imported.components.length === 0 || imported.warnings.length > 0) {
     throw new Error("source cannot be imported faithfully by Tau");
   }
+  if (validateElectrical) {
+    const circuit = extractCircuit(imported.components, imported.wires, imported.netLabels);
+    if (circuit.warnings.length > 0) {
+      throw new Error(`source is electrically incomplete: ${circuit.warnings.slice(0, 4).join(" ")}`);
+    }
+  }
 
   return {
     source,
@@ -214,23 +220,23 @@ function validatedAscSource(value: unknown): {
   };
 }
 
-export function parseCreateAscAction(id: string, input: unknown): AssistantCreateAscAction {
+export function parseCreateAscAction(id: string, input: unknown, validateElectrical = true): AssistantCreateAscAction {
   if (!id || id.length > 160) throw new Error("tool call has no valid id");
   const payload = record(input);
   if (!payload) throw new Error("tool input must be an object");
   const allowed = new Set(["filename", "source"]);
   if (Object.keys(payload).some((key) => !allowed.has(key))) throw new Error("tool input contains unknown fields");
   const filename = safeFilename(payload.filename);
-  const asc = validatedAscSource(payload.source);
+  const asc = validatedAscSource(payload.source, validateElectrical);
   return { type: "create_asc", id, filename, ...asc };
 }
 
-export function parseApplyCurrentAscAction(id: string, input: unknown): AssistantApplyCurrentAscAction {
+export function parseApplyCurrentAscAction(id: string, input: unknown, validateElectrical = true): AssistantApplyCurrentAscAction {
   if (!id || id.length > 160) throw new Error("tool call has no valid id");
   const payload = record(input);
   if (!payload) throw new Error("tool input must be an object");
   if (Object.keys(payload).some((key) => key !== "source")) throw new Error("tool input contains unknown fields");
-  const asc = validatedAscSource(payload.source);
+  const asc = validatedAscSource(payload.source, validateElectrical);
   if (ascRewriteRisks(asc.source).length > 0) {
     throw new Error("source cannot replace the current Tau document losslessly");
   }

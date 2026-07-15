@@ -9,14 +9,47 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## ⏱ HEARTBEAT
 - **Headline metric:** 1786 reviewed-tree tests green · corpus 82/82 import · 82/82 op-converge · 79/82 warning-clean
-- **Run started (UTC):** 2026-07-15T15:14Z
+- **Run started (UTC):** 2026-07-15T15:34Z
 - **Synced to origin:** auto/ltspice-parity @ HEAD.
-- **Claimed unit:** Assistant visible progress + bounded Anthropic proposal repair.
+- **Claimed unit:** Persistent assistant credentials/history + electrically safe AI proposals + Tau app icon.
 - **Status:** DONE
-- **Last completed sub-step:** Packaged Tau.app shows visible Sonnet phases,
-  elapsed time, activity, and Stop; rejected ASC receives one bounded repair.
+- **Last completed sub-step:** Fresh release Tau.app launched with the new icon assets and exposed the
+  Keychain-protected Anthropic setting; all desktop/Rust gates passed.
 - **Plan:** continue DoD leftovers; keep cloud live tests opt-in to protect credits.
-- **Next step:** Omar signs/notarizes when ready; continue corpus/DoD leftovers.
+- **Next step:** re-enter the Anthropic key once; subsequent launches restore it from the OS keychain.
+
+---
+
+## 2026-07-15T15:51Z — auto/ltspice-parity — Persistent assistant + safe proposals + app icon
+
+### What I did
+- Added native OS-keychain storage for the Anthropic API key, including safe
+  hydration/write ordering so an in-flight read cannot overwrite user input.
+- Added bounded per-schematic assistant transcript persistence; Clear removes
+  that schematic's saved history and tool payloads/actions are never retained.
+- Made direct cloud ASC proposals fail electrical-graph warnings before Create,
+  feeding dangling-pin diagnostics through the existing single repair pass.
+- Replaced the placeholder application artwork with a circuit-trace Tau icon
+  and regenerated the macOS, Windows, iOS, and Android icon sets.
+
+### Files
+- `apps/desktop/src-tauri/src/credentials.rs`, Cargo dependency/lockfile, invoke registration
+- `apps/desktop/src/lib/assistant.ts`, `assistantMemory.ts`, `assistantActions.ts`
+- `apps/desktop/src/components/AssistantPanel.tsx`, `ShellPanels.tsx`, `App.tsx`
+- Assistant memory/action/panel tests and `apps/desktop/src-tauri/icons/**`
+
+### Tests and QA
+- Desktop typecheck + full Vitest: 1790 passed / 6 skipped.
+- Desktop production build, cargo fmt, Clippy `-D warnings`, and Rust tests:
+  19 passed / 1 ignored real-ngspice environment smoke.
+- Fresh `tauri build --bundles app`: pass; rebuilt Tau.app launched and the
+  packaged Settings UI reported the Keychain-protected credential boundary.
+
+### Parity items
+- §8 assistant persistence, safe generated-circuit boundary, and packaged app branding advanced.
+
+### Next step
+- Enter the Anthropic key once in the rebuilt app; it will persist across launches.
 
 ---
 

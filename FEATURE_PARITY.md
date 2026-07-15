@@ -1202,8 +1202,9 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   top-right toolbar entry opens the same assistant beside Schematic or
   Simulator. Context is built from the real document/result; Anthropic tool
   output is parsed/validated as supported LTspice ASC and shown as an explicit
-  Create action rather than silently changing the circuit. The API key is kept
-  in memory for the current Tau session only. For exact post-run questions, a
+  Create action rather than silently changing the circuit. The API key is
+  persisted through the native OS keychain (never web/project storage), and a
+  bounded transcript is restored independently for each schematic. For exact post-run questions, a
   bounded private `inspect_simulation_signal` operation evaluates real transient
   vectors/expressions and returns min/max/average/RMS/final/classification to the
   model; tool syntax and payloads never appear in chat. CSP, action validation,
@@ -1243,6 +1244,10 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   activity bar, and a persistent Stop control. A rejected Anthropic ASC tool
   call receives exactly one private validator-guided repair pass before Tau
   surfaces an error, eliminating the former wait-then-manually-reprompt dead end.
+  Direct cloud ASC proposals must also pass Tau's electrical graph warnings, so
+  dangling generated pins are repaired/rejected before a misleading Create card
+  can reach disk. The packaged app now uses a circuit-trace Tau icon at every
+  platform asset size instead of the placeholder mark.
 - 🟡 Component picker matching LTspice (F2 part browser over the full library)
   — **F2 now opens the searchable part palette** (symbols, categories, hotkeys,
   ↑↓/↵ placement); remaining: coverage audit vs. LTspice's full library tree.
