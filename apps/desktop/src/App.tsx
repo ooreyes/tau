@@ -778,6 +778,20 @@ function App() {
   }, [openDocument, showNotice]);
 
   const createAssistantCircuit = useCallback(async (action: AssistantCreateAscAction) => {
+    // Latched before any await/branch below so the auto-run effect (keyed on
+    // the schematic store's directives) still fires whether this circuit ends
+    // up disk-backed or as a pathless scratchpad.
+    pendingAutoRunRef.current = pickAutoRunAnalysis(action.document.directives ?? []);
+    if (!useProject.getState().rootPath) {
+      // No Schematics folder chosen yet — don't fail the creation outright.
+      // openDocument's existing pathless-tab handling (blank-starter swap when
+      // the lone tab is empty, otherwise a new tab) already loads the document
+      // into the schematic store via loadCircuit, which is what makes the
+      // directives-keyed auto-run effect actually see the new circuit.
+      openDocument(action.document, action.filename);
+      showNotice(`Opened ${action.filename} as a scratchpad — choose a Schematics folder to save files.`);
+      return;
+    }
     const path = await createSchematicInRoot(action.filename);
     if (!path) throw new Error(useProject.getState().error ?? "Could not create schematic.");
     try {
@@ -788,7 +802,6 @@ function App() {
       await deleteProjectNode(path);
       throw error;
     }
-    pendingAutoRunRef.current = pickAutoRunAnalysis(action.document.directives ?? []);
     // Open the Tau-native document (wires meet symbol pins). The ASC on disk
     // remains the durable interchange file; re-importing it here would attach
     // LTspice pin overrides and visually detach wires from Tau glyphs.

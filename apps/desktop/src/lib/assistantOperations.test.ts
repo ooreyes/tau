@@ -62,7 +62,11 @@ describe("assistant internal simulation operations", () => {
       params: EMPTY_SCOPE,
     });
     expect(missing.ok).toBe(false);
-    expect(JSON.parse(missing.content).error).toMatch(/no finite values/i);
+    const parsed = JSON.parse(missing.content) as { error: string; availableSignals?: string[] };
+    expect(parsed.error).toMatch(/no finite values/i);
+    // The wrong-name failure must carry the real roster so the model can
+    // retry with an exact signal instead of telling the user to go check.
+    expect(parsed.availableSignals).toContain("V(out)");
   });
 
   it("rejects malformed inputs at the operation boundary", () => {

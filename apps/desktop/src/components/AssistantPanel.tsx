@@ -27,6 +27,7 @@ import {
 import { useAssistantPreferences } from "../lib/assistantPreferences";
 import { AssistantProviderError, type AssistantProviderReply } from "../lib/assistantProvider";
 import { LocalMlxAssistant, LOCAL_MLX_MODEL_PRESETS } from "../lib/localMlxAssistant";
+import { getLocalAiStatus, startLocalAi, LOCAL_AI_PRESETS, type LocalAiStatus } from "../lib/localAiRuntime";
 import { renderMiniMarkdown } from "../lib/miniMarkdown";
 import { PanelResizeHandle, usePanelWidth, type PanelWidthConfig } from "./panelResize";
 
@@ -143,6 +144,71 @@ export function AssistantPanel({
   const localAbortRef = useRef<AbortController | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
 
+  // First-run local AI onboarding: proactively surface setup instead of
+  // letting the first send() fail. Only tracked for the local-mlx provider —
+  // switching to Anthropic drops the status so the card never lingers.
+  const [localAiStatus, setLocalAiStatus] = useState<LocalAiStatus | null>(null);
+  const [localAiBusy, setLocalAiBusy] = useState(false);
+
+  useEffect(() => {
+    if (preferences.provider !== "local-mlx") {
+      setLocalAiStatus(null);
+      return;
+    }
+    let cancelled = false;
+    void getLocalAiStatus().then((next) => {
+      if (!cancelled) setLocalAiStatus(next);
+    }).catch(() => {
+      if (!cancelled) setLocalAiStatus(null);
+    });
+    return () => { cancelled = true; };
+  }, [preferences.provider, preferences.localModel]);
+
+  // Weights load asynchronously in native code — poll only while starting,
+  // matching the Settings sheet's own local-runtime polling (ShellPanels.tsx).
+  useEffect(() => {
+    if (preferences.provider !== "local-mlx" || localAiStatus?.state !== "starting") return;
+    let cancelled = false;
+    const timer = globalThis.setInterval(() => {
+      void getLocalAiStatus().then((next) => {
+        if (!cancelled) setLocalAiStatus(next);
+      }).catch(() => {});
+    }, 1500);
+    return () => {
+      cancelled = true;
+      globalThis.clearInterval(timer);
+    };
+  }, [preferences.provider, localAiStatus?.state]);
+
+  const localAiPresets = localAiStatus?.presets.length ? localAiStatus.presets : LOCAL_AI_PRESETS;
+  const selectedLocalAiPreset = localAiPresets.find((preset) => preset.id === preferences.localModel)
+    ?? LOCAL_AI_PRESETS.find((preset) => preset.id === preferences.localModel)!;
+  // Native start/download can fail synchronously (e.g. a non-Tauri browser
+  // runtime — see localAiRuntime.startLocalAi) as well as via a returned
+  // "error" status; installed stays false in both the browser fallback and a
+  // native Mac without the MLX runtime present, so gate the button on it
+  // rather than only on state to avoid offering a button that can only throw.
+  const showLocalAiSetup = preferences.provider === "local-mlx" && localAiStatus !== null && localAiStatus.state !== "ready";
+  const showLocalAiStartButton = showLocalAiSetup
+    && localAiStatus!.installed
+    && (localAiStatus!.state === "stopped" || localAiStatus!.state === "error");
+
+  const startLocalAiSetup = useCallback(async () => {
+    setLocalAiBusy(true);
+    try {
+      const next = await startLocalAi(preferences.localModel, !selectedLocalAiPreset.downloaded);
+      setLocalAiStatus(next);
+    } catch (error) {
+      setLocalAiStatus((prev) => (prev ? {
+        ...prev,
+        state: "error",
+        detail: error instanceof Error ? error.message : "Could not start the local MLX runtime.",
+      } : prev));
+    } finally {
+      setLocalAiBusy(false);
+    }
+  }, [preferences.localModel, selectedLocalAiPreset]);
+
   useEffect(() => {
     const el = listRef.current;
     if (el) el.scrollTop = el.scrollHeight;
@@ -222,12 +288,27 @@ export function AssistantPanel({
         if (controller.signal.aborted || localAbortRef.current !== controller) return;
         localAbortRef.current = null;
         completeTurn(reply);
+        // A completion proves the runtime is alive. If the setup card is
+        // still showing a stale "stopped" (the server was started elsewhere,
+        // e.g. the first-run dialog), reconcile so the card retires.
+        setLocalAiStatus((current) => {
+          if (current && current.state !== "ready") {
+            void getLocalAiStatus().then(setLocalAiStatus).catch(() => {});
+          }
+          return current;
+        });
       }).catch((localError: unknown) => {
         if (controller.signal.aborted
           || (localError instanceof AssistantProviderError && localError.kind === "aborted")
           || localAbortRef.current !== controller) return;
         localAbortRef.current = null;
         failTurn(localProviderError(localError));
+        // The server can die between the mount-time status check and this
+        // send; refresh so the setup card reappears instead of stranding the
+        // user on an error with no start button.
+        if (localError instanceof AssistantProviderError && localError.kind === "offline") {
+          void getLocalAiStatus().then(setLocalAiStatus).catch(() => {});
+        }
       });
       return;
     }
@@ -365,6 +446,30 @@ export function AssistantPanel({
         </div>
       ) : (
         <>
+          {showLocalAiSetup && localAiStatus && (
+            <div className="assistant-setup-card" data-state={localAiStatus.state}>
+              <div className="assistant-setup-head">
+                <Sparkles size={14} strokeWidth={1.7} aria-hidden="true" />
+                <div className="assistant-setup-copy">
+                  <strong>{selectedLocalAiPreset.label}</strong>
+                  <span>{selectedLocalAiPreset.downloadMb.toLocaleString("en-US")} MB</span>
+                </div>
+              </div>
+              <p className="assistant-setup-detail" role="status">{localAiStatus.detail}</p>
+              {showLocalAiStartButton && (
+                <div className="assistant-setup-actions">
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={localAiBusy}
+                    onClick={() => void startLocalAiSetup()}
+                  >
+                    {selectedLocalAiPreset.downloaded ? "Start" : "Download & start"}
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
           <div className="assistant-messages" ref={listRef} aria-live="polite">
             {messages.length === 0 && !error && (
               <div className="assistant-intro">

@@ -106,7 +106,9 @@ describe.runIf(live)("localMlxAssistant (live server)", () => {
         allowCurrentApply: false,
       });
       expect(reply.actions).toHaveLength(0);
-      expect(reply.text).toContain("?");
+      // A follow-up may be phrased imperatively ("Please specify …"), so
+      // accept any request for missing details, not only literal questions.
+      expect(reply.text).toMatch(/\?|specify|provide|clarify|what|which/i);
     },
   );
 });

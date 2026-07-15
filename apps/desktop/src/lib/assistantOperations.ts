@@ -66,8 +66,27 @@ export function findAssistantOperation(content: readonly unknown[]): AssistantOp
   return null;
 }
 
-function failure(message: string): AssistantOperationResult {
-  return { ok: false, content: JSON.stringify({ ok: false, error: message }) };
+function failure(message: string, availableSignals?: string[]): AssistantOperationResult {
+  return {
+    ok: false,
+    content: JSON.stringify({
+      ok: false,
+      error: message,
+      // Let the model correct a guessed name (e.g. V(IN) when the net is SIG)
+      // in its next tool call instead of surfacing "verify the signal names"
+      // to the user as a dead end.
+      ...(availableSignals && availableSignals.length > 0 ? { availableSignals } : {}),
+    }),
+  };
+}
+
+/** Exact plottable names for this run, capped to keep tool results compact. */
+function availableSignals(analysis: AnalysisResult | null): string[] {
+  if (!analysis?.ok) return [];
+  return [
+    ...analysis.traces.map((trace) => trace.label),
+    ...(analysis.currents ?? []).map((current) => current.label),
+  ].slice(0, 48);
 }
 
 /** Execute one bounded, read-only operation against the supplied run snapshot. */
@@ -93,11 +112,11 @@ export function executeAssistantOperation(
     context.params.scope,
     context.params.funcs,
   );
-  if (!evaluated.ok) return failure(evaluated.error);
+  if (!evaluated.ok) return failure(evaluated.error, availableSignals(context.analysis));
   if (!context.analysis?.ok) return failure("No successful transient analysis is available.");
 
   const statistics = traceStatistics(context.analysis.times, evaluated.trace.values);
-  if (!statistics) return failure("The expression has no finite samples.");
+  if (!statistics) return failure("The expression has no finite samples.", availableSignals(context.analysis));
   const classification = classifySignal(context.analysis.times, evaluated.trace.values);
 
   return {

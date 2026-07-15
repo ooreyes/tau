@@ -311,6 +311,12 @@ describe("assistant circuit plan", () => {
     })).toThrow(/M2\.s[\s\S]*MOSFET fix pattern/);
   });
 
+  it("normalizes a star-prefixed directive the way it normalizes dot and bang", () => {
+    // Qwen intermittently emits "*op" for ".op"; the safelist still gates it.
+    const action = compileAssistantCircuitPlan("star-op", { ...divider, directives: ["*op"] });
+    expect(action.document.directives).toContain("op");
+  });
+
   it("rejects path-like values and unsafe simulator directives", () => {
     expect(() => compileAssistantCircuitPlan("x", {
       ...divider,

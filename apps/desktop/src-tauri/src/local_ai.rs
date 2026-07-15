@@ -2,6 +2,7 @@ use std::{
     env,
     ffi::OsString,
     fs,
+    io::{Read, Write},
     net::{IpAddr, Ipv4Addr, SocketAddr, TcpStream},
     path::{Path, PathBuf},
     process::{Child, Command, Stdio},
@@ -359,8 +360,27 @@ fn model_is_downloaded(preset: ModelPreset) -> bool {
 }
 
 fn endpoint_is_listening() -> bool {
+    // A bare TCP probe reports a half-dead server (open listener, wedged
+    // interpreter) as ready, so the assistant then fails on every request
+    // while Settings insists everything is fine. Require an actual HTTP
+    // response from the models endpoint.
     let address = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), LOCAL_AI_PORT);
-    TcpStream::connect_timeout(&address, Duration::from_millis(80)).is_ok()
+    let Ok(mut stream) = TcpStream::connect_timeout(&address, Duration::from_millis(80)) else {
+        return false;
+    };
+    let _ = stream.set_read_timeout(Some(Duration::from_millis(400)));
+    let _ = stream.set_write_timeout(Some(Duration::from_millis(200)));
+    let request = format!(
+        "GET /v1/models HTTP/1.1\r\nHost: {LOCAL_AI_HOST}:{LOCAL_AI_PORT}\r\nConnection: close\r\n\r\n"
+    );
+    if stream.write_all(request.as_bytes()).is_err() {
+        return false;
+    }
+    let mut first_bytes = [0u8; 12];
+    match stream.read(&mut first_bytes) {
+        Ok(read) if read >= 12 => first_bytes.starts_with(b"HTTP/1.1 200") || first_bytes.starts_with(b"HTTP/1.0 200"),
+        _ => false,
+    }
 }
 
 fn preset_info() -> Vec<LocalAiPresetInfo> {
@@ -532,7 +552,15 @@ pub fn start_local_ai(
         ));
     }
 
-    let child = Command::new(executable)
+    // With cached weights, a Hugging Face Hub revision check on flaky or
+    // absent network can crash mlx_lm.server at startup ("cannot schedule new
+    // futures after interpreter shutdown"). Offline mode skips the check; it
+    // is only safe when no download is needed.
+    let mut command = Command::new(executable);
+    if model_is_downloaded(preset) {
+        command.env("HF_HUB_OFFLINE", "1");
+    }
+    let child = command
         .args([
             OsString::from("--model"),
             OsString::from(preset.repository),

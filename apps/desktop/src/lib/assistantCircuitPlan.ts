@@ -574,7 +574,16 @@ function parsePlan(input: unknown): CircuitPlan {
       const ref = token.slice(0, split);
       const rawPin = token.slice(split + 1);
       const component = byRef.get(ref.toLowerCase());
-      if (!component) throw new Error(`${token} references an unknown component`);
+      if (!component) {
+        // Name the declared refs: a small model that invented "Vtri" (or
+        // mistyped a ref) needs the actual roster to converge in one repair
+        // attempt — either connect an existing ref or declare the missing one.
+        const declared = [...byRef.values()].map((candidate) => candidate.ref).join(", ");
+        throw new Error(
+          `${token} references an unknown component — declared components are: ${declared}. `
+          + `Either use one of those refs or add the missing component to the components list`,
+        );
+      }
       const pin = canonicalizeAssistantPin(component.kind, rawPin);
       const validIds = getLocalPins(component.kind).map((candidate) => candidate.id);
       if (!validIds.includes(pin)) {
@@ -696,7 +705,9 @@ function parsePlan(input: unknown): CircuitPlan {
   }
   const safeDirective = /^(?:tran|ac|op|dc|noise|tf|step|meas|param|func|temp|options|model)\b/i;
   const directives = rawDirectives.map((raw, index) => {
-    const directive = cleanText(raw, `directives[${index}]`, 240).replace(/^[.!]\s*/, "");
+    // Leading "*" is tolerated alongside "."/"!": Qwen intermittently emits
+    // "*op" for ".op", and the safelist below still gates what may run.
+    const directive = cleanText(raw, `directives[${index}]`, 240).replace(/^[.!*]\s*/, "");
     if (!safeDirective.test(directive)) throw new Error(`directive .${directive.split(/\s/)[0]} is not allowed in an AI plan`);
     return directive;
   });
@@ -907,6 +918,9 @@ function rotationForComponent(
 function componentLevels(plan: DirectCircuitPlan): Map<string, number> {
   const neighbors = new Map(plan.components.map((component) => [component.ref, new Set<string>()]));
   for (const net of plan.nets) {
+    // The ground rail connects almost everything; treating it as adjacency
+    // collapses the signal-flow ordering (a load lands next to the source).
+    if (net.name === "0") continue;
     const refs = [...new Set(net.pins.map((pin) => pin.slice(0, pin.lastIndexOf("."))))];
     for (const left of refs) for (const right of refs) if (left !== right) neighbors.get(left)?.add(right);
   }
@@ -937,8 +951,17 @@ function moveComponent(
 ): void {
   const component = components.find((candidate) => candidate.label === label);
   if (!component || (dx === 0 && dy === 0)) return;
-  component.x = Math.round((component.x + dx) / GRID) * GRID;
-  component.y = Math.round((component.y + dy) / GRID) * GRID;
+  const x = Math.round((component.x + dx) / GRID) * GRID;
+  const y = Math.round((component.y + dy) / GRID) * GRID;
+  // Alignment slides accumulate over passes; refuse any slide that would walk
+  // this part onto (or right next to) another center, or the aligner can
+  // collapse a whole column one 64px hop at a time.
+  const collides = components.some((other) =>
+    other !== component && Math.abs(other.x - x) < 96 && Math.abs(other.y - y) < 96,
+  );
+  if (collides) return;
+  component.x = x;
+  component.y = y;
 }
 
 /**
@@ -985,6 +1008,61 @@ function alignConnectedPins(plan: DirectCircuitPlan, components: SchematicCompon
   }
 }
 
+/**
+ * Row order within each level, chosen so parts sit next to what they connect
+ * to (Sugiyama barycenter sweeps) instead of stacking in plan order — plan
+ * order is what left an LC filter's C and R dangling far below the bridge
+ * while L drifted to the top. Shorter columns are then centered against the
+ * tallest so single-part levels ride the visual middle of the signal path.
+ */
+function rowAssignments(plan: DirectCircuitPlan, levels: Map<string, number>): {
+  rowByRef: Map<string, number>;
+  rowCountByLevel: Map<number, number>;
+} {
+  const adjacency = new Map<string, Set<string>>(plan.components.map((component) => [component.ref, new Set()]));
+  for (const net of plan.nets) {
+    if (net.name === "0") continue; // ground pulls everything everywhere
+    const refs = [...new Set(net.pins.map((pin) => pin.slice(0, pin.lastIndexOf("."))))];
+    for (const left of refs) for (const right of refs) if (left !== right) adjacency.get(left)?.add(right);
+  }
+  const refsByLevel = new Map<number, string[]>();
+  for (const component of plan.components) {
+    const level = levels.get(component.ref) ?? 0;
+    refsByLevel.set(level, [...(refsByLevel.get(level) ?? []), component.ref]);
+  }
+  const orderedLevels = [...refsByLevel.keys()].sort((a, b) => a - b);
+  const rowByRef = new Map<string, number>();
+  for (const level of orderedLevels) {
+    (refsByLevel.get(level) ?? []).forEach((ref, index) => rowByRef.set(ref, index));
+  }
+
+  const sweep = (levelOrder: number[], neighborSide: (own: number, other: number) => boolean): void => {
+    for (const level of levelOrder) {
+      const refs = refsByLevel.get(level) ?? [];
+      if (refs.length < 2) continue;
+      const scored = refs.map((ref, index) => {
+        const anchors = [...(adjacency.get(ref) ?? [])]
+          .filter((other) => neighborSide(level, levels.get(other) ?? level))
+          .map((other) => rowByRef.get(other) ?? 0);
+        const score = anchors.length > 0
+          ? anchors.reduce((sum, row) => sum + row, 0) / anchors.length
+          : rowByRef.get(ref) ?? index;
+        return { ref, score, index };
+      });
+      scored.sort((a, b) => a.score - b.score || a.index - b.index);
+      scored.forEach((entry, row) => rowByRef.set(entry.ref, row));
+    }
+  };
+  // One downstream sweep pulls parts toward their sources; one upstream sweep
+  // settles feedback/load parts the first pass could not see yet.
+  sweep(orderedLevels, (own, other) => other < own);
+  sweep([...orderedLevels].reverse(), (own, other) => other > own);
+
+  const rowCountByLevel = new Map<number, number>();
+  for (const [level, refs] of refsByLevel) rowCountByLevel.set(level, refs.length);
+  return { rowByRef, rowCountByLevel };
+}
+
 function layoutComponents(plan: DirectCircuitPlan): SchematicComponent[] {
   const levels = componentLevels(plan);
   const netMembers = netMembership(plan);
@@ -992,16 +1070,21 @@ function layoutComponents(plan: DirectCircuitPlan): SchematicComponent[] {
   for (const net of plan.nets) {
     for (const pin of net.pins) netByPin.set(pin.toLowerCase(), net.name);
   }
-  const rowsByLevel = new Map<number, number>();
+  const { rowByRef, rowCountByLevel } = rowAssignments(plan, levels);
+  const tallestColumn = Math.max(1, ...rowCountByLevel.values());
   const components = plan.components.map((component, index) => {
     const level = levels.get(component.ref) ?? index;
-    const row = rowsByLevel.get(level) ?? 0;
-    rowsByLevel.set(level, row + 1);
+    const row = rowByRef.get(component.ref) ?? 0;
+    const columnRows = rowCountByLevel.get(level) ?? 1;
+    // Whole row-pitch steps only: fractional offsets leave columns on
+    // different lattices, and the pin-alignment slides (≤64px) can then snap
+    // two parts onto the same point. Same-lattice rows can never collide.
+    const centerOffset = Math.floor((tallestColumn - columnRows) / 2) * ROW_PITCH;
     return {
       id: `ai-component-${index + 1}`,
       kind: component.kind,
       x: 160 + level * COLUMN_PITCH,
-      y: 208 + row * ROW_PITCH,
+      y: 208 + row * ROW_PITCH + centerOffset,
       rotation: rotationForComponent(component, levels, netByPin, netMembers),
       value: component.value ?? CATALOG_BY_KIND[component.kind].defaultValue,
       label: component.ref,
@@ -1035,13 +1118,16 @@ export function assertAssistantDrawingIntegrity(
   wires: readonly SchematicWire[],
 ): void {
   const pinPoints: Point[] = [];
-  const centers = new Set<string>();
+  const centers = new Map<string, string>();
   for (const component of components) {
     const key = `${component.x},${component.y}`;
-    if (centers.has(key)) {
-      throw new Error(`Tau layout overlapped components at (${component.x}, ${component.y})`);
+    const occupant = centers.get(key);
+    if (occupant !== undefined) {
+      throw new Error(
+        `Tau layout overlapped ${component.label || component.kind} onto ${occupant} at (${component.x}, ${component.y})`,
+      );
     }
-    centers.add(key);
+    centers.set(key, component.label || component.kind);
     for (const pin of getComponentPins(component)) pinPoints.push({ x: pin.x, y: pin.y });
   }
   for (const wire of wires) {
@@ -1104,11 +1190,23 @@ function compileDocument(plan: DirectCircuitPlan): {
   const groundNet = plan.nets.find((net) => net.name === "0");
   if (!groundNet) throw new Error("circuit plan needs a 0 ground net");
   const groundOrigin = pinPoint(components, groundNet.pins[0]);
+  const groundX = Math.round(groundOrigin.x / GRID) * GRID;
+  let groundY = Math.round((groundOrigin.y + 64) / GRID) * GRID;
+  // The anchor pin's column may continue below it (a stacked source column):
+  // slide the symbol further down until it clears every component box, or it
+  // renders on top of the next part's body.
+  for (let nudge = 0; nudge < 4; nudge += 1) {
+    const collides = components.some((other) =>
+      Math.abs(other.x - groundX) < 96 && Math.abs(other.y - groundY) < 96,
+    );
+    if (!collides) break;
+    groundY += 80;
+  }
   components.push({
     id: "ai-ground-1",
     kind: "ground",
-    x: Math.round(groundOrigin.x / GRID) * GRID,
-    y: Math.round((groundOrigin.y + 64) / GRID) * GRID,
+    x: groundX,
+    y: groundY,
     rotation: 0,
     value: "",
     label: "",

@@ -69,12 +69,58 @@ vi.mock("@anthropic-ai/sdk", () => {
   };
 });
 
+// Isolates AssistantPanel's proactive local-AI onboarding card from real
+// fetch/timer activity: the existing local-mlx tests below drive chat
+// completions through a raw `fetch` mock, and without this the panel's own
+// getLocalAiStatus() call would consume/interleave with those same fetch
+// calls. Defaults to "ready" (card hidden) so unrelated tests are unaffected;
+// onboarding-specific tests override the resolved value per case.
+const { localAiStatusMock, startLocalAiMock } = vi.hoisted(() => ({
+  localAiStatusMock: vi.fn(),
+  startLocalAiMock: vi.fn(),
+}));
+vi.mock("../lib/localAiRuntime", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../lib/localAiRuntime")>()),
+  getLocalAiStatus: localAiStatusMock,
+  startLocalAi: startLocalAiMock,
+}));
+
 import { AssistantPanel, type AssistantPanelProps } from "./AssistantPanel";
 import { saveAssistantApiKey } from "../lib/assistant";
 import { saveAssistantPreferences } from "../lib/assistantPreferences";
 import { EMPTY_SCOPE } from "../simulation/paramScope";
 import type { AnalysisResult } from "../simulation/linearTransient";
 import type { SchematicComponent } from "../schematic/types";
+import type { LocalAiStatus } from "../lib/localAiRuntime";
+
+function localAiStatus(overrides: Partial<LocalAiStatus> = {}): LocalAiStatus {
+  return {
+    state: "ready",
+    endpoint: "http://127.0.0.1:8080/v1",
+    managed: true,
+    installed: true,
+    modelId: null,
+    modelRepository: null,
+    detail: "Local inference is ready.",
+    presets: [
+      {
+        id: "qwen3-4b-4bit",
+        repository: "Qwen/Qwen3-4B-MLX-4bit",
+        label: "Qwen3 4B · 4-bit",
+        downloadMb: 2_300,
+        downloaded: false,
+      },
+      {
+        id: "qwen3-1.7b-4bit",
+        repository: "Qwen/Qwen3-1.7B-MLX-4bit",
+        label: "Qwen3 1.7B · 4-bit",
+        downloadMb: 914,
+        downloaded: false,
+      },
+    ],
+    ...overrides,
+  };
+}
 
 // This jsdom build has localStorage disabled — install an in-memory Storage
 // (mirrors panelResize.test.tsx / TelemetryDock.test.tsx) so the API-key
@@ -104,6 +150,9 @@ beforeEach(() => {
   saveAssistantPreferences({ provider: "anthropic", localModel: "qwen3-1.7b-4bit" });
   streams.length = 0;
   streamRequests.length = 0;
+  localAiStatusMock.mockReset();
+  localAiStatusMock.mockResolvedValue(localAiStatus());
+  startLocalAiMock.mockReset();
 });
 
 const resistor = (id: string, label: string): SchematicComponent => ({
@@ -547,5 +596,114 @@ describe("AssistantPanel", () => {
     expect((await screen.findByRole("alert")).textContent).toContain("couldn't validate that circuit proposal");
     expect(onCreateAsc).not.toHaveBeenCalled();
     expect(onApplyCurrent).not.toHaveBeenCalled();
+  });
+});
+
+describe("AssistantPanel local AI onboarding", () => {
+  it("stays absent for the Anthropic provider even though the local runtime is unready", async () => {
+    saveAssistantApiKey("test-key");
+    localAiStatusMock.mockResolvedValue(localAiStatus({ state: "stopped", detail: "Choose a model to start local inference." }));
+    render(<AssistantPanel {...baseProps()} />);
+
+    // Give the (never-fired-for-anthropic) status effect a tick to prove it
+    // really is gated on provider, not just not-yet-resolved.
+    await Promise.resolve();
+    expect(screen.queryByText("Download & start")).toBeNull();
+    expect(screen.queryByText("Start")).toBeNull();
+    expect(localAiStatusMock).not.toHaveBeenCalled();
+  });
+
+  it("is absent once the local runtime reports ready", async () => {
+    saveAssistantPreferences({ provider: "local-mlx", localModel: "qwen3-4b-4bit" });
+    localAiStatusMock.mockResolvedValue(localAiStatus({ state: "ready", detail: "Local inference is ready." }));
+    render(<AssistantPanel {...baseProps()} />);
+
+    await waitFor(() => expect(localAiStatusMock).toHaveBeenCalled());
+    expect(screen.queryByText("Local inference is ready.")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Start" })).toBeNull();
+  });
+
+  it("offers Download & start for an undownloaded preset, and just Start once it's downloaded", async () => {
+    saveAssistantPreferences({ provider: "local-mlx", localModel: "qwen3-4b-4bit" });
+    localAiStatusMock.mockResolvedValue(localAiStatus({
+      state: "stopped",
+      installed: true,
+      detail: "MLX LM is installed. Choose a model to start local inference.",
+      presets: [
+        { id: "qwen3-4b-4bit", repository: "Qwen/Qwen3-4B-MLX-4bit", label: "Qwen3 4B · 4-bit", downloadMb: 2_300, downloaded: false },
+        { id: "qwen3-1.7b-4bit", repository: "Qwen/Qwen3-1.7B-MLX-4bit", label: "Qwen3 1.7B · 4-bit", downloadMb: 914, downloaded: false },
+      ],
+    }));
+    const { unmount } = render(<AssistantPanel {...baseProps()} />);
+
+    expect(await screen.findByRole("button", { name: "Download & start" })).toBeTruthy();
+    expect(screen.getByText("MLX LM is installed. Choose a model to start local inference.")).toBeTruthy();
+    expect(screen.getByText("2,300 MB")).toBeTruthy();
+    // Composer stays usable while the setup card is showing.
+    expect(screen.getByRole("textbox", { name: "Message the assistant" })).toBeTruthy();
+    unmount();
+
+    localAiStatusMock.mockResolvedValue(localAiStatus({
+      state: "stopped",
+      installed: true,
+      detail: "MLX LM is installed. Choose a model to start local inference.",
+      presets: [
+        { id: "qwen3-4b-4bit", repository: "Qwen/Qwen3-4B-MLX-4bit", label: "Qwen3 4B · 4-bit", downloadMb: 2_300, downloaded: true },
+        { id: "qwen3-1.7b-4bit", repository: "Qwen/Qwen3-1.7B-MLX-4bit", label: "Qwen3 1.7B · 4-bit", downloadMb: 914, downloaded: false },
+      ],
+    }));
+    render(<AssistantPanel {...baseProps()} />);
+    expect(await screen.findByRole("button", { name: "Start" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Download & start" })).toBeNull();
+  });
+
+  it("starts the runtime, polls while starting, and hides the card once ready", async () => {
+    saveAssistantPreferences({ provider: "local-mlx", localModel: "qwen3-4b-4bit" });
+    localAiStatusMock.mockResolvedValueOnce(localAiStatus({ state: "stopped", installed: true, detail: "Choose a model to start local inference." }));
+    startLocalAiMock.mockResolvedValue(localAiStatus({ state: "starting", detail: "Loading model weights into unified memory…" }));
+
+    render(<AssistantPanel {...baseProps()} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Download & start" }));
+
+    expect(await screen.findByText("Loading model weights into unified memory…")).toBeTruthy();
+    expect(startLocalAiMock).toHaveBeenCalledWith("qwen3-4b-4bit", true);
+    // Starting hides the button (nothing to click while it's already working).
+    expect(screen.queryByRole("button", { name: "Start" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Download & start" })).toBeNull();
+
+    // Poll picks up readiness and the card disappears.
+    localAiStatusMock.mockResolvedValue(localAiStatus({ state: "ready", detail: "Local inference is ready." }));
+    await waitFor(() => expect(screen.queryByText("Loading model weights into unified memory…")).toBeNull(), { timeout: 3000 });
+  }, 10000);
+
+  it("shows an error state's detail without a retry button when the preset isn't installed", async () => {
+    saveAssistantPreferences({ provider: "local-mlx", localModel: "qwen3-1.7b-4bit" });
+    localAiStatusMock.mockResolvedValue(localAiStatus({
+      state: "error",
+      installed: false,
+      detail: "The MLX server exited unexpectedly.",
+    }));
+    render(<AssistantPanel {...baseProps()} />);
+
+    expect(await screen.findByText("The MLX server exited unexpectedly.")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Start" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Download & start" })).toBeNull();
+  });
+
+  it("shows the browser-fallback detail text instead of a button (managed:false, not installed, stopped)", async () => {
+    saveAssistantPreferences({ provider: "local-mlx", localModel: "qwen3-4b-4bit" });
+    localAiStatusMock.mockResolvedValue(localAiStatus({
+      state: "stopped",
+      managed: false,
+      installed: false,
+      detail: "Open Tau desktop to start MLX local inference.",
+    }));
+    render(<AssistantPanel {...baseProps()} />);
+
+    expect(await screen.findByText("Open Tau desktop to start MLX local inference.")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Start" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Download & start" })).toBeNull();
+    // The composer is still fully usable in this browser dev fallback.
+    expect(screen.getByRole("textbox", { name: "Message the assistant" })).toBeTruthy();
   });
 });
