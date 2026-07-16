@@ -6703,11 +6703,6 @@ button.bottom-panel-head:focus-visible {
   text-overflow: ellipsis;
 }
 
-.status-codec {
-  color: var(--faint);
-  flex: 0 0 auto;
-}
-
 .status-hints {
   display: flex;
   align-items: center;
@@ -6716,16 +6711,6 @@ button.bottom-panel-head:focus-visible {
   flex: 1;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-/* Right-aligned metrics readout (grid pitch · counts · zoom) — an instrument-
-   panel numeric strip. Font/tabular-figure declarations now live in the
-   shared `.mono-num` utility (applied alongside this class in StatusBar.tsx,
-   same as `.status-file`/`.status-codec`) — this rule only carries what
-   `.mono-num` doesn't (color, layout). */
-.status-count {
-  color: var(--muted);
-  flex: 0 0 auto;
 }
 
 /* Keycaps in the hint strip now share the app-wide flat hairline mono
@@ -6994,6 +6979,13 @@ button.bottom-panel-head:focus-visible {
 .settings-local-actions {
   display: flex;
   justify-content: flex-end;
+}
+
+.settings-inline-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: var(--sp-2);
+  align-items: center;
 }
 
 .minimized-panel-dock {

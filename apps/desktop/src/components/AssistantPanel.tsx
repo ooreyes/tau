@@ -36,6 +36,7 @@ import { AssistantProviderError, type AssistantProviderReply } from "../lib/assi
 import type { AssistantRunMetrics } from "../lib/assistantProvider";
 import { LocalMlxAssistant, LOCAL_MLX_MODEL_PRESETS } from "../lib/localMlxAssistant";
 import { getLocalAiStatus, startLocalAi, LOCAL_AI_PRESETS, type LocalAiStatus } from "../lib/localAiRuntime";
+import { loadCustomLocalAiModels } from "../lib/localAiModels";
 import { renderMiniMarkdown } from "../lib/miniMarkdown";
 import {
   clearAssistantRecovery,
@@ -308,9 +309,14 @@ export function AssistantPanel({
     };
   }, [preferences.provider, localAiStatus?.state]);
 
-  const localAiPresets = localAiStatus?.presets.length ? localAiStatus.presets : LOCAL_AI_PRESETS;
+  const customLocalAiModels = loadCustomLocalAiModels();
+  const localAiPresets = [
+    ...(localAiStatus?.presets.length ? localAiStatus.presets : LOCAL_AI_PRESETS),
+    ...customLocalAiModels,
+  ];
   const selectedLocalAiPreset = localAiPresets.find((preset) => preset.id === preferences.localModel)
-    ?? LOCAL_AI_PRESETS.find((preset) => preset.id === preferences.localModel)!;
+    ?? LOCAL_AI_PRESETS.find((preset) => preset.id === preferences.localModel)
+    ?? LOCAL_AI_PRESETS[1];
   // Native start/download can fail synchronously (e.g. a non-Tauri browser
   // runtime — see localAiRuntime.startLocalAi) as well as via a returned
   // "error" status; installed stays false in both the browser fallback and a
@@ -324,7 +330,9 @@ export function AssistantPanel({
   const startLocalAiSetup = useCallback(async () => {
     setLocalAiBusy(true);
     try {
-      const next = await startLocalAi(preferences.localModel, !selectedLocalAiPreset.downloaded);
+      const next = "custom" in selectedLocalAiPreset
+        ? await startLocalAi(preferences.localModel, !selectedLocalAiPreset.downloaded, selectedLocalAiPreset.repository)
+        : await startLocalAi(preferences.localModel, !selectedLocalAiPreset.downloaded);
       setLocalAiStatus(next);
     } catch (error) {
       setLocalAiStatus((prev) => (prev ? {
@@ -715,7 +723,7 @@ export function AssistantPanel({
       saveAssistantPreferences({ ...preferences, provider: "anthropic" });
       return;
     }
-    if (value === "qwen3-1.7b-4bit" || value === "qwen3-4b-4bit") {
+    if (localAiPresets.some((preset) => preset.id === value)) {
       saveAssistantPreferences({ provider: "local-mlx", localModel: value });
     }
   };
@@ -750,6 +758,9 @@ export function AssistantPanel({
               <SelectItem value="anthropic">{ASSISTANT_MODEL_LABEL} · Cloud</SelectItem>
               <SelectItem value="qwen3-4b-4bit">{LOCAL_MLX_MODEL_PRESETS["qwen3-4b-4bit"].label} · Local</SelectItem>
               <SelectItem value="qwen3-1.7b-4bit">{LOCAL_MLX_MODEL_PRESETS["qwen3-1.7b-4bit"].label} · Local</SelectItem>
+              {customLocalAiModels.map((model) => (
+                <SelectItem key={model.id} value={model.id}>{model.label} · Imported</SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>

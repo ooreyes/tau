@@ -637,6 +637,45 @@ describe("schematic document store", () => {
     ]);
   });
 
+  it("copies and pastes an entire marquee-selected circuit as one offset group", () => {
+    useSchematic.getState().loadCircuit({
+      components: [
+        { id: "r1", kind: "resistor", x: 64, y: 64, rotation: 0, value: "1k", label: "R1" },
+        { id: "c1", kind: "capacitor", x: 160, y: 64, rotation: 0, value: "1u", label: "C1" },
+      ],
+      wires: [{ id: "w1", points: [{ x: 96, y: 64 }, { x: 128, y: 64 }] }],
+      netLabels: [{ id: "l1", x: 128, y: 64, text: "OUT" }],
+      probes: [{ id: "p1", x: 128, y: 64, color: "var(--trace-red)" }],
+    });
+    const loaded = useSchematic.getState();
+    useSchematic.getState().selectMixed({
+      componentIds: loaded.components.map((component) => component.id),
+      wireIds: loaded.wires.map((wire) => wire.id),
+      labelIds: loaded.netLabels.map((label) => label.id),
+      probeIds: loaded.probes.map((probe) => probe.id),
+    });
+
+    useSchematic.getState().copySelected();
+    useSchematic.getState().paste();
+
+    const state = useSchematic.getState();
+    expect(state.components.map((component) => component.label)).toEqual(["R1", "C1", "R2", "C2"]);
+    expect(state.components.slice(2).map(({ x, y }) => ({ x, y }))).toEqual([
+      { x: 96, y: 96 },
+      { x: 192, y: 96 },
+    ]);
+    expect(state.wires[1].points).toEqual([{ x: 128, y: 96 }, { x: 160, y: 96 }]);
+    expect(state.netLabels[1]).toMatchObject({ x: 160, y: 96, text: "OUT" });
+    expect(state.probes[1]).toMatchObject({ x: 160, y: 96, color: "var(--trace-red)" });
+    expect(state.selectedIds).toHaveLength(2);
+    expect(state.selectedWireIds).toHaveLength(1);
+    expect(state.selectedLabelIds).toHaveLength(1);
+    expect(state.selectedProbeIds).toHaveLength(1);
+    useSchematic.getState().undo();
+    expect(useSchematic.getState().components).toHaveLength(2);
+    expect(useSchematic.getState().wires).toHaveLength(1);
+  });
+
   it("copy/paste/duplicate are no-ops without a selection or clipboard", () => {
     useSchematic.getState().loadCircuit(sourceDocument());
     useSchematic.getState().select(null);

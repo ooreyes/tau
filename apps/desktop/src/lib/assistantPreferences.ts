@@ -22,7 +22,7 @@ function validPreferences(value: unknown): AssistantPreferences | null {
   if (!value || typeof value !== "object") return null;
   const candidate = value as Partial<AssistantPreferences>;
   if (candidate.provider !== "local-mlx" && candidate.provider !== "anthropic") return null;
-  if (candidate.localModel !== "qwen3-1.7b-4bit" && candidate.localModel !== "qwen3-4b-4bit") return null;
+  if (typeof candidate.localModel !== "string" || candidate.localModel.length === 0) return null;
   return { provider: candidate.provider, localModel: candidate.localModel };
 }
 

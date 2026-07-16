@@ -27,6 +27,13 @@ interface Doc {
   directives: string[];
 }
 
+interface SchematicClipboard {
+  components: SchematicComponent[];
+  wires: SchematicWire[];
+  netLabels: NetLabel[];
+  probes: Probe[];
+}
+
 export interface SchematicDocument {
   components: SchematicComponent[];
   wires: SchematicWire[];
@@ -146,9 +153,9 @@ interface SchematicState extends Doc {
   /** Mirror (horizontal flip) the current selection, or the placement ghost in place mode. */
   mirror: () => void;
 
-  /** Clipboard holding a copied component (ephemeral; never recorded in history). */
-  clipboard: SchematicComponent | null;
-  /** Copy the selected component into the clipboard. */
+  /** Clipboard holding a copied mixed selection (ephemeral; never in history). */
+  clipboard: SchematicClipboard | null;
+  /** Copy every marquee-selected component/wire/label/probe. */
   copySelected: () => void;
   /** Paste the clipboard component (offset + fresh ref-des), selecting the copy. */
   paste: () => void;
@@ -224,6 +231,70 @@ function placeClone(
       : {}),
   };
   return { comp, prefix: entry.prefix, next };
+}
+
+function clipboardFromSelection(state: SchematicState): SchematicClipboard | null {
+  const componentIds = new Set(state.selectedIds.length > 0
+    ? state.selectedIds
+    : state.selectedId ? [state.selectedId] : []);
+  const wireIds = new Set(state.selectedWireIds.length > 0
+    ? state.selectedWireIds
+    : state.selectedWireId ? [state.selectedWireId] : []);
+  const labelIds = new Set(state.selectedLabelIds);
+  const probeIds = new Set(state.selectedProbeIds);
+  const clipboard: SchematicClipboard = {
+    components: state.components.filter((component) => componentIds.has(component.id)).map((component) => ({ ...component })),
+    wires: state.wires.filter((wire) => wireIds.has(wire.id)).map((wire) => ({ ...wire, points: wire.points.map((point) => ({ ...point })) })),
+    netLabels: state.netLabels.filter((label) => labelIds.has(label.id)).map((label) => ({ ...label })),
+    probes: state.probes.filter((probe) => probeIds.has(probe.id)).map((probe) => ({ ...probe })),
+  };
+  return clipboard.components.length + clipboard.wires.length + clipboard.netLabels.length + clipboard.probes.length > 0
+    ? clipboard
+    : null;
+}
+
+function pasteClipboard(state: SchematicState, clipboard: SchematicClipboard): Partial<SchematicState> {
+  const counters = { ...state.counters };
+  const componentIdMap = new Map<string, string>();
+  const components = clipboard.components.map((source) => {
+    const { comp, prefix, next } = placeClone(counters, source);
+    counters[prefix] = next;
+    componentIdMap.set(source.id, comp.id);
+    return comp;
+  });
+  const wires = clipboard.wires.map((wire) => ({
+    ...wire,
+    id: nanoid(6),
+    points: wire.points.map((point) => ({ x: point.x + PASTE_OFFSET, y: point.y + PASTE_OFFSET })),
+  }));
+  const netLabels = clipboard.netLabels.map((label) => ({
+    ...label,
+    id: nanoid(6),
+    x: label.x + PASTE_OFFSET,
+    y: label.y + PASTE_OFFSET,
+  }));
+  const probes = clipboard.probes.map(({ netId: _netId, componentId, ...probe }) => ({
+    ...probe,
+    id: nanoid(6),
+    x: probe.x + PASTE_OFFSET,
+    y: probe.y + PASTE_OFFSET,
+    ...(componentId && componentIdMap.has(componentId)
+      ? { componentId: componentIdMap.get(componentId) }
+      : {}),
+  }));
+  return {
+    components: [...state.components, ...components],
+    wires: [...state.wires, ...wires],
+    netLabels: [...state.netLabels, ...netLabels],
+    probes: [...state.probes, ...probes],
+    counters,
+    selectedId: components[0]?.id ?? null,
+    selectedIds: components.map((component) => component.id),
+    selectedWireId: wires[0]?.id ?? null,
+    selectedWireIds: wires.map((wire) => wire.id),
+    selectedLabelIds: netLabels.map((label) => label.id),
+    selectedProbeIds: probes.map((probe) => probe.id),
+  };
 }
 
 /** Rebuild designator counters from labels so loaded circuits keep numbering correct. */
@@ -726,42 +797,19 @@ export const useSchematic = create<SchematicState>()((set) => {
       }),
 
     copySelected: () =>
-      set((s) => {
-        if (!s.selectedId) return {};
-        const src = s.components.find((c) => c.id === s.selectedId);
-        return src ? { clipboard: { ...src } } : {};
-      }),
+      set((s) => ({ clipboard: clipboardFromSelection(s) ?? s.clipboard })),
 
     paste: () =>
       set((s) => {
         if (!s.clipboard) return {};
-        const { comp, prefix, next } = placeClone(s.counters, s.clipboard);
-        return {
-          ...recordInto(s),
-          components: [...s.components, comp],
-          counters: { ...s.counters, [prefix]: next },
-          selectedId: comp.id,
-          selectedWireId: null,
-          selectedWireIds: [], selectedLabelIds: [], selectedProbeIds: [],
-          selectedIds: [comp.id],
-        };
+        return { ...recordInto(s), ...pasteClipboard(s, s.clipboard) };
       }),
 
     duplicateSelected: () =>
       set((s) => {
-        if (!s.selectedId) return {};
-        const src = s.components.find((c) => c.id === s.selectedId);
-        if (!src) return {};
-        const { comp, prefix, next } = placeClone(s.counters, src);
-        return {
-          ...recordInto(s),
-          components: [...s.components, comp],
-          counters: { ...s.counters, [prefix]: next },
-          selectedId: comp.id,
-          selectedWireId: null,
-          selectedWireIds: [], selectedLabelIds: [], selectedProbeIds: [],
-          selectedIds: [comp.id],
-        };
+        const clipboard = clipboardFromSelection(s);
+        if (!clipboard) return {};
+        return { ...recordInto(s), ...pasteClipboard(s, clipboard), clipboard };
       }),
 
     // Delete EVERYTHING in the current selection — components, wires, net

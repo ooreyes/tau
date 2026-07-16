@@ -134,6 +134,22 @@ describe("LocalMlxAssistant", () => {
     expect(capturedUrl).toBe("http://127.0.0.1:8080/v1/chat/completions");
   });
 
+  it("sends an imported MLX repository to the same fixed loopback server", async () => {
+    let capturedBody = "";
+    const fetchImpl = vi.fn(async (_input: string | URL | Request, init?: RequestInit) => {
+      capturedBody = String(init?.body);
+      return completion({ content: "Ready." });
+    });
+    const provider = new LocalMlxAssistant({
+      model: "custom:mlx-community/Circuit-Qwen-4bit",
+      fetchImpl,
+    });
+
+    await provider.complete(request());
+    expect((JSON.parse(capturedBody) as { model: string }).model).toBe("mlx-community/Circuit-Qwen-4bit");
+    expect(provider.endpoint).toBe("http://127.0.0.1:8080/v1/chat/completions");
+  });
+
   it("turns a logical OpenAI function call into a Tau-built validated ASC action", async () => {
     const fetchImpl = vi.fn(async () => completion({
       content: `Version 4\nSHEET 1 880 680\n${VALID_ASC}`,

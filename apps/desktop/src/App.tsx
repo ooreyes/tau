@@ -273,6 +273,7 @@ function App() {
   // genuinely different run/document superseded this one" and discards
   // whatever comes back.
   const transientAbortRef = useRef<AbortController | null>(null);
+  const saveActiveToProjectRef = useRef<() => Promise<boolean>>(async () => false);
 
   // Analysis to auto-start after an assistant-confirmed circuit lands, latched
   // by createAssistantCircuit/applyAssistantCircuit and consumed once by the
@@ -546,10 +547,12 @@ function App() {
   }, [components, wires, netLabels]);
 
   const runAnalysis = useCallback(async () => {
+    if (!(await saveActiveToProjectRef.current())) return;
     confirmLargeRunIfNeeded(effectiveAnalysisOptions, () => { void executeTransient(effectiveAnalysisOptions); });
   }, [effectiveAnalysisOptions, executeTransient, confirmLargeRunIfNeeded]);
 
   const runAndShowSimulator = useCallback(async () => {
+    if (!(await saveActiveToProjectRef.current())) return;
     confirmLargeRunIfNeeded(effectiveAnalysisOptions, () => {
       setMode("simulator");
       setGraphOpen(true);
@@ -1002,14 +1005,14 @@ function App() {
     // behind that operation so rapid Enter -> Cmd+S cannot target a stale path.
     await projectRenameInFlightRef.current;
     const tab = tabsRef.current.find((t) => t.id === activeId);
-    if (!tab) return;
+    if (!tab) return false;
     let filePath = tab.filePath ?? null;
     let createdForSave = false;
     if (!filePath) {
       filePath = await createSchematicInRoot(tab.title);
       if (!filePath) {
         showNotice(useProject.getState().error ?? "Open a Schematics folder before saving.");
-        return;
+        return false;
       }
       createdForSave = true;
     }
@@ -1029,7 +1032,7 @@ function App() {
         if (createdForSave) await deleteProjectNode(savePath);
         console.warn(`Blocked lossy save for ${basename(savePath)}: ${blockReason}`);
         showNotice(`Save blocked: ${blockReason}`);
-        return;
+        return false;
       }
       await writeSim(savePath, serialized.contents);
       setTabs((list) => list.map((t) => (
@@ -1050,11 +1053,14 @@ function App() {
       } else {
         showNotice(`${createdForSave ? "Created" : "Saved"} ${basename(savePath)}`);
       }
+      return true;
     } catch (error) {
       if (createdForSave) await deleteProjectNode(savePath);
       showNotice(error instanceof Error ? error.message : "Save failed.");
+      return false;
     }
   }, [activeId, components, wires, probes, netLabels, directives, currentDocument, currentSignature, createSchematicInRoot, deleteProjectNode, writeSim, showNotice]);
+  saveActiveToProjectRef.current = saveActiveToProject;
 
   // Switch to an already-open tab, preserving each tab's content in memory.
   const switchTab = useCallback((id: string) => {

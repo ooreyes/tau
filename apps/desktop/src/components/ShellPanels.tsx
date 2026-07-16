@@ -68,6 +68,11 @@ import {
   type LocalAiPresetInfo,
   type LocalAiStatus,
 } from "../lib/localAiRuntime";
+import {
+  importCustomLocalAiModel,
+  loadCustomLocalAiModels,
+  removeCustomLocalAiModel,
+} from "../lib/localAiModels";
 import { clampPanelWidth, PanelResizeHandle, usePanelWidth, type PanelWidthConfig } from "./panelResize";
 
 /** Drag-to-resize bounds for the two side panels (§11 Unit B). Minimums keep
@@ -647,21 +652,6 @@ export function ExplorerPanel({
             onClick={() => ascInputRef.current?.click()}
           >
             <VscodeImportFileIcon />
-          </button>
-          <button
-            type="button"
-            title="Open Schematics folder"
-            aria-label="Open Schematics folder"
-            onClick={async () => {
-              if (capability === "none") {
-                onNotice("Opening a disk folder needs the Tau desktop app.");
-                return;
-              }
-              const ok = await openFolder();
-              if (ok) onNotice("Opened project folder.");
-            }}
-          >
-            <VscodeImportFolderIcon />
           </button>
           <button
             type="button"
@@ -1772,6 +1762,8 @@ export function SettingsPanel({
   const [localAiStatus, setLocalAiStatus] = useState<LocalAiStatus | null>(null);
   const [localAiBusy, setLocalAiBusy] = useState(false);
   const [localAiError, setLocalAiError] = useState<string | null>(null);
+  const [customLocalModels, setCustomLocalModels] = useState(loadCustomLocalAiModels);
+  const [customModelRepository, setCustomModelRepository] = useState("");
 
   useEffect(() => setApiKeyInput(storedApiKey), [storedApiKey]);
 
@@ -1820,7 +1812,10 @@ export function SettingsPanel({
     }
   };
 
-  const localPresets = localAiStatus?.presets.length ? localAiStatus.presets : LOCAL_AI_PRESETS;
+  const localPresets = [
+    ...(localAiStatus?.presets.length ? localAiStatus.presets : LOCAL_AI_PRESETS),
+    ...customLocalModels,
+  ];
   const selectedLocalPreset = localPresets.find((preset) => preset.id === assistantPreferences.localModel)
     ?? LOCAL_AI_PRESETS.find((preset) => preset.id === assistantPreferences.localModel)!;
   const localStateLabel = localAiStatus
@@ -1906,6 +1901,52 @@ export function SettingsPanel({
                     <span className="settings-field-hint">4B is recommended for circuit proposals and fits 8 GB Macs; 1.7B is a lighter explanation-first fallback.</span>
                   </label>
 
+                  <div className="settings-field" aria-label="Custom local models">
+                    <span>Import your MLX model</span>
+                    <div className="settings-inline-actions">
+                      <Input
+                        value={customModelRepository}
+                        aria-label="Hugging Face model repository"
+                        placeholder="owner/model-name"
+                        onChange={(event) => setCustomModelRepository(event.currentTarget.value)}
+                      />
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={!customModelRepository.trim()}
+                        onClick={() => {
+                          try {
+                            const models = importCustomLocalAiModel(customModelRepository);
+                            const imported = models.find((model) => model.repository === customModelRepository.trim());
+                            setCustomLocalModels(models);
+                            setCustomModelRepository("");
+                            if (imported) saveAssistantPreferences({ provider: "local-mlx", localModel: imported.id });
+                            onNotice("Local model imported. Choose Download & Start to fetch its weights.");
+                          } catch (error) {
+                            setLocalAiError(error instanceof Error ? error.message : "Could not import that model.");
+                          }
+                        }}
+                      >
+                        Import
+                      </Button>
+                      {selectedLocalPreset && "custom" in selectedLocalPreset && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            if (!window.confirm(`Remove ${selectedLocalPreset.label} from Tau? Downloaded Hugging Face cache files are left untouched.`)) return;
+                            setCustomLocalModels(removeCustomLocalAiModel(selectedLocalPreset.id));
+                            saveAssistantPreferences({ provider: "local-mlx", localModel: "qwen3-4b-4bit" });
+                            onNotice("Removed custom model from Tau.");
+                          }}
+                        >
+                          Remove
+                        </Button>
+                      )}
+                    </div>
+                    <span className="settings-field-hint">Paste any MLX-compatible Hugging Face repository. Tau validates the name and passes it directly to the local MLX runtime—never through a shell.</span>
+                  </div>
+
                   <div className="settings-local-runtime" data-state={localAiStatus?.state ?? "checking"}>
                     <div className="settings-local-runtime-head">
                       <span className="settings-local-state-dot" aria-hidden="true" />
@@ -1916,7 +1957,9 @@ export function SettingsPanel({
                     </p>
                     {localAiStatus && !selectedLocalPreset.downloaded && localAiStatus.state !== "ready" && (
                       <span className="settings-local-download">
-                        Download size: {selectedLocalPreset.downloadMb.toLocaleString("en-US")} MB
+                        {selectedLocalPreset.downloadMb > 0
+                          ? `Download size: ${selectedLocalPreset.downloadMb.toLocaleString("en-US")} MB`
+                          : "Download size is set by the imported repository."}
                       </span>
                     )}
                     {localAiError && <span className="settings-local-error" role="alert">{localAiError}</span>}
@@ -1945,10 +1988,9 @@ export function SettingsPanel({
                             size="sm"
                             variant="outline"
                             disabled={localAiBusy}
-                            onClick={() => void runLocalAiAction(() => startLocalAi(
-                              assistantPreferences.localModel,
-                              !selectedLocalPreset.downloaded,
-                            ))}
+                            onClick={() => void runLocalAiAction(() => "custom" in selectedLocalPreset
+                              ? startLocalAi(assistantPreferences.localModel, !selectedLocalPreset.downloaded, selectedLocalPreset.repository)
+                              : startLocalAi(assistantPreferences.localModel, !selectedLocalPreset.downloaded))}
                           >
                             {selectedLocalPreset.downloaded ? "Start" : "Download & Start"}
                           </Button>

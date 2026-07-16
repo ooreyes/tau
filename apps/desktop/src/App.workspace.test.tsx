@@ -184,6 +184,25 @@ describe("App schematic workspace tools", () => {
     });
   });
 
+  it("automatically saves a lossless multi-segment ASC wire before Run", async () => {
+    await renderOpenProject();
+    const path = `${DEFAULT_WORKSPACE_ID}/untitled.asc`;
+    act(() => useSchematic.getState().addWire([
+      { x: 64, y: 64 },
+      { x: 128, y: 64 },
+      { x: 128, y: 128 },
+    ]));
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Run simulation" })[0]);
+
+    await waitFor(() => {
+      const contents = useProject.getState().workspaceFiles[path].contents;
+      expect(contents.match(/^WIRE /gm)).toHaveLength(2);
+    });
+    expect(screen.queryByText(/Save blocked/)).toBeNull();
+    expect(screen.queryByRole("img", { name: "untitled.asc has unsaved changes" })).toBeNull();
+  });
+
   it("renames an open tab on disk and saves later edits only to the renamed path", async () => {
     let releaseRename!: () => void;
     const renameGate = new Promise<void>((resolve) => { releaseRename = resolve; });

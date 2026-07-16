@@ -76,7 +76,6 @@ describe("ExplorerPanel VS Code action row", () => {
       "New schematic file",
       "New folder",
       "Import LTspice schematic",
-      "Open Schematics folder",
       "Refresh explorer",
       "Collapse folders in explorer",
     ]) {
@@ -87,7 +86,7 @@ describe("ExplorerPanel VS Code action row", () => {
     expect(screen.getByRole("button", { name: "New schematic file" }).querySelector(".vscode-new-file")).toBeTruthy();
     expect(screen.getByRole("button", { name: "New folder" }).querySelector(".vscode-new-folder")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Import LTspice schematic" }).querySelector(".vscode-import-file")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Open Schematics folder" }).querySelector(".vscode-import-folder")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Open Schematics folder" })).toBeNull();
 
     expect(useProject.getState().expanded.length).toBeGreaterThan(0);
     fireEvent.click(screen.getByRole("button", { name: "Collapse folders in explorer" }));
@@ -190,13 +189,11 @@ describe("ExplorerPanel VS Code action row", () => {
     expect(onNotice).not.toHaveBeenCalledWith("Explorer refreshed.");
   });
 
-  it("keeps folder opening and LTspice import in the compact toolbar without a redundant footer", () => {
-    const { onNotice } = renderExplorer();
-    expect(screen.getByRole("button", { name: "Open Schematics folder" })).toBeTruthy();
+  it("keeps LTspice import in the compact toolbar without a redundant open-folder icon", () => {
+    renderExplorer();
+    expect(screen.queryByRole("button", { name: "Open Schematics folder" })).toBeNull();
     expect(screen.getByRole("button", { name: "Import LTspice schematic" })).toBeTruthy();
     expect(document.querySelector(".explorer-secondary-actions")).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Open Schematics folder" }));
-    expect(onNotice).toHaveBeenCalledWith("Opening a disk folder needs the Tau desktop app.");
   });
 
   it("offers real-folder actions when native Tau has no project open", () => {

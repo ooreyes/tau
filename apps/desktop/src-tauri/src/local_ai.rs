@@ -18,43 +18,81 @@ const LOCAL_AI_PORT: u16 = 8080;
 const LOCAL_AI_ENDPOINT: &str = "http://127.0.0.1:8080/v1";
 const ALLOWED_ORIGINS: &str = "tauri://localhost,http://localhost:1420,http://127.0.0.1:1420";
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 struct ModelPreset {
-    id: &'static str,
-    repository: &'static str,
-    label: &'static str,
+    id: String,
+    repository: String,
+    label: String,
     download_mb: u32,
 }
 
-const MODEL_PRESETS: [ModelPreset; 2] = [
-    ModelPreset {
-        id: "qwen3-1.7b-4bit",
-        repository: "Qwen/Qwen3-1.7B-MLX-4bit",
-        label: "Qwen3 1.7B · 4-bit",
-        download_mb: 914,
-    },
-    ModelPreset {
-        id: "qwen3-4b-4bit",
-        repository: "Qwen/Qwen3-4B-MLX-4bit",
-        label: "Qwen3 4B · 4-bit",
-        download_mb: 2_300,
-    },
-];
+fn model_presets() -> [ModelPreset; 2] {
+    [
+        ModelPreset {
+            id: "qwen3-1.7b-4bit".to_string(),
+            repository: "Qwen/Qwen3-1.7B-MLX-4bit".to_string(),
+            label: "Qwen3 1.7B · 4-bit".to_string(),
+            download_mb: 914,
+        },
+        ModelPreset {
+            id: "qwen3-4b-4bit".to_string(),
+            repository: "Qwen/Qwen3-4B-MLX-4bit".to_string(),
+            label: "Qwen3 4B · 4-bit".to_string(),
+            download_mb: 2_300,
+        },
+    ]
+}
 
 fn preset_by_id(id: &str) -> Result<ModelPreset, String> {
-    MODEL_PRESETS
-        .iter()
-        .copied()
+    model_presets()
+        .into_iter()
         .find(|preset| preset.id == id)
         .ok_or_else(|| "Tau does not recognize that local model preset.".to_string())
+}
+
+fn valid_hugging_face_repository(repository: &str) -> bool {
+    let mut parts = repository.split('/');
+    let valid_part = |part: &str| {
+        !part.is_empty()
+            && part.len() <= 96
+            && part
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-'))
+    };
+    matches!((parts.next(), parts.next(), parts.next()), (Some(owner), Some(model), None) if valid_part(owner) && valid_part(model))
+}
+
+fn resolve_model(model_id: &str, repository: Option<String>) -> Result<ModelPreset, String> {
+    if let Ok(preset) = preset_by_id(model_id) {
+        return Ok(preset);
+    }
+    let repository = repository
+        .filter(|value| valid_hugging_face_repository(value))
+        .ok_or_else(|| {
+            "Enter a valid Hugging Face MLX repository as owner/model-name.".to_string()
+        })?;
+    if model_id != format!("custom:{repository}") {
+        return Err("The imported local model id does not match its repository.".to_string());
+    }
+    let label = repository
+        .split('/')
+        .next_back()
+        .unwrap_or(&repository)
+        .to_string();
+    Ok(ModelPreset {
+        id: model_id.to_string(),
+        repository,
+        label,
+        download_mb: 0,
+    })
 }
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LocalAiPresetInfo {
-    id: &'static str,
-    repository: &'static str,
-    label: &'static str,
+    id: String,
+    repository: String,
+    label: String,
     download_mb: u32,
     downloaded: bool,
 }
@@ -66,8 +104,8 @@ pub struct LocalAiStatus {
     endpoint: &'static str,
     managed: bool,
     installed: bool,
-    model_id: Option<&'static str>,
-    model_repository: Option<&'static str>,
+    model_id: Option<String>,
+    model_repository: Option<String>,
     detail: String,
     presets: Vec<LocalAiPresetInfo>,
 }
@@ -335,7 +373,7 @@ fn hugging_face_cache_root() -> Option<PathBuf> {
         .or_else(|| home_dir().map(|home| home.join(".cache/huggingface/hub")))
 }
 
-fn model_cache_directory(preset: ModelPreset) -> Option<PathBuf> {
+fn model_cache_directory(preset: &ModelPreset) -> Option<PathBuf> {
     let encoded = format!("models--{}", preset.repository.replace('/', "--"));
     hugging_face_cache_root().map(|root| root.join(encoded))
 }
@@ -346,7 +384,7 @@ fn model_snapshot_is_complete(snapshot: &Path) -> bool {
         && snapshot.join("model.safetensors").is_file()
 }
 
-fn model_is_downloaded(preset: ModelPreset) -> bool {
+fn model_is_downloaded(preset: &ModelPreset) -> bool {
     let Some(cache) = model_cache_directory(preset) else {
         return false;
     };
@@ -386,15 +424,14 @@ fn endpoint_is_listening() -> bool {
 }
 
 fn preset_info() -> Vec<LocalAiPresetInfo> {
-    MODEL_PRESETS
-        .iter()
-        .copied()
+    model_presets()
+        .into_iter()
         .map(|preset| LocalAiPresetInfo {
-            id: preset.id,
-            repository: preset.repository,
-            label: preset.label,
+            id: preset.id.to_string(),
+            repository: preset.repository.to_string(),
+            label: preset.label.to_string(),
             download_mb: preset.download_mb,
-            downloaded: model_is_downloaded(preset),
+            downloaded: model_is_downloaded(&preset),
         })
         .collect()
 }
@@ -402,7 +439,7 @@ fn preset_info() -> Vec<LocalAiPresetInfo> {
 fn status_with(
     state: &'static str,
     managed: bool,
-    model: Option<ModelPreset>,
+    model: Option<&ModelPreset>,
     detail: impl Into<String>,
 ) -> LocalAiStatus {
     LocalAiStatus {
@@ -410,8 +447,8 @@ fn status_with(
         endpoint: LOCAL_AI_ENDPOINT,
         managed,
         installed: mlx_server_executable().is_some(),
-        model_id: model.map(|preset| preset.id),
-        model_repository: model.map(|preset| preset.repository),
+        model_id: model.map(|preset| preset.id.to_string()),
+        model_repository: model.map(|preset| preset.repository.to_string()),
         detail: detail.into(),
         presets: preset_info(),
     }
@@ -421,12 +458,12 @@ fn local_ai_status_inner(slot: &mut Option<LocalAiProcess>) -> LocalAiStatus {
     if let Some(process) = slot.as_mut() {
         match process.child.try_wait() {
             Ok(Some(exit)) => {
-                let preset = process.preset;
+                let preset = process.preset.clone();
                 *slot = None;
                 return status_with(
                     "error",
                     false,
-                    Some(preset),
+                    Some(&preset),
                     format!("The MLX server exited with {exit}."),
                 );
             }
@@ -438,7 +475,7 @@ fn local_ai_status_inner(slot: &mut Option<LocalAiProcess>) -> LocalAiStatus {
                         "starting"
                     },
                     true,
-                    Some(process.preset),
+                    Some(&process.preset),
                     if endpoint_is_listening() {
                         "Local inference is ready."
                     } else {
@@ -450,7 +487,7 @@ fn local_ai_status_inner(slot: &mut Option<LocalAiProcess>) -> LocalAiStatus {
                 return status_with(
                     "error",
                     true,
-                    Some(process.preset),
+                    Some(&process.preset),
                     format!("Could not inspect the MLX server: {error}"),
                 );
             }
@@ -523,10 +560,11 @@ pub fn start_local_ai(
     state: State<'_, LocalAiState>,
     model_id: String,
     allow_download: bool,
+    repository: Option<String>,
 ) -> Result<LocalAiStatus, String> {
     require_apple_silicon()?;
-    let preset = preset_by_id(&model_id)?;
-    if !allow_download && !model_is_downloaded(preset) {
+    let preset = resolve_model(&model_id, repository)?;
+    if !allow_download && !model_is_downloaded(&preset) {
         return Err(format!(
             "{} is not cached. Starting it downloads approximately {} MB; confirm the download in Settings first.",
             preset.label, preset.download_mb
@@ -559,13 +597,13 @@ pub fn start_local_ai(
     // futures after interpreter shutdown"). Offline mode skips the check; it
     // is only safe when no download is needed.
     let mut command = Command::new(executable);
-    if model_is_downloaded(preset) {
+    if model_is_downloaded(&preset) {
         command.env("HF_HUB_OFFLINE", "1");
     }
     let child = command
         .args([
             OsString::from("--model"),
-            OsString::from(preset.repository),
+            OsString::from(&preset.repository),
             OsString::from("--host"),
             OsString::from(LOCAL_AI_HOST),
             OsString::from("--port"),
@@ -584,11 +622,14 @@ pub fn start_local_ai(
         .stderr(Stdio::null())
         .spawn()
         .map_err(|error| format!("Could not start MLX LM: {error}"))?;
-    *slot = Some(LocalAiProcess { child, preset });
+    *slot = Some(LocalAiProcess {
+        child,
+        preset: preset.clone(),
+    });
     Ok(status_with(
         "starting",
         true,
-        Some(preset),
+        Some(&preset),
         "Loading model weights into unified memory…",
     ))
 }
@@ -640,9 +681,25 @@ mod tests {
     }
 
     #[test]
+    fn accepts_valid_imported_repositories_without_shell_syntax() {
+        let custom = resolve_model(
+            "custom:mlx-community/Circuit-Qwen-4bit",
+            Some("mlx-community/Circuit-Qwen-4bit".to_string()),
+        )
+        .unwrap();
+        assert_eq!(custom.repository, "mlx-community/Circuit-Qwen-4bit");
+        assert!(resolve_model(
+            "custom:bad;touch /tmp/nope",
+            Some("bad;touch /tmp/nope".to_string())
+        )
+        .is_err());
+        assert!(resolve_model("custom:other/model", Some("owner/model".to_string())).is_err());
+    }
+
+    #[test]
     fn maps_hugging_face_repositories_to_cache_directories() {
         let preset = preset_by_id("qwen3-4b-4bit").unwrap();
-        let path = model_cache_directory(preset).unwrap();
+        let path = model_cache_directory(&preset).unwrap();
         assert!(path.ends_with(Path::new("models--Qwen--Qwen3-4B-MLX-4bit")));
     }
 

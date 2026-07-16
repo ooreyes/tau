@@ -8,17 +8,55 @@
      `git log --oneline -8`, recover/finish/revert that unit FIRST, then go on.
      ─────────────────────────────────────────────────────────────────────── -->
 ## ⏱ HEARTBEAT
-- **Headline metric:** 1842 reviewed-tree tests green · corpus 82/82 import · 82/82 op-converge · 79/82 warning-clean
-- **Run started (UTC):** 2026-07-16T02:45Z
-- **Synced to origin:** auto/ltspice-parity @ 581a492.
-- **Claimed unit:** Release-blocking explorer rename/context actions, save/rename identity, plot-axis precision,
-  and native folder drag/drop.
+- **Headline metric:** 1848 reviewed-tree tests green · corpus 82/82 import · 82/82 op-converge · 79/82 warning-clean
+- **Run started (UTC):** 2026-07-16T03:30Z
+- **Synced to origin:** auto/ltspice-parity @ 4fefaab.
+- **Claimed unit:** Run-time autosave, marquee copy/paste, local-model lifecycle management, and status-bar cleanup.
 - **Status:** DONE
-- **Last completed sub-step:** Packaged Tau.app moved a real renamed ASC into a nested folder through the
-  pointer drag path; disk verification proved the destination exists and the source is gone.
-- **Plan:** Reproduce each bug in focused tests, repair file operations and plot axes, then verify the
-  unsigned packaged macOS app through Computer Use before consolidating/pushing the checkpoint chain.
-- **Next step:** Consolidate the recovered durability checkpoints into one intentional commit and push.
+- **Last completed sub-step:** Unsigned Tau.app rebuilt successfully; desktop control could not perform the final
+  visual pass because macOS locked, while all automated native/package gates passed.
+- **Plan:** Repair autosave/export classification and mixed-selection clipboard first, then expose real native
+  local-model setup/import/removal controls and verify the unsigned packaged app.
+- **Next step:** Unlock the Mac and repeat the no-rebuild packaged visual check, then proceed to DMG signing readiness.
+
+---
+
+## 2026-07-16T03:53Z — auto/ltspice-parity — Autosave, whole-circuit clipboard, and local model management
+
+### What I did
+- Made Run await a successful project save and removed the false lossy-export
+  warning for exact Tau-polyline → LTspice-WIRE segmentation.
+- Extended copy/paste/duplicate from one component to the complete mixed marquee
+  selection, including wires, labels, probes, fresh IDs/refdes, offset geometry,
+  selection of the clone, and one-step undo.
+- Added persistent import/select/remove controls for user-owned MLX-compatible
+  Hugging Face repositories. Both renderer and Rust validate `owner/model`, the
+  native process receives it as a direct argument without a shell, and the local
+  assistant sends the imported repository to the fixed loopback endpoint.
+- Removed the redundant open-folder icon from an already-open Explorer and
+  removed the engine and grid/component/wire/zoom readouts from the status bar.
+
+### Files
+- `apps/desktop/src/{App,App.workspace.test}.tsx`, ASC exporter/tests
+- `apps/desktop/src/store/useSchematic.ts` and tests
+- `apps/desktop/src/lib/{localAiModels,localAiRuntime,localMlxAssistant,assistantPreferences}.ts` and tests
+- `apps/desktop/src/components/{ShellPanels,AssistantPanel,StatusBar}.tsx` and tests
+- `apps/desktop/src-tauri/src/local_ai.rs`, `App.css`, parity/progress docs
+
+### Tests and QA
+- Desktop typecheck/full Vitest: 1848 passed / 6 skipped; production web build pass.
+- Rust fmt/Clippy `-D warnings`/tests: 20 passed / 1 ignored; explicit bundled
+  real-ngspice smoke pass.
+- Local `mlx-lm v0.31.3` tool environment and transitive dependencies load via
+  `mlx_lm.server --help`; unsigned packaged Tau.app build pass.
+- Computer Use packaged visual inspection remains pending only because macOS
+  locked and the desktop-control service requires a manual unlock.
+
+### Parity items
+- §1 project save workflow; §2 editor copy/paste; §8 local AI; §10 chrome cleanup.
+
+### Next step
+- Unlock macOS and visually inspect the already-built Tau.app without rebuilding.
 
 ---
 

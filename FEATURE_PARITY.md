@@ -289,7 +289,9 @@ Status legend: ✅ done · 🟡 partial · ⬜ not started
   extensions, remap every affected open tab, and serialize an immediate Cmd-S
   behind the native rename so the old path cannot be recreated. Tau probe dots
   are session annotations and no longer block an otherwise lossless `.asc`
-  save. Native WKWebView drag uses a pointer gesture instead of its unreliable
+  save. Run now waits for that save before launching simulation, and converting
+  a Tau polyline into multiple LTspice WIRE records is correctly treated as an
+  exact representation instead of a save-blocking warning. Native WKWebView drag uses a pointer gesture instead of its unreliable
   HTML drag lifecycle; packaged-app QA moved a real renamed ASC into a folder
   and verified the source disappeared and destination bytes persisted on disk.
 
@@ -383,7 +385,7 @@ Status legend: ✅ done · 🟡 partial · ⬜ not started
   The importer now sets `mirrored` for `M*` orientations so imported parts render
   flipped. 12 hand-computed tests (pin geometry incl. mirror-before-rotate, store
   toggle/undo/place, import mapping).
-- 🟡 **Copy/paste, duplicate** (single selection) — **landed** in
+- ✅ **Copy/paste, duplicate** — **landed** in
   `store/useSchematic.ts`: `copySelected` → ephemeral `clipboard`; `paste`/
   `duplicateSelected` place a `placeClone` (fresh id, next ref-des, 2-grid diagonal
   offset, `pinOverride` offset in lockstep so imported parts stay wired); both
@@ -400,7 +402,11 @@ Status legend: ✅ done · 🟡 partial · ⬜ not started
   marquee selection now translates explicitly selected standalone wires, net
   labels, and probes with its components in one undo step. A selected wire can
   start that group drag, and the pointer-down grid point is the anchor so the
-  circuit does not jump when grabbed away from a symbol center. 10 store tests.
+  circuit does not jump when grabbed away from a symbol center. **Whole-circuit
+  clipboard follow-up (2026-07-16):** Cmd-C/Cmd-V and Duplicate now clone the
+  complete marquee selection—components, wires, net labels, and probes—as one
+  offset group with fresh object IDs and reference designators, preserving
+  relative geometry and one-step undo. 11 store tests.
 - ✅ **Drag wires / move with rubber-banding** — `moveGroup` rubber-bands wire
   endpoints attached to moved pins with orthogonal elbow insertion (store-level,
   shared by single and group moves).
@@ -1250,8 +1256,12 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   incomplete/lossy/oversize serialization disables the operation. **Local MLX
   provider follow-up:** Settings now offers local Qwen3 4B (recommended) and
   1.7B presets plus Anthropic, with cache-aware Start/Stop and an explicit
-  download-size confirmation. Native inference is fixed to `127.0.0.1:8080`
-  with audited repositories and allowed origins. The model emits only logical
+  download-size confirmation. Users can also persistently import/select/remove
+  any MLX-compatible Hugging Face `owner/model` repository; both TypeScript and
+  Rust validate the identifier, and Rust passes it as a direct process argument
+  without a shell. Removing a registration deliberately leaves shared cache
+  weights untouched. Native inference is fixed to `127.0.0.1:8080`
+  with audited built-in repositories and allowed origins. The model emits only logical
   plans and exact `ref.pin` nets for 29 safe library kinds;
   Tau validates, auto-places,
   obstacle-routes, serializes, re-imports, proves requested net connectivity and
@@ -1322,7 +1332,9 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
 - ⬜ Auto-update, licensing/activation
 - 🟡 Installer + onboarding — first-run Local AI setup dialog + one-click
   `Install MLX LM` (uv tool install) in the native app; unsigned DMG already
-  builds. Signing/notarization remains human-owned.
+  builds. `uv tool install mlx-lm` installs the complete isolated transitive
+  dependency environment; packaged-runtime QA confirms `mlx_lm.server --help`
+  loads successfully. Signing/notarization remains human-owned.
 
 ## 10. Visual design system — **IMPERATIVE (Omar's directive)** — ✅ FULLY ADOPTED (2026-07-08, Phase 4c)
 

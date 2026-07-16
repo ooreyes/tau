@@ -139,6 +139,33 @@ describe("SettingsPanel local assistant lifecycle", () => {
     await waitFor(() => expect(runtime.stop).toHaveBeenCalledTimes(1));
   });
 
+  it("imports, selects, starts, and removes a custom Hugging Face MLX model", async () => {
+    runtime.getStatus.mockResolvedValue(status());
+    runtime.start.mockResolvedValue(status({ state: "starting", managed: true }));
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
+    render(<SettingsPanel {...props} />);
+    await screen.findByText("Download size: 914 MB");
+
+    fireEvent.change(screen.getByRole("textbox", { name: "Hugging Face model repository" }), {
+      target: { value: "mlx-community/Custom-Circuit-4bit" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Import" }));
+
+    await waitFor(() => expect((screen.getByRole("combobox", { name: "Local model" }) as HTMLSelectElement).value)
+      .toBe("custom:mlx-community/Custom-Circuit-4bit"));
+    fireEvent.click(screen.getByRole("button", { name: "Download & Start" }));
+    await waitFor(() => expect(runtime.start).toHaveBeenCalledWith(
+      "custom:mlx-community/Custom-Circuit-4bit",
+      true,
+      "mlx-community/Custom-Circuit-4bit",
+    ));
+    fireEvent.click(screen.getByRole("button", { name: "Remove" }));
+    expect(confirm).toHaveBeenCalledOnce();
+    await waitFor(() => expect((screen.getByRole("combobox", { name: "Local model" }) as HTMLSelectElement).value)
+      .toBe("qwen3-4b-4bit"));
+    confirm.mockRestore();
+  });
+
   it("shows the cloud key only after Anthropic is selected", async () => {
     runtime.getStatus.mockResolvedValue(status());
     render(<SettingsPanel {...props} />);

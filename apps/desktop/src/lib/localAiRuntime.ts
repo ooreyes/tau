@@ -10,7 +10,7 @@ export const LOCAL_AI_ENDPOINT = "http://127.0.0.1:8080/v1";
 export type LocalAiState = "stopped" | "starting" | "ready" | "error";
 
 export interface LocalAiPresetInfo {
-  id: "qwen3-1.7b-4bit" | "qwen3-4b-4bit";
+  id: string;
   repository: string;
   label: string;
   downloadMb: number;
@@ -111,13 +111,14 @@ export async function installLocalAiRuntime(): Promise<LocalAiStatus> {
 }
 
 export async function startLocalAi(
-  modelId: LocalAiPresetInfo["id"],
+  modelId: string,
   allowDownload: boolean,
+  repository?: string,
 ): Promise<LocalAiStatus> {
   if (!(await isTauriRuntime())) {
     throw new Error("Tau desktop is required to start the local MLX server.");
   }
-  return invokeNative<LocalAiStatus>("start_local_ai", { modelId, allowDownload });
+  return invokeNative<LocalAiStatus>("start_local_ai", { modelId, allowDownload, repository });
 }
 
 export async function stopLocalAi(): Promise<LocalAiStatus> {

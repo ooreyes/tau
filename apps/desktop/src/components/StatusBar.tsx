@@ -1,7 +1,6 @@
 import { cn } from "@/lib/utils";
 import { useSchematic } from "../store/useSchematic";
 import type { AnalysisResult } from "../simulation/linearTransient";
-import { isNativeSpiceRuntime } from "../engine/nativeSpice";
 
 type LampState = "idle" | "ok" | "error";
 
@@ -14,8 +13,6 @@ export function StatusBar({
   result: AnalysisResult | null;
   title: string;
 }) {
-  const componentCount = useSchematic((s) => s.components.length);
-  const wireCount = useSchematic((s) => s.wires.length);
   const tool = useSchematic((s) => s.tool);
   const toolLabel =
     tool.mode === "place"
@@ -32,10 +29,6 @@ export function StatusBar({
     : tool.mode === "label"
       ? "Node name — click a node or existing name; empty text removes it"
       : "Inspect — select a component to focus telemetry";
-  // ngspice runs only inside the native desktop build; the browser preview uses
-  // the built-in TypeScript solver. Surface which one is active to avoid the
-  // "ngspice isn't working" confusion when running in a browser.
-  const engineLabel = isNativeSpiceRuntime() ? "ngspice" : "built-in solver";
   // Same lamp semantics as the toolbar's transport indicator (Toolbar.tsx):
   // color is entirely state-driven, not tied to which mode you're in.
   const lampState: LampState = mode === "simulator"
@@ -60,12 +53,6 @@ export function StatusBar({
         <span className="status-lamp-text mono-num">{state}</span>
       </span>
       <span className="status-file mono-num">{title}</span>
-      <span
-        className="status-codec mono-num"
-        title={isNativeSpiceRuntime() ? "Native ngspice engine" : "Built-in TypeScript solver — ngspice runs in the desktop app"}
-      >
-        engine: {engineLabel}
-      </span>
       <span className="status-hints">
         {mode === "simulator" ? (
           <>
@@ -88,10 +75,6 @@ export function StatusBar({
             <span className="dot">·</span><kbd>⌘</kbd>+scroll zoom · two-finger pan
           </>
         )}
-      </span>
-      <span className="status-count mono-num">
-        grid 0.1 in · {componentCount} component{componentCount === 1 ? "" : "s"} · {wireCount} wire
-        {wireCount === 1 ? "" : "s"} · zoom 100%
       </span>
     </footer>
   );

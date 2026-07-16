@@ -58,7 +58,7 @@ type FetchLike = (input: string | URL | Request, init?: RequestInit) => Promise<
 type ChatPayloadMessage = { role: string; [key: string]: unknown };
 
 export interface LocalMlxAssistantOptions {
-  model?: LocalMlxModelPreset;
+  model?: LocalMlxModelPreset | string;
   /** Test seam; production always falls back to global fetch. */
   fetchImpl?: FetchLike;
 }
@@ -369,7 +369,7 @@ function classifyFetchError(error: unknown): AssistantProviderError {
  * file/canvas mutation remains entirely outside this interface. */
 export class LocalMlxAssistant implements AssistantProvider {
   readonly id = "local-mlx";
-  readonly model: LocalMlxModelPreset;
+  readonly model: string;
   readonly endpoint: string;
   private readonly fetchImpl: FetchLike;
 
@@ -388,7 +388,9 @@ export class LocalMlxAssistant implements AssistantProvider {
       ...request.history.map(({ role, content }) => ({ role, content })),
     ];
     const body = {
-      model: LOCAL_MLX_MODEL_PRESETS[this.model].model,
+      model: this.model in LOCAL_MLX_MODEL_PRESETS
+        ? LOCAL_MLX_MODEL_PRESETS[this.model as LocalMlxModelPreset].model
+        : this.model.replace(/^custom:/, ""),
       messages: baseMessages,
       tools,
       tool_choice: "auto",

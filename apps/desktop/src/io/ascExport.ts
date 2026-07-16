@@ -204,9 +204,8 @@ export function schematicToAsc(input: SchematicExportInput): SchematicToAscResul
       const b = wire.points[i + 1];
       doc.wires.push({ x1: a.x, y1: a.y, x2: b.x, y2: b.y });
     }
-    if (wire.points.length > 2) {
-      warnings.push(`Wire ${wire.id}: ${wire.points.length}-point polyline split into segments.`);
-    }
+    // Splitting an orthogonal Tau polyline into LTspice WIRE records is an
+    // exact representation, not a lossy export condition.
   }
 
   for (const c of input.components) {

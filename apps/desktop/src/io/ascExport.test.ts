@@ -155,7 +155,7 @@ describe("schematicToAsc", () => {
     expect(named).toHaveLength(1);
   });
 
-  it("splits a multi-segment Tau wire into LTspice WIRE segments and warns", () => {
+  it("splits a multi-segment Tau wire into LTspice WIRE segments without blocking save", () => {
     const { text, warnings } = schematicToAsc({
       components: [],
       wires: [{ id: "w1", points: [{ x: 0, y: 0 }, { x: 16, y: 0 }, { x: 16, y: 16 }] }],
@@ -166,7 +166,7 @@ describe("schematicToAsc", () => {
       { x1: 0, y1: 0, x2: 16, y2: 0 },
       { x1: 16, y1: 0, x2: 16, y2: 16 },
     ]);
-    expect(warnings).toHaveLength(1);
+    expect(warnings).toEqual([]);
   });
 
   it("warns and skips a component with no LTspice symbol", () => {

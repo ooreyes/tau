@@ -21,5 +21,7 @@ describe("StatusBar simulator guidance", () => {
 
     expect(screen.getByText("Inspect — select a component to focus telemetry")).toBeTruthy();
     expect(screen.queryByText(/topology locked/i)).toBeNull();
+    expect(screen.queryByText(/engine:/i)).toBeNull();
+    expect(screen.queryByText(/grid 0\.1 in/i)).toBeNull();
   });
 });
