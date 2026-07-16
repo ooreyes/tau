@@ -43,6 +43,19 @@ export type ComponentKind =
   | "testpoint"
   | "ground";
 
+/** Runtime companion to ComponentKind for validating persisted/imported data. */
+export const COMPONENT_KINDS = [
+  "resistor", "capacitor", "inductor", "vsource", "isource", "vac", "iac", "vpulse",
+  "diode", "led", "zener", "opamp", "comparator", "digitalGate", "dflop", "sampleHold",
+  "modulator", "vcvs", "vccs", "cccs", "ccvs", "bsource", "nmos", "pmos", "njf", "pjf",
+  "npn", "pnp", "potentiometer", "switch", "transformer", "tline", "subckt", "testpoint",
+  "ground",
+] as const satisfies readonly ComponentKind[];
+
+export function isComponentKind(value: string | undefined): value is ComponentKind {
+  return !!value && (COMPONENT_KINDS as readonly string[]).includes(value);
+}
+
 /** Allowed component rotations, in degrees. */
 export type Rotation = 0 | 90 | 180 | 270;
 

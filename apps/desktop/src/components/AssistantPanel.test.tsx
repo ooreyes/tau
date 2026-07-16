@@ -585,7 +585,7 @@ describe("AssistantPanel", () => {
     expect(screen.getByText("Explain R1's role in this schematic and how its value affects the current circuit.")).toBeTruthy();
   });
 
-  it("withholds current-circuit apply when the live schematic cannot be serialized completely", () => {
+  it("keeps current-circuit apply for a persisted Tau-native component", () => {
     saveAssistantApiKey("test-key");
     const unsupported: SchematicComponent = {
       id: "tp1",
@@ -604,7 +604,7 @@ describe("AssistantPanel", () => {
     fireEvent.click(screen.getByRole("button", { name: "Send" }));
 
     const request = streamRequests[0] as { tools: Array<{ name: string }> };
-    expect(request.tools.map((tool) => tool.name)).not.toContain("apply_current_asc_circuit");
+    expect(request.tools.map((tool) => tool.name)).toContain("apply_current_asc_circuit");
     expect(request.tools.map((tool) => tool.name)).toContain("build_tau_circuit");
   });
 

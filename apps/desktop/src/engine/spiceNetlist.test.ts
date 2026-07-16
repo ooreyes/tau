@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { buildSpiceDeck } from "./spiceNetlist";
 import { buildParamScope } from "../simulation/paramScope";
 import type { SchematicComponent, SchematicWire } from "../schematic/types";
+import { CATALOG } from "../schematic/catalog";
 
 const component = (
   kind: SchematicComponent["kind"],
@@ -14,6 +15,22 @@ const component = (
 const wire = (id: string, points: { x: number; y: number }[]): SchematicWire => ({ id, points });
 
 describe("buildSpiceDeck", () => {
+  it("builds a finite simulation deck for every default Library component", () => {
+    for (const [index, entry] of CATALOG.entries()) {
+      const placed = component(
+        entry.kind,
+        entry.kind === "ground" ? "" : `${entry.prefix}${index + 1}`,
+        entry.defaultValue,
+        128,
+        128,
+      );
+      const grounded = component("ground", "", "", 0, 0);
+      const deck = buildSpiceDeck({ components: [grounded, placed], wires: [] }, { kind: "op" });
+      expect(deck.netlist, entry.kind).toContain(".op");
+      expect(deck.netlist, entry.kind).not.toMatch(/\b(?:NaN|undefined|Infinity)\b/);
+    }
+  });
+
   it("emits an ngspice transient deck for a grounded RC circuit", () => {
     const components = [
       component("vsource", "V1", "5", 0, 32),

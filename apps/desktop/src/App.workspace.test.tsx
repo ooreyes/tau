@@ -148,6 +148,18 @@ describe("App schematic workspace tools", () => {
     expect(screen.queryByRole("complementary", { name: "Components" })).toBeNull();
   });
 
+  it("explains the simulator is view-only when an edit shortcut is attempted", async () => {
+    await renderOpenProject();
+    act(() => useSchematic.getState().addComponent("resistor", 120, 120));
+    const before = useSchematic.getState().components.length;
+    fireEvent.click(screen.getByRole("button", { name: "Simulator" }));
+
+    fireEvent.keyDown(document.body, { key: "Delete" });
+
+    expect(screen.getByText("Simulator is view only. Return to Schematic to edit.")).toBeTruthy();
+    expect(useSchematic.getState().components).toHaveLength(before);
+  });
+
   it("keeps the assistant transcript mounted across Schematic ↔ Simulator switches", async () => {
     const id = createConversation();
     saveConversationMessages(`${DEFAULT_WORKSPACE_ID}/untitled.asc`, id, [
@@ -198,6 +210,22 @@ describe("App schematic workspace tools", () => {
     await waitFor(() => {
       const contents = useProject.getState().workspaceFiles[path].contents;
       expect(contents.match(/^WIRE /gm)).toHaveLength(2);
+    });
+    expect(screen.queryByText(/Save blocked/)).toBeNull();
+    expect(screen.queryByRole("img", { name: "untitled.asc has unsaved changes" })).toBeNull();
+  });
+
+  it("saves an AC voltage source without the former vac export blocker", async () => {
+    await renderOpenProject();
+    const path = `${DEFAULT_WORKSPACE_ID}/untitled.asc`;
+    act(() => useSchematic.getState().addComponent("vac", 160, 160));
+
+    fireEvent.keyDown(document.body, { key: "s", metaKey: true });
+
+    await waitFor(() => {
+      const contents = useProject.getState().workspaceFiles[path].contents;
+      expect(contents).toContain("SYMATTR TauKind vac");
+      expect(contents).toContain("SINE(0 1 1k) AC 1");
     });
     expect(screen.queryByText(/Save blocked/)).toBeNull();
     expect(screen.queryByRole("img", { name: "untitled.asc has unsaved changes" })).toBeNull();

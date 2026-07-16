@@ -21,6 +21,8 @@ import type {
   SchematicWire,
 } from "../schematic/types";
 import type { AscDocument, AscOrientation } from "./ascImport";
+import { decodeParams } from "../schematic/params";
+import { parseQuantity } from "../simulation/quantity";
 
 const int = (n: number): string => String(Math.round(n));
 
@@ -74,6 +76,9 @@ export function kindToLtspiceType(kind: ComponentKind): string | null {
     inductor: "ind",
     vsource: "voltage",
     isource: "current",
+    vac: "voltage",
+    iac: "current",
+    vpulse: "voltage",
     diode: "diode",
     zener: "zener",
     led: "led",
@@ -86,6 +91,8 @@ export function kindToLtspiceType(kind: ComponentKind): string | null {
     njf: "njf",
     pjf: "pjf",
     tline: "tline",
+    potentiometer: "pot",
+    transformer: "ind2t",
     // Bare `opamp` is LTspice's X-prefix subcircuit symbol and re-imports as a
     // generic subckt. `opamp2` is the native five-pin op-amp symbol Tau can
     // bank and round-trip as an opamp without changing its electrical role.
@@ -123,9 +130,75 @@ const DIGITAL_GATE_LEAFS = new Set([
 interface LtspiceComponentSymbol {
   type: string;
   value: string;
+  /** Tau-only round-trip metadata for a native part without a faithful
+   * one-symbol LTspice equivalent. LTspice ignores unknown SYMATTR fields. */
+  tauKind?: ComponentKind;
+  tauValue?: string;
+  carrierPrefix?: string;
 }
 
 function componentToLtspiceSymbol(component: SchematicComponent): LtspiceComponentSymbol | null {
+  if (component.kind === "vac" || component.kind === "iac") {
+    const signal = decodeParams(component.kind, component.value);
+    const offset = signal.offset || "0";
+    const amplitude = signal.amplitude || "1";
+    const frequency = signal.frequency || "1k";
+    return {
+      type: component.kind === "vac" ? "voltage" : "current",
+      // `voltage.asy` / `current.asy` are LTspice's canonical independent
+      // sources. Keeping both the transient SIN and small-signal AC stimulus
+      // in Value makes a Tau Library source immediately runnable in LTspice
+      // and prevents it from ever entering the lossy-save warning path.
+      value: `SINE(${offset} ${amplitude} ${frequency}) AC ${amplitude}`,
+      tauKind: component.kind,
+      tauValue: component.value,
+      carrierPrefix: component.kind === "vac" ? "V" : "I",
+    };
+  }
+  if (component.kind === "vpulse") {
+    const pulse = decodeParams("vpulse", component.value);
+    const low = pulse.low || "0";
+    const high = pulse.high || "5";
+    const frequency = parseQuantity(pulse.frequency || "100k", "Hz");
+    const duty = Math.min(0.99, Math.max(0.01, Number(pulse.duty || "0.5") || 0.5));
+    const period = frequency > 0 ? 1 / frequency : 1e-5;
+    const edge = period * 0.01;
+    const width = Math.max(period * duty - edge, period * 0.005);
+    return {
+      type: "voltage",
+      value: `PULSE(${low} ${high} 0 ${edge} ${edge} ${width} ${period})`,
+      tauKind: component.kind,
+      tauValue: component.value,
+      carrierPrefix: "V",
+    };
+  }
+  if (component.kind === "potentiometer") {
+    return {
+      type: "pot", value: component.value, tauKind: component.kind,
+      tauValue: component.value, carrierPrefix: "R",
+    };
+  }
+  if (component.kind === "transformer") {
+    return {
+      type: "ind2t", value: component.value, tauKind: component.kind,
+      tauValue: component.value, carrierPrefix: "L",
+    };
+  }
+  if (["comparator", "cccs", "ccvs", "switch", "subckt", "testpoint"].includes(component.kind)) {
+    // These Tau-native parts expand to multiple ngspice devices and therefore
+    // have no faithful single LTspice symbol. Persist them as a benign high-Z
+    // resistor plus explicit Tau metadata. Tau restores the exact kind/value,
+    // pins, drawing, and simulator behavior; LTspice can still open/netlist the
+    // file instead of failing on an unknown symbol or malformed element.
+    const closedSwitch = component.kind === "switch" && component.value.trim().toLowerCase().startsWith("closed");
+    return {
+      type: "res",
+      value: closedSwitch ? "1m" : "1T",
+      tauKind: component.kind,
+      tauValue: component.value,
+      carrierPrefix: "R",
+    };
+  }
   if (component.kind === "bsource" && /^\s*I\s*=/i.test(component.value)) {
     // Use LTspice's behavioral-current glyph when the expression drives
     // current. The generic `bv` symbol is electrically a B source too, but its
@@ -208,7 +281,7 @@ export function schematicToAsc(input: SchematicExportInput): SchematicToAscResul
     // exact representation, not a lossy export condition.
   }
 
-  for (const c of input.components) {
+  for (const [componentIndex, c] of input.components.entries()) {
     if (c.kind === "ground") {
       doc.flags.push({ x: c.x, y: c.y, net: "0" });
       continue;
@@ -219,8 +292,17 @@ export function schematicToAsc(input: SchematicExportInput): SchematicToAscResul
       continue;
     }
     const attrs: Record<string, string> = {};
-    if (c.label) attrs.InstName = c.label;
+    if (symbol.tauKind) {
+      // The carrier is a real LTspice resistor, so give it an R designator.
+      // TauLabel restores the user's original U/F/H/S/X/TP designator.
+      attrs.InstName = `${symbol.carrierPrefix ?? "R"}_TAU_${componentIndex + 1}`;
+      attrs.TauLabel = c.label || "\"\"";
+    } else if (c.label) attrs.InstName = c.label;
     if (symbol.value) attrs.Value = symbol.value;
+    if (symbol.tauKind) {
+      attrs.TauKind = symbol.tauKind;
+      attrs.TauValue = symbol.tauValue || "\"\"";
+    }
     doc.symbols.push({
       type: symbol.type,
       x: c.x,

@@ -8,16 +8,61 @@
      `git log --oneline -8`, recover/finish/revert that unit FIRST, then go on.
      ─────────────────────────────────────────────────────────────────────── -->
 ## ⏱ HEARTBEAT
-- **Headline metric:** 1848 reviewed-tree tests green · corpus 82/82 import · 82/82 op-converge · 79/82 warning-clean
-- **Run started (UTC):** 2026-07-16T03:30Z
-- **Synced to origin:** auto/ltspice-parity @ 4fefaab.
-- **Claimed unit:** Run-time autosave, marquee copy/paste, local-model lifecycle management, and status-bar cleanup.
+- **Headline metric:** 1857 reviewed-tree tests green · corpus 82/82 import · 82/82 op-converge · 79/82 warning-clean
+- **Run started (UTC):** 2026-07-16T14:20Z
+- **Synced to origin:** auto/ltspice-parity @ f0bca7f.
+- **Claimed unit:** Eliminate AC-source save blocking and harden empty-editor, simulator-read-only, and assistant resize UX.
 - **Status:** DONE
-- **Last completed sub-step:** Unsigned Tau.app rebuilt successfully; desktop control could not perform the final
-  visual pass because macOS locked, while all automated native/package gates passed.
-- **Plan:** Repair autosave/export classification and mixed-selection clipboard first, then expose real native
-  local-model setup/import/removal controls and verify the unsigned packaged app.
-- **Next step:** Unlock the Mac and repeat the no-rebuild packaged visual check, then proceed to DMG signing readiness.
+- **Last completed sub-step:** Packaged-app QA confirmed the empty-sheet Library default and non-overlapping minimum-width Assistant header.
+- **Plan:** Completed: catalog-wide save/reopen, drawing/deck/real-ngspice contracts, exact VAC regression,
+  Library defaulting, Simulator edit feedback, responsive model selection, and packaged release verification.
+- **Next step:** Continue the acceptance-corpus finish line; keep unsupported foreign ASC records protected from destructive rewrites.
+
+---
+
+## 2026-07-16T14:57Z — auto/ltspice-parity — Catalog-wide save/run assurance and release UX hardening
+
+### What I did
+- Removed the Library-created save-blocker class. AC voltage/current and pulse
+  sources now export as native LTspice sources, while Tau-only kinds round-trip
+  through validated metadata on safe carrier symbols instead of failing Save.
+- Added one matrix over every Library component: each of all 35 kinds saves,
+  reopens with its kind/value/label intact, has no rewrite risk on the next
+  save, builds a finite `.op` deck, and executes under real system ngspice.
+- Added a catalog/drawing contract proving one entry per kind, SVG primitives,
+  valid pins, and finite positive bounds. Added Tau's own two-pin passthrough
+  subcircuit for the generic Subcircuit card.
+- Empty schematics now select Library even after switching from a populated tab.
+  Simulator editing shortcuts show "Simulator is view only. Return to Schematic
+  to edit." without changing the document. The Assistant header now reserves
+  separate rows for actions and its ellipsized model selector at minimum width.
+- Researched future symbol sources: LibrePCB's CC0 base library is the cleanest
+  import candidate; KiCad's much larger official symbols are CC BY-SA and need
+  attribution/share-alike review. LTspice assets remain user-import-only.
+
+### Files
+- `apps/desktop/src/io/{ascExport,ascImport}.ts` and exporter tests
+- `apps/desktop/src/project/types.ts`, schematic catalog/types, bundled subcircuits
+- `apps/desktop/src/{App,App.workspace.test}.tsx`, Shell/Assistant panels and CSS
+- New catalog real-ngspice and symbol-contract tests; netlist coverage tests
+
+### Tests and QA
+- Desktop typecheck and full Vitest: 1857 passed / 6 skipped; catalog real-ngspice
+  smoke executed (not skipped) for all 35 Library entries.
+- Production web build; Rust fmt, Clippy `-D warnings`, 20 native tests; ignored
+  bundled-ngspice FFI smoke; unsigned Tauri app and DMG builds all pass.
+- Packaged Tau.app launched. Computer-use QA verified empty `untitled.asc` opens
+  with Library selected and the 280 px Assistant minimum keeps model/actions
+  readable without overlap. Exact App integration tests cover VAC Save and the
+  Simulator edit notice without mutation.
+
+### Parity items
+- §9 project/Tauri UX: catalog-created documents can save and reopen without a
+  blocker; empty editor, view-only Simulator, and narrow Assistant follow-ups landed.
+
+### Next step
+Run the committed acceptance corpus toward 80/82 warning-clean and keep the
+package acceptance suite focused on unmodified user LTspice files.
 
 ---
 

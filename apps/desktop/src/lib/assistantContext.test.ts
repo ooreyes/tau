@@ -225,7 +225,7 @@ describe("buildAssistantContext", () => {
     expect(text).toContain("Components: none placed.");
   });
 
-  it("withholds the current-circuit apply tool when serialization would skip a part", () => {
+  it("keeps current-circuit apply available for Tau-native persisted parts", () => {
     const { text, canApplyCurrent } = buildAssistantContext(baseInput({
       components: [
         component("ground", "g1", "", "", 0, 64),
@@ -233,9 +233,9 @@ describe("buildAssistantContext", () => {
       ],
       wires: [],
     }));
-    expect(canApplyCurrent).toBe(false);
-    expect(text).toContain("unavailable for safe revision");
-    expect(text).not.toContain("SYMBOL testpoint");
+    expect(canApplyCurrent).toBe(true);
+    expect(text).not.toContain("unavailable for safe revision");
+    expect(text).toContain("SYMATTR TauKind testpoint");
   });
 
   it("truncates the whole context and flags it when the analysis section alone blows the cap", () => {

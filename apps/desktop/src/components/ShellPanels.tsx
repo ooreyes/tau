@@ -1675,6 +1675,13 @@ export function ComponentsRail({
     if (selected || selectedWire) setSegment("properties");
   }, [selected?.id, selectedWire?.id]);
 
+  useEffect(() => {
+    // A blank sheet is the one state where Properties cannot help. Reset the
+    // persistent rail to Library whenever the active document becomes empty,
+    // including when switching from a populated tab to a new blank tab.
+    if (components.length === 0 && wires.length === 0) setSegment("library");
+  }, [components.length, wires.length]);
+
   const responsiveMaxWidth = Math.max(
     COMPONENTS_RAIL_WIDTH.minWidth,
     Math.min(COMPONENTS_RAIL_WIDTH.maxWidth, maxWidth ?? COMPONENTS_RAIL_WIDTH.maxWidth),

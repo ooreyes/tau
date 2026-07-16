@@ -5471,25 +5471,25 @@ button.bottom-panel-head:focus-visible {
 .assistant-header {
   flex: none;
   min-height: 45px;
+  position: relative;
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--sp-3);
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
   padding: var(--sp-2) var(--sp-3);
   border-bottom: 1px solid var(--border);
 }
 
 /* Title on top, model on the row below — same stack as the previous header,
    with the model kept to a single horizontal line. */
-.assistant-heading {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 6px;
-}
-
 .assistant-title {
+  display: flex;
+  align-items: center;
+  width: calc(100% - 9rem);
+  height: 28px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
   flex: none;
   font-size: var(--fs-title);
   font-weight: 600;
@@ -5500,9 +5500,9 @@ button.bottom-panel-head:focus-visible {
 }
 
 .assistant-model-select {
-  width: max-content;
-  min-width: 9.5rem;
-  max-width: 100%;
+  width: 100%;
+  min-width: 0;
+  max-width: 13rem;
   height: 24px;
   min-height: 24px;
   padding-inline: 7px;
@@ -5514,7 +5514,8 @@ button.bottom-panel-head:focus-visible {
 }
 
 .assistant-model-select [data-slot="select-value"] {
-  display: inline-block;
+  display: block;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -5522,6 +5523,9 @@ button.bottom-panel-head:focus-visible {
 }
 
 .assistant-actions {
+  position: absolute;
+  top: var(--sp-2);
+  right: var(--sp-3);
   flex: none;
   display: flex;
   align-items: center;

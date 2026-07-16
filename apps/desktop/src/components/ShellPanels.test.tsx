@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 
 import { BottomPanel, ComponentInspector, ComponentsRail, EditorToolbar } from "./ShellPanels";
 import type { AnalysisResult } from "../simulation/linearTransient";
@@ -171,6 +171,22 @@ describe("ComponentsRail — responsive shell budget", () => {
     render(<Harness maxWidth={340} embedded />);
     expect(screen.getByRole("complementary", { name: "Components" }).classList.contains("components-rail--embedded")).toBe(true);
     expect(screen.queryByRole("separator", { name: "Resize properties panel" })).toBeNull();
+  });
+
+  it("opens Library by default and returns there whenever the active sheet becomes empty", () => {
+    render(<Harness maxWidth={340} embedded />);
+    expect(screen.getByRole("tab", { name: "Library" }).getAttribute("aria-selected")).toBe("true");
+
+    act(() => useSchematic.setState({
+      components: [{ id: "r-1", kind: "resistor", x: 96, y: 0, rotation: 0, value: "1k", label: "R1" }],
+      selectedId: "r-1",
+      selectedIds: ["r-1"],
+    }));
+    expect(screen.getByRole("tab", { name: "Properties" }).getAttribute("aria-selected")).toBe("true");
+
+    act(() => useSchematic.setState({ components: [], selectedId: null, selectedIds: [] }));
+    expect(screen.getByRole("tab", { name: "Library" }).getAttribute("aria-selected")).toBe("true");
+    expect(screen.getByPlaceholderText("Filter")).toBeTruthy();
   });
 });
 

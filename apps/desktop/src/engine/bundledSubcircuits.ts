@@ -482,6 +482,9 @@ V3 N002 0 PWL(0 -1 {t0} -1 +1u 1 +10 1 +1u -1)
 /** Library file basename (lower-cased) → bundled ngspice-ready text. Keys are
  *  the names real `.asc` directives / `.asy` ModelFile attributes use. */
 const LIBRARY_FILES = new Map<string, string>([
+  ["tau-native.sub", `.subckt tau_passthrough 1 2
+Rpass 1 2 1m
+.ends tau_passthrough`],
   ["opamp.sub", OPAMP_SUB],
   ["towtom2.sub", TOWTOM2_SUB],
   ["capometer.sub", CAPOMETER_SUB],

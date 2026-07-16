@@ -33,7 +33,7 @@ import {
 } from "./components/ShellPanels";
 import { useSchematic, type SchematicDocument, type SchematicHistory } from "./store/useSchematic";
 import { CATALOG } from "./schematic/catalog";
-import { dispatchShortcutAction, resolveShortcut } from "./schematic/shortcuts";
+import { dispatchShortcutAction, isEditingAction, resolveShortcut } from "./schematic/shortcuts";
 import { extractCircuit } from "./schematic/netlist";
 import {
   MAX_TRANSIENT_STEPS,
@@ -1171,6 +1171,10 @@ function App() {
       });
       if (action) {
         if (action !== "cancel") e.preventDefault();
+        if (mode === "simulator" && isEditingAction(action)) {
+          showNotice("Simulator is view only. Return to Schematic to edit.");
+          return;
+        }
         // Simulator view is read-only (pan/zoom/probe only — see Canvas's
         // `interactive` prop); every editing action requires schematic view.
         dispatchShortcutAction(action, mode, {
@@ -1205,7 +1209,7 @@ function App() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [mode, startPlacing, startWiring, startLabeling, cancel, rotate, mirror, copySelected, paste, duplicateSelected, deleteSelected, undo, redo, saveActiveToProject]);
+  }, [mode, startPlacing, startWiring, startLabeling, cancel, rotate, mirror, copySelected, paste, duplicateSelected, deleteSelected, undo, redo, saveActiveToProject, showNotice]);
 
   // Track the shell body's real width so the simulator column budget below
   // reacts to the actual window size (including the 900px minimum), not just

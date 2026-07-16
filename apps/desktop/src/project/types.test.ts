@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { importAsc } from "../io/ascImport";
+import { CATALOG } from "../schematic/catalog";
 import {
   ascRewriteRisks,
   ascSaveBlockReason,
@@ -84,6 +85,30 @@ describe("project schematic file formats", () => {
     expect(ascSaveBlockReason([], 1, [])).toBeNull();
     expect(ascSaveBlockReason([], 0, ["X1: unsupported"])).toBe("X1: unsupported");
     expect(ascSaveBlockReason([], 0, [])).toBeNull();
+  });
+
+  it("never blocks first or subsequent saves for any Library component", () => {
+    for (const [index, entry] of CATALOG.entries()) {
+      const saved = serializeSchematicFile("/Schematics/catalog.asc", {
+        components: [{
+          id: `catalog-${entry.kind}`,
+          kind: entry.kind,
+          x: 128,
+          y: 128,
+          rotation: 0,
+          value: entry.defaultValue,
+          label: entry.kind === "ground" ? "" : `${entry.prefix}${index + 1}`,
+        }],
+        wires: [],
+        probes: [],
+        netLabels: [],
+        directives: [],
+      });
+      expect(saved.warnings, entry.kind).toEqual([]);
+      const rewriteRisks = ascRewriteRisks(saved.contents);
+      expect(rewriteRisks, entry.kind).toEqual([]);
+      expect(ascSaveBlockReason(rewriteRisks, 0, saved.warnings), entry.kind).toBeNull();
+    }
   });
 
   it("remaps open file paths when a file or containing folder moves", () => {

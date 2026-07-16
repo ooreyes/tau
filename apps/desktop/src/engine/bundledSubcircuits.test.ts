@@ -58,9 +58,10 @@ describe("sanitizeSubcktName", () => {
 });
 
 describe("bundled block registry", () => {
-  it("ships all 31 blocks: opamp + TowTom2 + capometer + 10 ISO7637 pulses + 18 ISO16750 profiles", () => {
+  it("ships all 32 blocks: Tau passthrough + opamp + TowTom2 + capometer + 10 ISO7637 pulses + 18 ISO16750 profiles", () => {
     const names = bundledSubcircuitNames();
-    expect(names.size).toBe(31);
+    expect(names.size).toBe(32);
+    expect(names.has("tau_passthrough")).toBe(true);
     expect(names.has("opamp")).toBe(true);
     expect(names.has("towtom2")).toBe(true);
     expect(names.has("capometer")).toBe(true);

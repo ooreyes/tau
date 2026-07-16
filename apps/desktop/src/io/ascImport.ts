@@ -29,6 +29,7 @@ import type {
   SchematicComponent,
   SchematicWire,
 } from "../schematic/types";
+import { isComponentKind } from "../schematic/types";
 import { getLocalPins } from "../schematic/pins";
 import { parseIcValue } from "../engine/icSpec";
 
@@ -1202,7 +1203,8 @@ export function ascToSchematic(doc: AscDocument, options: AscImportOptions = {})
       });
       continue;
     }
-    const kind = ltspiceTypeToKind(symbol.type);
+    const tauKind = isComponentKind(symbol.attrs.TauKind) ? symbol.attrs.TauKind : null;
+    const kind = tauKind ?? ltspiceTypeToKind(symbol.type);
     const instName = symbol.attrs.InstName ?? "";
     if (!kind) {
       // No built-in kind: try resolving the symbol as a hierarchical block and
@@ -1235,8 +1237,8 @@ export function ascToSchematic(doc: AscDocument, options: AscImportOptions = {})
       );
       continue;
     }
-    const pinOverride = buildPinOverride(symbol, kind) ?? undefined;
-    if (!pinOverride) {
+    const pinOverride = tauKind ? undefined : (buildPinOverride(symbol, kind) ?? undefined);
+    if (!pinOverride && !tauKind) {
       warnings.push(
         `${instName || symbol.type}: placed without pin-accurate geometry (no banked pins for "${symbol.type}"); its connections may be wrong.`,
       );
@@ -1261,14 +1263,18 @@ export function ascToSchematic(doc: AscDocument, options: AscImportOptions = {})
       // placeholder a neutral high-Z resting value (both are near-open below
       // their clamp/breakover voltage) so the deck builds and the op converges.
       // Nets stay correct; the import note already says to swap in a real model.
-      value: kind === "digitalGate"
+      value: tauKind
+        ? (symbol.attrs.TauValue === "\"\"" ? "" : (symbol.attrs.TauValue ?? symbol.attrs.Value ?? ""))
+        : kind === "digitalGate"
         ? `${leaf} ${componentValueFromAttrs(kind, symbol.attrs)}`.trim()
         : kind === "subckt"
           ? subcktValueFromSymbol(leaf, symbol.attrs)
           : (leaf === "varistor" || leaf === "diac") && kind === "resistor"
             ? "1Meg"
             : componentValueFromAttrs(kind, symbol.attrs),
-      label: instName,
+      label: tauKind
+        ? (symbol.attrs.TauLabel === "\"\"" ? "" : (symbol.attrs.TauLabel ?? instName))
+        : instName,
       ...(pinOverride ? { pinOverride } : {}),
     });
   }

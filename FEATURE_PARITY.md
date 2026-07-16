@@ -1307,6 +1307,14 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   deterministic quick prompts derived from the selected part, schematic, and
   latest results. Agent stop hooks keep the Vite/Tauri dev app attached and
   force a full reload; duplicate-process detection is scoped by process cwd.
+  **Catalog/save hardening follow-up (2026-07-16):** all 35 Library entries now
+  have a tested save/reopen path with no export warning or rewrite blocker, a
+  finite ngspice `.op` deck, and a render contract with pins and finite bounds.
+  Standard AC/pulse sources export natively; Tau-only symbols use validated
+  Tau metadata on a benign LTspice carrier so they reopen exactly in Tau rather
+  than blocking Save. Empty sheets select Library automatically, Simulator edit
+  shortcuts explain that the view is read-only, and the minimum-width Assistant
+  header gives its ellipsized model selector a dedicated row below the actions.
 - 🟡 Component picker matching LTspice (F2 part browser over the full library)
   — **F2 now opens the searchable part palette** (symbols, categories, hotkeys,
   ↑↓/↵ placement); remaining: coverage audit vs. LTspice's full library tree.

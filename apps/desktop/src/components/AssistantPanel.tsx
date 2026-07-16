@@ -748,22 +748,20 @@ export function AssistantPanel({
         />
       )}
       <header className="assistant-header">
-        <div className="assistant-heading">
-          <span className="assistant-title">Ask <span className="empty-brand">Tauri</span>…</span>
-          <Select value={modelChoice} onValueChange={changeModel} disabled={streaming}>
-            <SelectTrigger size="sm" className="assistant-model-select" aria-label="Assistant model">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent align="start">
-              <SelectItem value="anthropic">{ASSISTANT_MODEL_LABEL} · Cloud</SelectItem>
-              <SelectItem value="qwen3-4b-4bit">{LOCAL_MLX_MODEL_PRESETS["qwen3-4b-4bit"].label} · Local</SelectItem>
-              <SelectItem value="qwen3-1.7b-4bit">{LOCAL_MLX_MODEL_PRESETS["qwen3-1.7b-4bit"].label} · Local</SelectItem>
-              {customLocalAiModels.map((model) => (
-                <SelectItem key={model.id} value={model.id}>{model.label} · Imported</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+        <span className="assistant-title">Ask <span className="empty-brand">Tauri</span>…</span>
+        <Select value={modelChoice} onValueChange={changeModel} disabled={streaming}>
+          <SelectTrigger size="sm" className="assistant-model-select" aria-label="Assistant model">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent align="start">
+            <SelectItem value="anthropic">{ASSISTANT_MODEL_LABEL} · Cloud</SelectItem>
+            <SelectItem value="qwen3-4b-4bit">{LOCAL_MLX_MODEL_PRESETS["qwen3-4b-4bit"].label} · Local</SelectItem>
+            <SelectItem value="qwen3-1.7b-4bit">{LOCAL_MLX_MODEL_PRESETS["qwen3-1.7b-4bit"].label} · Local</SelectItem>
+            {customLocalAiModels.map((model) => (
+              <SelectItem key={model.id} value={model.id}>{model.label} · Imported</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
         <div className="assistant-actions">
           <Tooltip>
             <TooltipTrigger asChild>

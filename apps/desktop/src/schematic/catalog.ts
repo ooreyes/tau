@@ -72,7 +72,7 @@ export const CATALOG: CatalogEntry[] = [
   // the .subckt name (bundled library or document-defined), the rest instance
   // params. Imported LTspice-library symbols (TowTom2, capmeter, ISO16750-2,
   // ISO7637-2) land on this kind with their own .asy pin geometry.
-  { kind: "subckt",        section: "Analog",            name: "Subcircuit (X)",  hotkey: "",  prefix: "X",   defaultValue: "",      unit: "" },
+  { kind: "subckt",        section: "Analog",            name: "Subcircuit (X)",  hotkey: "",  prefix: "X",   defaultValue: "tau_passthrough", unit: "" },
   { kind: "testpoint",     section: "Markers",           name: "Test Point",      hotkey: "x", prefix: "TP",  defaultValue: "",      unit: "" },
 ];
 

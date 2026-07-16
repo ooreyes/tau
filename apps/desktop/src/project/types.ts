@@ -98,10 +98,12 @@ export function ascRewriteRisks(source: string): string[] {
   for (const symbol of parsed.symbols) {
     const kind = ltspiceTypeToKind(symbol.type);
     const canonical = kind ? kindToLtspiceType(kind) : null;
-    if (!canonical || normalizeLtspiceType(canonical) !== normalizeLtspiceType(symbol.type)) {
+    const normalizedType = normalizeLtspiceType(symbol.type);
+    const dynamicDigitalSymbol = kind === "digitalGate" && /^digital\/(?:and|or|xor|buf|buf1|inv|schmitt|schmtbuf|schmtinv)$/.test(normalizedType);
+    if ((!canonical || normalizeLtspiceType(canonical) !== normalizedType) && !dynamicDigitalSymbol) {
       risks.add("symbol-library identity");
     }
-    if (Object.keys(symbol.attrs).some((key) => key !== "InstName" && key !== "Value")) {
+    if (Object.keys(symbol.attrs).some((key) => !["InstName", "Value", "TauKind", "TauValue", "TauLabel"].includes(key))) {
       risks.add("extended symbol attributes");
     }
   }

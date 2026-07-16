@@ -8,6 +8,7 @@ import {
   rotationToOrientation,
 } from "./ascExport";
 import type { AscDocument } from "./ascImport";
+import { CATALOG } from "../schematic/catalog";
 
 // The same representative LTspice grammar the importer tests use, minus the
 // drawing primitive and WINDOW lines (which the serializer canonicalizes away).
@@ -76,6 +77,9 @@ describe("kindToLtspiceType", () => {
     expect(kindToLtspiceType("inductor")).toBe("ind");
     expect(kindToLtspiceType("vsource")).toBe("voltage");
     expect(kindToLtspiceType("isource")).toBe("current");
+    expect(kindToLtspiceType("vac")).toBe("voltage");
+    expect(kindToLtspiceType("iac")).toBe("current");
+    expect(kindToLtspiceType("vpulse")).toBe("voltage");
     expect(kindToLtspiceType("npn")).toBe("npn");
     expect(kindToLtspiceType("nmos")).toBe("nmos4");
     expect(kindToLtspiceType("pmos")).toBe("pmos4");
@@ -93,13 +97,14 @@ describe("kindToLtspiceType", () => {
     expect(kindToLtspiceType("digitalGate")).toBeNull();
   });
 
-  it("rejects composite or electrically incompatible single-symbol mappings", () => {
+  it("rejects electrically incompatible single-symbol mappings", () => {
     // LTspice f/h have only two output pins and name an external voltage source
     // as their controller, whereas Tau's CCCS/CCVS own a four-pin sense branch.
-    // LTspice models pots as resistor networks and transformers as L+K networks.
-    for (const kind of ["cccs", "ccvs", "potentiometer", "switch", "transformer"] as const) {
+    for (const kind of ["cccs", "ccvs", "switch"] as const) {
       expect(kindToLtspiceType(kind), kind).toBeNull();
     }
+    expect(kindToLtspiceType("potentiometer")).toBe("pot");
+    expect(kindToLtspiceType("transformer")).toBe("ind2t");
   });
 });
 
@@ -169,19 +174,21 @@ describe("schematicToAsc", () => {
     expect(warnings).toEqual([]);
   });
 
-  it("warns and skips a component with no LTspice symbol", () => {
-    const { warnings } = schematicToAsc({
+  it("persists Tau-only test points through a harmless carrier symbol", () => {
+    const { text, warnings } = schematicToAsc({
       components: [
         { id: "tp1", kind: "testpoint", x: 0, y: 0, rotation: 0, value: "", label: "TP1" },
       ],
       wires: [],
       netLabels: [],
     });
-    expect(warnings).toHaveLength(1);
-    expect(warnings[0]).toContain("testpoint");
+    expect(warnings).toEqual([]);
+    const round = importAsc(text);
+    expect(round.warnings).toEqual([]);
+    expect(round.components[0]).toMatchObject({ kind: "testpoint", value: "", label: "TP1" });
   });
 
-  it("warns instead of silently emitting lossy composite source symbols", () => {
+  it("persists composite Tau components without blocking save", () => {
     const components = ([
       ["cccs", "F1"],
       ["ccvs", "H1"],
@@ -199,15 +206,36 @@ describe("schematicToAsc", () => {
     }));
     const { text, warnings } = schematicToAsc({ components, wires: [], netLabels: [] });
 
-    expect(parseAsc(text).symbols).toEqual([]);
-    expect(warnings).toHaveLength(5);
-    expect(warnings).toEqual(expect.arrayContaining([
-      expect.stringContaining("F1"),
-      expect.stringContaining("H1"),
-      expect.stringContaining("RV1"),
-      expect.stringContaining("T1"),
-      expect.stringContaining("S1"),
-    ]));
+    expect(parseAsc(text).symbols).toHaveLength(5);
+    expect(warnings).toEqual([]);
+    const round = importAsc(text);
+    expect(round.warnings).toEqual([]);
+    expect(round.components.map((component) => component.kind)).toEqual(components.map((component) => component.kind));
+  });
+
+  it("guarantees every Library component can save and reopen with its drawing identity", () => {
+    for (const [index, entry] of CATALOG.entries()) {
+      const label = entry.kind === "ground" ? "" : `${entry.prefix}${index + 1}`;
+      const component = {
+        id: `catalog-${entry.kind}`,
+        kind: entry.kind,
+        x: 128,
+        y: 128,
+        rotation: 0 as const,
+        value: entry.defaultValue,
+        label,
+      };
+      const exported = schematicToAsc({ components: [component], wires: [], netLabels: [] });
+      expect(exported.warnings, entry.kind).toEqual([]);
+      const round = importAsc(exported.text);
+      expect(round.warnings, entry.kind).toEqual([]);
+      expect(round.components, entry.kind).toHaveLength(1);
+      expect(round.components[0], entry.kind).toMatchObject({
+        kind: entry.kind,
+        value: entry.defaultValue,
+        label,
+      });
+    }
   });
 
   it("warns instead of silently converting an unsupported digital function to AND", () => {
