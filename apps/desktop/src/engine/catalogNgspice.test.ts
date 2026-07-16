@@ -8,6 +8,8 @@ import { getComponentPins } from "../schematic/pins";
 import type { SchematicComponent } from "../schematic/types";
 import type { NetLabel } from "../schematic/types";
 import { buildSpiceDeck } from "./spiceNetlist";
+import { serializeSchematicFile } from "../project/types";
+import { importAsc } from "../io/ascImport";
 
 const haveNgspice = spawnSync("ngspice", ["--version"], { encoding: "utf8" }).error === undefined;
 
@@ -64,7 +66,20 @@ describe.skipIf(!haveNgspice)("Library catalog — real ngspice smoke", () => {
         }
 
         try {
-          const deck = buildSpiceDeck({ components, wires: [], netLabels }, { kind: "op" });
+          const saved = serializeSchematicFile(`/catalog/${entry.kind}.asc`, {
+            components,
+            wires: [],
+            probes: [],
+            netLabels,
+            directives: [],
+          });
+          if (saved.warnings.length > 0) throw new Error(saved.warnings.join(" "));
+          const reopened = importAsc(saved.contents);
+          const deck = buildSpiceDeck({
+            components: reopened.components,
+            wires: reopened.wires,
+            netLabels: reopened.netLabels,
+          }, { kind: "op" });
           const file = join(dir, `${entry.kind}.cir`);
           writeFileSync(file, deck.netlist);
           const run = spawnSync("ngspice", ["-b", file], { encoding: "utf8", timeout: 15_000 });

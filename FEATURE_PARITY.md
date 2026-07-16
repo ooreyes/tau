@@ -409,7 +409,15 @@ Status legend: ✅ done · 🟡 partial · ⬜ not started
   relative geometry and one-step undo. 11 store tests.
 - ✅ **Drag wires / move with rubber-banding** — `moveGroup` rubber-bands wire
   endpoints attached to moved pins with orthogonal elbow insertion (store-level,
-  shared by single and group moves).
+  shared by single and group moves). **Topology-invariant hardening
+  (2026-07-16):** rendering, hit targets, extraction, single/group movement,
+  rotate/mirror, clipboard, and undo now use the same imported-pin authority.
+  A selected pin on a conductor midpoint or a junction shared by a stationary
+  component keeps the original junction and gains an orthogonal lead instead of
+  silently detaching the other branch. Pointer-cancel/window-blur rolls back the
+  partial drag, and subdivided/overlapping wire insertion removes every bypass.
+  Exact endpoint, midpoint, shared-junction, multi-selection, imported-pin, and
+  cancellation regressions cover the complete gesture/store path.
 - ✅ **Schematic is read-only outside the schematic tab (§UX)**: the simulator
   view only permits pan/zoom/probe. Canvas mouse interactions were already
   gated by `interactive={mode==="schematic"}`, but two bypasses let the
@@ -1321,6 +1329,14 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   than blocking Save. Empty sheets select Library automatically, Simulator edit
   shortcuts explain that the view is read-only, and the minimum-width Assistant
   header gives its ellipsized model selector a dedicated row below the actions.
+  **Semantic round-trip follow-up (2026-07-16):** ASC Save now reimports its own
+  output and compares canonical terminal-connectivity partitions before writing;
+  it cannot silently persist a drawing whose visible loop reopens as floating
+  pins. Native Tau pin geometry carries explicit round-trip metadata, while the
+  malformed geometry written by older Tau builds is detected from wire topology
+  and repaired on open. The reported LED loop was verified from a fresh mounted
+  DMG through open → save → bundled-ngspice run → reload → rerun as 3 nets / 4
+  parts with no connectivity warnings.
 - 🟡 Component picker matching LTspice (F2 part browser over the full library)
   — **F2 now opens the searchable part palette** (symbols, categories, hotkeys,
   ↑↓/↵ placement); remaining: coverage audit vs. LTspice's full library tree.

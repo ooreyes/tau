@@ -18,6 +18,40 @@ describe("schematic document validation", () => {
     expect(validateSchematicDocument(validDocument())).toEqual(validDocument());
   });
 
+  it("preserves imported pin geometry and voltage/current probe identity", () => {
+    const base = validDocument();
+    const document = {
+      ...base,
+      components: [{
+        ...base.components[0],
+        pinOverride: [
+          { id: "a", label: "A", x: 64, y: 0 },
+          { id: "b", label: "B", x: 128, y: 0 },
+        ],
+      }],
+      probes: [
+        { id: "pv", x: 64, y: 0, color: "var(--trace-red)", netId: "OUT" },
+        { id: "pi", x: 96, y: 0, color: "var(--trace-cyan)", componentId: "r1" },
+      ],
+    };
+
+    expect(validateSchematicDocument(document)).toEqual(document);
+  });
+
+  it("rejects duplicate ids, duplicate references, and dangling current-probe references", () => {
+    const duplicateId = validDocument();
+    duplicateId.wires[0].id = "r1";
+    expect(() => validateSchematicDocument(duplicateId)).toThrow(/ids must be unique/i);
+
+    const duplicateRef = validDocument();
+    duplicateRef.components.push({ ...duplicateRef.components[0], id: "r2", label: "r1" });
+    expect(() => validateSchematicDocument(duplicateRef)).toThrow(/reference designators must be unique/i);
+
+    const danglingProbe = validDocument();
+    danglingProbe.probes[0] = { ...danglingProbe.probes[0], componentId: "missing" } as typeof danglingProbe.probes[number];
+    expect(() => validateSchematicDocument(danglingProbe)).toThrow(/missing component/i);
+  });
+
   it("rejects unknown parts and invalid coordinates before SVG rendering", () => {
     const unknown = validDocument();
     unknown.components[0].kind = "arbitrary-code";

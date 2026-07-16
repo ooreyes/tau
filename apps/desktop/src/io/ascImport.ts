@@ -30,7 +30,7 @@ import type {
   SchematicWire,
 } from "../schematic/types";
 import { isComponentKind } from "../schematic/types";
-import { getLocalPins } from "../schematic/pins";
+import { getLocalPins, transformPoint } from "../schematic/pins";
 import { parseIcValue } from "../engine/icSpec";
 
 /**
@@ -679,13 +679,17 @@ export function transformLtPoint(dx: number, dy: number, orientation: AscOrienta
 export function orientationToRotation(orientation: AscOrientation): 0 | 90 | 180 | 270 {
   switch (orientation) {
     case "R90":
-    case "M90":
+      return 90;
+    // LT mirrors after rotating; Tau mirrors before rotating. The quarter-turn
+    // tokens therefore swap so the rendered body and exact LT pin bank agree.
+    case "M270":
       return 90;
     case "R180":
     case "M180":
       return 180;
     case "R270":
-    case "M270":
+      return 270;
+    case "M90":
       return 270;
     default:
       return 0;
@@ -865,6 +869,63 @@ function buildPinOverride(symbol: AscSymbol, kind: ComponentKind): PinOverride[]
   }
 
   return override;
+}
+
+const pointOnImportedWire = (point: { x: number; y: number }, wire: SchematicWire): boolean => {
+  for (let index = 1; index < wire.points.length; index += 1) {
+    const a = wire.points[index - 1];
+    const b = wire.points[index];
+    const cross = (point.x - a.x) * (b.y - a.y) - (point.y - a.y) * (b.x - a.x);
+    if (cross !== 0) continue;
+    if (point.x >= Math.min(a.x, b.x) && point.x <= Math.max(a.x, b.x)
+      && point.y >= Math.min(a.y, b.y) && point.y <= Math.max(a.y, b.y)) return true;
+  }
+  return false;
+};
+
+/** Recover files written by Tau versions that serialized native Tau anchors as
+ * LTspice anchors without TauKind metadata. Their visible/native terminals meet
+ * the saved conductors while the reconstructed LT pin bank misses them all.
+ * Genuine LTspice files score the opposite way and remain untouched. */
+function recoverLegacyTauPinGeometry(
+  components: SchematicComponent[],
+  wires: SchematicWire[],
+  netLabels: NetLabel[],
+): { components: SchematicComponent[]; recovered: number } {
+  const anchors = new Set([
+    ...netLabels.map((label) => `${label.x},${label.y}`),
+    ...components.filter((component) => component.kind === "ground").map((component) => `${component.x},${component.y}`),
+  ]);
+  const connected = (point: { x: number; y: number }) =>
+    anchors.has(`${point.x},${point.y}`) || wires.some((wire) => pointOnImportedWire(point, wire));
+
+  const candidates = components.flatMap((component) => {
+    if (!component.pinOverride?.length) return [];
+    const nativePins = getLocalPins(component.kind).map((pin) => {
+      const offset = transformPoint(pin, component.rotation, component.mirrored ?? false);
+      return { x: component.x + offset.x, y: component.y + offset.y };
+    });
+    const nativeScore = nativePins.filter(connected).length;
+    const overrideScore = component.pinOverride.filter(connected).length;
+    return [{ component, nativeScore, overrideScore }];
+  });
+  const nativeTotal = candidates.reduce((sum, candidate) => sum + candidate.nativeScore, 0);
+  const overrideTotal = candidates.reduce((sum, candidate) => sum + candidate.overrideScore, 0);
+  if (nativeTotal < overrideTotal + 2) return { components, recovered: 0 };
+
+  const recoverIds = new Set(
+    candidates
+      .filter((candidate) => candidate.nativeScore > candidate.overrideScore)
+      .map((candidate) => candidate.component.id),
+  );
+  return {
+    recovered: recoverIds.size,
+    components: components.map((component) => {
+      if (!recoverIds.has(component.id)) return component;
+      const { pinOverride: _legacy, ...native } = component;
+      return native;
+    }),
+  };
 }
 
 /**
@@ -1298,10 +1359,14 @@ export function ascToSchematic(doc: AscDocument, options: AscImportOptions = {})
   // Register subcircuit port bridges last so a same-node parent FLAG names the net.
   netLabels.push(...deferredBridges);
 
+  const recovered = recoverLegacyTauPinGeometry(components, wires, netLabels);
+  if (recovered.recovered > 0) {
+    notes.push(`Recovered native Tau pin geometry for ${recovered.recovered} component(s) saved by an older Tau version.`);
+  }
   const directives = doc.texts.filter((t) => t.directive).map((t) => t.text);
   const comments = doc.texts.filter((t) => !t.directive).map((t) => t.text);
 
-  return { components, wires, netLabels, directives, comments, warnings, notes };
+  return { components: recovered.components, wires, netLabels, directives, comments, warnings, notes };
 }
 
 /**

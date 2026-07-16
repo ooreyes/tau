@@ -334,17 +334,17 @@ describe("AssistantPanel", () => {
     expect(screen.getByRole("combobox", { name: "Assistant model" }).textContent).toContain("Sonnet 5");
   });
 
-  it("centers the model selector between symmetric chat controls", () => {
+  it("keeps the model selector between new-chat and history, with close in the title row", () => {
     const { container } = render(<AssistantPanel {...baseProps()} />);
     const toolbar = container.querySelector(".assistant-toolbar");
+    const titleRow = container.querySelector(".assistant-title-row");
     expect(toolbar).not.toBeNull();
     expect(Array.from(toolbar!.querySelectorAll("button")).map((button) => button.getAttribute("aria-label"))).toEqual([
       "New chat",
-      "Past chats",
       "Assistant model",
-      "Delete conversation",
-      "Close assistant",
+      "Past chats",
     ]);
+    expect(within(titleRow as HTMLElement).getByRole("button", { name: "Close assistant" })).toBeTruthy();
   });
 
   it("uses the selected local preset without a cloud key and consumes its non-streaming reply", async () => {
@@ -963,10 +963,11 @@ describe("AssistantPanel local AI onboarding", () => {
 });
 
 describe("AssistantPanel conversation history", () => {
-  it("disables the header delete-conversation button for an empty, never-saved thread", () => {
+  it("disables the history delete action for an empty, never-saved thread", () => {
     saveAssistantApiKey("test-key");
     render(<AssistantPanel {...baseProps()} />);
-    expect((screen.getByRole("button", { name: "Delete conversation" }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(screen.getByRole("button", { name: "Past chats" }));
+    expect((screen.getByRole("button", { name: "Delete current chat" }) as HTMLButtonElement).disabled).toBe(true);
   });
 
   it("keeps the previous conversation when starting a new chat, and lists it in the past-chats menu", async () => {
@@ -981,11 +982,10 @@ describe("AssistantPanel conversation history", () => {
     // composer/intro read as a genuinely fresh conversation.
     expect(screen.queryByText("What does R1 do?")).toBeNull();
     expect(screen.getByText(/Ask about this circuit/)).toBeTruthy();
-    expect((screen.getByRole("button", { name: "Delete conversation" }) as HTMLButtonElement).disabled).toBe(true);
-
     fireEvent.click(screen.getByRole("button", { name: "Past chats" }));
     const menu = screen.getByRole("group", { name: "Past chats" });
     expect(within(menu).getByText("What does R1 do?")).toBeTruthy();
+    expect((within(menu).getByRole("button", { name: "Delete current chat" }) as HTMLButtonElement).disabled).toBe(true);
   });
 
   it("switches between two saved conversations via the past-chats menu without losing either transcript", async () => {
@@ -1056,7 +1056,7 @@ describe("AssistantPanel conversation history", () => {
     expect(within(screen.getByRole("group", { name: "Past chats" })).queryByText("What does R1 do?")).toBeNull();
   });
 
-  it("the header's delete-conversation button removes the active thread and falls back to the newest remaining one", async () => {
+  it("the history footer removes the active thread and falls back to the newest remaining one", async () => {
     saveAssistantApiKey("test-key");
     render(<AssistantPanel {...baseProps()} />);
 
@@ -1064,12 +1064,13 @@ describe("AssistantPanel conversation history", () => {
     fireEvent.click(screen.getByRole("button", { name: "New chat" }));
     await sendAndResolve("What does C1 do?", "C1 sets the pole.");
 
-    fireEvent.click(screen.getByRole("button", { name: "Delete conversation" }));
+    fireEvent.click(screen.getByRole("button", { name: "Past chats" }));
+    fireEvent.click(within(screen.getByRole("group", { name: "Past chats" })).getByRole("button", { name: "Delete current chat" }));
 
     expect(screen.getByText("R1 sets the gain.")).toBeTruthy();
     expect(screen.queryByText("C1 sets the pole.")).toBeNull();
 
-    fireEvent.click(screen.getByRole("button", { name: "Past chats" }));
+    if (!screen.queryByRole("group", { name: "Past chats" })) fireEvent.click(screen.getByRole("button", { name: "Past chats" }));
     expect(within(screen.getByRole("group", { name: "Past chats" })).queryByText("What does C1 do?")).toBeNull();
   });
 
@@ -1078,7 +1079,8 @@ describe("AssistantPanel conversation history", () => {
     render(<AssistantPanel {...baseProps()} />);
     await sendAndResolve("What does R1 do?", "R1 sets the gain.");
 
-    fireEvent.click(screen.getByRole("button", { name: "Delete conversation" }));
+    fireEvent.click(screen.getByRole("button", { name: "Past chats" }));
+    fireEvent.click(within(screen.getByRole("group", { name: "Past chats" })).getByRole("button", { name: "Delete current chat" }));
 
     expect(screen.queryByText("What does R1 do?")).toBeNull();
     expect(screen.getByText(/Ask about this circuit/)).toBeTruthy();

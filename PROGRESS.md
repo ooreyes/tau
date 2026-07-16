@@ -8,15 +8,64 @@
      `git log --oneline -8`, recover/finish/revert that unit FIRST, then go on.
      ─────────────────────────────────────────────────────────────────────── -->
 ## ⏱ HEARTBEAT
-- **Headline metric:** 1861 reviewed-tree tests green · corpus 82/82 import · 82/82 op-converge · 79/82 warning-clean
-- **Run started (UTC):** 2026-07-16T15:14Z
-- **Synced to origin:** auto/ltspice-parity @ ef9c06a.
-- **Claimed unit:** Improve transient understanding, plot-axis spacing, Assistant symmetry, and AC-source drawing alignment.
+- **Headline metric:** 1895 reviewed-tree tests green · corpus 82/82 import · 82/82 op-converge · 79/82 warning-clean
+- **Run started (UTC):** 2026-07-16T15:39Z
+- **Synced to origin:** auto/ltspice-parity @ fd94d77.
+- **Claimed unit:** Enforce schematic geometry/connectivity invariants end to end; replace the cramped Assistant and uneven telemetry regressions.
 - **Status:** DONE
-- **Last completed sub-step:** Packaged-app QA verified the 280px Assistant grid, plot gutter, centered AC sine, and time-varying telemetry semantics.
-- **Plan:** Completed: transient V/I previews and guidance, plot-axis breathing room, symmetric model toolbar,
-  shared centered sine geometry, regression tests, and packaged visual verification.
-- **Next step:** Resume acceptance-corpus parity; preserve full-axis transient plots behind explicit Probe while telemetry stays compact.
+- **Last completed sub-step:** Fresh DMG reopened, saved, reloaded, and reran the reported legacy LED loop as 3 nets / 4 parts with no connectivity warnings; 900×600 schematic/simulator QA passed.
+- **Plan:** Audit every import/edit/transform/undo/save/extract/deck boundary, enforce one geometry/connectivity invariant,
+  add deterministic transform and round-trip matrices, then package and visually verify the exact reported circuits and layouts.
+- **Next step:** Resume acceptance-corpus warning cleanup and the three waveform-parity release circuits.
+
+---
+
+## 2026-07-16T17:20Z — auto/ltspice-parity — Schematic topology invariant and editor hardening
+
+### What I did
+- Found the screenshot's exact root cause: Tau had serialized native symbol
+  centers as LTspice anchors, so reopening shifted the electrical pin bank away
+  from the visible glyph. Native Tau parts now carry round-trip geometry metadata,
+  and older affected files are detected and repaired from their wire topology.
+- Added a save postcondition that reimports every generated `.asc` and compares
+  canonical terminal-connectivity partitions before writing. The AI Create/Apply
+  path now validates the exported source too, and Run uses the validated in-memory
+  circuit even if persistence reports an unrelated representational limitation.
+- Made one pin geometry authoritative across rendering, hit targets, net
+  extraction, move/group-move, rotate/mirror, undo, copy/paste, and deletion.
+  Mid-wire pins and junctions shared with stationary parts now keep the junction
+  and receive orthogonal leads; imported absolute pins follow every transform.
+- Hardened document validation (duplicate IDs/refdes, pin overrides, probe
+  references), current-probe cloning/deletion, case-insensitive SPICE/net-label
+  identity, ideal-wire parsing, duplicate device-name rejection, and wire
+  insertion across subdivided/overlapping conductors. Circuit extraction now
+  uses spatial indexes instead of an all-segment-pairs scan.
+- Replaced the uneven per-card telemetry previews with equal summary cards plus
+  one selected-component transient inspector, and rebuilt the Assistant header
+  as title/close over New–Model–History with destructive chat deletion in History.
+
+### Tests and QA
+- Desktop typecheck/build passed; full Vitest: **1895 passed / 6 skipped** across
+  130 files. This includes every Library component through ASC save/reopen/deck/
+  real-ngspice, all kinds × rotations × mirror round trips, 5,000-wire extraction,
+  pointer cancellation, shared junctions, and exact legacy LED regressions.
+- Rust `fmt --check`, `clippy -D warnings`, 20 unit tests, and the ignored bundled
+  libngspice operating-point smoke all passed.
+- Unsigned Tauri release and DMG built. From the mounted fresh DMG, `led.asc`
+  opened as a connected loop, auto-saved, ran at 3.36 mA, reported **3 nets / 4
+  parts** with no warnings, then reloaded and reran cleanly. Both app modes were
+  visually/accessibly checked at the 900×600 minimum.
+
+### Parity items
+- §5 editor: import/edit/transform/clipboard/wire topology now shares one tested
+  pin authority and preserves stationary junctions.
+- §2/§12 persistence: generated ASC receives a semantic round-trip connectivity
+  postcondition; legacy malformed Tau ASC geometry self-repairs.
+- §10 UI: Assistant/telemetry regressions corrected and packaged at minimum size.
+
+### Next step
+Continue warning-clean corpus work and release-circuit waveform parity; retain
+the new semantic save postcondition as the gate against topology corruption.
 
 ---
 

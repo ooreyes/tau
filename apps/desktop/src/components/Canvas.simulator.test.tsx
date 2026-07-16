@@ -4,6 +4,7 @@ import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 
 import { Canvas } from "./Canvas";
 import { useSchematic } from "../store/useSchematic";
+import { getComponentPins } from "../schematic/pins";
 
 class ResizeObserverStub {
   static instances: ResizeObserverStub[] = [];
@@ -281,6 +282,18 @@ describe("Canvas — schematic selection chrome", () => {
     expect(document.querySelector(".component.selected")).not.toBeNull();
   });
 
+  it("preserves the grab offset when dragging a component from its edge", () => {
+    useSchematic.setState({ wires: [] });
+    render(<Canvas interactive />);
+    const canvas = document.querySelector("svg.canvas")!;
+
+    fireEvent.pointerDown(canvas, { button: 0, clientX: 20, clientY: 0, pointerId: 12 });
+    fireEvent.pointerMove(canvas, { clientX: 52, clientY: 0, pointerId: 12 });
+    fireEvent.pointerUp(canvas, { button: 0, clientX: 52, clientY: 0, pointerId: 12 });
+
+    expect(useSchematic.getState().components[0]).toMatchObject({ x: 32, y: 0 });
+  });
+
   it("draws a marquee and commits its component selection to Zustand", () => {
     useSchematic.setState({ wires: [] });
     render(<Canvas interactive />);
@@ -343,6 +356,94 @@ describe("Canvas — schematic selection chrome", () => {
     expect(moved.wires[0].points).toEqual([{ x: 32, y: 52 }, { x: 52, y: 52 }]);
     expect(moved.netLabels[0]).toMatchObject({ x: 42, y: 52 });
     expect(moved.probes[0]).toMatchObject({ x: 42, y: 52 });
+  });
+
+  it("moves imported absolute pin geometry with an individual component", () => {
+    useSchematic.setState({
+      components: [{
+        id: "r1",
+        kind: "resistor",
+        x: 0,
+        y: 0,
+        rotation: 0,
+        value: "1k",
+        label: "R1",
+        pinOverride: [
+          { id: "a", label: "A", x: -32, y: 0 },
+          { id: "b", label: "B", x: 32, y: 0 },
+        ],
+      }],
+      wires: [{ id: "w1", points: [{ x: 32, y: 0 }, { x: 96, y: 0 }] }],
+    });
+    render(<Canvas interactive />);
+    const canvas = document.querySelector("svg.canvas")!;
+
+    fireEvent.pointerDown(canvas, { button: 0, clientX: 0, clientY: 0, pointerId: 9 });
+    fireEvent.pointerMove(canvas, { clientX: 32, clientY: 32, pointerId: 9 });
+    fireEvent.pointerUp(canvas, { button: 0, clientX: 32, clientY: 32, pointerId: 9 });
+
+    const moved = useSchematic.getState().components[0];
+    expect(moved).toMatchObject({ x: 32, y: 32 });
+    expect(getComponentPins(moved).map(({ x, y }) => ({ x, y }))).toEqual([
+      { x: 0, y: 32 },
+      { x: 64, y: 32 },
+    ]);
+    expect(useSchematic.getState().wires[0].points[0]).toEqual({ x: 64, y: 32 });
+    expect(document.querySelectorAll(".snap-dot")).toHaveLength(0);
+  });
+
+  it("renders imported pin targets at the same coordinates used by snapping and netlisting", () => {
+    useSchematic.setState({
+      components: [{
+        id: "r1", kind: "resistor", x: 100, y: 80, rotation: 0, value: "1k", label: "R1",
+        pinOverride: [
+          { id: "a", label: "A", x: 60, y: 80 },
+          { id: "b", label: "B", x: 140, y: 80 },
+        ],
+      }],
+      wires: [],
+      tool: { mode: "wire" },
+    });
+    render(<Canvas interactive />);
+
+    const targets = [...document.querySelectorAll<SVGCircleElement>(".component .pin-target")];
+    expect(targets.map((target) => ({ cx: target.getAttribute("cx"), cy: target.getAttribute("cy") }))).toEqual([
+      { cx: "-40", cy: "0" },
+      { cx: "40", cy: "0" },
+    ]);
+    expect(document.querySelectorAll(".import-pin-lead")).toHaveLength(2);
+  });
+
+  it("clears marquee and moving snap markers when a pointer gesture is canceled", () => {
+    useSchematic.setState({ wires: [] });
+    render(<Canvas interactive />);
+    const canvas = document.querySelector("svg.canvas")!;
+
+    fireEvent.pointerDown(canvas, { button: 0, clientX: 0, clientY: 0, pointerId: 10 });
+    expect(document.querySelectorAll(".snap-dot").length).toBeGreaterThan(0);
+    fireEvent.pointerCancel(canvas, { pointerId: 10 });
+    expect(document.querySelectorAll(".snap-dot")).toHaveLength(0);
+
+    fireEvent.pointerDown(canvas, { button: 0, clientX: 100, clientY: 100, pointerId: 11 });
+    fireEvent.pointerMove(canvas, { clientX: 140, clientY: 140, pointerId: 11 });
+    expect(document.querySelector(".select-box")).not.toBeNull();
+    fireEvent.pointerCancel(canvas, { pointerId: 11 });
+    expect(document.querySelector(".select-box")).toBeNull();
+  });
+
+  it("rolls back a partially moved component when capture is canceled", () => {
+    useSchematic.setState({ wires: [] });
+    render(<Canvas interactive />);
+    const canvas = document.querySelector("svg.canvas")!;
+
+    fireEvent.pointerDown(canvas, { button: 0, clientX: 0, clientY: 0, pointerId: 13 });
+    fireEvent.pointerMove(canvas, { clientX: 32, clientY: 32, pointerId: 13 });
+    expect(useSchematic.getState().components[0]).toMatchObject({ x: 32, y: 32 });
+    fireEvent.pointerCancel(canvas, { pointerId: 13 });
+
+    expect(useSchematic.getState().components[0]).toMatchObject({ x: 0, y: 0 });
+    expect(useSchematic.getState().past).toHaveLength(0);
+    expect(document.querySelectorAll(".snap-dot")).toHaveLength(0);
   });
 
   it("finishes a wire on a component pin while keeping the Wire tool active", () => {

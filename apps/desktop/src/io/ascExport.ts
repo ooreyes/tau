@@ -231,8 +231,9 @@ export function rotationToOrientation(
   rotation: 0 | 90 | 180 | 270,
   mirrored: boolean | undefined,
 ): AscOrientation {
-  const base = mirrored ? "M" : "R";
-  return `${base}${rotation}` as AscOrientation;
+  if (!mirrored) return `R${rotation}` as AscOrientation;
+  const ltRotation = rotation === 90 ? 270 : rotation === 270 ? 90 : rotation;
+  return `M${ltRotation}` as AscOrientation;
 }
 
 export interface SchematicExportInput {
@@ -292,6 +293,13 @@ export function schematicToAsc(input: SchematicExportInput): SchematicToAscResul
       continue;
     }
     const attrs: Record<string, string> = {};
+    // A part created natively in Tau has Tau-local anchor/pin geometry, which
+    // is not the same as the corresponding LTspice .asy geometry. Persist the
+    // native identity for *every* such part so reopening Tau's own ASC never
+    // replaces its pins with LTspice offsets and silently breaks the graph.
+    // Faithfully imported LTspice parts already carry pinOverride and continue
+    // to round-trip through their original LT symbol geometry.
+    const roundTripTauKind = c.pinOverride?.length ? symbol.tauKind : c.kind;
     if (symbol.tauKind) {
       // The carrier is a real LTspice resistor, so give it an R designator.
       // TauLabel restores the user's original U/F/H/S/X/TP designator.
@@ -299,9 +307,10 @@ export function schematicToAsc(input: SchematicExportInput): SchematicToAscResul
       attrs.TauLabel = c.label || "\"\"";
     } else if (c.label) attrs.InstName = c.label;
     if (symbol.value) attrs.Value = symbol.value;
-    if (symbol.tauKind) {
-      attrs.TauKind = symbol.tauKind;
-      attrs.TauValue = symbol.tauValue || "\"\"";
+    if (roundTripTauKind) {
+      attrs.TauKind = roundTripTauKind;
+      attrs.TauValue = symbol.tauValue || c.value || "\"\"";
+      attrs.TauLabel = c.label || "\"\"";
     }
     doc.symbols.push({
       type: symbol.type,

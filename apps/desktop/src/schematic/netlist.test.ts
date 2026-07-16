@@ -1,11 +1,35 @@
 import { describe, expect, it } from "vitest";
-import { extractCircuit, netAtPoint } from "./netlist";
+import { extractCircuit, isResistiveWire, netAtPoint } from "./netlist";
 import type { NetLabel, SchematicComponent, SchematicWire } from "./types";
 
 const wire = (id: string, points: { x: number; y: number }[]): SchematicWire => ({ id, points });
 const label = (id: string, x: number, y: number, text: string): NetLabel => ({ id, x, y, text });
 const resistor = (id: string, x: number, y: number): SchematicComponent => ({
   id, kind: "resistor", label: id.toUpperCase(), value: "1k", x, y, rotation: 0,
+});
+
+describe("wire resistance classification", () => {
+  it.each(["", "0", "0m", "0Ω", "0e3", "0uOhm"])("treats numerical zero %j as an ideal conductor", (resistance) => {
+    expect(isResistiveWire({ id: "w", points: [{ x: 0, y: 0 }, { x: 16, y: 0 }], resistance })).toBe(false);
+  });
+
+  it("keeps positive and invalid values non-ideal so the deck cannot silently open them", () => {
+    expect(isResistiveWire({ id: "w", points: [{ x: 0, y: 0 }, { x: 16, y: 0 }], resistance: "10m" })).toBe(true);
+    expect(isResistiveWire({ id: "w", points: [{ x: 0, y: 0 }, { x: 16, y: 0 }], resistance: "banana" })).toBe(true);
+  });
+});
+
+describe("large schematic extraction", () => {
+  it("indexes 5,000 independent conductor segments without an all-pairs freeze", () => {
+    const wires = Array.from({ length: 5_000 }, (_, index) => wire(`w${index}`, [
+      { x: 0, y: index * 16 },
+      { x: 16, y: index * 16 },
+    ]));
+    const started = performance.now();
+    const circuit = extractCircuit([], wires);
+    expect(circuit.nets).toHaveLength(5_000);
+    expect(performance.now() - started).toBeLessThan(1_500);
+  });
 });
 
 describe("net extraction crossing semantics", () => {
@@ -74,6 +98,18 @@ describe("net labels are electrical", () => {
     const net = labelled.nets.find((n) => n.id === "vcc");
     expect(net).toBeDefined();
     expect(net?.pins.map((p) => p.componentId).sort()).toEqual(["r1", "r2"]);
+  });
+
+  it.each([
+    ["OUT", "out"],
+    ["foo bar", "foo_bar"],
+  ])("matches ngspice identity by merging labels %j and %j", (first, second) => {
+    const circuit = extractCircuit([r1, r2], [], [
+      label("l1", 132, 0, first),
+      label("l2", 268, 0, second),
+    ]);
+    expect(circuit.nets).toHaveLength(3);
+    expect(circuit.nets.some((net) => net.pins.length === 2)).toBe(true);
   });
 
   it("does not merge nets carrying different label names", () => {

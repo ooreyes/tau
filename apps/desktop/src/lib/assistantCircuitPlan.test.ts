@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { extractCircuit } from "../schematic/netlist";
+import { importAsc } from "../io/ascImport";
 import {
   ASSISTANT_CATALOG_PROMPT,
   ASSISTANT_COMPOSITE_KINDS,
@@ -43,7 +44,8 @@ function expectRoundTripConnectivity(id: string, plan: TopologyPlan) {
   expect(action.type).toBe("create_asc");
   if (action.type !== "create_asc") throw new Error("expected create action");
 
-  const circuit = extractCircuit(action.document.components, action.document.wires, action.document.netLabels);
+  const reopened = importAsc(action.source);
+  const circuit = extractCircuit(reopened.components, reopened.wires, reopened.netLabels);
   const byRef = new Map(circuit.components.map(({ component, pins }) => [component.label, pins]));
   for (const net of plan.nets) {
     for (const token of net.pins) {

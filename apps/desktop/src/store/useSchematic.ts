@@ -14,7 +14,22 @@ import { CATALOG_BY_KIND } from "../schematic/catalog";
 import { canCurrentProbe } from "../simulation/analysisSetup";
 import { validateSchematicDocument } from "../schematic/documentValidation";
 import { extractCircuit, netAtPoint } from "../schematic/netlist";
-import { getComponentPins } from "../schematic/pins";
+import { getComponentPins, rotatePoint, transformPoint } from "../schematic/pins";
+
+/** Move a component while preserving the invariant that imported LTspice pin
+ * overrides are absolute world coordinates attached to that component. */
+export function moveComponentTo(component: SchematicComponent, x: number, y: number): SchematicComponent {
+  const dx = x - component.x;
+  const dy = y - component.y;
+  return {
+    ...component,
+    x,
+    y,
+    ...(component.pinOverride
+      ? { pinOverride: component.pinOverride.map((pin) => ({ ...pin, x: pin.x + dx, y: pin.y + dy })) }
+      : {}),
+  };
+}
 
 /** The undoable document slice. Everything else in the store is ephemeral UI. */
 interface Doc {
@@ -309,10 +324,28 @@ function deriveCounters(components: SchematicComponent[]): Record<string, number
 
 /** Clone an incoming document with fresh ids so examples/files never alias live state. */
 function copyDocument(doc: SchematicDocument, freshIds: boolean): SchematicDocument {
+  const componentIds = new Map<string, string>();
+  const components = doc.components.map((component) => {
+    const id = freshIds ? nanoid(6) : component.id;
+    componentIds.set(component.id, id);
+    return {
+      ...component,
+      id,
+      ...(component.pinOverride
+        ? { pinOverride: component.pinOverride.map((pin) => ({ ...pin })) }
+        : {}),
+    };
+  });
   return {
-    components: doc.components.map((c) => ({ ...c, id: freshIds ? nanoid(6) : c.id })),
+    components,
     wires: doc.wires.map((w) => ({ id: freshIds ? nanoid(6) : w.id, points: w.points.map((p) => ({ ...p })) })),
-    probes: (doc.probes ?? []).map((probe) => ({ ...probe, id: freshIds ? nanoid(6) : probe.id })),
+    probes: (doc.probes ?? []).map((probe) => ({
+      ...probe,
+      id: freshIds ? nanoid(6) : probe.id,
+      ...(probe.componentId && componentIds.has(probe.componentId)
+        ? { componentId: componentIds.get(probe.componentId) }
+        : {}),
+    })),
     netLabels: (doc.netLabels ?? []).map((label) => ({ ...label, id: freshIds ? nanoid(6) : label.id })),
     directives: [...(doc.directives ?? [])],
   };
@@ -379,6 +412,147 @@ function cleanGroupRoute(points: Point[]): Point[] {
   return out;
 }
 
+const inverseRotation = (rotation: Rotation): Rotation => (((360 - rotation) % 360) as Rotation);
+
+/** Reorient absolute imported pin geometry through component-local space. */
+function reorientComponent(
+  component: SchematicComponent,
+  rotation: Rotation,
+  mirrored: boolean,
+): SchematicComponent {
+  if (!component.pinOverride?.length) return { ...component, rotation, mirrored };
+  const pinOverride = component.pinOverride.map((pin) => {
+    const relative = { x: pin.x - component.x, y: pin.y - component.y };
+    const unrotated = rotatePoint(relative, inverseRotation(component.rotation));
+    const local = component.mirrored ? { x: -unrotated.x, y: unrotated.y } : unrotated;
+    const next = transformPoint(local, rotation, mirrored);
+    return { ...pin, x: component.x + next.x, y: component.y + next.y };
+  });
+  return { ...component, rotation, mirrored, pinOverride };
+}
+
+function endpointRelocations(before: readonly SchematicComponent[], after: readonly SchematicComponent[]): Map<string, Point> {
+  const afterById = new Map(after.map((component) => [component.id, component]));
+  const relocations = new Map<string, Point>();
+  for (const component of before) {
+    const next = afterById.get(component.id);
+    if (!next) continue;
+    const nextPins = new Map(getComponentPins(next).map((pin) => [pin.id, pin]));
+    for (const pin of getComponentPins(component)) {
+      const target = nextPins.get(pin.id);
+      if (target && (pin.x !== target.x || pin.y !== target.y)) {
+        relocations.set(`${pin.x},${pin.y}`, { x: target.x, y: target.y });
+      }
+    }
+  }
+  return relocations;
+}
+
+function relocateWireEnd(points: Point[], atStart: boolean, target: Point): Point[] {
+  const ordered = atStart ? points : [...points].reverse();
+  if (ordered.length < 2) return points;
+  const old = ordered[0];
+  const neighbor = ordered[1];
+  const next = target.x === neighbor.x || target.y === neighbor.y
+    ? [target, ...ordered.slice(1)]
+    : [
+        target,
+        old.y === neighbor.y ? { x: neighbor.x, y: target.y } : { x: target.x, y: neighbor.y },
+        ...ordered.slice(1),
+      ];
+  const cleaned = cleanGroupRoute(next);
+  return atStart ? cleaned : cleaned.reverse();
+}
+
+const pointKey = (point: Point) => `${point.x},${point.y}`;
+
+const pointOnWire = (point: Point, wire: SchematicWire) => wire.points.slice(1).some((end, index) =>
+  pointOnOrthogonalSegment(point, wire.points[index], end));
+
+function orthogonalLead(from: Point, to: Point): Point[] {
+  return cleanGroupRoute([
+    from,
+    ...(from.x === to.x || from.y === to.y ? [] : [{ x: to.x, y: from.y }]),
+    to,
+  ]);
+}
+
+/** Keep conductors attached to moving/reoriented pins. A pin may terminate at
+ *  a wire endpoint, share that endpoint with a stationary part, or land on the
+ *  middle of a longer conductor. Shared junctions stay put and gain a lead;
+ *  otherwise the owned endpoint follows the pin. */
+function relocateAttachedEndpoints(
+  wires: readonly SchematicWire[],
+  relocations: ReadonlyMap<string, Point>,
+  stationaryPinKeys: ReadonlySet<string> = new Set(),
+  translatedWireIds: ReadonlySet<string> = new Set(),
+  translation: Point = { x: 0, y: 0 },
+): SchematicWire[] {
+  return wires.flatMap((wire) => {
+    if (wire.points.length < 2) return wire;
+    if (translatedWireIds.has(wire.id)) {
+      return { ...wire, points: wire.points.map((point) => ({
+        x: point.x + translation.x,
+        y: point.y + translation.y,
+      })) };
+    }
+
+    const firstPoint = wire.points[0];
+    const firstKey = pointKey(firstPoint);
+    const first = relocations.get(firstKey);
+    const lastPoint = wire.points[wire.points.length - 1];
+    const lastKey = pointKey(lastPoint);
+    const last = relocations.get(lastKey);
+    const firstShared = !!first && stationaryPinKeys.has(firstKey);
+    const lastShared = !!last && stationaryPinKeys.has(lastKey);
+
+    const leads = [...relocations.entries()]
+      .filter(([key, target]) => {
+        const [x, y] = key.split(",").map(Number);
+        const source = { x, y };
+        const sharedEnd = (key === firstKey && firstShared) || (key === lastKey && lastShared);
+        const interior = key !== firstKey && key !== lastKey && pointOnWire(source, wire);
+        return (sharedEnd || interior) && (source.x !== target.x || source.y !== target.y);
+      })
+      .map(([key, target], index) => {
+        const [x, y] = key.split(",").map(Number);
+        return {
+          id: `${wire.id}~lead~${key}~${index}`,
+          points: orthogonalLead({ x, y }, target),
+        };
+      });
+
+    const movableFirst = first && !firstShared ? first : undefined;
+    const movableLast = last && !lastShared ? last : undefined;
+    if (!movableFirst && !movableLast) return [wire, ...leads];
+
+    if (movableFirst && movableLast) {
+      const firstDelta = { x: movableFirst.x - firstPoint.x, y: movableFirst.y - firstPoint.y };
+      const lastDelta = { x: movableLast.x - lastPoint.x, y: movableLast.y - lastPoint.y };
+      if (firstDelta.x === lastDelta.x && firstDelta.y === lastDelta.y) {
+        return [{
+          ...wire,
+          points: wire.points.map((point) => ({ x: point.x + firstDelta.x, y: point.y + firstDelta.y })),
+        }, ...leads];
+      }
+    }
+    let points = wire.points.map((point) => ({ ...point }));
+    if (movableFirst) points = relocateWireEnd(points, true, movableFirst);
+    if (movableLast) points = relocateWireEnd(points, false, movableLast);
+    return [{ ...wire, points }, ...leads];
+  });
+}
+
+function relocateAnchoredPoint<T extends Point>(
+  item: T,
+  relocations: ReadonlyMap<string, Point>,
+  stationaryPinKeys: ReadonlySet<string> = new Set(),
+): T {
+  if (stationaryPinKeys.has(pointKey(item))) return item;
+  const target = relocations.get(pointKey(item));
+  return target ? { ...item, x: target.x, y: target.y } : item;
+}
+
 const pointOnOrthogonalSegment = (point: Point, a: Point, b: Point) =>
   a.x === b.x
     ? point.x === a.x && point.y >= Math.min(a.y, b.y) && point.y <= Math.max(a.y, b.y)
@@ -396,13 +570,19 @@ function wiresWithInsertedComponent(wires: SchematicWire[], component: Schematic
   const pins = getComponentPins(component);
   if (pins.length !== 2 || (pins[0].x === pins[1].x && pins[0].y === pins[1].y)) return wires;
 
-  for (let wireIndex = 0; wireIndex < wires.length; wireIndex += 1) {
-    const wire = wires[wireIndex];
+  let inserted = false;
+  const result: SchematicWire[] = [];
+  for (const sourceWire of wires) {
+    const wire = { ...sourceWire, points: cleanGroupRoute(sourceWire.points) };
     // A wire-level resistance models the entire original polyline. Copying it
     // onto both pieces would silently double that impedance, while assigning
     // it to one side would invent a location. Leave non-ideal wires untouched
     // until the model carries segment-level resistance.
-    if (wire.resistance?.trim()) continue;
+    if (wire.resistance?.trim()) {
+      result.push(sourceWire);
+      continue;
+    }
+    let replacement: SchematicWire[] | null = null;
     for (let segmentIndex = 0; segmentIndex < wire.points.length - 1; segmentIndex += 1) {
       const a = wire.points[segmentIndex];
       const b = wire.points[segmentIndex + 1];
@@ -419,15 +599,17 @@ function wiresWithInsertedComponent(wires: SchematicWire[], component: Schematic
       const before = cleanGroupRoute([...wire.points.slice(0, segmentIndex + 1), firstPoint]);
       const after = cleanGroupRoute([secondPoint, ...wire.points.slice(segmentIndex + 1)]);
       const pieces = [before, after].filter((points) => points.length >= 2);
-      const replacement = pieces.map((points, index) => ({
+      replacement = pieces.map((points, index) => ({
         ...wire,
         id: index === 0 ? wire.id : nanoid(6),
         points,
       }));
-      return [...wires.slice(0, wireIndex), ...replacement, ...wires.slice(wireIndex + 1)];
+      inserted = true;
+      break;
     }
+    result.push(...(replacement ?? [sourceWire]));
   }
-  return wires;
+  return inserted ? result : wires;
 }
 
 const initialDoc = loadPersisted();
@@ -547,55 +729,24 @@ export const useSchematic = create<SchematicState>()((set) => {
         const updatedComponents = s.components.map((c) => {
           const origin = origins.get(c.id);
           if (!origin) return c;
-          return { ...c, x: origin.x + dx, y: origin.y + dy };
+          return moveComponentTo(c, origin.x + dx, origin.y + dy);
         });
-        // Import translateAttachedWireEndpoints logic inline (avoid circular deps)
-        // We use the exported function from Canvas — but store can't import Canvas.
-        // Instead replicate the minimal logic here.
-        const pinSet = new Set(allSourcePins.map((p) => `${p.x},${p.y}`));
-        const isPinPoint = (pt: Point) => pinSet.has(`${pt.x},${pt.y}`);
+        const relocations = new Map(allSourcePins.map((pin) => [
+          pointKey(pin),
+          { x: pin.x + dx, y: pin.y + dy },
+        ]));
+        const stationaryPinKeys = new Set(s.components
+          .filter((component) => !origins.has(component.id))
+          .flatMap((component) => getComponentPins(component))
+          .map(pointKey));
         const selectedWireIds = new Set(s.selectedWireIds);
-        const updatedWires = sourceWires.map((wire) => {
-          if (wire.points.length < 2) return wire;
-          // A marquee-selected wire is part of the object being translated,
-          // even when it has no component pin at either end.
-          if (selectedWireIds.has(wire.id)) {
-            return { ...wire, points: wire.points.map((p) => ({ x: p.x + dx, y: p.y + dy })) };
-          }
-          const firstMoved = isPinPoint(wire.points[0]);
-          const lastMoved = isPinPoint(wire.points[wire.points.length - 1]);
-          if (!firstMoved && !lastMoved) return wire;
-          if (firstMoved && lastMoved) {
-            return { ...wire, points: wire.points.map((p) => ({ x: p.x + dx, y: p.y + dy })) };
-          }
-          const shiftedFirst = firstMoved ? { x: wire.points[0].x + dx, y: wire.points[0].y + dy } : null;
-          const shiftedLast = lastMoved ? { x: wire.points[wire.points.length - 1].x + dx, y: wire.points[wire.points.length - 1].y + dy } : null;
-          if (shiftedFirst) {
-            const pts = wire.points;
-            const next = pts[1];
-            const target = shiftedFirst;
-            const startsAligned = target.x === next.x || target.y === next.y;
-            if (startsAligned) {
-              return { ...wire, points: cleanGroupRoute([target, ...pts.slice(1)]) };
-            }
-            const origFirst = pts[0];
-            const elbow = origFirst.y === next.y ? { x: next.x, y: target.y } : { x: target.x, y: next.y };
-            return { ...wire, points: cleanGroupRoute([target, elbow, ...pts.slice(1)]) };
-          }
-          // shiftedLast
-          {
-            const pts = wire.points;
-            const previous = pts[pts.length - 2];
-            const target = shiftedLast!;
-            const startsAligned = previous.x === target.x || previous.y === target.y;
-            if (startsAligned) {
-              return { ...wire, points: cleanGroupRoute([...pts.slice(0, -1), target]) };
-            }
-            const origLast = pts[pts.length - 1];
-            const elbow = previous.y === origLast.y ? { x: previous.x, y: target.y } : { x: target.x, y: previous.y };
-            return { ...wire, points: cleanGroupRoute([...pts.slice(0, -1), elbow, target]) };
-          }
-        });
+        const updatedWires = relocateAttachedEndpoints(
+          sourceWires,
+          relocations,
+          stationaryPinKeys,
+          selectedWireIds,
+          { x: dx, y: dy },
+        );
         const updatedLabels = s.netLabels.map((label) => {
           const origin = labelOrigins.get(label.id);
           return origin ? { ...label, x: origin.x + dx, y: origin.y + dy } : label;
@@ -765,35 +916,55 @@ export const useSchematic = create<SchematicState>()((set) => {
     // History for a drag is captured once by the caller via beginChange() on the first move.
     moveComponent: (id, x, y) =>
       set((s) => ({
-        components: s.components.map((c) => (c.id === id ? { ...c, x, y } : c)),
+        components: s.components.map((c) => (c.id === id ? moveComponentTo(c, x, y) : c)),
       })),
 
     rotate: () =>
       set((s) => {
         if (s.tool.mode === "place") return { placeRotation: nextRotation(s.placeRotation) };
-        if (s.selectedId) {
-          return {
-            ...recordInto(s),
-            components: s.components.map((c) =>
-              c.id === s.selectedId ? { ...c, rotation: nextRotation(c.rotation) } : c,
-            ),
-          };
-        }
-        return {};
+        const ids = new Set(s.selectedIds.length > 0 ? s.selectedIds : s.selectedId ? [s.selectedId] : []);
+        if (ids.size === 0) return {};
+        const before = s.components.filter((component) => ids.has(component.id));
+        const components = s.components.map((component) => ids.has(component.id)
+          ? reorientComponent(component, nextRotation(component.rotation), component.mirrored ?? false)
+          : component);
+        const after = components.filter((component) => ids.has(component.id));
+        const relocations = endpointRelocations(before, after);
+        const stationaryPinKeys = new Set(s.components
+          .filter((component) => !ids.has(component.id))
+          .flatMap((component) => getComponentPins(component))
+          .map(pointKey));
+        return {
+          ...recordInto(s),
+          components,
+          wires: relocateAttachedEndpoints(s.wires, relocations, stationaryPinKeys),
+          netLabels: s.netLabels.map((label) => relocateAnchoredPoint(label, relocations, stationaryPinKeys)),
+          probes: s.probes.map((probe) => probe.componentId ? probe : relocateAnchoredPoint(probe, relocations, stationaryPinKeys)),
+        };
       }),
 
     mirror: () =>
       set((s) => {
         if (s.tool.mode === "place") return { placeMirror: !s.placeMirror };
-        if (s.selectedId) {
-          return {
-            ...recordInto(s),
-            components: s.components.map((c) =>
-              c.id === s.selectedId ? { ...c, mirrored: !(c.mirrored ?? false) } : c,
-            ),
-          };
-        }
-        return {};
+        const ids = new Set(s.selectedIds.length > 0 ? s.selectedIds : s.selectedId ? [s.selectedId] : []);
+        if (ids.size === 0) return {};
+        const before = s.components.filter((component) => ids.has(component.id));
+        const components = s.components.map((component) => ids.has(component.id)
+          ? reorientComponent(component, component.rotation, !(component.mirrored ?? false))
+          : component);
+        const after = components.filter((component) => ids.has(component.id));
+        const relocations = endpointRelocations(before, after);
+        const stationaryPinKeys = new Set(s.components
+          .filter((component) => !ids.has(component.id))
+          .flatMap((component) => getComponentPins(component))
+          .map(pointKey));
+        return {
+          ...recordInto(s),
+          components,
+          wires: relocateAttachedEndpoints(s.wires, relocations, stationaryPinKeys),
+          netLabels: s.netLabels.map((label) => relocateAnchoredPoint(label, relocations, stationaryPinKeys)),
+          probes: s.probes.map((probe) => probe.componentId ? probe : relocateAnchoredPoint(probe, relocations, stationaryPinKeys)),
+        };
       }),
 
     copySelected: () =>
@@ -827,7 +998,9 @@ export const useSchematic = create<SchematicState>()((set) => {
           components: compIds.size > 0 ? s.components.filter((c) => !compIds.has(c.id)) : s.components,
           wires: wireIds.size > 0 ? s.wires.filter((w) => !wireIds.has(w.id)) : s.wires,
           netLabels: labelIds.size > 0 ? s.netLabels.filter((l) => !labelIds.has(l.id)) : s.netLabels,
-          probes: probeIds.size > 0 ? s.probes.filter((p) => !probeIds.has(p.id)) : s.probes,
+          probes: (probeIds.size > 0 || compIds.size > 0)
+            ? s.probes.filter((p) => !probeIds.has(p.id) && (!p.componentId || !compIds.has(p.componentId)))
+            : s.probes,
           selectedId: null,
           selectedIds: [],
           selectedWireId: null,

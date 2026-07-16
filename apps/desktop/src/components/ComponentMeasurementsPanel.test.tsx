@@ -156,18 +156,25 @@ describe("ComponentMeasurementsPanel — variant=\"compact\" (telemetry dock gri
     expect(within(c1Card).getAllByText("—")).toHaveLength(2);
   });
 
-  it("shows separate, labelled V(t) and I(t) previews whenever component telemetry varies over time", () => {
-    render(<ComponentMeasurementsPanel rows={rows} selectedId={null} onSelect={() => {}} variant="compact" />);
+  it("keeps summary cards equal-height and shows V(t)/I(t) only in the selected component inspector", () => {
+    const { rerender } = render(<ComponentMeasurementsPanel rows={rows} selectedId={null} onSelect={() => {}} variant="compact" />);
 
     const r1Card = screen.getByText("R1").closest("button") as HTMLElement;
-    expect(within(r1Card).getByText("Waveform preview")).toBeTruthy();
-    expect(within(r1Card).getByRole("img", { name: "V(R1): Periodic · 1 kHz" })).toBeTruthy();
-    expect(within(r1Card).getByRole("img", { name: "I(R1): Periodic · 1 kHz" })).toBeTruthy();
-    expect(within(r1Card).getByText("Probe for a full time-axis plot")).toBeTruthy();
-
     const c1Card = screen.getByText("C1").closest("button") as HTMLElement;
-    expect(within(c1Card).getByRole("img", { name: "V(C1): transient" })).toBeTruthy();
-    expect(within(c1Card).queryByRole("img", { name: /I\(C1\)/ })).toBeNull();
+    expect(within(r1Card).queryByRole("img")).toBeNull();
+    expect(within(c1Card).queryByRole("img")).toBeNull();
+    expect(screen.queryByRole("region", { name: "R1 transient details" })).toBeNull();
+
+    rerender(<ComponentMeasurementsPanel rows={rows} selectedId="r1" onSelect={() => {}} variant="compact" />);
+    const r1Inspector = screen.getByRole("region", { name: "R1 transient details" });
+    expect(within(r1Inspector).getByRole("img", { name: "V(R1): Periodic · 1 kHz" })).toBeTruthy();
+    expect(within(r1Inspector).getByRole("img", { name: "I(R1): Periodic · 1 kHz" })).toBeTruthy();
+    expect(within(r1Inspector).getByText("Use Probe for a full time-axis plot")).toBeTruthy();
+
+    rerender(<ComponentMeasurementsPanel rows={rows} selectedId="c1" onSelect={() => {}} variant="compact" />);
+    const c1Inspector = screen.getByRole("region", { name: "C1 transient details" });
+    expect(within(c1Inspector).getByRole("img", { name: "V(C1): transient" })).toBeTruthy();
+    expect(within(c1Inspector).queryByRole("img", { name: /I\(C1\)/ })).toBeNull();
   });
 
   it("does not invent transient plots for a steady component", () => {

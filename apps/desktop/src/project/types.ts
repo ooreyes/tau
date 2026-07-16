@@ -1,6 +1,7 @@
 import { kindToLtspiceType, schematicToAsc } from "../io/ascExport";
 import { importAsc, ltspiceTypeToKind, parseAsc } from "../io/ascImport";
 import type { SchematicDocument } from "../store/useSchematic";
+import { extractCircuit } from "../schematic/netlist";
 
 /** On-disk / in-memory project tree node (VS Code–style folder project). */
 export type ProjectNodeKind = "dir" | "file";
@@ -68,6 +69,23 @@ export function isProjectFile(name: string): boolean {
 export interface SerializedSchematicFile {
   contents: string;
   warnings: string[];
+}
+
+/** Canonical terminal partition used as the Save semantic postcondition. Net
+ * ids may be regenerated, but the same component pins must remain equivalent. */
+export function schematicTopologySignature(document: SchematicDocument): string[] {
+  const circuit = extractCircuit(document.components, document.wires, document.netLabels ?? []);
+  const byId = new Map(document.components.map((component) => [component.id, component]));
+  return circuit.nets
+    .map((net) => net.pins.map((pin) => {
+      const component = byId.get(pin.componentId);
+      const identity = component
+        ? `${component.label || component.kind}@${component.x},${component.y}`
+        : pin.componentId;
+      return `${identity}.${pin.id}`;
+    }).sort().join("|"))
+    .filter(Boolean)
+    .sort();
 }
 
 const normalizeLtspiceType = (type: string): string =>
@@ -141,7 +159,16 @@ export function serializeSchematicFile(
       netLabels: document.netLabels ?? [],
       directives: document.directives ?? [],
     });
-    return { contents: result.text, warnings: result.warnings };
+    const reopened = importAsc(result.text);
+    const topologyChanged = JSON.stringify(schematicTopologySignature(document))
+      !== JSON.stringify(schematicTopologySignature(reopened));
+    return {
+      contents: result.text,
+      warnings: [
+        ...result.warnings,
+        ...(topologyChanged ? ["ASC round-trip changed terminal connectivity; save was not written."] : []),
+      ],
+    };
   }
 
   return {

@@ -1299,11 +1299,8 @@ export function compileAssistantCircuitPlan(id: string, input: unknown): Assista
     directives: loweredPlan.directives,
   };
   const action = plan.mode === "create"
-    // The logical-plan path already proves the native graph above. Its ASC
-    // round-trip retains some legacy symbol-pin geometry warnings, so the raw
-    // ASC electrical gate is reserved for direct cloud-model payloads.
-    ? parseCreateAscAction(id, { filename: plan.filename, source: exported.text }, false)
-    : parseApplyCurrentAscAction(id, { source: exported.text }, false);
+    ? parseCreateAscAction(id, { filename: plan.filename, source: exported.text }, true)
+    : parseApplyCurrentAscAction(id, { source: exported.text }, true);
   return {
     ...action,
     document: nativeDocument,

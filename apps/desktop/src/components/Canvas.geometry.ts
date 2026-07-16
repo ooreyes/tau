@@ -1,7 +1,7 @@
 import { GRID, SYMBOL_BODY } from "../schematic/symbols";
 import { CATALOG_BY_KIND } from "../schematic/catalog";
 import type { ComponentKind, NetLabel, Point, SchematicComponent, SchematicWire } from "../schematic/types";
-import { getLocalPins, getComponentPins, transformPoint } from "../schematic/pins";
+import { getComponentPins, transformPoint } from "../schematic/pins";
 import { decodeParams } from "../schematic/params";
 
 export const snap = (v: number) => {
@@ -755,25 +755,53 @@ export function translateAttachedWireEndpoints(
   sourcePins: Point[],
   dx: number,
   dy: number,
+  stationaryPins: Point[] = [],
 ): SchematicWire[] {
   const targetFor = (point: Point) =>
     sourcePins.some((pin) => pointsEqual(pin, point))
       ? { x: point.x + dx, y: point.y + dy }
       : null;
 
-  return sourceWires.map((wire) => {
-    if (wire.points.length < 2) return wire;
-    const firstTarget = targetFor(wire.points[0]);
-    const lastTarget = targetFor(wire.points[wire.points.length - 1]);
-    if (!firstTarget && !lastTarget) return wire;
+  const stationary = new Set(stationaryPins.map((pin) => pointKey(pin)));
+  const lead = (from: Point, to: Point): Point[] => cleanRoute([
+    from,
+    ...(from.x === to.x || from.y === to.y ? [] : [{ x: to.x, y: from.y }]),
+    to,
+  ]);
 
-    if (firstTarget && lastTarget) {
-      return { ...wire, points: wire.points.map((point) => ({ x: point.x + dx, y: point.y + dy })) };
+  return sourceWires.flatMap((wire) => {
+    if (wire.points.length < 2) return wire;
+    const firstPoint = wire.points[0];
+    const lastPoint = wire.points[wire.points.length - 1];
+    const firstTarget = targetFor(firstPoint);
+    const lastTarget = targetFor(lastPoint);
+    const interiorPins = sourcePins.filter((pin) => (
+      !pointsEqual(pin, firstPoint)
+      && !pointsEqual(pin, lastPoint)
+      && wireSegments([wire]).some((segment) => pointOnWireSegment(pin, segment))
+    ));
+    const firstShared = !!firstTarget && stationary.has(pointKey(firstPoint));
+    const lastShared = !!lastTarget && stationary.has(pointKey(lastPoint));
+    const leads = [
+      ...(firstShared ? [{ from: firstPoint, to: firstTarget! }] : []),
+      ...(lastShared ? [{ from: lastPoint, to: lastTarget! }] : []),
+      ...interiorPins.map((pin) => ({ from: pin, to: { x: pin.x + dx, y: pin.y + dy } })),
+    ].filter(({ from, to }) => !pointsEqual(from, to)).map(({ from, to }, index) => ({
+      id: `${wire.id}~lead~${pointKey(from)}~${index}`,
+      points: lead(from, to),
+    }));
+
+    const movableFirst = firstTarget && !firstShared ? firstTarget : null;
+    const movableLast = lastTarget && !lastShared ? lastTarget : null;
+    if (!movableFirst && !movableLast) return [wire, ...leads];
+
+    if (movableFirst && movableLast) {
+      return [{ ...wire, points: wire.points.map((point) => ({ x: point.x + dx, y: point.y + dy })) }, ...leads];
     }
-    return {
+    return [{
       ...wire,
-      points: firstTarget ? moveWireStart(wire.points, firstTarget) : moveWireEnd(wire.points, lastTarget!),
-    };
+      points: movableFirst ? moveWireStart(wire.points, movableFirst) : moveWireEnd(wire.points, movableLast!),
+    }, ...leads];
   });
 }
 
@@ -1012,27 +1040,19 @@ export function rerouteMovedWires(
 
 /** Wires whose endpoints currently sit on any of the given world pin points. */
 export function wiresTouchingPins(wires: SchematicWire[], pinPoints: Point[]): Set<string> {
-  const pins = new Set(pinPoints.map((p) => `${p.x},${p.y}`));
   const out = new Set<string>();
   for (const wire of wires) {
     if (wire.points.length < 2) continue;
-    const a = wire.points[0];
-    const b = wire.points[wire.points.length - 1];
-    if (pins.has(`${a.x},${a.y}`) || pins.has(`${b.x},${b.y}`)) out.add(wire.id);
+    if (pinPoints.some((pin) => wireSegments([wire]).some((segment) => pointOnWireSegment(pin, segment)))) {
+      out.add(wire.id);
+    }
   }
   return out;
 }
 
 /** World pin positions for a set of components (after orientation). */
 export function worldPinsFor(components: SchematicComponent[]): Point[] {
-  const out: Point[] = [];
-  for (const c of components) {
-    for (const pin of getLocalPins(c.kind)) {
-      const local = transformPoint({ x: pin.x, y: pin.y }, c.rotation, c.mirrored ?? false);
-      out.push({ x: c.x + local.x, y: c.y + local.y });
-    }
-  }
-  return out;
+  return components.flatMap((component) => getComponentPins(component).map(({ x, y }) => ({ x, y })));
 }
 
 /** Nearest grid spot (spiralling out) where a new body won't overlap an existing one. */

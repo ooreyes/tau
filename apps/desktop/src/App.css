@@ -367,6 +367,13 @@ body {
   opacity: 0.9;
 }
 
+.import-pin-lead {
+  fill: none;
+  stroke: var(--comp);
+  stroke-width: 1.75;
+  vector-effect: non-scaling-stroke;
+}
+
 /* Rubber-band selection rectangle drawn while drag-selecting on empty canvas. */
 .select-box {
   fill: color-mix(in srgb, var(--accent) 14%, transparent);
@@ -5293,19 +5300,28 @@ button.bottom-panel-head:focus-visible {
   overflow: hidden;
 }
 
-/* Compact telemetry grid. Cards reflow vertically at the 300px circuit-column
-   floor; primary V/I/P data never sits in a hidden horizontal carousel. */
+.telemetry-compact-layout {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  height: 100%;
+  min-height: 0;
+  padding-top: var(--sp-2);
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+/* Compact telemetry grid. Every card has the same summary-only structure;
+   selected transient detail lives in the inspector above instead of making
+   one CSS-grid row inherit an unrelated card's height. */
 .telemetry-strip {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 212px), 1fr));
-  align-items: flex-start;
+  align-items: stretch;
   gap: var(--sp-2);
-  height: 100%;
   margin: 0;
-  padding: var(--sp-2) 0 var(--sp-1);
+  padding: 0 0 var(--sp-1);
   list-style: none;
-  overflow-x: hidden;
-  overflow-y: auto;
 }
 
 .telemetry-strip-empty {
@@ -5319,12 +5335,14 @@ button.bottom-panel-head:focus-visible {
 
 .telemetry-card-item {
   min-width: 0;
+  height: 100%;
 }
 
 .telemetry-card {
   display: flex;
   flex-direction: column;
   width: 100%;
+  height: 100%;
   padding: 10px var(--sp-3) var(--sp-1);
   border: 1px solid var(--border-subtle);
   border-radius: var(--r-md);
@@ -5380,6 +5398,31 @@ button.bottom-panel-head:focus-visible {
   flex: none;
   color: var(--faint);
   font-size: var(--fs-micro);
+}
+
+.telemetry-card-meta {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.telemetry-card-badge {
+  padding: 2px 5px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font: 600 var(--fs-micro) var(--font-ui);
+  white-space: nowrap;
+}
+
+.telemetry-card-warning {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  color: var(--signal);
+  font: 600 var(--fs-micro) var(--font-mono);
 }
 
 /* Spec-sheet rows: full-word quantity left, value+unit right, hairlines
@@ -5438,19 +5481,19 @@ button.bottom-panel-head:focus-visible {
   color: var(--faint);
 }
 
-/* Time-domain V/I previews appear only when a component actually changes or
-   repeats during the transient. Voltage and current stay in separate plots so
-   incompatible units are never implied to share a scale; the full scope keeps
-   the physical time axis, cursors, and zoom controls. */
-.telemetry-waveforms {
+/* The selected component gets one bounded inspector. Voltage and current stay
+   in separate plots so incompatible units are never implied to share a scale. */
+.telemetry-inspector {
   display: flex;
   flex-direction: column;
   gap: var(--sp-2);
-  padding: var(--sp-2) 0 var(--sp-1);
-  border-top: 1px solid var(--border-subtle);
+  padding: var(--sp-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-md);
+  background: var(--panel-3);
 }
 
-.telemetry-waveforms-head,
+.telemetry-inspector-head,
 .telemetry-waveform-label {
   display: flex;
   align-items: baseline;
@@ -5459,19 +5502,31 @@ button.bottom-panel-head:focus-visible {
   min-width: 0;
 }
 
-.telemetry-waveforms-head {
+.telemetry-inspector-head {
   color: var(--muted);
   font-size: var(--fs-micro);
 }
 
-.telemetry-waveforms-head span:first-child {
+.telemetry-inspector-head > div {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.telemetry-inspector-head strong {
   color: var(--text);
   font-weight: 600;
+}
+
+.telemetry-inspector-eyebrow {
+  color: var(--faint);
+  font-size: var(--fs-micro);
   letter-spacing: var(--tracking-wide);
   text-transform: uppercase;
 }
 
-.telemetry-waveforms-head span:last-child {
+.telemetry-inspector-head > span {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -5561,9 +5616,16 @@ button.bottom-panel-head:focus-visible {
   border-bottom: 1px solid var(--border);
 }
 
-/* Calm title row above a symmetric control row. The model sits between two
-   icon controls on either side, so it reads as part of chat navigation rather
-   than a detached second-line field. */
+.assistant-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+
+/* Calm title row above one compact navigation row. Destructive chat actions
+   live in history; the permanent header only keeps the universal close. */
 .assistant-title {
   display: flex;
   align-items: center;
@@ -5606,7 +5668,7 @@ button.bottom-panel-head:focus-visible {
 
 .assistant-toolbar {
   display: grid;
-  grid-template-columns: 28px 28px minmax(0, 1fr) 28px 28px;
+  grid-template-columns: 28px minmax(0, 1fr) 28px;
   align-items: center;
   gap: var(--sp-2);
   width: 100%;
@@ -5626,8 +5688,8 @@ button.bottom-panel-head:focus-visible {
 .assistant-history-popover {
   position: absolute;
   top: calc(100% + 6px);
-  left: calc(-28px - var(--sp-2));
-  right: auto;
+  left: auto;
+  right: 0;
   z-index: 20;
   width: 240px;
   max-height: 320px;
@@ -5640,6 +5702,18 @@ button.bottom-panel-head:focus-visible {
   background: var(--panel-4);
   box-shadow: var(--elev-pop);
   animation: tau-pop-in var(--motion-fast) var(--spring) both;
+}
+
+.assistant-history-footer {
+  margin-top: var(--sp-1);
+  padding-top: var(--sp-1);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.assistant-history-footer button {
+  width: 100%;
+  justify-content: flex-start;
+  color: var(--danger);
 }
 
 .assistant-history-empty {

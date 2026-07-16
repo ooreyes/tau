@@ -17,6 +17,7 @@ import {
   type SchematicHistory,
 } from "./useSchematic";
 import { dispatchShortcutAction, resolveShortcut, type ShortcutHandlers } from "../schematic/shortcuts";
+import { getComponentPins } from "../schematic/pins";
 
 const sourceDocument = (): SchematicDocument => ({
   components: [
@@ -133,6 +134,36 @@ describe("schematic document store", () => {
       [{ x: -96, y: 0 }, expect.objectContaining({ x: -32, y: 0 })],
       [expect.objectContaining({ x: 32, y: 0 }), { x: 96, y: 0 }],
     ]);
+  });
+
+  it("removes the bypass even when a redundant vertex subdivides the conductor between the pins", () => {
+    useSchematic.setState({
+      wires: [{ id: "subdivided", points: [{ x: -96, y: 0 }, { x: 0, y: 0 }, { x: 96, y: 0 }] }],
+      tool: { mode: "place", kind: "resistor" },
+      placeRotation: 0,
+    });
+
+    useSchematic.getState().addComponent("resistor", 0, 0);
+    expect(useSchematic.getState().wires.map((wire) => wire.points)).toEqual([
+      [{ x: -96, y: 0 }, expect.objectContaining({ x: -32, y: 0 })],
+      [expect.objectContaining({ x: 32, y: 0 }), { x: 96, y: 0 }],
+    ]);
+    expect(useSchematic.getState().wires.some((wire) => wire.points.some((point) => point.x === 0 && point.y === 0))).toBe(false);
+  });
+
+  it("splits every overlapping ideal conductor so none silently bypasses a placed part", () => {
+    useSchematic.setState({
+      wires: [
+        { id: "w1", points: [{ x: -96, y: 0 }, { x: 96, y: 0 }] },
+        { id: "w2", points: [{ x: -64, y: 0 }, { x: 64, y: 0 }] },
+      ],
+      tool: { mode: "place", kind: "resistor" },
+      placeRotation: 0,
+    });
+
+    useSchematic.getState().addComponent("resistor", 0, 0);
+    expect(useSchematic.getState().wires).toHaveLength(4);
+    expect(useSchematic.getState().wires.every((wire) => wire.points.every((point) => point.x <= -32 || point.x >= 32))).toBe(true);
   });
 
   it("does not duplicate a non-ideal wire's resistance across inserted pieces", () => {
@@ -536,6 +567,31 @@ describe("schematic document store", () => {
     expect(loaded.components[0].value).toBe("1k");
   });
 
+  it("deep-clones imported pins and remaps current probes to fresh component ids", () => {
+    const source: SchematicDocument = {
+      components: [{
+        id: "source-r1", kind: "resistor", x: 96, y: 0, rotation: 0, value: "1k", label: "R1",
+        pinOverride: [
+          { id: "a", label: "A", x: 64, y: 0 },
+          { id: "b", label: "B", x: 128, y: 0 },
+        ],
+      }],
+      wires: [],
+      probes: [{ id: "source-probe", x: 96, y: 0, color: "var(--trace-cyan)", componentId: "source-r1" }],
+    };
+    useSchematic.getState().loadCircuit(source);
+    const loaded = useSchematic.getState();
+    expect(loaded.components[0].id).not.toBe("source-r1");
+    expect(loaded.probes[0].componentId).toBe(loaded.components[0].id);
+    expect(getComponentPins(loaded.components[0]).map(({ x, y }) => ({ x, y }))).toEqual([
+      { x: 64, y: 0 },
+      { x: 128, y: 0 },
+    ]);
+
+    source.components[0].pinOverride![0].x = 999;
+    expect(loaded.components[0].pinOverride?.[0].x).toBe(64);
+  });
+
   it("mirror toggles the selected component's mirrored flag and is undoable", () => {
     useSchematic.getState().loadCircuit(sourceDocument());
     const id = useSchematic.getState().components[0].id;
@@ -551,6 +607,105 @@ describe("schematic document store", () => {
     // Each toggle is its own undo entry.
     useSchematic.getState().undo();
     expect(useSchematic.getState().components[0].mirrored).toBe(true);
+  });
+
+  it("rotates imported pins, attached wires, net labels, and voltage probes as one undoable edit", () => {
+    useSchematic.setState({
+      components: [{
+        id: "r1", kind: "resistor", x: 0, y: 0, rotation: 0, value: "1k", label: "R1",
+        pinOverride: [
+          { id: "a", label: "A", x: -40, y: 0 },
+          { id: "b", label: "B", x: 40, y: 0 },
+        ],
+      }],
+      wires: [
+        { id: "left", points: [{ x: -96, y: 0 }, { x: -40, y: 0 }] },
+        { id: "right", points: [{ x: 40, y: 0 }, { x: 96, y: 0 }] },
+      ],
+      netLabels: [{ id: "n1", x: -40, y: 0, text: "IN" }],
+      probes: [{ id: "p1", x: 40, y: 0, color: "var(--trace-red)" }],
+      selectedId: "r1",
+      selectedIds: ["r1"],
+    });
+
+    useSchematic.getState().rotate();
+    const rotated = useSchematic.getState();
+    expect(rotated.components[0]).toMatchObject({
+      rotation: 90,
+      pinOverride: [
+        { id: "a", x: 0, y: -40 },
+        { id: "b", x: 0, y: 40 },
+      ],
+    });
+    expect(rotated.wires[0].points[rotated.wires[0].points.length - 1]).toEqual({ x: 0, y: -40 });
+    expect(rotated.wires[1].points[0]).toEqual({ x: 0, y: 40 });
+    expect(rotated.wires.every((wire) => wire.points.slice(1).every((point, index) =>
+      point.x === wire.points[index].x || point.y === wire.points[index].y))).toBe(true);
+    expect(rotated.netLabels[0]).toMatchObject({ x: 0, y: -40 });
+    expect(rotated.probes[0]).toMatchObject({ x: 0, y: 40 });
+
+    useSchematic.getState().undo();
+    expect(useSchematic.getState().components[0].pinOverride).toEqual([
+      { id: "a", label: "A", x: -40, y: 0 },
+      { id: "b", label: "B", x: 40, y: 0 },
+    ]);
+    expect(useSchematic.getState().wires).toEqual([
+      { id: "left", points: [{ x: -96, y: 0 }, { x: -40, y: 0 }] },
+      { id: "right", points: [{ x: 40, y: 0 }, { x: 96, y: 0 }] },
+    ]);
+  });
+
+  it("does not steal a shared junction when one attached component rotates", () => {
+    useSchematic.setState({
+      components: [
+        { id: "r1", kind: "resistor", x: 0, y: 0, rotation: 0, value: "1k", label: "R1" },
+        { id: "r2", kind: "resistor", x: 64, y: 0, rotation: 0, value: "2k", label: "R2" },
+      ],
+      wires: [{ id: "out", points: [{ x: 32, y: 0 }, { x: 128, y: 0 }] }],
+      netLabels: [{ id: "label", x: 32, y: 0, text: "SHARED" }],
+      selectedId: "r1",
+      selectedIds: ["r1"],
+    });
+
+    useSchematic.getState().rotate();
+    const state = useSchematic.getState();
+    expect(state.components[0].rotation).toBe(90);
+    expect(state.wires.map((wire) => wire.points)).toEqual([
+      [{ x: 32, y: 0 }, { x: 128, y: 0 }],
+      [{ x: 32, y: 0 }, { x: 0, y: 0 }, { x: 0, y: 32 }],
+    ]);
+    expect(state.netLabels[0]).toMatchObject({ x: 32, y: 0 });
+  });
+
+  it("mirrors every component in a multi-selection and keeps imported pin roles attached", () => {
+    useSchematic.setState({
+      components: [
+        {
+          id: "d1", kind: "diode", x: 0, y: 0, rotation: 0, value: "1N4148", label: "D1",
+          pinOverride: [
+            { id: "a", label: "A", x: -40, y: 0 },
+            { id: "k", label: "K", x: 40, y: 0 },
+          ],
+        },
+        { id: "r1", kind: "resistor", x: 160, y: 0, rotation: 0, value: "1k", label: "R1" },
+      ],
+      wires: [
+        { id: "wa", points: [{ x: -96, y: 0 }, { x: -40, y: 0 }] },
+        { id: "wk", points: [{ x: 40, y: 0 }, { x: 96, y: 0 }] },
+      ],
+      selectedId: null,
+      selectedIds: ["d1", "r1"],
+    });
+
+    useSchematic.getState().mirror();
+    const state = useSchematic.getState();
+    expect(state.components.map((component) => component.mirrored)).toEqual([true, true]);
+    expect(getComponentPins(state.components[0]).map(({ id, x, y }) => ({ id, x, y }))).toEqual([
+      { id: "a", x: 40, y: 0 },
+      { id: "k", x: -40, y: 0 },
+    ]);
+    expect(state.wires[0].points[state.wires[0].points.length - 1]).toEqual({ x: 40, y: 0 });
+    expect(state.wires[1].points[0]).toEqual({ x: -40, y: 0 });
   });
 
   it("mirror toggles placeMirror (not the document) while placing", () => {
@@ -595,6 +750,23 @@ describe("schematic document store", () => {
     expect(state.selectedId).toBe(copy.id);
     useSchematic.getState().undo();
     expect(useSchematic.getState().components).toHaveLength(1);
+  });
+
+  it("removes a component's current probe with the component and restores both on undo", () => {
+    useSchematic.setState({
+      components: [{ id: "r1", kind: "resistor", x: 0, y: 0, rotation: 0, value: "1k", label: "R1" }],
+      probes: [{ id: "pi", x: 0, y: 0, color: "var(--trace-cyan)", componentId: "r1" }],
+      selectedId: "r1",
+      selectedIds: ["r1"],
+    });
+
+    useSchematic.getState().deleteSelected();
+    expect(useSchematic.getState().components).toEqual([]);
+    expect(useSchematic.getState().probes).toEqual([]);
+    useSchematic.getState().undo();
+    expect(useSchematic.getState().components).toHaveLength(1);
+    expect(useSchematic.getState().probes).toHaveLength(1);
+    expect(useSchematic.getState().probes[0].componentId).toBe("r1");
   });
 
   it("copy then paste places an offset copy; a second paste keeps numbering", () => {
@@ -870,6 +1042,53 @@ describe("moveGroup (group move with wire rubber-banding)", () => {
     expect(wires[0].points[wires[0].points.length - 1]).toEqual({ x: 96, y: 0 });
   });
 
+  it("adds a lead when a moved pin was attached to the middle of a conductor", () => {
+    useSchematic.getState().loadCircuit({
+      components: [
+        { id: "r1", kind: "resistor", x: 0, y: 0, rotation: 0, value: "1k", label: "R1" },
+      ],
+      wires: [{ id: "bus", points: [{ x: 0, y: 0 }, { x: 64, y: 0 }] }],
+    });
+
+    useSchematic.getState().beginChange();
+    useSchematic.getState().moveGroup(
+      new Map([["r1", { x: 0, y: 0 }]]),
+      0,
+      32,
+      new Map([["r1", [{ x: -32, y: 0 }, { x: 32, y: 0 }]]]),
+      structuredClone(useSchematic.getState().wires),
+    );
+
+    expect(useSchematic.getState().wires.map((wire) => wire.points)).toEqual([
+      [{ x: 0, y: 0 }, { x: 64, y: 0 }],
+      [{ x: 32, y: 0 }, { x: 32, y: 32 }],
+    ]);
+  });
+
+  it("keeps a shared stationary junction and adds a lead to the moved pin", () => {
+    useSchematic.getState().loadCircuit({
+      components: [
+        { id: "r1", kind: "resistor", x: 0, y: 0, rotation: 0, value: "1k", label: "R1" },
+        { id: "r2", kind: "resistor", x: 64, y: 0, rotation: 0, value: "2k", label: "R2" },
+      ],
+      wires: [{ id: "out", points: [{ x: 32, y: 0 }, { x: 128, y: 0 }] }],
+    });
+
+    useSchematic.getState().beginChange();
+    useSchematic.getState().moveGroup(
+      new Map([["r1", { x: 0, y: 0 }]]),
+      0,
+      32,
+      new Map([["r1", [{ x: -32, y: 0 }, { x: 32, y: 0 }]]]),
+      structuredClone(useSchematic.getState().wires),
+    );
+
+    expect(useSchematic.getState().wires.map((wire) => wire.points)).toEqual([
+      [{ x: 32, y: 0 }, { x: 128, y: 0 }],
+      [{ x: 32, y: 0 }, { x: 32, y: 32 }],
+    ]);
+  });
+
   it("rubber-bands wire with an elbow when axis alignment is lost after move", () => {
     // R1 at y=0, wire start at pin (32, 0), wire goes to (32, 64) — vertical.
     // Moving R1 up by dy=-32: pin moves to (32, -32). Wire end stays at (32, 64).
@@ -949,6 +1168,52 @@ describe("moveGroup (group move with wire rubber-banding)", () => {
     const after = useSchematic.getState().components;
     expect(after.find((c) => c.id === comps[0].id)).toMatchObject({ x: 96, y: 16 });
     expect(after.find((c) => c.id === comps[1].id)).toMatchObject({ x: 224, y: 16 });
+  });
+
+  it("translates imported absolute pin overrides exactly once across cumulative pointer moves", () => {
+    useSchematic.getState().loadCircuit({
+      components: [{
+        id: "r1",
+        kind: "resistor",
+        x: 0,
+        y: 0,
+        rotation: 0,
+        value: "1k",
+        label: "R1",
+        pinOverride: [
+          { id: "a", label: "A", x: -32, y: 0 },
+          { id: "b", label: "B", x: 32, y: 0 },
+        ],
+      }],
+      wires: [],
+    });
+    const component = useSchematic.getState().components[0];
+    const origins = new Map([[component.id, { x: component.x, y: component.y }]]);
+    const pins = new Map([[component.id, [{ x: -32, y: 0 }, { x: 32, y: 0 }]]]);
+
+    useSchematic.getState().beginChange();
+    useSchematic.getState().moveGroup(origins, 32, 16, pins, []);
+    useSchematic.getState().moveGroup(origins, 64, 32, pins, []);
+    useSchematic.getState().moveGroup(origins, 96, 48, pins, []);
+
+    expect(useSchematic.getState().components[0]).toMatchObject({
+      x: 96,
+      y: 48,
+      pinOverride: [
+        { id: "a", label: "A", x: 64, y: 48 },
+        { id: "b", label: "B", x: 128, y: 48 },
+      ],
+    });
+
+    useSchematic.getState().undo();
+    expect(useSchematic.getState().components[0]).toMatchObject({
+      x: 0,
+      y: 0,
+      pinOverride: [
+        { id: "a", label: "A", x: -32, y: 0 },
+        { id: "b", label: "B", x: 32, y: 0 },
+      ],
+    });
   });
 
   it("translates marquee-selected wires, labels, and probes with the component group", () => {

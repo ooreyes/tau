@@ -1,5 +1,6 @@
 import type { NetLabel, Point, SchematicComponent, SchematicWire } from "./types";
 import { getComponentPins, type ComponentPin } from "./pins";
+import { isEngineeringMantissa, splitEngineeringValue } from "./engineering";
 
 /** Net-label texts that denote the global ground / reference node (case-insensitive). */
 const GROUND_LABELS = new Set(["0", "gnd"]);
@@ -124,7 +125,10 @@ export function extractCircuit(
   const labelsByName = new Map<string, Point[]>();
   for (const label of netLabels) {
     if (isGroundLabel(label.text)) continue;
-    const key = label.text.trim();
+    // ngspice node identity is case-insensitive and Tau emits sanitized node
+    // names. Merge by that exact lowered identity here so diagnostics/probes
+    // can never see two nets that the simulation deck silently shorts.
+    const key = sanitizeNetName(label.text).toLocaleLowerCase();
     if (key === "") continue;
     labelsByName.set(key, [...(labelsByName.get(key) ?? []), { x: label.x, y: label.y }]);
   }
@@ -154,23 +158,45 @@ export function extractCircuit(
   }
   const breakpoints = segments.map((segment) => [segment.a, segment.b]);
 
-  for (const i of idealSegmentIndexes) {
-    for (const pin of allPins) {
-      if (pointOnSegment(pin, segments[i])) breakpoints[i].push(pin);
+  // Connectivity only occurs where at least one conductor ends (crossing
+  // interiors are overpasses). Index orthogonal segments by their fixed axis
+  // and exact endpoints, then query those buckets for pins/labels/endpoints.
+  // This replaces the former all-segment-pairs scan that froze on large but
+  // valid schematics with thousands of independent wires.
+  const horizontalByY = new Map<number, number[]>();
+  const verticalByX = new Map<number, number[]>();
+  const endpointIndexes = new Map<string, number[]>();
+  for (const index of idealSegmentIndexes) {
+    const segment = segments[index];
+    if (segment.a.y === segment.b.y) {
+      horizontalByY.set(segment.a.y, [...(horizontalByY.get(segment.a.y) ?? []), index]);
+    } else if (segment.a.x === segment.b.x) {
+      verticalByX.set(segment.a.x, [...(verticalByX.get(segment.a.x) ?? []), index]);
     }
-    for (const point of labelPoints) {
-      if (pointOnSegment(point, segments[i])) breakpoints[i].push(point);
+    for (const endpoint of [segment.a, segment.b]) {
+      const key = pointKey(endpoint);
+      endpointIndexes.set(key, [...(endpointIndexes.get(key) ?? []), index]);
     }
   }
-
-  for (let a = 0; a < idealSegmentIndexes.length; a += 1) {
-    for (let b = a + 1; b < idealSegmentIndexes.length; b += 1) {
-      const i = idealSegmentIndexes[a];
-      const j = idealSegmentIndexes[b];
-      for (const point of segmentIntersections(segments[i], segments[j])) {
-        if (!isSegmentEndpoint(point, segments[i]) && !isSegmentEndpoint(point, segments[j])) continue;
-        breakpoints[i].push(point);
-        breakpoints[j].push(point);
+  const segmentIndexesAt = (point: Point): number[] => {
+    const candidates = new Set(endpointIndexes.get(pointKey(point)) ?? []);
+    for (const index of horizontalByY.get(point.y) ?? []) {
+      if (pointOnSegment(point, segments[index])) candidates.add(index);
+    }
+    for (const index of verticalByX.get(point.x) ?? []) {
+      if (pointOnSegment(point, segments[index])) candidates.add(index);
+    }
+    return [...candidates];
+  };
+  for (const point of [...allPins, ...labelPoints]) {
+    for (const index of segmentIndexesAt(point)) breakpoints[index].push(point);
+  }
+  for (const index of idealSegmentIndexes) {
+    for (const endpoint of [segments[index].a, segments[index].b]) {
+      for (const other of segmentIndexesAt(endpoint)) {
+        if (other === index) continue;
+        breakpoints[index].push(endpoint);
+        breakpoints[other].push(endpoint);
       }
     }
   }
@@ -225,8 +251,8 @@ export function extractCircuit(
       continue;
     }
     const labelName = rootToLabelName.get(root);
-    if (labelName && !usedNames.has(labelName)) {
-      usedNames.add(labelName);
+    if (labelName && !usedNames.has(labelName.toLocaleLowerCase())) {
+      usedNames.add(labelName.toLocaleLowerCase());
       rootToNetId.set(root, labelName);
     } else {
       rootToNetId.set(root, `N${String(nextNet++).padStart(3, "0")}`);
@@ -306,48 +332,10 @@ function wireSegments(wire: SchematicWire): Segment[] {
 /** True when the wire carries a non-zero series resistance (non-ideal conductor). */
 export function isResistiveWire(wire: SchematicWire): boolean {
   const raw = (wire.resistance ?? "").trim();
-  if (!raw || raw === "0") return false;
+  if (!raw) return false;
+  const { mantissa } = splitEngineeringValue(raw, "Ω");
+  if (isEngineeringMantissa(mantissa) && Number(mantissa) === 0) return false;
   return true;
-}
-
-function segmentIntersections(first: Segment, second: Segment): Point[] {
-  // Diagonal wires (LTspice allows them) must be classified explicitly: a
-  // diagonal is neither vertical nor horizontal, so a "not vertical" test
-  // alone would route two X-crossing diagonals that happen to share a start
-  // row into the horizontal-overlap branch and falsely merge their endpoints
-  // (Electrometer.asc crosses its dflop feedback this way as an overpass).
-  // Diagonals connect only at shared endpoints, which the DSU handles by
-  // point key without any help from this function.
-  const firstVertical = first.a.x === first.b.x;
-  const secondVertical = second.a.x === second.b.x;
-  const firstHorizontal = first.a.y === first.b.y;
-  const secondHorizontal = second.a.y === second.b.y;
-
-  if ((firstVertical && secondHorizontal) || (secondVertical && firstHorizontal)) {
-    const vertical = firstVertical ? first : second;
-    const horizontal = firstVertical ? second : first;
-    const point = { x: vertical.a.x, y: horizontal.a.y };
-    return pointOnSegment(point, vertical) && pointOnSegment(point, horizontal) ? [point] : [];
-  }
-
-  if (firstVertical && secondVertical && first.a.x === second.a.x) {
-    return overlappingEndpoints(first, second, "y");
-  }
-
-  if (firstHorizontal && secondHorizontal && first.a.y === second.a.y) {
-    return overlappingEndpoints(first, second, "x");
-  }
-
-  return [];
-}
-
-function overlappingEndpoints(first: Segment, second: Segment, axis: "x" | "y"): Point[] {
-  return uniquePoints([first.a, first.b, second.a, second.b].filter((point) => {
-    if (axis === "x") {
-      return between(point.x, first.a.x, first.b.x) && between(point.x, second.a.x, second.b.x);
-    }
-    return between(point.y, first.a.y, first.b.y) && between(point.y, second.a.y, second.b.y);
-  }));
 }
 
 function pointOnSegment(point: Point, segment: Segment): boolean {
@@ -358,10 +346,6 @@ function pointOnSegment(point: Point, segment: Segment): boolean {
     return point.y === segment.a.y && between(point.x, segment.a.x, segment.b.x);
   }
   return false;
-}
-
-function isSegmentEndpoint(point: Point, segment: Segment): boolean {
-  return pointKey(point) === pointKey(segment.a) || pointKey(point) === pointKey(segment.b);
 }
 
 function between(value: number, a: number, b: number): boolean {

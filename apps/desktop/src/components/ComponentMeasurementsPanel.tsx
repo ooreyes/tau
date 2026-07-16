@@ -289,10 +289,7 @@ function CompactMeasurementCard({
   selected: boolean;
   onSelect: (componentId: string | null) => void;
 }) {
-  const varyingSeries = [
-    row.voltage?.classification.kind !== "steady" ? { quantity: "V(t)", tone: "voltage" as const, series: row.voltage } : null,
-    row.current?.classification.kind !== "steady" ? { quantity: "I(t)", tone: "current" as const, series: row.current } : null,
-  ].filter((entry): entry is { quantity: string; tone: "voltage" | "current"; series: MeasuredSeries } => Boolean(entry?.series));
+  const timeVarying = row.voltage?.classification.kind !== "steady" || row.current?.classification.kind !== "steady";
 
   return (
     <li className="telemetry-card-item">
@@ -304,35 +301,59 @@ function CompactMeasurementCard({
       >
         <div className="telemetry-card-head">
           <span className="telemetry-card-ref">{row.ref}</span>
-          <span className="telemetry-card-kind">{displayKind(row.kind)}</span>
+          <span className="telemetry-card-meta">
+            {timeVarying && <span className="telemetry-card-badge">Time-varying</span>}
+            {!!row.advisories?.length && (
+              <span className="telemetry-card-warning" aria-label={`${row.advisories.length} warning${row.advisories.length === 1 ? "" : "s"}`}>
+                <TriangleAlert size={11} aria-hidden="true" />
+                {row.advisories.length}
+              </span>
+            )}
+            <span className="telemetry-card-kind">{displayKind(row.kind)}</span>
+          </span>
         </div>
         <dl className="telemetry-card-rows">
           <CompactReading label="Voltage" series={row.voltage} />
           <CompactReading label="Current" series={row.current} />
           <CompactReading label="Power" series={row.power} />
         </dl>
-        {varyingSeries.length > 0 && (
-          <div className="telemetry-waveforms" role="group" aria-label={`${row.ref} time-varying voltage and current`}>
-            <div className="telemetry-waveforms-head">
-              <span>Waveform preview</span>
-              <span>Probe for a full time-axis plot</span>
-            </div>
-            <div className="telemetry-waveforms-grid">
-              {varyingSeries.map(({ quantity, tone, series }) => (
-                <div className="telemetry-waveform" key={series.id}>
-                  <div className="telemetry-waveform-label">
-                    <span>{quantity}</span>
-                    <span>{classificationText(series)}</span>
-                  </div>
-                  <Sparkline series={series} tone={tone} />
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-        <MeasurementAdvisories advisories={row.advisories} compact />
       </button>
     </li>
+  );
+}
+
+function CompactTransientInspector({ row }: { row: ComponentMeasurement }) {
+  const varyingSeries = [
+    row.voltage?.classification.kind !== "steady" ? { quantity: "V(t)", tone: "voltage" as const, series: row.voltage } : null,
+    row.current?.classification.kind !== "steady" ? { quantity: "I(t)", tone: "current" as const, series: row.current } : null,
+  ].filter((entry): entry is { quantity: string; tone: "voltage" | "current"; series: MeasuredSeries } => Boolean(entry?.series));
+
+  if (varyingSeries.length === 0 && !row.advisories?.length) return null;
+
+  return (
+    <section className="telemetry-inspector" aria-label={`${row.ref} transient details`}>
+      <div className="telemetry-inspector-head">
+        <div>
+          <span className="telemetry-inspector-eyebrow">Selected component</span>
+          <strong>{row.ref} · Transient behavior</strong>
+        </div>
+        {varyingSeries.length > 0 && <span>Use Probe for a full time-axis plot</span>}
+      </div>
+      {varyingSeries.length > 0 && (
+        <div className="telemetry-waveforms-grid" role="group" aria-label={`${row.ref} time-varying voltage and current`}>
+          {varyingSeries.map(({ quantity, tone, series }) => (
+            <div className="telemetry-waveform" key={series.id}>
+              <div className="telemetry-waveform-label">
+                <span>{quantity}</span>
+                <span>{classificationText(series)}</span>
+              </div>
+              <Sparkline series={series} tone={tone} />
+            </div>
+          ))}
+        </div>
+      )}
+      <MeasurementAdvisories advisories={row.advisories} />
+    </section>
   );
 }
 
@@ -349,17 +370,21 @@ function CompactMeasurementsGrid({
       </p>
     );
   }
+  const selectedRow = rows.find((row) => row.componentId === selectedId);
   return (
-    <ul className={cn("telemetry-strip", className)}>
-      {rows.map((row) => (
-        <CompactMeasurementCard
-          key={row.componentId}
-          row={row}
-          selected={row.componentId === selectedId}
-          onSelect={onSelect}
-        />
-      ))}
-    </ul>
+    <div className={cn("telemetry-compact-layout", className)}>
+      {selectedRow && <CompactTransientInspector row={selectedRow} />}
+      <ul className="telemetry-strip">
+        {rows.map((row) => (
+          <CompactMeasurementCard
+            key={row.componentId}
+            row={row}
+            selected={row.componentId === selectedId}
+            onSelect={onSelect}
+          />
+        ))}
+      </ul>
+    </div>
   );
 }
 

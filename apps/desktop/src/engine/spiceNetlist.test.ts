@@ -376,6 +376,39 @@ describe("buildSpiceDeck", () => {
     expect(deck.netlist).toMatch(/RWIRE1 \S+ \S+ 0\.01/);
   });
 
+  it("rejects an invalid non-ideal wire value instead of silently opening the circuit", () => {
+    const components = [
+      component("vsource", "V1", "5", 0, 32),
+      component("resistor", "R1", "1k", 96, 0),
+      component("ground", "", "", 0, 64),
+    ];
+    const wires = [wire("w1", [{ x: 0, y: 0 }, { x: 64, y: 0 }])];
+    wires[0].resistance = "banana";
+    expect(() => buildSpiceDeck({ components, wires }, { kind: "op" })).toThrow(/wire resistance.*invalid/i);
+  });
+
+  it("rejects case and sanitization collisions in SPICE instance names", () => {
+    const baseWires = [
+      wire("w1", [{ x: -32, y: 0 }, { x: 32, y: 0 }]),
+      wire("w2", [{ x: 96, y: 0 }, { x: 160, y: 0 }]),
+    ];
+    const duplicateCase = [
+      component("resistor", "R1", "1k", 0, 0),
+      component("resistor", "r1", "2k", 128, 0),
+      component("ground", "", "", -64, 0),
+    ];
+    expect(() => buildSpiceDeck({ components: duplicateCase, wires: baseWires }, { kind: "op" }))
+      .toThrow(/duplicate SPICE instance name/i);
+
+    const sanitized = [
+      component("resistor", "R 1", "1k", 0, 0),
+      component("resistor", "R@1", "2k", 128, 0),
+      component("ground", "", "", -64, 0),
+    ];
+    expect(() => buildSpiceDeck({ components: sanitized, wires: baseWires }, { kind: "op" }))
+      .toThrow(/duplicate SPICE instance name/i);
+  });
+
   it("writes a proper AC source and sweep directive", () => {
     const components = [
       component("vac", "V1", "0 2 1k", 0, 32),

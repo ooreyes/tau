@@ -174,7 +174,8 @@ describe("orientationToRotation", () => {
     expect(orientationToRotation("R90")).toBe(90);
     expect(orientationToRotation("R180")).toBe(180);
     expect(orientationToRotation("R270")).toBe(270);
-    expect(orientationToRotation("M90")).toBe(90);
+    expect(orientationToRotation("M90")).toBe(270);
+    expect(orientationToRotation("M270")).toBe(90);
   });
 });
 

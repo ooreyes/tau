@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from "react";
-import { useSchematic } from "../store/useSchematic";
+import { moveComponentTo, useSchematic } from "../store/useSchematic";
 import { ComponentSymbol, GRID, SYMBOL_BOX } from "../schematic/symbols";
 import type { NetLabel, Point, SchematicComponent, SchematicWire } from "../schematic/types";
-import { getLocalPins, getComponentPins } from "../schematic/pins";
+import { getLocalPins, getComponentPins, transformPoint } from "../schematic/pins";
 import type { OperatingPointResult } from "../simulation/operatingPoint";
 import { opAnnotations } from "../simulation/opAnnotations";
 import { extractCircuit, netAtPoint } from "../schematic/netlist";
@@ -66,6 +66,8 @@ interface DragState {
   lastY: number;
   moved: boolean;
   origin?: Point;
+  /** Snapped pointer position at drag start (single move keeps grab offset). */
+  pointerOrigin?: Point;
   /** For single-component move: the component's pin positions at drag start. */
   sourcePins?: Point[];
   sourceWires?: SchematicWire[];
@@ -268,10 +270,13 @@ export function Canvas({
 
   const moveComponentWithAttachedWires = useCallback(
     (id: string, x: number, y: number, sourcePins: Point[], sourceWires: SchematicWire[], dx: number, dy: number) => {
-      const wiresWithMovedEndpoints = translateAttachedWireEndpoints(sourceWires, sourcePins, dx, dy);
       useSchematic.setState((state) => {
+        const stationaryPins = state.components
+          .filter((component) => component.id !== id)
+          .flatMap((component) => getComponentPins(component).map(({ x: pinX, y: pinY }) => ({ x: pinX, y: pinY })));
+        const wiresWithMovedEndpoints = translateAttachedWireEndpoints(sourceWires, sourcePins, dx, dy, stationaryPins);
         const components = state.components.map((component) =>
-          component.id === id ? { ...component, x, y } : component,
+          component.id === id ? moveComponentTo(component, x, y) : component,
         );
         const moved = components.find((c) => c.id === id);
         const pins = moved ? worldPinsFor([moved]) : [];
@@ -388,7 +393,11 @@ export function Canvas({
     (clientX: number, clientY: number): Point => {
       const w = screenToWorld(clientX, clientY);
       let best: Point | null = null;
-      let bestD = 22 * 22; // ~1.4 grid cells of forgiveness
+      // Keep the target radius constant on screen. A world-space threshold
+      // made terminals nearly impossible to hit when zoomed out and swallowed
+      // unrelated nodes when zoomed in.
+      const snapRadiusWorld = 18 / view.zoom;
+      let bestD = snapRadiusWorld * snapRadiusWorld;
       // Prefer pins over wire midpoints so terminals are easy to hit.
       for (const p of pinPoints) {
         const dx = p.x - w.x;
@@ -437,7 +446,7 @@ export function Canvas({
       }
       return best ?? { x: snap(w.x), y: snap(w.y) };
     },
-    [screenToWorld, snapTargets, pinPoints, pinKeySet, wires],
+    [screenToWorld, snapTargets, pinPoints, pinKeySet, wires, view.zoom],
   );
 
   const wireAtCursor = useCallback(
@@ -668,6 +677,7 @@ export function Canvas({
           lastY: e.clientY,
           moved: false,
           origin: { x: hit.x, y: hit.y },
+          pointerOrigin: { x: snap(world.x), y: snap(world.y) },
           sourcePins: getComponentPins(hit).map(({ x, y }) => ({ x, y })),
           sourceWires: wires.map((wire) => ({ ...wire, points: wire.points.map((point) => ({ ...point })) })),
         };
@@ -761,10 +771,10 @@ export function Canvas({
         boxDragRef.current = nextBox;
         setBoxDrag(nextBox);
       }
-    } else if (d.mode === "move" && d.id && d.origin && d.sourcePins && d.sourceWires) {
+    } else if (d.mode === "move" && d.id && d.origin && d.pointerOrigin && d.sourcePins && d.sourceWires) {
       const w = screenToWorld(e.clientX, e.clientY);
-      const tx = snap(w.x);
-      const ty = snap(w.y);
+      const tx = d.origin.x + snap(w.x - d.pointerOrigin.x);
+      const ty = d.origin.y + snap(w.y - d.pointerOrigin.y);
       // Skip if coordinates are degenerate (can happen if svgRef was null during screenToWorld).
       if (!Number.isFinite(tx) || !Number.isFinite(ty)) return;
       const moving = components.find((c) => c.id === d.id);
@@ -810,6 +820,38 @@ export function Canvas({
     }
   };
 
+  const resetDrag = useCallback(() => {
+    setMovingParts(false);
+    boxDragRef.current = null;
+    setBoxDrag(null);
+    drag.current.mode = "none";
+    drag.current.id = undefined;
+    drag.current.groupIds = undefined;
+    drag.current.moved = false;
+    drag.current.origin = undefined;
+    drag.current.pointerOrigin = undefined;
+    drag.current.sourcePins = undefined;
+    drag.current.sourceWires = undefined;
+    drag.current.groupSourcePins = undefined;
+    drag.current.groupOrigins = undefined;
+    drag.current.groupLabelOrigins = undefined;
+    drag.current.groupProbeOrigins = undefined;
+  }, []);
+
+  const rollbackDrag = useCallback(() => {
+    const active = drag.current;
+    if (active.moved && (active.mode === "move" || active.mode === "group-move")) {
+      useSchematic.getState().undo();
+    }
+    resetDrag();
+  }, [resetDrag]);
+
+  useEffect(() => {
+    const cancelOnBlur = () => rollbackDrag();
+    window.addEventListener("blur", cancelOnBlur);
+    return () => window.removeEventListener("blur", cancelOnBlur);
+  }, [rollbackDrag]);
+
   const endDrag = (e: ReactPointerEvent<SVGElement>) => {
     const d = drag.current;
     if (d.mode === "box") {
@@ -843,18 +885,13 @@ export function Canvas({
         });
       }
     }
-    setMovingParts(false);
-    drag.current.mode = "none";
-    drag.current.id = undefined;
-    drag.current.groupIds = undefined;
-    drag.current.moved = false;
-    drag.current.origin = undefined;
-    drag.current.sourcePins = undefined;
-    drag.current.sourceWires = undefined;
-    drag.current.groupSourcePins = undefined;
-    drag.current.groupOrigins = undefined;
-    drag.current.groupLabelOrigins = undefined;
-    drag.current.groupProbeOrigins = undefined;
+    resetDrag();
+    const el = svgRef.current;
+    if (el?.hasPointerCapture(e.pointerId)) el.releasePointerCapture(e.pointerId);
+  };
+
+  const cancelDrag = (e: ReactPointerEvent<SVGElement>) => {
+    rollbackDrag();
     const el = svgRef.current;
     if (el?.hasPointerCapture(e.pointerId)) el.releasePointerCapture(e.pointerId);
   };
@@ -1030,6 +1067,8 @@ export function Canvas({
         onPointerDown={onBackgroundPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={endDrag}
+        onPointerCancel={cancelDrag}
+        onLostPointerCapture={cancelDrag}
         onDoubleClick={onCanvasDoubleClick}
         onPointerLeave={() => {
           if (placing) setGhost(null);
@@ -1350,15 +1389,31 @@ function ComponentView({
   // Mirror-before-rotate (matches transformPoint / LTspice M*): SVG applies
   // transforms right-to-left, so `rotate(R) scale(-1 1)` flips then rotates.
   const orient = symbolTransform(comp.rotation, comp.mirrored ?? false);
+  const overridePins = comp.pinOverride?.length ? getComponentPins(comp) : null;
+  const nativePins = new Map(getLocalPins(comp.kind).map((pin) => [pin.id, pin]));
   return (
     <g className={`component${selected ? " selected" : ""}`} transform={`translate(${comp.x} ${comp.y})`}>
+      {overridePins?.map((pin) => {
+        const native = nativePins.get(pin.id);
+        if (!native) return null;
+        const start = transformPoint(native, comp.rotation, comp.mirrored ?? false);
+        const end = { x: pin.x - comp.x, y: pin.y - comp.y };
+        if (start.x === end.x && start.y === end.y) return null;
+        return <line key={`lead-${pin.id}`} className="import-pin-lead" x1={start.x} y1={start.y} x2={end.x} y2={end.y} />;
+      })}
       <g className="symbol" transform={orient}>
         <ComponentSymbol kind={comp.kind} />
       </g>
       {showPins && (
-        <g className="pin-layer" transform={orient}>
-          {getLocalPins(comp.kind).map((pin) => (
-            <circle key={pin.id} className="pin-target" cx={pin.x} cy={pin.y} r={4.5} />
+        <g className="pin-layer" transform={overridePins ? undefined : orient}>
+          {(overridePins ?? getLocalPins(comp.kind)).map((pin) => (
+            <circle
+              key={pin.id}
+              className="pin-target"
+              cx={overridePins ? pin.x - comp.x : pin.x}
+              cy={overridePins ? pin.y - comp.y : pin.y}
+              r={4.5}
+            />
           ))}
         </g>
       )}

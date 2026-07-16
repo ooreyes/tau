@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import { importAsc } from "../io/ascImport";
 import { CATALOG } from "../schematic/catalog";
+import { extractCircuit } from "../schematic/netlist";
+import { getComponentPins } from "../schematic/pins";
 import {
   ascRewriteRisks,
   ascSaveBlockReason,
@@ -18,6 +20,23 @@ SYMBOL res 160 80 R90
 SYMATTR InstName R1
 SYMATTR Value 1k
 TEXT 0 0 Left 2 !.tran 1m
+`;
+
+const LEGACY_TAU_LED = `Version 4
+SHEET 1 880 680
+WIRE -32 96 32 96
+WIRE 96 96 176 96
+WIRE 176 160 -32 160
+FLAG -32 160 0
+SYMBOL voltage -32 128 R0
+SYMATTR InstName V1
+SYMATTR Value 5
+SYMBOL res 64 96 R0
+SYMATTR InstName R1
+SYMATTR Value 1k
+SYMBOL led 176 128 R90
+SYMATTR InstName D1
+SYMATTR Value LED
 `;
 
 describe("project schematic file formats", () => {
@@ -46,6 +65,48 @@ describe("project schematic file formats", () => {
     expect(reopened.wires).toHaveLength(original.wires.length);
     expect(reopened.netLabels.map((label) => label.text)).toEqual(["input"]);
     expect(reopened.directives).toEqual([".tran 1m"]);
+  });
+
+  it("preserves native Tau pin geometry and connectivity across ASC save and reopen", () => {
+    const document = {
+      components: [
+        { id: "v1", kind: "vsource" as const, x: -32, y: 128, rotation: 0 as const, value: "5", label: "V1" },
+        { id: "r1", kind: "resistor" as const, x: 64, y: 96, rotation: 0 as const, value: "1k", label: "R1" },
+        { id: "d1", kind: "led" as const, x: 176, y: 128, rotation: 90 as const, value: "LED", label: "D1" },
+        { id: "g1", kind: "ground" as const, x: -32, y: 160, rotation: 0 as const, value: "", label: "" },
+      ],
+      wires: [
+        { id: "w1", points: [{ x: -32, y: 96 }, { x: 32, y: 96 }] },
+        { id: "w2", points: [{ x: 96, y: 96 }, { x: 176, y: 96 }] },
+        { id: "w3", points: [{ x: 176, y: 160 }, { x: -32, y: 160 }] },
+      ],
+      probes: [],
+      netLabels: [],
+      directives: [".op"],
+    };
+    expect(extractCircuit(document.components, document.wires).warnings).toEqual([]);
+    const originalPins = Object.fromEntries(document.components.map((component) => [
+      component.label || "GND",
+      getComponentPins(component).map(({ id, x, y }) => ({ id, x, y })),
+    ]));
+
+    const saved = serializeSchematicFile("/Schematics/led.asc", document);
+    expect(saved.warnings).toEqual([]);
+    const reopened = importAsc(saved.contents);
+    const reopenedPins = Object.fromEntries(reopened.components.map((component) => [
+      component.label || "GND",
+      getComponentPins(component).map(({ id, x, y }) => ({ id, x, y })),
+    ]));
+
+    expect(reopenedPins).toEqual(originalPins);
+    expect(extractCircuit(reopened.components, reopened.wires, reopened.netLabels).warnings).toEqual([]);
+  });
+
+  it("repairs the disconnected pin banks written by older Tau ASC exports", () => {
+    const reopened = importAsc(LEGACY_TAU_LED);
+    expect(reopened.notes).toContain("Recovered native Tau pin geometry for 3 component(s) saved by an older Tau version.");
+    expect(reopened.components.filter((component) => component.kind !== "ground").every((component) => !component.pinOverride)).toBe(true);
+    expect(extractCircuit(reopened.components, reopened.wires, reopened.netLabels).warnings).toEqual([]);
   });
 
   it("retains Tau JSON serialization for legacy .sim files", () => {
@@ -87,27 +148,54 @@ describe("project schematic file formats", () => {
     expect(ascSaveBlockReason([], 0, [])).toBeNull();
   });
 
-  it("never blocks first or subsequent saves for any Library component", () => {
+  it("blocks a semantic save when ASC lowering would change terminal connectivity", () => {
+    const saved = serializeSchematicFile("/Schematics/nonideal.asc", {
+      components: [
+        { id: "v1", kind: "vsource", x: 0, y: 32, rotation: 0, value: "5", label: "V1" },
+        { id: "r1", kind: "resistor", x: 96, y: 0, rotation: 0, value: "1k", label: "R1" },
+        { id: "g1", kind: "ground", x: 0, y: 64, rotation: 0, value: "", label: "" },
+      ],
+      wires: [{ id: "lossy", points: [{ x: 0, y: 0 }, { x: 64, y: 0 }], resistance: "10m" }],
+      probes: [],
+      netLabels: [],
+      directives: [],
+    });
+    expect(saved.warnings).toContain("ASC round-trip changed terminal connectivity; save was not written.");
+  });
+
+  it("round-trips every Library component through all rotations and mirrors without moving a pin", () => {
     for (const [index, entry] of CATALOG.entries()) {
-      const saved = serializeSchematicFile("/Schematics/catalog.asc", {
-        components: [{
-          id: `catalog-${entry.kind}`,
-          kind: entry.kind,
-          x: 128,
-          y: 128,
-          rotation: 0,
-          value: entry.defaultValue,
-          label: entry.kind === "ground" ? "" : `${entry.prefix}${index + 1}`,
-        }],
-        wires: [],
-        probes: [],
-        netLabels: [],
-        directives: [],
-      });
-      expect(saved.warnings, entry.kind).toEqual([]);
-      const rewriteRisks = ascRewriteRisks(saved.contents);
-      expect(rewriteRisks, entry.kind).toEqual([]);
-      expect(ascSaveBlockReason(rewriteRisks, 0, saved.warnings), entry.kind).toBeNull();
+      for (const rotation of [0, 90, 180, 270] as const) {
+        for (const mirrored of [false, true]) {
+          const component = {
+            id: `catalog-${entry.kind}`,
+            kind: entry.kind,
+            x: 128,
+            y: 128,
+            rotation,
+            ...(mirrored ? { mirrored: true } : {}),
+            value: entry.defaultValue,
+            label: entry.kind === "ground" ? "" : `${entry.prefix}${index + 1}`,
+          };
+          const saved = serializeSchematicFile("/Schematics/catalog.asc", {
+            components: [component],
+            wires: [],
+            probes: [],
+            netLabels: [],
+            directives: [],
+          });
+          const context = `${entry.kind} ${mirrored ? "M" : "R"}${rotation}`;
+          expect(saved.warnings, context).toEqual([]);
+          const rewriteRisks = ascRewriteRisks(saved.contents);
+          expect(rewriteRisks, context).toEqual([]);
+          expect(ascSaveBlockReason(rewriteRisks, 0, saved.warnings), context).toBeNull();
+
+          const reopened = importAsc(saved.contents);
+          expect(reopened.components[0]?.kind, context).toBe(entry.kind);
+          expect(getComponentPins(reopened.components[0]).map(({ id, x, y }) => ({ id, x, y })), context)
+            .toEqual(getComponentPins(component).map(({ id, x, y }) => ({ id, x, y })));
+        }
+      }
     }
   });
 

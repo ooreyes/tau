@@ -748,7 +748,24 @@ export function AssistantPanel({
         />
       )}
       <header className="assistant-header">
-        <span className="assistant-title">Ask <span className="empty-brand">Tauri</span>…</span>
+        <div className="assistant-title-row">
+          <span className="assistant-title">Ask <span className="empty-brand">Tauri</span>…</span>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                className="text-muted-foreground hover:text-foreground"
+                onClick={onClose}
+                aria-label="Close assistant"
+              >
+                <X size={14} strokeWidth={1.8} aria-hidden="true" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Close assistant</TooltipContent>
+          </Tooltip>
+        </div>
         <div className="assistant-toolbar">
           <Tooltip>
             <TooltipTrigger asChild>
@@ -764,6 +781,19 @@ export function AssistantPanel({
             </TooltipTrigger>
             <TooltipContent>New chat</TooltipContent>
           </Tooltip>
+          <Select value={modelChoice} onValueChange={changeModel} disabled={streaming}>
+            <SelectTrigger size="sm" className="assistant-model-select" aria-label="Assistant model">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent align="center">
+              <SelectItem value="anthropic">{ASSISTANT_MODEL_LABEL} · Cloud</SelectItem>
+              <SelectItem value="qwen3-4b-4bit">{LOCAL_MLX_MODEL_PRESETS["qwen3-4b-4bit"].label} · Local</SelectItem>
+              <SelectItem value="qwen3-1.7b-4bit">{LOCAL_MLX_MODEL_PRESETS["qwen3-1.7b-4bit"].label} · Local</SelectItem>
+              {customLocalAiModels.map((model) => (
+                <SelectItem key={model.id} value={model.id}>{model.label} · Imported</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <div className="assistant-history-menu" ref={historyMenuRef}>
             <Tooltip>
               <TooltipTrigger asChild>
@@ -814,52 +844,22 @@ export function AssistantPanel({
                     ))}
                   </ul>
                 )}
+                <div className="assistant-history-footer">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => deleteConversationById(activeConversationId)}
+                    disabled={!hasContent}
+                    aria-label="Delete current chat"
+                  >
+                    <Trash2 size={12} strokeWidth={1.8} aria-hidden="true" />
+                    Delete current chat
+                  </Button>
+                </div>
               </div>
             )}
           </div>
-          <Select value={modelChoice} onValueChange={changeModel} disabled={streaming}>
-            <SelectTrigger size="sm" className="assistant-model-select" aria-label="Assistant model">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent align="center">
-              <SelectItem value="anthropic">{ASSISTANT_MODEL_LABEL} · Cloud</SelectItem>
-              <SelectItem value="qwen3-4b-4bit">{LOCAL_MLX_MODEL_PRESETS["qwen3-4b-4bit"].label} · Local</SelectItem>
-              <SelectItem value="qwen3-1.7b-4bit">{LOCAL_MLX_MODEL_PRESETS["qwen3-1.7b-4bit"].label} · Local</SelectItem>
-              {customLocalAiModels.map((model) => (
-                <SelectItem key={model.id} value={model.id}>{model.label} · Imported</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="outline"
-                size="icon-sm"
-                className="text-muted-foreground hover:text-foreground"
-                onClick={() => deleteConversationById(activeConversationId)}
-                disabled={!hasContent}
-                aria-label="Delete conversation"
-              >
-                <Trash2 size={13} strokeWidth={1.8} aria-hidden="true" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Delete conversation</TooltipContent>
-          </Tooltip>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                type="button"
-                variant="outline"
-                size="icon-sm"
-                className="text-muted-foreground hover:text-foreground"
-                onClick={onClose}
-                aria-label="Close assistant"
-              >
-                <X size={14} strokeWidth={1.8} aria-hidden="true" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Close assistant</TooltipContent>
-          </Tooltip>
         </div>
       </header>
 

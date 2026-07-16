@@ -222,6 +222,18 @@ export function buildSpiceDeck(schematic: Schematic, analysis: SpiceAnalysis): S
   // "could not find a valid modelname" (UHFpreamp's MRF901).
   const subcktModels = new Set([...definedSubcktNames(rawDirectives), ...inlinedSubckts]);
 
+  const usedInstanceNames = new Map<string, string>();
+  circuit.components.forEach(({ component }, index) => {
+    if (component.kind === "ground" || component.kind === "testpoint") return;
+    const name = instanceName(component, index);
+    const key = name.toLocaleLowerCase();
+    const previous = usedInstanceNames.get(key);
+    if (previous) {
+      throw new Error(`Duplicate SPICE instance name "${name}" after sanitizing ${previous} and ${component.label || component.kind}.`);
+    }
+    usedInstanceNames.set(key, component.label || component.kind);
+  });
+
   circuit.components.forEach((entry, index) => {
     lines.push(...componentLines(entry, index, knownModels, schematic.params ?? EMPTY_SCOPE, vdmosModels, netPinCount, subcktModels));
   });
@@ -675,7 +687,10 @@ function instanceName(component: SchematicComponent, index: number): string {
   };
   const requested = safeName(component.label);
   const p = prefix[component.kind];
-  if (requested.startsWith(p)) return requested;
+  // SPICE identifiers are case-insensitive. Preserve a user's lowercase
+  // refdes so `R1` and `r1` reach the duplicate-name guard as the same device
+  // instead of manufacturing a misleading `Rr1` fallback.
+  if (requested.slice(0, p.length).toLocaleLowerCase() === p.toLocaleLowerCase()) return requested;
   // The label doesn't match the kind's SPICE prefix — this happens when a device
   // is remapped to a placeholder kind (diac/varistor → resistor keep their `Q1`/
   // `A1` labels). A bare `${p}${index+1}` fallback can COLLIDE with a real
@@ -762,9 +777,10 @@ function mosfetInstanceParams(mos: Record<string, string>): string {
 function parseWireResistanceOhms(text: string): number {
   try {
     const value = parseQuantity(text.trim(), "Ohm");
-    return Number.isFinite(value) && value > 0 ? value : 0;
-  } catch {
-    return 0;
+    if (!Number.isFinite(value) || value < 0) throw new Error("not a finite non-negative resistance");
+    return value;
+  } catch (error) {
+    throw new Error(`Wire resistance "${text}" is invalid: ${error instanceof Error ? error.message : "could not parse value"}.`);
   }
 }
 

@@ -57,6 +57,29 @@ describe("Canvas wire geometry", () => {
     expect(moved[0].points).toEqual([{ x: -16, y: -16 }, { x: 48, y: -16 }]);
   });
 
+  it("adds an orthogonal lead when a moved pin was attached to a wire interior", () => {
+    const moved = translateAttachedWireEndpoints(
+      [{ id: "bus", points: [{ x: -96, y: 0 }, { x: 96, y: 0 }] }],
+      [{ x: 0, y: 0 }],
+      32,
+      32,
+    );
+    expect(moved[0].points).toEqual([{ x: -96, y: 0 }, { x: 96, y: 0 }]);
+    expect(moved[1].points).toEqual([{ x: 0, y: 0 }, { x: 32, y: 0 }, { x: 32, y: 32 }]);
+  });
+
+  it("keeps a shared stationary-pin junction and adds a lead to the moved pin", () => {
+    const moved = translateAttachedWireEndpoints(
+      [{ id: "shared", points: [{ x: 0, y: 0 }, { x: 96, y: 0 }] }],
+      [{ x: 0, y: 0 }],
+      32,
+      32,
+      [{ x: 0, y: 0 }],
+    );
+    expect(moved[0].points).toEqual([{ x: 0, y: 0 }, { x: 96, y: 0 }]);
+    expect(moved[1].points).toEqual([{ x: 0, y: 0 }, { x: 32, y: 0 }, { x: 32, y: 32 }]);
+  });
+
   it("routes a horizontal wire directly when start and end share a y coordinate", () => {
     const route = routeWireSmart({ x: 0, y: 32 }, { x: 96, y: 32 }, []);
     expect(route).toEqual([{ x: 0, y: 32 }, { x: 96, y: 32 }]);

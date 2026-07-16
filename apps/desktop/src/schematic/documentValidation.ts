@@ -55,7 +55,7 @@ function component(value: unknown, index: number): SchematicComponent {
   if (typeof rotation !== "number" || !ROTATIONS.has(rotation as Rotation)) {
     fail(`components[${index}].rotation must be 0, 90, 180, or 270.`);
   }
-  return {
+  const result: SchematicComponent = {
     id: text(source.id, `components[${index}].id`, MAX_ID_LENGTH),
     kind,
     x: coordinate(source.x, `components[${index}].x`),
@@ -65,6 +65,21 @@ function component(value: unknown, index: number): SchematicComponent {
     value: text(source.value, `components[${index}].value`),
     label: text(source.label, `components[${index}].label`),
   };
+  if (source.pinOverride !== undefined) {
+    if (!Array.isArray(source.pinOverride) || source.pinOverride.length > 64) {
+      fail(`components[${index}].pinOverride must be an array of at most 64 pins.`);
+    }
+    result.pinOverride = source.pinOverride.map((candidate, pinIndex) => {
+      const pin = record(candidate, `components[${index}].pinOverride[${pinIndex}]`);
+      return {
+        id: text(pin.id, `components[${index}].pinOverride[${pinIndex}].id`, MAX_ID_LENGTH),
+        label: text(pin.label, `components[${index}].pinOverride[${pinIndex}].label`, 80),
+        x: coordinate(pin.x, `components[${index}].pinOverride[${pinIndex}].x`),
+        y: coordinate(pin.y, `components[${index}].pinOverride[${pinIndex}].y`),
+      };
+    });
+  }
+  return result;
 }
 
 function wire(value: unknown, index: number, remainingPoints: { value: number }): SchematicWire {
@@ -97,6 +112,9 @@ function probe(value: unknown, index: number): Probe {
   };
   if (source.componentId !== undefined) {
     result.componentId = text(source.componentId, `probes[${index}].componentId`, MAX_ID_LENGTH);
+  }
+  if (source.netId !== undefined) {
+    result.netId = text(source.netId, `probes[${index}].netId`, MAX_ID_LENGTH);
   }
   return result;
 }
@@ -135,11 +153,31 @@ export function validateSchematicDocument(value: unknown): SchematicDocument {
   if (!Array.isArray(directives) || directives.length > MAX_DIRECTIVES) fail("directives must be a bounded array.");
 
   const remainingPoints = { value: MAX_WIRE_POINTS };
+  const validatedComponents = source.components.map(component);
+  const validatedWires = source.wires.map((candidate, index) => wire(candidate, index, remainingPoints));
+  const validatedProbes = probes.map(probe);
+  const validatedLabels = netLabels.map(netLabel);
+  const allIds = [
+    ...validatedComponents.map((item) => item.id),
+    ...validatedWires.map((item) => item.id),
+    ...validatedProbes.map((item) => item.id),
+    ...validatedLabels.map((item) => item.id),
+  ];
+  if (new Set(allIds).size !== allIds.length) fail("component, wire, probe, and label ids must be unique.");
+  const componentIds = new Set(validatedComponents.map((item) => item.id));
+  for (const candidate of validatedProbes) {
+    if (candidate.componentId && !componentIds.has(candidate.componentId)) {
+      fail(`probe ${candidate.id} references a missing component.`);
+    }
+  }
+  const references = validatedComponents.map((item) => item.label.trim().toLocaleLowerCase()).filter(Boolean);
+  if (new Set(references).size !== references.length) fail("component reference designators must be unique (case-insensitive).");
+
   return {
-    components: source.components.map(component),
-    wires: source.wires.map((candidate, index) => wire(candidate, index, remainingPoints)),
-    probes: probes.map(probe),
-    netLabels: netLabels.map(netLabel),
+    components: validatedComponents,
+    wires: validatedWires,
+    probes: validatedProbes,
+    netLabels: validatedLabels,
     directives: directives.map((value, index) => text(value, `directives[${index}]`, MAX_DIRECTIVE_LENGTH)),
   };
 }

@@ -547,12 +547,16 @@ function App() {
   }, [components, wires, netLabels]);
 
   const runAnalysis = useCallback(async () => {
-    if (!(await saveActiveToProjectRef.current())) return;
+    // Saving is attempted first, but simulation operates on the validated
+    // in-memory schematic and must not be disabled by an unrelated inability
+    // to rewrite cosmetic/unsupported ASC records. The save path already tells
+    // the user exactly why persistence failed or was blocked.
+    await saveActiveToProjectRef.current();
     confirmLargeRunIfNeeded(effectiveAnalysisOptions, () => { void executeTransient(effectiveAnalysisOptions); });
   }, [effectiveAnalysisOptions, executeTransient, confirmLargeRunIfNeeded]);
 
   const runAndShowSimulator = useCallback(async () => {
-    if (!(await saveActiveToProjectRef.current())) return;
+    await saveActiveToProjectRef.current();
     confirmLargeRunIfNeeded(effectiveAnalysisOptions, () => {
       setMode("simulator");
       setGraphOpen(true);
