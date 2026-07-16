@@ -162,11 +162,11 @@ describe("App schematic workspace tools", () => {
 
   it("keeps the assistant transcript mounted across Schematic ↔ Simulator switches", async () => {
     const id = createConversation();
-    saveConversationMessages(`${DEFAULT_WORKSPACE_ID}/untitled.asc`, id, [
+    saveConversationMessages(DEFAULT_WORKSPACE_ID, id, [
       { role: "user", content: "What does R1 do?" },
       { role: "assistant", content: "R1 sets the gain." },
     ]);
-    setActiveConversationId(`${DEFAULT_WORKSPACE_ID}/untitled.asc`, id);
+    setActiveConversationId(DEFAULT_WORKSPACE_ID, id);
 
     await renderOpenProject();
     expect(screen.getByText("What does R1 do?")).toBeTruthy();
@@ -180,6 +180,26 @@ describe("App schematic workspace tools", () => {
     fireEvent.click(screen.getByRole("button", { name: "Schematic" }));
     expect(screen.getByText("What does R1 do?")).toBeTruthy();
     expect(screen.getByText("R1 sets the gain.")).toBeTruthy();
+  });
+
+  it("keeps the Assistant draft and active project chat while switching schematic files", async () => {
+    await renderOpenProject();
+    fireEvent.change(screen.getByRole("textbox", { name: "Message the assistant" }), {
+      target: { value: "Continue the two-bit register work" },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "New schematic" }));
+    await screen.findByRole("tab", { name: /untitled-2\.asc/ });
+    expect(screen.getByRole("textbox", { name: "Message the assistant" })).toHaveProperty(
+      "value",
+      "Continue the two-bit register work",
+    );
+
+    fireEvent.click(screen.getByRole("tab", { name: /^untitled\.asc/ }));
+    expect(screen.getByRole("textbox", { name: "Message the assistant" })).toHaveProperty(
+      "value",
+      "Continue the two-bit register work",
+    );
   });
 
   it("shows an unsaved dot after an edit and clears it after Save", async () => {

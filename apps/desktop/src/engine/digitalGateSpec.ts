@@ -197,13 +197,17 @@ export function dflopDeckLines(base: string, nodes: DflopNodes, spec: DigitalGat
   const a = (n: string | undefined) => n ?? "0";
   // Round away float noise from SI-suffix parsing (100n → 1.0000…001e-7).
   const delay = Number(Math.max(td, 1e-9).toPrecision(12));
+  // libngspice's ngSpice_Circ parser resolves XSPICE models in one pass. A
+  // forward reference accepted by the CLI batch parser fails in the embedded
+  // API with "unable to find definition of model", so every model card must
+  // precede the A-device that consumes it.
   return [
-    `A_${b}_adc [${a(nodes.d)} ${a(nodes.clk)} ${a(nodes.pre)} ${a(nodes.clr)}] [${b}_dd ${b}_dclk ${b}_dpre ${b}_dclr] ${b}_adc`,
     `.model ${b}_adc adc_bridge(in_low=${vt} in_high=${vt})`,
-    `A_${b} ${b}_dd ${b}_dclk ${b}_dpre ${b}_dclr ${b}_dq ${b}_dnq ${b}_dff`,
+    `A_${b}_adc [${a(nodes.d)} ${a(nodes.clk)} ${a(nodes.pre)} ${a(nodes.clr)}] [${b}_dd ${b}_dclk ${b}_dpre ${b}_dclr] ${b}_adc`,
     `.model ${b}_dff d_dff(ic=0 clk_delay=${delay} set_delay=${delay} reset_delay=${delay} rise_delay=1e-9 fall_delay=1e-9)`,
-    `A_${b}_dac [${b}_dq ${b}_dnq] [${nodes.q ?? `${b}_qnc`} ${nodes.qbar ?? `${b}_qbnc`}] ${b}_dac`,
+    `A_${b} ${b}_dd ${b}_dclk ${b}_dpre ${b}_dclr ${b}_dq ${b}_dnq ${b}_dff`,
     `.model ${b}_dac dac_bridge(out_low=${vlow} out_high=${vhigh})`,
+    `A_${b}_dac [${b}_dq ${b}_dnq] [${nodes.q ?? `${b}_qnc`} ${nodes.qbar ?? `${b}_qbnc`}] ${b}_dac`,
   ];
 }
 

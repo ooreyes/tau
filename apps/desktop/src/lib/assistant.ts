@@ -13,6 +13,7 @@ import {
 } from "./assistantActions";
 import {
   ASSISTANT_CATALOG_PROMPT,
+  GOLDEN_TWO_BIT_REGISTER_PLAN,
   compileAssistantCircuitPlan,
   GOLDEN_CLASS_D_ASSISTANT_PLAN,
   TAU_CIRCUIT_PLAN_TOOL,
@@ -86,6 +87,9 @@ ${JSON.stringify(ASSISTANT_CATALOG_PROMPT)}
 
 For a supported Class-D approximation, follow this known-good topology instead of inventing gate-driver pins:
 ${JSON.stringify(GOLDEN_CLASS_D_ASSISTANT_PLAN)}
+
+For D flip-flops, PRE and CLR are active-high: connect unused pre/clr and com to 0, never VDD. For a requested 2-bit 01→11→10 register, follow this native-ngspice-verified plan:
+${JSON.stringify(GOLDEN_TWO_BIT_REGISTER_PLAN)}
 
 When the user asks to add, remove, revise, or reconnect something in the currently open circuit, call apply_current_asc_circuit with the complete resulting schematic: preserve the current layout and include every existing part, wire, label, and directive that should remain. Never use a new-file plan for a requested edit, and never represent an edit as a partial patch. Do not paste plan JSON or ASC text into your prose. Both tools create proposals only: Tau validates them and the user must explicitly confirm before a file is created or the current document is replaced.
 

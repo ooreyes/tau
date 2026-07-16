@@ -10,6 +10,12 @@ export interface WaveformBounds {
 }
 
 const WAVEFORM_PADDING_FRACTION = 0.08;
+// Native solvers often leave femto-scale numerical residue on a physically
+// steady milli/volt-scale signal. Treating that residue as the whole Y domain
+// produces unreadable, effectively duplicate tick labels and visually inflates
+// solver noise into a waveform. Below one part per billion of the signal scale,
+// use the same honest steady-signal framing as an exactly flat trace.
+const EFFECTIVELY_FLAT_RELATIVE_SPAN = 1e-9;
 
 function paddedWaveformBounds(rawMin: number, rawMax: number): WaveformBounds {
   if (!Number.isFinite(rawMin) || !Number.isFinite(rawMax) || rawMax < rawMin) {
@@ -17,11 +23,14 @@ function paddedWaveformBounds(rawMin: number, rawMax: number): WaveformBounds {
   }
 
   const rawSpan = rawMax - rawMin;
+  const signalScale = Math.max(Math.abs(rawMin), Math.abs(rawMax));
+  const effectivelyFlat = rawSpan === 0
+    || (signalScale > 0 && rawSpan <= signalScale * EFFECTIVELY_FLAT_RELATIVE_SPAN);
   // A flat trace still needs a non-zero viewport. Scale that viewport to the
   // signal itself so a flat 5 V rail and a flat 5 pV residual both remain
   // meaningful; zero has no natural scale, so use a deliberately tiny finite
   // engineering span instead of the old arbitrary one-volt fallback.
-  const padding = rawSpan > 0
+  const padding = !effectivelyFlat
     ? rawSpan * WAVEFORM_PADDING_FRACTION
     : Math.abs(rawMin) > 0
       ? Math.abs(rawMin) * WAVEFORM_PADDING_FRACTION

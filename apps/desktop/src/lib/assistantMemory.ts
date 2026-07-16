@@ -23,7 +23,7 @@ export interface PersistedAssistantRecovery {
   message?: string;
 }
 
-/** One saved chat thread for a circuit. `messages` is the same bounded shape
+/** One saved chat thread for a project. `messages` is the same bounded shape
  *  the legacy single-thread store used, so every existing restore/redact rule
  *  (action validation, metrics validation, char/message caps) applies per
  *  conversation instead of per circuit. */
@@ -412,6 +412,38 @@ export function deleteConversation(memoryKey: string, id: string): void {
     }
   } catch {
     // Nothing else to do when browser storage is unavailable.
+  }
+}
+
+/**
+ * Fold conversations written by pre-project builds (which keyed chat storage
+ * by the active `.asc` path) into the project's shared chat history. The
+ * source is intentionally retained so downgrading Tau cannot destroy it.
+ * Existing destination rows win only when they are newer, and the source's
+ * active thread becomes active only when the project has no active thread.
+ */
+export function mergeConversationHistory(fromKey: string, projectKey: string): void {
+  if (typeof localStorage === "undefined" || !fromKey || !projectKey || fromKey === projectKey) return;
+  try {
+    const source = listConversations(fromKey);
+    if (source.length === 0) return;
+    const destination = listConversations(projectKey);
+    const merged = new Map(destination.map((conversation) => [conversation.id, conversation]));
+    let changed = false;
+    for (const conversation of source) {
+      const existing = merged.get(conversation.id);
+      if (!existing || conversation.updatedAt > existing.updatedAt) {
+        merged.set(conversation.id, conversation);
+        changed = true;
+      }
+    }
+    if (changed) writeConversations(projectKey, [...merged.values()]);
+    if (!getActiveConversationId(projectKey)) {
+      const sourceActive = getActiveConversationId(fromKey);
+      if (sourceActive && merged.has(sourceActive)) setActiveConversationId(projectKey, sourceActive);
+    }
+  } catch {
+    // Migration is best-effort; neither the source nor live transcript changes.
   }
 }
 

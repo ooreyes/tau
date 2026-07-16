@@ -168,6 +168,33 @@ export const GOLDEN_CLASS_D_ASSISTANT_PLAN = {
   directives: [".tran 1u 100m 0 1u"],
 };
 
+/** Known-good two-bit register sequence used by the assistant prompt and
+ * regression tests: Q1Q0 samples 01, 11, 10 on the 1/3/5 ms rising edges.
+ * ngspice's d_dff PRE/CLR controls are active-high, so both must be tied to
+ * ground while inactive (the earlier prompt incorrectly suggested VDD). */
+export const GOLDEN_TWO_BIT_REGISTER_PLAN = {
+  mode: "create" as const,
+  filename: "2bit-register.asc",
+  components: [
+    { ref: "VD0", kind: "vsource" as const, value: "PWL(0 5 4m 5 4.001m 0 6m 0)" },
+    { ref: "VD1", kind: "vsource" as const, value: "PWL(0 0 2m 0 2.001m 5 6m 5)" },
+    { ref: "VCLK", kind: "vsource" as const, value: "PULSE(0 5 1m 1n 1n 0.5m 2m)" },
+    { ref: "A1", kind: "dflop" as const, value: "Vhigh=5" },
+    { ref: "A2", kind: "dflop" as const, value: "Vhigh=5" },
+  ],
+  nets: [
+    { name: "D0", pins: ["VD0.p", "A1.d"] },
+    { name: "D1", pins: ["VD1.p", "A2.d"] },
+    { name: "CLK", pins: ["VCLK.p", "A1.clk", "A2.clk"] },
+    { name: "Q0", pins: ["A1.q"] },
+    { name: "Q0BAR", pins: ["A1.qbar"] },
+    { name: "Q1", pins: ["A2.q"] },
+    { name: "Q1BAR", pins: ["A2.qbar"] },
+    { name: "0", pins: ["VD0.n", "VD1.n", "VCLK.n", "A1.pre", "A1.clr", "A1.com", "A2.pre", "A2.clr", "A2.com"] },
+  ],
+  directives: [".tran 1u 6m"],
+};
+
 /**
  * Models often emit spice-ish pin nicknames (U1.n, U1.+, VDD). Map those onto
  * Tau's exact pin ids before validation so Class-D / op-amp plans don't die on

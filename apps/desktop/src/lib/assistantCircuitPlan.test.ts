@@ -1,12 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { extractCircuit } from "../schematic/netlist";
 import { importAsc } from "../io/ascImport";
+import { buildSpiceDeck } from "../engine/spiceNetlist";
 import {
   ASSISTANT_CATALOG_PROMPT,
   ASSISTANT_COMPOSITE_KINDS,
   ASSISTANT_DIRECT_GENERATABLE_KINDS,
   ASSISTANT_GENERATABLE_KINDS,
   GOLDEN_CLASS_D_ASSISTANT_PLAN,
+  GOLDEN_TWO_BIT_REGISTER_PLAN,
   assertAssistantDrawingIntegrity,
   assistantSchematicSvg,
   compileAssistantCircuitPlan,
@@ -883,5 +885,15 @@ describe("assistant circuit plan", () => {
       directives: [".tran 500n"],
     });
     expect(action.source).toContain("SYMBOL tline");
+  });
+
+  it("builds a two-bit D-register transient with inactive controls and observable current/voltage nodes", () => {
+    const action = compileAssistantCircuitPlan("two-bit-register", GOLDEN_TWO_BIT_REGISTER_PLAN);
+    const deck = buildSpiceDeck(action.document, { kind: "tran", stopTime: 0.006, steps: 6000 });
+    expect(deck.netlist).toContain(".tran 0.000001 0.006");
+    expect(deck.netlist).toMatch(/A_a1_adc \[\S+ \S+ 0 0\]/);
+    expect(deck.netlist).toMatch(/A_a2_adc \[\S+ \S+ 0 0\]/);
+    expect(deck.netlist).toContain("A_a1_dac");
+    expect(deck.netlist).toContain("A_a2_dac");
   });
 });

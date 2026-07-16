@@ -1,5 +1,6 @@
 import {
   ASSISTANT_CATALOG_PROMPT,
+  GOLDEN_TWO_BIT_REGISTER_PLAN,
   compileAssistantCircuitPlan,
   TAU_CIRCUIT_PLAN_TOOL,
   TAU_CIRCUIT_PLAN_TOOL_NAME,
@@ -73,6 +74,9 @@ If an exact transient waveform fact (for example a signal value at a specific ti
 
 Tau generation catalog (the only kinds and pin ids you may use):
 ${JSON.stringify(ASSISTANT_CATALOG_PROMPT)}
+
+D flip-flop PRE and CLR are active-high. Tie unused dflop pre/clr and com to 0, never VDD. For a 2-bit 01→11→10 register, use this native-ngspice-verified plan:
+${JSON.stringify(GOLDEN_TWO_BIT_REGISTER_PLAN)}
 
 Source values use portable LTspice syntax. Use vsource/isource for every source:
 - DC: value "5" or "1m"

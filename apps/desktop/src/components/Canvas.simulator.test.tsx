@@ -101,6 +101,20 @@ describe("Canvas — simulator mutation boundary", () => {
     expect(useSchematic.getState().wires).toHaveLength(1);
   });
 
+  it("adds a real branch-current probe when Probe clicks a component body", () => {
+    useSchematic.setState({ tool: { mode: "probe" } });
+    render(<Canvas interactive={false} />);
+
+    fireEvent.pointerDown(document.querySelector("svg.canvas")!, { button: 0, clientX: 0, clientY: 0 });
+    expect(useSchematic.getState().probes).toEqual([
+      expect.objectContaining({ componentId: "r1", x: 0, y: 0 }),
+    ]);
+    expect(screen.getByRole("button", { name: "Remove current probe" })).toBeTruthy();
+
+    fireEvent.pointerDown(document.querySelector("svg.canvas")!, { button: 0, clientX: 0, clientY: 0 });
+    expect(useSchematic.getState().probes).toEqual([]);
+  });
+
   it("adds, edits, and removes a node name inline", () => {
     useSchematic.setState({ tool: { mode: "label" } });
     render(<Canvas interactive={false} />);

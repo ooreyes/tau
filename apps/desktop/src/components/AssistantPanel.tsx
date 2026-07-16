@@ -46,6 +46,7 @@ import {
   listConversations,
   loadAssistantRecovery,
   renameConversation,
+  mergeConversationHistory,
   saveAssistantRecovery,
   saveConversationMessages,
   setActiveConversationId as persistActiveConversationId,
@@ -160,11 +161,12 @@ export type AssistantApplyCurrentHandler = (action: AssistantApplyCurrentAscActi
  *  debounced save effect and by the explicit switch/new-chat/delete handlers,
  *  never here, so this stays safe to call from a lazy useState initializer
  *  (React 18 StrictMode invokes those twice in dev). */
-function seedConversationState(memoryKey: string): {
+function seedConversationState(memoryKey: string, legacyMemoryKey?: string): {
   activeId: string;
   messages: ChatMessage[];
   conversations: AssistantConversation[];
 } {
+  if (legacyMemoryKey) mergeConversationHistory(legacyMemoryKey, memoryKey);
   const conversations = listConversations(memoryKey);
   const storedActiveId = getActiveConversationId(memoryKey);
   const active = conversations.find((conversation) => conversation.id === storedActiveId) ?? conversations[0] ?? null;
@@ -201,8 +203,10 @@ export interface AssistantPanelProps {
   onApplyCurrent?: AssistantApplyCurrentHandler;
   /** When inside the shared right dock, the dock owns width and the resize handle. */
   embedded?: boolean;
-  /** Stable document identity used to keep each schematic's transcript separate. */
+  /** Stable project identity. One active chat follows the user across files. */
   memoryKey?: string;
+  /** Previous file-scoped key, read only to migrate older Tau chat storage. */
+  legacyMemoryKey?: string;
 }
 
 export function AssistantPanel({
@@ -227,6 +231,7 @@ export function AssistantPanel({
   onApplyCurrent,
   embedded = false,
   memoryKey = "untitled.asc",
+  legacyMemoryKey,
 }: AssistantPanelProps) {
   const apiKey = useAssistantApiKey();
   const preferences = useAssistantPreferences();
@@ -238,7 +243,7 @@ export function AssistantPanel({
   // One seed call — StrictMode double-invokes lazy initializers, and three
   // separate seedConversationState() calls would mint three different ids for
   // an empty circuit.
-  const [seed] = useState(() => seedConversationState(memoryKey));
+  const [seed] = useState(() => seedConversationState(memoryKey, legacyMemoryKey));
   const [activeConversationId, setActiveConversationId] = useState(seed.activeId);
   const [messages, setMessages] = useState<ChatMessage[]>(seed.messages);
   const [conversations, setConversations] = useState<AssistantConversation[]>(seed.conversations);
@@ -362,6 +367,15 @@ export function AssistantPanel({
     return () => globalThis.clearTimeout(timer);
   }, [memoryKey, activeConversationId, messages]);
 
+  // Visiting another schematic may expose chat rows written by an older
+  // file-scoped Tau build. Merge them into the project list without changing
+  // the conversation currently in progress.
+  useEffect(() => {
+    if (!legacyMemoryKey || legacyMemoryKey === memoryKey) return;
+    mergeConversationHistory(legacyMemoryKey, memoryKey);
+    setConversations(listConversations(memoryKey));
+  }, [legacyMemoryKey, memoryKey]);
+
   // Flush the latest transcript synchronously on unmount. Declared after the
   // debounce effect so this cleanup runs first (React reverse order) and the
   // cancelled timer cannot race a late write.
@@ -449,7 +463,14 @@ export function AssistantPanel({
       [...baseMessages, userMessage].map(({ role, content }) => ({ role, content })),
     );
 
-    setMessages([...baseMessages, userMessage, assistantMessage]);
+    const pendingMessages = [...baseMessages, userMessage, assistantMessage];
+    setMessages(pendingMessages);
+    // Create the history row before network/local inference starts. Closing
+    // the panel, changing files, or a provider crash can no longer leave a
+    // visible prompt absent from Past chats during the debounce window.
+    saveConversationMessages(memoryKey, activeConversationId, toPersistedMessages(pendingMessages));
+    persistActiveConversationId(memoryKey, activeConversationId);
+    setConversations(listConversations(memoryKey));
     setInput("");
     requestStartedAtRef.current = Date.now();
     setElapsedSeconds(0);
@@ -750,116 +771,104 @@ export function AssistantPanel({
       <header className="assistant-header">
         <div className="assistant-title-row">
           <span className="assistant-title">Ask <span className="empty-brand">Tauri</span>…</span>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-sm"
-                className="text-muted-foreground hover:text-foreground"
-                onClick={onClose}
-                aria-label="Close assistant"
-              >
-                <X size={14} strokeWidth={1.8} aria-hidden="true" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Close assistant</TooltipContent>
-          </Tooltip>
-        </div>
-        <div className="assistant-toolbar">
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="outline"
-                size="icon-sm"
-                className="text-muted-foreground hover:text-foreground"
-                onClick={startNewChat}
-                aria-label="New chat"
-              >
-                <MessageSquarePlus size={13} strokeWidth={1.8} aria-hidden="true" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>New chat</TooltipContent>
-          </Tooltip>
-          <Select value={modelChoice} onValueChange={changeModel} disabled={streaming}>
-            <SelectTrigger size="sm" className="assistant-model-select" aria-label="Assistant model">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent align="center">
-              <SelectItem value="anthropic">{ASSISTANT_MODEL_LABEL} · Cloud</SelectItem>
-              <SelectItem value="qwen3-4b-4bit">{LOCAL_MLX_MODEL_PRESETS["qwen3-4b-4bit"].label} · Local</SelectItem>
-              <SelectItem value="qwen3-1.7b-4bit">{LOCAL_MLX_MODEL_PRESETS["qwen3-1.7b-4bit"].label} · Local</SelectItem>
-              {customLocalAiModels.map((model) => (
-                <SelectItem key={model.id} value={model.id}>{model.label} · Imported</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <div className="assistant-history-menu" ref={historyMenuRef}>
+          <div className="assistant-header-actions">
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
                   variant="outline"
                   size="icon-sm"
                   className="text-muted-foreground hover:text-foreground"
-                  onClick={() => setHistoryMenuOpen((open) => !open)}
-                  aria-label="Past chats"
-                  aria-haspopup="true"
-                  aria-expanded={historyMenuOpen}
+                  onClick={startNewChat}
+                  aria-label="New chat"
                 >
-                  <History size={13} strokeWidth={1.8} aria-hidden="true" />
+                  <MessageSquarePlus size={13} strokeWidth={1.8} aria-hidden="true" />
                 </Button>
               </TooltipTrigger>
-              <TooltipContent>Past chats</TooltipContent>
+              <TooltipContent>New chat</TooltipContent>
             </Tooltip>
-            {historyMenuOpen && (
-              <div className="assistant-history-popover" role="group" aria-label="Past chats">
-                {conversations.length === 0 ? (
-                  <p className="assistant-history-empty">No past chats yet</p>
-                ) : (
-                  <ul className="assistant-history-list">
-                    {conversations.map((conversation) => (
-                      <li
-                        key={conversation.id}
-                        className="assistant-history-row"
-                        data-active={conversation.id === activeConversationId}
-                      >
-                        <button
-                          type="button"
-                          className="assistant-history-item"
-                          onClick={() => switchConversation(conversation.id)}
-                          aria-current={conversation.id === activeConversationId ? "true" : undefined}
-                        >
-                          <span className="assistant-history-item-title">{conversation.title}</span>
-                          <span className="assistant-history-item-time">{relativeTime(conversation.updatedAt)}</span>
-                        </button>
-                        <button
-                          type="button"
-                          className="assistant-history-delete"
-                          onClick={() => deleteConversationById(conversation.id)}
-                          aria-label={`Delete "${conversation.title}"`}
-                        >
-                          <Trash2 size={12} strokeWidth={1.8} aria-hidden="true" />
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-                <div className="assistant-history-footer">
+            <div className="assistant-history-menu" ref={historyMenuRef}>
+              <Tooltip>
+                <TooltipTrigger asChild>
                   <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => deleteConversationById(activeConversationId)}
-                    disabled={!hasContent}
-                    aria-label="Delete current chat"
+                    variant="outline"
+                    size="icon-sm"
+                    className="text-muted-foreground hover:text-foreground"
+                    onClick={() => setHistoryMenuOpen((open) => !open)}
+                    aria-label="Past chats"
+                    aria-haspopup="true"
+                    aria-expanded={historyMenuOpen}
                   >
-                    <Trash2 size={12} strokeWidth={1.8} aria-hidden="true" />
-                    Delete current chat
+                    <History size={13} strokeWidth={1.8} aria-hidden="true" />
                   </Button>
+                </TooltipTrigger>
+                <TooltipContent>Past chats</TooltipContent>
+              </Tooltip>
+              {historyMenuOpen && (
+                <div className="assistant-history-popover" role="group" aria-label="Past chats">
+                  {conversations.length === 0 ? (
+                    <p className="assistant-history-empty">No past chats yet</p>
+                  ) : (
+                    <ul className="assistant-history-list">
+                      {conversations.map((conversation) => (
+                        <li key={conversation.id} className="assistant-history-row" data-active={conversation.id === activeConversationId}>
+                          <button
+                            type="button"
+                            className="assistant-history-item"
+                            onClick={() => switchConversation(conversation.id)}
+                            aria-current={conversation.id === activeConversationId ? "true" : undefined}
+                          >
+                            <span className="assistant-history-item-title">{conversation.title}</span>
+                            <span className="assistant-history-item-time">{relativeTime(conversation.updatedAt)}</span>
+                          </button>
+                          <button type="button" className="assistant-history-delete" onClick={() => deleteConversationById(conversation.id)} aria-label={`Delete "${conversation.title}"`}>
+                            <Trash2 size={12} strokeWidth={1.8} aria-hidden="true" />
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                 </div>
-              </div>
-            )}
+              )}
+            </div>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon-sm"
+                  className="text-muted-foreground hover:text-destructive"
+                  onClick={() => {
+                    setHistoryMenuOpen(false);
+                    deleteConversationById(activeConversationId);
+                  }}
+                  disabled={!hasContent}
+                  aria-label="Delete current chat"
+                >
+                  <Trash2 size={13} strokeWidth={1.8} aria-hidden="true" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Delete current chat</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button type="button" variant="outline" size="icon-sm" className="text-muted-foreground hover:text-foreground" onClick={onClose} aria-label="Close assistant">
+                  <X size={14} strokeWidth={1.8} aria-hidden="true" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Close assistant</TooltipContent>
+            </Tooltip>
           </div>
+        </div>
+        <div className="assistant-toolbar">
+          <Select value={modelChoice} onValueChange={changeModel} disabled={streaming}>
+            <SelectTrigger size="sm" className="assistant-model-select" aria-label="Assistant model"><SelectValue /></SelectTrigger>
+            <SelectContent align="center">
+              <SelectItem value="anthropic">{ASSISTANT_MODEL_LABEL} · Cloud</SelectItem>
+              <SelectItem value="qwen3-4b-4bit">{LOCAL_MLX_MODEL_PRESETS["qwen3-4b-4bit"].label} · Local</SelectItem>
+              <SelectItem value="qwen3-1.7b-4bit">{LOCAL_MLX_MODEL_PRESETS["qwen3-1.7b-4bit"].label} · Local</SelectItem>
+              {customLocalAiModels.map((model) => <SelectItem key={model.id} value={model.id}>{model.label} · Imported</SelectItem>)}
+            </SelectContent>
+          </Select>
         </div>
       </header>
 

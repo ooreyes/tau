@@ -8,17 +8,68 @@
      `git log --oneline -8`, recover/finish/revert that unit FIRST, then go on.
      ─────────────────────────────────────────────────────────────────────── -->
 ## ⏱ HEARTBEAT
-- **Headline metric:** 1895 reviewed-tree tests green · corpus 82/82 import · 82/82 op-converge · 79/82 warning-clean
-- **Run started (UTC):** 2026-07-16T15:39Z
-- **Synced to origin:** auto/ltspice-parity @ fd94d77.
-- **Claimed unit:** Enforce schematic geometry/connectivity invariants end to end; replace the cramped Assistant and uneven telemetry regressions.
+- **Headline metric:** 1903 reviewed-tree tests green · corpus 82/82 import · 82/82 op-converge · 79/82 warning-clean
+- **Run started (UTC):** 2026-07-16T22:01Z
+- **Synced to origin:** auto/ltspice-parity @ cc4a826.
+- **Claimed unit:** Make Assistant work project-persistent across schematic navigation, restore its full controls, and close the remaining transient plot/probe regressions.
 - **Status:** DONE
-- **Last completed sub-step:** Fresh DMG reopened, saved, reloaded, and reran the reported legacy LED loop as 3 nets / 4 parts with no connectivity warnings; 900×600 schematic/simulator QA passed.
-- **Plan:** Audit every import/edit/transform/undo/save/extract/deck boundary, enforce one geometry/connectivity invariant,
-  add deterministic transform and round-trip matrices, then package and visually verify the exact reported circuits and layouts.
-- **Next step:** Resume acceptance-corpus warning cleanup and the three waveform-parity release circuits.
+- **Last completed sub-step:** Built the fresh unsigned DMG and proved the packaged libngspice dylib loads its bundled XSPICE code models and runs the exact two-DFF register smoke test.
+- **Plan:** Completed — Assistant continuity/history/controls, transient edge gutter, explicit voltage/current probe gestures, and embedded XSPICE failure detection all landed with regressions.
+- **Next step:** Resume warning-clean corpus and release-circuit waveform parity; retain project-scoped Assistant memory and the packaged-library DFF smoke as release gates.
 
 ---
+
+## 2026-07-16T22:34Z — auto/ltspice-parity — Persistent Assistant and transient-probe release repair
+
+### What I did
+- Moved Assistant identity from the active `.asc` path to the open project, so
+  the current transcript, progress card, and draft follow tab/mode navigation.
+  Closing synchronously archives the active conversation, the opening prompt is
+  persisted before a provider responds, and legacy file-scoped chats merge into
+  project history without replacing the active thread.
+- Restored visible New, History, Delete, and Close controls with the model picker
+  on its own responsive row. History retains each named session and supports
+  reopening or deleting an individual chat.
+- Kept transient trace caps inside the plot frame with a coordinate-only edge
+  gutter. Probe mode now has an unambiguous electrical gesture: wire/pin plots
+  voltage over time; component body plots its real branch current over time.
+- Reproduced the two-bit-register failure inside embedded libngspice. Tau now
+  loads all bundled XSPICE code-model modules itself, rejects fatal parser/MIF
+  messages even when `ngSpice_Circ` returns zero, and never reuses stale vectors
+  as a false success. Assistant plans now ground active-high DFF PRE/CLR controls
+  and include a validated 01→11→10 two-register reference plan.
+
+### Files
+- `apps/desktop/src/App.tsx`, `src/components/AssistantPanel.tsx`,
+  `src/lib/assistantMemory.ts`: project-scoped continuity and durable history.
+- `src/components/Canvas.tsx`, `SimulationPanel.tsx`, Palette/StatusBar: explicit
+  current probing, current plots, and trace edge spacing.
+- `src-tauri/src/spice.rs`, `src/engine/digitalGateSpec.ts`, `nativeSpice.ts`:
+  bundled code-model loading and honest embedded-engine error handling.
+- Assistant plan/provider modules and focused regression suites.
+
+### Tests and QA
+- Desktop typecheck/build passed; full Vitest: **1903 passed / 6 skipped**.
+- Rust `fmt --check`, `clippy -D warnings`, and 20 unit tests passed.
+- The ignored real-ngspice smoke passed against both debug resources and the
+  packaged Tau.app dylib, including exact DFF states 01, 11, and 10.
+- Fresh unsigned Tauri app and `Tau_0.2.0_aarch64.dmg` built successfully.
+- From a cleanly remounted DMG, `2bit-register.asc` auto-saved and completed a
+  575-sample bundled-ngspice transient instead of the reported missing-time
+  failure. At 900×600 the full Assistant action row/model selector remained
+  reachable, the project chat survived file switches plus close/reopen and was
+  present in Past chats, and probing the LED circuit's resistor produced a real
+  `I(R1)` plot with clean current-axis labels and an inset right trace cap.
+
+### Parity items
+- §6: voltage and component-current probe gestures plus right-edge plot gutter.
+- §8/§10: project-persistent Assistant, close-to-history durability, restored
+  controls, and narrow-layout model-selector containment.
+- §7: embedded XSPICE module loading and two-DFF transient regression.
+
+### Next step
+Continue warning-clean corpus work and RC/Colpitts/Class-D waveform parity; use
+the new embedded fatal-message gate to keep false-success simulations out.
 
 ## 2026-07-16T17:20Z — auto/ltspice-parity — Schematic topology invariant and editor hardening
 

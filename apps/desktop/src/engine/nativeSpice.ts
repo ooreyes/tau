@@ -61,7 +61,16 @@ export async function runNativeTransient(
   const execution = await executeNative(schematic, { kind: "tran", ...options });
   if (!execution) return null;
   const time = vector(execution.result, "time");
-  if (!time || time.real.length < 2) throw new Error("ngspice returned no transient time vector.");
+  if (!time || time.real.length < 2) {
+    const detail = execution.result.messages
+      .map((message) => message.trim())
+      .filter(Boolean)
+      .slice(-4)
+      .join(" ");
+    throw new Error(detail
+      ? `ngspice could not start the transient analysis: ${detail}`
+      : "ngspice could not start the transient analysis and returned no time samples.");
+  }
 
   const traces: Trace[] = execution.deck.circuit.nets
     .filter((net) => !net.isGround)

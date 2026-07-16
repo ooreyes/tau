@@ -597,7 +597,13 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
     id-mapped (each `.asy` exposes a SUBSET of the 8-slot SpiceOrder contract,
     so mapped by pin id, not positional zip). Diagonal-wire netlist fix so
     crossing diagonals don't falsely merge (Electrometer dflop feedback
-    overpass). Warning-clean 71→73. 24 tests.
+    overpass). Warning-clean 71→73. 24 tests. **Embedded-library hardening
+    (2026-07-16):** Tau now explicitly loads every bundled ngspice code-model
+    module before accepting decks, because `ngSpice_Circ` does not source the
+    CLI's `spinit`; fatal parser/MIF messages are rejected even when libngspice
+    returns status zero, preventing stale prior vectors from masquerading as a
+    successful run. The reported two-DFF 01→11→10 register deck is an ignored
+    real-library smoke test and passes against the packaged app's own dylib.
   - **Landed (2026-07-04): `sampleHold` kind** — `SpecialFunctions\sample`
     (SAMPLEHOLD) imports with its id-mapped `.asy` pin bank and emits a real
     behavioral track-and-hold (`engine/sampleHoldSpec.ts`): S/H mode = switch +
@@ -962,16 +968,15 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   authority §6's plot-open→click-wire→trace path already uses) and keeps at
   most one voltage probe per net: same point again removes it (toggle off),
   a different point on the same net **moves** the marker there instead of
-  duplicating. Clicking off any net — empty canvas or a component **body**
-  with no pin/wire under the cursor — is a no-op ("probing an opamp makes no
-  sense," per owner feedback); an isolated pin with no wire still probes
-  (a valid, if unconnected, net). Current/clamp probes are unaffected — they
-  already dedup per component in `toggleCurrentProbe`. 7 new store tests.
-  **Interaction contract tightened (review pass, 2026-07-10):** simulator
-  component clicks now select/focus telemetry only and never create a current
-  probe implicitly. The explicit Probe tool adds voltage dots; dots themselves
-  are keyboard/click removable. The Name tool adds/renames/removes the one name
-  per physical node. Components, values, wires, and topology remain immutable.
+  duplicating. Clicking empty canvas is a no-op; an isolated pin with no wire
+  still probes (a valid, if unconnected, net). Current/clamp probes dedup per
+  component in `toggleCurrentProbe`. 7 new store tests.
+  **Interaction contract tightened (review pass, 2026-07-16):** Select-mode
+  component clicks focus telemetry and never create a probe implicitly. In the
+  explicit Probe tool, a wire/pin click toggles voltage while a component-body
+  click toggles its real branch-current trace over time. Probe dots remain
+  keyboard/click removable. The Name tool adds/renames/removes the one name per
+  physical node. Components, values, wires, and topology remain immutable.
 - 🟡 **Plot arbitrary expressions** (`V(a)-V(b)`, `I(R1)*V(out)`, power `V(out)*I(out)`)
   — **landed** (`simulation/plotExpression.ts`): an expression bar under the
   transient scope evaluates any expression of the simulated signals at every
@@ -1136,7 +1141,11 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   follow-up (2026-07-16):** plot padding and title offsets now give unit labels
   breathing room, while visible tick spacing selects 3–9 significant digits so
   deep zoom produces distinct, numerically accurate labels instead of repeated
-  rounded values.
+  rounded values. Transient paths also reserve a small SVG edge gutter, keeping
+  round-capped traces visibly inside the right frame without changing the time
+  domain or tick values. Femtoscale native-solver residue on a physically steady
+  engineering signal now receives steady-signal framing instead of generating
+  visually duplicate, crowded Y labels.
 - 🟡 `.step` family-of-curves overlay — **transient + AC + DC families landed**.
   Transient: `StepPlot` in `SimulationPanel` (the **STEP** tab re-runs the sweep
   and draws the probed signal across all members in a color ramp; legend lists
@@ -1251,7 +1260,10 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   output is parsed/validated as supported LTspice ASC and shown as an explicit
   Create action rather than silently changing the circuit. The API key is
   persisted through the native OS keychain (never web/project storage), and a
-  bounded transcript is restored independently for each schematic. For exact post-run questions, a
+  bounded project transcript follows the user across every open schematic and
+  app mode. Closing the panel synchronously archives the active transcript;
+  reopening or choosing Past chats restores it. Legacy per-file sessions merge
+  into project history without replacing the active thread. For exact post-run questions, a
   bounded private `inspect_simulation_signal` operation evaluates real transient
   vectors/expressions and returns min/max/average/RMS/final/classification to the
   model; tool syntax and payloads never appear in chat. CSP, action validation,
@@ -1328,7 +1340,8 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   Tau metadata on a benign LTspice carrier so they reopen exactly in Tau rather
   than blocking Save. Empty sheets select Library automatically, Simulator edit
   shortcuts explain that the view is read-only, and the minimum-width Assistant
-  header gives its ellipsized model selector a dedicated row below the actions.
+  header gives its ellipsized model selector a dedicated row below visible New,
+  History, Delete, and Close actions.
   **Semantic round-trip follow-up (2026-07-16):** ASC Save now reimports its own
   output and compares canonical terminal-connectivity partitions before writing;
   it cannot silently persist a drawing whose visible loop reopens as floating

@@ -11,6 +11,7 @@ import {
   loadAssistantHistory,
   loadAssistantRecovery,
   loadConversation,
+  mergeConversationHistory,
   migrateConversation,
   renameConversation,
   saveAssistantHistory,
@@ -283,6 +284,23 @@ describe("assistant conversation store", () => {
     expect(loadConversation("rc-filter.asc", id)?.title).toBe("Build an RC filter");
     // Source key is left intact — migrate is a copy, not a move.
     expect(loadConversation("untitled.asc", id)?.messages).toHaveLength(2);
+  });
+
+  it("merges legacy file chats into project history without replacing the active project thread", () => {
+    const projectId = createConversation();
+    saveConversationMessages("/project", projectId, [{ role: "user", content: "Project chat" }]);
+    setActiveConversationId("/project", projectId);
+    const fileId = createConversation();
+    saveConversationMessages("/project/a.asc", fileId, [{ role: "user", content: "Older file chat" }]);
+    setActiveConversationId("/project/a.asc", fileId);
+
+    mergeConversationHistory("/project/a.asc", "/project");
+
+    expect(listConversations("/project").map((conversation) => conversation.title)).toEqual(
+      expect.arrayContaining(["Project chat", "Older file chat"]),
+    );
+    expect(getActiveConversationId("/project")).toBe(projectId);
+    expect(listConversations("/project/a.asc")).toHaveLength(1);
   });
 
   it("migrateConversation no-ops when keys match or the source thread is empty", () => {

@@ -5624,23 +5624,31 @@ button.bottom-panel-head:focus-visible {
   min-width: 0;
 }
 
-/* Calm title row above one compact navigation row. Destructive chat actions
-   live in history; the permanent header only keeps the universal close. */
+/* The title never competes with the four durable chat controls. At the 280 px
+   panel floor it ellipsizes first; New / History / Delete / Close remain
+   reachable, while the model selector gets its own full-width row. */
 .assistant-title {
   display: flex;
   align-items: center;
-  width: 100%;
+  width: auto;
   height: 20px;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
-  flex: none;
+  flex: 1 1 auto;
   font-size: var(--fs-title);
   font-weight: 600;
   color: var(--cream);
   letter-spacing: -0.2px;
   line-height: 1;
   white-space: nowrap;
+}
+
+.assistant-header-actions {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .assistant-model-select {
@@ -5667,8 +5675,7 @@ button.bottom-panel-head:focus-visible {
 }
 
 .assistant-toolbar {
-  display: grid;
-  grid-template-columns: 28px minmax(0, 1fr) 28px;
+  display: block;
   align-items: center;
   gap: var(--sp-2);
   width: 100%;

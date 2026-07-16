@@ -99,7 +99,6 @@ import {
   type AssistantCreateAscAction,
 } from "./lib/assistantActions";
 import { pickAutoRunAnalysis, type AutoRunAnalysis } from "./lib/assistantAutoRun";
-import { migrateConversation } from "./lib/assistantMemory";
 
 const DEFAULT_ANALYSIS_OPTIONS: AnalysisOptions = {
   stopTime: 0.006,
@@ -892,10 +891,6 @@ function App() {
     // the schematic store's directives) still fires whether this circuit ends
     // up disk-backed or as a pathless scratchpad.
     pendingAutoRunRef.current = pickAutoRunAnalysis(action.document.directives ?? []);
-    // Creating a circuit remounts AssistantPanel under a new memoryKey
-    // (path or filename). Carry the chat that produced it so Create doesn't
-    // wipe the transcript the user just had.
-    const fromKey = activeFilePath ?? documentTitle;
     if (!useProject.getState().rootPath) {
       throw new Error("Open or create a project folder before Tauri creates a schematic.");
     }
@@ -913,9 +908,8 @@ function App() {
     // remains the durable interchange file; re-importing it here would attach
     // LTspice pin overrides and visually detach wires from Tau glyphs.
     openDocument(action.document, basename(path), path, ascRewriteRisks(action.source));
-    migrateConversation(fromKey, path);
     showNotice(`Created ${basename(path)}`);
-  }, [activeFilePath, createSchematicInRoot, deleteProjectNode, documentTitle, openDocument, showNotice, writeSim]);
+  }, [createSchematicInRoot, deleteProjectNode, openDocument, showNotice, writeSim]);
 
   const applyAssistantCircuit = useCallback((action: AssistantApplyCurrentAscAction) => {
     pendingAutoRunRef.current = pickAutoRunAnalysis(action.document.directives ?? []);
@@ -1451,7 +1445,7 @@ function App() {
                     className={toolMode === "probe" ? "active" : undefined}
                     onClick={startProbing}
                     aria-pressed={toolMode === "probe"}
-                    title="Add or remove a voltage probe"
+                    title="Plot wire voltage or component current"
                   >
                     <Crosshair size={13} strokeWidth={1.7} aria-hidden="true" />
                     <span>Probe</span>
@@ -1540,8 +1534,8 @@ function App() {
         )}
         {projectRootPath && assistantOpen && (
           <AssistantPanel
-            key={activeFilePath ?? documentTitle}
-            memoryKey={activeFilePath ?? documentTitle}
+            memoryKey={projectRootPath}
+            legacyMemoryKey={activeFilePath ?? documentTitle}
             components={components}
             wires={wires}
             netLabels={netLabels}

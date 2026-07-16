@@ -169,4 +169,12 @@ describe("native ngspice adapter", () => {
     await expect(runNativeTransient(rcSchematic(), { stopTime: 0.001, steps: 100 }))
       .rejects.toThrow(/no node-voltage traces/i);
   });
+
+  it("surfaces ngspice's real startup error when no transient time vector exists", async () => {
+    enableNativeRuntime();
+    invoke.mockResolvedValueOnce(nativeResult([], ["Error: unknown device A1", "analysis aborted"]));
+
+    await expect(runNativeTransient(rcSchematic(), { stopTime: 0.001, steps: 100 }))
+      .rejects.toThrow(/unknown device A1.*analysis aborted/i);
+  });
 });

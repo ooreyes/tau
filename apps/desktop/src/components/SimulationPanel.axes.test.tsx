@@ -158,6 +158,17 @@ describe("WaveformPlot (TRAN) — real tick axes", () => {
     expect(Math.max(...yValues) - Math.min(...yValues)).toBeGreaterThan(80);
   });
 
+  it("keeps the first and last transient samples inside the frame instead of clipping their round caps", () => {
+    const result = makeTranResult();
+    const { container } = render(
+      <WaveformPlot result={result} baseTraces={result.traces} netLabels={[]} paneLayout={defaultLayout(["n1"])} />,
+    );
+    const d = container.querySelector<SVGPathElement>(".scope-trace")?.getAttribute("d") ?? "";
+    const xValues = [...d.matchAll(/[ML]\s+(-?\d+(?:\.\d+)?)\s+-?\d+(?:\.\d+)?/g)].map((match) => Number(match[1]));
+    expect(Math.min(...xValues)).toBeGreaterThan(46);
+    expect(Math.max(...xValues)).toBeLessThan(340 - 46);
+  });
+
   it("keeps zoom/pan controls and resets the full plot domain on Fit", async () => {
     const result = makeTranResult();
     const { container, getByRole } = render(

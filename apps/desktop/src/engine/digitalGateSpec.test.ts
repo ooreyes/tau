@@ -113,26 +113,26 @@ describe("dflopDeckLines", () => {
     const spec = parseDigitalGate("Vhigh=1 Vlow=0");
     const lines = dflopDeckLines("A1", { d: "d", clk: "clk", q: "q", qbar: "qb" }, spec);
     expect(lines).toEqual([
-      "A_a1_adc [d clk 0 0] [a1_dd a1_dclk a1_dpre a1_dclr] a1_adc",
       ".model a1_adc adc_bridge(in_low=0.5 in_high=0.5)",
-      "A_a1 a1_dd a1_dclk a1_dpre a1_dclr a1_dq a1_dnq a1_dff",
+      "A_a1_adc [d clk 0 0] [a1_dd a1_dclk a1_dpre a1_dclr] a1_adc",
       ".model a1_dff d_dff(ic=0 clk_delay=1e-9 set_delay=1e-9 reset_delay=1e-9 rise_delay=1e-9 fall_delay=1e-9)",
-      "A_a1_dac [a1_dq a1_dnq] [q qb] a1_dac",
+      "A_a1 a1_dd a1_dclk a1_dpre a1_dclr a1_dq a1_dnq a1_dff",
       ".model a1_dac dac_bridge(out_low=0 out_high=1)",
+      "A_a1_dac [a1_dq a1_dnq] [q qb] a1_dac",
     ]);
   });
 
   it("uses the parsed levels/threshold (Electrometer: Vhigh=0 Vlow=-5 → vt=-2.5)", () => {
     const spec = parseDigitalGate("Vhigh=0 Vlow=-5");
     const lines = dflopDeckLines("A1", { d: "d", clk: "clk", q: "q" }, spec);
-    expect(lines[1]).toBe(".model a1_adc adc_bridge(in_low=-2.5 in_high=-2.5)");
-    expect(lines[5]).toBe(".model a1_dac dac_bridge(out_low=-5 out_high=0)");
+    expect(lines[0]).toBe(".model a1_adc adc_bridge(in_low=-2.5 in_high=-2.5)");
+    expect(lines[4]).toBe(".model a1_dac dac_bridge(out_low=-5 out_high=0)");
     // unconnected qbar lands on a private node
-    expect(lines[4]).toBe("A_a1_dac [a1_dq a1_dnq] [q a1_qbnc] a1_dac");
+    expect(lines[5]).toBe("A_a1_dac [a1_dq a1_dnq] [q a1_qbnc] a1_dac");
   });
 
   it("maps Td onto the event delays with a 1 ns floor", () => {
     const lines = dflopDeckLines("A1", { d: "d", clk: "c", q: "q" }, parseDigitalGate("Td=100n"));
-    expect(lines[3]).toContain("clk_delay=1e-7 set_delay=1e-7 reset_delay=1e-7");
+    expect(lines[2]).toContain("clk_delay=1e-7 set_delay=1e-7 reset_delay=1e-7");
   });
 });

@@ -161,7 +161,7 @@ export function Palette({ focusSignal }: { focusSignal: number; onNotice: (messa
                   </button>
                   <button
                     className={`palette-item${tool.mode === "probe" ? " active" : ""}`}
-                    title="Probe a node — then click a wire or pin to plot it"
+                    title="Probe voltage on a wire/pin or current through a component"
                     onClick={(ev) => {
                       startProbing();
                       ev.currentTarget.blur();

@@ -230,12 +230,62 @@ impl SpiceEngine {
         if status != 0 {
             return Err(format!("ngSpice_Init failed with status {status}"));
         }
-        Ok(Self {
+        let mut engine = Self {
             _library: library,
             api,
             callback_state,
             library_path,
-        })
+        };
+        engine.load_bundled_codemodels()?;
+        Ok(engine)
+    }
+
+    /** libngspice does not source the CLI's `spinit` when embedded. XSPICE
+     * devices (adc_bridge/d_dff/dac_bridge, tables, transmission lines) are
+     * dynamic `.cm` modules, so load Tau's sibling bundle explicitly before
+     * any circuit is parsed. Without this, ordinary analog circuits work but
+     * every digital A-device fails as an unknown model type. */
+    fn load_bundled_codemodels(&mut self) -> Result<(), String> {
+        let Some(lib_dir) = self.library_path.parent() else {
+            return Ok(());
+        };
+        let codemodel_dir = lib_dir.join("ngspice");
+        for name in [
+            "spice2poly.cm",
+            "analog.cm",
+            "digital.cm",
+            "xtradev.cm",
+            "xtraevt.cm",
+            "table.cm",
+            "tlines.cm",
+        ] {
+            let path = codemodel_dir.join(name);
+            if !path.is_file() {
+                continue;
+            }
+            // ngspice's command parser treats quotes as literal filename
+            // characters for `codemodel`; backslash-escape path separators
+            // understood by the parser instead.
+            let escaped = path.display().to_string().replace(' ', "\\ ");
+            let command = CString::new(format!("codemodel {escaped}")).map_err(|_| {
+                "A bundled ngspice code-model path contains a NUL byte.".to_string()
+            })?;
+            let status = unsafe { (self.api.command)(command.as_ptr() as *mut c_char) };
+            if status != 0 {
+                return Err(with_engine_messages(
+                    &self.callback_state,
+                    format!(
+                        "ngspice could not load bundled code model {}",
+                        path.display()
+                    ),
+                ));
+            }
+            if let Some(error) = fatal_engine_messages(&self.callback_state) {
+                return Err(format!("Loading {} failed: {error}", path.display()));
+            }
+        }
+        clear_callback_state(&self.callback_state);
+        Ok(())
     }
 
     fn run(&mut self, request: SpiceRequest) -> Result<SpiceResult, String> {
@@ -260,6 +310,9 @@ impl SpiceEngine {
                 format!("ngSpice_Circ failed with status {circ_status}"),
             ));
         }
+        if let Some(error) = fatal_engine_messages(&self.callback_state) {
+            return Err(error);
+        }
 
         let command = CString::new("run").expect("constant command has no NUL byte");
         let command_status = unsafe { (self.api.command)(command.as_ptr() as *mut c_char) };
@@ -268,6 +321,9 @@ impl SpiceEngine {
                 &self.callback_state,
                 format!("ngSpice_Command(run) failed with status {command_status}"),
             ));
+        }
+        if let Some(error) = fatal_engine_messages(&self.callback_state) {
+            return Err(error);
         }
         if let Some(exit) = self
             .callback_state
@@ -544,6 +600,23 @@ fn with_engine_messages(state: &CallbackState, message: String) -> String {
     }
 }
 
+/** ngSpice_Circ can return status 0 even after a parser/MIF failure. Without
+ * this guard ngSpice_CurPlot then points at the previous successful circuit,
+ * and Tau can accidentally receive stale vectors as if they belonged to the
+ * new run. Treat only explicit fatal/error callback lines as failures; ordinary
+ * convergence warnings stay attached to a valid result. */
+fn fatal_engine_messages(state: &CallbackState) -> Option<String> {
+    let messages = state.messages.lock().ok()?;
+    let fatal = messages.iter().any(|message| {
+        let lower = message.to_ascii_lowercase();
+        lower.contains("stderr error")
+            || lower.contains("mif-error")
+            || lower.contains("circuit not parsed")
+            || lower.contains("fatal error")
+    });
+    fatal.then(|| format!("ngspice rejected the circuit: {}", messages.join(" | ")))
+}
+
 #[cfg(test)]
 mod tests {
     use std::path::PathBuf;
@@ -695,5 +768,70 @@ mod tests {
             load_min > -0.5,
             "rectifier should block the negative half-cycle, got {load_min}"
         );
+
+        // Exact assistant 2-bit register regression: ngspice XSPICE d_dff
+        // controls are active-high, so PRE/CLR are held at zero. On clock
+        // rising edges at 1/3/5 ms the two outputs must sample 01, 11, 10.
+        let register = engine
+            .run(SpiceRequest {
+                netlist: r#"Tau two-bit register
+VD0 d0 0 DC 5 PWL(0 5 4m 5 4.001m 0 6m 0)
+VD1 d1 0 DC 0 PWL(0 0 2m 0 2.001m 5 6m 5)
+VCLK clk 0 DC 0 PULSE(0 5 1m 1n 1n .5m 2m)
+.model a1_adc adc_bridge(in_low=2.5 in_high=2.5)
+A_a1_adc [d0 clk 0 0] [a1_dd a1_dclk a1_dpre a1_dclr] a1_adc
+.model a1_dff d_dff(ic=0 clk_delay=1n set_delay=1n reset_delay=1n rise_delay=1n fall_delay=1n)
+A_a1 a1_dd a1_dclk a1_dpre a1_dclr a1_dq a1_dnq a1_dff
+.model a1_dac dac_bridge(out_low=0 out_high=5)
+A_a1_dac [a1_dq a1_dnq] [q0 q0bar] a1_dac
+.model a2_adc adc_bridge(in_low=2.5 in_high=2.5)
+A_a2_adc [d1 clk 0 0] [a2_dd a2_dclk a2_dpre a2_dclr] a2_adc
+.model a2_dff d_dff(ic=0 clk_delay=1n set_delay=1n reset_delay=1n rise_delay=1n fall_delay=1n)
+A_a2 a2_dd a2_dclk a2_dpre a2_dclr a2_dq a2_dnq a2_dff
+.model a2_dac dac_bridge(out_low=0 out_high=5)
+A_a2_dac [a2_dq a2_dnq] [q1 q1bar] a2_dac
+.tran 1u 6m
+.end"#
+                    .to_string(),
+            })
+            .expect("two-bit register transient should solve");
+        let times = register
+            .vectors
+            .iter()
+            .find(|vector| vector.name.eq_ignore_ascii_case("time"))
+            .expect("register time vector present");
+        let value_near = |name: &str, target: f64| {
+            let values = register
+                .vectors
+                .iter()
+                .find(|vector| vector.name.eq_ignore_ascii_case(name))
+                .unwrap_or_else(|| {
+                    panic!(
+                        "register vector {name} present; got {:?}; messages {:?}",
+                        register
+                            .vectors
+                            .iter()
+                            .map(|vector| &vector.name)
+                            .collect::<Vec<_>>(),
+                        register.messages
+                    )
+                });
+            let index = times
+                .real
+                .iter()
+                .enumerate()
+                .min_by(|(_, a), (_, b)| {
+                    (*a - target)
+                        .abs()
+                        .partial_cmp(&(*b - target).abs())
+                        .unwrap_or(std::cmp::Ordering::Equal)
+                })
+                .map(|(index, _)| index)
+                .expect("register has time samples");
+            values.real[index]
+        };
+        assert!(value_near("q0", 0.0011) > 4.0 && value_near("q1", 0.0011) < 1.0);
+        assert!(value_near("q0", 0.0031) > 4.0 && value_near("q1", 0.0031) > 4.0);
+        assert!(value_near("q0", 0.0051) < 1.0 && value_near("q1", 0.0051) > 4.0);
     }
 }

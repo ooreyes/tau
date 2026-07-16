@@ -44,6 +44,13 @@ describe("waveform display data", () => {
     expect(bounds.max).toBeCloseTo(3.24, 10);
   });
 
+  it("frames femto-scale solver residue as a steady engineering signal", () => {
+    const current = 3.3638e-3;
+    const bounds = waveformBounds([{ values: [current, current + 6.34e-13] }]);
+    expect(bounds.min).toBeCloseTo(current * 0.92, 11);
+    expect(bounds.max).toBeCloseTo(current * 1.08, 11);
+  });
+
   it("waveformBounds gives a flat zero signal a finite non-zero viewport", () => {
     const bounds = waveformBounds([{ values: [0, 0, 0] }]);
     expect(bounds.min).toBeLessThan(0);

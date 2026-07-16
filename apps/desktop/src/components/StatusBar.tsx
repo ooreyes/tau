@@ -25,7 +25,7 @@ export function StatusBar({
             ? "Net label — click a point, type a name"
             : "Select";
   const simulatorHint = tool.mode === "probe"
-    ? "Probe — click a wire to add; click a probe dot to remove"
+    ? "Probe — wire/pin plots voltage · component body plots current · click a probe to remove"
     : tool.mode === "label"
       ? "Node name — click a node or existing name; empty text removes it"
       : "Inspect — select a component to focus telemetry";

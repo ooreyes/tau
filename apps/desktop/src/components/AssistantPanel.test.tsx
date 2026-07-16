@@ -334,17 +334,18 @@ describe("AssistantPanel", () => {
     expect(screen.getByRole("combobox", { name: "Assistant model" }).textContent).toContain("Sonnet 5");
   });
 
-  it("keeps the model selector between new-chat and history, with close in the title row", () => {
+  it("keeps every chat action reachable in the title row and gives the model its own row", () => {
     const { container } = render(<AssistantPanel {...baseProps()} />);
     const toolbar = container.querySelector(".assistant-toolbar");
     const titleRow = container.querySelector(".assistant-title-row");
     expect(toolbar).not.toBeNull();
-    expect(Array.from(toolbar!.querySelectorAll("button")).map((button) => button.getAttribute("aria-label"))).toEqual([
+    expect(Array.from(titleRow!.querySelectorAll("button")).map((button) => button.getAttribute("aria-label"))).toEqual([
       "New chat",
-      "Assistant model",
       "Past chats",
+      "Delete current chat",
+      "Close assistant",
     ]);
-    expect(within(titleRow as HTMLElement).getByRole("button", { name: "Close assistant" })).toBeTruthy();
+    expect(within(toolbar as HTMLElement).getByRole("combobox", { name: "Assistant model" })).toBeTruthy();
   });
 
   it("uses the selected local preset without a cloud key and consumes its non-streaming reply", async () => {
@@ -985,7 +986,19 @@ describe("AssistantPanel conversation history", () => {
     fireEvent.click(screen.getByRole("button", { name: "Past chats" }));
     const menu = screen.getByRole("group", { name: "Past chats" });
     expect(within(menu).getByText("What does R1 do?")).toBeTruthy();
-    expect((within(menu).getByRole("button", { name: "Delete current chat" }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole("button", { name: "Delete current chat" }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("adds the opening prompt to Past chats immediately, before the provider finishes", () => {
+    saveAssistantApiKey("test-key");
+    render(<AssistantPanel {...baseProps({ memoryKey: "project-root" })} />);
+
+    fireEvent.change(screen.getByRole("textbox", { name: "Message the assistant" }), { target: { value: "Keep working on the register" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    fireEvent.click(screen.getByRole("button", { name: "Past chats" }));
+
+    expect(within(screen.getByRole("group", { name: "Past chats" })).getByText("Keep working on the register")).toBeTruthy();
+    expect(listConversations("project-root")).toHaveLength(1);
   });
 
   it("switches between two saved conversations via the past-chats menu without losing either transcript", async () => {
@@ -1065,7 +1078,7 @@ describe("AssistantPanel conversation history", () => {
     await sendAndResolve("What does C1 do?", "C1 sets the pole.");
 
     fireEvent.click(screen.getByRole("button", { name: "Past chats" }));
-    fireEvent.click(within(screen.getByRole("group", { name: "Past chats" })).getByRole("button", { name: "Delete current chat" }));
+    fireEvent.click(screen.getByRole("button", { name: "Delete current chat" }));
 
     expect(screen.getByText("R1 sets the gain.")).toBeTruthy();
     expect(screen.queryByText("C1 sets the pole.")).toBeNull();
@@ -1080,7 +1093,7 @@ describe("AssistantPanel conversation history", () => {
     await sendAndResolve("What does R1 do?", "R1 sets the gain.");
 
     fireEvent.click(screen.getByRole("button", { name: "Past chats" }));
-    fireEvent.click(within(screen.getByRole("group", { name: "Past chats" })).getByRole("button", { name: "Delete current chat" }));
+    fireEvent.click(screen.getByRole("button", { name: "Delete current chat" }));
 
     expect(screen.queryByText("What does R1 do?")).toBeNull();
     expect(screen.getByText(/Ask about this circuit/)).toBeTruthy();

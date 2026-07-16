@@ -140,6 +140,7 @@ export function Canvas({
   const setValue = useSchematic((s) => s.setValue);
   const probes = useSchematic((s) => s.probes);
   const addProbe = useSchematic((s) => s.addProbe);
+  const toggleCurrentProbe = useSchematic((s) => s.toggleCurrentProbe);
   const removeProbe = useSchematic((s) => s.removeProbe);
   const netLabels = useSchematic((s) => s.netLabels);
   const upsertNetLabel = useSchematic((s) => s.upsertNetLabel);
@@ -516,14 +517,30 @@ export function Canvas({
 
   // All selection/drag goes through one hit-test on the SVG, so z-order never
   // decides which component a click lands on (components don't intercept).
+  const handleProbeAction = (clientX: number, clientY: number): boolean => {
+    const point = snappedCursor(clientX, clientY);
+    const physicalNets = extractCircuit(components, wires, []).nets;
+    if (netAtPoint(physicalNets, wires, point)) {
+      addProbe(point.x, point.y);
+      return true;
+    }
+    // A node has voltage; a component body has branch current. This mirrors
+    // an oscilloscope probe vs clamp meter and avoids inventing a meaningless
+    // "node current" for a junction shared by several branches.
+    const world = screenToWorld(clientX, clientY);
+    const host = componentAt(components, world.x, world.y);
+    if (!host) return false;
+    toggleCurrentProbe(host.id);
+    return true;
+  };
+
   const handleSimulatorNodeAction = (clientX: number, clientY: number): boolean => {
     if (interactive || (tool.mode !== "probe" && tool.mode !== "label")) return false;
+    if (tool.mode === "probe") return handleProbeAction(clientX, clientY);
     const point = snappedCursor(clientX, clientY);
     const physicalNets = extractCircuit(components, wires, []).nets;
     if (!netAtPoint(physicalNets, wires, point)) return false;
-    if (tool.mode === "probe") {
-      addProbe(point.x, point.y);
-    } else if (!labelDraft) {
+    if (!labelDraft) {
       const existing = netLabels.find((label) =>
         netAtPoint(physicalNets, wires, label)?.id === netAtPoint(physicalNets, wires, point)?.id,
       );
@@ -640,8 +657,7 @@ export function Canvas({
       return;
     }
     if (tool.mode === "probe") {
-      const w = snappedCursor(e.clientX, e.clientY);
-      addProbe(w.x, w.y);
+      handleProbeAction(e.clientX, e.clientY);
       return;
     }
     if (tool.mode === "label") {

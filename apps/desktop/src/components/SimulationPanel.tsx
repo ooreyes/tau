@@ -150,6 +150,10 @@ const PLOT_HEIGHT = 210;
 // at 46px so the waveform retains useful vertical range. PlotAxes places the
 // vertical title and Y tick anchors at opposite sides of this gutter.
 const PLOT_PAD = 46;
+// Keep round line caps visibly inside the instrument frame. Mapping endpoints
+// exactly onto the clip boundary shaved half the stroke and made periodic
+// traces look cut off at both ends even though their samples were complete.
+const TRACE_EDGE_GUTTER = 2.5;
 
 export function SimulationPanel({
   circuitTitle,
@@ -1562,11 +1566,13 @@ function tracePath(
   const xSpan = xMax - xMin || 1;
   let path = "";
   let started = false;
-  for (const index of waveformEnvelopeIndices(times, trace.values, xMin, xMax, PLOT_WIDTH - PLOT_PAD * 2)) {
+  const innerWidth = PLOT_WIDTH - PLOT_PAD * 2;
+  const traceWidth = Math.max(0, innerWidth - TRACE_EDGE_GUTTER * 2);
+  for (const index of waveformEnvelopeIndices(times, trace.values, xMin, xMax, innerWidth)) {
     const value = trace.values[index];
     const time = times[index];
     if (!Number.isFinite(value) || !Number.isFinite(time)) continue;
-    const x = PLOT_PAD + ((time - xMin) / xSpan) * (PLOT_WIDTH - PLOT_PAD * 2);
+    const x = PLOT_PAD + TRACE_EDGE_GUTTER + ((time - xMin) / xSpan) * traceWidth;
     const y = height - PLOT_PAD - ((value - min) / (max - min || 1)) * (height - PLOT_PAD * 2);
     path += `${started ? "L" : "M"} ${x.toFixed(2)} ${y.toFixed(2)} `;
     started = true;
