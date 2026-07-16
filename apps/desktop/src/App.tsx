@@ -218,6 +218,8 @@ function App() {
   const [mode, setMode] = useState<"schematic" | "simulator">("schematic");
   const modeRef = useRef(mode);
   const [tabs, setTabs] = useState<OpenTab[]>([{ id: "tab-0", title: "untitled.asc", doc: null, history: emptyHistory() }]);
+  const tabsRef = useRef(tabs);
+  const projectRenameInFlightRef = useRef<Promise<string | null> | null>(null);
   const [activeId, setActiveId] = useState("tab-0");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [confirmClearOpen, setConfirmClearOpen] = useState(false);
@@ -240,6 +242,14 @@ function App() {
       saveAssistantOpen(next);
       return next;
     });
+  }, []);
+  const openAssistant = useCallback(() => {
+    setAssistantOpen(true);
+    saveAssistantOpen(true);
+    // Panel mounts asynchronously; give React a frame (or two) to paint.
+    window.setTimeout(() => {
+      document.querySelector<HTMLTextAreaElement>(".assistant-textarea")?.focus();
+    }, 50);
   }, []);
   const closeAssistant = useCallback(() => {
     setAssistantOpen(false);
@@ -288,6 +298,7 @@ function App() {
   const createSchematicInRoot = useProject((s) => s.createSchematicInRoot);
   const deleteProjectNode = useProject((s) => s.deleteNode);
   const moveProjectNodeInStore = useProject((s) => s.moveNode);
+  const renameProjectNodeInStore = useProject((s) => s.renameNode);
 
   const moveProjectNode = useCallback(async (sourcePath: string, destinationDirectoryPath: string) => {
     const movedRoot = await moveProjectNodeInStore(sourcePath, destinationDirectoryPath);
@@ -303,6 +314,37 @@ function App() {
     }));
     return movedRoot;
   }, [moveProjectNodeInStore]);
+
+  const renameProjectNode = useCallback(async (sourcePath: string, newName: string) => {
+    const renamedRoot = await renameProjectNodeInStore(sourcePath, newName);
+    if (!renamedRoot) return null;
+    const nextTabs = tabsRef.current.map((tab) => {
+      if (!tab.filePath) return tab;
+      const nextPath = remapMovedProjectPath(tab.filePath, sourcePath, renamedRoot);
+      if (nextPath === tab.filePath) return tab;
+      return { ...tab, filePath: nextPath, title: basename(nextPath) };
+    });
+    // Keep the imperative view current before this async callback resolves.
+    // A Cmd+S arriving in the same frame must follow the renamed path instead
+    // of recreating the old file while React is still scheduling the render.
+    tabsRef.current = nextTabs;
+    setTabs(nextTabs);
+    return renamedRoot;
+  }, [renameProjectNodeInStore]);
+
+  const requestProjectRename = useCallback((sourcePath: string, newName: string) => {
+    const request = renameProjectNode(sourcePath, newName);
+    projectRenameInFlightRef.current = request;
+    const clearRequest = () => {
+      if (projectRenameInFlightRef.current === request) projectRenameInFlightRef.current = null;
+    };
+    void request.then(clearRequest, clearRequest);
+    return request;
+  }, [renameProjectNode]);
+
+  useEffect(() => {
+    tabsRef.current = tabs;
+  }, [tabs]);
 
   const documentTitle = (tabs.find((tab) => tab.id === activeId) ?? tabs[0])?.title ?? "untitled.asc";
   const activeFilePath = (tabs.find((tab) => tab.id === activeId) ?? tabs[0])?.filePath ?? null;
@@ -956,7 +998,10 @@ function App() {
   }, [directives]);
 
   const saveActiveToProject = useCallback(async () => {
-    const tab = tabs.find((t) => t.id === activeId);
+    // Tab rename persists through the native filesystem bridge. Serialize saves
+    // behind that operation so rapid Enter -> Cmd+S cannot target a stale path.
+    await projectRenameInFlightRef.current;
+    const tab = tabsRef.current.find((t) => t.id === activeId);
     if (!tab) return;
     let filePath = tab.filePath ?? null;
     let createdForSave = false;
@@ -1009,7 +1054,7 @@ function App() {
       if (createdForSave) await deleteProjectNode(savePath);
       showNotice(error instanceof Error ? error.message : "Save failed.");
     }
-  }, [tabs, activeId, components, wires, probes, netLabels, directives, currentDocument, currentSignature, createSchematicInRoot, deleteProjectNode, writeSim, showNotice]);
+  }, [activeId, components, wires, probes, netLabels, directives, currentDocument, currentSignature, createSchematicInRoot, deleteProjectNode, writeSim, showNotice]);
 
   // Switch to an already-open tab, preserving each tab's content in memory.
   const switchTab = useCallback((id: string) => {
@@ -1316,6 +1361,7 @@ function App() {
             onOpenAscText={openAscFromProject}
             onNotice={showNotice}
             onMoveNode={moveProjectNode}
+            onRenameNode={requestProjectRename}
             maxWidth={explorerResponsiveMax}
           />
         )}
@@ -1328,9 +1374,7 @@ function App() {
                 onOpenFolder={() => void openProjectFolder()}
                 onCreateProject={() => void createProjectFolder("Schematics")}
                 onNewCircuit={() => void startNewCircuit()}
-                onAskTauri={() => {
-                  if (!assistantOpen) toggleAssistant();
-                }}
+                onAskTauri={openAssistant}
               />
             </main>
           </section>
@@ -1351,6 +1395,10 @@ function App() {
             mode={mode}
             onSelectTab={switchTab}
             onCloseTab={closeTab}
+            onRenameTab={(id, name) => {
+              const tab = tabs.find((candidate) => candidate.id === id);
+              if (tab?.filePath) void requestProjectRename(tab.filePath, name);
+            }}
             onNewCircuit={startNewCircuit}
             onHideSimulator={() => setMode("schematic")}
           />
@@ -1360,9 +1408,7 @@ function App() {
               <EmptyState
                 projectOpen
                 onNewCircuit={() => void startNewCircuit()}
-                onAskTauri={() => {
-                  if (!assistantOpen) toggleAssistant();
-                }}
+                onAskTauri={openAssistant}
               />
             )}
           </main>

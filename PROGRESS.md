@@ -8,17 +8,53 @@
      `git log --oneline -8`, recover/finish/revert that unit FIRST, then go on.
      ─────────────────────────────────────────────────────────────────────── -->
 ## ⏱ HEARTBEAT
-- **Headline metric:** 1834 reviewed-tree tests green · corpus 82/82 import · 82/82 op-converge · 79/82 warning-clean
-- **Run started (UTC):** 2026-07-15T23:46Z
-- **Synced to origin:** auto/ltspice-parity @ d76208e.
-- **Claimed unit:** Project-first workspace, durable ChatGPT-grade chats, contextual prompts, Tauri branding,
-  dirty indicators, and automatic live-app refresh.
+- **Headline metric:** 1842 reviewed-tree tests green · corpus 82/82 import · 82/82 op-converge · 79/82 warning-clean
+- **Run started (UTC):** 2026-07-16T02:45Z
+- **Synced to origin:** auto/ltspice-parity @ 581a492.
+- **Claimed unit:** Release-blocking explorer rename/context actions, save/rename identity, plot-axis precision,
+  and native folder drag/drop.
 - **Status:** DONE
-- **Last completed sub-step:** Packaged macOS QA proved the folder gate and native create flow; Chrome proved
-  automatic full-page recovery, and the final ghost scratchpad tab was removed from project tab lists.
-- **Plan:** Completed — recovered and finished both checkpointed slices, integrated project gating/branding,
-  and verified the result through unit, build, native ngspice, Chrome, and packaged-app gates.
-- **Next step:** Resume the highest-leverage unfinished acceptance-corpus/parity item.
+- **Last completed sub-step:** Packaged Tau.app moved a real renamed ASC into a nested folder through the
+  pointer drag path; disk verification proved the destination exists and the source is gone.
+- **Plan:** Reproduce each bug in focused tests, repair file operations and plot axes, then verify the
+  unsigned packaged macOS app through Computer Use before consolidating/pushing the checkpoint chain.
+- **Next step:** Consolidate the recovered durability checkpoints into one intentional commit and push.
+
+---
+
+## 2026-07-16T03:21Z — auto/ltspice-parity — Release file workflows and precision axes
+
+### What I did
+- Replaced destructive explorer double-click behavior with safe inline rename
+  and a shadcn context menu for path copy, relative-path copy, rename, confirmed
+  delete, and directory creation actions.
+- Made explorer/tab rename preserve extensions and open-tab identity, serialized
+  immediate Save behind async native rename, and stopped session-only probe dots
+  from blocking otherwise lossless ASC saves.
+- Increased plot-axis padding/title spacing and made tick precision respond to
+  the visible zoom step, retaining distinct labels down to deep sub-unit ranges.
+- Replaced WKWebView's incomplete HTML drag lifecycle with a pointer-based move
+  gesture while retaining the traversal/collision-safe native filesystem action.
+
+### Files
+- `apps/desktop/src/App.tsx`, `App.css`, `App.workspace.test.tsx`
+- `apps/desktop/src/components/{ShellPanels,PlotAxes,SimulationPanel}.tsx` and tests
+- `apps/desktop/src/{project/types,simulation/axisTicks,store/useProject}.ts` and tests
+- `FEATURE_PARITY.md`, `PROGRESS.md`
+
+### Tests and QA
+- Desktop typecheck and full Vitest: 1842 passed / 6 skipped.
+- Production build and Rust fmt/Clippy `-D warnings`/tests: pass; 19 Rust tests
+  passed / 1 ignored, and the explicit bundled-real-ngspice smoke passed.
+- Unsigned packaged `Tau.app`: context-menu and inline rename inspected through
+  Computer Use; a real `/tmp/tau-release-qa/driver-renamed.asc` was dragged into
+  `LED/`, Tau reported success, and shell verification proved the disk move.
+
+### Parity items
+- §1 native project explorer; waveform viewer tick axes; release usability.
+
+### Next step
+- Run the final DMG/signing readiness pass from this clean pushed lineage.
 
 ---
 

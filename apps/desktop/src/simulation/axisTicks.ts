@@ -172,13 +172,32 @@ export function fractionToValue(frac: number, min: number, max: number, scale: A
  * with every other numeric readout in the app. Angular/logarithmic units
  * (dB, °, %) are never SI-scaled — "40dB" must never read "40µdB".
  */
-export function formatTickLabel(value: number, unit = ""): string {
+export function formatTickLabel(value: number, unit = "", significantDigits = 3): string {
   const v = cleanFloat(value);
   if (NO_SI_PREFIX_UNITS.has(unit)) {
-    const rounded = Number(v.toPrecision(4));
+    const rounded = Number(v.toPrecision(Math.max(3, significantDigits)));
     return unit === "°" ? `${rounded}°` : `${rounded} ${unit}`;
   }
-  return formatEngineering(v, unit, 3);
+  return formatEngineering(v, unit, significantDigits);
+}
+
+/** Choose enough significant digits to distinguish adjacent visible ticks.
+ * Full-fit plots stay compact at three digits; deep zoom progressively exposes
+ * the additional decimals the viewport actually resolves. */
+function tickSignificantDigits(values: readonly number[]): number {
+  if (values.length < 2) return 3;
+  let minStep = Number.POSITIVE_INFINITY;
+  let maxAbs = 0;
+  for (let index = 0; index < values.length; index += 1) {
+    maxAbs = Math.max(maxAbs, Math.abs(values[index]));
+    if (index > 0) {
+      const step = Math.abs(values[index] - values[index - 1]);
+      if (step > 0) minStep = Math.min(minStep, step);
+    }
+  }
+  if (!Number.isFinite(minStep) || minStep === 0 || maxAbs === 0) return 3;
+  const digits = Math.floor(Math.log10(maxAbs)) - Math.floor(Math.log10(minStep)) + 1;
+  return Math.max(3, Math.min(9, digits));
 }
 
 export interface ComputeAxisTicksOptions {
@@ -201,6 +220,7 @@ export function computeAxisTicks(min: number, max: number, opts: ComputeAxisTick
   if (!Number.isFinite(min) || !Number.isFinite(max)) return [];
 
   const raw = scale === "log" ? logTicks(min, max, targetCount) : niceTicks(min, max, targetCount);
+  const significantDigits = tickSignificantDigits(raw);
   const seen = new Set<number>();
   const ticks: AxisTick[] = [];
   const EPS = 1e-6;
@@ -213,7 +233,7 @@ export function computeAxisTicks(min: number, max: number, opts: ComputeAxisTick
     ticks.push({
       value,
       frac: Math.min(1, Math.max(0, frac)),
-      label: formatTickLabel(value, unit),
+      label: formatTickLabel(value, unit, significantDigits),
       isZero: Math.abs(value) < 1e-15 * Math.max(1, Math.abs(max - min)),
     });
   }

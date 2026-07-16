@@ -52,6 +52,13 @@ function ensureSchematicExtension(name: string): string {
   return `${trimmed || "untitled"}.asc`;
 }
 
+function preserveSchematicExtension(name: string, originalName: string): string {
+  const trimmed = name.trim();
+  if (/\.(asc|sim|tau\.json)$/i.test(trimmed)) return trimmed;
+  const originalExtension = originalName.match(/(\.tau\.json|\.asc|\.sim)$/i)?.[1] ?? ".asc";
+  return `${trimmed || "untitled"}${originalExtension}`;
+}
+
 function isSafeLeafName(name: string): boolean {
   const trimmed = name.trim();
   return trimmed !== "" && trimmed !== "." && trimmed !== ".." && !/[\\/]/.test(trimmed);
@@ -447,24 +454,58 @@ export const useProject = create<ProjectStore>((set, get) => ({
   },
 
   renameNode: async (path, newName) => {
-    const parent = path.replace(/\\/g, "/").replace(/\/[^/]+$/, "");
-    const to = joinPath(parent, newName.trim());
-    if (to === path) return path;
+    const { rootPath, tree } = get();
+    const node = flattenTree(tree).find((candidate) => normalizedPath(candidate.path) === normalizedPath(path));
+    if (!node || !rootPath || !isPathInside(path, rootPath)) {
+      set({ error: "Rename must stay inside the open Schematics folder." });
+      return null;
+    }
+    const requestedName = newName.trim();
+    if (!isSafeLeafName(requestedName)) {
+      set({ error: "Names cannot be empty or contain folder paths." });
+      return null;
+    }
+    const safeName = node.kind === "file"
+      ? preserveSchematicExtension(requestedName, node.name)
+      : requestedName;
+    const parent = projectParentPath(path);
+    const to = joinPath(parent, safeName);
+    if (normalizedPath(to) === normalizedPath(path)) {
+      set({ error: null });
+      return path;
+    }
     try {
       if (isWorkspacePath(path)) {
-        const files = { ...get().workspaceFiles };
-        const src = files[path];
-        if (!src) return null;
-        delete files[path];
-        files[to] = { ...src, path: to, name: newName.trim() };
-        set({ workspaceFiles: files, tree: rebuildWorkspaceTree(files) });
+        const current = get().workspaceFiles;
+        const moving = Object.entries(current).filter(([candidate]) => isPathInside(candidate, path));
+        if (moving.length === 0) throw new Error("The selected item no longer exists.");
+        if (Object.keys(current).some((candidate) => !isPathInside(candidate, path) && isPathInside(candidate, to))) {
+          throw new Error(`“${safeName}” already exists in that folder.`);
+        }
+        const files = { ...current };
+        for (const [candidate] of moving) delete files[candidate];
+        for (const [candidate, file] of moving) {
+          const nextPath = `${normalizedPath(to)}${normalizedPath(candidate).slice(normalizedPath(path).length)}`;
+          files[nextPath] = { ...file, path: nextPath, name: basename(nextPath) };
+        }
+        set((state) => ({
+          workspaceFiles: files,
+          tree: rebuildWorkspaceTree(files),
+          expanded: state.expanded.map((candidate) => remapMovedProjectPath(candidate, path, to)),
+          error: null,
+        }));
         return to;
       }
+      if (await fs.pathExists(to)) throw new Error(`“${safeName}” already exists in that folder.`);
       await fs.renamePath(path, to);
-      await get().refresh();
+      const refreshed = await get().refresh();
+      set((state) => ({
+        expanded: state.expanded.map((candidate) => remapMovedProjectPath(candidate, path, to)),
+        ...(refreshed ? { error: null } : {}),
+      }));
       return to;
     } catch (error) {
-      set({ error: error instanceof Error ? error.message : "Could not rename." });
+      set({ error: failureMessage(error, "Could not rename.") });
       return null;
     }
   },

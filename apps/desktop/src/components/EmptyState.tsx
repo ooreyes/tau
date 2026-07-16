@@ -22,7 +22,7 @@ export function EmptyState({
       <div className="empty-panel">
         <div className="empty-kicker">
           <TauriMascot className="tauri-empty-mascot" aria-hidden="true" />
-          Meet Tauri
+          Meet <span className="empty-brand">Tauri</span>
         </div>
         <h1>{projectOpen ? "Create or open a schematic" : "Open a project folder"}</h1>
         {projectOpen ? (
@@ -43,8 +43,9 @@ export function EmptyState({
         ) : (
           <>
             <p>
-              Like VS Code, Tau works inside a folder. Open an existing
-              project or create one before viewing, editing, or generating schematics.
+              Choose a Schematics folder in Explorer, import an LTspice .asc, or open
+              Assistant and describe the circuit. Tau lays out parts, routes wires,
+              and can run the analysis after you confirm.
             </p>
             <div className="empty-state-actions">
               <Button type="button" size="sm" onClick={onOpenFolder}>

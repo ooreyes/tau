@@ -282,6 +282,16 @@ Status legend: ✅ done · 🟡 partial · ⬜ not started
   webview filesystem plugin. Real temporary-disk tests create nested folders,
   create ASC files inside them, and move both files and folders into/out of the
   new destinations while preserving bytes.
+  **Release file-workflow follow-up (2026-07-16):** double-click is strictly
+  open/inline-rename and can no longer invoke deletion. A shadcn context menu
+  exposes Copy Path, Copy Relative Path, Rename, and confirmed Delete (plus New
+  File/New Folder on directories). Explorer and tab renames preserve schematic
+  extensions, remap every affected open tab, and serialize an immediate Cmd-S
+  behind the native rename so the old path cannot be recreated. Tau probe dots
+  are session annotations and no longer block an otherwise lossless `.asc`
+  save. Native WKWebView drag uses a pointer gesture instead of its unreliable
+  HTML drag lifecycle; packaged-app QA moved a real renamed ASC into a folder
+  and verified the source disappeared and destination bytes persisted on disk.
 
 ## 2. Schematic capture
 - ✅ Place / move / rotate / mirror / delete components — `Canvas.tsx`, `store/useSchematic.ts` (mirror = horizontal flip, applied before rotation; Ctrl+E)
@@ -1102,7 +1112,11 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   the user's current X window and fits visible Y. Show Full Run remains a
   distinct action. Flat, negative-only, tiny-range, startup-outlier, 100 kHz / 7
   ms density, and dense-square-wave regressions keep padding useful without
-  inventing a giant zero-based area or an opaque 700-cycle block.
+  inventing a giant zero-based area or an opaque 700-cycle block. **Axis polish
+  follow-up (2026-07-16):** plot padding and title offsets now give unit labels
+  breathing room, while visible tick spacing selects 3–9 significant digits so
+  deep zoom produces distinct, numerically accurate labels instead of repeated
+  rounded values.
 - 🟡 `.step` family-of-curves overlay — **transient + AC + DC families landed**.
   Transient: `StepPlot` in `SimulationPanel` (the **STEP** tab re-runs the sweep
   and draws the probed signal across all members in a color ramp; legend lists

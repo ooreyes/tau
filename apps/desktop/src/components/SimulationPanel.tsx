@@ -146,7 +146,9 @@ interface SimulationPanelProps {
 
 const PLOT_WIDTH = 340;
 const PLOT_HEIGHT = 210;
-const PLOT_PAD = 40;
+// Labels and axis titles need separate visual bands; 46 keeps a readable
+// gutter at the 340px card width without sacrificing the trace viewport.
+const PLOT_PAD = 46;
 
 export function SimulationPanel({
   circuitTitle,

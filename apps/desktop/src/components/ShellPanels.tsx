@@ -1,16 +1,14 @@
-import { useEffect, useRef, useState, type ChangeEvent, type DragEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ChangeEvent, type DragEvent, type PointerEvent, type ReactNode } from "react";
 import {
   ChevronRight,
-  CopyMinus,
+  Copy,
   File,
+  FilePlus,
   FolderOpen,
   Folder,
-  Search,
-  FilePlus,
-  FileInput,
-  FolderInput,
   FolderPlus,
-  RefreshCw,
+  Pencil,
+  Search,
   Trash2,
   Eraser,
   MousePointer2,
@@ -22,6 +20,14 @@ import {
   CircuitBoard,
   Activity,
 } from "lucide-react";
+import {
+  VscodeCollapseAllIcon,
+  VscodeImportFileIcon,
+  VscodeImportFolderIcon,
+  VscodeNewFileIcon,
+  VscodeNewFolderIcon,
+  VscodeRefreshIcon,
+} from "./VscodeExplorerIcons";
 import { CATALOG_BY_KIND } from "../schematic/catalog";
 import { ComponentSymbol } from "../schematic/symbols";
 import type { SchematicComponent, SchematicWire } from "../schematic/types";
@@ -34,6 +40,14 @@ import { Input } from "@/components/ui/input";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Dialog, DialogContent, DialogHeader, DialogFooter, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuShortcut,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu";
 import { useSchematic } from "../store/useSchematic";
 import { useProject } from "../store/useProject";
 import { basename, isAscFile, type ProjectNode } from "../project/types";
@@ -163,6 +177,11 @@ export type MoveProjectNode = (
   destinationDirectoryPath: string,
 ) => Promise<string | null>;
 
+export type RenameProjectNode = (
+  sourcePath: string,
+  newName: string,
+) => Promise<string | null>;
+
 function normalizedExplorerPath(path: string): string {
   return path.replace(/\\/g, "/").replace(/\/+$/, "");
 }
@@ -171,6 +190,30 @@ function explorerParentPath(path: string): string {
   const normalized = normalizedExplorerPath(path);
   const separator = normalized.lastIndexOf("/");
   return separator > 0 ? normalized.slice(0, separator) : "";
+}
+
+function explorerRelativePath(rootPath: string, path: string): string {
+  const root = normalizedExplorerPath(rootPath);
+  const target = normalizedExplorerPath(path);
+  if (target === root) return ".";
+  return target.startsWith(`${root}/`) ? target.slice(root.length + 1) : target;
+}
+
+async function copyExplorerText(text: string): Promise<void> {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+  const input = document.createElement("textarea");
+  input.value = text;
+  input.setAttribute("readonly", "");
+  input.style.position = "fixed";
+  input.style.opacity = "0";
+  document.body.appendChild(input);
+  input.select();
+  const copied = document.execCommand?.("copy") ?? false;
+  input.remove();
+  if (!copied) throw new Error("Clipboard access is unavailable.");
 }
 
 function canMoveProjectNode(sourcePath: string, destinationDirectoryPath: string): boolean {
@@ -186,6 +229,22 @@ function canMoveProjectNode(sourcePath: string, destinationDirectoryPath: string
 }
 
 const PROJECT_NODE_DRAG_TYPE = "application/x-tau-project-node";
+
+function dragPayloadPath(dataTransfer: DataTransfer | null | undefined): string {
+  if (!dataTransfer) return "";
+  // getData() is empty during dragover in Chromium/WebKit; types stay visible.
+  try {
+    return dataTransfer.getData(PROJECT_NODE_DRAG_TYPE) || dataTransfer.getData("text/plain") || "";
+  } catch {
+    return "";
+  }
+}
+
+function dataTransferHasProjectNode(dataTransfer: DataTransfer | null | undefined): boolean {
+  if (!dataTransfer) return false;
+  const types = Array.from(dataTransfer.types ?? []);
+  return types.includes(PROJECT_NODE_DRAG_TYPE) || types.includes("text/plain");
+}
 
 function findProjectNode(nodes: readonly ProjectNode[], path: string): ProjectNode | null {
   const normalized = normalizedExplorerPath(path);
@@ -203,6 +262,7 @@ export function ExplorerPanel({
   onOpenAscText,
   onNotice,
   onMoveNode,
+  onRenameNode,
   maxWidth,
 }: {
   activeFilePath: string | null;
@@ -211,6 +271,8 @@ export function ExplorerPanel({
   onNotice: (message: string) => void;
   /** Atomic project-store move action; optional only for isolated panel hosts. */
   onMoveNode?: MoveProjectNode;
+  /** Rename action supplied by App so open tabs follow the new disk path. */
+  onRenameNode?: RenameProjectNode;
   /** Responsive ceiling supplied by the shell after reserving the editor and
    *  whichever right-side panel is visible. */
   maxWidth?: number;
@@ -231,6 +293,7 @@ export function ExplorerPanel({
   const createSchematicFile = useProject((s) => s.createSchematicFile);
   const importAscFile = useProject((s) => s.importAscFile);
   const deleteNode = useProject((s) => s.deleteNode);
+  const renameNodeInStore = useProject((s) => s.renameNode);
   const readSim = useProject((s) => s.readSim);
   const ascInputRef = useRef<HTMLInputElement | null>(null);
   const createInputRef = useRef<HTMLInputElement | null>(null);
@@ -239,11 +302,20 @@ export function ExplorerPanel({
     parentPath: string;
     name: string;
   } | null>(null);
+  const [renameDraft, setRenameDraft] = useState<{ node: ProjectNode; name: string } | null>(null);
   const [draggedNode, setDraggedNode] = useState<ProjectNode | null>(null);
   // Drag events can reach dragover/drop before React commits setDraggedNode.
   // Keep a synchronous source and also write the path into dataTransfer so a
   // rerender (for example, creating the destination folder) cannot lose it.
   const draggedNodeRef = useRef<ProjectNode | null>(null);
+  const pointerDragRef = useRef<{
+    node: ProjectNode;
+    pointerId: number;
+    startX: number;
+    startY: number;
+    dragging: boolean;
+  } | null>(null);
+  const suppressClickPathRef = useRef<string | null>(null);
   const [dropTargetPath, setDropTargetPath] = useState<string | null>(null);
   const explorerWidthConfig = {
     ...EXPLORER_PANEL_WIDTH,
@@ -309,6 +381,29 @@ export function ExplorerPanel({
     }
   };
 
+  const commitRenameDraft = async () => {
+    if (!renameDraft) return;
+    const draft = renameDraft;
+    const name = draft.name.trim();
+    if (!name) return;
+    setRenameDraft(null);
+    const rename = onRenameNode ?? renameNodeInStore;
+    const renamedPath = await rename(draft.node.path, name);
+    if (renamedPath) onNotice(`Renamed to ${basename(renamedPath)}`);
+    else onNotice(useProject.getState().error ?? `Could not rename ${draft.node.name}.`);
+  };
+
+  const copyNodePath = async (path: string, relative: boolean) => {
+    if (!rootPath) return;
+    const value = relative ? explorerRelativePath(rootPath, path) : path;
+    try {
+      await copyExplorerText(value);
+      onNotice(relative ? "Copied relative path." : "Copied path.");
+    } catch (error) {
+      onNotice(error instanceof Error ? error.message : "Could not copy path.");
+    }
+  };
+
   const importAscFromInput = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.currentTarget.files?.[0];
     event.currentTarget.value = "";
@@ -333,13 +428,16 @@ export function ExplorerPanel({
     }
   };
 
-  const beginNodeDrag = (event: DragEvent<HTMLButtonElement>, node: ProjectNode) => {
+  const beginNodeDrag = (event: DragEvent<HTMLElement>, node: ProjectNode) => {
     draggedNodeRef.current = node;
     setDraggedNode(node);
     setDropTargetPath(null);
     event.dataTransfer.effectAllowed = "move";
+    // text/plain is required for WKWebView/Tauri to keep the drag alive;
+    // the custom type is the authoritative payload on drop.
     event.dataTransfer.setData(PROJECT_NODE_DRAG_TYPE, node.path);
     event.dataTransfer.setData("text/plain", node.path);
+    event.stopPropagation();
   };
 
   const endNodeDrag = () => {
@@ -348,15 +446,75 @@ export function ExplorerPanel({
     setDropTargetPath(null);
   };
 
+  const pointerDestination = (event: PointerEvent<HTMLElement>): string | null => {
+    const target = document.elementFromPoint(event.clientX, event.clientY)
+      ?.closest<HTMLElement>("[data-project-dir-path]");
+    return target?.dataset.projectDirPath ?? null;
+  };
+
+  const beginPointerDrag = (event: PointerEvent<HTMLElement>, node: ProjectNode) => {
+    if (event.button !== 0) return;
+    pointerDragRef.current = {
+      node,
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      dragging: false,
+    };
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+  };
+
+  const updatePointerDrag = (event: PointerEvent<HTMLElement>) => {
+    const drag = pointerDragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    if (!drag.dragging && Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY) >= 5) {
+      drag.dragging = true;
+      draggedNodeRef.current = drag.node;
+      setDraggedNode(drag.node);
+    }
+    if (!drag.dragging) return;
+    event.preventDefault();
+    const destination = pointerDestination(event);
+    setDropTargetPath(destination && canMoveProjectNode(drag.node.path, destination) ? destination : null);
+  };
+
+  const finishPointerDrag = (event: PointerEvent<HTMLElement>) => {
+    const drag = pointerDragRef.current;
+    pointerDragRef.current = null;
+    if (!drag || drag.pointerId !== event.pointerId || !drag.dragging) return;
+    event.preventDefault();
+    event.stopPropagation();
+    suppressClickPathRef.current = drag.node.path;
+    window.setTimeout(() => {
+      if (suppressClickPathRef.current === drag.node.path) suppressClickPathRef.current = null;
+    }, 0);
+    const destination = pointerDestination(event);
+    if (destination && canMoveProjectNode(drag.node.path, destination)) {
+      void moveDraggedNode(destination);
+    } else {
+      endNodeDrag();
+    }
+  };
+
+  const cancelPointerDrag = () => {
+    pointerDragRef.current = null;
+    endNodeDrag();
+  };
+
+  const consumeSuppressedClick = (path: string): boolean => {
+    if (suppressClickPathRef.current !== path) return false;
+    suppressClickPathRef.current = null;
+    return true;
+  };
+
   const clearDropTarget = () => setDropTargetPath(null);
 
   const dragSource = (event?: DragEvent<HTMLElement>): ProjectNode | null => {
-    const payloadPath = event?.dataTransfer.getData(PROJECT_NODE_DRAG_TYPE)
-      || event?.dataTransfer.getData("text/plain")
-      || "";
-    return (payloadPath ? findProjectNode(tree, payloadPath) : null)
-      ?? draggedNodeRef.current
-      ?? draggedNode;
+    // Prefer the live ref during dragover (getData is empty until drop).
+    const fromRef = draggedNodeRef.current ?? draggedNode;
+    if (fromRef) return fromRef;
+    const payloadPath = dragPayloadPath(event?.dataTransfer);
+    return payloadPath ? findProjectNode(tree, payloadPath) : null;
   };
 
   const moveDraggedNode = async (destinationDirectoryPath: string, event?: DragEvent<HTMLElement>) => {
@@ -381,8 +539,16 @@ export function ExplorerPanel({
 
   const markDropTarget = (event: DragEvent<HTMLElement>, destinationDirectoryPath: string) => {
     const source = dragSource(event);
-    if (!source || !canMoveProjectNode(source.path, destinationDirectoryPath)) {
+    // During dragover, getData is empty — accept if the MIME type is present
+    // or we already know the dragged node from dragstart.
+    const looksLikeInternalDrag = Boolean(source) || dataTransferHasProjectNode(event.dataTransfer);
+    if (!looksLikeInternalDrag) {
       event.dataTransfer.dropEffect = "none";
+      return;
+    }
+    if (source && !canMoveProjectNode(source.path, destinationDirectoryPath)) {
+      event.dataTransfer.dropEffect = "none";
+      setDropTargetPath(null);
       return;
     }
     event.preventDefault();
@@ -406,7 +572,7 @@ export function ExplorerPanel({
                 if (ok) onNotice("Opened Schematics folder.");
               }}
             >
-              <FolderInput size={15} strokeWidth={1.7} />
+              <VscodeImportFolderIcon />
             </button>
             {capability === "tauri" && (
               <button
@@ -418,7 +584,7 @@ export function ExplorerPanel({
                   if (ok) onNotice("Created Schematics folder.");
                 }}
               >
-                <FolderPlus size={15} strokeWidth={1.7} />
+                <VscodeNewFolderIcon />
               </button>
             )}
             <button
@@ -427,7 +593,7 @@ export function ExplorerPanel({
               aria-label="Import LTspice schematic"
               onClick={() => ascInputRef.current?.click()}
             >
-              <FileInput size={15} strokeWidth={1.7} />
+              <VscodeImportFileIcon />
             </button>
           </div>
         </div>
@@ -461,7 +627,7 @@ export function ExplorerPanel({
               setCreateDraft({ kind: "file", parentPath: rootPath, name: "untitled.asc" });
             }}
           >
-            <FilePlus size={15} strokeWidth={1.7} />
+            <VscodeNewFileIcon />
           </button>
           <button
             type="button"
@@ -472,7 +638,7 @@ export function ExplorerPanel({
               setCreateDraft({ kind: "folder", parentPath: rootPath, name: "New Folder" });
             }}
           >
-            <FolderPlus size={15} strokeWidth={1.7} />
+            <VscodeNewFolderIcon />
           </button>
           <button
             type="button"
@@ -480,7 +646,7 @@ export function ExplorerPanel({
             aria-label="Import LTspice schematic"
             onClick={() => ascInputRef.current?.click()}
           >
-            <FileInput size={15} strokeWidth={1.7} />
+            <VscodeImportFileIcon />
           </button>
           <button
             type="button"
@@ -495,7 +661,7 @@ export function ExplorerPanel({
               if (ok) onNotice("Opened project folder.");
             }}
           >
-            <FolderInput size={15} strokeWidth={1.7} />
+            <VscodeImportFolderIcon />
           </button>
           <button
             type="button"
@@ -506,7 +672,7 @@ export function ExplorerPanel({
               if (ok) onNotice("Explorer refreshed.");
             }}
           >
-            <RefreshCw size={15} strokeWidth={1.7} />
+            <VscodeRefreshIcon />
           </button>
           <button
             type="button"
@@ -514,7 +680,7 @@ export function ExplorerPanel({
             aria-label="Collapse folders in explorer"
             onClick={collapseAll}
           >
-            <CopyMinus size={15} strokeWidth={1.7} />
+            <VscodeCollapseAllIcon />
           </button>
         </div>
       </div>
@@ -534,6 +700,7 @@ export function ExplorerPanel({
 
       <div
         className="tree-list"
+        data-project-dir-path={rootPath}
         data-drop-target={dropTargetPath === rootPath || undefined}
         onDragOver={(event) => markDropTarget(event, rootPath)}
         onDragLeave={(event) => {
@@ -605,6 +772,7 @@ export function ExplorerPanel({
           <ProjectTree
             nodes={tree}
             depth={0}
+            parentDirectoryPath={rootPath}
             expanded={expanded}
             activeFilePath={activeFilePath}
             onToggle={toggleExpanded}
@@ -620,6 +788,12 @@ export function ExplorerPanel({
               await deleteNode(path);
               onNotice(`Deleted ${name}`);
             }}
+            renameDraft={renameDraft}
+            onBeginRename={(node) => setRenameDraft({ node, name: node.name })}
+            onRenameDraftChange={(name) => setRenameDraft((draft) => draft ? { ...draft, name } : null)}
+            onCommitRename={() => { void commitRenameDraft(); }}
+            onCancelRename={() => setRenameDraft(null)}
+            onCopyPath={(path, relative) => { void copyNodePath(path, relative); }}
             draggedPath={draggedNode?.path ?? null}
             dropTargetPath={dropTargetPath}
             onDragStart={beginNodeDrag}
@@ -627,6 +801,11 @@ export function ExplorerPanel({
             onDragOverFolder={markDropTarget}
             onDragLeaveFolder={clearDropTarget}
             onDropFolder={(event, destination) => { void moveDraggedNode(destination, event); }}
+            onPointerDragStart={beginPointerDrag}
+            onPointerDragMove={updatePointerDrag}
+            onPointerDragEnd={finishPointerDrag}
+            onPointerDragCancel={cancelPointerDrag}
+            onConsumeSuppressedClick={consumeSuppressedClick}
           />
         )}
       </div>
@@ -637,9 +816,58 @@ export function ExplorerPanel({
   );
 }
 
+function ProjectNodeContextActions({
+  node,
+  onNewFolder,
+  onNewFile,
+  onBeginRename,
+  onCopyPath,
+  onDelete,
+}: {
+  node: ProjectNode;
+  onNewFolder: (parent: string) => void;
+  onNewFile: (parent: string) => void;
+  onBeginRename: (node: ProjectNode) => void;
+  onCopyPath: (path: string, relative: boolean) => void;
+  onDelete: (path: string, name: string) => void;
+}) {
+  return (
+    <ContextMenuContent className="explorer-context-menu">
+      {node.kind === "dir" && (
+        <>
+          <ContextMenuItem onSelect={() => onNewFile(node.path)}>
+            <FilePlus aria-hidden="true" /> New File…
+          </ContextMenuItem>
+          <ContextMenuItem onSelect={() => onNewFolder(node.path)}>
+            <FolderPlus aria-hidden="true" /> New Folder…
+          </ContextMenuItem>
+          <ContextMenuSeparator />
+        </>
+      )}
+      <ContextMenuItem onSelect={() => onCopyPath(node.path, false)}>
+        <Copy aria-hidden="true" /> Copy Path
+        <ContextMenuShortcut>⌥⌘C</ContextMenuShortcut>
+      </ContextMenuItem>
+      <ContextMenuItem onSelect={() => onCopyPath(node.path, true)}>
+        <Copy aria-hidden="true" /> Copy Relative Path
+        <ContextMenuShortcut>⌥⇧⌘C</ContextMenuShortcut>
+      </ContextMenuItem>
+      <ContextMenuSeparator />
+      <ContextMenuItem onSelect={() => onBeginRename(node)}>
+        <Pencil aria-hidden="true" /> Rename…
+        <ContextMenuShortcut>↩</ContextMenuShortcut>
+      </ContextMenuItem>
+      <ContextMenuItem variant="destructive" onSelect={() => onDelete(node.path, node.name)}>
+        <Trash2 aria-hidden="true" /> Delete
+      </ContextMenuItem>
+    </ContextMenuContent>
+  );
+}
+
 function ProjectTree({
   nodes,
   depth,
+  parentDirectoryPath,
   expanded,
   activeFilePath,
   onToggle,
@@ -647,6 +875,12 @@ function ProjectTree({
   onNewFolder,
   onNewFile,
   onDelete,
+  renameDraft,
+  onBeginRename,
+  onRenameDraftChange,
+  onCommitRename,
+  onCancelRename,
+  onCopyPath,
   draggedPath,
   dropTargetPath,
   onDragStart,
@@ -654,9 +888,16 @@ function ProjectTree({
   onDragOverFolder,
   onDragLeaveFolder,
   onDropFolder,
+  onPointerDragStart,
+  onPointerDragMove,
+  onPointerDragEnd,
+  onPointerDragCancel,
+  onConsumeSuppressedClick,
 }: {
   nodes: ProjectNode[];
   depth: number;
+  /** Directory that owns these nodes — used when dropping onto a file row. */
+  parentDirectoryPath: string;
   expanded: string[];
   activeFilePath: string | null;
   onToggle: (path: string) => void;
@@ -664,63 +905,123 @@ function ProjectTree({
   onNewFolder: (parent: string) => void;
   onNewFile: (parent: string) => void;
   onDelete: (path: string, name: string) => void;
+  renameDraft: { node: ProjectNode; name: string } | null;
+  onBeginRename: (node: ProjectNode) => void;
+  onRenameDraftChange: (name: string) => void;
+  onCommitRename: () => void;
+  onCancelRename: () => void;
+  onCopyPath: (path: string, relative: boolean) => void;
   draggedPath: string | null;
   dropTargetPath: string | null;
-  onDragStart: (event: DragEvent<HTMLButtonElement>, node: ProjectNode) => void;
+  onDragStart: (event: DragEvent<HTMLElement>, node: ProjectNode) => void;
   onDragEnd: () => void;
   onDragOverFolder: (event: DragEvent<HTMLElement>, destinationDirectoryPath: string) => void;
   onDragLeaveFolder: () => void;
   onDropFolder: (event: DragEvent<HTMLElement>, destinationDirectoryPath: string) => void;
+  onPointerDragStart: (event: PointerEvent<HTMLElement>, node: ProjectNode) => void;
+  onPointerDragMove: (event: PointerEvent<HTMLElement>) => void;
+  onPointerDragEnd: (event: PointerEvent<HTMLElement>) => void;
+  onPointerDragCancel: () => void;
+  onConsumeSuppressedClick: (path: string) => boolean;
 }) {
   return (
     <>
       {nodes.map((node) => {
         if (node.kind === "dir") {
           const open = expanded.includes(node.path);
+          const isDropTarget = dropTargetPath === node.path;
           return (
-            <div key={node.path} className="tree-dir">
-              <button
-                type="button"
-                className="tree-folder-row"
-                style={{ paddingLeft: 8 + depth * 12 }}
-                draggable
-                data-dragging={draggedPath === node.path || undefined}
-                aria-grabbed={draggedPath === node.path}
-                data-drop-target={dropTargetPath === node.path || undefined}
-                aria-describedby="explorer-drag-help"
-                title={`Drag ${node.name} onto another folder to move it`}
-                onClick={() => onToggle(node.path)}
-                onDragStart={(event) => onDragStart(event, node)}
-                onDragEnd={onDragEnd}
-                onDragOver={(event) => onDragOverFolder(event, node.path)}
-                onDragLeave={(event) => {
-                  if (!event.currentTarget.contains(event.relatedTarget as Node | null)) onDragLeaveFolder();
-                }}
-                onDrop={(event) => {
-                  event.preventDefault();
-                  event.stopPropagation();
-                  onDropFolder(event, node.path);
-                }}
-                onContextMenu={(e) => {
-                  e.preventDefault();
-                  const action = window.prompt(`Folder “${node.name}”: type folder / asc / delete`, "folder");
-                  if (action === "folder") onNewFolder(node.path);
-                  else if (action === "asc") onNewFile(node.path);
-                  else if (action === "delete") onDelete(node.path, node.name);
-                }}
-              >
-                <span className={`tree-caret${open ? " open" : ""}`} aria-hidden="true">
-                  <ChevronRight size={13} strokeWidth={1.6} />
-                </span>
-                {open
-                  ? <FolderOpen className="tree-folder-icon" size={14} strokeWidth={1.5} aria-hidden="true" />
-                  : <Folder className="tree-folder-icon" size={14} strokeWidth={1.5} aria-hidden="true" />}
-                <span className="tree-folder">{node.name}</span>
-              </button>
+            <div
+              key={node.path}
+              className="tree-dir"
+              data-project-dir-path={node.path}
+              data-drop-target={isDropTarget || undefined}
+              onDragOver={(event) => onDragOverFolder(event, node.path)}
+              onDragLeave={(event) => {
+                if (!event.currentTarget.contains(event.relatedTarget as Node | null)) onDragLeaveFolder();
+              }}
+              onDrop={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                onDropFolder(event, node.path);
+              }}
+            >
+              {renameDraft?.node.path === node.path ? (
+                <div className="tree-folder-row" style={{ paddingLeft: 8 + depth * 12 }}>
+                  <span className={`tree-caret${open ? " open" : ""}`} aria-hidden="true">
+                    <ChevronRight size={13} strokeWidth={1.6} />
+                  </span>
+                  {open
+                    ? <FolderOpen className="tree-folder-icon" size={14} strokeWidth={1.5} aria-hidden="true" />
+                    : <Folder className="tree-folder-icon" size={14} strokeWidth={1.5} aria-hidden="true" />}
+                  <input
+                    className="tree-rename-input"
+                    value={renameDraft.name}
+                    aria-label={`Rename ${node.name}`}
+                    autoFocus
+                    onChange={(event) => onRenameDraftChange(event.currentTarget.value)}
+                    onBlur={onCommitRename}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") onCommitRename();
+                      if (event.key === "Escape") onCancelRename();
+                    }}
+                  />
+                </div>
+              ) : (
+              <ContextMenu>
+                <ContextMenuTrigger asChild>
+                  <button
+                    type="button"
+                    className="tree-folder-row"
+                    style={{ paddingLeft: 8 + depth * 12 }}
+                    data-dragging={draggedPath === node.path || undefined}
+                    aria-grabbed={draggedPath === node.path}
+                    data-drop-target={isDropTarget || undefined}
+                    aria-describedby="explorer-drag-help"
+                    title={`Drag ${node.name} onto another folder to move it`}
+                    onClick={() => {
+                      if (!onConsumeSuppressedClick(node.path)) onToggle(node.path);
+                    }}
+                    onPointerDown={(event) => onPointerDragStart(event, node)}
+                    onPointerMove={onPointerDragMove}
+                    onPointerUp={onPointerDragEnd}
+                    onPointerCancel={onPointerDragCancel}
+                    onDragStart={(event) => onDragStart(event, node)}
+                    onDragEnd={onDragEnd}
+                    onDragOver={(event) => onDragOverFolder(event, node.path)}
+                    onDragLeave={(event) => {
+                      if (!event.currentTarget.contains(event.relatedTarget as Node | null)) onDragLeaveFolder();
+                    }}
+                    onDrop={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      onDropFolder(event, node.path);
+                    }}
+                  >
+                    <span className={`tree-caret${open ? " open" : ""}`} aria-hidden="true">
+                      <ChevronRight size={13} strokeWidth={1.6} />
+                    </span>
+                    {open
+                      ? <FolderOpen className="tree-folder-icon" size={14} strokeWidth={1.5} aria-hidden="true" />
+                      : <Folder className="tree-folder-icon" size={14} strokeWidth={1.5} aria-hidden="true" />}
+                    <span className="tree-folder">{node.name}</span>
+                  </button>
+                </ContextMenuTrigger>
+                <ProjectNodeContextActions
+                  node={node}
+                  onNewFolder={onNewFolder}
+                  onNewFile={onNewFile}
+                  onBeginRename={onBeginRename}
+                  onCopyPath={onCopyPath}
+                  onDelete={onDelete}
+                />
+              </ContextMenu>
+              )}
               {open && node.children && (
                 <ProjectTree
                   nodes={node.children}
                   depth={depth + 1}
+                  parentDirectoryPath={node.path}
                   expanded={expanded}
                   activeFilePath={activeFilePath}
                   onToggle={onToggle}
@@ -728,6 +1029,12 @@ function ProjectTree({
                   onNewFolder={onNewFolder}
                   onNewFile={onNewFile}
                   onDelete={onDelete}
+                  renameDraft={renameDraft}
+                  onBeginRename={onBeginRename}
+                  onRenameDraftChange={onRenameDraftChange}
+                  onCommitRename={onCommitRename}
+                  onCancelRename={onCancelRename}
+                  onCopyPath={onCopyPath}
                   draggedPath={draggedPath}
                   dropTargetPath={dropTargetPath}
                   onDragStart={onDragStart}
@@ -735,35 +1042,77 @@ function ProjectTree({
                   onDragOverFolder={onDragOverFolder}
                   onDragLeaveFolder={onDragLeaveFolder}
                   onDropFolder={onDropFolder}
+                  onPointerDragStart={onPointerDragStart}
+                  onPointerDragMove={onPointerDragMove}
+                  onPointerDragEnd={onPointerDragEnd}
+                  onPointerDragCancel={onPointerDragCancel}
+                  onConsumeSuppressedClick={onConsumeSuppressedClick}
                 />
               )}
             </div>
           );
         }
         const active = node.path === activeFilePath;
+        if (renameDraft?.node.path === node.path) {
+          return (
+            <div key={node.path} className={`tree-file${active ? " active" : ""}`} style={{ paddingLeft: 8 + depth * 12 }}>
+              <File className="tree-file-icon" size={14} strokeWidth={1.5} aria-hidden="true" />
+              <input
+                className="tree-rename-input"
+                value={renameDraft.name}
+                aria-label={`Rename ${node.name}`}
+                autoFocus
+                onChange={(event) => onRenameDraftChange(event.currentTarget.value)}
+                onBlur={onCommitRename}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") onCommitRename();
+                  if (event.key === "Escape") onCancelRename();
+                }}
+              />
+            </div>
+          );
+        }
         return (
-          <button
-            key={node.path}
-            type="button"
-            className={`tree-file${active ? " active" : ""}`}
-            style={{ paddingLeft: 8 + depth * 12 }}
-            aria-current={active ? "page" : undefined}
-            draggable
-            data-dragging={draggedPath === node.path || undefined}
-            aria-grabbed={draggedPath === node.path}
-            aria-describedby="explorer-drag-help"
-            title={`Drag ${node.name} onto a folder to move it`}
-            onClick={() => onOpenFile(node.path, node.name)}
-            onDragStart={(event) => onDragStart(event, node)}
-            onDragEnd={onDragEnd}
-            onContextMenu={(e) => {
-              e.preventDefault();
-              if (window.confirm(`Delete “${node.name}”?`)) onDelete(node.path, node.name);
-            }}
-          >
-            <File className="tree-file-icon" size={14} strokeWidth={1.5} aria-hidden="true" />
-            <span className="tree-file-name">{node.name}</span>
-          </button>
+          <ContextMenu key={node.path}>
+            <ContextMenuTrigger asChild>
+              <button
+                type="button"
+                className={`tree-file${active ? " active" : ""}`}
+                style={{ paddingLeft: 8 + depth * 12 }}
+                aria-current={active ? "page" : undefined}
+                data-dragging={draggedPath === node.path || undefined}
+                aria-grabbed={draggedPath === node.path}
+                aria-describedby="explorer-drag-help"
+                title={`Drag ${node.name} onto a folder to move it`}
+                onClick={() => {
+                  if (!onConsumeSuppressedClick(node.path)) onOpenFile(node.path, node.name);
+                }}
+                onPointerDown={(event) => onPointerDragStart(event, node)}
+                onPointerMove={onPointerDragMove}
+                onPointerUp={onPointerDragEnd}
+                onPointerCancel={onPointerDragCancel}
+                onDragStart={(event) => onDragStart(event, node)}
+                onDragEnd={onDragEnd}
+                onDragOver={(event) => onDragOverFolder(event, parentDirectoryPath)}
+                onDrop={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  onDropFolder(event, parentDirectoryPath);
+                }}
+              >
+                <File className="tree-file-icon" size={14} strokeWidth={1.5} aria-hidden="true" />
+                <span className="tree-file-name">{node.name}</span>
+              </button>
+            </ContextMenuTrigger>
+            <ProjectNodeContextActions
+              node={node}
+              onNewFolder={onNewFolder}
+              onNewFile={onNewFile}
+              onBeginRename={onBeginRename}
+              onCopyPath={onCopyPath}
+              onDelete={onDelete}
+            />
+          </ContextMenu>
         );
       })}
     </>
@@ -899,6 +1248,7 @@ export function EditorTabs({
   mode,
   onSelectTab,
   onCloseTab,
+  onRenameTab,
   onNewCircuit,
   onHideSimulator,
 }: {
@@ -907,9 +1257,23 @@ export function EditorTabs({
   mode: "schematic" | "simulator";
   onSelectTab: (id: string) => void;
   onCloseTab: (id: string) => void;
+  onRenameTab: (id: string, name: string) => void;
   onNewCircuit: () => void;
   onHideSimulator: () => void;
 }) {
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState("");
+  const cancelTabRenameRef = useRef(false);
+  const commitTabRename = () => {
+    const id = renamingId;
+    const name = renameValue.trim();
+    setRenamingId(null);
+    if (cancelTabRenameRef.current) {
+      cancelTabRenameRef.current = false;
+      return;
+    }
+    if (id && name) onRenameTab(id, name);
+  };
   return (
     <div className="editor-tabs" role="tablist" aria-label="Open schematics">
       {tabs.map((tab) => {
@@ -922,7 +1286,14 @@ export function EditorTabs({
             aria-selected={active}
             tabIndex={0}
             onClick={() => onSelectTab(tab.id)}
+            onDoubleClick={(event) => {
+              event.preventDefault();
+              cancelTabRenameRef.current = false;
+              setRenamingId(tab.id);
+              setRenameValue(tab.title);
+            }}
             onKeyDown={(event) => {
+              if (renamingId === tab.id) return;
               if (event.key === "Enter" || event.key === " ") {
                 event.preventDefault();
                 onSelectTab(tab.id);
@@ -930,7 +1301,26 @@ export function EditorTabs({
             }}
           >
             <i className={active ? "amber" : "blue"} />
-            {tab.title.replace(/\.sim$/i, "")}
+            {renamingId === tab.id ? (
+              <input
+                className="editor-tab-rename"
+                value={renameValue}
+                aria-label={`Rename ${tab.title}`}
+                autoFocus
+                onClick={(event) => event.stopPropagation()}
+                onDoubleClick={(event) => event.stopPropagation()}
+                onChange={(event) => setRenameValue(event.currentTarget.value)}
+                onBlur={commitTabRename}
+                onKeyDown={(event) => {
+                  event.stopPropagation();
+                  if (event.key === "Enter") event.currentTarget.blur();
+                  if (event.key === "Escape") {
+                    cancelTabRenameRef.current = true;
+                    event.currentTarget.blur();
+                  }
+                }}
+              />
+            ) : tab.title.replace(/\.sim$/i, "")}
             {tab.dirty && (
               <span
                 className="tab-dirty-indicator"

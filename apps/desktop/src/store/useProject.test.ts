@@ -427,3 +427,57 @@ describe("project node moves", () => {
     expect(useProject.getState().error).toBe("Disk refresh failed.");
   });
 });
+
+describe("project node renames", () => {
+  it("renames a workspace folder and remaps every descendant path", async () => {
+    useProject.getState().ensureDefaultWorkspace();
+    const root = useProject.getState().rootPath!;
+    const folder = await useProject.getState().createFolder(root, "Analog");
+    const file = await useProject.getState().createSchematicFile(folder!, "filter.asc");
+
+    await expect(useProject.getState().renameNode(folder!, "Filters"))
+      .resolves.toBe(`${root}/Filters`);
+    expect(useProject.getState().workspaceFiles[file!]).toBeUndefined();
+    expect(useProject.getState().workspaceFiles[`${root}/Filters/filter.asc`]).toBeTruthy();
+    expect(flattenTree(useProject.getState().tree).map((node) => node.path))
+      .toContain(`${root}/Filters/filter.asc`);
+  });
+
+  it("adds the schematic extension and performs a native disk rename", async () => {
+    const root = "/Users/test/Tau_Design";
+    const source = `${root}/untitled.asc`;
+    const destination = `${root}/gain-stage.asc`;
+    useProject.setState({
+      capability: "tauri",
+      rootPath: root,
+      rootName: "Tau_Design",
+      tree: [{ name: "untitled.asc", path: source, kind: "file" }],
+      expanded: [root],
+    });
+    vi.spyOn(fs, "pathExists").mockResolvedValue(false);
+    const rename = vi.spyOn(fs, "renamePath").mockResolvedValue(undefined);
+    vi.spyOn(fs, "readProjectTree").mockResolvedValue([
+      { name: "gain-stage.asc", path: destination, kind: "file" },
+    ]);
+
+    await expect(useProject.getState().renameNode(source, "gain-stage")).resolves.toBe(destination);
+    expect(rename).toHaveBeenCalledWith(source, destination);
+    expect(useProject.getState().error).toBeNull();
+  });
+
+  it("rejects path-like names before touching disk", async () => {
+    const root = "/Users/test/Tau_Design";
+    const source = `${root}/filter.asc`;
+    useProject.setState({
+      capability: "tauri",
+      rootPath: root,
+      rootName: "Tau_Design",
+      tree: [{ name: "filter.asc", path: source, kind: "file" }],
+    });
+    const rename = vi.spyOn(fs, "renamePath").mockResolvedValue(undefined);
+
+    await expect(useProject.getState().renameNode(source, "../escape.asc")).resolves.toBeNull();
+    expect(rename).not.toHaveBeenCalled();
+    expect(useProject.getState().error).toContain("cannot be empty or contain folder paths");
+  });
+});

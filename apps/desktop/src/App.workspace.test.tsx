@@ -41,6 +41,8 @@ import { DEFAULT_WORKSPACE_ID, DEFAULT_WORKSPACE_NAME } from "./project/defaultW
 import { useProject } from "./store/useProject";
 import { useSchematic } from "./store/useSchematic";
 
+const defaultRenameNode = useProject.getState().renameNode;
+
 const storage = new Map<string, string>();
 Object.defineProperty(globalThis, "localStorage", {
   configurable: true,
@@ -75,6 +77,7 @@ beforeEach(() => {
     workspaceFiles: {},
     error: null,
     capability: "tauri",
+    renameNode: defaultRenameNode,
   });
 });
 afterEach(() => cleanup());
@@ -179,6 +182,40 @@ describe("App schematic workspace tools", () => {
       expect(screen.queryByRole("img", { name: "untitled.asc has unsaved changes" })).toBeNull();
       expect(screen.getAllByText("untitled.asc").length).toBeGreaterThan(0);
     });
+  });
+
+  it("renames an open tab on disk and saves later edits only to the renamed path", async () => {
+    let releaseRename!: () => void;
+    const renameGate = new Promise<void>((resolve) => { releaseRename = resolve; });
+    useProject.setState({
+      renameNode: async (...args) => {
+        await renameGate;
+        return defaultRenameNode(...args);
+      },
+    });
+    await renderOpenProject();
+    const originalPath = `${DEFAULT_WORKSPACE_ID}/untitled.asc`;
+    const renamedPath = `${DEFAULT_WORKSPACE_ID}/gain-stage.asc`;
+    const tab = screen.getByRole("tab", { name: /untitled\.asc/ });
+
+    fireEvent.doubleClick(tab);
+    const renameInput = await screen.findByRole("textbox", { name: "Rename untitled.asc" });
+    fireEvent.change(renameInput, { target: { value: "gain-stage" } });
+    fireEvent.keyDown(renameInput, { key: "Enter" });
+    // Exercise the real race: Save arrives while the async native rename is
+    // still pending. It must wait and then target only the new path.
+    act(() => {
+      useSchematic.getState().addComponent("resistor", 120, 120);
+      useSchematic.getState().setProbes([{ id: "probe-1", x: 120, y: 120, color: "#53d6b5" }]);
+    });
+    fireEvent.keyDown(document.body, { key: "s", metaKey: true });
+    expect(useProject.getState().workspaceFiles[originalPath].contents).not.toContain("SYMBOL res");
+    await act(async () => releaseRename());
+
+    await waitFor(() => expect(screen.getByRole("tab", { name: /gain-stage\.asc/ })).toBeTruthy());
+    await waitFor(() => expect(useProject.getState().workspaceFiles[renamedPath].contents).toContain("SYMBOL res"));
+    expect(useProject.getState().workspaceFiles[originalPath]).toBeUndefined();
+    expect(screen.queryByText(/Save blocked/)).toBeNull();
   });
 });
 

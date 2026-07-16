@@ -106,7 +106,7 @@ export function PlotAxes({
             const anchor = t.frac < 0.06 ? "start" : t.frac > 0.94 ? "end" : "middle";
             const tx = anchor === "start" ? Math.max(px, pad) : anchor === "end" ? Math.min(px, width - pad) : px;
             return (
-              <text key={`tx${i}`} className="scope-tick mono-num" textAnchor={anchor} x={tx} y={height - pad + 11}>
+              <text key={`tx${i}`} className="scope-tick mono-num" textAnchor={anchor} x={tx} y={height - pad + 14}>
                 {t.label}
               </text>
             );
@@ -115,24 +115,24 @@ export function PlotAxes({
           const py = yPixel(t.frac);
           const clampedY = Math.min(height - pad - 1, Math.max(pad + 6, py));
           return (
-            <text key={`ty${i}`} className="scope-tick mono-num" textAnchor="end" x={pad - 4} y={clampedY + 3}>
+            <text key={`ty${i}`} className="scope-tick mono-num" textAnchor="end" x={pad - 7} y={clampedY + 3}>
               {t.label}
             </text>
           );
         })}
       </g>
       {xAxisTitle && (
-        <text className="scope-axis-title mono-num" x={pad + innerW / 2} y={height - 2} textAnchor="middle">
+        <text className="scope-axis-title mono-num" x={pad + innerW / 2} y={height - 6} textAnchor="middle">
           {xUnit ? `${xAxisTitle} (${xUnit})` : xAxisTitle}
         </text>
       )}
       {yAxisTitle && (
         <text
           className="scope-axis-title mono-num"
-          x={8}
+          x={11}
           y={pad + innerH / 2}
           textAnchor="middle"
-          transform={`rotate(-90 8 ${pad + innerH / 2})`}
+          transform={`rotate(-90 11 ${pad + innerH / 2})`}
         >
           {yUnit ? `${yAxisTitle} (${yUnit})` : yAxisTitle}
         </text>

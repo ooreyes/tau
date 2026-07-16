@@ -1,8 +1,8 @@
 import type { AnalysisResult } from "../simulation/linearTransient";
+import { Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
-import { TauriMascot } from "./TauriMascot";
 
 interface ToolbarProps {
   mode: "schematic" | "simulator";
@@ -141,7 +141,7 @@ export function Toolbar({ mode, result, runState, isRunning, title, assistantOpe
               disabled={!projectOpen}
               onClick={onToggleAssistant}
             >
-              <TauriMascot className="tauri-toolbar-mascot" aria-hidden="true" />
+              <Sparkles size={14} strokeWidth={1.8} aria-hidden="true" />
             </Button>
           </TooltipTrigger>
           <TooltipContent>{assistantOpen ? "Close Tauri" : "Ask Tauri"}</TooltipContent>

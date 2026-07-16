@@ -39,7 +39,10 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-const renderExplorer = ({ onMoveNode }: { onMoveNode?: (sourcePath: string, destinationDirectoryPath: string) => Promise<string | null> } = {}) => {
+const renderExplorer = ({ onMoveNode, onRenameNode }: {
+  onMoveNode?: (sourcePath: string, destinationDirectoryPath: string) => Promise<string | null>;
+  onRenameNode?: (sourcePath: string, newName: string) => Promise<string | null>;
+} = {}) => {
   const onOpenSimFile = vi.fn();
   const onOpenAscText = vi.fn();
   const onNotice = vi.fn();
@@ -50,6 +53,7 @@ const renderExplorer = ({ onMoveNode }: { onMoveNode?: (sourcePath: string, dest
       onOpenAscText={onOpenAscText}
       onNotice={onNotice}
       onMoveNode={onMoveNode}
+      onRenameNode={onRenameNode}
     />,
   );
   return { onOpenSimFile, onOpenAscText, onNotice };
@@ -78,8 +82,12 @@ describe("ExplorerPanel VS Code action row", () => {
     ]) {
       expect(screen.getByRole("button", { name })).toBeTruthy();
     }
-    expect(screen.getByRole("button", { name: "Refresh explorer" }).querySelector(".lucide-refresh-cw")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Collapse folders in explorer" }).querySelector(".lucide-copy-minus")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Refresh explorer" }).querySelector(".vscode-refresh")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Collapse folders in explorer" }).querySelector(".vscode-collapse-all")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "New schematic file" }).querySelector(".vscode-new-file")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "New folder" }).querySelector(".vscode-new-folder")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Import LTspice schematic" }).querySelector(".vscode-import-file")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Open Schematics folder" }).querySelector(".vscode-import-folder")).toBeTruthy();
 
     expect(useProject.getState().expanded.length).toBeGreaterThan(0);
     fireEvent.click(screen.getByRole("button", { name: "Collapse folders in explorer" }));
@@ -142,6 +150,38 @@ describe("ExplorerPanel VS Code action row", () => {
     ));
   });
 
+  it("opens a safe VS Code-style context menu and renames without any destructive double-click", async () => {
+    const root = useProject.getState().rootPath!;
+    const path = await useProject.getState().createSchematicFile(root, "filter.asc");
+    const onRenameNode = vi.fn().mockResolvedValue(`${root}/renamed.asc`);
+    const deleteNode = vi.fn().mockResolvedValue(undefined);
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
+    useProject.setState({ deleteNode });
+    renderExplorer({ onRenameNode });
+
+    const row = screen.getByRole("button", { name: "filter.asc" });
+    fireEvent.doubleClick(row);
+    expect(deleteNode).not.toHaveBeenCalled();
+
+    fireEvent.contextMenu(row);
+    expect(await screen.findByRole("menuitem", { name: /Copy Path/ })).toBeTruthy();
+    expect(screen.getByRole("menuitem", { name: /Copy Relative Path/ })).toBeTruthy();
+    expect(screen.getByRole("menuitem", { name: /Rename/ })).toBeTruthy();
+    expect(screen.getByRole("menuitem", { name: /Delete/ })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("menuitem", { name: /Copy Path/ }));
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith(path));
+
+    fireEvent.contextMenu(row);
+    fireEvent.click(await screen.findByRole("menuitem", { name: /Rename/ }));
+    const input = await screen.findByRole("textbox", { name: "Rename filter.asc" });
+    fireEvent.change(input, { target: { value: "renamed" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    await waitFor(() => expect(onRenameNode).toHaveBeenCalledWith(path, "renamed"));
+    expect(deleteNode).not.toHaveBeenCalled();
+  });
+
   it("does not announce a successful refresh when the project refresh fails", async () => {
     useProject.setState({ refresh: vi.fn().mockResolvedValue(false) });
     const { onNotice } = renderExplorer();
@@ -192,7 +232,7 @@ describe("ExplorerPanel VS Code action row", () => {
     expect(screen.queryByRole("button", { name: "Create Schematics folder" })).toBeNull();
   });
 
-  it("moves a draggable file onto a folder through the explicit project move contract", async () => {
+  it("moves a file onto a folder through the explicit project move contract", async () => {
     const root = useProject.getState().rootPath!;
     const source = await useProject.getState().createSchematicFile(root, "gain.asc");
     const folder = await useProject.getState().createFolder(root, "Filters");
@@ -202,7 +242,6 @@ describe("ExplorerPanel VS Code action row", () => {
     const folderRow = screen.getByRole("button", { name: "Filters" });
     const dataTransfer = dataTransferStub();
 
-    expect(fileRow.getAttribute("draggable")).toBe("true");
     expect(fileRow.getAttribute("aria-describedby")).toBe("explorer-drag-help");
     expect(screen.getByText(/Drag a file or folder onto another folder/)).toBeTruthy();
 
@@ -217,6 +256,28 @@ describe("ExplorerPanel VS Code action row", () => {
     await waitFor(() => expect(onMoveNode).toHaveBeenCalledWith(source, folder));
     expect(onNotice).toHaveBeenCalledWith("Moved gain.asc");
     expect(folderRow.getAttribute("data-drop-target")).toBeNull();
+  });
+
+  it("uses pointer dragging in WKWebView where native HTML drag is unreliable", async () => {
+    const root = useProject.getState().rootPath!;
+    const source = await useProject.getState().createSchematicFile(root, "native.asc");
+    const folder = await useProject.getState().createFolder(root, "Native Target");
+    const onMoveNode = vi.fn().mockResolvedValue(`${folder}/native.asc`);
+    renderExplorer({ onMoveNode });
+    const fileRow = screen.getByRole("button", { name: "native.asc" });
+    const folderRow = screen.getByRole("button", { name: "Native Target" });
+    const destination = folderRow.closest<HTMLElement>("[data-project-dir-path]")!;
+    Object.defineProperty(document, "elementFromPoint", {
+      configurable: true,
+      value: vi.fn().mockReturnValue(destination),
+    });
+
+    fireEvent.pointerDown(fileRow, { pointerId: 7, button: 0, clientX: 100, clientY: 100 });
+    fireEvent.pointerMove(fileRow, { pointerId: 7, clientX: 120, clientY: 120 });
+    fireEvent.pointerUp(fileRow, { pointerId: 7, clientX: 120, clientY: 120 });
+
+    await waitFor(() => expect(onMoveNode).toHaveBeenCalledWith(source, folder));
+    Reflect.deleteProperty(document, "elementFromPoint");
   });
 
   it("uses the drag payload when React drag state has not committed yet", async () => {
@@ -288,6 +349,24 @@ describe("ExplorerPanel VS Code action row", () => {
     fireEvent.drop(screen.getByRole("button", { name: "Filters" }), { dataTransfer });
 
     await waitFor(() => expect(onMoveNode).toHaveBeenCalledWith(source, destination));
+  });
+
+  it("treats a drop on a file inside an expanded folder as a drop on that folder", async () => {
+    const root = useProject.getState().rootPath!;
+    const led = await useProject.getState().createFolder(root, "LED");
+    await useProject.getState().createSchematicFile(led!, "led.asc");
+    const source = await useProject.getState().createSchematicFile(root, "driver.asc");
+    const onMoveNode = vi.fn().mockResolvedValue(`${led}/driver.asc`);
+    renderExplorer({ onMoveNode });
+    const dataTransfer = dataTransferStub();
+
+    fireEvent.dragStart(screen.getByRole("button", { name: "driver.asc" }), { dataTransfer });
+    // Users commonly release over the child file row under an expanded LED/.
+    fireEvent.dragOver(screen.getByRole("button", { name: "led.asc" }), { dataTransfer });
+    expect(dataTransfer.dropEffect).toBe("move");
+    fireEvent.drop(screen.getByRole("button", { name: "led.asc" }), { dataTransfer });
+
+    await waitFor(() => expect(onMoveNode).toHaveBeenCalledWith(source, led));
   });
 
   it("moves a folder and its contents across sibling folders", async () => {

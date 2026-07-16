@@ -60,6 +60,11 @@ describe("WaveformPlot (TRAN) — real tick axes", () => {
     expect(text).toMatch(/V/);
     // Zero-line drawn stronger when 0V is in range (a charging curve from 0V).
     expect(container.querySelectorAll(".scope-axis-zero").length).toBeGreaterThan(0);
+    const frame = container.querySelector(".scope-frame");
+    const titles = container.querySelectorAll(".scope-axis-title");
+    expect(frame?.getAttribute("x")).toBe("46");
+    expect(titles[0]?.getAttribute("y")).toBe("184");
+    expect(titles[1]?.getAttribute("x")).toBe("11");
   });
 
   it("splits x/y ticks across panes in multi-pane mode and only labels the bottom pane's x axis", () => {

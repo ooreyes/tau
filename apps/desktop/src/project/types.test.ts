@@ -80,8 +80,8 @@ describe("project schematic file formats", () => {
     ]));
   });
 
-  it("blocks an ASC save before probes or skipped components can be discarded", () => {
-    expect(ascSaveBlockReason([], 1, [])).toBe(".asc cannot preserve Tau probe dots yet.");
+  it("keeps viewer-only probes from blocking ASC saves but still rejects skipped components", () => {
+    expect(ascSaveBlockReason([], 1, [])).toBeNull();
     expect(ascSaveBlockReason([], 0, ["X1: unsupported"])).toBe("X1: unsupported");
     expect(ascSaveBlockReason([], 0, [])).toBeNull();
   });

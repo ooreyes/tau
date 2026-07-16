@@ -740,22 +740,18 @@ export function AssistantPanel({
         />
       )}
       <header className="assistant-header">
-        <div>
-          <div className="assistant-kicker">Assistant</div>
-          <div className="assistant-title-row">
-            <TauriMascot className="assistant-title-mascot" aria-hidden="true" />
-            <span className="assistant-title">Ask Tauri</span>
-            <Select value={modelChoice} onValueChange={changeModel} disabled={streaming}>
-              <SelectTrigger size="sm" className="assistant-model-select" aria-label="Assistant model">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent align="start">
-                <SelectItem value="anthropic">{ASSISTANT_MODEL_LABEL} · Cloud</SelectItem>
-                <SelectItem value="qwen3-4b-4bit">{LOCAL_MLX_MODEL_PRESETS["qwen3-4b-4bit"].label} · Local</SelectItem>
-                <SelectItem value="qwen3-1.7b-4bit">{LOCAL_MLX_MODEL_PRESETS["qwen3-1.7b-4bit"].label} · Local</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+        <div className="assistant-heading">
+          <span className="assistant-title">Ask <span className="empty-brand">Tauri</span>…</span>
+          <Select value={modelChoice} onValueChange={changeModel} disabled={streaming}>
+            <SelectTrigger size="sm" className="assistant-model-select" aria-label="Assistant model">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent align="start">
+              <SelectItem value="anthropic">{ASSISTANT_MODEL_LABEL} · Cloud</SelectItem>
+              <SelectItem value="qwen3-4b-4bit">{LOCAL_MLX_MODEL_PRESETS["qwen3-4b-4bit"].label} · Local</SelectItem>
+              <SelectItem value="qwen3-1.7b-4bit">{LOCAL_MLX_MODEL_PRESETS["qwen3-1.7b-4bit"].label} · Local</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
         <div className="assistant-actions">
           <Tooltip>

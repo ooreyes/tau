@@ -113,11 +113,12 @@ export function ascRewriteRisks(source: string): string[] {
 /** Return the first reason an ASC save would discard information. */
 export function ascSaveBlockReason(
   sourceRisks: readonly string[],
-  probeCount: number,
+  _probeCount: number,
   exportWarnings: readonly string[],
 ): string | null {
   if (sourceRisks.length > 0) return `Tau cannot yet preserve ${sourceRisks[0]}.`;
-  if (probeCount > 0) return ".asc cannot preserve Tau probe dots yet.";
+  // Probe dots are session-only viewer annotations, not schematic topology.
+  // They must never prevent saving otherwise lossless LTspice content.
   if (exportWarnings.length > 0) return exportWarnings[0];
   return null;
 }

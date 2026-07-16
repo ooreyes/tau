@@ -233,6 +233,13 @@ describe("computeAxisTicks", () => {
   it("returns [] for non-finite bounds instead of throwing", () => {
     expect(computeAxisTicks(NaN, 10)).toEqual([]);
   });
+
+  it("adds enough significant digits to distinguish ticks in a deeply zoomed viewport", () => {
+    const ticks = computeAxisTicks(2.5, 2.5004, { unit: "V", targetCount: 5 });
+    expect(ticks.length).toBeGreaterThanOrEqual(3);
+    expect(new Set(ticks.map((tick) => tick.label)).size).toBe(ticks.length);
+    expect(ticks.some((tick) => /2\.500[1-4] V/.test(tick.label))).toBe(true);
+  });
 });
 
 describe("pickTickCount", () => {
