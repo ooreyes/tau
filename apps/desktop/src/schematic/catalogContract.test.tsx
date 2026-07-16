@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import { CATALOG } from "./catalog";
 import { getLocalPins } from "./pins";
-import { ComponentSymbol, SYMBOL_BODY, SYMBOL_BOX } from "./symbols";
+import { CENTERED_SINE_PATH, ComponentSymbol, SYMBOL_BODY, SYMBOL_BOX } from "./symbols";
 import { COMPONENT_KINDS } from "./types";
 
 describe("Library catalog contract", () => {
@@ -22,5 +22,15 @@ describe("Library catalog contract", () => {
       expect(SYMBOL_BOX[entry.kind].halfW, `${entry.kind} width`).toBeGreaterThan(0);
       expect(SYMBOL_BOX[entry.kind].halfH, `${entry.kind} height`).toBeGreaterThan(0);
     }
+  });
+
+  it("uses one horizontally centered sine glyph for every sine-bearing symbol", () => {
+    for (const kind of ["vac", "iac", "modulator"] as const) {
+      const markup = renderToStaticMarkup(<svg><ComponentSymbol kind={kind} /></svg>);
+      expect(markup, `${kind} sine`).toContain(`d="${CENTERED_SINE_PATH}"`);
+      expect(markup.match(/data-sine-glyph=/g), `${kind} sine count`).toHaveLength(1);
+    }
+    const currentSource = renderToStaticMarkup(<svg><ComponentSymbol kind="iac" /></svg>);
+    expect(currentSource).toContain('transform="translate(0 -5)"');
   });
 });

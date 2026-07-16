@@ -8,15 +8,51 @@
      `git log --oneline -8`, recover/finish/revert that unit FIRST, then go on.
      ─────────────────────────────────────────────────────────────────────── -->
 ## ⏱ HEARTBEAT
-- **Headline metric:** 1857 reviewed-tree tests green · corpus 82/82 import · 82/82 op-converge · 79/82 warning-clean
-- **Run started (UTC):** 2026-07-16T14:20Z
-- **Synced to origin:** auto/ltspice-parity @ f0bca7f.
-- **Claimed unit:** Eliminate AC-source save blocking and harden empty-editor, simulator-read-only, and assistant resize UX.
+- **Headline metric:** 1861 reviewed-tree tests green · corpus 82/82 import · 82/82 op-converge · 79/82 warning-clean
+- **Run started (UTC):** 2026-07-16T15:14Z
+- **Synced to origin:** auto/ltspice-parity @ ef9c06a.
+- **Claimed unit:** Improve transient understanding, plot-axis spacing, Assistant symmetry, and AC-source drawing alignment.
 - **Status:** DONE
-- **Last completed sub-step:** Packaged-app QA confirmed the empty-sheet Library default and non-overlapping minimum-width Assistant header.
-- **Plan:** Completed: catalog-wide save/reopen, drawing/deck/real-ngspice contracts, exact VAC regression,
-  Library defaulting, Simulator edit feedback, responsive model selection, and packaged release verification.
-- **Next step:** Continue the acceptance-corpus finish line; keep unsupported foreign ASC records protected from destructive rewrites.
+- **Last completed sub-step:** Packaged-app QA verified the 280px Assistant grid, plot gutter, centered AC sine, and time-varying telemetry semantics.
+- **Plan:** Completed: transient V/I previews and guidance, plot-axis breathing room, symmetric model toolbar,
+  shared centered sine geometry, regression tests, and packaged visual verification.
+- **Next step:** Resume acceptance-corpus parity; preserve full-axis transient plots behind explicit Probe while telemetry stays compact.
+
+---
+
+## 2026-07-16T15:30Z — auto/ltspice-parity — Transient telemetry and instrument geometry
+
+### What I did
+- Time-varying component telemetry now exposes separate V(t) and I(t) waveform
+  previews for transient/periodic series. Steady components remain numeric and
+  uncluttered; each preview tells users to Probe for the full time-axis plot.
+- Increased the visual separation between Y tick labels and the rotated axis
+  title without reducing the waveform viewport or changing its clip geometry.
+- Rebuilt the Assistant header as a two-tier title + symmetric control grid:
+  New, History, flexible ellipsized model selector, Delete, Close. The history
+  popover stays inside the 280px minimum panel.
+- Replaced three offset sine drawings with one centered shared glyph used by AC
+  voltage, AC current, and modulator symbols.
+
+### Files
+- `components/{ComponentMeasurementsPanel,AssistantPanel,PlotAxes,SimulationPanel}.tsx`
+- `schematic/symbols.tsx`, `App.css`, focused component/axis/catalog tests
+
+### Tests and QA
+- Desktop typecheck and full Vitest: 1861 passed / 6 skipped; real-ngspice
+  catalog smoke executed and passed.
+- Unsigned Tauri app + DMG build passed. Packaged Tau.app at the 280px Assistant
+  floor showed the exact accessible order New/History/Model/Delete/Close with no
+  collision; a packaged sine-source transient run showed the centered glyph,
+  wider Y-title gutter, and a time-varying V1 telemetry group.
+
+### Parity items
+- §6/§11 transient understanding: labelled per-component V(t)/I(t) previews landed.
+- §10 instrument polish: shared axis gutter, Assistant symmetry, centered sine geometry landed.
+
+### Next step
+Continue warning-clean corpus work and waveform parity on the three release
+circuits; keep compact telemetry previews distinct from full physical-axis plots.
 
 ---
 

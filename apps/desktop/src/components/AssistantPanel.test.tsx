@@ -334,6 +334,19 @@ describe("AssistantPanel", () => {
     expect(screen.getByRole("combobox", { name: "Assistant model" }).textContent).toContain("Sonnet 5");
   });
 
+  it("centers the model selector between symmetric chat controls", () => {
+    const { container } = render(<AssistantPanel {...baseProps()} />);
+    const toolbar = container.querySelector(".assistant-toolbar");
+    expect(toolbar).not.toBeNull();
+    expect(Array.from(toolbar!.querySelectorAll("button")).map((button) => button.getAttribute("aria-label"))).toEqual([
+      "New chat",
+      "Past chats",
+      "Assistant model",
+      "Delete conversation",
+      "Close assistant",
+    ]);
+  });
+
   it("uses the selected local preset without a cloud key and consumes its non-streaming reply", async () => {
     saveAssistantPreferences({ provider: "local-mlx", localModel: "qwen3-4b-4bit" });
     const fetchMock = vi.fn(async (_input: string | URL | Request, _init?: RequestInit) => new Response(JSON.stringify({

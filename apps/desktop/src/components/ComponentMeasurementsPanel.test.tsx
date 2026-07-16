@@ -156,6 +156,34 @@ describe("ComponentMeasurementsPanel — variant=\"compact\" (telemetry dock gri
     expect(within(c1Card).getAllByText("—")).toHaveLength(2);
   });
 
+  it("shows separate, labelled V(t) and I(t) previews whenever component telemetry varies over time", () => {
+    render(<ComponentMeasurementsPanel rows={rows} selectedId={null} onSelect={() => {}} variant="compact" />);
+
+    const r1Card = screen.getByText("R1").closest("button") as HTMLElement;
+    expect(within(r1Card).getByText("Waveform preview")).toBeTruthy();
+    expect(within(r1Card).getByRole("img", { name: "V(R1): Periodic · 1 kHz" })).toBeTruthy();
+    expect(within(r1Card).getByRole("img", { name: "I(R1): Periodic · 1 kHz" })).toBeTruthy();
+    expect(within(r1Card).getByText("Probe for a full time-axis plot")).toBeTruthy();
+
+    const c1Card = screen.getByText("C1").closest("button") as HTMLElement;
+    expect(within(c1Card).getByRole("img", { name: "V(C1): transient" })).toBeTruthy();
+    expect(within(c1Card).queryByRole("img", { name: /I\(C1\)/ })).toBeNull();
+  });
+
+  it("does not invent transient plots for a steady component", () => {
+    const steady: ComponentMeasurement = {
+      componentId: "v1",
+      ref: "V1",
+      kind: "vsource",
+      voltage: series("V(V1)", "V", [5, 5, 5], "steady"),
+      current: series("I(V1)", "A", [1, 1, 1], "steady"),
+    };
+    render(<ComponentMeasurementsPanel rows={[steady]} selectedId={null} onSelect={() => {}} variant="compact" />);
+
+    expect(screen.queryByText("Waveform preview")).toBeNull();
+    expect(screen.queryByRole("img")).toBeNull();
+  });
+
   it("makes the whole card the click target (no dedicated Select button)", () => {
     const onSelect = vi.fn();
     const { rerender } = render(<ComponentMeasurementsPanel rows={rows} selectedId={null} onSelect={onSelect} variant="compact" />);

@@ -64,7 +64,9 @@ describe("WaveformPlot (TRAN) — real tick axes", () => {
     const titles = container.querySelectorAll(".scope-axis-title");
     expect(frame?.getAttribute("x")).toBe("46");
     expect(titles[0]?.getAttribute("y")).toBe("184");
-    expect(titles[1]?.getAttribute("x")).toBe("11");
+    expect(titles[1]?.getAttribute("x")).toBe("5");
+    const yTick = container.querySelector<SVGTextElement>('.scope-tick[text-anchor="end"]');
+    expect(Number(yTick?.getAttribute("x")) - Number(titles[1]?.getAttribute("x"))).toBeGreaterThanOrEqual(30);
   });
 
   it("splits x/y ticks across panes in multi-pane mode and only labels the bottom pane's x axis", () => {

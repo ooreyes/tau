@@ -3,6 +3,22 @@ import type { ComponentKind } from "./types";
 /** World pixels per grid cell. Components span a few cells; pins land on grid. */
 export const GRID = 16;
 
+/** One centered sine glyph shared by every sine-bearing schematic symbol.
+ *  Keeping the path in one place prevents AC sources and modulators from
+ *  drifting a few pixels left/right as their surrounding symbols evolve. */
+export const CENTERED_SINE_PATH = "M -11 0 C -8 -9 -3 -9 0 0 S 8 9 11 0";
+
+function CenteredSineGlyph({ y = 0 }: { y?: number }) {
+  return (
+    <path
+      data-sine-glyph=""
+      d={CENTERED_SINE_PATH}
+      fill="none"
+      transform={y === 0 ? undefined : `translate(0 ${y})`}
+    />
+  );
+}
+
 /** Accurate local bounding box of each symbol's drawn body (excludes pin leads).
  *  Unlike SYMBOL_BOX these are NOT assumed symmetric about the origin — e.g.
  *  ground is drawn entirely below its pin — so they give correct hit-testing
@@ -159,7 +175,7 @@ export function ComponentSymbol({ kind }: { kind: ComponentKind }) {
         <>
           <line x1={0} y1={-32} x2={0} y2={-15} />
           <circle cx={0} cy={0} r={15} />
-          <path d="M -10 0 C -6 -10 -2 -10 2 0 S 10 10 14 0" />
+          <CenteredSineGlyph />
           <line x1={0} y1={15} x2={0} y2={32} />
         </>
       );
@@ -169,7 +185,7 @@ export function ComponentSymbol({ kind }: { kind: ComponentKind }) {
         <>
           <line x1={0} y1={-32} x2={0} y2={-15} />
           <circle cx={0} cy={0} r={15} />
-          <path d="M -10 -5 C -6 -15 -2 -15 2 -5 S 10 5 14 -5" />
+          <CenteredSineGlyph y={-5} />
           <path d="M 0 1 V 10" />
           <path d="M -5 5 L 0 11 L 5 5" />
           <line x1={0} y1={15} x2={0} y2={32} />
@@ -329,7 +345,7 @@ export function ComponentSymbol({ kind }: { kind: ComponentKind }) {
           {/* com drops from the body floor */}
           <line x1={0} y1={32} x2={0} y2={48} />
           {/* sine-wave glyph: modulated carrier */}
-          <path d="M -14 0 Q -10 -10 -6 0 Q -2 10 2 0 Q 6 -10 10 0" fill="none" />
+          <CenteredSineGlyph />
         </>
       );
 

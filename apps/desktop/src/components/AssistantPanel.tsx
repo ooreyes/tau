@@ -749,20 +749,7 @@ export function AssistantPanel({
       )}
       <header className="assistant-header">
         <span className="assistant-title">Ask <span className="empty-brand">Tauri</span>…</span>
-        <Select value={modelChoice} onValueChange={changeModel} disabled={streaming}>
-          <SelectTrigger size="sm" className="assistant-model-select" aria-label="Assistant model">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent align="start">
-            <SelectItem value="anthropic">{ASSISTANT_MODEL_LABEL} · Cloud</SelectItem>
-            <SelectItem value="qwen3-4b-4bit">{LOCAL_MLX_MODEL_PRESETS["qwen3-4b-4bit"].label} · Local</SelectItem>
-            <SelectItem value="qwen3-1.7b-4bit">{LOCAL_MLX_MODEL_PRESETS["qwen3-1.7b-4bit"].label} · Local</SelectItem>
-            {customLocalAiModels.map((model) => (
-              <SelectItem key={model.id} value={model.id}>{model.label} · Imported</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <div className="assistant-actions">
+        <div className="assistant-toolbar">
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
@@ -830,6 +817,19 @@ export function AssistantPanel({
               </div>
             )}
           </div>
+          <Select value={modelChoice} onValueChange={changeModel} disabled={streaming}>
+            <SelectTrigger size="sm" className="assistant-model-select" aria-label="Assistant model">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent align="center">
+              <SelectItem value="anthropic">{ASSISTANT_MODEL_LABEL} · Cloud</SelectItem>
+              <SelectItem value="qwen3-4b-4bit">{LOCAL_MLX_MODEL_PRESETS["qwen3-4b-4bit"].label} · Local</SelectItem>
+              <SelectItem value="qwen3-1.7b-4bit">{LOCAL_MLX_MODEL_PRESETS["qwen3-1.7b-4bit"].label} · Local</SelectItem>
+              {customLocalAiModels.map((model) => (
+                <SelectItem key={model.id} value={model.id}>{model.label} · Imported</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
@@ -845,9 +845,21 @@ export function AssistantPanel({
             </TooltipTrigger>
             <TooltipContent>Delete conversation</TooltipContent>
           </Tooltip>
-          <button type="button" className="panel-close" onClick={onClose} aria-label="Close assistant">
-            <X size={14} strokeWidth={1.8} aria-hidden="true" />
-          </button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="outline"
+                size="icon-sm"
+                className="text-muted-foreground hover:text-foreground"
+                onClick={onClose}
+                aria-label="Close assistant"
+              >
+                <X size={14} strokeWidth={1.8} aria-hidden="true" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Close assistant</TooltipContent>
+          </Tooltip>
         </div>
       </header>
 

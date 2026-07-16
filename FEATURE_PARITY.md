@@ -1036,6 +1036,12 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   Tau does not invent a part-rating threshold it does not know. A completed
   zero-current direct-drive result remains `0 A`/`0 W` with no advisory, and a
   series-resistor case is covered against false positives.
+  **Transient-understanding follow-up (2026-07-16):** compact dock cards now
+  show separate, labelled V(t) and I(t) waveform previews only when those
+  quantities classify as transient or periodic. The previews use bounded real
+  simulation samples, never mix V and A on one scale, and explicitly direct the
+  user to Probe for the full physical time-axis plot; steady parts keep the
+  quieter numeric V/I/P presentation.
 - ✅ **Measurement cursors** (1 & 2, delta readout) — `simulation/cursors.ts`
   (`cursorReadout`/`fractionToX`, 8 unit tests) + a collapsible **Cursors** panel
   on the transient scope (`SimulationPanel` `CursorView`). Two sliders position
@@ -1384,7 +1390,11 @@ checklist for the authoritative list.
   periodic. The selection-following delete bubble was removed in favor of a
   stable selection-aware toolbar action and the existing Delete key. Shared
   Button/Tabs foregrounds now consume `--accent-ink`, preserving 12.5:1
-  contrast against the light interaction accent.
+  contrast against the light interaction accent. **Instrument-spacing and AI
+  header follow-up (2026-07-16):** Y tick anchors and vertical titles occupy
+  opposite sides of the plot gutter, and the minimum-width Assistant uses a
+  symmetric `New · History · Model · Delete · Close` grid below its title.
+  Every sine-bearing symbol now consumes one shared centered sine glyph.
 - ✅ **Foundation (2026-07-03):** Tailwind CSS v4 (`@tailwindcss/vite`) +
   shadcn scaffolding (components.json new-york, `src/lib/utils.ts` cn helper
   +4 tests, `@/*` alias in vite+tsconfig). `src/styles/tokens.css` maps the

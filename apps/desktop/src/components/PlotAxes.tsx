@@ -115,7 +115,7 @@ export function PlotAxes({
           const py = yPixel(t.frac);
           const clampedY = Math.min(height - pad - 1, Math.max(pad + 6, py));
           return (
-            <text key={`ty${i}`} className="scope-tick mono-num" textAnchor="end" x={pad - 7} y={clampedY + 3}>
+            <text key={`ty${i}`} className="scope-tick mono-num" textAnchor="end" x={pad - 4} y={clampedY + 3}>
               {t.label}
             </text>
           );
@@ -129,10 +129,10 @@ export function PlotAxes({
       {yAxisTitle && (
         <text
           className="scope-axis-title mono-num"
-          x={11}
+          x={5}
           y={pad + innerH / 2}
           textAnchor="middle"
-          transform={`rotate(-90 11 ${pad + innerH / 2})`}
+          transform={`rotate(-90 5 ${pad + innerH / 2})`}
         >
           {yUnit ? `${yAxisTitle} (${yUnit})` : yAxisTitle}
         </text>

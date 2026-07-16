@@ -80,13 +80,24 @@ export function sparklinePath(values: readonly number[], width = 112, height = 3
     .join(" ");
 }
 
-function Sparkline({ series }: { series: MeasuredSeries }) {
+function Sparkline({
+  series,
+  tone = "default",
+}: {
+  series: MeasuredSeries;
+  tone?: "default" | "voltage" | "current";
+}) {
   const path = sparklinePath(series.values);
   if (!path) return <span className="text-xs text-muted-foreground">No waveform</span>;
   const description = `${series.label}: ${classificationText(series)}`;
   return (
     <svg
-      className="h-8 w-28 shrink-0 overflow-visible text-primary"
+      className={cn(
+        "h-8 w-28 shrink-0 overflow-visible text-primary",
+        tone !== "default" && "telemetry-waveform-svg",
+        tone === "voltage" && "telemetry-waveform-svg--voltage",
+        tone === "current" && "telemetry-waveform-svg--current",
+      )}
       viewBox="0 0 112 32"
       role="img"
       aria-label={description}
@@ -278,6 +289,11 @@ function CompactMeasurementCard({
   selected: boolean;
   onSelect: (componentId: string | null) => void;
 }) {
+  const varyingSeries = [
+    row.voltage?.classification.kind !== "steady" ? { quantity: "V(t)", tone: "voltage" as const, series: row.voltage } : null,
+    row.current?.classification.kind !== "steady" ? { quantity: "I(t)", tone: "current" as const, series: row.current } : null,
+  ].filter((entry): entry is { quantity: string; tone: "voltage" | "current"; series: MeasuredSeries } => Boolean(entry?.series));
+
   return (
     <li className="telemetry-card-item">
       <button
@@ -295,6 +311,25 @@ function CompactMeasurementCard({
           <CompactReading label="Current" series={row.current} />
           <CompactReading label="Power" series={row.power} />
         </dl>
+        {varyingSeries.length > 0 && (
+          <div className="telemetry-waveforms" role="group" aria-label={`${row.ref} time-varying voltage and current`}>
+            <div className="telemetry-waveforms-head">
+              <span>Waveform preview</span>
+              <span>Probe for a full time-axis plot</span>
+            </div>
+            <div className="telemetry-waveforms-grid">
+              {varyingSeries.map(({ quantity, tone, series }) => (
+                <div className="telemetry-waveform" key={series.id}>
+                  <div className="telemetry-waveform-label">
+                    <span>{quantity}</span>
+                    <span>{classificationText(series)}</span>
+                  </div>
+                  <Sparkline series={series} tone={tone} />
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
         <MeasurementAdvisories advisories={row.advisories} compact />
       </button>
     </li>

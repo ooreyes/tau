@@ -146,8 +146,9 @@ interface SimulationPanelProps {
 
 const PLOT_WIDTH = 340;
 const PLOT_HEIGHT = 210;
-// Labels and axis titles need separate visual bands; 46 keeps a readable
-// gutter at the 340px card width without sacrificing the trace viewport.
+// Labels and axis titles need separate visual bands; the shared plot box stays
+// at 46px so the waveform retains useful vertical range. PlotAxes places the
+// vertical title and Y tick anchors at opposite sides of this gutter.
 const PLOT_PAD = 46;
 
 export function SimulationPanel({
