@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="bg" x1="160" y1="92" x2="864" y2="932" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#20272c"/>
+      <stop offset="1" stop-color="#0c1114"/>
+    </linearGradient>
+    <linearGradient id="body" x1="270" y1="350" x2="746" y2="682" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#56e4df"/>
+      <stop offset="1" stop-color="#15a9b6"/>
+    </linearGradient>
+    <filter id="shadow" x="90" y="240" width="844" height="560" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="28" stdDeviation="30" flood-color="#000" flood-opacity=".42"/>
+    </filter>
+  </defs>
+  <rect x="42" y="42" width="940" height="940" rx="226" fill="url(#bg)"/>
+  <rect x="58" y="58" width="908" height="908" rx="210" fill="none" stroke="#394249" stroke-width="8"/>
+  <g filter="url(#shadow)">
+    <path d="M124 512h156M744 512h156" stroke="#b8c3c8" stroke-width="46" stroke-linecap="round"/>
+    <rect x="246" y="328" width="532" height="368" rx="160" fill="url(#body)" stroke="#84fff5" stroke-width="16"/>
+    <path d="M340 348v328M404 334v356M620 334v356M684 348v328" stroke="#ffd166" stroke-width="34" opacity=".92"/>
+    <circle cx="442" cy="488" r="25" fill="#132127"/>
+    <circle cx="582" cy="488" r="25" fill="#132127"/>
+    <path d="M418 568c28 40 59 60 94 60s66-20 94-60" fill="none" stroke="#132127" stroke-width="28" stroke-linecap="round"/>
+    <circle cx="512" cy="512" r="242" fill="none" stroke="#20d7d1" stroke-width="10" opacity=".22"/>
+  </g>
+</svg>

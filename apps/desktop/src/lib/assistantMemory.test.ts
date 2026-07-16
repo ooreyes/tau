@@ -1,13 +1,22 @@
 // @vitest-environment jsdom
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { parseCreateAscAction } from "./assistantActions";
 import {
   clearAssistantRecovery,
+  createConversation,
+  deleteConversation,
+  getActiveConversationId,
+  listConversations,
   loadAssistantHistory,
   loadAssistantRecovery,
+  loadConversation,
+  migrateConversation,
+  renameConversation,
   saveAssistantHistory,
   saveAssistantRecovery,
+  saveConversationMessages,
+  setActiveConversationId,
 } from "./assistantMemory";
 
 const VALID_ASC = `Version 4
@@ -120,5 +129,191 @@ describe("assistant document memory", () => {
 
     clearAssistantRecovery("tank.asc");
     expect(loadAssistantRecovery("tank.asc")).toBeNull();
+  });
+});
+
+describe("assistant conversation store", () => {
+  beforeEach(() => localStorage.clear());
+  afterEach(() => vi.useRealTimers());
+
+  it("creates, saves, and lists conversations newest-updated first", () => {
+    vi.useFakeTimers();
+    const firstId = createConversation();
+    vi.setSystemTime(1_000);
+    saveConversationMessages("proj.asc", firstId, [{ role: "user", content: "First question" }]);
+
+    const secondId = createConversation();
+    vi.setSystemTime(2_000);
+    saveConversationMessages("proj.asc", secondId, [{ role: "user", content: "Second question" }]);
+
+    const list = listConversations("proj.asc");
+    expect(list.map((conversation) => conversation.id)).toEqual([secondId, firstId]);
+    expect(list[0].title).toBe("Second question");
+    expect(list[1].title).toBe("First question");
+    expect(loadConversation("proj.asc", secondId)?.title).toBe("Second question");
+    expect(loadConversation("proj.asc", "missing-id")).toBeNull();
+  });
+
+  it("never persists a conversation that only ever held empty messages", () => {
+    const id = createConversation();
+    saveConversationMessages("empty.asc", id, []);
+    saveConversationMessages("empty.asc", id, [{ role: "user", content: "   " }]);
+    expect(listConversations("empty.asc")).toEqual([]);
+  });
+
+  it("freezes the title at first save instead of drifting on later turns", () => {
+    const id = createConversation();
+    const longPrompt = "Explain the RC time constant for this low-pass filter in as much detail as possible please";
+    saveConversationMessages("title.asc", id, [{ role: "user", content: longPrompt }]);
+    const firstTitle = loadConversation("title.asc", id)?.title;
+    expect(firstTitle?.length).toBeLessThanOrEqual(48); // ellipsis counts against the cap
+    expect(firstTitle?.endsWith("…")).toBe(true);
+
+    saveConversationMessages("title.asc", id, [
+      { role: "user", content: longPrompt },
+      { role: "assistant", content: "R1 and C1 set the pole." },
+      { role: "user", content: "A completely different second question" },
+    ]);
+    expect(loadConversation("title.asc", id)?.title).toBe(firstTitle);
+  });
+
+  it("renames a saved conversation while preserving and bounding its transcript", () => {
+    const id = createConversation();
+    saveConversationMessages("rename.asc", id, [
+      { role: "user", content: "Old opening prompt" },
+      { role: "assistant", content: "An answer" },
+    ]);
+
+    renameConversation("rename.asc", id, "  A much better opening prompt for this circuit  ");
+
+    expect(loadConversation("rename.asc", id)).toEqual(expect.objectContaining({
+      title: "A much better opening prompt for this circuit",
+      messages: [
+        { role: "user", content: "Old opening prompt" },
+        { role: "assistant", content: "An answer" },
+      ],
+    }));
+  });
+
+  it("falls back to \"New chat\" when the first bounded message has no user turn", () => {
+    const id = createConversation();
+    saveConversationMessages("fallback.asc", id, [{ role: "assistant", content: "Hello, how can I help?" }]);
+    expect(loadConversation("fallback.asc", id)?.title).toBe("New chat");
+  });
+
+  it("migrates a legacy single-thread history into one conversation on first read, and only once", () => {
+    saveAssistantHistory("legacy.asc", [
+      { role: "user", content: "What does R1 do?" },
+      { role: "assistant", content: "It sets the gain." },
+    ]);
+
+    const list = listConversations("legacy.asc");
+    expect(list).toHaveLength(1);
+    expect(list[0].title).toBe("What does R1 do?");
+    expect(list[0].messages).toEqual([
+      { role: "user", content: "What does R1 do?" },
+      { role: "assistant", content: "It sets the gain." },
+    ]);
+    expect(getActiveConversationId("legacy.asc")).toBe(list[0].id);
+    // Folded in and removed — a second read must not fabricate a duplicate.
+    expect(loadAssistantHistory("legacy.asc")).toEqual([]);
+    const secondRead = listConversations("legacy.asc");
+    expect(secondRead).toHaveLength(1);
+    expect(secondRead[0].id).toBe(list[0].id);
+  });
+
+  it("does not fabricate a conversation for a circuit with no legacy history", () => {
+    expect(listConversations("brand-new.asc")).toEqual([]);
+  });
+
+  it("deletes a conversation, clearing the active pointer only when it pointed at the deleted one", () => {
+    const keepId = createConversation();
+    saveConversationMessages("del.asc", keepId, [{ role: "user", content: "Keep me" }]);
+    const dropId = createConversation();
+    saveConversationMessages("del.asc", dropId, [{ role: "user", content: "Drop me" }]);
+    setActiveConversationId("del.asc", dropId);
+
+    deleteConversation("del.asc", dropId);
+
+    expect(listConversations("del.asc").map((conversation) => conversation.id)).toEqual([keepId]);
+    expect(getActiveConversationId("del.asc")).toBeNull();
+
+    // Deleting a conversation that isn't the active one leaves the pointer alone.
+    setActiveConversationId("del.asc", keepId);
+    deleteConversation("del.asc", "not-a-real-id");
+    expect(getActiveConversationId("del.asc")).toBe(keepId);
+  });
+
+  it("bounds the number of saved conversations per circuit, dropping the oldest by updatedAt", () => {
+    vi.useFakeTimers();
+    const ids: string[] = [];
+    for (let index = 0; index < 31; index += 1) {
+      const id = createConversation();
+      vi.setSystemTime(1_000 + index);
+      saveConversationMessages("many.asc", id, [{ role: "user", content: `Question ${index}` }]);
+      ids.push(id);
+    }
+
+    const list = listConversations("many.asc");
+    expect(list).toHaveLength(30);
+    expect(list.some((conversation) => conversation.id === ids[0])).toBe(false);
+    expect(list[0].id).toBe(ids[30]);
+  });
+
+  it("round-trips the active-id pointer independent of whether that conversation exists", () => {
+    expect(getActiveConversationId("ptr.asc")).toBeNull();
+    setActiveConversationId("ptr.asc", "some-id");
+    expect(getActiveConversationId("ptr.asc")).toBe("some-id");
+  });
+
+  it("migrates an active conversation onto a new memoryKey (assistant Create remount)", () => {
+    const id = createConversation();
+    saveConversationMessages("untitled.asc", id, [
+      { role: "user", content: "Build an RC filter" },
+      { role: "assistant", content: "Here is a plan." },
+    ]);
+    setActiveConversationId("untitled.asc", id);
+
+    expect(migrateConversation("untitled.asc", "rc-filter.asc")).toBe(id);
+    expect(getActiveConversationId("rc-filter.asc")).toBe(id);
+    expect(loadConversation("rc-filter.asc", id)?.messages).toEqual([
+      { role: "user", content: "Build an RC filter" },
+      { role: "assistant", content: "Here is a plan." },
+    ]);
+    expect(loadConversation("rc-filter.asc", id)?.title).toBe("Build an RC filter");
+    // Source key is left intact — migrate is a copy, not a move.
+    expect(loadConversation("untitled.asc", id)?.messages).toHaveLength(2);
+  });
+
+  it("migrateConversation no-ops when keys match or the source thread is empty", () => {
+    const id = createConversation();
+    expect(migrateConversation("same.asc", "same.asc", id)).toBe(id);
+    expect(migrateConversation("empty-from.asc", "empty-to.asc")).toBeNull();
+    saveConversationMessages("empty-from.asc", id, []);
+    expect(migrateConversation("empty-from.asc", "empty-to.asc", id)).toBeNull();
+  });
+});
+
+describe("assistant conversation store — localStorage unavailable", () => {
+  let originalDescriptor: PropertyDescriptor | undefined;
+
+  beforeEach(() => {
+    originalDescriptor = Object.getOwnPropertyDescriptor(globalThis, "localStorage");
+    Object.defineProperty(globalThis, "localStorage", { configurable: true, value: undefined });
+  });
+
+  afterEach(() => {
+    if (originalDescriptor) Object.defineProperty(globalThis, "localStorage", originalDescriptor);
+  });
+
+  it("no-ops instead of throwing when browser storage is unavailable", () => {
+    expect(listConversations("any.asc")).toEqual([]);
+    expect(loadConversation("any.asc", "some-id")).toBeNull();
+    expect(typeof createConversation()).toBe("string");
+    expect(() => saveConversationMessages("any.asc", "some-id", [{ role: "user", content: "hi" }])).not.toThrow();
+    expect(() => deleteConversation("any.asc", "some-id")).not.toThrow();
+    expect(getActiveConversationId("any.asc")).toBeNull();
+    expect(() => setActiveConversationId("any.asc", "some-id")).not.toThrow();
+    expect(migrateConversation("a.asc", "b.asc")).toBeNull();
   });
 });

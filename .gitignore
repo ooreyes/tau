@@ -19,6 +19,9 @@ apps/desktop/src-tauri/resources/ngspice/**
 npm-debug.log*
 pnpm-debug.log*
 
+# Agent → live Tau refresh stamp (touched by scripts/refresh-tau-app.sh)
+apps/desktop/.agent-reload
+
 # Editor / OS
 .DS_Store
 .idea/

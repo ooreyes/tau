@@ -5,24 +5,37 @@
  * grounds its answers in. Built fresh at send time — not kept live — so it
  * always reflects exactly the circuit the user is asking about right now.
  */
-import type { NetLabel, SchematicComponent, SchematicWire } from "../schematic/types";
+import type { NetLabel, Probe, SchematicComponent, SchematicWire } from "../schematic/types";
+import { extractCircuit, netAtPoint } from "../schematic/netlist";
 import type { ParamScope } from "../simulation/paramScope";
 import type { AnalysisResult } from "../simulation/linearTransient";
 import type { ComponentMeasurement } from "../simulation/measurementModel";
 import type { MeasResult } from "../simulation/measure";
+import type { OperatingPointResult } from "../simulation/operatingPoint";
+import type { AcResult } from "../simulation/acSweep";
+import type { DcSweepResult } from "../simulation/dcSweep";
+import type { FourierResult } from "../simulation/fourier";
 import { buildSpiceDeck } from "../engine/spiceNetlist";
 import { schematicToAsc } from "../io/ascExport";
 import { formatEngineering } from "../simulation/quantity";
+import { classifySignal, traceStatistics } from "../simulation/measurementModel";
 import { primaryReading } from "../components/ComponentMeasurementsPanel";
 
 export interface AssistantContextInput {
   components: SchematicComponent[];
   wires: SchematicWire[];
   netLabels: NetLabel[];
+  /** Active meter probes — resolved to net / branch names for the model. */
+  probes?: readonly Probe[];
   directives: string[];
   params: ParamScope;
   /** Latest transient result, or null if nothing has been run yet. */
   analysis: AnalysisResult | null;
+  /** Brief summaries only — never dump full OP/AC/DC/Fourier arrays. */
+  opResult?: OperatingPointResult | null;
+  acResult?: AcResult | null;
+  dcResult?: DcSweepResult | null;
+  fourier?: readonly FourierResult[];
   componentRows: readonly ComponentMeasurement[];
   measurements?: readonly MeasResult[];
   selectedId: string | null;
@@ -40,6 +53,85 @@ export interface AssistantContextOptions {
   /** Exact ASC is needed only for an edit of the open document. New-circuit
    *  generation and ordinary Q&A use the smaller netlist/component summary. */
   includeCurrentAsc?: boolean;
+}
+
+export interface AssistantSuggestion {
+  /** Short chip copy; the full, grounded request is kept in `prompt`. */
+  label: string;
+  prompt: string;
+}
+
+/**
+ * Contextual starter prompts for the assistant composer. This is deliberately
+ * local and deterministic: suggestions update instantly with selection and
+ * simulation state without spending tokens on a second model call merely to
+ * decide what the model could be asked.
+ */
+export function buildAssistantSuggestions(input: AssistantContextInput): AssistantSuggestion[] {
+  const suggestions: AssistantSuggestion[] = [];
+  const selected = input.selectedId
+    ? input.components.find((component) => component.id === input.selectedId)
+    : null;
+
+  if (selected) {
+    const ref = selected.label || selected.id;
+    suggestions.push({
+      label: `Explain ${ref}`,
+      prompt: `Explain ${ref}'s role in this schematic and how its value affects the current circuit.`,
+    });
+  }
+
+  if (input.analysis?.ok) {
+    const signal = input.analysis.traces[0]?.label ?? input.analysis.currents[0]?.label;
+    suggestions.push(signal ? {
+      label: `Analyze ${signal}`,
+      prompt: `Analyze the latest ${signal} waveform in this schematic. Call out its level, shape, frequency, and anything unexpected.`,
+    } : {
+      label: "Analyze this run",
+      prompt: "Analyze the latest simulation results for this schematic and call out anything unexpected.",
+    });
+  } else if (input.analysis && !input.analysis.ok) {
+    suggestions.push({
+      label: "Diagnose failed run",
+      prompt: `Diagnose the latest simulation failure in this schematic and recommend the smallest fix: ${input.analysis.message}`,
+    });
+  } else if (input.acResult?.ok) {
+    suggestions.push({
+      label: "Find cutoff / resonance",
+      prompt: "Analyze the latest AC sweep for this schematic. Identify its cutoff or resonant frequency, bandwidth, and gain.",
+    });
+  }
+
+  const placed = input.components.filter((component) => component.kind !== "ground");
+  if (placed.length > 0) {
+    const refs = placed
+      .slice(0, 4)
+      .map((component) => component.label || component.id)
+      .join(", ");
+    suggestions.push({
+      label: "Review this design",
+      prompt: `Review this ${placed.length}-component schematic (${refs}${placed.length > 4 ? ", …" : ""}) for wiring, value, biasing, and simulation issues.`,
+    });
+    if (!input.analysis && !input.opResult && !input.acResult && !input.dcResult) {
+      suggestions.push({
+        label: "Choose an analysis",
+        prompt: "Based on this schematic and its directives, which simulation analysis should I run first, and what should I probe?",
+      });
+    }
+  } else {
+    suggestions.push(
+      {
+        label: "Build an RC filter",
+        prompt: "Build a practical first-order RC low-pass filter with labeled input and output nodes plus useful AC and transient analyses.",
+      },
+      {
+        label: "Build an LC tank",
+        prompt: "Build a practical LC resonant tank with a driven input, labeled output node, and analyses that reveal its resonance.",
+      },
+    );
+  }
+
+  return suggestions.slice(0, 3);
 }
 
 // A complete current ASC is more important than verbose analysis summaries for
@@ -138,17 +230,170 @@ function buildComponentSection(input: AssistantContextInput): string {
   return `Components (${placed.length}):\n${lines.join("\n")}`;
 }
 
+// Every trace the user can see plotted, capped so a large multi-net run can't
+// crowd out the rest of the context. Voltage nets first (what plots usually
+// show), then branch currents.
+const MAX_TRACE_LINES = 40;
+
+/** One compact per-signal line so the model can reason about what each plot
+ *  actually shows (ripple, DC offset, frequency) instead of guessing from the
+ *  net list or issuing an inspect_simulation_signal call for every trace. */
+function traceLine(label: string, unit: string, times: number[], values: number[]): string | null {
+  const stats = traceStatistics(times, values);
+  if (!stats) return null;
+  const bits = [
+    `${label}: final ${formatEngineering(stats.final, unit, 3)}`,
+    `pk-pk ${formatEngineering(stats.max - stats.min, unit, 3)}`,
+    `rms ${formatEngineering(stats.rms, unit, 3)}`,
+    `range ${formatEngineering(stats.min, unit, 3)}…${formatEngineering(stats.max, unit, 3)}`,
+  ];
+  const classification = classifySignal(times, values);
+  if (classification.kind === "periodic" && classification.frequency !== undefined) {
+    bits.push(`~${formatEngineering(classification.frequency, "Hz", 3)}`);
+  } else if (classification.kind === "steady") {
+    bits.push("steady");
+  }
+  return bits.join(", ");
+}
+
+function buildTraceSection(analysis: Extract<AnalysisResult, { ok: true }>): string {
+  const { times } = analysis;
+  const signals: Array<{ label: string; unit: string; values: number[] }> = [
+    ...analysis.traces.map((trace) => ({ label: trace.label, unit: trace.unit, values: trace.values })),
+    ...analysis.currents.map((current) => ({ label: current.label, unit: "A", values: current.values })),
+  ];
+  const lines = signals
+    .slice(0, MAX_TRACE_LINES)
+    .map((signal) => traceLine(signal.label, signal.unit, times, signal.values))
+    .filter((line): line is string => line !== null);
+  if (lines.length === 0) return "";
+  const omitted = signals.length - lines.length;
+  const header = `Plotted signals (${lines.length}${omitted > 0 ? ` of ${signals.length}` : ""}, exact statistics):`;
+  return `${header}\n${lines.join("\n")}`;
+}
+
+/** Resolve active probes to the same names the plot uses (V(net) / I(ref)). */
+function buildProbesSection(input: AssistantContextInput): string {
+  const probes = input.probes ?? [];
+  if (probes.length === 0) return "Active probes: none.";
+  let nets;
+  try {
+    nets = input.analysis?.ok
+      ? input.analysis.circuit.nets
+      : extractCircuit(input.components, input.wires, input.netLabels).nets;
+  } catch {
+    return `Active probes: ${probes.length} placed (net resolution unavailable).`;
+  }
+  const names: string[] = [];
+  for (const probe of probes) {
+    if (probe.componentId) {
+      const component = input.components.find((candidate) => candidate.id === probe.componentId);
+      names.push(component?.label ? `I(${component.label})` : "I(?)");
+      continue;
+    }
+    const net = netAtPoint(nets, input.wires, probe);
+    if (!net || net.isGround) continue;
+    names.push(`V(${net.id})`);
+  }
+  if (names.length === 0) return "Active probes: none resolved.";
+  const unique = [...new Set(names)];
+  return `Active probes (${unique.length}): ${unique.join(", ")}.`;
+}
+
+const MAX_OP_NET_SAMPLES = 8;
+const MAX_FOURIER_LINES = 4;
+
+/** Compact one-liners for non-transient results already sitting in App state —
+ *  enough for the model to know what exists without shipping full arrays. */
+function buildOtherResultsSection(input: AssistantContextInput): string {
+  const lines: string[] = [];
+  const { opResult, acResult, dcResult, fourier } = input;
+
+  if (opResult) {
+    if (opResult.ok) {
+      const sample = opResult.nets
+        .filter((net) => net.label !== "0" && net.label.toLowerCase() !== "gnd")
+        .slice(0, MAX_OP_NET_SAMPLES)
+        .map((net) => `${net.label}=${formatEngineering(net.voltage, "V", 3)}`);
+      const omitted = Math.max(0, opResult.nets.length - sample.length);
+      lines.push(
+        `OP: ${opResult.nets.length} nets`
+        + (sample.length > 0 ? ` (${sample.join(", ")}${omitted > 0 ? `, …+${omitted}` : ""})` : "")
+        + ".",
+      );
+    } else {
+      lines.push(`OP: failed — ${opResult.message}`);
+    }
+  }
+
+  if (acResult) {
+    if (acResult.ok) {
+      const freqs = acResult.freqs;
+      const fMin = freqs[0];
+      const fMax = freqs[freqs.length - 1];
+      lines.push(
+        `AC: ${freqs.length} points, ${acResult.traces.length} traces`
+        + (freqs.length > 0
+          ? `, ${formatEngineering(fMin, "Hz", 3)}…${formatEngineering(fMax, "Hz", 3)}`
+          : "")
+        + ".",
+      );
+    } else {
+      lines.push(`AC: failed — ${acResult.message}`);
+    }
+  }
+
+  if (dcResult) {
+    if (dcResult.ok) {
+      lines.push(
+        `DC: sweep ${dcResult.source}, ${dcResult.sweep.length} points, ${dcResult.nets.length} nets.`,
+      );
+    } else {
+      lines.push(`DC: failed — ${dcResult.message}`);
+    }
+  }
+
+  if (fourier && fourier.length > 0) {
+    for (const entry of fourier.slice(0, MAX_FOURIER_LINES)) {
+      lines.push(
+        `Fourier ${entry.output}: fund ${formatEngineering(entry.frequency, "Hz", 3)}, `
+        + `THD ${(entry.thd * 100).toFixed(2)}%, DC ${formatEngineering(entry.dc, "", 3)}.`,
+      );
+    }
+    if (fourier.length > MAX_FOURIER_LINES) {
+      lines.push(`Fourier: …+${fourier.length - MAX_FOURIER_LINES} more outputs.`);
+    }
+  }
+
+  return lines.join("\n");
+}
+
 function buildAnalysisSection(input: AssistantContextInput): string {
   const { analysis } = input;
-  if (!analysis) return "Analysis: no simulation has been run yet.";
-  if (!analysis.ok) return `Analysis: last transient run failed — ${analysis.message}`;
+  const probeLine = buildProbesSection(input);
+  const otherResults = buildOtherResultsSection(input);
+
+  if (!analysis) {
+    const lines = ["Analysis: no simulation has been run yet.", probeLine];
+    if (otherResults) lines.push(otherResults);
+    return lines.join("\n");
+  }
+  if (!analysis.ok) {
+    const lines = [`Analysis: last transient run failed — ${analysis.message}`, probeLine];
+    if (otherResults) lines.push(otherResults);
+    return lines.join("\n");
+  }
 
   const { stats, warnings } = analysis;
   const lines = [
     `Analysis: transient, ${stats.sampleCount.toLocaleString()} samples over `
     + `${formatEngineering(stats.stopTime, "s", 3)}, ${stats.netCount} nets, `
     + `${stats.componentCount} components.`,
+    probeLine,
   ];
+  const traceSection = buildTraceSection(analysis);
+  if (traceSection) lines.push(traceSection);
+  if (otherResults) lines.push(otherResults);
   if (warnings.length > 0) lines.push(`Warnings: ${warnings.join("; ")}`);
   if (input.measurements && input.measurements.length > 0) {
     const measLines = input.measurements.map((m) => (

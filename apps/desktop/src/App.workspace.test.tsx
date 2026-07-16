@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // Forces the real useProject store's ensureDefaultWorkspace (see
@@ -32,6 +32,14 @@ vi.mock("./lib/localAiRuntime", async (importOriginal) => ({
 }));
 
 import App from "./App";
+import {
+  createConversation,
+  saveConversationMessages,
+  setActiveConversationId,
+} from "./lib/assistantMemory";
+import { DEFAULT_WORKSPACE_ID, DEFAULT_WORKSPACE_NAME } from "./project/defaultWorkspace";
+import { useProject } from "./store/useProject";
+import { useSchematic } from "./store/useSchematic";
 
 const storage = new Map<string, string>();
 Object.defineProperty(globalThis, "localStorage", {
@@ -59,12 +67,36 @@ beforeEach(() => {
   shellWidth = 1440;
   storage.clear();
   storage.set("tau.assistant.open", "1");
+  useProject.setState({
+    rootPath: null,
+    rootName: null,
+    tree: [],
+    expanded: [],
+    workspaceFiles: {},
+    error: null,
+    capability: "tauri",
+  });
 });
 afterEach(() => cleanup());
 
+async function renderOpenProject() {
+  useProject.setState({
+    rootPath: DEFAULT_WORKSPACE_ID,
+    rootName: DEFAULT_WORKSPACE_NAME,
+    tree: [],
+    expanded: [DEFAULT_WORKSPACE_ID],
+    workspaceFiles: {},
+    error: null,
+    capability: "none",
+  });
+  render(<App />);
+  fireEvent.click(screen.getByRole("button", { name: "New schematic" }));
+  await screen.findByRole("tab", { name: /untitled\.asc/ });
+}
+
 describe("App schematic workspace tools", () => {
-  it("keeps Components and Assistant as simultaneous independently resizable columns", () => {
-    render(<App />);
+  it("keeps Components and Assistant as simultaneous independently resizable columns", async () => {
+    await renderOpenProject();
 
     expect(screen.getByRole("complementary", { name: "Components" })).toBeTruthy();
     expect(screen.getByRole("complementary", { name: "Assistant" })).toBeTruthy();
@@ -76,14 +108,14 @@ describe("App schematic workspace tools", () => {
     expect(screen.getByRole("complementary", { name: "Components" })).toBeTruthy();
     expect(screen.queryByRole("complementary", { name: "Assistant" })).toBeNull();
 
-    fireEvent.click(screen.getByRole("button", { name: "Open Tau assistant" }));
+    fireEvent.click(screen.getByRole("button", { name: "Open Tauri" }));
     expect(screen.getByRole("complementary", { name: "Components" })).toBeTruthy();
     expect(screen.getByRole("complementary", { name: "Assistant" })).toBeTruthy();
   });
 
-  it("keeps AI and Components together at 900px, yielding Explorer until explicitly requested", () => {
+  it("keeps AI and Components together at 900px, yielding Explorer until explicitly requested", async () => {
     shellWidth = 900;
-    render(<App />);
+    await renderOpenProject();
 
     expect(screen.getByRole("complementary", { name: "Assistant" })).toBeTruthy();
     expect(screen.getByRole("complementary", { name: "Components" })).toBeTruthy();
@@ -104,91 +136,69 @@ describe("App schematic workspace tools", () => {
     expect(screen.getByRole("complementary", { name: "Project explorer" })).toBeTruthy();
   });
 
-  it("uses the same independent Assistant column in simulator mode", () => {
-    render(<App />);
+  it("uses the same independent Assistant column in simulator mode", async () => {
+    await renderOpenProject();
     fireEvent.click(screen.getByRole("button", { name: "Simulator" }));
 
     expect(screen.getByRole("complementary", { name: "Assistant" })).toBeTruthy();
     expect(screen.getByRole("separator", { name: "Resize assistant panel" })).toBeTruthy();
     expect(screen.queryByRole("complementary", { name: "Components" })).toBeNull();
   });
-});
 
-// Drives the assistant's local-mlx chat path (the default provider — see
-// lib/assistantPreferences.ts) through a raw `fetch` mock returning an
-// OpenAI-shaped tool call, the same shape AssistantPanel.test.tsx's local
-// tests use. This is the only way to reach App.tsx's own createAssistantCircuit
-// callback: it's a closure, not an exported/mockable unit.
-function stubLocalCreateCircuit(filename: string, directives: string[]) {
-  const fetchMock = vi.fn(async () => new Response(JSON.stringify({
-    choices: [{
-      message: {
-        role: "assistant",
-        content: "I put together a quick circuit.",
-        tool_calls: [{
-          id: "local-create",
-          type: "function",
-          function: {
-            name: "build_tau_circuit",
-            arguments: JSON.stringify({
-              mode: "create",
-              filename,
-              components: [
-                { ref: "V1", kind: "vsource", value: "5" },
-                { ref: "R1", kind: "resistor", value: "1k" },
-              ],
-              nets: [
-                { name: "vin", pins: ["V1.p", "R1.a"] },
-                { name: "0", pins: ["V1.n", "R1.b"] },
-              ],
-              directives,
-            }),
-          },
-        }],
-      },
-    }],
-  }), { status: 200, headers: { "Content-Type": "application/json" } }));
-  vi.stubGlobal("fetch", fetchMock);
-  return fetchMock;
-}
+  it("keeps the assistant transcript mounted across Schematic ↔ Simulator switches", async () => {
+    const id = createConversation();
+    saveConversationMessages(`${DEFAULT_WORKSPACE_ID}/untitled.asc`, id, [
+      { role: "user", content: "What does R1 do?" },
+      { role: "assistant", content: "R1 sets the gain." },
+    ]);
+    setActiveConversationId(`${DEFAULT_WORKSPACE_ID}/untitled.asc`, id);
 
-describe("App assistant circuit creation without a Schematics folder", () => {
-  it("opens the created circuit as an unsaved scratchpad tab with the fallback notice", async () => {
-    stubLocalCreateCircuit("scratch-rc.asc", []); // no auto-runnable directive here
-    render(<App />);
+    await renderOpenProject();
+    expect(screen.getByText("What does R1 do?")).toBeTruthy();
+    expect(screen.getByText("R1 sets the gain.")).toBeTruthy();
 
-    fireEvent.change(screen.getByRole("textbox", { name: "Message the assistant" }), {
-      target: { value: "Create a quick RC circuit" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    fireEvent.click(screen.getByRole("button", { name: "Simulator" }));
+    expect(screen.getByRole("complementary", { name: "Assistant" })).toBeTruthy();
+    expect(screen.getByText("What does R1 do?")).toBeTruthy();
+    expect(screen.getByText("R1 sets the gain.")).toBeTruthy();
 
-    fireEvent.click(await screen.findByRole("button", { name: "Create scratch-rc.asc" }));
-
-    // The tab opened with no on-disk path — the same schematic view stays up
-    // (no auto-run directive to switch into the simulator) and shows the
-    // scratchpad-specific notice instead of "Couldn't create …".
-    expect(await screen.findByRole("tab", { name: /scratch-rc\.asc/ })).toBeTruthy();
-    expect(await screen.findByText(
-      "Opened scratch-rc.asc as a scratchpad — choose a Schematics folder to save files.",
-    )).toBeTruthy();
-    expect(screen.queryByText(/Couldn't create/)).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Schematic" }));
+    expect(screen.getByText("What does R1 do?")).toBeTruthy();
+    expect(screen.getByText("R1 sets the gain.")).toBeTruthy();
   });
 
-  it("still latches and fires the assistant's requested analysis for a scratchpad circuit", async () => {
-    stubLocalCreateCircuit("scratch-op.asc", [".op"]);
+  it("shows an unsaved dot after an edit and clears it after Save", async () => {
+    await renderOpenProject();
+
+    act(() => useSchematic.getState().addComponent("resistor", 120, 120));
+    expect(await screen.findByRole("img", { name: "untitled.asc has unsaved changes" })).toBeTruthy();
+    expect(screen.getByText("untitled.asc •")).toBeTruthy();
+
+    fireEvent.keyDown(document.body, { key: "s", metaKey: true });
+    await waitFor(() => {
+      expect(screen.queryByRole("img", { name: "untitled.asc has unsaved changes" })).toBeNull();
+      expect(screen.getAllByText("untitled.asc").length).toBeGreaterThan(0);
+    });
+  });
+});
+
+describe("App project-folder gate", () => {
+  it("requires a project before exposing schematic editing or Tauri", () => {
     render(<App />);
 
-    fireEvent.change(screen.getByRole("textbox", { name: "Message the assistant" }), {
-      target: { value: "Create a circuit and check its operating point" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    expect(screen.getByRole("heading", { name: "Open a project folder" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Open folder" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Create project" })).toBeTruthy();
+    expect(screen.queryByRole("tab")).toBeNull();
+    expect(screen.queryByRole("complementary", { name: "Components" })).toBeNull();
+    expect(screen.queryByRole("complementary", { name: "Assistant" })).toBeNull();
+  });
 
-    fireEvent.click(await screen.findByRole("button", { name: "Create scratch-op.asc" }));
-
-    // pendingAutoRunRef is set before the pathless-tab branch returns, and the
-    // directives-keyed effect in App.tsx still picks it up once loadCircuit
-    // (inside openDocument) lands the scratchpad's .op directive in the
-    // schematic store — evidenced by the switch into the simulator dashboard.
-    await waitFor(() => expect(screen.getByRole("region", { name: "Circuit overview" })).toBeTruthy());
+  it("does not let the toolbar bypass the project gate", () => {
+    render(<App />);
+    for (const name of ["Close Tauri", "Run simulation", "Simulator", "Components", "Waveforms"]) {
+      expect(screen.getByRole("button", { name }).hasAttribute("disabled")).toBe(true);
+    }
+    expect(screen.queryByRole("complementary", { name: "Assistant" })).toBeNull();
   });
 });

@@ -1,8 +1,8 @@
 import type { AnalysisResult } from "../simulation/linearTransient";
-import { Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
+import { TauriMascot } from "./TauriMascot";
 
 interface ToolbarProps {
   mode: "schematic" | "simulator";
@@ -11,6 +11,8 @@ interface ToolbarProps {
   isRunning: boolean;
   title: string;
   assistantOpen: boolean;
+  projectOpen?: boolean;
+  schematicOpen?: boolean;
   onModeChange: (mode: "schematic" | "simulator") => void;
   onRun: () => void;
   onToggleAssistant: () => void;
@@ -19,7 +21,7 @@ interface ToolbarProps {
 
 type LampState = "idle" | "running" | "ok" | "error" | "warn";
 
-export function Toolbar({ mode, result, runState, isRunning, title, assistantOpen, onModeChange, onRun, onToggleAssistant, onOpenSettings }: ToolbarProps) {
+export function Toolbar({ mode, result, runState, isRunning, title, assistantOpen, projectOpen = true, schematicOpen = true, onModeChange, onRun, onToggleAssistant, onOpenSettings }: ToolbarProps) {
   const isSimulator = mode === "simulator";
   const runHasError = !isRunning && (runState === "error" || result?.ok === false);
   const runIsAcceptable = !isRunning && runState === "complete" && result?.ok === true;
@@ -70,6 +72,7 @@ export function Toolbar({ mode, result, runState, isRunning, title, assistantOpe
           className={`mode-btn${mode === "schematic" ? " active" : ""}`}
           onClick={() => onModeChange("schematic")}
           aria-pressed={mode === "schematic"}
+          disabled={!projectOpen}
         >
           <svg viewBox="0 0 16 16" aria-hidden="true">
             <circle cx="4" cy="4" r="2" />
@@ -82,6 +85,7 @@ export function Toolbar({ mode, result, runState, isRunning, title, assistantOpe
           className={`mode-btn${mode === "simulator" ? " active" : ""}`}
           onClick={() => onModeChange("simulator")}
           aria-pressed={mode === "simulator"}
+          disabled={!schematicOpen}
         >
           <svg viewBox="0 0 16 16" aria-hidden="true">
             <path d="M1 12l4-5 3 2 5-6" />
@@ -106,7 +110,7 @@ export function Toolbar({ mode, result, runState, isRunning, title, assistantOpe
             <Button
               variant="outline"
               size="sm"
-              disabled={isRunning}
+              disabled={isRunning || !schematicOpen}
               className={cn(
                 "gap-1.5 bg-secondary hover:bg-accent",
                 "[-webkit-app-region:no-drag]",
@@ -132,14 +136,15 @@ export function Toolbar({ mode, result, runState, isRunning, title, assistantOpe
                 "assistant-toolbar-button [-webkit-app-region:no-drag]",
                 assistantOpen && "assistant-toolbar-button--active",
               )}
-              aria-label={assistantOpen ? "Close Tau assistant" : "Open Tau assistant"}
+              aria-label={assistantOpen ? "Close Tauri" : "Open Tauri"}
               aria-pressed={assistantOpen}
+              disabled={!projectOpen}
               onClick={onToggleAssistant}
             >
-              <Sparkles size={14} strokeWidth={1.8} aria-hidden="true" />
+              <TauriMascot className="tauri-toolbar-mascot" aria-hidden="true" />
             </Button>
           </TooltipTrigger>
-          <TooltipContent>{assistantOpen ? "Close Tau assistant" : "Ask Tau"}</TooltipContent>
+          <TooltipContent>{assistantOpen ? "Close Tauri" : "Ask Tauri"}</TooltipContent>
         </Tooltip>
         <Tooltip>
           <TooltipTrigger asChild>

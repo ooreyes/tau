@@ -413,6 +413,24 @@ body {
   pointer-events: none;
 }
 
+.empty-state-actions {
+  display: flex;
+  justify-content: center;
+  gap: var(--sp-2);
+  margin-top: var(--sp-4);
+}
+
+.empty-state-actions svg {
+  width: 14px;
+  height: 14px;
+}
+
+.tab-dirty-indicator {
+  color: var(--accent);
+  font-size: 12px;
+  line-height: 1;
+}
+
 /* Flat operator-console onboarding card — true-black surface, hairline ring,
    --elev-pop (the same recipe as the dialogs/sheets, not a translucent glass
    card). No backdrop blur, no gradient fade: flat surfaces only. */
@@ -450,6 +468,16 @@ body {
   border-radius: 50%;
   background: var(--success);
   box-shadow: none;
+}
+
+.tauri-empty-mascot {
+  --tauri-body: var(--accent);
+  --tauri-band: var(--signal);
+  --tauri-face: var(--bg);
+  width: 32px;
+  height: 22px;
+  color: var(--muted);
+  flex: 0 0 auto;
 }
 
 .empty-panel h1 {
@@ -3569,6 +3597,15 @@ body {
   ) !important;
 }
 
+.tauri-toolbar-mascot {
+  --tauri-body: var(--accent);
+  --tauri-band: var(--signal);
+  --tauri-face: var(--bg);
+  width: 18px;
+  height: 13px;
+  color: var(--muted);
+}
+
 .assistant-toolbar-button:hover,
 .assistant-toolbar-button--active {
   color: var(--text) !important;
@@ -5398,8 +5435,18 @@ button.bottom-panel-head:focus-visible {
 
 .assistant-title-row {
   display: flex;
-  align-items: baseline;
+  align-items: center;
+  flex-wrap: wrap;
   gap: var(--sp-2);
+}
+
+.assistant-title-mascot {
+  width: 23px;
+  height: 17px;
+  color: var(--assistant-alt);
+  --tauri-body: color-mix(in srgb, var(--assistant) 68%, var(--panel-4));
+  --tauri-band: var(--trace-yellow);
+  --tauri-face: var(--cream);
 }
 
 .assistant-title {
@@ -5410,11 +5457,12 @@ button.bottom-panel-head:focus-visible {
   line-height: 1;
 }
 
-.assistant-model-badge {
-  padding: 2px 6px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  color: var(--faint);
+.assistant-model-select {
+  width: 108px;
+  height: 24px;
+  min-height: 24px;
+  padding-inline: 7px;
+  color: var(--muted);
   font: 600 var(--fs-micro) var(--font-mono);
   letter-spacing: var(--tracking-micro);
 }
@@ -5424,6 +5472,133 @@ button.bottom-panel-head:focus-visible {
   display: flex;
   align-items: center;
   gap: var(--sp-2);
+}
+
+/* Past-chats popover (AssistantPanel header) — hand-rolled, not the Radix
+   DropdownMenu primitive: each row needs two independent click targets
+   (switch + delete), which fights Radix's single-action menuitem model. The
+   trigger button lives inside this wrapper too, so one ref covers the whole
+   "outside click closes it" check. */
+.assistant-history-menu {
+  position: relative;
+  display: flex;
+}
+
+.assistant-history-popover {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 20;
+  width: 240px;
+  max-height: 320px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  padding: var(--sp-1);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--panel-4);
+  box-shadow: var(--elev-pop);
+  animation: tau-pop-in var(--motion-fast) var(--spring) both;
+}
+
+.assistant-history-empty {
+  margin: 0;
+  padding: var(--sp-4) var(--sp-3);
+  color: var(--faint);
+  font: 500 var(--fs-body) var(--font-ui);
+  text-align: center;
+}
+
+.assistant-history-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.assistant-history-row {
+  display: flex;
+  align-items: stretch;
+  gap: 2px;
+  border-radius: var(--r-sm);
+  transition: background var(--motion-fast) var(--ease-out);
+}
+
+.assistant-history-row:hover,
+.assistant-history-row:focus-within {
+  background: var(--overlay-hover);
+}
+
+.assistant-history-row[data-active="true"] {
+  background: var(--accent-soft);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+.assistant-history-item {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: var(--sp-2);
+  border: none;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+}
+
+.assistant-history-item-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 600 var(--fs-body) var(--font-ui);
+  color: var(--text);
+}
+
+.assistant-history-row[data-active="true"] .assistant-history-item-title {
+  color: var(--cream);
+}
+
+.assistant-history-item-time {
+  font: 500 var(--fs-micro) var(--font-mono);
+  color: var(--faint);
+  letter-spacing: var(--tracking-micro);
+}
+
+.assistant-history-delete {
+  flex: none;
+  align-self: center;
+  width: 24px;
+  height: 24px;
+  margin-right: var(--sp-1);
+  display: grid;
+  place-items: center;
+  border: none;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--faint);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity var(--motion-fast) var(--spring),
+    color var(--motion-fast) var(--spring),
+    background var(--motion-fast) var(--spring);
+}
+
+.assistant-history-row:hover .assistant-history-delete,
+.assistant-history-row:focus-within .assistant-history-delete,
+.assistant-history-delete:focus-visible {
+  opacity: 1;
+}
+
+.assistant-history-delete:hover {
+  color: var(--danger);
+  background: var(--danger-soft);
 }
 
 .assistant-body {
@@ -5475,6 +5650,16 @@ button.bottom-panel-head:focus-visible {
   opacity: 0.5;
 }
 
+.assistant-intro .assistant-intro-mascot {
+  width: 52px;
+  height: 36px;
+  opacity: 0.9;
+  color: var(--assistant-alt);
+  --tauri-body: color-mix(in srgb, var(--assistant) 62%, var(--panel-4));
+  --tauri-band: var(--trace-yellow);
+  --tauri-face: var(--cream);
+}
+
 .assistant-intro p {
   margin: 0;
   font-size: var(--fs-body);
@@ -5509,6 +5694,54 @@ button.bottom-panel-head:focus-visible {
   border: 1px solid var(--border-subtle);
   border-radius: var(--r-lg);
   background: var(--panel-3);
+}
+
+.assistant-message-edit {
+  align-self: flex-end;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 3px;
+  padding: 2px 5px;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--faint);
+  font: 550 var(--fs-micro) var(--font-ui);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity var(--motion-fast) var(--ease-out), color var(--motion-fast) var(--ease-out);
+}
+
+.assistant-message--user:hover .assistant-message-edit,
+.assistant-message--user:focus-within .assistant-message-edit {
+  opacity: 1;
+}
+
+.assistant-message-edit:hover:not(:disabled) {
+  color: var(--text);
+}
+
+.assistant-message-edit:disabled {
+  cursor: default;
+}
+
+.assistant-message-editor {
+  width: min(320px, 100%);
+  display: grid;
+  gap: var(--sp-2);
+}
+
+.assistant-message-editor .assistant-textarea {
+  width: 100%;
+  min-height: 68px;
+  background: var(--panel-2);
+}
+
+.assistant-message-editor-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--sp-1);
 }
 
 .assistant-bubble p {
@@ -5655,30 +5888,45 @@ button.bottom-panel-head:focus-visible {
 }
 
 .assistant-progress {
-  display: grid;
-  gap: var(--sp-2);
-  padding: var(--sp-3);
-  border: 1px solid var(--assistant-line);
-  border-radius: var(--r-md);
-  background: linear-gradient(
-    135deg,
-    color-mix(in srgb, var(--assistant) 11%, var(--panel-3)),
-    color-mix(in srgb, var(--assistant-alt) 6%, var(--panel-3))
-  );
-  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--cream) 5%, transparent);
-}
-
-.assistant-progress-head {
-  min-width: 0;
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  display: flex;
   align-items: center;
-  gap: var(--sp-2);
+  gap: var(--sp-3);
+  padding: var(--sp-3);
+  border: 1px solid color-mix(in srgb, var(--assistant-line) 70%, transparent);
+  border-radius: var(--r-md);
+  background: color-mix(in srgb, var(--assistant) 7%, var(--panel-3));
 }
 
-.assistant-progress-head > svg {
-  color: color-mix(in srgb, var(--assistant-alt) 78%, var(--text));
-  animation: assistant-progress-spin 900ms linear infinite;
+.assistant-progress-orb {
+  position: relative;
+  flex: none;
+  width: 28px;
+  height: 28px;
+}
+
+.assistant-progress-orb::before,
+.assistant-progress-orb::after {
+  content: "";
+  position: absolute;
+  border-radius: 50%;
+}
+
+.assistant-progress-orb::before {
+  inset: 3px;
+  background: radial-gradient(
+    circle at 38% 32%,
+    color-mix(in srgb, var(--cream) 42%, var(--assistant-alt)),
+    var(--assistant) 52%,
+    color-mix(in srgb, var(--assistant-alt) 35%, var(--panel-4))
+  );
+  box-shadow: 0 0 12px color-mix(in srgb, var(--assistant-glow) 80%, transparent);
+  animation: assistant-orb-breathe 2.6s var(--ease-in-out, ease-in-out) infinite;
+}
+
+.assistant-progress-orb::after {
+  inset: -3px;
+  border: 1.5px solid color-mix(in srgb, var(--assistant-alt) 55%, transparent);
+  animation: assistant-ring-pulse 2.6s var(--ease-in-out, ease-in-out) infinite;
 }
 
 .assistant-progress-copy {
@@ -5705,79 +5953,23 @@ button.bottom-panel-head:focus-visible {
   font: 500 var(--fs-caption) var(--font-mono);
 }
 
-.assistant-progress-track {
-  height: 3px;
-  overflow: hidden;
-  border-radius: var(--r-pill);
-  background: color-mix(in srgb, var(--assistant-line) 60%, transparent);
+@keyframes assistant-orb-breathe {
+  0%, 100% { transform: scale(0.92); opacity: 0.82; }
+  50% { transform: scale(1); opacity: 1; }
 }
 
-.assistant-progress-track span {
-  display: block;
-  width: 38%;
-  height: 100%;
-  border-radius: inherit;
-  background: linear-gradient(90deg, var(--assistant), var(--assistant-alt));
-  animation: assistant-progress-sweep 1.45s var(--ease-in-out) infinite;
-}
-
-.assistant-progress-steps {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: var(--sp-2);
-}
-
-.assistant-progress-steps > span {
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  color: var(--faint);
-  font: 550 var(--fs-caption) var(--font-ui);
-}
-
-.assistant-progress-steps i {
-  width: 6px;
-  height: 6px;
-  flex: none;
-  border: 1px solid var(--border-strong);
-  border-radius: var(--r-pill);
-  background: transparent;
-}
-
-.assistant-progress-steps > span.current {
-  color: var(--text);
-}
-
-.assistant-progress-steps > span.current i {
-  border-color: var(--assistant-alt);
-  background: var(--assistant-alt);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--assistant-alt) 14%, transparent);
-}
-
-.assistant-progress-steps > span.complete {
-  color: var(--muted);
-}
-
-.assistant-progress-steps > span.complete i {
-  border-color: var(--success);
-  background: var(--success);
-}
-
-@keyframes assistant-progress-spin {
-  to { transform: rotate(360deg); }
-}
-
-@keyframes assistant-progress-sweep {
-  0% { transform: translateX(-115%); }
-  50% { transform: translateX(82%); }
-  100% { transform: translateX(265%); }
+@keyframes assistant-ring-pulse {
+  0%, 100% { transform: scale(0.88); opacity: 0.28; }
+  50% { transform: scale(1.04); opacity: 0.72; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .assistant-progress-head > svg,
-  .assistant-progress-track span { animation: none; }
-  .assistant-progress-track span { width: 100%; opacity: 0.55; }
+  .assistant-progress-orb::before,
+  .assistant-progress-orb::after {
+    animation: none;
+  }
+  .assistant-progress-orb::before { opacity: 0.95; }
+  .assistant-progress-orb::after { opacity: 0.5; }
 }
 
 .assistant-error {
@@ -5911,14 +6103,25 @@ button.bottom-panel-head:focus-visible {
   box-shadow: 0 0 0 2px var(--accent-line);
 }
 
-.assistant-composer {
+.assistant-composer-shell {
   flex: none;
-  display: flex;
-  align-items: flex-end;
-  gap: var(--sp-2);
   padding: var(--sp-3);
   border-top: 1px solid var(--border);
   background: color-mix(in srgb, var(--panel) 88%, transparent);
+}
+
+.assistant-composer {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--sp-2);
+}
+
+.assistant-disclaimer {
+  margin: var(--sp-2) 0 0;
+  color: var(--faint);
+  font: 500 var(--fs-micro) var(--font-ui);
+  line-height: 1.3;
+  text-align: center;
 }
 
 .assistant-textarea {

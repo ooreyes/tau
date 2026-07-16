@@ -79,6 +79,8 @@ interface ModeProps {
   mode: "schematic" | "simulator";
   explorerOpen: boolean;
   partsOpen: boolean;
+  projectOpen?: boolean;
+  schematicOpen?: boolean;
   onFocusExplorer: () => void;
   onModeChange: (mode: "schematic" | "simulator") => void;
   onSearch: () => void;
@@ -90,6 +92,8 @@ export function ActivityRail({
   mode,
   explorerOpen,
   partsOpen,
+  projectOpen = true,
+  schematicOpen = true,
   onFocusExplorer,
   onModeChange,
   onSearch,
@@ -101,13 +105,13 @@ export function ActivityRail({
       <RailButton active={mode === "schematic" && explorerOpen} label="Explorer" onClick={onFocusExplorer}>
         <FolderOpen size={18} strokeWidth={1.6} />
       </RailButton>
-      <RailButton label="Search" shortcut="⌘K" onClick={onSearch}>
+      <RailButton label="Search" shortcut="⌘K" onClick={onSearch} disabled={!projectOpen}>
         <Search size={18} strokeWidth={1.6} />
       </RailButton>
-      <RailButton active={partsOpen} label="Components" onClick={onFocusComponents}>
+      <RailButton active={partsOpen && schematicOpen} label="Components" onClick={onFocusComponents} disabled={!schematicOpen}>
         <CircuitBoard size={18} strokeWidth={1.6} />
       </RailButton>
-      <RailButton active={mode === "simulator"} label="Waveforms" onClick={() => onModeChange("simulator")}>
+      <RailButton active={mode === "simulator"} label="Waveforms" onClick={() => onModeChange("simulator")} disabled={!schematicOpen}>
         <Activity size={18} strokeWidth={1.6} />
       </RailButton>
       <div className="rail-spacer" />
@@ -122,19 +126,21 @@ function RailButton({
   active = false,
   label,
   shortcut,
+  disabled = false,
   onClick,
   children,
 }: {
   active?: boolean;
   label: string;
   shortcut?: string;
+  disabled?: boolean;
   onClick?: () => void;
   children: ReactNode;
 }) {
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <button className={`rail-btn${active ? " active" : ""}`} aria-label={label} onClick={onClick}>
+        <button className={`rail-btn${active ? " active" : ""}`} aria-label={label} onClick={onClick} disabled={disabled}>
           {active && <span className="rail-active" />}
           <span className="rail-lucide" aria-hidden="true">
             {children}
@@ -216,7 +222,6 @@ export function ExplorerPanel({
   const error = useProject((s) => s.error);
   const capability = useProject((s) => s.capability);
   const detectCapability = useProject((s) => s.detectCapability);
-  const ensureDefaultWorkspace = useProject((s) => s.ensureDefaultWorkspace);
   const openFolder = useProject((s) => s.openFolder);
   const newProject = useProject((s) => s.newProject);
   const refresh = useProject((s) => s.refresh);
@@ -267,10 +272,8 @@ export function ExplorerPanel({
   );
 
   useEffect(() => {
-    void detectCapability().then(() => {
-      ensureDefaultWorkspace();
-    });
-  }, [detectCapability, ensureDefaultWorkspace]);
+    void detectCapability();
+  }, [detectCapability]);
 
   const openNode = async (path: string, name: string) => {
     try {
@@ -899,7 +902,7 @@ export function EditorTabs({
   onNewCircuit,
   onHideSimulator,
 }: {
-  tabs: { id: string; title: string }[];
+  tabs: { id: string; title: string; dirty?: boolean }[];
   activeId: string;
   mode: "schematic" | "simulator";
   onSelectTab: (id: string) => void;
@@ -928,6 +931,16 @@ export function EditorTabs({
           >
             <i className={active ? "amber" : "blue"} />
             {tab.title.replace(/\.sim$/i, "")}
+            {tab.dirty && (
+              <span
+                className="tab-dirty-indicator"
+                role="img"
+                aria-label={`${tab.title} has unsaved changes`}
+                title="Unsaved changes"
+              >
+                ●
+              </span>
+            )}
             <button
               type="button"
               aria-label={`Close ${tab.title}`}

@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   assistantRequestNeedsCurrentAsc,
   buildAssistantContext,
+  buildAssistantSuggestions,
   type AssistantContextInput,
 } from "./assistantContext";
 import type { SchematicComponent, SchematicWire } from "../schematic/types";
@@ -107,10 +108,85 @@ describe("buildAssistantContext", () => {
     expect(text).not.toMatch(/\(ground\)/);
   });
 
+  it("enumerates each plotted signal with exact per-trace statistics", () => {
+    const analysis = successAnalysis();
+    analysis.times = [0, 0.25, 0.5, 0.75, 1];
+    analysis.traces = [
+      { id: "out", label: "V(out)", unit: "V", color: "var(--trace-cyan)", values: [0, 6, 3, 5, 5.21] },
+    ];
+    analysis.currents = [
+      { ref: "R_L", label: "I(R_L)", values: [0, 0.6, 0.65, 0.65, 0.652] },
+    ];
+    const { text } = buildAssistantContext(baseInput({ analysis }));
+    expect(text).toContain("Plotted signals (2, exact statistics):");
+    // Final value and peak-to-peak give the model the ripple/offset picture.
+    expect(text).toMatch(/V\(out\): final 5\.21 V, pk-pk 6 V/);
+    expect(text).toContain("I(R_L): final 652 mA");
+  });
+
   it("reports no simulation run yet when analysis is null, and no selection when nothing is selected", () => {
     const { text } = buildAssistantContext(baseInput());
     expect(text).toContain("Analysis: no simulation has been run yet.");
+    expect(text).toContain("Active probes: none.");
     expect(text).toContain("Selection: none.");
+  });
+
+  it("lists active probe net names and brief OP/AC/DC/Fourier summaries", () => {
+    const { components, wires } = rcSchematic();
+    const analysis = successAnalysis();
+    analysis.circuit = {
+      nets: [
+        { id: "out", points: [{ x: 192, y: 0 }], pins: [], isGround: false, labelCount: 1 },
+        { id: "0", points: [{ x: 0, y: 64 }], pins: [], isGround: true, labelCount: 0 },
+      ],
+      components: [],
+      groundNetId: "0",
+      warnings: [],
+    } as unknown as Extract<AnalysisResult, { ok: true }>["circuit"];
+
+    const { text } = buildAssistantContext(baseInput({
+      components,
+      wires,
+      probes: [
+        { id: "p1", x: 192, y: 0, color: "var(--trace-cyan)", netId: "out" },
+        { id: "p2", x: 96, y: 0, color: "var(--trace-red)", componentId: "r1" },
+      ],
+      analysis,
+      opResult: {
+        ok: true,
+        nets: [
+          { id: "out", label: "out", voltage: 5 },
+          { id: "0", label: "0", voltage: 0 },
+        ],
+        warnings: [],
+      },
+      acResult: {
+        ok: true,
+        freqs: [10, 100, 1_000],
+        traces: [{ id: "out", label: "V(out)", magDb: [0, -3, -20], phaseDeg: [0, -45, -90] }],
+        warnings: [],
+      },
+      dcResult: {
+        ok: true,
+        source: "V1",
+        sweep: [0, 2.5, 5],
+        nets: [{ id: "out", label: "V(out)", voltages: [0, 2.5, 5], ground: false }],
+        warnings: [],
+      },
+      fourier: [{
+        output: "V(out)",
+        frequency: 1_000,
+        dc: 2.5,
+        thd: 0.0123,
+        harmonics: [],
+      }],
+    }));
+
+    expect(text).toContain("Active probes (2): V(out), I(R1)");
+    expect(text).toMatch(/OP: 2 nets \(out=5 V/);
+    expect(text).toMatch(/AC: 3 points, 1 traces/);
+    expect(text).toContain("DC: sweep V1, 3 points, 1 nets.");
+    expect(text).toMatch(/Fourier V\(out\): fund 1 kHz, THD 1\.23%, DC 2\.5/);
   });
 
   it("omits coordinate-heavy ASC for new builds and Q&A while retaining safe-edit capability", () => {
@@ -172,5 +248,34 @@ describe("buildAssistantContext", () => {
     expect(text.length).toBeLessThan(16_100); // capped text plus the short trailing note
     expect(text).toContain("context truncated");
     expect(text).toContain("Current serialized LTspice ASC (complete");
+  });
+});
+
+describe("buildAssistantSuggestions", () => {
+  it("grounds chips in the selected component and current simulation signal", () => {
+    const analysis = successAnalysis();
+    analysis.traces = [{ id: "out", label: "V(OUT)", unit: "V", color: "var(--trace-cyan)", values: [0, 1] }];
+    const suggestions = buildAssistantSuggestions(baseInput({ selectedId: "r1", analysis }));
+
+    expect(suggestions.map((suggestion) => suggestion.label)).toEqual([
+      "Explain R1",
+      "Analyze V(OUT)",
+      "Review this design",
+    ]);
+    expect(suggestions[0].prompt).toContain("current circuit");
+    expect(suggestions[1].prompt).toContain("latest V(OUT) waveform");
+  });
+
+  it("offers failure diagnosis and no generic result explanation when the latest run failed", () => {
+    const suggestions = buildAssistantSuggestions(baseInput({
+      analysis: { ok: false, title: "Transient", message: "No ground symbol.", warnings: [] },
+    }));
+    expect(suggestions[0]).toEqual(expect.objectContaining({ label: "Diagnose failed run" }));
+    expect(suggestions[0].prompt).toContain("No ground symbol");
+  });
+
+  it("uses creation starters only for an empty schematic", () => {
+    const suggestions = buildAssistantSuggestions(baseInput({ components: [], wires: [] }));
+    expect(suggestions.map((suggestion) => suggestion.label)).toEqual(["Build an RC filter", "Build an LC tank"]);
   });
 });

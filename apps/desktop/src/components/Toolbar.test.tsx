@@ -71,13 +71,13 @@ describe("Toolbar Run health control", () => {
     const onToggleAssistant = vi.fn();
     const { rerender } = render(<Toolbar {...baseProps} onToggleAssistant={onToggleAssistant} />);
 
-    const open = screen.getByRole("button", { name: "Open Tau assistant" });
+    const open = screen.getByRole("button", { name: "Open Tauri" });
     expect(open.getAttribute("aria-pressed")).toBe("false");
     fireEvent.click(open);
     expect(onToggleAssistant).toHaveBeenCalledOnce();
 
     rerender(<Toolbar {...baseProps} mode="simulator" assistantOpen onToggleAssistant={onToggleAssistant} />);
-    const close = screen.getByRole("button", { name: "Close Tau assistant" });
+    const close = screen.getByRole("button", { name: "Close Tauri" });
     expect(close.getAttribute("aria-pressed")).toBe("true");
     expect(close.classList.contains("assistant-toolbar-button--active")).toBe(true);
   });

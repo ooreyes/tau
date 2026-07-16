@@ -1,16 +1,21 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent } from "react";
 import { nanoid } from "nanoid";
-import { Check, FilePlus2, LoaderCircle, RefreshCw, RotateCcw, Sparkles, Square, X } from "lucide-react";
+import { Check, FilePlus2, History, MessageSquarePlus, Pencil, RefreshCw, Sparkles, Square, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
-import type { NetLabel, SchematicComponent, SchematicWire } from "../schematic/types";
+import type { NetLabel, Probe, SchematicComponent, SchematicWire } from "../schematic/types";
 import type { ParamScope } from "../simulation/paramScope";
 import type { AnalysisResult } from "../simulation/linearTransient";
 import type { ComponentMeasurement } from "../simulation/measurementModel";
 import type { MeasResult } from "../simulation/measure";
-import { assistantRequestNeedsCurrentAsc, buildAssistantContext } from "../lib/assistantContext";
+import type { OperatingPointResult } from "../simulation/operatingPoint";
+import type { AcResult } from "../simulation/acSweep";
+import type { DcSweepResult } from "../simulation/dcSweep";
+import type { FourierResult } from "../simulation/fourier";
+import { assistantRequestNeedsCurrentAsc, buildAssistantContext, buildAssistantSuggestions } from "../lib/assistantContext";
 import type {
   AssistantApplyCurrentAscAction,
   AssistantAscAction,
@@ -18,8 +23,7 @@ import type {
 } from "../lib/assistantActions";
 import {
   ASSISTANT_MODEL_LABEL,
-  ASSISTANT_REQUEST_TIMEOUT_MS,
-  assistantRequestTimeoutMs,
+  compactAssistantHistory,
   streamAssistantReply,
   useAssistantApiKey,
   type AssistantChatMessage,
@@ -27,7 +31,7 @@ import {
   type AssistantProgressPhase,
   type AssistantStreamHandle,
 } from "../lib/assistant";
-import { useAssistantPreferences } from "../lib/assistantPreferences";
+import { saveAssistantPreferences, useAssistantPreferences } from "../lib/assistantPreferences";
 import { AssistantProviderError, type AssistantProviderReply } from "../lib/assistantProvider";
 import type { AssistantRunMetrics } from "../lib/assistantProvider";
 import { LocalMlxAssistant, LOCAL_MLX_MODEL_PRESETS } from "../lib/localMlxAssistant";
@@ -35,12 +39,19 @@ import { getLocalAiStatus, startLocalAi, LOCAL_AI_PRESETS, type LocalAiStatus } 
 import { renderMiniMarkdown } from "../lib/miniMarkdown";
 import {
   clearAssistantRecovery,
-  loadAssistantHistory,
+  createConversation,
+  deleteConversation as deleteStoredConversation,
+  getActiveConversationId,
+  listConversations,
   loadAssistantRecovery,
-  saveAssistantHistory,
+  renameConversation,
   saveAssistantRecovery,
+  saveConversationMessages,
+  setActiveConversationId as persistActiveConversationId,
+  type AssistantConversation,
 } from "../lib/assistantMemory";
 import { PanelResizeHandle, usePanelWidth, type PanelWidthConfig } from "./panelResize";
+import { TauriMascot } from "./TauriMascot";
 
 /** Docked at the far right of the simulator shell, same "edge=left widens"
  *  convention as the Components rail (panelResize.tsx). App.tsx calls
@@ -95,14 +106,6 @@ const PROGRESS_LABELS: Record<AssistantProgressPhase, string> = {
   responding: "Preparing the response",
 };
 
-const PROGRESS_STEPS = ["Plan", "Validate", "Ready"] as const;
-
-function progressStep(phase: AssistantProgressPhase): number {
-  if (phase === "inspecting" || phase === "validating" || phase === "repairing") return 1;
-  if (phase === "responding") return 2;
-  return 0;
-}
-
 function elapsedLabel(seconds: number): string {
   if (seconds < 60) return `${seconds}s`;
   return `${Math.floor(seconds / 60)}m ${String(seconds % 60).padStart(2, "0")}s`;
@@ -111,6 +114,26 @@ function elapsedLabel(seconds: number): string {
 function tokenLabel(value: number): string {
   if (value < 1000) return String(value);
   return `${(value / 1000).toFixed(value < 10_000 ? 1 : 0)}k`;
+}
+
+/** Coarse "last active" label for a past-chats row — precision beyond
+ *  minutes/hours/days isn't useful for picking a conversation back up. */
+function relativeTime(timestampMs: number): string {
+  const diffSeconds = Math.round((Date.now() - timestampMs) / 1000);
+  if (diffSeconds < 45) return "Just now";
+  const diffMinutes = Math.round(diffSeconds / 60);
+  if (diffMinutes < 60) return `${diffMinutes}m ago`;
+  const diffHours = Math.round(diffMinutes / 60);
+  if (diffHours < 24) return `${diffHours}h ago`;
+  const diffDays = Math.round(diffHours / 24);
+  if (diffDays < 7) return `${diffDays}d ago`;
+  return new Date(timestampMs).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
+/** Strips the client-only `id` field ChatMessage adds on top of
+ *  PersistedAssistantMessage — the shape every save path writes. */
+function toPersistedMessages(list: readonly ChatMessage[]) {
+  return list.map(({ role, content, actions, metrics }) => ({ role, content, actions, metrics }));
 }
 
 function localProviderError(error: unknown): AssistantError {
@@ -129,15 +152,42 @@ function localProviderError(error: unknown): AssistantError {
 export type AssistantCreateAscHandler = (action: AssistantCreateAscAction) => void | Promise<void>;
 export type AssistantApplyCurrentHandler = (action: AssistantApplyCurrentAscAction) => void | Promise<void>;
 
+/** Mount-time seed for the active conversation: resolves (and, via
+ *  listConversations, migrates) the stored active id against the real
+ *  conversation list, falling back to the newest thread or a fresh empty one.
+ *  Pure read — the resolved active-id pointer is written durably by the
+ *  debounced save effect and by the explicit switch/new-chat/delete handlers,
+ *  never here, so this stays safe to call from a lazy useState initializer
+ *  (React 18 StrictMode invokes those twice in dev). */
+function seedConversationState(memoryKey: string): {
+  activeId: string;
+  messages: ChatMessage[];
+  conversations: AssistantConversation[];
+} {
+  const conversations = listConversations(memoryKey);
+  const storedActiveId = getActiveConversationId(memoryKey);
+  const active = conversations.find((conversation) => conversation.id === storedActiveId) ?? conversations[0] ?? null;
+  return {
+    activeId: active?.id ?? nanoid(),
+    messages: active ? active.messages.map((message) => ({ ...message, id: nanoid() })) : [],
+    conversations,
+  };
+}
+
 type ResizeState = ReturnType<typeof usePanelWidth>;
 
 export interface AssistantPanelProps {
   components: SchematicComponent[];
   wires: SchematicWire[];
   netLabels: NetLabel[];
+  probes?: readonly Probe[];
   directives: string[];
   params: ParamScope;
   analysis: AnalysisResult | null;
+  opResult?: OperatingPointResult | null;
+  acResult?: AcResult | null;
+  dcResult?: DcSweepResult | null;
+  fourier?: readonly FourierResult[];
   componentRows: readonly ComponentMeasurement[];
   measurements: readonly MeasResult[];
   selectedId: string | null;
@@ -158,9 +208,14 @@ export function AssistantPanel({
   components,
   wires,
   netLabels,
+  probes = [],
   directives,
   params,
   analysis,
+  opResult = null,
+  acResult = null,
+  dcResult = null,
+  fourier = [],
   componentRows,
   measurements,
   selectedId,
@@ -179,14 +234,21 @@ export function AssistantPanel({
     () => new LocalMlxAssistant({ model: preferences.localModel }),
     [preferences.localModel],
   );
-  const [messages, setMessages] = useState<ChatMessage[]>(() => (
-    loadAssistantHistory(memoryKey).map((message) => ({ ...message, id: nanoid() }))
-  ));
+  // One seed call — StrictMode double-invokes lazy initializers, and three
+  // separate seedConversationState() calls would mint three different ids for
+  // an empty circuit.
+  const [seed] = useState(() => seedConversationState(memoryKey));
+  const [activeConversationId, setActiveConversationId] = useState(seed.activeId);
+  const [messages, setMessages] = useState<ChatMessage[]>(seed.messages);
+  const [conversations, setConversations] = useState<AssistantConversation[]>(seed.conversations);
+  const [historyMenuOpen, setHistoryMenuOpen] = useState(false);
+  const historyMenuRef = useRef<HTMLDivElement | null>(null);
   const [input, setInput] = useState("");
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+  const [editDraft, setEditDraft] = useState("");
   const [streaming, setStreaming] = useState(false);
   const [progressPhase, setProgressPhase] = useState<AssistantProgressPhase>("connecting");
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
-  const [requestTimeoutMs, setRequestTimeoutMs] = useState(ASSISTANT_REQUEST_TIMEOUT_MS);
   const [error, setError] = useState<AssistantError | null>(() => (
     restoredRecovery
       ? {
@@ -203,6 +265,12 @@ export function AssistantPanel({
   const localAbortRef = useRef<AbortController | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
   const requestStartedAtRef = useRef(0);
+  // Latest transcript identity for synchronous flush on unmount / memoryKey
+  // change — the debounced save below would otherwise drop up to 250ms of
+  // turns when the panel closes or remounts onto a new circuit key.
+  const persistRef = useRef({ memoryKey, activeConversationId, messages });
+  persistRef.current = { memoryKey, activeConversationId, messages };
+  const memoryKeyRef = useRef(memoryKey);
 
   // First-run local AI onboarding: proactively surface setup instead of
   // letting the first send() fail. Only tracked for the local-mlx provider —
@@ -276,15 +344,43 @@ export function AssistantPanel({
 
   useEffect(() => {
     const timer = globalThis.setTimeout(() => {
-      saveAssistantHistory(memoryKey, messages.map(({ role, content, actions, metrics }) => ({
-        role,
-        content,
-        actions,
-        metrics,
-      })));
+      saveConversationMessages(memoryKey, activeConversationId, toPersistedMessages(messages));
+      // Keeps the reload pointer in sync with whichever thread just actually
+      // persisted — cheaper than writing it on every switch of an empty,
+      // never-saved conversation (see seedConversationState).
+      persistActiveConversationId(memoryKey, activeConversationId);
+      setConversations(listConversations(memoryKey));
     }, 250);
     return () => globalThis.clearTimeout(timer);
-  }, [memoryKey, messages]);
+  }, [memoryKey, activeConversationId, messages]);
+
+  // Flush the latest transcript synchronously on unmount. Declared after the
+  // debounce effect so this cleanup runs first (React reverse order) and the
+  // cancelled timer cannot race a late write.
+  useEffect(() => () => {
+    const { memoryKey: key, activeConversationId: id, messages: msgs } = persistRef.current;
+    saveConversationMessages(key, id, toPersistedMessages(msgs));
+    persistActiveConversationId(key, id);
+  }, []);
+
+  // Closes the past-chats popover on Escape or a click/tap outside it —
+  // there's no Radix Popover in play here (see AssistantPanel's header
+  // markup below), so both need to be wired up by hand.
+  useEffect(() => {
+    if (!historyMenuOpen) return;
+    const onPointerDown = (event: PointerEvent) => {
+      if (!historyMenuRef.current?.contains(event.target as Node)) setHistoryMenuOpen(false);
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setHistoryMenuOpen(false);
+    };
+    window.addEventListener("pointerdown", onPointerDown);
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.removeEventListener("pointerdown", onPointerDown);
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [historyMenuOpen]);
 
   useEffect(() => {
     if (!streaming) return;
@@ -302,7 +398,35 @@ export function AssistantPanel({
     localAbortRef.current?.abort();
   }, []);
 
-  const send = useCallback((raw: string) => {
+  // Shared tail of every conversation switch: action/error/draft state is
+  // scoped to "whatever's on screen right now", not persisted per thread, so
+  // it's reset any time the displayed thread changes.
+  const resetComposerState = useCallback(() => {
+    setActionStates({});
+    setError(null);
+    setRetryPrompt(null);
+    setInput("");
+    setEditingMessageId(null);
+    setEditDraft("");
+  }, []);
+
+  // Belt-and-suspenders when memoryKey changes without a remount (App usually
+  // keys the panel). Flush the outgoing key, then re-seed from storage so a
+  // migrateConversation write that landed just before this effect is visible.
+  useEffect(() => {
+    if (memoryKeyRef.current === memoryKey) return;
+    const prev = persistRef.current;
+    saveConversationMessages(prev.memoryKey, prev.activeConversationId, toPersistedMessages(prev.messages));
+    persistActiveConversationId(prev.memoryKey, prev.activeConversationId);
+    memoryKeyRef.current = memoryKey;
+    const seeded = seedConversationState(memoryKey);
+    setActiveConversationId(seeded.activeId);
+    setMessages(seeded.messages);
+    setConversations(seeded.conversations);
+    resetComposerState();
+  }, [memoryKey, resetComposerState]);
+
+  const send = useCallback((raw: string, baseMessages: readonly ChatMessage[] = messages) => {
     const text = raw.trim();
     if (!text || streaming || (preferences.provider === "anthropic" && !apiKey)) return;
     setError(null);
@@ -310,13 +434,17 @@ export function AssistantPanel({
 
     const userMessage: ChatMessage = { id: nanoid(), role: "user", content: text };
     const assistantMessage: ChatMessage = { id: nanoid(), role: "assistant", content: "" };
-    const history: AssistantChatMessage[] = [...messages, userMessage].map(({ role, content }) => ({ role, content }));
+    // Apply the same tight history budget before either provider sees it.
+    // Cloud applies this defensively again; doing it here keeps local MLX from
+    // paying for a circuit's entire persisted transcript on every follow-up.
+    const history: AssistantChatMessage[] = compactAssistantHistory(
+      [...baseMessages, userMessage].map(({ role, content }) => ({ role, content })),
+    );
 
-    setMessages((list) => [...list, userMessage, assistantMessage]);
+    setMessages([...baseMessages, userMessage, assistantMessage]);
     setInput("");
     requestStartedAtRef.current = Date.now();
     setElapsedSeconds(0);
-    setRequestTimeoutMs(assistantRequestTimeoutMs(text));
     setProgressPhase(preferences.provider === "anthropic" ? "connecting" : "reasoning");
     setStreaming(true);
     saveAssistantRecovery(memoryKey, { status: "running", prompt: text });
@@ -325,9 +453,14 @@ export function AssistantPanel({
       components,
       wires,
       netLabels,
+      probes,
       directives,
       params,
       analysis,
+      opResult,
+      acResult,
+      dcResult,
+      fourier,
       componentRows,
       measurements,
       selectedId,
@@ -348,8 +481,8 @@ export function AssistantPanel({
       )));
       if (reply.rejectedActionCount > 0) {
         const message = preferences.provider === "anthropic"
-          ? "Tau rejected Sonnet's circuit plan after one automatic correction. No file was created."
-          : "Tau rejected the local model's circuit plan. No file was created.";
+          ? "Tauri rejected Sonnet's circuit plan after one automatic correction. No file was created."
+          : "Tauri rejected the local model's circuit plan. No file was created.";
         setRetryPrompt(text);
         setError({
           kind: "invalid_action",
@@ -426,7 +559,33 @@ export function AssistantPanel({
       },
       onProgress: setProgressPhase,
     }, { analysis, params }, { allowCurrentApply: canApplyCurrent });
-  }, [messages, streaming, preferences.provider, apiKey, components, wires, netLabels, directives, params, analysis, componentRows, measurements, selectedId, localAssistant, memoryKey]);
+  }, [messages, streaming, preferences.provider, apiKey, components, wires, netLabels, probes, directives, params, analysis, opResult, acResult, dcResult, fourier, componentRows, measurements, selectedId, localAssistant, memoryKey]);
+
+  const beginMessageEdit = useCallback((message: ChatMessage) => {
+    if (streaming || message.role !== "user") return;
+    setEditingMessageId(message.id);
+    setEditDraft(message.content);
+  }, [streaming]);
+
+  const cancelMessageEdit = useCallback(() => {
+    setEditingMessageId(null);
+    setEditDraft("");
+  }, []);
+
+  const resendEditedMessage = useCallback((messageId: string) => {
+    const text = editDraft.trim();
+    const index = messages.findIndex((message) => message.id === messageId && message.role === "user");
+    if (!text || index < 0 || streaming) return;
+    const baseMessages = messages.slice(0, index);
+    const isOpeningPrompt = !baseMessages.some((message) => message.role === "user");
+    // Flush before retitling so a very fast edit after the first reply cannot
+    // race the 250ms persistence debounce and leave the old title behind.
+    saveConversationMessages(memoryKey, activeConversationId, toPersistedMessages(messages));
+    if (isOpeningPrompt) renameConversation(memoryKey, activeConversationId, text);
+    setConversations(listConversations(memoryKey));
+    cancelMessageEdit();
+    send(text, baseMessages);
+  }, [activeConversationId, cancelMessageEdit, editDraft, memoryKey, messages, send, streaming]);
 
   const stop = useCallback(() => {
     streamRef.current?.abort();
@@ -437,13 +596,58 @@ export function AssistantPanel({
     clearAssistantRecovery(memoryKey);
   }, [memoryKey]);
 
-  const clearConversation = useCallback(() => {
+  const switchConversation = useCallback((id: string) => {
+    setHistoryMenuOpen(false);
+    if (id === activeConversationId) return;
     stop();
+    // Flushes the outgoing thread's exact latest state synchronously — the
+    // debounced save above would otherwise drop up to 250ms of edits if a
+    // switch lands mid-window — then re-reads so both the target thread's
+    // messages and the menu's own listing are never stale by that same
+    // window (not the possibly-stale `conversations` state).
+    saveConversationMessages(memoryKey, activeConversationId, toPersistedMessages(messages));
+    const refreshed = listConversations(memoryKey);
+    setConversations(refreshed);
+    const target = refreshed.find((conversation) => conversation.id === id);
+    setActiveConversationId(id);
+    setMessages(target ? target.messages.map((message) => ({ ...message, id: nanoid() })) : []);
+    resetComposerState();
+    persistActiveConversationId(memoryKey, id);
+  }, [activeConversationId, memoryKey, messages, resetComposerState, stop]);
+
+  // Archiving is implicit: the outgoing conversation is flushed (see
+  // switchConversation) and already durably saved, so "new chat" only has to
+  // point the active id at a fresh, still-empty thread.
+  const startNewChat = useCallback(() => {
+    setHistoryMenuOpen(false);
+    stop();
+    saveConversationMessages(memoryKey, activeConversationId, toPersistedMessages(messages));
+    setConversations(listConversations(memoryKey));
+    const id = createConversation();
+    setActiveConversationId(id);
     setMessages([]);
-    setActionStates({});
-    setError(null);
-    setRetryPrompt(null);
-  }, [stop]);
+    resetComposerState();
+    persistActiveConversationId(memoryKey, id);
+  }, [activeConversationId, memoryKey, messages, resetComposerState, stop]);
+
+  // Used both for the header's "delete current conversation" affordance and
+  // the past-chats menu's per-row delete. Deleting a conversation that isn't
+  // the active one only has to prune the list; deleting the active one also
+  // has to pick something else to display (newest remaining, or a fresh
+  // empty thread when that was the last one).
+  const deleteConversationById = useCallback((id: string) => {
+    deleteStoredConversation(memoryKey, id);
+    const remaining = listConversations(memoryKey);
+    setConversations(remaining);
+    if (id !== activeConversationId) return;
+    stop();
+    const next = remaining[0] ?? null;
+    const nextId = next?.id ?? createConversation();
+    setActiveConversationId(nextId);
+    setMessages(next ? next.messages.map((message) => ({ ...message, id: nanoid() })) : []);
+    resetComposerState();
+    persistActiveConversationId(memoryKey, nextId);
+  }, [activeConversationId, memoryKey, resetComposerState, stop]);
 
   const confirmAction = useCallback(async (action: AssistantAscAction) => {
     if (actionStates[action.id] === "working" || actionStates[action.id] === "done") return;
@@ -460,8 +664,15 @@ export function AssistantPanel({
     setError(null);
     setActionStates((states) => ({ ...states, [action.id]: "working" }));
     try {
-      if (action.type === "create_asc") await onCreateAsc?.(action);
-      else await onApplyCurrent?.(action);
+      // Create remounts the panel under a new memoryKey — flush first so
+      // migrateConversation in App can copy the complete transcript.
+      if (action.type === "create_asc") {
+        saveConversationMessages(memoryKey, activeConversationId, toPersistedMessages(messages));
+        persistActiveConversationId(memoryKey, activeConversationId);
+        await onCreateAsc?.(action);
+      } else {
+        await onApplyCurrent?.(action);
+      }
       setActionStates((states) => ({ ...states, [action.id]: "done" }));
     } catch {
       setActionStates((states) => ({ ...states, [action.id]: "idle" }));
@@ -472,7 +683,7 @@ export function AssistantPanel({
           : "Couldn't apply the proposed changes to the current circuit. Try asking for a revised proposal.",
       });
     }
-  }, [actionStates, onApplyCurrent, onCreateAsc]);
+  }, [actionStates, activeConversationId, memoryKey, messages, onApplyCurrent, onCreateAsc]);
 
   const onComposerKeyDown = (event: ReactKeyboardEvent<HTMLTextAreaElement>) => {
     if (event.key === "Enter" && !event.shiftKey) {
@@ -481,12 +692,33 @@ export function AssistantPanel({
     }
   };
 
-  const selectedComponent = selectedId ? components.find((c) => c.id === selectedId) ?? null : null;
-  const selectedRef = selectedComponent ? (selectedComponent.label || selectedComponent.id) : null;
   const hasContent = messages.length > 0 || error;
-  const modelBadge = preferences.provider === "local-mlx"
-    ? `Local · ${LOCAL_MLX_MODEL_PRESETS[preferences.localModel].label}`
-    : `Claude · ${ASSISTANT_MODEL_LABEL}`;
+  const modelChoice = preferences.provider === "anthropic" ? "anthropic" : preferences.localModel;
+  const suggestions = useMemo(() => buildAssistantSuggestions({
+    components,
+    wires,
+    netLabels,
+    probes,
+    directives,
+    params,
+    analysis,
+    opResult,
+    acResult,
+    dcResult,
+    fourier,
+    componentRows,
+    measurements,
+    selectedId,
+  }), [components, wires, netLabels, probes, directives, params, analysis, opResult, acResult, dcResult, fourier, componentRows, measurements, selectedId]);
+  const changeModel = (value: string) => {
+    if (value === "anthropic") {
+      saveAssistantPreferences({ ...preferences, provider: "anthropic" });
+      return;
+    }
+    if (value === "qwen3-1.7b-4bit" || value === "qwen3-4b-4bit") {
+      saveAssistantPreferences({ provider: "local-mlx", localModel: value });
+    }
+  };
   const needsCloudKey = preferences.provider === "anthropic" && !apiKey;
 
   return (
@@ -511,8 +743,18 @@ export function AssistantPanel({
         <div>
           <div className="assistant-kicker">Assistant</div>
           <div className="assistant-title-row">
-            <span className="assistant-title">Ask Tau</span>
-            <span className="assistant-model-badge">{modelBadge}</span>
+            <TauriMascot className="assistant-title-mascot" aria-hidden="true" />
+            <span className="assistant-title">Ask Tauri</span>
+            <Select value={modelChoice} onValueChange={changeModel} disabled={streaming}>
+              <SelectTrigger size="sm" className="assistant-model-select" aria-label="Assistant model">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent align="start">
+                <SelectItem value="anthropic">{ASSISTANT_MODEL_LABEL} · Cloud</SelectItem>
+                <SelectItem value="qwen3-4b-4bit">{LOCAL_MLX_MODEL_PRESETS["qwen3-4b-4bit"].label} · Local</SelectItem>
+                <SelectItem value="qwen3-1.7b-4bit">{LOCAL_MLX_MODEL_PRESETS["qwen3-1.7b-4bit"].label} · Local</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
         </div>
         <div className="assistant-actions">
@@ -522,14 +764,81 @@ export function AssistantPanel({
                 variant="outline"
                 size="icon-sm"
                 className="text-muted-foreground hover:text-foreground"
-                onClick={clearConversation}
-                disabled={!hasContent}
-                aria-label="Clear conversation"
+                onClick={startNewChat}
+                aria-label="New chat"
               >
-                <RotateCcw size={13} strokeWidth={1.8} aria-hidden="true" />
+                <MessageSquarePlus size={13} strokeWidth={1.8} aria-hidden="true" />
               </Button>
             </TooltipTrigger>
-            <TooltipContent>Clear conversation</TooltipContent>
+            <TooltipContent>New chat</TooltipContent>
+          </Tooltip>
+          <div className="assistant-history-menu" ref={historyMenuRef}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="icon-sm"
+                  className="text-muted-foreground hover:text-foreground"
+                  onClick={() => setHistoryMenuOpen((open) => !open)}
+                  aria-label="Past chats"
+                  aria-haspopup="true"
+                  aria-expanded={historyMenuOpen}
+                >
+                  <History size={13} strokeWidth={1.8} aria-hidden="true" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Past chats</TooltipContent>
+            </Tooltip>
+            {historyMenuOpen && (
+              <div className="assistant-history-popover" role="group" aria-label="Past chats">
+                {conversations.length === 0 ? (
+                  <p className="assistant-history-empty">No past chats yet</p>
+                ) : (
+                  <ul className="assistant-history-list">
+                    {conversations.map((conversation) => (
+                      <li
+                        key={conversation.id}
+                        className="assistant-history-row"
+                        data-active={conversation.id === activeConversationId}
+                      >
+                        <button
+                          type="button"
+                          className="assistant-history-item"
+                          onClick={() => switchConversation(conversation.id)}
+                          aria-current={conversation.id === activeConversationId ? "true" : undefined}
+                        >
+                          <span className="assistant-history-item-title">{conversation.title}</span>
+                          <span className="assistant-history-item-time">{relativeTime(conversation.updatedAt)}</span>
+                        </button>
+                        <button
+                          type="button"
+                          className="assistant-history-delete"
+                          onClick={() => deleteConversationById(conversation.id)}
+                          aria-label={`Delete "${conversation.title}"`}
+                        >
+                          <Trash2 size={12} strokeWidth={1.8} aria-hidden="true" />
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
+          </div>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="outline"
+                size="icon-sm"
+                className="text-muted-foreground hover:text-foreground"
+                onClick={() => deleteConversationById(activeConversationId)}
+                disabled={!hasContent}
+                aria-label="Delete conversation"
+              >
+                <Trash2 size={13} strokeWidth={1.8} aria-hidden="true" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Delete conversation</TooltipContent>
           </Tooltip>
           <button type="button" className="panel-close" onClick={onClose} aria-label="Close assistant">
             <X size={14} strokeWidth={1.8} aria-hidden="true" />
@@ -575,7 +884,7 @@ export function AssistantPanel({
           <div className="assistant-messages" ref={listRef} aria-live="polite">
             {messages.length === 0 && !error && (
               <div className="assistant-intro">
-                <Sparkles size={16} strokeWidth={1.6} aria-hidden="true" />
+                <TauriMascot className="assistant-intro-mascot" aria-hidden="true" />
                 <p>Ask about this circuit or describe one to create — I can see the schematic and latest simulation results.</p>
               </div>
             )}
@@ -584,7 +893,31 @@ export function AssistantPanel({
                 <div className="assistant-bubble">
                   {message.role === "assistant"
                     ? message.content ? renderMiniMarkdown(message.content) : null
-                    : <p>{message.content}</p>}
+                    : editingMessageId === message.id ? (
+                      <div className="assistant-message-editor">
+                        <textarea
+                          className="assistant-textarea"
+                          value={editDraft}
+                          rows={3}
+                          autoFocus
+                          aria-label="Edit message text"
+                          onChange={(event) => setEditDraft(event.currentTarget.value)}
+                          onKeyDown={(event) => {
+                            if (event.key === "Escape") cancelMessageEdit();
+                            if (event.key === "Enter" && !event.shiftKey) {
+                              event.preventDefault();
+                              resendEditedMessage(message.id);
+                            }
+                          }}
+                        />
+                        <div className="assistant-message-editor-actions">
+                          <Button type="button" size="sm" variant="ghost" onClick={cancelMessageEdit}>Cancel</Button>
+                          <Button type="button" size="sm" disabled={!editDraft.trim()} onClick={() => resendEditedMessage(message.id)}>
+                            Save & resend
+                          </Button>
+                        </div>
+                      </div>
+                    ) : <p>{message.content}</p>}
                   {message.role === "assistant" && message.actions?.map((action) => {
                     const status = actionStates[action.id] ?? "idle";
                     const isCreate = action.type === "create_asc";
@@ -633,37 +966,26 @@ export function AssistantPanel({
                   )}
                   {streaming && message.role === "assistant" && index === messages.length - 1 && (
                     <div className="assistant-progress" role="status" aria-live="polite">
-                      <div className="assistant-progress-head">
-                        <LoaderCircle size={15} strokeWidth={1.8} aria-hidden="true" />
-                        <div className="assistant-progress-copy">
-                          <strong>{preferences.provider === "anthropic" ? PROGRESS_LABELS[progressPhase] : "Planning on this Mac"}</strong>
-                          <span>
-                            {elapsedLabel(elapsedSeconds)}
-                            {preferences.provider === "anthropic"
-                              ? ` · ${Math.max(0, Math.ceil(requestTimeoutMs / 1000) - elapsedSeconds)}s safety limit`
-                              : " · Running locally"}
-                          </span>
-                        </div>
-                      </div>
-                      <div className="assistant-progress-track" aria-hidden="true">
-                        <span />
-                      </div>
-                      <div className="assistant-progress-steps" aria-hidden="true">
-                        {PROGRESS_STEPS.map((step, stepIndex) => (
-                          <span
-                            key={step}
-                            className={cn(
-                              stepIndex < progressStep(progressPhase) && "complete",
-                              stepIndex === progressStep(progressPhase) && "current",
-                            )}
-                          >
-                            <i />{step}
-                          </span>
-                        ))}
+                      <span className="assistant-progress-orb" aria-hidden="true" />
+                      <div className="assistant-progress-copy">
+                        <strong>{preferences.provider === "anthropic" ? PROGRESS_LABELS[progressPhase] : "Planning on this Mac"}</strong>
+                        <span>{elapsedLabel(elapsedSeconds)}</span>
                       </div>
                     </div>
                   )}
                 </div>
+                {message.role === "user" && editingMessageId !== message.id && (
+                  <button
+                    type="button"
+                    className="assistant-message-edit"
+                    disabled={streaming}
+                    onClick={() => beginMessageEdit(message)}
+                    aria-label={`Edit message: ${message.content.slice(0, 60)}`}
+                  >
+                    <Pencil size={11} strokeWidth={1.8} aria-hidden="true" />
+                    Edit
+                  </button>
+                )}
               </div>
             ))}
             {error && (
@@ -684,61 +1006,49 @@ export function AssistantPanel({
           </div>
 
           <div className="assistant-chips" role="group" aria-label="Quick actions">
-            <button
-              type="button"
-              className="assistant-chip"
-              disabled={streaming}
-              onClick={() => send("Summarize my circuit: what does it do, and what are the key stages?")}
-            >
-              Summarize my circuit
-            </button>
-            <button
-              type="button"
-              className="assistant-chip"
-              disabled={streaming}
-              onClick={() => send("Explain the current simulation results — what do they show, and is anything notable or unexpected?")}
-            >
-              Explain the current results
-            </button>
-            {selectedRef && (
+            {suggestions.map((suggestion) => (
               <button
+                key={suggestion.label}
                 type="button"
                 className="assistant-chip"
                 disabled={streaming}
-                onClick={() => send(`Why does ${selectedRef} behave this way, based on the current circuit and results?`)}
+                onClick={() => send(suggestion.prompt)}
               >
-                Why does {selectedRef} behave this way?
+                {suggestion.label}
               </button>
-            )}
+            ))}
           </div>
 
-          <form
-            className="assistant-composer"
-            onSubmit={(event) => {
-              event.preventDefault();
-              send(input);
-            }}
-          >
-            <textarea
-              className="assistant-textarea"
-              value={input}
-              placeholder="Ask a question or describe a circuit…"
-              disabled={streaming}
-              rows={2}
-              spellCheck={false}
-              onChange={(event) => setInput(event.currentTarget.value)}
-              onKeyDown={onComposerKeyDown}
-              aria-label="Message the assistant"
-            />
-            {streaming ? (
-              <Button type="button" variant="outline" size="sm" onClick={stop} className="gap-1.5">
-                <Square size={11} strokeWidth={2} aria-hidden="true" />
-                Stop
-              </Button>
-            ) : (
-              <Button type="submit" size="sm" disabled={!input.trim()}>Send</Button>
-            )}
-          </form>
+          <div className="assistant-composer-shell">
+            <form
+              className="assistant-composer"
+              onSubmit={(event) => {
+                event.preventDefault();
+                send(input);
+              }}
+            >
+              <textarea
+                className="assistant-textarea"
+                value={input}
+                placeholder="Ask a question or describe a circuit…"
+                disabled={streaming}
+                rows={2}
+                spellCheck={false}
+                onChange={(event) => setInput(event.currentTarget.value)}
+                onKeyDown={onComposerKeyDown}
+                aria-label="Message the assistant"
+              />
+              {streaming ? (
+                <Button type="button" variant="outline" size="sm" onClick={stop} className="gap-1.5">
+                  <Square size={11} strokeWidth={2} aria-hidden="true" />
+                  Stop
+                </Button>
+              ) : (
+                <Button type="submit" size="sm" disabled={!input.trim()}>Send</Button>
+              )}
+            </form>
+            <p className="assistant-disclaimer">Tauri is an AI and can make mistakes.</p>
+          </div>
         </>
       )}
     </aside>

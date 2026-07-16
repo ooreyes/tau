@@ -99,6 +99,7 @@ import {
   type AssistantCreateAscAction,
 } from "./lib/assistantActions";
 import { pickAutoRunAnalysis, type AutoRunAnalysis } from "./lib/assistantAutoRun";
+import { migrateConversation } from "./lib/assistantMemory";
 
 const DEFAULT_ANALYSIS_OPTIONS: AnalysisOptions = {
   stopTime: 0.006,
@@ -122,6 +123,8 @@ interface OpenTab {
   /** Absolute path when opened from a project folder; null for scratchpads. */
   filePath?: string | null;
   dirty?: boolean;
+  /** Stable snapshot of the last successful disk write/open. */
+  savedSignature?: string;
   /** Reasons an imported ASC cannot be rewritten losslessly by Tau yet. */
   ascRewriteRisks?: string[];
 }
@@ -129,6 +132,16 @@ interface OpenTab {
 const newTabId = () => `tab-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
 const blankDocument = (): SchematicDocument => ({ components: [], wires: [], probes: [], netLabels: [] });
 const emptyHistory = (): SchematicHistory => ({ past: [], future: [] });
+
+export function schematicDocumentSignature(doc: SchematicDocument): string {
+  return JSON.stringify({
+    components: doc.components,
+    wires: doc.wires,
+    probes: doc.probes,
+    netLabels: doc.netLabels,
+    directives: doc.directives ?? [],
+  });
+}
 
 // §10 responsive floor — App.css's `.editor-shell`/`.plotter` mirror these as
 // a CSS backstop. The schematic column must stay usable — tabs, canvas
@@ -267,6 +280,11 @@ function App() {
   }, [selectedId, mode]);
 
   const writeSim = useProject((s) => s.writeSim);
+  const projectRootPath = useProject((s) => s.rootPath);
+  const projectRootName = useProject((s) => s.rootName);
+  const projectCapability = useProject((s) => s.capability);
+  const openProjectFolder = useProject((s) => s.openFolder);
+  const createProjectFolder = useProject((s) => s.newProject);
   const createSchematicInRoot = useProject((s) => s.createSchematicInRoot);
   const deleteProjectNode = useProject((s) => s.deleteNode);
   const moveProjectNodeInStore = useProject((s) => s.moveNode);
@@ -288,6 +306,39 @@ function App() {
 
   const documentTitle = (tabs.find((tab) => tab.id === activeId) ?? tabs[0])?.title ?? "untitled.asc";
   const activeFilePath = (tabs.find((tab) => tab.id === activeId) ?? tabs[0])?.filePath ?? null;
+  const currentDocument = useMemo<SchematicDocument>(() => ({
+    components,
+    wires,
+    probes,
+    netLabels,
+    directives,
+  }), [components, directives, netLabels, probes, wires]);
+  const currentSignature = useMemo(
+    () => schematicDocumentSignature(currentDocument),
+    [currentDocument],
+  );
+  const activeTab = tabs.find((tab) => tab.id === activeId) ?? tabs[0];
+  const activeDirty = Boolean(
+    activeFilePath
+    && activeTab?.savedSignature
+    && activeTab.savedSignature !== currentSignature,
+  );
+  const normalizedRoot = projectRootPath?.replace(/\\/g, "/").replace(/\/+$/, "") ?? null;
+  const visibleTabs = tabs
+    .filter((tab) => {
+      if (!normalizedRoot || !tab.filePath) return false;
+      const normalizedTabPath = tab.filePath.replace(/\\/g, "/");
+      return normalizedTabPath === normalizedRoot || normalizedTabPath.startsWith(`${normalizedRoot}/`);
+    })
+    .map((tab) => (
+      tab.id === activeId ? { ...tab, dirty: activeDirty } : tab
+    ));
+  const normalizedActivePath = activeFilePath?.replace(/\\/g, "/") ?? null;
+  const activeProjectFile = Boolean(
+    normalizedRoot
+    && normalizedActivePath
+    && (normalizedActivePath === normalizedRoot || normalizedActivePath.startsWith(`${normalizedRoot}/`)),
+  );
 
   const showNotice = useCallback((message: string) => {
     setNotice(message);
@@ -669,6 +720,13 @@ function App() {
             ...tab,
             doc: { components, wires, probes, netLabels, directives },
             history: { past, future },
+            dirty: Boolean(tab.savedSignature && tab.savedSignature !== schematicDocumentSignature({
+              components,
+              wires,
+              probes,
+              netLabels,
+              directives,
+            })),
           }
         : tab)),
     [activeId, components, wires, probes, netLabels, directives, past, future],
@@ -700,6 +758,7 @@ function App() {
               history: emptyHistory(),
               filePath: filePath ?? tab.filePath,
               dirty: false,
+              savedSignature: schematicDocumentSignature(doc),
               ascRewriteRisks: rewriteRisks,
             }
           : tab,
@@ -721,6 +780,7 @@ function App() {
           history: emptyHistory(),
           filePath: filePath ?? null,
           dirty: false,
+          savedSignature: schematicDocumentSignature(doc),
           ascRewriteRisks: rewriteRisks,
         }]);
         setActiveId(snap[0].id);
@@ -734,6 +794,7 @@ function App() {
           history: emptyHistory(),
           filePath: filePath ?? null,
           dirty: false,
+          savedSignature: schematicDocumentSignature(doc),
           ascRewriteRisks: rewriteRisks,
         }]);
         setActiveId(id);
@@ -782,15 +843,12 @@ function App() {
     // the schematic store's directives) still fires whether this circuit ends
     // up disk-backed or as a pathless scratchpad.
     pendingAutoRunRef.current = pickAutoRunAnalysis(action.document.directives ?? []);
+    // Creating a circuit remounts AssistantPanel under a new memoryKey
+    // (path or filename). Carry the chat that produced it so Create doesn't
+    // wipe the transcript the user just had.
+    const fromKey = activeFilePath ?? documentTitle;
     if (!useProject.getState().rootPath) {
-      // No Schematics folder chosen yet — don't fail the creation outright.
-      // openDocument's existing pathless-tab handling (blank-starter swap when
-      // the lone tab is empty, otherwise a new tab) already loads the document
-      // into the schematic store via loadCircuit, which is what makes the
-      // directives-keyed auto-run effect actually see the new circuit.
-      openDocument(action.document, action.filename);
-      showNotice(`Opened ${action.filename} as a scratchpad — choose a Schematics folder to save files.`);
-      return;
+      throw new Error("Open or create a project folder before Tauri creates a schematic.");
     }
     const path = await createSchematicInRoot(action.filename);
     if (!path) throw new Error(useProject.getState().error ?? "Could not create schematic.");
@@ -806,8 +864,9 @@ function App() {
     // remains the durable interchange file; re-importing it here would attach
     // LTspice pin overrides and visually detach wires from Tau glyphs.
     openDocument(action.document, basename(path), path, ascRewriteRisks(action.source));
+    migrateConversation(fromKey, path);
     showNotice(`Created ${basename(path)}`);
-  }, [createSchematicInRoot, deleteProjectNode, openDocument, showNotice, writeSim]);
+  }, [activeFilePath, createSchematicInRoot, deleteProjectNode, documentTitle, openDocument, showNotice, writeSim]);
 
   const applyAssistantCircuit = useCallback((action: AssistantApplyCurrentAscAction) => {
     pendingAutoRunRef.current = pickAutoRunAnalysis(action.document.directives ?? []);
@@ -930,7 +989,14 @@ function App() {
       await writeSim(savePath, serialized.contents);
       setTabs((list) => list.map((t) => (
         t.id === activeId
-          ? { ...t, title: basename(savePath), filePath: savePath, dirty: false }
+          ? {
+              ...t,
+              title: basename(savePath),
+              filePath: savePath,
+              dirty: false,
+              doc: currentDocument,
+              savedSignature: currentSignature,
+            }
           : t
       )));
       if (serialized.warnings.length > 0) {
@@ -943,7 +1009,7 @@ function App() {
       if (createdForSave) await deleteProjectNode(savePath);
       showNotice(error instanceof Error ? error.message : "Save failed.");
     }
-  }, [tabs, activeId, components, wires, probes, netLabels, directives, createSchematicInRoot, deleteProjectNode, writeSim, showNotice]);
+  }, [tabs, activeId, components, wires, probes, netLabels, directives, currentDocument, currentSignature, createSchematicInRoot, deleteProjectNode, writeSim, showNotice]);
 
   // Switch to an already-open tab, preserving each tab's content in memory.
   const switchTab = useCallback((id: string) => {
@@ -1192,14 +1258,26 @@ function App() {
         result={analysis}
         runState={runState}
         isRunning={analysisRunning}
-        title={documentTitle}
+        title={activeDirty ? `${documentTitle} •` : (activeProjectFile ? documentTitle : (projectRootName ?? "Open a project"))}
         onModeChange={(nextMode) => {
+          if (nextMode === "simulator" && !activeProjectFile) {
+            showNotice("Open or create a schematic before using the simulator.");
+            return;
+          }
           setMode(nextMode);
           if (nextMode === "simulator") setFitSignal((value) => value + 1);
         }}
-        onRun={runAndShowSimulator}
+        onRun={activeProjectFile ? runAndShowSimulator : () => showNotice("Open or create a schematic before running a simulation.")}
         assistantOpen={assistantOpen}
-        onToggleAssistant={toggleAssistant}
+        projectOpen={Boolean(projectRootPath)}
+        schematicOpen={activeProjectFile}
+        onToggleAssistant={() => {
+          if (!projectRootPath) {
+            showNotice("Open or create a project folder before using Tauri.");
+            return;
+          }
+          toggleAssistant();
+        }}
         onOpenSettings={() => setSettingsOpen(true)}
       />
       <div
@@ -1211,6 +1289,8 @@ function App() {
           mode={mode}
           explorerOpen={explorerColumnOpen}
           partsOpen={componentsColumnOpen}
+          projectOpen={Boolean(projectRootPath)}
+          schematicOpen={activeProjectFile}
           onFocusExplorer={() => {
             setMode("schematic");
             if (assistantOpen && !independentColumnsFit) setPartsOpen(false);
@@ -1239,7 +1319,23 @@ function App() {
             maxWidth={explorerResponsiveMax}
           />
         )}
-        {mode === "schematic" && (
+        {mode === "schematic" && !activeProjectFile && (
+          <section className="editor-shell" aria-label="Project start">
+            <main className="stage">
+              <EmptyState
+                projectOpen={Boolean(projectRootPath)}
+                canCreateProject={projectCapability === "tauri"}
+                onOpenFolder={() => void openProjectFolder()}
+                onCreateProject={() => void createProjectFolder("Schematics")}
+                onNewCircuit={() => void startNewCircuit()}
+                onAskTauri={() => {
+                  if (!assistantOpen) toggleAssistant();
+                }}
+              />
+            </main>
+          </section>
+        )}
+        {mode === "schematic" && activeProjectFile && (
         <section className="editor-shell" aria-label="Schematic editor">
           <EditorToolbar
             mode={mode}
@@ -1250,7 +1346,7 @@ function App() {
             onClearScratchpad={() => setConfirmClearOpen(true)}
           />
           <EditorTabs
-            tabs={tabs}
+            tabs={visibleTabs}
             activeId={activeId}
             mode={mode}
             onSelectTab={switchTab}
@@ -1261,13 +1357,19 @@ function App() {
           <main className="stage">
             <Canvas op={opAnalysis} interactive fitSignal={fitSignal} />
             {components.length === 0 && wires.length === 0 && toolMode === "select" && (
-              <EmptyState />
+              <EmptyState
+                projectOpen
+                onNewCircuit={() => void startNewCircuit()}
+                onAskTauri={() => {
+                  if (!assistantOpen) toggleAssistant();
+                }}
+              />
             )}
           </main>
           <BottomPanel result={analysis} isRunning={analysisRunning} />
         </section>
         )}
-        {mode === "simulator" && graphOpen && (
+        {mode === "simulator" && activeProjectFile && graphOpen && (
           <>
             <section className="sim-schematic-pane" aria-label="Circuit overview">
               <header className="sim-schematic-header">
@@ -1362,13 +1464,13 @@ function App() {
             </AnalysisErrorBoundary>
           </>
         )}
-        {mode === "simulator" && !graphOpen && (
+        {mode === "simulator" && activeProjectFile && !graphOpen && (
           <MinimizedPanelDock
             graphHidden={!graphOpen}
             onRestoreGraph={() => setGraphOpen(true)}
           />
         )}
-        {componentsColumnOpen && (
+        {componentsColumnOpen && activeProjectFile && (
           <ComponentsRail
             focusSignal={componentFocusSignal}
             onNotice={showNotice}
@@ -1376,16 +1478,21 @@ function App() {
             maxWidth={componentsRailResponsiveMax}
           />
         )}
-        {assistantOpen && (
+        {projectRootPath && assistantOpen && (
           <AssistantPanel
             key={activeFilePath ?? documentTitle}
             memoryKey={activeFilePath ?? documentTitle}
             components={components}
             wires={wires}
             netLabels={netLabels}
+            probes={probes}
             directives={directives}
             params={params}
             analysis={analysis}
+            opResult={opAnalysis}
+            acResult={acAnalysis}
+            dcResult={dcAnalysis}
+            fourier={fourier}
             componentRows={componentRows}
             measurements={measurements}
             selectedId={selectedId}

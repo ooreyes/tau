@@ -8,6 +8,7 @@
     "dev": "pnpm --filter @tau/desktop tauri dev",
     "dev:web": "pnpm --filter @tau/desktop dev",
     "build": "pnpm --filter @tau/desktop tauri build",
+    "refresh:app": "bash scripts/refresh-tau-app.sh",
     "typecheck": "pnpm --filter @tau/desktop exec tsc --noEmit",
     "test": "pnpm --filter @tau/desktop test",
     "design:shot": "node scripts/design-shot.mjs"

@@ -8,16 +8,61 @@
      `git log --oneline -8`, recover/finish/revert that unit FIRST, then go on.
      ─────────────────────────────────────────────────────────────────────── -->
 ## ⏱ HEARTBEAT
-- **Headline metric:** 1802 reviewed-tree tests green · corpus 82/82 import · 82/82 op-converge · 79/82 warning-clean
-- **Run started (UTC):** 2026-07-15T16:30Z
-- **Synced to origin:** auto/ltspice-parity @ HEAD.
-- **Claimed unit:** End-to-end cloud assistant architecture, fast schematic generation, and persistent recovery UX.
+- **Headline metric:** 1834 reviewed-tree tests green · corpus 82/82 import · 82/82 op-converge · 79/82 warning-clean
+- **Run started (UTC):** 2026-07-15T23:46Z
+- **Synced to origin:** auto/ltspice-parity @ d76208e.
+- **Claimed unit:** Project-first workspace, durable ChatGPT-grade chats, contextual prompts, Tauri branding,
+  dirty indicators, and automatic live-app refresh.
 - **Status:** DONE
-- **Last completed sub-step:** Packaged Tau launched without a Keychain/UI-thread freeze after the final
-  build; full TypeScript/Vitest, Rust, release, and live cloud/ngspice gates passed.
-- **Plan:** Replaced raw-ASC cloud generation with Tau's deterministic logical-plan compiler, bounded
-  build/question budgets separately, persisted recovery/actions, and verified LC plus Class-D journeys.
-- **Next step:** Continue the highest-leverage unfinished Definition-of-Done item.
+- **Last completed sub-step:** Packaged macOS QA proved the folder gate and native create flow; Chrome proved
+  automatic full-page recovery, and the final ghost scratchpad tab was removed from project tab lists.
+- **Plan:** Completed — recovered and finished both checkpointed slices, integrated project gating/branding,
+  and verified the result through unit, build, native ngspice, Chrome, and packaged-app gates.
+- **Next step:** Resume the highest-leverage unfinished acceptance-corpus/parity item.
+
+---
+
+## 2026-07-16T00:02Z — auto/ltspice-parity — Project-first workspace and durable Tauri UX
+
+### What I did
+- Made a real folder the entry boundary for editing, simulation, and AI-created
+  files; empty projects now offer New Schematic or Ask Tauri instead of exposing
+  a pathless scratchpad, and project tab lists contain only project-backed files.
+- Added saved-document signatures and an unsaved dot that clears after a
+  successful save, plus tests covering mutation and Cmd/Ctrl+S.
+- Finished durable named chat sessions, past-chat open/delete, editable user
+  turns with branch-and-resend behavior, schematic/result-aware prompt chips,
+  a shadcn model selector, and the Tauri AI fallibility note.
+- Added the Tauri resistor-smiley mascot throughout the assistant/onboarding and
+  regenerated the complete macOS, Windows, iOS, and Android application icons.
+- Finished the agent stop-hook refresh path and fixed its Tauri-dev detection to
+  identify a process by repository cwd, preventing duplicate dev windows.
+
+### Files
+- `apps/desktop/src/App.tsx`, `App.css`, workspace/toolbar tests
+- `apps/desktop/src/components/AssistantPanel.tsx`, `EmptyState.tsx`,
+  `ShellPanels.tsx`, `Toolbar.tsx`, `TauriMascot.tsx`, and tests
+- `apps/desktop/src/lib/assistantContext.ts`, `assistantMemory.ts`, and tests
+- `apps/desktop/src-tauri/icons/**`, `scripts/refresh-tau-app.sh`
+- `.claude/settings.json`, `.cursor/hooks.json`, `apps/desktop/vite.config.ts`
+
+### Tests and QA
+- Desktop typecheck and full Vitest: 1834 passed / 6 skipped.
+- Production web build, Rust fmt/Clippy `-D warnings`/tests: pass; 19 Rust tests
+  passed / 1 ignored, and the explicit bundled-real-ngspice smoke passed.
+- Unsigned `tauri build --bundles app`: pass. Computer Use opened a native
+  `/tmp/tauri-project-qa` folder and created `qa.asc` inside it; the packaged
+  gate disabled Schematic/Simulator/Run/Tauri/Components until appropriate.
+- Chrome stayed attached to `localhost:1420` and recovered automatically after
+  source changes/full reload without a manual browser refresh. The refreshed
+  rootless view exposed only the project-start screen and disabled controls.
+
+### Parity items
+- §8 project-first workspace, save-state feedback, and Tauri chat/model UX advanced.
+- §10 shadcn-grade assistant/onboarding continuity and complete mascot assets advanced.
+
+### Next step
+- Resume the highest-leverage unfinished acceptance-corpus/parity item.
 
 ---
 

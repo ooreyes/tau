@@ -1272,6 +1272,17 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   off Tauri's UI thread, so an unsigned-build SecurityAgent authorization can no
   longer leave a black frozen window. The packaged app also uses the circuit-
   trace Tau icon at every platform asset size instead of the placeholder mark.
+  **Project + Tauri UX follow-up (2026-07-16):** startup is now project-first:
+  editing, simulation, component tools, and AI stay disabled until the user opens
+  or creates a folder, and every AI-created schematic is written inside it.
+  Disk-backed tabs derive an exact saved-document signature, show an unsaved dot
+  after any mutation, and clear it only after a successful save. Tauri now has a
+  resistor-smiley mascot and complete platform icon set, durable named chat
+  sessions that can be reopened/deleted, editable user turns with branch-and-
+  resend behavior, a shadcn model selector, a concise AI fallibility note, and
+  deterministic quick prompts derived from the selected part, schematic, and
+  latest results. Agent stop hooks keep the Vite/Tauri dev app attached and
+  force a full reload; duplicate-process detection is scoped by process cwd.
 - 🟡 Component picker matching LTspice (F2 part browser over the full library)
   — **F2 now opens the searchable part palette** (symbols, categories, hotkeys,
   ↑↓/↵ placement); remaining: coverage audit vs. LTspice's full library tree.

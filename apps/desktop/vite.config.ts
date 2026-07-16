@@ -1,14 +1,36 @@
-import { defineConfig } from "vite";
+import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
+import { writeFileSync, watchFile } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 // @ts-expect-error process is a nodejs global
 const host = process.env.TAURI_DEV_HOST;
 
+/** Agent-stop hook touches this file; broadcast a full reload so the open
+ *  Tau window always picks up the latest tree (HMR alone can miss some
+ *  structural edits, and packaged builds never see them at all). */
+function agentReloadPlugin(): Plugin {
+  const stamp = fileURLToPath(new URL("./.agent-reload", import.meta.url));
+  return {
+    name: "tau-agent-reload",
+    configureServer(server) {
+      try {
+        writeFileSync(stamp, "boot\n", { flag: "a" });
+      } catch {
+        // Private/read-only trees still get normal HMR; skip the stamp.
+        return;
+      }
+      watchFile(stamp, { interval: 400 }, () => {
+        server.ws.send({ type: "full-reload", path: "*" });
+      });
+    },
+  };
+}
+
 // https://vite.dev/config/
 export default defineConfig(async () => ({
-  plugins: [react(), tailwindcss()],
+  plugins: [react(), tailwindcss(), agentReloadPlugin()],
 
   resolve: {
     // shadcn convention: `@/` → src/ (mirrored in tsconfig paths).

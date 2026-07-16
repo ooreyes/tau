@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // Mocks a minimal slice of the Anthropic SDK surface lib/assistant.ts uses:
@@ -104,7 +104,15 @@ import {
   streamAssistantReply,
 } from "../lib/assistant";
 import { saveAssistantPreferences } from "../lib/assistantPreferences";
-import { saveAssistantRecovery } from "../lib/assistantMemory";
+import {
+  createConversation,
+  getActiveConversationId,
+  listConversations,
+  loadConversation,
+  saveAssistantRecovery,
+  saveConversationMessages,
+  setActiveConversationId,
+} from "../lib/assistantMemory";
 import { EMPTY_SCOPE } from "../simulation/paramScope";
 import type { AnalysisResult } from "../simulation/linearTransient";
 import type { SchematicComponent } from "../schematic/types";
@@ -250,6 +258,20 @@ function baseProps(overrides: Partial<AssistantPanelProps> = {}): AssistantPanel
   };
 }
 
+// Drives one full cloud turn to completion: types promptText, hits Send, and
+// resolves the most recently created mock stream with replyText. Used by the
+// conversation-history tests below, which each need several complete turns
+// to build up more than one saved chat.
+async function sendAndResolve(promptText: string, replyText: string) {
+  fireEvent.change(screen.getByRole("textbox", { name: "Message the assistant" }), { target: { value: promptText } });
+  fireEvent.click(screen.getByRole("button", { name: "Send" }));
+  const stream = streams[streams.length - 1];
+  await act(async () => {
+    stream.resolve(replyText);
+    await stream.finalMessage();
+  });
+}
+
 describe("AssistantPanel", () => {
   it("stops a cloud request that never starts responding instead of hanging for minutes", () => {
     vi.useFakeTimers();
@@ -309,7 +331,7 @@ describe("AssistantPanel", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Open Settings" }));
     expect(onOpenSettings).toHaveBeenCalledTimes(1);
-    expect(screen.getByText("Claude · Sonnet 5")).toBeTruthy();
+    expect(screen.getByRole("combobox", { name: "Assistant model" }).textContent).toContain("Sonnet 5");
   });
 
   it("uses the selected local preset without a cloud key and consumes its non-streaming reply", async () => {
@@ -352,7 +374,7 @@ describe("AssistantPanel", () => {
     vi.stubGlobal("fetch", fetchMock);
     render(<AssistantPanel {...baseProps()} />);
 
-    expect(screen.getByText("Local · Qwen3 4B")).toBeTruthy();
+    expect(screen.getByRole("combobox", { name: "Assistant model" }).textContent).toContain("Qwen3 4B");
     expect(screen.getByRole("textbox", { name: "Message the assistant" })).toBeTruthy();
     expect(screen.queryByText("No API Key")).toBeNull();
 
@@ -467,8 +489,9 @@ describe("AssistantPanel", () => {
     }));
 
     expect(await screen.findByText("Connecting to Sonnet 5")).toBeTruthy();
-    expect(screen.getByText(`0s · ${ASSISTANT_REQUEST_TIMEOUT_MS / 1000}s safety limit`)).toBeTruthy();
-    expect(screen.getByText("Plan").classList.contains("current")).toBe(true);
+    expect(screen.getByText("0s")).toBeTruthy();
+    expect(screen.queryByText(/safety limit/)).toBeNull();
+    expect(screen.queryByText("Plan")).toBeNull();
     expect(screen.getByRole("button", { name: "Stop" })).toBeTruthy();
 
     act(() => streams[0].emitThinking());
@@ -496,7 +519,7 @@ describe("AssistantPanel", () => {
     });
     await waitFor(() => expect(streams).toHaveLength(2));
     expect(screen.getByText("Correcting the circuit plan")).toBeTruthy();
-    expect(screen.getByText("Validate").classList.contains("current")).toBe(true);
+    expect(screen.queryByText("Validate")).toBeNull();
     expect(screen.queryByRole("alert")).toBeNull();
 
     const repairRequest = streamRequests[1] as {
@@ -538,10 +561,19 @@ describe("AssistantPanel", () => {
     saveAssistantApiKey("test-key");
     render(<AssistantPanel {...baseProps()} />);
 
-    fireEvent.click(screen.getByRole("button", { name: "Summarize my circuit" }));
+    fireEvent.click(screen.getByRole("button", { name: "Build an RC filter" }));
 
-    expect(screen.getByText("Summarize my circuit: what does it do, and what are the key stages?")).toBeTruthy();
+    expect(screen.getByText(/Build a practical first-order RC low-pass filter/)).toBeTruthy();
     expect(streams).toHaveLength(1);
+  });
+
+  it("shows the Tauri safety note and exposes the active model as a selector", () => {
+    saveAssistantApiKey("test-key");
+    render(<AssistantPanel {...baseProps()} />);
+
+    expect(screen.getByText("Tauri is an AI and can make mistakes.")).toBeTruthy();
+    expect(screen.getByRole("combobox", { name: "Assistant model" }).textContent).toContain("Sonnet 5");
+    expect(screen.queryByText(/Claude ·/)).toBeNull();
   });
 
   it("shows the ref-specific chip once a component is selected, and sends its prompt", () => {
@@ -549,8 +581,8 @@ describe("AssistantPanel", () => {
     const r1 = resistor("r1", "R1");
     render(<AssistantPanel {...baseProps({ components: [r1], selectedId: "r1" })} />);
 
-    fireEvent.click(screen.getByRole("button", { name: "Why does R1 behave this way?" }));
-    expect(screen.getByText("Why does R1 behave this way, based on the current circuit and results?")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Explain R1" }));
+    expect(screen.getByText("Explain R1's role in this schematic and how its value affects the current circuit.")).toBeTruthy();
   });
 
   it("withholds current-circuit apply when the live schematic cannot be serialized completely", () => {
@@ -682,7 +714,7 @@ describe("AssistantPanel", () => {
     fireEvent.click(screen.getByRole("button", { name: "Retry" }));
 
     expect(streams).toHaveLength(1);
-    expect(screen.getByText("Build an LC tank")).toBeTruthy();
+    expect(screen.getByText("Build an LC tank", { selector: ".assistant-message--user p" })).toBeTruthy();
   });
 
   it("compiles a compact cloud plan locally and keeps creation behind confirmation", async () => {
@@ -914,5 +946,193 @@ describe("AssistantPanel local AI onboarding", () => {
     expect(screen.queryByRole("button", { name: "Download & start" })).toBeNull();
     // The composer is still fully usable in this browser dev fallback.
     expect(screen.getByRole("textbox", { name: "Message the assistant" })).toBeTruthy();
+  });
+});
+
+describe("AssistantPanel conversation history", () => {
+  it("disables the header delete-conversation button for an empty, never-saved thread", () => {
+    saveAssistantApiKey("test-key");
+    render(<AssistantPanel {...baseProps()} />);
+    expect((screen.getByRole("button", { name: "Delete conversation" }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("keeps the previous conversation when starting a new chat, and lists it in the past-chats menu", async () => {
+    saveAssistantApiKey("test-key");
+    render(<AssistantPanel {...baseProps()} />);
+
+    await sendAndResolve("What does R1 do?", "R1 sets the gain.");
+    expect(screen.getByText("What does R1 do?")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "New chat" }));
+    // The prior thread is gone from view (archived, not deleted) and the
+    // composer/intro read as a genuinely fresh conversation.
+    expect(screen.queryByText("What does R1 do?")).toBeNull();
+    expect(screen.getByText(/Ask about this circuit/)).toBeTruthy();
+    expect((screen.getByRole("button", { name: "Delete conversation" }) as HTMLButtonElement).disabled).toBe(true);
+
+    fireEvent.click(screen.getByRole("button", { name: "Past chats" }));
+    const menu = screen.getByRole("group", { name: "Past chats" });
+    expect(within(menu).getByText("What does R1 do?")).toBeTruthy();
+  });
+
+  it("switches between two saved conversations via the past-chats menu without losing either transcript", async () => {
+    saveAssistantApiKey("test-key");
+    render(<AssistantPanel {...baseProps()} />);
+
+    await sendAndResolve("What does R1 do?", "R1 sets the gain.");
+    fireEvent.click(screen.getByRole("button", { name: "New chat" }));
+    await sendAndResolve("What does C1 do?", "C1 sets the pole.");
+    expect(screen.getByText("C1 sets the pole.")).toBeTruthy();
+    expect(screen.queryByText("R1 sets the gain.")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Past chats" }));
+    fireEvent.click(within(screen.getByRole("group", { name: "Past chats" })).getByText("What does R1 do?").closest("button")!);
+
+    expect(screen.getByText("R1 sets the gain.")).toBeTruthy();
+    expect(screen.queryByText("C1 sets the pole.")).toBeNull();
+    // The composer draft and any transient error state don't leak across a switch.
+    expect(screen.getByRole("textbox", { name: "Message the assistant" })).toHaveProperty("value", "");
+
+    fireEvent.click(screen.getByRole("button", { name: "Past chats" }));
+    fireEvent.click(within(screen.getByRole("group", { name: "Past chats" })).getByText("What does C1 do?").closest("button")!);
+    expect(screen.getByText("C1 sets the pole.")).toBeTruthy();
+    expect(screen.queryByText("R1 sets the gain.")).toBeNull();
+  });
+
+  it("edits and resends an earlier user prompt as a new branch, removing later turns and renaming the chat", async () => {
+    saveAssistantApiKey("test-key");
+    render(<AssistantPanel {...baseProps()} />);
+    await sendAndResolve("What does R1 do?", "R1 sets the gain.");
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit message: What does R1 do?" }));
+    const editor = screen.getByRole("textbox", { name: "Edit message text" });
+    fireEvent.change(editor, { target: { value: "How does C1 set the cutoff?" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save & resend" }));
+
+    expect(screen.queryByText("What does R1 do?")).toBeNull();
+    expect(screen.queryByText("R1 sets the gain.")).toBeNull();
+    expect(screen.getByText("How does C1 set the cutoff?")).toBeTruthy();
+    expect(streams).toHaveLength(2);
+    const request = streamRequests[1] as { messages: Array<{ role: string; content: string }> };
+    expect(request.messages[request.messages.length - 1]).toEqual({ role: "user", content: "How does C1 set the cutoff?" });
+    expect(JSON.stringify(request.messages)).not.toContain("What does R1 do?");
+
+    await act(async () => {
+      streams[1].resolveContent([{ type: "text", text: "C1 and R1 set the pole." }]);
+      await streams[1].finalMessage();
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Past chats" }));
+    expect(within(screen.getByRole("group", { name: "Past chats" })).getByText("How does C1 set the cutoff?")).toBeTruthy();
+  });
+
+  it("deletes a non-active conversation from the past-chats menu without disturbing the active thread", async () => {
+    saveAssistantApiKey("test-key");
+    render(<AssistantPanel {...baseProps()} />);
+
+    await sendAndResolve("What does R1 do?", "R1 sets the gain.");
+    fireEvent.click(screen.getByRole("button", { name: "New chat" }));
+    await sendAndResolve("What does C1 do?", "C1 sets the pole.");
+
+    fireEvent.click(screen.getByRole("button", { name: "Past chats" }));
+    fireEvent.click(within(screen.getByRole("group", { name: "Past chats" })).getByRole("button", { name: 'Delete "What does R1 do?"' }));
+
+    // Still on the active (C1) thread — deleting a different row doesn't touch
+    // it, and the menu stays open (still showing the pruned list) so a delete
+    // doesn't force a re-open to remove a second row.
+    expect(screen.getByText("C1 sets the pole.")).toBeTruthy();
+    expect(within(screen.getByRole("group", { name: "Past chats" })).queryByText("What does R1 do?")).toBeNull();
+  });
+
+  it("the header's delete-conversation button removes the active thread and falls back to the newest remaining one", async () => {
+    saveAssistantApiKey("test-key");
+    render(<AssistantPanel {...baseProps()} />);
+
+    await sendAndResolve("What does R1 do?", "R1 sets the gain.");
+    fireEvent.click(screen.getByRole("button", { name: "New chat" }));
+    await sendAndResolve("What does C1 do?", "C1 sets the pole.");
+
+    fireEvent.click(screen.getByRole("button", { name: "Delete conversation" }));
+
+    expect(screen.getByText("R1 sets the gain.")).toBeTruthy();
+    expect(screen.queryByText("C1 sets the pole.")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Past chats" }));
+    expect(within(screen.getByRole("group", { name: "Past chats" })).queryByText("What does C1 do?")).toBeNull();
+  });
+
+  it("deleting the only conversation falls back to a fresh empty thread instead of an empty menu forever", async () => {
+    saveAssistantApiKey("test-key");
+    render(<AssistantPanel {...baseProps()} />);
+    await sendAndResolve("What does R1 do?", "R1 sets the gain.");
+
+    fireEvent.click(screen.getByRole("button", { name: "Delete conversation" }));
+
+    expect(screen.queryByText("What does R1 do?")).toBeNull();
+    expect(screen.getByText(/Ask about this circuit/)).toBeTruthy();
+    // A brand new thread is usable right away.
+    fireEvent.change(screen.getByRole("textbox", { name: "Message the assistant" }), { target: { value: "Another question" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    expect(screen.getByText("Another question")).toBeTruthy();
+  });
+
+  it("closes the past-chats menu on Escape and on an outside click", async () => {
+    saveAssistantApiKey("test-key");
+    render(<AssistantPanel {...baseProps()} />);
+    await sendAndResolve("What does R1 do?", "R1 sets the gain.");
+
+    fireEvent.click(screen.getByRole("button", { name: "Past chats" }));
+    expect(screen.getByRole("group", { name: "Past chats" })).toBeTruthy();
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(screen.queryByRole("group", { name: "Past chats" })).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Past chats" }));
+    expect(screen.getByRole("group", { name: "Past chats" })).toBeTruthy();
+    fireEvent.pointerDown(document.body);
+    expect(screen.queryByRole("group", { name: "Past chats" })).toBeNull();
+  });
+
+  it("restores a conversation saved under a memoryKey the next time that circuit's panel mounts (reload survival)", () => {
+    const id = createConversation();
+    saveConversationMessages("persist.asc", id, [
+      { role: "user", content: "What does R1 do?" },
+      { role: "assistant", content: "R1 sets the gain." },
+    ]);
+    setActiveConversationId("persist.asc", id);
+
+    saveAssistantApiKey("test-key");
+    render(<AssistantPanel {...baseProps({ memoryKey: "persist.asc" })} />);
+
+    expect(screen.getByText("What does R1 do?")).toBeTruthy();
+    expect(screen.getByText("R1 sets the gain.")).toBeTruthy();
+  });
+
+  it("keeps separate transcripts for separate circuits under the same session", () => {
+    const id = createConversation();
+    saveConversationMessages("circuit-a.asc", id, [{ role: "user", content: "Circuit A question" }]);
+    setActiveConversationId("circuit-a.asc", id);
+
+    saveAssistantApiKey("test-key");
+    render(<AssistantPanel {...baseProps({ memoryKey: "circuit-b.asc" })} />);
+
+    expect(screen.queryByText("Circuit A question")).toBeNull();
+    expect(screen.getByText(/Ask about this circuit/)).toBeTruthy();
+  });
+
+  it("flushes the active conversation synchronously on unmount so a close mid-debounce does not drop turns", async () => {
+    saveAssistantApiKey("test-key");
+    const { unmount } = render(<AssistantPanel {...baseProps({ memoryKey: "flush.asc" })} />);
+    await sendAndResolve("What does R1 do?", "R1 sets the gain.");
+
+    // Unmount before waiting out another debounce window — the unmount flush
+    // must still have written the completed turn.
+    unmount();
+
+    const activeId = getActiveConversationId("flush.asc");
+    expect(activeId).toBeTruthy();
+    const saved = loadConversation("flush.asc", activeId!)?.messages ?? [];
+    expect(saved).toHaveLength(2);
+    expect(saved[0]).toMatchObject({ role: "user", content: "What does R1 do?" });
+    expect(saved[1]).toMatchObject({ role: "assistant", content: "R1 sets the gain." });
+    expect(listConversations("flush.asc")).toHaveLength(1);
   });
 });

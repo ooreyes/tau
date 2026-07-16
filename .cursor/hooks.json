@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "hooks": {
+    "stop": [
+      {
+        "command": ".cursor/hooks/refresh-tau-app.sh",
+        "timeout": 45
+      }
+    ],
+    "subagentStop": [
+      {
+        "command": ".cursor/hooks/refresh-tau-app.sh",
+        "timeout": 45
+      }
+    ]
+  }
+}
