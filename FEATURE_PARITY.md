@@ -1401,11 +1401,12 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   `Install MLX LM` (uv tool install) in the native app; unsigned DMG already
   builds. `uv tool install mlx-lm` installs the complete isolated transitive
   dependency environment; packaged-runtime QA confirms `mlx_lm.server --help`
-  loads successfully. Unsigned builds request an explicit ad-hoc identity, so
-  the hardened-runtime app has a valid sealed resource envelope before DMG
-  creation; `codesign --verify --deep --strict` and `hdiutil verify` pass.
-  Gatekeeper correctly continues to reject it until a human applies Developer
-  ID signing and notarization.
+  loads successfully. Unsigned builds request an explicit ad-hoc identity and
+  deliberately leave hardened runtime for the human Developer-ID signing step:
+  ad-hoc hardened runtime rejects bundled libraries because neither side has a
+  Team ID. The unsigned app therefore loads sealed bundled ngspice end-to-end;
+  `codesign --verify --deep --strict` and `hdiutil verify` still pass. The final
+  Developer ID signature must re-enable hardened runtime before notarization.
 
 ## 10. Visual design system — **IMPERATIVE (Omar's directive)** — ✅ FULLY ADOPTED (2026-07-08, Phase 4c)
 

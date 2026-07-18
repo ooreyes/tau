@@ -8,16 +8,73 @@
      `git log --oneline -8`, recover/finish/revert that unit FIRST, then go on.
      ─────────────────────────────────────────────────────────────────────── -->
 ## ⏱ HEARTBEAT
-- **Headline metric:** 1903 reviewed-tree tests green · corpus 82/82 import · 82/82 op-converge · 79/82 warning-clean
+- **Headline metric:** 1939 reviewed-tree tests green · corpus 82/82 import · 82/82 op-converge · 79/82 warning-clean
 - **Run started (UTC):** 2026-07-16T23:06Z
-- **Synced to origin:** auto/ltspice-parity @ d8e3467.
+- **Synced to origin:** auto/ltspice-parity @ 6f566ce (recovered interrupted checkpoint and pushed implementation at cb26b01).
 - **Claimed unit:** Replace Sonnet's brittle wall-clock timeout with a progress-aware deadline, then red-team complex AI creation, ASC import, native execution, and packaged-app security.
-- **Status:** IN PROGRESS
-- **Last completed sub-step:** Synced the release lineage and isolated the cloud request lifecycle, complex-circuit boundary, and unsigned DMG as the active stress surfaces.
-- **Plan:** Audit provider cancellation and secrets first; add adversarial regressions and a deterministic complex-circuit corpus; exercise the exact user prompt with capped cloud credentials; then rebuild, mount, and attack-test the fresh DMG at minimum and normal sizes.
-- **Next step:** Run independent timeout/security, simulation/import, and packaged-app threat audits while reproducing the long Sonnet request locally.
+- **Status:** DONE
+- **Last completed sub-step:** Rebuilt and remounted the ad-hoc-signed DMG, then proved bundled analog and XSPICE two-DFF transients from `/Volumes/Tau 1` (248 and 575 samples) after fixing signature and whitespace-path deployment failures.
+- **Plan:** Completed — provider deadlines/secrets, adversarial plan/import/deck coverage, external corpus expansion, native boundary hardening, packaged ngspice/XSPICE execution, and minimum/normal Chrome + desktop UI review all have durable evidence.
+- **Next step:** Isolate native ngspice behind a killable worker process before claiming crash-free execution for hostile arbitrary decks; then continue the three remaining warning-clean corpus symbols and guarded ASC round-trip parity.
 
 ---
+
+## 2026-07-18T04:55Z — auto/ltspice-parity — Complex-circuit release stress and packaged-engine repair
+
+### What I did
+- Replaced brittle Assistant wall-clock handling with progress-aware connect,
+  stall, and absolute deadlines; invalidated late stream events; bounded prompt,
+  file, diagnostic, and native-result inputs; refused unowned loopback AI and
+  unsafe file-backed/interpreter ngspice constructs. The user-supplied cloud
+  credential was deliberately not used or persisted.
+- Added a five-case adversarial AI-plan suite through the 80-component/160-pin
+  ceiling, real mixed-signal ngspice execution, large-fanout compilation, long
+  PWL/identifier boundaries, dangling/ambiguous nets, and ASC round trips.
+- Fixed split-TEXT `.subckt` state, relative PWL breakpoints, capacitor `Rser`,
+  authored `.tran` start/max-step/`uic`, PWM classification at 10–90% duty,
+  Tauri string error propagation, and project-scoped nested BLOCK/CELL imports.
+- Extended the corpus runner with opt-in external/symbol roots and swept the
+  107-file MIT LTspicePowerSim tree: 107/107 import, 72/107 decks, 63/107
+  warning-clean (up from 53 decks / 55 clean), without copying vendor assets.
+- Found two packaged-only failures by operating the mounted DMG: ad-hoc hardened
+  runtime rejected the bundled dylib, then `/Volumes/Tau 1` split XSPICE module
+  paths. Unsigned builds now leave hardened runtime for the human Developer-ID
+  step, and the engine stages sealed code-model bytes in a private no-space
+  temporary directory for its lifetime.
+
+### Files
+- Assistant/provider/security modules and tests under `apps/desktop/src/lib/`,
+  plus Tauri `local_ai.rs`, `project_fs.rs`, CSP/capability configuration.
+- ASC/directive/deck/waveform work in `src/io`, `src/engine`, `src/simulation`,
+  including new `projectAscImport.ts` and stress/error regression suites.
+- `src-tauri/src/spice.rs`, `Cargo.toml`, `tauri.conf.json`; corpus runner/shell
+  entrypoint; `FEATURE_PARITY.md` and `FIX_BUGS.md` evidence.
+
+### Tests and QA
+- Typecheck and production web build passed. Full Vitest: **1939 passed / 6
+  skipped**. Focused hierarchy importer: 88 passed. Stress script: 5 passed.
+- Rust fmt, release clippy `-D warnings`, 25 unit tests, and ignored real-ngspice
+  integration passed; its exact DFF sequence regression exercises ADC/DFF/DAC
+  XSPICE models.
+- Canonical one-command corpus: **82/82 import, 82/82 deck, 82/82 op, 79/82
+  warning-clean**; Class-D and Sample-and-Hold parity specs passed.
+- Fresh Tauri release, Tau.app, and DMG built. `codesign --verify --deep
+  --strict` and `hdiutil verify` passed. From the read-only mounted DMG, LED
+  completed 248 samples at 3.36 mA / 1.64 V, and the two-DFF project completed
+  575 samples / 9 nets / 7 parts with all eight waveform panes.
+- Computer Use at the app's minimum size remained reachable. Chrome at exact
+  900×600 and 1280×832 reported page==viewport, zero overflowing interactive
+  elements, and no placeholder/prototype copy.
+
+### Parity items
+- §1/§2/§4: real project hierarchy, CELL params, relative PWL, `.tran` fidelity.
+- §7/§8: adversarial execution, native input boundary, honest diagnostics.
+- §9: unsigned DMG analog + XSPICE execution from a numbered mount path.
+
+### Next step
+Move embedded libngspice into a killable subprocess/worker with hard wall-clock
+and memory limits. Until then a pathological native deck can still monopolize
+the engine mutex or terminate Tau despite the new deck/input bounds.
 
 ## 2026-07-16T22:34Z — auto/ltspice-parity — Persistent Assistant and transient-probe release repair
 

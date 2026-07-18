@@ -11,6 +11,7 @@ use std::env;
 use libloading::Library;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, State};
+use tempfile::TempDir;
 
 const MAX_VECTOR_LENGTH: usize = 2_000_000;
 const MAX_TRANSFER_VALUES: usize = 8_000_000;
@@ -183,6 +184,7 @@ struct SpiceApi {
 
 struct SpiceEngine {
     _library: Library,
+    _codemodel_cache: Option<TempDir>,
     api: SpiceApi,
     callback_state: Box<CallbackState>,
     library_path: PathBuf,
@@ -248,6 +250,7 @@ impl SpiceEngine {
         }
         let mut engine = Self {
             _library: library,
+            _codemodel_cache: None,
             api,
             callback_state,
             library_path,
@@ -266,7 +269,7 @@ impl SpiceEngine {
             return Ok(());
         };
         let codemodel_dir = lib_dir.join("ngspice");
-        for name in [
+        let names = [
             "spice2poly.cm",
             "analog.cm",
             "digital.cm",
@@ -274,16 +277,56 @@ impl SpiceEngine {
             "xtraevt.cm",
             "table.cm",
             "tlines.cm",
-        ] {
-            let path = codemodel_dir.join(name);
+        ];
+
+        // `codemodel` does not unquote double-quoted filenames and its command
+        // lexer still splits backslash-escaped spaces. DMGs commonly mount as
+        // `/Volumes/Tau 1`, so loading directly from the app resource path can
+        // silently leave every XSPICE device unknown. Stage the small, sealed
+        // modules in a private no-whitespace temp directory for this engine's
+        // lifetime. The embedded code signatures travel with the copied bytes.
+        #[cfg(unix)]
+        let cache = tempfile::Builder::new()
+            .prefix("tau-ngspice-")
+            .tempdir_in("/tmp")
+            .map_err(|error| format!("Could not stage bundled ngspice code models: {error}"))?;
+        #[cfg(not(unix))]
+        let cache = tempfile::Builder::new()
+            .prefix("tau-ngspice-")
+            .tempdir()
+            .map_err(|error| format!("Could not stage bundled ngspice code models: {error}"))?;
+        if cache
+            .path()
+            .to_string_lossy()
+            .chars()
+            .any(char::is_whitespace)
+        {
+            return Err(
+                "Tau's temporary code-model path contains whitespace; XSPICE cannot load safely."
+                    .to_string(),
+            );
+        }
+        for name in names {
+            let source = codemodel_dir.join(name);
+            if !source.is_file() {
+                continue;
+            }
+            std::fs::copy(&source, cache.path().join(name)).map_err(|error| {
+                format!(
+                    "Could not stage bundled ngspice code model {}: {error}",
+                    source.display()
+                )
+            })?;
+        }
+        let staged_dir = cache.path().to_path_buf();
+        self._codemodel_cache = Some(cache);
+
+        for name in names {
+            let path = staged_dir.join(name);
             if !path.is_file() {
                 continue;
             }
-            // ngspice's command parser treats quotes as literal filename
-            // characters for `codemodel`; backslash-escape path separators
-            // understood by the parser instead.
-            let escaped = path.display().to_string().replace(' ', "\\ ");
-            let command = CString::new(format!("codemodel {escaped}")).map_err(|_| {
+            let command = CString::new(format!("codemodel {}", path.display())).map_err(|_| {
                 "A bundled ngspice code-model path contains a NUL byte.".to_string()
             })?;
             let status = unsafe { (self.api.command)(command.as_ptr() as *mut c_char) };

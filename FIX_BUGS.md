@@ -15,16 +15,11 @@
 
 ## Baseline (green at audit time)
 - `pnpm -C apps/desktop typecheck` — clean. (Re-confirmed clean, pass 2.)
-- `pnpm -C apps/desktop test --run` — **1919 passed / 6 skipped** (131 files).
-- `cargo test --release` (src-tauri) — **25 passed / 1 ignored**.
-  **Pass 2 (later on 2026-07-17): cargo baseline SKIPPED — host disk exhausted.**
-  The APFS Data volume hit **0 bytes free mid-build** (`os error 28` while cargo
-  wrote `target/release/deps/…`), which also broke every shell command on the
-  machine. Recovery: deleted the regenerable `apps/desktop/src-tauri/target/`
-  (366 MB) — no source touched. The volume remains ~100% full (414 GiB used,
-  ≈460 MB free): **the next `cargo build/test` will refill it and fail again.**
-  This is an environment hazard for the autobuilder loop itself, not a Tau bug;
-  the host needs several GB freed before Rust baselines can run.
+- `pnpm -C apps/desktop test` — **1939 passed / 6 skipped** (133 files).
+- Rust release fmt/clippy/tests — **25 passed / 1 ignored**; the ignored real
+  ngspice integration also passed when explicitly enabled.
+- Host disk exhaustion was recovered by removing only regenerable Rust target
+  output; both release builds and every native gate subsequently completed.
 - Real ngspice FFI integration test (`TAU_NGSPICE_LIB=…/libngspice.dylib cargo test -- --ignored`) — **passes**: op, transient, AC, MOSFET, BJT, rectifier, and the digital 2-bit register all solve correctly.
 - Acceptance corpus (`scripts/acceptance-corpus.sh`, user's real LTspice files) — **82 imported / 82 op-converged / 79 warning-clean / 82 deck-built**.
 
@@ -32,13 +27,14 @@
 
 ## Confirmed bugs
 
-### BUG-1 — `.asc` import path has no byte-size cap (resource exhaustion) — **OPEN again (fix was lost, never committed)**
+### BUG-1 — `.asc` import path has no byte-size cap (resource exhaustion) — **FIXED 2026-07-17**
 - **Severity:** Medium.
 - **Where:** `apps/desktop/src/store/useProject.ts` → `importAscFile` (the "Import .asc" button / file-input path).
 - **Problem:** `readTextFile` (`src/project/fsBridge.ts`) enforces `MAX_SCHEMATIC_FILE_BYTES` (5 MB) *before* reading, but `importAscFile` called `decodeSchematicText(await file.arrayBuffer())` with **no size check**. The web/workspace branch then stores unbounded text in memory (Zustand state); even the native branch reads the whole file into the renderer before the Rust 5 MB write cap can reject it. A large dragged-in `.asc` can exhaust the renderer.
 - **Repro:** import a >5 MB `.asc` via the Import button; the 10 MB `gigantic-line.asc` stress file parsed in ~112 ms with no cap. (Contrast: File→Open of the same file is correctly rejected with "Schematic files are limited to 5,242,880 bytes.")
 - **Fix applied 2026-07-17 (pass 1):** guard `file.size > MAX_SCHEMATIC_FILE_BYTES` at the top of `importAscFile`, matching `readTextFile`, plus a regression test in `useProject.test.ts`. It was left uncommitted in the working copy.
-- **Status update (pass 2, same day):** that working-copy fix was **wiped by the runner's `git reset --hard`** before anyone committed it. Verified at `d7dc4a3`: `useProject.ts` `importAscFile` (line 340) still calls `decodeSchematicText(await file.arrayBuffer())` with no size guard, and `MAX_SCHEMATIC_FILE_BYTES` does not appear in the file. **The bug is live again.** Under audit-only rules the fix is not being re-applied; a human should land the one-line guard + test described above.
+- **Final status:** recovered and committed at `cb26b01`; both `file.size` and
+  the bytes actually read are bounded, including a stat/read race regression.
 
 ### BUG-2 — Op-amp `.asc` round-trip changes terminal connectivity — CONFIRMED (guarded from silent loss)
 - **Severity:** Medium–High (functional/parity limitation; **not** silent corruption — see mitigation).
@@ -56,12 +52,13 @@
 - **Mitigation:** same save-block guard as BUG-2 (`nmos → nmos4` triggers the "symbol-library identity" rewrite risk → save blocked). Not silent corruption.
 - **Note:** the export code comment claims `nmos4` was chosen *specifically* to avoid this — but the round-trip shows the 4-pin bulk offset still doesn't re-tie to source. Suggested fix: emit an explicit bulk-to-source wire on export, or map to a symbol whose bulk pin coincides with source.
 
-### BUG-4 — Hierarchical `.subckt`/`.ends` split across separate TEXT boxes is silently dropped — CONFIRMED (code + repro)
+### BUG-4 — Hierarchical `.subckt`/`.ends` split across separate TEXT boxes is silently dropped — **FIXED 2026-07-17**
 - **Severity:** Medium (low real-world frequency).
 - **Where:** `apps/desktop/src/engine/modelDirectives.ts` → `modelLibLinesFromDirectives`. `subcktDepth` / `prevEmitted` are declared **inside** the `for (const raw of directives)` loop, so they reset for every separate on-canvas TEXT directive. A `.subckt … .ends` block that lives in **one** multi-line TEXT box works; a block spread across **separate** TEXT annotations does not: the `.subckt` opener is emitted, but every body line and `.ends` is dropped (`.ends`'s keyword `"ends"` isn't in `BLOCK_KEYWORDS` and `subcktDepth` is 0). Result: an unclosed `.subckt` swallows the rest of the deck.
 - **Impact:** ngspice fatally rejects with `Error: Mismatch of .subckt … .ends statements! … no simulations run`. `deck_lines` (Rust) doesn't check subckt/ends balance, so the user sees only an opaque engine error.
 - **Repro:** `deep-hierarchy.asc`; also a minimal 3-box case (`.subckt X` / one instance line / `.ends X`).
-- **Suggested fix:** hoist `subcktDepth`/`prevEmitted` out of the per-directive loop so block state carries across TEXT entries; or reassemble all directive text before splitting into blocks. Add a `deck_lines` subckt/ends balance check as a backstop diagnostic.
+- **Fix:** hoisted block state across directive records with a three-record
+  regression. Project-open now also preloads bounded nested BLOCK/CELL sources.
 
 ### BUG-5 — Fast (TS) preview engine and native ngspice disagree on initial conditions — CONFIRMED
 - **Severity:** Medium (fidelity/UX; the authoritative "Run" via ngspice is correct).
@@ -75,7 +72,7 @@
 - **Why not exploitable:** ngspice merges a `+` line onto the preceding card as continuation parameters (`Warning: unrecognized parameter (quit) - ignored`); it is never executed as a command. The only place blocklisted commands run is a `.control` block, which the allowlist still rejects. Confirmed inert end-to-end.
 - **Suggested fix (hardening):** strip a leading `+` before extracting the command token, so continuation lines are checked too.
 
-### BUG-7 — `classifySignal` rejects any pulse/PWM waveform whose duty cycle is outside ≈48–51% — CONFIRMED
+### BUG-7 — `classifySignal` rejects any pulse/PWM waveform whose duty cycle is outside ≈48–51% — **FIXED 2026-07-17**
 - **Severity:** Medium. Non-50%-duty pulse trains are the bread and butter of the §11 priority area (vpulse sources, switching converters, logic clocks), and the misclassification silently degrades three shipped features at once.
 - **Where:** `apps/desktop/src/simulation/measurementModel.ts:167-208` (`classifySignal`). Periodicity is estimated from **mean-crossing half-periods**; for a rectangular wave of duty `d` those alternate `d·T` and `(1−d)·T`, so the interval-consistency gate `maxRelativeError <= 0.08` (line 193, measured against the *median half-period*) fails for any duty outside roughly 48–51%.
 - **Problem / Impact:** a perfectly clean, many-cycle pulse train is classified `"transient"` with no period/frequency. Measured downstream effects:
@@ -85,7 +82,36 @@
 - **Repro:** bundle the real module (`esbuild src/simulation/measurementModel.ts --bundle`) and call `classifySignal` on a sampled 1 kHz 0–5 V square wave, 10 full cycles, 5001 points. Observed: duty 0.5 → `periodic 1.000 kHz`; duty 0.45/0.40/0.30/0.20/0.10 → `transient`, no frequency. Sine/triangle/sawtooth at the same settings → `periodic` (correct). Threshold sweep: 0.48–0.51 pass, 0.47 and 0.52 fail. Independently re-verified by a second agent with its own vectors (2.5 kHz, 0–3.3 V, 25% duty, 8 cycles → `transient`; 50% duty and sine → `periodic`).
 - **Sub-issue (same root):** even inside the passing band the period is `2 × median half-period`, so an asymmetric duty biases the estimate — 48% duty of a true 1 000 Hz wave reports 965 Hz (~3.5% off) where the sine reports 1 000.00 Hz.
 - **Mitigation:** none in code; statistics (min/max/avg/RMS in the expanded row) remain correct — only the *headline* reading, badge, and Auto Frame degrade.
-- **Suggested fix (do not apply blindly):** derive the period from **same-direction crossings** (rising-to-rising intervals are duty-invariant: always exactly `T`) and apply the 8% consistency gate to those full periods; keep rise+fall half-periods only as the single-cycle fallback for near-symmetric waves. This also fixes the ~4% bias (period = median rising-to-rising interval, not 2× a half-period). Regression risk: the single-clean-cycle acceptance path (lines 194-198) and `autoFrameWaveform`/readout tests are tuned to current thresholds — re-run `measurementModel.test.ts`, `waveform.test.ts`, `engineeringTraceReadout.test.ts`.
+- **Fix:** period now comes from same-direction crossings; 10/20/40/60/80/90%
+  duty regressions pass with unbiased frequency and periodic classification.
+
+### BUG-8 — In-process libngspice has no hard timeout or crash isolation — **OPEN**
+- **Severity:** High for hostile/arbitrary decks.
+- **Where:** `src-tauri/src/spice.rs`; all native runs hold one mutex while C
+  executes inside Tau's process.
+- **Evidence:** cancellation currently invalidates late UI results but cannot
+  interrupt the FFI call. A deliberately hostile standalone ngspice deck also
+  reproduced a macOS `SIGABRT` in `ft_cktcoms`; the same engine family is loaded
+  in-process. Input/line/result/message caps reduce exposure but cannot contain
+  native infinite work, memory corruption, or aborts.
+- **Required fix:** run ngspice in a killable worker/subprocess with wall-clock
+  and memory limits; treat worker exit as a structured simulation failure.
+
+### BUG-9 — Ad-hoc hardened runtime rejects bundled libngspice — **FIXED 2026-07-17**
+- **Repro:** fresh mounted DMG launched, but `led.asc` failed at `dlopen` because
+  an ad-hoc app/library pair has no Team ID for hardened library validation.
+- **Fix:** the unsigned build is ad-hoc sealed without hardened runtime; the
+  human Developer-ID signing/notarization step must re-enable it. The rebuilt
+  mounted DMG completed the LED transient and still passes strict code-sign and
+  image verification.
+
+### BUG-10 — XSPICE modules fail from a bundle path containing spaces — **FIXED 2026-07-17**
+- **Repro:** `/Volumes/Tau 1/.../digital.cm` was split by ngspice's `codemodel`
+  parser; quotes are treated literally and backslash-space still produces two
+  arguments. Analog ran while `adc_bridge`/`d_dff` were unknown.
+- **Fix:** copy the sealed fixed module set into a private `TempDir` with a
+  no-whitespace path for the engine lifetime. The mounted two-DFF circuit then
+  completed 575 samples and the real-ngspice register regression passed.
 
 ---
 
@@ -117,7 +143,13 @@
 ---
 
 ## DMG readiness verdict (audit date 2026-07-17, updated pass 2)
-**Not yet a complete LTspice replacement; safe but incomplete.** No crashes, hangs, data corruption, or security holes were found — the engine, security posture, and crash-robustness are release-quality, and corrupt round-trips are *guarded* (blocked saves, not silent loss). But real parity gaps remain: op-amp and 3-pin-MOSFET schematics **cannot be saved as `.asc`** (BUG-2/BUG-3), multi-TEXT-box hierarchies fail to build a deck (BUG-4), the preview and "Run" engines disagree on initial conditions (BUG-5), the §11 measurement dashboard mis-handles every non-50%-duty switching waveform (BUG-7), and BUG-1 is live again after its uncommitted fix was lost. Recommend addressing BUG-1/2/3/4/7 before a public DMG billed as an LTspice replacement.
+**Not yet a complete LTspice replacement; substantially hardened but still
+incomplete.** BUG-1/4/7 and both packaged execution failures are fixed, and
+corrupt round-trips remain blocked rather than silently written. Remaining
+release gaps are BUG-2/3 guarded ASC saves, BUG-5 preview initial-condition
+semantics, F-1/F-2 input validation, and especially BUG-8 native isolation.
+Do not claim arbitrary hostile-deck crash safety until libngspice is out of
+process with enforceable resource limits.
 
 ---
 
