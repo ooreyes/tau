@@ -25,6 +25,15 @@ SYMBOL res 32 0 R90
 SYMATTR InstName R1
 SYMATTR Value {gain}k
 `;
+const locallyParameterizedChildAsc = `Version 4
+SHEET 1 880 680
+FLAG 0 0 IN
+FLAG 64 0 OUT
+SYMBOL res 32 0 R90
+SYMATTR InstName R1
+SYMATTR Value {doubled}k
+TEXT 0 100 Left 2 !.param doubled={gain}*2
+`;
 
 describe("importProjectAsc", () => {
   it("resolves project-root symbol libraries and applies CELL overrides", async () => {
@@ -41,6 +50,24 @@ describe("importProjectAsc", () => {
 
     expect(result.components).toEqual(expect.arrayContaining([
       expect.objectContaining({ kind: "resistor", value: "3k" }),
+    ]));
+    expect(result.warnings).toEqual([]);
+  });
+
+  it("resolves bare symbols from the conventional PowerSim library", async () => {
+    const inMemory = new Map([
+      ["/project/sym/PowerSim/child.asy", childAsy],
+      ["/project/sym/PowerSim/child.asc", locallyParameterizedChildAsc],
+    ]);
+    const result = await importProjectAsc(parent, {
+      sourcePath: "/project/examples/top.asc",
+      rootPath: "/project",
+      pathExists: async (path) => inMemory.has(path),
+      readText: async (path) => inMemory.get(path) ?? "",
+    });
+
+    expect(result.components).toEqual(expect.arrayContaining([
+      expect.objectContaining({ kind: "resistor", value: "6k" }),
     ]));
     expect(result.warnings).toEqual([]);
   });

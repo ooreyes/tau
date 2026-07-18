@@ -63,15 +63,25 @@ export async function importProjectAsc(
   for (const symbol of first.symbols) enqueue(symbol.type);
 
   const readCandidate = async (symbolPath: string, suffix: ".asy" | ".asc") => {
-    for (const root of roots) {
-      const candidate = joinPath(root, `${symbolPath}${suffix}`);
-      if (!(await options.pathExists(candidate))) continue;
-      const contents = await options.readText(candidate);
-      totalChars += contents.length;
-      if (totalChars > MAX_HIERARCHY_SOURCE_CHARS) {
-        throw new Error("Hierarchical symbol sources exceed Tau's 20 MiB import budget.");
+    // LTspice library search paths let a schematic refer to `DEADTIME` even
+    // when the files live at `sym/PowerSim/DEADTIME.{asy,asc}`. PowerSim uses
+    // that bare-name form pervasively; probing only `sym/DEADTIME` silently
+    // dropped almost its entire power stage. Keep explicit paths authoritative,
+    // then try the conventional PowerSim library for bare names.
+    const libraryPaths = symbolPath.includes("/")
+      ? [symbolPath]
+      : [symbolPath, `PowerSim/${symbolPath}`];
+    for (const libraryPath of libraryPaths) {
+      for (const root of roots) {
+        const candidate = joinPath(root, `${libraryPath}${suffix}`);
+        if (!(await options.pathExists(candidate))) continue;
+        const contents = await options.readText(candidate);
+        totalChars += contents.length;
+        if (totalChars > MAX_HIERARCHY_SOURCE_CHARS) {
+          throw new Error("Hierarchical symbol sources exceed Tau's 20 MiB import budget.");
+        }
+        return contents;
       }
-      return contents;
     }
     return undefined;
   };

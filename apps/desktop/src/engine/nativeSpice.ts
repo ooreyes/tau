@@ -215,5 +215,14 @@ function friendlyNetName(net: { id: string; pins: { componentLabel: string }[] }
 }
 
 function engineWarnings(messages: string[]): string[] {
-  return messages.filter((message) => /warn|singular|converg|error/i.test(message)).slice(0, 8);
+  const cleaned = messages
+    .filter((message) => /warn|singular|converg|error/i.test(message))
+    .map((message) => {
+      const withoutStream = message.replace(/^\s*(?:stdout|stderr)\s*/i, "").trim();
+      const missingIc = /warning\s*:\s*ic on non-existent node\s*-\s*([^,\s]+),?\s*ignored/i.exec(withoutStream);
+      if (missingIc) return `Ignored initial voltage for missing node “${missingIc[1]}”.`;
+      return withoutStream.replace(/^warning\s*:\s*/i, "").trim();
+    })
+    .filter(Boolean);
+  return [...new Set(cleaned)].slice(0, 8);
 }

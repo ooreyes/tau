@@ -891,11 +891,14 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   from the JS solver (native ngspice path annotates voltages only). Labels
   use a background stroke for readability over wires. Live-verified via
   Playwright on the divider example: 10 V / 5 V / −5 mA all placed correctly.
-- 🟡 Initial conditions **`.ic` / `.nodeset`** — `buildSpiceDeck` carries both
-  through to the native ngspice deck verbatim (re-prefixed, lower-cased keyword);
+- 🟡 Initial conditions **`.ic` / `.nodeset`** — `buildSpiceDeck` carries node
+  voltages and `.nodeset` through to native ngspice. LTspice-only inductor
+  current assignments (`.ic I(L1)=…`) are translated to the winding's instance
+  `IC=…`; a reference made stale by deleting the inductor is omitted with a
+  concise warning instead of producing ngspice's fatal `.ic syntax error`;
   when any `.ic` is present the `.tran` line gains **`uic`** so the values hold at
   t=0 (LTspice semantics) rather than only biasing the OP. Live-verified in ngspice
-  17 (`.ic v(cap)=2` → cap starts at 2 V). 2 deck tests. **`C`/`L` per-instance
+  17 (`.ic v(cap)=2` → cap starts at 2 V; `I(L1)=250m` → 250 mA). **`C`/`L` per-instance
   `IC=` attribute now landed** (`engine/icSpec.ts`; deck emits `IC=` + `uic`;
   importer reads it from `SpiceLine2` etc. — see §3 passives). **TS-solver IC
   support landed** too (seeds the companion-model state — see §3 passives).

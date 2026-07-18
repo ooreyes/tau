@@ -77,6 +77,8 @@ export type AnalysisResult =
       ok: false;
       title: string;
       message: string;
+      /** Bounded raw engine output, displayed only in a collapsed disclosure. */
+      details?: string;
       warnings: string[];
       circuit?: ExtractedCircuit;
     };

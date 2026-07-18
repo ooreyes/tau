@@ -29,7 +29,7 @@ import type {
   SchematicComponent,
   SchematicWire,
 } from "../schematic/types";
-import { parseParamAssignments } from "../simulation/paramScope";
+import { buildParamScope, parseParamAssignments, resolveComponentValues } from "../simulation/paramScope";
 import { isComponentKind } from "../schematic/types";
 import { getLocalPins, transformPoint } from "../schematic/pins";
 import { parseIcValue } from "../engine/icSpec";
@@ -1163,6 +1163,24 @@ function flattenSubcircuit(
     _placement: placement,
     _stack: new Set([...stack, symbol.type.toLowerCase()]),
   });
+  // BLOCK/CELL bodies commonly define implementation-only `.param` values
+  // used by their own R/C/source fields (for example PowerSim TYPE2 computes
+  // R1/C1/C2 from the instance's gain and corner frequencies). Those body
+  // directives must not leak into the parent deck, but dropping all of them
+  // before resolving `{R1}` left otherwise-complete flattened blocks with
+  // unparseable component values. Resolve the private scope while the body is
+  // still isolated, after per-instance bindings have been substituted.
+  let bodyComponents = body.components;
+  try {
+    const localDirectives = parameterizedBody.texts
+      .filter((text) => text.directive)
+      .map((text) => text.text);
+    bodyComponents = resolveComponentValues(body.components, buildParamScope(localDirectives));
+  } catch {
+    // A body may intentionally reference a parent/global parameter. Keep those
+    // braces for the top-level scope instead of turning an import into a hard
+    // failure; fully local bodies take the resolved path above.
+  }
 
   // Port net renames: <asy pin name> → <inst>:<pin>, and a parent-side bridge
   // label at each pin's world position so the body port joins the parent net.
@@ -1199,7 +1217,7 @@ function flattenSubcircuit(
   }
 
   const result: AscImportResult = {
-    components: body.components.map((c) => ({
+    components: bodyComponents.map((c) => ({
       ...c,
       id: `${instName}~${c.id}`,
       label: c.label ? `${instName}.${c.label}` : c.label,

@@ -264,6 +264,64 @@ describe("buildSpiceDeck", () => {
     expect(deck.netlist).toMatch(/\.tran [\d.e-]+ 0\.005 uic/);
   });
 
+  it("translates LTspice .ic inductor current assignments to ngspice instance IC", () => {
+    const components = [
+      component("vsource", "V1", "5", 0, 32),
+      component("inductor", "L1", "1m", 96, 0),
+      component("ground", "", "", 0, 64),
+      component("ground", "", "", 128, 0),
+    ];
+    const wires = [wire("w1", [{ x: 0, y: 0 }, { x: 64, y: 0 }])];
+    const deck = buildSpiceDeck(
+      {
+        components,
+        wires,
+        directives: [".ic V(out)=1 I(L1)=250m"],
+      },
+      { kind: "tran", stopTime: 0.001, steps: 200 },
+    );
+
+    expect(deck.netlist).toContain(".ic V(out)=1");
+    expect(deck.netlist).toMatch(/^L1\s+\S+\s+\S+\s+0\.001 IC=250m$/m);
+    expect(deck.netlist).not.toMatch(/^\.ic .*I\(L1\)/mi);
+    expect(deck.netlist).toMatch(/\.tran [\d.e-]+ 0\.001 uic/);
+  });
+
+  it("warns and drops a stale .ic current target after its inductor is deleted", () => {
+    const components = [
+      component("vsource", "V2", "5", 0, 32),
+      component("resistor", "R2", "1k", 96, 0),
+      component("led", "D1", "LED", 224, 0),
+      component("ground", "", "", 0, 64),
+      component("ground", "", "", 256, 0),
+    ];
+    const wires = [
+      wire("w1", [{ x: 0, y: 0 }, { x: 64, y: 0 }]),
+      wire("w2", [{ x: 128, y: 0 }, { x: 192, y: 0 }]),
+    ];
+    const deck = buildSpiceDeck(
+      { components, wires, directives: [".ic V(out)=1", ".ic I(L1)=0"] },
+      { kind: "tran", stopTime: 0.001, steps: 200 },
+    );
+
+    expect(deck.netlist).toContain(".ic V(out)=1");
+    expect(deck.netlist).not.toContain("I(L1)");
+    expect(deck.circuit.warnings).toContain("Ignored .ic I(L1)=0 because inductor L1 is not present.");
+    expect(deck.netlist).toContain(" uic");
+  });
+
+  it("rejects .ic current assignments that name an existing non-inductor", () => {
+    const components = [
+      component("resistor", "R1", "1k", 0, 0),
+      component("ground", "", "", 64, 0),
+    ];
+
+    expect(() => buildSpiceDeck(
+      { components, wires: [], directives: [".ic I(R1)=0"] },
+      { kind: "tran", stopTime: 0.001, steps: 200 },
+    )).toThrow(/\.ic I\(R1\).*inductor.*resistor/i);
+  });
+
   it("omits uic when only a .nodeset (no .ic) is present", () => {
     const components = [
       component("vsource", "V1", "5", 0, 32),

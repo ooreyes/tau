@@ -101,7 +101,7 @@ import {
   type AssistantCreateAscAction,
 } from "./lib/assistantActions";
 import { pickAutoRunAnalysis, type AutoRunAnalysis } from "./lib/assistantAutoRun";
-import { userFacingErrorMessage } from "./lib/errorMessage";
+import { technicalErrorDetails, userFacingErrorMessage } from "./lib/errorMessage";
 
 const DEFAULT_ANALYSIS_OPTIONS: AnalysisOptions = {
   stopTime: 0.006,
@@ -124,6 +124,8 @@ interface OpenTab {
   history: SchematicHistory;
   /** Absolute path when opened from a project folder; null for scratchpads. */
   filePath?: string | null;
+  /** A disk-backed document cleared into an editable, unsaved replacement. */
+  detached?: boolean;
   dirty?: boolean;
   /** Stable snapshot of the last successful disk write/open. */
   savedSignature?: string;
@@ -285,7 +287,7 @@ function App() {
   // genuinely different run/document superseded this one" and discards
   // whatever comes back.
   const transientAbortRef = useRef<AbortController | null>(null);
-  const saveActiveToProjectRef = useRef<() => Promise<boolean>>(async () => false);
+  const saveActiveToProjectRef = useRef<(options?: { quietBlocked?: boolean }) => Promise<boolean>>(async () => false);
 
   // Analysis to auto-start after an assistant-confirmed circuit lands, latched
   // by createAssistantCircuit/applyAssistantCircuit and consumed once by the
@@ -374,14 +376,18 @@ function App() {
   );
   const activeTab = tabs.find((tab) => tab.id === activeId) ?? tabs[0];
   const activeDirty = Boolean(
-    activeFilePath
+    (activeFilePath || activeTab?.detached)
     && activeTab?.savedSignature
     && activeTab.savedSignature !== currentSignature,
   );
   const normalizedRoot = projectRootPath?.replace(/\\/g, "/").replace(/\/+$/, "") ?? null;
   const visibleTabs = tabs
     .filter((tab) => {
-      if (!normalizedRoot || !tab.filePath) return false;
+      if (!normalizedRoot) return false;
+      // A cleared imported file is deliberately detached from its source path
+      // until the next Save. Keep only that explicit replacement visible;
+      // ordinary pathless starter tabs remain behind the project-open gate.
+      if (!tab.filePath) return Boolean(tab.detached);
       const normalizedTabPath = tab.filePath.replace(/\\/g, "/");
       return normalizedTabPath === normalizedRoot || normalizedTabPath.startsWith(`${normalizedRoot}/`);
     })
@@ -391,8 +397,11 @@ function App() {
   const normalizedActivePath = activeFilePath?.replace(/\\/g, "/") ?? null;
   const activeProjectFile = Boolean(
     normalizedRoot
-    && normalizedActivePath
-    && (normalizedActivePath === normalizedRoot || normalizedActivePath.startsWith(`${normalizedRoot}/`)),
+    && (
+      (normalizedActivePath
+        && (normalizedActivePath === normalizedRoot || normalizedActivePath.startsWith(`${normalizedRoot}/`)))
+      || (!normalizedActivePath && activeTab?.detached)
+    ),
   );
 
   const showNotice = useCallback((message: string) => {
@@ -529,6 +538,7 @@ function App() {
         ok: false,
         title: "ngspice transient",
         message: userFacingErrorMessage(error, "ngspice could not run this transient analysis."),
+        details: technicalErrorDetails(error),
         warnings: [],
       });
       setRunState("error");
@@ -564,12 +574,12 @@ function App() {
     // in-memory schematic and must not be disabled by an unrelated inability
     // to rewrite cosmetic/unsupported ASC records. The save path already tells
     // the user exactly why persistence failed or was blocked.
-    await saveActiveToProjectRef.current();
+    await saveActiveToProjectRef.current({ quietBlocked: true });
     confirmLargeRunIfNeeded(effectiveAnalysisOptions, () => { void executeTransient(effectiveAnalysisOptions); });
   }, [effectiveAnalysisOptions, executeTransient, confirmLargeRunIfNeeded]);
 
   const runAndShowSimulator = useCallback(async () => {
-    await saveActiveToProjectRef.current();
+    await saveActiveToProjectRef.current({ quietBlocked: true });
     confirmLargeRunIfNeeded(effectiveAnalysisOptions, () => {
       setMode("simulator");
       setGraphOpen(true);
@@ -1015,7 +1025,7 @@ function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [directives]);
 
-  const saveActiveToProject = useCallback(async () => {
+  const saveActiveToProject = useCallback(async (options?: { quietBlocked?: boolean }) => {
     // Tab rename persists through the native filesystem bridge. Serialize saves
     // behind that operation so rapid Enter -> Cmd+S cannot target a stale path.
     await projectRenameInFlightRef.current;
@@ -1046,7 +1056,10 @@ function App() {
       if (blockReason) {
         if (createdForSave) await deleteProjectNode(savePath);
         console.warn(`Blocked lossy save for ${basename(savePath)}: ${blockReason}`);
-        showNotice(`Save blocked: ${blockReason}`);
+        // Run uses the validated in-memory document. A cosmetic ASC rewrite
+        // limitation must not interrupt it with a persistence toast; Cmd+S
+        // remains explicit and continues to explain why it was protected.
+        if (!options?.quietBlocked) showNotice(`Save blocked: ${blockReason}`);
         return false;
       }
       await writeSim(savePath, serialized.contents);
@@ -1056,6 +1069,7 @@ function App() {
               ...t,
               title: basename(savePath),
               filePath: savePath,
+              detached: false,
               dirty: false,
               doc: currentDocument,
               savedSignature: currentSignature,
@@ -1139,7 +1153,24 @@ function App() {
   const clearScratchpad = useCallback(() => {
     newCircuit();
     setTabs((prev) => prev.map((tab) => (
-      tab.id === activeId ? { ...tab, doc: blankDocument(), history: emptyHistory() } : tab
+      tab.id === activeId
+        ? {
+            ...tab,
+            // Clearing a disk-backed import starts a new document. Keeping the
+            // old path/risk list made a hand-built replacement inherit stale
+            // directives and then refuse Save because of records belonging to
+            // the original file. Detaching also protects that source file from
+            // an accidental empty overwrite.
+            title: tab.filePath ? "untitled.asc" : tab.title,
+            filePath: null,
+            detached: Boolean(tab.filePath) || tab.detached,
+            dirty: false,
+            savedSignature: schematicDocumentSignature(blankDocument()),
+            ascRewriteRisks: [],
+            doc: blankDocument(),
+            history: emptyHistory(),
+          }
+        : tab
     )));
     invalidateAnalysis();
     setMode("schematic");
@@ -1593,7 +1624,7 @@ function App() {
       {confirmClearOpen && (
         <ConfirmDialog
           title="Clear scratchpad?"
-          body="This removes all components, wires, labels, probes, and the current analysis from the scratchpad."
+          body="This starts a new untitled schematic and leaves the original file unchanged. Components, wires, labels, directives, probes, and the current analysis are cleared."
           confirmLabel="Clear scratchpad"
           onConfirm={clearScratchpad}
           onCancel={() => setConfirmClearOpen(false)}

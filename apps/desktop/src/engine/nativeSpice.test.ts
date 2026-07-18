@@ -88,7 +88,11 @@ describe("native ngspice adapter", () => {
       { name: "time", real: [0, 0.001, 0.002], imaginary: null },
       { name: "V(N001)", real: [5, 5, 5], imaginary: null },
       { name: "v(n002)", real: [0, 3.2, 4.3], imaginary: null },
-    ], ["note: operating normally", "Warning: internal timestep reduced"]));
+    ], [
+      "note: operating normally",
+      "Warning: internal timestep reduced",
+      "stderr Warning : IC on non-existent node - out, ignored",
+    ]));
 
     const result = await runNativeTransient(rcSchematic(), { stopTime: 0.002, steps: 200 });
 
@@ -104,7 +108,10 @@ describe("native ngspice adapter", () => {
       expect.objectContaining({ id: "N001", label: "V(V1.R1)", values: [5, 5, 5] }),
       expect.objectContaining({ id: "N002", label: "V(R1.C1)", values: [0, 3.2, 4.3] }),
     ]));
-    expect(result.warnings).toEqual(["Warning: internal timestep reduced"]);
+    expect(result.warnings).toEqual([
+      "internal timestep reduced",
+      "Ignored initial voltage for missing node “out”.",
+    ]);
   });
 
   it("retains an explicit ngspice diode current vector for component telemetry", async () => {

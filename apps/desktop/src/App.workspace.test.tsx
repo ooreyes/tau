@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // Forces the real useProject store's ensureDefaultWorkspace (see
@@ -37,7 +37,11 @@ import {
   saveConversationMessages,
   setActiveConversationId,
 } from "./lib/assistantMemory";
-import { DEFAULT_WORKSPACE_ID, DEFAULT_WORKSPACE_NAME } from "./project/defaultWorkspace";
+import {
+  DEFAULT_WORKSPACE_ID,
+  DEFAULT_WORKSPACE_NAME,
+  defaultWorkspaceTree,
+} from "./project/defaultWorkspace";
 import { useProject } from "./store/useProject";
 import { useSchematic } from "./store/useSchematic";
 
@@ -259,6 +263,69 @@ describe("App schematic workspace tools", () => {
     });
     expect(screen.queryByText(/Save blocked/)).toBeNull();
     expect(screen.queryByRole("img", { name: "untitled.asc has unsaved changes" })).toBeNull();
+  });
+
+  it("clears an imported lossy ASC into a new safe file without overwriting the source", async () => {
+    const originalPath = `${DEFAULT_WORKSPACE_ID}/vendor-power-stage.asc`;
+    const replacementPath = `${DEFAULT_WORKSPACE_ID}/untitled.asc`;
+    const originalContents = [
+      "Version 4",
+      "SHEET 1 880 680",
+      "LINE Normal 32 32 96 32",
+      "TEXT 32 96 Left 2 !.tran 10m",
+      "",
+    ].join("\n");
+    const importedFile = {
+      path: originalPath,
+      name: "vendor-power-stage.asc",
+      contents: originalContents,
+      kind: "asc" as const,
+    };
+    useProject.setState({
+      rootPath: DEFAULT_WORKSPACE_ID,
+      rootName: DEFAULT_WORKSPACE_NAME,
+      tree: defaultWorkspaceTree([importedFile]),
+      expanded: [DEFAULT_WORKSPACE_ID],
+      workspaceFiles: { [originalPath]: importedFile },
+      error: null,
+      capability: "none",
+    });
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "vendor-power-stage.asc" }));
+    expect(await screen.findByRole("tab", { name: /vendor-power-stage\.asc/ })).toBeTruthy();
+    await waitFor(() => expect(useSchematic.getState().directives).toEqual([".tran 10m"]));
+
+    // Run is allowed from the validated in-memory document. Its best-effort
+    // autosave must not nag about source artwork that Tau is deliberately
+    // protecting; explicit Cmd+S still surfaces that protection.
+    fireEvent.click(screen.getAllByRole("button", { name: "Run simulation" })[0]);
+    await waitFor(() => expect(screen.getByRole("button", { name: "Schematic" })).toBeTruthy());
+    expect(screen.queryByText(/Save blocked/)).toBeNull();
+    expect(useProject.getState().workspaceFiles[originalPath].contents).toBe(originalContents);
+    fireEvent.click(screen.getByRole("button", { name: "Schematic" }));
+
+    fireEvent.click(screen.getByRole("button", { name: "Clear scratchpad" }));
+    const dialog = await screen.findByRole("alertdialog", { name: "Clear scratchpad?" });
+    expect(within(dialog).getByText(/leaves the original file unchanged/i)).toBeTruthy();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Clear scratchpad" }));
+
+    expect(await screen.findByRole("tab", { name: /untitled\.asc/ })).toBeTruthy();
+    expect(useSchematic.getState().components).toEqual([]);
+    expect(useSchematic.getState().directives).toEqual([]);
+    expect(useProject.getState().workspaceFiles[originalPath].contents).toBe(originalContents);
+
+    act(() => useSchematic.getState().addComponent("resistor", 256, 192));
+    fireEvent.keyDown(document.body, { key: "s", metaKey: true });
+
+    await waitFor(() => {
+      const saved = useProject.getState().workspaceFiles[replacementPath]?.contents;
+      expect(saved).toContain("SYMBOL res");
+      expect(saved).not.toContain("LINE Normal");
+      expect(saved).not.toContain(".tran 10m");
+    });
+    expect(useProject.getState().workspaceFiles[originalPath].contents).toBe(originalContents);
+    expect(screen.queryByText(/Save blocked/)).toBeNull();
   });
 
   it("renames an open tab on disk and saves later edits only to the renamed path", async () => {

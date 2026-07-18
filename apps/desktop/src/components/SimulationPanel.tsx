@@ -1197,7 +1197,15 @@ export function WaveformPlot({
       {/* The failed-run message used to live in the (removed) footer strip;
           every other tab surfaces result.message inline, so TRAN does too. */}
       {result && !result.ok && (
-        <div className="analysis-empty" role="alert">{result.message}</div>
+        <div className="analysis-empty" role="alert">
+          <span>{result.message}</span>
+          {result.details && (
+            <details className="analysis-error-details">
+              <summary>Technical details</summary>
+              <pre>{result.details}</pre>
+            </details>
+          )}
+        </div>
       )}
       {success && allTraces.length === 0 && (
         <div className="scope-empty-state">

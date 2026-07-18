@@ -8,14 +8,61 @@
      `git log --oneline -8`, recover/finish/revert that unit FIRST, then go on.
      ─────────────────────────────────────────────────────────────────────── -->
 ## ⏱ HEARTBEAT
-- **Headline metric:** 1948 reviewed-tree tests green · corpus 82/82 import · 82/82 op-converge · 79/82 warning-clean
-- **Run started (UTC):** 2026-07-18T05:48Z
-- **Synced to origin:** auto/ltspice-parity @ 22fd2e5.
-- **Claimed unit:** Preserve LTspice passive `Rser` without crystal misclassification and prove the PowerSim LLC converter builds/runs through the packaged app.
+- **Headline metric:** 1954 reviewed-tree tests green · corpus 82/82 import · 82/82 op-converge · 79/82 warning-clean
+- **Run started (UTC):** 2026-07-18T14:21Z
+- **Synced to origin:** auto/ltspice-parity @ 90a9287.
+- **Claimed unit:** Repair stale/invalid LTspice initial-condition directives that break a hand-edited LED circuit, and diagnose the exact PowerSim hierarchy loss shown in the packaged UI.
 - **Status:** DONE
-- **Last completed sub-step:** Rebuilt the app/DMG and ran the imported PowerSim LLC `.tran 0 1m .95m 10n` in packaged Tau: 5,001 samples, 27 nets, 12 supported parts; the former C1 deck error is gone and authored C/L ESR plus bare-K coupling reach ngspice.
-- **Plan:** Completed supported-parasitic extraction, capacitor/inductor ESR expansion, crystal disambiguation, bare-K passthrough, focused/full/corpus gates, rebuild, and packaged native LLC execution.
-- **Next step:** Do not call the reduced LLC result parity: 22 PowerSim behavioral/device symbols remain explicitly unsupported (flat switching nodes prove it). Implement the highest-impact PowerSim symbol family with models and UI import warnings before the next converter claim; preserve drawing/comment primitives for lossless edit/save.
+- **Last completed sub-step:** Rebuilt the app/DMG and ran a packaged 5 V / 1 kΩ / LED regression carrying the screenshot's stale `.ic V(out)=1` + `.ic I(L1)=0`: COMPLETE at 1 ms / 251 samples, LED 1.64 V and 3.36 mA, with concise warnings and no raw transcript.
+- **Plan:** Completed LTspice-current-IC translation, stale-reference handling, collapsed native diagnostics, warning cleanup, safe imported-file Clear/Save behavior, PowerSim bare-library resolution/private-param fixes, full gates, and packaged native proof.
+- **Next step:** Separate PowerSim's visible hierarchical block geometry from its netlist expansion, preserve the selected file's original library root in one-file Import, and compile the `.machine` state blocks before claiming switching-waveform parity.
+
+---
+
+## 2026-07-18T14:46Z — auto/ltspice-parity — LED IC repair + PowerSim hierarchy recovery
+
+### What I did
+- Reproduced the exact LED failure. LTspice accepts `.ic I(L1)=0`; ngspice only
+  accepts node voltages on `.ic`, so verbatim passthrough was guaranteed to fail.
+  Tau now moves valid current assignments onto the named inductor as `IC=…`,
+  warns and omits deleted-inductor targets, and rejects a current IC aimed at an
+  existing non-inductor with actionable product copy.
+- Replaced default raw stdout/stderr transcripts with bounded, concise failure
+  messages. Technical output is collapsed under `Technical details`; native
+  warning prefixes are removed and missing-node IC warnings are rewritten.
+- Fixed the misleading imported-file workflow: Clear starts a new untitled
+  document, clears inherited directives/risk metadata, and preserves the source
+  file. Run silently skips a blocked best-effort autosave; explicit Save remains
+  protective and still explains an actual lossless-rewrite limitation.
+- Recovered PowerSim bare library blocks from `sym/PowerSim` and resolved each
+  flattened body's private `.param` scope before dropping body-only directives.
+  With the actual project root, LLC improves from 12 components/22 skipped to
+  112/0; BUCK from 143/11 to 171/3 (remaining `fra` + two `fraprobe`).
+- Kept the PowerSim result honest: one-file copy/import still loses the external
+  library root, flattened internals are not a faithful top-level rendering, and
+  LTspice `.machine` state blocks are not compiled. These remain release blockers.
+
+### Files
+- `apps/desktop/src/engine/spiceNetlist.ts`, `nativeSpice.ts` + tests
+- `apps/desktop/src/io/projectAscImport.ts`, `ascImport.ts` + tests
+- `apps/desktop/src/lib/errorMessage.ts` + tests
+- `apps/desktop/src/components/SimulationPanel.tsx` + tests
+- `apps/desktop/src/App.tsx`, `App.css`, `App.workspace.test.tsx`
+- `FEATURE_PARITY.md`, `PROGRESS.md`
+
+### Tests
+- `pnpm -C apps/desktop typecheck` ✅
+- `pnpm -C apps/desktop test` ✅ (132 files passed / 1 skipped; 1,954 passed / 6 skipped)
+- Focused IC/import/error/UI/native suites ✅
+- Canonical + exact LLC/BUCK corpus diagnostic ✅ (84 imported; 83 deck/op;
+  copied BUCK remains the explicit hierarchy-context failure)
+- `pnpm --filter @tau/desktop tauri build` ✅ (Tau.app + DMG)
+- Packaged Computer Use LED regression ✅ (1 ms, 251 samples, 1.64 V / 3.36 mA)
+
+### Next step
+Introduce a first-class visible hierarchical/custom-symbol document node and
+expand it only for netlist generation; preserve native import dependency roots;
+then implement PowerSim `.machine` semantics and rerun LLC/BUCK switching nodes.
 
 ---
 

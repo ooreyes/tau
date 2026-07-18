@@ -168,6 +168,7 @@ describe("SimulationPanel — dashboard status strip (§11 Unit C6)", { timeout:
       ok: false,
       title: "Transient",
       message: "singular matrix at t=0",
+      details: "stderr: singular matrix at node n001",
       warnings: [],
     } as import("../simulation/linearTransient").AnalysisResult;
     renderPanel({ result: failed });
@@ -178,6 +179,8 @@ describe("SimulationPanel — dashboard status strip (§11 Unit C6)", { timeout:
     // The pointer must not dangle: the failed run's own message renders in
     // the scope area (the footer that used to carry it is gone).
     expect(screen.getByRole("alert").textContent).toContain("singular matrix at t=0");
+    expect(screen.getByText("Technical details").closest("details")?.hasAttribute("open")).toBe(false);
+    expect(screen.getByText(/stderr: singular matrix/)).toBeTruthy();
   });
 
   it("stays Idle with a pointer at the toolbar Run before anything has run", () => {

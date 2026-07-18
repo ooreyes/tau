@@ -2187,6 +2187,28 @@ body {
   line-height: 1.5;
 }
 
+.analysis-error-details {
+  margin-top: var(--sp-2);
+  color: var(--text-muted);
+}
+
+.analysis-error-details summary {
+  width: fit-content;
+  cursor: pointer;
+  color: var(--text-secondary);
+  font-size: var(--fs-caption);
+}
+
+.analysis-error-details pre {
+  max-height: 12rem;
+  margin: var(--sp-2) 0 0;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-family: var(--font-mono);
+  font-size: var(--fs-caption);
+}
+
 /* Amber caution variant — reused for warnings so they don't read as hard errors
    (red). Matches the app-wide semantic: red=error, amber=warning. */
 .analysis-empty.warn {

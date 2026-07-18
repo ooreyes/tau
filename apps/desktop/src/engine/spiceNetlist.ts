@@ -143,10 +143,18 @@ export function buildSpiceDeck(schematic: Schematic, analysis: SpiceAnalysis): S
     }
   }
 
-  // Carry `.ic`/`.nodeset` initial conditions through to ngspice verbatim. When
-  // any `.ic` is present a transient must run with `uic` for the initial values
-  // to hold at t=0 (LTspice semantics), not just bias the operating point.
-  const { lines: icLines, hasIc } = icLinesFromDirectives(flatDirectives);
+  // ngspice's `.ic` accepts node voltages only, while LTspice additionally
+  // accepts `I(Lname)=…` for an inductor. Translate those current assignments
+  // onto the inductor instance (`IC=…`) and leave only voltage assignments on
+  // `.ic`. Stale inductor-current targets left behind by schematic editing are
+  // explicit circuit warnings instead of fatal ngspice parser errors.
+  const {
+    lines: icLines,
+    hasIc,
+    inductorCurrents,
+    warnings: icWarnings,
+  } = icLinesFromDirectives(flatDirectives, circuit);
+  circuit.warnings.push(...icWarnings);
   lines.push(...icLines);
 
   const userModels = definedModelNames(schematic.directives ?? []);
@@ -235,7 +243,19 @@ export function buildSpiceDeck(schematic: Schematic, analysis: SpiceAnalysis): S
   });
 
   circuit.components.forEach((entry, index) => {
-    lines.push(...componentLines(entry, index, knownModels, schematic.params ?? EMPTY_SCOPE, vdmosModels, netPinCount, subcktModels));
+    const directiveIc = entry.component.kind === "inductor"
+      ? inductorCurrents.get(entry.component.label.trim().toLowerCase())
+      : undefined;
+    lines.push(...componentLines(
+      entry,
+      index,
+      knownModels,
+      schematic.params ?? EMPTY_SCOPE,
+      vdmosModels,
+      netPinCount,
+      subcktModels,
+      directiveIc,
+    ));
   });
 
   // Non-ideal wires: series resistors between the nets at each endpoint.
@@ -262,7 +282,7 @@ export function buildSpiceDeck(schematic: Schematic, analysis: SpiceAnalysis): S
   return { circuit, netlist: lines.join("\n") };
 }
 
-function componentLines(entry: ExtractedComponent, index: number, userModels: Set<string> = new Set(), params: ParamScope = EMPTY_SCOPE, vdmosModels: ReadonlySet<string> = new Set(), netPinCount: ReadonlyMap<string, number> = new Map(), subcktModels: ReadonlySet<string> = new Set()): string[] {
+function componentLines(entry: ExtractedComponent, index: number, userModels: Set<string> = new Set(), params: ParamScope = EMPTY_SCOPE, vdmosModels: ReadonlySet<string> = new Set(), netPinCount: ReadonlyMap<string, number> = new Map(), subcktModels: ReadonlySet<string> = new Set(), directiveInductorIc?: string): string[] {
   const { component } = entry;
   const name = instanceName(component, index);
   const node = (pin: string) => requiredNode(entry, pin);
@@ -308,15 +328,18 @@ function componentLines(entry: ExtractedComponent, index: number, userModels: Se
       // ngspice equivalent; emit its unsaturated linear inductance instead so the
       // deck builds and runs (engine/coreInductor.ts).
       const core = coreInductance(component.value);
-      if (core !== null) return [`${name} ${node("a")} ${node("b")} ${core}`];
+      const ic = directiveInductorIc === undefined
+        ? icSpecDeckText(component.value)
+        : ` IC=${substituteKnownBraces(directiveInductorIc, params).replace(/µ/g, "u")}`;
+      if (core !== null) return [`${name} ${node("a")} ${node("b")} ${core}${ic}`];
       const series = passiveSeriesResistance(component);
       const inductance = positiveNumberFromText(component, stripIcSpec(series.value), "H");
       if (series.ohms === null || series.ohms === 0) {
-        return [`${name} ${node("a")} ${node("b")} ${inductance}${icSpecDeckText(component.value)}`];
+        return [`${name} ${node("a")} ${node("b")} ${inductance}${ic}`];
       }
       const internal = `tau_${safeName(name).toLowerCase()}_esr`;
       return [
-        `${name} ${node("a")} ${internal} ${inductance}${icSpecDeckText(component.value)}`,
+        `${name} ${node("a")} ${internal} ${inductance}${ic}`,
         `RTAU_${safeName(name)}_ESR ${internal} ${node("b")} ${series.ohms}`,
       ];
     }
@@ -637,23 +660,91 @@ function componentLines(entry: ExtractedComponent, index: number, userModels: Se
   }
 }
 
+interface InitialConditionDeckSpec {
+  lines: string[];
+  hasIc: boolean;
+  /** LTspice inductor instance name (lower-case) → current expression. */
+  inductorCurrents: Map<string, string>;
+  warnings: string[];
+}
+
+/** One complete LTspice `.ic` assignment. Values may be plain tokens or a
+ * brace expression containing whitespace. Anything left unmatched is passed
+ * through unchanged so malformed user syntax remains a real engine error. */
+const LTSPICE_IC_ASSIGNMENT = /([VI])\s*\(\s*([^)]+?)\s*\)\s*=\s*(\{[^}]*\}|[^\s]+)/gi;
+
 /**
- * Collect `.ic`/`.nodeset` directives as deck lines (re-prefixed with a leading
- * dot, lower-cased keyword), reporting whether any `.ic` is present so the
- * transient line can request `uic`.
+ * Collect `.ic`/`.nodeset` directives and translate LTspice's inductor-current
+ * extension to ngspice's per-instance `IC=` syntax. ngspice only supports node
+ * voltage assignments on `.ic`; passing `I(L1)=…` through is always a syntax
+ * error. Current references made stale by deleting/renaming their target are
+ * omitted with an explicit circuit warning. An existing non-inductor target
+ * remains a hard error because LTspice only permits inductor currents here.
  */
-function icLinesFromDirectives(directives: ReadonlyArray<string>): { lines: string[]; hasIc: boolean } {
+function icLinesFromDirectives(
+  directives: ReadonlyArray<string>,
+  circuit: ExtractedCircuit,
+): InitialConditionDeckSpec {
   const lines: string[] = [];
   let hasIc = false;
+  const inductorCurrents = new Map<string, string>();
+  const warnings: string[] = [];
+  const componentsByName = new Map(
+    circuit.components
+      .filter(({ component }) => component.label.trim() !== "")
+      .map(({ component }) => [component.label.trim().toLowerCase(), component] as const),
+  );
   for (const directive of directives) {
     const bare = directive.trim().replace(/^[.!]+/, "");
     const m = /^(ic|nodeset)\b\s*(.+)$/i.exec(bare);
     if (!m) continue;
     const keyword = m[1].toLowerCase();
-    lines.push(`.${keyword} ${m[2].trim()}`);
-    if (keyword === "ic") hasIc = true;
+    const body = m[2].trim();
+    if (keyword === "nodeset") {
+      lines.push(`.nodeset ${body}`);
+      continue;
+    }
+
+    const matches = [...body.matchAll(LTSPICE_IC_ASSIGNMENT)];
+    LTSPICE_IC_ASSIGNMENT.lastIndex = 0;
+    const unmatched = body.replace(LTSPICE_IC_ASSIGNMENT, " ").trim();
+    LTSPICE_IC_ASSIGNMENT.lastIndex = 0;
+    if (matches.length === 0 || unmatched !== "") {
+      // Preserve malformed/unsupported syntax so ngspice reports it instead of
+      // silently changing the user's circuit.
+      lines.push(`.ic ${body}`);
+      hasIc = true;
+      continue;
+    }
+
+    const voltageAssignments: string[] = [];
+    for (const assignment of matches) {
+      const authoredKind = assignment[1];
+      const kind = authoredKind.toUpperCase();
+      const target = assignment[2].trim();
+      const value = assignment[3];
+      if (kind === "V") {
+        // Preserve node-voltage assignments verbatim. ngspice accepts this
+        // syntax and reports a non-existent node as a non-fatal warning.
+        voltageAssignments.push(`${authoredKind}(${target})=${value}`);
+        hasIc = true;
+        continue;
+      }
+
+      const component = componentsByName.get(target.toLowerCase());
+      if (!component) {
+        warnings.push(`Ignored .ic I(${target})=${value} because inductor ${target} is not present.`);
+        continue;
+      }
+      if (component.kind !== "inductor") {
+        throw new Error(`.ic I(${target})=${value} requires an inductor, but ${target} is a ${component.kind}.`);
+      }
+      inductorCurrents.set(target.toLowerCase(), value);
+      hasIc = true;
+    }
+    if (voltageAssignments.length > 0) lines.push(`.ic ${voltageAssignments.join(" ")}`);
   }
-  return { lines, hasIc };
+  return { lines, hasIc, inductorCurrents, warnings };
 }
 
 function analysisLine(analysis: SpiceAnalysis, useInitialConditions = false): string {
