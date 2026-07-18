@@ -14,9 +14,17 @@
 **Repo:** `auto/ltspice-parity` · **Audit date:** 2026-07-17 · **Auditor:** interactive session (Fable 5) + two background subagents (fuzz + sim cross-check).
 
 ## Baseline (green at audit time)
-- `pnpm -C apps/desktop typecheck` — clean.
+- `pnpm -C apps/desktop typecheck` — clean. (Re-confirmed clean, pass 2.)
 - `pnpm -C apps/desktop test --run` — **1919 passed / 6 skipped** (131 files).
 - `cargo test --release` (src-tauri) — **25 passed / 1 ignored**.
+  **Pass 2 (later on 2026-07-17): cargo baseline SKIPPED — host disk exhausted.**
+  The APFS Data volume hit **0 bytes free mid-build** (`os error 28` while cargo
+  wrote `target/release/deps/…`), which also broke every shell command on the
+  machine. Recovery: deleted the regenerable `apps/desktop/src-tauri/target/`
+  (366 MB) — no source touched. The volume remains ~100% full (414 GiB used,
+  ≈460 MB free): **the next `cargo build/test` will refill it and fail again.**
+  This is an environment hazard for the autobuilder loop itself, not a Tau bug;
+  the host needs several GB freed before Rust baselines can run.
 - Real ngspice FFI integration test (`TAU_NGSPICE_LIB=…/libngspice.dylib cargo test -- --ignored`) — **passes**: op, transient, AC, MOSFET, BJT, rectifier, and the digital 2-bit register all solve correctly.
 - Acceptance corpus (`scripts/acceptance-corpus.sh`, user's real LTspice files) — **82 imported / 82 op-converged / 79 warning-clean / 82 deck-built**.
 
@@ -24,13 +32,13 @@
 
 ## Confirmed bugs
 
-### BUG-1 — `.asc` import path has no byte-size cap (resource exhaustion) — FIXED (working copy, pending commit)
+### BUG-1 — `.asc` import path has no byte-size cap (resource exhaustion) — **OPEN again (fix was lost, never committed)**
 - **Severity:** Medium.
 - **Where:** `apps/desktop/src/store/useProject.ts` → `importAscFile` (the "Import .asc" button / file-input path).
 - **Problem:** `readTextFile` (`src/project/fsBridge.ts`) enforces `MAX_SCHEMATIC_FILE_BYTES` (5 MB) *before* reading, but `importAscFile` called `decodeSchematicText(await file.arrayBuffer())` with **no size check**. The web/workspace branch then stores unbounded text in memory (Zustand state); even the native branch reads the whole file into the renderer before the Rust 5 MB write cap can reject it. A large dragged-in `.asc` can exhaust the renderer.
 - **Repro:** import a >5 MB `.asc` via the Import button; the 10 MB `gigantic-line.asc` stress file parsed in ~112 ms with no cap. (Contrast: File→Open of the same file is correctly rejected with "Schematic files are limited to 5,242,880 bytes.")
-- **Fix applied this session:** guard `file.size > MAX_SCHEMATIC_FILE_BYTES` at the top of `importAscFile`, matching `readTextFile`. Regression test added: `useProject.test.ts` → "rejects an oversized .asc import before reading it into memory" (asserts `arrayBuffer()` is never called). `pnpm -C apps/desktop typecheck` clean; `useProject.test.ts` 29/29 pass.
-- **Status:** fix + test present in the working copy; **not yet committed** (left for review).
+- **Fix applied 2026-07-17 (pass 1):** guard `file.size > MAX_SCHEMATIC_FILE_BYTES` at the top of `importAscFile`, matching `readTextFile`, plus a regression test in `useProject.test.ts`. It was left uncommitted in the working copy.
+- **Status update (pass 2, same day):** that working-copy fix was **wiped by the runner's `git reset --hard`** before anyone committed it. Verified at `d7dc4a3`: `useProject.ts` `importAscFile` (line 340) still calls `decodeSchematicText(await file.arrayBuffer())` with no size guard, and `MAX_SCHEMATIC_FILE_BYTES` does not appear in the file. **The bug is live again.** Under audit-only rules the fix is not being re-applied; a human should land the one-line guard + test described above.
 
 ### BUG-2 — Op-amp `.asc` round-trip changes terminal connectivity — CONFIRMED (guarded from silent loss)
 - **Severity:** Medium–High (functional/parity limitation; **not** silent corruption — see mitigation).
@@ -67,6 +75,18 @@
 - **Why not exploitable:** ngspice merges a `+` line onto the preceding card as continuation parameters (`Warning: unrecognized parameter (quit) - ignored`); it is never executed as a command. The only place blocklisted commands run is a `.control` block, which the allowlist still rejects. Confirmed inert end-to-end.
 - **Suggested fix (hardening):** strip a leading `+` before extracting the command token, so continuation lines are checked too.
 
+### BUG-7 — `classifySignal` rejects any pulse/PWM waveform whose duty cycle is outside ≈48–51% — CONFIRMED
+- **Severity:** Medium. Non-50%-duty pulse trains are the bread and butter of the §11 priority area (vpulse sources, switching converters, logic clocks), and the misclassification silently degrades three shipped features at once.
+- **Where:** `apps/desktop/src/simulation/measurementModel.ts:167-208` (`classifySignal`). Periodicity is estimated from **mean-crossing half-periods**; for a rectangular wave of duty `d` those alternate `d·T` and `(1−d)·T`, so the interval-consistency gate `maxRelativeError <= 0.08` (line 193, measured against the *median half-period*) fails for any duty outside roughly 48–51%.
+- **Problem / Impact:** a perfectly clean, many-cycle pulse train is classified `"transient"` with no period/frequency. Measured downstream effects:
+  1. **Dashboard headline reading** (`ComponentMeasurementsPanel.tsx:31-38` `primaryReading`): non-periodic series fall back to `FINAL` — the last instantaneous sample. For a 0–5 V PWM node that is whichever rail `.tran` happens to stop on, instead of the meaningful RMS (e.g. 2.24 V at 20% duty). The classification badge reads "transient" instead of "Periodic · 1.000 kHz".
+  2. **Auto Frame** (`waveform.ts:103` `autoFrameWaveform`): frames the last N cycles only when a trace classifies periodic. Measured: 50%-duty 1 kHz square over 10 ms → framed to the last 4 ms (4 cycles); identical wave at 40% duty → no framing, full 10 ms window (its progressively-smaller-trailing-window retry can't help — the duty cycle is the same in every window).
+  3. **Oscillation detection/telemetry** anywhere else `classification.kind` is consulted (e.g. `EngineeringTraceReadout`).
+- **Repro:** bundle the real module (`esbuild src/simulation/measurementModel.ts --bundle`) and call `classifySignal` on a sampled 1 kHz 0–5 V square wave, 10 full cycles, 5001 points. Observed: duty 0.5 → `periodic 1.000 kHz`; duty 0.45/0.40/0.30/0.20/0.10 → `transient`, no frequency. Sine/triangle/sawtooth at the same settings → `periodic` (correct). Threshold sweep: 0.48–0.51 pass, 0.47 and 0.52 fail. Independently re-verified by a second agent with its own vectors (2.5 kHz, 0–3.3 V, 25% duty, 8 cycles → `transient`; 50% duty and sine → `periodic`).
+- **Sub-issue (same root):** even inside the passing band the period is `2 × median half-period`, so an asymmetric duty biases the estimate — 48% duty of a true 1 000 Hz wave reports 965 Hz (~3.5% off) where the sine reports 1 000.00 Hz.
+- **Mitigation:** none in code; statistics (min/max/avg/RMS in the expanded row) remain correct — only the *headline* reading, badge, and Auto Frame degrade.
+- **Suggested fix (do not apply blindly):** derive the period from **same-direction crossings** (rising-to-rising intervals are duty-invariant: always exactly `T`) and apply the 8% consistency gate to those full periods; keep rise+fall half-periods only as the single-cycle fallback for near-symmetric waves. This also fixes the ~4% bias (period = median rising-to-rising interval, not 2× a half-period). Regression risk: the single-clean-cycle acceptance path (lines 194-198) and `autoFrameWaveform`/readout tests are tuned to current thresholds — re-run `measurementModel.test.ts`, `waveform.test.ts`, `engineeringTraceReadout.test.ts`.
+
 ---
 
 ## Lower-severity / hardening notes
@@ -84,6 +104,7 @@
 - **Path safety (Rust `project_fs.rs`):** create/move/rename are confined to the authorized project root; symlink sources rejected; descendant-move and overwrite rejected; scope must be pre-authorized by the folder picker. Well tested.
 - **Local AI (`local_ai.rs`):** loopback-only (`127.0.0.1:8080`), origin allowlist has no `*`, pinned `uv` download with fixed URL + sha256, fixed `mlx-lm` install args (no renderer-supplied package/index/shell). Credentials live in the OS keychain (`credentials.rs`), never web storage.
 - **`.subckt` recursion:** real hierarchy flattening (`resolveSubcircuit`) terminates via a by-name cycle guard + `MAX_SUBCIRCUIT_DEPTH=16`. `recursive-subckt.asc`'s self-reference is inert (encoded as opaque TEXT directives, not interpreted as hierarchy).
+- **`traceStatistics` (measurementModel.ts) is genuinely trapezoidal.** On a 1 kHz sine with seeded-random non-uniform time steps, RMS is within 0.006% of A/√2; with samples deliberately clustered near the peaks (worst case for naive sample averaging), still within 0.09%. AVG/RMS on 50%- and 20%-duty squares match analytic values. The §11 plot statistics themselves are sound — BUG-7 is purely the classifier.
 
 ---
 
@@ -95,8 +116,8 @@
 
 ---
 
-## DMG readiness verdict (audit date 2026-07-17)
-**Not yet a complete LTspice replacement; safe but incomplete.** No crashes, hangs, data corruption, or security holes were found — the engine, security posture, and crash-robustness are release-quality, and corrupt round-trips are *guarded* (blocked saves, not silent loss). But real parity gaps remain: op-amp and 3-pin-MOSFET schematics **cannot be saved as `.asc`** (BUG-2/BUG-3), multi-TEXT-box hierarchies fail to build a deck (BUG-4), and the preview and "Run" engines disagree on initial conditions (BUG-5). Recommend addressing BUG-2/3/4 (and confirming BUG-1's fix is committed) before a public DMG billed as an LTspice replacement.
+## DMG readiness verdict (audit date 2026-07-17, updated pass 2)
+**Not yet a complete LTspice replacement; safe but incomplete.** No crashes, hangs, data corruption, or security holes were found — the engine, security posture, and crash-robustness are release-quality, and corrupt round-trips are *guarded* (blocked saves, not silent loss). But real parity gaps remain: op-amp and 3-pin-MOSFET schematics **cannot be saved as `.asc`** (BUG-2/BUG-3), multi-TEXT-box hierarchies fail to build a deck (BUG-4), the preview and "Run" engines disagree on initial conditions (BUG-5), the §11 measurement dashboard mis-handles every non-50%-duty switching waveform (BUG-7), and BUG-1 is live again after its uncommitted fix was lost. Recommend addressing BUG-1/2/3/4/7 before a public DMG billed as an LTspice replacement.
 
 ---
 
