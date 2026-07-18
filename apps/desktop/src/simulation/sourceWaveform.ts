@@ -1,5 +1,6 @@
 import { parseQuantity } from "./quantity";
 import { stripAcSpec } from "../engine/acSpec";
+import { parsePwlTimeToken } from "../engine/sourceFunction";
 
 /** Independent-source value unit: volts or amps on the level arguments. */
 export type SourceUnit = "V" | "A";
@@ -98,8 +99,11 @@ export function parseTransientSource(rawValue: string, unit: SourceUnit): Transi
       // Alternating time/level pairs; linear interpolation, flat-held at the ends.
       const times: number[] = [];
       const levels: number[] = [];
+      let previousTime = 0;
       for (let i = 0; i + 1 < args.length; i += 2) {
-        times.push(parseLevel(args[i], "s", 0));
+        const time = parsePwlTimeToken(args[i], previousTime);
+        times.push(time);
+        previousTime = time;
         levels.push(parseLevel(args[i + 1], unit, 0));
       }
       const first = levels.length > 0 ? levels[0] : 0;

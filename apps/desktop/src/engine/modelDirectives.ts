@@ -122,6 +122,11 @@ function stripInformationalDiodeParams(line: string): string {
 
 export function modelLibLinesFromDirectives(directives: ReadonlyArray<string>): string[] {
   const out: string[] = [];
+  // A logical SPICE block may be split across multiple LTspice TEXT records.
+  // Keep block/continuation state for the entire ordered directive stream,
+  // rather than resetting it at each annotation boundary.
+  let subcktDepth = 0;
+  let prevEmitted = false;
   for (const raw of directives) {
     // LTspice encodes multi-line TEXT blocks with a literal backslash-n. One
     // block freely MIXES kinds (SoftDiodeRecovery: `.tran 0 60u\n.model X …`;
@@ -129,10 +134,6 @@ export function modelLibLinesFromDirectives(directives: ReadonlyArray<string>): 
     // so each physical line is dispatched on its own keyword — gating on the
     // block's first line silently drops models the circuit depends on, and
     // conversely leaks `.tran`/`.step` lines from a model-led block.
-    let subcktDepth = 0;
-    // Whether the previous physical line was emitted: a SPICE `+` continuation
-    // belongs to that line, so it follows the same keep/skip decision.
-    let prevEmitted = false;
     for (const physical of raw.replace(/\\n/g, "\n").split("\n")) {
       const trimmed = physical.trim();
       if (!trimmed) continue;

@@ -195,6 +195,13 @@ export function dflopDeckLines(base: string, nodes: DflopNodes, spec: DigitalGat
   const { vhigh, vlow, vt, td } = spec;
   const b = base.toLowerCase();
   const a = (n: string | undefined) => n ?? "0";
+  // A non-zero ADC transition band prevents event/analog feedback from
+  // chattering at exactly Vt when one DFF output drives the next D input.
+  // Keep it tiny (0.1% of the logic swing) so it is numerical hysteresis, not
+  // an observable change to the user's logic threshold.
+  const bridgeBand = Math.max(Math.abs(vhigh - vlow) * 1e-3, 1e-9);
+  const inLow = Number((vt - bridgeBand).toPrecision(12));
+  const inHigh = Number((vt + bridgeBand).toPrecision(12));
   // Round away float noise from SI-suffix parsing (100n → 1.0000…001e-7).
   const delay = Number(Math.max(td, 1e-9).toPrecision(12));
   // libngspice's ngSpice_Circ parser resolves XSPICE models in one pass. A
@@ -202,11 +209,16 @@ export function dflopDeckLines(base: string, nodes: DflopNodes, spec: DigitalGat
   // API with "unable to find definition of model", so every model card must
   // precede the A-device that consumes it.
   return [
-    `.model ${b}_adc adc_bridge(in_low=${vt} in_high=${vt})`,
+    `.model ${b}_adc adc_bridge(in_low=${inLow} in_high=${inHigh})`,
     `A_${b}_adc [${a(nodes.d)} ${a(nodes.clk)} ${a(nodes.pre)} ${a(nodes.clr)}] [${b}_dd ${b}_dclk ${b}_dpre ${b}_dclr] ${b}_adc`,
     `.model ${b}_dff d_dff(ic=0 clk_delay=${delay} set_delay=${delay} reset_delay=${delay} rise_delay=1e-9 fall_delay=1e-9)`,
     `A_${b} ${b}_dd ${b}_dclk ${b}_dpre ${b}_dclr ${b}_dq ${b}_dnq ${b}_dff`,
-    `.model ${b}_dac dac_bridge(out_low=${vlow} out_high=${vhigh})`,
+    // A zero-time DAC edge into even a small capacitive analog load can drive
+    // ngspice into a vanishing-timestep loop when several DFFs toggle together.
+    // A 10 ns analog edge remains negligible for the intended logic timescale,
+    // while giving the transient solver enough room to cross a capacitive load
+    // without collapsing below its minimum timestep.
+    `.model ${b}_dac dac_bridge(out_low=${vlow} out_high=${vhigh} t_rise=1e-8 t_fall=1e-8)`,
     `A_${b}_dac [${b}_dq ${b}_dnq] [${nodes.q ?? `${b}_qnc`} ${nodes.qbar ?? `${b}_qbnc`}] ${b}_dac`,
   ];
 }

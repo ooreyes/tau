@@ -50,6 +50,7 @@ import {
   saveAssistantRecovery,
   saveConversationMessages,
   setActiveConversationId as persistActiveConversationId,
+  ASSISTANT_PROMPT_CHAR_LIMIT,
   type AssistantConversation,
 } from "../lib/assistantMemory";
 import { PanelResizeHandle, usePanelWidth, type PanelWidthConfig } from "./panelResize";
@@ -322,6 +323,12 @@ export function AssistantPanel({
   const selectedLocalAiPreset = localAiPresets.find((preset) => preset.id === preferences.localModel)
     ?? LOCAL_AI_PRESETS.find((preset) => preset.id === preferences.localModel)
     ?? LOCAL_AI_PRESETS[1];
+  // Do not send project/circuit context until the native lifecycle boundary
+  // confirms this exact process is one Tau started. A different process can
+  // bind the fixed loopback port and return a perfectly plausible `/models`
+  // response; reachability alone is not an ownership/authentication proof.
+  const localAiCanSend = preferences.provider !== "local-mlx"
+    || (localAiStatus?.state === "ready" && localAiStatus.managed);
   // Native start/download can fail synchronously (e.g. a non-Tauri browser
   // runtime — see localAiRuntime.startLocalAi) as well as via a returned
   // "error" status; installed stays false in both the browser fallback and a
@@ -450,7 +457,15 @@ export function AssistantPanel({
 
   const send = useCallback((raw: string, baseMessages: readonly ChatMessage[] = messages) => {
     const text = raw.trim();
-    if (!text || streaming || (preferences.provider === "anthropic" && !apiKey)) return;
+    if (text.length > ASSISTANT_PROMPT_CHAR_LIMIT) {
+      setError({
+        kind: "unknown",
+        message: `Messages are limited to ${ASSISTANT_PROMPT_CHAR_LIMIT.toLocaleString("en-US")} characters. Shorten this prompt before sending.`,
+      });
+      setRetryPrompt(null);
+      return;
+    }
+    if (!text || streaming || !localAiCanSend || (preferences.provider === "anthropic" && !apiKey)) return;
     setError(null);
     setRetryPrompt(null);
 
@@ -588,7 +603,7 @@ export function AssistantPanel({
       },
       onProgress: setProgressPhase,
     }, { analysis, params }, { allowCurrentApply: canApplyCurrent });
-  }, [messages, streaming, preferences.provider, apiKey, components, wires, netLabels, probes, directives, params, analysis, opResult, acResult, dcResult, fourier, componentRows, measurements, selectedId, localAssistant, memoryKey]);
+  }, [messages, streaming, localAiCanSend, preferences.provider, apiKey, components, wires, netLabels, probes, directives, params, analysis, opResult, acResult, dcResult, fourier, componentRows, measurements, selectedId, localAssistant, memoryKey]);
 
   const beginMessageEdit = useCallback((message: ChatMessage) => {
     if (streaming || message.role !== "user") return;
@@ -924,6 +939,7 @@ export function AssistantPanel({
                         <textarea
                           className="assistant-textarea"
                           value={editDraft}
+                          maxLength={ASSISTANT_PROMPT_CHAR_LIMIT}
                           rows={3}
                           autoFocus
                           aria-label="Edit message text"
@@ -1037,7 +1053,7 @@ export function AssistantPanel({
                 key={suggestion.label}
                 type="button"
                 className="assistant-chip"
-                disabled={streaming}
+                disabled={streaming || !localAiCanSend}
                 onClick={() => send(suggestion.prompt)}
               >
                 {suggestion.label}
@@ -1056,6 +1072,7 @@ export function AssistantPanel({
               <textarea
                 className="assistant-textarea"
                 value={input}
+                maxLength={ASSISTANT_PROMPT_CHAR_LIMIT}
                 placeholder="Ask a question or describe a circuit…"
                 disabled={streaming}
                 rows={2}
@@ -1070,7 +1087,7 @@ export function AssistantPanel({
                   Stop
                 </Button>
               ) : (
-                <Button type="submit" size="sm" disabled={!input.trim()}>Send</Button>
+                <Button type="submit" size="sm" disabled={!input.trim() || !localAiCanSend}>Send</Button>
               )}
             </form>
             <p className="assistant-disclaimer">Tauri is an AI and can make mistakes.</p>

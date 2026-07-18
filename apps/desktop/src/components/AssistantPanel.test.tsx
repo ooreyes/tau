@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 // a constructible default export with `messages.stream()` returning an
 // on/finalMessage/abort-shaped fake stream the tests drive by hand, plus the
 // four typed error classes classifyAssistantError() checks via instanceof.
-const { streams, streamRequests, MockAuthenticationError, MockRateLimitError, MockAPIConnectionError, MockAPIError } = vi.hoisted(() => {
+const { streams, streamRequests, streamCreateErrors, MockAuthenticationError, MockRateLimitError, MockAPIConnectionError, MockAPIError } = vi.hoisted(() => {
   class MockAPIError extends Error {}
   class MockAuthenticationError extends MockAPIError {}
   class MockRateLimitError extends MockAPIError {}
@@ -25,6 +25,7 @@ const { streams, streamRequests, MockAuthenticationError, MockRateLimitError, Mo
       reject: (error: unknown) => void;
     }>,
     streamRequests: [] as unknown[],
+    streamCreateErrors: [] as unknown[],
     MockAuthenticationError,
     MockRateLimitError,
     MockAPIConnectionError,
@@ -37,6 +38,8 @@ vi.mock("@anthropic-ai/sdk", () => {
     messages = {
       stream: vi.fn((request: unknown) => {
         streamRequests.push(request);
+        const createError = streamCreateErrors.shift();
+        if (createError) throw createError;
         const listeners: Record<string, Array<(...args: unknown[]) => void>> = {};
         let resolveFinal: (message: { content: Array<Record<string, unknown>>; usage?: Record<string, number> }) => void;
         let rejectFinal: (error: unknown) => void;
@@ -98,6 +101,7 @@ import {
   ASSISTANT_HISTORY_MESSAGE_LIMIT,
   ASSISTANT_MAX_OUTPUT_TOKENS,
   ASSISTANT_QUESTION_MAX_OUTPUT_TOKENS,
+  ASSISTANT_STALL_TIMEOUT_MS,
   ASSISTANT_REQUEST_TIMEOUT_MS,
   compactAssistantHistory,
   saveAssistantApiKey,
@@ -176,6 +180,7 @@ beforeEach(() => {
   saveAssistantPreferences({ provider: "anthropic", localModel: "qwen3-1.7b-4bit" });
   streams.length = 0;
   streamRequests.length = 0;
+  streamCreateErrors.length = 0;
   localAiStatusMock.mockReset();
   localAiStatusMock.mockResolvedValue(localAiStatus());
   startLocalAiMock.mockReset();
@@ -287,10 +292,31 @@ describe("AssistantPanel", () => {
     expect(streams[0].abort).toHaveBeenCalledTimes(1);
     expect(onError).toHaveBeenCalledWith(expect.objectContaining({
       kind: "network",
-      message: expect.stringMatching(/45 seconds/i),
+      message: expect.stringMatching(new RegExp(`${ASSISTANT_CONNECT_TIMEOUT_MS / 1_000} seconds`, "i")),
     }));
   });
-  it("enforces one overall deadline across active streaming and repair work", () => {
+  it("keeps a long Sonnet build alive while stream activity continues", () => {
+    vi.useFakeTimers();
+    const onError = vi.fn();
+    const handle = streamAssistantReply("test-key", "Circuit context", [{ role: "user", content: "Build an amplifier" }], {
+      onDelta: vi.fn(),
+      onDone: vi.fn(),
+      onError,
+    });
+    streams[0].emitThinking();
+
+    // This exceeds the former 90-second wall-clock deadline several times,
+    // but each real provider event proves the request is still making work.
+    for (let elapsed = 0; elapsed < 5 * 60_000; elapsed += ASSISTANT_STALL_TIMEOUT_MS - 1_000) {
+      vi.advanceTimersByTime(ASSISTANT_STALL_TIMEOUT_MS - 1_000);
+      streams[0].emitThinking();
+    }
+
+    expect(streams[0].abort).not.toHaveBeenCalled();
+    expect(onError).not.toHaveBeenCalled();
+    handle.abort();
+  });
+  it("stops a connected stream only after it becomes inactive", () => {
     vi.useFakeTimers();
     const onError = vi.fn();
     streamAssistantReply("test-key", "Circuit context", [{ role: "user", content: "Build an amplifier" }], {
@@ -298,15 +324,166 @@ describe("AssistantPanel", () => {
       onDone: vi.fn(),
       onError,
     });
-    streams[0].emitThinking(); // proves connection; the first-event timer is no longer relevant
+    streams[0].emitThinking();
 
-    vi.advanceTimersByTime(ASSISTANT_REQUEST_TIMEOUT_MS);
+    vi.advanceTimersByTime(ASSISTANT_STALL_TIMEOUT_MS - 1);
+    expect(streams[0].abort).not.toHaveBeenCalled();
+    streams[0].emitStreamEvent({ type: "content_block_delta", delta: { type: "thinking_delta" } });
+    vi.advanceTimersByTime(ASSISTANT_STALL_TIMEOUT_MS);
 
     expect(streams[0].abort).toHaveBeenCalledTimes(1);
     expect(onError).toHaveBeenCalledWith(expect.objectContaining({
       kind: "network",
-      message: expect.stringMatching(/90 seconds.*No file was created/i),
+      message: expect.stringMatching(/stopped making progress/i),
     }));
+  });
+  it("keeps a sane absolute ceiling even if a provider emits activity forever", () => {
+    vi.useFakeTimers();
+    const onError = vi.fn();
+    streamAssistantReply("test-key", "Circuit context", [{ role: "user", content: "Build an amplifier" }], {
+      onDelta: vi.fn(),
+      onDone: vi.fn(),
+      onError,
+    });
+    streams[0].emitThinking();
+
+    for (let elapsed = 0; elapsed < ASSISTANT_REQUEST_TIMEOUT_MS; elapsed += 60_000) {
+      vi.advanceTimersByTime(Math.min(60_000, ASSISTANT_REQUEST_TIMEOUT_MS - elapsed));
+      streams[0].emitThinking();
+    }
+
+    expect(streams[0].abort).toHaveBeenCalledTimes(1);
+    expect(onError).toHaveBeenCalledWith(expect.objectContaining({
+      kind: "network",
+      message: expect.stringMatching(/maximum.*time/i),
+    }));
+  });
+  it("ignores late provider events and completion after a terminal timeout", async () => {
+    vi.useFakeTimers();
+    const onDelta = vi.fn();
+    const onDone = vi.fn();
+    const onError = vi.fn();
+    streamAssistantReply("test-key", "Circuit context", [{ role: "user", content: "Build an amplifier" }], {
+      onDelta,
+      onDone,
+      onError,
+    });
+    streams[0].emitThinking();
+    vi.advanceTimersByTime(ASSISTANT_STALL_TIMEOUT_MS);
+
+    streams[0].emitText("late replay", "late replay");
+    streams[0].emitThinking();
+    await act(async () => {
+      streams[0].resolve("late completion");
+      await streams[0].finalMessage();
+    });
+    expect(onDelta).not.toHaveBeenCalled();
+    expect(onDone).not.toHaveBeenCalled();
+    expect(onError).toHaveBeenCalledTimes(1);
+  });
+  it("ignores replayed events from an earlier repair attempt", async () => {
+    const onDelta = vi.fn();
+    const onDone = vi.fn();
+    streamAssistantReply("test-key", "Circuit context", [{ role: "user", content: "Build an amplifier" }], {
+      onDelta,
+      onDone,
+      onError: vi.fn(),
+    });
+    await act(async () => {
+      streams[0].resolveContent([{
+        type: "tool_use",
+        id: "invalid-plan",
+        name: "build_tau_circuit",
+        input: {},
+      }]);
+      await streams[0].finalMessage();
+    });
+    expect(streams).toHaveLength(2);
+    onDelta.mockClear();
+
+    streams[0].emitText("stale first attempt", "stale first attempt");
+    streams[1].emitText("current repair", "current repair");
+    expect(onDelta).toHaveBeenCalledTimes(1);
+    expect(onDelta).toHaveBeenLastCalledWith("current repair");
+
+    await act(async () => {
+      streams[1].resolve("current repair");
+      await streams[1].finalMessage();
+    });
+    expect(onDone).toHaveBeenCalledTimes(1);
+  });
+  it("keeps unknown provider errors generic so credentials cannot leak into UI or logs", async () => {
+    const secretMarker = "sk-ant-redacted-test-marker";
+    const onError = vi.fn();
+    const consoleLog = vi.spyOn(console, "log").mockImplementation(() => {});
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    streamAssistantReply(secretMarker, "Circuit context", [{ role: "user", content: "Explain R1" }], {
+      onDelta: vi.fn(),
+      onDone: vi.fn(),
+      onError,
+    });
+    await act(async () => {
+      streams[0].reject(new Error(`fetch failed with x-api-key ${secretMarker}`));
+      await streams[0].finalMessage().catch(() => {});
+    });
+
+    expect(JSON.stringify(onError.mock.calls)).not.toContain(secretMarker);
+    expect(JSON.stringify(consoleLog.mock.calls)).not.toContain(secretMarker);
+    expect(JSON.stringify(consoleError.mock.calls)).not.toContain(secretMarker);
+  });
+  it("reports a synchronous SDK setup failure exactly once instead of throwing from send", () => {
+    const onError = vi.fn();
+    streamCreateErrors.push(new Error("synchronous request construction failure"));
+
+    expect(() => streamAssistantReply("test-key", "Circuit context", [{ role: "user", content: "Explain R1" }], {
+      onDelta: vi.fn(),
+      onDone: vi.fn(),
+      onError,
+    })).not.toThrow();
+    expect(onError).toHaveBeenCalledTimes(1);
+    expect(onError).toHaveBeenCalledWith(expect.objectContaining({ kind: "unknown" }));
+  });
+  it("keeps a user abort silent and ignores every late provider callback", async () => {
+    vi.useFakeTimers();
+    const onDelta = vi.fn();
+    const onDone = vi.fn();
+    const onError = vi.fn();
+    const handle = streamAssistantReply("test-key", "Circuit context", [{ role: "user", content: "Build an amplifier" }], {
+      onDelta,
+      onDone,
+      onError,
+    });
+    handle.abort();
+    streams[0].emitText("late replay", "late replay");
+    streams[0].emitThinking();
+    await act(async () => {
+      streams[0].resolve("late completion");
+      await streams[0].finalMessage();
+    });
+    vi.advanceTimersByTime(ASSISTANT_REQUEST_TIMEOUT_MS);
+
+    expect(streams[0].abort).toHaveBeenCalledTimes(1);
+    expect(onDelta).not.toHaveBeenCalled();
+    expect(onDone).not.toHaveBeenCalled();
+    expect(onError).not.toHaveBeenCalled();
+  });
+  it("never copies the API key into browser storage", () => {
+    const secretMarker = "sk-ant-keychain-only-test-marker";
+    saveAssistantApiKey(secretMarker);
+    expect([...backing.values()].join("\n")).not.toContain(secretMarker);
+  });
+  it("rejects an oversized pasted prompt before persistence or provider dispatch", () => {
+    saveAssistantApiKey("test-key");
+    render(<AssistantPanel {...baseProps()} />);
+    const composer = screen.getByRole("textbox", { name: "Message the assistant" }) as HTMLTextAreaElement;
+    expect(composer.maxLength).toBe(12_000);
+
+    fireEvent.change(composer, { target: { value: "x".repeat(12_001) } });
+    fireEvent.keyDown(composer, { key: "Enter", code: "Enter" });
+
+    expect(screen.getByRole("alert").textContent).toContain("12,000 characters");
+    expect(streams).toHaveLength(0);
+    expect(listConversations("untitled.asc")).toHaveLength(0);
   });
   it("bounds recurring provider history without losing the newest user request", () => {
     const history = Array.from({ length: 30 }, (_, index) => ({
@@ -388,6 +565,7 @@ describe("AssistantPanel", () => {
     vi.stubGlobal("fetch", fetchMock);
     render(<AssistantPanel {...baseProps()} />);
 
+    await waitFor(() => expect(localAiStatusMock).toHaveBeenCalled());
     expect(screen.getByRole("combobox", { name: "Assistant model" }).textContent).toContain("Qwen3 4B");
     expect(screen.getByRole("textbox", { name: "Message the assistant" })).toBeTruthy();
     expect(screen.queryByText("No API Key")).toBeNull();
@@ -407,7 +585,7 @@ describe("AssistantPanel", () => {
     }));
   });
 
-  it("aborts a local request from Stop and when the panel unmounts", () => {
+  it("aborts a local request from Stop and when the panel unmounts", async () => {
     saveAssistantPreferences({ provider: "local-mlx", localModel: "qwen3-1.7b-4bit" });
     const signals: AbortSignal[] = [];
     const fetchMock = vi.fn((_input: string | URL | Request, init?: RequestInit) => new Promise<Response>((_resolve, reject) => {
@@ -419,6 +597,7 @@ describe("AssistantPanel", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const first = render(<AssistantPanel {...baseProps()} />);
+    await waitFor(() => expect(localAiStatusMock).toHaveBeenCalledTimes(1));
     fireEvent.change(screen.getByRole("textbox", { name: "Message the assistant" }), { target: { value: "Explain this" } });
     fireEvent.click(screen.getByRole("button", { name: "Send" }));
     fireEvent.click(screen.getByRole("button", { name: "Stop" }));
@@ -426,6 +605,7 @@ describe("AssistantPanel", () => {
     first.unmount();
 
     const second = render(<AssistantPanel {...baseProps()} />);
+    await waitFor(() => expect(localAiStatusMock).toHaveBeenCalledTimes(2));
     fireEvent.change(screen.getByRole("textbox", { name: "Message the assistant" }), { target: { value: "Explain again" } });
     fireEvent.click(screen.getByRole("button", { name: "Send" }));
     second.unmount();
@@ -960,6 +1140,28 @@ describe("AssistantPanel local AI onboarding", () => {
     expect(screen.queryByRole("button", { name: "Download & start" })).toBeNull();
     // The composer is still fully usable in this browser dev fallback.
     expect(screen.getByRole("textbox", { name: "Message the assistant" })).toBeTruthy();
+  });
+
+  it("never sends circuit context to an unmanaged process occupying the local port", async () => {
+    saveAssistantPreferences({ provider: "local-mlx", localModel: "qwen3-4b-4bit" });
+    localAiStatusMock.mockResolvedValue(localAiStatus({
+      state: "error",
+      managed: false,
+      installed: true,
+      detail: "Port 8080 is occupied by a local server Tau did not start.",
+    }));
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    render(<AssistantPanel {...baseProps({
+      components: [resistor("r1", "R1")],
+    })} />);
+
+    expect(await screen.findByText("Port 8080 is occupied by a local server Tau did not start.")).toBeTruthy();
+    const composer = screen.getByRole("textbox", { name: "Message the assistant" });
+    fireEvent.change(composer, { target: { value: "Explain every value in this private circuit" } });
+    expect((screen.getByRole("button", { name: "Send" }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.keyDown(composer, { key: "Enter", code: "Enter" });
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });
 

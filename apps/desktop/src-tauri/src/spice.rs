@@ -16,6 +16,8 @@ const MAX_VECTOR_LENGTH: usize = 2_000_000;
 const MAX_TRANSFER_VALUES: usize = 8_000_000;
 const MAX_NETLIST_BYTES: usize = 512 * 1024;
 const MAX_DECK_LINES: usize = 30_000;
+const MAX_ENGINE_MESSAGES: usize = 256;
+const MAX_ENGINE_MESSAGE_BYTES: usize = 2 * 1024;
 
 type SendChar = unsafe extern "C" fn(*mut c_char, c_int, *mut c_void) -> c_int;
 type SendStat = unsafe extern "C" fn(*mut c_char, c_int, *mut c_void) -> c_int;
@@ -58,7 +60,29 @@ struct VectorInfo {
 #[derive(Default)]
 struct CallbackState {
     messages: Mutex<Vec<String>>,
+    dropped_messages: Mutex<usize>,
     exit_message: Mutex<Option<String>>,
+}
+
+fn record_engine_message(state: &CallbackState, bytes: &[u8]) {
+    let bounded = &bytes[..bytes.len().min(MAX_ENGINE_MESSAGE_BYTES)];
+    let message = String::from_utf8_lossy(bounded).trim().to_string();
+    if message.is_empty() {
+        return;
+    }
+    if let Ok(mut messages) = state.messages.lock() {
+        // Keep the newest diagnostics. Parser failures and fatal XSPICE errors
+        // arrive at the end of a noisy run, so retaining only the first N would
+        // turn an error flood into a possible stale-plot false success.
+        if messages.len() >= MAX_ENGINE_MESSAGES {
+            let remove = MAX_ENGINE_MESSAGES / 2;
+            messages.drain(..remove);
+            if let Ok(mut dropped) = state.dropped_messages.lock() {
+                *dropped = dropped.saturating_add(remove);
+            }
+        }
+        messages.push(message);
+    }
 }
 
 unsafe extern "C" fn on_char(text: *mut c_char, _ident: c_int, user_data: *mut c_void) -> c_int {
@@ -66,15 +90,7 @@ unsafe extern "C" fn on_char(text: *mut c_char, _ident: c_int, user_data: *mut c
         return 0;
     }
     let state = unsafe { &*(user_data as *const CallbackState) };
-    let message = unsafe { CStr::from_ptr(text) }
-        .to_string_lossy()
-        .trim()
-        .to_string();
-    if !message.is_empty() {
-        if let Ok(mut messages) = state.messages.lock() {
-            messages.push(message);
-        }
-    }
+    record_engine_message(state, unsafe { CStr::from_ptr(text) }.to_bytes());
     0
 }
 
@@ -527,14 +543,59 @@ fn deck_lines(netlist: &str) -> Result<Vec<String>, String> {
     for (index, line) in lines.iter().enumerate().skip(1) {
         let trimmed = line.trim_start();
         let lower = trimmed.to_ascii_lowercase();
+        // The embedded engine executes inside Tau's process and is not covered
+        // by Tauri's filesystem scope. Reject every supported ngspice/XSPICE
+        // file-backed form before the deck reaches it; model/source files must
+        // be resolved and copied into a Tau-owned model representation instead.
+        let compact = lower.split_whitespace().collect::<Vec<_>>().join(" ");
+        if compact.contains("filesource")
+            || compact.contains("file=")
+            || compact.contains("file =")
+            || compact.contains("filename=")
+            || compact.contains("filename =")
+            || compact.contains("pwl(file")
+        {
+            return Err(format!(
+                "File-backed ngspice primitives on line {} are not permitted.",
+                index + 1
+            ));
+        }
         if trimmed.starts_with('.') {
             let card = lower.split_whitespace().next().unwrap_or_default();
             if !matches!(
                 card,
-                ".model" | ".option" | ".options" | ".tran" | ".op" | ".ac" | ".end"
+                ".model"
+                    | ".option"
+                    | ".options"
+                    | ".tran"
+                    | ".op"
+                    | ".ac"
+                    | ".dc"
+                    | ".step"
+                    | ".meas"
+                    | ".measure"
+                    | ".noise"
+                    | ".tf"
+                    | ".param"
+                    | ".func"
+                    | ".temp"
+                    | ".ic"
+                    | ".nodeset"
+                    | ".save"
+                    | ".four"
+                    | ".global"
+                    | ".subckt"
+                    | ".ends"
+                    | ".end"
             ) {
                 return Err(format!(
                     "Unsupported ngspice card on line {}: {card}.",
+                    index + 1
+                ));
+            }
+            if card == ".end" && index + 1 != lines.len() {
+                return Err(format!(
+                    "The .end card must be the final non-empty line (line {}).",
                     index + 1
                 ));
             }
@@ -549,9 +610,22 @@ fn deck_lines(netlist: &str) -> Result<Vec<String>, String> {
                 | "quit"
                 | "exit"
                 | "destroy"
+                | "reset"
+                | "resume"
+                | "alter"
+                | "altermod"
+                | "run"
+                | "bg_run"
+                | "stop"
+                | "remcirc"
+                | "set"
+                | "unset"
+                | "let"
                 | "write"
                 | "wrdata"
                 | "cd"
+                | "codemodel"
+                | "pre_osdi"
         ) {
             return Err(format!(
                 "Unsafe ngspice command on line {} is not permitted.",
@@ -578,17 +652,32 @@ fn clear_callback_state(state: &CallbackState) {
     if let Ok(mut messages) = state.messages.lock() {
         messages.clear();
     }
+    if let Ok(mut dropped) = state.dropped_messages.lock() {
+        *dropped = 0;
+    }
     if let Ok(mut exit) = state.exit_message.lock() {
         *exit = None;
     }
 }
 
 fn take_messages(state: &CallbackState) -> Vec<String> {
-    state
+    let mut messages = state
         .messages
         .lock()
         .map(|mut messages| std::mem::take(&mut *messages))
-        .unwrap_or_default()
+        .unwrap_or_default();
+    let dropped = state
+        .dropped_messages
+        .lock()
+        .map(|mut dropped| std::mem::take(&mut *dropped))
+        .unwrap_or_default();
+    if dropped > 0 {
+        messages.insert(
+            0,
+            format!("Tau omitted {dropped} earlier ngspice diagnostic messages."),
+        );
+    }
+    messages
 }
 
 fn with_engine_messages(state: &CallbackState, message: String) -> String {
@@ -621,7 +710,10 @@ fn fatal_engine_messages(state: &CallbackState) -> Option<String> {
 mod tests {
     use std::path::PathBuf;
 
-    use super::{deck_lines, library_file_name, SpiceEngine, SpiceRequest};
+    use super::{
+        deck_lines, fatal_engine_messages, library_file_name, record_engine_message, take_messages,
+        CallbackState, SpiceEngine, SpiceRequest, MAX_ENGINE_MESSAGES, MAX_ENGINE_MESSAGE_BYTES,
+    };
 
     #[test]
     fn accepts_a_complete_deck() {
@@ -638,6 +730,85 @@ mod tests {
     fn rejects_control_cards_and_shell_commands() {
         assert!(deck_lines("Tau\n.control\nshell touch /tmp/nope\n.end\n").is_err());
         assert!(deck_lines("Tau\nR1 1 0 1k\n.include outside.lib\n.op\n.end\n").is_err());
+    }
+
+    #[test]
+    fn accepts_safe_inline_models_and_analysis_cards_without_file_access() {
+        let netlist = r#"Tau safe complex deck
+.param gain=2
+.func twice(x) {2*x}
+.global vdd
+.subckt cell in out params: r=1k
+R1 in out {r}
+.ends cell
+X1 in out cell r=2k
+V1 in 0 1
+.ic v(out)=0
+.nodeset v(out)=0.5
+.temp 27
+.save v(in) v(out)
+.tran 1u 1m
+.dc V1 0 1 .1
+.ac dec 10 1 1Meg
+.noise v(out) V1 dec 10 1 1Meg
+.tf v(out) V1
+.step param gain 1 3 1
+.meas tran peak MAX v(out)
+.four 1k v(out)
+.end"#;
+        assert!(deck_lines(netlist).is_ok());
+    }
+
+    #[test]
+    fn rejects_external_files_control_flow_and_interpreter_commands() {
+        for unsafe_line in [
+            ".include /tmp/host-model.lib",
+            ".inc ../host-model.lib",
+            ".lib /tmp/host-model.lib",
+            ".control",
+            ".pre_osdi /tmp/foreign.osdi",
+            "source /tmp/commands.cir",
+            "load /tmp/plot.raw",
+            "write /tmp/exfil.raw all",
+            "wrdata /tmp/exfil.txt all",
+            "shell touch /tmp/nope",
+            "system touch /tmp/nope",
+            "alter R1=0",
+            "altermod M1 vto=0",
+            "resume",
+            "codemodel /tmp/foreign.cm",
+            ".model input filesource(file=\"/tmp/secret.csv\")",
+            ".model input filesource(filename = ../secret.csv)",
+            "V1 in 0 PWL(file=/tmp/secret.csv)",
+        ] {
+            let deck = format!("Tau adversarial deck\n{unsafe_line}\n.end\n");
+            assert!(
+                deck_lines(&deck).is_err(),
+                "unsafe line was accepted: {unsafe_line}"
+            );
+        }
+
+        assert!(deck_lines("Tau\n.end\nR1 1 0 1k\n.end\n").is_err());
+    }
+
+    #[test]
+    fn bounds_noisy_engine_diagnostics_and_keeps_the_latest_fatal_error() {
+        let state = CallbackState::default();
+        for index in 0..(MAX_ENGINE_MESSAGES * 3) {
+            record_engine_message(&state, format!("stdout warning {index}").as_bytes());
+        }
+        let oversized = format!("stderr Error: {}", "x".repeat(MAX_ENGINE_MESSAGE_BYTES * 2));
+        record_engine_message(&state, oversized.as_bytes());
+
+        let fatal = fatal_engine_messages(&state).expect("latest fatal message must survive");
+        assert!(fatal.contains("stderr Error"));
+
+        let messages = take_messages(&state);
+        assert!(messages.len() <= MAX_ENGINE_MESSAGES + 1);
+        assert!(messages[0].contains("omitted"));
+        assert!(messages.last().is_some_and(|message| {
+            message.starts_with("stderr Error") && message.len() <= MAX_ENGINE_MESSAGE_BYTES
+        }));
     }
 
     #[test]

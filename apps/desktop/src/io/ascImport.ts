@@ -29,6 +29,7 @@ import type {
   SchematicComponent,
   SchematicWire,
 } from "../schematic/types";
+import { parseParamAssignments } from "../simulation/paramScope";
 import { isComponentKind } from "../schematic/types";
 import { getLocalPins, transformPoint } from "../schematic/pins";
 import { parseIcValue } from "../engine/icSpec";
@@ -247,6 +248,9 @@ export interface AsySymbol {
   symbolType: string;
   /** Pins in SpiceOrder order. */
   pins: AsyPin[];
+  /** Symbol-level defaults (Value/Value2/SpiceLine/SpiceLine2). Hierarchical
+   * CELL/BLOCK instances inherit these unless their ASC symbol overrides them. */
+  attrs: Record<string, string>;
 }
 
 /**
@@ -259,7 +263,7 @@ export interface AsySymbol {
  * Pins are returned sorted by SpiceOrder so index i is the i-th `.subckt` port.
  */
 export function parseAsy(text: string): AsySymbol {
-  const result: AsySymbol = { symbolType: "", pins: [] };
+  const result: AsySymbol = { symbolType: "", pins: [], attrs: {} };
   let current: { x: number; y: number; name: string; order: number } | null = null;
   const flush = () => {
     if (current) result.pins.push({ ...current });
@@ -270,6 +274,9 @@ export function parseAsy(text: string): AsySymbol {
     const tag = (parts[0] ?? "").toUpperCase();
     if (tag === "SYMBOLTYPE") {
       result.symbolType = parts[1] ?? "";
+    } else if (tag === "SYMATTR") {
+      const name = parts[1] ?? "";
+      if (name) result.attrs[name] = parts.slice(2).join(" ");
     } else if (tag === "PIN") {
       flush();
       current = { x: num(parts[1]), y: num(parts[2]), name: "", order: result.pins.length + 1 };
@@ -1111,8 +1118,47 @@ function flattenSubcircuit(
   const placement = options._placement ?? { nextX: 1_000_000 };
   const stack = options._stack ?? new Set<string>();
 
+  // LTspice CELL/BLOCK params live on the .asy as defaults and on the parent
+  // SYMBOL as per-instance overrides. Substitute them textually before
+  // recursion so nested instances inherit the resolved expressions while
+  // global references such as `{Vout}` remain for the parent param scope.
+  const bindings = new Map<string, string>();
+  for (const attrs of [def.symbol.attrs, symbol.attrs]) {
+    for (const field of ["Value", "Value2", "SpiceLine", "SpiceLine2"]) {
+      const text = attrs[field]?.trim() ?? "";
+      if (!text.includes("=")) continue;
+      for (const assignment of parseParamAssignments(text)) {
+        bindings.set(assignment.name.toLowerCase(), assignment.expr);
+      }
+    }
+  }
+  const substituteBindings = (text: string): string => {
+    let result = text;
+    for (let pass = 0; pass < 8; pass += 1) {
+      let changed = false;
+      result = result.replace(/\{([A-Za-z_]\w*)\}/g, (match, name: string) => {
+        const expression = bindings.get(name.toLowerCase());
+        if (expression === undefined) return match;
+        changed = true;
+        const trimmed = expression.trim();
+        if (/^\{.*\}$/.test(trimmed) || /^[-+]?(?:\d*\.)?\d+(?:e[-+]?\d+)?[A-Za-zµ]*$/i.test(trimmed)) return trimmed;
+        return `{${trimmed}}`;
+      });
+      if (!changed) break;
+    }
+    return result;
+  };
+  const parameterizedBody: AscDocument = bindings.size === 0 ? def.body : {
+    ...def.body,
+    symbols: def.body.symbols.map((bodySymbol) => ({
+      ...bodySymbol,
+      attrs: Object.fromEntries(Object.entries(bodySymbol.attrs).map(([key, value]) => [key, substituteBindings(value)])),
+    })),
+    texts: def.body.texts.map((text) => ({ ...text, text: substituteBindings(text.text) })),
+  };
+
   // Recurse first so nested blocks resolve and the body is fully flat.
-  const body = ascToSchematic(def.body, {
+  const body = ascToSchematic(parameterizedBody, {
     ...options,
     _depth: (options._depth ?? 0) + 1,
     _placement: placement,
@@ -1273,7 +1319,7 @@ export function ascToSchematic(doc: AscDocument, options: AscImportOptions = {})
       // used as a symbol (e.g. class-d_starter's `deadtime` X1).
       const def = options.resolveSubcircuit?.(symbol.type) ?? null;
       const depth = options._depth ?? 0;
-      if (def && def.symbol.symbolType.toUpperCase() === "BLOCK" && depth < MAX_SUBCIRCUIT_DEPTH
+      if (def && ["BLOCK", "CELL"].includes(def.symbol.symbolType.toUpperCase()) && depth < MAX_SUBCIRCUIT_DEPTH
         && !(options._stack ?? new Set()).has(symbol.type.toLowerCase())) {
         const placement = options._placement ?? { nextX: 1_000_000 };
         const { result, bridges } = flattenSubcircuit(
@@ -1384,7 +1430,8 @@ export function importAsc(text: string, options: AscImportOptions = {}): AscImpo
  * {@link SubcircuitResolver} that the Open dialog can build from a "read this
  * symbol's `.asy` + `.asc`" callback (and tests from an in-memory map), so the
  * file-system parts stay outside this pure module. A symbol resolves only when
- * BOTH its `.asy` (ports) and `.asc` (body) are found and the `.asy` is a BLOCK.
+ * BOTH its `.asy` (ports/defaults) and `.asc` (body) are found and the `.asy`
+ * is a hierarchical BLOCK or CELL.
  */
 export function makeSubcircuitResolver(
   readFiles: (symbolType: string) => { asy?: string; asc?: string } | null,
@@ -1393,7 +1440,7 @@ export function makeSubcircuitResolver(
     const files = readFiles(symbolType);
     if (!files?.asy || !files.asc) return null;
     const symbol = parseAsy(files.asy);
-    if (symbol.symbolType.toUpperCase() !== "BLOCK") return null;
+    if (!["BLOCK", "CELL"].includes(symbol.symbolType.toUpperCase())) return null;
     return { symbol, body: parseAsc(files.asc) };
   };
 }

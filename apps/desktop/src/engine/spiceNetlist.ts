@@ -24,7 +24,7 @@ import { tlineDeckParams } from "./tlineSpec";
 import { parseTempDirective } from "../io/directiveAnalysis";
 
 export type SpiceAnalysis =
-  | { kind: "tran"; stopTime: number; steps: number }
+  | { kind: "tran"; stopTime: number; steps: number; startTime?: number; maxStep?: number; uic?: boolean }
   | { kind: "op" }
   | { kind: "ac"; startHz: number; stopHz: number; pointsPerDecade: number }
   | {
@@ -292,7 +292,16 @@ function componentLines(entry: ExtractedComponent, index: number, userModels: Se
       // instead of choking positiveNumberFromText on the param-laden value.
       const crystal = parseCrystal(component.value);
       if (crystal) return crystalDeckLines(name, node("a"), node("b"), crystal);
-      return [`${name} ${node("a")} ${node("b")} ${positiveNumberFromText(component, stripIcSpec(component.value), "F")}${icSpecDeckText(component.value)}`];
+      const series = capacitorSeriesResistance(component);
+      const capacitance = positiveNumberFromText(component, stripIcSpec(series.value), "F");
+      if (series.ohms === null || series.ohms === 0) {
+        return [`${name} ${node("a")} ${node("b")} ${capacitance}${icSpecDeckText(component.value)}`];
+      }
+      const internal = `tau_${safeName(name).toLowerCase()}_esr`;
+      return [
+        `${name} ${node("a")} ${internal} ${capacitance}${icSpecDeckText(component.value)}`,
+        `RTAU_${safeName(name)}_ESR ${internal} ${node("b")} ${series.ohms}`,
+      ];
     }
     case "inductor": {
       // A nonlinear (Chan) magnetic-core inductor (Hc/Bs/Br/A/Lm/Lg/N) has no
@@ -644,7 +653,19 @@ function analysisLine(analysis: SpiceAnalysis, useInitialConditions = false): st
       if (!Number.isFinite(analysis.stopTime) || analysis.stopTime <= 0 || !Number.isInteger(analysis.steps) || analysis.steps < 2) {
         throw new Error("Transient analysis needs a positive stop time and at least two output steps.");
       }
-      return `.tran ${analysis.stopTime / analysis.steps} ${analysis.stopTime}${useInitialConditions ? " uic" : ""}`;
+      const outputStep = analysis.stopTime / analysis.steps;
+      const startTime = analysis.startTime;
+      const maxStep = analysis.maxStep;
+      if (startTime !== undefined && (!Number.isFinite(startTime) || startTime < 0 || startTime >= analysis.stopTime)) {
+        throw new Error("Transient output start time must be non-negative and earlier than stop time.");
+      }
+      if (maxStep !== undefined && (!Number.isFinite(maxStep) || maxStep <= 0)) {
+        throw new Error("Transient maximum step must be greater than zero.");
+      }
+      const authoredTail = startTime !== undefined || maxStep !== undefined
+        ? ` ${startTime ?? 0}${maxStep !== undefined ? ` ${maxStep}` : ""}`
+        : "";
+      return `.tran ${outputStep} ${analysis.stopTime}${authoredTail}${useInitialConditions || analysis.uic ? " uic" : ""}`;
     }
     case "op":
       return ".op";
@@ -749,6 +770,25 @@ function positiveNumberFromText(component: SchematicComponent, text: string, uni
     throw new Error(`${component.label || component.kind} needs a positive ${unit} value (got ${value}).`);
   }
   return value.toString();
+}
+
+/** LTspice's capacitor `Rser=` is a real series parasitic, but ngspice's C
+ * primitive does not accept that instance parameter. Remove it from the value
+ * token and let componentLines expand an explicit internal-node resistor. */
+function capacitorSeriesResistance(component: SchematicComponent): { value: string; ohms: number | null } {
+  const match = /(?:^|\s)Rser\s*=\s*([^\s]+)/i.exec(component.value);
+  if (!match) return { value: component.value, ohms: null };
+  let ohms: number;
+  try {
+    ohms = parseQuantity(match[1], "Ohm");
+    if (!Number.isFinite(ohms) || ohms < 0) throw new Error("invalid series resistance");
+  } catch {
+    throw new Error(`${component.label || component.kind} needs a valid non-negative Rser value.`);
+  }
+  return {
+    value: component.value.replace(match[0], " ").replace(/\s+/g, " ").trim(),
+    ohms,
+  };
 }
 
 /** Like parsedNumber but rejects only zero/NaN, allowing negative values.

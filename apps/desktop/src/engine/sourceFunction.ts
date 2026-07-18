@@ -13,6 +13,24 @@ export interface SourceSpec {
   dc: number;
 }
 
+/** Parse one LTspice PWL time token. A leading `+` is relative to the previous
+ * breakpoint (not merely a positive absolute number). Reject backwards or
+ * malformed time axes instead of silently turning them into time zero. */
+export function parsePwlTimeToken(token: string, previous: number): number {
+  const relative = token.startsWith("+");
+  const quantity = relative ? token.slice(1) : token;
+  let parsed: number;
+  try {
+    parsed = parseQuantity(quantity, "s");
+  } catch {
+    throw new Error(`PWL time "${token}" is invalid.`);
+  }
+  if (!Number.isFinite(parsed) || parsed < 0) throw new Error(`PWL time "${token}" is invalid.`);
+  const time = relative ? previous + parsed : parsed;
+  if (time < previous) throw new Error(`PWL time "${token}" goes backwards.`);
+  return parseFloat(time.toPrecision(12));
+}
+
 /**
  * LTspice writes the transient stimulus inline on a `voltage`/`current` symbol's
  * Value attribute — `SINE(...)`, `PULSE(...)`, `PWL(...)`, `EXP(...)`, `SFFM(...)`.
@@ -81,8 +99,11 @@ export function parseSourceFunction(rawValue: string, unit: SourceUnit): SourceS
       // Alternating time/level pairs; ngspice accepts the same form. Levels use
       // the source unit, times are seconds.
       const pairs: number[] = [];
+      let previousTime = 0;
       for (let i = 0; i < args.length; i += 2) {
-        pairs.push(num(args[i], "s"));
+        const time = parsePwlTimeToken(args[i], previousTime);
+        pairs.push(time);
+        previousTime = time;
         if (i + 1 < args.length) pairs.push(num(args[i + 1], unit));
       }
       const dc = pairs.length >= 2 ? pairs[1] : 0;

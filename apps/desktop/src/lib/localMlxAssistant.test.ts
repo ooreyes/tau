@@ -590,6 +590,18 @@ describe("LocalMlxAssistant", () => {
     await expect(invalid.complete(request())).rejects.toMatchObject({ kind: "invalid_response" });
   });
 
+  it("automatically aborts a wedged local server at the request deadline", async () => {
+    const fetchImpl = vi.fn((_input: string | URL | Request, init?: RequestInit) => new Promise<Response>((_resolve, reject) => {
+      init?.signal?.addEventListener("abort", () => reject(new DOMException("timed out", "AbortError")), { once: true });
+    }));
+    const provider = new LocalMlxAssistant({ fetchImpl, timeoutMs: 20 });
+    await expect(provider.complete(request())).rejects.toMatchObject({
+      kind: "server",
+      message: expect.stringMatching(/1 second.*stopped/i),
+    });
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
   it("rejects structurally invalid OpenAI responses instead of fabricating a reply", async () => {
     const fetchImpl = vi.fn(async () => new Response(JSON.stringify({ choices: [] }), { status: 200 }));
     const provider = new LocalMlxAssistant({ fetchImpl });

@@ -60,6 +60,21 @@ describe("modelLibLinesFromDirectives", () => {
     ]);
   });
 
+  it("keeps a .subckt block split across separate LTspice TEXT records", () => {
+    expect(modelLibLinesFromDirectives([
+      ".subckt cell in out params: r=1k",
+      "R1 in out {r}",
+      ".model clamp D(Is=1n)",
+      ".ends cell",
+      ".tran 1m",
+    ])).toEqual([
+      ".subckt cell in out params: r=1k",
+      "R1 in out {r}",
+      ".model clamp D(Is=1n)",
+      ".ends cell",
+    ]);
+  });
+
   it("drops blank physical lines inside a block", () => {
     const block = ".subckt s a b\\n\\nR1 a b 10\\n\\n.ends";
     expect(modelLibLinesFromDirectives([block])).toEqual([".subckt s a b", "R1 a b 10", ".ends"]);

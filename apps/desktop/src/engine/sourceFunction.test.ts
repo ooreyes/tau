@@ -42,6 +42,13 @@ describe("parseSourceFunction", () => {
     expect(spec!.dc).toBe(0);
   });
 
+  it("accumulates LTspice relative PWL times and rejects backwards axes", () => {
+    const spec = parseSourceFunction("PWL(0 0 10m 0 +1u 100 100m 100 +1u 400)", "V");
+    expect(spec!.text).toBe("DC 0 PWL(0 0 0.01 0 0.010001 100 0.1 100 0.100001 400)");
+    expect(() => parseSourceFunction("PWL(0 0 2m 1 1m 0)", "V")).toThrow(/goes backwards/i);
+    expect(() => parseSourceFunction("PWL(0 0 nope 1)", "V")).toThrow(/time.*invalid/i);
+  });
+
   it("parses EXP and SFFM", () => {
     expect(parseSourceFunction("EXP(0 5 1m 2m 5m 3m)", "V")!.text).toBe(
       "DC 0 EXP(0 5 0.001 0.002 0.005 0.003)",

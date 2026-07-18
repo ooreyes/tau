@@ -12,6 +12,12 @@ import { stripTcSpec } from "./temperature";
 export interface AnalysisOptions {
   stopTime: number;
   steps: number;
+  /** Optional authored `.tran` output start time (seconds). */
+  startTime?: number;
+  /** Optional authored `.tran` maximum internal solver step (seconds). */
+  maxStep?: number;
+  /** Preserve an explicit trailing `uic` modifier. */
+  uic?: boolean;
 }
 
 /** The interim interactive solver needs enough samples to represent a sine

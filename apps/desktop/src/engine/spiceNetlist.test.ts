@@ -55,6 +55,19 @@ describe("buildSpiceDeck", () => {
     expect(deck.netlist).toContain(".options gmin=1e-12 reltol=1e-4 abstol=1e-12 vntol=1e-7");
   });
 
+  it("preserves authored transient output-start and maximum-step controls", () => {
+    const components = [component("resistor", "R1", "1k", 0, 0), component("ground", "", "", 64, 0)];
+    const deck = buildSpiceDeck({ components, wires: [] }, {
+      kind: "tran",
+      stopTime: 0.001,
+      steps: 240,
+      startTime: 0.00099,
+      maxStep: 1e-8,
+      uic: true,
+    });
+    expect(deck.netlist).toContain(".tran 0.000004166666666666667 0.001 0.00099 1e-8 uic");
+  });
+
   it("emits the AC stimulus on an imported V source (SINE + AC spec)", () => {
     // LTspice Draft1: SYMATTR Value SINE(0 1 1) + SYMATTR Value2 AC 1 → one value.
     const components = [
@@ -125,6 +138,23 @@ describe("buildSpiceDeck", () => {
     const deck = buildSpiceDeck({ components, wires }, { kind: "tran", stopTime: 0.001, steps: 100 });
     expect(deck.netlist).toMatch(/C1 \S+ \S+ 1e-10 IC=1/);
     expect(deck.netlist).toMatch(/\.tran .* uic/);
+  });
+
+  it("expands LTspice capacitor Rser into an explicit series resistor", () => {
+    const components = [
+      component("vsource", "V1", "5", 0, 32),
+      component("resistor", "R1", "1k", 96, 0),
+      component("capacitor", "C1", "22u Rser=1m", 224, 0),
+      component("ground", "", "", 0, 64),
+      component("ground", "", "", 256, 0),
+    ];
+    const wires = [
+      wire("w1", [{ x: 0, y: 0 }, { x: 64, y: 0 }]),
+      wire("w2", [{ x: 128, y: 0 }, { x: 192, y: 0 }]),
+    ];
+    const deck = buildSpiceDeck({ components, wires }, { kind: "tran", stopTime: 1e-3, steps: 100 });
+    expect(deck.netlist).toMatch(/^C1\s+\S+\s+tau_c1_esr\s+0\.000022$/m);
+    expect(deck.netlist).toMatch(/^RTAU_C1_ESR\s+tau_c1_esr\s+0\s+0\.001$/m);
   });
 
   it("does not add uic when no instance carries an IC", () => {
@@ -694,12 +724,12 @@ describe("buildSpiceDeck", () => {
     const deck = buildSpiceDeck({ components, wires }, { kind: "op" });
     // Unconnected pre/clr tie to analog ground inside the adc bridge vector.
     expect(deck.netlist).toMatch(/A_a2_adc \[\S+ \S+ 0 0\] \[a2_dd a2_dclk a2_dpre a2_dclr\] a2_adc/);
-    expect(deck.netlist).toContain(".model a2_adc adc_bridge(in_low=2.5 in_high=2.5)");
+    expect(deck.netlist).toContain(".model a2_adc adc_bridge(in_low=2.495 in_high=2.505)");
     expect(deck.netlist).toContain("A_a2 a2_dd a2_dclk a2_dpre a2_dclr a2_dq a2_dnq a2_dff");
     expect(deck.netlist).toContain(".model a2_dff d_dff(ic=0");
     // Connected q lands on its net; unconnected qbar on a private node.
     expect(deck.netlist).toMatch(/A_a2_dac \[a2_dq a2_dnq\] \[\S+ a2_qbnc\] a2_dac/);
-    expect(deck.netlist).toContain(".model a2_dac dac_bridge(out_low=0 out_high=5)");
+    expect(deck.netlist).toContain(".model a2_dac dac_bridge(out_low=0 out_high=5 t_rise=1e-8 t_fall=1e-8)");
   });
 
   it("emits a sample-and-hold as switch + hold cap between B-source buffers", () => {

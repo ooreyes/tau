@@ -139,7 +139,7 @@ export function classifySignal(times: readonly number[], values: readonly number
   if (range <= Math.max(scale * 1e-9, 1e-30)) return { kind: "steady" };
 
   const mean = sum / validCount;
-  const crossings: number[] = [];
+  const crossings: Array<{ time: number; direction: "rising" | "falling" }> = [];
   let previousTime: number | null = null;
   let previousValue: number | null = null;
   for (let i = 0; i < count; i++) {
@@ -155,25 +155,38 @@ export function classifySignal(times: readonly number[], values: readonly number
       && (previousValue - mean) * (value - mean) < 0
     ) {
       const fraction = (mean - previousValue) / (value - previousValue);
-      crossings.push(previousTime + fraction * (time - previousTime));
+      crossings.push({
+        time: previousTime + fraction * (time - previousTime),
+        direction: value > previousValue ? "rising" : "falling",
+      });
     }
     previousTime = time;
     previousValue = value;
   }
 
-  // ≥2 half-period intervals (3 crossings) is the strong path; a single clean
-  // half-period is accepted only when amplitude is stable and the window covers
-  // roughly one period (audio/sine over a short .tran).
+  // Same-direction crossings are one full period apart regardless of waveform
+  // duty cycle. Alternating rise/fall intervals are not interchangeable for a
+  // pulse train (20% duty produces 0.2T and 0.8T), so using their median as a
+  // half-period both rejected PWM and biased its reported frequency.
   if (crossings.length >= 2) {
-    const halfPeriods = crossings.slice(1).map((crossing, i) => crossing - crossings[i]).filter((p) => p > 0);
-    if (halfPeriods.length >= 1) {
-      const ordered = [...halfPeriods].sort((a, b) => a - b);
-      const halfPeriod = ordered[Math.floor(ordered.length / 2)];
+    const directionalPeriods = (["rising", "falling"] as const).flatMap((direction) => {
+      const selected = crossings.filter((crossing) => crossing.direction === direction);
+      return selected.slice(1)
+        .map((crossing, i) => crossing.time - selected[i].time)
+        .filter((period) => period > 0);
+    });
+    const halfPeriods = crossings.slice(1)
+      .map((crossing, i) => crossing.time - crossings[i].time)
+      .filter((period) => period > 0);
+    const periodCandidates = directionalPeriods.length > 0 ? directionalPeriods : halfPeriods.map((half) => 2 * half);
+    const singleHalfPeriodFallback = directionalPeriods.length === 0 && halfPeriods.length === 1;
+    if (periodCandidates.length >= 1) {
+      const ordered = [...periodCandidates].sort((a, b) => a - b);
+      const period = ordered[Math.floor(ordered.length / 2)];
       let maxRelativeError = 0;
-      for (const candidate of halfPeriods) {
-        maxRelativeError = Math.max(maxRelativeError, Math.abs(candidate - halfPeriod) / halfPeriod);
+      for (const candidate of periodCandidates) {
+        maxRelativeError = Math.max(maxRelativeError, Math.abs(candidate - period) / period);
       }
-      const period = 2 * halfPeriod;
       const halfway = Math.floor(count / 2);
       const halfRange = (start: number, end: number): number => {
         let lo = Infinity;
@@ -190,8 +203,8 @@ export function classifySignal(times: readonly number[], values: readonly number
       const amplitudeRatio = Math.min(earlyRange, lateRange) / Math.max(earlyRange, lateRange);
       const duration = lastTime - firstTime;
       const cyclesInWindow = period > 0 && duration > 0 ? duration / period : 0;
-      const stableIntervals = halfPeriods.length >= 2 && maxRelativeError <= 0.08;
-      const singleCycleOk = halfPeriods.length === 1
+      const stableIntervals = directionalPeriods.length > 0 && maxRelativeError <= 0.08;
+      const singleCycleOk = singleHalfPeriodFallback
         && maxRelativeError <= 0.08
         && amplitudeRatio >= 0.85
         && cyclesInWindow >= 0.75

@@ -4,15 +4,50 @@ const tauri = vi.hoisted(() => ({
   isTauri: vi.fn(() => true),
   invoke: vi.fn(),
 }));
+const nativeFs = vi.hoisted(() => ({
+  stat: vi.fn(),
+  readFile: vi.fn(),
+  writeTextFile: vi.fn(),
+}));
 
 vi.mock("@tauri-apps/api/core", () => tauri);
+vi.mock("@tauri-apps/plugin-fs", () => nativeFs);
 
-import { createProjectDirectory, moveProjectEntry, reserveProjectTextFile } from "./fsBridge";
+import {
+  createProjectDirectory,
+  moveProjectEntry,
+  readTextFile,
+  reserveProjectTextFile,
+  writeTextFile,
+} from "./fsBridge";
 
 afterEach(() => {
   tauri.isTauri.mockReturnValue(true);
   tauri.invoke.mockReset();
+  nativeFs.stat.mockReset();
+  nativeFs.readFile.mockReset();
+  nativeFs.writeTextFile.mockReset();
   vi.unstubAllGlobals();
+});
+
+describe("project file resource limits", () => {
+  it("rejects oversized files before reading or writing their payload", async () => {
+    nativeFs.stat.mockResolvedValue({ size: 5 * 1024 * 1024 + 1 });
+    await expect(readTextFile("/project/hostile.asc")).rejects.toThrow("5,242,880 bytes");
+    expect(nativeFs.readFile).not.toHaveBeenCalled();
+
+    await expect(writeTextFile(
+      "/project/hostile.asc",
+      "x".repeat(5 * 1024 * 1024 + 1),
+    )).rejects.toThrow("5,242,880 bytes");
+    expect(nativeFs.writeTextFile).not.toHaveBeenCalled();
+  });
+
+  it("rejects a file that grows between stat and read", async () => {
+    nativeFs.stat.mockResolvedValue({ size: 64 });
+    nativeFs.readFile.mockResolvedValue(new Uint8Array(5 * 1024 * 1024 + 1));
+    await expect(readTextFile("/project/raced.asc")).rejects.toThrow("5,242,880 bytes");
+  });
 });
 
 describe("native project text-file reservation bridge", () => {

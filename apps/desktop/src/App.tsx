@@ -92,13 +92,15 @@ import {
   serializeSchematicFile,
 } from "./project/types";
 import { validateSchematicDocument } from "./schematic/documentValidation";
-import { importAsc } from "./io/ascImport";
+import { importProjectAsc } from "./io/projectAscImport";
+import { pathExists, readTextFile } from "./project/fsBridge";
 import {
   carryAssistantProbes,
   type AssistantApplyCurrentAscAction,
   type AssistantCreateAscAction,
 } from "./lib/assistantActions";
 import { pickAutoRunAnalysis, type AutoRunAnalysis } from "./lib/assistantAutoRun";
+import { userFacingErrorMessage } from "./lib/errorMessage";
 
 const DEFAULT_ANALYSIS_OPTIONS: AnalysisOptions = {
   stopTime: 0.006,
@@ -514,7 +516,7 @@ function App() {
       setAnalysis({
         ok: false,
         title: "ngspice transient",
-        message: error instanceof Error ? error.message : "ngspice could not run this transient analysis.",
+        message: userFacingErrorMessage(error, "ngspice could not run this transient analysis."),
         warnings: [],
       });
       setRunState("error");
@@ -572,7 +574,7 @@ function App() {
       setOpAnalysis(result);
     } catch (error) {
       if (analysisRequestRef.current !== requestId) return;
-      setOpAnalysis({ ok: false, message: error instanceof Error ? error.message : "ngspice could not calculate the operating point.", warnings: [] });
+      setOpAnalysis({ ok: false, message: userFacingErrorMessage(error, "ngspice could not calculate the operating point."), warnings: [] });
     } finally {
       if (analysisRequestRef.current === requestId) setAnalysisRunning(false);
     }
@@ -606,7 +608,7 @@ function App() {
       );
     } catch (error) {
       if (analysisRequestRef.current !== requestId) return;
-      setAcAnalysis({ ok: false, message: error instanceof Error ? error.message : "ngspice could not run this AC sweep.", warnings: [] });
+      setAcAnalysis({ ok: false, message: userFacingErrorMessage(error, "ngspice could not run this AC sweep."), warnings: [] });
       setAcStepFamily(null);
     } finally {
       if (analysisRequestRef.current === requestId) setAnalysisRunning(false);
@@ -637,7 +639,7 @@ function App() {
       );
     } catch (error) {
       if (analysisRequestRef.current !== requestId) return;
-      setDcAnalysis({ ok: false, message: error instanceof Error ? error.message : "Could not run this DC sweep.", warnings: [] });
+      setDcAnalysis({ ok: false, message: userFacingErrorMessage(error, "Could not run this DC sweep."), warnings: [] });
       setDcStepFamily(null);
     } finally {
       if (analysisRequestRef.current === requestId) setAnalysisRunning(false);
@@ -654,7 +656,7 @@ function App() {
       setTfAnalysis(result);
     } catch (error) {
       if (analysisRequestRef.current !== requestId) return;
-      setTfAnalysis({ ok: false, message: error instanceof Error ? error.message : "Could not run this transfer function.", warnings: [] });
+      setTfAnalysis({ ok: false, message: userFacingErrorMessage(error, "Could not run this transfer function."), warnings: [] });
     } finally {
       if (analysisRequestRef.current === requestId) setAnalysisRunning(false);
     }
@@ -670,7 +672,7 @@ function App() {
       setNoiseAnalysis(result);
     } catch (error) {
       if (analysisRequestRef.current !== requestId) return;
-      setNoiseAnalysis({ ok: false, message: error instanceof Error ? error.message : "Could not run this noise analysis.", warnings: [] });
+      setNoiseAnalysis({ ok: false, message: userFacingErrorMessage(error, "Could not run this noise analysis."), warnings: [] });
     } finally {
       if (analysisRequestRef.current === requestId) setAnalysisRunning(false);
     }
@@ -694,7 +696,7 @@ function App() {
     try {
       contexts = nestedStepContexts(specs, params, components);
     } catch (error) {
-      setStepFamily({ ok: false, message: error instanceof Error ? error.message : "Could not expand this .step.", members: [], warnings: [] });
+      setStepFamily({ ok: false, message: userFacingErrorMessage(error, "Could not expand this .step."), members: [], warnings: [] });
       return;
     }
     setAnalysisRunning(true);
@@ -715,7 +717,7 @@ function App() {
       setStepFamily({ ok: members.some((m) => m.result.ok), spec: specs[0], members, warnings });
     } catch (error) {
       if (analysisRequestRef.current !== requestId) return;
-      setStepFamily({ ok: false, message: error instanceof Error ? error.message : "Could not run this .step sweep.", members: [], warnings: [] });
+      setStepFamily({ ok: false, message: userFacingErrorMessage(error, "Could not run this .step sweep."), members: [], warnings: [] });
     } finally {
       if (analysisRequestRef.current === requestId) setAnalysisRunning(false);
     }
@@ -866,9 +868,14 @@ function App() {
     }
   }, [openDocument, showNotice]);
 
-  const openAscFromProject = useCallback((path: string, title: string, text: string) => {
+  const openAscFromProject = useCallback(async (path: string, title: string, text: string) => {
     try {
-      const result = importAsc(text);
+      const result = await importProjectAsc(text, {
+        sourcePath: path,
+        rootPath: useProject.getState().rootPath,
+        readText: readTextFile,
+        pathExists,
+      });
       const doc: SchematicDocument = {
         components: result.components,
         wires: result.wires,

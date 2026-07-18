@@ -31,6 +31,10 @@ const MAX_COMPONENTS = 80;
 const MAX_NETS = 160;
 const MAX_DIRECTIVES = 32;
 const GRID = 16;
+// Beyond this size a star of point-to-point wires is slower, less readable,
+// and electrically equivalent to repeated LTspice net labels. Named flags are
+// the conventional representation for buses, rails, and clock fanout.
+const LABELED_FANOUT_THRESHOLD = 12;
 
 // These kinds round-trip through Tau's LTspice exporter/importer without a
 // proprietary symbol library. Native-only markers and the kinds whose ASC
@@ -1244,9 +1248,27 @@ function compileDocument(plan: DirectCircuitPlan): {
   let wireIndex = 1;
   let labelIndex = 1;
   for (const net of plan.nets) {
+    // Wires already created for this same logical net are valid junctions, not
+    // obstacles. Feeding them back into the generic crossing-avoidance scorer
+    // makes a high-fanout star quadratic in its own harmless branches and can
+    // turn the maximum 80-part AI plan into a multi-second route. Freeze only
+    // wires from earlier, electrically distinct nets as blockers.
+    const blockingWires = [...wires];
     const points = net.pins.map((token) => pinPoint(components, token));
     const ground = components[components.length - 1];
     if (net.name === "0") points.push({ x: ground.x, y: ground.y });
+    if (points.length > LABELED_FANOUT_THRESHOLD) {
+      const labelPoints = net.name === "0" ? points.slice(0, -1) : points;
+      for (const point of labelPoints) {
+        netLabels.push({
+          id: `ai-label-${labelIndex++}`,
+          x: point.x,
+          y: point.y,
+          text: net.name,
+        });
+      }
+      continue;
+    }
     const anchor = points[0];
     const connected = [anchor];
     for (const target of points.slice(1)) {
@@ -1255,7 +1277,7 @@ function compileDocument(plan: DirectCircuitPlan): {
         const nearestDistance = Math.abs(nearest.x - target.x) + Math.abs(nearest.y - target.y);
         return candidateDistance < nearestDistance ? candidate : nearest;
       }, connected[0]);
-      const route = routeWireSmart(source, target, components, wires);
+      const route = routeWireSmart(source, target, components, blockingWires);
       if (route.length > 1) wires.push({ id: `ai-wire-${wireIndex++}`, points: route });
       connected.push(target);
     }

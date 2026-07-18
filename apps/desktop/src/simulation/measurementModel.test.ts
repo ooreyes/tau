@@ -60,6 +60,20 @@ describe("classifySignal", () => {
     expect(classification.kind).toBe("periodic");
     expect(classification.frequency).toBeCloseTo(100_000, -2);
   });
+
+  it.each([0.1, 0.2, 0.4, 0.6, 0.8, 0.9])(
+    "classifies a %.0% duty pulse train at its true frequency",
+    (duty) => {
+      const frequency = 2_500;
+      const period = 1 / frequency;
+      const times = Array.from({ length: 8_001 }, (_, i) => i * period / 1_000);
+      const values = times.map((time) => (time % period) < duty * period ? 3.3 : 0);
+      const classification = classifySignal(times, values);
+      expect(classification.kind).toBe("periodic");
+      expect(classification.frequency).toBeCloseTo(frequency, -1);
+      expect(classification.period).toBeCloseTo(period, 5);
+    },
+  );
 });
 
 function resultFixture(): Extract<AnalysisResult, { ok: true }> {

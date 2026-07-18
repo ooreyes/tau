@@ -41,9 +41,10 @@ function quantityOrNull(token: string): number | null {
 }
 
 /**
- * Parse a `.tran` directive into `{ stopTime, steps }`.
+ * Parse a `.tran` directive into Tau output sampling plus authored solver
+ * controls (`Tstart`, `Tmax`, and `uic`).
  *
- * LTspice forms (modifiers like `uic`/`startup` are ignored):
+ * LTspice forms:
  *   `.tran <Tstop>`                              → short form
  *   `.tran <Tstep> <Tstop> [<Tstart> [<Tmax>]]`  → full form
  *
@@ -55,16 +56,15 @@ export function parseTranDirective(directive: string): AnalysisOptions | null {
   const body = bodyAfterKeyword(directive, "tran");
   if (body === null) return null;
 
-  const numbers = body
-    .split(/[\s,()]+/)
-    .filter(Boolean)
-    .map(quantityOrNull)
-    .filter((n): n is number => n !== null);
+  const tokens = body.split(/[\s,()]+/).filter(Boolean);
+  const numbers = tokens.slice(0, 4).map(quantityOrNull);
+  while (numbers.length > 0 && numbers[numbers.length - 1] === null) numbers.pop();
   if (numbers.length === 0) return null;
 
   // Short form: a single value is Tstop. Otherwise Tstep, Tstop, [Tstart, Tmax].
   const tstep = numbers.length === 1 ? 0 : numbers[0];
   const tstop = numbers.length === 1 ? numbers[0] : numbers[1];
+  if (tstep === null || tstop === null) return null;
   if (!(tstop > 0)) return null;
 
   let steps = DEFAULT_TRAN_STEPS;
@@ -72,7 +72,17 @@ export function parseTranDirective(directive: string): AnalysisOptions | null {
     steps = Math.round(tstop / tstep);
   }
   steps = Math.max(2, Math.min(MAX_TRANSIENT_STEPS, steps));
-  return { stopTime: tstop, steps };
+  const startTime = numbers.length >= 3 ? numbers[2] : null;
+  const maxStep = numbers.length >= 4 ? numbers[3] : null;
+  if (startTime !== null && (startTime < 0 || startTime >= tstop)) return null;
+  if (maxStep !== null && maxStep <= 0) return null;
+  return {
+    stopTime: tstop,
+    steps,
+    ...(startTime !== null ? { startTime } : {}),
+    ...(maxStep !== null ? { maxStep } : {}),
+    ...(tokens.some((token) => token.toLowerCase() === "uic") ? { uic: true } : {}),
+  };
 }
 
 /**

@@ -1308,9 +1308,14 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   slow coordinate-heavy raw-ASC generation/recursive-payload repair path while
   retaining exact ASC only for current-document edits. One validator-guided
   correction is bounded to the original compact transcript; full failed tool
-  payloads are never echoed back. New builds use medium effort/6k output/90s,
-  while ordinary questions get only the read-only inspection tool at low
-  effort/2.5k output/60s. Recurring history is capped at 12 messages/12k chars,
+  payloads are never echoed back. New builds use medium effort/6k output behind
+  a progress-aware lifecycle: Sonnet gets two minutes to connect, then each
+  thinking/text/tool event rearms a two-minute inactivity deadline, with a
+  12-minute absolute build ceiling (six minutes for read-only questions).
+  Stop and terminal deadlines invalidate late/replayed SDK events, so stale
+  completions cannot apply a circuit. Ordinary questions still get only the
+  read-only inspection tool at low effort/2.5k output. Recurring history is
+  capped at 12 messages/12k chars,
   current ASC is sent only for edit intent, and static prompt/tool content uses
   Anthropic prompt caching. The shadcn-grade run card shows Plan → Validate →
   Ready, a real countdown/Stop action, and a duration/pass/token/cache receipt.
@@ -1350,6 +1355,22 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   and repaired on open. The reported LED loop was verified from a fresh mounted
   DMG through open → save → bundled-ngspice run → reload → rerun as 3 nets / 4
   parts with no connectivity warnings.
+  **Release stress/security follow-up (2026-07-16):** a committed five-case
+  adversarial suite now drives the logical-plan ceiling (80 components / 160
+  pins), long PWL/identifier boundaries, ambiguous/dangling/case-colliding
+  plans, crossing feedback meshes, ASC export/reimport/deck proof, and a real
+  four-DFF mixed-signal ngspice transient. Large fanout uses repeated named
+  flags and compiles in ~25–43 ms instead of 6–8 seconds. Narrow XSPICE ADC
+  threshold bands and finite 10 ns DAC edges fix the reproduced
+  vanishing-timestep failure under simultaneous RC loads. The native boundary
+  accepts advertised safe inline model/analysis/subcircuit cards while
+  rejecting external include/lib, control, shell, file-I/O, mutation, and code-
+  model commands. Diagnostics, schematic files, and assistant prompts are
+  bounded; symlink moves and unowned localhost AI listeners are refused;
+  production CSP/CORS no longer inherit dev origins. The installed 3,995-file
+  LTspice tree imports 3,995, builds 2,900 decks, and op-solves 2,895;
+  unsupported proprietary models remain explicit rather than being claimed
+  universally compatible.
 - 🟡 Component picker matching LTspice (F2 part browser over the full library)
   — **F2 now opens the searchable part palette** (symbols, categories, hotkeys,
   ↑↓/↵ placement); remaining: coverage audit vs. LTspice's full library tree.
@@ -1365,7 +1386,10 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   covers both); binding them to approximations would teach the wrong reflex.
   Those flip this item ✅ when the tools land.
 - ⬜ Help / model docs, error console with SPICE messages
-- ⬜ Crash-free on large/real circuits (stack-overflow class fixed; keep stress-testing)
+- 🟡 Crash-free on large/real circuits — the committed adversarial AI-plan suite
+  and 3,995-file installed-LTspice sweep complete without a process crash.
+  Remaining: native libngspice is in-process and lacks a hard cancellation/time
+  budget, so an intentionally pathological deck can monopolize or crash Tau.
 
 ## 9. Packaging / distribution (to actually sell)
 - ⬜ Bundle `libngspice` reliably (currently git-untracked; only `.gitkeep`)
@@ -1377,7 +1401,11 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   `Install MLX LM` (uv tool install) in the native app; unsigned DMG already
   builds. `uv tool install mlx-lm` installs the complete isolated transitive
   dependency environment; packaged-runtime QA confirms `mlx_lm.server --help`
-  loads successfully. Signing/notarization remains human-owned.
+  loads successfully. Unsigned builds request an explicit ad-hoc identity, so
+  the hardened-runtime app has a valid sealed resource envelope before DMG
+  creation; `codesign --verify --deep --strict` and `hdiutil verify` pass.
+  Gatekeeper correctly continues to reject it until a human applies Developer
+  ID signing and notarization.
 
 ## 10. Visual design system — **IMPERATIVE (Omar's directive)** — ✅ FULLY ADOPTED (2026-07-08, Phase 4c)
 

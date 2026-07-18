@@ -37,6 +37,7 @@ const MAX_TOKENS = 4096;
 // Bounds the inspect_simulation_signal round-trip loop below, independent of
 // (and not multiplied by) the plan-repair loop's own 3-attempt cap.
 const MAX_INSPECTION_ROUND_TRIPS = 4;
+export const LOCAL_MLX_REQUEST_TIMEOUT_MS = 2 * 60_000;
 
 // OpenAI tool-call shape for the same read-only operation the cloud path
 // exposes via INSPECT_SIGNAL_TOOL (assistantOperations.ts) — name, description,
@@ -62,6 +63,8 @@ export interface LocalMlxAssistantOptions {
   model?: LocalMlxModelPreset | string;
   /** Test seam; production always falls back to global fetch. */
   fetchImpl?: FetchLike;
+  /** Test seam; production uses the bounded two-minute local deadline. */
+  timeoutMs?: number;
 }
 
 function systemPrompt(contextText: string, allowCurrentApply: boolean): string {
@@ -376,14 +379,25 @@ export class LocalMlxAssistant implements AssistantProvider {
   readonly model: string;
   readonly endpoint: string;
   private readonly fetchImpl: FetchLike;
+  private readonly timeoutMs: number;
 
   constructor(options: LocalMlxAssistantOptions = {}) {
     this.model = options.model ?? "qwen3-4b-4bit";
     this.endpoint = CHAT_COMPLETIONS_ENDPOINT;
     this.fetchImpl = options.fetchImpl ?? globalThis.fetch.bind(globalThis);
+    this.timeoutMs = options.timeoutMs ?? LOCAL_MLX_REQUEST_TIMEOUT_MS;
   }
 
   async complete(request: AssistantProviderRequest, signal?: AbortSignal): Promise<AssistantProviderReply> {
+    const requestController = new AbortController();
+    let timedOut = false;
+    const forwardAbort = () => requestController.abort(signal?.reason);
+    if (signal?.aborted) forwardAbort();
+    else signal?.addEventListener("abort", forwardAbort, { once: true });
+    const timeout = globalThis.setTimeout(() => {
+      timedOut = true;
+      requestController.abort();
+    }, this.timeoutMs);
     const allowCurrentApply = request.allowCurrentApply !== false;
     const operationContext = request.operationContext;
     const tools = [TAU_CIRCUIT_PLAN_TOOL, INSPECT_SIGNAL_TOOL_OPENAI];
@@ -448,7 +462,7 @@ export class LocalMlxAssistant implements AssistantProvider {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(requestBody),
-            signal,
+            signal: requestController.signal,
             credentials: "omit",
             // A loopback server must never redirect circuit context off-device.
             redirect: "error",
@@ -506,7 +520,17 @@ export class LocalMlxAssistant implements AssistantProvider {
       }
       return lastReply ?? { text: "", actions: [], rejectedActionCount: 1 };
     } catch (error) {
+      if (timedOut) {
+        throw new AssistantProviderError(
+          "server",
+          `The local MLX server made no complete reply within ${Math.max(1, Math.round(this.timeoutMs / 1_000))} seconds. Tau stopped the request.`,
+          { cause: error },
+        );
+      }
       throw classifyFetchError(error);
+    } finally {
+      globalThis.clearTimeout(timeout);
+      signal?.removeEventListener("abort", forwardAbort);
     }
   }
 }

@@ -118,6 +118,15 @@ fn move_project_entry_inner(
     new_name: Option<&str>,
 ) -> Result<PathBuf, String> {
     let root = canonical_directory(project_root, "project root")?;
+    let source_metadata = fs::symlink_metadata(source_path)
+        .map_err(|error| format!("Could not access the item to move: {error}"))?;
+    if source_metadata.file_type().is_symlink() {
+        // Canonicalizing a symlink and then renaming that canonical path moves
+        // its target while leaving the link behind. Even when the target is
+        // inside the project, that is surprising and can mutate a different
+        // file than the Explorer entry the user chose.
+        return Err("Symbolic links cannot be moved or renamed by Tau.".into());
+    }
     let source = fs::canonicalize(source_path)
         .map_err(|error| format!("Could not access the item to move: {error}"))?;
     let target_directory = canonical_directory(target_directory, "target folder")?;
@@ -507,5 +516,43 @@ mod tests {
         );
         assert_eq!(fs::read_to_string(existing).unwrap(), "existing");
         fs::remove_dir_all(root).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn rejects_symlink_sources_and_symlink_escapes() {
+        use std::os::unix::fs::symlink;
+
+        let root = sandbox("symlink-root");
+        let outside = sandbox("symlink-outside");
+        let real_source = root.join("real.asc");
+        fs::write(&real_source, "Version 4\n").unwrap();
+
+        let source_link = root.join("linked.asc");
+        symlink(&real_source, &source_link).unwrap();
+        assert!(
+            move_project_entry_inner(&root, &source_link, &root, Some("renamed.asc"))
+                .unwrap_err()
+                .contains("Symbolic links")
+        );
+        assert!(real_source.exists());
+        assert!(source_link.exists());
+
+        let outside_link = root.join("outside");
+        symlink(&outside, &outside_link).unwrap();
+        assert!(create_project_text_file_exclusive_inner(
+            &root,
+            &outside_link,
+            "escape.asc",
+            "Version 4\n",
+        )
+        .unwrap_err()
+        .contains("inside the open project"));
+        assert!(!outside.join("escape.asc").exists());
+
+        fs::remove_file(source_link).unwrap();
+        fs::remove_file(outside_link).unwrap();
+        fs::remove_dir_all(root).unwrap();
+        fs::remove_dir_all(outside).unwrap();
     }
 }

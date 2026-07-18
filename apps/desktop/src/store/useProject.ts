@@ -20,6 +20,7 @@ import {
 } from "../project/defaultWorkspace";
 import * as fs from "../project/fsBridge";
 import { decodeSchematicText } from "../io/ascImport";
+import { MAX_SCHEMATIC_FILE_BYTES } from "../schematic/documentValidation";
 
 interface ProjectStore extends ProjectState {
   capability: fs.FsCapability;
@@ -340,6 +341,16 @@ export const useProject = create<ProjectStore>((set, get) => ({
   importAscFile: async (parentPath, file) => {
     if (!isSafeLeafName(file.name)) {
       set({ error: "Imported filenames cannot contain folder paths." });
+      return null;
+    }
+    // Match readTextFile's cap: reject an oversized file by its declared size
+    // BEFORE reading it into memory, so a huge .asc cannot exhaust the renderer
+    // (the native write path is capped in Rust, but the web/workspace branch and
+    // the arrayBuffer read below are not otherwise bounded).
+    if (file.size > MAX_SCHEMATIC_FILE_BYTES) {
+      set({
+        error: `Schematic files are limited to ${MAX_SCHEMATIC_FILE_BYTES.toLocaleString("en-US")} bytes.`,
+      });
       return null;
     }
     const desiredName = /\.asc$/i.test(file.name) ? file.name : `${file.name}.asc`;

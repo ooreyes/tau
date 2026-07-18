@@ -6,6 +6,7 @@
 
 import { basename, isProjectFile, joinPath, type ProjectNode } from "./types";
 import { decodeSchematicText } from "../io/ascImport";
+import { MAX_SCHEMATIC_FILE_BYTES } from "../schematic/documentValidation";
 
 export type FsCapability = "tauri" | "web" | "none";
 
@@ -174,13 +175,23 @@ function sortNodes(nodes: ProjectNode[]): ProjectNode[] {
 export async function readTextFile(path: string): Promise<string> {
   if (path.startsWith("web://")) {
     const file = await (await webFile(path)).getFile();
-    return decodeSchematicText(await file.arrayBuffer());
+    assertProjectTextByteLength(file.size);
+    const bytes = await file.arrayBuffer();
+    assertProjectTextByteLength(bytes.byteLength);
+    return decodeSchematicText(bytes);
   }
-  const { readFile: read } = await import("@tauri-apps/plugin-fs");
-  return decodeSchematicText(await read(path));
+  const { readFile: read, stat } = await import("@tauri-apps/plugin-fs");
+  const metadata = await stat(path);
+  assertProjectTextByteLength(metadata.size);
+  const bytes = await read(path);
+  // The file can change after stat(). Recheck the bytes actually returned so
+  // an external grow/replace race cannot allocate unbounded schematic text.
+  assertProjectTextByteLength(bytes.byteLength);
+  return decodeSchematicText(bytes);
 }
 
 export async function writeTextFile(path: string, contents: string): Promise<void> {
+  assertProjectTextByteLength(new TextEncoder().encode(contents).byteLength);
   if (path.startsWith("web://")) {
     const handle = await webFile(path, true);
     const writable = await handle.createWritable();
@@ -190,6 +201,14 @@ export async function writeTextFile(path: string, contents: string): Promise<voi
   }
   const { writeTextFile: write } = await import("@tauri-apps/plugin-fs");
   await write(path, contents);
+}
+
+function assertProjectTextByteLength(bytes: number): void {
+  if (!Number.isSafeInteger(bytes) || bytes < 0 || bytes > MAX_SCHEMATIC_FILE_BYTES) {
+    throw new Error(
+      `Schematic files are limited to ${MAX_SCHEMATIC_FILE_BYTES.toLocaleString("en-US")} bytes.`,
+    );
+  }
 }
 
 export type ProjectTextFileReservation =

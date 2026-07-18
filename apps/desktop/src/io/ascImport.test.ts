@@ -683,6 +683,18 @@ PINATTR SpiceOrder 3`;
     expect(sym.pins[0]).toMatchObject({ name: "pwm", x: -112, y: 0, order: 1 });
     expect(sym.pins[3]).toMatchObject({ name: "vcc", x: -16, y: -96, order: 4 });
   });
+
+  it("reads CELL parameter defaults for hierarchical schematic instances", () => {
+    const sym = parseAsy(`Version 4
+SymbolType CELL
+SYMATTR Value vh=5 vl=0
+SYMATTR SpiceLine K=1
+PIN 32 0 NONE 8
+PINATTR PinName out
+PINATTR SpiceOrder 1`);
+    expect(sym.symbolType).toBe("CELL");
+    expect(sym.attrs).toMatchObject({ Value: "vh=5 vl=0", SpiceLine: "K=1" });
+  });
 });
 
 describe("ascToSchematic hierarchical subcircuits", () => {
@@ -835,6 +847,33 @@ SYMATTR InstName X1`;
     const r = importAsc(PARENT);
     expect(r.warnings.some((w) => w.includes('no Tau equivalent for LTspice symbol "mydiv"'))).toBe(true);
     expect(r.components.filter((c) => c.kind === "resistor")).toHaveLength(0);
+  });
+
+  it("flattens CELL schematics with .asy defaults and instance overrides", () => {
+    const cellAsy = `Version 4
+SymbolType CELL
+SYMATTR SpiceLine K=1
+PIN 32 0 NONE 8
+PINATTR PinName out
+PINATTR SpiceOrder 1`;
+    const cellAsc = `Version 4
+SHEET 1 100 100
+FLAG 0 96 0
+FLAG 0 16 out
+SYMBOL voltage 0 0 R0
+SYMATTR InstName V1
+SYMATTR Value {K}`;
+    const cellResolver = makeSubcircuitResolver((type) =>
+      type.toLowerCase() === "const" ? { asy: cellAsy, asc: cellAsc } : null,
+    );
+    const parent = `Version 4
+SHEET 1 200 200
+SYMBOL CONST 100 100 R0
+SYMATTR InstName X1
+SYMATTR SpiceLine K=7`;
+    const result = importAsc(parent, { resolveSubcircuit: cellResolver });
+    expect(result.warnings).toEqual([]);
+    expect(result.components.find((component) => component.label === "X1.V1")?.value).toBe("7");
   });
 });
 

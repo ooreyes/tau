@@ -41,7 +41,7 @@ const CONVERSATIONS_PREFIX = "tau.assistant.conversations.v2:";
 const ACTIVE_CONVERSATION_PREFIX = "tau.assistant.activeConversation.v2:";
 const MAX_MESSAGES = 40;
 const MAX_MESSAGE_CHARS = 24_000;
-const MAX_PROMPT_CHARS = 12_000;
+export const ASSISTANT_PROMPT_CHAR_LIMIT = 12_000;
 const MAX_ERROR_CHARS = 1_000;
 const MAX_TITLE_CHARS = 48;
 /** Per-circuit cap on saved chats — oldest-by-updatedAt drops first, mirroring
@@ -180,7 +180,7 @@ export function loadAssistantRecovery(memoryKey: string): PersistedAssistantReco
   try {
     const candidate = record(JSON.parse(localStorage.getItem(storageKey(RECOVERY_PREFIX, memoryKey)) ?? "null"));
     if (!candidate || (candidate.status !== "running" && candidate.status !== "failed") || typeof candidate.prompt !== "string") return null;
-    const prompt = candidate.prompt.slice(0, MAX_PROMPT_CHARS).trim();
+    const prompt = candidate.prompt.slice(0, ASSISTANT_PROMPT_CHAR_LIMIT).trim();
     if (!prompt) return null;
     const allowedKinds = new Set(["auth", "rate_limit", "network", "invalid_action", "unknown"]);
     return {
@@ -201,7 +201,7 @@ export function saveAssistantRecovery(memoryKey: string, recovery: PersistedAssi
   try {
     localStorage.setItem(storageKey(RECOVERY_PREFIX, memoryKey), JSON.stringify({
       status: recovery.status,
-      prompt: recovery.prompt.slice(0, MAX_PROMPT_CHARS),
+      prompt: recovery.prompt.slice(0, ASSISTANT_PROMPT_CHAR_LIMIT),
       ...(recovery.kind ? { kind: recovery.kind } : {}),
       ...(recovery.message ? { message: recovery.message.slice(0, MAX_ERROR_CHARS) } : {}),
     }));

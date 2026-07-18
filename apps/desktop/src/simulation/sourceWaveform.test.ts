@@ -115,6 +115,15 @@ describe("parseTransientSource", () => {
       expect(s.at(2e-3)).toBeCloseTo(0, 9);
       expect(s.at(99)).toBe(0); // held at last level
     });
+
+    it("evaluates relative-time breakpoints in the same cumulative frame as LTspice", () => {
+      const s = parseTransientSource("PWL(0 0 10m 0 +1u 100 100m 100 +1u 400)", "V");
+      expect(s.at(10e-3)).toBe(0);
+      expect(s.at(10.0005e-3)).toBeCloseTo(50, 6);
+      expect(s.at(10.001e-3)).toBeCloseTo(100, 6);
+      expect(s.at(100.0005e-3)).toBeCloseTo(250, 6);
+      expect(s.at(100.001e-3)).toBeCloseTo(400, 6);
+    });
   });
 
   describe("EXP", () => {

@@ -12,10 +12,12 @@
  * Env knobs:
  *   CORPUS_ALL=1           also walk the full examples/ tree (~4,000 files)
  *   CORPUS_SKIP_NGSPICE=1  import + deck-build only (no op runs)
+ *   CORPUS_EXTRA_ROOTS=…   path-delimited external roots, walked recursively
+ *   CORPUS_SYMBOL_ROOTS=…  additional .asy/.asc search roots for hierarchy
  */
 import { readFileSync, readdirSync, existsSync, writeFileSync, mkdtempSync, rmSync } from "node:fs";
 import { spawnSync } from "node:child_process";
-import { join } from "node:path";
+import { basename, delimiter, isAbsolute, join, normalize, relative, sep } from "node:path";
 import { homedir, tmpdir } from "node:os";
 import { describe, it, expect } from "vitest";
 import { importAsc, makeSubcircuitResolver, decodeSchematicText } from "../src/io/ascImport";
@@ -25,6 +27,19 @@ import { summarizeCorpus, formatCorpusReport, ngspiceOpSucceeded, type CorpusRow
 
 const HOME = homedir();
 const NGSPICE_TIMEOUT_MS = 20_000;
+
+function envPaths(name: string): string[] {
+  return (process.env[name] ?? "")
+    .split(delimiter)
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+}
+
+const EXTRA_ROOTS = envPaths("CORPUS_EXTRA_ROOTS");
+const EXTRA_SYMBOL_ROOTS = [
+  ...envPaths("CORPUS_SYMBOL_ROOTS"),
+  ...EXTRA_ROOTS.map((root) => join(root, "sym")),
+].filter((root, index, roots) => existsSync(root) && roots.indexOf(root) === index);
 
 /** The canonical 82-file acceptance corpus (FEATURE_PARITY → KEY GOAL). */
 const CORPUS_DIRS = [
@@ -40,6 +55,14 @@ interface CorpusFile {
 
 function collectCorpus(): CorpusFile[] {
   const files: CorpusFile[] = [];
+  const walk = (dir: string, label: string, rel = "") => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const abs = join(dir, entry.name);
+      const relName = rel ? `${rel}/${entry.name}` : entry.name;
+      if (entry.isDirectory()) walk(abs, label, relName);
+      else if (/\.asc$/i.test(entry.name)) files.push({ path: abs, display: `${label}/${relName}` });
+    }
+  };
   for (const { dir, label } of CORPUS_DIRS) {
     if (!existsSync(dir)) continue;
     for (const name of readdirSync(dir).sort()) {
@@ -49,31 +72,38 @@ function collectCorpus(): CorpusFile[] {
   }
   if (process.env.CORPUS_ALL === "1") {
     const examples = join(HOME, "Documents", "LTspice", "examples");
-    const walk = (dir: string, rel: string) => {
-      for (const entry of readdirSync(dir, { withFileTypes: true })) {
-        const abs = join(dir, entry.name);
-        const relName = rel ? `${rel}/${entry.name}` : entry.name;
-        if (entry.isDirectory()) walk(abs, relName);
-        else if (/\.asc$/i.test(entry.name) && !relName.startsWith("Educational/")) {
-          files.push({ path: abs, display: `examples/${relName}` });
-        }
-      }
-    };
-    if (existsSync(examples)) walk(examples, "");
+    if (existsSync(examples)) walk(examples, "examples");
   }
-  return files;
+  for (const root of EXTRA_ROOTS) {
+    if (existsSync(root)) walk(root, basename(root) || "external");
+  }
+  return files
+    .filter((file, index, all) => all.findIndex((candidate) => candidate.path === file.path) === index)
+    .sort((a, b) => a.display.localeCompare(b.display));
 }
 
 /** Sibling-file subcircuit resolver: `<type>.asy` + `<type>.asc` next to the parent. */
 function siblingResolver(parentDir: string) {
   return makeSubcircuitResolver((symbolType) => {
-    const read = (name: string): string | undefined => {
-      const path = join(parentDir, name);
-      if (!existsSync(path)) return undefined;
-      return decodeSchematicText(readFileSync(path));
+    const relativeSymbol = normalize(symbolType.replace(/[\\/]+/g, sep));
+    if (
+      !relativeSymbol
+      || isAbsolute(relativeSymbol)
+      || relativeSymbol === ".."
+      || relativeSymbol.startsWith(`..${sep}`)
+    ) return null;
+    const roots = [parentDir, ...EXTRA_SYMBOL_ROOTS];
+    const read = (suffix: ".asy" | ".asc"): string | undefined => {
+      for (const root of roots) {
+        const path = join(root, `${relativeSymbol}${suffix}`);
+        const rel = relative(root, path);
+        if (rel === ".." || rel.startsWith(`..${sep}`) || isAbsolute(rel) || !existsSync(path)) continue;
+        return decodeSchematicText(readFileSync(path));
+      }
+      return undefined;
     };
-    const asy = read(`${symbolType}.asy`);
-    const asc = read(`${symbolType}.asc`);
+    const asy = read(".asy");
+    const asc = read(".asc");
     if (!asy && !asc) return null;
     return { asy, asc };
   });
@@ -165,7 +195,7 @@ describe.skipIf(corpus.length === 0)("acceptance corpus (user's own LTspice file
       // logamp (imported current-source polarity: LTspice "−" pin → Tau p).
       // ALL 82 op-converge as of the polarity fix.
       // Only enforced on the canonical corpus (CORPUS_ALL covers unvetted files).
-      if (process.env.CORPUS_ALL !== "1") {
+      if (process.env.CORPUS_ALL !== "1" && EXTRA_ROOTS.length === 0) {
         expect(summary.imported).toBeGreaterThanOrEqual(82);
         expect(summary.warningClean).toBeGreaterThanOrEqual(79);
         expect(summary.deckBuilt).toBeGreaterThanOrEqual(82);

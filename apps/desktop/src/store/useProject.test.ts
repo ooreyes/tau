@@ -133,6 +133,23 @@ describe("ASC-native project workspace", () => {
     expect(useProject.getState().workspaceFiles).toEqual({});
   });
 
+  it("rejects an oversized .asc import before reading it into memory", async () => {
+    useProject.getState().ensureDefaultWorkspace();
+    let read = false;
+    const file = {
+      name: "huge.asc",
+      size: 20 * 1024 * 1024,
+      arrayBuffer: async () => {
+        read = true;
+        return new ArrayBuffer(0);
+      },
+    } as unknown as File;
+    await expect(useProject.getState().importAscFile(DEFAULT_WORKSPACE_ID, file)).resolves.toBeNull();
+    expect(read).toBe(false);
+    expect(useProject.getState().workspaceFiles).toEqual({});
+    expect(useProject.getState().error).toMatch(/limited to/i);
+  });
+
   it("rejects path traversal in folder names", async () => {
     useProject.getState().ensureDefaultWorkspace();
     await expect(useProject.getState().createFolder(DEFAULT_WORKSPACE_ID, "../escape")).resolves.toBeNull();

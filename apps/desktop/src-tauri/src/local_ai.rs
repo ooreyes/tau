@@ -16,7 +16,17 @@ use tauri::State;
 const LOCAL_AI_HOST: &str = "127.0.0.1";
 const LOCAL_AI_PORT: u16 = 8080;
 const LOCAL_AI_ENDPOINT: &str = "http://127.0.0.1:8080/v1";
-const ALLOWED_ORIGINS: &str = "tauri://localhost,http://localhost:1420,http://127.0.0.1:1420";
+const RELEASE_ALLOWED_ORIGINS: &str = "tauri://localhost,http://tauri.localhost";
+const DEV_ALLOWED_ORIGINS: &str =
+    "tauri://localhost,http://tauri.localhost,http://localhost:1420,http://127.0.0.1:1420";
+
+const fn allowed_origins() -> &'static str {
+    if cfg!(debug_assertions) {
+        DEV_ALLOWED_ORIGINS
+    } else {
+        RELEASE_ALLOWED_ORIGINS
+    }
+}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct ModelPreset {
@@ -454,6 +464,26 @@ fn status_with(
     }
 }
 
+fn unmanaged_listener_status() -> LocalAiStatus {
+    status_with(
+        "error",
+        false,
+        None,
+        "Port 8080 is occupied by a local server Tau did not start. Stop that process before using local AI so circuit context is never sent to an unowned listener.",
+    )
+}
+
+fn reject_unmanaged_listener(listening: bool) -> Result<(), String> {
+    if listening {
+        Err(
+            "Port 8080 is occupied by a local server Tau did not start. Stop that process before starting local AI."
+                .to_string(),
+        )
+    } else {
+        Ok(())
+    }
+}
+
 fn local_ai_status_inner(slot: &mut Option<LocalAiProcess>) -> LocalAiStatus {
     if let Some(process) = slot.as_mut() {
         match process.child.try_wait() {
@@ -495,12 +525,7 @@ fn local_ai_status_inner(slot: &mut Option<LocalAiProcess>) -> LocalAiStatus {
     }
 
     if endpoint_is_listening() {
-        return status_with(
-            "ready",
-            false,
-            None,
-            "A loopback inference server is already listening. Tau will verify its model API before use.",
-        );
+        return unmanaged_listener_status();
     }
 
     let installed = mlx_server_executable().is_some();
@@ -583,14 +608,7 @@ pub fn start_local_ai(
     if slot.is_some() {
         return Ok(local_ai_status_inner(&mut slot));
     }
-    if endpoint_is_listening() {
-        return Ok(status_with(
-            "ready",
-            false,
-            None,
-            "A loopback inference server is already listening. Tau will use it without taking ownership.",
-        ));
-    }
+    reject_unmanaged_listener(endpoint_is_listening())?;
 
     // With cached weights, a Hugging Face Hub revision check on flaky or
     // absent network can crash mlx_lm.server at startup ("cannot schedule new
@@ -609,7 +627,7 @@ pub fn start_local_ai(
             OsString::from("--port"),
             OsString::from(LOCAL_AI_PORT.to_string()),
             OsString::from("--allowed-origins"),
-            OsString::from(ALLOWED_ORIGINS),
+            OsString::from(allowed_origins()),
             OsString::from("--temp"),
             OsString::from("0"),
             OsString::from("--max-tokens"),
@@ -649,14 +667,14 @@ pub fn stop_local_ai(state: State<'_, LocalAiState>) -> Result<LocalAiStatus, St
     }
     Ok(status_with(
         if endpoint_is_listening() {
-            "ready"
+            "error"
         } else {
             "stopped"
         },
         false,
         None,
         if endpoint_is_listening() {
-            "An external loopback inference server is still running."
+            "Port 8080 is occupied by an external process. Tau will not send circuit context to it."
         } else {
             "Local inference is stopped."
         },
@@ -720,7 +738,26 @@ mod tests {
     fn loopback_endpoint_is_fixed() {
         assert_eq!(LOCAL_AI_HOST, "127.0.0.1");
         assert_eq!(LOCAL_AI_ENDPOINT, "http://127.0.0.1:8080/v1");
-        assert!(!ALLOWED_ORIGINS.contains('*'));
+        assert!(!allowed_origins().contains('*'));
+        assert!(RELEASE_ALLOWED_ORIGINS.contains("tauri://localhost"));
+        assert!(RELEASE_ALLOWED_ORIGINS.contains("http://tauri.localhost"));
+        assert!(!RELEASE_ALLOWED_ORIGINS.contains("localhost:1420"));
+        assert!(!RELEASE_ALLOWED_ORIGINS.contains("127.0.0.1:1420"));
+
+        #[cfg(debug_assertions)]
+        assert_eq!(allowed_origins(), DEV_ALLOWED_ORIGINS);
+        #[cfg(not(debug_assertions))]
+        assert_eq!(allowed_origins(), RELEASE_ALLOWED_ORIGINS);
+    }
+
+    #[test]
+    fn unmanaged_listener_copy_never_claims_it_is_safe_to_use() {
+        let status = unmanaged_listener_status();
+        assert_eq!(status.state, "error");
+        assert!(!status.managed);
+        assert!(status.detail.contains("did not start"));
+        assert!(reject_unmanaged_listener(true).is_err());
+        assert!(reject_unmanaged_listener(false).is_ok());
     }
 
     #[test]

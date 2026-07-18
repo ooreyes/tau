@@ -9,13 +9,13 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## ⏱ HEARTBEAT
 - **Headline metric:** 1903 reviewed-tree tests green · corpus 82/82 import · 82/82 op-converge · 79/82 warning-clean
-- **Run started (UTC):** 2026-07-16T22:01Z
-- **Synced to origin:** auto/ltspice-parity @ cc4a826.
-- **Claimed unit:** Make Assistant work project-persistent across schematic navigation, restore its full controls, and close the remaining transient plot/probe regressions.
-- **Status:** DONE
-- **Last completed sub-step:** Built the fresh unsigned DMG and proved the packaged libngspice dylib loads its bundled XSPICE code models and runs the exact two-DFF register smoke test.
-- **Plan:** Completed — Assistant continuity/history/controls, transient edge gutter, explicit voltage/current probe gestures, and embedded XSPICE failure detection all landed with regressions.
-- **Next step:** Resume warning-clean corpus and release-circuit waveform parity; retain project-scoped Assistant memory and the packaged-library DFF smoke as release gates.
+- **Run started (UTC):** 2026-07-16T23:06Z
+- **Synced to origin:** auto/ltspice-parity @ d8e3467.
+- **Claimed unit:** Replace Sonnet's brittle wall-clock timeout with a progress-aware deadline, then red-team complex AI creation, ASC import, native execution, and packaged-app security.
+- **Status:** IN PROGRESS
+- **Last completed sub-step:** Synced the release lineage and isolated the cloud request lifecycle, complex-circuit boundary, and unsigned DMG as the active stress surfaces.
+- **Plan:** Audit provider cancellation and secrets first; add adversarial regressions and a deterministic complex-circuit corpus; exercise the exact user prompt with capped cloud credentials; then rebuild, mount, and attack-test the fresh DMG at minimum and normal sizes.
+- **Next step:** Run independent timeout/security, simulation/import, and packaged-app threat audits while reproducing the long Sonnet request locally.
 
 ---
 

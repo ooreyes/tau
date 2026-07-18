@@ -18,9 +18,21 @@ describe("parseTranDirective", () => {
     expect(parseTranDirective(".tran 10u 1m")).toEqual({ stopTime: 0.001, steps: 100 });
   });
 
-  it("ignores Tstart, Tmax, and trailing modifiers", () => {
+  it("preserves Tstart, Tmax, and an explicit uic modifier", () => {
     // Tstep=1u, Tstop=2m, Tstart=0, Tmax=1u, modifier uic → 2m/1u = 2000.
-    expect(parseTranDirective(".tran 1u 2m 0 1u uic")).toEqual({ stopTime: 0.002, steps: 2000 });
+    expect(parseTranDirective(".tran 1u 2m 0 1u uic")).toEqual({
+      stopTime: 0.002,
+      steps: 2000,
+      startTime: 0,
+      maxStep: 0.000001,
+      uic: true,
+    });
+    expect(parseTranDirective(".tran 0 1m .99m 10n")).toEqual({
+      stopTime: 0.001,
+      steps: DEFAULT_TRAN_STEPS,
+      startTime: 0.00099,
+      maxStep: 1e-8,
+    });
   });
 
   it("accepts the bare `tran` keyword (no leading dot) and is case-insensitive", () => {

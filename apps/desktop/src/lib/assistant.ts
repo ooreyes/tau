@@ -36,9 +36,17 @@ export const ASSISTANT_MODEL_LABEL = "Sonnet 5";
 
 export const ASSISTANT_MAX_OUTPUT_TOKENS = 6_000;
 export const ASSISTANT_QUESTION_MAX_OUTPUT_TOKENS = 2_500;
-export const ASSISTANT_CONNECT_TIMEOUT_MS = 45_000;
-export const ASSISTANT_REQUEST_TIMEOUT_MS = 90_000;
-export const ASSISTANT_QUESTION_TIMEOUT_MS = 60_000;
+/** The initial connection gets a bounded grace period. Once Anthropic emits
+ * any event, the request switches to the progress-aware stall deadline below. */
+export const ASSISTANT_CONNECT_TIMEOUT_MS = 120_000;
+/** A live request may run for minutes, but silence this long means the stream
+ * has almost certainly wedged. Every thinking/text/tool event rearms it. */
+export const ASSISTANT_STALL_TIMEOUT_MS = 120_000;
+/** Absolute cost/runaway ceilings. These are intentionally much larger than
+ * the inactivity window: a complex build can keep working for several minutes
+ * as long as the provider continues to prove progress. */
+export const ASSISTANT_REQUEST_TIMEOUT_MS = 12 * 60_000;
+export const ASSISTANT_QUESTION_TIMEOUT_MS = 6 * 60_000;
 export const ASSISTANT_HISTORY_MESSAGE_LIMIT = 12;
 export const ASSISTANT_HISTORY_CHAR_LIMIT = 12_000;
 
@@ -215,7 +223,7 @@ export function assistantRequestIsMutation(request: string): boolean {
   return /\b(?:create|build|design|generate|draw|draft|make|prepare|add|insert|remove|delete|change|edit|revise|replace|reconnect|rewire|rename|move|rotate|mirror|fix|update|set)\b/i.test(request);
 }
 
-export function assistantRequestTimeoutMs(request: string): number {
+export function assistantAbsoluteTimeoutMs(request: string): number {
   return assistantRequestIsMutation(request) ? ASSISTANT_REQUEST_TIMEOUT_MS : ASSISTANT_QUESTION_TIMEOUT_MS;
 }
 
@@ -303,7 +311,9 @@ function classifyAssistantError(error: unknown): AssistantError {
       ? { kind: "network", message: "Anthropic's assistant service is temporarily unavailable. Retry shortly." }
       : { kind: "unknown", message: "Anthropic rejected the assistant request. Retry once; if it repeats, update Tau." };
   }
-  return { kind: "unknown", message: error instanceof Error ? error.message : "Something went wrong." };
+  // Never reflect an arbitrary SDK/fetch error into the transcript. Transport
+  // errors can include request headers or bodies, including the user's key.
+  return { kind: "unknown", message: "The assistant request failed unexpectedly. Retry once; if it repeats, update Tau." };
 }
 
 /**
@@ -320,7 +330,14 @@ export function streamAssistantReply(
   operationContext?: AssistantOperationContext,
   options: AssistantStreamOptions = {},
 ): AssistantStreamHandle {
-  const client = new Anthropic({ apiKey, dangerouslyAllowBrowser: true });
+  // Match the SDK's own fetch ceiling to Tau's larger mutation ceiling. The
+  // SDK defaults to ten minutes, which would otherwise undercut Tau's
+  // progress-aware twelve-minute build budget.
+  const client = new Anthropic({
+    apiKey,
+    dangerouslyAllowBrowser: true,
+    timeout: ASSISTANT_REQUEST_TIMEOUT_MS,
+  });
   let userAborted = false;
   let activeStream: { abort: () => void } | null = null;
   let clearActiveDeadline = () => {};
@@ -342,22 +359,22 @@ export function streamAssistantReply(
   }));
   const requestText = [...history].reverse().find((message) => message.role === "user")?.content ?? "";
   const mutationRequest = assistantRequestIsMutation(requestText);
-  const requestTimeoutMs = assistantRequestTimeoutMs(requestText);
+  const requestTimeoutMs = assistantAbsoluteTimeoutMs(requestText);
   const tools = mutationRequest
     ? options.allowCurrentApply === false
       ? [CLOUD_CIRCUIT_PLAN_TOOL, INSPECT_SIGNAL_TOOL]
       : [CLOUD_CIRCUIT_PLAN_TOOL, APPLY_CURRENT_ASC_TOOL, INSPECT_SIGNAL_TOOL]
     : [INSPECT_SIGNAL_TOOL];
 
-  let overallTimer: ReturnType<typeof setTimeout> | null = null;
-  const clearOverallTimer = () => {
-    if (overallTimer) globalThis.clearTimeout(overallTimer);
-    overallTimer = null;
+  let absoluteTimer: ReturnType<typeof setTimeout> | null = null;
+  const clearAbsoluteTimer = () => {
+    if (absoluteTimer) globalThis.clearTimeout(absoluteTimer);
+    absoluteTimer = null;
   };
   const finishWithError = (error: AssistantError) => {
     if (terminal || userAborted) return;
     terminal = true;
-    clearOverallTimer();
+    clearAbsoluteTimer();
     clearActiveDeadline();
     activeStream?.abort();
     activeStream = null;
@@ -366,7 +383,7 @@ export function streamAssistantReply(
   const finishWithReply = (reply: Omit<AssistantCompletedReply, "metrics">) => {
     if (terminal || userAborted) return;
     terminal = true;
-    clearOverallTimer();
+    clearAbsoluteTimer();
     clearActiveDeadline();
     activeStream = null;
     handlers.onDone({
@@ -381,12 +398,10 @@ export function streamAssistantReply(
       },
     });
   };
-  overallTimer = globalThis.setTimeout(() => {
+  absoluteTimer = globalThis.setTimeout(() => {
     finishWithError({
       kind: "network",
-      message: mutationRequest
-        ? "Tau stopped Sonnet after 90 seconds. No file was created. Retry the build or simplify the request."
-        : "Tau stopped Sonnet after 60 seconds. Any partial answer remains above; retry the analysis if needed.",
+      message: `Sonnet reached Tau's ${Math.round(requestTimeoutMs / 60_000)}-minute maximum request time. Tau stopped it; no proposal was applied.`,
     });
   }, requestTimeoutMs);
 
@@ -397,47 +412,69 @@ export function streamAssistantReply(
   ): void => {
     if (userAborted || terminal) return;
     attempts += 1;
-    const stream = client.messages.stream({
-      model: ASSISTANT_MODEL,
-      max_tokens: mutationRequest ? ASSISTANT_MAX_OUTPUT_TOKENS : ASSISTANT_QUESTION_MAX_OUTPUT_TOKENS,
-      cache_control: { type: "ephemeral" },
-      output_config: { effort: mutationRequest ? "medium" : "low" },
-      system,
-      tools,
-      tool_choice: { type: "auto", disable_parallel_tool_use: true },
-      messages,
-    });
+    const stream = (() => {
+      try {
+        return client.messages.stream({
+          model: ASSISTANT_MODEL,
+          max_tokens: mutationRequest ? ASSISTANT_MAX_OUTPUT_TOKENS : ASSISTANT_QUESTION_MAX_OUTPUT_TOKENS,
+          cache_control: { type: "ephemeral" },
+          output_config: { effort: mutationRequest ? "medium" : "low" },
+          system,
+          tools,
+          tool_choice: { type: "auto", disable_parallel_tool_use: true },
+          messages,
+        });
+      } catch (error) {
+        finishWithError(classifyAssistantError(error));
+        return null;
+      }
+    })();
+    if (!stream) return;
     activeStream = stream;
 
     let requestSettled = false;
-    let connectTimer: ReturnType<typeof setTimeout> | null = globalThis.setTimeout(() => {
-      connectTimer = null;
+    let activityTimer: ReturnType<typeof setTimeout> | null = globalThis.setTimeout(() => {
+      activityTimer = null;
       if (userAborted || requestSettled || activeStream !== stream) return;
       requestSettled = true;
       finishWithError({
         kind: "network",
-        message: "Sonnet didn't start responding within 45 seconds. Tau stopped the request — retry when your connection is stable.",
+        message: `Sonnet didn't start responding within ${Math.round(ASSISTANT_CONNECT_TIMEOUT_MS / 1_000)} seconds. Tau stopped the request — retry when your connection is stable.`,
       });
     }, ASSISTANT_CONNECT_TIMEOUT_MS);
     const clearDeadline = () => {
-      if (connectTimer) globalThis.clearTimeout(connectTimer);
-      connectTimer = null;
+      if (activityTimer) globalThis.clearTimeout(activityTimer);
+      activityTimer = null;
     };
     clearActiveDeadline = clearDeadline;
-    const markConnected = () => clearDeadline();
+    const isActiveStream = () => !userAborted && !terminal && !requestSettled && activeStream === stream;
+    const markActivity = (): boolean => {
+      if (!isActiveStream()) return false;
+      clearDeadline();
+      activityTimer = globalThis.setTimeout(() => {
+        activityTimer = null;
+        if (!isActiveStream()) return;
+        requestSettled = true;
+        finishWithError({
+          kind: "network",
+          message: `Sonnet stopped making progress for ${Math.round(ASSISTANT_STALL_TIMEOUT_MS / 60_000)} minutes. Tau stopped the request; any partial response remains available to retry.`,
+        });
+      }, ASSISTANT_STALL_TIMEOUT_MS);
+      return true;
+    };
 
     stream.on("thinking", () => {
-      markConnected();
+      if (!markActivity()) return;
       handlers.onProgress?.("reasoning");
     });
     stream.on("streamEvent", (event) => {
-      markConnected();
+      if (!markActivity()) return;
       if (event.type === "content_block_start" && event.content_block.type === "tool_use") {
         handlers.onProgress?.(event.content_block.name === INSPECT_SIGNAL_TOOL.name ? "inspecting" : "drafting");
       }
     });
     stream.on("text", (_delta, snapshot) => {
-      markConnected();
+      if (!markActivity()) return;
       handlers.onProgress?.("responding");
       handlers.onDelta(snapshot);
     });
@@ -525,7 +562,7 @@ export function streamAssistantReply(
     abort: () => {
       userAborted = true;
       terminal = true;
-      clearOverallTimer();
+      clearAbsoluteTimer();
       clearActiveDeadline();
       activeStream?.abort();
       activeStream = null;

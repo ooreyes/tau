@@ -272,7 +272,7 @@ export function ExplorerPanel({
 }: {
   activeFilePath: string | null;
   onOpenSimFile: (path: string, title: string, json: string) => void;
-  onOpenAscText: (path: string, title: string, text: string) => void;
+  onOpenAscText: (path: string, title: string, text: string) => void | Promise<void>;
   onNotice: (message: string) => void;
   /** Atomic project-store move action; optional only for isolated panel hosts. */
   onMoveNode?: MoveProjectNode;
@@ -355,7 +355,7 @@ export function ExplorerPanel({
   const openNode = async (path: string, name: string) => {
     try {
       const text = await readSim(path);
-      if (isAscFile(name)) onOpenAscText(path, name, text);
+      if (isAscFile(name)) await onOpenAscText(path, name, text);
       else onOpenSimFile(path, name, text);
     } catch (err) {
       onNotice(err instanceof Error ? err.message : "Could not open file.");

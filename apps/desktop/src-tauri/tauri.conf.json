@@ -20,7 +20,8 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; connect-src 'self' ws://localhost:1420 http://127.0.0.1:8080 https://api.anthropic.com; img-src 'self' asset: data:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; script-src 'self'"
+      "csp": "default-src 'self'; connect-src 'self' http://127.0.0.1:8080 https://api.anthropic.com; img-src 'self' asset: data:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; script-src 'self'",
+      "devCsp": "default-src 'self'; connect-src 'self' ws://localhost:1420 http://127.0.0.1:8080 https://api.anthropic.com; img-src 'self' asset: data:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; script-src 'self'"
     }
   },
   "bundle": {
@@ -33,7 +34,8 @@
       "resources/ngspice/": "ngspice/"
     },
     "macOS": {
-      "minimumSystemVersion": "11.0"
+      "minimumSystemVersion": "11.0",
+      "signingIdentity": "-"
     },
     "icon": [
       "icons/32x32.png",
