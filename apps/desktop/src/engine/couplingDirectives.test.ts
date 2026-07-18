@@ -4,6 +4,7 @@ import { buildParamScope } from "../simulation/paramScope";
 
 describe("couplingLinesFromDirectives", () => {
   it("passes a basic two-winding K coupling through verbatim", () => {
+    expect(couplingLinesFromDirectives(["K Lp Ls 1"])).toEqual(["K Lp Ls 1"]);
     expect(couplingLinesFromDirectives(["K1 L1 L2 1"])).toEqual(["K1 L1 L2 1"]);
     expect(couplingLinesFromDirectives(["K3 L1 L2 .95"])).toEqual(["K3 L1 L2 .95"]);
   });

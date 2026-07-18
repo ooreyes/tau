@@ -483,8 +483,14 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   (`initialConditions.test.ts`): a 1µF/1kΩ cap charged to IC=2 V discharges as
   `V[n]=IC/(1+h/RC)^(n+1)` — starts ≈2 V, reaches ≈IC·e⁻¹=0.736 V at t=RC=1 ms,
   monotonic; an IC=1 A inductor delivers ~1 A at t=0 and decays through R; without
-  IC the node starts at 0. 3 tests. Still to add: parasitics (ESR/Rser),
-  behavioral R/C/L.
+  IC the node starts at 0. 3 tests. **Native passive ESR/Rser now landed**:
+  importer extraction keeps supported `Rser` while dropping vendor-only
+  metadata such as `Irms`/`Ipk`; the deck expands C/L ESR into a namespaced
+  internal series resistor because ngspice's primitives do not accept LTspice's
+  per-instance token. A capacitor is only treated as a BVD crystal when its
+  motional `Lser` is present (bare `Cpar`/`Rser` no longer misclassifies it).
+  PowerSim LLC's C1/Lp/Ls/Lr now build and run with their authored losses.
+  Still to add: browser-solver ESR stamps and behavioral R/C/L.
 - 🟡 Sources — DC/AC/PULSE plus **inline LTspice transient functions on V/I sources now emit to the ngspice deck: SINE (offset/amp/freq/td/damping/phase), PULSE (full 7-arg, Ncycles trimmed), PWL, EXP, SFFM** (`engine/sourceFunction.ts`; µ/meg normalized). **TS-fallback solver now evaluates the same families in the time domain** (`simulation/sourceWaveform.ts` `parseTransientSource` → `{ dc, at(t), maxFrequencyHz }`): the `.tran` loop drives `vsource`/`isource` (and the `vac`/`iac` AC symbols) from the parsed waveform instead of DC-only, `.op` seeds the t=0 bias, and `inspectTransientResolution` derives the sampling requirement from a function source's own frequency. ngspice-verified: PULSE(0 5 1m 0 0 2m 4m) node = 0/5/0 V at t=0.5/2/3.5 ms in both engines. Still missing: PWL FILE, explicit AC spec on these, noise sources (**arbitrary behavioral B-source `V=…`/`I=…` also landed** — see the dedicated B item below)
 - 🟡 Semiconductors — diode/BJT/MOS/zener present; **bundled LTspice standard
   models landed** (`engine/standardModels.ts`): common parts referenced by name
@@ -671,7 +677,7 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   (LTRA), `tline` UI param fields, TS-solver frequency-domain stamp.
 - 🟡 Coupled inductors `K` — **directive passthrough landed** (`engine/
   couplingDirectives.ts`): a document's on-canvas `K` TEXT directives
-  (`K1 L1 L2 1`, `K3 L1 L2 .95`, the all-windings `K1 L1 L2 L3 L4 1`, parameterized
+  (`K Lp Ls 1`, `K1 L1 L2 1`, `K3 L1 L2 .95`, the all-windings `K1 L1 L2 L3 L4 1`, parameterized
   `Kcup1 L2 L3 {Kcup}`) now flow into the native deck verbatim with any `{expr}`
   coefficient resolved against the param scope — previously dropped, which made a
   coupled transformer simulate as independent inductors. Live-verified in ngspice
@@ -688,7 +694,9 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   transformer steps a 1 V primary to **2 V** secondary (=√(L2/L1)) in both AC
   (+6.02 dB, frequency-independent) and transient (V(out)=2·V(in) every step),
   k=0.5 scales it to 0 dB, and an uncoupled pair leaves the secondary dead.
-  15 + 5 hand-computed tests. **NEXT:** a placeable K symbol/UI (still must
+  The bare `K` designator accepted by LTspice is included (PowerSim LLC); it was
+  formerly mistaken for a non-coupling line and silently dropped. 16 + 5
+  hand-computed tests. **NEXT:** a placeable K symbol/UI (still must
   hand-edit the directive).
 - ⬜ Special functions: TRIANGLE/PWM generators, schmitt, etc.
 - 🟡 **Model/library import** (`.model`, `.lib`, `.inc`, `.subckt`) — LTspice ships 2,038 `.lib` + 2,469 `.sub`.

@@ -639,6 +639,17 @@ describe("componentValueFromAttrs", () => {
     expect(componentValueFromAttrs("capacitor", { Value: "1u", SpiceLine: "IC=2" })).toBe("1u IC=2");
   });
 
+  it("keeps only supported passive parasitics from vendor SpiceLine metadata", () => {
+    expect(componentValueFromAttrs("capacitor", {
+      Value: "330µ",
+      SpiceLine: "Irms=1.5 Rser=0.1",
+    })).toBe("330µ Rser=0.1");
+    expect(componentValueFromAttrs("inductor", {
+      Value: "200µ",
+      SpiceLine: "Rser=10m Ipk=15",
+    })).toBe("200µ Rser=10m");
+  });
+
   it("carries op-amp behavioral params from Value2/SpiceLine (class-d Avol)", () => {
     // class-d_starter.asc U1: no Value, only `Value2 Avol=1Meg GBW=10Gig Slew=10Gig`
     // — must survive import so the deck builder can read Avol (rail clamp).

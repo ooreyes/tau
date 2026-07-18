@@ -8,14 +8,65 @@
      `git log --oneline -8`, recover/finish/revert that unit FIRST, then go on.
      ─────────────────────────────────────────────────────────────────────── -->
 ## ⏱ HEARTBEAT
-- **Headline metric:** 1946 reviewed-tree tests green · corpus 82/82 import · 82/82 op-converge · 79/82 warning-clean
-- **Run started (UTC):** 2026-07-18T05:04Z
-- **Synced to origin:** auto/ltspice-parity @ 7fe5362.
-- **Claimed unit:** Isolate native libngspice behind a killable, time-bounded worker and prove complex ASC execution plus cancellation in the packaged app.
+- **Headline metric:** 1948 reviewed-tree tests green · corpus 82/82 import · 82/82 op-converge · 79/82 warning-clean
+- **Run started (UTC):** 2026-07-18T05:48Z
+- **Synced to origin:** auto/ltspice-parity @ 22fd2e5.
+- **Claimed unit:** Preserve LTspice passive `Rser` without crystal misclassification and prove the PowerSim LLC converter builds/runs through the packaged app.
 - **Status:** DONE
-- **Last completed sub-step:** Rebuilt the packaged app and DMG, then proved the exact imported Colpitts schematic is orthogonal/overlap-free and runs its authored 500 µs startup transient with 14,822 native samples and a non-flat 1.97 V p-p drain trace at normal and minimum window sizes.
-- **Plan:** Completed worker containment, complex/cancel stress, authored-transient repair, imported-symbol visual fitting, full gates, corpus, Chrome minimum-size audit, and packaged native UI proof.
-- **Next step:** Fix the PowerSim passive-parasitic import failure (`Rser` on ordinary capacitors/inductors) and rerun the LLC converter end-to-end; comment-preserving ASC edits and the three explicitly unsupported corpus device kinds remain release blockers.
+- **Last completed sub-step:** Rebuilt the app/DMG and ran the imported PowerSim LLC `.tran 0 1m .95m 10n` in packaged Tau: 5,001 samples, 27 nets, 12 supported parts; the former C1 deck error is gone and authored C/L ESR plus bare-K coupling reach ngspice.
+- **Plan:** Completed supported-parasitic extraction, capacitor/inductor ESR expansion, crystal disambiguation, bare-K passthrough, focused/full/corpus gates, rebuild, and packaged native LLC execution.
+- **Next step:** Do not call the reduced LLC result parity: 22 PowerSim behavioral/device symbols remain explicitly unsupported (flat switching nodes prove it). Implement the highest-impact PowerSim symbol family with models and UI import warnings before the next converter claim; preserve drawing/comment primitives for lossless edit/save.
+
+---
+
+## 2026-07-18T05:56Z — auto/ltspice-parity — PowerSim passive ESR + bare-K coupling
+
+### What I did
+- Fixed vendor passive metadata import: `Irms=1.5 Rser=.1` now becomes a valid
+  capacitance plus supported ESR instead of an invalid numeric value; ordinary
+  inductor `Rser` is preserved rather than silently replaced by the 1 mΩ global
+  default. Unsupported rating metadata is intentionally discarded.
+- Expanded authored capacitor and inductor ESR as explicit namespaced series
+  resistors in native decks. The original L instance name remains intact, so
+  mutual-coupling references still bind to the winding.
+- Narrowed BVD crystal detection to the motional `Lser` signature; an ordinary
+  capacitor carrying only `Rser`/`Cpar` no longer becomes a fake crystal.
+- Accepted LTspice's bare coupling element `K Lp Ls 1`. PowerSim LLC used this
+  valid form and Tau had silently discarded it while accepting only `K1`/`Kfoo`.
+- Rebuilt the unsigned app/DMG and reran LLC in packaged Tau. The authored
+  transient completes at 1 ms / 5,001 returned samples; the former `C1 needs a
+  valid F value` is eliminated.
+- Kept the result honest: the UI reports 22 import warnings and only 12 supported
+  parts / 27 nets. `sw1…sw4` remain flat because PowerSim's proprietary behavioral
+  symbol families are not modelled, so this is execution robustness proof, not
+  LLC waveform parity.
+
+### Files
+- `apps/desktop/src/io/ascImport.ts` + tests
+- `apps/desktop/src/engine/spiceNetlist.ts` + tests
+- `apps/desktop/src/engine/crystalSpec.ts` + tests
+- `apps/desktop/src/engine/couplingDirectives.ts` + tests
+- `FEATURE_PARITY.md`, `PROGRESS.md`
+
+### Tests
+- Focused importer/deck/crystal/coupling: 148/148 ✅
+- `pnpm -C apps/desktop typecheck` ✅
+- `pnpm -C apps/desktop test` ✅ (132 files passed / 1 skipped; 1,948 passed / 6 skipped)
+- External corpus with exact LLC + symbol root ✅ (83/83 imported,
+  deck-built, and op-converged; LLC 22 warnings remain explicit)
+- `pnpm --filter @tau/desktop tauri build` ✅ (Tau.app + DMG)
+- Packaged Computer Use import/run/screenshot ✅ (1 ms, 5,001 samples)
+
+### Parity items
+- §3 passive Rser: native C/L import and ngspice translation landed.
+- §3 coupled inductors: bare LTspice `K` designator landed.
+- PowerSim LLC: deck/run blocker fixed; device-model parity remains blocked.
+
+### Next step
+Model the highest-impact skipped PowerSim behavioral symbols rather than hiding
+them behind placeholders, then rerun converter switching waveforms. Separately,
+preserve ASC comments/drawing primitives so a hand-edited import can save without
+loss or a blocking warning.
 
 ---
 

@@ -157,6 +157,26 @@ describe("buildSpiceDeck", () => {
     expect(deck.netlist).toMatch(/^RTAU_C1_ESR\s+tau_c1_esr\s+0\s+0\.001$/m);
   });
 
+  it("expands LTspice inductor Rser without changing the coupled inductor name", () => {
+    const components = [
+      component("vsource", "V1", "5", 0, 32),
+      component("inductor", "Lp", "200u Rser=10m", 96, 0),
+      component("resistor", "R1", "1k", 224, 0),
+      component("ground", "", "", 0, 64),
+      component("ground", "", "", 256, 0),
+    ];
+    const wires = [
+      wire("w1", [{ x: 0, y: 0 }, { x: 64, y: 0 }]),
+      wire("w2", [{ x: 128, y: 0 }, { x: 192, y: 0 }]),
+    ];
+    const deck = buildSpiceDeck({ components, wires, directives: ["K Lp Ls 1"] }, { kind: "tran", stopTime: 1e-3, steps: 100 });
+    const inductorLine = deck.netlist.split("\n").find((line) => line.startsWith("Lp "))!;
+    expect(inductorLine.split(/\s+/).slice(0, 3)).toEqual(["Lp", "n001", "tau_lp_esr"]);
+    expect(Number(inductorLine.split(/\s+/)[3])).toBeCloseTo(200e-6);
+    expect(deck.netlist).toMatch(/^RTAU_Lp_ESR\s+tau_lp_esr\s+\S+\s+0\.01$/m);
+    expect(deck.netlist).toContain("K Lp Ls 1");
+  });
+
   it("does not add uic when no instance carries an IC", () => {
     const components = [
       component("capacitor", "C1", "100p", 0, 0),

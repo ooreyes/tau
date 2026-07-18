@@ -292,7 +292,7 @@ function componentLines(entry: ExtractedComponent, index: number, userModels: Se
       // instead of choking positiveNumberFromText on the param-laden value.
       const crystal = parseCrystal(component.value);
       if (crystal) return crystalDeckLines(name, node("a"), node("b"), crystal);
-      const series = capacitorSeriesResistance(component);
+      const series = passiveSeriesResistance(component);
       const capacitance = positiveNumberFromText(component, stripIcSpec(series.value), "F");
       if (series.ohms === null || series.ohms === 0) {
         return [`${name} ${node("a")} ${node("b")} ${capacitance}${icSpecDeckText(component.value)}`];
@@ -309,7 +309,16 @@ function componentLines(entry: ExtractedComponent, index: number, userModels: Se
       // deck builds and runs (engine/coreInductor.ts).
       const core = coreInductance(component.value);
       if (core !== null) return [`${name} ${node("a")} ${node("b")} ${core}`];
-      return [`${name} ${node("a")} ${node("b")} ${positiveNumberFromText(component, stripIcSpec(component.value), "H")}${icSpecDeckText(component.value)}`];
+      const series = passiveSeriesResistance(component);
+      const inductance = positiveNumberFromText(component, stripIcSpec(series.value), "H");
+      if (series.ohms === null || series.ohms === 0) {
+        return [`${name} ${node("a")} ${node("b")} ${inductance}${icSpecDeckText(component.value)}`];
+      }
+      const internal = `tau_${safeName(name).toLowerCase()}_esr`;
+      return [
+        `${name} ${node("a")} ${internal} ${inductance}${icSpecDeckText(component.value)}`,
+        `RTAU_${safeName(name)}_ESR ${internal} ${node("b")} ${series.ohms}`,
+      ];
     }
     case "vsource": {
       // LTspice carries SINE/PULSE/PWL/EXP/SFFM inline on the source value, plus
@@ -772,10 +781,10 @@ function positiveNumberFromText(component: SchematicComponent, text: string, uni
   return value.toString();
 }
 
-/** LTspice's capacitor `Rser=` is a real series parasitic, but ngspice's C
- * primitive does not accept that instance parameter. Remove it from the value
- * token and let componentLines expand an explicit internal-node resistor. */
-function capacitorSeriesResistance(component: SchematicComponent): { value: string; ohms: number | null } {
+/** LTspice's passive `Rser=` is a real series parasitic, but ngspice's C/L
+ * primitives do not accept that per-instance parameter. Remove it from the
+ * value token and let componentLines expand an explicit internal resistor. */
+function passiveSeriesResistance(component: SchematicComponent): { value: string; ohms: number | null } {
   const match = /(?:^|\s)Rser\s*=\s*([^\s]+)/i.exec(component.value);
   if (!match) return { value: component.value, ohms: null };
   let ohms: number;

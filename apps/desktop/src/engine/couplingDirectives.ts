@@ -27,9 +27,10 @@
 
 import { substituteBraces, EMPTY_SCOPE, type ParamScope } from "../simulation/paramScope";
 
-/** A directive is a K coupling line when its first token is `K` + a name. */
+/** A directive is a K coupling line when its first token is `K` plus an
+ * optional instance suffix. LTspice also accepts the bare designator `K`. */
 function isCouplingLine(line: string): boolean {
-  return /^k\w+\s+\S/i.test(line.trim());
+  return /^k\w*\s+\S/i.test(line.trim());
 }
 
 /**

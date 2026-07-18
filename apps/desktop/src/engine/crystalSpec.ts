@@ -26,7 +26,7 @@ export interface CrystalSpec {
 
 /**
  * Parse an LTspice crystal value string. Returns `null` for a plain capacitor
- * (no `Lser`/`Cpar` tokens), so only genuine crystals get expanded — an
+ * (no `Lser` token), so only genuine crystals get expanded — an
  * ordinary C keeps its single-line emission. A crystal with a malformed/absent
  * numeric field falls back to physically inert defaults (Rser 0, Cpar 0) rather
  * than throwing, matching the placeholder-tolerant spirit of import.
@@ -34,9 +34,9 @@ export interface CrystalSpec {
 export function parseCrystal(value: string): CrystalSpec | null {
   const text = value.trim();
   if (text === "") return null;
-  // Crystal signature: a motional inductance and/or parallel capacitance. A
-  // bare `C` value never carries these, so their presence disambiguates.
-  if (!/\b(lser|cpar)\s*=/i.test(text)) return null;
+  // Crystal signature: a motional inductance. Ordinary capacitors can also
+  // carry Cpar/Rser vendor parasitics, so neither is sufficient on its own.
+  if (!/\blser\s*=/i.test(text)) return null;
 
   const tokens = text.split(/\s+/);
   // The leading bareword (no `=`) is Cser, the motional capacitance.

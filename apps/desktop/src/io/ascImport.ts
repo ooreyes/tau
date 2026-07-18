@@ -1016,20 +1016,19 @@ export function componentValueFromAttrs(
         .filter((s): s is string => !!s && !/^rser\b/i.test(s));
       return [base, ...extras].join(" ").trim();
     }
-    // Crystal (xtal) is imported as a capacitor whose SpiceLine carries the
-    // piezoelectric resonator params Rser/Lser/Cpar. ngspice's `C` device can't
-    // take these, so the value keeps them verbatim and the deck builder detects
-    // the crystal signature and expands the 4-element BVD model (crystalSpec.ts).
-    if (kind === "capacitor") {
-      const spiceLine = attrs.SpiceLine?.trim() ?? "";
-      if (/\b(rser|lser|cpar)\s*=/i.test(spiceLine)) {
-        return [base, spiceLine].filter(Boolean).join(" ");
-      }
-    }
     const ic = [attrs.Value2, attrs.SpiceLine, attrs.SpiceLine2]
       .map((s) => parseIcValue(s ?? ""))
       .find((v): v is string => v !== null);
-    return ic !== undefined ? `${base} IC=${ic}`.trim() : base;
+    // Retain only parasitics Tau actually translates. Vendor metadata often
+    // shares SpiceLine (`Irms=1.5 Rser=.1`); copying it wholesale makes the
+    // capacitance/inductance token unparsable. Lser identifies Misc\xtal and
+    // its BVD expansion; ordinary C/L Rser is expanded explicitly by the deck.
+    const parasitics = [...(attrs.SpiceLine ?? "").matchAll(/\b(Rser|Lser|Cpar)\s*=\s*([^\s]+)/gi)]
+      .filter((match) => kind === "capacitor" || match[1].toLowerCase() === "rser")
+      .map((match) => `${match[1]}=${match[2]}`);
+    return [base, ...parasitics, ...(ic !== undefined ? [`IC=${ic}`] : [])]
+      .filter(Boolean)
+      .join(" ");
   }
   return base;
 }

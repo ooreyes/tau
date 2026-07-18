@@ -19,9 +19,9 @@ describe("parseCrystal", () => {
     });
   });
 
-  it("triggers on Lser or Cpar alone and is order-independent", () => {
+  it("requires the motional Lser signature and is order-independent", () => {
     expect(parseCrystal("1p Lser=1m")).not.toBeNull();
-    expect(parseCrystal("1p Cpar=3p")).not.toBeNull();
+    expect(parseCrystal("1p Cpar=3p")).toBeNull();
     const a = parseCrystal("2p Cpar=4p Lser=2m Rser=5");
     expect(a).toEqual({ cser: 2e-12, lser: 2e-3, rser: 5, cpar: 4e-12 });
   });
