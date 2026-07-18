@@ -14,8 +14,20 @@
 **Repo:** `auto/ltspice-parity` · **Audit date:** 2026-07-17 · **Auditor:** interactive session (Fable 5) + two background subagents (fuzz + sim cross-check).
 
 ## Baseline (green at audit time)
-- `pnpm -C apps/desktop typecheck` — clean. (Re-confirmed clean, pass 2.)
-- `pnpm -C apps/desktop test` — **1939 passed / 6 skipped** (133 files).
+- `pnpm -C apps/desktop typecheck` — clean. (Re-confirmed clean 2026-07-18.)
+- `pnpm -C apps/desktop test` — **1939 passed / 6 skipped** (133 files) when the
+  machine is not otherwise loaded. **Flakiness note (2026-07-18):** running the
+  full suite concurrently with a `cargo build` produced 9 spurious failures, all
+  in `src/App.workspace.test.tsx`, all `renderOpenProject()` hitting vitest's
+  5 000 ms `testTimeout`. Run in isolation the file is green (13/13 on the 2nd
+  run; 1st cold run occasionally times out only its first test). This is a
+  test-harness timeout sensitivity under CPU contention, **not** a product
+  regression — `renderOpenProject()` routinely renders close to the 5 s budget.
+  Consider raising that file's `testTimeout` or reducing its per-test render cost
+  for CI stability.
+- Native ngspice worker (BUG-8 fix) exercised directly this pass via
+  `tau --tau-spice-worker` with a staged Homebrew `libngspice.dylib`: good RC
+  step, `.four`, stiff/singular, and recursive-`.func` (SIGSEGV, contained) decks.
 - Rust release fmt/clippy/tests — **25 passed / 1 ignored**; the ignored real
   ngspice integration also passed when explicitly enabled.
 - Host disk exhaustion was recovered by removing only regenerable Rust target
@@ -85,17 +97,43 @@
 - **Fix:** period now comes from same-direction crossings; 10/20/40/60/80/90%
   duty regressions pass with unbiased frequency and periodic classification.
 
-### BUG-8 — In-process libngspice has no hard timeout or crash isolation — **OPEN**
-- **Severity:** High for hostile/arbitrary decks.
-- **Where:** `src-tauri/src/spice.rs`; all native runs hold one mutex while C
-  executes inside Tau's process.
-- **Evidence:** cancellation currently invalidates late UI results but cannot
-  interrupt the FFI call. A deliberately hostile standalone ngspice deck also
-  reproduced a macOS `SIGABRT` in `ft_cktcoms`; the same engine family is loaded
-  in-process. Input/line/result/message caps reduce exposure but cannot contain
-  native infinite work, memory corruption, or aborts.
-- **Required fix:** run ngspice in a killable worker/subprocess with wall-clock
-  and memory limits; treat worker exit as a structured simulation failure.
+### BUG-8 — In-process libngspice had no hard timeout or crash isolation — **FIXED 2026-07-18 (commit 7fe5362), one residual (see BUG-11)**
+- **Severity (original):** High for hostile/arbitrary decks.
+- **Where:** `src-tauri/src/spice.rs`.
+- **Fix landed 2026-07-18 (`7fe5362`, "isolate native ngspice execution worker").**
+  `simulate_spice` now spawns a disposable child process (`tau --tau-spice-worker`,
+  dispatched from `main.rs` before Tauri starts). Every native run happens in that
+  child; libngspice is no longer loaded in Tau's UI process. IPC is bounded
+  (`MAX_WORKER_INPUT_BYTES`, `MAX_WORKER_OUTPUT_BYTES=256 MiB`,
+  `MAX_WORKER_STDERR_BYTES=64 KiB`, drained with `read_bounded` so a full pipe
+  can't deadlock); a `WORKER_TIMEOUT` of 120 s and a cooperative `AtomicBool`
+  cancellation (`cancel_spice`, wired to the Stop button) both terminate the
+  child via `child.kill()`; a non-zero/`signal` exit is turned into a structured
+  `Err`. A single-flight guard rejects a second concurrent native run.
+- **Re-verification this pass (2026-07-18):**
+  1. **Crash containment CONFIRMED.** A recursive `.func` deck (`.func f(x)={f(x)+1}`)
+     drives libngspice into a `SIGSEGV`: `tau --tau-spice-worker < rec-func.json`
+     exits `139` (128+11) with empty stdout. In the old in-process model this
+     would have taken down Tau; now it is a dead child and the parent returns
+     `"…worker crashed or exited with signal: 11 (SIGSEGV)"`. (This exact deck is
+     *not* reachable through Tau's own deck builder — only model/lib/subckt lines
+     are forwarded to native, and Tau's TS expression evaluator caps `.func`
+     recursion at depth 64 — but it is a clean, reproducible native crash proving
+     the isolation works.)
+  2. **Engine-unrecoverable state contained CONFIRMED.** A `.tran 50n 500m`
+     (~1e7 points × ~40 vectors) trips ngspice's own output-memory guard:
+     `Error: memory required … is more than memory available! … ngspice.dll cannot
+     recover and awaits to be reset or detached`. In the old persistent-engine
+     design that state poisoned every later run until app restart; the
+     fresh-process-per-run worker discards it and the *next* run is clean.
+  3. **Memory:** there is still **no explicit RSS/`setrlimit` cap** on the worker
+     (only the 120 s wall clock). In practice ngspice's own output-memory
+     pre-check plus Tau's 512 KiB / 30 000-line deck caps bound the realistic
+     blow-up, so this residual is Low rather than High — but a solver working-set
+     explosion within 120 s is not hard-limited. Worth a `setrlimit(RLIMIT_AS)`
+     in the worker for defence in depth.
+- **New side effect introduced by the fix:** see **BUG-11** (the worker's XSPICE
+  code-model `TempDir` leaks on every SIGKILL/crash exit).
 
 ### BUG-9 — Ad-hoc hardened runtime rejects bundled libngspice — **FIXED 2026-07-17**
 - **Repro:** fresh mounted DMG launched, but `led.asc` failed at `dlopen` because
@@ -112,6 +150,18 @@
 - **Fix:** copy the sealed fixed module set into a private `TempDir` with a
   no-whitespace path for the engine lifetime. The mounted two-DFF circuit then
   completed 575 samples and the real-ngspice register regression passed.
+
+### BUG-11 — Native worker leaks its XSPICE code-model temp dir on every Stop/timeout/crash — CONFIRMED
+- **Severity:** Low (bounded, reachable in normal use; a `/tmp` accumulation, not a correctness or security hole).
+- **Where:** `apps/desktop/src-tauri/src/spice.rs` — `SpiceEngine::load_bundled_codemodels` (~lines 320–354) stages the bundled `.cm` modules into a `tempfile::TempDir` created with `tempdir_in("/tmp")` and held in `SpiceEngine._codemodel_cache`. Cleanup relies solely on `TempDir`'s `Drop`. The worker-process design (BUG-8 fix) terminates that process with `child.kill()` (SIGKILL) on **cancellation** (`run_spice_worker_process`, the `cancellation.load(...)` branch — wired to the Stop button via `cancel_spice`) and on the **120 s timeout** (`started.elapsed() >= timeout` branch), and a hostile/pathological deck can make it die by signal. SIGKILL and fatal signals do **not** run destructors, so the staged directory is never removed.
+- **Problem / Impact:** every time a user clicks **Stop** while a native ngspice run is in flight, or a native run exceeds the 120 s cap, or the worker crashes, a `/tmp/tau-ngspice-XXXXXX` directory holding the 7 copied XSPICE modules (~692 KiB: `analog.cm`, `digital.cm`, `spice2poly.cm`, `table.cm`, `tlines.cm`, `xtradev.cm`, `xtraevt.cm`) is left behind. Repeated stops/timeouts accumulate in `/tmp` until the OS's periodic cleanup (macOS: files untouched for 3 days) or a reboot reclaims them. A normal completed run does **not** leak (Drop runs on clean exit).
+- **Repro (built worker, Homebrew libngspice):**
+  - Baseline `ls -d /tmp/tau-ngspice-* | wc -l`.
+  - Clean run: `tau --tau-spice-worker < good.json` → count unchanged (Drop cleans).
+  - Crash: `tau --tau-spice-worker < rec-func.json` (recursive `.func` → SIGSEGV, exit 139) three times → count rises by exactly **+3**.
+  - Cancellation/timeout equivalent: start `tau --tau-spice-worker < mod.json` (`.tran 100n 200m`), `sleep 2`, then `kill -9 <worker-pid>` (what the parent's `child.kill()` does) → count rises by exactly **+1**. Contents: 7 `.cm` files, ~692 KiB.
+- **Mitigation already present:** none in Tau. Only the OS's 3-day `/tmp` cleanup / reboot bounds it. Because the directory holds only sealed read-only module copies (no user or secret data), the leak is a disk-hygiene issue, not an information-exposure one.
+- **Suggested fix (do not apply):** don't rely on `Drop` for a resource that can be SIGKILLed — either (a) have the *parent* stage the code-model dir once, reuse it across worker invocations, and clean it on app shutdown; or (b) on startup sweep stale `tau-ngspice-*` dirs under the temp root; or (c) since the modules are identical every run, stage them once into a stable per-user cache dir (e.g. under `TMPDIR`/app-cache) instead of a fresh randomized dir per run, so at most one directory ever exists. Note the current `tempdir_in("/tmp")` also ignores `TMPDIR`; combining (c) with the per-user temp base would also stop cluttering the shared `/tmp`.
 
 ---
 
@@ -130,6 +180,7 @@
 - **Path safety (Rust `project_fs.rs`):** create/move/rename are confined to the authorized project root; symlink sources rejected; descendant-move and overwrite rejected; scope must be pre-authorized by the folder picker. Well tested.
 - **Local AI (`local_ai.rs`):** loopback-only (`127.0.0.1:8080`), origin allowlist has no `*`, pinned `uv` download with fixed URL + sha256, fixed `mlx-lm` install args (no renderer-supplied package/index/shell). Credentials live in the OS keychain (`credentials.rs`), never web storage.
 - **`.subckt` recursion:** real hierarchy flattening (`resolveSubcircuit`) terminates via a by-name cycle guard + `MAX_SUBCIRCUIT_DEPTH=16`. `recursive-subckt.asc`'s self-reference is inert (encoded as opaque TEXT directives, not interpreted as hierarchy).
+- **TS expression evaluator is recursion-safe.** `evalNode` (`simulation/expr.ts:401-402`) hard-caps at `depth > 64` ("Expression recursion too deep (cyclic .func?)"), so a recursive/cyclic `.func` (e.g. `.func f(x)={f(x)+1}`) throws cleanly in `buildParamScope`/component-value resolution rather than blowing the JS stack. It is also never forwarded to the native deck (only `model`/`lib`/`inc`/`include`/`subckt` keyword lines are emitted by `modelLibLinesFromDirectives`; `.func`/`.param` are resolved and substituted in TS), so the native recursive-`.func` SIGSEGV is not reachable from a Tau schematic.
 - **`traceStatistics` (measurementModel.ts) is genuinely trapezoidal.** On a 1 kHz sine with seeded-random non-uniform time steps, RMS is within 0.006% of A/√2; with samples deliberately clustered near the peaks (worst case for naive sample averaging), still within 0.09%. AVG/RMS on 50%- and 20%-duty squares match analytic values. The §11 plot statistics themselves are sound — BUG-7 is purely the classifier.
 
 ---
@@ -142,16 +193,20 @@
 
 ---
 
-## DMG readiness verdict (audit date 2026-07-17, updated pass 2)
-**Not yet a complete LTspice replacement; substantially hardened but still
-incomplete.** BUG-1/4/7 and both packaged execution failures are fixed, and
-corrupt round-trips remain blocked rather than silently written. Remaining
-release gaps are BUG-2/3 guarded ASC saves, BUG-5 preview initial-condition
-semantics, F-1/F-2 input validation, and especially BUG-8 native isolation.
-Do not claim arbitrary hostile-deck crash safety until libngspice is out of
-process with enforceable resource limits.
+## DMG readiness verdict (audit date 2026-07-18, updated pass 3)
+**Not yet a complete LTspice replacement; substantially hardened.** BUG-1/4/7,
+both packaged execution failures, **and now BUG-8 native isolation** are fixed:
+libngspice runs in a disposable child process with bounded IPC, a 120 s wall
+clock, and Stop-button cancellation, and a native `SIGSEGV`/`SIGABRT` or the
+"engine cannot recover" state is now contained (re-verified this pass). Corrupt
+round-trips remain blocked rather than silently written. Remaining release gaps:
+BUG-2/3 guarded ASC saves, BUG-5 preview initial-condition semantics, F-1/F-2
+input validation, and two smaller worker residuals — no hard memory cap on the
+worker (BUG-8 residual; ngspice's own output-memory guard mitigates) and the
+`/tmp/tau-ngspice-*` code-model leak on Stop/timeout/crash (BUG-11, Low).
 
 ---
 
 ## Audit passes log
+- **2026-07-18** — Native-execution isolation & resource pass on `auto/ltspice-parity` @ `90a9287`. Focus: the new ngspice worker (`7fe5362`). **Re-verified BUG-8 as FIXED** — spawned the real `tau --tau-spice-worker` (Homebrew `libngspice.dylib` staged into the gitignored resource path) and confirmed a native `SIGSEGV` (recursive `.func`, exit 139) and ngspice's "cannot recover" output-memory state are both contained by the disposable child + structured-error path; noted the remaining no-memory-cap residual. **Found BUG-11 (CONFIRMED, Low):** the worker's XSPICE code-model `TempDir` (`tempdir_in("/tmp")`) leaks ~692 KiB on every SIGKILL (Stop button / 120 s timeout) or crash exit because `Drop` doesn't run on signal death — reproduced deterministically (+1 per SIGKILL, +3 over 3 crashes; clean runs don't leak). Added verified-correct note (TS `evalNode` depth-64 recursion guard; `.func` not forwarded to native). Baseline re-run: typecheck clean; vitest green in isolation but flaky under CPU contention (9 `App.workspace.test.tsx` timeouts) — logged as harness timeout sensitivity, not a regression. Scratch harnesses in `/tmp/tau-audit` (outside the clone); leaked scratch temp dirs cleaned. **Next area:** AC/DC/TF native-vs-ngspice numeric parity, and F-1/F-2 `.asc` Open-path validation.
 - **2026-07-17** — Full reliability/perf/security pass on `auto/ltspice-parity`. Found BUG-1…BUG-6 + F-1/F-2; fixed BUG-1 in working copy. Baselines and benchmarks above. Audit tooling preserved in `scratchpad/audit-artifacts/` (stress harness, round-trip checker, fuzz suite, sim cross-check).
