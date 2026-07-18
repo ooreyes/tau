@@ -41,18 +41,18 @@ export function isNativeSpiceRuntime(): boolean {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 }
 
+/** Requests termination of the currently isolated native worker, if any. */
+export async function cancelNativeSpice(): Promise<boolean> {
+  if (!isNativeSpiceRuntime()) return false;
+  return invoke<boolean>("cancel_spice");
+}
+
 /**
  * Runs a transient analysis via ngspice through Tauri's `invoke` IPC — a
- * single request/response round trip to a Rust-spawned ngspice subprocess,
- * not a streamed/cancellable call. Unlike `runTransientAnalysis` (the web TS
- * solver, Fix 3), this has no progress channel and no abort path: `invoke`
- * doesn't support incremental callbacks, and there is no supported way to
- * interrupt an in-flight ngspice subprocess from here without risking a
- * corrupted/partial write on its side — so this deliberately does NOT
- * attempt to kill the process on Stop. App.tsx's `executeTransient` reflects
- * this by leaving `runProgress` at `null` (indeterminate bar) for the whole
- * call, and a Stop click while this is in flight just lets the eventual
- * result arrive and get discarded as stale (see `transientAbortRef` there).
+ * single request/response round trip to a Rust-spawned ngspice worker. The
+ * worker has bounded IPC, a hard timeout, and can be terminated through
+ * `cancelNativeSpice`; progress stays indeterminate because ngspice does not
+ * expose a stable per-analysis completion fraction.
  */
 export async function runNativeTransient(
   schematic: Schematic,

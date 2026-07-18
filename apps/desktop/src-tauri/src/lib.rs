@@ -28,8 +28,13 @@ pub fn run() {
             project_fs::create_project_directory,
             project_fs::create_project_text_file_exclusive,
             project_fs::move_project_entry,
-            spice::simulate_spice
+            spice::simulate_spice,
+            spice::cancel_spice
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+pub fn maybe_run_spice_worker() -> bool {
+    spice::maybe_run_spice_worker()
 }

@@ -5,6 +5,7 @@ const { invoke } = vi.hoisted(() => ({ invoke: vi.fn() }));
 vi.mock("@tauri-apps/api/core", () => ({ invoke }));
 
 import {
+  cancelNativeSpice,
   isNativeSpiceRuntime,
   runNativeAcSweep,
   runNativeOperatingPoint,
@@ -69,6 +70,16 @@ describe("native ngspice adapter", () => {
 
     await expect(runNativeTransient(rcSchematic(), { stopTime: 0.002, steps: 200 })).resolves.toBeNull();
     expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it("cancels only through the native worker runtime", async () => {
+    await expect(cancelNativeSpice()).resolves.toBe(false);
+    expect(invoke).not.toHaveBeenCalled();
+
+    enableNativeRuntime();
+    invoke.mockResolvedValueOnce(true);
+    await expect(cancelNativeSpice()).resolves.toBe(true);
+    expect(invoke).toHaveBeenCalledWith("cancel_spice");
   });
 
   it("sends a generated transient deck and converts node vectors into plotted traces", async () => {

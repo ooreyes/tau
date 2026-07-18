@@ -1,8 +1,15 @@
 use std::{
     ffi::{c_char, c_int, c_void, CStr, CString},
+    io::{Read, Write},
     path::PathBuf,
+    process::{Command, Stdio},
     ptr, slice,
-    sync::Mutex,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc, Mutex,
+    },
+    thread,
+    time::{Duration, Instant},
 };
 
 #[cfg(debug_assertions)]
@@ -19,6 +26,13 @@ const MAX_NETLIST_BYTES: usize = 512 * 1024;
 const MAX_DECK_LINES: usize = 30_000;
 const MAX_ENGINE_MESSAGES: usize = 256;
 const MAX_ENGINE_MESSAGE_BYTES: usize = 2 * 1024;
+const MAX_WORKER_INPUT_BYTES: usize = MAX_NETLIST_BYTES + 64 * 1024;
+const MAX_WORKER_OUTPUT_BYTES: usize = 256 * 1024 * 1024;
+const MAX_WORKER_STDERR_BYTES: usize = 64 * 1024;
+const WORKER_TIMEOUT: Duration = Duration::from_secs(120);
+const WORKER_POLL_INTERVAL: Duration = Duration::from_millis(20);
+const WORKER_ARG: &str = "--tau-spice-worker";
+const WORKER_RESPONSE_MARKER: &[u8] = b"TAU_SPICE_RESPONSE_V1:";
 
 type SendChar = unsafe extern "C" fn(*mut c_char, c_int, *mut c_void) -> c_int;
 type SendStat = unsafe extern "C" fn(*mut c_char, c_int, *mut c_void) -> c_int;
@@ -141,14 +155,14 @@ unsafe extern "C" fn on_bg_thread(_running: bool, _ident: c_int, _user_data: *mu
     0
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SpiceRequest {
     /// A complete, newline-separated SPICE deck with an analysis card and `.end`.
     pub netlist: String,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SpiceVector {
     pub name: String,
@@ -156,7 +170,7 @@ pub struct SpiceVector {
     pub imaginary: Option<Vec<f64>>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SpiceResult {
     pub plot: String,
@@ -165,11 +179,29 @@ pub struct SpiceResult {
     pub library_path: String,
 }
 
-pub struct NativeSpiceState(Mutex<Option<SpiceEngine>>);
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct WorkerRequest {
+    request: SpiceRequest,
+    library_candidates: Vec<PathBuf>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct WorkerResponse {
+    result: Option<SpiceResult>,
+    error: Option<String>,
+}
+
+pub struct NativeSpiceState {
+    active_cancellation: Arc<Mutex<Option<Arc<AtomicBool>>>>,
+}
 
 impl Default for NativeSpiceState {
     fn default() -> Self {
-        Self(Mutex::new(None))
+        Self {
+            active_cancellation: Arc::new(Mutex::new(None)),
+        }
     }
 }
 
@@ -482,22 +514,251 @@ impl SpiceEngine {
 }
 
 #[tauri::command]
-pub fn simulate_spice(
+pub async fn simulate_spice(
     app: AppHandle,
     state: State<'_, NativeSpiceState>,
     request: SpiceRequest,
 ) -> Result<SpiceResult, String> {
-    let mut engine = state
-        .0
-        .lock()
-        .map_err(|_| "ngspice engine lock was poisoned.".to_string())?;
-    if engine.is_none() {
-        *engine = Some(SpiceEngine::load(library_candidates(&app))?);
+    // Reject malformed or oversized input before starting another process.
+    // The worker repeats this check before libngspice sees the deck.
+    deck_lines(&request.netlist)?;
+
+    let cancellation = Arc::new(AtomicBool::new(false));
+    let active_cancellation = Arc::clone(&state.active_cancellation);
+    {
+        let mut active = active_cancellation
+            .lock()
+            .map_err(|_| "ngspice worker lock was poisoned.".to_string())?;
+        if active.is_some() {
+            return Err("Another native ngspice analysis is already running.".to_string());
+        }
+        *active = Some(Arc::clone(&cancellation));
     }
-    engine
-        .as_mut()
-        .expect("engine initialized above")
-        .run(request)
+
+    let worker_request = WorkerRequest {
+        request,
+        library_candidates: library_candidates(&app),
+    };
+    let task_result = tauri::async_runtime::spawn_blocking(move || {
+        run_spice_worker_process(worker_request, cancellation, WORKER_TIMEOUT)
+    })
+    .await;
+
+    if let Ok(mut active) = active_cancellation.lock() {
+        *active = None;
+    }
+    task_result.map_err(|error| format!("Tau's ngspice worker task failed: {error}"))?
+}
+
+#[tauri::command]
+pub fn cancel_spice(state: State<'_, NativeSpiceState>) -> Result<bool, String> {
+    let active = state
+        .active_cancellation
+        .lock()
+        .map_err(|_| "ngspice worker lock was poisoned.".to_string())?;
+    if let Some(cancellation) = active.as_ref() {
+        cancellation.store(true, Ordering::Release);
+        Ok(true)
+    } else {
+        Ok(false)
+    }
+}
+
+/** Runs before Tauri starts. A libngspice crash or non-converging solve is
+ * therefore confined to this disposable process instead of Tau's UI process. */
+pub fn maybe_run_spice_worker() -> bool {
+    if std::env::args_os().nth(1).as_deref() != Some(std::ffi::OsStr::new(WORKER_ARG)) {
+        return false;
+    }
+
+    let response = match read_worker_request() {
+        Ok(worker) => match SpiceEngine::load(worker.library_candidates)
+            .and_then(|mut engine| engine.run(worker.request))
+        {
+            Ok(result) => WorkerResponse {
+                result: Some(result),
+                error: None,
+            },
+            Err(error) => WorkerResponse {
+                result: None,
+                error: Some(error),
+            },
+        },
+        Err(error) => WorkerResponse {
+            result: None,
+            error: Some(error),
+        },
+    };
+
+    let encoded = serde_json::to_vec(&response).unwrap_or_else(|error| {
+        format!(r#"{{"result":null,"error":"Could not encode worker response: {error}"}}"#)
+            .into_bytes()
+    });
+    let mut stdout = std::io::stdout().lock();
+    let _ = stdout.write_all(WORKER_RESPONSE_MARKER);
+    let _ = stdout.write_all(&encoded);
+    let _ = stdout.flush();
+    true
+}
+
+fn read_worker_request() -> Result<WorkerRequest, String> {
+    let mut input = Vec::new();
+    std::io::stdin()
+        .lock()
+        .take((MAX_WORKER_INPUT_BYTES + 1) as u64)
+        .read_to_end(&mut input)
+        .map_err(|error| format!("Could not read Tau's ngspice worker request: {error}"))?;
+    if input.len() > MAX_WORKER_INPUT_BYTES {
+        return Err("Tau's ngspice worker request exceeded its input limit.".to_string());
+    }
+    let worker: WorkerRequest = serde_json::from_slice(&input)
+        .map_err(|error| format!("Tau's ngspice worker request was invalid: {error}"))?;
+    deck_lines(&worker.request.netlist)?;
+    Ok(worker)
+}
+
+fn run_spice_worker_process(
+    request: WorkerRequest,
+    cancellation: Arc<AtomicBool>,
+    timeout: Duration,
+) -> Result<SpiceResult, String> {
+    let executable = std::env::current_exe()
+        .map_err(|error| format!("Could not locate Tau's ngspice worker executable: {error}"))?;
+    let mut child = Command::new(executable)
+        .arg(WORKER_ARG)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|error| format!("Could not start Tau's isolated ngspice worker: {error}"))?;
+
+    let encoded = serde_json::to_vec(&request)
+        .map_err(|error| format!("Could not encode Tau's ngspice worker request: {error}"))?;
+    if encoded.len() > MAX_WORKER_INPUT_BYTES {
+        let _ = child.kill();
+        let _ = child.wait();
+        return Err("Tau's ngspice worker request exceeded its input limit.".to_string());
+    }
+    let mut stdin = child
+        .stdin
+        .take()
+        .ok_or_else(|| "Tau's ngspice worker stdin was unavailable.".to_string())?;
+    stdin.write_all(&encoded).map_err(|error| {
+        let _ = child.kill();
+        let _ = child.wait();
+        format!("Could not send the circuit to Tau's ngspice worker: {error}")
+    })?;
+    drop(stdin);
+
+    let stdout = child
+        .stdout
+        .take()
+        .ok_or_else(|| "Tau's ngspice worker stdout was unavailable.".to_string())?;
+    let stderr = child
+        .stderr
+        .take()
+        .ok_or_else(|| "Tau's ngspice worker stderr was unavailable.".to_string())?;
+    let stdout_reader = thread::spawn(move || read_bounded(stdout, MAX_WORKER_OUTPUT_BYTES));
+    let stderr_reader = thread::spawn(move || read_bounded(stderr, MAX_WORKER_STDERR_BYTES));
+
+    let started = Instant::now();
+    let (status, stop_reason) = loop {
+        if cancellation.load(Ordering::Acquire) {
+            let _ = child.kill();
+            break (child.wait().ok(), Some("Simulation cancelled.".to_string()));
+        }
+        if started.elapsed() >= timeout {
+            let _ = child.kill();
+            break (
+                child.wait().ok(),
+                Some(format!(
+                    "ngspice exceeded Tau's {}-second execution limit and was stopped.",
+                    timeout.as_secs()
+                )),
+            );
+        }
+        match child.try_wait() {
+            Ok(Some(status)) => break (Some(status), None),
+            Ok(None) => thread::sleep(WORKER_POLL_INTERVAL),
+            Err(error) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                break (
+                    None,
+                    Some(format!("Could not monitor Tau's ngspice worker: {error}")),
+                );
+            }
+        }
+    };
+
+    let (stdout, stdout_overflow) = stdout_reader
+        .join()
+        .map_err(|_| "Tau's ngspice worker stdout reader crashed.".to_string())??;
+    let (stderr, _) = stderr_reader
+        .join()
+        .map_err(|_| "Tau's ngspice worker stderr reader crashed.".to_string())??;
+    let stderr = String::from_utf8_lossy(&stderr).trim().to_string();
+    if let Some(reason) = stop_reason {
+        return Err(if stderr.is_empty() {
+            reason
+        } else {
+            format!("{reason} Worker diagnostics: {stderr}")
+        });
+    }
+    if stdout_overflow {
+        return Err("ngspice produced more data than Tau's worker transfer limit. Reduce output resolution or circuit size.".to_string());
+    }
+    let status =
+        status.ok_or_else(|| "Tau's ngspice worker ended without a status.".to_string())?;
+    if !status.success() {
+        return Err(format!(
+            "Tau's isolated ngspice worker crashed or exited with {status}.{}",
+            if stderr.is_empty() {
+                String::new()
+            } else {
+                format!(" Worker diagnostics: {stderr}")
+            }
+        ));
+    }
+    let marker = stdout
+        .windows(WORKER_RESPONSE_MARKER.len())
+        .rposition(|window| window == WORKER_RESPONSE_MARKER)
+        .ok_or_else(|| {
+            format!(
+                "Tau's ngspice worker returned no structured response.{}",
+                if stderr.is_empty() {
+                    String::new()
+                } else {
+                    format!(" Worker diagnostics: {stderr}")
+                }
+            )
+        })?;
+    let payload = &stdout[marker + WORKER_RESPONSE_MARKER.len()..];
+    let response: WorkerResponse = serde_json::from_slice(payload)
+        .map_err(|error| format!("Tau's ngspice worker returned invalid data: {error}"))?;
+    match (response.result, response.error) {
+        (Some(result), None) => Ok(result),
+        (None, Some(error)) => Err(error),
+        _ => Err("Tau's ngspice worker returned an inconsistent response.".to_string()),
+    }
+}
+
+fn read_bounded<R: Read>(mut reader: R, limit: usize) -> Result<(Vec<u8>, bool), String> {
+    let mut output = Vec::new();
+    let mut overflow = false;
+    let mut chunk = [0_u8; 8192];
+    loop {
+        let count = reader
+            .read(&mut chunk)
+            .map_err(|error| format!("Could not read ngspice worker output: {error}"))?;
+        if count == 0 {
+            break;
+        }
+        let remaining = limit.saturating_sub(output.len());
+        output.extend_from_slice(&chunk[..count.min(remaining)]);
+        overflow |= count > remaining;
+    }
+    Ok((output, overflow))
 }
 
 fn library_candidates(app: &AppHandle) -> Vec<PathBuf> {
@@ -751,11 +1012,12 @@ fn fatal_engine_messages(state: &CallbackState) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use std::path::PathBuf;
+    use std::{io::Cursor, path::PathBuf};
 
     use super::{
-        deck_lines, fatal_engine_messages, library_file_name, record_engine_message, take_messages,
-        CallbackState, SpiceEngine, SpiceRequest, MAX_ENGINE_MESSAGES, MAX_ENGINE_MESSAGE_BYTES,
+        deck_lines, fatal_engine_messages, library_file_name, read_bounded, record_engine_message,
+        take_messages, CallbackState, SpiceEngine, SpiceRequest, WorkerResponse,
+        MAX_ENGINE_MESSAGES, MAX_ENGINE_MESSAGE_BYTES,
     };
 
     #[test]
@@ -858,6 +1120,26 @@ V1 in 0 1
     fn uses_the_platform_library_name() {
         let name = PathBuf::from(library_file_name());
         assert!(name.file_name().is_some());
+    }
+
+    #[test]
+    fn bounded_worker_reader_drains_but_does_not_retain_excess_output() {
+        let input = vec![b'x'; 24_000];
+        let (output, overflow) = read_bounded(Cursor::new(input), 1024).expect("reader succeeds");
+        assert_eq!(output.len(), 1024);
+        assert!(overflow);
+    }
+
+    #[test]
+    fn worker_error_response_round_trips_without_an_ambiguous_success() {
+        let response = WorkerResponse {
+            result: None,
+            error: Some("intentional failure".to_string()),
+        };
+        let encoded = serde_json::to_vec(&response).expect("response encodes");
+        let decoded: WorkerResponse = serde_json::from_slice(&encoded).expect("response decodes");
+        assert!(decoded.result.is_none());
+        assert_eq!(decoded.error.as_deref(), Some("intentional failure"));
     }
 
     #[test]

@@ -9,13 +9,13 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## ⏱ HEARTBEAT
 - **Headline metric:** 1939 reviewed-tree tests green · corpus 82/82 import · 82/82 op-converge · 79/82 warning-clean
-- **Run started (UTC):** 2026-07-16T23:06Z
-- **Synced to origin:** auto/ltspice-parity @ 6f566ce (recovered interrupted checkpoint and pushed implementation at cb26b01).
-- **Claimed unit:** Replace Sonnet's brittle wall-clock timeout with a progress-aware deadline, then red-team complex AI creation, ASC import, native execution, and packaged-app security.
-- **Status:** DONE
-- **Last completed sub-step:** Rebuilt and remounted the ad-hoc-signed DMG, then proved bundled analog and XSPICE two-DFF transients from `/Volumes/Tau 1` (248 and 575 samples) after fixing signature and whitespace-path deployment failures.
-- **Plan:** Completed — provider deadlines/secrets, adversarial plan/import/deck coverage, external corpus expansion, native boundary hardening, packaged ngspice/XSPICE execution, and minimum/normal Chrome + desktop UI review all have durable evidence.
-- **Next step:** Isolate native ngspice behind a killable worker process before claiming crash-free execution for hostile arbitrary decks; then continue the three remaining warning-clean corpus symbols and guarded ASC round-trip parity.
+- **Run started (UTC):** 2026-07-18T05:04Z
+- **Synced to origin:** auto/ltspice-parity @ f97ac29.
+- **Claimed unit:** Isolate native libngspice behind a killable, time-bounded worker and prove complex ASC execution plus cancellation in the packaged app.
+- **Status:** IN PROGRESS
+- **Last completed sub-step:** Synced the single release lineage and confirmed the previous mounted-DMG/XSPICE stress unit is clean and durable.
+- **Plan:** Add worker protocol and crash/timeout/cancel containment with regressions; run full native/web/corpus gates; rebuild/remount the DMG; execute analog, oscillator, Class-D, hierarchy, and mixed-signal UI circuits at minimum and normal sizes; inspect Chrome overflow/logs.
+- **Next step:** Replace the in-process Tauri `simulate_spice` call with a bounded same-binary worker protocol and wire Stop to real child termination.
 
 ---
 

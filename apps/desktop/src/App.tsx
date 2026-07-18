@@ -76,6 +76,7 @@ import { runAcMeasurements } from "./simulation/measureAc";
 import { runDcMeasurements } from "./simulation/measureDc";
 import { runNoiseMeasurements } from "./simulation/measureNoise";
 import {
+  cancelNativeSpice,
   isNativeSpiceRuntime,
   MAX_NATIVE_OUTPUT_POINTS,
   runNativeAcSweep,
@@ -492,11 +493,8 @@ function App() {
     try {
       const nativeResult = await runNativeTransient({ components, wires, netLabels, params, directives }, options);
       if (nativeResult) {
-        // Native has no abort mechanism (no process kill — see
-        // engine/nativeSpice.ts). If Stop was clicked while this was in
-        // flight, `controller` is aborted but analysisRequestRef is NOT
-        // (see stopAnalysis) — so this check is what actually discards a
-        // native result the user no longer wants.
+        // Stop marks this request stale even if the worker happened to finish
+        // during cancellation, so a late native result can never overwrite UI.
         if (analysisRequestRef.current !== requestId || controller.signal.aborted) return;
         setAnalysis(nativeResult);
         setRunState(nativeResult.ok ? "complete" : "error");
@@ -513,6 +511,10 @@ function App() {
       if (controller.signal.aborted) showNotice("Stopped early — showing partial result.");
     } catch (error) {
       if (analysisRequestRef.current !== requestId) return;
+      if (controller.signal.aborted && isNativeSpiceRuntime()) {
+        showNotice("Simulation stopped.");
+        return;
+      }
       setAnalysis({
         ok: false,
         title: "ngspice transient",
@@ -739,24 +741,22 @@ function App() {
 
   const stopAnalysis = useCallback(() => {
     // transientAbortRef is non-null ONLY while executeTransient's own run is
-    // in flight (set at its start, cleared in its finally) — every other
-    // analysis kind (OP/AC/DC/TF/Noise/Step) leaves it null, so a live one of
-    // those still falls through to the old invalidate-based Stop below.
+    // in flight (set at its start, cleared in its finally). The browser solver
+    // cooperatively returns a partial result; native uses the same signal to
+    // invalidate late results and also terminates its isolated worker.
     if (analysisRunning && transientAbortRef.current) {
-      // A transient run can now actually be interrupted mid-solve (Fix 3) —
-      // abort the web solver's cooperative loop. This deliberately does NOT
-      // go through invalidateAnalysis: that bumps analysisRequestRef, which
-      // would make executeTransient discard the partial result this abort is
-      // about to produce. See executeTransient for how a native (unabortable)
-      // run still gets its stale result discarded correctly via the same
-      // controller's `aborted` flag.
+      // Do not go through invalidateAnalysis: the browser solver is about to
+      // return a useful partial result. Native sees `aborted`, discards any
+      // result that crossed the cancellation boundary, and stops the worker.
       transientAbortRef.current.abort();
+      if (isNativeSpiceRuntime()) void cancelNativeSpice();
       return;
     }
     if (!analysis && !analysisRunning) {
       showNotice("No simulation result to stop.");
       return;
     }
+    if (analysisRunning && isNativeSpiceRuntime()) void cancelNativeSpice();
     invalidateAnalysis("stopped");
     showNotice("Simulation stopped. Run again when ready.");
   }, [analysis, analysisRunning, invalidateAnalysis, showNotice]);
