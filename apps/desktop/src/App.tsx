@@ -187,7 +187,17 @@ function App() {
   // dial; manual state then sticks until "Reset to auto".
   const [optionsOverridden, setOptionsOverridden] = useState(false);
   const autoAnalysisOptions = useMemo(() => suggestTransientOptions(components), [components]);
-  const effectiveAnalysisOptions = optionsOverridden ? analysisOptions : autoAnalysisOptions;
+  const authoredAnalysisOptions = useMemo(
+    () => analysesFromDirectives(directives).tran,
+    [directives],
+  );
+  // An imported schematic's analysis card is part of the circuit, not merely
+  // an editor annotation. Honor it until the user deliberately touches a
+  // control; otherwise `adoptDirectiveOptions` updates invisible state while
+  // the Run path continues to use auto-resolution (the Colpitts regression).
+  const effectiveAnalysisOptions = optionsOverridden
+    ? analysisOptions
+    : authoredAnalysisOptions ?? autoAnalysisOptions;
   const overrideAnalysisOptions = useCallback((next: AnalysisOptions) => {
     setAnalysisOptions(next);
     setOptionsOverridden(true);

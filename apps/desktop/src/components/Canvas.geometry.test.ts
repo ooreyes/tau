@@ -2,8 +2,10 @@ import { describe, expect, it } from "vitest";
 import {
   autoNetLabelOffset,
   autoNetLabelOffsets,
+  buildLabelPlacements,
   circuitBounds,
   circuitBoundsWithLabels,
+  componentVisualPlacement,
   componentWorldRect,
   countRouteBodyHits,
   fitViewTransform,
@@ -17,9 +19,91 @@ import {
 } from "./Canvas.geometry";
 import type { SchematicComponent } from "../schematic/types";
 import { GRID } from "../schematic/symbols";
+import { getLocalPins, transformPoint } from "../schematic/pins";
 
 const comp = (id: string, x: number, y: number): SchematicComponent =>
   ({ id, kind: "resistor", x, y, rotation: 0, value: "1k" }) as SchematicComponent;
+
+// Tau-authored geometry equivalent to the failure mode: imported file anchors
+// sit above/left of the exact terminal bank, and the imported passive axis can
+// differ from Tau's native default. No external schematic content is embedded.
+const IMPORTED_VISUAL_FIXTURES: SchematicComponent[] = [
+  {
+    id: "imported-r", kind: "resistor", label: "R1", value: "470", x: 96, y: 96, rotation: 0,
+    pinOverride: [
+      { id: "a", label: "A", x: 112, y: 112 },
+      { id: "b", label: "B", x: 112, y: 192 },
+    ],
+  },
+  {
+    id: "imported-c", kind: "capacitor", label: "C1", value: "220p", x: 320, y: 96, rotation: 90,
+    pinOverride: [
+      { id: "a", label: "A", x: 320, y: 112 },
+      { id: "b", label: "B", x: 256, y: 112 },
+    ],
+  },
+  {
+    id: "imported-j", kind: "njf", label: "Q1", value: "NJF", x: 480, y: 96, rotation: 0,
+    pinOverride: [
+      { id: "d", label: "D", x: 528, y: 96 },
+      { id: "g", label: "G", x: 480, y: 160 },
+      { id: "s", label: "S", x: 528, y: 192 },
+    ],
+  },
+];
+
+const IMPORTED_VISUAL_WIRES = [
+  { id: "wr-a", points: [{ x: 64, y: 112 }, { x: 112, y: 112 }] },
+  { id: "wr-b", points: [{ x: 112, y: 192 }, { x: 160, y: 192 }] },
+  { id: "wc", points: [{ x: 256, y: 112 }, { x: 320, y: 112 }] },
+  { id: "wj-g", points: [{ x: 432, y: 160 }, { x: 480, y: 160 }] },
+];
+
+describe("imported LTspice symbol presentation", () => {
+  const components = IMPORTED_VISUAL_FIXTURES;
+  const byLabel = (label: string) => components.find((component) => component.label === label)!;
+
+  it("centres and rotates imported passives on their real terminal bank", () => {
+    expect(componentVisualPlacement(byLabel("R1"))).toMatchObject({ x: 112, y: 152, rotation: 90, mirrored: false });
+    expect(componentVisualPlacement(byLabel("C1"))).toMatchObject({ x: 288, y: 112, rotation: 180, mirrored: false });
+  });
+
+  it("moves an imported JFET body from its file anchor into the D/G/S pin bank", () => {
+    const placement = componentVisualPlacement(byLabel("Q1"));
+    expect(placement.x).toBeCloseTo(512);
+    expect(placement.y).toBeCloseTo(149.333333);
+    expect(placement.rotation).toBe(0);
+    expect(placement.mirrored).toBe(false);
+  });
+
+  it("renders only straight terminal extensions instead of crooked diagonal repair leads", () => {
+    for (const component of components) {
+      if (!component.pinOverride?.length) continue;
+      const placement = componentVisualPlacement(component);
+      const nativePins = new Map(getLocalPins(component.kind).map((pin) => [pin.id, pin]));
+      for (const target of component.pinOverride) {
+        const native = nativePins.get(target.id);
+        if (!native) continue;
+        const local = transformPoint(native, placement.rotation, placement.mirrored);
+        const start = { x: placement.x + local.x, y: placement.y + local.y };
+        expect(
+          start.x === target.x || start.y === target.y,
+          `${component.label}.${target.id} lead ${start.x},${start.y} -> ${target.x},${target.y}`,
+        ).toBe(true);
+      }
+    }
+  });
+
+  it("keeps imported reference/value pairs from overlapping one another", () => {
+    const placements = [...buildLabelPlacements(components, IMPORTED_VISUAL_WIRES).values()];
+    expect(placements).toHaveLength(components.length);
+    for (let left = 0; left < placements.length; left += 1) {
+      for (let right = left + 1; right < placements.length; right += 1) {
+        expect(rectsOverlap(placements[left].box, placements[right].box)).toBe(false);
+      }
+    }
+  });
+});
 
 describe("Canvas wire geometry", () => {
   it("keeps an identical wire preview inert instead of dereferencing an empty route", () => {

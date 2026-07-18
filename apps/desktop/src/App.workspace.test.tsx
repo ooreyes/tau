@@ -148,6 +148,16 @@ describe("App schematic workspace tools", () => {
     expect(screen.queryByRole("complementary", { name: "Components" })).toBeNull();
   });
 
+  it("uses an imported .tran card instead of auto-resolution until manually overridden", async () => {
+    await renderOpenProject();
+    act(() => useSchematic.setState({ directives: [".tran 500µ startup"] }));
+
+    fireEvent.click(screen.getByRole("button", { name: "Simulator" }));
+    fireEvent.click(screen.getByRole("button", { name: "Toggle advanced settings" }));
+
+    expect(screen.getByText("500 µs")).toBeTruthy();
+  });
+
   it("explains the simulator is view-only when an edit shortcut is attempted", async () => {
     await renderOpenProject();
     act(() => useSchematic.getState().addComponent("resistor", 120, 120));

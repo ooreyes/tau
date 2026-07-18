@@ -8,14 +8,66 @@
      `git log --oneline -8`, recover/finish/revert that unit FIRST, then go on.
      ─────────────────────────────────────────────────────────────────────── -->
 ## ⏱ HEARTBEAT
-- **Headline metric:** 1939 reviewed-tree tests green · corpus 82/82 import · 82/82 op-converge · 79/82 warning-clean
+- **Headline metric:** 1946 reviewed-tree tests green · corpus 82/82 import · 82/82 op-converge · 79/82 warning-clean
 - **Run started (UTC):** 2026-07-18T05:04Z
-- **Synced to origin:** auto/ltspice-parity @ f97ac29.
+- **Synced to origin:** auto/ltspice-parity @ 7fe5362.
 - **Claimed unit:** Isolate native libngspice behind a killable, time-bounded worker and prove complex ASC execution plus cancellation in the packaged app.
-- **Status:** IN PROGRESS
-- **Last completed sub-step:** Synced the single release lineage and confirmed the previous mounted-DMG/XSPICE stress unit is clean and durable.
-- **Plan:** Add worker protocol and crash/timeout/cancel containment with regressions; run full native/web/corpus gates; rebuild/remount the DMG; execute analog, oscillator, Class-D, hierarchy, and mixed-signal UI circuits at minimum and normal sizes; inspect Chrome overflow/logs.
-- **Next step:** Replace the in-process Tauri `simulate_spice` call with a bounded same-binary worker protocol and wire Stop to real child termination.
+- **Status:** DONE
+- **Last completed sub-step:** Rebuilt the packaged app and DMG, then proved the exact imported Colpitts schematic is orthogonal/overlap-free and runs its authored 500 µs startup transient with 14,822 native samples and a non-flat 1.97 V p-p drain trace at normal and minimum window sizes.
+- **Plan:** Completed worker containment, complex/cancel stress, authored-transient repair, imported-symbol visual fitting, full gates, corpus, Chrome minimum-size audit, and packaged native UI proof.
+- **Next step:** Fix the PowerSim passive-parasitic import failure (`Rser` on ordinary capacitors/inductors) and rerun the LLC converter end-to-end; comment-preserving ASC edits and the three explicitly unsupported corpus device kinds remain release blockers.
+
+---
+
+## 2026-07-18T05:46Z — auto/ltspice-parity — Colpitts authored transient + imported geometry fidelity
+
+### What I did
+- Made imported `.tran` cards outrank editor auto-resolution until the user
+  deliberately changes a control, and translated LTspice `startup` to the
+  closest deterministic ngspice zero-state start. The exact Colpitts fixture
+  now runs 500 µs / 14,822 native samples instead of 2.5 µs / 248 samples.
+- Fitted Tau's native symbol artwork to imported absolute pin banks without
+  mutating ASC anchors or electrical connectivity. Bounds, labels, hit-testing,
+  and router obstacles use the fitted placement; the crooked diagonal leads and
+  component/value overlaps seen in the packaged app are gone.
+- Removed unsupported `Alpha`/`Vk` extensions from bundled JFET model lines.
+  ngspice already ignored them numerically; Tau now runs the oscillator without
+  surfacing a false model warning.
+- Rebuilt the unsigned app + DMG and operated the packaged app at normal and
+  minimum size. The drain probe reports 6.71 V final and 1.97 V full-run p-p;
+  the app remains responsive and every essential simulator control is reachable.
+- Audited the 900×600 web shell in Chrome: no page overflow or app console
+  errors; only the intentionally clipped nonessential status-hint strip and a
+  host Chrome no-space cache diagnostic were observed.
+
+### Files
+- `apps/desktop/src/App.tsx`, `App.workspace.test.tsx`
+- `apps/desktop/src/io/directiveAnalysis.ts` + tests
+- `apps/desktop/src/engine/standardModels.ts` + tests
+- `apps/desktop/src/components/Canvas.tsx`, `Canvas.geometry.ts` + tests
+- `FEATURE_PARITY.md`, `PROGRESS.md`
+
+### Tests
+- `pnpm -C apps/desktop typecheck` ✅
+- `pnpm -C apps/desktop test` ✅ (132 files passed / 1 skipped; 1,946 passed / 6 skipped)
+- `scripts/acceptance-corpus.sh` ✅ (82/82 import, 79/82 warning-clean,
+  82/82 deck-built, 82/82 op-converged; Colpitts warning-clean)
+- Real ngspice authored-deck probe ✅ (500 µs; 0.393 V p-p over the second
+  half before UI framing; no model warning)
+- `pnpm --filter @tau/desktop build` ✅
+- `pnpm --filter @tau/desktop tauri build` ✅ (Tau.app + DMG)
+- Packaged Computer Use: import/layout/run/probe/minimum-size ✅
+
+### Parity items
+- §1 ASC imported visual geometry: crooked/overlap regression fixed.
+- §1 authored `.tran` and `startup`: packaged oscillator proof complete.
+- §3 bundled JFET model: warning-clean ngspice translation.
+
+### Next step
+Implement real passive `Rser` handling (without misclassifying an ordinary
+capacitor as a crystal), then rerun the PowerSim LLC converter in the packaged
+app. Preserve the honest blockers: comments still prevent lossless ASC save and
+three corpus symbols remain explicitly unsupported.
 
 ---
 

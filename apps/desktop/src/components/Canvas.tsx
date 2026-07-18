@@ -17,6 +17,7 @@ import {
   collides,
   fitViewTransform,
   componentAt,
+  componentVisualPlacement,
   componentWorldRect,
   findFreeSpot,
   isWireEndpoint,
@@ -1404,7 +1405,9 @@ function ComponentView({
   // geometry in the SVG handlers, so render order never decides hit results.
   // Mirror-before-rotate (matches transformPoint / LTspice M*): SVG applies
   // transforms right-to-left, so `rotate(R) scale(-1 1)` flips then rotates.
-  const orient = symbolTransform(comp.rotation, comp.mirrored ?? false);
+  const placement = componentVisualPlacement(comp);
+  const orient = symbolTransform(placement.rotation, placement.mirrored);
+  const visualOffset = { x: placement.x - comp.x, y: placement.y - comp.y };
   const overridePins = comp.pinOverride?.length ? getComponentPins(comp) : null;
   const nativePins = new Map(getLocalPins(comp.kind).map((pin) => [pin.id, pin]));
   return (
@@ -1412,12 +1415,13 @@ function ComponentView({
       {overridePins?.map((pin) => {
         const native = nativePins.get(pin.id);
         if (!native) return null;
-        const start = transformPoint(native, comp.rotation, comp.mirrored ?? false);
+        const local = transformPoint(native, placement.rotation, placement.mirrored);
+        const start = { x: visualOffset.x + local.x, y: visualOffset.y + local.y };
         const end = { x: pin.x - comp.x, y: pin.y - comp.y };
         if (start.x === end.x && start.y === end.y) return null;
         return <line key={`lead-${pin.id}`} className="import-pin-lead" x1={start.x} y1={start.y} x2={end.x} y2={end.y} />;
       })}
-      <g className="symbol" transform={orient}>
+      <g className="symbol" transform={`translate(${visualOffset.x} ${visualOffset.y}) ${orient}`}>
         <ComponentSymbol kind={comp.kind} />
       </g>
       {showPins && (

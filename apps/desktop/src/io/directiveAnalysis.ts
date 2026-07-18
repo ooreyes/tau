@@ -42,11 +42,11 @@ function quantityOrNull(token: string): number | null {
 
 /**
  * Parse a `.tran` directive into Tau output sampling plus authored solver
- * controls (`Tstart`, `Tmax`, and `uic`).
+ * controls (`Tstart`, `Tmax`, and startup modifiers).
  *
  * LTspice forms:
  *   `.tran <Tstop>`                              → short form
- *   `.tran <Tstep> <Tstop> [<Tstart> [<Tmax>]]`  → full form
+ *   `.tran <Tstep> <Tstop> [<Tstart> [<Tmax>]] [startup|uic]` → full form
  *
  * One numeric token ⇒ that's Tstop. Two or more ⇒ first is Tstep, second is
  * Tstop, and the sample count is derived from `Tstop/Tstep` (clamped). A zero or
@@ -76,12 +76,22 @@ export function parseTranDirective(directive: string): AnalysisOptions | null {
   const maxStep = numbers.length >= 4 ? numbers[3] : null;
   if (startTime !== null && (startTime < 0 || startTime >= tstop)) return null;
   if (maxStep !== null && maxStep <= 0) return null;
+  // ngspice has no LTspice `startup` keyword. Its closest deterministic
+  // equivalent is `uic`: both begin transient integration from zero dynamic
+  // state instead of the settled operating point, which is the behavior
+  // oscillator fixtures rely on to leave their otherwise-stable equilibrium.
+  // Keep this translation explicit here rather than silently dropping a
+  // meaningful authored control at deck-build time.
+  const startupRequested = tokens.some((token) => {
+    const modifier = token.toLowerCase();
+    return modifier === "uic" || modifier === "startup";
+  });
   return {
     stopTime: tstop,
     steps,
     ...(startTime !== null ? { startTime } : {}),
     ...(maxStep !== null ? { maxStep } : {}),
-    ...(tokens.some((token) => token.toLowerCase() === "uic") ? { uic: true } : {}),
+    ...(startupRequested ? { uic: true } : {}),
   };
 }
 

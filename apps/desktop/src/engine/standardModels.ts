@@ -42,20 +42,22 @@ const MODEL_LINES: readonly string[] = [
   ".model 2N2907 PNP(IS=1E-14 VAF=120 BF=250 IKF=0.3 XTB=1.5 BR=3 CJC=8E-12 CJE=30E-12 TR=100E-9 TF=400E-12 ITF=1 VTF=2 XTF=3 RB=10 RC=.3 RE=.2)",
   ".model 2N3906 PNP(IS=1E-14 VAF=100 BF=200 IKF=0.4 XTB=1.5 BR=4 CJC=4.5E-12 CJE=10E-12 RB=20 RC=0.1 RE=0.1 TR=250E-9 TF=350E-12 ITF=1 VTF=2 XTF=3)",
   ".model BC557 PNP(IS=1E-14 VAF=100 BF=250 IKF=0.3 XTB=1.5 BR=5 CJC=6E-12 CJE=12E-12 RB=10 RC=.3 RE=.2 TR=100E-9 TF=400E-12 ITF=1 VTF=2 XTF=3)",
-  // --- N-channel JFETs (standard.jft) — verbatim params, mfg= stripped ---
-  ".model 2N3819 NJF(Beta=1.304m Betatce=-.5 Rd=1 Rs=1 Lambda=2.25m Vto=-3 Vtotc=-2.5m Is=33.57f Isr=322.4f N=1 Nr=2 Xti=3 Alpha=311.7u Vk=243.6 Cgd=1.6p M=.3622 Pb=1 Fc=.5 Cgs=2.414p Kf=9.882E-18 Af=1)",
-  ".model J309 NJF(Beta=4.682m Betatce=-0.5 Vto=-2.075 Vtotc=-2.5m Lambda=14.5m Is=193.9f Xti=3 Isr=1881f Nr=2 Alpha=7.533u N=1 Rd=1 Rs=1 Cgd=6.2p Cgs=6.2p Fc=0.5 Vk=74.1 M=465m Pb=1 Kf=64120f Af=1)",
-  ".model J310 NJF(Beta=3.384m Betatce=-0.5 Vto=-3.409 Vtotc=-2.5m Lambda=17m Is=193.9f Xti=3 Isr=1881f Nr=2 Alpha=7.533u N=1 Rd=1 Rs=1 Cgd=6.2p Cgs=6.2p Fc=0.5 Vk=74.1 M=465m Pb=1 Kf=46340f Af=1)",
-  ".model 2N5484 NJF(Is=.25p Alpha=1e-4 Vk=80 Vto=-1.5 Vtotc=-3m Beta=3.0m Lambda=10m Betatce=-.5 Rd=10 Rs=10 Cgs=4p Cgd=4p Kf=3e-17)",
-  ".model 2N5486 NJF(Is=.25p Alpha=1e-4 Vk=80 Vto=-4.0 Vtotc=-3m Beta=4.0m Lambda=10m Betatce=-.5 Rd=10 Rs=10 Cgs=4p Cgd=4p Kf=3e-17)",
+  // --- N-channel JFETs (standard.jft). LTspice's Alpha/Vk extension is
+  // unsupported by ngspice and was already ignored there, so omit it instead
+  // of surfacing a model warning on every otherwise-valid imported circuit. ---
+  ".model 2N3819 NJF(Beta=1.304m Betatce=-.5 Rd=1 Rs=1 Lambda=2.25m Vto=-3 Vtotc=-2.5m Is=33.57f Isr=322.4f N=1 Nr=2 Xti=3 Cgd=1.6p M=.3622 Pb=1 Fc=.5 Cgs=2.414p Kf=9.882E-18 Af=1)",
+  ".model J309 NJF(Beta=4.682m Betatce=-0.5 Vto=-2.075 Vtotc=-2.5m Lambda=14.5m Is=193.9f Xti=3 Isr=1881f Nr=2 N=1 Rd=1 Rs=1 Cgd=6.2p Cgs=6.2p Fc=0.5 M=465m Pb=1 Kf=64120f Af=1)",
+  ".model J310 NJF(Beta=3.384m Betatce=-0.5 Vto=-3.409 Vtotc=-2.5m Lambda=17m Is=193.9f Xti=3 Isr=1881f Nr=2 N=1 Rd=1 Rs=1 Cgd=6.2p Cgs=6.2p Fc=0.5 M=465m Pb=1 Kf=46340f Af=1)",
+  ".model 2N5484 NJF(Is=.25p Vto=-1.5 Vtotc=-3m Beta=3.0m Lambda=10m Betatce=-.5 Rd=10 Rs=10 Cgs=4p Cgd=4p Kf=3e-17)",
+  ".model 2N5486 NJF(Is=.25p Vto=-4.0 Vtotc=-3m Beta=4.0m Lambda=10m Betatce=-.5 Rd=10 Rs=10 Cgs=4p Cgd=4p Kf=3e-17)",
   // --- Power MOSFETs (standard.mos, VDMOS) — class-d_starter's half bridge.
   // LTspice's `Cgso` is ngspice's `Cgs` (renamed; ngspice warns "unrecognized
   // parameter (cgso)" otherwise); mfg/Vds/Ron/Qg annotation keys stripped. ---
   ".model QS6K1 VDMOS(Rg=45 Vto=1.179 Rd=19.2m Rs=100m Rb=60m Kp=6.084 Lambda=50m Cgdmin=9p Cgdmax=75p A=0.6 Cgs=62p Is=1.7898p N=1.127 Cjo=15.057p M=235.72m Vj=617.76m TT=20n ksubthres=.1)",
   ".model RSR015P06 VDMOS(pchan Rg=39 Vto=-2.072 Rd=153.3m Rs=30m Rb=35m Kp=7.507 Lambda=50m Cgdmin=18p Cgdmax=75p A=0.2 Cgs=470p Is=716.43f N=1.039 Cjo=129.74p M=445.93m Vj=769.5m TT=43.5n)",
   // --- P-channel JFETs (standard.jft) ---
-  ".model 2N5460 PJF(Is=1.5p Alpha=1e-4 Vk=300 Vto=-3.4 Vtotc=-3m Beta=1.0m Lambda=10m Betatce=-.5 Rd=10 Rs=10 Cgs=5p Cgd=5p Kf=3e-17)",
-  ".model J175 PJF(Beta=1.031m Betatce=-0.5 Vto=-3.762 Vtotc=-2.5m Lambda=28m Is=461.5f Xti=3 Isr=4402f Nr=2 Alpha=32.54u N=1 Rd=1 Rs=1 Cgd=6.5p Cgs=9p Fc=0.5 Vk=393.2 M=279m Pb=1 Kf=66610f Af=1)",
+  ".model 2N5460 PJF(Is=1.5p Vto=-3.4 Vtotc=-3m Beta=1.0m Lambda=10m Betatce=-.5 Rd=10 Rs=10 Cgs=5p Cgd=5p Kf=3e-17)",
+  ".model J175 PJF(Beta=1.031m Betatce=-0.5 Vto=-3.762 Vtotc=-2.5m Lambda=28m Is=461.5f Xti=3 Isr=4402f Nr=2 N=1 Rd=1 Rs=1 Cgd=6.5p Cgs=9p Fc=0.5 M=279m Pb=1 Kf=66610f Af=1)",
 ];
 
 /** name (lower-cased) → `.model` line. */

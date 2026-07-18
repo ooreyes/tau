@@ -46,8 +46,11 @@ describe("standardModelLine", () => {
     expect(standardModelLine("J309")).toMatch(/NJF\(/);
     expect(standardModelLine("2N5460")).toMatch(/PJF\(/);
     expect(standardModelLine("J175")).toMatch(/PJF\(/);
-    // No stray double-space ngspice could choke on (the Vk= 80 → Vk=80 fix).
-    expect(standardModelLine("2N5484")).not.toMatch(/=\s+\d/);
+    // LTspice-only Alpha/Vk are deliberately stripped: ngspice ignores them
+    // but emits a user-visible model warning if either remains.
+    for (const name of ["2N3819", "J309", "J310", "2N5484", "2N5486", "2N5460", "J175"]) {
+      expect(standardModelLine(name)).not.toMatch(/\b(?:Alpha|Vk)=/i);
+    }
   });
 
   it("every bundled line is a well-formed .model and the name matches the key", () => {

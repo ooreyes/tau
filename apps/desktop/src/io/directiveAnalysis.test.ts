@@ -35,6 +35,14 @@ describe("parseTranDirective", () => {
     });
   });
 
+  it("maps LTspice startup onto an ngspice zero-state transient", () => {
+    expect(parseTranDirective(".tran 500µ startup")).toEqual({
+      stopTime: 0.0005,
+      steps: DEFAULT_TRAN_STEPS,
+      uic: true,
+    });
+  });
+
   it("accepts the bare `tran` keyword (no leading dot) and is case-insensitive", () => {
     expect(parseTranDirective("TRAN 5m")).toEqual({ stopTime: 0.005, steps: DEFAULT_TRAN_STEPS });
   });

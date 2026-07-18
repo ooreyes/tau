@@ -114,6 +114,15 @@ Status legend: ✅ done · 🟡 partial · ⬜ not started
     `schematic/pins.ts` `getComponentPins`. `ascToSchematic` places each part with
     `pinOverride = anchor + transformLtPoint(pin)` so nets extract exactly as
     LTspice intends (no connector-wire hacks). 3-terminal MOS bulk tied to source.
+  - ✅ **(b-visual) imported symbol bodies fit their real terminal banks** —
+    genuine LTspice anchors are not body centres and several R0 symbol axes
+    differ from Tau's native artwork. `componentVisualPlacement()` now fits the
+    native body to immutable `pinOverride` terminals using the eight legal
+    rotation/mirror orientations plus translation. Rendering, label collision,
+    fit-to-view, hit-testing, and routing obstacles share that placement, so
+    imported passives and semiconductors no longer grow crooked diagonal repair
+    leads or overlapping labels. Synthetic geometry regressions cover vertical
+    passives, rotated passives, and a three-terminal JFET.
   - ✅ **Net labels are now electrical** — `extractCircuit(…, netLabels)` merges
     same-named FLAGs into one net, treats `0`/`GND` as ground, and names nets
     after their label (so `V(vcc)` resolves). Threaded through the native +
@@ -129,10 +138,13 @@ Status legend: ✅ done · 🟡 partial · ⬜ not started
   - ✅ **(d-analyses `.tran`/`.ac`) directive → analysis options** — `io/
     directiveAnalysis.ts` parses `.tran <Tstep> <Tstop> …` → `{ stopTime, steps }`
     and `.ac <dec|oct|lin> <N> <Fstart> <Fstop>` → `{ startHz, stopHz,
-    pointsPerDecade }` (SI suffixes, modifiers ignored, lin/oct normalized to
-    points-per-decade). `App.tsx` `adoptDirectiveOptions` applies an imported
-    circuit's own `.tran` window on open / tab-switch, so it simulates as
-    authored instead of with the editor default. 14 unit tests, hand-computed.
+    pointsPerDecade }` (SI suffixes, lin/oct normalized to points-per-decade).
+    Authored transient options now outrank auto-resolution until the user
+    explicitly overrides them, and LTspice's `startup` modifier maps to
+    ngspice's deterministic zero-state (`uic`) start instead of being discarded.
+    Packaged proof: the educational Colpitts file runs its authored 500 µs
+    window (14,822 native samples) and develops a 1.97 V full-run p-p drain
+    waveform instead of the former flat 2.5 µs trace.
   - ✅ **(c) Open dialog wired to the importer** — the toolbar **Open** button's
     file picker now accepts `.asc` (`accept=".tau.json,.asc,application/json"`).
     `ShellPanels.openCircuit` branches on extension: `.asc` → `importAsc(text)`
@@ -154,7 +166,7 @@ Status legend: ✅ done · 🟡 partial · ⬜ not started
     pin-accurate geometry (connections may be wrong)" to pin-accurate — incl. the
     key-goal `deadtime.asc`. Warning-clean import coverage **45→67/82**.
   - **NEXT:** map `.meas`/`.dc`/`.step` directives (need those analyses first —
-    §4); render imported symbols at their LTspice geometry. Remaining 15
+    §4). Remaining warned files need
     warned files all need NEW component kinds: hierarchical sub-block import
     (`deadtime` used inside class-d_starter — §2), DIGITAL `A`-devices
     (INV/XOR/dflop/SCHMTBUF — §3), SpecialFunctions (MODULATE/sample/varistor),

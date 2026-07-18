@@ -1,7 +1,7 @@
 import { GRID, SYMBOL_BODY } from "../schematic/symbols";
 import { CATALOG_BY_KIND } from "../schematic/catalog";
-import type { ComponentKind, NetLabel, Point, SchematicComponent, SchematicWire } from "../schematic/types";
-import { getComponentPins, transformPoint } from "../schematic/pins";
+import type { ComponentKind, NetLabel, Point, Rotation, SchematicComponent, SchematicWire } from "../schematic/types";
+import { getComponentPins, getLocalPins, transformPoint } from "../schematic/pins";
 import { decodeParams } from "../schematic/params";
 
 export const snap = (v: number) => {
@@ -14,14 +14,87 @@ export const snap = (v: number) => {
  * is intentional here — imported LTspice parts can carry absolute pin
  * overrides that are much farther from the component origin than Tau's
  * built-in bank. */
+export interface ComponentVisualPlacement {
+  x: number;
+  y: number;
+  rotation: Rotation;
+  mirrored: boolean;
+}
+
+/**
+ * Imported LTspice symbols store the file's symbol anchor in `component.x/y`
+ * and the electrically exact terminal positions in `pinOverride`. The anchor
+ * is generally not the symbol centre (an R0 resistor's anchor is above-left of
+ * its vertical body), while Tau symbols are centre-origin. Drawing at the raw
+ * anchor therefore creates long diagonal repair leads even though the circuit
+ * topology is correct.
+ *
+ * Fit Tau's native pin bank onto the imported terminals using the eight legal
+ * orthogonal orientations plus a least-squares translation. The imported pins
+ * remain untouched and authoritative for netlisting/export; this is strictly a
+ * presentation transform. Native Tau components take the fast identity path.
+ */
+export function componentVisualPlacement(component: SchematicComponent): ComponentVisualPlacement {
+  const fallback: ComponentVisualPlacement = {
+    x: component.x,
+    y: component.y,
+    rotation: component.rotation,
+    mirrored: component.mirrored ?? false,
+  };
+  if (!component.pinOverride?.length) return fallback;
+
+  const nativeById = new Map(getLocalPins(component.kind).map((pin) => [pin.id, pin]));
+  const matches = component.pinOverride.flatMap((pin) => {
+    const native = nativeById.get(pin.id);
+    return native ? [{ native, target: pin }] : [];
+  });
+  if (matches.length < 2) return fallback;
+
+  const candidates: Array<{ rotation: Rotation; mirrored: boolean }> = [];
+  const addCandidate = (rotation: Rotation, mirrored: boolean) => {
+    if (!candidates.some((candidate) => candidate.rotation === rotation && candidate.mirrored === mirrored)) {
+      candidates.push({ rotation, mirrored });
+    }
+  };
+  // Prefer the authored orientation when fits tie (common for symmetric parts).
+  addCandidate(component.rotation, component.mirrored ?? false);
+  for (const mirrored of [false, true]) {
+    for (const rotation of [0, 90, 180, 270] as const) addCandidate(rotation, mirrored);
+  }
+
+  let best = { ...fallback, score: Number.POSITIVE_INFINITY };
+  for (const candidate of candidates) {
+    const transformed = matches.map(({ native, target }) => ({
+      local: transformPoint(native, candidate.rotation, candidate.mirrored),
+      target,
+    }));
+    const x = transformed.reduce((sum, pair) => sum + pair.target.x - pair.local.x, 0) / transformed.length;
+    const y = transformed.reduce((sum, pair) => sum + pair.target.y - pair.local.y, 0) / transformed.length;
+    const score = transformed.reduce((sum, pair) => {
+      const dx = x + pair.local.x - pair.target.x;
+      const dy = y + pair.local.y - pair.target.y;
+      return sum + dx * dx + dy * dy;
+    }, 0);
+    if (score < best.score) best = { x, y, ...candidate, score };
+  }
+  return { x: best.x, y: best.y, rotation: best.rotation, mirrored: best.mirrored };
+}
+
 function componentGeometryBounds(component: SchematicComponent): Rect {
+  const placement = componentVisualPlacement(component);
   const box = SYMBOL_BODY[component.kind];
   const bodyCorners: Point[] = [
     { x: box.minX, y: box.minY },
     { x: box.maxX, y: box.minY },
     { x: box.maxX, y: box.maxY },
     { x: box.minX, y: box.maxY },
-  ].map((point) => transformPoint(point, component.rotation, component.mirrored ?? false));
+  ].map((point) => {
+    const transformed = transformPoint(point, placement.rotation, placement.mirrored);
+    return {
+      x: placement.x - component.x + transformed.x,
+      y: placement.y - component.y + transformed.y,
+    };
+  });
   const pins = getComponentPins(component).map((pin) => ({
     x: pin.x - component.x,
     y: pin.y - component.y,
@@ -347,12 +420,13 @@ export const componentWorldRect = (component: SchematicComponent): Rect => {
 
 const labelCandidates = (component: SchematicComponent, refText: string, valText: string) => {
   const b = componentBounds(component);
-  const x = component.x;
-  const y = component.y;
-  const leftX = x + b.minX - 10;
-  const rightX = x + b.maxX + 10;
-  const topRefY = y + b.minY - 20;
-  const belowRefY = y + b.maxY + 10;
+  const placement = componentVisualPlacement(component);
+  const x = placement.x;
+  const y = placement.y;
+  const leftX = component.x + b.minX - 10;
+  const rightX = component.x + b.maxX + 10;
+  const topRefY = component.y + b.minY - 20;
+  const belowRefY = component.y + b.maxY + 10;
   const vertical = labelAxis(component) === "vertical";
   const candidates = [
     makePlacement(refText, valText, { x: leftX, y: y - 7, anchor: "end" }, { x: leftX, y: y + 7, anchor: "end" }),
@@ -631,6 +705,27 @@ const bodyBoxAt = (kind: ComponentKind, x: number, y: number, rotation: number):
   return { minX: x + box.minX, minY: y + box.minY, maxX: x + box.maxX, maxY: y + box.maxY };
 };
 
+/** World-space body box using the fitted visual origin for imported parts. */
+const componentBodyBox = (component: SchematicComponent): Rect => {
+  const placement = componentVisualPlacement(component);
+  const body = SYMBOL_BODY[component.kind];
+  const corners = [
+    { x: body.minX, y: body.minY },
+    { x: body.maxX, y: body.minY },
+    { x: body.maxX, y: body.maxY },
+    { x: body.minX, y: body.maxY },
+  ].map((point) => {
+    const transformed = transformPoint(point, placement.rotation, placement.mirrored);
+    return { x: placement.x + transformed.x, y: placement.y + transformed.y };
+  });
+  return {
+    minX: Math.min(...corners.map((point) => point.x)),
+    minY: Math.min(...corners.map((point) => point.y)),
+    maxX: Math.max(...corners.map((point) => point.x)),
+    maxY: Math.max(...corners.map((point) => point.y)),
+  };
+};
+
 /** STRICT overlap (touching edges do NOT count) — used for placement/route
  *  collision, where bodies placed flush against each other are legal. The
  *  exported `rectsOverlap` above is inclusive (marquee: touch selects). */
@@ -648,7 +743,7 @@ export const componentAt = (components: SchematicComponent[], wx: number, wy: nu
   let best: SchematicComponent | null = null;
   let bestScore = Infinity;
   for (const c of components) {
-    const box = bodyBoxAt(c.kind, c.x, c.y, c.rotation);
+    const box = componentBodyBox(c);
     if (wx < box.minX - HIT_PAD || wx > box.maxX + HIT_PAD || wy < box.minY - HIT_PAD || wy > box.maxY + HIT_PAD) {
       continue;
     }
@@ -675,7 +770,7 @@ export const collides = (
   const a = bodyBoxAt(kind, x, y, rotation);
   for (const c of components) {
     if (c.id === excludeId) continue;
-    if (rectsOverlapStrict(a, bodyBoxAt(c.kind, c.x, c.y, c.rotation))) return true;
+    if (rectsOverlapStrict(a, componentBodyBox(c))) return true;
   }
   return false;
 };
@@ -692,7 +787,7 @@ const segmentHitsBody = (a: Point, b: Point, components: SchematicComponent[]): 
   return components.some((c) => {
     const isEndpointComponent = getComponentPins(c).some((pin) => pointsEqual(pin, a) || pointsEqual(pin, b));
     if (isEndpointComponent) return false;
-    const box = bodyBoxAt(c.kind, c.x, c.y, c.rotation);
+    const box = componentBodyBox(c);
     // Keep a small clearance so wires don't graze symbol strokes.
     const pad = 1;
     return rectsOverlapStrict(seg, {
@@ -943,7 +1038,7 @@ export const routeWireSmart = (
   const xChannels = new Set<number>([start.x, end.x]);
   const yChannels = new Set<number>([start.y, end.y]);
   for (const component of components) {
-    const box = bodyBoxAt(component.kind, component.x, component.y, component.rotation);
+    const box = componentBodyBox(component);
     // One and two grid cells outside the body — gives the router room to skirt
     // symbols without hugging the stroke.
     for (const pad of [GRID, GRID * 2]) {
