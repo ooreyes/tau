@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
- * design-shot.mjs — re-runnable screenshot pipeline for the §10 visual-design
- * overhaul (STEP 3.5 in AGENTS.md / CLAUDE.md).
+ * design-shot.mjs - re-runnable screenshot pipeline for the §10 visual-design
+ * overhaul.
  *
  * Every design commit must produce a screenshot that VISIBLY DIFFERS from the
  * one before it. This script captures a fixed set of named app states at a
@@ -16,24 +16,24 @@
  * `screenshots/<label>/<state>-<width>x<height>.png`.
  *
  * States captured:
- *   empty      — fresh app, blank scratchpad, schematic view.
- *   schematic  — the "RC Charging" example loaded, schematic view.
- *   inspector  — same circuit with the first component selected, so the
+ *   empty      - fresh app, blank scratchpad, schematic view.
+ *   schematic  - the "RC Charging" example loaded, schematic view.
+ *   inspector  - same circuit with the first component selected, so the
  *                bottom component-inspector (property grid, not its empty
  *                "no selection" state) is visible.
- *   simulator  — same circuit after clicking Run; simulator/scope view.
+ *   simulator  - same circuit after clicking Run; simulator/scope view.
  *                Web mode has no Tauri/native ngspice bridge, but
  *                `runTransientAnalysis` (the TS fallback solver, see
  *                apps/desktop/src/engine/nativeSpice.ts:isNativeSpiceRuntime)
  *                still runs in-browser, so this should show REAL traces, not
  *                a degraded/error state. If it ever shows an error state in
  *                web mode, that's a regression worth flagging, not expected.
- *   dialog     — the settings panel open (gear icon in the toolbar).
- *   command    — the "Add component" command palette open (Cmd/Ctrl+K).
+ *   dialog     - the settings panel open (gear icon in the toolbar).
+ *   command    - the "Add component" command palette open (Cmd/Ctrl+K).
  *
  * Viewports: 1440x900 and 1280x720 (comfortable sizes) plus the app's real
  * minimum window size read from apps/desktop/src-tauri/tauri.conf.json
- * (minWidth x minHeight — currently 900x600) so the responsive floor
+ * (minWidth x minHeight - currently 900x600) so the responsive floor
  * (FEATURE_PARITY §11) is provable too.
  */
 
@@ -50,7 +50,7 @@ const REPO_ROOT = path.resolve(__dirname, "..");
 // Playwright is a devDependency of apps/desktop (not the workspace root), and
 // pnpm's isolated node_modules layout means a bare `import "playwright"` from
 // this root-level script would not resolve it. Resolve it explicitly relative
-// to apps/desktop's own package.json (CJS require, not ESM import — ESM's
+// to apps/desktop's own package.json (CJS require, not ESM import - ESM's
 // static cjs-module-lexer interop doesn't reliably surface playwright's
 // dynamically-assigned named exports) instead of hoisting a dependency the
 // workspace root doesn't otherwise need.
@@ -109,7 +109,7 @@ async function isServerUp(url) {
 
 /** Starts `pnpm dev:web` as its own process group so it (and any vite
  *  children) can be killed together on exit. No-ops if something is already
- *  listening on the dev port — that server is reused and left running. */
+ *  listening on the dev port - that server is reused and left running. */
 async function ensureDevServer() {
   if (await isServerUp(DEV_URL)) {
     console.log(`[design-shot] reusing already-running dev server at ${DEV_URL}`);
@@ -168,7 +168,7 @@ async function shootViewport(page, viewport) {
   // --- inspector: select a component so the property grid renders --------
   // Selection is resolved by geometric hit-testing on the canvas's own
   // pointerdown handler (world coordinates → component bounding boxes), not
-  // by which DOM node paints on top at the exact pixel — so `force: true`
+  // by which DOM node paints on top at the exact pixel - so `force: true`
   // (skip Playwright's topmost-element check, which the background grid
   // rect can otherwise fail depending on where a symbol's stroke falls
   // inside its bounding box) is correct here, not a workaround.
@@ -185,7 +185,7 @@ async function shootViewport(page, viewport) {
   await page.waitForSelector(".app-simulator", { timeout: STATE_TIMEOUT_MS });
   // Web mode has no native ngspice bridge but the TS-fallback transient
   // solver still runs in-browser (see isNativeSpiceRuntime in
-  // apps/desktop/src/engine/nativeSpice.ts) — wait for either a real trace or
+  // apps/desktop/src/engine/nativeSpice.ts) - wait for either a real trace or
   // a settled error/empty scope state, whichever the run produces.
   await page
     .waitForSelector(".scope-svg .scope-trace, .scope-shell", { timeout: STATE_TIMEOUT_MS })

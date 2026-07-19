@@ -1,5 +1,5 @@
 /**
- * @tau/schematic-core — canonical schematic document model.
+ * @tau/schematic-core - canonical schematic document model.
  *
  * NOTE: During Phase 1 the live, evolving copy of these types is in
  * `apps/desktop/src/schematic/types.ts`. This module is the agreed target home;

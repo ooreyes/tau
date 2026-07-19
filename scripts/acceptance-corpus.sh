@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Acceptance-corpus runner (AGENTS.md → Definition of Done).
+# Acceptance-corpus runner.
 #
 # Imports every `.asc` in the user's own LTspice corpus
 # (~/Downloads/LTspice_export, ~/Documents/LTspice, …/examples/Educational),

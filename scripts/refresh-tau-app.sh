@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Keep the native Tau window on the latest tree after agent work.
+# Keep the native Tau window on the latest tree after code changes.
 #
 # - Ensures Vite is serving the live frontend on :1420
 # - Ensures a `tauri dev` CLI is attached to that server (HMR + Rust watch)
@@ -7,7 +7,7 @@
 # - Brings the Tau window forward on macOS
 #
 # Safe to call from Cursor / Claude Code stop hooks. Debounced. Never fails
-# the hook (exit 0) — refresh is best-effort.
+# the hook (exit 0) - refresh is best-effort.
 set -uo pipefail
 
 root="$(git rev-parse --show-toplevel 2>/dev/null)" || exit 0
@@ -43,7 +43,7 @@ port_in_use() {
 }
 
 # Only a live `tauri dev` CLI gets HMR. An orphaned Tau.app from a prior
-# `tauri build` / crashed session does NOT — those bake the frontend in.
+# `tauri build` / crashed session does NOT - those bake the frontend in.
 process_is_in_tau_tree() {
   local pid cwd
   while IFS= read -r pid; do
@@ -118,7 +118,7 @@ start_vite() {
 }
 
 start_tauri_dev() {
-  # Attach to the already-running Vite — clear beforeDevCommand so we don't
+  # Attach to the already-running Vite - clear beforeDevCommand so we don't
   # fight over :1420 (this Tauri CLI's --no-dev-server flag only disables the
   # static fallback server, not beforeDevCommand).
   log_line "starting tauri dev attached to live Vite"
@@ -149,15 +149,15 @@ log_line "refresh start (cwd=$root)"
 if ! port_in_use; then
   start_vite || exit 0
 elif ! vite_for_tau_running && ! tauri_dev_cli_running; then
-  log_line "port $port busy by a non-Tau process — leaving alone"
+  log_line "port $port busy by a non-Tau process - leaving alone"
   exit 0
 fi
 
 if tauri_dev_cli_running; then
-  log_line "live tauri-dev detected — reload only"
+  log_line "live tauri-dev detected - reload only"
 else
   quit_stale_debug_tau
-  log_line "no live tauri-dev — launching against Vite"
+  log_line "no live tauri-dev - launching against Vite"
   start_tauri_dev
 fi
 

@@ -20,7 +20,7 @@ case "$branch" in
   *) exit 0 ;;
 esac
 
-# Nothing to save — the routine already committed this unit.
+# Nothing to save - the routine already committed this unit.
 if git diff --quiet && git diff --cached --quiet; then
   exit 0
 fi
@@ -30,6 +30,6 @@ git add -A
 git commit --no-verify -q -m "wip: checkpoint ${ts} [auto-durability]" || exit 0
 
 # Best-effort push so committed work survives sandbox teardown. Never fail the
-# hook on a transient network/auth error — the local commit already protects it.
+# hook on a transient network/auth error - the local commit already protects it.
 git push -q origin "HEAD:${branch}" 2>/dev/null || true
 exit 0

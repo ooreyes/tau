@@ -1,5 +1,5 @@
 /**
- * Acceptance-corpus runner (AGENTS.md → Definition of Done): imports every
+ * Acceptance-corpus runner: imports every
  * `.asc` in the user's own LTspice corpus, builds an `.op` deck for each, and
  * batch-runs it in the installed ngspice, then prints and asserts the
  * warning-clean / deck-built / op-converged counts.
@@ -180,10 +180,10 @@ describe.skipIf(corpus.length === 0)("acceptance corpus (user's own LTspice file
       const rows = corpus.map((file) => runFile(file, tmpDir, skipNgspice));
       const summary = summarizeCorpus(rows);
       console.log(`\n${formatCorpusReport(rows)}\n`);
-      if (skipNgspice) console.log("(ngspice runs skipped — CORPUS_SKIP_NGSPICE or ngspice not installed)");
+      if (skipNgspice) console.log("(ngspice runs skipped - CORPUS_SKIP_NGSPICE or ngspice not installed)");
 
       // Floors = the counts this runner actually measured on 2026-07-05
-      // (82/79/82/82) — never hand-typed claims; this runner once disproved
+      // (82/79/82/82) - never hand-typed claims; this runner once disproved
       // those (deck-built claimed 82, measured 79). Raise a floor only when a
       // re-run proves the new count. The 3 non-clean files are misc\nigbt,
       // POWERPRODUCTS\LT1184F, and PLL2's PHIDET A-device. Converge fixes on

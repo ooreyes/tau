@@ -1,5 +1,5 @@
 /**
- * Acceptance-corpus reporting (AGENTS.md → Definition of Done). The corpus
+ * Acceptance-corpus reporting. The corpus
  * runner (`scripts/acceptanceCorpus.corpus.ts`) walks the user's own LTspice
  * `.asc` files, imports each one, builds an `.op` deck, and batch-runs it in
  * ngspice; this module holds the pure, unit-testable pieces - per-file result

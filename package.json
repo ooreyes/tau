@@ -2,7 +2,7 @@
   "name": "tau",
   "private": true,
   "version": "0.2.0",
-  "description": "Tau — a modern, fast circuit simulator with a SPICE-class engine.",
+  "description": "Tau - a modern, fast circuit simulator with a SPICE-class engine.",
   "packageManager": "pnpm@11.7.0",
   "scripts": {
     "dev": "pnpm --filter @tau/desktop tauri dev",

@@ -1,6 +1,6 @@
 // Waveform-parity gate for the sampleHold kind (FEATURE_PARITY §7 flavor):
 // imports the real Educational/SampleAndHold.asc, builds a .tran deck, and
-// runs ngspice with .meas probes against hand-computed sine samples —
+// runs ngspice with .meas probes against hand-computed sine samples -
 // exercising BOTH A-device modes (A1 = S/H track-and-hold, A2 = CLK edge
 // sampler). Runs under vitest.corpus.config.ts only (needs the local corpus);
 // skips on machines without the corpus or ngspice.

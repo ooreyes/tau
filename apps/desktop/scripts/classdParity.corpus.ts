@@ -1,7 +1,7 @@
 /**
  * Class-D fidelity check (FEATURE_PARITY §7, priority #2): the flagship
  * class-d_starter.asc must SIMULATE correctly, not just converge in .op. Its
- * PWM comparator is a UniversalOpamp2 run open loop between ±10 V rails —
+ * PWM comparator is a UniversalOpamp2 run open loop between ±10 V rails -
  * with the plain gain-1e6 op-amp model the "PWM" node saturates to ~1e7 V and
  * the whole amplifier is garbage; with the rail-clamped model (engine/
  * opampSpec.ts) it must switch rail to rail and the LC-filtered output must
@@ -44,7 +44,7 @@ describe.skipIf(!existsSync(ASC_PATH) || !haveNgspice)("class-d_starter.asc fide
     });
     const imported = importAsc(text, { resolveSubcircuit: resolve });
 
-    // Simulate the circuit's own window (.tran 0 3m — 60 carrier cycles,
+    // Simulate the circuit's own window (.tran 0 3m - 60 carrier cycles,
     // 3 audio cycles), with .meas probes spliced in before .end: the deck
     // builder doesn't pass .meas through, and these are the assertions.
     const tranDirective = imported.directives.find((d) => parseTranDirective(d) !== null);
@@ -84,7 +84,7 @@ describe.skipIf(!existsSync(ASC_PATH) || !haveNgspice)("class-d_starter.asc fide
       expect(run.status, output.slice(-2000)).toBe(0);
       expect(output.toLowerCase()).not.toContain("simulation(s) aborted");
 
-      // The comparator output must clamp to the ±10 V rails — not ±1e7 V
+      // The comparator output must clamp to the ±10 V rails - not ±1e7 V
       // (broken open-loop op-amp) and not stuck at one rail (dead PWM).
       const vpwmMax = measValue(output, "vpwmmax");
       const vpwmMin = measValue(output, "vpwmmin");

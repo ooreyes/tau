@@ -1,7 +1,7 @@
 [package]
 name = "tau"
 version = "0.2.0"
-description = "Tau — a modern, fast circuit simulator with a SPICE-class engine."
+description = "Tau - a modern, fast circuit simulator with a SPICE-class engine."
 authors = ["Omar Reyes"]
 edition = "2021"
 
