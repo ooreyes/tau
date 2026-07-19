@@ -82,7 +82,7 @@ export interface SchematicComponent {
   y: number;
   rotation: Rotation;
   /**
-   * Horizontal flip (mirror across the vertical axis), applied BEFORE rotation —
+   * Horizontal flip (mirror across the vertical axis), applied BEFORE rotation -
    * matching LTspice's `M*` orientations and {@link transformLtPoint}. Absent or
    * `false` means not mirrored. Toggled by Ctrl+E in the editor.
    */
@@ -124,7 +124,7 @@ export interface Probe {
   x: number;
   y: number;
   color: string;
-  /** Resolved net id at placement — stabilizes dedup when the probe drifts off a wire segment. */
+  /** Resolved net id at placement - stabilizes dedup when the probe drifts off a wire segment. */
   netId?: string;
   componentId?: string;
 }
@@ -138,7 +138,7 @@ export interface NetLabel {
   /**
    * Text offset from the electrical anchor `(x, y)`, in world units. Both
    * undefined (never dragged, or an old .sim file predating this field) means
-   * "auto-place" — Canvas.tsx resolves it via `autoNetLabelOffset` every
+   * "auto-place" - Canvas.tsx resolves it via `autoNetLabelOffset` every
    * render instead of baking a placement into the document. Once the user
    * drags the label, dx/dy become explicit and auto-placement never runs
    * again for it, even if a component later moves into the old spot.

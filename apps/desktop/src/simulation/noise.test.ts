@@ -46,13 +46,13 @@ describe("parseNoiseDirective", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Single resistor + current input — flat thermal noise (textbook √(4kTR))
+// Single resistor + current input - flat thermal noise (textbook √(4kTR))
 // ---------------------------------------------------------------------------
 //
 //   out ---R1--- gnd      with current source Iin from out to gnd
 //
 // Only noise source is R1. Transimpedance to "out" = R, so the output noise PSD
-// = R²·(4kT/R) = 4kTR (flat). For R = 1k that is 4.07 nV/√Hz — the classic value.
+// = R²·(4kT/R) = 4kTR (flat). For R = 1k that is 4.07 nV/√Hz - the classic value.
 // With a current input source, input-referred noise = √(4kTR)/R = √(4kT/R).
 
 function singleResistor(): {
@@ -77,7 +77,7 @@ function singleResistor(): {
   return { components, netLabels };
 }
 
-describe("runNoiseAnalysis — single resistor (flat thermal noise)", () => {
+describe("runNoiseAnalysis - single resistor (flat thermal noise)", () => {
   const { components, netLabels } = singleResistor();
   const result = runNoiseAnalysis(
     { components, wires: [], netLabels },
@@ -116,13 +116,13 @@ describe("runNoiseAnalysis — single resistor (flat thermal noise)", () => {
 });
 
 // ---------------------------------------------------------------------------
-// RC low-pass — the famous kTC noise integral
+// RC low-pass - the famous kTC noise integral
 // ---------------------------------------------------------------------------
 //
 //   in ---R1--- out ---C1--- gnd      V1 drives "in"
 //
 // The output noise PSD of an RC filter is 4kTR/(1+(ωRC)²). Integrated over all
-// frequency this is kT/C — independent of R (the "kTC noise"). The input-
+// frequency this is kT/C - independent of R (the "kTC noise"). The input-
 // referred noise is FLAT at √(4kTR) (the resistor's noise referred to input).
 
 function rcLowpass(R: string, C: string): {
@@ -155,7 +155,7 @@ function rcLowpass(R: string, C: string): {
   return { components, netLabels };
 }
 
-describe("runNoiseAnalysis — RC low-pass (kTC noise)", () => {
+describe("runNoiseAnalysis - RC low-pass (kTC noise)", () => {
   const R = 1000;
   const C = 1e-9;
   const { components, netLabels } = rcLowpass("1k", "1n");
@@ -208,7 +208,7 @@ describe("runNoiseAnalysis — RC low-pass (kTC noise)", () => {
 // Error paths
 // ---------------------------------------------------------------------------
 
-describe("runNoiseAnalysis — error handling", () => {
+describe("runNoiseAnalysis - error handling", () => {
   it("reports a missing ground", () => {
     const comps: SchematicComponent[] = [
       { id: "iin", label: "Iin", kind: "iac", x: 0, y: 0, rotation: 0, value: "1",

@@ -93,23 +93,23 @@ describe("Transient resolution guard", () => {
 //   At t=5τ:      V_cap = Vs * (1 - e^{-5})   ≈ 0.9933 * Vs
 
 // ---------------------------------------------------------------------------
-// Test 1 — RC charging circuit
+// Test 1 - RC charging circuit
 // ---------------------------------------------------------------------------
-describe("RC charging — analytic validation", () => {
+describe("RC charging - analytic validation", () => {
   /**
    * Circuit topology (all rotation 0):
    *
    *   VS at (0, 0):   p=(0,-32)  n=(0,32)
    *   R  at (96, 0):  a=(64,0)   b=(128,0)
    *   C  at (224, 0): a=(192,0)  b=(256,0)
-   *   GND_n at (0,32): g=(0,32)  — connects to VS.n
-   *   GND_c at (256,0): g=(256,0) — connects to C.b
+   *   GND_n at (0,32): g=(0,32)  - connects to VS.n
+   *   GND_c at (256,0): g=(256,0) - connects to C.b
    *
    * Wires needed:
    *   VS.p (0,-32) → R.a (64,0): need junction, use a corner wire
    *   R.b (128,0) → C.a (192,0): direct horizontal wire
    *
-   * Simpler layout — place components so pins coincide directly:
+   * Simpler layout - place components so pins coincide directly:
    *
    *   VS at (0, 0):    p=(0,-32), n=(0,32)
    *   R  at (96, 0):   a=(64,0),  b=(128,0)
@@ -125,8 +125,8 @@ describe("RC charging — analytic validation", () => {
    *   VS at (0, 32):   p=(0,0),   n=(0,64)
    *   R  at (96, 0):   a=(64,0),  b=(128,0)
    *   C  at (224, 0):  a=(192,0), b=(256,0)
-   *   GND at (0, 64):  g=(0,64)   — coincides with VS.n
-   *   GND at (256, 0): g=(256,0)  — coincides with C.b
+   *   GND at (0, 64):  g=(0,64)   - coincides with VS.n
+   *   GND at (256, 0): g=(256,0)  - coincides with C.b
    *
    *   Wire: VS.p (0,0) → R.a (64,0) horizontal segment.
    *   Wire: R.b (128,0) → C.a (192,0) horizontal segment.
@@ -237,16 +237,16 @@ describe("RC charging — analytic validation", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Test 2 — Resistive voltage divider (DC steady state)
+// Test 2 - Resistive voltage divider (DC steady state)
 // ---------------------------------------------------------------------------
-describe("Voltage divider — DC steady state", () => {
+describe("Voltage divider - DC steady state", () => {
   /**
    * Circuit:
    *   VS at (0, 32):  p=(0,0), n=(0,64)
-   *   R1 at (96, 0):  a=(64,0), b=(128,0)   — top resistor
-   *   R2 at (192, 0): a=(160,0), b=(224,0)  — bottom resistor
-   *   GND at (0, 64): g=(0,64) — coincides with VS.n
-   *   GND at (224,0): g=(224,0) — coincides with R2.b
+   *   R1 at (96, 0):  a=(64,0), b=(128,0)   - top resistor
+   *   R2 at (192, 0): a=(160,0), b=(224,0)  - bottom resistor
+   *   GND at (0, 64): g=(0,64) - coincides with VS.n
+   *   GND at (224,0): g=(224,0) - coincides with R2.b
    *
    *   Wires:
    *     VS.p (0,0) → R1.a (64,0)
@@ -277,7 +277,7 @@ describe("Voltage divider — DC steady state", () => {
     const result = await runTransientAnalysis({ components, wires }, { stopTime: 1e-3, steps: 100 });
     if (!result.ok) throw new Error(result.message);
 
-    // Mid-node is between R1.b and R2.a — it should read ~5V immediately
+    // Mid-node is between R1.b and R2.a - it should read ~5V immediately
     // (pure resistive divider, no storage elements).
     const midTrace = result.traces.find(t => {
       const last = t.values[t.values.length - 1];
@@ -307,9 +307,9 @@ describe("Voltage divider — DC steady state", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Test 3 — RLC series under-damped circuit
+// Test 3 - RLC series under-damped circuit
 // ---------------------------------------------------------------------------
-describe("RLC series — under-damped oscillation", () => {
+describe("RLC series - under-damped oscillation", () => {
   /**
    * Under-damped RLC: R=10Ω, L=1mH, C=1µF → ω₀ = 1/√(LC) ≈ 31623 rad/s,
    * α = R/(2L) = 5000 s⁻¹, ω₀ > α → under-damped.
@@ -320,8 +320,8 @@ describe("RLC series — under-damped oscillation", () => {
    *   R  at (96, 0):    a=(64,0),  b=(128,0)
    *   L  at (192, 0):   a=(160,0), b=(224,0)
    *   C  at (288, 0):   a=(256,0), b=(320,0)
-   *   GND at (0, 64):   g=(0,64)  — coincides with VS.n
-   *   GND at (320, 0):  g=(320,0) — coincides with C.b
+   *   GND at (0, 64):   g=(0,64)  - coincides with VS.n
+   *   GND at (320, 0):  g=(320,0) - coincides with C.b
    *
    *   Wires connect the chain: VS.p→R.a, R.b→L.a, L.b→C.a
    *
@@ -407,7 +407,7 @@ describe("RLC series — under-damped oscillation", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Test 4 — Graceful failure cases (ok === false, no throw)
+// Test 4 - Graceful failure cases (ok === false, no throw)
 // ---------------------------------------------------------------------------
 describe("Graceful failure cases", () => {
   it("missing ground → ok=false", async () => {
@@ -436,7 +436,7 @@ describe("Graceful failure cases", () => {
   it("single floating node (no connections) → ok=false", async () => {
     // A resistor with its b pin floating (connected nowhere), plus VS+GND
     // VS at (0,32): p=(0,0), n=(0,64)
-    // R at (96, 200): a=(64,200), b=(128,200)  — in a different area, floating
+    // R at (96, 200): a=(64,200), b=(128,200)  - in a different area, floating
     // GND at (0,64)
     // Wire: VS.p(0,0) only → R and VS are disconnected
     const VS = vsource(0, 32, "5V", "V1");
@@ -453,14 +453,14 @@ describe("Graceful failure cases", () => {
   });
 
   it("singular matrix (VS with both terminals on same net) → ok=false", async () => {
-    // VS with p and n tied together via wire (zero-voltage loop) — singular
+    // VS with p and n tied together via wire (zero-voltage loop) - singular
     // VS at (0, 0): p=(0,-32), n=(0,32)
     // Wire from p(0,-32) to n(0,32): creates short
     // Actually: easier to use two voltage sources in a loop → singular KVL
     // Or: VS between two ground nodes (n is GND, p is also connected to GND via wire)
     const VS = vsource(0, 32, "5V", "V1");
     const GND_n = ground(0, 64);   // VS.n=(0,64) coincides
-    const GND_p = ground(0, 0);    // VS.p=(0,0) coincides — short VS to ground
+    const GND_p = ground(0, 0);    // VS.p=(0,0) coincides - short VS to ground
     const components = [VS, GND_n, GND_p];
     const wires: SchematicWire[] = [];
 
@@ -479,7 +479,7 @@ describe("Graceful failure cases", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Test 5 — New source primitives
+// Test 5 - New source primitives
 // ---------------------------------------------------------------------------
 describe("Transient source primitives", () => {
   it("AC voltage source drives a sine waveform", async () => {
@@ -521,9 +521,9 @@ describe("Transient source primitives", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Test 5 — Branch currents I(...) exposed for .meas / probe
+// Test 5 - Branch currents I(...) exposed for .meas / probe
 // ---------------------------------------------------------------------------
-describe("Branch currents — I(...) exposure", () => {
+describe("Branch currents - I(...) exposure", () => {
   /**
    * Same resistive divider as Test 2: V1=10 V across R1=R2=1k in series.
    * Series current = 10 / 2000 = 5 mA.
@@ -595,7 +595,7 @@ describe("Branch currents — I(...) exposure", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Test — function-source stimulus (PULSE / SINE on a plain vsource)
+// Test - function-source stimulus (PULSE / SINE on a plain vsource)
 // ---------------------------------------------------------------------------
 describe("PULSE/SINE stimulus drives the TS transient solver", () => {
   /**
@@ -651,10 +651,10 @@ describe("PULSE/SINE stimulus drives the TS transient solver", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Cooperative async solve: progress + abort (Fix 3 — "runs block the UI")
+// Cooperative async solve: progress + abort (Fix 3 - "runs block the UI")
 // ---------------------------------------------------------------------------
 
-describe("runTransientAnalysis — async progress/abort (Fix 3)", () => {
+describe("runTransientAnalysis - async progress/abort (Fix 3)", () => {
   function simpleRcCircuit(steps: number) {
     const v1 = vsource(0, 32, "5", "V1");
     const r1 = resistor(96, 0, "1k", "R1");
@@ -699,7 +699,7 @@ describe("runTransientAnalysis — async progress/abort (Fix 3)", () => {
       { stopTime, steps },
       {
         signal: controller.signal,
-        // Abort partway through — onProgress fires before the loop checks
+        // Abort partway through - onProgress fires before the loop checks
         // `signal.aborted`, so this deterministically stops the run instead
         // of racing a real timer.
         onProgress: (fraction) => {
@@ -721,7 +721,7 @@ describe("runTransientAnalysis — async progress/abort (Fix 3)", () => {
     expect(result.warnings.some((w) => /stopped early/i.test(w))).toBe(true);
   });
 
-  it("never aborts (signal absent) — behaves exactly as a plain run", async () => {
+  it("never aborts (signal absent) - behaves exactly as a plain run", async () => {
     const { components, wires, stopTime, steps } = simpleRcCircuit(200);
     const result = await runTransientAnalysis({ components, wires }, { stopTime, steps });
     expect(result.ok).toBe(true);

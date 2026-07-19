@@ -3,7 +3,7 @@ import { evaluateExpression, parse } from "./expr";
 
 const ev = (s: string, scope = {}, funcs = {}) => evaluateExpression(s, scope, funcs);
 
-describe("evaluateExpression — arithmetic", () => {
+describe("evaluateExpression - arithmetic", () => {
   it("adds, subtracts, multiplies, divides", () => {
     expect(ev("2+3")).toBe(5);
     expect(ev("10-4")).toBe(6);
@@ -37,7 +37,7 @@ describe("evaluateExpression — arithmetic", () => {
   });
 });
 
-describe("evaluateExpression — SI-suffixed literals", () => {
+describe("evaluateExpression - SI-suffixed literals", () => {
   it("parses k, meg, m, u, n, p", () => {
     expect(ev("1k")).toBe(1000);
     expect(ev("2.2meg")).toBe(2.2e6);
@@ -73,7 +73,7 @@ describe("evaluateExpression — SI-suffixed literals", () => {
   });
 });
 
-describe("evaluateExpression — variables & constants", () => {
+describe("evaluateExpression - variables & constants", () => {
   it("resolves scope variables", () => {
     expect(ev("R*2", { R: 1000 })).toBe(2000);
     expect(ev("vdd - vee", { vdd: 5, vee: -5 })).toBe(10);
@@ -106,7 +106,7 @@ describe("evaluateExpression — variables & constants", () => {
   });
 });
 
-describe("evaluateExpression — functions", () => {
+describe("evaluateExpression - functions", () => {
   it("evaluates trig and exp/log", () => {
     expect(ev("sin(0)")).toBe(0);
     expect(ev("cos(0)")).toBe(1);
@@ -201,7 +201,7 @@ describe("evaluateExpression — functions", () => {
   });
 });
 
-describe("evaluateExpression — comparisons, logic, ternary", () => {
+describe("evaluateExpression - comparisons, logic, ternary", () => {
   it("evaluates comparisons to 1/0", () => {
     expect(ev("3 > 2")).toBe(1);
     expect(ev("3 < 2")).toBe(0);
@@ -222,7 +222,7 @@ describe("evaluateExpression — comparisons, logic, ternary", () => {
   });
 });
 
-describe("evaluateExpression — user .func", () => {
+describe("evaluateExpression - user .func", () => {
   it("calls a user function with bound args", () => {
     const funcs = { sq: { params: ["x"], body: "x*x" } };
     expect(ev("sq(5)", {}, funcs)).toBe(25);
@@ -247,7 +247,7 @@ describe("evaluateExpression — user .func", () => {
   });
 });
 
-describe("parse — error handling", () => {
+describe("parse - error handling", () => {
   it("throws on empty expression", () => {
     expect(() => parse("")).toThrow();
   });

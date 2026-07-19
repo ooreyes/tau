@@ -244,7 +244,7 @@ const PIN_ALIASES: Partial<Record<ComponentKind, Record<string, string>>> = {
     in: "in-",
     outp: "out",
     output: "out",
-    // Comparators have no drawable supply pins — rails live in the value
+    // Comparators have no drawable supply pins - rails live in the value
     // string. Map supply nicknames away so models do not invent U1.v+/-.
   },
   npn: { base: "b", collector: "c", emitter: "e", b: "b", c: "c", e: "e" },
@@ -270,7 +270,7 @@ function isPositiveSupplyNetName(name: string): boolean {
 
 /** Prefer a named rail over ground when the model lists the same pin twice.
  * MOSFET source/bulk are special: nmos return wants ground; pmos wants the
- * positive rail — otherwise a dual-listed M1.s on SW+0 would stick to SW. */
+ * positive rail - otherwise a dual-listed M1.s on SW+0 would stick to SW. */
 function netAssignmentScore(
   netName: string,
   pinCountOnNet: number,
@@ -292,7 +292,7 @@ function netAssignmentScore(
   }
   if (netName === "0") return pinCountOnNet;
   // Named nets always beat ground. Pin count breaks ties among named nets so a
-  // denser intentional rail wins over a singleton leftover — equal counts stay
+  // denser intentional rail wins over a singleton leftover - equal counts stay
   // ambiguous and reject below.
   return 1000 + pinCountOnNet;
 }
@@ -305,7 +305,7 @@ function formatPinConflictHint(
   const validIds = getLocalPins(kind).map((pin) => pin.id).join(", ");
   return (
     `${canonical} is connected to more than one net (${netNames.join(", ")}). `
-    + `Each pin may appear in exactly one net — aliases like vee/vss/v- collapse to the same pin. `
+    + `Each pin may appear in exactly one net - aliases like vee/vss/v- collapse to the same pin. `
     + `Keep ${canonical} only on the intended net and remove it from the others. `
     + `${kind} pins: ${validIds}.`
   );
@@ -320,7 +320,7 @@ function formatPinConflictHint(
  * - Uncovered pmos `s` → attach to a positive supply net: prefer a net named
  *   VDD/VCC/…, else any non-ground net that already holds a vsource `.p`.
  * - Uncovered `b` (bulk) → tie to that device's source net (after source repair).
- * Gate/drain are never invented — those stay hard failures for the repair loop.
+ * Gate/drain are never invented - those stay hard failures for the repair loop.
  */
 function autoRepairMosSourceAndBulk(
   components: CircuitPlanComponent[],
@@ -383,9 +383,9 @@ function autoRepairMosSourceAndBulk(
 }
 
 /**
- * Dual-NMOS half-bridges cannot switch the high side from a 0–VDD gate drive
+ * Dual-NMOS half-bridges cannot switch the high side from a 0-VDD gate drive
  * (needs bootstrap / level shift). Live Class-D failures used two nmos with a
- * shared PWM gate — rewrite the second device to pmos and park its source/bulk
+ * shared PWM gate - rewrite the second device to pmos and park its source/bulk
  * on the positive rail so the complementary golden topology is recovered.
  */
 function autoRepairDualNmosHalfBridge(
@@ -400,7 +400,7 @@ function autoRepairDualNmosHalfBridge(
   const pinNet = (pinKey: string): string | undefined =>
     mutableNets.find((net) => net.pins.some((pin) => pin.toLowerCase() === pinKey))?.name;
 
-  // Prefer a shared gate net — that is the PWM comparator drive.
+  // Prefer a shared gate net - that is the PWM comparator drive.
   const gateNets = new Map<string, string[]>();
   for (const fet of nmos) {
     const gateNet = pinNet(`${fet.ref}.g`.toLowerCase());
@@ -539,10 +539,10 @@ function parsePlan(input: unknown): CircuitPlan {
   if (Object.keys(source).some((key) => !allowed.has(key))) throw new Error("circuit plan has unknown fields");
   if (source.mode !== "create" && source.mode !== "replace_current") throw new Error("circuit plan mode is invalid");
   if (!Array.isArray(source.components) || source.components.length < 1 || source.components.length > MAX_COMPONENTS) {
-    throw new Error(`circuit plan must contain 1–${MAX_COMPONENTS} components`);
+    throw new Error(`circuit plan must contain 1-${MAX_COMPONENTS} components`);
   }
   if (!Array.isArray(source.nets) || source.nets.length < 1 || source.nets.length > MAX_NETS) {
-    throw new Error(`circuit plan must contain 1–${MAX_NETS} nets`);
+    throw new Error(`circuit plan must contain 1-${MAX_NETS} nets`);
   }
 
   const kindSet = new Set<string>(ASSISTANT_GENERATABLE_KINDS);
@@ -608,10 +608,10 @@ function parsePlan(input: unknown): CircuitPlan {
       if (!component) {
         // Name the declared refs: a small model that invented "Vtri" (or
         // mistyped a ref) needs the actual roster to converge in one repair
-        // attempt — either connect an existing ref or declare the missing one.
+        // attempt - either connect an existing ref or declare the missing one.
         const declared = [...byRef.values()].map((candidate) => candidate.ref).join(", ");
         throw new Error(
-          `${token} references an unknown component — declared components are: ${declared}. `
+          `${token} references an unknown component - declared components are: ${declared}. `
           + `Either use one of those refs or add the missing component to the components list`,
         );
       }
@@ -621,7 +621,7 @@ function parsePlan(input: unknown): CircuitPlan {
         const supplyLike = /^(?:v\+|v-|vcc|vee|vdd|vss|vp|vn|avdd|avss)$/i.test(rawPin);
         if (component.kind === "comparator" && supplyLike) {
           throw new Error(
-            `${component.ref}.${rawPin} is not a valid comparator pin — comparators have NO supply pins `
+            `${component.ref}.${rawPin} is not a valid comparator pin - comparators have NO supply pins `
             + `(use ${validIds.join(", ")}; put high/low rails in the value string, e.g. "10 0 0")`,
           );
         }
@@ -706,7 +706,7 @@ function parsePlan(input: unknown): CircuitPlan {
   // remaining floaters still reject with an explicit MOSFET fix pattern.
   const afterMosPins = autoRepairMosSourceAndBulk(components, nets);
   // Dual-NMOS half-bridges (shared PWM gate, no pmos) cannot switch from a
-  // 0–VDD gate drive — rewrite to complementary nmos+pmos before validation.
+  // 0-VDD gate drive - rewrite to complementary nmos+pmos before validation.
   const repaired = autoRepairDualNmosHalfBridge(components, afterMosPins);
   components = repaired.components;
   const repairedNets = repaired.nets;
@@ -715,7 +715,7 @@ function parsePlan(input: unknown): CircuitPlan {
     repairedNets.flatMap((net) => net.pins.map((pin) => pin.toLowerCase())),
   );
 
-  // A pin absent from every net is a silently floating part — the simulation
+  // A pin absent from every net is a silently floating part - the simulation
   // would read 0 V / 0 A and the schematic would look plausible but be wrong.
   // Rejecting here feeds the provider's repair loop, so the model corrects
   // its own plan instead of shipping a broken circuit. Report every floating
@@ -890,7 +890,7 @@ function lowerCompositePlan(plan: CircuitPlan): DirectCircuitPlan {
   return { ...plan, components, nets, directives: [...plan.directives, ...internalDirectives] };
 }
 
-// Moderate pitch — pin-alignment below keeps wires straight so we do not need
+// Moderate pitch - pin-alignment below keeps wires straight so we do not need
 // huge empty rectangles between parts.
 const COLUMN_PITCH = 208;
 const ROW_PITCH = 144;
@@ -997,7 +997,7 @@ function moveComponent(
 
 /**
  * After coarse level placement, slide parts so connected pins share an axis.
- * That turns L-shaped router jogs into single straight wires — the difference
+ * That turns L-shaped router jogs into single straight wires - the difference
  * between a hand-drawn LED loop and a sparse rectangle with stair-steps.
  */
 function alignConnectedPins(plan: DirectCircuitPlan, components: SchematicComponent[]): void {
@@ -1041,7 +1041,7 @@ function alignConnectedPins(plan: DirectCircuitPlan, components: SchematicCompon
 
 /**
  * Row order within each level, chosen so parts sit next to what they connect
- * to (Sugiyama barycenter sweeps) instead of stacking in plan order — plan
+ * to (Sugiyama barycenter sweeps) instead of stacking in plan order - plan
  * order is what left an LC filter's C and R dangling far below the bridge
  * while L drifted to the top. Shorter columns are then centered against the
  * tallest so single-part levels ride the visual middle of the signal path.
@@ -1167,7 +1167,7 @@ export function assertAssistantDrawingIntegrity(
       const onPin = pinPoints.some((pin) => pointsEqual(pin, end));
       if (!onPin) {
         throw new Error(
-          `Tau layout left a wire floating at (${end.x}, ${end.y}) — not attached to any symbol pin`,
+          `Tau layout left a wire floating at (${end.x}, ${end.y}) - not attached to any symbol pin`,
         );
       }
     }
@@ -1216,7 +1216,7 @@ function compileDocument(plan: DirectCircuitPlan): {
 } {
   // Layout and route against Tau's native pin banks only. Routing against
   // LTspice ASC pin overrides made wires attach to coordinates the canvas
-  // symbols do not draw — the "disconnected spaghetti" failure mode.
+  // symbols do not draw - the "disconnected spaghetti" failure mode.
   const components = layoutComponents(plan);
   const groundNet = plan.nets.find((net) => net.name === "0");
   if (!groundNet) throw new Error("circuit plan needs a 0 ground net");

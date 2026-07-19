@@ -1,12 +1,12 @@
-import { extractCircuit, isResistiveWire, netAtPoint, type ExtractedCircuit, type ExtractedComponent } from "../schematic/netlist";
-import { resolveComponentValues, expandDirectiveLines, substituteKnownBraces, EMPTY_SCOPE, type ParamScope } from "../simulation/paramScope";
+import { extractCircuit, isResistiveWire, netAtPoint, spiceSafeToken, type ExtractedCircuit, type ExtractedComponent } from "../schematic/netlist";
+import { resolveComponentValues, expandDirectiveLines, inlineFuncCalls, substituteKnownBraces, substituteBehavioralBraces, substituteScopeIdentifiers, EMPTY_SCOPE, type ParamScope } from "../simulation/paramScope";
 import type { ComponentKind, NetLabel, SchematicComponent, SchematicWire } from "../schematic/types";
 import { parseQuantity } from "../simulation/quantity";
 import { decodeParams } from "../schematic/params";
 import { parseSourceFunction } from "./sourceFunction";
 import { stripAcSpec, acSpecDeckText, stripSourceModifiers } from "./acSpec";
 import { stripIcSpec, icSpecDeckText, parseIcValue } from "./icSpec";
-import { behavioralSpecText as behavioralSpec } from "../simulation/behavioral";
+import { behavioralSpecText as behavioralSpec, ifToTernary, ltFuncsToNgspice, moduloToFloor, statFuncsToNgspice } from "../simulation/behavioral";
 import { parseComparator, comparatorDeckLine } from "./comparatorSpec";
 import { parseCrystal, crystalDeckLines } from "./crystalSpec";
 import { parseDigitalGate, digitalGateDeckLines, dflopDeckLines } from "./digitalGateSpec";
@@ -71,11 +71,86 @@ const DEFAULT_MODELS = [
  * are intentionally generic starter models; named vendor models belong in an
  * imported library, not in the schematic renderer or React UI.
  */
+/** LTspice behavioral element values: a `V=` / `I=` / `R=` expression prefix. */
+function isBehavioralValue(value: string | undefined): boolean {
+  return !!value && /^\s*[VIR]\s*=/i.test(value);
+}
+
 export function buildSpiceDeck(schematic: Schematic, analysis: SpiceAnalysis): SpiceDeck {
-  const components = resolveComponentValues(schematic.components, schematic.params ?? EMPTY_SCOPE);
+  const paramScope = schematic.params ?? EMPTY_SCOPE;
+  // Behavioral (V=/I=/R=) expressions may legitimately reference run-time
+  // state (`time`, `V(node)`) inside braces or as bare param names - LTspice
+  // resolves those late, so route them through the lenient behavioral
+  // substitution instead of the strict numeric brace resolver, which would
+  // reject the whole deck with e.g. `Unknown parameter "time"` (SRF_PLL).
+  // (After behavioral substitution those values are brace-free, so the strict
+  // resolver below leaves them untouched and everything else stays strict.)
+  const components = resolveComponentValues(
+    schematic.components.map((component) =>
+      isBehavioralValue(component.value)
+        ? { ...component, value: substituteScopeIdentifiers(substituteBehavioralBraces(inlineFuncCalls(component.value, paramScope.funcs), paramScope), paramScope) }
+        : component,
+    ),
+    paramScope,
+  );
   const circuit = extractCircuit(components, schematic.wires, schematic.netLabels ?? []);
   if (components.length === 0) throw new Error("Place components before running analysis.");
   if (!circuit.groundNetId) throw new Error("Add a ground symbol so node voltages have a reference.");
+
+  // Branch-current references in behavioral expressions. LTspice's B-sources
+  // may read ANY element's current (`V=I(R1)`, BATTERY_ECM's coulomb counter);
+  // ngspice only knows V-source/inductor branch currents, and a flattened
+  // block's element is emitted under its instance-prefixed name (RX16_R1), so
+  // a verbatim `I(R1)` dies with "unknown controlling source". Resolve the
+  // reference LTspice-style - innermost enclosing block first, then outward -
+  // then rewrite: V-source/inductor refs to the emitted instance name,
+  // resistor refs to Ohm's law over the resistor's own nets.
+  const componentsByLabel = new Map<string, { entry: ExtractedComponent; index: number }>();
+  circuit.components.forEach((entry, index) => {
+    const label = entry.component.label?.trim().toLowerCase();
+    if (label && !componentsByLabel.has(label)) componentsByLabel.set(label, { entry, index });
+  });
+  const deckNode = (netId: string | undefined): string | null =>
+    netId === undefined ? null : netId === circuit.groundNetId ? "0" : netId.toLowerCase();
+  // Node names inside behavioral expressions must transliterate exactly like
+  // net labels do (spiceSafeToken), or a Greek-named net (`V(θ_pll)`,
+  // `V(uα)`) silently references a different, floating node in the deck.
+  const sanitizeExprNodeRefs = (value: string): string =>
+    value.replace(/\bV\s*\(\s*([^\s(),]+)\s*(?:,\s*([^\s(),]+)\s*)?\)/giu, (_m, a: string, b?: string) =>
+      b ? `V(${spiceSafeToken(a)},${spiceSafeToken(b)})` : `V(${spiceSafeToken(a)})`,
+    );
+  const rewriteCurrentRefs = (value: string, ownerLabel: string): string =>
+    value.replace(/\bI\s*\(\s*([\w.]+)\s*\)/gi, (match, ref: string) => {
+      const segments = ownerLabel.split(".");
+      for (let keep = segments.length - 1; keep >= 0; keep -= 1) {
+        const prefix = segments.slice(0, keep).join(".");
+        const target = componentsByLabel.get((prefix ? `${prefix}.${ref}` : ref).toLowerCase());
+        if (!target) continue;
+        const kind = target.entry.component.kind;
+        if (kind === "vsource" || kind === "vac" || kind === "inductor") {
+          return `I(${instanceName(target.entry.component, target.index)})`;
+        }
+        if (kind === "resistor") {
+          const a = deckNode(target.entry.pins.a);
+          const b = deckNode(target.entry.pins.b);
+          try {
+            const ohms = parseQuantity(target.entry.component.value, "Ω");
+            if (a !== null && b !== null && ohms !== 0) return `((V(${a})-V(${b}))/(${ohms}))`;
+          } catch {
+            /* behavioral/unparseable resistance - leave the reference as-is */
+          }
+        }
+        return match;
+      }
+      return match;
+    });
+  for (const entry of circuit.components) {
+    const value = entry.component.value;
+    if (entry.component.kind === "bsource" || isBehavioralValue(value)) {
+      const rewritten = sanitizeExprNodeRefs(rewriteCurrentRefs(value, entry.component.label ?? ""));
+      if (rewritten !== value) entry.component = { ...entry.component, value: rewritten };
+    }
+  }
 
   // LTspice packs several directives into one on-canvas TEXT block joined by the
   // literal `\n` escape (e.g. `.ic v(vo)=0.5\n.tran 10m`). The single-line
@@ -95,13 +170,13 @@ export function buildSpiceDeck(schematic: Schematic, analysis: SpiceAnalysis): S
   // deck so an imported `.asc` simulates against its real device models and
   // libraries instead of only Tau's generic starter models. A `.include`/`.lib`
   // that names a BUNDLED LTspice library file (1563.asc's `.include TowTom2.sub`)
-  // is replaced by the bundled text itself — ngspice can't resolve LTspice's
+  // is replaced by the bundled text itself - ngspice can't resolve LTspice's
   // lib/sub paths from Tau's working directory. Names those texts define are
   // tracked so the per-instance emission below doesn't duplicate the block.
   const inlinedSubckts = new Set<string>();
   // Track `.subckt … .ends` nesting: LTspice evaluates a `{param}` on a
   // passthrough `.model` line against the document's global `.param` scope
-  // (Fc.asc's `.model DX D(Cjo={Cjo} …)` — ngspice instead dies with
+  // (Fc.asc's `.model DX D(Cjo={Cjo} …)` - ngspice instead dies with
   // "Undefined parameter"), but a brace INSIDE a document-defined subckt body
   // must stay verbatim for ngspice to resolve against the subckt's own params.
   let subcktDepth = 0;
@@ -153,14 +228,14 @@ export function buildSpiceDeck(schematic: Schematic, analysis: SpiceAnalysis): S
     hasIc,
     inductorCurrents,
     warnings: icWarnings,
-  } = icLinesFromDirectives(flatDirectives, circuit);
+  } = icLinesFromDirectives(flatDirectives, circuit, paramScope);
   circuit.warnings.push(...icWarnings);
   lines.push(...icLines);
 
   const userModels = definedModelNames(schematic.directives ?? []);
   // VDMOS power-MOSFET model names (lower-cased), from the document's own
   // `.model … VDMOS(…)` definitions. A MOSFET on one of these emits a 3-terminal
-  // VDMOS device line (the bulk node is dropped — see `componentLines`).
+  // VDMOS device line (the bulk node is dropped - see `componentLines`).
   const vdmosModels = new Set<string>();
   for (const [model, type] of definedModelTypes(schematic.directives ?? [])) {
     if (type === "vdmos") vdmosModels.add(model);
@@ -193,7 +268,7 @@ export function buildSpiceDeck(schematic: Schematic, analysis: SpiceAnalysis): S
   // A subcircuit instance references its `.subckt` by name (the value's first
   // token). When the document neither defines that name nor `.include`s a
   // bundled library that does, emit the bundled block (engine/
-  // bundledSubcircuits.ts) so the deck is self-contained — this is how the
+  // bundledSubcircuits.ts) so the deck is self-contained - this is how the
   // ISO16750-2/ISO7637-2 symbols work in LTspice, whose `.asy` ModelFile
   // attribute pulls the library in without any on-canvas directive.
   const emittedSubckts = new Set<string>();
@@ -301,10 +376,19 @@ function componentLines(entry: ExtractedComponent, index: number, userModels: Se
     vdmosModels.has(modelName.toLowerCase());
 
   switch (component.kind) {
-    case "resistor":
+    case "resistor": {
+      // PowerSim GD-style behavioral resistance: a res symbol whose value is a
+      // `V=`/`R=` expression (switchable drive strength ron/roff). ngspice
+      // takes the run-time expression quoted: R1 a b r = 'expr'.
+      const raw = component.value ?? "";
+      if (/^\s*[VR]\s*=/i.test(raw)) {
+        const expr = moduloToFloor(ltFuncsToNgspice(statFuncsToNgspice(ifToTernary(raw.replace(/^\s*[VR]\s*=\s*/i, "")))));
+        return [`${name} ${node("a")} ${node("b")} r = '${expr}'`];
+      }
       // SPICE allows negative resistance (active/negative-impedance elements,
       // e.g. Draft7's -1k); reject only zero/NaN, which is a short.
       return [`${name} ${node("a")} ${node("b")} ${nonZeroNumberValue(component, "Ohm")}`];
+    }
     case "capacitor": {
       // An imported crystal (Misc\xtal) lands as a capacitor whose value carries
       // the motional-branch params (Lser/Cpar); expand it into the real BVD
@@ -356,10 +440,13 @@ function componentLines(entry: ExtractedComponent, index: number, userModels: Se
       // SPICE convention: I N+ N- value → current flows from N+ toward N- through the
       // source body, so N+ is the terminal where external current enters (N+ voltage goes
       // negative for positive I into a resistive load).  Tau's schematic uses p="+", n="-"
-      // with the convention that positive I raises V(p) — consistent with the TS MNA solver.
+      // with the convention that positive I raises V(p) - consistent with the TS MNA solver.
       // Emit as "I name n p value" so that ngspice's N+ = n (sink) and N- = p (source),
       // making V(p) rise for positive current just as the TS solver predicts.
-      const main = stripSourceModifiers(stripAcSpec(component.value));
+      // LTspice's `load`/`load2` flags (current source acts as a clamped load,
+      // CP_PLL's `{gm} load`) have no ngspice equivalent - approximate as the
+      // ideal source by dropping the flag rather than failing the deck.
+      const main = stripSourceModifiers(stripAcSpec(component.value)).replace(/\s+load2?\s*$/i, "");
       const ac = acSpecDeckText(component.value);
       const fn = parseSourceFunction(main, "A");
       if (fn) return [`${name} ${node("n")} ${node("p")} ${fn.text}${ac}`];
@@ -434,7 +521,7 @@ function componentLines(entry: ExtractedComponent, index: number, userModels: Se
       const base = safeName(component.label || `U${index + 1}`);
       // When both supply pins are actually driven (on the ground net or a net
       // with another pin), clamp the output to the rails like LTspice's
-      // UniversalOpamp2 — run open loop (class-d_starter's PWM comparator) the
+      // UniversalOpamp2 - run open loop (class-d_starter's PWM comparator) the
       // plain gain-1e6 model saturates to ~1e7 V instead of switching rail to
       // rail. Floating supplies keep the classic unbounded ideal model.
       const driven = (netId: string | undefined): netId is string =>
@@ -482,9 +569,9 @@ function componentLines(entry: ExtractedComponent, index: number, userModels: Se
       }, spec);
     }
     case "dflop": {
-      // Stateful device — no B-source can hold edge-triggered state, so emit
+      // Stateful device - no B-source can hold edge-triggered state, so emit
       // an XSPICE d_dff between explicit adc/dac bridges at the gate's logic
-      // levels (engine/digitalGateSpec.ts; bridges live-verified — the AUTO
+      // levels (engine/digitalGateSpec.ts; bridges live-verified - the AUTO
       // bridge thresholds sit above LTspice's 0..1 V levels). Unconnected
       // control pins tie to analog ground (digital 0 = inactive).
       const base = safeName(component.label || `A${index + 1}`);
@@ -506,7 +593,7 @@ function componentLines(entry: ExtractedComponent, index: number, userModels: Se
     }
     case "sampleHold": {
       // LTspice SpecialFunctions\sample (SAMPLEHOLD): behavioral track-and-
-      // hold — S/H high tracks V(in+,in-) and holds when low; CLK latches the
+      // hold - S/H high tracks V(in+,in-) and holds when low; CLK latches the
       // input at each rising edge via master-slave switch+cap stages
       // (engine/sampleHoldSpec.ts, live-verified against the Educational
       // SampleAndHold example). Params (Vt=…) share the A-device value syntax.
@@ -528,7 +615,7 @@ function componentLines(entry: ExtractedComponent, index: number, userModels: Se
       }, spec);
     }
     case "modulator": {
-      // LTspice SpecialFunctions\modulate (MODULATOR): behavioral VCO — a
+      // LTspice SpecialFunctions\modulate (MODULATOR): behavioral VCO - a
       // unit sine at `space` Hz for FM=0V, `mark` Hz for FM=1V, amplitude
       // scaled by the AM input (engine/modulatorSpec.ts, live-verified
       // against PLL.asc's space=0 entry).
@@ -628,14 +715,14 @@ function componentLines(entry: ExtractedComponent, index: number, userModels: Se
     }
     case "tline": {
       // Ideal lossless transmission line: T N1 N2 N3 N4 Z0=.. TD=..
-      // Port A = (a1,a2), port B = (b1,b2). Delay/impedance element — native
+      // Port A = (a1,a2), port B = (b1,b2). Delay/impedance element - native
       // engine only (the linear TS MNA solver has no transmission-line stamp).
       return [`${name} ${node("a1")} ${node("a2")} ${node("b1")} ${node("b2")} ${tlineDeckParams(component.value)}`];
     }
     case "subckt": {
       // Subcircuit instance: X <nodes in SpiceOrder> <subckt name> [params].
       // Pin ids are p1..pN (the importer banks them in the .asy's SpiceOrder),
-      // so sort numerically — object key order is not a contract. The name is
+      // so sort numerically - object key order is not a contract. The name is
       // sanitized exactly like the bundled `.subckt` lines (a dash in a subckt
       // name is fatal to ngspice's X-line lookup), and any `µ` in the instance
       // params (Fc.asc's `C=.25µ`) becomes ngspice's `u`.
@@ -684,6 +771,7 @@ const LTSPICE_IC_ASSIGNMENT = /([VI])\s*\(\s*([^)]+?)\s*\)\s*=\s*(\{[^}]*\}|[^\s
 function icLinesFromDirectives(
   directives: ReadonlyArray<string>,
   circuit: ExtractedCircuit,
+  params: ParamScope = EMPTY_SCOPE,
 ): InitialConditionDeckSpec {
   const lines: string[] = [];
   let hasIc = false;
@@ -699,7 +787,9 @@ function icLinesFromDirectives(
     const m = /^(ic|nodeset)\b\s*(.+)$/i.exec(bare);
     if (!m) continue;
     const keyword = m[1].toLowerCase();
-    const body = m[2].trim();
+    // The deck carries no .param lines (Tau resolves params app-side), so any
+    // `{vout}`-style brace here must be substituted now or ngspice fatals.
+    const body = substituteKnownBraces(m[2].trim(), params);
     if (keyword === "nodeset") {
       lines.push(`.nodeset ${body}`);
       continue;
@@ -812,7 +902,7 @@ function instanceName(component: SchematicComponent, index: number): string {
   // refdes so `R1` and `r1` reach the duplicate-name guard as the same device
   // instead of manufacturing a misleading `Rr1` fallback.
   if (requested.slice(0, p.length).toLocaleLowerCase() === p.toLocaleLowerCase()) return requested;
-  // The label doesn't match the kind's SPICE prefix — this happens when a device
+  // The label doesn't match the kind's SPICE prefix - this happens when a device
   // is remapped to a placeholder kind (diac/varistor → resistor keep their `Q1`/
   // `A1` labels). A bare `${p}${index+1}` fallback can COLLIDE with a real
   // component that legitimately owns that name (dimmer.asc: diac `Q1`→`R1`
@@ -909,7 +999,7 @@ function mosfetInstanceParams(mos: Record<string, string>): string {
   if (mos.l?.trim()) parts.push(`L=${mos.l.trim()}`);
   // KP/VTO are model parameters in SPICE; when the user sets them on the
   // instance we still emit them as instance overrides (ngspice accepts W/L
-  // on M lines; KP/VTO on the instance are ignored by some engines — keep
+  // on M lines; KP/VTO on the instance are ignored by some engines - keep
   // them in the value string for the UI and only emit W/L on the deck line).
   return parts.length ? ` ${parts.join(" ")}` : "";
 }

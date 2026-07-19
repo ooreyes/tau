@@ -1,8 +1,7 @@
-// Group delay of an AC response (FEATURE_PARITY §6 "Log/linear axes, dB, phase,
-// group delay" — the LTspice waveform viewer's group-delay trace).
+// Group delay of an AC response (LTspice parity).
 //
 // Group delay is τ(ω) = −dφ/dω, the negative slope of the phase response with
-// respect to angular frequency — the time a narrow-band signal centred at ω is
+// respect to angular frequency - the time a narrow-band signal centred at ω is
 // delayed by the network. LTspice plots it in seconds. Two subtleties make a
 // naive `diff(phase)` wrong, so we handle both here and unit-test them:
 //

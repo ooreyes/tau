@@ -146,7 +146,7 @@ export function Palette({ focusSignal }: { focusSignal: number; onNotice: (messa
                 <div className="palette-list">
                   <button
                     className={`palette-item${tool.mode === "wire" ? " active" : ""}`}
-                    title="Draw wire — press W"
+                    title="Draw wire - press W"
                     onClick={(ev) => {
                       startWiring();
                       ev.currentTarget.blur();
@@ -178,7 +178,7 @@ export function Palette({ focusSignal }: { focusSignal: number; onNotice: (messa
                   </button>
                   <button
                     className={`palette-item${tool.mode === "label" ? " active" : ""}`}
-                    title="Name a net — press F4, click a point, type the name"
+                    title="Name a net - press F4, click a point, type the name"
                     onClick={(ev) => {
                       startLabeling();
                       ev.currentTarget.blur();
@@ -231,7 +231,7 @@ function PaletteItem({ kind, name, hotkey, active, onPlace }: PaletteItemProps) 
       className={`palette-item${active ? " active" : ""}`}
       title={
         hotkey
-          ? `Place ${name.toLowerCase()} — press ${hotkey.toUpperCase()}`
+          ? `Place ${name.toLowerCase()} - press ${hotkey.toUpperCase()}`
           : `Place ${name.toLowerCase()}`
       }
       onClick={(ev) => {

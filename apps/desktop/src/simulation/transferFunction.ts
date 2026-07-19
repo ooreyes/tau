@@ -15,7 +15,7 @@
  *
  * Because Tau's DC operating point is a linear MNA solve, all three are computed
  * by SUPERPOSITION/PERTURBATION around the existing `runOperatingPoint` solver
- * (no duplicated stamping — same pattern as `dcSweep.ts`):
+ * (no duplicated stamping - same pattern as `dcSweep.ts`):
  *
  *   - gain:  solve with the input source set to 0 and to 1, take the difference.
  *            Any other independent sources keep their authored values and cancel

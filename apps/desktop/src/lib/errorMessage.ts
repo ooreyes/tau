@@ -26,12 +26,27 @@ function conciseNativeSpiceMessage(raw: string, fallback: string): string {
   return fallback;
 }
 
+/** Signatures of JS runtime/internal failures (TypeError texts, stack frames,
+ * fetch plumbing). These are bug diagnostics, not product copy - a toast that
+ * says "Cannot read properties of undefined (reading 'invoke')" reads as a
+ * broken app. Detect them so the caller's plain-language fallback is shown
+ * instead, with the raw text preserved for Technical details. */
+function isInternalErrorText(text: string): boolean {
+  return (
+    /cannot read propert|is not a function|undefined is not|null is not an object|cannot access before initialization/i.test(text)
+    || /^\s*(?:Type|Reference|Range|Syntax)Error\b/.test(text)
+    || /\bat\s+\S+\s+\(.+:\d+:\d+\)/.test(text)
+    || /^Failed to fetch\b|NetworkError when attempting/i.test(text)
+  );
+}
+
 /** Normalize Error objects and Tauri's string rejections without reflecting
  * unbounded/arbitrary payloads into the UI. Native simulation commands reject
  * with strings, so Error-only handling hid the diagnostic users needed. */
 export function userFacingErrorMessage(error: unknown, fallback: string): string {
   const normalized = normalizedErrorText(error);
   if (!normalized) return fallback;
+  if (isInternalErrorText(normalized)) return fallback;
   // Native ngspice failures contain stdout/stderr transcripts separated by
   // pipes. Those are useful diagnostics, but they are not product copy and
   // must stay collapsed behind Technical details.

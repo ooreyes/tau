@@ -3,7 +3,7 @@
  *
  * Tau emits a baseline `.options` line (gmin/reltol/abstol/vntol) for robust
  * convergence. When an imported `.asc` carries its own `.options` directives
- * (used 7× in the user's circuits, FEATURE_PARITY §4), the user's settings must
+ * (used 7× in the user's circuits, LTspice parity ), the user's settings must
  * win so the simulation matches LTspice. These helpers parse `.options` lines
  * into key/value pairs and merge them over the defaults.
  */
@@ -15,13 +15,13 @@ export const DEFAULT_OPTIONS: Record<string, string> = {
   abstol: "1e-12",
   vntol: "1e-7",
   // A 1 TΩ resistor from every node to ground. ngspice (unlike LTspice) throws a
-  // fatal "singular matrix" the moment any node lacks a DC path to ground — a
+  // fatal "singular matrix" the moment any node lacks a DC path to ground - a
   // floating op-amp input, an AC-coupled stage, an ideal-transformer winding.
   // rshunt gives every node a negligible DC return so those circuits solve; at
   // 1e12 Ω its effect on real node voltages is below measurement noise. The
   // document can override or disable it.
   rshunt: "1e12",
-  // 1 mΩ in series with every inductor — LTspice's own documented default
+  // 1 mΩ in series with every inductor - LTspice's own documented default
   // (an inductor without an explicit Rser gets 1 mΩ; Control Panel → Hacks).
   // Without it a loop of ideal inductors (or L across a V source) has an
   // indeterminate DC current split and ngspice's op fails with "singular

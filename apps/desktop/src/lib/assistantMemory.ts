@@ -44,7 +44,7 @@ const MAX_MESSAGE_CHARS = 24_000;
 export const ASSISTANT_PROMPT_CHAR_LIMIT = 12_000;
 const MAX_ERROR_CHARS = 1_000;
 const MAX_TITLE_CHARS = 48;
-/** Per-circuit cap on saved chats — oldest-by-updatedAt drops first, mirroring
+/** Per-circuit cap on saved chats - oldest-by-updatedAt drops first, mirroring
  *  MAX_MESSAGES' sliding-window rule for a single thread. */
 const MAX_CONVERSATIONS = 30;
 
@@ -124,7 +124,7 @@ function restoreMessages(value: unknown): PersistedAssistantMessage[] {
 }
 
 /** Filters empty turns and truncates content/actions, keeping the
- *  PersistedAssistantMessage shape (actions still parsed objects) — the form
+ *  PersistedAssistantMessage shape (actions still parsed objects) - the form
  *  an AssistantConversation holds in memory. */
 function boundPersistedMessages(messages: readonly PersistedAssistantMessage[]): PersistedAssistantMessage[] {
   return messages
@@ -139,7 +139,7 @@ function boundPersistedMessages(messages: readonly PersistedAssistantMessage[]):
 }
 
 /** JSON-safe form of boundPersistedMessages (actions serialized to plain
- *  records) — what actually goes into localStorage. */
+ *  records) - what actually goes into localStorage. */
 function serializeMessages(messages: readonly PersistedAssistantMessage[]): Array<Record<string, unknown>> {
   return boundPersistedMessages(messages).map((message) => ({
     role: message.role,
@@ -231,7 +231,7 @@ function deriveTitle(messages: readonly PersistedAssistantMessage[]): string {
   if (!firstUser) return "New chat";
   const collapsed = firstUser.content.trim().replace(/\s+/g, " ");
   // The ellipsis counts against the cap so the result is never longer than
-  // MAX_TITLE_CHARS — serializeConversation/restoreConversation re-slice to
+  // MAX_TITLE_CHARS - serializeConversation/restoreConversation re-slice to
   // that same bound as a defensive round-trip cap, which would otherwise
   // silently chop the trailing "…" off a 48-char-plus-ellipsis title.
   return collapsed.length > MAX_TITLE_CHARS ? `${collapsed.slice(0, MAX_TITLE_CHARS - 1).trimEnd()}…` : collapsed;
@@ -315,7 +315,7 @@ function migrateLegacyHistory(memoryKey: string): AssistantConversation[] {
   try {
     localStorage.removeItem(storageKey(HISTORY_PREFIX, memoryKey));
   } catch {
-    // Best-effort cleanup — the v2 store above is already populated and is
+    // Best-effort cleanup - the v2 store above is already populated and is
     // checked first on every future read, so a leftover legacy key is inert.
   }
   return [conversation];
@@ -343,7 +343,7 @@ export function loadConversation(memoryKey: string, id: string): AssistantConver
   return listConversations(memoryKey).find((conversation) => conversation.id === id) ?? null;
 }
 
-/** Id generation only — independent of any circuit's store. The row is
+/** Id generation only - independent of any circuit's store. The row is
  *  created lazily the moment saveConversationMessages first sees real
  *  content for this id, so an opened-but-never-used "New chat" never
  *  clutters the list (mirrors the legacy store's clear-on-empty rule). */
@@ -365,7 +365,7 @@ export function saveConversationMessages(memoryKey: string, id: string, messages
     }
     const next: AssistantConversation = {
       id,
-      // Frozen at first save so it reads like a stable subject line — it
+      // Frozen at first save so it reads like a stable subject line - it
       // must not drift if a later turn pushes the opening message out of
       // the MAX_MESSAGES window.
       title: existing?.title ?? deriveTitle(bounded),

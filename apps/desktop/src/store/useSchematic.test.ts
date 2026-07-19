@@ -259,7 +259,7 @@ describe("schematic document store", () => {
     const loaded = useSchematic.getState();
     expect(loaded.directives).toEqual([".param Rload=10k", ".tran 1m"]);
 
-    // The store keeps its own copy — caller mutations cannot corrupt it.
+    // The store keeps its own copy - caller mutations cannot corrupt it.
     incoming.directives![0] = ".param Rload=999";
     expect(useSchematic.getState().directives[0]).toBe(".param Rload=10k");
   });
@@ -438,7 +438,7 @@ describe("schematic document store", () => {
   it("a net label drag (beginChange once + repeated setNetLabelOffsetDirect) collapses into one undo entry", () => {
     // Mirrors the drag convention documented on setNetLabelDirect/moveComponent:
     // beginChange() once before the first move, then the no-undo setter for
-    // every subsequent move — Canvas.tsx's net label drag handler (Fix 2)
+    // every subsequent move - Canvas.tsx's net label drag handler (Fix 2)
     // follows this exact sequence.
     useSchematic.setState({ netLabels: [{ id: "label-1", x: 64, y: 0, text: "OUT", dx: 6, dy: -6 }] });
     const historyBefore = useSchematic.getState().past.length;
@@ -1090,7 +1090,7 @@ describe("moveGroup (group move with wire rubber-banding)", () => {
   });
 
   it("rubber-bands wire with an elbow when axis alignment is lost after move", () => {
-    // R1 at y=0, wire start at pin (32, 0), wire goes to (32, 64) — vertical.
+    // R1 at y=0, wire start at pin (32, 0), wire goes to (32, 64) - vertical.
     // Moving R1 up by dy=-32: pin moves to (32, -32). Wire end stays at (32, 64).
     // Wire stays axis-aligned: new points [{ x:32, y:-32 }, { x:32, y:64 }].
     const doc: SchematicDocument = {
@@ -1153,7 +1153,7 @@ describe("moveGroup (group move with wire rubber-banding)", () => {
   it("does not compound cumulative deltas across successive pointer-moves", () => {
     // During a drag, the canvas calls moveGroup once per pointer-move with the
     // TOTAL delta from drag start. Positions must come from the drag-start
-    // origins, not the current state — otherwise the group runs away from the
+    // origins, not the current state - otherwise the group runs away from the
     // cursor (regression: components moved by dx each call on top of the last).
     useSchematic.getState().loadCircuit(twoResistorDocument());
     const comps = useSchematic.getState().components;
@@ -1253,7 +1253,7 @@ describe("moveGroup (group move with wire rubber-banding)", () => {
   });
 });
 
-describe("addProbe — one probe per net, net-identity dedup (§UX)", () => {
+describe("addProbe - one probe per net, net-identity dedup ", () => {
   it("adds a probe when a net has none", () => {
     useSchematic.setState({ wires: [{ id: "w1", points: [{ x: 0, y: 0 }, { x: 64, y: 0 }] }] });
     useSchematic.getState().addProbe(32, 0);
@@ -1271,7 +1271,7 @@ describe("addProbe — one probe per net, net-identity dedup (§UX)", () => {
   it("moves (does not duplicate) the probe when a DIFFERENT point on the same net is clicked", () => {
     // An L-shaped wire: (32, 0) and (64, 32) are two different points on the
     // one net. Clicking a net that already has a probe relocates the marker
-    // instead of stacking a second ring — a net carries at most one probe.
+    // instead of stacking a second ring - a net carries at most one probe.
     useSchematic.setState({
       wires: [{ id: "w1", points: [{ x: 0, y: 0 }, { x: 64, y: 0 }, { x: 64, y: 64 }] }],
     });
@@ -1280,13 +1280,13 @@ describe("addProbe — one probe per net, net-identity dedup (§UX)", () => {
     useSchematic.getState().addProbe(64, 32);
     const probes = useSchematic.getState().probes;
     expect(probes).toHaveLength(1);
-    expect(probes[0].id).toBe(firstId); // same probe, relocated — not a new one
+    expect(probes[0].id).toBe(firstId); // same probe, relocated - not a new one
     expect(probes[0]).toMatchObject({ x: 64, y: 32 });
   });
 
   it("does nothing when clicking a component BODY (no pin/wire under the cursor)", () => {
     // Owner feedback: "probing an opamp makes no sense". The opamp's own
-    // (x, y) is its body center — none of its pins sit there — so a probe
+    // (x, y) is its body center - none of its pins sit there - so a probe
     // click must not attach a probe at a point that isn't on any net.
     useSchematic.setState({
       components: [{ id: "u1", kind: "opamp", x: 0, y: 0, rotation: 0, value: "ideal", label: "U1" }],
@@ -1318,7 +1318,7 @@ describe("addProbe — one probe per net, net-identity dedup (§UX)", () => {
   });
 });
 
-describe("selectMixed + deleteSelected — marquee selects and deletes ALL object kinds (§UX)", () => {
+describe("selectMixed + deleteSelected - marquee selects and deletes ALL object kinds ", () => {
   const populate = () => {
     useSchematic.setState({
       components: [{ id: "r1", kind: "resistor", x: 0, y: 0, rotation: 0, value: "1k", label: "R1" }],
@@ -1373,7 +1373,7 @@ describe("selectMixed + deleteSelected — marquee selects and deletes ALL objec
   });
 });
 
-describe("upsertNetLabel — one label per physically-connected node (§UX)", () => {
+describe("upsertNetLabel - one label per physically-connected node ", () => {
   const lWire = () => {
     // One L-shaped wire: (32, 0) and (64, 32) are two points on the same node.
     useSchematic.setState({
@@ -1447,8 +1447,8 @@ describe("toggleCurrentProbe (clamp-meter)", () => {
         { id: "r-1", kind: "resistor", x: 96, y: 0, rotation: 0, value: "1k", label: "R1" },
         { id: "gnd-1", kind: "ground", x: 0, y: 64, rotation: 0, value: "", label: "" },
       ],
-      // Wire across R1's pins so (96, 0) — R1's own body position, where its
-      // current probe sits — also resolves to a net (mid-segment) for the
+      // Wire across R1's pins so (96, 0) - R1's own body position, where its
+      // current probe sits - also resolves to a net (mid-segment) for the
       // "coincident net probe" test below; addProbe now requires a net.
       wires: [{ id: "w-1", points: [{ x: 64, y: 0 }, { x: 128, y: 0 }] }],
     });
@@ -1495,10 +1495,10 @@ describe("toggleCurrentProbe (clamp-meter)", () => {
   });
 });
 
-describe("keyboard shortcuts are read-only outside the schematic view (§UX)", () => {
+describe("keyboard shortcuts are read-only outside the schematic view ", () => {
   // Wired the same way App.tsx wires dispatchShortcutAction to the store, so
   // this exercises the exact production callback graph against the real
-  // store — not mocks — and proves the store genuinely doesn't change.
+  // store - not mocks - and proves the store genuinely doesn't change.
   const realHandlers = (): ShortcutHandlers => ({
     undo: () => useSchematic.getState().undo(),
     redo: () => useSchematic.getState().redo(),

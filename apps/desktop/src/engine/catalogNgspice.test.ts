@@ -13,7 +13,7 @@ import { importAsc } from "../io/ascImport";
 
 const haveNgspice = spawnSync("ngspice", ["--version"], { encoding: "utf8" }).error === undefined;
 
-describe.skipIf(!haveNgspice)("Library catalog — real ngspice smoke", () => {
+describe.skipIf(!haveNgspice)("Library catalog - real ngspice smoke", () => {
   it("accepts and runs the default model for every Library component", () => {
     const failures: string[] = [];
     const dir = mkdtempSync(join(tmpdir(), "tau-catalog-ngspice-"));

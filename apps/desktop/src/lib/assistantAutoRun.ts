@@ -1,10 +1,10 @@
 /**
  * Decide which analysis (if any) an assistant-confirmed circuit's directives
- * request, so App.tsx's confirm handlers can auto-start it — the flow is
+ * request, so App.tsx's confirm handlers can auto-start it - the flow is
  * "ask -> confirm -> data appears" instead of leaving the run to be
  * configured by hand.
  *
- * Pure decision logic only — no engine calls, no React state. The actual run
+ * Pure decision logic only - no engine calls, no React state. The actual run
  * (pre-run guards, abort, progress, dashboards) stays in App.tsx's existing
  * per-mode run callbacks; this module only picks which one to invoke.
  */
@@ -19,7 +19,7 @@ export interface AutoRunAnalysis {
   directive: string;
 }
 
-// Keyword sniff used only to recover *document order* across kinds —
+// Keyword sniff used only to recover *document order* across kinds -
 // analysesFromDirectives (below) keeps just the first successfully-parsed
 // value per kind, discarding which line it came from and how that line
 // compares against other kinds' lines. Order here otherwise mirrors
@@ -35,7 +35,7 @@ const KIND_KEYWORDS: ReadonlyArray<{ kind: Exclude<AutoRunAnalysisKind, "op">; p
 
 /**
  * Scan `directives` in document order and return the first line whose
- * keyword names a recognized, successfully-parsed analysis — "first
+ * keyword names a recognized, successfully-parsed analysis - "first
  * recognized analysis directive wins". `null` when nothing in the document
  * requests a runnable analysis.
  *

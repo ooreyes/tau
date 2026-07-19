@@ -48,7 +48,7 @@ export async function cancelNativeSpice(): Promise<boolean> {
 }
 
 /**
- * Runs a transient analysis via ngspice through Tauri's `invoke` IPC — a
+ * Runs a transient analysis via ngspice through Tauri's `invoke` IPC - a
  * single request/response round trip to a Rust-spawned ngspice worker. The
  * worker has bounded IPC, a hard timeout, and can be terminated through
  * `cancelNativeSpice`; progress stays indeterminate because ngspice does not

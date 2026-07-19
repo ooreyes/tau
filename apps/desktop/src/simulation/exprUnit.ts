@@ -1,10 +1,9 @@
-// Dimensional-unit inference for plotted waveform expressions (FEATURE_PARITY §6
-// "plot arbitrary expressions" — per-trace axis/unit).
+// Dimensional-unit inference for plotted waveform expressions (LTspice parity).
 //
 // The expression bar under the transient scope plots any expression of the
 // simulated signals. Until now every derived trace was labelled volts, so
 // probing a branch current `I(R1)` or instantaneous power `V(out)*I(R1)` drew an
-// axis that read in "V" — wrong. LTspice picks the axis unit from the physical
+// axis that read in "V" - wrong. LTspice picks the axis unit from the physical
 // dimension of the expression, so we do the same: walk the *same* AST the
 // evaluator uses (`expr.ts`), treat `V(...)` as volts and `I(...)` as amps, and
 // propagate the {volt, amp} exponents through the arithmetic. The result maps to
@@ -26,7 +25,7 @@ const VOLT: Dim = { v: 1, a: 0 };
 const AMP: Dim = { v: 0, a: 1 };
 
 /** Functions that preserve their argument's dimension (LTspice: `abs(I(L1))`
- *  is still amps). Everything else — trig, exp, log, sqrt, db/mag/ph — collapses
+ *  is still amps). Everything else - trig, exp, log, sqrt, db/mag/ph - collapses
  *  to a dimensionless number for axis-labelling purposes. */
 const DIM_PRESERVING = new Set(["abs", "min", "max", "limit", "uramp"]);
 
@@ -39,7 +38,7 @@ function dimOf(node: Node): Dim {
     case "num":
       return DIMLESS;
     case "var":
-      // A `.param`/`.func` scalar (e.g. Rload) — treated as a plain number for
+      // A `.param`/`.func` scalar (e.g. Rload) - treated as a plain number for
       // unit purposes; we don't track parameter units.
       return DIMLESS;
     case "call": {
@@ -101,14 +100,14 @@ function unitFromDim(dim: Dim): TraceUnit {
   if (v === 1 && a === 1) return "W"; // power V·I
   if (v === 1 && a === -1) return "Ω"; // V/I
   if (v === -1 && a === 1) return "S"; // I/V
-  return ""; // V², A², etc. — no single common symbol
+  return ""; // V², A², etc. - no single common symbol
 }
 
 /**
  * Infer the physical unit a plotted expression carries (for the scope axis /
  * legend). `V(a)-V(b)` → "V", `I(R1)` → "A", `V(out)*I(R1)` → "W",
  * `V(out)/I(out)` → "Ω". Returns "" for a dimensionless or un-inferable
- * expression (the caller can fall back to its own default). Never throws — a
+ * expression (the caller can fall back to its own default). Never throws - a
  * malformed expression yields "".
  */
 export function inferExpressionUnit(expr: string): TraceUnit {

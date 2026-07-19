@@ -1,6 +1,6 @@
 /**
  * Official VS Code Codicon paths (@vscode/codicons) for the explorer action
- * row — filled glyphs tinted via `currentColor`, matching VS Code 1:1.
+ * row - filled glyphs tinted via `currentColor`, matching VS Code 1:1.
  */
 import type { ReactNode, SVGProps } from "react";
 
@@ -56,7 +56,7 @@ export function VscodeNewFolderIcon(props: IconProps) {
 }
 
 /**
- * File with inbound arrow — matches the VS Code-style “open/import file”
+ * File with inbound arrow - matches the VS Code-style “open/import file”
  * glyph from the explorer action strip (not a stock single codicon name).
  */
 export function VscodeImportFileIcon(props: IconProps) {
@@ -68,7 +68,7 @@ export function VscodeImportFileIcon(props: IconProps) {
   );
 }
 
-/** Folder with inbound arrow — open/import folder counterpart. */
+/** Folder with inbound arrow - open/import folder counterpart. */
 export function VscodeImportFolderIcon(props: IconProps) {
   return (
     <Codicon className="vscode-explorer-icon vscode-import-folder" {...props}>

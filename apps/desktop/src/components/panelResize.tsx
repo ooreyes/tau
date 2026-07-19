@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { KeyboardEvent as ReactKeyboardEvent, PointerEvent as ReactPointerEvent } from "react";
 
 /**
- * Draggable side-panel widths (§11 Unit B). One small authority for the
+ * Draggable side-panel widths. One small authority for the
  * clamp + localStorage-persistence math (pure, unit-testable) and a hook +
  * handle component the explorer tree and the properties rail both reuse.
  */
@@ -18,7 +18,7 @@ export interface PanelWidthConfig {
    *  from its "right" edge. Determines the drag direction that widens.
    *  "top"/"bottom" repurpose the same clamp/pointer/persistence machinery
    *  for a *height* instead (e.g. the simulator's telemetry dock, anchored to
-   *  the bottom of its column, drags from its "top" edge) — the field names
+   *  the bottom of its column, drags from its "top" edge) - the field names
    *  stay width-flavored since the math is dimension-agnostic. */
   edge: "left" | "right" | "top" | "bottom";
 }
@@ -46,7 +46,7 @@ export function savePanelWidth(storageKey: string, width: number): void {
   try {
     localStorage.setItem(storageKey, String(width));
   } catch {
-    // Quota exceeded / private mode — the session keeps its in-memory width.
+    // Quota exceeded / private mode - the session keeps its in-memory width.
   }
 }
 
@@ -88,7 +88,7 @@ export function usePanelWidth(config: PanelWidthConfig) {
       try {
         target.setPointerCapture(event.pointerId);
       } catch {
-        // jsdom / older engines without pointer capture — window listeners
+        // jsdom / older engines without pointer capture - window listeners
         // below still receive the moves.
       }
       setDragging(true);
@@ -122,7 +122,7 @@ export function usePanelWidth(config: PanelWidthConfig) {
       if (event.key !== startKey && event.key !== endKey) return;
       event.preventDefault();
       // Arrow keys move the BORDER, matching the pointer: moving it toward the
-      // panel narrows, away widens — regardless of which side the panel docks.
+      // panel narrows, away widens - regardless of which side the panel docks.
       const towardStart = event.key === startKey;
       const startEdge = cfg.edge === "left" || cfg.edge === "top";
       const delta = startEdge === towardStart ? KEY_STEP : -KEY_STEP;
@@ -131,7 +131,7 @@ export function usePanelWidth(config: PanelWidthConfig) {
     [applyWidth],
   );
 
-  // Exposes the same clamped setter the drag/keyboard handlers use — for a
+  // Exposes the same clamped setter the drag/keyboard handlers use - for a
   // caller that lifts this hook (App.tsx's Assistant column) and needs to
   // shrink the panel programmatically as the window narrows, the way the
   // scope column's own width state already does. Intentionally does NOT

@@ -1,7 +1,7 @@
-/* ── Design tokens — Apple HIG dark materials + SF typography.
+/* ── Design tokens - Apple HIG dark materials + SF typography.
    Sole :root. Engineering-instrument density on macOS/iOS system colors. ─── */
 :root {
-  /* Surfaces — Apple dark hierarchy (systemBackground → tertiary).
+  /* Surfaces - Apple dark hierarchy (systemBackground → tertiary).
      Canvas stays true black (instrument screen); chrome uses elevated grays. */
   --bg:       #000000;           /* systemBackground */
   --panel:    #1c1c1e;           /* secondarySystemBackground */
@@ -9,12 +9,12 @@
   --panel-3:  #161617;           /* sidebar / toolbar underlay */
   --panel-4:  #3a3a3c;           /* elevated control / popover fill */
 
-  /* Separators — Apple opaqueSeparator / separator */
+  /* Separators - Apple opaqueSeparator / separator */
   --border:         rgba(84, 84, 88, 0.65);
   --border-strong:  rgba(142, 142, 147, 0.45);
   --border-subtle:  rgba(84, 84, 88, 0.36);
 
-  /* Neutral hover overlays — Apple fill materials */
+  /* Neutral hover overlays - Apple fill materials */
   --overlay-hover:        rgba(120, 120, 128, 0.24);
   --overlay-hover-faint:  rgba(120, 120, 128, 0.14);
 
@@ -22,7 +22,7 @@
   --scrim:         rgba(0, 0, 0, 0.36);
   --scrim-strong:  rgba(0, 0, 0, 0.55);
 
-  /* Labels — Apple label / secondaryLabel / tertiaryLabel */
+  /* Labels - Apple label / secondaryLabel / tertiaryLabel */
   --text:   #f5f5f7;
   --muted:  rgba(235, 235, 245, 0.6);
   --faint:  rgba(235, 235, 245, 0.3);
@@ -30,7 +30,7 @@
   --canvas-label-muted: rgba(235, 235, 245, 0.55);
   --canvas-label-halo: #000000;
 
-  /* Interaction accent — warm ice/graphite, deliberately neutral. Chrome,
+  /* Interaction accent - warm ice/graphite, deliberately neutral. Chrome,
      selection and focus use this family; color remains reserved for measured
      traces and semantic status. The dark ink keeps filled primary controls
      legible against the light neutral face. */
@@ -41,16 +41,16 @@
   --accent-glow:  rgba(214, 211, 202, 0.16);
   --accent-line:  rgba(214, 211, 202, 0.38);
 
-  /* Signal — tactical amber, desaturated off Apple's systemOrange so the
+  /* Signal - tactical amber, desaturated off Apple's systemOrange so the
      "running" lamp reads as an instrument indicator, not a warning siren. */
   --signal:       #e6a23c;
   --signal-soft:  rgba(230, 162, 60, 0.12);
   --signal-line:  rgba(230, 162, 60, 0.35);
   --signal-glow:  rgba(230, 162, 60, 0.22);
 
-  /* Semantic — desaturated off Apple systemRed/systemGreen. These read as
+  /* Semantic - desaturated off Apple systemRed/systemGreen. These read as
      lamps, hairlines and small text now (never a full-saturation text run or
-     a large tinted fill — see the status strip / Toolbar retheme), so the
+     a large tinted fill - see the status strip / Toolbar retheme), so the
      quieter base value is legible without shouting. */
   --danger:       #e6564b;
   --danger-soft:  rgba(230, 86, 75, 0.10);
@@ -61,7 +61,7 @@
   --success-line: rgba(79, 174, 107, 0.35);
   --success-glow: rgba(79, 174, 107, 0.20);
 
-  /* Assistant — a deliberate violet→aqua identity used only for the single
+  /* Assistant - a deliberate violet→aqua identity used only for the single
      top-level AI action and its focused state. Like Apple's stained-glass
      primary controls, color lives on the functional control layer rather
      than washing the circuit or plot content surfaces. */
@@ -73,7 +73,7 @@
   --cream:        #f5f5f7;
   --cream-soft:   rgba(245, 245, 247, 0.08);
 
-  /* Diagnostics — vivid Apple dark-mode semantics, constrained to lamps,
+  /* Diagnostics - vivid Apple dark-mode semantics, constrained to lamps,
      hairlines and shallow glass tint. These are intentionally brighter than
      the general-purpose semantic tokens above so status is glanceable without
      flooding an entire panel with color. */
@@ -94,12 +94,12 @@
   --diagnostic-error-glow:  rgba(255, 69, 58, 0.26);
   --diagnostic-glass-shine: rgba(255, 255, 255, 0.055);
 
-  /* Schematic strokes — light label on black instrument face */
+  /* Schematic strokes - light label on black instrument face */
   --comp:      #d1d1d6;
   --comp-ref:  rgba(235, 235, 245, 0.45);
 
-  /* Grid — quiet Apple-style dots */
-  /* §UX checklist 7: subtle dots (dark mode 6–10% white) — snap stays visible,
+  /* Grid - quiet Apple-style dots */
+  /* subtle dots (dark mode 6-10% white) - snap stays visible,
      wires/components keep clearly higher contrast than the grid. */
   --grid-dot:        rgba(235, 235, 245, 0.08);
   --grid-dot-major:  rgba(235, 235, 245, 0.13);
@@ -108,12 +108,12 @@
   --scope-surface:  #0c0c0e;
   --scope-grid:  #1c1c1e;
 
-  /* Traces — instrument palette, desaturated off Apple's system colors
+  /* Traces - instrument palette, desaturated off Apple's system colors
      (retheme: neon system-color traces read like a toy on a near-black
      scope face; a muted, "measured" hue set still stays clearly
      distinguishable at this contrast). Red stays visually close to
-     --danger's family — reserved for error/limit reads elsewhere in the
-     panel — so it stays the least saturated of the six even though it's
+     --danger's family - reserved for error/limit reads elsewhere in the
+     panel - so it stays the least saturated of the six even though it's
      first in the expression-trace rotation. */
   --trace-cyan:    #6fb8db;   /* steel cyan */
   --trace-green:   #7cb88a;   /* sage green */
@@ -124,7 +124,7 @@
 
   --dial-track:  #3a3a3c;
 
-  /* Spacing — 4pt Apple grid */
+  /* Spacing - 4pt Apple grid */
   --sp-1:  4px;
   --sp-2:  8px;
   --sp-3:  12px;
@@ -133,7 +133,7 @@
   --sp-6:  24px;
   --sp-8:  32px;
 
-  /* Type — SF Pro optical sizes (dense engineering chrome) */
+  /* Type - SF Pro optical sizes (dense engineering chrome) */
   --fs-micro:   9px;
   --fs-caption: 10px;
   --fs-body:    11px;
@@ -156,13 +156,13 @@
   --r-lg:  10px;
   --r-xl:  14px;
 
-  /* Materials / elevation — soft Apple shadows, not neon glow */
+  /* Materials / elevation - soft Apple shadows, not neon glow */
   --elev-1:   inset 0 0.5px 0 rgba(255, 255, 255, 0.06);
   --elev-2:   0 1px 2px rgba(0, 0, 0, 0.35), inset 0 0.5px 0 rgba(255, 255, 255, 0.06);
   --elev-pop: 0 16px 40px rgba(0, 0, 0, 0.55), 0 0 0 0.5px rgba(255, 255, 255, 0.12);
   --elev-inset: inset 0 1px 2px rgba(0, 0, 0, 0.35);
 
-  /* Motion — Apple spring / ease */
+  /* Motion - Apple spring / ease */
   --motion-fast:  120ms;
   --motion-med:   220ms;
   --spring:  cubic-bezier(0.25, 0.1, 0.25, 1);
@@ -170,7 +170,7 @@
   --ease-in:    cubic-bezier(0.55, 0.055, 0.675, 0.19);
   --ease-snap:  cubic-bezier(0.32, 0.72, 0, 1);
 
-  /* SF Pro / SF Mono only — no Inter */
+  /* SF Pro / SF Mono only - no Inter */
   --font-ui:    -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Helvetica Neue", system-ui, sans-serif;
   --font-display: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", system-ui, sans-serif;
   --font-mono:  "SF Mono", ui-monospace, Menlo, Monaco, "Courier New", monospace;
@@ -203,7 +203,7 @@ body {
    used to live here was fully shadowed by it (every property re-set) and is
    removed. The legacy top-bar rules that used to live here (`.toolbar`,
    `.brand`, `.brand-mark`, `.brand-name`, `.brand-sub`, `.toolbar-spacer`,
-   `.toolbar-group`, `.tool-btn`) were §10-Phase-3a'd: the two properties that
+   `.toolbar-group`, `.tool-btn`) were -Phase-3a'd: the two properties that
    leaked past their migration counterparts (`.toolbar`'s `backdrop-filter`,
    `.brand`'s `flex-shrink`) are now folded directly into the live rules in the
    DESIGN HANDOFF MIGRATION block, and the fully-shadowed/fully-dead legacy
@@ -236,7 +236,7 @@ body {
   border-color: var(--accent-line);
 }
 
-/* app-standard neutral focus ring (matches .empty-actions) — the picker was
+/* app-standard neutral focus ring (matches .empty-actions) - the picker was
    keyboard-focusable with no visible focus at all */
 .example-picker select:focus-visible {
   outline: none;
@@ -267,9 +267,9 @@ body {
   color: var(--muted);
 }
 
-/* Wire icon — shared by the Palette "Tools" row icons and the schematic
+/* Wire icon - shared by the Palette "Tools" row icons and the schematic
    itself; the PALETTE chrome rules live in the live "DESIGN HANDOFF
-   MIGRATION" section below (search this file for "PALETTE — operator-grade"). */
+   MIGRATION" section below (search this file for "PALETTE - operator-grade"). */
 .wire-icon {
   fill: none;
   stroke: var(--comp);
@@ -314,7 +314,7 @@ body {
   vector-effect: non-scaling-stroke;
 }
 
-/* Polarity arrows inside transistor/JFET symbols are FILLED triangles — as
+/* Polarity arrows inside transistor/JFET symbols are FILLED triangles - as
    unfilled open paths they read as stray broken strokes. They inherit the
    symbol's stroke color (normal or selected) as their fill. */
 .symbol .symbol-arrow {
@@ -330,8 +330,7 @@ body {
   cursor: pointer;
 }
 
-/* Schematic canvas SVG text — the canvas keeps its own bespoke rendering
-   (§10 brief); kept outside the App.css type scale on purpose. */
+/* Schematic canvas SVG text - the canvas keeps its own bespoke rendering; kept outside the App.css type scale on purpose. */
 .component .ref,
 .component .val {
   font-size: 9px;
@@ -443,7 +442,7 @@ body {
   line-height: 1;
 }
 
-/* Flat operator-console onboarding card — true-black surface, hairline ring,
+/* Flat operator-console onboarding card - true-black surface, hairline ring,
    --elev-pop (the same recipe as the dialogs/sheets, not a translucent glass
    card). No backdrop blur, no gradient fade: flat surfaces only. */
 .empty-panel {
@@ -522,7 +521,7 @@ body {
   margin-top: var(--sp-5);
 }
 
-/* Flat hairline buttons — no embossed gradient pill, matching the operator
+/* Flat hairline buttons - no embossed gradient pill, matching the operator
    console bar (Button primitive's own outline variant, hand-rolled here
    since these sit directly on the canvas, not inside a primitive tree). */
 .empty-actions button {
@@ -551,7 +550,7 @@ body {
   background: var(--overlay-hover-faint);
 }
 
-/* Keyboard focus ring — the secondary New/Open actions had none (a11y gap). */
+/* Keyboard focus ring - the secondary New/Open actions had none (a11y gap). */
 .empty-actions button:focus-visible {
   outline: none;
   box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent-line);
@@ -578,7 +577,7 @@ body {
    Same true-black pop-surface recipe the rest of the system uses for
    floating surfaces (`--panel-4` + `--elev-pop`, see ui/dialog.tsx and
    ui/tooltip.tsx) instead of a one-off panel shade + a raw rgba drop
-   shadow — an accent border is kept because this reads as an active edit
+   shadow - an accent border is kept because this reads as an active edit
    affordance, matching every other focused input in the app. */
 .value-edit-input {
   position: absolute;
@@ -696,7 +695,7 @@ body {
   border-bottom: 1px solid var(--border);
 }
 
-/* Braun-style micro-label — shares the same rule as the palette/explorer/
+/* Braun-style micro-label - shares the same rule as the palette/explorer/
    Assistant section captions (search this file for ".plotter-kicker" further
    down in the shared micro-label selector group). */
 .plotter-kicker {
@@ -730,10 +729,10 @@ body {
     border-color var(--motion-med) var(--spring);
 }
 
-/* ── Dashboard status strip (§11 Unit C6) ─────────────────────────────────
+/* ── Dashboard status strip ─────────────────────────────────
    The panel's single status voice, under the analysis tabs: a semantic lamp
    + mono state word + last-run figures. Retheme: the state WORD stays
-   --muted in every state (running/complete/error/idle) — only the small lamp
+   --muted in every state (running/complete/error/idle) - only the small lamp
    dot carries color, so the strip reads as an instrument readout, not a
    colored sentence. */
 .plotter-status {
@@ -800,7 +799,7 @@ body {
 
 /* ── Run-in-progress overlay (Fix 3) ──────────────────────────────────────
    The status strip above stays the quiet always-on readout; this is the
-   loud, unmissable treatment for an actual in-progress run — centered over
+   loud, unmissable treatment for an actual in-progress run - centered over
    just the plots area (`.plotter-body` is its positioning root, not the
    whole panel, so header/tabs/status stay visible and un-dimmed). */
 .plotter-body {
@@ -855,7 +854,7 @@ body {
   transition: width var(--motion-med) var(--ease-out);
 }
 
-/* No known fraction (native ngspice — no progress channel): a sweeping
+/* No known fraction (native ngspice - no progress channel): a sweeping
    segment instead of a stalled full-width bar, so it still reads as "alive"
    rather than possibly frozen. */
 .run-overlay-fill.indeterminate {
@@ -885,12 +884,11 @@ body {
   letter-spacing: 0.3px;
 }
 
-/* Analysis tabs — segment control style, on the ui/ Tabs (Radix) primitive
-   (§10 Phase 3c: first real consumer of ui/tabs.tsx). Mono uppercase labels
+/* Analysis tabs - segment control style, on the ui/ Tabs (Radix) primitive. Mono uppercase labels
    read as instrument abbreviations (TRAN/OP/AC/…), distinct from the
    toolbar's word-label schematic/simulator segmented toggle. Active state
    keys off Radix's own `data-state` attribute rather than a hand-toggled
-   "active" class. As with every §10 primitive, this plain rule is unlayered
+   "active" class. As with every primitive, this plain rule is unlayered
    so it wins over the Tailwind utility classes tabs.tsx ships by default. */
 .plotter-tabs {
   flex-shrink: 0;
@@ -933,7 +931,7 @@ body {
     border-color var(--motion-fast) var(--spring);
 }
 
-/* Inactive analysis tabs had no hover — OP/AC/DC/TF/NOISE/STEP were inert
+/* Inactive analysis tabs had no hover - OP/AC/DC/TF/NOISE/STEP were inert
    until clicked. Brighten to --text over an --overlay-hover fill on hover. */
 .plotter-tab:not([data-state="active"]):not(:disabled):hover {
   color: var(--text);
@@ -967,8 +965,8 @@ body {
 }
 
 /* Instrument workspace: the shell itself just stacks its (at most a couple)
-   direct children — the real 2-up snap-tiling grid lives one level down, on
-   `.plot-dashboard-grid` (§ TRAN dashboard grid), so an error message or the
+   direct children - the real 2-up snap-tiling grid lives one level down, on
+   `.plot-dashboard-grid` , so an error message or the
    empty state can still sit above it full-width without fighting a grid
    context. `container-type: inline-size` lets that nested grid react to the
    PANEL's actual width (narrower than the viewport once the explorer/
@@ -1018,17 +1016,17 @@ body {
   width: 100%;
   aspect-ratio: 340 / 190;
   display: block;
-  /* The scope face is the "oscilloscope screen" — flat instrument black, one
+  /* The scope face is the "oscilloscope screen" - flat instrument black, one
      notch lighter than the schematic canvas so the two stay distinguishable
      without a gradient glow, framed by a real hairline (not a barely-there
-     rgba(255,255,255,0.08) leftover from the migration draft — see the
+     rgba(255,255,255,0.08) leftover from the migration draft - see the
      SIMULATION PANEL note at the top of this file for that consolidation). */
   background: var(--scope-surface);
   border: 1px solid var(--border-strong);
   border-radius: var(--r-md);
   box-shadow: var(--elev-2), var(--elev-inset);
   overflow: visible;
-  /* Desmos-style zoom/pan (§UX Unit B) — drag to pan, ⌘/pinch-wheel to zoom
+  /* Desmos-style zoom/pan - drag to pan, ⌘/pinch-wheel to zoom
      (plain wheel is left alone so it scrolls the analysis panel instead).
      user-select:none stops a pan drag from also native-selecting the tick
      label <text> elements it passes over. */
@@ -1124,10 +1122,10 @@ body {
   stroke-width: 1.5;
   stroke-linejoin: round;
   stroke-linecap: round;
-  /* no glow filter — precise, clean */
+  /* no glow filter - precise, clean */
 }
 
-/* LTspice .raw reference overlay — dashed so it reads as the comparison line. */
+/* LTspice .raw reference overlay - dashed so it reads as the comparison line. */
 .scope-trace.ref {
   stroke-width: 1.25;
   stroke-dasharray: 4 3;
@@ -1178,7 +1176,7 @@ body {
 }
 
 /* Plot SVG axis text, positioned against the pane's own PLOT_PAD/PLOT_HEIGHT
-   geometry (SimulationPanel.tsx) — kept outside the App.css type scale, same
+   geometry (SimulationPanel.tsx) - kept outside the App.css type scale, same
    as the schematic canvas's own text. */
 .scope-axis {
   fill: var(--muted);
@@ -1193,7 +1191,7 @@ body {
   text-anchor: end;
 }
 
-/* Per-tick axis labels (PlotAxes.tsx) — smaller and dimmer than the old
+/* Per-tick axis labels (PlotAxes.tsx) - smaller and dimmer than the old
    corner min/max labels since there are many more of them now; `.mono-num`
    (applied alongside this class) carries the tabular-nums font. */
 .scope-tick {
@@ -1239,7 +1237,7 @@ body {
    right, hairline separators) instead of the old three-track grid: the grid's
    hard px minimums exceeded a half-width dashboard card and painted UNDER the
    neighboring card. A column of rows has no minimum wider than its card, so
-   each readout stays contained in — and moves with — its own card. */
+   each readout stays contained in - and moves with - its own card. */
 .engineering-trace-readout {
   min-width: 0;
   display: flex;
@@ -1344,7 +1342,7 @@ body {
 }
 
 /* Trace-legend swatches read as small indicator lamps (OP-1 style), not thin
-   color-key underlines — a solid square per trace, not a rounded line. */
+   color-key underlines - a solid square per trace, not a rounded line. */
 .scope-legend i {
   width: 8px;
   height: 8px;
@@ -1354,7 +1352,7 @@ body {
 
 /* ── Multi-pane waveform viewer ────────────────────────────────────────────── */
 
-/* Pane controls bar — sits at the top of the scope shell, above all panes. */
+/* Pane controls bar - sits at the top of the scope shell, above all panes. */
 .pane-controls {
   display: flex;
   align-items: center;
@@ -1362,7 +1360,7 @@ body {
   padding: 0 0 4px;
 }
 
-/* Shared micro-label treatment — plain small-caps captions (weight 600,
+/* Shared micro-label treatment - plain small-caps captions (weight 600,
    `--tracking-micro`). Was five byte-identical declarations copy-pasted
    across the pane/op-table/meas-table/selection-strip chrome; each
    selector below now only carries what's actually unique to it. */
@@ -1385,7 +1383,7 @@ body {
    Replaces the old always-stacked `.pane-wrapper` list: every plot pane and
    every non-empty table (Measurements/Fourier) is now a `.dashboard-card` in
    one 2-column grid, each spanning 1 (half) or 2 (full) columns. Order is
-   driven purely by DOM order (`cardLayout.ts`'s `order` array) — no
+   driven purely by DOM order (`cardLayout.ts`'s `order` array) - no
    `grid-auto-flow: dense`, so a half card that can't pair into the current
    row simply starts the next one, keeping the visual order predictable
    during drag. `align-items: start` (not stretch) so a table card sitting
@@ -1428,7 +1426,7 @@ body {
   transform: scale(0.98);
 }
 
-/* Drop-target indicator — a glowing accent hairline at the edge the dragged
+/* Drop-target indicator - a glowing accent hairline at the edge the dragged
    card will land against, the "magnetic snap" cue for the macOS-tiling feel. */
 .dashboard-card-drop {
   position: absolute;
@@ -1654,7 +1652,7 @@ body {
 
 /* Expression-trace bar (transient scope). Wraps at narrow panel widths so the
    export button row (Export CSV/Netlist/Save .raw/Ref .raw…) flows onto a
-   second line instead of squeezing the expression input to nothing — the
+   second line instead of squeezing the expression input to nothing - the
    input keeps a real usable minimum width (see `.expr-bar` Input's
    `min-w-40` in SimulationPanel.tsx) rather than shrinking past legibility. */
 .expr-bar {
@@ -1672,7 +1670,7 @@ body {
   border-radius: 5px;
   padding: var(--sp-1) var(--sp-2);
   color: var(--text);
-  /* Signal expressions (V(out), I(R1)…) are technical identifiers — monospace. */
+  /* Signal expressions (V(out), I(R1)…) are technical identifiers - monospace. */
   font: var(--fs-body) var(--font-mono);
   letter-spacing: -0.01em;
 }
@@ -1686,7 +1684,7 @@ body {
   border-color: var(--accent);
 }
 
-/* Export/utility buttons — neutral graphite ghost with real depth + spring lift.
+/* Export/utility buttons - neutral graphite ghost with real depth + spring lift.
    Secondary to the accent PRIMARY "Add trace" so the row reads as a hierarchy. */
 .expr-add {
   flex-shrink: 0;
@@ -1730,7 +1728,7 @@ body {
   box-shadow: none;
 }
 
-/* PRIMARY action — "Add trace": solid neutral accent, the highest-weight control. */
+/* PRIMARY action - "Add trace": solid neutral accent, the highest-weight control. */
 .expr-add.primary {
   color: var(--accent-ink);
   background: linear-gradient(180deg, var(--accent-hover), var(--accent));
@@ -1745,7 +1743,7 @@ body {
   box-shadow: var(--elev-2), 0 6px 18px var(--accent-glow);
 }
 
-/* Toggle-on state (cursors) — accent-filled, matches the primary weight. */
+/* Toggle-on state (cursors) - accent-filled, matches the primary weight. */
 .expr-add.active {
   color: var(--accent-ink);
   background: linear-gradient(180deg, var(--accent-hover), var(--accent));
@@ -1761,7 +1759,7 @@ body {
   opacity: 0.8;
 }
 
-/* Plot SVG text — kept outside the App.css type scale (canvas/plot text). */
+/* Plot SVG text - kept outside the App.css type scale (canvas/plot text). */
 .plot-cursor text {
   fill: var(--accent);
   font-size: 9px;
@@ -1929,9 +1927,9 @@ body {
   }
 }
 
-/* FFT spectrum / Cursors disclosure headers — the same Braun-style micro-label
+/* FFT spectrum / Cursors disclosure headers - the same Braun-style micro-label
    + hairline-rule + chevron affordance as the Palette's `.palette-section-header`
-   (search this file for "Section header — a Braun-style micro-label"), not a
+   (search this file for "Section header - a Braun-style micro-label"), not a
    bordered pill button. Shared by any collapsible sub-section of the plotter. */
 .disclosure-header {
   display: flex;
@@ -2043,7 +2041,7 @@ body {
   color: var(--text);
 }
 
-/* Data cells — signal identifiers + per-cursor voltages — are technical
+/* Data cells - signal identifiers + per-cursor voltages - are technical
    readouts, so monospace them like .meas-value and the trace legend. Headers
    (th) stay in the UI small-caps. */
 .cursor-table td {
@@ -2110,7 +2108,7 @@ body {
   opacity: 0.7;
 }
 
-/* Destructive × was keyboard-invisible — a rounded danger ring makes focus read. */
+/* Destructive × was keyboard-invisible - a rounded danger ring makes focus read. */
 .expr-remove:focus-visible {
   outline: none;
   color: var(--danger);
@@ -2150,11 +2148,11 @@ body {
 }
 
 /* Font/tabular-figure declarations now live in the shared `.mono-num` utility
-   (applied in SimulationPanel.tsx's Metric component) — this rule only
+   (applied in SimulationPanel.tsx's Metric component) - this rule only
    carries what `.mono-num` doesn't (size, weight, color, layout). The
    instrument-cluster read (big mono number, tiny micro-label above) is the
-   NETS/NODES/SAMPLES row's whole point — see `.metric span` below. Kept
-   outside the §10 type scale: the one big-digit instrument readout in the
+   NETS/NODES/SAMPLES row's whole point - see `.metric span` below. Kept
+   outside the type scale: the one big-digit instrument readout in the
    app, deliberately larger than the 13px "emphasized readout" ceiling used
    everywhere else. */
 .metric strong {
@@ -2209,7 +2207,7 @@ body {
   font-size: var(--fs-caption);
 }
 
-/* Amber caution variant — reused for warnings so they don't read as hard errors
+/* Amber caution variant - reused for warnings so they don't read as hard errors
    (red). Matches the app-wide semantic: red=error, amber=warning. */
 .analysis-empty.warn {
   border-color: var(--signal-line);
@@ -2269,7 +2267,7 @@ body {
   font-weight: 600;
 }
 
-/* `.meas` measurement table — mirrors the operating-point table styling. */
+/* `.meas` measurement table - mirrors the operating-point table styling. */
 .meas-table {
   margin: 0 14px 12px;
   border: 1px solid var(--border);
@@ -2325,10 +2323,10 @@ body {
   font-weight: 400;
 }
 
-/* ONE Advanced disclosure per tab (simplify pass) — collapsed by default. The
+/* ONE Advanced disclosure per tab (simplify pass) - collapsed by default. The
    header reuses the shared .disclosure-header affordance; body groups its
    subsections (Plot tools / Spectrum & cursors / Export / …) with a static
-   Braun-style micro-label each, not a nested collapsible — FftView/CursorView
+   Braun-style micro-label each, not a nested collapsible - FftView/CursorView
    bring their OWN .disclosure-header toggle where one is warranted. */
 .advanced-settings {
   flex-shrink: 0;
@@ -2433,7 +2431,7 @@ body {
 }
 
 /* Font declarations now live in the shared `.mono-num` utility (applied in
-   SimulationPanel.tsx's ResolutionControl) — this rule only carries size/color. */
+   SimulationPanel.tsx's ResolutionControl) - this rule only carries size/color. */
 .resolution-control strong {
   color: var(--text);
   font-size: var(--fs-title);
@@ -2447,7 +2445,7 @@ body {
 }
 
 /* Status states read via a tinted border + a hairline accent bar (not a
-   full-box tinted wash, retheme) — the reading itself carries the color, the
+   full-box tinted wash, retheme) - the reading itself carries the color, the
    surrounding panel stays neutral. */
 .resolution-control.ready {
   border-color: var(--success-line);
@@ -2775,7 +2773,7 @@ body {
 
 /* SI-prefixed numeric input (mantissa + prefix picker), shared by the
    selection-strip param editors (SimulationPanel) and the bottom inspector's
-   property grid (ShellPanels — scoped overrides at `.property-field
+   property grid (ShellPanels - scoped overrides at `.property-field
    .eng-input`). Height matches the shadcn Input primitive's `sm` size
    (`--row-h`, 28px) and the focus ring follows the same accent-hairline +
    soft halo language every other Tau field uses. */
@@ -2882,7 +2880,7 @@ body {
 ══════════════════════════════════════════════════════════════════════════════ */
 /* NOTE: the live `.statusbar` rule set lives in the "interactive completion
    pass" block below (search `.statusbar {`). A duplicate set once lived here and
-   leaked a wasteful backdrop-filter blur onto the opaque bar — deleted. The
+   leaked a wasteful backdrop-filter blur onto the opaque bar - deleted. The
    hint strip's `kbd` now shares the app-wide keycap recipe (search this file
    for ".palette-key,"); `.status-hints .dot` lives beside the real block. */
 
@@ -2901,7 +2899,7 @@ body {
   animation: tau-fade-in var(--motion-fast) var(--spring) both;
 }
 
-/* True-black pop surface — same recipe as ui/dialog.tsx's DialogContent
+/* True-black pop surface - same recipe as ui/dialog.tsx's DialogContent
    (--panel-4 popover, hairline ring, --elev-pop), restyled in place rather
    than migrated onto the primitive (the arrow-key + pointer selection model
    here is bespoke, not a Dialog). No backdrop blur: flat surfaces only. */
@@ -2944,7 +2942,7 @@ body {
   scrollbar-color: var(--panel-4) transparent;
 }
 
-/* Accent-hairline selection (never a heavy fill) — the same "targeting"
+/* Accent-hairline selection (never a heavy fill) - the same "targeting"
    language as .palette-item.active's left accent edge. */
 .cmdk-item {
   display: flex;
@@ -2970,7 +2968,7 @@ body {
   opacity: 0.8;
 }
 
-/* Mono instrument identifier — the same treatment as .palette-name, so the
+/* Mono instrument identifier - the same treatment as .palette-name, so the
    palette and the command palette read as the same parts catalog. */
 .cmdk-name {
   flex: 1;
@@ -3021,7 +3019,7 @@ body {
 }
 
 /* ── View controls (zoom / fit) ────────────────────────── */
-/* Canvas view controls — a segmented vertical cluster (zoom in / out / fit)
+/* Canvas view controls - a segmented vertical cluster (zoom in / out / fit)
    pinned top-right of the schematic. Consolidated here; the old duplicate lower
    in the file is deleted. Matches the ui/Button outline/icon language
    (hairline-bordered group, --overlay-hover on hover, real Tooltips per
@@ -3071,7 +3069,7 @@ body {
   color: var(--accent);
   background: var(--accent-soft);
 }
-/* focus ring is INSET — the container clips outer rings via overflow:hidden */
+/* focus ring is INSET - the container clips outer rings via overflow:hidden */
 .view-btn:focus-visible {
   outline: none;
   color: var(--text);
@@ -3117,7 +3115,7 @@ body {
   justify-content: space-between;
 }
 /* Font/tabular-figure declarations now live in the shared `.mono-num` utility
-   (applied in SimulationPanel.tsx's DialControl) — this rule only carries
+   (applied in SimulationPanel.tsx's DialControl) - this rule only carries
    what `.mono-num` doesn't (size, color). */
 .param-value {
   font-size: var(--fs-title);
@@ -3171,8 +3169,8 @@ body {
 .param-fields {
   /* `.selection-strip` is a 2-column grid (52px label rail + 1fr content);
      without an explicit column span this 3rd+ grid child auto-placed into
-     row 2 / column 1 — the narrow 52px label rail, not the wide content
-     column — collapsing every field's value input to ~18px (just the SI
+     row 2 / column 1 - the narrow 52px label rail, not the wide content
+     column - collapsing every field's value input to ~18px (just the SI
      select arrow, no room for the mantissa). Same fix `.value-editor`
      already has, just missing here. */
   grid-column: 1 / -1;
@@ -3207,7 +3205,7 @@ body {
 }
 
 /* Draggable + clickable in exactly the two contexts Canvas.tsx computes as
-   `labelsInteractive` (schematic editor select tool, simulator label tool) —
+   `labelsInteractive` (schematic editor select tool, simulator label tool) -
    not scoped to a container class, since the schematic editor's own Canvas
    has no `.sim-schematic-canvas` wrapper. */
 .net-label-layer.labels-interactive,
@@ -3222,7 +3220,7 @@ body {
   text-decoration: underline;
 }
 
-/* Marquee-selected markers — accent halo, consistent with wire/component selection. */
+/* Marquee-selected markers - accent halo, consistent with wire/component selection. */
 .net-label-text.selected {
   fill: var(--text);
   stroke: var(--accent-line);
@@ -3238,7 +3236,7 @@ body {
 
 /* Connects a label back to its net anchor once it's been dragged far enough
    that the two would otherwise read as unrelated (Canvas.tsx: offset
-   magnitude > 24). Hairline, not a wire — must never be mistaken for one. */
+   magnitude > 24). Hairline, not a wire - must never be mistaken for one. */
 .net-label-leader {
   stroke: var(--faint);
   stroke-width: 1;
@@ -3281,7 +3279,7 @@ body {
   font-weight: 500;
   letter-spacing: 0.02em;
   paint-order: stroke fill;
-  /* Halo must stay well under ~25% of the glyph size — the old 3.5px stroke
+  /* Halo must stay well under ~25% of the glyph size - the old 3.5px stroke
      on 8.5px text ate the counters and read as broken rendering. */
   stroke: var(--canvas-bg);
   stroke-width: 1.5px;
@@ -3302,7 +3300,7 @@ body {
 }
 
 /* ══════════════════════════════════════════════════════════════════════════════
-   DESIGN HANDOFF MIGRATION — VS Code shell + LTspice workspace
+   DESIGN HANDOFF MIGRATION - VS Code shell + LTspice workspace
    (Palette tokens consolidated into the single :root at the top of this file.)
 ══════════════════════════════════════════════════════════════════════════════ */
 
@@ -3333,7 +3331,7 @@ body {
 }
 
 /* ══════════════════════════════════════════════════════════════════════════════
-   TOOLBAR — operator console title bar (§10 Phase 3a)
+   TOOLBAR - operator console title bar
    Flat --panel surface (one notch off true black), a single bottom hairline,
    4pt-rhythm contents. Mono instrument readouts + a real indicator lamp
    (green=ok, amber=running, red=error, off=idle) replace the old plain-text
@@ -3373,7 +3371,7 @@ body {
 }
 
 /* leaked from the legacy pre-migration `.brand` (see the Root layout NOTE
-   above) — keeps the brand cluster from being squeezed by the mode toggle
+   above) - keeps the brand cluster from being squeezed by the mode toggle
    at the 900px minimum width. */
 .brand {
   min-width: 0;
@@ -3385,7 +3383,7 @@ body {
   -webkit-app-region: no-drag;
 }
 
-/* Brand lockup (mark + .brand-name below) — kept outside the §10 type
+/* Brand lockup (mark + .brand-name below) - kept outside the type
    scale on purpose: a logo/wordmark pair, not repeating chrome text. */
 .brand .brand-mark {
   font-size: 17px;
@@ -3406,10 +3404,10 @@ body {
   text-transform: none;
 }
 
-/* Instrument-label filename readout — monospace + tabular figures via
+/* Instrument-label filename readout - monospace + tabular figures via
    `.mono-num` (applied in Toolbar.tsx); this rule only carries what
    `.mono-num` doesn't (color, size, tracking, truncation). Case is left
-   alone (real filenames, not app-authored copy — forcing a transform would
+   alone (real filenames, not app-authored copy - forcing a transform would
    misrepresent a user's actual file on disk). */
 .brand-file {
   min-width: 0;
@@ -3422,10 +3420,10 @@ body {
   text-overflow: ellipsis;
 }
 
-/* Segmented mode control — a crisp hairline track on --panel-3 (one step
+/* Segmented mode control - a crisp hairline track on --panel-3 (one step
    below the bar's own --panel so the track still reads as a component, not
    a color-block), flat (no inset groove, no permanent glow on the active
-   segment — glows are reserved for the status lamp's functional states). */
+   segment - glows are reserved for the status lamp's functional states). */
 .mode-toggle {
   display: flex;
   align-items: center;
@@ -3464,7 +3462,7 @@ body {
   stroke-linejoin: round;
 }
 
-/* Inactive buttons had NO hover state — dead segment until clicked. Give them a
+/* Inactive buttons had NO hover state - dead segment until clicked. Give them a
    legible resting lift: brighten text off --muted, seat an --overlay-hover fill,
    and a spring nudge so the control feels alive before selection. */
 .mode-btn:not(.active):hover {
@@ -3491,8 +3489,8 @@ body {
   box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent);
 }
 
-/* Status lamp — a real OP-1-style transport indicator, not a decorative dot.
-   Retheme: the LABEL stays --muted in every state — color lives entirely on
+/* Status lamp - a real OP-1-style transport indicator, not a decorative dot.
+   Retheme: the LABEL stays --muted in every state - color lives entirely on
    the small dot (idle=off, running=amber, ok=green, error=red, warn=amber-
    static for a stale/invalidated result), so run state reads as a lamp, not
    a paragraph of colored text. Label is a tracked, uppercase mono instrument
@@ -3568,7 +3566,7 @@ body {
   animation: status-lamp-pulse 1.1s var(--ease-in-out, ease-in-out) infinite;
 }
 
-/* Run button status gradients — evidence-based color: green after a clean
+/* Run button status gradients - evidence-based color: green after a clean
    run, red after a failed one. Kept subtle (fill tint + hairline), never a
    saturated CTA slab. The lamp dot follows suit via currentColor-free vars. */
 .run-button--ok {
@@ -3824,7 +3822,7 @@ body {
   box-shadow: 0 0 0 1px var(--accent-line);
 }
 
-/* VS Code Codicons are filled glyphs — don't force a Lucide stroke recipe. */
+/* VS Code Codicons are filled glyphs - don't force a Lucide stroke recipe. */
 .explorer-icons button svg.vscode-explorer-icon {
   fill: currentColor;
   stroke: none;
@@ -4162,7 +4160,7 @@ body {
   min-width: 0;
 }
 
-/* Analysis setup forms (DC / TF / Noise / Step) — replaces typing .directives */
+/* Analysis setup forms (DC / TF / Noise / Step) - replaces typing .directives */
 .analysis-setup {
   margin: var(--sp-2) 0;
   padding: var(--sp-2) var(--sp-3);
@@ -4221,9 +4219,9 @@ body {
 /* editor */
 .editor-shell {
   flex: 1;
-  /* §10 responsive floor: the schematic column (tabs, canvas overlays, and
+  /* responsive floor: the schematic column (tabs, canvas overlays, and
      the simulator bottom panel's results table) needs real room to stay
-     usable — App.tsx's ResizeObserver keeps the scope/Ask Sim columns
+     usable - App.tsx's ResizeObserver keeps the scope/Ask Sim columns
      within a budget that respects this floor at any window width down to
      the 900px minimum, so in practice this never has to bite. It's a CSS
      backstop for the brief pre-layout-effect frame, not the primary
@@ -4235,10 +4233,9 @@ body {
   background: var(--panel-3);
 }
 
-/* Component parts catalogue — a fixed right column inside the flex shell-body
+/* Component parts catalogue - a fixed right column inside the flex shell-body
    (the legacy `grid-area: palette` is inert here, so size it explicitly).
-   264px comfortably fits icon + name + description + keycap (§10 Phase 3b —
-   see the PALETTE rules below); at the 900px minimum-window floor it narrows
+   264px comfortably fits icon + name + description + keycap; at the 900px minimum-window floor it narrows
    to 208px, which drops the container query's threshold and the row sheds
    its description column rather than clipping the name (verified via
    design-shot at 900×600). */
@@ -4267,9 +4264,9 @@ body {
   overflow: hidden;
 }
 
-/* ── Panel resize handles (§11 Unit B) ─────────────────────────────────────
-   An 8px grab strip inside the panel's resizable edge. Invisible at rest —
-   the panel border carries the visual line — with a neutral accent hairline on
+/* ── Panel resize handles ─────────────────────────────────────
+   An 8px grab strip inside the panel's resizable edge. Invisible at rest -
+   the panel border carries the visual line - with a neutral accent hairline on
    hover/drag/focus so the affordance appears exactly when relevant. */
 .panel-resize-handle {
   position: absolute;
@@ -4289,7 +4286,7 @@ body {
   right: 0;
 }
 
-/* Vertical variant (dock height, e.g. the telemetry dock's top edge) — same
+/* Vertical variant (dock height, e.g. the telemetry dock's top edge) - same
    invisible-strip-until-hover affordance, rotated: full width, thin height. */
 .panel-resize-handle--top,
 .panel-resize-handle--bottom {
@@ -4408,7 +4405,7 @@ body {
 }
 
 .components-rail-body > .component-inspector {
-  /* Right rail is ~264px — stack identity above the property grid instead of
+  /* Right rail is ~264px - stack identity above the property grid instead of
      the bottom-panel's side-by-side 232px + 1fr layout (which starved fields). */
   display: flex;
   flex-direction: column;
@@ -4516,8 +4513,8 @@ body {
   background: var(--border);
 }
 
-/* Document buttons (New/Open/Save/Save .asc) migrated to the §10 Button
-   primitive (components/ui/button.tsx) — .editor-doc-btn remains only as a
+/* Document buttons (New/Open/Save/Save .asc) migrated to the Button
+   primitive (components/ui/button.tsx) - .editor-doc-btn remains only as a
    simulator-mode visibility marker below. The select migrates with the
    Select primitive later. */
 .example-picker select {
@@ -4547,7 +4544,7 @@ body {
   border-radius: 8px;
 }
 
-/* Square-ish icon control, not a list/table row — kept outside
+/* Square-ish icon control, not a list/table row - kept outside
    --row-h/--row-h-dense on purpose (width and height are both bespoke to
    this compact transport cluster). */
 .transport button {
@@ -4688,7 +4685,7 @@ body {
   r: 2.8;
 }
 
-/* Errors strip — compact; expands only when there are issues. */
+/* Errors strip - compact; expands only when there are issues. */
 .bottom-panel {
   --diagnostic-color: var(--diagnostic-ok);
   --diagnostic-text: var(--diagnostic-ok-text);
@@ -4898,17 +4895,17 @@ button.bottom-panel-head:focus-visible {
   overflow: hidden;
 }
 
-/* ── Component inspector — operator spec-sheet (§10 Phase 3b) ────────────
+/* ── Component inspector - operator spec-sheet ────────────
    A fixed identity column (symbol + label) beside a dense label/value grid:
    each row is a micro-label (uppercase, tracked, --faint) paired with a
-   mono value, separated by hairlines — an instrument spec sheet, not a
+   mono value, separated by hairlines - an instrument spec sheet, not a
    stack of form-card fields. */
 .component-inspector {
   grid-template-columns: 232px 1fr;
 }
 
 /* At the 900px minimum-window floor the bottom panel itself is narrow (the
-   explorer + palette columns eat most of it) — shrink the identity column
+   explorer + palette columns eat most of it) - shrink the identity column
    further so the property grid still has room for a value, not just a label
    and a starved 0px input. */
 @media (max-width: 1023px) {
@@ -4964,7 +4961,7 @@ button.bottom-panel-head:focus-visible {
 }
 
 /* Operator-grade "no selection" reticle: a large dim aiming crosshair that
-   reads as "acquire a target" — mask keeps the tint on a token (no baked hex). */
+   reads as "acquire a target" - mask keeps the tint on a token (no baked hex). */
 .inspector-summary.empty::before {
   content: "";
   width: 52px;
@@ -5104,7 +5101,7 @@ button.bottom-panel-head:focus-visible {
 .sim-results {
   /* 64px floor keeps a name + engineering-notation value pair
      (e.g. "R1  12.3mA") from collapsing into single-letter headers when the
-     schematic column is narrow — the column scrolls internally
+     schematic column is narrow - the column scrolls internally
      (.result-list below) rather than starving to 0. */
   grid-template-columns: repeat(3, minmax(64px, 1fr));
   overflow-x: auto;
@@ -5179,7 +5176,7 @@ button.bottom-panel-head:focus-visible {
    of replacing the editor with a full-window oscilloscope. The schematic is
    intentionally read-only here; it remains selectable for measurement focus
    and supports pan/zoom, but exposes no editing tools. Liquid-glass-like
-   material is limited to the compact header/control layer — the schematic and
+   material is limited to the compact header/control layer - the schematic and
    plots stay on opaque content surfaces for legibility. */
 .sim-schematic-pane {
   flex: 0 1 38%;
@@ -5448,7 +5445,7 @@ button.bottom-panel-head:focus-visible {
 }
 
 /* Spec-sheet rows: full-word quantity left, value+unit right, hairlines
-   between rows — an Apple tech-specs table in miniature. */
+   between rows - an Apple tech-specs table in miniature. */
 .telemetry-card-rows {
   display: flex;
   flex-direction: column;
@@ -5607,10 +5604,10 @@ button.bottom-panel-head:focus-visible {
   border-left: 0;
 }
 
-/* ── Assistant column (§ AI assistant) ────────────────────────────────────
+/* ── Assistant column ────────────────────────────────────
    Docks to the right of the scope column, same "resizable side panel"
    language as the Components rail (panelResize.tsx, edge="left" widens away
-   from the window edge). It is always a direct flex column — never an overlay
+   from the window edge). It is always a direct flex column - never an overlay
    and never vertically combined with Components. App.tsx owns its measured
    responsive width so editor/analysis floors remain reachable. */
 .assistant-panel {
@@ -5704,7 +5701,7 @@ button.bottom-panel-head:focus-visible {
   min-width: 0;
 }
 
-/* Past-chats popover (AssistantPanel header) — hand-rolled, not the Radix
+/* Past-chats popover (AssistantPanel header) - hand-rolled, not the Radix
    DropdownMenu primitive: each row needs two independent click targets
    (switch + delete), which fights Radix's single-action menuitem model. The
    trigger button lives inside this wrapper too, so one ref covers the whole
@@ -6110,7 +6107,7 @@ button.bottom-panel-head:focus-visible {
 }
 
 /* Blinking insertion caret appended to the last assistant bubble only while
-   its reply is still streaming in — a quiet "still typing" signal instead of
+   its reply is still streaming in - a quiet "still typing" signal instead of
    a spinner, consistent with the run-lamp-dot idiom used elsewhere. */
 .assistant-caret {
   display: inline-block;
@@ -6241,7 +6238,7 @@ button.bottom-panel-head:focus-visible {
   gap: var(--sp-2);
 }
 
-/* First-run local AI onboarding card (AssistantPanel) — same proposal-card
+/* First-run local AI onboarding card (AssistantPanel) - same proposal-card
    idiom as .assistant-action, shown proactively above the transcript instead
    of waiting for a failed send. */
 .assistant-setup-card {
@@ -6436,15 +6433,15 @@ button.bottom-panel-head:focus-visible {
   background: var(--accent);
 }
 
-/* §10 Phase 3c: the plotter header/tabs/run-button/icon-action rules that
+/* Phase 3c: the plotter header/tabs/run-button/icon-action rules that
    used to live here (duplicating and re-overriding the primary SIMULATION
-   PANEL rules above) are gone — the run button and every header icon button
+   PANEL rules above) are gone - the run button and every header icon button
    (stop/step/maximize/close) now render the real shadcn `Button` primitive
    (SimulationPanel.tsx), matching the toolbar's Run button exactly, so their
    chrome lives in button.tsx's own token-driven variants instead of a
    parallel `.plotter-run`/`.run-btn`/`.plotter-icon-action`/`.plotter-close`
    CSS family. `.panel-close` (now the Assistant panel's own close button,
-   AssistantPanel.tsx — untouched by this migration) keeps its rule below,
+   AssistantPanel.tsx - untouched by this migration) keeps its rule below,
    now standalone. The effective padding/color values those dead rules used
    to carry (14px header gutter, --cream title, accent-filled active tab,
    --scope-surface scope face) are folded directly into the primary rules
@@ -6490,16 +6487,16 @@ button.bottom-panel-head:focus-visible {
 }
 
 /* ══════════════════════════════════════════════════════════════════════════════
-   PALETTE — operator-grade component selection (§10 Phase 3b)
+   PALETTE - operator-grade component selection
    Dense hairline rows at --row-h-dense (24px): icon, name (priority column),
    muted description, mono keycap. Selection reads as an accent hairline +
-   accent name text — never a heavy fill — the targeting affordance of an
+   accent name text - never a heavy fill - the targeting affordance of an
    Anduril/Palantir selectable list, not a highlighted list box. Below a
    220px container width the description column drops out entirely so the
    name never truncates (see the `@container palette-list` rule below).
 ══════════════════════════════════════════════════════════════════════════════ */
 /* Structural-only: width/background/border are set at higher specificity by
-   `.shell-body > .palette` above (the flex shell's real geometry) — kept
+   `.shell-body > .palette` above (the flex shell's real geometry) - kept
    separate so those two properties aren't duplicated across both rules. */
 .palette {
   display: flex;
@@ -6521,7 +6518,7 @@ button.bottom-panel-head:focus-visible {
   padding: 0 10px 8px;
 }
 
-/* Search glyph — CSS mask so the icon inherits a theme token instead of a
+/* Search glyph - CSS mask so the icon inherits a theme token instead of a
    baked-in hex inside the data-URI (project rule: no hardcoded colors). */
 .palette-search-icon {
   position: absolute;
@@ -6538,7 +6535,7 @@ button.bottom-panel-head:focus-visible {
 
 /* The Input primitive's own Tailwind padding (`px-2.5`) is unlayered-vs-
    layered-losing against this plain CSS rule (App.css loads outside any
-   `@layer`, so it always wins over `@layer utilities` — see tokens.css), so
+   `@layer`, so it always wins over `@layer utilities` - see tokens.css), so
    this single declaration cleanly reclaims room for the icon without an
    `!important` fighting the primitive. */
 .palette-search {
@@ -6572,9 +6569,9 @@ button.bottom-panel-head:focus-visible {
   margin-top: 2px;
 }
 
-/* Section header — a Braun-style micro-label: uppercase, tracked, --faint,
+/* Section header - a Braun-style micro-label: uppercase, tracked, --faint,
    with a hairline rule filling the rest of the row (replaces the old
-   "— Passives —" em-dash bracketing). */
+   "- Passives -" em-dash bracketing). */
 .palette-section-header {
   display: flex;
   align-items: center;
@@ -6626,7 +6623,7 @@ button.bottom-panel-head:focus-visible {
   display: flex;
   flex-direction: column;
   /* Container queries key off this content-box width so a row can drop its
-     description column once the panel (or a future resize) narrows — see
+     description column once the panel (or a future resize) narrows - see
      the `@container` rule below. */
   container-type: inline-size;
   container-name: palette-list;
@@ -6645,7 +6642,7 @@ button.bottom-panel-head:focus-visible {
   cursor: pointer;
   text-align: left;
   width: 100%;
-  /* Operator-console left indicator rail — invisible at rest, lights on
+  /* Operator-console left indicator rail - invisible at rest, lights on
      hover, goes solid accent when selected (the targeting affordance in an
      Anduril/Palantir selectable list, never a heavy fill). */
   box-shadow: inset 2px 0 0 transparent;
@@ -6762,12 +6759,12 @@ button.bottom-panel-head:focus-visible {
   }
 }
 
-/* Flat hairline mono keycap — no embossed gradient/bevel; a crisp badge that
+/* Flat hairline mono keycap - no embossed gradient/bevel; a crisp badge that
    reads as a console legend rather than a physical button. ONE recipe shared
    by every shortcut badge in the app: the palette's hotkey column, the
    status-bar hint strip, the command palette's result row, and the canvas
    empty-state's onboarding actions (search this file for "kbd" if adding a
-   new one — extend this selector, don't fork a new rule). */
+   new one - extend this selector, don't fork a new rule). */
 .palette-key,
 .status-hints kbd,
 .cmdk-key,
@@ -6809,7 +6806,7 @@ button.bottom-panel-head:focus-visible {
   line-height: 1.5;
 }
 
-/* Symbol preview — reads as an instrument screen: flat --canvas-surface
+/* Symbol preview - reads as an instrument screen: flat --canvas-surface
    black, a hairline border, the symbol stroke in --accent. No soft-blue
    fill (that read as a UI "card", not a screen). */
 .symbol-preview {
@@ -6859,7 +6856,7 @@ button.bottom-panel-head:focus-visible {
   font-style: normal;
 }
 /* status */
-/* App-chrome bar (fixed shell region, not a repeating row) — kept outside
+/* App-chrome bar (fixed shell region, not a repeating row) - kept outside
    --row-h/--row-h-dense on purpose. */
 .statusbar {
   grid-area: status;
@@ -6880,7 +6877,7 @@ button.bottom-panel-head:focus-visible {
 }
 
 /* The mode/run-state indicator is the shared `.status-lamp` component
-   (search this file for "Status lamp —") — the same treatment as the
+   (search this file for "Status lamp -") - the same treatment as the
    toolbar's transport lamp, so idle/ok/error read identically everywhere. */
 
 .status-file {
@@ -6967,7 +6964,7 @@ button.bottom-panel-head:focus-visible {
   color: color-mix(in srgb, currentColor 82%, var(--text));
 }
 
-/* Reticle-language empty state — the same recipe as
+/* Reticle-language empty state - the same recipe as
    .inspector-summary.empty (dim aiming glyph + mono uppercase title + faint
    guidance), reused here so every "nothing to show yet" panel in the app
    reads as one consistent idiom. */
@@ -7005,7 +7002,7 @@ button.bottom-panel-head:focus-visible {
   font-size: var(--fs-body);
   line-height: 1.45;
 }
-/* Settings sheet body (ui/sheet.tsx supplies the panel chrome — true-black
+/* Settings sheet body (ui/sheet.tsx supplies the panel chrome - true-black
    popover surface, hairline ring, --elev-pop, slide-in motion; these rules
    are only the settings-specific dense row content). */
 .settings-sheet-kicker {
@@ -7023,7 +7020,7 @@ button.bottom-panel-head:focus-visible {
 }
 
 /* Dense hairline row: a micro-label + one-line hint on the left, the real
-   ui/Button action on the right — the same "spec-sheet row" language as
+   ui/Button action on the right - the same "spec-sheet row" language as
    .property-field, not a stack of card-styled buttons. */
 .settings-row {
   display: flex;
@@ -7224,10 +7221,10 @@ button.bottom-panel-head:focus-visible {
   transform: translateY(-1px);
 }
 
-/* .confirm-dialog / .confirm-actions are now identity markers only — every
+/* .confirm-dialog / .confirm-actions are now identity markers only - every
    visual property (true-black popover, hairline ring, --elev-pop, --scrim-
    strong backdrop, pop-in motion, Cancel/destructive-Confirm buttons) comes
-   from ui/dialog.tsx + ui/button.tsx (§10). */
+   from ui/dialog.tsx + ui/button.tsx. */
 
 .shell-toast {
   position: fixed;
@@ -7281,11 +7278,11 @@ button.bottom-panel-head:focus-visible {
 }
 
 /* ══════════════════════════════════════════════════════════════════════════════
-   §10 SHARED UTILITIES — plain CSS (not Tailwind @utility) so every existing
+   SHARED UTILITIES - plain CSS (not Tailwind @utility) so every existing
    ad-hoc `font-family: var(--font-mono)` site can adopt it later without a
    build-tooling change. Lives here, not in tokens.css: tokens.css is reserved
    for the Tailwind `@theme` bridge (--color- and --radius- names Tailwind
-   uses to generate utilities) — a real CSS class with declarations does not
+   uses to generate utilities) - a real CSS class with declarations does not
    belong in that contract. This is the ONLY site that defines it; the 15+
    existing ad-hoc mono call-sites migrate per-panel in Phase 3.
 ══════════════════════════════════════════════════════════════════════════════ */

@@ -95,6 +95,7 @@ import {
 import { validateSchematicDocument } from "./schematic/documentValidation";
 import { importProjectAsc } from "./io/projectAscImport";
 import { pathExists, readTextFile } from "./project/fsBridge";
+import { isWorkspacePath } from "./project/defaultWorkspace";
 import {
   carryAssistantProbes,
   type AssistantApplyCurrentAscAction,
@@ -108,7 +109,23 @@ const DEFAULT_ANALYSIS_OPTIONS: AnalysisOptions = {
   steps: 240,
 };
 
-// Pre-run confirmation thresholds (Fix 3 — "may take a while" guard). The
+// The temporary browser workspace exists only inside the project store; fsBridge
+// helpers reach Tauri plugin-fs for anything that is not `web://`, which throws
+// in a plain browser. Route workspace paths to the in-memory files so opening
+// an imported .asc (and its hierarchical .asy/.asc probes) never touches IPC.
+async function readProjectText(path: string): Promise<string> {
+  if (!isWorkspacePath(path)) return readTextFile(path);
+  const file = useProject.getState().workspaceFiles[path];
+  if (!file) throw new Error("File not found in workspace.");
+  return file.contents;
+}
+
+async function projectPathExists(path: string): Promise<boolean> {
+  if (!isWorkspacePath(path)) return pathExists(path);
+  return Object.prototype.hasOwnProperty.call(useProject.getState().workspaceFiles, path);
+}
+
+// Pre-run confirmation thresholds (Fix 3 - "may take a while" guard). The
 // web TS solver blocks-then-yields cooperatively and is the slower path;
 // native ngspice runs out-of-process and tolerates far more samples before
 // the run feels risky to kick off without warning.
@@ -147,9 +164,9 @@ export function schematicDocumentSignature(doc: SchematicDocument): string {
   });
 }
 
-// §10 responsive floor — App.css's `.editor-shell`/`.plotter` mirror these as
-// a CSS backstop. The schematic column must stay usable — tabs, canvas
-// overlays, and the results table — down to the app's stated 900px minimum
+// responsive floor - App.css's `.editor-shell`/`.plotter` mirror these as
+// a CSS backstop. The schematic column must stay usable - tabs, canvas
+// overlays, and the results table - down to the app's stated 900px minimum
 // window width, so the scope column budgets around it instead of squeezing
 // it to nothing.
 const RAIL_W = SHELL_LAYOUT.railWidth; // .activity-rail
@@ -184,7 +201,7 @@ function App() {
   const undo = useSchematic((s) => s.undo);
   const redo = useSchematic((s) => s.redo);
   const [analysisOptions, setAnalysisOptions] = useState<AnalysisOptions>(DEFAULT_ANALYSIS_OPTIONS);
-  // §11 Unit C8 — Tau chooses transient resolution automatically (from the
+  // Tau chooses transient resolution automatically (from the
   // circuit's time constants + source frequencies) until the user touches a
   // dial; manual state then sticks until "Reset to auto".
   const [optionsOverridden, setOptionsOverridden] = useState(false);
@@ -219,12 +236,12 @@ function App() {
   const [analysisRunning, setAnalysisRunning] = useState(false);
   // Determinate while the web TS solver is reporting real fractions; null
   // (indeterminate bar) before the first callback and for the whole run when
-  // native ngspice ends up handling it (no progress channel — see
+  // native ngspice ends up handling it (no progress channel - see
   // executeTransient/engine/nativeSpice.ts).
   const [runProgress, setRunProgress] = useState<number | null>(null);
   const [runState, setRunState] = useState<"idle" | "complete" | "error" | "stopped">("idle");
   // Pending confirmation for a transient run large enough to warrant a
-  // "this may take a while" pause (Fix 3 pre-run guard) — null when no
+  // "this may take a while" pause (Fix 3 pre-run guard) - null when no
   // confirmation is pending. `run` is the deferred action to take if the
   // user picks "Run anyway".
   const [confirmLargeRun, setConfirmLargeRun] = useState<{ steps: number; netCount: number; run: () => void } | null>(null);
@@ -235,6 +252,8 @@ function App() {
   const tabsRef = useRef(tabs);
   const projectRenameInFlightRef = useRef<Promise<string | null> | null>(null);
   const [activeId, setActiveId] = useState("tab-0");
+  /** ASC import warnings keyed by document path (shown in Diagnostics). */
+  const [importWarningsByPath, setImportWarningsByPath] = useState<Record<string, string[]>>({});
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [confirmClearOpen, setConfirmClearOpen] = useState(false);
   const [confirmCloseTabId, setConfirmCloseTabId] = useState<string | null>(null);
@@ -243,7 +262,7 @@ function App() {
   const [partsOpen, setPartsOpen] = useState(true);
   const [fitSignal, setFitSignal] = useState(0);
   const [scopeWidth, setScopeWidth] = useState(440);
-  // Closed by default (§ AI assistant column) — persists across sessions
+  // Closed by default - persists across sessions
   // like graphOpen/partsOpen, but doesn't reset on a schematic/simulator mode
   // switch since it's not view-specific. Width is lifted (not owned by
   // AssistantPanel itself) so the responsive-floor effect below can read and
@@ -280,7 +299,7 @@ function App() {
   // ngspice runs outside React's lifecycle. A request version prevents a late
   // result from an edited, closed, or stopped circuit overwriting current UI.
   const analysisRequestRef = useRef(0);
-  // Live transient run's abort handle (web TS solver only — see
+  // Live transient run's abort handle (web TS solver only - see
   // executeTransient). Deliberately NOT tied to analysisRequestRef: aborting
   // must let the in-flight run's own partial result still reach setAnalysis,
   // whereas bumping analysisRequestRef (invalidateAnalysis) is for "a
@@ -294,7 +313,7 @@ function App() {
   // effect below. A ref (not state): replaceCircuit/loadCircuit update the
   // schematic store synchronously, but this component's own closures
   // (directives, and every run callback that reads them) only refresh on the
-  // *next* render — so setting a ref here and reading it from an effect keyed
+  // *next* render - so setting a ref here and reading it from an effect keyed
   // on `directives` lets the auto-run fire against freshly-rendered closures
   // instead of the stale ones captured before the circuit swapped.
   const pendingAutoRunRef = useRef<AutoRunAnalysis | null>(null);
@@ -465,7 +484,7 @@ function App() {
   // Per-component V/I/P telemetry for the simulator's always-visible dock
   // (lifted out of SimulationPanel so it can render alongside the read-only
   // schematic, not just inside the analysis column's Advanced disclosure).
-  // Tracks the transient result specifically — it's the only analysis kind
+  // Tracks the transient result specifically - it's the only analysis kind
   // with per-timestep node/branch data to derive component readings from.
   const componentRows = useMemo<ComponentMeasurement[]>(
     () => (analysis?.ok ? componentMeasurements(analysis) : []),
@@ -501,7 +520,7 @@ function App() {
     transientAbortRef.current = controller;
     let lastProgressAt = 0;
     const onProgress = (fraction: number) => {
-      // Throttle to ~10/sec (100ms) — the solver yields far more often than
+      // Throttle to ~10/sec (100ms) - the solver yields far more often than
       // a progress bar needs to repaint, and 0/1 always get through so the
       // bar starts and finishes in sync with the actual run.
       const now = Date.now();
@@ -527,7 +546,7 @@ function App() {
       if (analysisRequestRef.current !== requestId) return;
       setAnalysis(result);
       setRunState(result.ok ? "complete" : "error");
-      if (controller.signal.aborted) showNotice("Stopped early — showing partial result.");
+      if (controller.signal.aborted) showNotice("Stopped early - showing partial result.");
     } catch (error) {
       if (analysisRequestRef.current !== requestId) return;
       if (controller.signal.aborted && isNativeSpiceRuntime()) {
@@ -547,7 +566,7 @@ function App() {
         setAnalysisRunning(false);
         setRunProgress(null);
       }
-      // Only clear the ref if it's still ours — a newer executeTransient call
+      // Only clear the ref if it's still ours - a newer executeTransient call
       // (re-run before this one settled) already installed its own
       // controller, and clearing that out from under it would make
       // stopAnalysis fall back to the non-abortable invalidate path for a
@@ -606,7 +625,7 @@ function App() {
     const requestId = ++analysisRequestRef.current;
     setAnalysisRunning(true);
     try {
-      // §11 Unit C8 — sweep defaults bracket the circuit's own source
+      // sweep defaults bracket the circuit's own source
       // frequencies (a document .ac directive still wins for step families).
       const acSweep = suggestAcSweep(components);
       const result = await runNativeAcSweep(
@@ -884,7 +903,7 @@ function App() {
       const doc = validateSchematicDocument(parsed);
       openDocument(doc, title, path);
     } catch (error) {
-      showNotice(error instanceof Error ? error.message : "Could not open .sim file.");
+      showNotice(userFacingErrorMessage(error, "Could not open .sim file."));
     }
   }, [openDocument, showNotice]);
 
@@ -893,9 +912,22 @@ function App() {
       const result = await importProjectAsc(text, {
         sourcePath: path,
         rootPath: useProject.getState().rootPath,
-        readText: readTextFile,
-        pathExists,
+        readText: readProjectText,
+        pathExists: projectPathExists,
       });
+      // Duplicate reference designators only failed later, at deck build,
+      // far from the cause. Flag them at open time instead.
+      const labelCounts = new Map<string, number>();
+      for (const component of result.components) {
+        const label = component.label?.trim().toLowerCase();
+        if (label) labelCounts.set(label, (labelCounts.get(label) ?? 0) + 1);
+      }
+      const duplicateWarnings = [...labelCounts.entries()]
+        .filter(([, count]) => count > 1)
+        .map(([label, count]) => `Component name "${label.toUpperCase()}" is used ${count} times; simulation requires unique names.`);
+      // Surface import warnings in the Diagnostics panel for THIS document.
+      // The toast only carries a count, which is a dead end on its own.
+      setImportWarningsByPath((previous) => ({ ...previous, [path]: [...result.warnings, ...duplicateWarnings] }));
       const doc: SchematicDocument = {
         components: result.components,
         wires: result.wires,
@@ -909,7 +941,7 @@ function App() {
         showNotice(`Opened ${title} with ${result.warnings.length} import warning(s).`);
       }
     } catch (error) {
-      showNotice(error instanceof Error ? error.message : "Could not import .asc file.");
+      showNotice(userFacingErrorMessage(error, "Could not import .asc file."));
     }
   }, [openDocument, showNotice]);
 
@@ -975,8 +1007,8 @@ function App() {
   // request (ask -> confirm -> data appears), reusing the exact per-mode run
   // callbacks the simulator's own Run buttons use so pre-run guards, abort,
   // progress, and dashboards all behave identically. Keyed on `directives`
-  // (not the confirm handlers themselves) so it fires once the store — and
-  // every callback that closes over it — has actually caught up with the
+  // (not the confirm handlers themselves) so it fires once the store - and
+  // every callback that closes over it - has actually caught up with the
   // just-applied circuit; see pendingAutoRunRef above.
   useEffect(() => {
     const pending = pendingAutoRunRef.current;
@@ -1085,7 +1117,7 @@ function App() {
       return true;
     } catch (error) {
       if (createdForSave) await deleteProjectNode(savePath);
-      showNotice(error instanceof Error ? error.message : "Save failed.");
+      showNotice(userFacingErrorMessage(error, "Save failed."));
       return false;
     }
   }, [activeId, components, wires, probes, netLabels, directives, currentDocument, currentSignature, createSchematicInRoot, deleteProjectNode, writeSim, showNotice]);
@@ -1221,7 +1253,7 @@ function App() {
           showNotice("Simulator is view only. Return to Schematic to edit.");
           return;
         }
-        // Simulator view is read-only (pan/zoom/probe only — see Canvas's
+        // Simulator view is read-only (pan/zoom/probe only - see Canvas's
         // `interactive` prop); every editing action requires schematic view.
         dispatchShortcutAction(action, mode, {
           undo,
@@ -1271,7 +1303,7 @@ function App() {
     return () => observer.disconnect();
   }, []);
 
-  // §10 responsive floor: whenever the window narrows (or the scope opens/
+  // responsive floor: whenever the window narrows (or the scope opens/
   // closes), re-clamp the scope width so the layout never drops below a
   // usable width. This only ever shrinks toward the current values, so it
   // never fights a manual drag that already fits.
@@ -1468,7 +1500,11 @@ function App() {
               />
             )}
           </main>
-          <BottomPanel result={analysis} isRunning={analysisRunning} />
+          <BottomPanel
+            result={analysis}
+            isRunning={analysisRunning}
+            notices={activeFilePath ? importWarningsByPath[activeFilePath] ?? [] : []}
+          />
         </section>
         )}
         {mode === "simulator" && activeProjectFile && graphOpen && (

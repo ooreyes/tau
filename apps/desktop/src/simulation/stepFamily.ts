@@ -1,9 +1,9 @@
 /**
- * `.step` family-of-curves wiring (FEATURE_PARITY §4 `.step`, §6 family overlay).
+ * `.step` family-of-curves wiring (LTspice parity).
  *
  * The parser/value-enumerator and the generic `param` runner live in
  * `paramStep.ts`. This module turns a {@link StepSpec} into a list of concrete
- * {@link StepContext}s — one per swept value — that the UI can hand to *any*
+ * {@link StepContext}s - one per swept value - that the UI can hand to *any*
  * solver (transient/AC/op, TS or native) to build a family of result curves.
  *
  * It is the piece `runParamStep` could not be: `runParamStep` only injects into
@@ -65,7 +65,7 @@ export function formatStepValue(value: number): string {
 /**
  * Expand a `.step` spec into one {@link StepContext} per swept value (capped at
  * {@link MAX_FAMILY_MEMBERS}). Returns at most `MAX_FAMILY_MEMBERS` contexts even
- * when the spec enumerates more — the family overlay only needs a readable set.
+ * when the spec enumerates more - the family overlay only needs a readable set.
  *
  * - **param**: the value is injected into a copy of `baseParams` ({@link withStepValue}).
  * - **source**: the component whose ref-des (`label`) matches `spec.name`
@@ -128,7 +128,7 @@ function applyStepValue(
 }
 
 /**
- * Expand two or more `.step` specs into the Cartesian product of contexts —
+ * Expand two or more `.step` specs into the Cartesian product of contexts -
  * LTspice's nested outer×inner sweep (the first spec is the outermost loop).
  * Each member composes every axis's transform (param scope injection, source
  * override, temp rescale) onto the base, joins the axis labels with `", "`, and
@@ -183,7 +183,7 @@ export function runnableStepsFromDirectives(directives: string[]): StepSpec[] {
 }
 
 /** True when the spec is a `.step` the interim engine can run a family for
- *  (param, source, or temp — the last via resistor tempco rescaling). */
+ *  (param, source, or temp - the last via resistor tempco rescaling). */
 export function isRunnableStep(spec: StepSpec | null): spec is StepSpec {
   return spec !== null && (spec.kind === "param" || spec.kind === "source" || spec.kind === "temp");
 }

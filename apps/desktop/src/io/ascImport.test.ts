@@ -210,7 +210,7 @@ describe("LTSPICE_PINS", () => {
 
 describe("ascToSchematic", () => {
   // R1 (res, R90) sits at (336,192). Its LTspice pins (16,16)/(16,96) map under
-  // R90 to world (320,208)/(240,208) — verified by hand against the wires below.
+  // R90 to world (320,208)/(240,208) - verified by hand against the wires below.
   const SRC = `Version 4
 SHEET 1 880 680
 WIRE 368 208 320 208
@@ -494,7 +494,7 @@ SYMATTR InstName R1`;
   });
 
   it("imported directives build a param scope that resolves {expr} component values", () => {
-    // §1(d): a real imported circuit's `.param`/`{expr}` round-trip — the
+    // (d): a real imported circuit's `.param`/`{expr}` round-trip - the
     // directives ascToSchematic surfaces must drive the param scope that the
     // solvers resolve component values against.
     const PARAMETRIZED = `Version 4
@@ -518,7 +518,7 @@ TEXT 0 40 Left 2 !.tran 1m`;
     const circuit = extractCircuit(doc.components, doc.wires, doc.netLabels);
     const pinNet = (label: string, pinId: string) =>
       circuit.nets.find((n) => n.pins.some((p) => p.componentLabel === label && p.id === pinId))?.id;
-    // R1.a meets the vcc wire; R1.b meets the vout wire — net names follow labels.
+    // R1.a meets the vcc wire; R1.b meets the vout wire - net names follow labels.
     expect(pinNet("R1", "a")).toBe("vcc");
     expect(pinNet("R1", "b")).toBe("vout");
     expect(circuit.warnings).not.toContain("No ground symbol found.");
@@ -652,7 +652,7 @@ describe("componentValueFromAttrs", () => {
 
   it("carries op-amp behavioral params from Value2/SpiceLine (class-d Avol)", () => {
     // class-d_starter.asc U1: no Value, only `Value2 Avol=1Meg GBW=10Gig Slew=10Gig`
-    // — must survive import so the deck builder can read Avol (rail clamp).
+    // - must survive import so the deck builder can read Avol (rail clamp).
     expect(
       componentValueFromAttrs("opamp", { Value2: "Avol=1Meg GBW=10Gig Slew=10Gig" }),
     ).toBe("Avol=1Meg GBW=10Gig Slew=10Gig");
@@ -710,7 +710,7 @@ PINATTR SpiceOrder 1`);
 
 describe("ascToSchematic hierarchical subcircuits", () => {
   // A 2-port block "mydiv": a→[R1]→mid→[R2]→b. `mid` is an internal
-  // geometry-only net (no port, no label) — used to prove instance isolation.
+  // geometry-only net (no port, no label) - used to prove instance isolation.
   const DIV_ASY = `Version 4
 SymbolType BLOCK
 PIN -32 0 LEFT 8
@@ -778,7 +778,7 @@ TEXT 0 400 Left 2 !.op`;
     const r = importAsc(PARENT, { resolveSubcircuit: resolver });
     const circuit = extractCircuit(r.components, r.wires, r.netLabels);
     // The a-port joins the parent's `vin` FLAG; the net should resolve as `vin`
-    // (the author's name) so V(vin) probes work — not the `X1:a` synthetic.
+    // (the author's name) so V(vin) probes work - not the `X1:a` synthetic.
     const ids = circuit.nets.map((n) => n.id);
     expect(ids).toContain("vin");
     expect(ids.some((id) => /^x1/i.test(id))).toBe(false);
@@ -983,7 +983,7 @@ SYMATTR Value Rclamp=1`;
     expect(doc.warnings.filter((w) => /A1|varistor/i.test(w))).toHaveLength(0);
     expect(doc.notes.some((n) => /A1|varistor/i.test(n))).toBe(true);
     // The raw `Rclamp=1` value is an A-device param the resistor emitter can't
-    // parse — the placeholder gets a neutral high-Z resting resistance instead
+    // parse - the placeholder gets a neutral high-Z resting resistance instead
     // (regression: `Rclamp=1` used to reach the deck as a bad Ohm value and
     // crash deck-build). 1Meg ≈ open, matching a varistor below its clamp V.
     expect(a1?.value).toBe("1Meg");
@@ -1012,7 +1012,7 @@ describe("digital A-device symbols (Digital\\*)", () => {
 
   it("imports DIGITAL\\AND with the full 8-slot pin bank and the fn in the value", () => {
     // and.asy: a..e(-32,{32,48,64,80,96}), _Q(32,80), Q(32,48), com(-16,96).
-    // R0 at (1904,208) — 160.asc's A1.
+    // R0 at (1904,208) - 160.asc's A1.
     const src = `Version 4
 SHEET 1 880 680
 SYMBOL DIGITAL\\AND 1904 208 R0
@@ -1031,7 +1031,7 @@ SYMATTR InstName A1`;
   });
 
   it("imports DIGITAL\\INV with only its .asy pin subset (in1/qbar/com)", () => {
-    // inv.asy: in(0,64), _Q(64,64), com(0,80). R0 at (1776,224) — 160.asc's A6.
+    // inv.asy: in(0,64), _Q(64,64), com(0,80). R0 at (1776,224) - 160.asc's A6.
     const src = `Version 4
 SHEET 1 880 680
 SYMBOL DIGITAL\\INV 1776 224 R0
@@ -1077,7 +1077,7 @@ SYMATTR Value2 Trise=10n`;
 
   it("imports SpecialFunctions\\sample as a sampleHold with the id-mapped pin bank", () => {
     // sample.asy: in+(-80,-32) in-(-80,0) CLK(-80,32) S/H(-80,64) out(96,16)
-    // com(-80,96). R0 at (208,96) — Educational/SampleAndHold.asc's A1. The
+    // com(-80,96). R0 at (208,96) - Educational/SampleAndHold.asc's A1. The
     // corpus file writes the path with DOUBLED backslashes; the importer's
     // separator normalization must accept that form.
     const src = `Version 4
@@ -1112,7 +1112,7 @@ SYMATTR InstName A1`;
 
   it("imports SpecialFunctions\\MODULATE as a modulator with the id-mapped pin bank", () => {
     // modulate.asy: FM(0,0) AM(0,64) Q(144,32) com(0,96). R0 at (192,880) is
-    // PLL.asc's A1 (uppercase path, doubled backslashes — as the corpus file
+    // PLL.asc's A1 (uppercase path, doubled backslashes - as the corpus file
     // writes it); M0 at (1056,1056) is its A3 (mirror flips dx). SpiceLine
     // extras must join onto the A-device value.
     const src = `Version 4
@@ -1144,7 +1144,7 @@ SYMATTR Value mark=2K space=0`;
   });
 
   it("imports bi2 as a bsource with its flipped pin geometry", () => {
-    // bi2.asy (B current source, alt geometry): +(0,80) / -(0,0) — bi's flip.
+    // bi2.asy (B current source, alt geometry): +(0,80) / -(0,0) - bi's flip.
     const src = `Version 4
 SHEET 1 880 680
 SYMBOL bi2 100 100 R0
@@ -1245,7 +1245,7 @@ SYMATTR SpiceModel 4-6-3_24V_StartingProfile`;
   });
 
   it("Opamps\\opamp is a subckt (not the behavioral opamp kind) with SpiceOrder pins invin FIRST", () => {
-    // opamp.asy: Prefix X onto `.subckt opamp` — SpiceOrder 1=invin(-32,48),
+    // opamp.asy: Prefix X onto `.subckt opamp` - SpiceOrder 1=invin(-32,48),
     // 2=noninvin(-32,80), 3=out(32,64). This is the OPPOSITE input order to
     // Tau's opampO role bank; a swap here silently flips feedback polarity.
     // opamp.asc places U1 R0 at (1488,16) with only an InstName.

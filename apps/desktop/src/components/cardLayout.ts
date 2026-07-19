@@ -1,5 +1,5 @@
 /**
- * cardLayout.ts — Pure layout model for the TRAN tab's snap-tiling dashboard
+ * cardLayout.ts - Pure layout model for the TRAN tab's snap-tiling dashboard
  * (plot panes + the measurements/Fourier tables, arranged in a 2-column grid
  * with drag-to-tile). Mirrors plotPanes.ts's shape: a small, framework-free
  * reducer so the reorder/resize/persistence math is unit-testable without
@@ -10,11 +10,11 @@ export type CardWidth = "half" | "full";
 export type CardHeight = "S" | "M" | "L";
 export type CardKind = "plot" | "table";
 
-/** viewBox height in px for each plot card size — threaded into TranScopePane. */
+/** viewBox height in px for each plot card size - threaded into TranScopePane. */
 export const PLOT_HEIGHT_PX: Record<CardHeight, number> = { S: 160, M: 190, L: 260 };
 
 export interface CardSpec {
-  /** Stable id — `plot:<traceId>` for plot cards (never the pane's own id,
+  /** Stable id - `plot:<traceId>` for plot cards (never the pane's own id,
    *  which regenerates as `auto-p${index}` whenever the signal set changes),
    *  or a fixed id ("measurements" / "fourier") for table cards. */
   id: string;
@@ -45,7 +45,7 @@ function defaultWidth(kind: CardKind, plotCount: number): CardWidth {
  * cards: keeps existing order/width/height for ids still present, appends
  * newly-available ids (in their natural order) at the end, and drops ids that
  * no longer exist. A manual width/height choice is never clobbered by a
- * rerun with the same signals — only genuinely new cards get defaults.
+ * rerun with the same signals - only genuinely new cards get defaults.
  */
 export function reconcileCardLayout(state: CardLayoutState, cards: readonly CardSpec[]): CardLayoutState {
   const known = new Set(cards.map((c) => c.id));
@@ -84,7 +84,7 @@ export function cycleCardHeight(state: CardLayoutState, id: string): CardLayoutS
 
 /**
  * Where a dragged card lands relative to the hovered card. Pairing (side by
- * side) only makes sense next to a card that is already `half` width — a
+ * side) only makes sense next to a card that is already `half` width - a
  * `full` card takes its whole row, so hovering it just reorders (before/
  * after), matching "drop onto a half-slot next to a half card to tile them".
  */
@@ -161,6 +161,6 @@ export function saveCardLayout(key: string, state: CardLayoutState): void {
   try {
     localStorage.setItem(STORAGE_PREFIX + key, JSON.stringify(state));
   } catch {
-    // Quota exceeded / private mode — the session keeps its in-memory layout.
+    // Quota exceeded / private mode - the session keeps its in-memory layout.
   }
 }

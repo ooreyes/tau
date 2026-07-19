@@ -216,7 +216,7 @@ describe("assistant conversation store", () => {
       { role: "assistant", content: "It sets the gain." },
     ]);
     expect(getActiveConversationId("legacy.asc")).toBe(list[0].id);
-    // Folded in and removed — a second read must not fabricate a duplicate.
+    // Folded in and removed - a second read must not fabricate a duplicate.
     expect(loadAssistantHistory("legacy.asc")).toEqual([]);
     const secondRead = listConversations("legacy.asc");
     expect(secondRead).toHaveLength(1);
@@ -282,7 +282,7 @@ describe("assistant conversation store", () => {
       { role: "assistant", content: "Here is a plan." },
     ]);
     expect(loadConversation("rc-filter.asc", id)?.title).toBe("Build an RC filter");
-    // Source key is left intact — migrate is a copy, not a move.
+    // Source key is left intact - migrate is a copy, not a move.
     expect(loadConversation("untitled.asc", id)?.messages).toHaveLength(2);
   });
 
@@ -312,7 +312,7 @@ describe("assistant conversation store", () => {
   });
 });
 
-describe("assistant conversation store — localStorage unavailable", () => {
+describe("assistant conversation store - localStorage unavailable", () => {
   let originalDescriptor: PropertyDescriptor | undefined;
 
   beforeEach(() => {

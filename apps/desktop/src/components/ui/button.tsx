@@ -5,13 +5,13 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
 /**
- * shadcn Button (new-york), adapted to Tau (§10 design system):
+ * shadcn Button (new-york), adapted to Tau:
  * - All color routes through the Tau token layer (`src/styles/tokens.css`),
  *   so buttons re-theme with the runtime theme switcher for free.
  * - The base string carries its own UA resets (`appearance-none`, explicit
  *   border, `[font-family:inherit]`): preflight is deliberately NOT imported
  *   (see tokens.css), so a primitive must not rely on its resets.
- * - Sizes run dense (sm = 28px row height) per the §10 density rule:
+ * - Sizes run dense (sm = 28px row height) per the density rule:
  *   LTspice users must not feel the UI wastes their pixels.
  */
 const buttonVariants = cva(

@@ -10,14 +10,14 @@ import type { DigitalGateSpec } from "./digitalGateSpec";
  *    above the logic threshold and holds the last value when it falls below.
  *    One switch+cap stage.
  *  - **CLK mode** (CLK pin wired): the input is latched at each RISING edge of
- *    CLK. Realized as a master–slave pair — stage 1 tracks while CLK is low,
- *    stage 2 tracks stage 1 while CLK is high — so the output is a clean
+ *    CLK. Realized as a master-slave pair - stage 1 tracks while CLK is low,
+ *    stage 2 tracks stage 1 while CLK is high - so the output is a clean
  *    staircase of edge samples. A one-shot window was rejected: the transient
  *    solver steps straight over a ~100 ns control pulse, whereas the
- *    master–slave stages only ever switch on (breakpoint-resolved) clock
+ *    master-slave stages only ever switch on (breakpoint-resolved) clock
  *    crossings. Live-verified against hand-computed sine samples to 4 digits.
  *
- * With BOTH control pins wired, S/H mode wins (documented limitation — the
+ * With BOTH control pins wired, S/H mode wins (documented limitation - the
  * corpus and LTspice's own example drive exactly one). With NEITHER wired the
  * device degrades to a unity-gain follower.
  *
@@ -83,7 +83,7 @@ export function sampleHoldDeckLines(
 
   if (nodes.clk) {
     // Edge sampler: master tracks while CLK low, slave tracks the (buffered)
-    // master while CLK high — so the slave latches the input value present at
+    // master while CLK high - so the slave latches the input value present at
     // the rising edge. The mid buffer prevents charge-sharing between caps.
     return [
       `B_${b}_in ${b}_s 0 V=${vin}`,

@@ -92,7 +92,7 @@ describe("parseRaw (errors)", () => {
   });
 });
 
-// A REAL LTspice operating-point .raw (embedded base64 fixture) — exercises the
+// A REAL LTspice operating-point .raw (embedded base64 fixture) - exercises the
 // genuine UTF-16LE header + float64/float32 binary layout end to end.
 describe("parseRaw (real .op.raw, UTF-16LE)", () => {
   const data = parseRaw(fromBase64(OP_RAW_B64));

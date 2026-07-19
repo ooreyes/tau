@@ -11,7 +11,7 @@ import {
   type CardSpec,
 } from "./cardLayout";
 
-// This jsdom build has localStorage disabled — install an in-memory Storage
+// This jsdom build has localStorage disabled - install an in-memory Storage
 // so the persistence path is actually exercised (mirrors panelResize.test.tsx).
 const backing = new Map<string, string>();
 beforeEach(() => {
@@ -35,7 +35,7 @@ afterEach(() => backing.clear());
 const plot = (id: string, title = id): CardSpec => ({ id: `plot:${id}`, kind: "plot", title });
 const table = (id: "measurements" | "fourier"): CardSpec => ({ id, kind: "table", title: id });
 
-describe("reconcileCardLayout — default widths", () => {
+describe("reconcileCardLayout - default widths", () => {
   it("gives a lone plot pane full width", () => {
     const next = reconcileCardLayout(emptyCardLayout(), [plot("out")]);
     expect(next.order).toEqual(["plot:out"]);
@@ -52,7 +52,7 @@ describe("reconcileCardLayout — default widths", () => {
   it("always gives a table full width, even alongside multiple plots", () => {
     const next = reconcileCardLayout(emptyCardLayout(), [plot("out"), plot("in"), table("measurements")]);
     expect(next.widths.measurements).toBe("full");
-    expect(next.heights.measurements).toBeUndefined(); // tables auto-height — no S/M/L
+    expect(next.heights.measurements).toBeUndefined(); // tables auto-height - no S/M/L
   });
 
   it("preserves a manual width/height choice across a rerun with the same cards", () => {
@@ -70,14 +70,14 @@ describe("reconcileCardLayout — default widths", () => {
     expect(next.order).toEqual(["plot:in", "plot:out", "plot:gate"]);
   });
 
-  it("keys plot cards by trace id, not pane index — surviving a pane-id regeneration", () => {
+  it("keys plot cards by trace id, not pane index - surviving a pane-id regeneration", () => {
     // automaticLayout regenerates pane ids as `auto-p${index}` whenever the
     // signal set changes; a card keyed by trace id (not pane id) still finds
     // its saved prefs after the set reorders.
     const first = reconcileCardLayout(emptyCardLayout(), [plot("out"), plot("in")]);
     const widened = toggleCardWidth(first, "plot:out"); // full
     // Same trace ids, different arrival order (as if a probe reorder changed
-    // which pane index each trace landed in) — the id itself is unchanged.
+    // which pane index each trace landed in) - the id itself is unchanged.
     const next = reconcileCardLayout(widened, [plot("in"), plot("out")]);
     expect(next.widths["plot:out"]).toBe("full");
   });

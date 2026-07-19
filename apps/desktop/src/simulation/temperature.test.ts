@@ -1,6 +1,5 @@
 /**
- * Coverage for the resistor temperature model (FEATURE_PARITY §4 `.temp` /
- * `.step temp`). All expectations are hand-computed against LTspice's tempco law
+ * Coverage for the resistor temperature model (LTspice parity). All expectations are hand-computed against LTspice's tempco law
  * `R(T) = R0·(1 + tc1·ΔT + tc2·ΔT²)`, ΔT = T − 27 °C.
  */
 

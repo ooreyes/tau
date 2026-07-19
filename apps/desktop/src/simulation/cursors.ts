@@ -1,7 +1,7 @@
 /**
- * Measurement cursors (LTspice's "1 & 2" cursors, FEATURE_PARITY §6). Given the
+ * Measurement cursors (LTspice's "1 & 2" cursors, LTspice parity ). Given the
  * traces on a scope and two cursor positions along the independent axis, report
- * each trace's value at each cursor and the delta between them — the readout a
+ * each trace's value at each cursor and the delta between them - the readout a
  * user needs to measure rise time, period, gain, slope, etc. directly off a
  * waveform. Pure logic so it is fully unit-testable; the scope UI just renders
  * the returned numbers.
@@ -30,7 +30,7 @@ export interface CursorReadout {
   x2: number;
   /** x2 − x1. */
   dx: number;
-  /** 1 / |dx| — LTspice shows this as the "frequency" of the interval (NaN when
+  /** 1 / |dx| - LTspice shows this as the "frequency" of the interval (NaN when
    *  the cursors coincide). */
   inverseDx: number;
   traces: CursorTraceReadout[];
@@ -52,7 +52,7 @@ export function fractionToX(axis: readonly number[], fraction: number): number {
 }
 
 /**
- * Map a fraction in `[0,1]` to an absolute value along a **log-scaled** axis —
+ * Map a fraction in `[0,1]` to an absolute value along a **log-scaled** axis -
  * the frequency axis of the FFT/Bode plots, where equal slider travel should
  * mean equal decades, not equal hertz. Non-positive leading entries (the FFT's
  * DC bin) are skipped since they have no place on a log axis. Returns NaN when
@@ -68,7 +68,7 @@ export function logFractionToX(axis: readonly number[], fraction: number): numbe
 }
 
 /**
- * Slope between the two cursors in dB per decade — the rolloff measurement a
+ * Slope between the two cursors in dB per decade - the rolloff measurement a
  * filter designer reads off an FFT/Bode plot. `y` values must already be in dB.
  * NaN when the cursors coincide or either frequency is non-positive.
  */

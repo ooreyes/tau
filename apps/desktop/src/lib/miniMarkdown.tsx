@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 /**
  * A tiny, deliberately non-exhaustive markdown renderer for assistant
  * replies: fenced code blocks, **bold**, `inline code`, and -/* or 1. lists
- * — enough for the kind of answers this assistant gives. Anything else
+ * - enough for the kind of answers this assistant gives. Anything else
  * (tables, headings, links) renders as plain text rather than pulling in a
  * markdown dependency for a chat bubble.
  */
@@ -52,7 +52,7 @@ function renderProseBlock(block: string, key: string): ReactNode {
 }
 
 /** `text.split()` against a 2-capture-group regex interleaves matches as
- *  [prose, lang, code, prose, lang, code, …, prose] — walked 3 at a time
+ *  [prose, lang, code, prose, lang, code, …, prose] - walked 3 at a time
  *  below. An unclosed fence (mid-stream, before the closing ``` arrives)
  *  simply has no match yet, so it renders as plain prose until it closes. */
 const CODE_FENCE = /```(\w*)\n?([\s\S]*?)```/g;

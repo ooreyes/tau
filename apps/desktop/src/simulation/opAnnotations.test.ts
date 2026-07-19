@@ -4,9 +4,9 @@
  * resolution are exercised end to end.
  *
  * Divider (documented pin geometry, GRID = 16):
- *   VS at (0, 32):    p=(0,0),   n=(0,64)   — 10 V
- *   R1 at (96, 0):    a=(64,0),  b=(128,0)  — 1k
- *   R2 at (224, 0):   a=(192,0), b=(256,0)  — 1k, b wired to ground
+ *   VS at (0, 32):    p=(0,0),   n=(0,64)   - 10 V
+ *   R1 at (96, 0):    a=(64,0),  b=(128,0)  - 1k
+ *   R2 at (224, 0):   a=(192,0), b=(256,0)  - 1k, b wired to ground
  *   Wires: (0,0)→(64,0) and (128,0)→(192,0); R2.b→(256,64)→ground at (256,64).
  *   V(out) = mid node = 5 V; I(V1) (MNA convention) = −5 mA.
  */

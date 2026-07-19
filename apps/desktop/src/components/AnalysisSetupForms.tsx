@@ -39,7 +39,7 @@ function SourceSelect({
       value={value}
       onChange={(e) => onChange(e.currentTarget.value)}
     >
-      {sources.length === 0 && <option value={value}>{value || "—"}</option>}
+      {sources.length === 0 && <option value={value}>{value || "-"}</option>}
       {sources.map((c) => (
         <option key={c.id} value={c.label}>{c.label}</option>
       ))}

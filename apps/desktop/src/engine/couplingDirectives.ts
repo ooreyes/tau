@@ -1,13 +1,13 @@
 /**
  * Carry a document's mutual-inductance (`K`) coupling directives through to the
- * native ngspice deck (FEATURE_PARITY §3 coupled inductors `K`).
+ * native ngspice deck (LTspice parity).
  *
  * Real LTspice transformer circuits keep their winding coupling in on-canvas
  * TEXT directives, e.g. `K1 L1 L2 1`, `K3 L1 L2 .95`, the all-windings form
  * `K1 L1 L2 L3 L4 1`, or a parameterized coefficient `Kcup1 L2 L3 {Kcup}`.
  * `ascToSchematic` stores each TEXT block in `directives` with the leading `!`
  * stripped. The model/lib passthrough and the analysis/param/option handlers all
- * ignore `K` lines, so without this they were silently dropped — turning a
+ * ignore `K` lines, so without this they were silently dropped - turning a
  * coupled transformer into independent, uncoupled inductors and producing the
  * wrong waveforms (Transformer, varactor, Royer, …).
  *
@@ -16,7 +16,7 @@
  *
  * One twist: a `K` line names inductors by their LTspice instance name (e.g.
  * `K2 T2a T2b T2c 1`), but the deck builder renames an inductor whose label
- * doesn't start with `L` (an ngspice inductor must — `T2a` would be parsed as a
+ * doesn't start with `L` (an ngspice inductor must - `T2a` would be parsed as a
  * transmission line). The caller passes the original-label → emitted-name map so
  * the references are rewritten to match (else ngspice: "coupling to non-existent
  * inductor", Electrometer.asc).

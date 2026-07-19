@@ -1,6 +1,5 @@
 /**
- * Bundled LTspice **library subcircuits** (FEATURE_PARITY §1 — the `.asy`
- * `Prefix X` import path). Five LTspice-library symbols in the acceptance
+ * Bundled LTspice **library subcircuits** (LTspice parity). Five LTspice-library symbols in the acceptance
  * corpus (`Misc\\TowTom2`, `SpecialFunctions\\capmeter`, `ISO16750-2`,
  * `ISO7637-2`, `Opamps\\opamp`) instantiate subcircuits whose bodies ship
  * with LTspice 17.2.4 in `lib/sub/*.{sub,lib}`. Real `.asc` files reference

@@ -3,7 +3,7 @@ import { parseQuantity } from "../simulation/quantity";
 /**
  * LTspice `SpecialFunctions\modulate` (A-device MODULATOR): a behavioral VCO.
  * The output is a unit sine whose instantaneous frequency is linear in the FM
- * input voltage — `space` Hz at 0 V, `mark` Hz at 1 V — scaled by the AM input
+ * input voltage - `space` Hz at 0 V, `mark` Hz at 1 V - scaled by the AM input
  * voltage (amplitude defaults to 1 V when AM is unwired).
  *
  * Emission is an XSPICE `sine` controlled oscillator (`cntl_array=[0 1]
@@ -26,7 +26,7 @@ export interface ModulatorSpec {
 /**
  * Parse a modulator value: `mark=<freq> space=<freq>` (case-insensitive, SI
  * suffixes, either order, unknown tokens ignored). Missing fields default to
- * mark=1K/space=0 — the corpus always sets both; the default just keeps a
+ * mark=1K/space=0 - the corpus always sets both; the default just keeps a
  * bare native placement usable. Negative frequencies clamp to 0 (the XSPICE
  * oscillator rejects them).
  */
@@ -64,7 +64,7 @@ export interface ModulatorNodes {
  * output is unconnected (the device then drives nothing).
  *
  * The FM control is buffered through a B-source so an unwired FM pin (control
- * = 0 → space) and a com-referenced one emit uniformly — the XSPICE input
+ * = 0 → space) and a com-referenced one emit uniformly - the XSPICE input
  * then always reads a well-defined driven node.
  */
 export function modulatorDeckLines(

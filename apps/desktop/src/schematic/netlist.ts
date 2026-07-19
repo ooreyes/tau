@@ -12,7 +12,7 @@ export interface ExtractedNet {
   pins: ComponentPin[];
   isGround: boolean;
   /** Number of (non-ground) net labels attached. A labelled single-pin net is
-   *  still "connected" — the label makes it observable and joinable (the
+   *  still "connected" - the label makes it observable and joinable (the
    *  LTspice idiom of probing an output through a bare flag). */
   labelCount: number;
 }
@@ -139,7 +139,7 @@ export function extractCircuit(
   }
 
   const segments = wires.flatMap(wireSegments);
-  // Ideal wires short their endpoints. Resistive (non-ideal) wires do NOT —
+  // Ideal wires short their endpoints. Resistive (non-ideal) wires do NOT -
   // they only contribute endpoints as DSU nodes so netAtPoint can resolve them;
   // spiceNetlist emits a series R between the endpoint nets.
   const idealSegmentIndexes: number[] = [];
@@ -301,14 +301,14 @@ export function extractCircuit(
 
 /** Resolve which net sits under a world point: an exact net point (endpoint /
  * pin / junction), or any point lying on a wire segment of the net. This is
- * the probe-resolution authority — a probe dropped mid-segment (the common
+ * the probe-resolution authority - a probe dropped mid-segment (the common
  * click) has no DSU point of its own but is still electrically on the net. */
 export function netAtPoint(nets: ExtractedNet[], wires: SchematicWire[], point: Point): ExtractedNet | null {
   const atPoint = (net: ExtractedNet, p: Point) => net.points.some((np) => np.x === p.x && np.y === p.y);
   const exact = nets.find((net) => atPoint(net, point));
   if (exact) return exact;
   for (const wire of wires) {
-    // Resistive wires are not a single net — only endpoints resolve (exact match above).
+    // Resistive wires are not a single net - only endpoints resolve (exact match above).
     if (isResistiveWire(wire)) continue;
     for (const segment of wireSegments(wire)) {
       if (!pointOnSegment(point, segment)) continue;
@@ -362,10 +362,33 @@ function uniquePoints(points: Point[]): Point[] {
   return [...new Map(points.map((point) => [pointKey(point), point])).values()];
 }
 
+/** Greek letters common in EE net names (PowerSim FOC's `uα`/`uβ`, PLL's
+ *  `θ_pll`). Transliterated by NAME so distinct labels can never collapse
+ *  onto one node - the old strip-only rule turned both `uα` and `uβ` into
+ *  `u`, silently shorting the α/β axes together (singular matrix). */
+const GREEK_TRANSLITERATION: Record<string, string> = {
+  "α": "alpha", "β": "beta", "γ": "gamma", "δ": "delta", "ε": "epsilon", "ζ": "zeta",
+  "η": "eta", "θ": "theta", "ι": "iota", "κ": "kappa", "λ": "lambda", "μ": "mu", "µ": "mu",
+  "ν": "nu", "ξ": "xi", "π": "pi", "ρ": "rho", "σ": "sigma", "τ": "tau", "φ": "phi",
+  "χ": "chi", "ψ": "psi", "ω": "omega", "Ω": "ohm", "Δ": "delta", "Θ": "theta", "Σ": "sigma", "Φ": "phi", "Ψ": "psi",
+};
+
+/** Transliterate one label to SPICE-safe ASCII, collision-free: allowed chars
+ *  pass through, Greek maps by name, anything else becomes its hex codepoint. */
+export function spiceSafeToken(text: string): string {
+  let out = "";
+  for (const ch of text.trim()) {
+    if (/[A-Za-z0-9_+\-./]/.test(ch)) out += ch;
+    else if (/\s/.test(ch)) out += "_";
+    else out += GREEK_TRANSLITERATION[ch] ?? `x${ch.codePointAt(0)!.toString(16)}`;
+  }
+  return out;
+}
+
 /** Reduce a net-label to a SPICE-safe node name (no whitespace; never starts a
  *  generated N00x id, never the ground id "0"). */
 function sanitizeNetName(text: string): string {
-  const cleaned = text.trim().replace(/\s+/g, "_").replace(/[^A-Za-z0-9_+\-./]/g, "");
+  const cleaned = spiceSafeToken(text);
   if (cleaned === "" || cleaned === "0") return "";
   return cleaned;
 }

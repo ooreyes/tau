@@ -1,6 +1,5 @@
 /**
- * Build scope overlays from a parsed LTspice `.raw` reference (FEATURE_PARITY
- * KEY GOAL — overlay LTspice's own waveforms against Tau's). For each Tau trace
+ * Build scope overlays from a parsed LTspice `.raw` reference (LTspice parity). For each Tau trace
  * whose name matches a reference variable, the reference is resampled onto Tau's
  * time grid (so it draws as one more `Trace`) and compared numerically, turning
  * "do the waveforms match?" into a per-signal pass/fail with an RMS error.

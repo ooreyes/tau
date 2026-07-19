@@ -1,18 +1,18 @@
 /**
- * LTspice `.asc` schematic EXPORTER — the inverse of `ascImport.ts`.
+ * LTspice `.asc` schematic EXPORTER - the inverse of `ascImport.ts`.
  *
  * Two layers:
- *  - `serializeAscDocument(doc)` — a lossless text serializer that is the inverse
+ *  - `serializeAscDocument(doc)` - a lossless text serializer that is the inverse
  *    of `parseAsc` for the structures the parser understands. The round-trip
  *    `parseAsc(serializeAscDocument(doc)) ≅ doc` holds for any document built from
  *    VERSION/SHEET/WIRE/FLAG/SYMBOL/SYMATTR/TEXT/shape content (i.e. no `unknown`
  *    lines, which by definition cannot be re-serialized).
- *  - `schematicToAsc({components, wires, netLabels, directives, comments})` —
+ *  - `schematicToAsc({components, wires, netLabels, directives, comments})` -
  *    builds an `AscDocument` from Tau schematic content and serializes it, so a
  *    schematic edited in Tau can be written back as a `.asc` and reopened in
  *    LTspice. Round-trips through Tau's own importer: `importAsc(text) →
  *    schematicToAsc(result) → importAsc(text2)` yields the same components, wires,
- *    and nets (FEATURE_PARITY §1 "Export Tau schematic → .asc").
+ *    and nets (LTspice parity).
  */
 import type {
   ComponentKind,
@@ -29,7 +29,7 @@ const int = (n: number): string => String(Math.round(n));
 /**
  * Serialize an {@link AscDocument} to LTspice `.asc` text. Inverse of `parseAsc`.
  * Lines are emitted in LTspice's canonical order (header, wires, flags, symbols
- * with their attributes, free text, shapes). `unknown` lines are dropped — they
+ * with their attributes, free text, shapes). `unknown` lines are dropped - they
  * had no structured representation to begin with.
  */
 export function serializeAscDocument(doc: AscDocument): string {

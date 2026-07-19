@@ -65,7 +65,7 @@ describe("addPane", () => {
 });
 
 // ---------------------------------------------------------------------------
-// removePane — invariants
+// removePane - invariants
 // ---------------------------------------------------------------------------
 describe("removePane", () => {
   it("reassigns orphaned traces to pane 0", () => {

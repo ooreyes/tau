@@ -3,7 +3,7 @@ import { importAsc, ltspiceTypeToKind, parseAsc } from "../io/ascImport";
 import type { SchematicDocument } from "../store/useSchematic";
 import { extractCircuit } from "../schematic/netlist";
 
-/** On-disk / in-memory project tree node (VS Code–style folder project). */
+/** On-disk / in-memory project tree node (VS Code-style folder project). */
 export type ProjectNodeKind = "dir" | "file";
 
 export interface ProjectNode {
@@ -56,7 +56,7 @@ export function isSimFile(name: string): boolean {
   return /\.(sim|tau\.json)$/i.test(name);
 }
 
-/** LTspice schematic — importable into a Tau tab from the project tree. */
+/** LTspice schematic - importable into a Tau tab from the project tree. */
 export function isAscFile(name: string): boolean {
   return /\.asc$/i.test(name);
 }

@@ -20,8 +20,8 @@ function CenteredSineGlyph({ y = 0 }: { y?: number }) {
 }
 
 /** Accurate local bounding box of each symbol's drawn body (excludes pin leads).
- *  Unlike SYMBOL_BOX these are NOT assumed symmetric about the origin — e.g.
- *  ground is drawn entirely below its pin — so they give correct hit-testing
+ *  Unlike SYMBOL_BOX these are NOT assumed symmetric about the origin - e.g.
+ *  ground is drawn entirely below its pin - so they give correct hit-testing
  *  and collision for asymmetric parts. Used for selection + overlap. */
 export interface BodyBox {
   minX: number;
@@ -197,7 +197,7 @@ export function ComponentSymbol({ kind }: { kind: ComponentKind }) {
         <>
           <line x1={0} y1={-32} x2={0} y2={-15} />
           <circle cx={0} cy={0} r={15} />
-          {/* pulse train: low–high–low–high */}
+          {/* pulse train: low-high-low-high */}
           <path d="M -10 5 L -10 -5 L -2 -5 L -2 5 L 6 5 L 6 -5 L 10 -5" />
           <line x1={0} y1={15} x2={0} y2={32} />
         </>
@@ -450,7 +450,7 @@ export function ComponentSymbol({ kind }: { kind: ComponentKind }) {
           <line x1={4} y1={14} x2={16} y2={14} />
           <line x1={4} y1={0} x2={32} y2={0} />
           {/* NMOS: filled arrow pointing INTO the channel (tip on the bar).
-              Open chevrons here render as stray strokes — see .symbol-arrow. */}
+              Open chevrons here render as stray strokes - see .symbol-arrow. */}
           <path className="symbol-arrow" d="M 4 0 L 12 -4.5 L 12 4.5 Z" />
         </>
       );
@@ -467,7 +467,7 @@ export function ComponentSymbol({ kind }: { kind: ComponentKind }) {
           <line x1={4} y1={14} x2={16} y2={14} />
           <line x1={4} y1={0} x2={32} y2={0} />
           {/* PMOS: filled arrow pointing OUT of the channel (tip away from
-              the bar), the mirror of NMOS — direction IS the polarity cue. */}
+              the bar), the mirror of NMOS - direction IS the polarity cue. */}
           <path className="symbol-arrow" d="M 14 0 L 6 -4.5 L 6 4.5 Z" />
         </>
       );
@@ -492,7 +492,7 @@ export function ComponentSymbol({ kind }: { kind: ComponentKind }) {
           <line x1={-6} y1={-18} x2={-6} y2={18} />
           <line x1={-6} y1={-8} x2={16} y2={-32} />
           <line x1={-6} y1={8} x2={16} y2={32} />
-          {/* PNP: filled emitter arrow pointing IN (toward the base bar) —
+          {/* PNP: filled emitter arrow pointing IN (toward the base bar) -
               opposite of NPN; same mid-leg placement on the emitter. */}
           <path className="symbol-arrow" d="M 0.6 15.2 L 4.6 25.6 L 10.5 20.2 Z" />
         </>

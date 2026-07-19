@@ -92,7 +92,7 @@ export function visibleWaveformBounds(
  *
  * A full-run view of a fast periodic signal can contain hundreds of cycles, so
  * even a correct unfilled min/max envelope becomes a visually solid band. For
- * periodic data, Auto Frame shows the final 3–5 cycles (four by default) and
+ * periodic data, Auto Frame shows the final 3-5 cycles (four by default) and
  * computes Y from only that time window. The final cycles are intentional: they
  * retain steady-state behavior while leaving startup visible through the
  * separate Full Run/Home action.

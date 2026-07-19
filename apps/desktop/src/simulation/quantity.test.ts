@@ -28,7 +28,7 @@ describe("parseQuantity", () => {
     expect(parseQuantity("1MEG")).toBe(1e6);
   });
 
-  it('parses "1M" as 1e-3 — M is milli in SPICE, not mega', () => {
+  it('parses "1M" as 1e-3 - M is milli in SPICE, not mega', () => {
     expect(parseQuantity("1M")).toBeCloseTo(1e-3, 20);
   });
 

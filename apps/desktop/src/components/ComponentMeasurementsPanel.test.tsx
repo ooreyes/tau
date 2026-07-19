@@ -127,7 +127,7 @@ describe("ComponentMeasurementsPanel", () => {
   });
 });
 
-describe("ComponentMeasurementsPanel — variant=\"compact\" (telemetry dock grid)", () => {
+describe("ComponentMeasurementsPanel - variant=\"compact\" (telemetry dock grid)", () => {
   it("renders the same rows as responsive small cards, no search or disclosure chrome", () => {
     render(<ComponentMeasurementsPanel rows={rows} selectedId={null} onSelect={() => {}} variant="compact" />);
     expect(screen.getByText("R1")).toBeTruthy();
@@ -139,7 +139,7 @@ describe("ComponentMeasurementsPanel — variant=\"compact\" (telemetry dock gri
 
   it("labels each spec row with the full quantity word, its qualifier, and a unit-bearing value", () => {
     render(<ComponentMeasurementsPanel rows={rows} selectedId={null} onSelect={() => {}} variant="compact" />);
-    // One row per quantity per card — never bare "V"/"I"/"P".
+    // One row per quantity per card - never bare "V"/"I"/"P".
     expect(screen.getAllByText("Voltage")).toHaveLength(2);
     expect(screen.getAllByText("Current")).toHaveLength(2);
     expect(screen.getAllByText("Power")).toHaveLength(2);
@@ -153,7 +153,7 @@ describe("ComponentMeasurementsPanel — variant=\"compact\" (telemetry dock gri
     expect(within(r1Card).getAllByText("RMS").length).toBeGreaterThanOrEqual(2);
     expect(within(r1Card).getByText("AVG")).toBeTruthy();
     const c1Card = screen.getByText("C1").closest("button") as HTMLElement;
-    expect(within(c1Card).getAllByText("—")).toHaveLength(2);
+    expect(within(c1Card).getAllByText("-")).toHaveLength(2);
   });
 
   it("keeps summary cards equal-height and shows V(t)/I(t) only in the selected component inspector", () => {

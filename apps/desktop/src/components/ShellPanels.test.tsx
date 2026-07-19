@@ -9,11 +9,11 @@ import { usePanelWidth } from "./panelResize";
 
 /**
  * The simulator view is read-only outside the schematic tab (pan/zoom/probe
- * only — see Canvas's `interactive` prop and App.tsx's keydown gate). This
+ * only - see Canvas's `interactive` prop and App.tsx's keydown gate). This
  * toolbar renders unconditionally regardless of `mode` (App.tsx only swaps
  * the Canvas/Palette/ExplorerPanel), so its own editing controls need their
- * own `mode` gate — this was a second, mouse-driven bypass of the same bug
- * the keyboard gate fixes (§UX).
+ * own `mode` gate - this was a second, mouse-driven bypass of the same bug
+ * the keyboard gate fixes .
  */
 
 afterEach(() => cleanup());
@@ -51,11 +51,11 @@ const noopToolbarProps = {
   onClearScratchpad: () => {},
 };
 
-describe("EditorToolbar — read-only outside schematic view (§UX)", () => {
+describe("EditorToolbar - read-only outside schematic view ", () => {
   it("disables Wire, Net label, Undo, Redo, selection deletion, and Clear scratchpad in simulator mode", () => {
     const emptyDoc = { components: [], wires: [], counters: {}, probes: [], netLabels: [], directives: [] };
     // Both past and future populated so canUndo/canRedo would be true if the
-    // mode gate weren't there — proves the gate, not just an empty history.
+    // mode gate weren't there - proves the gate, not just an empty history.
     useSchematic.setState({ past: [emptyDoc], future: [emptyDoc] });
     render(<EditorToolbar mode="simulator" {...noopToolbarProps} />);
 
@@ -124,7 +124,7 @@ describe("EditorToolbar — read-only outside schematic view (§UX)", () => {
   });
 });
 
-describe("ComponentInspector — no-selection empty state (§11 Unit A)", () => {
+describe("ComponentInspector - no-selection empty state", () => {
   it("shows the No Selection title and full helper text when nothing is selected", () => {
     render(<ComponentInspector selected={null} />);
     expect(screen.getByText("No Selection")).toBeTruthy();
@@ -143,7 +143,7 @@ describe("ComponentInspector — no-selection empty state (§11 Unit A)", () => 
   });
 });
 
-describe("ComponentsRail — responsive shell budget", () => {
+describe("ComponentsRail - responsive shell budget", () => {
   function Harness({ maxWidth, embedded = false }: { maxWidth: number; embedded?: boolean }) {
     const resize = usePanelWidth({
       storageKey: "tau.test.componentsRailWidth",
@@ -190,7 +190,7 @@ describe("ComponentsRail — responsive shell budget", () => {
   });
 });
 
-describe("BottomPanel — errors tab states (§11 Unit A3)", () => {
+describe("BottomPanel - errors tab states", () => {
   const failed = {
     ok: false,
     title: "Transient",

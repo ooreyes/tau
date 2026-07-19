@@ -112,7 +112,7 @@ interface SchematicState extends Doc {
    * Move a group of components together by (dx, dy) *from their drag-start
    * origins*, rubber-banding any wire endpoints that were pinned to their pins
    * at drag start. Both the origins and the deltas are relative to drag start,
-   * so repeated calls during one drag are idempotent for the same (dx, dy) —
+   * so repeated calls during one drag are idempotent for the same (dx, dy) -
    * matching the absolute-position single-component move path.
    * Caller must call `beginChange()` once before the first pointer-move.
    */
@@ -152,7 +152,7 @@ interface SchematicState extends Doc {
   setNetLabelDirect: (x: number, y: number, text: string) => void;
   /**
    * Reposition a net label's text relative to its net anchor (drag-to-move,
-   * by id — distinct from `setNetLabelDirect`'s anchor-lookup-by-point,
+   * by id - distinct from `setNetLabelDirect`'s anchor-lookup-by-point,
    * which is for the rename-draft flow). No undo entry: caller calls
    * `beginChange()` once before the first pointermove of a drag, then this
    * for every subsequent move, so the whole drag collapses into one undo
@@ -375,7 +375,7 @@ function loadPersisted(): SchematicDocument | null {
     // Validate fully so stale or corrupt autosave data never reaches the renderer.
     return validateSchematicDocument(JSON.parse(raw));
   } catch {
-    // Corrupt, stale, or incompatible autosave — discard silently.
+    // Corrupt, stale, or incompatible autosave - discard silently.
   }
   return null;
 }
@@ -394,7 +394,7 @@ function persist(doc: SchematicDocument) {
 }
 
 /** Deduplicate consecutive identical points and collapse collinear runs (mirrors
- *  `cleanRoute` from Canvas.tsx — kept here so the store has no UI import). */
+ *  `cleanRoute` from Canvas.tsx - kept here so the store has no UI import). */
 function cleanGroupRoute(points: Point[]): Point[] {
   const out: Point[] = [];
   for (const p of points) {
@@ -724,7 +724,7 @@ export const useSchematic = create<SchematicState>()((set) => {
         for (const [, pins] of sourcePins) {
           for (const p of pins) allSourcePins.push(p);
         }
-        // Absolute placement from the drag-start origin — never from the current
+        // Absolute placement from the drag-start origin - never from the current
         // position, which would compound the cumulative delta on every event.
         const updatedComponents = s.components.map((c) => {
           const origin = origins.get(c.id);
@@ -768,13 +768,13 @@ export const useSchematic = create<SchematicState>()((set) => {
     // separately, per component, in toggleCurrentProbe below). Resolve the
     // click through the same net-identity authority the netlist extractor
     // and the waveform viewer use (`netAtPoint`) rather than exact-position
-    // matching — wire clicks snap to varying midpoints, so two clicks on the
+    // matching - wire clicks snap to varying midpoints, so two clicks on the
     // same net rarely land on the same pixel. Semantics: clicking a net with
     // no probe adds one; clicking the SAME point again removes it (toggle
     // off); clicking a DIFFERENT point on a net that already has a probe
     // MOVES the probe there instead of stacking a second ring on one net.
     // Clicking off any net (empty canvas, a component body with no pin/wire
-    // under the cursor) is a no-op — probes only attach to nets/wires/pins,
+    // under the cursor) is a no-op - probes only attach to nets/wires/pins,
     // so "probing an opamp" body does nothing.
     addProbe: (x, y) =>
       set((s) => {
@@ -830,7 +830,7 @@ export const useSchematic = create<SchematicState>()((set) => {
 
     // A physically-connected node carries AT MOST ONE net label (mirrors the
     // one-probe-per-net rule). Node identity comes from extraction with the
-    // labels EXCLUDED — labels merge nets by name, so including them would
+    // labels EXCLUDED - labels merge nets by name, so including them would
     // wrongly dedup a same-name label placed on a separate, disconnected node
     // (the legitimate "connect nets by name" workflow). Semantics: labeling a
     // bare node adds; re-labeling the same node edits/MOVES the existing label
@@ -846,7 +846,7 @@ export const useSchematic = create<SchematicState>()((set) => {
         const existing = clickedNet
           ? s.netLabels.find((l) => nodeOf(l) === clickedNet.id)
           : s.netLabels.find((l) => l.x === x && l.y === y);
-        if (!trimmed && !existing) return s; // nothing to add or remove — no history entry
+        if (!trimmed && !existing) return s; // nothing to add or remove - no history entry
         if (!trimmed) return { ...recordInto(s), netLabels: s.netLabels.filter((l) => l.id !== existing!.id) };
         if (existing?.text === trimmed && existing.x === x && existing.y === y) return s; // unchanged
         if (existing) {
@@ -983,7 +983,7 @@ export const useSchematic = create<SchematicState>()((set) => {
         return { ...recordInto(s), ...pasteClipboard(s, clipboard), clipboard };
       }),
 
-    // Delete EVERYTHING in the current selection — components, wires, net
+    // Delete EVERYTHING in the current selection - components, wires, net
     // labels, and probes together (a marquee selects mixed object kinds), as a
     // single undoable step.
     deleteSelected: () =>

@@ -207,7 +207,7 @@ describe("buildAssistantContext", () => {
     const { text } = buildAssistantContext(baseInput({
       analysis: { ok: false, title: "Transient", message: "No ground symbol.", warnings: [] },
     }));
-    expect(text).toContain("Analysis: last transient run failed — No ground symbol.");
+    expect(text).toContain("Analysis: last transient run failed - No ground symbol.");
   });
 
   it("falls back to a clear message when the circuit can't build a netlist (no ground)", () => {
@@ -240,7 +240,7 @@ describe("buildAssistantContext", () => {
 
   it("truncates the whole context and flags it when the analysis section alone blows the cap", () => {
     // A step sweep or a directive-heavy .meas block can produce hundreds of
-    // measurement rows — enough alone (on top of the netlist + component
+    // measurement rows - enough alone (on top of the netlist + component
     // sections) to exceed the bounded context on a small, valid circuit.
     const measurements = Array.from({ length: 800 }, (_, i) => ({ name: `meas_${i}_of_a_long_name`, value: 1.2345 + i }));
     const { text, truncated } = buildAssistantContext(baseInput({ analysis: successAnalysis(), measurements }));

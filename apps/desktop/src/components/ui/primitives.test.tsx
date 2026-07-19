@@ -15,13 +15,13 @@ import { ScrollArea } from "./scroll-area";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "./context-menu";
 
 /**
- * §10 shadcn primitive smoke tests: every Radix-backed primitive needs a
+ * shadcn primitive smoke tests: every Radix-backed primitive needs a
  * couple of DOM APIs jsdom doesn't implement (ResizeObserver, pointer
- * capture, scrollIntoView) — without these, mounting ScrollArea/Select
+ * capture, scrollIntoView) - without these, mounting ScrollArea/Select
  * throws before a single assertion runs. Polyfilled once here rather than
  * per-test since every primitive in this file shares the same jsdom
  * environment (`@vitest-environment jsdom` pragma above, scoped to this
- * file only — every other suite in the repo stays on the fast `node`
+ * file only - every other suite in the repo stays on the fast `node`
  * environment from vitest.config.ts).
  */
 beforeAll(() => {
@@ -40,7 +40,7 @@ beforeAll(() => {
 
 afterEach(() => cleanup());
 
-describe("Button (existing primitive — sanity baseline for the pattern)", () => {
+describe("Button (existing primitive - sanity baseline for the pattern)", () => {
   it("renders and forwards className", () => {
     render(<Button className="extra-class">Run</Button>);
     const el = screen.getByRole("button", { name: "Run" });

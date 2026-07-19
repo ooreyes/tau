@@ -1,5 +1,5 @@
 /**
- * FFT of a transient waveform — LTspice's "View → FFT" on the scope.
+ * FFT of a transient waveform - LTspice's "View → FFT" on the scope.
  *
  * LTspice resamples the (non-uniformly sampled) transient onto a uniform grid,
  * applies a window, and shows the one-sided amplitude spectrum on a log
@@ -55,7 +55,7 @@ export function nextPow2(n: number): number {
 }
 
 /**
- * In-place iterative radix-2 Cooley–Tukey FFT. `re` and `im` are the real and
+ * In-place iterative radix-2 Cooley-Tukey FFT. `re` and `im` are the real and
  * imaginary parts; their length **must** be a power of two. Computes the forward
  * transform `X[k] = Σ x[n]·e^(-i 2π k n / N)`.
  */
@@ -196,7 +196,7 @@ export function waveformSpectrum(
   return { frequencies, magnitude, magnitudeDb, phase };
 }
 
-/** The bin with the largest amplitude above DC — the dominant tone of the signal. */
+/** The bin with the largest amplitude above DC - the dominant tone of the signal. */
 export function dominantFrequency(spectrum: Spectrum): number {
   let best = 0;
   let bestMag = -Infinity;
@@ -273,7 +273,7 @@ function resolveSignal(waveform: MeasWaveform, output: string): number[] | null 
   }
   const voltage = /^v\(([^)]+)\)$/i.exec(text);
   const node = (voltage ? voltage[1] : text).trim().toLowerCase();
-  // Match the net id, the bare label, or the label's inner name — trace labels
+  // Match the net id, the bare label, or the label's inner name - trace labels
   // are display names like `V(R1·C1)` whose inner name is NOT the net id, and
   // the viewer's signal pickers feed those labels back here verbatim.
   const trace = waveform.traces.find((t) => {

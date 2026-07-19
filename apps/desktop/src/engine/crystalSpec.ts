@@ -1,8 +1,8 @@
 import { parseQuantity } from "../simulation/quantity";
 
 /**
- * The 4-element (Butterworth–Van Dyke) quartz-crystal model LTspice writes on
- * its `Misc\xtal` symbol: a motional series branch (Lser–Cser–Rser) in parallel
+ * The 4-element (Butterworth-Van Dyke) quartz-crystal model LTspice writes on
+ * its `Misc\xtal` symbol: a motional series branch (Lser-Cser-Rser) in parallel
  * with the electrode/case capacitance Cpar.
  *
  *   SYMATTR Value      <Cser>                       (motional capacitance, F)
@@ -14,7 +14,7 @@ import { parseQuantity } from "../simulation/quantity";
  * expands it into the real motional branch (see `crystalDeckLines`).
  */
 export interface CrystalSpec {
-  /** Motional (series) capacitance, F — the symbol's primary Value. */
+  /** Motional (series) capacitance, F - the symbol's primary Value. */
   cser: number;
   /** Motional inductance, H. */
   lser: number;
@@ -26,7 +26,7 @@ export interface CrystalSpec {
 
 /**
  * Parse an LTspice crystal value string. Returns `null` for a plain capacitor
- * (no `Lser` token), so only genuine crystals get expanded — an
+ * (no `Lser` token), so only genuine crystals get expanded - an
  * ordinary C keeps its single-line emission. A crystal with a malformed/absent
  * numeric field falls back to physically inert defaults (Rser 0, Cpar 0) rather
  * than throwing, matching the placeholder-tolerant spirit of import.

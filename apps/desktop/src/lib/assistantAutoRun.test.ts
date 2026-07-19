@@ -58,7 +58,7 @@ describe("pickAutoRunAnalysis", () => {
   });
 
   it("skips a malformed directive and falls through to a later, different-kind directive", () => {
-    // `.tran` with no numeric body doesn't parse, so it's not "recognized" —
+    // `.tran` with no numeric body doesn't parse, so it's not "recognized" -
     // the scan continues past it instead of stalling on the first keyword match.
     expect(pickAutoRunAnalysis([".tran", ".dc V1 0 5 1"])).toEqual({
       kind: "dc",
@@ -67,7 +67,7 @@ describe("pickAutoRunAnalysis", () => {
   });
 
   it("tolerates surrounding whitespace and is case-insensitive on the keyword", () => {
-    // `directives` entries never carry the ASC "!" marker — ascImport strips it —
+    // `directives` entries never carry the ASC "!" marker - ascImport strips it -
     // but stray whitespace and LTspice's case-insensitive keywords still apply.
     expect(pickAutoRunAnalysis(["  .TRAN 10m  "])).toEqual({
       kind: "tran",

@@ -33,7 +33,7 @@ export function parsePwlTimeToken(token: string, previous: number): number {
 
 /**
  * LTspice writes the transient stimulus inline on a `voltage`/`current` symbol's
- * Value attribute — `SINE(...)`, `PULSE(...)`, `PWL(...)`, `EXP(...)`, `SFFM(...)`.
+ * Value attribute - `SINE(...)`, `PULSE(...)`, `PWL(...)`, `EXP(...)`, `SFFM(...)`.
  * ngspice understands the same families but is fussier about argument count and
  * unicode SI prefixes (LTspice emits `µ`, `meg`). This normalizer parses the
  * LTspice form, re-emits each numeric argument as a plain number (so ngspice
@@ -70,7 +70,7 @@ export function parseSourceFunction(rawValue: string, unit: SourceUnit): SourceS
     case "SINE":
     case "SIN": {
       // LTspice SINE(Voffset Vamp Freq Td Theta Phi Ncycles)
-      // ngspice    SIN(Voff Vamp Freq Td Theta Phase)  — drop Ncycles.
+      // ngspice    SIN(Voff Vamp Freq Td Theta Phase)  - drop Ncycles.
       const off = num(args[0], unit);
       const amp = num(args[1], unit);
       const freq = num(args[2], "Hz", 1e3);
@@ -83,7 +83,7 @@ export function parseSourceFunction(rawValue: string, unit: SourceUnit): SourceS
     }
     case "PULSE": {
       // LTspice PULSE(V1 V2 Tdelay Trise Tfall Ton Tperiod Ncycles)
-      // ngspice  PULSE(V1 V2 TD TR TF PW PER) — drop Ncycles.
+      // ngspice  PULSE(V1 V2 TD TR TF PW PER) - drop Ncycles.
       const v1 = num(args[0], unit);
       const v2 = num(args[1], unit);
       const td = num(args[2], "s");

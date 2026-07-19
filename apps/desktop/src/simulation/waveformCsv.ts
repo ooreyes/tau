@@ -1,7 +1,7 @@
-// CSV export of waveform data (FEATURE_PARITY §6 "export CSV").
+// CSV export of waveform data (LTspice parity).
 //
 // LTspice can export the plotted data as a table; we produce the same kind of
-// CSV — a header row naming the independent axis and each trace, then one row
+// CSV - a header row naming the independent axis and each trace, then one row
 // per sample. Kept as a pure string builder so it is trivially unit-testable
 // and reusable for any axis (time, frequency, swept source).
 

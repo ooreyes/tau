@@ -4,9 +4,9 @@ import * as SeparatorPrimitive from "@radix-ui/react-separator";
 import { cn } from "@/lib/utils";
 
 /**
- * shadcn Separator (new-york), adapted to Tau (§10 design system): a hairline
+ * shadcn Separator (new-york), adapted to Tau: a hairline
  * on `--border` (the same token every hand-styled divider in App.css already
- * uses) — no stock shadcn color. See button.tsx for the shared rationale.
+ * uses) - no stock shadcn color. See button.tsx for the shared rationale.
  */
 function Separator({
   className,

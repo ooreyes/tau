@@ -5,7 +5,7 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { TelemetryDock } from "./TelemetryDock";
 import type { ComponentMeasurement, MeasuredSeries } from "../simulation/measurementModel";
 
-// This jsdom build has localStorage disabled — install an in-memory Storage
+// This jsdom build has localStorage disabled - install an in-memory Storage
 // (mirrors panelResize.test.tsx) so the dock's height/collapse persistence
 // path is actually exercised instead of silently no-oping.
 const backing = new Map<string, string>();

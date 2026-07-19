@@ -91,7 +91,7 @@ import { traceStatistics } from "../simulation/measurementModel";
 import { AnalysisModeRail, type AnalysisMode } from "./AnalysisModeRail";
 
 interface SimulationPanelProps {
-  /** Active circuit tab's title — a best-effort key for persisting the TRAN
+  /** Active circuit tab's title - a best-effort key for persisting the TRAN
    *  grid's per-card layout (order/width/height) across reruns of the same
    *  circuit. Falls back to a shared key when omitted (e.g. in isolated
    *  WaveformPlot tests that don't model a tabbed document at all). */
@@ -112,13 +112,13 @@ interface SimulationPanelProps {
   dcMeasurements: MeasResult[];
   noiseMeasurements: MeasResult[];
   options: AnalysisOptions;
-  /** True while transient resolution is auto-derived from the circuit (§11 C8). */
+  /** True while transient resolution is auto-derived from the circuit. */
   optionsAuto?: boolean;
   isRunning: boolean;
   /** Fraction in [0, 1] while the web TS transient solver is reporting real
    *  progress; null before the first callback and for the whole run when
-   *  native ngspice handles it (no progress channel — App.tsx/executeTransient
-   *  passes null through in that case) — the run overlay below shows an
+   *  native ngspice handles it (no progress channel - App.tsx/executeTransient
+   *  passes null through in that case) - the run overlay below shows an
    *  indeterminate bar instead of a percentage in that state. */
   runProgress: number | null;
   onOptionsChange: (options: AnalysisOptions) => void;
@@ -204,23 +204,23 @@ export function SimulationPanel({
 
   const [mode, setMode] = useState<AnalysisMode>("tran");
   // Each analysis tab collapses its power-user controls behind ONE Advanced
-  // disclosure, closed by default — the default view stays a calm read of
+  // disclosure, closed by default - the default view stays a calm read of
   // plots + status, not a stacked instrument panel.
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [acAdvancedOpen, setAcAdvancedOpen] = useState(false);
   const [dcAdvancedOpen, setDcAdvancedOpen] = useState(false);
   const [noiseAdvancedOpen, setNoiseAdvancedOpen] = useState(false);
-  // MIN/AVG/MAX overlay on single-trace panes — opt-in (Advanced ▸ Plot tools)
+  // MIN/AVG/MAX overlay on single-trace panes - opt-in (Advanced ▸ Plot tools)
   // so the default scope reads as a clean waveform, not a measurement grid.
   const [showStats, setShowStats] = useState(false);
   const [maximized, setMaximized] = useState(false);
-  // User-entered expression traces overlaid on the transient scope (§6), e.g.
+  // User-entered expression traces overlaid on the transient scope, e.g.
   // `V(out)-V(in)` or power `V(out)*I(R1)`.
   const [exprList, setExprList] = useState<string[]>([]);
   const [exprInput, setExprInput] = useState("");
   const [exprError, setExprError] = useState<string | null>(null);
   // Expression traces overlaid on the AC (Bode) pane, e.g. `db(V(out))-db(V(in))`
-  // for a transfer function, and on the DC pane, e.g. `V(out)-V(in)` (§6).
+  // for a transfer function, and on the DC pane, e.g. `V(out)-V(in)`.
   const [acExprList, setAcExprList] = useState<string[]>([]);
   const [acExprInput, setAcExprInput] = useState("");
   const [acExprError, setAcExprError] = useState<string | null>(null);
@@ -362,7 +362,7 @@ export function SimulationPanel({
   };
 
   // Export the transient result (node voltages + branch currents + any plotted
-  // expressions) as a CSV table — one column per signal, one row per timestep.
+  // expressions) as a CSV table - one column per signal, one row per timestep.
   const exportCsv = () => {
     if (!result || !result.ok) return;
     const series = [
@@ -454,7 +454,7 @@ export function SimulationPanel({
     }
   }, [components, options]);
 
-  // §11 Unit C6 — one status voice for the whole panel: the dashboard strip
+  // one status voice for the whole panel: the dashboard strip
   // under the tabs. Idle (nothing run), Running (amber, tactical), Complete
   // (success + last-run figures), Error (danger, details live in the Errors
   // panel). Each tab reads its own result object; no invented values.
@@ -476,14 +476,14 @@ export function SimulationPanel({
     runStatus === "complete" && mode === "tran" && result?.ok
       ? `${formatEngineering(result.stats.stopTime, "s", 2)} · ${result.stats.sampleCount} samples · ${result.stats.netCount} nets · ${result.stats.componentCount} parts`
       : runStatus === "error"
-        ? "Simulation failed — details below"
+        ? "Simulation failed - details below"
         : runStatus === "idle"
-          ? "No results yet — press Run in the toolbar or pick an analysis tab"
+          ? "No results yet - press Run in the toolbar or pick an analysis tab"
           : null;
 
   // Selecting an analysis tab both switches the visible pane and kicks off
-  // that analysis immediately — the one primary Run control lives in the top
-  // toolbar (§11 Unit C); in here tab selection IS the run gesture.
+  // that analysis immediately - the one primary Run control lives in the top
+  // toolbar; in here tab selection IS the run gesture.
   const handleModeChange = (next: AnalysisMode) => {
     setMode(next);
     if (next === "tran") void onRun();
@@ -495,7 +495,7 @@ export function SimulationPanel({
     else if (next === "step") void onRunStep();
   };
 
-  // Fix 3 — a run long enough to need a Stop button also deserves copy that
+  // Fix 3 - a run long enough to need a Stop button also deserves copy that
   // says what's actually running, not just a generic "Running…" (the status
   // strip below already covers the generic case; this is the loud overlay).
   const runningLabel =
@@ -548,8 +548,8 @@ export function SimulationPanel({
             </TooltipTrigger>
             <TooltipContent>{maximized ? "Restore panel" : "Maximize analysis"}</TooltipContent>
           </Tooltip>
-          {/* No Run button here — the single primary Run lives in the top
-              toolbar (§11 Unit C). Refine transient resolution moved into
+          {/* No Run button here - the single primary Run lives in the top
+              toolbar. Refine transient resolution moved into
               Advanced ▸ Simulation settings (niche, TRAN-only); run status
               lives in the dashboard strip under the tabs (Unit C6). */}
         </div>
@@ -565,7 +565,7 @@ export function SimulationPanel({
         {lastRunInfo && <span className="plotter-status-info">{lastRunInfo}</span>}
       </div>
 
-      {/* `.plotter-body` is the positioning root for the run overlay below —
+      {/* `.plotter-body` is the positioning root for the run overlay below -
           it needs to center over the plots specifically, not the whole
           panel (which would cover the header/tabs/status strip too). */}
       <div className="plotter-body">
@@ -1055,10 +1055,10 @@ export function WaveformPlot({
   result: AnalysisResult | null;
   baseTraces: Trace[];
   netLabels: NetLabel[];
-  /** User-entered expression traces overlaid on the scope (§6). */
+  /** User-entered expression traces overlaid on the scope. */
   extraTraces?: Trace[];
   paneLayout: PaneLayout;
-  /** MIN/AVG/MAX overlay on single-trace panes — opt-in, off by default. */
+  /** MIN/AVG/MAX overlay on single-trace panes - opt-in, off by default. */
   showStatistics?: boolean;
   /** Non-empty tables become their own snap-tiling dashboard cards, ordered
    *  and sized alongside the plot panes (see cardLayout.ts). Defaulting to
@@ -1073,7 +1073,7 @@ export function WaveformPlot({
   const success = result?.ok ? result : null;
 
   // Build the full ordered trace list (all panes, all traces) the same way as
-  // before — probed nets or the first 6, then expression/ref overlays.  We keep
+  // before - probed nets or the first 6, then expression/ref overlays.  We keep
   // a map from id → Trace for fast lookup when rendering per-pane subsets.
   const allTraces = useMemo<Trace[]>(() => {
     return [...baseTraces, ...extraTraces];
@@ -1104,12 +1104,12 @@ export function WaveformPlot({
   };
 
   // ── Dashboard card model (snap-tiling grid) ──────────────────────────────
-  // One card per pane (even an empty one — a pane always gets its own scope
+  // One card per pane (even an empty one - a pane always gets its own scope
   // face) plus one card per non-empty table. Cards are keyed by TRACE id, not
   // pane id/index: automaticLayout regenerates pane ids as `auto-p${index}`
   // whenever the signal set changes, so keying by pane id would silently
   // reassign one probe's saved width/height to whatever trace lands at that
-  // index next. Recomputed plainly (no memo) every render — cheap, and
+  // index next. Recomputed plainly (no memo) every render - cheap, and
   // memoizing would need `labelFor` in the deps, which closes over `success`/
   // `netLabels` and is recreated every render anyway.
   const cardSpecs: CardSpec[] = paneLayout.map((pane) => {
@@ -1271,7 +1271,7 @@ export function WaveformPlot({
                   showXAxis
                   // Not just `success`: on the render where a run first
                   // resolves, `plot` can still be null for one tick before
-                  // `paneLayout` catches up with the new trace ids — folding
+                  // `paneLayout` catches up with the new trace ids - folding
                   // `plot`'s presence into the reset key means the viewport
                   // reset effect fires exactly when this pane actually has
                   // data to fit, not before.
@@ -1291,7 +1291,7 @@ export function WaveformPlot({
                       />
                     ))
                   ) : (
-                    <span className="muted">Empty — move a trace here</span>
+                    <span className="muted">Empty - move a trace here</span>
                   )}
                 </div>
               </DashboardCard>
@@ -1306,8 +1306,8 @@ export function WaveformPlot({
 /**
  * Slim header chrome shared by every dashboard card (plot panes AND the
  * measurements/Fourier tables): a drag handle, title, optional height cycle
- * (plots only — tables auto-height), and a width toggle. Owns none of the
- * layout state itself — purely presentational plus the pointer-down that
+ * (plots only - tables auto-height), and a width toggle. Owns none of the
+ * layout state itself - purely presentational plus the pointer-down that
  * starts a drag, so {@link WaveformPlot} stays the single source of truth
  * for card order/width/height.
  */
@@ -1380,10 +1380,10 @@ function DashboardCard({
 /**
  * One TRAN scope pane's `<svg>`: real tick axes (via {@link PlotAxes}) plus
  * the trace paths, with Desmos-style cursor-anchored ⌘/pinch-wheel zoom
- * (plain wheel scrolls the panel instead — see `usePlotViewport`), drag pan,
+ * (plain wheel scrolls the panel instead - see `usePlotViewport`), drag pan,
  * and an auto-fit ⌂ button (`usePlotViewport`). Split out of
  * {@link WaveformPlot}'s per-pane `.map()` so each pane can own its own
- * hooks — hooks can't live inside a `.map()` callback in the parent, and
+ * hooks - hooks can't live inside a `.map()` callback in the parent, and
  * each pane needs an independent zoom viewport anyway.
  */
 function TranScopePane({
@@ -1403,7 +1403,7 @@ function TranScopePane({
   times: number[];
   ariaLabel: string;
   showXAxis: boolean;
-  /** Identity of the current run — changing it resets this pane's zoom to full-fit. */
+  /** Identity of the current run - changing it resets this pane's zoom to full-fit. */
   runKey: unknown;
   sharedX: { xMin: number; xMax: number };
   onSharedXChange: (x: { xMin: number; xMax: number }) => void;
@@ -1417,10 +1417,10 @@ function TranScopePane({
   const [measureRef, size] = useMeasuredSize<SVGSVGElement>();
   const { targetXTicks, targetYTicks } = tickCountsFromSize(size);
   // Placeholder domain for a pane with no traces yet (e.g. just added via
-  // "move to pane", data not resolved this tick) — 0..1 is arbitrary and must
+  // "move to pane", data not resolved this tick) - 0..1 is arbitrary and must
   // never be shared: `onXViewportChange` below is only wired up when `plot`
   // is real, so this placeholder can't leak into `sharedX` and drag siblings
-  // with real (e.g. millisecond-scale) data onto a bogus 0–1s window.
+  // with real (e.g. millisecond-scale) data onto a bogus 0-1s window.
   const domain = useMemo<Viewport>(
     () => ({ xMin: 0, xMax: plot ? plot.tMax : 1, yMin: plot ? plot.min : -1, yMax: plot ? plot.max : 1 }),
     [plot],
@@ -1560,7 +1560,7 @@ function ScopeStatisticsOverlay({
 }
 
 /** Map a transient trace to an SVG path over an explicit `[xMin,xMax]` time
- *  window (not always `[0,tMax]` — zoom/pan can move the visible window to
+ *  window (not always `[0,tMax]` - zoom/pan can move the visible window to
  *  a non-zero start). `tMax`-only callers (unzoomed) pass `xMin=0`. */
 function tracePath(
   trace: Trace,
@@ -1591,7 +1591,7 @@ function tracePath(
 function OpTable({ result }: { result: OperatingPointResult | null }) {
   if (!result) return null;
   if (!result.ok) return <div className="analysis-empty">{result.message}</div>;
-  // Avoid Math.max(...spread) over a potentially large array — use reduce instead.
+  // Avoid Math.max(...spread) over a potentially large array - use reduce instead.
   const maxAbs = result.nets.reduce((acc, net) => Math.max(acc, Math.abs(net.voltage)), 0);
   return (
     <>
@@ -1661,7 +1661,7 @@ function TfTable({ result }: { result: TfResult | null }) {
 
 /**
  * Plot a `.noise` analysis: output-referred noise density vs frequency on a
- * log–log scale (frequency decades on X, V/√Hz decades on Y), with the
+ * log-log scale (frequency decades on X, V/√Hz decades on Y), with the
  * integrated total output / input-referred noise in the metric row. Mirrors
  * {@link AcPlot}'s log-frequency mapping but maps a single positive density
  * trace through log10 rather than dB.
@@ -1824,11 +1824,11 @@ function downloadCsv(csv: string, tag: string): void {
 const AC_COLORS = ["var(--trace-cyan)", "var(--trace-green)", "var(--trace-cream)", "var(--trace-red)"];
 // Distinct ramp for user expression traces so they stand out from node traces.
 const EXPR_COLORS = ["var(--trace-red)", "var(--trace-cream)", "var(--trace-cyan)", "var(--trace-green)"];
-// Reference (.raw overlay) traces — drawn dashed (see `.scope-trace.ref`).
+// Reference (.raw overlay) traces - drawn dashed (see `.scope-trace.ref`).
 const REF_COLORS = ["var(--trace-amber)", "var(--trace-purple)", "var(--trace-cream)", "var(--trace-green)"];
 
 /**
- * FFT of a transient signal — LTspice's "View → FFT". Resamples the chosen
+ * FFT of a transient signal - LTspice's "View → FFT". Resamples the chosen
  * waveform onto a uniform grid, windows it, and shows the one-sided amplitude
  * spectrum on a log-frequency / dB axis. Collapsed by default so the (heavier)
  * transform only runs when the user opens it. Reuses {@link bodePath} for the
@@ -1882,7 +1882,7 @@ export function FftView({ result, preferredSignals = [] }: { result: AnalysisRes
     }
     const maxDb = Math.ceil(rawMax / 10) * 10;
     const minDb = Math.floor(Math.min(rawMin, maxDb - 60) / 10) * 10;
-    // Skip the DC bin (freq 0) — it has no place on a log axis.
+    // Skip the DC bin (freq 0) - it has no place on a log axis.
     const positive = spectrum.frequencies.filter((f) => f > 0);
     const f0 = Math.log10(positive[0] || 1);
     const f1 = Math.log10(positive[positive.length - 1] || 10);
@@ -1924,7 +1924,7 @@ export function FftView({ result, preferredSignals = [] }: { result: AnalysisRes
   );
 
   // Cursor pixel position from the LIVE (possibly zoomed/panned) viewport, not
-  // the static full-spectrum domain — a cursor placed via the 0-100% slider
+  // the static full-spectrum domain - a cursor placed via the 0-100% slider
   // stays anchored to its actual frequency and simply scrolls off-plot
   // (returns null, hidden) once zoom/pan moves it outside the visible window.
   const cursorPixelX = (f: number): number | null => {
@@ -2129,10 +2129,10 @@ function SpectrumInsightsPanel({
   unit: "V" | "A";
 }) {
   const percent = (value: number | null | undefined) => value === null || value === undefined
-    ? "—"
+    ? "-"
     : `${value.toFixed(3)}%`;
   const db = (value: number | null | undefined) => value === null || value === undefined
-    ? "—"
+    ? "-"
     : `${value.toFixed(1)} dB`;
   const hasSignal = Boolean(insights.fundamental && insights.fundamental.amplitude > 0);
   return (
@@ -2149,12 +2149,12 @@ function SpectrumInsightsPanel({
         <SpectrumMetric label="Noise floor" value={db(insights.noiseFloorDb)} detail="Median per FFT bin" />
         <SpectrumMetric
           label="Resolution"
-          value={insights.frequencyResolutionHz ? formatEngineering(insights.frequencyResolutionHz, "Hz", 3) : "—"}
+          value={insights.frequencyResolutionHz ? formatEngineering(insights.frequencyResolutionHz, "Hz", 3) : "-"}
           detail="FFT bin width"
         />
         <SpectrumMetric
           label="DC"
-          value={insights.dc ? formatEngineering(insights.dc.amplitude, unit, 3) : "—"}
+          value={insights.dc ? formatEngineering(insights.dc.amplitude, unit, 3) : "-"}
           detail={insights.dc ? `${insights.dc.amplitudeDb.toFixed(1)} dB` : undefined}
         />
       </div>
@@ -2191,9 +2191,9 @@ function SpectrumMetric({ label, value, detail }: { label: string; value: string
 }
 
 /**
- * Measurement cursors (§6) — two positions along the time axis with a per-trace
+ * Measurement cursors - two positions along the time axis with a per-trace
  * value + delta readout (LTspice's "1 & 2" cursors). Positions are sliders
- * (0–100% of the run) so there is no canvas drag to get wrong; the readout comes
+ * (0-100% of the run) so there is no canvas drag to get wrong; the readout comes
  * from the unit-tested `cursorReadout`.
  */
 function CursorView({ result, extraTraces }: { result: AnalysisResult | null; extraTraces: Trace[] }) {
@@ -2340,7 +2340,7 @@ export function AcPlot({ result, overlays = [] }: { result: AcResult | null; ove
     return { minDb, maxDb, f0, f1, minPh, maxPh };
   }, [success, traces, overlays]);
 
-  // Independent zoom per pane — magnitude and phase don't share an x-viewport
+  // Independent zoom per pane - magnitude and phase don't share an x-viewport
   // in this pass (a documented scoping decision, see PROGRESS.md): they're
   // visually stacked halves of one Bode plot but each is its own `<svg>` with
   // its own `usePlotViewport`, so zooming one doesn't move the other.
@@ -2391,8 +2391,8 @@ export function AcPlot({ result, overlays = [] }: { result: AcResult | null; ove
       if (Number.isFinite(db)) peak = Math.max(peak, db);
     }
   }
-  // Peak group delay τ = -dφ/dω of the primary (first) output trace — the
-  // network's worst-case envelope delay in the swept band (LTspice §6).
+  // Peak group delay τ = -dφ/dω of the primary (first) output trace - the
+  // network's worst-case envelope delay in the swept band (LTspice ).
   let peakGroupDelay = 0;
   if (traces.length > 0) {
     for (const tau of groupDelay(result.freqs, traces[0].phaseDeg)) {
@@ -2400,7 +2400,7 @@ export function AcPlot({ result, overlays = [] }: { result: AcResult | null; ove
     }
   }
   // Loop-stability margins of the primary trace (treated as the open-loop
-  // response): phase margin at the 0 dB crossover, gain margin at −180° (§6).
+  // response): phase margin at the 0 dB crossover, gain margin at −180°.
   const margins =
     traces.length > 0
       ? stabilityMargins(result.freqs, traces[0].magDb, traces[0].phaseDeg)
@@ -2569,7 +2569,7 @@ function bodeValuePath(
 /**
  * Plot a `.dc` source sweep: the swept source value on a linear X axis, each
  * node's voltage on a linear Y axis. Mirrors {@link AcPlot} but without the log
- * frequency mapping. The ground net (label "GND") is dropped — it is always 0 V.
+ * frequency mapping. The ground net (label "GND") is dropped - it is always 0 V.
  */
 export function DcPlot({ result, overlays = [] }: { result: DcSweepResult | null; overlays?: DcSweepNet[] }) {
   const clipId = useId();
@@ -2727,8 +2727,7 @@ const STEP_COLORS = [
 
 /**
  * Overlay a `.step` family: re-run a transient once per swept value and draw the
- * same signal across the family, one colored curve per step (FEATURE_PARITY §6
- * family-of-curves). The plotted signal follows the probe (first probed net),
+ * same signal across the family, one colored curve per step (LTspice parity). The plotted signal follows the probe (first probed net),
  * falling back to the first trace, matching the transient scope.
  */
 export function StepPlot({ result, probes, wires }: { result: StepFamilyResult | null; probes: Probe[]; wires: SchematicWire[] }) {
@@ -2807,7 +2806,7 @@ export function StepPlot({ result, probes, wires }: { result: StepFamilyResult |
 }
 
 /** Pick the trace to plot across a step family: the first probed net's trace,
- *  else the first trace — mirroring the transient scope's selection. */
+ *  else the first trace - mirroring the transient scope's selection. */
 function pickFamilyTraceId(
   success: Extract<AnalysisResult, { ok: true }>,
   probes: Probe[],
@@ -3018,7 +3017,7 @@ function MeasTable({ measurements }: { measurements: MeasResult[] }) {
         <div className="meas-row" role="row" key={m.name}>
           <span className="meas-name" role="cell">{m.name}</span>
           <span className={`meas-value${m.value === null ? " meas-fail" : ""}`} role="cell" title={m.error}>
-            {m.value === null ? (m.error ?? "—") : formatEngineering(m.value, "", 4)}
+            {m.value === null ? (m.error ?? "-") : formatEngineering(m.value, "", 4)}
           </span>
         </div>
       ))}

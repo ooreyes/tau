@@ -82,7 +82,7 @@ describe("net extraction crossing semantics", () => {
 });
 
 describe("net labels are electrical", () => {
-  // r1 spans pins (68,0)-(132,0); r2 spans (268,0)-(332,0) — physically apart.
+  // r1 spans pins (68,0)-(132,0); r2 spans (268,0)-(332,0) - physically apart.
   const r1 = resistor("r1", 100, 0);
   const r2 = resistor("r2", 300, 0);
 
@@ -156,7 +156,7 @@ describe("net labels are electrical", () => {
   });
 
   it("counts labels per net and treats a labelled single-pin net as connected", () => {
-    // r1.b carries only a bare "OUT" flag — the LTspice probe idiom
+    // r1.b carries only a bare "OUT" flag - the LTspice probe idiom
     // (Educational/SampleAndHold.asc). The label makes the net observable, so
     // no "only connected to one pin" warning; labelCount reports it.
     const circuit = extractCircuit([r1], [], [label("l", 132, 0, "OUT")]);

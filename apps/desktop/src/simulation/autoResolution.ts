@@ -8,7 +8,7 @@ import {
 import { parseQuantity } from "./quantity";
 
 /**
- * §11 Unit C8 — automatic transient resolution.
+ * automatic transient resolution.
  *
  * "Tau automatically chooses simulation settings unless overridden": infer a
  * transient window + step count from the circuit's own RC/RL time constants
@@ -19,7 +19,7 @@ import { parseQuantity } from "./quantity";
  * - Time constants: every capacitor contributes τ = C·R_typ and every
  *   inductor τ = L/R_typ, where R_typ is the geometric mean of the circuit's
  *   resistor values (1 kΩ when there are no resistors). This ignores the
- *   actual topology — a deliberate simplification; series/parallel structure
+ *   actual topology - a deliberate simplification; series/parallel structure
  *   would need per-node Thévenin resistances.
  * - Window: long enough to show 5 cycles of the SLOWEST periodic source and
  *   the settling of the slowest time constant (7·τ ≈ settle to <0.1%),
@@ -60,7 +60,7 @@ export interface AutoResolutionInputs {
 }
 
 /** Scan the schematic for the frequency/time-constant figures the heuristic
- *  needs. Malformed or non-positive values are skipped, never thrown — auto
+ *  needs. Malformed or non-positive values are skipped, never thrown - auto
  *  mode must degrade to the defaults, not block a run. */
 export function collectAutoResolutionInputs(
   components: readonly SchematicComponent[],
@@ -90,7 +90,7 @@ export function collectAutoResolutionInputs(
     try {
       frequency = periodicSourceFrequencyHz(component);
     } catch {
-      frequency = null; // malformed source value — the run itself will report it
+      frequency = null; // malformed source value - the run itself will report it
     }
     if (frequency !== null && Number.isFinite(frequency) && frequency > 0) {
       maxSourceHz = Math.max(maxSourceHz, frequency);
@@ -166,7 +166,7 @@ export interface AcSweepDefaults {
 
 /** AC sweep defaults centered on the circuit's own source frequencies: two
  *  decades below the slowest and two above the fastest, snapped outward to
- *  clean decades, with the classic 10 Hz–1 MHz when every source is DC. */
+ *  clean decades, with the classic 10 Hz-1 MHz when every source is DC. */
 export function suggestAcSweep(components: readonly SchematicComponent[]): AcSweepDefaults {
   const { minSourceHz, maxSourceHz } = collectAutoResolutionInputs(components);
   if (maxSourceHz <= 0) return { startHz: 10, stopHz: 1e6, pointsPerDecade: 20 };

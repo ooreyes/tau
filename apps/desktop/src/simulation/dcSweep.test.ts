@@ -36,16 +36,16 @@ describe("parseDcDirective", () => {
   });
 
   it("ignores a malformed second leg but keeps the primary sweep", () => {
-    // Only 7 tokens after `dc` — second leg incomplete, so it's dropped.
+    // Only 7 tokens after `dc` - second leg incomplete, so it's dropped.
     expect(parseDcDirective(".dc V1 0 5 1 V2 0 5")).toEqual({ source: "V1", start: 0, stop: 5, step: 1 });
   });
 });
 
 // ---------------------------------------------------------------------------
-// runDcSweep — hand-computed resistive divider
+// runDcSweep - hand-computed resistive divider
 // ---------------------------------------------------------------------------
 
-// V1 (p=n1, n=gnd) — R1 (n1..mid) — R2 (mid..gnd). Node voltages along a wire
+// V1 (p=n1, n=gnd) - R1 (n1..mid) - R2 (mid..gnd). Node voltages along a wire
 // collapse, so we connect pins by sharing coordinates via wires.
 //
 //   n1 ---R1--- mid ---R2--- gnd
@@ -208,7 +208,7 @@ describe("runDcSweep", () => {
   });
 
   // Mirrors App.runDcAnalysis: an imported circuit's own `.dc` directive is
-  // mapped to a sweep spec, then run against the schematic — the path that
+  // mapped to a sweep spec, then run against the schematic - the path that
   // lets a real `.asc` sweep as authored.
   it("runs the sweep spec recovered from a document's `.dc` directive", () => {
     const { components, wires } = dividerSchematic();

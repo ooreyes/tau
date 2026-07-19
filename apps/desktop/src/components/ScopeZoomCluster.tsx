@@ -7,7 +7,7 @@ import { InstrumentIconButton } from "@/components/ui/instrument-icon-button";
  * actions follow the same SF Symbol semantics as Tau's other instrument
  * controls. The fit button's tooltip documents the full interaction set
  * (⌘/pinch-wheel, shift/alt locks, drag) since there's no other persistent UI
- * real estate for it. Plain wheel is deliberately absent from that list — it
+ * real estate for it. Plain wheel is deliberately absent from that list - it
  * scrolls the analysis panel, not the plot (usePlotViewport.ts).
  */
 export function ScopeZoomCluster({

@@ -1,12 +1,12 @@
 /**
- * Scope axis tick generation — the "nice number" algorithm (Heckbert/d3 style:
+ * Scope axis tick generation - the "nice number" algorithm (Heckbert/d3 style:
  * steps of 1/2/5×10^n) shared by every plot context (TRAN, AC mag/phase, DC
  * sweep, FFT, noise, step families). Pure and DOM-free so it is fully
  * unit-testable; `SimulationPanel.tsx` / `PlotAxes.tsx` only consume the
  * computed tick list.
  *
  * SI-prefix formatting reuses {@link formatEngineering} (simulation/quantity.ts)
- * — the same authority `EngineeringInput` and every metric readout uses —
+ * - the same authority `EngineeringInput` and every metric readout uses -
  * rather than duplicating a prefix table here.
  */
 import { formatEngineering } from "./quantity";
@@ -20,7 +20,7 @@ export interface AxisTick {
   frac: number;
   /** Rendered label, e.g. "2ms", "1kHz", "40 dB". */
   label: string;
-  /** True when this tick is (numerically) zero — callers draw the zero-line stronger. */
+  /** True when this tick is (numerically) zero - callers draw the zero-line stronger. */
   isZero: boolean;
 }
 
@@ -29,7 +29,7 @@ export interface AxisTick {
 const NO_SI_PREFIX_UNITS = new Set(["dB", "°", "deg", "%"]);
 
 /** Kill float accumulation noise (`0.1 + 0.2` → `0.30000000000000004`) without
- *  being sensitive to the value's magnitude — 12 significant digits is far
+ *  being sensitive to the value's magnitude - 12 significant digits is far
  *  more precision than any tick label needs, but enough to distinguish two
  *  ticks that differ only in the 15th digit due to arithmetic. */
 function cleanFloat(v: number): number {
@@ -71,7 +71,7 @@ export function niceTicks(min: number, max: number, targetCount = 5): number[] {
   let hi = max;
   if (lo > hi) [lo, hi] = [hi, lo];
   if (hi - lo < 1e-300) {
-    // Zero-span (or effectively so) domain — synthesize a small span around
+    // Zero-span (or effectively so) domain - synthesize a small span around
     // the value (or around 0 when the value itself is 0) so there is still
     // something to show, matching the existing "pad a flat trace" behavior
     // used elsewhere in SimulationPanel.tsx.
@@ -96,7 +96,7 @@ export function niceTicks(min: number, max: number, targetCount = 5): number[] {
  * Generate log-decade tick values for a strictly-positive domain (frequency
  * axes, log-magnitude noise density). One tick per decade normally; when the
  * domain spans fewer than 2 decades, adds 2×/5× sub-decade marks so a narrow
- * sweep (e.g. 1kHz–5kHz) still shows more than one or two ticks. When the
+ * sweep (e.g. 1kHz-5kHz) still shows more than one or two ticks. When the
  * domain spans many decades, thins by an integer stride so the label count
  * stays near `targetCount`. Returns `[]` for a non-positive or degenerate domain.
  */
@@ -108,8 +108,8 @@ export function logTicks(min: number, max: number, targetCount = 6): number[] {
   if (decades <= 0) return [10 ** lo];
 
   // Decide sub-decade-vs-stride mode off the ACTUAL span (log10(max/min)), not
-  // the outward-rounded [lo,hi] used for decade alignment — a domain that
-  // spans exactly one decade (e.g. 500 Hz–5 kHz) should still get 1/2/5
+  // the outward-rounded [lo,hi] used for decade alignment - a domain that
+  // spans exactly one decade (e.g. 500 Hz-5 kHz) should still get 1/2/5
   // sub-ticks, not just its two rounded decade endpoints.
   const actualSpan = Math.log10(max / min);
   if (actualSpan < 2) {
@@ -122,7 +122,7 @@ export function logTicks(min: number, max: number, targetCount = 6): number[] {
     }
     // Deep zoom on a log axis (Desmos-style wheel zoom can shrink the window
     // to well under a decade) can leave a window with NO 1/2/5×10^n value
-    // inside it at all — e.g. a 3.10kHz–3.14kHz window contains none of
+    // inside it at all - e.g. a 3.10kHz-3.14kHz window contains none of
     // {1,2,3,5}×10^{2,3,4}. Rather than render zero ticks, degrade
     // gracefully to plain nice-number ticks over the actual (now near-linear
     // at this scale) visible range.
@@ -170,7 +170,7 @@ export function fractionToValue(frac: number, min: number, max: number, scale: A
  * Format a single tick's value for display. SI-prefix units (V, A, s, Hz, W,
  * Ω, V/√Hz, …) reuse {@link formatEngineering} so tick labels always agree
  * with every other numeric readout in the app. Angular/logarithmic units
- * (dB, °, %) are never SI-scaled — "40dB" must never read "40µdB".
+ * (dB, °, %) are never SI-scaled - "40dB" must never read "40µdB".
  */
 export function formatTickLabel(value: number, unit = "", significantDigits = 3): string {
   const v = cleanFloat(value);
@@ -243,7 +243,7 @@ export function computeAxisTicks(min: number, max: number, opts: ComputeAxisTick
 
 /**
  * Pick a target tick count from a measured pixel size so labels stay legible
- * (don't collide) as a plot pane shrinks — e.g. multi-pane layouts at the
+ * (don't collide) as a plot pane shrinks - e.g. multi-pane layouts at the
  * app's 900×600 minimum window size. `minSpacingPx` is the minimum pixel gap
  * a single tick label needs; the result is clamped to `[minCount, maxCount]`.
  */

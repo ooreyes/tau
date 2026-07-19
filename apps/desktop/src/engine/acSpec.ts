@@ -68,7 +68,7 @@ export function stripAcSpec(value: string): string {
  * `wavefile=…`, `chan=0`, …) from a source value. ngspice's independent sources
  * reject these inline (`unknown parameter (rser)`), so an imported `.asc` whose
  * source value is `AC 1 Rser=1K` must drop the `Rser=` token before the DC level
- * parses — otherwise the leftover `Rser=1K` fails as "needs a valid V value".
+ * parses - otherwise the leftover `Rser=1K` fails as "needs a valid V value".
  * Transient functions (SINE/PULSE/PWL/EXP/SFFM) contain no bare `key=value`
  * tokens, so this never disturbs them. The dropped series resistance is a small
  * accuracy concession in exchange for the deck building/simulating at all.

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ChangeEvent, type DragEvent, type PointerEvent, type ReactNode } from "react";
+import { userFacingErrorMessage } from "../lib/errorMessage";
 import {
   ChevronRight,
   Copy,
@@ -75,7 +76,7 @@ import {
 } from "../lib/localAiModels";
 import { clampPanelWidth, PanelResizeHandle, usePanelWidth, type PanelWidthConfig } from "./panelResize";
 
-/** Drag-to-resize bounds for the two side panels (§11 Unit B). Minimums keep
+/** Drag-to-resize bounds for the two side panels. Minimums keep
  *  every control usable (tree rows, property fields); maximums keep the canvas
  *  from being starved even at the 900px minimum window. */
 const EXPLORER_PANEL_WIDTH: PanelWidthConfig = {
@@ -166,7 +167,7 @@ function RailButton({
           </span>
         </button>
       </TooltipTrigger>
-      <TooltipContent side="right">{shortcut ? `${label} — ${shortcut}` : label}</TooltipContent>
+      <TooltipContent side="right">{shortcut ? `${label} - ${shortcut}` : label}</TooltipContent>
     </Tooltip>
   );
 }
@@ -405,7 +406,7 @@ export function ExplorerPanel({
       await copyExplorerText(value);
       onNotice(relative ? "Copied relative path." : "Copied path.");
     } catch (error) {
-      onNotice(error instanceof Error ? error.message : "Could not copy path.");
+      onNotice(userFacingErrorMessage(error, "Could not copy path."));
     }
   };
 
@@ -544,7 +545,7 @@ export function ExplorerPanel({
 
   const markDropTarget = (event: DragEvent<HTMLElement>, destinationDirectoryPath: string) => {
     const source = dragSource(event);
-    // During dragover, getData is empty — accept if the MIME type is present
+    // During dragover, getData is empty - accept if the MIME type is present
     // or we already know the dragged node from dragstart.
     const looksLikeInternalDrag = Boolean(source) || dataTransferHasProjectNode(event.dataTransfer);
     if (!looksLikeInternalDrag) {
@@ -710,7 +711,7 @@ export function ExplorerPanel({
           data-drop-target={dropTargetPath === rootPath || undefined}
           aria-label={`Project root ${rootName ?? "Schematics"}; drop files or folders here`}
           aria-describedby="explorer-drag-help"
-          title="Project root — drop files or folders here; click to collapse or expand"
+          title="Project root - drop files or folders here; click to collapse or expand"
           aria-expanded={expanded.includes(rootPath)}
           onClick={() => toggleExpanded(rootPath)}
           onDragOver={(event) => markDropTarget(event, rootPath)}
@@ -886,7 +887,7 @@ function ProjectTree({
 }: {
   nodes: ProjectNode[];
   depth: number;
-  /** Directory that owns these nodes — used when dropping onto a file row. */
+  /** Directory that owns these nodes - used when dropping onto a file row. */
   parentDirectoryPath: string;
   expanded: string[];
   activeFilePath: string | null;
@@ -1124,7 +1125,7 @@ export function EditorToolbar({
   onStop: () => void;
   onClearScratchpad: () => void;
 }) {
-  // The simulator view is read-only (pan/zoom/probe only — see Canvas's
+  // The simulator view is read-only (pan/zoom/probe only - see Canvas's
   // `interactive` prop and App.tsx's keydown gate); every editing control in
   // this toolbar must be inert there too. Select (cancel) and Probe stay
   // enabled: cancel doesn't mutate the document, and probing is how traces
@@ -1155,7 +1156,7 @@ export function EditorToolbar({
         <MousePointer2 size={16} strokeWidth={1.6} />
       </IconButton>
       <IconButton title="Wire" active={tool.mode === "wire"} disabled={readOnly} onClick={startWiring}>
-        {/* Orthogonal wire with junction endpoints — schematic wires are
+        {/* Orthogonal wire with junction endpoints - schematic wires are
             axis-aligned, so the glyph is a dogleg, not a freeform spline. */}
         <svg width={16} height={16} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
           <path d="M3.2 12.2 H8 V3.8 H12.8" />
@@ -1345,20 +1346,27 @@ export function EditorTabs({
 export function BottomPanel({
   result,
   isRunning = false,
+  notices = [],
 }: {
   mode?: "schematic" | "simulator";
   result: AnalysisResult | null;
   isRunning?: boolean;
+  /** Document-level warnings independent of a run (e.g. ASC import warnings -
+   *  previously console-only, so "Opened with 2 warning(s)" was a dead end). */
+  notices?: string[];
 }) {
   // A live run supersedes the previous result's diagnostics. Keeping stale
   // success/error classes during a rerun would contradict the amber Run state.
   const messages = isRunning ? [] : [
     ...(result && !result.ok ? [result.message] : []),
     ...(result?.warnings ?? []),
+    ...notices,
   ];
   const hasIssues = messages.length > 0;
   const hasError = !isRunning && Boolean(result && !result.ok);
-  const isIdle = !isRunning && result === null;
+  // Import notices must surface even before the first run - "idle" only when
+  // there is genuinely nothing to show.
+  const isIdle = !isRunning && result === null && !hasIssues;
   const isClean = !isRunning && Boolean(result?.ok) && !hasIssues;
   const issueSignature = messages.join("\u0000");
   const [expanded, setExpanded] = useState(hasIssues);
@@ -1546,7 +1554,7 @@ export function ComponentInspector({ selected }: { selected: SchematicComponent 
                 <p className="property-hint">
                   {Number.isFinite(opampPart.gbwHz) && opampPart.gbwHz > 0
                     ? `${formatEngineering(opampPart.gbwHz, "Hz", 2)} GBW · ${opampPart.slewRate} V/µs · ±${opampPart.supplyMax} V · ${opampPart.package}`
-                    : "Ideal — infinite gain & bandwidth"}
+                    : "Ideal - infinite gain & bandwidth"}
                 </p>
               )}
             </>
@@ -1783,7 +1791,7 @@ export function SettingsPanel({
       if (!cancelled) setLocalAiStatus(status);
     }).catch((error: unknown) => {
       if (!cancelled) {
-        setLocalAiError(error instanceof Error ? error.message : "Could not inspect the local MLX runtime.");
+        setLocalAiError(userFacingErrorMessage(error, "Could not inspect the local MLX runtime."));
       }
     });
     return () => { cancelled = true; };
@@ -1798,7 +1806,7 @@ export function SettingsPanel({
       void getLocalAiStatus().then((status) => {
         if (!cancelled) setLocalAiStatus(status);
       }).catch((error: unknown) => {
-        if (!cancelled) setLocalAiError(error instanceof Error ? error.message : "Could not inspect the local MLX runtime.");
+        if (!cancelled) setLocalAiError(userFacingErrorMessage(error, "Could not inspect the local MLX runtime."));
       });
     }, 900);
     return () => {
@@ -1813,7 +1821,7 @@ export function SettingsPanel({
     try {
       setLocalAiStatus(await action());
     } catch (error) {
-      setLocalAiError(error instanceof Error ? error.message : "The local MLX runtime action failed.");
+      setLocalAiError(userFacingErrorMessage(error, "The local MLX runtime action failed."));
     } finally {
       setLocalAiBusy(false);
     }
@@ -1930,7 +1938,7 @@ export function SettingsPanel({
                             if (imported) saveAssistantPreferences({ provider: "local-mlx", localModel: imported.id });
                             onNotice("Local model imported. Choose Download & Start to fetch its weights.");
                           } catch (error) {
-                            setLocalAiError(error instanceof Error ? error.message : "Could not import that model.");
+                            setLocalAiError(userFacingErrorMessage(error, "Could not import that model."));
                           }
                         }}
                       >
@@ -1951,7 +1959,7 @@ export function SettingsPanel({
                         </Button>
                       )}
                     </div>
-                    <span className="settings-field-hint">Paste any MLX-compatible Hugging Face repository. Tau validates the name and passes it directly to the local MLX runtime—never through a shell.</span>
+                    <span className="settings-field-hint">Paste any MLX-compatible Hugging Face repository. Tau validates the name and passes it directly to the local MLX runtime-never through a shell.</span>
                   </div>
 
                   <div className="settings-local-runtime" data-state={localAiStatus?.state ?? "checking"}>
@@ -2029,7 +2037,7 @@ export function SettingsPanel({
               )}
             </div>
           </div>
-          <SettingsRow label="Command palette" hint="⌘K · F2 · / — search & place parts">
+          <SettingsRow label="Command palette" hint="⌘K · F2 · / - search & place parts">
             <Button size="sm" variant="outline" onClick={onOpenCommandPalette}>Open</Button>
           </SettingsRow>
           <SettingsRow label="Meter probes" hint={`${probes.length} placed on this schematic`}>
@@ -2142,7 +2150,7 @@ export function ConfirmDialog({
         role="alertdialog"
         className="confirm-dialog"
         // Focus Cancel, not Confirm, on open so a stray Enter can't fire the
-        // destructive action — Radix otherwise focuses the content itself.
+        // destructive action - Radix otherwise focuses the content itself.
         onOpenAutoFocus={(event) => {
           event.preventDefault();
           (event.currentTarget as HTMLElement).querySelector<HTMLButtonElement>("[data-autofocus]")?.focus();

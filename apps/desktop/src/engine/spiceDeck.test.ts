@@ -58,7 +58,7 @@ function expectValidDeck(netlist: string, analysisCard: RegExp) {
 
 // ---------------------------------------------------------------------------
 
-describe("deck structure — RC transient", () => {
+describe("deck structure - RC transient", () => {
   const comps = [
     Vdc(0, 32, "5"),
     R(96, 0, "1k", "R1"),
@@ -78,7 +78,7 @@ describe("deck structure — RC transient", () => {
   });
 });
 
-describe("deck structure — operating point", () => {
+describe("deck structure - operating point", () => {
   it("emits a single .op card", () => {
     const deck = buildSpiceDeck(
       { components: [Vdc(0, 32, "5"), R(96, 0, "1k", "R1"), GND(0, 64), GND(128, 0)], wires: [W({ x: 0, y: 0 }, { x: 64, y: 0 })] },
@@ -103,7 +103,7 @@ describe("deck structure — operating point", () => {
   });
 });
 
-describe("deck structure — coupled inductors (K)", () => {
+describe("deck structure - coupled inductors (K)", () => {
   it("emits a transformer's K coupling directive into the deck (Transformer.asc)", () => {
     const deck = buildSpiceDeck(
       {
@@ -125,7 +125,7 @@ describe("deck structure — coupled inductors (K)", () => {
   });
 });
 
-describe("deck structure — behavioral B-source", () => {
+describe("deck structure - behavioral B-source", () => {
   // B-source output pin p sits at (0,-32), n at (0,32) for a vertical source.
   const Bsrc = (x: number, y: number, v: string, l = "B1") =>
     mk("bsource", x, y, v, l);
@@ -166,7 +166,7 @@ describe("deck structure — behavioral B-source", () => {
   });
 });
 
-describe("deck structure — Laplace E source", () => {
+describe("deck structure - Laplace E source", () => {
   // vcvs local pins: cp(-32,-16) cn(-32,16) op(32,-16) on(32,16).
   const Vcvs = (x: number, y: number, v: string, l = "E1") => mk("vcvs", x, y, v, l);
 
@@ -203,7 +203,7 @@ describe("deck structure — Laplace E source", () => {
   });
 });
 
-describe("deck structure — AC sweep", () => {
+describe("deck structure - AC sweep", () => {
   it("emits a DC/AC/SIN source and a single .ac card", () => {
     const deck = buildSpiceDeck(
       { components: [Vac(0, 32, "0 2 1k"), GND(0, 64)], wires: [] },
@@ -215,7 +215,7 @@ describe("deck structure — AC sweep", () => {
   });
 });
 
-describe("deck structure — nonlinear models only when used", () => {
+describe("deck structure - nonlinear models only when used", () => {
   it("omits device models for a purely-passive deck", () => {
     const deck = buildSpiceDeck(
       { components: [Vdc(0, 32, "5"), R(96, 0, "1k", "R1"), GND(0, 64), GND(128, 0)], wires: [W({ x: 0, y: 0 }, { x: 64, y: 0 })] },
@@ -234,9 +234,9 @@ describe("deck structure — nonlinear models only when used", () => {
   });
 });
 
-describe("deck structure — comparator emits a clamped behavioral source", () => {
+describe("deck structure - comparator emits a clamped behavioral source", () => {
   // An open-loop comparator must snap to its explicit rails via a B-source, not
-  // saturate the way the gain-1e6 op-amp model does (FEATURE_PARITY.md §3).
+  // saturate the way the gain-1e6 op-amp model does (LTspice parity).
   const lbl = (x: number, y: number, text: string): NetLabel => ({ id: uid("flag"), x, y, text });
   // U1 at (0,0): in+ (-32,16), in- (-32,-16), out (32,0).
   const comps = [mk("comparator", 0, 0, "5 0", "U1"), R(96, 0, "1k", "R1")];
@@ -259,7 +259,7 @@ describe("deck structure — comparator emits a clamped behavioral source", () =
   });
 });
 
-describe("deck structure — potentiometer half-track resistance is a literal number", () => {
+describe("deck structure - potentiometer half-track resistance is a literal number", () => {
   // Regression: the wiper split must be a precomputed number (e.g. 5000), not
   // an arithmetic expression like "10000/2" that bare-field ngspice rejects.
   const comps = [
@@ -280,7 +280,7 @@ describe("deck structure — potentiometer half-track resistance is a literal nu
   });
 });
 
-describe("deck structure — node numbering is contiguous from N001", () => {
+describe("deck structure - node numbering is contiguous from N001", () => {
   // A 3-node chain should produce exactly n001..n003 with no gaps, plus 0.
   const comps = [
     Vdc(0, 32, "12"),
@@ -306,7 +306,7 @@ describe("deck structure — node numbering is contiguous from N001", () => {
   });
 });
 
-describe("deck structure — isource / iac polarity (n before p)", () => {
+describe("deck structure - isource / iac polarity (n before p)", () => {
   // SPICE convention: I N+ N- value pulls current from N+ (making it negative for
   // positive I).  To match Tau's schematic convention (current exits p, raising V(p)),
   // the deck must emit "I name n p value", i.e., swap the terminal order.
@@ -335,7 +335,7 @@ describe("deck structure — isource / iac polarity (n before p)", () => {
   });
 });
 
-describe("deck builder — failure modes", () => {
+describe("deck builder - failure modes", () => {
   it("throws when no ground is present", () => {
     expect(() =>
       buildSpiceDeck({ components: [Vdc(0, 32, "5"), R(96, 0, "1k", "R1")], wires: [] }, { kind: "op" }),

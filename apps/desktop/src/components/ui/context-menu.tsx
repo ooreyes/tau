@@ -5,7 +5,7 @@ import { Check, ChevronRight, Circle } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 /**
- * shadcn ContextMenu (new-york), adapted to Tau (§10 design system): shares
+ * shadcn ContextMenu (new-york), adapted to Tau: shares
  * the dropdown-menu true-black popover recipe (same token routes, same
  * dense row height) since the two only differ in trigger semantics
  * (right-click vs. click).

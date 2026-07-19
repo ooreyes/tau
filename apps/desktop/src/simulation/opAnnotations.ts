@@ -1,7 +1,7 @@
 /**
- * In-place DC operating point annotations (FEATURE_PARITY §6): after an `.op`
+ * In-place DC operating point annotations (LTspice parity): after an `.op`
  * run, the schematic shows each net's voltage next to the net and each
- * V-source/inductor branch current next to its component — LTspice's ".op data
+ * V-source/inductor branch current next to its component - LTspice's ".op data
  * label" readout, but live on the canvas. Pure positioning/formatting logic so
  * it is fully unit-testable; the canvas just renders the returned labels.
  */
@@ -18,7 +18,7 @@ export interface OpAnnotation {
   kind: "voltage" | "current";
 }
 
-/** Topmost-then-leftmost of a net's points — a stable, visible anchor. */
+/** Topmost-then-leftmost of a net's points - a stable, visible anchor. */
 function netAnchor(points: readonly { x: number; y: number }[]): { x: number; y: number } | null {
   let best: { x: number; y: number } | null = null;
   for (const p of points) {

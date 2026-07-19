@@ -3,8 +3,8 @@ import type { AxisScale } from "../simulation/axisTicks";
 import { zoomViewport, panByPixels, fitViewport, clampFraction, type Viewport } from "../simulation/plotViewport";
 
 /**
- * Desmos-style zoom/pan for one scope `<svg>` pane (§UX Unit B). Plain wheel
- * does nothing here — no `preventDefault`, no zoom — so the event bubbles and
+ * Desmos-style zoom/pan for one scope `<svg>` pane . Plain wheel
+ * does nothing here - no `preventDefault`, no zoom - so the event bubbles and
  * the surrounding analysis panel scrolls normally; a plot sitting under the
  * cursor must never trap the page scroll. Zoom is gated on `e.ctrlKey` (also
  * what browsers report for trackpad pinch) or `e.metaKey` (⌘+wheel on
@@ -17,7 +17,7 @@ import { zoomViewport, panByPixels, fitViewport, clampFraction, type Viewport } 
  * trackpad can fire far more wheel events than the display refresh rate) so
  * rapid zooming stays smooth instead of re-rendering the plot per tick.
  *
- * The viewport resets to `domain` whenever `resetKey` changes — callers pass
+ * The viewport resets to `domain` whenever `resetKey` changes - callers pass
  * the identity of the current analysis run (e.g. the `AnalysisResult`
  * reference) so a fresh run always opens at full-fit, while changes that
  * don't re-run the simulation (adding a trace to the same pane, resizing the
@@ -27,7 +27,7 @@ export interface UsePlotViewportOptions {
   domain: Viewport;
   xScale?: AxisScale;
   yScale?: AxisScale;
-  /** Identity of the "current run" — changing this snaps back to `domain`. */
+  /** Identity of the "current run" - changing this snaps back to `domain`. */
   resetKey?: unknown;
   /** viewBox geometry, shared by every scope svg (see PLOT_WIDTH/HEIGHT/PAD). */
   width: number;
@@ -38,7 +38,7 @@ export interface UsePlotViewportOptions {
   /**
    * Publishes horizontal zoom/pan so sibling panes can follow it. Called
    * ONLY from user-gesture code paths (wheel, drag, `zoomBy`, `fit`/dbl-click)
-   * — never from mount, the `resetKey` reset, or `sharedX` adoption. A pane
+   * - never from mount, the `resetKey` reset, or `sharedX` adoption. A pane
    * with no data (caller passes `undefined` here) never publishes, so its
    * placeholder domain can't leak into the shared window.
    */
@@ -48,7 +48,7 @@ export interface UsePlotViewportOptions {
 export interface PlotViewportHandle {
   viewport: Viewport;
   /**
-   * Callback ref — attach directly to the `<svg>` (or merge with another ref,
+   * Callback ref - attach directly to the `<svg>` (or merge with another ref,
    * see `useMeasuredSize`'s companion usage). A callback ref (not a plain
    * `RefObject`) is required here: several scope panes (e.g. the FFT view)
    * render their `<svg>` behind a disclosure toggle, so the element can mount
@@ -101,7 +101,7 @@ export function usePlotViewport({
   const geometryRef = useRef({ width, height, pad });
   geometryRef.current = { width, height, pad };
   // Ref indirection so the gesture handlers below (whose identities must stay
-  // stable — they're wired to native listeners / spread onto the svg) don't
+  // stable - they're wired to native listeners / spread onto the svg) don't
   // need `onXViewportChange` in their dep arrays.
   const onXViewportChangeRef = useRef(onXViewportChange);
   onXViewportChangeRef.current = onXViewportChange;
@@ -116,7 +116,7 @@ export function usePlotViewport({
     setViewport(
       sharedX ? { xMin: sharedX.xMin, xMax: sharedX.xMax, yMin: domain.yMin, yMax: domain.yMax } : domain,
     );
-    // Only `resetKey` should trigger this — `domain`/`sharedX` are
+    // Only `resetKey` should trigger this - `domain`/`sharedX` are
     // intentionally excluded so autorange recomputation (new trace, pane
     // resize) or a sibling's pan/zoom alone don't re-trigger a reset.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -130,7 +130,7 @@ export function usePlotViewport({
   }, [sharedX?.xMin, sharedX?.xMax]);
 
   // Gesture-only X publish. `viewport` also changes on mount, on `resetKey`
-  // reset, and on `sharedX` adoption above — none of those are user gestures,
+  // reset, and on `sharedX` adoption above - none of those are user gestures,
   // and publishing them was the bug (a pane's transient/placeholder viewport
   // would broadcast into `sharedX` and every sibling would adopt it). Gesture
   // handlers set `publishXPendingRef` immediately before the `setViewport`
@@ -178,12 +178,12 @@ export function usePlotViewport({
   }, []);
 
   // --- wheel: native listener (React's synthetic onWheel is passive, so
-  // preventDefault silently no-ops there — this is the same pattern Canvas.tsx
+  // preventDefault silently no-ops there - this is the same pattern Canvas.tsx
   // uses for its own wheel zoom). Coalesced into one update per rAF. Attached
   // via the `attachSvg` callback ref (see PlotViewportHandle doc) rather than
   // a useEffect, so it works for svgs that mount late (behind a toggle).
   // A plain wheel is deliberately NOT handled at all (no listener-level early
-  // return with preventDefault) — see onWheel below, which no-ops and lets
+  // return with preventDefault) - see onWheel below, which no-ops and lets
   // the event bubble so the analysis panel scrolls under the cursor.
   const detachWheelRef = useRef<(() => void) | null>(null);
 
@@ -210,7 +210,7 @@ export function usePlotViewport({
       };
 
       const onWheel = (e: WheelEvent) => {
-        // Plain wheel (no ctrl/meta) is plot-agnostic scrolling, not zoom —
+        // Plain wheel (no ctrl/meta) is plot-agnostic scrolling, not zoom -
         // don't preventDefault, don't touch the viewport, just let it bubble
         // to the panel. Only ctrl (browsers report trackpad pinch as
         // ctrlKey) or meta (⌘+wheel on macOS) zooms, matching Canvas.tsx.
@@ -225,7 +225,7 @@ export function usePlotViewport({
         const yFrac = clampFraction(1 - (point.y - p) / innerH);
 
         // Axis locks while zooming: Shift = x-only, Alt/Option = y-only. The
-        // old "horizontal wheel gesture = x zoom" heuristic is gone — a
+        // old "horizontal wheel gesture = x zoom" heuristic is gone - a
         // horizontal swipe with no modifier is now plain scrolling.
         const xOnly = e.shiftKey;
         const yOnly = e.altKey;

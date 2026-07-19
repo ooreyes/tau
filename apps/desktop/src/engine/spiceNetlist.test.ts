@@ -383,7 +383,7 @@ describe("buildSpiceDeck", () => {
 
   it("emits a VDMOS power MOSFET as a 3-terminal device line (no bulk node)", () => {
     // A document `.model … VDMOS(…)` makes the referencing MOSFET a 3-pin VDMOS
-    // (ngspice: M nd ng ns model). The bulk node must be dropped — emitting it
+    // (ngspice: M nd ng ns model). The bulk node must be dropped - emitting it
     // would reinterpret the bulk as the model's optional thermal node.
     const components = [
       component("nmos", "M1", "IRFZ44N", 0, 0),
@@ -395,7 +395,7 @@ describe("buildSpiceDeck", () => {
       { kind: "op" },
     );
 
-    // 3 nodes (d g s) then the model name — no 4th bulk node before IRFZ44N.
+    // 3 nodes (d g s) then the model name - no 4th bulk node before IRFZ44N.
     expect(deck.netlist).toMatch(/M1 n\d+ n\d+ 0 IRFZ44N\b/);
     expect(deck.netlist).not.toMatch(/M1 n\d+ n\d+ 0 n\d+ IRFZ44N/);
     // The VDMOS model definition is carried into the deck verbatim.
@@ -673,7 +673,7 @@ describe("buildSpiceDeck", () => {
 
   it("clamps an op-amp with driven supply pins to its rails (Class-D PWM comparator)", () => {
     // U1 at origin: in+(-32,16) in-(-32,-16) out(32,0) v+(0,-32) v-(0,32).
-    // VP feeds v+ via a wire, v- is wired to ground — both rails driven, so the
+    // VP feeds v+ via a wire, v- is wired to ground - both rails driven, so the
     // deck must emit the rail-clamped B-source with the imported Avol, not the
     // unbounded E-source (which open-loop saturates to ~1e7 V).
     const components = [
@@ -865,8 +865,8 @@ describe("buildSpiceDeck", () => {
     // that `R1` and clashed with a genuine `R1` (dimmer.asc). Now it's `RQ1`.
     const components = [
       component("vsource", "V1", "5", 0, 0),        // p(0,-32) n(0,32)
-      component("resistor", "Q1", "1Meg", 32, -32), // a(0,-32) b(64,-32) — placeholder
-      component("resistor", "R1", "1k", 32, 32),    // a(0,32)  b(64,32)  — real R1
+      component("resistor", "Q1", "1Meg", 32, -32), // a(0,-32) b(64,-32) - placeholder
+      component("resistor", "R1", "1k", 32, 32),    // a(0,32)  b(64,32)  - real R1
       component("ground", "", "", 0, 32),
     ];
     const wires = [wire("w1", [{ x: 64, y: -32 }, { x: 64, y: 32 }])];

@@ -1,11 +1,11 @@
 /**
  * Per-instance initial conditions (`IC=` on a capacitor/inductor) in the interim
- * TS transient solver (FEATURE_PARITY §3 C/L initial conditions, §4 `.ic`).
+ * TS transient solver (LTspice parity).
  *
  * LTspice writes the IC after the value (`C1 n1 n2 1u IC=2`) and runs the
  * transient with `uic` so the value holds at t=0. The TS solver seeds the
  * companion-model state from the parsed IC token; without it the run used to
- * throw (`parseQuantity("1u IC=2")` is unparseable) — now the magnitude parses
+ * throw (`parseQuantity("1u IC=2")` is unparseable) - now the magnitude parses
  * and the IC seeds the start.
  *
  * Geometry (GRID = 16, rotation 0):
@@ -68,7 +68,7 @@ function rcDischarge(capValue: string): {
   };
 }
 
-describe("initial conditions — capacitor IC=", () => {
+describe("initial conditions - capacitor IC=", () => {
   it("a charged cap discharges through R from its IC (does not throw on `1u IC=2`)", async () => {
     const { components, wires, netLabels } = rcDischarge("1u IC=2");
     const result = await runTransientAnalysis({ components, wires, netLabels }, { stopTime: 1e-3, steps: 1000 });
@@ -97,7 +97,7 @@ describe("initial conditions — capacitor IC=", () => {
   });
 });
 
-describe("initial conditions — inductor IC=", () => {
+describe("initial conditions - inductor IC=", () => {
   it("an inductor seeded with IC delivers that current at t=0 and decays through R", async () => {
     // RL loop: L (IC=1 A) and R=1Ω from node `n1` to ground ⇒ τ = L/R = 1 s.
     // I(L1)[0] ≈ IC, decaying as I = IC·e^(−tR/L).

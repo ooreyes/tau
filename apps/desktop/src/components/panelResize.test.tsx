@@ -12,7 +12,7 @@ import {
 } from "./panelResize";
 
 // This jsdom build has localStorage disabled (typeof localStorage ===
-// "undefined" — the same guard the module itself relies on). Install an
+// "undefined" - the same guard the module itself relies on). Install an
 // in-memory Storage so the persistence path is actually exercised.
 const backing = new Map<string, string>();
 Object.defineProperty(globalThis, "localStorage", {
@@ -146,7 +146,7 @@ describe("usePanelWidth drag behavior", () => {
     fireEvent.pointerDown(handle, { button: 0, clientX: 400, pointerId: 1 });
     fireEvent.pointerUp(window, { pointerId: 1 });
     fireEvent.pointerMove(window, { clientX: 200, pointerId: 1 });
-    expect(panelWidth()).toBe(264); // released — moves no longer resize
+    expect(panelWidth()).toBe(264); // released - moves no longer resize
   });
 
   it("resizes and persists via arrow keys (separator keyboard support)", () => {
@@ -170,10 +170,10 @@ describe("usePanelWidth drag behavior", () => {
 });
 
 // edge="top"/"bottom" repurpose the same machinery for a *height* (the
-// simulator's telemetry dock drags its top edge) — the field names stay
+// simulator's telemetry dock drags its top edge) - the field names stay
 // width-flavored (see PanelWidthConfig) but the pointer axis and ARIA
 // orientation both flip to vertical/horizontal respectively.
-describe("usePanelWidth drag behavior — vertical edges (dock height)", () => {
+describe("usePanelWidth drag behavior - vertical edges (dock height)", () => {
   it("edge=top (bottom-docked panel): dragging the border up grows the height", () => {
     render(<Harness cfg={config({ edge: "top", defaultWidth: 200, minWidth: 120, maxWidth: 400 })} />);
     const handle = screen.getByRole("separator");
@@ -198,7 +198,7 @@ describe("usePanelWidth drag behavior — vertical edges (dock height)", () => {
   it("resizes via ArrowUp/ArrowDown, not ArrowLeft/ArrowRight", () => {
     render(<Harness cfg={config({ edge: "top", defaultWidth: 200, minWidth: 120, maxWidth: 400 })} />);
     const handle = screen.getByRole("separator");
-    fireEvent.keyDown(handle, { key: "ArrowLeft" }); // wrong axis — no-op
+    fireEvent.keyDown(handle, { key: "ArrowLeft" }); // wrong axis - no-op
     expect(panelWidth()).toBe(200);
     fireEvent.keyDown(handle, { key: "ArrowUp" }); // border up = taller
     expect(panelWidth()).toBe(216);

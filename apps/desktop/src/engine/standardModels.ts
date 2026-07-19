@@ -1,7 +1,6 @@
 /**
- * A curated bundle of LTspice's **standard device models** (FEATURE_PARITY §3 /
- * §7 "ship a real device-model set"). Real circuits reference common parts by
- * name — `1N4148`, `2N2222`, … — with no inline `.model`, expecting LTspice's
+ * A curated bundle of LTspice's **standard device models** (LTspice parity). Real circuits reference common parts by
+ * name - `1N4148`, `2N2222`, … - with no inline `.model`, expecting LTspice's
  * shipped `standard.dio` / `standard.bjt` definitions. Without them Tau falls
  * back to a generic `TAU_*` starter and the waveforms don't match LTspice.
  *
@@ -29,7 +28,7 @@ const MODEL_LINES: readonly string[] = [
   ".model 1N5818 D(Is=31.7u Rs=.051 N=1.373 Cjo=160p M=.32 Eg=.69 Xti=2)",
   ".model 1N5819 D(Is=31.7u Rs=.051 N=1.373 Cjo=110p M=.35 Eg=.69 Xti=2)",
   ".model BAT54 D(Is=200u Rs=2 N=1.1 Cjo=10p M=.333 Eg=.69 Xti=2)",
-  // --- Zeners (standard.dio) — reverse breakdown via Bv/Ibv ---
+  // --- Zeners (standard.dio) - reverse breakdown via Bv/Ibv ---
   ".model 1N750 D(Is=.88f Rs=.25 Cjo=175p M=.55 Bv=4.7 Ibv=20.245m)",
   ".model 1N751 D(Is=.88f Rs=.25 Cjo=170p M=.55 Bv=5.1 Ibv=20m)",
   ".model 1N4733 D(Is=.88f Rs=.21 Cjo=400p M=.55 Bv=5.1 Ibv=49m)",
@@ -50,7 +49,7 @@ const MODEL_LINES: readonly string[] = [
   ".model J310 NJF(Beta=3.384m Betatce=-0.5 Vto=-3.409 Vtotc=-2.5m Lambda=17m Is=193.9f Xti=3 Isr=1881f Nr=2 N=1 Rd=1 Rs=1 Cgd=6.2p Cgs=6.2p Fc=0.5 M=465m Pb=1 Kf=46340f Af=1)",
   ".model 2N5484 NJF(Is=.25p Vto=-1.5 Vtotc=-3m Beta=3.0m Lambda=10m Betatce=-.5 Rd=10 Rs=10 Cgs=4p Cgd=4p Kf=3e-17)",
   ".model 2N5486 NJF(Is=.25p Vto=-4.0 Vtotc=-3m Beta=4.0m Lambda=10m Betatce=-.5 Rd=10 Rs=10 Cgs=4p Cgd=4p Kf=3e-17)",
-  // --- Power MOSFETs (standard.mos, VDMOS) — class-d_starter's half bridge.
+  // --- Power MOSFETs (standard.mos, VDMOS) - class-d_starter's half bridge.
   // LTspice's `Cgso` is ngspice's `Cgs` (renamed; ngspice warns "unrecognized
   // parameter (cgso)" otherwise); mfg/Vds/Ron/Qg annotation keys stripped. ---
   ".model QS6K1 VDMOS(Rg=45 Vto=1.179 Rd=19.2m Rs=100m Rb=60m Kp=6.084 Lambda=50m Cgdmin=9p Cgdmax=75p A=0.6 Cgs=62p Is=1.7898p N=1.127 Cjo=15.057p M=235.72m Vj=617.76m TT=20n ksubthres=.1)",

@@ -35,7 +35,7 @@ const SCHEMA: Partial<Record<ComponentKind, ParamField[]>> = {
     { key: "low", label: "Low level", unit: "V" },
     { key: "high", label: "High level", unit: "V" },
     { key: "frequency", label: "Frequency", unit: "Hz" },
-    { key: "duty", label: "Duty (0–1)", unit: "" },
+    { key: "duty", label: "Duty (0-1)", unit: "" },
   ],
   // Semiconductor symbols use Tau's generic built-in models. Arbitrary vendor
   // names stay unavailable until a parsed library-to-symbol mapping can affect

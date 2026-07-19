@@ -12,7 +12,7 @@
  * inner sweep once per outer value and return the result as a family of curves:
  * each base net is expanded into one trace per outer value, annotated with the
  * outer source's value, and the X axis stays the inner sweep. This is how
- * LTspice draws a nested `.dc` — a fan of curves vs the inner source.
+ * LTspice draws a nested `.dc` - a fan of curves vs the inner source.
  *
  * This module is SELF-CONTAINED apart from reusing `runOperatingPoint`: for each
  * swept value it overrides the named source's `value` field and solves the DC
@@ -60,7 +60,7 @@ export interface DcSweepNet {
   /** Display label (annotated with the outer value for nested sweeps). */
   label: string;
   voltages: number[];
-  /** Ground net (V≈0) — the UI hides these from the plot. */
+  /** Ground net (V≈0) - the UI hides these from the plot. */
   ground: boolean;
 }
 

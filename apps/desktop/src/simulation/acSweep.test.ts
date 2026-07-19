@@ -64,16 +64,16 @@ function wire(points: { x: number; y: number }[]): SchematicWire {
 //   VAC at (0, 32):    p=(0,0),   n=(0,64)
 //   R   at (96, 0):    a=(64,0),  b=(128,0)
 //   C   at (224, 0):   a=(192,0), b=(256,0)
-//   GND_vac at (0,64): g=(0,64)   — coincides with VAC.n
-//   GND_cap at (256,0):g=(256,0)  — coincides with C.b
+//   GND_vac at (0,64): g=(0,64)   - coincides with VAC.n
+//   GND_cap at (256,0):g=(256,0)  - coincides with C.b
 //
 //   Wire: VAC.p (0,0) → R.a (64,0)    horizontal
 //   Wire: R.b (128,0) → C.a (192,0)   horizontal
 //
 // Nets (after extractCircuit):
-//   NET "source":  {VAC.p, R.a}     — driven node = VAC amplitude
-//   NET "out":     {R.b, C.a}       — output node (the RC midpoint)
-//   NET "0":       {VAC.n, C.b, GND pins} — ground
+//   NET "source":  {VAC.p, R.a}     - driven node = VAC amplitude
+//   NET "out":     {R.b, C.a}       - output node (the RC midpoint)
+//   NET "0":       {VAC.n, C.b, GND pins} - ground
 //
 // fc = 1 / (2π × R × C)
 // With R = 1000 Ω, C = 159.155e-9 F:
@@ -130,10 +130,10 @@ function findOutTrace(result: { ok: true; freqs: number[]; traces: { id: string;
 }
 
 // ---------------------------------------------------------------------------
-// Test suite 1 — RC low-pass analytical validation
+// Test suite 1 - RC low-pass analytical validation
 // ---------------------------------------------------------------------------
 
-describe("AC sweep — RC low-pass filter (fc ≈ 1 kHz)", () => {
+describe("AC sweep - RC low-pass filter (fc ≈ 1 kHz)", () => {
   it("returns ok=true for valid RC circuit", () => {
     const result = runAcSweep({ components, wires }, acOptions);
     expect(result.ok).toBe(true);
@@ -237,10 +237,10 @@ describe("AC sweep — RC low-pass filter (fc ≈ 1 kHz)", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Test suite 2 — Graceful failure guards (ok === false, never throws)
+// Test suite 2 - Graceful failure guards (ok === false, never throws)
 // ---------------------------------------------------------------------------
 
-describe("AC sweep — graceful failure cases", () => {
+describe("AC sweep - graceful failure cases", () => {
   it("no ground symbol → ok=false", () => {
     // VAC + R, no ground at all
     const V1 = vac(0, 32, "1", "V1");
@@ -297,7 +297,7 @@ describe("AC sweep — graceful failure cases", () => {
   });
 });
 
-describe("AC sweep — switch primitive", () => {
+describe("AC sweep - switch primitive", () => {
   it("closed switch connects the AC source to the load node", () => {
     const V1 = vac(0, 32, "1", "V1");
     const S1 = sw(96, 0, "closed", "S1");
@@ -330,7 +330,7 @@ describe("AC sweep — switch primitive", () => {
 // as suite 1, swapping VAC for a vsource whose value is "SINE(0 1 1) AC 1".
 // ---------------------------------------------------------------------------
 
-describe("AC sweep — vsource with an LTspice AC spec drives the sweep", () => {
+describe("AC sweep - vsource with an LTspice AC spec drives the sweep", () => {
   const VS = vsource(0, 32, "SINE(0 1 1) AC 1", "V1");
   const R1b = resistor(96, 0, R_VALUE, "R1");
   const C1b = capacitor(224, 0, C_VALUE, "C1");
@@ -358,7 +358,7 @@ describe("AC sweep — vsource with an LTspice AC spec drives the sweep", () => 
   });
 });
 
-describe("AC sweep — current source with an AC spec", () => {
+describe("AC sweep - current source with an AC spec", () => {
   it("injects an AC current into a load resistor", () => {
     // I1 (AC 1 A) across R=1k → |V(R)| = 1·1000 = 1000 V = 60 dB, flat with frequency.
     const I1: SchematicComponent = {

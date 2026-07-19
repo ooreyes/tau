@@ -1,13 +1,11 @@
-// Loop-stability margins from an AC (Bode) response (FEATURE_PARITY §6 — the
-// Bode readouts LTspice engineers reach for on any feedback loop: phase margin
-// and gain margin).
+// Loop-stability margins from an AC (Bode) response (LTspice parity).
 //
 // For an open-loop response T(jω) = |T|∠φ swept over frequency:
 //
-//   • Phase margin  = 180° + φ(f_gc), where f_gc is the *gain crossover* — the
+//   • Phase margin  = 180° + φ(f_gc), where f_gc is the *gain crossover* - the
 //     frequency where |T| = 0 dB (unity gain). How much extra phase lag the loop
 //     can tolerate before it hits −180° and oscillates. Positive = stable.
-//   • Gain margin   = −|T(f_pc)| dB, where f_pc is the *phase crossover* — the
+//   • Gain margin   = −|T(f_pc)| dB, where f_pc is the *phase crossover* - the
 //     frequency where φ = −180°. How much more gain the loop can take before the
 //     −180° point reaches 0 dB. Positive (dB) = stable.
 //
@@ -16,7 +14,7 @@
 // vs. log-frequency, matching how LTspice reads the cursor off the Bode plot),
 // so the margin doesn't snap to the nearest swept point. Pure (arrays in,
 // numbers out); returns `null` when the response never crosses (no unity-gain
-// point, or phase that never reaches −180°) so the caller can show "—".
+// point, or phase that never reaches −180°) so the caller can show "-".
 
 export interface StabilityMargins {
   /** Phase margin in degrees at the unity-gain (0 dB) crossover, or null. */
@@ -127,6 +125,6 @@ export function stabilityMargins(
   return out;
 }
 
-// Re-export the interpolating crossing finder — handy for other single-target
+// Re-export the interpolating crossing finder - handy for other single-target
 // Bode readouts (e.g. the −3 dB corner) and independently unit-tested.
 export { firstCrossing };

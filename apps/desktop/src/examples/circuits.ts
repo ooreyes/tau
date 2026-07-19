@@ -18,13 +18,13 @@ export interface ExampleCircuit {
   description: string;
   components: SchematicComponent[];
   wires: SchematicWire[];
-  /** Uses nonlinear devices (MOSFET/BJT/diode) — only the native ngspice engine
+  /** Uses nonlinear devices (MOSFET/BJT/diode) - only the native ngspice engine
    *  can solve it; the interim TypeScript solver rejects it by design. */
   nativeOnly?: boolean;
 }
 
 // ---------------------------------------------------------------------------
-// Circuit 1 — RC Charging (the flagship; τ = RC = 1 ms)
+// Circuit 1 - RC Charging (the flagship; τ = RC = 1 ms)
 //
 // Components and world pin coordinates:
 //   V1  vsource rot=0 at (96, 96):      p=(96,64),   n=(96,128)
@@ -59,7 +59,7 @@ const RC_CHARGING: ExampleCircuit = {
 };
 
 // ---------------------------------------------------------------------------
-// Circuit 2 — RC Low-Pass Filter (R=10 kΩ, C=10 nF, τ = 100 µs)
+// Circuit 2 - RC Low-Pass Filter (R=10 kΩ, C=10 nF, τ = 100 µs)
 //
 // Components and world pin coordinates:
 //   V1   vsource rot=0 at (96, 96):      p=(96,64),   n=(96,128)
@@ -95,7 +95,7 @@ const RC_LOWPASS: ExampleCircuit = {
 };
 
 // ---------------------------------------------------------------------------
-// Circuit 3 — Voltage Divider (V=10 V, R1=1 kΩ top, R2=1 kΩ bottom → Vmid = 5 V)
+// Circuit 3 - Voltage Divider (V=10 V, R1=1 kΩ top, R2=1 kΩ bottom → Vmid = 5 V)
 //
 // Components and world pin coordinates:
 //   V1   vsource rot=0 at (96, 96):     p=(96,64),    n=(96,128)
@@ -130,7 +130,7 @@ const VOLTAGE_DIVIDER: ExampleCircuit = {
 };
 
 // ---------------------------------------------------------------------------
-// Circuit 4 — RLC Series (under-damped ringing, ζ = 0.5)
+// Circuit 4 - RLC Series (under-damped ringing, ζ = 0.5)
 //
 // Values: V=5 V, R=10 Ω, L=1 mH, C=10 µF
 //   ω₀ = 1/√(LC) = 1/√(1e-3 × 10e-6) = 10,000 rad/s → f₀ ≈ 1592 Hz
@@ -173,7 +173,7 @@ const RLC_SERIES: ExampleCircuit = {
 };
 
 // ---------------------------------------------------------------------------
-// Circuit 5 — Non-inverting amplifier (gain = 1 + Rf/Rg = 1 + 10k/1k = 11)
+// Circuit 5 - Non-inverting amplifier (gain = 1 + Rf/Rg = 1 + 10k/1k = 11)
 //
 // GRID = 16. Op-amp pin geometry (rotation 0):
 //   opamp at (cx, cy): in+ at (cx-32, cy+16), in- at (cx-32, cy-16), out at (cx+32, cy)
@@ -185,8 +185,8 @@ const RLC_SERIES: ExampleCircuit = {
 //                                     v+=(256,64), v-=(256,128) [unconnected, gmin handles]
 //   Rg   resistor rot=0 at (160, 80): a=(128,80),  b=(192,80)
 //   Rf   resistor rot=0 at (256, 80): a=(224,80),  b=(288,80)
-//   GND_v1 ground at (64,176):  g=(64,176)   — coincides with V1.n
-//   GND_rg ground at (96,80):   g=(96,80)    — short wire from Rg.a
+//   GND_v1 ground at (64,176):  g=(64,176)   - coincides with V1.n
+//   GND_rg ground at (96,80):   g=(96,80)    - short wire from Rg.a
 //
 // Net connections:
 //   N1 (input):  V1.p(64,112) ── wire ── U1.in+(224,112)
@@ -226,7 +226,7 @@ const NONINVERTING_AMP: ExampleCircuit = {
 };
 
 // ---------------------------------------------------------------------------
-// Circuit 6 — Inverting amplifier (gain = -Rf/Rin = -10k/1k = -10)
+// Circuit 6 - Inverting amplifier (gain = -Rf/Rin = -10k/1k = -10)
 //
 // Component world-pin coordinates:
 //   V1   vac  rot=0 at (64, 112):    p=(64,80),    n=(64,144)
@@ -234,8 +234,8 @@ const NONINVERTING_AMP: ExampleCircuit = {
 //                                     v+=(256,64), v-=(256,128) [unconnected]
 //   Rin  resistor rot=0 at (160, 80): a=(128,80),  b=(192,80)
 //   Rf   resistor rot=0 at (256, 80): a=(224,80),  b=(288,80)
-//   GND_v1  ground at (64,144):  g=(64,144)  — coincides with V1.n
-//   GND_in+ ground at (224,112): g=(224,112) — ties in+ to GND
+//   GND_v1  ground at (64,144):  g=(64,144)  - coincides with V1.n
+//   GND_in+ ground at (224,112): g=(224,112) - ties in+ to GND
 //
 // Net connections:
 //   N1 (Vin):    V1.p(64,80) ── wire ── Rin.a(128,80)
@@ -274,13 +274,13 @@ const INVERTING_AMP: ExampleCircuit = {
 };
 
 // ---------------------------------------------------------------------------
-// Circuit 7 — Unity buffer (voltage follower, gain = 1)
+// Circuit 7 - Unity buffer (voltage follower, gain = 1)
 //
 // Component world-pin coordinates:
 //   V1   vac  rot=0 at (64, 144):    p=(64,112),   n=(64,176)
 //   U1   opamp   rot=0 at (192, 96): in+=(160,112), in-=(160,80), out=(224,96)
 //                                     v+=(192,64), v-=(192,128) [unconnected]
-//   GND_v1 ground at (64,176): g=(64,176) — V1.n
+//   GND_v1 ground at (64,176): g=(64,176) - V1.n
 //
 // Net connections:
 //   N1 (input):  V1.p(64,112) ── wire ── U1.in+(160,112)
@@ -310,10 +310,10 @@ const UNITY_BUFFER: ExampleCircuit = {
 };
 
 // ---------------------------------------------------------------------------
-// Circuit 8 — Class-D switching output stage (CMOS half-bridge + LC filter)
+// Circuit 8 - Class-D switching output stage (CMOS half-bridge + LC filter)
 //
 // A complementary MOSFET half-bridge switched by a PWM gate drive, with an LC
-// reconstruction filter into the load — the power stage of a Class-D amplifier.
+// reconstruction filter into the load - the power stage of a Class-D amplifier.
 // Nonlinear (MOSFETs) → solves on the native ngspice engine only.
 //
 // Net / world-pin map (GRID = 16):
@@ -334,7 +334,7 @@ const UNITY_BUFFER: ExampleCircuit = {
 const CLASS_D: ExampleCircuit = {
   id: "classd.v1",
   name: "Class-D Output Stage",
-  description: "Complementary MOSFET half-bridge with a PWM gate drive and an LC reconstruction filter — a Class-D amplifier power stage. Needs the native ngspice engine.",
+  description: "Complementary MOSFET half-bridge with a PWM gate drive and an LC reconstruction filter - a Class-D amplifier power stage. Needs the native ngspice engine.",
   nativeOnly: true,
   components: [
     { id: "cd.v1", kind: "vsource",   x: 0,   y: 0,   rotation: 0,  value: "12",            label: "V1" },

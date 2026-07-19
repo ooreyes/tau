@@ -1,5 +1,5 @@
 /**
- * `.four` — Fourier analysis of a transient waveform.
+ * `.four` - Fourier analysis of a transient waveform.
  *
  * SPICE/LTspice `.four <freq> [<Nharmonics>] [<Nperiods>] <output> [<output> …]`
  * computes the DC component, the fundamental at `freq`, and its harmonics over the
@@ -72,7 +72,7 @@ const isInteger = (token: string): boolean => /^\d+$/.test(token.trim());
 /**
  * Parse a `.four` directive. Leading `.`/`!` and surrounding whitespace are
  * tolerated. After the frequency, up to two bare integers are read as
- * `[Nharmonics] [Nperiods]` (Nperiods is parsed but unused — we always use the
+ * `[Nharmonics] [Nperiods]` (Nperiods is parsed but unused - we always use the
  * last period); the remaining tokens are output signals. Returns null if the
  * directive is not a `.four` or has no frequency/outputs.
  */
@@ -88,12 +88,12 @@ export function parseFourDirective(directive: string): FourierSpec | null {
 
   let i = 1;
   let harmonics = DEFAULT_HARMONICS;
-  // Optional [Nharmonics] [Nperiods] — only consume bare integers, never an output.
+  // Optional [Nharmonics] [Nperiods] - only consume bare integers, never an output.
   if (i < tokens.length && isInteger(tokens[i])) {
     harmonics = Math.max(1, Number(tokens[i]));
     i += 1;
     if (i < tokens.length && isInteger(tokens[i])) {
-      i += 1; // Nperiods — accepted but we always analyze the last period
+      i += 1; // Nperiods - accepted but we always analyze the last period
     }
   }
 
@@ -141,7 +141,7 @@ export function computeFourier(
   const period = 1 / freq;
   const tEnd = times[times.length - 1];
   let tStart = tEnd - period;
-  if (tStart < times[0]) tStart = times[0]; // not a full period available — use what we have
+  if (tStart < times[0]) tStart = times[0]; // not a full period available - use what we have
   const span = tEnd - tStart;
 
   // Build the (t, x) grid covering the last period: interpolated endpoints plus
@@ -208,7 +208,7 @@ function resolveSignal(waveform: MeasWaveform, output: string): number[] | null 
   }
   const voltage = /^v\(([^)]+)\)$/i.exec(text);
   const node = (voltage ? voltage[1] : text).trim().toLowerCase();
-  // Match the net id, the bare label, or the label's inner name — trace labels
+  // Match the net id, the bare label, or the label's inner name - trace labels
   // are display names like `V(R1·C1)` whose inner name is NOT the net id, and
   // the viewer's signal pickers feed those labels back here verbatim.
   const trace = waveform.traces.find((t) => {

@@ -2,8 +2,8 @@
  * Acceptance-corpus reporting (AGENTS.md → Definition of Done). The corpus
  * runner (`scripts/acceptanceCorpus.corpus.ts`) walks the user's own LTspice
  * `.asc` files, imports each one, builds an `.op` deck, and batch-runs it in
- * ngspice; this module holds the pure, unit-testable pieces — per-file result
- * shape, ngspice-output verdict, aggregation, and the printed report — so the
+ * ngspice; this module holds the pure, unit-testable pieces - per-file result
+ * shape, ngspice-output verdict, aggregation, and the printed report - so the
  * script itself is only file/process glue.
  */
 
@@ -47,7 +47,7 @@ export function summarizeCorpus(rows: CorpusRow[]): CorpusSummary {
  * exits 0 after printing "simulation(s) aborted"), so the verdict needs the
  * output text: any known failure marker fails, and a successful `.op` must
  * actually print its solution ("No. of Data Rows"). A null status means the
- * process was killed (timeout) — always a failure.
+ * process was killed (timeout) - always a failure.
  */
 export function ngspiceOpSucceeded(output: string, status: number | null): boolean {
   if (status === null || status !== 0) return false;

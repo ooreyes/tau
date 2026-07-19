@@ -48,8 +48,10 @@ describe("digitalGateDeckLines", () => {
   it("emits an AND ternary per connected output (qbar swaps levels)", () => {
     const lines = digitalGateDeckLines("A1", { ins: ["a", "b"], q: "y", qbar: "yb" }, spec);
     expect(lines).toEqual([
-      "B_A1_Q y 0 V=((V(a)>0.5)&&(V(b)>0.5)) ? 1 : 0",
-      "B_A1_QB yb 0 V=((V(a)>0.5)&&(V(b)>0.5)) ? 0 : 1",
+      "B_A1_Q A1_qd 0 V=((V(a)>0.5)&&(V(b)>0.5)) ? 1 : 0",
+      "R_A1_Q A1_qd y 1",
+      "B_A1_QB A1_qbd 0 V=((V(a)>0.5)&&(V(b)>0.5)) ? 0 : 1",
+      "R_A1_QB A1_qbd yb 1",
     ]);
   });
 
@@ -59,19 +61,19 @@ describe("digitalGateDeckLines", () => {
 
   it("OR joins terms with ||; XOR is exactly-one-true", () => {
     const or = digitalGateDeckLines("A1", { ins: ["a", "b"], q: "y" }, parseDigitalGate("or"));
-    expect(or[0]).toBe("B_A1_Q y 0 V=((V(a)>0.5)||(V(b)>0.5)) ? 1 : 0");
+    expect(or[0]).toBe("B_A1_Q A1_qd 0 V=((V(a)>0.5)||(V(b)>0.5)) ? 1 : 0");
     const xor = digitalGateDeckLines("A1", { ins: ["a", "b"], q: "y" }, parseDigitalGate("xor"));
-    expect(xor[0]).toBe("B_A1_Q y 0 V=(((V(a)>0.5)+(V(b)>0.5))==1) ? 1 : 0");
+    expect(xor[0]).toBe("B_A1_Q A1_qd 0 V=(((V(a)>0.5)+(V(b)>0.5))==1) ? 1 : 0");
   });
 
   it("an inverter is a buf whose only output is qbar", () => {
     const lines = digitalGateDeckLines("A2", { ins: ["in"], qbar: "out" }, parseDigitalGate("inv"));
-    expect(lines).toEqual(["B_A2_QB out 0 V=((V(in)>0.5)) ? 0 : 1"]);
+    expect(lines).toEqual(["B_A2_QB A2_qbd 0 V=((V(in)>0.5)) ? 0 : 1", "R_A2_QB A2_qbd out 1"]);
   });
 
   it("gates with all inputs floating drive vlow", () => {
     const lines = digitalGateDeckLines("A1", { ins: [], q: "y" }, parseDigitalGate("and Vlow=-5"));
-    expect(lines).toEqual(["B_A1_Q y 0 V=(0) ? 1 : -5"]);
+    expect(lines).toEqual(["B_A1_Q A1_qd 0 V=(0) ? 1 : -5", "R_A1_Q A1_qd y 1"]);
   });
 
   it("Schmitt trip points straddle vt by vhys, keyed off the output state", () => {
@@ -79,7 +81,8 @@ describe("digitalGateDeckLines", () => {
     const lines = digitalGateDeckLines("A3", { ins: ["in"], q: "y" }, sch);
     // state high (V(y) above midpoint 0.5) → lower trip 0.3; state low → 0.7
     expect(lines).toEqual([
-      "B_A3_Q y 0 V=((V(y)>0.5) ? (V(in)>0.3) : (V(in)>0.7)) ? 1 : 0",
+      "B_A3_Q A3_qd 0 V=((V(A3_qd)>0.5) ? (V(in)>0.3) : (V(in)>0.7)) ? 1 : 0",
+      "R_A3_Q A3_qd y 1",
     ]);
   });
 
@@ -89,7 +92,7 @@ describe("digitalGateDeckLines", () => {
     const sch = parseDigitalGate("schmitt Vhigh=5 Vhys=0.2");
     const lines = digitalGateDeckLines("A3", { ins: ["in"], q: "y" }, sch);
     expect(lines[0]).toBe(
-      "B_A3_Q y 0 V=((V(y)>2.5) ? (V(in)>2.3) : (V(in)>2.7)) ? 5 : 0",
+      "B_A3_Q A3_qd 0 V=((V(A3_qd)>2.5) ? (V(in)>2.3) : (V(in)>2.7)) ? 5 : 0",
     );
   });
 
@@ -99,12 +102,12 @@ describe("digitalGateDeckLines", () => {
       { ins: ["a"], q: "y", com: "vee" },
       parseDigitalGate("buf"),
     );
-    expect(lines).toEqual(["B_A4_Q y 0 V=(((V(a,vee)>0.5)) ? 1 : 0)+V(vee)"]);
+    expect(lines).toEqual(["B_A4_Q A4_qd 0 V=(((V(a,vee)>0.5)) ? 1 : 0)+V(vee)", "R_A4_Q A4_qd y 1"]);
   });
 
   it("treats a grounded com as absent", () => {
     const lines = digitalGateDeckLines("A4", { ins: ["a"], q: "y", com: "0" }, parseDigitalGate("buf"));
-    expect(lines).toEqual(["B_A4_Q y 0 V=((V(a)>0.5)) ? 1 : 0"]);
+    expect(lines).toEqual(["B_A4_Q A4_qd 0 V=((V(a)>0.5)) ? 1 : 0", "R_A4_Q A4_qd y 1"]);
   });
 });
 

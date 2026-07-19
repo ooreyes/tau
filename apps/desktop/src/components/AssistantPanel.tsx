@@ -59,7 +59,7 @@ import { TauriMascot } from "./TauriMascot";
 /** Docked at the far right of the simulator shell, same "edge=left widens"
  *  convention as the Components rail (panelResize.tsx). App.tsx calls
  *  usePanelWidth(this) itself and lifts the result up (not self-contained
- *  like TelemetryDock) — the responsive-floor effect needs to read the
+ *  like TelemetryDock) - the responsive-floor effect needs to read the
  *  current width to keep the schematic/scope columns from being starved. */
 export const ASSISTANT_PANEL_WIDTH: PanelWidthConfig = {
   storageKey: "tau.assistant.width",
@@ -85,7 +85,7 @@ export function saveAssistantOpen(open: boolean): void {
   try {
     localStorage.setItem(OPEN_STORAGE_KEY, open ? "1" : "0");
   } catch {
-    // Quota exceeded / private mode — the session keeps its in-memory state.
+    // Quota exceeded / private mode - the session keeps its in-memory state.
   }
 }
 
@@ -119,7 +119,7 @@ function tokenLabel(value: number): string {
   return `${(value / 1000).toFixed(value < 10_000 ? 1 : 0)}k`;
 }
 
-/** Coarse "last active" label for a past-chats row — precision beyond
+/** Coarse "last active" label for a past-chats row - precision beyond
  *  minutes/hours/days isn't useful for picking a conversation back up. */
 function relativeTime(timestampMs: number): string {
   const diffSeconds = Math.round((Date.now() - timestampMs) / 1000);
@@ -134,7 +134,7 @@ function relativeTime(timestampMs: number): string {
 }
 
 /** Strips the client-only `id` field ChatMessage adds on top of
- *  PersistedAssistantMessage — the shape every save path writes. */
+ *  PersistedAssistantMessage - the shape every save path writes. */
 function toPersistedMessages(list: readonly ChatMessage[]) {
   return list.map(({ role, content, actions, metrics }) => ({ role, content, actions, metrics }));
 }
@@ -158,7 +158,7 @@ export type AssistantApplyCurrentHandler = (action: AssistantApplyCurrentAscActi
 /** Mount-time seed for the active conversation: resolves (and, via
  *  listConversations, migrates) the stored active id against the real
  *  conversation list, falling back to the newest thread or a fresh empty one.
- *  Pure read — the resolved active-id pointer is written durably by the
+ *  Pure read - the resolved active-id pointer is written durably by the
  *  debounced save effect and by the explicit switch/new-chat/delete handlers,
  *  never here, so this stays safe to call from a lazy useState initializer
  *  (React 18 StrictMode invokes those twice in dev). */
@@ -241,7 +241,7 @@ export function AssistantPanel({
     () => new LocalMlxAssistant({ model: preferences.localModel }),
     [preferences.localModel],
   );
-  // One seed call — StrictMode double-invokes lazy initializers, and three
+  // One seed call - StrictMode double-invokes lazy initializers, and three
   // separate seedConversationState() calls would mint three different ids for
   // an empty circuit.
   const [seed] = useState(() => seedConversationState(memoryKey, legacyMemoryKey));
@@ -273,14 +273,14 @@ export function AssistantPanel({
   const listRef = useRef<HTMLDivElement | null>(null);
   const requestStartedAtRef = useRef(0);
   // Latest transcript identity for synchronous flush on unmount / memoryKey
-  // change — the debounced save below would otherwise drop up to 250ms of
+  // change - the debounced save below would otherwise drop up to 250ms of
   // turns when the panel closes or remounts onto a new circuit key.
   const persistRef = useRef({ memoryKey, activeConversationId, messages });
   persistRef.current = { memoryKey, activeConversationId, messages };
   const memoryKeyRef = useRef(memoryKey);
 
   // First-run local AI onboarding: proactively surface setup instead of
-  // letting the first send() fail. Only tracked for the local-mlx provider —
+  // letting the first send() fail. Only tracked for the local-mlx provider -
   // switching to Anthropic drops the status so the card never lingers.
   const [localAiStatus, setLocalAiStatus] = useState<LocalAiStatus | null>(null);
   const [localAiBusy, setLocalAiBusy] = useState(false);
@@ -299,7 +299,7 @@ export function AssistantPanel({
     return () => { cancelled = true; };
   }, [preferences.provider, preferences.localModel]);
 
-  // Weights load asynchronously in native code — poll only while starting,
+  // Weights load asynchronously in native code - poll only while starting,
   // matching the Settings sheet's own local-runtime polling (ShellPanels.tsx).
   useEffect(() => {
     if (preferences.provider !== "local-mlx" || localAiStatus?.state !== "starting") return;
@@ -330,7 +330,7 @@ export function AssistantPanel({
   const localAiCanSend = preferences.provider !== "local-mlx"
     || (localAiStatus?.state === "ready" && localAiStatus.managed);
   // Native start/download can fail synchronously (e.g. a non-Tauri browser
-  // runtime — see localAiRuntime.startLocalAi) as well as via a returned
+  // runtime - see localAiRuntime.startLocalAi) as well as via a returned
   // "error" status; installed stays false in both the browser fallback and a
   // native Mac without the MLX runtime present, so gate the button on it
   // rather than only on state to avoid offering a button that can only throw.
@@ -366,7 +366,7 @@ export function AssistantPanel({
     const timer = globalThis.setTimeout(() => {
       saveConversationMessages(memoryKey, activeConversationId, toPersistedMessages(messages));
       // Keeps the reload pointer in sync with whichever thread just actually
-      // persisted — cheaper than writing it on every switch of an empty,
+      // persisted - cheaper than writing it on every switch of an empty,
       // never-saved conversation (see seedConversationState).
       persistActiveConversationId(memoryKey, activeConversationId);
       setConversations(listConversations(memoryKey));
@@ -392,7 +392,7 @@ export function AssistantPanel({
     persistActiveConversationId(key, id);
   }, []);
 
-  // Closes the past-chats popover on Escape or a click/tap outside it —
+  // Closes the past-chats popover on Escape or a click/tap outside it -
   // there's no Radix Popover in play here (see AssistantPanel's header
   // markup below), so both need to be wired up by hand.
   useEffect(() => {
@@ -545,7 +545,7 @@ export function AssistantPanel({
       setError(err);
       setRetryPrompt(text);
       saveAssistantRecovery(memoryKey, { status: "failed", prompt: text, kind: err.kind, message: err.message });
-      // Drop the placeholder bubble if nothing ever reached it — an empty
+      // Drop the placeholder bubble if nothing ever reached it - an empty
       // assistant turn would otherwise sit invisibly in the transcript.
       setMessages((list) => list.filter((message) => (
         message.id !== assistantMessage.id || message.content !== "" || Boolean(message.actions?.length)
@@ -644,9 +644,9 @@ export function AssistantPanel({
     setHistoryMenuOpen(false);
     if (id === activeConversationId) return;
     stop();
-    // Flushes the outgoing thread's exact latest state synchronously — the
+    // Flushes the outgoing thread's exact latest state synchronously - the
     // debounced save above would otherwise drop up to 250ms of edits if a
-    // switch lands mid-window — then re-reads so both the target thread's
+    // switch lands mid-window - then re-reads so both the target thread's
     // messages and the menu's own listing are never stale by that same
     // window (not the possibly-stale `conversations` state).
     saveConversationMessages(memoryKey, activeConversationId, toPersistedMessages(messages));
@@ -708,7 +708,7 @@ export function AssistantPanel({
     setError(null);
     setActionStates((states) => ({ ...states, [action.id]: "working" }));
     try {
-      // Create remounts the panel under a new memoryKey — flush first so
+      // Create remounts the panel under a new memoryKey - flush first so
       // migrateConversation in App can copy the complete transcript.
       if (action.type === "create_asc") {
         saveConversationMessages(memoryKey, activeConversationId, toPersistedMessages(messages));
@@ -926,7 +926,7 @@ export function AssistantPanel({
             {messages.length === 0 && !error && (
               <div className="assistant-intro">
                 <TauriMascot className="assistant-intro-mascot" aria-hidden="true" />
-                <p>Ask about this circuit or describe one to create — I can see the schematic and latest simulation results.</p>
+                <p>Ask about this circuit or describe one to create - I can see the schematic and latest simulation results.</p>
               </div>
             )}
             {messages.map((message, index) => (

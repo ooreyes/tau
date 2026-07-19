@@ -27,7 +27,7 @@ import {
 } from "./assistantOperations";
 import type { AssistantRunMetrics } from "./assistantProvider";
 
-/** Exact model id — no date suffix. Keep every call site pointed at this
+/** Exact model id - no date suffix. Keep every call site pointed at this
  *  one constant so a future model bump is a one-line change.
  *  Sonnet 5 is the capable cheap default for Tau's Anthropic path
  *  (cheaper than Opus, strong enough for circuit Q&A + tool use). */
@@ -78,7 +78,7 @@ const CLOUD_CIRCUIT_PLAN_TOOL = {
 // streamAssistantReply) so the stable prefix above it stays cacheable.
 const SYSTEM_PROMPT = `You are Tau's assistant: a concise electronics tutor and circuit reviewer built into a SPICE simulator, for a student or practicing engineer.
 
-Ground every answer in the netlist, component list, and analysis data provided below — never invent a component value, node voltage, or measurement that isn't in that data. If the data doesn't answer the question, say what's missing and suggest a specific check or analysis to run (e.g. "run an AC sweep to see the corner frequency").
+Ground every answer in the netlist, component list, and analysis data provided below - never invent a component value, node voltage, or measurement that isn't in that data. If the data doesn't answer the question, say what's missing and suggest a specific check or analysis to run (e.g. "run an AC sweep to see the corner frequency").
 
 Refer to parts by their reference designators (R1, C2, ...) and to nets by name, not vague descriptions. Prefer a few precise sentences over a lecture; use short bullet lists for steps or checklists, and inline code for refs, values, and expressions.
 
@@ -152,7 +152,7 @@ export function saveAssistantApiKey(key: string): void {
   }, 350);
 }
 
-/** Reactive read of the stored API key — updates when Settings saves a new
+/** Reactive read of the stored API key - updates when Settings saves a new
  *  one (same tab, via API_KEY_EVENT) or another tab changes it (`storage`). */
 export function useAssistantApiKey(): string {
   const [key, setKey] = useState(loadAssistantApiKey);
@@ -188,13 +188,13 @@ export interface AssistantCompletedReply {
 }
 
 export interface AssistantStreamHandlers {
-  /** Called with the cumulative assistant text so far (a snapshot, not a delta —
+  /** Called with the cumulative assistant text so far (a snapshot, not a delta -
    *  the caller can just assign it, no manual concatenation). */
   onDelta: (snapshot: string) => void;
   onDone: (reply: AssistantCompletedReply) => void;
   /** Coarse, non-sensitive lifecycle only; never exposes hidden reasoning. */
   onProgress?: (phase: AssistantProgressPhase) => void;
-  /** Never called for a user-initiated abort() — see AssistantStreamHandle. */
+  /** Never called for a user-initiated abort() - see AssistantStreamHandle. */
   onError: (error: AssistantError) => void;
 }
 
@@ -301,7 +301,7 @@ function classifyAssistantError(error: unknown): AssistantError {
     return { kind: "auth", message: "Authentication failed. Check your API key in Settings." };
   }
   if (error instanceof Anthropic.RateLimitError) {
-    return { kind: "rate_limit", message: "Rate limited — try again shortly." };
+    return { kind: "rate_limit", message: "Rate limited - try again shortly." };
   }
   if (error instanceof Anthropic.APIConnectionError) {
     return { kind: "network", message: "Couldn't reach Anthropic. Check your connection and try again." };
@@ -319,7 +319,7 @@ function classifyAssistantError(error: unknown): AssistantError {
 /**
  * Starts a streamed reply for one turn. `contextText` is the freshly-built
  * circuit context (lib/assistantContext.ts) for THIS send; `history` is the
- * running conversation including the just-added user turn — the API is
+ * running conversation including the just-added user turn - the API is
  * stateless, so the full history goes on every call.
  */
 export function streamAssistantReply(
@@ -439,7 +439,7 @@ export function streamAssistantReply(
       requestSettled = true;
       finishWithError({
         kind: "network",
-        message: `Sonnet didn't start responding within ${Math.round(ASSISTANT_CONNECT_TIMEOUT_MS / 1_000)} seconds. Tau stopped the request — retry when your connection is stable.`,
+        message: `Sonnet didn't start responding within ${Math.round(ASSISTANT_CONNECT_TIMEOUT_MS / 1_000)} seconds. Tau stopped the request - retry when your connection is stable.`,
       });
     }, ASSISTANT_CONNECT_TIMEOUT_MS);
     const clearDeadline = () => {

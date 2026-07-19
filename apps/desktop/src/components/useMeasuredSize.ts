@@ -7,12 +7,12 @@ export interface MeasuredSize {
 }
 
 /**
- * Tracks an element's rendered CSS pixel size via `ResizeObserver` — used to
+ * Tracks an element's rendered CSS pixel size via `ResizeObserver` - used to
  * shrink the scope's tick count as a plot pane gets smaller (multi-pane
  * layouts, the app's 900×600 minimum window) so tick labels never collide.
  * SSR/test-safe: falls back to `{0,0}` when `ResizeObserver` isn't available
  * (older jsdom in component tests), which callers treat as "use the default
- * tick count" — see {@link tickCountsFromSize}.
+ * tick count" - see {@link tickCountsFromSize}.
  */
 export function useMeasuredSize<T extends Element>(): [RefObject<T | null>, MeasuredSize] {
   const ref = useRef<T | null>(null);

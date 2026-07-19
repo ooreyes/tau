@@ -5,12 +5,12 @@ import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 /**
- * shadcn Dialog (new-york), adapted to Tau (§10 design system): true-black
+ * shadcn Dialog (new-york), adapted to Tau: true-black
  * panel (`--popover` = `--panel-4`) with a hairline ring + `--elev-pop`
  * shadow (the app's existing hand-rolled `.settings-panel`/`.confirm-dialog`
  * use the same recipe) and a `--scrim` backdrop, not a stock shadcn
  * black/50 overlay. Self-contained UA resets on the close button (no
- * preflight). Open/close uses the §10 motion tokens.
+ * preflight). Open/close uses the motion tokens.
  */
 function Dialog({ ...props }: React.ComponentProps<typeof DialogPrimitive.Root>) {
   return <DialogPrimitive.Root data-slot="dialog" {...props} />;

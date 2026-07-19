@@ -44,7 +44,7 @@ describe("parseTfDirective", () => {
 });
 
 // ---------------------------------------------------------------------------
-// runTransferFunction — hand-computed resistive divider
+// runTransferFunction - hand-computed resistive divider
 // ---------------------------------------------------------------------------
 //
 //   in ---R1--- out ---R2--- gnd      (R1 = R2 = 1k)
@@ -87,7 +87,7 @@ function dividerWithLabels(): {
   return { components, wires: [], netLabels };
 }
 
-describe("runTransferFunction — voltage input", () => {
+describe("runTransferFunction - voltage input", () => {
   it("computes gain, input and output impedance of a 1k:1k divider", () => {
     const sch = dividerWithLabels();
     const res = runTransferFunction(sch, parseTfDirective(".tf V(out) V1")!);
@@ -135,7 +135,7 @@ describe("runTransferFunction — voltage input", () => {
 });
 
 // ---------------------------------------------------------------------------
-// runTransferFunction — current input
+// runTransferFunction - current input
 // ---------------------------------------------------------------------------
 //
 //   in ---R1--- gnd      (R1 = 2k), I1 injects into "in".
@@ -166,7 +166,7 @@ function currentDrivenResistor(): {
   return { components, wires: [], netLabels };
 }
 
-describe("runTransferFunction — current input", () => {
+describe("runTransferFunction - current input", () => {
   it("reports transimpedance gain and matching impedances", () => {
     const sch = currentDrivenResistor();
     const res = runTransferFunction(sch, parseTfDirective(".tf V(in) I1")!);

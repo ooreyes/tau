@@ -11,7 +11,7 @@ export const snap = (v: number) => {
 
 /** Local-space AABB of everything that establishes a component's visible
  * footprint: transformed symbol body plus its real pins. `getComponentPins`
- * is intentional here — imported LTspice parts can carry absolute pin
+ * is intentional here - imported LTspice parts can carry absolute pin
  * overrides that are much farther from the component origin than Tau's
  * built-in bank. */
 export interface ComponentVisualPlacement {
@@ -148,7 +148,7 @@ export const HOP_RADIUS = 4;
 
 /**
  * SVG path for a wire polyline where horizontal segments arc over the given
- * x positions — the classic "hop" that marks an UNCONNECTED crossing (a
+ * x positions - the classic "hop" that marks an UNCONNECTED crossing (a
  * connected join gets a junction dot instead). The bump always points up
  * (−y): sweep=1 while traveling +x, sweep=0 while traveling −x. Hops within
  * HOP_RADIUS of a segment end are dropped so elbows keep their corners.
@@ -215,7 +215,7 @@ const explicitUnit = (value: string, unit: string) => {
  * the catalog's `unit` is simply suffixed onto the value (`explicitUnit`
  * below). A handful of kinds store several fields in one value string
  * (AC sources' "amplitude freq", a comparator's "vhigh vlow vhyst", a pulse
- * source's "low high freq duty") — for those, suffixing one unit onto the
+ * source's "low high freq duty") - for those, suffixing one unit onto the
  * whole joined string is meaningless (or actively garbled, e.g. a
  * comparator's "1 0" + a literal "Vhi Vlo" unit hint). Each gets its own
  * formatter built from the same structured fields the inspector uses
@@ -284,7 +284,7 @@ export const wireSegments = (wires: SchematicWire[]): WireSegment[] => {
   return segments;
 };
 
-/** Axis-aligned rect overlap (touching edges counts — marquee semantics). */
+/** Axis-aligned rect overlap (touching edges counts - marquee semantics). */
 export const rectsOverlap = (a: Rect, b: Rect): boolean =>
   a.minX <= b.maxX && a.maxX >= b.minX && a.minY <= b.maxY && a.maxY >= b.minY;
 
@@ -296,7 +296,7 @@ export const pointInRect = (p: Point, r: Rect): boolean =>
  * Does an orthogonal wire segment intersect an axis-aligned rect? True when
  * ANY part of the segment crosses or touches the rect (marquee semantics:
  * "inside or intersecting" selects). Wires are axis-aligned so this reduces
- * to interval checks — no general line clipping needed.
+ * to interval checks - no general line clipping needed.
  */
 export const segmentIntersectsRect = (segment: WireSegment, rect: Rect): boolean => {
   const loX = Math.min(segment.a.x, segment.b.x);
@@ -510,7 +510,7 @@ export function circuitBoundsWithLabels(
 }
 
 // ── Net label auto-placement (Fix 2) ──────────────────────────────────────
-// Font size matches `.net-label-text` in App.css (9.5px mono) — keep in sync;
+// Font size matches `.net-label-text` in App.css (9.5px mono) - keep in sync;
 // this is a character-count estimate, not a DOM measurement (auto-placement
 // runs on every render of an unpositioned label, so it must stay cheap).
 const NET_LABEL_CHAR_W = 5.8;
@@ -518,7 +518,7 @@ const NET_LABEL_HEIGHT = 11;
 
 /** World-space bbox a net label's text would occupy at a given anchor+offset.
  *  Matches the actual render in Canvas.tsx (`<text x={anchor.x+dx}
- *  y={anchor.y+dy}>`, default start-anchor — text extends rightward from x,
+ *  y={anchor.y+dy}>`, default start-anchor - text extends rightward from x,
  *  y is the baseline so most of the glyph height sits above it). */
 const netLabelTextRect = (anchor: Point, dx: number, dy: number, text: string): Rect => {
   const w = Math.max(8, text.length * NET_LABEL_CHAR_W);
@@ -551,9 +551,9 @@ const netLabelOffsetCandidates = (w: number): Array<{ dx: number; dy: number }> 
  * text bbox clears every component's bounding box, else the lowest-overlap
  * fallback. Mirrors `buildLabelPlacements`' candidate-scoring approach
  * (score = summed overlap area, cheapest wins) but scoped to net labels vs.
- * component bodies only — a schematic has few labels and few components, so
+ * component bodies only - a schematic has few labels and few components, so
  * scoring every candidate against every component per render is deterministic
- * and cheap (§Fix2, "Net labels: broken placement").
+ * and cheap .
  */
 /** Length of `segment` that passes through `rect` (0 when it misses). Only
  *  axis-aligned segments occur in Tau wires, so this is a cheap clip. */
@@ -579,7 +579,7 @@ export function autoNetLabelOffset(
   text: string,
   components: readonly SchematicComponent[],
   /** Optional extra obstacles: wires under the text read as "label on a wire"
-   *  and probe dots (r≈8) get fully hidden — both score as overlap. */
+   *  and probe dots (r≈8) get fully hidden - both score as overlap. */
   wires: readonly SchematicWire[] = [],
   probePoints: readonly Point[] = [],
   occupiedLabelRects: readonly Rect[] = [],
@@ -595,7 +595,7 @@ export function autoNetLabelOffset(
     let score = obstacles.reduce((total, rect) => total + overlapArea(box, rect), 0);
     score += probeRects.reduce((total, rect) => total + overlapArea(box, rect) * 2, 0);
     score += occupiedLabelRects.reduce((total, rect) => total + overlapArea(box, rect) * 3, 0);
-    // A wire crossing the text box is linear, not areal — weight it so a
+    // A wire crossing the text box is linear, not areal - weight it so a
     // couple of grid units of wire-under-text loses to a clear spot.
     score += segments.reduce((total, segment) => total + segmentLengthInRect(segment, box) * 4, 0);
     return { offset, score };
@@ -646,7 +646,7 @@ export interface FitViewOptions {
 }
 
 /** Zoom + translation that frames `bounds` in a viewport with breathing room:
- *  12% of each viewport dimension, never less than 48px (§11 Unit A2). Pure so
+ *  12% of each viewport dimension, never less than 48px. Pure so
  *  the padding math is unit-testable without a DOM. Degenerate (point-sized)
  *  bounds and zero-sized viewports resolve to a clamped, finite transform. */
 export function fitViewTransform(
@@ -726,7 +726,7 @@ const componentBodyBox = (component: SchematicComponent): Rect => {
   };
 };
 
-/** STRICT overlap (touching edges do NOT count) — used for placement/route
+/** STRICT overlap (touching edges do NOT count) - used for placement/route
  *  collision, where bodies placed flush against each other are legal. The
  *  exported `rectsOverlap` above is inclusive (marquee: touch selects). */
 const rectsOverlapStrict = (a: Rect, b: Rect) =>
@@ -736,7 +736,7 @@ const rectsOverlapStrict = (a: Rect, b: Rect) =>
 const HIT_PAD = 7;
 
 /** The component under a world point. Prefer one whose actual body contains the
- *  point over one only within the click pad, then the smaller body — so a small
+ *  point over one only within the click pad, then the smaller body - so a small
  *  part (e.g. ground) can never steal a click from the part under the cursor,
  *  regardless of render/z-order. */
 export const componentAt = (components: SchematicComponent[], wx: number, wy: number): SchematicComponent | null => {
@@ -935,13 +935,13 @@ const routeIncidentalPinCount = (points: Point[], components: SchematicComponent
   return contacts.size;
 };
 
-/** Exported for tests — count how many orthogonal segments cross a body. */
+/** Exported for tests - count how many orthogonal segments cross a body. */
 export const countRouteBodyHits = routeHitCount;
 
 /** Route an orthogonal wire between two points. Prefers clear channels around
  *  component bodies, then shorter length, then fewer corners. */
 /** Crossing count + collinear-overlap length of a candidate route against the
- *  existing wires — the "visual nightmare" metrics. Endpoint touches are
+ *  existing wires - the "visual nightmare" metrics. Endpoint touches are
  *  ignored (they're legitimate connections, not clutter). */
 const routeClutter = (
   points: Point[],
@@ -1039,7 +1039,7 @@ export const routeWireSmart = (
   const yChannels = new Set<number>([start.y, end.y]);
   for (const component of components) {
     const box = componentBodyBox(component);
-    // One and two grid cells outside the body — gives the router room to skirt
+    // One and two grid cells outside the body - gives the router room to skirt
     // symbols without hugging the stroke.
     for (const pad of [GRID, GRID * 2]) {
       xChannels.add(snap(box.minX - pad));
@@ -1088,7 +1088,7 @@ export const routeWireSmart = (
         points,
         incidentalPins: routeIncidentalPinCount(points, components),
         hits: routeHitCount(points, components),
-        // Riding on top of another wire is worse than crossing it — an
+        // Riding on top of another wire is worse than crossing it - an
         // overlapped run is unreadable, a crossing at least gets a hop arc.
         overlap: clutter.overlap,
         nearParallel: clutter.nearParallel,
@@ -1127,7 +1127,7 @@ export function rerouteMovedWires(
     if (wire.points.length < 2) return wire;
     const start = wire.points[0];
     const end = wire.points[wire.points.length - 1];
-    // Score against the OTHER wires — a wire must not penalize its own path.
+    // Score against the OTHER wires - a wire must not penalize its own path.
     const others = wires.filter((other) => other.id !== wire.id);
     return { ...wire, points: routeWireSmart(start, end, components, others) };
   });

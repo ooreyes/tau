@@ -1,7 +1,6 @@
 /**
  * Carry a document's `.model` / `.lib` / `.inc`(`.include`) / `.subckt`…`.ends`
- * directives through to the native ngspice deck (FEATURE_PARITY §3 model/library
- * import — the passthrough half).
+ * directives through to the native ngspice deck (LTspice parity).
  *
  * Real LTspice circuits keep their device models and library references in
  * on-canvas TEXT directives. `ascToSchematic` strips the leading `!` and stores
@@ -45,7 +44,7 @@ function normalizeOpeningLine(line: string): string {
  * its `.model <name> …` and `.subckt <name> …` directives (multi-line blocks
  * included). Lets the deck builder safely reference a semiconductor's own model
  * name only when that model is actually present, falling back to Tau's generic
- * starters otherwise — so this never introduces an "undefined model" error.
+ * starters otherwise - so this never introduces an "undefined model" error.
  */
 export function definedModelNames(directives: ReadonlyArray<string>): Set<string> {
   const names = new Set<string>();
@@ -79,7 +78,7 @@ export function definedSubcktNames(directives: ReadonlyArray<string>): Set<strin
 /**
  * Map every document-defined `.model <name> <type>(…)` to its type token
  * (both lower-cased). Lets the deck builder distinguish a 3-terminal **VDMOS**
- * power MOSFET — whose ngspice device line is `M nd ng ns model` — from an
+ * power MOSFET - whose ngspice device line is `M nd ng ns model` - from an
  * ordinary 4-terminal level-1 MOS (`M nd ng ns nb model`). Emitting the 4-node
  * form against a VDMOS model silently reinterprets the bulk node as the model's
  * optional thermal node (or floats it), so the device must drop the bulk pin.
@@ -111,7 +110,7 @@ function translateModelType(line: string): string {
  * LTspice diode models carry informational-only parameters (`type=silicon`,
  * `mfg=OnSemi`) whose values are bare words. ngspice tries to evaluate the word
  * as an expression and dies with "Undefined parameter [silicon]" (P2.asc's
- * `.model 1N484 D(Rs=3 Cjo=4p type=silicon)`), killing the whole deck — so
+ * `.model 1N484 D(Rs=3 Cjo=4p type=silicon)`), killing the whole deck - so
  * strip them from `.model … D(…)` lines. Numeric informational params (Vpk,
  * Iave, …) only draw a warning and are left alone.
  */
@@ -131,7 +130,7 @@ export function modelLibLinesFromDirectives(directives: ReadonlyArray<string>): 
     // LTspice encodes multi-line TEXT blocks with a literal backslash-n. One
     // block freely MIXES kinds (SoftDiodeRecovery: `.tran 0 60u\n.model X …`;
     // UHFpreamp opens its `.subckt MRF901` block with `*` copyright comments),
-    // so each physical line is dispatched on its own keyword — gating on the
+    // so each physical line is dispatched on its own keyword - gating on the
     // block's first line silently drops models the circuit depends on, and
     // conversely leaks `.tran`/`.step` lines from a model-led block.
     for (const physical of raw.replace(/\\n/g, "\n").split("\n")) {
@@ -139,7 +138,7 @@ export function modelLibLinesFromDirectives(directives: ReadonlyArray<string>): 
       if (!trimmed) continue;
       const keyword = leadingKeyword(trimmed);
       if (subcktDepth > 0) {
-        // Inside a `.subckt` body everything is emitted verbatim — instances,
+        // Inside a `.subckt` body everything is emitted verbatim - instances,
         // nested models (still lateral-BJT translated), comments, `.ends`.
         if (keyword === "subckt") subcktDepth += 1;
         else if (keyword === "ends") subcktDepth -= 1;

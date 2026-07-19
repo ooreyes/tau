@@ -26,7 +26,7 @@ export function Toolbar({ mode, result, runState, isRunning, title, assistantOpe
   const runHasError = !isRunning && (runState === "error" || result?.ok === false);
   const runIsAcceptable = !isRunning && runState === "complete" && result?.ok === true;
 
-  // The status lamp is the single source of truth for run state — no cancel
+  // The status lamp is the single source of truth for run state - no cancel
   // path exists (nothing in the codebase can interrupt an in-flight ngspice
   // call), so "running" only ever resolves to idle/ok/error on its own; there
   // is deliberately no fake "stop" affordance here.
@@ -42,8 +42,8 @@ export function Toolbar({ mode, result, runState, isRunning, title, assistantOpe
             ? "warn"
             : "idle";
 
-  // Quiet by design (§UX checklist 5): the schematic editor shows NO status
-  // chatter — "ready · edit mode" told the user nothing. Only genuinely useful
+  // Quiet by design : the schematic editor shows NO status
+  // chatter - "ready · edit mode" told the user nothing. Only genuinely useful
   // simulator state is surfaced, in sentence case, and idle stays blank.
   const statusText = isRunning
     ? "Running…"

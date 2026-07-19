@@ -26,7 +26,7 @@ export const CATALOG: CatalogEntry[] = [
   { kind: "vac",           section: "Sources",           name: "AC Voltage",      hotkey: "a", prefix: "V",   defaultValue: "1 1k",  unit: "V Hz" },
   { kind: "iac",           section: "Sources",           name: "AC Current",      hotkey: "y", prefix: "I",   defaultValue: "1m 1k", unit: "A Hz" },
   // unit is "" (not "V"): the value is the 4-token PULSE spec (low high freq
-  // duty), not a single voltage — Canvas.tsx's sourceValueLabel gives it a
+  // duty), not a single voltage - Canvas.tsx's sourceValueLabel gives it a
   // bespoke "low→high @ freq" canvas label instead of suffixing one unit
   // onto the whole token string.
   { kind: "vpulse",        section: "Sources",           name: "Pulse Voltage",   hotkey: "k", prefix: "V",   defaultValue: "0 5 100k 0.5", unit: "" },
@@ -44,7 +44,7 @@ export const CATALOG: CatalogEntry[] = [
 
   { kind: "opamp",         section: "Analog",            name: "Op Amp",          hotkey: "o", prefix: "U",   defaultValue: "ideal", unit: "" },
   // unit is "" (not "Vhi Vlo"): the value is the vhigh/vlow/vhyst spec, not a
-  // single quantity — Canvas.tsx's sourceValueLabel gives it a bespoke
+  // single quantity - Canvas.tsx's sourceValueLabel gives it a bespoke
   // "1V/0V" canvas label instead of suffixing a two-word "unit" onto it.
   { kind: "comparator",    section: "Analog",            name: "Comparator",      hotkey: "",  prefix: "U",   defaultValue: "1 0",   unit: "" },
   { kind: "vcvs",          section: "Analog",            name: "VCVS (E)",        hotkey: "u", prefix: "E",   defaultValue: "10",    unit: "V/V" },
@@ -65,7 +65,7 @@ export const CATALOG: CatalogEntry[] = [
   { kind: "switch",        section: "Electromechanical", name: "Switch",          hotkey: "s", prefix: "S",   defaultValue: "open",  unit: "" },
   { kind: "transformer",   section: "Electromechanical", name: "Transformer",     hotkey: "t", prefix: "T",   defaultValue: "1:1",   unit: "" },
   // unit is "" (not "Ω s"): the value is a "Td=50n Z0=50" key=value spec that
-  // already self-describes each token — LTspice shows it as raw text, and a
+  // already self-describes each token - LTspice shows it as raw text, and a
   // two-word "unit" suffixed onto the whole string was never meaningful.
   { kind: "tline",         section: "Electromechanical", name: "Transmission Line", hotkey: "", prefix: "T",   defaultValue: "Td=50n Z0=50", unit: "" },
   // Generic subcircuit instance (SPICE X device): the value's first token is

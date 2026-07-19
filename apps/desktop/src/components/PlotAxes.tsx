@@ -3,7 +3,7 @@ import { computeAxisTicks, type AxisScale } from "../simulation/axisTicks";
 
 /**
  * Shared scope chrome: gridlines AT the actual tick positions (not a fixed
- * 6×5 grid), tick-value labels along both edges (SI-prefixed, unit-bearing —
+ * 6×5 grid), tick-value labels along both edges (SI-prefixed, unit-bearing -
  * "2ms 4ms 6ms", "1V 2V 3V"), a stronger zero-line when zero is in range, and
  * the instrument frame rect. Used by every plot context (TRAN, AC mag/phase,
  * DC sweep, FFT, noise, step families) so they all read from one tick
@@ -25,10 +25,10 @@ export interface PlotAxesProps {
   yScale?: AxisScale;
   xUnit?: string;
   yUnit?: string;
-  /** Persistent axis title (e.g. "Time", "Voltage") — LTspice/Desmos-style. */
+  /** Persistent axis title (e.g. "Time", "Voltage") - LTspice/Desmos-style. */
   xAxisTitle?: string;
   yAxisTitle?: string;
-  /** Target tick counts — lower this as the rendered plot shrinks (see
+  /** Target tick counts - lower this as the rendered plot shrinks (see
    *  `axisTicks.pickTickCount`) so labels don't collide at small sizes. */
   targetXTicks?: number;
   targetYTicks?: number;
@@ -143,7 +143,7 @@ export function PlotAxes({
 
 /**
  * Clips its children (trace `<path>`s) to the plot's inner box. Needed once
- * zoom/pan can put data outside the visible window — without it, an SVG
+ * zoom/pan can put data outside the visible window - without it, an SVG
  * path just keeps drawing past the frame into the tick-label margins
  * (`.scope-svg` uses `overflow: visible` for the zoom-cluster overlay, so
  * nothing else would stop it). `id` must be unique per rendered `<svg>`

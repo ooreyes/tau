@@ -2,7 +2,7 @@
  * Corner-case hardening tests for the simulation engine.
  *
  * Every case below must either solve correctly or fail gracefully with a clear
- * message — never hang, throw, or produce NaN/Infinity. The geometry follows the
+ * message - never hang, throw, or produce NaN/Infinity. The geometry follows the
  * same conventions documented in realCircuits.test.ts (GRID = 16).
  */
 
@@ -44,7 +44,7 @@ function allFinite(result: ReturnType<typeof runOperatingPoint>): boolean {
 
 describe("floating node (dangling resistor terminal)", () => {
   // VS → R, R.b not connected to anything. R.b floats but is reachable through
-  // R from a known node, so KCL pins it to the source voltage — not singular.
+  // R from a known node, so KCL pins it to the source voltage - not singular.
   const comps = [Vdc(0, 32, "5"), R(96, 0, "1k", "R1"), GND(0, 64)];
   const wires = [W({ x: 0, y: 0 }, { x: 64, y: 0 })];
 
@@ -83,7 +83,7 @@ describe("multiple ground symbols", () => {
     R(192, 0, "1k", "R2"),
     GND(0, 64),
     GND(224, 0),
-    GND(400, 400), // stray, unconnected ground — folds into the same reference
+    GND(400, 400), // stray, unconnected ground - folds into the same reference
   ];
   const wires = [W({ x: 0, y: 0 }, { x: 64, y: 0 }), W({ x: 128, y: 0 }, { x: 160, y: 0 })];
 
@@ -319,7 +319,7 @@ describe("huge resistor value (1 TΩ)", () => {
 
 describe("tiny and huge reactive values in AC stay finite", () => {
   // 1 fF cap and 1 kΩ: the corner is far above any swept frequency, so the
-  // output stays near the input — the solver must not produce NaN/Infinity.
+  // output stays near the input - the solver must not produce NaN/Infinity.
   const comps = [Vac(0, 32, "1 1k"), R(96, 0, "1k", "R1"), Cap(256, 32, "1f", "C1", 90), GND(0, 64), GND(256, 64)];
   const wires = [W({ x: 0, y: 0 }, { x: 64, y: 0 }), W({ x: 128, y: 0 }, { x: 256, y: 0 })];
 
@@ -405,7 +405,7 @@ describe("malformed inputs never throw", () => {
     ];
     for (const schematic of broken) {
       expect(() => runOperatingPoint(schematic)).not.toThrow();
-      // runTransientAnalysis is async now (Fix 3) — `.not.toThrow()` doesn't
+      // runTransientAnalysis is async now (Fix 3) - `.not.toThrow()` doesn't
       // apply to a function that returns a promise (it would trivially pass
       // regardless of a rejection). Awaiting it directly is the equivalent
       // check: an unhandled rejection here fails the test the same way a
@@ -427,7 +427,7 @@ describe("malformed inputs never throw", () => {
     const comps = [Vdc(0, 32, "5"), R(96, 0, "1k", "R1"), GND(0, 64), GND(128, 0)];
     const wires = [W({ x: 0, y: 0 }, { x: 64, y: 0 })];
     const res = await runTransientAnalysis({ components: comps, wires }, { stopTime: 1e100, steps: 100 });
-    // stopTime is finite but huge — solver should run without producing NaN.
+    // stopTime is finite but huge - solver should run without producing NaN.
     if (res.ok) {
       for (const trace of res.traces) {
         expect(trace.values.every((v) => Number.isFinite(v))).toBe(true);

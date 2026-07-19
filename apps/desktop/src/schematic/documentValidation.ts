@@ -128,7 +128,7 @@ function netLabel(value: unknown, index: number): NetLabel {
     text: text(source.text, `netLabels[${index}].text`, 80),
   };
   // dx/dy are optional (absent on labels never dragged, and on any .sim file
-  // saved before manual placement existed) — omitting them here (rather than
+  // saved before manual placement existed) - omitting them here (rather than
   // defaulting to 0) preserves "auto-place" as a distinct state from an
   // explicit zero offset the user actually dragged onto the anchor.
   if (source.dx !== undefined) result.dx = coordinate(source.dx, `netLabels[${index}].dx`);

@@ -1,5 +1,5 @@
 /**
- * plotPanes.ts — Pure pane-model helpers for the multi-pane waveform viewer.
+ * plotPanes.ts - Pure pane-model helpers for the multi-pane waveform viewer.
  *
  * A "pane" is an ordered slot in the transient scope. Each pane owns a set of
  * trace ids (node ids from AnalysisResult.traces / CurrentTrace.ref, or
@@ -9,11 +9,11 @@
  *   1. There is always at least one pane.
  *   2. No trace id appears in more than one pane.
  *   3. No trace id is orphaned (if a pane is removed, its traces are
- *      reassigned to pane 0 — the "catch-all" pane).
+ *      reassigned to pane 0 - the "catch-all" pane).
  */
 
 export interface PlotPane {
-  /** Stable id — nanoid-style, generated once at creation. */
+  /** Stable id - nanoid-style, generated once at creation. */
   id: string;
   /** Ordered set of trace ids owned by this pane. */
   traceIds: string[];
@@ -58,7 +58,7 @@ export function paneIndexOf(layout: PaneLayout, traceId: string): number {
 }
 
 // ---------------------------------------------------------------------------
-// Mutators (all pure — return a new PaneLayout, never mutate in place)
+// Mutators (all pure - return a new PaneLayout, never mutate in place)
 // ---------------------------------------------------------------------------
 
 /** Add a new, empty pane at the end of the layout. */

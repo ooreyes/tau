@@ -1,6 +1,6 @@
 /**
  * Per-instance **initial condition** (`IC=`) on a capacitor or inductor
- * (FEATURE_PARITY §3 "C/L initial conditions" / §4 `.ic`). LTspice stores it in
+ * (LTspice parity). LTspice stores it in
  * a `SYMATTR SpiceLine`/`SpiceLine2`/`Value2` attribute (e.g. a 100 pF cap with
  * `SpiceLine2 IC=1`); on the SPICE line it rides after the value:
  *

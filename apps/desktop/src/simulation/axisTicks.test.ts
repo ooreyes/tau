@@ -178,7 +178,7 @@ describe("formatTickLabel", () => {
     expect(formatTickLabel(0, "V")).toBe("0 V");
   });
 
-  it("never SI-scales dB — no 'k'/'µ' prefix nonsense on a logarithmic unit", () => {
+  it("never SI-scales dB - no 'k'/'µ' prefix nonsense on a logarithmic unit", () => {
     expect(formatTickLabel(40, "dB")).toBe("40 dB");
     expect(formatTickLabel(-2000, "dB")).toBe("-2000 dB");
     expect(formatTickLabel(0, "dB")).toBe("0 dB");

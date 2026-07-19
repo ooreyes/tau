@@ -2,10 +2,10 @@ import { parseQuantity } from "../simulation/quantity";
 
 /**
  * A comparator's defined output levels (and optional hysteresis), parsed from a
- * component value string. Unlike an op-amp — whose ideal gain-1e6 model is only
- * valid inside a feedback loop — a comparator runs *open loop*, so its output
+ * component value string. Unlike an op-amp - whose ideal gain-1e6 model is only
+ * valid inside a feedback loop - a comparator runs *open loop*, so its output
  * must clamp to explicit logic/rail levels instead of saturating to ~1e7 V.
- * (See FEATURE_PARITY.md §3: this is the class-d_starter.asc blocker.)
+ * (See LTspice parity .md : this is the class-d_starter.asc blocker.)
  */
 export interface ComparatorSpec {
   /** Output voltage when V(in+) > V(in-). */
@@ -93,7 +93,7 @@ function tryQuantity(text: string): number | null {
 /**
  * Build the ngspice behavioral-source deck line for a comparator. Emits a single
  * B-source on `out` referenced to ground, using ngspice's native ternary
- * (`cond ? a : b`) operator — LTspice's `if(cond,a,b)` is NOT accepted by
+ * (`cond ? a : b`) operator - LTspice's `if(cond,a,b)` is NOT accepted by
  * ngspice outside compatibility mode (live-verified: ngspice raises "no such
  * function 'if'"), whereas the ternary clamps correctly.
  *

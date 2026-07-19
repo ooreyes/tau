@@ -37,7 +37,7 @@ export const OPAMP_LIBRARY: OpAmpPart[] = [
     slewRate: Infinity,
     supplyMin: 0,
     supplyMax: Infinity,
-    description: "Mathematically ideal nullor — infinite gain, bandwidth, and slew rate.",
+    description: "Mathematically ideal nullor - infinite gain, bandwidth, and slew rate.",
   },
   {
     part: "LM741",
@@ -97,7 +97,7 @@ export const OPAMP_LIBRARY: OpAmpPart[] = [
     slewRate: 13,
     supplyMin: 5,
     supplyMax: 18,
-    description: "Quad JFET-input op-amp — four TL071s in one package for active filter banks.",
+    description: "Quad JFET-input op-amp - four TL071s in one package for active filter banks.",
   },
   {
     part: "TL081",

@@ -536,7 +536,7 @@ fn local_ai_status_inner(slot: &mut Option<LocalAiProcess>) -> LocalAiStatus {
         if installed {
             "MLX LM is installed. Choose a model to start local inference."
         } else {
-            "MLX LM is not installed. Choose Install MLX LM — Tau will set up the local runtime on this Mac."
+            "MLX LM is not installed. Choose Install MLX LM - Tau will set up the local runtime on this Mac."
         },
     )
 }

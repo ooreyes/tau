@@ -14,10 +14,10 @@ import type { NoiseResult } from "../simulation/noise";
 import { defaultLayout } from "./plotPanes";
 
 /**
- * §UX scope axes (owner feedback: "the table is completely devoid of x/y
+ * "the table is completely devoid of x/y
  * labels"). These tests mount each plot context with a synthetic-but-valid
- * result and assert real tick labels render — not just the old 2-3 corner
- * labels — with unit-bearing text (V, Hz, dB, ms…), proving `PlotAxes` is
+ * result and assert real tick labels render - not just the old 2-3 corner
+ * labels - with unit-bearing text (V, Hz, dB, ms…), proving `PlotAxes` is
  * wired into every context, not just the transient scope.
  */
 
@@ -42,7 +42,7 @@ function makeTranResult(): Extract<AnalysisResult, { ok: true }> {
   };
 }
 
-describe("WaveformPlot (TRAN) — real tick axes", () => {
+describe("WaveformPlot (TRAN) - real tick axes", () => {
   it("renders multiple x and y tick labels with units, not just corner min/max", () => {
     const result = makeTranResult();
     const { container } = render(
@@ -87,14 +87,14 @@ describe("WaveformPlot (TRAN) — real tick axes", () => {
 
   it("does not let a newly-mounted empty second pane override the data pane's shared X window", () => {
     // Regression for a feedback loop: a pane with no data (`plot === null`)
-    // used to initialize its viewport to a 0–1 fallback domain and broadcast
+    // used to initialize its viewport to a 0-1 fallback domain and broadcast
     // that into `sharedX` on mount, snapping every sibling pane's real
-    // (millisecond-scale) time axis to a bogus 0–1s window (and, once the
+    // (millisecond-scale) time axis to a bogus 0-1s window (and, once the
     // data pane's resulting adoption fed back into the empty pane, the two
-    // panes' effects never stopped fighting — the old code hung indefinitely
+    // panes' effects never stopped fighting - the old code hung indefinitely
     // on this exact repro instead of settling). Mirrors the real repro: a
     // pane with data is rendered and settles first, THEN a second, empty
-    // pane is added (e.g. probing another net) — mounting both together in
+    // pane is added (e.g. probing another net) - mounting both together in
     // one render doesn't trigger the loop, so the two-step `rerender` here
     // is essential to reproducing it.
     const result = makeTranResult();
@@ -121,7 +121,7 @@ describe("WaveformPlot (TRAN) — real tick axes", () => {
     const svgs = container.querySelectorAll(".scope-svg");
     expect(svgs.length).toBe(2);
     const dataPaneTicks = Array.from(svgs[0].querySelectorAll(".scope-tick")).map((t) => t.textContent ?? "");
-    // The data pane's real range is 0–6ms; if the empty sibling's fallback
+    // The data pane's real range is 0-6ms; if the empty sibling's fallback
     // domain leaked into the shared X window, the max tick would read "1s".
     expect(dataPaneTicks.some((t) => /ms/.test(t))).toBe(true);
     expect(dataPaneTicks.every((t) => !/^1\s?s$/.test(t.trim()))).toBe(true);
@@ -221,7 +221,7 @@ describe("WaveformPlot (TRAN) — real tick axes", () => {
   });
 });
 
-describe("AcPlot — log-frequency ticks on both magnitude and phase", () => {
+describe("AcPlot - log-frequency ticks on both magnitude and phase", () => {
   it("renders Hz-labeled log ticks and dB/degree y ticks", () => {
     const freqs = [10, 100, 1000, 10000, 100000];
     const result: AcResult = {
@@ -239,7 +239,7 @@ describe("AcPlot — log-frequency ticks on both magnitude and phase", () => {
   });
 });
 
-describe("DcPlot — linear sweep/volts ticks", () => {
+describe("DcPlot - linear sweep/volts ticks", () => {
   it("renders volt-labeled y ticks across the swept range", () => {
     const sweep = [0, 1, 2, 3, 4, 5];
     const result: DcSweepResult = {
@@ -256,7 +256,7 @@ describe("DcPlot — linear sweep/volts ticks", () => {
   });
 });
 
-describe("NoisePlot — log-log (frequency × V/√Hz decades) ticks", () => {
+describe("NoisePlot - log-log (frequency × V/√Hz decades) ticks", () => {
   it("renders Hz and V/√Hz decade tick labels", () => {
     const freqs = [10, 100, 1000, 10000];
     const onoise = [1e-8, 1e-7, 1e-6, 1e-7];

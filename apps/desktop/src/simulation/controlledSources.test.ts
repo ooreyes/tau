@@ -62,7 +62,7 @@ function nodeNear(result: ReturnType<typeof runOperatingPoint>, target: number):
   return bestV;
 }
 
-describe("VCVS (E) — voltage-controlled voltage source", () => {
+describe("VCVS (E) - voltage-controlled voltage source", () => {
   it("outputs gain·V(control), independent of the load", () => {
     const components = [
       part("vsource", "1", "V1", { p: CP, n: GND }),
@@ -110,7 +110,7 @@ describe("VCVS (E) — voltage-controlled voltage source", () => {
   });
 });
 
-describe("VCCS (G) — voltage-controlled current source", () => {
+describe("VCCS (G) - voltage-controlled current source", () => {
   it("drives gm·V(control) into the load (current pulled from op)", () => {
     // V(out) = -gm·R·V(cp) = -1e-3·1000·1 = -1 V  (matches ngspice)
     const components = [
@@ -185,7 +185,7 @@ describe("controlled sources in AC analysis", () => {
 //   H op 0 Vsense r    →  V(op) =  r·I_sense              (ideal, load-independent)
 // ---------------------------------------------------------------------------
 
-describe("CCCS (F) — current-controlled current source", () => {
+describe("CCCS (F) - current-controlled current source", () => {
   it("drives gain·I_sense into the load (V(out) = -gain·I_sense·R_load)", () => {
     // Ic = 1 mA, gain = 10, R = 1k → V(out) = -10·1e-3·1000 = -10 V (ngspice: -10)
     const components = [
@@ -220,7 +220,7 @@ describe("CCCS (F) — current-controlled current source", () => {
   });
 });
 
-describe("CCVS (H) — current-controlled voltage source", () => {
+describe("CCVS (H) - current-controlled voltage source", () => {
   it("outputs r·I_sense, independent of the load", () => {
     // Ic = 1 mA, r = 2k → V(out) = 2000·1e-3 = 2 V (ngspice: 2)
     const components = [

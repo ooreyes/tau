@@ -1,9 +1,9 @@
 /**
- * SPICE/LTspice numeric suffix semantics — the single value-parsing authority
+ * SPICE/LTspice numeric suffix semantics - the single value-parsing authority
  * for the engine, importers, and directive readers.
  *
  * Suffixes are CASE-INSENSITIVE, exactly like LTspice: `m` and `M` are BOTH
- * milli, and only `meg` (any case) is mega — the classic `1MHz` = 1 milli
+ * milli, and only `meg` (any case) is mega - the classic `1MHz` = 1 milli
  * gotcha is faithful behavior, not a bug. `mil` = 25.4 µ. Letters after a
  * recognized suffix are ignored as units (`1kHz` → 1e3, `100nF` → 100e-9).
  * Mirrors the expression engine's literal rules (simulation/expr.ts).

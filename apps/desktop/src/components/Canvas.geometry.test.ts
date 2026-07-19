@@ -434,7 +434,7 @@ describe("circuitBounds (fit-to-view math)", () => {
   });
 });
 
-describe("circuitBoundsWithLabels (§11 Unit A2)", () => {
+describe("circuitBoundsWithLabels", () => {
   it("returns null for an empty schematic, matching circuitBounds", () => {
     expect(circuitBoundsWithLabels([], [])).toBeNull();
   });
@@ -447,7 +447,7 @@ describe("circuitBoundsWithLabels (§11 Unit A2)", () => {
     expect(withLabels.minY).toBeLessThanOrEqual(base.minY);
     expect(withLabels.maxX).toBeGreaterThanOrEqual(base.maxX);
     expect(withLabels.maxY).toBeGreaterThanOrEqual(base.maxY);
-    // The label must actually widen the box on at least one side — otherwise
+    // The label must actually widen the box on at least one side - otherwise
     // this helper would be indistinguishable from circuitBounds.
     const widened =
       withLabels.minX < base.minX || withLabels.maxX > base.maxX ||
@@ -456,7 +456,7 @@ describe("circuitBoundsWithLabels (§11 Unit A2)", () => {
   });
 });
 
-describe("autoNetLabelOffset (Fix 2 — net label auto-placement)", () => {
+describe("autoNetLabelOffset (Fix 2 - net label auto-placement)", () => {
   it("defaults to the right-above offset (today's old fixed default) when nothing obstructs it", () => {
     expect(autoNetLabelOffset({ x: 0, y: 0 }, "OUT", [])).toEqual({ dx: 6, dy: -6 });
   });
@@ -465,7 +465,7 @@ describe("autoNetLabelOffset (Fix 2 — net label auto-placement)", () => {
     const blocker = comp("r1", 0, 0);
     const blockerRect = componentWorldRect(blocker);
     // Sanity: the default right-above candidate's start point (anchor + 6,-6)
-    // does land inside this blocker's own bbox for this placement — otherwise
+    // does land inside this blocker's own bbox for this placement - otherwise
     // this test isn't actually exercising the collision-avoidance path.
     expect(blockerRect.minX).toBeLessThanOrEqual(6);
     expect(blockerRect.maxX).toBeGreaterThanOrEqual(6);
@@ -507,7 +507,7 @@ describe("autoNetLabelOffset (Fix 2 — net label auto-placement)", () => {
   });
 });
 
-describe("fitViewTransform padding (§11 Unit A2)", () => {
+describe("fitViewTransform padding", () => {
   const bounds = { minX: 0, minY: 0, maxX: 1000, maxY: 500 };
 
   it("keeps 12% of the viewport clear on the constrained axis", () => {
@@ -575,7 +575,7 @@ describe("fitViewTransform padding (§11 Unit A2)", () => {
   });
 });
 
-describe("marquee intersection geometry (§UX checklist 3)", () => {
+describe("marquee intersection geometry ", () => {
   const rect = { minX: 0, minY: 0, maxX: 100, maxY: 100 };
 
   it("rectsOverlap: overlap, containment, touch, and miss", () => {
@@ -606,7 +606,7 @@ describe("marquee intersection geometry (§UX checklist 3)", () => {
   });
 });
 
-describe("pathWithHops — hop-over arcs at unconnected crossings", () => {
+describe("pathWithHops - hop-over arcs at unconnected crossings", () => {
   it("arcs over each crossing on a left-to-right horizontal segment, in order", () => {
     const d = pathWithHops(
       [{ x: 0, y: 0 }, { x: 100, y: 0 }],

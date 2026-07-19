@@ -1,9 +1,8 @@
-// Arbitrary-expression waveform traces (FEATURE_PARITY §6 "plot arbitrary
-// expressions": V(a)-V(b), I(R1)*V(out), power V(out)*I(out)).
+// Arbitrary-expression waveform traces (LTspice parity)-V(b), I(R1)*V(out), power V(out)*I(out)).
 //
 // LTspice lets you plot any expression of the simulated signals, not just a
 // single node. A transient AnalysisResult already carries everything an
-// expression needs — node-voltage traces and per-device branch currents — and
+// expression needs - node-voltage traces and per-device branch currents - and
 // the `.meas` engine already knows how to compile an expression that mixes
 // `V(...)`/`I(...)` signals with scalars into a per-sample evaluator. We reuse
 // that compiler here to turn an expression string into a derived trace sampled
@@ -53,7 +52,7 @@ export function evaluatePlotExpression(
     if (Number.isFinite(v)) anyFinite = true;
   }
   if (!anyFinite) {
-    return { ok: false, error: `“${trimmed}” has no finite values — check the signal names.` };
+    return { ok: false, error: `“${trimmed}” has no finite values - check the signal names.` };
   }
 
   // Label the axis by the expression's physical dimension (amps for a probed

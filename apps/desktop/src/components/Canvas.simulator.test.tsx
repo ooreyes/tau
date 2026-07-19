@@ -25,7 +25,7 @@ class ResizeObserverStub {
 }
 
 // Net label drag (Fix 2) captures the pointer on the dragged `<text>` so a
-// fast drag still delivers pointermove/up to it — jsdom doesn't implement
+// fast drag still delivers pointermove/up to it - jsdom doesn't implement
 // pointer capture at all (see ui/primitives.test.tsx for the same gap on
 // Radix primitives), so every test in this file needs the same no-op stubs.
 beforeAll(() => {
@@ -60,7 +60,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe("Canvas — simulator mutation boundary", () => {
+describe("Canvas - simulator mutation boundary", () => {
   it("selects a component without changing probes or circuit topology", () => {
     render(<Canvas interactive={false} />);
     const before = useSchematic.getState();
@@ -162,7 +162,7 @@ describe("Canvas — simulator mutation boundary", () => {
   });
 });
 
-describe("Canvas — simulator fit viewport", () => {
+describe("Canvas - simulator fit viewport", () => {
   it("centers topology in the visible SVG and refits after its wrapper resizes", () => {
     vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
       callback(0);
@@ -245,7 +245,7 @@ describe("Canvas — simulator fit viewport", () => {
   });
 });
 
-describe("Canvas — placement preview", () => {
+describe("Canvas - placement preview", () => {
   it("centers a vertical resistor on the pointer and removes the stale dashed ghost after placement", () => {
     useSchematic.setState({
       components: [],
@@ -280,7 +280,7 @@ describe("Canvas — placement preview", () => {
   });
 });
 
-describe("Canvas — schematic selection chrome", () => {
+describe("Canvas - schematic selection chrome", () => {
   it("selects an individual component through the canvas pointer gesture", () => {
     useSchematic.setState({ wires: [] });
     render(<Canvas interactive />);
@@ -491,7 +491,7 @@ describe("Canvas — schematic selection chrome", () => {
   });
 });
 
-describe("Canvas — net label drag (Fix 2)", () => {
+describe("Canvas - net label drag (Fix 2)", () => {
   it("drags a net label's text to a new dx/dy with exactly one undo entry, not one per pointermove", () => {
     useSchematic.setState({
       tool: { mode: "label" },
@@ -503,7 +503,7 @@ describe("Canvas — net label drag (Fix 2)", () => {
     const labelText = screen.getByRole("button", { name: "Rename node OUT" });
     fireEvent.pointerDown(labelText, { clientX: 100, clientY: 100 });
     fireEvent.pointerMove(labelText, { clientX: 108, clientY: 106 }); // past the click/drag threshold
-    fireEvent.pointerMove(labelText, { clientX: 115, clientY: 112 }); // still mid-drag — no extra undo entry
+    fireEvent.pointerMove(labelText, { clientX: 115, clientY: 112 }); // still mid-drag - no extra undo entry
     fireEvent.pointerUp(labelText, { clientX: 115, clientY: 112 });
 
     const label = useSchematic.getState().netLabels[0];

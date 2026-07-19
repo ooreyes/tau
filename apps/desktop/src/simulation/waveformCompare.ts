@@ -1,6 +1,6 @@
 /**
- * Quantitative waveform comparison — the heart of the acceptance test
- * ("reproduce LTspice's waveforms exactly", FEATURE_PARITY KEY GOAL). Given a
+ * Quantitative waveform comparison - the heart of the acceptance test
+ * ("reproduce LTspice's waveforms exactly", LTspice parity KEY GOAL). Given a
  * Tau result series and a reference series (typically loaded from an LTspice
  * `.raw`, which is sampled at different time points), it resamples the reference
  * onto the test's time grid over the overlapping interval and reports error

@@ -19,7 +19,7 @@ const part = (kind: SchematicComponent["kind"], value: string, label = ""): Sche
   label,
 });
 
-describe("collectAutoResolutionInputs (§11 Unit C8)", () => {
+describe("collectAutoResolutionInputs", () => {
   it("computes RC time constants against the geometric-mean resistance", () => {
     // R = 1k and 100k → R_typ = sqrt(1e3 · 1e5) = 10 kΩ; C = 1µ → τ = 10 ms.
     const inputs = collectAutoResolutionInputs([
@@ -49,7 +49,7 @@ describe("collectAutoResolutionInputs (§11 Unit C8)", () => {
     const inputs = collectAutoResolutionInputs([
       part("resistor", "not-a-number", "R1"),
       part("capacitor", "100n IC=1", "C1"), // leading token parses
-      part("vac", "", "V1"), // malformed source — skipped
+      part("vac", "", "V1"), // malformed source - skipped
     ]);
     // No valid resistor → fallback R_typ = 1 kΩ; τ = 100n · 1k = 100 µs.
     expect(inputs.maxTauSeconds).toBeCloseTo(1e-4, 9);
@@ -57,7 +57,7 @@ describe("collectAutoResolutionInputs (§11 Unit C8)", () => {
   });
 });
 
-describe("autoTransientOptions (§11 Unit C8)", () => {
+describe("autoTransientOptions", () => {
   it("falls back to the classic 6 ms / 240 defaults for a source-less, memory-less circuit", () => {
     expect(autoTransientOptions({ maxSourceHz: 0, minSourceHz: 0, maxTauSeconds: 0, minTauSeconds: 0 }))
       .toEqual({ stopTime: 0.006, steps: 240 });
@@ -96,7 +96,7 @@ describe("autoTransientOptions (§11 Unit C8)", () => {
 
   it("gives up window length, not sample density, when the step cap binds", () => {
     // 1 MHz fast source + 1 Hz slow source: 5 s window at 64 Ms/s wants 320M
-    // steps — impossible. The window shrinks to the cap at that density but
+    // steps - impossible. The window shrinks to the cap at that density but
     // never below one cycle of the slowest source (1 s → still capped math),
     // and steps land on the cap.
     const options = autoTransientOptions({
@@ -124,8 +124,8 @@ describe("autoTransientOptions (§11 Unit C8)", () => {
   });
 });
 
-describe("suggestAcSweep (§11 Unit C8)", () => {
-  it("keeps the classic 10 Hz–1 MHz sweep when every source is DC", () => {
+describe("suggestAcSweep", () => {
+  it("keeps the classic 10 Hz-1 MHz sweep when every source is DC", () => {
     expect(suggestAcSweep([part("vsource", "5", "V1")]))
       .toEqual({ startHz: 10, stopHz: 1e6, pointsPerDecade: 20 });
   });

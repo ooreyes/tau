@@ -3,7 +3,7 @@
  *
  * Evaluates the `{...}` brace expressions and `.param`/`.func` bodies that
  * pervade real LTspice circuits (`.param` is used 180× across the user's files).
- * Pure arithmetic over a numeric scope — no side effects, no schematic access —
+ * Pure arithmetic over a numeric scope - no side effects, no schematic access -
  * which keeps it trivially testable with hand-computed expected values.
  *
  * Grammar (precedence low → high):
@@ -342,7 +342,7 @@ const FUNCS: Record<string, Fn> = {
   round: ([x]) => Math.round(x),
   nint: ([x]) => Math.round(x), // LTspice "nearest integer"
   int: ([x]) => Math.trunc(x),
-  // 20·log10|x| — LTspice's dB helper.
+  // 20·log10|x| - LTspice's dB helper.
   db: ([x]) => 20 * Math.log10(Math.abs(x)),
   hypot: (a) => Math.hypot(...a),
   min: (a) => Math.min(...a),
@@ -366,7 +366,7 @@ const FUNCS: Record<string, Fn> = {
   xor: ([a, b]) => bool((a > 0.5) !== (b > 0.5)),
 
   // LTspice statistical / Monte-Carlo functions. Tau runs a single deterministic
-  // analysis, so these evaluate to their *nominal* (mean) value — the value
+  // analysis, so these evaluate to their *nominal* (mean) value - the value
   // LTspice's nominal run uses before any `.step`-driven randomization. This lets
   // circuits that pepper component values with `mc()`/`gauss()`/`flat()` build and
   // simulate at nominal instead of failing on an unknown function (MonteCarlo.asc).
@@ -378,7 +378,7 @@ const FUNCS: Record<string, Fn> = {
   white: () => 0, // white(x): band-limited white noise, mean 0
 };
 
-/** table(x, x1,y1, x2,y2, ...) — piecewise-linear lookup, clamped at the ends. */
+/** table(x, x1,y1, x2,y2, ...) - piecewise-linear lookup, clamped at the ends. */
 function tableFn(args: number[]): number {
   const x = args[0];
   const pts: Array<[number, number]> = [];

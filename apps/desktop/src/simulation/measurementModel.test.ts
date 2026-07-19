@@ -43,7 +43,7 @@ describe("classifySignal", () => {
 
   it("reports frequency for a single 10 Hz sine cycle over 100 ms", () => {
     // Auto-resolution for Class-D (10 Hz audio + 100 kHz carrier) often lands
-    // on a 100 ms window — exactly one audio cycle. Rising-only detection
+    // on a 100 ms window - exactly one audio cycle. Rising-only detection
     // previously needed ≥3 periods and labelled this transient.
     const times = Array.from({ length: 1001 }, (_, i) => i * 0.0001);
     const values = times.map((time) => Math.sin(2 * Math.PI * 10 * time));

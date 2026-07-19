@@ -373,7 +373,7 @@ describe("Sallen-Key low-pass (unity-gain, Butterworth, f_c ≈ 1 kHz)", () => {
     // The filter output is the op-amp output / in+ node: unity gain at low
     // frequency but rolling off at high frequency. Among traces that pass the
     // signal (≈0 dB at low f), the output is the one with the most attenuation
-    // up the band — this excludes the input node, which stays flat.
+    // up the band - this excludes the input node, which stays flat.
     const passband = ac.traces.filter((t) => Math.abs(t.magDb[0]) < 1);
     expect(passband.length).toBeGreaterThan(0);
     const outTrace = passband.reduce((best, t) => (t.magDb[bi] < best.magDb[bi] ? t : best));

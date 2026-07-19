@@ -24,7 +24,7 @@ function safeQuantity(text: string, unit: string): number {
 /**
  * Parse an LTspice ideal-lossless-transmission-line value into characteristic
  * impedance and one-way delay. LTspice writes the value as `Td=50n Z0=75`,
- * `Z0=150 Td=30n`, etc. — order-independent `key=value` tokens with SI
+ * `Z0=150 Td=30n`, etc. - order-independent `key=value` tokens with SI
  * suffixes. Missing/invalid fields fall back to Z0 = 50 Ω, Td = 1 ns (the
  * ngspice lossless line requires both Z0 and a positive TD).
  */

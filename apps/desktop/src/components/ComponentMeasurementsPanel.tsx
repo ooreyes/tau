@@ -17,7 +17,7 @@ export interface ComponentMeasurementsPanelProps {
   maxHeight?: number | string;
   /** "full" (default) is the searchable card grid used standalone. "compact"
    *  renders the same rows as a responsive grid of small cards
-   *  for the simulator's telemetry dock — same data/selection model, a
+   *  for the simulator's telemetry dock - same data/selection model, a
    *  different shell entirely (no search, no sign-convention disclosure). */
   variant?: "full" | "compact";
 }
@@ -120,7 +120,7 @@ function Reading({ label, series }: { label: "Voltage" | "Current" | "Power"; se
     <div className="min-w-0 rounded-md bg-muted px-3 py-2">
       <dt className="flex items-baseline justify-between gap-2 text-[0.6875rem] font-medium uppercase tracking-wide text-muted-foreground">
         <span>{label}</span>
-        <span>{reading?.qualifier ?? "—"}</span>
+        <span>{reading?.qualifier ?? "-"}</span>
       </dt>
       <dd className={cn("m-0 mt-1 truncate font-mono text-sm font-semibold tabular-nums", series ? "text-foreground" : "text-muted-foreground")}>
         {readingText(series)}
@@ -257,10 +257,10 @@ function displayKind(kind: ComponentMeasurement["kind"]): string {
 }
 
 /** One row of the compact card's spec table: full-word quantity on the left
- *  (with the qualifier the value actually carries — RMS/AVG/final; the data
+ *  (with the qualifier the value actually carries - RMS/AVG/final; the data
  *  model picks it per series), engineering value + unit right-aligned. The
  *  whole card is the button (unlike the full card's dedicated Select
- *  button) — in the dock, clicking a card IS "focus this on canvas". */
+ *  button) - in the dock, clicking a card IS "focus this on canvas". */
 function CompactReading({ label, series }: { label: "Voltage" | "Current" | "Power"; series?: MeasuredSeries }) {
   const reading = series ? primaryReading(series) : null;
   return (
@@ -274,7 +274,7 @@ function CompactReading({ label, series }: { label: "Voltage" | "Current" | "Pow
         )}
       </dt>
       <dd className={reading ? undefined : "muted"}>
-        {series && reading ? formatEngineering(reading.value, series.unit, 3) : "—"}
+        {series && reading ? formatEngineering(reading.value, series.unit, 3) : "-"}
       </dd>
     </div>
   );

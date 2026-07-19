@@ -50,6 +50,11 @@ interface View {
 
 const clampZoom = (z: number) => Math.min(5, Math.max(0.25, z));
 
+/** Anything at/right of this X is a flattened hierarchical-block body packed
+ *  off-sheet by the ASC importer (placement starts at 1e6); authored circuits
+ *  live well left of it (document validation caps |coord| at 1e6). */
+const SUBCIRCUIT_PACK_REGION_X = 500_000;
+
 /** Screen-space box used while drawing a rubber-band selection rectangle. */
 interface BoxDrag {
   startX: number; // screen coords
@@ -87,7 +92,7 @@ export function Canvas({
   fitSignal = 0,
 }: {
   /** Last DC operating point; in simulator mode its node voltages / branch
-   *  currents are annotated in place on the schematic (§6). */
+   *  currents are annotated in place on the schematic. */
   op?: OperatingPointResult | null;
   /** When false (simulator view) topology is read-only: pan/zoom, inspection,
    *  probe dots, and topology-neutral node aliases remain available. */
@@ -109,7 +114,7 @@ export function Canvas({
   // update. Keep the gesture geometry synchronously available as well, and
   // never mutate the Zustand selection store from inside a React state updater.
   const boxDragRef = useRef<BoxDrag | null>(null);
-  /** True while a component (or group) is being dragged — drives snap-dot visibility. */
+  /** True while a component (or group) is being dragged - drives snap-dot visibility. */
   const [movingParts, setMovingParts] = useState(false);
 
   const components = useSchematic((s) => s.components);
@@ -149,7 +154,7 @@ export function Canvas({
   const [editingId, setEditingId] = useState<string | null>(null);
 
   // In-place OP annotations (simulator mode only): re-extract geometry only
-  // when an ok OP result is actually on screen — never during schematic edits.
+  // when an ok OP result is actually on screen - never during schematic edits.
   const opLabels = useMemo(() => {
     if (interactive || !op?.ok) return [];
     return opAnnotations(op, extractCircuit(components, wires, netLabels));
@@ -484,7 +489,7 @@ export function Canvas({
     [screenToWorld],
   );
 
-  // Marquee semantics: anything INSIDE OR INTERSECTING the box selects —
+  // Marquee semantics: anything INSIDE OR INTERSECTING the box selects -
   // components by body overlap, wires when ANY segment crosses the box
   // (selected as complete wires, never fragments), labels/probes by anchor.
   const componentsInRect = useCallback(
@@ -931,14 +936,23 @@ export function Canvas({
     if (!el) return;
     const r = el.getBoundingClientRect();
     if (r.width === 0 || r.height === 0) return;
+    // Hierarchical imports pack flattened block bodies far right of the sheet
+    // (ascImport places them from x = 1e6). Framing those makes a 1M-unit-wide
+    // fit where the authored circuit is sub-pixel - the sheet looks EMPTY. Fit
+    // only the authored region unless the sheet has nothing else.
+    const authored = componentsRef.current.filter((c) => c.x < SUBCIRCUIT_PACK_REGION_X);
+    const fitComponents = authored.length > 0 ? authored : componentsRef.current;
+    const fitWires = authored.length > 0
+      ? wiresRef.current.filter((w) => w.points.every((p) => p.x < SUBCIRCUIT_PACK_REGION_X))
+      : wiresRef.current;
     // Label-aware bounds + 12%/48px viewport padding so long refdes/value
-    // text never touches (or clips at) the canvas edge (§11 Unit A2).
-    const framingBounds = circuitBoundsWithLabels(componentsRef.current, wiresRef.current);
+    // text never touches (or clips at) the canvas edge.
+    const framingBounds = circuitBoundsWithLabels(fitComponents, fitWires);
     if (!framingBounds) {
       setView({ x: r.width / 2, y: r.height / 2, zoom: 1 });
       return;
     }
-    const topologyBounds = circuitBounds(componentsRef.current, wiresRef.current);
+    const topologyBounds = circuitBounds(fitComponents, fitWires);
     const center = topologyBounds
       ? {
           x: (topologyBounds.minX + topologyBounds.maxX) / 2,
@@ -953,7 +967,7 @@ export function Canvas({
   }, []);
 
   // Auto-fit when the document identity changes (open / new / tab switch).
-  // Deliberately does NOT depend on components/wires — user pan is preserved
+  // Deliberately does NOT depend on components/wires - user pan is preserved
   // across edits; ⌂ and fitSignal are the only re-fit triggers in schematic mode.
   useEffect(() => {
     const el = svgRef.current;
@@ -1007,13 +1021,13 @@ export function Canvas({
     moved: boolean;
   } | null>(null);
   // Screen pixels of movement below which a pointerdown+up is a click
-  // (rename/select), not a drag — small enough not to feel laggy, large
+  // (rename/select), not a drag - small enough not to feel laggy, large
   // enough to absorb hand tremor on a trackpad tap.
   const LABEL_DRAG_THRESHOLD = 4;
 
   const activateNetLabel = (l: NetLabel) => {
     if (!interactive && labeling) {
-      // Click-without-drag opens the rename draft — unchanged from before
+      // Click-without-drag opens the rename draft - unchanged from before
       // labels were draggable.
       setLabelDraft({ x: l.x, y: l.y, text: l.text });
     } else if (interactive && tool.mode === "select") {
@@ -1044,7 +1058,7 @@ export function Canvas({
     if (!drag.moved && Math.hypot(dxScreen, dyScreen) < LABEL_DRAG_THRESHOLD) return;
     if (!drag.moved) {
       drag.moved = true;
-      // One undo snapshot for the whole drag, on the first move only — same
+      // One undo snapshot for the whole drag, on the first move only - same
       // convention as component drag (onPointerMove's "move" case above).
       beginChange();
     }
@@ -1094,7 +1108,7 @@ export function Canvas({
       >
         <defs>
           {/*
-            Circles must be centered in each tile — SVG patterns clip at the
+            Circles must be centered in each tile - SVG patterns clip at the
             tile edge, so a dot at (0,0) renders as a quarter-circle (the bug
             visible on the schematic stage).
           */}
@@ -1215,14 +1229,14 @@ export function Canvas({
               (never dragged, or an old .sim file predating this field) falls
               back to `autoNetLabelOffset`'s collision-avoiding placement;
               once dragged, the explicit offset wins forever so auto-place
-              never fights a placement the user chose (§Fix2). */}
+              never fights a placement the user chose . */}
           <g className={`net-label-layer${labelsInteractive ? " labels-interactive" : ""}`} aria-hidden={labelsInteractive ? undefined : "true"}>
             {netLabels.map((l) => {
               const offset = netLabelOffsets.get(l.id)
                 ?? autoNetLabelOffset({ x: l.x, y: l.y }, l.text, components, wires, probes);
               const tx = l.x + offset.dx;
               const ty = l.y + offset.dy;
-              // Anchor and text drift apart once dragged far — a leader line
+              // Anchor and text drift apart once dragged far - a leader line
               // keeps the net connection legible instead of a label reading
               // as floating and unattached.
               const showLeader = Math.hypot(offset.dx, offset.dy) > 24;
@@ -1259,7 +1273,7 @@ export function Canvas({
                 {a.text}
               </text>
             ) : (
-              // Centered under the component body — clear of the ref/value
+              // Centered under the component body - clear of the ref/value
               // labels, which sit beside the body.
               <text key={a.key} className="op-annotation current" x={a.x} y={a.y + 30} textAnchor="middle">
                 {a.text}
@@ -1278,7 +1292,7 @@ export function Canvas({
           )}
         </g>
 
-        {/* Rubber-band selection rectangle — in screen space (no world transform). */}
+        {/* Rubber-band selection rectangle - in screen space (no world transform). */}
         {boxDrag && (() => {
           const el = svgRef.current;
           const r = el?.getBoundingClientRect();
@@ -1401,7 +1415,7 @@ function ComponentView({
   selected: boolean;
   showPins: boolean;
 }) {
-  // Presentational only — selection/drag/edit are resolved centrally by
+  // Presentational only - selection/drag/edit are resolved centrally by
   // geometry in the SVG handlers, so render order never decides hit results.
   // Mirror-before-rotate (matches transformPoint / LTspice M*): SVG applies
   // transforms right-to-left, so `rotate(R) scale(-1 1)` flips then rotates.
@@ -1481,7 +1495,7 @@ function WireView({
   selected: boolean;
   /** Simulator mode: clicking probes the net, so advertise it with the probe cursor. */
   probeReady: boolean;
-  /** Unconnected-crossing x positions per horizontal segment index — drawn
+  /** Unconnected-crossing x positions per horizontal segment index - drawn
    *  as hop-over arcs so a crossing never reads as a connection. */
   hops?: ReadonlyMap<number, readonly number[]>;
   onPointerDown: (e: ReactPointerEvent<SVGElement>) => void;

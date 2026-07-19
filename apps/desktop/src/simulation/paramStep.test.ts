@@ -1,6 +1,6 @@
 /**
  * Unit + integration coverage for the `.step` parametric sweep parser and
- * runner (FEATURE_PARITY §4 `.step` / §5 `.step param x list/range`).
+ * runner (LTspice parity).
  *
  * Every range expectation below is hand-computed; the integration test re-uses
  * the voltage-divider geometry from paramIntegration.test.ts and proves the
@@ -19,7 +19,7 @@ import { runOperatingPoint } from "./operatingPoint";
 import { buildParamScope, EMPTY_SCOPE } from "./paramScope";
 import type { SchematicComponent, SchematicWire } from "../schematic/types";
 
-describe("parseStepDirective — linear range", () => {
+describe("parseStepDirective - linear range", () => {
   it("parses `.step param X 1 5 1` into 1..5", () => {
     const spec = parseStepDirective(".step param X 1 5 1");
     expect(spec).toEqual<StepSpec>({ kind: "param", name: "X", values: [1, 2, 3, 4, 5] });
@@ -52,7 +52,7 @@ describe("parseStepDirective — linear range", () => {
   });
 });
 
-describe("parseStepDirective — list form", () => {
+describe("parseStepDirective - list form", () => {
   it("parses an explicit param list", () => {
     const spec = parseStepDirective(".step param Rload list 1 2 5 10");
     expect(spec).toEqual<StepSpec>({ kind: "param", name: "Rload", values: [1, 2, 5, 10] });
@@ -67,7 +67,7 @@ describe("parseStepDirective — list form", () => {
   });
 });
 
-describe("parseStepDirective — log scales", () => {
+describe("parseStepDirective - log scales", () => {
   it("dec gives N points per decade including the endpoint", () => {
     // 1 → 100 at 1 pt/decade ⇒ 1, 10, 100.
     const spec = parseStepDirective(".step dec param F 1 100 1");
@@ -89,7 +89,7 @@ describe("parseStepDirective — log scales", () => {
   });
 });
 
-describe("parseStepDirective — source and temp kinds", () => {
+describe("parseStepDirective - source and temp kinds", () => {
   it("reads a bare designator as a source sweep", () => {
     const spec = parseStepDirective(".step V1 0 5 1");
     expect(spec).toEqual<StepSpec>({ kind: "source", name: "V1", values: [0, 1, 2, 3, 4, 5] });
@@ -107,7 +107,7 @@ describe("parseStepDirective — source and temp kinds", () => {
   });
 });
 
-describe("parseStepDirective — rejects malformed input", () => {
+describe("parseStepDirective - rejects malformed input", () => {
   it("returns null for non-step directives", () => {
     expect(parseStepDirective(".tran 1m")).toBeNull();
     expect(parseStepDirective(".param X=1")).toBeNull();
@@ -176,7 +176,7 @@ const resistor = (x: number, y: number, value: string, label = "R1"): SchematicC
 const ground = (x: number, y: number): SchematicComponent => ({ id: uid("gnd"), kind: "ground", x, y, rotation: 0, value: "", label: "" });
 const wire = (points: { x: number; y: number }[]): SchematicWire => ({ id: uid("w"), points });
 
-describe("runParamStep — divider integration", () => {
+describe("runParamStep - divider integration", () => {
   it("steps Rtop and the midpoint voltage tracks the divider ratio", () => {
     // Vsrc=12, Rbot=1k fixed; sweep Rtop ∈ {1k, 3k}. mid = 12 * 1k/(Rtop+1k).
     const components = [

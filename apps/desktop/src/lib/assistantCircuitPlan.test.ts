@@ -123,7 +123,7 @@ describe("assistant circuit plan", () => {
         { name: "0", pins: ["V1.n", "V1.p", "U1.in+", "U1.in-", "U1.v+"] },
       ],
     })).toThrow(/NO supply pins/);
-    // Equal-score conflict on two named nets — must reject with a repair hint.
+    // Equal-score conflict on two named nets - must reject with a repair hint.
     expect(() => compileAssistantCircuitPlan("x", {
       mode: "create",
       filename: "conflict.asc",
@@ -163,7 +163,7 @@ describe("assistant circuit plan", () => {
         { name: "vout", pins: ["R2.b", "U1.out"] },
         { name: "vcc", pins: ["V2.p", "U1.v+", "U1.vcc"] },
         { name: "vee", pins: ["V3.n", "U1.v-"] },
-        // Duplicate supply alias wrongly also grounded — compiler keeps vee.
+        // Duplicate supply alias wrongly also grounded - compiler keeps vee.
         { name: "0", pins: ["V1.n", "V2.n", "V3.p", "U1.in+", "U1.vee"] },
       ],
       directives: [".tran 200m"],
@@ -203,7 +203,7 @@ describe("assistant circuit plan", () => {
   });
 
   it("auto-repairs MOSFET source/bulk pins omitted by the model (Class-D miss)", () => {
-    // Live failure: M1.s, M2.s not connected — gates/drains present, sources
+    // Live failure: M1.s, M2.s not connected - gates/drains present, sources
     // forgotten. Compiler ties nmos s/b → 0 and pmos s/b → VDD (vsource.p).
     const action = compileAssistantCircuitPlan("mos-float-repair", {
       mode: "create",
@@ -309,7 +309,7 @@ describe("assistant circuit plan", () => {
       nets: [
         { name: "PWM", pins: ["M1.g", "M2.g"] },
         { name: "SW", pins: ["M1.d", "M2.d", "R1.a"] },
-        // No vsource.p rail — nmos s/b auto-repair to 0, but pmos s stays floating.
+        // No vsource.p rail - nmos s/b auto-repair to 0, but pmos s stays floating.
         { name: "0", pins: ["R1.b"] },
       ],
     })).toThrow(/M2\.s[\s\S]*MOSFET fix pattern/);
@@ -759,8 +759,8 @@ describe("assistant circuit plan", () => {
   });
 
   it("REGRESSION: dual-NMOS shared-gate half-bridge rewrites to complementary nmos+pmos", () => {
-    // Live Class-D failure: both FETs nmos on one PWM gate — high side cannot
-    // switch from a 0–VDD drive. Compiler must recover the golden topology.
+    // Live Class-D failure: both FETs nmos on one PWM gate - high side cannot
+    // switch from a 0-VDD drive. Compiler must recover the golden topology.
     const action = compileAssistantCircuitPlan("class-d-dual-nmos", {
       mode: "create",
       filename: "class-d-approx.asc",

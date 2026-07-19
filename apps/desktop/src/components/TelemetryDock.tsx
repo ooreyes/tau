@@ -5,8 +5,8 @@ import { PanelResizeHandle, usePanelWidth, type PanelWidthConfig } from "./panel
 
 /**
  * Collapsible per-component V/I/P dock anchored to the bottom of the
- * simulator's circuit column (§ telemetry dock). Reuses panelResize.tsx's
- * clamp/pointer/localStorage machinery for the height drag (edge="top" — see
+ * simulator's circuit column . Reuses panelResize.tsx's
+ * clamp/pointer/localStorage machinery for the height drag (edge="top" - see
  * PanelWidthConfig) and ComponentMeasurementsPanel's "compact" variant for
  * the card strip itself, so the dock owns layout chrome only, never the
  * measurement model or card markup.
@@ -36,7 +36,7 @@ function saveCollapsed(collapsed: boolean): void {
   try {
     localStorage.setItem(COLLAPSE_KEY, collapsed ? "1" : "0");
   } catch {
-    // Quota exceeded / private mode — the session keeps its in-memory state.
+    // Quota exceeded / private mode - the session keeps its in-memory state.
   }
 }
 

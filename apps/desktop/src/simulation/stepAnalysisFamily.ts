@@ -1,6 +1,6 @@
 /**
  * `.step` family-of-curves for the frequency- and DC-domain analyses
- * (FEATURE_PARITY §4 `.step`, §6 family overlay).
+ * (LTspice parity).
  *
  * `stepFamily.ts` builds the analysis-agnostic {@link StepContext}s (one per
  * swept value, nested products included) and the transient family is assembled
@@ -10,7 +10,7 @@
  * {@link runDcStepFamily}) that drive the interim TS `.ac`/`.dc` solvers.
  *
  * Keeping the core generic over the result shape (via `resultOk`) means the
- * exact same family logic serves the Bode sweep and the DC sweep — and stays
+ * exact same family logic serves the Bode sweep and the DC sweep - and stays
  * unit-testable against the real TS solvers with no native engine.
  */
 
@@ -124,8 +124,8 @@ function seriesDiffer(a: number[], b: number[]): boolean {
 /**
  * Reduce an AC `.step` family to one plottable signal across all successful
  * members. The chosen signal is the first trace of the first ok member that
- * actually *responds* to the step (differs between members) — a source node
- * pinned at 0 dB would make a useless family — falling back to the first trace
+ * actually *responds* to the step (differs between members) - a source node
+ * pinned at 0 dB would make a useless family - falling back to the first trace
  * when everything is flat. Members that lost the signal are skipped, not
  * errors. Returns `null` when there is nothing to draw (no family, all-failed,
  * no traces).
@@ -167,8 +167,8 @@ export interface DcFamilyOverlay {
 /**
  * Reduce a DC `.step` family to one plottable net across all successful
  * members. Ground (always 0 V) is excluded; among the rest the chosen net is
- * the first that responds to the step (differs between members) — the swept
- * source's own node is identical in every member — falling back to the first
+ * the first that responds to the step (differs between members) - the swept
+ * source's own node is identical in every member - falling back to the first
  * non-ground net when everything matches. Returns `null` when there is
  * nothing to draw.
  */

@@ -23,6 +23,14 @@ describe("decodeSchematicText", () => {
   it("decodes plain UTF-8/ASCII unchanged", () => {
     expect(decodeSchematicText(new TextEncoder().encode("Version 4\nSHEET 1"))).toBe("Version 4\nSHEET 1");
   });
+  it("strips NUL and C0 control bytes that would corrupt labels", () => {
+    const bytes = new TextEncoder().encode("Version 4\nSYMATTR InstName V\u0000in\u0001 middle\n");
+    const text = decodeSchematicText(bytes);
+    expect(text).toContain("InstName Vin middle");
+    expect(text).not.toContain("\u0000");
+    expect(text).not.toContain("\u0001");
+  });
+
   it("decodes UTF-16LE with BOM", () => {
     expect(decodeSchematicText(utf16le("Version 4"))).toBe("Version 4");
   });

@@ -1,14 +1,14 @@
 /**
- * LTspice `.raw` waveform IMPORTER (FEATURE_PARITY §1 "`.raw` waveform import").
+ * LTspice `.raw` waveform IMPORTER (LTspice parity).
  *
  * Reads the simulation output LTspice writes alongside a `.asc` so its reference
- * waveforms can be loaded into Tau and overlaid against Tau's own results — the
+ * waveforms can be loaded into Tau and overlaid against Tau's own results - the
  * heart of the acceptance test ("reproduce LTspice's waveforms exactly").
  *
  * Format (LTspice 17.x): a UTF-16LE (or ASCII) header of `Key: value` lines, a
  * `Variables:` table, then a `Binary:` or `Values:` data block. For binary real
  * data LTspice stores the independent variable (index 0: time/frequency/sweep)
- * as a float64 and every dependent variable as a float32 — unless `Flags`
+ * as a float64 and every dependent variable as a float32 - unless `Flags`
  * contains `double`, when all are float64. Complex (`.ac`) data stores every
  * variable as a (re, im) float64 pair.
  */
@@ -28,7 +28,7 @@ export interface RawData {
   complex: boolean;
   variables: RawVariable[];
   pointCount: number;
-  /** `values[v][p]` — real part of variable `v` at point `p`. */
+  /** `values[v][p]` - real part of variable `v` at point `p`. */
   values: number[][];
   /** Imaginary parts, present only for complex (`.ac`) data. */
   imaginary?: number[][];
@@ -38,7 +38,7 @@ export interface RawData {
  *  default), else assume UTF-8/ASCII. Honors a leading BOM. */
 function detectUtf16(bytes: Uint8Array): boolean {
   if (bytes.length >= 2 && bytes[0] === 0xff && bytes[1] === 0xfe) return true;
-  // "Title:" — the 'i' (0x69) at index 1 is followed by NUL in UTF-16LE.
+  // "Title:" - the 'i' (0x69) at index 1 is followed by NUL in UTF-16LE.
   return bytes.length >= 4 && bytes[0] !== 0x00 && bytes[1] === 0x00;
 }
 

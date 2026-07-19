@@ -5,11 +5,11 @@ import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 /**
- * §10 Sheet — a corner-anchored slide-in panel built on the same Radix
+ * Sheet - a corner-anchored slide-in panel built on the same Radix
  * Dialog primitive as ui/dialog.tsx (focus trap, Escape-to-close, outside-
  * click all come free), positioned as an operator-console side panel instead
  * of a centered pop. This is the treatment Tau's Settings panel has always
- * used (top-right, fit-content height, not a full-height drawer) — now with
+ * used (top-right, fit-content height, not a full-height drawer) - now with
  * real slide-from-edge motion (`--animate-slide-in/out-right`, tokens.css)
  * instead of Dialog's scale-pop. Backdrop uses the lighter `--scrim` (a side
  * sheet dims the console less than a centered alert, which keeps

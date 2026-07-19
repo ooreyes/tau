@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // Forces the real useProject store's ensureDefaultWorkspace (see
 // ExplorerPanel's mount effect in ShellPanels.tsx) to leave rootPath alone
-// instead of seeding its in-memory browser fallback — the assistant
+// instead of seeding its in-memory browser fallback - the assistant
 // scratchpad-fallback tests below need a genuine "no Schematics folder open"
 // precondition, which normally only happens on the real desktop app before
 // the user picks a folder (capability !== "none").
@@ -15,7 +15,7 @@ vi.mock("./project/fsBridge", async (importOriginal) => ({
 
 // Keeps the assistant's proactive local-AI onboarding card (and the
 // app-global LocalAiSetupDialog, which polls the same module) out of these
-// layout/creation-flow tests — both are covered by their own component tests.
+// layout/creation-flow tests - both are covered by their own component tests.
 vi.mock("./lib/localAiRuntime", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./lib/localAiRuntime")>()),
   isNativeDesktopApp: async () => false,

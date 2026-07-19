@@ -4,9 +4,9 @@ import { sourceValueLabel } from "./Canvas.geometry";
 const thin = "\u2009";
 
 /**
- * §UX fix: the canvas value label used to blindly suffix a catalog "unit"
+ * the canvas value label used to blindly suffix a catalog "unit"
  * onto the whole value string. For kinds that store several fields in one
- * string (comparator, vpulse — and previously tline), that produced garbled
+ * string (comparator, vpulse - and previously tline), that produced garbled
  * text like "1 0Vhi Vlo" instead of a real per-field format. Each multi-field
  * kind now gets its own formatter built from the same `decodeParams` the
  * inspector uses. Units sit next to the number with a thin space so digits

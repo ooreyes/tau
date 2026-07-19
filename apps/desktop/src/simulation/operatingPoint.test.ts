@@ -46,15 +46,15 @@ function wire(points: { x: number; y: number }[]): SchematicWire {
 }
 
 // ---------------------------------------------------------------------------
-// Test 1 — Resistive voltage divider
+// Test 1 - Resistive voltage divider
 // ---------------------------------------------------------------------------
-describe("DC operating point — resistive voltage divider", () => {
+describe("DC operating point - resistive voltage divider", () => {
   /**
    * VS=10V at (0,32): p=(0,0), n=(0,64)
    * R1=1kΩ at (96,0): a=(64,0), b=(128,0)
    * R2=1kΩ at (192,0): a=(160,0), b=(224,0)
-   * GND at (0,64): g=(0,64) — VS.n
-   * GND at (224,0): g=(224,0) — R2.b
+   * GND at (0,64): g=(0,64) - VS.n
+   * GND at (224,0): g=(224,0) - R2.b
    * Wire: (0,0)→(64,0), (128,0)→(160,0)
    *
    * Expected: mid-node ≈ 5V, source node = 10V
@@ -115,9 +115,9 @@ describe("DC operating point — resistive voltage divider", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Test 2 — Asymmetric divider (R1=2k, R2=1k) → mid = 10/3 V
+// Test 2 - Asymmetric divider (R1=2k, R2=1k) → mid = 10/3 V
 // ---------------------------------------------------------------------------
-describe("DC operating point — asymmetric divider", () => {
+describe("DC operating point - asymmetric divider", () => {
   /**
    * VS=10V, R1=2k, R2=1k
    * Expected mid = 10 * R2/(R1+R2) = 10 * 1/3 ≈ 3.333 V
@@ -152,9 +152,9 @@ describe("DC operating point — asymmetric divider", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Test 3 — Capacitor treated as open (ignored)
+// Test 3 - Capacitor treated as open (ignored)
 // ---------------------------------------------------------------------------
-describe("DC operating point — capacitor as open circuit", () => {
+describe("DC operating point - capacitor as open circuit", () => {
   /**
    * VS=5V, R=1kΩ, C=1µF in parallel with R.
    *   At DC, C is open → C carries no current → divider behaves the same.
@@ -180,15 +180,15 @@ describe("DC operating point — capacitor as open circuit", () => {
    *   VS at (0,32): p=(0,0), n=(0,64)
    *   R  at (96,0): a=(64,0), b=(128,0)
    *   GND at (0,64)
-   *   GND at (128,0): g=(128,0) — R.b
+   *   GND at (128,0): g=(128,0) - R.b
    *   Wire: VS.p(0,0)→R.a(64,0)
    *
    *   Cap in parallel with R → cap.a connects to (64,0)=R.a (VS+), cap.b connects to (128,0)=R.b (GND).
-   *   C at (96,0): same position as R would make pin collisions with R — use different y.
+   *   C at (96,0): same position as R would make pin collisions with R - use different y.
    *   Cap at (96,100): a=(64,100), b=(128,100)
    *   Wire: (64,0)→(64,100)→... but let's just place cap coinciding with R pins.
    *   C at (96,0) same as R → pins coincide perfectly, cap in parallel with R.
-   *   That's fine — the cap is open, so no impact.
+   *   That's fine - the cap is open, so no impact.
    *
    *   Simplest: cap in series with another R, both grounded. VS→R1→mid→cap (open)→...
    *   mid floats because cap is open. That's bad.
@@ -198,7 +198,7 @@ describe("DC operating point — capacitor as open circuit", () => {
    *   R at (96,0): a=(64,0), b=(128,0)
    *   GND at (0,64): VS.n
    *   GND at (128,0): R.b
-   *   Cap at (0,0): a=(-32,0), b=(32,0)  — across VS.p side + some floating node
+   *   Cap at (0,0): a=(-32,0), b=(32,0)  - across VS.p side + some floating node
    *   That's messy.
    *
    *   CLEANEST: same R-only circuit + add a cap in parallel (same pins).
@@ -206,7 +206,7 @@ describe("DC operating point — capacitor as open circuit", () => {
    */
   const V1 = vsource(0, 32, "5V", "V1");
   const R = resistor(96, 0, "1k", "R1");
-  // Cap at same x as R: a=(64,0), b=(128,0) — in parallel with R
+  // Cap at same x as R: a=(64,0), b=(128,0) - in parallel with R
   const C = capacitor(96, 0, "1µ", "C1");
   const GND_vs = ground(0, 64);
   const GND_r = ground(128, 0);
@@ -233,9 +233,9 @@ describe("DC operating point — capacitor as open circuit", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Test 4 — Inductor treated as short
+// Test 4 - Inductor treated as short
 // ---------------------------------------------------------------------------
-describe("DC operating point — inductor as short circuit", () => {
+describe("DC operating point - inductor as short circuit", () => {
   /**
    * VS=10V → L (short) → GND. With L as wire, VS sees a dead short.
    * The L branch current is 10/0... wait, L is a 0V source: V_L=0.
@@ -301,9 +301,9 @@ describe("DC operating point — inductor as short circuit", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Test 5 — Simple resistor network (T-network)
+// Test 5 - Simple resistor network (T-network)
 // ---------------------------------------------------------------------------
-describe("DC operating point — T-resistor network", () => {
+describe("DC operating point - T-resistor network", () => {
   /**
    * T-network (pi-topology without the right leg):
    *   VS=12V → Ra=3k → mid → Rb=1k → GND
@@ -356,9 +356,9 @@ describe("DC operating point — T-resistor network", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Test 6 — Failure cases
+// Test 6 - Failure cases
 // ---------------------------------------------------------------------------
-describe("DC operating point — failure cases", () => {
+describe("DC operating point - failure cases", () => {
   it("no ground → ok=false", () => {
     const V1 = vsource(0, 32, "5V", "V1");
     const R = resistor(96, 0, "1k", "R1");
@@ -388,7 +388,7 @@ describe("DC operating point — failure cases", () => {
     // VS with both p and n grounded → singular (VS forces 5V but ground forces 0V on same node)
     const V1 = vsource(0, 32, "5V", "V1");
     const GND_n = ground(0, 64);   // VS.n=(0,64) coincides
-    const GND_p = ground(0, 0);    // VS.p=(0,0) coincides — forces VS+ to GND
+    const GND_p = ground(0, 0);    // VS.p=(0,0) coincides - forces VS+ to GND
     const components = [V1, GND_n, GND_p];
     const wires: SchematicWire[] = [];
 
@@ -396,7 +396,7 @@ describe("DC operating point — failure cases", () => {
     expect(result.ok).toBe(false);
   });
 
-  it("does not throw — all failures return {ok: false}", () => {
+  it("does not throw - all failures return {ok: false}", () => {
     // Verify none of the failure cases throw
     const cases = [
       runOperatingPoint({ components: [], wires: [] }),

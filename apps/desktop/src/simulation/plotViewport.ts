@@ -1,15 +1,13 @@
 /**
- * Desmos-style scope zoom/pan viewport math (§UX Unit B, owner feedback:
- * "LTspice makes it significantly easier to zoom into plots and zoom out.
- * Almost like Desmos: auto-center, and x/y axis remain persistent."). Pure
- * and DOM-free — no `getBoundingClientRect`, no event objects — so the
+ * Desmos-style scope zoom/pan viewport math . Pure
+ * and DOM-free - no `getBoundingClientRect`, no event objects - so the
  * zoom-about-point / pan / fit math is fully unit-testable. The interaction
  * hook (`components/usePlotViewport.ts`) converts real pointer/wheel events
  * into the fractional inputs these functions take.
  */
 import type { AxisScale } from "./axisTicks";
 
-/** A plot's visible data-space window — what {@link PlotAxes} and the trace
+/** A plot's visible data-space window - what {@link PlotAxes} and the trace
  *  path functions read to know what to draw. Independent per pane/svg. */
 export interface Viewport {
   xMin: number;
@@ -24,7 +22,7 @@ export interface ViewportScales {
 }
 
 /** Zoom-in/out never shrinks a span past this fraction of the ORIGINAL data
- *  domain span — guards against an inverted or zero-width axis after many
+ *  domain span - guards against an inverted or zero-width axis after many
  *  rapid zoom-in ticks (a span of exactly 0 breaks every downstream ratio). */
 const MIN_SPAN_FRACTION = 1e-9;
 
@@ -57,12 +55,12 @@ function zoomAxis(min: number, max: number, focalFrac: number, factor: number, s
 
 /**
  * Zoom a viewport about a focal point (fractions `[0,1]` within the plot
- * box) by independent per-axis factors — `{x:1,y:1}` for "y-only" zoom
+ * box) by independent per-axis factors - `{x:1,y:1}` for "y-only" zoom
  * (Alt/Option+wheel), `{x:f,y:1}` for "x-only" (Shift+wheel / horizontal
  * wheel), `{x:f,y:f}` for the default both-axes zoom.
  */
 /** A span floor tied to the axis VALUES' own magnitude (not the current span
- *  itself) — using the shrinking span as its own floor's basis would let the
+ *  itself) - using the shrinking span as its own floor's basis would let the
  *  floor shrink right along with it, never actually stopping the zoom. */
 function axisMinSpan(min: number, max: number, scale: AxisScale): number {
   if (scale === "log" && isPositiveDomain(min, max)) {
@@ -135,7 +133,7 @@ export function fitViewport(domain: Viewport): Viewport {
   return { xMin: domain.xMin, xMax: domain.xMax, yMin: domain.yMin, yMax: domain.yMax };
 }
 
-/** Clamp a fraction into `[0,1]` — used to keep a pointer position that
+/** Clamp a fraction into `[0,1]` - used to keep a pointer position that
  *  strayed outside the plot box (e.g. a drag that continues past the SVG's
  *  edge) from producing a nonsensical focal point. */
 export function clampFraction(frac: number): number {

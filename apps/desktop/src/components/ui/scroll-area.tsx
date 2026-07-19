@@ -4,7 +4,7 @@ import * as ScrollAreaPrimitive from "@radix-ui/react-scroll-area";
 import { cn } from "@/lib/utils";
 
 /**
- * shadcn ScrollArea (new-york), adapted to Tau (§10 design system): the
+ * shadcn ScrollArea (new-york), adapted to Tau: the
  * thumb uses `--panel-4` (the same "control surface" step other primitives
  * rest on), matching the thin custom scrollbars App.css already hand-rolls
  * via `scrollbar-color` for panels that don't (yet) use this primitive.

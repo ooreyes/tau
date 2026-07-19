@@ -11,7 +11,7 @@
  * coefficients (params already resolved against the schematic scope) and emit an
  * `A`-device + `.model s_xfer`.
  *
- * Two cases can't be a finite rational polynomial in s — transport delay
+ * Two cases can't be a finite rational polynomial in s - transport delay
  * `exp(-T*s)` and fractional/root responses `sqrt(1+τ*s)` (LTspice's own
  * TwoTau/HalfSlope demos). For those we fall back to the DC gain H(0): a plain
  * constant-gain source. That is *exact* for an operating point (s=0) and a
@@ -162,7 +162,7 @@ function toRational(node: Node, scope: Scope, funcs: Record<string, FuncDef>): R
       }
     }
     case "call":
-      // exp(), sqrt(), … are transcendental in s — not a finite polynomial.
+      // exp(), sqrt(), … are transcendental in s - not a finite polynomial.
       throw new NonRationalError(`function ${node.name}() is not a rational transfer`);
     case "tern":
       throw new NonRationalError("ternary not allowed in a Laplace transfer");
@@ -201,7 +201,7 @@ export interface LaplaceLines {
  *
  * Voltage sources realize a rational H(s) with an XSPICE `s_xfer` A-device
  * (coefficients emitted highest-power-first, ngspice's convention). Anything
- * non-rational — or any current source — falls back to the DC gain H(0) as a
+ * non-rational - or any current source - falls back to the DC gain H(0) as a
  * plain constant-gain controlled source so the deck always builds.
  */
 export function laplaceSourceLines(args: {
@@ -224,7 +224,7 @@ export function laplaceSourceLines(args: {
       const rat = toRational(tree, scope, funcs);
       const num = polyTrim(rat.num);
       const den = polyTrim(rat.den);
-      // Pure gain (no dynamics) — emit a plain VCVS, no code model needed.
+      // Pure gain (no dynamics) - emit a plain VCVS, no code model needed.
       if (num.length === 1 && den.length === 1) {
         return { lines: [`E_${base} ${op} ${on} ${cp} ${cn} ${fmt(num[0] / den[0])}`], exact: true };
       }

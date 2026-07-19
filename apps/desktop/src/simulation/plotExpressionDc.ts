@@ -1,8 +1,7 @@
-// Arbitrary-expression traces for the DC-sweep pane (FEATURE_PARITY §6
-// "plot arbitrary expressions … in the DC pane").
+// Arbitrary-expression traces for the DC-sweep pane (LTspice parity).
 //
 // A DC sweep produces a real-valued node-voltage series indexed by the swept
-// source value — the same shape as a transient result. So, exactly like the
+// source value - the same shape as a transient result. So, exactly like the
 // transient expression plot (`plotExpression.ts`), we adapt the sweep into the
 // `.meas` MeasWaveform (`dcResultToWaveform`) and reuse the transient expression
 // compiler (`compileExpr`) to evaluate any expression of the swept node voltages
@@ -47,7 +46,7 @@ export function evaluateDcPlotExpression(
     if (Number.isFinite(v)) anyFinite = true;
   }
   if (!anyFinite) {
-    return { ok: false, error: `“${trimmed}” has no finite values — check the signal names.` };
+    return { ok: false, error: `“${trimmed}” has no finite values - check the signal names.` };
   }
 
   return {

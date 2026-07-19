@@ -143,7 +143,7 @@ describe("AC real-circuit forms (scope thresholds + freq variable)", () => {
   const fc = 1000;
   const data = acData(logFreqs(10, 1e6, 100), { vout: lowpass(fc) });
 
-  it("FIND freq WHEN mag(V(vout))=(vout_3db) — bandwidth chain (AD4080 form)", () => {
+  it("FIND freq WHEN mag(V(vout))=(vout_3db) - bandwidth chain (AD4080 form)", () => {
     // Reproduces: .meas AC vout_max MAX MAG(V(vout))
     //             .meas AC vout_3db param vout_max/sqrt(2)
     //             .meas AC bw_3db FIND freq WHEN mag(V(vout))=(vout_3db)
@@ -160,7 +160,7 @@ describe("AC real-circuit forms (scope thresholds + freq variable)", () => {
     expect(bw.value! / fc).toBeCloseTo(1, 1);
   });
 
-  it("WHEN mag(V(out)) = GAIN/sqrt(2) — threshold references an earlier .meas (spaces around =)", () => {
+  it("WHEN mag(V(out)) = GAIN/sqrt(2) - threshold references an earlier .meas (spaces around =)", () => {
     const results = runAcMeasurements(
       [
         ".meas AC GAIN FIND mag(V(vout)) AT 10",

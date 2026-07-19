@@ -5,8 +5,8 @@ import { Check, ChevronRight, Circle } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 /**
- * shadcn DropdownMenu (new-york), adapted to Tau (§10 design system): a
- * true-black popover surface (same recipe as tooltip/select/context-menu —
+ * shadcn DropdownMenu (new-york), adapted to Tau: a
+ * true-black popover surface (same recipe as tooltip/select/context-menu -
  * `--popover` + hairline ring + `--elev-pop`), dense item rows, cobalt
  * accent for the active/checked state. Self-contained UA resets (no
  * preflight).

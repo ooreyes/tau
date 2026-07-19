@@ -1,5 +1,5 @@
 /**
- * Bundled LTspice library subcircuits (the `.asy` Prefix X import path) —
+ * Bundled LTspice library subcircuits (the `.asy` Prefix X import path) -
  * module API plus buildSpiceDeck integration. The sanitization rules under
  * test were each live-verified against ngspice-46 first: a dash in a subckt
  * name fails the X-line lookup, B-source `Rpar=` and `if()` are rejected, and
@@ -133,7 +133,7 @@ describe("bundledLibraryText", () => {
   });
 });
 
-describe("deck integration — subckt instances", () => {
+describe("deck integration - subckt instances", () => {
   it("emits the X line (SpiceOrder nodes, sanitized name) plus the bundled block once", () => {
     // U1: p1 shared with R1.a via a wire, p2 grounded by a flag.
     const comps = [

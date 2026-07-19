@@ -4,10 +4,10 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
 /**
- * shadcn Input (new-york), adapted to Tau (§10 design system): see button.tsx
+ * shadcn Input (new-york), adapted to Tau: see button.tsx
  * for the shared rationale (Tau tokens only, self-contained UA resets, dense
  * sizing). `variant="mono"` opts into `.mono-num` (App.css) for numeric
- * fields (component values, node voltages, etc.) — tabular figures so digits
+ * fields (component values, node voltages, etc.) - tabular figures so digits
  * don't jitter the field width as they change.
  */
 const inputVariants = cva(
@@ -38,7 +38,7 @@ function Input({
   ...props
 }: Omit<React.ComponentProps<"input">, "size"> & VariantProps<typeof inputVariants>) {
   // `size` is a real HTML input attribute (a number, the visible character
-  // width) that collides with cva's own `size` density variant (a string) —
+  // width) that collides with cva's own `size` density variant (a string) -
   // `Omit` above drops the native one so callers can pass `size="sm"`.
   return (
     <input

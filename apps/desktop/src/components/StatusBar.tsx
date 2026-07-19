@@ -20,15 +20,15 @@ export function StatusBar({
       : tool.mode === "wire"
         ? "Wiring"
         : tool.mode === "probe"
-          ? "Probing — click a node"
+          ? "Probing - click a node"
           : tool.mode === "label"
-            ? "Net label — click a point, type a name"
+            ? "Net label - click a point, type a name"
             : "Select";
   const simulatorHint = tool.mode === "probe"
-    ? "Probe — wire/pin plots voltage · component body plots current · click a probe to remove"
+    ? "Probe - wire/pin plots voltage · component body plots current · click a probe to remove"
     : tool.mode === "label"
-      ? "Node name — click a node or existing name; empty text removes it"
-      : "Inspect — select a component to focus telemetry";
+      ? "Node name - click a node or existing name; empty text removes it"
+      : "Inspect - select a component to focus telemetry";
   // Same lamp semantics as the toolbar's transport indicator (Toolbar.tsx):
   // color is entirely state-driven, not tied to which mode you're in.
   const lampState: LampState = mode === "simulator"

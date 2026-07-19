@@ -19,7 +19,7 @@ describe("StatusBar simulator guidance", () => {
   it("uses concise inspection guidance without repeating the view-only label", () => {
     render(<StatusBar mode="simulator" result={null} title="filter.asc" />);
 
-    expect(screen.getByText("Inspect — select a component to focus telemetry")).toBeTruthy();
+    expect(screen.getByText("Inspect - select a component to focus telemetry")).toBeTruthy();
     expect(screen.queryByText(/topology locked/i)).toBeNull();
     expect(screen.queryByText(/engine:/i)).toBeNull();
     expect(screen.queryByText(/grid 0\.1 in/i)).toBeNull();

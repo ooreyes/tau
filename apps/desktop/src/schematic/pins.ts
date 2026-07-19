@@ -62,7 +62,7 @@ const LOCAL_PINS: Record<ComponentKind, LocalPin[]> = {
     { id: "v-", label: "V-", x: 0, y: 32 },
   ],
   // Comparator: differential inputs (left) drive a single-ended output (right)
-  // that snaps to explicit high/low levels. No supply pins — rails are encoded
+  // that snaps to explicit high/low levels. No supply pins - rails are encoded
   // in the value (see engine/comparatorSpec.ts), so an open-loop comparator
   // clamps instead of saturating the way an ideal op-amp would.
   comparator: [
@@ -73,7 +73,7 @@ const LOCAL_PINS: Record<ComponentKind, LocalPin[]> = {
   // LTspice-style idealized digital gate (Digital\*.asy): up to five inputs on
   // the left, true (q) and complementary (qbar) outputs on the right, and a
   // com reference. Imported gates override this with the .asy's exact subset;
-  // natively placed gates expose the full bank (extra pins are harmless — a
+  // natively placed gates expose the full bank (extra pins are harmless - a
   // floating input is ignored, per LTspice semantics).
   digitalGate: [
     { id: "in1", label: "1", x: -32, y: -32 },
@@ -164,7 +164,7 @@ const LOCAL_PINS: Record<ComponentKind, LocalPin[]> = {
     { id: "s", label: "S", x: 16, y: 32 },
     { id: "b", label: "B", x: 32, y: 0 },
   ],
-  // JFET (3-terminal): drain top-right, gate left, source bottom-right — same
+  // JFET (3-terminal): drain top-right, gate left, source bottom-right - same
   // role layout as the MOSFET but no bulk pin (D G S map straight to the SPICE
   // J device order).
   njf: [

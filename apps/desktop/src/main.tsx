@@ -1,6 +1,6 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
-// Design-system token/utility layers (§10) — loaded before App.css (imported
+// Design-system token/utility layers - loaded before App.css (imported
 // by App) so the existing hand-written rules keep final say while panels migrate.
 import "./styles/tokens.css";
 import App from "./App";

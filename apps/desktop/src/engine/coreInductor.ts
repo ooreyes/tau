@@ -1,14 +1,14 @@
 /**
  * LTspice nonlinear (Chan) magnetic-core inductors → a linear ngspice inductor.
  *
- * LTspice sizes a saturable inductor from core geometry and a B–H curve, e.g.
+ * LTspice sizes a saturable inductor from core geometry and a B-H curve, e.g.
  *   SYMATTR Value     Hc=16. Bs=.44 Br=.10     (coercive force / saturation / remanence)
  *   SYMATTR Value2    A=0.0000251 Lm=0.0198    (core area m² / magnetic path length m)
  *   SYMATTR SpiceLine Lg=0.0006858 N=1000      (air-gap length m / turns)
  * ngspice (≤46) has no equivalent saturable-core primitive, so the hysteretic
  * waveform can't be reproduced. We instead emit the *unsaturated* small-signal
- * inductance from the magnetic circuit's reluctance — exact in the linear region
- * (the operating point and small-signal AC of most transformer demos) — so the
+ * inductance from the magnetic circuit's reluctance - exact in the linear region
+ * (the operating point and small-signal AC of most transformer demos) - so the
  * deck builds and runs instead of throwing.
  *
  *   reluctance R = Lg/(µ0·A) + Lm/(µ0·µi·A),  initial permeability µi = Br/(µ0·Hc)

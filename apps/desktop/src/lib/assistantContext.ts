@@ -2,7 +2,7 @@
  * Pure circuit-context assembly for the AI assistant column. Turns whatever
  * App.tsx already has in memory (schematic, directives, latest transient
  * result, per-component telemetry) into one compact text block the assistant
- * grounds its answers in. Built fresh at send time — not kept live — so it
+ * grounds its answers in. Built fresh at send time - not kept live - so it
  * always reflects exactly the circuit the user is asking about right now.
  */
 import type { NetLabel, Probe, SchematicComponent, SchematicWire } from "../schematic/types";
@@ -25,13 +25,13 @@ export interface AssistantContextInput {
   components: SchematicComponent[];
   wires: SchematicWire[];
   netLabels: NetLabel[];
-  /** Active meter probes — resolved to net / branch names for the model. */
+  /** Active meter probes - resolved to net / branch names for the model. */
   probes?: readonly Probe[];
   directives: string[];
   params: ParamScope;
   /** Latest transient result, or null if nothing has been run yet. */
   analysis: AnalysisResult | null;
-  /** Brief summaries only — never dump full OP/AC/DC/Fourier arrays. */
+  /** Brief summaries only - never dump full OP/AC/DC/Fourier arrays. */
   opResult?: OperatingPointResult | null;
   acResult?: AcResult | null;
   dcResult?: DcSweepResult | null;
@@ -141,7 +141,7 @@ const CONTEXT_CHAR_CAP = 16_000;
 const CURRENT_ASC_CHAR_CAP = 10_000;
 const NETLIST_CHAR_CAP = 2000;
 
-/** Nominal `.tran` line for a context-only deck build — the actual stop
+/** Nominal `.tran` line for a context-only deck build - the actual stop
  *  time/steps don't matter here (nothing is simulated), so a real result's
  *  numbers are preferred when available, purely for a more representative
  *  netlist header. */
@@ -167,7 +167,7 @@ function truncateMiddle(text: string, cap: number): string {
   const omitted = text.length - cap;
   const head = Math.ceil(cap * 0.6);
   const tail = cap - head;
-  return `${text.slice(0, head)}\n… [netlist truncated — ${omitted} chars omitted] …\n${text.slice(text.length - tail)}`;
+  return `${text.slice(0, head)}\n… [netlist truncated - ${omitted} chars omitted] …\n${text.slice(text.length - tail)}`;
 }
 
 function buildNetlistSection(input: AssistantContextInput): string {
@@ -303,7 +303,7 @@ function buildProbesSection(input: AssistantContextInput): string {
 const MAX_OP_NET_SAMPLES = 8;
 const MAX_FOURIER_LINES = 4;
 
-/** Compact one-liners for non-transient results already sitting in App state —
+/** Compact one-liners for non-transient results already sitting in App state -
  *  enough for the model to know what exists without shipping full arrays. */
 function buildOtherResultsSection(input: AssistantContextInput): string {
   const lines: string[] = [];
@@ -322,7 +322,7 @@ function buildOtherResultsSection(input: AssistantContextInput): string {
         + ".",
       );
     } else {
-      lines.push(`OP: failed — ${opResult.message}`);
+      lines.push(`OP: failed - ${opResult.message}`);
     }
   }
 
@@ -339,7 +339,7 @@ function buildOtherResultsSection(input: AssistantContextInput): string {
         + ".",
       );
     } else {
-      lines.push(`AC: failed — ${acResult.message}`);
+      lines.push(`AC: failed - ${acResult.message}`);
     }
   }
 
@@ -349,7 +349,7 @@ function buildOtherResultsSection(input: AssistantContextInput): string {
         `DC: sweep ${dcResult.source}, ${dcResult.sweep.length} points, ${dcResult.nets.length} nets.`,
       );
     } else {
-      lines.push(`DC: failed — ${dcResult.message}`);
+      lines.push(`DC: failed - ${dcResult.message}`);
     }
   }
 
@@ -379,7 +379,7 @@ function buildAnalysisSection(input: AssistantContextInput): string {
     return lines.join("\n");
   }
   if (!analysis.ok) {
-    const lines = [`Analysis: last transient run failed — ${analysis.message}`, probeLine];
+    const lines = [`Analysis: last transient run failed - ${analysis.message}`, probeLine];
     if (otherResults) lines.push(otherResults);
     return lines.join("\n");
   }
@@ -427,7 +427,7 @@ export function buildAssistantContext(
   // later summaries (e.g. hundreds of .meas rows), never the revision source.
   const omitted = text.length - CONTEXT_CHAR_CAP;
   return {
-    text: `${text.slice(0, CONTEXT_CHAR_CAP)}\n… [context truncated — ${omitted} chars omitted]`,
+    text: `${text.slice(0, CONTEXT_CHAR_CAP)}\n… [context truncated - ${omitted} chars omitted]`,
     truncated: true,
     canApplyCurrent: currentAsc.canApplyCurrent,
   };

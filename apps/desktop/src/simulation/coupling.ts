@@ -1,6 +1,6 @@
 /**
  * Mutual-inductance (`K` coupling) support for the interim TS MNA solvers
- * (FEATURE_PARITY §3 coupled inductors `K` — the browser/test-engine half).
+ * (LTspice parity).
  *
  * The native ngspice deck already carries `K` directives verbatim
  * (`engine/couplingDirectives.ts`). This module is the analogous support for the
@@ -9,7 +9,7 @@
  * inductor set, into pairwise mutual-inductance terms the solvers stamp.
  *
  * Without it a coupled transformer simulates in the TS engine as independent,
- * uncoupled inductors (no voltage transfers between windings) — the wrong answer.
+ * uncoupled inductors (no voltage transfers between windings) - the wrong answer.
  *
  * Pure functions. A K line names inductors by their instance label and ends with
  * a coupling coefficient (possibly a braced parameter expression), e.g.
@@ -83,7 +83,7 @@ export interface CoupledInductor {
  * directly (so a caller maps them to branch unknowns by adding its inductor
  * offset). A K line listing N inductors couples all C(N,2) pairs with the same
  * coefficient; the first spec to mention a given pair wins (later duplicates are
- * ignored). |k| is clamped to 1 — a physical coupling coefficient cannot exceed
+ * ignored). |k| is clamped to 1 - a physical coupling coefficient cannot exceed
  * unity, and k>1 makes the inductance matrix non-positive-definite (singular /
  * unstable solve). Labels not present among `inductors` are ignored.
  */

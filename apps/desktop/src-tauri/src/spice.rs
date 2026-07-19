@@ -18,7 +18,6 @@ use std::env;
 use libloading::Library;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, State};
-use tempfile::TempDir;
 
 const MAX_VECTOR_LENGTH: usize = 2_000_000;
 const MAX_TRANSFER_VALUES: usize = 8_000_000;
@@ -214,9 +213,43 @@ struct SpiceApi {
     get_vec_info: NgGetVecInfo,
 }
 
+/** Remove leftover per-run `tau-ngspice-XXXXXX` staging dirs that earlier Tau
+ * builds leaked when a worker died by signal (Drop never ran). Only dirs with
+ * the randomized-suffix prefix are touched, never the stable staging dir, and
+ * only after they have been idle well past a worker's maximum lifetime. */
+fn sweep_stale_codemodel_dirs(stable_dir: &std::path::Path) {
+    let Some(parent) = stable_dir.parent() else {
+        return;
+    };
+    let Ok(entries) = std::fs::read_dir(parent) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path == stable_dir {
+            continue;
+        }
+        let is_legacy = entry
+            .file_name()
+            .to_str()
+            .is_some_and(|name| name.starts_with("tau-ngspice-") && name != "tau-ngspice-codemodels");
+        if !is_legacy || !path.is_dir() {
+            continue;
+        }
+        let idle_long_enough = entry
+            .metadata()
+            .and_then(|meta| meta.modified())
+            .ok()
+            .and_then(|modified| modified.elapsed().ok())
+            .is_some_and(|elapsed| elapsed.as_secs() > 600);
+        if idle_long_enough {
+            let _ = std::fs::remove_dir_all(&path);
+        }
+    }
+}
+
 struct SpiceEngine {
     _library: Library,
-    _codemodel_cache: Option<TempDir>,
     api: SpiceApi,
     callback_state: Box<CallbackState>,
     library_path: PathBuf,
@@ -282,7 +315,6 @@ impl SpiceEngine {
         }
         let mut engine = Self {
             _library: library,
-            _codemodel_cache: None,
             api,
             callback_state,
             library_path,
@@ -315,20 +347,18 @@ impl SpiceEngine {
         // lexer still splits backslash-escaped spaces. DMGs commonly mount as
         // `/Volumes/Tau 1`, so loading directly from the app resource path can
         // silently leave every XSPICE device unknown. Stage the small, sealed
-        // modules in a private no-whitespace temp directory for this engine's
-        // lifetime. The embedded code signatures travel with the copied bytes.
+        // modules in a STABLE no-whitespace staging directory shared by every
+        // run. A per-run TempDir relied on Drop for cleanup, and the worker
+        // process is killed with SIGKILL on Stop/timeout/crash, so each such
+        // exit leaked a ~692 KiB directory into /tmp. A fixed path is written
+        // atomically (temp file + rename), reused when the bytes already
+        // match, and never needs Drop. The embedded code signatures travel
+        // with the copied bytes.
         #[cfg(unix)]
-        let cache = tempfile::Builder::new()
-            .prefix("tau-ngspice-")
-            .tempdir_in("/tmp")
-            .map_err(|error| format!("Could not stage bundled ngspice code models: {error}"))?;
+        let staged_dir = PathBuf::from("/tmp/tau-ngspice-codemodels");
         #[cfg(not(unix))]
-        let cache = tempfile::Builder::new()
-            .prefix("tau-ngspice-")
-            .tempdir()
-            .map_err(|error| format!("Could not stage bundled ngspice code models: {error}"))?;
-        if cache
-            .path()
+        let staged_dir = std::env::temp_dir().join("tau-ngspice-codemodels");
+        if staged_dir
             .to_string_lossy()
             .chars()
             .any(char::is_whitespace)
@@ -338,20 +368,39 @@ impl SpiceEngine {
                     .to_string(),
             );
         }
+        std::fs::create_dir_all(&staged_dir)
+            .map_err(|error| format!("Could not stage bundled ngspice code models: {error}"))?;
+        sweep_stale_codemodel_dirs(&staged_dir);
+        let pid = std::process::id();
         for name in names {
             let source = codemodel_dir.join(name);
             if !source.is_file() {
                 continue;
             }
-            std::fs::copy(&source, cache.path().join(name)).map_err(|error| {
+            let destination = staged_dir.join(name);
+            let bytes = std::fs::read(&source).map_err(|error| {
                 format!(
                     "Could not stage bundled ngspice code model {}: {error}",
                     source.display()
                 )
             })?;
+            // Concurrent workers share the staging dir; identical bytes mean
+            // the copy can be skipped, and the rename keeps a reader in
+            // another process from ever observing a torn file.
+            if std::fs::read(&destination).is_ok_and(|existing| existing == bytes) {
+                continue;
+            }
+            let scratch = staged_dir.join(format!(".{name}.tmp-{pid}"));
+            std::fs::write(&scratch, &bytes)
+                .and_then(|()| std::fs::rename(&scratch, &destination))
+                .map_err(|error| {
+                    let _ = std::fs::remove_file(&scratch);
+                    format!(
+                        "Could not stage bundled ngspice code model {}: {error}",
+                        source.display()
+                    )
+                })?;
         }
-        let staged_dir = cache.path().to_path_buf();
-        self._codemodel_cache = Some(cache);
 
         for name in names {
             let path = staged_dir.join(name);
@@ -904,7 +953,15 @@ fn deck_lines(netlist: &str) -> Result<Vec<String>, String> {
                 ));
             }
         }
-        let command = lower.split_whitespace().next().unwrap_or_default();
+        // A SPICE continuation line starts with '+'; strip it so a smuggled
+        // "+ shell foo" is screened exactly like "shell foo" (defense in
+        // depth: ngspice treats such lines as inert parameters, but the
+        // sanitizer should not depend on that).
+        let command = lower
+            .trim_start_matches('+')
+            .split_whitespace()
+            .next()
+            .unwrap_or_default();
         if matches!(
             command,
             "shell"
@@ -1094,6 +1151,23 @@ V1 in 0 1
         }
 
         assert!(deck_lines("Tau\n.end\nR1 1 0 1k\n.end\n").is_err());
+    }
+
+    #[test]
+    fn screens_continuation_lines_like_their_unfolded_form() {
+        // A '+' continuation used to hide the command token from the
+        // blocklist. ngspice treats these as inert parameters, but the
+        // sanitizer must not depend on that.
+        for unsafe_line in ["+ shell touch /tmp/nope", "+shell touch /tmp/nope", "+ quit", "+ write /tmp/exfil.raw"] {
+            let deck = format!("Tau adversarial deck\nV1 in 0 5\n{unsafe_line}\n.end\n");
+            assert!(
+                deck_lines(&deck).is_err(),
+                "continuation-smuggled line was accepted: {unsafe_line}"
+            );
+        }
+        // Ordinary continuation parameters still pass.
+        let benign = "Tau deck\nV1 in 0 PULSE(0 5 0 1n\n+ 1n 0.5m 1m)\nR1 in 0 1k\n.tran 1u 1m\n.end\n";
+        assert!(deck_lines(benign).is_ok(), "benign continuation was rejected");
     }
 
     #[test]

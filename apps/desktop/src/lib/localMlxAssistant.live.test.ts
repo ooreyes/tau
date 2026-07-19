@@ -59,7 +59,7 @@ describe.runIf(live)("localMlxAssistant (live server)", () => {
       expect(values).toContain("1k");
       expect(values).toContain("2k");
 
-      // The plan must not merely parse — it must simulate as a real divider.
+      // The plan must not merely parse - it must simulate as a real divider.
       const op = runOperatingPoint({
         components: action.document.components,
         wires: action.document.wires,

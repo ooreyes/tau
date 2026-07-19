@@ -51,7 +51,7 @@ function wire(points: { x: number; y: number }[]): SchematicWire {
 }
 
 // ---------------------------------------------------------------------------
-// Test 1 — Inverting amplifier (gain = -Rf/Rin = -10k/1k = -10)
+// Test 1 - Inverting amplifier (gain = -Rf/Rin = -10k/1k = -10)
 //
 // Layout:
 //   V1  vsource at (64,112):  p=(64,80),   n=(64,144)
@@ -68,7 +68,7 @@ function wire(points: { x: number; y: number }[]): SchematicWire {
 //
 // Expected: Vout = -Rf/Rin * Vin = -10 * 1 = -10 V
 // ---------------------------------------------------------------------------
-describe("Inverting amplifier — gain = -Rf/Rin = -10", () => {
+describe("Inverting amplifier - gain = -Rf/Rin = -10", () => {
   const V1   = vsource(64, 112, "1", "V1");
   const U1   = opamp(256, 96, "U1");
   const Rin  = resistor(160, 80, "1k", "Rin");
@@ -131,7 +131,7 @@ describe("Inverting amplifier — gain = -Rf/Rin = -10", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Test 2 — Non-inverting amplifier (gain = 1 + Rf/Rg = 1 + 10k/1k = 11)
+// Test 2 - Non-inverting amplifier (gain = 1 + Rf/Rg = 1 + 10k/1k = 11)
 //
 // Layout:
 //   V1  vsource at (64,144):  p=(64,112),  n=(64,176)
@@ -148,7 +148,7 @@ describe("Inverting amplifier — gain = -Rf/Rin = -10", () => {
 //
 // Expected: Vout = (1 + Rf/Rg) * Vin = 11 * 1 = 11 V
 // ---------------------------------------------------------------------------
-describe("Non-inverting amplifier — gain = 1 + Rf/Rg = 11", () => {
+describe("Non-inverting amplifier - gain = 1 + Rf/Rg = 11", () => {
   const V1   = vsource(64, 144, "1", "V1");
   const U1   = opamp(256, 96, "U1");
   const Rg   = resistor(160, 80, "1k", "Rg");
@@ -207,7 +207,7 @@ describe("Non-inverting amplifier — gain = 1 + Rf/Rg = 11", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Test 3 — Unity buffer (voltage follower, gain = 1)
+// Test 3 - Unity buffer (voltage follower, gain = 1)
 //
 // Layout:
 //   V1   vsource at (64,144):  p=(64,112),  n=(64,176)
@@ -220,7 +220,7 @@ describe("Non-inverting amplifier — gain = 1 + Rf/Rg = 11", () => {
 //
 // Expected: Vout = Vin = 1 V (gain = 1)
 // ---------------------------------------------------------------------------
-describe("Unity buffer — gain = 1", () => {
+describe("Unity buffer - gain = 1", () => {
   const V1     = vsource(64, 144, "1", "V1");
   const U1     = opamp(192, 96, "U1");
   const gndV1  = ground(64, 176);
@@ -276,13 +276,13 @@ describe("Unity buffer — gain = 1", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Test 4 — gmin smoke test: op-amp with unconnected v+/v- rails
+// Test 4 - gmin smoke test: op-amp with unconnected v+/v- rails
 //
 // A minimal inverting-amp circuit where v+ and v- are deliberately left
 // floating (no connection, no ground). The solver must return ok=true
 // (gmin anchors the floating nodes to ~0 V, preventing a singular matrix).
 // ---------------------------------------------------------------------------
-describe("gmin smoke test — unconnected op-amp power rails", () => {
+describe("gmin smoke test - unconnected op-amp power rails", () => {
   /**
    * Same inverting-amp as Test 1, but we explicitly confirm the v+/v- pins
    * of the op-amp have NO connection (no ground, no wire). This tests the

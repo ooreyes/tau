@@ -4,10 +4,10 @@ import * as TooltipPrimitive from "@radix-ui/react-tooltip";
 import { cn } from "@/lib/utils";
 
 /**
- * shadcn Tooltip (new-york), adapted to Tau (§10 design system): a
+ * shadcn Tooltip (new-york), adapted to Tau: a
  * true-black popover surface with a hairline ring (no stock shadcn
- * `bg-primary` bubble — Tau tooltips read as instrument labels, not
- * call-outs). Open/close uses the §10 motion tokens (tokens.css
+ * `bg-primary` bubble - Tau tooltips read as instrument labels, not
+ * call-outs). Open/close uses the motion tokens (tokens.css
  * `--animate-pop-in/out`, itself `--motion-fast` + `--spring`) so it lands
  * well under the 120ms interaction-response budget.
  */

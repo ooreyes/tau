@@ -1,6 +1,5 @@
 /**
- * Coverage for AC-pane expression traces (FEATURE_PARITY §6 plot arbitrary
- * expressions in the AC pane).
+ * Coverage for AC-pane expression traces (LTspice parity).
  *
  * `evaluateAcPlotExpression` reuses the `.meas ac` compiler, so a `db(V(out))`
  * expression must exactly reproduce the underlying trace's dB magnitude, and a

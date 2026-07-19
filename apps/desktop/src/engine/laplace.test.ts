@@ -23,7 +23,7 @@ describe("laplaceTransfer", () => {
   });
 });
 
-describe("laplaceSourceLines — rational s_xfer", () => {
+describe("laplaceSourceLines - rational s_xfer", () => {
   it("first-order lag 1/(1+0.001s): den = [0.001 1] highest-power first", () => {
     const { m } = model("1/(1+0.001*s)");
     // ascending [1, 0.001] -> descending [0.001, 1]
@@ -59,7 +59,7 @@ describe("laplaceSourceLines — rational s_xfer", () => {
   });
 });
 
-describe("laplaceSourceLines — non-rational DC fallback", () => {
+describe("laplaceSourceLines - non-rational DC fallback", () => {
   it("transport delay exp(-Ts) falls back to H(0) gain", () => {
     const r = laplaceSourceLines({ ...E, transfer: "exp(-.001*s)/(1+.001*s)**2", scope: {} });
     expect(r.exact).toBe(false);

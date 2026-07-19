@@ -5,7 +5,7 @@ import { Check, ChevronDown, ChevronUp } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 /**
- * shadcn Select (new-york), adapted to Tau (§10 design system): trigger
+ * shadcn Select (new-york), adapted to Tau: trigger
  * matches Input's dense sizing (28px sm default) and border/background
  * tokens so the two read as one family in a form row; popover content
  * shares the tooltip/dropdown/context-menu true-black recipe.

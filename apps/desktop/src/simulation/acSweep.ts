@@ -225,7 +225,7 @@ function nodeIdx(net: string | undefined, index: Map<string, number>): number {
   return index.get(net) ?? -1;
 }
 
-/** Friendly node name — mirrors linearTransient.nodeName. */
+/** Friendly node name - mirrors linearTransient.nodeName. */
 function nodeName(net: { id: string; pins: { componentLabel: string }[] }): string {
   const labels = [...new Set(net.pins.map((p) => p.componentLabel).filter(Boolean))];
   return labels.length > 0 ? labels.slice(0, 2).join("·") : net.id;

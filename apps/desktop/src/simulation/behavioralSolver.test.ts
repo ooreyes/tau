@@ -51,7 +51,7 @@ function nodeNear(result: ReturnType<typeof runOperatingPoint>, target: number):
   return bestV;
 }
 
-describe("behavioral B-source (V=) — linear voltage", () => {
+describe("behavioral B-source (V=) - linear voltage", () => {
   it("outputs a gain·V(node), independent of the load", () => {
     const components = [
       part("vsource", "1", "V1", { p: CTRL, n: GND }),
@@ -62,7 +62,7 @@ describe("behavioral B-source (V=) — linear voltage", () => {
     const netLabels = [labelAt("ctrl", CTRL)];
     expect(nodeNear(runOperatingPoint({ components, wires: [], netLabels }), 2)).toBeCloseTo(2, 6);
 
-    // 100× smaller load — ideal source, output unchanged.
+    // 100× smaller load - ideal source, output unchanged.
     components[2] = part("resistor", "10", "R1", { a: OUT, b: GND });
     expect(nodeNear(runOperatingPoint({ components, wires: [], netLabels }), 2)).toBeCloseTo(2, 6);
   });
@@ -101,7 +101,7 @@ describe("behavioral B-source (V=) — linear voltage", () => {
   });
 });
 
-describe("behavioral B-source — transient", () => {
+describe("behavioral B-source - transient", () => {
   it("an ideal behavioral amplifier holds 2·V(ctrl) across the sweep", async () => {
     const components = [
       part("vsource", "1.5", "V1", { p: CTRL, n: GND }),
@@ -123,7 +123,7 @@ describe("behavioral B-source — transient", () => {
   });
 });
 
-describe("behavioral B-source — AC small signal", () => {
+describe("behavioral B-source - AC small signal", () => {
   it("a flat-gain behavioral amplifier gives 20·log10(gain) dB at every frequency", () => {
     const components = [
       part("vac", "1 1k", "V1", { p: CTRL, n: GND }),
@@ -144,7 +144,7 @@ describe("behavioral B-source — AC small signal", () => {
   });
 });
 
-describe("behavioral B-source (I=) — linear current", () => {
+describe("behavioral B-source (I=) - linear current", () => {
   it("pulls coeff·V(node) out of its + node through the load", () => {
     // I(out→0) = 1m·V(ctrl) = 2m; V(out) = -2m·1k = -2 V (matches ngspice).
     const components = [
@@ -157,7 +157,7 @@ describe("behavioral B-source (I=) — linear current", () => {
   });
 });
 
-describe("behavioral B-source — unsupported expressions", () => {
+describe("behavioral B-source - unsupported expressions", () => {
   it("fails cleanly on a nonlinear expression (directs to native engine)", () => {
     const components = [
       part("vsource", "1", "V1", { p: CTRL, n: GND }),

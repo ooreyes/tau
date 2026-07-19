@@ -63,7 +63,7 @@ describe.skipIf(!haveNgspice)("golden Class-D ngspice smoke", () => {
       const vpwmAvg = meas("vpwmavg");
       const vswPp = meas("vswpp");
       const voutAvg = meas("voutavg");
-      // Comparator rails 0/10 — must actually switch both ways.
+      // Comparator rails 0/10 - must actually switch both ways.
       expect(vpwmMax).toBeGreaterThan(9);
       expect(vpwmMin).toBeLessThan(1);
       expect(vpwmAvg).toBeGreaterThan(2);

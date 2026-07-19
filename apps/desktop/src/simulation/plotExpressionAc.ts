@@ -1,9 +1,8 @@
-// Arbitrary-expression traces for the AC (Bode) pane (FEATURE_PARITY §6
-// "plot arbitrary expressions … in the AC pane").
+// Arbitrary-expression traces for the AC (Bode) pane (LTspice parity).
 //
 // The transient scope can already overlay any expression of the simulated
 // signals (`plotExpression.ts`). LTspice offers the same in the frequency
-// domain — plot `db(V(out))-db(V(in))` (a transfer function), `mag(V(a,b))`,
+// domain - plot `db(V(out))-db(V(in))` (a transfer function), `mag(V(a,b))`,
 // or a raw ratio across the sweep. `.meas ac` already compiles exactly this
 // mix of magnitude/phase-wrapped signals into a per-frequency evaluator
 // (`compileAcExpr`), so we reuse it here: the same compiler drives AC
@@ -11,8 +10,8 @@
 //
 // The compiled expression yields a real value per frequency; we return it as a
 // Bode trace whose `magDb` array carries that value directly. LTspice plots the
-// expression as written — so wrap in `db(...)` for a dB curve, leave bare for a
-// linear-magnitude curve — matching how the transient pane plots the literal
+// expression as written - so wrap in `db(...)` for a dB curve, leave bare for a
+// linear-magnitude curve - matching how the transient pane plots the literal
 // expression. Phase is left flat (0°): a scalar expression has no phase axis.
 
 import { type FuncDef, type Scope } from "./expr";
@@ -52,7 +51,7 @@ export function evaluateAcPlotExpression(
     if (Number.isFinite(v)) anyFinite = true;
   }
   if (!anyFinite) {
-    return { ok: false, error: `“${trimmed}” has no finite values — check the signal names.` };
+    return { ok: false, error: `“${trimmed}” has no finite values - check the signal names.` };
   }
 
   return {

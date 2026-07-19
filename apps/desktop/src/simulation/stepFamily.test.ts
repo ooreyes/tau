@@ -1,9 +1,9 @@
 /**
- * Coverage for `.step` family-context expansion (FEATURE_PARITY §4 `.step`).
+ * Coverage for `.step` family-context expansion (LTspice parity).
  *
  * `stepContexts` turns a parsed StepSpec into concrete per-value run contexts.
  * The divider integration proves a source-kind sweep flows through the real
- * operating-point solver and tracks the hand-computed divider ratio — the same
+ * operating-point solver and tracks the hand-computed divider ratio - the same
  * path the UI's STEP tab drives.
  */
 
@@ -45,7 +45,7 @@ describe("isRunnableStep", () => {
   });
 });
 
-describe("stepContexts — param kind", () => {
+describe("stepContexts - param kind", () => {
   it("injects each swept value into a fresh scope without mutating the base", () => {
     const base = buildParamScope([".param A=2"]);
     const spec = parseStepDirective(".step param Rload list 1k 2k")!;
@@ -68,7 +68,7 @@ describe("stepContexts — param kind", () => {
   });
 });
 
-describe("stepContexts — source kind", () => {
+describe("stepContexts - source kind", () => {
   it("overrides the matched component's value and leaves others alone", () => {
     const comps = [vsource(0, 0, "1", "V1"), resistor(0, 0, "1k", "R1")];
     const spec = parseStepDirective(".step V1 list 2 5")!;
@@ -92,7 +92,7 @@ describe("stepContexts — source kind", () => {
   });
 });
 
-describe("stepContexts — guards", () => {
+describe("stepContexts - guards", () => {
   it("builds a temp family: rescales tc resistors and carries the temperature", () => {
     const comps = [resistor(0, 0, "1k tc=0.01", "R1"), resistor(0, 0, "2k", "R2")];
     const spec = parseStepDirective(".step temp 27 127 50")!; // 27, 77, 127 °C
@@ -103,7 +103,7 @@ describe("stepContexts — guards", () => {
     expect(Number(ctxs[0].components.find((c) => c.label === "R1")!.value)).toBeCloseTo(1000, 6);
     expect(Number(ctxs[1].components.find((c) => c.label === "R1")!.value)).toBeCloseTo(1500, 6);
     expect(Number(ctxs[2].components.find((c) => c.label === "R1")!.value)).toBeCloseTo(2000, 6);
-    // R2 has no tc — passed through untouched; base list not mutated.
+    // R2 has no tc - passed through untouched; base list not mutated.
     expect(ctxs[1].components.find((c) => c.label === "R2")!.value).toBe("2k");
     expect(comps[0].value).toBe("1k tc=0.01");
   });
@@ -115,7 +115,7 @@ describe("stepContexts — guards", () => {
   });
 });
 
-describe("stepContexts — source sweep through the OP solver", () => {
+describe("stepContexts - source sweep through the OP solver", () => {
   it("sweeps the supply and the midpoint tracks half the supply (1:1 divider)", () => {
     // R1 = R2 = 1k → mid = Vsupply / 2. Sweep V1 ∈ {4, 8, 12}.
     const components = [

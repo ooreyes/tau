@@ -151,7 +151,7 @@ function localAiStatus(overrides: Partial<LocalAiStatus> = {}): LocalAiStatus {
   };
 }
 
-// This jsdom build has localStorage disabled — install an in-memory Storage
+// This jsdom build has localStorage disabled - install an in-memory Storage
 // (mirrors panelResize.test.tsx / TelemetryDock.test.tsx) so the API-key
 // storage path is actually exercised instead of silently no-oping.
 const backing = new Map<string, string>();
@@ -644,7 +644,7 @@ describe("AssistantPanel", () => {
     await waitFor(() => expect(screen.getByText("It sets the")).toBeTruthy());
 
     // The "text" event's cumulative snapshot is what actually paints the
-    // bubble (see AssistantPanel's onDelta) — finalMessage() just marks the
+    // bubble (see AssistantPanel's onDelta) - finalMessage() just marks the
     // turn done, so a realistic mock streams the full text as a delta first.
     const full = "It sets the RC time constant with C1.";
     await act(async () => {
@@ -658,7 +658,7 @@ describe("AssistantPanel", () => {
       await streams[0].finalMessage();
     });
     await waitFor(() => expect(screen.getByText(full)).toBeTruthy());
-    // Streaming ended — composer is usable again for the next turn.
+    // Streaming ended - composer is usable again for the next turn.
     expect(screen.getByRole("button", { name: "Send" })).toBeTruthy();
     expect(screen.getByLabelText("Assistant request usage").textContent).toContain("5.8k cache write");
   });
@@ -1264,7 +1264,7 @@ describe("AssistantPanel conversation history", () => {
     fireEvent.click(screen.getByRole("button", { name: "Past chats" }));
     fireEvent.click(within(screen.getByRole("group", { name: "Past chats" })).getByRole("button", { name: 'Delete "What does R1 do?"' }));
 
-    // Still on the active (C1) thread — deleting a different row doesn't touch
+    // Still on the active (C1) thread - deleting a different row doesn't touch
     // it, and the menu stays open (still showing the pruned list) so a delete
     // doesn't force a re-open to remove a second row.
     expect(screen.getByText("C1 sets the pole.")).toBeTruthy();
@@ -1353,7 +1353,7 @@ describe("AssistantPanel conversation history", () => {
     const { unmount } = render(<AssistantPanel {...baseProps({ memoryKey: "flush.asc" })} />);
     await sendAndResolve("What does R1 do?", "R1 sets the gain.");
 
-    // Unmount before waiting out another debounce window — the unmount flush
+    // Unmount before waiting out another debounce window - the unmount flush
     // must still have written the completed turn.
     unmount();
 

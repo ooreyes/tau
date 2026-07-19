@@ -10,7 +10,7 @@ import {
 const plain = (key: string) => resolveShortcut({ key, ctrlOrMeta: false, shift: false });
 const mod = (key: string, shift = false) => resolveShortcut({ key, ctrlOrMeta: true, shift });
 
-describe("resolveShortcut — LTspice function keys (§8)", () => {
+describe("resolveShortcut - LTspice function keys", () => {
   it.each<[string, ShortcutAction]>([
     ["F2", "palette"],
     ["F3", "wire"],
@@ -36,7 +36,7 @@ describe("resolveShortcut — LTspice function keys (§8)", () => {
   });
 });
 
-describe("resolveShortcut — modifier bindings", () => {
+describe("resolveShortcut - modifier bindings", () => {
   it.each<[string, boolean, ShortcutAction]>([
     ["z", false, "undo"],
     ["z", true, "redo"],
@@ -62,7 +62,7 @@ describe("resolveShortcut — modifier bindings", () => {
   });
 });
 
-describe("resolveShortcut — plain keys", () => {
+describe("resolveShortcut - plain keys", () => {
   it.each<[string, ShortcutAction]>([
     ["/", "palette"],
     ["Escape", "cancel"],
@@ -100,7 +100,7 @@ const noopHandlers = (): ShortcutHandlers => ({
   label: vi.fn(),
 });
 
-describe("isEditingAction — schematic read-only-outside-schematic-view gate (§UX)", () => {
+describe("isEditingAction - schematic read-only-outside-schematic-view gate ", () => {
   it("treats cancel and palette as view-level (always allowed)", () => {
     expect(isEditingAction("cancel")).toBe(false);
     expect(isEditingAction("palette")).toBe(false);
@@ -114,7 +114,7 @@ describe("isEditingAction — schematic read-only-outside-schematic-view gate (�
   );
 });
 
-describe("dispatchShortcutAction — mode gate (§UX)", () => {
+describe("dispatchShortcutAction - mode gate ", () => {
   it("dispatches every action in schematic mode", () => {
     const handlers = noopHandlers();
     for (const action of ALL_ACTIONS) dispatchShortcutAction(action, "schematic", handlers);

@@ -1,9 +1,9 @@
 /**
  * Map LTspice analysis directives (`.tran`, `.ac`) onto Tau's analysis option
  * shapes so an imported `.asc` runs with its *own* timestep / sweep settings
- * instead of the editor's hardcoded defaults (FEATURE_PARITY §1 d-analyses).
+ * instead of the editor's hardcoded defaults (LTspice parity).
  *
- * Pure functions only — given a directive string they return option objects or
+ * Pure functions only - given a directive string they return option objects or
  * `null` (malformed / unsupported). Wiring into the run buttons lives in App.tsx.
  */
 

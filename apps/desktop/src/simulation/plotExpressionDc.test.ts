@@ -1,6 +1,5 @@
 /**
- * Coverage for DC-pane expression traces (FEATURE_PARITY §6 plot arbitrary
- * expressions in the DC pane).
+ * Coverage for DC-pane expression traces (LTspice parity).
  *
  * `evaluateDcPlotExpression` adapts a DC sweep into the `.meas` waveform and
  * reuses the transient expression compiler, so an expression of the swept node

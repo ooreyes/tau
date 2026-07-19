@@ -15,6 +15,17 @@ describe("userFacingErrorMessage", () => {
     expect(technicalErrorDetails(raw)).toContain("stderr Error: .ic syntax error");
   });
 
+  it("masks JS-internal errors behind the plain-language fallback", () => {
+    expect(userFacingErrorMessage(new TypeError("Cannot read properties of undefined (reading 'invoke')"), "Could not open this file.")).toBe("Could not open this file.");
+    expect(userFacingErrorMessage("undefined is not an object (evaluating 'a.b')", "Save failed.")).toBe("Save failed.");
+    expect(userFacingErrorMessage(new Error("x is not a function"), "Could not import .asc.")).toBe("Could not import .asc.");
+    expect(userFacingErrorMessage("Failed to fetch", "Could not reach the local AI server.")).toBe("Could not reach the local AI server.");
+    // The raw diagnostic stays available behind Technical details.
+    expect(technicalErrorDetails(new TypeError("Cannot read properties of undefined (reading 'invoke')"))).toContain("invoke");
+    // Legitimate product copy containing none of the signatures passes through.
+    expect(userFacingErrorMessage(new Error("Add a ground symbol so node voltages have a reference."), "fallback")).toBe("Add a ground symbol so node voltages have a reference.");
+  });
+
   it("falls back for non-text failures and bounds hostile payloads", () => {
     expect(userFacingErrorMessage({ secret: "nope" }, "safe fallback")).toBe("safe fallback");
     const result = userFacingErrorMessage(`bad\0${"x".repeat(5_000)}`, "fallback");

@@ -1,12 +1,12 @@
 /**
- * LTspice `.raw` waveform EXPORTER — the inverse of `rawImport.ts`. Writes a
+ * LTspice `.raw` waveform EXPORTER - the inverse of `rawImport.ts`. Writes a
  * Tau simulation result in LTspice's binary `.raw` format so the user can open
  * Tau's waveforms in LTspice's own viewer (or any nutmeg-compatible tool) and
- * compare them side-by-side (FEATURE_PARITY §1 "`.raw` … export").
+ * compare them side-by-side (LTspice parity).
  *
  * Emits the canonical LTspice layout: a UTF-16LE header, a `Variables:` table,
  * a `Binary:` marker, then binary samples with the independent variable (index
- * 0) as float64 and dependents as float32 for real data — exactly what
+ * 0) as float64 and dependents as float32 for real data - exactly what
  * {@link parseRaw} reads, so `parseRaw(serializeRaw(x))` round-trips.
  */
 import type { RawVariable } from "./rawImport";
@@ -16,7 +16,7 @@ export interface RawExportInput {
   title?: string;
   date?: string;
   variables: RawVariable[];
-  /** `values[v][p]` — real part of variable `v` at point `p`. */
+  /** `values[v][p]` - real part of variable `v` at point `p`. */
   values: number[][];
   complex?: boolean;
   /** Imaginary parts (required when `complex`). */

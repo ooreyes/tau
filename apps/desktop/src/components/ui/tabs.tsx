@@ -4,9 +4,9 @@ import * as TabsPrimitive from "@radix-ui/react-tabs";
 import { cn } from "@/lib/utils";
 
 /**
- * shadcn Tabs (new-york), adapted to Tau (§10 design system). Dense row
+ * shadcn Tabs (new-york), adapted to Tau. Dense row
  * height (`--row-h` = 28px) for the trigger strip; active trigger reads as a
- * flat cobalt-accent tab (no stock shadcn `bg-background` pill — the tokens
+ * flat cobalt-accent tab (no stock shadcn `bg-background` pill - the tokens
  * bridge doesn't define one that reads correctly on true black). Self
  * -contained UA resets on the trigger (button semantics, no preflight).
  */

@@ -63,7 +63,7 @@ function transformer(primaryValue: string): {
 
 const AC = { startHz: 100, stopHz: 100_000, pointsPerDecade: 10 };
 
-describe("mutual inductance — AC (acSweep)", () => {
+describe("mutual inductance - AC (acSweep)", () => {
   it("steps a 1:2-turns transformer up by √(L2/L1) = 2 (≈ +6.02 dB)", () => {
     const { components, wires, netLabels } = transformer("1 AC 1");
     const couplings = parseCouplingSpecs(["K1 L1 L2 1"]);
@@ -98,7 +98,7 @@ describe("mutual inductance — AC (acSweep)", () => {
   });
 });
 
-describe("mutual inductance — transient (linearTransient)", () => {
+describe("mutual inductance - transient (linearTransient)", () => {
   it("holds V(out) = 2·V(in) at every step for an ideal open-circuit transformer", async () => {
     // DC primary: I₂ = 0 (open secondary) and I₁ ramps, so the flux-coupling
     // relation V(out) = (M/L1)·V(in) = 2·V(in) holds instantaneously.

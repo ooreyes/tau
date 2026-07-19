@@ -1,17 +1,17 @@
-/* ── §10 design-system foundation: Tailwind v4 + shadcn token layer ─────────
+/* ── design-system foundation: Tailwind v4 + shadcn token layer ─────────
  *
  * Deliberately NOT `@import "tailwindcss"`: that would pull in preflight,
  * whose resets (button/input/margin/border rules) would visibly change the
  * existing hand-styled UI. This file loads only the theme + utility layers,
- * so shipping it is pixel-neutral — panels then opt in utility-by-utility as
- * they migrate (FEATURE_PARITY §10: incremental, never a big-bang rewrite).
+ * so shipping it is pixel-neutral - panels then opt in utility-by-utility as
+ * they migrate (LTspice parity).
  *
  * Every shadcn token maps onto the EXISTING App.css palette via var(), so the
  * runtime theme switcher (which re-defines --bg/--accent/… on a scope class)
  * re-themes Tailwind utilities automatically. Token names intentionally live
  * only in Tailwind's `--color-*` namespace: App.css already uses `--muted`
  * for a *text* color while shadcn's `--muted` is a *surface*, so bare shadcn
- * `:root` variables would collide — the namespaced form cannot.
+ * `:root` variables would collide - the namespaced form cannot.
  */
 @layer theme, base, components, utilities;
 @import "tailwindcss/theme.css" layer(theme);
@@ -19,7 +19,7 @@
 
 @theme inline {
   /* Wipe Tailwind's stock palette: every color must route through Tau tokens
-   * (project rule: no hardcoded colors — this makes `bg-red-500` a build
+   * (project rule: no hardcoded colors - this makes `bg-red-500` a build
    * error instead of a review comment). */
   --color-*: initial;
 
@@ -45,7 +45,7 @@
   /* Positive/run state (the ▶ run button, sim-live pill). App.css has no
    * bare semantic green; --trace-green is the calmest one in the palette. */
   --color-success: var(--trace-green);
-  /* Tactical/amber signal (armed, running, warning) — the OP-1-style amber
+  /* Tactical/amber signal (armed, running, warning) - the OP-1-style amber
    * transport lamp. Bare name so callers get `bg-warning`/`text-warning`/
    * `border-warning` utilities the same way `success`/`destructive` do. */
   --color-warning: var(--signal);
@@ -62,19 +62,19 @@
   --radius-lg: var(--r-lg);
   --radius-xl: var(--r-xl);
 
-  /* §10 Radix primitive motion — ties Tailwind v4's `--animate-*` theme
+  /* Radix primitive motion - ties Tailwind v4's `--animate-*` theme
    * namespace (which generates `animate-*` utilities) to App.css's own
    * --motion-fast/--motion-med/--spring tokens instead of pulling in the
    * tailwindcss-animate plugin (which would ship its own easing/duration
    * scale, drifting from the rest of the app's motion language). `pop` is
    * for small popover-surfaces (tooltip/select/dropdown/context-menu);
    * `fade` is for dialog's scrim. Radix drives these via its own
-   * `data-[state=open|closed]` attributes — no JS animation library. */
+   * `data-[state=open|closed]` attributes - no JS animation library. */
   --animate-fade-in:  tau-fade-in var(--motion-fast) var(--spring) both;
   --animate-fade-out: tau-fade-out var(--motion-fast) var(--spring) both;
   --animate-pop-in:   tau-pop-in var(--motion-fast) var(--spring) both;
   --animate-pop-out:  tau-pop-out var(--motion-fast) var(--spring) both;
-  /* Corner-sheet motion (ui/sheet.tsx's Settings sheet) — a slide-from-edge
+  /* Corner-sheet motion (ui/sheet.tsx's Settings sheet) - a slide-from-edge
    * variant of pop-in/out for a panel that's anchored to the window's edge
    * instead of centered, so it should arrive FROM that edge, not scale from
    * its own center. `--motion-med` (not `-fast`): a sheet travels further
@@ -109,6 +109,6 @@
 }
 
 /* The `base` layer stays empty for now. Preflight's border reset
- * (`* { border: 0 solid }` — which the `border` utility relies on) lands with
+ * (`* { border: 0 solid }` - which the `border` utility relies on) lands with
  * the first shadcn primitive, where its effect can be screenshot-verified
  * against real components instead of blind-shipping a global reset. */

@@ -1,16 +1,16 @@
 /**
- * SPICE `.cir` / `.net` netlist IMPORTER (FEATURE_PARITY §1 "import `.cir`").
+ * SPICE `.cir` / `.net` netlist IMPORTER (LTspice parity).
  *
  * A SPICE deck references nets by NAME, not geometry, so there is nothing to
  * place visually. We lay each device out on a simple grid and make every
  * connection electrical via a {@link NetLabel} pinned to the device's pin
- * position — net labels with the same name merge (and `0`/`GND` become ground),
+ * position - net labels with the same name merge (and `0`/`GND` become ground),
  * so the extracted netlist matches the deck without routing a single wire.
  *
  * Scope: the common two/three/four-terminal primitives (R/C/L, V/I, D, Q, M,
  * E/G VC sources, B behavioral). Subcircuit calls (`X`), couplings (`K`),
  * current-controlled sources (`F`/`H`, which name a sense source rather than two
- * control nodes), and transmission lines are reported as warnings and skipped —
+ * control nodes), and transmission lines are reported as warnings and skipped -
  * their directives/models still survive so a later pass can use them.
  */
 import type {

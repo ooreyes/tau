@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { userFacingErrorMessage } from "../lib/errorMessage";
 import {
   basename,
   blankAscText,
@@ -174,7 +175,7 @@ export const useProject = create<ProjectStore>((set, get) => ({
       });
       return true;
     } catch (error) {
-      set({ error: error instanceof Error ? error.message : "Could not open folder." });
+      set({ error: userFacingErrorMessage(error, "Could not open folder.") });
       return false;
     }
   },
@@ -198,7 +199,7 @@ export const useProject = create<ProjectStore>((set, get) => ({
       });
       return true;
     } catch (error) {
-      set({ error: error instanceof Error ? error.message : "Could not create project." });
+      set({ error: userFacingErrorMessage(error, "Could not create project.") });
       return false;
     }
   },
@@ -222,7 +223,7 @@ export const useProject = create<ProjectStore>((set, get) => ({
       set({ tree, error: null });
       return true;
     } catch (error) {
-      set({ error: error instanceof Error ? error.message : "Could not refresh project." });
+      set({ error: userFacingErrorMessage(error, "Could not refresh project.") });
       return false;
     }
   },
@@ -382,7 +383,7 @@ export const useProject = create<ProjectStore>((set, get) => ({
       await get().refresh();
       return path;
     } catch (error) {
-      set({ error: error instanceof Error ? error.message : "Could not import .asc." });
+      set({ error: userFacingErrorMessage(error, "Could not import .asc.") });
       return null;
     }
   },
@@ -534,7 +535,7 @@ export const useProject = create<ProjectStore>((set, get) => ({
       await fs.removePath(path);
       await get().refresh();
     } catch (error) {
-      set({ error: error instanceof Error ? error.message : "Could not delete." });
+      set({ error: userFacingErrorMessage(error, "Could not delete.") });
     }
   },
 

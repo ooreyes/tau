@@ -19,7 +19,7 @@ describe("coreInductance", () => {
     expect(L!).toBeCloseTo(0.045727, 5);
   });
 
-  it("a gapped core with no B–H curve is gap-dominated: L = µ0·N²·A/Lg", () => {
+  it("a gapped core with no B-H curve is gap-dominated: L = µ0·N²·A/Lg", () => {
     const L = coreInductance("A=0.0000251 Lg=0.0006858 N=1000");
     expect(L!).toBeCloseTo(0.045992, 5); // 4π e-7 · 1e6 · 2.51e-5 / 6.858e-4
   });

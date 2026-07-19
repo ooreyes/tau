@@ -23,8 +23,8 @@ export interface TransientSource {
 const DEG2RAD = Math.PI / 180;
 
 /**
- * Parse an LTspice/ngspice transient source spec — `SINE(...)`, `PULSE(...)`,
- * `PWL(...)`, `EXP(...)`, `SFFM(...)` — into a numeric time-domain evaluator.
+ * Parse an LTspice/ngspice transient source spec - `SINE(...)`, `PULSE(...)`,
+ * `PWL(...)`, `EXP(...)`, `SFFM(...)` - into a numeric time-domain evaluator.
  * A trailing `AC <mag>` spec (LTspice writes `SINE(0 1 1k) AC 1`) is ignored
  * here; it only matters to AC analysis. A plain numeric value (no function
  * head) resolves to a constant DC source.

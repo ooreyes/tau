@@ -1,7 +1,7 @@
 /**
- * Parametric sweep (`.step`) — re-run an analysis while varying one parameter,
+ * Parametric sweep (`.step`) - re-run an analysis while varying one parameter,
  * source value, or temperature across a list/range of values, producing a
- * family of result curves (FEATURE_PARITY §4 `.step` / §5 `.step param …`).
+ * family of result curves (LTspice parity).
  *
  * `.step` is used 34× across the user's circuits and is essential for real work
  * (gain vs. component value, Bode family, tolerance studies). LTspice forms:

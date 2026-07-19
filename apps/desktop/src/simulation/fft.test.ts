@@ -289,7 +289,7 @@ describe("runWaveformFft", () => {
   });
 
   it("resolves a display label whose inner name is not the net id (V(R1·C1) vs id n1)", () => {
-    // The scope's signal pickers feed trace *labels* back — nodeName-derived
+    // The scope's signal pickers feed trace *labels* back - nodeName-derived
     // labels like V(R1·C1) never equal the internal net id (regression: the FFT
     // pane showed "No spectrum" for every named net).
     const named: MeasWaveform = {

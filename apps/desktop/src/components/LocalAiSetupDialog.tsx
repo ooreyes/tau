@@ -138,7 +138,7 @@ export function LocalAiSetupDialog({ onReady }: LocalAiSetupDialogProps) {
           <DialogTitle>Set up local AI</DialogTitle>
           <DialogDescription id="local-ai-setup-desc">
             Apple silicon only. One click installs the on-device runtime, then downloads a
-            small local model. After that, open Assistant and describe a circuit — Tau lays
+            small local model. After that, open Assistant and describe a circuit - Tau lays
             it out and can simulate once you confirm. No account required.
           </DialogDescription>
         </DialogHeader>

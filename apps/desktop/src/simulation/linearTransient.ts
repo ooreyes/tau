@@ -8,6 +8,7 @@ import { stripAcSpec } from "../engine/acSpec";
 import { parseIcValue, stripIcSpec } from "../engine/icSpec";
 import { parseTransientSource, isFunctionSource, type TransientSource } from "./sourceWaveform";
 import { stripTcSpec } from "./temperature";
+import { DIODE_KINDS, diodeConductance, diodeCurrent, diodeSpecFor, limitDiodeVoltage } from "./diodeCompanion";
 
 export interface AnalysisOptions {
   stopTime: number;
@@ -109,34 +110,55 @@ const TRANSIENT_SUPPORTED = new Set<ComponentKind>([
   "switch",
   "testpoint",
   "ground",
+  "diode",
+  "led",
+  "zener",
 ]);
+
+/** Newton iteration budget per timestep when junction diodes are present.
+ *  Matches SPICE's itl4-style ceiling; convergence normally takes < 10. */
+const NEWTON_MAX_ITERATIONS = 100;
 
 /** Tiny conductance added from every non-ground node to ground (SPICE gmin trick).
  *  Prevents singular matrices caused by floating nodes (e.g. unconnected op-amp rails). */
 const GMIN = 1e-12;
 
-/** Progress/cancellation hooks for a transient run (Fix 3 — no more frozen
+/** Progress/cancellation hooks for a transient run (Fix 3 - no more frozen
  *  UI on a long solve). Both optional so every existing caller (production
  *  or test) that doesn't care about either keeps working unchanged, just
  *  now behind a `Promise` (the solve loop yields to the event loop
  *  periodically, so the function can no longer return synchronously). */
 export interface TransientRunControl {
   /** Called with a fraction in [0, 1], monotonically non-decreasing, at each
-   *  cooperative-yield checkpoint (see the loop below) — cheap and safe to
+   *  cooperative-yield checkpoint (see the loop below) - cheap and safe to
    *  call often; throttle on the receiving end (App.tsx) if needed. */
   onProgress?: (fraction: number) => void;
   /** Checked at each yield checkpoint. When aborted, the loop stops and the
    *  function resolves (never rejects) with a PARTIAL `ok: true` result built
-   *  from whatever samples were already computed, plus a warning — abort is
+   *  from whatever samples were already computed, plus a warning - abort is
    *  a normal user action (Stop button), not an error. */
   signal?: AbortSignal;
 }
 
 /** One macrotask yield so the browser can paint (progress bar) and deliver
  *  input (Stop button click) mid-solve. A microtask (`Promise.resolve().then`)
- *  would resume before the next paint and defeat the point; `setTimeout`
- *  works identically in the browser and in Node (tests). */
+ *  would resume before the next paint and defeat the point. MessageChannel is
+ *  preferred over `setTimeout(0)` because timers are clamped (4 ms after
+ *  nesting, up to ~1 s in occluded/background documents) - a 300-step run with
+ *  per-step yields crawled for minutes in a backgrounded window while the
+ *  actual math took 21 ms. MessageChannel posts are never throttled (it's how
+ *  React's scheduler yields); setTimeout remains as the fallback. */
 function yieldToEventLoop(): Promise<void> {
+  if (typeof MessageChannel !== "undefined") {
+    return new Promise((resolve) => {
+      const channel = new MessageChannel();
+      channel.port1.onmessage = () => {
+        channel.port1.close();
+        resolve();
+      };
+      channel.port2.postMessage(null);
+    });
+  }
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
@@ -170,7 +192,7 @@ export async function runTransientAnalysis(
     if (unsupported.length > 0) {
       return fail(
         "Unsupported model",
-        `${unsupported.map((component) => component.label || component.kind).join(", ")} ${unsupported.length === 1 ? "is" : "are"} placeable and wireable, but the interim solver only supports R/C/L, voltage/current sources, AC sine sources, switches, grounds, and test points. Full models need the planned ngspice engine.`,
+        `${unsupported.map((component) => component.label || component.kind).join(", ")} ${unsupported.length === 1 ? "is" : "are"} placeable and wireable, but the interim solver only supports R/C/L, voltage/current sources, AC sine sources, diodes/LEDs/zeners, switches, grounds, and test points. Full models need the planned ngspice engine.`,
         circuit,
       );
     }
@@ -192,11 +214,18 @@ export async function runTransientAnalysis(
     nonGroundNets.forEach((net, index) => netByName.set(net.id.toLowerCase(), index));
     const voltageSources = circuit.components.filter(({ component }) => component.kind === "vsource" || component.kind === "vac");
     const inductors = circuit.components.filter(({ component }) => component.kind === "inductor");
+    // Junction diodes (diode/led/zener) are the solver's only nonlinear devices:
+    // each timestep re-solves via Newton with a per-device companion model, so
+    // collect their specs once and carry the junction voltage as solver state
+    // (the previous timestep's solution is the next step's initial guess).
+    const diodes = circuit.components.filter(({ component }) => DIODE_KINDS.has(component.kind));
+    const diodeSpecs = new Map(diodes.map((entry) => [entry.component.id, diodeSpecFor(entry.component.kind, entry.component.value)]));
+    const diodeVoltage = new Map<string, number>();
     const opamps = circuit.components.filter(({ component }) => component.kind === "opamp");
     const vcvss = circuit.components.filter(({ component }) => component.kind === "vcvs");
     const cccss = circuit.components.filter(({ component }) => component.kind === "cccs");
     const ccvss = circuit.components.filter(({ component }) => component.kind === "ccvs");
-    // Behavioral sources (B): linearize once (constant — we reject time-varying
+    // Behavioral sources (B): linearize once (constant - we reject time-varying
     // forms), V-type adds a branch unknown, I-type does not.
     const paramScope = schematic.params ?? EMPTY_SCOPE;
     const bModels = new Map<string, LinearBehavioral>();
@@ -236,7 +265,7 @@ export async function runTransientAnalysis(
           inductorCurrent.set(entry.component.id, parseQuantity(ic, "A"));
         }
       } catch {
-        /* unparseable IC token — ignore, start from 0 */
+        /* unparseable IC token - ignore, start from 0 */
       }
     }
 
@@ -279,7 +308,7 @@ export async function runTransientAnalysis(
       arr.push(value);
     };
 
-    // Set once the run is stopped early (Stop button / AbortSignal) — the
+    // Set once the run is stopped early (Stop button / AbortSignal) - the
     // loop below breaks out and falls through to the same result-building
     // code as a completed run, just with fewer samples and a warning.
     let aborted = false;
@@ -290,12 +319,12 @@ export async function runTransientAnalysis(
       const matrix = zeroMatrix(size);
       const rhs = Array(size).fill(0) as number[];
 
-      // SPICE gmin: when op-amps are present, add GMIN from every non-ground
-      // node to ground so floating nodes (e.g. unconnected op-amp v+/v- rails)
-      // resolve to ~0 V rather than making the matrix singular.
-      // Applied only when op-amps are in the circuit to avoid masking genuine
-      // floating-node errors in resistive/reactive-only circuits.
-      if (opamps.length > 0) {
+      // SPICE gmin: when op-amps or diodes are present, add GMIN from every
+      // non-ground node to ground so floating nodes (e.g. unconnected op-amp
+      // rails, or a node isolated behind a reverse-biased diode) resolve to
+      // ~0 V rather than making the matrix singular. Applied only for those
+      // devices to avoid masking genuine floating-node errors elsewhere.
+      if (opamps.length > 0 || diodes.length > 0) {
         for (let i = 0; i < nonGroundNets.length; i += 1) {
           matrix[i][i] += GMIN;
         }
@@ -468,7 +497,58 @@ export async function runTransientAnalysis(
         rhs[ib] -= r * iaPrev;
       }
 
-      const solution = solveLinearSystem(matrix, rhs);
+      // Linear circuits solve in one shot. With junction diodes the assembled
+      // matrix/rhs above is the constant part; Newton-iterate the diode
+      // companions on top of a copy until the junction voltages settle
+      // (SPICE-style reltol/vntol), with pnjlim damping each update.
+      let solution: number[] | null = null;
+      if (diodes.length === 0) {
+        solution = solveLinearSystem(matrix, rhs);
+      } else {
+        const guesses = new Map<string, number>();
+        for (const entry of diodes) {
+          guesses.set(entry.component.id, diodeVoltage.get(entry.component.id) ?? 0);
+        }
+        for (let iteration = 0; iteration < NEWTON_MAX_ITERATIONS; iteration += 1) {
+          const newtonMatrix = matrix.map((row) => [...row]);
+          const newtonRhs = [...rhs];
+          for (const entry of diodes) {
+            const spec = diodeSpecs.get(entry.component.id)!;
+            const junction = guesses.get(entry.component.id)!;
+            const conductance = diodeConductance(spec, junction);
+            const equivalent = diodeCurrent(spec, junction) - conductance * junction;
+            const anode = netIndex(entry.pins.a, nodeIndex);
+            const cathode = netIndex(entry.pins.k, nodeIndex);
+            stampConductance(newtonMatrix, anode, cathode, conductance);
+            stampCurrent(newtonRhs, anode, cathode, equivalent);
+          }
+          const attempt = solveLinearSystem(newtonMatrix, newtonRhs);
+          let converged = true;
+          for (const entry of diodes) {
+            const spec = diodeSpecs.get(entry.component.id)!;
+            const previous = guesses.get(entry.component.id)!;
+            const next = limitDiodeVoltage(
+              spec,
+              voltageBetween(entry.pins.a, entry.pins.k, nodeIndex, attempt),
+              previous,
+            );
+            if (Math.abs(next - previous) > 1e-6 + 1e-3 * Math.abs(next)) converged = false;
+            guesses.set(entry.component.id, next);
+          }
+          if (converged) {
+            solution = attempt;
+            break;
+          }
+        }
+        if (!solution) {
+          return fail(
+            "No convergence",
+            `The diode models did not converge at t = ${formatEngineering(time, "s", 3)}. Try more time steps or simplify the circuit.`,
+            circuit,
+          );
+        }
+        for (const [id, junction] of guesses) diodeVoltage.set(id, junction);
+      }
       times.push(time);
       for (let i = 0; i < nonGroundNets.length; i += 1) traceValues[i].push(solution[i]);
 
@@ -541,12 +621,19 @@ export async function runTransientAnalysis(
             pushCurrent(id, ref, solution[ccvsOffset + hi * 2 + 1]);
             break;
           }
+          case "diode":
+          case "led":
+          case "zener": {
+            const spec = diodeSpecs.get(id)!;
+            pushCurrent(id, ref, diodeCurrent(spec, voltageBetween(entry.pins.a, entry.pins.k, nodeIndex, solution)));
+            break;
+          }
         }
       }
 
       // Cooperative yield: this step's samples are already fully committed
       // above (times/traceValues/currentSamples), so it's always safe to
-      // stop right here — never mid-step. Checked by step count first (cheap)
+      // stop right here - never mid-step. Checked by step count first (cheap)
       // before the `Date.now()` call so the fast-per-step-large-circuit case
       // isn't paying a clock read every single iteration.
       if (step % YIELD_STEP_INTERVAL === 0 || Date.now() - lastYieldAt >= YIELD_TIME_INTERVAL_MS) {
@@ -573,7 +660,7 @@ export async function runTransientAnalysis(
     }
 
     // Reached stop time on an early abort is whatever the last committed
-    // sample says, not the originally requested `options.stopTime` — the
+    // sample says, not the originally requested `options.stopTime` - the
     // stats/warning must describe what the user is actually looking at.
     const reachedStopTime = times.length > 0 ? times[times.length - 1] : 0;
     const warnings = aborted
@@ -660,7 +747,7 @@ export function inspectTransientResolution(
 
 /** Dominant frequency a source imposes on transient sampling, or null when the
  *  component is not a source / is plain DC. May return NaN/negative for a
- *  malformed value — callers decide whether that is an error (the resolution
+ *  malformed value - callers decide whether that is an error (the resolution
  *  inspector throws) or a skip (the auto-resolution heuristic). */
 export function periodicSourceFrequencyHz(component: SchematicComponent): number | null {
   const isAcSymbol = component.kind === "vac" || component.kind === "iac";

@@ -2,7 +2,7 @@
  * End-to-end proof that `.param` / `{expr}` component values resolve through the
  * solver. Same voltage-divider geometry as operatingPoint.test.ts, but every
  * value is a brace expression resolved against a ParamScope built from
- * `.param` directives — exactly the path a real imported LTspice circuit takes.
+ * `.param` directives - exactly the path a real imported LTspice circuit takes.
  */
 
 import { describe, it, expect } from "vitest";
@@ -32,7 +32,7 @@ const wires = [
   wire([{ x: 128, y: 0 }, { x: 160, y: 0 }]),
 ];
 
-describe("param-driven divider — runOperatingPoint", () => {
+describe("param-driven divider - runOperatingPoint", () => {
   it("resolves {Vsrc}/{Rtop}/{Rbot} and solves the divider", () => {
     const result = runOperatingPoint({ components, wires, params });
     if (!result.ok) throw new Error(result.message);
@@ -50,7 +50,7 @@ describe("param-driven divider — runOperatingPoint", () => {
   });
 });
 
-describe("param-driven divider — buildSpiceDeck", () => {
+describe("param-driven divider - buildSpiceDeck", () => {
   it("emits concrete numbers in the native netlist", () => {
     const { netlist } = buildSpiceDeck({ components, wires, params }, { kind: "op" });
     // Rtop=1000, Rbot=3000, Vsrc=12 must appear as plain numbers, no braces.

@@ -13,7 +13,7 @@ import {
 import { useSchematic } from "../store/useSchematic";
 
 /**
- * §11 Unit C5 — the simulator tab must NOT carry its own primary Run button;
+ * the simulator tab must NOT carry its own primary Run button;
  * the single primary Run lives in the top toolbar. In-panel, selecting an
  * analysis tab IS the run gesture (all seven tabs, TRAN included).
  */
@@ -87,8 +87,8 @@ function renderPanel(overrides: Partial<Parameters<typeof SimulationPanel>[0]> =
 }
 
 // First render of the full panel is slow when the suite collects in parallel
-// under load — the 5s default flakes; these are render-once assertions.
-describe("SimulationPanel — no redundant Run button (§11 Unit C5)", { timeout: 20_000 }, () => {
+// under load - the 5s default flakes; these are render-once assertions.
+describe("SimulationPanel - no redundant Run button", { timeout: 20_000 }, () => {
   it("renders no Run button in the transient pane, only the status strip", () => {
     renderPanel();
     expect(screen.queryByRole("button", { name: /run transient/i })).toBeNull();
@@ -140,7 +140,7 @@ describe("SimulationPanel — no redundant Run button (§11 Unit C5)", { timeout
   });
 });
 
-describe("SimulationPanel — dashboard status strip (§11 Unit C6)", { timeout: 20_000 }, () => {
+describe("SimulationPanel - dashboard status strip", { timeout: 20_000 }, () => {
   const okResult = {
     ok: true,
     title: "Transient",
@@ -200,7 +200,7 @@ describe("SimulationPanel — dashboard status strip (§11 Unit C6)", { timeout:
   });
 });
 
-describe("SimulationPanel — component telemetry moved to the always-visible dock", { timeout: 20_000 }, () => {
+describe("SimulationPanel - component telemetry moved to the always-visible dock", { timeout: 20_000 }, () => {
   // Per-component V/I/P now lives in App.tsx's TelemetryDock (see
   // TelemetryDock.test.tsx), rendered beside the read-only schematic instead
   // of tucked inside this panel's Advanced disclosure. This is a regression
@@ -237,8 +237,8 @@ describe("SimulationPanel — component telemetry moved to the always-visible do
   });
 });
 
-describe("SimulationPanel — TRAN snap-tiling dashboard grid", { timeout: 20_000 }, () => {
-  // Two probed nets so `visibleTransientTraces` (store-driven — SimulationPanel
+describe("SimulationPanel - TRAN snap-tiling dashboard grid", { timeout: 20_000 }, () => {
+  // Two probed nets so `visibleTransientTraces` (store-driven - SimulationPanel
   // reads probes/wires/netLabels from useSchematic, not props) resolves two
   // plot panes automatically, the scenario the grid's "2+ panes -> half
   // width" default is meant for.
@@ -319,7 +319,7 @@ describe("SimulationPanel — TRAN snap-tiling dashboard grid", { timeout: 20_00
   });
 });
 
-describe("visibleTransientTraces — node names and probes are the plot authority", () => {
+describe("visibleTransientTraces - node names and probes are the plot authority", () => {
   const wires = Array.from({ length: 7 }, (_, index) => ({
     id: `w${index + 1}`,
     points: [{ x: index * 20, y: 0 }, { x: index * 20 + 10, y: 0 }],
@@ -368,7 +368,7 @@ describe("visibleTransientTraces — node names and probes are the plot authorit
   });
 });
 
-describe("SimulationPanel — one Advanced disclosure per tab (simplify pass)", { timeout: 20_000 }, () => {
+describe("SimulationPanel - one Advanced disclosure per tab (simplify pass)", { timeout: 20_000 }, () => {
   it("hides the STOP/STEPS/resolution controls behind a closed-by-default disclosure", () => {
     renderPanel();
     const toggle = screen.getByRole("button", { name: "Toggle advanced settings" });
@@ -415,7 +415,7 @@ describe("SimulationPanel — one Advanced disclosure per tab (simplify pass)", 
   });
 });
 
-describe("SimulationPanel — run-in-progress overlay (Fix 3)", () => {
+describe("SimulationPanel - run-in-progress overlay (Fix 3)", () => {
   it("is absent when idle", () => {
     renderPanel({ isRunning: false, runProgress: null });
     expect(screen.queryByRole("progressbar")).toBeNull();

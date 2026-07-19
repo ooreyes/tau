@@ -50,7 +50,7 @@ export type OperatingPointResult =
 export interface OpOptions {
   /**
    * Extra DC current injected INTO the given nets (amps). A positive value adds
-   * current into that node's KCL — i.e. an ideal test current source from ground
+   * current into that node's KCL - i.e. an ideal test current source from ground
    * into the net. Used to probe output impedance. Nets are matched by net id
    * (the same id reported back in `nets[].id`).
    */
@@ -223,7 +223,7 @@ export function runOperatingPoint(
         }
 
         case "capacitor":
-          // Open circuit at DC — skip entirely
+          // Open circuit at DC - skip entirely
           break;
 
         case "inductor": {
@@ -387,7 +387,7 @@ export function runOperatingPoint(
 
         case "testpoint":
         case "ground":
-          // Ground pins are absorbed into the reference — nothing to stamp
+          // Ground pins are absorbed into the reference - nothing to stamp
           break;
       }
     }
@@ -555,7 +555,7 @@ function stampLinearVSource(
 }
 
 /** Linear behavioral I-source: I(p→n) = constant + Σ coeff·V(node). No extra
- *  unknown — a constant current plus VCCS coupling terms. */
+ *  unknown - a constant current plus VCCS coupling terms. */
 function stampLinearISource(
   matrix: number[][],
   rhs: number[],

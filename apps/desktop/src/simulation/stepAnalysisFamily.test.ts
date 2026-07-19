@@ -1,5 +1,5 @@
 /**
- * Coverage for AC/DC-domain `.step` families (FEATURE_PARITY §4 `.step`, §6).
+ * Coverage for AC/DC-domain `.step` families (LTspice parity).
  *
  * The transient family is assembled in `App`; this proves the same nested-context
  * expansion drives the frequency- and DC-domain TS solvers. The generic core is
@@ -30,7 +30,7 @@ interface Fake {
 }
 const okFake = (): Fake => ({ ok: true, warnings: ["w"] });
 
-describe("runStepFamily — generic core", () => {
+describe("runStepFamily - generic core", () => {
   it("returns a clear message with no specs", () => {
     const fam = runStepFamily<Fake>([], EMPTY_SCOPE, [], okFake, (r) => r.ok, (r) => r.warnings);
     expect(fam.ok).toBe(false);
@@ -98,7 +98,7 @@ describe("runStepFamily — generic core", () => {
 });
 
 // ---------------------------------------------------------------------------
-// AC family — RC low-pass whose R is stepped, shifting the -3 dB corner.
+// AC family - RC low-pass whose R is stepped, shifting the -3 dB corner.
 //
 //   V1(AC 1) --R{Rval}-- mid --C-- gnd.   H(f) = 1/(1 + j·2πf·R·C).
 //   At a fixed high frequency, |H| ≈ 1/(ωRC): a larger R attenuates more.
@@ -161,7 +161,7 @@ describe("runAcStepFamily", () => {
 });
 
 // ---------------------------------------------------------------------------
-// DC family — resistive divider whose top resistor is stepped.
+// DC family - resistive divider whose top resistor is stepped.
 //
 //   V1 --R1{Rt}-- mid --R2(1k)-- gnd.  V(mid) = Vsweep · R2/(R1+R2).
 //   Rt=1k → ratio 0.5; Rt=3k → ratio 0.25.  Swept 0..10 V.
@@ -222,7 +222,7 @@ describe("runDcStepFamily", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Overlay selectors — reduce a family to the one signal the UI draws per step.
+// Overlay selectors - reduce a family to the one signal the UI draws per step.
 // Hand-built members pin the selection rules exactly; one end-to-end case each
 // proves the selectors compose with the real wrappers.
 // ---------------------------------------------------------------------------
@@ -275,7 +275,7 @@ describe("acFamilyOverlaySeries", () => {
         ok: true as const,
         freqs: [10, 100, 1000],
         traces: [
-          // The AC source node: 0 dB in every member — a useless family.
+          // The AC source node: 0 dB in every member - a useless family.
           { id: "in", label: "V(in)", magDb: [0, 0, 0], phaseDeg: [0, 0, 0] },
           { id: "out", label: "V(out)", magDb: outDb, phaseDeg: [0, -45, -90] },
         ],

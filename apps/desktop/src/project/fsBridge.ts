@@ -1,5 +1,5 @@
 /**
- * Thin filesystem bridge for VS Code–style folder projects.
+ * Thin filesystem bridge for VS Code-style folder projects.
  * Prefers Tauri dialog/fs plugins; falls back to the Chrome File System Access
  * API in the browser; otherwise reports that a desktop app is required.
  */
@@ -39,7 +39,7 @@ export async function pickProjectFolder(): Promise<string | null> {
     await authorizeProjectDirectory(selected);
     return selected;
   }
-  // Web File System Access API — we keep a handle map keyed by a synthetic path.
+  // Web File System Access API - we keep a handle map keyed by a synthetic path.
   if (typeof window !== "undefined" && "showDirectoryPicker" in window) {
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -314,7 +314,7 @@ export async function removePath(path: string): Promise<void> {
 
 export async function renamePath(from: string, to: string): Promise<void> {
   if (from.startsWith("web://")) {
-    // Web FS Access has no rename — read + write + delete.
+    // Web FS Access has no rename - read + write + delete.
     const text = await readTextFile(from);
     await writeTextFile(to, text);
     await removePath(from);

@@ -1,6 +1,5 @@
 /**
- * Temperature model for the interim TS solver (FEATURE_PARITY §4 `.temp` /
- * `.step temp`).
+ * Temperature model for the interim TS solver (LTspice parity).
  *
  * The native ngspice path already honours `.temp` through its device models
  * (see `engine/spiceNetlist.ts`). The interim linear solver has no device
@@ -87,7 +86,7 @@ export function applyTemperature(components: SchematicComponent[], tempC: number
     try {
       spec = parseResistorTemp(component.value);
     } catch {
-      return component; // expression / unresolved value — leave for the solver to handle.
+      return component; // expression / unresolved value - leave for the solver to handle.
     }
     if (spec.tc1 === 0 && spec.tc2 === 0) return component;
     const scaled = resistanceAtTemperature(spec, tempC);

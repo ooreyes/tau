@@ -6,16 +6,16 @@ import { parseQuantity } from "../simulation/quantity";
  * LTspice's A-device pin contract (verified against the installed 17.2.4
  * `lib/sym/Digital` library): SpiceOrder 1-5 are inputs, 6 is the COMPLEMENTARY
  * output `_Q`, 7 is the true output `Q`, 8 is the `com` reference. There is no
- * INV function — `inv.asy` is a BUF exposing only the complementary output pin,
+ * INV function - `inv.asy` is a BUF exposing only the complementary output pin,
  * and `schmtinv.asy` is a SCHMITT likewise. So the function set reduces to
  * {buf, and, or, xor, schmitt}, and inversion falls out of *which output pin*
  * a line drives. Floating inputs are ignored (LTspice semantics).
  *
- * Emission is a B-source per connected output using ngspice's ternary — the
+ * Emission is a B-source per connected output using ngspice's ternary - the
  * same live-verified idiom as engine/comparatorSpec.ts. Boolean `&&`/`||`,
  * `==`, and `abs()` in B expressions are all live-verified in ngspice-46.
  * The flip-flop (DFLOP) is stateful and cannot be a B-source; it emits an
- * XSPICE d_dff between explicit adc/dac bridges (also live-verified — the
+ * XSPICE d_dff between explicit adc/dac bridges (also live-verified - the
  * AUTO bridge's default thresholds sit above LTspice's 0..1 V logic levels,
  * so explicit bridges at Vt/Vlow/Vhigh are required, not optional).
  */
@@ -100,7 +100,7 @@ export function parseDigitalGate(value: string): DigitalGateSpec {
   };
 }
 
-/** Node assignments for a gate instance. Only *connected* pins are present —
+/** Node assignments for a gate instance. Only *connected* pins are present -
  *  imported symbols carry pin overrides for exactly the pins the `.asy` has,
  *  and LTspice ignores floating gate inputs. `com` is the input/output voltage
  *  reference; omit it (or pass "0") when grounded. */
@@ -144,13 +144,15 @@ export function digitalGateDeckLines(
     cond = `(${ins.map((n) => term(n, vt)).join("+")})==1`;
   } else if (fn === "schmitt" && vhys > 0) {
     // State is read from an output: high state ⇔ V(q) above the level midpoint
-    // (or V(qbar) below it). With neither output connected the gate drives
-    // nothing, so cond is irrelevant — fall through to the ideal threshold.
+    // (or V(qbar) below it). Read the INTERNAL drive node (`…_qd`, before the
+    // series output resistor) so an external load can't corrupt the state.
+    // With neither output connected the gate drives nothing, so cond is
+    // irrelevant - fall through to the ideal threshold.
     const mid = (vhigh + vlow) / 2;
     const state = nodes.q
-      ? `V(${nodes.q})>${mid}`
+      ? `V(${base}_qd)>${mid}`
       : nodes.qbar
-        ? `V(${nodes.qbar})<${mid}`
+        ? `V(${base}_qbd)<${mid}`
         : null;
     cond = state
       ? `(${state}) ? ${term(ins[0], vt - vhys)} : ${term(ins[0], vt + vhys)}`
@@ -167,9 +169,20 @@ export function digitalGateDeckLines(
       ? `V=((${cond}) ? ${hi} : ${lo})+V(${com})`
       : `V=(${cond}) ? ${hi} : ${lo}`;
 
+  // Drive each output through a small series resistance instead of an ideal
+  // B voltage source directly on the net. LTspice's A-devices have finite
+  // drive impedance, so its libraries freely parallel gate outputs (PowerSim's
+  // DEADTIME inside TLVR); two ideal B sources on one net make the matrix
+  // singular ("check node b_…_q#branch"). 1 Ω is far below any realistic load.
   const lines: string[] = [];
-  if (nodes.q) lines.push(`B_${base}_Q ${nodes.q} 0 ${out(vhigh, vlow)}`);
-  if (nodes.qbar) lines.push(`B_${base}_QB ${nodes.qbar} 0 ${out(vlow, vhigh)}`);
+  if (nodes.q) {
+    lines.push(`B_${base}_Q ${base}_qd 0 ${out(vhigh, vlow)}`);
+    lines.push(`R_${base}_Q ${base}_qd ${nodes.q} 1`);
+  }
+  if (nodes.qbar) {
+    lines.push(`B_${base}_QB ${base}_qbd 0 ${out(vlow, vhigh)}`);
+    lines.push(`R_${base}_QB ${base}_qbd ${nodes.qbar} 1`);
+  }
   return lines;
 }
 

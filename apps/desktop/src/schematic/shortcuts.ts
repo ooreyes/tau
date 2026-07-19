@@ -1,11 +1,11 @@
 /**
- * Keyboard shortcut table (FEATURE_PARITY §8 — LTspice parity). Pure resolver
+ * Keyboard shortcut table (LTspice parity). Pure resolver
  * so every binding is unit-testable; `App.tsx` dispatches on the returned
  * action id. The caller is responsible for the "typing in an input" guard.
  *
  * LTspice function keys: F2 part picker, F3 wire, F4 net label, F5 delete,
  * F6 copy, F9 undo (Shift+F9 redo). F7 (move) and F8 (drag) are intentionally
- * unbound until Tau grows those tools — binding them to something else would
+ * unbound until Tau grows those tools - binding them to something else would
  * teach users the wrong reflex.
  */
 
@@ -31,9 +31,9 @@ export interface ShortcutKey {
 
 /**
  * Actions that read or navigate rather than mutate the schematic document or
- * arm an editing tool — safe to run from any view. Every other action is an
+ * arm an editing tool - safe to run from any view. Every other action is an
  * editing action and only applies in the schematic view: the simulator view
- * is read-only (pan/zoom/probe only — see Canvas's `interactive` prop and
+ * is read-only (pan/zoom/probe only - see Canvas's `interactive` prop and
  * `dispatchShortcutAction` below), so undo/redo, delete, rotate/mirror,
  * copy/paste/duplicate, and the wire/label tools must not fire there.
  */

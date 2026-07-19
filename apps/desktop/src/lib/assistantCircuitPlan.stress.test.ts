@@ -125,11 +125,11 @@ describe("assistant complex-circuit adversarial contract", () => {
         kind: "resistor",
         value: "1k",
       })),
-    })).toThrow(/1–80 components/);
+    })).toThrow(/1-80 components/);
     expect(() => compileAssistantCircuitPlan("too-many-nets", {
       ...base,
       nets: Array.from({ length: 161 }, (_, index) => ({ name: `N${index + 1}`, pins: ["R1.a"] })),
-    })).toThrow(/1–160 nets/);
+    })).toThrow(/1-160 nets/);
     expect(() => compileAssistantCircuitPlan("too-many-pins", {
       ...base,
       nets: [

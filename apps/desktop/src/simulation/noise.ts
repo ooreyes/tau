@@ -15,7 +15,7 @@
  *
  *   Let A be the MNA matrix. A current I injected into node k produces
  *   V(out) = (A⁻¹)[out][k]·I (superposition). Solving Aᵀ z = e_out gives
- *   z[k] = (A⁻¹)[out][k] for every k at once — exactly the transimpedance from
+ *   z[k] = (A⁻¹)[out][k] for every k at once - exactly the transimpedance from
  *   node k to the output. For a noise current source between nodes (na, nb) the
  *   transimpedance is z[na] − z[nb].
  *
@@ -27,7 +27,7 @@
  * AC solve with the input source driven at 1).
  *
  * Self-contained: depends only on `extractCircuit`, `parseQuantity`, the param
- * scope, and types — no internals from the other solvers.
+ * scope, and types - no internals from the other solvers.
  */
 
 import type { ComponentKind, NetLabel, SchematicComponent, SchematicWire } from "../schematic/types";
@@ -376,7 +376,7 @@ export function runNoiseAnalysis(schematic: Schematic, spec: NoiseSpec): NoiseRe
 
     const GMIN = 1e-12;
 
-    // Resistors (the noise generators) — precompute their node index pairs + value.
+    // Resistors (the noise generators) - precompute their node index pairs + value.
     const resistors = circuit.components
       .filter(({ component }) => component.kind === "resistor")
       .map(({ component, pins }) => ({
@@ -433,7 +433,7 @@ export function runNoiseAnalysis(schematic: Schematic, spec: NoiseSpec): NoiseRe
           }
           case "vsource":
           case "vac": {
-            // Companion stamp only — source amplitude does not affect the system matrix.
+            // Companion stamp only - source amplitude does not affect the system matrix.
             const sIdx = voltageSourceOffset + voltageSources.findIndex((v) => v.component.id === component.id);
             const one: Complex = { re: 1, im: 0 };
             const negOne: Complex = { re: -1, im: 0 };
@@ -518,7 +518,7 @@ export function runNoiseAnalysis(schematic: Schematic, spec: NoiseSpec): NoiseRe
 
     const warnings = [...circuit.warnings];
     if (resistors.length === 0) {
-      warnings.push("No resistors in the circuit — the linear noise solver reports zero noise.");
+      warnings.push("No resistors in the circuit - the linear noise solver reports zero noise.");
     }
 
     return {
