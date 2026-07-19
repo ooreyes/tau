@@ -18,33 +18,32 @@
 ## What is Tau?
 
 Tau is a standalone desktop circuit simulator that pairs a serious, SPICE-class
-numerical engine with an interface that feels like a modern design canvas —
+numerical engine with an interface that feels like a modern design canvas -
 fast, obvious, and beginner-friendly, without hiding the underlying engineering.
 
-- **Powerful** — a real SPICE engine (ngspice, embedded natively), not a toy approximation.
-- **Fast** — a native Rust/Tauri app that uses your hardware efficiently. Computational efficiency is a first-class priority.
-- **Approachable** — drag-and-drop placement, search-first components, smart wiring, click-to-probe, automatic plots.
-- **Honest** — beginner mode explains what's happening; expert mode exposes raw netlists, directives, and solver settings.
+- **Powerful** - a real SPICE engine (ngspice, embedded natively), not a toy approximation.
+- **Fast** - a native Rust/Tauri app that uses your hardware efficiently. Computational efficiency is a first-class priority.
+- **Approachable** - drag-and-drop placement, search-first components, smart wiring, click-to-probe, automatic plots.
+- **Honest** - beginner mode explains what's happening; expert mode exposes raw netlists, directives, and solver settings.
 
 ## Why Tau?
 
 LTspice is powerful but its interaction model is painful. EveryCircuit is
 approachable but paywalled and limited. Tau aims to be powerful *and*
-approachable — a tool you can learn circuits on and still trust for real design.
+approachable - a tool you can learn circuits on and still trust for real design.
 
 ## Tech stack
 
 | Layer | Choice |
 |---|---|
-| Shell | Tauri v2 (Rust) — standalone desktop, minimal overhead |
+| Shell | Tauri v2 (Rust) - standalone desktop, minimal overhead |
 | Frontend | React 19 + TypeScript + Vite 7 |
 | Schematic canvas | SVG + React (v0) → Canvas2D/WebGL for scale |
 | State | Zustand |
 | Engine | Bundled ngspice via Rust FFI (`libngspice`); TypeScript MNA only for browser dev fallback |
 | Plotting | SVG plotter now; uPlot or custom renderer later |
 
-See [ARCHITECTURE.md](ARCHITECTURE.md) for the full picture and
-[DESIGN_LOG.md](DESIGN_LOG.md) for decisions and current state.
+See [ARCHITECTURE.md](ARCHITECTURE.md) for the full picture.
 
 ## Current component library
 
@@ -130,7 +129,7 @@ verifies after signing. Public distribution still needs Apple Developer ID
 signing and notarization; without that, Gatekeeper will reject the app.
 
 Current signed local DMG SHA-256:
-`dee445b493922361b86c7c33247e07283cbd0020ba50eea04c7937069b00a136`.
+`9490dab2e5729709ddc04d9d3a543e0e4084344f9232b4451c40743eceab4cd8`.
 
 ## Repository layout
 
@@ -139,14 +138,13 @@ Tau/
 ├── apps/desktop/         # Tauri v2 desktop app (React frontend + Rust shell)
 ├── packages/
 │   └── schematic-core/   # canonical schematic document model & types
-├── crates/               # (Phase 3) Rust crates: ngspice FFI, orchestrator
 ├── ARCHITECTURE.md       # system design
-├── DESIGN_LOG.md         # decisions + append-only session log (read this first)
-└── CLAUDE.md             # context for AI assistants working on the repo
+├── KNOWN_ISSUES.md       # current limitations, tracked honestly
+└── SHARE.md              # install notes for the unsigned preview build
 ```
 
 ## License
 
-Proprietary, all rights reserved during early development — see [LICENSE](LICENSE).
+Proprietary, all rights reserved during early development - see [LICENSE](LICENSE).
 The long-term license is intentionally undecided to keep open-source, open-core,
 and commercial paths available.

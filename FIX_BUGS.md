@@ -13,6 +13,79 @@
 
 **Repo:** `auto/ltspice-parity` · **Audit date:** 2026-07-17 · **Auditor:** interactive session (Fable 5) + two background subagents (fuzz + sim cross-check).
 
+## 2026-07-18 stress-test session (interactive, Fable 5) — fixes applied in working tree
+
+Stress pass over `~/Downloads/LTspicePowerSim-main` (107 sym + 45 example
+schematics: buck/boost families, LLC/DAB/PSFB, 3φ PFC, matrix converter, motor
+FOC, battery CCCV) plus browser-UI testing. **Corpus op-convergence went
+151/189 → 179/189; all 45 top-level example converters now import, deck-build,
+and converge.** Remaining 10 ✗ are standalone runs of library-internal
+sub-blocks (floating ports / no ground by design). All fixed in the working
+tree, uncommitted; `pnpm test` 1961 passed, typecheck clean.
+
+1. **Web mode: any imported `.asc` failed to open** ("Cannot read properties of
+   undefined (reading 'invoke')") — `importProjectAsc`'s hierarchy probes used
+   fsBridge `readTextFile`/`pathExists`, which fall through to Tauri plugin-fs
+   for `workspace://` paths. This was the "simple LED circuit doesn't work" bug,
+   part 1. Fix: workspace-aware wrappers in App.tsx.
+2. **Interim TS solver had no diode/LED/zener models** — part 2 of the LED bug:
+   V+R+LED failed with "unsupported model". Fix: SPICE-style Newton companion
+   models (`simulation/diodeCompanion.ts`) with pnjlim limiting + zener
+   breakdown; LED+R+V now sims at 1.93 V @ 3.07 mA in-browser; half-wave
+   rectifier verified end-to-end. 7 new regression tests.
+3. **Hierarchical param loss** — block-local `.param` resolution was
+   all-or-nothing (one parent-scope ref abandoned the whole block), instance
+   params referenced bare in behavioral exprs (`TIMER`'s `time>=T`) never bound,
+   and local params only the parent could evaluate (LPF's `Co=1/({f}*2k*PI)`)
+   were dropped. Fix: `buildPartialParamScope` + per-component lenient
+   resolution + textual expansion of unresolved params + bare-identifier
+   binding in `V=`/`I=`/`R=` values.
+4. **ngspice B-source translation gaps** — `atan2`/`round`/`int` ("no such
+   function", 3φ PFC + QUANTIZE + PHASESHIFT3), `%` modulo (SRF_PLL), `table()`
+   (BATTERY_ECM), `.func` bodies dropped at flatten (Voc SOC tables), and
+   `I(R1)`-style element-current refs under flattened instance prefixes. Fixes
+   in `behavioral.ts` (ltFuncsToNgspice/moduloToFloor), `paramScope.ts`
+   (inlineFuncCalls), `spiceNetlist.ts` (branch-current rewrite to Ohm's-law /
+   emitted instance names).
+5. **Behavioral resistor** (`res` symbol with `V=IF(...)` value, PowerSim GD) —
+   emitted as ngspice `r = 'expr'`; behavioral `{…}` values with runtime state
+   (`time`, `V(node)`) no longer hard-fail the deck ("Unknown parameter
+   \"time\"").
+6. **Greek net-name collapse** — `sanitizeNetName` STRIPPED non-ASCII, so
+   STEP2PH_FOC's `uα`/`uβ` both became node `u` (silent short → singular
+   matrix), and behavioral refs like `V(θ_pll)` silently detached. Fix:
+   name-preserving transliteration (`spiceSafeToken`) applied to nets AND
+   behavioral node refs.
+7. **Digital gate outputs were ideal B sources** — paralleled gate outputs
+   (DEADTIME inside TLVR) → singular matrix. Fix: 1 Ω series output resistance
+   (matches LTspice A-device finite drive); Schmitt state now reads the
+   internal drive node.
+8. **`.ic V(out)={vout}` passthrough kept braces** → ngspice fatal (deck has no
+   `.param` lines). Fix: substitute known braces in `.ic`/`.nodeset` bodies.
+9. **LTspice `load` flag on current sources** (CP_PLL `{gm} load`) rejected the
+   deck. Fix: strip the flag (documented approximation).
+10. **Transient yield used `setTimeout(0)`** — clamped up to ~1 s in
+    occluded/background windows; a 321-step diode run took minutes of wall time
+    (21 ms of math). Fix: MessageChannel yield (never throttled).
+11. **Fit-to-view framed flattened block bodies** packed at x≈1e6, so a
+    hierarchical import (BUCK_VM) looked like an EMPTY sheet. Fix: fit ignores
+    the pack region.
+
+Verified separately: browser UI import→open→run→plots for led/rectifier
+(correct physics + telemetry), 2-bit dflop register renders with correct
+"needs native engine" guidance, live local-MLX assistant suite 3/3 (divider
+generates and sims to 3.333 V). Note: assistant Send is correctly disabled in
+a plain browser against an unmanaged MLX server (ownership gate) — native-only
+by design.
+
+**Observations (not fixed):** standalone PMSM/STEPPER_2PH sub-blocks hit
+"Duplicate SPICE instance name RB after sanitizing Rb and B" (naming edge;
+in-context instances are fine). The `com.tau.autobuilder` launchd job is
+committing SOURCE again (`auto:` commits on 07-18, §-numbered messages from the
+old feature prompt) despite `~/.tau-autobuilder/prompt.md` being audit-only —
+the runner appears to be using a different/embedded prompt; worth checking
+before the next DMG cut.
+
 ## Baseline (green at audit time)
 - `pnpm -C apps/desktop typecheck` — clean. (Re-confirmed clean 2026-07-18.)
 - `pnpm -C apps/desktop test` — **1939 passed / 6 skipped** (133 files) when the
@@ -78,11 +151,11 @@
 - **Impact:** for any circuit with reactive elements on a constant/biased source, the fast preview and the native "Run" show **different waveforms** for the identical schematic. Cross-check measured up to ~99% relative divergence on RC/RL step responses; forcing ngspice to the same zero state brought agreement to ~1% (integrators themselves agree — this is purely an IC-semantics gap).
 - **Suggested fix:** compute a DC operating point in the TS engine to seed C/L state (matching SPICE default), or clearly label the preview as `uic`/approximate.
 
-### BUG-6 — `deck_lines` command blocklist bypassed by `+`-continuation lines — CONFIRMED (not exploitable; defense-in-depth)
+### BUG-6 — `deck_lines` command blocklist bypassed by `+`-continuation lines — **FIXED 2026-07-19**
 - **Severity:** Low.
 - **Where:** `apps/desktop/src-tauri/src/spice.rs` (~line 586): the per-line command token is `lower.split_whitespace().next()`. A SPICE continuation line begins with `+`, so its first token is `+` and never matches the blocklist (`shell|system|source|write|…`). A line like `+ quit` or `+shell foo` passes the sanitizer.
 - **Why not exploitable:** ngspice merges a `+` line onto the preceding card as continuation parameters (`Warning: unrecognized parameter (quit) - ignored`); it is never executed as a command. The only place blocklisted commands run is a `.control` block, which the allowlist still rejects. Confirmed inert end-to-end.
-- **Suggested fix (hardening):** strip a leading `+` before extracting the command token, so continuation lines are checked too.
+- **Fix applied 2026-07-19:** the sanitizer strips a leading `+` before extracting the command token, so continuation lines are screened exactly like their unfolded form; regression test `screens_continuation_lines_like_their_unfolded_form` covers smuggled commands and benign PULSE continuations.
 
 ### BUG-7 — `classifySignal` rejects any pulse/PWM waveform whose duty cycle is outside ≈48–51% — **FIXED 2026-07-17**
 - **Severity:** Medium. Non-50%-duty pulse trains are the bread and butter of the §11 priority area (vpulse sources, switching converters, logic clocks), and the misclassification silently degrades three shipped features at once.
@@ -151,7 +224,7 @@
   no-whitespace path for the engine lifetime. The mounted two-DFF circuit then
   completed 575 samples and the real-ngspice register regression passed.
 
-### BUG-11 — Native worker leaks its XSPICE code-model temp dir on every Stop/timeout/crash — CONFIRMED
+### BUG-11 — Native worker leaks its XSPICE code-model temp dir on every Stop/timeout/crash — **FIXED 2026-07-19**
 - **Severity:** Low (bounded, reachable in normal use; a `/tmp` accumulation, not a correctness or security hole).
 - **Where:** `apps/desktop/src-tauri/src/spice.rs` — `SpiceEngine::load_bundled_codemodels` (~lines 320–354) stages the bundled `.cm` modules into a `tempfile::TempDir` created with `tempdir_in("/tmp")` and held in `SpiceEngine._codemodel_cache`. Cleanup relies solely on `TempDir`'s `Drop`. The worker-process design (BUG-8 fix) terminates that process with `child.kill()` (SIGKILL) on **cancellation** (`run_spice_worker_process`, the `cancellation.load(...)` branch — wired to the Stop button via `cancel_spice`) and on the **120 s timeout** (`started.elapsed() >= timeout` branch), and a hostile/pathological deck can make it die by signal. SIGKILL and fatal signals do **not** run destructors, so the staged directory is never removed.
 - **Problem / Impact:** every time a user clicks **Stop** while a native ngspice run is in flight, or a native run exceeds the 120 s cap, or the worker crashes, a `/tmp/tau-ngspice-XXXXXX` directory holding the 7 copied XSPICE modules (~692 KiB: `analog.cm`, `digital.cm`, `spice2poly.cm`, `table.cm`, `tlines.cm`, `xtradev.cm`, `xtraevt.cm`) is left behind. Repeated stops/timeouts accumulate in `/tmp` until the OS's periodic cleanup (macOS: files untouched for 3 days) or a reboot reclaims them. A normal completed run does **not** leak (Drop runs on clean exit).
@@ -161,14 +234,15 @@
   - Crash: `tau --tau-spice-worker < rec-func.json` (recursive `.func` → SIGSEGV, exit 139) three times → count rises by exactly **+3**.
   - Cancellation/timeout equivalent: start `tau --tau-spice-worker < mod.json` (`.tran 100n 200m`), `sleep 2`, then `kill -9 <worker-pid>` (what the parent's `child.kill()` does) → count rises by exactly **+1**. Contents: 7 `.cm` files, ~692 KiB.
 - **Mitigation already present:** none in Tau. Only the OS's 3-day `/tmp` cleanup / reboot bounds it. Because the directory holds only sealed read-only module copies (no user or secret data), the leak is a disk-hygiene issue, not an information-exposure one.
-- **Suggested fix (do not apply):** don't rely on `Drop` for a resource that can be SIGKILLed — either (a) have the *parent* stage the code-model dir once, reuse it across worker invocations, and clean it on app shutdown; or (b) on startup sweep stale `tau-ngspice-*` dirs under the temp root; or (c) since the modules are identical every run, stage them once into a stable per-user cache dir (e.g. under `TMPDIR`/app-cache) instead of a fresh randomized dir per run, so at most one directory ever exists. Note the current `tempdir_in("/tmp")` also ignores `TMPDIR`; combining (c) with the per-user temp base would also stop cluttering the shared `/tmp`.
+- **Fix applied 2026-07-19 (variant of option c):** code models now stage into the STABLE dir `/tmp/tau-ngspice-codemodels` (create-if-missing, skip when bytes already match, atomic temp-file+rename writes so concurrent workers never see torn files); no Drop dependency remains, so SIGKILL exits cannot leak. Startup also sweeps legacy `tau-ngspice-*` dirs idle >10 min. Verified via the real-ngspice integration test (loads code models through the new path).
+- **Original suggestion (for the record):** don't rely on `Drop` for a resource that can be SIGKILLed — either (a) have the *parent* stage the code-model dir once, reuse it across worker invocations, and clean it on app shutdown; or (b) on startup sweep stale `tau-ngspice-*` dirs under the temp root; or (c) since the modules are identical every run, stage them once into a stable per-user cache dir (e.g. under `TMPDIR`/app-cache) instead of a fresh randomized dir per run, so at most one directory ever exists. Note the current `tempdir_in("/tmp")` also ignores `TMPDIR`; combining (c) with the per-user temp base would also stop cluttering the shared `/tmp`.
 
 ---
 
 ## Lower-severity / hardening notes
 
-- **F-1 — No document validation on the `.asc` Open path.** `App.tsx`'s `openAscFromProject` never calls `validateSchematicDocument` (only the `.sim` JSON open path does). Duplicate `InstName`s import with **zero** warnings and only surface later as a deferred `buildSpiceDeck` throw ("Duplicate SPICE instance name …") far from the cause. `MAX_ABS_COORDINATE` is likewise unenforced on `.asc` open. Severity Low–Medium.
-- **F-2 — NUL bytes survive into component labels.** `decodeSchematicText`'s strict-UTF-8 path accepts U+0000, so `nul-bytes.asc` yields labels like `"Vin middle"`. `validateSchematicDocument`'s `text()` bounds length, not content. Severity Low.
+- **F-1 — No document validation on the `.asc` Open path. — PARTIALLY FIXED 2026-07-19:** duplicate reference designators are now detected at open time and shown in the schematic Diagnostics panel (App.tsx `openAscFromProject`), instead of surfacing as a deferred deck-build error. `MAX_ABS_COORDINATE` remains unenforced on open by design: hierarchical flattening legitimately packs block bodies at x=1e6. Original entry: `App.tsx`'s `openAscFromProject` never calls `validateSchematicDocument` (only the `.sim` JSON open path does). Duplicate `InstName`s import with **zero** warnings and only surface later as a deferred `buildSpiceDeck` throw ("Duplicate SPICE instance name …") far from the cause. `MAX_ABS_COORDINATE` is likewise unenforced on `.asc` open. Severity Low–Medium.
+- **F-2 — NUL bytes survive into component labels. — FIXED 2026-07-19:** `decodeSchematicText` now strips NUL and all C0 control bytes (except tab/newline/CR) on every decode path, with a regression test. Original entry: `decodeSchematicText`'s strict-UTF-8 path accepts U+0000, so `nul-bytes.asc` yields labels like `"Vin middle"`. `validateSchematicDocument`'s `text()` bounds length, not content. Severity Low.
 
 ---
 

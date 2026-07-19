@@ -35,7 +35,7 @@ Tau is a native Mac circuit app (not a website). This build is an **unsigned pub
 ## Reddit-ready blurb
 
 ```
-Apple silicon Mac preview of Tau — native LTspice-ish schematic + sim app with on-device AI.
+Apple silicon Mac preview of Tau - native LTspice-ish schematic + sim app with on-device AI.
 
 DMG: <release URL>
 Install: drag to Applications → Control-click Open (unsigned preview).

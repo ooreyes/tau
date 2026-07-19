@@ -1,4 +1,4 @@
-# Tau — Architecture
+# Tau - Architecture
 
 This document describes the intended system design. It is aspirational where it
 describes layers not yet built; those are marked _(planned)_. See
@@ -17,9 +17,9 @@ describes layers not yet built; those are marked _(planned)_. See
 3. **The schematic is the single source of truth.** The netlist is *derived*
    from it, never hand-maintained. Undo/redo is a command stack over the model.
 4. **Two simulation modes, one engine.**
-   - **Live mode** _(planned)_ — continuous, animated, interactive transient for
+   - **Live mode** _(planned)_ - continuous, animated, interactive transient for
      small circuits (the EveryCircuit-like "feel").
-   - **Analysis mode** _(planned)_ — full SPICE analyses (transient, AC, DC
+   - **Analysis mode** _(planned)_ - full SPICE analyses (transient, AC, DC
      sweep, op, noise, parametric, Monte Carlo) with a waveform viewer.
 5. **Never hide the math; make it legible.** Beginner mode explains; expert mode
    exposes raw directives, netlists, model parameters, and solver settings.
@@ -28,7 +28,7 @@ describes layers not yet built; those are marked _(planned)_. See
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
-│  FRONTEND  (apps/desktop/src — React + TypeScript)             │
+│  FRONTEND  (apps/desktop/src - React + TypeScript)             │
 │                                                                │
 │  Toolbar · Palette · Command palette (planned)                 │
 │  Schematic Canvas (SVG→Canvas2D/WebGL)   Zustand doc + undo    │
@@ -55,7 +55,7 @@ describes layers not yet built; those are marked _(planned)_. See
 | Module | Location | Responsibility |
 |---|---|---|
 | `@tau/desktop` | `apps/desktop` | The app: UI, canvas, Rust shell |
-| `@tau/schematic-core` | `packages/schematic-core` | Canonical document model & types (net extraction, IR — planned) |
+| `@tau/schematic-core` | `packages/schematic-core` | Canonical document model & types (net extraction, IR - planned) |
 | `ngspice-sys` _(planned)_ | `crates/ngspice-sys` | Raw FFI bindings to `libngspice` |
 | `ngspice-rs` _(planned)_ | `crates/ngspice-rs` | Safe wrapper + result streaming via ngspice callbacks |
 | `sim-orchestrator` _(planned)_ | `crates/sim-orchestrator` | Run scheduling, parallel sweeps/Monte Carlo |
@@ -74,7 +74,7 @@ describes layers not yet built; those are marked _(planned)_. See
   threads inside one instance. This is the robust path to "use all cores."
 - **Numerics (provided by ngspice):** Modified Nodal Analysis forms a stiff DAE
   system; implicit integration (Backward Euler / Trapezoidal / Gear) with
-  adaptive time-stepping and local-truncation-error control; Newton–Raphson with
+  adaptive time-stepping and local-truncation-error control; Newton-Raphson with
   Gmin/source stepping for convergence; sparse LU (KLU) per iteration.
 
 ## Browser fallback
