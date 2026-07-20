@@ -34,13 +34,6 @@ fixes land as they are ready.
   simulation worker process; ngspice's own output-memory guard is the
   effective bound.
 
-## Import edge cases
-
-- A few PowerSim library sub-blocks use reference designators that collide
-  after SPICE name sanitizing (for example `Rb` next to a part named `B`).
-  Opening them standalone reports a duplicate instance name. Instantiated
-  inside a parent schematic they work normally.
-
 ## Install
 
 - The preview build is not notarized. macOS Gatekeeper requires a one-time

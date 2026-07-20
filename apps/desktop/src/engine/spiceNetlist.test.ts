@@ -877,4 +877,31 @@ describe("buildSpiceDeck", () => {
     expect(names).toContain("R1");  // real resistor keeps its name
     expect(new Set(names).size).toBe(names.length); // no duplicates
   });
+
+  it("disambiguates a manufactured name that lands on a refdes a sibling owns", () => {
+    // PowerSim sub-blocks pair a resistor `Rb` with a part labeled `B` whose
+    // manufactured fallback is also `RB`; the deck used to fail with a
+    // duplicate-name error when such a block was opened standalone. The part
+    // whose label owns the name keeps it regardless of component order.
+    for (const ordered of [true, false]) {
+      const pair = [
+        component("resistor", "Rb", "1k", 0, 0),
+        component("resistor", "B", "2k", 96, 0),
+      ];
+      const components = [...(ordered ? pair : pair.reverse()), component("ground", "", "", 0, 64)];
+      const deck = buildSpiceDeck({ components, wires: [] }, { kind: "op" });
+      expect(deck.netlist).toMatch(/^Rb /m);
+      expect(deck.netlist).toMatch(/^RB_2 /m);
+    }
+  });
+
+  it("still rejects two parts that claim the same SPICE instance name", () => {
+    const components = [
+      component("resistor", "R1", "1k", 0, 0),
+      { ...component("resistor", "r1", "2k", 96, 0), id: "r1-dup" },
+      component("ground", "", "", 0, 64),
+    ];
+    expect(() => buildSpiceDeck({ components, wires: [] }, { kind: "op" }))
+      .toThrow(/Duplicate SPICE instance name/);
+  });
 });

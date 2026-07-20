@@ -110,6 +110,9 @@ export function buildSpiceDeck(schematic: Schematic, analysis: SpiceAnalysis): S
     const label = entry.component.label?.trim().toLowerCase();
     if (label && !componentsByLabel.has(label)) componentsByLabel.set(label, { entry, index });
   });
+  // Deck instance names, resolved once so behavioral current refs, coupling
+  // lines, and element emission all agree; throws on a genuine duplicate.
+  const instanceNames = resolveInstanceNames(circuit.components);
   const deckNode = (netId: string | undefined): string | null =>
     netId === undefined ? null : netId === circuit.groundNetId ? "0" : netId.toLowerCase();
   // Node names inside behavioral expressions must transliterate exactly like
@@ -128,7 +131,7 @@ export function buildSpiceDeck(schematic: Schematic, analysis: SpiceAnalysis): S
         if (!target) continue;
         const kind = target.entry.component.kind;
         if (kind === "vsource" || kind === "vac" || kind === "inductor") {
-          return `I(${instanceName(target.entry.component, target.index)})`;
+          return `I(${instanceNames.get(target.index)!})`;
         }
         if (kind === "resistor") {
           const a = deckNode(target.entry.pins.a);
@@ -204,7 +207,7 @@ export function buildSpiceDeck(schematic: Schematic, analysis: SpiceAnalysis): S
   circuit.components.forEach((entry, index) => {
     if (entry.component.kind !== "inductor") return;
     const label = safeName(entry.component.label).toLowerCase();
-    if (label) inductorNames.set(label, instanceName(entry.component, index));
+    if (label) inductorNames.set(label, instanceNames.get(index)!);
   });
   lines.push(...couplingLinesFromDirectives(flatDirectives, schematic.params ?? EMPTY_SCOPE, inductorNames));
 
@@ -305,18 +308,6 @@ export function buildSpiceDeck(schematic: Schematic, analysis: SpiceAnalysis): S
   // "could not find a valid modelname" (UHFpreamp's MRF901).
   const subcktModels = new Set([...definedSubcktNames(rawDirectives), ...inlinedSubckts]);
 
-  const usedInstanceNames = new Map<string, string>();
-  circuit.components.forEach(({ component }, index) => {
-    if (component.kind === "ground" || component.kind === "testpoint") return;
-    const name = instanceName(component, index);
-    const key = name.toLocaleLowerCase();
-    const previous = usedInstanceNames.get(key);
-    if (previous) {
-      throw new Error(`Duplicate SPICE instance name "${name}" after sanitizing ${previous} and ${component.label || component.kind}.`);
-    }
-    usedInstanceNames.set(key, component.label || component.kind);
-  });
-
   circuit.components.forEach((entry, index) => {
     const directiveIc = entry.component.kind === "inductor"
       ? inductorCurrents.get(entry.component.label.trim().toLowerCase())
@@ -324,6 +315,7 @@ export function buildSpiceDeck(schematic: Schematic, analysis: SpiceAnalysis): S
     lines.push(...componentLines(
       entry,
       index,
+      instanceNames.get(index) ?? "",
       knownModels,
       schematic.params ?? EMPTY_SCOPE,
       vdmosModels,
@@ -357,9 +349,8 @@ export function buildSpiceDeck(schematic: Schematic, analysis: SpiceAnalysis): S
   return { circuit, netlist: lines.join("\n") };
 }
 
-function componentLines(entry: ExtractedComponent, index: number, userModels: Set<string> = new Set(), params: ParamScope = EMPTY_SCOPE, vdmosModels: ReadonlySet<string> = new Set(), netPinCount: ReadonlyMap<string, number> = new Map(), subcktModels: ReadonlySet<string> = new Set(), directiveInductorIc?: string): string[] {
+function componentLines(entry: ExtractedComponent, index: number, name: string, userModels: Set<string> = new Set(), params: ParamScope = EMPTY_SCOPE, vdmosModels: ReadonlySet<string> = new Set(), netPinCount: ReadonlyMap<string, number> = new Map(), subcktModels: ReadonlySet<string> = new Set(), directiveInductorIc?: string): string[] {
   const { component } = entry;
-  const name = instanceName(component, index);
   const node = (pin: string) => requiredNode(entry, pin);
 
   // For a semiconductor, prefer the part's own model name when the document
@@ -890,25 +881,63 @@ function analysisLine(analysis: SpiceAnalysis, useInitialConditions = false): st
   }
 }
 
-function instanceName(component: SchematicComponent, index: number): string {
-  const prefix: Record<ComponentKind, string> = {
-    resistor: "R", capacitor: "C", inductor: "L", vsource: "V", isource: "I", vac: "V", iac: "I", vpulse: "V",
-    diode: "D", led: "D", zener: "D", opamp: "E", comparator: "B", digitalGate: "B", dflop: "A", sampleHold: "A", modulator: "A", vcvs: "E", vccs: "G", cccs: "F", ccvs: "H", bsource: "B", nmos: "M", pmos: "M", njf: "J", pjf: "J", npn: "Q", pnp: "Q",
-    potentiometer: "R", switch: "R", transformer: "L", tline: "T", subckt: "X", testpoint: "X", ground: "X",
-  };
+const SPICE_PREFIX: Record<ComponentKind, string> = {
+  resistor: "R", capacitor: "C", inductor: "L", vsource: "V", isource: "I", vac: "V", iac: "I", vpulse: "V",
+  diode: "D", led: "D", zener: "D", opamp: "E", comparator: "B", digitalGate: "B", dflop: "A", sampleHold: "A", modulator: "A", vcvs: "E", vccs: "G", cccs: "F", ccvs: "H", bsource: "B", nmos: "M", pmos: "M", njf: "J", pjf: "J", npn: "Q", pnp: "Q",
+  potentiometer: "R", switch: "R", transformer: "L", tline: "T", subckt: "X", testpoint: "X", ground: "X",
+};
+
+/** The label's own SPICE name when it already carries the kind's prefix
+ * (`R1` for a resistor), or null when a prefixed fallback must be
+ * manufactured. SPICE identifiers are case-insensitive; a lowercase refdes
+ * is preserved so `R1` and `r1` reach the duplicate-name guard as the same
+ * device instead of manufacturing a misleading `Rr1` fallback. */
+function requestedInstanceName(component: SchematicComponent): string | null {
   const requested = safeName(component.label);
-  const p = prefix[component.kind];
-  // SPICE identifiers are case-insensitive. Preserve a user's lowercase
-  // refdes so `R1` and `r1` reach the duplicate-name guard as the same device
-  // instead of manufacturing a misleading `Rr1` fallback.
-  if (requested.slice(0, p.length).toLocaleLowerCase() === p.toLocaleLowerCase()) return requested;
-  // The label doesn't match the kind's SPICE prefix - this happens when a device
-  // is remapped to a placeholder kind (diac/varistor → resistor keep their `Q1`/
-  // `A1` labels). A bare `${p}${index+1}` fallback can COLLIDE with a real
-  // component that legitimately owns that name (dimmer.asc: diac `Q1`→`R1`
-  // clashed with the actual `R1`). Suffix the sanitized label instead so the
-  // SPICE name stays unique and still traces back to the LTspice refdes.
-  return requested ? `${p}${requested}` : `${p}${index + 1}`;
+  const p = SPICE_PREFIX[component.kind];
+  return requested.slice(0, p.length).toLocaleLowerCase() === p.toLocaleLowerCase() ? requested : null;
+}
+
+/** Every component's deck instance name, resolved up front so the two naming
+ * paths cannot silently collide:
+ * - A label that already carries its kind's SPICE prefix owns that name
+ *   outright; two components claiming the same one is a real authoring error
+ *   and still throws.
+ * - Otherwise the name is manufactured (`${prefix}${label}`, e.g. a diac
+ *   remapped to a resistor keeps its `Q1` label as `RQ1`). A manufactured
+ *   name may land on one a sibling legitimately owns - PowerSim blocks pair
+ *   a resistor `Rb` with a part labeled `B` whose fallback is also `RB` - so
+ *   it takes a numeric suffix (`RB_2`) until unique instead of failing the
+ *   whole deck.
+ */
+function resolveInstanceNames(components: readonly ExtractedComponent[]): Map<number, string> {
+  const used = new Map<string, string>();
+  const resolved = new Map<number, string>();
+  const named = (component: SchematicComponent) =>
+    component.kind !== "ground" && component.kind !== "testpoint";
+  components.forEach(({ component }, index) => {
+    if (!named(component)) return;
+    const name = requestedInstanceName(component);
+    if (name === null) return;
+    const key = name.toLocaleLowerCase();
+    const previous = used.get(key);
+    if (previous) {
+      throw new Error(`Duplicate SPICE instance name "${name}" after sanitizing ${previous} and ${component.label || component.kind}.`);
+    }
+    used.set(key, component.label || component.kind);
+    resolved.set(index, name);
+  });
+  components.forEach(({ component }, index) => {
+    if (!named(component) || resolved.has(index)) return;
+    const requested = safeName(component.label);
+    const p = SPICE_PREFIX[component.kind];
+    const base = requested ? `${p}${requested}` : `${p}${index + 1}`;
+    let name = base;
+    for (let n = 2; used.has(name.toLocaleLowerCase()); n += 1) name = `${base}_${n}`;
+    used.set(name.toLocaleLowerCase(), component.label || component.kind);
+    resolved.set(index, name);
+  });
+  return resolved;
 }
 
 function requiredNode(entry: ExtractedComponent, pin: string): string {
