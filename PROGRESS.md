@@ -8,14 +8,14 @@
      `git log --oneline -8`, recover/finish/revert that unit FIRST, then go on.
      ─────────────────────────────────────────────────────────────────────── -->
 ## ⏱ HEARTBEAT
-- **Headline metric:** 1954 reviewed-tree tests green · corpus 82/82 import · 82/82 op-converge · 79/82 warning-clean
-- **Run started (UTC):** 2026-07-18T14:21Z
-- **Synced to origin:** auto/ltspice-parity @ 90a9287.
-- **Claimed unit:** Repair stale/invalid LTspice initial-condition directives that break a hand-edited LED circuit, and diagnose the exact PowerSim hierarchy loss shown in the packaged UI.
+- **Headline metric:** 1972 reviewed-tree tests green · corpus 82/82 import · 82/82 op-converge · 79/82 warning-clean
+- **Run started (UTC):** 2026-07-20T12:05Z
+- **Synced to origin:** auto/ltspice-parity @ e8e1f22.
+- **Claimed unit:** Reconcile the rescued wip checkpoint: imported LTspice symbol identity preserved on .asc save (3-pin MOSFETs and vendor/Universal op-amps round-trip; lossy-save block lifted only where re-import is proven identical).
 - **Status:** DONE
-- **Last completed sub-step:** Rebuilt the app/DMG and ran a packaged 5 V / 1 kΩ / LED regression carrying the screenshot's stale `.ic V(out)=1` + `.ic I(L1)=0`: COMPLETE at 1 ms / 251 samples, LED 1.64 V and 3.36 mA, with concise warnings and no raw transcript.
-- **Plan:** Completed LTspice-current-IC translation, stale-reference handling, collapsed native diagnostics, warning cleanup, safe imported-file Clear/Save behavior, PowerSim bare-library resolution/private-param fixes, full gates, and packaged native proof.
-- **Next step:** Separate PowerSim's visible hierarchical block geometry from its netlist expansion, preserve the selected file's original library root in one-file Import, and compile the `.machine` state blocks before claiming switching-waveform parity.
+- **Last completed sub-step:** Landed rescued work through full gates (tsc, vitest 1972 green single-threaded - parallel App.workspace failures are pre-existing load flakes, cargo test 28, clippy, corpus 82/82) and pushed e8e1f22. Also fixed a local-only clippy blocker: staged ngspice dylibs were mode 444 and tauri_build's target copy could not be overwritten (chmod u+w, untracked artifacts).
+- **Plan:** Re-applied the 9-file rescue diff (ltSymbolType on SchematicComponent, verbatim SYMBOL re-emission via canEmitLtSymbolVerbatim, ascRewriteRisks exemption, validation, tests, KNOWN_ISSUES rewrite) as one proper commit.
+- **Next step:** PowerSim refdes collisions after SPICE name sanitizing (Rb vs B duplicate instance names), or preview-solver DC operating-point initialization to match native bias.
 
 ---
 
