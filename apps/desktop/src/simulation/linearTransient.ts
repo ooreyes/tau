@@ -294,6 +294,88 @@ export async function runTransientAnalysis(
       }
     }
 
+    // Per-run constants hoisted out of the time loop: branch-unknown indices,
+    // parsed magnitudes, and waveform evaluators never change between steps,
+    // so re-running findIndex scans and value-string parses every step only
+    // made step cost grow with component count for identical numbers.
+    const branchIndexOf = <T extends { component: { id: string } }>(entries: readonly T[]) =>
+      new Map(entries.map((candidate, index) => [candidate.component.id, index]));
+    const voltageSourceIndex = branchIndexOf(voltageSources);
+    const inductorIndex = branchIndexOf(inductors);
+    const opampIndex = branchIndexOf(opamps);
+    const vcvsIndex = branchIndexOf(vcvss);
+    const cccsIndex = branchIndexOf(cccss);
+    const ccvsIndex = branchIndexOf(ccvss);
+    const vBsourceIndex = branchIndexOf(vBsources);
+
+    const conductanceOf = new Map<string, number>();
+    const capacitanceOf = new Map<string, number>();
+    const inductanceOf = new Map<string, number>();
+    const gainOf = new Map<string, number>();
+    const dcSourceValue = new Map<string, number>();
+    const acWaveAt = new Map<string, (time: number) => number>();
+    const closedSwitches = new Set<string>();
+    const behavioralTermsOf = new Map<string, BehavioralTerm[]>();
+    // The sampling loop historically parsed leniently (try/catch → 0) while
+    // stamping parsed strictly; both are precomputed with their original
+    // expressions so telemetry and failure behavior stay identical.
+    const sampleCapacitance = new Map<string, number>();
+    const sampleResistance = new Map<string, number>();
+    for (const entry of circuit.components) {
+      const { id } = entry.component;
+      switch (entry.component.kind) {
+        case "resistor": {
+          conductanceOf.set(id, resistanceToConductance(entry));
+          let r = 0;
+          try { r = parseQuantity(entry.component.value, "Ω"); } catch { r = 0; }
+          sampleResistance.set(id, r);
+          break;
+        }
+        case "capacitor": {
+          capacitanceOf.set(id, positiveValue(entry, "F"));
+          let c = 0;
+          try { c = parseQuantity(entry.component.value, "F"); } catch { c = 0; }
+          sampleCapacitance.set(id, c);
+          break;
+        }
+        case "inductor":
+          inductanceOf.set(id, positiveValue(entry, "H"));
+          break;
+        case "vsource":
+          if (!sourceWaveforms.get(id)) dcSourceValue.set(id, parseQuantity(stripAcSpec(entry.component.value), "V"));
+          break;
+        case "isource":
+          if (!sourceWaveforms.get(id)) dcSourceValue.set(id, parseQuantity(stripAcSpec(entry.component.value), "A"));
+          break;
+        case "vac":
+          acWaveAt.set(id, signalEvaluator(entry.component.value, "V"));
+          break;
+        case "iac":
+          acWaveAt.set(id, signalEvaluator(entry.component.value, "A"));
+          break;
+        case "vccs":
+          gainOf.set(id, parseQuantity(entry.component.value, "A/V"));
+          break;
+        case "vcvs":
+          gainOf.set(id, parseQuantity(entry.component.value, "V/V"));
+          break;
+        case "cccs":
+          gainOf.set(id, parseQuantity(entry.component.value, "A/A"));
+          break;
+        case "ccvs":
+          gainOf.set(id, parseQuantity(entry.component.value, "V/A"));
+          break;
+        case "switch":
+          if (entry.component.value.trim().toLowerCase().startsWith("closed")) closedSwitches.add(id);
+          break;
+        case "bsource":
+          behavioralTermsOf.set(id, resolveBehavioralTerms(bModels.get(id)!, entry.component.label, netByName));
+          break;
+        default:
+          break;
+      }
+    }
+
     // Per-component branch-current samples (SPICE sign convention), keyed by id.
     const currentSamples = new Map<string, number[]>();
     const currentRefs = new Map<string, string>();
@@ -333,11 +415,10 @@ export async function runTransientAnalysis(
       for (const entry of circuit.components) {
         switch (entry.component.kind) {
           case "resistor":
-            stampConductance(matrix, netIndex(entry.pins.a, nodeIndex), netIndex(entry.pins.b, nodeIndex), resistanceToConductance(entry));
+            stampConductance(matrix, netIndex(entry.pins.a, nodeIndex), netIndex(entry.pins.b, nodeIndex), conductanceOf.get(entry.component.id)!);
             break;
           case "capacitor": {
-            const capacitance = positiveValue(entry, "F");
-            const conductance = capacitance / stepSize;
+            const conductance = capacitanceOf.get(entry.component.id)! / stepSize;
             const a = netIndex(entry.pins.a, nodeIndex);
             const b = netIndex(entry.pins.b, nodeIndex);
             const previousVoltage = capacitorVoltage.get(entry.component.id) ?? 0;
@@ -346,37 +427,36 @@ export async function runTransientAnalysis(
             break;
           }
           case "vsource": {
-            const sourceIndex = voltageSourceOffset + voltageSources.findIndex((source) => source.component.id === entry.component.id);
+            const sourceIndex = voltageSourceOffset + voltageSourceIndex.get(entry.component.id)!;
             const wave = sourceWaveforms.get(entry.component.id);
-            stampVoltageSource(matrix, rhs, netIndex(entry.pins.p, nodeIndex), netIndex(entry.pins.n, nodeIndex), sourceIndex, wave ? wave.at(time) : parseQuantity(stripAcSpec(entry.component.value), "V"));
+            stampVoltageSource(matrix, rhs, netIndex(entry.pins.p, nodeIndex), netIndex(entry.pins.n, nodeIndex), sourceIndex, wave ? wave.at(time) : dcSourceValue.get(entry.component.id)!);
             break;
           }
           case "vac": {
-            const sourceIndex = voltageSourceOffset + voltageSources.findIndex((source) => source.component.id === entry.component.id);
-            stampVoltageSource(matrix, rhs, netIndex(entry.pins.p, nodeIndex), netIndex(entry.pins.n, nodeIndex), sourceIndex, signalValue(entry.component.value, "V", time));
+            const sourceIndex = voltageSourceOffset + voltageSourceIndex.get(entry.component.id)!;
+            stampVoltageSource(matrix, rhs, netIndex(entry.pins.p, nodeIndex), netIndex(entry.pins.n, nodeIndex), sourceIndex, acWaveAt.get(entry.component.id)!(time));
             break;
           }
           case "isource": {
             // SPICE convention: positive value → current exits p into the external circuit.
             // Stamp from n to p so that rhs[p] += I (current injected into p).
             const wave = sourceWaveforms.get(entry.component.id);
-            stampCurrent(rhs, netIndex(entry.pins.n, nodeIndex), netIndex(entry.pins.p, nodeIndex), wave ? wave.at(time) : parseQuantity(stripAcSpec(entry.component.value), "A"));
+            stampCurrent(rhs, netIndex(entry.pins.n, nodeIndex), netIndex(entry.pins.p, nodeIndex), wave ? wave.at(time) : dcSourceValue.get(entry.component.id)!);
             break;
           }
           case "iac":
             // Same polarity convention as isource.
-            stampCurrent(rhs, netIndex(entry.pins.n, nodeIndex), netIndex(entry.pins.p, nodeIndex), signalValue(entry.component.value, "A", time));
+            stampCurrent(rhs, netIndex(entry.pins.n, nodeIndex), netIndex(entry.pins.p, nodeIndex), acWaveAt.get(entry.component.id)!(time));
             break;
           case "inductor": {
-            const inductorIndex = inductorOffset + inductors.findIndex((source) => source.component.id === entry.component.id);
-            const inductance = positiveValue(entry, "H");
-            const resistance = inductance / stepSize;
+            const branchIndex = inductorOffset + inductorIndex.get(entry.component.id)!;
+            const resistance = inductanceOf.get(entry.component.id)! / stepSize;
             stampInductor(
               matrix,
               rhs,
               netIndex(entry.pins.a, nodeIndex),
               netIndex(entry.pins.b, nodeIndex),
-              inductorIndex,
+              branchIndex,
               resistance,
               inductorCurrent.get(entry.component.id) ?? 0,
             );
@@ -387,7 +467,7 @@ export async function runTransientAnalysis(
             // The constraint row enforces V(in+) = V(in-) (virtual short).
             // Output current io is injected into the out net KCL row.
             // Input pins draw NO current. Power pins (v+/v-) are ignored (gmin handles them).
-            const ioIndex = opampOffset + opamps.findIndex((op) => op.component.id === entry.component.id);
+            const ioIndex = opampOffset + opampIndex.get(entry.component.id)!;
             const outNode = netIndex(entry.pins["out"], nodeIndex);
             const inPlusNode = netIndex(entry.pins["in+"], nodeIndex);
             const inMinusNode = netIndex(entry.pins["in-"], nodeIndex);
@@ -401,7 +481,7 @@ export async function runTransientAnalysis(
           }
           case "vccs": {
             // VCCS (G): I(op→on) = gm·(V(cp) − V(cn)).
-            const gm = parseQuantity(entry.component.value, "A/V");
+            const gm = gainOf.get(entry.component.id)!;
             stampVCCS(
               matrix,
               netIndex(entry.pins.op, nodeIndex),
@@ -414,8 +494,8 @@ export async function runTransientAnalysis(
           }
           case "vcvs": {
             // VCVS (E): V(op) − V(on) = gain·(V(cp) − V(cn)).
-            const gain = parseQuantity(entry.component.value, "V/V");
-            const iIdx = vcvsOffset + vcvss.findIndex((e) => e.component.id === entry.component.id);
+            const gain = gainOf.get(entry.component.id)!;
+            const iIdx = vcvsOffset + vcvsIndex.get(entry.component.id)!;
             stampVCVS(
               matrix,
               netIndex(entry.pins.op, nodeIndex),
@@ -429,8 +509,8 @@ export async function runTransientAnalysis(
           }
           case "cccs": {
             // CCCS (F): I(op→on) = gain·I_sense(cp→cn).
-            const gain = parseQuantity(entry.component.value, "A/A");
-            const senseIdx = cccsOffset + cccss.findIndex((f) => f.component.id === entry.component.id);
+            const gain = gainOf.get(entry.component.id)!;
+            const senseIdx = cccsOffset + cccsIndex.get(entry.component.id)!;
             stampCCCS(
               matrix,
               netIndex(entry.pins.op, nodeIndex),
@@ -444,8 +524,8 @@ export async function runTransientAnalysis(
           }
           case "ccvs": {
             // CCVS (H): V(op) − V(on) = r·I_sense(cp→cn).
-            const r = parseQuantity(entry.component.value, "V/A");
-            const hi = ccvss.findIndex((h) => h.component.id === entry.component.id);
+            const r = gainOf.get(entry.component.id)!;
+            const hi = ccvsIndex.get(entry.component.id)!;
             stampCCVS(
               matrix,
               netIndex(entry.pins.op, nodeIndex),
@@ -462,9 +542,9 @@ export async function runTransientAnalysis(
             const model = bModels.get(entry.component.id)!;
             const p = netIndex(entry.pins.p, nodeIndex);
             const n = netIndex(entry.pins.n, nodeIndex);
-            const terms = resolveBehavioralTerms(model, entry.component.label, netByName);
+            const terms = behavioralTermsOf.get(entry.component.id)!;
             if (model.type === "V") {
-              const branchIndex = bsourceOffset + vBsources.findIndex((b) => b.component.id === entry.component.id);
+              const branchIndex = bsourceOffset + vBsourceIndex.get(entry.component.id)!;
               stampLinearVSource(matrix, rhs, p, n, branchIndex, model.constant, terms);
             } else {
               stampLinearISource(matrix, rhs, p, n, model.constant, terms);
@@ -472,7 +552,7 @@ export async function runTransientAnalysis(
             break;
           }
           case "switch":
-            if (entry.component.value.trim().toLowerCase().startsWith("closed")) {
+            if (closedSwitches.has(entry.component.id)) {
               stampConductance(matrix, netIndex(entry.pins.a, nodeIndex), netIndex(entry.pins.b, nodeIndex), 1e9);
             }
             break;
@@ -560,64 +640,57 @@ export async function runTransientAnalysis(
             const now = voltageBetween(entry.pins.a, entry.pins.b, nodeIndex, solution);
             const prev = capacitorVoltage.get(id) ?? 0;
             capacitorVoltage.set(id, now);
-            let c = 0;
-            try { c = parseQuantity(entry.component.value, "F"); } catch { c = 0; }
+            const c = sampleCapacitance.get(id)!;
             pushCurrent(id, ref, step === 0 || !(c > 0) ? 0 : (c * (now - prev)) / stepSize);
             break;
           }
           case "inductor": {
-            const currentIndex = inductorOffset + inductors.findIndex((source) => source.component.id === id);
+            const currentIndex = inductorOffset + inductorIndex.get(id)!;
             inductorCurrent.set(id, solution[currentIndex]);
             pushCurrent(id, ref, solution[currentIndex]);
             break;
           }
           case "resistor": {
-            let r = 0;
-            try { r = parseQuantity(entry.component.value, "Ω"); } catch { r = 0; }
+            const r = sampleResistance.get(id)!;
             if (r > 0) pushCurrent(id, ref, voltageBetween(entry.pins.a, entry.pins.b, nodeIndex, solution) / r);
             break;
           }
           case "vsource":
           case "vac": {
-            const currentIndex = voltageSourceOffset + voltageSources.findIndex((source) => source.component.id === id);
+            const currentIndex = voltageSourceOffset + voltageSourceIndex.get(id)!;
             pushCurrent(id, ref, solution[currentIndex]);
             break;
           }
           case "isource": {
+            // The strict stamp parse above already failed the run on a bad
+            // value, so the once-parsed DC magnitude is safe to reuse here.
             const wave = sourceWaveforms.get(id);
-            let a = 0;
-            if (wave) a = wave.at(time);
-            else { try { a = parseQuantity(stripAcSpec(entry.component.value), "A"); } catch { a = 0; } }
-            pushCurrent(id, ref, a);
+            pushCurrent(id, ref, wave ? wave.at(time) : dcSourceValue.get(id) ?? 0);
             break;
           }
           case "iac": {
-            pushCurrent(id, ref, signalValue(entry.component.value, "A", time));
+            pushCurrent(id, ref, acWaveAt.get(id)!(time));
             break;
           }
           case "vcvs": {
-            const currentIndex = vcvsOffset + vcvss.findIndex((e) => e.component.id === id);
+            const currentIndex = vcvsOffset + vcvsIndex.get(id)!;
             pushCurrent(id, ref, solution[currentIndex]);
             break;
           }
           case "vccs": {
-            let gm = 0;
-            try { gm = parseQuantity(entry.component.value, "A/V"); } catch { gm = 0; }
             const vctrl = voltageBetween(entry.pins.cp, entry.pins.cn, nodeIndex, solution);
-            pushCurrent(id, ref, gm * vctrl);
+            pushCurrent(id, ref, gainOf.get(id)! * vctrl);
             break;
           }
           case "cccs": {
             // Output current = gain·I_sense; the sense current is the branch unknown.
-            let gain = 0;
-            try { gain = parseQuantity(entry.component.value, "A/A"); } catch { gain = 0; }
-            const senseIdx = cccsOffset + cccss.findIndex((f) => f.component.id === id);
-            pushCurrent(id, ref, gain * solution[senseIdx]);
+            const senseIdx = cccsOffset + cccsIndex.get(id)!;
+            pushCurrent(id, ref, gainOf.get(id)! * solution[senseIdx]);
             break;
           }
           case "ccvs": {
             // Output branch current is the second of this device's two unknowns.
-            const hi = ccvss.findIndex((h) => h.component.id === id);
+            const hi = ccvsIndex.get(id)!;
             pushCurrent(id, ref, solution[ccvsOffset + hi * 2 + 1]);
             break;
           }
@@ -798,13 +871,17 @@ function positiveValue(entry: ExtractedComponent, unit: string): number {
   return value;
 }
 
-function signalValue(value: string, unit: "V" | "A", time: number): number {
-  // SINE/PULSE/PWL/EXP/SFFM stimulus on an AC-symbol source: evaluate the
-  // full time-domain waveform. Plain `amp freq` (legacy vac/iac form) keeps the
-  // bare-sine interpretation below.
-  if (isFunctionSource(value)) return parseTransientSource(value, unit).at(time);
+/** Parse a vac/iac stimulus once per run and return a per-step evaluator.
+ * SINE/PULSE/PWL/EXP/SFFM stimulus on an AC-symbol source evaluates the full
+ * time-domain waveform; plain `amp freq` (legacy vac/iac form) keeps the
+ * bare-sine interpretation below. */
+function signalEvaluator(value: string, unit: "V" | "A"): (time: number) => number {
+  if (isFunctionSource(value)) {
+    const source = parseTransientSource(value, unit);
+    return (time) => source.at(time);
+  }
   const source = parseSineSource(value, unit);
-  return source.offset + source.amplitude * Math.sin(2 * Math.PI * source.frequency * time);
+  return (time) => source.offset + source.amplitude * Math.sin(2 * Math.PI * source.frequency * time);
 }
 
 function parseSineSource(value: string, unit: "V" | "A") {
