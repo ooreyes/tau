@@ -40,13 +40,16 @@ export interface ExampleCircuit {
 //        C1.b(224,128) == GND2.g(224,128) [coincident]
 //
 // τ = R × C = 1000 Ω × 1×10⁻⁶ F = 1 ms
+// V1 is a 0 → 5 V step (PULSE), not plain DC: a transient run solves the DC
+// operating point first, so a DC source would start the cap already charged
+// and plot a flat line. The step keeps the classic charging curve visible.
 // ---------------------------------------------------------------------------
 const RC_CHARGING: ExampleCircuit = {
   id: "rc.v1",
   name: "RC Charging",
-  description: "Classic RC series circuit: 5 V source charges a 1 µF capacitor through a 1 kΩ resistor. τ = RC = 1 ms.",
+  description: "Classic RC series circuit: a 0 to 5 V step charges a 1 µF capacitor through a 1 kΩ resistor. τ = RC = 1 ms.",
   components: [
-    { id: "rc1.v1",   kind: "vsource",   x: 96,  y: 96,  rotation: 0, value: "5",   label: "V1" },
+    { id: "rc1.v1",   kind: "vsource",   x: 96,  y: 96,  rotation: 0, value: "PULSE(0 5 0 1u 1u 10m 20m)", label: "V1" },
     { id: "rc1.r1",   kind: "resistor",  x: 192, y: 64,  rotation: 0, value: "1k",  label: "R1" },
     { id: "rc1.c1",   kind: "capacitor", x: 224, y: 96,  rotation: 90, value: "1µ", label: "C1" },
     { id: "rc1.gnd1", kind: "ground",    x: 96,  y: 128, rotation: 0, value: "",    label: "" },
@@ -76,13 +79,16 @@ const RC_CHARGING: ExampleCircuit = {
 //
 // τ = R × C = 10,000 Ω × 10×10⁻⁹ F = 100 µs
 // Corner frequency f_c = 1/(2πτ) ≈ 1.59 kHz
+// V1 is a 1 kHz square wave so the filter has something to filter: the output
+// shows the exponential edge rounding. (A DC source would plot flat - the
+// transient starts from the solved DC operating point.)
 // ---------------------------------------------------------------------------
 const RC_LOWPASS: ExampleCircuit = {
   id: "rc-lpf.v1",
   name: "RC Low-Pass",
-  description: "RC low-pass filter: source → 10 kΩ → output node → 10 nF → GND. τ = 100 µs, f_c ≈ 1.59 kHz.",
+  description: "RC low-pass filter: 1 kHz square wave → 10 kΩ → output node → 10 nF → GND. τ = 100 µs, f_c ≈ 1.59 kHz rounds the edges.",
   components: [
-    { id: "lpf.v1",   kind: "vsource",   x: 96,  y: 96,  rotation: 0, value: "5",    label: "V1" },
+    { id: "lpf.v1",   kind: "vsource",   x: 96,  y: 96,  rotation: 0, value: "PULSE(0 5 0 1u 1u 500u 1m)", label: "V1" },
     { id: "lpf.r1",   kind: "resistor",  x: 192, y: 64,  rotation: 0, value: "10k",  label: "R1" },
     { id: "lpf.c1",   kind: "capacitor", x: 224, y: 96,  rotation: 90, value: "10n", label: "C1" },
     { id: "lpf.gnd1", kind: "ground",    x: 96,  y: 128, rotation: 0, value: "",     label: "" },
@@ -152,12 +158,14 @@ const VOLTAGE_DIVIDER: ExampleCircuit = {
 //   GND: V1.n(96,192) == GND1.g(96,192) [coincident]
 //        C1.b(352,192) == GND2.g(352,192) [coincident]
 // ---------------------------------------------------------------------------
+// V1 is a 0 → 5 V step (PULSE): the ringing is the step response, and a DC
+// source would start at the settled operating point and plot flat.
 const RLC_SERIES: ExampleCircuit = {
   id: "rlc.v1",
   name: "RLC Series",
-  description: "Series RLC: 5 V, R=10 Ω, L=1 mH, C=10 µF. ζ=0.5 → under-damped ringing at ≈1.6 kHz (~8 cycles in 5 ms).",
+  description: "Series RLC: 0 to 5 V step, R=10 Ω, L=1 mH, C=10 µF. ζ=0.5 → under-damped ringing at ≈1.6 kHz (~8 cycles in 5 ms).",
   components: [
-    { id: "rlc.v1",   kind: "vsource",   x: 96,  y: 160, rotation: 0,  value: "5",    label: "V1" },
+    { id: "rlc.v1",   kind: "vsource",   x: 96,  y: 160, rotation: 0,  value: "PULSE(0 5 0 1u 1u 10m 20m)", label: "V1" },
     { id: "rlc.r1",   kind: "resistor",  x: 192, y: 128, rotation: 0,  value: "10",   label: "R1" },
     { id: "rlc.l1",   kind: "inductor",  x: 320, y: 128, rotation: 0,  value: "1m",   label: "L1" },
     { id: "rlc.c1",   kind: "capacitor", x: 352, y: 160, rotation: 90, value: "10µ",  label: "C1" },

@@ -27,7 +27,9 @@ const wires: SchematicWire[] = [
 async function runCircuit() {
   const result = await runTransientAnalysis(
     { components: [VS, R, C, GND_VS, GND_C], wires },
-    { stopTime: 5e-3, steps: 500 },
+    // `uic` keeps the classic charging waveform this suite asserts on; without
+    // it the run starts from the DC operating point (cap already at 5 V).
+    { stopTime: 5e-3, steps: 500, uic: true },
   );
   if (!result.ok) throw new Error(result.message);
   return result;

@@ -18,14 +18,14 @@ fixes land as they are ready.
 
 ## Browser preview vs native engine
 
-- The in-browser preview solver starts capacitors and inductors from zero
-  state (the same as SPICE `uic`). The native ngspice engine solves the DC
-  operating point first, which is the standard SPICE behavior. For circuits
-  with reactive parts on DC bias, preview waveforms can differ from a native
-  run. The native result is the authoritative one.
 - The preview solver covers R/C/L, sources, diodes/LEDs/zeners, switches,
   op-amps, and controlled sources. Transistors and digital parts need the
   native engine and say so when you press Run.
+- Like the native engine, the preview solves the DC operating point before a
+  transient (unless the analysis specifies `uic`). If that solve is singular -
+  for example an ideal source directly across an ideal inductor - the preview
+  warns and starts from zero state instead. The native result is the
+  authoritative one.
 
 ## Native engine limits
 

@@ -9,6 +9,7 @@ import { parseIcValue, stripIcSpec } from "../engine/icSpec";
 import { parseTransientSource, isFunctionSource, type TransientSource } from "./sourceWaveform";
 import { stripTcSpec } from "./temperature";
 import { DIODE_KINDS, diodeConductance, diodeCurrent, diodeSpecFor, limitDiodeVoltage } from "./diodeCompanion";
+import { runOperatingPoint } from "./operatingPoint";
 
 export interface AnalysisOptions {
   stopTime: number;
@@ -17,7 +18,8 @@ export interface AnalysisOptions {
   startTime?: number;
   /** Optional authored `.tran` maximum internal solver step (seconds). */
   maxStep?: number;
-  /** Preserve an explicit trailing `uic` modifier. */
+  /** Skip the DC operating-point solve and start reactive parts from zero
+   *  state (SPICE `use initial conditions`). */
   uic?: boolean;
 }
 
@@ -266,6 +268,43 @@ export async function runTransientAnalysis(
         }
       } catch {
         /* unparseable IC token - ignore, start from 0 */
+      }
+    }
+
+    // Without `uic`, SPICE solves the DC operating point first and integrates
+    // from that bias - a circuit already at steady state plots flat instead of
+    // showing a fictitious startup transient. Seed the companion-model state
+    // from the OP solution; an explicit per-instance `IC=` keeps its authored
+    // value. When the OP cannot be computed (e.g. a node with no DC path, or
+    // an inductor shorting an ideal source at DC), fall back to zero state -
+    // exactly the old `uic`-style behavior - and say so in a warning.
+    const extraWarnings: string[] = [];
+    const needsOpSeed =
+      !options.uic &&
+      circuit.components.some(
+        ({ component }) =>
+          (component.kind === "capacitor" && !capacitorVoltage.has(component.id)) ||
+          (component.kind === "inductor" && !inductorCurrent.has(component.id)),
+      );
+    if (needsOpSeed) {
+      const op = runOperatingPoint(schematic, { returnBranches: true });
+      if (op.ok) {
+        const voltageByNet = new Map(op.nets.map((net) => [net.id, net.voltage]));
+        const branchCurrentById = new Map((op.branches ?? []).map((branch) => [branch.id, branch.current]));
+        const nodeVoltage = (netId: string | undefined) => (netId !== undefined ? voltageByNet.get(netId) ?? 0 : 0);
+        for (const entry of circuit.components) {
+          const { id, kind } = entry.component;
+          if (kind === "capacitor" && !capacitorVoltage.has(id)) {
+            capacitorVoltage.set(id, nodeVoltage(entry.pins.a) - nodeVoltage(entry.pins.b));
+          } else if (kind === "inductor" && !inductorCurrent.has(id)) {
+            const current = branchCurrentById.get(id);
+            if (current !== undefined) inductorCurrent.set(id, current);
+          }
+        }
+      } else {
+        extraWarnings.push(
+          `The DC operating point could not be computed (${op.message.replace(/\s+$/, "")}) - capacitors and inductors start from zero state instead, like a run with uic.`,
+        );
       }
     }
 
@@ -736,12 +775,12 @@ export async function runTransientAnalysis(
     // sample says, not the originally requested `options.stopTime` - the
     // stats/warning must describe what the user is actually looking at.
     const reachedStopTime = times.length > 0 ? times[times.length - 1] : 0;
-    const warnings = aborted
-      ? [
-          ...circuit.warnings,
-          `Stopped early at ${formatEngineering(reachedStopTime, "s", 2)} of ${formatEngineering(options.stopTime, "s", 2)}.`,
-        ]
-      : circuit.warnings;
+    const warnings = [...circuit.warnings, ...extraWarnings];
+    if (aborted) {
+      warnings.push(
+        `Stopped early at ${formatEngineering(reachedStopTime, "s", 2)} of ${formatEngineering(options.stopTime, "s", 2)}.`,
+      );
+    }
 
     return {
       ok: true,

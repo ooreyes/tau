@@ -145,11 +145,12 @@ before the next DMG cut.
 - **Fix:** hoisted block state across directive records with a three-record
   regression. Project-open now also preloads bounded nested BLOCK/CELL sources.
 
-### BUG-5 — Fast (TS) preview engine and native ngspice disagree on initial conditions — CONFIRMED
+### BUG-5 — Fast (TS) preview engine and native ngspice disagree on initial conditions — **FIXED 2026-07-20**
 - **Severity:** Medium (fidelity/UX; the authoritative "Run" via ngspice is correct).
 - **Where:** `apps/desktop/src/simulation/linearTransient.ts` (~lines 215–231): `capacitorVoltage`/`inductorCurrent` default to `0` unless an explicit `IC=` is present — i.e. the TS engine always behaves as `uic`. Native ngspice (and Tau's own `spiceNetlist.ts` deck builder, which omits `uic` unless `.ic`/instance IC is present) solves the DC operating point first and starts from steady state.
 - **Impact:** for any circuit with reactive elements on a constant/biased source, the fast preview and the native "Run" show **different waveforms** for the identical schematic. Cross-check measured up to ~99% relative divergence on RC/RL step responses; forcing ngspice to the same zero state brought agreement to ~1% (integrators themselves agree — this is purely an IC-semantics gap).
 - **Suggested fix:** compute a DC operating point in the TS engine to seed C/L state (matching SPICE default), or clearly label the preview as `uic`/approximate.
+- **Fix applied 2026-07-20:** `runTransientAnalysis` now seeds `capacitorVoltage`/`inductorCurrent` from `runOperatingPoint` before integrating (unless the `.tran` carries `uic`); explicit per-instance `IC=` still wins. `runOperatingPoint` gained Newton support for the diode/LED/zener companion models so biased diode circuits seed too. When the OP is singular (e.g. an ideal source directly across an inductor at DC) the run falls back to zero state with a visible warning - the old behavior, now labeled. Regression tests: `initialConditions.test.ts` ("DC operating-point seeding"), `operatingPoint.test.ts` ("junction diodes"), `linearTransient.test.ts` ("without uic the run starts from the DC operating point"). Shipped example circuits switched from DC to PULSE stimuli so their waveforms stay demonstrative under the corrected semantics.
 
 ### BUG-6 — `deck_lines` command blocklist bypassed by `+`-continuation lines — **FIXED 2026-07-19**
 - **Severity:** Low.
@@ -274,7 +275,7 @@ libngspice runs in a disposable child process with bounded IPC, a 120 s wall
 clock, and Stop-button cancellation, and a native `SIGSEGV`/`SIGABRT` or the
 "engine cannot recover" state is now contained (re-verified this pass). Corrupt
 round-trips remain blocked rather than silently written. Remaining release gaps:
-BUG-2/3 guarded ASC saves, BUG-5 preview initial-condition semantics, F-1/F-2
+BUG-2/3 guarded ASC saves, F-1/F-2
 input validation, and two smaller worker residuals — no hard memory cap on the
 worker (BUG-8 residual; ngspice's own output-memory guard mitigates) and the
 `/tmp/tau-ngspice-*` code-model leak on Stop/timeout/crash (BUG-11, Low).

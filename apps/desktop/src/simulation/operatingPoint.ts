@@ -7,6 +7,8 @@
  *   - Inductors  → SHORT circuit (treated as a 0 V voltage source / wire)
  *   - Resistors  → stamped normally
  *   - DC Voltage sources → stamped normally
+ *   - Diodes/LEDs/zeners → Newton iteration over the shared junction
+ *     companion model (the same one the transient solver uses)
  *
  * This module is SELF-CONTAINED. It does NOT import or depend on any
  * internals from linearTransient.ts. It uses only:
@@ -21,6 +23,7 @@ import { resolveComponentValues, EMPTY_SCOPE, type ParamScope } from "./paramSco
 import { linearBSourceModel, resolveBehavioralTerms, type BehavioralTerm, type LinearBehavioral } from "./behavioral";
 import { stripAcSpec } from "../engine/acSpec";
 import { parseTransientSource, isFunctionSource } from "./sourceWaveform";
+import { DIODE_KINDS, diodeConductance, diodeCurrent, diodeSpecFor, limitDiodeVoltage } from "./diodeCompanion";
 
 // ---------------------------------------------------------------------------
 // Result type (mirrors linearTransient's style)
@@ -76,11 +79,18 @@ const OP_SUPPORTED = new Set<ComponentKind>([
   "switch",
   "testpoint",
   "ground",
+  "diode",
+  "led",
+  "zener",
 ]);
 
 /** Tiny conductance added from every non-ground node to ground (SPICE gmin trick).
  *  Prevents singular matrices caused by floating nodes (e.g. unconnected op-amp rails). */
 const GMIN = 1e-12;
+
+/** Newton iteration budget when junction diodes are present - matches the
+ *  transient solver's SPICE itl-style ceiling; convergence normally takes < 10. */
+const NEWTON_MAX_ITERATIONS = 100;
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -107,7 +117,7 @@ export function runOperatingPoint(
     const unsupported = components.filter((component) => !OP_SUPPORTED.has(component.kind));
     if (unsupported.length > 0) {
       return fail(
-        `${unsupported.map((component) => component.label || component.kind).join(", ")} ${unsupported.length === 1 ? "is" : "are"} placeable and wireable, but operating point currently supports only R/C/L, voltage/current sources, AC sources at 0 DC, switches, grounds, and test points.`,
+        `${unsupported.map((component) => component.label || component.kind).join(", ")} ${unsupported.length === 1 ? "is" : "are"} placeable and wireable, but operating point currently supports only R/C/L, voltage/current sources, AC sources at 0 DC, diodes/LEDs/zeners, op-amps, controlled sources, switches, grounds, and test points.`,
         circuit,
       );
     }
@@ -166,6 +176,9 @@ export function runOperatingPoint(
     const vBsources = circuit.components.filter(
       ({ component }) => component.kind === "bsource" && bModels.get(component.id)?.type === "V",
     );
+    // Junction diodes add no unknowns; they are Newton-iterated companion
+    // stamps layered over the constant part of the matrix after assembly.
+    const diodes = circuit.components.filter(({ component }) => DIODE_KINDS.has(component.kind));
 
     const nodeIndex = new Map(
       nonGroundNets.map((net, idx) => [net.id, idx]),
@@ -199,12 +212,12 @@ export function runOperatingPoint(
     const matrix = zeroMatrix(size);
     const rhs = Array<number>(size).fill(0);
 
-    // SPICE gmin: when op-amps are present, add GMIN from every non-ground
-    // node to ground so floating nodes (e.g. unconnected op-amp v+/v- rails)
-    // resolve to ~0 V rather than making the matrix singular.
-    // Applied only when op-amps are in the circuit to avoid masking genuine
-    // floating-node errors in resistive/reactive-only circuits.
-    if (opamps.length > 0) {
+    // SPICE gmin: when op-amps or diodes are present, add GMIN from every
+    // non-ground node to ground so floating nodes (e.g. unconnected op-amp
+    // v+/v- rails, or a node isolated behind a reverse-biased diode) resolve
+    // to ~0 V rather than making the matrix singular. Applied only for those
+    // devices to avoid masking genuine floating-node errors elsewhere.
+    if (opamps.length > 0 || diodes.length > 0) {
       for (let i = 0; i < nonGroundNets.length; i++) {
         matrix[i][i] += GMIN;
       }
@@ -385,6 +398,12 @@ export function runOperatingPoint(
           }
           break;
 
+        case "diode":
+        case "led":
+        case "zener":
+          // Nonlinear - stamped per Newton iteration below, not here.
+          break;
+
         case "testpoint":
         case "ground":
           // Ground pins are absorbed into the reference - nothing to stamp
@@ -402,7 +421,55 @@ export function runOperatingPoint(
       }
     }
 
-    const solution = solveLinearSystem(matrix, rhs);
+    // Linear circuits solve in one shot. With junction diodes the assembled
+    // matrix/rhs above is the constant part; Newton-iterate the diode
+    // companions on top of a copy until the junction voltages settle
+    // (SPICE-style reltol/vntol), with pnjlim damping each update.
+    let solution: number[];
+    if (diodes.length === 0) {
+      solution = solveLinearSystem(matrix, rhs);
+    } else {
+      const diodeSpecs = new Map(
+        diodes.map((entry) => [entry.component.id, diodeSpecFor(entry.component.kind, entry.component.value)]),
+      );
+      const guesses = new Map(diodes.map((entry) => [entry.component.id, 0]));
+      let converged: number[] | null = null;
+      for (let iteration = 0; iteration < NEWTON_MAX_ITERATIONS; iteration++) {
+        const newtonMatrix = matrix.map((row) => [...row]);
+        const newtonRhs = [...rhs];
+        for (const entry of diodes) {
+          const spec = diodeSpecs.get(entry.component.id)!;
+          const junction = guesses.get(entry.component.id)!;
+          const conductance = diodeConductance(spec, junction);
+          const equivalent = diodeCurrent(spec, junction) - conductance * junction;
+          const anode = nodeIdx(entry.pins["a"], nodeIndex);
+          const cathode = nodeIdx(entry.pins["k"], nodeIndex);
+          stampConductance(newtonMatrix, anode, cathode, conductance);
+          stampCurrent(newtonRhs, anode, cathode, equivalent);
+        }
+        const attempt = solveLinearSystem(newtonMatrix, newtonRhs);
+        let settled = true;
+        for (const entry of diodes) {
+          const spec = diodeSpecs.get(entry.component.id)!;
+          const previous = guesses.get(entry.component.id)!;
+          const anode = nodeIdx(entry.pins["a"], nodeIndex);
+          const cathode = nodeIdx(entry.pins["k"], nodeIndex);
+          const junction =
+            (anode >= 0 ? attempt[anode] : 0) - (cathode >= 0 ? attempt[cathode] : 0);
+          const next = limitDiodeVoltage(spec, junction, previous);
+          if (Math.abs(next - previous) > 1e-6 + 1e-3 * Math.abs(next)) settled = false;
+          guesses.set(entry.component.id, next);
+        }
+        if (settled) {
+          converged = attempt;
+          break;
+        }
+      }
+      if (!converged) {
+        return fail("The diode models did not converge at the DC operating point. Simplify the circuit or check diode orientation.", circuit);
+      }
+      solution = converged;
+    }
 
     const nets = nonGroundNets.map((net, idx) => ({
       id: net.id,

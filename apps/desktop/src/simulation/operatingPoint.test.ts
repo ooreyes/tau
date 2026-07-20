@@ -417,3 +417,101 @@ describe("DC operating point - failure cases", () => {
     }
   });
 });
+
+// ---------------------------------------------------------------------------
+// Test 7 - Junction diodes (Newton iteration over the shared companion model)
+// ---------------------------------------------------------------------------
+describe("DC operating point - junction diodes", () => {
+  function diode(x: number, y: number, kind: "diode" | "led" | "zener", value = "", label = "D1"): SchematicComponent {
+    return { id: uid("d"), kind, x, y, rotation: 0, value, label };
+  }
+
+  /**
+   * VS=5V at (0,32): p=(0,0), n=(0,64)
+   * R1=1kΩ at (96,0): a=(64,0), b=(128,0)
+   * D1 at (192,0): a=(160,0), k=(224,0)
+   * GND at (0,64) - VS.n; GND at (224,0) - D1.k
+   * Wire: (0,0)→(64,0), (128,0)→(160,0)
+   */
+  function forwardBiased(kind: "diode" | "led" | "zener", value = "") {
+    const components = [
+      vsource(0, 32, "5V", "V1"),
+      resistor(96, 0, "1k", "R1"),
+      diode(192, 0, kind, value),
+      ground(0, 64),
+      ground(224, 0),
+    ];
+    const wires = [
+      wire([{ x: 0, y: 0 }, { x: 64, y: 0 }]),
+      wire([{ x: 128, y: 0 }, { x: 160, y: 0 }]),
+    ];
+    return runOperatingPoint({ components, wires });
+  }
+
+  it("forward silicon diode drops ≈ 0.6-0.75 V through 1 kΩ from 5 V", () => {
+    const result = forwardBiased("diode");
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const anode = result.nets.find((net) => /R1.*D1|D1.*R1/.test(net.label));
+    expect(anode).toBeDefined();
+    expect(anode!.voltage).toBeGreaterThan(0.55);
+    expect(anode!.voltage).toBeLessThan(0.8);
+  });
+
+  it("forward LED sits near its ≈ 2 V forward voltage", () => {
+    const result = forwardBiased("led");
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const anode = result.nets.find((net) => /R1.*D1|D1.*R1/.test(net.label));
+    expect(anode).toBeDefined();
+    expect(anode!.voltage).toBeGreaterThan(1.5);
+    expect(anode!.voltage).toBeLessThan(2.5);
+  });
+
+  it("a reverse-biased diode blocks - the load node pulls to the rail", () => {
+    // Same topology but the diode flipped (rotation 180 swaps a/k): the node
+    // between R1 and the cathode floats up to 5 V with only leakage flowing.
+    const flipped: SchematicComponent = { id: uid("d"), kind: "diode", x: 192, y: 0, rotation: 180, value: "", label: "D1" };
+    const components = [
+      vsource(0, 32, "5V", "V1"),
+      resistor(96, 0, "1k", "R1"),
+      flipped,
+      ground(0, 64),
+      ground(224, 0),
+    ];
+    const wires = [
+      wire([{ x: 0, y: 0 }, { x: 64, y: 0 }]),
+      wire([{ x: 128, y: 0 }, { x: 160, y: 0 }]),
+    ];
+    const result = runOperatingPoint({ components, wires });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const node = result.nets.find((net) => /R1.*D1|D1.*R1/.test(net.label));
+    expect(node).toBeDefined();
+    expect(node!.voltage).toBeGreaterThan(4.9);
+  });
+
+  it("a 5.1 V zener fed 12 V through 1 kΩ regulates near its breakdown", () => {
+    // Cathode to the resistor, anode to ground: reverse-biased into breakdown.
+    const flippedZener: SchematicComponent = { id: uid("d"), kind: "zener", x: 192, y: 0, rotation: 180, value: "5.1", label: "D1" };
+    const components = [
+      vsource(0, 32, "12V", "V1"),
+      resistor(96, 0, "1k", "R1"),
+      flippedZener,
+      ground(0, 64),
+      ground(224, 0),
+    ];
+    const wires = [
+      wire([{ x: 0, y: 0 }, { x: 64, y: 0 }]),
+      wire([{ x: 128, y: 0 }, { x: 160, y: 0 }]),
+    ];
+    const result = runOperatingPoint({ components, wires });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const node = result.nets.find((net) => /R1.*D1|D1.*R1/.test(net.label));
+    expect(node).toBeDefined();
+    // Breakdown knee plus the exponential's ≈ 0.7 V of slope at ~6 mA.
+    expect(node!.voltage).toBeGreaterThan(5.0);
+    expect(node!.voltage).toBeLessThan(6.0);
+  });
+});

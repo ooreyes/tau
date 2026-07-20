@@ -59,6 +59,11 @@ function wire(points: { x: number; y: number }[]): SchematicWire {
   return { id: uid("w"), points };
 }
 
+// Most analytic tests exercise the integration from zero state, so they run
+// with `uic` - without it the solver starts from the DC operating point
+// (standard SPICE `.tran` behavior, asserted by its own test below).
+const uic = true;
+
 describe("Transient resolution guard", () => {
   it("calculates required samples from the highest AC source frequency", () => {
     const source = vac(0, 32, "1 1Meg", "V1");
@@ -135,6 +140,10 @@ describe("RC charging - analytic validation", () => {
    * stopTime = 5τ = 5ms, steps = 500 → stepSize = 10µs
    *
    * The "capacitor node" is the net between R.b and C.a.
+   *
+   * The charging tests run with `uic: true`: without it the solver seeds the
+   * cap from the DC operating point (already 5 V), which is standard SPICE
+   * `.tran` behavior and is asserted separately below.
    */
   const Vs = 5;
   const tau = 1e-3; // 1 ms
@@ -160,12 +169,12 @@ describe("RC charging - analytic validation", () => {
   ];
 
   it("runs successfully (ok=true)", async () => {
-    const result = await runTransientAnalysis({ components, wires }, { stopTime, steps });
+    const result = await runTransientAnalysis({ components, wires }, { stopTime, steps, uic });
     expect(result.ok).toBe(true);
   });
 
   it("has exactly one non-ground trace (the capacitor node)", async () => {
-    const result = await runTransientAnalysis({ components, wires }, { stopTime, steps });
+    const result = await runTransientAnalysis({ components, wires }, { stopTime, steps, uic });
     if (!result.ok) throw new Error(result.message);
     // There are two non-ground nets: the VS+ / R.a node and the R.b / C.a node.
     // The solver returns both; we need the capacitor node (the one with the cap).
@@ -173,7 +182,7 @@ describe("RC charging - analytic validation", () => {
   });
 
   it("capacitor voltage ≈ 0.632 × Vs at t = τ (within 2%)", async () => {
-    const result = await runTransientAnalysis({ components, wires }, { stopTime, steps });
+    const result = await runTransientAnalysis({ components, wires }, { stopTime, steps, uic });
     if (!result.ok) throw new Error(result.message);
 
     // Find the capacitor-node trace: it starts at 0 and charges.
@@ -198,7 +207,7 @@ describe("RC charging - analytic validation", () => {
   });
 
   it("capacitor voltage ≈ 0.993 × Vs at t = 5τ (within 2%)", async () => {
-    const result = await runTransientAnalysis({ components, wires }, { stopTime, steps });
+    const result = await runTransientAnalysis({ components, wires }, { stopTime, steps, uic });
     if (!result.ok) throw new Error(result.message);
 
     const analytic5tau = Vs * (1 - Math.exp(-5)); // ≈ 4.966
@@ -219,7 +228,7 @@ describe("RC charging - analytic validation", () => {
   });
 
   it("capacitor voltage starts near 0 V at t=0", async () => {
-    const result = await runTransientAnalysis({ components, wires }, { stopTime, steps });
+    const result = await runTransientAnalysis({ components, wires }, { stopTime, steps, uic });
     if (!result.ok) throw new Error(result.message);
 
     for (const trace of result.traces) {
@@ -233,6 +242,18 @@ describe("RC charging - analytic validation", () => {
     // (The VS node starts at Vs=5 immediately; the cap node starts at 0)
     const capTrace = result.traces.find(t => Math.abs(t.values[0]) < 1);
     expect(capTrace).toBeDefined();
+  });
+
+  it("without uic the run starts from the DC operating point (cap pre-charged, flat)", async () => {
+    // Standard SPICE `.tran`: the DC operating point is solved first, so a DC
+    // source into an RC settles instantly - every trace holds its bias value
+    // (native ngspice behaves the same way; this keeps the preview in step).
+    const result = await runTransientAnalysis({ components, wires }, { stopTime, steps });
+    if (!result.ok) throw new Error(result.message);
+    for (const trace of result.traces) {
+      expect(trace.values[0]).toBeCloseTo(Vs, 6);
+      expect(trace.values[trace.values.length - 1]).toBeCloseTo(Vs, 6);
+    }
   });
 });
 
@@ -345,12 +366,12 @@ describe("RLC series - under-damped oscillation", () => {
   const steps = 500;
 
   it("runs successfully", async () => {
-    const result = await runTransientAnalysis({ components, wires }, { stopTime, steps });
+    const result = await runTransientAnalysis({ components, wires }, { stopTime, steps, uic });
     expect(result.ok).toBe(true);
   });
 
   it("capacitor node voltage is bounded within [-15, 25] V (energy constraint)", async () => {
-    const result = await runTransientAnalysis({ components, wires }, { stopTime, steps });
+    const result = await runTransientAnalysis({ components, wires }, { stopTime, steps, uic });
     if (!result.ok) throw new Error(result.message);
 
     // Find the cap node: it's the one that oscillates and isn't pinned to VS
@@ -370,7 +391,7 @@ describe("RLC series - under-damped oscillation", () => {
   });
 
   it("capacitor node voltage is oscillatory (multiple sign changes in first difference)", async () => {
-    const result = await runTransientAnalysis({ components, wires }, { stopTime, steps });
+    const result = await runTransientAnalysis({ components, wires }, { stopTime, steps, uic });
     if (!result.ok) throw new Error(result.message);
 
     // Find the trace that oscillates most (highest number of sign changes in diff)
@@ -390,7 +411,7 @@ describe("RLC series - under-damped oscillation", () => {
   });
 
   it("capacitor node voltage overshoots VS (under-damped characteristic)", async () => {
-    const result = await runTransientAnalysis({ components, wires }, { stopTime, steps });
+    const result = await runTransientAnalysis({ components, wires }, { stopTime, steps, uic });
     if (!result.ok) throw new Error(result.message);
 
     // Under-damped RLC: the capacitor voltage peaks above the source voltage
@@ -619,7 +640,7 @@ describe("PULSE/SINE stimulus drives the TS transient solver", () => {
     const { components, wires } = driveNode("PULSE(0 5 1m 0 0 2m 4m)");
     const stopTime = 4e-3;
     const steps = 400; // 10µs sample spacing
-    const result = await runTransientAnalysis({ components, wires }, { stopTime, steps });
+    const result = await runTransientAnalysis({ components, wires }, { stopTime, steps, uic });
     if (!result.ok) throw new Error(result.message);
 
     const node = result.traces.find((t) => {
@@ -638,7 +659,7 @@ describe("PULSE/SINE stimulus drives the TS transient solver", () => {
     const { components, wires } = driveNode("SINE(0 2 1k)");
     const stopTime = 2e-3;
     const steps = 400;
-    const result = await runTransientAnalysis({ components, wires }, { stopTime, steps });
+    const result = await runTransientAnalysis({ components, wires }, { stopTime, steps, uic });
     if (!result.ok) throw new Error(result.message);
 
     const node = result.traces.find((t) => Math.max(...t.values) > 1.9 && Math.min(...t.values) < -1.9);
@@ -723,7 +744,7 @@ describe("runTransientAnalysis - async progress/abort (Fix 3)", () => {
 
   it("never aborts (signal absent) - behaves exactly as a plain run", async () => {
     const { components, wires, stopTime, steps } = simpleRcCircuit(200);
-    const result = await runTransientAnalysis({ components, wires }, { stopTime, steps });
+    const result = await runTransientAnalysis({ components, wires }, { stopTime, steps, uic });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.stats.sampleCount).toBe(steps + 1);
