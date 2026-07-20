@@ -10,10 +10,14 @@
 
 ---
 
-> ⚠️ **Status: early development (v0.2, pre-alpha).** Tau has an embedded
-> ngspice engine for the native desktop app, including transient, operating
-> point, and AC analyses. The browser-only dev path retains the smaller
-> TypeScript solver as a fallback.
+> **Status: v1.0 release.** Tau is a working circuit simulator you can use for
+> real design today: a native desktop app with an embedded ngspice engine
+> (transient, operating point, AC, DC, noise, transfer-function, and step
+> analyses), LTspice `.asc` import verified against a 189-schematic corpus,
+> click-to-probe plotting with live measurements, and an optional AI circuit
+> assistant. The browser-only dev path retains a smaller TypeScript preview
+> solver. Remaining limitations are tracked honestly in
+> [KNOWN_ISSUES.md](KNOWN_ISSUES.md).
 
 ## What is Tau?
 
@@ -121,15 +125,15 @@ Current macOS release artifacts are produced under
 `apps/desktop/src-tauri/target/release/bundle/`:
 
 - `macos/Tau.app`
-- `dmg/Tau_0.2.0_aarch64.dmg`
-- `dmg/Tau_0.2.0_aarch64_signed.dmg` after the local ad-hoc signing pass
+- `dmg/Tau_1.0.0_aarch64.dmg`
+- `dmg/Tau_1.0.0_aarch64_signed.dmg` after the local ad-hoc signing pass
 
 Local release builds are ad-hoc signed and the app bundle code signature
 verifies after signing. Public distribution still needs Apple Developer ID
 signing and notarization; without that, Gatekeeper will reject the app.
 
-Current signed local DMG SHA-256:
-`d78651a5ea55478e26f83b6b3f2b20e233404414a97d88f7d3e32c3de69afbd7`.
+Current signed local DMG SHA-256 (`Tau_1.0.0_aarch64.dmg`):
+`51e0472babacf3184c06067222ea822e139eaad561304d72f63e565e8cb6d611`.
 
 ## Repository layout
 
@@ -145,6 +149,6 @@ Tau/
 
 ## License
 
-Proprietary, all rights reserved during early development - see [LICENSE](LICENSE).
+Proprietary, all rights reserved - see [LICENSE](LICENSE).
 The long-term license is intentionally undecided to keep open-source, open-core,
 and commercial paths available.

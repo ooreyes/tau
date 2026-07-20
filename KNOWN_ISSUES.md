@@ -1,8 +1,8 @@
 # Known issues
 
-Tau v0.2 is a pre-alpha preview. These are the current limitations worth
-knowing about before you rely on it. Everything here is reproduced and
-tracked; fixes land as they are ready.
+Tau v1.0 is usable for real design work; like any engineering tool it has
+limitations worth knowing about. Everything here is reproduced and tracked;
+fixes land as they are ready.
 
 ## Saving imported schematics
 

@@ -1,6 +1,6 @@
 # Try Tau (macOS Apple silicon)
 
-Tau is a native Mac circuit app (not a website). This build is an **unsigned public preview**.
+Tau is a native Mac circuit app (not a website). This is the **v1.0 release build** (ad-hoc signed, not yet Apple-notarized, so the first launch needs one extra click - see below).
 
 ## Requirements
 
@@ -11,7 +11,7 @@ Tau is a native Mac circuit app (not a website). This build is an **unsigned pub
 
 ## Install
 
-1. Download `Tau_0.2.0_aarch64.dmg` from the [GitHub Release](https://github.com/ooreyes/tau/releases).
+1. Download `Tau_1.0.0_aarch64.dmg` from the [GitHub Release](https://github.com/ooreyes/tau/releases).
 2. Open the DMG and drag **Tau** into **Applications**.
 3. First launch (Gatekeeper, because this build is not notarized yet):
    - In Finder → Applications, **Control-click Tau → Open → Open**
@@ -27,10 +27,10 @@ Tau is a native Mac circuit app (not a website). This build is an **unsigned pub
 3. Confirm the proposal. Tau lays out the schematic and can auto-run the analysis.
 4. Vague prompts like `a voltage source` should get a short clarifying question.
 
-## What this preview is / isn’t
+## What this release is / isn’t
 
-- **Is:** native `.app`, local MLX assistant, schematic + ngspice-backed simulation path.
-- **Isn’t:** Apple-notarized (so Gatekeeper needs the right-click Open), or a finished LTspice replacement.
+- **Is:** a native `.app` with a real embedded ngspice engine, LTspice `.asc` import, probe-and-plot workflow, and an on-device MLX assistant - usable for real circuit work.
+- **Isn’t:** Apple-notarized yet (so Gatekeeper needs the one-time Control-click Open). Remaining limitations are listed in [KNOWN_ISSUES.md](KNOWN_ISSUES.md).
 
 ## Reddit-ready blurb
 
