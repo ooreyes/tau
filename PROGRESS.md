@@ -8,14 +8,14 @@
      `git log --oneline -8`, recover/finish/revert that unit FIRST, then go on.
      ─────────────────────────────────────────────────────────────────────── -->
 ## ⏱ HEARTBEAT
-- **Headline metric:** 1972 reviewed-tree tests green · corpus 82/82 import · 82/82 op-converge · 79/82 warning-clean
+- **Headline metric:** 1974 reviewed-tree tests green · corpus 82/82 import · 82/82 op-converge · 79/82 warning-clean
 - **Run started (UTC):** 2026-07-20T12:05Z
-- **Synced to origin:** auto/ltspice-parity @ e8e1f22.
-- **Claimed unit:** Reconcile the rescued wip checkpoint: imported LTspice symbol identity preserved on .asc save (3-pin MOSFETs and vendor/Universal op-amps round-trip; lossy-save block lifted only where re-import is proven identical).
+- **Synced to origin:** auto/ltspice-parity @ 56b37c1.
+- **Claimed unit:** (2 units this run) 1: reconcile rescued wip checkpoint - imported LTspice symbol identity preserved on .asc save. 2: PowerSim refdes collisions - manufactured fallback instance names (RB from a part labeled B) now take a numeric suffix instead of failing the deck against a genuine Rb.
 - **Status:** DONE
-- **Last completed sub-step:** Landed rescued work through full gates (tsc, vitest 1972 green single-threaded - parallel App.workspace failures are pre-existing load flakes, cargo test 28, clippy, corpus 82/82) and pushed e8e1f22. Also fixed a local-only clippy blocker: staged ngspice dylibs were mode 444 and tauri_build's target copy could not be overwritten (chmod u+w, untracked artifacts).
-- **Plan:** Re-applied the 9-file rescue diff (ltSymbolType on SchematicComponent, verbatim SYMBOL re-emission via canEmitLtSymbolVerbatim, ascRewriteRisks exemption, validation, tests, KNOWN_ISSUES rewrite) as one proper commit.
-- **Next step:** PowerSim refdes collisions after SPICE name sanitizing (Rb vs B duplicate instance names), or preview-solver DC operating-point initialization to match native bias.
+- **Last completed sub-step:** Landed both units through full gates (tsc, vitest 1974 green single-threaded - parallel App.workspace failures are pre-existing load flakes, cargo test 28, clippy, corpus 82/82); pushed e8e1f22 and 56b37c1; removed the fixed KNOWN_ISSUES import-edge-case entry with regression tests in the same commit. Also fixed a local-only clippy blocker: staged ngspice dylibs were mode 444 and tauri_build's target copy could not be overwritten (chmod u+w, untracked artifacts).
+- **Plan:** Unit 1 re-applied the 9-file rescue diff (ltSymbolType, verbatim SYMBOL re-emission, ascRewriteRisks exemption, validation, tests, KNOWN_ISSUES rewrite). Unit 2 centralized deck naming in resolveInstanceNames: label-owned names claim first and still throw on true duplicates; manufactured fallbacks get _2/_3 suffixes; behavioral I() refs, K-coupling renames, and emission share one map.
+- **Next step:** Preview-solver DC operating-point initialization to match native bias, or user .lib/.subckt model import workflow (parse+register+netlist first).
 
 ---
 
