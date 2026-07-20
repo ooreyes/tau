@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { buildSpiceDeck } from "./spiceNetlist";
 import { buildParamScope } from "../simulation/paramScope";
-import type { SchematicComponent, SchematicWire } from "../schematic/types";
+import type { NetLabel, PinOverride, SchematicComponent, SchematicWire } from "../schematic/types";
 import { CATALOG } from "../schematic/catalog";
 
 const component = (
@@ -622,6 +622,85 @@ describe("buildSpiceDeck", () => {
     const deck = buildSpiceDeck({ components, wires: [] }, { kind: "op" });
     expect(deck.netlist).toMatch(/D1 n\d+ n\d+ TAU_DIODE/);
     expect(deck.netlist).not.toContain("XYZ999");
+  });
+
+  it("resolves a semiconductor model from a user-supplied vendor library (no inline/bundled model exists)", () => {
+    const components = [
+      component("vsource", "V1", "5", 0, 32),
+      component("diode", "D1", "ACME_D1", 96, 0),
+      component("ground", "", "", 0, 64),
+      component("ground", "", "", 128, 0),
+    ];
+    const wires = [wire("w1", [{ x: 0, y: 0 }, { x: 64, y: 0 }])];
+    const userModelLibraries = [".model ACME_D1 D(Is=3e-9 N=1.1 Rs=0.4)"];
+    const deck = buildSpiceDeck({ components, wires, userModelLibraries }, { kind: "op" });
+    // The user library's real model line is inlined and the device references it.
+    expect(deck.netlist).toContain(".model ACME_D1 D(Is=3e-9 N=1.1 Rs=0.4)");
+    expect(deck.netlist).toMatch(/D1 \S+ \S+ ACME_D1/);
+    // The generic TAU_DIODE substitute is NOT used for this part's device line.
+    expect(deck.netlist).not.toMatch(/D1 \S+ \S+ TAU_DIODE/);
+  });
+
+  it("prefers Tau's bundled standard model over a same-named user library entry", () => {
+    // Resolution order: inline document .model > Tau's bundled standard part >
+    // user library, so a vendor file that happens to redefine a name Tau
+    // already bundles must never win.
+    const components = [component("diode", "D1", "1N4148", 0, 0), component("ground", "", "", 16, 32)];
+    const userModelLibraries = [".model 1N4148 D(Is=999 N=999)"];
+    const deck = buildSpiceDeck({ components, wires: [], userModelLibraries }, { kind: "op" });
+    expect(deck.netlist).toMatch(/^\.model 1N4148 D\(Is=2\.52n/m);
+    expect(deck.netlist).not.toContain("Is=999");
+  });
+
+  it("resolves a subckt from a user-supplied vendor library, emitted once even when referenced twice", () => {
+    let counter = 0;
+    const uid = (p: string) => `${p}-${++counter}`;
+    const sub = (label: string, pins: Array<[string, string, number, number]>): SchematicComponent => ({
+      id: uid("subckt"),
+      kind: "subckt",
+      x: 0,
+      y: 0,
+      rotation: 0,
+      value: "VendorBlock",
+      label,
+      pinOverride: pins.map(([id, pinLabel, x, y]): PinOverride => ({ id, label: pinLabel, x, y })),
+    });
+    const lbl = (x: number, y: number, text: string): NetLabel => ({ id: uid("flag"), x, y, text });
+
+    const comps = [
+      sub("U1", [["p1", "+", 0, 0], ["p2", "-", 0, 80]]),
+      sub("U2", [["p1", "+", 160, 0], ["p2", "-", 160, 80]]),
+    ];
+    const netLabels = [lbl(0, 80, "0")]; // establishes the circuit's ground reference
+    const userModelLibraries = [".subckt VendorBlock a b\nR1 a b 4.7k\n.ends VendorBlock"];
+    const deck = buildSpiceDeck(
+      { components: comps, wires: [], netLabels, userModelLibraries },
+      { kind: "op" },
+    );
+    // Both instances reference the block; it is inlined exactly once.
+    expect(deck.netlist.match(/^\.subckt VendorBlock /gm)?.length).toBe(1);
+    expect(deck.netlist).toMatch(/^XU1 \S+ \S+ VendorBlock$/m);
+    expect(deck.netlist).toMatch(/^XU2 \S+ \S+ VendorBlock$/m);
+    expect(deck.netlist).toContain("R1 a b 4.7k");
+  });
+
+  it("leaves deck output unchanged when no user model libraries are supplied (regression guard)", () => {
+    const components = [
+      component("vsource", "V1", "5", 0, 32),
+      component("resistor", "R1", "1k", 96, 0),
+      component("diode", "D1", "1N4148", 224, 0),
+      component("ground", "", "", 0, 64),
+      component("ground", "", "", 256, 0),
+    ];
+    const wires = [
+      wire("w1", [{ x: 0, y: 0 }, { x: 64, y: 0 }]),
+      wire("w2", [{ x: 128, y: 0 }, { x: 192, y: 0 }]),
+    ];
+    const withoutField = buildSpiceDeck({ components, wires }, { kind: "op" });
+    const withEmptyLibraries = buildSpiceDeck({ components, wires, userModelLibraries: [] }, { kind: "op" });
+    expect(withEmptyLibraries.netlist).toBe(withoutField.netlist);
+    // Sanity: the bundled standard model still wins with no user library present.
+    expect(withoutField.netlist).toMatch(/^\.model 1N4148 D\(/m);
   });
 
   it("emits a BJT whose Value names a document .subckt as an X instance (UHFpreamp MRF901)", () => {

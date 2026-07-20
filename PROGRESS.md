@@ -9,13 +9,13 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## ⏱ HEARTBEAT
 - **Headline metric:** 1974 reviewed-tree tests green · corpus 82/82 import · 82/82 op-converge · 79/82 warning-clean
-- **Run started (UTC):** 2026-07-20T12:05Z
-- **Synced to origin:** auto/ltspice-parity @ 56b37c1.
-- **Claimed unit:** (2 units this run) 1: reconcile rescued wip checkpoint - imported LTspice symbol identity preserved on .asc save. 2: PowerSim refdes collisions - manufactured fallback instance names (RB from a part labeled B) now take a numeric suffix instead of failing the deck against a genuine Rb.
+- **Run started (UTC):** 2026-07-20T17:20Z (interactive session, Opus-driven, subagent-executed)
+- **Synced to origin:** auto/ltspice-parity @ 3cb5b9c.
+- **Claimed unit:** Model import U1 (flagship) - user vendor `.lib`/`.subckt` model import, foundation: parse + register + deck resolution.
 - **Status:** DONE
-- **Last completed sub-step:** Landed both units through full gates (tsc, vitest 1974 green single-threaded - parallel App.workspace failures are pre-existing load flakes, cargo test 28, clippy, corpus 82/82); pushed e8e1f22 and 56b37c1; removed the fixed KNOWN_ISSUES import-edge-case entry with regression tests in the same commit. Also fixed a local-only clippy blocker: staged ngspice dylibs were mode 444 and tauri_build's target copy could not be overwritten (chmod u+w, untracked artifacts).
-- **Plan:** Unit 1 re-applied the 9-file rescue diff (ltSymbolType, verbatim SYMBOL re-emission, ascRewriteRisks exemption, validation, tests, KNOWN_ISSUES rewrite). Unit 2 centralized deck naming in resolveInstanceNames: label-owned names claim first and still throw on true duplicates; manufactured fallbacks get _2/_3 suffixes; behavioral I() refs, K-coupling renames, and emission share one map.
-- **Next step:** Preview-solver DC operating-point initialization to match native bias, or user .lib/.subckt model import workflow (parse+register+netlist first).
+- **Last completed sub-step:** Landed U1 through full gates (tsc clean, vitest 1988 green, corpus 181/189 unchanged, Rust untouched by a TS-only diff). New pure module `engine/userModelLibrary.ts` (parse vendor `.lib`/`.subckt`/`.mod` text into a name->definition registry, INLINE-only per the native deck sanitizer which rejects file-backed `.include`/`.lib`) + optional `userModelLibraries?: readonly string[]` threaded into `buildSpiceDeck`, consulted as the LAST resolution source at the two existing fall-through loops (standard-model ~253, subckt ~277). 15 new tests incl. resolution-priority (bundled wins over same-named user entry) and byte-identical-when-absent regression guard.
+- **Known follow-ups from U1 (do these next):** (a) unresolved-model error surfacing via `userFacingErrorMessage` when a ref resolves nowhere [U2]; (b) VDMOS type-sniff for user-registry models so a user `VDMOS(...)` emits the 3-terminal form (currently only bundled/standard get `vdmosModels` tagging); (c) BJT-names-a-subckt `X`-rewrite (~line 309) not extended to user registry; (d) project UI to attach a model file [U3]; (e) validate a REAL public vendor op-amp/MOSFET `.lib` end-to-end through native libngspice [U4 - the credibility proof].
+- **Next step:** U4 (real vendor `.lib` through native ngspice) is the highest-value next unit - it collapses the readiness uncertainty. Then U2 error surfacing, then U3 UI.
 
 ---
 

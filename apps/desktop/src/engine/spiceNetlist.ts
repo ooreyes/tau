@@ -20,6 +20,7 @@ import { laplaceTransfer, laplaceSourceLines } from "./laplace";
 import { coreInductance } from "./coreInductor";
 import { standardModelLine, standardModelType } from "./standardModels";
 import { bundledSubcircuitBlock, bundledLibraryText, sanitizeSubcktName } from "./bundledSubcircuits";
+import { parseUserModelLibraries, resolveUserModel, resolveUserSubckt } from "./userModelLibrary";
 import { tlineDeckParams } from "./tlineSpec";
 import { parseTempDirective } from "../io/directiveAnalysis";
 
@@ -52,6 +53,11 @@ type Schematic = {
   params?: ParamScope;
   /** Document directive lines; any `.options` here override Tau's defaults. */
   directives?: string[];
+  /** Raw text of user-imported vendor `.lib`/`.subckt`/`.mod` files (LTspice
+   *  parity gap): a component may reference a model/subckt name that is
+   *  neither inline nor one of Tau's bundled parts - see userModelLibrary.ts.
+   *  Optional and additive; omitting it leaves deck output unchanged. */
+  userModelLibraries?: readonly string[];
 };
 
 const DEFAULT_MODELS = [
@@ -244,6 +250,17 @@ export function buildSpiceDeck(schematic: Schematic, analysis: SpiceAnalysis): S
     if (type === "vdmos") vdmosModels.add(model);
   }
 
+  // User-imported vendor library text (.lib/.subckt/.mod files the user
+  // attached alongside the schematic - userModelLibrary.ts), parsed once.
+  // Consulted only as the LAST resolution source below, after inline document
+  // directives and Tau's bundled standard/subckt libraries, and always
+  // INLINED as literal text: the native engine's deck sanitizer
+  // (src-tauri/src/spice.rs `deck_lines`) rejects any `.include`/`.lib`/
+  // `file=` primitive, so there is no other way to pull a user model in.
+  // Parsing an empty/absent list yields an empty registry, so every lookup
+  // below misses and deck output is unchanged when no libraries are supplied.
+  const userLibraryRegistry = parseUserModelLibraries(schematic.userModelLibraries ?? []);
+
   // A semiconductor may reference an LTspice standard part by name (1N4148,
   // 2N2222, …) with no inline `.model`. When the document doesn't define it but
   // we bundle it, emit the real LTspice model line so the device simulates with
@@ -265,6 +282,15 @@ export function buildSpiceDeck(schematic: Schematic, analysis: SpiceAnalysis): S
       emittedStandard.add(named.toLowerCase());
       knownModels.add(named.toLowerCase());
       if (standardModelType(named) === "vdmos") vdmosModels.add(named.toLowerCase());
+      continue;
+    }
+    // Not inline and not a bundled standard part: fall through to a
+    // user-supplied vendor library, the last resolution source before this
+    // semiconductor is stuck with Tau's generic TAU_* starter model.
+    const userLine = resolveUserModel(userLibraryRegistry, named);
+    if (userLine) {
+      lines.push(userLine);
+      knownModels.add(named.toLowerCase());
     }
   }
 
@@ -282,6 +308,14 @@ export function buildSpiceDeck(schematic: Schematic, analysis: SpiceAnalysis): S
     const block = bundledSubcircuitBlock(ref);
     if (block) {
       lines.push(block);
+      emittedSubckts.add(ref);
+      continue;
+    }
+    // Not inline and not a bundled library subckt: fall through to a
+    // user-supplied vendor library (same last-resort resolution as above).
+    const userBlock = resolveUserSubckt(userLibraryRegistry, ref);
+    if (userBlock) {
+      lines.push(userBlock);
       emittedSubckts.add(ref);
     }
   }
