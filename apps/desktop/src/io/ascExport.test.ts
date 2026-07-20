@@ -6,8 +6,11 @@ import {
   schematicToAsc,
   kindToLtspiceType,
   rotationToOrientation,
+  canEmitLtSymbolVerbatim,
 } from "./ascExport";
 import type { AscDocument } from "./ascImport";
+import type { NetLabel, SchematicComponent, SchematicWire } from "../schematic/types";
+import { ascRewriteRisks, schematicTopologySignature } from "../project/types";
 import { CATALOG } from "../schematic/catalog";
 
 // The same representative LTspice grammar the importer tests use, minus the
@@ -370,5 +373,122 @@ describe("schematicToAsc", () => {
     expect(round.components.map((c) => c.kind).sort()).toEqual(
       original.components.map((c) => c.kind).sort(),
     );
+  });
+});
+
+// Imported-symbol identity: parts imported from a banked LTspice symbol carry
+// `ltSymbolType` and re-export the ORIGINAL symbol name, so files with 3-pin
+// MOSFETs and vendor/Universal op-amps round-trip with their connectivity and
+// library identity intact (previously the canonical rewrite to nmos4/opamp2
+// moved pins and forced the lossy-save block).
+describe("imported LTspice symbol identity", () => {
+  const topology = (content: { components: SchematicComponent[]; wires: SchematicWire[]; netLabels: NetLabel[] }) =>
+    schematicTopologySignature({
+      components: content.components,
+      wires: content.wires,
+      netLabels: content.netLabels,
+      probes: [],
+      directives: [],
+    });
+
+  const NMOS3 = `Version 4
+SHEET 1 880 680
+WIRE 176 96 112 96
+WIRE 208 32 208 -16
+WIRE 208 176 208 128
+FLAG 112 96 g
+FLAG 208 -16 d
+FLAG 208 176 0
+SYMBOL nmos 160 16 R0
+SYMATTR InstName M1
+SYMATTR Value 2N7002`;
+
+  const VENDOR_OPAMP = `Version 4
+SHEET 1 880 680
+WIRE 112 128 48 128
+WIRE 112 160 48 160
+WIRE 240 144 176 144
+FLAG 48 128 inn
+FLAG 48 160 inp
+FLAG 240 144 out
+SYMBOL Opamps\\\\AD823 144 80 R0
+SYMATTR InstName U1
+SYMATTR Value AD823`;
+
+  it("round-trips a 3-pin nmos with the bulk still tied to the source", () => {
+    const imported = importAsc(NMOS3);
+    expect(imported.warnings).toEqual([]);
+    expect(imported.components.find((c) => c.kind === "nmos")?.ltSymbolType).toBe("nmos");
+    expect(ascRewriteRisks(NMOS3)).toEqual([]);
+
+    const exported = schematicToAsc(imported);
+    expect(exported.warnings).toEqual([]);
+    expect(parseAsc(exported.text).symbols[0].type).toBe("nmos");
+    expect(topology(importAsc(exported.text))).toEqual(topology(imported));
+  });
+
+  it("round-trips a vendor op-amp without collapsing it to opamp2", () => {
+    const imported = importAsc(VENDOR_OPAMP);
+    expect(imported.warnings).toEqual([]);
+    expect(ascRewriteRisks(VENDOR_OPAMP)).toEqual([]);
+
+    const exported = schematicToAsc(imported);
+    expect(parseAsc(exported.text).symbols[0].type).toBe("Opamps\\\\AD823");
+    expect(topology(importAsc(exported.text))).toEqual(topology(imported));
+  });
+
+  it("round-trips a UniversalOpAmp2 through its centered pin geometry", () => {
+    const src = VENDOR_OPAMP.replace(/Opamps\\\\AD823/, "OpAmps\\\\UniversalOpAmp2").replace("SYMATTR Value AD823", "SYMATTR Value level.2");
+    const imported = importAsc(src);
+    expect(imported.warnings).toEqual([]);
+    expect(ascRewriteRisks(src)).toEqual([]);
+    const exported = schematicToAsc(imported);
+    expect(parseAsc(exported.text).symbols[0].type).toBe("OpAmps\\\\UniversalOpAmp2");
+    expect(topology(importAsc(exported.text))).toEqual(topology(imported));
+  });
+
+  it("keeps the save block for symbols whose bank drops real pins or rewrites the value", () => {
+    // npn4 has a substrate pin the 3-pin npn bank cannot represent; sw has a
+    // control pin pair; diac's imported value is a placeholder resistance.
+    for (const type of ["npn4", "sw", "diac"]) {
+      const src = NMOS3.replace("SYMBOL nmos", `SYMBOL ${type}`);
+      expect(ascRewriteRisks(src), type).toContain("symbol-library identity");
+    }
+    expect(canEmitLtSymbolVerbatim("npn4", "npn")).toBe(false);
+    expect(canEmitLtSymbolVerbatim("sw", "switch")).toBe(false);
+    expect(canEmitLtSymbolVerbatim("diac", "resistor")).toBe(false);
+    // Digital gates encode their function in the symbol leaf, which the
+    // importer prepends to the value; verbatim re-emission would double it.
+    expect(canEmitLtSymbolVerbatim("Digital\\\\and", "digitalGate")).toBe(false);
+  });
+
+  it("still exports a Tau-native nmos as the explicit-bulk nmos4", () => {
+    const native: SchematicComponent = {
+      id: "m1", kind: "nmos", x: 0, y: 0, rotation: 0, value: "2N7002", label: "M1",
+    };
+    const { text } = schematicToAsc({ components: [native], wires: [], netLabels: [] });
+    expect(parseAsc(text).symbols[0].type).toBe("nmos4");
+  });
+});
+
+// Orientation is the other half of imported-geometry fidelity: a mirrored,
+// rotated 3-pin nmos must reproduce the same SYMBOL line and pin topology.
+describe("imported symbol identity under mirror/rotation", () => {
+  it("round-trips a mirrored 3-pin nmos", () => {
+    const src = `Version 4
+SHEET 1 880 680
+SYMBOL nmos 160 16 M90
+SYMATTR InstName M1
+SYMATTR Value 2N7002`;
+    const imported = importAsc(src);
+    expect(imported.warnings).toEqual([]);
+    const exported = schematicToAsc(imported);
+    const symbol = parseAsc(exported.text).symbols[0];
+    expect(symbol.type).toBe("nmos");
+    expect(symbol.orientation).toBe("M90");
+    const reopened = importAsc(exported.text);
+    const pins = (c: typeof imported) =>
+      (c.components[0].pinOverride ?? []).map((p) => `${p.id}@${p.x},${p.y}`).sort();
+    expect(pins(reopened)).toEqual(pins(imported));
   });
 });

@@ -6,11 +6,15 @@ fixes land as they are ready.
 
 ## Saving imported schematics
 
-- Schematics imported from LTspice that contain op-amps or 3-pin MOSFETs can
-  be opened, edited, and simulated, but cannot yet be saved back to `.asc`.
-  Tau detects that the round-trip would change terminal connectivity and
-  refuses to write the file rather than corrupt it. You will see a clear
-  message when this happens. Native `.sim` saves are unaffected.
+- Imported `.asc` files whose parts come from the standard LTspice symbol
+  library - including op-amps (vendor and generic) and 3-pin MOSFETs - save
+  back in place with their original symbol identity intact. Tau still refuses
+  to overwrite a file when the rewrite would drop information it cannot yet
+  reproduce: custom symbol-label placement (WINDOW records), drawing
+  primitives, comment placement, extra symbol attributes such as SpiceLine,
+  and symbols with pins Tau does not model (4-pin BJT substrate, switch
+  control pins). The message names the specific reason. Native `.sim` saves
+  are unaffected.
 
 ## Browser preview vs native engine
 

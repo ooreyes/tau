@@ -79,6 +79,9 @@ function component(value: unknown, index: number): SchematicComponent {
       };
     });
   }
+  if (source.ltSymbolType !== undefined) {
+    result.ltSymbolType = text(source.ltSymbolType, `components[${index}].ltSymbolType`, MAX_TEXT_LENGTH);
+  }
   return result;
 }
 

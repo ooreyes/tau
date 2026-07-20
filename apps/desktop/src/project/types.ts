@@ -1,4 +1,4 @@
-import { kindToLtspiceType, schematicToAsc } from "../io/ascExport";
+import { canEmitLtSymbolVerbatim, kindToLtspiceType, schematicToAsc } from "../io/ascExport";
 import { importAsc, ltspiceTypeToKind, parseAsc } from "../io/ascImport";
 import type { SchematicDocument } from "../store/useSchematic";
 import { extractCircuit } from "../schematic/netlist";
@@ -118,7 +118,11 @@ export function ascRewriteRisks(source: string): string[] {
     const canonical = kind ? kindToLtspiceType(kind) : null;
     const normalizedType = normalizeLtspiceType(symbol.type);
     const dynamicDigitalSymbol = kind === "digitalGate" && /^digital\/(?:and|or|xor|buf|buf1|inv|schmitt|schmtbuf|schmtinv)$/.test(normalizedType);
-    if ((!canonical || normalizeLtspiceType(canonical) !== normalizedType) && !dynamicDigitalSymbol) {
+    // A symbol the exporter re-emits verbatim (banked geometry, same kind and
+    // value on re-import) keeps its library identity even when it is not the
+    // canonical export symbol - e.g. a 3-pin `nmos` or a vendor op-amp.
+    const verbatim = kind !== null && canEmitLtSymbolVerbatim(symbol.type, kind);
+    if (!verbatim && (!canonical || normalizeLtspiceType(canonical) !== normalizedType) && !dynamicDigitalSymbol) {
       risks.add("symbol-library identity");
     }
     if (Object.keys(symbol.attrs).some((key) => !["InstName", "Value", "TauKind", "TauValue", "TauLabel"].includes(key))) {

@@ -21,6 +21,7 @@ import type {
   SchematicWire,
 } from "../schematic/types";
 import type { AscDocument, AscOrientation } from "./ascImport";
+import { hasBankedLtPins, ltspiceTypeToKind } from "./ascImport";
 import { decodeParams } from "../schematic/params";
 import { parseQuantity } from "../simulation/quantity";
 
@@ -127,6 +128,31 @@ const DIGITAL_GATE_LEAFS = new Set([
   "and", "or", "xor", "buf", "buf1", "inv", "schmitt", "schmtbuf", "schmtinv",
 ]);
 
+/** LTspice symbol leafs whose imported form is NOT a faithful re-emission
+ * target even though their pin geometry is banked: the bank drops real .asy
+ * pins (npn4/pnp4 substrate, sw/csw control pair - wires to those pins would
+ * silently detach), or the importer replaced the source Value with a
+ * placeholder (varistor/diac get a neutral high-Z resistance). These stay on
+ * the blocked-save path. */
+const VERBATIM_UNSAFE_LEAFS = new Set(["npn4", "pnp4", "sw", "csw", "varistor", "diac"]);
+
+/**
+ * Whether an imported LTspice symbol name can be re-emitted verbatim by the
+ * exporter with full fidelity: re-importing the emitted SYMBOL line must yield
+ * the same kind, the same banked pin positions, and the same value. Kinds
+ * whose imported value is derived from more than the Value attribute
+ * (digitalGate prepends the symbol leaf, subckt rebuilds an instance spec)
+ * are excluded - their values would double-transform on re-import - as are the
+ * path-encoded A-device kinds, whose canonical emission already reproduces the
+ * source symbol exactly.
+ */
+export function canEmitLtSymbolVerbatim(type: string, kind: ComponentKind): boolean {
+  const leaf = type.replace(/\\/g, "/").toLowerCase().split("/").pop() ?? "";
+  if (VERBATIM_UNSAFE_LEAFS.has(leaf)) return false;
+  if (["digitalGate", "subckt", "dflop", "sampleHold", "modulator"].includes(kind)) return false;
+  return ltspiceTypeToKind(type) === kind && hasBankedLtPins(type);
+}
+
 interface LtspiceComponentSymbol {
   type: string;
   value: string;
@@ -138,6 +164,18 @@ interface LtspiceComponentSymbol {
 }
 
 function componentToLtspiceSymbol(component: SchematicComponent): LtspiceComponentSymbol | null {
+  if (
+    component.ltSymbolType &&
+    component.pinOverride?.length &&
+    canEmitLtSymbolVerbatim(component.ltSymbolType, component.kind)
+  ) {
+    // An imported part keeps its original LTspice symbol: the banked geometry
+    // regenerates the same pinOverride on re-import, and LTspice reopens the
+    // file with the exact symbol it wrote (a 3-pin `nmos` stays 3-pin instead
+    // of being rewritten to `nmos4` with a relocated bulk pin; a vendor op-amp
+    // keeps its library identity instead of collapsing to `opamp2`).
+    return { type: component.ltSymbolType, value: component.value };
+  }
   if (component.kind === "vac" || component.kind === "iac") {
     const signal = decodeParams(component.kind, component.value);
     const offset = signal.offset || "0";

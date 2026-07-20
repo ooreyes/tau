@@ -28,6 +28,7 @@ describe("schematic document validation", () => {
           { id: "a", label: "A", x: 64, y: 0 },
           { id: "b", label: "B", x: 128, y: 0 },
         ],
+        ltSymbolType: "res2",
       }],
       probes: [
         { id: "pv", x: 64, y: 0, color: "var(--trace-red)", netId: "OUT" },

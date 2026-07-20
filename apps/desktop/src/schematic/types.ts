@@ -97,6 +97,15 @@ export interface SchematicComponent {
    * parts placed in the editor (which use rotated kind geometry).
    */
   pinOverride?: PinOverride[];
+  /**
+   * The exact LTspice symbol name this part was imported from (e.g. "nmos",
+   * "Opamps\\AD823"). Set alongside {@link pinOverride}. When the symbol's
+   * banked pin geometry round-trips fully, the ASC exporter re-emits this name
+   * verbatim so the saved file keeps its original symbol identity instead of
+   * being rewritten to Tau's canonical export symbol. Absent for parts placed
+   * in the editor.
+   */
+  ltSymbolType?: string;
 }
 
 /** A grid-snapped point in world coordinates. */

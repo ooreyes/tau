@@ -135,11 +135,15 @@ describe("project schematic file formats", () => {
       "directive annotation placement",
     );
 
+    // A vendor op-amp's symbol identity is preserved verbatim by the exporter
+    // (no identity risk), but extra SYMATTR fields still block the rewrite.
     const vendorOpAmp = `Version 4\nSHEET 1 880 680\nSYMBOL Opamps\\LT1001 80 80 R0\nSYMATTR InstName U1\nSYMATTR SpiceLine Avol=1Meg\n`;
-    expect(ascRewriteRisks(vendorOpAmp)).toEqual(expect.arrayContaining([
-      "symbol-library identity",
-      "extended symbol attributes",
-    ]));
+    expect(ascRewriteRisks(vendorOpAmp)).toEqual(["extended symbol attributes"]);
+
+    // npn4's substrate pin has no banked geometry, so its identity cannot be
+    // re-emitted faithfully and the save block stays.
+    const substrateBjt = `Version 4\nSHEET 1 880 680\nSYMBOL npn4 80 80 R0\nSYMATTR InstName Q1\n`;
+    expect(ascRewriteRisks(substrateBjt)).toContain("symbol-library identity");
   });
 
   it("keeps viewer-only probes from blocking ASC saves but still rejects skipped components", () => {
