@@ -8,13 +8,87 @@
      `git log --oneline -8`, recover/finish/revert that unit FIRST, then go on.
      ─────────────────────────────────────────────────────────────────────── -->
 ## ⏱ HEARTBEAT
-- **Headline metric:** corpus 82/82 import · 82/82 op-converge · 79/82 warning-clean; vendor `.model` import PROVEN end-to-end - a real STMicro 2N3055 read from the installed LTspice `standard.bjt` imports, its ngspice-fatal `mfg=` annotation normalized away, inlines, and simulates a bias stage through native ngspice-46 (Ic/Ib reproduces the model's Bf=73). Changed-file + corpus suites green (userModelLibrary 13, spiceNetlist 60, nativeSpice 9, userModelImport corpus 1).
-- **Run started (UTC):** 2026-07-21T15:37Z (autobuilder, Opus-driven)
-- **Synced to origin:** auto/ltspice-parity @ 453b8ee (this unit's parent).
-- **Claimed unit:** BUG-12 (`.model` half) - normalize LTspice string-valued annotation params (`mfg=STMicro`) out of imported vendor `.model` cards so ngspice loads them, and prove a real vendor card end to end. (Rescued and finalized from the `-wip` durability checkpoint after review.)
+- **Headline metric:** corpus 82/82 import · 82/82 op-converge · 79/82 warning-clean (baseline held); vendor `.subckt` macromodel import now SIMULATES - a real Analog Devices AD8541 op-amp read from the installed LTspice library imports as a unity-gain buffer and tracks its 2.5 V input through native ngspice-46, after its LTspice-only switch constructs (`VSWITCH` model type + parenthesized switch-instance control nodes) are translated to ngspice's `SW`/bare-node spelling. Both vendor-import proofs pass (userModelImport 2N3055 `.model`, userSubcktImport AD8541 `.subckt`); changed-file suites green (userModelLibrary 19, spiceNetlist 60, nativeSpice 9).
+- **Run started (UTC):** 2026-07-21T21:00Z (autobuilder, Opus-driven)
+- **Synced to origin:** auto/ltspice-parity @ e9db683 (this unit's parent).
+- **Claimed unit:** BUG-12 (`.subckt` half) - translate the LTspice switch constructs ngspice rejects inside imported vendor `.subckt` macromodels: a `VSWITCH`/`ISWITCH` `.model` card becomes `SW`/`CSW` (on/off levels `Von`/`Voff` -> center+hysteresis `Vt`/`Vh`, `Ron`/`Roff` carried verbatim, bare `noiseless` flag dropped), and switch-instance control nodes LTspice wraps in parens `(nc+,nc-)` are de-parenthesized. Recovered and finalized from the `-wip` durability checkpoint after full review + real-engine proof.
 - **Status:** DONE
-- **Last completed sub-step:** `parseUserModelLibraries` now runs each imported `.model` card through `stripAnnotationParams`, which removes a `key=value` whose value starts with a letter (a bare-word LTspice datasheet annotation such as `mfg=STMicro` / `type=std` that ngspice fatally rejects) while preserving the model name, model type, bare flags (`pchan`), and every numeric parameter - including signed (`Vto=-0.328`), decimal-leading (`Tr=.5703U`), suffixed (`Cjo=1000P`), and warned-but-ignored numeric annotations (`Vceo=60`). Scope is `.model` cards only; `.subckt` blocks stay verbatim. The function is reachable solely through `parseUserModelLibraries`, which the 82-file corpus never invokes (it passes no `userModelLibraries`), so the corpus baseline is structurally unaffected - and confirmed still 82/82/79. New real-engine proof `scripts/userModelImport.corpus.ts` (runs under the corpus config, skips cleanly without ngspice or the vendor file) reads the actual LTspice `standard.bjt`, imports its 2N3055, asserts the card inlines with `mfg=` gone and the device references it, asserts the SAME schematic without the library falls back to `TAU_NPN` (proving resolution came from the user library), then simulates a common-emitter stage on native ngspice and checks forward-active bias with Ic/Ib ~ Bf=73. Gates: tsc clean; userModelLibrary 13/13 + spiceNetlist 60 + nativeSpice 9 green in isolation; full acceptance corpus 82/82/79 with the new proof passing; zero Rust/bundle touched so cargo/clippy/tauri-build unaffected. No safety guard changed - `stripAnnotationParams` only deletes annotation tokens (cannot inject), and the deck still passes the native `deck_lines` sanitizer.
-- **Next candidates:** BUG-12 (`.subckt` half) - vendor op-amp/mixed-signal macromodels still do not simulate: `VSWITCH`/`ISWITCH` switch models -> ngspice `SW`/`CSW`, strip the LTspice `noiseless` resistor flag, and handle LTspice built-in `OTA`/behavioral code-model A-devices; each is a credibility unit with a real macromodel as proof. Then U4-UI - thread `userModelLibraries` from the project/store through App.tsx into `runNative*` (App.tsx still passes only `{components,wires,netLabels,params,directives}`), and U3 - a project UI affordance to attach the model file. Alternatives: BUG-2/3 op-amp/MOSFET `.asc` round-trip so the save-block can lift; extended-corpus convergence (181/189).
+- **Last completed sub-step:** `parseUserModelLibraries` now runs a captured `.subckt` block through `normalizeSubcktInterior`, a line-gated transform that rewrites only the two LTspice-only switch constructs ngspice's build rejects and passes every other line through byte-for-byte. (1) A switch `.model` card (`translateSwitchModelCard`): LTspice's `VSWITCH`/`ISWITCH` are `SW`/`CSW` in ngspice, and the on/off control levels (`Von`/`Voff`, `Ion`/`Ioff`) become a center threshold plus hysteresis half-width via `Vt=(Von+Voff)/2`, `Vh=(Von-Voff)/2`; `Ron`/`Roff` re-emit as their original strings (no suffix/precision lost), a bare `noiseless` flag is dropped, and computed levels are cleaned of binary float noise (`toPrecision(12)`). A non-switch `.model`, or a body that cannot be matched, is returned unchanged. (2) A voltage-switch instance whose control nodes LTspice parenthesizes (`Sxxx n+ n- (nc+,nc-) MODEL`) is de-parenthesized to bare nodes; current switches (`Wxxx ... Vsource`) carry no parens and are untouched. Standalone `.model` cards outside any subckt also route through `translateSwitchModelCard`. Verified NECESSARY and SUFFICIENT against the real installed LTspice library: the untranslated card fails ngspice ("model type mismatch" -> "Unable to find definition of model switch"), the translated one simulates. New real-engine proof `scripts/userSubcktImport.corpus.ts` (runs under the corpus config, skips cleanly without ngspice or the vendor file) reads the actual Analog Devices AD8541 op-amp macromodel, wires it as a unity buffer via `pinOverride`+net labels, asserts the deck inlines `.model VSY_SWITCH SW(...)` and the bare `S1 90 91 50 99 VSY_SWITCH` (no `vswitch`, no `(50,99)`), asserts the SAME schematic without the library inlines no AD8541 definition, then simulates on native ngspice-46 and checks V(out) tracks the 2.5 V input. Gates: tsc clean; userModelLibrary 19/19 (+6 switch-translation cases) + spiceNetlist 60 + nativeSpice 9 green in isolation; full acceptance corpus 82/82/79 with BOTH vendor-import proofs passing; cargo test 28/0 + clippy clean; zero bundle/resources touched so tauri-build unaffected. No safety guard changed - the transform only rewrites recognized switch tokens (cannot inject), and the inlined deck still passes the native `deck_lines` sanitizer.
+- **Next candidates:** BUG-12 remaining vendor-macromodel gaps - LTspice built-in `OTA`/behavioral code-model A-devices, and `.model ... res(...)` thermal params ngspice merely warns on (non-fatal today). Then U4-UI - thread `userModelLibraries` from the project/store through App.tsx into `runNative*` (App.tsx still passes only `{components,wires,netLabels,params,directives}`), and U3 - a project UI affordance to attach the model file. Alternatives: BUG-2/3 op-amp/MOSFET `.asc` round-trip so the save-block can lift; extended-corpus convergence (181/189).
+
+---
+
+## 2026-07-21T21:00Z - auto/ltspice-parity - BUG-12 (.subckt half): LTspice switch-model translation + real AD8541 op-amp end-to-end proof
+
+### What I did
+- Finalized the `.subckt` half of the user SPICE model-import flagship, recovered
+  from the `-wip` durability checkpoint (`b607063`) after a full review and a
+  real-engine proof. Vendor op-amp/comparator macromodels are where LTspice
+  users live, and many (Analog Devices' among them) build their clamp/output
+  stages from LTspice switch primitives ngspice does not accept verbatim:
+    - the `.model` type is `VSWITCH`/`ISWITCH`, which ngspice spells `SW`/`CSW`,
+      and the control levels are stated as on/off (`Von`/`Voff`) instead of
+      ngspice's center-plus-hysteresis (`Vt`/`Vh`);
+    - the switch instance wraps its control nodes in parentheses `(nc+,nc-)`,
+      which ngspice rejects.
+  Left as-is ngspice fails the whole deck ("Unable to find definition of model
+  ...") and the imported op-amp does nothing.
+- `parseUserModelLibraries` now runs a captured `.subckt` block through
+  `normalizeSubcktInterior`, a line-gated transform that rewrites only those two
+  constructs and passes every other line (transistor models, POLY sources,
+  passives) through byte-for-byte:
+    - `translateSwitchModelCard` renames the model type and converts the levels:
+      `Vt=(Von+Voff)/2`, `Vh=(Von-Voff)/2` (likewise `It`/`Ih`); `Ron`/`Roff`
+      re-emit as their original strings so no SPICE suffix or precision is lost;
+      a bare `noiseless` flag is dropped (only the four recognized keys emit);
+      computed levels are cleaned of binary float noise (`toPrecision(12)`). A
+      non-switch `.model`, or a body it cannot match, is returned unchanged.
+    - a voltage-switch instance's parenthesized control nodes are de-parenthesized
+      to bare nodes; current switches (`Wxxx ... Vsource`) carry no parens and
+      are untouched.
+  Standalone `.model` cards outside any subckt also route through
+  `translateSwitchModelCard`.
+
+### Why it is correct (real-library evidence)
+- Both transforms are exercised by real installed LTspice files, not synthetic
+  fixtures: `ADA4898`/`ADA4610` (comma- and space-separated `vswitch`, the
+  latter with a `Noiseless` flag), `AD8253` (two `vswitch` cards), and `AD8541`
+  (`.MODEL VSY_SWITCH VSWITCH(...)` with SIGNED `Von`/`Voff` AND a parenthesized
+  instance `S1 90 91 (50,99) VSY_SWITCH`).
+- Confirmed against native ngspice-46 that the untranslated form fails ("warning,
+  model type mismatch" on the `vswitch` card -> "Unable to find definition of
+  model switch" on the instance) and the translated form simulates.
+
+### Tests
+- New real-engine proof `scripts/userSubcktImport.corpus.ts` (runs under
+  `vitest.corpus.config.ts`, so `scripts/acceptance-corpus.sh` exercises it; it
+  `skipIf`s cleanly when ngspice or the vendor file is absent). It reads the
+  actual Analog Devices AD8541 macromodel from the installed LTspice library,
+  imports it via `userModelLibraries`, wires it as a single-supply unity buffer
+  through a `subckt` component's `pinOverride`, asserts the deck inlines
+  `.model VSY_SWITCH SW(...)` and the bare `S1 90 91 50 99 VSY_SWITCH` (with no
+  `vswitch` and no `(50,99)` left), asserts the SAME schematic WITHOUT the
+  library inlines no AD8541 definition (so resolution demonstrably came from the
+  user library), then simulates on native ngspice and checks the output tracks
+  the 2.5 V input. Verified passing on this host.
+- `userModelLibrary.test.ts` +6 unit cases: `VSWITCH`->`SW` with `Vt`/`Vh`
+  conversion (comma-separated); signed `Von`/`Voff` with `Roff` re-emitted
+  verbatim; a bare `noiseless` flag dropped (space-separated); `ISWITCH`->`CSW`
+  with `It`/`Ih`; a captured subckt's switch model AND parenthesized instance
+  normalized while other lines stay verbatim; a bare (non-parenthesized) switch
+  instance left untouched.
+- Gates: `tsc --noEmit` clean; userModelLibrary 19/19, spiceNetlist 60,
+  nativeSpice 9 green in isolation; full acceptance corpus 82 imported / 82
+  op-converged / 79 warning-clean with BOTH vendor-import proofs passing; cargo
+  test 28/0 and clippy clean. The 82-file corpus passes no `userModelLibraries`,
+  so `normalizeSubcktInterior` is never reached on it and the baseline is
+  structurally unaffected - confirmed still 82/82/79.
+
+### Safety
+- No safety guard weakened. The transform only rewrites recognized switch tokens
+  inside an already-captured block (it cannot inject new directives), and the
+  inlined subckt text still passes the native `spice.rs` `deck_lines` sanitizer
+  unchanged.
 
 ---
 

@@ -84,7 +84,7 @@ describe("parseUserModelLibraries", () => {
     expect(registry.subckts.size).toBe(0);
   });
 
-  it("preserves a .subckt body verbatim, including a nested .model and comments", () => {
+  it("preserves a .subckt body's non-switch content byte-for-byte, including a nested .model and comments", () => {
     const text = [
       ".subckt MacroPart 1 2 3",
       "* internal comment",
@@ -97,6 +97,77 @@ describe("parseUserModelLibraries", () => {
     // The nested .model is NOT separately registered as a top-level model -
     // it belongs to the subckt body only, verbatim.
     expect(registry.models.has("qinner")).toBe(false);
+  });
+
+  it("translates an LTspice VSWITCH .model card into ngspice SW with Vt/Vh levels", () => {
+    // ADA4898's switch model (comma-separated). LTspice states the on/off
+    // control levels directly; ngspice wants a center threshold plus a
+    // hysteresis half-width: Vt=(Von+Voff)/2, Vh=(Von-Voff)/2. Ron/Roff carry
+    // over verbatim. A bare rename would leave Vt=Vh=0 and trip the switch at 0.
+    const registry = parseUserModelLibraries([
+      ".model Switch vswitch(Von=1.005,Voff=0.995,ron=0.001,roff=1e6)",
+    ]);
+    expect(registry.models.get("switch")).toBe(".model Switch SW(RON=0.001 ROFF=1e6 VT=1 VH=0.005)");
+    expect(registry.models.get("switch")).not.toMatch(/vswitch/i);
+  });
+
+  it("converts signed Von/Voff and re-emits Ron/Roff strings unchanged", () => {
+    // AD8541's switch model: negative control levels, scientific-notation Roff.
+    // Vt=(-3.5 + -4.2)/2 = -3.85, Vh=(-3.5 - -4.2)/2 = 0.35; Roff stays "100E3".
+    const registry = parseUserModelLibraries([
+      ".model VSY_SWITCH vswitch(ROFF=100E3,RON=1,VOFF=-4.2,VON=-3.5)",
+    ]);
+    expect(registry.models.get("vsy_switch")).toBe(".model VSY_SWITCH SW(RON=1 ROFF=100E3 VT=-3.85 VH=0.35)");
+  });
+
+  it("drops an LTspice-only bare switch flag (noiseless) that ngspice has no SW parameter for", () => {
+    // ADA4610's switch model carries a trailing `Noiseless` flag; only the four
+    // recognized keys are re-emitted, so it is dropped along the way.
+    const registry = parseUserModelLibraries([
+      ".model Switch vswitch(Von=1.505 Voff=1.495 ron=0.001 roff=1e6 Noiseless)",
+    ]);
+    expect(registry.models.get("switch")).toBe(".model Switch SW(RON=0.001 ROFF=1e6 VT=1.5 VH=0.005)");
+    expect(registry.models.get("switch")).not.toMatch(/noiseless/i);
+  });
+
+  it("translates a current-controlled ISWITCH into ngspice CSW with It/Ih levels", () => {
+    const registry = parseUserModelLibraries([
+      ".model CS iswitch(Ion=0.001 Ioff=0.0005 Ron=1 Roff=1e6)",
+    ]);
+    expect(registry.models.get("cs")).toBe(".model CS CSW(RON=1 ROFF=1e6 IT=0.00075 IH=0.00025)");
+  });
+
+  it("normalizes a captured subckt's switch model and parenthesized switch instance", () => {
+    // AD8541's macromodel shape: a voltage-switch instance whose control nodes
+    // LTspice wraps in parens `(50,99)` - ngspice wants them bare - and an
+    // interior VSWITCH card. Everything else in the block stays byte-for-byte.
+    const text = [
+      ".subckt AMP 1 2 99 50 45",
+      "R1 1 2 1e9",
+      "S1 90 91 (50,99) VSY_SWITCH",
+      ".model VSY_SWITCH vswitch(ROFF=100E3,RON=1,VOFF=-4.2,VON=-3.5)",
+      ".ends AMP",
+    ].join("\n");
+    const block = parseUserModelLibraries([text]).subckts.get("amp");
+    expect(block).toContain("S1 90 91 50 99 VSY_SWITCH");
+    expect(block).toContain(".model VSY_SWITCH SW(RON=1 ROFF=100E3 VT=-3.85 VH=0.35)");
+    expect(block).toContain("R1 1 2 1e9"); // untouched line stays verbatim
+    expect(block).not.toMatch(/vswitch/i);
+    expect(block).not.toContain("(50,99)");
+  });
+
+  it("leaves a bare (non-parenthesized) switch instance untouched", () => {
+    // ADA4898 writes its switch instances with bare control nodes already; only
+    // the model card needs translating, the instance line must not be mangled.
+    const text = [
+      ".subckt AMP 1 2 3 4",
+      "S1 98 1030 106 113 Switch",
+      ".model Switch vswitch(Von=1.005,Voff=0.995,ron=0.001,roff=1e6)",
+      ".ends AMP",
+    ].join("\n");
+    const block = parseUserModelLibraries([text]).subckts.get("amp");
+    expect(block).toContain("S1 98 1030 106 113 Switch");
+    expect(block).toContain(".model Switch SW(RON=0.001 ROFF=1e6 VT=1 VH=0.005)");
   });
 
   it("first definition wins when a name repeats across texts", () => {
