@@ -37,6 +37,31 @@ describe("parseUserModelLibraries", () => {
     expect(registry.models.get("mydiode")).toBe(".model MyDiode D(Is=1e-14 N=1.05 Rs=0.5)");
   });
 
+  it("drops LTspice string-valued annotation params ngspice rejects, keeping numeric ones", () => {
+    // A real LTspice `.model` card carries datasheet annotations; `mfg=STMicro`
+    // is a bare word ngspice fatally rejects, while `Vceo=60`/`Icrating=10` are
+    // numeric and only warned-and-ignored. Only the string one is removed.
+    const registry = parseUserModelLibraries([
+      ".model 2N3055 NPN(Bf=73 Is=2.37E-8 Vceo=60 Icrating=10 mfg=STMicro)",
+    ]);
+    const line = registry.models.get("2n3055");
+    expect(line).toBe(".model 2N3055 NPN(Bf=73 Is=2.37E-8 Vceo=60 Icrating=10)");
+    expect(line).not.toMatch(/mfg/i);
+  });
+
+  it("strips a string annotation even when it is the first parameter", () => {
+    const registry = parseUserModelLibraries([".model P D(type=std Is=1e-14 N=1.05)"]);
+    // The name, type keyword, closing paren, and numeric params stay intact.
+    expect(registry.models.get("p")).toBe(".model P D(Is=1e-14 N=1.05)");
+  });
+
+  it("keeps negative and suffixed numeric parameters (never mistaken for annotations)", () => {
+    const registry = parseUserModelLibraries([
+      ".model M NMOS(Vto=-0.328 Kp=10E-6 Tr=.5703U Cjo=1000P)",
+    ]);
+    expect(registry.models.get("m")).toBe(".model M NMOS(Vto=-0.328 Kp=10E-6 Tr=.5703U Cjo=1000P)");
+  });
+
   it("sanitizes a dashed subckt name the same way bundledSubcircuits does", () => {
     const registry = parseUserModelLibraries([
       ".subckt my-block in out\nR1 in out 1k\n.ends my-block",

@@ -41,12 +41,38 @@ function stripTrailingComment(line: string): string {
 }
 
 /**
+ * Drop LTspice/vendor annotation parameters whose value is a bare word
+ * (`mfg=NXP`, `mfg=STMicro`, `type=Sic`, …). ngspice FATALLY rejects a `.model`
+ * parameter with a non-numeric value ("Error in netlist line …"), which sinks
+ * the whole deck; but a genuine device-model parameter always begins with a
+ * digit, sign, or decimal point, so a value that starts with a letter is always
+ * datasheet metadata, never a simulation parameter. Only those letter-valued
+ * assignments are removed - the model name and type, bare flags (`pchan`),
+ * every numeric parameter, and the numeric annotations ngspice merely warns
+ * about and ignores (`Vceo=60`, `Icrating=10`) are all left untouched, since
+ * dropping a parameter by name could silently discard a real one. Tau already
+ * hand-removes these keys when curating its bundled models (standardModels.ts);
+ * this does the same for user-imported files.
+ */
+function stripAnnotationParams(line: string): string {
+  return line
+    .replace(/(?<=[\s(])[A-Za-z_][\w.]*\s*=\s*[A-Za-z][^\s()]*/g, "")
+    .replace(/\(\s+/g, "(")
+    .replace(/\s+\)/g, ")")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
+/**
  * Parse one or more raw vendor library file texts into a combined registry.
  * When the same model/subckt name appears more than once (within one file or
  * across several), the FIRST definition wins and later duplicates are
  * ignored - consistent with how the deck builder's own dedup sets treat a
  * name as claimed once it is known (spiceNetlist.ts's `knownModels`/
- * `emittedSubckts`).
+ * `emittedSubckts`). A `.model` line is stored with its LTspice string-valued
+ * annotation parameters removed (see {@link stripAnnotationParams}) so the
+ * inlined card actually loads in ngspice; `.subckt` blocks are still captured
+ * verbatim.
  */
 export function parseUserModelLibraries(texts: readonly string[]): UserModelLibraryRegistry {
   const models = new Map<string, string>();
@@ -108,7 +134,7 @@ export function parseUserModelLibraries(texts: readonly string[]): UserModelLibr
           parts.push(stripTrailingComment(cont.slice(1).trim()));
           i += 1;
         }
-        const line = parts.filter((part) => part !== "").join(" ");
+        const line = stripAnnotationParams(parts.filter((part) => part !== "").join(" "));
         const name = /^\.model\s+([^\s(]+)/i.exec(line)?.[1];
         if (name) {
           const key = name.toLowerCase();

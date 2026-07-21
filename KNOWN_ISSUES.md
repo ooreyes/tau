@@ -16,6 +16,21 @@ fixes land as they are ready.
   control pins). The message names the specific reason. Native `.sim` saves
   are unaffected.
 
+## Importing vendor SPICE models
+
+- A vendor `.model` device card (a manufacturer's transistor, diode, JFET, or
+  MOSFET model) attached through a `.lib`/`.subckt` file resolves by name and
+  simulates through the native engine. LTspice datasheet annotations ngspice
+  does not accept - for example `mfg=STMicro` - are removed automatically so the
+  card loads.
+- A vendor `.subckt` macromodel (many op-amp and mixed-signal parts ship as
+  these) resolves and is inlined into the deck, but some do not yet simulate:
+  LTspice macromodels often use simulator-specific constructs - `VSWITCH`/
+  `ISWITCH` switch models, the `noiseless` resistor flag, and LTspice built-in
+  behavioral code models such as `OTA` - that Tau's ngspice build rejects.
+  Translating those is in progress; a macromodel written with only standard
+  SPICE primitives works today.
+
 ## Browser preview vs native engine
 
 - The preview solver covers R/C/L, sources, diodes/LEDs/zeners, switches,

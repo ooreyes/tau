@@ -8,15 +8,71 @@
      `git log --oneline -8`, recover/finish/revert that unit FIRST, then go on.
      ─────────────────────────────────────────────────────────────────────── -->
 ## ⏱ HEARTBEAT
-- **Headline metric:** corpus 82/82 import · 82/82 op-converge · 79/82 warning-clean · changed-file suites green (spiceNetlist 60, nativeSpice 9, errorMessage 5). Full suite still shows a handful of React render/timing timeouts under full-suite CPU oversubscription on this busy host; each such file passes in isolation (verified this run: primitives 12/12, goldenClassD 1/1, netlist 26/26 alone).
-- **Run started (UTC):** 2026-07-20T23:10Z (interactive session, Opus-driven)
-- **Synced to origin:** auto/ltspice-parity @ 883f8f4 (this unit's parent).
-- **Claimed unit:** U2 - surface unresolved-model errors through `userFacingErrorMessage` (model-import flagship step c).
+- **Headline metric:** corpus 82/82 import · 82/82 op-converge · 79/82 warning-clean; vendor `.model` import PROVEN end-to-end - a real STMicro 2N3055 read from the installed LTspice `standard.bjt` imports, its ngspice-fatal `mfg=` annotation normalized away, inlines, and simulates a bias stage through native ngspice-46 (Ic/Ib reproduces the model's Bf=73). Changed-file + corpus suites green (userModelLibrary 13, spiceNetlist 60, nativeSpice 9, userModelImport corpus 1).
+- **Run started (UTC):** 2026-07-21T15:37Z (autobuilder, Opus-driven)
+- **Synced to origin:** auto/ltspice-parity @ 453b8ee (this unit's parent).
+- **Claimed unit:** BUG-12 (`.model` half) - normalize LTspice string-valued annotation params (`mfg=STMicro`) out of imported vendor `.model` cards so ngspice loads them, and prove a real vendor card end to end. (Rescued and finalized from the `-wip` durability checkpoint after review.)
 - **Status:** DONE
-- **Last completed sub-step:** `buildSpiceDeck` now reports `SpiceDeck.unresolvedSubckts` - `subckt` component references that no inline directive, bundled library, or user-imported `.lib`/`.subckt` defines (deduped, sorted, original casing; membership tested against both raw and sanitized name forms so a resolvable reference is never flagged). Netlist output is unchanged, so the corpus and every existing deck consumer are unaffected. `executeNative` (the single native tran/op/ac chokepoint) checks the field before invoking ngspice and throws `unresolvedSubcktMessage(...)` - plain product copy naming the missing part(s), capped at 6 names - which App.tsx's catch passes through `userFacingErrorMessage` verbatim, so the user gets "No imported library defines the subcircuit X. Import the LTspice model file..." instead of a cryptic native "unknown subckt". Scope held to *subckt* refs only: an unresolved *semiconductor* model still falls back to the generic `TAU_*` starter (corpus relies on it), so no hard error there. Gates: tsc clean; changed-file suites 74/74 green in isolation; corpus baseline held (82/82/79); full suite's timeouts are the documented render/timing flake (verified files pass alone); zero Rust touched so cargo/tauri-build gates unaffected. No safety guard changed - purely additive detection plus a fail-fast throw.
-- **Next candidates:** U4 - a real public vendor `.lib`/`.sub` (op-amp or MOSFET) attached and run end-to-end through native libngspice (the credibility proof this whole flagship is for; note `userModelLibraries` still needs threading from the project/store into `runNative*` - App.tsx passes `{components,wires,netLabels,params,directives}` today, so wiring that field is the natural companion to U4); then U3 - a project UI affordance to attach the model file. Alternatives: BUG-2/3 op-amp/MOSFET `.asc` round-trip so the save-block can lift; extended-corpus convergence (181/189).
+- **Last completed sub-step:** `parseUserModelLibraries` now runs each imported `.model` card through `stripAnnotationParams`, which removes a `key=value` whose value starts with a letter (a bare-word LTspice datasheet annotation such as `mfg=STMicro` / `type=std` that ngspice fatally rejects) while preserving the model name, model type, bare flags (`pchan`), and every numeric parameter - including signed (`Vto=-0.328`), decimal-leading (`Tr=.5703U`), suffixed (`Cjo=1000P`), and warned-but-ignored numeric annotations (`Vceo=60`). Scope is `.model` cards only; `.subckt` blocks stay verbatim. The function is reachable solely through `parseUserModelLibraries`, which the 82-file corpus never invokes (it passes no `userModelLibraries`), so the corpus baseline is structurally unaffected - and confirmed still 82/82/79. New real-engine proof `scripts/userModelImport.corpus.ts` (runs under the corpus config, skips cleanly without ngspice or the vendor file) reads the actual LTspice `standard.bjt`, imports its 2N3055, asserts the card inlines with `mfg=` gone and the device references it, asserts the SAME schematic without the library falls back to `TAU_NPN` (proving resolution came from the user library), then simulates a common-emitter stage on native ngspice and checks forward-active bias with Ic/Ib ~ Bf=73. Gates: tsc clean; userModelLibrary 13/13 + spiceNetlist 60 + nativeSpice 9 green in isolation; full acceptance corpus 82/82/79 with the new proof passing; zero Rust/bundle touched so cargo/clippy/tauri-build unaffected. No safety guard changed - `stripAnnotationParams` only deletes annotation tokens (cannot inject), and the deck still passes the native `deck_lines` sanitizer.
+- **Next candidates:** BUG-12 (`.subckt` half) - vendor op-amp/mixed-signal macromodels still do not simulate: `VSWITCH`/`ISWITCH` switch models -> ngspice `SW`/`CSW`, strip the LTspice `noiseless` resistor flag, and handle LTspice built-in `OTA`/behavioral code-model A-devices; each is a credibility unit with a real macromodel as proof. Then U4-UI - thread `userModelLibraries` from the project/store through App.tsx into `runNative*` (App.tsx still passes only `{components,wires,netLabels,params,directives}`), and U3 - a project UI affordance to attach the model file. Alternatives: BUG-2/3 op-amp/MOSFET `.asc` round-trip so the save-block can lift; extended-corpus convergence (181/189).
 
 ---
+
+## 2026-07-21T15:37Z - auto/ltspice-parity - BUG-12 (.model half): vendor annotation normalization + real 2N3055 end-to-end proof
+
+### What I did
+- Finalized the `.model` half of the user SPICE model-import flagship, recovered
+  from the `-wip` durability checkpoint (`c99f8ac`) after a full review. Real
+  LTspice vendor `.model` cards carry datasheet annotations with non-numeric
+  values (`mfg=STMicro`, `mfg=NXP`, `type=std`). ngspice fatally aborts the
+  whole deck on a string-valued model parameter, so inlining a matched vendor
+  card verbatim was not enough to actually simulate it.
+- `parseUserModelLibraries` now normalizes each imported `.model` line through a
+  new `stripAnnotationParams`: it removes a `key=value` whose value begins with
+  a letter (always datasheet metadata, never a device parameter) and leaves
+  everything else intact - the model name and type, bare flags (`pchan`), and
+  every numeric parameter, including signed (`Vto=-0.328`), decimal-leading
+  (`Tr=.5703U`), suffixed (`Cjo=1000P`), and the numeric annotations ngspice
+  merely warns about (`Vceo=60`, `Icrating=10`). This mirrors the curation Tau
+  already hand-applies to its bundled models. `.subckt` blocks are still stored
+  verbatim - the normalization is scoped to `.model` cards only.
+- The function is reachable only through `parseUserModelLibraries`, which the
+  82-file acceptance corpus never invokes (it passes no `userModelLibraries`),
+  so the corpus baseline is structurally unaffected - and confirmed still
+  82/82/79.
+
+### Tests
+- New real-engine proof `scripts/userModelImport.corpus.ts` (runs under
+  `vitest.corpus.config.ts`, so `scripts/acceptance-corpus.sh` exercises it; it
+  `skipIf`s cleanly when ngspice or the vendor file is absent). It reads the
+  actual installed LTspice `standard.bjt`, imports its STMicro 2N3055, asserts
+  the card inlines with `mfg=` gone and a `Q` device references it, asserts the
+  SAME schematic WITHOUT the library falls back to `TAU_NPN` (so the resolution
+  demonstrably came from the user library, not a bundled part), then simulates a
+  common-emitter bias stage on native ngspice-46 and checks forward-active
+  operation with the collector/base current ratio reproducing the model's own
+  `Bf=73`. Verified passing on this host (ngspice-46 + the vendor file present).
+- `userModelLibrary.test.ts` +3 unit cases: a string annotation is dropped while
+  numeric ones stay; a leading-position annotation is dropped; signed/suffixed
+  numeric parameters are never mistaken for annotations.
+- Gates: `tsc --noEmit` clean (includes the new `scripts/` file); userModelLibrary
+  13/13, spiceNetlist 60, nativeSpice 9 green in isolation; full acceptance
+  corpus 82 imported / 82 op-converged / 79 warning-clean with the new proof
+  among the passing specs; zero Rust/bundle/resource files touched, so
+  cargo/clippy/tauri-build gates are unaffected.
+
+### Honesty / scope
+- KNOWN_ISSUES gains an "Importing vendor SPICE models" section stating plainly
+  that a vendor `.model` device card resolves and simulates (annotations removed
+  automatically), while many vendor `.subckt` op-amp macromodels resolve and
+  inline but do not yet simulate because they use `VSWITCH`/`ISWITCH`,
+  `noiseless`, or LTspice built-in `OTA`/code-model devices. No overclaim: the
+  macromodel path is explicitly called out as in progress.
+- FIX_BUGS BUG-12 records the `.model` fix as done with the `.subckt` macromodel
+  translation left open as the next credibility unit.
+- No safety guard touched: `stripAnnotationParams` only deletes annotation
+  tokens (it cannot inject text), and the inlined card still passes the native
+  `spice.rs` `deck_lines` sanitizer before reaching ngspice.
 
 ## 2026-07-20T23:10Z — auto/ltspice-parity — U2: surface unresolved-subckt errors through userFacingErrorMessage
 
