@@ -8,16 +8,46 @@
      `git log --oneline -8`, recover/finish/revert that unit FIRST, then go on.
      ─────────────────────────────────────────────────────────────────────── -->
 ## ⏱ HEARTBEAT
-- **Headline metric:** 1974 reviewed-tree tests green · corpus 82/82 import · 82/82 op-converge · 79/82 warning-clean
-- **Run started (UTC):** 2026-07-20T17:20Z (interactive session, Opus-driven, subagent-executed)
-- **Synced to origin:** auto/ltspice-parity @ 3cb5b9c.
-- **Claimed unit:** Model import U1 (flagship) - user vendor `.lib`/`.subckt` model import, foundation: parse + register + deck resolution.
+- **Headline metric:** 1997 tests green (6 skipped; each file passes in isolation - a few React render/timing tests flake only under full-suite CPU oversubscription on a busy host) · corpus 82/82 import · 82/82 op-converge · 79/82 warning-clean
+- **Run started (UTC):** 2026-07-20T22:25Z (interactive session, Opus-driven)
+- **Synced to origin:** auto/ltspice-parity @ 06db456.
+- **Claimed unit:** Recover + verify the stranded BUG-5 unit (preview solver DC operating-point seeding) that the previous run auto-checkpointed mid-change, then finalize the record.
 - **Status:** DONE
-- **Last completed sub-step:** Landed U1 through full gates (tsc clean, vitest 1988 green, corpus 181/189 unchanged, Rust untouched by a TS-only diff). New pure module `engine/userModelLibrary.ts` (parse vendor `.lib`/`.subckt`/`.mod` text into a name->definition registry, INLINE-only per the native deck sanitizer which rejects file-backed `.include`/`.lib`) + optional `userModelLibraries?: readonly string[]` threaded into `buildSpiceDeck`, consulted as the LAST resolution source at the two existing fall-through loops (standard-model ~253, subckt ~277). 15 new tests incl. resolution-priority (bundled wins over same-named user entry) and byte-identical-when-absent regression guard.
-- **Known follow-ups from U1 (do these next):** (a) unresolved-model error surfacing via `userFacingErrorMessage` when a ref resolves nowhere [U2]; (b) VDMOS type-sniff for user-registry models so a user `VDMOS(...)` emits the 3-terminal form (currently only bundled/standard get `vdmosModels` tagging); (c) BJT-names-a-subckt `X`-rewrite (~line 309) not extended to user registry; (d) project UI to attach a model file [U3]; (e) validate a REAL public vendor op-amp/MOSFET `.lib` end-to-end through native libngspice [U4 - the credibility proof].
-- **Next step:** U4 (real vendor `.lib` through native ngspice) is the highest-value next unit - it collapses the readiness uncertainty. Then U2 error surfacing, then U3 UI.
+- **Last completed sub-step:** Reviewed the checkpoint (06db456) and confirmed it is a complete, correct, green unit. `runTransientAnalysis` now seeds capacitor voltage / inductor current from a DC operating-point solve before integrating (skipped under `uic`; explicit per-instance `IC=` still wins); `runOperatingPoint` gained Newton companion-model support for diodes/LEDs/zeners (shared `diodeCompanion` primitives, GMIN on isolated nodes, pnjlim damping) so biased junction circuits seed too, with a clean non-convergence failure and a warned singular-OP zero-state fallback. Verified: tsc clean; the 84 simulation tests for the change pass in isolation; the full suite's ~3 stragglers are render/timing flakes that each pass alone (AssistantPanel 50/50, App.workspace 14/14, netlist perf 26/26 x3); corpus baseline held (82/82/79); zero Rust changed since v1.0.0 so the cargo gates are unaffected. Tests were not weakened - the `uic:true` added to currentProbe/realCircuits selects the from-zero mode those suites assert on, while the new DC-OP default is covered by initialConditions/operatingPoint/linearTransient additions. Shipped example circuits switched DC->PULSE so they stay demonstrative under the corrected semantics. FIX_BUGS BUG-5 marked FIXED; KNOWN_ISSUES preview note rewritten.
+- **Next candidates:** model-import follow-ups - U2 unresolved-model error surfacing via `userFacingErrorMessage`, then U4 a real public vendor `.lib` end-to-end through native libngspice (the credibility proof), then U3 project UI to attach a model file; or BUG-2/3 op-amp/MOSFET `.asc` round-trip so the save-block can lift; or extended-corpus convergence (181/189).
 
 ---
+
+## 2026-07-20T22:25Z — auto/ltspice-parity — recover + verify BUG-5 (preview DC operating-point seeding)
+
+### What I did
+- The previous run auto-checkpointed a stranded unit (`06db456`, "wip: checkpoint")
+  mid-change. Reconciled it: the older `-wip` rescue branch forks from before the
+  model-import feature landed and is superseded by `179d3e2`, so it was left in
+  place. Reviewed the checkpoint as reviewer of record and confirmed it is a
+  complete, correct unit rather than a half-finished blob.
+- The unit fixes BUG-5: the TS preview solver behaved as `uic` (reactive parts
+  from zero) while native ngspice solves the DC operating point first, so biased
+  circuits disagreed. `runTransientAnalysis` now seeds capacitor voltage and
+  inductor current from a DC operating-point solve before integrating (skipped
+  under `uic`; an explicit per-instance `IC=` still wins). `runOperatingPoint`
+  gained Newton companion-model support for diodes/LEDs/zeners so biased junction
+  circuits seed too, with a clean non-convergence failure and a warned
+  zero-state fallback when the OP is singular.
+- Confirmed the test changes are not weakenings: `uic:true` added to
+  currentProbe/realCircuits selects the from-zero waveform those suites assert
+  on, and the new DC-OP default is separately covered. Example circuits switched
+  DC->PULSE so their curves stay demonstrative under the corrected semantics.
+
+### Tests
+- `pnpm -C apps/desktop exec tsc --noEmit` (clean)
+- `pnpm -C apps/desktop test` (1997 green / 6 skipped; the handful of full-suite
+  stragglers are React render/timing tests that each pass in isolation under
+  lower CPU contention - simulation, AssistantPanel, App.workspace, netlist perf
+  all confirmed green alone)
+- Focused: the 84 simulation tests touched by the change, run in isolation
+- `scripts/acceptance-corpus.sh` (82 imported / 82 op-converged / 79 warning-clean)
+- cargo test/clippy unaffected: zero Rust changed since the v1.0.0 release
 
 ## 2026-07-18T14:46Z — auto/ltspice-parity — LED IC repair + PowerSim hierarchy recovery
 
