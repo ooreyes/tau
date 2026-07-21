@@ -11,7 +11,7 @@ import {
   runNativeOperatingPoint,
   runNativeTransient,
 } from "./nativeSpice";
-import type { SchematicComponent, SchematicWire } from "../schematic/types";
+import type { NetLabel, PinOverride, SchematicComponent, SchematicWire } from "../schematic/types";
 
 const component = (
   kind: SchematicComponent["kind"],
@@ -194,5 +194,24 @@ describe("native ngspice adapter", () => {
 
     await expect(runNativeTransient(rcSchematic(), { stopTime: 0.001, steps: 100 }))
       .rejects.toThrow(/unknown device A1.*analysis aborted/i);
+  });
+
+  it("fails fast with actionable copy when a subcircuit has no imported definition", async () => {
+    enableNativeRuntime();
+    const pinOverride: PinOverride[] = [
+      { id: "p1", label: "+", x: 0, y: 0 },
+      { id: "p2", label: "-", x: 0, y: 80 },
+    ];
+    const schematic = {
+      components: [{ ...component("subckt", "u1", "U1", "LT1001", 0, 0), pinOverride }],
+      wires: [] as SchematicWire[],
+      netLabels: [{ id: "f1", x: 0, y: 80, text: "0" }] as NetLabel[],
+    };
+
+    await expect(runNativeTransient(schematic, { stopTime: 0.001, steps: 100 }))
+      .rejects.toThrow(/No imported library defines the subcircuit "LT1001"/);
+    // The precise name is known before the deck is handed off, so no native
+    // round trip is spent on an error the user cannot act on.
+    expect(invoke).not.toHaveBeenCalled();
   });
 });

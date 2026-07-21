@@ -711,9 +711,17 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   `definedModelNames` collects the document's `.model`/`.subckt` names and the
   deck builder emits a semiconductor's own `SYMATTR Value` model name on its
   device line *when that model is defined* (else the generic `TAU_*`), so it
-  never introduces an undefined-model error. **NEXT:** resolve `.lib`/`.inc`
-  *file paths* (read & inline, or hand to ngspice); browser TS-solver model
-  parsing.
+  never introduces an undefined-model error. **User-attached vendor libraries
+  landed** (`engine/userModelLibrary.ts`): `parseUserModelLibraries` folds
+  attached `.lib`/`.subckt`/`.mod` text into a registry the deck builder
+  consults as the last resolution source (after inline directives and Tau's
+  bundled parts), inlining the matched `.model` line or `.subckt` block.
+  **Unresolved-reference errors surfaced:** a `subckt` reference that resolves
+  nowhere is reported on `SpiceDeck.unresolvedSubckts`, and the native runner
+  fails fast through `userFacingErrorMessage` naming the missing part instead of
+  handing ngspice a deck that dies with a cryptic "unknown subckt". **NEXT:** a
+  project UI affordance to attach a model file; resolve `.lib`/`.inc` *file
+  paths* (read & inline, or hand to ngspice); browser TS-solver model parsing.
 
 ## 4. Analyses (simulation commands)
 - ✅ `.op` Operating point — TS + native — `operatingPoint.ts`

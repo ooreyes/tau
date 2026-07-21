@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildSpiceDeck } from "./spiceNetlist";
+import { buildSpiceDeck, unresolvedSubcktMessage } from "./spiceNetlist";
 import { buildParamScope } from "../simulation/paramScope";
 import type { NetLabel, PinOverride, SchematicComponent, SchematicWire } from "../schematic/types";
 import { CATALOG } from "../schematic/catalog";
@@ -682,6 +682,64 @@ describe("buildSpiceDeck", () => {
     expect(deck.netlist).toMatch(/^XU1 \S+ \S+ VendorBlock$/m);
     expect(deck.netlist).toMatch(/^XU2 \S+ \S+ VendorBlock$/m);
     expect(deck.netlist).toContain("R1 a b 4.7k");
+    // A fully-resolved deck reports nothing missing.
+    expect(deck.unresolvedSubckts).toEqual([]);
+  });
+
+  it("reports subckt references with no inline, bundled, or imported definition", () => {
+    let counter = 0;
+    const uid = (p: string) => `${p}-${++counter}`;
+    const sub = (label: string, value: string, pins: Array<[string, string, number, number]>): SchematicComponent => ({
+      id: uid("subckt"),
+      kind: "subckt",
+      x: 0,
+      y: 0,
+      rotation: 0,
+      value,
+      label,
+      pinOverride: pins.map(([id, pinLabel, x, y]): PinOverride => ({ id, label: pinLabel, x, y })),
+    });
+    const lbl = (x: number, y: number, text: string): NetLabel => ({ id: uid("flag"), x, y, text });
+
+    const comps = [
+      // Two instances of the same missing vendor op-amp (dedup) plus one of a
+      // second missing part (sorted). No inline .subckt, not a bundled block,
+      // and no user library is attached.
+      sub("U1", "LT1001", [["p1", "+", 0, 0], ["p2", "-", 0, 80]]),
+      sub("U2", "LT1001", [["p1", "+", 160, 0], ["p2", "-", 160, 80]]),
+      sub("U3", "AD8000", [["p1", "+", 320, 0], ["p2", "-", 320, 80]]),
+    ];
+    const netLabels = [lbl(0, 80, "0")]; // ground reference
+    const deck = buildSpiceDeck({ components: comps, wires: [], netLabels }, { kind: "op" });
+
+    expect(deck.unresolvedSubckts).toEqual(["AD8000", "LT1001"]);
+    // The netlist still emits the X lines; the field is advisory, not a rewrite.
+    expect(deck.netlist).toMatch(/^XU1 \S+ \S+ LT1001$/m);
+    expect(deck.netlist).toMatch(/^XU3 \S+ \S+ AD8000$/m);
+  });
+
+  it("does not report a subckt that a document .subckt directive defines inline", () => {
+    let counter = 0;
+    const uid = (p: string) => `${p}-${++counter}`;
+    const sub = (label: string, value: string, pins: Array<[string, string, number, number]>): SchematicComponent => ({
+      id: uid("subckt"),
+      kind: "subckt",
+      x: 0,
+      y: 0,
+      rotation: 0,
+      value,
+      label,
+      pinOverride: pins.map(([id, pinLabel, x, y]): PinOverride => ({ id, label: pinLabel, x, y })),
+    });
+    const lbl = (x: number, y: number, text: string): NetLabel => ({ id: uid("flag"), x, y, text });
+
+    const comps = [sub("U1", "MyBlock", [["p1", "a", 0, 0], ["p2", "b", 0, 80]])];
+    const netLabels = [lbl(0, 80, "0")];
+    const directives = [".subckt MyBlock a b\\nR1 a b 2.2k\\n.ends MyBlock"];
+    const deck = buildSpiceDeck({ components: comps, wires: [], netLabels, directives }, { kind: "op" });
+
+    expect(deck.unresolvedSubckts).toEqual([]);
+    expect(deck.netlist).toMatch(/^XU1 \S+ \S+ MyBlock$/m);
   });
 
   it("leaves deck output unchanged when no user model libraries are supplied (regression guard)", () => {
@@ -982,5 +1040,30 @@ describe("buildSpiceDeck", () => {
     ];
     expect(() => buildSpiceDeck({ components, wires: [] }, { kind: "op" }))
       .toThrow(/Duplicate SPICE instance name/);
+  });
+});
+
+describe("unresolvedSubcktMessage", () => {
+  it("names a single missing subcircuit and how to supply it", () => {
+    const message = unresolvedSubcktMessage(["LT1001"]);
+    expect(message).toBe(
+      'No imported library defines the subcircuit "LT1001". Import the LTspice model file (.lib or .subckt) that provides it, then run again.',
+    );
+    // Plain product copy: userFacingErrorMessage must be able to surface it
+    // verbatim, so it carries no engine transcript markers or JS-error shapes.
+    expect(message).not.toMatch(/stdout|stderr|ngspice|is not a function/i);
+  });
+
+  it("lists several missing subcircuits in the plural", () => {
+    expect(unresolvedSubcktMessage(["AD8000", "LT1001"])).toBe(
+      'No imported library defines these subcircuits: "AD8000", "LT1001". Import the LTspice model files (.lib or .subckt) that provide them, then run again.',
+    );
+  });
+
+  it("caps the enumerated list so the message stays short", () => {
+    const names = ["A", "B", "C", "D", "E", "F", "G", "H"];
+    const message = unresolvedSubcktMessage(names);
+    expect(message).toContain('"A", "B", "C", "D", "E", "F", and 2 more');
+    expect(message).not.toContain('"G"');
   });
 });

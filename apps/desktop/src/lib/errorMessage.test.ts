@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { technicalErrorDetails, userFacingErrorMessage } from "./errorMessage";
+import { unresolvedSubcktMessage } from "../engine/spiceNetlist";
 
 describe("userFacingErrorMessage", () => {
   it("preserves bounded Error and Tauri string diagnostics", () => {
@@ -24,6 +25,11 @@ describe("userFacingErrorMessage", () => {
     expect(technicalErrorDetails(new TypeError("Cannot read properties of undefined (reading 'invoke')"))).toContain("invoke");
     // Legitimate product copy containing none of the signatures passes through.
     expect(userFacingErrorMessage(new Error("Add a ground symbol so node voltages have a reference."), "fallback")).toBe("Add a ground symbol so node voltages have a reference.");
+  });
+
+  it("surfaces the missing-subcircuit message verbatim (model-import guidance reaches the user)", () => {
+    const message = unresolvedSubcktMessage(["LT1001"]);
+    expect(userFacingErrorMessage(new Error(message), "ngspice could not run this simulation.")).toBe(message);
   });
 
   it("falls back for non-text failures and bounds hostile payloads", () => {

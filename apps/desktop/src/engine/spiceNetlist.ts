@@ -44,6 +44,13 @@ export type SpiceAnalysis =
 export interface SpiceDeck {
   circuit: ExtractedCircuit;
   netlist: string;
+  /** Subcircuit reference names (original casing, deduped, sorted) that no
+   *  inline directive, bundled library, or user-imported `.lib`/`.subckt`
+   *  defines. The netlist still emits their `X` lines, so the native engine
+   *  would fail with a cryptic "unknown subckt"; the native runner checks this
+   *  first and fails fast with product copy naming the missing part(s). Empty
+   *  for every fully-resolved deck. */
+  unresolvedSubckts: string[];
 }
 
 type Schematic = {
@@ -342,6 +349,31 @@ export function buildSpiceDeck(schematic: Schematic, analysis: SpiceAnalysis): S
   // "could not find a valid modelname" (UHFpreamp's MRF901).
   const subcktModels = new Set([...definedSubcktNames(rawDirectives), ...inlinedSubckts]);
 
+  // A `subckt` instance whose referenced name resolves to no definition
+  // anywhere - inline document `.subckt`, a bundled library block, or a
+  // user-imported vendor `.lib`/`.subckt` - reaches ngspice as an `X` line with
+  // no matching `.subckt` and fails with a cryptic native error. Collect those
+  // names (original casing, deduped) so the native runner can fail fast with
+  // product copy naming exactly which part's library is missing. Membership is
+  // tested against both the sanitized and raw forms of every known-defined name
+  // so a legitimately resolvable reference is never flagged.
+  const definedSubcktRefs = new Set<string>();
+  for (const known of [...subcktModels, ...emittedSubckts, ...userModels]) {
+    definedSubcktRefs.add(known);
+    definedSubcktRefs.add(sanitizeSubcktName(known).toLowerCase());
+  }
+  const unresolvedByKey = new Map<string, string>();
+  for (const { component } of circuit.components) {
+    if (component.kind !== "subckt") continue;
+    const displayName = component.value.trim().split(/\s+/)[0] ?? "";
+    if (!displayName) continue; // an empty name is already a hard build error below
+    const rawKey = displayName.toLowerCase();
+    const sanitizedKey = sanitizeSubcktName(displayName).toLowerCase();
+    if (definedSubcktRefs.has(rawKey) || definedSubcktRefs.has(sanitizedKey)) continue;
+    if (!unresolvedByKey.has(sanitizedKey)) unresolvedByKey.set(sanitizedKey, displayName);
+  }
+  const unresolvedSubckts = [...unresolvedByKey.values()].sort((a, b) => a.localeCompare(b));
+
   circuit.components.forEach((entry, index) => {
     const directiveIc = entry.component.kind === "inductor"
       ? inductorCurrents.get(entry.component.label.trim().toLowerCase())
@@ -380,8 +412,25 @@ export function buildSpiceDeck(schematic: Schematic, analysis: SpiceAnalysis): S
 
   lines.push(analysisLine(analysis, hasIc || hasInstanceIc), ".end");
 
-  return { circuit, netlist: lines.join("\n") };
+  return { circuit, netlist: lines.join("\n"), unresolvedSubckts };
 }
+
+/** Product copy for a deck's {@link SpiceDeck.unresolvedSubckts}: names the
+ *  missing subcircuit(s) and tells the user to import the vendor model file
+ *  that defines them. Plain prose with no engine transcript, so
+ *  `userFacingErrorMessage` surfaces it to the user verbatim. Callers guard on
+ *  a non-empty list; the enumerated names are capped so the toast stays short.
+ */
+export function unresolvedSubcktMessage(names: readonly string[]): string {
+  const listed = names.slice(0, MAX_LISTED_MISSING_SUBCKTS).map((name) => `"${name}"`);
+  const extra = names.length - listed.length;
+  const enumerated = extra > 0 ? `${listed.join(", ")}, and ${extra} more` : listed.join(", ");
+  return names.length === 1
+    ? `No imported library defines the subcircuit ${enumerated}. Import the LTspice model file (.lib or .subckt) that provides it, then run again.`
+    : `No imported library defines these subcircuits: ${enumerated}. Import the LTspice model files (.lib or .subckt) that provide them, then run again.`;
+}
+
+const MAX_LISTED_MISSING_SUBCKTS = 6;
 
 function componentLines(entry: ExtractedComponent, index: number, name: string, userModels: Set<string> = new Set(), params: ParamScope = EMPTY_SCOPE, vdmosModels: ReadonlySet<string> = new Set(), netPinCount: ReadonlyMap<string, number> = new Map(), subcktModels: ReadonlySet<string> = new Set(), directiveInductorIc?: string): string[] {
   const { component } = entry;

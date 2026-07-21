@@ -8,16 +8,56 @@
      `git log --oneline -8`, recover/finish/revert that unit FIRST, then go on.
      ─────────────────────────────────────────────────────────────────────── -->
 ## ⏱ HEARTBEAT
-- **Headline metric:** 1997 tests green (6 skipped; each file passes in isolation - a few React render/timing tests flake only under full-suite CPU oversubscription on a busy host) · corpus 82/82 import · 82/82 op-converge · 79/82 warning-clean
-- **Run started (UTC):** 2026-07-20T22:25Z (interactive session, Opus-driven)
-- **Synced to origin:** auto/ltspice-parity @ 06db456.
-- **Claimed unit:** Recover + verify the stranded BUG-5 unit (preview solver DC operating-point seeding) that the previous run auto-checkpointed mid-change, then finalize the record.
+- **Headline metric:** corpus 82/82 import · 82/82 op-converge · 79/82 warning-clean · changed-file suites green (spiceNetlist 60, nativeSpice 9, errorMessage 5). Full suite still shows a handful of React render/timing timeouts under full-suite CPU oversubscription on this busy host; each such file passes in isolation (verified this run: primitives 12/12, goldenClassD 1/1, netlist 26/26 alone).
+- **Run started (UTC):** 2026-07-20T23:10Z (interactive session, Opus-driven)
+- **Synced to origin:** auto/ltspice-parity @ 883f8f4 (this unit's parent).
+- **Claimed unit:** U2 - surface unresolved-model errors through `userFacingErrorMessage` (model-import flagship step c).
 - **Status:** DONE
-- **Last completed sub-step:** Reviewed the checkpoint (06db456) and confirmed it is a complete, correct, green unit. `runTransientAnalysis` now seeds capacitor voltage / inductor current from a DC operating-point solve before integrating (skipped under `uic`; explicit per-instance `IC=` still wins); `runOperatingPoint` gained Newton companion-model support for diodes/LEDs/zeners (shared `diodeCompanion` primitives, GMIN on isolated nodes, pnjlim damping) so biased junction circuits seed too, with a clean non-convergence failure and a warned singular-OP zero-state fallback. Verified: tsc clean; the 84 simulation tests for the change pass in isolation; the full suite's ~3 stragglers are render/timing flakes that each pass alone (AssistantPanel 50/50, App.workspace 14/14, netlist perf 26/26 x3); corpus baseline held (82/82/79); zero Rust changed since v1.0.0 so the cargo gates are unaffected. Tests were not weakened - the `uic:true` added to currentProbe/realCircuits selects the from-zero mode those suites assert on, while the new DC-OP default is covered by initialConditions/operatingPoint/linearTransient additions. Shipped example circuits switched DC->PULSE so they stay demonstrative under the corrected semantics. FIX_BUGS BUG-5 marked FIXED; KNOWN_ISSUES preview note rewritten.
-- **Next candidates:** model-import follow-ups - U2 unresolved-model error surfacing via `userFacingErrorMessage`, then U4 a real public vendor `.lib` end-to-end through native libngspice (the credibility proof), then U3 project UI to attach a model file; or BUG-2/3 op-amp/MOSFET `.asc` round-trip so the save-block can lift; or extended-corpus convergence (181/189).
-- **U2 scoping (from reading `engine/spiceNetlist.ts` resolution loops):** an unresolved *subckt* ref emits an `X` line with no matching `.subckt`, so ngspice hard-fails with a cryptic native error - that is the safe, high-value case to detect and rewrite through `userFacingErrorMessage`. An unresolved *semiconductor* model instead falls back silently to Tau's generic `TAU_*` starter, and real corpus files lean on that fallback, so do NOT convert it into a hard error without re-running `scripts/acceptance-corpus.sh` to prove the 82/82 op-converge baseline holds.
+- **Last completed sub-step:** `buildSpiceDeck` now reports `SpiceDeck.unresolvedSubckts` - `subckt` component references that no inline directive, bundled library, or user-imported `.lib`/`.subckt` defines (deduped, sorted, original casing; membership tested against both raw and sanitized name forms so a resolvable reference is never flagged). Netlist output is unchanged, so the corpus and every existing deck consumer are unaffected. `executeNative` (the single native tran/op/ac chokepoint) checks the field before invoking ngspice and throws `unresolvedSubcktMessage(...)` - plain product copy naming the missing part(s), capped at 6 names - which App.tsx's catch passes through `userFacingErrorMessage` verbatim, so the user gets "No imported library defines the subcircuit X. Import the LTspice model file..." instead of a cryptic native "unknown subckt". Scope held to *subckt* refs only: an unresolved *semiconductor* model still falls back to the generic `TAU_*` starter (corpus relies on it), so no hard error there. Gates: tsc clean; changed-file suites 74/74 green in isolation; corpus baseline held (82/82/79); full suite's timeouts are the documented render/timing flake (verified files pass alone); zero Rust touched so cargo/tauri-build gates unaffected. No safety guard changed - purely additive detection plus a fail-fast throw.
+- **Next candidates:** U4 - a real public vendor `.lib`/`.sub` (op-amp or MOSFET) attached and run end-to-end through native libngspice (the credibility proof this whole flagship is for; note `userModelLibraries` still needs threading from the project/store into `runNative*` - App.tsx passes `{components,wires,netLabels,params,directives}` today, so wiring that field is the natural companion to U4); then U3 - a project UI affordance to attach the model file. Alternatives: BUG-2/3 op-amp/MOSFET `.asc` round-trip so the save-block can lift; extended-corpus convergence (181/189).
 
 ---
+
+## 2026-07-20T23:10Z — auto/ltspice-parity — U2: surface unresolved-subckt errors through userFacingErrorMessage
+
+### What I did
+- Model-import flagship, step (c). When a placed subcircuit symbol references a
+  name that no inline `.subckt` directive, bundled library block, or
+  user-imported `.lib`/`.subckt` defines, the deck used to emit an `X` line with
+  no matching definition and ngspice failed with a cryptic "unknown subckt".
+- `buildSpiceDeck` now also returns `SpiceDeck.unresolvedSubckts`: the missing
+  reference names, deduped and sorted, original casing preserved. Membership is
+  tested against both the raw and `sanitizeSubcktName`-sanitized forms of every
+  known-defined name (inline `.subckt`, bundled/user-emitted, and document
+  `.model`/`.subckt` names), so a reference that is in fact resolvable through
+  any path is never flagged. The netlist itself is unchanged - the field is
+  advisory - so the corpus and every existing deck consumer are untouched.
+- `executeNative` (the single native tran/op/ac path) checks the field before
+  invoking ngspice and throws `unresolvedSubcktMessage(...)`, plain product copy
+  that names the missing part(s) (capped at 6) and tells the user to import the
+  LTspice model file. App.tsx's run catch passes it through
+  `userFacingErrorMessage` verbatim (no engine transcript, no JS-error shape),
+  so the user sees actionable guidance instead of a native error dump - and no
+  native round trip is spent on an error they cannot act on.
+- Scope deliberately held to *subckt* references. An unresolved *semiconductor*
+  model still falls back to the generic `TAU_*` starter (real corpus files lean
+  on that fallback), so it is not converted into a hard error here.
+
+### Tests
+- `pnpm -C apps/desktop exec tsc --noEmit` (clean)
+- Focused, in isolation: `spiceNetlist.test.ts` (60), `nativeSpice.test.ts` (9),
+  `errorMessage.test.ts` (5) - 74/74 green. New cases: deck reports/omits
+  `unresolvedSubckts` (unresolved dedup+sort, inline-directive resolved, user
+  library resolved); `unresolvedSubcktMessage` singular/plural/cap; native run
+  rejects with the message and never calls `invoke`; `userFacingErrorMessage`
+  surfaces the composed message verbatim.
+- `pnpm -C apps/desktop test` (full): the only failures are the documented React
+  render/timing timeouts under full-suite CPU oversubscription on this busy
+  host; confirmed the affected files pass alone (primitives 12/12, goldenClassD
+  1/1, netlist 26/26).
+- `scripts/acceptance-corpus.sh` (82 imported / 82 op-converged / 79 warning-clean)
+- cargo test/clippy + tauri build unaffected: zero Rust / bundle / resource files
+  touched (diff is 5 TS files under `apps/desktop/src`).
 
 ## 2026-07-20T22:25Z — auto/ltspice-parity — recover + verify BUG-5 (preview DC operating-point seeding)
 

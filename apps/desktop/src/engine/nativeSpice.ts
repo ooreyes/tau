@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import { buildSpiceDeck, type SpiceAnalysis } from "./spiceNetlist";
+import { buildSpiceDeck, unresolvedSubcktMessage, type SpiceAnalysis } from "./spiceNetlist";
 import type { NetLabel, SchematicComponent, SchematicWire } from "../schematic/types";
 import type { ParamScope } from "../simulation/paramScope";
 import type { AnalysisOptions, AnalysisResult, CurrentTrace, Trace } from "../simulation/linearTransient";
@@ -194,6 +194,13 @@ export async function runNativeAcSweep(
 async function executeNative(schematic: Schematic, analysis: SpiceAnalysis): Promise<NativeExecution | null> {
   if (!isNativeSpiceRuntime()) return null;
   const deck = buildSpiceDeck(schematic, analysis);
+  // A subcircuit reference with no resolvable definition would make ngspice
+  // reject the deck with a cryptic native error. We know the exact missing
+  // name(s) here, so fail fast with actionable copy instead of paying a native
+  // round trip for an error the user cannot act on.
+  if (deck.unresolvedSubckts.length > 0) {
+    throw new Error(unresolvedSubcktMessage(deck.unresolvedSubckts));
+  }
   const result = await invoke<NativeSpiceResult>("simulate_spice", { request: { netlist: deck.netlist } });
   return { result, deck };
 }
