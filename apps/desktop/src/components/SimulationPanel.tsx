@@ -200,6 +200,11 @@ export function SimulationPanel({
   const probes = useSchematic((s) => s.probes);
   const netLabels = useSchematic((s) => s.netLabels);
   const directives = useSchematic((s) => s.directives);
+  const userModelLibraries = useSchematic((s) => s.userModelLibraries);
+  const userModelLibraryTexts = useMemo(
+    () => userModelLibraries.map((library) => library.text),
+    [userModelLibraries],
+  );
   const warnings = result?.warnings ?? [];
 
   const [mode, setMode] = useState<AnalysisMode>("tran");
@@ -407,7 +412,14 @@ export function SimulationPanel({
     try {
       const params = directives.length > 0 ? buildParamScope(directives) : undefined;
       const deck = buildSpiceDeck(
-        { components, wires, netLabels, params, directives },
+        {
+          components,
+          wires,
+          netLabels,
+          params,
+          directives,
+          ...(userModelLibraryTexts.length > 0 ? { userModelLibraries: userModelLibraryTexts } : {}),
+        },
         { kind: "tran", stopTime: options.stopTime, steps: options.steps },
       );
       downloadText(deck.netlist, "netlist", "cir", "text/plain");

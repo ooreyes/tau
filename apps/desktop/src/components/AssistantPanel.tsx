@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
+import { useSchematic } from "../store/useSchematic";
 import type { NetLabel, Probe, SchematicComponent, SchematicWire } from "../schematic/types";
 import type { ParamScope } from "../simulation/paramScope";
 import type { AnalysisResult } from "../simulation/linearTransient";
@@ -236,6 +237,11 @@ export function AssistantPanel({
 }: AssistantPanelProps) {
   const apiKey = useAssistantApiKey();
   const preferences = useAssistantPreferences();
+  const userModelLibraries = useSchematic((s) => s.userModelLibraries);
+  const userModelLibraryTexts = useMemo(
+    () => userModelLibraries.map((library) => library.text),
+    [userModelLibraries],
+  );
   const restoredRecovery = useMemo(() => loadAssistantRecovery(memoryKey), [memoryKey]);
   const localAssistant = useMemo(
     () => new LocalMlxAssistant({ model: preferences.localModel }),
@@ -499,6 +505,7 @@ export function AssistantPanel({
       netLabels,
       probes,
       directives,
+      userModelLibraries: userModelLibraryTexts,
       params,
       analysis,
       opResult,
@@ -603,7 +610,7 @@ export function AssistantPanel({
       },
       onProgress: setProgressPhase,
     }, { analysis, params }, { allowCurrentApply: canApplyCurrent });
-  }, [messages, streaming, localAiCanSend, preferences.provider, apiKey, components, wires, netLabels, probes, directives, params, analysis, opResult, acResult, dcResult, fourier, componentRows, measurements, selectedId, localAssistant, memoryKey]);
+  }, [messages, streaming, localAiCanSend, preferences.provider, apiKey, components, wires, netLabels, probes, directives, userModelLibraryTexts, params, analysis, opResult, acResult, dcResult, fourier, componentRows, measurements, selectedId, localAssistant, memoryKey]);
 
   const beginMessageEdit = useCallback((message: ChatMessage) => {
     if (streaming || message.role !== "user") return;

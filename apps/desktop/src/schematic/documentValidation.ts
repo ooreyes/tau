@@ -11,12 +11,16 @@ const MAX_TEXT_LENGTH = 160;
 const MAX_ID_LENGTH = 128;
 const MAX_DIRECTIVES = 1_000;
 const MAX_DIRECTIVE_LENGTH = 1_024;
-const MAX_MODEL_LIBRARIES = 64;
+// Exported so the attach-file UI can pre-check both caps before it ever
+// touches the store (an inline error there is much cheaper than round-tripping
+// through attachModelLibrary and validateSchematicDocument to discover the
+// same limit).
+export const MAX_MODEL_LIBRARIES = 64;
 const MAX_MODEL_LIBRARY_NAME_LENGTH = 256;
 // A single attached file may be up to the same size as a schematic import; the
 // aggregate cap bounds a hand-crafted document from loading unbounded text.
 const MAX_MODEL_LIBRARY_TEXT_LENGTH = MAX_SCHEMATIC_FILE_BYTES;
-const MAX_MODEL_LIBRARY_TOTAL_LENGTH = 4 * MAX_SCHEMATIC_FILE_BYTES;
+export const MAX_MODEL_LIBRARY_TOTAL_LENGTH = 4 * MAX_SCHEMATIC_FILE_BYTES;
 const ROTATIONS = new Set<Rotation>([0, 90, 180, 270]);
 const PROBE_COLORS = new Set([
   "var(--trace-red)",

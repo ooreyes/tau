@@ -49,6 +49,8 @@ const noopToolbarProps = {
   onStep: () => {},
   onStop: () => {},
   onClearScratchpad: () => {},
+  modelLibraryCount: 0,
+  onOpenModelLibraries: () => {},
 };
 
 describe("EditorToolbar - read-only outside schematic view ", () => {
@@ -121,6 +123,22 @@ describe("EditorToolbar - read-only outside schematic view ", () => {
   it("keeps the selection action disabled when there is nothing to remove", () => {
     render(<EditorToolbar mode="schematic" {...noopToolbarProps} />);
     expect((screen.getByRole("button", { name: "Delete selection (Delete)" }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("renders a Model libraries button and calls the callback on click", () => {
+    const onOpenModelLibraries = vi.fn();
+    render(<EditorToolbar mode="schematic" {...noopToolbarProps} onOpenModelLibraries={onOpenModelLibraries} />);
+    const button = screen.getByRole("button", { name: "Model libraries" }) as HTMLButtonElement;
+    expect(button.disabled).toBe(false);
+    fireEvent.click(button);
+    expect(onOpenModelLibraries).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows a count indicator only when libraries are attached", () => {
+    const { rerender } = render(<EditorToolbar mode="schematic" {...noopToolbarProps} modelLibraryCount={0} />);
+    expect(screen.queryByText("3")).toBeNull();
+    rerender(<EditorToolbar mode="schematic" {...noopToolbarProps} modelLibraryCount={3} />);
+    expect(screen.getByText("3")).toBeTruthy();
   });
 });
 

@@ -5,7 +5,7 @@ import { useSchematic } from "../store/useSchematic";
 import type { ComponentKind } from "../schematic/types";
 
 interface Entry {
-  kind: ComponentKind | "__wire__" | "__probe__" | "__label__";
+  kind: ComponentKind | "__wire__" | "__probe__" | "__label__" | "__model_libraries__";
   name: string;
   section: string;
   hotkey: string;
@@ -16,9 +16,18 @@ const ENTRIES: Entry[] = [
   { kind: "__wire__", name: "Wire", section: "Tools", hotkey: "w" },
   { kind: "__probe__", name: "Probe", section: "Tools", hotkey: "" },
   { kind: "__label__", name: "Net label", section: "Tools", hotkey: "f4" },
+  { kind: "__model_libraries__", name: "Model libraries...", section: "Document", hotkey: "" },
 ];
 
-export function CommandPalette({ open, onClose }: { open: boolean; onClose: () => void }) {
+export function CommandPalette({
+  open,
+  onClose,
+  onOpenModelLibraries,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onOpenModelLibraries?: () => void;
+}) {
   const startPlacing = useSchematic((s) => s.startPlacing);
   const startWiring = useSchematic((s) => s.startWiring);
   const startProbing = useSchematic((s) => s.startProbing);
@@ -56,6 +65,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
     if (entry.kind === "__wire__") startWiring();
     else if (entry.kind === "__probe__") startProbing();
     else if (entry.kind === "__label__") startLabeling();
+    else if (entry.kind === "__model_libraries__") onOpenModelLibraries?.();
     else startPlacing(entry.kind);
     onClose();
   };
@@ -109,6 +119,10 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
                   <g className="symbol">
                     <path d="M -26 -12 H 6 L 24 0 L 6 12 H -26 Z" fill="none" />
                     <path d="M -18 -5 V 5 M -10 -5 V 5" fill="none" />
+                  </g>
+                ) : entry.kind === "__model_libraries__" ? (
+                  <g className="symbol">
+                    <path d="M -20 -16 V 16 M -6 -16 V 16 M 8 -16 L 20 -10 V 16 L 8 16 Z" fill="none" />
                   </g>
                 ) : (
                   <g className="symbol">

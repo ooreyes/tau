@@ -18,6 +18,7 @@ import {
 import { AnalysisErrorBoundary } from "./components/AnalysisErrorBoundary";
 import { EmptyState } from "./components/EmptyState";
 import { LocalAiSetupDialog } from "./components/LocalAiSetupDialog";
+import { ModelLibrariesDialog } from "./components/ModelLibrariesDialog";
 import { CommandPalette } from "./components/CommandPalette";
 import {
   ActivityRail,
@@ -257,6 +258,7 @@ function App() {
   /** ASC import warnings keyed by document path (shown in Diagnostics). */
   const [importWarningsByPath, setImportWarningsByPath] = useState<Record<string, string[]>>({});
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [modelLibrariesOpen, setModelLibrariesOpen] = useState(false);
   const [confirmClearOpen, setConfirmClearOpen] = useState(false);
   const [confirmCloseTabId, setConfirmCloseTabId] = useState<string | null>(null);
   const [graphOpen, setGraphOpen] = useState(true);
@@ -1485,6 +1487,8 @@ function App() {
             onStep={stepAnalysis}
             onStop={stopAnalysis}
             onClearScratchpad={() => setConfirmClearOpen(true)}
+            modelLibraryCount={userModelLibraries.length}
+            onOpenModelLibraries={() => setModelLibrariesOpen(true)}
           />
           <EditorTabs
             tabs={visibleTabs}
@@ -1652,7 +1656,12 @@ function App() {
         )}
       </div>
       <StatusBar mode={mode} result={analysis} title={documentTitle} />
-      <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
+      <CommandPalette
+        open={paletteOpen}
+        onClose={() => setPaletteOpen(false)}
+        onOpenModelLibraries={() => setModelLibrariesOpen(true)}
+      />
+      <ModelLibrariesDialog open={modelLibrariesOpen} onOpenChange={setModelLibrariesOpen} />
       <LocalAiSetupDialog onReady={() => showNotice("Local AI is ready on this Mac.")} />
       {settingsOpen && (
         <SettingsPanel

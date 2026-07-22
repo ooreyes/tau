@@ -28,6 +28,9 @@ export interface AssistantContextInput {
   /** Active meter probes - resolved to net / branch names for the model. */
   probes?: readonly Probe[];
   directives: string[];
+  /** Raw text of attached vendor model files (see SchematicModelLibrary),
+   *  inlined into the netlist section when a placed part references one. */
+  userModelLibraries?: readonly string[];
   params: ParamScope;
   /** Latest transient result, or null if nothing has been run yet. */
   analysis: AnalysisResult | null;
@@ -176,7 +179,16 @@ function buildNetlistSection(input: AssistantContextInput): string {
       ? { stopTime: input.analysis.stats.stopTime, steps: input.analysis.stats.sampleCount }
       : FALLBACK_TRAN;
     const deck = buildSpiceDeck(
-      { components: input.components, wires: input.wires, netLabels: input.netLabels, params: input.params, directives: input.directives },
+      {
+        components: input.components,
+        wires: input.wires,
+        netLabels: input.netLabels,
+        params: input.params,
+        directives: input.directives,
+        ...(input.userModelLibraries && input.userModelLibraries.length > 0
+          ? { userModelLibraries: input.userModelLibraries }
+          : {}),
+      },
       { kind: "tran", stopTime, steps },
     );
     return `SPICE netlist:\n${truncateMiddle(deck.netlist.trim(), NETLIST_CHAR_CAP)}`;

@@ -440,3 +440,53 @@ describe("SimulationPanel - run-in-progress overlay (Fix 3)", () => {
     expect(screen.getByText("Working…")).toBeTruthy();
   });
 });
+
+describe("SimulationPanel - exportNetlist inlines attached model libraries", { timeout: 20_000 }, () => {
+  const originalCreateObjectURL = URL.createObjectURL;
+  const originalRevokeObjectURL = URL.revokeObjectURL;
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    URL.createObjectURL = originalCreateObjectURL;
+    URL.revokeObjectURL = originalRevokeObjectURL;
+  });
+
+  it("resolves a part's model name against an attached vendor library in the exported .cir", async () => {
+    // A common-emitter stage whose transistor references a name that only an
+    // attached library defines - mirrors useSchematic.test.ts's "user model
+    // library attachments" end-to-end case.
+    useSchematic.setState({
+      components: [
+        { id: "V1", kind: "vsource", label: "V1", value: "12", x: 100, y: 300, rotation: 0 },
+        { id: "Rb", kind: "resistor", label: "Rb", value: "470k", x: 250, y: 200, rotation: 0 },
+        { id: "Rc", kind: "resistor", label: "Rc", value: "1k", x: 350, y: 100, rotation: 0 },
+        { id: "Q1", kind: "npn", label: "Q1", value: "MYVENDNPN", x: 500, y: 300, rotation: 0 },
+      ],
+      wires: [],
+      netLabels: [
+        { id: "n1", x: 100, y: 268, text: "vcc" }, { id: "n2", x: 218, y: 200, text: "vcc" }, { id: "n3", x: 318, y: 100, text: "vcc" },
+        { id: "n4", x: 100, y: 332, text: "0" }, { id: "n5", x: 516, y: 332, text: "0" },
+        { id: "n6", x: 282, y: 200, text: "base" }, { id: "n7", x: 468, y: 300, text: "base" },
+        { id: "n8", x: 382, y: 100, text: "coll" }, { id: "n9", x: 516, y: 268, text: "coll" },
+      ],
+      userModelLibraries: [{ name: "vendor.lib", text: ".model MYVENDNPN NPN(Is=1e-14 Bf=73)" }],
+    });
+
+    const capturedBlobs: Blob[] = [];
+    URL.createObjectURL = ((blob: Blob) => {
+      capturedBlobs.push(blob);
+      return "blob:mock";
+    }) as typeof URL.createObjectURL;
+    URL.revokeObjectURL = (() => {}) as typeof URL.revokeObjectURL;
+    vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+
+    renderPanel();
+    fireEvent.click(screen.getByRole("button", { name: "Toggle advanced settings" }));
+    fireEvent.click(screen.getByRole("button", { name: "Netlist" }));
+
+    expect(capturedBlobs).toHaveLength(1);
+    const netlist = await capturedBlobs[0].text();
+    expect(netlist).toMatch(/^\.model\s+MYVENDNPN\s+NPN/im);
+    expect(netlist).toMatch(/^Q\w*\s+coll\s+base\s+0\s+MYVENDNPN\b/im);
+  });
+});

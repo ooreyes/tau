@@ -4462,6 +4462,7 @@ body {
 }
 
 .editor-icon-btn {
+  position: relative;
   width: 32px;
   height: 28px;
   display: grid;
@@ -4473,6 +4474,22 @@ body {
   cursor: pointer;
   transition: color var(--motion-fast) var(--ease-out),
     background var(--motion-fast) var(--ease-out);
+}
+
+/* Attached-library count badge on the Model libraries toolbar button. */
+.toolbar-count {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  min-width: 12px;
+  height: 12px;
+  padding: 0 2px;
+  display: grid;
+  place-items: center;
+  border-radius: 6px;
+  background: var(--accent);
+  color: var(--accent-foreground, #fff);
+  font: 600 9px/1 var(--font-ui);
 }
 
 .editor-icon-btn svg,

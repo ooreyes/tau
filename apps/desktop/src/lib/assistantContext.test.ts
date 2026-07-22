@@ -125,6 +125,32 @@ describe("buildAssistantContext", () => {
     expect(text).toContain("I(R_L): final 652 mA");
   });
 
+  it("inlines an attached vendor model library's definition for a component that references it", () => {
+    // A common-emitter stage whose transistor references a name that only an
+    // attached library defines - mirrors useSchematic.test.ts's "user model
+    // library attachments" end-to-end case.
+    const components: SchematicComponent[] = [
+      component("vsource", "v1", "V1", "12", 100, 300),
+      component("resistor", "rb", "Rb", "470k", 250, 200),
+      component("resistor", "rc", "Rc", "1k", 350, 100),
+      component("npn", "q1", "Q1", "MYVENDNPN", 500, 300),
+    ];
+    const netLabels = [
+      { id: "n1", x: 100, y: 268, text: "vcc" }, { id: "n2", x: 218, y: 200, text: "vcc" }, { id: "n3", x: 318, y: 100, text: "vcc" },
+      { id: "n4", x: 100, y: 332, text: "0" }, { id: "n5", x: 516, y: 332, text: "0" },
+      { id: "n6", x: 282, y: 200, text: "base" }, { id: "n7", x: 468, y: 300, text: "base" },
+      { id: "n8", x: 382, y: 100, text: "coll" }, { id: "n9", x: 516, y: 268, text: "coll" },
+    ];
+    const { text } = buildAssistantContext(baseInput({
+      components,
+      wires: [],
+      netLabels,
+      userModelLibraries: [".model MYVENDNPN NPN(Is=1e-14 Bf=73)"],
+    }));
+    expect(text).toMatch(/^\.model\s+MYVENDNPN\s+NPN/im);
+    expect(text).toMatch(/^Q\w*\s+coll\s+base\s+0\s+MYVENDNPN\b/im);
+  });
+
   it("reports no simulation run yet when analysis is null, and no selection when nothing is selected", () => {
     const { text } = buildAssistantContext(baseInput());
     expect(text).toContain("Analysis: no simulation has been run yet.");

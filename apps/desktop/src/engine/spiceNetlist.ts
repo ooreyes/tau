@@ -426,8 +426,8 @@ export function unresolvedSubcktMessage(names: readonly string[]): string {
   const extra = names.length - listed.length;
   const enumerated = extra > 0 ? `${listed.join(", ")}, and ${extra} more` : listed.join(", ");
   return names.length === 1
-    ? `No imported library defines the subcircuit ${enumerated}. Import the LTspice model file (.lib or .subckt) that provides it, then run again.`
-    : `No imported library defines these subcircuits: ${enumerated}. Import the LTspice model files (.lib or .subckt) that provide them, then run again.`;
+    ? `No imported library defines the subcircuit ${enumerated}. Attach the vendor model file (.lib or .subckt) that defines it under Model libraries, then run again.`
+    : `No imported library defines these subcircuits: ${enumerated}. Attach the vendor model files (.lib or .subckt) that define them under Model libraries, then run again.`;
 }
 
 const MAX_LISTED_MISSING_SUBCKTS = 6;

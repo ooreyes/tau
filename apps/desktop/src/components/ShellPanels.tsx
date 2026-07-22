@@ -20,6 +20,7 @@ import {
   Settings,
   CircuitBoard,
   Activity,
+  Library,
 } from "lucide-react";
 import {
   VscodeCollapseAllIcon,
@@ -1117,6 +1118,8 @@ export function EditorToolbar({
   onStep,
   onStop,
   onClearScratchpad,
+  modelLibraryCount,
+  onOpenModelLibraries,
 }: {
   mode: "schematic" | "simulator";
   isRunning: boolean;
@@ -1124,6 +1127,8 @@ export function EditorToolbar({
   onStep: () => void;
   onStop: () => void;
   onClearScratchpad: () => void;
+  modelLibraryCount: number;
+  onOpenModelLibraries: () => void;
 }) {
   // The simulator view is read-only (pan/zoom/probe only - see Canvas's
   // `interactive` prop and App.tsx's keydown gate); every editing control in
@@ -1182,6 +1187,13 @@ export function EditorToolbar({
       </IconButton>
       <IconButton title="Clear scratchpad" disabled={readOnly} onClick={onClearScratchpad}>
         <Eraser size={16} strokeWidth={1.6} />
+      </IconButton>
+      <span className="toolbar-divider" />
+      <IconButton title="Model libraries" onClick={onOpenModelLibraries}>
+        <Library size={16} strokeWidth={1.6} />
+        {modelLibraryCount > 0 && (
+          <span className="toolbar-count" aria-hidden="true">{modelLibraryCount}</span>
+        )}
       </IconButton>
       <div className="editor-toolbar-spacer" />
       <div className="transport">

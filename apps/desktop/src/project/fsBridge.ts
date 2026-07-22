@@ -211,6 +211,59 @@ function assertProjectTextByteLength(bytes: number): void {
   }
 }
 
+export interface PickedTextFile {
+  name: string;
+  text: string;
+}
+
+/**
+ * Prompt the user to pick one vendor SPICE model file (`.lib`/`.subckt`/…) to
+ * attach to the document. Returns null on cancel. Uses the same double
+ * byte-cap check as {@link readTextFile} so an attached file can never smuggle
+ * in more text than an imported schematic could.
+ */
+export async function pickModelLibraryFile(): Promise<PickedTextFile | null> {
+  if (await isTauri()) {
+    const { open } = await import("@tauri-apps/plugin-dialog");
+    const selected = await open({
+      multiple: false,
+      title: "Attach vendor model file",
+      filters: [
+        { name: "SPICE model files", extensions: ["lib", "sub", "subckt", "mod", "cir", "spi", "inc", "txt"] },
+      ],
+    });
+    if (typeof selected !== "string") return null;
+    const { readFile: read, stat } = await import("@tauri-apps/plugin-fs");
+    const metadata = await stat(selected);
+    assertProjectTextByteLength(metadata.size);
+    const bytes = await read(selected);
+    // The file can change after stat(); recheck the bytes actually returned so
+    // an external grow/replace race cannot allocate unbounded attachment text.
+    assertProjectTextByteLength(bytes.byteLength);
+    return { name: basename(selected), text: decodeSchematicText(bytes) };
+  }
+
+  if (typeof window !== "undefined" && "showOpenFilePicker" in window) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let handles: any[];
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      handles = await (window as any).showOpenFilePicker({ multiple: false });
+    } catch {
+      return null; // user cancelled
+    }
+    const handle = handles[0];
+    if (!handle) return null;
+    const file = await handle.getFile();
+    assertProjectTextByteLength(file.size);
+    const bytes = await file.arrayBuffer();
+    assertProjectTextByteLength(bytes.byteLength);
+    return { name: file.name as string, text: decodeSchematicText(bytes) };
+  }
+
+  throw new Error("Attaching model files requires the Tau desktop app or a browser with file access.");
+}
+
 export type ProjectTextFileReservation =
   | { status: "created"; path: string; atomic: boolean }
   | { status: "already-exists"; atomic: boolean };

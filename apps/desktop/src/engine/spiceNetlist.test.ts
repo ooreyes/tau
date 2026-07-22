@@ -1047,7 +1047,7 @@ describe("unresolvedSubcktMessage", () => {
   it("names a single missing subcircuit and how to supply it", () => {
     const message = unresolvedSubcktMessage(["LT1001"]);
     expect(message).toBe(
-      'No imported library defines the subcircuit "LT1001". Import the LTspice model file (.lib or .subckt) that provides it, then run again.',
+      'No imported library defines the subcircuit "LT1001". Attach the vendor model file (.lib or .subckt) that defines it under Model libraries, then run again.',
     );
     // Plain product copy: userFacingErrorMessage must be able to surface it
     // verbatim, so it carries no engine transcript markers or JS-error shapes.
@@ -1056,7 +1056,7 @@ describe("unresolvedSubcktMessage", () => {
 
   it("lists several missing subcircuits in the plural", () => {
     expect(unresolvedSubcktMessage(["AD8000", "LT1001"])).toBe(
-      'No imported library defines these subcircuits: "AD8000", "LT1001". Import the LTspice model files (.lib or .subckt) that provide them, then run again.',
+      'No imported library defines these subcircuits: "AD8000", "LT1001". Attach the vendor model files (.lib or .subckt) that define them under Model libraries, then run again.',
     );
   });
 
