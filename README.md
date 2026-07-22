@@ -127,15 +127,17 @@ Current macOS release artifacts are produced under
 `apps/desktop/src-tauri/target/release/bundle/`:
 
 - `macos/Tau.app`
-- `dmg/Tau_1.0.0_aarch64.dmg`
-- `dmg/Tau_1.0.0_aarch64_signed.dmg` after the local ad-hoc signing pass
+- `dmg/Tau_1.0.0_aarch64.dmg` - the ad-hoc-signed app plus the `Examples`
+  folder and install notes, packed with `hdiutil` (Tauri's own DMG step needs
+  a GUI session for its Finder styling pass)
 
 Local release builds are ad-hoc signed and the app bundle code signature
-verifies after signing. Public distribution still needs Apple Developer ID
-signing and notarization; without that, Gatekeeper will reject the app.
+verifies after signing, including from the read-only mounted DMG. Public
+distribution still needs Apple Developer ID signing and notarization; without
+that, Gatekeeper needs the one-time Control-click Open.
 
-Current signed local DMG SHA-256 (`Tau_1.0.0_aarch64.dmg`):
-`51e0472babacf3184c06067222ea822e139eaad561304d72f63e565e8cb6d611`.
+Current DMG SHA-256 (`Tau_1.0.0_aarch64.dmg`):
+`d8672917b57b9d958c6b754dbf32c2586527e3f5c7d0749097d2ad2931d7538c`.
 
 ## Repository layout
 

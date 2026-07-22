@@ -7,6 +7,36 @@
      from an OLD timestamp, the previous run died mid-unit — run
      `git log --oneline -8`, recover/finish/revert that unit FIRST, then go on.
      ─────────────────────────────────────────────────────────────────────── -->
+## READINESS: NOTARIZATION-ONLY
+
+Verified this session (2026-07-22), every gate run and observed green on the
+exact shipped tree:
+
+- **Tests:** tsc clean · frontend 2040 passed / 135 files · cargo 28/0 +
+  clippy clean.
+- **Corpus:** 189 imported · 181 op-converged · 182 deck-built · 189
+  schema-valid (all 8 non-op files are third-party symbol definition sheets,
+  documented in KNOWN_ISSUES; every runnable circuit converges).
+- **Flagship, user-reachable end to end:** vendor `.lib`/`.subckt` files
+  attach through the Model libraries dialog (toolbar + command palette),
+  persist, resolve with attached-wins precedence, and simulate natively;
+  missing-model errors name the fix.
+- **Demos (corpus-locked):** `Examples/class-d-amplifier` (real imported
+  LTspice class-D stage, transient ~0.8 s wall) and `Examples/ad8541-buffer`
+  (real ADI AD8541 macromodel as a unity buffer, attach walkthrough in the
+  README).
+- **Hostile-review pass:** oversized/malformed `.asc` bounded at import with
+  clean errors; deck-injection surface re-verified (Rust `deck_lines`
+  allowlist holds on every native path); silent model shadowing fixed.
+- **DMG:** `Tau_1.0.0_aarch64.dmg` on `~/Desktop` (also
+  `apps/desktop/src-tauri/target/release/bundle/dmg/`), ad-hoc signed,
+  `codesign --verify --deep --strict` and `hdiutil verify` green, app
+  launched and ran from the read-only mount, Examples folder included.
+  SHA-256 `d8672917b57b9d958c6b754dbf32c2586527e3f5c7d0749097d2ad2931d7538c`.
+
+The only step left before sharing with testers is Apple notarization, which
+needs Omar's Developer ID.
+
 ## ⏱ HEARTBEAT
 - **Headline metric:** extended corpus 189 imported · 181 op-converged · 182 deck-built (baseline held; every one of the 8 non-converging files is a hierarchical symbol sheet from LTspicePowerSim `sym/PowerSim`, not a runnable circuit - 7 correctly refuse with "add a ground symbol", 1 (IMON.asc) hits a singular matrix its own file comment predicts); full frontend suite 2036 passing, cargo 28/0, clippy clean. The user model-import flagship is now USER-REACHABLE end to end: a Model libraries dialog (toolbar button with attachment-count badge + command palette entry) attaches, lists, and removes vendor `.lib`/`.subckt` files on the document via the native file dialog under the same byte caps as schematic import, and the missing-subcircuit error names the Model libraries UI as the fix. Preview surfaces (SimulationPanel export-netlist, assistant netlist context) now build decks with attachments too, so the exported `.cir` matches what the engine runs.
 - **Run started (UTC):** 2026-07-22T15:20Z (finish-line session)
