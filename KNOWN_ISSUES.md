@@ -18,18 +18,20 @@ fixes land as they are ready.
 
 ## Importing vendor SPICE models
 
-- A vendor `.model` device card (a manufacturer's transistor, diode, JFET, or
-  MOSFET model) attached through a `.lib`/`.subckt` file resolves by name and
-  simulates through the native engine. LTspice datasheet annotations ngspice
-  does not accept - for example `mfg=STMicro` - are removed automatically so the
-  card loads.
-- A vendor `.subckt` macromodel (many op-amp and mixed-signal parts ship as
-  these) resolves and is inlined into the deck, but some do not yet simulate:
-  LTspice macromodels often use simulator-specific constructs - `VSWITCH`/
-  `ISWITCH` switch models, the `noiseless` resistor flag, and LTspice built-in
-  behavioral code models such as `OTA` - that Tau's ngspice build rejects.
-  Translating those is in progress; a macromodel written with only standard
-  SPICE primitives works today.
+- A vendor `.model` device card or `.subckt` macromodel attached through the
+  Model libraries dialog resolves by name and simulates through the native
+  engine. LTspice-only constructs common in vendor files are translated
+  automatically: datasheet annotations ngspice rejects (for example
+  `mfg=STMicro`), `VSWITCH`/`ISWITCH` switch model cards, parenthesized
+  switch control nodes, and the bare `noiseless` resistor flag. The shipped
+  AD8541 example runs a real Analog Devices macromodel end to end.
+- LTspice's built-in behavioral code models (for example the `OTA` A-device)
+  are not translated yet; a macromodel built from them will not simulate and
+  says so at run time.
+- If two attached files define the same subcircuit name, the first attached
+  file wins; re-attaching a file with the same name replaces it. An attached
+  definition that collides with a Tau built-in model name takes precedence -
+  attaching a vendor model means you want the vendor's numbers.
 
 ## Browser preview vs native engine
 
@@ -42,12 +44,26 @@ fixes land as they are ready.
   warns and starts from zero state instead. The native result is the
   authoritative one.
 
+## Corpus files that do not simulate
+
+- Eight files in the extended 189-schematic acceptance corpus do not produce
+  an operating point, and all eight are hierarchical symbol definition sheets
+  (gate-driver, AC-source, and monitor building blocks from a third-party
+  power-electronics library), not runnable circuits. Seven have no ground
+  node by design and Tau refuses their deck with "Add a ground symbol so node
+  voltages have a reference"; one (a current-monitor block) yields a singular
+  matrix that its own file comment predicts for small shunt values. Every
+  runnable circuit in the corpus converges.
+
 ## Native engine limits
 
 - A native simulation is capped at 120 seconds of wall time and its deck at
   512 KiB / 30,000 lines. There is currently no hard memory cap on the
   simulation worker process; ngspice's own output-memory guard is the
   effective bound.
+- A document is capped at 5,000 components and 20,000 wires. An `.asc` that
+  exceeds this is refused at import with a message naming the actual counts;
+  every schematic in the 189-file acceptance corpus fits with room to spare.
 
 ## Install
 

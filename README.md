@@ -2,9 +2,9 @@
 
 # τ &nbsp;Tau
 
-**A modern, fast circuit simulator with a SPICE-class engine.**
+**A native-Mac, LTspice-.asc-compatible circuit simulator.**
 
-*The power of LTspice. An interface that doesn't fight you.*
+*A real SPICE engine. An interface that doesn't fight you.*
 
 </div>
 
@@ -14,9 +14,11 @@
 > real design today: a native desktop app with an embedded ngspice engine
 > (transient, operating point, AC, DC, noise, transfer-function, and step
 > analyses), LTspice `.asc` import verified against a 189-schematic corpus,
-> click-to-probe plotting with live measurements, and an optional AI circuit
-> assistant. The browser-only dev path retains a smaller TypeScript preview
-> solver. Remaining limitations are tracked honestly in
+> vendor SPICE model import (`.lib`/`.subckt` files attach per document and
+> simulate through the native engine), click-to-probe plotting with live
+> measurements, ready-to-run demos in [examples/](examples/README.md), and an
+> optional AI circuit assistant. The browser-only dev path retains a smaller
+> TypeScript preview solver. Remaining limitations are tracked honestly in
 > [KNOWN_ISSUES.md](KNOWN_ISSUES.md).
 
 ## What is Tau?
@@ -59,12 +61,16 @@ The native desktop app exports the current library to ngspice. R/C/L, DC and
 AC sources, diodes, LEDs, zeners, NMOS/PMOS, NPN/PNP, ideal op amps,
 potentiometers, switches, transformers, grounds, and test points therefore run
 through real SPICE analysis. Tau supplies conservative generic models for the
-semiconductor symbols; vendor-accurate models still require a future
-user-provided `.lib` / `.subckt` import workflow.
+semiconductor symbols.
 
-Tau does not bundle or copy LTspice's proprietary libraries. Future work should
-add an importer for user-provided SPICE `.lib`/`.subckt` files and symbol
-mapping rather than vendoring third-party libraries.
+For vendor-accurate parts, attach the manufacturer's `.lib`/`.subckt` file to
+the document through the Model libraries dialog (toolbar button or command
+palette). Attached definitions resolve by name, persist with the document, and
+simulate through the native engine; LTspice-only constructs common in vendor
+macromodels (`VSWITCH`/`ISWITCH` cards, parenthesized switch control nodes,
+`mfg=` annotations) are translated automatically. The
+[AD8541 example](examples/README.md) runs a real Analog Devices macromodel end
+to end. Tau does not bundle or copy LTspice's proprietary libraries.
 
 ## Quickstart (development)
 
@@ -94,11 +100,7 @@ development override only; packaged apps resolve their library through Tauri's
 resource directory and never load an arbitrary system/Homebrew installation.
 
 `scripts/build-ngspice.sh` currently automates native macOS and Linux builds.
-For Windows, build ngspice with the target's native toolchain and stage its
-target-matched `ngspice.dll` at
-`apps/desktop/src-tauri/resources/ngspice/lib/ngspice.dll` before running
-`tauri build`. The Rust loader and Tauri resource layout already support that
-path; the Windows build automation remains a separate release-engineering task.
+Tau is macOS-only today; other platforms are not part of this release.
 
 ## Release build
 
@@ -142,6 +144,7 @@ Tau/
 ├── apps/desktop/         # Tauri v2 desktop app (React frontend + Rust shell)
 ├── packages/
 │   └── schematic-core/   # canonical schematic document model & types
+├── examples/             # ready-to-run demo schematics (see examples/README.md)
 ├── ARCHITECTURE.md       # system design
 ├── KNOWN_ISSUES.md       # current limitations, tracked honestly
 └── SHARE.md              # install notes for the unsigned preview build
@@ -149,6 +152,6 @@ Tau/
 
 ## License
 
-Proprietary, all rights reserved - see [LICENSE](LICENSE).
-The long-term license is intentionally undecided to keep open-source, open-core,
-and commercial paths available.
+Copyright (c) 2026 Omar Reyes. All rights reserved. The long-term license is
+intentionally undecided to keep open-source, open-core, and commercial paths
+available.
