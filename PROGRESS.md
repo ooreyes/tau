@@ -8,15 +8,82 @@
      `git log --oneline -8`, recover/finish/revert that unit FIRST, then go on.
      ─────────────────────────────────────────────────────────────────────── -->
 ## ⏱ HEARTBEAT
-- **Headline metric:** corpus 82/82 import · 82/82 op-converge · 79/82 warning-clean (baseline held); vendor `.subckt` macromodel import now SIMULATES - a real Analog Devices AD8541 op-amp read from the installed LTspice library imports as a unity-gain buffer and tracks its 2.5 V input through native ngspice-46, after its LTspice-only switch constructs (`VSWITCH` model type + parenthesized switch-instance control nodes) are translated to ngspice's `SW`/bare-node spelling. Both vendor-import proofs pass (userModelImport 2N3055 `.model`, userSubcktImport AD8541 `.subckt`); changed-file suites green (userModelLibrary 19, spiceNetlist 60, nativeSpice 9).
-- **Run started (UTC):** 2026-07-21T21:00Z (autobuilder, Opus-driven)
-- **Synced to origin:** auto/ltspice-parity @ e9db683 (this unit's parent).
-- **Claimed unit:** BUG-12 (`.subckt` half) - translate the LTspice switch constructs ngspice rejects inside imported vendor `.subckt` macromodels: a `VSWITCH`/`ISWITCH` `.model` card becomes `SW`/`CSW` (on/off levels `Von`/`Voff` -> center+hysteresis `Vt`/`Vh`, `Ron`/`Roff` carried verbatim, bare `noiseless` flag dropped), and switch-instance control nodes LTspice wraps in parens `(nc+,nc-)` are de-parenthesized. Recovered and finalized from the `-wip` durability checkpoint after full review + real-engine proof.
+- **Headline metric:** corpus 82/82 import · 82/82 op-converge · 79/82 warning-clean · 82/82 deck-built (baseline held) with BOTH vendor-import proofs passing (userModelImport 2N3055 `.model`, userSubcktImport AD8541 `.subckt`); user-imported vendor model libraries now reach the native engine FROM A LOADED DOCUMENT, not just test harnesses - a document-level `userModelLibraries` slice is threaded through App.tsx into every native run (transient / operating-point / AC / `.step`), persists in `.sim` save and localStorage autosave, and is bounded by the document validator. This closes the store->engine seam of the model-import flagship (resolution + LTspice-syntax translation were already proven end-to-end, but only reachable from corpus scripts).
+- **Run started (UTC):** 2026-07-22T03:20Z (autobuilder, Opus-driven)
+- **Synced to origin:** auto/ltspice-parity @ cdbf596 (this unit's parent).
+- **Claimed unit:** U4 - thread document-attached user SPICE model libraries (`.lib`/`.subckt`/`.mod`) from the schematic store through App.tsx into `runNative*`. The deck builder already resolved against `userModelLibraries: readonly string[]`, but App.tsx only ever passed `{components,wires,netLabels,params,directives}`, so a placed part could never see an attached vendor definition in the running app. Recovered the store-slice foundation from the `-wip` durability checkpoint, corrected two attachment leaks it missed (newCircuit and restoreCircuit did not reset the slice), and finished the App threading + document validation + persistence + regression tests.
 - **Status:** DONE
-- **Last completed sub-step:** `parseUserModelLibraries` now runs a captured `.subckt` block through `normalizeSubcktInterior`, a line-gated transform that rewrites only the two LTspice-only switch constructs ngspice's build rejects and passes every other line through byte-for-byte. (1) A switch `.model` card (`translateSwitchModelCard`): LTspice's `VSWITCH`/`ISWITCH` are `SW`/`CSW` in ngspice, and the on/off control levels (`Von`/`Voff`, `Ion`/`Ioff`) become a center threshold plus hysteresis half-width via `Vt=(Von+Voff)/2`, `Vh=(Von-Voff)/2`; `Ron`/`Roff` re-emit as their original strings (no suffix/precision lost), a bare `noiseless` flag is dropped, and computed levels are cleaned of binary float noise (`toPrecision(12)`). A non-switch `.model`, or a body that cannot be matched, is returned unchanged. (2) A voltage-switch instance whose control nodes LTspice parenthesizes (`Sxxx n+ n- (nc+,nc-) MODEL`) is de-parenthesized to bare nodes; current switches (`Wxxx ... Vsource`) carry no parens and are untouched. Standalone `.model` cards outside any subckt also route through `translateSwitchModelCard`. Verified NECESSARY and SUFFICIENT against the real installed LTspice library: the untranslated card fails ngspice ("model type mismatch" -> "Unable to find definition of model switch"), the translated one simulates. New real-engine proof `scripts/userSubcktImport.corpus.ts` (runs under the corpus config, skips cleanly without ngspice or the vendor file) reads the actual Analog Devices AD8541 op-amp macromodel, wires it as a unity buffer via `pinOverride`+net labels, asserts the deck inlines `.model VSY_SWITCH SW(...)` and the bare `S1 90 91 50 99 VSY_SWITCH` (no `vswitch`, no `(50,99)`), asserts the SAME schematic without the library inlines no AD8541 definition, then simulates on native ngspice-46 and checks V(out) tracks the 2.5 V input. Gates: tsc clean; userModelLibrary 19/19 (+6 switch-translation cases) + spiceNetlist 60 + nativeSpice 9 green in isolation; full acceptance corpus 82/82/79 with BOTH vendor-import proofs passing; cargo test 28/0 + clippy clean; zero bundle/resources touched so tauri-build unaffected. No safety guard changed - the transform only rewrites recognized switch tokens (cannot inject), and the inlined deck still passes the native `deck_lines` sanitizer.
-- **Next candidates:** BUG-12 remaining vendor-macromodel gaps - LTspice built-in `OTA`/behavioral code-model A-devices, and `.model ... res(...)` thermal params ngspice merely warns on (non-fatal today). Then U4-UI - thread `userModelLibraries` from the project/store through App.tsx into `runNative*` (App.tsx still passes only `{components,wires,netLabels,params,directives}`), and U3 - a project UI affordance to attach the model file. Alternatives: BUG-2/3 op-amp/MOSFET `.asc` round-trip so the save-block can lift; extended-corpus convergence (181/189).
+- **Last completed sub-step:** (1) Store: a document-level `SchematicModelLibrary { name, text }` slice on the undoable `Doc` with `attachModelLibrary` (same-name replace, so re-attaching updates rather than duplicating) and `removeModelLibrary`, both recorded as undoable edits; threaded through docOf / copyDocument / copyHistoryEntry / initial state and all four document resets (loadCircuit, replaceCircuit, restoreCircuit, newCircuit) so attachments never leak across tabs or into a blank sheet. (2) App.tsx maps the attached files to raw text (`userModelLibraries.map(l => l.text)`) and passes them into all four native run call sites (+ their dep arrays); the field also flows into `currentDocument`, the dirty-tracking signature, and `.sim` serialization / autosave. Native `Schematic` widened to accept `userModelLibraries?: readonly string[]` - the engine layer knows only texts (no store-type coupling); the `{name,text}` representation stays at the App boundary. (3) `documentValidation` bounds the slice: at most 64 attachments, 256-char names, 5 MB per file, 20 MB aggregate, unique names, `{name,text}`-only shape; additive (the key is emitted only when attachments exist, so legacy/empty documents keep byte-identical shape). Gates: tsc clean; new tests green in isolation (store "user model library attachments" block incl. an attach->map->buildSpiceDeck end-to-end that inlines a vendor `.model` and a without-library control; documentValidation round-trip/bounds/dedup; project/types `.sim` round-trip + empty-stays-clean); full acceptance corpus 82/82/79/82 with both vendor proofs; cargo test 28/0 + clippy clean. No safety guard changed - the deck still passes the native `deck_lines` sanitizer, and the new caps are defense-in-depth on the document. Full frontend suite has the documented `testTimeout` flakiness under CPU contention (all residual failures pass in isolation - App.workspace, SettingsPanel MLX, and a load-sensitive netlist perf assertion).
+- **Next candidates:** U3 - a project UI affordance (file picker) to attach a vendor `.lib`/`.subckt` to the document: read the file under the same 5 MB cap as `.asc` import, call `attachModelLibrary`, and list/remove attachments; this makes the flagship user-reachable (the store + run path are now ready for it). Also: `SimulationPanel` export-netlist and `assistantContext` preview decks build from explicit literals without `userModelLibraries`, so they do not yet reflect attachments - wire them for preview fidelity. Then BUG-12 remaining vendor-macromodel gaps (LTspice `OTA`/behavioral code-model A-devices). Alternatives: BUG-2/3 op-amp/MOSFET `.asc` round-trip so the save-block can lift; extended-corpus convergence (181/189).
 
 ---
+
+## 2026-07-22T03:20Z - auto/ltspice-parity - U4: thread document-attached user model libraries into the native run
+
+### What I did
+- Closed the store->engine seam of the user SPICE model-import flagship. The
+  deck builder (`spiceNetlist.ts`) already resolved a placed part's `.model`/
+  `.subckt` reference against `userModelLibraries: readonly string[]`, and the
+  resolution + LTspice-syntax translation were proven end-to-end against real
+  vendor files (2N3055, AD8541). But nothing populated that field in the running
+  app: `App.tsx` only ever passed `{components,wires,netLabels,params,directives}`
+  to `runNative*`, so an attached vendor definition could never actually reach a
+  simulation outside the corpus scripts.
+- Added a document-level `SchematicModelLibrary { name, text }` slice to the
+  schematic store (`useSchematic.ts`), on the undoable `Doc`:
+    - `attachModelLibrary` (replaces a same-named attachment in place, so
+      re-attaching an edited file updates rather than duplicating) and
+      `removeModelLibrary`, both recorded as undoable document edits;
+    - threaded through `docOf`, `copyDocument`, `copyHistoryEntry`, the initial
+      state, and all four document resets. The `-wip` durability checkpoint I
+      recovered the slice from had wired only `loadCircuit`/`replaceCircuit`;
+      `restoreCircuit` and `newCircuit` were left out, which would have leaked one
+      tab's (or the previous circuit's) attachments into another. Fixed both.
+- `App.tsx` maps the attached files to their raw text
+  (`userModelLibraries.map(l => l.text)`) and passes them into all four native
+  run sites (transient, operating-point, AC, `.step`) and their dependency
+  arrays. The field also flows into `currentDocument`, the dirty-tracking
+  signature, `.sim` serialization, and localStorage autosave, so an attachment
+  survives save/open and app restart.
+- `nativeSpice.ts`'s local `Schematic` type gained
+  `userModelLibraries?: readonly string[]`; the engine layer stays text-only (no
+  dependency on the store's `{name,text}` type), and the representation
+  conversion lives at the App boundary.
+
+### Why it is correct / safe
+- New tests, green in isolation:
+    - store "user model library attachments": attach/replace-by-name/remove,
+      undo/redo, `newCircuit` clears + `restoreCircuit` does not leak (direct
+      regressions for the two `-wip` bugs), and an end-to-end
+      attach -> `map(l => l.text)` -> `buildSpiceDeck` that inlines a vendor
+      `.model` and points the device at it, with a without-library control that
+      inlines nothing (proof the card came from the attachment);
+    - `documentValidation`: round-trips attachments, omits the key when empty
+      (legacy shape preserved), and rejects non-`{name,text}` entries, >64
+      attachments, duplicate names, and an over-aggregate-cap text total;
+    - `project/types`: a `.sim` save/open round-trips attachments, and a
+      document with none produces no `userModelLibraries` key.
+- No safety guard weakened. The inlined deck still passes the Rust `deck_lines`
+  allowlist. The new document caps (<=64 files, 256-char names, 5 MB/file,
+  20 MB aggregate, unique names) are additive defense-in-depth bounding a
+  hand-crafted `.sim`/autosave payload.
+- Gates: tsc clean; cargo test 28/0 (+1 ignored) and clippy clean (zero `.rs`
+  files touched); acceptance corpus `82 imported / 82 op-converged / 79
+  warning-clean / 82 deck-built` with both vendor-import proofs passing. The full
+  frontend suite exhibits the documented `App.workspace`/render `testTimeout`
+  sensitivity under CPU contention; every residual failure passes in isolation
+  (App.workspace 14/14, SettingsPanel, and a load-sensitive netlist perf
+  assertion) - harness timing, not a product regression.
+
+### Follow-ups
+- U3: a project UI file-picker to attach a vendor `.lib`/`.subckt` (read under
+  the 5 MB `.asc` import cap, call `attachModelLibrary`, list/remove). The store
+  and run path are now ready for it; this is what makes the flagship
+  user-reachable, and no vendor-model-import "works in the app" claim should ship
+  before it lands.
+- `SimulationPanel` export-netlist and `assistantContext` preview decks build
+  from explicit literals without `userModelLibraries`, so they do not yet reflect
+  attachments; wire them for preview/AI-context fidelity.
 
 ## 2026-07-21T21:00Z - auto/ltspice-parity - BUG-12 (.subckt half): LTspice switch-model translation + real AD8541 op-amp end-to-end proof
 
