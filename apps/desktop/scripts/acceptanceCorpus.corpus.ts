@@ -23,6 +23,7 @@ import { describe, it, expect } from "vitest";
 import { importAsc, makeSubcircuitResolver, decodeSchematicText } from "../src/io/ascImport";
 import { buildParamScope } from "../src/simulation/paramScope";
 import { buildSpiceDeck } from "../src/engine/spiceNetlist";
+import { validateSchematicDocument } from "../src/schematic/documentValidation";
 import { summarizeCorpus, formatCorpusReport, ngspiceOpSucceeded, type CorpusRow } from "../src/io/corpusReport";
 
 const HOME = homedir();
@@ -116,6 +117,7 @@ function runFile(file: CorpusFile, tmpDir: string, skipNgspice: boolean): Corpus
     warnings: 0,
     deckBuilt: false,
     opConverged: false,
+    validated: false,
   };
 
   let imported;
@@ -127,6 +129,25 @@ function runFile(file: CorpusFile, tmpDir: string, skipNgspice: boolean): Corpus
   } catch (error) {
     row.error = `import: ${error instanceof Error ? error.message : String(error)}`;
     return row;
+  }
+
+  // Regression guard: every document the .asc importer hands back must also
+  // clear validateSchematicDocument - the same gate the .sim loader and the
+  // App-level .asc open path both run the result through. A failure here on a
+  // real (non-hostile) corpus file means the validator has drifted tighter
+  // than a genuine LTspice import needs, which is exactly what this guard is
+  // for; it must never happen on the recorded corpus.
+  try {
+    validateSchematicDocument({
+      components: imported.components,
+      wires: imported.wires,
+      probes: [],
+      netLabels: imported.netLabels,
+      directives: imported.directives,
+    });
+    row.validated = true;
+  } catch (error) {
+    row.error = row.error ?? `validate: ${error instanceof Error ? error.message : String(error)}`;
   }
 
   let netlist: string;
@@ -181,6 +202,11 @@ describe.skipIf(corpus.length === 0)("acceptance corpus (user's own LTspice file
       const summary = summarizeCorpus(rows);
       console.log(`\n${formatCorpusReport(rows)}\n`);
       if (skipNgspice) console.log("(ngspice runs skipped - CORPUS_SKIP_NGSPICE or ngspice not installed)");
+
+      // Regression guard (always enforced, canonical corpus or not): every
+      // successfully-imported file must also pass validateSchematicDocument.
+      // See the comment on the validate step in runFile() above.
+      expect(summary.validated).toBe(summary.imported);
 
       // Floors = the counts this runner actually measured on 2026-07-05
       // (82/79/82/82) - never hand-typed claims; this runner once disproved

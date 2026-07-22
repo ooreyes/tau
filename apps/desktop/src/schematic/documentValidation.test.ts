@@ -63,10 +63,12 @@ describe("schematic document validation", () => {
     expect(() => validateSchematicDocument(nonFinite)).toThrow(/finite coordinate/i);
   });
 
-  it("rejects diagonal wires and unsafe probe colors", () => {
+  it("accepts diagonal wires and rejects unsafe probe colors", () => {
+    // LTspice permits diagonal wire segments and imported .asc documents keep
+    // them, so a document carrying one must round-trip through save/load.
     const diagonal = validDocument();
     diagonal.wires[0].points[1] = { x: 128, y: 32 };
-    expect(() => validateSchematicDocument(diagonal)).toThrow(/orthogonal/i);
+    expect(() => validateSchematicDocument(diagonal)).not.toThrow();
 
     const unsafeColor = validDocument();
     unsafeColor.probes[0].color = "url(javascript:alert(1))";

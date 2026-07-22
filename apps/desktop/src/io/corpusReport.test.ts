@@ -7,6 +7,7 @@ const row = (over: Partial<CorpusRow>): CorpusRow => ({
   warnings: 0,
   deckBuilt: true,
   opConverged: true,
+  validated: true,
   ...over,
 });
 
@@ -25,6 +26,7 @@ describe("summarizeCorpus", () => {
       warningClean: 3,
       deckBuilt: 3,
       opConverged: 2,
+      validated: 4,
     });
   });
 
@@ -33,8 +35,25 @@ describe("summarizeCorpus", () => {
     expect(s.warningClean).toBe(0);
   });
 
+  it("a failed import is never counted as validated, even when validated is true", () => {
+    const s = summarizeCorpus([row({ imported: false, validated: true })]);
+    expect(s.validated).toBe(0);
+  });
+
+  it("a validateSchematicDocument failure on an imported file is not validated", () => {
+    const s = summarizeCorpus([row({ imported: true, validated: false })]);
+    expect(s.validated).toBe(0);
+  });
+
   it("handles an empty corpus", () => {
-    expect(summarizeCorpus([])).toEqual({ total: 0, imported: 0, warningClean: 0, deckBuilt: 0, opConverged: 0 });
+    expect(summarizeCorpus([])).toEqual({
+      total: 0,
+      imported: 0,
+      warningClean: 0,
+      deckBuilt: 0,
+      opConverged: 0,
+      validated: 0,
+    });
   });
 });
 

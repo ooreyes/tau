@@ -3,14 +3,39 @@ import type { ComponentKind, NetLabel, Point, Probe, Rotation, SchematicComponen
 import type { SchematicDocument, SchematicModelLibrary } from "../store/useSchematic";
 
 export const MAX_SCHEMATIC_FILE_BYTES = 5 * 1024 * 1024;
-const MAX_COMPONENTS = 5_000;
-const MAX_WIRES = 20_000;
+// Exported so other import paths (the `.asc` importer's early count gate, in
+// particular) can reject an oversized document by the same numbers instead of
+// duplicating them - two copies of a security limit drift apart silently.
+export const MAX_COMPONENTS = 5_000;
+export const MAX_WIRES = 20_000;
 const MAX_WIRE_POINTS = 100_000;
-const MAX_ABS_COORDINATE = 1_000_000;
+// Must clear the `.asc` importer's off-canvas parking convention: flattened
+// hierarchical sub-blocks are shifted into disjoint X-regions starting at
+// x = 1,000,000 (ascImport.ts) so their internals can never forge a false net
+// with parent content. A parent block's shift re-shifts its already-parked
+// children, so nested hierarchies grow the cursor roughly geometrically
+// (measured 2.5e8 on a real 4-phase converter; depth is capped at 16). The
+// cap exists to reject absurd values a hand-crafted file could use to break
+// float math (1e308 coordinates), not to bound the canvas: 1e12 is exact in
+// doubles and clears every real hierarchy with orders-of-magnitude headroom,
+// while a pathological nesting chain overflows to Infinity and still fails
+// the finiteness check - rejection, not corruption.
+const MAX_ABS_COORDINATE = 1_000_000_000_000;
 const MAX_TEXT_LENGTH = 160;
+// A component's value is one future deck line, and real vendor blocks carry
+// legitimately huge ones - flattened battery models in the acceptance corpus
+// embed multi-KB PWL/table expressions. 32 KiB bounds a single field hard
+// (the 5 MB document cap and the native 512 KiB deck cap still bound the
+// aggregate) without rejecting genuine imported content.
+const MAX_COMPONENT_VALUE_LENGTH = 32_768;
 const MAX_ID_LENGTH = 128;
 const MAX_DIRECTIVES = 1_000;
-const MAX_DIRECTIVE_LENGTH = 1_024;
+// An imported LTspice TEXT !-block lands as ONE directive string with its
+// embedded newlines (a behavioral-source table in the acceptance corpus runs
+// to 2.5 KB), so a directive gets the same generous single-field cap as a
+// component value; the 5 MB file cap and the native 512 KiB deck cap bound
+// the aggregate.
+const MAX_DIRECTIVE_LENGTH = 32_768;
 // Exported so the attach-file UI can pre-check both caps before it ever
 // touches the store (an inline error there is much cheaper than round-tripping
 // through attachModelLibrary and validateSchematicDocument to discover the
@@ -72,7 +97,7 @@ function component(value: unknown, index: number): SchematicComponent {
     y: coordinate(source.y, `components[${index}].y`),
     rotation: rotation as Rotation,
     ...(source.mirrored === true ? { mirrored: true } : {}),
-    value: text(source.value, `components[${index}].value`),
+    value: text(source.value, `components[${index}].value`, MAX_COMPONENT_VALUE_LENGTH),
     label: text(source.label, `components[${index}].label`),
   };
   if (source.pinOverride !== undefined) {
@@ -101,11 +126,10 @@ function wire(value: unknown, index: number, remainingPoints: { value: number })
   remainingPoints.value -= source.points.length;
   if (remainingPoints.value < 0) fail(`wire point limit exceeded (${MAX_WIRE_POINTS}).`);
   const points = source.points.map((candidate, pointIndex) => point(candidate, `wires[${index}].points[${pointIndex}]`));
-  for (let pointIndex = 1; pointIndex < points.length; pointIndex += 1) {
-    const previous = points[pointIndex - 1];
-    const current = points[pointIndex];
-    if (previous.x !== current.x && previous.y !== current.y) fail(`wires[${index}] must be orthogonal.`);
-  }
+  // Diagonal segments are allowed: Tau's own editor only draws orthogonal
+  // wires, but LTspice permits diagonals and imported `.asc` documents keep
+  // them - the canvas and the netlister both handle arbitrary segments, so a
+  // document carrying them must round-trip through save/load unchanged.
   const resistance =
     source.resistance === undefined || source.resistance === null || source.resistance === ""
       ? undefined

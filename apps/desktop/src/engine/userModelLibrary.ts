@@ -172,6 +172,13 @@ function normalizeSubcktInterior(block: string): string {
  * inlined card actually loads in ngspice; `.subckt` blocks are captured as the
  * vendor wrote them except for the LTspice-only switch constructs ngspice
  * rejects, which are normalized in place (see {@link normalizeSubcktInterior}).
+ *
+ * This "first wins" rule is deterministic across two attached libraries that
+ * both define the same name: `texts` is walked in array order, and the caller
+ * always builds that array from the schematic's `userModelLibraries` in
+ * attachment order (each `attachModelLibrary` call appends - see
+ * store/useSchematic.ts) - so "first in `texts`" always means "first
+ * attached", never an arbitrary iteration order.
  */
 export function parseUserModelLibraries(texts: readonly string[]): UserModelLibraryRegistry {
   const models = new Map<string, string>();

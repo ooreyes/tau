@@ -641,15 +641,74 @@ describe("buildSpiceDeck", () => {
     expect(deck.netlist).not.toMatch(/D1 \S+ \S+ TAU_DIODE/);
   });
 
-  it("prefers Tau's bundled standard model over a same-named user library entry", () => {
-    // Resolution order: inline document .model > Tau's bundled standard part >
-    // user library, so a vendor file that happens to redefine a name Tau
-    // already bundles must never win.
+  it("prefers an attached user library's model over a same-named bundled standard part", () => {
+    // Resolution order: inline document .model > attached user library >
+    // Tau's bundled standard part, so a user-attached vendor file that
+    // redefines a name Tau also bundles wins (LTspice local-definition-wins
+    // semantics) instead of being silently shadowed by the bundled model.
     const components = [component("diode", "D1", "1N4148", 0, 0), component("ground", "", "", 16, 32)];
     const userModelLibraries = [".model 1N4148 D(Is=999 N=999)"];
     const deck = buildSpiceDeck({ components, wires: [], userModelLibraries }, { kind: "op" });
-    expect(deck.netlist).toMatch(/^\.model 1N4148 D\(Is=2\.52n/m);
-    expect(deck.netlist).not.toContain("Is=999");
+    expect(deck.netlist).toMatch(/^\.model 1N4148 D\(Is=999 N=999\)/m);
+    expect(deck.netlist).not.toContain("Is=2.52n");
+  });
+
+  it("prefers an attached user library's subckt over a same-named bundled subcircuit", () => {
+    // Same local-definition-wins rule for subckts: "opamp" is a bundled
+    // library subcircuit (Opamps\\opamp.asy → OPAMP_SUB); an attached vendor
+    // file that redefines it must win and the bundled body must not appear.
+    let counter = 0;
+    const uid = (p: string) => `${p}-${++counter}`;
+    const sub = (label: string, pins: Array<[string, string, number, number]>): SchematicComponent => ({
+      id: uid("subckt"),
+      kind: "subckt",
+      x: 0,
+      y: 0,
+      rotation: 0,
+      value: "opamp",
+      label,
+      pinOverride: pins.map(([id, pinLabel, x, y]): PinOverride => ({ id, label: pinLabel, x, y })),
+    });
+    const lbl = (x: number, y: number, text: string): NetLabel => ({ id: uid("flag"), x, y, text });
+
+    const comps = [sub("U1", [["p1", "1", 0, 0], ["p2", "2", 0, 80], ["p3", "3", 160, 40]])];
+    const netLabels = [lbl(0, 80, "0")];
+    const userModelLibraries = [".subckt opamp 1 2 3\nR1 1 3 1\n.ends opamp"];
+    const deck = buildSpiceDeck({ components: comps, wires: [], netLabels, userModelLibraries }, { kind: "op" });
+    expect(deck.netlist).toContain("R1 1 3 1");
+    expect(deck.netlist).not.toContain("G1 0 3 2 1");
+    expect(deck.netlist.match(/^\.subckt opamp /gm)?.length).toBe(1);
+  });
+
+  it("resolves a same-named subckt from the FIRST attached library when two both define it", () => {
+    // Deterministic collision resolution across two attachments: the caller
+    // always builds `userModelLibraries` in the schematic's attachment order
+    // (store/useSchematic.ts's attachModelLibrary appends), and
+    // parseUserModelLibraries keeps the first definition it sees - so "first
+    // attached" always wins, never an arbitrary iteration order.
+    let counter = 0;
+    const uid = (p: string) => `${p}-${++counter}`;
+    const sub = (label: string, pins: Array<[string, string, number, number]>): SchematicComponent => ({
+      id: uid("subckt"),
+      kind: "subckt",
+      x: 0,
+      y: 0,
+      rotation: 0,
+      value: "opamp",
+      label,
+      pinOverride: pins.map(([id, pinLabel, x, y]): PinOverride => ({ id, label: pinLabel, x, y })),
+    });
+    const lbl = (x: number, y: number, text: string): NetLabel => ({ id: uid("flag"), x, y, text });
+
+    const comps = [sub("U1", [["p1", "1", 0, 0], ["p2", "2", 0, 80], ["p3", "3", 160, 40]])];
+    const netLabels = [lbl(0, 80, "0")];
+    const userModelLibraries = [
+      ".subckt opamp 1 2 3\nR1 1 3 111\n.ends opamp",
+      ".subckt opamp 1 2 3\nR1 1 3 222\n.ends opamp",
+    ];
+    const deck = buildSpiceDeck({ components: comps, wires: [], netLabels, userModelLibraries }, { kind: "op" });
+    expect(deck.netlist).toContain("R1 1 3 111");
+    expect(deck.netlist).not.toContain("R1 1 3 222");
   });
 
   it("resolves a subckt from a user-supplied vendor library, emitted once even when referenced twice", () => {

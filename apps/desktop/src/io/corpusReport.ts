@@ -19,6 +19,14 @@ export interface CorpusRow {
   deckBuilt: boolean;
   /** ngspice -b solved the operating point. */
   opConverged: boolean;
+  /**
+   * The imported document passed `validateSchematicDocument` - the same gate
+   * every `.sim` load and the `.asc` open path both run through. Only
+   * meaningful when `imported` is true (mirrors `warningClean`'s convention);
+   * a regression guard against the validator silently over-tightening against
+   * a real, non-hostile file.
+   */
+  validated: boolean;
   /** First failure message (import throw, deck throw, or ngspice marker). */
   error?: string;
 }
@@ -30,6 +38,8 @@ export interface CorpusSummary {
   warningClean: number;
   deckBuilt: number;
   opConverged: number;
+  /** Imported AND passed validateSchematicDocument. */
+  validated: number;
 }
 
 export function summarizeCorpus(rows: CorpusRow[]): CorpusSummary {
@@ -39,6 +49,7 @@ export function summarizeCorpus(rows: CorpusRow[]): CorpusSummary {
     warningClean: rows.filter((r) => r.imported && r.warnings === 0).length,
     deckBuilt: rows.filter((r) => r.deckBuilt).length,
     opConverged: rows.filter((r) => r.opConverged).length,
+    validated: rows.filter((r) => r.imported && r.validated).length,
   };
 }
 
@@ -70,16 +81,16 @@ export function formatCorpusReport(rows: CorpusRow[]): string {
   const summary = summarizeCorpus(rows);
   const nameWidth = Math.max(4, ...rows.map((r) => r.file.length));
   const lines: string[] = [];
-  lines.push(`${"file".padEnd(nameWidth)}  import  warn  deck  op`);
+  lines.push(`${"file".padEnd(nameWidth)}  import  warn  deck  op  valid`);
   for (const r of rows) {
     const mark = (ok: boolean) => (ok ? "  ✓ " : "  ✗ ");
     lines.push(
-      `${r.file.padEnd(nameWidth)}  ${mark(r.imported)}   ${String(r.warnings).padStart(3)}${mark(r.deckBuilt)} ${mark(r.opConverged)}${r.error ? `  ${r.error}` : ""}`,
+      `${r.file.padEnd(nameWidth)}  ${mark(r.imported)}   ${String(r.warnings).padStart(3)}${mark(r.deckBuilt)} ${mark(r.opConverged)}${mark(r.validated)}${r.error ? `  ${r.error}` : ""}`,
     );
   }
   lines.push("");
   lines.push(
-    `total ${summary.total} · imported ${summary.imported} · warning-clean ${summary.warningClean} · deck-built ${summary.deckBuilt} · op-converged ${summary.opConverged}`,
+    `total ${summary.total} · imported ${summary.imported} · warning-clean ${summary.warningClean} · deck-built ${summary.deckBuilt} · op-converged ${summary.opConverged} · schema-valid ${summary.validated}`,
   );
   return lines.join("\n");
 }

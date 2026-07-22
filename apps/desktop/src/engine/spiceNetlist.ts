@@ -283,21 +283,25 @@ export function buildSpiceDeck(schematic: Schematic, analysis: SpiceAnalysis): S
     if (!SEMI_KINDS.has(component.kind)) continue;
     const named = component.value.trim().split(/\s+/)[0] ?? "";
     if (!named || knownModels.has(named.toLowerCase())) continue;
+    // An attached vendor library (userModelLibrary.ts) is checked BEFORE Tau's
+    // bundled standard part so a user-attached `.model 1N4148 …` wins over a
+    // same-named bundled model instead of being silently shadowed by it - this
+    // is LTspice's local-definition-wins semantics and matches user intent. It
+    // only changes behavior for documents that HAVE an attachment: with none,
+    // `resolveUserModel` misses (empty registry) and every name falls through
+    // to `standardModelLine` exactly as before.
+    const userLine = resolveUserModel(userLibraryRegistry, named);
+    if (userLine) {
+      lines.push(userLine);
+      knownModels.add(named.toLowerCase());
+      continue;
+    }
     const line = standardModelLine(named);
     if (line && !emittedStandard.has(named.toLowerCase())) {
       lines.push(line);
       emittedStandard.add(named.toLowerCase());
       knownModels.add(named.toLowerCase());
       if (standardModelType(named) === "vdmos") vdmosModels.add(named.toLowerCase());
-      continue;
-    }
-    // Not inline and not a bundled standard part: fall through to a
-    // user-supplied vendor library, the last resolution source before this
-    // semiconductor is stuck with Tau's generic TAU_* starter model.
-    const userLine = resolveUserModel(userLibraryRegistry, named);
-    if (userLine) {
-      lines.push(userLine);
-      knownModels.add(named.toLowerCase());
     }
   }
 
@@ -312,17 +316,18 @@ export function buildSpiceDeck(schematic: Schematic, analysis: SpiceAnalysis): S
     if (component.kind !== "subckt") continue;
     const ref = sanitizeSubcktName(component.value.trim().split(/\s+/)[0] ?? "").toLowerCase();
     if (!ref || userModels.has(ref) || inlinedSubckts.has(ref) || emittedSubckts.has(ref)) continue;
-    const block = bundledSubcircuitBlock(ref);
-    if (block) {
-      lines.push(block);
-      emittedSubckts.add(ref);
-      continue;
-    }
-    // Not inline and not a bundled library subckt: fall through to a
-    // user-supplied vendor library (same last-resort resolution as above).
+    // Same local-definition-wins rule as the model loop above: an attached
+    // vendor library's `.subckt` wins over a bundled subcircuit of the same
+    // name, checked first so it is never shadowed.
     const userBlock = resolveUserSubckt(userLibraryRegistry, ref);
     if (userBlock) {
       lines.push(userBlock);
+      emittedSubckts.add(ref);
+      continue;
+    }
+    const block = bundledSubcircuitBlock(ref);
+    if (block) {
+      lines.push(block);
       emittedSubckts.add(ref);
     }
   }

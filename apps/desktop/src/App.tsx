@@ -939,13 +939,19 @@ function App() {
       // Surface import warnings in the Diagnostics panel for THIS document.
       // The toast only carries a count, which is a dead end on its own.
       setImportWarningsByPath((previous) => ({ ...previous, [path]: [...result.warnings, ...duplicateWarnings] }));
-      const doc: SchematicDocument = {
+      // Belt-and-braces: the importer's own count gate stops a hostile file
+      // before it does quadratic pin-geometry work, but every document that
+      // reaches the store - .asc included - must still clear the exact same
+      // bounds (component/wire/coordinate/text caps) the .sim loader enforces
+      // above. Any failure here surfaces through the catch below, same as a
+      // rejected .sim file.
+      const doc: SchematicDocument = validateSchematicDocument({
         components: result.components,
         wires: result.wires,
         netLabels: result.netLabels,
         directives: result.directives,
         probes: [],
-      };
+      });
       openDocument(doc, title, path, ascRewriteRisks(text));
       if (result.warnings.length > 0) {
         console.warn(`Imported ${title} with ${result.warnings.length} warning(s):`, result.warnings);
