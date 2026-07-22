@@ -30,8 +30,8 @@ export interface UserModelLibraryRegistry {
   readonly models: ReadonlyMap<string, string>;
   /** Sanitized subckt name (lower-cased, via {@link sanitizeSubcktName}) ->
    *  its full `.subckt … .ends` block. The interior is preserved as the vendor
-   *  wrote it except for the two LTspice-only constructs ngspice rejects, which
-   *  are rewritten in place (see {@link normalizeSubcktInterior}); everything
+   *  wrote it except for the LTspice-only constructs ngspice rejects, which are
+   *  rewritten in place (see {@link normalizeSubcktInterior}); everything
    *  ngspice already accepts stays byte-for-byte. */
   readonly subckts: ReadonlyMap<string, string>;
 }
@@ -65,6 +65,32 @@ function stripAnnotationParams(line: string): string {
     .replace(/\s+\)/g, ")")
     .replace(/\s{2,}/g, " ")
     .trim();
+}
+
+/**
+ * Remove LTspice's bare `noiseless` device flag. ngspice has no such keyword:
+ * on an R/C/L INSTANCE line it is read as an unknown model/parameter and
+ * FATALLY aborts the whole deck ("unknown parameter (noiseless)" -> "incomplete
+ * or empty netlist"), while inside a `.model` card ngspice merely warns and
+ * ignores it. Vendor macromodels (Analog Devices' among them) tag every
+ * internal passive `noiseless`, so a single unstripped flag on an instance line
+ * sinks the entire imported part - a real ADI op-amp like ADA4351 (140 such
+ * flags) goes from an empty netlist to a full operating point once they are
+ * gone. The token is matched whole-word and case-insensitively; the whitespace
+ * it leaves behind is collapsed (leading indentation preserved) so the emitted
+ * card stays clean.
+ */
+function stripNoiselessFlag(line: string): string {
+  if (!/\bnoiseless\b/i.test(line)) return line;
+  const lead = /^[ \t]*/.exec(line)?.[0] ?? "";
+  const body = line
+    .slice(lead.length)
+    .replace(/\bnoiseless\b/gi, "")
+    .replace(/\(\s+/g, "(")
+    .replace(/\s+\)/g, ")")
+    .replace(/[ \t]{2,}/g, " ")
+    .replace(/[ \t]+$/g, "");
+  return lead + body;
 }
 
 /** Emit a computed switch threshold as a clean deck token: strip the binary
@@ -134,29 +160,34 @@ function translateSwitchModelCard(line: string): string {
 }
 
 /**
- * Rewrite the two LTspice-only constructs inside a captured `.subckt` block that
+ * Rewrite the LTspice-only constructs inside a captured `.subckt` block that
  * ngspice's build rejects, so an inlined vendor macromodel actually simulates.
  * The transform is deliberately SURGICAL and line-gated - every line ngspice
- * already accepts passes through byte-for-byte; only two constructs change:
+ * already accepts passes through byte-for-byte; only these constructs change:
  *   - a switch `.model` card (`VSWITCH`/`ISWITCH`), via
  *     {@link translateSwitchModelCard};
  *   - a voltage-switch instance (`Sxxx n+ n- (nc+,nc-) MODEL`), whose control
  *     nodes LTspice wraps in parentheses - ngspice wants them bare, so the
  *     parentheses are removed and any comma inside becomes a space. Current
  *     switches (`Wxxx n+ n- Vsource MODEL`) name their control source and carry
- *     no such parentheses, so they are left alone.
- * Everything else (transistor models, POLY sources, passives) is already valid
- * ngspice and stays exactly as the vendor wrote it.
+ *     no such parentheses, so they are left alone;
+ *   - a bare `noiseless` device flag on any instance or `.model` line, via
+ *     {@link stripNoiselessFlag} - fatal on an instance line, so it must go.
+ * Full-line comments (`*`/`;`) are left untouched. Everything else (transistor
+ * models, POLY sources, passives) is already valid ngspice and stays exactly as
+ * the vendor wrote it.
  */
 function normalizeSubcktInterior(block: string): string {
   return block
     .split("\n")
     .map((line) => {
-      if (/^\s*\.model\b/i.test(line)) return translateSwitchModelCard(line);
-      if (/^\s*S[\w$]/i.test(line) && line.includes("(")) {
-        return line.replace(/\(([^()]*)\)/, (_full, inner: string) => inner.replace(/,/g, " ").trim());
+      if (/^\s*[*;]/.test(line)) return line;
+      if (/^\s*\.model\b/i.test(line)) return stripNoiselessFlag(translateSwitchModelCard(line));
+      let out = line;
+      if (/^\s*S[\w$]/i.test(out) && out.includes("(")) {
+        out = out.replace(/\(([^()]*)\)/, (_full, inner: string) => inner.replace(/,/g, " ").trim());
       }
-      return line;
+      return stripNoiselessFlag(out);
     })
     .join("\n");
 }
@@ -168,10 +199,11 @@ function normalizeSubcktInterior(block: string): string {
  * ignored - consistent with how the deck builder's own dedup sets treat a
  * name as claimed once it is known (spiceNetlist.ts's `knownModels`/
  * `emittedSubckts`). A `.model` line is stored with its LTspice string-valued
- * annotation parameters removed (see {@link stripAnnotationParams}) so the
- * inlined card actually loads in ngspice; `.subckt` blocks are captured as the
- * vendor wrote them except for the LTspice-only switch constructs ngspice
- * rejects, which are normalized in place (see {@link normalizeSubcktInterior}).
+ * annotation parameters removed (see {@link stripAnnotationParams}) and its
+ * bare `noiseless` flag stripped (see {@link stripNoiselessFlag}) so the inlined
+ * card actually loads in ngspice; `.subckt` blocks are captured as the vendor
+ * wrote them except for the LTspice-only constructs ngspice rejects, which are
+ * normalized in place (see {@link normalizeSubcktInterior}).
  *
  * This "first wins" rule is deterministic across two attached libraries that
  * both define the same name: `texts` is walked in array order, and the caller
@@ -240,9 +272,9 @@ export function parseUserModelLibraries(texts: readonly string[]): UserModelLibr
           parts.push(stripTrailingComment(cont.slice(1).trim()));
           i += 1;
         }
-        const line = translateSwitchModelCard(
+        const line = stripNoiselessFlag(translateSwitchModelCard(
           stripAnnotationParams(parts.filter((part) => part !== "").join(" ")),
-        );
+        ));
         const name = /^\.model\s+([^\s(]+)/i.exec(line)?.[1];
         if (name) {
           const key = name.toLowerCase();

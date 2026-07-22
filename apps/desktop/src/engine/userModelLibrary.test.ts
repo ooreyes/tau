@@ -170,6 +170,65 @@ describe("parseUserModelLibraries", () => {
     expect(block).toContain(".model Switch SW(RON=0.001 ROFF=1e6 VT=1 VH=0.005)");
   });
 
+  it("strips the fatal bare `noiseless` flag from a captured subckt's instance lines", () => {
+    // Real ADI macromodels (ADA4351, MAX4230) tag every internal passive with
+    // LTspice's `noiseless` flag. On an R/C/L INSTANCE line ngspice reads it as
+    // an unknown model/parameter and aborts the whole deck ("unknown parameter
+    // (noiseless)" -> incomplete netlist), so it must be removed while the
+    // device's nodes, model name, and value stay intact.
+    const text = [
+      ".subckt AMP 1 2 3",
+      "RinDiff INNx INPx RQT 3.75E12 Noiseless",
+      "C1 INNx INPx 2p noiseless",
+      "L1 3 INPx 1n Noiseless",
+      ".ends AMP",
+    ].join("\n");
+    const block = parseUserModelLibraries([text]).subckts.get("amp");
+    expect(block).not.toMatch(/noiseless/i);
+    expect(block).toContain("RinDiff INNx INPx RQT 3.75E12");
+    expect(block).toContain("C1 INNx INPx 2p");
+    expect(block).toContain("L1 3 INPx 1n");
+  });
+
+  it("cleans a bare `noiseless` flag out of an interior .model card too", () => {
+    // ADA4899 writes it inside its diode cards (`.model DzVoutP D(BV=4.3
+    // Noiseless)`). ngspice only warns there, but the emitted card is cleaner
+    // without it and the numeric parameters are untouched.
+    const text = [
+      ".subckt AMP 1 2",
+      "D1 1 2 DZ",
+      ".model DZ D(BV=4.3 Noiseless)",
+      ".ends AMP",
+    ].join("\n");
+    const block = parseUserModelLibraries([text]).subckts.get("amp");
+    expect(block).toContain(".model DZ D(BV=4.3)");
+    expect(block).not.toMatch(/noiseless/i);
+  });
+
+  it("strips the `noiseless` flag from a directly-attached top-level .model card", () => {
+    // MAX4230's output diode: `.model DO D(Vfwd=1k Vrev=0 Revepsilon=0.1 Ron=1m
+    // Noiseless)`. The bare flag goes; the LTspice diode parameters (which
+    // ngspice merely warns about) are left for the engine to handle.
+    const registry = parseUserModelLibraries([
+      ".model DO D(Vfwd=1k Vrev=0 Revepsilon=0.1 Ron=1m Noiseless)",
+    ]);
+    expect(registry.models.get("do")).toBe(".model DO D(Vfwd=1k Vrev=0 Revepsilon=0.1 Ron=1m)");
+  });
+
+  it("leaves the word noiseless in a full-line comment alone", () => {
+    // Only executable lines are cleaned; a comment that merely mentions the word
+    // must not be rewritten as if it were a device flag.
+    const text = [
+      ".subckt AMP 1 2",
+      "* all resistors are noiseless",
+      "R1 1 2 1k",
+      ".ends AMP",
+    ].join("\n");
+    const block = parseUserModelLibraries([text]).subckts.get("amp");
+    expect(block).toContain("* all resistors are noiseless");
+    expect(block).toContain("R1 1 2 1k");
+  });
+
   it("first definition wins when a name repeats across texts", () => {
     const registry = parseUserModelLibraries([
       ".model Dup D(Is=1e-14 N=1)",

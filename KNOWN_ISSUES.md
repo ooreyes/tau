@@ -23,11 +23,13 @@ fixes land as they are ready.
   engine. LTspice-only constructs common in vendor files are translated
   automatically: datasheet annotations ngspice rejects (for example
   `mfg=STMicro`), `VSWITCH`/`ISWITCH` switch model cards, parenthesized
-  switch control nodes, and the bare `noiseless` resistor flag. The shipped
-  AD8541 example runs a real Analog Devices macromodel end to end.
+  switch control nodes, and the bare `noiseless` device flag (which ngspice
+  otherwise rejects as an unknown parameter, aborting the whole deck). The
+  shipped AD8541 example runs a real Analog Devices macromodel end to end.
 - LTspice's built-in behavioral code models (for example the `OTA` A-device)
-  are not translated yet; a macromodel built from them will not simulate and
-  says so at run time.
+  and its soft-limit helper functions (`uplim`/`dnlim`, common in Analog
+  Devices output stages) are not translated yet; a macromodel built from them
+  will not simulate and says so at run time.
 - If two attached files define the same subcircuit name, the first attached
   file wins; re-attaching a file with the same name replaces it. An attached
   definition that collides with a Tau built-in model name takes precedence -
