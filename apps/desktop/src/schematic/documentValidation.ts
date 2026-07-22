@@ -1,6 +1,6 @@
 import { CATALOG_BY_KIND } from "./catalog";
 import type { ComponentKind, NetLabel, Point, Probe, Rotation, SchematicComponent, SchematicWire } from "./types";
-import type { SchematicDocument } from "../store/useSchematic";
+import type { SchematicDocument, SchematicModelLibrary } from "../store/useSchematic";
 
 export const MAX_SCHEMATIC_FILE_BYTES = 5 * 1024 * 1024;
 const MAX_COMPONENTS = 5_000;
@@ -11,6 +11,12 @@ const MAX_TEXT_LENGTH = 160;
 const MAX_ID_LENGTH = 128;
 const MAX_DIRECTIVES = 1_000;
 const MAX_DIRECTIVE_LENGTH = 1_024;
+const MAX_MODEL_LIBRARIES = 64;
+const MAX_MODEL_LIBRARY_NAME_LENGTH = 256;
+// A single attached file may be up to the same size as a schematic import; the
+// aggregate cap bounds a hand-crafted document from loading unbounded text.
+const MAX_MODEL_LIBRARY_TEXT_LENGTH = MAX_SCHEMATIC_FILE_BYTES;
+const MAX_MODEL_LIBRARY_TOTAL_LENGTH = 4 * MAX_SCHEMATIC_FILE_BYTES;
 const ROTATIONS = new Set<Rotation>([0, 90, 180, 270]);
 const PROBE_COLORS = new Set([
   "var(--trace-red)",
@@ -139,6 +145,14 @@ function netLabel(value: unknown, index: number): NetLabel {
   return result;
 }
 
+function modelLibrary(value: unknown, index: number): SchematicModelLibrary {
+  const source = record(value, `userModelLibraries[${index}]`);
+  return {
+    name: text(source.name, `userModelLibraries[${index}].name`, MAX_MODEL_LIBRARY_NAME_LENGTH),
+    text: text(source.text, `userModelLibraries[${index}].text`, MAX_MODEL_LIBRARY_TEXT_LENGTH),
+  };
+}
+
 /** Parse only the versioned schematic shape Tau can safely render and simulate. */
 export function validateSchematicDocument(value: unknown): SchematicDocument {
   const source = record(value, "document");
@@ -151,9 +165,13 @@ export function validateSchematicDocument(value: unknown): SchematicDocument {
   const probes = source.probes === undefined ? [] : source.probes;
   const netLabels = source.netLabels === undefined ? [] : source.netLabels;
   const directives = source.directives === undefined ? [] : source.directives;
+  const userModelLibraries = source.userModelLibraries === undefined ? [] : source.userModelLibraries;
   if (!Array.isArray(probes) || probes.length > MAX_COMPONENTS) fail("probes must be a bounded array.");
   if (!Array.isArray(netLabels) || netLabels.length > MAX_COMPONENTS) fail("netLabels must be a bounded array.");
   if (!Array.isArray(directives) || directives.length > MAX_DIRECTIVES) fail("directives must be a bounded array.");
+  if (!Array.isArray(userModelLibraries) || userModelLibraries.length > MAX_MODEL_LIBRARIES) {
+    fail(`userModelLibraries must be an array of at most ${MAX_MODEL_LIBRARIES} items.`);
+  }
 
   const remainingPoints = { value: MAX_WIRE_POINTS };
   const validatedComponents = source.components.map(component);
@@ -176,11 +194,23 @@ export function validateSchematicDocument(value: unknown): SchematicDocument {
   const references = validatedComponents.map((item) => item.label.trim().toLocaleLowerCase()).filter(Boolean);
   if (new Set(references).size !== references.length) fail("component reference designators must be unique (case-insensitive).");
 
+  const validatedLibraries = userModelLibraries.map(modelLibrary);
+  if (new Set(validatedLibraries.map((item) => item.name)).size !== validatedLibraries.length) {
+    fail("attached model library names must be unique.");
+  }
+  const totalLibraryText = validatedLibraries.reduce((sum, item) => sum + item.text.length, 0);
+  if (totalLibraryText > MAX_MODEL_LIBRARY_TOTAL_LENGTH) {
+    fail(`attached model libraries exceed the ${MAX_MODEL_LIBRARY_TOTAL_LENGTH}-character aggregate limit.`);
+  }
+
   return {
     components: validatedComponents,
     wires: validatedWires,
     probes: validatedProbes,
     netLabels: validatedLabels,
     directives: directives.map((value, index) => text(value, `directives[${index}]`, MAX_DIRECTIVE_LENGTH)),
+    // Additive: only emit the key when attachments exist so legacy/empty
+    // documents keep their exact prior serialized shape.
+    ...(validatedLibraries.length > 0 ? { userModelLibraries: validatedLibraries } : {}),
   };
 }

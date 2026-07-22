@@ -20,7 +20,7 @@ interface NativeSpiceResult {
   libraryPath: string;
 }
 
-type Schematic = { components: SchematicComponent[]; wires: SchematicWire[]; netLabels?: NetLabel[]; params?: ParamScope; directives?: string[] };
+type Schematic = { components: SchematicComponent[]; wires: SchematicWire[]; netLabels?: NetLabel[]; params?: ParamScope; directives?: string[]; userModelLibraries?: readonly string[] };
 type NativeExecution = { result: NativeSpiceResult; deck: ReturnType<typeof buildSpiceDeck> };
 
 /** Keeps a single high-resolution result below Rust's transfer guard. */

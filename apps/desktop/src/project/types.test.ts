@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { importAsc } from "../io/ascImport";
+import { validateSchematicDocument } from "../schematic/documentValidation";
 import { CATALOG } from "../schematic/catalog";
 import { extractCircuit } from "../schematic/netlist";
 import { getComponentPins } from "../schematic/pins";
@@ -120,6 +121,25 @@ describe("project schematic file formats", () => {
       app: "Tau",
       savedAt: "2026-07-14T00:00:00.000Z",
     }));
+  });
+
+  it("round-trips attached vendor model libraries through a .sim save/open", () => {
+    const document = {
+      components: [], wires: [], probes: [], netLabels: [], directives: [],
+      userModelLibraries: [{ name: "opamps.lib", text: ".subckt OA out in\nR1 in out 1k\n.ends" }],
+    };
+    const saved = serializeSchematicFile("/Schematics/withlib.sim", document);
+    // A re-open runs the same validation the app uses, so the attachment survives.
+    const reopened = validateSchematicDocument(JSON.parse(saved.contents));
+    expect(reopened.userModelLibraries).toEqual(document.userModelLibraries);
+  });
+
+  it("omits the userModelLibraries key from .sim output when a document has none", () => {
+    const saved = serializeSchematicFile(
+      "/Schematics/nolib.sim",
+      { components: [], wires: [], probes: [], netLabels: [], directives: [] },
+    );
+    expect(Object.prototype.hasOwnProperty.call(JSON.parse(saved.contents), "userModelLibraries")).toBe(false);
   });
 
   it("blocks rewrites when the source contains records Tau cannot preserve", () => {

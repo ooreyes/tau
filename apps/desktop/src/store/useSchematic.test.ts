@@ -16,6 +16,7 @@ import {
   type SchematicDocument,
   type SchematicHistory,
 } from "./useSchematic";
+import { buildSpiceDeck } from "../engine/spiceNetlist";
 import { dispatchShortcutAction, resolveShortcut, type ShortcutHandlers } from "../schematic/shortcuts";
 import { getComponentPins } from "../schematic/pins";
 
@@ -65,6 +66,7 @@ function resetStore() {
     probes: [],
     netLabels: [],
     directives: [],
+    userModelLibraries: [],
     past: [],
     future: [],
   });
@@ -1576,5 +1578,102 @@ describe("keyboard shortcuts are read-only outside the schematic view ", () => {
     const action = resolveShortcut({ key: "Escape", ctrlOrMeta: false, shift: false })!;
     dispatchShortcutAction(action, "simulator", realHandlers());
     expect(useSchematic.getState().tool).toEqual({ mode: "select" });
+  });
+});
+
+describe("user model library attachments", () => {
+  const names = () => useSchematic.getState().userModelLibraries.map((library) => library.name);
+
+  it("attaches a library and replaces a same-named attachment in place", () => {
+    const { attachModelLibrary } = useSchematic.getState();
+    attachModelLibrary({ name: "opamps.lib", text: "* first" });
+    attachModelLibrary({ name: "diodes.lib", text: "* diodes" });
+    expect(names()).toEqual(["opamps.lib", "diodes.lib"]);
+
+    // Re-attaching the same file name updates it rather than duplicating, so the
+    // deck never carries two copies of one vendor definition.
+    attachModelLibrary({ name: "opamps.lib", text: "* second" });
+    expect(names()).toEqual(["diodes.lib", "opamps.lib"]);
+    expect(useSchematic.getState().userModelLibraries.find((l) => l.name === "opamps.lib")?.text).toBe("* second");
+  });
+
+  it("removes a library and is a no-op for an unknown name", () => {
+    const { attachModelLibrary, removeModelLibrary } = useSchematic.getState();
+    attachModelLibrary({ name: "opamps.lib", text: "* first" });
+    const before = useSchematic.getState().past.length;
+    removeModelLibrary("does-not-exist");
+    expect(names()).toEqual(["opamps.lib"]);
+    expect(useSchematic.getState().past.length).toBe(before); // no history entry for a no-op
+
+    removeModelLibrary("opamps.lib");
+    expect(names()).toEqual([]);
+  });
+
+  it("records attach/remove as undoable document edits", () => {
+    const { attachModelLibrary, undo, redo } = useSchematic.getState();
+    attachModelLibrary({ name: "opamps.lib", text: "* first" });
+    expect(names()).toEqual(["opamps.lib"]);
+    undo();
+    expect(names()).toEqual([]);
+    redo();
+    expect(names()).toEqual(["opamps.lib"]);
+  });
+
+  it("clears attachments on newCircuit and does not leak them across restoreCircuit", () => {
+    const { attachModelLibrary } = useSchematic.getState();
+    attachModelLibrary({ name: "opamps.lib", text: "* first" });
+
+    // A blank document starts with no attachments (regression: a partial reset
+    // that omitted the field would leak the previous circuit's libraries).
+    useSchematic.getState().newCircuit();
+    expect(names()).toEqual([]);
+
+    // Restoring a tab snapshot that has no libraries must also clear any left
+    // over from the current tab.
+    attachModelLibrary({ name: "again.lib", text: "* x" });
+    useSchematic.getState().restoreCircuit({ components: [], wires: [] }, { past: [], future: [] });
+    expect(names()).toEqual([]);
+  });
+
+  it("loads attachments from a document and resolves them into the native deck", () => {
+    // A common-emitter stage whose transistor references a name that is neither
+    // inline nor a bundled/standard part - only an attached library defines it.
+    const doc: SchematicDocument = {
+      components: [
+        { id: "V1", kind: "vsource", label: "V1", value: "12", x: 100, y: 300, rotation: 0 },
+        { id: "Rb", kind: "resistor", label: "Rb", value: "470k", x: 250, y: 200, rotation: 0 },
+        { id: "Rc", kind: "resistor", label: "Rc", value: "1k", x: 350, y: 100, rotation: 0 },
+        { id: "Q1", kind: "npn", label: "Q1", value: "MYVENDNPN", x: 500, y: 300, rotation: 0 },
+      ],
+      wires: [],
+      netLabels: [
+        { id: "n1", x: 100, y: 268, text: "vcc" }, { id: "n2", x: 218, y: 200, text: "vcc" }, { id: "n3", x: 318, y: 100, text: "vcc" },
+        { id: "n4", x: 100, y: 332, text: "0" }, { id: "n5", x: 516, y: 332, text: "0" },
+        { id: "n6", x: 282, y: 200, text: "base" }, { id: "n7", x: 468, y: 300, text: "base" },
+        { id: "n8", x: 382, y: 100, text: "coll" }, { id: "n9", x: 516, y: 268, text: "coll" },
+      ],
+      userModelLibraries: [{ name: "vendor.lib", text: ".model MYVENDNPN NPN(Is=1e-14 Bf=73)" }],
+    };
+    useSchematic.getState().loadCircuit(doc);
+    const state = useSchematic.getState();
+    expect(names()).toEqual(["vendor.lib"]);
+
+    // App maps the attached files to their raw text before handing them to the
+    // deck builder; the referenced vendor card is then inlined and the device
+    // points at it.
+    const schematic = {
+      components: state.components,
+      wires: state.wires,
+      netLabels: state.netLabels,
+      userModelLibraries: state.userModelLibraries.map((library) => library.text),
+    };
+    const deck = buildSpiceDeck(schematic, { kind: "op" });
+    expect(deck.netlist).toMatch(/^\.model\s+MYVENDNPN\s+NPN/im);
+    expect(deck.netlist).toMatch(/^Q\w*\s+coll\s+base\s+0\s+MYVENDNPN\b/im);
+
+    // Control: the same circuit with the attachment removed no longer inlines
+    // the vendor card - proof the card came from the attached library.
+    const withoutDeck = buildSpiceDeck({ ...schematic, userModelLibraries: [] }, { kind: "op" });
+    expect(withoutDeck.netlist).not.toMatch(/^\.model\s+MYVENDNPN\b/im);
   });
 });

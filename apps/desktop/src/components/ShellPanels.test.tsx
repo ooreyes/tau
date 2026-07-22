@@ -53,7 +53,7 @@ const noopToolbarProps = {
 
 describe("EditorToolbar - read-only outside schematic view ", () => {
   it("disables Wire, Net label, Undo, Redo, selection deletion, and Clear scratchpad in simulator mode", () => {
-    const emptyDoc = { components: [], wires: [], counters: {}, probes: [], netLabels: [], directives: [] };
+    const emptyDoc = { components: [], wires: [], counters: {}, probes: [], netLabels: [], directives: [], userModelLibraries: [] };
     // Both past and future populated so canUndo/canRedo would be true if the
     // mode gate weren't there - proves the gate, not just an empty history.
     useSchematic.setState({ past: [emptyDoc], future: [emptyDoc] });
@@ -67,7 +67,7 @@ describe("EditorToolbar - read-only outside schematic view ", () => {
   it("does not undo the document when the disabled Undo button is clicked in simulator mode", () => {
     useSchematic.setState({
       components: [{ id: "r-1", kind: "resistor", x: 96, y: 0, rotation: 0, value: "1k", label: "R1" }],
-      past: [{ components: [], wires: [], counters: {}, probes: [], netLabels: [], directives: [] }],
+      past: [{ components: [], wires: [], counters: {}, probes: [], netLabels: [], directives: [], userModelLibraries: [] }],
     });
     render(<EditorToolbar mode="simulator" {...noopToolbarProps} />);
 
@@ -96,7 +96,7 @@ describe("EditorToolbar - read-only outside schematic view ", () => {
   });
 
   it("enables Wire, Undo (with history), and Clear scratchpad in schematic mode", () => {
-    useSchematic.setState({ past: [{ components: [], wires: [], counters: {}, probes: [], netLabels: [], directives: [] }] });
+    useSchematic.setState({ past: [{ components: [], wires: [], counters: {}, probes: [], netLabels: [], directives: [], userModelLibraries: [] }] });
     render(<EditorToolbar mode="schematic" {...noopToolbarProps} />);
 
     for (const name of ["Wire", "Net label (F4)", "Undo", "Clear scratchpad"]) {

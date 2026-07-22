@@ -125,4 +125,53 @@ describe("schematic document validation", () => {
     expect(label!.dy).toBeUndefined();
     expect(Object.prototype.hasOwnProperty.call(label, "dx")).toBe(false);
   });
+
+  it("round-trips attached vendor model libraries", () => {
+    const withLibraries = {
+      ...validDocument(),
+      userModelLibraries: [
+        { name: "opamps.lib", text: ".subckt OA out in\nR1 in out 1k\n.ends" },
+        { name: "diodes.mod", text: ".model MyD D(Is=1e-14)" },
+      ],
+    };
+    expect(validateSchematicDocument(withLibraries)).toEqual(withLibraries);
+  });
+
+  it("omits userModelLibraries entirely when a document has none, so legacy files keep their shape", () => {
+    const result = validateSchematicDocument(validDocument());
+    expect(Object.prototype.hasOwnProperty.call(result, "userModelLibraries")).toBe(false);
+  });
+
+  it("rejects a library entry that is not a { name, text } object", () => {
+    const bad = { ...validDocument(), userModelLibraries: ["just a string"] };
+    expect(() => validateSchematicDocument(bad)).toThrow(/userModelLibraries\[0\] must be an object/i);
+  });
+
+  it("rejects more than the attachment-count limit", () => {
+    const many = Array.from({ length: 65 }, (_, i) => ({ name: `lib${i}.lib`, text: "* x" }));
+    const bad = { ...validDocument(), userModelLibraries: many };
+    expect(() => validateSchematicDocument(bad)).toThrow(/at most 64 items/i);
+  });
+
+  it("rejects duplicate library names (they would inline twice)", () => {
+    const bad = {
+      ...validDocument(),
+      userModelLibraries: [
+        { name: "dup.lib", text: "* a" },
+        { name: "dup.lib", text: "* b" },
+      ],
+    };
+    expect(() => validateSchematicDocument(bad)).toThrow(/names must be unique/i);
+  });
+
+  it("rejects an attachment set whose total text exceeds the aggregate cap", () => {
+    // Each file is within the per-file cap, but together they blow the aggregate
+    // bound (4x the per-file limit) - a hand-crafted resource-exhaustion attempt.
+    const chunk = "x".repeat(5 * 1024 * 1024);
+    const bad = {
+      ...validDocument(),
+      userModelLibraries: Array.from({ length: 5 }, (_, i) => ({ name: `big${i}.lib`, text: chunk })),
+    };
+    expect(() => validateSchematicDocument(bad)).toThrow(/aggregate limit/i);
+  });
 });

@@ -889,7 +889,9 @@ describe("assistant circuit plan", () => {
 
   it("builds a two-bit D-register transient with inactive controls and observable current/voltage nodes", () => {
     const action = compileAssistantCircuitPlan("two-bit-register", GOLDEN_TWO_BIT_REGISTER_PLAN);
-    const deck = buildSpiceDeck(action.document, { kind: "tran", stopTime: 0.006, steps: 6000 });
+    // The deck builder takes vendor library files as raw text; an assistant-compiled
+    // document never carries attachments, so pass none.
+    const deck = buildSpiceDeck({ ...action.document, userModelLibraries: [] }, { kind: "tran", stopTime: 0.006, steps: 6000 });
     expect(deck.netlist).toContain(".tran 0.000001 0.006");
     expect(deck.netlist).toMatch(/A_a1_adc \[\S+ \S+ 0 0\]/);
     expect(deck.netlist).toMatch(/A_a2_adc \[\S+ \S+ 0 0\]/);

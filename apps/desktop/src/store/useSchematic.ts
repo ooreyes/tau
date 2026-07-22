@@ -31,6 +31,21 @@ export function moveComponentTo(component: SchematicComponent, x: number, y: num
   };
 }
 
+/**
+ * A vendor SPICE model file the user attached to the document (a `.lib`,
+ * `.subckt`, or `.mod`). Its text is inlined into the native deck when a placed
+ * component references one of the models/subckts it defines - the safe stand-in
+ * for LTspice's `.include`/`.lib`, which Tau's deck sanitizer rejects because it
+ * would read arbitrary files. Attachments are immutable: they are added or
+ * removed whole, never edited in place, so history snapshots can share them.
+ */
+export interface SchematicModelLibrary {
+  /** Display name, usually the attached file's name (e.g. "opamps.lib"). */
+  name: string;
+  /** Raw file text, inlined verbatim (minus LTspice-only cleanup) when referenced. */
+  text: string;
+}
+
 /** The undoable document slice. Everything else in the store is ephemeral UI. */
 interface Doc {
   components: SchematicComponent[];
@@ -40,6 +55,8 @@ interface Doc {
   netLabels: NetLabel[];
   /** SPICE directives (`.param`/`.tran`/`.ac`/`.meas`/…) carried by the document. */
   directives: string[];
+  /** Vendor model files attached to the document (see {@link SchematicModelLibrary}). */
+  userModelLibraries: SchematicModelLibrary[];
 }
 
 interface SchematicClipboard {
@@ -62,6 +79,11 @@ export interface SchematicDocument {
    * importer from `TEXT !` lines; absent for legacy/v1 files.
    */
   directives?: string[];
+  /**
+   * Attached vendor model files (`.lib`/`.subckt`/`.mod`). Optional and additive:
+   * absent for legacy/v1 files and for documents with no attachments.
+   */
+  userModelLibraries?: SchematicModelLibrary[];
 }
 
 export interface SchematicHistory {
@@ -190,6 +212,13 @@ interface SchematicState extends Doc {
   /** Replace the document's directive lines (used by the LTspice importer / directive editor). */
   setDirectives: (directives: string[]) => void;
 
+  /** Vendor model files attached to the document, inlined into the native deck when referenced. */
+  userModelLibraries: SchematicModelLibrary[];
+  /** Attach a model file; a same-named attachment is replaced so re-attaching updates in place. */
+  attachModelLibrary: (library: SchematicModelLibrary) => void;
+  /** Remove the attachment with the given name (no-op if absent). */
+  removeModelLibrary: (name: string) => void;
+
   loadCircuit: (doc: SchematicDocument) => void;
   /** Replace the active document as one undoable edit (assistant/import transforms). */
   replaceCircuit: (doc: SchematicDocument) => void;
@@ -217,6 +246,7 @@ const docOf = (s: Doc): Doc => ({
   probes: s.probes,
   netLabels: s.netLabels,
   directives: s.directives,
+  userModelLibraries: s.userModelLibraries,
 });
 
 /** Grid units a pasted/duplicated component is offset by so it never lands exactly
@@ -348,6 +378,9 @@ function copyDocument(doc: SchematicDocument, freshIds: boolean): SchematicDocum
     })),
     netLabels: (doc.netLabels ?? []).map((label) => ({ ...label, id: freshIds ? nanoid(6) : label.id })),
     directives: [...(doc.directives ?? [])],
+    // Attachments are immutable, so a shallow copy shares the (possibly large)
+    // text without duplicating it - fresh ids never apply to library files.
+    userModelLibraries: [...(doc.userModelLibraries ?? [])],
   };
 }
 
@@ -364,6 +397,7 @@ function copyHistoryEntry(entry: Doc): Doc {
     probes: document.probes ?? [],
     netLabels: document.netLabels ?? [],
     directives: document.directives ?? [],
+    userModelLibraries: document.userModelLibraries ?? [],
   };
 }
 
@@ -636,12 +670,31 @@ export const useSchematic = create<SchematicState>()((set) => {
     probes: initialDoc?.probes ?? [],
     netLabels: initialDoc?.netLabels ?? [],
     directives: initialDoc?.directives ?? [],
+    userModelLibraries: initialDoc?.userModelLibraries ?? [],
     past: [],
     future: [],
 
     beginChange: () => set((s) => recordInto(s)),
 
     setDirectives: (directives) => set((s) => ({ ...recordInto(s), directives: [...directives] })),
+
+    attachModelLibrary: (library) =>
+      set((s) => ({
+        ...recordInto(s),
+        // Replace a same-named attachment in place so re-attaching an edited file
+        // updates it rather than accumulating duplicate definitions in the deck.
+        userModelLibraries: [
+          ...s.userModelLibraries.filter((existing) => existing.name !== library.name),
+          library,
+        ],
+      })),
+
+    removeModelLibrary: (name) =>
+      set((s) => {
+        const next = s.userModelLibraries.filter((existing) => existing.name !== name);
+        if (next.length === s.userModelLibraries.length) return {};
+        return { ...recordInto(s), userModelLibraries: next };
+      }),
 
     undo: () =>
       set((s) => {
@@ -1042,6 +1095,7 @@ export const useSchematic = create<SchematicState>()((set) => {
           probes: cloned.probes ?? [],
           netLabels: cloned.netLabels ?? [],
           directives: cloned.directives ?? [],
+          userModelLibraries: cloned.userModelLibraries ?? [],
           past: [],
           future: [],
           selectedId: null,
@@ -1063,6 +1117,7 @@ export const useSchematic = create<SchematicState>()((set) => {
           probes: replacement.probes ?? [],
           netLabels: replacement.netLabels ?? [],
           directives: replacement.directives ?? [],
+          userModelLibraries: replacement.userModelLibraries ?? [],
           selectedId: null,
           selectedWireId: null,
           selectedWireIds: [], selectedLabelIds: [], selectedProbeIds: [],
@@ -1081,6 +1136,7 @@ export const useSchematic = create<SchematicState>()((set) => {
           probes: restored.probes ?? [],
           netLabels: restored.netLabels ?? [],
           directives: restored.directives ?? [],
+          userModelLibraries: restored.userModelLibraries ?? [],
           past: history.past.map(copyHistoryEntry).slice(-HISTORY_LIMIT),
           future: history.future.map(copyHistoryEntry).slice(0, HISTORY_LIMIT),
           selectedId: null,
@@ -1099,6 +1155,7 @@ export const useSchematic = create<SchematicState>()((set) => {
         probes: [],
         netLabels: [],
         directives: [],
+        userModelLibraries: [],
         past: [],
         future: [],
         selectedId: null,
@@ -1118,6 +1175,7 @@ useSchematic.subscribe((state, prev) => {
     || state.probes !== prev.probes
     || state.netLabels !== prev.netLabels
     || state.directives !== prev.directives
+    || state.userModelLibraries !== prev.userModelLibraries
   ) {
     persist({
       components: state.components,
@@ -1125,6 +1183,7 @@ useSchematic.subscribe((state, prev) => {
       probes: state.probes,
       netLabels: state.netLabels,
       directives: state.directives,
+      ...(state.userModelLibraries.length > 0 ? { userModelLibraries: state.userModelLibraries } : {}),
     });
   }
 });

@@ -186,6 +186,11 @@ export function serializeSchematicFile(
         probes: document.probes ?? [],
         netLabels: document.netLabels ?? [],
         directives: document.directives ?? [],
+        // Additive: only present when the document carries attached vendor model
+        // files, so legacy `.sim` output is byte-for-byte unchanged.
+        ...(document.userModelLibraries && document.userModelLibraries.length > 0
+          ? { userModelLibraries: document.userModelLibraries }
+          : {}),
       },
       null,
       2,

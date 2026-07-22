@@ -161,6 +161,7 @@ export function schematicDocumentSignature(doc: SchematicDocument): string {
     probes: doc.probes,
     netLabels: doc.netLabels,
     directives: doc.directives ?? [],
+    userModelLibraries: doc.userModelLibraries ?? [],
   });
 }
 
@@ -189,6 +190,7 @@ function App() {
   const probes = useSchematic((s) => s.probes);
   const netLabels = useSchematic((s) => s.netLabels);
   const directives = useSchematic((s) => s.directives);
+  const userModelLibraries = useSchematic((s) => s.userModelLibraries);
   const past = useSchematic((s) => s.past);
   const future = useSchematic((s) => s.future);
   const cancel = useSchematic((s) => s.cancel);
@@ -388,7 +390,14 @@ function App() {
     probes,
     netLabels,
     directives,
-  }), [components, directives, netLabels, probes, wires]);
+    ...(userModelLibraries.length > 0 ? { userModelLibraries } : {}),
+  }), [components, directives, netLabels, probes, userModelLibraries, wires]);
+  // Native runs take the raw vendor text (LTspice-only cleanup happens in the
+  // deck builder); the store keeps names alongside for the attachment UI.
+  const userModelLibraryTexts = useMemo(
+    () => userModelLibraries.map((library) => library.text),
+    [userModelLibraries],
+  );
   const currentSignature = useMemo(
     () => schematicDocumentSignature(currentDocument),
     [currentDocument],
@@ -529,7 +538,7 @@ function App() {
       setRunProgress(fraction);
     };
     try {
-      const nativeResult = await runNativeTransient({ components, wires, netLabels, params, directives }, options);
+      const nativeResult = await runNativeTransient({ components, wires, netLabels, params, directives, userModelLibraries: userModelLibraryTexts }, options);
       if (nativeResult) {
         // Stop marks this request stale even if the worker happened to finish
         // during cancellation, so a late native result can never overwrite UI.
@@ -573,7 +582,7 @@ function App() {
       // run that's actually still abortable.
       if (transientAbortRef.current === controller) transientAbortRef.current = null;
     }
-  }, [components, wires, netLabels, params, directives, couplings, showNotice]);
+  }, [components, wires, netLabels, params, directives, userModelLibraryTexts, couplings, showNotice]);
 
   // Pre-run guard (Fix 3): a step count big enough to genuinely stall the UI
   // for a while gets a confirmation instead of launching silently. Native is
@@ -610,7 +619,7 @@ function App() {
     const requestId = ++analysisRequestRef.current;
     setAnalysisRunning(true);
     try {
-      const result = await runNativeOperatingPoint({ components, wires, netLabels, params, directives }) ?? runOperatingPoint({ components, wires, netLabels, params }, { returnBranches: true });
+      const result = await runNativeOperatingPoint({ components, wires, netLabels, params, directives, userModelLibraries: userModelLibraryTexts }) ?? runOperatingPoint({ components, wires, netLabels, params }, { returnBranches: true });
       if (analysisRequestRef.current !== requestId) return;
       setOpAnalysis(result);
     } catch (error) {
@@ -619,7 +628,7 @@ function App() {
     } finally {
       if (analysisRequestRef.current === requestId) setAnalysisRunning(false);
     }
-  }, [components, wires, netLabels, params, directives]);
+  }, [components, wires, netLabels, params, directives, userModelLibraryTexts]);
 
   const runAcAnalysis = useCallback(async () => {
     const requestId = ++analysisRequestRef.current;
@@ -629,7 +638,7 @@ function App() {
       // frequencies (a document .ac directive still wins for step families).
       const acSweep = suggestAcSweep(components);
       const result = await runNativeAcSweep(
-        { components, wires, netLabels, params, directives },
+        { components, wires, netLabels, params, directives, userModelLibraries: userModelLibraryTexts },
         acSweep,
       ) ?? runAcSweep({ components, wires, netLabels, params, couplings }, acSweep);
       if (analysisRequestRef.current !== requestId) return;
@@ -654,7 +663,7 @@ function App() {
     } finally {
       if (analysisRequestRef.current === requestId) setAnalysisRunning(false);
     }
-  }, [components, wires, netLabels, params, directives, couplings]);
+  }, [components, wires, netLabels, params, directives, userModelLibraryTexts, couplings]);
 
   useEffect(() => {
     setDcSetup((d) => defaultDcSetup(components, d));
@@ -749,7 +758,7 @@ function App() {
         // resistors via applyTemperature).
         const stepDirectives = ctx.temperature !== undefined ? [`.temp ${ctx.temperature}`] : undefined;
         const result =
-          (await runNativeTransient({ components: ctx.components, wires, netLabels, params: ctx.params, directives: stepDirectives }, effectiveAnalysisOptions))
+          (await runNativeTransient({ components: ctx.components, wires, netLabels, params: ctx.params, directives: stepDirectives, userModelLibraries: userModelLibraryTexts }, effectiveAnalysisOptions))
           ?? (await runTransientAnalysis({ components: ctx.components, wires, netLabels, params: ctx.params }, effectiveAnalysisOptions));
         if (analysisRequestRef.current !== requestId) return;
         members.push({ label: ctx.label, value: ctx.value, result });
@@ -762,7 +771,7 @@ function App() {
     } finally {
       if (analysisRequestRef.current === requestId) setAnalysisRunning(false);
     }
-  }, [components, wires, netLabels, params, directives, effectiveAnalysisOptions, stepSetupUi]);
+  }, [components, wires, netLabels, params, directives, userModelLibraryTexts, effectiveAnalysisOptions, stepSetupUi]);
 
   const stepAnalysis = useCallback(async () => {
     // Native ngspice may return an endpoint in addition to requested samples.
