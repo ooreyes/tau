@@ -43,15 +43,72 @@ The only step left before sharing with testers is Apple notarization, which
 needs Omar's Developer ID.
 
 ## ⏱ HEARTBEAT
-- **Headline metric:** acceptance corpus remains 82 imported / 79 warning-clean / 82 deck-built / 82 op-converged / 82 schema-valid; `Circuit_testing_v1` is being escalated beyond its 31-check/11-fixture baseline into switching power, mixed logic/sequential, multi-stage op-amp, and larger power-network stress cases.
+- **Headline metric:** acceptance corpus remains 82 imported / 79 warning-clean / 82 deck-built / 82 op-converged / 82 schema-valid; `Circuit_testing_v1` is now 19 fixtures / 55 quantitative checks covering switching power, mixed combinational/sequential logic, complex active filtering, three-phase power, rectification, and instrumentation amplification.
 - **Run started (UTC):** 2026-07-23T17:08Z
 - **Synced to origin:** auto/ltspice-parity @ 145e1d0 (this unit's parent).
 - **Claimed unit:** add a significant second tier of complex LTspice-compatible circuits—buck/boost converters, AND/OR/NAND/NOR/XOR/inverter networks, D flip-flop sequencing, op-amp control/filter chains, and power-distribution cases—with quantitative Tau/native assertions and packaged-app UX verification.
-- **Status:** IN PROGRESS
-- **Last completed sub-step:** synchronized the sole durable branch, confirmed the prior unit is DONE with no `wip:` checkpoint, and mapped the existing v1 runner plus Tau's native digital, D-flop, op-amp, MOSFET, switch, and transient deck paths.
-- **Next candidates:** author the complex fixtures from the device/pin contracts, validate their generated decks directly in ngspice, then encode behavioral assertions that distinguish a correct result from a merely non-crashing run.
+- **Status:** DONE
+- **Last completed sub-step:** rebuilt the exact debug `Tau.app`, ran the buck, logic matrix, four-pole AC filter, and instrumentation amplifier through the packaged native path, and removed false floating-pin diagnostics for valid LTspice digital gates.
+- **Next candidates:** use this 55-check pack as a regression gate; the next research-grade expansion should target a concrete unsupported workflow such as Monte Carlo/sensitivity, control-loop stability automation, or a user-supplied vendor macro-model—not more unasserted demo schematics.
 
 ---
+
+## 2026-07-23T17:27Z - auto/ltspice-parity - Advanced engineering circuit stress tier (§1/§6)
+
+### What I did
+- Expanded `Circuit_testing_v1` from 11 to 19 unmodified
+  LTspice-compatible `.asc` fixtures: 100 kHz buck and boost converters,
+  AND/NAND/OR/NOR/XOR/XNOR truth-table logic, a cascaded two-bit D-flop
+  register, four independently buffered active-filter poles, a compensated
+  three-phase feeder and grounded-wye load, a bridge/capacitor DC supply, and
+  a three-op-amp instrumentation amplifier.
+- Extended the one-command corpus to 55 named checks. The new assertions prove
+  converter regulation and ripple, all four input states across six logic
+  outputs, the D-flop 01 → 11 → 10 edge sequence, −12 dB corner /
+  −80 dB-decade filter behavior, three-phase RMS balance, rectifier DC quality,
+  and approximately 21× differential instrumentation gain.
+- Fixed an advanced-circuit UX defect found only in the packaged pass:
+  intentionally unused LTspice digital-gate terminals no longer emit false
+  "only connected to one pin" warnings. Truly incomplete ordinary components
+  still use the existing diagnostic.
+
+### Packaged UX / numerical proof
+- Buck: complete in the rebuilt `Tau.app`, 132,634 samples over 4 ms,
+  `VOUT_AVG=4.642 V`, `VOUT_PP=15.11 mV`, with switch, gate, output, and
+  per-component telemetry visible.
+- Logic matrix: complete in the rebuilt app, 840 samples / 19 nets / 24 parts;
+  eight input/output waveform cards were reachable and the final build showed
+  no false floating-gate warnings.
+- Four-pole filter: authored `.ac dec 40 10 1Meg` opened directly in AC and
+  completed with 201 points. Instrumentation amplifier: authored `.op`
+  completed with `V(out)=-210 mV` for a 10 mV differential input.
+
+### Tests
+- `Circuit_testing_v1/run.sh` - 20 tests, 55 passed / 0 skipped.
+- `pnpm -C apps/desktop typecheck` - clean.
+- `pnpm -C apps/desktop test` - 137 files passed / 1 skipped; 2,063 tests
+  passed / 6 skipped.
+- `pnpm --filter @tau/desktop tauri build --debug --bundles app` - passed;
+  exact rebuilt app re-launched and exercised through the macOS UI.
+
+### Files / parity
+- `Circuit_testing_v1/12_*.asc` through `19_*.asc`, `README.md`
+- `apps/desktop/scripts/circuitTestingV1.corpus.ts`
+- `apps/desktop/src/schematic/netlist.ts` + regression
+- `FEATURE_PARITY.md` §1/§6
+
+### Research-grade verdict
+This tier is a material step beyond educational RC examples and proves
+graduate-level building blocks across power electronics, digital state,
+multi-stage analog, and three-phase systems. It is not evidence of universal
+PhD/research suitability: arbitrary proprietary macro-model compatibility,
+Monte Carlo/sensitivity/optimization, and domain-specific control or RF
+workflows still require their own acceptance fixtures and product support.
+
+### Next step
+Add the next fixture only alongside a user-provided research workflow and a
+numerical oracle, so breadth continues to measure correctness rather than
+schematic count.
 
 ## 2026-07-23T16:12Z - auto/ltspice-parity - Circuit_testing_v1 native analysis and packaged UX audit (§1/§6)
 

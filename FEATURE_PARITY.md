@@ -99,12 +99,16 @@ Status legend: ✅ done · 🟡 partial · ⬜ not started
   singular matrix in ngspice without the true Chan model — building ≠ converging
   for that one file; the saturable waveform is genuinely out of ngspice's reach.)
 - ✅ **Repository-owned analysis/UX stress pack** (`Circuit_testing_v1/`,
-  2026-07-23): 11 LTspice-compatible `.asc` fixtures plus `run.sh` cover
-  OP/TRAN/AC/DC/STEP/MEAS/TF/NOISE, RLC behavior, an 18-part ladder, and
-  deliberate missing-ground/duplicate-ref failures. The one-command report is
-  green at 31/31 across Tau solvers and installed ngspice; the exact packaged
-  macOS app additionally proved 3.33 V OP, the authored 121-point AC sweep,
-  and a 4,090-sample native ladder transient.
+  expanded 2026-07-23): 19 LTspice-compatible `.asc` fixtures plus `run.sh`
+  cover OP/TRAN/AC/DC/STEP/MEAS/TF/NOISE, RLC behavior, an 18-part ladder,
+  MOSFET buck/boost converters, six-output combinational logic, a cascaded
+  D-flop register, a four-pole buffered active filter, a compensated
+  three-phase feeder, a bridge supply, a three-op-amp instrumentation
+  amplifier, and deliberate missing-ground/duplicate-ref failures. The
+  one-command report is green at 55/55 across Tau solvers and installed
+  ngspice. The exact packaged macOS app additionally proved the buck at
+  4.642 V average / 15.11 mV ripple, all eight logic traces warning-free, the
+  four-pole AC run, and −210 mV INA output from 10 mV differential input.
 - 🟡 **Import LTspice `.asc` schematics** — **parser + `ascToSchematic()` landed**
   (`io/ascImport.ts`). Parses `Version/SHEET/WIRE/FLAG/SYMBOL/SYMATTR/WINDOW/TEXT/
   LINE/…` losslessly; validated by parsing **4,012 real LTspice files (49,625
