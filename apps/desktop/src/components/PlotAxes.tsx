@@ -63,6 +63,32 @@ export function PlotAxes({
   const xPixel = (frac: number) => pad + frac * innerW;
   // Y is inverted: frac 0 (yMin) sits at the bottom of the plot box.
   const yPixel = (frac: number) => height - pad - frac * innerH;
+  const xLabelGeometry = xTicks.map((tick, index) => {
+    const px = xPixel(tick.frac);
+    const anchor: "start" | "end" | "middle" =
+      tick.frac < 0.06 ? "start" : tick.frac > 0.94 ? "end" : "middle";
+    const x = anchor === "start" ? Math.max(px, pad) : anchor === "end" ? Math.min(px, width - pad) : px;
+    // The plot's technical font is 11px. 7.2px per glyph is intentionally
+    // conservative so a narrow pane thins labels before they visibly collide.
+    const estimatedWidth = tick.label.length * 7.2;
+    const left = anchor === "start" ? x : anchor === "end" ? x - estimatedWidth : x - estimatedWidth / 2;
+    const right = anchor === "start" ? x + estimatedWidth : anchor === "end" ? x : x + estimatedWidth / 2;
+    return { tick, index, anchor, x, left, right };
+  });
+  const visibleXLabelIndices = (() => {
+    if (xLabelGeometry.length <= 2) return new Set(xLabelGeometry.map((entry) => entry.index));
+    const visible = new Set<number>([xLabelGeometry[0].index]);
+    let rightEdge = xLabelGeometry[0].right;
+    const final = xLabelGeometry[xLabelGeometry.length - 1];
+    for (const entry of xLabelGeometry.slice(1, -1)) {
+      if (entry.left >= rightEdge + 4 && entry.right <= final.left - 4) {
+        visible.add(entry.index);
+        rightEdge = entry.right;
+      }
+    }
+    visible.add(final.index);
+    return visible;
+  })();
 
   return (
     <>
@@ -101,13 +127,11 @@ export function PlotAxes({
       <rect className="scope-frame" x={pad} y={pad} width={innerW} height={innerH} />
       <g className="scope-ticks">
         {showXTicks &&
-          xTicks.map((t, i) => {
-            const px = xPixel(t.frac);
-            const anchor = t.frac < 0.06 ? "start" : t.frac > 0.94 ? "end" : "middle";
-            const tx = anchor === "start" ? Math.max(px, pad) : anchor === "end" ? Math.min(px, width - pad) : px;
+          xLabelGeometry.map(({ tick, index, anchor, x }) => {
+            if (!visibleXLabelIndices.has(index)) return null;
             return (
-              <text key={`tx${i}`} className="scope-tick mono-num" textAnchor={anchor} x={tx} y={height - pad + 14}>
-                {t.label}
+              <text key={`tx${index}`} className="scope-tick mono-num" textAnchor={anchor} x={x} y={height - pad + 14}>
+                {tick.label}
               </text>
             );
           })}
@@ -130,9 +154,8 @@ export function PlotAxes({
         <text
           className="scope-axis-title mono-num"
           x={5}
-          y={pad + innerH / 2}
-          textAnchor="middle"
-          transform={`rotate(-90 5 ${pad + innerH / 2})`}
+          y={Math.max(10, pad - 8)}
+          textAnchor="start"
         >
           {yUnit ? `${yAxisTitle} (${yUnit})` : yAxisTitle}
         </text>

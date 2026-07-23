@@ -415,6 +415,65 @@ describe("SimulationPanel - one Advanced disclosure per tab (simplify pass)", { 
   });
 });
 
+describe("SimulationPanel - engineering-safe transient controls", { timeout: 20_000 }, () => {
+  it("sets the STEPS slider floor from the fastest source and clamps changes to it", () => {
+    useSchematic.setState({
+      components: [
+        { id: "v1", kind: "vac", label: "V1", value: "1 1Meg", x: 0, y: 0, rotation: 0 },
+      ],
+    });
+    const handlers = renderPanel({ options: { stopTime: 10e-6, steps: 100 } });
+
+    fireEvent.click(screen.getByRole("button", { name: "Toggle advanced settings" }));
+    const slider = screen.getByLabelText("STEPS slider") as HTMLInputElement;
+    expect(slider.min).toBe("320");
+
+    fireEvent.change(slider, { target: { value: "32" } });
+    expect(slider.value).toBe("320");
+    expect(handlers.onOptionsChange).not.toHaveBeenCalled();
+  });
+
+  it("accepts an exact exponent-form STOP time", () => {
+    const handlers = renderPanel();
+    fireEvent.click(screen.getByRole("button", { name: "Toggle advanced settings" }));
+    fireEvent.change(screen.getByLabelText("Simulation stop time SI prefix"), { target: { value: "" } });
+    fireEvent.change(screen.getByLabelText("Simulation stop time"), { target: { value: "2e-3" } });
+    expect(handlers.onOptionsChange).toHaveBeenLastCalledWith({ stopTime: 0.002, steps: 240 });
+  });
+
+  it("draws both cursors through the waveform and accepts exact interval endpoints", () => {
+    useSchematic.setState({
+      wires: [{ id: "w1", points: [{ x: 0, y: 0 }, { x: 16, y: 0 }] }],
+      probes: [{ id: "p1", x: 0, y: 0, netId: "n1", color: "var(--trace-cyan)" }],
+    });
+    const result = {
+      ok: true,
+      title: "Transient",
+      times: [0, 1, 2],
+      traces: [{ id: "n1", label: "V(out)", unit: "V", color: "var(--trace-cyan)", values: [0, 1, 0] }],
+      currents: [],
+      stats: { netCount: 1, componentCount: 0, sampleCount: 3, stopTime: 2, stepSize: 1 },
+      warnings: [],
+      circuit: {
+        groundNetId: null,
+        warnings: [],
+        nets: [{ id: "n1", points: [{ x: 0, y: 0 }, { x: 16, y: 0 }], pins: [], isGround: false, labelCount: 0 }],
+        components: [],
+      },
+    } as Extract<import("../simulation/linearTransient").AnalysisResult, { ok: true }>;
+    renderPanel({ result });
+
+    fireEvent.click(screen.getByRole("button", { name: "Toggle advanced settings" }));
+    fireEvent.click(screen.getByRole("button", { name: "Toggle measurement cursors" }));
+    expect(document.querySelectorAll(".transient-cursor")).toHaveLength(2);
+
+    fireEvent.change(screen.getByLabelText("Cursor 1 time SI prefix"), { target: { value: "" } });
+    fireEvent.change(screen.getByLabelText("Cursor 1 time"), { target: { value: "1e0" } });
+    const firstCursorLine = document.querySelector(".transient-cursor.cursor-1 line");
+    expect(Number(firstCursorLine?.getAttribute("x1"))).toBeCloseTo(170, 3);
+  });
+});
+
 describe("SimulationPanel - run-in-progress overlay (Fix 3)", () => {
   it("is absent when idle", () => {
     renderPanel({ isRunning: false, runProgress: null });

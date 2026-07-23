@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState, type FocusEvent } from "react";
 import {
   ENGINEERING_PREFIXES,
+  compactEngineeringMantissa,
   composeEngineeringValue,
   isEngineeringMantissa,
+  isEngineeringMantissaDraft,
   splitEngineeringValue,
 } from "../schematic/engineering";
 
@@ -20,7 +22,8 @@ export function EngineeringInput({ value, unit, label, onValueChange, onBeginCha
   const focused = useRef(false);
   const changeStarted = useRef(false);
   const valid = isEngineeringMantissa(parts.mantissa);
-  // Keep the unit tucked against the number; grow as digits are typed.
+  // `field-sizing: content` is not reliable in the macOS WebView. Give WebKit
+  // an explicit character width so the complete mantissa remains visible.
   const inputSize = Math.max(2, Math.min(14, parts.mantissa.length + 1));
 
   useEffect(() => {
@@ -46,7 +49,14 @@ export function EngineeringInput({ value, unit, label, onValueChange, onBeginCha
     if (event.currentTarget.contains(event.relatedTarget)) return;
     focused.current = false;
     changeStarted.current = false;
-    if (!isEngineeringMantissa(parts.mantissa)) setParts(splitEngineeringValue(value, unit));
+    if (!isEngineeringMantissa(parts.mantissa)) {
+      setParts(splitEngineeringValue(value, unit));
+      return;
+    }
+    setParts((current) => ({
+      ...current,
+      mantissa: compactEngineeringMantissa(current.mantissa),
+    }));
   };
 
   return (
@@ -56,10 +66,12 @@ export function EngineeringInput({ value, unit, label, onValueChange, onBeginCha
         aria-label={label}
         value={parts.mantissa}
         size={inputSize}
+        style={{ width: `${inputSize}ch` }}
         inputMode="decimal"
         spellCheck={false}
         aria-invalid={!valid}
         onChange={(event) => {
+          if (!isEngineeringMantissaDraft(event.currentTarget.value)) return;
           const next = { ...parts, mantissa: event.currentTarget.value };
           setParts(next);
           commit(next);

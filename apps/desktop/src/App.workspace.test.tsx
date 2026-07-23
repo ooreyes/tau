@@ -159,7 +159,8 @@ describe("App schematic workspace tools", () => {
     fireEvent.click(screen.getByRole("button", { name: "Simulator" }));
     fireEvent.click(screen.getByRole("button", { name: "Toggle advanced settings" }));
 
-    expect(screen.getByText("500 µs")).toBeTruthy();
+    expect((screen.getByLabelText("Simulation stop time") as HTMLInputElement).value).toBe("500");
+    expect((screen.getByLabelText("Simulation stop time SI prefix") as HTMLSelectElement).value).toBe("u");
   });
 
   it("explains the simulator is view-only when an edit shortcut is attempted", async () => {

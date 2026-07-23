@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { composeEngineeringValue, isEngineeringMantissa, splitEngineeringValue } from "./engineering";
+import {
+  compactEngineeringMantissa,
+  composeEngineeringValue,
+  isEngineeringMantissa,
+  isEngineeringMantissaDraft,
+  splitEngineeringValue,
+} from "./engineering";
 
 describe("engineering value controls", () => {
   it("treats m and M both as milli (LTspice suffix rules)", () => {
@@ -42,5 +48,13 @@ describe("engineering value controls", () => {
   it("accepts incomplete typing locally only after it becomes a valid number", () => {
     expect(isEngineeringMantissa("1.")).toBe(true);
     expect(isEngineeringMantissa("-")).toBe(false);
+    expect(isEngineeringMantissaDraft("-")).toBe(true);
+    expect(isEngineeringMantissaDraft("1e-")).toBe(true);
+    expect(isEngineeringMantissaDraft("english")).toBe(false);
+  });
+
+  it("compacts overlong numbers to exponential notation for display", () => {
+    expect(compactEngineeringMantissa("123456789012")).toBe("1.23456789e11");
+    expect(compactEngineeringMantissa("4.7")).toBe("4.7");
   });
 });

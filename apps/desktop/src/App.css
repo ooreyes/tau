@@ -1765,6 +1765,18 @@ body {
   font-size: 9px;
 }
 
+.transient-cursors {
+  pointer-events: none;
+}
+
+.transient-cursor.cursor-2 line {
+  stroke: var(--trace-green);
+}
+
+.transient-cursor.cursor-2 text {
+  fill: var(--trace-green);
+}
+
 /* In-place DC operating point labels on the schematic (simulator mode). A
    background stroke keeps them readable over wires and symbol bodies. Kept
    outside the App.css type scale (schematic canvas SVG text). */
@@ -2023,6 +2035,33 @@ body {
 .cursor-sliders input[type="range"] {
   flex: 1;
   accent-color: var(--accent);
+}
+
+.cursor-help {
+  margin: 2px 2px 6px;
+  color: var(--faint);
+  font-size: var(--fs-caption);
+}
+
+.cursor-time-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--sp-3);
+  padding: 0 2px var(--sp-2);
+}
+
+.cursor-time-fields > label {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: var(--sp-2);
+  color: var(--muted);
+  font-size: var(--fs-caption);
+}
+
+.cursor-time-fields .eng-input {
+  justify-self: end;
 }
 
 .cursor-table {
@@ -2798,6 +2837,9 @@ body {
 
 .eng-input input {
   /* Grow with digit count; unit stays immediately to the right. */
+  /* The app-wide border-box reset must not consume character width with this
+     field's padding; `width: Nch` describes the editable text area. */
+  box-sizing: content-box;
   width: auto;
   min-width: 2.5ch;
   max-width: 14ch;
@@ -3113,6 +3155,7 @@ body {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
+  gap: var(--sp-2);
 }
 /* Font/tabular-figure declarations now live in the shared `.mono-num` utility
    (applied in SimulationPanel.tsx's DialControl) - this rule only carries
@@ -3121,6 +3164,10 @@ body {
   font-size: var(--fs-title);
   font-weight: 500;
   color: var(--text);
+}
+
+.param-head .eng-input {
+  justify-content: flex-end;
 }
 .param-slider {
   -webkit-appearance: none;

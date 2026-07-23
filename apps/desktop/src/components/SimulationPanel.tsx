@@ -10,7 +10,7 @@ import {
   type AnalysisResult,
   type Trace,
 } from "../simulation/linearTransient";
-import { formatEngineering } from "../simulation/quantity";
+import { formatEngineering, parseQuantity } from "../simulation/quantity";
 import type { Probe, NetLabel, SchematicWire } from "../schematic/types";
 import { netAtPoint } from "../schematic/netlist";
 import { Button } from "@/components/ui/button";
@@ -89,6 +89,7 @@ import { visibleTransientTraces } from "../simulation/visibleTraces";
 import { EngineeringTraceReadout } from "./EngineeringTraceReadout";
 import { traceStatistics } from "../simulation/measurementModel";
 import { AnalysisModeRail, type AnalysisMode } from "./AnalysisModeRail";
+import { EngineeringInput } from "./EngineeringInput";
 
 interface SimulationPanelProps {
   /** Active circuit tab's title - a best-effort key for persisting the TRAN
@@ -218,6 +219,9 @@ export function SimulationPanel({
   // MIN/AVG/MAX overlay on single-trace panes - opt-in (Advanced ▸ Plot tools)
   // so the default scope reads as a clean waveform, not a measurement grid.
   const [showStats, setShowStats] = useState(false);
+  const [cursorsOpen, setCursorsOpen] = useState(false);
+  const [cursorF1, setCursorF1] = useState(0.25);
+  const [cursorF2, setCursorF2] = useState(0.75);
   const [maximized, setMaximized] = useState(false);
   // User-entered expression traces overlaid on the transient scope, e.g.
   // `V(out)-V(in)` or power `V(out)*I(R1)`.
@@ -465,6 +469,17 @@ export function SimulationPanel({
       return null;
     }
   }, [components, options]);
+  const transientCursorPositions = useMemo(() => {
+    if (!cursorsOpen || !result?.ok || result.times.length === 0) return null;
+    return {
+      x1: fractionToX(result.times, cursorF1),
+      x2: fractionToX(result.times, cursorF2),
+    };
+  }, [cursorsOpen, result, cursorF1, cursorF2]);
+  const minimumTransientSteps =
+    resolution && resolution.requiredSteps > 0 && resolution.requiredSteps <= maxTransientSteps
+      ? Math.max(32, resolution.requiredSteps)
+      : 32;
 
   // one status voice for the whole panel: the dashboard strip
   // under the tabs. Idle (nothing run), Running (amber, tactical), Complete
@@ -620,6 +635,7 @@ export function SimulationPanel({
             measurements={measurements}
             fourier={fourier}
             layoutKey={circuitTitle ?? "default"}
+            cursors={transientCursorPositions}
           />
 
           <div className="advanced-settings">
@@ -745,7 +761,16 @@ export function SimulationPanel({
                 <section className="advanced-group">
                   <h4 className="advanced-group-title">Spectrum &amp; cursors</h4>
                   <FftView result={result} preferredSignals={baseTraces.map((trace) => trace.label)} />
-                  <CursorView result={result} extraTraces={exprTraces} />
+                  <CursorView
+                    result={result}
+                    extraTraces={exprTraces}
+                    open={cursorsOpen}
+                    onOpenChange={setCursorsOpen}
+                    f1={cursorF1}
+                    f2={cursorF2}
+                    onF1Change={setCursorF1}
+                    onF2Change={setCursorF2}
+                  />
                 </section>
 
                 <section className="advanced-group">
@@ -817,15 +842,36 @@ export function SimulationPanel({
                       step={0.1}
                       numericValue={options.stopTime * 1000}
                       onChange={(value) => onOptionsChange({ ...options, stopTime: value / 1000 })}
+                      editor={
+                        <EngineeringInput
+                          label="Simulation stop time"
+                          value={engineeringInputDisplay(options.stopTime, "s")}
+                          unit="s"
+                          onValueChange={(value) => {
+                            try {
+                              const stopTime = parseQuantity(value, "s");
+                              if (Number.isFinite(stopTime) && stopTime > 0) {
+                                onOptionsChange({ ...options, stopTime });
+                              }
+                            } catch {
+                              // EngineeringInput retains the editable draft
+                              // until it becomes a valid numeric value.
+                            }
+                          }}
+                        />
+                      }
                     />
                     <DialControl
                       label="STEPS"
                       value={String(options.steps)}
-                      min={32}
+                      min={minimumTransientSteps}
                       max={maxTransientSteps}
                       step={1}
                       numericValue={options.steps}
-                      onChange={(value) => onOptionsChange({ ...options, steps: Math.round(value) })}
+                      onChange={(value) => onOptionsChange({
+                        ...options,
+                        steps: Math.max(minimumTransientSteps, Math.round(value)),
+                      })}
                     />
                     <ResolutionControl
                       resolution={resolution}
@@ -1063,6 +1109,7 @@ export function WaveformPlot({
   measurements = [],
   fourier = [],
   layoutKey = "default",
+  cursors = null,
 }: {
   result: AnalysisResult | null;
   baseTraces: Trace[];
@@ -1081,6 +1128,8 @@ export function WaveformPlot({
   /** Best-effort localStorage key for the dashboard's card order/width/
    *  height, one per circuit tab (App.tsx's active document title). */
   layoutKey?: string;
+  /** Active transient measurement positions, drawn through every plot pane. */
+  cursors?: { x1: number; x2: number } | null;
 }) {
   const success = result?.ok ? result : null;
 
@@ -1292,6 +1341,7 @@ export function WaveformPlot({
                   onSharedXChange={shareXViewport}
                   showStatistics={showStatistics}
                   plotHeight={PLOT_HEIGHT_PX[height]}
+                  cursors={cursors}
                 />
                 <div className="scope-legend" aria-label="Trace measurements">
                   {paneTraces.length > 0 ? (
@@ -1409,6 +1459,7 @@ function TranScopePane({
   onSharedXChange,
   showStatistics,
   plotHeight = 190,
+  cursors,
 }: {
   paneTraces: Trace[];
   plot: { min: number; max: number; tMax: number; unit: string } | null;
@@ -1424,6 +1475,7 @@ function TranScopePane({
   /** Dashboard card height (S/M/L → 160/190/260, see cardLayout.ts). Defaults
    *  to the old fixed 190 for any caller that doesn't specify one. */
   plotHeight?: number;
+  cursors?: { x1: number; x2: number } | null;
 }) {
   const clipId = useId();
   const [measureRef, size] = useMeasuredSize<SVGSVGElement>();
@@ -1504,6 +1556,23 @@ function TranScopePane({
                 viewport={viewport}
                 height={plotHeight}
               />
+            )}
+            {cursors && (
+              <g className="transient-cursors" aria-hidden="true">
+                {[
+                  { label: "C1", value: cursors.x1, className: "cursor-1" },
+                  { label: "C2", value: cursors.x2, className: "cursor-2" },
+                ].map((cursor) => {
+                  if (cursor.value < viewport.xMin || cursor.value > viewport.xMax) return null;
+                  const x = PLOT_PAD + ((cursor.value - viewport.xMin) / (viewport.xMax - viewport.xMin)) * (PLOT_WIDTH - 2 * PLOT_PAD);
+                  return (
+                    <g key={cursor.label} className={`plot-cursor transient-cursor ${cursor.className}`}>
+                      <line x1={x} y1={PLOT_PAD} x2={x} y2={plotHeight - PLOT_PAD} />
+                      <text x={x + 4} y={PLOT_PAD + 11}>{cursor.label}</text>
+                    </g>
+                  );
+                })}
+              </g>
             )}
           </>
         )}
@@ -2204,15 +2273,29 @@ function SpectrumMetric({ label, value, detail }: { label: string; value: string
 
 /**
  * Measurement cursors - two positions along the time axis with a per-trace
- * value + delta readout (LTspice's "1 & 2" cursors). Positions are sliders
- * (0-100% of the run) so there is no canvas drag to get wrong; the readout comes
- * from the unit-tested `cursorReadout`.
+ * value + delta readout (LTspice's "1 & 2" cursors). Sliders provide quick
+ * placement, exact engineering-notation time fields provide precision, and
+ * the controlled positions are also drawn through every waveform pane.
  */
-function CursorView({ result, extraTraces }: { result: AnalysisResult | null; extraTraces: Trace[] }) {
-  const [open, setOpen] = useState(false);
-  const [f1, setF1] = useState(0.25);
-  const [f2, setF2] = useState(0.75);
-
+function CursorView({
+  result,
+  extraTraces,
+  open,
+  onOpenChange,
+  f1,
+  f2,
+  onF1Change,
+  onF2Change,
+}: {
+  result: AnalysisResult | null;
+  extraTraces: Trace[];
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  f1: number;
+  f2: number;
+  onF1Change: (fraction: number) => void;
+  onF2Change: (fraction: number) => void;
+}) {
   const success = result?.ok ? result : null;
   const signals = useMemo<CursorTraceInput[]>(() => {
     if (!success) return [];
@@ -2233,6 +2316,19 @@ function CursorView({ result, extraTraces }: { result: AnalysisResult | null; ex
       return null;
     }
   }, [open, success, signals, f1, f2]);
+  const setExactTime = (value: string, setFraction: (fraction: number) => void) => {
+    if (!success || success.times.length === 0) return;
+    try {
+      const seconds = parseQuantity(value, "s");
+      const first = success.times[0];
+      const last = success.times[success.times.length - 1];
+      const span = last - first;
+      if (!Number.isFinite(seconds) || span <= 0) return;
+      setFraction(Math.max(0, Math.min(1, (seconds - first) / span)));
+    } catch {
+      // The shared engineering input keeps partial exponent drafts locally.
+    }
+  };
 
   if (!success) return null;
 
@@ -2240,7 +2336,7 @@ function CursorView({ result, extraTraces }: { result: AnalysisResult | null; ex
     <div className="fft-view">
       <button
         className="disclosure-header"
-        onClick={() => setOpen((o) => !o)}
+        onClick={() => onOpenChange(!open)}
         aria-expanded={open}
         aria-label="Toggle measurement cursors"
       >
@@ -2256,7 +2352,7 @@ function CursorView({ result, extraTraces }: { result: AnalysisResult | null; ex
               <input
                 type="range" min={0} max={1000} value={Math.round(f1 * 1000)}
                 aria-label="Cursor 1 position"
-                onChange={(e) => setF1(Number(e.currentTarget.value) / 1000)}
+                onChange={(e) => onF1Change(Number(e.currentTarget.value) / 1000)}
               />
             </label>
             <label>
@@ -2264,10 +2360,35 @@ function CursorView({ result, extraTraces }: { result: AnalysisResult | null; ex
               <input
                 type="range" min={0} max={1000} value={Math.round(f2 * 1000)}
                 aria-label="Cursor 2 position"
-                onChange={(e) => setF2(Number(e.currentTarget.value) / 1000)}
+                onChange={(e) => onF2Change(Number(e.currentTarget.value) / 1000)}
               />
             </label>
           </div>
+          {readout && (
+            <>
+              <p className="cursor-help">Drag for coarse placement or enter exact endpoints for a time interval.</p>
+              <div className="cursor-time-fields">
+                <label>
+                  <span>C1 time</span>
+                  <EngineeringInput
+                    label="Cursor 1 time"
+                    value={engineeringInputDisplay(readout.x1, "s")}
+                    unit="s"
+                    onValueChange={(value) => setExactTime(value, onF1Change)}
+                  />
+                </label>
+                <label>
+                  <span>C2 time</span>
+                  <EngineeringInput
+                    label="Cursor 2 time"
+                    value={engineeringInputDisplay(readout.x2, "s")}
+                    unit="s"
+                    onValueChange={(value) => setExactTime(value, onF2Change)}
+                  />
+                </label>
+              </div>
+            </>
+          )}
           {readout && (
             <div className="meter-row analysis-meter">
               <Metric label="t1" value={formatEngineering(readout.x1, "s", 3)} tone="cyan" />
@@ -3088,6 +3209,7 @@ function DialControl({
   max,
   step,
   onChange,
+  editor,
 }: {
   label: string;
   value: string;
@@ -3096,16 +3218,18 @@ function DialControl({
   max: number;
   step: number;
   onChange: (value: number) => void;
+  editor?: ReactNode;
 }) {
   const progress = Math.max(0, Math.min(1, (numericValue - min) / (max - min)));
   return (
     <label className="param-control">
       <div className="param-head">
         <span className="param-label">{label}</span>
-        <span className="param-value mono-num">{value}</span>
+        {editor ?? <span className="param-value mono-num">{value}</span>}
       </div>
       <input
         className="param-slider"
+        aria-label={`${label} slider`}
         type="range"
         min={min}
         max={max}
@@ -3164,3 +3288,5 @@ function ResolutionControl({
 
 const formatCount = (value: number) => value.toLocaleString("en-US");
 const formatSamples = (value: number) => Number(value.toPrecision(3)).toString();
+const engineeringInputDisplay = (value: number, unit: string) =>
+  formatEngineering(value, unit, 8).replace(/\s+/g, "");

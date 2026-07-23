@@ -37,6 +37,7 @@ import { CATALOG } from "./schematic/catalog";
 import { dispatchShortcutAction, isEditingAction, resolveShortcut } from "./schematic/shortcuts";
 import { extractCircuit } from "./schematic/netlist";
 import {
+  enforceMinimumTransientSteps,
   MAX_TRANSIENT_STEPS,
   runTransientAnalysis,
   type AnalysisOptions,
@@ -217,9 +218,14 @@ function App() {
   // an editor annotation. Honor it until the user deliberately touches a
   // control; otherwise `adoptDirectiveOptions` updates invisible state while
   // the Run path continues to use auto-resolution (the Colpitts regression).
-  const effectiveAnalysisOptions = optionsOverridden
+  const requestedAnalysisOptions = optionsOverridden
     ? analysisOptions
     : authoredAnalysisOptions ?? autoAnalysisOptions;
+  const effectiveAnalysisOptions = enforceMinimumTransientSteps(
+    components,
+    requestedAnalysisOptions,
+    isNativeSpiceRuntime() ? MAX_NATIVE_OUTPUT_POINTS - 1 : MAX_TRANSIENT_STEPS,
+  );
   const overrideAnalysisOptions = useCallback((next: AnalysisOptions) => {
     setAnalysisOptions(next);
     setOptionsOverridden(true);

@@ -837,7 +837,7 @@ function validateOptions(options: AnalysisOptions) {
 /** Inspect the highest periodic source before running, so the UI can display a
  * meaningful samples-per-cycle figure and the solver can prevent aliasing. */
 export function inspectTransientResolution(
-  components: SchematicComponent[],
+  components: readonly SchematicComponent[],
   options: AnalysisOptions,
 ): TransientResolution {
   let maxFrequencyHz = 0;
@@ -855,6 +855,27 @@ export function inspectTransientResolution(
     requiredSteps: maxFrequencyHz > 0 ? Math.ceil(options.stopTime * maxFrequencyHz * MIN_SAMPLES_PER_CYCLE) : 0,
     samplesPerCycle,
   };
+}
+
+/**
+ * Clamp a requested transient run to the circuit-derived minimum sample
+ * density. When the requirement exceeds the runtime's output ceiling, return
+ * the ceiling so the UI can honestly ask the user to shorten STOP.
+ */
+export function enforceMinimumTransientSteps(
+  components: readonly SchematicComponent[],
+  options: AnalysisOptions,
+  maxSteps = MAX_TRANSIENT_STEPS,
+): AnalysisOptions {
+  try {
+    const { requiredSteps } = inspectTransientResolution(components, options);
+    if (requiredSteps <= 0 || options.steps >= requiredSteps) return options;
+    return { ...options, steps: Math.min(maxSteps, requiredSteps) };
+  } catch {
+    // A malformed source is reported by the normal run validation. The
+    // protective UI clamp must not make the whole workspace fail to render.
+    return options;
+  }
 }
 
 /** Dominant frequency a source imposes on transient sampling, or null when the

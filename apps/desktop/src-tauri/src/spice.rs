@@ -229,10 +229,9 @@ fn sweep_stale_codemodel_dirs(stable_dir: &std::path::Path) {
         if path == stable_dir {
             continue;
         }
-        let is_legacy = entry
-            .file_name()
-            .to_str()
-            .is_some_and(|name| name.starts_with("tau-ngspice-") && name != "tau-ngspice-codemodels");
+        let is_legacy = entry.file_name().to_str().is_some_and(|name| {
+            name.starts_with("tau-ngspice-") && name != "tau-ngspice-codemodels"
+        });
         if !is_legacy || !path.is_dir() {
             continue;
         }
@@ -1158,7 +1157,12 @@ V1 in 0 1
         // A '+' continuation used to hide the command token from the
         // blocklist. ngspice treats these as inert parameters, but the
         // sanitizer must not depend on that.
-        for unsafe_line in ["+ shell touch /tmp/nope", "+shell touch /tmp/nope", "+ quit", "+ write /tmp/exfil.raw"] {
+        for unsafe_line in [
+            "+ shell touch /tmp/nope",
+            "+shell touch /tmp/nope",
+            "+ quit",
+            "+ write /tmp/exfil.raw",
+        ] {
             let deck = format!("Tau adversarial deck\nV1 in 0 5\n{unsafe_line}\n.end\n");
             assert!(
                 deck_lines(&deck).is_err(),
@@ -1166,8 +1170,12 @@ V1 in 0 1
             );
         }
         // Ordinary continuation parameters still pass.
-        let benign = "Tau deck\nV1 in 0 PULSE(0 5 0 1n\n+ 1n 0.5m 1m)\nR1 in 0 1k\n.tran 1u 1m\n.end\n";
-        assert!(deck_lines(benign).is_ok(), "benign continuation was rejected");
+        let benign =
+            "Tau deck\nV1 in 0 PULSE(0 5 0 1n\n+ 1n 0.5m 1m)\nR1 in 0 1k\n.tran 1u 1m\n.end\n";
+        assert!(
+            deck_lines(benign).is_ok(),
+            "benign continuation was rejected"
+        );
     }
 
     #[test]

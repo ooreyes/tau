@@ -11,7 +11,11 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { inspectTransientResolution, runTransientAnalysis } from "./linearTransient";
+import {
+  enforceMinimumTransientSteps,
+  inspectTransientResolution,
+  runTransientAnalysis,
+} from "./linearTransient";
 import type { SchematicComponent, SchematicWire } from "../schematic/types";
 
 // ---------------------------------------------------------------------------
@@ -79,6 +83,19 @@ describe("Transient resolution guard", () => {
     const result = await runTransientAnalysis({ components: [source, gnd], wires: [] }, { stopTime: 10e-6, steps: 100 });
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.message).toContain("Transient resolution is too low");
+  });
+
+  it("automatically raises a manual request to the circuit-derived minimum", () => {
+    const source = vac(0, 32, "1 1Meg", "V1");
+    expect(enforceMinimumTransientSteps([source], { stopTime: 10e-6, steps: 100 })).toEqual({
+      stopTime: 10e-6,
+      steps: 320,
+    });
+  });
+
+  it("uses the runtime ceiling when the required sample count cannot fit", () => {
+    const source = vac(0, 32, "1 1G", "V1");
+    expect(enforceMinimumTransientSteps([source], { stopTime: 1e-3, steps: 100 }, 500_000).steps).toBe(500_000);
   });
 
   it("rejects a request that exceeds the interactive high-speed ceiling", async () => {

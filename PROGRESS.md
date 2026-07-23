@@ -43,13 +43,13 @@ The only step left before sharing with testers is Apple notarization, which
 needs Omar's Developer ID.
 
 ## ⏱ HEARTBEAT
-- **Headline metric:** vendor-model import now strips LTspice's bare `noiseless` device flag, which ngspice-46 FATALLY rejects on an R/C/L instance line ("unknown parameter (noiseless)" -> "incomplete or empty netlist"); a real Analog Devices macromodel (ADA4351, 140 such flags) goes from an empty netlist to a full operating point. 163 of the 2698 vendor files in the host LTspice lib carry the flag. Canonical acceptance corpus held at 82 imported / 79 warning-clean / 82 deck-built / 82 op-converged / 82 schema-valid; frontend suite green (2044 passing; the `App.workspace.test.tsx` `renderOpenProject` timeouts seen under full-suite CPU contention are the documented harness flakiness - the file is 14/14 in isolation), cargo 28/0, clippy clean.
-- **Run started (UTC):** 2026-07-22T15:10Z
-- **Synced to origin:** auto/ltspice-parity @ 771714f (this unit's parent).
-- **Claimed unit:** strip the LTspice `noiseless` device flag from inlined vendor `.subckt` interiors and directly-attached `.model` cards - a new `stripNoiselessFlag` helper in `engine/userModelLibrary.ts`, wired into `normalizeSubcktInterior` (every instance line and interior `.model` card; full-line comments left untouched, leading indentation preserved) and the top-level `.model` parse path. Necessary because ngspice reads a trailing `noiseless` on an instance line as an unknown model/parameter and aborts the whole deck; inside a `.model` card it is only a warning, but the strip removes that noise too.
-- **Status:** DONE
-- **Last completed sub-step:** Full gate matrix green on this exact tree: tsc clean; `userModelLibrary.test.ts` 23/23 (4 new - instance-line strip, interior `.model` strip, top-level `.model` strip, comment-line left alone); frontend suite green as above; cargo 28/0 + clippy clean; acceptance corpus at baseline with all three vendor-model proofs passing, including the new `scripts/userNoiselessImport.corpus.ts` - a real-engine A/B on ADA4351 (the raw vendor text aborts on the flag, Tau's translation converges to a full `.op`). No safety guard changed: the strip is a pure text transform on already-inlined vendor content; the Rust `deck_lines` allowlist, byte caps, and document validator are untouched. KNOWN_ISSUES vendor section updated (noiseless now honestly a "device flag"; `uplim`/`dnlim` added to the not-yet-translated list).
-- **Next candidates:** `uplim`/`dnlim` soft-limit function translation (135 of the 2698 host vendor files - the biggest remaining non-A-device blocker, overlapping heavily with noiseless; translate to `min`/`max` hard clamps with a convergence check), then the LTspice `OTA`/XSPICE A-device code models (235 files, the hardest layer).
+- **Headline metric:** acceptance corpus remains 82 imported / 79 warning-clean / 82 deck-built / 82 op-converged / 82 schema-valid while the component-value, transient-resolution, and waveform-cursor controls receive a focused usability/correctness repair.
+- **Run started (UTC):** 2026-07-23T12:54Z
+- **Synced to origin:** auto/ltspice-parity @ caf66aa (this unit's parent).
+- **Claimed unit:** make engineering value editors display complete values (with exponent support and numeric-only validation), automatically enforce the circuit-derived minimum transient sample count, and redesign transient cursors for direct visual and exact-time selection.
+- **Status:** IN PROGRESS
+- **Last completed sub-step:** synchronized the durable branch, confirmed the prior heartbeat was DONE with no recent `wip:` checkpoint, reviewed the relevant §2 and §6 parity entries, and selected the dual direct-manipulation/exact-entry cursor design.
+- **Next candidates:** add focused regression tests first, implement the three connected controls, then verify at the 900×600 minimum and run every required gate.
 
 ---
 

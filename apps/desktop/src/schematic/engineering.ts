@@ -65,4 +65,28 @@ export function splitEngineeringValue(value: string, unit = ""): EngineeringPart
 
 export const isEngineeringMantissa = (value: string) => MANTISSA_RE.test(value.trim()) && Number.isFinite(Number(value));
 
+/**
+ * True while `value` can still become a valid engineering mantissa by typing
+ * more characters. This deliberately accepts edit-in-progress states such as
+ * `-`, `1e`, and `1e-`, but rejects alphabetic text immediately.
+ */
+export function isEngineeringMantissaDraft(value: string): boolean {
+  const trimmed = value.trim();
+  if (trimmed === "" || trimmed === "+" || trimmed === "-") return true;
+  return /^[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[-+]?\d*)?$/i.test(trimmed);
+}
+
+/**
+ * Keep an unfocused long value legible without changing its represented
+ * magnitude. Nine significant digits fit comfortably in the inspector while
+ * retaining far more precision than a component's normal tolerance.
+ */
+export function compactEngineeringMantissa(value: string, maxCharacters = 12): string {
+  const trimmed = value.trim();
+  if (!isEngineeringMantissa(trimmed) || trimmed.length < maxCharacters) return trimmed;
+  const [coefficient, exponent] = Number(trimmed).toExponential(8).split("e");
+  const compactCoefficient = coefficient.replace(/(?:\.0+|(\.\d*?)0+)$/, "$1");
+  return `${compactCoefficient}e${Number(exponent)}`;
+}
+
 export const composeEngineeringValue = (mantissa: string, prefix: EngineeringPrefix) => `${mantissa.trim()}${prefix}`;
