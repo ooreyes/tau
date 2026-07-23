@@ -89,6 +89,12 @@ function renderPanel(overrides: Partial<Parameters<typeof SimulationPanel>[0]> =
 // First render of the full panel is slow when the suite collects in parallel
 // under load - the 5s default flakes; these are render-once assertions.
 describe("SimulationPanel - no redundant Run button", { timeout: 20_000 }, () => {
+  it("opens on the analysis authored by the circuit without firing a second run", () => {
+    const handlers = renderPanel({ circuitTitle: "filter.asc", preferredMode: "ac" });
+    expect(screen.getByRole("tab", { name: "AC sweep (.ac)" }).getAttribute("aria-selected")).toBe("true");
+    expect(handlers.onRunAcSweep).not.toHaveBeenCalled();
+  });
+
   it("renders no Run button in the transient pane, only the status strip", () => {
     renderPanel();
     expect(screen.queryByRole("button", { name: /run transient/i })).toBeNull();

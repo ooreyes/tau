@@ -157,11 +157,18 @@ const blankDocument = (): SchematicDocument => ({ components: [], wires: [], pro
 const emptyHistory = (): SchematicHistory => ({ past: [], future: [] });
 
 export function schematicDocumentSignature(doc: SchematicDocument): string {
+  // Internal ids are deliberately regenerated when a document is loaded so
+  // two open copies never collide in the live store. They are not authored
+  // circuit content and therefore must not make a clean import look edited.
+  const componentIds = new Map(doc.components.map((component, index) => [component.id, `component:${index}`]));
   return JSON.stringify({
-    components: doc.components,
-    wires: doc.wires,
-    probes: doc.probes,
-    netLabels: doc.netLabels,
+    components: doc.components.map(({ id: _id, ...component }) => component),
+    wires: doc.wires.map(({ id: _id, ...wire }) => wire),
+    probes: (doc.probes ?? []).map(({ id: _id, componentId, ...probe }) => ({
+      ...probe,
+      ...(componentId ? { componentId: componentIds.get(componentId) ?? componentId } : {}),
+    })),
+    netLabels: (doc.netLabels ?? []).map(({ id: _id, ...label }) => label),
     directives: doc.directives ?? [],
     userModelLibraries: doc.userModelLibraries ?? [],
   });
@@ -614,15 +621,6 @@ function App() {
     confirmLargeRunIfNeeded(effectiveAnalysisOptions, () => { void executeTransient(effectiveAnalysisOptions); });
   }, [effectiveAnalysisOptions, executeTransient, confirmLargeRunIfNeeded]);
 
-  const runAndShowSimulator = useCallback(async () => {
-    await saveActiveToProjectRef.current({ quietBlocked: true });
-    confirmLargeRunIfNeeded(effectiveAnalysisOptions, () => {
-      setMode("simulator");
-      setGraphOpen(true);
-      void executeTransient(effectiveAnalysisOptions);
-    });
-  }, [effectiveAnalysisOptions, executeTransient, confirmLargeRunIfNeeded]);
-
   const runOperatingAnalysis = useCallback(async () => {
     const requestId = ++analysisRequestRef.current;
     setAnalysisRunning(true);
@@ -642,9 +640,9 @@ function App() {
     const requestId = ++analysisRequestRef.current;
     setAnalysisRunning(true);
     try {
-      // sweep defaults bracket the circuit's own source
-      // frequencies (a document .ac directive still wins for step families).
-      const acSweep = suggestAcSweep(components);
+      // An imported LTspice .ac directive is the user's analysis definition.
+      // Suggest a useful range only when the document does not provide one.
+      const acSweep = analysesFromDirectives(directives).ac ?? suggestAcSweep(components);
       const result = await runNativeAcSweep(
         { components, wires, netLabels, params, directives, userModelLibraries: userModelLibraryTexts },
         acSweep,
@@ -780,6 +778,40 @@ function App() {
       if (analysisRequestRef.current === requestId) setAnalysisRunning(false);
     }
   }, [components, wires, netLabels, params, directives, userModelLibraryTexts, effectiveAnalysisOptions, stepSetupUi]);
+
+  const preferredAnalysis = useMemo(
+    () => pickAutoRunAnalysis(directives)?.kind ?? "tran",
+    [directives],
+  );
+
+  // The global Run command follows the first authored analysis directive, as
+  // LTspice users expect. Selecting a mode tab remains an explicit request to
+  // run that particular mode.
+  const runAndShowSimulator = useCallback(async () => {
+    await saveActiveToProjectRef.current({ quietBlocked: true });
+    setMode("simulator");
+    setGraphOpen(true);
+    if (preferredAnalysis === "op") void runOperatingAnalysis();
+    else if (preferredAnalysis === "ac") void runAcAnalysis();
+    else if (preferredAnalysis === "dc") void runDcAnalysis();
+    else if (preferredAnalysis === "tf") void runTfAnalysis();
+    else if (preferredAnalysis === "noise") void runNoiseAnalysis_();
+    else {
+      confirmLargeRunIfNeeded(effectiveAnalysisOptions, () => {
+        void executeTransient(effectiveAnalysisOptions);
+      });
+    }
+  }, [
+    preferredAnalysis,
+    runOperatingAnalysis,
+    runAcAnalysis,
+    runDcAnalysis,
+    runTfAnalysis,
+    runNoiseAnalysis_,
+    confirmLargeRunIfNeeded,
+    effectiveAnalysisOptions,
+    executeTransient,
+  ]);
 
   const stepAnalysis = useCallback(async () => {
     // Native ngspice may return an endpoint in addition to requested samples.
@@ -1585,6 +1617,7 @@ function App() {
             <AnalysisErrorBoundary>
               <SimulationPanel
                 circuitTitle={documentTitle}
+                preferredMode={preferredAnalysis}
                 result={analysis}
                 opResult={opAnalysis}
                 acResult={acAnalysis}

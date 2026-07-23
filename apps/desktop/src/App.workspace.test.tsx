@@ -31,7 +31,7 @@ vi.mock("./lib/localAiRuntime", async (importOriginal) => ({
   }),
 }));
 
-import App from "./App";
+import App, { schematicDocumentSignature } from "./App";
 import {
   createConversation,
   saveConversationMessages,
@@ -46,6 +46,31 @@ import { useProject } from "./store/useProject";
 import { useSchematic } from "./store/useSchematic";
 
 const defaultRenameNode = useProject.getState().renameNode;
+
+describe("schematicDocumentSignature", () => {
+  it("ignores regenerated internal ids while retaining semantic edits", () => {
+    const first = {
+      components: [{ id: "r-old", kind: "resistor" as const, x: 96, y: 0, rotation: 0 as const, value: "1k", label: "R1" }],
+      wires: [{ id: "w-old", points: [{ x: 64, y: 0 }, { x: 128, y: 0 }] }],
+      probes: [{ id: "p-old", x: 96, y: 0, color: "var(--trace-red)", componentId: "r-old" }],
+      netLabels: [{ id: "n-old", x: 64, y: 0, text: "OUT" }],
+      directives: [".op"],
+    };
+    const reloaded = {
+      ...first,
+      components: [{ ...first.components[0], id: "r-new" }],
+      wires: [{ ...first.wires[0], id: "w-new" }],
+      probes: [{ ...first.probes[0], id: "p-new", componentId: "r-new" }],
+      netLabels: [{ ...first.netLabels[0], id: "n-new" }],
+    };
+
+    expect(schematicDocumentSignature(reloaded)).toBe(schematicDocumentSignature(first));
+    expect(schematicDocumentSignature({
+      ...reloaded,
+      components: [{ ...reloaded.components[0], value: "2k" }],
+    })).not.toBe(schematicDocumentSignature(first));
+  });
+});
 
 const storage = new Map<string, string>();
 Object.defineProperty(globalThis, "localStorage", {

@@ -46,7 +46,7 @@ describe("schematic document validation", () => {
 
     const duplicateRef = validDocument();
     duplicateRef.components.push({ ...duplicateRef.components[0], id: "r2", label: "r1" });
-    expect(() => validateSchematicDocument(duplicateRef)).toThrow(/reference designators must be unique/i);
+    expect(() => validateSchematicDocument(duplicateRef)).toThrow(/component reference "R1" is used 2 times/i);
 
     const danglingProbe = validDocument();
     danglingProbe.probes[0] = { ...danglingProbe.probes[0], componentId: "missing" } as typeof danglingProbe.probes[number];

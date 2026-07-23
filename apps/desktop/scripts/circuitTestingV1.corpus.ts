@@ -144,7 +144,7 @@ describe("Circuit_testing_v1", () => {
           probes: [],
           netLabels: imported.netLabels,
           directives: imported.directives,
-        })).toThrow(/reference designators must be unique/i);
+        })).toThrow(/component reference "R1" is used 2 times/i);
         pass(file, "import + expected validation rejection");
       } else {
         pass(file, "import + document validation");
@@ -326,7 +326,7 @@ describe("Circuit_testing_v1", () => {
       probes: [],
       netLabels: imported.netLabels,
       directives: imported.directives,
-    })).toThrow(/reference designators must be unique/i);
+    })).toThrow(/component reference "R1" is used 2 times/i);
     pass(file, "clear duplicate-R1 error");
   });
 

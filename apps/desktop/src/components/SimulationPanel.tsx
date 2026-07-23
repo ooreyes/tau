@@ -97,6 +97,8 @@ interface SimulationPanelProps {
    *  circuit. Falls back to a shared key when omitted (e.g. in isolated
    *  WaveformPlot tests that don't model a tabbed document at all). */
   circuitTitle?: string;
+  /** Analysis authored first in the document; selected when this circuit opens. */
+  preferredMode?: AnalysisMode;
   result: AnalysisResult | null;
   opResult: OperatingPointResult | null;
   acResult: AcResult | null;
@@ -158,6 +160,7 @@ const TRACE_EDGE_GUTTER = 2.5;
 
 export function SimulationPanel({
   circuitTitle,
+  preferredMode = "tran",
   result,
   opResult,
   acResult,
@@ -208,7 +211,7 @@ export function SimulationPanel({
   );
   const warnings = result?.warnings ?? [];
 
-  const [mode, setMode] = useState<AnalysisMode>("tran");
+  const [mode, setMode] = useState<AnalysisMode>(preferredMode);
   // Each analysis tab collapses its power-user controls behind ONE Advanced
   // disclosure, closed by default - the default view stays a calm read of
   // plots + status, not a stacked instrument panel.
@@ -228,6 +231,12 @@ export function SimulationPanel({
   const [exprList, setExprList] = useState<string[]>([]);
   const [exprInput, setExprInput] = useState("");
   const [exprError, setExprError] = useState<string | null>(null);
+
+  // Switching circuits should reveal the analysis that its directives ask
+  // for, without treating the programmatic tab change as another run.
+  useEffect(() => {
+    setMode(preferredMode);
+  }, [circuitTitle, preferredMode]);
   // Expression traces overlaid on the AC (Bode) pane, e.g. `db(V(out))-db(V(in))`
   // for a transfer function, and on the DC pane, e.g. `V(out)-V(in)`.
   const [acExprList, setAcExprList] = useState<string[]>([]);

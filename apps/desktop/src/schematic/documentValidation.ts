@@ -219,8 +219,18 @@ export function validateSchematicDocument(value: unknown): SchematicDocument {
       fail(`probe ${candidate.id} references a missing component.`);
     }
   }
-  const references = validatedComponents.map((item) => item.label.trim().toLocaleLowerCase()).filter(Boolean);
-  if (new Set(references).size !== references.length) fail("component reference designators must be unique (case-insensitive).");
+  const referenceCounts = new Map<string, { display: string; count: number }>();
+  for (const item of validatedComponents) {
+    const display = item.label.trim();
+    if (!display) continue;
+    const key = display.toLocaleLowerCase();
+    const previous = referenceCounts.get(key);
+    referenceCounts.set(key, { display: previous?.display ?? display, count: (previous?.count ?? 0) + 1 });
+  }
+  const duplicateReference = [...referenceCounts.values()].find(({ count }) => count > 1);
+  if (duplicateReference) {
+    fail(`component reference "${duplicateReference.display}" is used ${duplicateReference.count} times; each component name must be unique.`);
+  }
 
   const validatedLibraries = userModelLibraries.map(modelLibrary);
   if (new Set(validatedLibraries.map((item) => item.name)).size !== validatedLibraries.length) {
