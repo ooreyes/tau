@@ -358,7 +358,15 @@ Status legend: ✅ done · 🟡 partial · ⬜ not started
   pin overrides, direct Home activation, horizontal/vertical insertion, undo,
   resistance preservation, ghost lifecycle, and resize regressions are covered.
 - ✅ Undo/redo, autosave, multi-tab documents
-- ✅ Component value editing (double-click) + structured params
+- ✅ Component value editing (double-click) + structured params.
+  **Engineering-input repair (2026-07-23):** single-quantity component editors
+  now size from the visible mantissa instead of collapsing to a one-digit
+  border-box; complete values remain readable and long finite mantissas compact
+  to scientific notation on commit. The shared editor accepts decimal and
+  exponent forms (including normal in-progress states such as `1e-`) while
+  rejecting alphabetic input, so component values, transient STOP, and exact
+  cursor times share one numeric contract. Focused tests cover full-width
+  rendering, numeric-only filtering, exponent entry, and compaction.
 - ✅ **Comparator/opamp value label + inspector param fields fixed (§UX)**:
   two bugs, both traced to multi-field values getting treated like a single
   quantity. (a) The canvas label blindly suffixed the catalog's `unit`
@@ -968,6 +976,12 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   and frequency readout; complete statistics stay in a disclosure. Current-flow
   arrows/toggle/readout were removed until the
   electrical model is mature enough to represent them without confusion.
+  **Resolution-control correctness (2026-07-23):** every transient override is
+  clamped through the circuit-derived sampling requirement before either the UI
+  or run path can consume it. The STEPS slider's minimum moves to that required
+  count (bounded by the active runtime cap), so users cannot select an
+  under-sampled run; STOP uses the shared engineering editor and accepts
+  exponent notation without accepting words.
 - 🟡 Bode (AC mag/phase) — **magnitude + phase now both plotted** (`AcPlot`): a
   second log-frequency sub-plot draws each trace's `phaseDeg` on a 45°-snapped
   degrees axis below the dB magnitude, matching LTspice's dual Bode. Shared
@@ -1092,6 +1106,14 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   cursors along the run; a meter row shows t1/t2/Δt/(1/Δt) and a table lists each
   signal's value at C1, C2, and the delta. Reuses the tested `interpolateAt`
   resampler so readings are interpolated between samples.
+  **Engineer-facing cursor redesign (2026-07-23):** C1/C2 are now shared across
+  every visible transient plot and drawn as labelled, color-distinct vertical
+  lines on the waveform. Sliders remain for coarse placement, while dedicated
+  engineering-value fields accept exact C1/C2 endpoints (including exponent
+  notation) for precise time-interval measurements. Packaged-app QA on a real
+  200,015-sample native run verified the plot lines, full `781.25 ms` /
+  `2.34375 s` fields, interpolated signal table, Δt, and reciprocal-frequency
+  readout at the 900×600 minimum.
 - ✅ **Overlay an LTspice `.raw` reference on the scope** (the acceptance-test
   overlay) — **Ref .raw** button loads a `.raw`, `buildReferenceOverlay`
   (`simulation/rawOverlay.ts`, 4 tests) matches its variables to the plotted Tau

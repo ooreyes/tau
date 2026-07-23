@@ -43,15 +43,64 @@ The only step left before sharing with testers is Apple notarization, which
 needs Omar's Developer ID.
 
 ## ⏱ HEARTBEAT
-- **Headline metric:** acceptance corpus remains 82 imported / 79 warning-clean / 82 deck-built / 82 op-converged / 82 schema-valid while the component-value, transient-resolution, and waveform-cursor controls receive a focused usability/correctness repair.
+- **Headline metric:** acceptance corpus remains 82 imported / 79 warning-clean / 82 deck-built / 82 op-converged / 82 schema-valid; engineering value editors now keep complete numbers visible and numeric-only, transient overrides cannot fall below the circuit-derived sample minimum, and C1/C2 support both exact endpoint entry and labelled plot lines.
 - **Run started (UTC):** 2026-07-23T12:54Z
 - **Synced to origin:** auto/ltspice-parity @ caf66aa (this unit's parent).
 - **Claimed unit:** make engineering value editors display complete values (with exponent support and numeric-only validation), automatically enforce the circuit-derived minimum transient sample count, and redesign transient cursors for direct visual and exact-time selection.
-- **Status:** IN PROGRESS
-- **Last completed sub-step:** synchronized the durable branch, confirmed the prior heartbeat was DONE with no recent `wip:` checkpoint, reviewed the relevant §2 and §6 parity entries, and selected the dual direct-manipulation/exact-entry cursor design.
-- **Next candidates:** add focused regression tests first, implement the three connected controls, then verify at the 900×600 minimum and run every required gate.
+- **Status:** DONE
+- **Last completed sub-step:** implementation pushed in `a2c2c82`; full frontend gate is 2,060 passing / 6 skipped with clean typecheck, Rust is fmt/clippy-clean with 28 passing / 1 ignored, the ignored real-ngspice smoke passes, and the exact debug bundle ran `untitled.asc` natively to 200,015 samples. Packaged 900×600 QA verified unclipped component/STOP/cursor values plus C1/C2 vertical waveform lines and exact interval entry.
+- **Next candidates:** resume the highest-leverage unfinished acceptance/parity item; no corpus number changed in this UI/control unit.
 
 ---
+
+## 2026-07-23T13:24Z - auto/ltspice-parity - Engineering inputs, sample floor, and exact visual cursors (§2/§6)
+
+### What I did
+- Repaired the shared engineering-number editor: it expands with the mantissa,
+  rejects nonnumeric text while preserving valid decimal/exponent draft states,
+  and compacts long committed mantissas to scientific notation.
+- Routed transient STOP through that same editor and enforced the circuit-derived
+  sample floor in both the STEPS control and the effective run options, bounded
+  by the active runtime's real maximum.
+- Redesigned transient cursors as a dual interaction: coarse sliders plus exact
+  C1/C2 engineering-time inputs, with shared labelled vertical lines through
+  every visible waveform and the existing interpolated value/delta table.
+- Kept plot axes readable at the minimum layout by moving the Y caption above
+  the frame and thinning colliding X labels without removing their grid lines.
+
+### Files touched
+- `src/components/EngineeringInput.tsx`, `src/schematic/engineering.ts`,
+  `src/App.css` (numeric filtering, responsive width, exponent compaction)
+- `src/components/SimulationPanel.tsx`, `src/App.tsx`,
+  `src/simulation/linearTransient.ts` (STOP, minimum STEPS, cursors/run clamp)
+- `src/components/PlotAxes.tsx` (minimum-width axis readability)
+- Focused component/schematic/simulation/axes tests; `src-tauri/src/spice.rs`
+  carries formatter-only cleanup required by the native gate.
+- `FEATURE_PARITY.md` (§2 component editing; §6 transient scope/cursors)
+
+### Tests
+- `pnpm -C apps/desktop typecheck` — clean.
+- `pnpm -C apps/desktop test` — 137 files passed / 1 skipped; 2,060 tests
+  passed / 6 skipped.
+- `pnpm --filter @tau/desktop build` — passed.
+- `cargo fmt --check`, `cargo clippy -- -D warnings` — passed.
+- `cargo test` — 28 passed / 1 ignored; explicit ignored real-ngspice
+  operating-point smoke — 1 passed.
+- `pnpm --filter @tau/desktop tauri build --debug --bundles app` — passed.
+  The exact packaged app opened `untitled.asc`, simulated natively to 200,015
+  samples, and showed full numeric fields plus C1/C2 on the waveform at 900×600.
+
+### FEATURE_PARITY items updated
+- §2 component value editing: complete-width, numeric-only, exponent-capable
+  engineering fields and long-value scientific compaction.
+- §6 transient scope: circuit-derived minimum STEPS enforced in UI and run path;
+  engineering STOP entry.
+- §6 cursors: labelled plot lines plus exact endpoint entry retained alongside
+  coarse sliders.
+
+### Next step
+Resume the highest-leverage unfinished acceptance/parity item. This focused
+control/UI unit did not alter or rerun the canonical importer corpus metric.
 
 ## 2026-07-22T03:20Z - auto/ltspice-parity - U4: thread document-attached user model libraries into the native run
 
