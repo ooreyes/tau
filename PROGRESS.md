@@ -43,13 +43,13 @@ The only step left before sharing with testers is Apple notarization, which
 needs Omar's Developer ID.
 
 ## ⏱ HEARTBEAT
-- **Headline metric:** acceptance corpus remains 82 imported / 79 warning-clean / 82 deck-built / 82 op-converged / 82 schema-valid; `Circuit_testing_v1` is now 19 fixtures / 55 quantitative checks covering switching power, mixed combinational/sequential logic, complex active filtering, three-phase power, rectification, and instrumentation amplification.
-- **Run started (UTC):** 2026-07-23T17:08Z
-- **Synced to origin:** auto/ltspice-parity @ 145e1d0 (this unit's parent).
-- **Claimed unit:** add a significant second tier of complex LTspice-compatible circuits—buck/boost converters, AND/OR/NAND/NOR/XOR/inverter networks, D flip-flop sequencing, op-amp control/filter chains, and power-distribution cases—with quantitative Tau/native assertions and packaged-app UX verification.
-- **Status:** DONE
-- **Last completed sub-step:** rebuilt the exact debug `Tau.app`, ran the buck, logic matrix, four-pole AC filter, and instrumentation amplifier through the packaged native path, and removed false floating-pin diagnostics for valid LTspice digital gates.
-- **Next candidates:** use this 55-check pack as a regression gate; the next research-grade expansion should target a concrete unsupported workflow such as Monte Carlo/sensitivity, control-loop stability automation, or a user-supplied vendor macro-model—not more unasserted demo schematics.
+- **Headline metric:** acceptance corpus remains 82 imported / 79 warning-clean / 82 deck-built / 82 op-converged / 82 schema-valid; closing/saving and discoverable directive authoring are now the active packaged-UX blockers.
+- **Run started (UTC):** 2026-07-23T17:35Z
+- **Synced to origin:** auto/ltspice-parity @ 1732049 (this unit's parent).
+- **Claimed unit:** eliminate the recurring imported-ASC comment save block, add a simple user-facing path for source waveforms and analysis directives, and confirm dirty-tab close with Save / Don't Save / Cancel.
+- **Status:** IN PROGRESS
+- **Last completed sub-step:** synchronized the sole durable branch and located the loss-risk classifier, ASC comment exporter, existing directive store, save callback, and tab-close surface.
+- **Next candidates:** preserve imported comment records through the document model/exporter, expose progressively disclosed directive/source editors, and centralize dirty-close confirmation so mouse and keyboard close paths behave identically.
 
 ---
 
