@@ -43,13 +43,13 @@ The only step left before sharing with testers is Apple notarization, which
 needs Omar's Developer ID.
 
 ## ⏱ HEARTBEAT
-- **Headline metric:** acceptance corpus remains 82 imported / 79 warning-clean / 82 deck-built / 82 op-converged / 82 schema-valid; the repository-owned `Circuit_testing_v1` analysis/UX pack is independently green at 31/31 checks across 11 LTspice-compatible fixtures.
-- **Run started (UTC):** 2026-07-23T13:31Z
-- **Synced to origin:** auto/ltspice-parity @ 243d0e0 (this unit's parent).
-- **Claimed unit:** create a reusable LTspice-compatible `Circuit_testing_v1` folder and runner, exercise its circuits through Tau's native analysis paths, inspect the packaged app at 900×600 and a comfortable size for Apple-quality messaging/discoverability, then fix and regression-test any bounded high-confidence defects found.
-- **Status:** DONE
-- **Last completed sub-step:** packaged-app QA proved authored OP/AC dispatch, the exact 121-point imported AC sweep, named validation guidance, and a 4,090-sample native transient on the 18-part ladder; corpus/typecheck/full-suite/build gates are green and commits `72e9a04` + `5538fa1` are pushed.
-- **Next candidates:** use `Circuit_testing_v1/run.sh` as a fast breadth regression alongside the canonical acceptance corpus; expand it only when a concrete LTspice workflow or packaged-app defect needs a durable reproducer.
+- **Headline metric:** acceptance corpus remains 82 imported / 79 warning-clean / 82 deck-built / 82 op-converged / 82 schema-valid; `Circuit_testing_v1` is being escalated beyond its 31-check/11-fixture baseline into switching power, mixed logic/sequential, multi-stage op-amp, and larger power-network stress cases.
+- **Run started (UTC):** 2026-07-23T17:08Z
+- **Synced to origin:** auto/ltspice-parity @ 145e1d0 (this unit's parent).
+- **Claimed unit:** add a significant second tier of complex LTspice-compatible circuits—buck/boost converters, AND/OR/NAND/NOR/XOR/inverter networks, D flip-flop sequencing, op-amp control/filter chains, and power-distribution cases—with quantitative Tau/native assertions and packaged-app UX verification.
+- **Status:** IN PROGRESS
+- **Last completed sub-step:** synchronized the sole durable branch, confirmed the prior unit is DONE with no `wip:` checkpoint, and mapped the existing v1 runner plus Tau's native digital, D-flop, op-amp, MOSFET, switch, and transient deck paths.
+- **Next candidates:** author the complex fixtures from the device/pin contracts, validate their generated decks directly in ngspice, then encode behavioral assertions that distinguish a correct result from a merely non-crashing run.
 
 ---
 
