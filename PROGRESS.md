@@ -43,15 +43,75 @@ The only step left before sharing with testers is Apple notarization, which
 needs Omar's Developer ID.
 
 ## ⏱ HEARTBEAT
-- **Headline metric:** acceptance corpus remains 82 imported / 79 warning-clean / 82 deck-built / 82 op-converged / 82 schema-valid while a new repository-owned `Circuit_testing_v1` pack is built to stress analysis breadth and the packaged macOS workflow independently of the user's existing corpus.
+- **Headline metric:** acceptance corpus remains 82 imported / 79 warning-clean / 82 deck-built / 82 op-converged / 82 schema-valid; the repository-owned `Circuit_testing_v1` analysis/UX pack is independently green at 31/31 checks across 11 LTspice-compatible fixtures.
 - **Run started (UTC):** 2026-07-23T13:31Z
 - **Synced to origin:** auto/ltspice-parity @ 243d0e0 (this unit's parent).
 - **Claimed unit:** create a reusable LTspice-compatible `Circuit_testing_v1` folder and runner, exercise its circuits through Tau's native analysis paths, inspect the packaged app at 900×600 and a comfortable size for Apple-quality messaging/discoverability, then fix and regression-test any bounded high-confidence defects found.
-- **Status:** IN PROGRESS
-- **Last completed sub-step:** synchronized the only durable branch, confirmed the prior heartbeat was DONE with no recent `wip:` checkpoint, and mapped the existing acceptance runner, native corpus scripts, minimum-size screenshot pipeline, and §6 waveform/UI parity surface.
-- **Next candidates:** author a deliberately varied v1 circuit matrix (OP/TRAN/AC/DC/STEP/MEAS/NOISE/TF plus failure cases), add a one-command report, run native/package QA, and turn concrete findings into focused fixes rather than speculative redesign.
+- **Status:** DONE
+- **Last completed sub-step:** packaged-app QA proved authored OP/AC dispatch, the exact 121-point imported AC sweep, named validation guidance, and a 4,090-sample native transient on the 18-part ladder; corpus/typecheck/full-suite/build gates are green and commits `72e9a04` + `5538fa1` are pushed.
+- **Next candidates:** use `Circuit_testing_v1/run.sh` as a fast breadth regression alongside the canonical acceptance corpus; expand it only when a concrete LTspice workflow or packaged-app defect needs a durable reproducer.
 
 ---
+
+## 2026-07-23T16:12Z - auto/ltspice-parity - Circuit_testing_v1 native analysis and packaged UX audit (§1/§6)
+
+### What I did
+- Added `Circuit_testing_v1/`, a repository-owned matrix of 11 unmodified
+  LTspice-compatible `.asc` fixtures covering OP, TRAN, `.meas`, AC, nonlinear
+  DC, parameter STEP, TF, NOISE, RLC ringing, two deliberate error cases, and
+  an eight-pole/18-part RC ladder. `run.sh` prints a per-check table and fails
+  on regressions.
+- Ran each applicable analysis through Tau's TypeScript engine and installed
+  ngspice CLI, then repeated the user-facing checks in the exact rebuilt
+  debug `Tau.app` so the result includes Tauri/native-engine behavior rather
+  than only browser tests.
+- Fixed three defects exposed by that pass: regenerated internal IDs no longer
+  mark every clean `.asc` import as edited; global Run follows the first valid
+  authored analysis directive; and base AC runs honor the imported
+  `dec`/`oct`/`lin` sweep instead of silently substituting Tau's suggestion.
+- Replaced the generic duplicate-reference validation message with one that
+  identifies the actual reference and count (`R1` used twice).
+
+### Packaged UX findings
+- Clean imports now have no false unsaved dot. `01_op_voltage_divider.asc`
+  opens/runs directly on OP and reports 3.33 V; `03_ac_rc_lowpass.asc`
+  opens/runs directly on AC and reports the authored 121 points for
+  `.ac dec 24 10 1Meg`.
+- Missing ground already used concise recovery-first copy ("Add a ground
+  symbol...") with technical details secondary. Duplicate references now use
+  the same principle by naming `R1`.
+- At the app's minimum-size layout, Run, analysis tabs, plots, circuit context,
+  status, and telemetry remain reachable; at the comfortable layout the
+  18-part telemetry dock and two trace cards stay readable without obscuring
+  the primary analysis. Exact cursor-time entry, visible C1/C2 plot lines,
+  exponent-safe engineering fields, and the enforced sample floor were
+  re-audited and remain present from the immediately preceding §2/§6 unit.
+
+### Tests
+- `Circuit_testing_v1/run.sh` - 31 passed / 0 skipped.
+- `pnpm -C apps/desktop typecheck` - clean.
+- `pnpm -C apps/desktop test` - 137 files passed / 1 skipped; 2,062 tests
+  passed / 6 skipped.
+- `pnpm --filter @tau/desktop tauri build --debug --bundles app` - passed.
+- Exact packaged native proof: OP 3.33 V; AC 121 points; ladder transient
+  4,090 samples / 8 ms / 10 nets / 18 parts with waveform and telemetry.
+
+### Replacement verdict
+- Tau replaces LTspice for the workflows deliberately represented in this v1
+  matrix: editing/opening conventional `.asc`, common analyses, measurement,
+  stepped families, waveform inspection/export, and actionable validation.
+  This is not evidence that every arbitrary vendor/proprietary LTspice circuit
+  is compatible; the canonical 82-file corpus and named model limitations
+  remain the authority for that broader claim.
+
+### Files / parity
+- `Circuit_testing_v1/*`, `apps/desktop/scripts/circuitTestingV1.corpus.ts`
+- `App.tsx`, `SimulationPanel.tsx`, `documentValidation.ts` + regressions
+- `FEATURE_PARITY.md` §1/§6
+
+### Next step
+Keep this pack as a deterministic product-level smoke test and add fixtures
+only for real regressions or newly supported LTspice workflows.
 
 ## 2026-07-23T13:24Z - auto/ltspice-parity - Engineering inputs, sample floor, and exact visual cursors (§2/§6)
 

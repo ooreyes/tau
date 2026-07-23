@@ -98,6 +98,13 @@ Status legend: ✅ done · 🟡 partial · ⬜ not started
   behavioral-magnetics demo whose flux-integrating G-source loop still hits a
   singular matrix in ngspice without the true Chan model — building ≠ converging
   for that one file; the saturable waveform is genuinely out of ngspice's reach.)
+- ✅ **Repository-owned analysis/UX stress pack** (`Circuit_testing_v1/`,
+  2026-07-23): 11 LTspice-compatible `.asc` fixtures plus `run.sh` cover
+  OP/TRAN/AC/DC/STEP/MEAS/TF/NOISE, RLC behavior, an 18-part ladder, and
+  deliberate missing-ground/duplicate-ref failures. The one-command report is
+  green at 31/31 across Tau solvers and installed ngspice; the exact packaged
+  macOS app additionally proved 3.33 V OP, the authored 121-point AC sweep,
+  and a 4,090-sample native ladder transient.
 - 🟡 **Import LTspice `.asc` schematics** — **parser + `ascToSchematic()` landed**
   (`io/ascImport.ts`). Parses `Version/SHEET/WIRE/FLAG/SYMBOL/SYMATTR/WINDOW/TEXT/
   LINE/…` losslessly; validated by parsing **4,012 real LTspice files (49,625
@@ -981,7 +988,13 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   or run path can consume it. The STEPS slider's minimum moves to that required
   count (bounded by the active runtime cap), so users cannot select an
   under-sampled run; STOP uses the shared engineering editor and accepts
-  exponent notation without accepting words.
+  exponent notation without accepting words. **Imported-analysis intent
+  (2026-07-23):** the global Run command now follows the first valid authored
+  `.op`/`.tran`/`.ac`/`.dc`/`.tf`/`.noise` directive, the analysis rail opens on
+  that mode, and base AC runs honor the imported `dec`/`oct`/`lin` settings
+  instead of silently substituting an automatic sweep. Clean `.asc` imports no
+  longer show an unsaved dot merely because the store regenerated internal
+  IDs; duplicate-reference errors name the duplicated component and count.
 - 🟡 Bode (AC mag/phase) — **magnitude + phase now both plotted** (`AcPlot`): a
   second log-frequency sub-plot draws each trace's `phaseDeg` on a 45°-snapped
   degrees axis below the dB magnitude, matching LTspice's dual Bode. Shared
