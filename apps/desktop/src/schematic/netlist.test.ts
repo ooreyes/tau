@@ -168,6 +168,25 @@ describe("net labels are electrical", () => {
     const bare = extractCircuit([r1], []);
     expect(bare.warnings.some((w) => /only connected to one pin/.test(w))).toBe(true);
   });
+
+  it("does not diagnose LTspice's optional floating digital-gate pins", () => {
+    const gate: SchematicComponent = {
+      id: "a1",
+      kind: "digitalGate",
+      label: "A1",
+      value: "xor Vhigh=5",
+      x: 0,
+      y: 0,
+      rotation: 0,
+      pinOverride: [
+        { id: "in3", label: "3", x: 0, y: 0 },
+        { id: "q", label: "Q", x: 32, y: 0 },
+      ],
+    };
+    const circuit = extractCircuit([gate], []);
+    expect(circuit.warnings).not.toContain("A1.3 is only connected to one pin.");
+    expect(circuit.warnings).not.toContain("A1.Q is only connected to one pin.");
+  });
 });
 
 describe("netAtPoint (probe resolution)", () => {

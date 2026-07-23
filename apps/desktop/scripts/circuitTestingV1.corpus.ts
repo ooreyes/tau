@@ -30,7 +30,7 @@ import { runTransferFunction } from "../src/simulation/transferFunction";
 import { runNoiseAnalysis } from "../src/simulation/noise";
 
 const PACK_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "../../../Circuit_testing_v1");
-const EXPECTED_FILES = 11;
+const EXPECTED_FILES = 19;
 const haveNgspice = spawnSync("ngspice", ["--version"], { encoding: "utf8" }).status === 0;
 const rows: { file: string; check: string; result: "PASS" | "SKIP" }[] = [];
 
@@ -64,10 +64,15 @@ function pass(file: string, check: string, result: "PASS" | "SKIP" = "PASS") {
   rows.push({ file, check, result });
 }
 
-function nativeRun(file: string, imported: Imported, analysis: SpiceAnalysis) {
+function nativeRun(
+  file: string,
+  imported: Imported,
+  analysis: SpiceAnalysis,
+  extraDeckLines: readonly string[] = [],
+): string {
   if (!haveNgspice) {
     pass(file, `native ${analysis.kind}`, "SKIP");
-    return;
+    return "";
   }
   const deck = buildSpiceDeck(schematic(imported), analysis);
   expect(deck.unresolvedSubckts, `${file}: unresolved subcircuits`).toEqual([]);
@@ -75,15 +80,16 @@ function nativeRun(file: string, imported: Imported, analysis: SpiceAnalysis) {
   // output command. The standalone ngspice batch CLI used by this runner does,
   // so add a harmless print for one real node without changing the analysis.
   const printedNode = deck.circuit.nets.find((net) => !net.isGround)?.id;
-  const printLine = printedNode
+  const printLine = extraDeckLines.length === 0 && printedNode
     ? analysis.kind === "ac"
       ? `.print ac vm(${printedNode}) vp(${printedNode})`
       : analysis.kind === "op"
         ? `.print op v(${printedNode})`
         : `.print ${analysis.kind} v(${printedNode})`
     : "";
-  const batchNetlist = printLine
-    ? deck.netlist.replace(/\n\.end\s*$/i, `\n${printLine}\n.end`)
+  const batchLines = [printLine, ...extraDeckLines].filter(Boolean);
+  const batchNetlist = batchLines.length > 0
+    ? deck.netlist.replace(/\n\.end\s*$/i, `\n${batchLines.join("\n")}\n.end`)
     : deck.netlist;
   const temp = mkdtempSync(join(tmpdir(), "tau-circuit-v1-"));
   try {
@@ -92,6 +98,7 @@ function nativeRun(file: string, imported: Imported, analysis: SpiceAnalysis) {
     const run = spawnSync("ngspice", ["-b", path], {
       encoding: "utf8",
       timeout: 120_000,
+      maxBuffer: 64 * 1024 * 1024,
     });
     const output = `${run.stdout ?? ""}\n${run.stderr ?? ""}`;
     expect(run.status, `${file} native ${analysis.kind}\n${output.slice(-2500)}`).toBe(0);
@@ -99,9 +106,41 @@ function nativeRun(file: string, imported: Imported, analysis: SpiceAnalysis) {
       /simulation\(s\) aborted|fatal error|timestep too small/i,
     );
     pass(file, `native ${analysis.kind}`);
+    return output;
   } finally {
     rmSync(temp, { recursive: true, force: true });
   }
+}
+
+function measured(output: string, name: string): number {
+  const match = new RegExp(`(?:^|\\n)\\s*${name}\\s*=\\s*([^\\s]+)`, "i").exec(output);
+  expect(match, `missing native measurement ${name}\n${output.slice(-3000)}`).toBeTruthy();
+  const value = Number(match?.[1]);
+  expect(value, `non-finite native measurement ${name}`).toSatisfy(Number.isFinite);
+  return value;
+}
+
+function printedOperatingPoint(output: string, signal: string): number {
+  const marker = new RegExp(`(?:^|\\n)Index\\s+${signal.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*(?:\\n[-\\s]+)?`, "i");
+  const section = marker.exec(output);
+  expect(section, `missing native print column ${signal}\n${output.slice(-3000)}`).toBeTruthy();
+  const row = /^\s*0\s+([^\s]+)/m.exec(output.slice((section?.index ?? 0) + (section?.[0].length ?? 0)));
+  const value = Number(row?.[1]);
+  expect(value, `non-finite native print ${signal}`).toSatisfy(Number.isFinite);
+  return value;
+}
+
+function printedAcMagnitude(output: string, targetFrequency: number): number {
+  const samples = [...output.matchAll(/^\s*\d+\s+([+\-\d.eE]+)\s+([+\-\d.eE]+)\s*$/gm)]
+    .map((match) => ({ frequency: Number(match[1]), magnitude: Number(match[2]) }))
+    .filter(({ frequency, magnitude }) => Number.isFinite(frequency) && Number.isFinite(magnitude));
+  expect(samples.length, "missing native AC magnitude samples").toBeGreaterThan(0);
+  const nearest = samples.reduce((best, sample) =>
+    Math.abs(sample.frequency - targetFrequency) < Math.abs(best.frequency - targetFrequency)
+      ? sample
+      : best
+  );
+  return nearest.magnitude;
 }
 
 function voltageAt(
@@ -361,5 +400,165 @@ describe("Circuit_testing_v1", () => {
     nativeRun(file, imported, { kind: "op" });
     nativeRun(file, imported, { kind: "tran", ...analyses.tran! });
     nativeRun(file, imported, { kind: "ac", ...analyses.ac! });
+  });
+
+  it("regulates the switching buck near duty times input with bounded ripple", () => {
+    const file = "12_buck_converter.asc";
+    const imported = load(file);
+    const tran = analysesFromDirectives(imported.directives).tran;
+    expect(tran).toBeDefined();
+    expect(imported.components.filter((component) => component.kind === "pmos")).toHaveLength(1);
+    const output = nativeRun(file, imported, { kind: "tran", ...tran! }, [
+      ".measure tran vout_avg AVG v(out) FROM=3m TO=4m",
+      ".measure tran vout_pp PP v(out) FROM=3m TO=4m",
+    ]);
+    if (!haveNgspice) return;
+    const average = measured(output, "vout_avg");
+    const ripple = measured(output, "vout_pp");
+    expect(average).toBeGreaterThan(3.8);
+    expect(average).toBeLessThan(5.6);
+    expect(ripple).toBeGreaterThan(0);
+    expect(ripple).toBeLessThan(1.2);
+    pass(file, "buck ratio + ripple");
+  });
+
+  it("boosts 5 V above 8 V under load with bounded ripple", () => {
+    const file = "13_boost_converter.asc";
+    const imported = load(file);
+    const tran = analysesFromDirectives(imported.directives).tran;
+    expect(tran).toBeDefined();
+    expect(imported.components.filter((component) => component.kind === "nmos")).toHaveLength(1);
+    const output = nativeRun(file, imported, { kind: "tran", ...tran! }, [
+      ".measure tran vout_avg AVG v(out) FROM=4m TO=5m",
+      ".measure tran vout_pp PP v(out) FROM=4m TO=5m",
+    ]);
+    if (!haveNgspice) return;
+    const average = measured(output, "vout_avg");
+    const ripple = measured(output, "vout_pp");
+    expect(average).toBeGreaterThan(8);
+    expect(average).toBeLessThan(12);
+    expect(ripple).toBeGreaterThan(0);
+    expect(ripple).toBeLessThan(1.5);
+    pass(file, "boost ratio + ripple");
+  });
+
+  it("evaluates AND/NAND, OR/NOR, and XOR/XNOR over all input states", () => {
+    const file = "14_logic_gate_matrix.asc";
+    const imported = load(file);
+    const tran = analysesFromDirectives(imported.directives).tran;
+    expect(tran).toBeDefined();
+    expect(imported.components.filter((component) => component.kind === "digitalGate")).toHaveLength(4);
+    const samples = [
+      { suffix: "11", time: "1u", expected: { and: 5, nand: 0, or: 5, nor: 0, xor: 0, xnor: 5 } },
+      { suffix: "10", time: "3u", expected: { and: 0, nand: 5, or: 5, nor: 0, xor: 5, xnor: 0 } },
+      { suffix: "01", time: "5u", expected: { and: 0, nand: 5, or: 5, nor: 0, xor: 5, xnor: 0 } },
+      { suffix: "00", time: "7u", expected: { and: 0, nand: 5, or: 0, nor: 5, xor: 0, xnor: 5 } },
+    ] as const;
+    const lines = samples.flatMap(({ suffix, time, expected }) =>
+      Object.keys(expected).map((signal) => `.measure tran ${signal}_${suffix} FIND v(${signal}) AT=${time}`),
+    );
+    const output = nativeRun(file, imported, { kind: "tran", ...tran! }, lines);
+    if (!haveNgspice) return;
+    for (const { suffix, expected } of samples) {
+      for (const [signal, value] of Object.entries(expected)) {
+        expect(measured(output, `${signal}_${suffix}`)).toBeCloseTo(value, 2);
+      }
+    }
+    pass(file, "six-output truth table");
+  });
+
+  it("samples a two-bit 01→11→10 register sequence on rising edges", () => {
+    const file = "15_dflop_register.asc";
+    const imported = load(file);
+    const tran = analysesFromDirectives(imported.directives).tran;
+    expect(tran).toBeDefined();
+    expect(imported.components.filter((component) => component.kind === "dflop")).toHaveLength(2);
+    const output = nativeRun(file, imported, { kind: "tran", ...tran! }, [
+      ".measure tran q0_1 FIND v(q0) AT=1.2m",
+      ".measure tran q1_1 FIND v(q1) AT=1.2m",
+      ".measure tran q0_3 FIND v(q0) AT=3.2m",
+      ".measure tran q1_3 FIND v(q1) AT=3.2m",
+      ".measure tran q0_5 FIND v(q0) AT=5.2m",
+      ".measure tran q1_5 FIND v(q1) AT=5.2m",
+    ]);
+    if (!haveNgspice) return;
+    expect([measured(output, "q1_1"), measured(output, "q0_1")]).toEqual([0, 5]);
+    expect([measured(output, "q1_3"), measured(output, "q0_3")]).toEqual([5, 5]);
+    expect([measured(output, "q1_5"), measured(output, "q0_5")]).toEqual([5, 0]);
+    pass(file, "DFF edge sequence");
+  });
+
+  it("holds the expected fourth-order filter corner and asymptotic slope", () => {
+    const file = "16_active_fourth_order_filter.asc";
+    const imported = load(file);
+    const ac = analysesFromDirectives(imported.directives).ac;
+    expect(ac).toBeDefined();
+    expect(imported.components.filter((component) => component.kind === "opamp")).toHaveLength(4);
+    const output = nativeRun(file, imported, { kind: "ac", ...ac! }, [
+      ".print ac vm(out)",
+    ]);
+    if (haveNgspice) {
+      const cornerDb = 20 * Math.log10(printedAcMagnitude(output, 1591.55));
+      const decadeDb = 20 * Math.log10(printedAcMagnitude(output, 15915.5));
+      expect(cornerDb).toBeGreaterThan(-13.5);
+      expect(cornerDb).toBeLessThan(-10.5);
+      expect(decadeDb).toBeLessThan(-75);
+    }
+    pass(file, "4-pole corner + rolloff");
+  });
+
+  it("keeps a compensated three-phase feeder balanced", async () => {
+    const file = "17_three_phase_power_grid.asc";
+    const imported = load(file);
+    const tran = analysesFromDirectives(imported.directives).tran;
+    expect(tran).toBeDefined();
+    const result = await runTransientAnalysis(schematic(imported), tran!);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      const phaseIds = ["a_bus", "b_bus", "c_bus"];
+      const rms = phaseIds.map((id) => {
+        const trace = result.traces.find((candidate) => candidate.id.toLowerCase() === id);
+        expect(trace, `missing ${id}`).toBeDefined();
+        const start = Math.floor(trace!.values.length * 0.5);
+        const values = trace!.values.slice(start);
+        return Math.sqrt(values.reduce((sum, value) => sum + value * value, 0) / values.length);
+      });
+      expect(Math.max(...rms) - Math.min(...rms)).toBeLessThan(0.5);
+      expect(rms.every((value) => value > 100 && value < 125)).toBe(true);
+    }
+    nativeRun(file, imported, { kind: "tran", ...tran! });
+    pass(file, "3φ RMS balance");
+  });
+
+  it("rectifies 12 Vrms into a loaded, ripple-bounded DC rail", () => {
+    const file = "18_full_bridge_power_supply.asc";
+    const imported = load(file);
+    const tran = analysesFromDirectives(imported.directives).tran;
+    expect(tran).toBeDefined();
+    expect(imported.components.filter((component) => component.kind === "diode")).toHaveLength(4);
+    const output = nativeRun(file, imported, { kind: "tran", ...tran! }, [
+      ".measure tran vdc_avg AVG v(vdc) FROM=80m TO=120m",
+      ".measure tran vdc_pp PP v(vdc) FROM=80m TO=120m",
+    ]);
+    if (!haveNgspice) return;
+    const average = measured(output, "vdc_avg");
+    const ripple = measured(output, "vdc_pp");
+    expect(average).toBeGreaterThan(14);
+    expect(average).toBeLessThan(17);
+    expect(ripple).toBeGreaterThan(0);
+    expect(ripple).toBeLessThan(2);
+    pass(file, "bridge DC + ripple");
+  });
+
+  it("amplifies 10 mV differential input by about 21× while rejecting common mode", () => {
+    const file = "19_instrumentation_amplifier.asc";
+    const imported = load(file);
+    expect(imported.components.filter((component) => component.kind === "opamp")).toHaveLength(3);
+    const output = nativeRun(file, imported, { kind: "op" }, [".print op v(out)"]);
+    if (haveNgspice) {
+      expect(Math.abs(printedOperatingPoint(output, "v(out)"))).toBeGreaterThan(0.19);
+      expect(Math.abs(printedOperatingPoint(output, "v(out)"))).toBeLessThan(0.23);
+    }
+    pass(file, "INA gain ≈21");
   });
 });

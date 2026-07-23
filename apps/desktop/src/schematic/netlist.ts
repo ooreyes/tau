@@ -279,6 +279,10 @@ export function extractCircuit(
       const pin = net.pins[0];
       // The ideal op-amp ignores its supply rails, so don't nag about unconnected V+/V-.
       if (pin.kind === "opamp" && (pin.id === "v+" || pin.id === "v-")) continue;
+      // LTspice digital gates expose an optional input bank plus true and
+      // complementary outputs; unused terminals may float. Reporting those
+      // pins as incomplete makes a valid 2-input gate look broken.
+      if (pin.kind === "digitalGate") continue;
       warnings.push(`${pin.componentLabel || pin.componentId}.${pin.label} is only connected to one pin.`);
     }
   }
