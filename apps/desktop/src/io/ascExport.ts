@@ -18,6 +18,8 @@ import type {
   ComponentKind,
   NetLabel,
   SchematicComponent,
+  SchematicSheet,
+  SchematicTextAnnotation,
   SchematicWire,
 } from "../schematic/types";
 import type { AscDocument, AscOrientation } from "./ascImport";
@@ -282,6 +284,10 @@ export interface SchematicExportInput {
   directives?: string[];
   /** Free-text comments (no leading ";"); emitted as `TEXT … ;…`. */
   comments?: string[];
+  /** Positioned LTspice TEXT records retained from an imported `.asc`. */
+  textAnnotations?: SchematicTextAnnotation[];
+  /** Original LTspice sheet geometry retained from import. */
+  sheet?: SchematicSheet;
 }
 
 export interface SchematicToAscResult {
@@ -300,7 +306,7 @@ export function schematicToAsc(input: SchematicExportInput): SchematicToAscResul
   const warnings: string[] = [];
   const doc: AscDocument = {
     version: 4,
-    sheet: { index: 1, width: 880, height: 680 },
+    sheet: input.sheet ? { ...input.sheet } : { index: 1, width: 880, height: 680 },
     wires: [],
     flags: [],
     symbols: [],
@@ -363,11 +369,45 @@ export function schematicToAsc(input: SchematicExportInput): SchematicToAscResul
     doc.flags.push({ x: label.x, y: label.y, net: label.text });
   }
 
-  for (const d of input.directives ?? []) {
-    doc.texts.push({ x: 0, y: 0, directive: true, text: d });
+  // Preserve every imported comment at its original position. For directives,
+  // match the current authored list back to its original TEXT record by value.
+  // If a setup form changed a directive's arguments, reuse the position of the
+  // same directive kind (`.tran`, `.ac`, …). A newly-added directive gets
+  // Tau's canonical origin while removed directives disappear. This keeps
+  // simulation state and ASC presentation in sync without making the engine
+  // depend on canvas annotation coordinates.
+  const annotations = input.textAnnotations ?? [];
+  const currentDirectives = input.directives ?? [];
+  const consumed = new Set<number>();
+  const directiveKind = (directive: string) => /^\s*(\.[^\s]+)/.exec(directive)?.[1].toLowerCase() ?? "";
+  for (const annotation of annotations) {
+    if (!annotation.directive) {
+      doc.texts.push({ ...annotation });
+      continue;
+    }
+    let index = currentDirectives.findIndex((directive, candidate) =>
+      !consumed.has(candidate) && directive === annotation.text
+    );
+    if (index < 0) {
+      const annotationKind = directiveKind(annotation.text);
+      index = currentDirectives.findIndex((directive, candidate) =>
+        !consumed.has(candidate) && annotationKind !== "" && directiveKind(directive) === annotationKind
+      );
+    }
+    if (index >= 0) {
+      consumed.add(index);
+      doc.texts.push({ ...annotation, text: currentDirectives[index] });
+    }
   }
-  for (const comment of input.comments ?? []) {
-    doc.texts.push({ x: 0, y: 0, directive: false, text: comment });
+  currentDirectives.forEach((directive, index) => {
+    if (!consumed.has(index)) {
+      doc.texts.push({ x: 0, y: 0, directive: true, text: directive });
+    }
+  });
+  if (!annotations.some((annotation) => !annotation.directive)) {
+    for (const comment of input.comments ?? []) {
+      doc.texts.push({ x: 0, y: 0, directive: false, text: comment });
+    }
   }
 
   return { text: serializeAscDocument(doc), warnings };

@@ -214,6 +214,8 @@ function validatedAscSource(value: unknown, validateElectrical: boolean): {
       probes: [],
       netLabels: imported.netLabels,
       directives: imported.directives,
+      textAnnotations: imported.textAnnotations,
+      ascSheet: imported.sheet,
     },
     componentCount: imported.components.filter((component) => component.kind !== "ground").length,
     wireCount: imported.wires.length,

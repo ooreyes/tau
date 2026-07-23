@@ -151,7 +151,7 @@ describe("project schematic file formats", () => {
       "symbol label placement",
     ]));
 
-    expect(ascRewriteRisks(ASC_SOURCE.replace("TEXT 0 0", "TEXT 64 160"))).toContain(
+    expect(ascRewriteRisks(ASC_SOURCE.replace("TEXT 0 0", "TEXT 64 160"))).not.toContain(
       "directive annotation placement",
     );
 
@@ -164,6 +164,44 @@ describe("project schematic file formats", () => {
     // re-emitted faithfully and the save block stays.
     const substrateBjt = `Version 4\nSHEET 1 880 680\nSYMBOL npn4 80 80 R0\nSYMATTR InstName Q1\n`;
     expect(ascRewriteRisks(substrateBjt)).toContain("symbol-library identity");
+  });
+
+  it("preserves positioned comments, directives, and custom sheet geometry", () => {
+    const source = [
+      "Version 4",
+      "SHEET 1 1120 760",
+      "TEXT 48 624 Left 2 !.tran 10n 4m",
+      "TEXT 48 656 Left 2 ;100 kHz buck qualification",
+      "",
+    ].join("\n");
+    const imported = importAsc(source);
+    expect(ascRewriteRisks(source)).toEqual([]);
+
+    const saved = serializeSchematicFile("/Schematics/buck.asc", {
+      components: imported.components,
+      wires: imported.wires,
+      probes: [],
+      netLabels: imported.netLabels,
+      directives: imported.directives,
+      textAnnotations: imported.textAnnotations,
+      ascSheet: imported.sheet,
+    });
+    expect(saved.warnings).toEqual([]);
+    expect(saved.contents).toContain("SHEET 1 1120 760");
+    expect(saved.contents).toContain("TEXT 48 624 Left 2 !.tran 10n 4m");
+    expect(saved.contents).toContain("TEXT 48 656 Left 2 ;100 kHz buck qualification");
+
+    const changedSetup = serializeSchematicFile("/Schematics/buck.asc", {
+      components: imported.components,
+      wires: imported.wires,
+      probes: [],
+      netLabels: imported.netLabels,
+      directives: [".tran 20n 8m"],
+      textAnnotations: imported.textAnnotations,
+      ascSheet: imported.sheet,
+    });
+    expect(changedSetup.contents).toContain("TEXT 48 624 Left 2 !.tran 20n 8m");
+    expect(changedSetup.contents).not.toContain("TEXT 0 0 Left 2 !.tran");
   });
 
   it("keeps viewer-only probes from blocking ASC saves but still rejects skipped components", () => {

@@ -103,13 +103,6 @@ export function ascRewriteRisks(source: string): string[] {
 
   if (parsed.unknown.length > 0) risks.add("unknown LTspice records");
   if (parsed.shapes.length > 0) risks.add("drawing primitives");
-  if (parsed.texts.some((text) => !text.directive)) risks.add("schematic comments");
-  if (parsed.texts.some((text) => text.directive && (text.x !== 0 || text.y !== 0))) {
-    risks.add("directive annotation placement");
-  }
-  if (parsed.sheet.index !== 1 || parsed.sheet.width !== 880 || parsed.sheet.height !== 680) {
-    risks.add("custom sheet geometry");
-  }
   if (/^\s*WINDOW\b/im.test(source)) risks.add("symbol label placement");
   if (/^\s*IOPIN\b/im.test(source)) risks.add("hierarchy ports");
 
@@ -162,6 +155,8 @@ export function serializeSchematicFile(
       wires: document.wires,
       netLabels: document.netLabels ?? [],
       directives: document.directives ?? [],
+      textAnnotations: document.textAnnotations ?? [],
+      ...(document.ascSheet ? { sheet: document.ascSheet } : {}),
     });
     const reopened = importAsc(result.text);
     const topologyChanged = JSON.stringify(schematicTopologySignature(document))
@@ -186,6 +181,10 @@ export function serializeSchematicFile(
         probes: document.probes ?? [],
         netLabels: document.netLabels ?? [],
         directives: document.directives ?? [],
+        ...(document.textAnnotations && document.textAnnotations.length > 0
+          ? { textAnnotations: document.textAnnotations }
+          : {}),
+        ...(document.ascSheet ? { ascSheet: document.ascSheet } : {}),
         // Additive: only present when the document carries attached vendor model
         // files, so legacy `.sim` output is byte-for-byte unchanged.
         ...(document.userModelLibraries && document.userModelLibraries.length > 0

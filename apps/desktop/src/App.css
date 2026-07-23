@@ -7290,6 +7290,109 @@ button.bottom-panel-head:focus-visible {
    strong backdrop, pop-in motion, Cancel/destructive-Confirm buttons) comes
    from ui/dialog.tsx + ui/button.tsx. */
 
+.simulation-setup-dialog {
+  width: min(560px, calc(100vw - 32px));
+}
+
+.simulation-setup-body {
+  display: grid;
+  gap: var(--sp-4);
+}
+
+.simulation-setup-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--sp-3);
+}
+
+.simulation-setup-grid--ac {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.simulation-setup-field {
+  display: grid;
+  gap: var(--sp-2);
+  color: var(--text-muted);
+  font: 600 var(--fs-label) var(--font-ui);
+}
+
+.simulation-setup-field small {
+  font-weight: 500;
+  color: var(--text-dim);
+}
+
+.simulation-setup-field select,
+.simulation-setup-advanced textarea {
+  width: 100%;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  background: var(--panel-2);
+  font: 500 var(--fs-label) var(--font-mono);
+}
+
+.simulation-setup-field select {
+  min-height: 34px;
+  padding: 0 var(--sp-3);
+}
+
+.simulation-setup-source-note,
+.simulation-setup-hint {
+  margin: 0;
+  padding: var(--sp-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  background: var(--panel);
+  font: 500 var(--fs-label) / 1.5 var(--font-ui);
+}
+
+.simulation-setup-source-note strong {
+  color: var(--text);
+}
+
+.simulation-setup-source-note code,
+.simulation-setup-advanced code {
+  color: var(--cream);
+  font-family: var(--font-mono);
+}
+
+.simulation-setup-advanced {
+  border-top: 1px solid var(--border);
+  padding-top: var(--sp-3);
+}
+
+.simulation-setup-advanced summary {
+  cursor: pointer;
+  color: var(--text);
+  font: 650 var(--fs-label) var(--font-ui);
+}
+
+.simulation-setup-advanced p {
+  margin: var(--sp-2) 0;
+  color: var(--text-dim);
+  font: 500 var(--fs-caption) / 1.45 var(--font-ui);
+}
+
+.simulation-setup-advanced textarea {
+  min-height: 112px;
+  resize: vertical;
+  padding: var(--sp-3);
+}
+
+.simulation-setup-error {
+  margin: 0;
+  color: var(--danger);
+  font: 600 var(--fs-label) var(--font-ui);
+}
+
+@media (max-width: 560px) {
+  .simulation-setup-grid,
+  .simulation-setup-grid--ac {
+    grid-template-columns: 1fr;
+  }
+}
+
 .shell-toast {
   position: fixed;
   right: 18px;

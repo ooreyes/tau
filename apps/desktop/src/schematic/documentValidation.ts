@@ -1,5 +1,15 @@
 import { CATALOG_BY_KIND } from "./catalog";
-import type { ComponentKind, NetLabel, Point, Probe, Rotation, SchematicComponent, SchematicWire } from "./types";
+import type {
+  ComponentKind,
+  NetLabel,
+  Point,
+  Probe,
+  Rotation,
+  SchematicComponent,
+  SchematicSheet,
+  SchematicTextAnnotation,
+  SchematicWire,
+} from "./types";
 import type { SchematicDocument, SchematicModelLibrary } from "../store/useSchematic";
 
 export const MAX_SCHEMATIC_FILE_BYTES = 5 * 1024 * 1024;
@@ -30,6 +40,7 @@ const MAX_TEXT_LENGTH = 160;
 const MAX_COMPONENT_VALUE_LENGTH = 32_768;
 const MAX_ID_LENGTH = 128;
 const MAX_DIRECTIVES = 1_000;
+const MAX_TEXT_ANNOTATIONS = 2_000;
 // An imported LTspice TEXT !-block lands as ONE directive string with its
 // embedded newlines (a behavioral-source table in the acceptance corpus runs
 // to 2.5 KB), so a directive gets the same generous single-field cap as a
@@ -181,6 +192,32 @@ function modelLibrary(value: unknown, index: number): SchematicModelLibrary {
   };
 }
 
+function textAnnotation(value: unknown, index: number): SchematicTextAnnotation {
+  const source = record(value, `textAnnotations[${index}]`);
+  if (typeof source.directive !== "boolean") {
+    fail(`textAnnotations[${index}].directive must be a boolean.`);
+  }
+  return {
+    x: coordinate(source.x, `textAnnotations[${index}].x`),
+    y: coordinate(source.y, `textAnnotations[${index}].y`),
+    directive: source.directive,
+    text: text(source.text, `textAnnotations[${index}].text`, MAX_DIRECTIVE_LENGTH),
+  };
+}
+
+function schematicSheet(value: unknown): SchematicSheet {
+  const source = record(value, "ascSheet");
+  const index = source.index;
+  if (typeof index !== "number" || !Number.isInteger(index) || index < 1 || index > 64) {
+    fail("ascSheet.index must be an integer from 1 to 64.");
+  }
+  return {
+    index,
+    width: coordinate(source.width, "ascSheet.width"),
+    height: coordinate(source.height, "ascSheet.height"),
+  };
+}
+
 /** Parse only the versioned schematic shape Tau can safely render and simulate. */
 export function validateSchematicDocument(value: unknown): SchematicDocument {
   const source = record(value, "document");
@@ -193,10 +230,15 @@ export function validateSchematicDocument(value: unknown): SchematicDocument {
   const probes = source.probes === undefined ? [] : source.probes;
   const netLabels = source.netLabels === undefined ? [] : source.netLabels;
   const directives = source.directives === undefined ? [] : source.directives;
+  const textAnnotations = source.textAnnotations === undefined ? [] : source.textAnnotations;
+  const ascSheet = source.ascSheet;
   const userModelLibraries = source.userModelLibraries === undefined ? [] : source.userModelLibraries;
   if (!Array.isArray(probes) || probes.length > MAX_COMPONENTS) fail("probes must be a bounded array.");
   if (!Array.isArray(netLabels) || netLabels.length > MAX_COMPONENTS) fail("netLabels must be a bounded array.");
   if (!Array.isArray(directives) || directives.length > MAX_DIRECTIVES) fail("directives must be a bounded array.");
+  if (!Array.isArray(textAnnotations) || textAnnotations.length > MAX_TEXT_ANNOTATIONS) {
+    fail(`textAnnotations must be an array of at most ${MAX_TEXT_ANNOTATIONS} items.`);
+  }
   if (!Array.isArray(userModelLibraries) || userModelLibraries.length > MAX_MODEL_LIBRARIES) {
     fail(`userModelLibraries must be an array of at most ${MAX_MODEL_LIBRARIES} items.`);
   }
@@ -247,6 +289,10 @@ export function validateSchematicDocument(value: unknown): SchematicDocument {
     probes: validatedProbes,
     netLabels: validatedLabels,
     directives: directives.map((value, index) => text(value, `directives[${index}]`, MAX_DIRECTIVE_LENGTH)),
+    ...(textAnnotations.length > 0
+      ? { textAnnotations: textAnnotations.map(textAnnotation) }
+      : {}),
+    ...(ascSheet !== undefined ? { ascSheet: schematicSheet(ascSheet) } : {}),
     // Additive: only emit the key when attachments exist so legacy/empty
     // documents keep their exact prior serialized shape.
     ...(validatedLibraries.length > 0 ? { userModelLibraries: validatedLibraries } : {}),

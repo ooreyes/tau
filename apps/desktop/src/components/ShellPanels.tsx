@@ -21,6 +21,7 @@ import {
   CircuitBoard,
   Activity,
   Library,
+  SlidersHorizontal,
 } from "lucide-react";
 import {
   VscodeCollapseAllIcon,
@@ -1120,6 +1121,7 @@ export function EditorToolbar({
   onClearScratchpad,
   modelLibraryCount,
   onOpenModelLibraries,
+  onOpenSimulationSetup,
 }: {
   mode: "schematic" | "simulator";
   isRunning: boolean;
@@ -1129,6 +1131,7 @@ export function EditorToolbar({
   onClearScratchpad: () => void;
   modelLibraryCount: number;
   onOpenModelLibraries: () => void;
+  onOpenSimulationSetup: () => void;
 }) {
   // The simulator view is read-only (pan/zoom/probe only - see Canvas's
   // `interactive` prop and App.tsx's keydown gate); every editing control in
@@ -1194,6 +1197,9 @@ export function EditorToolbar({
         {modelLibraryCount > 0 && (
           <span className="toolbar-count" aria-hidden="true">{modelLibraryCount}</span>
         )}
+      </IconButton>
+      <IconButton title="Simulation setup" disabled={readOnly} onClick={onOpenSimulationSetup}>
+        <SlidersHorizontal size={16} strokeWidth={1.6} />
       </IconButton>
       <div className="editor-toolbar-spacer" />
       <div className="transport">
@@ -2175,6 +2181,45 @@ export function ConfirmDialog({
         <DialogFooter className="confirm-actions">
           <Button data-autofocus variant="outline" onClick={onCancel}>Cancel</Button>
           <Button variant="destructive" onClick={onConfirm}>{confirmLabel}</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+export function UnsavedChangesDialog({
+  title,
+  saving = false,
+  onSave,
+  onDiscard,
+  onCancel,
+}: {
+  title: string;
+  saving?: boolean;
+  onSave: () => void;
+  onDiscard: () => void;
+  onCancel: () => void;
+}) {
+  return (
+    <Dialog open onOpenChange={(next) => { if (!next && !saving) onCancel(); }}>
+      <DialogContent
+        role="alertdialog"
+        className="confirm-dialog"
+        onOpenAutoFocus={(event) => {
+          event.preventDefault();
+          (event.currentTarget as HTMLElement).querySelector<HTMLButtonElement>("[data-autofocus]")?.focus();
+        }}
+      >
+        <DialogHeader>
+          <DialogTitle>Save changes to “{title}”?</DialogTitle>
+        </DialogHeader>
+        <DialogDescription className="confirm-dialog-body">
+          Your changes will be lost if you close this schematic without saving.
+        </DialogDescription>
+        <DialogFooter className="confirm-actions">
+          <Button data-autofocus variant="outline" disabled={saving} onClick={onCancel}>Cancel</Button>
+          <Button variant="destructive" disabled={saving} onClick={onDiscard}>Don’t Save</Button>
+          <Button disabled={saving} onClick={onSave}>{saving ? "Saving…" : "Save"}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

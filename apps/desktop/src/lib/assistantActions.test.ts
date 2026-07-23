@@ -56,7 +56,9 @@ describe("assistant ASC action boundary", () => {
     expect(() => parseApplyCurrentAscAction("apply-3", {
       source: APPLY_ASC.replace(/FLAG \d+ \d+ 0\n/g, ""),
     })).toThrow(/ground reference/i);
-    expect(() => parseApplyCurrentAscAction("apply-4", { source: VALID_ASC })).toThrow(/losslessly/i);
+    expect(() => parseApplyCurrentAscAction("apply-4", {
+      source: VALID_ASC.replace("TEXT 72 280", "LINE Normal 0 0 16 16 0\nTEXT 72 280"),
+    })).toThrow(/losslessly/i);
   });
 
   it("re-resolves voltage probes and follows same-reference current probes across apply", () => {

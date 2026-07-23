@@ -805,6 +805,10 @@ export interface AscImportResult {
   directives: string[];
   /** Free-text comments (`TEXT … ;…`), leading ";" stripped. */
   comments: string[];
+  /** Original TEXT records with positions, retained for lossless `.asc` save. */
+  textAnnotations: AscText[];
+  /** Original SHEET record retained for lossless `.asc` save. */
+  sheet: AscDocument["sheet"];
   /** Non-fatal issues (symbols placed without pin-accurate geometry, etc.). */
   warnings: string[];
   /**
@@ -1285,6 +1289,8 @@ function flattenSubcircuit(
     // the block; they must not run when the block is used inside a parent.
     directives: [],
     comments: [],
+    textAnnotations: [],
+    sheet: { ...body.sheet },
     warnings: body.warnings.map((w) => `${instName}: ${w}`),
     notes: body.notes.map((n) => `${instName}: ${n}`),
   };
@@ -1518,7 +1524,17 @@ export function ascToSchematic(doc: AscDocument, options: AscImportOptions = {})
   const directives = doc.texts.filter((t) => t.directive).map((t) => t.text);
   const comments = doc.texts.filter((t) => !t.directive).map((t) => t.text);
 
-  return { components: recovered.components, wires, netLabels, directives, comments, warnings, notes };
+  return {
+    components: recovered.components,
+    wires,
+    netLabels,
+    directives,
+    comments,
+    textAnnotations: doc.texts.map((text) => ({ ...text })),
+    sheet: { ...doc.sheet },
+    warnings,
+    notes,
+  };
 }
 
 /**

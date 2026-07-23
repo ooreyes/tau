@@ -114,6 +114,25 @@ export interface Point {
   y: number;
 }
 
+/**
+ * An LTspice TEXT record retained with its canvas position. Directives also
+ * live in `SchematicDocument.directives` for simulation; this annotation is
+ * the lossless presentation record used when the `.asc` is saved again.
+ */
+export interface SchematicTextAnnotation {
+  x: number;
+  y: number;
+  directive: boolean;
+  text: string;
+}
+
+/** Original LTspice SHEET record retained so in-place saves keep canvas size. */
+export interface SchematicSheet {
+  index: number;
+  width: number;
+  height: number;
+}
+
 /** A wire drawn as an orthogonal polyline. Nets are derived from wires later.
  *  Optional `resistance` (engineering string, e.g. `"10m"`) models a non-ideal
  *  conductor: the wire no longer shorts its endpoints in the netlist and a

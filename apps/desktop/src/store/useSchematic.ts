@@ -9,6 +9,8 @@ import type {
   Tool,
   Probe,
   NetLabel,
+  SchematicTextAnnotation,
+  SchematicSheet,
 } from "../schematic/types";
 import { CATALOG_BY_KIND } from "../schematic/catalog";
 import { canCurrentProbe } from "../simulation/analysisSetup";
@@ -55,6 +57,10 @@ interface Doc {
   netLabels: NetLabel[];
   /** SPICE directives (`.param`/`.tran`/`.ac`/`.meas`/…) carried by the document. */
   directives: string[];
+  /** Positioned LTspice TEXT records retained for lossless `.asc` rewrites. */
+  textAnnotations: SchematicTextAnnotation[];
+  /** Original LTspice SHEET record, null for Tau-native/legacy documents. */
+  ascSheet: SchematicSheet | null;
   /** Vendor model files attached to the document (see {@link SchematicModelLibrary}). */
   userModelLibraries: SchematicModelLibrary[];
 }
@@ -79,6 +85,10 @@ export interface SchematicDocument {
    * importer from `TEXT !` lines; absent for legacy/v1 files.
    */
   directives?: string[];
+  /** Positioned LTspice comments/directives retained for lossless `.asc` rewrites. */
+  textAnnotations?: SchematicTextAnnotation[];
+  /** Original LTspice SHEET record retained for lossless `.asc` rewrites. */
+  ascSheet?: SchematicSheet | null;
   /**
    * Attached vendor model files (`.lib`/`.subckt`/`.mod`). Optional and additive:
    * absent for legacy/v1 files and for documents with no attachments.
@@ -211,6 +221,9 @@ interface SchematicState extends Doc {
   directives: string[];
   /** Replace the document's directive lines (used by the LTspice importer / directive editor). */
   setDirectives: (directives: string[]) => void;
+  /** Positioned source TEXT records; changed only by import/document replacement. */
+  textAnnotations: SchematicTextAnnotation[];
+  ascSheet: SchematicSheet | null;
 
   /** Vendor model files attached to the document, inlined into the native deck when referenced. */
   userModelLibraries: SchematicModelLibrary[];
@@ -246,6 +259,8 @@ const docOf = (s: Doc): Doc => ({
   probes: s.probes,
   netLabels: s.netLabels,
   directives: s.directives,
+  textAnnotations: s.textAnnotations,
+  ascSheet: s.ascSheet,
   userModelLibraries: s.userModelLibraries,
 });
 
@@ -378,6 +393,8 @@ function copyDocument(doc: SchematicDocument, freshIds: boolean): SchematicDocum
     })),
     netLabels: (doc.netLabels ?? []).map((label) => ({ ...label, id: freshIds ? nanoid(6) : label.id })),
     directives: [...(doc.directives ?? [])],
+    textAnnotations: (doc.textAnnotations ?? []).map((annotation) => ({ ...annotation })),
+    ...(doc.ascSheet ? { ascSheet: { ...doc.ascSheet } } : {}),
     // Attachments are immutable, so a shallow copy shares the (possibly large)
     // text without duplicating it - fresh ids never apply to library files.
     userModelLibraries: [...(doc.userModelLibraries ?? [])],
@@ -397,6 +414,8 @@ function copyHistoryEntry(entry: Doc): Doc {
     probes: document.probes ?? [],
     netLabels: document.netLabels ?? [],
     directives: document.directives ?? [],
+    textAnnotations: document.textAnnotations ?? [],
+    ascSheet: document.ascSheet ?? null,
     userModelLibraries: document.userModelLibraries ?? [],
   };
 }
@@ -670,6 +689,8 @@ export const useSchematic = create<SchematicState>()((set) => {
     probes: initialDoc?.probes ?? [],
     netLabels: initialDoc?.netLabels ?? [],
     directives: initialDoc?.directives ?? [],
+    textAnnotations: initialDoc?.textAnnotations ?? [],
+    ascSheet: initialDoc?.ascSheet ?? null,
     userModelLibraries: initialDoc?.userModelLibraries ?? [],
     past: [],
     future: [],
@@ -1095,6 +1116,8 @@ export const useSchematic = create<SchematicState>()((set) => {
           probes: cloned.probes ?? [],
           netLabels: cloned.netLabels ?? [],
           directives: cloned.directives ?? [],
+          textAnnotations: cloned.textAnnotations ?? [],
+          ascSheet: cloned.ascSheet ?? null,
           userModelLibraries: cloned.userModelLibraries ?? [],
           past: [],
           future: [],
@@ -1117,6 +1140,8 @@ export const useSchematic = create<SchematicState>()((set) => {
           probes: replacement.probes ?? [],
           netLabels: replacement.netLabels ?? [],
           directives: replacement.directives ?? [],
+          textAnnotations: replacement.textAnnotations ?? [],
+          ascSheet: replacement.ascSheet ?? null,
           userModelLibraries: replacement.userModelLibraries ?? [],
           selectedId: null,
           selectedWireId: null,
@@ -1136,6 +1161,8 @@ export const useSchematic = create<SchematicState>()((set) => {
           probes: restored.probes ?? [],
           netLabels: restored.netLabels ?? [],
           directives: restored.directives ?? [],
+          textAnnotations: restored.textAnnotations ?? [],
+          ascSheet: restored.ascSheet ?? null,
           userModelLibraries: restored.userModelLibraries ?? [],
           past: history.past.map(copyHistoryEntry).slice(-HISTORY_LIMIT),
           future: history.future.map(copyHistoryEntry).slice(0, HISTORY_LIMIT),
@@ -1155,6 +1182,8 @@ export const useSchematic = create<SchematicState>()((set) => {
         probes: [],
         netLabels: [],
         directives: [],
+        textAnnotations: [],
+        ascSheet: null,
         userModelLibraries: [],
         past: [],
         future: [],
@@ -1175,6 +1204,8 @@ useSchematic.subscribe((state, prev) => {
     || state.probes !== prev.probes
     || state.netLabels !== prev.netLabels
     || state.directives !== prev.directives
+    || state.textAnnotations !== prev.textAnnotations
+    || state.ascSheet !== prev.ascSheet
     || state.userModelLibraries !== prev.userModelLibraries
   ) {
     persist({
@@ -1183,6 +1214,8 @@ useSchematic.subscribe((state, prev) => {
       probes: state.probes,
       netLabels: state.netLabels,
       directives: state.directives,
+      textAnnotations: state.textAnnotations,
+      ...(state.ascSheet ? { ascSheet: state.ascSheet } : {}),
       ...(state.userModelLibraries.length > 0 ? { userModelLibraries: state.userModelLibraries } : {}),
     });
   }

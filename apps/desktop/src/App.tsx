@@ -19,6 +19,7 @@ import { AnalysisErrorBoundary } from "./components/AnalysisErrorBoundary";
 import { EmptyState } from "./components/EmptyState";
 import { LocalAiSetupDialog } from "./components/LocalAiSetupDialog";
 import { ModelLibrariesDialog } from "./components/ModelLibrariesDialog";
+import { SimulationSetupDialog } from "./components/SimulationSetupDialog";
 import { CommandPalette } from "./components/CommandPalette";
 import {
   ActivityRail,
@@ -31,6 +32,7 @@ import {
   ExplorerPanel,
   MinimizedPanelDock,
   SettingsPanel,
+  UnsavedChangesDialog,
 } from "./components/ShellPanels";
 import { useSchematic, type SchematicDocument, type SchematicHistory } from "./store/useSchematic";
 import { CATALOG } from "./schematic/catalog";
@@ -170,6 +172,8 @@ export function schematicDocumentSignature(doc: SchematicDocument): string {
     })),
     netLabels: (doc.netLabels ?? []).map(({ id: _id, ...label }) => label),
     directives: doc.directives ?? [],
+    textAnnotations: doc.textAnnotations ?? [],
+    ascSheet: doc.ascSheet ?? null,
     userModelLibraries: doc.userModelLibraries ?? [],
   });
 }
@@ -199,6 +203,8 @@ function App() {
   const probes = useSchematic((s) => s.probes);
   const netLabels = useSchematic((s) => s.netLabels);
   const directives = useSchematic((s) => s.directives);
+  const textAnnotations = useSchematic((s) => s.textAnnotations);
+  const ascSheet = useSchematic((s) => s.ascSheet);
   const userModelLibraries = useSchematic((s) => s.userModelLibraries);
   const past = useSchematic((s) => s.past);
   const future = useSchematic((s) => s.future);
@@ -272,8 +278,10 @@ function App() {
   const [importWarningsByPath, setImportWarningsByPath] = useState<Record<string, string[]>>({});
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [modelLibrariesOpen, setModelLibrariesOpen] = useState(false);
+  const [simulationSetupOpen, setSimulationSetupOpen] = useState(false);
   const [confirmClearOpen, setConfirmClearOpen] = useState(false);
   const [confirmCloseTabId, setConfirmCloseTabId] = useState<string | null>(null);
+  const [savingCloseTab, setSavingCloseTab] = useState(false);
   const [graphOpen, setGraphOpen] = useState(true);
   const [componentFocusSignal, setComponentFocusSignal] = useState(0);
   const [partsOpen, setPartsOpen] = useState(true);
@@ -405,8 +413,10 @@ function App() {
     probes,
     netLabels,
     directives,
+    textAnnotations,
+    ...(ascSheet ? { ascSheet } : {}),
     ...(userModelLibraries.length > 0 ? { userModelLibraries } : {}),
-  }), [components, directives, netLabels, probes, userModelLibraries, wires]);
+  }), [ascSheet, components, directives, netLabels, probes, textAnnotations, userModelLibraries, wires]);
   // Native runs take the raw vendor text (LTspice-only cleanup happens in the
   // deck builder); the store keeps names alongside for the attachment UI.
   const userModelLibraryTexts = useMemo(
@@ -856,7 +866,15 @@ function App() {
       list.map((tab) => (tab.id === activeId
         ? {
             ...tab,
-            doc: { components, wires, probes, netLabels, directives },
+            doc: {
+              components,
+              wires,
+              probes,
+              netLabels,
+              directives,
+              textAnnotations,
+              ...(ascSheet ? { ascSheet } : {}),
+            },
             history: { past, future },
             dirty: Boolean(tab.savedSignature && tab.savedSignature !== schematicDocumentSignature({
               components,
@@ -864,10 +882,12 @@ function App() {
               probes,
               netLabels,
               directives,
+              textAnnotations,
+              ...(ascSheet ? { ascSheet } : {}),
             })),
           }
         : tab)),
-    [activeId, components, wires, probes, netLabels, directives, past, future],
+    [activeId, ascSheet, components, wires, probes, netLabels, directives, textAnnotations, past, future],
   );
 
   // Adopt an imported circuit's own `.tran` settings (stop time / sample count)
@@ -988,6 +1008,8 @@ function App() {
         wires: result.wires,
         netLabels: result.netLabels,
         directives: result.directives,
+        textAnnotations: result.textAnnotations,
+        ascSheet: result.sheet,
         probes: [],
       });
       openDocument(doc, title, path, ascRewriteRisks(text));
@@ -1112,12 +1134,16 @@ function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [directives]);
 
-  const saveActiveToProject = useCallback(async (options?: { quietBlocked?: boolean }) => {
+  const saveTabToProject = useCallback(async (
+    targetId: string,
+    options?: { quietBlocked?: boolean },
+  ) => {
     // Tab rename persists through the native filesystem bridge. Serialize saves
     // behind that operation so rapid Enter -> Cmd+S cannot target a stale path.
     await projectRenameInFlightRef.current;
-    const tab = tabsRef.current.find((t) => t.id === activeId);
+    const tab = tabsRef.current.find((t) => t.id === targetId);
     if (!tab) return false;
+    const document = targetId === activeId ? currentDocument : tab.doc ?? blankDocument();
     let filePath = tab.filePath ?? null;
     let createdForSave = false;
     if (!filePath) {
@@ -1130,15 +1156,9 @@ function App() {
     }
     const savePath = filePath;
     try {
-      const serialized = serializeSchematicFile(savePath, {
-        components,
-        wires,
-        probes,
-        netLabels,
-        directives,
-      });
+      const serialized = serializeSchematicFile(savePath, document);
       const blockReason = isAscFile(savePath)
-        ? ascSaveBlockReason(tab.ascRewriteRisks ?? [], probes.length, serialized.warnings)
+        ? ascSaveBlockReason(tab.ascRewriteRisks ?? [], document.probes?.length ?? 0, serialized.warnings)
         : null;
       if (blockReason) {
         if (createdForSave) await deleteProjectNode(savePath);
@@ -1151,15 +1171,15 @@ function App() {
       }
       await writeSim(savePath, serialized.contents);
       setTabs((list) => list.map((t) => (
-        t.id === activeId
+        t.id === targetId
           ? {
               ...t,
               title: basename(savePath),
               filePath: savePath,
               detached: false,
               dirty: false,
-              doc: currentDocument,
-              savedSignature: currentSignature,
+              doc: document,
+              savedSignature: schematicDocumentSignature(document),
             }
           : t
       )));
@@ -1175,7 +1195,12 @@ function App() {
       showNotice(userFacingErrorMessage(error, "Save failed."));
       return false;
     }
-  }, [activeId, components, wires, probes, netLabels, directives, currentDocument, currentSignature, createSchematicInRoot, deleteProjectNode, writeSim, showNotice]);
+  }, [activeId, createSchematicInRoot, currentDocument, deleteProjectNode, showNotice, writeSim]);
+
+  const saveActiveToProject = useCallback(
+    (options?: { quietBlocked?: boolean }) => saveTabToProject(activeId, options),
+    [activeId, saveTabToProject],
+  );
   saveActiveToProjectRef.current = saveActiveToProject;
 
   // Switch to an already-open tab, preserving each tab's content in memory.
@@ -1213,9 +1238,7 @@ function App() {
     const idx = snap.findIndex((tab) => tab.id === id);
     if (idx === -1) return;
     const closing = snap[idx];
-    const isLastPopulatedTab = snap.length === 1
-      && Boolean(closing.doc && (closing.doc.components.length > 0 || closing.doc.wires.length > 0));
-    if (isLastPopulatedTab && !confirmed) {
+    if (closing.dirty && !confirmed) {
       setConfirmCloseTabId(id);
       return;
     }
@@ -1224,7 +1247,10 @@ function App() {
       const blank: OpenTab = { id: newTabId(), title: "untitled.asc", doc: blankDocument(), history: emptyHistory() };
       setTabs([blank]);
       setActiveId(blank.id);
-      newCircuit();
+      // Replace both the document and its history explicitly. This is the
+      // same atomic path used when switching tabs and prevents the just-closed
+      // circuit from remaining in the store behind the project-start view.
+      restoreCircuit(blank.doc ?? blankDocument(), blank.history);
     } else {
       const next = remaining[Math.max(0, idx - 1)];
       setTabs(remaining);
@@ -1235,7 +1261,7 @@ function App() {
     }
     invalidateAnalysis();
     setMode("schematic");
-  }, [tabs, activeId, snapshotActive, restoreCircuit, newCircuit, invalidateAnalysis]);
+  }, [tabs, activeId, snapshotActive, restoreCircuit, invalidateAnalysis]);
 
   const clearScratchpad = useCallback(() => {
     newCircuit();
@@ -1533,6 +1559,7 @@ function App() {
             onClearScratchpad={() => setConfirmClearOpen(true)}
             modelLibraryCount={userModelLibraries.length}
             onOpenModelLibraries={() => setModelLibrariesOpen(true)}
+            onOpenSimulationSetup={() => setSimulationSetupOpen(true)}
           />
           <EditorTabs
             tabs={visibleTabs}
@@ -1707,6 +1734,7 @@ function App() {
         onOpenModelLibraries={() => setModelLibrariesOpen(true)}
       />
       <ModelLibrariesDialog open={modelLibrariesOpen} onOpenChange={setModelLibrariesOpen} />
+      <SimulationSetupDialog open={simulationSetupOpen} onOpenChange={setSimulationSetupOpen} />
       <LocalAiSetupDialog onReady={() => showNotice("Local AI is ready on this Mac.")} />
       {settingsOpen && (
         <SettingsPanel
@@ -1730,11 +1758,18 @@ function App() {
         />
       )}
       {confirmCloseTabId && (
-        <ConfirmDialog
-          title="Close this scratchpad?"
-          body="Save a .tau.json copy first if you need this circuit later. Closing the only open scratchpad starts a new blank circuit."
-          confirmLabel="Close scratchpad"
-          onConfirm={() => {
+        <UnsavedChangesDialog
+          title={tabs.find((tab) => tab.id === confirmCloseTabId)?.title ?? "schematic"}
+          saving={savingCloseTab}
+          onSave={() => {
+            setSavingCloseTab(true);
+            void saveTabToProject(confirmCloseTabId).then((saved) => {
+              if (!saved) return;
+              closeTab(confirmCloseTabId, true);
+              setConfirmCloseTabId(null);
+            }).finally(() => setSavingCloseTab(false));
+          }}
+          onDiscard={() => {
             closeTab(confirmCloseTabId, true);
             setConfirmCloseTabId(null);
           }}

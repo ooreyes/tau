@@ -98,6 +98,7 @@ beforeEach(() => {
   shellWidth = 1440;
   storage.clear();
   storage.set("tau.assistant.open", "1");
+  useSchematic.getState().newCircuit();
   useProject.setState({
     rootPath: null,
     rootName: null,
@@ -253,6 +254,75 @@ describe("App schematic workspace tools", () => {
     await waitFor(() => {
       expect(screen.queryByRole("img", { name: "untitled.asc has unsaved changes" })).toBeNull();
       expect(screen.getAllByText("untitled.asc").length).toBeGreaterThan(0);
+    });
+  });
+
+  it("asks Save / Don’t Save / Cancel before closing a dirty schematic", async () => {
+    await renderOpenProject();
+    act(() => useSchematic.getState().addComponent("resistor", 120, 120));
+
+    fireEvent.click(screen.getByRole("button", { name: "Close untitled.asc" }));
+    let dialog = await screen.findByRole("alertdialog", { name: "Save changes to “untitled.asc”?" });
+    expect(within(dialog).getByRole("button", { name: "Save" })).toBeTruthy();
+    expect(within(dialog).getByRole("button", { name: "Don’t Save" })).toBeTruthy();
+    expect(within(dialog).getByRole("button", { name: "Cancel" })).toBeTruthy();
+
+    fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
+    expect(screen.getByRole("img", { name: "untitled.asc has unsaved changes" })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Close untitled.asc" }));
+    dialog = await screen.findByRole("alertdialog", { name: "Save changes to “untitled.asc”?" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Don’t Save" }));
+    await waitFor(() => expect(useSchematic.getState().components).toEqual([]));
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+  });
+
+  it("saves a dirty schematic from the close confirmation before closing", async () => {
+    await renderOpenProject();
+    const path = `${DEFAULT_WORKSPACE_ID}/untitled.asc`;
+    act(() => useSchematic.getState().addComponent("resistor", 120, 120));
+
+    fireEvent.click(screen.getByRole("button", { name: "Close untitled.asc" }));
+    const dialog = await screen.findByRole("alertdialog", { name: "Save changes to “untitled.asc”?" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+
+    await waitFor(() => expect(useProject.getState().workspaceFiles[path].contents).toContain("SYMBOL res"));
+    await waitFor(() => expect(useSchematic.getState().components).toEqual([]));
+  });
+
+  it("saves imported comments, directive placement, and custom sheet geometry", async () => {
+    const path = `${DEFAULT_WORKSPACE_ID}/commented.asc`;
+    const contents = [
+      "Version 4",
+      "SHEET 1 1120 760",
+      "TEXT 48 624 Left 2 !.op",
+      "TEXT 48 656 Left 2 ;Keep this engineering note",
+      "",
+    ].join("\n");
+    const file = { path, name: "commented.asc", contents, kind: "asc" as const };
+    useProject.setState({
+      rootPath: DEFAULT_WORKSPACE_ID,
+      rootName: DEFAULT_WORKSPACE_NAME,
+      tree: defaultWorkspaceTree([file]),
+      expanded: [DEFAULT_WORKSPACE_ID],
+      workspaceFiles: { [path]: file },
+      error: null,
+      capability: "none",
+    });
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "commented.asc" }));
+    await screen.findByRole("tab", { name: /commented\.asc/ });
+    act(() => useSchematic.getState().addComponent("resistor", 120, 120));
+    fireEvent.keyDown(document.body, { key: "s", metaKey: true });
+
+    await waitFor(() => expect(screen.queryByText(/Save blocked/)).toBeNull());
+    await waitFor(() => {
+      const saved = useProject.getState().workspaceFiles[path].contents;
+      expect(saved).toContain("SHEET 1 1120 760");
+      expect(saved).toContain("TEXT 48 624 Left 2 !.op");
+      expect(saved).toContain("TEXT 48 656 Left 2 ;Keep this engineering note");
+      expect(saved).toContain("SYMBOL res");
     });
   });
 
