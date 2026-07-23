@@ -43,13 +43,13 @@ The only step left before sharing with testers is Apple notarization, which
 needs Omar's Developer ID.
 
 ## ⏱ HEARTBEAT
-- **Headline metric:** acceptance corpus remains 82 imported / 79 warning-clean / 82 deck-built / 82 op-converged / 82 schema-valid; engineering value editors now keep complete numbers visible and numeric-only, transient overrides cannot fall below the circuit-derived sample minimum, and C1/C2 support both exact endpoint entry and labelled plot lines.
-- **Run started (UTC):** 2026-07-23T12:54Z
-- **Synced to origin:** auto/ltspice-parity @ caf66aa (this unit's parent).
-- **Claimed unit:** make engineering value editors display complete values (with exponent support and numeric-only validation), automatically enforce the circuit-derived minimum transient sample count, and redesign transient cursors for direct visual and exact-time selection.
-- **Status:** DONE
-- **Last completed sub-step:** implementation pushed in `a2c2c82`; full frontend gate is 2,060 passing / 6 skipped with clean typecheck, Rust is fmt/clippy-clean with 28 passing / 1 ignored, the ignored real-ngspice smoke passes, and the exact debug bundle ran `untitled.asc` natively to 200,015 samples. Packaged 900×600 QA verified unclipped component/STOP/cursor values plus C1/C2 vertical waveform lines and exact interval entry.
-- **Next candidates:** resume the highest-leverage unfinished acceptance/parity item; no corpus number changed in this UI/control unit.
+- **Headline metric:** acceptance corpus remains 82 imported / 79 warning-clean / 82 deck-built / 82 op-converged / 82 schema-valid while a new repository-owned `Circuit_testing_v1` pack is built to stress analysis breadth and the packaged macOS workflow independently of the user's existing corpus.
+- **Run started (UTC):** 2026-07-23T13:31Z
+- **Synced to origin:** auto/ltspice-parity @ 243d0e0 (this unit's parent).
+- **Claimed unit:** create a reusable LTspice-compatible `Circuit_testing_v1` folder and runner, exercise its circuits through Tau's native analysis paths, inspect the packaged app at 900×600 and a comfortable size for Apple-quality messaging/discoverability, then fix and regression-test any bounded high-confidence defects found.
+- **Status:** IN PROGRESS
+- **Last completed sub-step:** synchronized the only durable branch, confirmed the prior heartbeat was DONE with no recent `wip:` checkpoint, and mapped the existing acceptance runner, native corpus scripts, minimum-size screenshot pipeline, and §6 waveform/UI parity surface.
+- **Next candidates:** author a deliberately varied v1 circuit matrix (OP/TRAN/AC/DC/STEP/MEAS/NOISE/TF plus failure cases), add a one-command report, run native/package QA, and turn concrete findings into focused fixes rather than speculative redesign.
 
 ---
 
