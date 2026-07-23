@@ -47,11 +47,64 @@ needs Omar's Developer ID.
 - **Run started (UTC):** 2026-07-23T17:35Z
 - **Synced to origin:** auto/ltspice-parity @ 1732049 (this unit's parent).
 - **Claimed unit:** eliminate the recurring imported-ASC comment save block, add a simple user-facing path for source waveforms and analysis directives, and confirm dirty-tab close with Save / Don't Save / Cancel.
-- **Status:** IN PROGRESS
-- **Last completed sub-step:** synchronized the sole durable branch and located the loss-risk classifier, ASC comment exporter, existing directive store, save callback, and tab-close surface.
-- **Next candidates:** preserve imported comment records through the document model/exporter, expose progressively disclosed directive/source editors, and centralize dirty-close confirmation so mouse and keyboard close paths behave identically.
+- **Status:** DONE
+- **Last completed sub-step:** packaged Tau saved and reopened a disposable buck converter while preserving comments/directive positions, then bundled ngspice completed its 165,337-sample transient; all required gates and the 55-check advanced circuit corpus are green.
+- **Next candidates:** keep the remaining unsupported ASC drawing/window records explicit, and continue the acceptance-corpus path rather than widening the editor with lossy representations.
 
 ---
+
+## 2026-07-23T17:58Z - auto/ltspice-parity - Safe imported-ASC save + simulation authoring + dirty close (§1/§6)
+
+### What I did
+- Removed the recurring `Tau cannot yet preserve schematic comments` save
+  blocker by retaining imported LTspice `TEXT` records and `SHEET` geometry in
+  the document, history, persistence, validation, assistant-apply, and ASC
+  export paths. Comments retain their coordinates; edited `.tran`/`.ac`/other
+  directive arguments retain the position of the original directive kind.
+- Added a progressive `Simulation setup` toolbar dialog: `.op`, `.tran`, and
+  `.ac` use named engineering fields; expert `.param`, `.step`, `.meas`,
+  `.model`, `.include`, and other cards remain available under Advanced. The
+  dialog points beginners to the existing Pulse Voltage and AC Voltage source
+  components and their named Properties instead of requiring `PULSE(...)`.
+- Replaced the ambiguous scratchpad-close warning with the standard
+  Save / Don't Save / Cancel flow for every dirty tab. Save supports inactive
+  tabs, waits for the disk write, and closes only after success; Cancel is the
+  initial focus and keeps the dirty document open.
+
+### Files
+- `apps/desktop/src/{App.tsx,App.css,App.workspace.test.tsx}`
+- `apps/desktop/src/components/{ShellPanels.tsx,ShellPanels.test.tsx,SimulationSetupDialog.tsx,SimulationSetupDialog.test.tsx}`
+- `apps/desktop/src/io/{ascImport.ts,ascExport.ts}`
+- `apps/desktop/src/project/{types.ts,types.test.ts}`
+- `apps/desktop/src/schematic/{types.ts,documentValidation.ts}`
+- `apps/desktop/src/store/useSchematic.ts`
+- `apps/desktop/src/lib/{assistantActions.ts,assistantActions.test.ts}`
+
+### Tests
+- `pnpm -C apps/desktop typecheck` — PASS.
+- `pnpm -C apps/desktop test` — PASS (2,071 passed / 6 skipped).
+- `pnpm --filter @tau/desktop build` — PASS.
+- `cargo fmt --check` / `cargo clippy -- -D warnings` / `cargo test` — PASS
+  (28 passed / 1 ignored), plus the explicit real-ngspice ignored smoke — PASS.
+- `pnpm --filter @tau/desktop tauri build` — PASS (Tau.app + arm64 DMG).
+- `Circuit_testing_v1/run.sh` — PASS (55 checks / 0 skipped).
+- Packaged Computer Use pass — PASS: disposable
+  `12_buck_converter.asc` exposed `.tran 50n 4m`, changed to 5 ms, showed the
+  dirty marker and three-choice close dialog, Cancel retained it, Save closed
+  it without a blocker, and the rewritten file retained four positioned TEXT
+  records. Reopen + bundled ngspice completed 165,337 samples with
+  `VOUT_AVG=4.642 V` and `VOUT_PP=15.11 mV`.
+
+### Parity items
+- §1 ASC import/export: positioned comments/directives and custom sheet
+  geometry now round-trip through an ordinary edit/save.
+- §6 project/editor UX: common analysis authoring is discoverable without
+  forcing raw SPICE, and every dirty-tab close has a native-style safe choice.
+
+### Next step
+- Preserve only additional ASC record classes that Tau can represent
+  losslessly; continue to block drawing primitives, WINDOW label placement,
+  hierarchy ports, and unknown records until their models exist.
 
 ## 2026-07-23T17:27Z - auto/ltspice-parity - Advanced engineering circuit stress tier (§1/§6)
 

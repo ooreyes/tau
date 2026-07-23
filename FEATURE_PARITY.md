@@ -1425,6 +1425,16 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   and repaired on open. The reported LED loop was verified from a fresh mounted
   DMG through open → save → bundled-ngspice run → reload → rerun as 3 nets / 4
   parts with no connectivity warnings.
+  **Safe save + authoring follow-up (2026-07-23):** imported LTspice comments,
+  positioned directives, and custom `SHEET` geometry now survive document
+  history, persistence, assistant apply, and ASC save, eliminating the
+  recurring comment blocker without weakening the remaining loss-risk checks.
+  A toolbar Simulation setup dialog authors `.op`, `.tran`, and `.ac` through
+  named fields, keeps expert cards under Advanced, and points new users to
+  Pulse/AC Voltage components instead of requiring raw source syntax. Every
+  dirty tab now closes through Save / Don't Save / Cancel; Save completes the
+  disk write before closing. Packaged Tau proved the flow on the buck fixture
+  and reran its bundled-ngspice transient after save/reopen.
   **Release stress/security follow-up (2026-07-16):** a committed five-case
   adversarial suite now drives the logical-plan ceiling (80 components / 160
   pins), long PWL/identifier boundaries, ambiguous/dangling/case-colliding
