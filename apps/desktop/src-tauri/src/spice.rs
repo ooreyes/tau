@@ -893,58 +893,10 @@ fn deck_lines(netlist: &str) -> Result<Vec<String>, String> {
         return Err("The ngspice netlist must end with an .end card.".to_string());
     }
     for (index, line) in lines.iter().enumerate().skip(1) {
-        let trimmed = line.trim_start();
-        let lower = trimmed.to_ascii_lowercase();
-        // The embedded engine executes inside Tau's process and is not covered
-        // by Tauri's filesystem scope. Reject every supported ngspice/XSPICE
-        // file-backed form before the deck reaches it; model/source files must
-        // be resolved and copied into a Tau-owned model representation instead.
-        let compact = lower.split_whitespace().collect::<Vec<_>>().join(" ");
-        if compact.contains("filesource")
-            || compact.contains("file=")
-            || compact.contains("file =")
-            || compact.contains("filename=")
-            || compact.contains("filename =")
-            || compact.contains("pwl(file")
-        {
-            return Err(format!(
-                "File-backed ngspice primitives on line {} are not permitted.",
-                index + 1
-            ));
-        }
-        if trimmed.starts_with('.') {
-            let card = lower.split_whitespace().next().unwrap_or_default();
-            if !matches!(
-                card,
-                ".model"
-                    | ".option"
-                    | ".options"
-                    | ".tran"
-                    | ".op"
-                    | ".ac"
-                    | ".dc"
-                    | ".step"
-                    | ".meas"
-                    | ".measure"
-                    | ".noise"
-                    | ".tf"
-                    | ".param"
-                    | ".func"
-                    | ".temp"
-                    | ".ic"
-                    | ".nodeset"
-                    | ".save"
-                    | ".four"
-                    | ".global"
-                    | ".subckt"
-                    | ".ends"
-                    | ".end"
-            ) {
-                return Err(format!(
-                    "Unsupported ngspice card on line {}: {card}.",
-                    index + 1
-                ));
-            }
+        let compact = compact_lower(line);
+        screen_card(&compact, index + 1)?;
+        if compact.starts_with('.') {
+            let card = compact.split(' ').next().unwrap_or_default();
             if card == ".end" && index + 1 != lines.len() {
                 return Err(format!(
                     "The .end card must be the final non-empty line (line {}).",
@@ -956,7 +908,7 @@ fn deck_lines(netlist: &str) -> Result<Vec<String>, String> {
         // "+ shell foo" is screened exactly like "shell foo" (defense in
         // depth: ngspice treats such lines as inert parameters, but the
         // sanitizer should not depend on that).
-        let command = lower
+        let command = compact
             .trim_start_matches('+')
             .split_whitespace()
             .next()
@@ -993,7 +945,160 @@ fn deck_lines(netlist: &str) -> Result<Vec<String>, String> {
             ));
         }
     }
+    // Screening a physical line screens text ngspice never parses in that
+    // form: it folds every '+' continuation onto the card above first, so a
+    // parameter name and its '=' can be split across the fold and reassemble
+    // only inside the engine. Screen the folded cards as well. The engine
+    // still receives the original physical lines, unchanged.
+    for card in stitch_cards(&lines)? {
+        screen_card(&card.text, card.line_number)?;
+    }
     Ok(lines)
+}
+
+/// One logical ngspice card: the opening line with every following '+'
+/// continuation folded in, exactly as the engine stitches them.
+struct StitchedCard {
+    /// 1-based physical line the card opens on, for diagnostics.
+    line_number: usize,
+    /// Lowercased, whitespace-collapsed, continuations folded in.
+    text: String,
+}
+
+/// Lowercase a deck line and collapse every whitespace run to a single space,
+/// so that exotic spacing cannot hide a token from the screens below.
+fn compact_lower(line: &str) -> String {
+    line.to_ascii_lowercase()
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+/// Fold the deck's continuation lines into logical cards. The title line is
+/// never a card, so a deck whose first non-title line is a continuation has
+/// nothing to continue and is rejected outright. A full-line '*' comment may
+/// legitimately sit between a card and its continuation, so a comment neither
+/// opens a card nor closes the one above it.
+fn stitch_cards(lines: &[String]) -> Result<Vec<StitchedCard>, String> {
+    let mut cards: Vec<StitchedCard> = Vec::new();
+    let mut open: Option<usize> = None;
+    for (index, line) in lines.iter().enumerate().skip(1) {
+        let compact = compact_lower(line);
+        if compact.is_empty() || compact.starts_with('*') {
+            continue;
+        }
+        if compact.starts_with('+') {
+            let Some(target) = open else {
+                return Err(format!(
+                    "Line {} continues an ngspice card that does not exist.",
+                    index + 1
+                ));
+            };
+            // ngspice replaces the '+' with a space, so tokens never glue
+            // across the fold; join the same way.
+            let card = &mut cards[target];
+            card.text.push(' ');
+            card.text.push_str(compact.trim_start_matches('+').trim_start());
+            continue;
+        }
+        cards.push(StitchedCard {
+            line_number: index + 1,
+            text: compact,
+        });
+        open = Some(cards.len() - 1);
+    }
+    Ok(cards)
+}
+
+/// Screen one card, physical or stitched. `compact` must come from
+/// [`compact_lower`]; `line_number` is 1-based and only used for diagnostics.
+fn screen_card(compact: &str, line_number: usize) -> Result<(), String> {
+    // The embedded engine executes inside Tau's process and is not covered
+    // by Tauri's filesystem scope. Reject every supported ngspice/XSPICE
+    // file-backed form before the deck reaches it; model/source files must
+    // be resolved and copied into a Tau-owned model representation instead.
+    if references_a_file(compact) {
+        return Err(format!(
+            "File-backed ngspice primitives on line {line_number} are not permitted."
+        ));
+    }
+    if compact.starts_with('.') {
+        let card = compact.split(' ').next().unwrap_or_default();
+        if !matches!(
+            card,
+            ".model"
+                | ".option"
+                | ".options"
+                | ".tran"
+                | ".op"
+                | ".ac"
+                | ".dc"
+                | ".step"
+                | ".meas"
+                | ".measure"
+                | ".noise"
+                | ".tf"
+                | ".param"
+                | ".func"
+                | ".temp"
+                | ".ic"
+                | ".nodeset"
+                | ".save"
+                | ".four"
+                | ".global"
+                | ".subckt"
+                | ".ends"
+                | ".end"
+        ) {
+            return Err(format!(
+                "Unsupported ngspice card on line {line_number}: {card}."
+            ));
+        }
+    }
+    Ok(())
+}
+
+/// True when a card names a file-backed ngspice/XSPICE primitive. `compact`
+/// is already lowercase, so this is the case-insensitive equivalent of
+/// `/(filesource|pwl\(file|[a-z0-9_]*file(name)?\s*=)/i`: every parameter
+/// whose name ends in `file` or `filename` (`file=`, `file =`, `filename=`,
+/// `input_file =`, `state_file=`, and any future spelling) plus the two forms
+/// that carry no '=' at all. Matching on the suffix rather than a fixed set
+/// of names keeps parameters Tau has not seen yet inside the screen.
+fn references_a_file(compact: &str) -> bool {
+    if compact.contains("filesource") || compact.contains("pwl(file") {
+        return true;
+    }
+    let bytes = compact.as_bytes();
+    let mut index = 0;
+    while index < bytes.len() {
+        if !is_parameter_byte(bytes[index]) {
+            index += 1;
+            continue;
+        }
+        let start = index;
+        while index < bytes.len() && is_parameter_byte(bytes[index]) {
+            index += 1;
+        }
+        // Slicing is safe: both bounds sit on ASCII bytes, never inside a
+        // multi-byte character.
+        let word = &compact[start..index];
+        if !word.ends_with("file") && !word.ends_with("filename") {
+            continue;
+        }
+        let mut cursor = index;
+        while bytes.get(cursor).is_some_and(u8::is_ascii_whitespace) {
+            cursor += 1;
+        }
+        if bytes.get(cursor) == Some(&b'=') {
+            return true;
+        }
+    }
+    false
+}
+
+fn is_parameter_byte(byte: u8) -> bool {
+    byte.is_ascii_alphanumeric() || byte == b'_'
 }
 
 unsafe fn c_string(pointer: *mut c_char) -> Option<String> {
@@ -1175,6 +1280,99 @@ V1 in 0 1
         assert!(
             deck_lines(benign).is_ok(),
             "benign continuation was rejected"
+        );
+    }
+
+    #[test]
+    fn rejects_file_parameters_split_across_a_continuation() {
+        // Each of these passes every single-physical-line screen: the opening
+        // line carries no '=' and the continuation carries no file token. Only
+        // the stitched card ngspice actually parses shows the file reference.
+        for unsafe_deck in [
+            // The audit's S1 proof of concept: XSPICE d_source input_file.
+            "Tau adversarial deck\n.model dsrc d_source(input_file\n+ = \"/Users/victim/keys.txt\")\n.end\n",
+            // The '=' opens the continuation with no space of its own.
+            "Tau adversarial deck\n.model dsrc d_source(input_file\n+=\"/etc/passwd\")\n.end\n",
+            // The parameter name itself is split across the fold.
+            "Tau adversarial deck\n.model dsrc d_source(input_\n+ file = \"/etc/passwd\")\n.end\n",
+            // PWL file, spaced so that the "pwl(file" substring never appears.
+            "Tau adversarial deck\nV1 in 0 PWL ( file\n+ = \"/etc/passwd\" )\nR1 in 0 1k\n.tran 1u 1m\n.end\n",
+            // d_state state_file, which the old substring set never listed.
+            "Tau adversarial deck\n.model dstate d_state(state_file\n+ = \"/etc/passwd\")\n.end\n",
+            // table2d file, folded twice.
+            "Tau adversarial deck\n.model tbl table2d(file\n+\n+ = \"/etc/passwd\")\n.end\n",
+            // A '*' comment between the card and its fold must not reopen it.
+            "Tau adversarial deck\n.model dsrc d_source(input_file\n* datasheet note\n+ = \"/etc/passwd\")\n.end\n",
+            // Inside a .subckt body, the way a downloaded vendor .lib reaches
+            // the deck (userModelLibrary.ts captures blocks verbatim).
+            "Tau adversarial deck\n.subckt vendor a b\nR1 a b 1k\n.model dsrc d_source(input_file\n+ = \"/etc/passwd\")\n.ends vendor\nX1 in 0 vendor\n.op\n.end\n",
+        ] {
+            assert!(
+                deck_lines(unsafe_deck).is_err(),
+                "continuation-split file parameter was accepted: {unsafe_deck}"
+            );
+        }
+
+        // The same parameters on a single line stay rejected, including the
+        // spellings the old fixed substring set did not enumerate.
+        for unsafe_line in [
+            ".model dsrc d_source(input_file = \"/etc/passwd\")",
+            ".model dstate d_state(state_file=\"/etc/passwd\")",
+            ".model tbl table2d(file = \"/etc/passwd\")",
+            ".model src filesource(filename=\"/etc/passwd\")",
+        ] {
+            let deck = format!("Tau adversarial deck\n{unsafe_line}\n.end\n");
+            assert!(
+                deck_lines(&deck).is_err(),
+                "file parameter was accepted: {unsafe_line}"
+            );
+        }
+
+        // A continuation with no card above it cannot be screened as anything,
+        // so it is refused outright rather than folded into the title.
+        assert!(deck_lines("Tau adversarial deck\n+ = \"/etc/passwd\"\n.end\n").is_err());
+    }
+
+    #[test]
+    fn accepts_vendor_macromodels_that_fold_long_parameter_lists() {
+        // Real vendor .lib files continue long .model cards over many lines.
+        // Folding them before screening must not make them look hostile.
+        let vendor = "Tau vendor deck
+.subckt opamp 1 2 99 50 45
+Q1 4 2 6 QIN
+.model QIN NPN(IS=8E-16 BF=110 VAF=130 IKF=2.2E-3
++ ISE=1.3E-16 NE=2 BR=2 VAR=20 IKR=2E-3 ISC=1E-16
++ NC=2 RB=2E3 RE=10 RC=100 CJE=1.3E-12 VJE=0.7
++ MJE=0.4 CJC=0.8E-12 VJC=0.55 MJC=0.5 TF=0.3E-9)
+.model DX D(IS=1E-14)
+.ends opamp
+X1 in fb vcc vee out opamp
+V1 in 0 PULSE(0 5 0 1n
++ 1n 0.5m 1m)
+R1 out fb 10k
+.tran 1u 1m
+.end
+";
+        assert!(
+            deck_lines(vendor).is_ok(),
+            "a folded vendor parameter list was rejected"
+        );
+    }
+
+    #[test]
+    fn accepts_the_bundled_ad8541_vendor_macromodel() {
+        // The real Analog Devices macromodel shipped in examples/, screened as
+        // a deck exactly the way userModelLibrary.ts hands it over: verbatim,
+        // comments and all.
+        let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../../examples/ad8541-buffer/AD8541.lib");
+        let vendor = std::fs::read_to_string(&path)
+            .unwrap_or_else(|error| panic!("{} should be readable: {error}", path.display()));
+        let deck =
+            format!("Tau AD8541 buffer\n{vendor}\nX1 in 0 vcc vee out AD8541\nV1 in 0 1\nR1 out 0 10k\n.tran 1u 1m\n.end\n");
+        assert!(
+            deck_lines(&deck).is_ok(),
+            "the bundled AD8541 vendor model was rejected"
         );
     }
 
