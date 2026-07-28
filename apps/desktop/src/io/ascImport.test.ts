@@ -338,6 +338,43 @@ SYMATTR InstName U1`;
     expect(doc.warnings.some((w) => w.includes("U1"))).toBe(false);
   });
 
+  it("banks the sw control pair, so an imported switch can be driven", () => {
+    // sw.asy A(0,16)/B(0,96)/NC+(-48,80)/NC-(-48,32) at (100,100) R0 → world
+    // (100,116)/(100,196)/(52,180)/(52,132). Dropping NC+/NC- is what made
+    // every imported switch simulate as a permanent open circuit.
+    const O = `Version 4
+SHEET 1 880 680
+SYMBOL sw 100 100 R0
+SYMATTR InstName S1
+SYMATTR Value MYSW`;
+    const doc = ascToSchematic(parseAsc(O));
+    const s1 = doc.components.find((c) => c.label === "S1");
+    expect(s1?.kind).toBe("switch");
+    const pins = Object.fromEntries((s1?.pinOverride ?? []).map((p) => [p.id, { x: p.x, y: p.y }]));
+    expect(pins.a).toEqual({ x: 100, y: 116 });
+    expect(pins.b).toEqual({ x: 100, y: 196 });
+    expect(pins.cp).toEqual({ x: 52, y: 180 });
+    expect(pins.cn).toEqual({ x: 52, y: 132 });
+  });
+
+  it("keeps the 2-pin csw off sw's bank, so no phantom control pins appear", () => {
+    // csw.asy is +(0,0)/-(0,80) with no control pins - its control is a named
+    // source. Borrowing sw's 4-pin bank would place two pins on geometry the
+    // symbol does not have, where a passing wire could silently attach.
+    const O = `Version 4
+SHEET 1 880 680
+SYMBOL csw 100 100 R0
+SYMATTR InstName S2
+SYMATTR Value MYSW`;
+    const doc = ascToSchematic(parseAsc(O));
+    const s2 = doc.components.find((c) => c.label === "S2");
+    expect(s2?.kind).toBe("switch");
+    const pins = s2?.pinOverride ?? [];
+    expect(pins.map((p) => p.id)).toEqual(["a", "b"]);
+    expect(pins[0]).toMatchObject({ x: 100, y: 100 });
+    expect(pins[1]).toMatchObject({ x: 100, y: 180 });
+  });
+
   it("banks VCVS (e) and VCCS (g) control/output pins to LTspice geometry", () => {
     // e.asy: out +(0,16)/-(0,96), control P(-48,32)/N(-48,80). g.asy reverses
     // output polarity: +(0,96)/-(0,16). Both at (200,200) R0.

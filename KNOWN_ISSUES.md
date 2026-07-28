@@ -17,10 +17,12 @@ Nothing in the UI currently labels which engine produced a given result.
 
 ## Devices that are not modelled yet
 
-- **Voltage-controlled switches do not switch.** A `sw` part imports without
-  its two control pins and simulates as a permanent open circuit. Any SMPS,
-  relay or ideal-switch circuit built around one will produce a confident,
-  wrong waveform. Do not rely on a switching converter result.
+- **Current-controlled switches (`csw`) do not switch.** A `csw` is controlled
+  by the current through a named source rather than by pins, which Tau does not
+  model, so it simulates as a fixed open circuit - and says so with the result
+  instead of returning a confident wrong waveform. Voltage-controlled switches
+  (`sw`) do switch: they import with their NC+/NC- control pins and simulate as
+  a real ngspice `S` device against the schematic's own `.model`.
 - Tau ships 28 standard device models against LTspice's ~2,500. A part whose
   model name Tau cannot resolve is simulated on a generic starter device
   (`Level=1` MOSFET, textbook BJT/diode) and **says so before the run** - the

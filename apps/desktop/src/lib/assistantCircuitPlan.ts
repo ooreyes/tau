@@ -127,12 +127,22 @@ export const TAU_CIRCUIT_PLAN_TOOL = {
   },
 };
 
+/** The pins a plan may reference for a kind. A switch is lowered to a plain
+ *  resistor and accepts only open/closed, so its NC+/NC- control pair cannot be
+ *  placed: advertising it would invite plans the compiler has to reject, and
+ *  requiring nets on it would reject every valid switch plan. */
+function plannablePins(kind: ComponentKind) {
+  return getLocalPins(kind).filter(
+    ({ id }) => !(kind === "switch" && (id === "cp" || id === "cn")),
+  );
+}
+
 export const ASSISTANT_CATALOG_PROMPT = ASSISTANT_GENERATABLE_KINDS.map((kind) => ({
   kind,
   name: CATALOG_BY_KIND[kind].name,
   refPrefix: CATALOG_BY_KIND[kind].prefix,
   defaultValue: CATALOG_BY_KIND[kind].defaultValue,
-  pins: getLocalPins(kind).map(({ id, label }) => ({ id, label })),
+  pins: plannablePins(kind).map(({ id, label }) => ({ id, label })),
 }));
 
 /**
@@ -722,7 +732,7 @@ function parsePlan(input: unknown): CircuitPlan {
   // pin at once: a small model given one pin per attempt burns its limited
   // repair attempts without converging.
   const uncoveredPins = components.flatMap((component) =>
-    getLocalPins(component.kind)
+    plannablePins(component.kind)
       .map(({ id }) => `${component.ref}.${id}`)
       .filter((pin) => !connectedPins.has(pin.toLowerCase())),
   );

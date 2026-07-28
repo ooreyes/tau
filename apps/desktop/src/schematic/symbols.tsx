@@ -59,7 +59,7 @@ export const SYMBOL_BODY: Record<ComponentKind, BodyBox> = {
   npn: { minX: -8, minY: -20, maxX: 18, maxY: 20 },
   pnp: { minX: -8, minY: -20, maxX: 18, maxY: 20 },
   potentiometer: { minX: -28, minY: -18, maxX: 28, maxY: 12 },
-  switch: { minX: -14, minY: -20, maxX: 14, maxY: 8 },
+  switch: { minX: -18, minY: -20, maxX: 18, maxY: 20 },
   transformer: { minX: -24, minY: -27, maxX: 24, maxY: 27 },
   tline: { minX: -20, minY: -16, maxX: 20, maxY: 16 },
   subckt: { minX: -24, minY: -20, maxX: 24, maxY: 20 },
@@ -546,6 +546,9 @@ export function ComponentSymbol({ kind }: { kind: ComponentKind }) {
           <circle cx={-12} cy={0} r={3} />
           <circle cx={12} cy={0} r={3} />
           <line x1={-10} y1={-3} x2={11} y2={-18} />
+          <line x1={-16} y1={32} x2={-16} y2={16} />
+          <line x1={16} y1={32} x2={16} y2={16} />
+          <line x1={-16} y1={16} x2={16} y2={16} />
         </>
       );
 

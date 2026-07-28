@@ -192,7 +192,17 @@ const LOCAL_PINS: Record<ComponentKind, LocalPin[]> = {
     { id: "b", label: "B", x: 32, y: 0 },
     { id: "w", label: "W", x: 0, y: -32 },
   ],
-  switch: TWO_TERMINAL_PINS,
+  // Voltage-controlled switch (LTspice sw.asy): the switched path A/B plus the
+  // NC+/NC- control pair, in SpiceOrder so an imported symbol's pins zip 1:1.
+  // The control pair is optional - a switch with it unwired holds the static
+  // open/closed state instead (engine/spiceNetlist.ts), so extractCircuit does
+  // not report those two pins as unconnected.
+  switch: [
+    { id: "a", label: "A", x: -32, y: 0 },
+    { id: "b", label: "B", x: 32, y: 0 },
+    { id: "cp", label: "NC+", x: -16, y: 32 },
+    { id: "cn", label: "NC-", x: 16, y: 32 },
+  ],
   transformer: [
     { id: "p1", label: "P1", x: -32, y: -16 },
     { id: "p2", label: "P2", x: -32, y: 16 },

@@ -479,7 +479,18 @@ export const LTSPICE_PINS: Record<string, LtPin[]> = {
   ],
   // LTspice njf/pjf.asy pins (SpiceOrder D,G,S): gate at dy=64 (vs MOS dy=80).
   njf: [{ name: "D", dx: 48, dy: 0 }, { name: "G", dx: 0, dy: 64 }, { name: "S", dx: 48, dy: 96 }],
-  sw: [{ name: "A", dx: 0, dy: 16 }, { name: "B", dx: 0, dy: 96 }],
+  // sw.asy (voltage-controlled switch), in SpiceOrder: the switched path A/B
+  // then the control pair NC+/NC-. NC+ is the LOWER of the two control pins.
+  sw: [
+    { name: "A", dx: 0, dy: 16 },
+    { name: "B", dx: 0, dy: 96 },
+    { name: "NC+", dx: -48, dy: 80 },
+    { name: "NC-", dx: -48, dy: 32 },
+  ],
+  // csw.asy (current-controlled switch) is a 2-pin symbol on its own geometry -
+  // its control is a named source, not a pin pair, so it must not borrow sw's
+  // bank or the two phantom control pins would land on whatever passes there.
+  csw: [{ name: "+", dx: 0, dy: 0 }, { name: "-", dx: 0, dy: 80 }],
   // LTspice tline.asy pins, in SpiceOrder: I1,R1 (left port) / I2,R2 (right
   // port). Symbol-local offsets are centered; mapped to Tau's a1/a2/b1/b2.
   tline: [
@@ -767,7 +778,7 @@ function ltPinKey(type: string): keyof typeof LTSPICE_PINS | null {
     nmos: "nmos", nmos4: "mos4",
     pmos: "pmos", pmos4: "mos4",
     njf: "njf", pjf: "njf",
-    sw: "sw", csw: "sw",
+    sw: "sw", csw: "csw",
     tline: "tline", ltline: "tline",
     // Controlled sources: e/e2 = VCVS, g/g2 = VCCS. The `2` variants swap the
     // control pair (see LTSPICE_PINS). f/h (current-controlled) expose only two

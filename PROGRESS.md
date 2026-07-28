@@ -22,11 +22,25 @@ found two independent reasons:
    truncated to 16 points in silence, and `.asc` export wrote several part
    kinds as 1 TOhm resistors with `warnings: []`.
 
-Most of those are now fixed (see the audit's Status section), but **switches
-are still not modelled, and `.dc`/`.noise`/`.tf` still never reach ngspice, so
-a transistor DC sweep does not run.** Do not restore a readiness banner until
-every Class A and Class B item in the audit is closed or consciously accepted,
-with file:line evidence.
+Most of those are now fixed (see the audit's Status section). Voltage-controlled
+switches were closed on 2026-07-28 and are proved against the host's real
+ngspice, but **`.dc`/`.noise`/`.tf` still never reach ngspice, so a transistor
+DC sweep does not run.** Do not restore a readiness banner until every Class A
+and Class B item in the audit is closed or consciously accepted, with file:line
+evidence.
+
+**Last unit - 2026-07-28: voltage-controlled switches (audit P2).** A `sw`
+imports its NC+/NC- control pair and emits ngspice `S <a> <b> <cp> <cn> <model>`
+resolved against the document's `.model`, or a `TAU_SW` starter that reports the
+substitution. An uncontrolled switch (`csw`, or an `S` with no wired control)
+stays a fixed resistance and warns. Gates: tsc clean, 2154 JS tests passing in
+isolation (App.workspace/TelemetryDock/the 5,000-segment perf test remain the
+known full-suite CPU-contention flakes, each green on its own), 31 Rust, clippy
+clean, corpus unchanged at 80 imported / 80 deck-built / 80 op-converged / 80
+schema-valid with warning-clean 77 - measured on the same tree with and without
+the change. Corpus still fails its own `>= 82` assertion because
+`~/Downloads/LTspice_export` is missing, not from a code regression.
+Next candidate: audit P3, route `.dc` to ngspice so a transistor DC sweep runs.
 
 The 2026-07-22 evidence below is kept for history. Note its corpus numbers are
 no longer reproducible on this machine: `~/Downloads/LTspice_export` was

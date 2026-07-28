@@ -867,6 +867,70 @@ describe("buildSpiceDeck", () => {
     expect(deck.netlist).not.toContain("TP1 ");
   });
 
+  // A switched load: V1 -> S1 -> R1 -> ground, with S1's NC+/NC- pair driven by
+  // VC. Reused by the three switch cases below, which differ only in wiring.
+  const switchedLoad = (controlled: boolean) => {
+    const components = [
+      component("vsource", "V1", "5", -128, 32),
+      component("ground", "", "", -128, 64),
+      component("switch", "S1", "MYSW", 0, 0),
+      component("resistor", "R1", "1k", 96, 0),
+      component("ground", "", "", 128, 0),
+      ...(controlled
+        ? [
+          component("vsource", "VC", "2", -16, 96),
+          component("ground", "", "", -16, 128),
+          component("ground", "", "", 16, 32),
+        ]
+        : []),
+    ];
+    const wires = [
+      wire("w1", [{ x: -128, y: 0 }, { x: -32, y: 0 }]),
+      wire("w2", [{ x: 32, y: 0 }, { x: 64, y: 0 }]),
+      ...(controlled ? [wire("w3", [{ x: -16, y: 32 }, { x: -16, y: 64 }])] : []),
+    ];
+    return { components, wires, directives: [".model MYSW SW(Ron=1 Roff=1Meg Vt=1)"] };
+  };
+
+  it("emits a voltage-controlled switch as an S device driven by its control pair", () => {
+    const deck = buildSpiceDeck(switchedLoad(true), { kind: "op" });
+
+    // S <n+> <n-> <control+> <control-> <model> - not a fixed resistance.
+    expect(deck.netlist).toMatch(/^S1 \S+ \S+ \S+ \S+ MYSW$/m);
+    expect(deck.netlist).not.toMatch(/^R_S1 /m);
+    expect(deck.circuit.warnings).toEqual([]);
+  });
+
+  it("reports a model-named switch with no control wiring instead of silently opening it", () => {
+    const deck = buildSpiceDeck(switchedLoad(false), { kind: "op" });
+
+    expect(deck.netlist).toMatch(/^R_S1 \S+ \S+ 1e12$/m);
+    expect(deck.circuit.warnings.some((w) => w.startsWith("S1 has no control connection"))).toBe(true);
+    // The optional control pair must not also surface as extraction noise:
+    // assistantActions treats any extraction warning as a fatal rejection.
+    expect(deck.circuit.warnings.filter((w) => w.includes("only connected to one pin"))).toEqual([]);
+  });
+
+  it("keeps a switch left on Tau's static state a fixed resistance, unwarned", () => {
+    const open = { ...switchedLoad(false), components: switchedLoad(false).components };
+    open.components[2] = component("switch", "S1", "open", 0, 0);
+    expect(buildSpiceDeck(open, { kind: "op" }).netlist).toMatch(/^R_S1 \S+ \S+ 1e12$/m);
+    expect(buildSpiceDeck(open, { kind: "op" }).circuit.warnings).toEqual([]);
+
+    const closed = { ...switchedLoad(false), components: switchedLoad(false).components };
+    closed.components[2] = component("switch", "S1", "closed", 0, 0);
+    expect(buildSpiceDeck(closed, { kind: "op" }).netlist).toMatch(/^R_S1 \S+ \S+ 1m$/m);
+    expect(buildSpiceDeck(closed, { kind: "op" }).circuit.warnings).toEqual([]);
+  });
+
+  it("falls back to the starter switch model when the document defines none", () => {
+    const deck = buildSpiceDeck({ ...switchedLoad(true), directives: [] }, { kind: "op" });
+
+    expect(deck.netlist).toMatch(/^S1 \S+ \S+ \S+ \S+ TAU_SW$/m);
+    expect(deck.netlist).toContain(".model TAU_SW SW(");
+    expect(deck.modelSubstitutions.map((s) => s.ref)).toContain("S1");
+  });
+
   it("clamps an op-amp with driven supply pins to its rails (Class-D PWM comparator)", () => {
     // U1 at origin: in+(-32,16) in-(-32,-16) out(32,0) v+(0,-32) v-(0,32).
     // VP feeds v+ via a wire, v- is wired to ground - both rails driven, so the

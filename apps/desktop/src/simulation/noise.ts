@@ -368,6 +368,10 @@ export function runNoiseAnalysis(schematic: Schematic, spec: NoiseSpec): NoiseRe
     );
     const inductors = circuit.components.filter(({ component }) => component.kind === "inductor");
     const opamps = circuit.components.filter(({ component }) => component.kind === "opamp");
+    // A switch's NC+/NC- control pair is optional; left unwired it forms
+    // single-pin nets that are all-zero rows in the matrix. Same floating-node
+    // case as an unconnected op-amp rail, so it takes the same gmin shunt.
+    const hasSwitch = circuit.components.some(({ component }) => component.kind === "switch");
     const voltageSourceOffset = nonGroundNets.length;
     const inductorOffset = voltageSourceOffset + voltageSources.length;
     const opampOffset = inductorOffset + inductors.length;
@@ -395,7 +399,7 @@ export function runNoiseAnalysis(schematic: Schematic, spec: NoiseSpec): NoiseRe
       const omega = 2 * Math.PI * f;
       const matrix = zeroCMatrix(size);
 
-      if (opamps.length > 0) {
+      if (opamps.length > 0 || hasSwitch) {
         const gminC: Complex = { re: GMIN, im: 0 };
         for (let i = 0; i < nonGroundNets.length; i += 1) matrix[i][i] = cadd(matrix[i][i], gminC);
       }

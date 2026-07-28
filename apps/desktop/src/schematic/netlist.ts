@@ -301,6 +301,12 @@ export function extractCircuit(
       // complementary outputs; unused terminals may float. Reporting those
       // pins as incomplete makes a valid 2-input gate look broken.
       if (pin.kind === "digitalGate") continue;
+      // A switch's NC+/NC- control pair is optional: leaving it unwired holds
+      // the part at its static open/closed state, which the deck builder
+      // reports on its own terms. Nagging here would make every static switch
+      // look broken - and callers that treat any extraction warning as fatal
+      // (assistantActions) would refuse the schematic outright.
+      if (pin.kind === "switch" && (pin.id === "cp" || pin.id === "cn")) continue;
       warnings.push(`${pin.componentLabel || pin.componentId}.${pin.label} is only connected to one pin.`);
     }
   }

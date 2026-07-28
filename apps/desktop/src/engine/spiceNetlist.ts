@@ -98,6 +98,12 @@ const DEFAULT_MODELS = [
   ".model TAU_PNP PNP(Is=1e-14 Bf=100 Vaf=100)",
   ".model TAU_NJF NJF(Vto=-2 Beta=1m Lambda=1e-4)",
   ".model TAU_PJF PJF(Vto=2 Beta=1m Lambda=1e-4)",
+  // Starter voltage-controlled switch. Ron matches the resistance Tau has
+  // always used for a statically closed switch; Roff is held at 1G rather than
+  // the static path's 1T because an Ron/Roff ratio that wide is a documented
+  // ngspice convergence hazard, and 1G is already an open circuit in any
+  // circuit a switch appears in. Vh=0 - hysteresis costs convergence in DC.
+  ".model TAU_SW SW(Ron=1m Roff=1e9 Vt=0.5 Vh=0)",
 ];
 
 /**
@@ -200,7 +206,7 @@ export function buildSpiceDeck(schematic: Schematic, analysis: SpiceAnalysis): S
 
   const lines = ["Tau generated circuit", optionsLineFromDirectives(flatDirectives)];
   const usedKinds = new Set(components.map((component) => component.kind));
-  const needsModels = ["diode", "led", "zener", "nmos", "pmos", "njf", "pjf", "npn", "pnp"].some((kind) => usedKinds.has(kind as ComponentKind));
+  const needsModels = ["diode", "led", "zener", "nmos", "pmos", "njf", "pjf", "npn", "pnp", "switch"].some((kind) => usedKinds.has(kind as ComponentKind));
   if (needsModels) lines.push(...DEFAULT_MODELS);
 
   // Carry the document's own `.model`/`.lib`/`.inc`/`.subckt` definitions into the
@@ -420,6 +426,15 @@ export function buildSpiceDeck(schematic: Schematic, analysis: SpiceAnalysis): S
       directiveIc,
       modelSubstitutions,
     ));
+    // A switch that names a model but has no wired control pair silently
+    // degraded to a fixed open circuit before this was reported.
+    if (
+      entry.component.kind === "switch"
+      && !isStaticSwitchState(entry.component.value)
+      && switchControlNodes(entry, netPinCount) === null
+    ) {
+      circuit.warnings.push(uncontrolledSwitchWarning(entry.component));
+    }
   });
   circuit.warnings.push(...modelSubstitutions.map(modelSubstitutionMessage));
 
@@ -506,6 +521,42 @@ export function unresolvedSubcktMessage(names: readonly string[]): string {
 }
 
 const MAX_LISTED_MISSING_SUBCKTS = 6;
+
+/** True when a switch carries Tau's own static state rather than the name of a
+ *  `.model … SW(…)`. These are authored in Tau, not imported, and stay a fixed
+ *  resistance even if their control pins are wired. */
+function isStaticSwitchState(value: string): boolean {
+  const state = value.trim().toLowerCase();
+  return state === "" || state.startsWith("open") || state.startsWith("closed");
+}
+
+/** The two nodes driving a voltage-controlled switch, or null when the control
+ *  pair cannot supply a controlling voltage: either pin unwired (a net with no
+ *  second pin on it is not a connection), or both tied to the same net. */
+function switchControlNodes(
+  entry: ExtractedComponent,
+  netPinCount: ReadonlyMap<string, number>,
+): { positive: string; negative: string } | null {
+  const wired = (pin: string): string | undefined => {
+    const netId = entry.pins[pin];
+    if (!netId) return undefined;
+    if (netId !== "0" && (netPinCount.get(netId) ?? 0) < 2) return undefined;
+    return netId.toLowerCase();
+  };
+  const positive = wired("cp");
+  const negative = wired("cn");
+  if (!positive || !negative || positive === negative) return null;
+  return { positive, negative };
+}
+
+/** Product copy for a switch that names a model but has no control connection.
+ *  It simulates as a fixed open circuit, which is a different circuit - saying
+ *  so is the whole point, since a permanently open switch produces a confident
+ *  wrong waveform rather than an error. */
+export function uncontrolledSwitchWarning(component: SchematicComponent): string {
+  const ref = component.label.trim() || "A switch";
+  return `${ref} has no control connection, so it simulates as a fixed open circuit. Wire both control pins (NC+ and NC-) to drive it, or set its value to "closed" to hold it on.`;
+}
 
 function componentLines(entry: ExtractedComponent, index: number, name: string, userModels: Set<string> = new Set(), params: ParamScope = EMPTY_SCOPE, vdmosModels: ReadonlySet<string> = new Set(), netPinCount: ReadonlyMap<string, number> = new Map(), subcktModels: ReadonlySet<string> = new Set(), directiveInductorIc?: string, substitutions: ModelSubstitution[] = []): string[] {
   const { component } = entry;
@@ -858,6 +909,21 @@ function componentLines(entry: ExtractedComponent, index: number, name: string, 
       ];
     }
     case "switch": {
+      // A voltage-controlled switch (LTspice sw.asy) is ngspice's `S` device:
+      // the switched path A/B gated by the NC+/NC- control pair. Emit the real
+      // device whenever that pair is wired and the value names a model. A part
+      // left on Tau's static open/closed state, or one whose control pair never
+      // reaches a net, has no controlling voltage and stays a fixed resistance -
+      // `uncontrolledSwitchWarning` reports the second case so a switch that
+      // cannot switch is never silent.
+      const control = switchControlNodes(entry, netPinCount);
+      if (control && !isStaticSwitchState(component.value)) {
+        const named = component.value.trim().split(/\s+/)[0] ?? "";
+        const model = named && userModels.has(named.toLowerCase())
+          ? named
+          : genericModel(named, "TAU_SW");
+        return [`${name} ${node("a")} ${node("b")} ${control.positive} ${control.negative} ${model}`];
+      }
       const closed = component.value.trim().toLowerCase().startsWith("closed");
       return [`R_${safeName(component.label || `S${index + 1}`)} ${node("a")} ${node("b")} ${closed ? "1m" : "1e12"}`];
     }
@@ -1050,7 +1116,7 @@ function analysisLine(analysis: SpiceAnalysis, useInitialConditions = false): st
 const SPICE_PREFIX: Record<ComponentKind, string> = {
   resistor: "R", capacitor: "C", inductor: "L", vsource: "V", isource: "I", vac: "V", iac: "I", vpulse: "V",
   diode: "D", led: "D", zener: "D", opamp: "E", comparator: "B", digitalGate: "B", dflop: "A", sampleHold: "A", modulator: "A", vcvs: "E", vccs: "G", cccs: "F", ccvs: "H", bsource: "B", nmos: "M", pmos: "M", njf: "J", pjf: "J", npn: "Q", pnp: "Q",
-  potentiometer: "R", switch: "R", transformer: "L", tline: "T", subckt: "X", testpoint: "X", ground: "X",
+  potentiometer: "R", switch: "S", transformer: "L", tline: "T", subckt: "X", testpoint: "X", ground: "X",
 };
 
 /** The label's own SPICE name when it already carries the kind's prefix

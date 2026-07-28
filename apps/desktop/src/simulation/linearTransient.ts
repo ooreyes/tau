@@ -230,6 +230,10 @@ export async function runTransientAnalysis(
     const diodeSpecs = new Map(diodes.map((entry) => [entry.component.id, diodeSpecFor(entry.component.kind, entry.component.value)]));
     const diodeVoltage = new Map<string, number>();
     const opamps = circuit.components.filter(({ component }) => component.kind === "opamp");
+    // A switch's NC+/NC- control pair is optional; left unwired it forms
+    // single-pin nets that are all-zero rows in the matrix. Same floating-node
+    // case as an unconnected op-amp rail, so it takes the same gmin shunt.
+    const hasSwitch = circuit.components.some(({ component }) => component.kind === "switch");
     const vcvss = circuit.components.filter(({ component }) => component.kind === "vcvs");
     const cccss = circuit.components.filter(({ component }) => component.kind === "cccs");
     const ccvss = circuit.components.filter(({ component }) => component.kind === "ccvs");
@@ -640,7 +644,7 @@ export async function runTransientAnalysis(
     let baseFactorization: GaussJordanFactorization | null = null;
     if (linear) {
       const baseMatrix = zeroMatrix(size);
-      if (opamps.length > 0) {
+      if (opamps.length > 0 || hasSwitch) {
         for (let i = 0; i < nonGroundNets.length; i += 1) {
           baseMatrix[i][i] += GMIN;
         }
@@ -666,14 +670,14 @@ export async function runTransientAnalysis(
       const matrix = linear ? null : zeroMatrix(size);
       const rhs = Array(size).fill(0) as number[];
 
-      // SPICE gmin: when op-amps or diodes are present, add GMIN from every
+      // SPICE gmin: when op-amps, diodes or switches are present, add GMIN from every
       // non-ground node to ground so floating nodes (e.g. unconnected op-amp
       // rails, or a node isolated behind a reverse-biased diode) resolve to
       // ~0 V rather than making the matrix singular. Applied only for those
       // devices to avoid masking genuine floating-node errors elsewhere.
       // (For the linear/opamp case this was already folded into the
       // factored base matrix above, so `matrix` being null skips it here.)
-      if (matrix && (opamps.length > 0 || diodes.length > 0)) {
+      if (matrix && (opamps.length > 0 || diodes.length > 0 || hasSwitch)) {
         for (let i = 0; i < nonGroundNets.length; i += 1) {
           matrix[i][i] += GMIN;
         }

@@ -149,6 +149,10 @@ export function runOperatingPoint(
     const opamps = circuit.components.filter(
       ({ component }) => component.kind === "opamp",
     );
+    // A switch's NC+/NC- control pair is optional; left unwired it forms
+    // single-pin nets that are all-zero rows in the matrix. Same floating-node
+    // case as an unconnected op-amp rail, so it takes the same gmin shunt.
+    const hasSwitch = circuit.components.some(({ component }) => component.kind === "switch");
     // VCVS (E) adds a branch-current unknown, like an independent voltage source.
     const vcvss = circuit.components.filter(
       ({ component }) => component.kind === "vcvs",
@@ -212,12 +216,12 @@ export function runOperatingPoint(
     const matrix = zeroMatrix(size);
     const rhs = Array<number>(size).fill(0);
 
-    // SPICE gmin: when op-amps or diodes are present, add GMIN from every
+    // SPICE gmin: when op-amps, diodes or switches are present, add GMIN from every
     // non-ground node to ground so floating nodes (e.g. unconnected op-amp
     // v+/v- rails, or a node isolated behind a reverse-biased diode) resolve
     // to ~0 V rather than making the matrix singular. Applied only for those
     // devices to avoid masking genuine floating-node errors elsewhere.
-    if (opamps.length > 0 || diodes.length > 0) {
+    if (opamps.length > 0 || diodes.length > 0 || hasSwitch) {
       for (let i = 0; i < nonGroundNets.length; i++) {
         matrix[i][i] += GMIN;
       }
