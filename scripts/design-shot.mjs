@@ -64,6 +64,12 @@ const STATE_TIMEOUT_MS = 15_000;
 const label = process.argv[2] ?? new Date().toISOString().replace(/[:.]/g, "-");
 const outDir = path.join(REPO_ROOT, "screenshots", label);
 
+// The schematic/inspector/simulator states all hang off one imported circuit.
+// An RC pulse with a .tran + .meas gives every downstream state something real
+// to show: components to select, and a curve the TS solver actually produces.
+const SAMPLE_ASC = path.join(REPO_ROOT, "Circuit_testing_v1", "02_tran_rc_pulse_meas.asc");
+const sampleAscText = readFileSync(SAMPLE_ASC, "utf8");
+
 function readViewports() {
   const viewports = [
     { name: "1440x900", width: 1440, height: 900 },
@@ -147,23 +153,42 @@ function killProcessGroup(child) {
   }
 }
 
-async function shootViewport(page, viewport) {
+async function shootViewport(page, viewport, theme) {
   await page.setViewportSize({ width: viewport.width, height: viewport.height });
+  // Drives App.css's `@media (prefers-color-scheme: …)` block, i.e. the app's
+  // "System" mode - the same path a user gets from their OS setting, rather
+  // than stamping data-theme and testing only the explicit override.
+  await page.emulateMedia({ colorScheme: theme });
 
   // --- empty: fresh load, blank scratchpad -------------------------------
   await page.goto(DEV_URL, { waitUntil: "networkidle", timeout: NAV_TIMEOUT_MS });
   await page.waitForSelector(".toolbar", { timeout: STATE_TIMEOUT_MS });
   await page.waitForSelector(".explorer-panel", { timeout: STATE_TIMEOUT_MS });
   await page.waitForTimeout(150); // settle animations/spring transitions
-  await page.screenshot({ path: path.join(outDir, `empty-${viewport.name}.png`), fullPage: true });
+  await page.screenshot({ path: path.join(outDir, `empty-${theme}-${viewport.name}.png`), fullPage: true });
 
-  // --- schematic: load the RC Charging example ----------------------------
+  // --- schematic: import a real LTspice .asc -------------------------------
+  // The browser workspace seeds EMPTY on purpose (project/defaultWorkspace.ts:
+  // `defaultWorkspaceFiles` returns []), and the Explorer's own import button
+  // routes through a native folder picker first when no project is open, which
+  // headless Chromium cannot answer. The dev bridge (lib/devBridge.ts, DEV
+  // builds only) calls the same store actions the UI does, so the import still
+  // goes through the shipping importer - then the file is opened by clicking
+  // it in the tree, exactly as a user would.
+  await page.evaluate(
+    ([name, text]) => {
+      window.__TAU_DEV__.seedWorkspace();
+      return window.__TAU_DEV__.importAscText(name, text);
+    },
+    [path.basename(SAMPLE_ASC), sampleAscText],
+  );
+
   const exampleButton = page.locator(".explorer-panel .tree-file").first();
   await exampleButton.waitFor({ state: "visible", timeout: STATE_TIMEOUT_MS });
   await exampleButton.click();
   await page.waitForSelector(".stage .component", { timeout: STATE_TIMEOUT_MS }).catch(() => {});
   await page.waitForTimeout(200);
-  await page.screenshot({ path: path.join(outDir, `schematic-${viewport.name}.png`), fullPage: true });
+  await page.screenshot({ path: path.join(outDir, `schematic-${theme}-${viewport.name}.png`), fullPage: true });
 
   // --- inspector: select a component so the property grid renders --------
   // Selection is resolved by geometric hit-testing on the canvas's own
@@ -176,7 +201,7 @@ async function shootViewport(page, viewport) {
   await firstComponent.click({ force: true });
   await page.waitForSelector(".inspector-summary:not(.empty)", { timeout: STATE_TIMEOUT_MS }).catch(() => {});
   await page.waitForTimeout(150);
-  await page.screenshot({ path: path.join(outDir, `inspector-${viewport.name}.png`), fullPage: true });
+  await page.screenshot({ path: path.join(outDir, `inspector-${theme}-${viewport.name}.png`), fullPage: true });
 
   // --- simulator: click Run, switch to scope view -------------------------
   const runButton = page.locator('button[aria-label="Run simulation"]').first();
@@ -191,14 +216,14 @@ async function shootViewport(page, viewport) {
     .waitForSelector(".scope-svg .scope-trace, .scope-shell", { timeout: STATE_TIMEOUT_MS })
     .catch(() => {});
   await page.waitForTimeout(300);
-  await page.screenshot({ path: path.join(outDir, `simulator-${viewport.name}.png`), fullPage: true });
+  await page.screenshot({ path: path.join(outDir, `simulator-${theme}-${viewport.name}.png`), fullPage: true });
 
   // --- dialog: settings panel ----------------------------------------------
   const settingsButton = page.locator('button[aria-label="Settings"]').first();
   await settingsButton.click();
   await page.waitForSelector('.settings-panel[role="dialog"]', { timeout: STATE_TIMEOUT_MS });
   await page.waitForTimeout(150);
-  await page.screenshot({ path: path.join(outDir, `dialog-${viewport.name}.png`), fullPage: true });
+  await page.screenshot({ path: path.join(outDir, `dialog-${theme}-${viewport.name}.png`), fullPage: true });
   await page.locator('button[aria-label="Close settings"]').click();
   await page.waitForSelector('.settings-panel[role="dialog"]', { state: "detached", timeout: STATE_TIMEOUT_MS });
 
@@ -209,7 +234,7 @@ async function shootViewport(page, viewport) {
   await page.locator('.activity-rail button[aria-label="Search"]').click();
   await page.waitForSelector('.cmdk[role="dialog"]', { timeout: STATE_TIMEOUT_MS });
   await page.waitForTimeout(150);
-  await page.screenshot({ path: path.join(outDir, `command-${viewport.name}.png`), fullPage: true });
+  await page.screenshot({ path: path.join(outDir, `command-${theme}-${viewport.name}.png`), fullPage: true });
   await page.keyboard.press("Escape");
 }
 
@@ -227,9 +252,30 @@ async function main() {
     const page = await context.newPage();
     page.setDefaultTimeout(STATE_TIMEOUT_MS);
 
-    for (const viewport of viewports) {
-      console.log(`[design-shot] capturing viewport ${viewport.name}…`);
-      await shootViewport(page, viewport);
+    // Force the "no filesystem" capability before any app script runs.
+    // useProject's auto-seed (store/useProject.ts - `capability !== "none"`
+    // bails) only fills the scratchpad when neither Tauri nor the Chrome File
+    // System Access API is present. Headless Chromium DOES expose
+    // showDirectoryPicker, so without this the app boots to the "Open a
+    // project folder" empty state, the Explorer stays empty, and every state
+    // after `empty` fails on a tree file that never appears. addInitScript
+    // re-runs on each navigation, so it survives the per-viewport goto.
+    await page.addInitScript(() => {
+      try {
+        delete window.showDirectoryPicker;
+      } catch {
+        /* non-configurable in some builds - the app falls back to "none" anyway */
+      }
+    });
+
+    // Both themes, every run. A component styled only for dark is unfinished
+    // (DESIGN_SYSTEM.md section 7.2), and light regressions are invisible if
+    // the pipeline only ever shoots one of them.
+    for (const theme of ["dark", "light"]) {
+      for (const viewport of viewports) {
+        console.log(`[design-shot] capturing ${theme} ${viewport.name}…`);
+        await shootViewport(page, viewport, theme);
+      }
     }
     console.log(`[design-shot] done. Screenshots written to ${path.relative(REPO_ROOT, outDir)}/`);
   } catch (error) {

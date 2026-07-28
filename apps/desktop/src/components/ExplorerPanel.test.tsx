@@ -75,7 +75,7 @@ describe("ExplorerPanel VS Code action row", () => {
     for (const name of [
       "New schematic file",
       "New folder",
-      "Import LTspice schematic",
+      "Import circuit",
       "Refresh explorer",
       "Collapse folders in explorer",
     ]) {
@@ -85,7 +85,7 @@ describe("ExplorerPanel VS Code action row", () => {
     expect(screen.getByRole("button", { name: "Collapse folders in explorer" }).querySelector(".vscode-collapse-all")).toBeTruthy();
     expect(screen.getByRole("button", { name: "New schematic file" }).querySelector(".vscode-new-file")).toBeTruthy();
     expect(screen.getByRole("button", { name: "New folder" }).querySelector(".vscode-new-folder")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Import LTspice schematic" }).querySelector(".vscode-import-file")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Import circuit" }).querySelector(".vscode-import-file")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Open Schematics folder" })).toBeNull();
 
     expect(useProject.getState().expanded.length).toBeGreaterThan(0);
@@ -124,7 +124,7 @@ describe("ExplorerPanel VS Code action row", () => {
     const source = "Version 4\nSHEET 1 880 680\n";
     const bytes = new TextEncoder().encode(source);
     const file = { name: "existing.asc", arrayBuffer: async () => bytes.buffer } as File;
-    const input = document.querySelector<HTMLInputElement>('input[type="file"][accept=".asc"]');
+    const input = document.querySelector<HTMLInputElement>('input[type="file"][accept*=".asc"]');
     expect(input).toBeTruthy();
 
     fireEvent.change(input!, { target: { files: [file] } });
@@ -192,7 +192,7 @@ describe("ExplorerPanel VS Code action row", () => {
   it("keeps LTspice import in the compact toolbar without a redundant open-folder icon", () => {
     renderExplorer();
     expect(screen.queryByRole("button", { name: "Open Schematics folder" })).toBeNull();
-    expect(screen.getByRole("button", { name: "Import LTspice schematic" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Import circuit" })).toBeTruthy();
     expect(document.querySelector(".explorer-secondary-actions")).toBeNull();
   });
 
@@ -209,7 +209,7 @@ describe("ExplorerPanel VS Code action row", () => {
 
     expect(screen.getByRole("button", { name: "Open Schematics folder" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Create Schematics folder" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Import LTspice schematic" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Import circuit" })).toBeTruthy();
     expect(document.querySelector(".explorer-empty-actions")).toBeNull();
     expect(screen.getByText("Schematics")).toBeTruthy();
   });

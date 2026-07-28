@@ -9,6 +9,7 @@ import {
   componentWorldRect,
   countRouteBodyHits,
   fitViewTransform,
+  netLabelTextRect,
   pathWithHops,
   rectsOverlap,
   rerouteMovedWires,
@@ -504,6 +505,32 @@ describe("autoNetLabelOffset (Fix 2 - net label auto-placement)", () => {
     ], []);
     expect(offsets.get("fixed")).toEqual({ dx: 6, dy: -6 });
     expect(offsets.get("auto")).not.toEqual({ dx: 6, dy: -6 });
+  });
+
+  it("does not settle a net label on a component's reference designator", () => {
+    // Regression: only component *symbols* were treated as obstacles, so a net
+    // label could land squarely on the refdes/value text that
+    // buildLabelPlacements had already positioned. Reproduced from
+    // Circuit_testing_v1/02_tran_rc_pulse_meas.asc, where FLAG 304 96 "out"
+    // rendered on top of R1 in a three-part RC circuit.
+    // Real geometry from that file: SYMBOL res 320 80 R90, refdes R1, 1k.
+    const r1 = {
+      id: "r1", kind: "resistor", label: "R1", value: "1k", x: 320, y: 80, rotation: 90,
+    } as SchematicComponent;
+    const labelBoxes = [...buildLabelPlacements([r1], []).values()].map((p) => p.box);
+    expect(labelBoxes.length).toBeGreaterThan(0);
+
+    const offsets = autoNetLabelOffsets([{ id: "out", x: 304, y: 96, text: "out" }], [r1]);
+    const chosen = offsets.get("out");
+    expect(chosen).toBeDefined();
+
+    const box = netLabelTextRect({ x: 304, y: 96 }, chosen!.dx, chosen!.dy, "out");
+    for (const labelBox of labelBoxes) {
+      expect(
+        rectsOverlap(box, labelBox),
+        `net label overlaps component label text ${JSON.stringify(labelBox)}`,
+      ).toBe(false);
+    }
   });
 });
 

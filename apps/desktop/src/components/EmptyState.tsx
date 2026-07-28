@@ -1,6 +1,9 @@
-import { TauriMascot } from "./TauriMascot";
-import { FolderOpen, FolderPlus, Plus, Sparkles } from "lucide-react";
+import { useRef, type ChangeEvent } from "react";
+import { BodeMascot } from "./BodeMascot";
+import { FolderOpen, FolderPlus, Import, Plus, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { importDroppedFile } from "../io/fileImport";
+import { IMPORT_ACCEPT, IMPORT_BUTTON_LABEL } from "../io/importUi";
 
 export function EmptyState({
   projectOpen = true,
@@ -8,48 +11,82 @@ export function EmptyState({
   onOpenFolder,
   onCreateProject,
   onNewCircuit,
-  onAskTauri,
+  onAskBode,
+  onOpenAscText,
+  onNotice,
 }: {
   projectOpen?: boolean;
   canCreateProject?: boolean;
   onOpenFolder?: () => void;
   onCreateProject?: () => void;
   onNewCircuit?: () => void;
-  onAskTauri?: () => void;
+  onAskBode?: () => void;
+  /** Opens an imported schematic once it has been written into the project -
+   *  same contract `ExplorerPanel` uses, so App.tsx can pass one function to
+   *  both. Only needed for the no-project Import action below. */
+  onOpenAscText?: (path: string, title: string, text: string, extraWarnings?: string[]) => void | Promise<void>;
+  onNotice?: (message: string) => void;
 }) {
+  const importInputRef = useRef<HTMLInputElement | null>(null);
+
+  const handleImportChange = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.currentTarget.files?.[0];
+    event.currentTarget.value = "";
+    if (!file) return;
+    // No project is open on this screen, so a schematic could not possibly be
+    // open either - a dropped model-library file is refused, not attached.
+    const outcome = await importDroppedFile(file, { hasActiveSchematic: false });
+    if (outcome.kind === "error") {
+      onNotice?.(outcome.message);
+      return;
+    }
+    if (outcome.kind === "model-library") {
+      onNotice?.(`Attached ${outcome.name}`);
+      return;
+    }
+    onNotice?.(`Imported ${outcome.path.split("/").pop() ?? outcome.path}`);
+    const title = outcome.path.split("/").pop() ?? outcome.path;
+    if (outcome.warnings.length > 0) await onOpenAscText?.(outcome.path, title, outcome.text, outcome.warnings);
+    else await onOpenAscText?.(outcome.path, title, outcome.text);
+  };
+
   return (
     <section className="empty-state" aria-label="Empty schematic">
       <div className="empty-panel">
         <div className="empty-kicker">
-          <TauriMascot className="tauri-empty-mascot" aria-hidden="true" />
-          Meet <span className="empty-brand">Tauri</span>
+          <BodeMascot className="bode-empty-mascot" aria-hidden="true" />
+          {/* One flex item, not three: .empty-kicker gaps its children, so a
+              bare text node after the brand would space the comma off it. */}
+          <span>Meet <span className="empty-brand">Bode</span>, your circuit assistant</span>
         </div>
         <h1>{projectOpen ? "Create or open a schematic" : "Open a project folder"}</h1>
         {projectOpen ? (
           <>
             <p>
               Every schematic is saved inside this project. Create a circuit,
-              open one from Explorer, or ask Tauri to design it with you.
+              open one from Explorer, or ask Bode to design it with you.
             </p>
             <div className="empty-state-actions">
               <Button type="button" size="sm" onClick={onNewCircuit}>
                 <Plus aria-hidden="true" /> New schematic
               </Button>
-              <Button type="button" size="sm" variant="outline" onClick={onAskTauri}>
-                <Sparkles aria-hidden="true" /> Ask Tauri
+              <Button type="button" size="sm" variant="outline" onClick={onAskBode}>
+                <Sparkles aria-hidden="true" /> Ask Bode
               </Button>
             </div>
           </>
         ) : (
           <>
             <p>
-              Choose a Schematics folder in Explorer, import an LTspice .asc, or open
-              Assistant and describe the circuit. Tau lays out parts, routes wires,
-              and can run the analysis after you confirm.
+              Tau keeps every schematic inside a project folder. Open one to start,
+              or import an existing schematic or SPICE netlist.
             </p>
             <div className="empty-state-actions">
               <Button type="button" size="sm" onClick={onOpenFolder}>
                 <FolderOpen aria-hidden="true" /> Open folder
+              </Button>
+              <Button type="button" size="sm" variant="outline" onClick={() => importInputRef.current?.click()}>
+                <Import aria-hidden="true" /> {IMPORT_BUTTON_LABEL}
               </Button>
               {canCreateProject && (
                 <Button type="button" size="sm" variant="outline" onClick={onCreateProject}>
@@ -57,6 +94,14 @@ export function EmptyState({
                 </Button>
               )}
             </div>
+            <input
+              ref={importInputRef}
+              className="file-input"
+              type="file"
+              accept={IMPORT_ACCEPT}
+              title={IMPORT_BUTTON_LABEL}
+              onChange={handleImportChange}
+            />
           </>
         )}
       </div>

@@ -15,7 +15,9 @@ import {
   formatStepValue,
   isRunnableStep,
   MAX_FAMILY_MEMBERS,
+  stepTruncationWarning,
 } from "./stepFamily";
+import type { StepSpec } from "./paramStep";
 import { parseStepDirective } from "./paramStep";
 import { runOperatingPoint } from "./operatingPoint";
 import { EMPTY_SCOPE, buildParamScope } from "./paramScope";
@@ -213,5 +215,33 @@ describe("nestedStepContexts", () => {
 
   it("returns [] for no specs", () => {
     expect(nestedStepContexts([], EMPTY_SCOPE, [])).toEqual([]);
+  });
+});
+
+describe("stepTruncationWarning", () => {
+  const spec = (name: string, count: number): StepSpec => ({
+    kind: "param",
+    name,
+    values: Array.from({ length: count }, (_, i) => i),
+  });
+
+  it("stays silent when the whole sweep fits", () => {
+    expect(stepTruncationWarning([spec("RL", MAX_FAMILY_MEMBERS)])).toBeNull();
+    expect(stepTruncationWarning([])).toBeNull();
+  });
+
+  it("names the requested count and the cap when the sweep is cut short", () => {
+    // `.step param RL 1k 100k 1k` enumerates 100 values; 16 run. Without this
+    // the plot stops at 16k and looks like it reached 100k.
+    const message = stepTruncationWarning([spec("RL", 100)]);
+    expect(message).toContain("RL");
+    expect(message).toContain("100 runs");
+    expect(message).toContain(`first ${MAX_FAMILY_MEMBERS}`);
+  });
+
+  it("multiplies nested sweeps rather than reporting one axis", () => {
+    const message = stepTruncationWarning([spec("RL", 8), spec("VIN", 5)]);
+    expect(message).toContain("40 runs");
+    expect(message).toContain("RL x VIN");
   });
 });

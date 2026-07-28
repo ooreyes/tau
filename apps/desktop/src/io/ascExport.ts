@@ -165,6 +165,29 @@ interface LtspiceComponentSymbol {
   carrierPrefix?: string;
 }
 
+/**
+ * Kinds with no faithful single LTspice symbol - they expand to several
+ * ngspice devices. They are persisted as a high-Z (or near-zero) carrier
+ * resistor plus `Tau*` metadata, so Tau restores them exactly and LTspice can
+ * still open the file. LTspice itself sees only the resistor, which is why
+ * every one of these has to be reported on export.
+ */
+/** Stable phrase identifying a lossy-carrier notice. Callers that only care
+ *  about save-BLOCKING problems (round-trip tests, the save guard) filter on
+ *  {@link isLossyCarrierWarning} rather than matching prose that may be
+ *  reworded. */
+export const LOSSY_CARRIER_MARKER = "saved as a placeholder resistor";
+
+/** True for an informational lossy-carrier notice: the part still round-trips
+ *  through Tau, it just does not survive into LTspice as itself. */
+export function isLossyCarrierWarning(warning: string): boolean {
+  return warning.includes(LOSSY_CARRIER_MARKER);
+}
+
+export const LOSSY_CARRIER_KINDS: ReadonlySet<string> = new Set([
+  "comparator", "cccs", "ccvs", "switch", "subckt", "testpoint",
+]);
+
 function componentToLtspiceSymbol(component: SchematicComponent): LtspiceComponentSymbol | null {
   if (
     component.ltSymbolType &&
@@ -224,7 +247,7 @@ function componentToLtspiceSymbol(component: SchematicComponent): LtspiceCompone
       tauValue: component.value, carrierPrefix: "L",
     };
   }
-  if (["comparator", "cccs", "ccvs", "switch", "subckt", "testpoint"].includes(component.kind)) {
+  if (LOSSY_CARRIER_KINDS.has(component.kind)) {
     // These Tau-native parts expand to multiple ngspice devices and therefore
     // have no faithful single LTspice symbol. Persist them as a benign high-Z
     // resistor plus explicit Tau metadata. Tau restores the exact kind/value,
@@ -335,6 +358,16 @@ export function schematicToAsc(input: SchematicExportInput): SchematicToAscResul
     if (!symbol) {
       warnings.push(`${c.label || c.id}: no LTspice symbol for kind "${c.kind}"; skipped.`);
       continue;
+    }
+    // Tau round-trips these through their `Tau*` attributes, so the loss is
+    // invisible here - it lands on whoever opens the file in LTspice and sees
+    // a bare resistor where a switch or subcircuit used to be. Say so.
+    if (LOSSY_CARRIER_KINDS.has(c.kind)) {
+      const reads = symbol.value === "1T" ? "an open circuit" : `a ${symbol.value} resistor`;
+      warnings.push(
+        `${c.label || c.id}: ${LOSSY_CARRIER_MARKER}. Tau reopens it as a ${c.kind}, `
+        + `but in LTspice it reads as ${reads}.`,
+      );
     }
     const attrs: Record<string, string> = {};
     // A part created natively in Tau has Tau-local anchor/pin geometry, which

@@ -769,3 +769,56 @@ describe("runTransientAnalysis - async progress/abort (Fix 3)", () => {
     expect(result.warnings.some((w) => /stopped early/i.test(w))).toBe(false);
   });
 });
+
+
+// ---------------------------------------------------------------------------
+// Nonlinear path - the transient LHS is only time-invariant while the circuit
+// is linear. A diode adds Newton iterations that DO mutate the matrix, so a
+// factorization computed once and reused must not be applied there. Every
+// linear test above still passes with a broken nonlinear path, which is
+// exactly why these exist.
+//
+// Geometry (mirrors operatingPoint.test.ts's forwardBiased):
+//   V1 at (0,32): p=(0,0), n=(0,64)   R1 at (96,0): a=(64,0), b=(128,0)
+//   D1 at (192,0): a=(160,0), k=(224,0)   grounds at (0,64) and (224,0)
+// ---------------------------------------------------------------------------
+describe("diode transient (nonlinear Newton path)", () => {
+  function diode(x: number, y: number, value = "", label = "D1"): SchematicComponent {
+    return { id: uid("d"), kind: "diode", x, y, rotation: 0, value, label };
+  }
+
+  function seriesDiode(sourceValue: string) {
+    const components = [
+      vsource(0, 32, sourceValue, "V1"),
+      resistor(96, 0, "1k", "R1"),
+      diode(192, 0),
+      ground(0, 64),
+      ground(224, 0),
+    ];
+    const wires = [
+      wire([{ x: 0, y: 0 }, { x: 64, y: 0 }]),
+      wire([{ x: 128, y: 0 }, { x: 160, y: 0 }]),
+    ];
+    return runTransientAnalysis({ components, wires }, { stopTime: 1e-3, steps: 200 });
+  }
+
+  /** Final value of the R1/D1 node - the only non-source, non-ground net. */
+  function finalMidNode(result: Awaited<ReturnType<typeof runTransientAnalysis>>) {
+    if (!result.ok) throw new Error(result.message);
+    const mid = result.traces.find((trace) => /R1.*D1|D1.*R1/.test(trace.label));
+    expect(mid, `no R1/D1 node in ${result.traces.map((t) => t.label).join(", ")}`).toBeDefined();
+    return mid!.values[mid!.values.length - 1];
+  }
+
+  it("clamps a forward-biased diode to a physical drop, not the source voltage", async () => {
+    // Reusing one factorization across Newton iterations converges to the wrong
+    // operating point here: the node collapses toward 0 V or toward the source.
+    expect(finalMidNode(await seriesDiode("5V"))).toBeGreaterThan(0.55);
+    expect(finalMidNode(await seriesDiode("5V"))).toBeLessThan(0.8);
+  });
+
+  it("blocks a reverse-biased diode, leaving no drop across the series resistor", async () => {
+    // Diode off means no current, so the node sits at the source rail.
+    expect(finalMidNode(await seriesDiode("-5V"))).toBeCloseTo(-5, 1);
+  });
+});

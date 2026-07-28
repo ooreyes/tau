@@ -520,7 +520,7 @@ const NET_LABEL_HEIGHT = 11;
  *  Matches the actual render in Canvas.tsx (`<text x={anchor.x+dx}
  *  y={anchor.y+dy}>`, default start-anchor - text extends rightward from x,
  *  y is the baseline so most of the glyph height sits above it). */
-const netLabelTextRect = (anchor: Point, dx: number, dy: number, text: string): Rect => {
+export const netLabelTextRect = (anchor: Point, dx: number, dy: number, text: string): Rect => {
   const w = Math.max(8, text.length * NET_LABEL_CHAR_W);
   const x = anchor.x + dx;
   const y = anchor.y + dy;
@@ -574,6 +574,55 @@ const segmentLengthInRect = (segment: WireSegment, rect: Rect): number => {
   return 0;
 };
 
+/** Everything a net label must avoid, resolved once. Built per placement pass
+ *  rather than per candidate offset: the component and wire geometry is
+ *  identical for every candidate, so recomputing it inside the scoring loop is
+ *  pure waste (and at a few hundred parts it is what makes a drag stutter). */
+interface NetLabelObstacles {
+  componentRects: Rect[];
+  segments: WireSegment[];
+  probeRects: Rect[];
+}
+
+const netLabelObstacles = (
+  components: readonly SchematicComponent[],
+  wires: readonly SchematicWire[],
+  probePoints: readonly Point[],
+): NetLabelObstacles => ({
+  componentRects: components.map(componentWorldRect),
+  segments: wireSegments(wires as SchematicWire[]),
+  probeRects: probePoints.map((p) => ({ minX: p.x - 8, minY: p.y - 8, maxX: p.x + 8, maxY: p.y + 8 })),
+});
+
+function chooseNetLabelOffset(
+  anchor: Point,
+  text: string,
+  obstacles: NetLabelObstacles,
+  occupiedLabelRects: readonly Rect[],
+): { dx: number; dy: number } {
+  const w = Math.max(8, text.length * NET_LABEL_CHAR_W);
+  const candidates = netLabelOffsetCandidates(w);
+  const { componentRects, segments, probeRects } = obstacles;
+  if (
+    componentRects.length === 0 && segments.length === 0
+    && probeRects.length === 0 && occupiedLabelRects.length === 0
+  ) return candidates[0];
+
+  const scored = candidates.map((offset) => {
+    const box = netLabelTextRect(anchor, offset.dx, offset.dy, text);
+    let score = componentRects.reduce((total, rect) => total + overlapArea(box, rect), 0);
+    score += probeRects.reduce((total, rect) => total + overlapArea(box, rect) * 2, 0);
+    // Text landing on other text is the worst outcome - it is the one case
+    // where both strings become unreadable rather than just cluttered.
+    score += occupiedLabelRects.reduce((total, rect) => total + overlapArea(box, rect) * 3, 0);
+    // A wire crossing the text box is linear, not areal - weight it so a
+    // couple of grid units of wire-under-text loses to a clear spot.
+    score += segments.reduce((total, segment) => total + segmentLengthInRect(segment, box) * 4, 0);
+    return { offset, score };
+  });
+  return scored.find((entry) => entry.score === 0)?.offset ?? scored.sort((a, b) => a.score - b.score)[0].offset;
+}
+
 export function autoNetLabelOffset(
   anchor: Point,
   text: string,
@@ -584,23 +633,12 @@ export function autoNetLabelOffset(
   probePoints: readonly Point[] = [],
   occupiedLabelRects: readonly Rect[] = [],
 ): { dx: number; dy: number } {
-  const w = Math.max(8, text.length * NET_LABEL_CHAR_W);
-  const candidates = netLabelOffsetCandidates(w);
-  const obstacles = components.map(componentWorldRect);
-  const probeRects: Rect[] = probePoints.map((p) => ({ minX: p.x - 8, minY: p.y - 8, maxX: p.x + 8, maxY: p.y + 8 }));
-  if (obstacles.length === 0 && wires.length === 0 && probeRects.length === 0 && occupiedLabelRects.length === 0) return candidates[0];
-  const segments = wireSegments(wires as SchematicWire[]);
-  const scored = candidates.map((offset) => {
-    const box = netLabelTextRect(anchor, offset.dx, offset.dy, text);
-    let score = obstacles.reduce((total, rect) => total + overlapArea(box, rect), 0);
-    score += probeRects.reduce((total, rect) => total + overlapArea(box, rect) * 2, 0);
-    score += occupiedLabelRects.reduce((total, rect) => total + overlapArea(box, rect) * 3, 0);
-    // A wire crossing the text box is linear, not areal - weight it so a
-    // couple of grid units of wire-under-text loses to a clear spot.
-    score += segments.reduce((total, segment) => total + segmentLengthInRect(segment, box) * 4, 0);
-    return { offset, score };
-  });
-  return scored.find((entry) => entry.score === 0)?.offset ?? scored.sort((a, b) => a.score - b.score)[0].offset;
+  return chooseNetLabelOffset(
+    anchor,
+    text,
+    netLabelObstacles(components, wires, probePoints),
+    occupiedLabelRects,
+  );
 }
 
 /** Place all automatic net labels as one deterministic set so two labels do
@@ -614,7 +652,15 @@ export function autoNetLabelOffsets(
   probePoints: readonly Point[] = [],
 ): Map<string, { dx: number; dy: number }> {
   const offsets = new Map<string, { dx: number; dy: number }>();
-  const occupied: Rect[] = [];
+  const obstacles = netLabelObstacles(components, wires, probePoints);
+
+  // Reference designators and value text are placed by buildLabelPlacements,
+  // independently of net labels. Without seeding them here a net label happily
+  // settles on top of one: FLAG 304 96 "out" landed exactly on R1's refdes in
+  // a three-part RC circuit, which is the first thing an imported LTspice file
+  // shows. Component *symbols* were already avoided; their *text* was not.
+  const occupied: Rect[] = [...buildLabelPlacements(components as SchematicComponent[], wires as SchematicWire[]).values()]
+    .map((placement) => placement.box);
 
   // User placements are authoritative obstacles, regardless of document order.
   for (const label of labels) {
@@ -626,7 +672,7 @@ export function autoNetLabelOffsets(
 
   for (const label of labels) {
     if (offsets.has(label.id)) continue;
-    const offset = autoNetLabelOffset(label, label.text, components, wires, probePoints, occupied);
+    const offset = chooseNetLabelOffset(label, label.text, obstacles, occupied);
     offsets.set(label.id, offset);
     occupied.push(netLabelTextRect(label, offset.dx, offset.dy, label.text));
   }

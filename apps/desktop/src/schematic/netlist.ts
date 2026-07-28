@@ -84,6 +84,20 @@ class DisjointSet {
   }
 }
 
+/** Append `value` to the array kept at `key`, creating it on first use.
+ *  Replaces the `map.set(key, [...(map.get(key) ?? []), value])` idiom, which
+ *  copies the whole bucket on every append - O(k) per call, O(k^2) per key
+ *  over k appends. Ground is always the largest net, so that idiom made
+ *  ground-net extraction quadratic in the net's point count. */
+function pushBucket<K, V>(map: Map<K, V[]>, key: K, value: V): void {
+  let bucket = map.get(key);
+  if (!bucket) {
+    bucket = [];
+    map.set(key, bucket);
+  }
+  bucket.push(value);
+}
+
 export function extractCircuit(
   components: SchematicComponent[],
   wires: SchematicWire[],
@@ -96,7 +110,7 @@ export function extractCircuit(
 
   for (const pin of allPins) {
     dsu.add(pointKey(pin));
-    pinByComponent.set(pin.componentId, [...(pinByComponent.get(pin.componentId) ?? []), pin]);
+    pushBucket(pinByComponent, pin.componentId, pin);
   }
 
   // Net labels are electrical: a labelled point joins whatever net sits under
@@ -130,7 +144,7 @@ export function extractCircuit(
     // can never see two nets that the simulation deck silently shorts.
     const key = sanitizeNetName(label.text).toLocaleLowerCase();
     if (key === "") continue;
-    labelsByName.set(key, [...(labelsByName.get(key) ?? []), { x: label.x, y: label.y }]);
+    pushBucket(labelsByName, key, { x: label.x, y: label.y });
   }
   for (const points of labelsByName.values()) {
     for (let i = 1; i < points.length; i += 1) {
@@ -169,13 +183,12 @@ export function extractCircuit(
   for (const index of idealSegmentIndexes) {
     const segment = segments[index];
     if (segment.a.y === segment.b.y) {
-      horizontalByY.set(segment.a.y, [...(horizontalByY.get(segment.a.y) ?? []), index]);
+      pushBucket(horizontalByY, segment.a.y, index);
     } else if (segment.a.x === segment.b.x) {
-      verticalByX.set(segment.a.x, [...(verticalByX.get(segment.a.x) ?? []), index]);
+      pushBucket(verticalByX, segment.a.x, index);
     }
     for (const endpoint of [segment.a, segment.b]) {
-      const key = pointKey(endpoint);
-      endpointIndexes.set(key, [...(endpointIndexes.get(key) ?? []), index]);
+      pushBucket(endpointIndexes, pointKey(endpoint), index);
     }
   }
   const segmentIndexesAt = (point: Point): number[] => {
@@ -213,13 +226,13 @@ export function extractCircuit(
   const rootToPoints = new Map<string, Point[]>();
   for (const key of dsu.keys()) {
     const root = dsu.find(key);
-    rootToPoints.set(root, [...(rootToPoints.get(root) ?? []), pointFromKey(key)]);
+    pushBucket(rootToPoints, root, pointFromKey(key));
   }
 
   const rootToPins = new Map<string, ComponentPin[]>();
   for (const pin of allPins) {
     const root = dsu.find(pointKey(pin));
-    rootToPins.set(root, [...(rootToPins.get(root) ?? []), pin]);
+    pushBucket(rootToPins, root, pin);
   }
 
   const groundRoot = groundAnchors.length > 0 ? dsu.find(pointKey(groundAnchors[0])) : null;
@@ -228,7 +241,12 @@ export function extractCircuit(
   const sortedRoots = [...rootToPoints.keys()].sort((a, b) => {
     if (a === groundRoot) return -1;
     if (b === groundRoot) return 1;
-    return a.localeCompare(b);
+    // Root keys are plain "<x>,<y>" coordinate strings (digits/comma/hyphen
+    // only, from pointKey/pointFromKey) - a plain lexicographic compare
+    // orders them identically to localeCompare for that alphabet but without
+    // ICU collation overhead, ~50-100x slower for this hot sort where ground
+    // (the largest net) is always one of the compared roots.
+    return a < b ? -1 : a > b ? 1 : 0;
   });
 
   // Prefer a user/LTspice net-label name for a net's id (so V(vcc) resolves as
@@ -358,7 +376,7 @@ function between(value: number, a: number, b: number): boolean {
 
 function pinsByPoint(pins: ComponentPin[]): Map<string, ComponentPin[]> {
   const byPoint = new Map<string, ComponentPin[]>();
-  for (const pin of pins) byPoint.set(pointKey(pin), [...(byPoint.get(pointKey(pin)) ?? []), pin]);
+  for (const pin of pins) pushBucket(byPoint, pointKey(pin), pin);
   return byPoint;
 }
 

@@ -37,6 +37,16 @@ SYMATTR Value PULSE(0 5 0 1n 1n 1m 2m)
 TEXT 72 280 Left 2 !.tran 5m
 TEXT 72 320 Left 2 ;RC low-pass demo`;
 
+
+/** Every export warning must be a lossy-carrier notice (a part with no faithful
+ *  LTspice symbol, saved as a placeholder resistor). Anything else is a real
+ *  export defect, so this asserts the *kind* of warning rather than silence. */
+function expectOnlyCarrierWarnings(warnings: string[]) {
+  for (const warning of warnings) {
+    expect(warning, warning).toMatch(/saved as a placeholder resistor/);
+  }
+}
+
 describe("serializeAscDocument", () => {
   it("round-trips an AscDocument through parseAsc", () => {
     const doc = parseAsc(SAMPLE);
@@ -187,7 +197,8 @@ describe("schematicToAsc", () => {
       wires: [],
       netLabels: [],
     });
-    expect(warnings).toEqual([]);
+    expectOnlyCarrierWarnings(warnings);
+    expect(warnings).toHaveLength(1);
     const round = importAsc(text);
     expect(round.warnings).toEqual([]);
     expect(round.components[0]).toMatchObject({ kind: "testpoint", value: "", label: "TP1" });
@@ -212,7 +223,10 @@ describe("schematicToAsc", () => {
     const { text, warnings } = schematicToAsc({ components, wires: [], netLabels: [] });
 
     expect(parseAsc(text).symbols).toHaveLength(5);
-    expect(warnings).toEqual([]);
+    // cccs, ccvs and switch have no faithful LTspice symbol; potentiometer and
+    // transformer do, so only three of the five report.
+    expectOnlyCarrierWarnings(warnings);
+    expect(warnings).toHaveLength(3);
     const round = importAsc(text);
     expect(round.warnings).toEqual([]);
     expect(round.components.map((component) => component.kind)).toEqual(components.map((component) => component.kind));
@@ -231,7 +245,9 @@ describe("schematicToAsc", () => {
         label,
       };
       const exported = schematicToAsc({ components: [component], wires: [], netLabels: [] });
-      expect(exported.warnings, entry.kind).toEqual([]);
+      // A Library part with no faithful LTspice symbol reports a carrier
+      // notice; the Tau round-trip below is what this test actually guards.
+      expectOnlyCarrierWarnings(exported.warnings);
       const round = importAsc(exported.text);
       expect(round.warnings, entry.kind).toEqual([]);
       expect(round.components, entry.kind).toHaveLength(1);
@@ -490,5 +506,44 @@ SYMATTR Value 2N7002`;
     const pins = (c: typeof imported) =>
       (c.components[0].pinOverride ?? []).map((p) => `${p.id}@${p.x},${p.y}`).sort();
     expect(pins(reopened)).toEqual(pins(imported));
+  });
+});
+
+describe("lossy carrier export warnings", () => {
+  const part = (kind: SchematicComponent["kind"], label: string, value: string): SchematicComponent =>
+    ({ id: label, kind, label, value, x: 128, y: 128, rotation: 0 });
+
+  it("warns for every part saved as a placeholder resistor", () => {
+    // Tau round-trips these through their Tau* attributes, so the loss is
+    // invisible until a colleague opens the file in LTspice and finds a bare
+    // resistor. Before this the export reported warnings: [].
+    const { warnings } = schematicToAsc({
+      components: [
+        part("switch", "S1", "SW"),
+        part("subckt", "X1", "LT1001"),
+        part("ccvs", "H1", "1"),
+      ],
+      wires: [],
+      netLabels: [],
+      directives: [],
+      comments: [],
+    });
+
+    expect(warnings).toHaveLength(3);
+    for (const ref of ["S1", "X1", "H1"]) {
+      expect(warnings.some((w) => w.startsWith(`${ref}:`)), `no warning for ${ref}`).toBe(true);
+    }
+    expect(warnings.find((w) => w.startsWith("S1:"))).toContain("open circuit");
+  });
+
+  it("stays silent for parts with a faithful LTspice symbol", () => {
+    const { warnings } = schematicToAsc({
+      components: [part("resistor", "R1", "1k"), part("capacitor", "C1", "1u")],
+      wires: [],
+      netLabels: [],
+      directives: [],
+      comments: [],
+    });
+    expect(warnings).toEqual([]);
   });
 });

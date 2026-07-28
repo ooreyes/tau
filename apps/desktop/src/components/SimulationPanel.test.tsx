@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 
-import { SimulationPanel } from "./SimulationPanel";
+import { SimulationPanel, StepPlot } from "./SimulationPanel";
 import { visibleTransientTraces } from "../simulation/visibleTraces";
 import {
   defaultDcSetup,
@@ -553,5 +553,42 @@ describe("SimulationPanel - exportNetlist inlines attached model libraries", { t
     const netlist = await capturedBlobs[0].text();
     expect(netlist).toMatch(/^\.model\s+MYVENDNPN\s+NPN/im);
     expect(netlist).toMatch(/^Q\w*\s+coll\s+base\s+0\s+MYVENDNPN\b/im);
+  });
+});
+
+describe("StepPlot truncation notice", () => {
+  function member(label: string, value: number) {
+    return {
+      label,
+      value,
+      result: {
+        ok: true as const,
+        title: "Transient",
+        circuit: { nets: [{ id: "n1", label: "out", isGround: false, points: [], pins: [], labelCount: 0 }], components: [], groundNetId: null, warnings: [] },
+        traces: [{ id: "n1", label: "V(out)", values: [0, 1, 2], unit: "V" as const, color: "var(--trace-cyan)" }],
+        times: [0, 1e-3, 2e-3],
+        currents: [],
+        stats: { netCount: 1, componentCount: 1, sampleCount: 3, stopTime: 2e-3, stepSize: 1e-3 },
+        warnings: [],
+      },
+    };
+  }
+
+  it("renders a truncated .step warning instead of only storing it", () => {
+    // The curves look complete on their own, so the sentence saying the sweep
+    // was cut short has to render with them.
+    render(
+      <StepPlot
+        result={{
+          ok: true,
+          spec: { kind: "param", name: "RL", values: [1, 2] },
+          members: [member("RL=1", 1), member("RL=2", 2)],
+          warnings: [".step RL asks for 100 runs; Tau ran the first 16."],
+        }}
+        probes={[]}
+        wires={[]}
+      />,
+    );
+    expect(screen.getByText(/asks for 100 runs/)).toBeTruthy();
   });
 });

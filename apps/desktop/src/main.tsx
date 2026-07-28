@@ -5,6 +5,17 @@ import ReactDOM from "react-dom/client";
 import "./styles/tokens.css";
 import App from "./App";
 import { AppErrorBoundary } from "./components/AppErrorBoundary";
+import { installDevBridge } from "./lib/devBridge";
+import { initThemeMode } from "./lib/theme";
+
+// Dev-only. Tree-shaken out of production builds by the constant condition, so
+// nothing here reaches a shipped bundle.
+if (import.meta.env.DEV) installDevBridge();
+
+// Before the first render, so an explicit Light/Dark choice does not flash the
+// other theme on launch. "System" needs no JS - App.css's prefers-color-scheme
+// block already handles it - but this still runs to clear a stale data-theme.
+initThemeMode();
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>

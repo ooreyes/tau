@@ -2943,6 +2943,12 @@ export function StepPlot({ result, probes, wires }: { result: StepFamilyResult |
         <Metric label="STEPS" value={String(family.series.length)} tone="cyan" />
         <Metric label="SWEEP" value={result.spec?.name ?? "--"} tone="cream" />
       </div>
+      {/* A truncated `.step` is reported here and nowhere else - the curves
+          above look complete on their own, so the sentence saying they are not
+          has to sit with them. */}
+      {result.warnings.length > 0 && (
+        <div className="analysis-empty warn" role="status">{result.warnings.join(" ")}</div>
+      )}
     </>
   );
 }

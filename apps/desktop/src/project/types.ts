@@ -1,4 +1,9 @@
-import { canEmitLtSymbolVerbatim, kindToLtspiceType, schematicToAsc } from "../io/ascExport";
+import {
+  canEmitLtSymbolVerbatim,
+  isLossyCarrierWarning,
+  kindToLtspiceType,
+  schematicToAsc,
+} from "../io/ascExport";
 import { importAsc, ltspiceTypeToKind, parseAsc } from "../io/ascImport";
 import type { SchematicDocument } from "../store/useSchematic";
 import { extractCircuit } from "../schematic/netlist";
@@ -136,7 +141,13 @@ export function ascSaveBlockReason(
   if (sourceRisks.length > 0) return `Tau cannot yet preserve ${sourceRisks[0]}.`;
   // Probe dots are session-only viewer annotations, not schematic topology.
   // They must never prevent saving otherwise lossless LTspice content.
-  if (exportWarnings.length > 0) return exportWarnings[0];
+  //
+  // Nor may a lossy-carrier notice. Those parts DO round-trip through Tau via
+  // their `Tau*` attributes - the notice only says the file reads differently
+  // in LTspice. Blocking on it would refuse to save any schematic containing a
+  // switch, subcircuit, comparator, CCCS, CCVS or test point.
+  const blocking = exportWarnings.filter((warning) => !isLossyCarrierWarning(warning));
+  if (blocking.length > 0) return blocking[0];
   return null;
 }
 

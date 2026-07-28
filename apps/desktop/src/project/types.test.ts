@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { importAsc } from "../io/ascImport";
+import { isLossyCarrierWarning } from "../io/ascExport";
 import { validateSchematicDocument } from "../schematic/documentValidation";
 import { CATALOG } from "../schematic/catalog";
 import { extractCircuit } from "../schematic/netlist";
@@ -247,7 +248,10 @@ describe("project schematic file formats", () => {
             directives: [],
           });
           const context = `${entry.kind} ${mirrored ? "M" : "R"}${rotation}`;
-          expect(saved.warnings, context).toEqual([]);
+          // A carrier notice is informational (the part reopens in Tau as
+          // itself); this test guards pin geometry, so only blocking warnings
+          // matter here.
+          expect(saved.warnings.filter((w) => !isLossyCarrierWarning(w)), context).toEqual([]);
           const rewriteRisks = ascRewriteRisks(saved.contents);
           expect(rewriteRisks, context).toEqual([]);
           expect(ascSaveBlockReason(rewriteRisks, 0, saved.warnings), context).toBeNull();
@@ -282,5 +286,28 @@ describe("project schematic file formats", () => {
       "/Schematics/Analog/filter.asc",
       "/Schematics/filter.asc",
     )).toBe("/Schematics/filter.asc");
+  });
+});
+
+describe("ascSaveBlockReason and lossy-carrier notices", () => {
+  it("does not block a save on an informational carrier notice", () => {
+    // Regression: the carrier notice was introduced so a colleague opening the
+    // file in LTspice learns a switch became a resistor. Treating it as a block
+    // would refuse to save any schematic containing a switch, subcircuit,
+    // comparator, CCCS, CCVS or test point - far worse than the silent loss.
+    const notice = "S1: saved as a placeholder resistor. Tau reopens it as a switch, "
+      + "but in LTspice it reads as an open circuit.";
+    expect(isLossyCarrierWarning(notice)).toBe(true);
+    expect(ascSaveBlockReason([], 0, [notice])).toBeNull();
+  });
+
+  it("still blocks on a genuine export problem", () => {
+    const real = "ASC round-trip changed terminal connectivity; save was not written.";
+    expect(isLossyCarrierWarning(real)).toBe(false);
+    expect(ascSaveBlockReason([], 0, [real])).toBe(real);
+  });
+
+  it("still blocks on a source rewrite risk regardless of notices", () => {
+    expect(ascSaveBlockReason(["symbol label placement"], 0, [])).toContain("symbol label placement");
   });
 });

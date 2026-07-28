@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { CSSProperties } from "react";
+import type { CSSProperties, DragEvent } from "react";
 import { Crosshair, Eye, LockKeyhole, MousePointer2, Tag } from "lucide-react";
 import "./App.css";
 import { Toolbar } from "./components/Toolbar";
@@ -52,6 +52,7 @@ import { runTransferFunction, type TfResult, type TfSpec } from "./simulation/tr
 import { runNoiseAnalysis, type NoiseResult, type NoiseSpec } from "./simulation/noise";
 import {
   nestedStepContexts,
+  stepTruncationWarning,
   runnableStepsFromDirectives,
   type StepFamilyMember,
   type StepFamilyResult,
@@ -98,6 +99,7 @@ import {
 } from "./project/types";
 import { validateSchematicDocument } from "./schematic/documentValidation";
 import { importProjectAsc } from "./io/projectAscImport";
+import { importDroppedFile } from "./io/fileImport";
 import { pathExists, readTextFile } from "./project/fsBridge";
 import { isWorkspacePath } from "./project/defaultWorkspace";
 import {
@@ -779,7 +781,13 @@ function App() {
         if (analysisRequestRef.current !== requestId) return;
         members.push({ label: ctx.label, value: ctx.value, result });
       }
-      const warnings = members.find((m) => m.result.ok)?.result.warnings ?? [];
+      // Leads the list: a truncated sweep changes how every curve below it
+      // should be read, unlike a per-member circuit warning.
+      const truncation = stepTruncationWarning(specs);
+      const warnings = [
+        ...(truncation ? [truncation] : []),
+        ...(members.find((m) => m.result.ok)?.result.warnings ?? []),
+      ];
       setStepFamily({ ok: members.some((m) => m.result.ok), spec: specs[0], members, warnings });
     } catch (error) {
       if (analysisRequestRef.current !== requestId) return;
@@ -976,7 +984,15 @@ function App() {
     }
   }, [openDocument, showNotice]);
 
-  const openAscFromProject = useCallback(async (path: string, title: string, text: string) => {
+  const openAscFromProject = useCallback(async (
+    path: string,
+    title: string,
+    text: string,
+    // Conversion-time warnings from a non-native import (a SPICE or KiCad
+    // netlist Tau converted into this .asc) - see `io/fileImport.ts`. Empty
+    // for a genuine .asc, whose own warnings come entirely from `result` below.
+    extraWarnings: string[] = [],
+  ) => {
     try {
       const result = await importProjectAsc(text, {
         sourcePath: path,
@@ -996,7 +1012,8 @@ function App() {
         .map(([label, count]) => `Component name "${label.toUpperCase()}" is used ${count} times; simulation requires unique names.`);
       // Surface import warnings in the Diagnostics panel for THIS document.
       // The toast only carries a count, which is a dead end on its own.
-      setImportWarningsByPath((previous) => ({ ...previous, [path]: [...result.warnings, ...duplicateWarnings] }));
+      const allWarnings = [...extraWarnings, ...result.warnings, ...duplicateWarnings];
+      setImportWarningsByPath((previous) => ({ ...previous, [path]: allWarnings }));
       // Belt-and-braces: the importer's own count gate stops a hostile file
       // before it does quadratic pin-geometry work, but every document that
       // reaches the store - .asc included - must still clear the exact same
@@ -1013,14 +1030,75 @@ function App() {
         probes: [],
       });
       openDocument(doc, title, path, ascRewriteRisks(text));
-      if (result.warnings.length > 0) {
-        console.warn(`Imported ${title} with ${result.warnings.length} warning(s):`, result.warnings);
-        showNotice(`Opened ${title} with ${result.warnings.length} import warning(s).`);
+      if (allWarnings.length > 0) {
+        console.warn(`Imported ${title} with ${allWarnings.length} warning(s):`, allWarnings);
+        showNotice(`Opened ${title} with ${allWarnings.length} import ${allWarnings.length === 1 ? "warning" : "warnings"}. See Diagnostics.`);
       }
     } catch (error) {
       showNotice(userFacingErrorMessage(error, "Could not import .asc file."));
     }
   }, [openDocument, showNotice]);
+
+  // Single handler behind every "get a file into Tau" surface that isn't the
+  // Explorer header's own input (which calls `io/fileImport.ts` directly) -
+  // drag-and-drop onto the editor. Format detection, conversion, and
+  // persistence all live in `io/fileImport.ts`; this only decides how to put
+  // the result on screen, exactly like `openAscFromProject` above.
+  const handleDroppedFile = useCallback(async (file: File) => {
+    const outcome = await importDroppedFile(file, { hasActiveSchematic: activeProjectFile });
+    if (outcome.kind === "error") {
+      showNotice(outcome.message);
+      return;
+    }
+    if (outcome.kind === "model-library") {
+      showNotice(`Attached ${outcome.name}`);
+      return;
+    }
+    showNotice(`Imported ${basename(outcome.path)}`);
+    await openAscFromProject(outcome.path, basename(outcome.path), outcome.text, outcome.warnings);
+  }, [activeProjectFile, openAscFromProject, showNotice]);
+
+  // Drag state for the editor's drop zone (`importDragDepthRef` counts nested
+  // dragenter/dragleave pairs - a child element firing dragleave before the
+  // parent must not hide the overlay early). Scoped to a real OS file drag
+  // only (`types` includes "Files"); this shares no code path with the
+  // Explorer tree's own node-reordering drag-and-drop.
+  const importDragDepthRef = useRef(0);
+  const [importDragActive, setImportDragActive] = useState(false);
+  const isFileDrag = (event: DragEvent<HTMLElement>) =>
+    Array.from(event.dataTransfer?.types ?? []).includes("Files");
+  const handleImportDragEnter = useCallback((event: DragEvent<HTMLElement>) => {
+    if (!isFileDrag(event)) return;
+    event.preventDefault();
+    importDragDepthRef.current += 1;
+    setImportDragActive(true);
+  }, []);
+  const handleImportDragOver = useCallback((event: DragEvent<HTMLElement>) => {
+    if (!isFileDrag(event)) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "copy";
+  }, []);
+  const handleImportDragLeave = useCallback((event: DragEvent<HTMLElement>) => {
+    if (!isFileDrag(event)) return;
+    importDragDepthRef.current = Math.max(0, importDragDepthRef.current - 1);
+    if (importDragDepthRef.current === 0) setImportDragActive(false);
+  }, []);
+  const handleImportDrop = useCallback((event: DragEvent<HTMLElement>) => {
+    if (!isFileDrag(event)) return;
+    event.preventDefault();
+    importDragDepthRef.current = 0;
+    setImportDragActive(false);
+    const file = event.dataTransfer.files?.[0];
+    if (!file) return;
+    if (event.dataTransfer.files.length > 1) showNotice("Dropped one file to import; the rest were ignored.");
+    void handleDroppedFile(file);
+  }, [handleDroppedFile, showNotice]);
+  const importDropZoneProps = {
+    onDragEnter: handleImportDragEnter,
+    onDragOver: handleImportDragOver,
+    onDragLeave: handleImportDragLeave,
+    onDrop: handleImportDrop,
+  };
 
   const createAssistantCircuit = useCallback(async (action: AssistantCreateAscAction) => {
     // Latched before any await/branch below so the auto-run effect (keyed on
@@ -1028,7 +1106,7 @@ function App() {
     // up disk-backed or as a pathless scratchpad.
     pendingAutoRunRef.current = pickAutoRunAnalysis(action.document.directives ?? []);
     if (!useProject.getState().rootPath) {
-      throw new Error("Open or create a project folder before Tauri creates a schematic.");
+      throw new Error("Open or create a project folder before Bode creates a schematic.");
     }
     const path = await createSchematicInRoot(action.filename);
     if (!path) throw new Error(useProject.getState().error ?? "Could not create schematic.");
@@ -1185,7 +1263,7 @@ function App() {
       )));
       if (serialized.warnings.length > 0) {
         console.warn(`Saved ${basename(savePath)} with export warnings:`, serialized.warnings);
-        showNotice(`Saved with ${serialized.warnings.length} export warning(s).`);
+        showNotice(`Saved with ${serialized.warnings.length} export ${serialized.warnings.length === 1 ? "warning" : "warnings"}.`);
       } else {
         showNotice(`${createdForSave ? "Created" : "Saved"} ${basename(savePath)}`);
       }
@@ -1487,7 +1565,7 @@ function App() {
         schematicOpen={activeProjectFile}
         onToggleAssistant={() => {
           if (!projectRootPath) {
-            showNotice("Open or create a project folder before using Tauri.");
+            showNotice("Open or create a project folder before using Bode.");
             return;
           }
           toggleAssistant();
@@ -1535,7 +1613,12 @@ function App() {
           />
         )}
         {mode === "schematic" && !activeProjectFile && (
-          <section className="editor-shell" aria-label="Project start">
+          <section
+            className="editor-shell"
+            aria-label="Project start"
+            style={{ position: "relative" }}
+            {...importDropZoneProps}
+          >
             <main className="stage">
               <EmptyState
                 projectOpen={Boolean(projectRootPath)}
@@ -1543,13 +1626,21 @@ function App() {
                 onOpenFolder={() => void openProjectFolder()}
                 onCreateProject={() => void createProjectFolder("Schematics")}
                 onNewCircuit={() => void startNewCircuit()}
-                onAskTauri={openAssistant}
+                onAskBode={openAssistant}
+                onOpenAscText={openAscFromProject}
+                onNotice={showNotice}
               />
             </main>
+            <ImportDropOverlay active={importDragActive} />
           </section>
         )}
         {mode === "schematic" && activeProjectFile && (
-        <section className="editor-shell" aria-label="Schematic editor">
+        <section
+          className="editor-shell"
+          aria-label="Schematic editor"
+          style={{ position: "relative" }}
+          {...importDropZoneProps}
+        >
           <EditorToolbar
             mode={mode}
             isRunning={analysisRunning}
@@ -1580,7 +1671,7 @@ function App() {
               <EmptyState
                 projectOpen
                 onNewCircuit={() => void startNewCircuit()}
-                onAskTauri={openAssistant}
+                onAskBode={openAssistant}
               />
             )}
           </main>
@@ -1589,6 +1680,7 @@ function App() {
             isRunning={analysisRunning}
             notices={activeFilePath ? importWarningsByPath[activeFilePath] ?? [] : []}
           />
+          <ImportDropOverlay active={importDragActive} />
         </section>
         )}
         {mode === "simulator" && activeProjectFile && graphOpen && (
@@ -1790,6 +1882,41 @@ function App() {
         />
       )}
       {notice && <div className="shell-toast" role="status">{notice}</div>}
+    </div>
+  );
+}
+
+/**
+ * Visible drop-target state for the editor's file import zone. Every color is
+ * an existing `App.css` token referenced via `var()` - this component adds no
+ * stylesheet rules of its own, so it stays correct in both themes for free.
+ */
+function ImportDropOverlay({ active }: { active: boolean }) {
+  if (!active) return null;
+  return (
+    <div
+      aria-hidden="true"
+      style={{
+        position: "absolute",
+        inset: "var(--sp-2)",
+        zIndex: 20,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        pointerEvents: "none",
+        background: "var(--accent-soft)",
+        border: "2px dashed var(--accent-line)",
+        borderRadius: "var(--r-lg)",
+      }}
+    >
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "var(--sp-1)" }}>
+        <span style={{ fontFamily: "var(--font-ui)", fontSize: "var(--fs-heading)", fontWeight: 600, color: "var(--text)" }}>
+          Drop to import
+        </span>
+        <span style={{ fontFamily: "var(--font-ui)", fontSize: "var(--fs-body)", color: "var(--muted)" }}>
+          Schematic, SPICE netlist, or model library
+        </span>
+      </div>
     </div>
   );
 }

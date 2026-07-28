@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildSpiceDeck, unresolvedSubcktMessage } from "./spiceNetlist";
+import { buildSpiceDeck, transformerWindings, unresolvedSubcktMessage } from "./spiceNetlist";
 import { buildParamScope } from "../simulation/paramScope";
 import type { NetLabel, PinOverride, SchematicComponent, SchematicWire } from "../schematic/types";
 import { CATALOG } from "../schematic/catalog";
@@ -1124,5 +1124,133 @@ describe("unresolvedSubcktMessage", () => {
     const message = unresolvedSubcktMessage(names);
     expect(message).toContain('"A", "B", "C", "D", "E", "F", and 2 more');
     expect(message).not.toContain('"G"');
+  });
+});
+
+describe("model substitution reporting", () => {
+  const grounded = () => component("ground", "", "", 0, 0);
+
+  it("reports a named vendor part that resolved to a generic starter", () => {
+    // The trust-destroying case: the deck happily emits a textbook Level=1
+    // device under the vendor part's designator. Silence here means the user
+    // reads a confident waveform for a device Tau does not have.
+    const deck = buildSpiceDeck(
+      { components: [grounded(), component("nmos", "M1", "IRF540", 128, 128)], wires: [] },
+      { kind: "op" },
+    );
+
+    expect(deck.modelSubstitutions).toEqual([
+      { ref: "M1", requested: "IRF540", substituted: "TAU_NMOS" },
+    ]);
+    expect(deck.netlist).toContain("TAU_NMOS");
+
+    const [warning] = deck.circuit.warnings.filter((w) => w.includes("IRF540"));
+    expect(warning).toBe(
+      'M1: model "IRF540" was not found. Tau simulates it as a generic NMOS (Level=1), which will not match the real device.',
+    );
+  });
+
+  it("stays silent for a part left on its Library default value", () => {
+    // Placing an NMOS from the Library and not naming a part is not a
+    // substitution - warning here would fire on every default-placed device
+    // and train the user to ignore the channel that matters.
+    const deck = buildSpiceDeck(
+      { components: [grounded(), component("nmos", "M1", "NMOS W=10u L=1u", 128, 128)], wires: [] },
+      { kind: "op" },
+    );
+
+    expect(deck.modelSubstitutions).toEqual([]);
+  });
+
+  it("stays silent when the document defines the model it names", () => {
+    const deck = buildSpiceDeck(
+      {
+        components: [grounded(), component("nmos", "M1", "MYFET", 128, 128)],
+        wires: [],
+        directives: [".model MYFET NMOS(Level=1 Vto=2)"],
+      },
+      { kind: "op" },
+    );
+
+    expect(deck.modelSubstitutions).toEqual([]);
+    expect(deck.netlist).toContain("MYFET");
+  });
+
+  it("names every unresolved part, not just the first", () => {
+    // BC847C is deliberately not one of the bundled standard parts; 2N3904 is,
+    // and is asserted below to stay silent.
+    const deck = buildSpiceDeck(
+      {
+        components: [
+          grounded(),
+          component("nmos", "M1", "IRF540", 128, 128),
+          component("npn", "Q1", "BC847C", 256, 128),
+        ],
+        wires: [],
+      },
+      { kind: "op" },
+    );
+
+    expect(deck.modelSubstitutions.map((s) => s.ref).sort()).toEqual(["M1", "Q1"]);
+  });
+
+  it("stays silent for a part the bundled standard library defines", () => {
+    // 2N3904 ships in standardModels.ts, so it resolves for real. Warning on a
+    // part Tau actually models would be a false alarm.
+    const deck = buildSpiceDeck(
+      { components: [grounded(), component("npn", "Q1", "2N3904", 128, 128)], wires: [] },
+      { kind: "op" },
+    );
+
+    expect(deck.modelSubstitutions).toEqual([]);
+    expect(deck.netlist).toContain("2N3904");
+  });
+});
+
+describe("transformerWindings", () => {
+  it("defaults to a 10 mH magnetizing inductance and near-unity coupling", () => {
+    expect(transformerWindings("1:1")).toEqual({ primary: 10e-3, secondary: 10e-3, coupling: 0.999 });
+  });
+
+  it("derives the secondary from the turns ratio", () => {
+    // L2 = L1 * (Ns/Np)^2
+    expect(transformerWindings("1:2").secondary).toBeCloseTo(40e-3, 9);
+    expect(transformerWindings("2:1").secondary).toBeCloseTo(2.5e-3, 9);
+  });
+
+  it("honors explicit L1, L2 and k instead of the hardcoded defaults", () => {
+    // Magnetizing and leakage inductance are the two numbers a flyback is
+    // designed around; before this they were unreachable.
+    const spec = transformerWindings("1:2 L1=2m L2=8m k=0.98");
+    expect(spec.primary).toBeCloseTo(2e-3, 9);
+    expect(spec.secondary).toBeCloseTo(8e-3, 9);
+    expect(spec.coupling).toBeCloseTo(0.98, 9);
+  });
+
+  it("keeps the ratio-derived secondary when only L1 is given", () => {
+    const spec = transformerWindings("1:3 L1=1m");
+    expect(spec.primary).toBeCloseTo(1e-3, 9);
+    expect(spec.secondary).toBeCloseTo(9e-3, 9);
+  });
+
+  it("refuses a coupling of 1, which makes the coupled pair singular", () => {
+    expect(transformerWindings("1:1 k=1").coupling).toBe(0.999);
+    expect(transformerWindings("1:1 k=1.5").coupling).toBe(0.999);
+  });
+
+  it("emits the parsed values into the deck", () => {
+    const deck = buildSpiceDeck(
+      {
+        components: [
+          component("ground", "", "", 0, 0),
+          component("transformer", "T1", "1:2 L1=2m k=0.95", 128, 128),
+        ],
+        wires: [],
+      },
+      { kind: "op" },
+    );
+    expect(deck.netlist).toContain("L_T1_p");
+    expect(deck.netlist).toMatch(/L_T1_p \S+ \S+ 0\.002/);
+    expect(deck.netlist).toMatch(/K_T1 L_T1_p L_T1_s 0\.95/);
   });
 });

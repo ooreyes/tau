@@ -170,6 +170,12 @@ function yieldToEventLoop(): Promise<void> {
  *  than one frame. */
 const YIELD_STEP_INTERVAL = 250;
 const YIELD_TIME_INTERVAL_MS = 16;
+/** The wall-clock half of the yield check only exists to catch a step that
+ *  is itself slow enough to blow past YIELD_TIME_INTERVAL_MS before the next
+ *  step-count boundary - it doesn't need to be re-sampled every single step
+ *  to do that. Checking every 8 steps still notices a slow run well inside a
+ *  frame, without a Date.now() call on (almost) every iteration. */
+const YIELD_TIME_CHECK_STRIDE = 8;
 
 export async function runTransientAnalysis(
   schematic: { components: SchematicComponent[]; wires: SchematicWire[]; netLabels?: NetLabel[]; params?: ParamScope; couplings?: CouplingSpec[] },
@@ -429,29 +435,20 @@ export async function runTransientAnalysis(
       arr.push(value);
     };
 
-    // Set once the run is stopped early (Stop button / AbortSignal) - the
-    // loop below breaks out and falls through to the same result-building
-    // code as a completed run, just with fewer samples and a warning.
-    let aborted = false;
-    let lastYieldAt = Date.now();
-
-    for (let step = 0; step <= options.steps; step += 1) {
-      const time = step * stepSize;
-      const matrix = zeroMatrix(size);
-      const rhs = Array(size).fill(0) as number[];
-
-      // SPICE gmin: when op-amps or diodes are present, add GMIN from every
-      // non-ground node to ground so floating nodes (e.g. unconnected op-amp
-      // rails, or a node isolated behind a reverse-biased diode) resolve to
-      // ~0 V rather than making the matrix singular. Applied only for those
-      // devices to avoid masking genuine floating-node errors elsewhere.
-      if (opamps.length > 0 || diodes.length > 0) {
-        for (let i = 0; i < nonGroundNets.length; i += 1) {
-          matrix[i][i] += GMIN;
-        }
-      }
-
-      for (const entry of circuit.components) {
+    // Stamp helpers shared between the one-time matrix build (F1, diode-free
+    // circuits only - see `linear` below) and the per-step loop. `matrix` is
+    // null whenever the LHS was already factored and only `rhs` needs
+    // rebuilding for this step; every stamp function used here no-ops its
+    // matrix-touching half when passed null (see the stamp* definitions
+    // below the solver), so this is the exact same code path either way -
+    // just with the matrix side skipped on most calls.
+    // (`resolvedCircuit` re-binds the already-narrowed `circuit` to a plain
+    // const: TS can't carry a `let`'s narrowing into a closure body, since it
+    // can't prove the outer variable isn't reassigned before the closure
+    // runs - this sidesteps that without changing anything at runtime.)
+    const resolvedCircuit = circuit;
+    const stampComponents = (matrix: number[][] | null, rhs: number[], time: number) => {
+      for (const entry of resolvedCircuit.components) {
         switch (entry.component.kind) {
           case "resistor":
             stampConductance(matrix, netIndex(entry.pins.a, nodeIndex), netIndex(entry.pins.b, nodeIndex), conductanceOf.get(entry.component.id)!);
@@ -506,16 +503,19 @@ export async function runTransientAnalysis(
             // The constraint row enforces V(in+) = V(in-) (virtual short).
             // Output current io is injected into the out net KCL row.
             // Input pins draw NO current. Power pins (v+/v-) are ignored (gmin handles them).
-            const ioIndex = opampOffset + opampIndex.get(entry.component.id)!;
-            const outNode = netIndex(entry.pins["out"], nodeIndex);
-            const inPlusNode = netIndex(entry.pins["in+"], nodeIndex);
-            const inMinusNode = netIndex(entry.pins["in-"], nodeIndex);
-            // Output current injection into out KCL row
-            if (outNode >= 0) matrix[outNode][ioIndex] += 1;
-            // Virtual-short constraint row: V(in+) - V(in-) = 0
-            if (inPlusNode >= 0) matrix[ioIndex][inPlusNode] += 1;
-            if (inMinusNode >= 0) matrix[ioIndex][inMinusNode] -= 1;
-            // rhs[ioIndex] = 0 (already zero from initialisation)
+            // All-matrix, no rhs term (rhs[ioIndex] = 0, already zero from
+            // initialisation) - skipped entirely once the LHS is factored.
+            if (matrix) {
+              const ioIndex = opampOffset + opampIndex.get(entry.component.id)!;
+              const outNode = netIndex(entry.pins["out"], nodeIndex);
+              const inPlusNode = netIndex(entry.pins["in+"], nodeIndex);
+              const inMinusNode = netIndex(entry.pins["in-"], nodeIndex);
+              // Output current injection into out KCL row
+              if (outNode >= 0) matrix[outNode][ioIndex] += 1;
+              // Virtual-short constraint row: V(in+) - V(in-) = 0
+              if (inPlusNode >= 0) matrix[ioIndex][inPlusNode] += 1;
+              if (inMinusNode >= 0) matrix[ioIndex][inMinusNode] -= 1;
+            }
             break;
           }
           case "vccs": {
@@ -600,36 +600,105 @@ export async function runTransientAnalysis(
             break;
         }
       }
+    };
 
-      // Mutual-inductance coupling (backward-Euler companion): the flux in one
-      // winding adds (M/h)·(Iother − Iother_prev) to this winding's branch eq,
-      // mirroring the self term L/h. Stamp the cross conductance + history rhs.
+    // Mutual-inductance coupling (backward-Euler companion): the flux in one
+    // winding adds (M/h)·(Iother − Iother_prev) to this winding's branch eq,
+    // mirroring the self term L/h. The cross-conductance matrix term is
+    // constant (skipped when `matrix` is null); the history rhs term is not.
+    const stampMutuals = (matrix: number[][] | null, rhs: number[]) => {
       for (const term of mutuals) {
         const ia = inductorOffset + term.a;
         const ib = inductorOffset + term.b;
         const r = term.m / stepSize;
         const iaPrev = inductorCurrent.get(inductors[term.a].component.id) ?? 0;
         const ibPrev = inductorCurrent.get(inductors[term.b].component.id) ?? 0;
-        matrix[ia][ib] -= r;
-        matrix[ib][ia] -= r;
+        if (matrix) {
+          matrix[ia][ib] -= r;
+          matrix[ib][ia] -= r;
+        }
         rhs[ia] -= r * ibPrev;
         rhs[ib] -= r * iaPrev;
       }
+    };
 
-      // Linear circuits solve in one shot. With junction diodes the assembled
-      // matrix/rhs above is the constant part; Newton-iterate the diode
-      // companions on top of a copy until the junction voltages settle
-      // (SPICE-style reltol/vntol), with pnjlim damping each update.
+    // F1: the transient LHS is provably time-invariant for a diode-free
+    // circuit - every stamp above uses a constant (G, C/h, L/h, +/-1 at fixed
+    // branch indices, fixed gains, M/h for mutuals); only `rhs` carries the
+    // time-varying source and history terms. Factor the matrix once here
+    // (recording the Gauss-Jordan row operations, see `factorMatrix` below)
+    // and replay that factorization against a freshly-stamped `rhs` every
+    // step, instead of re-running Gauss-Jordan (O(n^3)) on a freshly rebuilt
+    // matrix every step. A circuit with junction diodes keeps the original
+    // per-step rebuild + Newton path below unchanged: the diode companion
+    // conductance is added onto a fresh copy of the matrix every Newton
+    // iteration (see `diodes.length > 0` below), so the LHS genuinely
+    // changes there and a single reusable factorization would be unsound.
+    // Restricting the fast path to the diode-free case is deliberate -
+    // correctness beats speed here.
+    const linear = diodes.length === 0;
+    let baseFactorization: GaussJordanFactorization | null = null;
+    if (linear) {
+      const baseMatrix = zeroMatrix(size);
+      if (opamps.length > 0) {
+        for (let i = 0; i < nonGroundNets.length; i += 1) {
+          baseMatrix[i][i] += GMIN;
+        }
+      }
+      const scratchRhs = Array(size).fill(0) as number[];
+      stampComponents(baseMatrix, scratchRhs, 0);
+      stampMutuals(baseMatrix, scratchRhs);
+      baseFactorization = factorMatrix(baseMatrix);
+    }
+
+    // Set once the run is stopped early (Stop button / AbortSignal) - the
+    // loop below breaks out and falls through to the same result-building
+    // code as a completed run, just with fewer samples and a warning.
+    let aborted = false;
+    let lastYieldAt = Date.now();
+
+    for (let step = 0; step <= options.steps; step += 1) {
+      const time = step * stepSize;
+      // Diode-free: the matrix was already factored above, so stampComponents
+      // /stampMutuals below are called with `matrix = null` and only rebuild
+      // rhs. Diode-bearing: rebuild the matrix fresh every step exactly as
+      // before, since the Newton loop mutates it per iteration.
+      const matrix = linear ? null : zeroMatrix(size);
+      const rhs = Array(size).fill(0) as number[];
+
+      // SPICE gmin: when op-amps or diodes are present, add GMIN from every
+      // non-ground node to ground so floating nodes (e.g. unconnected op-amp
+      // rails, or a node isolated behind a reverse-biased diode) resolve to
+      // ~0 V rather than making the matrix singular. Applied only for those
+      // devices to avoid masking genuine floating-node errors elsewhere.
+      // (For the linear/opamp case this was already folded into the
+      // factored base matrix above, so `matrix` being null skips it here.)
+      if (matrix && (opamps.length > 0 || diodes.length > 0)) {
+        for (let i = 0; i < nonGroundNets.length; i += 1) {
+          matrix[i][i] += GMIN;
+        }
+      }
+
+      stampComponents(matrix, rhs, time);
+      stampMutuals(matrix, rhs);
+
+      // Linear circuits solve via the factorization computed once above.
+      // With junction diodes the assembled matrix/rhs here is the constant
+      // part; Newton-iterate the diode companions on top of a copy until the
+      // junction voltages settle (SPICE-style reltol/vntol), with pnjlim
+      // damping each update.
       let solution: number[] | null = null;
-      if (diodes.length === 0) {
-        solution = solveLinearSystem(matrix, rhs);
+      if (linear) {
+        solution = solveWithFactorization(baseFactorization!, rhs);
       } else {
         const guesses = new Map<string, number>();
         for (const entry of diodes) {
           guesses.set(entry.component.id, diodeVoltage.get(entry.component.id) ?? 0);
         }
         for (let iteration = 0; iteration < NEWTON_MAX_ITERATIONS; iteration += 1) {
-          const newtonMatrix = matrix.map((row) => [...row]);
+          // Non-null: this branch only runs when `linear` is false, which is
+          // exactly when `matrix` above was allocated (not left null).
+          const newtonMatrix = matrix!.map((row) => [...row]);
           const newtonRhs = [...rhs];
           for (const entry of diodes) {
             const spec = diodeSpecs.get(entry.component.id)!;
@@ -745,10 +814,17 @@ export async function runTransientAnalysis(
 
       // Cooperative yield: this step's samples are already fully committed
       // above (times/traceValues/currentSamples), so it's always safe to
-      // stop right here - never mid-step. Checked by step count first (cheap)
-      // before the `Date.now()` call so the fast-per-step-large-circuit case
-      // isn't paying a clock read every single iteration.
-      if (step % YIELD_STEP_INTERVAL === 0 || Date.now() - lastYieldAt >= YIELD_TIME_INTERVAL_MS) {
+      // stop right here - never mid-step. The step-count check is free and
+      // covers the common case; the wall-clock fallback is only sampled
+      // every YIELD_TIME_CHECK_STRIDE steps rather than every step - `||`
+      // only skips its right operand when the left one is true, so with the
+      // step-count check on the left (true on 1 in YIELD_STEP_INTERVAL
+      // steps) a plain `A || B` here called Date.now() on the other 249 of
+      // every 250 steps, the opposite of what this comment used to claim.
+      if (
+        step % YIELD_STEP_INTERVAL === 0 ||
+        (step % YIELD_TIME_CHECK_STRIDE === 0 && Date.now() - lastYieldAt >= YIELD_TIME_INTERVAL_MS)
+      ) {
         control?.onProgress?.(step / options.steps);
         if (control?.signal?.aborted) {
           aborted = true;
@@ -964,7 +1040,14 @@ function zeroMatrix(size: number): number[][] {
   return Array.from({ length: size }, () => Array(size).fill(0) as number[]);
 }
 
-function stampConductance(matrix: number[][], a: number, b: number, conductance: number) {
+// The stamp helpers below all take `matrix: number[][] | null`. For a
+// diode-free circuit the LHS matrix is time-invariant (F1): it is built and
+// factored once before the time loop, and every step thereafter passes
+// `matrix = null` here to skip re-stamping it while still stamping the
+// time-varying `rhs` terms. A nonlinear (diode-bearing) circuit still passes
+// a real matrix every step, exactly as before - see the Newton loop below.
+function stampConductance(matrix: number[][] | null, a: number, b: number, conductance: number) {
+  if (!matrix) return;
   if (a >= 0) matrix[a][a] += conductance;
   if (b >= 0) matrix[b][b] += conductance;
   if (a >= 0 && b >= 0) {
@@ -979,26 +1062,29 @@ function stampCurrent(rhs: number[], a: number, b: number, currentFromAToB: numb
 }
 
 function stampVoltageSource(
-  matrix: number[][],
+  matrix: number[][] | null,
   rhs: number[],
   positive: number,
   negative: number,
   sourceIndex: number,
   voltage: number,
 ) {
-  if (positive >= 0) {
-    matrix[positive][sourceIndex] += 1;
-    matrix[sourceIndex][positive] += 1;
-  }
-  if (negative >= 0) {
-    matrix[negative][sourceIndex] -= 1;
-    matrix[sourceIndex][negative] -= 1;
+  if (matrix) {
+    if (positive >= 0) {
+      matrix[positive][sourceIndex] += 1;
+      matrix[sourceIndex][positive] += 1;
+    }
+    if (negative >= 0) {
+      matrix[negative][sourceIndex] -= 1;
+      matrix[sourceIndex][negative] -= 1;
+    }
   }
   rhs[sourceIndex] += voltage;
 }
 
 /** Voltage-controlled current source: I(op→on) = gm·(V(cp) − V(cn)). */
-function stampVCCS(matrix: number[][], op: number, on: number, cp: number, cn: number, gm: number) {
+function stampVCCS(matrix: number[][] | null, op: number, on: number, cp: number, cn: number, gm: number) {
+  if (!matrix) return;
   if (op >= 0 && cp >= 0) matrix[op][cp] += gm;
   if (op >= 0 && cn >= 0) matrix[op][cn] -= gm;
   if (on >= 0 && cp >= 0) matrix[on][cp] -= gm;
@@ -1006,7 +1092,8 @@ function stampVCCS(matrix: number[][], op: number, on: number, cp: number, cn: n
 }
 
 /** Voltage-controlled voltage source: V(op) − V(on) = gain·(V(cp) − V(cn)). */
-function stampVCVS(matrix: number[][], op: number, on: number, cp: number, cn: number, branchIndex: number, gain: number) {
+function stampVCVS(matrix: number[][] | null, op: number, on: number, cp: number, cn: number, branchIndex: number, gain: number) {
+  if (!matrix) return;
   if (op >= 0) {
     matrix[op][branchIndex] += 1;
     matrix[branchIndex][op] += 1;
@@ -1020,15 +1107,17 @@ function stampVCVS(matrix: number[][], op: number, on: number, cp: number, cn: n
 }
 
 /** Linear behavioral V-source: V(p) − V(n) = constant + Σ coeff·V(node). */
-function stampLinearVSource(matrix: number[][], rhs: number[], p: number, n: number, branchIndex: number, constant: number, terms: BehavioralTerm[]) {
+function stampLinearVSource(matrix: number[][] | null, rhs: number[], p: number, n: number, branchIndex: number, constant: number, terms: BehavioralTerm[]) {
   stampVoltageSource(matrix, rhs, p, n, branchIndex, constant);
-  for (const { index, coeff } of terms) {
-    if (index >= 0) matrix[branchIndex][index] -= coeff;
+  if (matrix) {
+    for (const { index, coeff } of terms) {
+      if (index >= 0) matrix[branchIndex][index] -= coeff;
+    }
   }
 }
 
 /** Linear behavioral I-source: I(p→n) = constant + Σ coeff·V(node). */
-function stampLinearISource(matrix: number[][], rhs: number[], p: number, n: number, constant: number, terms: BehavioralTerm[]) {
+function stampLinearISource(matrix: number[][] | null, rhs: number[], p: number, n: number, constant: number, terms: BehavioralTerm[]) {
   stampCurrent(rhs, p, n, constant);
   for (const { index, coeff } of terms) {
     stampVCCS(matrix, p, n, index, -1, coeff);
@@ -1036,7 +1125,8 @@ function stampLinearISource(matrix: number[][], rhs: number[], p: number, n: num
 }
 
 /** Internal zero-volt control-sense source (cp→cn); `senseIdx` = I(cp→cn). */
-function stampSenseBranch(matrix: number[][], cp: number, cn: number, senseIdx: number) {
+function stampSenseBranch(matrix: number[][] | null, cp: number, cn: number, senseIdx: number) {
+  if (!matrix) return;
   if (cp >= 0) {
     matrix[cp][senseIdx] += 1;
     matrix[senseIdx][cp] += 1;
@@ -1048,14 +1138,16 @@ function stampSenseBranch(matrix: number[][], cp: number, cn: number, senseIdx: 
 }
 
 /** Current-controlled current source: I(op→on) = gain·I_sense(cp→cn). */
-function stampCCCS(matrix: number[][], op: number, on: number, cp: number, cn: number, senseIdx: number, gain: number) {
+function stampCCCS(matrix: number[][] | null, op: number, on: number, cp: number, cn: number, senseIdx: number, gain: number) {
+  if (!matrix) return;
   stampSenseBranch(matrix, cp, cn, senseIdx);
   if (op >= 0) matrix[op][senseIdx] += gain;
   if (on >= 0) matrix[on][senseIdx] -= gain;
 }
 
 /** Current-controlled voltage source: V(op) − V(on) = r·I_sense(cp→cn). */
-function stampCCVS(matrix: number[][], op: number, on: number, cp: number, cn: number, senseIdx: number, outIdx: number, r: number) {
+function stampCCVS(matrix: number[][] | null, op: number, on: number, cp: number, cn: number, senseIdx: number, outIdx: number, r: number) {
+  if (!matrix) return;
   stampSenseBranch(matrix, cp, cn, senseIdx);
   if (op >= 0) {
     matrix[op][outIdx] += 1;
@@ -1069,7 +1161,7 @@ function stampCCVS(matrix: number[][], op: number, on: number, cp: number, cn: n
 }
 
 function stampInductor(
-  matrix: number[][],
+  matrix: number[][] | null,
   rhs: number[],
   a: number,
   b: number,
@@ -1077,15 +1169,17 @@ function stampInductor(
   resistance: number,
   previousCurrent: number,
 ) {
-  if (a >= 0) {
-    matrix[a][inductorIndex] += 1;
-    matrix[inductorIndex][a] += 1;
+  if (matrix) {
+    if (a >= 0) {
+      matrix[a][inductorIndex] += 1;
+      matrix[inductorIndex][a] += 1;
+    }
+    if (b >= 0) {
+      matrix[b][inductorIndex] -= 1;
+      matrix[inductorIndex][b] -= 1;
+    }
+    matrix[inductorIndex][inductorIndex] -= resistance;
   }
-  if (b >= 0) {
-    matrix[b][inductorIndex] -= 1;
-    matrix[inductorIndex][b] -= 1;
-  }
-  matrix[inductorIndex][inductorIndex] -= resistance;
   rhs[inductorIndex] -= resistance * previousCurrent;
 }
 
@@ -1126,4 +1220,84 @@ function solveLinearSystem(matrix: number[][], rhs: number[]): number[] {
   }
 
   return a.map((row) => row[n]);
+}
+
+/** Recorded Gauss-Jordan row operations for a matrix that will be reused
+ *  across many right-hand sides (F1: the transient LHS is time-invariant for
+ *  a diode-free circuit, so it only needs to be reduced once). This is not
+ *  classic LU + triangular solves - it is the same full reduce-to-identity
+ *  elimination `solveLinearSystem` performs, just split so the matrix-only
+ *  half runs once and the recorded pivot/factor sequence replays against a
+ *  fresh rhs every step. Replaying the identical operations in the identical
+ *  order is what makes the result bit-for-bit equal to calling
+ *  `solveLinearSystem(matrix, rhs)` fresh every step - a genuine LU/back-
+ *  substitution implementation would round differently in the last bit or
+ *  two, which would fail the bit-identical proof this fix requires. */
+interface GaussJordanFactorization {
+  n: number;
+  /** Row swapped into `col` during elimination (may equal `col`). */
+  swapWith: number[];
+  /** Diagonal value each row was normalized by, read after the swap. */
+  pivotValue: number[];
+  /** Rows (other than `col`) with a nonzero factor at `col`, and that factor,
+   *  in row-iteration order - exactly the rows `solveLinearSystem` would have
+   *  touched for this column. */
+  eliminations: { row: number; factor: number }[][];
+}
+
+function factorMatrix(matrix: number[][]): GaussJordanFactorization {
+  const n = matrix.length;
+  const a = matrix.map((row) => [...row]);
+  const swapWith = new Array<number>(n);
+  const pivotValue = new Array<number>(n);
+  const eliminations: { row: number; factor: number }[][] = [];
+
+  for (let col = 0; col < n; col += 1) {
+    let pivot = col;
+    for (let row = col + 1; row < n; row += 1) {
+      if (Math.abs(a[row][col]) > Math.abs(a[pivot][col])) pivot = row;
+    }
+    if (Math.abs(a[pivot][col]) < 1e-12) {
+      throw new Error("Matrix is singular. Check for floating nodes, voltage-source loops, or missing ground connections.");
+    }
+    swapWith[col] = pivot;
+    if (pivot !== col) [a[pivot], a[col]] = [a[col], a[pivot]];
+
+    const value = a[col][col];
+    pivotValue[col] = value;
+    for (let item = col; item < n; item += 1) a[col][item] /= value;
+
+    const colEliminations: { row: number; factor: number }[] = [];
+    for (let row = 0; row < n; row += 1) {
+      if (row === col) continue;
+      const factor = a[row][col];
+      if (factor === 0) continue;
+      for (let item = col; item < n; item += 1) a[row][item] -= factor * a[col][item];
+      colEliminations.push({ row, factor });
+    }
+    eliminations.push(colEliminations);
+  }
+
+  return { n, swapWith, pivotValue, eliminations };
+}
+
+/** Replay the recorded elimination against one rhs vector. Produces the same
+ *  result `solveLinearSystem(matrix, rhs)` would, in O(n^2) instead of
+ *  O(n^3), because the O(n^3) matrix-side work already happened once in
+ *  `factorMatrix`. */
+function solveWithFactorization(factorization: GaussJordanFactorization, rhs: number[]): number[] {
+  const v = [...rhs];
+  for (let col = 0; col < factorization.n; col += 1) {
+    const pivot = factorization.swapWith[col];
+    if (pivot !== col) {
+      const t = v[pivot];
+      v[pivot] = v[col];
+      v[col] = t;
+    }
+    v[col] /= factorization.pivotValue[col];
+    for (const { row, factor } of factorization.eliminations[col]) {
+      v[row] -= factor * v[col];
+    }
+  }
+  return v;
 }

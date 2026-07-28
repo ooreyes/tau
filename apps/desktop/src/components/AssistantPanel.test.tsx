@@ -761,11 +761,11 @@ describe("AssistantPanel", () => {
     expect(streams).toHaveLength(1);
   });
 
-  it("shows the Tauri safety note and exposes the active model as a selector", () => {
+  it("shows the Bode safety note and exposes the active model as a selector", () => {
     saveAssistantApiKey("test-key");
     render(<AssistantPanel {...baseProps()} />);
 
-    expect(screen.getByText("Tauri is an AI and can make mistakes.")).toBeTruthy();
+    expect(screen.getByText("Bode is an AI and can make mistakes.")).toBeTruthy();
     expect(screen.getByRole("combobox", { name: "Assistant model" }).textContent).toContain("Sonnet 5");
     expect(screen.queryByText(/Claude ·/)).toBeNull();
   });

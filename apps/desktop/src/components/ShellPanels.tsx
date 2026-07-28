@@ -54,6 +54,8 @@ import {
 import { useSchematic } from "../store/useSchematic";
 import { useProject } from "../store/useProject";
 import { basename, isAscFile, type ProjectNode } from "../project/types";
+import { importDroppedFile } from "../io/fileImport";
+import { IMPORT_ACCEPT, IMPORT_BUTTON_LABEL } from "../io/importUi";
 import type { AnalysisResult } from "../simulation/linearTransient";
 import { formatEngineering } from "../simulation/quantity";
 import { loadAssistantApiKey, saveAssistantApiKey, useAssistantApiKey } from "../lib/assistant";
@@ -77,6 +79,7 @@ import {
   removeCustomLocalAiModel,
 } from "../lib/localAiModels";
 import { clampPanelWidth, PanelResizeHandle, usePanelWidth, type PanelWidthConfig } from "./panelResize";
+import { ThemeControl } from "./SettingsPanel";
 
 /** Drag-to-resize bounds for the two side panels. Minimums keep
  *  every control usable (tree rows, property fields); maximums keep the canvas
@@ -275,7 +278,7 @@ export function ExplorerPanel({
 }: {
   activeFilePath: string | null;
   onOpenSimFile: (path: string, title: string, json: string) => void;
-  onOpenAscText: (path: string, title: string, text: string) => void | Promise<void>;
+  onOpenAscText: (path: string, title: string, text: string, extraWarnings?: string[]) => void | Promise<void>;
   onNotice: (message: string) => void;
   /** Atomic project-store move action; optional only for isolated panel hosts. */
   onMoveNode?: MoveProjectNode;
@@ -299,7 +302,6 @@ export function ExplorerPanel({
   const collapseAll = useProject((s) => s.collapseAll);
   const createFolder = useProject((s) => s.createFolder);
   const createSchematicFile = useProject((s) => s.createSchematicFile);
-  const importAscFile = useProject((s) => s.importAscFile);
   const deleteNode = useProject((s) => s.deleteNode);
   const renameNodeInStore = useProject((s) => s.renameNode);
   const readSim = useProject((s) => s.readSim);
@@ -412,27 +414,30 @@ export function ExplorerPanel({
     }
   };
 
-  const importAscFromInput = async (event: ChangeEvent<HTMLInputElement>) => {
+  const importFileFromInput = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.currentTarget.files?.[0];
     event.currentTarget.value = "";
     if (!file) return;
+    await runFileImport(file);
+  };
 
-    let destination = useProject.getState().rootPath;
-    if (!destination) {
-      const created = capability === "tauri"
-        ? await newProject("Schematics")
-        : await openFolder();
-      destination = created ? useProject.getState().rootPath : null;
-    }
-    if (!destination) {
-      onNotice("Choose a Schematics folder to import this file.");
+  /** Shared by the header's file input and drag-and-drop onto the tree - see
+   *  `io/fileImport.ts` for format detection, conversion, and persistence. */
+  const runFileImport = async (file: File) => {
+    const outcome = await importDroppedFile(file, { hasActiveSchematic: Boolean(activeFilePath) });
+    if (outcome.kind === "error") {
+      onNotice(outcome.message);
       return;
     }
-
-    const path = await importAscFile(destination, file);
-    if (path) {
-      onNotice(`Imported ${basename(path)}`);
-      await openNode(path, basename(path));
+    if (outcome.kind === "model-library") {
+      onNotice(`Attached ${outcome.name}`);
+      return;
+    }
+    onNotice(`Imported ${basename(outcome.path)}`);
+    if (outcome.warnings.length > 0) {
+      await onOpenAscText(outcome.path, basename(outcome.path), outcome.text, outcome.warnings);
+    } else {
+      await onOpenAscText(outcome.path, basename(outcome.path), outcome.text);
     }
   };
 
@@ -597,8 +602,8 @@ export function ExplorerPanel({
             )}
             <button
               type="button"
-              title="Import LTspice schematic"
-              aria-label="Import LTspice schematic"
+              title={IMPORT_BUTTON_LABEL}
+              aria-label={IMPORT_BUTTON_LABEL}
               onClick={() => ascInputRef.current?.click()}
             >
               <VscodeImportFileIcon />
@@ -609,9 +614,9 @@ export function ExplorerPanel({
           ref={ascInputRef}
           className="file-input"
           type="file"
-          accept=".asc"
-          title="Import LTspice schematic"
-          onChange={importAscFromInput}
+          accept={IMPORT_ACCEPT}
+          title={IMPORT_BUTTON_LABEL}
+          onChange={importFileFromInput}
         />
         <div className="explorer-empty">
           <p className="explorer-empty-hint">Choose, create, or import a Schematics folder from the toolbar.</p>
@@ -650,8 +655,8 @@ export function ExplorerPanel({
           </button>
           <button
             type="button"
-            title="Import LTspice schematic"
-            aria-label="Import LTspice schematic"
+            title={IMPORT_BUTTON_LABEL}
+            aria-label={IMPORT_BUTTON_LABEL}
             onClick={() => ascInputRef.current?.click()}
           >
             <VscodeImportFileIcon />
@@ -682,9 +687,9 @@ export function ExplorerPanel({
         ref={ascInputRef}
         className="file-input"
         type="file"
-        accept=".asc"
-        title="Import LTspice schematic"
-        onChange={importAscFromInput}
+        accept={IMPORT_ACCEPT}
+        title={IMPORT_BUTTON_LABEL}
+        onChange={importFileFromInput}
       />
 
       <p id="explorer-drag-help" className="sr-only">
@@ -1888,6 +1893,10 @@ export function SettingsPanel({
           <SheetDescription className="sr-only">Workspace and document settings for this scratchpad.</SheetDescription>
         </SheetHeader>
         <div className="settings-list">
+          <div className="settings-section">
+            <span className="settings-sheet-kicker">Appearance</span>
+            <ThemeControl />
+          </div>
           <div className="settings-section">
             <span className="settings-sheet-kicker">Assistant</span>
             <div className="settings-field-grid">

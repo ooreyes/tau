@@ -162,6 +162,23 @@
   --elev-pop: 0 16px 40px rgba(0, 0, 0, 0.55), 0 0 0 0.5px rgba(255, 255, 255, 0.12);
   --elev-inset: inset 0 1px 2px rgba(0, 0, 0, 0.35);
 
+  /* Raw-color audit (DESIGN_SYSTEM.md §7.1, 2026-07-27) - these five were
+     inline rgba(...) literals scattered outside :root. Promoted to tokens
+     so light mode can redefine them instead of shipping a dark-strength
+     black shadow on a white panel, which is the standard tell that a theme
+     was bolted on rather than designed. */
+  --control-edge:        rgba(0, 0, 0, 0.25);   /* dark seam under a filled accent control */
+  --thumb-shadow:         rgba(0, 0, 0, 0.4);    /* param-slider thumb, resting/hover/focus */
+  --thumb-shadow-active:  rgba(0, 0, 0, 0.5);    /* param-slider thumb, pressed */
+  --fill-track:           rgba(120, 120, 128, 0.16); /* segmented-control / transport track fill */
+  /* Which end of the ramp semantic TEXT mixes toward. The Run button tints its
+     label with its own status hue; on a dark fill that has to land pale, on a
+     pale fill it has to land dark. Hardcoding `white` made "Run" near-invisible
+     in light mode. A literal color keyword is not caught by a hex/rgba scan,
+     so this is the one hardcoded-color class the token audit can miss. */
+  --status-ink-mix:       white;
+  --pill-shadow: 0 0.5px 1px rgba(0, 0, 0, 0.35), inset 0 0.5px 0 rgba(255, 255, 255, 0.12);
+
   /* Motion - Apple spring / ease */
   --motion-fast:  120ms;
   --motion-med:   220ms;
@@ -181,6 +198,353 @@
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
+}
+
+/* ── Light theme - DESIGN_SYSTEM.md §1 ───────────────────────────────────
+ * Cascade, in specificity order (see DESIGN_SYSTEM.md §1 for the rationale):
+ *   1. :root above       - dark, the unchanged default.
+ *   2. @media below       - OS-level "System" mode: only takes effect with
+ *                           no data-theme attribute on <html>, i.e. before
+ *                           the user has picked an explicit theme.
+ *   3. :root[data-theme]  - explicit Light/Dark, set by the Settings control
+ *                           (see lib/theme.ts). An attribute selector always
+ *                           outranks a bare :root, so these two blocks win
+ *                           over the media query in BOTH directions
+ *                           regardless of source order.
+ *
+ * Only color tokens are redefined here - spacing, type, radii and motion do
+ * not change with theme. Component rules never live inside these blocks;
+ * every component keeps consuming the same token names from :root. Light is
+ * derived, not inverted: traces are darkened/saturated versions of their
+ * dark hue (still 4.5:1 against --bg per §1.5), not a straight color
+ * inversion, which would produce pastel traces that read as unserious.
+ */
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg:       #fbfbfa;
+    --panel:    #f2f1ee;
+    --panel-2:  #e8e7e3;
+    --panel-3:  #f7f6f4;
+    --panel-4:  #ffffff;
+
+    --border:         rgba(60, 60, 67, 0.22);
+    --border-strong:  rgba(60, 60, 67, 0.36);
+    --border-subtle:  rgba(60, 60, 67, 0.13);
+
+    --overlay-hover:        rgba(60, 60, 67, 0.10);
+    --overlay-hover-faint:  rgba(60, 60, 67, 0.05);
+
+    --scrim:         rgba(0, 0, 0, 0.20);
+    --scrim-strong:  rgba(0, 0, 0, 0.32);
+
+    --text:   #1c1c1e;
+    --muted:  rgba(60, 60, 67, 0.62);
+    --faint:  rgba(60, 60, 67, 0.34);
+    --canvas-label: #1c1c1e;
+    --canvas-label-muted: rgba(60, 60, 67, 0.55);
+    --canvas-label-halo: #fbfbfa;
+
+    --accent:       #3a362f;
+    --accent-hover: #4c473e;
+    --accent-ink:   #faf9f6;
+    --accent-soft:  rgba(58, 54, 47, 0.07);
+    --accent-glow:  rgba(58, 54, 47, 0.12);
+    --accent-line:  rgba(58, 54, 47, 0.32);
+
+    --signal:       #96620a;
+    --signal-soft:  rgba(150, 98, 10, 0.08);
+    --signal-line:  rgba(150, 98, 10, 0.30);
+    --signal-glow:  rgba(150, 98, 10, 0.17);
+
+    --danger:       #c02718;
+    --danger-soft:  rgba(192, 39, 24, 0.07);
+    --danger-line:  rgba(192, 39, 24, 0.30);
+    --danger-glow:  rgba(192, 39, 24, 0.17);
+    --success:      #248a3d;
+    --success-soft: rgba(36, 138, 61, 0.07);
+    --success-line: rgba(36, 138, 61, 0.30);
+    --success-glow: rgba(36, 138, 61, 0.15);
+
+    /* Assistant identity - same darken-for-paper transform as the trace
+       ramp below, not a spec table value (the assistant violet/aqua pair
+       is a one-off product accent, not one of the six instrument traces). */
+    --assistant:       #6841aa;
+    --assistant-alt:   #0f6b59;
+    --assistant-soft:  rgba(104, 65, 170, 0.08);
+    --assistant-line:  rgba(104, 65, 170, 0.36);
+    --assistant-glow:  rgba(15, 107, 89, 0.16);
+    /* --cream equals --text in dark (#f5f5f7 both); keep that identity. */
+    --cream:        #1c1c1e;
+    --cream-soft:   rgba(28, 28, 30, 0.05);
+
+    --diagnostic-ok:          #248a3d;
+    --diagnostic-ok-text:     #248a3d;
+    --diagnostic-ok-soft:     rgba(36, 138, 61, 0.07);
+    --diagnostic-ok-line:     rgba(36, 138, 61, 0.36);
+    --diagnostic-ok-glow:     rgba(36, 138, 61, 0.20);
+    --diagnostic-warning:     #b25000;
+    --diagnostic-warning-text: #b25000;
+    --diagnostic-warning-soft: rgba(178, 80, 0, 0.08);
+    --diagnostic-warning-line: rgba(178, 80, 0, 0.36);
+    --diagnostic-warning-glow: rgba(178, 80, 0, 0.19);
+    --diagnostic-error:       #d70015;
+    --diagnostic-error-text:  #d70015;
+    --diagnostic-error-soft:  rgba(215, 0, 21, 0.08);
+    --diagnostic-error-line:  rgba(215, 0, 21, 0.37);
+    --diagnostic-error-glow:  rgba(215, 0, 21, 0.20);
+    --diagnostic-glass-shine: rgba(255, 255, 255, 0.5);
+
+    /* Schematic strokes - dark ink on a near-white sheet (inverse of dark
+       theme's light-label-on-black). */
+    --comp:      #1c1c1e;
+    --comp-ref:  rgba(60, 60, 67, 0.48);
+
+    --grid-dot:        rgba(60, 60, 67, 0.12);
+    --grid-dot-major:  rgba(60, 60, 67, 0.20);
+    --canvas-bg:      #fbfbfa;
+    --canvas-surface: #f6f5f2;
+    --scope-surface:  #f7f7f5;
+    --scope-grid:  #f2f1ee;
+
+    --trace-cyan:    #1c6d92;
+    --trace-green:   #2c7a45;
+    --trace-cream:   #55524a;
+    --trace-red:     #b23f30;
+    --trace-purple:  #64499f;
+    --trace-amber:   #975e16;
+
+    --dial-track:  #e8e7e3;
+
+    /* Shadows stay a black family (a shadow is an absence of light in both
+       themes) but at a fraction of dark-mode strength - a full-strength
+       dark shadow on a light panel is the textbook "bolted-on theme" tell.
+       The white bevel highlights (top-edge catch-light) still work as-is
+       here since they sit on --panel/--panel-2, which are off-white, not
+       pure white - only --panel-4 is pure white, where they harmlessly
+       no-op. */
+    --elev-1:   inset 0 0.5px 0 rgba(255, 255, 255, 0.8);
+    --elev-2:   0 1px 2px rgba(0, 0, 0, 0.10), inset 0 0.5px 0 rgba(255, 255, 255, 0.8);
+    --elev-pop: 0 16px 40px rgba(0, 0, 0, 0.16), 0 0 0 0.5px rgba(60, 60, 67, 0.12);
+    --elev-inset: inset 0 1px 2px rgba(0, 0, 0, 0.10);
+
+    --control-edge:        rgba(0, 0, 0, 0.14);
+    --thumb-shadow:         rgba(0, 0, 0, 0.18);
+    --thumb-shadow-active:  rgba(0, 0, 0, 0.22);
+    --fill-track:           rgba(60, 60, 67, 0.06);
+    --status-ink-mix:       black;
+    /* The dark-mode inset highlight is dropped, not just re-tinted: it sits
+       on .mode-btn.active's --panel-4 fill, which is pure white in light
+       mode, so a white-on-white inset is a no-op - carrying it forward
+       would be dead CSS, not a themed value. */
+    --pill-shadow: 0 0.5px 1px rgba(0, 0, 0, 0.14);
+  }
+}
+
+:root[data-theme="light"] {
+  --bg:       #fbfbfa;
+  --panel:    #f2f1ee;
+  --panel-2:  #e8e7e3;
+  --panel-3:  #f7f6f4;
+  --panel-4:  #ffffff;
+
+  --border:         rgba(60, 60, 67, 0.22);
+  --border-strong:  rgba(60, 60, 67, 0.36);
+  --border-subtle:  rgba(60, 60, 67, 0.13);
+
+  --overlay-hover:        rgba(60, 60, 67, 0.10);
+  --overlay-hover-faint:  rgba(60, 60, 67, 0.05);
+
+  --scrim:         rgba(0, 0, 0, 0.20);
+  --scrim-strong:  rgba(0, 0, 0, 0.32);
+
+  --text:   #1c1c1e;
+  --muted:  rgba(60, 60, 67, 0.62);
+  --faint:  rgba(60, 60, 67, 0.34);
+  --canvas-label: #1c1c1e;
+  --canvas-label-muted: rgba(60, 60, 67, 0.55);
+  --canvas-label-halo: #fbfbfa;
+
+  --accent:       #3a362f;
+  --accent-hover: #4c473e;
+  --accent-ink:   #faf9f6;
+  --accent-soft:  rgba(58, 54, 47, 0.07);
+  --accent-glow:  rgba(58, 54, 47, 0.12);
+  --accent-line:  rgba(58, 54, 47, 0.32);
+
+  --signal:       #96620a;
+  --signal-soft:  rgba(150, 98, 10, 0.08);
+  --signal-line:  rgba(150, 98, 10, 0.30);
+  --signal-glow:  rgba(150, 98, 10, 0.17);
+
+  --danger:       #c02718;
+  --danger-soft:  rgba(192, 39, 24, 0.07);
+  --danger-line:  rgba(192, 39, 24, 0.30);
+  --danger-glow:  rgba(192, 39, 24, 0.17);
+  --success:      #248a3d;
+  --success-soft: rgba(36, 138, 61, 0.07);
+  --success-line: rgba(36, 138, 61, 0.30);
+  --success-glow: rgba(36, 138, 61, 0.15);
+
+  --assistant:       #6841aa;
+  --assistant-alt:   #0f6b59;
+  --assistant-soft:  rgba(104, 65, 170, 0.08);
+  --assistant-line:  rgba(104, 65, 170, 0.36);
+  --assistant-glow:  rgba(15, 107, 89, 0.16);
+  --cream:        #1c1c1e;
+  --cream-soft:   rgba(28, 28, 30, 0.05);
+
+  --diagnostic-ok:          #248a3d;
+  --diagnostic-ok-text:     #248a3d;
+  --diagnostic-ok-soft:     rgba(36, 138, 61, 0.07);
+  --diagnostic-ok-line:     rgba(36, 138, 61, 0.36);
+  --diagnostic-ok-glow:     rgba(36, 138, 61, 0.20);
+  --diagnostic-warning:     #b25000;
+  --diagnostic-warning-text: #b25000;
+  --diagnostic-warning-soft: rgba(178, 80, 0, 0.08);
+  --diagnostic-warning-line: rgba(178, 80, 0, 0.36);
+  --diagnostic-warning-glow: rgba(178, 80, 0, 0.19);
+  --diagnostic-error:       #d70015;
+  --diagnostic-error-text:  #d70015;
+  --diagnostic-error-soft:  rgba(215, 0, 21, 0.08);
+  --diagnostic-error-line:  rgba(215, 0, 21, 0.37);
+  --diagnostic-error-glow:  rgba(215, 0, 21, 0.20);
+  --diagnostic-glass-shine: rgba(255, 255, 255, 0.5);
+
+  --comp:      #1c1c1e;
+  --comp-ref:  rgba(60, 60, 67, 0.48);
+
+  --grid-dot:        rgba(60, 60, 67, 0.12);
+  --grid-dot-major:  rgba(60, 60, 67, 0.20);
+  --canvas-bg:      #fbfbfa;
+  --canvas-surface: #f6f5f2;
+  --scope-surface:  #f7f7f5;
+  --scope-grid:  #f2f1ee;
+
+  --trace-cyan:    #1c6d92;
+  --trace-green:   #2c7a45;
+  --trace-cream:   #55524a;
+  --trace-red:     #b23f30;
+  --trace-purple:  #64499f;
+  --trace-amber:   #975e16;
+
+  --dial-track:  #e8e7e3;
+
+  --elev-1:   inset 0 0.5px 0 rgba(255, 255, 255, 0.8);
+  --elev-2:   0 1px 2px rgba(0, 0, 0, 0.10), inset 0 0.5px 0 rgba(255, 255, 255, 0.8);
+  --elev-pop: 0 16px 40px rgba(0, 0, 0, 0.16), 0 0 0 0.5px rgba(60, 60, 67, 0.12);
+  --elev-inset: inset 0 1px 2px rgba(0, 0, 0, 0.10);
+
+  --control-edge:        rgba(0, 0, 0, 0.14);
+  --thumb-shadow:         rgba(0, 0, 0, 0.18);
+  --thumb-shadow-active:  rgba(0, 0, 0, 0.22);
+  --fill-track:           rgba(60, 60, 67, 0.06);
+  --status-ink-mix:       black; /* ...and toward black on a pale one */
+  --pill-shadow: 0 0.5px 1px rgba(0, 0, 0, 0.14);
+}
+
+/* Explicit Dark re-affirms the plain :root values so a user who picks Dark
+ * while their OS reports light (@media above would otherwise apply) still
+ * gets the dark theme - see the cascade note above. */
+:root[data-theme="dark"] {
+  --bg:       #000000;
+  --panel:    #1c1c1e;
+  --panel-2:  #2c2c2e;
+  --panel-3:  #161617;
+  --panel-4:  #3a3a3c;
+
+  --border:         rgba(84, 84, 88, 0.65);
+  --border-strong:  rgba(142, 142, 147, 0.45);
+  --border-subtle:  rgba(84, 84, 88, 0.36);
+
+  --overlay-hover:        rgba(120, 120, 128, 0.24);
+  --overlay-hover-faint:  rgba(120, 120, 128, 0.14);
+
+  --scrim:         rgba(0, 0, 0, 0.36);
+  --scrim-strong:  rgba(0, 0, 0, 0.55);
+
+  --text:   #f5f5f7;
+  --muted:  rgba(235, 235, 245, 0.6);
+  --faint:  rgba(235, 235, 245, 0.3);
+  --canvas-label: #f5f5f7;
+  --canvas-label-muted: rgba(235, 235, 245, 0.55);
+  --canvas-label-halo: #000000;
+
+  --accent:       #d6d3ca;
+  --accent-hover: #ebe8df;
+  --accent-ink:   #121214;
+  --accent-soft:  rgba(214, 211, 202, 0.10);
+  --accent-glow:  rgba(214, 211, 202, 0.16);
+  --accent-line:  rgba(214, 211, 202, 0.38);
+
+  --signal:       #e6a23c;
+  --signal-soft:  rgba(230, 162, 60, 0.12);
+  --signal-line:  rgba(230, 162, 60, 0.35);
+  --signal-glow:  rgba(230, 162, 60, 0.22);
+
+  --danger:       #e6564b;
+  --danger-soft:  rgba(230, 86, 75, 0.10);
+  --danger-line:  rgba(230, 86, 75, 0.35);
+  --danger-glow:  rgba(230, 86, 75, 0.22);
+  --success:      #4fae6b;
+  --success-soft: rgba(79, 174, 107, 0.10);
+  --success-line: rgba(79, 174, 107, 0.35);
+  --success-glow: rgba(79, 174, 107, 0.20);
+
+  --assistant:       #a78bfa;
+  --assistant-alt:   #52e0c4;
+  --assistant-soft:  rgba(167, 139, 250, 0.13);
+  --assistant-line:  rgba(167, 139, 250, 0.42);
+  --assistant-glow:  rgba(82, 224, 196, 0.20);
+  --cream:        #f5f5f7;
+  --cream-soft:   rgba(245, 245, 247, 0.08);
+
+  --diagnostic-ok:          #30d158;
+  --diagnostic-ok-text:     #8ff0aa;
+  --diagnostic-ok-soft:     rgba(48, 209, 88, 0.10);
+  --diagnostic-ok-line:     rgba(48, 209, 88, 0.42);
+  --diagnostic-ok-glow:     rgba(48, 209, 88, 0.26);
+  --diagnostic-warning:     #ff9f0a;
+  --diagnostic-warning-text: #ffd27a;
+  --diagnostic-warning-soft: rgba(255, 159, 10, 0.11);
+  --diagnostic-warning-line: rgba(255, 159, 10, 0.42);
+  --diagnostic-warning-glow: rgba(255, 159, 10, 0.25);
+  --diagnostic-error:       #ff453a;
+  --diagnostic-error-text:  #ff9b94;
+  --diagnostic-error-soft:  rgba(255, 69, 58, 0.11);
+  --diagnostic-error-line:  rgba(255, 69, 58, 0.44);
+  --diagnostic-error-glow:  rgba(255, 69, 58, 0.26);
+  --diagnostic-glass-shine: rgba(255, 255, 255, 0.055);
+
+  --comp:      #d1d1d6;
+  --comp-ref:  rgba(235, 235, 245, 0.45);
+
+  --grid-dot:        rgba(235, 235, 245, 0.08);
+  --grid-dot-major:  rgba(235, 235, 245, 0.13);
+  --canvas-bg:      #000000;
+  --canvas-surface: #0a0a0a;
+  --scope-surface:  #0c0c0e;
+  --scope-grid:  #1c1c1e;
+
+  --trace-cyan:    #6fb8db;
+  --trace-green:   #7cb88a;
+  --trace-cream:   #e8e6de;
+  --trace-red:     #d97468;
+  --trace-purple:  #9e88c4;
+  --trace-amber:   #d9a15a;
+
+  --dial-track:  #3a3a3c;
+
+  --elev-1:   inset 0 0.5px 0 rgba(255, 255, 255, 0.06);
+  --elev-2:   0 1px 2px rgba(0, 0, 0, 0.35), inset 0 0.5px 0 rgba(255, 255, 255, 0.06);
+  --elev-pop: 0 16px 40px rgba(0, 0, 0, 0.55), 0 0 0 0.5px rgba(255, 255, 255, 0.12);
+  --elev-inset: inset 0 1px 2px rgba(0, 0, 0, 0.35);
+
+  --control-edge:        rgba(0, 0, 0, 0.25);
+  --thumb-shadow:         rgba(0, 0, 0, 0.4);
+  --thumb-shadow-active:  rgba(0, 0, 0, 0.5);
+  --fill-track:           rgba(120, 120, 128, 0.16);
+  --status-ink-mix:       white; /* status text mixes toward white on a dark fill */
+  --pill-shadow: 0 0.5px 1px rgba(0, 0, 0, 0.35), inset 0 0.5px 0 rgba(255, 255, 255, 0.12);
 }
 
 * {
@@ -486,10 +850,10 @@ body {
   box-shadow: none;
 }
 
-.tauri-empty-mascot {
-  --tauri-body: var(--accent);
-  --tauri-band: var(--signal);
-  --tauri-face: var(--bg);
+.bode-empty-mascot {
+  --bode-body: var(--accent);
+  --bode-band: var(--signal);
+  --bode-face: var(--bg);
   width: 32px;
   height: 22px;
   color: var(--muted);
@@ -1732,7 +2096,7 @@ body {
 .expr-add.primary {
   color: var(--accent-ink);
   background: linear-gradient(180deg, var(--accent-hover), var(--accent));
-  border-color: rgba(0, 0, 0, 0.25);
+  border-color: var(--control-edge);
   font-weight: 650;
   box-shadow: var(--elev-1), 0 0 0 1px var(--accent-glow);
 }
@@ -1747,7 +2111,7 @@ body {
 .expr-add.active {
   color: var(--accent-ink);
   background: linear-gradient(180deg, var(--accent-hover), var(--accent));
-  border-color: rgba(0, 0, 0, 0.25);
+  border-color: var(--control-edge);
   box-shadow: var(--elev-1), 0 0 0 1px var(--accent-glow);
 }
 
@@ -3190,7 +3554,7 @@ body {
   height: 13px;
   border-radius: 50%;
   background: var(--cream);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4), 0 0 0 1px var(--accent-line);
+  box-shadow: 0 1px 3px var(--thumb-shadow), 0 0 0 1px var(--accent-line);
   cursor: pointer;
   transition: transform var(--motion-fast) var(--spring),
     box-shadow var(--motion-fast) var(--spring);
@@ -3199,16 +3563,16 @@ body {
    the neutral accent, spring-grows into an --accent-glow halo on grab. */
 .param-slider::-webkit-slider-thumb:hover {
   transform: scale(1.15);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4), 0 0 0 1px var(--accent),
+  box-shadow: 0 1px 3px var(--thumb-shadow), 0 0 0 1px var(--accent),
     0 0 0 5px var(--accent-glow);
 }
 .param-slider::-webkit-slider-thumb:active {
   transform: scale(1.05);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5), 0 0 0 1px var(--accent),
+  box-shadow: 0 1px 3px var(--thumb-shadow-active), 0 0 0 1px var(--accent),
     0 0 0 3px var(--accent-glow);
 }
 .param-slider:focus-visible::-webkit-slider-thumb {
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4), 0 0 0 2px var(--bg),
+  box-shadow: 0 1px 3px var(--thumb-shadow), 0 0 0 2px var(--bg),
     0 0 0 4px var(--accent);
 }
 
@@ -3478,7 +3842,7 @@ body {
   padding: 2px;
   border: 0.5px solid var(--border);
   border-radius: 8px;
-  background: rgba(120, 120, 128, 0.16);
+  background: var(--fill-track);
   -webkit-app-region: no-drag;
 }
 
@@ -3529,7 +3893,7 @@ body {
 .mode-btn.active {
   background: var(--panel-4);
   color: var(--text);
-  box-shadow: 0 0.5px 1px rgba(0, 0, 0, 0.35), inset 0 0.5px 0 rgba(255, 255, 255, 0.12);
+  box-shadow: var(--pill-shadow);
 }
 
 .mode-btn.active:focus-visible {
@@ -3622,7 +3986,7 @@ body {
     color-mix(in srgb, var(--success) 42%, var(--panel-2)),
     color-mix(in srgb, var(--success) 16%, var(--panel-2))
   ) !important;
-  color: color-mix(in srgb, var(--success) 32%, white) !important;
+  color: color-mix(in srgb, var(--success) 32%, var(--status-ink-mix)) !important;
   border-color: color-mix(in srgb, var(--success) 62%, transparent) !important;
   box-shadow: inset 0 1px 0 color-mix(in srgb, white 10%, transparent),
     0 0 12px color-mix(in srgb, var(--success) 12%, transparent);
@@ -3639,7 +4003,7 @@ body {
     color-mix(in srgb, var(--signal) 38%, var(--panel-2)),
     color-mix(in srgb, var(--signal) 14%, var(--panel-2))
   ) !important;
-  color: color-mix(in srgb, var(--signal) 28%, white) !important;
+  color: color-mix(in srgb, var(--signal) 28%, var(--status-ink-mix)) !important;
   border-color: color-mix(in srgb, var(--signal) 58%, transparent) !important;
   box-shadow: inset 0 1px 0 color-mix(in srgb, white 9%, transparent),
     0 0 12px color-mix(in srgb, var(--signal) 12%, transparent);
@@ -3656,7 +4020,7 @@ body {
     color-mix(in srgb, var(--danger) 46%, var(--panel-2)),
     color-mix(in srgb, var(--danger) 18%, var(--panel-2))
   ) !important;
-  color: color-mix(in srgb, var(--danger) 24%, white) !important;
+  color: color-mix(in srgb, var(--danger) 24%, var(--status-ink-mix)) !important;
   border-color: color-mix(in srgb, var(--danger) 66%, transparent) !important;
   box-shadow: inset 0 1px 0 color-mix(in srgb, white 9%, transparent),
     0 0 12px color-mix(in srgb, var(--danger) 14%, transparent);
@@ -3682,9 +4046,9 @@ body {
 }
 
 .tauri-toolbar-mascot {
-  --tauri-body: var(--accent);
-  --tauri-band: var(--signal);
-  --tauri-face: var(--bg);
+  --bode-body: var(--accent);
+  --bode-band: var(--signal);
+  --bode-face: var(--bg);
   width: 18px;
   height: 13px;
   color: var(--muted);
@@ -4535,7 +4899,7 @@ body {
   place-items: center;
   border-radius: 6px;
   background: var(--accent);
-  color: var(--accent-foreground, #fff);
+  color: var(--accent-ink);
   font: 600 9px/1 var(--font-ui);
 }
 
@@ -4603,7 +4967,7 @@ body {
   align-items: center;
   gap: 1px;
   padding: 2px;
-  background: rgba(120, 120, 128, 0.16);
+  background: var(--fill-track);
   border: 0.5px solid var(--border);
   border-radius: 8px;
 }
@@ -5960,9 +6324,9 @@ button.bottom-panel-head:focus-visible {
   opacity: 0.9;
   color: var(--muted);
   /* Same tan body as Meet Tauri / New schematic title card. */
-  --tauri-body: var(--accent);
-  --tauri-band: var(--signal);
-  --tauri-face: var(--bg);
+  --bode-body: var(--accent);
+  --bode-band: var(--signal);
+  --bode-face: var(--bg);
 }
 
 .assistant-intro p {

@@ -41,6 +41,27 @@ export interface StepFamilyResult {
  *  (a `.step` with hundreds of points would otherwise launch hundreds of sims). */
 export const MAX_FAMILY_MEMBERS = 16;
 
+/**
+ * The sentence a truncated `.step` has to say out loud, or null when the whole
+ * sweep fits.
+ *
+ * `.step param RL 1k 100k 1k` enumerates 100 values; only the first 16 run.
+ * Silently plotting those 16 means a user who asked to sweep to 100k reads a
+ * chart that stops at 16k and believes it reached the end - every conclusion
+ * drawn from it is then wrong. Cheaper to name the cap than to raise it.
+ */
+export function stepTruncationWarning(specs: readonly StepSpec[]): string | null {
+  if (specs.length === 0) return null;
+  const requested = specs.reduce((total, spec) => total * spec.values.length, 1);
+  if (requested <= MAX_FAMILY_MEMBERS) return null;
+
+  const swept = specs
+    .map((spec) => spec.name ?? (spec.kind === "temp" ? "temp" : "the source"))
+    .join(" x ");
+  return `.step ${swept} asks for ${requested} runs; Tau ran the first ${MAX_FAMILY_MEMBERS}. `
+    + "The plotted curves stop short of the range you requested.";
+}
+
 /** One concrete step: the swept value with the scope and component list it
  *  should be solved against. Exactly one of scope/components differs from base. */
 export interface StepContext {

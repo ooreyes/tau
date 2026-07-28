@@ -55,7 +55,7 @@ import {
   type AssistantConversation,
 } from "../lib/assistantMemory";
 import { PanelResizeHandle, usePanelWidth, type PanelWidthConfig } from "./panelResize";
-import { TauriMascot } from "./TauriMascot";
+import { BodeMascot } from "./BodeMascot";
 
 /** Docked at the far right of the simulator shell, same "edge=left widens"
  *  convention as the Components rail (panelResize.tsx). App.tsx calls
@@ -531,9 +531,11 @@ export function AssistantPanel({
           : message
       )));
       if (reply.rejectedActionCount > 0) {
+        // Which model produced the plan is an implementation detail; the user
+        // needs to know the plan was rejected and that nothing was written.
         const message = preferences.provider === "anthropic"
-          ? "Tauri rejected Sonnet's circuit plan after one automatic correction. No file was created."
-          : "Tauri rejected the local model's circuit plan. No file was created.";
+          ? "Bode rejected the proposed circuit after one automatic correction. No file was created."
+          : "Bode rejected the proposed circuit. No file was created.";
         setRetryPrompt(text);
         setError({
           kind: "invalid_action",
@@ -792,7 +794,7 @@ export function AssistantPanel({
       )}
       <header className="assistant-header">
         <div className="assistant-title-row">
-          <span className="assistant-title">Ask <span className="empty-brand">Tauri</span>…</span>
+          <span className="assistant-title">Ask <span className="empty-brand">Bode</span>…</span>
           <div className="assistant-header-actions">
             <Tooltip>
               <TooltipTrigger asChild>
@@ -932,7 +934,7 @@ export function AssistantPanel({
           <div className="assistant-messages" ref={listRef} aria-live="polite">
             {messages.length === 0 && !error && (
               <div className="assistant-intro">
-                <TauriMascot className="assistant-intro-mascot" aria-hidden="true" />
+                <BodeMascot className="assistant-intro-mascot" aria-hidden="true" />
                 <p>Ask about this circuit or describe one to create - I can see the schematic and latest simulation results.</p>
               </div>
             )}
@@ -1097,7 +1099,7 @@ export function AssistantPanel({
                 <Button type="submit" size="sm" disabled={!input.trim() || !localAiCanSend}>Send</Button>
               )}
             </form>
-            <p className="assistant-disclaimer">Tauri is an AI and can make mistakes.</p>
+            <p className="assistant-disclaimer">Bode is an AI and can make mistakes.</p>
           </div>
         </>
       )}

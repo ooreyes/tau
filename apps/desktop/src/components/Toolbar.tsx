@@ -136,7 +136,7 @@ export function Toolbar({ mode, result, runState, isRunning, title, assistantOpe
                 "assistant-toolbar-button [-webkit-app-region:no-drag]",
                 assistantOpen && "assistant-toolbar-button--active",
               )}
-              aria-label={assistantOpen ? "Close Tauri" : "Open Tauri"}
+              aria-label={assistantOpen ? "Close Bode" : "Open Bode"}
               aria-pressed={assistantOpen}
               disabled={!projectOpen}
               onClick={onToggleAssistant}
@@ -144,7 +144,7 @@ export function Toolbar({ mode, result, runState, isRunning, title, assistantOpe
               <Sparkles size={14} strokeWidth={1.8} aria-hidden="true" />
             </Button>
           </TooltipTrigger>
-          <TooltipContent>{assistantOpen ? "Close Tauri" : "Ask Tauri"}</TooltipContent>
+          <TooltipContent>{assistantOpen ? "Close Bode" : "Ask Bode"}</TooltipContent>
         </Tooltip>
         <Tooltip>
           <TooltipTrigger asChild>

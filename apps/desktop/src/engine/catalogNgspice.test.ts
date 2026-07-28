@@ -10,6 +10,7 @@ import type { NetLabel } from "../schematic/types";
 import { buildSpiceDeck } from "./spiceNetlist";
 import { serializeSchematicFile } from "../project/types";
 import { importAsc } from "../io/ascImport";
+import { isLossyCarrierWarning } from "../io/ascExport";
 
 const haveNgspice = spawnSync("ngspice", ["--version"], { encoding: "utf8" }).error === undefined;
 
@@ -73,7 +74,10 @@ describe.skipIf(!haveNgspice)("Library catalog - real ngspice smoke", () => {
             netLabels,
             directives: [],
           });
-          if (saved.warnings.length > 0) throw new Error(saved.warnings.join(" "));
+          // A lossy-carrier notice is informational: the part still reopens in
+          // Tau as itself. Only a genuine save problem should fail this smoke.
+          const blocking = saved.warnings.filter((w) => !isLossyCarrierWarning(w));
+          if (blocking.length > 0) throw new Error(blocking.join(" "));
           const reopened = importAsc(saved.contents);
           const deck = buildSpiceDeck({
             components: reopened.components,

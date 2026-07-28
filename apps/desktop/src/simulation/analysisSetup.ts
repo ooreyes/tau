@@ -5,9 +5,12 @@ import type { NoiseSpec } from "./noise";
 import type { StepSpec } from "./paramStep";
 
 const SWEEPABLE_KINDS = new Set(["vsource", "isource", "vac", "iac"]);
+// Must use the exact `ComponentKind` spellings (schematic/types.ts). The FETs
+// were previously listed as "nmosp"/"pmosp"/"njfet"/"pjfet", which match no
+// kind at all, so alt-clicking a MOSFET or JFET silently did nothing.
 const CURRENT_PROBE_KINDS = new Set([
   "resistor", "capacitor", "inductor", "vsource", "isource", "diode", "led",
-  "zener", "nmosp", "pmosp", "njfet", "pjfet", "npn", "pnp",
+  "zener", "nmos", "pmos", "njf", "pjf", "npn", "pnp",
 ]);
 
 export function sweepableSources(components: readonly SchematicComponent[]): SchematicComponent[] {

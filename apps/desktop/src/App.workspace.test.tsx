@@ -141,7 +141,7 @@ describe("App schematic workspace tools", () => {
     expect(screen.getByRole("complementary", { name: "Components" })).toBeTruthy();
     expect(screen.queryByRole("complementary", { name: "Assistant" })).toBeNull();
 
-    fireEvent.click(screen.getByRole("button", { name: "Open Tauri" }));
+    fireEvent.click(screen.getByRole("button", { name: "Open Bode" }));
     expect(screen.getByRole("complementary", { name: "Components" })).toBeTruthy();
     expect(screen.getByRole("complementary", { name: "Assistant" })).toBeTruthy();
   });
@@ -460,7 +460,7 @@ describe("App schematic workspace tools", () => {
 });
 
 describe("App project-folder gate", () => {
-  it("requires a project before exposing schematic editing or Tauri", () => {
+  it("requires a project before exposing schematic editing or Bode", () => {
     render(<App />);
 
     expect(screen.getByRole("heading", { name: "Open a project folder" })).toBeTruthy();
@@ -473,7 +473,7 @@ describe("App project-folder gate", () => {
 
   it("does not let the toolbar bypass the project gate", () => {
     render(<App />);
-    for (const name of ["Close Tauri", "Run simulation", "Simulator", "Components", "Waveforms"]) {
+    for (const name of ["Close Bode", "Run simulation", "Simulator", "Components", "Waveforms"]) {
       expect(screen.getByRole("button", { name }).hasAttribute("disabled")).toBe(true);
     }
     expect(screen.queryByRole("complementary", { name: "Assistant" })).toBeNull();

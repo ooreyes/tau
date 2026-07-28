@@ -41,9 +41,30 @@ export type SpiceAnalysis =
       step2?: number;
     };
 
+/**
+ * One semiconductor whose named model resolved to nothing - no document
+ * `.model`, no bundled LTspice standard part, no attached vendor library - and
+ * was therefore emitted on a generic `TAU_*` starter instead. A plausible
+ * waveform from the wrong device is worse than no waveform, so every one of
+ * these is named out loud on the deck's warning channel.
+ */
+export interface ModelSubstitution {
+  /** The part's reference designator as drawn (M1, Q3, D2). */
+  ref: string;
+  /** The model name the schematic asked for. */
+  requested: string;
+  /** The generic starter model Tau put on the device line instead. */
+  substituted: string;
+}
+
 export interface SpiceDeck {
   circuit: ExtractedCircuit;
   netlist: string;
+  /** Semiconductors emitted on a generic starter because the model they name is
+   *  defined nowhere. Each also appears as prose in `circuit.warnings`, which
+   *  every native analysis result forwards to the UI. Empty for a deck whose
+   *  every named model resolved. */
+  modelSubstitutions: ModelSubstitution[];
   /** Subcircuit reference names (original casing, deduped, sorted) that no
    *  inline directive, bundled library, or user-imported `.lib`/`.subckt`
    *  defines. The netlist still emits their `X` lines, so the native engine
@@ -379,6 +400,10 @@ export function buildSpiceDeck(schematic: Schematic, analysis: SpiceAnalysis): S
   }
   const unresolvedSubckts = [...unresolvedByKey.values()].sort((a, b) => a.localeCompare(b));
 
+  // Every generic-starter substitution the emission below makes, collected so
+  // the deck can name each one instead of quietly plotting a device Tau does
+  // not have.
+  const modelSubstitutions: ModelSubstitution[] = [];
   circuit.components.forEach((entry, index) => {
     const directiveIc = entry.component.kind === "inductor"
       ? inductorCurrents.get(entry.component.label.trim().toLowerCase())
@@ -393,8 +418,10 @@ export function buildSpiceDeck(schematic: Schematic, analysis: SpiceAnalysis): S
       netPinCount,
       subcktModels,
       directiveIc,
+      modelSubstitutions,
     ));
   });
+  circuit.warnings.push(...modelSubstitutions.map(modelSubstitutionMessage));
 
   // Non-ideal wires: series resistors between the nets at each endpoint.
   // Ideal wires already shorted those nets in extractCircuit.
@@ -417,7 +444,50 @@ export function buildSpiceDeck(schematic: Schematic, analysis: SpiceAnalysis): S
 
   lines.push(analysisLine(analysis, hasIc || hasInstanceIc), ".end");
 
-  return { circuit, netlist: lines.join("\n"), unresolvedSubckts };
+  return { circuit, netlist: lines.join("\n"), unresolvedSubckts, modelSubstitutions };
+}
+
+/** How each generic starter reads in product copy, keyed by its model name. */
+const GENERIC_MODEL_DESCRIPTION: Record<string, string> = {
+  TAU_DIODE: "a generic diode",
+  TAU_LED: "a generic LED",
+  TAU_ZENER: "a generic 5.1 V zener",
+  TAU_NMOS: "a generic NMOS (Level=1)",
+  TAU_PMOS: "a generic PMOS (Level=1)",
+  TAU_NPN: "a generic NPN",
+  TAU_PNP: "a generic PNP",
+  TAU_NJF: "a generic N-channel JFET",
+  TAU_PJF: "a generic P-channel JFET",
+};
+
+/**
+ * Product copy for one {@link ModelSubstitution}: the part, the model it asked
+ * for, and the consequence. Blunt on purpose - the user is about to read a
+ * waveform that looks right and is not, and only this sentence says so.
+ */
+export function modelSubstitutionMessage(substitution: ModelSubstitution): string {
+  const generic = GENERIC_MODEL_DESCRIPTION[substitution.substituted] ?? "a generic starter model";
+  return `${substitution.ref}: model "${substitution.requested}" was not found. Tau simulates it as ${generic}, which will not match the real device.`;
+}
+
+/** Value tokens that name the *generic* device of a kind rather than a real
+ *  part: Tau's Library defaults (`D`, `NPN`, `NMOS W=10u L=1u`, `5V1`, …) and
+ *  LTspice's own placeholder symbol values. Landing on the starter model for
+ *  one of these is the intended behaviour, not a silent substitution, so they
+ *  must never warn - otherwise every default-placed part would. */
+const GENERIC_MODEL_VALUES: ReadonlySet<string> = new Set([
+  "d", "diode", "led", "zener", "5v1", "nmos", "pmos", "mos", "vdmos",
+  "njf", "pjf", "jfet", "j", "npn", "pnp", "q",
+]);
+
+/** True when a semiconductor's value names a specific part Tau failed to find,
+ *  as opposed to no model at all, an instance parameter (`W=10u`), a bare
+ *  number, or one of the generic placeholders above. */
+function isSubstitutedModelName(requested: string): boolean {
+  const name = requested.trim();
+  if (!name || name.includes("=")) return false;
+  if (!/[A-Za-z]/.test(name)) return false;
+  return !GENERIC_MODEL_VALUES.has(name.toLowerCase());
 }
 
 /** Product copy for a deck's {@link SpiceDeck.unresolvedSubckts}: names the
@@ -437,16 +507,26 @@ export function unresolvedSubcktMessage(names: readonly string[]): string {
 
 const MAX_LISTED_MISSING_SUBCKTS = 6;
 
-function componentLines(entry: ExtractedComponent, index: number, name: string, userModels: Set<string> = new Set(), params: ParamScope = EMPTY_SCOPE, vdmosModels: ReadonlySet<string> = new Set(), netPinCount: ReadonlyMap<string, number> = new Map(), subcktModels: ReadonlySet<string> = new Set(), directiveInductorIc?: string): string[] {
+function componentLines(entry: ExtractedComponent, index: number, name: string, userModels: Set<string> = new Set(), params: ParamScope = EMPTY_SCOPE, vdmosModels: ReadonlySet<string> = new Set(), netPinCount: ReadonlyMap<string, number> = new Map(), subcktModels: ReadonlySet<string> = new Set(), directiveInductorIc?: string, substitutions: ModelSubstitution[] = []): string[] {
   const { component } = entry;
   const node = (pin: string) => requiredNode(entry, pin);
+
+  // Fall back to a generic starter, recording the swap when the value named a
+  // real part we could not resolve. Without the record the deck would emit a
+  // textbook device under a vendor part's designator and say nothing.
+  const genericModel = (requested: string, fallback: string): string => {
+    if (isSubstitutedModelName(requested)) {
+      substitutions.push({ ref: component.label.trim() || name, requested: requested.trim(), substituted: fallback });
+    }
+    return fallback;
+  };
 
   // For a semiconductor, prefer the part's own model name when the document
   // actually defines it (`.model`/`.subckt` passthrough); else the generic
   // starter. The part's value is the LTspice `SYMATTR Value` (a model name).
   const deviceModel = (fallback: string): string => {
     const named = component.value.trim().split(/\s+/)[0] ?? "";
-    return named && userModels.has(named.toLowerCase()) ? named : fallback;
+    return named && userModels.has(named.toLowerCase()) ? named : genericModel(named, fallback);
   };
 
   // True when the MOSFET resolves to a VDMOS power-MOSFET model: ngspice's
@@ -564,7 +644,7 @@ function componentLines(entry: ExtractedComponent, index: number, name: string, 
       // Prefer a user `.model` named in the value; else the TAU starter.
       const named = (mos.model ?? "").trim();
       const model =
-        named && userModels.has(named.toLowerCase()) ? named : deviceModel("TAU_NMOS");
+        named && userModels.has(named.toLowerCase()) ? named : genericModel(named, "TAU_NMOS");
       const geom = mosfetInstanceParams(mos);
       // VDMOS power MOSFET → 3-terminal line (no bulk); else 4-terminal level-1 MOS.
       return isVdmos(model)
@@ -575,7 +655,7 @@ function componentLines(entry: ExtractedComponent, index: number, name: string, 
       const mos = decodeParams("pmos", component.value);
       const named = (mos.model ?? "").trim();
       const model =
-        named && userModels.has(named.toLowerCase()) ? named : deviceModel("TAU_PMOS");
+        named && userModels.has(named.toLowerCase()) ? named : genericModel(named, "TAU_PMOS");
       const geom = mosfetInstanceParams(mos);
       return isVdmos(model)
         ? [`${name} ${node("d")} ${node("g")} ${node("s")} ${model}${geom}`]
@@ -783,13 +863,11 @@ function componentLines(entry: ExtractedComponent, index: number, name: string, 
     }
     case "transformer": {
       const base = safeName(component.label || `T${index + 1}`);
-      const ratio = turnsRatio(component.value);
-      const primaryInductance = 10e-3;
-      const secondaryInductance = primaryInductance * (ratio.secondary / ratio.primary) ** 2;
+      const windings = transformerWindings(component.value);
       return [
-        `L_${base}_p ${node("p1")} ${node("p2")} ${primaryInductance}`,
-        `L_${base}_s ${node("s1")} ${node("s2")} ${secondaryInductance}`,
-        `K_${base} L_${base}_p L_${base}_s 0.999`,
+        `L_${base}_p ${node("p1")} ${node("p2")} ${windings.primary}`,
+        `L_${base}_s ${node("s1")} ${node("s2")} ${windings.secondary}`,
+        `K_${base} L_${base}_p L_${base}_s ${windings.coupling}`,
       ];
     }
     case "tline": {
@@ -1150,11 +1228,53 @@ function sourceSignal(component: SchematicComponent, unit: "V" | "A") {
 }
 
 function turnsRatio(value: string) {
-  const [primaryRaw, secondaryRaw] = value.split(":").map((part) => Number(part.trim()));
+  // Only the leading token is a ratio - `1:2 L1=2m k=0.98` must not have its
+  // parameter tail swallowed by the `:` split.
+  const head = value.trim().split(/\s+/)[0] ?? "";
+  const [primaryRaw, secondaryRaw] = head.split(":").map((part) => Number(part.trim()));
   if (Number.isFinite(primaryRaw) && Number.isFinite(secondaryRaw) && primaryRaw > 0 && secondaryRaw > 0) {
     return { primary: primaryRaw, secondary: secondaryRaw };
   }
   return { primary: 1, secondary: 1 };
+}
+
+/** Default magnetizing inductance when the part names no `L1`. */
+const DEFAULT_PRIMARY_INDUCTANCE = 10e-3;
+/** Default coupling. Not 1.0: a perfectly coupled pair is singular. */
+const DEFAULT_COUPLING = 0.999;
+
+/**
+ * Transformer winding values.
+ *
+ * Magnetizing inductance and leakage (via `k`) are the two numbers a flyback
+ * or forward converter is actually designed around, so both have to be
+ * reachable. They used to be hardcoded at 10 mH and 0.999 regardless of what
+ * the part said, which silently made every power design the same transformer.
+ *
+ * Accepts `1:2`, `L1=2m L2=8m k=0.98`, or a mix. `L2` falls back to the turns
+ * ratio (L2 = L1 * (Ns/Np)^2), which is the physical relationship, so a bare
+ * ratio keeps behaving exactly as before.
+ */
+export function transformerWindings(value: string): {
+  primary: number;
+  secondary: number;
+  coupling: number;
+} {
+  const ratio = turnsRatio(value);
+  const param = (name: string): number | null => {
+    const match = new RegExp(`\\b${name}\\s*=\\s*([^\\s]+)`, "i").exec(value);
+    if (!match) return null;
+    const parsed = parseQuantity(match[1]);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+  };
+
+  const primary = param("L1") ?? DEFAULT_PRIMARY_INDUCTANCE;
+  const secondary = param("L2") ?? primary * (ratio.secondary / ratio.primary) ** 2;
+  // k must stay strictly inside (0, 1): k=1 makes the coupled pair singular,
+  // and ngspice rejects k<=0.
+  const declared = param("k");
+  const coupling = declared !== null && declared < 1 ? declared : DEFAULT_COUPLING;
+  return { primary, secondary, coupling };
 }
 
 function safeName(value: string): string {
