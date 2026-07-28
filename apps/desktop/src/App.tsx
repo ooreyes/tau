@@ -85,6 +85,7 @@ import {
   isNativeSpiceRuntime,
   MAX_NATIVE_OUTPUT_POINTS,
   runNativeAcSweep,
+  runNativeDcSweep,
   runNativeOperatingPoint,
   runNativeTransient,
 } from "./engine/nativeSpice";
@@ -697,7 +698,12 @@ function App() {
     const dc = analysesFromDirectives(directives).dc ?? dcSetup;
     setAnalysisRunning(true);
     try {
-      const result = runDcSweep({ components, wires, netLabels, params }, dc);
+      // ngspice first: the TS solver has no semiconductor stamps, so it cannot
+      // sweep a transistor at all.
+      const result = await runNativeDcSweep(
+        { components, wires, netLabels, params, directives, userModelLibraries: userModelLibraryTexts },
+        dc,
+      ) ?? runDcSweep({ components, wires, netLabels, params }, dc);
       if (analysisRequestRef.current !== requestId) return;
       setDcAnalysis(result);
       // A runnable `.step` also produces a family of transfer curves to overlay.
@@ -712,7 +718,7 @@ function App() {
     } finally {
       if (analysisRequestRef.current === requestId) setAnalysisRunning(false);
     }
-  }, [components, wires, netLabels, params, directives, dcSetup]);
+  }, [components, wires, netLabels, params, directives, dcSetup, userModelLibraryTexts]);
 
   const runTfAnalysis = useCallback(async () => {
     const requestId = ++analysisRequestRef.current;

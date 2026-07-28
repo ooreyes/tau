@@ -42,20 +42,20 @@ partial work.
 Ordered. Take the top item unless it is blocked. Class A outranks everything -
 a plausible wrong number is worse than a refusal to run.
 
-1. **P2 - voltage-controlled switches** (Class A). Emit a real `S` element;
-   today it is `R 1e12`, a permanent open circuit, and both control pins are
-   dropped at import. Silently wrong on every SMPS, relay and ideal-switch
-   circuit. `io/ascImport.ts:482`, `engine/spiceNetlist.ts:780-783`, plus a
-   4-pin `switch` kind in `schematic/pins.ts` and its symbol.
-2. **P3 - `runNativeDcSweep`** (Class B). `.dc` never reaches ngspice and the
-   TS solver rejects transistors, so a MOSFET DC sweep is impossible. The deck
-   branch at `engine/spiceNetlist.ts:946-968` already exists and is dead code;
-   mirror `runNativeAcSweep`.
-3. **P6 - opaque-record passthrough**. A `WINDOW` record blocks saving an
+1. **P6 - opaque-record passthrough**. A `WINDOW` record blocks saving an
    imported `.asc`, and LTspice writes one whenever a label is nudged. Tau is a
    viewer, not an editor, until this lands. `project/types.ts:100-128`.
-4. **P9 - resolve `.include`/`.lib`** relative to the source `.asc` through the
+2. **P9 - resolve `.include`/`.lib`** relative to the source `.asc` through the
    existing FS bridge, instead of hard-failing the run.
+3. **P3 remainder - `.noise`/`.tf` on ngspice.** `.dc` landed 2026-07-28;
+   these two still run only on the TS solver, which rejects transistors.
+   Mirror `runNativeDcSweep`. Note `analysisLine` has no `noise`/`tf` branch
+   yet, so this needs a deck line as well as a runner.
+4. **A MOSFET DC-sweep corpus proof.** The native DC path is unit-tested
+   against mocked vectors and its ngspice contract was checked by hand at the
+   CLI, but nothing in the repo runs a real transistor sweep end to end. A
+   `scripts/dcSweepNative.corpus.ts` in the shape of
+   `scripts/sampleHoldParity.corpus.ts` would close that.
 5. **P16 - engine badge**. Nothing tells the user whether ngspice or the TS
    solver produced a result. Also fix the two strings still calling ngspice
    "planned" (`simulation/noise.ts:332`, `simulation/acSweep.ts:291`).
@@ -66,6 +66,11 @@ a plausible wrong number is worse than a refusal to run.
 
 Newest first. One line each: date, unit, evidence.
 
+- 2026-07-28 - `.dc` reaches ngspice: `runNativeDcSweep` + `App.tsx` wiring, so
+  a transistor transfer curve can be swept at all. Nested runs split back out of
+  ngspice's flat inner-major vector; mutation-checked.
+- 2026-07-28 - Voltage-controlled switches emit a real `S` element instead of a
+  permanent open circuit, with both control pins imported.
 - 2026-07-28 - Vendor models read via `ltspiceLibRoot()` so no macOS TCC prompt
   can stall an unattended fire. 3 suites verified running, not skipping.
 - 2026-07-28 - Trace palette replaced with validated Okabe-Ito. Old palette
@@ -113,6 +118,13 @@ Check for each before calling a unit done.
 4. **A "hardcoded color" scan that misses keywords.** `color-mix(..., white)`
    is invisible to a hex/rgba grep and made the light-mode Run button
    unreadable.
-5. **A proof pipeline that quietly stops proving.** `design-shot.mjs` broke
+5. **Reading the full suite's red as a regression.** `pnpm test` runs 147 files
+   at full worker concurrency and this machine has very little free RAM, so
+   jsdom `render()` calls time out at 5 s and 20-40 tests fail *non-
+   deterministically on a clean tree too*. Do not spend a fire bisecting it.
+   Re-run with `--maxWorkers=2`, or run the failing files on their own; if they
+   pass there, it is contention. Establish the clean-tree count before blaming
+   your own diff.
+6. **A proof pipeline that quietly stops proving.** `design-shot.mjs` broke
    when the workspace stopped seeding examples, then covered only light once
    light tokens landed. Look at the PNGs.

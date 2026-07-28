@@ -28,10 +28,10 @@ import { EMPTY_SCOPE, type ParamScope } from "./paramScope";
 const SWEEPABLE = new Set(["vsource", "isource", "vac", "iac"]);
 
 /** Guard against pathological step counts (e.g. tiny increment over a huge span). */
-const MAX_POINTS = 100_001;
+export const MAX_POINTS = 100_001;
 
 /** Cap the outer loop so a nested sweep can't fan out into thousands of curves. */
-const MAX_OUTER_POINTS = 64;
+export const MAX_OUTER_POINTS = 64;
 
 /** One source's linear sweep bounds. */
 export interface DcSweepLeg {
@@ -128,7 +128,7 @@ function parseLeg(parts: string[], i: number): DcSweepLeg | null {
 }
 
 /** Build the ordered list of swept values, or throw on a degenerate spec. */
-function sweepValues(leg: DcSweepLeg, max: number): number[] {
+export function sweepValues(leg: DcSweepLeg, max: number): number[] {
   const { start, stop, step } = leg;
   if (step === 0) throw new Error("DC sweep increment must be non-zero.");
   const dir = stop >= start ? 1 : -1;
@@ -144,7 +144,7 @@ function sweepValues(leg: DcSweepLeg, max: number): number[] {
   return values;
 }
 
-interface SweepSchematic {
+export interface SweepSchematic {
   components: SchematicComponent[];
   wires: SchematicWire[];
   netLabels?: NetLabel[];
@@ -152,7 +152,7 @@ interface SweepSchematic {
 }
 
 /** Locate a sweepable independent source by label, or return an error message. */
-function findSource(
+export function findSource(
   schematic: SweepSchematic,
   label: string,
 ): SchematicComponent | string {
@@ -281,7 +281,7 @@ export function runDcSweep(schematic: SweepSchematic, spec: DcSweepSpec): DcSwee
 }
 
 /** Render a swept numeric value as a plain SPICE literal (no SI suffix). */
-function formatSweepValue(v: number): string {
+export function formatSweepValue(v: number): string {
   // Avoid scientific notation surprises for tidy values; parseQuantity reads both.
   return Number.isInteger(v) ? String(v) : v.toPrecision(12).replace(/\.?0+$/, "");
 }

@@ -23,24 +23,30 @@ found two independent reasons:
    kinds as 1 TOhm resistors with `warnings: []`.
 
 Most of those are now fixed (see the audit's Status section). Voltage-controlled
-switches were closed on 2026-07-28 and are proved against the host's real
-ngspice, but **`.dc`/`.noise`/`.tf` still never reach ngspice, so a transistor
-DC sweep does not run.** Do not restore a readiness banner until every Class A
-and Class B item in the audit is closed or consciously accepted, with file:line
-evidence.
+switches were closed on 2026-07-28 and `.dc` now reaches ngspice as of the unit
+below, so a transistor DC sweep runs; **`.noise`/`.tf` still run only on the TS
+solver.** Do not restore a readiness banner until every Class A and Class B item
+in the audit is closed or consciously accepted, with file:line evidence.
 
-**Last unit - 2026-07-28: voltage-controlled switches (audit P2).** A `sw`
-imports its NC+/NC- control pair and emits ngspice `S <a> <b> <cp> <cn> <model>`
-resolved against the document's `.model`, or a `TAU_SW` starter that reports the
-substitution. An uncontrolled switch (`csw`, or an `S` with no wired control)
-stays a fixed resistance and warns. Gates: tsc clean, 2154 JS tests passing in
-isolation (App.workspace/TelemetryDock/the 5,000-segment perf test remain the
-known full-suite CPU-contention flakes, each green on its own), 31 Rust, clippy
+**Last unit - 2026-07-28: native DC sweep (audit P3).** `runNativeDcSweep` in
+`engine/nativeSpice.ts` runs `.dc` on ngspice and `App.tsx`'s `runDcAnalysis`
+now prefers it, falling back to the TS solver only outside the Tauri runtime.
+The TS solver re-solves an operating point per step and has no semiconductor
+stamps, so this is the first path on which a MOSFET or BJT transfer curve can be
+swept at all. The sweep axis is read off ngspice's source-typed scale vector
+(`v-sweep` for a voltage source, `i-sweep` for a current source, both confirmed
+against the host's real ngspice), and a nested run - which ngspice returns as
+one flat inner-major vector - is split back into one curve per outer value. The
+sweep spec is validated before the native round trip so an unknown source and a
+runaway curve count keep the TS solver's actionable messages and caps.
+Gates: tsc clean, 2165 JS tests green (the one App.workspace failure is the
+known full-suite CPU-contention flake, 18/18 in isolation), 31 Rust, clippy
 clean, corpus unchanged at 80 imported / 80 deck-built / 80 op-converged / 80
-schema-valid with warning-clean 77 - measured on the same tree with and without
-the change. Corpus still fails its own `>= 82` assertion because
-`~/Downloads/LTspice_export` is missing, not from a code regression.
-Next candidate: audit P3, route `.dc` to ngspice so a transistor DC sweep runs.
+schema-valid with warning-clean 77. Corpus still fails its own `>= 82` assertion
+because `~/Downloads/LTspice_export` is missing, not from a code regression.
+The nested-leg split was mutation-checked: collapsing it to a single leg fails
+the new test. Next candidate: audit P6, opaque-record passthrough, so an
+imported `.asc` carrying a `WINDOW` record can be saved.
 
 The 2026-07-22 evidence below is kept for history. Note its corpus numbers are
 no longer reproducible on this machine: `~/Downloads/LTspice_export` was

@@ -5,13 +5,13 @@ first section is the one to read before trusting a number.
 
 ## Which analyses actually use the native engine
 
-Transient, operating point and AC run on the embedded ngspice engine.
+Transient, operating point, AC and DC sweep run on the embedded ngspice engine.
 
-**DC sweep, noise and transfer function do not.** They run on Tau's own
-smaller solver, which models R/C/L, sources, diodes, op-amps and controlled
-sources but **not transistors**. So a MOSFET or BJT DC sweep - an Id-Vds
-curve, a Vgs transfer curve, a bias sweep - refuses to run and says so. This
-is the largest gap between Tau and LTspice today.
+**Noise and transfer function do not.** They run on Tau's own smaller solver,
+which models R/C/L, sources, diodes, op-amps and controlled sources but **not
+transistors**. So a noise or transfer-function analysis on a circuit containing
+a MOSFET or BJT refuses to run and says so. This is the largest remaining gap
+between Tau and LTspice.
 
 Nothing in the UI currently labels which engine produced a given result.
 

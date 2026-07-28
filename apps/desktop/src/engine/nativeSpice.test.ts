@@ -8,6 +8,7 @@ import {
   cancelNativeSpice,
   isNativeSpiceRuntime,
   runNativeAcSweep,
+  runNativeDcSweep,
   runNativeOperatingPoint,
   runNativeTransient,
 } from "./nativeSpice";
@@ -48,6 +49,16 @@ const directLedSchematic = () => ({
     component("ground", "g2", "", "", 128, 64),
   ],
   wires: [wire("w1", [{ x: 0, y: 0 }, { x: 128, y: 0 }])],
+});
+
+/** The RC chain plus a second independent source, for nested `.dc` legs. */
+const twoSourceSchematic = () => ({
+  ...rcSchematic(),
+  components: [
+    ...rcSchematic().components,
+    component("vsource", "v2", "V2", "1", 384, 32),
+    component("ground", "g3", "", "", 384, 64),
+  ],
 });
 
 const nativeResult = (vectors: { name: string; real: number[]; imaginary: number[] | null }[], messages: string[] = []) => ({
@@ -194,6 +205,80 @@ describe("native ngspice adapter", () => {
 
     await expect(runNativeTransient(rcSchematic(), { stopTime: 0.001, steps: 100 }))
       .rejects.toThrow(/unknown device A1.*analysis aborted/i);
+  });
+
+  it("sweeps DC on ngspice, reading the axis off the source-typed scale vector", async () => {
+    enableNativeRuntime();
+    invoke.mockResolvedValueOnce(nativeResult([
+      { name: "v-sweep", real: [0, 1, 2], imaginary: null },
+      { name: "v(n001)", real: [0, 1, 2], imaginary: null },
+      { name: "v(n002)", real: [0, 0.5, 1], imaginary: null },
+    ]));
+
+    const result = await runNativeDcSweep(rcSchematic(), { source: "V1", start: 0, stop: 2, step: 1 });
+
+    expect(result).not.toBeNull();
+    if (!result || !result.ok) return;
+    expect(invoke.mock.calls[0][1].request.netlist).toMatch(/^\.dc V1 0 2 1$/m);
+    expect(result.source).toBe("V1");
+    expect(result.sweep).toEqual([0, 1, 2]);
+    expect(result.nets).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: "N001", voltages: [0, 1, 2], ground: false }),
+      expect.objectContaining({ id: "N002", voltages: [0, 0.5, 1], ground: false }),
+      expect.objectContaining({ id: "0", label: "GND", voltages: [0, 0, 0], ground: true }),
+    ]));
+  });
+
+  it("splits a nested DC run back into one curve per outer value", async () => {
+    enableNativeRuntime();
+    // ngspice returns a nested sweep as one flat inner-major run: three inner
+    // points per leg, three legs, so the axis repeats 0,1,2 three times.
+    invoke.mockResolvedValueOnce(nativeResult([
+      { name: "v-sweep", real: [0, 1, 2, 0, 1, 2, 0, 1, 2], imaginary: null },
+      { name: "v(n001)", real: [0, 1, 2, 3, 4, 5, 6, 7, 8], imaginary: null },
+    ]));
+
+    const result = await runNativeDcSweep(twoSourceSchematic(), {
+      source: "V1", start: 0, stop: 2, step: 1,
+      source2: "V2", start2: 0, stop2: 4, step2: 2,
+    });
+
+    expect(result).not.toBeNull();
+    if (!result || !result.ok) return;
+    expect(invoke.mock.calls[0][1].request.netlist).toMatch(/^\.dc V1 0 2 1 V2 0 4 2$/m);
+    // The shared X axis is one leg, not the concatenated run.
+    expect(result.sweep).toEqual([0, 1, 2]);
+    expect(result.nets).toEqual([
+      expect.objectContaining({ label: "V(V1.R1) (V2=0)", voltages: [0, 1, 2] }),
+      expect.objectContaining({ label: "V(V1.R1) (V2=2)", voltages: [3, 4, 5] }),
+      expect.objectContaining({ label: "V(V1.R1) (V2=4)", voltages: [6, 7, 8] }),
+    ]);
+  });
+
+  it("rejects an unsweepable DC source before spending a native round trip", async () => {
+    enableNativeRuntime();
+
+    await expect(runNativeDcSweep(rcSchematic(), { source: "V9", start: 0, stop: 1, step: 0.1 }))
+      .rejects.toThrow(/"V9" not found/i);
+    await expect(runNativeDcSweep(rcSchematic(), { source: "R1", start: 0, stop: 1, step: 0.1 }))
+      .rejects.toThrow(/not an independent source/i);
+    // A nested sweep that would fan out past the curve cap is refused here too,
+    // because ngspice itself has no such limit.
+    await expect(runNativeDcSweep(twoSourceSchematic(), {
+      source: "V1", start: 0, stop: 1, step: 0.1,
+      source2: "V2", start2: 0, stop2: 1000, step2: 1,
+    })).rejects.toThrow(/max 64/i);
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it("refuses a DC result with no sweep axis rather than plotting against nothing", async () => {
+    enableNativeRuntime();
+    invoke.mockResolvedValueOnce(nativeResult([
+      { name: "v(n001)", real: [0, 1, 2], imaginary: null },
+    ]));
+
+    await expect(runNativeDcSweep(rcSchematic(), { source: "V1", start: 0, stop: 2, step: 1 }))
+      .rejects.toThrow(/no DC sweep axis/i);
   });
 
   it("fails fast with actionable copy when a subcircuit has no imported definition", async () => {

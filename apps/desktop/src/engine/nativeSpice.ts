@@ -6,6 +6,16 @@ import type { AnalysisOptions, AnalysisResult, CurrentTrace, Trace } from "../si
 import { deriveRcCurrents } from "../simulation/currents";
 import type { OperatingPointResult } from "../simulation/operatingPoint";
 import type { AcResult, AcTrace } from "../simulation/acSweep";
+import {
+  MAX_OUTER_POINTS,
+  MAX_POINTS,
+  findSource,
+  formatSweepValue,
+  sweepValues,
+  type DcSweepNet,
+  type DcSweepResult,
+  type DcSweepSpec,
+} from "../simulation/dcSweep";
 
 interface NativeVector {
   name: string;
@@ -189,6 +199,112 @@ export async function runNativeAcSweep(
 
   if (traces.length === 0) throw new Error("ngspice completed, but returned no AC node-voltage traces.");
   return { ok: true, freqs: frequency.real, traces, warnings: [...execution.deck.circuit.warnings, ...engineWarnings(execution.result.messages)] };
+}
+
+/**
+ * Runs a DC transfer sweep on ngspice. The TypeScript solver behind
+ * `runDcSweep` re-solves an operating point per step and has no semiconductor
+ * stamps, so it refuses every transistor - this is the only path on which a
+ * MOSFET or BJT transfer curve can be swept at all.
+ *
+ * ngspice returns a nested sweep as one flat inner-major run: with three inner
+ * and three outer points the vectors are nine long and the sweep axis reads
+ * 0,1,2,0,1,2,0,1,2. The legs are split back apart here so the result matches
+ * the shape the plot already draws for the TypeScript solver.
+ */
+export async function runNativeDcSweep(
+  schematic: Schematic,
+  spec: DcSweepSpec,
+): Promise<DcSweepResult | null> {
+  if (!isNativeSpiceRuntime()) return null;
+
+  // Validate the sweep spec before paying a native round trip: ngspice reports
+  // an unknown sweep source as a generic parse failure the user cannot act on,
+  // and its own point count is unbounded, so the TS solver's caps are applied
+  // here too rather than letting a nested sweep fan out into thousands of curves.
+  const inner = findSource(schematic, spec.source);
+  if (typeof inner === "string") throw new Error(inner);
+  sweepValues(spec, MAX_POINTS);
+  let outer: SchematicComponent | null = null;
+  let outerValues: number[] = [];
+  // Exactly the condition the deck emits a second sweep on, so the runner and
+  // `analysisLine` can never disagree about whether a run is nested.
+  const source2 = spec.source2?.trim();
+  if (
+    source2
+    && Number.isFinite(spec.start2)
+    && Number.isFinite(spec.stop2)
+    && Number.isFinite(spec.step2)
+    && spec.step2 !== 0
+  ) {
+    const found = findSource(schematic, source2);
+    if (typeof found === "string") throw new Error(found);
+    if (found.id === inner.id) throw new Error("DC sweep inner and outer sources must differ.");
+    outer = found;
+    outerValues = sweepValues(
+      { source: source2, start: spec.start2!, stop: spec.stop2!, step: spec.step2! },
+      MAX_OUTER_POINTS,
+    );
+  }
+
+  const execution = await executeNative(schematic, { kind: "dc", ...spec });
+  if (!execution) return null;
+
+  // ngspice names the DC scale for the swept source's type, not its refdes:
+  // `v-sweep` for a voltage source, `i-sweep` for a current source.
+  const scale = execution.result.vectors.find((candidate) => /^[vi]-sweep$/i.test(candidate.name.trim()));
+  if (!scale || scale.real.length === 0) throw new Error("ngspice completed, but returned no DC sweep axis.");
+
+  // The inner leg restarts when the axis returns to its first value. A
+  // single-source sweep never does, giving one leg of the full length; an
+  // inner sweep pinned to a single point repeats immediately, giving legs of
+  // one - both fall out of the same rule.
+  const repeat = scale.real.findIndex((value, index) => index > 0 && value === scale.real[0]);
+  const legLength = repeat > 0 ? repeat : scale.real.length;
+  const sweep = scale.real.slice(0, legLength);
+  const legCount = Math.floor(scale.real.length / legLength);
+
+  const series = execution.deck.circuit.nets
+    .filter((net) => !net.isGround)
+    .flatMap((net) => {
+      const values = vector(execution.result, `v(${net.id})`);
+      if (!values || values.real.length !== scale.real.length) return [];
+      return [{ id: net.id, label: `V(${friendlyNetName(net)})`, values: values.real }];
+    });
+  if (series.length === 0) throw new Error("ngspice completed, but returned no DC node-voltage traces.");
+
+  const warnings = [...execution.deck.circuit.warnings, ...engineWarnings(execution.result.messages)];
+
+  if (!outer) {
+    // Ground rides along at 0 V so the shape matches the TS solver, which
+    // carries it through from the operating point; the plot hides it.
+    const nets: DcSweepNet[] = [
+      { id: "0", label: "GND", voltages: sweep.map(() => 0), ground: true },
+      ...series.map((net) => ({ id: net.id, label: net.label, voltages: net.values, ground: false })),
+    ];
+    return { ok: true, source: inner.label, sweep, nets, warnings };
+  }
+
+  const fanned: DcSweepNet[] = [];
+  for (let leg = 0; leg < legCount; leg += 1) {
+    // Label from the outer values Tau computed, which is the same arithmetic
+    // ngspice sweeps with. If the two ever disagree on leg count, fall back to
+    // the leg's ordinal rather than captioning a curve with the wrong value.
+    const value = outerValues[leg];
+    const caption = value === undefined
+      ? `${outer.label} leg ${leg + 1}`
+      : `${outer.label}=${formatSweepValue(value)}`;
+    const key = value === undefined ? `leg${leg + 1}` : `${outer.label}=${formatSweepValue(value)}`;
+    for (const net of series) {
+      fanned.push({
+        id: `${net.id}@${key}`,
+        label: `${net.label} (${caption})`,
+        voltages: net.values.slice(leg * legLength, (leg + 1) * legLength),
+        ground: false,
+      });
+    }
+  }
+  return { ok: true, source: inner.label, sweep, nets: fanned, warnings };
 }
 
 async function executeNative(schematic: Schematic, analysis: SpiceAnalysis): Promise<NativeExecution | null> {
