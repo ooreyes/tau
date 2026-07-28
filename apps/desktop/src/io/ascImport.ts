@@ -24,11 +24,13 @@
 
 import type {
   ComponentKind,
+  LtspiceWindow,
   NetLabel,
   PinOverride,
   SchematicComponent,
   SchematicWire,
 } from "../schematic/types";
+import { canonicalWindowJustification } from "../schematic/types";
 import { buildPartialParamScope, inlineFuncCalls, parseParamAssignments, substituteKnownBraces, substituteBehavioralBraces, substituteScopeIdentifiers, substituteIdentifierExpressions } from "../simulation/paramScope";
 import { isComponentKind } from "../schematic/types";
 import { getLocalPins, transformPoint } from "../schematic/pins";
@@ -110,6 +112,35 @@ export interface AscSymbol {
   orientation: AscOrientation;
   /** SYMATTR name → value (InstName, Value, Value2, SpiceModel, SpiceLine, …). */
   attrs: Record<string, string>;
+  /** `WINDOW` label-placement records that followed this SYMBOL, in file order. */
+  windows?: LtspiceWindow[];
+}
+
+/** Attribute slot and text size a `WINDOW` record may carry. Wider than the
+ *  slots LTspice documents (0..40 plus 123 for Value2) so an unusual but
+ *  well-formed record still round-trips; anything outside is kept as an unknown
+ *  line, which keeps the file on the blocked-save path rather than guessing. */
+const MAX_WINDOW_ATTR = 255;
+const MAX_WINDOW_SIZE = 16;
+/** Placement offsets are symbol-relative and small; this only rejects absurd
+ *  coordinates so a re-emitted record always survives document validation. */
+const MAX_WINDOW_OFFSET = 10_000_000;
+
+/** Parse a `WINDOW` record's five operands, or `null` if it is not one Tau can
+ *  reproduce exactly. */
+function parseWindowRecord(parts: string[]): LtspiceWindow | null {
+  if (parts.length !== 6) return null;
+  const justification = canonicalWindowJustification(parts[4]);
+  if (justification === null) return null;
+  const attr = Number(parts[1]);
+  const size = Number(parts[5]);
+  const x = Number(parts[2]);
+  const y = Number(parts[3]);
+  if (!Number.isInteger(attr) || attr < 0 || attr > MAX_WINDOW_ATTR) return null;
+  if (!Number.isInteger(size) || size < 0 || size > MAX_WINDOW_SIZE) return null;
+  if (!Number.isInteger(x) || !Number.isInteger(y)) return null;
+  if (Math.abs(x) > MAX_WINDOW_OFFSET || Math.abs(y) > MAX_WINDOW_OFFSET) return null;
+  return { attr, x, y, justification, size };
 }
 
 export interface AscText {
@@ -203,9 +234,19 @@ export function parseAsc(text: string): AscDocument {
       case "SYMATTR":
         if (current && parts[1]) current.attrs[parts[1]] = parts.slice(2).join(" ");
         break;
-      case "WINDOW":
-        // Label placement only - does not affect electrical content. Ignored.
+      case "WINDOW": {
+        // Label placement only - no electrical content, but it must survive a
+        // save or LTspice reopens the file with every nudged label back at its
+        // default spot. A record with no symbol to attach to, or one Tau cannot
+        // re-emit exactly, falls through to `unknown` so the save stays blocked.
+        const window = current ? parseWindowRecord(parts) : null;
+        if (!window) {
+          doc.unknown.push(line);
+          break;
+        }
+        (current!.windows ??= []).push(window);
         break;
+      }
       case "TEXT": {
         // TEXT x y <align> <size> <payload...>  - payload starts with ! or ;.
         const payload = line.trim().split(/\s+/).slice(5).join(" ");
@@ -1506,6 +1547,10 @@ export function ascToSchematic(doc: AscDocument, options: AscImportOptions = {})
       // export symbol (which for e.g. a 3-pin `nmos` would relocate the bulk
       // pin and change connectivity).
       ...(pinOverride ? { pinOverride, ltSymbolType: symbol.type } : {}),
+      // Label placement travels with the part, not the symbol bank, so keep it
+      // even for a symbol whose geometry Tau could not bank - the exporter
+      // decides whether it can be re-emitted.
+      ...(symbol.windows?.length ? { ltWindows: symbol.windows } : {}),
     });
   }
 

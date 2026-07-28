@@ -10,11 +10,11 @@ import {
 } from "./ascExport";
 import type { AscDocument } from "./ascImport";
 import type { NetLabel, SchematicComponent, SchematicWire } from "../schematic/types";
-import { ascRewriteRisks, schematicTopologySignature } from "../project/types";
+import { ascRewriteRisks, ascSaveBlockReason, schematicTopologySignature } from "../project/types";
 import { CATALOG } from "../schematic/catalog";
 
 // The same representative LTspice grammar the importer tests use, minus the
-// drawing primitive and WINDOW lines (which the serializer canonicalizes away).
+// drawing primitive (which the serializer canonicalizes away).
 const SAMPLE = `Version 4
 SHEET 1 880 680
 WIRE 144 96 80 96
@@ -163,6 +163,62 @@ describe("schematicToAsc", () => {
     const r1 = round.components.find((c) => c.label === "R1");
     const o1 = original.components.find((c) => c.label === "R1");
     expect(r1?.pinOverride).toEqual(o1?.pinOverride);
+  });
+
+  it("writes nudged label placement back out and stops blocking the save", () => {
+    // LTspice emits a WINDOW whenever the user drags a label off its default
+    // spot, so this is what an ordinary edited schematic looks like.
+    const source = SAMPLE
+      .replace("SYMATTR InstName R1", "WINDOW 0 0 56 VBottom 2\nWINDOW 3 32 56 VTop 2\nSYMATTR InstName R1")
+      .replace("SYMATTR InstName C1", "WINDOW 3 32 32 VTop 2\nSYMATTR InstName C1");
+    const original = importAsc(source);
+    const placement = [
+      { attr: 0, x: 0, y: 56, justification: "VBottom", size: 2 },
+      { attr: 3, x: 32, y: 56, justification: "VTop", size: 2 },
+    ];
+    expect(original.components.find((c) => c.label === "R1")?.ltWindows).toEqual(placement);
+
+    const { text, warnings } = schematicToAsc(original);
+    expect(warnings).toEqual([]);
+    expect(ascSaveBlockReason(ascRewriteRisks(source), 0, warnings)).toBeNull();
+
+    // The records must come back on the right symbol, in LTspice's own order:
+    // SYMBOL, then its WINDOW placements, then its SYMATTR values.
+    const lines = text.split("\n");
+    const at = lines.findIndex((line) => line.startsWith("SYMBOL res "));
+    expect(lines.slice(at + 1, at + 4)).toEqual([
+      "WINDOW 0 0 56 VBottom 2",
+      "WINDOW 3 32 56 VTop 2",
+      "SYMATTR InstName R1",
+    ]);
+    // The capacitor keeps its own single record rather than the resistor's pair.
+    expect(parseAsc(text).symbols.find((s) => s.attrs.InstName === "C1")?.windows)
+      .toEqual([{ attr: 3, x: 32, y: 32, justification: "VTop", size: 2 }]);
+    // A symbol that declared none must not acquire any.
+    expect(parseAsc(text).symbols.find((s) => s.attrs.InstName === "V1")?.windows).toBeUndefined();
+
+    const round = importAsc(text);
+    expect(round.components.find((c) => c.label === "R1")?.ltWindows).toEqual(placement);
+  });
+
+  it("says so instead of scattering placement when the part changes symbol", () => {
+    // A switch has no faithful LTspice symbol and is saved as a carrier
+    // resistor, whose attribute slots sit somewhere else entirely. Dropping the
+    // records silently would move the user's labels; the warning keeps the save
+    // blocked until the symbol itself round-trips.
+    const { text, warnings } = schematicToAsc({
+      components: [{
+        id: "s1", kind: "switch", x: 0, y: 0, rotation: 0, value: "closed", label: "S1",
+        ltSymbolType: "sw",
+        ltWindows: [{ attr: 0, x: 0, y: 56, justification: "VBottom", size: 2 }],
+      }],
+      wires: [],
+      netLabels: [],
+    });
+    expect(text).not.toContain("WINDOW");
+    const placementWarnings = warnings.filter((warning) => warning.includes("label placement"));
+    expect(placementWarnings).toHaveLength(1);
+    expect(ascSaveBlockReason([], 0, warnings)).toBe(placementWarnings[0]);
   });
 
   it("emits ground parts and net labels as FLAGs", () => {

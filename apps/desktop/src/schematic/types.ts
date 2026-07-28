@@ -106,6 +106,47 @@ export interface SchematicComponent {
    * in the editor.
    */
   ltSymbolType?: string;
+  /**
+   * LTspice `WINDOW` records retained from the source symbol - where that
+   * symbol's attribute text is drawn. Purely presentational, but LTspice writes
+   * one whenever a label is nudged, so dropping them would rewrite a quarter of
+   * real schematics on save. Re-emitted verbatim by the ASC exporter when the
+   * part keeps its original symbol; see {@link LtspiceWindow}.
+   */
+  ltWindows?: LtspiceWindow[];
+}
+
+/**
+ * An LTspice `WINDOW <attr> <x> <y> <justification> <size>` record: the on-canvas
+ * placement of one symbol attribute's text. `attr` selects the attribute slot
+ * (0 = InstName, 3 = Value, 39 = SpiceLine, …). Tau does not render these - it
+ * carries them so an imported `.asc` can be saved back without moving the
+ * user's labels.
+ */
+export interface LtspiceWindow {
+  attr: number;
+  x: number;
+  y: number;
+  /** One of {@link LTSPICE_WINDOW_JUSTIFICATIONS}. */
+  justification: string;
+  size: number;
+}
+
+/**
+ * Justification tokens LTspice writes in a `WINDOW` record. `Invisible` hides
+ * the attribute. Parsing is case-insensitive but re-emission uses this exact
+ * spelling, so a record can only ever be written back well-formed.
+ */
+export const LTSPICE_WINDOW_JUSTIFICATIONS = [
+  "Left", "Right", "Top", "Bottom", "Center",
+  "VLeft", "VRight", "VTop", "VBottom", "VCenter",
+  "Invisible",
+] as const;
+
+/** Canonical spelling for a justification token, or `null` if unrecognized. */
+export function canonicalWindowJustification(token: string): string | null {
+  const lower = token.toLowerCase();
+  return LTSPICE_WINDOW_JUSTIFICATIONS.find((known) => known.toLowerCase() === lower) ?? null;
 }
 
 /** A grid-snapped point in world coordinates. */

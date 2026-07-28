@@ -28,7 +28,39 @@ below, so a transistor DC sweep runs; **`.noise`/`.tf` still run only on the TS
 solver.** Do not restore a readiness banner until every Class A and Class B item
 in the audit is closed or consciously accepted, with file:line evidence.
 
-**Last unit - 2026-07-28: native DC sweep (audit P3).** `runNativeDcSweep` in
+**Last unit - 2026-07-28: `WINDOW` label placement survives a save (audit P6).**
+LTspice writes a `WINDOW` record whenever an attribute label is dragged off its
+default spot, and Tau used to refuse to save any file containing one - 1042 of
+the 4010 `.asc` files on this machine, which made Tau a viewer rather than an
+editor for a quarter of a real library. `parseAsc` now parses the five operands
+into a structured record attached to its symbol (`io/ascImport.ts`), the
+component carries them (`schematic/types.ts`), and `serializeAscDocument`
+re-emits them in LTspice's own order - SYMBOL, then WINDOW, then SYMATTR. They
+are only written back when the part keeps its source symbol: a part saved under
+a different symbol (a carrier resistor, or Tau's canonical type) would scatter
+the text across the wrong attribute slots, so the exporter drops them and warns,
+which keeps that file's save blocked. A record with no symbol to attach to, or
+one whose operands Tau cannot reproduce exactly, is parsed into `unknown`
+instead of being guessed at - so it also stays on the blocked-save path. The
+justification token is canonicalized against a fixed set on the way in and
+re-emitted from it, so a record can only ever be written back well-formed, and
+`documentValidation` rejects an unknown token rather than round-tripping a
+`.sim` that would produce a corrupt `.asc`.
+Evidence: a new `scripts/ascWindowRoundTrip.corpus.ts` walks the real corpus -
+1851 placement records across 300 files re-emitted byte-identical, 0 scattered,
+0 import failures, and 93 of those files are now saveable that were not before.
+Mutation-checked: reverting the three source files fails 6 of the new tests.
+Gates: tsc clean, 2130 JS tests green with 41 failures across 10 files that all
+pass in isolation (180/180 - the known jsdom/CPU-contention flake, including a
+wall-clock perf budget that missed at 1697 ms vs 1500 ms), 31 Rust, clippy
+clean, corpus unchanged at 80 imported / 80 deck-built / 80 op-converged / 80
+schema-valid with warning-clean 77. Corpus still fails its own `>= 82` assertion
+because `~/Downloads/LTspice_export` is missing, not from a code regression.
+Next candidate: drawing primitives (`LINE`/`RECTANGLE`/`CIRCLE`/`ARC`), now the
+most common remaining reason an imported `.asc` cannot be saved - `parseAsc`
+already keeps them in `doc.shapes` and the exporter drops them.
+
+**2026-07-28: native DC sweep (audit P3).** `runNativeDcSweep` in
 `engine/nativeSpice.ts` runs `.dc` on ngspice and `App.tsx`'s `runDcAnalysis`
 now prefers it, falling back to the TS solver only outside the Tauri runtime.
 The TS solver re-solves an operating point per step and has no semiconductor

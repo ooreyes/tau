@@ -146,11 +146,23 @@ describe("project schematic file formats", () => {
   it("blocks rewrites when the source contains records Tau cannot preserve", () => {
     expect(ascRewriteRisks(ASC_SOURCE)).toEqual([]);
 
-    const vendorSource = `${ASC_SOURCE}WINDOW 0 24 56 Left 2\nLINE Normal 0 0 16 16\n`;
-    expect(ascRewriteRisks(vendorSource)).toEqual(expect.arrayContaining([
-      "drawing primitives",
-      "symbol label placement",
-    ]));
+    const withDrawing = `${ASC_SOURCE}LINE Normal 0 0 16 16\n`;
+    expect(ascRewriteRisks(withDrawing)).toEqual(["drawing primitives"]);
+
+    // A WINDOW attached to its symbol is carried on the component and re-emitted,
+    // so it no longer blocks the save. LTspice writes one whenever a label is
+    // nudged, which made a quarter of real schematics read-only in Tau.
+    const nudgedLabel = ASC_SOURCE.replace(
+      "SYMATTR InstName R1",
+      "WINDOW 0 0 56 VBottom 2\nWINDOW 3 32 56 VTop 2\nSYMATTR InstName R1",
+    );
+    expect(ascRewriteRisks(nudgedLabel)).toEqual([]);
+
+    // One with no symbol to attach to, or with an operand Tau cannot reproduce
+    // exactly, is not understood - it stays on the blocked-save path instead of
+    // being dropped on the floor.
+    expect(ascRewriteRisks(`${ASC_SOURCE}WINDOW 0 24 56 Left 2\n`)).toEqual(["unknown LTspice records"]);
+    expect(ascRewriteRisks(nudgedLabel.replace("VBottom", "Sideways"))).toEqual(["unknown LTspice records"]);
 
     expect(ascRewriteRisks(ASC_SOURCE.replace("TEXT 0 0", "TEXT 64 160"))).not.toContain(
       "directive annotation placement",

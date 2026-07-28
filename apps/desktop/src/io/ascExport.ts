@@ -29,6 +29,10 @@ import { parseQuantity } from "../simulation/quantity";
 
 const int = (n: number): string => String(Math.round(n));
 
+/** LTspice writes symbol paths with doubled backslashes; compare on a single
+ *  normalized form so `Opamps\\AD823` and `opamps/AD823` are the same symbol. */
+const normalizeLtType = (type: string): string => type.replace(/\\+/g, "/").toLowerCase();
+
 /**
  * Serialize an {@link AscDocument} to LTspice `.asc` text. Inverse of `parseAsc`.
  * Lines are emitted in LTspice's canonical order (header, wires, flags, symbols
@@ -48,6 +52,10 @@ export function serializeAscDocument(doc: AscDocument): string {
   }
   for (const s of doc.symbols) {
     lines.push(`SYMBOL ${s.type} ${int(s.x)} ${int(s.y)} ${s.orientation}`);
+    // LTspice's order is SYMBOL, then WINDOW placements, then SYMATTR values.
+    for (const w of s.windows ?? []) {
+      lines.push(`WINDOW ${int(w.attr)} ${int(w.x)} ${int(w.y)} ${w.justification} ${int(w.size)}`);
+    }
     for (const [name, value] of Object.entries(s.attrs)) {
       lines.push(`SYMATTR ${name} ${value}`);
     }
@@ -389,12 +397,25 @@ export function schematicToAsc(input: SchematicExportInput): SchematicToAscResul
       attrs.TauValue = symbol.tauValue || c.value || "\"\"";
       attrs.TauLabel = c.label || "\"\"";
     }
+    // Label placement is expressed in the source symbol's own attribute slots
+    // and geometry, so it only survives when the part is written back under
+    // that same symbol. Exporting it onto a different symbol (a carrier
+    // resistor, or Tau's canonical type) would scatter the text.
+    const windows = c.ltWindows ?? [];
+    const keepsSourceSymbol = c.ltSymbolType !== undefined
+      && normalizeLtType(c.ltSymbolType) === normalizeLtType(symbol.type);
+    if (windows.length > 0 && !keepsSourceSymbol) {
+      warnings.push(
+        `${c.label || c.id}: label placement is not preserved; the part is saved as symbol "${symbol.type}".`,
+      );
+    }
     doc.symbols.push({
       type: symbol.type,
       x: c.x,
       y: c.y,
       orientation: rotationToOrientation(c.rotation, c.mirrored),
       attrs,
+      ...(keepsSourceSymbol && windows.length > 0 ? { windows } : {}),
     });
   }
 

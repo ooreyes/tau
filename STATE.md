@@ -42,23 +42,25 @@ partial work.
 Ordered. Take the top item unless it is blocked. Class A outranks everything -
 a plausible wrong number is worse than a refusal to run.
 
-1. **P6 - opaque-record passthrough**. A `WINDOW` record blocks saving an
-   imported `.asc`, and LTspice writes one whenever a label is nudged. Tau is a
-   viewer, not an editor, until this lands. `project/types.ts:100-128`.
-2. **P9 - resolve `.include`/`.lib`** relative to the source `.asc` through the
+1. **P9 - resolve `.include`/`.lib`** relative to the source `.asc` through the
    existing FS bridge, instead of hard-failing the run.
-3. **P3 remainder - `.noise`/`.tf` on ngspice.** `.dc` landed 2026-07-28;
+2. **P3 remainder - `.noise`/`.tf` on ngspice.** `.dc` landed 2026-07-28;
    these two still run only on the TS solver, which rejects transistors.
    Mirror `runNativeDcSweep`. Note `analysisLine` has no `noise`/`tf` branch
    yet, so this needs a deck line as well as a runner.
-4. **A MOSFET DC-sweep corpus proof.** The native DC path is unit-tested
+3. **A MOSFET DC-sweep corpus proof.** The native DC path is unit-tested
    against mocked vectors and its ngspice contract was checked by hand at the
    CLI, but nothing in the repo runs a real transistor sweep end to end. A
    `scripts/dcSweepNative.corpus.ts` in the shape of
    `scripts/sampleHoldParity.corpus.ts` would close that.
-5. **P16 - engine badge**. Nothing tells the user whether ngspice or the TS
+4. **P16 - engine badge**. Nothing tells the user whether ngspice or the TS
    solver produced a result. Also fix the two strings still calling ngspice
    "planned" (`simulation/noise.ts:332`, `simulation/acSweep.ts:291`).
+5. **The next save blocker after `WINDOW`: drawing primitives.** With placement
+   preserved, `LINE`/`RECTANGLE`/`CIRCLE`/`ARC` are the most common remaining
+   reason an imported `.asc` still cannot be saved. `parseAsc` already keeps
+   them in `doc.shapes`; the exporter drops them. Same passthrough shape as
+   this unit.
 
 ---
 
@@ -66,6 +68,11 @@ a plausible wrong number is worse than a refusal to run.
 
 Newest first. One line each: date, unit, evidence.
 
+- 2026-07-28 - `WINDOW` label placement survives a save instead of blocking it.
+  Carried on the component, re-emitted when the part keeps its own symbol,
+  warned about when it does not. Real-corpus proof: 1851 placements across 300
+  files re-emitted byte-identical, 93 files newly saveable
+  (`scripts/ascWindowRoundTrip.corpus.ts`).
 - 2026-07-28 - `.dc` reaches ngspice: `runNativeDcSweep` + `App.tsx` wiring, so
   a transistor transfer curve can be swept at all. Nested runs split back out of
   ngspice's flat inner-major vector; mutation-checked.

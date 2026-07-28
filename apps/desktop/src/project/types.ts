@@ -108,7 +108,10 @@ export function ascRewriteRisks(source: string): string[] {
 
   if (parsed.unknown.length > 0) risks.add("unknown LTspice records");
   if (parsed.shapes.length > 0) risks.add("drawing primitives");
-  if (/^\s*WINDOW\b/im.test(source)) risks.add("symbol label placement");
+  // WINDOW records are carried on the component and re-emitted by the exporter
+  // when the part keeps its source symbol. One Tau could not attach or could
+  // not reproduce exactly is parsed into `unknown` instead, which is already a
+  // risk above; a symbol that changes on export raises its own export warning.
   if (/^\s*IOPIN\b/im.test(source)) risks.add("hierarchy ports");
 
   for (const symbol of parsed.symbols) {

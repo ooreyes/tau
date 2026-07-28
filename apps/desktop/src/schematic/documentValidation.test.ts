@@ -39,6 +39,30 @@ describe("schematic document validation", () => {
     expect(validateSchematicDocument(document)).toEqual(document);
   });
 
+  it("preserves LTspice label placement and rejects a record it could not write back", () => {
+    const base = validDocument();
+    const document = {
+      ...base,
+      components: [{
+        ...base.components[0],
+        ltWindows: [{ attr: 3, x: 32, y: 56, justification: "VTop", size: 2 }],
+      }],
+    };
+    expect(validateSchematicDocument(document)).toEqual(document);
+
+    // These are re-emitted verbatim into `.asc` text, so a document that
+    // reaches Tau with a record LTspice cannot read must be refused rather
+    // than round-tripped into a corrupt save.
+    const bad = (window: Record<string, unknown>) => () => validateSchematicDocument({
+      ...base,
+      components: [{ ...base.components[0], ltWindows: [window] }],
+    });
+    expect(bad({ attr: 3, x: 0, y: 0, justification: "Sideways", size: 2 })).toThrow(/justification/i);
+    expect(bad({ attr: -1, x: 0, y: 0, justification: "Left", size: 2 })).toThrow(/attr/i);
+    expect(bad({ attr: 3, x: 0, y: 0, justification: "Left", size: 1.5 })).toThrow(/size/i);
+    expect(bad({ attr: 3, x: Infinity, y: 0, justification: "Left", size: 2 })).toThrow(/coordinate/i);
+  });
+
   it("rejects duplicate ids, duplicate references, and dangling current-probe references", () => {
     const duplicateId = validDocument();
     duplicateId.wires[0].id = "r1";

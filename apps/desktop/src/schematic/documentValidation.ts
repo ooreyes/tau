@@ -10,6 +10,7 @@ import type {
   SchematicTextAnnotation,
   SchematicWire,
 } from "./types";
+import { canonicalWindowJustification } from "./types";
 import type { SchematicDocument, SchematicModelLibrary } from "../store/useSchematic";
 
 export const MAX_SCHEMATIC_FILE_BYTES = 5 * 1024 * 1024;
@@ -39,6 +40,8 @@ const MAX_TEXT_LENGTH = 160;
 // aggregate) without rejecting genuine imported content.
 const MAX_COMPONENT_VALUE_LENGTH = 32_768;
 const MAX_ID_LENGTH = 128;
+// One placement per attribute slot; LTspice's own slots stop well below this.
+const MAX_WINDOWS_PER_COMPONENT = 64;
 const MAX_DIRECTIVES = 1_000;
 const MAX_TEXT_ANNOTATIONS = 2_000;
 // An imported LTspice TEXT !-block lands as ONE directive string with its
@@ -127,6 +130,23 @@ function component(value: unknown, index: number): SchematicComponent {
   }
   if (source.ltSymbolType !== undefined) {
     result.ltSymbolType = text(source.ltSymbolType, `components[${index}].ltSymbolType`, MAX_TEXT_LENGTH);
+  }
+  if (source.ltWindows !== undefined) {
+    if (!Array.isArray(source.ltWindows) || source.ltWindows.length > MAX_WINDOWS_PER_COMPONENT) {
+      fail(`components[${index}].ltWindows must be an array of at most ${MAX_WINDOWS_PER_COMPONENT} records.`);
+    }
+    result.ltWindows = source.ltWindows.map((candidate, windowIndex) => {
+      const name = `components[${index}].ltWindows[${windowIndex}]`;
+      const window = record(candidate, name);
+      const { attr, size } = window;
+      if (typeof attr !== "number" || !Number.isInteger(attr) || attr < 0) fail(`${name}.attr must be a non-negative integer.`);
+      if (typeof size !== "number" || !Number.isInteger(size) || size < 0) fail(`${name}.size must be a non-negative integer.`);
+      const justification = canonicalWindowJustification(text(window.justification, `${name}.justification`, 40));
+      // Re-emitted verbatim into `.asc` text, so an unrecognized token must
+      // never round-trip - it would write a record LTspice cannot read.
+      if (justification === null) fail(`${name}.justification is not a supported LTspice justification.`);
+      return { attr, x: coordinate(window.x, `${name}.x`), y: coordinate(window.y, `${name}.y`), justification, size };
+    });
   }
   return result;
 }

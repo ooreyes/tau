@@ -73,10 +73,41 @@ describe("parseAsc", () => {
     expect(doc.shapes[0].kind).toBe("LINE");
   });
 
-  it("WINDOW lines do not attach as SYMATTRs and are ignored", () => {
+  it("WINDOW lines attach to their symbol as placement records, not as SYMATTRs", () => {
     for (const s of doc.symbols) {
       expect(Object.keys(s.attrs).every((k) => !/^\d+$/.test(k))).toBe(true);
     }
+    const r1 = doc.symbols.find((s) => s.attrs.InstName === "R1");
+    expect(r1!.windows).toEqual([{ attr: 0, x: 0, y: 56, justification: "VBottom", size: 2 }]);
+    const v1 = doc.symbols.find((s) => s.attrs.InstName === "V1");
+    expect(v1!.windows).toEqual([{ attr: 123, x: 0, y: 0, justification: "Left", size: 0 }]);
+    // The cap declared none, so it must not inherit the preceding symbol's.
+    expect(doc.symbols.find((s) => s.attrs.InstName === "C1")!.windows).toBeUndefined();
+  });
+
+  it("keeps a WINDOW it cannot reproduce exactly as an unknown line", () => {
+    // No symbol to attach to (a TEXT record ended the preceding symbol block).
+    const orphan = parseAsc("Version 4\nSHEET 1 880 680\nTEXT 0 0 Left 2 ;note\nWINDOW 0 0 56 Left 2");
+    expect(orphan.unknown).toEqual(["WINDOW 0 0 56 Left 2"]);
+
+    const malformed = [
+      "WINDOW 0 0 56 Sideways 2",   // justification LTspice never writes
+      "WINDOW 0 0 56 Left",         // truncated
+      "WINDOW 0 0 56 Left 2 extra", // trailing operand
+      "WINDOW -1 0 56 Left 2",      // negative attribute slot
+      "WINDOW 0 0 56 Left 99",      // implausible text size
+      "WINDOW 0 1e400 56 Left 2",   // non-finite coordinate
+    ];
+    for (const line of malformed) {
+      const parsed = parseAsc(`Version 4\nSHEET 1 880 680\nSYMBOL res 240 80 R90\n${line}\nSYMATTR InstName R1`);
+      expect(parsed.unknown, line).toEqual([line]);
+      expect(parsed.symbols[0].windows, line).toBeUndefined();
+    }
+  });
+
+  it("normalizes a justification token's spelling so it is re-emitted well-formed", () => {
+    const doc = parseAsc("Version 4\nSHEET 1 880 680\nSYMBOL res 240 80 R90\nWINDOW 3 32 56 vtop 2");
+    expect(doc.symbols[0].windows).toEqual([{ attr: 3, x: 32, y: 56, justification: "VTop", size: 2 }]);
   });
 
   it("never throws on empty or garbage input", () => {
