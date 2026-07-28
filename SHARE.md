@@ -44,20 +44,35 @@ Tau is a native Mac circuit app (not a website). This is the **v1.0 release buil
 ## What this release is / isn't
 
 - **Is:** a native `.app` with a real embedded ngspice engine, LTspice `.asc`
-  import verified against a 189-schematic corpus, vendor `.lib`/`.subckt`
-  model import, a probe-and-plot workflow, and an optional on-device MLX
-  assistant - usable for real circuit work.
+  import, vendor `.lib`/`.subckt` model import, a probe-and-plot workflow, and
+  an optional on-device MLX assistant.
 - **Isn't:** an LTspice replacement, or Apple-notarized yet (so Gatekeeper
-  needs the one-time Control-click Open). Remaining limitations are listed in
-  [KNOWN_ISSUES.md](KNOWN_ISSUES.md).
+  needs the one-time Control-click Open).
+- **Two gaps worth naming up front**, because they will be the first things an
+  experienced user hits: DC sweep, noise and transfer function do not run on
+  ngspice yet - they use Tau's smaller solver, which does not model
+  transistors, so a MOSFET DC sweep refuses to run. And voltage-controlled
+  switches are not modelled, so switching-converter results are not
+  trustworthy. Everything else is in
+  [KNOWN_ISSUES.md](KNOWN_ISSUES.md), which is specific rather than tidy.
 
 ## Reddit-ready blurb
+
+Lead with the limits. An audience of engineers will find them in the first ten
+minutes, and finding them yourself is the difference between a fair hearing and
+a thread about what the post left out.
 
 ```
 Tau - a native-Mac circuit simulator that opens LTspice .asc files and runs
 them on a real embedded ngspice engine. Vendor .lib/.subckt models import and
 simulate (the demo runs an actual ADI AD8541 macromodel). Optional on-device
 AI assistant, no cloud.
+
+Honest about where it is: transient, op and AC run on ngspice. DC sweep, noise
+and transfer function still run on my own smaller solver, which does not do
+transistors yet, and voltage-controlled switches are not modelled. So it is not
+an LTspice replacement - it is an LTspice-compatible sim with a better editor,
+and I would rather you knew that before downloading it than after.
 
 DMG: <release URL>
 Install: drag to Applications, Control-click Open once (not notarized yet).

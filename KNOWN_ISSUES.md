@@ -1,8 +1,36 @@
 # Known issues
 
-Tau v1.0 is usable for real design work; like any engineering tool it has
-limitations worth knowing about. Everything here is reproduced and tracked;
-fixes land as they are ready.
+Everything here is reproduced and tracked; fixes land as they are ready. The
+first section is the one to read before trusting a number.
+
+## Which analyses actually use the native engine
+
+Transient, operating point and AC run on the embedded ngspice engine.
+
+**DC sweep, noise and transfer function do not.** They run on Tau's own
+smaller solver, which models R/C/L, sources, diodes, op-amps and controlled
+sources but **not transistors**. So a MOSFET or BJT DC sweep - an Id-Vds
+curve, a Vgs transfer curve, a bias sweep - refuses to run and says so. This
+is the largest gap between Tau and LTspice today.
+
+Nothing in the UI currently labels which engine produced a given result.
+
+## Devices that are not modelled yet
+
+- **Voltage-controlled switches do not switch.** A `sw` part imports without
+  its two control pins and simulates as a permanent open circuit. Any SMPS,
+  relay or ideal-switch circuit built around one will produce a confident,
+  wrong waveform. Do not rely on a switching converter result.
+- Tau ships 28 standard device models against LTspice's ~2,500. A part whose
+  model name Tau cannot resolve is simulated on a generic starter device
+  (`Level=1` MOSFET, textbook BJT/diode) and **says so before the run** - the
+  warning names the part and the model it could not find. Attach the vendor
+  `.lib` through the Model libraries dialog to get the real device.
+- TRIACs import as a BJT; DIACs and varistors as high-value resistors.
+- `.step` runs at most 16 points. A wider sweep warns that it was truncated
+  rather than plotting a short curve as if it were complete.
+- Transformer magnetizing and leakage inductance are read from `L1`, `L2` and
+  `k` on the part; a bare turns ratio still defaults to 10 mH primary.
 
 ## Saving imported schematics
 
@@ -37,9 +65,10 @@ fixes land as they are ready.
 
 ## Browser preview vs native engine
 
-- The preview solver covers R/C/L, sources, diodes/LEDs/zeners, switches,
-  op-amps, and controlled sources. Transistors and digital parts need the
-  native engine and say so when you press Run.
+- The preview solver covers R/C/L, sources, diodes/LEDs/zeners, op-amps and
+  controlled sources. Transistors and digital parts need the native engine and
+  say so when you press Run. Switches are accepted but not modelled - see
+  "Devices that are not modelled yet" above.
 - Like the native engine, the preview solves the DC operating point before a
   transient (unless the analysis specifies `uic`). If that solve is singular -
   for example an ideal source directly across an ideal inductor - the preview
@@ -48,8 +77,9 @@ fixes land as they are ready.
 
 ## Corpus files that do not simulate
 
-- Eight files in the extended 189-schematic acceptance corpus do not produce
-  an operating point, and all eight are hierarchical symbol definition sheets
+- In the extended acceptance corpus (189 schematics when the full third-party
+  power-electronics tree is present), eight files do not produce an operating
+  point, and all eight are hierarchical symbol definition sheets
   (gate-driver, AC-source, and monitor building blocks from a third-party
   power-electronics library), not runnable circuits. Seven have no ground
   node by design and Tau refuses their deck with "Add a ground symbol so node
@@ -65,7 +95,7 @@ fixes land as they are ready.
   effective bound.
 - A document is capped at 5,000 components and 20,000 wires. An `.asc` that
   exceeds this is refused at import with a message naming the actual counts;
-  every schematic in the 189-file acceptance corpus fits with room to spare.
+  every schematic in the acceptance corpus fits with room to spare.
 
 ## Install
 

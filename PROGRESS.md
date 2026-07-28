@@ -7,10 +7,35 @@
      from an OLD timestamp, the previous run died mid-unit — run
      `git log --oneline -8`, recover/finish/revert that unit FIRST, then go on.
      ─────────────────────────────────────────────────────────────────────── -->
-## READINESS: NOTARIZATION-ONLY
+## READINESS: NOT READY - RETRACTED 2026-07-28
 
-Verified this session (2026-07-22), every gate run and observed green on the
-exact shipped tree:
+The `READINESS: NOTARIZATION-ONLY` banner recorded on 2026-07-22 was **wrong**
+and is retracted. A three-part audit on 2026-07-27 (`AUDIT_2026-07-27.md`)
+found two independent reasons:
+
+1. **The release config cannot pass notarization at all.** `tauri.conf.json`
+   ships `signingIdentity: "-"` with `hardenedRuntime: false`, so notarization
+   was never the single remaining blocker.
+2. **Several circuit classes silently returned confidently wrong answers.**
+   Unknown device models were swapped for generic starters with no diagnostic,
+   voltage-controlled switches simulated as permanent open circuits, `.step`
+   truncated to 16 points in silence, and `.asc` export wrote several part
+   kinds as 1 TOhm resistors with `warnings: []`.
+
+Most of those are now fixed (see the audit's Status section), but **switches
+are still not modelled, and `.dc`/`.noise`/`.tf` still never reach ngspice, so
+a transistor DC sweep does not run.** Do not restore a readiness banner until
+every Class A and Class B item in the audit is closed or consciously accepted,
+with file:line evidence.
+
+The 2026-07-22 evidence below is kept for history. Note its corpus numbers are
+no longer reproducible on this machine: `~/Downloads/LTspice_export` was
+deleted, leaving 80 files against a recorded baseline of 82.
+
+<details><summary>2026-07-22 evidence (superseded)</summary>
+
+Verified that session, every gate run and observed green on the exact shipped
+tree:
 
 - **Tests:** tsc clean · frontend 2044 passing / 136 files (the
   `App.workspace.test.tsx` `renderOpenProject` timeouts under full-suite CPU
@@ -41,6 +66,8 @@ exact shipped tree:
 
 The only step left before sharing with testers is Apple notarization, which
 needs Omar's Developer ID.
+
+</details>
 
 ## ⏱ HEARTBEAT
 - **Headline metric:** acceptance corpus remains 82 imported / 79 warning-clean / 82 deck-built / 82 op-converged / 82 schema-valid; closing/saving and discoverable directive authoring are now the active packaged-UX blockers.

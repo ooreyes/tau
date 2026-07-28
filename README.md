@@ -10,16 +10,20 @@
 
 ---
 
-> **Status: v1.0 release.** Tau is a working circuit simulator you can use for
-> real design today: a native desktop app with an embedded ngspice engine
-> (transient, operating point, AC, DC, noise, transfer-function, and step
-> analyses), LTspice `.asc` import verified against a 189-schematic corpus,
-> vendor SPICE model import (`.lib`/`.subckt` files attach per document and
-> simulate through the native engine), click-to-probe plotting with live
-> measurements, ready-to-run demos in [examples/](examples/README.md), and an
-> optional AI circuit assistant. The browser-only dev path retains a smaller
-> TypeScript preview solver. Remaining limitations are tracked honestly in
-> [KNOWN_ISSUES.md](KNOWN_ISSUES.md).
+> **Status: v1.0, with real gaps.** Tau is a native desktop app with an
+> embedded ngspice engine, LTspice `.asc` import, vendor SPICE model import
+> (`.lib`/`.subckt` files attach per document and simulate natively),
+> click-to-probe plotting with live measurements, ready-to-run demos in
+> [examples/](examples/README.md), and an optional AI circuit assistant.
+>
+> **Transient, operating point and AC run on the embedded ngspice engine.**
+> DC sweep, noise and transfer function currently run on Tau's own smaller
+> solver, which does not model transistors - so you cannot yet DC-sweep a
+> MOSFET or BJT. Voltage-controlled switches are not modelled either. Read
+> [KNOWN_ISSUES.md](KNOWN_ISSUES.md) before trusting a result; it is specific
+> about what is and is not real.
+>
+> Tau is an LTspice-compatible simulator, not a drop-in LTspice replacement.
 
 ## What is Tau?
 
