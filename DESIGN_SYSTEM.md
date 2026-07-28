@@ -99,24 +99,42 @@ relationship of the dark theme, so the control keeps its weight in the hierarchy
 
 ### 1.5 Traces - the instrument palette
 
-Six hues, rotated in this order. Red is first in the expression rotation but stays the least
-saturated of the six, because red is also the error family elsewhere in the panel.
+**Okabe-Ito**, the colorblind-safe qualitative set from Okabe & Ito's *Color
+Universal Design*, snapped into each surface's OKLCH lightness band. This
+replaced a hand-tuned set that failed on measurement, not taste: sage green and
+steel cyan sat at **deltaE 11.6 for normal vision** against a floor of 15, so
+V(in) and V(out) on one scope were hard to separate for *everyone*, before
+considering the ~8% of men with red-green colour vision deficiency.
 
-| Token | Dark | Light | Name |
-|---|---|---|---|
-| `--trace-cyan` | `#6fb8db` | `#1c6d92` | steel cyan |
-| `--trace-green` | `#7cb88a` | `#2c7a45` | sage |
-| `--trace-cream` | `#e8e6de` | `#55524a` | graphite cream |
-| `--trace-red` | `#d97468` | `#b23f30` | muted signal red |
-| `--trace-purple` | `#9e88c4` | `#64499f` | dimmed purple |
-| `--signal` | `#e6a23c` | `#96620a` | tactical amber |
+Rotation order, and it is load-bearing:
 
-Every light value clears 4.5:1 against `--bg` at a 1.5px stroke. The `cream` role inverts
-meaning between themes - it is the *neutral* trace, so it is near-white on black and graphite
-on paper.
+| # | Token | Dark | Light | Name |
+|---|---|---|---|---|
+| 1 | `--trace-green` | `#0CA176` | `#008B62` | green |
+| 2 | `--trace-red` | `#D86108` | `#C04A00` | vermillion |
+| 3 | `--trace-cyan` | `#3193C6` | `#0E7EB0` | sky |
+| 4 | `--trace-cream` | `#9A8C00` | `#857700` | olive |
+| 5 | `--trace-purple` | `#BC6A98` | `#A55583` | purple |
+| 6 | `--trace-amber` | `#BD7900` | `#A76300` | orange |
 
-Traces are drawn at 1.5px. Do not add glow, gradient fills, or drop shadows to a trace: they
-misrepresent the data's precision.
+The token names are historical; the comment beside each value names the real
+hue. **The order is part of the result.** These hues only clear the adjacent
+pair checks in this sequence - olive next to green fails the normal-vision
+floor, and orange next to olive fails CVD separation outright at deltaE 0.6.
+
+**Do not change a value or the order by eye.** Re-run the validator:
+
+```
+node validate_palette.js "#0CA176,#D86108,#3193C6,#9A8C00,#BC6A98,#BD7900" --mode dark
+node validate_palette.js "#008B62,#C04A00,#0E7EB0,#857700,#A55583,#A76300" --mode light
+```
+
+Both currently report ALL CHECKS PASS: lightness band, chroma floor, adjacent
+CVD separation, normal-vision floor, and contrast against the surface.
+
+Traces are drawn at 1.5px. No glow, gradient fill, or drop shadow: decoration
+misrepresents the precision of the data. `--signal` (amber) is the running
+lamp and is **status, not a series** - never assign it to a trace.
 
 ### 1.6 Status
 

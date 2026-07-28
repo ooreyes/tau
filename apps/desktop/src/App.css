@@ -108,19 +108,23 @@
   --scope-surface:  #0c0c0e;
   --scope-grid:  #1c1c1e;
 
-  /* Traces - instrument palette, desaturated off Apple's system colors
-     (retheme: neon system-color traces read like a toy on a near-black
-     scope face; a muted, "measured" hue set still stays clearly
-     distinguishable at this contrast). Red stays visually close to
-     --danger's family - reserved for error/limit reads elsewhere in the
-     panel - so it stays the least saturated of the six even though it's
-     first in the expression-trace rotation. */
-  --trace-cyan:    #6fb8db;   /* steel cyan */
-  --trace-green:   #7cb88a;   /* sage green */
-  --trace-cream:   #e8e6de;   /* graphite cream */
-  --trace-red:     #d97468;   /* muted signal red */
-  --trace-purple:  #9e88c4;   /* dimmed purple */
-  --trace-amber:   #d9a15a;   /* muted amber */
+  /* Traces - Okabe-Ito, the colorblind-safe qualitative set from Okabe & Ito's
+     "Color Universal Design", snapped into this surface's OKLCH lightness band.
+     Chosen over a hand-tuned set because it is verifiable: the previous palette
+     put sage green and steel cyan at deltaE 11.6 for NORMAL vision (floor is
+     15), so V(in) and V(out) on the same scope were hard to tell apart for
+     everyone, not only the ~8% of men with red-green CVD.
+
+     The rotation order in TRACE_COLORS is part of the result, not cosmetic:
+     these hues only clear the adjacent-pair checks in the order
+     green, vermillion, sky, olive, purple, orange. Re-run
+     dataviz/scripts/validate_palette.js before changing a value OR the order. */
+  --trace-cyan: #3193C6;   /* sky */
+  --trace-green: #0CA176;   /* green */
+  --trace-cream: #9A8C00;   /* olive */
+  --trace-red: #D86108;   /* vermillion */
+  --trace-purple: #BC6A98;   /* purple */
+  --trace-amber: #BD7900;   /* orange */
 
   --dial-track:  #3a3a3c;
 
@@ -306,12 +310,12 @@
     --scope-surface:  #f7f7f5;
     --scope-grid:  #f2f1ee;
 
-    --trace-cyan:    #1c6d92;
-    --trace-green:   #2c7a45;
-    --trace-cream:   #55524a;
-    --trace-red:     #b23f30;
-    --trace-purple:  #64499f;
-    --trace-amber:   #975e16;
+    --trace-cyan: #0E7EB0;   /* sky */
+    --trace-green: #008B62;   /* green */
+    --trace-cream: #857700;   /* olive */
+    --trace-red: #C04A00;   /* vermillion */
+    --trace-purple: #A55583;   /* purple */
+    --trace-amber: #A76300;   /* orange */
 
     --dial-track:  #e8e7e3;
 
@@ -420,12 +424,12 @@
   --scope-surface:  #f7f7f5;
   --scope-grid:  #f2f1ee;
 
-  --trace-cyan:    #1c6d92;
-  --trace-green:   #2c7a45;
-  --trace-cream:   #55524a;
-  --trace-red:     #b23f30;
-  --trace-purple:  #64499f;
-  --trace-amber:   #975e16;
+  --trace-cyan: #0E7EB0;   /* sky */
+  --trace-green: #008B62;   /* green */
+  --trace-cream: #857700;   /* olive */
+  --trace-red: #C04A00;   /* vermillion */
+  --trace-purple: #A55583;   /* purple */
+  --trace-amber: #A76300;   /* orange */
 
   --dial-track:  #e8e7e3;
 
@@ -525,12 +529,12 @@
   --scope-surface:  #0c0c0e;
   --scope-grid:  #1c1c1e;
 
-  --trace-cyan:    #6fb8db;
-  --trace-green:   #7cb88a;
-  --trace-cream:   #e8e6de;
-  --trace-red:     #d97468;
-  --trace-purple:  #9e88c4;
-  --trace-amber:   #d9a15a;
+  --trace-cyan: #3193C6;   /* sky */
+  --trace-green: #0CA176;   /* green */
+  --trace-cream: #9A8C00;   /* olive */
+  --trace-red: #D86108;   /* vermillion */
+  --trace-purple: #BC6A98;   /* purple */
+  --trace-amber: #BD7900;   /* orange */
 
   --dial-track:  #3a3a3c;
 

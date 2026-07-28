@@ -87,10 +87,10 @@ export type AnalysisResult =
     };
 
 const TRACE_COLORS = [
-  "var(--trace-cyan)",
   "var(--trace-green)",
-  "var(--trace-cream)",
   "var(--trace-red)",
+  "var(--trace-cyan)",
+  "var(--trace-cream)",
   "var(--trace-purple)",
   "var(--trace-amber)",
 ];

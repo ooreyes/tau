@@ -2859,10 +2859,10 @@ function dcPath(
 // A wider ramp than AC_COLORS so a family of up to MAX_FAMILY_MEMBERS curves
 // stays distinguishable. All entries are App.css trace variables (no hardcoding).
 const STEP_COLORS = [
-  "var(--trace-cyan)",
   "var(--trace-green)",
-  "var(--trace-cream)",
   "var(--trace-red)",
+  "var(--trace-cyan)",
+  "var(--trace-cream)",
   "var(--trace-purple)",
   "var(--trace-amber)",
 ];
