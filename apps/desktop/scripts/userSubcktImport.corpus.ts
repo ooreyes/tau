@@ -27,15 +27,13 @@
 import { readFileSync, existsSync, writeFileSync, mkdtempSync, rmSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { join } from "node:path";
-import { homedir, tmpdir } from "node:os";
+import { tmpdir } from "node:os";
 import { describe, it, expect } from "vitest";
 import { buildSpiceDeck } from "../src/engine/spiceNetlist";
 import type { NetLabel, PinOverride, SchematicComponent } from "../src/schematic/types";
+import { ltspiceLibRoot } from "./ltspiceLibRoot";
 
-const LIB_PATH = join(
-  homedir(),
-  "Library", "Application Support", "LTspice", "lib", "sub", "AD8541.lib",
-);
+const LIB_PATH = join(ltspiceLibRoot(), "sub", "AD8541.lib");
 const haveNgspice = spawnSync("ngspice", ["--version"], { encoding: "utf8" }).error === undefined;
 
 /** Pull `name = <value>` out of ngspice's batch .meas output. */

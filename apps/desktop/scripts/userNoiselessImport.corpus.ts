@@ -25,14 +25,12 @@
 import { readFileSync, existsSync, writeFileSync, mkdtempSync, rmSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { join } from "node:path";
-import { homedir, tmpdir } from "node:os";
+import { tmpdir } from "node:os";
 import { describe, it, expect } from "vitest";
 import { parseUserModelLibraries, resolveUserSubckt } from "../src/engine/userModelLibrary";
+import { ltspiceLibRoot } from "./ltspiceLibRoot";
 
-const LIB_PATH = join(
-  homedir(),
-  "Library", "Application Support", "LTspice", "lib", "sub", "ADA4351.lib",
-);
+const LIB_PATH = join(ltspiceLibRoot(), "sub", "ADA4351.lib");
 const SUBCKT = "ADA4351";
 const haveNgspice = spawnSync("ngspice", ["--version"], { encoding: "utf8" }).error === undefined;
 
