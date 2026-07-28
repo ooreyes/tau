@@ -125,8 +125,8 @@ floor, and orange next to olive fails CVD separation outright at deltaE 0.6.
 **Do not change a value or the order by eye.** Re-run the validator:
 
 ```
-node validate_palette.js "#0CA176,#D86108,#3193C6,#9A8C00,#BC6A98,#BD7900" --mode dark
-node validate_palette.js "#008B62,#C04A00,#0E7EB0,#857700,#A55583,#A76300" --mode light
+node scripts/validate-palette.mjs "#0CA176,#D86108,#3193C6,#9A8C00,#BC6A98,#BD7900" --mode dark
+node scripts/validate-palette.mjs "#008B62,#C04A00,#0E7EB0,#857700,#A55583,#A76300" --mode light
 ```
 
 Both currently report ALL CHECKS PASS: lightness band, chroma floor, adjacent

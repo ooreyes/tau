@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { parseKicadNet } from "./kicadNetImport";
 import { extractCircuit } from "../schematic/netlist";
+import { schematicToAsc } from "./ascExport";
+import { importAsc } from "./ascImport";
 
 /** A small but structurally realistic KiCad netlist export (the S-expression
  *  format from Eeschem's "Generate Netlist File", not the SPICE export). */
@@ -121,5 +123,56 @@ describe("parseKicadNet", () => {
   it("throws a clear error for a malformed (unbalanced) S-expression", () => {
     expect(() => parseKicadNet("(export (version D) (nets")).toThrow(/unmatched/);
     expect(() => parseKicadNet("(export))")).toThrow(/unmatched/);
+  });
+});
+
+describe("hostile KiCad input", () => {
+  it("cannot forge extra .asc records through a newline in a quoted field", () => {
+    // .asc records are single-line, so a literal newline inside a KiCad string
+    // becomes an extra line that the importer reads back as a real record. This
+    // payload tries to smuggle a .tran directive into a schematic the user
+    // believes contains only passives.
+    const hostile = `(export (version "E")
+  (components
+    (comp (ref "R1") (value "10k\nTEXT 400 400 Left 2 !.tran 1 100")))
+  (nets
+    (net (code "1") (name "N1")
+      (node (ref "R1") (pin "1")))))`;
+    const parsed = parseKicadNet(hostile);
+    for (const component of parsed.components) {
+      expect(component.value).not.toContain("\n");
+      expect(component.label).not.toContain("\n");
+    }
+
+    // The property that matters is not that the text vanishes - a nonsense
+    // component value is harmless - but that it cannot become its OWN record.
+    // Serialize and confirm no line parses as a directive.
+    const { text } = schematicToAsc({
+      components: parsed.components,
+      wires: parsed.wires,
+      netLabels: parsed.netLabels,
+      directives: [],
+      comments: [],
+    });
+    const forged = text.split("\n").filter((line) => /^\s*TEXT\b/.test(line));
+    expect(forged, `forged records: ${JSON.stringify(forged)}`).toHaveLength(0);
+    expect(importAsc(text).directives).toEqual([]);
+  });
+
+  it("strips control characters from net names too", () => {
+    const hostile = `(export (version "E")
+  (components (comp (ref "R1") (value "1k")))
+  (nets (net (code "1") (name "out\rFLAG 0 0 0")
+    (node (ref "R1") (pin "1")))))`;
+    const parsed = parseKicadNet(hostile);
+    for (const label of parsed.netLabels) {
+      expect(label.text).not.toMatch(/[\r\n]/);
+    }
+  });
+
+  it("stops a paren flood instead of tokenizing it unbounded", () => {
+    // The cap used to sit only on the bare-atom branch, so a file of nothing
+    // but "(" never tripped it: 5 MB tokenized in 91ms with no error.
+    expect(() => parseKicadNet("(".repeat(3_000_000))).toThrow(/size budget/i);
   });
 });

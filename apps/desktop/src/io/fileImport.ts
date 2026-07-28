@@ -9,7 +9,11 @@
  */
 import { useProject } from "../store/useProject";
 import { useSchematic } from "../store/useSchematic";
-import { MAX_MODEL_LIBRARIES, MAX_MODEL_LIBRARY_TOTAL_LENGTH } from "../schematic/documentValidation";
+import {
+  MAX_MODEL_LIBRARIES,
+  MAX_MODEL_LIBRARY_TOTAL_LENGTH,
+  MAX_SCHEMATIC_FILE_BYTES,
+} from "../schematic/documentValidation";
 import { planFileImport } from "./importRouter";
 
 export type FileImportOutcome =
@@ -46,6 +50,17 @@ export async function importDroppedFile(
     bytes = new Uint8Array(await file.arrayBuffer());
   } catch {
     return { kind: "error", message: `Could not read "${file.name}".` };
+  }
+
+  // Cap the INPUT, before any parser sees it. The schematic byte cap used to be
+  // applied only to the synthesized .asc on the way out, which is after
+  // tokenize and parse have already run on the attacker's file.
+  if (bytes.length > MAX_SCHEMATIC_FILE_BYTES) {
+    const mb = (MAX_SCHEMATIC_FILE_BYTES / (1024 * 1024)).toFixed(0);
+    return {
+      kind: "error",
+      message: `"${file.name}" is larger than the ${mb} MB import limit.`,
+    };
   }
 
   let plan: ReturnType<typeof planFileImport>;

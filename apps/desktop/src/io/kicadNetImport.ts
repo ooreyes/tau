@@ -42,6 +42,12 @@ function tokenize(text: string): string[] {
   const n = text.length;
   let i = 0;
   while (i < n) {
+    // Checked here, not per-branch: the cap used to sit only on the bare-atom
+    // path, so a file of nothing but "(" pushed unbounded tokens and never
+    // tripped it. 5 MB of parens tokenized in 91ms with no error.
+    if (tokens.length > MAX_TOKENS) {
+      throw new Error("KiCad netlist exceeds Tau's import size budget.");
+    }
     const ch = text[i];
     if (ch === "(" || ch === ")") {
       tokens.push(ch);
@@ -73,18 +79,33 @@ function tokenize(text: string): string[] {
     while (j < n && !/[\s()]/.test(text[j])) j += 1;
     tokens.push(text.slice(i, j));
     i = j;
-    if (tokens.length > MAX_TOKENS) {
-      throw new Error("KiCad netlist exceeds Tau's import size budget.");
-    }
   }
   return tokens;
 }
 
+/**
+ * Remove control characters from any text lifted out of a KiCad file.
+ *
+ * `.asc` records are single-line (`SYMATTR Value <v>`, `FLAG <x> <y> <net>`),
+ * so a literal newline inside a quoted KiCad string turns into an extra line
+ * that the importer then reads back as a real record. A crafted
+ * `(value "10k\nTEXT 400 400 Left 2 !.tran 1 100")` forges a SPICE directive
+ * into a schematic the user believes contains only passives. The engine's own
+ * deck screening still blocks file and shell primitives, so this is an
+ * integrity problem rather than a code-execution one, but a netlist that
+ * quietly gains directives is exactly the silent-wrongness this project
+ * refuses elsewhere.
+ */
+function stripControlChars(value: string): string {
+  // eslint-disable-next-line no-control-regex
+  return value.replace(/[\u0000-\u001f\u007f]/g, "");
+}
+
 function unquote(token: string): string {
   if (token.length >= 2 && token[0] === '"' && token[token.length - 1] === '"') {
-    return token.slice(1, -1).replace(/\\(.)/g, "$1");
+    return stripControlChars(token.slice(1, -1).replace(/\\(.)/g, "$1"));
   }
-  return token;
+  return stripControlChars(token);
 }
 
 /** Iterative (non-recursive) parse so a deeply nested or malformed file cannot
@@ -119,7 +140,7 @@ function textOf(node: SExpr, name: string): string {
   const child = findChild(node, name);
   if (!child) return "";
   const value = childrenOf(child)[0];
-  return typeof value === "string" ? value : "";
+  return typeof value === "string" ? stripControlChars(value) : "";
 }
 
 /** `lib "Device"` parts whose two terminals are electrically symmetric, so
