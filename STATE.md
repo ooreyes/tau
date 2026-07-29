@@ -35,6 +35,13 @@ Being killed mid-unit is normal and expected on a Pro plan. It is not a
 failure, and it is not a reason to restart the unit from scratch. Pick up the
 partial work.
 
+**The `-wip` branch is currently already reconciled.** Its tip `3f69254` held
+the `.noise` TypeScript half; that work landed 2026-07-29 as `dddda1c` (with
+the real-engine proof it was missing), so `..-wip` still shows one commit
+"missing" purely because the SHA differs. Nothing there needs re-applying -
+do not spend a fire diffing it again. Re-check only if its tip moves past
+`3f69254`.
+
 ---
 
 ## Next up
