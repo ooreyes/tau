@@ -58,8 +58,10 @@ one engine for the whole session.
   back in place with their original symbol identity intact. Attribute label
   placement (WINDOW records, which LTspice writes whenever a label is dragged)
   is carried through the save unchanged, as long as the part keeps its own
-  symbol. Tau still refuses to overwrite a file when the rewrite would drop
-  information it cannot yet reproduce: drawing primitives, comment placement,
+  symbol. Drawing primitives (`LINE`, `RECTANGLE`, `CIRCLE`, `ARC`) survive a
+  save byte-for-byte, though Tau's canvas does not draw them yet - they are
+  preserved, not displayed. Tau still refuses to overwrite a file when the
+  rewrite would drop information it cannot yet reproduce: comment placement,
   extra symbol attributes such as SpiceLine, and symbols with pins Tau does not
   model (4-pin BJT substrate, switch control pins). The message names the
   specific reason. Native `.sim` saves are unaffected.

@@ -83,7 +83,11 @@ describe("parseAsc", () => {
   it("rejects a malformed drawing primitive into `unknown` instead of `shapes`", () => {
     const badWidth = "LINE Dotted 0 0 8 8";   // "Dotted" is not a pen-width word
     const short = "LINE Normal 0 0";          // too few coordinates for a LINE
-    for (const line of [badWidth, short]) {
+    // A coordinate that is not a whole number must not be coerced: rounding it
+    // (or reading an unparseable token as 0) would silently move the drawing.
+    const fractional = "LINE Normal 0.5 0 8 8";
+    const notANumber = "LINE Normal x y 8 8";
+    for (const line of [badWidth, short, fractional, notANumber]) {
       const parsed = parseAsc(`Version 4\nSHEET 1 880 680\n${line}`);
       expect(parsed.shapes, line).toEqual([]);
       expect(parsed.unknown, line).toEqual([line]);

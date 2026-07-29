@@ -46,9 +46,6 @@ const MAX_WINDOWS_PER_COMPONENT = 64;
 const MAX_DIRECTIVES = 1_000;
 const MAX_TEXT_ANNOTATIONS = 2_000;
 const MAX_ASC_SHAPES = 2_000;
-// A shape's coords are its endpoints (4, or 8 for an ARC) plus LTspice's
-// optional trailing dash-style index.
-const MAX_ASC_SHAPE_COORDS = 9;
 // An imported LTspice TEXT !-block lands as ONE directive string with its
 // embedded newlines (a behavioral-source table in the acceptance corpus runs
 // to 2.5 KB), so a directive gets the same generous single-field cap as a
@@ -243,8 +240,12 @@ function ascShape(value: unknown, index: number): SchematicAscShape {
   if (!ASC_SHAPE_WIDTHS.has(width)) {
     fail(`ascShapes[${index}].width must be "Normal" or "Wide".`);
   }
-  if (!Array.isArray(source.coords) || source.coords.length > MAX_ASC_SHAPE_COORDS) {
-    fail(`ascShapes[${index}].coords must be an array of at most ${MAX_ASC_SHAPE_COORDS} numbers.`);
+  // Endpoints for this kind, optionally followed by LTspice's dash-style index.
+  // The count is part of the record's grammar, not just a bound: a LINE with an
+  // ARC's eight coordinates serializes to a line LTspice cannot read back.
+  const points = kind === "ARC" ? 8 : 4;
+  if (!Array.isArray(source.coords) || source.coords.length < points || source.coords.length > points + 1) {
+    fail(`ascShapes[${index}].coords must be an array of ${points} or ${points + 1} numbers for a ${kind}.`);
   }
   return {
     kind,

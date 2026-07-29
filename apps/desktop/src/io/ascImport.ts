@@ -189,12 +189,15 @@ function parseShapeRecord(kind: AscShape["kind"], parts: string[]): AscShape | n
   const token = parts[1]?.toLowerCase();
   const width = ASC_SHAPE_WIDTHS.find((candidate) => candidate.toLowerCase() === token);
   if (!width) return null;
-  const coords = parts.slice(2).map(num);
+  const tokens = parts.slice(2);
   // Endpoints, then LTspice's optional dash-style index.
   const points = kind === "ARC" ? 8 : 4;
-  if (coords.length < points || coords.length > points + 1) return null;
-  if (!coords.every((value) => Number.isFinite(value))) return null;
-  return { kind, width, coords };
+  if (tokens.length < points || tokens.length > points + 1) return null;
+  // Screen the source tokens rather than what `num` makes of them: it coerces
+  // anything unparseable to 0, which would move the drawing to the origin on
+  // the way back out. Whole numbers only, so `int` re-emits them unchanged.
+  if (!tokens.every((value) => /^[+-]?\d+$/.test(value))) return null;
+  return { kind, width, coords: tokens.map(num) };
 }
 
 /**

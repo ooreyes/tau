@@ -223,6 +223,10 @@ describe("schematic document validation", () => {
     expect(bad({ kind: "LINE", width: "Dotted", coords: [0, 0, 16, 16] })).toThrow(/width/i);
     expect(bad({ kind: "LINE", width: "Normal", coords: [0, "x", 16, 16] })).toThrow(/coordinate/i);
     expect(bad({ kind: "LINE", width: "Normal", coords: Array.from({ length: 10 }, () => 0) })).toThrow(/coords/i);
+    // The coordinate count is part of the grammar: a LINE carrying an ARC's
+    // eight coordinates would serialize to a record LTspice cannot read back.
+    expect(bad({ kind: "LINE", width: "Normal", coords: [0, 0, 1, 1, 2, 2, 3, 3] })).toThrow(/4 or 5 numbers for a LINE/);
+    expect(bad({ kind: "ARC", width: "Normal", coords: [0, 0, 16, 16] })).toThrow(/8 or 9 numbers for an? ARC/);
   });
 
   it("omits ascShapes entirely when a document has none, so legacy files keep their shape", () => {
