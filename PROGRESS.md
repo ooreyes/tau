@@ -28,7 +28,38 @@ below, so a transistor DC sweep runs; **`.noise`/`.tf` still run only on the TS
 solver.** Do not restore a readiness banner until every Class A and Class B item
 in the audit is closed or consciously accepted, with file:line evidence.
 
-**Last unit - 2026-07-28: `WINDOW` label placement survives a save (audit P6).**
+**Last unit - 2026-07-28: an unresolvable `.include`/`.lib` no longer sinks the
+whole run (audit P9, first half).** An imported LTspice schematic that names a
+vendor library file could not simulate at all. `buildSpiceDeck` passed the
+directive through verbatim, and the native deck sanitizer
+(`src-tauri/src/spice.rs` `deck_lines`) rejects every file-backed primitive, so
+the run died on a card the user never typed and could not act on. The deck
+builder now resolves the reference against the bundled libraries as before and,
+failing that, leaves the directive OUT of the deck and names the file on the
+warning channel that `nativeSpice.ts` forwards to the results panel
+(`engine/spiceNetlist.ts`). The guard itself is untouched - the fix is that the
+card never reaches it. Dropping the directive is not a silent loss: a
+subcircuit that went missing with it still fails fast through
+`unresolvedSubckts` naming the part, and a missing device model still reports a
+model substitution, so the failure modes stay "refuse or say so", never a quiet
+wrong number. Two older tests asserted the passthrough with the rationale
+"ngspice may still resolve it"; that was never true for the native engine and
+both now assert the drop plus the warning.
+Evidence: an end-to-end run against the host's real ngspice, same circuit, same
+binary - with the directive, `Error: Could not find include file … fatal error
+in ngspice, exit(1)`; without it, a full operating point with node voltages.
+Mutation-checked: reverting `spiceNetlist.ts` fails 9 of the tests.
+Gates: tsc clean, 2166 JS tests green with 13 failures across 4 files that all
+pass in isolation (79/79 - the known jsdom/CPU-contention flake), 31 Rust,
+clippy clean, corpus unchanged at 80 imported / 80 deck-built / 80 op-converged
+/ 80 schema-valid with warning-clean 77. Corpus still fails its own `>= 82`
+assertion because `~/Downloads/LTspice_export` is missing, not from a code
+regression.
+Next candidate: the second half of P9 - read the named file off disk relative to
+the source `.asc` through the FS bridge and register it as a model library, so
+the common case resolves instead of warning.
+
+**2026-07-28: `WINDOW` label placement survives a save (audit P6).**
 LTspice writes a `WINDOW` record whenever an attribute label is dragged off its
 default spot, and Tau used to refuse to save any file containing one - 1042 of
 the 4010 `.asc` files on this machine, which made Tau a viewer rather than an

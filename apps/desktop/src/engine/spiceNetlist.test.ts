@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { buildSpiceDeck, transformerWindings, unresolvedSubcktMessage } from "./spiceNetlist";
+import {
+  buildSpiceDeck,
+  includedFileName,
+  transformerWindings,
+  unresolvedLibraryWarning,
+  unresolvedSubcktMessage,
+} from "./spiceNetlist";
 import { buildParamScope } from "../simulation/paramScope";
 import type { NetLabel, PinOverride, SchematicComponent, SchematicWire } from "../schematic/types";
 import { CATALOG } from "../schematic/catalog";
@@ -588,9 +594,12 @@ describe("buildSpiceDeck", () => {
       { kind: "op" },
     );
     expect(deck.netlist).toContain(".model MyNPN NPN(Bf=250)");
-    expect(deck.netlist).toContain(".lib /path/std.lib NMOS");
     expect(deck.netlist).toContain(".subckt myamp in out");
     expect(deck.netlist).toContain(".ends");
+    // An unresolvable `.lib` is reported, not emitted: the native sanitizer
+    // rejects a file-backed card, so passing it through failed the whole deck.
+    expect(deck.netlist).not.toContain(".lib /path/std.lib NMOS");
+    expect(deck.circuit.warnings).toContain(unresolvedLibraryWarning("/path/std.lib"));
     // The analysis directive is handled by the analysis line, not the body.
     expect(deck.netlist).not.toContain(".tran 1m");
   });
@@ -1316,5 +1325,99 @@ describe("transformerWindings", () => {
     expect(deck.netlist).toContain("L_T1_p");
     expect(deck.netlist).toMatch(/L_T1_p \S+ \S+ 0\.002/);
     expect(deck.netlist).toMatch(/K_T1 L_T1_p L_T1_s 0\.95/);
+  });
+});
+
+describe("includedFileName", () => {
+  it("takes the path only, dropping a .lib section name", () => {
+    expect(includedFileName("mymodels.lib")).toBe("mymodels.lib");
+    expect(includedFileName("/path/to/std.lib NMOS")).toBe("/path/to/std.lib");
+    expect(includedFileName("  spaced.lib  ")).toBe("spaced.lib");
+  });
+
+  it("keeps the spaces inside a quoted path", () => {
+    expect(includedFileName('"C:\\my models\\adi.lib"')).toBe("C:\\my models\\adi.lib");
+    expect(includedFileName("'my models/adi.lib' TYP")).toBe("my models/adi.lib");
+  });
+});
+
+describe("unresolvable .include/.lib directives", () => {
+  const rc = (directives: string[]) =>
+    buildSpiceDeck(
+      {
+        components: [
+          component("vsource", "V1", "5", 0, 32),
+          component("resistor", "R1", "1k", 96, 0),
+          component("ground", "", "", 0, 64),
+        ],
+        wires: [wire("w1", [{ x: 0, y: 0 }, { x: 96, y: 0 }])],
+        directives,
+      },
+      { kind: "op" },
+    );
+
+  // The native sanitizer (src-tauri/src/spice.rs `deck_lines`) rejects every
+  // file-backed card, so a passed-through `.include` failed the whole run.
+  it("keeps the directive out of the deck so the run is not rejected outright", () => {
+    const deck = rc([".include mymodels.lib"]);
+    expect(deck.netlist).not.toMatch(/^\.(?:include|lib)\b/m);
+    expect(deck.netlist).toContain(".op");
+  });
+
+  it("names the file it could not resolve on the warning channel", () => {
+    expect(rc([".include mymodels.lib"]).circuit.warnings).toContain(
+      unresolvedLibraryWarning("mymodels.lib"),
+    );
+  });
+
+  it("reports the path alone for the `.inc` alias and a sectioned `.lib`", () => {
+    expect(rc([".inc sub/vendor.mod"]).circuit.warnings).toContain(
+      unresolvedLibraryWarning("sub/vendor.mod"),
+    );
+    // The path is reported as the document wrote it, not shortened to a
+    // basename - a user looking for the file needs the reference they typed.
+    expect(rc([".lib /opt/models/std.lib NMOS"]).circuit.warnings).toContain(
+      unresolvedLibraryWarning("/opt/models/std.lib"),
+    );
+  });
+
+  it("reports each missing file once, however many directives name it", () => {
+    const warnings = rc([".include dup.lib", ".inc dup.lib", ".include other.lib"]).circuit.warnings;
+    expect(warnings.filter((w) => w.includes("dup.lib"))).toHaveLength(1);
+    expect(warnings.filter((w) => w.includes("other.lib"))).toHaveLength(1);
+  });
+
+  it("says nothing when the reference resolves to a bundled library", () => {
+    const deck = rc([".include TowTom2.sub"]);
+    expect(deck.netlist).toContain(".subckt TowTom2");
+    expect(deck.circuit.warnings.filter((w) => w.includes("Could not resolve"))).toEqual([]);
+  });
+
+  // Dropping the directive must not disturb the `.subckt … .ends` depth
+  // tracking that decides whether a `{param}` is substituted here or left for
+  // ngspice to resolve against the subcircuit's own scope.
+  it("leaves a document-defined subcircuit around it intact", () => {
+    const directives = [
+      ".param Rload=1k",
+      ".subckt buf a b\n.include vendor.lib\nR1 a b {Rload}\n.ends",
+      ".model DX D(Is={Rload})",
+    ];
+    const deck = buildSpiceDeck(
+      {
+        components: [component("resistor", "R1", "1k", 96, 0), component("ground", "", "", 0, 64)],
+        wires: [],
+        directives,
+        params: buildParamScope(directives),
+      },
+      { kind: "op" },
+    );
+    expect(deck.netlist).toContain(".subckt buf a b");
+    // Inside the block the brace stays for the subcircuit's own scope; the
+    // `.model` after `.ends` is back at document scope and gets substituted.
+    // Both only hold if dropping the `.include` left the depth count alone.
+    expect(deck.netlist).toContain("R1 a b {Rload}");
+    expect(deck.netlist).toContain(".model DX D(Is=1000)");
+    expect(deck.netlist).not.toMatch(/^\.(?:include|lib)\b/m);
+    expect(deck.circuit.warnings).toContain(unresolvedLibraryWarning("vendor.lib"));
   });
 });

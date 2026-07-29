@@ -210,7 +210,7 @@ describe("deck integration - subckt instances", () => {
     expect(deck.netlist).toMatch(/^XU1 0 a b TowTom2$/m);
   });
 
-  it("leaves a non-bundled .include untouched (ngspice may still resolve it)", () => {
+  it("drops a non-bundled .include and names the file instead of emitting it", () => {
     const comps = [
       sub("mystery", "U1", [["p1", "+", 0, 0], ["p2", "-", 0, 80]]),
     ];
@@ -219,10 +219,17 @@ describe("deck integration - subckt instances", () => {
       { components: comps, wires: [], netLabels, directives: [".include mymodels.lib"] },
       { kind: "op" },
     );
-    expect(deck.netlist).toContain(".include mymodels.lib");
+    // Passing the directive through is not a way to let ngspice resolve it:
+    // the native sanitizer rejects any file-backed card, so an emitted
+    // `.include` failed the entire run rather than the one missing part.
+    expect(deck.netlist).not.toMatch(/^\.(?:include|lib)\b/m);
+    expect(deck.circuit.warnings.some((w) => w.includes("mymodels.lib"))).toBe(true);
     // Unknown subckt: X line emitted, no bundled block invented.
     expect(deck.netlist).toMatch(/^XU1 n\d+ 0 mystery$/m);
     expect(deck.netlist).not.toMatch(/^\.subckt/m);
+    // Still fatal for the part that actually went missing - dropping the
+    // directive must not turn an unresolvable model into a quiet wrong answer.
+    expect(deck.unresolvedSubckts).toContain("mystery");
   });
 
   it("does not emit a bundled block when the document defines the subckt itself", () => {

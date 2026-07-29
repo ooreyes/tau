@@ -28,6 +28,10 @@ Nothing in the UI currently labels which engine produced a given result.
   (`Level=1` MOSFET, textbook BJT/diode) and **says so before the run** - the
   warning names the part and the model it could not find. Attach the vendor
   `.lib` through the Model libraries dialog to get the real device.
+- A `.include`/`.lib` directive that points at a file on disk is not read; Tau
+  resolves only the libraries it bundles. The rest of the schematic still
+  simulates, and the run names the file it could not resolve - attach that file
+  through the Model libraries dialog to bring its definitions in.
 - TRIACs import as a BJT; DIACs and varistors as high-value resistors.
 - `.step` runs at most 16 points. A wider sweep warns that it was truncated
   rather than plotting a short curve as if it were complete.

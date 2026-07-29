@@ -42,8 +42,19 @@ partial work.
 Ordered. Take the top item unless it is blocked. Class A outranks everything -
 a plausible wrong number is worse than a refusal to run.
 
-1. **P9 - resolve `.include`/`.lib`** relative to the source `.asc` through the
-   existing FS bridge, instead of hard-failing the run.
+1. **P9 second half - actually READ the `.include`/`.lib` file.** The directive
+   no longer sinks the run (landed 2026-07-28), so the deck reaches ngspice and
+   names the file it could not resolve. What is still missing is resolving that
+   name relative to the source `.asc` through the FS bridge
+   (`project/fsBridge.ts` `readTextFile`) and registering the text as a model
+   library, so the common case resolves instead of warning. The plumbing to
+   use it already exists: `parseUserModelLibraries` +
+   `schematic.userModelLibraries`. Note the netlist builder is deliberately
+   pure (no FS access) - do the read at import/open time in `App.tsx` or
+   `io/fileImport.ts`, not inside `buildSpiceDeck`. Also note `.include` is
+   resolved by NAME, not by file: once the text is attached, every model and
+   subckt in it resolves through the registry, so nothing has to match the
+   `.include` path.
 2. **P3 remainder - `.noise`/`.tf` on ngspice.** `.dc` landed 2026-07-28;
    these two still run only on the TS solver, which rejects transistors.
    Mirror `runNativeDcSweep`. Note `analysisLine` has no `noise`/`tf` branch
@@ -68,6 +79,13 @@ a plausible wrong number is worse than a refusal to run.
 
 Newest first. One line each: date, unit, evidence.
 
+- 2026-07-28 - An unresolvable `.include`/`.lib` is dropped from the deck and
+  named on the warning channel instead of being emitted verbatim, which the
+  native sanitizer rejected - so the whole schematic used to fail to run. Guard
+  untouched; the card just never reaches it. Real-ngspice proof: same circuit,
+  with the directive `fatal error in ngspice, exit(1)`, without it a full
+  operating point. Two old tests asserting the passthrough were wrong about the
+  native engine and now assert the drop.
 - 2026-07-28 - `WINDOW` label placement survives a save instead of blocking it.
   Carried on the component, re-emitted when the part keeps its own symbol,
   warned about when it does not. Real-corpus proof: 1851 placements across 300

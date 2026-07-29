@@ -217,6 +217,15 @@ export function buildSpiceDeck(schematic: Schematic, analysis: SpiceAnalysis): S
   // lib/sub paths from Tau's working directory. Names those texts define are
   // tracked so the per-instance emission below doesn't duplicate the block.
   const inlinedSubckts = new Set<string>();
+  // Files named by a `.include`/`.lib` that resolved to nothing, in first-seen
+  // order. Such a directive is left OUT of the deck: the native sanitizer
+  // (src-tauri/src/spice.rs `deck_lines`) rejects every file-backed primitive,
+  // so emitting it verbatim failed the whole run on a card the user never
+  // wrote by hand and cannot act on. Dropping it costs nothing that was
+  // working and is not silent - the file is named on the warning channel here,
+  // and any definition that went missing with it still surfaces through
+  // `unresolvedSubckts` (fatal, names the part) or a model substitution.
+  const unresolvedLibraryFiles = new Set<string>();
   // Track `.subckt … .ends` nesting: LTspice evaluates a `{param}` on a
   // passthrough `.model` line against the document's global `.param` scope
   // (Fc.asc's `.model DX D(Cjo={Cjo} …)` - ngspice instead dies with
@@ -225,17 +234,23 @@ export function buildSpiceDeck(schematic: Schematic, analysis: SpiceAnalysis): S
   let subcktDepth = 0;
   const passthroughScope = schematic.params ?? EMPTY_SCOPE;
   for (const line of modelLibLinesFromDirectives(rawDirectives)) {
-    const fileRef = /^\.(?:include|lib)\s+(.+)$/i.exec(line.trim());
-    const bundled = fileRef ? bundledLibraryText(fileRef[1]) : null;
+    const fileRef = /^\.(include|lib)\s+(.+)$/i.exec(line.trim());
+    // Resolve and report against the SAME token, so a directive the bundled
+    // lookup never really tried can't be reported as an unresolvable file.
+    const file = fileRef ? includedFileName(fileRef[2]) : "";
+    const bundled = file ? bundledLibraryText(file) : null;
     if (bundled) {
       lines.push(bundled);
       for (const m of bundled.matchAll(/^\.subckt\s+(\S+)/gim)) inlinedSubckts.add(m[1].toLowerCase());
+    } else if (fileRef) {
+      if (file) unresolvedLibraryFiles.add(file);
     } else {
       if (/^\.subckt\b/i.test(line.trim())) subcktDepth += 1;
       lines.push(subcktDepth > 0 ? line : substituteKnownBraces(line, passthroughScope));
       if (/^\.ends\b/i.test(line.trim())) subcktDepth = Math.max(0, subcktDepth - 1);
     }
   }
+  for (const file of unresolvedLibraryFiles) circuit.warnings.push(unresolvedLibraryWarning(file));
 
   // Carry mutual-inductance `K` coupling directives (transformer windings) into
   // the deck with any `{expr}` coefficient resolved; without this a coupled
@@ -556,6 +571,26 @@ function switchControlNodes(
 export function uncontrolledSwitchWarning(component: SchematicComponent): string {
   const ref = component.label.trim() || "A switch";
   return `${ref} has no control connection, so it simulates as a fixed open circuit. Wire both control pins (NC+ and NC-) to drive it, or set its value to "closed" to hold it on.`;
+}
+
+/**
+ * The file a `.include` / `.lib` directive names. A `.lib` may carry a trailing
+ * section name (`.lib std.lib NMOS`) which is not part of the path, and either
+ * form may quote a path that contains spaces. An unquoted reference ends at the
+ * first space, which is how ngspice reads it too.
+ */
+export function includedFileName(ref: string): string {
+  const trimmed = ref.trim();
+  const quoted = /^(["'])(.*?)\1/.exec(trimmed);
+  if (quoted) return quoted[2].trim();
+  return trimmed.split(/\s+/)[0] ?? "";
+}
+
+/** Product copy for a `.include`/`.lib` naming a file Tau has no text for. The
+ *  directive is dropped rather than passed through, so this is the only place
+ *  the user learns that part of their document did not make it into the run. */
+export function unresolvedLibraryWarning(file: string): string {
+  return `Could not resolve the library file ${file}, so its models and subcircuits are not part of this run. Attach the file under Model Libraries to use its definitions.`;
 }
 
 function componentLines(entry: ExtractedComponent, index: number, name: string, userModels: Set<string> = new Set(), params: ParamScope = EMPTY_SCOPE, vdmosModels: ReadonlySet<string> = new Set(), netPinCount: ReadonlyMap<string, number> = new Map(), subcktModels: ReadonlySet<string> = new Set(), directiveInductorIc?: string, substitutions: ModelSubstitution[] = []): string[] {
