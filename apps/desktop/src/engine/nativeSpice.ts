@@ -214,6 +214,24 @@ export async function runNativeAcSweep(
 }
 
 /**
+ * ngspice names the DC scale for the swept source's type, not its refdes:
+ * `v-sweep` for a voltage source, `i-sweep` for a current source.
+ */
+export const DC_SWEEP_SCALE = /^[vi]-sweep$/i;
+
+/**
+ * Splits a `.dc` sweep axis into its inner legs. The inner leg restarts when
+ * the axis returns to its first value. A single-source sweep never does, giving
+ * one leg of the full length; an inner sweep pinned to a single point repeats
+ * immediately, giving legs of one - both fall out of the same rule.
+ */
+export function splitDcSweepLegs(axis: number[]): { sweep: number[]; legLength: number; legCount: number } {
+  const repeat = axis.findIndex((value, index) => index > 0 && value === axis[0]);
+  const legLength = repeat > 0 ? repeat : axis.length;
+  return { sweep: axis.slice(0, legLength), legLength, legCount: Math.floor(axis.length / legLength) };
+}
+
+/**
  * Runs a DC transfer sweep on ngspice. The TypeScript solver behind
  * `runDcSweep` re-solves an operating point per step and has no semiconductor
  * stamps, so it refuses every transistor - this is the only path on which a
@@ -262,19 +280,10 @@ export async function runNativeDcSweep(
   const execution = await executeNative(schematic, { kind: "dc", ...spec });
   if (!execution) return null;
 
-  // ngspice names the DC scale for the swept source's type, not its refdes:
-  // `v-sweep` for a voltage source, `i-sweep` for a current source.
-  const scale = execution.result.vectors.find((candidate) => /^[vi]-sweep$/i.test(candidate.name.trim()));
+  const scale = execution.result.vectors.find((candidate) => DC_SWEEP_SCALE.test(candidate.name.trim()));
   if (!scale || scale.real.length === 0) throw new Error("ngspice completed, but returned no DC sweep axis.");
 
-  // The inner leg restarts when the axis returns to its first value. A
-  // single-source sweep never does, giving one leg of the full length; an
-  // inner sweep pinned to a single point repeats immediately, giving legs of
-  // one - both fall out of the same rule.
-  const repeat = scale.real.findIndex((value, index) => index > 0 && value === scale.real[0]);
-  const legLength = repeat > 0 ? repeat : scale.real.length;
-  const sweep = scale.real.slice(0, legLength);
-  const legCount = Math.floor(scale.real.length / legLength);
+  const { sweep, legLength, legCount } = splitDcSweepLegs(scale.real);
 
   const series = execution.deck.circuit.nets
     .filter((net) => !net.isGround)

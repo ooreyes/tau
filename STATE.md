@@ -49,22 +49,22 @@ do not spend a fire diffing it again. Re-check only if its tip moves past
 Ordered. Take the top item unless it is blocked. Class A outranks everything -
 a plausible wrong number is worse than a refusal to run.
 
-1. **A MOSFET DC-sweep corpus proof.** The native DC path is unit-tested
-   against mocked vectors and its ngspice contract was checked by hand at the
-   CLI, but nothing in the repo runs a real transistor sweep end to end. A
-   `scripts/dcSweepNative.corpus.ts` in the shape of `scripts/tfNative.corpus.ts`
-   or the new `scripts/noiseNative.corpus.ts` would close that - both parse
-   ngspice's own printed output so the adapter's vector names are checked
-   against a real run rather than restated.
-2. **P16 - engine badge**. Nothing tells the user whether ngspice or the TS
+1. **P16 - engine badge**. Nothing tells the user whether ngspice or the TS
    solver produced a result, and KNOWN_ISSUES now says so in as many words.
    Also fix the last string still calling ngspice "planned"
    (`simulation/acSweep.ts:291`); the noise one is gone.
-3. **The next save blocker after `WINDOW`: drawing primitives.** With placement
+2. **The next save blocker after `WINDOW`: drawing primitives.** With placement
    preserved, `LINE`/`RECTANGLE`/`CIRCLE`/`ARC` are the most common remaining
    reason an imported `.asc` still cannot be saved. `parseAsc` already keeps
    them in `doc.shapes`; the exporter drops them. Same passthrough shape as
-   this unit.
+   the `WINDOW` unit.
+3. **`.dc` is proven, `.tran` and `.ac` are not.** With the DC-sweep proof
+   landed, transient and AC are the two native paths left whose vector contract
+   is only unit-tested against mocked vectors. `.tran` is the highest-traffic
+   analysis in the app, and `runNativeTransient` carries the most unproven
+   name-matching of any adapter (`componentCurrentVector`'s `<ref>#branch` /
+   `i(<ref>)` / `@<ref>[id]` ladder). Same harness shape as
+   `scripts/dcSweepNative.corpus.ts`.
 
 ---
 
@@ -72,6 +72,30 @@ a plausible wrong number is worse than a refusal to run.
 
 Newest first. One line each: date, unit, evidence.
 
+- 2026-07-29 - A real transistor DC sweep runs end to end in the repo, so the
+  native `.dc` path is checked against ngspice rather than against mocked
+  vectors. Extracted the two engine-facing assumptions out of
+  `runNativeDcSweep` so the proof exercises shipped code, not a copy:
+  `DC_SWEEP_SCALE` (ngspice names the axis for the swept source's type -
+  `v-sweep` or `i-sweep` - not for its refdes) and `splitDcSweepLegs` (a nested
+  sweep returns as one flat inner-major run; the inner leg restarts when the
+  axis returns to its first value). Real-ngspice proof:
+  `scripts/dcSweepNative.corpus.ts` - an NMOS common-source stage swept
+  gate-inner / rail-outer that the TS solver refuses outright, whose drain
+  voltage is checked in closed form (Level 1 saturation with `Vds = Vdd - Id*Rd`
+  gives `Id = a(1+lambda*Vdd)/(1+a*lambda*Rd)`) at all 33 points across 3 rails
+  to 6 decimals; a divider both engines answer identically; and a current-source
+  sweep, which is the only thing in the repo exercising the `i-sweep` half of
+  the scale rule. Leg order pinned by holding each leg's `vdd` column against
+  the outer values `sweepValues` computes - the same arithmetic the adapter
+  captions with - so a mis-split cannot pass by smearing one rail's curve under
+  another's caption. Mutation-checked four ways: dropped `i-sweep` (kills the
+  current case), collapsed the splitter (kills the nested case), retuned the
+  shipped `TAU_NMOS` starter model (kills the deck assertion), and perturbed the
+  harness's own closed form by 0.001 in lambda (kills the 33-point comparison,
+  so it is not vacuous). No guard moved, no shipped behaviour changed; the 34
+  existing `nativeSpice.test.ts` cases still pass and the corpus held at
+  80/80/80/80.
 - 2026-07-29 - `.noise` runs on ngspice end to end, so a noise figure now
   includes a transistor's own shot and flicker noise instead of resistor thermal
   noise alone. Recovered the `-wip` rescue commit's TS half (`analysisLine`

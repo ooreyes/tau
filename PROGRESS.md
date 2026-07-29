@@ -29,7 +29,43 @@ figure all run on the real engine. Do not restore a readiness banner until every
 Class A and Class B item in the audit is closed or consciously accepted, with
 file:line evidence.
 
-**Last unit - 2026-07-29: `.noise` runs on ngspice end to end, so a noise
+**Last unit - 2026-07-29: a real transistor DC sweep now runs end to end in the
+repo, so the native `.dc` path is checked against ngspice instead of against
+mocked vectors.** `.dc` has reached ngspice since 2026-07-28, but every test of
+`runNativeDcSweep` fed it hand-written vectors - its two engine-facing
+assumptions (what ngspice calls the sweep axis, and how it lays a nested sweep
+out) were restated in the test, not measured. `scripts/dcSweepNative.corpus.ts`
+closes that in the shape of the `.tf` and `.noise` proofs.
+
+Two assumptions were extracted from `runNativeDcSweep` so the proof can exercise
+the shipped code rather than a copy of it: `DC_SWEEP_SCALE` (ngspice names the
+axis for the swept source's *type* - `v-sweep` or `i-sweep` - not for its
+refdes) and `splitDcSweepLegs` (a nested sweep comes back as one flat
+inner-major run; the inner leg restarts when the axis returns to its first
+value). The corpus feeds the axis a real run actually returned into that real
+splitter.
+
+The flagship case is an NMOS common-source stage swept gate-inner, rail-outer -
+a circuit the TypeScript solver refuses outright, since `OP_SUPPORTED` has no
+MOSFET stamp. Its drain voltage is checked in closed form rather than by
+tolerance band: Level 1 in saturation with `Vds = Vdd - Id*Rd` solves to
+`Id = a(1 + lambda*Vdd) / (1 + a*lambda*Rd)`, and all 33 points across 3 rails
+agree with ngspice to 6 decimals. Leg order is pinned by holding each leg's
+`vdd` column against the outer values `sweepValues` computes - the same
+arithmetic the adapter captions curves with - so a mis-split cannot pass by
+smearing one rail's curve under another's caption.
+
+Mutation-checked four ways: dropping `i-sweep` from the scale rule (kills the
+current-sweep case), collapsing the leg splitter to one leg (kills the nested
+case), silently retuning the shipped `TAU_NMOS` starter model (kills the deck
+assertion), and perturbing the harness's own closed form by 0.001 in lambda
+(kills the 33-point comparison, so those assertions are not vacuous).
+
+No guard moved and no shipped behaviour changed - the extraction is
+line-for-line the same logic, and the 34 existing `nativeSpice.test.ts` cases
+still pass. Corpus held at 80/80/80/80.
+
+**Previous unit - 2026-07-29: `.noise` runs on ngspice end to end, so a noise
 figure includes a transistor's own noise instead of resistor thermal noise
 alone.** This is the TypeScript half that the previous unit's `extraPlots`
 contract was built for, and it was recovered rather than written fresh: the
