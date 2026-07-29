@@ -288,7 +288,7 @@ export function runAcSweep(
     const unsupported = components.filter((component) => !AC_SUPPORTED.has(component.kind));
     if (unsupported.length > 0) {
       return fail(
-        `${unsupported.map((component) => component.label || component.kind).join(", ")} ${unsupported.length === 1 ? "is" : "are"} placeable and wireable, but AC analysis currently supports only R/C/L, voltage/current sources, ideal op amps, switches, grounds, and test points. Full models need the planned ngspice engine.`,
+        `${unsupported.map((component) => component.label || component.kind).join(", ")} ${unsupported.length === 1 ? "is" : "are"} placeable and wireable, but this preview solver's AC sweep supports only R/C/L, voltage/current sources, ideal op amps, switches, grounds, and test points. Full device models need the ngspice engine, which runs in the desktop app.`,
         circuit,
       );
     }

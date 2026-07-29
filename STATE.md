@@ -49,16 +49,12 @@ do not spend a fire diffing it again. Re-check only if its tip moves past
 Ordered. Take the top item unless it is blocked. Class A outranks everything -
 a plausible wrong number is worse than a refusal to run.
 
-1. **P16 - engine badge**. Nothing tells the user whether ngspice or the TS
-   solver produced a result, and KNOWN_ISSUES now says so in as many words.
-   Also fix the last string still calling ngspice "planned"
-   (`simulation/acSweep.ts:291`); the noise one is gone.
-2. **The next save blocker after `WINDOW`: drawing primitives.** With placement
+1. **The next save blocker after `WINDOW`: drawing primitives.** With placement
    preserved, `LINE`/`RECTANGLE`/`CIRCLE`/`ARC` are the most common remaining
    reason an imported `.asc` still cannot be saved. `parseAsc` already keeps
    them in `doc.shapes`; the exporter drops them. Same passthrough shape as
    the `WINDOW` unit.
-3. **`.dc` is proven, `.tran` and `.ac` are not.** With the DC-sweep proof
+2. **`.dc` is proven, `.tran` and `.ac` are not.** With the DC-sweep proof
    landed, transient and AC are the two native paths left whose vector contract
    is only unit-tested against mocked vectors. `.tran` is the highest-traffic
    analysis in the app, and `runNativeTransient` carries the most unproven
@@ -72,6 +68,30 @@ a plausible wrong number is worse than a refusal to run.
 
 Newest first. One line each: date, unit, evidence.
 
+- 2026-07-29 - Every analysis result now names the solver that produced it, so
+  a number can be traced to ngspice or to the TypeScript preview solver instead
+  of being read as though one engine answered everything. The two engines model
+  different circuits (the preview solver has no semiconductor stamps and refuses
+  transistors outright), so an unattributed figure was the last place Tau
+  presented a subset answer as if it were the full one. The badge reads off the
+  DISPLAYED result rather than the runtime, and `activeResult` was already
+  mode-aware, so switching analysis tabs re-attributes; a result carrying no
+  engine shows no badge rather than implying the native one. Provenance is an
+  App-layer concern - the solvers do not know their own - so nothing was added
+  to the six result contracts; the App state/panel props intersect them with
+  `EngineProvenance` instead. All five native-first analyses route through one
+  `resolveEngineResult(native, () => fallback())` seam, which makes naming the
+  wrong engine unwritable at a call site and keeps the fallback lazy; transient
+  and `.step` stamp explicitly because they branch further. A `.step` family
+  whose members did not all come from one solver carries no badge. Mutation-
+  checked four ways: badge read from the runtime instead of the result (kills 3),
+  badge computed but never rendered (kills 4 - trap 1), the seam always claiming
+  ngspice (kills 1), the fallback made eager (kills 2). Also retired the three
+  strings still calling ngspice "planned" or the shipped solver "interim"
+  (`acSweep.ts`, `linearTransient.ts` x2) - ngspice has shipped since v1.0.
+  KNOWN_ISSUES said in as many words that nothing labelled the engine; that line
+  is now the feature's description. Gates: tsc, full suite 2226 passed / 148
+  files, cargo test + clippy clean, corpus held at 80/80/80/80.
 - 2026-07-29 - A real transistor DC sweep runs end to end in the repo, so the
   native `.dc` path is checked against ngspice rather than against mocked
   vectors. Extracted the two engine-facing assumptions out of

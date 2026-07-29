@@ -57,6 +57,7 @@ import {
   type StepFamilyMember,
   type StepFamilyResult,
 } from "./simulation/stepFamily";
+import { resolveEngineResult, withEngine, type EngineProvenance, type SimulationEngine } from "./simulation/engineProvenance";
 import {
   runAcStepFamily,
   runDcStepFamily,
@@ -191,6 +192,10 @@ export function schematicDocumentSignature(doc: SchematicDocument): string {
 const RAIL_W = SHELL_LAYOUT.railWidth; // .activity-rail
 const HANDLE_W = SHELL_LAYOUT.handleWidth; // .col-resize-handle, one per open column
 const SCOPE_MIN = 300; // analysis scope column floor (matches old drag clamp)
+// Names the engine on an error result: nothing was returned to attribute, but
+// the failure still came from whichever solver the run reached for.
+const attemptedEngine = (): SimulationEngine => (isNativeSpiceRuntime() ? "ngspice" : "preview");
+
 function App() {
   const components = useSchematic((s) => s.components);
   const wires = useSchematic((s) => s.wires);
@@ -249,13 +254,13 @@ function App() {
     setOptionsOverridden(true);
   }, []);
   const resetAnalysisOptions = useCallback(() => setOptionsOverridden(false), []);
-  const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
-  const [opAnalysis, setOpAnalysis] = useState<OperatingPointResult | null>(null);
-  const [acAnalysis, setAcAnalysis] = useState<AcResult | null>(null);
-  const [dcAnalysis, setDcAnalysis] = useState<DcSweepResult | null>(null);
-  const [tfAnalysis, setTfAnalysis] = useState<TfResult | null>(null);
-  const [noiseAnalysis, setNoiseAnalysis] = useState<NoiseResult | null>(null);
-  const [stepFamily, setStepFamily] = useState<StepFamilyResult | null>(null);
+  const [analysis, setAnalysis] = useState<(AnalysisResult & EngineProvenance) | null>(null);
+  const [opAnalysis, setOpAnalysis] = useState<(OperatingPointResult & EngineProvenance) | null>(null);
+  const [acAnalysis, setAcAnalysis] = useState<(AcResult & EngineProvenance) | null>(null);
+  const [dcAnalysis, setDcAnalysis] = useState<(DcSweepResult & EngineProvenance) | null>(null);
+  const [tfAnalysis, setTfAnalysis] = useState<(TfResult & EngineProvenance) | null>(null);
+  const [noiseAnalysis, setNoiseAnalysis] = useState<(NoiseResult & EngineProvenance) | null>(null);
+  const [stepFamily, setStepFamily] = useState<(StepFamilyResult & EngineProvenance) | null>(null);
   // `.step` families of the AC/DC analyses: computed alongside the base run
   // whenever the document carries a runnable `.step`, overlaid on their panes.
   const [acStepFamily, setAcStepFamily] = useState<AnalysisFamily<AcResult> | null>(null);
@@ -579,7 +584,7 @@ function App() {
         // Stop marks this request stale even if the worker happened to finish
         // during cancellation, so a late native result can never overwrite UI.
         if (analysisRequestRef.current !== requestId || controller.signal.aborted) return;
-        setAnalysis(nativeResult);
+        setAnalysis(withEngine(nativeResult, "ngspice"));
         setRunState(nativeResult.ok ? "complete" : "error");
         return;
       }
@@ -589,7 +594,7 @@ function App() {
         { onProgress, signal: controller.signal },
       );
       if (analysisRequestRef.current !== requestId) return;
-      setAnalysis(result);
+      setAnalysis(withEngine(result, "preview"));
       setRunState(result.ok ? "complete" : "error");
       if (controller.signal.aborted) showNotice("Stopped early - showing partial result.");
     } catch (error) {
@@ -604,6 +609,7 @@ function App() {
         message: userFacingErrorMessage(error, "ngspice could not run this transient analysis."),
         details: technicalErrorDetails(error),
         warnings: [],
+        engine: attemptedEngine(),
       });
       setRunState("error");
     } finally {
@@ -646,12 +652,15 @@ function App() {
     const requestId = ++analysisRequestRef.current;
     setAnalysisRunning(true);
     try {
-      const result = await runNativeOperatingPoint({ components, wires, netLabels, params, directives, userModelLibraries: userModelLibraryTexts, userModelLibraryNames }) ?? runOperatingPoint({ components, wires, netLabels, params }, { returnBranches: true });
+      const result = resolveEngineResult(
+        await runNativeOperatingPoint({ components, wires, netLabels, params, directives, userModelLibraries: userModelLibraryTexts, userModelLibraryNames }),
+        () => runOperatingPoint({ components, wires, netLabels, params }, { returnBranches: true }),
+      );
       if (analysisRequestRef.current !== requestId) return;
       setOpAnalysis(result);
     } catch (error) {
       if (analysisRequestRef.current !== requestId) return;
-      setOpAnalysis({ ok: false, message: userFacingErrorMessage(error, "ngspice could not calculate the operating point."), warnings: [] });
+      setOpAnalysis({ ok: false, message: userFacingErrorMessage(error, "ngspice could not calculate the operating point."), warnings: [], engine: attemptedEngine() });
     } finally {
       if (analysisRequestRef.current === requestId) setAnalysisRunning(false);
     }
@@ -664,10 +673,13 @@ function App() {
       // An imported LTspice .ac directive is the user's analysis definition.
       // Suggest a useful range only when the document does not provide one.
       const acSweep = analysesFromDirectives(directives).ac ?? suggestAcSweep(components);
-      const result = await runNativeAcSweep(
-        { components, wires, netLabels, params, directives, userModelLibraries: userModelLibraryTexts, userModelLibraryNames },
-        acSweep,
-      ) ?? runAcSweep({ components, wires, netLabels, params, couplings }, acSweep);
+      const result = resolveEngineResult(
+        await runNativeAcSweep(
+          { components, wires, netLabels, params, directives, userModelLibraries: userModelLibraryTexts, userModelLibraryNames },
+          acSweep,
+        ),
+        () => runAcSweep({ components, wires, netLabels, params, couplings }, acSweep),
+      );
       if (analysisRequestRef.current !== requestId) return;
       setAcAnalysis(result);
       // A runnable `.step` also produces a family of Bode curves to overlay,
@@ -685,7 +697,7 @@ function App() {
       );
     } catch (error) {
       if (analysisRequestRef.current !== requestId) return;
-      setAcAnalysis({ ok: false, message: userFacingErrorMessage(error, "ngspice could not run this AC sweep."), warnings: [] });
+      setAcAnalysis({ ok: false, message: userFacingErrorMessage(error, "ngspice could not run this AC sweep."), warnings: [], engine: attemptedEngine() });
       setAcStepFamily(null);
     } finally {
       if (analysisRequestRef.current === requestId) setAnalysisRunning(false);
@@ -708,10 +720,13 @@ function App() {
     try {
       // ngspice first: the TS solver has no semiconductor stamps, so it cannot
       // sweep a transistor at all.
-      const result = await runNativeDcSweep(
-        { components, wires, netLabels, params, directives, userModelLibraries: userModelLibraryTexts, userModelLibraryNames },
-        dc,
-      ) ?? runDcSweep({ components, wires, netLabels, params }, dc);
+      const result = resolveEngineResult(
+        await runNativeDcSweep(
+          { components, wires, netLabels, params, directives, userModelLibraries: userModelLibraryTexts, userModelLibraryNames },
+          dc,
+        ),
+        () => runDcSweep({ components, wires, netLabels, params }, dc),
+      );
       if (analysisRequestRef.current !== requestId) return;
       setDcAnalysis(result);
       // A runnable `.step` also produces a family of transfer curves to overlay.
@@ -721,7 +736,7 @@ function App() {
       );
     } catch (error) {
       if (analysisRequestRef.current !== requestId) return;
-      setDcAnalysis({ ok: false, message: userFacingErrorMessage(error, "Could not run this DC sweep."), warnings: [] });
+      setDcAnalysis({ ok: false, message: userFacingErrorMessage(error, "Could not run this DC sweep."), warnings: [], engine: attemptedEngine() });
       setDcStepFamily(null);
     } finally {
       if (analysisRequestRef.current === requestId) setAnalysisRunning(false);
@@ -735,15 +750,18 @@ function App() {
     try {
       // ngspice first, for the same reason as the DC sweep: the TS solver has
       // no semiconductor stamps, so it cannot take an amplifier's gain at all.
-      const result = await runNativeTransferFunction(
-        { components, wires, netLabels, params, directives, userModelLibraries: userModelLibraryTexts, userModelLibraryNames },
-        tf,
-      ) ?? runTransferFunction({ components, wires, netLabels, params }, tf);
+      const result = resolveEngineResult(
+        await runNativeTransferFunction(
+          { components, wires, netLabels, params, directives, userModelLibraries: userModelLibraryTexts, userModelLibraryNames },
+          tf,
+        ),
+        () => runTransferFunction({ components, wires, netLabels, params }, tf),
+      );
       if (analysisRequestRef.current !== requestId) return;
       setTfAnalysis(result);
     } catch (error) {
       if (analysisRequestRef.current !== requestId) return;
-      setTfAnalysis({ ok: false, message: userFacingErrorMessage(error, "Could not run this transfer function."), warnings: [] });
+      setTfAnalysis({ ok: false, message: userFacingErrorMessage(error, "Could not run this transfer function."), warnings: [], engine: attemptedEngine() });
     } finally {
       if (analysisRequestRef.current === requestId) setAnalysisRunning(false);
     }
@@ -757,15 +775,18 @@ function App() {
       // ngspice first: the TS solver has only resistor thermal noise and
       // refuses any circuit with a semiconductor in it, so it cannot report a
       // real amplifier's noise at all.
-      const result = await runNativeNoise(
-        { components, wires, netLabels, params, directives, userModelLibraries: userModelLibraryTexts, userModelLibraryNames },
-        noise,
-      ) ?? runNoiseAnalysis({ components, wires, netLabels, params }, noise);
+      const result = resolveEngineResult(
+        await runNativeNoise(
+          { components, wires, netLabels, params, directives, userModelLibraries: userModelLibraryTexts, userModelLibraryNames },
+          noise,
+        ),
+        () => runNoiseAnalysis({ components, wires, netLabels, params }, noise),
+      );
       if (analysisRequestRef.current !== requestId) return;
       setNoiseAnalysis(result);
     } catch (error) {
       if (analysisRequestRef.current !== requestId) return;
-      setNoiseAnalysis({ ok: false, message: userFacingErrorMessage(error, "Could not run this noise analysis."), warnings: [] });
+      setNoiseAnalysis({ ok: false, message: userFacingErrorMessage(error, "Could not run this noise analysis."), warnings: [], engine: attemptedEngine() });
     } finally {
       if (analysisRequestRef.current === requestId) setAnalysisRunning(false);
     }
@@ -795,15 +816,21 @@ function App() {
     setAnalysisRunning(true);
     try {
       const members: StepFamilyMember[] = [];
+      // A family only carries a badge when every member came from the same
+      // solver; a mixed family is not attributable to one engine.
+      let familyEngine: SimulationEngine | undefined;
       for (const ctx of contexts) {
         // A temp sweep forwards its temperature to native ngspice as `.temp` so
         // its device models shift too (the TS solver already saw the rescaled
         // resistors via applyTemperature).
         const stepDirectives = ctx.temperature !== undefined ? [`.temp ${ctx.temperature}`] : undefined;
-        const result =
-          (await runNativeTransient({ components: ctx.components, wires, netLabels, params: ctx.params, directives: stepDirectives, userModelLibraries: userModelLibraryTexts, userModelLibraryNames }, effectiveAnalysisOptions))
-          ?? (await runTransientAnalysis({ components: ctx.components, wires, netLabels, params: ctx.params }, effectiveAnalysisOptions));
+        const native = await runNativeTransient({ components: ctx.components, wires, netLabels, params: ctx.params, directives: stepDirectives, userModelLibraries: userModelLibraryTexts, userModelLibraryNames }, effectiveAnalysisOptions);
+        const result = native
+          ? withEngine(native, "ngspice")
+          : withEngine(await runTransientAnalysis({ components: ctx.components, wires, netLabels, params: ctx.params }, effectiveAnalysisOptions), "preview");
         if (analysisRequestRef.current !== requestId) return;
+        const memberEngine: SimulationEngine = native ? "ngspice" : "preview";
+        familyEngine = members.length === 0 ? memberEngine : familyEngine === memberEngine ? familyEngine : undefined;
         members.push({ label: ctx.label, value: ctx.value, result });
       }
       // Leads the list: a truncated sweep changes how every curve below it
@@ -813,10 +840,10 @@ function App() {
         ...(truncation ? [truncation] : []),
         ...(members.find((m) => m.result.ok)?.result.warnings ?? []),
       ];
-      setStepFamily({ ok: members.some((m) => m.result.ok), spec: specs[0], members, warnings });
+      setStepFamily({ ok: members.some((m) => m.result.ok), spec: specs[0], members, warnings, engine: familyEngine });
     } catch (error) {
       if (analysisRequestRef.current !== requestId) return;
-      setStepFamily({ ok: false, message: userFacingErrorMessage(error, "Could not run this .step sweep."), members: [], warnings: [] });
+      setStepFamily({ ok: false, message: userFacingErrorMessage(error, "Could not run this .step sweep."), members: [], warnings: [], engine: attemptedEngine() });
     } finally {
       if (analysisRequestRef.current === requestId) setAnalysisRunning(false);
     }

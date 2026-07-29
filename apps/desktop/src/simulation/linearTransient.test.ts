@@ -512,7 +512,7 @@ describe("Graceful failure cases", () => {
 
     const result = await runTransientAnalysis({ components: [U1, GND], wires: [] }, { stopTime: 1e-3, steps: 100 });
     expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.message).toContain("interim solver");
+    if (!result.ok) expect(result.message).toContain("preview solver");
   });
 });
 

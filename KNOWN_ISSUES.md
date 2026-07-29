@@ -19,7 +19,10 @@ Tau's own smaller solver, which models R/C/L, sources, diodes, op-amps and
 controlled sources but **not transistors** - on those it refuses to run and
 says so.
 
-Nothing in the UI currently labels which engine produced a given result.
+Every result is labelled with the engine that produced it, on the status strip
+above the plots - `ngspice` or `Preview solver`. The label follows the analysis
+tab you are looking at, so switching tabs re-attributes rather than reporting
+one engine for the whole session.
 
 ## Devices that are not modelled yet
 

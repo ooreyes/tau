@@ -200,7 +200,7 @@ export async function runTransientAnalysis(
     if (unsupported.length > 0) {
       return fail(
         "Unsupported model",
-        `${unsupported.map((component) => component.label || component.kind).join(", ")} ${unsupported.length === 1 ? "is" : "are"} placeable and wireable, but the interim solver only supports R/C/L, voltage/current sources, AC sine sources, diodes/LEDs/zeners, switches, grounds, and test points. Full models need the planned ngspice engine.`,
+        `${unsupported.map((component) => component.label || component.kind).join(", ")} ${unsupported.length === 1 ? "is" : "are"} placeable and wireable, but this preview solver only supports R/C/L, voltage/current sources, AC sine sources, diodes/LEDs/zeners, switches, grounds, and test points. Full device models need the ngspice engine, which runs in the desktop app.`,
         circuit,
       );
     }
@@ -208,7 +208,7 @@ export async function runTransientAnalysis(
       return fail("No reference", "Add a ground symbol so node voltages have a reference.", circuit);
     }
     if (!components.some((component) => ["vsource", "isource", "vac", "iac", "bsource"].includes(component.kind))) {
-      return fail("No source", "Add a voltage or current source to excite the circuit. The interim solver requires an explicit independent source.", circuit);
+      return fail("No source", "Add a voltage or current source to excite the circuit. This preview solver requires an explicit independent source.", circuit);
     }
 
     const nonGroundNets = circuit.nets.filter((net) => !net.isGround);

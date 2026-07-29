@@ -29,7 +29,48 @@ figure all run on the real engine. Do not restore a readiness banner until every
 Class A and Class B item in the audit is closed or consciously accepted, with
 file:line evidence.
 
-**Last unit - 2026-07-29: a real transistor DC sweep now runs end to end in the
+**Last unit - 2026-07-29: every analysis result now names the engine that
+produced it, so a number can be traced to ngspice or to the TypeScript preview
+solver instead of being read as though one engine answered everything.** The two
+solvers do not model the same circuits - the preview solver has no semiconductor
+stamps and refuses a transistor outright - so an unattributed figure was the last
+place Tau could present a subset answer as if it were the full one. KNOWN_ISSUES
+said so in as many words; that line is now the feature's description.
+
+The badge sits at the end of the plotter status strip and reads off the
+*displayed* result, not off the runtime. `activeResult` in `SimulationPanel` was
+already mode-aware, so switching analysis tabs re-attributes rather than
+reporting one engine for the whole session. A result carrying no engine shows no
+badge at all - absence means unknown, never "native" - and nothing is shown
+while a run is in flight, when there is nothing to attribute yet.
+
+Provenance is an App-layer concern: a solver does not know its own, and the
+choice is made in `App.tsx` where the native runner's `null` is turned into a
+fallback. So none of the six result contracts changed; the App state and the
+panel props intersect them with `EngineProvenance` instead. All five
+native-first analyses (`.op`, `.ac`, `.dc`, `.tf`, `.noise`) now route through a
+single `resolveEngineResult(native, () => fallback())` seam, which both makes
+naming the wrong engine unwritable at a call site and keeps the fallback lazy so
+the preview solver never runs after ngspice already answered. Transient and
+`.step` stamp explicitly because they branch further; a `.step` family whose
+members did not all come from one solver carries no badge.
+
+Mutation-checked four ways: reading the badge from the runtime instead of from
+the result (kills 3 tests), computing the engine but never rendering it (kills 4
+- the trap that hid the `.step` truncation warning), the seam always claiming
+ngspice (kills 1), and the fallback made eager (kills 2).
+
+Also retired the three strings still calling ngspice "planned" or calling the
+shipped solver "interim" - two in `linearTransient.ts`, one in `acSweep.ts`.
+ngspice has shipped since v1.0; those messages now say that full device models
+need the ngspice engine in the desktop app, which is what a browser user
+actually needs to know.
+
+Gates: tsc clean, full suite 2226 passed across 148 files, cargo test and clippy
+clean, corpus held at 80/80/80/80 (the `>= 82` assertion still fails on the
+deleted input files, unchanged and tracked as blocked).
+
+**Previous unit - 2026-07-29: a real transistor DC sweep now runs end to end in the
 repo, so the native `.dc` path is checked against ngspice instead of against
 mocked vectors.** `.dc` has reached ngspice since 2026-07-28, but every test of
 `runNativeDcSweep` fed it hand-written vectors - its two engine-facing
@@ -65,7 +106,7 @@ No guard moved and no shipped behaviour changed - the extraction is
 line-for-line the same logic, and the 34 existing `nativeSpice.test.ts` cases
 still pass. Corpus held at 80/80/80/80.
 
-**Previous unit - 2026-07-29: `.noise` runs on ngspice end to end, so a noise
+**Earlier unit - 2026-07-29: `.noise` runs on ngspice end to end, so a noise
 figure includes a transistor's own noise instead of resistor thermal noise
 alone.** This is the TypeScript half that the previous unit's `extraPlots`
 contract was built for, and it was recovered rather than written fresh: the

@@ -89,6 +89,7 @@ import { visibleTransientTraces } from "../simulation/visibleTraces";
 import { EngineeringTraceReadout } from "./EngineeringTraceReadout";
 import { traceStatistics } from "../simulation/measurementModel";
 import { AnalysisModeRail, type AnalysisMode } from "./AnalysisModeRail";
+import { ENGINE_DESCRIPTIONS, ENGINE_LABELS, type EngineProvenance } from "../simulation/engineProvenance";
 import { EngineeringInput } from "./EngineeringInput";
 
 interface SimulationPanelProps {
@@ -99,13 +100,13 @@ interface SimulationPanelProps {
   circuitTitle?: string;
   /** Analysis authored first in the document; selected when this circuit opens. */
   preferredMode?: AnalysisMode;
-  result: AnalysisResult | null;
-  opResult: OperatingPointResult | null;
-  acResult: AcResult | null;
-  dcResult: DcSweepResult | null;
-  tfResult: TfResult | null;
-  noiseResult: NoiseResult | null;
-  stepResult: StepFamilyResult | null;
+  result: (AnalysisResult & EngineProvenance) | null;
+  opResult: (OperatingPointResult & EngineProvenance) | null;
+  acResult: (AcResult & EngineProvenance) | null;
+  dcResult: (DcSweepResult & EngineProvenance) | null;
+  tfResult: (TfResult & EngineProvenance) | null;
+  noiseResult: (NoiseResult & EngineProvenance) | null;
+  stepResult: (StepFamilyResult & EngineProvenance) | null;
   /** `.step` families of the AC/DC analyses, drawn as extra curves on their panes. */
   acStepFamily: AnalysisFamily<AcResult> | null;
   dcStepFamily: AnalysisFamily<DcSweepResult> | null;
@@ -498,7 +499,7 @@ export function SimulationPanel({
   // under the tabs. Idle (nothing run), Running (amber, tactical), Complete
   // (success + last-run figures), Error (danger, details live in the Errors
   // panel). Each tab reads its own result object; no invented values.
-  const activeResult: { ok: boolean } | null =
+  const activeResult: ({ ok: boolean } & EngineProvenance) | null =
     mode === "tran" ? result
     : mode === "op" ? opResult
     : mode === "ac" ? acResult
@@ -507,6 +508,11 @@ export function SimulationPanel({
     : mode === "noise" ? noiseResult
     : stepResult;
   const runStatus = isRunning ? "running" : activeResult ? (activeResult.ok ? "complete" : "error") : "idle";
+  // Read off the displayed result, not off the runtime: the two engines model
+  // different circuits, so a number is only meaningful next to the name of the
+  // solver that produced it. Absent while running or idle - there is no result
+  // to attribute yet - and absent on a result that never chose an engine.
+  const activeEngine = isRunning ? undefined : activeResult?.engine;
   const statusLabel =
     runStatus === "running" ? "Running"
     : runStatus === "complete" ? "Complete"
@@ -603,6 +609,23 @@ export function SimulationPanel({
         <span className="plotter-status-lamp" aria-hidden="true" />
         <span className="plotter-status-state">{statusLabel}</span>
         {lastRunInfo && <span className="plotter-status-info">{lastRunInfo}</span>}
+        {activeEngine && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span
+                className={`plotter-status-engine plotter-status-engine--${activeEngine}`}
+                data-engine={activeEngine}
+                // Focusable so the caveat about what each engine models is
+                // reachable without a pointer; the label itself is visible
+                // regardless, so nothing essential lives only in the tooltip.
+                tabIndex={0}
+              >
+                {ENGINE_LABELS[activeEngine]}
+              </span>
+            </TooltipTrigger>
+            <TooltipContent>{ENGINE_DESCRIPTIONS[activeEngine]}</TooltipContent>
+          </Tooltip>
+        )}
       </div>
 
       {/* `.plotter-body` is the positioning root for the run overlay below -

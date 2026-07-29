@@ -1136,6 +1136,30 @@ body {
   text-overflow: ellipsis;
 }
 
+/* Which solver produced the displayed result. Sits at the far end of the strip
+   so it reads as an attribution of the figures beside it, not as a status. */
+.plotter-status-engine {
+  flex: none;
+  margin-left: auto;
+  padding: 1px 7px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  font: 500 var(--fs-caption) var(--font-mono);
+  letter-spacing: var(--tracking-micro);
+  white-space: nowrap;
+  color: var(--muted);
+  background: var(--panel-3);
+  cursor: default;
+}
+
+/* The preview solver answers a strict subset of circuits, so its badge carries
+   a qualification instead of reading like the full engine. */
+.plotter-status-engine--preview {
+  color: var(--diagnostic-warning-text);
+  border-color: var(--diagnostic-warning-line);
+  background: var(--diagnostic-warning-soft);
+}
+
 .plotter-status--running .plotter-status-lamp {
   background: var(--signal);
   box-shadow: 0 0 0 0 var(--signal-glow);
