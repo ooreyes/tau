@@ -17,9 +17,13 @@ Rules:
 
 ## Now
 
-**Status:** IDLE
-**Unit:** none claimed
-**Started:** -
+**Status:** IN PROGRESS
+**Unit:** P9 second half - resolve a `.include`/`.lib` against the schematic's
+own folder at open time and attach the text as a user model library, so the
+common vendor-model case resolves instead of warning. Confined to the project
+root (a `.include` is attacker-controlled text; absolute paths and `..` escapes
+must stay refused) and reusing the existing byte/count caps.
+**Started:** 2026-07-28
 **Branch:** auto/ltspice-parity
 
 If Status is IN PROGRESS with a timestamp older than ~2 hours, the previous

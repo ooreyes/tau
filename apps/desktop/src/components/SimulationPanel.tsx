@@ -209,6 +209,10 @@ export function SimulationPanel({
     () => userModelLibraries.map((library) => library.text),
     [userModelLibraries],
   );
+  const userModelLibraryNames = useMemo(
+    () => userModelLibraries.map((library) => library.name),
+    [userModelLibraries],
+  );
   const warnings = result?.warnings ?? [];
 
   const [mode, setMode] = useState<AnalysisMode>(preferredMode);
@@ -431,7 +435,7 @@ export function SimulationPanel({
           netLabels,
           params,
           directives,
-          ...(userModelLibraryTexts.length > 0 ? { userModelLibraries: userModelLibraryTexts } : {}),
+          ...(userModelLibraryTexts.length > 0 ? { userModelLibraries: userModelLibraryTexts, userModelLibraryNames } : {}),
         },
         { kind: "tran", stopTime: options.stopTime, steps: options.steps },
       );

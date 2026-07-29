@@ -1,14 +1,33 @@
 import { importAsc, makeSubcircuitResolver, parseAsc, type AscImportResult } from "./ascImport";
 import { joinPath } from "../project/types";
+import { bundledLibraryText } from "../engine/bundledSubcircuits";
+import { modelLibLinesFromDirectives } from "../engine/modelDirectives";
+import { includedFileName, libraryFileKey } from "../engine/spiceNetlist";
+import { MAX_MODEL_LIBRARIES, MAX_MODEL_LIBRARY_TOTAL_LENGTH } from "../schematic/documentValidation";
+import type { SchematicModelLibrary } from "../store/useSchematic";
 
 const MAX_HIERARCHY_SYMBOLS = 128;
 const MAX_HIERARCHY_SOURCE_CHARS = 20 * 1024 * 1024;
+
+/**
+ * Extensions a `.include`/`.lib` may name for Tau to read the file on its own.
+ * The directive is document text, so it is attacker-controllable in a shared
+ * `.asc`; auto-reading therefore stays on suffixes that only ever hold SPICE
+ * models. LTspice also lets a model live in a `.txt`/`.cir`, and those still
+ * work - through Model Libraries, where the user picks the file themselves.
+ */
+const AUTO_MODEL_LIBRARY_EXTENSIONS = new Set(["lib", "sub", "subckt", "mod", "inc"]);
 
 export interface ProjectAscImportOptions {
   sourcePath: string;
   rootPath: string | null;
   readText: (path: string) => Promise<string>;
   pathExists: (path: string) => Promise<boolean>;
+}
+
+export interface ProjectAscImportResult extends AscImportResult {
+  /** Vendor model files a `.include`/`.lib` named and Tau resolved from disk. */
+  modelLibraries: SchematicModelLibrary[];
 }
 
 function parentPath(path: string): string {
@@ -28,6 +47,66 @@ function safeSymbolPath(symbolType: string): string | null {
   return normalized;
 }
 
+/** A library reference Tau may read on its own: relative, inside the project,
+ *  and carrying a model-file extension. Returns null for anything else, which
+ *  leaves the deck builder to warn that the file did not resolve. */
+function safeLibraryPath(ref: string): string | null {
+  const safe = safeSymbolPath(ref);
+  if (!safe) return null;
+  const dot = safe.lastIndexOf(".");
+  const ext = dot < 0 ? "" : safe.slice(dot + 1).toLowerCase();
+  return AUTO_MODEL_LIBRARY_EXTENSIONS.has(ext) ? safe : null;
+}
+
+/**
+ * Read the vendor model files a document's `.include`/`.lib` directives name.
+ * LTspice resolves these relative to the schematic, which is the case that
+ * makes a real design work at all; Tau otherwise drops the directive and can
+ * only tell the user to attach the file by hand.
+ *
+ * Reads are confined the same way hierarchical symbol reads are - relative
+ * paths only, no `..` segment, under the schematic's folder or the project
+ * root - because the directive comes from the document, not from the user. A
+ * reference that resolves to nothing is simply left alone here.
+ */
+async function resolveModelLibraries(
+  directives: readonly string[],
+  roots: readonly string[],
+  options: ProjectAscImportOptions,
+): Promise<SchematicModelLibrary[]> {
+  const libraries: SchematicModelLibrary[] = [];
+  const seen = new Set<string>();
+  let totalChars = 0;
+
+  for (const line of modelLibLinesFromDirectives(directives)) {
+    const fileRef = /^\.(include|lib)\s+(.+)$/i.exec(line.trim());
+    if (!fileRef) continue;
+    const file = includedFileName(fileRef[2]);
+    // A name the bundled LTspice libraries already satisfy is inlined by the
+    // deck builder; reading a same-named file would duplicate every definition.
+    if (!file || bundledLibraryText(file)) continue;
+    const safe = safeLibraryPath(file);
+    if (!safe) continue;
+    const key = libraryFileKey(safe);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    if (libraries.length >= MAX_MODEL_LIBRARIES) break;
+
+    for (const root of roots) {
+      const candidate = joinPath(root, safe);
+      if (!(await options.pathExists(candidate))) continue;
+      const contents = await options.readText(candidate);
+      // Same aggregate budget an attachment picked by hand has to clear, so a
+      // document cannot use auto-resolution to exceed what the store accepts.
+      if (totalChars + contents.length > MAX_MODEL_LIBRARY_TOTAL_LENGTH) break;
+      totalChars += contents.length;
+      libraries.push({ name: key, text: contents });
+      break;
+    }
+  }
+  return libraries;
+}
+
 /**
  * Import an LTspice schematic from an authorized Tau project and preload the
  * sibling `.asy` + `.asc` pairs needed by hierarchical BLOCK/CELL symbols.
@@ -37,7 +116,7 @@ function safeSymbolPath(symbolType: string): string | null {
 export async function importProjectAsc(
   text: string,
   options: ProjectAscImportOptions,
-): Promise<AscImportResult> {
+): Promise<ProjectAscImportResult> {
   const first = parseAsc(text);
   const sourceDir = parentPath(options.sourcePath);
   const roots = [
@@ -101,5 +180,16 @@ export async function importProjectAsc(
     const safe = safeSymbolPath(symbolType);
     return safe ? files.get(safe.toLowerCase()) ?? null : null;
   });
-  return importAsc(text, { resolveSubcircuit: resolver });
+  const result = importAsc(text, { resolveSubcircuit: resolver });
+  // LTspice looks for an included library beside the schematic first, then in
+  // its own library folders. Keep that order so a copy the user dropped next
+  // to the design wins over a project-wide one of the same name.
+  const libraryRoots = [
+    sourceDir,
+    ...(options.rootPath
+      ? [joinPath(options.rootPath, "lib"), joinPath(options.rootPath, "lib/sub"), options.rootPath]
+      : []),
+  ].filter((root, index, all) => root !== "" && all.indexOf(root) === index);
+  const modelLibraries = await resolveModelLibraries(result.directives, libraryRoots, options);
+  return { ...result, modelLibraries };
 }

@@ -426,6 +426,12 @@ function App() {
     () => userModelLibraries.map((library) => library.text),
     [userModelLibraries],
   );
+  // A `.include` naming one of these resolved at open time, so the deck must
+  // not warn that it could not find the file.
+  const userModelLibraryNames = useMemo(
+    () => userModelLibraries.map((library) => library.name),
+    [userModelLibraries],
+  );
   const currentSignature = useMemo(
     () => schematicDocumentSignature(currentDocument),
     [currentDocument],
@@ -566,7 +572,7 @@ function App() {
       setRunProgress(fraction);
     };
     try {
-      const nativeResult = await runNativeTransient({ components, wires, netLabels, params, directives, userModelLibraries: userModelLibraryTexts }, options);
+      const nativeResult = await runNativeTransient({ components, wires, netLabels, params, directives, userModelLibraries: userModelLibraryTexts, userModelLibraryNames }, options);
       if (nativeResult) {
         // Stop marks this request stale even if the worker happened to finish
         // during cancellation, so a late native result can never overwrite UI.
@@ -638,7 +644,7 @@ function App() {
     const requestId = ++analysisRequestRef.current;
     setAnalysisRunning(true);
     try {
-      const result = await runNativeOperatingPoint({ components, wires, netLabels, params, directives, userModelLibraries: userModelLibraryTexts }) ?? runOperatingPoint({ components, wires, netLabels, params }, { returnBranches: true });
+      const result = await runNativeOperatingPoint({ components, wires, netLabels, params, directives, userModelLibraries: userModelLibraryTexts, userModelLibraryNames }) ?? runOperatingPoint({ components, wires, netLabels, params }, { returnBranches: true });
       if (analysisRequestRef.current !== requestId) return;
       setOpAnalysis(result);
     } catch (error) {
@@ -657,7 +663,7 @@ function App() {
       // Suggest a useful range only when the document does not provide one.
       const acSweep = analysesFromDirectives(directives).ac ?? suggestAcSweep(components);
       const result = await runNativeAcSweep(
-        { components, wires, netLabels, params, directives, userModelLibraries: userModelLibraryTexts },
+        { components, wires, netLabels, params, directives, userModelLibraries: userModelLibraryTexts, userModelLibraryNames },
         acSweep,
       ) ?? runAcSweep({ components, wires, netLabels, params, couplings }, acSweep);
       if (analysisRequestRef.current !== requestId) return;
@@ -701,7 +707,7 @@ function App() {
       // ngspice first: the TS solver has no semiconductor stamps, so it cannot
       // sweep a transistor at all.
       const result = await runNativeDcSweep(
-        { components, wires, netLabels, params, directives, userModelLibraries: userModelLibraryTexts },
+        { components, wires, netLabels, params, directives, userModelLibraries: userModelLibraryTexts, userModelLibraryNames },
         dc,
       ) ?? runDcSweep({ components, wires, netLabels, params }, dc);
       if (analysisRequestRef.current !== requestId) return;
@@ -782,7 +788,7 @@ function App() {
         // resistors via applyTemperature).
         const stepDirectives = ctx.temperature !== undefined ? [`.temp ${ctx.temperature}`] : undefined;
         const result =
-          (await runNativeTransient({ components: ctx.components, wires, netLabels, params: ctx.params, directives: stepDirectives, userModelLibraries: userModelLibraryTexts }, effectiveAnalysisOptions))
+          (await runNativeTransient({ components: ctx.components, wires, netLabels, params: ctx.params, directives: stepDirectives, userModelLibraries: userModelLibraryTexts, userModelLibraryNames }, effectiveAnalysisOptions))
           ?? (await runTransientAnalysis({ components: ctx.components, wires, netLabels, params: ctx.params }, effectiveAnalysisOptions));
         if (analysisRequestRef.current !== requestId) return;
         members.push({ label: ctx.label, value: ctx.value, result });
@@ -1034,6 +1040,10 @@ function App() {
         textAnnotations: result.textAnnotations,
         ascSheet: result.sheet,
         probes: [],
+        // Vendor models a `.include`/`.lib` named and the importer found beside
+        // the schematic. Surfaced in the Model Libraries dialog, whose header
+        // count is the user's confirmation that the file was picked up.
+        ...(result.modelLibraries.length > 0 ? { userModelLibraries: result.modelLibraries } : {}),
       });
       openDocument(doc, title, path, ascRewriteRisks(text));
       if (allWarnings.length > 0) {

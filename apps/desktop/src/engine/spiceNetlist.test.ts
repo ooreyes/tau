@@ -1387,6 +1387,45 @@ describe("unresolvable .include/.lib directives", () => {
     expect(warnings.filter((w) => w.includes("other.lib"))).toHaveLength(1);
   });
 
+  // The importer reads a `.include`d file that sits beside the schematic and
+  // attaches it, so the same directive that used to be unresolvable now has
+  // its text in the deck. Warning about it anyway would contradict the run.
+  it("says nothing when the named file is attached as a model library", () => {
+    const deck = buildSpiceDeck(
+      {
+        components: [
+          component("vsource", "V1", "5", 0, 32),
+          component("resistor", "R1", "1k", 96, 0),
+          component("ground", "", "", 0, 64),
+        ],
+        wires: [wire("w1", [{ x: 0, y: 0 }, { x: 96, y: 0 }])],
+        directives: [".include models/vendor.lib"],
+        userModelLibraries: [".subckt VEND 1 2\nR1 1 2 1k\n.ends VEND"],
+        userModelLibraryNames: ["vendor.lib"],
+      },
+      { kind: "op" },
+    );
+    expect(deck.circuit.warnings.filter((w) => w.includes("Could not resolve"))).toEqual([]);
+  });
+
+  it("still warns when the attached libraries do not include the named file", () => {
+    const deck = buildSpiceDeck(
+      {
+        components: [
+          component("vsource", "V1", "5", 0, 32),
+          component("resistor", "R1", "1k", 96, 0),
+          component("ground", "", "", 0, 64),
+        ],
+        wires: [wire("w1", [{ x: 0, y: 0 }, { x: 96, y: 0 }])],
+        directives: [".include models/vendor.lib"],
+        userModelLibraries: [".subckt OTHER 1 2\nR1 1 2 1k\n.ends OTHER"],
+        userModelLibraryNames: ["unrelated.lib"],
+      },
+      { kind: "op" },
+    );
+    expect(deck.circuit.warnings).toContain(unresolvedLibraryWarning("models/vendor.lib"));
+  });
+
   it("says nothing when the reference resolves to a bundled library", () => {
     const deck = rc([".include TowTom2.sub"]);
     expect(deck.netlist).toContain(".subckt TowTom2");

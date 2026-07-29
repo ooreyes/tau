@@ -86,6 +86,11 @@ type Schematic = {
    *  neither inline nor one of Tau's bundled parts - see userModelLibrary.ts.
    *  Optional and additive; omitting it leaves deck output unchanged. */
   userModelLibraries?: readonly string[];
+  /** File names of those same libraries, when the caller has them. A
+   *  `.include`/`.lib` naming one of these DID resolve - its text reaches the
+   *  deck through the registry above - so it must not also be reported as a
+   *  file Tau could not find. Omitting it only costs a redundant warning. */
+  userModelLibraryNames?: readonly string[];
 };
 
 const DEFAULT_MODELS = [
@@ -226,6 +231,9 @@ export function buildSpiceDeck(schematic: Schematic, analysis: SpiceAnalysis): S
   // and any definition that went missing with it still surfaces through
   // `unresolvedSubckts` (fatal, names the part) or a model substitution.
   const unresolvedLibraryFiles = new Set<string>();
+  const attachedLibraryFiles = new Set(
+    (schematic.userModelLibraryNames ?? []).map(libraryFileKey).filter((key) => key !== ""),
+  );
   // Track `.subckt … .ends` nesting: LTspice evaluates a `{param}` on a
   // passthrough `.model` line against the document's global `.param` scope
   // (Fc.asc's `.model DX D(Cjo={Cjo} …)` - ngspice instead dies with
@@ -243,7 +251,7 @@ export function buildSpiceDeck(schematic: Schematic, analysis: SpiceAnalysis): S
       lines.push(bundled);
       for (const m of bundled.matchAll(/^\.subckt\s+(\S+)/gim)) inlinedSubckts.add(m[1].toLowerCase());
     } else if (fileRef) {
-      if (file) unresolvedLibraryFiles.add(file);
+      if (file && !attachedLibraryFiles.has(libraryFileKey(file))) unresolvedLibraryFiles.add(file);
     } else {
       if (/^\.subckt\b/i.test(line.trim())) subcktDepth += 1;
       lines.push(subcktDepth > 0 ? line : substituteKnownBraces(line, passthroughScope));
@@ -584,6 +592,16 @@ export function includedFileName(ref: string): string {
   const quoted = /^(["'])(.*?)\1/.exec(trimmed);
   if (quoted) return quoted[2].trim();
   return trimmed.split(/\s+/)[0] ?? "";
+}
+
+/**
+ * The name a library reference reduces to, for matching a `.include`/`.lib`
+ * against an attached library. Both sides compare on the base name so
+ * `.include models/opamp.lib` matches the attachment named "opamp.lib".
+ */
+export function libraryFileKey(ref: string): string {
+  const normalized = ref.replace(/\\/g, "/");
+  return normalized.slice(normalized.lastIndexOf("/") + 1).trim().toLowerCase();
 }
 
 /** Product copy for a `.include`/`.lib` naming a file Tau has no text for. The
