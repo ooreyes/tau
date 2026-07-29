@@ -95,7 +95,20 @@ async function resolveModelLibraries(
     for (const root of roots) {
       const candidate = joinPath(root, safe);
       if (!(await options.pathExists(candidate))) continue;
-      const contents = await options.readText(candidate);
+      // Resolving a library is an optional improvement on top of the import,
+      // so a failed read must not sink the document the way a failed symbol
+      // read does. The reader rejects anything past its byte cap, and the file
+      // can also vanish between the probe and the read; either way the
+      // schematic still opens and the deck builder still names the file it
+      // could not resolve. Stop looking after the first match rather than
+      // falling through to a same-named file elsewhere, which would quietly
+      // substitute different models than the reference asked for.
+      let contents: string;
+      try {
+        contents = await options.readText(candidate);
+      } catch {
+        break;
+      }
       // Same aggregate budget an attachment picked by hand has to clear, so a
       // document cannot use auto-resolution to exceed what the store accepts.
       if (totalChars + contents.length > MAX_MODEL_LIBRARY_TOTAL_LENGTH) break;

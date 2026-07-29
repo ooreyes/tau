@@ -17,13 +17,9 @@ Rules:
 
 ## Now
 
-**Status:** IN PROGRESS
-**Unit:** P9 second half - resolve a `.include`/`.lib` against the schematic's
-own folder at open time and attach the text as a user model library, so the
-common vendor-model case resolves instead of warning. Confined to the project
-root (a `.include` is attacker-controlled text; absolute paths and `..` escapes
-must stay refused) and reusing the existing byte/count caps.
-**Started:** 2026-07-28
+**Status:** IDLE
+**Unit:** -
+**Started:** -
 **Branch:** auto/ltspice-parity
 
 If Status is IN PROGRESS with a timestamp older than ~2 hours, the previous
@@ -46,32 +42,19 @@ partial work.
 Ordered. Take the top item unless it is blocked. Class A outranks everything -
 a plausible wrong number is worse than a refusal to run.
 
-1. **P9 second half - actually READ the `.include`/`.lib` file.** The directive
-   no longer sinks the run (landed 2026-07-28), so the deck reaches ngspice and
-   names the file it could not resolve. What is still missing is resolving that
-   name relative to the source `.asc` through the FS bridge
-   (`project/fsBridge.ts` `readTextFile`) and registering the text as a model
-   library, so the common case resolves instead of warning. The plumbing to
-   use it already exists: `parseUserModelLibraries` +
-   `schematic.userModelLibraries`. Note the netlist builder is deliberately
-   pure (no FS access) - do the read at import/open time in `App.tsx` or
-   `io/fileImport.ts`, not inside `buildSpiceDeck`. Also note `.include` is
-   resolved by NAME, not by file: once the text is attached, every model and
-   subckt in it resolves through the registry, so nothing has to match the
-   `.include` path.
-2. **P3 remainder - `.noise`/`.tf` on ngspice.** `.dc` landed 2026-07-28;
+1. **P3 remainder - `.noise`/`.tf` on ngspice.** `.dc` landed 2026-07-28;
    these two still run only on the TS solver, which rejects transistors.
    Mirror `runNativeDcSweep`. Note `analysisLine` has no `noise`/`tf` branch
    yet, so this needs a deck line as well as a runner.
-3. **A MOSFET DC-sweep corpus proof.** The native DC path is unit-tested
+2. **A MOSFET DC-sweep corpus proof.** The native DC path is unit-tested
    against mocked vectors and its ngspice contract was checked by hand at the
    CLI, but nothing in the repo runs a real transistor sweep end to end. A
    `scripts/dcSweepNative.corpus.ts` in the shape of
    `scripts/sampleHoldParity.corpus.ts` would close that.
-4. **P16 - engine badge**. Nothing tells the user whether ngspice or the TS
+3. **P16 - engine badge**. Nothing tells the user whether ngspice or the TS
    solver produced a result. Also fix the two strings still calling ngspice
    "planned" (`simulation/noise.ts:332`, `simulation/acSweep.ts:291`).
-5. **The next save blocker after `WINDOW`: drawing primitives.** With placement
+4. **The next save blocker after `WINDOW`: drawing primitives.** With placement
    preserved, `LINE`/`RECTANGLE`/`CIRCLE`/`ARC` are the most common remaining
    reason an imported `.asc` still cannot be saved. `parseAsc` already keeps
    them in `doc.shapes`; the exporter drops them. Same passthrough shape as
@@ -83,6 +66,14 @@ a plausible wrong number is worse than a refusal to run.
 
 Newest first. One line each: date, unit, evidence.
 
+- 2026-07-29 - A `.include`/`.lib` naming a file beside the schematic is now
+  READ at import time and attached as a model library, so a vendor model
+  resolves on its own instead of only warning. Confined like the symbol reads
+  (relative, no `..`, inside the project) plus a model-file extension
+  allowlist, and a read that fails no longer sinks the import. Real-ngspice
+  proof: a 2N3055 from LTspice's `standard.bjt`, copied beside a temp `.asc`,
+  resolves through `importProjectAsc`, inlines into the deck, and biases a
+  common-emitter stage to its own Bf (`scripts/includeResolution.corpus.ts`).
 - 2026-07-28 - An unresolvable `.include`/`.lib` is dropped from the deck and
   named on the warning channel instead of being emitted verbatim, which the
   native sanitizer rejected - so the whole schematic used to fail to run. Guard

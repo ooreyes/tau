@@ -28,7 +28,50 @@ below, so a transistor DC sweep runs; **`.noise`/`.tf` still run only on the TS
 solver.** Do not restore a readiness banner until every Class A and Class B item
 in the audit is closed or consciously accepted, with file:line evidence.
 
-**Last unit - 2026-07-28: an unresolvable `.include`/`.lib` no longer sinks the
+**Last unit - 2026-07-29: a `.include`/`.lib` sitting next to the schematic is
+actually read (audit P9, second half).** Vendor models are where LTspice users
+live, and the first half of P9 only stopped the directive from killing the run -
+the models still never reached the engine, so an EE who imported a real design
+got a warning and a generic starter device where their part should be.
+`importProjectAsc` now resolves the reference off disk at open time and returns
+it as an attached model library (`io/projectAscImport.ts`), which the existing
+`userModelLibraries` registry already knows how to inline into the deck; the
+netlist builder stays pure, with no filesystem access. LTspice's own search
+order is kept: beside the schematic first, then the project's `lib`, `lib/sub`
+and root, so a copy the user dropped next to the design wins over a project-wide
+one. Because `.include` resolves by NAME through the registry, the deck no
+longer warns about a file it now has the text for
+(`userModelLibraryNames`, `engine/spiceNetlist.ts`), and the resolved library
+shows up in the Model Libraries dialog, whose count is the user's confirmation
+that the file was picked up.
+
+A `.include` is document text, so the read is confined exactly like the
+hierarchical symbol reads - relative only, no `..` segment, inside the project -
+plus an extension allowlist (`.lib`/`.sub`/`.subckt`/`.mod`/`.inc`) so a hostile
+`.asc` cannot aim the reader at arbitrary files, and the store's existing
+library count and aggregate-length caps. Review of the checkpointed work caught
+one defect and it is fixed here: a read that throws (a vendor file past the FS
+bridge's 5 MB cap, or one that vanishes between the probe and the read) escaped
+`importProjectAsc` and failed the whole import, so a schematic that used to open
+with a warning would not open at all. The read is now best-effort - the models
+are lost, the schematic is not, and the deck still names the unresolved file.
+Mutation-checked: reverting that try/catch fails the new test and nothing else.
+Evidence: `scripts/includeResolution.corpus.ts` runs the host's real ngspice
+against a 2N3055 from LTspice's own `standard.bjt` copied beside a throwaway
+`.asc` - the importer finds the sibling, the model inlines into the netlist, no
+`.include` survives into the deck, and a common-emitter stage biases into
+forward-active reproducing the imported model's Bf. KNOWN_ISSUES now states the
+narrowed limitation rather than "not read".
+Gates: tsc clean, full suite 2192 passed / 6 skipped across 147 files, 31 Rust
+tests, clippy clean, corpus unchanged at 80 imported / 80 deck-built / 80
+op-converged / 80 schema-valid with warning-clean 77 (the corpus harness uses
+the pure importer, so this unit cannot move those numbers). Corpus still fails
+its own `>= 82` assertion because `~/Downloads/LTspice_export` is missing, not
+from a code regression.
+Next candidate: `.noise`/`.tf` on ngspice - the last two analyses that still run
+only on the TS solver, which rejects transistors.
+
+**2026-07-28: an unresolvable `.include`/`.lib` no longer sinks the
 whole run (audit P9, first half).** An imported LTspice schematic that names a
 vendor library file could not simulate at all. `buildSpiceDeck` passed the
 directive through verbatim, and the native deck sanitizer

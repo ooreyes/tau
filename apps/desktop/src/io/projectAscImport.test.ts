@@ -213,4 +213,23 @@ describe("importProjectAsc model library resolution", () => {
     expect(result.modelLibraries).toEqual([]);
     expect(io.read).toEqual([]);
   });
+
+  // A vendor library can easily be bigger than the project reader's byte cap,
+  // and the reader throws on one. That must cost the models, not the whole
+  // schematic - the deck builder still names the file it could not resolve.
+  it("still imports the schematic when the library file cannot be read", async () => {
+    const io = probe(new Map([["/project/examples/huge.lib", opampLib]]));
+    const result = await importProjectAsc(withInclude("huge.lib"), {
+      sourcePath: "/project/examples/top.asc",
+      rootPath: "/project",
+      pathExists: io.pathExists,
+      readText: async (path: string) => {
+        if (path.endsWith("huge.lib")) throw new Error("Schematic files are limited to 5,242,880 bytes.");
+        return io.readText(path);
+      },
+    });
+
+    expect(result.modelLibraries).toEqual([]);
+    expect(result.components).toHaveLength(1);
+  });
 });
