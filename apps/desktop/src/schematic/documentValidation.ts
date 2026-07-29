@@ -250,7 +250,15 @@ function ascShape(value: unknown, index: number): SchematicAscShape {
   return {
     kind,
     width,
-    coords: source.coords.map((coord, coordIndex) => coordinate(coord, `ascShapes[${index}].coords[${coordIndex}]`)),
+    coords: source.coords.map((coord, coordIndex) => {
+      const name = `ascShapes[${index}].coords[${coordIndex}]`;
+      const value = coordinate(coord, name);
+      // Whole numbers only, matching what the `.asc` parser accepts: these are
+      // re-emitted through `Math.round`, so a fractional coordinate would move
+      // the drawing on the way back out instead of being refused.
+      if (!Number.isInteger(value)) fail(`${name} must be a whole number.`);
+      return value;
+    }),
   };
 }
 

@@ -17,11 +17,9 @@ Rules:
 
 ## Now
 
-**Status:** IN PROGRESS
-**Unit:** Drawing primitives (`LINE`/`RECTANGLE`/`CIRCLE`/`ARC`) survive a save
-instead of blocking it. Same passthrough shape as the `WINDOW` unit: carry them
-on the document, re-emit them, drop the `drawing primitives` rewrite risk.
-**Started:** 2026-07-29
+**Status:** IDLE
+**Unit:** -
+**Started:** -
 **Branch:** auto/ltspice-parity
 
 If Status is IN PROGRESS with a timestamp older than ~2 hours, the previous
@@ -51,18 +49,16 @@ do not spend a fire diffing it again. Re-check only if its tip moves past
 Ordered. Take the top item unless it is blocked. Class A outranks everything -
 a plausible wrong number is worse than a refusal to run.
 
-1. **The next save blocker after `WINDOW`: drawing primitives.** With placement
-   preserved, `LINE`/`RECTANGLE`/`CIRCLE`/`ARC` are the most common remaining
-   reason an imported `.asc` still cannot be saved. `parseAsc` already keeps
-   them in `doc.shapes`; the exporter drops them. Same passthrough shape as
-   the `WINDOW` unit.
-2. **`.dc` is proven, `.tran` and `.ac` are not.** With the DC-sweep proof
+1. **`.dc` is proven, `.tran` and `.ac` are not.** With the DC-sweep proof
    landed, transient and AC are the two native paths left whose vector contract
    is only unit-tested against mocked vectors. `.tran` is the highest-traffic
    analysis in the app, and `runNativeTransient` carries the most unproven
    name-matching of any adapter (`componentCurrentVector`'s `<ref>#branch` /
    `i(<ref>)` / `@<ref>[id]` ladder). Same harness shape as
    `scripts/dcSweepNative.corpus.ts`.
+2. **Tau's canvas does not draw the primitives it now preserves.** A saved file
+   keeps its artwork byte-for-byte, but the author cannot see it in Tau. That is
+   stated plainly in KNOWN_ISSUES; rendering them is the follow-up.
 
 ---
 
@@ -70,6 +66,35 @@ a plausible wrong number is worse than a refusal to run.
 
 Newest first. One line each: date, unit, evidence.
 
+- 2026-07-29 - Drawing primitives (`LINE`/`RECTANGLE`/`CIRCLE`/`ARC`) survive a
+  save instead of blocking it, retiring the most common remaining reason an
+  imported `.asc` could not be written back. Same passthrough shape as the
+  `WINDOW` unit: carried on the document as `ascShapes`, re-emitted by the
+  exporter, and the `drawing primitives` rewrite risk dropped. The parse was
+  wrong in a way that only mattered once the record was re-emitted: LTspice
+  writes a pen-width word (`Normal`/`Wide`) between the tag and the
+  coordinates, and the old parser ran `num()` over it, coercing it to a 0 that
+  would have been written back as a coordinate. Anything the exporter could not
+  reproduce exactly - an unknown width word, the wrong coordinate count for the
+  kind, a non-integer or unparseable coordinate - falls through to `unknown`
+  instead, which is already a rewrite risk, so the save stays blocked rather
+  than silently moving someone's drawing to the origin. `documentValidation`
+  enforces the same grammar on the `.sim` side, including whole-number
+  coordinates, since the exporter rounds and a fraction arriving that way would
+  shift the artwork. Real-corpus proof: `scripts/ascShapeRoundTrip.corpus.ts` -
+  233 shape lines across 69 of the user's own files re-emitted byte-identically
+  and in order, none lost or invented, all 69 newly free of this block.
+  Mutation-checked both halves: dropping the width word from the exporter kills
+  the corpus on the first file, and restoring the old
+  `risks.add("drawing primitives")` kills its risk assertion. Two existing tests
+  used a drawing primitive as their stand-in for "a record Tau cannot preserve"
+  and were repointed at records that still are (`DATAFLAG`, `SpiceLine`) so the
+  autosave-protection and assistant-replacement guards stay covered - the
+  assistant boundary rejects a malformed primitive a step earlier than the
+  lossless check, which is now asserted separately. KNOWN_ISSUES says plainly
+  that the shapes are preserved, not displayed: Tau's canvas still does not draw
+  them. Gates: tsc, full suite 2233 passed / 148 files, cargo test 31 passed +
+  clippy clean, corpus held at 80/80/80/80.
 - 2026-07-29 - Every analysis result now names the solver that produced it, so
   a number can be traced to ngspice or to the TypeScript preview solver instead
   of being read as though one engine answered everything. The two engines model

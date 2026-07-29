@@ -56,9 +56,24 @@ describe("assistant ASC action boundary", () => {
     expect(() => parseApplyCurrentAscAction("apply-3", {
       source: APPLY_ASC.replace(/FLAG \d+ \d+ 0\n/g, ""),
     })).toThrow(/ground reference/i);
+    // A record Tau can parse but not reproduce still refuses to replace the
+    // document, which is the guard drawing primitives used to stand in for.
     expect(() => parseApplyCurrentAscAction("apply-4", {
-      source: VALID_ASC.replace("TEXT 72 280", "LINE Normal 0 0 16 16 0\nTEXT 72 280"),
+      source: VALID_ASC.replace("SYMATTR Value 1k", "SYMATTR Value 1k\nSYMATTR SpiceLine tc=0.001"),
     })).toThrow(/losslessly/i);
+    // A malformed drawing primitive is refused a step earlier: the parser will
+    // not guess at a pen width it does not know, so the record falls through to
+    // `unknown` and the boundary rejects the source outright.
+    expect(() => parseApplyCurrentAscAction("apply-bad-shape", {
+      source: VALID_ASC.replace("TEXT 72 280", "LINE Dotted 0 0 16 16\nTEXT 72 280"),
+    })).toThrow(/unsupported ASC records/i);
+    // A well-formed one is carried through instead of blocked.
+    const withDrawing = parseApplyCurrentAscAction("apply-5", {
+      source: VALID_ASC.replace("TEXT 72 280", "LINE Normal 0 0 16 16 0\nTEXT 72 280"),
+    });
+    expect(withDrawing.document.ascShapes).toEqual([
+      { kind: "LINE", width: "Normal", coords: [0, 0, 16, 16, 0] },
+    ]);
   });
 
   it("re-resolves voltage probes and follows same-reference current probes across apply", () => {

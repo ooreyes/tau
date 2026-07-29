@@ -367,7 +367,9 @@ describe("App schematic workspace tools", () => {
     const originalContents = [
       "Version 4",
       "SHEET 1 880 680",
-      "LINE Normal 32 32 96 32",
+      // A real LTspice record Tau does not model, so the source stays protected.
+      // Drawing primitives no longer qualify - they survive a save now.
+      "DATAFLAG 32 32 V(out)",
       "TEXT 32 96 Left 2 !.tran 10m",
       "",
     ].join("\n");
@@ -393,7 +395,7 @@ describe("App schematic workspace tools", () => {
     await waitFor(() => expect(useSchematic.getState().directives).toEqual([".tran 10m"]));
 
     // Run is allowed from the validated in-memory document. Its best-effort
-    // autosave must not nag about source artwork that Tau is deliberately
+    // autosave must not nag about source records that Tau is deliberately
     // protecting; explicit Cmd+S still surfaces that protection.
     fireEvent.click(screen.getAllByRole("button", { name: "Run simulation" })[0]);
     await waitFor(() => expect(screen.getByRole("button", { name: "Schematic" })).toBeTruthy());
@@ -417,7 +419,7 @@ describe("App schematic workspace tools", () => {
     await waitFor(() => {
       const saved = useProject.getState().workspaceFiles[replacementPath]?.contents;
       expect(saved).toContain("SYMBOL res");
-      expect(saved).not.toContain("LINE Normal");
+      expect(saved).not.toContain("DATAFLAG");
       expect(saved).not.toContain(".tran 10m");
     });
     expect(useProject.getState().workspaceFiles[originalPath].contents).toBe(originalContents);

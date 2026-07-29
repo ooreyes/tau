@@ -29,7 +29,51 @@ figure all run on the real engine. Do not restore a readiness banner until every
 Class A and Class B item in the audit is closed or consciously accepted, with
 file:line evidence.
 
-**Last unit - 2026-07-29: every analysis result now names the engine that
+**Last unit - 2026-07-29: LTspice drawing primitives (`LINE`, `RECTANGLE`,
+`CIRCLE`, `ARC`) now survive a save instead of blocking it**, retiring the most
+common remaining reason an imported `.asc` could not be written back. This is
+the same passthrough shape as the `WINDOW` unit: the records are carried on the
+document as `ascShapes`, re-emitted by the exporter, and the `drawing
+primitives` rewrite risk is dropped.
+
+The parse was wrong in a way that only mattered once the record was re-emitted.
+LTspice writes a pen-width word (`Normal` or `Wide`) between the tag and the
+coordinates, and the old parser ran `num()` over the whole tail - coercing that
+word to a 0 it would then have written back out as a leading coordinate. Nothing
+noticed because the exporter dropped shapes entirely.
+
+Anything the exporter cannot reproduce exactly now falls through to `unknown`
+rather than being half-preserved: an unrecognized width word, the wrong
+coordinate count for the kind (an `ARC` carries 8, the others 4, each with an
+optional dash-style index), or a coordinate that is not a whole number.
+`unknown` is already a rewrite risk, so those files stay blocked instead of
+having their artwork silently moved to the origin. `documentValidation` enforces
+the same grammar on the `.sim` side, whole-number coordinates included, because
+the exporter rounds and a fraction arriving that way would shift the drawing.
+
+Real-corpus proof: `scripts/ascShapeRoundTrip.corpus.ts` walks the user's own
+LTspice tree and asserts the strong property - 233 shape lines across 69 files
+re-emitted byte-identically and in order, none lost, none invented, and all 69
+newly free of this block. Mutation-checked on both halves: dropping the width
+word from the exporter fails on the first file, and restoring the old
+`risks.add("drawing primitives")` fails the risk assertion.
+
+Two existing tests had used a drawing primitive as their stand-in for "a record
+Tau cannot preserve", so lifting the block made them vacuous. Both were
+repointed at records that still qualify - `DATAFLAG` for the autosave-protection
+test, `SpiceLine` for the assistant's lossless-replacement guard - so neither
+guard lost coverage. Repointing surfaced that the assistant boundary rejects a
+malformed primitive one step *earlier* than the lossless check, as an
+unsupported record; that is now asserted separately rather than conflated.
+
+KNOWN_ISSUES says plainly that these shapes are preserved, not displayed: Tau's
+canvas still does not draw them, and rendering them is logged as the follow-up.
+
+Gates: tsc clean, full suite 2233 passed across 148 files, cargo test 31 passed
+and clippy clean, corpus held at 80/80/80/80 (the `>= 82` assertion still fails
+on the deleted input files, unchanged and tracked as blocked).
+
+**Previous unit - 2026-07-29: every analysis result now names the engine that
 produced it, so a number can be traced to ngspice or to the TypeScript preview
 solver instead of being read as though one engine answered everything.** The two
 solvers do not model the same circuits - the preview solver has no semiconductor

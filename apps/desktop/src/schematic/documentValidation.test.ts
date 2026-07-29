@@ -222,6 +222,8 @@ describe("schematic document validation", () => {
     expect(bad({ kind: "TRIANGLE", width: "Normal", coords: [0, 0, 16, 16] })).toThrow(/kind/i);
     expect(bad({ kind: "LINE", width: "Dotted", coords: [0, 0, 16, 16] })).toThrow(/width/i);
     expect(bad({ kind: "LINE", width: "Normal", coords: [0, "x", 16, 16] })).toThrow(/coordinate/i);
+    // Re-emitted through Math.round, so a fraction would shift the drawing.
+    expect(bad({ kind: "LINE", width: "Normal", coords: [0.5, 0, 16, 16] })).toThrow(/whole number/i);
     expect(bad({ kind: "LINE", width: "Normal", coords: Array.from({ length: 10 }, () => 0) })).toThrow(/coords/i);
     // The coordinate count is part of the grammar: a LINE carrying an ARC's
     // eight coordinates would serialize to a record LTspice cannot read back.
