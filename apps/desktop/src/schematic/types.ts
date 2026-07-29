@@ -174,6 +174,16 @@ export interface SchematicSheet {
   height: number;
 }
 
+/** An LTspice drawing primitive: pure annotation, no electrical meaning, but it
+ *  must survive a save or reopening the file loses the author's diagram. */
+export interface SchematicAscShape {
+  kind: "LINE" | "RECTANGLE" | "CIRCLE" | "ARC";
+  /** LTspice's pen-width word, which sits between the tag and the coordinates. */
+  width: "Normal" | "Wide";
+  /** The record's coordinates, then LTspice's optional dash-style index. */
+  coords: number[];
+}
+
 /** A wire drawn as an orthogonal polyline. Nets are derived from wires later.
  *  Optional `resistance` (engineering string, e.g. `"10m"`) models a non-ideal
  *  conductor: the wire no longer shorts its endpoints in the netlist and a

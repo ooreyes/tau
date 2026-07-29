@@ -17,9 +17,11 @@ Rules:
 
 ## Now
 
-**Status:** IDLE
-**Unit:** -
-**Started:** -
+**Status:** IN PROGRESS
+**Unit:** Drawing primitives (`LINE`/`RECTANGLE`/`CIRCLE`/`ARC`) survive a save
+instead of blocking it. Same passthrough shape as the `WINDOW` unit: carry them
+on the document, re-emit them, drop the `drawing primitives` rewrite risk.
+**Started:** 2026-07-29
 **Branch:** auto/ltspice-parity
 
 If Status is IN PROGRESS with a timestamp older than ~2 hours, the previous

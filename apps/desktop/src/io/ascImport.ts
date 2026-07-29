@@ -27,6 +27,7 @@ import type {
   LtspiceWindow,
   NetLabel,
   PinOverride,
+  SchematicAscShape,
   SchematicComponent,
   SchematicWire,
 } from "../schematic/types";
@@ -151,10 +152,7 @@ export interface AscText {
   text: string;
 }
 
-export interface AscShape {
-  kind: "LINE" | "RECTANGLE" | "CIRCLE" | "ARC";
-  coords: number[];
-}
+export type AscShape = SchematicAscShape;
 
 export interface AscDocument {
   version: number;
@@ -179,6 +177,25 @@ const num = (token: string | undefined): number => {
   const n = Number(token);
   return Number.isFinite(n) ? n : 0;
 };
+
+/** Pen widths LTspice writes for a drawing primitive. */
+const ASC_SHAPE_WIDTHS = ["Normal", "Wide"] as const;
+
+/** `LINE|RECTANGLE|CIRCLE|ARC <width> <coords...>`. The width word is not a
+ *  coordinate; dropping it writes a record LTspice reads back as malformed.
+ *  Returns null for anything the exporter could not reproduce exactly, so the
+ *  record falls through to `unknown` and the save stays blocked. */
+function parseShapeRecord(kind: AscShape["kind"], parts: string[]): AscShape | null {
+  const token = parts[1]?.toLowerCase();
+  const width = ASC_SHAPE_WIDTHS.find((candidate) => candidate.toLowerCase() === token);
+  if (!width) return null;
+  const coords = parts.slice(2).map(num);
+  // Endpoints, then LTspice's optional dash-style index.
+  const points = kind === "ARC" ? 8 : 4;
+  if (coords.length < points || coords.length > points + 1) return null;
+  if (!coords.every((value) => Number.isFinite(value))) return null;
+  return { kind, width, coords };
+}
 
 /**
  * Parse LTspice `.asc` text into a structured document. Tolerant of unknown
@@ -263,10 +280,13 @@ export function parseAsc(text: string): AscDocument {
       case "LINE":
       case "RECTANGLE":
       case "CIRCLE":
-      case "ARC":
-        doc.shapes.push({ kind: tag, coords: parts.slice(1).map(num).filter((n) => Number.isFinite(n)) });
+      case "ARC": {
+        const shape = parseShapeRecord(tag, parts);
+        if (shape) doc.shapes.push(shape);
+        else doc.unknown.push(line);
         current = null;
         break;
+      }
       case "IOPIN":
         // Hierarchy port - recorded as a flag-like net marker is out of scope v1.
         break;
@@ -859,6 +879,8 @@ export interface AscImportResult {
   comments: string[];
   /** Original TEXT records with positions, retained for lossless `.asc` save. */
   textAnnotations: AscText[];
+  /** Original drawing primitives retained for lossless `.asc` save. */
+  shapes: AscShape[];
   /** Original SHEET record retained for lossless `.asc` save. */
   sheet: AscDocument["sheet"];
   /** Non-fatal issues (symbols placed without pin-accurate geometry, etc.). */
@@ -1342,6 +1364,7 @@ function flattenSubcircuit(
     directives: [],
     comments: [],
     textAnnotations: [],
+    shapes: [],
     sheet: { ...body.sheet },
     warnings: body.warnings.map((w) => `${instName}: ${w}`),
     notes: body.notes.map((n) => `${instName}: ${n}`),
@@ -1587,6 +1610,7 @@ export function ascToSchematic(doc: AscDocument, options: AscImportOptions = {})
     directives,
     comments,
     textAnnotations: doc.texts.map((text) => ({ ...text })),
+    shapes: doc.shapes.map((shape) => ({ ...shape, coords: [...shape.coords] })),
     sheet: { ...doc.sheet },
     warnings,
     notes,

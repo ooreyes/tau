@@ -146,8 +146,11 @@ describe("project schematic file formats", () => {
   it("blocks rewrites when the source contains records Tau cannot preserve", () => {
     expect(ascRewriteRisks(ASC_SOURCE)).toEqual([]);
 
+    // Drawing primitives are carried on the document (`doc.shapes`) and
+    // re-emitted verbatim by the exporter (see the dedicated round-trip test
+    // below), so they no longer block the save.
     const withDrawing = `${ASC_SOURCE}LINE Normal 0 0 16 16\n`;
-    expect(ascRewriteRisks(withDrawing)).toEqual(["drawing primitives"]);
+    expect(ascRewriteRisks(withDrawing)).toEqual([]);
 
     // A WINDOW attached to its symbol is carried on the component and re-emitted,
     // so it no longer blocks the save. LTspice writes one whenever a label is
@@ -177,6 +180,51 @@ describe("project schematic file formats", () => {
     // re-emitted faithfully and the save block stays.
     const substrateBjt = `Version 4\nSHEET 1 880 680\nSYMBOL npn4 80 80 R0\nSYMATTR InstName Q1\n`;
     expect(ascRewriteRisks(substrateBjt)).toContain("symbol-library identity");
+  });
+
+  it("does not block a save for a resistor divider annotated with drawing primitives", () => {
+    // A plain resistor divider (Vin -> R1 -> Vout(unlabeled) -> R2 -> GND) plus
+    // one of each drawing primitive. No OTHER risk (unknown records, hierarchy
+    // ports, symbol identity, extended attributes, unsupported devices) fires,
+    // so this isolates the "drawing primitives" risk having been retired.
+    const source = `Version 4
+SHEET 1 880 680
+WIRE 96 128 96 176
+FLAG 96 48 vin
+FLAG 96 256 0
+SYMBOL res 80 32 R0
+SYMATTR InstName R1
+SYMATTR Value 1k
+SYMBOL res 80 160 R0
+SYMATTR InstName R2
+SYMATTR Value 1k
+LINE Normal 500 32 600 32
+RECTANGLE Normal 500 64 600 128
+CIRCLE Wide 500 160 540 200
+ARC Normal 500 240 600 320 500 320 600 240
+`;
+    const risks = ascRewriteRisks(source);
+    expect(risks).not.toContain("drawing primitives");
+    expect(risks).toEqual([]);
+    expect(ascSaveBlockReason(risks, 0, [])).toBeNull();
+
+    // End to end: the shapes actually survive a real save with no warnings.
+    const imported = importAsc(source);
+    expect(imported.warnings).toEqual([]);
+    const saved = serializeSchematicFile("/Schematics/divider.asc", {
+      components: imported.components,
+      wires: imported.wires,
+      probes: [],
+      netLabels: imported.netLabels,
+      directives: imported.directives,
+      ascShapes: imported.shapes,
+    });
+    expect(saved.warnings).toEqual([]);
+    expect(saved.contents).toContain("LINE Normal 500 32 600 32");
+    expect(saved.contents).toContain("RECTANGLE Normal 500 64 600 128");
+    expect(saved.contents).toContain("CIRCLE Wide 500 160 540 200");
+    expect(saved.contents).toContain("ARC Normal 500 240 600 320 500 320 600 240");
+    expect(ascSaveBlockReason(ascRewriteRisks(saved.contents), 0, saved.warnings)).toBeNull();
   });
 
   it("preserves positioned comments, directives, and custom sheet geometry", () => {

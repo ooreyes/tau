@@ -5,6 +5,7 @@ import type {
   Point,
   Probe,
   Rotation,
+  SchematicAscShape,
   SchematicComponent,
   SchematicSheet,
   SchematicTextAnnotation,
@@ -44,6 +45,10 @@ const MAX_ID_LENGTH = 128;
 const MAX_WINDOWS_PER_COMPONENT = 64;
 const MAX_DIRECTIVES = 1_000;
 const MAX_TEXT_ANNOTATIONS = 2_000;
+const MAX_ASC_SHAPES = 2_000;
+// A shape's coords are its endpoints (4, or 8 for an ARC) plus LTspice's
+// optional trailing dash-style index.
+const MAX_ASC_SHAPE_COORDS = 9;
 // An imported LTspice TEXT !-block lands as ONE directive string with its
 // embedded newlines (a behavioral-source table in the acceptance corpus runs
 // to 2.5 KB), so a directive gets the same generous single-field cap as a
@@ -225,6 +230,29 @@ function textAnnotation(value: unknown, index: number): SchematicTextAnnotation 
   };
 }
 
+const ASC_SHAPE_KINDS = new Set(["LINE", "RECTANGLE", "CIRCLE", "ARC"]);
+const ASC_SHAPE_WIDTHS = new Set(["Normal", "Wide"]);
+
+function ascShape(value: unknown, index: number): SchematicAscShape {
+  const source = record(value, `ascShapes[${index}]`);
+  const kind = text(source.kind, `ascShapes[${index}].kind`) as SchematicAscShape["kind"];
+  if (!ASC_SHAPE_KINDS.has(kind)) {
+    fail(`ascShapes[${index}].kind must be one of LINE, RECTANGLE, CIRCLE, ARC.`);
+  }
+  const width = text(source.width, `ascShapes[${index}].width`) as SchematicAscShape["width"];
+  if (!ASC_SHAPE_WIDTHS.has(width)) {
+    fail(`ascShapes[${index}].width must be "Normal" or "Wide".`);
+  }
+  if (!Array.isArray(source.coords) || source.coords.length > MAX_ASC_SHAPE_COORDS) {
+    fail(`ascShapes[${index}].coords must be an array of at most ${MAX_ASC_SHAPE_COORDS} numbers.`);
+  }
+  return {
+    kind,
+    width,
+    coords: source.coords.map((coord, coordIndex) => coordinate(coord, `ascShapes[${index}].coords[${coordIndex}]`)),
+  };
+}
+
 function schematicSheet(value: unknown): SchematicSheet {
   const source = record(value, "ascSheet");
   const index = source.index;
@@ -251,6 +279,7 @@ export function validateSchematicDocument(value: unknown): SchematicDocument {
   const netLabels = source.netLabels === undefined ? [] : source.netLabels;
   const directives = source.directives === undefined ? [] : source.directives;
   const textAnnotations = source.textAnnotations === undefined ? [] : source.textAnnotations;
+  const ascShapes = source.ascShapes === undefined ? [] : source.ascShapes;
   const ascSheet = source.ascSheet;
   const userModelLibraries = source.userModelLibraries === undefined ? [] : source.userModelLibraries;
   if (!Array.isArray(probes) || probes.length > MAX_COMPONENTS) fail("probes must be a bounded array.");
@@ -258,6 +287,9 @@ export function validateSchematicDocument(value: unknown): SchematicDocument {
   if (!Array.isArray(directives) || directives.length > MAX_DIRECTIVES) fail("directives must be a bounded array.");
   if (!Array.isArray(textAnnotations) || textAnnotations.length > MAX_TEXT_ANNOTATIONS) {
     fail(`textAnnotations must be an array of at most ${MAX_TEXT_ANNOTATIONS} items.`);
+  }
+  if (!Array.isArray(ascShapes) || ascShapes.length > MAX_ASC_SHAPES) {
+    fail(`ascShapes must be an array of at most ${MAX_ASC_SHAPES} items.`);
   }
   if (!Array.isArray(userModelLibraries) || userModelLibraries.length > MAX_MODEL_LIBRARIES) {
     fail(`userModelLibraries must be an array of at most ${MAX_MODEL_LIBRARIES} items.`);
@@ -312,6 +344,7 @@ export function validateSchematicDocument(value: unknown): SchematicDocument {
     ...(textAnnotations.length > 0
       ? { textAnnotations: textAnnotations.map(textAnnotation) }
       : {}),
+    ...(ascShapes.length > 0 ? { ascShapes: ascShapes.map(ascShape) } : {}),
     ...(ascSheet !== undefined ? { ascSheet: schematicSheet(ascSheet) } : {}),
     // Additive: only emit the key when attachments exist so legacy/empty
     // documents keep their exact prior serialized shape.

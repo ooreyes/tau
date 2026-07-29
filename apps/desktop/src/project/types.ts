@@ -107,7 +107,10 @@ export function ascRewriteRisks(source: string): string[] {
   const risks = new Set<string>();
 
   if (parsed.unknown.length > 0) risks.add("unknown LTspice records");
-  if (parsed.shapes.length > 0) risks.add("drawing primitives");
+  // Drawing primitives (LINE/RECTANGLE/CIRCLE/ARC) are carried on the document
+  // in `shapes` and re-emitted by the exporter. One Tau could not parse and
+  // re-emit exactly (a non-integer coordinate, an unrecognized width word, …)
+  // is parsed into `unknown` instead, which is already a risk above.
   // WINDOW records are carried on the component and re-emitted by the exporter
   // when the part keeps its source symbol. One Tau could not attach or could
   // not reproduce exactly is parsed into `unknown` instead, which is already a
@@ -170,6 +173,7 @@ export function serializeSchematicFile(
       netLabels: document.netLabels ?? [],
       directives: document.directives ?? [],
       textAnnotations: document.textAnnotations ?? [],
+      shapes: document.ascShapes,
       ...(document.ascSheet ? { sheet: document.ascSheet } : {}),
     });
     const reopened = importAsc(result.text);
@@ -197,6 +201,9 @@ export function serializeSchematicFile(
         directives: document.directives ?? [],
         ...(document.textAnnotations && document.textAnnotations.length > 0
           ? { textAnnotations: document.textAnnotations }
+          : {}),
+        ...(document.ascShapes && document.ascShapes.length > 0
+          ? { ascShapes: document.ascShapes }
           : {}),
         ...(document.ascSheet ? { ascSheet: document.ascSheet } : {}),
         // Additive: only present when the document carries attached vendor model

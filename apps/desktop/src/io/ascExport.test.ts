@@ -83,6 +83,42 @@ describe("serializeAscDocument", () => {
   });
 });
 
+// One of each drawing primitive, a dash-style index on the LINE, and an ARC
+// with exactly 8 coordinates (no dash index) - the full grammar from the brief.
+const SHAPES_SOURCE = `Version 4
+SHEET 1 880 680
+LINE Normal 100 300 200 300 2
+RECTANGLE Normal 80 96 -112 -96
+CIRCLE Wide 0 0 50 50
+ARC Normal 0 0 100 100 0 100 100 0`;
+
+describe("drawing primitives (LINE/RECTANGLE/CIRCLE/ARC) round-trip", () => {
+  it("re-emits every shape line byte-identically through parseAsc -> serializeAscDocument", () => {
+    const doc = parseAsc(SHAPES_SOURCE);
+    expect(doc.shapes).toEqual([
+      { kind: "LINE", width: "Normal", coords: [100, 300, 200, 300, 2] },
+      { kind: "RECTANGLE", width: "Normal", coords: [80, 96, -112, -96] },
+      { kind: "CIRCLE", width: "Wide", coords: [0, 0, 50, 50] },
+      { kind: "ARC", width: "Normal", coords: [0, 0, 100, 100, 0, 100, 100, 0] },
+    ]);
+    const serialized = serializeAscDocument(doc);
+    const sourceShapeLines = SHAPES_SOURCE.split("\n").filter((line) => /^(LINE|RECTANGLE|CIRCLE|ARC)\b/.test(line));
+    expect(sourceShapeLines).toHaveLength(4);
+    for (const line of sourceShapeLines) {
+      expect(serialized, line).toContain(line);
+    }
+  });
+
+  it("schematicToAsc emits shapes carried on the export input", () => {
+    const { shapes } = parseAsc(SHAPES_SOURCE);
+    const result = schematicToAsc({ components: [], wires: [], netLabels: [], shapes });
+    const sourceShapeLines = SHAPES_SOURCE.split("\n").filter((line) => /^(LINE|RECTANGLE|CIRCLE|ARC)\b/.test(line));
+    for (const line of sourceShapeLines) {
+      expect(result.text, line).toContain(line);
+    }
+  });
+});
+
 describe("kindToLtspiceType", () => {
   it("inverts the common built-ins back to banked-pin symbol types", () => {
     expect(kindToLtspiceType("resistor")).toBe("res");

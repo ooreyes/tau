@@ -17,6 +17,7 @@
 import type {
   ComponentKind,
   NetLabel,
+  SchematicAscShape,
   SchematicComponent,
   SchematicSheet,
   SchematicTextAnnotation,
@@ -67,7 +68,7 @@ export function serializeAscDocument(doc: AscDocument): string {
     lines.push(`TEXT ${int(t.x)} ${int(t.y)} Left 2 ${marker}${t.text}`);
   }
   for (const shape of doc.shapes) {
-    lines.push(`${shape.kind} ${shape.coords.map(int).join(" ")}`.trimEnd());
+    lines.push(`${shape.kind} ${shape.width} ${shape.coords.map(int).join(" ")}`.trimEnd());
   }
 
   return lines.join("\n") + "\n";
@@ -317,6 +318,8 @@ export interface SchematicExportInput {
   comments?: string[];
   /** Positioned LTspice TEXT records retained from an imported `.asc`. */
   textAnnotations?: SchematicTextAnnotation[];
+  /** Drawing primitives retained from an imported `.asc`. */
+  shapes?: SchematicAscShape[];
   /** Original LTspice sheet geometry retained from import. */
   sheet?: SchematicSheet;
 }
@@ -342,7 +345,7 @@ export function schematicToAsc(input: SchematicExportInput): SchematicToAscResul
     flags: [],
     symbols: [],
     texts: [],
-    shapes: [],
+    shapes: (input.shapes ?? []).map((shape) => ({ ...shape, coords: [...shape.coords] })),
     unknown: [],
   };
 

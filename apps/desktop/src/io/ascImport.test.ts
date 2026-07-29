@@ -70,7 +70,24 @@ describe("parseAsc", () => {
 
   it("captures drawing primitives without choking", () => {
     expect(doc.shapes).toHaveLength(1);
-    expect(doc.shapes[0].kind).toBe("LINE");
+    expect(doc.shapes[0]).toEqual({ kind: "LINE", width: "Normal", coords: [100, 300, 200, 300] });
+  });
+
+  it("parses an ARC's 8 coordinates", () => {
+    const parsed = parseAsc("Version 4\nSHEET 1 880 680\nARC Normal 0 0 100 100 0 100 100 0");
+    expect(parsed.shapes).toEqual([
+      { kind: "ARC", width: "Normal", coords: [0, 0, 100, 100, 0, 100, 100, 0] },
+    ]);
+  });
+
+  it("rejects a malformed drawing primitive into `unknown` instead of `shapes`", () => {
+    const badWidth = "LINE Dotted 0 0 8 8";   // "Dotted" is not a pen-width word
+    const short = "LINE Normal 0 0";          // too few coordinates for a LINE
+    for (const line of [badWidth, short]) {
+      const parsed = parseAsc(`Version 4\nSHEET 1 880 680\n${line}`);
+      expect(parsed.shapes, line).toEqual([]);
+      expect(parsed.unknown, line).toEqual([line]);
+    }
   });
 
   it("WINDOW lines attach to their symbol as placement records, not as SYMATTRs", () => {

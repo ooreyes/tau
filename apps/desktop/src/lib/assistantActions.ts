@@ -215,6 +215,7 @@ function validatedAscSource(value: unknown, validateElectrical: boolean): {
       netLabels: imported.netLabels,
       directives: imported.directives,
       textAnnotations: imported.textAnnotations,
+      ascShapes: imported.shapes,
       ascSheet: imported.sheet,
     },
     componentCount: imported.components.filter((component) => component.kind !== "ground").length,

@@ -200,4 +200,33 @@ describe("schematic document validation", () => {
     };
     expect(() => validateSchematicDocument(bad)).toThrow(/aggregate limit/i);
   });
+
+  it("preserves drawing primitives and rejects an entry it could not write back", () => {
+    const base = validDocument();
+    const document = {
+      ...base,
+      ascShapes: [
+        { kind: "LINE", width: "Normal", coords: [0, 0, 16, 16] },
+        { kind: "ARC", width: "Wide", coords: [0, 0, 100, 100, 0, 100, 100, 0, 2] },
+      ],
+    };
+    expect(validateSchematicDocument(document)).toEqual(document);
+
+    // Re-emitted verbatim into `.asc` text, so a document that reaches Tau with
+    // a record LTspice cannot read must be refused rather than round-tripped
+    // into a corrupt save.
+    const bad = (shape: Record<string, unknown>) => () => validateSchematicDocument({
+      ...base,
+      ascShapes: [shape],
+    });
+    expect(bad({ kind: "TRIANGLE", width: "Normal", coords: [0, 0, 16, 16] })).toThrow(/kind/i);
+    expect(bad({ kind: "LINE", width: "Dotted", coords: [0, 0, 16, 16] })).toThrow(/width/i);
+    expect(bad({ kind: "LINE", width: "Normal", coords: [0, "x", 16, 16] })).toThrow(/coordinate/i);
+    expect(bad({ kind: "LINE", width: "Normal", coords: Array.from({ length: 10 }, () => 0) })).toThrow(/coords/i);
+  });
+
+  it("omits ascShapes entirely when a document has none, so legacy files keep their shape", () => {
+    const result = validateSchematicDocument(validDocument());
+    expect(Object.prototype.hasOwnProperty.call(result, "ascShapes")).toBe(false);
+  });
 });
