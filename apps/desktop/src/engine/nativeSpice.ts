@@ -110,11 +110,12 @@ export async function runNativeTransient(
 
   if (traces.length === 0) throw new Error("ngspice completed, but returned no node-voltage traces.");
 
-  // Branch currents: voltage-source/inductor currents normally arrive as
-  // `<ref>#branch`. Some ngspice decks also retain a two-terminal
-  // semiconductor's explicit `@ref[id]` device vector; preserve it when it is
-  // present instead of leaving that component's telemetry blank. Resistor and
-  // capacitor currents are derived from the node voltages below.
+  // Branch currents: voltage-source and inductor currents are the ones ngspice
+  // returns on its own, as `<ref>#branch`. Resistor and capacitor currents are
+  // derived from the node voltages below. A device vector like `@ref[id]` is
+  // only present when a deck asked for it with `.save`, which Tau's does not,
+  // so the remaining candidates are read defensively rather than expected -
+  // a semiconductor's own current is absent from a native transient today.
   const nodeVoltages = new Map<string, number[]>(traces.map((t) => [t.id, t.values]));
   const currents: CurrentTrace[] = [];
   const seen = new Set<string>();
@@ -134,6 +135,12 @@ export async function runNativeTransient(
   }
 
   const stopTime = time.real[time.real.length - 1] ?? options.stopTime;
+  // ngspice picks its own timestep, so the returned samples are not on a
+  // uniform grid and the first interval is not the step: a `.tran 10u 2m` run
+  // opens with a 10 ps step while it finds the solution. The average interval
+  // describes the samples that actually came back, and equals the requested
+  // step when the grid is uniform.
+  const span = stopTime - (time.real[0] ?? 0);
   return {
     ok: true,
     title: "ngspice transient",
@@ -145,7 +152,7 @@ export async function runNativeTransient(
       componentCount: schematic.components.length,
       sampleCount: time.real.length,
       stopTime,
-      stepSize: time.real.length > 1 ? (time.real[1] - time.real[0]) : stopTime,
+      stepSize: time.real.length > 1 ? span / (time.real.length - 1) : stopTime,
     },
     warnings: [...execution.deck.circuit.warnings, ...engineWarnings(execution.result.messages)],
     circuit: execution.deck.circuit,

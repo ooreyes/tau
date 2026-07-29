@@ -49,14 +49,21 @@ do not spend a fire diffing it again. Re-check only if its tip moves past
 Ordered. Take the top item unless it is blocked. Class A outranks everything -
 a plausible wrong number is worse than a refusal to run.
 
-1. **`.dc` is proven, `.tran` and `.ac` are not.** With the DC-sweep proof
-   landed, transient and AC are the two native paths left whose vector contract
-   is only unit-tested against mocked vectors. `.tran` is the highest-traffic
-   analysis in the app, and `runNativeTransient` carries the most unproven
-   name-matching of any adapter (`componentCurrentVector`'s `<ref>#branch` /
-   `i(<ref>)` / `@<ref>[id]` ladder). Same harness shape as
-   `scripts/dcSweepNative.corpus.ts`.
-2. **Tau's canvas does not draw the primitives it now preserves.** A saved file
+1. **`.ac` is the last native path proven only against mocked vectors.**
+   `.dc`, `.tf`, `.noise` and now `.tran` all have real-engine harnesses;
+   `runNativeAcSweep` does not. It reads `frequency` plus the complex node
+   vectors and derives dB/phase itself, so the untested assumptions are the
+   scale name, the real/imaginary split, and the dB convention. Same harness
+   shape as `scripts/tranNative.corpus.ts` - reuse its `print all` parser,
+   which handles the pagination the older `dcSweepNative` one does not.
+2. **A semiconductor has no current trace in a native transient.** Established
+   with engine evidence on 2026-07-29 and now stated in KNOWN_ISSUES: ngspice
+   returns a device vector like `@d1[id]` only when the deck asks with `.save`,
+   and Tau's deck does not. A clamp probe on a transistor resolves to nothing.
+   Emitting `.save` is the obvious fix but it RESTRICTS what ngspice saves, so
+   it must be `.save all @<ref>[id] ...` and needs its own real-engine proof
+   that no existing vector disappears.
+3. **Tau's canvas does not draw the primitives it now preserves.** A saved file
    keeps its artwork byte-for-byte, but the author cannot see it in Tau. That is
    stated plainly in KNOWN_ISSUES; rendering them is the follow-up.
 
@@ -66,6 +73,28 @@ a plausible wrong number is worse than a refusal to run.
 
 Newest first. One line each: date, unit, evidence.
 
+- 2026-07-29 - `.tran` proven against a real ngspice run rather than mocked
+  vectors, closing the highest-traffic analysis. `scripts/tranNative.corpus.ts`
+  pins the `time` scale, node vectors arriving BARE (not `v(x)`, which is why
+  `nodeVectorName` strips the wrapper), `<ref>#branch` for sources/inductors,
+  and `deriveRcCurrents` on ngspice's own non-uniform grid checked against a
+  vector ngspice did return. Found one wrong number: `stats.stepSize` was
+  `time[1] - time[0]`, which on a real adaptive-timestep run is 10 ps for a
+  `.tran 10u 2m` - six orders of magnitude off the requested 10 us. Now the
+  average interval over the returned span. Latent (nothing renders it), fixed
+  before something does. Also established that two rungs of
+  `componentCurrentVector` never fire on a real run - ngspice names no
+  `i(<ref>)`, and `@<ref>[id]` needs a `.save` Tau does not emit - so a
+  semiconductor has NO current trace; that is now in KNOWN_ISSUES and is Next
+  up #2. Circuits: RC step in closed form on both engines, RL series
+  (`v1#branch == -l1#branch`), derived R/C currents, and a common-emitter NPN
+  the TS solver refuses, biased mid-rail and amplifying 16x with inversion.
+  Writing it surfaced that `print all` paginates every ~50 rows and the older
+  column-claim logic read that as a finished table - without the fix the
+  harness saw only the first 0.25 ms of a 5 ms run. Mutation-checked both
+  halves: restoring `time[1] - time[0]` kills the 2 new unit tests, removing
+  the pagination handling kills 4 of the 6 corpus cases. Gates: tsc, full suite
+  2235 passed / 148 files, cargo test 31 + clippy clean, corpus 80/80/80/80.
 - 2026-07-29 - Drawing primitives (`LINE`/`RECTANGLE`/`CIRCLE`/`ARC`) survive a
   save instead of blocking it, retiring the most common remaining reason an
   imported `.asc` could not be written back. Same passthrough shape as the

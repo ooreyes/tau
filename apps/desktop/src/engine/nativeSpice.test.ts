@@ -128,6 +128,43 @@ describe("native ngspice adapter", () => {
     ]);
   });
 
+  // ngspice chooses its own timestep, so the samples that come back are not on
+  // the grid Tau asked for. A real `.tran 10u 2m` run opens with a 10 ps step
+  // while the solver settles, which is what the first interval would report.
+  it("reports the average sample interval, not ngspice's tiny opening step", async () => {
+    enableNativeRuntime();
+    invoke.mockResolvedValueOnce(nativeResult([
+      { name: "time", real: [0, 1e-11, 0.0005, 0.001, 0.002], imaginary: null },
+      { name: "v(n001)", real: [5, 5, 5, 5, 5], imaginary: null },
+      { name: "v(n002)", real: [0, 0, 2.1, 3.2, 4.3], imaginary: null },
+    ]));
+
+    const result = await runNativeTransient(rcSchematic(), { stopTime: 0.002, steps: 200 });
+
+    expect(result).not.toBeNull();
+    if (!result || !result.ok) return;
+    expect(result.stats.sampleCount).toBe(5);
+    expect(result.stats.stopTime).toBe(0.002);
+    expect(result.stats.stepSize).toBeCloseTo(0.0005, 12);
+  });
+
+  // A run whose output starts late spans only the samples it returned, so the
+  // average is taken over that span rather than from zero.
+  it("measures the average interval across the returned span, not from zero", async () => {
+    enableNativeRuntime();
+    invoke.mockResolvedValueOnce(nativeResult([
+      { name: "time", real: [0.001, 0.0011, 0.002], imaginary: null },
+      { name: "v(n001)", real: [5, 5, 5], imaginary: null },
+      { name: "v(n002)", real: [1, 2, 3], imaginary: null },
+    ]));
+
+    const result = await runNativeTransient(rcSchematic(), { stopTime: 0.002, steps: 200 });
+
+    expect(result).not.toBeNull();
+    if (!result || !result.ok) return;
+    expect(result.stats.stepSize).toBeCloseTo(0.0005, 12);
+  });
+
   it("retains an explicit ngspice diode current vector for component telemetry", async () => {
     enableNativeRuntime();
     invoke.mockResolvedValueOnce(nativeResult([

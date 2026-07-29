@@ -29,7 +29,52 @@ figure all run on the real engine. Do not restore a readiness banner until every
 Class A and Class B item in the audit is closed or consciously accepted, with
 file:line evidence.
 
-**Last unit - 2026-07-29: LTspice drawing primitives (`LINE`, `RECTANGLE`,
+**Last unit - 2026-07-29: `.tran` is now proven against a real ngspice run
+instead of against mocked vectors**, closing the gap on the highest-traffic
+analysis in the app. `scripts/tranNative.corpus.ts` builds the deck Tau would
+hand the native engine, runs it through the ngspice binary, and holds each of
+the adapter's engine-facing assumptions against what actually comes back: the
+`time` scale, node vectors arriving bare rather than as `v(x)` (which is why
+`nodeVectorName` has to strip the wrapper - a literal lookup would find no
+traces at all), the `<ref>#branch` spelling the current ladder leads with, and
+`deriveRcCurrents` standing in for the device currents ngspice never returns.
+
+The run found one wrong number. `stats.stepSize` was `time[1] - time[0]`, but
+ngspice picks its own timestep: a real `.tran 10u 2m` opens with a **10 ps**
+step while the solver settles, so the reported step was off by six orders of
+magnitude from the 10 us the user asked for. It now reports the average interval
+across the returned span, which equals the requested step on a uniform grid.
+Nothing renders `stepSize` today, so this was latent rather than on screen - it
+is fixed here because it becomes a visible lie the moment anything does.
+
+Two of the ladder's three rungs turn out to be defensive, not the normal path:
+ngspice names no vector `i(<ref>)`, and a device vector like `@d1[id]` exists
+only when a deck asks for it with `.save`, which Tau's does not. The consequence
+is now stated in KNOWN_ISSUES rather than left for a user to discover: in a
+native transient, current is available for sources, inductors, resistors and
+capacitors, but a transistor's or diode's own current has no trace. It is left
+blank, not estimated - a clamp probe on one resolves to nothing.
+
+Proof circuits: an RC step whose exponential is checked in closed form at
+ngspice's own sample times, on both engines; an RL series stage where the source
+and inductor `#branch` vectors must be equal and opposite; the same RC fed
+through the shipped `deriveRcCurrents` on ngspice's real non-uniform grid and
+checked against a vector ngspice *did* return; and a common-emitter NPN the
+TypeScript solver refuses outright, biased mid-rail and amplifying 16x with the
+inversion a common-emitter must show. Writing it surfaced that `print all`
+paginates every ~50 rows, which the existing column-claim logic read as a
+finished table - a transient is the first run here long enough to hit it, and
+without the fix the harness silently saw only the first 0.25 ms of a 5 ms run.
+
+Mutation-checked both halves: restoring `time[1] - time[0]` kills the two new
+unit tests, and removing the pagination handling kills four of the six corpus
+cases.
+
+Gates: tsc clean, full suite 2235 passed across 148 files, cargo test 31 passed
+and clippy clean, corpus held at 80/80/80/80 (the `>= 82` assertion still fails
+on the deleted input files, unchanged and tracked as blocked).
+
+**Previous unit - 2026-07-29: LTspice drawing primitives (`LINE`, `RECTANGLE`,
 `CIRCLE`, `ARC`) now survive a save instead of blocking it**, retiring the most
 common remaining reason an imported `.asc` could not be written back. This is
 the same passthrough shape as the `WINDOW` unit: the records are carried on the
