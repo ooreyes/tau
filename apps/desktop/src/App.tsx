@@ -87,6 +87,7 @@ import {
   runNativeAcSweep,
   runNativeDcSweep,
   runNativeOperatingPoint,
+  runNativeNoise,
   runNativeTransferFunction,
   runNativeTransient,
 } from "./engine/nativeSpice";
@@ -753,7 +754,13 @@ function App() {
     const noise = analysesFromDirectives(directives).noise ?? noiseSetup;
     setAnalysisRunning(true);
     try {
-      const result = runNoiseAnalysis({ components, wires, netLabels, params }, noise);
+      // ngspice first: the TS solver has only resistor thermal noise and
+      // refuses any circuit with a semiconductor in it, so it cannot report a
+      // real amplifier's noise at all.
+      const result = await runNativeNoise(
+        { components, wires, netLabels, params, directives, userModelLibraries: userModelLibraryTexts, userModelLibraryNames },
+        noise,
+      ) ?? runNoiseAnalysis({ components, wires, netLabels, params }, noise);
       if (analysisRequestRef.current !== requestId) return;
       setNoiseAnalysis(result);
     } catch (error) {
@@ -762,7 +769,7 @@ function App() {
     } finally {
       if (analysisRequestRef.current === requestId) setAnalysisRunning(false);
     }
-  }, [components, wires, netLabels, params, directives, noiseSetup]);
+  }, [components, wires, netLabels, params, directives, noiseSetup, userModelLibraryTexts, userModelLibraryNames]);
 
   const runStepAnalysis = useCallback(async () => {
     const requestId = ++analysisRequestRef.current;

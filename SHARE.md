@@ -48,13 +48,10 @@ Tau is a native Mac circuit app (not a website). This is the **v1.0 release buil
   an optional on-device MLX assistant.
 - **Isn't:** an LTspice replacement, or Apple-notarized yet (so Gatekeeper
   needs the one-time Control-click Open).
-- **Two gaps worth naming up front**, because they will be the first things an
-  experienced user hits: noise does not run on ngspice yet - it uses Tau's
-  smaller solver, which does not model transistors, so a noise analysis on a
-  transistor circuit refuses to run. And current-controlled switches are not
-  modelled, so a converter built around one is not trustworthy. Everything
-  else is in [KNOWN_ISSUES.md](KNOWN_ISSUES.md), which is specific rather than
-  tidy.
+- **The gap worth naming up front**, because it will be among the first things
+  an experienced user hits: current-controlled switches are not modelled, so a
+  converter built around one is not trustworthy. Everything else is in
+  [KNOWN_ISSUES.md](KNOWN_ISSUES.md), which is specific rather than tidy.
 
 ## Reddit-ready blurb
 
@@ -68,11 +65,12 @@ them on a real embedded ngspice engine. Vendor .lib/.subckt models import and
 simulate (the demo runs an actual ADI AD8541 macromodel). Optional on-device
 AI assistant, no cloud.
 
-Honest about where it is: transient, op and AC run on ngspice. DC sweep, noise
-and transfer function still run on my own smaller solver, which does not do
-transistors yet, and voltage-controlled switches are not modelled. So it is not
-an LTspice replacement - it is an LTspice-compatible sim with a better editor,
-and I would rather you knew that before downloading it than after.
+Honest about where it is: transient, op, AC, DC sweep, transfer function and
+noise all run on ngspice. Current-controlled switches are not modelled, and it
+is not Apple-notarized yet, so Gatekeeper needs a one-time Control-click Open.
+So it is not an LTspice replacement - it is an LTspice-compatible sim with a
+better editor, and I would rather you knew that before downloading it than
+after.
 
 DMG: <release URL>
 Install: drag to Applications, Control-click Open once (not notarized yet).

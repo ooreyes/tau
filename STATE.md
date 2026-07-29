@@ -42,27 +42,18 @@ partial work.
 Ordered. Take the top item unless it is blocked. Class A outranks everything -
 a plausible wrong number is worse than a refusal to run.
 
-1. **P3 remainder - `.noise` on ngspice, TS half.** The Rust prerequisite landed
-   2026-07-29: `SpiceResult.extraPlots` now carries the spectral-density plot
-   (`onoise_spectrum`, `inoise_spectrum`, its own `frequency` scale) that
-   `ngSpice_CurPlot` cannot reach, and the current plot still holds the totals
-   (`onoise_total`, `inoise_total`). What is left is all TypeScript: a `noise`
-   branch in `analysisLine` (`engine/spiceNetlist.ts`), a `runNativeNoise` in
-   `engine/nativeSpice.ts` shaped like `runNativeTransferFunction` but reading
-   both plots, the `App.tsx` wiring, and the "planned" string at
-   `simulation/noise.ts:332`. Nothing in TS reads `extraPlots` yet - it is a
-   declared contract with no consumer until this lands.
-2. **A MOSFET DC-sweep corpus proof.** The native DC path is unit-tested
+1. **A MOSFET DC-sweep corpus proof.** The native DC path is unit-tested
    against mocked vectors and its ngspice contract was checked by hand at the
    CLI, but nothing in the repo runs a real transistor sweep end to end. A
-   `scripts/dcSweepNative.corpus.ts` in the shape of the new
-   `scripts/tfNative.corpus.ts` would close that - copy its `runTf` helper
-   shape, which parses ngspice's own printed block so the adapter's vector
-   matchers are checked against real names.
-3. **P16 - engine badge**. Nothing tells the user whether ngspice or the TS
-   solver produced a result. Also fix the two strings still calling ngspice
-   "planned" (`simulation/noise.ts:332`, `simulation/acSweep.ts:291`).
-4. **The next save blocker after `WINDOW`: drawing primitives.** With placement
+   `scripts/dcSweepNative.corpus.ts` in the shape of `scripts/tfNative.corpus.ts`
+   or the new `scripts/noiseNative.corpus.ts` would close that - both parse
+   ngspice's own printed output so the adapter's vector names are checked
+   against a real run rather than restated.
+2. **P16 - engine badge**. Nothing tells the user whether ngspice or the TS
+   solver produced a result, and KNOWN_ISSUES now says so in as many words.
+   Also fix the last string still calling ngspice "planned"
+   (`simulation/acSweep.ts:291`); the noise one is gone.
+3. **The next save blocker after `WINDOW`: drawing primitives.** With placement
    preserved, `LINE`/`RECTANGLE`/`CIRCLE`/`ARC` are the most common remaining
    reason an imported `.asc` still cannot be saved. `parseAsc` already keeps
    them in `doc.shapes`; the exporter drops them. Same passthrough shape as
@@ -74,6 +65,30 @@ a plausible wrong number is worse than a refusal to run.
 
 Newest first. One line each: date, unit, evidence.
 
+- 2026-07-29 - `.noise` runs on ngspice end to end, so a noise figure now
+  includes a transistor's own shot and flicker noise instead of resistor thermal
+  noise alone. Recovered the `-wip` rescue commit's TS half (`analysisLine`
+  noise branch, `runNativeNoise`, App wiring, unit tests) and added the
+  real-engine proof its own comment referenced but never contained. Reads both
+  plots ngspice splits a noise run across: density curves out of `extraPlots`,
+  integrated totals out of the current plot. An input source carrying no AC
+  amplitude is named before the round trip - verified at the CLI that ngspice
+  aborts the whole run on one, leaving no plots at all, so there is no partial
+  answer to salvage. `.noise` was already in the Rust card allowlist, so no
+  guard moved. Real-ngspice proof: `scripts/noiseNative.corpus.ts` - a 10k/10k
+  divider whose 5k of thermal noise must sit flat at sqrt(4kTR) =
+  9.10 nV/sqrt(Hz) with the total at that times sqrt(bandwidth), agreeing with
+  the shipped TS solver on the one case both engines can answer; plus a
+  common-emitter NPN the TS solver refuses outright whose output noise is 57x
+  Rc's own thermal floor. The proof parses ngspice's plot listing, so the
+  two-plot split and every name in `NOISE_VECTOR_NAMES` is checked against a
+  real run rather than restated. Mutation-checked three ways: a wrong spectrum
+  vector name (kills the corpus and 5 unit tests), reading the spectrum from
+  the current plot instead of `extraPlots` (kills 5), the AC precheck removed
+  (kills 1). KNOWN_ISSUES / README / SHARE updated - all three named noise as
+  a headline gap, and SHARE's blurb was separately wrong about which switch
+  kind is unmodelled (`csw`, not the voltage-controlled one that landed
+  2026-07-28) and still called DC sweep and `.tf` non-native.
 - 2026-07-29 - The native bridge can see a run's secondary plots at all:
   `ngSpice_AllPlots` plus a before/after snapshot yields `SpiceResult.extraPlots`,
   which is what a `.noise` run's spectral-density curves live in - unreachable

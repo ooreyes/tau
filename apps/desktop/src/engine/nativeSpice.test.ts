@@ -9,6 +9,7 @@ import {
   isNativeSpiceRuntime,
   runNativeAcSweep,
   runNativeDcSweep,
+  runNativeNoise,
   runNativeOperatingPoint,
   runNativeTransferFunction,
   runNativeTransient,
@@ -522,6 +523,181 @@ describe("native transfer function", () => {
       output: { kind: "voltage", pos: "out" },
       source: "V1",
     })).toBeNull();
+    expect(invoke).not.toHaveBeenCalled();
+  });
+});
+
+// A `.noise` run answers across two plots: ngspice leaves the two integrated
+// totals current and puts the spectral density curves, with their own
+// frequency scale, in a second plot that only `extraPlots` reaches. Vector
+// names and plot split captured from a real run of this deck.
+const noiseDividerSchematic = () => ({
+  ...dividerSchematic(),
+  components: dividerSchematic().components.map((part) =>
+    part.id === "v1" ? { ...part, value: "5 AC 1" } : part,
+  ),
+});
+
+const noiseResult = (options: {
+  freqs?: number[];
+  onoise?: number[];
+  inoise?: number[];
+  totals?: { name: string; real: number[]; imaginary: number[] | null }[];
+  spectrumNames?: { scale: string; onoise: string; inoise: string };
+} = {}) => {
+  const freqs = options.freqs ?? [1, 10, 100];
+  const names = options.spectrumNames
+    ?? { scale: "frequency", onoise: "onoise_spectrum", inoise: "inoise_spectrum" };
+  return {
+    plot: "noise2",
+    vectors: options.totals ?? [
+      { name: "inoise_total", real: [4.1e-7], imaginary: null },
+      { name: "onoise_total", real: [2.05e-7], imaginary: null },
+    ],
+    extraPlots: [{
+      name: "noise1",
+      vectors: [
+        { name: names.scale, real: freqs, imaginary: null },
+        { name: names.onoise, real: options.onoise ?? freqs.map(() => 9.1e-9), imaginary: null },
+        { name: names.inoise, real: options.inoise ?? freqs.map(() => 1.82e-8), imaginary: null },
+      ],
+    }],
+    messages: [] as string[],
+    libraryPath: "/bundle/libngspice.dylib",
+  };
+};
+
+const noiseSpec = (overrides: Partial<Parameters<typeof runNativeNoise>[1]> = {}) => ({
+  output: { pos: "out" },
+  source: "V1",
+  sweep: { startHz: 1, stopHz: 100, pointsPerDecade: 1 },
+  ...overrides,
+});
+
+describe("native noise analysis", () => {
+  it("reads the spectrum out of the secondary plot and the totals out of the current one", async () => {
+    enableNativeRuntime();
+    invoke.mockResolvedValue(noiseResult());
+
+    const result = await runNativeNoise(noiseDividerSchematic(), noiseSpec());
+
+    expect(deckOf()).toContain(".noise v(out) V1 dec 1 1 100");
+    expect(result?.ok).toBe(true);
+    if (!result?.ok) return;
+    expect(result.freqs).toEqual([1, 10, 100]);
+    expect(result.onoise).toEqual([9.1e-9, 9.1e-9, 9.1e-9]);
+    expect(result.inoise).toEqual([1.82e-8, 1.82e-8, 1.82e-8]);
+    expect(result.totalOutputNoise).toBeCloseTo(2.05e-7, 12);
+    expect(result.totalInputNoise).toBeCloseTo(4.1e-7, 12);
+    expect(result.inoiseUnit).toBe("V/√Hz");
+  });
+
+  it("emits a differential output port as v(pos,neg)", async () => {
+    enableNativeRuntime();
+    invoke.mockResolvedValue(noiseResult());
+
+    const result = await runNativeNoise(
+      noiseDividerSchematic(),
+      noiseSpec({ output: { pos: "out", neg: "in" } }),
+    );
+
+    expect(deckOf()).toContain(".noise v(out,in) V1 dec 1 1 100");
+    expect(result?.ok).toBe(true);
+  });
+
+  it("labels a current input's referred noise in amps", async () => {
+    enableNativeRuntime();
+    invoke.mockResolvedValue(noiseResult());
+    const schematic = noiseDividerSchematic();
+    const withCurrentInput = {
+      ...schematic,
+      components: schematic.components.map((part) =>
+        part.id === "v1" ? { ...part, kind: "isource" as const, label: "I1", value: "0 AC 1" } : part,
+      ),
+    };
+
+    const result = await runNativeNoise(withCurrentInput, noiseSpec({ source: "I1" }));
+
+    expect(result?.ok).toBe(true);
+    if (!result?.ok) return;
+    expect(result.inoiseUnit).toBe("A/√Hz");
+  });
+
+  // ngspice aborts the whole run on a noise input with no AC stimulus, so this
+  // has to be caught before the round trip or the user sees an empty result.
+  it("names a missing AC amplitude instead of paying a round trip ngspice aborts", async () => {
+    enableNativeRuntime();
+
+    const result = await runNativeNoise(dividerSchematic(), noiseSpec());
+
+    expect(result?.ok).toBe(false);
+    if (result?.ok !== false) return;
+    expect(result.message).toMatch(/has no AC amplitude/i);
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it("reads an AC amplitude that arrives through a parameter", async () => {
+    enableNativeRuntime();
+    invoke.mockResolvedValue(noiseResult());
+    const schematic = noiseDividerSchematic();
+    const parameterized = {
+      ...schematic,
+      components: schematic.components.map((part) =>
+        part.id === "v1" ? { ...part, value: "5 AC {amp}" } : part,
+      ),
+      params: { scope: { amp: 1 }, funcs: {} },
+    };
+
+    const result = await runNativeNoise(parameterized, noiseSpec());
+
+    expect(result?.ok).toBe(true);
+    expect(invoke).toHaveBeenCalled();
+  });
+
+  it("names an unknown output node and a stimulus that is not a source", async () => {
+    enableNativeRuntime();
+
+    const badNode = await runNativeNoise(noiseDividerSchematic(), noiseSpec({ output: { pos: "nowhere" } }));
+    expect(badNode?.ok).toBe(false);
+    if (badNode?.ok !== false) return;
+    expect(badNode.message).toMatch(/output node "nowhere" not found/i);
+
+    const wrongKind = await runNativeNoise(noiseDividerSchematic(), noiseSpec({ source: "R1" }));
+    expect(wrongKind?.ok).toBe(false);
+    if (wrongKind?.ok !== false) return;
+    expect(wrongKind.message).toMatch(/not an independent source/i);
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  // The whole reason this path exists: the density curves are unreachable
+  // through the current plot, so a run that returned only totals has nothing
+  // to draw and must say so rather than report an empty sweep.
+  it("refuses a run whose spectral density plot never arrived", async () => {
+    enableNativeRuntime();
+    invoke.mockResolvedValue({ ...noiseResult(), extraPlots: [] });
+
+    await expect(runNativeNoise(noiseDividerSchematic(), noiseSpec()))
+      .rejects.toThrow(/no noise spectral density curves/i);
+  });
+
+  it("refuses a spectrum whose curve is shorter than its frequency scale", async () => {
+    enableNativeRuntime();
+    invoke.mockResolvedValue(noiseResult({ onoise: [9.1e-9, 9.1e-9] }));
+
+    await expect(runNativeNoise(noiseDividerSchematic(), noiseSpec()))
+      .rejects.toThrow(/no noise spectral density curves/i);
+  });
+
+  it("refuses to report totals ngspice did not return", async () => {
+    enableNativeRuntime();
+    invoke.mockResolvedValue(noiseResult({ totals: [{ name: "onoise_total", real: [2.05e-7], imaginary: null }] }));
+
+    await expect(runNativeNoise(noiseDividerSchematic(), noiseSpec()))
+      .rejects.toThrow(/no integrated noise totals/i);
+  });
+
+  it("stays on the TypeScript solver outside a Tauri webview", async () => {
+    expect(await runNativeNoise(noiseDividerSchematic(), noiseSpec())).toBeNull();
     expect(invoke).not.toHaveBeenCalled();
   });
 });

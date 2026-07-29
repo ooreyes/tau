@@ -16,12 +16,10 @@
 > click-to-probe plotting with live measurements, ready-to-run demos in
 > [examples/](examples/README.md), and an optional AI circuit assistant.
 >
-> **Transient, operating point, AC, DC sweep and transfer function run on the
-> embedded ngspice engine.** Noise currently runs on Tau's own smaller solver,
-> which does not model transistors - so a noise analysis on a MOSFET or BJT
-> refuses to run. Current-controlled switches are not modelled either. Read
-> [KNOWN_ISSUES.md](KNOWN_ISSUES.md) before trusting a result; it is specific
-> about what is and is not real.
+> **Transient, operating point, AC, DC sweep, transfer function and noise all
+> run on the embedded ngspice engine.** Current-controlled switches are not
+> modelled. Read [KNOWN_ISSUES.md](KNOWN_ISSUES.md) before trusting a result;
+> it is specific about what is and is not real.
 >
 > Tau is an LTspice-compatible simulator, not a drop-in LTspice replacement.
 

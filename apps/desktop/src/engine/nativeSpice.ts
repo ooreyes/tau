@@ -1,7 +1,9 @@
 import { invoke } from "@tauri-apps/api/core";
 import { buildSpiceDeck, unresolvedSubcktMessage, type SpiceAnalysis } from "./spiceNetlist";
 import type { NetLabel, SchematicComponent, SchematicWire } from "../schematic/types";
-import type { ParamScope } from "../simulation/paramScope";
+import { resolveComponentValues, EMPTY_SCOPE, type ParamScope } from "../simulation/paramScope";
+import { parseAcSpec } from "./acSpec";
+import type { NoiseResult, NoiseSpec } from "../simulation/noise";
 import type { AnalysisOptions, AnalysisResult, CurrentTrace, Trace } from "../simulation/linearTransient";
 import { deriveRcCurrents } from "../simulation/currents";
 import type { OperatingPointResult } from "../simulation/operatingPoint";
@@ -317,8 +319,9 @@ export async function runNativeDcSweep(
   return { ok: true, source: inner.label, sweep, nets: fanned, warnings };
 }
 
-/** Independent-source kinds usable as a `.tf` stimulus, matching the TS solver. */
-const TF_SOURCE_KINDS = new Set<SchematicComponent["kind"]>(["vsource", "isource", "vac", "iac"]);
+/** Independent-source kinds usable as a `.tf` or `.noise` stimulus, matching
+ *  the TS solvers. */
+const INDEPENDENT_SOURCE_KINDS = new Set<SchematicComponent["kind"]>(["vsource", "isource", "vac", "iac"]);
 
 /**
  * How ngspice's three `.tf` scalars are recognised, against a lower-cased
@@ -359,7 +362,7 @@ export async function runNativeTransferFunction(
     (component) => component.label.toLowerCase() === spec.source.toLowerCase(),
   );
   if (!input) return { ok: false, message: `.tf source "${spec.source}" not found in the circuit.`, warnings: [] };
-  if (!TF_SOURCE_KINDS.has(input.kind)) {
+  if (!INDEPENDENT_SOURCE_KINDS.has(input.kind)) {
     return {
       ok: false,
       message: `.tf source "${spec.source}" is a ${input.kind}, not an independent source.`,
@@ -427,6 +430,132 @@ export async function runNativeTransferFunction(
     inputImpedance: inputImpedance ?? Infinity,
     outputImpedance: outputImpedance ?? NaN,
     warnings,
+  };
+}
+
+/**
+ * How ngspice names a `.noise` run's results. The run answers across two
+ * plots: the two integrated totals are left current, while the spectral
+ * density curves and their own frequency scale are a separate plot that
+ * `ngSpice_CurPlot` cannot reach - they arrive in `extraPlots`.
+ * `scripts/noiseNative.corpus.ts` checks these names against a real run.
+ */
+export const NOISE_VECTOR_NAMES = {
+  outputTotal: "onoise_total",
+  inputTotal: "inoise_total",
+  outputSpectrum: "onoise_spectrum",
+  inputSpectrum: "inoise_spectrum",
+  scale: "frequency",
+} as const;
+
+/**
+ * Runs a small-signal noise analysis on ngspice. The TypeScript solver behind
+ * `runNoiseAnalysis` models resistor thermal noise only and refuses every
+ * circuit holding a semiconductor, so on anything with a transistor, diode or
+ * vendor macromodel in it this is the only path that produces noise numbers at
+ * all - and the only one that includes a device's own shot and flicker noise.
+ */
+export async function runNativeNoise(
+  schematic: Schematic,
+  spec: NoiseSpec,
+): Promise<NoiseResult | null> {
+  if (!isNativeSpiceRuntime()) return null;
+
+  // Resolve the port before paying a native round trip, for the same reason as
+  // `.tf`: ngspice reports an unknown node or source as a generic parse
+  // failure, and the TS solver's wording is what the panel already shows.
+  const input = schematic.components.find(
+    (component) => component.label.toLowerCase() === spec.source.toLowerCase(),
+  );
+  if (!input) {
+    return { ok: false, message: `.noise input source "${spec.source}" not found in the circuit.`, warnings: [] };
+  }
+  if (!INDEPENDENT_SOURCE_KINDS.has(input.kind)) {
+    return {
+      ok: false,
+      message: `.noise input "${spec.source}" is a ${input.kind}, not an independent source.`,
+      warnings: [],
+    };
+  }
+
+  // ngspice refers the output noise back to the input through that source's AC
+  // stimulus, and a source carrying none aborts the entire run ("noise input
+  // source has no AC value") - no plots, no partial answer. Catch it here so
+  // the panel can name the fix rather than report an empty result.
+  const [resolvedInput] = resolveComponentValues([input], schematic.params ?? EMPTY_SCOPE);
+  if (!parseAcSpec(resolvedInput?.value ?? input.value)) {
+    return {
+      ok: false,
+      message: `.noise input source "${spec.source}" has no AC amplitude, so the input-referred noise has nothing to refer to. Add one to its value (for example "AC 1").`,
+      warnings: [],
+    };
+  }
+
+  // Node names in the deck are net ids; resolve the user's names against a
+  // throwaway `.op` deck, whose net extraction does not depend on the analysis.
+  const nets = buildSpiceDeck(schematic, { kind: "op" }).circuit.nets;
+  const node = deckNodeFor(nets, spec.output.pos);
+  if (node === undefined) {
+    return {
+      ok: false,
+      message: `.noise output node "${spec.output.pos}" not found. Label the net (e.g. add a "${spec.output.pos}" net label).`,
+      warnings: [],
+    };
+  }
+  let refNode: string | undefined;
+  if (spec.output.neg !== undefined) {
+    refNode = deckNodeFor(nets, spec.output.neg);
+    if (refNode === undefined) {
+      return { ok: false, message: `.noise output node "${spec.output.neg}" not found.`, warnings: [] };
+    }
+  }
+
+  const execution = await executeNative(schematic, {
+    kind: "noise",
+    output: { node, refNode },
+    source: input.label,
+    ...spec.sweep,
+  });
+  if (!execution) return null;
+
+  const named = (vectors: NativeVector[], name: string): NativeVector | undefined =>
+    vectors.find((candidate) => candidate.name.trim().toLowerCase() === name);
+
+  // The spectral density curves live in the secondary plot, so a read of the
+  // current plot alone would find nothing to draw.
+  const spectrum = execution.result.extraPlots.find(
+    (plot) => named(plot.vectors, NOISE_VECTOR_NAMES.outputSpectrum) !== undefined,
+  );
+  const freqs = spectrum ? named(spectrum.vectors, NOISE_VECTOR_NAMES.scale)?.real : undefined;
+  const onoise = spectrum ? named(spectrum.vectors, NOISE_VECTOR_NAMES.outputSpectrum)?.real : undefined;
+  const inoise = spectrum ? named(spectrum.vectors, NOISE_VECTOR_NAMES.inputSpectrum)?.real : undefined;
+  // Both curves share the one frequency scale, so a short read of either would
+  // draw a trace against the wrong axis rather than a shorter one.
+  if (
+    !freqs || !onoise || !inoise || freqs.length === 0
+    || onoise.length !== freqs.length || inoise.length !== freqs.length
+  ) {
+    throw new Error("ngspice completed, but returned no noise spectral density curves.");
+  }
+
+  // The integrated totals are the current plot, not the spectrum one.
+  const totalOutputNoise = named(execution.result.vectors, NOISE_VECTOR_NAMES.outputTotal)?.real[0];
+  const totalInputNoise = named(execution.result.vectors, NOISE_VECTOR_NAMES.inputTotal)?.real[0];
+  if (totalOutputNoise === undefined || totalInputNoise === undefined) {
+    throw new Error("ngspice completed, but returned no integrated noise totals.");
+  }
+
+  const inputIsVoltage = input.kind === "vsource" || input.kind === "vac";
+  return {
+    ok: true,
+    spec,
+    freqs,
+    onoise,
+    inoise,
+    inoiseUnit: inputIsVoltage ? "V/√Hz" : "A/√Hz",
+    totalOutputNoise,
+    totalInputNoise,
+    warnings: [...execution.deck.circuit.warnings, ...engineWarnings(execution.result.messages)],
   };
 }
 

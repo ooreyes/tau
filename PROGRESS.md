@@ -23,13 +23,72 @@ found two independent reasons:
    kinds as 1 TOhm resistors with `warnings: []`.
 
 Most of those are now fixed (see the audit's Status section). Voltage-controlled
-switches were closed on 2026-07-28, and `.dc` and `.tf` now reach ngspice, so a
-transistor DC sweep and a transistor gain both run; **`.noise` still runs only on
-the TS solver.** Do not restore a readiness banner until every Class A and
-Class B item in the audit is closed or consciously accepted, with file:line
-evidence.
+switches were closed on 2026-07-28, and `.dc`, `.tf` and now `.noise` all reach
+ngspice, so a transistor DC sweep, a transistor gain and a transistor noise
+figure all run on the real engine. Do not restore a readiness banner until every
+Class A and Class B item in the audit is closed or consciously accepted, with
+file:line evidence.
 
-**Last unit - 2026-07-29: the native bridge can reach a run's secondary result
+**Last unit - 2026-07-29: `.noise` runs on ngspice end to end, so a noise
+figure includes a transistor's own noise instead of resistor thermal noise
+alone.** This is the TypeScript half that the previous unit's `extraPlots`
+contract was built for, and it was recovered rather than written fresh: the
+`-wip` rescue branch held a commit (`3f69254`) with a complete-looking
+implementation - an `analysisLine` noise branch, `runNativeNoise`, the `App.tsx`
+wiring and unit tests - but no real-engine proof. Its own comment named a
+`scripts/noiseNative.corpus.ts` that did not exist. The recovered diff was
+reviewed line by line, mutation-checked, and landed with that proof written.
+
+`runNativeNoise` reads both plots a noise run answers across: the spectral
+density curves out of `extraPlots`, where `ngSpice_CurPlot` cannot reach them,
+and the integrated totals out of the current plot. It refuses a run that
+returned totals without curves rather than drawing an empty sweep, and refuses a
+curve shorter than its own frequency scale rather than plotting a trace against
+the wrong axis. An input source carrying no AC amplitude is caught before the
+native round trip: ngspice aborts the entire run on one, leaving no plots at all
+(confirmed at the CLI - only the `const` plot survives), so there is no partial
+answer to salvage and the user is told to add `AC 1` instead of seeing nothing.
+The AC value is read after parameter resolution, so `AC {amp}` works.
+
+No guard moved: `.noise` was already in the `deck_lines` card allowlist
+(`spice.rs:1123`). The deck line is built the same way `.tf` is - the source
+name through `safeName`, node names validated by `deckNode` rather than
+rewritten - so no new injection path opens. Results reach a visible element:
+`NoisePlot` already renders the density trace, both totals and `result.warnings`
+(`SimulationPanel.tsx`), and the failure branch renders `result.message`, so
+nothing this adds is computed and then dropped.
+
+Evidence: `scripts/noiseNative.corpus.ts` runs the deck Tau builds through the
+real ngspice binary on two circuits. A 10k/10k divider, where the output sees
+5 kΩ of thermal noise, so the density must sit flat at sqrt(4kTR) =
+9.10 nV/sqrt(Hz), the input-referred figure must be exactly twice it through a
+gain of 0.5, and the integrated total must equal density times sqrt(bandwidth) -
+all hold, and the shipped TS solver agrees on this one case both engines can
+answer. And a common-emitter NPN the TS solver refuses outright, whose output
+noise is 57x Rc's own thermal floor - that gap is the transistor's shot noise,
+which is exactly what the resistor-only solver misses. The proof parses
+ngspice's own plot listing and vector dumps, so the two-plot split and every
+name in `NOISE_VECTOR_NAMES` is checked against a real run rather than restated
+in the test. Mutation-checked three ways: a wrong spectrum vector name fails the
+corpus and 5 unit tests, reading the spectrum from the current plot instead of
+`extraPlots` fails 5, and removing the AC precheck fails 1.
+
+KNOWN_ISSUES, README and SHARE all named noise as a headline gap and were
+updated; KNOWN_ISSUES now records what replaces it - the browser fallback has no
+native engine, and a `.noise` run needs `AC 1` on its input source the same as
+LTspice requires. SHARE's blurb was separately wrong on two counts and both were
+corrected: it named voltage-controlled switches as unmodelled when the
+unmodelled kind is current-controlled (`csw`; the VCSW fix landed 2026-07-28),
+and it still described DC sweep and `.tf` as running on the TS solver.
+Gates: tsc clean, full suite 2213 passed / 6 skipped across 147 files at
+`--maxWorkers=2`, cargo test and clippy clean, corpus unchanged at 80 imported /
+80 deck-built / 80 op-converged / 80 schema-valid with warning-clean 77 - still
+failing its own `>= 82` assertion because `~/Downloads/LTspice_export` is
+missing, not from a code regression.
+Next candidate: a MOSFET DC-sweep corpus proof - the native `.dc` path is still
+proven only against mocked vectors.
+
+**2026-07-29: the native bridge can reach a run's secondary result
 plots, which is what `.noise` needs.** A noise run is the one analysis whose
 answer ngspice splits across two plots: the spectral density curves
 (`onoise_spectrum`, `inoise_spectrum`, on their own `frequency` scale) and the

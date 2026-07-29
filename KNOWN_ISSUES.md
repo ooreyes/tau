@@ -5,13 +5,19 @@ first section is the one to read before trusting a number.
 
 ## Which analyses actually use the native engine
 
-Transient, operating point, AC sweep, DC sweep and transfer function run on the
-embedded ngspice engine.
+Transient, operating point, AC sweep, DC sweep, transfer function and noise all
+run on the embedded ngspice engine, so a noise analysis includes a transistor's
+own shot and flicker noise rather than resistor thermal noise alone.
 
-**Noise does not.** It runs on Tau's own smaller solver, which models R/C/L,
-sources, diodes, op-amps and controlled sources but **not transistors**. So a
-noise analysis on a circuit containing a MOSFET or BJT refuses to run and says
-so. This is the largest remaining gap between Tau and LTspice.
+A `.noise` run needs an AC amplitude on its input source (`AC 1`), the same as
+LTspice requires: the input-referred figure is the output noise divided by the
+gain from that source, so without a stimulus there is nothing to refer it back
+to. Tau names this before running rather than returning an empty result.
+
+Outside the desktop app there is no native engine, so noise there falls back to
+Tau's own smaller solver, which models R/C/L, sources, diodes, op-amps and
+controlled sources but **not transistors** - on those it refuses to run and
+says so.
 
 Nothing in the UI currently labels which engine produced a given result.
 

@@ -51,6 +51,21 @@ export type SpiceAnalysis =
         | { kind: "current"; device: string };
       /** Instance name of the independent input source. */
       source: string;
+    }
+  | {
+      kind: "noise";
+      /**
+       * Output port, already resolved to deck node names by the caller, same
+       * as `tf` above - `analysisLine` has no net map of its own.
+       */
+      output: { node: string; refNode?: string };
+      /** Instance name of the independent input source the output noise is
+       *  referred back to. It must carry an AC stimulus; ngspice aborts the
+       *  whole run without one. */
+      source: string;
+      startHz: number;
+      stopHz: number;
+      pointsPerDecade: number;
     };
 
 /**
@@ -1186,21 +1201,36 @@ function analysisLine(analysis: SpiceAnalysis, useInitialConditions = false): st
       // Node names arrive already resolved to what the deck emits, so they are
       // validated rather than rewritten - mangling one here would silently
       // measure a different node than the caller asked for.
-      const node = deckNode(analysis.output.node, "output node");
+      const node = deckNode(analysis.output.node, "output node", "Transfer function");
       const refNode = analysis.output.refNode?.trim()
-        ? deckNode(analysis.output.refNode, "output reference node")
+        ? deckNode(analysis.output.refNode, "output reference node", "Transfer function")
         : undefined;
       return `.tf v(${refNode ? `${node},${refNode}` : node}) ${source}`;
+    }
+    case "noise": {
+      if (!analysis.source.trim()) throw new Error("Noise analysis needs an input source name.");
+      if (
+        !Number.isFinite(analysis.startHz) || !Number.isFinite(analysis.stopHz)
+        || analysis.startHz <= 0 || analysis.stopHz <= analysis.startHz || analysis.pointsPerDecade < 1
+      ) {
+        throw new Error("Noise analysis needs positive start/stop frequencies and at least one point per decade.");
+      }
+      const node = deckNode(analysis.output.node, "output node", "Noise analysis");
+      const refNode = analysis.output.refNode?.trim()
+        ? deckNode(analysis.output.refNode, "output reference node", "Noise analysis")
+        : undefined;
+      const port = refNode ? `${node},${refNode}` : node;
+      return `.noise v(${port}) ${safeName(analysis.source.trim())} dec ${Math.round(analysis.pointsPerDecade)} ${analysis.startHz} ${analysis.stopHz}`;
     }
   }
 }
 
-/** A node name safe to place inside a `.tf` output port. */
-function deckNode(value: string, role: string): string {
+/** A node name safe to place inside a `.tf` / `.noise` output port. */
+function deckNode(value: string, role: string, analysis: string): string {
   const node = value.trim();
-  if (!node) throw new Error(`Transfer function needs an ${role}.`);
+  if (!node) throw new Error(`${analysis} needs an ${role}.`);
   if (!/^[A-Za-z0-9_$.:+-]+$/.test(node)) {
-    throw new Error(`Transfer function ${role} "${value}" is not a usable node name.`);
+    throw new Error(`${analysis} ${role} "${value}" is not a usable node name.`);
   }
   return node;
 }
