@@ -10,6 +10,7 @@ import {
   runNativeAcSweep,
   runNativeDcSweep,
   runNativeOperatingPoint,
+  runNativeTransferFunction,
   runNativeTransient,
 } from "./nativeSpice";
 import type { NetLabel, PinOverride, SchematicComponent, SchematicWire } from "../schematic/types";
@@ -297,6 +298,212 @@ describe("native ngspice adapter", () => {
       .rejects.toThrow(/No imported library defines the subcircuit "LT1001"/);
     // The precise name is known before the deck is handed off, so no native
     // round trip is spent on an error the user cannot act on.
+    expect(invoke).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// .tf on ngspice
+// ---------------------------------------------------------------------------
+//
+// The same 1k:1k divider `transferFunction.test.ts` hand-computes, so the two
+// engines are checked against one set of numbers: gain 0.5, Rin 2 kΩ,
+// Rout 500 Ω. The mocked vector names are exactly what ngspice 46 names them,
+// captured from a real run of this deck - the port is spelled into the name,
+// which is why the adapter matches them by shape.
+const dividerSchematic = () => ({
+  components: [
+    { ...component("vsource", "v1", "V1", "5", 0, 0), pinOverride: [
+      { id: "p", label: "+", x: 0, y: 0 },
+      { id: "n", label: "-", x: 0, y: 100 },
+    ] as PinOverride[] },
+    { ...component("resistor", "r1", "R1", "1k", 0, 0), pinOverride: [
+      { id: "a", label: "a", x: 0, y: 0 },
+      { id: "b", label: "b", x: 0, y: 50 },
+    ] as PinOverride[] },
+    { ...component("resistor", "r2", "R2", "1k", 0, 0), pinOverride: [
+      { id: "a", label: "a", x: 0, y: 50 },
+      { id: "b", label: "b", x: 0, y: 100 },
+    ] as PinOverride[] },
+    { ...component("ground", "g", "", "", 0, 100), pinOverride: [
+      { id: "g", label: "gnd", x: 0, y: 100 },
+    ] as PinOverride[] },
+  ],
+  wires: [] as SchematicWire[],
+  netLabels: [
+    { id: "lin", x: 0, y: 0, text: "in" },
+    { id: "lout", x: 0, y: 50, text: "out" },
+  ] as NetLabel[],
+});
+
+const tfVectors = (names: { transfer: string; input: string; output?: string }) => [
+  { name: names.transfer, real: [0.5], imaginary: null },
+  { name: names.input, real: [2000], imaginary: null },
+  ...(names.output ? [{ name: names.output, real: [500], imaginary: null }] : []),
+];
+
+const deckOf = () => (invoke.mock.calls[0]?.[1] as { request: { netlist: string } }).request.netlist;
+
+describe("native transfer function", () => {
+  it("sweeps a node output and reads ngspice's three scalars back", async () => {
+    enableNativeRuntime();
+    invoke.mockResolvedValue(nativeResult(tfVectors({
+      transfer: "Transfer_function",
+      input: "v1#Input_impedance",
+      output: "output_impedance_at_V(out)",
+    })));
+
+    const result = await runNativeTransferFunction(dividerSchematic(), {
+      output: { kind: "voltage", pos: "out" },
+      source: "V1",
+    });
+
+    expect(deckOf()).toContain(".tf v(out) V1");
+    expect(result?.ok).toBe(true);
+    if (!result?.ok) return;
+    expect(result.gain).toBeCloseTo(0.5, 9);
+    expect(result.inputImpedance).toBeCloseTo(2000, 6);
+    expect(result.outputImpedance).toBeCloseTo(500, 6);
+    expect(result.gainLabel).toBe("V(out)/V1");
+    expect(result.gainUnit).toBe("");
+  });
+
+  it("emits a differential output port as v(pos,neg)", async () => {
+    enableNativeRuntime();
+    invoke.mockResolvedValue(nativeResult(tfVectors({
+      transfer: "Transfer_function",
+      input: "v1#Input_impedance",
+      output: "output_impedance_at_V(out,in)",
+    })));
+
+    const result = await runNativeTransferFunction(dividerSchematic(), {
+      output: { kind: "voltage", pos: "out", neg: "in" },
+      source: "V1",
+    });
+
+    expect(deckOf()).toContain(".tf v(out,in) V1");
+    expect(result?.ok).toBe(true);
+  });
+
+  it("resolves a ground output node to node 0", async () => {
+    enableNativeRuntime();
+    invoke.mockResolvedValue(nativeResult(tfVectors({
+      transfer: "Transfer_function",
+      input: "v1#Input_impedance",
+      output: "output_impedance_at_V(out,0)",
+    })));
+
+    await runNativeTransferFunction(dividerSchematic(), {
+      output: { kind: "voltage", pos: "out", neg: "GND" },
+      source: "V1",
+    });
+
+    expect(deckOf()).toContain(".tf v(out,0) V1");
+  });
+
+  it("reports the branch-current output impedance ngspice names after the device", async () => {
+    enableNativeRuntime();
+    invoke.mockResolvedValue(nativeResult(tfVectors({
+      transfer: "Transfer_function",
+      input: "v1#Input_impedance",
+      output: "v1#Output_impedance",
+    })));
+
+    const result = await runNativeTransferFunction(dividerSchematic(), {
+      output: { kind: "current", device: "V1" },
+      source: "V1",
+    });
+
+    expect(deckOf()).toContain(".tf i(V1) V1");
+    expect(result?.ok).toBe(true);
+    if (!result?.ok) return;
+    expect(result.outputImpedance).toBeCloseTo(500, 6);
+    expect(result.gainUnit).toBe("A/V");
+    expect(result.gainLabel).toBe("I(V1)/V1");
+  });
+
+  it("says an omitted output impedance is missing instead of reporting it as zero", async () => {
+    enableNativeRuntime();
+    invoke.mockResolvedValue(nativeResult(tfVectors({
+      transfer: "Transfer_function",
+      input: "v1#Input_impedance",
+    })));
+
+    const result = await runNativeTransferFunction(dividerSchematic(), {
+      output: { kind: "current", device: "V1" },
+      source: "V1",
+    });
+
+    expect(result?.ok).toBe(true);
+    if (!result?.ok) return;
+    expect(result.outputImpedance).toBeNaN();
+    expect(result.warnings).toContain("Output impedance for an I(...) output is not reported.");
+  });
+
+  it("names an unknown output node without paying a native round trip", async () => {
+    enableNativeRuntime();
+
+    const result = await runNativeTransferFunction(dividerSchematic(), {
+      output: { kind: "voltage", pos: "nowhere" },
+      source: "V1",
+    });
+
+    expect(result?.ok).toBe(false);
+    if (result?.ok !== false) return;
+    expect(result.message).toMatch(/output node "nowhere" not found/i);
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it("names an output device the circuit does not contain", async () => {
+    enableNativeRuntime();
+
+    const result = await runNativeTransferFunction(dividerSchematic(), {
+      output: { kind: "current", device: "Vsense" },
+      source: "V1",
+    });
+
+    expect(result?.ok).toBe(false);
+    if (result?.ok !== false) return;
+    expect(result.message).toMatch(/I\(Vsense\) is not a device in the circuit/i);
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it("rejects a stimulus that is not an independent source", async () => {
+    enableNativeRuntime();
+
+    const missing = await runNativeTransferFunction(dividerSchematic(), {
+      output: { kind: "voltage", pos: "out" },
+      source: "V9",
+    });
+    expect(missing?.ok).toBe(false);
+    if (missing?.ok !== false) return;
+    expect(missing.message).toMatch(/source "V9" not found/i);
+
+    const wrongKind = await runNativeTransferFunction(dividerSchematic(), {
+      output: { kind: "voltage", pos: "out" },
+      source: "R1",
+    });
+    expect(wrongKind?.ok).toBe(false);
+    if (wrongKind?.ok !== false) return;
+    expect(wrongKind.message).toMatch(/not an independent source/i);
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it("refuses to report a transfer function ngspice did not return", async () => {
+    enableNativeRuntime();
+    invoke.mockResolvedValue(nativeResult([{ name: "v1#Input_impedance", real: [2000], imaginary: null }]));
+
+    await expect(runNativeTransferFunction(dividerSchematic(), {
+      output: { kind: "voltage", pos: "out" },
+      source: "V1",
+    })).rejects.toThrow(/no transfer function/i);
+  });
+
+  it("stays on the TypeScript solver outside a Tauri webview", async () => {
+    expect(await runNativeTransferFunction(dividerSchematic(), {
+      output: { kind: "voltage", pos: "out" },
+      source: "V1",
+    })).toBeNull();
     expect(invoke).not.toHaveBeenCalled();
   });
 });

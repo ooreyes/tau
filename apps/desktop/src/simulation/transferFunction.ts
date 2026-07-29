@@ -296,12 +296,14 @@ function inputSourceNets(
   return [p, n];
 }
 
-function formatOutput(output: TfOutput): string {
+/** The gain row's output half, e.g. `V(out)` or `I(V1)`. */
+export function formatOutput(output: TfOutput): string {
   if (output.kind === "current") return `I(${output.device})`;
   return output.neg !== undefined ? `V(${output.pos},${output.neg})` : `V(${output.pos})`;
 }
 
-function unitFor(outputKind: TfOutput["kind"], inputIsVoltage: boolean): string {
+/** Unit of d(output)/d(input) for the four port combinations. */
+export function unitFor(outputKind: TfOutput["kind"], inputIsVoltage: boolean): string {
   const outIsVoltage = outputKind === "voltage";
   if (outIsVoltage && inputIsVoltage) return ""; // V/V
   if (!outIsVoltage && !inputIsVoltage) return ""; // A/A

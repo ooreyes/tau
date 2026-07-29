@@ -87,6 +87,7 @@ import {
   runNativeAcSweep,
   runNativeDcSweep,
   runNativeOperatingPoint,
+  runNativeTransferFunction,
   runNativeTransient,
 } from "./engine/nativeSpice";
 import { useProject } from "./store/useProject";
@@ -731,7 +732,12 @@ function App() {
     const tf = analysesFromDirectives(directives).tf ?? tfSetup;
     setAnalysisRunning(true);
     try {
-      const result = runTransferFunction({ components, wires, netLabels, params }, tf);
+      // ngspice first, for the same reason as the DC sweep: the TS solver has
+      // no semiconductor stamps, so it cannot take an amplifier's gain at all.
+      const result = await runNativeTransferFunction(
+        { components, wires, netLabels, params, directives, userModelLibraries: userModelLibraryTexts, userModelLibraryNames },
+        tf,
+      ) ?? runTransferFunction({ components, wires, netLabels, params }, tf);
       if (analysisRequestRef.current !== requestId) return;
       setTfAnalysis(result);
     } catch (error) {
@@ -740,7 +746,7 @@ function App() {
     } finally {
       if (analysisRequestRef.current === requestId) setAnalysisRunning(false);
     }
-  }, [components, wires, netLabels, params, directives, tfSetup]);
+  }, [components, wires, netLabels, params, directives, tfSetup, userModelLibraryTexts, userModelLibraryNames]);
 
   const runNoiseAnalysis_ = useCallback(async () => {
     const requestId = ++analysisRequestRef.current;

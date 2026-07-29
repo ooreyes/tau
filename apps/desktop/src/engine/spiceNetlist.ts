@@ -39,6 +39,18 @@ export type SpiceAnalysis =
       start2?: number;
       stop2?: number;
       step2?: number;
+    }
+  | {
+      kind: "tf";
+      /**
+       * Output port, already resolved to deck node names / instance names by
+       * the caller - `analysisLine` has no net map of its own.
+       */
+      output:
+        | { kind: "voltage"; node: string; refNode?: string }
+        | { kind: "current"; device: string };
+      /** Instance name of the independent input source. */
+      source: string;
     };
 
 /**
@@ -1163,7 +1175,34 @@ function analysisLine(analysis: SpiceAnalysis, useInitialConditions = false): st
       }
       return line;
     }
+    case "tf": {
+      if (!analysis.source.trim()) throw new Error("Transfer function needs an input source name.");
+      const source = safeName(analysis.source.trim());
+      if (analysis.output.kind === "current") {
+        const device = analysis.output.device.trim();
+        if (!device) throw new Error("Transfer function needs an output device name.");
+        return `.tf i(${safeName(device)}) ${source}`;
+      }
+      // Node names arrive already resolved to what the deck emits, so they are
+      // validated rather than rewritten - mangling one here would silently
+      // measure a different node than the caller asked for.
+      const node = deckNode(analysis.output.node, "output node");
+      const refNode = analysis.output.refNode?.trim()
+        ? deckNode(analysis.output.refNode, "output reference node")
+        : undefined;
+      return `.tf v(${refNode ? `${node},${refNode}` : node}) ${source}`;
+    }
   }
+}
+
+/** A node name safe to place inside a `.tf` output port. */
+function deckNode(value: string, role: string): string {
+  const node = value.trim();
+  if (!node) throw new Error(`Transfer function needs an ${role}.`);
+  if (!/^[A-Za-z0-9_$.:+-]+$/.test(node)) {
+    throw new Error(`Transfer function ${role} "${value}" is not a usable node name.`);
+  }
+  return node;
 }
 
 const SPICE_PREFIX: Record<ComponentKind, string> = {

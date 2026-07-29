@@ -16,6 +16,7 @@ import {
   type DcSweepResult,
   type DcSweepSpec,
 } from "../simulation/dcSweep";
+import { formatOutput, unitFor, type TfResult, type TfSpec } from "../simulation/transferFunction";
 
 interface NativeVector {
   name: string;
@@ -305,6 +306,131 @@ export async function runNativeDcSweep(
     }
   }
   return { ok: true, source: inner.label, sweep, nets: fanned, warnings };
+}
+
+/** Independent-source kinds usable as a `.tf` stimulus, matching the TS solver. */
+const TF_SOURCE_KINDS = new Set<SchematicComponent["kind"]>(["vsource", "isource", "vac", "iac"]);
+
+/**
+ * How ngspice's three `.tf` scalars are recognised, against a lower-cased
+ * vector name. It spells the port into two of the names - the output
+ * impedance is `output_impedance_at_V(out)` for a node output but
+ * `<device>#Output_impedance` for a branch-current one - so they are matched
+ * by shape. `scripts/tfNative.corpus.ts` checks these against the names a real
+ * ngspice run produces.
+ */
+export const TF_VECTOR_MATCHERS = {
+  gain: (name: string) => name === "transfer_function",
+  inputImpedance: (name: string) => name.endsWith("#input_impedance"),
+  outputImpedance: (name: string) =>
+    name.startsWith("output_impedance_at_") || name.endsWith("#output_impedance"),
+};
+
+/**
+ * Runs a small-signal transfer function on ngspice. The TypeScript solver
+ * behind `runTransferFunction` derives gain and the two impedances from
+ * repeated operating-point solves, which have no semiconductor stamps, so it
+ * refuses every transistor - on an amplifier this is the only path that
+ * produces a transfer function at all.
+ *
+ * ngspice returns the three results as scalars in a `Transfer Function` plot.
+ * Their names carry the port in them (`output_impedance_at_V(out)`,
+ * `v1#Input_impedance`), so they are matched by shape rather than spelled out.
+ */
+export async function runNativeTransferFunction(
+  schematic: Schematic,
+  spec: TfSpec,
+): Promise<TfResult | null> {
+  if (!isNativeSpiceRuntime()) return null;
+
+  // Resolve the port against the schematic before paying a native round trip:
+  // ngspice reports an unknown node or source as a generic parse failure, and
+  // the TS solver's wording for these is what the panel already shows.
+  const input = schematic.components.find(
+    (component) => component.label.toLowerCase() === spec.source.toLowerCase(),
+  );
+  if (!input) return { ok: false, message: `.tf source "${spec.source}" not found in the circuit.`, warnings: [] };
+  if (!TF_SOURCE_KINDS.has(input.kind)) {
+    return {
+      ok: false,
+      message: `.tf source "${spec.source}" is a ${input.kind}, not an independent source.`,
+      warnings: [],
+    };
+  }
+
+  // Node names in the deck are net ids; resolve the user's name against a
+  // throwaway `.op` deck, whose net extraction does not depend on the analysis.
+  let output: Extract<SpiceAnalysis, { kind: "tf" }>["output"];
+  if (spec.output.kind === "current") {
+    const device = spec.output.device;
+    if (!schematic.components.some((component) => component.label.toLowerCase() === device.toLowerCase())) {
+      return { ok: false, message: `.tf output I(${device}) is not a device in the circuit.`, warnings: [] };
+    }
+    output = { kind: "current", device };
+  } else {
+    const nets = buildSpiceDeck(schematic, { kind: "op" }).circuit.nets;
+    const node = deckNodeFor(nets, spec.output.pos);
+    if (node === undefined) {
+      return {
+        ok: false,
+        message: `.tf output node "${spec.output.pos}" not found. Label the net (e.g. add a "${spec.output.pos}" net label).`,
+        warnings: [],
+      };
+    }
+    let refNode: string | undefined;
+    if (spec.output.neg !== undefined) {
+      refNode = deckNodeFor(nets, spec.output.neg);
+      if (refNode === undefined) {
+        return { ok: false, message: `.tf output node "${spec.output.neg}" not found.`, warnings: [] };
+      }
+    }
+    output = { kind: "voltage", node, refNode };
+  }
+
+  const execution = await executeNative(schematic, { kind: "tf", output, source: input.label });
+  if (!execution) return null;
+
+  const warnings = [...execution.deck.circuit.warnings, ...engineWarnings(execution.result.messages)];
+  const scalar = (match: (name: string) => boolean): number | undefined => {
+    const found = execution.result.vectors.find((candidate) => match(candidate.name.trim().toLowerCase()));
+    return found?.real[0];
+  };
+
+  const gain = scalar(TF_VECTOR_MATCHERS.gain);
+  if (gain === undefined || !Number.isFinite(gain)) {
+    throw new Error("ngspice completed, but returned no transfer function.");
+  }
+  const inputImpedance = scalar(TF_VECTOR_MATCHERS.inputImpedance);
+  const outputImpedance = scalar(TF_VECTOR_MATCHERS.outputImpedance);
+  if (outputImpedance === undefined) {
+    warnings.push("Output impedance for an I(...) output is not reported.");
+  }
+
+  return {
+    ok: true,
+    spec,
+    gain,
+    gainLabel: `${formatOutput(spec.output)}/${input.label}`,
+    gainUnit: unitFor(spec.output.kind, input.kind === "vsource" || input.kind === "vac"),
+    // An input impedance ngspice did not return reads as open, matching what
+    // the TS solver reports for a port it draws no current from - never as a
+    // plausible zero.
+    inputImpedance: inputImpedance ?? Infinity,
+    outputImpedance: outputImpedance ?? NaN,
+    warnings,
+  };
+}
+
+/** The deck node name for a user-facing net name, or undefined when unknown. */
+function deckNodeFor(
+  nets: readonly { id: string; isGround: boolean }[],
+  name: string,
+): string | undefined {
+  const lower = name.trim().toLowerCase();
+  if (lower === "0" || lower === "gnd" || lower === "ground") return "0";
+  const net = nets.find((candidate) => candidate.id.toLowerCase() === lower);
+  if (!net) return undefined;
+  return net.isGround ? "0" : net.id.toLowerCase();
 }
 
 async function executeNative(schematic: Schematic, analysis: SpiceAnalysis): Promise<NativeExecution | null> {

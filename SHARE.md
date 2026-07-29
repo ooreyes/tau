@@ -49,12 +49,12 @@ Tau is a native Mac circuit app (not a website). This is the **v1.0 release buil
 - **Isn't:** an LTspice replacement, or Apple-notarized yet (so Gatekeeper
   needs the one-time Control-click Open).
 - **Two gaps worth naming up front**, because they will be the first things an
-  experienced user hits: DC sweep, noise and transfer function do not run on
-  ngspice yet - they use Tau's smaller solver, which does not model
-  transistors, so a MOSFET DC sweep refuses to run. And voltage-controlled
-  switches are not modelled, so switching-converter results are not
-  trustworthy. Everything else is in
-  [KNOWN_ISSUES.md](KNOWN_ISSUES.md), which is specific rather than tidy.
+  experienced user hits: noise does not run on ngspice yet - it uses Tau's
+  smaller solver, which does not model transistors, so a noise analysis on a
+  transistor circuit refuses to run. And current-controlled switches are not
+  modelled, so a converter built around one is not trustworthy. Everything
+  else is in [KNOWN_ISSUES.md](KNOWN_ISSUES.md), which is specific rather than
+  tidy.
 
 ## Reddit-ready blurb
 

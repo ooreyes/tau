@@ -23,12 +23,55 @@ found two independent reasons:
    kinds as 1 TOhm resistors with `warnings: []`.
 
 Most of those are now fixed (see the audit's Status section). Voltage-controlled
-switches were closed on 2026-07-28 and `.dc` now reaches ngspice as of the unit
-below, so a transistor DC sweep runs; **`.noise`/`.tf` still run only on the TS
-solver.** Do not restore a readiness banner until every Class A and Class B item
-in the audit is closed or consciously accepted, with file:line evidence.
+switches were closed on 2026-07-28, and `.dc` and `.tf` now reach ngspice, so a
+transistor DC sweep and a transistor gain both run; **`.noise` still runs only on
+the TS solver.** Do not restore a readiness banner until every Class A and
+Class B item in the audit is closed or consciously accepted, with file:line
+evidence.
 
-**Last unit - 2026-07-29: a `.include`/`.lib` sitting next to the schematic is
+**Last unit - 2026-07-29: `.tf` runs on ngspice, so a transfer function can be
+taken on an amplifier.** Transfer function was one of the two analyses still
+pinned to Tau's own solver, which has no semiconductor stamps - so asking an
+imported design for its gain, input impedance and output impedance refused
+outright the moment a MOSFET or BJT was in the loop, which is most of the
+circuits anyone wants a gain for. `runNativeTransferFunction`
+(`engine/nativeSpice.ts`) mirrors `runNativeDcSweep`: the port is resolved
+against the schematic first, so an unknown node, a stimulus that is not an
+independent source, or an output device the circuit does not contain is named
+in the panel's own wording without paying a native round trip; then a `.tf`
+card built by a new `analysisLine` branch (`engine/spiceNetlist.ts`) goes to
+the engine and the three scalars come back. `App.tsx` runs it native-first with
+the TS solver as the browser-preview fallback, and the result keeps the shipped
+`TfResult` shape, so the existing panel renders it - including its warnings
+(`components/SimulationPanel.tsx:1749`) - with no UI change.
+
+ngspice spells the port into two of the three vector names
+(`output_impedance_at_V(out)` for a node output, `<device>#Output_impedance` for
+a branch-current one), so they are matched by shape through an exported
+`TF_VECTOR_MATCHERS`, which the proof harness checks against the names a real
+run produces rather than against a copy of them. No guard moved: `.tf` was
+already in `deck_lines`' card allowlist (`src-tauri/src/spice.rs:1036`), node
+names are validated rather than rewritten so a resolved node can never be
+silently swapped for a different one, and a missing input impedance reads as
+open rather than as a plausible zero.
+Evidence: `scripts/tfNative.corpus.ts` runs the host's real ngspice against two
+decks Tau builds - a 1k:1k divider, where ngspice, the TS solver and the
+hand-computed answer all agree at 0.5 / 2 kΩ / 500 Ω, and a common-emitter NPN
+stage, where the TS solver refuses outright and ngspice returns an inverting
+gain with Rout set by Rc and Rin above Rb. Mutation-checked: removing the
+ground-node alias fails 2 unit tests, and removing the node-output impedance
+matcher fails both corpus checks with the real vector names in the message.
+Gates: tsc clean, full suite 2186 passed / 6 skipped across 147 files (the 15
+jsdom `render()` timeouts are the documented worker-contention flake - all
+re-run green in isolation), 31 Rust tests, clippy clean, corpus unchanged at
+80 imported / 80 deck-built / 80 op-converged / 80 schema-valid with
+warning-clean 77. Corpus still fails its own `>= 82` assertion because
+`~/Downloads/LTspice_export` is missing, not from a code regression.
+Next candidate: `.noise` on ngspice. It needs native work this unit did not: a
+noise run produces two plots (spectral density and integrated total) and Rust
+reads only `ngSpice_CurPlot`, so one of them is unreachable today.
+
+**2026-07-29: a `.include`/`.lib` sitting next to the schematic is
 actually read (audit P9, second half).** Vendor models are where LTspice users
 live, and the first half of P9 only stopped the directive from killing the run -
 the models still never reached the engine, so an EE who imported a real design

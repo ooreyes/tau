@@ -16,10 +16,10 @@
 > click-to-probe plotting with live measurements, ready-to-run demos in
 > [examples/](examples/README.md), and an optional AI circuit assistant.
 >
-> **Transient, operating point and AC run on the embedded ngspice engine.**
-> DC sweep, noise and transfer function currently run on Tau's own smaller
-> solver, which does not model transistors - so you cannot yet DC-sweep a
-> MOSFET or BJT. Voltage-controlled switches are not modelled either. Read
+> **Transient, operating point, AC, DC sweep and transfer function run on the
+> embedded ngspice engine.** Noise currently runs on Tau's own smaller solver,
+> which does not model transistors - so a noise analysis on a MOSFET or BJT
+> refuses to run. Current-controlled switches are not modelled either. Read
 > [KNOWN_ISSUES.md](KNOWN_ISSUES.md) before trusting a result; it is specific
 > about what is and is not real.
 >

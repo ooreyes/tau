@@ -42,15 +42,19 @@ partial work.
 Ordered. Take the top item unless it is blocked. Class A outranks everything -
 a plausible wrong number is worse than a refusal to run.
 
-1. **P3 remainder - `.noise`/`.tf` on ngspice.** `.dc` landed 2026-07-28;
-   these two still run only on the TS solver, which rejects transistors.
-   Mirror `runNativeDcSweep`. Note `analysisLine` has no `noise`/`tf` branch
-   yet, so this needs a deck line as well as a runner.
+1. **P3 remainder - `.noise` on ngspice.** `.dc` landed 2026-07-28 and `.tf` on
+   2026-07-29; noise is the last analysis still pinned to the TS solver, which
+   rejects transistors. It is NOT a copy of the `.tf` unit: a noise run produces
+   TWO plots (spectral density and integrated total) and `spice.rs` reads only
+   `ngSpice_CurPlot`, so this needs Rust work first - either select the plot by
+   name or return both. `analysisLine` has no `noise` branch either.
 2. **A MOSFET DC-sweep corpus proof.** The native DC path is unit-tested
    against mocked vectors and its ngspice contract was checked by hand at the
    CLI, but nothing in the repo runs a real transistor sweep end to end. A
-   `scripts/dcSweepNative.corpus.ts` in the shape of
-   `scripts/sampleHoldParity.corpus.ts` would close that.
+   `scripts/dcSweepNative.corpus.ts` in the shape of the new
+   `scripts/tfNative.corpus.ts` would close that - copy its `runTf` helper
+   shape, which parses ngspice's own printed block so the adapter's vector
+   matchers are checked against real names.
 3. **P16 - engine badge**. Nothing tells the user whether ngspice or the TS
    solver produced a result. Also fix the two strings still calling ngspice
    "planned" (`simulation/noise.ts:332`, `simulation/acSweep.ts:291`).
@@ -66,6 +70,14 @@ a plausible wrong number is worse than a refusal to run.
 
 Newest first. One line each: date, unit, evidence.
 
+- 2026-07-29 - `.tf` reaches ngspice, so gain / Zin / Zout can be taken on a
+  circuit with a transistor in it. Port resolved before the round trip so a bad
+  node or stimulus keeps the panel's own wording; ngspice's three scalars matched
+  by shape through an exported `TF_VECTOR_MATCHERS`. `.tf` was already in the
+  Rust card allowlist, so no guard moved. Real-ngspice proof:
+  `scripts/tfNative.corpus.ts` - a 1k:1k divider where both engines and the hand
+  computation agree (0.5 / 2 kΩ / 500 Ω), and a common-emitter NPN the TS solver
+  refuses outright. Mutation-checked both ways.
 - 2026-07-29 - A `.include`/`.lib` naming a file beside the schematic is now
   READ at import time and attached as a model library, so a vendor model
   resolves on its own instead of only warning. Confined like the symbol reads
