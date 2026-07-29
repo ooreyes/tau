@@ -21,6 +21,13 @@ use tauri::{AppHandle, Manager, State};
 
 const MAX_VECTOR_LENGTH: usize = 2_000_000;
 const MAX_TRANSFER_VALUES: usize = 8_000_000;
+/** Secondary plots share a budget well under the primary one: a `.noise` run
+ * needs two small plots, while a `.step` deck can leave dozens behind. */
+const MAX_EXTRA_PLOTS: usize = 8;
+const MAX_EXTRA_PLOT_VALUES: usize = 1_000_000;
+const MAX_PLOT_NAMES: usize = 1_000;
+/** ngspice's always-present plot of named constants, never a run result. */
+const CONSTANTS_PLOT: &str = "const";
 const MAX_NETLIST_BYTES: usize = 512 * 1024;
 const MAX_DECK_LINES: usize = 30_000;
 const MAX_ENGINE_MESSAGES: usize = 256;
@@ -52,6 +59,7 @@ type NgSpiceInit = unsafe extern "C" fn(
 type NgSpiceCommand = unsafe extern "C" fn(*mut c_char) -> c_int;
 type NgSpiceCirc = unsafe extern "C" fn(*mut *mut c_char) -> c_int;
 type NgSpiceCurPlot = unsafe extern "C" fn() -> *mut c_char;
+type NgSpiceAllPlots = unsafe extern "C" fn() -> *mut *mut c_char;
 type NgSpiceAllVecs = unsafe extern "C" fn(*mut c_char) -> *mut *mut c_char;
 type NgGetVecInfo = unsafe extern "C" fn(*mut c_char) -> *mut VectorInfo;
 
@@ -171,9 +179,22 @@ pub struct SpiceVector {
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct SpicePlot {
+    pub name: String,
+    pub vectors: Vec<SpiceVector>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SpiceResult {
     pub plot: String,
     pub vectors: Vec<SpiceVector>,
+    /** Plots this run created besides the current one, which stays in `plot`
+     * and `vectors`. Most analyses make a single plot, but `.noise` splits its
+     * answer across two - the spectral density curves and the integrated
+     * totals - and only the totals are current. Held separately so the primary
+     * result is never transferred twice. */
+    pub extra_plots: Vec<SpicePlot>,
     pub messages: Vec<String>,
     pub library_path: String,
 }
@@ -209,6 +230,7 @@ struct SpiceApi {
     command: NgSpiceCommand,
     circ: NgSpiceCirc,
     cur_plot: NgSpiceCurPlot,
+    all_plots: NgSpiceAllPlots,
     all_vecs: NgSpiceAllVecs,
     get_vec_info: NgGetVecInfo,
 }
@@ -293,6 +315,7 @@ impl SpiceEngine {
             command: unsafe { symbol(&library, b"ngSpice_Command\0")? },
             circ: unsafe { symbol(&library, b"ngSpice_Circ\0")? },
             cur_plot: unsafe { symbol(&library, b"ngSpice_CurPlot\0")? },
+            all_plots: unsafe { symbol(&library, b"ngSpice_AllPlots\0")? },
             all_vecs: unsafe { symbol(&library, b"ngSpice_AllVecs\0")? },
             get_vec_info: unsafe { symbol(&library, b"ngGet_Vec_Info\0")? },
         };
@@ -430,6 +453,10 @@ impl SpiceEngine {
     fn run(&mut self, request: SpiceRequest) -> Result<SpiceResult, String> {
         let lines = deck_lines(&request.netlist)?;
         clear_callback_state(&self.callback_state);
+        // ngspice appends this run's plots to the ones earlier circuits in the
+        // same process left behind, so the only way to tell them apart is to
+        // know what was there first.
+        let plots_before = self.plot_names();
 
         let c_lines = lines
             .iter()
@@ -480,16 +507,74 @@ impl SpiceEngine {
                 "ngspice did not produce a plot.".to_string(),
             )
         })?;
-        let vectors = self.read_vectors(&plot)?;
+        let mut transferred = 0_usize;
+        let vectors = self.read_vectors(&plot, &mut transferred, MAX_TRANSFER_VALUES)?;
+
+        // Secondary plots are extra detail on top of an answer the caller
+        // already has, so they get their own smaller budget and a run that
+        // cannot afford them says so instead of failing outright.
+        let mut extra_plots = Vec::new();
+        let mut extra_transferred = 0_usize;
+        let mut omitted = Vec::new();
+        for name in self.plot_names() {
+            if name == plot || name == CONSTANTS_PLOT || plots_before.contains(&name) {
+                continue;
+            }
+            if extra_plots.len() >= MAX_EXTRA_PLOTS {
+                omitted.push(name);
+                continue;
+            }
+            match self.read_vectors(&name, &mut extra_transferred, MAX_EXTRA_PLOT_VALUES) {
+                Ok(vectors) if !vectors.is_empty() => extra_plots.push(SpicePlot { name, vectors }),
+                Ok(_) => {}
+                Err(_) => omitted.push(name),
+            }
+        }
+
+        let mut messages = take_messages(&self.callback_state);
+        if !omitted.is_empty() {
+            // Prefixed the way ngspice prefixes its own diagnostics, because
+            // that is what the frontend screens messages on before showing
+            // them. Without it this notice would be dropped in silence.
+            messages.push(format!(
+                "Warning: Tau left out this run's secondary result plots {} to stay inside its transfer budget.",
+                omitted.join(", ")
+            ));
+        }
         Ok(SpiceResult {
             plot,
             vectors,
-            messages: take_messages(&self.callback_state),
+            extra_plots,
+            messages,
             library_path: self.library_path.display().to_string(),
         })
     }
 
-    fn read_vectors(&self, plot: &str) -> Result<Vec<SpiceVector>, String> {
+    /** Names of every plot ngspice currently holds, oldest first. */
+    fn plot_names(&self) -> Vec<String> {
+        let names = unsafe { (self.api.all_plots)() };
+        if names.is_null() {
+            return Vec::new();
+        }
+        let mut result = Vec::new();
+        for index in 0..MAX_PLOT_NAMES {
+            let entry = unsafe { *names.add(index) };
+            if entry.is_null() {
+                break;
+            }
+            if let Some(name) = unsafe { c_string(entry) } {
+                result.push(name);
+            }
+        }
+        result
+    }
+
+    fn read_vectors(
+        &self,
+        plot: &str,
+        transfer_values: &mut usize,
+        transfer_limit: usize,
+    ) -> Result<Vec<SpiceVector>, String> {
         let plot_name =
             CString::new(plot).map_err(|_| "ngspice returned an invalid plot name.".to_string())?;
         let vector_names = unsafe { (self.api.all_vecs)(plot_name.as_ptr() as *mut c_char) };
@@ -497,7 +582,6 @@ impl SpiceEngine {
             return Err(format!("ngspice returned no vectors for plot {plot}."));
         }
         let mut result = Vec::new();
-        let mut transfer_values = 0_usize;
         for index in 0..10_000 {
             let entry = unsafe { *vector_names.add(index) };
             if entry.is_null() {
@@ -528,13 +612,13 @@ impl SpiceEngine {
                 .ok_or_else(|| {
                     "ngspice vector length overflowed Tau's transfer budget.".to_string()
                 })?;
-            transfer_values = transfer_values
+            *transfer_values = transfer_values
                 .checked_add(scalar_values)
                 .ok_or_else(|| "ngspice result overflowed Tau's transfer budget.".to_string())?;
-            if transfer_values > MAX_TRANSFER_VALUES {
+            if *transfer_values > transfer_limit {
                 return Err(format!(
                     "ngspice result has more than Tau's {} scalar-value transfer limit. Reduce stop time, output resolution, or circuit size.",
-                    MAX_TRANSFER_VALUES
+                    transfer_limit
                 ));
             }
             let (real, imaginary) = if !info.real_data.is_null() {
@@ -1609,5 +1693,106 @@ A_a2_dac [a2_dq a2_dnq] [q1 q1bar] a2_dac
         assert!(value_near("q0", 0.0011) > 4.0 && value_near("q1", 0.0011) < 1.0);
         assert!(value_near("q0", 0.0031) > 4.0 && value_near("q1", 0.0031) > 4.0);
         assert!(value_near("q0", 0.0051) < 1.0 && value_near("q1", 0.0051) > 4.0);
+    }
+
+    /** A noise run splits its answer across two plots and leaves the integrated
+     * totals current, so the spectral density curves are only reachable through
+     * extra_plots. Two 10k resistors put 5k across the output, whose thermal
+     * noise is sqrt(4kTR) = 9.1 nV/sqrt(Hz), flat over the sweep, and the total
+     * over the 1 Hz - 1 MHz band is that density times sqrt(bandwidth). */
+    #[test]
+    #[ignore = "requires TAU_NGSPICE_LIB pointing to libngspice"]
+    fn returns_both_plots_of_a_real_noise_run() {
+        let library = std::env::var_os("TAU_NGSPICE_LIB")
+            .map(PathBuf::from)
+            .expect("TAU_NGSPICE_LIB must point to a shared ngspice library");
+        let mut engine = SpiceEngine::load(vec![library]).expect("ngspice library should load");
+        let noise = engine
+            .run(SpiceRequest {
+                netlist: "Tau noise\nV1 in 0 DC 0 AC 1\nR1 in out 10k\nR2 out 0 10k\n.noise v(out) V1 dec 10 1 1Meg\n.end".to_string(),
+            })
+            .expect("noise analysis should solve");
+        let total = noise
+            .vectors
+            .iter()
+            .find(|vector| vector.name.eq_ignore_ascii_case("onoise_total"))
+            .and_then(|vector| vector.real.first())
+            .copied()
+            .expect("integrated total is the current plot");
+        assert!(
+            !noise
+                .vectors
+                .iter()
+                .any(|vector| vector.name.eq_ignore_ascii_case("onoise_spectrum")),
+            "the spectrum does not live in the current plot, so extra_plots is the only route to it"
+        );
+        let spectrum = noise
+            .extra_plots
+            .iter()
+            .find(|plot| {
+                plot.vectors
+                    .iter()
+                    .any(|vector| vector.name.eq_ignore_ascii_case("onoise_spectrum"))
+            })
+            .unwrap_or_else(|| {
+                panic!(
+                    "spectral density plot present; got {:?}; messages {:?}",
+                    noise
+                        .extra_plots
+                        .iter()
+                        .map(|plot| &plot.name)
+                        .collect::<Vec<_>>(),
+                    noise.messages
+                )
+            });
+        assert_ne!(spectrum.name, noise.plot, "extra plots exclude the current one");
+        let frequency = spectrum
+            .vectors
+            .iter()
+            .find(|vector| vector.name.eq_ignore_ascii_case("frequency"))
+            .expect("spectrum carries its own frequency scale");
+        assert!(
+            frequency.real.len() > 50,
+            "a 6-decade sweep at 10 points per decade should have 61 points, got {}",
+            frequency.real.len()
+        );
+        let density = spectrum
+            .vectors
+            .iter()
+            .find(|vector| vector.name.eq_ignore_ascii_case("onoise_spectrum"))
+            .expect("output spectral density present");
+        assert_eq!(density.real.len(), frequency.real.len());
+        for value in [
+            density.real[0],
+            density.real[density.real.len() / 2],
+            density.real[density.real.len() - 1],
+        ] {
+            assert!(
+                (8.5e-9..9.7e-9).contains(&value),
+                "resistor thermal noise should be flat at about 9.1 nV/sqrt(Hz), got {value}"
+            );
+        }
+        let expected_total = density.real[0] * frequency.real[frequency.real.len() - 1].sqrt();
+        assert!(
+            (total / expected_total - 1.0).abs() < 0.05,
+            "integrated total {total} should match the density integrated over the band, {expected_total}"
+        );
+
+        // ngspice keeps every plot it has ever made, so a later run on the same
+        // engine must not inherit this one's. An operating point makes exactly
+        // one plot and has no secondary result at all.
+        let op = engine
+            .run(SpiceRequest {
+                netlist: "Tau op after noise\nV1 in 0 5\nR1 in 0 1k\n.op\n.end".to_string(),
+            })
+            .expect("operating point after a noise run should solve");
+        assert!(
+            op.extra_plots.is_empty(),
+            "a later run must not report the previous run's plots, got {:?}",
+            op.extra_plots
+                .iter()
+                .map(|plot| &plot.name)
+                .collect::<Vec<_>>()
+        );
     }
 }

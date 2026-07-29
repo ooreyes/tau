@@ -65,6 +65,7 @@ const twoSourceSchematic = () => ({
 const nativeResult = (vectors: { name: string; real: number[]; imaginary: number[] | null }[], messages: string[] = []) => ({
   plot: "tran1",
   vectors,
+  extraPlots: [],
   messages,
   libraryPath: "/bundle/libngspice.dylib",
 });
@@ -143,6 +144,23 @@ describe("native ngspice adapter", () => {
       { ref: "V2", label: "I(V2)", values: [-0.315, -0.315, -0.315] },
       { ref: "D2", label: "I(D2)", values: [0.315, 0.315, 0.315] },
     ]));
+  });
+
+  // The engine reports a plot it could not afford to transfer on the same
+  // message channel as its own diagnostics. That channel is screened before
+  // anything is shown, so the notice has to clear the screen to exist at all.
+  it("shows a dropped secondary result plot as a warning", async () => {
+    enableNativeRuntime();
+    invoke.mockResolvedValueOnce(nativeResult(
+      [{ name: "v(n001)", real: [5], imaginary: null }],
+      ["Warning: Tau left out this run's secondary result plots noise1 to stay inside its transfer budget."],
+    ));
+
+    const result = await runNativeOperatingPoint(rcSchematic());
+
+    expect(result?.warnings).toContain(
+      "Tau left out this run's secondary result plots noise1 to stay inside its transfer budget.",
+    );
   });
 
   it("returns all finite operating-point voltages, with GND prepended at 0 V", async () => {

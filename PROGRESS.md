@@ -29,7 +29,51 @@ the TS solver.** Do not restore a readiness banner until every Class A and
 Class B item in the audit is closed or consciously accepted, with file:line
 evidence.
 
-**Last unit - 2026-07-29: `.tf` runs on ngspice, so a transfer function can be
+**Last unit - 2026-07-29: the native bridge can reach a run's secondary result
+plots, which is what `.noise` needs.** A noise run is the one analysis whose
+answer ngspice splits across two plots: the spectral density curves
+(`onoise_spectrum`, `inoise_spectrum`, on their own `frequency` scale) and the
+integrated totals (`onoise_total`, `inoise_total`). It leaves the totals as the
+current plot, and `spice.rs` read only `ngSpice_CurPlot` - so the curves anyone
+actually wants to plot were unreachable from Tau at any layer. `SpiceResult` now
+carries `extraPlots` beside `plot`/`vectors`, filled by walking
+`ngSpice_AllPlots` and keeping what this run added: ngspice never discards a
+plot, so the list is snapshotted before the run and the names present beforehand
+are excluded, which is what stops a later analysis on the same engine from
+reporting an earlier one's results as its own.
+
+No guard was relaxed. The primary read keeps its own untouched
+`MAX_TRANSFER_VALUES` budget, so no deck that fitted before can newly overflow;
+secondary plots draw on a separate, much smaller budget
+(`MAX_EXTRA_PLOTS` 8, `MAX_EXTRA_PLOT_VALUES` 1e6) because a `.step` deck can
+leave dozens of plots behind where a noise run leaves one. A plot that will not
+fit is named on the engine's message channel rather than dropped in silence, and
+because that channel is screened before anything is displayed
+(`engineWarnings`, `engine/nativeSpice.ts`), the notice is prefixed the way
+ngspice prefixes its own diagnostics so it survives the screen - covered by its
+own test, mutation-checked by removing the prefix and watching it fail.
+
+Nothing in TypeScript consumes `extraPlots` yet; it is the declared contract for
+the `.noise` wiring, which is the next unit. `simulation/noise.ts` still runs
+noise on the TS solver, and no shipped text claims otherwise.
+Evidence: `returns_both_plots_of_a_real_noise_run` runs Tau's own bundled
+libngspice against a 10k/10k divider. Its output sees 5 kΩ of thermal noise, so
+the spectrum has to sit flat at sqrt(4kTR) = 9.1 nV/sqrt(Hz) across the sweep
+and the integrated total has to equal that density times sqrt(bandwidth); both
+hold to within 5%, the spectrum is confirmed absent from the current plot, and a
+following `.op` on the same engine reports no extra plots. Mutation-checked:
+with the capture disabled the test fails on an empty `extraPlots`.
+Gates: tsc clean, full suite 2203 passed / 6 skipped across 147 files at
+`--maxWorkers=2`, 31 Rust tests plus the 2 real-library tests run explicitly,
+clippy clean, corpus unchanged at 80 imported / 80 deck-built / 80 op-converged
+/ 80 schema-valid with warning-clean 77 - still failing its own `>= 82`
+assertion because `~/Downloads/LTspice_export` is missing, not from a code
+regression.
+Next candidate: the TypeScript half of `.noise` - an `analysisLine` branch, a
+`runNativeNoise` reading both plots, `App.tsx` wiring, and the "planned" string
+at `simulation/noise.ts:332`.
+
+**2026-07-29: `.tf` runs on ngspice, so a transfer function can be
 taken on an amplifier.** Transfer function was one of the two analyses still
 pinned to Tau's own solver, which has no semiconductor stamps - so asking an
 imported design for its gain, input impedance and output impedance refused
@@ -69,7 +113,8 @@ warning-clean 77. Corpus still fails its own `>= 82` assertion because
 `~/Downloads/LTspice_export` is missing, not from a code regression.
 Next candidate: `.noise` on ngspice. It needs native work this unit did not: a
 noise run produces two plots (spectral density and integrated total) and Rust
-reads only `ngSpice_CurPlot`, so one of them is unreachable today.
+reads only `ngSpice_CurPlot`, so one of them is unreachable today. (Closed the
+same day - see the entry above.)
 
 **2026-07-29: a `.include`/`.lib` sitting next to the schematic is
 actually read (audit P9, second half).** Vendor models are where LTspice users

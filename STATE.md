@@ -42,12 +42,16 @@ partial work.
 Ordered. Take the top item unless it is blocked. Class A outranks everything -
 a plausible wrong number is worse than a refusal to run.
 
-1. **P3 remainder - `.noise` on ngspice.** `.dc` landed 2026-07-28 and `.tf` on
-   2026-07-29; noise is the last analysis still pinned to the TS solver, which
-   rejects transistors. It is NOT a copy of the `.tf` unit: a noise run produces
-   TWO plots (spectral density and integrated total) and `spice.rs` reads only
-   `ngSpice_CurPlot`, so this needs Rust work first - either select the plot by
-   name or return both. `analysisLine` has no `noise` branch either.
+1. **P3 remainder - `.noise` on ngspice, TS half.** The Rust prerequisite landed
+   2026-07-29: `SpiceResult.extraPlots` now carries the spectral-density plot
+   (`onoise_spectrum`, `inoise_spectrum`, its own `frequency` scale) that
+   `ngSpice_CurPlot` cannot reach, and the current plot still holds the totals
+   (`onoise_total`, `inoise_total`). What is left is all TypeScript: a `noise`
+   branch in `analysisLine` (`engine/spiceNetlist.ts`), a `runNativeNoise` in
+   `engine/nativeSpice.ts` shaped like `runNativeTransferFunction` but reading
+   both plots, the `App.tsx` wiring, and the "planned" string at
+   `simulation/noise.ts:332`. Nothing in TS reads `extraPlots` yet - it is a
+   declared contract with no consumer until this lands.
 2. **A MOSFET DC-sweep corpus proof.** The native DC path is unit-tested
    against mocked vectors and its ngspice contract was checked by hand at the
    CLI, but nothing in the repo runs a real transistor sweep end to end. A
@@ -70,6 +74,20 @@ a plausible wrong number is worse than a refusal to run.
 
 Newest first. One line each: date, unit, evidence.
 
+- 2026-07-29 - The native bridge can see a run's secondary plots at all:
+  `ngSpice_AllPlots` plus a before/after snapshot yields `SpiceResult.extraPlots`,
+  which is what a `.noise` run's spectral-density curves live in - unreachable
+  through `ngSpice_CurPlot`, which returns only the two integrated scalars. The
+  primary read keeps its own untouched `MAX_TRANSFER_VALUES` budget so no deck
+  that used to fit can newly overflow; extras get a separate smaller budget and
+  are named on the message channel rather than dropped silently. Real-ngspice
+  proof against Tau's bundled libngspice
+  (`returns_both_plots_of_a_real_noise_run`): a 10k/10k divider whose output sees
+  5k of thermal noise, so the spectrum must sit flat at sqrt(4kTR) =
+  9.1 nV/sqrt(Hz) and the integrated total must equal that times sqrt(bandwidth) -
+  both hold, and a following `.op` on the same engine reports no extra plots, so
+  a later run cannot inherit an earlier one's. Mutation-checked: with capture
+  disabled the test fails on an empty `extraPlots`.
 - 2026-07-29 - `.tf` reaches ngspice, so gain / Zin / Zout can be taken on a
   circuit with a transistor in it. Port resolved before the round trip so a bad
   node or stimulus keeps the panel's own wording; ngspice's three scalars matched

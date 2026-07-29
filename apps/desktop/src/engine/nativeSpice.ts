@@ -24,9 +24,18 @@ interface NativeVector {
   imaginary: number[] | null;
 }
 
+interface NativePlot {
+  name: string;
+  vectors: NativeVector[];
+}
+
 interface NativeSpiceResult {
   plot: string;
   vectors: NativeVector[];
+  /** Plots the run made besides the current one, which stays in `vectors`. A
+   * `.noise` run leaves its integrated totals current and its spectral density
+   * curves here. */
+  extraPlots: NativePlot[];
   messages: string[];
   libraryPath: string;
 }
