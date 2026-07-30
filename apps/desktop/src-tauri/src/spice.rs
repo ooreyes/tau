@@ -1309,11 +1309,12 @@ V1 in 0 1
         assert!(deck_lines(netlist).is_ok());
     }
 
-    /// The device-current `.save` a transient deck carries for every
-    /// semiconductor on the schematic. The corpus proof runs the ngspice binary
-    /// directly, which never sees this sanitizer - so without this test a card
-    /// the screen rejected would break every transistor transient in the app
-    /// while every TypeScript gate stayed green.
+    /// The device-current `.save` a transient or operating-point deck carries
+    /// for every semiconductor on the schematic. The corpus proof runs the
+    /// ngspice binary directly, which never sees this sanitizer - so without
+    /// this test a card the screen rejected would break every transistor
+    /// transient and every operating point in the app while every TypeScript
+    /// gate stayed green.
     #[test]
     fn accepts_the_device_current_save_card_and_its_continuations() {
         let netlist = r#"Tau device currents
@@ -1329,6 +1330,9 @@ M1 out gate 0 0 TAU_NMOS
 .tran 1u 1m
 .end"#;
         assert!(deck_lines(netlist).is_ok());
+        // The same card now precedes an `.op`, which is the analysis the whole
+        // acceptance corpus runs through.
+        assert!(deck_lines(&netlist.replace(".tran 1u 1m", ".op")).is_ok());
     }
 
     #[test]

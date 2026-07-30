@@ -17,18 +17,9 @@ Rules:
 
 ## Now
 
-**Status:** IN PROGRESS
-**Unit:** Currents in the OPERATING POINT. Two halves, both needed: the native
-`.op` read side never populates `branches` at all (`nativeSpice.ts:182` returns
-nets only), and `OpTable` (`SimulationPanel.tsx:1708`) renders node voltages
-only - it never touches `branches` on EITHER engine. So a native `.op` has no
-current anywhere, and the TS solver's source/inductor currents reach the canvas
-annotations but never the table. Trap 1 in a new dress. Adds the `.save` card to
-an `.op` deck (device currents), reads `#branch` + `@<ref>[<param>]` back, and
-renders both. Sign convention is the hazard: the TS `branches` contract is the
-raw MNA unknown (negative of conventional out of a source's + terminal) - must
-be proved equal to ngspice's, not assumed.
-**Started:** 2026-07-30T02:10Z
+**Status:** IDLE
+**Unit:** -
+**Started:** -
 **Branch:** auto/ltspice-parity
 
 If Status is IN PROGRESS with a timestamp older than ~2 hours, the previous
@@ -58,14 +49,14 @@ do not spend a fire diffing it again. Re-check only if its tip moves past
 Ordered. Take the top item unless it is blocked. Class A outranks everything -
 a plausible wrong number is worse than a refusal to run.
 
-1. **A semiconductor still has no current in the OPERATING POINT table.** The
-   transient half landed 2026-07-30; the `.op` table (`operatingPoint.ts:493`)
-   lists source and inductor currents only. Already verified at the CLI that
-   `.op` behaves exactly like `.tran` here - `.save all @q1[ic] @d1[id]` on an
-   `.op` deck returns the same 9 default vectors PLUS the two device currents,
-   so the card is a strict superset there too. The work is the read side plus
-   whatever renders the table. Note the corpus's 80 op-converged files all run
-   through that path, so prove the counts hold.
+1. **A passive has no current in the OPERATING POINT table.** The `.op` table now
+   lists source, inductor and semiconductor currents; a transient additionally
+   reconstructs resistor and capacitor currents from the node voltages
+   (`deriveRcCurrents`) and the `.op` read side does not. Stated in KNOWN_ISSUES.
+   The arithmetic is trivial at DC but the SIGN is not: a two-terminal element's
+   current sign follows its orientation, so reuse the oriented-branch logic
+   rather than inventing a convention, and prove the sign against ngspice
+   (`v1#branch` is already pinned in `scripts/opNative.corpus.ts`).
 2. **A BJT reports only its collector current.** `DEVICE_CURRENT_PARAMS` in
    `spiceNetlist.ts` maps one current per element letter. ngspice will return
    `@q1[ib]` and `@q1[ie]` too (verified), but `result.currents` is keyed by
@@ -376,6 +367,16 @@ Check for each before calling a unit done.
    Re-run with `--maxWorkers=2`, or run the failing files on their own; if they
    pass there, it is contention. Establish the clean-tree count before blaming
    your own diff.
-6. **A proof pipeline that quietly stops proving.** `design-shot.mjs` broke
+6. **A subagent that outlives the fire interval gets its tree force-committed.**
+   A single delegated edit ran ~12 minutes here; the durability net fired twice
+   during it, rescued the half-written tree to `-wip`, hard-reset the clone
+   mid-edit, and then committed the finished tree onto the work branch itself as
+   `wip: checkpoint ...`. The work survived and the subagent's own gate run was
+   unaffected, but the commit message cannot be rewritten (no history rewriting),
+   so the unit lands under an ugly message with the real one on top. Keep a
+   delegated edit well under the interval, or expect to review a checkpoint
+   commit instead of a working tree. `git status` looking clean after a subagent
+   returns does NOT mean the work vanished - check `git log` before redoing it.
+7. **A proof pipeline that quietly stops proving.** `design-shot.mjs` broke
    when the workspace stopped seeding examples, then covered only light once
    light tokens landed. Look at the PNGs.

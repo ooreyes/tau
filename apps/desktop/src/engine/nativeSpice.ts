@@ -194,9 +194,11 @@ export async function runNativeOperatingPoint(schematic: Schematic): Promise<Ope
 
   // Branch currents, read through the same helper the transient path uses so
   // the two cannot drift. The values are ngspice's own, UNFLIPPED: its
-  // `#branch` on an `.op` run is already the raw MNA unknown the `branches`
-  // contract above documents - the NEGATIVE of the conventional current out of
-  // a source's + terminal - so no sign flip belongs here. A semiconductor's
+  // `#branch` on an `.op` run is already the raw MNA unknown that the TS
+  // solver's own `branches` contract specifies (see `OperatingPointResult` in
+  // simulation/operatingPoint.ts) - the NEGATIVE of the conventional current
+  // out of a source's + terminal - so no sign flip belongs here, and the two
+  // engines report a source current the same way round. A semiconductor's
   // own current is present at all only because this deck named it in its
   // `.save` card (see `wantsDeviceCurrents` in spiceNetlist.ts).
   const deviceCurrents = new Map(execution.deck.deviceCurrents.map((d) => [d.componentId, d.vector]));

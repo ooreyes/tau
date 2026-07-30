@@ -124,13 +124,14 @@ one engine for the whole session.
 - A document is capped at 5,000 components and 20,000 wires. An `.asc` that
   exceeds this is refused at import with a message naming the actual counts;
   every schematic in the acceptance corpus fits with room to spare.
-- In a native transient run, a transistor, diode or JFET reports one current:
-  a BJT its collector current, a three-terminal device its drain current. Both
-  read as `I(Q1)` / `I(M1)`. The other terminals have no trace of their own.
-  Sources and inductors report their branch current, and resistor and capacitor
-  currents are derived from the node voltages. Currents are transient-only -
-  the operating-point table lists source and inductor currents but not a
-  semiconductor's.
+- A transistor, diode or JFET reports one current: a BJT its collector current,
+  a three-terminal device its drain current. Both read as `I(Q1)` / `I(M1)`. The
+  other terminals have no trace of their own. Currents are reported in a native
+  transient run and in the operating-point table; the other analyses report node
+  voltages only. The two report different sets: a transient also reconstructs
+  resistor and capacitor currents from the node voltages, while the
+  operating-point table lists source, inductor and semiconductor currents only -
+  a passive's DC current has to be read off the node voltages either side of it.
 
 ## Install
 
