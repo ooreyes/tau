@@ -17,11 +17,9 @@ Rules:
 
 ## Now
 
-**Status:** IN PROGRESS
-**Unit:** `.ac` proven against a real ngspice run (Next up #1), plus the
-divergence that proof surfaced: the preview solver REFUSES an AC sweep with no
-AC-excited source, the native path returns a flat -300 dB Bode plot instead.
-**Started:** 2026-07-29T19:20Z
+**Status:** IDLE
+**Unit:** -
+**Started:** -
 **Branch:** auto/ltspice-parity
 
 If Status is IN PROGRESS with a timestamp older than ~2 hours, the previous
@@ -51,23 +49,25 @@ do not spend a fire diffing it again. Re-check only if its tip moves past
 Ordered. Take the top item unless it is blocked. Class A outranks everything -
 a plausible wrong number is worse than a refusal to run.
 
-1. **`.ac` is the last native path proven only against mocked vectors.**
-   `.dc`, `.tf`, `.noise` and now `.tran` all have real-engine harnesses;
-   `runNativeAcSweep` does not. It reads `frequency` plus the complex node
-   vectors and derives dB/phase itself, so the untested assumptions are the
-   scale name, the real/imaginary split, and the dB convention. Same harness
-   shape as `scripts/tranNative.corpus.ts` - reuse its `print all` parser,
-   which handles the pagination the older `dcSweepNative` one does not.
-2. **A semiconductor has no current trace in a native transient.** Established
+1. **A semiconductor has no current trace in a native transient.** Established
    with engine evidence on 2026-07-29 and now stated in KNOWN_ISSUES: ngspice
    returns a device vector like `@d1[id]` only when the deck asks with `.save`,
    and Tau's deck does not. A clamp probe on a transistor resolves to nothing.
    Emitting `.save` is the obvious fix but it RESTRICTS what ngspice saves, so
    it must be `.save all @<ref>[id] ...` and needs its own real-engine proof
    that no existing vector disappears.
-3. **Tau's canvas does not draw the primitives it now preserves.** A saved file
+2. **Tau's canvas does not draw the primitives it now preserves.** A saved file
    keeps its artwork byte-for-byte, but the author cannot see it in Tau. That is
    stated plainly in KNOWN_ISSUES; rendering them is the follow-up.
+3. **The one Rust test that drives a real libngspice is red on this host and is
+   not a gate.** `runs_an_operating_point_with_the_real_ngspice_library` is
+   `#[ignore]`d behind `TAU_NGSPICE_LIB`, and with either staged dylib it dies
+   partway through on `Unknown model type adc_bridge` - the XSPICE code models
+   are not reachable from a bare `cargo test`. Everything in its body after the
+   two-bit register case has not been running. Logged in FIX_BUGS 2026-07-29.
+   Splitting it, or making the code models findable, would put the FFI vector
+   read back under a gate. Run it with `--test-threads=1`: the two real-library
+   tests SIGSEGV when they share a process.
 
 ---
 
@@ -75,6 +75,33 @@ a plausible wrong number is worse than a refusal to run.
 
 Newest first. One line each: date, unit, evidence.
 
+- 2026-07-29 - `.ac` proven against a real ngspice run, which was the last
+  native path standing on mocked vectors, and the proof surfaced a live
+  divergence that is now closed: the preview solver REFUSES a sweep with no
+  AC-excited source, while the native path returned a flat trace at the -300 dB
+  floor. Verified at the CLI that ngspice treats an unexcited `.ac` as a clean
+  run - no error, no warning, every node exactly 0 + 0j - so there was nothing
+  in the result to tell Tau the answer was empty. `hasAcExcitation` +
+  `NO_AC_SOURCE_MESSAGE` now live once in `acSweep.ts` and both engines refuse
+  through them, param-resolved so an `AC {amp}` still counts. Extracted the
+  adapter's two engine-facing conventions (`AC_SCALE_NAME`, `AC_DB_FLOOR`,
+  `acTraceFromComplex`) so the proof exercises shipped arithmetic, not a copy.
+  Real-ngspice proof: `scripts/acNative.corpus.ts` - an RC low-pass whose pole
+  sits exactly on a `dec 4` grid point, with real/imag held against
+  `H = 1/(1+jwRC)` at all 17 points, `magDb` against ngspice's own `vdb()`, and
+  `phaseDeg` against its `vp()` AFTER conversion, because **ngspice's phase is
+  RADIANS and Tau reports degrees** (-pi/4 vs -45 at the pole); plus a
+  common-emitter NPN the preview solver refuses outright, and the unexcited deck
+  the new refusal guards. `print all` is unusable on an AC run - a complex column
+  prints as TWO cells under ONE header - so the harness prints `real()`/`imag()`
+  explicitly. Rust side: the FFI complex read was only asserted `is_some()`, so a
+  swapped or mis-strided phasor would have passed; now pinned numerically at the
+  pole and a decade above, where imag is 10x real. Mutation-checked three ways:
+  precheck removed (kills 1 unit test), degrees conversion dropped (kills 3 of 6
+  corpus cases + 1 unit test), Rust complex halves swapped (moves the panic onto
+  the new frequency-scale assertion). Gates: tsc, cargo test 31 + clippy clean,
+  corpus 80/80/80/80 with the new AC proof inside it. Full suite: 2237 pass, and
+  the 25 failures were trap 5 - all 6 files pass isolated at `--maxWorkers=2`.
 - 2026-07-29 - `.tran` proven against a real ngspice run rather than mocked
   vectors, closing the highest-traffic analysis. `scripts/tranNative.corpus.ts`
   pins the `time` scale, node vectors arriving BARE (not `v(x)`, which is why

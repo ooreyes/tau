@@ -1569,17 +1569,65 @@ R1 out fb 10k
             .iter()
             .any(|vector| { vector.name.eq_ignore_ascii_case("time") && vector.real.len() > 10 }));
 
+        // AC analysis is the only path whose vectors come back COMPLEX, so it is
+        // the only one that exercises the `complex_data` branch of the vector
+        // read. R=1k with C=159.1549n puts the pole at 1 kHz, and a `dec 10`
+        // sweep from 100 Hz lands on it exactly at index 10, so the phasor is
+        // known in closed form at two indices rather than only in shape:
+        // H(jw) = 1/(1+jx) with x = w*R*C, giving 0.5 - 0.5j at the pole and
+        // 0.009901 - 0.09901j a decade above it.
         let ac = engine
             .run(SpiceRequest {
-                netlist: "Tau AC smoke test\nV1 in 0 AC 1\nR1 in out 1k\nC1 out 0 1u\n.ac dec 10 10 1Meg\n.end".to_string(),
+                netlist: "Tau AC smoke test\nV1 in 0 AC 1\nR1 in out 1k\nC1 out 0 159.1549n\n.ac dec 10 100 10k\n.end".to_string(),
             })
             .expect("AC analysis should solve");
-        assert!(ac.vectors.iter().any(|vector| {
-            vector.name.eq_ignore_ascii_case("frequency") && vector.real.len() > 10
-        }));
-        assert!(ac.vectors.iter().any(|vector| {
-            vector.name.eq_ignore_ascii_case("out") && vector.imaginary.is_some()
-        }));
+        let frequency = ac
+            .vectors
+            .iter()
+            .find(|vector| vector.name.eq_ignore_ascii_case("frequency"))
+            .expect("AC run reports a frequency scale");
+        assert_eq!(frequency.real.len(), 21);
+        // ngspice types the scale itself complex, with a zero imaginary part -
+        // the axis is its real part, so a reader taking the magnitude or the
+        // imaginary half would silently plot against nothing.
+        assert!((frequency.real[10] - 1000.0).abs() < 1e-6);
+        assert!((frequency.real[20] - 10_000.0).abs() < 1e-3);
+        if let Some(imaginary) = &frequency.imaginary {
+            assert!(imaginary.iter().all(|value| *value == 0.0));
+        }
+
+        let out = ac
+            .vectors
+            .iter()
+            .find(|vector| vector.name.eq_ignore_ascii_case("out"))
+            .expect("AC run reports the output node");
+        let out_imaginary = out
+            .imaginary
+            .as_ref()
+            .expect("an AC node vector carries an imaginary part");
+        assert_eq!(out.real.len(), 21);
+        assert_eq!(out_imaginary.len(), 21);
+        // At the pole the two parts are equal in magnitude, which pins the sign
+        // convention (the low-pass lags, so the imaginary part is negative) but
+        // not the pairing. A decade above, the imaginary part is ten times the
+        // real one, so a swapped pair or a mis-strided read of the interleaved
+        // complex array cannot pass both.
+        assert!((out.real[10] - 0.5).abs() < 1e-4, "real at pole: {}", out.real[10]);
+        assert!(
+            (out_imaginary[10] + 0.5).abs() < 1e-4,
+            "imaginary at pole: {}",
+            out_imaginary[10]
+        );
+        assert!(
+            (out.real[20] - 0.009_901).abs() < 1e-5,
+            "real a decade above the pole: {}",
+            out.real[20]
+        );
+        assert!(
+            (out_imaginary[20] + 0.099_010).abs() < 1e-5,
+            "imaginary a decade above the pole: {}",
+            out_imaginary[20]
+        );
 
         // Common-emitter BJT bias point: with VCC=12, RC=4.7k, base fed through
         // RB=100k from a 0.8 V supply, the generic NPN sits in the active region

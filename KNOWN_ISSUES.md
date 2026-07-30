@@ -14,6 +14,12 @@ LTspice requires: the input-referred figure is the output noise divided by the
 gain from that source, so without a stimulus there is nothing to refer it back
 to. Tau names this before running rather than returning an empty result.
 
+An `.ac` sweep needs the same stimulus somewhere in the circuit, for the same
+reason: a plain DC source is a short at AC, so with no `AC` amplitude anywhere
+the circuit is unexcited and every node solves to exactly zero. ngspice reports
+that as a successful run, not an error, so Tau checks for the stimulus first and
+says what is missing instead of drawing a flat trace at the bottom of the plot.
+
 Outside the desktop app there is no native engine, so noise there falls back to
 Tau's own smaller solver, which models R/C/L, sources, diodes, op-amps and
 controlled sources but **not transistors** - on those it refuses to run and

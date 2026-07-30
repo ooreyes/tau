@@ -14,6 +14,7 @@ import {
   runNativeTransferFunction,
   runNativeTransient,
 } from "./nativeSpice";
+import { NO_AC_SOURCE_MESSAGE } from "../simulation/acSweep";
 import type { NetLabel, PinOverride, SchematicComponent, SchematicWire } from "../schematic/types";
 
 const component = (
@@ -40,6 +41,14 @@ const rcSchematic = () => ({
     wire("w1", [{ x: 0, y: 0 }, { x: 64, y: 0 }]),
     wire("w2", [{ x: 128, y: 0 }, { x: 192, y: 0 }]),
   ],
+});
+
+/** The same divider with an AC stimulus on its source, so an `.ac` sweep has
+ *  something to excite it with. */
+const acExcitedSchematic = () => ({
+  ...rcSchematic(),
+  components: rcSchematic().components.map((component) =>
+    component.label === "V1" ? { ...component, value: "5 AC 1" } : component),
 });
 
 /** A deliberately direct LED drive used to verify retained device current. */
@@ -230,7 +239,7 @@ describe("native ngspice adapter", () => {
       { name: "v(n002)", real: [0, 0], imaginary: [1, 0] },
     ]));
 
-    const result = await runNativeAcSweep(rcSchematic(), {
+    const result = await runNativeAcSweep(acExcitedSchematic(), {
       startHz: 10,
       stopHz: 100,
       pointsPerDecade: 10,
@@ -243,6 +252,38 @@ describe("native ngspice adapter", () => {
       expect.objectContaining({ id: "N001", magDb: [0, -300], phaseDeg: [0, 0] }),
       expect.objectContaining({ id: "N002", magDb: [0, -300], phaseDeg: [90, 0] }),
     ]));
+  });
+
+  it("refuses an AC sweep with no AC-excited source instead of plotting the dB floor", async () => {
+    enableNativeRuntime();
+
+    // ngspice answers this circuit without complaint, returning every node as
+    // exactly 0 + 0j, which would reach the plot as a flat trace at -300 dB.
+    const result = await runNativeAcSweep(rcSchematic(), { startHz: 10, stopHz: 100, pointsPerDecade: 10 });
+
+    expect(result).toEqual({ ok: false, message: NO_AC_SOURCE_MESSAGE, warnings: [] });
+    // Refused before the round trip, so the engine is never asked at all.
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it("counts an AC stimulus that only appears once the parameter scope is applied", async () => {
+    enableNativeRuntime();
+    invoke.mockResolvedValueOnce(nativeResult([
+      { name: "frequency", real: [10, 100], imaginary: null },
+      { name: "v(n001)", real: [1, 1], imaginary: [0, 0] },
+    ]));
+
+    const parameterized = {
+      ...rcSchematic(),
+      components: rcSchematic().components.map((component) =>
+        component.label === "V1" ? { ...component, value: "5 AC {amp}" } : component),
+      params: { scope: { amp: 1 }, funcs: {} },
+    };
+
+    const result = await runNativeAcSweep(parameterized, { startHz: 10, stopHz: 100, pointsPerDecade: 10 });
+
+    expect(result?.ok).toBe(true);
+    expect(invoke).toHaveBeenCalled();
   });
 
   it("surfaces malformed native output instead of presenting an empty simulation as valid", async () => {

@@ -29,7 +29,68 @@ figure all run on the real engine. Do not restore a readiness banner until every
 Class A and Class B item in the audit is closed or consciously accepted, with
 file:line evidence.
 
-**Last unit - 2026-07-29: `.tran` is now proven against a real ngspice run
+**Last unit - 2026-07-29: `.ac` is now proven against a real ngspice run**, which
+was the last native analysis path still standing on mocked vectors, and the proof
+turned up a live divergence between the two engines that is closed in the same
+change. `runNativeAcSweep` reads ngspice's complex node vectors and derives the
+Bode plot's magnitude and phase itself, so the untested assumptions were the
+scale name, which half of each phasor is which, and the two unit conventions.
+`scripts/acNative.corpus.ts` now holds each of them against a real run.
+
+The divergence: the preview solver refuses an AC sweep with no AC-excited source,
+because a plain DC source is a short at AC and there is nothing to sweep. The
+native path did not. Verified at the CLI that ngspice treats that deck as a
+completely successful run - no error, no warning, `No. of Data Rows : 7`, every
+node exactly 0 + 0j - so nothing in the result told Tau the answer was empty, and
+it reached the plot as a flat trace at the -300 dB floor. The magnitude autoscale
+discards anything at or below -250 dB, so the user got an empty-looking Bode plot
+with no explanation instead of the one sentence that fixes it. `hasAcExcitation`
+and the message now live once in `acSweep.ts` and both engines refuse through
+them, applied after parameter resolution so an `AC {amp}` stimulus still counts.
+
+Two conventions are the adapter's own and both are now checked against the
+engine rather than restated. dB is `20*log10(|v|)`, which agrees with ngspice's
+own `vdb()`. Phase is where they part: **ngspice's `vp()` and `ph()` return
+RADIANS**, so at the pole the engine prints -0.785398 where Tau reports -45
+degrees. The two agree only after conversion, which is now asserted in that
+form so nobody "corrects" Tau to match the raw column.
+
+Proof circuits: an RC low-pass with R=1k and C=159.1549n, chosen so the pole
+lands exactly on a `dec 4` grid point, with real and imaginary parts held against
+`H(jw) = 1/(1+jwRC)` at all 17 points and the phasor's asymmetry a decade above
+the pole (|imag| ten times |real|) making a swapped pair impossible to pass; the
+same circuit answered identically by both engines; a common-emitter NPN the
+preview solver refuses outright, whose mid-band gain and inversion only the
+native engine can produce; and the unexcited deck the new refusal guards, whose
+zeros are shown to yield exactly the dB floor. `print all` turned out to be
+unusable on an AC run - a complex column prints as two whitespace-separated
+cells under one header name - so the harness prints `real()` and `imag()`
+explicitly instead.
+
+On the Rust side the FFI complex read was only ever asserted to be `Some`, so a
+swapped or mis-strided phasor would have passed the smoke test while every Bode
+plot in the app was wrong. It is now pinned numerically at the pole and a decade
+above it, along with the frequency scale being carried in the real half.
+
+Mutation-checked three ways: removing the precheck kills a unit test, dropping
+the radians-to-degrees conversion kills three of the six corpus cases and one
+unit test, and swapping the two halves of the Rust complex read moves its panic
+onto the new frequency-scale assertion.
+
+Running the Rust test also established that it has not been fully running: it is
+`#[ignore]`d behind `TAU_NGSPICE_LIB` and, with either staged dylib, dies partway
+through on `Unknown model type adc_bridge` because the XSPICE code models are not
+reachable from a bare `cargo test`. Everything after that point in its body is
+unreachable on this host. Confirmed pre-existing with the day's change reverted,
+and logged in `FIX_BUGS.md`.
+
+Gates: tsc clean, cargo test 31 passed and clippy clean, corpus held at
+80/80/80/80 with the new AC proof running inside it (the `>= 82` assertion still
+fails on the deleted input files, unchanged and tracked as blocked). Full suite
+2237 passed; 25 failures across 6 heavy jsdom files were RAM contention, all 6
+green in isolation at `--maxWorkers=2`.
+
+**Previous unit - 2026-07-29: `.tran` is now proven against a real ngspice run
 instead of against mocked vectors**, closing the gap on the highest-traffic
 analysis in the app. `scripts/tranNative.corpus.ts` builds the deck Tau would
 hand the native engine, runs it through the ngspice binary, and holds each of

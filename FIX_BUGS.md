@@ -13,6 +13,28 @@
 
 **Repo:** `auto/ltspice-parity` · **Audit date:** 2026-07-17 · **Auditor:** interactive session (Fable 5) + two background subagents (fuzz + sim cross-check).
 
+## 2026-07-29 — the real-library Rust test cannot go green on this host (CONFIRMED)
+
+`spice::tests::runs_an_operating_point_with_the_real_ngspice_library` is
+`#[ignore]`d behind `TAU_NGSPICE_LIB`, so `cargo test` never runs it. Pointed at
+either staged copy of the bundled library
+(`src-tauri/resources/ngspice/lib/libngspice.dylib` or the one under
+`target/debug/ngspice/lib/`) it fails partway through, at its two-bit register
+case: `Unknown model type adc_bridge - ignored` /
+`MIF-ERROR - unable to find definition of model a1_adc`. The XSPICE code models
+are not reachable from a plain `cargo test` process, only from the packaged app,
+so every assertion after that point in the test body is unreachable here.
+Reproduced with the change of the day reverted, so it is not caused by it.
+
+Consequence: this is the only test that exercises the FFI vector read against a
+real libngspice, and roughly the back half of it has not been running. Its
+earlier assertions do run and can be mutation-checked (swapping the complex
+real/imaginary read fails it at the frequency-scale assertion), so it is usable
+as a proof today - just not as a gate, and not past the register case.
+
+Also note: running the two `--ignored` real-library tests in one process
+SIGSEGVs. libngspice is a stateful singleton; they need `--test-threads=1`.
+
 ## 2026-07-18 stress-test session (interactive, Fable 5) — fixes applied in working tree
 
 Stress pass over `~/Downloads/LTspicePowerSim-main` (107 sym + 45 example
