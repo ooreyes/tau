@@ -55,8 +55,13 @@ a plausible wrong number is worse than a refusal to run.
    (`deriveRcCurrents`) and the `.op` read side does not. Stated in KNOWN_ISSUES.
    The arithmetic is trivial at DC but the SIGN is not: a two-terminal element's
    current sign follows its orientation, so reuse the oriented-branch logic
-   rather than inventing a convention, and prove the sign against ngspice
-   (`v1#branch` is already pinned in `scripts/opNative.corpus.ts`).
+   rather than inventing a convention, and prove the sign against ngspice.
+   `scripts/opNative.corpus.ts` is the place to prove it and already holds what
+   you need: a ladder with an R, an L and a C wired, both engines' branch
+   currents agreeing unflipped, and an assertion that ngspice returns NO
+   `r1#branch` / `c1#branch` on an `.op` - so the derivation is Tau's to do and
+   there is no engine vector to check the passive against. Check it against a
+   vector ngspice DID return, the way the transient proof does.
 2. **A BJT reports only its collector current.** `DEVICE_CURRENT_PARAMS` in
    `spiceNetlist.ts` maps one current per element letter. ngspice will return
    `@q1[ib]` and `@q1[ie]` too (verified), but `result.currents` is keyed by
@@ -82,6 +87,42 @@ a plausible wrong number is worse than a refusal to run.
 
 Newest first. One line each: date, unit, evidence.
 
+- 2026-07-30 - The `.op` current contract is a GATE now, not a shell transcript.
+  The previous entry shipped the operating point's currents with their two
+  engine-facing assumptions verified by hand at a prompt and never committed;
+  `scripts/opNative.corpus.ts` closes that, and it was the one thing the last
+  fire named as the next fire's first job. Four cases, all four
+  mutation-checked. **The sign is the point.** ngspice's `v1#branch` and the TS
+  solver's `branches` unknown are two independently-authored conventions that
+  happen to agree, which is why the adapter stores ngspice's value unflipped -
+  but the existing unit test feeds its OWN mocked vector, so it can only prove
+  the adapter does no flip, never that no-flip is right. The proof runs both
+  engines on one ladder and holds their branch currents against each other and
+  against the closed form: `v1#branch` negative and equal to the two legs' total
+  (1.677 mA), `l1#branch` POSITIVE - opposite sign to the source that drives it,
+  same current round the loop - and the TS solver agreeing on both, with an
+  explicit assertion that the two have opposite signs so the agreement cannot be
+  two zeros or two copies of one number. Flipping the TS source branch kills it.
+  Established against the real engine, not assumed: an `.op` returns **no scale
+  vector at all** (ngspice marks a node `[default scale]`), so a read side that
+  demanded one the way the transient path demands `time` would reject every
+  operating point; nodes arrive bare; and a resistor or capacitor gets NO vector,
+  which is exactly why the `.op` table lists fewer currents than a transient's -
+  the KNOWN_ISSUES claim now tracks the engine. `print all` switches form for a
+  one-row plot: `name = value` lines, not the paginated `Index` table the
+  transient harness parses, and requiring the `=` is what keeps ngspice's batch
+  `.op` summary and its full model-parameter dump out of the parse. Re-proved
+  `all` on an `.op` deck rather than inheriting the transient's result: with the
+  card 8 vectors, without it 6, and with `all` deleted the run collapses to the
+  ONE named vector - every node voltage and both `#branch` currents gone, run
+  still succeeding, nothing in the result saying so. Mutation-checked four ways
+  in shipped code (flip the TS source sign, drop `all`, stop asking for device
+  currents on `.op`, save a BJT's `ie` instead of its `ic`) and once in the
+  harness's own arithmetic (perturb the ladder's closed form 0.3%, which kills
+  the sign case, so it is not vacuous). No shipped code changed, so no guard
+  moved and no doc went stale. Gates: tsc, full suite 2250 passed / 148 files
+  with ZERO failures at `--maxWorkers=2`, cargo 32 passed + clippy clean, corpus
+  80/80/80/80 warning-clean 77 with the new proof inside it.
 - 2026-07-30 - The OPERATING POINT reports currents at all, and a semiconductor
   is one of them. Two halves were missing and either alone kept the number
   invisible: the native `.op` read side never populated `branches` (so on
@@ -109,9 +150,9 @@ Newest first. One line each: date, unit, evidence.
   CLI, by hand, and is NOT yet a repeatable gate** - a common-emitter stage with
   an inductor in the collector leg, where `@q1[ic] + l1#branch` matched
   `(V(in)-V(coll))/2k` (exact by KCL) and `v1#branch` matched the resistors' own
-  total, both to the printed digits. Committing it as
-  `scripts/opNative.corpus.ts` is the FIRST thing the next fire should do; the
-  numbers to reproduce are in this entry and in the PROGRESS log. Scope stated
+  total, both to the printed digits. **Committed as a gate the next day** -
+  `scripts/opNative.corpus.ts`, see the entry above; nothing here is left to
+  reproduce. Scope stated
   honestly, not papered over: a
   transient reconstructs R/C currents from node voltages and `.op` does not, so
   its table lists source, inductor and semiconductor currents only - in

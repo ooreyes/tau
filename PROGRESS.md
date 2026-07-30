@@ -29,7 +29,63 @@ figure all run on the real engine. Do not restore a readiness banner until every
 Class A and Class B item in the audit is closed or consciously accepted, with
 file:line evidence.
 
-**Last unit - 2026-07-30: the operating point reports currents at all, and a
+**Last unit - 2026-07-30: the operating point's current contract is a gate now,
+instead of a shell transcript.** The previous unit shipped the `.op` table's
+currents with both of its engine-facing assumptions verified by hand at a command
+prompt and never committed, and said so plainly. This closes that:
+`apps/desktop/scripts/opNative.corpus.ts`, four cases, running inside
+`scripts/acceptance-corpus.sh`. No shipped code changed.
+
+The sign is the reason this needed doing rather than being taken on trust.
+ngspice's `<ref>#branch` and the TypeScript solver's `branches` unknown are two
+conventions authored independently of each other that happen to agree, which is
+why the adapter stores ngspice's value unflipped. The existing unit test feeds its
+own mocked vector, so all it can establish is that the adapter performs no flip -
+never that performing no flip is the right answer. The proof runs both engines on
+one ladder and holds their branch currents against each other and against the
+closed form: `v1#branch` comes back negative and equal to the two legs' total
+current, 1.677 mA; `l1#branch` comes back POSITIVE, the opposite sign to the
+source driving it even though the same current flows round the loop; and the
+TypeScript solver reports both with the same signs. It asserts explicitly that the
+two have opposite signs, so the agreement cannot be satisfied by two zeros or by
+two copies of one number. Negating the solver's source branch kills the case.
+
+Three things about a real `.op` run were established rather than assumed, and each
+would have been easy to get wrong from the transient case alone. An operating
+point returns no scale vector at all - ngspice marks one of the node vectors
+`[default scale]` instead - so a read side that insisted on one the way the
+transient path insists on `time` would reject every operating point. Node vectors
+arrive bare, without the `v(...)` wrapper. And a resistor or a capacitor gets no
+current vector whatsoever, which is precisely why the `.op` table lists fewer
+currents than a transient's, so the KNOWN_ISSUES wording on that now tracks what
+the engine actually does. `print all` also switches form for a one-row plot: it
+emits `name = value` lines rather than the paginated `Index` table the transient
+harness parses, and requiring the `=` is what keeps ngspice's own batch-mode
+`.op` summary and its full model-parameter dump out of the parse.
+
+The `all` in the `.save` card was re-proved on an `.op` deck rather than inherited
+from the transient result: with the card the run returns 8 vectors, without it 6,
+and with `all` deleted it collapses to the single named vector - every node
+voltage and both `#branch` currents gone, the run still succeeding, and nothing
+anywhere in the result saying so.
+
+Mutation-checked four ways in shipped code - negate the solver's source branch,
+drop `all` from the card, stop asking for device currents on an `.op` deck, save a
+BJT's `ie` instead of its `ic` - and once in the harness's own arithmetic, by
+perturbing the ladder's closed form 0.3%, which kills the sign case and so shows
+the comparison is not vacuous.
+
+Gates: tsc clean, full suite 2250 passed / 148 files with zero failures at
+`--maxWorkers=2`, cargo test 32 passed and clippy clean, corpus 80/80/80/80 with
+warning-clean 77 and the new proof inside the run (the `>= 82` assertion still
+fails on the deleted input files, unchanged and tracked as blocked). No guard was
+touched, and no shipped behaviour changed, so nothing else went stale. Next
+candidate: resistor and capacitor currents in the operating-point table, whose
+sign is the part needing care - and the new harness already asserts there is no
+engine vector to check a passive against, so the derivation has to be held against
+a vector ngspice did return.
+
+**Previous unit - 2026-07-30: the operating point reports currents at all, and a
 semiconductor is one of them.** Two independent halves were missing and either
 one alone would have kept the number invisible. The native `.op` read side built
 node voltages and returned, never populating `branches`, so on ngspice - the
@@ -68,8 +124,11 @@ have silently placed zero current labels on the canvas. There is a test that
 fails if it changes.
 
 The real-engine check behind all of the above was run directly against the
-ngspice binary at the command line, and it is stated plainly that it is not yet a
-repeatable gate. The circuit is a common-emitter stage with an inductor in the
+ngspice binary at the command line, and was not a repeatable gate when this unit
+landed. It became one the following day, as `opNative.corpus.ts` - see the unit
+above - so nothing recorded here is left to reproduce; the numbers are kept
+because they are the hand-computed reference the harness was built from. The
+circuit is a common-emitter stage with an inductor in the
 collector leg: `V1 in 0 10`, `R1 in coll 2k`, `Q1 coll base 0` NPN,
 `R2 in base 470k`, `L1 coll out 1m`, `R3 out 0 1k`. On that deck ngspice returned
 `@q1[ic]` = 3.962382e-03 and `l1#branch` = 6.924057e-04, whose sum matches
@@ -77,10 +136,7 @@ collector leg: `V1 in 0 10`, `R1 in coll 2k`, `Q1 coll base 0` NPN,
 identity KCL makes exact, because the collector node carries nothing but R1, the
 inductor and the transistor. `v1#branch` came back as -4.67360e-03, matching the
 negative of what R1 and R2 together draw, which is the sign convention above.
-`V(coll)` and `V(out)` are equal, the inductor being a short at DC. Turning that
-into `scripts/opNative.corpus.ts`, alongside the with-and-without-card superset
-case the transient proof already runs, is the next unit's first task; the numbers
-needed to reproduce it are all here.
+`V(coll)` and `V(out)` are equal, the inductor being a short at DC.
 
 Scope stated honestly rather than papered over: the transient reconstructs
 resistor and capacitor currents from the node voltages and the operating point
