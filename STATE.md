@@ -82,6 +82,43 @@ a plausible wrong number is worse than a refusal to run.
 
 Newest first. One line each: date, unit, evidence.
 
+- 2026-07-30 - The OPERATING POINT reports currents at all, and a semiconductor
+  is one of them. Two halves were missing and either alone kept the number
+  invisible: the native `.op` read side never populated `branches` (so on
+  ngspice, the default engine, a DC operating point had NO current anywhere),
+  and `OpTable` rendered the voltage table only - it never touched
+  `result.branches` on EITHER engine, so even the TS solver's source/inductor
+  currents, which it has always computed and always drawn as canvas
+  annotations, had never appeared in the table. Trap 1 in a new dress, found by
+  tracing the value to a visible element instead of trusting the read side.
+  Widening the `.save` card to `.op` was proved at the CLI BEFORE writing code:
+  `.save all @q1[ic] @q1[ib]` on an `.op` deck returns every node voltage and
+  every `#branch` the plain deck did, plus the device currents - strict
+  superset. All 80 op-converged corpus files build through this path and all 80
+  still converge. Read side reuses the transient's `componentCurrentVector` so
+  the two cannot drift. **The SIGN was the hazard**: ngspice's `v1#branch` is
+  the negative of the conventional current out of a source's + terminal, which
+  is exactly the raw MNA unknown the TS `branches` contract specifies, so the
+  values go in UNFLIPPED - pinned by a unit test that feeds a negative reading
+  and demands a negative one back, and against the real engine by holding
+  `v1#branch` against `-((V(in)-V(coll))/2k + (V(in)-V(base))/470k)`. A flip
+  would have shown every source current backwards while every voltage stayed
+  right. A branch's `id` is the COMPONENT id, not the ref-des: `opAnnotations`
+  finds its component by that id, so a ref-des would have placed zero canvas
+  labels silently - guarded by a test. **The real-engine check was run at the
+  CLI, by hand, and is NOT yet a repeatable gate** - a common-emitter stage with
+  an inductor in the collector leg, where `@q1[ic] + l1#branch` matched
+  `(V(in)-V(coll))/2k` (exact by KCL) and `v1#branch` matched the resistors' own
+  total, both to the printed digits. Committing it as
+  `scripts/opNative.corpus.ts` is the FIRST thing the next fire should do; the
+  numbers to reproduce are in this entry and in the PROGRESS log. Scope stated
+  honestly, not papered over: a
+  transient reconstructs R/C currents from node voltages and `.op` does not, so
+  its table lists source, inductor and semiconductor currents only - in
+  KNOWN_ISSUES, and Next up #1. No guard moved; `.save` was already allowlisted
+  and its Rust test now covers the card ahead of an `.op` too. Gates: tsc, full
+  suite 2250 passed / 148 files with ZERO failures at `--maxWorkers=2`, cargo 32
+  passed + clippy clean, corpus 80/80/80/80 (warning-clean 77).
 - 2026-07-30 - A transistor, diode or JFET finally has a current in a native
   transient, so a clamp probe on one resolves to a trace instead of nothing.
   ngspice returns a device's own current only as `@<ref>[<param>]` and only for

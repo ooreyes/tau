@@ -29,7 +29,74 @@ figure all run on the real engine. Do not restore a readiness banner until every
 Class A and Class B item in the audit is closed or consciously accepted, with
 file:line evidence.
 
-**Last unit - 2026-07-30: a transistor, diode or JFET finally has a current in a
+**Last unit - 2026-07-30: the operating point reports currents at all, and a
+semiconductor is one of them.** Two independent halves were missing and either
+one alone would have kept the number invisible. The native `.op` read side built
+node voltages and returned, never populating `branches`, so on ngspice - the
+default engine - a DC operating point had no current in it anywhere. And
+`OpTable` rendered the node-voltage table only; it never touched
+`result.branches` on either engine, so even the TypeScript solver's own source
+and inductor currents, which it has always computed and has always drawn on the
+canvas as `.op` annotations, had never once appeared in the table beside the
+voltages. A value computed by both engines and rendered by neither.
+
+The deck half is the `.save` card from the previous unit, now emitted for `.op`
+as well as `.tran`. That it is safe to widen was proved against the engine
+before the code was written, not assumed from the transient case: on an `.op`
+deck, `.save all @q1[ic] @q1[ib]` returns every node voltage and every
+`<ref>#branch` the plain deck returned, plus the two device currents - a strict
+superset, same as the transient. All 80 op-converged corpus files build their
+decks through this path, and all 80 still converge with the card in place.
+
+The read side goes through the same `componentCurrentVector` helper the transient
+uses, so the two paths cannot drift in which vector name they try first. The
+hazard here was the SIGN, because the two engines have to agree on a convention
+that is easy to get backwards and impossible to spot by eye: ngspice's
+`v1#branch` is the NEGATIVE of the conventional current out of a source's +
+terminal, which is exactly the raw MNA unknown the TypeScript solver's own
+`branches` contract specifies. So the values go in unflipped, and that is pinned
+twice - by a unit test that feeds a negative reading and demands a negative
+reading back, and against the real engine, where `v1#branch` is held against
+`-((V(in) - V(coll))/2k + (V(in) - V(base))/470k)`, the total current the two
+resistors actually draw. A flipped sign would have shown every source current in
+the table backwards while every voltage stayed right.
+
+One further detail worth stating because getting it wrong renders nothing and
+reports no error: a branch's `id` is the component id, not the ref-des.
+`opAnnotations` finds a branch's component by that id, so a ref-des there would
+have silently placed zero current labels on the canvas. There is a test that
+fails if it changes.
+
+The real-engine check behind all of the above was run directly against the
+ngspice binary at the command line, and it is stated plainly that it is not yet a
+repeatable gate. The circuit is a common-emitter stage with an inductor in the
+collector leg: `V1 in 0 10`, `R1 in coll 2k`, `Q1 coll base 0` NPN,
+`R2 in base 470k`, `L1 coll out 1m`, `R3 out 0 1k`. On that deck ngspice returned
+`@q1[ic]` = 3.962382e-03 and `l1#branch` = 6.924057e-04, whose sum matches
+`(V(in) - V(coll))/2k` = (10 - 0.6924057)/2000 to the printed digits - an
+identity KCL makes exact, because the collector node carries nothing but R1, the
+inductor and the transistor. `v1#branch` came back as -4.67360e-03, matching the
+negative of what R1 and R2 together draw, which is the sign convention above.
+`V(coll)` and `V(out)` are equal, the inductor being a short at DC. Turning that
+into `scripts/opNative.corpus.ts`, alongside the with-and-without-card superset
+case the transient proof already runs, is the next unit's first task; the numbers
+needed to reproduce it are all here.
+
+Scope stated honestly rather than papered over: the transient reconstructs
+resistor and capacitor currents from the node voltages and the operating point
+does not, so its table lists source, inductor and semiconductor currents only.
+KNOWN_ISSUES says so in those words, and it is the next unit. Its sign is the
+part that needs care - a passive's current sign follows its orientation.
+
+Gates: tsc clean, full suite 2250 passed / 148 files with no failures at
+`--maxWorkers=2`, cargo test 32 passed and clippy clean, corpus held at
+80/80/80/80 with warning-clean 77 (the `>= 82` assertion still fails on the
+deleted input files, unchanged and tracked as blocked). No guard was weakened:
+`.save` was already on the `deck_lines` card allowlist and its Rust test now
+covers the card ahead of an `.op` as well as a `.tran`. Next candidate: resistor
+and capacitor currents in the operating-point table.
+
+**Previous unit - 2026-07-30: a transistor, diode or JFET finally has a current in a
 native transient run.** A clamp probe dropped on one used to resolve to nothing:
 ngspice hands back a device's own current only under the name `@<ref>[<param>]`,
 and only for a deck that asked for it, and Tau's deck asked for nothing. Sources
