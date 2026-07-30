@@ -7,8 +7,9 @@
 // What is under test here is naming and shape, not arithmetic ngspice owns:
 // the `time` scale, node vectors arriving bare rather than as `v(x)`, the
 // `<ref>#branch` spelling the current ladder leads with, the non-uniform
-// timestep the sample statistics have to describe, and `deriveRcCurrents`
-// standing in for the device currents ngspice does not return.
+// timestep the sample statistics have to describe, `deriveRcCurrents` standing
+// in for the passive currents ngspice does not return, and the `.save all` card
+// that is the only way a semiconductor's own current comes back at all.
 // Runs under vitest.corpus.config.ts only; skips without ngspice.
 import { spawnSync } from "node:child_process";
 import { writeFileSync } from "node:fs";
@@ -75,7 +76,7 @@ print all
   const names: string[] = [];
   for (const line of dump.split("\n")) {
     if (/^\s*Index\s/.test(line)) break;
-    const vec = line.match(/^\s+([A-Za-z0-9_#().[\]-]+)\s+:\s+\S/);
+    const vec = line.match(/^\s+([A-Za-z0-9_#@().[\]-]+)\s+:\s+\S/);
     if (vec && !names.includes(vec[1])) names.push(vec[1]);
   }
 
@@ -374,10 +375,80 @@ describe.skipIf(!haveNgspice)("`.tran` through the native engine", () => {
     const peak = src.indexOf(Math.max(...src));
     expect(coll[peak]).toBeLessThan((low + high) / 2);
 
-    // The transistor's own current is NOT in the run - ngspice returns no
-    // device vector without a `.save`, and `deriveRcCurrents` only covers R and
-    // C. This is the documented gap, pinned so it cannot close silently.
+    // The transistor's own current, which ngspice returns ONLY because the deck
+    // asked for it by name. There is still no `q1#branch` - that form exists for
+    // sources and inductors, never for a semiconductor.
+    expect(deck.netlist).toMatch(/^\.save all @q1\[ic\]$/m);
     expect(run.names).not.toContain("q1#branch");
-    expect(run.names.some((name) => name.toLowerCase().includes("q1"))).toBe(false);
+    expect(run.names).toContain("@q1[ic]");
+
+    // It is the real collector current, not a placeholder: `coll` carries only
+    // Rc and the collector, so KCL makes @q1[ic] exactly (V(vdd) - V(coll))/2k
+    // at every sample. Checked against two columns ngspice returned separately,
+    // so a mis-strided or wrongly-scaled device vector cannot pass.
+    // `print` rounds to about seven significant digits, so the comparison is
+    // relative: at 1.4 mA the last printed digit is already 5e-10. Still tight
+    // enough that any scale error - a factor, a unit, a swapped terminal -
+    // fails on the first sample.
+    const ic = column(run, "@q1[ic]");
+    const vdd = column(run, "vdd");
+    expect(ic.length).toBe(coll.length);
+    ic.forEach((value, index) => {
+      const kcl = (vdd[index] - coll[index]) / 2000;
+      expect(Math.abs(value - kcl)).toBeLessThan(Math.abs(kcl) * 1e-6);
+    });
+
+    // Into the collector, so positive for an NPN, and in anti-phase with the
+    // collector voltage - the same inversion the node voltage shows.
+    expect(Math.min(...ic)).toBeGreaterThan(0);
+    expect(ic[peak]).toBeGreaterThan((Math.min(...ic) + Math.max(...ic)) / 2);
+  });
+
+  it("keeps every vector a run without the `.save` returned, because the card says `all`", () => {
+    // The trap this pins: a bare `.save @q1[ic]` REPLACES ngspice's default set
+    // instead of adding to it, so dropping `all` would silently strip every node
+    // voltage and source branch current from the run. The analysis still
+    // succeeds and still plots - with almost nothing in it. Nothing in the
+    // result says so, which is why it is proved against the engine here rather
+    // than trusted to the card's spelling.
+    // Pin geometry: diode a=(x-32,y) k=(x+32,y).
+    const mixed = {
+      components: [
+        vsource("V1", "5", 100, 300),
+        resistor("R1", "1k", 250, 300),
+        capacitor("C1", "1u", 400, 400),
+        inductor("L1", "1m", 400, 200),
+        { id: "D1", kind: "diode" as const, label: "D1", value: "D", x: 550, y: 300, rotation: 0 as const },
+        { id: "Q1", kind: "npn" as const, label: "Q1", value: "NPN", x: 700, y: 300, rotation: 0 as const },
+      ],
+      wires: [],
+      netLabels: [
+        lbl(100, 268, "vdd"), lbl(218, 300, "vdd"),
+        lbl(282, 300, "mid"), lbl(368, 400, "mid"), lbl(368, 200, "mid"), lbl(518, 300, "mid"),
+        lbl(432, 400, "0"), lbl(432, 200, "0"), lbl(100, 332, "0"), lbl(716, 332, "0"),
+        lbl(582, 300, "dk"), lbl(668, 300, "dk"),
+      ],
+    };
+
+    const deck = buildSpiceDeck(mixed, { kind: "tran", stopTime: 1e-3, steps: 100 });
+    const saveCard = deck.netlist.split("\n").filter((line) => /^(\.save|\+ @)/.test(line));
+    expect(saveCard.join("\n")).toContain("@d1[id]");
+    expect(saveCard.join("\n")).toContain("@q1[ic]");
+
+    const withSave = runTran(deck.netlist, "save-superset");
+    const withoutSave = runTran(
+      deck.netlist.split("\n").filter((line) => !/^(\.save|\+ @)/.test(line)).join("\n"),
+      "save-baseline",
+    );
+
+    // Everything the plain run returned is still here, spelling for spelling.
+    expect(withoutSave.names.length).toBeGreaterThan(3);
+    for (const name of withoutSave.names) expect(withSave.names).toContain(name);
+    // Plus exactly the device currents the card asked for, which the plain run
+    // did not have - so the comparison above is not two identical sets.
+    expect(withoutSave.names).not.toContain("@q1[ic]");
+    expect(withoutSave.names).not.toContain("@d1[id]");
+    expect(withSave.names).toContain("@q1[ic]");
+    expect(withSave.names).toContain("@d1[id]");
   });
 });

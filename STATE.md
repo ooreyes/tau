@@ -49,17 +49,24 @@ do not spend a fire diffing it again. Re-check only if its tip moves past
 Ordered. Take the top item unless it is blocked. Class A outranks everything -
 a plausible wrong number is worse than a refusal to run.
 
-1. **A semiconductor has no current trace in a native transient.** Established
-   with engine evidence on 2026-07-29 and now stated in KNOWN_ISSUES: ngspice
-   returns a device vector like `@d1[id]` only when the deck asks with `.save`,
-   and Tau's deck does not. A clamp probe on a transistor resolves to nothing.
-   Emitting `.save` is the obvious fix but it RESTRICTS what ngspice saves, so
-   it must be `.save all @<ref>[id] ...` and needs its own real-engine proof
-   that no existing vector disappears.
-2. **Tau's canvas does not draw the primitives it now preserves.** A saved file
+1. **A semiconductor still has no current in the OPERATING POINT table.** The
+   transient half landed 2026-07-30; the `.op` table (`operatingPoint.ts:493`)
+   lists source and inductor currents only. Already verified at the CLI that
+   `.op` behaves exactly like `.tran` here - `.save all @q1[ic] @d1[id]` on an
+   `.op` deck returns the same 9 default vectors PLUS the two device currents,
+   so the card is a strict superset there too. The work is the read side plus
+   whatever renders the table. Note the corpus's 80 op-converged files all run
+   through that path, so prove the counts hold.
+2. **A BJT reports only its collector current.** `DEVICE_CURRENT_PARAMS` in
+   `spiceNetlist.ts` maps one current per element letter. ngspice will return
+   `@q1[ib]` and `@q1[ie]` too (verified), but `result.currents` is keyed by
+   ref-des and every consumer looks a component up by that one key, so
+   per-terminal traces need a contract change, not another `.save` entry. Stated
+   in KNOWN_ISSUES.
+3. **Tau's canvas does not draw the primitives it now preserves.** A saved file
    keeps its artwork byte-for-byte, but the author cannot see it in Tau. That is
    stated plainly in KNOWN_ISSUES; rendering them is the follow-up.
-3. **The one Rust test that drives a real libngspice is red on this host and is
+4. **The one Rust test that drives a real libngspice is red on this host and is
    not a gate.** `runs_an_operating_point_with_the_real_ngspice_library` is
    `#[ignore]`d behind `TAU_NGSPICE_LIB`, and with either staged dylib it dies
    partway through on `Unknown model type adc_bridge` - the XSPICE code models
@@ -75,6 +82,40 @@ a plausible wrong number is worse than a refusal to run.
 
 Newest first. One line each: date, unit, evidence.
 
+- 2026-07-30 - A transistor, diode or JFET finally has a current in a native
+  transient, so a clamp probe on one resolves to a trace instead of nothing.
+  ngspice returns a device's own current only as `@<ref>[<param>]` and only for
+  a deck that named it, so the deck now emits a `.save` card. **`all` is the
+  whole safety of that card**: verified at the CLI that a bare
+  `.save @q1[ic]` REPLACES the default set - 9 vectors collapsed to 2, every
+  node voltage and source branch gone - while `.save all @q1[ic] ...` is a
+  strict superset. The run still succeeds either way and says nothing, which is
+  why it is proved against the engine rather than trusted to the spelling.
+  Targets are read off the lines the emitter actually produced, not off the
+  component kind, so a BJT whose Value names a `.subckt` (emitted as `XQ1`) is
+  correctly skipped. The vector name is recorded on the deck per component and
+  the adapter looks up exactly that, so the ask and the read cannot drift.
+  Scoped to `.tran`, the one analysis that reads currents back. Kept the label
+  `I(Q1)` rather than LTspice's `Ic(Q1)`: the FFT picker feeds a trace LABEL
+  back into `runWaveformFft`, which resolves `I(ref)`, so a terminal-qualified
+  label would have silently broken the spectrum of every device current - trap
+  3 in a new dress. Real-ngspice proof in `tranNative.corpus.ts`: the
+  common-emitter stage's `@q1[ic]` held against `(V(vdd) - V(coll))/2k` at every
+  sample, which KCL makes exact, so a mis-strided or mis-scaled vector cannot
+  pass; plus a superset case that runs the SAME deck with and without the card
+  and asserts every vector of the plain run survives. Writing it surfaced that
+  the harness's own vector-name regex had no `@` in its character class and had
+  been silently skipping device vectors. Added a Rust test too - the corpus runs
+  the ngspice binary directly and never sees `deck_lines`, so a card the
+  sanitizer rejected would have broken every transistor transient in the app
+  with every TypeScript gate green. No guard moved; `.save` was already
+  allowlisted. Mutation-checked four ways: `all` dropped (kills 2 real-engine
+  cases), card never emitted (kills 2 real-engine + 2 unit), read side ignoring
+  the saved name (kills 2 unit, including the pre-existing diode case), `.save`
+  removed from the Rust allowlist (kills 2 Rust). Gates: tsc, cargo 32 passed +
+  clippy clean, corpus 80/80/80/80. Full suite 2203 passed with 40 render
+  timeouts - trap 5, all 10 files pass isolated, and the clean-tree corpus
+  baseline was re-measured identical (warning-clean 77) before blaming the diff.
 - 2026-07-29 - `.ac` proven against a real ngspice run, which was the last
   native path standing on mocked vectors, and the proof surfaced a live
   divergence that is now closed: the preview solver REFUSES a sweep with no

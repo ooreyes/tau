@@ -124,11 +124,13 @@ one engine for the whole session.
 - A document is capped at 5,000 components and 20,000 wires. An `.asc` that
   exceeds this is refused at import with a message naming the actual counts;
   every schematic in the acceptance corpus fits with room to spare.
-- In a native transient run, current is available for sources, inductors,
-  resistors and capacitors, but **not for semiconductors**. ngspice returns a
-  branch current only for sources and inductors; resistor and capacitor
-  currents are derived from the node voltages. A transistor's or diode's own
-  current has no trace - it is left blank rather than estimated.
+- In a native transient run, a transistor, diode or JFET reports one current:
+  a BJT its collector current, a three-terminal device its drain current. Both
+  read as `I(Q1)` / `I(M1)`. The other terminals have no trace of their own.
+  Sources and inductors report their branch current, and resistor and capacitor
+  currents are derived from the node voltages. Currents are transient-only -
+  the operating-point table lists source and inductor currents but not a
+  semiconductor's.
 
 ## Install
 

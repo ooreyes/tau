@@ -1309,6 +1309,28 @@ V1 in 0 1
         assert!(deck_lines(netlist).is_ok());
     }
 
+    /// The device-current `.save` a transient deck carries for every
+    /// semiconductor on the schematic. The corpus proof runs the ngspice binary
+    /// directly, which never sees this sanitizer - so without this test a card
+    /// the screen rejected would break every transistor transient in the app
+    /// while every TypeScript gate stayed green.
+    #[test]
+    fn accepts_the_device_current_save_card_and_its_continuations() {
+        let netlist = r#"Tau device currents
+V1 vcc 0 5
+Q1 coll base 0 TAU_NPN
+D1 coll out TAU_DIODE
+M1 out gate 0 0 TAU_NMOS
+.model TAU_NPN NPN(BF=200)
+.model TAU_DIODE D(IS=1e-14)
+.model TAU_NMOS NMOS(LEVEL=1)
+.save all @q1[ic] @d1[id]
++ @m1[id]
+.tran 1u 1m
+.end"#;
+        assert!(deck_lines(netlist).is_ok());
+    }
+
     #[test]
     fn rejects_external_files_control_flow_and_interpreter_commands() {
         for unsafe_line in [

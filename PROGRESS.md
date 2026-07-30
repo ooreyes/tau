@@ -29,7 +29,68 @@ figure all run on the real engine. Do not restore a readiness banner until every
 Class A and Class B item in the audit is closed or consciously accepted, with
 file:line evidence.
 
-**Last unit - 2026-07-29: `.ac` is now proven against a real ngspice run**, which
+**Last unit - 2026-07-30: a transistor, diode or JFET finally has a current in a
+native transient run.** A clamp probe dropped on one used to resolve to nothing:
+ngspice hands back a device's own current only under the name `@<ref>[<param>]`,
+and only for a deck that asked for it, and Tau's deck asked for nothing. Sources
+and inductors get a `<ref>#branch` for free and the passives are reconstructed
+from node voltages, so the semiconductors were the one class with no current at
+all.
+
+The fix is a `.save` card, and the word `all` in it is the whole safety of the
+change. A bare `.save @q1[ic]` does not ADD to what ngspice keeps, it REPLACES
+it: verified at the CLI that the same deck goes from nine vectors to two, losing
+every node voltage and every source branch current, while the run still reports
+success and says nothing about it. `.save all @q1[ic] ...` is a strict superset.
+Because nothing in the result distinguishes those two outcomes, the guarantee is
+proved against the engine rather than trusted to the card's spelling: a corpus
+case runs the same deck with and without the card and asserts every vector of
+the plain run is still present in the saved one, plus exactly the device
+currents that were requested.
+
+Which devices get a card is read off the instance lines the emitter actually
+produced, not off the component kind. A BJT whose Value names a `.subckt` is
+netlisted as `XQ1`, which has no device vector of any kind, and only the emitted
+line knows that. The vector name is then recorded on the deck per component and
+the adapter looks up exactly what was recorded, so the name asked for and the
+name read back cannot drift - a device saved under one spelling and looked up
+under another yields no trace and no error to say why. Scoped to `.tran`, the
+one analysis that reads currents back today.
+
+The trace keeps the label `I(Q1)` rather than LTspice's terminal-qualified
+`Ic(Q1)`. That looks like the less precise choice and is the correct one: the
+FFT signal picker feeds a trace's LABEL back into `runWaveformFft`, which
+resolves signals by the `I(ref)` form, so a qualified label would have silently
+produced an empty spectrum for every device current. Which terminal each device
+reports is documented in KNOWN_ISSUES instead - a BJT its collector current, a
+three-terminal device its drain.
+
+Real-engine proof in `scripts/tranNative.corpus.ts`: the common-emitter stage's
+`@q1[ic]` is held against `(V(vdd) - V(coll))/2k` at every sample, an identity
+KCL makes exact because the collector node carries nothing but Rc and the
+transistor, so a mis-strided, mis-scaled or wrong-terminal vector fails on the
+first point. Writing it surfaced that the harness's own vector-name regex had no
+`@` in its character class and had been quietly skipping device vectors
+entirely. A Rust test was added as well: the corpus drives the ngspice binary
+directly and never passes through `deck_lines`, so a card the sanitizer rejected
+would have broken every transistor transient in the shipped app while every
+TypeScript gate stayed green. No guard was weakened - `.save` was already on the
+card allowlist and the `+` continuation is folded before screening as before.
+
+Mutation-checked four ways: dropping `all` kills two real-engine cases, never
+emitting the card kills two real-engine and two unit tests, ignoring the saved
+name on the read side kills two unit tests including the pre-existing diode
+case, and removing `.save` from the Rust allowlist kills two Rust tests.
+
+Gates: tsc clean, cargo test 32 passed and clippy clean, corpus held at
+80/80/80/80 (the `>= 82` assertion still fails on the deleted input files,
+unchanged and tracked as blocked). Full suite 2203 passed with 40 jsdom render
+timeouts - RAM contention, all ten files green in isolation, and the clean-tree
+corpus baseline was re-measured identical before attributing anything to this
+diff. Next candidate: the same current in the operating-point table, where the
+`.op` deck has already been shown at the CLI to take the card as a superset too.
+
+**Previous unit - 2026-07-29: `.ac` is now proven against a real ngspice run**, which
 was the last native analysis path still standing on mocked vectors, and the proof
 turned up a live divergence between the two engines that is closed in the same
 change. `runNativeAcSweep` reads ngspice's complex node vectors and derives the

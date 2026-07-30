@@ -112,17 +112,18 @@ export async function runNativeTransient(
 
   // Branch currents: voltage-source and inductor currents are the ones ngspice
   // returns on its own, as `<ref>#branch`. Resistor and capacitor currents are
-  // derived from the node voltages below. A device vector like `@ref[id]` is
-  // only present when a deck asked for it with `.save`, which Tau's does not,
-  // so the remaining candidates are read defensively rather than expected -
-  // a semiconductor's own current is absent from a native transient today.
+  // derived from the node voltages below. A semiconductor has neither - its own
+  // current comes back only under the `@<ref>[<param>]` name the deck asked for
+  // in its `.save` card, so it is looked up through the deck's own record of
+  // what it asked for.
   const nodeVoltages = new Map<string, number[]>(traces.map((t) => [t.id, t.values]));
+  const deviceCurrents = new Map(execution.deck.deviceCurrents.map((d) => [d.componentId, d.vector]));
   const currents: CurrentTrace[] = [];
   const seen = new Set<string>();
   for (const { component } of execution.deck.circuit.components) {
     const ref = component.label;
     if (!ref || seen.has(ref.toLowerCase())) continue;
-    const branch = componentCurrentVector(execution.result, component.kind, ref)?.real;
+    const branch = componentCurrentVector(execution.result, deviceCurrents.get(component.id), ref)?.real;
     if (branch && branch.length === time.real.length) {
       currents.push({ ref, label: `I(${ref})`, values: branch });
       seen.add(ref.toLowerCase());
@@ -159,15 +160,18 @@ export async function runNativeTransient(
   };
 }
 
+/**
+ * `deviceVector` is the `@<ref>[<param>]` name the deck saved for this component,
+ * absent for anything that is not a primitive semiconductor. It is tried first
+ * because it is the only name the deck explicitly asked ngspice to keep; the
+ * `#branch` form is what sources and inductors get for free.
+ */
 function componentCurrentVector(
   result: NativeSpiceResult,
-  kind: SchematicComponent["kind"],
+  deviceVector: string | undefined,
   ref: string,
 ): NativeVector | undefined {
-  const candidates = [`${ref}#branch`, `i(${ref})`];
-  if (kind === "diode" || kind === "led" || kind === "zener") {
-    candidates.push(`@${ref}[id]`);
-  }
+  const candidates = deviceVector ? [deviceVector, `${ref}#branch`] : [`${ref}#branch`, `i(${ref})`];
   for (const candidate of candidates) {
     const found = vector(result, candidate);
     if (found) return found;

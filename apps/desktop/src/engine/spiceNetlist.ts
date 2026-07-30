@@ -99,6 +99,20 @@ export interface SpiceDeck {
    *  first and fails fast with product copy naming the missing part(s). Empty
    *  for every fully-resolved deck. */
   unresolvedSubckts: string[];
+  /** Every device whose own current the deck named in a `.save`, and the vector
+   *  ngspice returns it under. Recorded per component so the read side looks up
+   *  exactly what was asked for instead of rebuilding the name from a ref-des
+   *  the emitter may have sanitized. Populated for a transient deck only, which
+   *  is the one analysis that reads device currents back. */
+  deviceCurrents: DeviceCurrent[];
+}
+
+/** One device current a deck asked ngspice to keep. */
+export interface DeviceCurrent {
+  /** `SchematicComponent.id` of the device that owns the current. */
+  componentId: string;
+  /** The ngspice vector name, e.g. `@q1[ic]`. */
+  vector: string;
 }
 
 type Schematic = {
@@ -460,11 +474,17 @@ export function buildSpiceDeck(schematic: Schematic, analysis: SpiceAnalysis): S
   // the deck can name each one instead of quietly plotting a device Tau does
   // not have.
   const modelSubstitutions: ModelSubstitution[] = [];
+  // Transient is the only analysis that reads device currents back, and a
+  // `.save` is not free - it changes what the run keeps - so no other analysis
+  // asks for one. Recording only what was actually asked for is what keeps the
+  // read side from looking up a vector this deck never requested.
+  const wantsDeviceCurrents = analysis.kind === "tran";
+  const deviceCurrents: DeviceCurrent[] = [];
   circuit.components.forEach((entry, index) => {
     const directiveIc = entry.component.kind === "inductor"
       ? inductorCurrents.get(entry.component.label.trim().toLowerCase())
       : undefined;
-    lines.push(...componentLines(
+    const emitted = componentLines(
       entry,
       index,
       instanceNames.get(index) ?? "",
@@ -475,7 +495,17 @@ export function buildSpiceDeck(schematic: Schematic, analysis: SpiceAnalysis): S
       subcktModels,
       directiveIc,
       modelSubstitutions,
-    ));
+    );
+    lines.push(...emitted);
+    // Read off the lines that were actually emitted rather than off the
+    // component kind: a BJT whose Value names a `.subckt` goes out as an `X`
+    // call, which has no device vector, and only the emitted line knows that.
+    if (wantsDeviceCurrents) {
+      for (const line of emitted) {
+        const vector = deviceCurrentVector(line);
+        if (vector) deviceCurrents.push({ componentId: entry.component.id, vector });
+      }
+    }
     // A switch that names a model but has no wired control pair silently
     // degraded to a fixed open circuit before this was reported.
     if (
@@ -507,9 +537,66 @@ export function buildSpiceDeck(schematic: Schematic, analysis: SpiceAnalysis): S
     lines.push(`RWIRE${wireRIndex} ${nodeA} ${nodeB} ${ohms}`);
   }
 
+  // A semiconductor's own current exists only if the deck asks for it by name.
+  if (deviceCurrents.length > 0) {
+    lines.push(...saveCardLines(deviceCurrents.map((device) => device.vector)));
+  }
   lines.push(analysisLine(analysis, hasIc || hasInstanceIc), ".end");
 
-  return { circuit, netlist: lines.join("\n"), unresolvedSubckts, modelSubstitutions };
+  return { circuit, netlist: lines.join("\n"), unresolvedSubckts, modelSubstitutions, deviceCurrents };
+}
+
+/**
+ * The current ngspice reports for a device that asks for one, keyed by the
+ * element letter its instance line starts with. A BJT reports its collector
+ * current and a three-terminal device its drain current, which is what `I(Q1)`
+ * and `I(M1)` mean everywhere in Tau.
+ *
+ * ngspice returns these only as `@<ref>[<param>]`, and only for a deck that
+ * named them, so this table is at once what the deck saves and what the result
+ * is read back by - `nativeSpice` imports it rather than restating it, because
+ * a device saved under one name and looked up under another yields no trace at
+ * all and no error to say why.
+ */
+export const DEVICE_CURRENT_PARAMS: Readonly<Record<string, string>> = {
+  d: "id",
+  q: "ic",
+  m: "id",
+  j: "id",
+};
+
+/**
+ * `@q1[ic]` for the instance line `Q1 c b e TAU_NPN`. Undefined for any element
+ * ngspice has no such vector for: an `X` subcircuit call, a source, a passive,
+ * a behavioral `B` source.
+ */
+export function deviceCurrentVector(instanceLine: string): string | undefined {
+  const name = instanceLine.trim().split(/\s+/)[0] ?? "";
+  const param = DEVICE_CURRENT_PARAMS[name.slice(0, 1).toLowerCase()];
+  return param ? `@${name.toLowerCase()}[${param}]` : undefined;
+}
+
+/** Width to wrap the `.save` card at, well inside any SPICE line-length limit. */
+const SAVE_CARD_WIDTH = 120;
+
+/**
+ * The `.save` card naming every device current the deck wants, wrapped onto `+`
+ * continuations so a schematic full of transistors cannot produce one enormous
+ * line.
+ *
+ * `all` is load-bearing. A bare `.save` REPLACES the default set rather than
+ * adding to it, so asking for `@q1[ic]` on its own drops every node voltage and
+ * every source branch current from the run - the analysis still succeeds and
+ * still plots, just with almost nothing in it.
+ */
+export function saveCardLines(vectors: readonly string[]): string[] {
+  const lines: string[] = [".save all"];
+  for (const vector of vectors) {
+    const last = lines[lines.length - 1];
+    if (last.length + vector.length + 1 <= SAVE_CARD_WIDTH) lines[lines.length - 1] = `${last} ${vector}`;
+    else lines.push(`+ ${vector}`);
+  }
+  return lines;
 }
 
 /** How each generic starter reads in product copy, keyed by its model name. */

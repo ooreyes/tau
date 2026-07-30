@@ -15,6 +15,7 @@ import {
   runNativeTransient,
 } from "./nativeSpice";
 import { NO_AC_SOURCE_MESSAGE } from "../simulation/acSweep";
+import { currentProbeTraces } from "../simulation/currentProbe";
 import type { NetLabel, PinOverride, SchematicComponent, SchematicWire } from "../schematic/types";
 
 const component = (
@@ -27,6 +28,8 @@ const component = (
 ): SchematicComponent => ({ id, kind, label, value, x, y, rotation: 0 });
 
 const wire = (id: string, points: { x: number; y: number }[]): SchematicWire => ({ id, points });
+
+const lbl = (x: number, y: number, text: string): NetLabel => ({ id: `f-${x}-${y}`, x, y, text });
 
 /** A physical RC topology: V1 -> R1 -> C1 -> ground. */
 const rcSchematic = () => ({
@@ -60,6 +63,26 @@ const directLedSchematic = () => ({
     component("ground", "g2", "", "", 128, 64),
   ],
   wires: [wire("w1", [{ x: 0, y: 0 }, { x: 128, y: 0 }])],
+});
+
+/** A common-emitter stage, wired through net labels. The transistor is the case
+ *  that has no `#branch` current of any kind - only the `@q1[ic]` vector the
+ *  deck's `.save` card asks for. Pin geometry: npn c=(x+16,y-32) b=(x-32,y)
+ *  e=(x+16,y+32). */
+const amplifierSchematic = () => ({
+  components: [
+    component("vsource", "v1", "V1", "5", 100, 300),
+    component("resistor", "rb", "Rb", "10k", 250, 400),
+    component("resistor", "rc", "Rc", "2k", 250, 200),
+    component("npn", "q1", "Q1", "NPN", 500, 300),
+  ],
+  wires: [],
+  netLabels: [
+    lbl(100, 268, "vdd"), lbl(218, 200, "vdd"), lbl(218, 400, "vdd"),
+    lbl(100, 332, "0"), lbl(516, 332, "0"),
+    lbl(282, 400, "base"), lbl(468, 300, "base"),
+    lbl(282, 200, "coll"), lbl(516, 268, "coll"),
+  ] as NetLabel[],
 });
 
 /** The RC chain plus a second independent source, for nested `.dc` legs. */
@@ -191,6 +214,61 @@ describe("native ngspice adapter", () => {
       { ref: "V2", label: "I(V2)", values: [-0.315, -0.315, -0.315] },
       { ref: "D2", label: "I(D2)", values: [0.315, 0.315, 0.315] },
     ]));
+  });
+
+  // A transistor has no `#branch` current and is not one of the passives
+  // `deriveRcCurrents` reconstructs, so this vector is the only way it gets a
+  // current trace at all - and it exists only because the deck asked for it.
+  it("gives a transistor a current trace, read under the name its deck saved", async () => {
+    enableNativeRuntime();
+    invoke.mockResolvedValueOnce(nativeResult([
+      { name: "time", real: [0, 0.001, 0.002], imaginary: null },
+      { name: "v(vdd)", real: [5, 5, 5], imaginary: null },
+      { name: "v(coll)", real: [3.2, 3.1, 3.3], imaginary: null },
+      { name: "v(base)", real: [0.7, 0.7, 0.7], imaginary: null },
+      { name: "@q1[ic]", real: [0.0009, 0.00095, 0.00085], imaginary: null },
+    ]));
+
+    const result = await runNativeTransient(amplifierSchematic(), { stopTime: 0.002, steps: 200 });
+
+    expect(result).not.toBeNull();
+    if (!result || !result.ok) return;
+    // Labelled `I(Q1)` like every other current, because that is the spelling
+    // `.meas`, plot expressions and the FFT picker all resolve.
+    expect(result.currents).toEqual(expect.arrayContaining([
+      { ref: "Q1", label: "I(Q1)", values: [0.0009, 0.00095, 0.00085] },
+    ]));
+
+    // And it reaches something drawn: a clamp probe dropped on the transistor
+    // resolves to a plottable trace. Resolving to nothing was the whole bug -
+    // the current existing in the result but never reaching the canvas would
+    // be the same bug one step later.
+    const traces = currentProbeTraces(result, [{
+      id: "p-q1", x: 500, y: 300, color: "var(--trace-red)", componentId: "q1",
+    }]);
+    expect(traces).toEqual([{
+      id: "I(Q1)",
+      label: "I(Q1)",
+      unit: "A",
+      color: "var(--trace-red)",
+      values: [0.0009, 0.00095, 0.00085],
+    }]);
+  });
+
+  it("leaves a transistor without a trace when the run returned no device vector", async () => {
+    enableNativeRuntime();
+    invoke.mockResolvedValueOnce(nativeResult([
+      { name: "time", real: [0, 0.001, 0.002], imaginary: null },
+      { name: "v(vdd)", real: [5, 5, 5], imaginary: null },
+      { name: "v(coll)", real: [3.2, 3.1, 3.3], imaginary: null },
+    ]));
+
+    const result = await runNativeTransient(amplifierSchematic(), { stopTime: 0.002, steps: 200 });
+
+    expect(result).not.toBeNull();
+    if (!result || !result.ok) return;
+    // Absent, not zero: a fabricated flat line would read as a real measurement.
+    expect(result.currents.some((current) => current.ref === "Q1")).toBe(false);
   });
 
   // The engine reports a plot it could not afford to transfer on the same

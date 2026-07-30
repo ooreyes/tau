@@ -845,6 +845,78 @@ describe("buildSpiceDeck", () => {
     expect(deck.netlist).not.toMatch(/^Q1 /m);
   });
 
+  // ngspice hands back a semiconductor's own current only for a deck that named
+  // it. Without these cards a clamp probe on a transistor resolves to nothing.
+  describe("device current `.save`", () => {
+    const semiconductors = () => [
+      component("ground", "", "", -32, 64),
+      component("npn", "Q1", "NPN", 0, 0),
+      component("diode", "D1", "D", 128, 0),
+      component("nmos", "M1", "NMOS", 256, 0),
+      component("njf", "J1", "NJF", 384, 0),
+      component("resistor", "R1", "1k", 512, 0),
+    ];
+
+    it("asks for each semiconductor's own current, and for `all` so the defaults survive", () => {
+      const deck = buildSpiceDeck(
+        { components: semiconductors(), wires: [] },
+        { kind: "tran", stopTime: 1e-3, steps: 100 },
+      );
+      // `all` is the whole safety of this card: a bare `.save` REPLACES
+      // ngspice's default set, so without it the run comes back with the device
+      // currents and nothing else - no node voltages, no source branches.
+      expect(deck.netlist).toMatch(/^\.save all @q1\[ic\] @d1\[id\] @m1\[id\] @j1\[id\]$/m);
+      // Passives have no device vector; their currents are derived from the
+      // node voltages instead.
+      expect(deck.netlist).not.toContain("@r1");
+      expect(deck.deviceCurrents).toEqual([
+        { componentId: "Q1", vector: "@q1[ic]" },
+        { componentId: "D1", vector: "@d1[id]" },
+        { componentId: "M1", vector: "@m1[id]" },
+        { componentId: "J1", vector: "@j1[id]" },
+      ]);
+    });
+
+    it("carries no `.save` on an analysis that does not read device currents", () => {
+      for (const analysis of [{ kind: "op" as const }, { kind: "ac" as const, startHz: 1, stopHz: 1e3, pointsPerDecade: 10 }]) {
+        const deck = buildSpiceDeck({ components: semiconductors(), wires: [] }, analysis);
+        expect(deck.netlist, analysis.kind).not.toContain(".save");
+        expect(deck.deviceCurrents, analysis.kind).toEqual([]);
+      }
+    });
+
+    it("asks for nothing on a BJT emitted as a subcircuit call, which has no device vector", () => {
+      const components = [
+        component("npn", "Q1", "MRF901", 0, 0),
+        component("ground", "", "", -32, 64),
+      ];
+      const directives = [".subckt MRF901 1 2 3\\nQA 1 2 3 QR99\\n.model QR99 NPN(BF=88)\\n.ends MRF901"];
+      const deck = buildSpiceDeck(
+        { components, wires: [], directives },
+        { kind: "tran", stopTime: 1e-3, steps: 100 },
+      );
+      expect(deck.netlist).toMatch(/^XQ1 /m);
+      expect(deck.netlist).not.toContain(".save");
+      expect(deck.deviceCurrents).toEqual([]);
+    });
+
+    it("wraps a long card onto `+` continuations rather than one enormous line", () => {
+      const many = [
+        component("ground", "", "", -32, 64),
+        ...Array.from({ length: 24 }, (_, index) => component("npn", `Q${index + 1}`, "NPN", index * 128, 0)),
+      ];
+      const deck = buildSpiceDeck({ components: many, wires: [] }, { kind: "tran", stopTime: 1e-3, steps: 100 });
+      const card = deck.netlist.split("\n").filter((line) => /^(\.save|\+ @)/.test(line));
+      expect(card.length).toBeGreaterThan(1);
+      expect(card[0].startsWith(".save all ")).toBe(true);
+      expect(card.slice(1).every((line) => line.startsWith("+ "))).toBe(true);
+      expect(Math.max(...card.map((line) => line.length))).toBeLessThanOrEqual(120);
+      // Every device is still named exactly once across the wrapped card.
+      const named = card.join(" ").match(/@q\d+\[ic\]/g) ?? [];
+      expect(new Set(named).size).toBe(24);
+    });
+  });
+
   it("exports every remaining starter-library symbol to an ngspice primitive", () => {
     const components = [
       component("diode", "D1", "D", 0, 0),
