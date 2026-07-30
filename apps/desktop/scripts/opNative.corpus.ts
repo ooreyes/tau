@@ -16,10 +16,11 @@
 // branch currents compared, against hand arithmetic as well as each other.
 //
 // Also under test: an `.op` run has no scale vector of its own, names nodes bare
-// the way a transient does, gives a resistor and a capacitor no current at all
-// (which is why the `.op` table lists fewer currents than a transient's), and
-// yields a semiconductor's own current only because the deck named it in a
-// `.save` card whose `all` keeps it additive.
+// the way a transient does, gives a resistor and a capacitor no current at all,
+// and yields a semiconductor's own current only because the deck named it in a
+// `.save` card whose `all` keeps it additive - so a passive's DC current is
+// Tau's to reconstruct, and its sign is checked here against one the engine did
+// return.
 // Runs under vitest.corpus.config.ts only; skips without ngspice.
 import { spawnSync } from "node:child_process";
 import { writeFileSync } from "node:fs";
@@ -27,6 +28,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { describe, it, expect } from "vitest";
 import { buildSpiceDeck } from "../src/engine/spiceNetlist";
+import { deriveDcRcBranches } from "../src/simulation/currents";
 import { runOperatingPoint } from "../src/simulation/operatingPoint";
 import type { NetLabel, SchematicComponent } from "../src/schematic/types";
 
@@ -185,10 +187,9 @@ describe.skipIf(!haveNgspice)("`.op` through the native engine", () => {
     for (const vector of run.names) expect(run.values.get(vector)).toBeDefined();
 
     // The source and the inductor get a current for free. The resistors and the
-    // capacitor get NOTHING - and unlike a transient, which reconstructs theirs
-    // from the node voltages with `deriveRcCurrents`, the `.op` read side does
-    // not, so this absence is exactly why its table lists fewer currents. Stated
-    // in KNOWN_ISSUES; asserted here so the claim tracks the engine.
+    // capacitor get NOTHING, under any spelling - which is why their DC currents
+    // are Tau's to reconstruct rather than to read back, and why the case below
+    // has to check the derived sign against a vector the engine did return.
     expect(run.names).toContain("v1#branch");
     expect(run.names).toContain("l1#branch");
     for (const passive of ["r1#branch", "r2#branch", "r3#branch", "c1#branch", "i(r1)", "i(c1)"]) {
@@ -250,6 +251,57 @@ describe.skipIf(!haveNgspice)("`.op` through the native engine", () => {
     // The voltages agree too, which is what makes the pair comparable at all.
     const tsNets = new Map(ts.nets.map((net) => [net.id, net.voltage]));
     closeRelative(tsNets.get("mid")!, value(run, "mid"));
+  });
+
+  it("derives a passive's current with the same sign as the inductor branch ngspice returned", () => {
+    // The passives are the half of the table ngspice supplies nothing for, so
+    // unlike the source and the inductor above there is no engine vector to
+    // compare `I(R1)` against directly. What makes the sign checkable anyway is
+    // that R1, L1 and R2 sit in ONE series leg: whatever convention the derived
+    // current follows, it has to come out equal to `l1#branch` - a number the
+    // engine did return - or Tau is reporting two elements of one loop as
+    // carrying current in opposite directions.
+    const deck = buildSpiceDeck(twoLegLadder, { kind: "op" });
+    const run = runOp(deck.netlist, "passives");
+
+    // Fed the way the read side feeds it: ngspice's own node voltages, with
+    // ground supplied explicitly because it is not a vector.
+    const voltageByNet = new Map<string, number>();
+    for (const net of deck.circuit.nets) {
+      voltageByNet.set(net.id, net.isGround ? 0 : value(run, net.id.toLowerCase()));
+    }
+    const derived = new Map(
+      deriveDcRcBranches(deck.circuit.components, voltageByNet).map((b) => [b.label, b.current]),
+    );
+    // Every passive in the ladder and nothing else - the source and the inductor
+    // are the engine's to report, not this function's.
+    expect([...derived.keys()].sort()).toEqual(["I(C1)", "I(R1)", "I(R2)", "I(R3)"]);
+
+    // THE SIGN, against a vector ngspice returned. R1 runs `in` -> `mid` and R2
+    // runs `tap` -> `0`, both down the leg L1 sits in, so all three are the same
+    // current: positive, and equal to `l1#branch` to the printed digits.
+    const inductorBranch = value(run, "l1#branch");
+    expect(inductorBranch).toBeGreaterThan(0);
+    closeRelative(derived.get("I(R1)")!, inductorBranch);
+    closeRelative(derived.get("I(R2)")!, inductorBranch);
+
+    // And the source, whose sign is the opposite one, is the negative of the two
+    // legs' derived currents summed. This is the check a flip cannot survive:
+    // it holds two DERIVED numbers against one the engine produced, through KCL
+    // at `in`, where the only paths off the node are R1, R3 and the source.
+    const sourceBranch = value(run, "v1#branch");
+    expect(sourceBranch).toBeLessThan(0);
+    closeRelative(-sourceBranch, derived.get("I(R1)")! + derived.get("I(R3)")!);
+    // Both legs are real contributors, so the sum above cannot pass on one term.
+    closeRelative(derived.get("I(R1)")!, LEG_A);
+    closeRelative(derived.get("I(R3)")!, LEG_B);
+    expect(derived.get("I(R3)")!).toBeGreaterThan(0);
+
+    // The capacitor is exactly zero, not merely small: at a DC operating point
+    // it holds its voltage, and it has 5 V across it here, so a value that
+    // tracked the node voltage instead would be conspicuous.
+    expect(derived.get("I(C1)")).toBe(0);
+    closeRelative(value(run, "in"), 5);
   });
 
   it("reports a transistor's own current on a circuit the TypeScript solver refuses", () => {

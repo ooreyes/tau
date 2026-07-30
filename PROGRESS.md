@@ -29,8 +29,71 @@ figure all run on the real engine. Do not restore a readiness banner until every
 Class A and Class B item in the audit is closed or consciously accepted, with
 file:line evidence.
 
-**Last unit - 2026-07-30: the operating point's current contract is a gate now,
-instead of a shell transcript.** The previous unit shipped the `.op` table's
+**Last unit - 2026-07-30: a resistor and a capacitor have a current in the
+operating-point table.** The table listed source, inductor and semiconductor
+currents only, because those are the ones ngspice hands back; a passive's DC
+current had to be worked out by eye from the two node voltages either side of
+it, on the single analysis where reading a bias current is the whole point. A
+transient had reconstructed them from the node voltages since it shipped, so the
+two runs on one circuit listed different sets of parts.
+
+The arithmetic is trivial at DC. The sign is not, and it is the only thing here
+worth care: a two-terminal element's current sign follows its own orientation, so
+the derivation reuses the pin order the transient path already uses rather than
+inventing a second convention. `deriveRcCurrents` and the new
+`deriveDcRcBranches` now share one `rcElements` enumeration, so which parts
+qualify and which way round they run cannot drift apart between the two
+analyses. That shared pin order turns out to be the same convention the MNA
+branch unknowns beside it already use - both are the current entering the
+element's first terminal - which is why the derived numbers sit in the same table
+as ngspice's own without either being flipped.
+
+Proving that needed a vector ngspice did return, because it returns none for a
+passive - the harness written the day before asserts exactly that, so there is
+nothing to compare a resistor against directly. The proof puts R1, L1 and R2 in
+one series leg of the existing ladder: whatever convention the derived current
+follows, it has to come out equal to `l1#branch`, or Tau is reporting two
+elements of one loop as carrying current in opposite directions. Both resistors
+match it to the printed digits, positive. Then KCL at the source node holds two
+derived currents against a third engine vector: `v1#branch` equals the negative of
+`I(R1) + I(R3)`, with each leg separately pinned to its closed form so the sum
+cannot pass on one term. The capacitor is exactly zero with 5 V standing across
+it - a DC solution holds its voltage constant - so a value that tracked the node
+voltage instead would be conspicuous rather than plausible.
+
+A terminal whose voltage the engine did not return skips its element rather than
+reading as ground. Defaulting the gap to 0 V would have reported a confident
+wrong current for any resistor touching a node that never came back, which is the
+failure mode this project cares about most.
+
+Mutation-checked three ways: flipping the derived sign to `(Vb - Va)` kills the
+real-engine case and three unit tests; letting an unknown terminal read as ground
+kills two; removing the wiring from `runNativeOperatingPoint` entirely kills
+three, so the helper is reached rather than merely present. Three existing tests
+asserted the old, narrower behaviour and were repointed rather than deleted - the
+"absent, not a fabricated zero" guard now rides on a resistor whose node the
+engine withheld, which is a sharper case than the one it replaced, and a new test
+pins that a passive the engine did report is not also listed a second time from
+the derivation.
+
+Scope is deliberate: the TypeScript preview solver's `branches` is unchanged,
+because `transferFunction.ts` resolves a `.tf` current output by searching that
+same list, and widening it there would have quietly changed which `.tf` outputs
+are accepted. KNOWN_ISSUES now says both things plainly - that both native runs
+list the same set of parts, and that the preview's operating point still lists
+fewer rows.
+
+Gates: tsc clean, full suite 2256 passed / 148 files with zero failures at
+`--maxWorkers=2`, cargo test 32 passed and clippy clean, corpus 80/80/80/80 with
+warning-clean 77 and the new proof inside the run (the `>= 82` assertion still
+fails on the deleted input files, unchanged and tracked as blocked). No guard was
+touched. Next candidate: a BJT reports only its collector current - `@q1[ib]` and
+`@q1[ie]` come back from ngspice too, but `currents` is keyed by ref-des and every
+consumer looks a component up by that one key, so per-terminal traces need a
+contract change rather than another `.save` entry.
+
+**Previous unit - 2026-07-30: the operating point's current contract is a gate
+now, instead of a shell transcript.** The previous unit shipped the `.op` table's
 currents with both of its engine-facing assumptions verified by hand at a command
 prompt and never committed, and said so plainly. This closes that:
 `apps/desktop/scripts/opNative.corpus.ts`, four cases, running inside

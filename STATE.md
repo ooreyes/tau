@@ -49,29 +49,16 @@ do not spend a fire diffing it again. Re-check only if its tip moves past
 Ordered. Take the top item unless it is blocked. Class A outranks everything -
 a plausible wrong number is worse than a refusal to run.
 
-1. **A passive has no current in the OPERATING POINT table.** The `.op` table now
-   lists source, inductor and semiconductor currents; a transient additionally
-   reconstructs resistor and capacitor currents from the node voltages
-   (`deriveRcCurrents`) and the `.op` read side does not. Stated in KNOWN_ISSUES.
-   The arithmetic is trivial at DC but the SIGN is not: a two-terminal element's
-   current sign follows its orientation, so reuse the oriented-branch logic
-   rather than inventing a convention, and prove the sign against ngspice.
-   `scripts/opNative.corpus.ts` is the place to prove it and already holds what
-   you need: a ladder with an R, an L and a C wired, both engines' branch
-   currents agreeing unflipped, and an assertion that ngspice returns NO
-   `r1#branch` / `c1#branch` on an `.op` - so the derivation is Tau's to do and
-   there is no engine vector to check the passive against. Check it against a
-   vector ngspice DID return, the way the transient proof does.
-2. **A BJT reports only its collector current.** `DEVICE_CURRENT_PARAMS` in
+1. **A BJT reports only its collector current.** `DEVICE_CURRENT_PARAMS` in
    `spiceNetlist.ts` maps one current per element letter. ngspice will return
    `@q1[ib]` and `@q1[ie]` too (verified), but `result.currents` is keyed by
    ref-des and every consumer looks a component up by that one key, so
    per-terminal traces need a contract change, not another `.save` entry. Stated
    in KNOWN_ISSUES.
-3. **Tau's canvas does not draw the primitives it now preserves.** A saved file
+2. **Tau's canvas does not draw the primitives it now preserves.** A saved file
    keeps its artwork byte-for-byte, but the author cannot see it in Tau. That is
    stated plainly in KNOWN_ISSUES; rendering them is the follow-up.
-4. **The one Rust test that drives a real libngspice is red on this host and is
+3. **The one Rust test that drives a real libngspice is red on this host and is
    not a gate.** `runs_an_operating_point_with_the_real_ngspice_library` is
    `#[ignore]`d behind `TAU_NGSPICE_LIB`, and with either staged dylib it dies
    partway through on `Unknown model type adc_bridge` - the XSPICE code models
@@ -87,6 +74,42 @@ a plausible wrong number is worse than a refusal to run.
 
 Newest first. One line each: date, unit, evidence.
 
+- 2026-07-30 - A RESISTOR AND A CAPACITOR have a current in the operating-point
+  table, so the two native runs list the same set of parts instead of a
+  transient reconstructing passives and the `.op` leaving them to be worked out
+  by eye. **The arithmetic is trivial at DC; the sign is the unit.** A
+  two-terminal element's current sign follows its own orientation, so
+  `deriveRcCurrents` and the new `deriveDcRcBranches` now share one
+  `rcElements` enumeration - which parts qualify and which way round they run
+  cannot drift between the two analyses. That shared pin order turns out to BE
+  the MNA convention already in the list (both are the current entering the
+  first terminal), which is why derived and engine numbers sit together
+  unflipped. Proving it needed a vector ngspice DID return, since it returns
+  none for a passive (the harness from the previous entry asserts exactly that):
+  R1, L1 and R2 sit in ONE series leg of the existing ladder, so a derived
+  current must equal `l1#branch` or Tau is reporting two elements of one loop
+  running opposite ways - both match, positive; then KCL at the source node
+  holds TWO derived currents against a third engine vector, `v1#branch` ==
+  -(I(R1) + I(R3)), each leg separately pinned to its closed form so the sum
+  cannot pass on one term. C1 is exactly 0 with 5 V across it, so a value
+  tracking the node voltage would be conspicuous rather than plausible. An
+  unknown terminal SKIPS its element rather than reading as ground - defaulting
+  the gap to 0 V would report a confident wrong current for any resistor
+  touching a node that never came back. Mutation-checked three ways: flip to
+  `(Vb - Va)` (kills the real-engine case + 3 unit), unknown terminal reads as
+  ground (kills 2), unwire the call from `runNativeOperatingPoint` (kills 3, so
+  the helper is reached and not merely present). Three existing tests asserted
+  the narrower behaviour and were REPOINTED, not deleted - "absent, not a
+  fabricated zero" now rides on a resistor whose node the engine withheld, a
+  sharper case than the one it replaced, plus a new dedupe test. **Scope is
+  deliberate:** the TS solver's `branches` is UNCHANGED, because
+  `transferFunction.ts:189` resolves a `.tf` current output by searching that
+  same list and widening it would quietly change which `.tf` outputs are
+  accepted (trap 3). KNOWN_ISSUES says both halves: both native runs list the
+  same parts, and the preview's `.op` still lists fewer rows. Gates: tsc, full
+  suite 2256 passed / 148 files with ZERO failures at `--maxWorkers=2`, cargo 32
+  passed + clippy clean, corpus 80/80/80/80 warning-clean 77 with the proof
+  inside it.
 - 2026-07-30 - The `.op` current contract is a GATE now, not a shell transcript.
   The previous entry shipped the operating point's currents with their two
   engine-facing assumptions verified by hand at a prompt and never committed;

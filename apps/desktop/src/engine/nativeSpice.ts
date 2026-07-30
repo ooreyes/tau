@@ -5,7 +5,7 @@ import { resolveComponentValues, EMPTY_SCOPE, type ParamScope } from "../simulat
 import { parseAcSpec } from "./acSpec";
 import type { NoiseResult, NoiseSpec } from "../simulation/noise";
 import type { AnalysisOptions, AnalysisResult, CurrentTrace, Trace } from "../simulation/linearTransient";
-import { deriveRcCurrents } from "../simulation/currents";
+import { deriveDcRcBranches, deriveRcCurrents } from "../simulation/currents";
 import type { OperatingPointResult } from "../simulation/operatingPoint";
 import { hasAcExcitation, NO_AC_SOURCE_MESSAGE, type AcResult, type AcTrace } from "../simulation/acSweep";
 import {
@@ -217,6 +217,20 @@ export async function runNativeOperatingPoint(schematic: Schematic): Promise<Ope
       branches.push({ id: component.id, label: `I(${ref})`, current: current as number });
       seen.add(ref.toLowerCase());
     }
+  }
+
+  // ngspice gives a resistor or a capacitor no vector of its own, so their DC
+  // currents are reconstructed here from the node voltages - the same thing the
+  // transient path does with `deriveRcCurrents`, through the same oriented pin
+  // order, so the two report a passive the same way round. Ground reads as an
+  // explicit 0 V rather than as a missing node, since a missing one skips its
+  // element.
+  const voltageByNet = new Map(nonGroundNets.map((net) => [net.id, net.voltage]));
+  for (const net of execution.deck.circuit.nets) if (net.isGround) voltageByNet.set(net.id, 0);
+  for (const { ref, ...derived } of deriveDcRcBranches(execution.deck.circuit.components, voltageByNet)) {
+    if (seen.has(ref.toLowerCase())) continue;
+    branches.push(derived);
+    seen.add(ref.toLowerCase());
   }
 
   return {

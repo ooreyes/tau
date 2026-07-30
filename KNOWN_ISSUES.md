@@ -102,6 +102,9 @@ one engine for the whole session.
   for example an ideal source directly across an ideal inductor - the preview
   warns and starts from zero state instead. The native result is the
   authoritative one.
+- The preview's operating-point table lists source and inductor currents only.
+  Resistor and capacitor currents are reconstructed on the native path, so an
+  operating point run without the native engine shows fewer rows.
 
 ## Corpus files that do not simulate
 
@@ -128,10 +131,9 @@ one engine for the whole session.
   a three-terminal device its drain current. Both read as `I(Q1)` / `I(M1)`. The
   other terminals have no trace of their own. Currents are reported in a native
   transient run and in the operating-point table; the other analyses report node
-  voltages only. The two report different sets: a transient also reconstructs
-  resistor and capacitor currents from the node voltages, while the
-  operating-point table lists source, inductor and semiconductor currents only -
-  a passive's DC current has to be read off the node voltages either side of it.
+  voltages only. ngspice returns a current of its own for sources, inductors and
+  semiconductors; a resistor's and a capacitor's are reconstructed from the node
+  voltages either side of them, so both runs list the same set of parts.
 
 ## Install
 

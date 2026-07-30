@@ -298,12 +298,19 @@ describe("native ngspice adapter", () => {
     const result = await runNativeOperatingPoint(rcSchematic());
 
     // GND is always prepended at 0 V to match the TS solver's OperatingPointResult shape.
+    // The two passives carry derived currents: ngspice returns no vector for
+    // either, so R1 is reconstructed from the nodes either side of it and C1 is
+    // zero because a DC solution holds a capacitor's voltage constant.
     expect(result).toEqual({
       ok: true,
       nets: [
         { id: "0", label: "GND", voltage: 0 },
         { id: "N001", label: "V(V1.R1)", voltage: 5 },
         { id: "N002", label: "V(R1.C1)", voltage: 0 },
+      ],
+      branches: [
+        { id: "r1", label: "I(R1)", current: 0.005 },
+        { id: "c1", label: "I(C1)", current: 0 },
       ],
       warnings: [],
     });
@@ -527,7 +534,7 @@ describe("native operating point branch currents", () => {
     ]));
   });
 
-  it("omits an operating-point component ngspice returned no current for, instead of reporting zero", async () => {
+  it("derives a resistor's operating-point current from the nodes either side of it", async () => {
     enableNativeRuntime();
     invoke.mockResolvedValueOnce(nativeResult(opAmplifierVectors()));
 
@@ -535,20 +542,65 @@ describe("native operating point branch currents", () => {
 
     expect(result?.ok).toBe(true);
     if (!result?.ok) return;
-    // Rb/Rc have neither a device vector nor a `#branch` vector, and ngspice
-    // returned neither for them here - absent, not a fabricated 0/NaN.
-    expect(result.branches?.some((b) => b.id === "rb" || b.id === "rc")).toBe(false);
-    expect(result.branches).toHaveLength(2);
+    // Rb/Rc have neither a device vector nor a `#branch` vector - ngspice gives
+    // a resistor neither - so these come from Ohm's law over the returned
+    // nodes, in the resistor's own pin order: Rb runs vdd -> base and Rc runs
+    // vdd -> coll, so both are positive, the same way round as the inductor
+    // `#branch` beside them and opposite to the source that drives them.
+    expect(result.branches).toEqual(expect.arrayContaining([
+      { id: "rb", label: "I(Rb)", current: (5 - 0.7) / 10_000 },
+      { id: "rc", label: "I(Rc)", current: (5 - 3.2) / 2_000 },
+    ]));
+    // The engine's own currents stay ahead of the derived ones in the table.
+    expect(result.branches?.map((b) => b.id)).toEqual(["v1", "q1", "rb", "rc"]);
   });
 
-  it("returns no `branches` key at all when the run has none, matching the TS solver's optional field", async () => {
+  it("omits a resistor whose terminal voltage ngspice did not return, instead of reading it as ground", async () => {
+    enableNativeRuntime();
+    // Same run with `v(base)` missing, which is the only thing separating a
+    // real 0 V node from an absent one. Reading the gap as ground would report
+    // I(Rb) = 500 uA - a confident wrong number - instead of nothing.
+    invoke.mockResolvedValueOnce(nativeResult(
+      opAmplifierVectors().filter((v) => v.name !== "v(base)"),
+    ));
+
+    const result = await runNativeOperatingPoint(amplifierSchematic());
+
+    expect(result?.ok).toBe(true);
+    if (!result?.ok) return;
+    expect(result.branches?.some((b) => b.id === "rb")).toBe(false);
+    // Rc, whose two nodes both came back, is unaffected.
+    expect(result.branches?.some((b) => b.id === "rc")).toBe(true);
+  });
+
+  it("keeps a passive ngspice did report out of the derived list, rather than listing it twice", async () => {
     enableNativeRuntime();
     invoke.mockResolvedValueOnce(nativeResult([
       { name: "v(n001)", real: [5], imaginary: null },
       { name: "v(n002)", real: [0], imaginary: null },
+      // Not something ngspice 46 emits, but the dedupe is what stops a future
+      // engine that does from putting R1 in the table twice with two values.
+      { name: "r1#branch", real: [0.004], imaginary: null },
     ]));
 
     const result = await runNativeOperatingPoint(rcSchematic());
+
+    expect(result?.ok).toBe(true);
+    if (!result?.ok) return;
+    expect(result.branches?.filter((b) => b.id === "r1")).toEqual([
+      { id: "r1", label: "I(R1)", current: 0.004 },
+    ]);
+  });
+
+  it("returns no `branches` key at all when the run has none, matching the TS solver's optional field", async () => {
+    enableNativeRuntime();
+    // No resistor and no capacitor in this one, so nothing is derivable, and
+    // the mock returns no current vector for the diode either.
+    invoke.mockResolvedValueOnce(nativeResult([
+      { name: "v(n001)", real: [5], imaginary: null },
+    ]));
+
+    const result = await runNativeOperatingPoint(directLedSchematic());
 
     expect(result?.ok).toBe(true);
     if (!result?.ok) return;
