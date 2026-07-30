@@ -477,6 +477,85 @@ describe("native ngspice adapter", () => {
   });
 });
 
+// A `.op` deck now asks ngspice to `.save` a semiconductor's own current
+// (spiceNetlist.ts `wantsDeviceCurrents`), so `runNativeOperatingPoint` can
+// populate `branches` the same way the transient path populates `currents` -
+// through the same `componentCurrentVector` helper, keyed by the deck's own
+// record of what it asked for.
+describe("native operating point branch currents", () => {
+  const opAmplifierVectors = () => [
+    { name: "v(vdd)", real: [5], imaginary: null },
+    { name: "v(coll)", real: [3.2], imaginary: null },
+    { name: "v(base)", real: [0.7], imaginary: null },
+    { name: "@q1[ic]", real: [0.00095], imaginary: null },
+    { name: "v1#branch", real: [-0.0023], imaginary: null },
+  ];
+
+  it("gives a BJT's operating-point current a branch keyed by component id, not refdes", async () => {
+    enableNativeRuntime();
+    invoke.mockResolvedValueOnce(nativeResult(opAmplifierVectors()));
+
+    const result = await runNativeOperatingPoint(amplifierSchematic());
+
+    expect(invoke.mock.calls[0][1].request.netlist).toContain("@q1[ic]");
+    expect(result?.ok).toBe(true);
+    if (!result?.ok) return;
+    // `id` must be the SchematicComponent id ("q1"), never the refdes ("Q1"):
+    // opAnnotations.ts locates a branch's component with
+    // `circuit.components.find((c) => c.component.id === branch.id)`, so a
+    // refdes here would silently place zero canvas current labels.
+    expect(result.branches).toEqual(expect.arrayContaining([
+      { id: "q1", label: "I(Q1)", current: 0.00095 },
+    ]));
+  });
+
+  it("keeps a voltage source's operating-point #branch sign exactly as ngspice reports it", async () => {
+    enableNativeRuntime();
+    invoke.mockResolvedValueOnce(nativeResult(opAmplifierVectors()));
+
+    const result = await runNativeOperatingPoint(amplifierSchematic());
+
+    expect(result?.ok).toBe(true);
+    if (!result?.ok) return;
+    // ngspice's `#branch` on an `.op` run is already the raw MNA unknown the
+    // `branches` contract (operatingPoint.ts) documents - the negative of the
+    // conventional current out of the source's + terminal - so flipping it
+    // here would silently disagree with the TS solver's own convention. This
+    // is the sign-flip regression guard: a negative reading must stay negative.
+    expect(result.branches).toEqual(expect.arrayContaining([
+      { id: "v1", label: "I(V1)", current: -0.0023 },
+    ]));
+  });
+
+  it("omits an operating-point component ngspice returned no current for, instead of reporting zero", async () => {
+    enableNativeRuntime();
+    invoke.mockResolvedValueOnce(nativeResult(opAmplifierVectors()));
+
+    const result = await runNativeOperatingPoint(amplifierSchematic());
+
+    expect(result?.ok).toBe(true);
+    if (!result?.ok) return;
+    // Rb/Rc have neither a device vector nor a `#branch` vector, and ngspice
+    // returned neither for them here - absent, not a fabricated 0/NaN.
+    expect(result.branches?.some((b) => b.id === "rb" || b.id === "rc")).toBe(false);
+    expect(result.branches).toHaveLength(2);
+  });
+
+  it("returns no `branches` key at all when the run has none, matching the TS solver's optional field", async () => {
+    enableNativeRuntime();
+    invoke.mockResolvedValueOnce(nativeResult([
+      { name: "v(n001)", real: [5], imaginary: null },
+      { name: "v(n002)", real: [0], imaginary: null },
+    ]));
+
+    const result = await runNativeOperatingPoint(rcSchematic());
+
+    expect(result?.ok).toBe(true);
+    if (!result?.ok) return;
+    expect(result.branches).toBeUndefined();
+  });
+});
+
 // ---------------------------------------------------------------------------
 // .tf on ngspice
 // ---------------------------------------------------------------------------

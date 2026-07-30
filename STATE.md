@@ -17,9 +17,18 @@ Rules:
 
 ## Now
 
-**Status:** IDLE
-**Unit:** -
-**Started:** -
+**Status:** IN PROGRESS
+**Unit:** Currents in the OPERATING POINT. Two halves, both needed: the native
+`.op` read side never populates `branches` at all (`nativeSpice.ts:182` returns
+nets only), and `OpTable` (`SimulationPanel.tsx:1708`) renders node voltages
+only - it never touches `branches` on EITHER engine. So a native `.op` has no
+current anywhere, and the TS solver's source/inductor currents reach the canvas
+annotations but never the table. Trap 1 in a new dress. Adds the `.save` card to
+an `.op` deck (device currents), reads `#branch` + `@<ref>[<param>]` back, and
+renders both. Sign convention is the hazard: the TS `branches` contract is the
+raw MNA unknown (negative of conventional out of a source's + terminal) - must
+be proved equal to ngspice's, not assumed.
+**Started:** 2026-07-30T02:10Z
 **Branch:** auto/ltspice-parity
 
 If Status is IN PROGRESS with a timestamp older than ~2 hours, the previous

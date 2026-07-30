@@ -191,7 +191,38 @@ export async function runNativeOperatingPoint(schematic: Schematic): Promise<Ope
   if (nonGroundNets.length === 0) throw new Error("ngspice completed, but returned no operating-point voltages.");
   // Prepend the ground net at 0 V, matching the TS solver's OperatingPointResult shape.
   const nets = [{ id: "0", label: "GND", voltage: 0 }, ...nonGroundNets];
-  return { ok: true, nets, warnings: [...execution.deck.circuit.warnings, ...engineWarnings(execution.result.messages)] };
+
+  // Branch currents, read through the same helper the transient path uses so
+  // the two cannot drift. The values are ngspice's own, UNFLIPPED: its
+  // `#branch` on an `.op` run is already the raw MNA unknown the `branches`
+  // contract above documents - the NEGATIVE of the conventional current out of
+  // a source's + terminal - so no sign flip belongs here. A semiconductor's
+  // own current is present at all only because this deck named it in its
+  // `.save` card (see `wantsDeviceCurrents` in spiceNetlist.ts).
+  const deviceCurrents = new Map(execution.deck.deviceCurrents.map((d) => [d.componentId, d.vector]));
+  const branches: { id: string; label: string; current: number }[] = [];
+  const seen = new Set<string>();
+  for (const { component } of execution.deck.circuit.components) {
+    const ref = component.label;
+    if (!ref || seen.has(ref.toLowerCase())) continue;
+    const found = componentCurrentVector(execution.result, deviceCurrents.get(component.id), ref);
+    const current = found?.real[0];
+    if (Number.isFinite(current)) {
+      // `id` is the SchematicComponent id, not the ref-des: opAnnotations.ts
+      // locates a branch's component with `circuit.components.find((c) =>
+      // c.component.id === branch.id)`, so a ref-des here would silently
+      // render zero canvas current labels.
+      branches.push({ id: component.id, label: `I(${ref})`, current: current as number });
+      seen.add(ref.toLowerCase());
+    }
+  }
+
+  return {
+    ok: true,
+    nets,
+    ...(branches.length > 0 ? { branches } : {}),
+    warnings: [...execution.deck.circuit.warnings, ...engineWarnings(execution.result.messages)],
+  };
 }
 
 /**

@@ -877,8 +877,29 @@ describe("buildSpiceDeck", () => {
       ]);
     });
 
+    it("asks for the same device currents on an `.op` deck as on a transient deck, with node/source content otherwise unchanged", () => {
+      // Proven against real ngspice: on an `.op` deck, `.save all @q1[ic] …` is
+      // a STRICT SUPERSET of the default vector set - every node voltage and
+      // every `#branch` current still comes back, plus the named device
+      // currents - so the operating point is the other analysis (besides
+      // transient) that can read a semiconductor's own current back.
+      const opDeck = buildSpiceDeck({ components: semiconductors(), wires: [] }, { kind: "op" });
+      const tranDeck = buildSpiceDeck(
+        { components: semiconductors(), wires: [] },
+        { kind: "tran", stopTime: 1e-3, steps: 100 },
+      );
+      expect(opDeck.netlist).toMatch(/^\.save all @q1\[ic\] @d1\[id\] @m1\[id\] @j1\[id\]$/m);
+      expect(opDeck.deviceCurrents).toEqual(tranDeck.deviceCurrents);
+      // The `.save` card and the trailing analysis line are the only place an
+      // `.op` deck and a `.tran` deck built from the same schematic may
+      // differ - every node name, source line, and model line is identical.
+      const withoutSaveAndAnalysis = (netlist: string) =>
+        netlist.split("\n").filter((line) => !/^(\.save\b|\+ @|\.op$|\.tran\b)/.test(line));
+      expect(withoutSaveAndAnalysis(opDeck.netlist)).toEqual(withoutSaveAndAnalysis(tranDeck.netlist));
+    });
+
     it("carries no `.save` on an analysis that does not read device currents", () => {
-      for (const analysis of [{ kind: "op" as const }, { kind: "ac" as const, startHz: 1, stopHz: 1e3, pointsPerDecade: 10 }]) {
+      for (const analysis of [{ kind: "ac" as const, startHz: 1, stopHz: 1e3, pointsPerDecade: 10 }]) {
         const deck = buildSpiceDeck({ components: semiconductors(), wires: [] }, analysis);
         expect(deck.netlist, analysis.kind).not.toContain(".save");
         expect(deck.deviceCurrents, analysis.kind).toEqual([]);

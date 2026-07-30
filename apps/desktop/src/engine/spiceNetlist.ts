@@ -102,8 +102,8 @@ export interface SpiceDeck {
   /** Every device whose own current the deck named in a `.save`, and the vector
    *  ngspice returns it under. Recorded per component so the read side looks up
    *  exactly what was asked for instead of rebuilding the name from a ref-des
-   *  the emitter may have sanitized. Populated for a transient deck only, which
-   *  is the one analysis that reads device currents back. */
+   *  the emitter may have sanitized. Populated for the transient and
+   *  operating-point decks, the two analyses that read device currents back. */
   deviceCurrents: DeviceCurrent[];
 }
 
@@ -474,11 +474,15 @@ export function buildSpiceDeck(schematic: Schematic, analysis: SpiceAnalysis): S
   // the deck can name each one instead of quietly plotting a device Tau does
   // not have.
   const modelSubstitutions: ModelSubstitution[] = [];
-  // Transient is the only analysis that reads device currents back, and a
-  // `.save` is not free - it changes what the run keeps - so no other analysis
-  // asks for one. Recording only what was actually asked for is what keeps the
-  // read side from looking up a vector this deck never requested.
-  const wantsDeviceCurrents = analysis.kind === "tran";
+  // Transient and the operating point are the analyses that read device
+  // currents back. A `.save` card is not free - it changes what a run keeps -
+  // so no other analysis asks for one, and `all` is what keeps the card
+  // additive rather than replacing ngspice's default set (verified on an
+  // `.op` deck: every node voltage and `#branch` current still comes back
+  // alongside the named device currents). Recording only what was actually
+  // asked for is what keeps the read side from looking up a vector this deck
+  // never requested.
+  const wantsDeviceCurrents = analysis.kind === "tran" || analysis.kind === "op";
   const deviceCurrents: DeviceCurrent[] = [];
   circuit.components.forEach((entry, index) => {
     const directiveIc = entry.component.kind === "inductor"

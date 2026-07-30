@@ -11,6 +11,7 @@ import {
   defaultTfSetup,
 } from "../simulation/analysisSetup";
 import { useSchematic } from "../store/useSchematic";
+import { formatEngineering } from "../simulation/quantity";
 
 /**
  * the simulator tab must NOT carry its own primary Run button;
@@ -203,6 +204,43 @@ describe("SimulationPanel - dashboard status strip", { timeout: 20_000 }, () => 
 
     expect(screen.getByText("GROUND").closest(".metric")?.classList.contains("green")).toBe(true);
     expect(screen.getByText("GROUND").closest(".metric")?.classList.contains("cyan")).toBe(false);
+  });
+});
+
+// The `.op` table drew node voltages only and never touched `result.branches`,
+// so even the TS solver's own source/inductor currents had never reached this
+// table on either engine - a value computed by both engines but never
+// rendered. These assert on the visible DC CURRENT text itself, not just on
+// data being present, so a regression that stops rendering it (but keeps
+// computing it) is still caught.
+describe("SimulationPanel - OpTable DC CURRENT table", { timeout: 20_000 }, () => {
+  it("renders a branch's label and formatted current in a DC CURRENT table", () => {
+    renderPanel({
+      opResult: {
+        ok: true,
+        nets: [{ id: "0", label: "GND", voltage: 0 }, { id: "n001", label: "V(N001)", voltage: 5 }],
+        branches: [{ id: "q1", label: "I(Q1)", current: 0.0055 }],
+        warnings: [],
+      },
+    });
+    fireEvent.mouseDown(screen.getByRole("tab", { name: "Operating point (.op)" }), { button: 0 });
+
+    expect(screen.getByText("DC CURRENT")).toBeTruthy();
+    expect(screen.getByText("I(Q1)")).toBeTruthy();
+    expect(screen.getByText(formatEngineering(0.0055, "A", 3))).toBeTruthy();
+  });
+
+  it("renders no DC CURRENT header when the operating-point result has no branches", () => {
+    renderPanel({
+      opResult: {
+        ok: true,
+        nets: [{ id: "0", label: "GND", voltage: 0 }, { id: "n001", label: "V(N001)", voltage: 5 }],
+        warnings: [],
+      },
+    });
+    fireEvent.mouseDown(screen.getByRole("tab", { name: "Operating point (.op)" }), { button: 0 });
+
+    expect(screen.queryByText("DC CURRENT")).toBeNull();
   });
 });
 

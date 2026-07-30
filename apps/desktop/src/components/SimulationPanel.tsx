@@ -1729,6 +1729,20 @@ function OpTable({ result }: { result: OperatingPointResult | null }) {
           </div>
         ))}
       </div>
+      {result.branches && result.branches.length > 0 && (
+        <div className="op-table">
+          <div className="op-row op-head">
+            <span>COMPONENT</span>
+            <span>DC CURRENT</span>
+          </div>
+          {result.branches.map((branch) => (
+            <div className="op-row" key={branch.id}>
+              <span>{branch.label}</span>
+              <span>{formatEngineering(branch.current, "A", 3)}</span>
+            </div>
+          ))}
+        </div>
+      )}
     </>
   );
 }
