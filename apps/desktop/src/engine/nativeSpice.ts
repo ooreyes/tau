@@ -7,7 +7,7 @@ import type { NoiseResult, NoiseSpec } from "../simulation/noise";
 import type { AnalysisOptions, AnalysisResult, CurrentTrace, Trace } from "../simulation/linearTransient";
 import { deriveRcCurrents } from "../simulation/currents";
 import type { OperatingPointResult } from "../simulation/operatingPoint";
-import type { AcResult, AcTrace } from "../simulation/acSweep";
+import { hasAcExcitation, NO_AC_SOURCE_MESSAGE, type AcResult, type AcTrace } from "../simulation/acSweep";
 import {
   MAX_OUTER_POINTS,
   MAX_POINTS,
@@ -190,13 +190,61 @@ export async function runNativeOperatingPoint(schematic: Schematic): Promise<Ope
   return { ok: true, nets, warnings: [...execution.deck.circuit.warnings, ...engineWarnings(execution.result.messages)] };
 }
 
+/**
+ * ngspice names the AC scale `frequency`, and returns it as a complex vector
+ * whose imaginary part is all zeros - so the axis is its real part, never its
+ * magnitude.
+ */
+export const AC_SCALE_NAME = "frequency";
+
+/** Reported for a node whose response is exactly zero, where dB is undefined. */
+export const AC_DB_FLOOR = -300;
+
+/**
+ * Turns one complex node vector into the magnitude/phase pair the Bode plot
+ * draws. ngspice hands back the phasor itself, not its polar form, so both
+ * conventions are Tau's to choose and both are checked against the engine:
+ *
+ * - dB is `20*log10(|v|)`, a voltage ratio, which agrees with ngspice's own
+ *   `vdb()` to the printed digits.
+ * - phase is in DEGREES. ngspice's `vp()` / `ph()` default to RADIANS, so the
+ *   engine's own phase column agrees with this one only after conversion.
+ *
+ * `imaginary` is absent when ngspice returns a real vector where a complex one
+ * was expected; treating that as zero quadrature keeps the magnitude honest
+ * rather than dropping the trace.
+ */
+export function acTraceFromComplex(
+  real: readonly number[],
+  imaginary: readonly number[] | null,
+): { magDb: number[]; phaseDeg: number[] } {
+  return {
+    magDb: real.map((value, index) => {
+      const magnitude = Math.hypot(value, imaginary?.[index] ?? 0);
+      return magnitude > 0 ? 20 * Math.log10(magnitude) : AC_DB_FLOOR;
+    }),
+    phaseDeg: real.map((value, index) => Math.atan2(imaginary?.[index] ?? 0, value) * (180 / Math.PI)),
+  };
+}
+
 export async function runNativeAcSweep(
   schematic: Schematic,
   options: { startHz: number; stopHz: number; pointsPerDecade: number },
 ): Promise<AcResult | null> {
+  if (!isNativeSpiceRuntime()) return null;
+
+  // An unexcited AC sweep is not an error to ngspice: it solves the circuit,
+  // reports no warning, and returns every node as exactly 0 + 0j. That would
+  // reach the plot as a flat trace at the dB floor, which reads as an answer.
+  // The preview solver already refuses it, so refuse here too, with its wording.
+  const resolved = resolveComponentValues(schematic.components, schematic.params ?? EMPTY_SCOPE);
+  if (!hasAcExcitation(resolved)) {
+    return { ok: false, message: NO_AC_SOURCE_MESSAGE, warnings: [] };
+  }
+
   const execution = await executeNative(schematic, { kind: "ac", ...options });
   if (!execution) return null;
-  const frequency = vector(execution.result, "frequency");
+  const frequency = vector(execution.result, AC_SCALE_NAME);
   if (!frequency || frequency.real.length < 2) throw new Error("ngspice returned no AC frequency vector.");
 
   const traces: AcTrace[] = execution.deck.circuit.nets
@@ -204,15 +252,10 @@ export async function runNativeAcSweep(
     .flatMap((net) => {
       const values = vector(execution.result, `v(${net.id})`);
       if (!values || values.real.length !== frequency.real.length) return [];
-      const imag = values.imaginary ?? Array(values.real.length).fill(0);
       return [{
         id: net.id,
         label: `V(${friendlyNetName(net)})`,
-        magDb: values.real.map((real, index) => {
-          const magnitude = Math.hypot(real, imag[index] ?? 0);
-          return magnitude > 0 ? 20 * Math.log10(magnitude) : -300;
-        }),
-        phaseDeg: values.real.map((real, index) => Math.atan2(imag[index] ?? 0, real) * (180 / Math.PI)),
+        ...acTraceFromComplex(values.real, values.imaginary),
       }];
     });
 

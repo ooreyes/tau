@@ -41,6 +41,32 @@ export type AcResult =
   | { ok: true; freqs: number[]; traces: AcTrace[]; warnings: string[] }
   | { ok: false; message: string; warnings: string[] };
 
+/**
+ * An AC sweep is driven only by an independent source carrying an `AC <mag>`
+ * stimulus - a plain DC source is a short (or an open) at AC. With none of them
+ * present the circuit is unexcited and every node sits at exactly zero, which
+ * ngspice reports as a clean run rather than as an error, so both engines share
+ * this test and refuse instead of drawing a flat trace at the dB floor.
+ *
+ * Call with param-resolved components: an `AC {amp}` stimulus is only visible
+ * once the scope has been applied.
+ *
+ * A source living inside an imported `.subckt` is not counted; an AC stimulus
+ * buried in a macromodel rather than placed on the canvas would be refused here.
+ */
+export function hasAcExcitation(components: readonly SchematicComponent[]): boolean {
+  return components.some(
+    (component) =>
+      component.kind === "vac" ||
+      component.kind === "iac" ||
+      ((component.kind === "vsource" || component.kind === "isource") && parseAcSpec(component.value) !== null),
+  );
+}
+
+/** Shared by both solvers so the same missing stimulus is reported the same way. */
+export const NO_AC_SOURCE_MESSAGE =
+  "No AC source found. Add a vac or iac component, or an “AC 1” stimulus to a voltage or current source, to excite the circuit for AC analysis.";
+
 // ---------------------------------------------------------------------------
 // Complex number helpers
 // ---------------------------------------------------------------------------
@@ -293,17 +319,8 @@ export function runAcSweep(
       );
     }
 
-    const hasAcSource = components.some(
-      (c) =>
-        c.kind === "vac" ||
-        c.kind === "iac" ||
-        ((c.kind === "vsource" || c.kind === "isource") && parseAcSpec(c.value) !== null),
-    );
-    if (!hasAcSource) {
-      return fail(
-        "No AC source found. Add a vac or iac component to excite the circuit for AC analysis.",
-        circuit,
-      );
+    if (!hasAcExcitation(components)) {
+      return fail(NO_AC_SOURCE_MESSAGE, circuit);
     }
 
     const nonGroundNets = circuit.nets.filter((net) => !net.isGround);

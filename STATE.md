@@ -17,9 +17,11 @@ Rules:
 
 ## Now
 
-**Status:** IDLE
-**Unit:** -
-**Started:** -
+**Status:** IN PROGRESS
+**Unit:** `.ac` proven against a real ngspice run (Next up #1), plus the
+divergence that proof surfaced: the preview solver REFUSES an AC sweep with no
+AC-excited source, the native path returns a flat -300 dB Bode plot instead.
+**Started:** 2026-07-29T19:20Z
 **Branch:** auto/ltspice-parity
 
 If Status is IN PROGRESS with a timestamp older than ~2 hours, the previous
