@@ -15,6 +15,7 @@ import {
   runNativeTransient,
 } from "./nativeSpice";
 import { NO_AC_SOURCE_MESSAGE } from "../simulation/acSweep";
+import { primaryBranches } from "../simulation/operatingPoint";
 import { currentProbeTraces } from "../simulation/currentProbe";
 import type { NetLabel, PinOverride, SchematicComponent, SchematicWire } from "../schematic/types";
 
@@ -559,7 +560,7 @@ describe("native operating point branch currents", () => {
     ]));
   });
 
-  it("keeps the operating-point table on one current per part when the deck saved three", async () => {
+  it("gives a BJT's base and emitter their own operating-point branches, with the collector still I(Q1)", async () => {
     enableNativeRuntime();
     // The `.op` deck asks for all three BJT terminals, like the transient one,
     // so all three come back. `branches` is keyed by COMPONENT id, and the
@@ -577,7 +578,30 @@ describe("native operating point branch currents", () => {
     expect(result?.ok).toBe(true);
     if (!result?.ok) return;
     const q1 = (result.branches ?? []).filter((branch) => branch.id === "q1");
-    expect(q1).toEqual([{ id: "q1", label: "I(Q1)", current: 0.00095 }]);
+    // The part's own current is the untagged entry and it is the COLLECTOR -
+    // pinned by value, so a list that let the emitter answer for the part
+    // fails here rather than merely looking short.
+    expect(q1).toEqual([
+      { id: "q1", label: "I(Q1)", current: 0.00095 },
+      { id: "q1", label: "Ib(Q1)", current: 0.0000095, terminal: "b" },
+      { id: "q1", label: "Ie(Q1)", current: -0.0009595, terminal: "e" },
+    ]);
+    expect(primaryBranches(q1)).toEqual([{ id: "q1", label: "I(Q1)", current: 0.00095 }]);
+  });
+
+  it("leaves a part whose terminals the engine did not return with its own current alone", async () => {
+    enableNativeRuntime();
+    // The deck always asks for all three; a run that answers with only the
+    // collector must produce one entry, not two undefined ones. `@q1[ic]` is
+    // in `opAmplifierVectors`, the two terminals are not.
+    invoke.mockResolvedValueOnce(nativeResult(opAmplifierVectors()));
+
+    const result = await runNativeOperatingPoint(amplifierSchematic());
+
+    expect(result?.ok).toBe(true);
+    if (!result?.ok) return;
+    expect((result.branches ?? []).filter((branch) => branch.id === "q1"))
+      .toEqual([{ id: "q1", label: "I(Q1)", current: 0.00095 }]);
   });
 
   it("keeps a voltage source's operating-point #branch sign exactly as ngspice reports it", async () => {

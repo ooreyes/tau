@@ -129,12 +129,14 @@ one engine for the whole session.
   every schematic in the acceptance corpus fits with room to spare.
 - A part's own current reads as `I(Q1)` / `I(M1)`: a BJT's collector current, a
   three-terminal device's drain current. A BJT also reports its base and emitter
-  in a native transient, as `Ib(Q1)` and `Ie(Q1)`, which plot expressions, `.meas`
-  and the FFT picker all resolve. These are ngspice's own values - the current
-  INTO each terminal, so `Ie(Q1)` reads negative for a forward-active NPN and the
-  three sum to zero. A diode, MOSFET or JFET still reports one current; its other
-  terminals have no trace of their own. The operating-point table lists one
-  current per part, so a BJT's base and emitter appear in a transient only.
+  as `Ib(Q1)` and `Ie(Q1)`, in a native transient - where plot expressions,
+  `.meas` and the FFT picker all resolve them - and as their own rows in the
+  operating-point table. These are ngspice's own values - the current INTO each
+  terminal, so `Ie(Q1)` reads negative for a forward-active NPN and the three sum
+  to zero. A diode, MOSFET or JFET still reports one current; its other terminals
+  have no trace of their own. On the schematic itself, the in-place operating-
+  point annotation shows one current per part - the part's own - because the
+  per-terminal figures would all anchor to the same component position.
   Currents are reported in a native transient run and in the operating-point
   table; the other analyses report node voltages only. ngspice returns a current
   of its own for sources, inductors and semiconductors; a resistor's and a

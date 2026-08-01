@@ -9,7 +9,7 @@ import { parseIcValue, stripIcSpec } from "../engine/icSpec";
 import { parseTransientSource, isFunctionSource, type TransientSource } from "./sourceWaveform";
 import { stripTcSpec } from "./temperature";
 import { DIODE_KINDS, diodeConductance, diodeCurrent, diodeSpecFor, limitDiodeVoltage } from "./diodeCompanion";
-import { runOperatingPoint } from "./operatingPoint";
+import { primaryBranches, runOperatingPoint } from "./operatingPoint";
 
 export interface AnalysisOptions {
   stopTime: number;
@@ -306,7 +306,10 @@ export async function runTransientAnalysis(
       const op = runOperatingPoint(schematic, { returnBranches: true });
       if (op.ok) {
         const voltageByNet = new Map(op.nets.map((net) => [net.id, net.voltage]));
-        const branchCurrentById = new Map((op.branches ?? []).map((branch) => [branch.id, branch.current]));
+        // Through `primaryBranches`, not the raw list: a component id can carry
+        // several entries, and a Map over all of them would seed an inductor
+        // from whichever terminal came last.
+        const branchCurrentById = new Map(primaryBranches(op.branches).map((branch) => [branch.id, branch.current]));
         const nodeVoltage = (netId: string | undefined) => (netId !== undefined ? voltageByNet.get(netId) ?? 0 : 0);
         for (const entry of circuit.components) {
           const { id, kind } = entry.component;

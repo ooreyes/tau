@@ -222,11 +222,8 @@ export async function runNativeOperatingPoint(schematic: Schematic): Promise<Ope
   // engines report a source current the same way round. A semiconductor's
   // own current is present at all only because this deck named it in its
   // `.save` card (see `wantsDeviceCurrents` in spiceNetlist.ts).
-  // Primary currents only: a `branches` entry is keyed by COMPONENT id, so a
-  // BJT's base and emitter cannot be added here without colliding on that key.
-  // The operating-point table therefore still lists one current per part.
   const deviceCurrents = primaryDeviceCurrents(execution.deck.deviceCurrents);
-  const branches: { id: string; label: string; current: number }[] = [];
+  const branches: { id: string; label: string; current: number; terminal?: string }[] = [];
   const seen = new Set<string>();
   for (const { component } of execution.deck.circuit.components) {
     const ref = component.label;
@@ -240,6 +237,23 @@ export async function runNativeOperatingPoint(schematic: Schematic): Promise<Ope
       // render zero canvas current labels.
       branches.push({ id: component.id, label: `I(${ref})`, current: current as number });
       seen.add(ref.toLowerCase());
+      // A part reporting several terminals adds one entry per terminal under
+      // the SAME component id and ref-des, so `seen` cannot gate them. Values
+      // go in unflipped like the primary: ngspice gives the current INTO each
+      // terminal, so a BJT's three sum to zero and `Ie(Q1)` reads negative for
+      // a forward-active NPN. `id` is no longer unique across the list - see
+      // `primaryBranches` for the consumers that need one entry per part.
+      for (const extra of execution.deck.deviceCurrents) {
+        if (extra.componentId !== component.id || !extra.terminal) continue;
+        const value = vector(execution.result, extra.vector)?.real[0];
+        if (!Number.isFinite(value)) continue;
+        branches.push({
+          id: component.id,
+          label: `I${extra.terminal}(${ref})`,
+          current: value as number,
+          terminal: extra.terminal,
+        });
+      }
     }
   }
 

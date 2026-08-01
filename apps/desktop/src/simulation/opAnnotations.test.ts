@@ -75,4 +75,31 @@ describe("opAnnotations", () => {
     const circuit = extractCircuit(components, wires, []);
     expect(opAnnotations(op, circuit).every((a) => a.kind === "voltage")).toBe(true);
   });
+
+  it("draws one current label per part when a branch list carries per-terminal entries", () => {
+    // A native `.op` on a BJT reports the part's own current plus one entry per
+    // terminal, all under the SAME component id - so all three would anchor to
+    // the same coordinates under the same render key. Only the part's own
+    // current belongs on the canvas; the terminals are in the table.
+    const op = runOperatingPoint({ components, wires }, { returnBranches: true });
+    expect(op.ok).toBe(true);
+    if (!op.ok) return;
+    const withTerminals = {
+      ...op,
+      branches: [
+        ...(op.branches ?? []),
+        { id: "vs-1", label: "Ib(V1)", current: 0.25, terminal: "b" },
+        { id: "vs-1", label: "Ie(V1)", current: -0.75, terminal: "e" },
+      ],
+    };
+    const circuit = extractCircuit(components, wires, []);
+    const amps = opAnnotations(withTerminals, circuit).filter((a) => a.kind === "current");
+
+    expect(amps).toHaveLength(1);
+    // The one that survives is the part's own current, not a terminal: 0.25 A
+    // or -0.75 A here would mean a terminal took the canvas label.
+    expect(amps[0].text).toBe("-5 mA");
+    // Every render key is distinct, which is what the collision would break.
+    expect(new Set(amps.map((a) => a.key)).size).toBe(amps.length);
+  });
 });

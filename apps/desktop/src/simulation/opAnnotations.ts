@@ -5,7 +5,7 @@
  * label" readout, but live on the canvas. Pure positioning/formatting logic so
  * it is fully unit-testable; the canvas just renders the returned labels.
  */
-import type { OperatingPointResult } from "./operatingPoint";
+import { primaryBranches, type OperatingPointResult } from "./operatingPoint";
 import type { ExtractedCircuit } from "../schematic/netlist";
 import { formatEngineering } from "./quantity";
 
@@ -54,7 +54,12 @@ export function opAnnotations(
     });
   }
 
-  for (const branch of op.branches ?? []) {
+  // One label per part. A multi-terminal device contributes a branch per
+  // terminal under one component id, and they all anchor to the same component
+  // coordinates - so drawing them would stack several readings on one spot
+  // under one render key. The part's own current is the one on the canvas; the
+  // per-terminal figures are in the operating-point table.
+  for (const branch of primaryBranches(op.branches)) {
     const extracted = circuit.components.find((c) => c.component.id === branch.id);
     if (!extracted) continue;
     annotations.push({

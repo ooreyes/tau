@@ -29,7 +29,53 @@ figure all run on the real engine. Do not restore a readiness banner until every
 Class A and Class B item in the audit is closed or consciously accepted, with
 file:line evidence.
 
-**Last unit - 2026-08-01: a BJT's base and emitter have their own current
+**Last unit - 2026-08-01: the operating-point table lists a BJT's base and
+emitter beside its collector.** The previous unit gave them traces in a
+transient and stopped at the `.op`, because a `branches` entry is keyed by
+component id and a second entry per part collides on that key. The table now
+carries all three, so a bias point can be read where reading one is the whole
+point of the analysis.
+
+The deck was already asking for them: `wantsDeviceCurrents` covers `op` as well
+as `tran`, so `@q1[ib]` and `@q1[ie]` were being saved and then dropped by the
+read side's primary-only filter. Verified at the CLI before writing code that a
+one-row `.op` plot really does return them - a `.tran` returning a vector is not
+evidence that an `.op` does, and the two take different paths through ngspice.
+
+**The hazard was the read sides, not the feature.** Three consumers resolved a
+part through `branch.id`, which is no longer unique. The operating-point table
+keyed each row by it, and React renders duplicate keys with only a console
+warning - so the rows still appeared and the defect would have shipped
+invisibly; the regression test asserts on that warning, because asserting the
+three rows render passes either way. `opAnnotations` anchors a label to the
+component's own position, so three terminals would have stacked three readings
+on one spot under one key - the canvas deliberately keeps the part's own current
+and the terminals stay in the table. `linearTransient` built a Map over the
+whole list to seed an inductor, the last-wins shape that would have taken a
+terminal's value. All three now go through one `primaryBranches` seam that
+states "the untagged entry is the part's own current" once instead of per call
+site. `.tf` resolves a current output by label and reads the TypeScript solver
+only, so it was left alone rather than have its accepted outputs quietly widen.
+
+Proved against the real engine (`opNative.corpus.ts`): on an `.op`, the three
+terminal currents sum to zero to 1e-7 of the collector - an identity no scale
+error or wrong terminal satisfies by accident - with the emitter negative and
+the base under a tenth of the collector, so a swapped pair still fails after the
+sum passes, and the collector separately held against Rc's own node voltages.
+Mutation-checked five ways: drop the terminal push (kills 1 unit), read the raw
+list in `opAnnotations` (kills 1), stop `primaryBranches` filtering (kills 2),
+revert the row key (kills 1), stop the deck asking for terminals (kills 2
+real-engine). One existing test asserted the narrower behaviour and was
+repointed, not deleted. KNOWN_ISSUES updated: it said in as many words that the
+table lists one current per part. Scope unchanged elsewhere - only a BJT is
+widened, since a MOSFET's gate and source vectors are still unverified against
+the engine. Gates: tsc, full suite 2264 passed / 147 files (one App render file
+timed out under contention and passes isolated; it is untouched by this diff),
+cargo 32 passed + clippy clean, corpus 80/80/80/80 (warning-clean 77) with the
+proof inside it. Next candidate: verify a MOSFET's `@m1[ig]`/`@m1[is]` at the
+CLI and widen the terminal set if the engine returns them.
+
+**Prior unit - 2026-08-01: a BJT's base and emitter have their own current
 traces in a native transient.** `Ib(Q1)` and `Ie(Q1)` now resolve for a probe,
 a plot expression, a `.meas` and the FFT picker; before, a transistor had only
 its collector current to offer under the single name `I(Q1)`.
@@ -58,8 +104,7 @@ next unit and it is stated in KNOWN_ISSUES. Only a BJT is widened - a MOSFET's
 gate and source vectors were not verified against the engine, so they are not
 assumed. Gates: tsc, full suite 2262 passed / 148 files with zero failures at
 `--maxWorkers=2`, cargo 32 passed + clippy clean, corpus 80/80/80/80
-(warning-clean 77) with the proof inside it. Next candidate: give the
-operating-point table the same per-terminal currents.
+(warning-clean 77) with the proof inside it.
 
 **Prior unit - 2026-07-30: a resistor and a capacitor have a current in the
 operating-point table.** The table listed source, inductor and semiconductor

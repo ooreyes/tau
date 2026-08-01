@@ -230,6 +230,47 @@ describe("SimulationPanel - OpTable DC CURRENT table", { timeout: 20_000 }, () =
     expect(screen.getByText(formatEngineering(0.0055, "A", 3))).toBeTruthy();
   });
 
+  it("renders a row per terminal for a part that reports more than one", () => {
+    // A BJT's three currents share one component id, so the table used to key
+    // every row by `branch.id` alone. All three must be visible with their own
+    // values - the emitter's sign in particular, since it is the entry that
+    // would have displaced the collector under a lookup keyed by part.
+    const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      renderPanel({
+        opResult: {
+          ok: true,
+          nets: [{ id: "0", label: "GND", voltage: 0 }, { id: "n001", label: "V(N001)", voltage: 5 }],
+          branches: [
+            { id: "q1", label: "I(Q1)", current: 0.00095 },
+            { id: "q1", label: "Ib(Q1)", current: 0.0000095, terminal: "b" },
+            { id: "q1", label: "Ie(Q1)", current: -0.0009595, terminal: "e" },
+          ],
+          warnings: [],
+        },
+      });
+      fireEvent.mouseDown(screen.getByRole("tab", { name: "Operating point (.op)" }), { button: 0 });
+
+      expect(screen.getByText("I(Q1)")).toBeTruthy();
+      expect(screen.getByText("Ib(Q1)")).toBeTruthy();
+      expect(screen.getByText("Ie(Q1)")).toBeTruthy();
+      expect(screen.getByText(formatEngineering(0.00095, "A", 3))).toBeTruthy();
+      expect(screen.getByText(formatEngineering(0.0000095, "A", 3))).toBeTruthy();
+      expect(screen.getByText(formatEngineering(-0.0009595, "A", 3))).toBeTruthy();
+
+      // React renders duplicate keys today and only warns, so the three rows
+      // above appear either way - this is what actually holds the row key to
+      // one per rendered row. React calls the behaviour unsupported and liable
+      // to change, which is the regression being kept out.
+      const duplicateKey = errors.mock.calls
+        .map((args) => args.map(String).join(" "))
+        .filter((text) => text.includes("same key"));
+      expect(duplicateKey).toEqual([]);
+    } finally {
+      errors.mockRestore();
+    }
+  });
+
   it("renders no DC CURRENT header when the operating-point result has no branches", () => {
     renderPanel({
       opResult: {

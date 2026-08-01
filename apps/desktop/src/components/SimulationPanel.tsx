@@ -1735,8 +1735,11 @@ function OpTable({ result }: { result: OperatingPointResult | null }) {
             <span>COMPONENT</span>
             <span>DC CURRENT</span>
           </div>
+          {/* Keyed by id AND terminal: a multi-terminal part contributes one
+              row per terminal under a single component id, so the id alone is
+              not unique across the list. */}
           {result.branches.map((branch) => (
-            <div className="op-row" key={branch.id}>
+            <div className="op-row" key={`${branch.id}:${branch.terminal ?? ""}`}>
               <span>{branch.label}</span>
               <span>{formatEngineering(branch.current, "A", 3)}</span>
             </div>

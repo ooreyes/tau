@@ -39,8 +39,16 @@ export type OperatingPointResult =
        * is set. `current` is the raw MNA unknown: for a voltage source it equals
        * the current flowing INTO its + node from the source branch, i.e. the
        * NEGATIVE of the conventional current delivered out of the + terminal.
+       *
+       * A part that reports several terminals contributes SEVERAL entries under
+       * one component `id`: the untagged one is the part's own current, the
+       * tagged ones its individual terminals (`terminal: "b"` labelled
+       * `Ib(Q1)`), each the current INTO that terminal. `id` is therefore not
+       * unique - resolve one-per-part through {@link primaryBranches} rather
+       * than by building a lookup over the list, which would let the last
+       * terminal answer for the part.
        */
-      branches?: { id: string; label: string; current: number }[];
+      branches?: { id: string; label: string; current: number; terminal?: string }[];
       warnings: string[];
     }
   | {
@@ -48,6 +56,23 @@ export type OperatingPointResult =
       message: string;
       warnings: string[];
     };
+
+/**
+ * The branches that are a part's OWN current, dropping the per-terminal entries
+ * a device like a BJT contributes alongside it.
+ *
+ * A multi-terminal part occupies its component id more than once, so a consumer
+ * that wants one entry per part - a canvas label, an inductor's seed current -
+ * has to say which one. Doing it through here states "the untagged entry is the
+ * part's own current" once instead of per call site; a Map built over the whole
+ * list would answer with whichever terminal came last, a different number with
+ * the opposite sign.
+ */
+export function primaryBranches<T extends { terminal?: string }>(
+  branches: ReadonlyArray<T> | undefined,
+): T[] {
+  return (branches ?? []).filter((branch) => !branch.terminal);
+}
 
 /** Optional, purely-additive knobs used by small-signal analyses (`.tf`). */
 export interface OpOptions {

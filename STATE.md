@@ -49,21 +49,16 @@ do not spend a fire diffing it again. Re-check only if its tip moves past
 Ordered. Take the top item unless it is blocked. Class A outranks everything -
 a plausible wrong number is worse than a refusal to run.
 
-1. **The operating-point table still lists one current per part.** A BJT's base
-   and emitter now reach a native TRANSIENT (landed 2026-08-01), but `branches`
-   entries are keyed by COMPONENT id - `opAnnotations.ts` finds a branch's
-   component with `c.component.id === branch.id` - so a second entry per part
-   collides on that key and would place ambiguous canvas labels. Needs its own
-   contract widening; `primaryDeviceCurrents` in `nativeSpice.ts` is the seam
-   that currently filters the terminals out. Stated in KNOWN_ISSUES.
-2. **Only a BJT reports its extra terminals.** `DEVICE_TERMINAL_CURRENT_PARAMS`
+1. **Only a BJT reports its extra terminals.** `DEVICE_TERMINAL_CURRENT_PARAMS`
    in `spiceNetlist.ts` lists `q: ["ib", "ie"]` and nothing else. A MOSFET's
    `@m1[ig]`/`@m1[is]` were NOT verified against the engine and must not be added
    on the assumption they behave like the BJT's - prove them at the CLI first.
-3. **Tau's canvas does not draw the primitives it now preserves.** A saved file
+   Both read sides are ready for them now (`terminal` on `CurrentTrace` and on
+   `branches`), so this is a deck-side unit plus its engine proof.
+2. **Tau's canvas does not draw the primitives it now preserves.** A saved file
    keeps its artwork byte-for-byte, but the author cannot see it in Tau. That is
    stated plainly in KNOWN_ISSUES; rendering them is the follow-up.
-4. **The one Rust test that drives a real libngspice is red on this host and is
+3. **The one Rust test that drives a real libngspice is red on this host and is
    not a gate.** `runs_an_operating_point_with_the_real_ngspice_library` is
    `#[ignore]`d behind `TAU_NGSPICE_LIB`, and with either staged dylib it dies
    partway through on `Unknown model type adc_bridge` - the XSPICE code models
@@ -79,6 +74,41 @@ a plausible wrong number is worse than a refusal to run.
 
 Newest first. One line each: date, unit, evidence.
 
+- 2026-08-01 - The OPERATING-POINT TABLE lists a BJT's base and emitter beside
+  its collector, closing the scope the previous unit left open: traces existed in
+  a transient and stopped at the `.op`, the one analysis where reading a bias
+  current is the whole point. **No engine work - the deck was already asking.**
+  `wantsDeviceCurrents` covers `op` as well as `tran`, so `@q1[ib]`/`@q1[ie]`
+  were being saved and then dropped by the read side's primary-only filter.
+  Re-proved at the CLI first that a one-row `.op` plot really returns them: a
+  `.tran` returning a vector is not evidence an `.op` does, and the two take
+  different paths through ngspice. **The hazard was the read sides, again.**
+  `branch.id` is a component id and is no longer unique; three consumers resolved
+  a part through it. The table keyed each row by it, and **React renders
+  duplicate keys with only a console warning** - the three rows still appear, so
+  asserting they render passes WITHOUT the fix (trap 2 caught in the act, by
+  running the mutation); the test asserts on the absence of that warning instead.
+  `opAnnotations` anchors to the component's own position, so three terminals
+  would have stacked three readings on one spot under one key - the canvas keeps
+  the part's own current deliberately and the terminals stay in the table.
+  `linearTransient` built a Map over the whole list to seed an inductor, the
+  last-wins shape that would have taken a terminal's value. All three go through
+  one `primaryBranches` seam in `operatingPoint.ts` (beside the contract it
+  states) rather than per call site. `.tf` resolves a current output by LABEL and
+  reads the TS solver only, so it was left alone rather than quietly widen which
+  `.tf` outputs are accepted (trap 3, same trap the previous fire avoided).
+  Real-engine proof in `opNative.corpus.ts`: on an `.op` the three sum to zero to
+  1e-7 of the collector, emitter negative, base under a tenth of the collector so
+  a swapped pair still fails after the sum passes, and the collector separately
+  held against Rc's own nodes. Mutation-checked five ways: drop the terminal push
+  (kills 1 unit), raw list in `opAnnotations` (kills 1), `primaryBranches` stops
+  filtering (kills 2), revert the row key (kills 1), deck stops asking (kills 2
+  real-engine). One existing test asserted the narrower behaviour and was
+  REPOINTED, not deleted. KNOWN_ISSUES said in as many words that the table lists
+  one current per part; it now says the canvas annotation does, and why. Gates:
+  tsc, full suite 2264 passed / 147 files, cargo 32 passed + clippy clean, corpus
+  80/80/80/80 warning-clean 77 with the proof inside it. One App render file
+  timed out under contention (trap 5) and passes isolated; it is untouched here.
 - 2026-08-01 - A BJT's BASE AND EMITTER have their own traces in a native
   transient (`Ib(Q1)`, `Ie(Q1)`), so a probe or a `.meas` on either resolves
   instead of silently having only the collector to offer. The blocker was never

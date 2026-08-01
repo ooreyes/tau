@@ -345,8 +345,8 @@ describe.skipIf(!haveNgspice)("`.op` through the native engine", () => {
     // `runNativeOperatingPoint` looks the vector up by, so the ask and the read
     // cannot drift apart in this proof either.
     // A BJT's three terminals are all asked for; only the untagged one - the
-    // collector - is what `I(Q1)` means, and the operating-point table reads
-    // that one alone, since a `branches` entry is keyed by component id.
+    // collector - is what `I(Q1)` means, and the table lists the other two
+    // beside it under their own labels (see the terminal case below).
     expect(deck.deviceCurrents).toEqual([
       { componentId: "Q1", vector: "@q1[ic]" },
       { componentId: "Q1", vector: "@q1[ib]", terminal: "b" },
@@ -390,6 +390,80 @@ describe.skipIf(!haveNgspice)("`.op` through the native engine", () => {
     const sourceBranch = value(run, "v1#branch");
     expect(sourceBranch).toBeLessThan(0);
     closeRelative(-sourceBranch, (vdd - coll) / 2000 + (vdd - value(run, "base")) / 470000);
+  });
+
+  it("returns a BJT's base and emitter currents on an `.op`, summing to zero with the collector", () => {
+    // Proved for an `.op` here rather than inherited from the transient result:
+    // the two analyses take different paths through ngspice, and a terminal
+    // vector that a `.tran` returns is not evidence that a one-row `.op` plot
+    // does. Same common-emitter bias, without the inductor leg - the identity
+    // below needs only a transistor in the active region.
+    //
+    //   V1 5V -> vdd -> Rc 2k -> coll -> Q1 collector
+    //            vdd -> Rb 470k -> base,  Q1 emitter -> 0
+    const stage = {
+      components: [
+        vsource("V1", "5", 100, 300),
+        resistor("Rc", "2k", 250, 200),
+        resistor("Rb", "470k", 250, 400),
+        { id: "Q1", kind: "npn" as const, label: "Q1", value: "NPN", x: 500, y: 300, rotation: 0 as const },
+      ],
+      wires: [],
+      netLabels: [
+        lbl(100, 268, "vdd"), lbl(218, 200, "vdd"), lbl(218, 400, "vdd"),
+        lbl(100, 332, "0"), lbl(516, 332, "0"),
+        lbl(282, 400, "base"), lbl(468, 300, "base"),
+        lbl(282, 200, "coll"), lbl(516, 268, "coll"),
+      ],
+    };
+
+    const deck = buildSpiceDeck(stage, { kind: "op" });
+    expect(deck.netlist).toMatch(/^Q1 coll base 0 /m);
+
+    // Names taken from the deck's own record, so this proves the vectors the
+    // read side actually looks up rather than three names spelled here.
+    const terminalOf = (letter: string) =>
+      deck.deviceCurrents.find((current) => current.terminal === letter)!.vector;
+    const collector = deck.deviceCurrents.find((current) => !current.terminal)!.vector;
+    expect([collector, terminalOf("b"), terminalOf("e")])
+      .toEqual(["@q1[ic]", "@q1[ib]", "@q1[ie]"]);
+
+    const run = runOp(deck.netlist, "bjt-terminals");
+
+    // The engine returns all three on a one-row plot. Without this the read
+    // side would ask for two vectors that never arrive.
+    for (const name of [collector, terminalOf("b"), terminalOf("e")]) {
+      expect(run.names).toContain(name);
+    }
+
+    const ic = value(run, collector);
+    const ib = value(run, terminalOf("b"));
+    const ie = value(run, terminalOf("e"));
+
+    // Biased into the active region, so these are a real bias point: a
+    // saturated or cut-off corner would satisfy the identity trivially.
+    expect(value(run, "coll")).toBeGreaterThan(0.3);
+    expect(value(run, "coll")).toBeLessThan(4.7);
+    expect(ic).toBeGreaterThan(1e-6);
+
+    // Every one of the three is the current INTO its terminal, so they sum to
+    // zero exactly - an identity no scale error, wrong terminal or swapped pair
+    // satisfies by accident. Compared absolutely against the largest term,
+    // since the expected value is zero.
+    expect(Math.abs(ic + ib + ie)).toBeLessThan(Math.abs(ic) * PRINTED_DIGITS);
+
+    // The sum alone would still pass with `ib` and `ie` swapped, so their own
+    // shapes are pinned: the emitter carries the whole current back out and is
+    // NEGATIVE, while the base takes well under a tenth of the collector's.
+    expect(ie).toBeLessThan(0);
+    expect(ib).toBeGreaterThan(0);
+    expect(ib).toBeLessThan(ic / 10);
+    closeRelative(-ie, ic + ib);
+
+    // Reconstructing the collector from Rc holds the device vector against a
+    // node voltage ngspice returned separately, so a mis-read `@q1[ic]` fails
+    // here even though the three still sum to zero among themselves.
+    closeRelative(ic, (value(run, "vdd") - value(run, "coll")) / 2000);
   });
 
   it("keeps every vector a run without the `.save` returned, because the card says `all`", () => {
