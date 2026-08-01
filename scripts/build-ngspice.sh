@@ -130,11 +130,16 @@ if [[ "$(uname -s)" == "Darwin" ]] && command -v brew >/dev/null 2>&1; then
 fi
 
 pushd "$BUILD_DIR" >/dev/null
+# XSPICE is on by default at the pinned commit, so --enable-xspice changes
+# nothing today. It is passed because it is the difference between an engine
+# that can run a digital part and one that cannot, and that has been an opt-in
+# upstream before: the flag states the requirement rather than inheriting it.
 PATH="$BISON_DIR:$AUTOTOOLS_BIN:$PATH" \
   CFLAGS="${CFLAGS:-} -O2 -fPIC $EXTRA_CFLAGS" \
   LDFLAGS="${LDFLAGS:-} $EXTRA_LDFLAGS" \
   "$SOURCE_DIR/configure" \
     --with-ngshared \
+    --enable-xspice \
     --enable-relpath \
     --disable-debug \
     --disable-openmp \
@@ -152,18 +157,25 @@ if (( ${#libraries[@]} == 0 )); then
 fi
 cp -RP "${libraries[@]}" "$RESOURCE_DIR/lib/"
 shopt -u nullglob
-if [[ -d "$STAGE_DIR/lib/ngspice" ]]; then
-  cp -R "$STAGE_DIR/lib/ngspice" "$RESOURCE_DIR/lib/"
-else
-  # XSPICE code models are separate .cm modules loaded at run time. Without
-  # them the library still solves every analog circuit, so an install that
-  # produced none looks healthy here, while each digital or behavioral A device
-  # - Tau emits them for D flip-flop, sample-and-hold and modulator parts -
-  # fails at run time as an unknown model type. Staging silently skipped this
-  # for as long as it was a bare test, which is how the shipped resource came
-  # to carry no code models at all.
-  echo "WARNING: this ngspice install produced no XSPICE code models under $STAGE_DIR/lib/ngspice. The staged resource cannot simulate digital or behavioral A devices." >&2
+# XSPICE code models are separate .cm modules loaded at run time. Without them
+# the library still solves every analog circuit, so an install that produced
+# none looks healthy here, while each digital or behavioral A device - Tau emits
+# them for D flip-flop, sample-and-hold and modulator parts - fails at run time
+# as an unknown model type. This stayed a warning for as long as it was a bare
+# directory test, which is how a resource carrying no code models at all went
+# unnoticed. Every name the engine loader asks for is required, so a partial
+# code-model build is caught here rather than one device at a time in the app.
+missing_codemodels=()
+for codemodel in spice2poly analog digital xtradev xtraevt table tlines; do
+  if [[ ! -f "$STAGE_DIR/lib/ngspice/$codemodel.cm" ]]; then
+    missing_codemodels+=("$codemodel.cm")
+  fi
+done
+if (( ${#missing_codemodels[@]} > 0 )); then
+  echo "ngspice install is missing XSPICE code models under $STAGE_DIR/lib/ngspice: ${missing_codemodels[*]}. Tau cannot simulate digital or behavioral A devices without them." >&2
+  exit 1
 fi
+cp -R "$STAGE_DIR/lib/ngspice" "$RESOURCE_DIR/lib/"
 if [[ -d "$STAGE_DIR/share/ngspice" ]]; then
   mkdir -p "$RESOURCE_DIR/share"
   cp -R "$STAGE_DIR/share/ngspice" "$RESOURCE_DIR/share/"

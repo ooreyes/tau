@@ -22,6 +22,19 @@ Rules:
 **Started:** -
 **Branch:** auto/ltspice-parity
 
+**Engine build notes, learned the hard way 2026-08-01 - keep these:**
+
+1. **Clone from the GitHub mirror, not SourceForge.** SourceForge served ~1.4
+   MB/min (hours); `https://github.com/imr/ngspice.git` carries the identical
+   pinned SHA and a `--depth 1` fetch of it took 4 seconds. The script takes
+   `NGSPICE_REPOSITORY` as an override, and the SHA check makes the host
+   irrelevant. `build/ngspice-src` is already at the pinned commit.
+2. **Kill every stray `make` before re-running.** The script's
+   `rm -rf "$BUILD_DIR"` races a previous run's surviving children and dies on
+   "Directory not empty".
+3. A full build is ~25 minutes on this host, nearly all of it ngspice's device
+   library. Budget a whole fire.
+
 If Status is IN PROGRESS with a timestamp older than ~2 hours, the previous
 fire died mid-unit (usage limit or watchdog). Recover before starting anything
 new:
@@ -49,18 +62,15 @@ do not spend a fire diffing it again. Re-check only if its tip moves past
 Ordered. Take the top item unless it is blocked. Class A outranks everything -
 a plausible wrong number is worse than a refusal to run.
 
-1. **Make the bundled engine build carry its XSPICE code models (BUG-13).** The
-   diagnosis landed 2026-08-01; the packaging gap behind it did not. Add the
-   XSPICE option to `scripts/build-ngspice.sh:136`'s `configure` line (likely
-   `--enable-xspice`, unverified - check `configure --help` for the pinned
-   commit), rebuild, confirm `build/ngspice-stage/lib/ngspice/*.cm` appears and
-   reaches `apps/desktop/src-tauri/resources/ngspice/lib/ngspice/`, then turn
-   the warning at `:155` into a hard failure. **Budget a whole fire for the
-   build** - it clones ngspice from SourceForge, autogens, configures and makes.
-   Acceptance test already written and currently red on the staged library:
-   `runs_a_digital_register_with_the_real_ngspice_code_models`. Run the ignored
-   Rust tests with `--test-threads=1`; the real-library ones SIGSEGV when they
-   share a process.
+1. **Nothing verifies the staged engine is the pinned build.**
+   `scripts/build-ngspice.sh` writes `build-info.json` with the repository,
+   commit and host, and **no code anywhere reads it**. Nothing in the packaging
+   path compares the staged library against the pinned commit, so a hand-placed
+   or system `libngspice` is bundled as though it were the reproducible build -
+   which is exactly what had happened here for an unknown length of time (see
+   `FIX_BUGS.md`, 2026-08-01). Have the bundle step verify the staged resource
+   against `build-info.json` and refuse a mismatch. Note the resource tree is
+   gitignored, so the check has to run at package time, not in the test suite.
 2. **Preview solver vs native DC operating point.** The TS preview was said to
    start reactive parts at zero (`uic`-style) while ngspice solves the DC OP
    first. **Verify before starting:** `KNOWN_ISSUES.md:100` now states the
@@ -73,6 +83,43 @@ a plausible wrong number is worse than a refusal to run.
 
 Newest first. One line each: date, unit, evidence.
 
+- 2026-08-01 - THE BUNDLED ENGINE IS TAU'S OWN BUILD AND CARRIES ITS XSPICE CODE
+  MODELS, so a D flip-flop, sample-and-hold or modulator runs.
+  **The handed-down diagnosis was wrong and checking it first is what found the
+  real defect.** `--enable-xspice` was not missing: XSPICE is on by default at
+  the pinned commit (`configure.ac:1177`) and `src/xspice/Makefile.am:12` lists
+  `icm` in SUBDIRS unconditionally under it, so the stock configure line already
+  builds all seven `.cm` modules - a build with the line untouched logs `XSPICE
+  features included`. **The engine staged in this tree had never been built by
+  the build script at all.** Four independent signs, all checked before
+  rebuilding: byte-for-byte identical SHA-256 to
+  `/opt/homebrew/lib/libngspice.0.dylib`; `otool -D` still giving Homebrew's
+  `/opt/homebrew/opt/libngspice/...` install name where the script rewrites
+  `@rpath/`; `libngspice.dylib` a second 4.97 MB regular file where `cp -RP`
+  preserves libtool's symlink; and no `build-info.json`, which the script writes
+  unconditionally on every successful run. The reproducible-build story was not
+  what was actually staged. Staging is now a hard failure requiring every one of
+  the seven modules the loader asks for, proved by running the SHIPPED lines
+  against doctored stage dirs - complete accepted, each of seven missing refused
+  AND named, whole directory missing refused naming all seven - and the pre-fix
+  script fails that proof, while the old block run against an install with no
+  code models exits 0, the defect demonstrated rather than described. After a
+  real build: seven `.cm` staged, `share/ngspice` present, symlink restored,
+  `@rpath` install name, `build-info.json` at the pinned commit, SHA no longer
+  Homebrew's. `runs_a_digital_register_with_the_real_ngspice_code_models` - red
+  when the previous fire wrote it - **passes**, with all 4 ignored real-library
+  tests green at `--test-threads=1`. Trap 1 checked empirically, not assumed:
+  Tauri's directory mapping propagated the modules into
+  `target/debug/ngspice/lib/ngspice/`, so they reach the build output. The
+  KNOWN_ISSUES item saying digital parts do not run is gone. Two findings logged
+  in `FIX_BUGS.md`, including that **nothing reads `build-info.json`** - no step
+  compares the staged engine to the pinned commit, which is how a hand-placed
+  library went unnoticed. Gates: tsc, full suite 2264 passed / 150 files at
+  `--maxWorkers=2` with 26 render timeouts across 6 files that pass 97/97
+  isolated (trap 5, and no `src/` TypeScript changed - the default suite includes
+  `src/**` only), cargo 34 passed + all 4 ignored real-library tests passed at
+  `--test-threads=1` + clippy clean, corpus 80/80/80/80 warning-clean 77 with the
+  new 11-case proof inside it.
 - 2026-08-01 - A MISSING XSPICE CODE-MODEL BUNDLE stops being silent, and the
   real-library test that proves the FFI vector read stops dying on it.
   **Tau's bundled engine cannot run a single digital part, and nothing said so.**

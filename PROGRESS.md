@@ -29,7 +29,69 @@ figure all run on the real engine. Do not restore a readiness banner until every
 Class A and Class B item in the audit is closed or consciously accepted, with
 file:line evidence.
 
-**Last unit - 2026-08-01: a missing XSPICE code-model bundle stops being silent.**
+**Last unit - 2026-08-01: the bundled engine is Tau's own build, and it carries
+its XSPICE code models.** Digital parts run. The previous fire left this as
+"add `--enable-xspice` to the configure line, rebuild"; **that diagnosis was
+wrong, and checking it first is what found the real defect.** XSPICE is already
+on by default at the pinned commit
+(`AM_CONDITIONAL([XSPICE_WANTED], [test "x$enable_xspice" = xyes || test "x$enable_xspice" = x])`,
+`configure.ac:1177`) and `src/xspice/Makefile.am:12` lists `icm` in SUBDIRS
+unconditionally under it, so the stock configure line already builds all seven
+`.cm` modules - a build from the pinned commit with the line untouched logs
+`XSPICE features included`.
+
+**The engine staged in this tree had never been built by the build script at
+all.** It was Homebrew's, hand-placed, on four independent signs checked before
+anything was rebuilt: its `libngspice.0.dylib` was byte-for-byte
+`/opt/homebrew/lib/libngspice.0.dylib` (same SHA-256), `otool -D` still gave
+Homebrew's own `/opt/homebrew/opt/libngspice/...` install name where the script
+rewrites `@rpath/`, `libngspice.dylib` beside it was a second 4.97 MB regular
+file where `cp -RP` preserves libtool's symlink, and `build-info.json` - written
+unconditionally at the end of every successful run - was absent, as was
+`share/ngspice`. So the code models were missing because the build had never
+run, not because it was misconfigured. That also means the reproducible-build
+story was not what was actually staged: an engine of unknown version and build
+options was being bundled as though it were the pinned commit.
+
+The script's staging step is now a hard failure that requires every one of the
+seven modules the engine loader asks for, so a partial code-model build is
+caught at build time rather than one device at a time in the app; the old bare
+directory test warned and carried on, which put the only signal on a build log
+for a build nobody had run. Proved by running the shipped lines against a
+doctored stage directory: a complete install is accepted, each of the seven
+missing individually is refused AND named, and the whole directory missing is
+refused naming all seven. The pre-fix script fails that proof, and the old block
+run directly against an install with no code models exits 0 - the defect,
+demonstrated rather than described. `--enable-xspice` is passed explicitly too:
+it changes nothing today, but it is the difference between an engine that can
+run a digital part and one that cannot, and it has been opt-in upstream before.
+
+After a real build the resource carries all seven `.cm` modules plus
+`share/ngspice`, `libngspice.dylib` is a symlink again, the install name is
+`@rpath/libngspice.0.dylib`, `build-info.json` records the pinned commit, and
+the library's SHA-256 is no longer Homebrew's.
+`runs_a_digital_register_with_the_real_ngspice_code_models` - written red by the
+previous fire and the acceptance test for this unit - **passes**, along with all
+four ignored real-library tests at `--test-threads=1`. Trap 1 was checked
+empirically rather than trusted to the config: Tauri's `resources/ngspice/`
+directory mapping propagated the modules into `target/debug/ngspice/lib/ngspice/`,
+so they reach the build output and are not merely staged. KNOWN_ISSUES said in
+as many words that digital parts do not run on the bundled engine build; that
+item is gone. Gates: tsc, full suite 2264 passed / 150 files at `--maxWorkers=2`
+with 26 render timeouts across 6 files that pass 97/97 isolated (trap 5, and no
+`src/` TypeScript changed - the default suite includes `src/**` only), cargo 34
+passed + all 4 ignored real-library tests passed at `--test-threads=1` + clippy
+clean, corpus 80/80/80/80 warning-clean 77 with the new 11-case proof inside it.
+Two findings logged in `FIX_BUGS.md`:
+the corrected diagnosis, and the fact that **nothing reads `build-info.json`** -
+no step compares the staged engine against the pinned commit, which is why a
+hand-placed library went unnoticed for an unknown length of time.
+
+Next candidate: have the packaging step verify the staged engine against
+`build-info.json` and refuse a mismatch, so a hand-placed or system libngspice
+cannot be bundled as the reproducible build again.
+
+**Prior unit - 2026-08-01: a missing XSPICE code-model bundle stops being silent.**
 Tau's parts palette offers D flip-flops, sample-and-hold and modulator parts;
 `digitalGateSpec.ts` turns a DFLOP into `adc_bridge`/`d_dff`/`dac_bridge` cards
 and `spiceNetlist.ts:1373` maps all three kinds to the `A` prefix. Those are

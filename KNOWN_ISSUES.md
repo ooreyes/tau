@@ -32,13 +32,6 @@ one engine for the whole session.
 
 ## Devices that are not modelled yet
 
-- **Digital parts do not run on the bundled engine build.** A D flip-flop,
-  sample-and-hold or modulator is simulated as an ngspice XSPICE device, and
-  those live in separate code-model modules that the current bundled engine
-  build does not carry. The rest of the schematic is unaffected - every analog
-  circuit still runs - and Tau names the device and says the engine loaded no
-  code models rather than reporting the raw "unknown model type" its absence
-  produces. An engine built with its code models beside the library runs them.
 - **Current-controlled switches (`csw`) do not switch.** A `csw` is controlled
   by the current through a named source rather than by pins, which Tau does not
   model, so it simulates as a fixed open circuit - and says so with the result

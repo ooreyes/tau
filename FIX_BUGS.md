@@ -13,6 +13,53 @@
 
 **Repo:** `auto/ltspice-parity` · **Audit date:** 2026-07-17 · **Auditor:** interactive session (Fable 5) + two background subagents (fuzz + sim cross-check).
 
+## 2026-08-01 — the staged engine was Homebrew's copy, not the pinned build (CONFIRMED, FIXED)
+
+The engine under `apps/desktop/src-tauri/resources/ngspice/` on this host was
+never produced by `scripts/build-ngspice.sh`. Four independent signs, all checked
+before anything was rebuilt:
+
+- `shasum -a 256` of the staged `libngspice.0.dylib` is
+  `5172c8b8b9769e7b39734aac0b92fb808756ce7fcf567e35303f1a0b4b52c1de`, byte-for-byte
+  `/opt/homebrew/lib/libngspice.0.dylib` (Homebrew libngspice 46).
+- `otool -D` gives its install name as
+  `/opt/homebrew/opt/libngspice/lib/libngspice.0.dylib`. The script rewrites that
+  to `@rpath/libngspice.0.dylib` on every run, so a script-built copy cannot
+  carry it.
+- `libngspice.dylib` beside it is a second 4.97 MB regular file. The script stages
+  with `cp -RP`, which preserves the symlink libtool installs.
+- `build-info.json`, which the script writes unconditionally at the end of every
+  successful run, was absent - as was `share/ngspice`.
+
+**This corrects the assumed cause of the missing code models.** The diagnosis on
+record was that the configure line lacked `--enable-xspice`. It does not need it:
+XSPICE is on by default at the pinned commit
+(`AM_CONDITIONAL([XSPICE_WANTED], [test "x$enable_xspice" = xyes || test "x$enable_xspice" = x])`,
+`configure.ac:1177`) and `src/xspice/Makefile.am:12` lists `icm` in SUBDIRS
+unconditionally under it, so a plain `--with-ngshared` configure builds and
+installs all seven `.cm` modules. A build from the pinned commit with the
+unmodified configure line logs `XSPICE features included`. The code models were
+missing because the build had never run here, not because it was misconfigured.
+
+The staging step made that invisible: it was a bare `if [[ -d ]]` that warned and
+carried on, so the only signal was a line on a build log for a build nobody had
+run. It is now a hard failure that requires every one of the seven modules the
+engine loader asks for, and `--enable-xspice` is passed explicitly so the
+requirement is stated rather than inherited from an upstream default that has
+been opt-in before.
+
+## 2026-08-01 — nothing checks that the staged engine is the pinned build (CONFIRMED, OPEN)
+
+Fallout from the entry above. `scripts/build-ngspice.sh` writes `build-info.json`
+with the repository, commit and host it built from, and **no code anywhere reads
+it** - it is the only record of engine provenance and it is decorative. Nothing
+in the packaging path compares the staged library against the pinned commit, so
+any hand-placed or system-installed `libngspice` is bundled as though it were the
+reproducible build, which is exactly what happened here for an unknown length of
+time. A DMG built from such a tree ships an engine whose version, build options
+and patch level are unknown. Worth a unit: have the bundle step verify the staged
+resource against `build-info.json` and refuse a mismatch.
+
 ## 2026-07-29 — the real-library Rust test cannot go green on this host (CONFIRMED)
 
 `spice::tests::runs_an_operating_point_with_the_real_ngspice_library` is
