@@ -49,9 +49,12 @@ do not spend a fire diffing it again. Re-check only if its tip moves past
 Ordered. Take the top item unless it is blocked. Class A outranks everything -
 a plausible wrong number is worse than a refusal to run.
 
-1. **Tau's canvas does not draw the primitives it now preserves.** A saved file
-   keeps its artwork byte-for-byte, but the author cannot see it in Tau. That is
-   stated plainly in KNOWN_ISSUES; rendering them is the follow-up.
+1. **Fit-to-view frames the circuit alone.** `circuitBounds` takes components
+   and wires only, so now that the drawing primitives are drawn, artwork placed
+   well outside the circuit can start off-screen, and a sheet that is ONLY
+   artwork fits to nothing. In KNOWN_ISSUES. Widening it touches every caller of
+   `circuitBounds` / `circuitBoundsWithLabels` (trap 3) - check them all before
+   changing the signature.
 2. **The one Rust test that drives a real libngspice is red on this host and is
    not a gate.** `runs_an_operating_point_with_the_real_ngspice_library` is
    `#[ignore]`d behind `TAU_NGSPICE_LIB`, and with either staged dylib it dies
@@ -68,6 +71,46 @@ a plausible wrong number is worse than a refusal to run.
 
 Newest first. One line each: date, unit, evidence.
 
+- 2026-08-01 - The CANVAS DRAWS the LTspice drawing primitives it has preserved
+  byte-for-byte since 2026-07-29, so a schematic's borders, dividers and
+  hand-drawn diagrams are visible in the one place they exist to be read. They
+  draw behind the circuit in muted canvas ink with LTspice's pen width and dash
+  style, and take no pointer events, so they cannot swallow a click meant for a
+  wire. **Two facts about the record format decide whether anything appears at
+  all.** A box is two opposite corners in the author's DRAG ORDER, not an origin
+  and a size: on the user's own corpus **154 of 155 real boxes** have the second
+  corner above and/or left of the first, so `x2 - x1` is a negative width or
+  radius and the SVG element then draws NOTHING with no error - the near-total
+  failure would have looked exactly like the feature not being wired up. The
+  corpus proof asserts the normalised box still covers the author's own corners,
+  not merely that it is positive. And an arc's last four numbers are RAYS from
+  the box centre, not points on the curve (`ind.asy` puts one 16.97 from the
+  centre of a circle of radius 16), so they are projected onto the ellipse;
+  drawing to the raw point opens a gap at both ends. **Sweep direction is the one
+  part a wrong guess renders PLAUSIBLY rather than not at all** - the
+  complementary curve is still an arc on the same ellipse - so it was established
+  from files, and from two independent ones. `ind.asy` draws an inductor as three
+  arcs between pins at (16,16) and (16,96) and only one direction closes them
+  into a coil clear of that axis; then `examples/Applications/LT3086.asc`
+  confirms it on a real SCHEMATIC - a cylinder on its side whose two arcs are the
+  near and far halves of one end cap, one solid and one on LTspice's dotted pen
+  (a hidden edge), so the solid one must bulge away from the body and the dotted
+  one into it. That case recovers the midpoint from the SWEEP FLAG in the emitted
+  path by SVG's own rule, because both caps are half-circles whose chords run
+  through the centre and `largeArc` cannot tell the candidates apart there.
+  Mutation-checked six ways: flip the sweep (kills 2 unit + the cylinder), stop
+  normalising corners (kills 2 unit + 1 render), raw ray point (kills 2), delete
+  the render group so geometry is computed and never shown (kills 3 - trap 1),
+  drop the degenerate-box guard, which otherwise emits a path of `NaN` (kills 1).
+  Dash indices are LTspice's, which are the GDI pen constants (1 dash, 2 dot, 3
+  dash-dot, 4 dash-dot-dot); an unrecognised index falls through to solid rather
+  than to nothing. Colors are `--canvas-label-muted` only, no hardcoded values.
+  **Scope stated, not papered over:** fit-to-view still frames the circuit alone,
+  so artwork far outside it can start off-screen - that is Next up #1 and it is
+  in KNOWN_ISSUES beside the claim that the primitives are drawn. Gates: tsc,
+  full suite 2279 passed / 149 files with ZERO failures at `--maxWorkers=2`,
+  cargo 32 passed + clippy clean, corpus 80/80/80/80 warning-clean 77 with the
+  new proof inside it.
 - 2026-08-01 - `Ic(Q1)` AND `Id(M1)` - what LTspice itself calls a collector and
   a drain - resolve to the real current instead of to nothing. Both parsed fine
   and then found no trace, because a part's own current IS its collector or its

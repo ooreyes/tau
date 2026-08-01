@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from "react";
 import { moveComponentTo, useSchematic } from "../store/useSchematic";
 import { ComponentSymbol, GRID, SYMBOL_BOX } from "../schematic/symbols";
-import type { NetLabel, Point, SchematicComponent, SchematicWire } from "../schematic/types";
+import type { NetLabel, Point, SchematicAscShape, SchematicComponent, SchematicWire } from "../schematic/types";
 import { getLocalPins, getComponentPins, transformPoint } from "../schematic/pins";
 import type { OperatingPointResult } from "../simulation/operatingPoint";
 import { opAnnotations } from "../simulation/opAnnotations";
@@ -11,6 +11,8 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import {
   autoNetLabelOffset,
   autoNetLabelOffsets,
+  ascArcPath,
+  ascShapeRender,
   buildLabelPlacements,
   circuitBounds,
   circuitBoundsWithLabels,
@@ -119,6 +121,7 @@ export function Canvas({
 
   const components = useSchematic((s) => s.components);
   const wires = useSchematic((s) => s.wires);
+  const ascShapes = useSchematic((s) => s.ascShapes);
   // Keep latest geometry in refs so fitView stays stable and does NOT re-fit
   // the camera on every component/wire edit (only on fitSignal / home / resize).
   const componentsRef = useRef(components);
@@ -1124,6 +1127,14 @@ export function Canvas({
         <g transform={`translate(${view.x} ${view.y}) scale(${view.zoom})`}>
           <rect x={-100000} y={-100000} width={200000} height={200000} fill="url(#grid)" />
 
+          {ascShapes.length > 0 && (
+            <g className="asc-shapes" data-testid="asc-shapes">
+              {ascShapes.map((shape, index) => (
+                <AscShapeView key={`shape-${index}`} shape={shape} />
+              ))}
+            </g>
+          )}
+
           {wires.map((wire) => (
             <WireView
               key={wire.id}
@@ -1482,6 +1493,40 @@ function ComponentLabels({ components, wires }: { components: SchematicComponent
       })}
     </g>
   );
+}
+
+/** A preserved LTspice drawing primitive. Pure annotation with no electrical
+ *  meaning, so it draws behind the circuit and takes no pointer events - it
+ *  must never swallow a click meant for a wire underneath it. */
+function AscShapeView({ shape }: { shape: SchematicAscShape }) {
+  const render = ascShapeRender(shape);
+  if (!render) return null;
+  // An unrecognised style index falls through to no dash rule, i.e. solid.
+  const className = `asc-shape${render.wide ? " wide" : ""}${
+    render.style > 0 ? ` dash-${render.style}` : ""
+  }`;
+  switch (render.kind) {
+    case "LINE":
+      return (
+        <line className={className} x1={render.x1} y1={render.y1} x2={render.x2} y2={render.y2} />
+      );
+    case "RECTANGLE":
+      return (
+        <rect
+          className={className}
+          x={render.x}
+          y={render.y}
+          width={render.width}
+          height={render.height}
+        />
+      );
+    case "CIRCLE":
+      return (
+        <ellipse className={className} cx={render.cx} cy={render.cy} rx={render.rx} ry={render.ry} />
+      );
+    case "ARC":
+      return <path className={className} d={ascArcPath(render)} />;
+  }
 }
 
 function WireView({

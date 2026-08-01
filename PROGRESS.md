@@ -29,7 +29,63 @@ figure all run on the real engine. Do not restore a readiness banner until every
 Class A and Class B item in the audit is closed or consciously accepted, with
 file:line evidence.
 
-**Last unit - 2026-08-01: `Ic(Q1)` and `Id(M1)` resolve to the real current
+**Last unit - 2026-08-01: the canvas draws the LTspice drawing primitives it
+already preserves.** `LINE`, `RECTANGLE`, `CIRCLE` and `ARC` records carry a
+schematic's borders, dividers and hand-drawn diagrams. They have survived a save
+byte-for-byte since 2026-07-29, but they were never rendered, so the author's own
+artwork was invisible in the one place it exists to be read. They now draw behind
+the circuit in muted canvas ink, with LTspice's pen width and dash style, and
+take no pointer events so they cannot swallow a click meant for a wire.
+
+**Two things about the record format decide whether anything appears at all.**
+The first is that LTspice stores a box as two opposite corners in the order the
+author dragged them, not as an origin and a size: on the user's own corpus 154 of
+the 155 real boxes have the second corner above and/or left of the first. Handing
+`x2 - x1` to an SVG `<rect>` or `<ellipse>` gives a negative width or radius, and
+the element then draws nothing at all with no error anywhere - so the near-total
+failure would have looked exactly like the feature not being wired up. The
+corners are normalised, and the corpus proof asserts the normalised box still
+covers the author's own two corners rather than merely being positive.
+
+The second is that an arc's last four numbers are rays from the box centre, not
+points on the curve, and LTspice lets them sit off the ellipse - `ind.asy` puts
+one 16.97 units from the centre of a circle of radius 16. They are projected onto
+the ellipse before the path is written; drawing straight to the raw point opens a
+visible gap at both ends of every arc.
+
+**Sweep direction is the only part of this a wrong guess renders plausibly
+rather than not at all** - the complementary curve is still an arc on the same
+ellipse, so it looks like artwork, just not the author's. It was established from
+files rather than assumed, and from two independent ones. LTspice's own `ind.asy`
+draws an inductor as three arcs between pins at (16,16) and (16,96); only one
+sweep direction closes them into a coil bulging clear of that axis, and the other
+gives three shallow nicks on the far side. The corpus then confirms it on a real
+schematic rather than a symbol: `examples/Applications/LT3086.asc` draws a
+cylinder on its side, and its two arcs are the near and far halves of the
+left-hand end cap - one solid, one on LTspice's dotted pen, which is how a hidden
+edge is drawn. The solid half has to bulge away from the body and the dotted one
+into it, and both do. That case recovers the arc's midpoint from the sweep flag
+in the emitted path, by SVG's own rule for it, because both caps are half-circles
+whose chords run through the centre - `largeArc` cannot tell the two candidate
+curves apart there, so the flag carries the whole decision.
+
+Mutation-checked six ways, every one killing at least one case: flip the sweep
+direction (kills 2 unit + the real-schematic cylinder), stop normalising the
+corners (kills 2 unit + 1 render), draw to the raw ray point (kills 2), delete
+the render group so the geometry is computed and never shown (kills 3, which is
+the trap this project has hit before), and drop the degenerate-box guard, which
+otherwise emits a path of `NaN` (kills 1). The dash indices are LTspice's, which
+are the GDI pen constants: 1 dash, 2 dot, 3 dash-dot, 4 dash-dot-dot, with an
+unrecognised index falling through to solid rather than to nothing. Scope is
+stated rather than papered over: fit-to-view still frames the circuit alone, so
+artwork placed well outside it can start off-screen, and KNOWN_ISSUES says so in
+the same breath as saying the primitives are drawn. Gates: tsc, full suite 2279
+passed / 149 files with zero failures at `--maxWorkers=2`, cargo 32 passed +
+clippy clean, corpus 80/80/80/80 (warning-clean 77) with the new proof inside it.
+Next candidate: include the primitives in fit-to-view bounds, or the ignored
+real-library Rust test.
+
+**Prior unit - 2026-08-01: `Ic(Q1)` and `Id(M1)` resolve to the real current
 instead of to nothing.** They are what LTspice itself calls a collector and a
 drain, so they are the spellings an experienced user reaches for first, and both
 parsed cleanly and then found no trace at all. The reason is that a part's own

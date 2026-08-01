@@ -64,9 +64,10 @@ one engine for the whole session.
   back in place with their original symbol identity intact. Attribute label
   placement (WINDOW records, which LTspice writes whenever a label is dragged)
   is carried through the save unchanged, as long as the part keeps its own
-  symbol. Drawing primitives (`LINE`, `RECTANGLE`, `CIRCLE`, `ARC`) survive a
-  save byte-for-byte, though Tau's canvas does not draw them yet - they are
-  preserved, not displayed. Tau still refuses to overwrite a file when the
+  symbol. Drawing primitives (`LINE`, `RECTANGLE`, `CIRCLE`, `ARC`) are drawn on
+  the canvas with their pen width and dash style, and survive a save
+  byte-for-byte. Fit-to-view still frames the circuit alone, so artwork placed
+  well outside it can start off-screen. Tau still refuses to overwrite a file when the
   rewrite would drop information it cannot yet reproduce: comment placement,
   extra symbol attributes such as SpiceLine, and symbols with pins Tau does not
   model (4-pin BJT substrate, switch control pins). The message names the

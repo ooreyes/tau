@@ -1,6 +1,6 @@
 import { GRID, SYMBOL_BODY } from "../schematic/symbols";
 import { CATALOG_BY_KIND } from "../schematic/catalog";
-import type { ComponentKind, NetLabel, Point, Rotation, SchematicComponent, SchematicWire } from "../schematic/types";
+import type { ComponentKind, NetLabel, Point, Rotation, SchematicAscShape, SchematicComponent, SchematicWire } from "../schematic/types";
 import { getComponentPins, getLocalPins, transformPoint } from "../schematic/pins";
 import { decodeParams } from "../schematic/params";
 
@@ -1216,4 +1216,101 @@ export const findFreeSpot = (
     }
   }
   return { x, y };
+};
+
+/** One drawing primitive resolved into the numbers an SVG element wants.
+ *  LTspice stores a box as two opposite corners in whatever order the author
+ *  dragged them, so `x2 - x1` is frequently negative and cannot be handed to a
+ *  `<rect>` directly. */
+export type AscShapeRender =
+  | { kind: "LINE"; wide: boolean; style: number; x1: number; y1: number; x2: number; y2: number }
+  | { kind: "RECTANGLE"; wide: boolean; style: number; x: number; y: number; width: number; height: number }
+  | { kind: "CIRCLE"; wide: boolean; style: number; cx: number; cy: number; rx: number; ry: number }
+  | {
+      kind: "ARC";
+      wide: boolean;
+      style: number;
+      cx: number;
+      cy: number;
+      rx: number;
+      ry: number;
+      start: Point;
+      end: Point;
+      largeArc: boolean;
+    };
+
+const TAU_RADIANS = Math.PI * 2;
+
+/** An arc record's last four numbers are rays from the box centre, not points
+ *  on the curve - LTspice lets the author drag them anywhere. Projecting them
+ *  onto the ellipse is what keeps the arc from starting off it. */
+const ellipseRayPoint = (
+  cx: number,
+  cy: number,
+  rx: number,
+  ry: number,
+  px: number,
+  py: number,
+): Point & { angle: number } => {
+  const angle = Math.atan2((py - cy) / ry, (px - cx) / rx);
+  return { x: cx + rx * Math.cos(angle), y: cy + ry * Math.sin(angle), angle };
+};
+
+/** Resolve one preserved `.asc` drawing primitive into renderable numbers, or
+ *  null for a record with no visible extent (an arc needs a non-degenerate box
+ *  before its rays mean anything). */
+export function ascShapeRender(shape: SchematicAscShape): AscShapeRender | null {
+  const [a, b, c, d] = shape.coords;
+  if (![a, b, c, d].every((value) => Number.isFinite(value))) return null;
+  const wide = shape.width === "Wide";
+  // The trailing coordinate is LTspice's line-style index; absent means solid.
+  const style = shape.coords[shape.kind === "ARC" ? 8 : 4] ?? 0;
+  if (shape.kind === "LINE") {
+    return { kind: "LINE", wide, style, x1: a, y1: b, x2: c, y2: d };
+  }
+  const left = Math.min(a, c);
+  const top = Math.min(b, d);
+  const width = Math.abs(c - a);
+  const height = Math.abs(d - b);
+  if (shape.kind === "RECTANGLE") {
+    return { kind: "RECTANGLE", wide, style, x: left, y: top, width, height };
+  }
+  const cx = left + width / 2;
+  const cy = top + height / 2;
+  const rx = width / 2;
+  const ry = height / 2;
+  if (shape.kind === "CIRCLE") {
+    return { kind: "CIRCLE", wide, style, cx, cy, rx, ry };
+  }
+  const [px1, py1, px2, py2] = shape.coords.slice(4);
+  if (rx <= 0 || ry <= 0) return null;
+  if (![px1, py1, px2, py2].every((value) => Number.isFinite(value))) return null;
+  const start = ellipseRayPoint(cx, cy, rx, ry, px1, py1);
+  const end = ellipseRayPoint(cx, cy, rx, ry, px2, py2);
+  // LTspice sweeps an arc counterclockwise on screen from the first ray to the
+  // second - established against its own `ind.asy`, whose three arcs only close
+  // into a coil bulging away from the pin axis this way round. The SVG y axis
+  // points down, so counterclockwise is a decreasing parameter angle.
+  const sweep = ((start.angle - end.angle) % TAU_RADIANS + TAU_RADIANS) % TAU_RADIANS;
+  return {
+    kind: "ARC",
+    wide,
+    style,
+    cx,
+    cy,
+    rx,
+    ry,
+    start: { x: start.x, y: start.y },
+    end: { x: end.x, y: end.y },
+    largeArc: sweep > Math.PI,
+  };
+}
+
+/** SVG path for an arc. Sweep-flag 0 is counterclockwise under a downward y
+ *  axis, which is the direction LTspice draws. */
+export const ascArcPath = (arc: Extract<AscShapeRender, { kind: "ARC" }>): string => {
+  const round = (value: number) => Math.round(value * 1000) / 1000;
+  return `M ${round(arc.start.x)} ${round(arc.start.y)} A ${round(arc.rx)} ${round(arc.ry)} 0 ${
+    arc.largeArc ? 1 : 0
+  } 0 ${round(arc.end.x)} ${round(arc.end.y)}`;
 };

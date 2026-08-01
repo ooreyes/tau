@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  ascArcPath,
+  ascShapeRender,
   autoNetLabelOffset,
   autoNetLabelOffsets,
   buildLabelPlacements,
@@ -18,7 +20,7 @@ import {
   translateAttachedWireEndpoints,
   wireIntersectsRect,
 } from "./Canvas.geometry";
-import type { SchematicComponent } from "../schematic/types";
+import type { SchematicAscShape, SchematicComponent } from "../schematic/types";
 import { GRID } from "../schematic/symbols";
 import { getLocalPins, transformPoint } from "../schematic/pins";
 
@@ -660,5 +662,110 @@ describe("pathWithHops - hop-over arcs at unconnected crossings", () => {
       ]),
     );
     expect(d).toBe("M 0 0 L 40 0 L 40 80");
+  });
+});
+
+describe("ascShapeRender", () => {
+  const shape = (
+    kind: SchematicAscShape["kind"],
+    coords: number[],
+    width: SchematicAscShape["width"] = "Normal",
+  ): SchematicAscShape => ({ kind, width, coords });
+
+  it("normalises a box whose corners arrive in the author's drag order", () => {
+    // Real records in the LTspice corpus put the second corner above and left
+    // of the first, so a raw `x2 - x1` is negative and `<rect>` draws nothing.
+    const rect = ascShapeRender(shape("RECTANGLE", [96, 240, -32, 16]));
+    expect(rect).toEqual({
+      kind: "RECTANGLE",
+      wide: false,
+      style: 0,
+      x: -32,
+      y: 16,
+      width: 128,
+      height: 224,
+    });
+  });
+
+  it("reads a circle as the ellipse inscribed in its box, keeping the style index", () => {
+    // `CIRCLE Normal -32 224 -112 -32 2` - a real corpus record, both corners
+    // reversed, with LTspice's dotted pen.
+    expect(ascShapeRender(shape("CIRCLE", [-32, 224, -112, -32, 2]))).toEqual({
+      kind: "CIRCLE",
+      wide: false,
+      style: 2,
+      cx: -72,
+      cy: 96,
+      rx: 40,
+      ry: 128,
+    });
+  });
+
+  it("keeps a line's endpoints as drawn and defaults an absent style to solid", () => {
+    expect(ascShapeRender(shape("LINE", [16, 80, 16, -32], "Wide"))).toEqual({
+      kind: "LINE",
+      wide: true,
+      style: 0,
+      x1: 16,
+      y1: 80,
+      x2: 16,
+      y2: -32,
+    });
+  });
+
+  // LTspice's own `ind.asy` draws an inductor as three arcs between pins at
+  // (16,16) and (16,96), so every hump has to bulge clear of that axis. That
+  // makes the file ground truth for the sweep direction: the wrong way round
+  // gives three shallow nicks on the far side instead of a coil.
+  const INDUCTOR_ARCS = [
+    [0, 40, 32, 72, 4, 68, 4, 44],
+    [0, 64, 32, 96, 16, 96, 4, 68],
+    [0, 16, 32, 48, 4, 44, 16, 16],
+  ];
+
+  it("sweeps an arc the way LTspice draws it, so an inductor's humps clear the pin axis", () => {
+    for (const coords of INDUCTOR_ARCS) {
+      const arc = ascShapeRender(shape("ARC", coords));
+      if (arc?.kind !== "ARC") throw new Error("expected an arc");
+      // Which of the two candidate curves gets drawn is exactly what
+      // `largeArc` decides, so recover the midpoint from the chord rather than
+      // from the shipped angle arithmetic: it sits on the far side of the
+      // centre from the chord when the long way round is taken.
+      const chordX = (arc.start.x + arc.end.x) / 2 - arc.cx;
+      const chordY = (arc.start.y + arc.end.y) / 2 - arc.cy;
+      const norm = Math.hypot(chordX, chordY);
+      const sign = arc.largeArc ? -1 : 1;
+      const midX = arc.cx + (sign * chordX / norm) * arc.rx;
+      const midY = arc.cy + (sign * chordY / norm) * arc.ry;
+      expect(arc.largeArc).toBe(true);
+      // Right of the pin axis at x = 16, and clear of it, not grazing.
+      expect(midX).toBeGreaterThan(24);
+      expect(midY).toBeGreaterThan(arc.cy - arc.ry - 1e-9);
+      expect(midY).toBeLessThan(arc.cy + arc.ry + 1e-9);
+    }
+  });
+
+  it("projects an arc's rays onto the ellipse instead of drawing to the raw record point", () => {
+    // LTspice stores a direction from the centre, not a point on the curve:
+    // (4,68) is 16.97 from the centre of a circle of radius 16.
+    const arc = ascShapeRender(shape("ARC", INDUCTOR_ARCS[0]));
+    if (arc?.kind !== "ARC") throw new Error("expected an arc");
+    expect(Math.hypot(arc.start.x - arc.cx, arc.start.y - arc.cy)).toBeCloseTo(16, 9);
+    expect(Math.hypot(arc.end.x - arc.cx, arc.end.y - arc.cy)).toBeCloseTo(16, 9);
+    expect(arc.start.x).toBeCloseTo(4.686, 3);
+    expect(arc.start.y).toBeCloseTo(67.314, 3);
+  });
+
+  it("writes the counterclockwise sweep flag SVG needs under a downward y axis", () => {
+    const arc = ascShapeRender(shape("ARC", INDUCTOR_ARCS[0]));
+    if (arc?.kind !== "ARC") throw new Error("expected an arc");
+    expect(ascArcPath(arc)).toBe("M 4.686 67.314 A 16 16 0 1 0 4.686 44.686");
+  });
+
+  it("drops an arc with no extent rather than emitting a path of NaN", () => {
+    // A zero-width box makes the ray projection divide by zero; the record has
+    // nothing to draw either way.
+    expect(ascShapeRender(shape("ARC", [40, 16, 40, 48, 4, 44, 16, 16]))).toBeNull();
+    expect(ascShapeRender(shape("ARC", [0, 16, 32, 16, 4, 44, 16, 16]))).toBeNull();
   });
 });

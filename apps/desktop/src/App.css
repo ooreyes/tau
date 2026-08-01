@@ -772,6 +772,44 @@ body {
   stroke-dasharray: 7 4;
 }
 
+/* Preserved LTspice drawing primitives. Annotation, not circuit: muted ink so
+   they read as a backdrop to the wires, and no pointer events so they cannot
+   take a click meant for something under them. */
+.asc-shapes {
+  pointer-events: none;
+}
+
+.asc-shape {
+  fill: none;
+  stroke: var(--canvas-label-muted);
+  /* World-space stroke, so artwork scales with the circuit it annotates. */
+  stroke-width: 1.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.asc-shape.wide {
+  stroke-width: 3;
+}
+
+/* LTspice stores the pen style as its index, which is the GDI pen constant:
+   1 dash, 2 dot, 3 dash-dot, 4 dash-dot-dot. */
+.asc-shape.dash-1 {
+  stroke-dasharray: 8 4;
+}
+
+.asc-shape.dash-2 {
+  stroke-dasharray: 1.5 3;
+}
+
+.asc-shape.dash-3 {
+  stroke-dasharray: 8 3 1.5 3;
+}
+
+.asc-shape.dash-4 {
+  stroke-dasharray: 8 3 1.5 3 1.5 3;
+}
+
 .ghost .symbol {
   stroke: var(--accent);
   stroke-dasharray: 4 3;
