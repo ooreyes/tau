@@ -29,7 +29,39 @@ figure all run on the real engine. Do not restore a readiness banner until every
 Class A and Class B item in the audit is closed or consciously accepted, with
 file:line evidence.
 
-**Last unit - 2026-07-30: a resistor and a capacitor have a current in the
+**Last unit - 2026-08-01: a BJT's base and emitter have their own current
+traces in a native transient.** `Ib(Q1)` and `Ie(Q1)` now resolve for a probe,
+a plot expression, a `.meas` and the FFT picker; before, a transistor had only
+its collector current to offer under the single name `I(Q1)`.
+
+The `.save` card was never the blocker. `CurrentTrace` was one entry per
+ref-des, and every consumer looked a part up by that one key - so the risk was
+in the read sides, not the feature. `measurementModel.ts` built a Map over the
+whole current list, where the LAST entry wins: adding the terminals would have
+made every BJT's dashboard row report its emitter, a different number with the
+opposite sign, on a table that still looked complete. The native operating
+point had the same shape of Map over the deck's saved vectors. Both now go
+through one seam that states "a bare `I(ref)` is the part's own current" once
+rather than at each call site.
+
+Widening `.meas`'s signal pattern to reach `Ie(Q1)` nearly broke something
+unrelated: `if(cond,a,b)` is a real expression function, and a wildcard terminal
+letter matches `if(`. The accepted letters are a closed set, with a test that
+measures an `if()` after the change.
+
+Proved against the real engine: ngspice reports the current INTO each terminal,
+so a BJT's three sum to zero at every sample - an identity no scale error,
+stride error or swapped pair satisfies by accident. Mutation-checked three ways.
+The operating-point table is deliberately unchanged and still lists one current
+per part, because its `branches` entries are keyed by component id; that is the
+next unit and it is stated in KNOWN_ISSUES. Only a BJT is widened - a MOSFET's
+gate and source vectors were not verified against the engine, so they are not
+assumed. Gates: tsc, full suite 2262 passed / 148 files with zero failures at
+`--maxWorkers=2`, cargo 32 passed + clippy clean, corpus 80/80/80/80
+(warning-clean 77) with the proof inside it. Next candidate: give the
+operating-point table the same per-terminal currents.
+
+**Prior unit - 2026-07-30: a resistor and a capacitor have a current in the
 operating-point table.** The table listed source, inductor and semiconductor
 currents only, because those are the ones ngspice hands back; a passive's DC
 current had to be worked out by eye from the two node voltages either side of
