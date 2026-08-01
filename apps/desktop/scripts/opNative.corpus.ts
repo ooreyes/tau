@@ -466,6 +466,121 @@ describe.skipIf(!haveNgspice)("`.op` through the native engine", () => {
     closeRelative(ic, (value(run, "vdd") - value(run, "coll")) / 2000);
   });
 
+  it("returns a MOSFET's gate and source currents on an `.op`, summing to zero with the drain", () => {
+    // The MOSFET half of the case above, proved separately rather than assumed
+    // from the BJT's: a device reporting one set of terminal params is no
+    // evidence another kind reports the matching set, and the two are different
+    // enough that the bulk had to be left out (see the VDMOS case below).
+    //
+    //   V1 5V -> vdd -> Rd 1k -> drain -> M1 drain, Vg 3V -> gate
+    //            M1 source and bulk -> 0
+    // Pin geometry: nmos d=(x+16,y-32) g=(x-32,y) s=(x+16,y+32) b=(x+32,y).
+    const commonSource = {
+      components: [
+        vsource("V1", "5", 100, 300),
+        vsource("Vg", "3", 150, 500),
+        resistor("Rd", "1k", 250, 200),
+        { id: "M1", kind: "nmos" as const, label: "M1", value: "NMOS W=10u L=1u", x: 500, y: 300, rotation: 0 as const },
+      ],
+      wires: [],
+      netLabels: [
+        lbl(100, 268, "vdd"), lbl(218, 200, "vdd"),
+        lbl(100, 332, "0"), lbl(150, 532, "0"), lbl(516, 332, "0"), lbl(532, 300, "0"),
+        lbl(150, 468, "gate"), lbl(468, 300, "gate"),
+        lbl(282, 200, "drain"), lbl(516, 268, "drain"),
+      ],
+    };
+
+    const deck = buildSpiceDeck(commonSource, { kind: "op" });
+    expect(deck.netlist).toMatch(/^M1 drain gate 0 0 /m);
+
+    // Read off the deck's own record, so this proves the vectors the read side
+    // looks up rather than three names spelled here.
+    const terminalOf = (letter: string) =>
+      deck.deviceCurrents.find((current) => current.terminal === letter)!.vector;
+    const drain = deck.deviceCurrents.find((current) => !current.terminal)!.vector;
+    expect([drain, terminalOf("g"), terminalOf("s")])
+      .toEqual(["@m1[id]", "@m1[ig]", "@m1[is]"]);
+
+    const run = runOp(deck.netlist, "mos-terminals");
+    for (const name of [drain, terminalOf("g"), terminalOf("s")]) {
+      expect(run.names).toContain(name);
+    }
+
+    const id = value(run, drain);
+    const ig = value(run, terminalOf("g"));
+    const is = value(run, terminalOf("s"));
+
+    // In saturation, so this is a real bias point rather than a cut-off corner
+    // where every one of these is zero and the identity below is vacuous.
+    expect(value(run, "drain")).toBeGreaterThan(0.3);
+    expect(value(run, "drain")).toBeLessThan(4.7);
+    expect(id).toBeGreaterThan(1e-6);
+
+    // Each is the current INTO its terminal, so they sum to zero. The bulk is
+    // not in this sum and does not need to be: its junctions are reverse-biased
+    // here, carrying ~1e-14 A, which is five orders below the tolerance. That is
+    // true of a biased device, NOT of one turned off - a cut-off level-1 MOSFET
+    // returns the whole of its drain leakage through the bulk, which is a second
+    // reason this case biases the part on.
+    expect(Math.abs(id + ig + is)).toBeLessThan(Math.abs(id) * PRINTED_DIGITS);
+
+    // The sum alone would still pass with the gate and source swapped, so their
+    // own shapes are pinned: the source carries the whole channel current back
+    // out and is NEGATIVE, while the gate takes no DC current at all.
+    expect(is).toBeLessThan(0);
+    expect(Math.abs(ig)).toBeLessThan(Math.abs(id) * 1e-9);
+    closeRelative(-is, id);
+
+    // Reconstructing the drain current from Rd holds the device vector against a
+    // node voltage ngspice returned separately, so a mis-read `@m1[id]` fails
+    // here even though the three still sum to zero among themselves.
+    closeRelative(id, (value(run, "vdd") - value(run, "drain")) / 1000);
+  });
+
+  it("gets a zero-length vector, and a blinded `print all`, for a bulk current the model has no terminal for", () => {
+    // Why the bulk is absent from DEVICE_TERMINAL_CURRENT_PARAMS. A VDMOS - what
+    // an LTspice power MOSFET model is - has three terminals, so `@m1[ib]` names
+    // nothing. ngspice does not reject the card: it creates the vector ZERO
+    // LENGTH, the run succeeds, and nothing in the result says the answer is
+    // missing. In the app that would be an empty trace on a real part; at a CLI
+    // it is worse, because `print all` refuses to print ANY vector when one of
+    // them is empty - the whole operating point comes back blank.
+    //
+    // Hand-written rather than built from a schematic because Tau emits its own
+    // level-1 starter model for an `nmos` symbol; a VDMOS arrives with a user's
+    // model file. Vto=3/Kp=10 puts it well into conduction at Vgs=6.
+    const vdmos = (saveCard: string) => `* vdmos bulk probe
+.model TAU_VDMOS VDMOS(Vto=3 Kp=10)
+V1 vdd 0 15
+Vg gate 0 6
+Rd vdd drain 20
+M1 drain gate 0 TAU_VDMOS
+.op
+.save all ${saveCard}
+.end
+`;
+
+    // Asking only for what the device has: every vector arrives, and because a
+    // VDMOS has no fourth terminal to leak into, the three sum to zero with
+    // nothing left over - the cleanest form of the identity above.
+    const ok = runOp(vdmos("@m1[id] @m1[ig] @m1[is]"), "vdmos-ok");
+    const id = value(ok, "@m1[id]");
+    expect(id).toBeGreaterThan(0.1);
+    expect(Math.abs(id + value(ok, "@m1[ig]") + value(ok, "@m1[is]")))
+      .toBeLessThan(Math.abs(id) * PRINTED_DIGITS);
+
+    // Adding the bulk: the vector is listed, so the card was accepted and the
+    // run still succeeded...
+    const blinded = runOp(vdmos("@m1[id] @m1[ig] @m1[is] @m1[ib]"), "vdmos-bulk");
+    expect(blinded.names).toContain("@m1[ib]");
+    // ...and every value is gone, including the node voltages that have nothing
+    // to do with the MOSFET. The run above printed its whole plot; this one
+    // prints none of it.
+    expect(ok.values.size).toBeGreaterThan(4);
+    expect(blinded.values.size).toBe(0);
+  });
+
   it("keeps every vector a run without the `.save` returned, because the card says `all`", () => {
     // The trap this pins, on an `.op` deck rather than the transient one where
     // it was first proved: a bare `.save @q1[ic]` REPLACES ngspice's default set

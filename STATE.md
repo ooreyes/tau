@@ -49,12 +49,15 @@ do not spend a fire diffing it again. Re-check only if its tip moves past
 Ordered. Take the top item unless it is blocked. Class A outranks everything -
 a plausible wrong number is worse than a refusal to run.
 
-1. **Only a BJT reports its extra terminals.** `DEVICE_TERMINAL_CURRENT_PARAMS`
-   in `spiceNetlist.ts` lists `q: ["ib", "ie"]` and nothing else. A MOSFET's
-   `@m1[ig]`/`@m1[is]` were NOT verified against the engine and must not be added
-   on the assumption they behave like the BJT's - prove them at the CLI first.
-   Both read sides are ready for them now (`terminal` on `CurrentTrace` and on
-   `branches`), so this is a deck-side unit plus its engine proof.
+1. **A primary terminal spelled out resolves to NOTHING.** `findCurrentTrace`
+   demands an exact terminal match and the part's own trace carries
+   `terminal: undefined`, so `Ic(Q1)` and `Id(M1)` - the natural spellings for a
+   collector and a drain, and what LTspice itself calls them - parse as terminal
+   signals (`c` and `d` are in `measure.ts`'s letter set for the BJT; `d` is not,
+   yet) and then find no trace. Pre-existing for `Ic(Q1)`, found while adding the
+   MOSFET's. The fix is to fold the primary letter onto the untagged trace in the
+   one `findCurrentTrace` seam - but that widens what `.meas` accepts, so check
+   every consumer first (trap 3).
 2. **Tau's canvas does not draw the primitives it now preserves.** A saved file
    keeps its artwork byte-for-byte, but the author cannot see it in Tau. That is
    stated plainly in KNOWN_ISSUES; rendering them is the follow-up.
@@ -74,6 +77,40 @@ a plausible wrong number is worse than a refusal to run.
 
 Newest first. One line each: date, unit, evidence.
 
+- 2026-08-01 - A MOSFET reports its GATE AND SOURCE (`Ig(M1)`, `Is(M1)`) in a
+  native transient and in the operating-point table, closing the "only a BJT has
+  extra terminals" gap. **The unit was the engine question, not the code.** The
+  previous fire refused to assume a MOSFET behaves like a BJT and left it to be
+  proved at a CLI first; that was right, because the obvious four-param guess is
+  WRONG. `@m1[ig]` and `@m1[is]` are real on every model tried (level 1, level 3,
+  VDMOS), but **`@m1[ib]` is not, and asking for it fails SILENTLY**: ngspice
+  neither errors nor warns on the card, it creates the vector ZERO-LENGTH. That
+  matters in production, not just in theory - `spiceNetlist.ts:904` already emits
+  a 3-terminal VDMOS line for any MOSFET on a user's `.model … VDMOS(…)`, which
+  is exactly what an LTspice power MOSFET is, so the shipped-guess version would
+  have hung an empty trace on the most common vendor part in the corpus. Worse at
+  a CLI: `print all` refuses to print ANY vector when one is empty, so one bad
+  param blanks the entire operating point - node voltages included. Both halves
+  are now a gate (`opNative.corpus.ts`), the second asserting the blinding
+  directly: same deck twice, `ok.values.size > 4` and `blinded.values.size === 0`
+  with `@m1[ib]` listed among the names. **The sum identity needed re-deriving,
+  not copying.** A BJT's three terminals sum to zero always; a level-1 MOSFET's
+  three do so only when biased ON, because a cut-off device returns its whole
+  drain leakage through the bulk (measured: id 5.01e-12 against is 8e-20). So the
+  case biases into saturation and says why, and the VDMOS case - genuinely
+  3-terminal - carries the exact form of the identity. Gate pinned separately as
+  ~0 at DC and the drain held against Rd's own node voltages, so a swapped
+  gate/source still fails after the sum passes. `measure.ts`'s letter set went
+  `[bce]` -> `[bcegs]`, still closed against the `if(` collision it was closed
+  for. Two existing deck assertions were REPOINTED, not deleted - the `.save`
+  card legitimately changed shape. Mutation-checked three ways: drop the param
+  entry (kills 2 unit + 1 real-engine), revert the letter set (kills 1), stop
+  asking for the bulk in the blinded deck (kills 1). Deliberately NOT widened:
+  `d` stays out of the letter set, because the drain IS the untagged trace and
+  `Id(M1)` would parse and then resolve to nothing - that gap is now Next up #1
+  rather than half-fixed here. Gates: tsc, full suite 2266 passed / 148 files
+  with ZERO failures at `--maxWorkers=2`, cargo 32 passed + clippy clean, corpus
+  80/80/80/80 warning-clean 77 with the proof inside it.
 - 2026-08-01 - The OPERATING-POINT TABLE lists a BJT's base and emitter beside
   its collector, closing the scope the previous unit left open: traces existed in
   a transient and stopped at the `.op`, the one analysis where reading a bias

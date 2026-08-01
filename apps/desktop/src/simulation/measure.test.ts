@@ -289,6 +289,28 @@ describe("branch-current signals I(ref)", () => {
     expect(r.value).toBeCloseTo(10, 9);
   });
 
+  it("measures a MOSFET's gate and source terminals", () => {
+    // The same shape as the BJT above, on the letters a MOSFET adds. `Is(M1)`
+    // is the one to watch: `is` reads as a word, so a pattern that matched it
+    // loosely would take the `s` off any identifier ending in one.
+    const withMos: MeasWaveform = {
+      ...w,
+      currents: [
+        ...w.currents!,
+        { ref: "M1", label: "I(M1)", values: [2, 2, 2, 2] },
+        { ref: "M1", label: "Ig(M1)", values: [0, 0, 0, 0], terminal: "g" },
+        { ref: "M1", label: "Is(M1)", values: [-2, -2, -2, -2], terminal: "s" },
+      ],
+    };
+    // A bare `I(M1)` is the drain - the part's own current - not the source.
+    expect(evaluateMeasurement(parseMeasDirective(".meas tran id AVG I(M1)")!, withMos, {}).value)
+      .toBeCloseTo(2, 9);
+    expect(evaluateMeasurement(parseMeasDirective(".meas tran is AVG Is(M1)")!, withMos, {}).value)
+      .toBeCloseTo(-2, 9);
+    expect(evaluateMeasurement(parseMeasDirective(".meas tran ig AVG Ig(M1)")!, withMos, {}).value)
+      .toBeCloseTo(0, 9);
+  });
+
   it("an unknown ref yields a null/NaN measurement, not a throw", () => {
     const r = evaluateMeasurement(parseMeasDirective(".meas tran m AVG I(R9)")!, w, {});
     expect(r.value === null || Number.isNaN(r.value)).toBe(true);

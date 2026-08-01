@@ -865,22 +865,31 @@ describe("buildSpiceDeck", () => {
       // `all` is the whole safety of this card: a bare `.save` REPLACES
       // ngspice's default set, so without it the run comes back with the device
       // currents and nothing else - no node voltages, no source branches.
-      expect(deck.netlist).toMatch(/^\.save all @q1\[ic\] @q1\[ib\] @q1\[ie\] @d1\[id\] @m1\[id\] @j1\[id\]$/m);
+      expect(deck.netlist).toMatch(
+        /^\.save all @q1\[ic\] @q1\[ib\] @q1\[ie\] @d1\[id\] @m1\[id\] @m1\[ig\] @m1\[is\] @j1\[id\]$/m,
+      );
       // Passives have no device vector; their currents are derived from the
       // node voltages instead.
       expect(deck.netlist).not.toContain("@r1");
-      // A BJT is the one part here that reports more than its own current, so
-      // it contributes three entries under one component id. The untagged entry
-      // is what `I(ref)` means; the tagged ones are extra traces. A two- or
-      // three-terminal device with a single current stays a single entry.
+      // A BJT and a MOSFET each report more than their own current, so each
+      // contributes several entries under one component id. The untagged entry
+      // is what `I(ref)` means; the tagged ones are extra traces. A two-terminal
+      // device, and a JFET, stay a single entry.
       expect(deck.deviceCurrents).toEqual([
         { componentId: "Q1", vector: "@q1[ic]" },
         { componentId: "Q1", vector: "@q1[ib]", terminal: "b" },
         { componentId: "Q1", vector: "@q1[ie]", terminal: "e" },
         { componentId: "D1", vector: "@d1[id]" },
         { componentId: "M1", vector: "@m1[id]" },
+        { componentId: "M1", vector: "@m1[ig]", terminal: "g" },
+        { componentId: "M1", vector: "@m1[is]", terminal: "s" },
         { componentId: "J1", vector: "@j1[id]" },
       ]);
+      // The bulk is deliberately not asked for. A model without a bulk terminal
+      // - a VDMOS, which is what an LTspice power MOSFET is - has no `@m1[ib]`,
+      // and ngspice answers the card with a zero-length vector instead of an
+      // error, so the part would carry an empty trace and nothing would say so.
+      expect(deck.netlist).not.toContain("@m1[ib]");
     });
 
     it("asks for the same device currents on an `.op` deck as on a transient deck, with node/source content otherwise unchanged", () => {
@@ -894,7 +903,9 @@ describe("buildSpiceDeck", () => {
         { components: semiconductors(), wires: [] },
         { kind: "tran", stopTime: 1e-3, steps: 100 },
       );
-      expect(opDeck.netlist).toMatch(/^\.save all @q1\[ic\] @q1\[ib\] @q1\[ie\] @d1\[id\] @m1\[id\] @j1\[id\]$/m);
+      expect(opDeck.netlist).toMatch(
+        /^\.save all @q1\[ic\] @q1\[ib\] @q1\[ie\] @d1\[id\] @m1\[id\] @m1\[ig\] @m1\[is\] @j1\[id\]$/m,
+      );
       expect(opDeck.deviceCurrents).toEqual(tranDeck.deviceCurrents);
       // The `.save` card and the trailing analysis line are the only place an
       // `.op` deck and a `.tran` deck built from the same schematic may

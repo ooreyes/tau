@@ -119,6 +119,8 @@ describe("current-signal resolution across a part with several terminals", () =>
     expect(parseCurrentSignal("I(R1)")).toEqual({ ref: "R1" });
     expect(parseCurrentSignal(" Ie(Q1) ")).toEqual({ ref: "Q1", terminal: "e" });
     expect(parseCurrentSignal("IB(Q1)")).toEqual({ ref: "Q1", terminal: "b" });
+    expect(parseCurrentSignal("Ig(M1)")).toEqual({ ref: "M1", terminal: "g" });
+    expect(parseCurrentSignal("Is(M1)")).toEqual({ ref: "M1", terminal: "s" });
     expect(parseCurrentSignal("V(out)")).toBeNull();
     expect(parseCurrentSignal("out")).toBeNull();
     expect(parseCurrentSignal("I()")).toBeNull();

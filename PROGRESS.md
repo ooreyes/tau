@@ -29,7 +29,61 @@ figure all run on the real engine. Do not restore a readiness banner until every
 Class A and Class B item in the audit is closed or consciously accepted, with
 file:line evidence.
 
-**Last unit - 2026-08-01: the operating-point table lists a BJT's base and
+**Last unit - 2026-08-01: a MOSFET reports its gate and source currents
+(`Ig(M1)`, `Is(M1)`).** They resolve for a probe, a plot expression, a `.meas`
+and the FFT picker, and appear as their own rows in the operating-point table -
+the same treatment a BJT's base and emitter got, on the device class that had
+been left out because its vectors were unverified.
+
+**The unit was the engine question, not the code.** The previous unit refused to
+assume a MOSFET behaves like a BJT and left the params to be established at a
+CLI first. That was the right call, because the obvious four-terminal guess is
+wrong. `@m1[ig]` and `@m1[is]` come back on every model tried (level 1, level 3,
+VDMOS), but **`@m1[ib]` does not, and asking for it fails silently**: ngspice
+neither errors nor warns on the card, it creates the vector with ZERO LENGTH.
+That is a live production case rather than a hypothetical - Tau already emits a
+3-terminal VDMOS device line for any MOSFET on a user's `.model … VDMOS(…)`, and
+a VDMOS is what an LTspice power MOSFET model is, so shipping the guess would
+have hung an empty trace on the most common vendor part an imported design
+carries. At a command line it is worse: `print all` refuses to print any vector
+when one of them is empty, so a single bad param blanks the whole operating
+point, node voltages included. The bulk is therefore deliberately absent, with
+the reason recorded where the params are listed.
+
+Both findings are now gates in `opNative.corpus.ts`. The gate/source case builds
+a common-source stage through the normal deck path, takes the vector names off
+the deck's own record, and holds the three currents against each other and
+against Rd's node voltages. The second case asserts the blinding directly: the
+same VDMOS deck run twice, once asking only for what the device has and once
+also for the bulk, with the bulk run listing `@m1[ib]` among its vectors and
+returning no values at all.
+
+**The sum identity had to be re-derived, not copied.** A BJT's three terminals
+sum to zero at any bias; a level-1 MOSFET's three do so only when it is on,
+because a cut-off device returns its whole drain leakage through the bulk
+(measured: 5.01e-12 A of drain current against 8e-20 A at the source). So the
+case biases into saturation and says why, and the VDMOS case - genuinely
+three-terminal - carries the exact form of the identity. The gate is pinned
+separately as no DC current at all and the drain held against a node voltage
+ngspice returned independently, so a swapped gate and source still fails after
+the sum passes.
+
+`measure.ts`'s terminal-letter set went from `[bce]` to `[bcegs]`, still a closed
+set against the `if(...)` collision it was closed for. `d` was deliberately left
+out: the drain is the untagged trace, so `Id(M1)` would parse and then resolve to
+nothing. That gap - which `Ic(Q1)` already has - is written up as the next unit
+rather than half-fixed here. Two existing deck assertions were repointed, not
+deleted, since the `.save` card legitimately changed shape. Mutation-checked
+three ways: drop the param entry (kills 2 unit tests + 1 real-engine case),
+revert the letter set (kills 1), stop the blinded deck asking for the bulk
+(kills 1). KNOWN_ISSUES updated - it said a MOSFET reports one current, and now
+records both the new terminals and why the bulk is not among them. Gates: tsc,
+full suite 2266 passed / 148 files with zero failures at `--maxWorkers=2`, cargo
+32 passed + clippy clean, corpus 80/80/80/80 (warning-clean 77) with the proof
+inside it. Next candidate: make a primary terminal spelled out (`Ic(Q1)`,
+`Id(M1)`) resolve to the part's own trace instead of to nothing.
+
+**Prior unit - 2026-08-01: the operating-point table lists a BJT's base and
 emitter beside its collector.** The previous unit gave them traces in a
 transient and stopped at the `.op`, because a `branches` entry is keyed by
 component id and a second entry per part collides on that key. The table now
@@ -75,7 +129,7 @@ cargo 32 passed + clippy clean, corpus 80/80/80/80 (warning-clean 77) with the
 proof inside it. Next candidate: verify a MOSFET's `@m1[ig]`/`@m1[is]` at the
 CLI and widen the terminal set if the engine returns them.
 
-**Prior unit - 2026-08-01: a BJT's base and emitter have their own current
+**Earlier unit - 2026-08-01: a BJT's base and emitter have their own current
 traces in a native transient.** `Ib(Q1)` and `Ie(Q1)` now resolve for a probe,
 a plot expression, a `.meas` and the FFT picker; before, a transistor had only
 its collector current to offer under the single name `I(Q1)`.

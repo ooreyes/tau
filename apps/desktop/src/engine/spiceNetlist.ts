@@ -600,9 +600,18 @@ export function deviceCurrentVector(instanceLine: string): string | undefined {
  *
  * A param is `i` + its terminal letter, so the letter is derived rather than
  * listed twice; nothing here may name a param that breaks that.
+ *
+ * A MOSFET reports its gate and source the same way, but NOT its bulk. Only a
+ * model with a bulk terminal has `@m1[ib]` at all, and Tau emits a 3-terminal
+ * line for any MOSFET on a VDMOS model (see `componentLines`) - which is what
+ * an LTspice power MOSFET is. ngspice does not refuse the card for one: it
+ * creates the vector ZERO-LENGTH, so the run succeeds and says nothing, and the
+ * part carries an empty trace. Only params every model of a kind actually
+ * reports belong here; the bulk is deliberately absent.
  */
 export const DEVICE_TERMINAL_CURRENT_PARAMS: Readonly<Record<string, readonly string[]>> = {
   q: ["ib", "ie"],
+  m: ["ig", "is"],
 };
 
 /** `@q1[ib]` / `@q1[ie]` for the instance line `Q1 c b e TAU_NPN`, each tagged
