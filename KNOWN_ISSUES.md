@@ -128,7 +128,9 @@ one engine for the whole session.
   exceeds this is refused at import with a message naming the actual counts;
   every schematic in the acceptance corpus fits with room to spare.
 - A part's own current reads as `I(Q1)` / `I(M1)`: a BJT's collector current, a
-  three-terminal device's drain current. A BJT also reports its base and emitter
+  three-terminal device's drain current. Naming that terminal explicitly reads
+  the same current, so `Ic(Q1)` and `Id(M1)` work as well as the bare form. A
+  BJT also reports its base and emitter
   as `Ib(Q1)` and `Ie(Q1)`, and a MOSFET its gate and source as `Ig(M1)` and
   `Is(M1)`, in a native transient - where plot expressions, `.meas` and the FFT
   picker all resolve them - and as their own rows in the operating-point table.

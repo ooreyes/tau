@@ -49,19 +49,10 @@ do not spend a fire diffing it again. Re-check only if its tip moves past
 Ordered. Take the top item unless it is blocked. Class A outranks everything -
 a plausible wrong number is worse than a refusal to run.
 
-1. **A primary terminal spelled out resolves to NOTHING.** `findCurrentTrace`
-   demands an exact terminal match and the part's own trace carries
-   `terminal: undefined`, so `Ic(Q1)` and `Id(M1)` - the natural spellings for a
-   collector and a drain, and what LTspice itself calls them - parse as terminal
-   signals (`c` and `d` are in `measure.ts`'s letter set for the BJT; `d` is not,
-   yet) and then find no trace. Pre-existing for `Ic(Q1)`, found while adding the
-   MOSFET's. The fix is to fold the primary letter onto the untagged trace in the
-   one `findCurrentTrace` seam - but that widens what `.meas` accepts, so check
-   every consumer first (trap 3).
-2. **Tau's canvas does not draw the primitives it now preserves.** A saved file
+1. **Tau's canvas does not draw the primitives it now preserves.** A saved file
    keeps its artwork byte-for-byte, but the author cannot see it in Tau. That is
    stated plainly in KNOWN_ISSUES; rendering them is the follow-up.
-3. **The one Rust test that drives a real libngspice is red on this host and is
+2. **The one Rust test that drives a real libngspice is red on this host and is
    not a gate.** `runs_an_operating_point_with_the_real_ngspice_library` is
    `#[ignore]`d behind `TAU_NGSPICE_LIB`, and with either staged dylib it dies
    partway through on `Unknown model type adc_bridge` - the XSPICE code models
@@ -77,6 +68,41 @@ a plausible wrong number is worse than a refusal to run.
 
 Newest first. One line each: date, unit, evidence.
 
+- 2026-08-01 - `Ic(Q1)` AND `Id(M1)` - what LTspice itself calls a collector and
+  a drain - resolve to the real current instead of to nothing. Both parsed fine
+  and then found no trace, because a part's own current IS its collector or its
+  drain and the trace carrying it is the UNTAGGED one: an exact terminal match
+  had nothing to match. **The whole risk was in how wide the fold gets.** A
+  fallback of "no exact terminal, take the part's own current" would have made
+  `Ib(R1)` read a resistor's current and `Iz(Q1)` read a collector - a confident
+  wrong number for a spelling that is simply not a thing. So the fold is keyed on
+  the ONE letter the element type reports (`PRIMARY_TERMINALS` in `currents.ts`),
+  which is the same fact `DEVICE_CURRENT_PARAMS` states for the `.save` card -
+  and a test holds the two tables in step, because a letter that drifted apart
+  resolves to nothing with no error to say why. `measure.ts`'s letter set went
+  `[bcegs]` -> `[bcdegs]`: `d` was not a letter a `.meas` current could carry, so
+  `Id(M1)` parsed as plain text and measured nothing at all; still closed against
+  the `if(` collision, and the existing `if()` assertion is in the same case.
+  Every consumer of the seam was checked before widening (trap 3): only three of
+  the five pass a terminal at all (`measure`, `fft`, `fourier`), and none
+  enumerate terminals, so nothing double-counts. `.meas ac` returns NaN for every
+  current regardless and was left alone. Real-engine proof in
+  `tranNative.corpus.ts`: a self-biased NPN and a common-source NMOS on one rail,
+  traces assembled off the DECK'S OWN `deviceCurrents` record rather than six
+  names spelled in the harness, then resolved through the shipped
+  `findCurrentTrace` - `Ic(Q1)` and `Id(M1)` each held against KCL from node
+  voltages ngspice returned separately, both parts biased on so a cut-off corner
+  cannot make it vacuous, and each asserted NOT to be the terminal beside it (the
+  emitter and source run negative, the base is under a tenth). Mutation-checked
+  five ways on the unit tests (revert the fold, revert the letter set, drop the
+  guard, perturb the table `q: "c"` -> `"e"`, fold onto a tagged trace) and three
+  ways on the real-engine case; the baseline is green and every mutation kills at
+  least one case. One existing assertion said `Ic(Q1)` resolves to nothing and
+  was REPOINTED, not deleted - the unanswerable cases it guarded are now
+  `Ib(R1)`, `Ic(R1)`, `Id(Q1)`, `Ic(M1)` and `Iz(Q1)`. KNOWN_ISSUES says the
+  spelling works. Gates: tsc, full suite 2268 passed / 148 files with ZERO
+  failures at `--maxWorkers=2`, cargo 32 passed + clippy clean, corpus
+  80/80/80/80 warning-clean 77 with the proof inside it.
 - 2026-08-01 - A MOSFET reports its GATE AND SOURCE (`Ig(M1)`, `Is(M1)`) in a
   native transient and in the operating-point table, closing the "only a BJT has
   extra terminals" gap. **The unit was the engine question, not the code.** The

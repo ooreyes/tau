@@ -280,6 +280,10 @@ describe("branch-current signals I(ref)", () => {
       .toBeCloseTo(-1.01, 9);
     expect(evaluateMeasurement(parseMeasDirective(".meas tran ic AVG I(Q1)")!, withBjt, {}).value)
       .toBeCloseTo(1, 9);
+    // LTspice's own spelling for that same collector current. It reaches the
+    // part's untagged trace, not the emitter sharing the ref-des beside it.
+    expect(evaluateMeasurement(parseMeasDirective(".meas tran icc AVG Ic(Q1)")!, withBjt, {}).value)
+      .toBeCloseTo(1, 9);
 
     // The signal pattern had to grow a terminal letter to read `Ie(Q1)`, and
     // `if(cond,a,b)` is a real expression function: a wildcard letter there
@@ -309,6 +313,11 @@ describe("branch-current signals I(ref)", () => {
       .toBeCloseTo(-2, 9);
     expect(evaluateMeasurement(parseMeasDirective(".meas tran ig AVG Ig(M1)")!, withMos, {}).value)
       .toBeCloseTo(0, 9);
+    // `Id(M1)` had to be added to the signal pattern as well as resolved: `d`
+    // was not a letter a `.meas` current could carry, so the natural spelling
+    // for a drain parsed as plain text and measured nothing at all.
+    expect(evaluateMeasurement(parseMeasDirective(".meas tran idd AVG Id(M1)")!, withMos, {}).value)
+      .toBeCloseTo(2, 9);
   });
 
   it("an unknown ref yields a null/NaN measurement, not a throw", () => {

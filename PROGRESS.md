@@ -29,7 +29,58 @@ figure all run on the real engine. Do not restore a readiness banner until every
 Class A and Class B item in the audit is closed or consciously accepted, with
 file:line evidence.
 
-**Last unit - 2026-08-01: a MOSFET reports its gate and source currents
+**Last unit - 2026-08-01: `Ic(Q1)` and `Id(M1)` resolve to the real current
+instead of to nothing.** They are what LTspice itself calls a collector and a
+drain, so they are the spellings an experienced user reaches for first, and both
+parsed cleanly and then found no trace at all. The reason is that a part's own
+current already IS its collector or its drain: that value rides on the UNTAGGED
+trace, the one a bare `I(Q1)` means, so an exact terminal match had nothing to
+match. A probe, a plot expression, a `.meas` and the FFT picker all reach the
+current now, under either spelling.
+
+**The whole risk was in how wide the fallback gets.** A plain "no exact terminal,
+take the part's own current" rule would have made `Ib(R1)` report a resistor's
+current and `Iz(Q1)` report a collector - a confident number for a name that is
+not a thing, which is exactly the failure class this project treats as worse than
+refusing to answer. The fold is therefore keyed on the one terminal letter the
+element type actually reports, held in `PRIMARY_TERMINALS` beside the resolver.
+That is the same fact the `.save` card already states as `DEVICE_CURRENT_PARAMS`
+(`i` plus the same letter), and a test holds the two tables in step, because a
+letter that drifted apart resolves to nothing and says nothing about why.
+
+`measure.ts`'s terminal-letter set went from `[bcegs]` to `[bcdegs]`. `d` was
+deliberately left out when the MOSFET terminals landed, precisely because it
+resolved to nothing; with the fold in place it is the drain, and without the
+widening `Id(M1)` would still parse as plain text and measure nothing. The set
+stays closed against the `if(...)` collision it was closed for, and the existing
+`if()` assertion sits in the same test. Every consumer of the seam was checked
+before widening it: of the five call sites only three pass a terminal at all
+(`measure`, `fft`, `fourier`), none enumerate terminals, so nothing can
+double-count; `.meas ac` returns NaN for every current regardless and was left
+alone.
+
+The real-engine proof is in `tranNative.corpus.ts`: a self-biased NPN and a
+common-source NMOS sharing one rail, with the trace list assembled off the
+deck's own record of what it asked ngspice for rather than off six names spelled
+in the harness, then resolved through the shipped resolver. `Ic(Q1)` and
+`Id(M1)` are each held against KCL from node voltages ngspice returned
+separately, so a placeholder that merely resolved would fail; both parts are
+biased on, so the numbers are a real operating point rather than a cut-off
+corner where every terminal reads zero; and each is asserted NOT to be the
+terminal sitting beside it under the same ref-des - the emitter and the source
+run the other way, the base is under a tenth the size. Mutation-checked five
+ways on the unit tests (revert the fold, revert the letter set, drop the guard,
+perturb the table so `q` folds to the emitter, fold onto a tagged trace) and
+three ways on the real-engine case, with the baseline green and every mutation
+killing at least one case. One existing assertion stated that `Ic(Q1)` resolves
+to nothing; it was repointed, not deleted, onto the cases that are still
+unanswerable. KNOWN_ISSUES says the spelling works. Gates: tsc, full suite 2268
+passed / 148 files with zero failures at `--maxWorkers=2`, cargo 32 passed +
+clippy clean, corpus 80/80/80/80 (warning-clean 77) with the proof inside it.
+Next candidate: draw the imported drawing primitives Tau preserves but does not
+render.
+
+**Prior unit - 2026-08-01: a MOSFET reports its gate and source currents
 (`Ig(M1)`, `Is(M1)`).** They resolve for a probe, a plot expression, a `.meas`
 and the FFT picker, and appear as their own rows in the operating-point table -
 the same treatment a BJT's base and emitter got, on the device class that had
@@ -83,7 +134,7 @@ full suite 2266 passed / 148 files with zero failures at `--maxWorkers=2`, cargo
 inside it. Next candidate: make a primary terminal spelled out (`Ic(Q1)`,
 `Id(M1)`) resolve to the part's own trace instead of to nothing.
 
-**Prior unit - 2026-08-01: the operating-point table lists a BJT's base and
+**Earlier - 2026-08-01: the operating-point table lists a BJT's base and
 emitter beside its collector.** The previous unit gave them traces in a
 transient and stopped at the `.op`, because a `branches` entry is keyed by
 component id and a second entry per part collides on that key. The table now

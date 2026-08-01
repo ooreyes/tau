@@ -309,10 +309,12 @@ function isClauseKeyword(token: string): boolean {
 
 // The terminal suffix is a closed set, not `[a-z]?`: `if(cond,a,b)` is a real
 // expression function (see expr.ts), and a wildcard letter would read every one
-// of them as a current on a part called `cond` and measure NaN. The letters
-// track DEVICE_TERMINAL_CURRENT_PARAMS - a spelling accepted here that no deck
-// ever saves resolves to nothing, so the two sets stay in step.
-const SIGNAL_RE = /\b(V|I[bcegs]?)\s*\(\s*([^)]*?)\s*\)/gi;
+// of them as a current on a part called `cond` and measure NaN. The letters are
+// the terminals a deck actually saves (DEVICE_TERMINAL_CURRENT_PARAMS) plus the
+// ones a part's own current already is (PRIMARY_TERMINALS, which is what lets
+// `Id(M1)` name a drain) - a spelling accepted here that resolves to nothing
+// measures NaN, so the sets stay in step.
+const SIGNAL_RE = /\b(V|I[bcdegs]?)\s*\(\s*([^)]*?)\s*\)/gi;
 
 /** Resolve a node name to its trace's per-sample values. */
 function findTrace(wf: MeasWaveform, name: string): ReadonlyArray<number> | null {

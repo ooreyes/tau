@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { deriveDcRcBranches, deriveRcCurrents, findCurrentTrace, parseCurrentSignal } from "./currents";
+import { deriveDcRcBranches, deriveRcCurrents, findCurrentTrace, parseCurrentSignal, PRIMARY_TERMINALS } from "./currents";
+import { DEVICE_CURRENT_PARAMS } from "../engine/spiceNetlist";
 import type { ExtractedComponent } from "../schematic/netlist";
 import type { SchematicComponent } from "../schematic/types";
 
@@ -96,6 +97,9 @@ describe("current-signal resolution across a part with several terminals", () =>
     { ref: "Q1", label: "I(Q1)", values: [10, 10] },
     { ref: "Q1", label: "Ib(Q1)", values: [0.1, 0.1], terminal: "b" },
     { ref: "Q1", label: "Ie(Q1)", values: [-10.1, -10.1], terminal: "e" },
+    { ref: "M1", label: "I(M1)", values: [2, 2] },
+    { ref: "M1", label: "Ig(M1)", values: [0, 0], terminal: "g" },
+    { ref: "M1", label: "Is(M1)", values: [-2, -2], terminal: "s" },
   ];
 
   it("reads `I(ref)` as the part's own current, not the terminal listed last", () => {
@@ -110,9 +114,40 @@ describe("current-signal resolution across a part with several terminals", () =>
     expect(findCurrentTrace(traces, "Q1", "b")?.label).toBe("Ib(Q1)");
     expect(findCurrentTrace(traces, "Q1", "E")?.label).toBe("Ie(Q1)");
     // A resistor has no terminals to name, and must not answer with its own
-    // current when one is requested - `Ib(R1)` is unanswerable, not 1 A.
+    // current when one is requested - `Ib(R1)` is unanswerable, not 1 A. The
+    // fold below is what makes this worth pinning: it must not widen into
+    // "any terminal on any part reads that part's current".
     expect(findCurrentTrace(traces, "R1", "b")).toBeUndefined();
-    expect(findCurrentTrace(traces, "Q1", "c")).toBeUndefined();
+    expect(findCurrentTrace(traces, "R1", "c")).toBeUndefined();
+    // A letter this element type does not report stays unanswerable too: a BJT
+    // has no drain and a MOSFET no collector.
+    expect(findCurrentTrace(traces, "Q1", "d")).toBeUndefined();
+    expect(findCurrentTrace(traces, "M1", "c")).toBeUndefined();
+    expect(findCurrentTrace(traces, "Q1", "z")).toBeUndefined();
+  });
+
+  it("resolves a primary terminal spelled out to the part's own untagged trace", () => {
+    // `Ic(Q1)` and `Id(M1)` are what LTspice calls a collector and a drain, and
+    // nothing in a result carries `terminal: "c"` or `"d"` - the trace holding
+    // those currents is the untagged one - so an exact match found nothing at
+    // all for either spelling.
+    expect(findCurrentTrace(traces, "Q1", "c")?.label).toBe("I(Q1)");
+    expect(findCurrentTrace(traces, "M1", "D")?.label).toBe("I(M1)");
+    // Landing on the part rather than on one of its tagged terminals is the
+    // whole point: the emitter and the source sit in the same list under the
+    // same ref-des, with the opposite sign.
+    expect(findCurrentTrace(traces, "Q1", "c")?.values).toEqual([10, 10]);
+    expect(findCurrentTrace(traces, "M1", "d")?.values).toEqual([2, 2]);
+  });
+
+  it("folds exactly the terminal the deck saves as the part's own current", () => {
+    // Two tables state the same fact - what a part's own current IS - one for
+    // the `.save` card and one for resolution. A letter that drifted apart
+    // resolves to nothing, with no error to say why.
+    expect(Object.keys(PRIMARY_TERMINALS).sort()).toEqual(Object.keys(DEVICE_CURRENT_PARAMS).sort());
+    for (const [element, terminal] of Object.entries(PRIMARY_TERMINALS)) {
+      expect(DEVICE_CURRENT_PARAMS[element], element).toBe(`i${terminal}`);
+    }
   });
 
   it("splits a current signal into its part and terminal", () => {

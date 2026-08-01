@@ -54,6 +54,24 @@ export function parseCurrentSignal(text: string): { ref: string; terminal?: stri
 }
 
 /**
+ * The terminal a part's own current already IS, keyed by the ref-des letter of
+ * the element type that reports it. `I(Q1)` is a BJT's collector current and
+ * `I(M1)` a three-terminal device's drain current, so those two currents carry
+ * no terminal tag and nothing in a result answers to `c` or `d`.
+ *
+ * Mirrors the params the deck asks ngspice for - `DEVICE_CURRENT_PARAMS` in
+ * engine/spiceNetlist.ts is `i` plus the letter here - and a test holds the two
+ * in step, because a letter accepted here that the deck saves under a different
+ * name resolves to nothing and says nothing about why.
+ */
+export const PRIMARY_TERMINALS: Readonly<Record<string, string>> = {
+  d: "d",
+  q: "c",
+  m: "d",
+  j: "d",
+};
+
+/**
  * Resolve a current signal against a result's traces.
  *
  * A device that reports several terminals contributes several traces under ONE
@@ -61,6 +79,12 @@ export function parseCurrentSignal(text: string): { ref: string; terminal?: stri
  * or, for a Map built over the list, whichever comes LAST. Every caller goes
  * through here so "a bare `I(ref)` means the part's own current, not one of its
  * terminals" is stated once instead of re-derived per call site.
+ *
+ * Spelling that same current's terminal out resolves to it: `Ic(Q1)` and
+ * `Id(M1)` are what LTspice calls a collector and a drain, and an exact match
+ * finds nothing for either, since the trace carrying them is the untagged one.
+ * Only the single letter the ref-des's element type reports folds that way, so
+ * `Ib(R1)` stays unanswerable rather than quietly reading a resistor's current.
  */
 export function findCurrentTrace<T extends { ref: string; terminal?: string }>(
   currents: ReadonlyArray<T> | undefined,
@@ -69,7 +93,10 @@ export function findCurrentTrace<T extends { ref: string; terminal?: string }>(
 ): T | undefined {
   const wantedRef = ref.trim().toLowerCase();
   const wantedTerminal = terminal?.toLowerCase();
-  return currents?.find((c) => c.ref.toLowerCase() === wantedRef && c.terminal === wantedTerminal);
+  const exact = currents?.find((c) => c.ref.toLowerCase() === wantedRef && c.terminal === wantedTerminal);
+  if (exact || wantedTerminal === undefined) return exact;
+  if (PRIMARY_TERMINALS[wantedRef.slice(0, 1)] !== wantedTerminal) return undefined;
+  return currents?.find((c) => c.ref.toLowerCase() === wantedRef && c.terminal === undefined);
 }
 
 /**

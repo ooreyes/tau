@@ -17,7 +17,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { describe, it, expect } from "vitest";
 import { buildSpiceDeck } from "../src/engine/spiceNetlist";
-import { deriveRcCurrents } from "../src/simulation/currents";
+import { deriveRcCurrents, findCurrentTrace } from "../src/simulation/currents";
 import { runTransientAnalysis } from "../src/simulation/linearTransient";
 import type { NetLabel, SchematicComponent } from "../src/schematic/types";
 
@@ -429,6 +429,104 @@ describe.skipIf(!haveNgspice)("`.tran` through the native engine", () => {
     ic.forEach((value, index) => {
       expect(ib[index]).toBeLessThan(value / 10);
     });
+  });
+
+  it("resolves `Ic(Q1)` and `Id(M1)` - LTspice's own spellings - to the real collector and drain", () => {
+    // A collector and a drain ARE what `I(Q1)` and `I(M1)` mean, so the traces
+    // carrying them are the untagged ones and nothing in a result answers to
+    // `c` or `d`. Both spellings used to parse and then resolve to nothing.
+    //
+    //   V1 5V -> vdd, Rc 2k -> coll -> Q1 collector, Rb 470k -> base (self-bias)
+    //            Rd 1k -> drain -> M1 drain, Vg 3V -> gate
+    //            Q1 emitter, M1 source and bulk -> 0
+    // Pin geometry: npn c=(x+16,y-32) b=(x-32,y) e=(x+16,y+32);
+    // nmos d=(x+16,y-32) g=(x-32,y) s=(x+16,y+32) b=(x+32,y).
+    const stages = {
+      components: [
+        vsource("V1", "5", 100, 300),
+        vsource("Vg", "3", 150, 500),
+        resistor("Rc", "2k", 250, 200),
+        resistor("Rb", "470k", 250, 400),
+        resistor("Rd", "1k", 250, 600),
+        { id: "Q1", kind: "npn" as const, label: "Q1", value: "NPN", x: 500, y: 300, rotation: 0 as const },
+        { id: "M1", kind: "nmos" as const, label: "M1", value: "NMOS W=10u L=1u", x: 800, y: 600, rotation: 0 as const },
+      ],
+      wires: [],
+      netLabels: [
+        lbl(100, 268, "vdd"), lbl(218, 200, "vdd"), lbl(218, 400, "vdd"), lbl(218, 600, "vdd"),
+        lbl(100, 332, "0"), lbl(150, 532, "0"), lbl(516, 332, "0"), lbl(816, 632, "0"), lbl(832, 600, "0"),
+        lbl(150, 468, "gate"), lbl(768, 600, "gate"),
+        lbl(282, 200, "coll"), lbl(516, 268, "coll"),
+        lbl(282, 400, "base"), lbl(468, 300, "base"),
+        lbl(282, 600, "drain"), lbl(816, 568, "drain"),
+      ],
+    };
+
+    const deck = buildSpiceDeck(stages, { kind: "tran", stopTime: 1e-4, steps: 20 });
+    expect(deck.netlist).toMatch(/^Q1 coll base 0 /m);
+    expect(deck.netlist).toMatch(/^M1 drain gate 0 0 /m);
+
+    const run = runTran(deck.netlist, "primary-terminals");
+
+    // The trace list the adapter builds, assembled off the deck's OWN record of
+    // what it asked ngspice for rather than off six names spelled here: the
+    // untagged entry is the part's own current, every other carries the
+    // terminal it enters.
+    const traces = deck.deviceCurrents.map((current) => {
+      const ref = stages.components.find((c) => c.id === current.componentId)!.label;
+      return {
+        ref,
+        label: current.terminal ? `I${current.terminal}(${ref})` : `I(${ref})`,
+        values: column(run, current.vector),
+        terminal: current.terminal,
+      };
+    });
+    expect(traces.map((t) => t.label))
+      .toEqual(["I(Q1)", "Ib(Q1)", "Ie(Q1)", "I(M1)", "Ig(M1)", "Is(M1)"]);
+
+    const ic = findCurrentTrace(traces, "Q1", "c");
+    const id = findCurrentTrace(traces, "M1", "D");
+    expect(ic?.label).toBe("I(Q1)");
+    expect(id?.label).toBe("I(M1)");
+
+    // Real engine values, not a placeholder that merely resolved: `coll` and
+    // `drain` each carry only their own resistor, so KCL fixes both currents
+    // exactly against node voltages ngspice returned separately. Tolerance is
+    // `print`'s seven digits, five orders looser than any real defect.
+    const vdd = column(run, "vdd");
+    const coll = column(run, "coll");
+    const drain = column(run, "drain");
+    expect(ic!.values.length).toBe(vdd.length);
+    ic!.values.forEach((value, i) => {
+      const kcl = (vdd[i] - coll[i]) / 2000;
+      expect(Math.abs(value - kcl)).toBeLessThan(Math.abs(kcl) * 1e-5);
+    });
+    id!.values.forEach((value, i) => {
+      const kcl = (vdd[i] - drain[i]) / 1000;
+      expect(Math.abs(value - kcl)).toBeLessThan(Math.abs(kcl) * 1e-5);
+    });
+
+    // Both parts are biased on, so the numbers above are a real operating point
+    // rather than a cut-off corner where every terminal reads zero and landing
+    // on the wrong one would go unnoticed.
+    expect(Math.min(...ic!.values)).toBeGreaterThan(1e-4);
+    expect(Math.min(...id!.values)).toBeGreaterThan(1e-6);
+
+    // And NOT one of the terminals sharing the ref-des beside it, which is how
+    // a fold that ignored the terminal would have failed: the emitter and the
+    // source both run the other way, and the base is a hundredth of the size.
+    expect(Math.max(...findCurrentTrace(traces, "Q1", "e")!.values)).toBeLessThan(0);
+    expect(Math.max(...findCurrentTrace(traces, "M1", "s")!.values)).toBeLessThan(0);
+    expect(Math.max(...findCurrentTrace(traces, "Q1", "b")!.values))
+      .toBeLessThan(Math.min(...ic!.values) / 10);
+
+    // The tagged spellings still reach their own traces, and a letter the
+    // element type does not report stays unanswerable on a real result too - a
+    // BJT has no drain and a MOSFET no collector.
+    expect(findCurrentTrace(traces, "Q1", "b")?.label).toBe("Ib(Q1)");
+    expect(findCurrentTrace(traces, "M1", "g")?.label).toBe("Ig(M1)");
+    expect(findCurrentTrace(traces, "Q1", "d")).toBeUndefined();
+    expect(findCurrentTrace(traces, "M1", "c")).toBeUndefined();
   });
 
   it("keeps every vector a run without the `.save` returned, because the card says `all`", () => {
