@@ -127,13 +127,19 @@ one engine for the whole session.
 - A document is capped at 5,000 components and 20,000 wires. An `.asc` that
   exceeds this is refused at import with a message naming the actual counts;
   every schematic in the acceptance corpus fits with room to spare.
-- A transistor, diode or JFET reports one current: a BJT its collector current,
-  a three-terminal device its drain current. Both read as `I(Q1)` / `I(M1)`. The
-  other terminals have no trace of their own. Currents are reported in a native
-  transient run and in the operating-point table; the other analyses report node
-  voltages only. ngspice returns a current of its own for sources, inductors and
-  semiconductors; a resistor's and a capacitor's are reconstructed from the node
-  voltages either side of them, so both runs list the same set of parts.
+- A part's own current reads as `I(Q1)` / `I(M1)`: a BJT's collector current, a
+  three-terminal device's drain current. A BJT also reports its base and emitter
+  in a native transient, as `Ib(Q1)` and `Ie(Q1)`, which plot expressions, `.meas`
+  and the FFT picker all resolve. These are ngspice's own values - the current
+  INTO each terminal, so `Ie(Q1)` reads negative for a forward-active NPN and the
+  three sum to zero. A diode, MOSFET or JFET still reports one current; its other
+  terminals have no trace of their own. The operating-point table lists one
+  current per part, so a BJT's base and emitter appear in a transient only.
+  Currents are reported in a native transient run and in the operating-point
+  table; the other analyses report node voltages only. ngspice returns a current
+  of its own for sources, inductors and semiconductors; a resistor's and a
+  capacitor's are reconstructed from the node voltages either side of them, so
+  both runs list the same set of parts.
 
 ## Install
 

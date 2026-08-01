@@ -55,6 +55,12 @@ export interface CurrentTrace {
   ref: string;
   label: string;
   values: number[];
+  /** The device terminal this current enters, for a part that reports more than
+   *  one: a BJT contributes `b` and `e` alongside the collector current. Absent
+   *  on the single trace a bare `I(ref)` resolves to, so several traces can
+   *  share one ref-des - resolve through `findCurrentTrace`, never by scanning
+   *  `ref` alone. */
+  terminal?: string;
 }
 
 export interface AnalysisStats {

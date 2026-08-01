@@ -14,6 +14,7 @@
  */
 
 import type { MeasWaveform } from "./measure";
+import { findCurrentTrace, parseCurrentSignal } from "./currents";
 
 /** Window functions offered on the FFT view (LTspice's default is a flavour of these). */
 export type WindowFn = "rectangular" | "hann" | "hamming" | "blackman";
@@ -265,10 +266,9 @@ export function spectrumThd(
 /** Resolve an FFT output signal (`V(node)`, bare node, or `I(ref)`) to a value series. */
 function resolveSignal(waveform: MeasWaveform, output: string): number[] | null {
   const text = output.trim();
-  const current = /^i\(([^)]+)\)$/i.exec(text);
+  const current = parseCurrentSignal(text);
   if (current) {
-    const ref = current[1].trim().toLowerCase();
-    const found = waveform.currents?.find((c) => c.ref.toLowerCase() === ref);
+    const found = findCurrentTrace(waveform.currents, current.ref, current.terminal);
     return found ? [...found.values] : null;
   }
   const voltage = /^v\(([^)]+)\)$/i.exec(text);

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { deriveDcRcBranches, deriveRcCurrents } from "./currents";
+import { deriveDcRcBranches, deriveRcCurrents, findCurrentTrace, parseCurrentSignal } from "./currents";
 import type { ExtractedComponent } from "../schematic/netlist";
 import type { SchematicComponent } from "../schematic/types";
 
@@ -87,5 +87,40 @@ describe("deriveDcRcBranches (operating-point R/C currents from node voltages)",
     ];
     const voltages = new Map<string, number>([["out", 1], ["0", 0]]);
     expect(deriveDcRcBranches(comps, voltages)).toHaveLength(0);
+  });
+});
+
+describe("current-signal resolution across a part with several terminals", () => {
+  const traces = [
+    { ref: "R1", label: "I(R1)", values: [1, 1] },
+    { ref: "Q1", label: "I(Q1)", values: [10, 10] },
+    { ref: "Q1", label: "Ib(Q1)", values: [0.1, 0.1], terminal: "b" },
+    { ref: "Q1", label: "Ie(Q1)", values: [-10.1, -10.1], terminal: "e" },
+  ];
+
+  it("reads `I(ref)` as the part's own current, not the terminal listed last", () => {
+    // The hazard this pins: three traces share the ref-des `Q1`, so a lookup
+    // that matched on `ref` alone would answer with whichever the list happened
+    // to end on - the emitter, a different number with the opposite sign.
+    expect(findCurrentTrace(traces, "Q1")?.label).toBe("I(Q1)");
+    expect(findCurrentTrace(traces, "q1")?.values).toEqual([10, 10]);
+  });
+
+  it("reads a terminal only when one is asked for, and never falls back to the part", () => {
+    expect(findCurrentTrace(traces, "Q1", "b")?.label).toBe("Ib(Q1)");
+    expect(findCurrentTrace(traces, "Q1", "E")?.label).toBe("Ie(Q1)");
+    // A resistor has no terminals to name, and must not answer with its own
+    // current when one is requested - `Ib(R1)` is unanswerable, not 1 A.
+    expect(findCurrentTrace(traces, "R1", "b")).toBeUndefined();
+    expect(findCurrentTrace(traces, "Q1", "c")).toBeUndefined();
+  });
+
+  it("splits a current signal into its part and terminal", () => {
+    expect(parseCurrentSignal("I(R1)")).toEqual({ ref: "R1" });
+    expect(parseCurrentSignal(" Ie(Q1) ")).toEqual({ ref: "Q1", terminal: "e" });
+    expect(parseCurrentSignal("IB(Q1)")).toEqual({ ref: "Q1", terminal: "b" });
+    expect(parseCurrentSignal("V(out)")).toBeNull();
+    expect(parseCurrentSignal("out")).toBeNull();
+    expect(parseCurrentSignal("I()")).toBeNull();
   });
 });

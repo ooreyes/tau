@@ -265,6 +265,30 @@ describe("branch-current signals I(ref)", () => {
     expect(r.value).toBeCloseTo(5.0, 9); // -(10 × -0.5)
   });
 
+  it("measures one BJT terminal, and leaves `if(...)` alone while doing it", () => {
+    // Terminal currents share a ref-des with the part's own, so `I(Q1)` and
+    // `Ie(Q1)` must land on different traces.
+    const withBjt: MeasWaveform = {
+      ...w,
+      currents: [
+        ...w.currents!,
+        { ref: "Q1", label: "I(Q1)", values: [1, 1, 1, 1] },
+        { ref: "Q1", label: "Ie(Q1)", values: [-1.01, -1.01, -1.01, -1.01], terminal: "e" },
+      ],
+    };
+    expect(evaluateMeasurement(parseMeasDirective(".meas tran ie AVG Ie(Q1)")!, withBjt, {}).value)
+      .toBeCloseTo(-1.01, 9);
+    expect(evaluateMeasurement(parseMeasDirective(".meas tran ic AVG I(Q1)")!, withBjt, {}).value)
+      .toBeCloseTo(1, 9);
+
+    // The signal pattern had to grow a terminal letter to read `Ie(Q1)`, and
+    // `if(cond,a,b)` is a real expression function: a wildcard letter there
+    // would have read every `if(` as a current on a part called `cond` and
+    // measured NaN. The letters accepted are a closed set for exactly this.
+    const r = evaluateMeasurement(parseMeasDirective(".meas tran g AVG if(V(out)>1,10,20)")!, withBjt, {});
+    expect(r.value).toBeCloseTo(10, 9);
+  });
+
   it("an unknown ref yields a null/NaN measurement, not a throw", () => {
     const r = evaluateMeasurement(parseMeasDirective(".meas tran m AVG I(R9)")!, w, {});
     expect(r.value === null || Number.isNaN(r.value)).toBe(true);

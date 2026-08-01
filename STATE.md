@@ -49,16 +49,21 @@ do not spend a fire diffing it again. Re-check only if its tip moves past
 Ordered. Take the top item unless it is blocked. Class A outranks everything -
 a plausible wrong number is worse than a refusal to run.
 
-1. **A BJT reports only its collector current.** `DEVICE_CURRENT_PARAMS` in
-   `spiceNetlist.ts` maps one current per element letter. ngspice will return
-   `@q1[ib]` and `@q1[ie]` too (verified), but `result.currents` is keyed by
-   ref-des and every consumer looks a component up by that one key, so
-   per-terminal traces need a contract change, not another `.save` entry. Stated
-   in KNOWN_ISSUES.
-2. **Tau's canvas does not draw the primitives it now preserves.** A saved file
+1. **The operating-point table still lists one current per part.** A BJT's base
+   and emitter now reach a native TRANSIENT (landed 2026-08-01), but `branches`
+   entries are keyed by COMPONENT id - `opAnnotations.ts` finds a branch's
+   component with `c.component.id === branch.id` - so a second entry per part
+   collides on that key and would place ambiguous canvas labels. Needs its own
+   contract widening; `primaryDeviceCurrents` in `nativeSpice.ts` is the seam
+   that currently filters the terminals out. Stated in KNOWN_ISSUES.
+2. **Only a BJT reports its extra terminals.** `DEVICE_TERMINAL_CURRENT_PARAMS`
+   in `spiceNetlist.ts` lists `q: ["ib", "ie"]` and nothing else. A MOSFET's
+   `@m1[ig]`/`@m1[is]` were NOT verified against the engine and must not be added
+   on the assumption they behave like the BJT's - prove them at the CLI first.
+3. **Tau's canvas does not draw the primitives it now preserves.** A saved file
    keeps its artwork byte-for-byte, but the author cannot see it in Tau. That is
    stated plainly in KNOWN_ISSUES; rendering them is the follow-up.
-3. **The one Rust test that drives a real libngspice is red on this host and is
+4. **The one Rust test that drives a real libngspice is red on this host and is
    not a gate.** `runs_an_operating_point_with_the_real_ngspice_library` is
    `#[ignore]`d behind `TAU_NGSPICE_LIB`, and with either staged dylib it dies
    partway through on `Unknown model type adc_bridge` - the XSPICE code models
@@ -74,6 +79,41 @@ a plausible wrong number is worse than a refusal to run.
 
 Newest first. One line each: date, unit, evidence.
 
+- 2026-08-01 - A BJT's BASE AND EMITTER have their own traces in a native
+  transient (`Ib(Q1)`, `Ie(Q1)`), so a probe or a `.meas` on either resolves
+  instead of silently having only the collector to offer. The blocker was never
+  the `.save` card - it was that `CurrentTrace` was one entry per ref-des and
+  every consumer looked a part up by that one key. `terminal` now distinguishes
+  them, absent on the trace a bare `I(ref)` means. **The dangerous half was the
+  read sides, not the feature.** `measurementModel.ts` built a Map over the whole
+  current list, so LAST wins: adding the terminals would have made every BJT's
+  dashboard row report its EMITTER - a different number with the opposite sign,
+  on a table that still looked complete. `runNativeOperatingPoint` had the same
+  Map over the deck's `deviceCurrents`. Both now go through one seam
+  (`findCurrentTrace` / `primaryDeviceCurrents`) that states "a bare `I(ref)` is
+  the part's own current" once instead of per call site; a clamp probe on a
+  transistor still reads the collector. Widening `.meas`'s signal pattern to
+  reach `Ie(Q1)` nearly broke something unrelated: `if(cond,a,b)` is a real
+  expression function (`expr.ts:355`), and `I[a-z]?\(` matches `if(` - so the
+  terminal letters are a closed `[bce]` set, with a test that measures an `if()`
+  after the change. The FFT picker feeds a trace LABEL back into `resolveSignal`,
+  so `parseCurrentSignal` handles the new spelling there too (trap 3 in the dress
+  it already wore once). Real-engine proof in `tranNative.corpus.ts`: ngspice
+  reports the current INTO each terminal, so the three sum to zero at every
+  sample - an identity no scale error, stride error or swapped pair satisfies by
+  accident - plus `Ie` negative and `Ib` under a tenth of `Ic`, so a swapped
+  Ib/Ie still fails after the sum passes. Tolerance is `print`'s 7 digits, five
+  orders of magnitude looser than any real defect. Mutation-checked three ways:
+  drop the primary filter (kills 5 unit), stop asking for the terminals (kills 1
+  unit + 1 real-engine), revert the signal regex (kills 1). Four existing
+  assertions were REPOINTED, not deleted - the `.save` card and the
+  `deviceCurrents` record both legitimately changed shape. **Scope stated, not
+  papered over:** the `.op` table is unchanged and still lists one current per
+  part, because `branches` is keyed by component id; that is Next up #1 and is in
+  KNOWN_ISSUES. Only a BJT is widened - a MOSFET's `@m1[ig]`/`@m1[is]` were not
+  verified against the engine, so they are not assumed. Gates: tsc, full suite
+  2262 passed / 148 files with ZERO failures at `--maxWorkers=2`, cargo 32 passed
+  + clippy clean, corpus 80/80/80/80 warning-clean 77 with the proof inside it.
 - 2026-07-30 - A RESISTOR AND A CAPACITOR have a current in the operating-point
   table, so the two native runs list the same set of parts instead of a
   transient reconstructing passives and the `.op` leaving them to be worked out

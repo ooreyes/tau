@@ -378,7 +378,7 @@ describe.skipIf(!haveNgspice)("`.tran` through the native engine", () => {
     // The transistor's own current, which ngspice returns ONLY because the deck
     // asked for it by name. There is still no `q1#branch` - that form exists for
     // sources and inductors, never for a semiconductor.
-    expect(deck.netlist).toMatch(/^\.save all @q1\[ic\]$/m);
+    expect(deck.netlist).toMatch(/^\.save all @q1\[ic\] @q1\[ib\] @q1\[ie\]$/m);
     expect(run.names).not.toContain("q1#branch");
     expect(run.names).toContain("@q1[ic]");
 
@@ -402,6 +402,33 @@ describe.skipIf(!haveNgspice)("`.tran` through the native engine", () => {
     // collector voltage - the same inversion the node voltage shows.
     expect(Math.min(...ic)).toBeGreaterThan(0);
     expect(ic[peak]).toBeGreaterThan((Math.min(...ic) + Math.max(...ic)) / 2);
+
+    // The base and the emitter come back too, which is what makes a probe on
+    // either one resolvable. Their whole sign contract is that ngspice reports
+    // the current INTO each terminal, so the three sum to zero at every sample -
+    // an identity no scaling, no stride error and no swapped pair can satisfy by
+    // accident, and the reason Tau stores them unflipped like the collector.
+    const ib = column(run, "@q1[ib]");
+    const ie = column(run, "@q1[ie]");
+    expect(ib.length).toBe(ic.length);
+    expect(ie.length).toBe(ic.length);
+    // Tolerance is set by `print`, not by the solver: three columns each rounded
+    // to about seven significant digits leave a residual of a few 1e-9 at 1.4 mA.
+    // Any real defect here - a swapped terminal, a scale factor, a stride error -
+    // moves the sum by a fraction of a milliamp, five orders of magnitude out.
+    ic.forEach((value, index) => {
+      expect(Math.abs(value + ib[index] + ie[index])).toBeLessThan(Math.abs(value) * 1e-5);
+    });
+
+    // Not three copies of one number, and each the size a forward-active NPN
+    // makes it: the emitter runs OUT of the terminal (negative), and the base
+    // carries a small fraction of the collector current, so a swapped Ib/Ie
+    // still fails after the sum above is satisfied.
+    expect(Math.max(...ie)).toBeLessThan(0);
+    expect(Math.min(...ib)).toBeGreaterThan(0);
+    ic.forEach((value, index) => {
+      expect(ib[index]).toBeLessThan(value / 10);
+    });
   });
 
   it("keeps every vector a run without the `.save` returned, because the card says `all`", () => {

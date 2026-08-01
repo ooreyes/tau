@@ -1,5 +1,6 @@
 import type { AnalysisResult, Trace } from "./linearTransient";
 import type { Probe } from "../schematic/types";
+import { findCurrentTrace } from "./currents";
 
 type SuccessResult = Extract<AnalysisResult, { ok: true }>;
 
@@ -18,7 +19,9 @@ export function currentProbeTraces(result: SuccessResult, probes: Probe[]): Trac
     const extracted = result.circuit.components.find((c) => c.component.id === probe.componentId);
     const ref = extracted?.component.label;
     if (!ref) continue;
-    const current = result.currents.find((c) => c.ref === ref);
+    // The part's own current, not one of its terminals - a clamp meter round a
+    // transistor reads what `I(ref)` means everywhere else in Tau.
+    const current = findCurrentTrace(result.currents, ref);
     if (!current) continue;
     const id = `I(${ref})`;
     if (traces.some((t) => t.id === id)) continue;

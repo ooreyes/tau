@@ -15,13 +15,16 @@
 // an accumulating scope seeded by the circuit's `.param` values.
 
 import { evaluateExpression, type FuncDef, type Scope } from "./expr";
+import { findCurrentTrace } from "./currents";
 
 /** The minimal transient-result shape `.meas` needs (a subset of AnalysisResult). */
 export interface MeasWaveform {
   times: number[];
   traces: ReadonlyArray<{ id: string; label: string; values: number[] }>;
   /** Branch-current waveforms keyed by ref-des, so `I(R1)`/`I(V1)` resolve. */
-  currents?: ReadonlyArray<{ ref: string; label: string; values: ReadonlyArray<number> }>;
+  /** `terminal` distinguishes the several traces a part with more than one
+   *  reports; see `CurrentTrace`. Several entries may share a `ref`. */
+  currents?: ReadonlyArray<{ ref: string; label: string; values: ReadonlyArray<number>; terminal?: string }>;
 }
 
 export type AggregateKind = "MAX" | "MIN" | "PP" | "AVG" | "RMS" | "INTEG";
@@ -304,7 +307,10 @@ function isClauseKeyword(token: string): boolean {
 
 // --- signal-expression evaluation -------------------------------------------
 
-const SIGNAL_RE = /\b([VI])\s*\(\s*([^)]*?)\s*\)/gi;
+// The terminal suffix is a closed set, not `[a-z]?`: `if(cond,a,b)` is a real
+// expression function (see expr.ts), and a wildcard letter would read every one
+// of them as a current on a part called `cond` and measure NaN.
+const SIGNAL_RE = /\b(V|I[bce]?)\s*\(\s*([^)]*?)\s*\)/gi;
 
 /** Resolve a node name to its trace's per-sample values. */
 function findTrace(wf: MeasWaveform, name: string): ReadonlyArray<number> | null {
@@ -369,12 +375,12 @@ export function compileExpr(expr: string, wf: MeasWaveform, scope: Scope, funcs:
 }
 
 function makeGetter(kind: string, arg: string, wf: MeasWaveform): (i: number) => number {
-  if (kind.toUpperCase() === "I") {
-    // Branch current by ref-des, e.g. I(R1)/I(V1). Resolved against the
-    // waveform's current traces (both the TS solver and native ngspice supply
-    // these); an unknown ref reads NaN so the measurement reports cleanly.
-    const ref = arg.trim().toLowerCase();
-    const cur = wf.currents?.find((c) => c.ref.toLowerCase() === ref);
+  if (kind[0].toUpperCase() === "I") {
+    // Branch current by ref-des, e.g. I(R1)/I(V1), or one device terminal,
+    // e.g. Ie(Q1). Resolved against the waveform's current traces (both the TS
+    // solver and native ngspice supply these); an unknown ref or a terminal the
+    // part does not report reads NaN so the measurement reports cleanly.
+    const cur = findCurrentTrace(wf.currents, arg, kind.length > 1 ? kind.slice(1) : undefined);
     if (!cur) return () => NaN;
     return (i) => cur.values[i] ?? NaN;
   }

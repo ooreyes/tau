@@ -255,6 +255,49 @@ describe("native ngspice adapter", () => {
     }]);
   });
 
+  it("gives a BJT's base and emitter their own traces alongside the collector", async () => {
+    enableNativeRuntime();
+    invoke.mockResolvedValueOnce(nativeResult([
+      { name: "time", real: [0, 0.001, 0.002], imaginary: null },
+      { name: "v(vdd)", real: [5, 5, 5], imaginary: null },
+      { name: "v(coll)", real: [3.2, 3.1, 3.3], imaginary: null },
+      { name: "v(base)", real: [0.7, 0.7, 0.7], imaginary: null },
+      { name: "@q1[ic]", real: [0.0009, 0.00095, 0.00085], imaginary: null },
+      { name: "@q1[ib]", real: [0.000009, 0.0000095, 0.0000085], imaginary: null },
+      { name: "@q1[ie]", real: [-0.000909, -0.0009595, -0.0008585], imaginary: null },
+    ]));
+
+    const result = await runNativeTransient(amplifierSchematic(), { stopTime: 0.002, steps: 200 });
+
+    expect(result).not.toBeNull();
+    if (!result || !result.ok) return;
+    // Three traces under ONE ref-des, which is the contract change: the two
+    // terminals carry `terminal`, the part's own current does not.
+    expect(result.currents.filter((c) => c.ref === "Q1")).toEqual([
+      { ref: "Q1", label: "I(Q1)", values: [0.0009, 0.00095, 0.00085] },
+      { ref: "Q1", label: "Ib(Q1)", values: [0.000009, 0.0000095, 0.0000085], terminal: "b" },
+      { ref: "Q1", label: "Ie(Q1)", values: [-0.000909, -0.0009595, -0.0008585], terminal: "e" },
+    ]);
+    // Stored exactly as ngspice reports them - the current INTO each terminal,
+    // so the emitter reads negative and the three sum to zero. A flip here
+    // would break that identity while every trace still looked plausible.
+    expect(result.currents.find((c) => c.terminal === "e")?.values[0]).toBeLessThan(0);
+
+    // The part's own current still answers for the part everywhere that asks by
+    // ref-des. A clamp meter round a transistor must not start reading the
+    // emitter just because the emitter's trace was appended last.
+    const traces = currentProbeTraces(result, [{
+      id: "p-q1", x: 500, y: 300, color: "var(--trace-red)", componentId: "q1",
+    }]);
+    expect(traces).toEqual([{
+      id: "I(Q1)",
+      label: "I(Q1)",
+      unit: "A",
+      color: "var(--trace-red)",
+      values: [0.0009, 0.00095, 0.00085],
+    }]);
+  });
+
   it("leaves a transistor without a trace when the run returned no device vector", async () => {
     enableNativeRuntime();
     invoke.mockResolvedValueOnce(nativeResult([
@@ -514,6 +557,27 @@ describe("native operating point branch currents", () => {
     expect(result.branches).toEqual(expect.arrayContaining([
       { id: "q1", label: "I(Q1)", current: 0.00095 },
     ]));
+  });
+
+  it("keeps the operating-point table on one current per part when the deck saved three", async () => {
+    enableNativeRuntime();
+    // The `.op` deck asks for all three BJT terminals, like the transient one,
+    // so all three come back. `branches` is keyed by COMPONENT id, and the
+    // emitter is saved LAST - so anything building that lookup over the whole
+    // list would quietly let `I(Q1)` report the emitter's current, a different
+    // number with the opposite sign, on a table that still looked complete.
+    invoke.mockResolvedValueOnce(nativeResult([
+      ...opAmplifierVectors(),
+      { name: "@q1[ib]", real: [0.0000095], imaginary: null },
+      { name: "@q1[ie]", real: [-0.0009595], imaginary: null },
+    ]));
+
+    const result = await runNativeOperatingPoint(amplifierSchematic());
+
+    expect(result?.ok).toBe(true);
+    if (!result?.ok) return;
+    const q1 = (result.branches ?? []).filter((branch) => branch.id === "q1");
+    expect(q1).toEqual([{ id: "q1", label: "I(Q1)", current: 0.00095 }]);
   });
 
   it("keeps a voltage source's operating-point #branch sign exactly as ngspice reports it", async () => {

@@ -41,6 +41,38 @@ function rcElements(components: ReadonlyArray<ExtractedComponent>): RcElement[] 
 }
 
 /**
+ * Split a current signal name into the part it belongs to and the terminal it
+ * names: `I(R1)` is a whole part, `Ib(Q1)` is one BJT terminal. Returns null
+ * for anything that is not a current, including a bare node or `V(out)`.
+ */
+export function parseCurrentSignal(text: string): { ref: string; terminal?: string } | null {
+  const match = /^i([a-z]?)\(([^)]+)\)$/i.exec(text.trim());
+  if (!match) return null;
+  const ref = match[2].trim();
+  if (!ref) return null;
+  return match[1] ? { ref, terminal: match[1].toLowerCase() } : { ref };
+}
+
+/**
+ * Resolve a current signal against a result's traces.
+ *
+ * A device that reports several terminals contributes several traces under ONE
+ * ref-des, so matching on `ref` alone returns whichever happens to come first -
+ * or, for a Map built over the list, whichever comes LAST. Every caller goes
+ * through here so "a bare `I(ref)` means the part's own current, not one of its
+ * terminals" is stated once instead of re-derived per call site.
+ */
+export function findCurrentTrace<T extends { ref: string; terminal?: string }>(
+  currents: ReadonlyArray<T> | undefined,
+  ref: string,
+  terminal?: string,
+): T | undefined {
+  const wantedRef = ref.trim().toLowerCase();
+  const wantedTerminal = terminal?.toLowerCase();
+  return currents?.find((c) => c.ref.toLowerCase() === wantedRef && c.terminal === wantedTerminal);
+}
+
+/**
  * Derive resistor/capacitor branch-current waveforms from node-voltage traces,
  * for engine paths (native ngspice) that return node voltages but not every
  * device current. `I_R = (Va - Vb)/R`, `I_C = C dV/dt`, both in SPICE a→b sign

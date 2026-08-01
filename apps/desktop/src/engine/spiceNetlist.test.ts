@@ -865,12 +865,18 @@ describe("buildSpiceDeck", () => {
       // `all` is the whole safety of this card: a bare `.save` REPLACES
       // ngspice's default set, so without it the run comes back with the device
       // currents and nothing else - no node voltages, no source branches.
-      expect(deck.netlist).toMatch(/^\.save all @q1\[ic\] @d1\[id\] @m1\[id\] @j1\[id\]$/m);
+      expect(deck.netlist).toMatch(/^\.save all @q1\[ic\] @q1\[ib\] @q1\[ie\] @d1\[id\] @m1\[id\] @j1\[id\]$/m);
       // Passives have no device vector; their currents are derived from the
       // node voltages instead.
       expect(deck.netlist).not.toContain("@r1");
+      // A BJT is the one part here that reports more than its own current, so
+      // it contributes three entries under one component id. The untagged entry
+      // is what `I(ref)` means; the tagged ones are extra traces. A two- or
+      // three-terminal device with a single current stays a single entry.
       expect(deck.deviceCurrents).toEqual([
         { componentId: "Q1", vector: "@q1[ic]" },
+        { componentId: "Q1", vector: "@q1[ib]", terminal: "b" },
+        { componentId: "Q1", vector: "@q1[ie]", terminal: "e" },
         { componentId: "D1", vector: "@d1[id]" },
         { componentId: "M1", vector: "@m1[id]" },
         { componentId: "J1", vector: "@j1[id]" },
@@ -888,7 +894,7 @@ describe("buildSpiceDeck", () => {
         { components: semiconductors(), wires: [] },
         { kind: "tran", stopTime: 1e-3, steps: 100 },
       );
-      expect(opDeck.netlist).toMatch(/^\.save all @q1\[ic\] @d1\[id\] @m1\[id\] @j1\[id\]$/m);
+      expect(opDeck.netlist).toMatch(/^\.save all @q1\[ic\] @q1\[ib\] @q1\[ie\] @d1\[id\] @m1\[id\] @j1\[id\]$/m);
       expect(opDeck.deviceCurrents).toEqual(tranDeck.deviceCurrents);
       // The `.save` card and the trailing analysis line are the only place an
       // `.op` deck and a `.tran` deck built from the same schematic may

@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import { buildSpiceDeck, unresolvedSubcktMessage, type SpiceAnalysis } from "./spiceNetlist";
+import { buildSpiceDeck, unresolvedSubcktMessage, type DeviceCurrent, type SpiceAnalysis } from "./spiceNetlist";
 import type { NetLabel, SchematicComponent, SchematicWire } from "../schematic/types";
 import { resolveComponentValues, EMPTY_SCOPE, type ParamScope } from "../simulation/paramScope";
 import { parseAcSpec } from "./acSpec";
@@ -117,7 +117,7 @@ export async function runNativeTransient(
   // in its `.save` card, so it is looked up through the deck's own record of
   // what it asked for.
   const nodeVoltages = new Map<string, number[]>(traces.map((t) => [t.id, t.values]));
-  const deviceCurrents = new Map(execution.deck.deviceCurrents.map((d) => [d.componentId, d.vector]));
+  const deviceCurrents = primaryDeviceCurrents(execution.deck.deviceCurrents);
   const currents: CurrentTrace[] = [];
   const seen = new Set<string>();
   for (const { component } of execution.deck.circuit.components) {
@@ -127,6 +127,18 @@ export async function runNativeTransient(
     if (branch && branch.length === time.real.length) {
       currents.push({ ref, label: `I(${ref})`, values: branch });
       seen.add(ref.toLowerCase());
+      // A part that reports more than one terminal contributes an extra trace
+      // per terminal under the SAME ref-des, so `seen` cannot gate them and
+      // they are appended here rather than in the dedupe loop above. Values go
+      // in unflipped, like the primary: ngspice gives the current INTO each
+      // terminal, so a BJT's three sum to zero and `Ie(Q1)` reads negative for
+      // a forward-active NPN.
+      for (const extra of execution.deck.deviceCurrents) {
+        if (extra.componentId !== component.id || !extra.terminal) continue;
+        const values = vector(execution.result, extra.vector)?.real;
+        if (!values || values.length !== time.real.length) continue;
+        currents.push({ ref, label: `I${extra.terminal}(${ref})`, values, terminal: extra.terminal });
+      }
     }
   }
   for (const derived of deriveRcCurrents(execution.deck.circuit.components, nodeVoltages, time.real)) {
@@ -166,6 +178,15 @@ export async function runNativeTransient(
  * because it is the only name the deck explicitly asked ngspice to keep; the
  * `#branch` form is what sources and inductors get for free.
  */
+/**
+ * The one vector per component that a bare `I(ref)` means, indexed by component
+ * id. Terminal currents share their component id, so building this over the
+ * whole list would let the LAST entry - a BJT's emitter - answer for the part.
+ */
+function primaryDeviceCurrents(deviceCurrents: ReadonlyArray<DeviceCurrent>): Map<string, string> {
+  return new Map(deviceCurrents.filter((d) => !d.terminal).map((d) => [d.componentId, d.vector]));
+}
+
 function componentCurrentVector(
   result: NativeSpiceResult,
   deviceVector: string | undefined,
@@ -201,7 +222,10 @@ export async function runNativeOperatingPoint(schematic: Schematic): Promise<Ope
   // engines report a source current the same way round. A semiconductor's
   // own current is present at all only because this deck named it in its
   // `.save` card (see `wantsDeviceCurrents` in spiceNetlist.ts).
-  const deviceCurrents = new Map(execution.deck.deviceCurrents.map((d) => [d.componentId, d.vector]));
+  // Primary currents only: a `branches` entry is keyed by COMPONENT id, so a
+  // BJT's base and emitter cannot be added here without colliding on that key.
+  // The operating-point table therefore still lists one current per part.
+  const deviceCurrents = primaryDeviceCurrents(execution.deck.deviceCurrents);
   const branches: { id: string; label: string; current: number }[] = [];
   const seen = new Set<string>();
   for (const { component } of execution.deck.circuit.components) {

@@ -344,9 +344,17 @@ describe.skipIf(!haveNgspice)("`.op` through the native engine", () => {
     // what it asked for rather than spelled here - the same record
     // `runNativeOperatingPoint` looks the vector up by, so the ask and the read
     // cannot drift apart in this proof either.
-    expect(deck.deviceCurrents).toEqual([{ componentId: "Q1", vector: "@q1[ic]" }]);
-    const saved = deck.deviceCurrents[0].vector;
-    expect(deck.netlist).toMatch(/^\.save all @q1\[ic\]$/m);
+    // A BJT's three terminals are all asked for; only the untagged one - the
+    // collector - is what `I(Q1)` means, and the operating-point table reads
+    // that one alone, since a `branches` entry is keyed by component id.
+    expect(deck.deviceCurrents).toEqual([
+      { componentId: "Q1", vector: "@q1[ic]" },
+      { componentId: "Q1", vector: "@q1[ib]", terminal: "b" },
+      { componentId: "Q1", vector: "@q1[ie]", terminal: "e" },
+    ]);
+    const saved = deck.deviceCurrents.find((current) => !current.terminal)!.vector;
+    expect(saved).toBe("@q1[ic]");
+    expect(deck.netlist).toMatch(/^\.save all @q1\[ic\] @q1\[ib\] @q1\[ie\]$/m);
 
     const run = runOp(deck.netlist, "amplifier");
 

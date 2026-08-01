@@ -10,6 +10,7 @@
 import type { ComponentKind } from "../schematic/types";
 import type { AnalysisResult, TraceUnit } from "./linearTransient";
 import { formatEngineering } from "./quantity";
+import { findCurrentTrace } from "./currents";
 
 type SuccessResult = Extract<AnalysisResult, { ok: true }>;
 
@@ -396,11 +397,13 @@ export function componentMeasurements(result: SuccessResult): ComponentMeasureme
   const nets = result.circuit?.nets ?? [];
   const circuitComponents = result.circuit?.components ?? [];
   const groundNets = new Set(nets.filter((net) => net.isGround).map((net) => net.id));
-  const currentByRef = new Map(result.currents.map((trace) => [trace.ref.toLowerCase(), trace.values]));
+  // A part's own current, never one of its terminals: a Map built over the
+  // whole list would let a BJT's LAST trace - its emitter - stand in for the
+  // part, reporting a different number with the opposite sign.
   const passiveCurrentsByComponentId = new Map<string, number[]>();
   for (const { component } of circuitComponents) {
     if (!component.label) continue;
-    const rawCurrent = currentByRef.get(component.label.toLowerCase());
+    const rawCurrent = findCurrentTrace(result.currents, component.label)?.values;
     if (!rawCurrent) continue;
     const currentSign = component.kind === "isource" || component.kind === "iac" ? -1 : 1;
     passiveCurrentsByComponentId.set(component.id, rawCurrent.map((value) => value * currentSign));

@@ -113,6 +113,11 @@ export interface DeviceCurrent {
   componentId: string;
   /** The ngspice vector name, e.g. `@q1[ic]`. */
   vector: string;
+  /** The device terminal this current enters, for a part that reports more than
+   *  one. Absent on the single current a bare `I(ref)` means, which is what
+   *  every read side keyed by ref-des wants; a BJT's `b` and `e` carry theirs.
+   *  Same convention as `CurrentTrace.terminal`. */
+  terminal?: string;
 }
 
 type Schematic = {
@@ -508,6 +513,9 @@ export function buildSpiceDeck(schematic: Schematic, analysis: SpiceAnalysis): S
       for (const line of emitted) {
         const vector = deviceCurrentVector(line);
         if (vector) deviceCurrents.push({ componentId: entry.component.id, vector });
+        for (const extra of deviceTerminalCurrentVectors(line)) {
+          deviceCurrents.push({ componentId: entry.component.id, ...extra });
+        }
       }
     }
     // A switch that names a model but has no wired control pair silently
@@ -578,6 +586,31 @@ export function deviceCurrentVector(instanceLine: string): string | undefined {
   const name = instanceLine.trim().split(/\s+/)[0] ?? "";
   const param = DEVICE_CURRENT_PARAMS[name.slice(0, 1).toLowerCase()];
   return param ? `@${name.toLowerCase()}[${param}]` : undefined;
+}
+
+/**
+ * The currents a device reports BEYOND the one `I(ref)` means, keyed by element
+ * letter. A BJT is the case that matters: ngspice returns `@q1[ib]` and
+ * `@q1[ie]` alongside the collector current, so a base or emitter waveform is
+ * available for the asking and used to be unreachable.
+ *
+ * Every one of these is the current INTO its terminal - `@q1[ie]` is negative
+ * for a forward-active NPN - which is why the three sum to zero and why the
+ * read side stores them unflipped, exactly as it does the collector current.
+ *
+ * A param is `i` + its terminal letter, so the letter is derived rather than
+ * listed twice; nothing here may name a param that breaks that.
+ */
+export const DEVICE_TERMINAL_CURRENT_PARAMS: Readonly<Record<string, readonly string[]>> = {
+  q: ["ib", "ie"],
+};
+
+/** `@q1[ib]` / `@q1[ie]` for the instance line `Q1 c b e TAU_NPN`, each tagged
+ *  with the terminal it enters. Empty for every element with one current. */
+export function deviceTerminalCurrentVectors(instanceLine: string): { vector: string; terminal: string }[] {
+  const name = instanceLine.trim().split(/\s+/)[0] ?? "";
+  const params = DEVICE_TERMINAL_CURRENT_PARAMS[name.slice(0, 1).toLowerCase()] ?? [];
+  return params.map((param) => ({ vector: `@${name.toLowerCase()}[${param}]`, terminal: param.slice(1) }));
 }
 
 /** Width to wrap the `.save` card at, well inside any SPICE line-length limit. */
