@@ -29,7 +29,60 @@ figure all run on the real engine. Do not restore a readiness banner until every
 Class A and Class B item in the audit is closed or consciously accepted, with
 file:line evidence.
 
-**Last unit - 2026-08-01: fit-to-view frames the artwork, not just the circuit.**
+**Last unit - 2026-08-01: a missing XSPICE code-model bundle stops being silent.**
+Tau's parts palette offers D flip-flops, sample-and-hold and modulator parts;
+`digitalGateSpec.ts` turns a DFLOP into `adc_bridge`/`d_dff`/`dac_bridge` cards
+and `spiceNetlist.ts:1373` maps all three kinds to the `A` prefix. Those are
+XSPICE devices, they load from separate `.cm` modules at run time, and the
+staged engine resource has **no `lib/ngspice` directory at all** - the build
+script's staging step was a bare `if [[ -d ]]`, so an install that produced none
+was skipped in silence. What a user got was `Unknown model type adc_bridge -
+ignored` followed by an `MIF-ERROR`, which reads like a broken schematic rather
+than an incomplete engine.
+
+**The library is not the problem, the packaging is.** Copying Homebrew's `.cm`
+modules beside a copy of Tau's own staged dylib makes the digital case pass, and
+that dylib carries the XSPICE `MIF-ERROR` strings, so XSPICE is compiled into
+the shared library. Only the modules are missing. The engine now counts what it
+loaded and refuses an A device on an engine that loaded none, naming the device
+and the state of the engine build. The predicate skips line 0, because a deck
+title is free text and is the one line that can start with an A without being a
+device - a deck titled `Amplifier bias point` would otherwise be refused while
+being entirely analog.
+
+**A second defect fell out of counting the modules.** The staging directory is a
+fixed machine-wide path and the load loop read whatever was sitting in it, so a
+different ngspice build's modules could be loaded into this library - an ABI
+mismatch, and it also made an engine with none of its own look healthy. It now
+loads only what was staged from beside the library being loaded; the real-engine
+case proves it by finding 7 foreign modules in the shared directory and still
+reporting 0.
+
+The two-bit register moved into its own test, so the FFI vector read - operating
+point, a second circuit in the same engine, MOSFET, transient, the complex AC
+phasor, BJT bias and rectifier - passes against the staged library for the first
+time. The one red test is now the one whose whole job is to report this engine
+build's state. Mutation-checked four ways: the precheck computed but never
+returned (kills the real-engine refusal - trap 1, and its output is exactly the
+raw MIF error), loading whatever the shared directory holds (kills it, left 7
+right 0), the title line not skipped (kills the analog case), the early return
+dropped (kills the unit case). Trap 2 caught in the act: the analog case first
+used a one-letter title, which the length check masked, so it passed without the
+skip - retitled until the mutation killed it. The build script now warns loudly
+instead of skipping in silence; the configure fix needs a full ngspice rebuild
+and is logged as BUG-13 with the evidence. KNOWN_ISSUES says plainly that
+digital parts do not run on this engine build. Gates: tsc, full suite 2288
+passed / 150 files at `--maxWorkers=2` with 2 known `App.workspace.test.tsx`
+render timeouts that pass 18/18 isolated (trap 5; no TypeScript changed), cargo
+34 passed + clippy clean, corpus 80/80/80/80 (warning-clean 77).
+
+Next candidate: BUG-13's own fix - add the XSPICE option to
+`scripts/build-ngspice.sh:136`'s configure line, rebuild, confirm the `.cm`
+modules reach the staged resource, and turn the new warning into a hard failure.
+Budget a whole fire for the build itself; the acceptance test is already written
+and currently red on the staged library.
+
+**Prior unit - 2026-08-01: fit-to-view frames the artwork, not just the circuit.**
 `circuitBounds` took components and wires only, so the drawing primitives that
 started rendering last unit were invisible to the one thing that decides where
 the camera opens. On the user's own corpus that is not a hypothetical: **39 of

@@ -274,6 +274,10 @@ struct SpiceEngine {
     api: SpiceApi,
     callback_state: Box<CallbackState>,
     library_path: PathBuf,
+    /** How many XSPICE code-model modules this engine actually loaded. Zero
+     * means every A device in a deck is an unknown model type, which is a
+     * property of the engine build rather than of the circuit. */
+    codemodels_loaded: usize,
 }
 
 impl SpiceEngine {
@@ -340,6 +344,7 @@ impl SpiceEngine {
             api,
             callback_state,
             library_path,
+            codemodels_loaded: 0,
         };
         engine.load_bundled_codemodels()?;
         Ok(engine)
@@ -394,12 +399,14 @@ impl SpiceEngine {
             .map_err(|error| format!("Could not stage bundled ngspice code models: {error}"))?;
         sweep_stale_codemodel_dirs(&staged_dir);
         let pid = std::process::id();
+        let mut staged = Vec::new();
         for name in names {
             let source = codemodel_dir.join(name);
             if !source.is_file() {
                 continue;
             }
             let destination = staged_dir.join(name);
+            staged.push(destination.clone());
             let bytes = std::fs::read(&source).map_err(|error| {
                 format!(
                     "Could not stage bundled ngspice code model {}: {error}",
@@ -424,11 +431,13 @@ impl SpiceEngine {
                 })?;
         }
 
-        for name in names {
-            let path = staged_dir.join(name);
-            if !path.is_file() {
-                continue;
-            }
+        // Only the modules that were staged from beside THIS library are
+        // loaded. The staging directory is a fixed path shared by every Tau
+        // process on the machine, so a library built elsewhere can have left
+        // its own modules there; loading a foreign build's `.cm` into this
+        // library is an ABI mismatch, and it would also make an engine with no
+        // code models of its own look like a healthy one.
+        for path in &staged {
             let command = CString::new(format!("codemodel {}", path.display())).map_err(|_| {
                 "A bundled ngspice code-model path contains a NUL byte.".to_string()
             })?;
@@ -446,12 +455,16 @@ impl SpiceEngine {
                 return Err(format!("Loading {} failed: {error}", path.display()));
             }
         }
+        self.codemodels_loaded = staged.len();
         clear_callback_state(&self.callback_state);
         Ok(())
     }
 
     fn run(&mut self, request: SpiceRequest) -> Result<SpiceResult, String> {
         let lines = deck_lines(&request.netlist)?;
+        if let Some(message) = missing_codemodel_message(&lines, self.codemodels_loaded) {
+            return Err(message);
+        }
         clear_callback_state(&self.callback_state);
         // ngspice appends this run's plots to the ones earlier circuits in the
         // same process left behind, so the only way to tell them apart is to
@@ -950,6 +963,29 @@ const fn library_file_name() -> &'static str {
     }
 }
 
+/** Tau's own parts emit XSPICE A devices - a D flip-flop becomes an
+ * adc_bridge / d_dff / dac_bridge trio, and sample-and-hold and modulator
+ * parts are A devices too - and every one of them lives in a dynamically
+ * loaded `.cm` module. An engine build that staged no modules does not say so:
+ * it warns "Unknown model type" on the model card, then fails on the instance
+ * with an MIF error naming neither the missing module nor the fix, which reads
+ * like a broken schematic rather than an incomplete engine. */
+fn missing_codemodel_message(lines: &[String], codemodels_loaded: usize) -> Option<String> {
+    if codemodels_loaded > 0 {
+        return None;
+    }
+    // Line 0 is the deck title: free text, never a device.
+    let device = lines.iter().skip(1).find_map(|line| {
+        let mut fields = line.split_whitespace();
+        let name = fields.next()?;
+        let is_device = name.len() > 1 && name.starts_with(['a', 'A']) && fields.next().is_some();
+        is_device.then_some(name)
+    })?;
+    Some(format!(
+        "This circuit uses the XSPICE device {device}, but Tau's ngspice engine loaded no code models, so digital and behavioral A devices cannot be simulated on this install. Rebuild the bundled engine with scripts/build-ngspice.sh so its code-model modules are staged beside the library."
+    ))
+}
+
 fn deck_lines(netlist: &str) -> Result<Vec<String>, String> {
     if netlist.len() > MAX_NETLIST_BYTES {
         return Err(format!(
@@ -1260,9 +1296,9 @@ mod tests {
     use std::{io::Cursor, path::PathBuf};
 
     use super::{
-        deck_lines, fatal_engine_messages, library_file_name, read_bounded, record_engine_message,
-        take_messages, CallbackState, SpiceEngine, SpiceRequest, WorkerResponse,
-        MAX_ENGINE_MESSAGES, MAX_ENGINE_MESSAGE_BYTES,
+        deck_lines, fatal_engine_messages, library_file_name, missing_codemodel_message,
+        read_bounded, record_engine_message, take_messages, CallbackState, SpiceEngine,
+        SpiceRequest, WorkerResponse, MAX_ENGINE_MESSAGES, MAX_ENGINE_MESSAGE_BYTES,
     };
 
     #[test]
@@ -1533,6 +1569,38 @@ R1 out fb 10k
     }
 
     #[test]
+    fn an_engine_without_code_models_names_the_xspice_device_it_cannot_run() {
+        let lines = vec![
+            "Tau two-bit register".to_string(),
+            "VD0 d0 0 DC 5".to_string(),
+            "A_a1_adc [d0 clk 0 0] [a1_dd a1_dclk a1_dpre a1_dclr] a1_adc".to_string(),
+            ".end".to_string(),
+        ];
+        let message =
+            missing_codemodel_message(&lines, 0).expect("an A device on an engine with no modules");
+        assert!(message.contains("A_a1_adc"), "{message}");
+        assert!(message.contains("code models"), "{message}");
+        // The same deck on an engine that did load its modules is fine, so the
+        // message reports the engine build rather than the circuit.
+        assert_eq!(missing_codemodel_message(&lines, 7), None);
+    }
+
+    #[test]
+    fn an_analog_deck_is_not_refused_for_missing_code_models() {
+        // The modules only matter to A devices. A deck title is free text and
+        // is the one line that can start with an A without being a device, so
+        // a title like this one would refuse an entirely analog circuit.
+        let lines = vec![
+            "Amplifier bias point".to_string(),
+            "V1 in 0 5".to_string(),
+            "R1 in 0 1k".to_string(),
+            ".op".to_string(),
+            ".end".to_string(),
+        ];
+        assert_eq!(missing_codemodel_message(&lines, 0), None);
+    }
+
+    #[test]
     #[ignore = "requires TAU_NGSPICE_LIB pointing to libngspice"]
     fn runs_an_operating_point_with_the_real_ngspice_library() {
         let library = std::env::var_os("TAU_NGSPICE_LIB")
@@ -1638,7 +1706,11 @@ R1 out fb 10k
         // not the pairing. A decade above, the imaginary part is ten times the
         // real one, so a swapped pair or a mis-strided read of the interleaved
         // complex array cannot pass both.
-        assert!((out.real[10] - 0.5).abs() < 1e-4, "real at pole: {}", out.real[10]);
+        assert!(
+            (out.real[10] - 0.5).abs() < 1e-4,
+            "real at pole: {}",
+            out.real[10]
+        );
         assert!(
             (out_imaginary[10] + 0.5).abs() < 1e-4,
             "imaginary at pole: {}",
@@ -1702,10 +1774,28 @@ R1 out fb 10k
             load_min > -0.5,
             "rectifier should block the negative half-cycle, got {load_min}"
         );
+    }
 
-        // Exact assistant 2-bit register regression: ngspice XSPICE d_dff
-        // controls are active-high, so PRE/CLR are held at zero. On clock
-        // rising edges at 1/3/5 ms the two outputs must sample 01, 11, 10.
+    /** Exact assistant 2-bit register regression: ngspice XSPICE d_dff
+     * controls are active-high, so PRE/CLR are held at zero. On clock rising
+     * edges at 1/3/5 ms the two outputs must sample 01, 11, 10.
+     *
+     * Split out of the vector-read test above because it is the only case that
+     * needs the `.cm` code-model modules staged beside the library. A build
+     * without them fails here and nowhere else, so keeping the two together
+     * meant one incomplete engine build hid every FFI assertion in the same
+     * function. This test is the one that reports that state. */
+    #[test]
+    #[ignore = "requires TAU_NGSPICE_LIB pointing to libngspice with its code models"]
+    fn runs_a_digital_register_with_the_real_ngspice_code_models() {
+        let library = std::env::var_os("TAU_NGSPICE_LIB")
+            .map(PathBuf::from)
+            .expect("TAU_NGSPICE_LIB must point to a shared ngspice library");
+        let mut engine = SpiceEngine::load(vec![library]).expect("ngspice library should load");
+        assert!(
+            engine.codemodels_loaded > 0,
+            "this library staged no XSPICE code models, so no A device can run against it"
+        );
         let register = engine
             .run(SpiceRequest {
                 netlist: r#"Tau two-bit register
@@ -1769,6 +1859,44 @@ A_a2_dac [a2_dq a2_dnq] [q1 q1bar] a2_dac
         assert!(value_near("q0", 0.0051) < 1.0 && value_near("q1", 0.0051) > 4.0);
     }
 
+    /** A library with no `.cm` modules beside it is exactly the state Tau's
+     * own bundled resource is in, and the state the diagnosis exists for. It
+     * is reached here by loading the real library through a directory that has
+     * no code-model sibling, so the case does not depend on which library
+     * TAU_NGSPICE_LIB names, nor on what an earlier run left behind in the
+     * staging directory every Tau process shares. */
+    #[test]
+    #[cfg(unix)]
+    #[ignore = "requires TAU_NGSPICE_LIB pointing to libngspice"]
+    fn refuses_an_xspice_device_on_a_library_that_staged_no_code_models() {
+        let library = std::env::var_os("TAU_NGSPICE_LIB")
+            .map(PathBuf::from)
+            .expect("TAU_NGSPICE_LIB must point to a shared ngspice library");
+        let bare = std::env::temp_dir().join(format!("tau-no-codemodels-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&bare);
+        std::fs::create_dir_all(&bare).expect("a directory for a library without its modules");
+        let link = bare.join(library.file_name().expect("the library has a file name"));
+        std::os::unix::fs::symlink(&library, &link).expect("link the library into it");
+
+        let mut engine = SpiceEngine::load(vec![link]).expect("ngspice library should load");
+        assert_eq!(
+            engine.codemodels_loaded, 0,
+            "no code models sit beside the linked library"
+        );
+        let error = engine
+            .run(SpiceRequest {
+                netlist: "Tau register\nVCLK clk 0 DC 0\n.model a1_adc adc_bridge(in_low=2.5 in_high=2.5)\nA_a1_adc [clk 0 0 0] [a1_dd a1_dclk a1_dpre a1_dclr] a1_adc\n.tran 1u 10u\n.end".to_string(),
+            })
+            .expect_err("an A device cannot run on an engine with no code models");
+        assert!(error.contains("A_a1_adc"), "{error}");
+        assert!(error.contains("code models"), "{error}");
+        // The deck never reached ngspice, so what the user sees is Tau's
+        // account of its own engine build rather than the MIF error, which
+        // names neither the missing module nor the fix.
+        assert!(!error.contains("MIF"), "{error}");
+        let _ = std::fs::remove_dir_all(&bare);
+    }
+
     /** A noise run splits its answer across two plots and leaves the integrated
      * totals current, so the spectral density curves are only reachable through
      * extra_plots. Two 10k resistors put 5k across the output, whose thermal
@@ -1819,7 +1947,10 @@ A_a2_dac [a2_dq a2_dnq] [q1 q1bar] a2_dac
                     noise.messages
                 )
             });
-        assert_ne!(spectrum.name, noise.plot, "extra plots exclude the current one");
+        assert_ne!(
+            spectrum.name, noise.plot,
+            "extra plots exclude the current one"
+        );
         let frequency = spectrum
             .vectors
             .iter()

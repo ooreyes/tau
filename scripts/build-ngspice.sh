@@ -154,6 +154,15 @@ cp -RP "${libraries[@]}" "$RESOURCE_DIR/lib/"
 shopt -u nullglob
 if [[ -d "$STAGE_DIR/lib/ngspice" ]]; then
   cp -R "$STAGE_DIR/lib/ngspice" "$RESOURCE_DIR/lib/"
+else
+  # XSPICE code models are separate .cm modules loaded at run time. Without
+  # them the library still solves every analog circuit, so an install that
+  # produced none looks healthy here, while each digital or behavioral A device
+  # - Tau emits them for D flip-flop, sample-and-hold and modulator parts -
+  # fails at run time as an unknown model type. Staging silently skipped this
+  # for as long as it was a bare test, which is how the shipped resource came
+  # to carry no code models at all.
+  echo "WARNING: this ngspice install produced no XSPICE code models under $STAGE_DIR/lib/ngspice. The staged resource cannot simulate digital or behavioral A devices." >&2
 fi
 if [[ -d "$STAGE_DIR/share/ngspice" ]]; then
   mkdir -p "$RESOURCE_DIR/share"

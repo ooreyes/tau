@@ -49,19 +49,23 @@ do not spend a fire diffing it again. Re-check only if its tip moves past
 Ordered. Take the top item unless it is blocked. Class A outranks everything -
 a plausible wrong number is worse than a refusal to run.
 
-1. **The one Rust test that drives a real libngspice is red on this host and is
-   not a gate.** `runs_an_operating_point_with_the_real_ngspice_library` is
-   `#[ignore]`d behind `TAU_NGSPICE_LIB`, and with either staged dylib it dies
-   partway through on `Unknown model type adc_bridge` - the XSPICE code models
-   are not reachable from a bare `cargo test`. Everything in its body after the
-   two-bit register case has not been running. Logged in FIX_BUGS 2026-07-29.
-   Splitting it, or making the code models findable, would put the FFI vector
-   read back under a gate. Run it with `--test-threads=1`: the two real-library
-   tests SIGSEGV when they share a process.
-2. **Preview solver vs native DC operating point.** The TS preview starts
-   reactive parts at zero (`uic`-style) while ngspice solves the DC OP first, so
-   the two engines disagree on a biased circuit's opening transient. A DC OP
-   initialization in the preview would close it; native stays authoritative.
+1. **Make the bundled engine build carry its XSPICE code models (BUG-13).** The
+   diagnosis landed 2026-08-01; the packaging gap behind it did not. Add the
+   XSPICE option to `scripts/build-ngspice.sh:136`'s `configure` line (likely
+   `--enable-xspice`, unverified - check `configure --help` for the pinned
+   commit), rebuild, confirm `build/ngspice-stage/lib/ngspice/*.cm` appears and
+   reaches `apps/desktop/src-tauri/resources/ngspice/lib/ngspice/`, then turn
+   the warning at `:155` into a hard failure. **Budget a whole fire for the
+   build** - it clones ngspice from SourceForge, autogens, configures and makes.
+   Acceptance test already written and currently red on the staged library:
+   `runs_a_digital_register_with_the_real_ngspice_code_models`. Run the ignored
+   Rust tests with `--test-threads=1`; the real-library ones SIGSEGV when they
+   share a process.
+2. **Preview solver vs native DC operating point.** The TS preview was said to
+   start reactive parts at zero (`uic`-style) while ngspice solves the DC OP
+   first. **Verify before starting:** `KNOWN_ISSUES.md:100` now states the
+   preview solves the DC operating point before a transient unless the analysis
+   specifies `uic`, so this may already be closed and only this entry is stale.
 
 ---
 
@@ -69,6 +73,47 @@ a plausible wrong number is worse than a refusal to run.
 
 Newest first. One line each: date, unit, evidence.
 
+- 2026-08-01 - A MISSING XSPICE CODE-MODEL BUNDLE stops being silent, and the
+  real-library test that proves the FFI vector read stops dying on it.
+  **Tau's bundled engine cannot run a single digital part, and nothing said so.**
+  `digitalGateSpec.ts` emits `adc_bridge`/`d_dff`/`dac_bridge` for a DFLOP and
+  `spiceNetlist.ts:1373` maps `dflop`, `sampleHold` and `modulator` to the `A`
+  prefix; those are XSPICE devices that load from separate `.cm` modules at run
+  time, and the staged resource has **no `lib/ngspice` directory at all** - the
+  build script's staging step was a bare `if [[ -d ]]`, so producing none was
+  silent. What a user got was `Unknown model type adc_bridge - ignored` and then
+  an `MIF-ERROR`, which reads like a broken schematic rather than an incomplete
+  engine. **The library is not the problem, the packaging is:** Homebrew's `.cm`
+  modules copied beside a copy of Tau's OWN staged dylib make the register case
+  pass, and that dylib carries the XSPICE `MIF-ERROR` strings, so XSPICE is
+  compiled in. `run()` now refuses an A device on an engine that loaded no
+  modules, naming the device. The predicate skips line 0 because a deck title is
+  free text and is the one line that can start with an A without being a device
+  - `Amplifier bias point` would otherwise refuse an entirely analog circuit.
+  **A second defect fell out of counting the modules:** the staging directory is
+  a fixed machine-wide path (`/tmp/tau-ngspice-codemodels`) and the load loop
+  read whatever was sitting in it, so a DIFFERENT ngspice build's modules were
+  loaded into this library - an ABI mismatch, and it also made an engine with
+  none of its own look healthy. It now loads only what was staged from beside
+  the library being loaded, proven by a case that finds 7 foreign modules there
+  and still reports 0. The two-bit register is now its own test, so the FFI
+  vector read - op, second op, MOSFET, transient, the complex AC phasor, BJT
+  bias, rectifier - **passes against the staged library for the first time**;
+  the one red test is now the one whose whole job is to report this engine
+  build's state. Mutation-checked four ways: precheck computed but never
+  returned (kills the real-engine refusal - trap 1, and its output is exactly
+  the raw MIF error), load whatever the shared dir holds (kills it, left 7 right
+  0), title line not skipped (kills the analog case), early return dropped
+  (kills the unit case). **Trap 2 caught in the act:** the analog case first
+  used a one-letter title, which the length check masked, so it passed WITHOUT
+  the skip - retitled until the mutation killed it. The build script now warns
+  loudly instead of skipping in silence; the configure fix needs a full ngspice
+  rebuild and is Next up #1, logged as BUG-13 with the evidence. KNOWN_ISSUES
+  says plainly that digital parts do not run on this engine build. Gates: tsc,
+  full suite 2288 passed / 150 files at `--maxWorkers=2` with 2 known
+  `App.workspace.test.tsx` render timeouts that pass 18/18 isolated (trap 5, and
+  no TypeScript changed), cargo 34 passed (32 + 2 new always-on) + clippy clean,
+  corpus 80/80/80/80 warning-clean 77.
 - 2026-08-01 - FIT-TO-VIEW FRAMES THE ARTWORK, not just the circuit, so the
   primitives that started rendering last fire are visible to the one thing that
   decides where the camera opens. **Not hypothetical on the real corpus: 39 of
