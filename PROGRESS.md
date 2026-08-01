@@ -29,7 +29,68 @@ figure all run on the real engine. Do not restore a readiness banner until every
 Class A and Class B item in the audit is closed or consciously accepted, with
 file:line evidence.
 
-**Last unit - 2026-08-01: the canvas draws the LTspice drawing primitives it
+**Last unit - 2026-08-01: fit-to-view frames the artwork, not just the circuit.**
+`circuitBounds` took components and wires only, so the drawing primitives that
+started rendering last unit were invisible to the one thing that decides where
+the camera opens. On the user's own corpus that is not a hypothetical: **39 of
+the 69 shape-bearing files draw artwork outside the circuit's own frame.** And a
+sheet that is nothing but a drawing had no bounds at all - `circuitBounds`
+returned null the moment the component and wire lists were empty, so the view
+fell back to zoom 1 at the viewport origin and the drawing opened off-screen.
+
+**An arc is where the obvious box is the wrong one, twice over.** Its record ends
+in four numbers that are rays from the box centre, and LTspice lets the author
+drag them anywhere - `ind.asy` puts one 16.97 from the centre of a circle of
+radius 16 - so a min/max over the record's own coordinates frames a point no part
+of the curve reaches. And an arc covers only the part of its ellipse it sweeps:
+the first inductor hump runs from the upper left round the right-hand side to the
+lower left, so it reaches x = 32 but never the leftmost point of its own box at
+x = 0. `ascShapeBounds` therefore takes the two drawn endpoints plus each of the
+four axis extremes the sweep actually passes through, and it is built on
+`ascShapeRender` rather than on the record, so what gets framed is what the canvas
+puts on the sheet. The sweep rule itself moved into one `arcSweep` helper the path
+and the box now share, because the two disagreeing about which of the two
+candidate curves is drawn would frame the wrong half of an ellipse.
+
+**Widening a box is exactly the kind of change that breaks the caller nobody
+checked**, so all of them were checked first: `circuitBounds` and
+`circuitBoundsWithLabels` have two production call sites between them, both
+inside `fitView`. One needed a guard. A hierarchical import packs flattened block
+bodies from x = 1e6, and `fitView` already frames only the authored region for
+exactly that reason - a million-unit fit draws the real circuit sub-pixel and the
+canvas looks empty. A flattened body drops its own artwork on import
+(`ascImport.ts:1370`), so every shape on the document belongs to the authored
+sheet; once the fit has fallen back to the packed region there is none of that
+region's drawing to frame, and pulling the sheet's artwork in would rebuild the
+very fit the fallback exists to avoid. That case has its own test. Emptiness is
+now decided by what was covered rather than by list lengths, which also stops a
+wire carrying no points from returning an all-Infinity box.
+
+The real-corpus proof samples the drawing instead of restating the arithmetic:
+all 233 records across 69 files are walked the way the canvas draws them - an arc
+through its own emitted path's sweep flag, by SVG's rule - and every sample must
+sit inside the box while every side of the box must be touched, so a bound that
+clips artwork and a bound that zooms out past it fail separately. Both of the
+corpus's arcs are partial sweeps, which is asserted, because if neither were the
+tightness check would be vacuous. A second case runs the real import and holds the
+widened box against the circuit-only one on all 69 files: the circuit is never
+dropped, and the 39 that grow are the evidence the unit was worth having.
+Mutation-checked four ways: shapes dropped from `circuitBounds` (kills 4 unit +
+2 render + 1 corpus case), `fitView` stops passing them so the geometry is right
+and nothing asks for it (kills 2 render - trap 1), an arc framed as its whole
+ellipse (kills 1 unit + 1 corpus case), the packed-region guard removed (kills 1
+render). KNOWN_ISSUES said in as many words that fit-to-view frames the circuit
+alone; that line is now the feature. Gates: tsc, full suite 2290 passed / 149
+files with zero failures at `--maxWorkers=2`, cargo 32 passed + clippy clean,
+corpus 80/80/80/80 (warning-clean 77) with the proof inside it.
+
+Next candidate: the one Rust test that drives a real libngspice is `#[ignore]`d
+behind `TAU_NGSPICE_LIB` and dies partway through on `Unknown model type
+adc_bridge`, so everything in its body after the two-bit register case has never
+run. Splitting it, or making the XSPICE code models reachable, would put the FFI
+vector read back under a gate.
+
+**Prior unit - 2026-08-01: the canvas draws the LTspice drawing primitives it
 already preserves.** `LINE`, `RECTANGLE`, `CIRCLE` and `ARC` records carry a
 schematic's borders, dividers and hand-drawn diagrams. They have survived a save
 byte-for-byte since 2026-07-29, but they were never rendered, so the author's own

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 
 import { Canvas } from "./Canvas";
 import { useSchematic } from "../store/useSchematic";
@@ -97,5 +97,106 @@ describe("Canvas - preserved LTspice drawing primitives", () => {
     useSchematic.setState({ ascShapes: [] });
     const { container } = render(<Canvas interactive />);
     expect(container.querySelector(".asc-shapes")).toBeNull();
+  });
+});
+
+describe("Canvas - fit-to-view frames the artwork too", () => {
+  const WIDTH = 400;
+  const HEIGHT = 300;
+
+  /** Fit the canvas at a known viewport size and read back the world -> screen
+   *  transform the circuit is actually drawn with. */
+  const fitAndProject = () => {
+    render(<Canvas interactive />);
+    const canvas = document.querySelector<SVGSVGElement>("svg.canvas")!;
+    Object.defineProperty(canvas, "getBoundingClientRect", {
+      configurable: true,
+      value: () => ({
+        x: 0, y: 0, left: 0, top: 0,
+        right: WIDTH, bottom: HEIGHT, width: WIDTH, height: HEIGHT,
+        toJSON: () => ({}),
+      }),
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Fit circuit to view" }));
+    const group = [...canvas.children].find(
+      (child) => child.tagName.toLowerCase() === "g" && child.hasAttribute("transform"),
+    );
+    const match = group
+      ?.getAttribute("transform")
+      ?.match(/translate\(([-\d.]+) ([-\d.]+)\) scale\(([-\d.]+)\)/);
+    if (!match) throw new Error("Canvas transform missing");
+    const view = { x: Number(match[1]), y: Number(match[2]), zoom: Number(match[3]) };
+    return (wx: number, wy: number) => ({
+      x: view.x + wx * view.zoom,
+      y: view.y + wy * view.zoom,
+    });
+  };
+
+  it("keeps a border drawn well outside the circuit on screen", () => {
+    // The circuit is one resistor at the origin; the artwork is a title-block
+    // border around the whole sheet. Framing the circuit alone fits ~56 world
+    // units across a 400px viewport, which puts every corner of the border
+    // several screen-widths away with nothing on the canvas to say so.
+    useSchematic.setState({
+      components: [
+        { id: "r1", kind: "resistor", x: 0, y: 0, rotation: 0, value: "1k", label: "R1" },
+      ],
+      wires: [],
+      ascShapes: [{ kind: "RECTANGLE", width: "Normal", coords: [560, 420, -240, -180] }],
+    });
+
+    const project = fitAndProject();
+    for (const [wx, wy] of [[-240, -180], [560, -180], [560, 420], [-240, 420]]) {
+      const point = project(wx, wy);
+      expect(point.x, `x of ${wx},${wy}`).toBeGreaterThanOrEqual(0);
+      expect(point.x, `x of ${wx},${wy}`).toBeLessThanOrEqual(WIDTH);
+      expect(point.y, `y of ${wx},${wy}`).toBeGreaterThanOrEqual(0);
+      expect(point.y, `y of ${wx},${wy}`).toBeLessThanOrEqual(HEIGHT);
+    }
+    // Still framing it, not merely containing it after zooming out to nothing.
+    const left = project(-240, 0).x;
+    const right = project(560, 0).x;
+    expect(right - left).toBeGreaterThan(WIDTH / 2);
+  });
+
+  it("frames a sheet that carries artwork and no circuit at all", () => {
+    // With no components and no wires there was nothing to fit, so the view
+    // fell back to zoom 1 at the viewport origin - and a drawing anywhere else
+    // opened off-screen.
+    useSchematic.setState({
+      components: [],
+      wires: [],
+      ascShapes: [{ kind: "LINE", width: "Normal", coords: [1200, 900, 1600, 1300] }],
+    });
+
+    const project = fitAndProject();
+    for (const [wx, wy] of [[1200, 900], [1600, 1300]]) {
+      const point = project(wx, wy);
+      expect(point.x, `x of ${wx},${wy}`).toBeGreaterThanOrEqual(0);
+      expect(point.x, `x of ${wx},${wy}`).toBeLessThanOrEqual(WIDTH);
+      expect(point.y, `y of ${wx},${wy}`).toBeGreaterThanOrEqual(0);
+      expect(point.y, `y of ${wx},${wy}`).toBeLessThanOrEqual(HEIGHT);
+    }
+  });
+
+  it("still ignores the sheet's artwork when only a packed block body is left to frame", () => {
+    // A hierarchical import packs flattened bodies from x = 1e6, and a sheet
+    // whose only parts are packed has to keep framing them. The artwork belongs
+    // to the authored sheet - a block body drops its own on import - so pulling
+    // it in here would fit a million units across and show an empty canvas.
+    useSchematic.setState({
+      components: [
+        { id: "b~r1", kind: "resistor", x: 1_000_000, y: 0, rotation: 0, value: "1k", label: "R1" },
+      ],
+      wires: [],
+      ascShapes: [{ kind: "LINE", width: "Normal", coords: [0, 0, 64, 0] }],
+    });
+
+    const project = fitAndProject();
+    const part = project(1_000_000, 0);
+    expect(part.x).toBeGreaterThanOrEqual(0);
+    expect(part.x).toBeLessThanOrEqual(WIDTH);
+    // The authored-region artwork is off-screen, which is the intended trade.
+    expect(project(0, 0).x).toBeLessThan(0);
   });
 });

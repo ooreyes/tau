@@ -20,8 +20,14 @@ import { readFileSync, readdirSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { homedir } from "node:os";
 import { describe, it, expect } from "vitest";
-import { parseAsc, decodeSchematicText } from "../src/io/ascImport";
-import { ascShapeRender, ascArcPath } from "../src/components/Canvas.geometry";
+import { parseAsc, ascToSchematic, decodeSchematicText } from "../src/io/ascImport";
+import {
+  ascShapeRender,
+  ascShapeBounds,
+  ascArcPath,
+  circuitBounds,
+  type AscShapeRender,
+} from "../src/components/Canvas.geometry";
 
 const CORPUS_ROOT = join(homedir(), "Documents", "LTspice");
 /** Bounded defensively; the corpus holds ~69 shape-bearing files today. */
@@ -128,6 +134,137 @@ describe.skipIf(files.length === 0)("drawing primitives render on the real corpu
     // If this ever drops to zero the corner-normalisation assertions above
     // stop proving anything, so the spec would be quietly vacuous.
     expect(reversedBoxes).toBeGreaterThan(0);
+  });
+
+  // Fit-to-view frames `circuitBounds`, so a box that does not cover the
+  // artwork opens a real sheet with its border - or its whole drawing - off
+  // screen, and a box that is loose zooms out past what is there. Sampling the
+  // curve the canvas draws is the only way to check both at once: it walks an
+  // arc through the emitted PATH's own sweep flag rather than repeating the
+  // angle arithmetic `ascShapeBounds` uses to decide the same thing.
+  const TAU = Math.PI * 2;
+  const SAMPLES = 2000;
+
+  const sampleDrawing = (render: AscShapeRender): { x: number; y: number }[] => {
+    if (render.kind === "LINE") {
+      return [{ x: render.x1, y: render.y1 }, { x: render.x2, y: render.y2 }];
+    }
+    if (render.kind === "RECTANGLE") {
+      const right = render.x + render.width;
+      const bottom = render.y + render.height;
+      return [
+        { x: render.x, y: render.y },
+        { x: right, y: render.y },
+        { x: right, y: bottom },
+        { x: render.x, y: bottom },
+      ];
+    }
+    const at = (angle: number) => ({
+      x: render.cx + render.rx * Math.cos(angle),
+      y: render.cy + render.ry * Math.sin(angle),
+    });
+    if (render.kind === "CIRCLE") {
+      return Array.from({ length: SAMPLES }, (_, i) => at((i / SAMPLES) * TAU));
+    }
+    const flag = /A \S+ \S+ 0 [01] ([01])/.exec(ascArcPath(render));
+    expect(flag, "arc path carries a sweep flag").not.toBeNull();
+    // Sweep flag 1 travels in the direction of increasing angle; 0 the other
+    // way. Both are SVG's rule, not Tau's.
+    const direction = flag![1] === "1" ? 1 : -1;
+    const angleOf = (point: { x: number; y: number }) =>
+      Math.atan2((point.y - render.cy) / render.ry, (point.x - render.cx) / render.rx);
+    const start = angleOf(render.start);
+    const swept = ((direction * (angleOf(render.end) - start)) % TAU + TAU) % TAU;
+    return Array.from({ length: SAMPLES + 1 }, (_, i) =>
+      at(start + direction * swept * (i / SAMPLES)));
+  };
+
+  it("bounds every real record tightly around what the canvas draws", () => {
+    let records = 0;
+    let tightenedArcs = 0;
+
+    for (const path of files) {
+      for (const shape of parseAsc(decodeSchematicText(readFileSync(path))).shapes) {
+        const render = ascShapeRender(shape);
+        const box = ascShapeBounds(shape);
+        const where = `${path}: ${shape.kind} ${shape.coords.join(" ")}`;
+        if (!render) {
+          expect(box, where).toBeNull();
+          continue;
+        }
+        expect(box, where).not.toBeNull();
+        records += 1;
+        const points = sampleDrawing(render);
+        const xs = points.map((point) => point.x);
+        const ys = points.map((point) => point.y);
+        // Nothing drawn may fall outside the box - an off-screen border.
+        expect(Math.min(...xs), `${where} minX`).toBeGreaterThanOrEqual(box!.minX - 1e-9);
+        expect(Math.max(...xs), `${where} maxX`).toBeLessThanOrEqual(box!.maxX + 1e-9);
+        expect(Math.min(...ys), `${where} minY`).toBeGreaterThanOrEqual(box!.minY - 1e-9);
+        expect(Math.max(...ys), `${where} maxY`).toBeLessThanOrEqual(box!.maxY + 1e-9);
+        // ...and no side may sit clear of it - a fit zoomed out past the sheet.
+        expect(Math.min(...xs), `${where} minX slack`).toBeCloseTo(box!.minX, 3);
+        expect(Math.max(...xs), `${where} maxX slack`).toBeCloseTo(box!.maxX, 3);
+        expect(Math.min(...ys), `${where} minY slack`).toBeCloseTo(box!.minY, 3);
+        expect(Math.max(...ys), `${where} maxY slack`).toBeCloseTo(box!.maxY, 3);
+
+        if (render.kind === "ARC") {
+          const ellipse = (render.rx * 2) * (render.ry * 2);
+          const drawn = (box!.maxX - box!.minX) * (box!.maxY - box!.minY);
+          if (drawn < ellipse - 1e-6) tightenedArcs += 1;
+        }
+      }
+    }
+
+    // eslint-disable-next-line no-console
+    console.log(
+      `[asc-shape-bounds] ${records} records bounded; ` +
+        `${tightenedArcs} arcs reach less than their own ellipse box`,
+    );
+    expect(records).toBeGreaterThan(0);
+    // If no real arc were a partial sweep, the swept-extreme arithmetic would
+    // never be exercised and the tightness assertions above would be vacuous.
+    expect(tightenedArcs).toBeGreaterThan(0);
+  });
+
+  it("frames artwork that reaches outside the circuit on real sheets", () => {
+    let sheetsWithArtworkOutside = 0;
+    let sheetsFramingNothingElse = 0;
+
+    for (const path of files) {
+      const imported = ascToSchematic(parseAsc(decodeSchematicText(readFileSync(path))));
+      const circuit = circuitBounds(imported.components, imported.wires);
+      const framed = circuitBounds(
+        imported.components,
+        imported.wires,
+        undefined,
+        imported.shapes,
+      );
+      if (!circuit) {
+        // A sheet that is only artwork used to have no bounds at all, so
+        // fit-to-view fell back to zoom 1 at the viewport origin.
+        if (framed) sheetsFramingNothingElse += 1;
+        continue;
+      }
+      expect(framed, path).not.toBeNull();
+      // The circuit is never dropped by widening the box.
+      expect(framed!.minX, path).toBeLessThanOrEqual(circuit.minX);
+      expect(framed!.minY, path).toBeLessThanOrEqual(circuit.minY);
+      expect(framed!.maxX, path).toBeGreaterThanOrEqual(circuit.maxX);
+      expect(framed!.maxY, path).toBeGreaterThanOrEqual(circuit.maxY);
+      const grew = framed!.minX < circuit.minX || framed!.minY < circuit.minY
+        || framed!.maxX > circuit.maxX || framed!.maxY > circuit.maxY;
+      if (grew) sheetsWithArtworkOutside += 1;
+    }
+
+    // eslint-disable-next-line no-console
+    console.log(
+      `[asc-shape-bounds] ${sheetsWithArtworkOutside} of ${files.length} shape-bearing files ` +
+        `draw artwork outside the circuit's own frame; ` +
+        `${sheetsFramingNothingElse} are artwork with no circuit to frame`,
+    );
+    // The whole point of the unit: on real files this is not a hypothetical.
+    expect(sheetsWithArtworkOutside).toBeGreaterThan(0);
   });
 
   // Which way an arc sweeps is the one thing about these records that a wrong

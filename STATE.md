@@ -49,13 +49,7 @@ do not spend a fire diffing it again. Re-check only if its tip moves past
 Ordered. Take the top item unless it is blocked. Class A outranks everything -
 a plausible wrong number is worse than a refusal to run.
 
-1. **Fit-to-view frames the circuit alone.** `circuitBounds` takes components
-   and wires only, so now that the drawing primitives are drawn, artwork placed
-   well outside the circuit can start off-screen, and a sheet that is ONLY
-   artwork fits to nothing. In KNOWN_ISSUES. Widening it touches every caller of
-   `circuitBounds` / `circuitBoundsWithLabels` (trap 3) - check them all before
-   changing the signature.
-2. **The one Rust test that drives a real libngspice is red on this host and is
+1. **The one Rust test that drives a real libngspice is red on this host and is
    not a gate.** `runs_an_operating_point_with_the_real_ngspice_library` is
    `#[ignore]`d behind `TAU_NGSPICE_LIB`, and with either staged dylib it dies
    partway through on `Unknown model type adc_bridge` - the XSPICE code models
@@ -64,6 +58,10 @@ a plausible wrong number is worse than a refusal to run.
    Splitting it, or making the code models findable, would put the FFI vector
    read back under a gate. Run it with `--test-threads=1`: the two real-library
    tests SIGSEGV when they share a process.
+2. **Preview solver vs native DC operating point.** The TS preview starts
+   reactive parts at zero (`uic`-style) while ngspice solves the DC OP first, so
+   the two engines disagree on a biased circuit's opening transient. A DC OP
+   initialization in the preview would close it; native stays authoritative.
 
 ---
 
@@ -71,6 +69,43 @@ a plausible wrong number is worse than a refusal to run.
 
 Newest first. One line each: date, unit, evidence.
 
+- 2026-08-01 - FIT-TO-VIEW FRAMES THE ARTWORK, not just the circuit, so the
+  primitives that started rendering last fire are visible to the one thing that
+  decides where the camera opens. **Not hypothetical on the real corpus: 39 of
+  the 69 shape-bearing files draw artwork outside the circuit's own frame**, and
+  an artwork-only sheet had no bounds at all - `circuitBounds` returned null the
+  moment components and wires were empty, so the view fell back to zoom 1 at the
+  viewport origin. **An arc is where the obvious box is wrong twice over.** Its
+  last four numbers are RAYS the author may have dragged anywhere (`ind.asy`:
+  16.97 from the centre of a radius-16 circle), so a min/max over the record
+  frames a point the curve never reaches; and an arc covers only the part of its
+  ellipse it SWEEPS - the first inductor hump reaches x = 32 but never the
+  leftmost point of its own box at x = 0. `ascShapeBounds` takes the two drawn
+  endpoints plus each axis extreme the sweep passes through, built on
+  `ascShapeRender` rather than on the record so what is framed is what is drawn;
+  the sweep rule moved into one `arcSweep` helper the path and the box share,
+  since the two disagreeing would frame the wrong half of an ellipse. **Every
+  caller was checked before widening (trap 3)**: two production call sites, both
+  in `fitView`, and one needed a guard. A hierarchical import packs flattened
+  bodies from x = 1e6 and `fitView` already frames only the authored region for
+  that reason; a flattened body drops its own artwork on import
+  (`ascImport.ts:1370`), so once the fit has fallen back to the packed region
+  there is no drawing of that region to frame and pulling the sheet's artwork in
+  would rebuild the million-unit fit - held by its own test. Emptiness is now
+  what was covered, not list length, which also stops a point-less wire returning
+  an all-Infinity box. Corpus proof SAMPLES the drawing rather than restating the
+  arithmetic: all 233 records across 69 files walked as the canvas draws them (an
+  arc through its emitted path's own sweep flag, by SVG's rule), every sample
+  inside the box AND every side of the box touched, so clipping and zooming out
+  past the sheet fail separately; both corpus arcs are partial sweeps, asserted,
+  or the tightness check would be vacuous. Mutation-checked four ways: shapes
+  dropped from `circuitBounds` (kills 4 unit + 2 render + 1 corpus), `fitView`
+  stops passing them so geometry is right and nothing asks (kills 2 render -
+  trap 1), whole-ellipse arc (kills 1 unit + 1 corpus), packed-region guard
+  removed (kills 1 render). KNOWN_ISSUES said fit-to-view frames the circuit
+  alone; that line is now the feature. Gates: tsc, full suite 2290 passed / 149
+  files with ZERO failures at `--maxWorkers=2`, cargo 32 passed + clippy clean,
+  corpus 80/80/80/80 warning-clean 77 with the proof inside it.
 - 2026-08-01 - The CANVAS DRAWS the LTspice drawing primitives it has preserved
   byte-for-byte since 2026-07-29, so a schematic's borders, dividers and
   hand-drawn diagrams are visible in the one place they exist to be read. They

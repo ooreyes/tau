@@ -110,34 +110,48 @@ function componentGeometryBounds(component: SchematicComponent): Rect {
 
 /** World-space bounding box of a circuit, with a small margin around each
  * transformed symbol/pin footprint so parts are never flush against the
- * frame. Returns null for an empty schematic. Pure so fit-to-view stays
- * independently testable without a DOM. */
+ * frame. Preserved `.asc` artwork counts toward it, so a sheet framed by a
+ * border - or one that is nothing but a drawing - is not fitted to a region
+ * that leaves it off-screen. Returns null for an empty schematic. Pure so
+ * fit-to-view stays independently testable without a DOM. */
 export function circuitBounds(
   components: readonly SchematicComponent[],
   wires: readonly SchematicWire[],
   margin = 16,
+  shapes: readonly SchematicAscShape[] = [],
 ): { minX: number; minY: number; maxX: number; maxY: number } | null {
-  if (components.length === 0 && wires.length === 0) return null;
   let minX = Infinity;
   let minY = Infinity;
   let maxX = -Infinity;
   let maxY = -Infinity;
+  const cover = (box: Rect) => {
+    minX = Math.min(minX, box.minX);
+    minY = Math.min(minY, box.minY);
+    maxX = Math.max(maxX, box.maxX);
+    maxY = Math.max(maxY, box.maxY);
+  };
   for (const c of components) {
     const bounds = componentGeometryBounds(c);
-    minX = Math.min(minX, c.x + bounds.minX - margin);
-    minY = Math.min(minY, c.y + bounds.minY - margin);
-    maxX = Math.max(maxX, c.x + bounds.maxX + margin);
-    maxY = Math.max(maxY, c.y + bounds.maxY + margin);
+    cover({
+      minX: c.x + bounds.minX - margin,
+      minY: c.y + bounds.minY - margin,
+      maxX: c.x + bounds.maxX + margin,
+      maxY: c.y + bounds.maxY + margin,
+    });
   }
   for (const w of wires) {
-    for (const p of w.points) {
-      minX = Math.min(minX, p.x);
-      minY = Math.min(minY, p.y);
-      maxX = Math.max(maxX, p.x);
-      maxY = Math.max(maxY, p.y);
-    }
+    for (const p of w.points) cover({ minX: p.x, minY: p.y, maxX: p.x, maxY: p.y });
   }
-  return { minX, minY, maxX, maxY };
+  // Artwork takes no symbol margin: a drawing's own extent is exactly what
+  // reaches the sheet, and fit-to-view's viewport padding is what keeps it off
+  // the frame.
+  for (const shape of shapes) {
+    const box = ascShapeBounds(shape);
+    if (box) cover(box);
+  }
+  // A wire carrying no points, or a record with no visible extent, contributes
+  // nothing - so emptiness is what was covered, not how long the lists were.
+  return Number.isFinite(minX) ? { minX, minY, maxX, maxY } : null;
 }
 export const pointsEqual = (a: Point, b: Point) => a.x === b.x && a.y === b.y;
 export const pointKey = (point: Point) => `${point.x},${point.y}`;
@@ -496,8 +510,9 @@ export const buildLabelPlacements = (components: SchematicComponent[], wires: Sc
 export function circuitBoundsWithLabels(
   components: SchematicComponent[],
   wires: SchematicWire[],
+  shapes: readonly SchematicAscShape[] = [],
 ): Rect | null {
-  const base = circuitBounds(components, wires);
+  const base = circuitBounds(components, wires, undefined, shapes);
   if (!base) return base;
   let { minX, minY, maxX, maxY } = base;
   for (const placement of buildLabelPlacements(components, wires).values()) {
@@ -1241,6 +1256,14 @@ export type AscShapeRender =
 
 const TAU_RADIANS = Math.PI * 2;
 
+/** How far an arc travels from one parameter angle to another the way LTspice
+ *  draws it - counterclockwise on screen, which is a DECREASING angle under a
+ *  downward y axis. Stated once, because the emitted path and the bounding box
+ *  disagreeing about which of the two candidate curves is drawn would frame the
+ *  wrong half of an ellipse. */
+const arcSweep = (from: number, to: number) =>
+  ((from - to) % TAU_RADIANS + TAU_RADIANS) % TAU_RADIANS;
+
 /** An arc record's last four numbers are rays from the box centre, not points
  *  on the curve - LTspice lets the author drag them anywhere. Projecting them
  *  onto the ellipse is what keeps the arc from starting off it. */
@@ -1289,9 +1312,8 @@ export function ascShapeRender(shape: SchematicAscShape): AscShapeRender | null 
   const end = ellipseRayPoint(cx, cy, rx, ry, px2, py2);
   // LTspice sweeps an arc counterclockwise on screen from the first ray to the
   // second - established against its own `ind.asy`, whose three arcs only close
-  // into a coil bulging away from the pin axis this way round. The SVG y axis
-  // points down, so counterclockwise is a decreasing parameter angle.
-  const sweep = ((start.angle - end.angle) % TAU_RADIANS + TAU_RADIANS) % TAU_RADIANS;
+  // into a coil bulging away from the pin axis this way round.
+  const sweep = arcSweep(start.angle, end.angle);
   return {
     kind: "ARC",
     wide,
@@ -1303,6 +1325,63 @@ export function ascShapeRender(shape: SchematicAscShape): AscShapeRender | null 
     start: { x: start.x, y: start.y },
     end: { x: end.x, y: end.y },
     largeArc: sweep > Math.PI,
+  };
+}
+
+/** World-space box a preserved primitive actually draws in, or null for a
+ *  record with no visible extent. Two things a naive min/max over the record's
+ *  own numbers gets wrong: an arc reaches only the part of its ellipse it
+ *  sweeps, and an arc's last four numbers are RAYS the author may have dragged
+ *  far outside the box, so they are no part of the drawing. Built on
+ *  `ascShapeRender` rather than on the record, so what is framed is what the
+ *  canvas puts on the sheet. */
+export function ascShapeBounds(shape: SchematicAscShape): Rect | null {
+  const render = ascShapeRender(shape);
+  if (!render) return null;
+  if (render.kind === "LINE") {
+    return {
+      minX: Math.min(render.x1, render.x2),
+      minY: Math.min(render.y1, render.y2),
+      maxX: Math.max(render.x1, render.x2),
+      maxY: Math.max(render.y1, render.y2),
+    };
+  }
+  if (render.kind === "RECTANGLE") {
+    return {
+      minX: render.x,
+      minY: render.y,
+      maxX: render.x + render.width,
+      maxY: render.y + render.height,
+    };
+  }
+  const { cx, cy, rx, ry } = render;
+  if (render.kind === "CIRCLE") {
+    return { minX: cx - rx, minY: cy - ry, maxX: cx + rx, maxY: cy + ry };
+  }
+  const angleOf = (point: Point) => Math.atan2((point.y - cy) / ry, (point.x - cx) / rx);
+  const from = angleOf(render.start);
+  const swept = arcSweep(from, angleOf(render.end));
+  const xs = [render.start.x, render.end.x];
+  const ys = [render.start.y, render.end.y];
+  // The ellipse's four axis extremes, each kept only if the drawn curve passes
+  // through it. An extreme sitting exactly on an endpoint is already covered
+  // either way, so the fp error in recovering these angles cannot move a bound.
+  const extremes: [number, number, number][] = [
+    [0, cx + rx, cy],
+    [Math.PI / 2, cx, cy + ry],
+    [Math.PI, cx - rx, cy],
+    [-Math.PI / 2, cx, cy - ry],
+  ];
+  for (const [angle, x, y] of extremes) {
+    if (arcSweep(from, angle) > swept) continue;
+    xs.push(x);
+    ys.push(y);
+  }
+  return {
+    minX: Math.min(...xs),
+    minY: Math.min(...ys),
+    maxX: Math.max(...xs),
+    maxY: Math.max(...ys),
   };
 }
 

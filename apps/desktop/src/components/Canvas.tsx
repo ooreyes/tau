@@ -126,8 +126,10 @@ export function Canvas({
   // the camera on every component/wire edit (only on fitSignal / home / resize).
   const componentsRef = useRef(components);
   const wiresRef = useRef(wires);
+  const ascShapesRef = useRef(ascShapes);
   componentsRef.current = components;
   wiresRef.current = wires;
+  ascShapesRef.current = ascShapes;
   const selectedId = useSchematic((s) => s.selectedId);
   const selectedWireId = useSchematic((s) => s.selectedWireId);
   const selectedWireIds = useSchematic((s) => s.selectedWireIds);
@@ -948,14 +950,21 @@ export function Canvas({
     const fitWires = authored.length > 0
       ? wiresRef.current.filter((w) => w.points.every((p) => p.x < SUBCIRCUIT_PACK_REGION_X))
       : wiresRef.current;
+    // A flattened block body drops its own artwork on import, so every shape
+    // here belongs to the authored sheet. Once the fit has fallen back to the
+    // packed region there is none of that region's drawing to frame, and
+    // pulling the sheet's own artwork in would rebuild the million-unit fit.
+    const fitShapes = componentsRef.current.length > 0 && authored.length === 0
+      ? []
+      : ascShapesRef.current;
     // Label-aware bounds + 12%/48px viewport padding so long refdes/value
     // text never touches (or clips at) the canvas edge.
-    const framingBounds = circuitBoundsWithLabels(fitComponents, fitWires);
+    const framingBounds = circuitBoundsWithLabels(fitComponents, fitWires, fitShapes);
     if (!framingBounds) {
       setView({ x: r.width / 2, y: r.height / 2, zoom: 1 });
       return;
     }
-    const topologyBounds = circuitBounds(fitComponents, fitWires);
+    const topologyBounds = circuitBounds(fitComponents, fitWires, undefined, fitShapes);
     const center = topologyBounds
       ? {
           x: (topologyBounds.minX + topologyBounds.maxX) / 2,

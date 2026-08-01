@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   ascArcPath,
+  ascShapeBounds,
   ascShapeRender,
   autoNetLabelOffset,
   autoNetLabelOffsets,
@@ -767,5 +768,82 @@ describe("ascShapeRender", () => {
     // nothing to draw either way.
     expect(ascShapeRender(shape("ARC", [40, 16, 40, 48, 4, 44, 16, 16]))).toBeNull();
     expect(ascShapeRender(shape("ARC", [0, 16, 32, 16, 4, 44, 16, 16]))).toBeNull();
+  });
+
+  describe("ascShapeBounds", () => {
+    it("covers a line's endpoints and a box's normalised corners", () => {
+      expect(ascShapeBounds(shape("LINE", [16, 80, 208, 32]))).toEqual({
+        minX: 16, minY: 32, maxX: 208, maxY: 80,
+      });
+      // Corner-reversed, the way most real records are stored.
+      expect(ascShapeBounds(shape("RECTANGLE", [96, 240, -32, 16]))).toEqual({
+        minX: -32, minY: 16, maxX: 96, maxY: 240,
+      });
+      expect(ascShapeBounds(shape("CIRCLE", [-32, 224, -112, -32, 2]))).toEqual({
+        minX: -112, minY: -32, maxX: -32, maxY: 224,
+      });
+    });
+
+    it("covers only the part of the ellipse an arc actually sweeps", () => {
+      // The first inductor hump runs from the upper left round the right-hand
+      // side to the lower left, so it reaches x = 32 but never the leftmost
+      // point of its own box at x = 0. Framing the whole ellipse would waste a
+      // third of the width; framing the raw record would use x = 4, a ray the
+      // author dragged 16.97 from a centre of radius 16 and no part of the
+      // curve. Both wrong answers are excluded by one assertion.
+      const bounds = ascShapeBounds(shape("ARC", INDUCTOR_ARCS[0]))!;
+      expect(bounds.minX).toBeCloseTo(4.686, 3);
+      expect(bounds.maxX).toBeCloseTo(32, 9);
+      expect(bounds.minY).toBeCloseTo(40, 9);
+      expect(bounds.maxY).toBeCloseTo(72, 9);
+    });
+
+    it("has no bounds for a record with nothing to draw", () => {
+      expect(ascShapeBounds(shape("ARC", [40, 16, 40, 48, 4, 44, 16, 16]))).toBeNull();
+    });
+  });
+});
+
+describe("circuitBounds covers preserved artwork", () => {
+  const shape = (
+    kind: SchematicAscShape["kind"],
+    coords: number[],
+  ): SchematicAscShape => ({ kind, width: "Normal", coords });
+
+  it("frames a sheet that is nothing but a drawing", () => {
+    // Previously null - so fit-to-view fell back to zoom 1 at the viewport
+    // origin and a drawing anywhere else started off-screen.
+    expect(circuitBounds([], [], 0, [shape("RECTANGLE", [400, 300, 100, 80])])).toEqual({
+      minX: 100, minY: 80, maxX: 400, maxY: 300,
+    });
+  });
+
+  it("widens the circuit's own box to reach artwork drawn outside it", () => {
+    const border = shape("RECTANGLE", [-200, -150, 600, 500]);
+    const circuit = circuitBounds([comp("r1", 0, 0)], [], 0)!;
+    const withArt = circuitBounds([comp("r1", 0, 0)], [], 0, [border])!;
+    expect(circuit.maxX).toBeLessThan(600);
+    expect(withArt).toEqual({ minX: -200, minY: -150, maxX: 600, maxY: 500 });
+  });
+
+  it("gives artwork no symbol margin, so its box is the drawing's own extent", () => {
+    expect(circuitBounds([], [], 16, [shape("LINE", [0, 0, 100, 40])])).toEqual({
+      minX: 0, minY: 0, maxX: 100, maxY: 40,
+    });
+  });
+
+  it("stays null when nothing carries an extent", () => {
+    // A record that cannot be drawn must not fabricate a frame, and neither
+    // must a wire with no points - both used to depend on list length alone.
+    expect(circuitBounds([], [], 0, [shape("ARC", [40, 16, 40, 48, 4, 44, 16, 16])])).toBeNull();
+    expect(circuitBounds([], [{ id: "w1", points: [] }], 0)).toBeNull();
+  });
+
+  it("carries artwork through the label-aware bounds fit-to-view frames with", () => {
+    const border = shape("RECTANGLE", [-200, -150, 600, 500]);
+    const bounds = circuitBoundsWithLabels([comp("r1", 0, 0)], [], [border])!;
+    expect(bounds.minX).toBeLessThanOrEqual(-200);
+    expect(bounds.maxX).toBeGreaterThanOrEqual(600);
+    expect(bounds.maxY).toBeGreaterThanOrEqual(500);
   });
 });
