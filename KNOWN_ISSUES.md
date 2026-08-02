@@ -72,11 +72,16 @@ one engine for the whole session.
   symbol) survive a save with their direction, attached to the net label they
   name. Tau does not draw a port marker for them and does not yet resolve a
   hierarchy, so such a sheet still opens as a flat circuit - the ports are
-  preserved, not acted on. Tau still refuses to overwrite a file when the
-  rewrite would drop information it cannot yet reproduce: comment placement,
-  extra symbol attributes such as SpiceLine, and symbols with pins Tau does not
-  model (4-pin BJT substrate, switch control pins). The message names the
-  specific reason. Native `.sim` saves are unaffected.
+  preserved, not acted on. The extra symbol attributes that carry a part's
+  parameters (`Value2`, `SpiceLine`, …) go back into the slots they came from,
+  so a part whose whole spec lives in them - an op-amp with no `Value` at all -
+  reopens as itself rather than with everything collapsed onto `Value`. Tau
+  still refuses to overwrite a file when the rewrite would drop information it
+  cannot yet reproduce: comment placement, those attributes on a symbol Tau
+  would have to rewrite (so the slots have nowhere to land) or whose folded
+  value has since been edited, and symbols with pins Tau does not model (4-pin
+  BJT substrate, switch control pins). The message names the specific reason.
+  Native `.sim` saves are unaffected.
 
 ## Importing vendor SPICE models
 

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { importAsc } from "../io/ascImport";
-import { isLossyCarrierWarning } from "../io/ascExport";
+import { isLossyCarrierWarning, schematicToAsc } from "../io/ascExport";
 import { validateSchematicDocument } from "../schematic/documentValidation";
 import { CATALOG } from "../schematic/catalog";
 import { extractCircuit } from "../schematic/netlist";
@@ -171,10 +171,18 @@ describe("project schematic file formats", () => {
       "directive annotation placement",
     );
 
-    // A vendor op-amp's symbol identity is preserved verbatim by the exporter
-    // (no identity risk), but extra SYMATTR fields still block the rewrite.
+    // A vendor op-amp keeps its symbol identity verbatim, so its extra SYMATTR
+    // fields go back into their own slots and no longer block the rewrite.
     const vendorOpAmp = `Version 4\nSHEET 1 880 680\nSYMBOL Opamps\\LT1001 80 80 R0\nSYMATTR InstName U1\nSYMATTR SpiceLine Avol=1Meg\n`;
-    expect(ascRewriteRisks(vendorOpAmp)).toEqual(["extended symbol attributes"]);
+    expect(ascRewriteRisks(vendorOpAmp)).toEqual([]);
+    const resaved = importAsc(vendorOpAmp);
+    expect(schematicToAsc({ components: resaved.components, wires: [], netLabels: [] }).text)
+      .toContain("SYMATTR InstName U1\nSYMATTR SpiceLine Avol=1Meg");
+
+    // A symbol the exporter would have to rewrite has nowhere to put them, so
+    // that save stays blocked.
+    const carrier = `Version 4\nSHEET 1 880 680\nSYMBOL sw 80 80 R0\nSYMATTR InstName S1\nSYMATTR SpiceLine Ron=1\n`;
+    expect(ascRewriteRisks(carrier)).toContain("extended symbol attributes");
 
     // npn4's substrate pin has no banked geometry, so its identity cannot be
     // re-emitted faithfully and the save block stays.

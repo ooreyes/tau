@@ -57,10 +57,24 @@ describe("assistant ASC action boundary", () => {
       source: APPLY_ASC.replace(/FLAG \d+ \d+ 0\n/g, ""),
     })).toThrow(/ground reference/i);
     // A record Tau can parse but not reproduce still refuses to replace the
-    // document, which is the guard drawing primitives used to stand in for.
+    // document, which is the guard drawing primitives used to stand in for. A
+    // varistor is written back as a placeholder resistor, so the extra
+    // attribute slot it carries has no symbol of its own to return to. Its pins
+    // sit on a different pitch than the resistor it stands in for here, so this
+    // one case checks the rewrite guard with the electrical check turned off -
+    // that check is covered by "apply-3" and by the dangling-pin test below.
     expect(() => parseApplyCurrentAscAction("apply-4", {
+      source: VALID_ASC
+        .replace("SYMBOL res", "SYMBOL varistor")
+        .replace("SYMATTR Value 1k", "SYMATTR Value 1k\nSYMATTR SpiceLine Rclamp=1"),
+    }, false)).toThrow(/losslessly/i);
+    // The same slot on a symbol the exporter keeps is reproduced exactly, so it
+    // is carried through rather than refused.
+    const withSlot = parseApplyCurrentAscAction("apply-4-ok", {
       source: VALID_ASC.replace("SYMATTR Value 1k", "SYMATTR Value 1k\nSYMATTR SpiceLine tc=0.001"),
-    })).toThrow(/losslessly/i);
+    });
+    expect(withSlot.document.components.find((c) => c.label === "R1")?.ltExtraAttrs?.extras)
+      .toEqual({ SpiceLine: "tc=0.001" });
     // A malformed drawing primitive is refused a step earlier: the parser will
     // not guess at a pen width it does not know, so the record falls through to
     // `unknown` and the boundary rejects the source outright.

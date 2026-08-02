@@ -416,6 +416,34 @@ export function schematicToAsc(input: SchematicExportInput): SchematicToAscResul
         `${c.label || c.id}: label placement is not preserved; the part is saved as symbol "${symbol.type}".`,
       );
     }
+    // The extended attribute slots mean what they mean relative to the symbol
+    // that declared them, so - like label placement - they can only go back
+    // onto that same symbol. Restoring the split is what makes the file read as
+    // the original part in LTspice rather than one whose whole spec collapsed
+    // into `Value`.
+    const extraAttrs = c.ltExtraAttrs;
+    if (extraAttrs) {
+      // Nothing was folded onto the value when the two agree, so the slots stay
+      // independent of it and an edited value simply takes `Value`. Otherwise
+      // the value has to still be the one Tau derived, since a folded edit
+      // cannot be distributed back across the slots it came from.
+      const restorable = keepsSourceSymbol && !symbol.tauKind
+        && (extraAttrs.derivedValue === extraAttrs.baseValue || c.value === extraAttrs.derivedValue);
+      if (restorable) {
+        const base = extraAttrs.derivedValue === extraAttrs.baseValue ? c.value : extraAttrs.baseValue;
+        // LTspice omits `Value` entirely on a part whose spec lives in the
+        // other slots; writing one back would add an attribute it never had.
+        if (base) attrs.Value = base;
+        else delete attrs.Value;
+        for (const [name, value] of Object.entries(extraAttrs.extras)) attrs[name] = value;
+      } else {
+        warnings.push(
+          `${c.label || c.id}: ${Object.keys(extraAttrs.extras).join(", ")} ${
+            Object.keys(extraAttrs.extras).length === 1 ? "is" : "are"
+          } not preserved; the part's parameters are saved on Value alone.`,
+        );
+      }
+    }
     doc.symbols.push({
       type: symbol.type,
       x: c.x,

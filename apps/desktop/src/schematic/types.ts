@@ -114,6 +114,37 @@ export interface SchematicComponent {
    * part keeps its original symbol; see {@link LtspiceWindow}.
    */
   ltWindows?: LtspiceWindow[];
+  /**
+   * The extended `SYMATTR` slots the source symbol carried, kept so a save can
+   * put them back where LTspice expects them. See {@link LtspiceExtraAttrs}.
+   */
+  ltExtraAttrs?: LtspiceExtraAttrs;
+}
+
+/**
+ * The `SYMATTR` fields beyond `InstName`/`Value` a symbol carried on import,
+ * with the `Value` they sat beside.
+ *
+ * These slots hold real electrical parameters, and which slot a value sits in
+ * is part of its meaning: `UniversalOpamp2` reads its level from `Value` and
+ * its behavior from `Value2`/`SpiceLine`. Tau folds several of them onto the
+ * component's single {@link SchematicComponent.value} so the deck builder sees
+ * one spec line, so writing that folded value back into `Value` alone would
+ * hand LTspice a different part. The exporter restores the original split.
+ */
+export interface LtspiceExtraAttrs {
+  /** The source symbol's own `Value`; empty when it wrote none. */
+  baseValue: string;
+  /**
+   * The component value Tau derived from the whole set. The split can only be
+   * restored while the component still holds this value - once the folded
+   * value is edited there is no way to distribute the edit back across slots.
+   * When it equals `baseValue` nothing was folded, so an edit is safe to write
+   * straight into `Value` with the other slots untouched.
+   */
+  derivedValue: string;
+  /** Every other field, in the order the file wrote them. */
+  extras: Record<string, string>;
 }
 
 /**

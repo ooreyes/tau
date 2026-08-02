@@ -709,3 +709,94 @@ describe("IOPIN (hierarchy port) round-trip", () => {
     expect(parseAsc(grounded).unknown).toEqual(["IOPIN -64 480 In"]);
   });
 });
+
+// A part whose parameters live in the extended SYMATTR slots. The op-amp is
+// copied from a real class-D dead-time sheet: LTspice wrote it no `Value` at
+// all, so its entire behavior is in Value2 and SpiceLine. The capacitor and
+// resistor add the other two shapes - a slot Tau folds only part of onto the
+// value, and one it ignores completely.
+const EXTENDED_ATTR_SOURCE = `Version 4
+SHEET 1 880 680
+FLAG -64 480 0
+SYMBOL Opamps\\\\UniversalOpamp2 272 80 R0
+SYMATTR InstName U2
+SYMATTR Value2 Avol=1Meg GBW=10Gig Slew=10Gig
+SYMATTR SpiceLine ilimit=2 rail=0 Vos=0 phimargin=45
+SYMBOL cap -80 96 R0
+SYMATTR InstName C1
+SYMATTR Value 20p
+SYMATTR SpiceLine Rser=.1 Irms=1.5
+SYMBOL res 336 192 R90
+SYMATTR InstName R1
+SYMATTR Value 100k
+SYMATTR SpiceLine tol=1 pwr=0.1`;
+
+const resaveExtendedAttrs = (edit: (c: SchematicComponent) => SchematicComponent = (c) => c) => {
+  const imported = importAsc(EXTENDED_ATTR_SOURCE);
+  return schematicToAsc({
+    components: imported.components.map(edit),
+    wires: imported.wires,
+    netLabels: imported.netLabels,
+  });
+};
+
+describe("extended SYMATTR slots (Value2 / SpiceLine) round-trip", () => {
+  it("puts each parameter back in the slot it came from", () => {
+    const { text } = resaveExtendedAttrs();
+    // The op-amp had no Value; inventing one would hand LTspice a different
+    // part, since UniversalOpamp2 reads its level from that slot.
+    expect(text).toContain(
+      "SYMATTR InstName U2\nSYMATTR Value2 Avol=1Meg GBW=10Gig Slew=10Gig\n"
+        + "SYMATTR SpiceLine ilimit=2 rail=0 Vos=0 phimargin=45",
+    );
+    expect(text).not.toMatch(/SYMATTR Value Avol=/);
+    expect(text).toContain("SYMATTR InstName R1\nSYMATTR Value 100k\nSYMATTR SpiceLine tol=1 pwr=0.1");
+  });
+
+  it("keeps a parameter Tau's own value never carried", () => {
+    // Tau folds Rser onto the capacitance and drops Irms, which it has no use
+    // for. Re-emitting the slot verbatim is what stops the save destroying it.
+    const imported = importAsc(EXTENDED_ATTR_SOURCE);
+    const cap = imported.components.find((c) => c.label === "C1");
+    expect(cap?.value).toBe("20p Rser=.1");
+    expect(resaveExtendedAttrs().text).toContain("SYMATTR Value 20p\nSYMATTR SpiceLine Rser=.1 Irms=1.5");
+  });
+
+  it("reopens with the same values it was saved from", () => {
+    const before = importAsc(EXTENDED_ATTR_SOURCE);
+    const after = importAsc(resaveExtendedAttrs().text);
+    expect(after.components.map((c) => [c.label, c.value]))
+      .toEqual(before.components.map((c) => [c.label, c.value]));
+  });
+
+  it("no longer blocks a save for extended attributes alone", () => {
+    const risks = ascRewriteRisks(EXTENDED_ATTR_SOURCE);
+    expect(risks).toEqual([]);
+    expect(ascSaveBlockReason(risks, 0, resaveExtendedAttrs().warnings)).toBeNull();
+  });
+
+  it("takes an edited value into Value when no slot was folded onto it", () => {
+    const { text, warnings } = resaveExtendedAttrs((c) => c.label === "R1" ? { ...c, value: "200k" } : c);
+    expect(text).toContain("SYMATTR InstName R1\nSYMATTR Value 200k\nSYMATTR SpiceLine tol=1 pwr=0.1");
+    expect(warnings).toEqual([]);
+  });
+
+  it("refuses the save when a folded value was edited", () => {
+    // The op-amp's value IS its slots joined, so an edit cannot be distributed
+    // back across them. Dropping them silently is the failure this guards.
+    const { text, warnings } = resaveExtendedAttrs((c) => c.label === "U2" ? { ...c, value: "Avol=2Meg" } : c);
+    expect(warnings).toEqual([
+      "U2: Value2, SpiceLine are not preserved; the part's parameters are saved on Value alone.",
+    ]);
+    expect(ascSaveBlockReason([], 0, warnings)).toBe(warnings[0]);
+    expect(text).not.toContain("SYMATTR Value2");
+  });
+
+  it("keeps the save blocked for a part that cannot go back on its own symbol", () => {
+    // A switch is written out as a placeholder resistor, so its slots have
+    // nowhere to land.
+    const source = `${EXTENDED_ATTR_SOURCE}\nSYMBOL sw 400 400 R0\nSYMATTR InstName S1\n`
+      + "SYMATTR Value MYSW\nSYMATTR SpiceLine Ron=1 Roff=1Meg";
+    expect(ascRewriteRisks(source)).toContain("extended symbol attributes");
+  });
+});

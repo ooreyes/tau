@@ -1084,6 +1084,26 @@ function recoverLegacyTauPinGeometry(
 const SOURCE_KINDS_WITH_INLINE_SPEC = new Set<ComponentKind>(["vsource", "isource"]);
 
 /**
+ * `SYMATTR` fields Tau reads structure out of: the two LTspice writes for every
+ * part, plus the metadata the exporter adds for a Tau-only kind. Everything
+ * else is an extended slot carried verbatim ({@link LtspiceExtraAttrs}). The
+ * exporter and the save guard both key off this list, so it lives in one place.
+ */
+export const RESERVED_SYMATTR_FIELDS: readonly string[] = [
+  "InstName", "Value", "TauKind", "TauValue", "TauLabel",
+];
+
+/** The extended slots of a symbol's attributes, in the order the file wrote
+ *  them, or `null` when it carried none. */
+export function extendedSymbolAttrs(attrs: Record<string, string>): Record<string, string> | null {
+  const extras: Record<string, string> = {};
+  for (const [name, value] of Object.entries(attrs)) {
+    if (!RESERVED_SYMATTR_FIELDS.includes(name)) extras[name] = value;
+  }
+  return Object.keys(extras).length > 0 ? extras : null;
+}
+
+/**
  * Build a Tau component value from a symbol's SYMATTR attributes. For
  * independent sources, append `Value2` and `SpiceLine` to `Value` (space-joined)
  * so the LTspice `AC <mag> [phase]` stimulus - and any other inline source spec
@@ -1576,6 +1596,24 @@ export function ascToSchematic(doc: AscDocument, options: AscImportOptions = {})
     // device was mapped to the closest Tau analog rather than a faithful model.
     const placeholderNote = importPlaceholderNote(leaf, instName);
     if (placeholderNote) notes.push(placeholderNote);
+    // A digital gate's function (and/or/xor/inv/…) is encoded in the symbol
+    // NAME, not its value; prepend the leaf so parseDigitalGate sees it.
+    // Voltage-triggered devices imported as a resistor placeholder (varistor
+    // `Rclamp=`, diac `VK=`) carry no parseable Ohm value - their spec is an
+    // A-device / breakover param the resistor emitter can't use. Give the
+    // placeholder a neutral high-Z resting value (both are near-open below
+    // their clamp/breakover voltage) so the deck builds and the op converges.
+    // Nets stay correct; the import note already says to swap in a real model.
+    const value = tauKind
+      ? (symbol.attrs.TauValue === "\"\"" ? "" : (symbol.attrs.TauValue ?? symbol.attrs.Value ?? ""))
+      : kind === "digitalGate"
+      ? `${leaf} ${componentValueFromAttrs(kind, symbol.attrs)}`.trim()
+      : kind === "subckt"
+        ? subcktValueFromSymbol(leaf, symbol.attrs)
+        : (leaf === "varistor" || leaf === "diac") && kind === "resistor"
+          ? "1Meg"
+          : componentValueFromAttrs(kind, symbol.attrs);
+    const extras = extendedSymbolAttrs(symbol.attrs);
     components.push({
       id: id("c"),
       kind,
@@ -1583,23 +1621,7 @@ export function ascToSchematic(doc: AscDocument, options: AscImportOptions = {})
       y: symbol.y,
       rotation: orientationToRotation(symbol.orientation),
       ...(symbol.orientation.startsWith("M") ? { mirrored: true } : {}),
-      // A digital gate's function (and/or/xor/inv/…) is encoded in the symbol
-      // NAME, not its value; prepend the leaf so parseDigitalGate sees it.
-      // Voltage-triggered devices imported as a resistor placeholder (varistor
-      // `Rclamp=`, diac `VK=`) carry no parseable Ohm value - their spec is an
-      // A-device / breakover param the resistor emitter can't use. Give the
-      // placeholder a neutral high-Z resting value (both are near-open below
-      // their clamp/breakover voltage) so the deck builds and the op converges.
-      // Nets stay correct; the import note already says to swap in a real model.
-      value: tauKind
-        ? (symbol.attrs.TauValue === "\"\"" ? "" : (symbol.attrs.TauValue ?? symbol.attrs.Value ?? ""))
-        : kind === "digitalGate"
-        ? `${leaf} ${componentValueFromAttrs(kind, symbol.attrs)}`.trim()
-        : kind === "subckt"
-          ? subcktValueFromSymbol(leaf, symbol.attrs)
-          : (leaf === "varistor" || leaf === "diac") && kind === "resistor"
-            ? "1Meg"
-            : componentValueFromAttrs(kind, symbol.attrs),
+      value,
       label: tauKind
         ? (symbol.attrs.TauLabel === "\"\"" ? "" : (symbol.attrs.TauLabel ?? instName))
         : instName,
@@ -1612,6 +1634,17 @@ export function ascToSchematic(doc: AscDocument, options: AscImportOptions = {})
       // even for a symbol whose geometry Tau could not bank - the exporter
       // decides whether it can be re-emitted.
       ...(symbol.windows?.length ? { ltWindows: symbol.windows } : {}),
+      // Several of these slots are folded onto `value` above, so the split has
+      // to travel with the part for the exporter to put them back.
+      ...(extras
+        ? {
+          ltExtraAttrs: {
+            baseValue: symbol.attrs.Value ?? "",
+            derivedValue: value,
+            extras,
+          },
+        }
+        : {}),
     });
   }
 

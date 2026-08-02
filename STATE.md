@@ -62,16 +62,19 @@ do not spend a fire diffing it again. Re-check only if its tip moves past
 Ordered. Take the top item unless it is blocked. Class A outranks everything -
 a plausible wrong number is worse than a refusal to run.
 
-1. **`SYMATTR SpiceLine` / `Value2` are dropped on an `.asc` round-trip**, so a
-   save is refused with "extended symbol attributes". Unlike the annotation
-   records already closed, these carry real electrical parameters, which is why
-   the block is correct today and why lifting it means carrying them onto the
-   component and back, not just re-emitting them. Measured 2026-08-02 against
-   `examples/class-d-amplifier/deadtime.asc`: after the IOPIN unit landed, this
-   is the ONLY remaining risk on that file (`unknown` is empty, 2 `SpiceLine`
-   + 2 `Value2` across 14 symbols). Closing it makes a real hierarchical sheet
-   saveable end to end.
-2. **The provenance record describes the tree, not its contents.** The check
+1. **The extended slots still cannot be restored onto a symbol Tau rewrites.**
+   The 2026-08-02 unit carries `Value2`/`SpiceLine` back into their own slots,
+   but only for a part re-emitted under its source symbol. A lossy-carrier kind
+   (switch, comparator, subckt, test point) is written out as a placeholder
+   resistor, so its slots have nowhere to land and the save is still refused.
+   Closing that means giving the carrier a Tau-only slot to park them in - the
+   same trick `TauKind`/`TauValue` already use - and is worth one unit.
+2. **A folded value that was edited blocks the save.** By design: an op-amp's
+   value IS its slots joined, so an edit cannot be split back across them. The
+   honest fix is to stop folding - give the component structured parameters
+   instead of one string - which is a much larger unit than this note implies.
+   Logged so it is a decision, not an oversight.
+3. **The provenance record describes the tree, not its contents.** The check
    landed 2026-08-01 refuses a staged resource whose `build-info.json` is absent,
    from another commit, or from another target, and it names every required file.
    It cannot tell that the library *file* was swapped after a legitimate build,
@@ -88,6 +91,7 @@ Newest first, ONE line each. Full evidence for every unit is in PROGRESS.md
 and in its commit message. This section exists so a fresh fire can see what
 is already done at a glance, not so it can re-read the reasoning.
 
+- 2026-08-02 - EXTENDED SYMATTR SLOTS (`Value2`/`SpiceLine`) go back into the slots they came from instead of collapsing onto `Value`; `examples/class-d-amplifier/deadtime.asc` now saves end to end with zero risks and zero warnings.
 - 2026-08-02 - HIERARCHY PORTS (`IOPIN`) survive a save instead of being silently discarded at parse; carried on the net label their FLAG became, so a port cannot outlive its label or be emitted without its FLAG.
 - 2026-08-01 - THE DESKTOP BUILD REFUSES TO PACKAGE AN ENGINE THAT IS NOT THE PINNED BUILD. `build-info.json` was written by every successful run of the build script and read by nothing; `build.rs` now refuses a staged resource with no record, from another commit or target, whose recorded library is absent, or missing a code model. Each refusal proved through a real `cargo build` on a doctored tree....
 - 2026-08-01 - THE BUNDLED ENGINE IS TAU'S OWN BUILD AND CARRIES ITS XSPICE CODE MODELS, so a D flip-flop, sample-and-hold or modulator runs. **The handed-down diagnosis....

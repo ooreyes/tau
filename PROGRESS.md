@@ -29,7 +29,55 @@ figure all run on the real engine. Do not restore a readiness banner until every
 Class A and Class B item in the audit is closed or consciously accepted, with
 file:line evidence.
 
-**Last unit - 2026-08-02: hierarchy ports (`IOPIN`) survive a round-trip save.**
+**Last unit - 2026-08-02: a part's extended attribute slots survive a save.**
+LTspice spreads a part's parameters across `Value2` / `SpiceLine` / `SpiceLine2`
+as well as `Value`, and *which slot* a value sits in is part of its meaning:
+`UniversalOpamp2` reads its level from `Value` and its behavior from the others.
+Tau folds several of those slots onto its single `component.value` so the deck
+builder sees one spec line, so re-emitting that folded value into `Value` alone
+would have handed LTspice a different part. That is why the save was blocked
+rather than approximated, and why lifting the block meant carrying the split.
+
+**The split travels on the component** (`ltExtraAttrs`: the original `Value`,
+the value Tau derived from the whole set, and the other slots verbatim), the
+same shape `ltWindows` already uses. The exporter restores it only onto the
+symbol that declared it - the slots mean nothing on a symbol Tau had to rewrite
+- and only while the component still holds the derived value, since a folded
+edit cannot be distributed back across the slots it came from. Where nothing was
+folded (a resistor's `tol`/`pwr`), an edited value simply takes `Value` and the
+other slots are untouched. Anything else raises an export warning that names the
+slots, which `ascSaveBlockReason` already treats as blocking, so the failure mode
+is a refused save and never a quiet drop. A side effect worth naming: a
+capacitor's `Irms` - metadata Tau's own value never carried - now survives a
+save instead of being deleted by it.
+
+**Evidence on a real file.** `examples/class-d-amplifier/deadtime.asc`, the
+measured case from the previous unit, now reports `risks: []`, `warnings: []`,
+`block: null`; all four of its `Value2`/`SpiceLine` lines come back byte-identical
+and every component reopens with the same kind and value. Both directions of the
+guard were mutation-checked: with the exporter's restore disabled 5 of the 7 new
+tests fail, and with the risk gate disabled the one that proves a rewritten
+symbol stays blocked fails.
+
+**One existing test legitimately changed meaning.** The assistant's
+`apply_current_asc` boundary refuses any source `ascRewriteRisks` flags, and its
+"cannot reproduce" case was a resistor carrying `SpiceLine tc=0.001` - which now
+round-trips losslessly, so accepting it is correct rather than a hole. The
+predicate is untouched; the case was moved to a symbol that genuinely still
+cannot be reproduced, and an assertion added that the resistor's slot is carried
+through intact.
+
+**Gates.** 2304 tests green (150 files, `--maxWorkers=2`), tsc clean, cargo test
+46 passed, clippy clean. Corpus identical with and without the diff -
+`imported 80 · warning-clean 77 · deck-built 80 · op-converged 80 ·
+schema-valid 80`; the script's `>= 82` assertion still fails on missing inputs
+(documented, blocked on Omar), not on this change.
+
+**What this does NOT do:** a lossy-carrier part (switch, comparator, subckt,
+test point) is written out as a placeholder resistor, so its slots still have
+nowhere to land and that save stays blocked. Recorded in `KNOWN_ISSUES.md`.
+
+**2026-08-02: hierarchy ports (`IOPIN`) survive a round-trip save.**
 The parser had a `case "IOPIN": break;` - the record was recognized and then
 silently discarded, and `ascRewriteRisks` blocked the save with a source-text
 regex. So the port data never reached the document at all, which means that had

@@ -4,7 +4,7 @@ import {
   kindToLtspiceType,
   schematicToAsc,
 } from "../io/ascExport";
-import { importAsc, ltspiceTypeToKind, parseAsc } from "../io/ascImport";
+import { extendedSymbolAttrs, importAsc, ltspiceTypeToKind, parseAsc } from "../io/ascImport";
 import type { SchematicDocument } from "../store/useSchematic";
 import { extractCircuit } from "../schematic/netlist";
 
@@ -131,7 +131,12 @@ export function ascRewriteRisks(source: string): string[] {
     if (!verbatim && (!canonical || normalizeLtspiceType(canonical) !== normalizedType) && !dynamicDigitalSymbol) {
       risks.add("symbol-library identity");
     }
-    if (Object.keys(symbol.attrs).some((key) => !["InstName", "Value", "TauKind", "TauValue", "TauLabel"].includes(key))) {
+    // Extended attribute slots (Value2, SpiceLine, …) are carried on the part
+    // and written back into the slots they came from, but only onto the symbol
+    // that declared them - so a part Tau would re-emit under a different symbol
+    // still loses them. A value edit that cannot be split back across the slots
+    // is caught on the export side, where the current value is known.
+    if (!verbatim && extendedSymbolAttrs(symbol.attrs)) {
       risks.add("extended symbol attributes");
     }
   }
