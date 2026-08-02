@@ -95,6 +95,26 @@ describe("App - unified import surface", () => {
     expect(useProject.getState().rootPath).not.toBeNull();
   });
 
+  it("refuses a partial run when a freshly imported .asc skipped an electrical symbol", async () => {
+    render(<App />);
+    const emptyState = await screen.findByRole("region", { name: "Project start" });
+    const input = within(emptyState).getByTitle("Import circuit") as HTMLInputElement;
+    const source = `Version 4
+SHEET 1 880 680
+SYMBOL deadtime 336 -304 R0
+SYMATTR InstName X1
+TEXT 0 0 Left 2 !.tran 1m
+`;
+    fireEvent.change(input, { target: { files: [fileFrom("class-d.asc", source)] } });
+
+    await screen.findByRole("tab", { name: /class-d\.asc/ });
+    fireEvent.click(screen.getAllByRole("button", { name: "Run simulation" })[0]);
+
+    expect((await screen.findAllByText(
+      /Simulation refused: X1 \(deadtime\).*No approximate or partial circuit was run/,
+    )).length).toBeGreaterThan(0);
+  });
+
   it("shows a drop-target state while dragging a file over the editor, and imports it on drop", async () => {
     render(<App />);
     const dropZone = await screen.findByRole("region", { name: "Project start" });

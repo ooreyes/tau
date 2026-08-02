@@ -10789,3 +10789,17 @@ evidence is kept in full here.
   Rust tests plus real bundled-ngspice OP and XSPICE smoke tests; six waveform
   parity cases. Next: Chrome/native UI acceptance, then reconcile the rescue
   ref and observe a clean scheduler restart.
+
+- 2026-08-02 - Completed hands-on Chrome and packaged macOS acceptance. Chrome
+  loaded Tau at its stated 900x600 minimum with every control in bounds and no
+  console warning/error. A stale mounted DMG initially impersonated the current
+  build; after ejecting it, the exact freshly built release `.app` proved both
+  sides of the integrity contract: a Class-D file copied without its required
+  `deadtime` siblings refuses X1 before producing telemetry or plots, while the
+  canonical unmodified `class-d_starter.asc` beside `deadtime.asc/.asy` runs the
+  bundled ngspice engine to 16,873 samples / 33 parts, displays real 20 kHz gate
+  drive and a switching Class-D output, and evaluates Efficiency = 990.7 m
+  (99.07%). Added an end-to-end import regression for the refusal path. The
+  unsigned Tau.app and DMG rebuilt successfully. Next: delete the inspected
+  rescue ref, restart launchd, and verify stable lock/backoff/notification
+  behavior without manufacturing a completion marker.

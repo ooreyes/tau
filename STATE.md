@@ -12,8 +12,10 @@ waveform parity, `.step`/`.meas`, PNG export, and native AC/OP data are repaired
 The final requested correctness unit replaced fake DIAC/TRIAC/VARISTOR
 behavior, modeled PHIDET against LTspice, and made every remaining unsupported
 symbol refuse all analyses. All frontend, production web, Rust, native
-operating-point, and native XSPICE gates pass. The schedule remains paused only
-until the requested Chrome/native-app UI checks finish.
+operating-point, and native XSPICE gates pass. Chrome and the exact freshly
+built packaged app now pass the requested UI checks. The schedule remains
+paused only long enough to reconcile the rescue ref and observe one clean
+runner fire.
 
 Last unit landed 2026-08-02: the vendor-symbol save unblock (half 2). Both
 halves of that unit are now done and the save actually lifts - measured over
@@ -97,6 +99,7 @@ Newest first, ONE line each. Full evidence for every unit is in PROGRESS.md
 and in its commit message. This section exists so a fresh fire can see what
 is already done at a glance, not so it can re-read the reasoning.
 
+- 2026-08-02 - FRESH PACKAGED-APP QA IS GREEN. The exact release `.app` opens the canonical `class-d_starter.asc` with its sibling `deadtime` block, runs bundled ngspice to 16,873 samples / 33 parts, renders the expected switching and sine/output waveforms, and reports Efficiency = 990.7 m (99.07%). The same top-level file without its required sibling sources refuses by name and shows no telemetry or partial plot. Chrome at the 900x600 minimum had zero clipped controls and zero console warnings/errors.
 - 2026-08-02 - UNSUPPORTED DEVICES CAN NO LONGER PRODUCE A PLAUSIBLE FALSE ANSWER. DIAC/TRIAC invoke the unmodified file's own `.subckt`s, VARISTOR and PHIDET have direct LTspice waveform parity proofs, and NIGBT/LT1184F refuse atomically by name. The canonical runner now truthfully proves 80/82 warning-clean, deck-built, and op-converged, with the two refusals separated from hard failures.
 - 2026-08-02 - NATIVE AC returns source/inductor/semiconductor currents and OP exposes device bias, conductance, and region data, all held against real ngspice vectors.
 - 2026-08-02 - WAVEFORM PNG EXPORT captures every visible pane at 2× with computed theme styles inlined.
