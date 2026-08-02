@@ -1175,6 +1175,16 @@ export function decodeCarriedAttrs(
   return { baseValue: base, extras };
 }
 
+/**
+ * The warning a `SYMBOL` with no Tau kind and no resolvable subcircuit raises.
+ * Exported so the save-risk check can subtract the exact messages belonging to
+ * symbols it already knows are carried verbatim; matching the text with a
+ * regex there would let the two drift apart silently.
+ */
+export function foreignSymbolWarning(instName: string, symbolType: string): string {
+  return `Skipped ${instName || "an unnamed part"}: no Tau equivalent for LTspice symbol "${symbolType}".`;
+}
+
 /** The extended slots of a symbol's attributes, in the order the file wrote
  *  them, or `null` when it carried none. */
 export function extendedSymbolAttrs(attrs: Record<string, string>): Record<string, string> | null {
@@ -1680,9 +1690,7 @@ export function ascToSchematic(doc: AscDocument, options: AscImportOptions = {})
         attrs: { ...symbol.attrs },
         ...(symbol.windows ? { windows: symbol.windows.map((w) => ({ ...w })) } : {}),
       });
-      warnings.push(
-        `Skipped ${instName || "an unnamed part"}: no Tau equivalent for LTspice symbol "${symbol.type}".`,
-      );
+      warnings.push(foreignSymbolWarning(instName, symbol.type));
       continue;
     }
     const pinOverride = tauKind ? undefined : (buildPinOverride(symbol, kind) ?? undefined);

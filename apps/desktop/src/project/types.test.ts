@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { importAsc } from "../io/ascImport";
+import { importAsc, makeSubcircuitResolver, type SubcircuitResolver } from "../io/ascImport";
 import { isLossyCarrierWarning, schematicToAsc } from "../io/ascExport";
 import { validateSchematicDocument } from "../schematic/documentValidation";
 import { CATALOG } from "../schematic/catalog";
@@ -246,9 +246,8 @@ ARC Normal 500 240 600 320 500 320 600 240
     // A vendor part Tau cannot map to a kind - the schematic still opens (and
     // the record is retained on import), but serializeSchematicFile must
     // re-emit it verbatim rather than silently deleting it from the file.
-    // (The save itself stays blocked, same as today - see ascRewriteRisks'
-    // "partially supported devices" risk - this only proves the writer side
-    // does not discard the record when it does run.)
+    // (This proves only the writer side. Whether the save is allowed to run
+    // at all is the next test's subject.)
     const source = `Version 4
 SHEET 1 880 680
 SYMBOL PowerProducts\\LTC4449 100 200 R0
@@ -269,6 +268,102 @@ SYMATTR Value LTC4449`;
     expect(saved.contents).toContain("SYMBOL PowerProducts\\LTC4449 100 200 R0");
     expect(saved.contents).toContain("SYMATTR InstName U1");
     expect(saved.contents).toContain("SYMATTR Value LTC4449");
+  });
+
+  it("stops blocking the save once the document is known to carry the vendor symbol", () => {
+    const source = `Version 4
+SHEET 1 880 680
+FLAG 96 256 0
+SYMBOL res 80 32 R0
+SYMATTR InstName R1
+SYMATTR Value 1k
+SYMBOL PowerProducts\\LTC4449 100 200 R0
+SYMATTR InstName U1
+SYMATTR Value LTC4449
+`;
+    const imported = importAsc(source);
+    expect(imported.foreignSymbols).toHaveLength(1);
+    // The part still is not simulated, so the notice still has to reach
+    // Diagnostics. Unblocking the save must not silence it.
+    expect(imported.warnings).toEqual([
+      'Skipped U1: no Tau equivalent for LTspice symbol "PowerProducts\\LTC4449".',
+    ]);
+
+    // With no carried set the verdict stays the conservative one: an unmapped
+    // symbol raises both risks and the save is refused.
+    expect([...ascRewriteRisks(source)].sort()).toEqual([
+      "partially supported devices",
+      "symbol-library identity",
+    ]);
+    expect(ascSaveBlockReason(ascRewriteRisks(source), 0, [])).not.toBeNull();
+
+    // Told what the document carries, both risks are subtracted and the save
+    // runs. The resistor beside it still has to answer for itself.
+    const risks = ascRewriteRisks(source, imported.foreignSymbols);
+    expect(risks).toEqual([]);
+    const saved = serializeSchematicFile("/Schematics/vendor.asc", {
+      components: imported.components,
+      wires: imported.wires,
+      probes: [],
+      netLabels: imported.netLabels,
+      directives: imported.directives,
+      ascForeignSymbols: imported.foreignSymbols,
+    });
+    expect(ascSaveBlockReason(risks, 0, saved.warnings)).toBeNull();
+    expect(saved.contents).toContain("SYMBOL PowerProducts\\LTC4449 100 200 R0");
+    expect(saved.contents).toContain("SYMATTR Value LTC4449");
+
+    // Re-importing what Tau just wrote yields the same record and the same
+    // verdict, so repeated saves are a fixed point rather than slow erosion.
+    const reimported = importAsc(saved.contents);
+    expect(reimported.foreignSymbols).toEqual(imported.foreignSymbols);
+    expect(ascRewriteRisks(saved.contents, reimported.foreignSymbols)).toEqual([]);
+  });
+
+  it("keeps blocking a hierarchical block, whose in-place save would flatten it", () => {
+    // The trap the second argument exists for. `ascRewriteRisks` re-imports the
+    // source with NO subcircuit resolver, so `mydiv2` falls through to the
+    // foreign-symbol branch and looks carried verbatim. The document the app
+    // would actually write was imported WITH a resolver, which FLATTENS the
+    // block into ordinary parts - saving that in place would rewrite the
+    // user's hierarchy as flat components.
+    const bodyAsy = `Version 4
+SymbolType BLOCK
+PIN -32 0 LEFT 8
+PINATTR PinName a
+PINATTR SpiceOrder 1
+PIN 32 0 RIGHT 8
+PINATTR PinName b
+PINATTR SpiceOrder 2`;
+    const bodyAsc = `Version 4
+SHEET 1 100 200
+FLAG 16 0 a
+FLAG 16 160 b
+SYMBOL res 0 -16 R0
+SYMATTR InstName R1
+SYMATTR Value 1k`;
+    const resolver: SubcircuitResolver = makeSubcircuitResolver((type) =>
+      type.toLowerCase() === "mydiv2" ? { asy: bodyAsy, asc: bodyAsc } : null,
+    );
+    const source = `Version 4
+SHEET 1 880 680
+SYMBOL mydiv2 200 200 R0
+SYMATTR InstName X1
+`;
+    const resolved = importAsc(source, { resolveSubcircuit: resolver });
+    expect(resolved.foreignSymbols).toEqual([]);
+    expect(resolved.components.length).toBeGreaterThan(0);
+
+    // The two imports genuinely disagree, which is why the set has to be
+    // passed in: deriving it here would call the flattened block "carried"
+    // and let the save overwrite the hierarchy.
+    expect(importAsc(source).foreignSymbols).toHaveLength(1);
+    expect(ascRewriteRisks(source, importAsc(source).foreignSymbols)).toEqual([]);
+
+    // The authoritative set keeps the block.
+    const risks = ascRewriteRisks(source, resolved.foreignSymbols);
+    expect(risks).toContain("symbol-library identity");
+    expect(ascSaveBlockReason(risks, 0, [])).not.toBeNull();
   });
 
   it("round-trips a foreign symbol through a .sim save/open", () => {

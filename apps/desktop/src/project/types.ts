@@ -5,7 +5,14 @@ import {
   schematicToAsc,
   TAU_CARRIER_KINDS,
 } from "../io/ascExport";
-import { extendedSymbolAttrs, importAsc, ltspiceTypeToKind, parseAsc } from "../io/ascImport";
+import {
+  extendedSymbolAttrs,
+  foreignSymbolWarning,
+  importAsc,
+  ltspiceTypeToKind,
+  parseAsc,
+} from "../io/ascImport";
+import type { SchematicForeignSymbol } from "../schematic/types";
 import type { SchematicDocument } from "../store/useSchematic";
 import { extractCircuit } from "../schematic/netlist";
 
@@ -97,15 +104,48 @@ export function schematicTopologySignature(document: SchematicDocument): string[
 const normalizeLtspiceType = (type: string): string =>
   type.replace(/\\+/g, "/").toLowerCase();
 
+/** Identity of a source `SYMBOL` record, for matching one against the set the
+ *  document carries. Joined on a character no symbol type can contain, so two
+ *  different records cannot collide into one key. */
+const foreignSymbolKey = (symbol: {
+  type: string;
+  x: number;
+  y: number;
+  orientation: string;
+}): string =>
+  [normalizeLtspiceType(symbol.type), symbol.x, symbol.y, symbol.orientation].join(" ");
+
 /**
  * Report source constructs that Tau's structured exporter cannot faithfully
  * reproduce yet. Imported files with any of these risks remain viewable and
  * simulatable, but in-place Save must be blocked instead of overwriting user
  * data with a simplified schematic.
+ *
+ * `carriedForeignSymbols` is the `ascForeignSymbols` of the document that
+ * would actually be written. It has to be passed in rather than derived here:
+ * this function re-imports `source` with no subcircuit resolver, and a
+ * hierarchical block resolves differently in the two. Resolved, the block is
+ * FLATTENED into ordinary components, so an in-place save rewrites the user's
+ * hierarchy as flat parts and must stay blocked; unresolved, the same symbol
+ * falls through to the foreign-symbol branch and looks carried verbatim.
+ * Deriving the set locally would therefore unblock a lossy save. Omitting the
+ * argument means "unknown", which keeps the conservative pre-carry behaviour -
+ * over-blocking is safe, under-blocking corrupts files.
  */
-export function ascRewriteRisks(source: string): string[] {
+export function ascRewriteRisks(
+  source: string,
+  carriedForeignSymbols?: readonly SchematicForeignSymbol[],
+): string[] {
   const parsed = parseAsc(source);
   const risks = new Set<string>();
+  // Counted, not a plain set: if the source holds more copies of a record than
+  // the document carries, the extras fall through to the risk checks below.
+  const carriedByKey = new Map<string, number>();
+  for (const symbol of carriedForeignSymbols ?? []) {
+    const key = foreignSymbolKey(symbol);
+    carriedByKey.set(key, (carriedByKey.get(key) ?? 0) + 1);
+  }
+  const carriedWarnings = new Set<string>();
 
   if (parsed.unknown.length > 0) risks.add("unknown LTspice records");
   // Drawing primitives (LINE/RECTANGLE/CIRCLE/ARC) are carried on the document
@@ -121,6 +161,16 @@ export function ascRewriteRisks(source: string): string[] {
   // `unknown` instead, which is already a risk above.
 
   for (const symbol of parsed.symbols) {
+    // A record the document carries verbatim keeps both its library identity
+    // and its attribute slots: the exporter re-emits the raw SYMBOL, its
+    // WINDOWs and every SYMATTR byte for byte, so neither risk below applies.
+    const carriedKey = foreignSymbolKey(symbol);
+    const carriedCount = carriedByKey.get(carriedKey) ?? 0;
+    if (carriedCount > 0) {
+      carriedByKey.set(carriedKey, carriedCount - 1);
+      carriedWarnings.add(foreignSymbolWarning(symbol.attrs.InstName ?? "", symbol.type));
+      continue;
+    }
     const kind = ltspiceTypeToKind(symbol.type);
     const canonical = kind ? kindToLtspiceType(kind) : null;
     const normalizedType = normalizeLtspiceType(symbol.type);
@@ -145,7 +195,11 @@ export function ascRewriteRisks(source: string): string[] {
     }
   }
 
-  if (importAsc(source).warnings.length > 0) risks.add("partially supported devices");
+  // The carried records still warn on import - the part genuinely is not
+  // simulated, and that notice has to reach Diagnostics. It just is not a
+  // reason to refuse the save, because the save reproduces the record exactly.
+  const warnings = importAsc(source).warnings.filter((warning) => !carriedWarnings.has(warning));
+  if (warnings.length > 0) risks.add("partially supported devices");
   return [...risks];
 }
 

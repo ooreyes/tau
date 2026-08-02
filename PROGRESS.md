@@ -29,7 +29,58 @@ figure all run on the real engine. Do not restore a readiness banner until every
 Class A and Class B item in the audit is closed or consciously accepted, with
 file:line evidence.
 
-**Last unit - 2026-08-02: an unmappable vendor symbol survives the app and a
+**Last unit - 2026-08-02: the vendor-symbol save unblock - half 2 of 2. A file
+with a vendor symbol now actually saves.**
+
+Half 1 made the raw `SYMBOL` record survive import, export, validation, the
+store and a `.sim` save, but nothing a user could see changed: `ascRewriteRisks`
+still raised `symbol-library identity` for any symbol with no Tau kind and
+`partially supported devices` for any importer warning, so the save stayed
+blocked. This closes it. `ascRewriteRisks` takes an optional second argument -
+the `ascForeignSymbols` of the document that would actually be written - and for
+each source record in that set it skips both risk checks and subtracts the exact
+warning the record raises.
+
+**The set has to be passed in; deriving it locally causes data loss.**
+`ascRewriteRisks` re-imports `source` with no subcircuit resolver, but the
+document that gets saved was imported with one (`projectAscImport.ts:196`). The
+two disagree precisely on hierarchical blocks: with a resolver the block is
+FLATTENED into ordinary components (`ascImport.ts:1651`), so an in-place save
+would rewrite the user's hierarchy as flat parts; without one the same symbol
+falls through to the foreign-symbol branch and looks carried verbatim. Taking
+`importAsc(source).foreignSymbols` would therefore have unblocked exactly the
+files that must stay blocked. Omitting the argument keeps the old conservative
+verdict - over-blocking is safe, under-blocking corrupts files. A regression
+test pins this by asserting both sides of the disagreement.
+
+The warning is subtracted through a shared builder (`foreignSymbolWarning`,
+exported from `ascImport.ts`) used both where the warning is pushed and where it
+is subtracted, so the two cannot drift; no regex over message text. The warning
+itself stays - the part genuinely is not simulated, and Diagnostics still says
+so. Only the save verdict changed.
+
+Measured over `~/Documents`, 4,012 real `.asc` files: **save-blocked falls from
+3,509 to 46, with 0 files newly blocked.** For all 3,463 newly-saveable files
+the document was serialized and re-imported: 0 lost foreign symbols and 0
+changes in component, wire, net-label or directive count. Both new tests were
+confirmed to fail with the fix mutated out.
+
+Gates: `tsc` clean; the 5 directly affected test files green (204 tests); full
+suite 2,327 passed with 2 jsdom timeouts in `App.workspace.test.tsx` that pass
+in isolation (trap 5 contention - one is named "clears an imported lossy ASC",
+but its fixture blocks on `unknown LTspice records`, a risk this change does not
+touch); `cargo test` 46 passed; `clippy` clean; acceptance corpus unchanged at
+imported 80 / deck-built 80 / op-converged 80 / schema-valid 80 (its `>= 82`
+assertion still fails on the documented missing input, not a regression - the
+corpus script never calls `ascRewriteRisks`).
+
+Note for the archive: a raw NUL byte slipped into `project/types.ts` as a string
+separator during editing and made the file binary to git. `tsc` and every test
+passed with it in place - a NUL is legal inside a TS string - so only
+`git diff` reporting "Binary files differ" caught it. Worth a glance at
+`git diff --stat` before any commit.
+
+**Prior unit - 2026-08-02: an unmappable vendor symbol survives the app and a
 `.sim` save - half 1 of 2, and the save is still blocked.**
 
 An imported `SYMBOL` with no Tau equivalent (`PowerProducts\LTC4449`,

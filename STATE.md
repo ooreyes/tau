@@ -4,70 +4,16 @@ The working memory of an unattended loop that starts from zero every fire.
 **Read this first and read it fully. It is small on purpose.**
 
 Rules:
-- Rewrite `## Now` at claim, and again at end of fire. Never leave it stale.
-- Append one line to `## Landed` per unit that lands green. Newest first.
-- Anything a human must do goes in `## Blocked on Omar` and stays there.
-- Keep this file under ~200 lines. Prune `## Landed` past 30 entries; the git
-  log is the real history.
-- `AUDIT_2026-07-27.md` is the backlog. `PROGRESS.md` (466 KB) and
-  `FEATURE_PARITY.md` (142 KB) are archives - **do not read them to plan work.**
-  Open them only to append, or when this file names a specific section.
+- Rewrite `## Now
 
----
+**Status:** IDLE
 
-## Now
-
-**Status:** IN PROGRESS
-**Unit:** A vendor symbol Tau cannot import is carried verbatim through a save
-instead of blocking it. Censused over `~/Documents` (4,012 real `.asc`): 3,509
-are unsaveable and **3,490 of them - 99.5% - are blocked solely by an unmapped
-vendor symbol** (`PowerProducts/LTC4449`, `Optos/PC817D`, ... a long tail, not a
-short list). Mapped-but-not-verbatim accounts for 7 files total. The two risks
-that fire, `symbol-library identity` and `partially supported devices`, are both
-downstream of the same skipped SYMBOL record.
-**Started:** 2026-08-02
-**Branch:** auto/ltspice-parity
-
-**Split into two halves. Half 1 has LANDED; half 2 is the user-visible one.**
-
-- **Half 1 (DONE): the record survives the app.** Import retains the raw SYMBOL,
-  the exporter re-emits it, validation bounds it, and the store / `.sim` /
-  `App.tsx` document carry it. `aad9e76` (a durability checkpoint, hence the ugly
-  message) holds import + export + validation + store; the `App.tsx` and `.sim`
-  wiring, stranded on `auto/ltspice-parity-wip` with a literal `if (false)` where
-  the control-character check belonged, was finished and gated on top.
-- **Half 2 (NEXT - take this): the save actually unblocks.** `ascRewriteRisks`
-  (`project/types.ts:106`) still raises `symbol-library identity` at :133 for
-  any symbol with no Tau kind, and `partially supported devices` at :148 for any
-  importer warning - and the carried symbol still emits its "Skipped ... no Tau
-  equivalent" warning. **So half 1 alone changes nothing a user can see.** Do
-  not call this unit done until a file with a vendor symbol saves.
-
-  **The obvious implementation causes DATA LOSS. Verified 2026-08-02, read this
-  before writing a line.** `ascRewriteRisks` takes only `source` and calls
-  `importAsc(source)` with NO options (:148), but the document that actually
-  gets saved is imported WITH a subcircuit resolver
-  (`projectAscImport.ts:196`). The two disagree exactly on hierarchical blocks:
-  - resolver present (the real document): the block is FLATTENED into ordinary
-    components (`ascImport.ts:1651`), so an in-place save rewrites the user's
-    hierarchy as flat parts - lossy, must stay blocked.
-  - resolver absent (inside `ascRewriteRisks`): the same symbol falls through to
-    the foreign-symbol branch (`ascImport.ts:1671`) and looks carried-verbatim.
-
-  So "take the carried set from `importAsc(source).foreignSymbols`" is WRONG -
-  it would unblock a hierarchical schematic and overwrite it flattened. Pass the
-  authoritative set in instead: `App.tsx:1085` already holds the resolver-aware
-  `result.foreignSymbols` fifteen lines above its `ascRewriteRisks(text)` call at
-  :1100. Give the function an optional second argument, and when it is omitted
-  keep today's conservative behaviour (still a risk) - over-blocking is safe,
-  under-blocking corrupts files. Other callers: `App.tsx:1192` and `:1218` can
-  pass `action.document.ascForeignSymbols`; `assistantActions.ts:244` has no
-  document and should keep the conservative path.
-
-  For `partially supported devices`, do not regex the warning text: export one
-  message builder from `ascImport.ts` used both where the warning is pushed
-  (:1683) and where `ascRewriteRisks` subtracts it, so the two cannot drift.
-  The warning itself must STAY - the part really is not simulated.
+Last unit landed 2026-08-02: the vendor-symbol save unblock (half 2). Both
+halves of that unit are now done and the save actually lifts - measured over
+`~/Documents` (4,012 real `.asc`), save-blocked drops from **3,509 to 46**,
+with **0 files newly blocked** and, on all 3,463 newly-saveable files, 0 lost
+foreign symbols and 0 component/wire/net-label/directive count changes across a
+write-then-reimport round trip.
 
 **Engine build notes, learned the hard way 2026-08-01 - keep these:**
 
@@ -95,14 +41,13 @@ Being killed mid-unit is normal and expected on a Pro plan. It is not a
 failure, and it is not a reason to restart the unit from scratch. Pick up the
 partial work.
 
-**The `-wip` branch is currently already reconciled.** Its tip is now `6392d85`,
-which held the `App.tsx` + `.sim` half of this unit; that landed 2026-08-02 as
-`6ceeb08`, with its unfinished `if (false)` fixed and a test added for the `.sim`
-round trip it shipped untested. (The tip before it, `3f69254`, held the `.noise`
+**The `-wip` branch is currently already reconciled.** Its tip is `6392d85`,
+which held the `App.tsx` + `.sim` half of the carry-through unit; that landed
+2026-08-02 as `6ceeb08`. (The tip before it, `3f69254`, held the `.noise`
 TypeScript half and landed 2026-07-29 as `dddda1c`.) `..-wip` keeps showing a
-commit "missing" purely because the SHAs differ. Nothing there needs re-applying
-- do not spend a fire diffing it again. Re-check only if the tip moves past
-`6392d85`.
+commit "missing" purely because the SHAs differ. Nothing there needs
+re-applying - do not spend a fire diffing it again. Re-check only if the tip
+moves past `6392d85`.
 
 ---
 
@@ -111,21 +56,27 @@ commit "missing" purely because the SHAs differ. Nothing there needs re-applying
 Ordered. Take the top item unless it is blocked. Class A outranks everything -
 a plausible wrong number is worse than a refusal to run.
 
-1. **A vendor symbol Tau cannot import blocks the save, and it is now the
-   dominant reason.** Landing the `sw` round-trip left 9 of the 10 real
-   switch files still blocked, every one of them by a part like `LTC4282` or
-   `TVSdiode`: the importer skips the symbol (`no Tau equivalent for LTspice
-   symbol "X"`), which raises BOTH `partially supported devices` and
-   `symbol-library identity`. That is the same wall the flagship model-import
-   work is aimed at. Measure any "this blocks saves" claim against
-   `~/Documents` (4,012 real `.asc` files) before spending a fire on it - two
-   units in a row have found the named cause was not the binding one.
-2. **A folded value that was edited blocks the save.** By design: an op-amp's
+1. **The 46 files still save-blocked.** Down from 3,509, so the remaining set
+   is finally small enough to enumerate rather than estimate. Re-census it
+   first (`ascRewriteRisks(text)` vs `ascRewriteRisks(text, resolved
+   .foreignSymbols)` over `~/Documents`) and group by risk before picking -
+   `unknown LTspice records` and hierarchical blocks are the two known
+   remainders and they are completely different units. Measure any "this
+   blocks saves" claim against the corpus before spending a fire on it - three
+   units in a row found the named cause was not the binding one.
+2. **A hierarchical block still cannot be saved in place, and now it is a
+   visible gap rather than one of thousands.** A resolved block is FLATTENED at
+   import (`ascImport.ts:1651`), so an in-place save would rewrite the user's
+   hierarchy as flat parts. Carrying the un-flattened `SYMBOL` alongside the
+   flattened components - the way a foreign symbol is carried now - is the
+   shape of the fix, but the exporter must then emit the block and NOT its
+   flattened parts, which is the hard half.
+3. **A folded value that was edited blocks the save.** By design: an op-amp's
    value IS its slots joined, so an edit cannot be split back across them. The
    honest fix is to stop folding - give the component structured parameters
    instead of one string - which is a much larger unit than this note implies.
    Logged so it is a decision, not an oversight.
-3. **The provenance record describes the tree, not its contents.** The check
+4. **The provenance record describes the tree, not its contents.** The check
    landed 2026-08-01 refuses a staged resource whose `build-info.json` is absent,
    from another commit, or from another target, and it names every required file.
    It cannot tell that the library *file* was swapped after a legitimate build,
@@ -142,6 +93,7 @@ Newest first, ONE line each. Full evidence for every unit is in PROGRESS.md
 and in its commit message. This section exists so a fresh fire can see what
 is already done at a glance, not so it can re-read the reasoning.
 
+- 2026-08-02 - A VENDOR SYMBOL Tau cannot map no longer blocks the save: `ascRewriteRisks` takes the document's authoritative `ascForeignSymbols` and subtracts the risks those records raise. Save-blocked over 4,012 real `.asc` falls 3,509 -> 46, 0 newly blocked, and all 3,463 newly-saveable files survive a write-then-reimport with no lost record and no count change. The set MUST be passed in, not re-derived: a resolved hierarchical block flattens, so a locally derived set would unblock a lossy save.
 - 2026-08-02 - A VOLTAGE-CONTROLLED SWITCH is written back as a `sw` with all four pins instead of a placeholder resistor; `sw.asy`'s bank was already complete, so the "drops the control pair" comment guarding it was stale. `examples/Educational/Vswitch.asc` saves with zero risks and zero warnings.
 - 2026-08-02 - A PART SAVED UNDER A PLACEHOLDER SYMBOL keeps its extended slots in a Tau-only `TauAttrs` field. Measured over 3,999 real files: it unblocks ZERO of them - carrier kinds are blocked by symbol-library identity, which is the correct verdict.
 - 2026-08-02 - EXTENDED SYMATTR SLOTS (`Value2`/`SpiceLine`) go back into the slots they came from instead of collapsing onto `Value`; `examples/class-d-amplifier/deadtime.asc` now saves end to end with zero risks and zero warnings.

@@ -85,8 +85,13 @@ one engine for the whole session.
   Tau draws on every switch). A voltage-controlled switch (`sw`) is not one of
   them any more - it is written back as a `sw` with its four pins. A part saved
   under a placeholder symbol is the exception - it keeps its slots in a Tau-only
-  attribute, so they are no longer a reason to refuse the save, though a source
-  file whose symbols Tau cannot re-emit stays blocked on that count alone.
+  attribute, so they are no longer a reason to refuse the save. Neither is a
+  vendor symbol Tau has no equivalent for: its raw `SYMBOL` record, WINDOW
+  placements and every SYMATTR are carried through the save verbatim, so the
+  part comes back out exactly as it arrived. It still is not simulated, and the
+  import warning still says so. A schematic that instantiates another `.asc` as
+  a hierarchical block does stay blocked - Tau flattens the block on import, so
+  saving in place would rewrite the hierarchy as flat parts.
   The message names the specific reason.
   Native `.sim` saves are unaffected.
 

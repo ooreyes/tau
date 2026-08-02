@@ -1097,7 +1097,9 @@ function App() {
         // count is the user's confirmation that the file was picked up.
         ...(result.modelLibraries.length > 0 ? { userModelLibraries: result.modelLibraries } : {}),
       });
-      openDocument(doc, title, path, ascRewriteRisks(text));
+      // The resolver-aware carried set, not one re-derived from `text`: see
+      // ascRewriteRisks for why a locally derived set unblocks a lossy save.
+      openDocument(doc, title, path, ascRewriteRisks(text, result.foreignSymbols));
       if (allWarnings.length > 0) {
         console.warn(`Imported ${title} with ${allWarnings.length} warning(s):`, allWarnings);
         showNotice(`Opened ${title} with ${allWarnings.length} import ${allWarnings.length === 1 ? "warning" : "warnings"}. See Diagnostics.`);
@@ -1189,7 +1191,12 @@ function App() {
     // Open the Tau-native document (wires meet symbol pins). The ASC on disk
     // remains the durable interchange file; re-importing it here would attach
     // LTspice pin overrides and visually detach wires from Tau glyphs.
-    openDocument(action.document, basename(path), path, ascRewriteRisks(action.source));
+    openDocument(
+      action.document,
+      basename(path),
+      path,
+      ascRewriteRisks(action.source, action.document.ascForeignSymbols),
+    );
     showNotice(`Created ${basename(path)}`);
   }, [createSchematicInRoot, deleteProjectNode, openDocument, showNotice, writeSim]);
 
@@ -1215,7 +1222,7 @@ function App() {
             doc: appliedDocument,
             history: appliedHistory,
             dirty: true,
-            ascRewriteRisks: ascRewriteRisks(action.source),
+            ascRewriteRisks: ascRewriteRisks(action.source, action.document.ascForeignSymbols),
           }
         : tab
     )));
