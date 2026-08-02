@@ -15,9 +15,10 @@ User-directed autobuilder recovery: repair the unreachable completion signal,
 atomic lock/disk preflight, corpus coverage and independent floors, Class-D
 Efficiency plus RC/Colpitts/Class-D waveform parity proofs, and the remaining
 correctness gaps identified in the interactive review. The launchd schedule is
-paused for the requested Chrome/native-app acceptance; the interrupted DATAFLAG
-claim is preserved on the sanctioned rescue ref and will be reconciled or
-deleted before the schedule resumes. The `.step`
+active again after Chrome/native-app acceptance; the interrupted DATAFLAG claim
+contained no implementation and its sanctioned rescue ref was inspected and
+deleted. The first controlled runner fire exited cleanly under quota backoff.
+The `.step`
 correctness unit is complete: full ordinary sweeps, atomic refusal above the
 safe ceiling, and per-member `.meas` evaluation/display. PNG waveform export is
 now complete. Native AC branch/device phasors and native device operating-point
@@ -10803,3 +10804,14 @@ evidence is kept in full here.
   unsigned Tau.app and DMG rebuilt successfully. Next: delete the inspected
   rescue ref, restart launchd, and verify stable lock/backoff/notification
   behavior without manufacturing a completion marker.
+
+- 2026-08-02 - Re-enabled the 10-minute launchd schedule after inspecting and
+  deleting the sanctioned rescue ref. The first controlled fire probed the
+  active usage backoff, logged the refusal, exited 0, and removed its PID-owned
+  lock; neither completion marker exists. Closed the last notification-proof
+  gap: `verify-autobuilder-completion.sh` now mounts the built DMG and runs both
+  real operating-point and XSPICE-register smokes against the ngspice library
+  inside that mounted Tau.app before it may create a marker. Both mounted-bundle
+  tests pass. The runner can therefore notify only for an exact pushed marker
+  commit backed by green source, corpus, parity, package, launch, and bundled-
+  engine gates.

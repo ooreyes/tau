@@ -88,7 +88,7 @@ record_completion() {
 
   pnpm --filter @tau/desktop tauri build
 
-  local app dmg mount_dir mounted_app app_pid
+  local app dmg mount_dir mounted_app mounted_library app_pid
   app="$ROOT/apps/desktop/src-tauri/target/release/bundle/macos/Tau.app"
   dmg="$(find "$ROOT/apps/desktop/src-tauri/target/release/bundle/dmg" -maxdepth 1 -type f -name '*.dmg' -print -quit)"
   [[ -d "$app" ]] || die "tauri build produced no Tau.app"
@@ -105,6 +105,19 @@ record_completion() {
   hdiutil attach "$dmg" -readonly -nobrowse -mountpoint "$mount_dir" -quiet
   mounted_app="$mount_dir/Tau.app"
   [[ -x "$mounted_app/Contents/MacOS/tau" ]] || die "mounted DMG has no runnable Tau executable"
+  mounted_library="$mounted_app/Contents/Resources/ngspice/lib/libngspice.dylib"
+  [[ -f "$mounted_library" ]] || die "mounted Tau.app has no bundled ngspice library"
+  # The source resource passed above does not prove the DMG contains the same
+  # runnable engine or its adjacent XSPICE modules. Exercise the library from
+  # the mounted app bundle before this proof is allowed to notify completion.
+  TAU_NGSPICE_LIB="$mounted_library" cargo test \
+    --manifest-path apps/desktop/src-tauri/Cargo.toml \
+    runs_an_operating_point_with_the_real_ngspice_library \
+    -- --ignored --test-threads=1
+  TAU_NGSPICE_LIB="$mounted_library" cargo test \
+    --manifest-path apps/desktop/src-tauri/Cargo.toml \
+    runs_a_digital_register_with_the_real_ngspice_code_models \
+    -- --ignored --test-threads=1
   "$mounted_app/Contents/MacOS/tau" >"$mount_dir/tau-app.log" 2>&1 &
   app_pid=$!
   sleep 5
