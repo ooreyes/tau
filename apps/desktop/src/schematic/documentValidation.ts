@@ -282,6 +282,17 @@ const ASC_ORIENTATIONS = new Set([
   "R0", "R90", "R180", "R270", "M0", "M90", "M180", "M270",
 ]);
 
+// A foreign symbol is the only document field written back into `.asc` text
+// without passing through a fixed table first, and `SYMBOL`/`SYMATTR` are
+// space-delimited line records. A newline would forge whole records and an
+// interior space would shift a record's remaining fields, so both are refused
+// here rather than sanitized: `parseAsc` splits on lines and cannot produce
+// either, so a value carrying one did not come from an LTspice file.
+const FORGES_ASC_RECORD = /[\s\u0000-\u001f\u007f]/;
+// An attribute VALUE is the last field on its `SYMATTR` line, so an interior
+// space is ordinary and must stay; only a control character can forge a record.
+const CONTROL_CHARACTER = /[\u0000-\u001f\u007f]/;
+
 function foreignSymbol(value: unknown, index: number): SchematicForeignSymbol {
   const source = record(value, `ascForeignSymbols[${index}]`);
   const orientation = text(source.orientation, `ascForeignSymbols[${index}].orientation`, 8);
@@ -296,10 +307,21 @@ function foreignSymbol(value: unknown, index: number): SchematicForeignSymbol {
   const attrs: Record<string, string> = {};
   for (const [name, raw] of attrsEntries) {
     if (name.length > MAX_TEXT_LENGTH) fail(`ascForeignSymbols[${index}].attrs has a field name that is too long.`);
-    attrs[name] = text(raw, `ascForeignSymbols[${index}].attrs.${name}`, MAX_COMPONENT_VALUE_LENGTH);
+    if (name === "" || FORGES_ASC_RECORD.test(name)) {
+      fail(`ascForeignSymbols[${index}].attrs has a field name that is not a valid SYMATTR name.`);
+    }
+    const attrValue = text(raw, `ascForeignSymbols[${index}].attrs.${name}`, MAX_COMPONENT_VALUE_LENGTH);
+    if (CONTROL_CHARACTER.test(attrValue)) {
+      fail(`ascForeignSymbols[${index}].attrs.${name} must not contain control characters.`);
+    }
+    attrs[name] = attrValue;
+  }
+  const symbolType = text(source.type, `ascForeignSymbols[${index}].type`, MAX_TEXT_LENGTH);
+  if (symbolType === "" || FORGES_ASC_RECORD.test(symbolType)) {
+    fail(`ascForeignSymbols[${index}].type must be a non-empty LTspice symbol name with no whitespace.`);
   }
   const result: SchematicForeignSymbol = {
-    type: text(source.type, `ascForeignSymbols[${index}].type`, MAX_TEXT_LENGTH),
+    type: symbolType,
     x: coordinate(source.x, `ascForeignSymbols[${index}].x`),
     y: coordinate(source.y, `ascForeignSymbols[${index}].y`),
     orientation: orientation as SchematicForeignSymbol["orientation"],

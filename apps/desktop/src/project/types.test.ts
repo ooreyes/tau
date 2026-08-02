@@ -271,6 +271,39 @@ SYMATTR Value LTC4449`;
     expect(saved.contents).toContain("SYMATTR Value LTC4449");
   });
 
+  it("round-trips a foreign symbol through a .sim save/open", () => {
+    // Saving an imported `.asc` as a Tau project and reopening it must not be
+    // the step that loses the part: the record has to survive the JSON body,
+    // not just the `.asc` writer above. WINDOW placements ride along with it.
+    const imported = importAsc(`Version 4
+SHEET 1 880 680
+SYMBOL Optos\\PC817D 208 96 R90
+WINDOW 0 24 16 Left 2
+SYMATTR InstName U2
+SYMATTR SpiceLine Rser=1 Cpar=2`);
+    expect(imported.foreignSymbols).toHaveLength(1);
+
+    const saved = serializeSchematicFile("/Schematics/vendor.sim", {
+      components: imported.components,
+      wires: imported.wires,
+      probes: [],
+      netLabels: imported.netLabels,
+      directives: imported.directives,
+      ascForeignSymbols: imported.foreignSymbols,
+    });
+    // A re-open runs the same validation the app uses, so the record survives.
+    const reopened = validateSchematicDocument(JSON.parse(saved.contents));
+    expect(reopened.ascForeignSymbols).toEqual(imported.foreignSymbols);
+  });
+
+  it("omits the ascForeignSymbols key from .sim output when a document has none", () => {
+    const saved = serializeSchematicFile(
+      "/Schematics/plain.sim",
+      { components: [], wires: [], probes: [], netLabels: [], directives: [] },
+    );
+    expect(Object.prototype.hasOwnProperty.call(JSON.parse(saved.contents), "ascForeignSymbols")).toBe(false);
+  });
+
   it("preserves positioned comments, directives, and custom sheet geometry", () => {
     const source = [
       "Version 4",

@@ -180,6 +180,7 @@ export function schematicDocumentSignature(doc: SchematicDocument): string {
     directives: doc.directives ?? [],
     textAnnotations: doc.textAnnotations ?? [],
     ascShapes: doc.ascShapes ?? [],
+    ascForeignSymbols: doc.ascForeignSymbols ?? [],
     ascSheet: doc.ascSheet ?? null,
     userModelLibraries: doc.userModelLibraries ?? [],
   });
@@ -216,6 +217,7 @@ function App() {
   const directives = useSchematic((s) => s.directives);
   const textAnnotations = useSchematic((s) => s.textAnnotations);
   const ascShapes = useSchematic((s) => s.ascShapes);
+  const ascForeignSymbols = useSchematic((s) => s.ascForeignSymbols);
   const ascSheet = useSchematic((s) => s.ascSheet);
   const userModelLibraries = useSchematic((s) => s.userModelLibraries);
   const past = useSchematic((s) => s.past);
@@ -427,9 +429,10 @@ function App() {
     directives,
     textAnnotations,
     ascShapes,
+    ascForeignSymbols,
     ...(ascSheet ? { ascSheet } : {}),
     ...(userModelLibraries.length > 0 ? { userModelLibraries } : {}),
-  }), [ascSheet, ascShapes, components, directives, netLabels, probes, textAnnotations, userModelLibraries, wires]);
+  }), [ascForeignSymbols, ascSheet, ascShapes, components, directives, netLabels, probes, textAnnotations, userModelLibraries, wires]);
   // Native runs take the raw vendor text (LTspice-only cleanup happens in the
   // deck builder); the store keeps names alongside for the attachment UI.
   const userModelLibraryTexts = useMemo(
@@ -937,6 +940,7 @@ function App() {
               directives,
               textAnnotations,
               ascShapes,
+              ascForeignSymbols,
               ...(ascSheet ? { ascSheet } : {}),
             },
             history: { past, future },
@@ -948,11 +952,12 @@ function App() {
               directives,
               textAnnotations,
               ascShapes,
+              ascForeignSymbols,
               ...(ascSheet ? { ascSheet } : {}),
             })),
           }
         : tab)),
-    [activeId, ascSheet, ascShapes, components, wires, probes, netLabels, directives, textAnnotations, past, future],
+    [activeId, ascForeignSymbols, ascSheet, ascShapes, components, wires, probes, netLabels, directives, textAnnotations, past, future],
   );
 
   // Adopt an imported circuit's own `.tran` settings (stop time / sample count)
@@ -1084,6 +1089,7 @@ function App() {
         directives: result.directives,
         textAnnotations: result.textAnnotations,
         ascShapes: result.shapes,
+        ascForeignSymbols: result.foreignSymbols,
         ascSheet: result.sheet,
         probes: [],
         // Vendor models a `.include`/`.lib` named and the importer found beside

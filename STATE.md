@@ -28,6 +28,25 @@ downstream of the same skipped SYMBOL record.
 **Started:** 2026-08-02
 **Branch:** auto/ltspice-parity
 
+**Split into two halves. Half 1 has LANDED; half 2 is the user-visible one.**
+
+- **Half 1 (DONE): the record survives the app.** Import retains the raw SYMBOL,
+  the exporter re-emits it, validation bounds it, and the store / `.sim` /
+  `App.tsx` document carry it. `aad9e76` (a durability checkpoint, hence the ugly
+  message) holds import + export + validation + store; the `App.tsx` and `.sim`
+  wiring, stranded on `auto/ltspice-parity-wip` with a literal `if (false)` where
+  the control-character check belonged, was finished and gated on top.
+- **Half 2 (NEXT - take this): the save actually unblocks.** `ascRewriteRisks`
+  (`project/types.ts:106`) still raises `symbol-library identity` at :133 for
+  any symbol with no Tau kind, and `partially supported devices` at :148 for any
+  importer warning - and the carried symbol still emits its "Skipped ... no Tau
+  equivalent" warning. **So half 1 alone changes nothing a user can see.** Do
+  not call this unit done until a file with a vendor symbol saves.
+  The predicate must NOT be re-derived: `ascRewriteRisks` already calls
+  `importAsc(source)`, so take the carried set from `imported.foreignSymbols`.
+  Re-deriving "has no Tau kind" would wrongly unblock a subcircuit-flattened
+  part, which is rewritten lossily and must stay blocked (`ascImport.ts:1649`).
+
 **Engine build notes, learned the hard way 2026-08-01 - keep these:**
 
 1. **Clone from the GitHub mirror, not SourceForge.** SourceForge served ~1.4

@@ -267,4 +267,32 @@ describe("schematic document validation", () => {
     const result = validateSchematicDocument(validDocument());
     expect(Object.prototype.hasOwnProperty.call(result, "ascForeignSymbols")).toBe(false);
   });
+
+  it("refuses a foreign symbol whose fields would forge extra `.asc` records", () => {
+    const base = validDocument();
+    const bad = (symbol: Record<string, unknown>) => () => validateSchematicDocument({
+      ...base,
+      ascForeignSymbols: [symbol],
+    });
+    const at = (extra: Record<string, unknown>) => ({
+      type: "PowerProducts\\LTC4449", x: 0, y: 0, orientation: "R0", attrs: {}, ...extra,
+    });
+
+    // `SYMBOL <type> <x> <y> <orientation>` is space-delimited: a newline in
+    // the type appends whole records, a space shifts the coordinates.
+    expect(bad(at({ type: "res 0 0 R0\nWIRE 0 0 64 0" }))).toThrow(/type/i);
+    expect(bad(at({ type: "two words" }))).toThrow(/type/i);
+    expect(bad(at({ type: "" }))).toThrow(/type/i);
+
+    // `SYMATTR <name> <value>`: same exposure on both fields.
+    expect(bad(at({ attrs: { "InstName U1\nFLAG 0 0 0": "x" } }))).toThrow(/field name/i);
+    expect(bad(at({ attrs: { "": "x" } }))).toThrow(/field name/i);
+    expect(bad(at({ attrs: { InstName: "U1\nSYMBOL res 0 0 R0" } }))).toThrow(/control character/i);
+
+    // A value's interior spaces are ordinary - it is the last field on its
+    // line - and must keep validating, or real vendor parts would be refused.
+    const spaced = at({ attrs: { SpiceLine: "Rser=1 Cpar=2" } });
+    expect(validateSchematicDocument({ ...base, ascForeignSymbols: [spaced] }).ascForeignSymbols)
+      .toEqual([spaced]);
+  });
 });
