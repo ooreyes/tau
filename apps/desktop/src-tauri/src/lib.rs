@@ -2,6 +2,7 @@ mod credentials;
 mod local_ai;
 mod project_fs;
 mod spice;
+pub mod staged_engine;
 
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 #[tauri::command]

@@ -62,20 +62,19 @@ do not spend a fire diffing it again. Re-check only if its tip moves past
 Ordered. Take the top item unless it is blocked. Class A outranks everything -
 a plausible wrong number is worse than a refusal to run.
 
-1. **Nothing verifies the staged engine is the pinned build.**
-   `scripts/build-ngspice.sh` writes `build-info.json` with the repository,
-   commit and host, and **no code anywhere reads it**. Nothing in the packaging
-   path compares the staged library against the pinned commit, so a hand-placed
-   or system `libngspice` is bundled as though it were the reproducible build -
-   which is exactly what had happened here for an unknown length of time (see
-   `FIX_BUGS.md`, 2026-08-01). Have the bundle step verify the staged resource
-   against `build-info.json` and refuse a mismatch. Note the resource tree is
-   gitignored, so the check has to run at package time, not in the test suite.
-2. **Preview solver vs native DC operating point.** The TS preview was said to
+1. **Preview solver vs native DC operating point.** The TS preview was said to
    start reactive parts at zero (`uic`-style) while ngspice solves the DC OP
    first. **Verify before starting:** `KNOWN_ISSUES.md:100` now states the
    preview solves the DC operating point before a transient unless the analysis
    specifies `uic`, so this may already be closed and only this entry is stale.
+2. **The provenance record describes the tree, not its contents.** The check
+   landed 2026-08-01 refuses a staged resource whose `build-info.json` is absent,
+   from another commit, or from another target, and it names every required file.
+   It cannot tell that the library *file* was swapped after a legitimate build,
+   because the record holds no digest. Recording a SHA-256 per staged file at
+   staging time and verifying it in `build.rs` would close that; the cost is that
+   adopting it needs a full engine rebuild (~25 min) to regenerate the record,
+   which is why it was not folded into the same unit.
 
 ---
 
@@ -85,6 +84,7 @@ Newest first, ONE line each. Full evidence for every unit is in PROGRESS.md
 and in its commit message. This section exists so a fresh fire can see what
 is already done at a glance, not so it can re-read the reasoning.
 
+- 2026-08-01 - THE DESKTOP BUILD REFUSES TO PACKAGE AN ENGINE THAT IS NOT THE PINNED BUILD. `build-info.json` was written by every successful run of the build script and read by nothing; `build.rs` now refuses a staged resource with no record, from another commit or target, whose recorded library is absent, or missing a code model. Each refusal proved through a real `cargo build` on a doctored tree....
 - 2026-08-01 - THE BUNDLED ENGINE IS TAU'S OWN BUILD AND CARRIES ITS XSPICE CODE MODELS, so a D flip-flop, sample-and-hold or modulator runs. **The handed-down diagnosis....
 - 2026-08-01 - A MISSING XSPICE CODE-MODEL BUNDLE stops being silent, and the real-library test that proves the FFI vector read stops dying on it. **Tau's bundled engine....
 - 2026-08-01 - FIT-TO-VIEW FRAMES THE ARTWORK, not just the circuit, so the primitives that started rendering last fire are visible to the one thing that decides where the....
@@ -127,6 +127,12 @@ is already done at a glance, not so it can re-read the reasoning.
   `scripts/acceptance-corpus.sh` fails its `>= 82` assertion. This is missing
   input, not a regression. **Do not lower the baseline.** What matters is that
   imported / deck-built / op-converged / schema-valid all stay at 80.
+- **Disk.** 2026-08-01: 1.6 GiB free on a 100%-full volume, and `cargo clippy`
+  died with `No space left on device` mid-fire;
+  `apps/desktop/src-tauri/target/debug/incremental` (371 MB of regenerable
+  cache) was removed to get past it. `target/` is still ~3.7 GB. A release
+  build or a full engine rebuild needs room this host does not have - check
+  `df -h /` before starting either.
 
 ---
 

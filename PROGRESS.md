@@ -29,7 +29,60 @@ figure all run on the real engine. Do not restore a readiness banner until every
 Class A and Class B item in the audit is closed or consciously accepted, with
 file:line evidence.
 
-**Last unit - 2026-08-01: the bundled engine is Tau's own build, and it carries
+**Last unit - 2026-08-01: the desktop build refuses to package an engine that is
+not the pinned build.** `build-info.json` had been written by
+`scripts/build-ngspice.sh` on every successful run and **read by nothing** - the
+only record of engine provenance, and decorative. That is exactly how a
+hand-placed Homebrew library sat in this tree for an unknown length of time and
+would have shipped in a DMG as the reproducible build. `build.rs` now verifies
+the staged tree against the record before `tauri_build::build()`.
+
+**The check has to live in the build script, not the test suite.** The staged
+resource is gitignored, so no test can see the tree that actually ships;
+`build.rs` is the one step every desktop build and every packaging run goes
+through. It refuses five ways: no `build-info.json` at all (the failure that
+actually happened), a record from another commit, a record from another target,
+a recorded library that is not the one this build loads or is not present on
+disk, and any missing XSPICE code model.
+
+**Two decisions are about the check not quietly becoming a no-op.** The pinned
+SHA is parsed out of `scripts/build-ngspice.sh` rather than copied into Rust, so
+it keeps one home and a bumped pin cannot silently pass an engine built from the
+old one - and a script that stops declaring `NGSPICE_COMMIT` **refuses the
+build** rather than skipping the comparison, which is trap 7 in its natural
+habitat. The seven `.cm` names are now a single `REQUIRED_CODEMODELS` shared by
+the run-time loader and the packaging check; a name that drifted apart would be
+staged and never loaded, or required and never staged, in both directions
+silently.
+
+**The recorded repository is deliberately NOT compared.** The script takes a
+mirror override (`NGSPICE_REPOSITORY`) and verifies the checkout resolves to the
+pinned commit, so the URL carries nothing the SHA does not - and the tree staged
+here was legitimately built from the GitHub mirror while the script's default
+still names SourceForge. Comparing it would have refused a correct build.
+
+**Trap 1 checked against the shipped path, not the pure function.** Each refusal
+was run through a real `cargo build` against a doctored resource tree: the record
+removed (refused, naming `scripts/build-ngspice.sh`), its commit changed to
+`deadbeef...` (refused, naming both SHAs), its host changed to `Darwin-x86_64`
+(refused, naming both targets), `digital.cm` deleted (refused, naming that
+module) - and the real tree restored builds. Mutation-checked twice more:
+renaming `NGSPICE_COMMIT` in the script fails the build with "no longer declares"
+rather than passing, and dropping `digital.cm` from the one shared list kills
+`runs_a_digital_register_with_the_real_ngspice_code_models` with ngspice's own
+`Unknown model type adc_bridge` / `MIF-ERROR`, so the loader is proved to read
+the shared constant rather than a leftover copy. `serde_json` was added to
+`[build-dependencies]`; it is already a dependency of the crate and of
+`tauri-build`, so no package was added. The `FIX_BUGS.md` entry logged by the
+previous fire is closed with the fix, and README no longer says only that a build
+fails when the library is absent. Gates: tsc, cargo 46 passed (34 + 12 new) + all
+4 ignored real-library tests passed at `--test-threads=1` + clippy clean.
+
+Next candidate: Next up #2 - verify whether the preview solver / native DC
+operating-point mismatch is still real, or whether `KNOWN_ISSUES.md:100` has
+already closed it and only the backlog entry is stale.
+
+**Prior unit - 2026-08-01: the bundled engine is Tau's own build, and it carries
 its XSPICE code models.** Digital parts run. The previous fire left this as
 "add `--enable-xspice` to the configure line, rebuild"; **that diagnosis was
 wrong, and checking it first is what found the real defect.** XSPICE is already
@@ -86,10 +139,6 @@ Two findings logged in `FIX_BUGS.md`:
 the corrected diagnosis, and the fact that **nothing reads `build-info.json`** -
 no step compares the staged engine against the pinned commit, which is why a
 hand-placed library went unnoticed for an unknown length of time.
-
-Next candidate: have the packaging step verify the staged engine against
-`build-info.json` and refuse a mismatch, so a hand-placed or system libngspice
-cannot be bundled as the reproducible build again.
 
 **Prior unit - 2026-08-01: a missing XSPICE code-model bundle stops being silent.**
 Tau's parts palette offers D flip-flops, sample-and-hold and modulator parts;

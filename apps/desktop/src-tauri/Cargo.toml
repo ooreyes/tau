@@ -16,6 +16,9 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
+# The build script reads the staged engine's provenance record. Already a
+# dependency of the crate and of tauri-build, so this adds no package.
+serde_json = "1"
 
 [dependencies]
 tauri = { version = "2", features = [] }

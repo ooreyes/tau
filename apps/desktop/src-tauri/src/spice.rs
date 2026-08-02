@@ -360,15 +360,7 @@ impl SpiceEngine {
             return Ok(());
         };
         let codemodel_dir = lib_dir.join("ngspice");
-        let names = [
-            "spice2poly.cm",
-            "analog.cm",
-            "digital.cm",
-            "xtradev.cm",
-            "xtraevt.cm",
-            "table.cm",
-            "tlines.cm",
-        ];
+        let names = crate::staged_engine::REQUIRED_CODEMODELS;
 
         // `codemodel` does not unquote double-quoted filenames and its command
         // lexer still splits backslash-escaped spaces. DMGs commonly mount as

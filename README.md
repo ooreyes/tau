@@ -97,7 +97,10 @@ native engine. Use `pnpm dev` for ngspice verification.
 The build script locks ngspice to its recorded source commit, compiles out of
 tree, stages a target-matched library under `src-tauri/resources/ngspice/`, and
 writes `build-info.json` with the exact provenance. Desktop builds fail early
-when that staged library is absent. `TAU_NGSPICE_LIB` remains an explicit local
+when that staged library is absent, and again when it is present but is not the
+pinned build: the build reads `build-info.json` and refuses a resource that
+carries no record, was built from another commit or for another target, or is
+missing an XSPICE code model. `TAU_NGSPICE_LIB` remains an explicit local
 development override only; packaged apps resolve their library through Tauri's
 resource directory and never load an arbitrary system/Homebrew installation.
 

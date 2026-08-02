@@ -48,17 +48,32 @@ engine loader asks for, and `--enable-xspice` is passed explicitly so the
 requirement is stated rather than inherited from an upstream default that has
 been opt-in before.
 
-## 2026-08-01 — nothing checks that the staged engine is the pinned build (CONFIRMED, OPEN)
+## 2026-08-01 — nothing checks that the staged engine is the pinned build (CONFIRMED, FIXED 2026-08-01)
 
 Fallout from the entry above. `scripts/build-ngspice.sh` writes `build-info.json`
-with the repository, commit and host it built from, and **no code anywhere reads
-it** - it is the only record of engine provenance and it is decorative. Nothing
-in the packaging path compares the staged library against the pinned commit, so
-any hand-placed or system-installed `libngspice` is bundled as though it were the
+with the repository, commit and host it built from, and **no code anywhere read
+it** - it was the only record of engine provenance and it was decorative. Nothing
+in the packaging path compared the staged library against the pinned commit, so
+any hand-placed or system-installed `libngspice` was bundled as though it were the
 reproducible build, which is exactly what happened here for an unknown length of
 time. A DMG built from such a tree ships an engine whose version, build options
-and patch level are unknown. Worth a unit: have the bundle step verify the staged
-resource against `build-info.json` and refuse a mismatch.
+and patch level are unknown.
+
+**Fix applied 2026-08-01:** `build.rs` - the one step every desktop build and
+every packaging run goes through - now verifies the staged tree against the
+record before `tauri_build::build()`, and panics with the reason on a mismatch.
+It refuses a resource carrying no `build-info.json` (the failure that actually
+happened), one built from a commit other than the SHA `scripts/build-ngspice.sh`
+pins, one built for another target, one whose recorded library is not the one
+this build loads or is not present, and one missing any of the XSPICE code
+models. The pinned SHA is read out of the build script rather than copied, and a
+script that stops declaring `NGSPICE_COMMIT` refuses the build instead of
+skipping the check. The recorded repository is deliberately not compared: the
+script takes a mirror override and verifies the checkout resolves to the pinned
+commit, so the URL carries nothing the commit does not. Logic and its unit tests
+live in `apps/desktop/src-tauri/src/staged_engine.rs`, which `build.rs` includes
+by path, since the staged tree is gitignored and cannot be checked from the test
+suite alone.
 
 ## 2026-07-29 — the real-library Rust test cannot go green on this host (CONFIRMED)
 
