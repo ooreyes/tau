@@ -216,6 +216,7 @@ function validatedAscSource(value: unknown, validateElectrical: boolean): {
       directives: imported.directives,
       textAnnotations: imported.textAnnotations,
       ascShapes: imported.shapes,
+      ascForeignSymbols: imported.foreignSymbols,
       ascSheet: imported.sheet,
     },
     componentCount: imported.components.filter((component) => component.kind !== "ground").length,

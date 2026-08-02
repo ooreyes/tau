@@ -121,6 +121,42 @@ describe("drawing primitives (LINE/RECTANGLE/CIRCLE/ARC) round-trip", () => {
   });
 });
 
+// A vendor symbol with no Tau equivalent - two WINDOW label placements plus
+// several SYMATTR lines, the full grammar a real library part carries.
+const FOREIGN_SYMBOL_SOURCE = `Version 4
+SHEET 1 880 680
+SYMBOL PowerProducts\\LTC4449 100 200 R0
+WINDOW 0 24 16 Left 2
+WINDOW 3 24 44 Left 2
+SYMATTR InstName U1
+SYMATTR Value LTC4449
+SYMATTR SpiceModel LTC4449BOOST`;
+
+describe("foreign symbols (no Tau equivalent) round-trip", () => {
+  it("schematicToAsc re-emits the SYMBOL, WINDOW, and every SYMATTR line", () => {
+    const { foreignSymbols } = importAsc(FOREIGN_SYMBOL_SOURCE);
+    expect(foreignSymbols).toHaveLength(1);
+    const { text } = schematicToAsc({ components: [], wires: [], netLabels: [], foreignSymbols });
+    const sourceLines = FOREIGN_SYMBOL_SOURCE.split("\n").filter((line) => /^(SYMBOL|WINDOW|SYMATTR)\b/.test(line));
+    for (const line of sourceLines) {
+      expect(text, line).toContain(line);
+    }
+  });
+
+  it("survives a full import -> export -> re-import round trip", () => {
+    const before = importAsc(FOREIGN_SYMBOL_SOURCE);
+    expect(before.foreignSymbols).toHaveLength(1);
+    const { text } = schematicToAsc({
+      components: before.components,
+      wires: before.wires,
+      netLabels: before.netLabels,
+      foreignSymbols: before.foreignSymbols,
+    });
+    const after = importAsc(text);
+    expect(after.foreignSymbols).toEqual(before.foreignSymbols);
+  });
+});
+
 describe("kindToLtspiceType", () => {
   it("inverts the common built-ins back to banked-pin symbol types", () => {
     expect(kindToLtspiceType("resistor")).toBe("res");

@@ -17,9 +17,15 @@ Rules:
 
 ## Now
 
-**Status:** IDLE
-**Unit:** -
-**Started:** -
+**Status:** IN PROGRESS
+**Unit:** A vendor symbol Tau cannot import is carried verbatim through a save
+instead of blocking it. Censused over `~/Documents` (4,012 real `.asc`): 3,509
+are unsaveable and **3,490 of them - 99.5% - are blocked solely by an unmapped
+vendor symbol** (`PowerProducts/LTC4449`, `Optos/PC817D`, ... a long tail, not a
+short list). Mapped-but-not-verbatim accounts for 7 files total. The two risks
+that fire, `symbol-library identity` and `partially supported devices`, are both
+downstream of the same skipped SYMBOL record.
+**Started:** 2026-08-02
 **Branch:** auto/ltspice-parity
 
 **Engine build notes, learned the hard way 2026-08-01 - keep these:**

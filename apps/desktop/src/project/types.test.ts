@@ -242,6 +242,35 @@ ARC Normal 500 240 600 320 500 320 600 240
     expect(ascSaveBlockReason(ascRewriteRisks(saved.contents), 0, saved.warnings)).toBeNull();
   });
 
+  it("carries a foreign symbol with no Tau equivalent through a real save instead of dropping it", () => {
+    // A vendor part Tau cannot map to a kind - the schematic still opens (and
+    // the record is retained on import), but serializeSchematicFile must
+    // re-emit it verbatim rather than silently deleting it from the file.
+    // (The save itself stays blocked, same as today - see ascRewriteRisks'
+    // "partially supported devices" risk - this only proves the writer side
+    // does not discard the record when it does run.)
+    const source = `Version 4
+SHEET 1 880 680
+SYMBOL PowerProducts\\LTC4449 100 200 R0
+SYMATTR InstName U1
+SYMATTR Value LTC4449`;
+    const imported = importAsc(source);
+    expect(imported.foreignSymbols).toHaveLength(1);
+    expect(imported.warnings.some((w) => w.includes("no Tau equivalent"))).toBe(true);
+
+    const saved = serializeSchematicFile("/Schematics/vendor.asc", {
+      components: imported.components,
+      wires: imported.wires,
+      probes: [],
+      netLabels: imported.netLabels,
+      directives: imported.directives,
+      ascForeignSymbols: imported.foreignSymbols,
+    });
+    expect(saved.contents).toContain("SYMBOL PowerProducts\\LTC4449 100 200 R0");
+    expect(saved.contents).toContain("SYMATTR InstName U1");
+    expect(saved.contents).toContain("SYMATTR Value LTC4449");
+  });
+
   it("preserves positioned comments, directives, and custom sheet geometry", () => {
     const source = [
       "Version 4",

@@ -19,6 +19,7 @@ import type {
   NetLabel,
   SchematicAscShape,
   SchematicComponent,
+  SchematicForeignSymbol,
   SchematicSheet,
   SchematicTextAnnotation,
   SchematicWire,
@@ -367,6 +368,11 @@ export interface SchematicExportInput {
   textAnnotations?: SchematicTextAnnotation[];
   /** Drawing primitives retained from an imported `.asc`. */
   shapes?: SchematicAscShape[];
+  /**
+   * Source SYMBOL records with no Tau equivalent, retained from an imported
+   * `.asc` so an in-place save does not silently delete the part.
+   */
+  foreignSymbols?: SchematicForeignSymbol[];
   /** Original LTspice sheet geometry retained from import. */
   sheet?: SchematicSheet;
 }
@@ -507,6 +513,16 @@ export function schematicToAsc(input: SchematicExportInput): SchematicToAscResul
       orientation: rotationToOrientation(c.rotation, c.mirrored),
       attrs,
       ...(keepsSourceSymbol && windows.length > 0 ? { windows } : {}),
+    });
+  }
+
+  // Foreign symbols carry no Tau semantics - append after every real component
+  // so a save never interleaves them with the parts Tau understands.
+  for (const foreign of input.foreignSymbols ?? []) {
+    doc.symbols.push({
+      ...foreign,
+      attrs: { ...foreign.attrs },
+      ...(foreign.windows ? { windows: foreign.windows.map((w) => ({ ...w })) } : {}),
     });
   }
 

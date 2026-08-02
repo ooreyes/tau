@@ -6,6 +6,7 @@ import type {
   Probe,
   Rotation,
   SchematicAscShape,
+  SchematicForeignSymbol,
   SchematicPortDirection,
   SchematicComponent,
   SchematicSheet,
@@ -47,6 +48,11 @@ const MAX_WINDOWS_PER_COMPONENT = 64;
 const MAX_DIRECTIVES = 1_000;
 const MAX_TEXT_ANNOTATIONS = 2_000;
 const MAX_ASC_SHAPES = 2_000;
+const MAX_ASC_FOREIGN_SYMBOLS = 2_000;
+// Generous next to any real symbol (LTspice itself writes a handful of SYMATTR
+// fields per part) and small enough that a crafted file cannot grow one
+// symbol's attributes without bound.
+const MAX_FOREIGN_SYMBOL_ATTRS = 64;
 // An imported LTspice TEXT !-block lands as ONE directive string with its
 // embedded newlines (a behavioral-source table in the acceptance corpus runs
 // to 2.5 KB), so a directive gets the same generous single-field cap as a
@@ -272,6 +278,53 @@ function ascShape(value: unknown, index: number): SchematicAscShape {
   };
 }
 
+const ASC_ORIENTATIONS = new Set([
+  "R0", "R90", "R180", "R270", "M0", "M90", "M180", "M270",
+]);
+
+function foreignSymbol(value: unknown, index: number): SchematicForeignSymbol {
+  const source = record(value, `ascForeignSymbols[${index}]`);
+  const orientation = text(source.orientation, `ascForeignSymbols[${index}].orientation`, 8);
+  if (!ASC_ORIENTATIONS.has(orientation)) {
+    fail(`ascForeignSymbols[${index}].orientation must be one of R0, R90, R180, R270, M0, M90, M180, M270.`);
+  }
+  const attrsSource = record(source.attrs, `ascForeignSymbols[${index}].attrs`);
+  const attrsEntries = Object.entries(attrsSource);
+  if (attrsEntries.length > MAX_FOREIGN_SYMBOL_ATTRS) {
+    fail(`ascForeignSymbols[${index}].attrs must have at most ${MAX_FOREIGN_SYMBOL_ATTRS} entries.`);
+  }
+  const attrs: Record<string, string> = {};
+  for (const [name, raw] of attrsEntries) {
+    if (name.length > MAX_TEXT_LENGTH) fail(`ascForeignSymbols[${index}].attrs has a field name that is too long.`);
+    attrs[name] = text(raw, `ascForeignSymbols[${index}].attrs.${name}`, MAX_COMPONENT_VALUE_LENGTH);
+  }
+  const result: SchematicForeignSymbol = {
+    type: text(source.type, `ascForeignSymbols[${index}].type`, MAX_TEXT_LENGTH),
+    x: coordinate(source.x, `ascForeignSymbols[${index}].x`),
+    y: coordinate(source.y, `ascForeignSymbols[${index}].y`),
+    orientation: orientation as SchematicForeignSymbol["orientation"],
+    attrs,
+  };
+  if (source.windows !== undefined) {
+    if (!Array.isArray(source.windows) || source.windows.length > MAX_WINDOWS_PER_COMPONENT) {
+      fail(`ascForeignSymbols[${index}].windows must be an array of at most ${MAX_WINDOWS_PER_COMPONENT} records.`);
+    }
+    result.windows = source.windows.map((candidate, windowIndex) => {
+      const name = `ascForeignSymbols[${index}].windows[${windowIndex}]`;
+      const window = record(candidate, name);
+      const { attr, size } = window;
+      if (typeof attr !== "number" || !Number.isInteger(attr) || attr < 0) fail(`${name}.attr must be a non-negative integer.`);
+      if (typeof size !== "number" || !Number.isInteger(size) || size < 0) fail(`${name}.size must be a non-negative integer.`);
+      const justification = canonicalWindowJustification(text(window.justification, `${name}.justification`, 40));
+      // Re-emitted verbatim into `.asc` text, so an unrecognized token must
+      // never round-trip - it would write a record LTspice cannot read.
+      if (justification === null) fail(`${name}.justification is not a supported LTspice justification.`);
+      return { attr, x: coordinate(window.x, `${name}.x`), y: coordinate(window.y, `${name}.y`), justification, size };
+    });
+  }
+  return result;
+}
+
 function schematicSheet(value: unknown): SchematicSheet {
   const source = record(value, "ascSheet");
   const index = source.index;
@@ -299,6 +352,7 @@ export function validateSchematicDocument(value: unknown): SchematicDocument {
   const directives = source.directives === undefined ? [] : source.directives;
   const textAnnotations = source.textAnnotations === undefined ? [] : source.textAnnotations;
   const ascShapes = source.ascShapes === undefined ? [] : source.ascShapes;
+  const ascForeignSymbols = source.ascForeignSymbols === undefined ? [] : source.ascForeignSymbols;
   const ascSheet = source.ascSheet;
   const userModelLibraries = source.userModelLibraries === undefined ? [] : source.userModelLibraries;
   if (!Array.isArray(probes) || probes.length > MAX_COMPONENTS) fail("probes must be a bounded array.");
@@ -309,6 +363,9 @@ export function validateSchematicDocument(value: unknown): SchematicDocument {
   }
   if (!Array.isArray(ascShapes) || ascShapes.length > MAX_ASC_SHAPES) {
     fail(`ascShapes must be an array of at most ${MAX_ASC_SHAPES} items.`);
+  }
+  if (!Array.isArray(ascForeignSymbols) || ascForeignSymbols.length > MAX_ASC_FOREIGN_SYMBOLS) {
+    fail(`ascForeignSymbols must be an array of at most ${MAX_ASC_FOREIGN_SYMBOLS} items.`);
   }
   if (!Array.isArray(userModelLibraries) || userModelLibraries.length > MAX_MODEL_LIBRARIES) {
     fail(`userModelLibraries must be an array of at most ${MAX_MODEL_LIBRARIES} items.`);
@@ -364,6 +421,7 @@ export function validateSchematicDocument(value: unknown): SchematicDocument {
       ? { textAnnotations: textAnnotations.map(textAnnotation) }
       : {}),
     ...(ascShapes.length > 0 ? { ascShapes: ascShapes.map(ascShape) } : {}),
+    ...(ascForeignSymbols.length > 0 ? { ascForeignSymbols: ascForeignSymbols.map(foreignSymbol) } : {}),
     ...(ascSheet !== undefined ? { ascSheet: schematicSheet(ascSheet) } : {}),
     // Additive: only emit the key when attachments exist so legacy/empty
     // documents keep their exact prior serialized shape.

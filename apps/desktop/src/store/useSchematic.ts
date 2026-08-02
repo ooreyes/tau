@@ -11,6 +11,7 @@ import type {
   NetLabel,
   SchematicTextAnnotation,
   SchematicAscShape,
+  SchematicForeignSymbol,
   SchematicSheet,
 } from "../schematic/types";
 import { CATALOG_BY_KIND } from "../schematic/catalog";
@@ -62,6 +63,8 @@ interface Doc {
   textAnnotations: SchematicTextAnnotation[];
   /** Original LTspice drawing primitives retained for lossless `.asc` rewrites. */
   ascShapes: SchematicAscShape[];
+  /** Original SYMBOL records with no Tau equivalent, retained for lossless `.asc` rewrites. */
+  ascForeignSymbols: SchematicForeignSymbol[];
   /** Original LTspice SHEET record, null for Tau-native/legacy documents. */
   ascSheet: SchematicSheet | null;
   /** Vendor model files attached to the document (see {@link SchematicModelLibrary}). */
@@ -92,6 +95,8 @@ export interface SchematicDocument {
   textAnnotations?: SchematicTextAnnotation[];
   /** Drawing primitives retained for lossless `.asc` rewrites. */
   ascShapes?: SchematicAscShape[];
+  /** Source SYMBOL records with no Tau equivalent, retained for lossless `.asc` rewrites. */
+  ascForeignSymbols?: SchematicForeignSymbol[];
   /** Original LTspice SHEET record retained for lossless `.asc` rewrites. */
   ascSheet?: SchematicSheet | null;
   /**
@@ -230,6 +235,8 @@ interface SchematicState extends Doc {
   textAnnotations: SchematicTextAnnotation[];
   /** Original drawing primitives; changed only by import/document replacement. */
   ascShapes: SchematicAscShape[];
+  /** Original SYMBOL records with no Tau equivalent; changed only by import/document replacement. */
+  ascForeignSymbols: SchematicForeignSymbol[];
   ascSheet: SchematicSheet | null;
 
   /** Vendor model files attached to the document, inlined into the native deck when referenced. */
@@ -268,6 +275,7 @@ const docOf = (s: Doc): Doc => ({
   directives: s.directives,
   textAnnotations: s.textAnnotations,
   ascShapes: s.ascShapes,
+  ascForeignSymbols: s.ascForeignSymbols,
   ascSheet: s.ascSheet,
   userModelLibraries: s.userModelLibraries,
 });
@@ -403,6 +411,11 @@ function copyDocument(doc: SchematicDocument, freshIds: boolean): SchematicDocum
     directives: [...(doc.directives ?? [])],
     textAnnotations: (doc.textAnnotations ?? []).map((annotation) => ({ ...annotation })),
     ascShapes: (doc.ascShapes ?? []).map((shape) => ({ ...shape, coords: [...shape.coords] })),
+    ascForeignSymbols: (doc.ascForeignSymbols ?? []).map((symbol) => ({
+      ...symbol,
+      attrs: { ...symbol.attrs },
+      ...(symbol.windows ? { windows: symbol.windows.map((w) => ({ ...w })) } : {}),
+    })),
     ...(doc.ascSheet ? { ascSheet: { ...doc.ascSheet } } : {}),
     // Attachments are immutable, so a shallow copy shares the (possibly large)
     // text without duplicating it - fresh ids never apply to library files.
@@ -425,6 +438,7 @@ function copyHistoryEntry(entry: Doc): Doc {
     directives: document.directives ?? [],
     textAnnotations: document.textAnnotations ?? [],
     ascShapes: document.ascShapes ?? [],
+    ascForeignSymbols: document.ascForeignSymbols ?? [],
     ascSheet: document.ascSheet ?? null,
     userModelLibraries: document.userModelLibraries ?? [],
   };
@@ -701,6 +715,7 @@ export const useSchematic = create<SchematicState>()((set) => {
     directives: initialDoc?.directives ?? [],
     textAnnotations: initialDoc?.textAnnotations ?? [],
     ascShapes: initialDoc?.ascShapes ?? [],
+    ascForeignSymbols: initialDoc?.ascForeignSymbols ?? [],
     ascSheet: initialDoc?.ascSheet ?? null,
     userModelLibraries: initialDoc?.userModelLibraries ?? [],
     past: [],
@@ -1129,6 +1144,7 @@ export const useSchematic = create<SchematicState>()((set) => {
           directives: cloned.directives ?? [],
           textAnnotations: cloned.textAnnotations ?? [],
           ascShapes: cloned.ascShapes ?? [],
+          ascForeignSymbols: cloned.ascForeignSymbols ?? [],
           ascSheet: cloned.ascSheet ?? null,
           userModelLibraries: cloned.userModelLibraries ?? [],
           past: [],
@@ -1154,6 +1170,7 @@ export const useSchematic = create<SchematicState>()((set) => {
           directives: replacement.directives ?? [],
           textAnnotations: replacement.textAnnotations ?? [],
           ascShapes: replacement.ascShapes ?? [],
+          ascForeignSymbols: replacement.ascForeignSymbols ?? [],
           ascSheet: replacement.ascSheet ?? null,
           userModelLibraries: replacement.userModelLibraries ?? [],
           selectedId: null,
@@ -1176,6 +1193,7 @@ export const useSchematic = create<SchematicState>()((set) => {
           directives: restored.directives ?? [],
           textAnnotations: restored.textAnnotations ?? [],
           ascShapes: restored.ascShapes ?? [],
+          ascForeignSymbols: restored.ascForeignSymbols ?? [],
           ascSheet: restored.ascSheet ?? null,
           userModelLibraries: restored.userModelLibraries ?? [],
           past: history.past.map(copyHistoryEntry).slice(-HISTORY_LIMIT),
@@ -1198,6 +1216,7 @@ export const useSchematic = create<SchematicState>()((set) => {
         directives: [],
         textAnnotations: [],
         ascShapes: [],
+        ascForeignSymbols: [],
         ascSheet: null,
         userModelLibraries: [],
         past: [],
@@ -1221,6 +1240,7 @@ useSchematic.subscribe((state, prev) => {
     || state.directives !== prev.directives
     || state.textAnnotations !== prev.textAnnotations
     || state.ascShapes !== prev.ascShapes
+    || state.ascForeignSymbols !== prev.ascForeignSymbols
     || state.ascSheet !== prev.ascSheet
     || state.userModelLibraries !== prev.userModelLibraries
   ) {
@@ -1232,6 +1252,7 @@ useSchematic.subscribe((state, prev) => {
       directives: state.directives,
       textAnnotations: state.textAnnotations,
       ascShapes: state.ascShapes,
+      ascForeignSymbols: state.ascForeignSymbols,
       ...(state.ascSheet ? { ascSheet: state.ascSheet } : {}),
       ...(state.userModelLibraries.length > 0 ? { userModelLibraries: state.userModelLibraries } : {}),
     });

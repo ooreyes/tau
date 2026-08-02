@@ -977,6 +977,84 @@ SYMATTR SpiceLine K=7`;
   });
 });
 
+describe("foreign symbols (no Tau equivalent)", () => {
+  // A vendor part Tau has no built-in kind for, with the full grammar a real
+  // library symbol carries: two WINDOW label placements and several SYMATTRs.
+  const FOREIGN_SYMBOL_SOURCE = `Version 4
+SHEET 1 880 680
+SYMBOL PowerProducts\\LTC4449 100 200 R0
+WINDOW 0 24 16 Left 2
+WINDOW 3 24 44 Left 2
+SYMATTR InstName U1
+SYMATTR Value LTC4449
+SYMATTR SpiceModel LTC4449BOOST`;
+
+  it("retains a symbol with no Tau equivalent so an in-place save cannot drop it, and still warns", () => {
+    const doc = ascToSchematic(parseAsc(FOREIGN_SYMBOL_SOURCE));
+    expect(doc.components).toHaveLength(0);
+    expect(doc.foreignSymbols).toHaveLength(1);
+    const [foreign] = doc.foreignSymbols;
+    expect(foreign.type).toBe("PowerProducts\\LTC4449");
+    expect(foreign.x).toBe(100);
+    expect(foreign.y).toBe(200);
+    expect(foreign.orientation).toBe("R0");
+    expect(foreign.attrs).toEqual({
+      InstName: "U1",
+      Value: "LTC4449",
+      SpiceModel: "LTC4449BOOST",
+    });
+    expect(foreign.windows).toEqual([
+      { attr: 0, x: 24, y: 16, justification: "Left", size: 2 },
+      { attr: 3, x: 24, y: 44, justification: "Left", size: 2 },
+    ]);
+    // The record is retained, not silently accepted - the existing "no Tau
+    // equivalent" warning (and the resulting save-block) must still fire.
+    expect(
+      doc.warnings.some((w) => w.includes('no Tau equivalent for LTspice symbol "PowerProducts\\LTC4449"')),
+    ).toBe(true);
+  });
+
+  it("does not carry a foreign symbol from inside a flattened subcircuit body into the parent", () => {
+    // Reuse the 2-port block shape from the hierarchical-subcircuit fixtures
+    // above, but give its body a symbol Tau cannot map - it belongs to that
+    // block's own file, not the parent's, so it must not ride along when the
+    // block is flattened into the parent document.
+    const bodyAsy = `Version 4
+SymbolType BLOCK
+PIN -32 0 LEFT 8
+PINATTR PinName a
+PINATTR SpiceOrder 1
+PIN 32 0 RIGHT 8
+PINATTR PinName b
+PINATTR SpiceOrder 2`;
+    const bodyAsc = `Version 4
+SHEET 1 100 200
+FLAG 16 0 a
+FLAG 16 160 b
+SYMBOL res 0 -16 R0
+SYMATTR InstName R1
+SYMATTR Value 1k
+SYMBOL PowerProducts\\LTC4449 0 100 R0
+SYMATTR InstName U1`;
+    const resolver: SubcircuitResolver = makeSubcircuitResolver((type) =>
+      type.toLowerCase() === "mydiv2" ? { asy: bodyAsy, asc: bodyAsc } : null,
+    );
+    const parent = `Version 4
+SHEET 1 880 680
+SYMBOL mydiv2 200 200 R0
+SYMATTR InstName X1`;
+    const r = importAsc(parent, { resolveSubcircuit: resolver });
+    // The parent document itself carries no foreign symbol of its own.
+    expect(r.foreignSymbols).toEqual([]);
+    // The information is not lost - the body's warning still surfaces,
+    // prefixed with the instance name - it just isn't a *record* the parent
+    // re-emits (that stays with the block's own file).
+    expect(
+      r.warnings.some((w) => w.includes('X1: Skipped U1: no Tau equivalent for LTspice symbol "PowerProducts\\LTC4449"')),
+    ).toBe(true);
+  });
+});
+
 describe("analog placeholder symbols (xtal, diac, triac, varistor)", () => {
   it("maps misc\\xtal to capacitor with pin-accurate geometry from xtal.asy", () => {
     // xtal.asy (Misc/): PIN A(16,0) SpiceOrder 1, PIN B(16,64) SpiceOrder 2.

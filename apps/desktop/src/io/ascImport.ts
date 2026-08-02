@@ -919,6 +919,12 @@ export interface AscImportResult {
   textAnnotations: AscText[];
   /** Original drawing primitives retained for lossless `.asc` save. */
   shapes: AscShape[];
+  /**
+   * Source `SYMBOL` records Tau has no equivalent for (e.g. a vendor part like
+   * "PowerProducts\\LTC4449"), retained verbatim so an in-place save does not
+   * silently delete the part from the user's file.
+   */
+  foreignSymbols: AscSymbol[];
   /** Original SHEET record retained for lossless `.asc` save. */
   sheet: AscDocument["sheet"];
   /** Non-fatal issues (symbols placed without pin-accurate geometry, etc.). */
@@ -1499,6 +1505,9 @@ function flattenSubcircuit(
     comments: [],
     textAnnotations: [],
     shapes: [],
+    // A foreign symbol inside a block's own body belongs to that block's file,
+    // not to the parent, so it must not be injected into the parent on save.
+    foreignSymbols: [],
     sheet: { ...body.sheet },
     warnings: body.warnings.map((w) => `${instName}: ${w}`),
     notes: body.notes.map((n) => `${instName}: ${n}`),
@@ -1609,6 +1618,9 @@ export function ascToSchematic(doc: AscDocument, options: AscImportOptions = {})
   const deferredBridges: NetLabel[] = [];
   const warnings: string[] = [];
   const notes: string[] = [];
+  // Source SYMBOL records with no Tau equivalent, retained verbatim so an
+  // in-place save does not silently delete the part - see AscImportResult.
+  const foreignSymbols: AscSymbol[] = [];
 
   for (const symbol of doc.symbols) {
     const leaf = symbol.type.replace(/\\/g, "/").toLowerCase().split("/").pop() ?? "";
@@ -1656,6 +1668,18 @@ export function ascToSchematic(doc: AscDocument, options: AscImportOptions = {})
         options._placement = placement;
         continue;
       }
+      // No built-in kind and no resolvable subcircuit: retain a deep copy of
+      // the raw record so an in-place save re-emits it verbatim instead of
+      // dropping the part. (The subcircuit-flatten branch above does NOT reach
+      // here - it emits real components and must not also carry the symbol.)
+      foreignSymbols.push({
+        type: symbol.type,
+        x: symbol.x,
+        y: symbol.y,
+        orientation: symbol.orientation,
+        attrs: { ...symbol.attrs },
+        ...(symbol.windows ? { windows: symbol.windows.map((w) => ({ ...w })) } : {}),
+      });
       warnings.push(
         `Skipped ${instName || "an unnamed part"}: no Tau equivalent for LTspice symbol "${symbol.type}".`,
       );
@@ -1779,6 +1803,7 @@ export function ascToSchematic(doc: AscDocument, options: AscImportOptions = {})
     comments,
     textAnnotations: doc.texts.map((text) => ({ ...text })),
     shapes: doc.shapes.map((shape) => ({ ...shape, coords: [...shape.coords] })),
+    foreignSymbols,
     sheet: { ...doc.sheet },
     warnings,
     notes,

@@ -219,6 +219,26 @@ export interface SchematicAscShape {
   coords: number[];
 }
 
+/**
+ * A source `SYMBOL` record LTspice writes that Tau has no equivalent for (e.g.
+ * a vendor part like "PowerProducts\\LTC4449"). Not interpreted or simulated -
+ * carried verbatim so an in-place `.asc` save re-emits the SYMBOL, its WINDOW
+ * placements, and its SYMATTRs exactly as imported instead of silently
+ * dropping the part. Mirrors {@link SchematicAscShape}'s role for drawing
+ * primitives.
+ */
+export interface SchematicForeignSymbol {
+  /** LTspice symbol type, e.g. "PowerProducts\\LTC4449", "Optos\\PC817D". */
+  type: string;
+  x: number;
+  y: number;
+  orientation: "R0" | "R90" | "R180" | "R270" | "M0" | "M90" | "M180" | "M270";
+  /** SYMATTR name → value, verbatim - Tau does not interpret these. */
+  attrs: Record<string, string>;
+  /** `WINDOW` label-placement records that followed this SYMBOL, in file order. */
+  windows?: LtspiceWindow[];
+}
+
 /** A wire drawn as an orthogonal polyline. Nets are derived from wires later.
  *  Optional `resistance` (engineering string, e.g. `"10m"`) models a non-ideal
  *  conductor: the wire no longer shorts its endpoints in the netlist and a

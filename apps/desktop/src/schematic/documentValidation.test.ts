@@ -235,4 +235,36 @@ describe("schematic document validation", () => {
     const result = validateSchematicDocument(validDocument());
     expect(Object.prototype.hasOwnProperty.call(result, "ascShapes")).toBe(false);
   });
+
+  it("preserves foreign symbols and rejects an entry with an unsupported orientation", () => {
+    const base = validDocument();
+    const document = {
+      ...base,
+      ascForeignSymbols: [
+        {
+          type: "PowerProducts\\LTC4449",
+          x: 100,
+          y: 200,
+          orientation: "R0",
+          attrs: { InstName: "U1", Value: "LTC4449" },
+          windows: [{ attr: 0, x: 24, y: 16, justification: "Left", size: 2 }],
+        },
+      ],
+    };
+    expect(validateSchematicDocument(document)).toEqual(document);
+
+    // Re-emitted verbatim into `.asc` text, so a document that reaches Tau
+    // with a record LTspice cannot read must be refused rather than
+    // round-tripped into a corrupt save.
+    const bad = (symbol: Record<string, unknown>) => () => validateSchematicDocument({
+      ...base,
+      ascForeignSymbols: [symbol],
+    });
+    expect(bad({ type: "X", x: 0, y: 0, orientation: "Sideways", attrs: {} })).toThrow(/orientation/i);
+  });
+
+  it("omits ascForeignSymbols entirely when a document has none, so legacy files keep their shape", () => {
+    const result = validateSchematicDocument(validDocument());
+    expect(Object.prototype.hasOwnProperty.call(result, "ascForeignSymbols")).toBe(false);
+  });
 });

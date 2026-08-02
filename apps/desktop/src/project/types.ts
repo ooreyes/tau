@@ -185,6 +185,7 @@ export function serializeSchematicFile(
       directives: document.directives ?? [],
       textAnnotations: document.textAnnotations ?? [],
       shapes: document.ascShapes,
+      foreignSymbols: document.ascForeignSymbols,
       ...(document.ascSheet ? { sheet: document.ascSheet } : {}),
     });
     const reopened = importAsc(result.text);
