@@ -42,10 +42,32 @@ downstream of the same skipped SYMBOL record.
   importer warning - and the carried symbol still emits its "Skipped ... no Tau
   equivalent" warning. **So half 1 alone changes nothing a user can see.** Do
   not call this unit done until a file with a vendor symbol saves.
-  The predicate must NOT be re-derived: `ascRewriteRisks` already calls
-  `importAsc(source)`, so take the carried set from `imported.foreignSymbols`.
-  Re-deriving "has no Tau kind" would wrongly unblock a subcircuit-flattened
-  part, which is rewritten lossily and must stay blocked (`ascImport.ts:1649`).
+
+  **The obvious implementation causes DATA LOSS. Verified 2026-08-02, read this
+  before writing a line.** `ascRewriteRisks` takes only `source` and calls
+  `importAsc(source)` with NO options (:148), but the document that actually
+  gets saved is imported WITH a subcircuit resolver
+  (`projectAscImport.ts:196`). The two disagree exactly on hierarchical blocks:
+  - resolver present (the real document): the block is FLATTENED into ordinary
+    components (`ascImport.ts:1651`), so an in-place save rewrites the user's
+    hierarchy as flat parts - lossy, must stay blocked.
+  - resolver absent (inside `ascRewriteRisks`): the same symbol falls through to
+    the foreign-symbol branch (`ascImport.ts:1671`) and looks carried-verbatim.
+
+  So "take the carried set from `importAsc(source).foreignSymbols`" is WRONG -
+  it would unblock a hierarchical schematic and overwrite it flattened. Pass the
+  authoritative set in instead: `App.tsx:1085` already holds the resolver-aware
+  `result.foreignSymbols` fifteen lines above its `ascRewriteRisks(text)` call at
+  :1100. Give the function an optional second argument, and when it is omitted
+  keep today's conservative behaviour (still a risk) - over-blocking is safe,
+  under-blocking corrupts files. Other callers: `App.tsx:1192` and `:1218` can
+  pass `action.document.ascForeignSymbols`; `assistantActions.ts:244` has no
+  document and should keep the conservative path.
+
+  For `partially supported devices`, do not regex the warning text: export one
+  message builder from `ascImport.ts` used both where the warning is pushed
+  (:1683) and where `ascRewriteRisks` subtracts it, so the two cannot drift.
+  The warning itself must STAY - the part really is not simulated.
 
 **Engine build notes, learned the hard way 2026-08-01 - keep these:**
 
