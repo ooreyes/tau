@@ -95,12 +95,14 @@ Being killed mid-unit is normal and expected on a Pro plan. It is not a
 failure, and it is not a reason to restart the unit from scratch. Pick up the
 partial work.
 
-**The `-wip` branch is currently already reconciled.** Its tip `3f69254` held
-the `.noise` TypeScript half; that work landed 2026-07-29 as `dddda1c` (with
-the real-engine proof it was missing), so `..-wip` still shows one commit
-"missing" purely because the SHA differs. Nothing there needs re-applying -
-do not spend a fire diffing it again. Re-check only if its tip moves past
-`3f69254`.
+**The `-wip` branch is currently already reconciled.** Its tip is now `6392d85`,
+which held the `App.tsx` + `.sim` half of this unit; that landed 2026-08-02 as
+`6ceeb08`, with its unfinished `if (false)` fixed and a test added for the `.sim`
+round trip it shipped untested. (The tip before it, `3f69254`, held the `.noise`
+TypeScript half and landed 2026-07-29 as `dddda1c`.) `..-wip` keeps showing a
+commit "missing" purely because the SHAs differ. Nothing there needs re-applying
+- do not spend a fire diffing it again. Re-check only if the tip moves past
+`6392d85`.
 
 ---
 
@@ -170,12 +172,6 @@ is already done at a glance, not so it can re-read the reasoning.
 - 2026-07-28 - `WINDOW` label placement survives a save instead of blocking it.
 - 2026-07-28 - `.dc` reaches ngspice: `runNativeDcSweep` + `App.tsx` wiring, so a transistor transfer curve can be swept at all.
 - 2026-07-28 - Voltage-controlled switches emit a real `S` element instead of a permanent open circuit, with both control pins imported.
-- 2026-07-28 - Vendor models read via `ltspiceLibRoot()` so no macOS TCC prompt can stall an unattended fire. 3 suites verified running, not skipping.
-- 2026-07-28 - Trace palette replaced with validated Okabe-Ito.
-- 2026-07-28 - KiCad importer hardened: control-char strip (a newline in a quoted field forged `.asc` records), tokenizer cap fixed (only fired on one branch), input byte....
-- 2026-07-28 - Class A truth pass: model-substitution warnings, `.step` truncation warning (and it is now rendered), lossy `.asc` export warnings, transformer....
-- 2026-07-28 - Light theme with System/Light/Dark, applied before first render.
-- 2026-07-28 - `deck_lines` folds `+` continuations before screening, closing a file-primitive smuggling path. ---.
 
 ## Blocked on Omar
 
