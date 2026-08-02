@@ -341,6 +341,30 @@ describe("schematic document store", () => {
     expect(state.netLabels).toEqual([]);
   });
 
+  it("starts each fresh document without the previous file's carried ASC records", () => {
+    // Every carried `.asc` record belongs to the file it was imported from.
+    // `ascDataFlags` was the one a hand-listed reset left behind, so a blank
+    // document still held the previous file's readouts and saving it wrote
+    // them into a file that never had them. Assert the whole set, not just
+    // that field, so the next one added is covered before it can leak.
+    useSchematic.setState({
+      ascShapes: [{ kind: "LINE", width: "Normal", coords: [0, 0, 64, 0] }],
+      ascDataFlags: [{ x: -784, y: 1648, expr: "\"V(out)\"" }],
+      ascForeignSymbols: [{ type: "PowerProducts\\LTC4449", x: 0, y: 0, orientation: "R0", attrs: { InstName: "U1" } }],
+      ascHierarchicalBlocks: [{ type: "deadtime", x: 96, y: 96, orientation: "R0", attrs: { InstName: "X1" } }],
+      ascSheet: { index: 1, width: 880, height: 680 },
+    });
+
+    useSchematic.getState().newCircuit();
+
+    const state = useSchematic.getState();
+    expect(state.ascShapes).toEqual([]);
+    expect(state.ascDataFlags).toEqual([]);
+    expect(state.ascForeignSymbols).toEqual([]);
+    expect(state.ascHierarchicalBlocks).toEqual([]);
+    expect(state.ascSheet).toBeNull();
+  });
+
   it("restores each tab with its own undo history", () => {
     useSchematic.getState().loadCircuit(sourceDocument());
     const tabAId = useSchematic.getState().components[0].id;

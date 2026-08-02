@@ -393,6 +393,9 @@ describe("App schematic workspace tools", () => {
       // primitives no longer qualify, and neither do DATAFLAG readouts - both
       // survive a save now.
       "WINDOW 0 32 32 Left 2",
+      // Carried on the document, so clearing has to drop it: it belongs to this
+      // file and must not follow the blank replacement onto disk.
+      "DATAFLAG 32 96 \"V(out)\"",
       "TEXT 32 96 Left 2 !.tran 10m",
       "",
     ].join("\n");
@@ -416,6 +419,9 @@ describe("App schematic workspace tools", () => {
     fireEvent.click(await screen.findByRole("button", { name: "vendor-power-stage.asc" }));
     expect(await screen.findByRole("tab", { name: /vendor-power-stage\.asc/ })).toBeTruthy();
     await waitFor(() => expect(useSchematic.getState().directives).toEqual([".tran 10m"]));
+    // The readout really is carried, so the assertion after the clear below is
+    // measuring the reset rather than an import that never captured it.
+    expect(useSchematic.getState().ascDataFlags).toEqual([{ x: 32, y: 96, expr: "\"V(out)\"" }]);
 
     // Run is allowed from the validated in-memory document. Its best-effort
     // autosave must not nag about source records that Tau is deliberately
@@ -434,6 +440,7 @@ describe("App schematic workspace tools", () => {
     expect(await screen.findByRole("tab", { name: /untitled\.asc/ })).toBeTruthy();
     expect(useSchematic.getState().components).toEqual([]);
     expect(useSchematic.getState().directives).toEqual([]);
+    expect(useSchematic.getState().ascDataFlags).toEqual([]);
     expect(useProject.getState().workspaceFiles[originalPath].contents).toBe(originalContents);
 
     act(() => useSchematic.getState().addComponent("resistor", 256, 192));
@@ -444,6 +451,7 @@ describe("App schematic workspace tools", () => {
       expect(saved).toContain("SYMBOL res");
       expect(saved).not.toContain("WINDOW 0 32 32");
       expect(saved).not.toContain(".tran 10m");
+      expect(saved).not.toContain("DATAFLAG");
     });
     expect(useProject.getState().workspaceFiles[originalPath].contents).toBe(originalContents);
     expect(screen.queryByText(/Save blocked/)).toBeNull();

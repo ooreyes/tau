@@ -13,7 +13,7 @@
 
 **Repo:** `auto/ltspice-parity` · **Audit date:** 2026-07-17 · **Auditor:** interactive session (Fable 5) + two background subagents (fuzz + sim cross-check).
 
-## 2026-08-02 — `newCircuit` leaves the previous schematic's DATAFLAG readouts in the store (CONFIRMED)
+## 2026-08-02 — `newCircuit` leaves the previous schematic's DATAFLAG readouts in the store (CONFIRMED, FIXED)
 
 `useSchematic.ts`'s `newCircuit` resets every other carried `.asc` field -
 `ascShapes`, `ascForeignSymbols`, `ascHierarchicalBlocks`, `ascSheet`,
@@ -25,6 +25,16 @@ would write them into a file they never belonged to.
 Found while wiring `ascHierarchicalBlocks` through the same reset. Not fixed in
 that unit: the one-line addition needs its own regression test, and the unit in
 flight was already gated. Small, self-contained, and ready to take.
+
+**Fixed 2026-08-02.** The reset is no longer a hand-written field list: it comes
+from a `blankDoc(): Doc` helper whose explicit return type makes an omitted
+carried field a compile error rather than the next leak. Two regression tests,
+both verified to fail with the fix reverted: the store one asserts every carried
+record (`ascShapes`, `ascDataFlags`, `ascForeignSymbols`,
+`ascHierarchicalBlocks`, `ascSheet`) is empty after `newCircuit`, and the
+workspace one drives the real Clear scratchpad flow on a source file carrying
+`DATAFLAG 32 96 "V(out)"` and asserts the replacement written to disk contains
+no `DATAFLAG` at all.
 
 ## 2026-08-01 — the staged engine was Homebrew's copy, not the pinned build (CONFIRMED, FIXED)
 

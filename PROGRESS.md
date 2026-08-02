@@ -9,9 +9,42 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-02 18:20 CDT**
+**Status: DONE - 2026-08-02 18:35 CDT**
 
-Latest unit: a hierarchical block's save-block reason stops claiming Tau has no
+Latest unit: a new circuit no longer inherits the previous file's `DATAFLAG`
+readouts, so saving it cannot write records into a file that never had them.
+
+`newCircuit` cleared every carried `.asc` field by hand - `ascShapes`,
+`ascForeignSymbols`, `ascHierarchicalBlocks`, `ascSheet`, `userModelLibraries` -
+and the list had fallen one behind: `ascDataFlags` was never in it. Open a
+schematic carrying `DATAFLAG` records, choose New circuit or Clear scratchpad,
+draw something else and save, and the previous file's readouts were written into
+the new file. The document that reaches the exporter is built from the store, so
+the stale field went straight to disk.
+
+The fix is not the missing line. The reset now comes from a `blankDoc(): Doc`
+helper whose explicit return type means a carried field added to `Doc` fails to
+compile until it is cleared here too - this was the second time a hand-listed
+reset leaked a field, after model-library attachments.
+
+Both regression tests were verified to fail with the fix reverted. The store
+test asserts the whole carried set is empty after `newCircuit`, not just the one
+field, so the next field added is covered before it can leak. The workspace test
+drives the real Clear scratchpad flow on a source file carrying
+`DATAFLAG 32 96 "V(out)"`: it first asserts the readout really was imported, so
+it measures the reset rather than an import that never captured it, and then
+asserts the replacement written to disk contains no `DATAFLAG` at all. Reverted,
+that second assertion holds the `waitFor` open until it times out.
+
+Gates: typecheck; full frontend suite (154 files, 2359 tests, 0 failed); cargo
+test (46 passed, 4 ignored); clippy clean; acceptance corpus 82 imported / 80
+warning-clean / 80 deck-built / 80 op-converged / 82 schema-valid, at baseline.
+
+Next candidate: the hierarchical-block save, half 2 - teach the exporter to emit
+the block record and suppress its flattened parts, with per-component provenance
+and a guard that keeps the save blocked when a part inside the block was edited.
+
+Previous unit: a hierarchical block's save-block reason stops claiming Tau has no
 symbol for a part it resolved, read and inlined (half 1 of 2).
 
 A block that resolves against its sibling files is FLATTENED at import, and
@@ -49,11 +82,7 @@ Gates: typecheck; full frontend suite (154 files, 2358 tests, 0 failed); cargo
 test (46 passed); clippy clean; acceptance corpus 82 imported / 80 warning-clean
 / 80 deck-built / 80 op-converged / 82 schema-valid, at baseline.
 
-Next candidate: half 2 - teach the exporter to emit the block record and
-suppress its flattened parts, with per-component provenance and a guard that
-keeps the save blocked when a part inside the block was edited.
-
-Previous unit: `DATAFLAG` readouts are carried through import and export, which
+Unit before that: `DATAFLAG` readouts are carried through import and export, which
 empties the `unknown LTspice records` save-block category. Re-censused over the
 4,012 real `.asc` under `~/Documents`, decoded the way the app decodes: files
 blocked from an in-place save fall from 39 to 36, and the category that this

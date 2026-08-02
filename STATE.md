@@ -7,59 +7,34 @@ The working memory of an unattended loop that starts from zero every fire.
 
 **Status:** IDLE - 2026-08-02
 
-Landed "Next up" item 1, half 1 of 2: the un-flattened hierarchical-block
-`SYMBOL` record is carried on the document, and the save-block reason now names
-the hierarchy. Measured on `examples/class-d-amplifier/class-d-starter.asc`:
-`["symbol-library identity","partially supported devices"]` becomes exactly
-`["hierarchical blocks"]`, so "Tau cannot yet preserve symbol-library identity."
-becomes "Tau cannot yet preserve hierarchical blocks." The verdict is unchanged
-- the save is still refused, correctly, because an in-place write would flatten
-the user's hierarchy. Only the false part of the message is gone.
+Landed the CONFIRMED `newCircuit` leak from the top of `FIX_BUGS.md`: the reset
+had fallen one field behind, so a new circuit still held the previous file's
+`ascDataFlags` and saving it wrote that file's `DATAFLAG` readouts into one that
+never had them. **The reset is now derived from `blankDoc(): Doc`, so a carried
+field added to `Doc` is a compile error until it is cleared** - a hand-listed
+reset had already leaked model-library attachments once, and this was the second
+time. Do not go back to listing the fields.
 
-**The record must NOT go on `ascForeignSymbols`.** That set feeds
-`assertSimulationIntegrity` (`App.tsx:578`), which refuses to simulate anything
-in it; a resolved block DOES simulate, so reusing the field would have stopped
-the flagship class-d example running at all. It is a separate field for that
-reason, and a block nested inside a block's own body stays with the child file.
+**A hierarchical block's record must NOT go on `ascForeignSymbols`.** That set
+feeds `assertSimulationIntegrity` (`App.tsx:578`), which refuses to simulate
+anything in it; a resolved block DOES simulate, so reusing the field would have
+stopped the flagship class-d example running at all. `ascHierarchicalBlocks` is
+a separate field for that reason, and a block nested inside a block's own body
+stays with the child file. Half 2 of that unit is "Next up" item 1 below.
 
-Half 2 is the hard half and is unchanged: the exporter must emit the block
-record and SUPPRESS its flattened parts, which needs per-component provenance
-plus a guard that refuses when a flattened part was edited (that edit belongs in
-the child `.asc`, which Tau is not writing).
-
-`DATAFLAG` is carried through import and export, which closes the WHOLE
-`unknown LTspice records` save-block category.
-
-**Re-census of "Next up" item 1 is DONE (fresh measurement, this fire).** Over
-4,012 real `.asc` under `~/Documents`, decoded with `decodeSchematicText` and
-imported with a sibling resolver, **39 files were save-blocked, now 36**:
-- 20 `extended symbol attributes` (item 2 below - the folded-value problem)
-- 17 `symbol-library identity` (item 1 below - hierarchical blocks)
--  0 `unknown LTspice records` - was 3 files / 8 records, **100% DATAFLAG**,
-   all blocked by nothing else. That category is now empty on the corpus.
+**Save-block census, measured over the 4,012 real `.asc` under `~/Documents`,
+imported with a sibling resolver: 36 files blocked** - 20 `extended symbol
+attributes` (item 2 below), 17 `symbol-library identity` (item 1 below), and 0
+`unknown LTspice records`, a category `DATAFLAG` support emptied entirely.
 
 A census MUST decode with `decodeSchematicText(readFileSync(f))`, never
 `readFileSync(f, "latin1")` and never `grep`: `DCopPnt.asc` is UTF-16LE, so
 both of those instruments miss it and under-count the category.
 
-User-directed recovery unit: the runner/completion protocol, recursive corpus,
-waveform parity, `.step`/`.meas`, PNG export, and native AC/OP data are repaired.
-The final requested correctness unit replaced fake DIAC/TRIAC/VARISTOR
-behavior, modeled PHIDET against LTspice, and made every remaining unsupported
-symbol refuse all analyses. All frontend, production web, Rust, native
-operating-point, and native XSPICE gates pass. Chrome and the exact freshly
-built packaged app now pass the requested UI checks. The schedule remains
-schedule is active again: the rescue ref is deleted and the first controlled
-fire honored quota backoff, exited 0, and left no lock. Completion verification
-now also runs analog and XSPICE smoke tests against the library inside the
-mounted DMG, not merely the pre-package resource.
-
-Last unit landed 2026-08-02: the vendor-symbol save unblock (half 2). Both
-halves of that unit are now done and the save actually lifts - measured over
-`~/Documents` (4,012 real `.asc`), save-blocked drops from **3,509 to 46**,
-with **0 files newly blocked** and, on all 3,463 newly-saveable files, 0 lost
-foreign symbols and 0 component/wire/net-label/directive count changes across a
-write-then-reimport round trip.
+All frontend, production web, Rust, native operating-point and native XSPICE
+gates pass, as do the packaged-app and Chrome UI checks. Completion verification
+runs analog and XSPICE smoke tests against the library inside the mounted DMG,
+not merely the pre-package resource.
 
 **Engine build notes, learned the hard way 2026-08-01 - keep these:**
 
@@ -128,6 +103,7 @@ Newest first, ONE line each. Full evidence for every unit is in PROGRESS.md
 and in its commit message. This section exists so a fresh fire can see what
 is already done at a glance, not so it can re-read the reasoning.
 
+- 2026-08-02 - A NEW CIRCUIT NO LONGER INHERITS THE PREVIOUS FILE'S `DATAFLAG` READOUTS, which a save wrote to disk. `newCircuit`'s reset now comes from `blankDoc(): Doc`, whose explicit return type makes an uncleared carried field a compile error instead of the next leak.
 - 2026-08-02 - A HIERARCHICAL BLOCK'S SAVE-BLOCK REASON STOPS LYING (half 1 of 2): the resolved-and-flattened `SYMBOL` is carried as `ascHierarchicalBlocks`, turning `["symbol-library identity","partially supported devices"]` into `["hierarchical blocks"]` on the class-d starter. It is a SEPARATE field because `ascForeignSymbols` feeds the simulation-integrity refusal and a block must still simulate.
 - 2026-08-02 - A `DATAFLAG` READOUT SURVIVES A SAVE, emptying the whole `unknown LTspice records` category: save-blocked over 4,012 real `.asc` falls 39 -> 36, and the 8 records in the 3 affected files round-trip identically with no save warning. The expression is carried as the verbatim line tail, never re-joined from split tokens.
 - 2026-08-02 - FRESH PACKAGED-APP QA IS GREEN. The exact release `.app` opens the canonical `class-d_starter.asc` with its sibling `deadtime` block, runs bundled ngspice to 16,873 samples / 33 parts, renders the expected switching and sine/output waveforms, and reports Efficiency = 990.7 m (99.07%). The same top-level file without its required sibling sources refuses by name and shows no telemetry or partial plot. Chrome at the 900x600 minimum had zero clipped controls and zero console warnings/errors.
@@ -164,10 +140,7 @@ is already done at a glance, not so it can re-read the reasoning.
 - 2026-07-29 - The native bridge can see a run's secondary plots at all: `ngSpice_AllPlots` plus a before/after snapshot yields `SpiceResult.extraPlots`, which is what a....
 - 2026-07-29 - `.tf` reaches ngspice, so gain / Zin / Zout can be taken on a circuit with a transistor in it.
 - 2026-07-29 - A `.include`/`.lib` naming a file beside the schematic is now READ at import time and attached as a model library, so a vendor model resolves on its own....
-- 2026-07-28 - An unresolvable `.include`/`.lib` is dropped from the deck and named on the warning channel instead of being emitted verbatim, which the native sanitizer....
-- 2026-07-28 - `WINDOW` label placement survives a save instead of blocking it.
-- 2026-07-28 - `.dc` reaches ngspice: `runNativeDcSweep` + `App.tsx` wiring, so a transistor transfer curve can be swept at all.
-- 2026-07-28 - Voltage-controlled switches emit a real `S` element instead of a permanent open circuit, with both control pins imported.
+- 2026-07-28 - `.dc` reaches ngspice, voltage-controlled switches emit a real `S` element with both control pins, `WINDOW` label placement survives a save, and an unresolvable `.include`/`.lib` is dropped from the deck and named on the warning channel. Evidence for all four is in PROGRESS.md.
 
 ## Human-owned after the bot's completion signal
 

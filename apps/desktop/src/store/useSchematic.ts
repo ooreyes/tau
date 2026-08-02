@@ -299,6 +299,29 @@ const docOf = (s: Doc): Doc => ({
   userModelLibraries: s.userModelLibraries,
 });
 
+/**
+ * The document half of a blank schematic. Return-typed as `Doc` on purpose: a
+ * new carried `.asc` field added to `Doc` then fails to compile here until it is
+ * cleared too. Listing the fields by hand instead let `ascDataFlags` survive a
+ * New circuit, so a blank document held the previous file's readouts and saving
+ * it wrote them into a file they never belonged to.
+ */
+const blankDoc = (): Doc => ({
+  components: [],
+  wires: [],
+  counters: {},
+  probes: [],
+  netLabels: [],
+  directives: [],
+  textAnnotations: [],
+  ascShapes: [],
+  ascDataFlags: [],
+  ascForeignSymbols: [],
+  ascHierarchicalBlocks: [],
+  ascSheet: null,
+  userModelLibraries: [],
+});
+
 /** Grid units a pasted/duplicated component is offset by so it never lands exactly
  *  on top of its source (2 grid cells, like LTspice's paste nudge). */
 const PASTE_OFFSET = 32;
@@ -1243,18 +1266,7 @@ export const useSchematic = create<SchematicState>()((set) => {
 
     newCircuit: () =>
       set(() => ({
-        components: [],
-        wires: [],
-        counters: {},
-        probes: [],
-        netLabels: [],
-        directives: [],
-        textAnnotations: [],
-        ascShapes: [],
-        ascForeignSymbols: [],
-        ascHierarchicalBlocks: [],
-        ascSheet: null,
-        userModelLibraries: [],
+        ...blankDoc(),
         past: [],
         future: [],
         selectedId: null,
