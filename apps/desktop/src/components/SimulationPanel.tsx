@@ -43,6 +43,7 @@ import { commonTraceUnit } from "../simulation/exprUnit";
 import { groupDelay } from "../simulation/groupDelay";
 import { stabilityMargins } from "../simulation/stability";
 import { seriesToCsv } from "../simulation/waveformCsv";
+import { downloadWaveformPng, waveformSvgsToPng } from "../simulation/plotPng";
 import { runWaveformFft, type WindowFn } from "../simulation/fft";
 import { spectrumInsights } from "../simulation/spectrumInsights";
 import { buildSpiceDeck } from "../engine/spiceNetlist";
@@ -250,7 +251,8 @@ export function SimulationPanel({
   const [dcExprList, setDcExprList] = useState<string[]>([]);
   const [dcExprInput, setDcExprInput] = useState("");
   const [dcExprError, setDcExprError] = useState<string | null>(null);
-  const [netlistError, setNetlistError] = useState<string | null>(null);
+  const [exportError, setExportError] = useState<string | null>(null);
+  const transientPlotsRef = useRef<HTMLDivElement | null>(null);
   // Multi-pane layout for the transient scope. Starts as a single pane with all
   // traces (preserving existing behavior). Updated via pane controls / trace moves.
   const [paneLayout, setPaneLayout] = useState<PaneLayout>(() => defaultLayout());
@@ -396,6 +398,17 @@ export function SimulationPanel({
     downloadCsv(seriesToCsv("time", result.times, series), "transient");
   };
 
+  const exportPng = async () => {
+    try {
+      const svgs = transientPlotsRef.current?.querySelectorAll<SVGSVGElement>("svg.scope-svg") ?? [];
+      const blob = await waveformSvgsToPng(Array.from(svgs));
+      downloadWaveformPng(blob);
+      setExportError(null);
+    } catch (error) {
+      setExportError(error instanceof Error ? error.message : "Could not export the waveform PNG.");
+    }
+  };
+
   // Export the AC sweep as a CSV table: freq + per-trace magnitude(dB)/phase(°).
   const exportAcCsv = () => {
     if (!acResult || !acResult.ok) return;
@@ -441,9 +454,9 @@ export function SimulationPanel({
         { kind: "tran", stopTime: options.stopTime, steps: options.steps },
       );
       downloadText(deck.netlist, "netlist", "cir", "text/plain");
-      setNetlistError(null);
+      setExportError(null);
     } catch (err) {
-      setNetlistError(err instanceof Error ? err.message : "Could not build the netlist.");
+      setExportError(err instanceof Error ? err.message : "Could not build the netlist.");
     }
   };
 
@@ -661,18 +674,20 @@ export function SimulationPanel({
 
       {mode === "tran" && (
         <>
-          <WaveformPlot
-            result={result}
-            baseTraces={baseTraces}
-            netLabels={netLabels}
-            extraTraces={scopeTraces}
-            paneLayout={paneLayout}
-            showStatistics={showStats}
-            measurements={measurements}
-            fourier={fourier}
-            layoutKey={circuitTitle ?? "default"}
-            cursors={transientCursorPositions}
-          />
+          <div ref={transientPlotsRef}>
+            <WaveformPlot
+              result={result}
+              baseTraces={baseTraces}
+              netLabels={netLabels}
+              extraTraces={scopeTraces}
+              paneLayout={paneLayout}
+              showStatistics={showStats}
+              measurements={measurements}
+              fourier={fourier}
+              layoutKey={circuitTitle ?? "default"}
+              cursors={transientCursorPositions}
+            />
+          </div>
 
           <div className="advanced-settings">
             <button
@@ -822,6 +837,14 @@ export function SimulationPanel({
                     </Tooltip>
                     <Tooltip>
                       <TooltipTrigger asChild>
+                        <Button variant="outline" size="sm" onClick={() => void exportPng()} disabled={!result?.ok}>
+                          Export PNG
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>Export every visible transient plot pane as one PNG image</TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
                         <Button variant="outline" size="sm" onClick={exportNetlist} disabled={components.length === 0}>
                           Netlist
                         </Button>
@@ -837,7 +860,7 @@ export function SimulationPanel({
                       <TooltipContent>Export the transient waveforms as an LTspice .raw file</TooltipContent>
                     </Tooltip>
                   </div>
-                  {netlistError && <div className="expr-error" role="alert">{netlistError}</div>}
+                  {exportError && <div className="expr-error" role="alert">{exportError}</div>}
                 </section>
 
                 <section className="advanced-group">

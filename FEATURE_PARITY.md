@@ -1236,15 +1236,18 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   hand-computed RC-corner / divider-ratio values.
   Per-member `.meas` results are shown below the transient family. Pending:
   per-trace selection, cursor readout.
-- 🟡 Save plot settings (`.plt`), export image/CSV — **CSV export landed**
+- 🟡 Save plot settings (`.plt`), export image/CSV — **CSV + PNG export landed**
   (`simulation/waveformCsv.ts` `seriesToCsv`): an **Export CSV** button on the
   transient scope writes a table of `time` + every node-voltage trace + branch
   current + plotted expression, one row per timestep (RFC-4180 quoting,
   non-finite samples as gaps). **Export CSV buttons on the AC pane** (freq +
   per-trace mag(dB)/phase(°)), **DC pane** (swept source + each net voltage),
   and **noise pane** (freq + onoise V/√Hz + inoise) too, sharing a `downloadCsv`
-  helper. 4 hand-computed tests. **NEXT:** `.plt`
-  settings, PNG image export, step-family CSV (per-member time grids).
+  helper. **Export PNG** rasterizes every visible transient SVG pane into one
+  two-column, 2× image; computed theme/trace styles are inlined so the file is
+  faithful outside the app, and a multi-pane dashboard is never reduced to its
+  first plot. 6 hand-computed/DOM tests. **NEXT:** `.plt` settings and
+  step-family CSV (per-member time grids).
 - ⬜ Right-click trace → math/operations
 
 ## 7. Engine & accuracy

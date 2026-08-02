@@ -9,7 +9,7 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-02 14:08 CDT**
+**Status: DONE - 2026-08-02 14:11 CDT**
 
 User-directed autobuilder recovery: repair the unreachable completion signal,
 atomic lock/disk preflight, corpus coverage and independent floors, Class-D
@@ -18,8 +18,8 @@ correctness gaps identified in the interactive review. The launchd schedule is
 paused; the interrupted DATAFLAG claim is preserved on the sanctioned rescue
 ref and will be reconciled or deleted before the schedule resumes. The `.step`
 correctness unit is complete: full ordinary sweeps, atomic refusal above the
-safe ceiling, and per-member `.meas` evaluation/display. PNG export, native AC
-device data, and unsupported-device honesty are the next small units.
+safe ceiling, and per-member `.meas` evaluation/display. PNG waveform export is
+now complete; native AC device data and unsupported-device honesty follow.
 
 ## READINESS: NOT READY - RETRACTED 2026-07-28
 
@@ -10748,3 +10748,11 @@ evidence is kept in full here.
   stepped parameter scope, and the STEP pane renders step / measure / value
   rows. Files: step-family engine/UI/tests and §4/§6 checklist. Tests: typecheck;
   full frontend 2,332 passed / 6 skipped. Next: PNG export and native AC data.
+
+- 2026-08-02 - Added real waveform PNG export. The transient Export group now
+  captures every visible SVG plot pane—not just the first—and lays them out in
+  one two-column 2× PNG. The exporter inlines each SVG element's computed
+  theme, trace, grid, and font styles before rasterization, so the downloaded
+  image remains faithful when detached from App.css. Files: `plotPng.ts`, DOM
+  tests, and SimulationPanel wiring. Tests: typecheck; focused 35 passed. Next:
+  native AC current/device data.
