@@ -1,6 +1,7 @@
 /**
- * Acceptance-corpus runner: imports every
- * `.asc` in the user's own LTspice corpus, builds an `.op` deck for each, and
+ * Acceptance-corpus runner: recursively imports every `.asc` below
+ * `~/Downloads/LTspice_export` and `~/Documents/LTspice`, builds an `.op` deck
+ * for each, and
  * batch-runs it in the installed ngspice, then prints and asserts the
  * warning-clean / deck-built / op-converged counts.
  *
@@ -10,7 +11,7 @@
  * skips instead of failing.
  *
  * Env knobs:
- *   CORPUS_ALL=1           also walk the full examples/ tree (~4,000 files)
+ *   CORPUS_CANONICAL_ONLY=1  run only the historical 82-file baseline
  *   CORPUS_SKIP_NGSPICE=1  import + deck-build only (no op runs)
  *   CORPUS_EXTRA_ROOTS=…   path-delimited external roots, walked recursively
  *   CORPUS_SYMBOL_ROOTS=…  additional .asy/.asc search roots for hierarchy
@@ -42,44 +43,55 @@ const EXTRA_SYMBOL_ROOTS = [
   ...EXTRA_ROOTS.map((root) => join(root, "sym")),
 ].filter((root, index, roots) => existsSync(root) && roots.indexOf(root) === index);
 
-/** The canonical 82-file acceptance corpus (FEATURE_PARITY → KEY GOAL). */
-const CORPUS_DIRS = [
-  { dir: join(HOME, "Downloads", "LTspice_export"), label: "LTspice_export" },
-  { dir: join(HOME, "Documents", "LTspice"), label: "LTspice" },
-  { dir: join(HOME, "Documents", "LTspice", "examples", "Educational"), label: "Educational" },
+const DOWNLOADS_ROOT = join(HOME, "Downloads", "LTspice_export");
+const DOCUMENTS_ROOT = join(HOME, "Documents", "LTspice");
+
+/** Every user-owned tree the Definition of Done requires this runner to cover. */
+const CORPUS_ROOTS = [
+  { dir: DOWNLOADS_ROOT, label: "LTspice_export" },
+  { dir: DOCUMENTS_ROOT, label: "LTspice" },
 ];
 
 interface CorpusFile {
   path: string;
   display: string;
+  canonical: boolean;
+}
+
+/**
+ * The historical 82-file baseline is the two Downloads fixtures, the eleven
+ * schematics directly below Documents/LTspice, and the 69 Educational
+ * examples. Keep that subset for the ≥80/82 release floor while the default
+ * runner still exercises every nested `.asc` file and reports its own totals.
+ */
+function isCanonical(path: string): boolean {
+  const parent = normalize(join(path, ".."));
+  return parent === normalize(DOWNLOADS_ROOT)
+    || parent === normalize(DOCUMENTS_ROOT)
+    || parent === normalize(join(DOCUMENTS_ROOT, "examples", "Educational"));
 }
 
 function collectCorpus(): CorpusFile[] {
   const files: CorpusFile[] = [];
   const walk = (dir: string, label: string, rel = "") => {
-    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    for (const entry of readdirSync(dir, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
       const abs = join(dir, entry.name);
       const relName = rel ? `${rel}/${entry.name}` : entry.name;
       if (entry.isDirectory()) walk(abs, label, relName);
-      else if (/\.asc$/i.test(entry.name)) files.push({ path: abs, display: `${label}/${relName}` });
+      else if (/\.asc$/i.test(entry.name)) {
+        files.push({ path: abs, display: `${label}/${relName}`, canonical: isCanonical(abs) });
+      }
     }
   };
-  for (const { dir, label } of CORPUS_DIRS) {
-    if (!existsSync(dir)) continue;
-    for (const name of readdirSync(dir).sort()) {
-      if (!/\.asc$/i.test(name)) continue;
-      files.push({ path: join(dir, name), display: `${label}/${name}` });
-    }
-  }
-  if (process.env.CORPUS_ALL === "1") {
-    const examples = join(HOME, "Documents", "LTspice", "examples");
-    if (existsSync(examples)) walk(examples, "examples");
+  for (const { dir, label } of CORPUS_ROOTS) {
+    if (existsSync(dir)) walk(dir, label);
   }
   for (const root of EXTRA_ROOTS) {
     if (existsSync(root)) walk(root, basename(root) || "external");
   }
   return files
     .filter((file, index, all) => all.findIndex((candidate) => candidate.path === file.path) === index)
+    .filter((file) => process.env.CORPUS_CANONICAL_ONLY !== "1" || file.canonical)
     .sort((a, b) => a.display.localeCompare(b.display));
 }
 
@@ -195,18 +207,46 @@ const corpus = collectCorpus();
 const skipNgspice = process.env.CORPUS_SKIP_NGSPICE === "1" || spawnSync("ngspice", ["--version"], { encoding: "utf8" }).error !== undefined;
 
 describe.skipIf(corpus.length === 0)("acceptance corpus (user's own LTspice files)", () => {
-  it("imports, builds, and op-solves the corpus at or above the recorded baseline", () => {
+  it("imports, builds, and op-solves the corpus at or above the recorded baseline", async () => {
     const tmpDir = mkdtempSync(join(tmpdir(), "tau-corpus-"));
     try {
-      const rows = corpus.map((file) => runFile(file, tmpDir, skipNgspice));
+      const rows: CorpusRow[] = [];
+      for (let index = 0; index < corpus.length; index += 1) {
+        rows.push(runFile(corpus[index]!, tmpDir, skipNgspice));
+        // `spawnSync` keeps each individual ngspice invocation simple and
+        // bounded, but thousands back-to-back would starve Vitest's worker RPC
+        // heartbeat for more than a minute. Yield periodically so the full
+        // recursive release gate cannot finish with a false infrastructure
+        // timeout after completing all of its circuit work.
+        if ((index + 1) % 25 === 0) {
+          await new Promise<void>((resolve) => setImmediate(resolve));
+        }
+      }
       const summary = summarizeCorpus(rows);
-      console.log(`\n${formatCorpusReport(rows)}\n`);
+      const canonicalRows = rows.filter((_, index) => corpus[index]?.canonical);
+      const canonicalSummary = summarizeCorpus(canonicalRows);
+      const hardFailures = rows.filter((row) => (
+        !row.imported
+        || !row.deckBuilt
+        || !row.validated
+        || (!skipNgspice && !row.opConverged)
+      ));
+      console.log([
+        "",
+        "ALL DISCOVERED FILES",
+        `total ${summary.total} · imported ${summary.imported} · warning-clean ${summary.warningClean} · deck-built ${summary.deckBuilt} · op-converged ${summary.opConverged} · schema-valid ${summary.validated}`,
+        hardFailures.length > 0
+          ? `\nHARD FAILURES (${hardFailures.length})\n${formatCorpusReport(hardFailures)}`
+          : "\nHARD FAILURES (0)",
+        "",
+      ].join("\n"));
+      console.log(`\nCANONICAL RELEASE SUBSET\n${formatCorpusReport(canonicalRows)}\n`);
       if (skipNgspice) console.log("(ngspice runs skipped - CORPUS_SKIP_NGSPICE or ngspice not installed)");
 
       // Regression guard (always enforced, canonical corpus or not): every
       // successfully-imported file must also pass validateSchematicDocument.
       // See the comment on the validate step in runFile() above.
-      expect(summary.validated).toBe(summary.imported);
+      expect.soft(summary.validated, "all imported files must remain schema-valid").toBe(summary.imported);
 
       // Floors = the counts this runner actually measured on 2026-07-05
       // (82/79/82/82) - never hand-typed claims; this runner once disproved
@@ -220,12 +260,16 @@ describe.skipIf(corpus.length === 0)("acceptance corpus (user's own LTspice file
       // continuation folding, type=silicon strip, Q-on-subckt → X rewrite),
       // logamp (imported current-source polarity: LTspice "−" pin → Tau p).
       // ALL 82 op-converge as of the polarity fix.
-      // Only enforced on the canonical corpus (CORPUS_ALL covers unvetted files).
-      if (process.env.CORPUS_ALL !== "1" && EXTRA_ROOTS.length === 0) {
-        expect(summary.imported).toBeGreaterThanOrEqual(82);
-        expect(summary.warningClean).toBeGreaterThanOrEqual(79);
-        expect(summary.deckBuilt).toBeGreaterThanOrEqual(82);
-        if (!skipNgspice) expect(summary.opConverged).toBeGreaterThanOrEqual(82);
+      // `expect.soft` is deliberate: a missing input must not mask a separate
+      // warning/deck/convergence regression in the same run's report.
+      if (EXTRA_ROOTS.length === 0) {
+        expect.soft(canonicalSummary.total, "canonical input files discovered").toBeGreaterThanOrEqual(82);
+        expect.soft(canonicalSummary.imported, "canonical imports").toBeGreaterThanOrEqual(82);
+        expect.soft(canonicalSummary.warningClean, "canonical warning-clean floor").toBeGreaterThanOrEqual(79);
+        expect.soft(canonicalSummary.deckBuilt, "canonical deck-build floor").toBeGreaterThanOrEqual(82);
+        if (!skipNgspice) {
+          expect.soft(canonicalSummary.opConverged, "canonical operating-point floor").toBeGreaterThanOrEqual(82);
+        }
       }
     } finally {
       rmSync(tmpDir, { recursive: true, force: true });

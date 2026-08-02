@@ -74,6 +74,21 @@ describe("buildSpiceDeck", () => {
     expect(deck.netlist).toContain(".tran 0.000004166666666666667 0.001 0.00099 1e-8 uic");
   });
 
+  it("emulates LTspice startup by ramping DC sources for 20 µs and using uic", () => {
+    const components = [
+      component("vsource", "V1", "7", 0, 32),
+      component("resistor", "R1", "1k", 96, 0),
+      component("ground", "", "", 0, 64),
+      component("ground", "", "", 128, 0),
+    ];
+    const wires = [wire("w1", [{ x: 0, y: 0 }, { x: 64, y: 0 }])];
+    const deck = buildSpiceDeck({ components, wires }, {
+      kind: "tran", stopTime: 500e-6, steps: 240, startup: true,
+    });
+    expect(deck.netlist).toContain("V1 n001 0 DC 7 PWL(0 0 0.00002 7)");
+    expect(deck.netlist).toMatch(/\.tran .* uic/);
+  });
+
   it("emits the AC stimulus on an imported V source (SINE + AC spec)", () => {
     // LTspice Draft1: SYMATTR Value SINE(0 1 1) + SYMATTR Value2 AC 1 → one value.
     const components = [

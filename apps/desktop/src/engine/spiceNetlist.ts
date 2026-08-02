@@ -25,7 +25,7 @@ import { tlineDeckParams } from "./tlineSpec";
 import { parseTempDirective } from "../io/directiveAnalysis";
 
 export type SpiceAnalysis =
-  | { kind: "tran"; stopTime: number; steps: number; startTime?: number; maxStep?: number; uic?: boolean }
+  | { kind: "tran"; stopTime: number; steps: number; startTime?: number; maxStep?: number; uic?: boolean; startup?: boolean }
   | { kind: "op" }
   | { kind: "ac"; startHz: number; stopHz: number; pointsPerDecade: number }
   | {
@@ -504,6 +504,7 @@ export function buildSpiceDeck(schematic: Schematic, analysis: SpiceAnalysis): S
       subcktModels,
       directiveIc,
       modelSubstitutions,
+      analysis.kind === "tran" && analysis.startup ? Math.min(20e-6, analysis.stopTime) : undefined,
     );
     lines.push(...emitted);
     // Read off the lines that were actually emitted rather than off the
@@ -771,7 +772,7 @@ export function unresolvedLibraryWarning(file: string): string {
   return `Could not resolve the library file ${file}, so its models and subcircuits are not part of this run. Attach the file under Model Libraries to use its definitions.`;
 }
 
-function componentLines(entry: ExtractedComponent, index: number, name: string, userModels: Set<string> = new Set(), params: ParamScope = EMPTY_SCOPE, vdmosModels: ReadonlySet<string> = new Set(), netPinCount: ReadonlyMap<string, number> = new Map(), subcktModels: ReadonlySet<string> = new Set(), directiveInductorIc?: string, substitutions: ModelSubstitution[] = []): string[] {
+function componentLines(entry: ExtractedComponent, index: number, name: string, userModels: Set<string> = new Set(), params: ParamScope = EMPTY_SCOPE, vdmosModels: ReadonlySet<string> = new Set(), netPinCount: ReadonlyMap<string, number> = new Map(), subcktModels: ReadonlySet<string> = new Set(), directiveInductorIc?: string, substitutions: ModelSubstitution[] = [], startupRampSeconds?: number): string[] {
   const { component } = entry;
   const node = (pin: string) => requiredNode(entry, pin);
 
@@ -857,7 +858,9 @@ function componentLines(entry: ExtractedComponent, index: number, name: string, 
       const ac = acSpecDeckText(component.value);
       const fn = parseSourceFunction(main, "V");
       if (fn) return [`${name} ${node("p")} ${node("n")} ${fn.text}${ac}`];
-      return [`${name} ${node("p")} ${node("n")} DC ${numberFromText(component, main, "V")}${ac}`];
+      const dc = numberFromText(component, main, "V");
+      const startup = startupRampSeconds === undefined ? "" : ` PWL(0 0 ${startupRampSeconds} ${dc})`;
+      return [`${name} ${node("p")} ${node("n")} DC ${dc}${startup}${ac}`];
     }
     case "isource": {
       // SPICE convention: I N+ N- value → current flows from N+ toward N- through the
@@ -873,7 +876,9 @@ function componentLines(entry: ExtractedComponent, index: number, name: string, 
       const ac = acSpecDeckText(component.value);
       const fn = parseSourceFunction(main, "A");
       if (fn) return [`${name} ${node("n")} ${node("p")} ${fn.text}${ac}`];
-      return [`${name} ${node("n")} ${node("p")} DC ${numberFromText(component, main, "A")}${ac}`];
+      const dc = numberFromText(component, main, "A");
+      const startup = startupRampSeconds === undefined ? "" : ` PWL(0 0 ${startupRampSeconds} ${dc})`;
+      return [`${name} ${node("n")} ${node("p")} DC ${dc}${startup}${ac}`];
     }
     case "vac": {
       const signal = sourceSignal(component, "V");
@@ -1291,7 +1296,7 @@ function analysisLine(analysis: SpiceAnalysis, useInitialConditions = false): st
       const authoredTail = startTime !== undefined || maxStep !== undefined
         ? ` ${startTime ?? 0}${maxStep !== undefined ? ` ${maxStep}` : ""}`
         : "";
-      return `.tran ${outputStep} ${analysis.stopTime}${authoredTail}${useInitialConditions || analysis.uic ? " uic" : ""}`;
+      return `.tran ${outputStep} ${analysis.stopTime}${authoredTail}${useInitialConditions || analysis.uic || analysis.startup ? " uic" : ""}`;
     }
     case "op":
       return ".op";

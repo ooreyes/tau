@@ -21,6 +21,10 @@ export interface AnalysisOptions {
   /** Skip the DC operating-point solve and start reactive parts from zero
    *  state (SPICE `use initial conditions`). */
   uic?: boolean;
+  /** LTspice `startup`: skip the operating point and ramp independent sources
+   *  from zero over the first 20 µs. Distinct from bare `uic`, which starts
+   *  them at their authored values immediately. */
+  startup?: boolean;
 }
 
 /** The interim interactive solver needs enough samples to represent a sine
@@ -296,7 +300,7 @@ export async function runTransientAnalysis(
     // exactly the old `uic`-style behavior - and say so in a warning.
     const extraWarnings: string[] = [];
     const needsOpSeed =
-      !options.uic &&
+      !options.uic && !options.startup &&
       circuit.components.some(
         ({ component }) =>
           (component.kind === "capacitor" && !capacitorVoltage.has(component.id)) ||
@@ -460,6 +464,7 @@ export async function runTransientAnalysis(
     // can't prove the outer variable isn't reassigned before the closure
     // runs - this sidesteps that without changing anything at runtime.)
     const resolvedCircuit = circuit;
+    const startupScale = (time: number) => options.startup ? Math.min(1, Math.max(0, time / 20e-6)) : 1;
     const stampComponents = (matrix: number[][] | null, rhs: number[], time: number) => {
       for (const entry of resolvedCircuit.components) {
         switch (entry.component.kind) {
@@ -478,24 +483,26 @@ export async function runTransientAnalysis(
           case "vsource": {
             const sourceIndex = voltageSourceOffset + voltageSourceIndex.get(entry.component.id)!;
             const wave = sourceWaveforms.get(entry.component.id);
-            stampVoltageSource(matrix, rhs, netIndex(entry.pins.p, nodeIndex), netIndex(entry.pins.n, nodeIndex), sourceIndex, wave ? wave.at(time) : dcSourceValue.get(entry.component.id)!);
+            const value = wave ? wave.at(time) : dcSourceValue.get(entry.component.id)!;
+            stampVoltageSource(matrix, rhs, netIndex(entry.pins.p, nodeIndex), netIndex(entry.pins.n, nodeIndex), sourceIndex, value * startupScale(time));
             break;
           }
           case "vac": {
             const sourceIndex = voltageSourceOffset + voltageSourceIndex.get(entry.component.id)!;
-            stampVoltageSource(matrix, rhs, netIndex(entry.pins.p, nodeIndex), netIndex(entry.pins.n, nodeIndex), sourceIndex, acWaveAt.get(entry.component.id)!(time));
+            stampVoltageSource(matrix, rhs, netIndex(entry.pins.p, nodeIndex), netIndex(entry.pins.n, nodeIndex), sourceIndex, acWaveAt.get(entry.component.id)!(time) * startupScale(time));
             break;
           }
           case "isource": {
             // SPICE convention: positive value → current exits p into the external circuit.
             // Stamp from n to p so that rhs[p] += I (current injected into p).
             const wave = sourceWaveforms.get(entry.component.id);
-            stampCurrent(rhs, netIndex(entry.pins.n, nodeIndex), netIndex(entry.pins.p, nodeIndex), wave ? wave.at(time) : dcSourceValue.get(entry.component.id)!);
+            const value = wave ? wave.at(time) : dcSourceValue.get(entry.component.id)!;
+            stampCurrent(rhs, netIndex(entry.pins.n, nodeIndex), netIndex(entry.pins.p, nodeIndex), value * startupScale(time));
             break;
           }
           case "iac":
             // Same polarity convention as isource.
-            stampCurrent(rhs, netIndex(entry.pins.n, nodeIndex), netIndex(entry.pins.p, nodeIndex), acWaveAt.get(entry.component.id)!(time));
+            stampCurrent(rhs, netIndex(entry.pins.n, nodeIndex), netIndex(entry.pins.p, nodeIndex), acWaveAt.get(entry.component.id)!(time) * startupScale(time));
             break;
           case "inductor": {
             const branchIndex = inductorOffset + inductorIndex.get(entry.component.id)!;
@@ -786,11 +793,11 @@ export async function runTransientAnalysis(
             // The strict stamp parse above already failed the run on a bad
             // value, so the once-parsed DC magnitude is safe to reuse here.
             const wave = sourceWaveforms.get(id);
-            pushCurrent(id, ref, wave ? wave.at(time) : dcSourceValue.get(id) ?? 0);
+            pushCurrent(id, ref, (wave ? wave.at(time) : dcSourceValue.get(id) ?? 0) * startupScale(time));
             break;
           }
           case "iac": {
-            pushCurrent(id, ref, acWaveAt.get(id)!(time));
+            pushCurrent(id, ref, acWaveAt.get(id)!(time) * startupScale(time));
             break;
           }
           case "vcvs": {

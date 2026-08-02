@@ -7,6 +7,18 @@
      from an OLD timestamp, the previous run died mid-unit — run
      `git log --oneline -8`, recover/finish/revert that unit FIRST, then go on.
      ─────────────────────────────────────────────────────────────────────── -->
+## HEARTBEAT
+
+**Status: DONE - 2026-08-02 13:58 CDT**
+
+User-directed autobuilder recovery: repair the unreachable completion signal,
+atomic lock/disk preflight, corpus coverage and independent floors, Class-D
+Efficiency plus RC/Colpitts/Class-D waveform parity proofs, and the remaining
+correctness gaps identified in the interactive review. The launchd schedule is
+paused; the interrupted DATAFLAG claim is preserved on the sanctioned rescue
+ref and will be reconciled or deleted before the schedule resumes. This control,
+corpus, and parity unit is complete; the requested correctness unit follows.
+
 ## READINESS: NOT READY - RETRACTED 2026-07-28
 
 The `READINESS: NOTARIZATION-ONLY` banner recorded on 2026-07-22 was **wrong**
@@ -10704,3 +10716,24 @@ evidence is kept in full here.
   corpus 80/80/80/80 with the new AC proof inside it. Full suite: 2237 pass, and
   the 25 failures were trap 5 - all 6 files pass isolated at `--maxWorkers=2`.
 
+- 2026-08-02 - Repaired the unattended builder's completion and acceptance
+  control plane. `scripts/verify-autobuilder-completion.sh` now makes completion
+  a two-commit, exact-HEAD proof after every frontend, Rust, corpus, parity,
+  packaged-app, DMG, and bundled-ngspice gate; the launchd runner validates that
+  proof rather than trusting prose or a stale sentinel. Its lock is an atomic
+  PID-owned directory with dead-owner recovery, disk floors are enforced before
+  and during a fire, and output/backoff/DONE state is written safely. The corpus
+  runner recursively exercised all 4,012 `.asc` files in the two required user
+  trees in 76 seconds without starving Vitest's worker heartbeat: 4,012 imported
+  and schema-valid, 3,817 decks, 3,809 op points; the canonical release subset
+  independently held 82 imported / 79 warning-clean / 82 decks / 82 op points.
+  Restored the two missing owner fixtures from the repository's checksum-exact
+  verbatim copies. Added headless LTspice-vs-Tau proof for RC, Colpitts, and
+  Class-D waveforms plus the Class-D fixture's authored Efficiency `.meas`.
+  That proof exposed and fixed a real semantic error: `.tran startup` is now a
+  20 µs source ramp plus zero-state start, not bare `uic`. Tests: typecheck;
+  full frontend 2,330 passed / 6 skipped; recursive corpus and 82-file floors;
+  parity 4/4. Files: runner/completion scripts, acceptance/parity corpus specs,
+  directive/transient/deck startup handling, progress/state/checklist. Next:
+  close the requested step/measurement, native AC-data, export, and unsupported-
+  device honesty gaps before re-enabling launchd.

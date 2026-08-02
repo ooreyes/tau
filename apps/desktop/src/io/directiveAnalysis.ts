@@ -76,22 +76,17 @@ export function parseTranDirective(directive: string): AnalysisOptions | null {
   const maxStep = numbers.length >= 4 ? numbers[3] : null;
   if (startTime !== null && (startTime < 0 || startTime >= tstop)) return null;
   if (maxStep !== null && maxStep <= 0) return null;
-  // ngspice has no LTspice `startup` keyword. Its closest deterministic
-  // equivalent is `uic`: both begin transient integration from zero dynamic
-  // state instead of the settled operating point, which is the behavior
-  // oscillator fixtures rely on to leave their otherwise-stable equilibrium.
-  // Keep this translation explicit here rather than silently dropping a
-  // meaningful authored control at deck-build time.
-  const startupRequested = tokens.some((token) => {
-    const modifier = token.toLowerCase();
-    return modifier === "uic" || modifier === "startup";
-  });
+  // `startup` is not just `uic`: both skip the settled operating point, but
+  // startup additionally ramps independent sources from zero for 20 µs.
+  const uicRequested = tokens.some((token) => token.toLowerCase() === "uic");
+  const startupRequested = tokens.some((token) => token.toLowerCase() === "startup");
   return {
     stopTime: tstop,
     steps,
     ...(startTime !== null ? { startTime } : {}),
     ...(maxStep !== null ? { maxStep } : {}),
-    ...(startupRequested ? { uic: true } : {}),
+    ...(uicRequested ? { uic: true } : {}),
+    ...(startupRequested ? { startup: true } : {}),
   };
 }
 

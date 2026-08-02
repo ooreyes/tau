@@ -14,7 +14,7 @@ import { buildParamScope } from "../src/simulation/paramScope";
 import { buildSpiceDeck } from "../src/engine/spiceNetlist";
 
 const names = (process.env.DUMP_FILES ?? "").split(/\s+/).filter(Boolean);
-const dir = join(homedir(), "Documents", "LTspice", "examples", "Educational");
+const dir = process.env.DUMP_ROOT ?? join(homedir(), "Documents", "LTspice", "examples", "Educational");
 
 function siblingResolver(parentDir: string) {
   return makeSubcircuitResolver((symbolType) => {
@@ -37,6 +37,9 @@ describe.skipIf(names.length === 0)("deck dump", () => {
       const text = decodeSchematicText(readFileSync(path));
       const imported = importAsc(text, { resolveSubcircuit: siblingResolver(dir) });
       const params = buildParamScope(imported.directives);
+      const analysis = process.env.DUMP_ANALYSIS === "tran"
+        ? { kind: "tran" as const, stopTime: Number(process.env.DUMP_STOP ?? "0.003"), steps: Number(process.env.DUMP_STEPS ?? "3000") }
+        : { kind: "op" as const };
       const deck = buildSpiceDeck(
         {
           components: imported.components,
@@ -45,7 +48,7 @@ describe.skipIf(names.length === 0)("deck dump", () => {
           params,
           directives: imported.directives,
         },
-        { kind: "op" },
+        analysis,
       );
       console.log(`\n===== ${name} =====\n${deck.netlist}\n===== end ${name} =====\n`);
     });

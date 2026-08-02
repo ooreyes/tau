@@ -12,7 +12,7 @@
 > **and quantitatively by the committed runner** `scripts/acceptance-corpus.sh`
 > (✅ — see §1; measured 2026‑07‑03: 82 imported / 71 warning‑clean / 79
 > deck‑built / 64 op‑converged). **Done = corpus script proves ≥ 80/82 + Class‑D
-> `.tran`/`.meas` parity + signed DMG** (full checklist in AGENTS.md → Definition of Done).
+> `.tran`/`.meas` parity + production-ready unsigned DMG** (full checklist in AGENTS.md → Definition of Done).
 
 ---
 
@@ -59,13 +59,16 @@ Status legend: ✅ done · 🟡 partial · ⬜ not started
 ## 1. File I/O & interoperability  ← **highest leverage for the key goal**
 - ✅ **Committed acceptance-corpus runner** (`scripts/acceptance-corpus.sh` →
   `apps/desktop/scripts/acceptanceCorpus.corpus.ts` via `vitest.corpus.config.ts`,
-  outside the default suite): imports every `.asc` in `~/Downloads/LTspice_export`
-  + `~/Documents/LTspice` (incl. `examples/Educational`), builds an `.op` deck,
+  outside the default suite): recursively imports every `.asc` in
+  `~/Downloads/LTspice_export` + `~/Documents/LTspice`, builds an `.op` deck,
   batch-runs `ngspice -b`, prints a per-file table + summary, and **fails on any
   regression below the measured floors**. Pure verdict/aggregation helpers in
   `src/io/corpusReport.ts` (8 unit tests in the default suite; ngspice's exit
   code alone is untrustworthy — it exits 0 after "simulation(s) aborted", so the
   verdict requires "No. of Data Rows" in the output and no failure marker).
+  The default run now covers all 4,012 discovered files and separately reports
+  the historical 82-file release subset; soft assertions report every release
+  floor in one run instead of hiding later regressions behind the first failure.
   **First trustworthy measurement (2026-07-03): 82 imported / 71 warning-clean /
   79 deck-built / 64 op-converged.** This corrected the hand-typed "82/82 build"
   claim below. **Update 2026-07-04: 82/82 deck-built (ALL) / 73 warning-clean /
@@ -151,8 +154,9 @@ Status legend: ✅ done · 🟡 partial · ⬜ not started
     and `.ac <dec|oct|lin> <N> <Fstart> <Fstop>` → `{ startHz, stopHz,
     pointsPerDecade }` (SI suffixes, lin/oct normalized to points-per-decade).
     Authored transient options now outrank auto-resolution until the user
-    explicitly overrides them, and LTspice's `startup` modifier maps to
-    ngspice's deterministic zero-state (`uic`) start instead of being discarded.
+    explicitly overrides them. LTspice's `startup` modifier is preserved
+    separately from plain `uic`: both skip the operating point, while startup
+    also ramps independent DC sources from zero over the first 20 µs.
     Packaged proof: the educational Colpitts file runs its authored 500 µs
     window (14,822 native samples) and develops a 1.97 V full-run p-p drain
     waveform instead of the former flat 2.5 µs trace.
@@ -1304,6 +1308,12 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   ~0.1 V into 8 Ω. Measured (ngspice, .tran 0 3m): vpwm exactly ±10 (rails),
   vo −8.3…+9.8 V tracking the 7.5 V/1 kHz program, avg −16 mV. Corpus floors
   hold at 82/71/79/64.
+  **Release proof update (2026-08-02):** `scripts/dod-parity.sh` runs the
+  unmodified owner fixture through Tau's importer/deck path, evaluates its own
+  three authored `.meas` directives with Tau's measurement engine, and compares
+  Efficiency to installed LTspice within 2%. The same gate compares RC and
+  Class-D traces point-for-point and the unmodified educational Colpitts
+  oscillator by amplitude, RMS, and frequency. All four proofs pass headlessly.
 - 🟡 Ship/bundle a real device-model set — **common LTspice standard diodes/
   zeners/BJTs + the class-d power VDMOS pair bundled** (`engine/standardModels.ts`,
   real `standard.*` params, emitted by `buildSpiceDeck` when referenced by name).

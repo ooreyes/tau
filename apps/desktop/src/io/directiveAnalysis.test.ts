@@ -35,11 +35,11 @@ describe("parseTranDirective", () => {
     });
   });
 
-  it("maps LTspice startup onto an ngspice zero-state transient", () => {
+  it("preserves LTspice startup separately from bare uic", () => {
     expect(parseTranDirective(".tran 500µ startup")).toEqual({
       stopTime: 0.0005,
       steps: DEFAULT_TRAN_STEPS,
-      uic: true,
+      startup: true,
     });
   });
 

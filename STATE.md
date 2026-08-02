@@ -3,10 +3,15 @@
 The working memory of an unattended loop that starts from zero every fire.
 **Read this first and read it fully. It is small on purpose.**
 
-Rules:
-- Rewrite `## Now
+## Now
 
-**Status:** IDLE
+**Status:** DONE - 2026-08-02 13:58 CDT
+
+User-directed recovery unit: make the launchd runner disk-safe and single-fire,
+restore the objective completion protocol, harden the corpus and parity gates,
+then close the known correctness gaps listed in the 2026-08-02 review. The
+scheduled runner remains paused until the follow-up correctness unit and final
+end-to-end scheduler observation are complete.
 
 Last unit landed 2026-08-02: the vendor-symbol save unblock (half 2). Both
 halves of that unit are now done and the save actually lifts - measured over
