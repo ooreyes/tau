@@ -65,6 +65,8 @@ record_completion() {
   pnpm -C apps/desktop test
   scripts/acceptance-corpus.sh
   scripts/dod-parity.sh
+  pnpm -C apps/desktop exec vitest run --config vitest.corpus.config.ts \
+    scripts/acNative.corpus.ts scripts/opNative.corpus.ts
   pnpm --filter @tau/desktop build
 
   cargo fmt --manifest-path apps/desktop/src-tauri/Cargo.toml --check

@@ -912,14 +912,19 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   over frequency with `onoise`/`inoise` traces, so `MAX/MIN V(onoise)`,
   `FIND V(onoise) AT=1k`, `WHEN V(onoise)=10n` and `V(inoise)` resolve; `App.tsx`
   memoizes `noiseMeasurements` and renders a `MeasTable` under the noise plot.
-  7 hand-computed tests. All four spectral/sweep `.meas` domains
-  (tran/ac/dc/noise) now run. **NEXT:** expose currents in the waveform viewer
-  (probe a device → plot its current, §6).
+  7 hand-computed tests. Native AC results now add source/inductor `#branch`,
+  saved semiconductor terminal, and phasor-derived R/C traces, so
+  `mag(I(L1))`, `ph(I(Q1))`, and `.meas ac` current expressions resolve. The
+  installed-ngspice corpus holds `I(L1)` against the series resistor phasor at
+  every frequency. All four spectral/sweep `.meas` domains run.
 - ✅ **DC operating point annotation on schematic** (show node V / device I
   in-place, 2026-07-02) — after an OP run, the simulator-mode canvas labels
   every non-ground net with its DC voltage (cyan, at the net's
   topmost-leftmost point) and every V-source/inductor with its MNA branch
-  current (amber, centered under the body). Pure resolver
+  current (amber, centered under the body). Native `.op` also requests and
+  displays device bias/small-signal data (diode VD/GD; BJT VBE/VBC/GM/GPI/GO;
+  MOS/JFET VGS/VDS/VDSAT/GM/GDS) and classifies cutoff, active/linear, and
+  saturation regions from the returned operating point. Pure resolver
   `simulation/opAnnotations.ts` (5 tests on a real divider run: V(out)=Vin/2
   at the hand-computed anchor, I(V1)=−5 mA, ground skipped, stale/failed/null
   inputs degrade to []); `runOperatingAnalysis` now requests `returnBranches`

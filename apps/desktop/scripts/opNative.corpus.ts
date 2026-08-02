@@ -354,7 +354,7 @@ describe.skipIf(!haveNgspice)("`.op` through the native engine", () => {
     ]);
     const saved = deck.deviceCurrents.find((current) => !current.terminal)!.vector;
     expect(saved).toBe("@q1[ic]");
-    expect(deck.netlist).toMatch(/^\.save all @q1\[ic\] @q1\[ib\] @q1\[ie\]$/m);
+    expect(deck.netlist).toMatch(/^\.save all @q1\[ic\] @q1\[ib\] @q1\[ie\].*@q1\[vbe\]/m);
 
     const run = runOp(deck.netlist, "amplifier");
 
@@ -362,6 +362,12 @@ describe.skipIf(!haveNgspice)("`.op` through the native engine", () => {
     // `#branch`; that form is for sources and inductors.
     expect(run.names).toContain(saved);
     expect(run.names).not.toContain("q1#branch");
+    const opVectors = new Map(deck.deviceOperatingPoints.map((parameter) => [parameter.name, parameter.vector]));
+    expect([...opVectors.keys()]).toEqual(["VBE", "VBC", "GM", "GPI", "GO"]);
+    for (const vectorName of opVectors.values()) expect(run.names).toContain(vectorName);
+    expect(value(run, opVectors.get("VBE")!)).toBeGreaterThan(0.5);
+    expect(value(run, opVectors.get("VBC")!)).toBeLessThan(0);
+    expect(value(run, opVectors.get("GM")!)).toBeGreaterThan(0);
 
     // Biased into the active region rather than sitting at a rail, so the
     // current below is a real bias point and not a saturated corner.
@@ -628,7 +634,11 @@ M1 drain gate 0 TAU_VDMOS
 
     // And without `all`, the run collapses to the named vector alone: no node
     // voltages, no source branch. This is the silent failure `all` prevents.
-    expect(withoutAll.names).toEqual(["@d1[id]"]);
+    const explicitlySaved = [...new Set([
+      ...deck.deviceCurrents.map((current) => current.vector),
+      ...deck.deviceOperatingPoints.map((parameter) => parameter.vector),
+    ])].sort();
+    expect(withoutAll.names.sort()).toEqual(explicitlySaved);
     expect(withoutAll.names).not.toContain("v1#branch");
     expect(withoutAll.names).not.toContain("anode");
   });

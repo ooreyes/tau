@@ -918,9 +918,14 @@ describe("buildSpiceDeck", () => {
         { components: semiconductors(), wires: [] },
         { kind: "tran", stopTime: 1e-3, steps: 100 },
       );
-      expect(opDeck.netlist).toMatch(
-        /^\.save all @q1\[ic\] @q1\[ib\] @q1\[ie\] @d1\[id\] @m1\[id\] @m1\[ig\] @m1\[is\] @j1\[id\]$/m,
-      );
+      expect(opDeck.netlist).toMatch(/^\.save all @q1\[ic\].*@q1\[vbe\]/m);
+      expect(opDeck.netlist).toContain("@m1[vdsat]");
+      expect(opDeck.deviceOperatingPoints).toEqual(expect.arrayContaining([
+        { componentId: "Q1", name: "VBE", vector: "@q1[vbe]", unit: "V" },
+        { componentId: "Q1", name: "GM", vector: "@q1[gm]", unit: "S" },
+        { componentId: "M1", name: "VDSAT", vector: "@m1[vdsat]", unit: "V" },
+        { componentId: "M1", name: "GDS", vector: "@m1[gds]", unit: "S" },
+      ]));
       expect(opDeck.deviceCurrents).toEqual(tranDeck.deviceCurrents);
       // The `.save` card and the trailing analysis line are the only place an
       // `.op` deck and a `.tran` deck built from the same schematic may
@@ -930,11 +935,12 @@ describe("buildSpiceDeck", () => {
       expect(withoutSaveAndAnalysis(opDeck.netlist)).toEqual(withoutSaveAndAnalysis(tranDeck.netlist));
     });
 
-    it("carries no `.save` on an analysis that does not read device currents", () => {
+    it("asks for semiconductor current phasors on AC without OP-only parameters", () => {
       for (const analysis of [{ kind: "ac" as const, startHz: 1, stopHz: 1e3, pointsPerDecade: 10 }]) {
         const deck = buildSpiceDeck({ components: semiconductors(), wires: [] }, analysis);
-        expect(deck.netlist, analysis.kind).not.toContain(".save");
-        expect(deck.deviceCurrents, analysis.kind).toEqual([]);
+        expect(deck.netlist, analysis.kind).toMatch(/^\.save all @q1\[ic\].*@j1\[id\]$/m);
+        expect(deck.deviceCurrents, analysis.kind).toHaveLength(8);
+        expect(deck.deviceOperatingPoints, analysis.kind).toEqual([]);
       }
     });
 

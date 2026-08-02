@@ -1110,7 +1110,8 @@ fn stitch_cards(lines: &[String]) -> Result<Vec<StitchedCard>, String> {
             // across the fold; join the same way.
             let card = &mut cards[target];
             card.text.push(' ');
-            card.text.push_str(compact.trim_start_matches('+').trim_start());
+            card.text
+                .push_str(compact.trim_start_matches('+').trim_start());
             continue;
         }
         cards.push(StitchedCard {

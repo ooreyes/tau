@@ -1769,6 +1769,28 @@ function OpTable({ result }: { result: OperatingPointResult | null }) {
           ))}
         </div>
       )}
+      {result.devices && result.devices.length > 0 && (
+        <div className="op-table" aria-label="Device operating points">
+          <div className="op-row op-head">
+            <span>DEVICE PARAMETER</span>
+            <span>OPERATING POINT</span>
+          </div>
+          {result.devices.flatMap((device) => [
+            ...(device.region ? [(
+              <div className="op-row" key={`${device.id}:region`}>
+                <span>{device.label} · REGION</span>
+                <span>{device.region}</span>
+              </div>
+            )] : []),
+            ...device.parameters.map((parameter) => (
+              <div className="op-row" key={`${device.id}:${parameter.name}`}>
+                <span>{device.label} · {parameter.name}</span>
+                <span>{formatEngineering(parameter.value, parameter.unit, 4)}</span>
+              </div>
+            )),
+          ])}
+        </div>
+      )}
     </>
   );
 }

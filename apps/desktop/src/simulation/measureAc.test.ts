@@ -70,6 +70,23 @@ describe("AC FIND ... AT", () => {
     const r = evaluateAcMeasurement(".meas ac g FIND db(V(out)) AT=10", data)!;
     expect(r.value!).toBeCloseTo(0, 1);
   });
+
+  it("measures a native branch-current phasor by I(ref)", () => {
+    const voltageData = acData([1000], { out: () => ({ re: 1, im: 0 }) });
+    const currentData: AcMeasData = {
+      ...voltageData,
+      traces: [...voltageData.traces, {
+        id: "current:L1",
+        label: "I(L1)",
+        magDb: [20 * Math.log10(0.002)],
+        phaseDeg: [-90],
+      }],
+    };
+    expect(evaluateAcMeasurement(".meas ac il FIND mag(I(L1)) AT=1k", currentData)?.value)
+      .toBeCloseTo(0.002, 9);
+    expect(evaluateAcMeasurement(".meas ac phase FIND ph(I(L1)) AT=1k", currentData)?.value)
+      .toBeCloseTo(-90, 9);
+  });
 });
 
 describe("AC WHEN crossing (corner / bandwidth detection)", () => {

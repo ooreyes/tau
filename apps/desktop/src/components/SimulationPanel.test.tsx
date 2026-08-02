@@ -283,6 +283,33 @@ describe("SimulationPanel - OpTable DC CURRENT table", { timeout: 20_000 }, () =
 
     expect(screen.queryByText("DC CURRENT")).toBeNull();
   });
+
+  it("renders native device bias parameters and the derived operating region", () => {
+    renderPanel({
+      opResult: {
+        ok: true,
+        nets: [{ id: "0", label: "GND", voltage: 0 }],
+        devices: [{
+          id: "q1",
+          label: "Q1",
+          region: "forward-active",
+          parameters: [
+            { name: "VBE", value: 0.7, unit: "V" },
+            { name: "GM", value: 0.002, unit: "S" },
+          ],
+        }],
+        warnings: [],
+      },
+    });
+    fireEvent.mouseDown(screen.getByRole("tab", { name: "Operating point (.op)" }), { button: 0 });
+
+    expect(screen.getByLabelText("Device operating points")).toBeTruthy();
+    expect(screen.getByText("Q1 · REGION")).toBeTruthy();
+    expect(screen.getByText("forward-active")).toBeTruthy();
+    expect(screen.getByText("Q1 · VBE")).toBeTruthy();
+    expect(screen.getByText("Q1 · GM")).toBeTruthy();
+    expect(screen.getByText(formatEngineering(0.002, "S", 4))).toBeTruthy();
+  });
 });
 
 describe("SimulationPanel - component telemetry moved to the always-visible dock", { timeout: 20_000 }, () => {

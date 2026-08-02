@@ -80,6 +80,13 @@ function findAcTrace(data: AcMeasData, name: string): AcMeasTrace | null {
   return byInner ?? null;
 }
 
+function findAcCurrentTrace(data: AcMeasData, name: string): AcMeasTrace | null {
+  const lower = name.trim().toLowerCase();
+  return data.traces.find((trace) => trace.label.trim().toLowerCase() === `i(${lower})`)
+    ?? data.traces.find((trace) => trace.id.trim().toLowerCase() === `current:${lower}`)
+    ?? null;
+}
+
 function stripVLabel(label: string): string {
   const m = /^v\(\s*(.*?)\s*\)$/i.exec(label.trim());
   return m ? m[1] : label;
@@ -92,8 +99,8 @@ const AC_SIGNAL_RE =
 
 function makeAcGetter(func: string, kind: string, arg: string, data: AcMeasData): (i: number) => number {
   if (kind.toUpperCase() === "I") {
-    // The interim TS solver does not expose branch currents to `.meas ac`.
-    return () => NaN;
+    const current = findAcCurrentTrace(data, arg);
+    return current ? (i) => deriveScalar(func, complexAt(current, i)) : () => NaN;
   }
   const parts = arg.split(",").map((p) => p.trim());
   if (parts.length === 2) {

@@ -366,6 +366,7 @@ describe("native ngspice adapter", () => {
       { name: "frequency", real: [10, 100], imaginary: null },
       { name: "v(n001)", real: [1, 0], imaginary: [0, 0] },
       { name: "v(n002)", real: [0, 0], imaginary: [1, 0] },
+      { name: "v1#branch", real: [-0.001, -0.002], imaginary: [0, 0] },
     ]));
 
     const result = await runNativeAcSweep(acExcitedSchematic(), {
@@ -380,6 +381,40 @@ describe("native ngspice adapter", () => {
     expect(result.traces).toEqual(expect.arrayContaining([
       expect.objectContaining({ id: "N001", magDb: [0, -300], phaseDeg: [0, 0] }),
       expect.objectContaining({ id: "N002", magDb: [0, -300], phaseDeg: [90, 0] }),
+    ]));
+    const source = result.traces.find((trace) => trace.label === "I(V1)");
+    const resistor = result.traces.find((trace) => trace.label === "I(R1)");
+    const capacitor = result.traces.find((trace) => trace.label === "I(C1)");
+    expect(source?.magDb[0]).toBeCloseTo(-60, 9);
+    expect(source?.phaseDeg[0]).toBeCloseTo(180, 9);
+    expect(resistor?.magDb[0]).toBeCloseTo(20 * Math.log10(Math.SQRT2 / 1000), 9);
+    expect(resistor?.phaseDeg[0]).toBeCloseTo(-45, 9);
+    expect(capacitor?.magDb[0]).toBeCloseTo(20 * Math.log10(2 * Math.PI * 10e-6), 9);
+    expect(capacitor?.phaseDeg[0]).toBeCloseTo(180, 9);
+  });
+
+  it("returns saved semiconductor current phasors on native AC", async () => {
+    enableNativeRuntime();
+    invoke.mockResolvedValueOnce(nativeResult([
+      { name: "frequency", real: [1000, 10_000], imaginary: null },
+      { name: "v(vdd)", real: [5, 5], imaginary: [0, 0] },
+      { name: "@q1[ic]", real: [0.001, 0], imaginary: [0, -0.002] },
+      { name: "@q1[ib]", real: [10e-6, 0], imaginary: [0, -20e-6] },
+      { name: "@q1[ie]", real: [-0.00101, 0], imaginary: [0, 0.00202] },
+    ]));
+    const schematic = {
+      ...amplifierSchematic(),
+      components: amplifierSchematic().components.map((part) =>
+        part.label === "V1" ? { ...part, value: "5 AC 1" } : part),
+    };
+    const result = await runNativeAcSweep(schematic, { startHz: 1000, stopHz: 10_000, pointsPerDecade: 1 });
+    expect(invoke.mock.calls[0][1].request.netlist).toContain(".save all @q1[ic] @q1[ib] @q1[ie]");
+    expect(result?.ok).toBe(true);
+    if (!result?.ok) return;
+    expect(result.traces).toEqual(expect.arrayContaining([
+      expect.objectContaining({ label: "I(Q1)", magDb: [-60, 20 * Math.log10(0.002)], phaseDeg: [0, -90] }),
+      expect.objectContaining({ label: "Ib(Q1)" }),
+      expect.objectContaining({ label: "Ie(Q1)" }),
     ]));
   });
 
@@ -539,6 +574,11 @@ describe("native operating point branch currents", () => {
     { name: "v(coll)", real: [3.2], imaginary: null },
     { name: "v(base)", real: [0.7], imaginary: null },
     { name: "@q1[ic]", real: [0.00095], imaginary: null },
+    { name: "@q1[vbe]", real: [0.7], imaginary: null },
+    { name: "@q1[vbc]", real: [-2.5], imaginary: null },
+    { name: "@q1[gm]", real: [0.002], imaginary: null },
+    { name: "@q1[gpi]", real: [0.00002], imaginary: null },
+    { name: "@q1[go]", real: [0.000001], imaginary: null },
     { name: "v1#branch", real: [-0.0023], imaginary: null },
   ];
 
@@ -557,6 +597,17 @@ describe("native operating point branch currents", () => {
     // refdes here would silently place zero canvas current labels.
     expect(result.branches).toEqual(expect.arrayContaining([
       { id: "q1", label: "I(Q1)", current: 0.00095 },
+    ]));
+    expect(result.devices).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        id: "q1",
+        label: "Q1",
+        region: "forward-active",
+        parameters: expect.arrayContaining([
+          { name: "VBE", value: 0.7, unit: "V" },
+          { name: "GM", value: 0.002, unit: "S" },
+        ]),
+      }),
     ]));
   });
 

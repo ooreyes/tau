@@ -18,6 +18,7 @@ import { describe, it, expect } from "vitest";
 import { buildSpiceDeck } from "../src/engine/spiceNetlist";
 import { AC_SCALE_NAME, AC_DB_FLOOR, acTraceFromComplex } from "../src/engine/nativeSpice";
 import { runAcSweep, hasAcExcitation, NO_AC_SOURCE_MESSAGE } from "../src/simulation/acSweep";
+import { deriveAcRcCurrents } from "../src/simulation/currents";
 import type { NetLabel, SchematicComponent } from "../src/schematic/types";
 
 const haveNgspice = spawnSync("ngspice", ["--version"], { encoding: "utf8" }).error === undefined;
@@ -30,6 +31,9 @@ const resistor = (label: string, value: string, x: number, y: number): Schematic
 });
 const capacitor = (label: string, value: string, x: number, y: number): SchematicComponent => ({
   id: label, kind: "capacitor", label, value, x, y, rotation: 0,
+});
+const inductor = (label: string, value: string, x: number, y: number): SchematicComponent => ({
+  id: label, kind: "inductor", label, value, x, y, rotation: 0,
 });
 const lbl = (x: number, y: number, text: string): NetLabel => ({ id: `f-${x}-${y}`, x, y, text });
 
@@ -205,6 +209,43 @@ describe.skipIf(!haveNgspice)("`.ac` through the native engine", () => {
     const ratio = Math.abs(imag[aboveIndex]) / Math.abs(real[aboveIndex]);
     expect(ratio).toBeGreaterThan(9);
     expect(ratio).toBeLessThan(11);
+  });
+
+  it("returns I(L1) and agrees with a derived passive current on a real AC run", () => {
+    const rl = {
+      components: [
+        vsource("V1", "AC 1", 100, 300),
+        inductor("L1", "1m", 200, 268),
+        resistor("R1", "1k", 300, 268),
+      ],
+      wires: [],
+      netLabels: [
+        lbl(100, 268, "in"), lbl(168, 268, "in"),
+        lbl(232, 268, "mid"), lbl(268, 268, "mid"),
+        lbl(100, 332, "0"), lbl(332, 268, "0"),
+      ],
+    };
+    const deck = buildSpiceDeck(rl, { kind: "ac", ...sweep });
+    const run = runAc(deck.netlist, "rlcurrent", [
+      "real(v(mid))", "imag(v(mid))", "real(l1#branch)", "imag(l1#branch)",
+    ]);
+    const freqs = column(run, "frequency");
+    const lReal = column(run, "real(l1#branch)");
+    const lImag = column(run, "imag(l1#branch)");
+    expect(run.names).toContain("l1#branch");
+
+    const ground = new Array(freqs.length).fill(0);
+    const derived = deriveAcRcCurrents(
+      deck.circuit.components,
+      new Map([
+        ["mid", { real: column(run, "real(v(mid))"), imaginary: column(run, "imag(v(mid))") }],
+        [deck.circuit.groundNetId!, { real: ground, imaginary: ground }],
+      ]),
+      freqs,
+    ).find((current) => current.label === "I(R1)");
+    expect(derived).toBeDefined();
+    derived!.real.forEach((value, index) => expect(Math.abs(value - lReal[index])).toBeLessThan(1e-7));
+    derived!.imaginary.forEach((value, index) => expect(Math.abs(value - lImag[index])).toBeLessThan(1e-7));
   });
 
   it("the dB and phase conventions match the engine after the documented conversion", () => {

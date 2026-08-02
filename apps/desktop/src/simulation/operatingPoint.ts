@@ -29,6 +29,13 @@ import { DIODE_KINDS, diodeConductance, diodeCurrent, diodeSpecFor, limitDiodeVo
 // Result type (mirrors linearTransient's style)
 // ---------------------------------------------------------------------------
 
+export interface DeviceOperatingPoint {
+  id: string;
+  label: string;
+  region?: "cutoff" | "forward-active" | "reverse-active" | "linear" | "saturation" | "conducting";
+  parameters: { name: string; value: number; unit: "V" | "S" }[];
+}
+
 export type OperatingPointResult =
   | {
       ok: true;
@@ -49,6 +56,8 @@ export type OperatingPointResult =
        * terminal answer for the part.
        */
       branches?: { id: string; label: string; current: number; terminal?: string }[];
+      /** Native ngspice bias/small-signal data for semiconductor primitives. */
+      devices?: DeviceOperatingPoint[];
       warnings: string[];
     }
   | {

@@ -13,7 +13,8 @@ interface RcElement {
   /** Ref-des. */
   ref: string;
   kind: "resistor" | "capacitor";
-  /** Ohms for a resistor, farads for a capacitor. Always finite and positive. */
+  /** Ohms for a resistor (non-zero; negative active resistance is legal), or
+   *  farads for a capacitor (positive). */
   size: number;
   a: string | undefined;
   b: string | undefined;
@@ -34,10 +35,54 @@ function rcElements(components: ReadonlyArray<ExtractedComponent>): RcElement[] 
     try {
       size = parseQuantity(component.value, component.kind === "resistor" ? "Ω" : "F");
     } catch { continue; }
-    if (!(size > 0)) continue;
+    if (component.kind === "resistor" ? size === 0 : !(size > 0)) continue;
     out.push({ id: component.id, ref, kind: component.kind, size, a: pins.a, b: pins.b });
   }
   return out;
+}
+
+export interface ComplexSamples {
+  real: number[];
+  imaginary: number[];
+}
+
+/** Reconstruct resistor/capacitor AC branch phasors from node phasors:
+ * `I_R=(Va−Vb)/R`, `I_C=jωC(Va−Vb)`, in the element's a→b orientation. */
+export function deriveAcRcCurrents(
+  components: ReadonlyArray<ExtractedComponent>,
+  nodePhasors: ReadonlyMap<string, ComplexSamples>,
+  frequencies: ReadonlyArray<number>,
+): { id: string; ref: string; label: string; real: number[]; imaginary: number[] }[] {
+  const read = (netId: string | undefined, index: number): { re: number; im: number } | null => {
+    if (!netId) return null;
+    const phasor = nodePhasors.get(netId);
+    if (!phasor) return null;
+    const re = phasor.real[index];
+    const im = phasor.imaginary[index];
+    return Number.isFinite(re) && Number.isFinite(im) ? { re, im } : null;
+  };
+  const output: { id: string; ref: string; label: string; real: number[]; imaginary: number[] }[] = [];
+  for (const element of rcElements(components)) {
+    const real: number[] = [];
+    const imaginary: number[] = [];
+    let complete = true;
+    for (let index = 0; index < frequencies.length; index += 1) {
+      const a = read(element.a, index);
+      const b = read(element.b, index);
+      if (!a || !b) { complete = false; break; }
+      const voltage = { re: a.re - b.re, im: a.im - b.im };
+      if (element.kind === "resistor") {
+        real.push(voltage.re / element.size);
+        imaginary.push(voltage.im / element.size);
+      } else {
+        const omegaC = 2 * Math.PI * frequencies[index] * element.size;
+        real.push(-omegaC * voltage.im);
+        imaginary.push(omegaC * voltage.re);
+      }
+    }
+    if (complete) output.push({ id: element.id, ref: element.ref, label: `I(${element.ref})`, real, imaginary });
+  }
+  return output;
 }
 
 /**

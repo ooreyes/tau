@@ -5,8 +5,8 @@ import { resolveComponentValues, EMPTY_SCOPE, type ParamScope } from "../simulat
 import { parseAcSpec } from "./acSpec";
 import type { NoiseResult, NoiseSpec } from "../simulation/noise";
 import type { AnalysisOptions, AnalysisResult, CurrentTrace, Trace } from "../simulation/linearTransient";
-import { deriveDcRcBranches, deriveRcCurrents } from "../simulation/currents";
-import type { OperatingPointResult } from "../simulation/operatingPoint";
+import { deriveAcRcCurrents, deriveDcRcBranches, deriveRcCurrents } from "../simulation/currents";
+import type { DeviceOperatingPoint, OperatingPointResult } from "../simulation/operatingPoint";
 import { hasAcExcitation, NO_AC_SOURCE_MESSAGE, type AcResult, type AcTrace } from "../simulation/acSweep";
 import {
   MAX_OUTER_POINTS,
@@ -200,6 +200,34 @@ function componentCurrentVector(
   return undefined;
 }
 
+function deviceRegion(
+  component: SchematicComponent,
+  parameters: ReadonlyMap<string, number>,
+  current: number | undefined,
+): DeviceOperatingPoint["region"] {
+  if (component.kind === "diode" || component.kind === "led" || component.kind === "zener") {
+    return Math.abs(current ?? 0) > 1e-12 ? "conducting" : "cutoff";
+  }
+  if (component.kind === "npn" || component.kind === "pnp") {
+    const polarity = component.kind === "pnp" ? -1 : 1;
+    const beForward = polarity * (parameters.get("VBE") ?? 0) > 0.45;
+    const bcForward = polarity * (parameters.get("VBC") ?? 0) > 0.45;
+    if (beForward && bcForward) return "saturation";
+    if (beForward) return "forward-active";
+    if (bcForward) return "reverse-active";
+    return "cutoff";
+  }
+  if (["nmos", "pmos", "njf", "pjf"].includes(component.kind)) {
+    const gm = Math.abs(parameters.get("GM") ?? 0);
+    if (Math.abs(current ?? 0) <= 1e-15 && gm <= 1e-15) return "cutoff";
+    const vds = parameters.get("VDS");
+    const vdsat = parameters.get("VDSAT");
+    if (vds === undefined || vdsat === undefined) return undefined;
+    return Math.abs(vds) >= Math.abs(vdsat) ? "saturation" : "linear";
+  }
+  return undefined;
+}
+
 export async function runNativeOperatingPoint(schematic: Schematic): Promise<OperatingPointResult | null> {
   const execution = await executeNative(schematic, { kind: "op" });
   if (!execution) return null;
@@ -271,10 +299,35 @@ export async function runNativeOperatingPoint(schematic: Schematic): Promise<Ope
     seen.add(ref.toLowerCase());
   }
 
+  const primaryCurrentById = new Map(
+    branches.filter((branch) => !branch.terminal).map((branch) => [branch.id, branch.current]),
+  );
+  const parameterRecords = new Map<string, DeviceOperatingPoint["parameters"]>();
+  for (const saved of execution.deck.deviceOperatingPoints) {
+    const value = vector(execution.result, saved.vector)?.real[0];
+    if (!Number.isFinite(value)) continue;
+    const records = parameterRecords.get(saved.componentId) ?? [];
+    records.push({ name: saved.name, value: value as number, unit: saved.unit });
+    parameterRecords.set(saved.componentId, records);
+  }
+  const devices: DeviceOperatingPoint[] = [];
+  for (const { component } of execution.deck.circuit.components) {
+    const parameters = parameterRecords.get(component.id);
+    if (!parameters || parameters.length === 0) continue;
+    const values = new Map(parameters.map((parameter) => [parameter.name, parameter.value]));
+    devices.push({
+      id: component.id,
+      label: component.label,
+      region: deviceRegion(component, values, primaryCurrentById.get(component.id)),
+      parameters,
+    });
+  }
+
   return {
     ok: true,
     nets,
     ...(branches.length > 0 ? { branches } : {}),
+    ...(devices.length > 0 ? { devices } : {}),
     warnings: [...execution.deck.circuit.warnings, ...engineWarnings(execution.result.messages)],
   };
 }
@@ -336,7 +389,7 @@ export async function runNativeAcSweep(
   const frequency = vector(execution.result, AC_SCALE_NAME);
   if (!frequency || frequency.real.length < 2) throw new Error("ngspice returned no AC frequency vector.");
 
-  const traces: AcTrace[] = execution.deck.circuit.nets
+  const nodeTraces: AcTrace[] = execution.deck.circuit.nets
     .filter((net) => !net.isGround)
     .flatMap((net) => {
       const values = vector(execution.result, `v(${net.id})`);
@@ -348,7 +401,65 @@ export async function runNativeAcSweep(
       }];
     });
 
-  if (traces.length === 0) throw new Error("ngspice completed, but returned no AC node-voltage traces.");
+  if (nodeTraces.length === 0) throw new Error("ngspice completed, but returned no AC node-voltage traces.");
+
+  const count = frequency.real.length;
+  const nodePhasors = new Map<string, { real: number[]; imaginary: number[] }>();
+  for (const net of execution.deck.circuit.nets) {
+    if (net.isGround) {
+      nodePhasors.set(net.id, { real: new Array(count).fill(0), imaginary: new Array(count).fill(0) });
+      continue;
+    }
+    const values = vector(execution.result, `v(${net.id})`);
+    if (!values || values.real.length !== count) continue;
+    nodePhasors.set(net.id, { real: values.real, imaginary: values.imaginary ?? new Array(count).fill(0) });
+  }
+
+  const traces = [...nodeTraces];
+  const primary = primaryDeviceCurrents(execution.deck.deviceCurrents);
+  const seen = new Set<string>();
+  for (const { component } of execution.deck.circuit.components) {
+    const ref = component.label;
+    if (!ref || seen.has(ref.toLowerCase())) continue;
+    let values = componentCurrentVector(execution.result, primary.get(component.id), ref);
+    if (!values && (component.kind === "isource" || component.kind === "iac")) {
+      const stimulus = parseAcSpec(component.value);
+      const magnitude = stimulus?.mag ?? 0;
+      const radians = ((stimulus?.phase ?? 0) * Math.PI) / 180;
+      values = {
+        name: `i(${ref})`,
+        real: new Array(count).fill(magnitude * Math.cos(radians)),
+        imaginary: new Array(count).fill(magnitude * Math.sin(radians)),
+      };
+    }
+    if (!values || values.real.length !== count) continue;
+    traces.push({
+      id: `current:${component.id}`,
+      label: `I(${ref})`,
+      ...acTraceFromComplex(values.real, values.imaginary),
+    });
+    seen.add(ref.toLowerCase());
+    for (const extra of execution.deck.deviceCurrents) {
+      if (extra.componentId !== component.id || !extra.terminal) continue;
+      const terminal = vector(execution.result, extra.vector);
+      if (!terminal || terminal.real.length !== count) continue;
+      traces.push({
+        id: `current:${component.id}:${extra.terminal}`,
+        label: `I${extra.terminal}(${ref})`,
+        ...acTraceFromComplex(terminal.real, terminal.imaginary),
+      });
+    }
+  }
+  for (const derived of deriveAcRcCurrents(execution.deck.circuit.components, nodePhasors, frequency.real)) {
+    if (seen.has(derived.ref.toLowerCase())) continue;
+    traces.push({
+      id: `current:${derived.id}`,
+      label: derived.label,
+      ...acTraceFromComplex(derived.real, derived.imaginary),
+    });
+    seen.add(derived.ref.toLowerCase());
+  }
+
   return { ok: true, freqs: frequency.real, traces, warnings: [...execution.deck.circuit.warnings, ...engineWarnings(execution.result.messages)] };
 }
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { deriveDcRcBranches, deriveRcCurrents, findCurrentTrace, parseCurrentSignal, PRIMARY_TERMINALS } from "./currents";
+import { deriveAcRcCurrents, deriveDcRcBranches, deriveRcCurrents, findCurrentTrace, parseCurrentSignal, PRIMARY_TERMINALS } from "./currents";
 import { DEVICE_CURRENT_PARAMS } from "../engine/spiceNetlist";
 import type { ExtractedComponent } from "../schematic/netlist";
 import type { SchematicComponent } from "../schematic/types";
@@ -43,6 +43,35 @@ describe("deriveRcCurrents (native-path R/C currents from node voltages)", () =>
     const comps = [comp("resistor", "R1", "2k", { a: "hot", b: "0" })];
     const voltages = new Map<string, number[]>([["hot", [4]]]);
     expect(deriveRcCurrents(comps, voltages, [0])[0].values[0]).toBeCloseTo(0.002, 9);
+  });
+});
+
+describe("deriveAcRcCurrents (native-path R/C current phasors)", () => {
+  it("derives resistor and capacitor currents with magnitude, phase, and pin sign intact", () => {
+    const components = [
+      comp("resistor", "R1", "1k", { a: "in", b: "out" }),
+      comp("capacitor", "C1", "1u", { a: "out", b: "0" }),
+    ];
+    const nodes = new Map([
+      ["in", { real: [1], imaginary: [0] }],
+      ["out", { real: [0], imaginary: [1] }],
+      ["0", { real: [0], imaginary: [0] }],
+    ]);
+    const [resistor, capacitor] = deriveAcRcCurrents(components, nodes, [1000]);
+    expect(resistor.real[0]).toBeCloseTo(1e-3, 12);
+    expect(resistor.imaginary[0]).toBeCloseTo(-1e-3, 12);
+    // jωC · j1 V = -ωC A (purely real, negative).
+    expect(capacitor.real[0]).toBeCloseTo(-2 * Math.PI * 1000e-6, 12);
+    expect(capacitor.imaginary[0]).toBeCloseTo(0, 12);
+  });
+
+  it("keeps a negative resistor's legal active-current sign", () => {
+    const components = [comp("resistor", "Rneg", "-1k", { a: "n", b: "0" })];
+    const nodes = new Map([
+      ["n", { real: [2], imaginary: [0] }],
+      ["0", { real: [0], imaginary: [0] }],
+    ]);
+    expect(deriveAcRcCurrents(components, nodes, [10])[0].real[0]).toBe(-0.002);
   });
 });
 

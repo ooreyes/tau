@@ -9,7 +9,7 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-02 14:11 CDT**
+**Status: DONE - 2026-08-02 14:21 CDT**
 
 User-directed autobuilder recovery: repair the unreachable completion signal,
 atomic lock/disk preflight, corpus coverage and independent floors, Class-D
@@ -19,7 +19,8 @@ paused; the interrupted DATAFLAG claim is preserved on the sanctioned rescue
 ref and will be reconciled or deleted before the schedule resumes. The `.step`
 correctness unit is complete: full ordinary sweeps, atomic refusal above the
 safe ceiling, and per-member `.meas` evaluation/display. PNG waveform export is
-now complete; native AC device data and unsupported-device honesty follow.
+now complete. Native AC branch/device phasors and native device operating-point
+parameters/regions are complete; unsupported-device honesty is the next unit.
 
 ## READINESS: NOT READY - RETRACTED 2026-07-28
 
@@ -10756,3 +10757,13 @@ evidence is kept in full here.
   image remains faithful when detached from App.css. Files: `plotPng.ts`, DOM
   tests, and SimulationPanel wiring. Tests: typecheck; focused 35 passed. Next:
   native AC current/device data.
+
+- 2026-08-02 - Closed audit P12. Native AC now returns source/inductor branch
+  phasors, saved semiconductor/terminal currents, and R/C currents reconstructed
+  in the complex domain; `.meas ac I(ref)` resolves them. Native `.op` now
+  requests and displays diode/BJT/FET bias voltages and small-signal
+  conductances plus cutoff/active/linear/saturation region. Real ngspice proofs
+  hold `I(L1)` against a series resistor at every frequency and verify BJT OP
+  vector names/values. Completion now runs both real-engine corpora. Tests so
+  far: typecheck; 212 focused unit/DOM; 15 installed-ngspice corpus. Next:
+  remove unsafe TRIAC/DIAC/varistor substitutions.

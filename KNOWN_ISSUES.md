@@ -166,11 +166,13 @@ one engine for the whole session.
   have no trace of their own. On the schematic itself, the in-place operating-
   point annotation shows one current per part - the part's own - because the
   per-terminal figures would all anchor to the same component position.
-  Currents are reported in a native transient run and in the operating-point
-  table; the other analyses report node voltages only. ngspice returns a current
+  Currents are reported in native transient, AC, and operating-point results.
+  Native AC includes complex source/inductor and semiconductor phasors and
+  reconstructs R/C phasors from the node voltages, so `I(L1)` and `.meas ac`
+  current expressions work. Native `.op` also lists device bias voltages,
+  gm/conductance, and an explicit operating region. ngspice returns a current
   of its own for sources, inductors and semiconductors; a resistor's and a
-  capacitor's are reconstructed from the node voltages either side of them, so
-  both runs list the same set of parts.
+  capacitor's are reconstructed from the node voltages either side of them.
 
 ## Install
 

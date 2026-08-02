@@ -103,8 +103,11 @@ export interface SpiceDeck {
    *  ngspice returns it under. Recorded per component so the read side looks up
    *  exactly what was asked for instead of rebuilding the name from a ref-des
    *  the emitter may have sanitized. Populated for the transient and
-   *  operating-point decks, the two analyses that read device currents back. */
+   *  operating-point and AC decks, the analyses that read device currents. */
   deviceCurrents: DeviceCurrent[];
+  /** Native `.op` device parameters requested from ngspice (bias voltages,
+   *  transconductance/conductance, and MOS/JFET saturation voltage). */
+  deviceOperatingPoints: DeviceOperatingVector[];
 }
 
 /** One device current a deck asked ngspice to keep. */
@@ -118,6 +121,15 @@ export interface DeviceCurrent {
    *  every read side keyed by ref-des wants; a BJT's `b` and `e` carry theirs.
    *  Same convention as `CurrentTrace.terminal`. */
   terminal?: string;
+}
+
+export interface DeviceOperatingVector {
+  componentId: string;
+  /** User-facing parameter name (`VBE`, `GM`, `VDSAT`, …). */
+  name: string;
+  /** Exact ngspice vector saved by the deck. */
+  vector: string;
+  unit: "V" | "S";
 }
 
 type Schematic = {
@@ -479,16 +491,16 @@ export function buildSpiceDeck(schematic: Schematic, analysis: SpiceAnalysis): S
   // the deck can name each one instead of quietly plotting a device Tau does
   // not have.
   const modelSubstitutions: ModelSubstitution[] = [];
-  // Transient and the operating point are the analyses that read device
-  // currents back. A `.save` card is not free - it changes what a run keeps -
-  // so no other analysis asks for one, and `all` is what keeps the card
+  // Transient, operating point, and AC read device currents back. A `.save`
+  // card is not free - it changes what a run keeps - and `all` keeps the card
   // additive rather than replacing ngspice's default set (verified on an
   // `.op` deck: every node voltage and `#branch` current still comes back
   // alongside the named device currents). Recording only what was actually
   // asked for is what keeps the read side from looking up a vector this deck
   // never requested.
-  const wantsDeviceCurrents = analysis.kind === "tran" || analysis.kind === "op";
+  const wantsDeviceCurrents = analysis.kind === "tran" || analysis.kind === "op" || analysis.kind === "ac";
   const deviceCurrents: DeviceCurrent[] = [];
+  const deviceOperatingPoints: DeviceOperatingVector[] = [];
   circuit.components.forEach((entry, index) => {
     const directiveIc = entry.component.kind === "inductor"
       ? inductorCurrents.get(entry.component.label.trim().toLowerCase())
@@ -516,6 +528,13 @@ export function buildSpiceDeck(schematic: Schematic, analysis: SpiceAnalysis): S
         if (vector) deviceCurrents.push({ componentId: entry.component.id, vector });
         for (const extra of deviceTerminalCurrentVectors(line)) {
           deviceCurrents.push({ componentId: entry.component.id, ...extra });
+        }
+      }
+    }
+    if (analysis.kind === "op") {
+      for (const line of emitted) {
+        for (const parameter of deviceOperatingPointVectors(line)) {
+          deviceOperatingPoints.push({ componentId: entry.component.id, ...parameter });
         }
       }
     }
@@ -551,12 +570,23 @@ export function buildSpiceDeck(schematic: Schematic, analysis: SpiceAnalysis): S
   }
 
   // A semiconductor's own current exists only if the deck asks for it by name.
-  if (deviceCurrents.length > 0) {
-    lines.push(...saveCardLines(deviceCurrents.map((device) => device.vector)));
+  const savedVectors = [...new Set([
+    ...deviceCurrents.map((device) => device.vector),
+    ...deviceOperatingPoints.map((parameter) => parameter.vector),
+  ])];
+  if (savedVectors.length > 0) {
+    lines.push(...saveCardLines(savedVectors));
   }
   lines.push(analysisLine(analysis, hasIc || hasInstanceIc), ".end");
 
-  return { circuit, netlist: lines.join("\n"), unresolvedSubckts, modelSubstitutions, deviceCurrents };
+  return {
+    circuit,
+    netlist: lines.join("\n"),
+    unresolvedSubckts,
+    modelSubstitutions,
+    deviceCurrents,
+    deviceOperatingPoints,
+  };
 }
 
 /**
@@ -621,6 +651,48 @@ export function deviceTerminalCurrentVectors(instanceLine: string): { vector: st
   const name = instanceLine.trim().split(/\s+/)[0] ?? "";
   const params = DEVICE_TERMINAL_CURRENT_PARAMS[name.slice(0, 1).toLowerCase()] ?? [];
   return params.map((param) => ({ vector: `@${name.toLowerCase()}[${param}]`, terminal: param.slice(1) }));
+}
+
+const DEVICE_OPERATING_PARAMS: Readonly<Record<string, readonly { name: string; param: string; unit: "V" | "S" }[]>> = {
+  d: [
+    { name: "VD", param: "vd", unit: "V" },
+    { name: "GD", param: "gd", unit: "S" },
+  ],
+  q: [
+    { name: "VBE", param: "vbe", unit: "V" },
+    { name: "VBC", param: "vbc", unit: "V" },
+    { name: "GM", param: "gm", unit: "S" },
+    { name: "GPI", param: "gpi", unit: "S" },
+    { name: "GO", param: "go", unit: "S" },
+  ],
+  m: [
+    { name: "VGS", param: "vgs", unit: "V" },
+    { name: "VDS", param: "vds", unit: "V" },
+    { name: "VON", param: "von", unit: "V" },
+    { name: "VDSAT", param: "vdsat", unit: "V" },
+    { name: "GM", param: "gm", unit: "S" },
+    { name: "GDS", param: "gds", unit: "S" },
+  ],
+  j: [
+    { name: "VGS", param: "vgs", unit: "V" },
+    { name: "VDS", param: "vds", unit: "V" },
+    { name: "VDSAT", param: "vdsat", unit: "V" },
+    { name: "GM", param: "gm", unit: "S" },
+    { name: "GDS", param: "gds", unit: "S" },
+  ],
+};
+
+/** Device bias/small-signal parameters that ngspice exposes on an `.op` plot. */
+export function deviceOperatingPointVectors(
+  instanceLine: string,
+): { name: string; vector: string; unit: "V" | "S" }[] {
+  const instance = instanceLine.trim().split(/\s+/)[0] ?? "";
+  const parameters = DEVICE_OPERATING_PARAMS[instance.slice(0, 1).toLowerCase()] ?? [];
+  return parameters.map(({ name, param, unit }) => ({
+    name,
+    vector: `@${instance.toLowerCase()}[${param}]`,
+    unit,
+  }));
 }
 
 /** Width to wrap the `.save` card at, well inside any SPICE line-length limit. */
