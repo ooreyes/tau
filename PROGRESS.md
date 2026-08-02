@@ -73,10 +73,18 @@ rather than passing, and dropping `digital.cm` from the one shared list kills
 `Unknown model type adc_bridge` / `MIF-ERROR`, so the loader is proved to read
 the shared constant rather than a leftover copy. `serde_json` was added to
 `[build-dependencies]`; it is already a dependency of the crate and of
-`tauri-build`, so no package was added. The `FIX_BUGS.md` entry logged by the
-previous fire is closed with the fix, and README no longer says only that a build
-fails when the library is absent. Gates: tsc, cargo 46 passed (34 + 12 new) + all
-4 ignored real-library tests passed at `--test-threads=1` + clippy clean.
+`tauri-build`, so `Cargo.lock` is unchanged and no package was added. The
+`FIX_BUGS.md` entry logged by the previous fire is closed with the fix, and
+README no longer says only that a build fails when the library is absent.
+
+**This host is out of disk** - 1.6 GiB free on a 100%-full volume, and clippy
+first died with `No space left on device`; `target/debug/incremental` (371 MB of
+regenerable cache) was removed to get past it. Worth knowing before a release
+build is attempted here. Gates: tsc, full suite 2289 passed / 150 files at
+`--maxWorkers=2` with one `App.workspace.test.tsx` render timeout that passes
+18/18 isolated (trap 5, and this unit changed no TypeScript at all - the diff is
+Rust, `Cargo.toml` and docs), cargo 46 passed (34 + 12 new) + all 4 ignored
+real-library tests passed at `--test-threads=1` + clippy clean.
 
 Next candidate: Next up #2 - verify whether the preview solver / native DC
 operating-point mismatch is still real, or whether `KNOWN_ISSUES.md:100` has
