@@ -179,10 +179,11 @@ describe("project schematic file formats", () => {
     expect(schematicToAsc({ components: resaved.components, wires: [], netLabels: [] }).text)
       .toContain("SYMATTR InstName U1\nSYMATTR SpiceLine Avol=1Meg");
 
-    // A symbol the exporter would have to rewrite has nowhere to put them, so
-    // that save stays blocked.
+    // A part written under a carrier symbol keeps its slots in the Tau-only
+    // field, so they are no longer a reason to block. The save stays blocked
+    // all the same: the carrier resistor drops the switch's two control pins.
     const carrier = `Version 4\nSHEET 1 880 680\nSYMBOL sw 80 80 R0\nSYMATTR InstName S1\nSYMATTR SpiceLine Ron=1\n`;
-    expect(ascRewriteRisks(carrier)).toContain("extended symbol attributes");
+    expect(ascRewriteRisks(carrier)).toEqual(["symbol-library identity"]);
 
     // npn4's substrate pin has no banked geometry, so its identity cannot be
     // re-emitted faithfully and the save block stays.

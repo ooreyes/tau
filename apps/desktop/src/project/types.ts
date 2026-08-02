@@ -3,6 +3,7 @@ import {
   isLossyCarrierWarning,
   kindToLtspiceType,
   schematicToAsc,
+  TAU_CARRIER_KINDS,
 } from "../io/ascExport";
 import { extendedSymbolAttrs, importAsc, ltspiceTypeToKind, parseAsc } from "../io/ascImport";
 import type { SchematicDocument } from "../store/useSchematic";
@@ -134,9 +135,12 @@ export function ascRewriteRisks(source: string): string[] {
     // Extended attribute slots (Value2, SpiceLine, …) are carried on the part
     // and written back into the slots they came from, but only onto the symbol
     // that declared them - so a part Tau would re-emit under a different symbol
-    // still loses them. A value edit that cannot be split back across the slots
-    // is caught on the export side, where the current value is known.
-    if (!verbatim && extendedSymbolAttrs(symbol.attrs)) {
+    // still loses them. A part written under a carrier symbol is the exception:
+    // the carrier records the part's real kind, so the slots ride along with it
+    // and come back on reopen. A value edit that cannot be split back across
+    // the slots is caught on the export side, where the current value is known.
+    const carried = kind !== null && TAU_CARRIER_KINDS.has(kind);
+    if (!verbatim && !carried && extendedSymbolAttrs(symbol.attrs)) {
       risks.add("extended symbol attributes");
     }
   }

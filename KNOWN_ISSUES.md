@@ -78,9 +78,13 @@ one engine for the whole session.
   reopens as itself rather than with everything collapsed onto `Value`. Tau
   still refuses to overwrite a file when the rewrite would drop information it
   cannot yet reproduce: comment placement, those attributes on a symbol Tau
-  would have to rewrite (so the slots have nowhere to land) or whose folded
-  value has since been edited, and symbols with pins Tau does not model (4-pin
-  BJT substrate, switch control pins). The message names the specific reason.
+  would have to rewrite into a different real symbol (so the slots have nowhere
+  to land) or whose folded value has since been edited, and symbols with pins
+  Tau does not model (4-pin BJT substrate, switch control pins). A part saved
+  under a placeholder symbol is the exception - it keeps its slots in a Tau-only
+  attribute, so they are no longer a reason to refuse the save, though a source
+  file whose symbols Tau cannot re-emit stays blocked on that count alone.
+  The message names the specific reason.
   Native `.sim` saves are unaffected.
 
 ## Importing vendor SPICE models

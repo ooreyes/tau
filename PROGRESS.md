@@ -29,7 +29,53 @@ figure all run on the real engine. Do not restore a readiness banner until every
 Class A and Class B item in the audit is closed or consciously accepted, with
 file:line evidence.
 
-**Last unit - 2026-08-02: a part's extended attribute slots survive a save.**
+**Last unit - 2026-08-02: a part saved under a placeholder symbol keeps its
+extended attribute slots - and the measurement that says this was the smaller
+half of the problem.**
+A Tau-native kind with no faithful single LTspice symbol (switch, comparator,
+subcircuit, test point, CCCS, CCVS, potentiometer, transformer) is written out
+as a carrier: a placeholder resistor plus `TauKind`/`TauValue` metadata. Its
+`Value2`/`SpiceLine` slots could not go with it, because on a resistor those
+names mean the resistor's own parasitics. The exporter therefore dropped them
+with a warning `ascSaveBlockReason` treats as fatal, so a document holding such
+a part could not be written at all.
+
+**The slots now ride in a Tau-only attribute** (`TauAttrs`), beside the
+`TauKind` that says which part they describe, carrying the `Value` they sat
+beside so the split can be restored. The value-fold guard is unchanged: a
+folded value that has since been edited still refuses, because the edit cannot
+be distributed back across the slots it came from. `TauAttrs` is file content,
+so the decoder rejects anything Tau did not write - malformed JSON, a
+non-string value, a reserved name that would overwrite the part's identity, a
+name that would not survive `SYMATTR <name> <value>`, more than 16 slots, and
+any value holding a control character, which would otherwise forge whole `.asc`
+records on the next save.
+
+**Measured, not assumed - and the result reframes the backlog item.** Running
+`ascRewriteRisks` over 3,999 real `.asc` files before and after: the slots stop
+being a listed risk on 3 files and **unblock zero of them**. Every one of these
+kinds is independently blocked by `symbol-library identity`, which is the
+correct verdict and must stay: LTspice's `sw` has two control pins the carrier
+resistor does not, so rewriting the user's file would still cost them their
+switch. So this closes a real data-loss path in the export layer - a document
+with no source risks (a new sheet, a part pasted into one) now saves those slots
+instead of refusing - but the backlog item that named it as the reason carrier
+kinds cannot be saved was wrong. The real blocker is emitting a faithful `sw`
+with its control pins.
+
+**Mutation-checked both ways.** With the exporter's parking branch disabled 5
+of the 6 new tests fail; with the risk-side exemption disabled the sixth fails.
+One existing assertion legitimately changed meaning: the switch fixture in
+`types.test.ts` asserted the extended-attribute risk, and now asserts the
+symbol-identity risk that is the true and only reason that file stays blocked.
+
+**Gates.** 2312 tests green (150 files, 1 skipped, `--maxWorkers=2`), tsc clean,
+cargo test 46 passed, clippy clean. Corpus counters identical with and without
+the diff, verified by re-running on a stashed tree - `imported 80 ·
+warning-clean 77 · deck-built 80 · schema-valid 80`; the script's `>= 82`
+assertion still fails on missing inputs (documented, blocked on Omar).
+
+**2026-08-02: a part's extended attribute slots survive a save.**
 LTspice spreads a part's parameters across `Value2` / `SpiceLine` / `SpiceLine2`
 as well as `Value`, and *which slot* a value sits in is part of its meaning:
 `UniversalOpamp2` reads its level from `Value` and its behavior from the others.

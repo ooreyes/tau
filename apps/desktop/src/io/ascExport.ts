@@ -24,7 +24,12 @@ import type {
   SchematicWire,
 } from "../schematic/types";
 import type { AscDocument, AscOrientation } from "./ascImport";
-import { hasBankedLtPins, ltspiceTypeToKind } from "./ascImport";
+import {
+  encodeCarriedAttrs,
+  hasBankedLtPins,
+  ltspiceTypeToKind,
+  TAU_CARRIED_ATTRS_FIELD,
+} from "./ascImport";
 import { decodeParams } from "../schematic/params";
 import { parseQuantity } from "../simulation/quantity";
 
@@ -199,6 +204,20 @@ export function isLossyCarrierWarning(warning: string): boolean {
 
 export const LOSSY_CARRIER_KINDS: ReadonlySet<string> = new Set([
   "comparator", "cccs", "ccvs", "switch", "subckt", "testpoint",
+]);
+
+/**
+ * Kinds {@link componentToLtspiceSymbol} writes under a carrier symbol - one
+ * that stands in for the part and records its real identity in `TauKind`. That
+ * is also the only place a part's extended slots can be parked when they cannot
+ * go back under their own names, so the save guard reads the same set.
+ *
+ * Kept in step with the carrier branches below by a test that exports one part
+ * of every kind in this set and requires a `TauKind` on each.
+ */
+export const TAU_CARRIER_KINDS: ReadonlySet<ComponentKind> = new Set<ComponentKind>([
+  "vac", "iac", "vpulse", "potentiometer", "transformer",
+  ...(LOSSY_CARRIER_KINDS as ReadonlySet<ComponentKind>),
 ]);
 
 function componentToLtspiceSymbol(component: SchematicComponent): LtspiceComponentSymbol | null {
@@ -427,15 +446,23 @@ export function schematicToAsc(input: SchematicExportInput): SchematicToAscResul
       // independent of it and an edited value simply takes `Value`. Otherwise
       // the value has to still be the one Tau derived, since a folded edit
       // cannot be distributed back across the slots it came from.
-      const restorable = keepsSourceSymbol && !symbol.tauKind
-        && (extraAttrs.derivedValue === extraAttrs.baseValue || c.value === extraAttrs.derivedValue);
-      if (restorable) {
-        const base = extraAttrs.derivedValue === extraAttrs.baseValue ? c.value : extraAttrs.baseValue;
+      const valueIntact = extraAttrs.derivedValue === extraAttrs.baseValue
+        || c.value === extraAttrs.derivedValue;
+      const base = extraAttrs.derivedValue === extraAttrs.baseValue ? c.value : extraAttrs.baseValue;
+      if (valueIntact && keepsSourceSymbol && !symbol.tauKind) {
         // LTspice omits `Value` entirely on a part whose spec lives in the
         // other slots; writing one back would add an attribute it never had.
         if (base) attrs.Value = base;
         else delete attrs.Value;
         for (const [name, value] of Object.entries(extraAttrs.extras)) attrs[name] = value;
+      } else if (valueIntact && symbol.tauKind) {
+        // The part is written under a carrier symbol, so its slots cannot go
+        // back under their own names - `SpiceLine` on the placeholder resistor
+        // would be read as the resistor's. Park them in the Tau-only slot
+        // instead, next to the `TauKind` that says which part they describe.
+        // LTspice sees the carrier either way; this is what stops a save from
+        // destroying the spec on the way through Tau.
+        attrs[TAU_CARRIED_ATTRS_FIELD] = encodeCarriedAttrs(base, extraAttrs.extras);
       } else {
         warnings.push(
           `${c.label || c.id}: ${Object.keys(extraAttrs.extras).join(", ")} ${

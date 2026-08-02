@@ -1090,8 +1090,84 @@ const SOURCE_KINDS_WITH_INLINE_SPEC = new Set<ComponentKind>(["vsource", "isourc
  * exporter and the save guard both key off this list, so it lives in one place.
  */
 export const RESERVED_SYMATTR_FIELDS: readonly string[] = [
-  "InstName", "Value", "TauKind", "TauValue", "TauLabel",
+  "InstName", "Value", "TauKind", "TauValue", "TauLabel", "TauAttrs",
 ];
+
+/**
+ * The Tau-only slot holding the extended slots of a part written out under a
+ * carrier symbol. A Tau-native kind (a switch, a subcircuit, …) is saved as a
+ * placeholder resistor, so its own `Value2`/`SpiceLine` cannot be re-emitted
+ * under those names - on a resistor they would mean something else entirely.
+ * They ride here instead, beside the `TauKind` that says what part they belong
+ * to; LTspice ignores the field, and Tau restores the split on reopen.
+ */
+export const TAU_CARRIED_ATTRS_FIELD = "TauAttrs";
+
+/** Upper bounds on a carried set. Generous next to any real symbol (LTspice
+ *  itself writes four spec slots) and small enough that a crafted file cannot
+ *  grow one component's attributes without bound across repeated saves. */
+const MAX_CARRIED_ATTRS = 16;
+const MAX_CARRIED_ATTRS_LENGTH = 4096;
+
+/** A SYMATTR field name that survives `SYMATTR <name> <value>` unchanged. */
+const SYMATTR_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
+
+/** True when the text holds a control character - a newline in an attribute
+ *  value would forge whole `.asc` records the next time it is written out. */
+function hasControlCharacter(text: string): boolean {
+  for (let i = 0; i < text.length; i += 1) {
+    const code = text.charCodeAt(i);
+    if (code < 0x20 || code === 0x7f) return true;
+  }
+  return false;
+}
+
+/**
+ * Serialize the slots (and the `Value` they sat beside) for
+ * {@link TAU_CARRIED_ATTRS_FIELD}. Compact JSON: the `.asc` parser reads an
+ * attribute as the rest of its line and collapses runs of whitespace, and the
+ * attribute values it produces are already single-space normalized, so the
+ * encoded form survives a parse unchanged.
+ */
+export function encodeCarriedAttrs(baseValue: string, extras: Record<string, string>): string {
+  return JSON.stringify({ base: baseValue, slots: extras });
+}
+
+/**
+ * Read {@link TAU_CARRIED_ATTRS_FIELD} back. Returns `null` for anything Tau
+ * did not write: the field is file content, so a hand-edited or hostile `.asc`
+ * can put arbitrary text here and the only safe response is to ignore it.
+ *
+ * A decoded name has to be a real SYMATTR field name, and never a reserved one
+ * (a `TauKind` or `InstName` slot would overwrite the part's identity when the
+ * exporter writes the set back out). A decoded value has to be free of control
+ * characters, or a newline in it would forge whole records on the next save.
+ */
+export function decodeCarriedAttrs(
+  encoded: string,
+): { baseValue: string; extras: Record<string, string> } | null {
+  if (encoded.length > MAX_CARRIED_ATTRS_LENGTH) return null;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(encoded);
+  } catch {
+    return null;
+  }
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return null;
+  const { base, slots } = parsed as { base?: unknown; slots?: unknown };
+  if (typeof base !== "string") return null;
+  if (typeof slots !== "object" || slots === null || Array.isArray(slots)) return null;
+  const entries = Object.entries(slots as Record<string, unknown>);
+  if (entries.length === 0 || entries.length > MAX_CARRIED_ATTRS) return null;
+  const extras: Record<string, string> = {};
+  for (const [name, value] of entries) {
+    if (!SYMATTR_NAME.test(name) || RESERVED_SYMATTR_FIELDS.includes(name)) return null;
+    if (typeof value !== "string" || hasControlCharacter(value)) return null;
+    extras[name] = value;
+  }
+  if (hasControlCharacter(base)) return null;
+  return { baseValue: base, extras };
+}
 
 /** The extended slots of a symbol's attributes, in the order the file wrote
  *  them, or `null` when it carried none. */
@@ -1613,7 +1689,20 @@ export function ascToSchematic(doc: AscDocument, options: AscImportOptions = {})
         : (leaf === "varistor" || leaf === "diac") && kind === "resistor"
           ? "1Meg"
           : componentValueFromAttrs(kind, symbol.attrs);
-    const extras = extendedSymbolAttrs(symbol.attrs);
+    // A part Tau wrote under a carrier symbol keeps its slots in the Tau-only
+    // field, since on the carrier their own names belong to another part. They
+    // are read back with the `Value` they sat beside, so the exporter has the
+    // same split it started from. A field Tau did not write decodes to null and
+    // is treated as absent rather than trusted.
+    const carried = symbol.attrs[TAU_CARRIED_ATTRS_FIELD] !== undefined
+      ? decodeCarriedAttrs(symbol.attrs[TAU_CARRIED_ATTRS_FIELD])
+      : null;
+    // Tau never writes both, but a hand-edited file can hold both: a carried
+    // slot describes the part, one written on the symbol itself describes the
+    // carrier standing in for it, so the carried one wins where they collide
+    // and neither is dropped.
+    const onSymbol = extendedSymbolAttrs(symbol.attrs);
+    const extras = carried ? { ...onSymbol, ...carried.extras } : onSymbol;
     components.push({
       id: id("c"),
       kind,
@@ -1639,7 +1728,9 @@ export function ascToSchematic(doc: AscDocument, options: AscImportOptions = {})
       ...(extras
         ? {
           ltExtraAttrs: {
-            baseValue: symbol.attrs.Value ?? "",
+            // The carrier's own `Value` is the placeholder Tau gave it, not the
+            // one the slots came from; that one travels in the carried record.
+            baseValue: carried?.baseValue ?? symbol.attrs.Value ?? "",
             derivedValue: value,
             extras,
           },

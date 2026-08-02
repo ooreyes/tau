@@ -7,6 +7,8 @@ import {
   kindToLtspiceType,
   rotationToOrientation,
   canEmitLtSymbolVerbatim,
+  isLossyCarrierWarning,
+  TAU_CARRIER_KINDS,
 } from "./ascExport";
 import type { AscDocument } from "./ascImport";
 import type { NetLabel, SchematicComponent, SchematicWire } from "../schematic/types";
@@ -792,11 +794,155 @@ describe("extended SYMATTR slots (Value2 / SpiceLine) round-trip", () => {
     expect(text).not.toContain("SYMATTR Value2");
   });
 
-  it("keeps the save blocked for a part that cannot go back on its own symbol", () => {
-    // A switch is written out as a placeholder resistor, so its slots have
-    // nowhere to land.
-    const source = `${EXTENDED_ATTR_SOURCE}\nSYMBOL sw 400 400 R0\nSYMATTR InstName S1\n`
-      + "SYMATTR Value MYSW\nSYMATTR SpiceLine Ron=1 Roff=1Meg";
+  it("keeps the save blocked for a part re-emitted under a different real symbol", () => {
+    // A 4-pin BJT is rewritten to `npn`, which reads its own slots differently,
+    // and unlike a carrier it records no Tau kind to tie them back to.
+    const source = "Version 4\nSHEET 1 880 680\nSYMBOL npn4 400 400 R0\nSYMATTR InstName Q1\n"
+      + "SYMATTR Value 2N2222\nSYMATTR SpiceLine tj=25";
     expect(ascRewriteRisks(source)).toContain("extended symbol attributes");
+  });
+});
+
+// A switch is saved as a placeholder resistor, so `SpiceLine` cannot go back
+// under its own name - on a resistor LTspice would read it as the resistor's
+// parasitics. The slots ride in the Tau-only field instead.
+const CARRIER_ATTR_SOURCE = `Version 4
+SHEET 1 880 680
+SYMBOL sw 400 400 R0
+SYMATTR InstName S1
+SYMATTR Value MYSW
+SYMATTR SpiceLine Ron=1 Roff=1Meg`;
+
+const CARRIED_SLOTS = "{\"base\":\"MYSW\",\"slots\":{\"SpiceLine\":\"Ron=1 Roff=1Meg\"}}";
+
+const resaveCarrierAttrs = (source = CARRIER_ATTR_SOURCE) => {
+  const imported = importAsc(source);
+  return schematicToAsc({
+    components: imported.components,
+    wires: imported.wires,
+    netLabels: imported.netLabels,
+  });
+};
+
+describe("extended SYMATTR slots on a part saved under a carrier symbol", () => {
+  it("parks the slots beside the kind they belong to", () => {
+    const { text } = resaveCarrierAttrs();
+    expect(text).toContain("SYMATTR TauKind switch");
+    expect(text).toContain(`SYMATTR TauAttrs ${CARRIED_SLOTS}`);
+    // Writing the slot under its own name would hand LTspice a resistor with
+    // an Ron/Roff spec, which is what makes the carrier the only safe place.
+    expect(text).not.toContain("SYMATTR SpiceLine");
+  });
+
+  it("reopens as the same part, with the same slots and the value they sat beside", () => {
+    const before = importAsc(CARRIER_ATTR_SOURCE).components[0];
+    const after = importAsc(resaveCarrierAttrs().text).components[0];
+    expect(after.kind).toBe("switch");
+    expect(after.value).toBe(before.value);
+    expect(after.label).toBe("S1");
+    expect(after.ltExtraAttrs).toEqual(before.ltExtraAttrs);
+    expect(after.ltExtraAttrs?.extras).toEqual({ SpiceLine: "Ron=1 Roff=1Meg" });
+  });
+
+  it("still holds them after a second save", () => {
+    // The carried record has to survive its own round-trip, or the slots would
+    // simply disappear one save later instead of at the first one.
+    expect(resaveCarrierAttrs(resaveCarrierAttrs().text).text).toContain(`SYMATTR TauAttrs ${CARRIED_SLOTS}`);
+  });
+
+  it("saves a schematic holding the part instead of refusing it", () => {
+    // The slots used to leave a warning the save guard treats as fatal, so a
+    // document holding the part could not be written at all. What is left is
+    // the notice that LTspice sees a resistor, which never blocks a save.
+    const { warnings } = resaveCarrierAttrs();
+    expect(warnings.filter((w) => !isLossyCarrierWarning(w))).toEqual([]);
+    expect(ascSaveBlockReason([], 0, warnings)).toBeNull();
+  });
+
+  it("stops naming the slots as a reason the source file cannot be rewritten", () => {
+    // Saving over the LTspice original stays blocked, but on the symbol
+    // identity alone: `sw` has two control pins that the carrier resistor does
+    // not, so writing the file back would still cost the user their switch.
+    expect(ascRewriteRisks(CARRIER_ATTR_SOURCE)).toEqual(["symbol-library identity"]);
+  });
+
+  it("refuses to park slots the value no longer matches", () => {
+    // A folded value IS its slots joined, so an edit cannot be split back
+    // across them. The carrier is a place to park the slots, not a way around
+    // the value that no longer agrees with them.
+    const part: SchematicComponent = {
+      id: "c1",
+      kind: "switch",
+      x: 0,
+      y: 0,
+      rotation: 0,
+      value: "MYSW Ron=1",
+      label: "S1",
+      ltExtraAttrs: { baseValue: "MYSW", derivedValue: "MYSW Ron=1", extras: { SpiceLine: "Ron=1" } },
+    };
+    const edited = schematicToAsc({ components: [{ ...part, value: "OTHER" }], wires: [], netLabels: [] });
+    expect(edited.warnings.filter((w) => !isLossyCarrierWarning(w))).toEqual([
+      "S1: SpiceLine is not preserved; the part's parameters are saved on Value alone.",
+    ]);
+    expect(edited.text).not.toContain("SYMATTR TauAttrs");
+
+    // Unedited, the same part parks the slots beside the `Value` they sat
+    // beside - the source symbol's own, not the value Tau folded them into.
+    const kept = schematicToAsc({ components: [part], wires: [], netLabels: [] });
+    expect(kept.text).toContain("SYMATTR TauAttrs {\"base\":\"MYSW\",\"slots\":{\"SpiceLine\":\"Ron=1\"}}");
+  });
+
+  it("writes every carrier kind under a Tau kind, so the save guard and the exporter agree", () => {
+    for (const kind of TAU_CARRIER_KINDS) {
+      const { text } = schematicToAsc({
+        components: [{ id: "c1", kind, x: 0, y: 0, rotation: 0, value: "", label: "X1" }],
+        wires: [],
+        netLabels: [],
+      });
+      expect(text, kind).toContain(`SYMATTR TauKind ${kind}`);
+    }
+  });
+
+  it("keeps a slot written on the carrier symbol itself", () => {
+    // Tau writes one or the other, never both, but a hand-edited file can hold
+    // both and neither may vanish on the way through.
+    const source = "Version 4\nSHEET 1 880 680\nSYMBOL res 400 400 R0\nSYMATTR InstName R1\n"
+      + "SYMATTR Value 1T\nSYMATTR TauKind switch\nSYMATTR TauValue MYSW\n"
+      + `SYMATTR TauAttrs ${CARRIED_SLOTS}\nSYMATTR Value2 tol=1`;
+    expect(importAsc(source).components[0].ltExtraAttrs?.extras)
+      .toEqual({ Value2: "tol=1", SpiceLine: "Ron=1 Roff=1Meg" });
+  });
+
+  it("ignores a carried record Tau did not write", () => {
+    // The field is file content. A newline in a value would forge whole
+    // records on the next save; a reserved name would overwrite the part's own
+    // identity. Every malformed form has to read as no record at all.
+    const forged = [
+      "not json",
+      "[\"SpiceLine\",\"Ron=1\"]",
+      "{\"base\":\"MYSW\"}",
+      "{\"base\":\"MYSW\",\"slots\":{}}",
+      "{\"base\":\"MYSW\",\"slots\":{\"SpiceLine\":5}}",
+      "{\"base\":\"MYSW\",\"slots\":{\"TauKind\":\"resistor\"}}",
+      "{\"base\":\"MYSW\",\"slots\":{\"InstName\":\"R9\"}}",
+      "{\"base\":\"MYSW\",\"slots\":{\"Spice Line\":\"Ron=1\"}}",
+      "{\"base\":\"MYSW\",\"slots\":{\"SpiceLine\":\"x\\nSYMBOL res 0 0 R0\"}}",
+      `{"base":"MYSW","slots":{${
+        Array.from({ length: 17 }, (_, i) => `"S${i}":"1"`).join(",")
+      }}}`,
+      `{"base":"MYSW","slots":{"SpiceLine":"${"x".repeat(4096)}"}}`,
+    ];
+    for (const record of forged) {
+      const source = `Version 4\nSHEET 1 880 680\nSYMBOL res 400 400 R0\nSYMATTR InstName R1\n`
+        + `SYMATTR Value 1T\nSYMATTR TauKind switch\nSYMATTR TauValue MYSW\n`
+        + `SYMATTR TauAttrs ${record}`;
+      const component = importAsc(source).components[0];
+      expect(component.ltExtraAttrs, record).toBeUndefined();
+      // Nothing forged can reach the next file: the record is not carried, so
+      // there is nothing to write back out.
+      const { text } = schematicToAsc({ components: [component], wires: [], netLabels: [] });
+      expect(text, record).not.toContain("SYMATTR TauAttrs");
+      expect(text.split("\n").filter((l) => l.startsWith("SYMBOL")), record).toHaveLength(1);
+    }
   });
 });

@@ -62,13 +62,21 @@ do not spend a fire diffing it again. Re-check only if its tip moves past
 Ordered. Take the top item unless it is blocked. Class A outranks everything -
 a plausible wrong number is worse than a refusal to run.
 
-1. **The extended slots still cannot be restored onto a symbol Tau rewrites.**
-   The 2026-08-02 unit carries `Value2`/`SpiceLine` back into their own slots,
-   but only for a part re-emitted under its source symbol. A lossy-carrier kind
-   (switch, comparator, subckt, test point) is written out as a placeholder
-   resistor, so its slots have nowhere to land and the save is still refused.
-   Closing that means giving the carrier a Tau-only slot to park them in - the
-   same trick `TauKind`/`TauValue` already use - and is worth one unit.
+1. **A switch cannot be written back as a switch.** LTspice's `sw`/`csw` have
+   two control pins; Tau saves the part as a placeholder resistor, so
+   `ascRewriteRisks` returns `symbol-library identity` and refuses to overwrite
+   the file. That verdict is CORRECT - rewriting it would cost the user their
+   switch - and it is the real reason these files cannot be saved. Closing it
+   means teaching the exporter to emit a faithful `sw` with its control pins,
+   not relaxing the guard.
+
+   **Do not re-take the extended-slots framing of this item: it was measured
+   and it was wrong.** The 2026-08-02 unit gave the carrier a Tau-only slot
+   (`TauAttrs`) to park `Value2`/`SpiceLine` in, which was worth landing for the
+   export layer, but running `ascRewriteRisks` over 3,999 real `.asc` files
+   showed it changes the verdict on 3 files and unblocks **zero** - every one of
+   them is independently blocked by symbol-library identity. Measure a "this
+   blocks saves" claim against the corpus before spending a fire on it.
 2. **A folded value that was edited blocks the save.** By design: an op-amp's
    value IS its slots joined, so an edit cannot be split back across them. The
    honest fix is to stop folding - give the component structured parameters
@@ -91,6 +99,7 @@ Newest first, ONE line each. Full evidence for every unit is in PROGRESS.md
 and in its commit message. This section exists so a fresh fire can see what
 is already done at a glance, not so it can re-read the reasoning.
 
+- 2026-08-02 - A PART SAVED UNDER A PLACEHOLDER SYMBOL keeps its extended slots in a Tau-only `TauAttrs` field. Measured over 3,999 real files: it unblocks ZERO of them - carrier kinds are blocked by symbol-library identity, which is the correct verdict.
 - 2026-08-02 - EXTENDED SYMATTR SLOTS (`Value2`/`SpiceLine`) go back into the slots they came from instead of collapsing onto `Value`; `examples/class-d-amplifier/deadtime.asc` now saves end to end with zero risks and zero warnings.
 - 2026-08-02 - HIERARCHY PORTS (`IOPIN`) survive a save instead of being silently discarded at parse; carried on the net label their FLAG became, so a port cannot outlive its label or be emitted without its FLAG.
 - 2026-08-01 - THE DESKTOP BUILD REFUSES TO PACKAGE AN ENGINE THAT IS NOT THE PINNED BUILD. `build-info.json` was written by every successful run of the build script and read by nothing; `build.rs` now refuses a staged resource with no record, from another commit or target, whose recorded library is absent, or missing a code model. Each refusal proved through a real `cargo build` on a doctored tree....
