@@ -2900,8 +2900,8 @@ function dcPath(
   return path;
 }
 
-// A wider ramp than AC_COLORS so a family of up to MAX_FAMILY_MEMBERS curves
-// stays distinguishable. All entries are App.css trace variables (no hardcoding).
+// All entries are App.css trace variables (no hardcoding); colors repeat for
+// large families while the legend and measurement table retain exact labels.
 const STEP_COLORS = [
   "var(--trace-green)",
   "var(--trace-red)",
@@ -2987,13 +2987,43 @@ export function StepPlot({ result, probes, wires }: { result: StepFamilyResult |
         <Metric label="STEPS" value={String(family.series.length)} tone="cyan" />
         <Metric label="SWEEP" value={result.spec?.name ?? "--"} tone="cream" />
       </div>
-      {/* A truncated `.step` is reported here and nowhere else - the curves
-          above look complete on their own, so the sentence saying they are not
-          has to sit with them. */}
+      <StepMeasTable members={result.members} />
       {result.warnings.length > 0 && (
         <div className="analysis-empty warn" role="status">{result.warnings.join(" ")}</div>
       )}
     </>
+  );
+}
+
+/** `.meas` values evaluated independently for every transient step member. */
+function StepMeasTable({ members }: { members: StepFamilyResult["members"] }) {
+  const rows = members.flatMap((member) =>
+    (member.measurements ?? []).map((measurement) => ({ step: member.label, measurement })),
+  );
+  if (rows.length === 0) return null;
+  return (
+    <div className="meas-table step-meas-table" role="table" aria-label="Step measurements">
+      <div className="meas-table-head step-meas-row" role="row">
+        <span role="columnheader">STEP</span>
+        <span role="columnheader">MEASURE</span>
+        <span role="columnheader">VALUE</span>
+      </div>
+      {rows.map(({ step, measurement }) => (
+        <div className="meas-row step-meas-row" role="row" key={`${step}:${measurement.name}`}>
+          <span className="meas-name" role="cell" title={step}>{step}</span>
+          <span className="meas-name" role="cell">{measurement.name}</span>
+          <span
+            className={`meas-value${measurement.value === null ? " meas-fail" : ""}`}
+            role="cell"
+            title={measurement.error}
+          >
+            {measurement.value === null
+              ? (measurement.error ?? "-")
+              : formatEngineering(measurement.value, "", 4)}
+          </span>
+        </div>
+      ))}
+    </div>
   );
 }
 

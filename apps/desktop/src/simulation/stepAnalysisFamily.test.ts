@@ -69,6 +69,26 @@ describe("runStepFamily - generic core", () => {
     expect(fam.members).toEqual([]);
   });
 
+  it("refuses an oversized family before invoking the solver", () => {
+    const spec = {
+      kind: "param" as const,
+      name: "G",
+      values: Array.from({ length: 257 }, (_, i) => i),
+    };
+    let calls = 0;
+    const fam = runStepFamily<Fake>(
+      [spec],
+      EMPTY_SCOPE,
+      [],
+      () => { calls += 1; return okFake(); },
+      (r) => r.ok,
+      (r) => r.warnings,
+    );
+    expect(fam.ok).toBe(false);
+    expect(fam.message).toMatch(/No partial results were run/);
+    expect(calls).toBe(0);
+  });
+
   it("expands two specs into the nested Cartesian product", () => {
     const outer = parseStepDirective(".step param A list 1 2")!;
     const inner = parseStepDirective(".step param B list 10 20")!;

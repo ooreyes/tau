@@ -9,15 +9,17 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-02 13:58 CDT**
+**Status: DONE - 2026-08-02 14:08 CDT**
 
 User-directed autobuilder recovery: repair the unreachable completion signal,
 atomic lock/disk preflight, corpus coverage and independent floors, Class-D
 Efficiency plus RC/Colpitts/Class-D waveform parity proofs, and the remaining
 correctness gaps identified in the interactive review. The launchd schedule is
 paused; the interrupted DATAFLAG claim is preserved on the sanctioned rescue
-ref and will be reconciled or deleted before the schedule resumes. This control,
-corpus, and parity unit is complete; the requested correctness unit follows.
+ref and will be reconciled or deleted before the schedule resumes. The `.step`
+correctness unit is complete: full ordinary sweeps, atomic refusal above the
+safe ceiling, and per-member `.meas` evaluation/display. PNG export, native AC
+device data, and unsupported-device honesty are the next small units.
 
 ## READINESS: NOT READY - RETRACTED 2026-07-28
 
@@ -10737,3 +10739,12 @@ evidence is kept in full here.
   directive/transient/deck startup handling, progress/state/checklist. Next:
   close the requested step/measurement, native AC-data, export, and unsupported-
   device honesty gaps before re-enabling launchd.
+
+- 2026-08-02 - Removed partial `.step` answers. Tau now executes every member of
+  ordinary sweeps (including 100-point ranges), permits up to 256 runs, and
+  rejects larger/nested products before invoking any solver; it never plots a
+  convincing prefix of an incomplete range. Each transient step member now
+  evaluates the document's `.meas` directives with that member's waveform and
+  stepped parameter scope, and the STEP pane renders step / measure / value
+  rows. Files: step-family engine/UI/tests and §4/§6 checklist. Tests: typecheck;
+  full frontend 2,332 passed / 6 skipped. Next: PNG export and native AC data.

@@ -52,7 +52,6 @@ import { runTransferFunction, type TfResult, type TfSpec } from "./simulation/tr
 import { runNoiseAnalysis, type NoiseResult, type NoiseSpec } from "./simulation/noise";
 import {
   nestedStepContexts,
-  stepTruncationWarning,
   runnableStepsFromDirectives,
   type StepFamilyMember,
   type StepFamilyResult,
@@ -837,15 +836,12 @@ function App() {
         if (analysisRequestRef.current !== requestId) return;
         const memberEngine: SimulationEngine = native ? "ngspice" : "preview";
         familyEngine = members.length === 0 ? memberEngine : familyEngine === memberEngine ? familyEngine : undefined;
-        members.push({ label: ctx.label, value: ctx.value, result });
+        const memberMeasurements = result.ok
+          ? runMeasurements(directives, result, ctx.params.scope, ctx.params.funcs)
+          : [];
+        members.push({ label: ctx.label, value: ctx.value, result, measurements: memberMeasurements });
       }
-      // Leads the list: a truncated sweep changes how every curve below it
-      // should be read, unlike a per-member circuit warning.
-      const truncation = stepTruncationWarning(specs);
-      const warnings = [
-        ...(truncation ? [truncation] : []),
-        ...(members.find((m) => m.result.ok)?.result.warnings ?? []),
-      ];
+      const warnings = members.find((m) => m.result.ok)?.result.warnings ?? [];
       setStepFamily({ ok: members.some((m) => m.result.ok), spec: specs[0], members, warnings, engine: familyEngine });
     } catch (error) {
       if (analysisRequestRef.current !== requestId) return;
@@ -853,7 +849,7 @@ function App() {
     } finally {
       if (analysisRequestRef.current === requestId) setAnalysisRunning(false);
     }
-  }, [components, wires, netLabels, params, directives, userModelLibraryTexts, effectiveAnalysisOptions, stepSetupUi]);
+  }, [components, wires, netLabels, params, directives, userModelLibraryTexts, userModelLibraryNames, effectiveAnalysisOptions, stepSetupUi]);
 
   const preferredAnalysis = useMemo(
     () => pickAutoRunAnalysis(directives)?.kind ?? "tran",

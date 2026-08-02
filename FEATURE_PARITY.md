@@ -811,7 +811,9 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   `stepContexts(spec, params, components)` expands a spec into one concrete run
   context per swept value — **param** injects into a scope copy (`withStepValue`),
   **source** overrides the matched component's `value` (case-insensitive ref-des),
-  **temp** throws a clear message — capped at `MAX_FAMILY_MEMBERS` (16).
+  **temp** carries the requested analysis temperature. Ordinary sweeps now run
+  in full (including 100-point ranges); a product above the 256-run safety limit
+  is refused before the first solver call with “No partial results were run.”
   `App.runStepAnalysis` re-runs the transient (native or TS) once per context and
   stores a `StepFamilyResult`; a **STEP** tab in `SimulationPanel` overlays the
   probed signal across the family in a trace-variable color ramp (`StepPlot`, §6).
@@ -827,8 +829,10 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   `.step` directives now form LTspice's outer×inner Cartesian product (first
   directive = outermost loop), composing every axis's transform (param inject /
   source override / temp rescale) onto each member, joining labels with `", "`,
-  merging the innermost temperature, and capping the product at 16. `App` drives
-  it for any 1..N runnable specs. 7 more hand-computed tests.
+  merging the innermost temperature. `App` drives it for any 1..N runnable specs.
+  Every successful transient member evaluates the authored `.meas` directives
+  against that member's waveform and step-param scope; `StepPlot` displays the
+  resulting step / measure / value rows instead of losing `.step × .meas` data.
   **AC/DC-domain step families now landed (engine)** (`simulation/stepAnalysisFamily.ts`):
   a generic `runStepFamily<R>(specs, params, components, run, resultOk,
   resultWarnings)` re-runs *any* synchronous solver once per nested-`.step`
@@ -1230,7 +1234,8 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   `DcFamilyPlot` draw the family under the Bode/DC panes with a `name=value`
   legend, autoranged axes, and per-member error surfacing. 11 tests with
   hand-computed RC-corner / divider-ratio values.
-  Pending: per-trace selection, cursor readout.
+  Per-member `.meas` results are shown below the transient family. Pending:
+  per-trace selection, cursor readout.
 - 🟡 Save plot settings (`.plt`), export image/CSV — **CSV export landed**
   (`simulation/waveformCsv.ts` `seriesToCsv`): an **Export CSV** button on the
   transient scope writes a table of `time` + every node-voltage trace + branch

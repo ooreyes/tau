@@ -635,11 +635,12 @@ describe("SimulationPanel - exportNetlist inlines attached model libraries", { t
   });
 });
 
-describe("StepPlot truncation notice", () => {
-  function member(label: string, value: number) {
+describe("StepPlot measurements", () => {
+  function member(label: string, value: number, measured?: number) {
     return {
       label,
       value,
+      measurements: measured === undefined ? [] : [{ name: "Efficiency", value: measured }],
       result: {
         ok: true as const,
         title: "Transient",
@@ -653,21 +654,24 @@ describe("StepPlot truncation notice", () => {
     };
   }
 
-  it("renders a truncated .step warning instead of only storing it", () => {
-    // The curves look complete on their own, so the sentence saying the sweep
-    // was cut short has to render with them.
+  it("renders each member's .meas value beside its exact sweep label", () => {
     render(
       <StepPlot
         result={{
           ok: true,
           spec: { kind: "param", name: "RL", values: [1, 2] },
-          members: [member("RL=1", 1), member("RL=2", 2)],
-          warnings: [".step RL asks for 100 runs; Tau ran the first 16."],
+          members: [member("RL=1", 1, 0.81), member("RL=2", 2, 0.93)],
+          warnings: [],
         }}
         probes={[]}
         wires={[]}
       />,
     );
-    expect(screen.getByText(/asks for 100 runs/)).toBeTruthy();
+    const table = screen.getByRole("table", { name: "Step measurements" });
+    expect(table.textContent).toContain("RL=1");
+    expect(table.textContent).toContain("RL=2");
+    expect(screen.getAllByText("Efficiency")).toHaveLength(2);
+    expect(screen.getByText("810 m")).toBeTruthy();
+    expect(screen.getByText("930 m")).toBeTruthy();
   });
 });

@@ -20,7 +20,6 @@ import type { StepSpec } from "./paramStep";
 import type { CouplingSpec } from "./coupling";
 import {
   nestedStepContexts,
-  stepTruncationWarning,
   type StepContext,
 } from "./stepFamily";
 import { runAcSweep, type AcResult, type AcOptions } from "./acSweep";
@@ -94,18 +93,11 @@ export function runStepFamily<R>(
   // Surface the first successful member's warnings (they share a circuit shape,
   // so a representative warning set is all the overlay needs).
   const firstOk = members.find((m) => resultOk(m.result));
-  // The truncation notice leads: it describes the sweep the user asked for
-  // rather than one member's circuit, and it is the one warning that changes
-  // how the whole overlay should be read.
-  const truncation = stepTruncationWarning(specs);
   return {
     ok: members.some((m) => resultOk(m.result)),
     spec: specs[0],
     members,
-    warnings: [
-      ...(truncation ? [truncation] : []),
-      ...(firstOk ? resultWarnings(firstOk.result) : []),
-    ],
+    warnings: firstOk ? resultWarnings(firstOk.result) : [],
   };
 }
 

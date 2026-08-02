@@ -2772,6 +2772,10 @@ body {
   border-top: 0;
 }
 
+.step-meas-row {
+  grid-template-columns: minmax(7rem, 1.25fr) minmax(5rem, 1fr) auto;
+}
+
 .meas-name {
   min-width: 0;
   overflow: hidden;

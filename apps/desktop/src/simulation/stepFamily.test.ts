@@ -15,7 +15,7 @@ import {
   formatStepValue,
   isRunnableStep,
   MAX_FAMILY_MEMBERS,
-  stepTruncationWarning,
+  assertStepFamilySize,
 } from "./stepFamily";
 import type { StepSpec } from "./paramStep";
 import { parseStepDirective } from "./paramStep";
@@ -110,10 +110,20 @@ describe("stepContexts - guards", () => {
     expect(comps[0].value).toBe("1k tc=0.01");
   });
 
-  it("caps the family at MAX_FAMILY_MEMBERS", () => {
-    const spec = parseStepDirective(".step param X 1 1000 1")!; // 1000 values
+  it("runs an ordinary 100-point sweep in full", () => {
+    const spec = parseStepDirective(".step param X 1 100 1")!;
     const ctxs = stepContexts(spec, EMPTY_SCOPE, []);
-    expect(ctxs).toHaveLength(MAX_FAMILY_MEMBERS);
+    expect(ctxs).toHaveLength(100);
+    expect(ctxs[ctxs.length - 1]?.label).toBe("X=100");
+  });
+
+  it("refuses an oversized family before returning any partial contexts", () => {
+    const spec: StepSpec = {
+      kind: "param",
+      name: "X",
+      values: Array.from({ length: MAX_FAMILY_MEMBERS + 1 }, (_, i) => i),
+    };
+    expect(() => stepContexts(spec, EMPTY_SCOPE, [])).toThrow(/No partial results were run/);
   });
 });
 
@@ -200,11 +210,10 @@ describe("nestedStepContexts", () => {
     expect(ctxs[1].temperature).toBe(77);
   });
 
-  it("caps the product at MAX_FAMILY_MEMBERS", () => {
-    const a = parseStepDirective(".step param A 1 100 1")!; // 100 values
-    const b = parseStepDirective(".step param B 1 100 1")!;
-    const ctxs = nestedStepContexts([a, b], EMPTY_SCOPE, []);
-    expect(ctxs).toHaveLength(MAX_FAMILY_MEMBERS);
+  it("refuses an oversized Cartesian product instead of returning a prefix", () => {
+    const a = parseStepDirective(".step param A 1 20 1")!;
+    const b = parseStepDirective(".step param B 1 20 1")!;
+    expect(() => nestedStepContexts([a, b], EMPTY_SCOPE, [])).toThrow(/asks for 400 runs/);
   });
 
   it("validates a source axis up front (throws on an absent component)", () => {
@@ -218,7 +227,7 @@ describe("nestedStepContexts", () => {
   });
 });
 
-describe("stepTruncationWarning", () => {
+describe("assertStepFamilySize", () => {
   const spec = (name: string, count: number): StepSpec => ({
     kind: "param",
     name,
@@ -226,22 +235,17 @@ describe("stepTruncationWarning", () => {
   });
 
   it("stays silent when the whole sweep fits", () => {
-    expect(stepTruncationWarning([spec("RL", MAX_FAMILY_MEMBERS)])).toBeNull();
-    expect(stepTruncationWarning([])).toBeNull();
+    expect(() => assertStepFamilySize([spec("RL", MAX_FAMILY_MEMBERS)])).not.toThrow();
+    expect(() => assertStepFamilySize([])).not.toThrow();
   });
 
-  it("names the requested count and the cap when the sweep is cut short", () => {
-    // `.step param RL 1k 100k 1k` enumerates 100 values; 16 run. Without this
-    // the plot stops at 16k and looks like it reached 100k.
-    const message = stepTruncationWarning([spec("RL", 100)]);
-    expect(message).toContain("RL");
-    expect(message).toContain("100 runs");
-    expect(message).toContain(`first ${MAX_FAMILY_MEMBERS}`);
+  it("names the requested count and the cap when refusing an oversized sweep", () => {
+    expect(() => assertStepFamilySize([spec("RL", MAX_FAMILY_MEMBERS + 1)]))
+      .toThrow(new RegExp(`RL.*${MAX_FAMILY_MEMBERS + 1} runs.*limit is ${MAX_FAMILY_MEMBERS}`));
   });
 
   it("multiplies nested sweeps rather than reporting one axis", () => {
-    const message = stepTruncationWarning([spec("RL", 8), spec("VIN", 5)]);
-    expect(message).toContain("40 runs");
-    expect(message).toContain("RL x VIN");
+    expect(() => assertStepFamilySize([spec("RL", 20), spec("VIN", 20)]))
+      .toThrow(/RL x VIN asks for 400 runs/);
   });
 });

@@ -16,6 +16,7 @@
 import type { SchematicComponent } from "../schematic/types";
 import type { ParamScope } from "./paramScope";
 import type { AnalysisResult } from "./linearTransient";
+import type { MeasResult } from "./measure";
 import { withStepValue, parseStepDirective, type StepSpec } from "./paramStep";
 import { applyTemperature } from "./temperature";
 
@@ -24,6 +25,8 @@ export interface StepFamilyMember {
   label: string;
   value: number;
   result: AnalysisResult;
+  /** `.meas` directives evaluated against this member's own waveform/scope. */
+  measurements?: MeasResult[];
 }
 
 /** A family of transient curves produced by re-running a `.step` sweep. */
@@ -37,29 +40,34 @@ export interface StepFamilyResult {
   warnings: string[];
 }
 
-/** Cap on stepped runs surfaced as an overlay family, bounding native re-runs
- *  (a `.step` with hundreds of points would otherwise launch hundreds of sims). */
-export const MAX_FAMILY_MEMBERS = 16;
+/** Hard safety limit for an explicitly requested family. Sweeps above this are
+ *  refused before the first run; Tau never returns a plausible-looking prefix. */
+export const MAX_FAMILY_MEMBERS = 256;
 
 /**
- * The sentence a truncated `.step` has to say out loud, or null when the whole
- * sweep fits.
- *
- * `.step param RL 1k 100k 1k` enumerates 100 values; only the first 16 run.
- * Silently plotting those 16 means a user who asked to sweep to 100k reads a
- * chart that stops at 16k and believes it reached the end - every conclusion
- * drawn from it is then wrong. Cheaper to name the cap than to raise it.
+ * Refuse an impractically large family before any solver work begins. Returning
+ * only a prefix is unsafe because the overlay looks like a complete sweep.
  */
-export function stepTruncationWarning(specs: readonly StepSpec[]): string | null {
-  if (specs.length === 0) return null;
-  const requested = specs.reduce((total, spec) => total * spec.values.length, 1);
-  if (requested <= MAX_FAMILY_MEMBERS) return null;
+export function assertStepFamilySize(specs: readonly StepSpec[]): void {
+  if (specs.length === 0) return;
+  let requested = 1;
+  for (const spec of specs) {
+    requested *= spec.values.length;
+    if (!Number.isSafeInteger(requested)) {
+      requested = Number.POSITIVE_INFINITY;
+      break;
+    }
+  }
+  if (requested <= MAX_FAMILY_MEMBERS) return;
 
   const swept = specs
     .map((spec) => spec.name ?? (spec.kind === "temp" ? "temp" : "the source"))
     .join(" x ");
-  return `.step ${swept} asks for ${requested} runs; Tau ran the first ${MAX_FAMILY_MEMBERS}. `
-    + "The plotted curves stop short of the range you requested.";
+  const count = Number.isFinite(requested) ? String(requested) : "more than JavaScript can count safely";
+  throw new Error(
+    `.step ${swept} asks for ${count} runs; Tau's safe limit is ${MAX_FAMILY_MEMBERS}. `
+      + "Reduce or split the sweep. No partial results were run.",
+  );
 }
 
 /** One concrete step: the swept value with the scope and component list it
@@ -84,9 +92,8 @@ export function formatStepValue(value: number): string {
 }
 
 /**
- * Expand a `.step` spec into one {@link StepContext} per swept value (capped at
- * {@link MAX_FAMILY_MEMBERS}). Returns at most `MAX_FAMILY_MEMBERS` contexts even
- * when the spec enumerates more - the family overlay only needs a readable set.
+ * Expand a `.step` spec into one {@link StepContext} per swept value. Families
+ * above {@link MAX_FAMILY_MEMBERS} are rejected in full before expansion.
  *
  * - **param**: the value is injected into a copy of `baseParams` ({@link withStepValue}).
  * - **source**: the component whose ref-des (`label`) matches `spec.name`
@@ -105,7 +112,8 @@ export function stepContexts(
   baseComponents: SchematicComponent[],
 ): StepContext[] {
   validateStep(spec, baseComponents);
-  return spec.values.slice(0, MAX_FAMILY_MEMBERS).map((value) => {
+  assertStepFamilySize([spec]);
+  return spec.values.map((value) => {
     const t = applyStepValue(spec, value, baseParams, baseComponents);
     return { label: t.label, value, params: t.params, components: t.components, temperature: t.temperature };
   });
@@ -153,8 +161,8 @@ function applyStepValue(
  * LTspice's nested outer×inner sweep (the first spec is the outermost loop).
  * Each member composes every axis's transform (param scope injection, source
  * override, temp rescale) onto the base, joins the axis labels with `", "`, and
- * merges the innermost temperature. The whole product is capped at
- * {@link MAX_FAMILY_MEMBERS} so a large grid stays a readable overlay.
+ * merges the innermost temperature. An oversized product is rejected before
+ * expansion, rather than being silently truncated.
  *
  * With a single spec this is exactly {@link stepContexts}; with none it returns
  * `[]`. `member.value` reflects the innermost axis (what the overlay colour-ramps).
@@ -167,13 +175,14 @@ export function nestedStepContexts(
   if (specs.length === 0) return [];
   if (specs.length === 1) return stepContexts(specs[0], baseParams, baseComponents);
   specs.forEach((spec) => validateStep(spec, baseComponents));
+  assertStepFamilySize(specs);
 
   let contexts: StepContext[] = [
     { label: "", value: 0, params: baseParams, components: baseComponents },
   ];
   for (const spec of specs) {
     const next: StepContext[] = [];
-    outer: for (const ctx of contexts) {
+    for (const ctx of contexts) {
       for (const value of spec.values) {
         const t = applyStepValue(spec, value, ctx.params, ctx.components);
         next.push({
@@ -183,12 +192,11 @@ export function nestedStepContexts(
           components: t.components,
           temperature: t.temperature ?? ctx.temperature,
         });
-        if (next.length >= MAX_FAMILY_MEMBERS) break outer;
       }
     }
     contexts = next;
   }
-  return contexts.slice(0, MAX_FAMILY_MEMBERS);
+  return contexts;
 }
 
 /** Collect every runnable `.step` spec from a directive block, outermost first
