@@ -10,8 +10,8 @@
 > copy‑pasted here, since this file is not rewritten every run and WILL drift.
 > Acceptance corpus is tracked qualitatively below (per‑symbol ⬜/🟡/✅ in §1)
 > **and quantitatively by the committed runner** `scripts/acceptance-corpus.sh`
-> (✅ — see §1; measured 2026‑07‑03: 82 imported / 71 warning‑clean / 79
-> deck‑built / 64 op‑converged). **Done = corpus script proves ≥ 80/82 + Class‑D
+> (✅ — see §1; measured 2026‑08‑02: 82 imported / 80 warning‑clean / 80
+> deck‑built / 80 op‑converged, with two named honest refusals). **Done = corpus script proves ≥ 80/82 + Class‑D
 > `.tran`/`.meas` parity + production-ready unsigned DMG** (full checklist in AGENTS.md → Definition of Done).
 
 ---
@@ -75,9 +75,12 @@ Status legend: ✅ done · 🟡 partial · ⬜ not started
   67 op-converged** — the 3 deck-build failures are fixed for real: Pierce XTAL
   now expands to a 4-element crystal model (`engine/crystalSpec.ts`), and
   varistor/diac placeholders get a valid high-Z value + collision-safe SPICE
-  names. Knobs: `CORPUS_SKIP_NGSPICE=1` (import+deck only), `CORPUS_ALL=1` (full
-  examples tree, floors not enforced).
-- 🟡 **Real-`.asc` op-deck build now 79/82 by the committed runner** (was 34/82
+  names. **Current truthful measurement (2026-08-02): 82 imported / 80
+  warning-clean / 80 deck-built / 80 op-converged.** NIGBT and LT1184F are
+  printed as honest unsupported refusals, never as hard failures or false
+  passes. Knobs: `CORPUS_SKIP_NGSPICE=1` (import+deck only),
+  `CORPUS_CANONICAL_ONLY=1` (historical release subset).
+- ✅ **Real-`.asc` release floor is 80/82 by the committed runner** (was 34/82
   at this work's start; the "82/82" previously recorded here predated the runner
   and double-counted 3 files — Pierce/dimmer/varistor — that throw at deck time):
   `decodeSchematicText` falls back to **Windows-1252** when the bytes aren't valid
@@ -95,8 +98,10 @@ Status legend: ✅ done · 🟡 partial · ⬜ not started
   a **Chan magnetic-core inductor** (`Hc/Bs/Br/A/Lm/Lg/N`) is sized to its
   **unsaturated linear inductance** from the gap+core reluctance
   (`engine/coreInductor.ts`; ngspice has no saturable-core primitive) — unblocked
-  NonLinearTransformer. **79/82 build a deck per the committed runner**
-  (Pierce/dimmer/varistor throw at deck time — see the runner item above).
+  NonLinearTransformer. **80/82 build and converge per the committed runner.**
+  DIAC/TRIAC invoke the unmodified file's authored `.subckt`s; VARISTOR and
+  PHASEDET have direct LTspice waveform proofs. Only NIGBT (an LTspice-only
+  intrinsic) and encrypted LT1184F refuse explicitly.
   (NonLinearTransformer is a
   behavioral-magnetics demo whose flux-integrating G-source loop still hits a
   singular matrix in ngspice without the true Chan model — building ≠ converging
@@ -179,13 +184,8 @@ Status legend: ✅ done · 🟡 partial · ⬜ not started
     map their control/output pairs (the `2` variants swap controls; G reverses
     output polarity). This flips **22 acceptance files** from "placed without
     pin-accurate geometry (connections may be wrong)" to pin-accurate — incl. the
-    key-goal `deadtime.asc`. Warning-clean import coverage **45→67/82**.
-  - **NEXT:** map `.meas`/`.dc`/`.step` directives (need those analyses first —
-    §4). Remaining warned files need
-    warned files all need NEW component kinds: hierarchical sub-block import
-    (`deadtime` used inside class-d_starter — §2), DIGITAL `A`-devices
-    (INV/XOR/dflop/SCHMTBUF — §3), SpecialFunctions (MODULATE/sample/varistor),
-    and DIAC/TRIAC/IGBT/XTAL/capmeter primitives.
+    key-goal `deadtime.asc`. Warning-clean import coverage ultimately reached
+    **80/82**; only NIGBT and encrypted LT1184F remain named refusals.
   - **Pin data banked:** `LTSPICE_PINS` + `transformLtPoint()` in `io/ascImport.ts`
     hold the real LTspice symbol-local pin offsets (from `lib/sym/*.asy`) and the
     orientation transform (clockwise, Y-down, mirror-aware). Now covers passives,
@@ -210,10 +210,8 @@ Status legend: ✅ done · 🟡 partial · ⬜ not started
     (the generic DC/AC/PULSE/SINE/PWL/EXP/SFFM symbol, Prefix V) maps to
     `vsource` with the same +/− pin bank as `voltage`; its SINE value + `AC`
     stimulus flow through unchanged. Cleans **Draft1.asc** (a key-goal file).
-  - **Acceptance import coverage: 67/82 of the user's own files now import with
-    zero unmapped symbols** (was 66 before signal; the remaining 15 need
-    hierarchical-block (`deadtime` sub-schematic), DIGITAL `A`-device, or
-    DIAC/TRIAC/IGBT support — all tracked ⬜ items).
+  - **Acceptance warning-clean coverage: 80/82.** Unknown symbols are preserved
+    for lossless editing and gate Run; they are never dropped from simulation.
 - 🟡 Map LTspice `SYMATTR Value/Value2/SpiceModel/ModelFile` to Tau component
   values — **source AC-stimulus mapping landed** (`io/ascImport.ts`
   `componentValueFromAttrs`): for `voltage`/`current` symbols the importer now
@@ -673,9 +671,10 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
     increment, matching `rand(x)` semantics; `white()` shifts zero-mean.
     Live-verified (mean 0.546 over 150 bit periods). PLL.asc + PLL2.asc
     `.op` converge: op-converged 67→**69**. 7 tests.
-  - **NEXT:** import-map LTspice comparator symbols (`Comparators\\*`) to the
-    comparator kind (none appear in the current corpus); counter/srflop and
-    PHIDET (PLL2.asc) still fall through to skip-warnings.
+  - **PHIDET landed (2026-08-02):** a two-DFF phase/frequency detector plus
+    charge pump matches LTspice's polarity and accumulated phase-error waveform.
+    Counter/srflop and comparator-library symbols not present in the release
+    corpus remain explicit unsupported cases.
   - **Finding (2026-06-28):** class-d_starter.asc now *builds and runs* its `.tran`
     in ngspice 17 — the comparator U1 imports as the generic `opamp` and emits as
     a gain-1e6 VCVS (`E_U1 … 1e6`). But open-loop it **saturates to ~1e7 V** at
@@ -1279,7 +1278,7 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
     number, not an eyeball. `interpolateAt`/`resampleOnto` exported for the
     `.raw` scope overlay. 10 unit tests. (Still ⬜: actually tuning ngspice
     defaults so the verdict passes across the deck suite.)
-- ✅ **Real-`.asc` op-deck *run* now 82/82 (ALL)** (was 45/82 when first measured this
+- ✅ **Real-`.asc` truthful op-deck run is 80/82** (was 45/82 when first measured this
   session) — i.e. how many acceptance decks ngspice actually solves an operating
   point for, not just builds. Driven up by: a **default `rshunt=1e12`** (every node
   gets a DC path — 19 op-amp/AC-coupled circuits stopped throwing "singular
@@ -1927,8 +1926,6 @@ should map LTspice symbol `type` → Tau `ComponentKind`, falling back to a gene
 ---
 
 _This footer is intentionally not a live status line — see the `PROGRESS.md`
-heartbeat for the current test count and active unit. Deck-build is 82/82 and
-op-run is **82/82 (ALL)** after the imported current-source polarity fix
-(2026-07-05); warning-clean is 79/82. Next highest-leverage work toward the
-DoD ≥80/82 warning-clean: the remaining stateful Digital A-device (PHIDET),
-and the misc\nigbt / LT1184F symbols._
+heartbeat for the current test count and active unit. The committed runner now
+proves **80/82 warning-clean, deck-built, and op-converged**. The remaining two
+files—misc\nigbt and encrypted LT1184F—are explicit refusals, not false passes._

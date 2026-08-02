@@ -156,6 +156,7 @@ function runFile(file: CorpusFile, tmpDir: string, skipNgspice: boolean): Corpus
       probes: [],
       netLabels: imported.netLabels,
       directives: imported.directives,
+      ascForeignSymbols: imported.foreignSymbols,
     });
     row.validated = true;
   } catch (error) {
@@ -172,6 +173,7 @@ function runFile(file: CorpusFile, tmpDir: string, skipNgspice: boolean): Corpus
         netLabels: imported.netLabels,
         params,
         directives: imported.directives,
+        ascForeignSymbols: imported.foreignSymbols,
       },
       { kind: "op" },
     );
@@ -225,11 +227,13 @@ describe.skipIf(corpus.length === 0)("acceptance corpus (user's own LTspice file
       const summary = summarizeCorpus(rows);
       const canonicalRows = rows.filter((_, index) => corpus[index]?.canonical);
       const canonicalSummary = summarizeCorpus(canonicalRows);
+      const unsupportedRefusals = rows.filter((row) => row.error?.startsWith("deck: Simulation refused:"));
       const hardFailures = rows.filter((row) => (
         !row.imported
-        || !row.deckBuilt
         || !row.validated
-        || (!skipNgspice && !row.opConverged)
+        || (!row.error?.startsWith("deck: Simulation refused:") && (
+          !row.deckBuilt || (!skipNgspice && !row.opConverged)
+        ))
       ));
       console.log([
         "",
@@ -238,6 +242,9 @@ describe.skipIf(corpus.length === 0)("acceptance corpus (user's own LTspice file
         hardFailures.length > 0
           ? `\nHARD FAILURES (${hardFailures.length})\n${formatCorpusReport(hardFailures)}`
           : "\nHARD FAILURES (0)",
+        unsupportedRefusals.length > 0
+          ? `\nHONEST UNSUPPORTED REFUSALS (${unsupportedRefusals.length})\n${formatCorpusReport(unsupportedRefusals)}`
+          : "\nHONEST UNSUPPORTED REFUSALS (0)",
         "",
       ].join("\n"));
       console.log(`\nCANONICAL RELEASE SUBSET\n${formatCorpusReport(canonicalRows)}\n`);
@@ -248,11 +255,13 @@ describe.skipIf(corpus.length === 0)("acceptance corpus (user's own LTspice file
       // See the comment on the validate step in runFile() above.
       expect.soft(summary.validated, "all imported files must remain schema-valid").toBe(summary.imported);
 
-      // Floors = the counts this runner actually measured on 2026-07-05
-      // (82/79/82/82) - never hand-typed claims; this runner once disproved
-      // those (deck-built claimed 82, measured 79). Raise a floor only when a
-      // re-run proves the new count. The 3 non-clean files are misc\nigbt,
-      // POWERPRODUCTS\LT1184F, and PLL2's PHIDET A-device. Converge fixes on
+      // Floors = the truthful release target from AGENTS.md: at least 80 of the
+      // canonical 82 must build and converge. Earlier 82/82 measurements
+      // counted unsupported symbols that had been silently dropped or replaced
+      // by unrelated devices. DIAC/TRIAC now invoke the document's own models,
+      // VARISTOR and PHIDET have LTspice-backed parity proofs, and the remaining
+      // two (NIGBT and encrypted LT1184F) refuse explicitly. The non-clean files
+      // are those two honest refusals. Converge fixes on
       // 2026-07-05: opamp/logamp (bundled opamp.sub), Cohn/passive/varactor2
       // (default rseries=1mΩ), Fc ({param} substitution on passthrough
       // .model lines), LoopGain2 (Mn orientation = rotate-then-mirror),
@@ -265,10 +274,10 @@ describe.skipIf(corpus.length === 0)("acceptance corpus (user's own LTspice file
       if (EXTRA_ROOTS.length === 0) {
         expect.soft(canonicalSummary.total, "canonical input files discovered").toBeGreaterThanOrEqual(82);
         expect.soft(canonicalSummary.imported, "canonical imports").toBeGreaterThanOrEqual(82);
-        expect.soft(canonicalSummary.warningClean, "canonical warning-clean floor").toBeGreaterThanOrEqual(79);
-        expect.soft(canonicalSummary.deckBuilt, "canonical deck-build floor").toBeGreaterThanOrEqual(82);
+        expect.soft(canonicalSummary.warningClean, "canonical warning-clean floor").toBeGreaterThanOrEqual(80);
+        expect.soft(canonicalSummary.deckBuilt, "canonical deck-build floor").toBeGreaterThanOrEqual(80);
         if (!skipNgspice) {
-          expect.soft(canonicalSummary.opConverged, "canonical operating-point floor").toBeGreaterThanOrEqual(82);
+          expect.soft(canonicalSummary.opConverged, "canonical operating-point floor").toBeGreaterThanOrEqual(80);
         }
       }
     } finally {

@@ -80,6 +80,7 @@ import { componentMeasurements, type ComponentMeasurement } from "./simulation/m
 import { runAcMeasurements } from "./simulation/measureAc";
 import { runDcMeasurements } from "./simulation/measureDc";
 import { runNoiseMeasurements } from "./simulation/measureNoise";
+import { assertSimulationIntegrity } from "./simulation/simulationIntegrity";
 import {
   cancelNativeSpice,
   isNativeSpiceRuntime,
@@ -567,6 +568,11 @@ function App() {
     return runNoiseMeasurements(directives, noiseAnalysis, params.scope, params.funcs);
   }, [noiseAnalysis, directives, params]);
 
+  const assertCurrentSimulationIntegrity = useCallback(
+    () => assertSimulationIntegrity(components, ascForeignSymbols),
+    [components, ascForeignSymbols],
+  );
+
   const executeTransient = useCallback(async (options: AnalysisOptions) => {
     const requestId = ++analysisRequestRef.current;
     setAnalysisRunning(true);
@@ -584,6 +590,7 @@ function App() {
       setRunProgress(fraction);
     };
     try {
+      assertCurrentSimulationIntegrity();
       const nativeResult = await runNativeTransient({ components, wires, netLabels, params, directives, userModelLibraries: userModelLibraryTexts, userModelLibraryNames }, options);
       if (nativeResult) {
         // Stop marks this request stale even if the worker happened to finish
@@ -629,7 +636,7 @@ function App() {
       // run that's actually still abortable.
       if (transientAbortRef.current === controller) transientAbortRef.current = null;
     }
-  }, [components, wires, netLabels, params, directives, userModelLibraryTexts, couplings, showNotice]);
+  }, [components, wires, netLabels, params, directives, userModelLibraryTexts, couplings, showNotice, assertCurrentSimulationIntegrity]);
 
   // Pre-run guard (Fix 3): a step count big enough to genuinely stall the UI
   // for a while gets a confirmation instead of launching silently. Native is
@@ -657,6 +664,7 @@ function App() {
     const requestId = ++analysisRequestRef.current;
     setAnalysisRunning(true);
     try {
+      assertCurrentSimulationIntegrity();
       const result = resolveEngineResult(
         await runNativeOperatingPoint({ components, wires, netLabels, params, directives, userModelLibraries: userModelLibraryTexts, userModelLibraryNames }),
         () => runOperatingPoint({ components, wires, netLabels, params }, { returnBranches: true }),
@@ -669,12 +677,13 @@ function App() {
     } finally {
       if (analysisRequestRef.current === requestId) setAnalysisRunning(false);
     }
-  }, [components, wires, netLabels, params, directives, userModelLibraryTexts]);
+  }, [components, wires, netLabels, params, directives, userModelLibraryTexts, assertCurrentSimulationIntegrity]);
 
   const runAcAnalysis = useCallback(async () => {
     const requestId = ++analysisRequestRef.current;
     setAnalysisRunning(true);
     try {
+      assertCurrentSimulationIntegrity();
       // An imported LTspice .ac directive is the user's analysis definition.
       // Suggest a useful range only when the document does not provide one.
       const acSweep = analysesFromDirectives(directives).ac ?? suggestAcSweep(components);
@@ -707,7 +716,7 @@ function App() {
     } finally {
       if (analysisRequestRef.current === requestId) setAnalysisRunning(false);
     }
-  }, [components, wires, netLabels, params, directives, userModelLibraryTexts, couplings]);
+  }, [components, wires, netLabels, params, directives, userModelLibraryTexts, couplings, assertCurrentSimulationIntegrity]);
 
   useEffect(() => {
     setDcSetup((d) => defaultDcSetup(components, d));
@@ -723,6 +732,7 @@ function App() {
     const dc = analysesFromDirectives(directives).dc ?? dcSetup;
     setAnalysisRunning(true);
     try {
+      assertCurrentSimulationIntegrity();
       // ngspice first: the TS solver has no semiconductor stamps, so it cannot
       // sweep a transistor at all.
       const result = resolveEngineResult(
@@ -746,13 +756,14 @@ function App() {
     } finally {
       if (analysisRequestRef.current === requestId) setAnalysisRunning(false);
     }
-  }, [components, wires, netLabels, params, directives, dcSetup, userModelLibraryTexts]);
+  }, [components, wires, netLabels, params, directives, dcSetup, userModelLibraryTexts, assertCurrentSimulationIntegrity]);
 
   const runTfAnalysis = useCallback(async () => {
     const requestId = ++analysisRequestRef.current;
     const tf = analysesFromDirectives(directives).tf ?? tfSetup;
     setAnalysisRunning(true);
     try {
+      assertCurrentSimulationIntegrity();
       // ngspice first, for the same reason as the DC sweep: the TS solver has
       // no semiconductor stamps, so it cannot take an amplifier's gain at all.
       const result = resolveEngineResult(
@@ -770,13 +781,14 @@ function App() {
     } finally {
       if (analysisRequestRef.current === requestId) setAnalysisRunning(false);
     }
-  }, [components, wires, netLabels, params, directives, tfSetup, userModelLibraryTexts, userModelLibraryNames]);
+  }, [components, wires, netLabels, params, directives, tfSetup, userModelLibraryTexts, userModelLibraryNames, assertCurrentSimulationIntegrity]);
 
   const runNoiseAnalysis_ = useCallback(async () => {
     const requestId = ++analysisRequestRef.current;
     const noise = analysesFromDirectives(directives).noise ?? noiseSetup;
     setAnalysisRunning(true);
     try {
+      assertCurrentSimulationIntegrity();
       // ngspice first: the TS solver has only resistor thermal noise and
       // refuses any circuit with a semiconductor in it, so it cannot report a
       // real amplifier's noise at all.
@@ -795,7 +807,7 @@ function App() {
     } finally {
       if (analysisRequestRef.current === requestId) setAnalysisRunning(false);
     }
-  }, [components, wires, netLabels, params, directives, noiseSetup, userModelLibraryTexts, userModelLibraryNames]);
+  }, [components, wires, netLabels, params, directives, noiseSetup, userModelLibraryTexts, userModelLibraryNames, assertCurrentSimulationIntegrity]);
 
   const runStepAnalysis = useCallback(async () => {
     const requestId = ++analysisRequestRef.current;
@@ -813,6 +825,7 @@ function App() {
     }
     let contexts;
     try {
+      assertCurrentSimulationIntegrity();
       contexts = nestedStepContexts(specs, params, components);
     } catch (error) {
       setStepFamily({ ok: false, message: userFacingErrorMessage(error, "Could not expand this .step."), members: [], warnings: [] });
@@ -849,7 +862,7 @@ function App() {
     } finally {
       if (analysisRequestRef.current === requestId) setAnalysisRunning(false);
     }
-  }, [components, wires, netLabels, params, directives, userModelLibraryTexts, userModelLibraryNames, effectiveAnalysisOptions, stepSetupUi]);
+  }, [components, wires, netLabels, params, directives, userModelLibraryTexts, userModelLibraryNames, effectiveAnalysisOptions, stepSetupUi, assertCurrentSimulationIntegrity]);
 
   const preferredAnalysis = useMemo(
     () => pickAutoRunAnalysis(directives)?.kind ?? "tran",

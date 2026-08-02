@@ -7,6 +7,7 @@ cd "$ROOT"
 specs=(
   "scripts/classdEfficiency.corpus.ts"
   "scripts/waveformParity.corpus.ts"
+  "scripts/specialDeviceParity.corpus.ts"
 )
 
 for spec in "${specs[@]}"; do

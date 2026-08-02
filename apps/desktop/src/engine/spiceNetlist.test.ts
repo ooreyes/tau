@@ -1260,22 +1260,34 @@ describe("buildSpiceDeck", () => {
     expect(deck.netlist).toMatch(/B_a1_out \S+ 0 V=V\(a1_osc\)/);
   });
 
-  it("gives a remapped placeholder a unique name that can't collide with a real part", () => {
-    // A diac imports as a resistor keeping its `Q1` label; the old fallback made
-    // that `R1` and clashed with a genuine `R1` (dimmer.asc). Now it's `RQ1`.
+  it("refuses an imported placeholder before emitting any approximate deck", () => {
     const components = [
       component("vsource", "V1", "5", 0, 0),        // p(0,-32) n(0,32)
-      component("resistor", "Q1", "1Meg", 32, -32), // a(0,-32) b(64,-32) - placeholder
+      { ...component("resistor", "Q1", "1Meg", 32, -32), ltSymbolType: "misc\\DIAC" },
       component("resistor", "R1", "1k", 32, 32),    // a(0,32)  b(64,32)  - real R1
       component("ground", "", "", 0, 32),
     ];
     const wires = [wire("w1", [{ x: 64, y: -32 }, { x: 64, y: 32 }])];
-    const deck = buildSpiceDeck({ components, wires }, { kind: "op" });
-    const rLines = deck.netlist.split("\n").filter((l) => /^R\S+ /.test(l));
-    const names = rLines.map((l) => l.split(/\s+/)[0]);
-    expect(names).toContain("RQ1"); // placeholder diac, label-suffixed
-    expect(names).toContain("R1");  // real resistor keeps its name
-    expect(new Set(names).size).toBe(names.length); // no duplicates
+    expect(() => buildSpiceDeck({ components, wires }, { kind: "op" }))
+      .toThrow(/Simulation refused: Q1 \(misc\\DIAC\).*No approximate or partial circuit was run/);
+  });
+
+  it("refuses a preserved foreign symbol before emitting a partial deck", () => {
+    const components = [
+      component("vsource", "V1", "5", 0, 0),
+      component("ground", "", "", 0, 32),
+    ];
+    expect(() => buildSpiceDeck({
+      components,
+      wires: [],
+      ascForeignSymbols: [{
+        type: "PowerProducts\\LTC4449",
+        x: 96,
+        y: 0,
+        orientation: "R0",
+        attrs: { InstName: "U1" },
+      }],
+    }, { kind: "op" })).toThrow(/Simulation refused: U1 \(PowerProducts\\LTC4449\)/);
   });
 
   it("disambiguates a manufactured name that lands on a refdes a sibling owns", () => {

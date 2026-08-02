@@ -119,6 +119,7 @@ export function runPairedBatch(
   netlist: string,
   saves: readonly string[],
   measurements: readonly string[] = [],
+  ngspiceNetlist: string = netlist,
 ): PairedBatchResult {
   if (!existsSync(LTSPICE_BINARY)) throw new Error(`LTspice is missing at ${LTSPICE_BINARY}`);
   const dir = mkdtempSync(join(tmpdir(), `tau-parity-${name}-`));
@@ -136,7 +137,7 @@ export function runPairedBatch(
     writeFileSync(ltPath, prepareDeck(netlist, ltSaves, measurements, true));
     // Tau evaluates authored measurements from returned traces (simulation/
     // measure.ts); do not ask ngspice's more limited `.meas` dialect to do so.
-    writeFileSync(ngPath, prepareDeck(netlist, saves, [], false));
+    writeFileSync(ngPath, prepareDeck(ngspiceNetlist, saves, [], false));
 
     const ltRun = spawnSync(LTSPICE_BINARY, ["-b", ltPath], { encoding: "utf8", timeout: 120_000 });
     const ltLogPath = join(dir, `${name}-lt.log`);

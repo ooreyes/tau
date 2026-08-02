@@ -1055,7 +1055,7 @@ SYMATTR InstName X1`;
   });
 });
 
-describe("analog placeholder symbols (xtal, diac, triac, varistor)", () => {
+describe("analog library symbols (xtal, model-backed DIAC/TRIAC, varistor)", () => {
   it("maps misc\\xtal to capacitor with pin-accurate geometry from xtal.asy", () => {
     // xtal.asy (Misc/): PIN A(16,0) SpiceOrder 1, PIN B(16,64) SpiceOrder 2.
     // Placed at (200,200) R90: A → R90(16,0) = (0,16) → world (200,216);
@@ -1090,7 +1090,7 @@ SYMATTR Value 0.1p`;
     expect(doc.warnings.filter((w) => /Y2|xtal/i.test(w))).toHaveLength(0);
   });
 
-  it("maps misc\\DIAC to resistor placeholder with pin-accurate geometry", () => {
+  it("maps misc\\DIAC to its document-supplied subcircuit with pin-accurate geometry", () => {
     // DIAC.asy (Misc/): PIN +(32,0) SpiceOrder 1, PIN -(32,64) SpiceOrder 2.
     // Placed at (320,176) R90: +(32,0) → R90(32,0)=(0,32) → world (320,208);
     // -(32,64) → R90(32,64)=(-64,32) → world (256,208).
@@ -1101,20 +1101,18 @@ SYMATTR InstName Q1
 SYMATTR Value2 VK=30`;
     const doc = ascToSchematic(parseAsc(src));
     const q1 = doc.components.find((c) => c.label === "Q1");
-    expect(q1?.kind).toBe("resistor");
+    expect(q1?.kind).toBe("subckt");
+    expect(q1?.value).toBe("DIAC VK=30");
     const pins = Object.fromEntries((q1?.pinOverride ?? []).map((p) => [p.id, { x: p.x, y: p.y }]));
-    expect(pins.a).toEqual({ x: 320, y: 208 });
-    expect(pins.b).toEqual({ x: 256, y: 208 });
+    expect(pins.p1).toEqual({ x: 320, y: 208 });
+    expect(pins.p2).toEqual({ x: 256, y: 208 });
     // Emits an import note, NOT a warning.
     expect(doc.warnings.filter((w) => /Q1|diac/i.test(w))).toHaveLength(0);
     expect(doc.notes.some((n) => /Q1|diac/i.test(n))).toBe(true);
-    // The diac carries only `Value2 VK=30` (breakover V, no Ohm) → placeholder
-    // gets a neutral high-Z resting resistance so the deck builds (regression:
-    // an empty value used to crash deck-build with "needs a valid Ohm value").
-    expect(q1?.value).toBe("1Meg");
+    expect(doc.notes.some((n) => /model-backed subcircuit/i.test(n))).toBe(true);
   });
 
-  it("maps misc\\TRIAC to npn placeholder with MT2/G/MT1 pin geometry", () => {
+  it("maps misc\\TRIAC to its document-supplied subcircuit with MT2/G/MT1 pin geometry", () => {
     // TRIAC.asy (Misc/): MT2(32,0)/G(-16,64)/MT1(32,64). Placed at (336,144) R0.
     // world: MT2(368,144), G(320,208), MT1(368,208).
     const src = `Version 4
@@ -1123,17 +1121,17 @@ SYMBOL misc\\TRIAC 336 144 R0
 SYMATTR InstName U1`;
     const doc = ascToSchematic(parseAsc(src));
     const u1 = doc.components.find((c) => c.label === "U1");
-    expect(u1?.kind).toBe("npn");
+    expect(u1?.kind).toBe("subckt");
+    expect(u1?.value).toBe("TRIAC");
     const pins = Object.fromEntries((u1?.pinOverride ?? []).map((p) => [p.id, { x: p.x, y: p.y }]));
-    // c ← MT2, b ← G, e ← MT1
-    expect(pins.c).toEqual({ x: 368, y: 144 });
-    expect(pins.b).toEqual({ x: 320, y: 208 });
-    expect(pins.e).toEqual({ x: 368, y: 208 });
+    expect(pins.p1).toEqual({ x: 368, y: 144 });
+    expect(pins.p2).toEqual({ x: 320, y: 208 });
+    expect(pins.p3).toEqual({ x: 368, y: 208 });
     expect(doc.warnings.filter((w) => /U1|triac/i.test(w))).toHaveLength(0);
     expect(doc.notes.some((n) => /U1|triac/i.test(n))).toBe(true);
   });
 
-  it("maps SpecialFunctions\\varistor to resistor placeholder with primary terminal geometry", () => {
+  it("maps SpecialFunctions\\varistor to a four-terminal behavioral clamp", () => {
     // varistor.asy (SpecialFunctions/): invin(-32,48)/noninvin(-32,80). R0 at (1328,416).
     // world: invin(1296,464), noninvin(1296,496).
     const src = `Version 4
@@ -1143,23 +1141,22 @@ SYMATTR InstName A1
 SYMATTR Value Rclamp=1`;
     const doc = ascToSchematic(parseAsc(src));
     const a1 = doc.components.find((c) => c.label === "A1");
-    expect(a1?.kind).toBe("resistor");
+    expect(a1?.kind).toBe("subckt");
+    expect(a1?.value).toBe("VARISTOR Rclamp=1");
     const pins = Object.fromEntries((a1?.pinOverride ?? []).map((p) => [p.id, { x: p.x, y: p.y }]));
-    expect(pins.a).toEqual({ x: 1296, y: 464 });
-    expect(pins.b).toEqual({ x: 1296, y: 496 });
+    expect(pins.p1).toEqual({ x: 1296, y: 464 });
+    expect(pins.p2).toEqual({ x: 1296, y: 496 });
+    expect(pins.p3).toEqual({ x: 1312, y: 448 });
+    expect(pins.p4).toEqual({ x: 1312, y: 512 });
     expect(doc.warnings.filter((w) => /A1|varistor/i.test(w))).toHaveLength(0);
     expect(doc.notes.some((n) => /A1|varistor/i.test(n))).toBe(true);
-    // The raw `Rclamp=1` value is an A-device param the resistor emitter can't
-    // parse - the placeholder gets a neutral high-Z resting resistance instead
-    // (regression: `Rclamp=1` used to reach the deck as a bad Ohm value and
-    // crash deck-build). 1Meg ≈ open, matching a varistor below its clamp V.
-    expect(a1?.value).toBe("1Meg");
+    expect(doc.notes.some((n) => /all four terminals/i.test(n))).toBe(true);
   });
 
-  it("ltspiceTypeToKind maps diac/triac/varistor to their placeholder kinds", () => {
-    expect(ltspiceTypeToKind("misc\\DIAC")).toBe("resistor");
-    expect(ltspiceTypeToKind("misc\\TRIAC")).toBe("npn");
-    expect(ltspiceTypeToKind("SPECIALFUNCTIONS\\VARISTOR")).toBe("resistor");
+  it("ltspiceTypeToKind maps diac/triac/varistor to model-backed carriers", () => {
+    expect(ltspiceTypeToKind("misc\\DIAC")).toBe("subckt");
+    expect(ltspiceTypeToKind("misc\\TRIAC")).toBe("subckt");
+    expect(ltspiceTypeToKind("SPECIALFUNCTIONS\\VARISTOR")).toBe("subckt");
   });
 });
 
@@ -1169,6 +1166,7 @@ describe("digital A-device symbols (Digital\\*)", () => {
     expect(ltspiceTypeToKind("Digital\\inv")).toBe("digitalGate");
     expect(ltspiceTypeToKind("digital\\schmtbuf")).toBe("digitalGate");
     expect(ltspiceTypeToKind("Digital\\dflop")).toBe("dflop");
+    expect(ltspiceTypeToKind("Digital\\phidet")).toBe("digitalGate");
     // Bare leafs are too generic to claim globally.
     expect(ltspiceTypeToKind("and")).toBeNull();
     expect(ltspiceTypeToKind("inv")).toBeNull();
@@ -1240,6 +1238,27 @@ SYMATTR Value2 Trise=10n`;
     expect(pins.qbar).toEqual({ x: 656, y: 416 });
     expect(pins.com).toEqual({ x: 832, y: 464 });
     expect(doc.warnings.filter((w) => /A1/i.test(w))).toHaveLength(0);
+  });
+
+  it("imports Digital\\PHIDET with its two inputs, pump output, and common", () => {
+    const src = `Version 4
+SHEET 1 880 680
+SYMBOL DIGITAL\\PHIDET 880 928 R0
+SYMATTR Value Iout=15u
+SYMATTR SpiceLine Vhigh=2.5
+SYMATTR SpiceLine2 Ref=0
+SYMATTR Value2 Vlow=-.5
+SYMATTR InstName A5`;
+    const doc = ascToSchematic(parseAsc(src));
+    const a5 = doc.components.find((component) => component.label === "A5");
+    expect(a5?.kind).toBe("digitalGate");
+    expect(a5?.value).toBe("phidet Iout=15u Vlow=-.5 Vhigh=2.5 Ref=0");
+    const pins = Object.fromEntries((a5?.pinOverride ?? []).map((pin) => [pin.id, { x: pin.x, y: pin.y }]));
+    expect(pins.in1).toEqual({ x: 848, y: 912 });
+    expect(pins.in2).toEqual({ x: 848, y: 944 });
+    expect(pins.q).toEqual({ x: 976, y: 928 });
+    expect(pins.com).toEqual({ x: 848, y: 976 });
+    expect(doc.warnings).toHaveLength(0);
   });
 
   it("imports SpecialFunctions\\sample as a sampleHold with the id-mapped pin bank", () => {

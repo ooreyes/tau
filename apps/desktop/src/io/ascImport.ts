@@ -471,20 +471,16 @@ export function ltspiceTypeToKind(type: string): ComponentKind | null {
     bi2: "bsource",
     b: "bsource",
     b2: "bsource",
-    // DIAC: 2-terminal bidirectional trigger diode (misc\\DIAC). No Tau analog;
-    // imported as a resistor placeholder so the file opens clean and the two nets
-    // connect correctly. An import note is emitted instead of a warning.
-    diac: "resistor",
-    // TRIAC: 3-terminal AC power switch (misc\\TRIAC, pins MT2/G/MT1). Imported
-    // as an NPN placeholder so all three nets connect correctly. Import note emitted.
-    triac: "npn",
+    // DIAC/TRIAC are generic Prefix-X symbols: the circuit supplies their
+    // `.subckt` definitions. Preserve the exact SpiceOrder pins and invoke that
+    // model rather than substituting a resistor/BJT.
+    diac: "subckt",
+    triac: "subckt",
     // Varistor (SpecialFunctions\\varistor): a 4-terminal behavioral voltage-
     // controlled clamp. The two primary terminals (invin/noninvin, SpiceOrder 1/2)
-    // are mapped to a resistor placeholder; the output/com pins are dropped. Its
-    // `Rclamp=` value is an A-device param, not an Ohm value, so the placeholder
-    // is given a neutral high-Z resting resistance (see the value assignment in
-    // ascToSchematic) rather than the unparseable raw value.
-    varistor: "resistor",
+    // are represented by a four-terminal behavioral subcircuit carrier. The
+    // deck emitter implements LTspice's documented voltage-controlled clamp.
+    varistor: "subckt",
     // LTspice-library subcircuit symbols (`SYMATTR Prefix X`) whose bodies are
     // bundled in engine/bundledSubcircuits.ts. Each imports as a generic
     // `subckt` instance carrying the `.asy`'s exact pin bank; the deck builder
@@ -506,6 +502,7 @@ export function ltspiceTypeToKind(type: string): ComponentKind | null {
   // is required - bare leafs like "and"/"or" are too generic to claim globally.
   if (base.includes("digital/")) {
     if (leaf === "dflop") return "dflop";
+    if (leaf === "phidet") return "digitalGate";
     if (DIGITAL_GATE_LEAFS.has(leaf)) return "digitalGate";
   }
   // LTspice behavioral A-devices under `SpecialFunctions\`. `sample` is the
@@ -519,7 +516,7 @@ export function ltspiceTypeToKind(type: string): ComponentKind | null {
 }
 
 /** `Digital\*.asy` leafs that map onto the behavioral `digitalGate` kind.
- *  (counter/srflop/phidet and the diff* family are not yet modelled and fall
+ *  (counter/srflop and the diff* family are not yet modelled and fall
  *  through to the skip-warning path; SpecialFunctions\sample maps to the
  *  `sampleHold` kind above.) */
 const DIGITAL_GATE_LEAFS = new Set([
@@ -648,20 +645,24 @@ export const LTSPICE_PINS: Record<string, LtPin[]> = {
     { name: "op", dx: 0, dy: 96 },
     { name: "on", dx: 0, dy: 16 },
   ],
-  // DIAC (Misc/DIAC.asy, SpiceOrder +=1 / −=2): +(32,0) / −(32,64).
-  // Imported as resistor; zipped to Tau resistor pins a/b.
+  // DIAC/TRIAC are variable-pin subcircuit instances; buildPinOverride assigns
+  // p1..pN in this SpiceOrder rather than zipping them to a Tau primitive.
   diac: [{ name: "+", dx: 32, dy: 0 }, { name: "-", dx: 32, dy: 64 }],
   // TRIAC (Misc/TRIAC.asy, SpiceOrder MT2=1 / G=2 / MT1=3):
-  //   MT2(32,0) → Tau C, G(-16,64) → Tau B (gate), MT1(32,64) → Tau E.
-  // Imported as npn placeholder; zipped to Tau npn pins c/b/e.
+  //   MT2(32,0), G(-16,64), MT1(32,64).
   triac: [
     { name: "MT2", dx: 32, dy: 0 },
     { name: "G", dx: -16, dy: 64 },
     { name: "MT1", dx: 32, dy: 64 },
   ],
-  // varistor (SpecialFunctions/varistor.asy): primary terminals invin(−32,48)/
-  // noninvin(−32,80) at SpiceOrder 1/2. Imported as resistor; zipped to a/b.
-  varistor: [{ name: "invin", dx: -32, dy: 48 }, { name: "noninvin", dx: -32, dy: 80 }],
+  // varistor (SpecialFunctions/varistor.asy): control voltage on pins 1/2,
+  // clamped output on 7/com(8). All four are required for electrical parity.
+  varistor: [
+    { name: "invin", dx: -32, dy: 48 },
+    { name: "noninvin", dx: -32, dy: 80 },
+    { name: "out", dx: -16, dy: 32 },
+    { name: "com", dx: -16, dy: 96 },
+  ],
   // bi2 (B current source, alternate geometry): pins are bi's flipped - +(0,80)/−(0,0).
   bi2: [{ name: "+", dx: 0, dy: 80 }, { name: "-", dx: 0, dy: 0 }],
   // ── LTspice-library subcircuit symbols (`SYMATTR Prefix X`) ──────────────
@@ -749,6 +750,13 @@ export const LTSPICE_PINS: Record<string, LtPin[]> = {
     { name: "qbar", dx: 96, dy: 96 },
     { name: "q", dx: 80, dy: 48 },
     { name: "com", dx: -80, dy: 144 },
+  ],
+  // Digital/phidet.asy: two clock inputs, current output, and common.
+  phidet: [
+    { name: "in1", dx: -32, dy: -16 },
+    { name: "in2", dx: -32, dy: 16 },
+    { name: "q", dx: 96, dy: 0 },
+    { name: "com", dx: -32, dy: 48 },
   ],
   // SpecialFunctions/sample.asy (SAMPLEHOLD): id-mapped like the digital banks.
   // SpiceOrder in+=1, in-=2, CLK=3, S/H=4, out=7, com=8 (slots 5/6 unused).
@@ -855,7 +863,7 @@ function ltPinKey(type: string): keyof typeof LTSPICE_PINS | null {
       inv: "digInv", schmtinv: "digInv",
       buf: "digBuf", schmitt: "digBuf",
       buf1: "digBuf1", schmtbuf: "digBuf1",
-      dflop: "dflop",
+      dflop: "dflop", phidet: "phidet",
     };
     return digital[leaf] ?? null;
   }
@@ -893,8 +901,7 @@ function ltPinKey(type: string): keyof typeof LTSPICE_PINS | null {
     diac: "diac",
     // TRIAC (Misc/TRIAC.asy): MT2(32,0)/G(-16,64)/MT1(32,64) - 3-terminal.
     triac: "triac",
-    // varistor (SpecialFunctions/varistor.asy): primary pins invin(-32,48)/
-    // noninvin(-32,80) at SpiceOrder 1/2 - own bank.
+    // varistor (SpecialFunctions/varistor.asy): four-terminal control/clamp.
     varistor: "varistor",
     // Library subcircuit symbols (Prefix X) - banks are SpiceOrder-ordered;
     // the subckt branch of buildPinOverride assigns p1..pN ids.
@@ -930,9 +937,10 @@ export interface AscImportResult {
   /** Non-fatal issues (symbols placed without pin-accurate geometry, etc.). */
   warnings: string[];
   /**
-   * Informational notes about placeholder mappings - the file opened clean and
-   * all nets are correct, but a device was mapped to the closest Tau analog
-   * (e.g. diac → resistor, triac → npn). Does not affect the warning count.
+   * Informational notes about geometry-carrier mappings - the file opened clean
+   * and all retained nets are correct, but the part has no equivalent Tau
+   * electrical model. Simulation refuses these carriers. Notes do not affect
+   * the import warning count.
    */
   notes: string[];
 }
@@ -1535,6 +1543,9 @@ function flattenSubcircuit(
  * examples' U1 instances carry no attrs at all and mean the 12 V variant).
  */
 const SUBCKT_SYMBOL_DEFAULTS: Record<string, { name: string; params?: string }> = {
+  diac: { name: "DIAC" },
+  triac: { name: "TRIAC" },
+  varistor: { name: "VARISTOR" },
   opamp: { name: "opamp", params: "Aol=100K GBW=10Meg" },
   towtom2: { name: "TowTom2" },
   capmeter: { name: "capometer", params: "current=1m freq=3Meg C=.5µ Q=.25" },
@@ -1551,8 +1562,10 @@ const SUBCKT_SYMBOL_DEFAULTS: Record<string, { name: string; params?: string }> 
  */
 function subcktValueFromSymbol(leaf: string, attrs: Record<string, string>): string {
   const def = SUBCKT_SYMBOL_DEFAULTS[leaf];
-  const name = (attrs.SpiceModel ?? attrs.Value ?? "").trim() || def?.name || leaf;
-  const params = [attrs.SpiceLine, attrs.SpiceLine2]
+  const rawValue = attrs.Value?.trim() ?? "";
+  const valueIsParams = /^\w+\s*=/.test(rawValue);
+  const name = (attrs.SpiceModel ?? (valueIsParams ? "" : rawValue)).trim() || def?.name || leaf;
+  const params = [valueIsParams ? rawValue : undefined, attrs.Value2, attrs.SpiceLine, attrs.SpiceLine2]
     .map((s) => s?.trim())
     .filter((s): s is string => !!s)
     .join(" ") || def?.params || "";
@@ -1568,11 +1581,11 @@ function importPlaceholderNote(leaf: string, instName: string): string | null {
   const ref = instName || leaf;
   switch (leaf) {
     case "diac":
-      return `${ref}: DIAC (bidirectional trigger diode) imported as a resistor placeholder. Nets are correct; replace with a subcircuit model for simulation accuracy.`;
+      return `${ref}: DIAC imported as a model-backed subcircuit instance. Tau will refuse simulation if the document or an attached library does not define DIAC.`;
     case "triac":
-      return `${ref}: TRIAC imported as an NPN placeholder (MT2→C, G→B, MT1→E). Nets are correct; replace with a subcircuit model for simulation accuracy.`;
+      return `${ref}: TRIAC imported as a model-backed subcircuit instance. Tau will refuse simulation if the document or an attached library does not define TRIAC.`;
     case "varistor":
-      return `${ref}: Varistor (4-terminal behavioral clamp) imported as a resistor placeholder using the two primary terminals. Nets are correct; replace with a subcircuit model for simulation accuracy.`;
+      return `${ref}: LTspice voltage-controlled varistor imported with all four terminals and its Rclamp behavior.`;
     default:
       return null;
   }
@@ -1699,28 +1712,22 @@ export function ascToSchematic(doc: AscDocument, options: AscImportOptions = {})
         `${instName || symbol.type}: placed without pin-accurate geometry (no banked pins for "${symbol.type}"); its connections may be wrong.`,
       );
     }
-    // Emit an informational note (not a warning) for placeholder mappings.
-    // The file opens clean and all nets are correct; the note documents that a
-    // device was mapped to the closest Tau analog rather than a faithful model.
+    // Emit an informational note (not a warning) for geometry-carrier mappings.
+    // The file opens clean with retained nets, while the simulation-integrity
+    // guard uses ltSymbolType to refuse it before any deck or solver work.
     const placeholderNote = importPlaceholderNote(leaf, instName);
     if (placeholderNote) notes.push(placeholderNote);
     // A digital gate's function (and/or/xor/inv/…) is encoded in the symbol
     // NAME, not its value; prepend the leaf so parseDigitalGate sees it.
-    // Voltage-triggered devices imported as a resistor placeholder (varistor
-    // `Rclamp=`, diac `VK=`) carry no parseable Ohm value - their spec is an
-    // A-device / breakover param the resistor emitter can't use. Give the
-    // placeholder a neutral high-Z resting value (both are near-open below
-    // their clamp/breakover voltage) so the deck builds and the op converges.
-    // Nets stay correct; the import note already says to swap in a real model.
+    // Model-backed X devices and behavioral varistors carry their parameters in
+    // Value2/SpiceLine; subcktValueFromSymbol retains those instance params.
     const value = tauKind
       ? (symbol.attrs.TauValue === "\"\"" ? "" : (symbol.attrs.TauValue ?? symbol.attrs.Value ?? ""))
       : kind === "digitalGate"
       ? `${leaf} ${componentValueFromAttrs(kind, symbol.attrs)}`.trim()
       : kind === "subckt"
         ? subcktValueFromSymbol(leaf, symbol.attrs)
-        : (leaf === "varistor" || leaf === "diac") && kind === "resistor"
-          ? "1Meg"
-          : componentValueFromAttrs(kind, symbol.attrs);
+        : componentValueFromAttrs(kind, symbol.attrs);
     // A part Tau wrote under a carrier symbol keeps its slots in the Tau-only
     // field, since on the carrier their own names belong to another part. They
     // are read back with the `Value` they sat beside, so the exporter has the

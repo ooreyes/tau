@@ -1,6 +1,6 @@
 import { extractCircuit, isResistiveWire, netAtPoint, spiceSafeToken, type ExtractedCircuit, type ExtractedComponent } from "../schematic/netlist";
 import { resolveComponentValues, expandDirectiveLines, inlineFuncCalls, substituteKnownBraces, substituteBehavioralBraces, substituteScopeIdentifiers, EMPTY_SCOPE, type ParamScope } from "../simulation/paramScope";
-import type { ComponentKind, NetLabel, SchematicComponent, SchematicWire } from "../schematic/types";
+import type { ComponentKind, NetLabel, SchematicComponent, SchematicForeignSymbol, SchematicWire } from "../schematic/types";
 import { parseQuantity } from "../simulation/quantity";
 import { decodeParams } from "../schematic/params";
 import { parseSourceFunction } from "./sourceFunction";
@@ -23,6 +23,9 @@ import { bundledSubcircuitBlock, bundledLibraryText, sanitizeSubcktName } from "
 import { parseUserModelLibraries, resolveUserModel, resolveUserSubckt } from "./userModelLibrary";
 import { tlineDeckParams } from "./tlineSpec";
 import { parseTempDirective } from "../io/directiveAnalysis";
+import { assertSimulationIntegrity } from "../simulation/simulationIntegrity";
+import { parseVaristor, varistorDeckLine } from "./varistorSpec";
+import { parsePhaseDetector, phaseDetectorDeckLines } from "./phaseDetectorSpec";
 
 export type SpiceAnalysis =
   | { kind: "tran"; stopTime: number; steps: number; startTime?: number; maxStep?: number; uic?: boolean; startup?: boolean }
@@ -149,6 +152,8 @@ type Schematic = {
    *  deck through the registry above - so it must not also be reported as a
    *  file Tau could not find. Omitting it only costs a redundant warning. */
   userModelLibraryNames?: readonly string[];
+  /** Preserved source symbols without a Tau electrical model. */
+  ascForeignSymbols?: readonly SchematicForeignSymbol[];
 };
 
 const DEFAULT_MODELS = [
@@ -179,7 +184,13 @@ function isBehavioralValue(value: string | undefined): boolean {
   return !!value && /^\s*[VIR]\s*=/i.test(value);
 }
 
+function importedSymbolLeaf(component: SchematicComponent): string {
+  const segments = (component.ltSymbolType ?? "").trim().split(/[\\/]/);
+  return segments[segments.length - 1]?.toLowerCase() ?? "";
+}
+
 export function buildSpiceDeck(schematic: Schematic, analysis: SpiceAnalysis): SpiceDeck {
+  assertSimulationIntegrity(schematic.components, schematic.ascForeignSymbols);
   const paramScope = schematic.params ?? EMPTY_SCOPE;
   // Behavioral (V=/I=/R=) expressions may legitimately reference run-time
   // state (`time`, `V(node)`) inside braces or as bare param names - LTspice
@@ -422,6 +433,7 @@ export function buildSpiceDeck(schematic: Schematic, analysis: SpiceAnalysis): S
   const emittedSubckts = new Set<string>();
   for (const { component } of circuit.components) {
     if (component.kind !== "subckt") continue;
+    if (importedSymbolLeaf(component) === "varistor") continue;
     const ref = sanitizeSubcktName(component.value.trim().split(/\s+/)[0] ?? "").toLowerCase();
     if (!ref || userModels.has(ref) || inlinedSubckts.has(ref) || emittedSubckts.has(ref)) continue;
     // Same local-definition-wins rule as the model loop above: an attached
@@ -478,6 +490,7 @@ export function buildSpiceDeck(schematic: Schematic, analysis: SpiceAnalysis): S
   const unresolvedByKey = new Map<string, string>();
   for (const { component } of circuit.components) {
     if (component.kind !== "subckt") continue;
+    if (importedSymbolLeaf(component) === "varistor") continue;
     const displayName = component.value.trim().split(/\s+/)[0] ?? "";
     if (!displayName) continue; // an empty name is already a hard build error below
     const rawKey = displayName.toLowerCase();
@@ -1058,6 +1071,14 @@ function componentLines(entry: ExtractedComponent, index: number, name: string, 
         if (netId !== "0" && (netPinCount.get(netId) ?? 0) < 2) return null;
         return netId.toLowerCase();
       };
+      if (importedSymbolLeaf(component) === "phidet") {
+        return phaseDetectorDeckLines(base, {
+          a: connected("in1") ?? "0",
+          b: connected("in2") ?? "0",
+          q: connected("q") ?? `${base.toLowerCase()}_qnc`,
+          com: connected("com") ?? "0",
+        }, parsePhaseDetector(component.value));
+      }
       const ins = ["in1", "in2", "in3", "in4", "in5"]
         .map(connected)
         .filter((n): n is string => n !== null);
@@ -1233,6 +1254,16 @@ function componentLines(entry: ExtractedComponent, index: number, name: string, 
       return [`${name} ${node("a1")} ${node("a2")} ${node("b1")} ${node("b2")} ${tlineDeckParams(component.value)}`];
     }
     case "subckt": {
+      if (importedSymbolLeaf(component) === "varistor") {
+        return [varistorDeckLine(
+          safeName(component.label || `A${index + 1}`),
+          node("p1"),
+          node("p2"),
+          node("p3"),
+          node("p4"),
+          parseVaristor(component.value),
+        )];
+      }
       // Subcircuit instance: X <nodes in SpiceOrder> <subckt name> [params].
       // Pin ids are p1..pN (the importer banks them in the .asy's SpiceOrder),
       // so sort numerically - object key order is not a contract. The name is

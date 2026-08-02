@@ -5,13 +5,15 @@ The working memory of an unattended loop that starts from zero every fire.
 
 ## Now
 
-**Status:** DONE - 2026-08-02 13:58 CDT
+**Status:** DONE - 2026-08-02 14:47 CDT
 
-User-directed recovery unit: make the launchd runner disk-safe and single-fire,
-restore the objective completion protocol, harden the corpus and parity gates,
-then close the known correctness gaps listed in the 2026-08-02 review. The
-scheduled runner remains paused until the follow-up correctness unit and final
-end-to-end scheduler observation are complete.
+User-directed recovery unit: the runner/completion protocol, recursive corpus,
+waveform parity, `.step`/`.meas`, PNG export, and native AC/OP data are repaired.
+The final requested correctness unit replaced fake DIAC/TRIAC/VARISTOR
+behavior, modeled PHIDET against LTspice, and made every remaining unsupported
+symbol refuse all analyses. All frontend, production web, Rust, native
+operating-point, and native XSPICE gates pass. The schedule remains paused only
+until the requested Chrome/native-app UI checks finish.
 
 Last unit landed 2026-08-02: the vendor-symbol save unblock (half 2). Both
 halves of that unit are now done and the save actually lifts - measured over
@@ -46,13 +48,10 @@ Being killed mid-unit is normal and expected on a Pro plan. It is not a
 failure, and it is not a reason to restart the unit from scratch. Pick up the
 partial work.
 
-**The `-wip` branch is currently already reconciled.** Its tip is `6392d85`,
-which held the `App.tsx` + `.sim` half of the carry-through unit; that landed
-2026-08-02 as `6ceeb08`. (The tip before it, `3f69254`, held the `.noise`
-TypeScript half and landed 2026-07-29 as `dddda1c`.) `..-wip` keeps showing a
-commit "missing" purely because the SHAs differ. Nothing there needs
-re-applying - do not spend a fire diffing it again. Re-check only if the tip
-moves past `6392d85`.
+**The current `-wip` rescue tip is `45365c4`.** It contains only the interrupted
+heartbeat claim captured before this recovery. The canonical branch contains
+all substantive work; verify the diff, then delete the rescue ref before
+restarting launchd.
 
 ---
 
@@ -98,6 +97,11 @@ Newest first, ONE line each. Full evidence for every unit is in PROGRESS.md
 and in its commit message. This section exists so a fresh fire can see what
 is already done at a glance, not so it can re-read the reasoning.
 
+- 2026-08-02 - UNSUPPORTED DEVICES CAN NO LONGER PRODUCE A PLAUSIBLE FALSE ANSWER. DIAC/TRIAC invoke the unmodified file's own `.subckt`s, VARISTOR and PHIDET have direct LTspice waveform parity proofs, and NIGBT/LT1184F refuse atomically by name. The canonical runner now truthfully proves 80/82 warning-clean, deck-built, and op-converged, with the two refusals separated from hard failures.
+- 2026-08-02 - NATIVE AC returns source/inductor/semiconductor currents and OP exposes device bias, conductance, and region data, all held against real ngspice vectors.
+- 2026-08-02 - WAVEFORM PNG EXPORT captures every visible pane at 2× with computed theme styles inlined.
+- 2026-08-02 - `.step` RUNS COMPLETE FAMILIES through 256 points, refuses larger products before any solver call, and evaluates/renders `.meas` per member.
+- 2026-08-02 - THE AUTOBUILDER CONTROL PLANE is atomic and proof-gated: PID-owned lock, dead-owner recovery, disk floors, exact-HEAD two-commit completion proof, and no stale sentinel can notify completion.
 - 2026-08-02 - A VENDOR SYMBOL Tau cannot map no longer blocks the save: `ascRewriteRisks` takes the document's authoritative `ascForeignSymbols` and subtracts the risks those records raise. Save-blocked over 4,012 real `.asc` falls 3,509 -> 46, 0 newly blocked, and all 3,463 newly-saveable files survive a write-then-reimport with no lost record and no count change. The set MUST be passed in, not re-derived: a resolved hierarchical block flattens, so a locally derived set would unblock a lossy save.
 - 2026-08-02 - A VOLTAGE-CONTROLLED SWITCH is written back as a `sw` with all four pins instead of a placeholder resistor; `sw.asy`'s bank was already complete, so the "drops the control pair" comment guarding it was stale. `examples/Educational/Vswitch.asc` saves with zero risks and zero warnings.
 - 2026-08-02 - A PART SAVED UNDER A PLACEHOLDER SYMBOL keeps its extended slots in a Tau-only `TauAttrs` field. Measured over 3,999 real files: it unblocks ZERO of them - carrier kinds are blocked by symbol-library identity, which is the correct verdict.
@@ -130,22 +134,12 @@ is already done at a glance, not so it can re-read the reasoning.
 - 2026-07-28 - `.dc` reaches ngspice: `runNativeDcSweep` + `App.tsx` wiring, so a transistor transfer curve can be swept at all.
 - 2026-07-28 - Voltage-controlled switches emit a real `S` element instead of a permanent open circuit, with both control pins imported.
 
-## Blocked on Omar
+## Human-owned after the bot's completion signal
 
-- **Notarization.** `tauri.conf.json` has `signingIdentity: "-"` and
-  `hardenedRuntime: false`. That configuration cannot pass notarization. Needs
-  his Apple Developer ID. Do not attempt.
-- **Corpus inputs.** `~/Downloads/LTspice_export` was deleted in a disk
-  cleanup, so the corpus is 80 files against a recorded baseline of 82 and
-  `scripts/acceptance-corpus.sh` fails its `>= 82` assertion. This is missing
-  input, not a regression. **Do not lower the baseline.** What matters is that
-  imported / deck-built / op-converged / schema-valid all stay at 80.
-- **Disk.** 2026-08-01: 1.6 GiB free on a 100%-full volume, and `cargo clippy`
-  died with `No space left on device` mid-fire;
-  `apps/desktop/src-tauri/target/debug/incremental` (371 MB of regenerable
-  cache) was removed to get past it. `target/` is still ~3.7 GB. A release
-  build or a full engine rebuild needs room this host does not have - check
-  `df -h /` before starting either.
+- Signing/notarization/distribution are Omar's post-completion steps and never
+  gate the unsigned production-ready completion signal. The corpus inputs are
+  restored, and the runner enforces an 8 GiB fire floor plus 2 GiB session
+  floor; still check `df -h /` before release or native-engine builds.
 
 ---
 

@@ -345,6 +345,27 @@ describe("App schematic workspace tools", () => {
     expect(screen.queryByRole("img", { name: "untitled.asc has unsaved changes" })).toBeNull();
   });
 
+  it("refuses Run when a preserved LTspice symbol has no Tau electrical model", async () => {
+    await renderOpenProject();
+    act(() => useSchematic.setState({
+      directives: [".tran 1m"],
+      ascForeignSymbols: [{
+        type: "PowerProducts\\LTC4449",
+        x: 96,
+        y: 64,
+        orientation: "R0",
+        attrs: { InstName: "U1", Value: "LTC4449" },
+      }],
+    }));
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Run simulation" })[0]);
+
+    const refusals = await screen.findAllByText(
+      /Simulation refused: U1 \(PowerProducts\\LTC4449\).*No approximate or partial circuit was run/,
+    );
+    expect(refusals.length).toBeGreaterThan(0);
+  });
+
   it("saves an AC voltage source without the former vac export blocker", async () => {
     await renderOpenProject();
     const path = `${DEFAULT_WORKSPACE_ID}/untitled.asc`;

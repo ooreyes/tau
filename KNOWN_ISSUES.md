@@ -51,9 +51,12 @@ one engine for the whole session.
   limit is not opened on its own - attach that file through the Model libraries
   dialog instead. Either way the rest of the schematic still simulates and the
   run names any file it could not resolve.
-- TRIACs import as a BJT; DIACs and varistors as high-value resistors.
-- `.step` runs at most 16 points. A wider sweep warns that it was truncated
-  rather than plotting a short curve as if it were complete.
+- DIAC/TRIAC instances invoke the document's own `.subckt` definitions;
+  voltage-controlled varistors and PHASEDET have LTspice-backed behavioral
+  models. NIGBT and encrypted LT1184F remain unsupported and refuse every
+  analysis explicitly—Tau does not substitute or drop them.
+- `.step` runs every point through 256 members. A larger/nested product is
+  rejected before the first solver call, so no partial family is presented.
 - Transformer magnetizing and leakage inductance are read from `L1`, `L2` and
   `k` on the part; a bare turns ratio still defaults to 10 mH primary.
 

@@ -9,18 +9,22 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-02 14:21 CDT**
+**Status: DONE - 2026-08-02 14:47 CDT**
 
 User-directed autobuilder recovery: repair the unreachable completion signal,
 atomic lock/disk preflight, corpus coverage and independent floors, Class-D
 Efficiency plus RC/Colpitts/Class-D waveform parity proofs, and the remaining
 correctness gaps identified in the interactive review. The launchd schedule is
-paused; the interrupted DATAFLAG claim is preserved on the sanctioned rescue
-ref and will be reconciled or deleted before the schedule resumes. The `.step`
+paused for the requested Chrome/native-app acceptance; the interrupted DATAFLAG
+claim is preserved on the sanctioned rescue ref and will be reconciled or
+deleted before the schedule resumes. The `.step`
 correctness unit is complete: full ordinary sweeps, atomic refusal above the
 safe ceiling, and per-member `.meas` evaluation/display. PNG waveform export is
 now complete. Native AC branch/device phasors and native device operating-point
-parameters/regions are complete; unsupported-device honesty is the next unit.
+parameters/regions are complete. DIAC/TRIAC now invoke their source document's
+own subcircuits, VARISTOR and PHIDET have direct LTspice waveform proofs, and
+every preserved-but-unmapped LTspice symbol refuses every analysis explicitly,
+so Tau cannot present approximate output as electrical parity.
 
 ## READINESS: NOT READY - RETRACTED 2026-07-28
 
@@ -10767,3 +10771,21 @@ evidence is kept in full here.
   vector names/values. Completion now runs both real-engine corpora. Tests so
   far: typecheck; 212 focused unit/DOM; 15 installed-ngspice corpus. Next:
   remove unsafe TRIAC/DIAC/varistor substitutions.
+
+- 2026-08-02 - Removed the last plausible false answers in the requested
+  correctness audit. DIAC/TRIAC imports now use the unmodified document's own
+  `.subckt` definitions, VARISTOR is a four-terminal controlled clamp, and
+  PHIDET is a two-DFF phase/frequency detector with charge-pump output. Direct
+  LTspice-vs-ngspice traces prove both implemented special devices. All analyses
+  now atomically refuse a legacy placeholder or preserved foreign symbol by
+  name. The canonical 82-file corpus truthfully reports 80 warning-clean / 80
+  deck-built / 80 op-converged, with NIGBT and the encrypted LT1184F separated
+  as honest unsupported refusals and zero hard failures. The recursive corpus
+  reports 4,012 imported/schema-valid, 526 warning-clean, 515 deck-built, 511
+  op-converged, 3,486 honest refusals, and 15 extended-corpus hard failures.
+  Files: import/netlist/integrity engine, VARISTOR/PHIDET models and parity,
+  acceptance reporting, UI guard, audit/checklist/state. Tests: typecheck;
+  frontend 2,352 passed / 6 skipped; production web build; Rust fmt/clippy; 46
+  Rust tests plus real bundled-ngspice OP and XSPICE smoke tests; six waveform
+  parity cases. Next: Chrome/native UI acceptance, then reconcile the rescue
+  ref and observe a clean scheduler restart.

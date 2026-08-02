@@ -5,7 +5,8 @@
 # (~/Downloads/LTspice_export and ~/Documents/LTspice),
 # builds an `.op` ngspice deck for each, batch-runs it, and reports
 # warning-clean / deck-built / op-converged counts. Fails if any count drops
-# below the recorded baseline.
+# below the truthful ≥80/82 release floor. Unsupported devices are reported as
+# explicit refusals rather than being silently dropped or approximated.
 #
 # Usage:
 #   scripts/acceptance-corpus.sh                 # all discovered user files
