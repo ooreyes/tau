@@ -558,18 +558,111 @@ SYMATTR Value AD823`;
   });
 
   it("keeps the save block for symbols whose bank drops real pins or rewrites the value", () => {
-    // npn4 has a substrate pin the 3-pin npn bank cannot represent; sw has a
-    // control pin pair; diac's imported value is a placeholder resistance.
-    for (const type of ["npn4", "sw", "diac"]) {
+    // npn4 has a substrate pin the 3-pin npn bank cannot represent; csw is a
+    // 2-pin current-controlled switch with nowhere to put the cp/cn pair Tau
+    // draws on every switch; diac's imported value is a placeholder resistance.
+    for (const type of ["npn4", "csw", "diac"]) {
       const src = NMOS3.replace("SYMBOL nmos", `SYMBOL ${type}`);
       expect(ascRewriteRisks(src), type).toContain("symbol-library identity");
     }
     expect(canEmitLtSymbolVerbatim("npn4", "npn")).toBe(false);
-    expect(canEmitLtSymbolVerbatim("sw", "switch")).toBe(false);
+    expect(canEmitLtSymbolVerbatim("csw", "switch")).toBe(false);
     expect(canEmitLtSymbolVerbatim("diac", "resistor")).toBe(false);
     // Digital gates encode their function in the symbol leaf, which the
     // importer prepends to the value; verbatim re-emission would double it.
     expect(canEmitLtSymbolVerbatim("Digital\\\\and", "digitalGate")).toBe(false);
+  });
+
+  // sw.asy's four pins (A, B, NC+, NC-) are banked whole and line up with the
+  // switch kind's a/b/cp/cn, so a switch goes back out as a switch. Before this
+  // it was written as a placeholder resistor, which cost the user their part -
+  // correctly making `ascRewriteRisks` refuse the save on any file holding one.
+  const SWITCH = `Version 4
+SHEET 1 880 680
+WIRE 100 64 100 116
+WIRE 100 196 100 240
+WIRE 52 180 0 180
+WIRE 52 132 0 132
+FLAG 100 240 0
+FLAG 0 180 0
+FLAG 100 64 out
+FLAG 0 132 ctl
+SYMBOL sw 100 100 R0
+WINDOW 0 12 104 Left 2
+WINDOW 3 17 11 Left 2
+SYMATTR InstName S1
+SYMATTR Value MYSW`;
+
+  it("round-trips a voltage-controlled switch as a sw, control pins and all", () => {
+    const imported = importAsc(SWITCH);
+    expect(imported.warnings).toEqual([]);
+    expect(ascRewriteRisks(SWITCH)).toEqual([]);
+    const [source] = imported.components.filter((c) => c.kind === "switch");
+    // The fixture has to actually wire all four pins, or the topology check
+    // below would compare two empty partitions and prove nothing.
+    expect(source.pinOverride?.map((p) => p.id)).toEqual(["a", "b", "cp", "cn"]);
+
+    const exported = schematicToAsc(imported);
+    expect(exported.warnings).toEqual([]);
+    const symbol = parseAsc(exported.text).symbols[0];
+    expect(symbol.type).toBe("sw");
+    expect(symbol.orientation).toBe("R0");
+    expect(symbol.attrs.InstName).toBe("S1");
+    expect(symbol.attrs.Value).toBe("MYSW");
+    // No carrier metadata: the part is written as itself, not as a stand-in.
+    expect(symbol.attrs.TauKind).toBeUndefined();
+    // WINDOW placement rides along, since the part keeps its source symbol.
+    expect(exported.text).toContain("WINDOW 0 12 104 Left 2");
+
+    const reopened = importAsc(exported.text);
+    expect(topology(reopened)).toEqual(topology(imported));
+    const [again] = reopened.components.filter((c) => c.kind === "switch");
+    expect(again.value).toBe("MYSW");
+    expect(again.ltSymbolType).toBe("sw");
+    expect(again.pinOverride).toEqual(source.pinOverride);
+  });
+
+  it("re-emits a switch that carried no Value without inventing one", () => {
+    // LTspice writes several of these (LTC4226-1.asc); a `Value` added on the
+    // way out would be an attribute the source never had.
+    const src = SWITCH.replace("\nSYMATTR Value MYSW", "");
+    expect(ascRewriteRisks(src)).toEqual([]);
+    const symbol = parseAsc(schematicToAsc(importAsc(src)).text).symbols[0];
+    expect(symbol.type).toBe("sw");
+    expect(symbol.attrs.Value).toBeUndefined();
+  });
+
+  it("writes a switch left on a static open/closed state under the carrier", () => {
+    // `sw` is only a switch because its Value names a .model, so a part moved
+    // to Tau's static state is no longer that symbol and must not be written as
+    // one - LTspice would read `SYMATTR Value closed` as a missing model.
+    const imported = importAsc(SWITCH);
+    const components = imported.components.map((c) =>
+      c.kind === "switch" ? { ...c, value: "closed" } : c);
+    const exported = schematicToAsc({ ...imported, components });
+    const symbol = parseAsc(exported.text).symbols[0];
+    expect(symbol.type).toBe("res");
+    expect(symbol.attrs.TauKind).toBe("switch");
+    expect(symbol.attrs.TauValue).toBe("closed");
+    expect(exported.warnings.filter(isLossyCarrierWarning)).toHaveLength(1);
+    // And Tau reads its own carrier back as the switch it stands in for.
+    const [again] = importAsc(exported.text).components.filter((c) => c.kind === "switch");
+    expect(again.value).toBe("closed");
+  });
+
+  it("reports the carrier without blocking the save", () => {
+    // Moving to a static state changes the symbol, which is what the label
+    // placement of the source symbol cannot survive - so a part carrying WINDOW
+    // records is refused on that, as any part re-emitted under another symbol
+    // is. Without them the only thing left to say is that LTspice sees a
+    // resistor, and that notice must never stop a switch being saved.
+    const src = SWITCH.split("\n").filter((l) => !l.startsWith("WINDOW ")).join("\n");
+    const imported = importAsc(src);
+    const components = imported.components.map((c) =>
+      c.kind === "switch" ? { ...c, value: "closed" } : c);
+    const { warnings } = schematicToAsc({ ...imported, components });
+    expect(warnings.every(isLossyCarrierWarning)).toBe(true);
+    expect(ascSaveBlockReason(ascRewriteRisks(src), 0, warnings)).toBeNull();
   });
 
   it("still exports a Tau-native nmos as the explicit-bulk nmos4", () => {
@@ -803,12 +896,13 @@ describe("extended SYMATTR slots (Value2 / SpiceLine) round-trip", () => {
   });
 });
 
-// A switch is saved as a placeholder resistor, so `SpiceLine` cannot go back
-// under its own name - on a resistor LTspice would read it as the resistor's
-// parasitics. The slots ride in the Tau-only field instead.
+// A current-controlled switch is saved as a placeholder resistor - csw.asy is
+// a 2-pin symbol with nowhere to put the cp/cn pair Tau draws - so `SpiceLine`
+// cannot go back under its own name: on a resistor LTspice would read it as the
+// resistor's parasitics. The slots ride in the Tau-only field instead.
 const CARRIER_ATTR_SOURCE = `Version 4
 SHEET 1 880 680
-SYMBOL sw 400 400 R0
+SYMBOL csw 400 400 R0
 SYMATTR InstName S1
 SYMATTR Value MYSW
 SYMATTR SpiceLine Ron=1 Roff=1Meg`;
@@ -861,8 +955,8 @@ describe("extended SYMATTR slots on a part saved under a carrier symbol", () => 
 
   it("stops naming the slots as a reason the source file cannot be rewritten", () => {
     // Saving over the LTspice original stays blocked, but on the symbol
-    // identity alone: `sw` has two control pins that the carrier resistor does
-    // not, so writing the file back would still cost the user their switch.
+    // identity alone: the carrier resistor is not a switch, so writing the file
+    // back would still cost the user their part.
     expect(ascRewriteRisks(CARRIER_ATTR_SOURCE)).toEqual(["symbol-library identity"]);
   });
 

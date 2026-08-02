@@ -79,8 +79,11 @@ one engine for the whole session.
   still refuses to overwrite a file when the rewrite would drop information it
   cannot yet reproduce: comment placement, those attributes on a symbol Tau
   would have to rewrite into a different real symbol (so the slots have nowhere
-  to land) or whose folded value has since been edited, and symbols with pins
-  Tau does not model (4-pin BJT substrate, switch control pins). A part saved
+  to land) or whose folded value has since been edited, and symbols whose pins
+  and Tau's do not line up (a 4-pin BJT's substrate, which Tau does not model;
+  a 2-pin current-controlled switch, which has nowhere to put the control pair
+  Tau draws on every switch). A voltage-controlled switch (`sw`) is not one of
+  them any more - it is written back as a `sw` with its four pins. A part saved
   under a placeholder symbol is the exception - it keeps its slots in a Tau-only
   attribute, so they are no longer a reason to refuse the save, though a source
   file whose symbols Tau cannot re-emit stays blocked on that count alone.

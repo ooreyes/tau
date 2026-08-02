@@ -29,7 +29,71 @@ figure all run on the real engine. Do not restore a readiness banner until every
 Class A and Class B item in the audit is closed or consciously accepted, with
 file:line evidence.
 
-**Last unit - 2026-08-02: a part saved under a placeholder symbol keeps its
+**Last unit - 2026-08-02: a voltage-controlled switch is written back as a
+switch.**
+An imported LTspice `sw` was saved as a placeholder resistor, so
+`ascRewriteRisks` returned `symbol-library identity` and Tau refused to
+overwrite the file. That verdict was correct - rewriting the file would have
+cost the user their switch - but the reason recorded for it was not. The guard
+that produced it, `VERBATIM_UNSAFE_LEAFS` in `apps/desktop/src/io/ascExport.ts`,
+listed `sw` because "the bank drops real .asy pins (sw/csw control pair)". That
+comment was written before the 2026-07-28 unit that imported both control pins
+and had gone stale: checked against this host's real
+`lib/sym/sw.asy`, the symbol has exactly four pins - A(0,16), B(0,96),
+NC+(-48,80), NC-(-48,32) - and `LTSPICE_PINS.sw` banks all four, matching the
+switch kind's `a`/`b`/`cp`/`cn` one for one. Nothing was being dropped.
+
+Three changes: `sw` leaves `VERBATIM_UNSAFE_LEAFS` (`csw` stays - it is a 2-pin
+symbol, so the cp/cn pair Tau draws on every switch has nowhere to go, which is
+a real mismatch in the opposite direction); the verbatim path is declined for a
+switch moved to Tau's static `open`/`closed` state, since `sw` is only a switch
+because its `Value` names a `.model` and LTspice would read `Value closed` as a
+missing one; and the lossy-carrier notice is now raised on `symbol.tauKind`
+rather than on the kind, so an `sw` written back as itself is not reported as a
+placeholder that is not in the file. An empty value is deliberately not treated
+as a static state - LTspice writes valueless `sw` records (LTC4226-1.asc), and
+those must go back out valueless.
+
+Measured over the 4,012 real `.asc` files in `~/Documents`, not asserted: 10
+hold a `sw`, 0 hold a `csw`. `examples/Educational/Vswitch.asc` - LTspice's own
+teaching file for switches - goes from `["symbol-library identity"]` and two
+export warnings to zero risks and zero warnings, and now saves end to end. The
+other 9 stay blocked, every one of them independently, by a vendor symbol the
+importer skips (`LTC4282`, `LTC1232`, `TVSdiode`, …). That is the honest
+result: this unit unblocks 1 of 10 files, and it is now recorded in STATE.md
+that unimportable vendor symbols, not switches, are the binding constraint.
+All 10 do stop having their switch rewritten to a resistor on any save that
+does go through.
+
+Round-trip proven rather than claimed: on Vswitch.asc, LTC4282.asc,
+LTC4226-1.asc and LTC1232.asc, `importAsc → schematicToAsc → importAsc` keeps
+`schematicTopologySignature` identical and returns the switch with the same
+label, value, symbol type, rotation, mirror and all four pins at identical world
+coordinates; Vswitch.asc re-emits `SYMBOL sw 192 272 M180` with its two WINDOW
+records and `SYMATTR InstName S1`.
+
+Tests: three new cases in `ascExport.test.ts` (faithful `sw` round-trip with the
+control pins and WINDOW placement; a valueless `sw` re-emitted without an
+invented `Value`; the static-state fallback to the carrier and its notice not
+blocking a save) and one in `types.test.ts`. Reverting the one-line guard change
+fails 4 of them - the mutation was run, not assumed. Two existing tests had
+encoded the stale belief and were corrected to `csw`, which is the switch that
+genuinely still needs a carrier.
+
+One thing the new tests surfaced and did NOT paper over: a switch moved to a
+static state changes symbol, so a part carrying WINDOW records is refused on
+"label placement is not preserved" - the pre-existing contract for any part
+re-emitted under another symbol. That guard is correct and was left alone; the
+assertion that assumed otherwise was the thing that was wrong.
+
+Gates: `tsc --noEmit` clean; full suite 2317 passed / 6 skipped across 150 files
+(`--maxWorkers=2`); `cargo test` 46 passed; `cargo clippy --all-targets` clean;
+acceptance corpus 80 imported / 77 warning-clean / 80 deck-built / 80
+op-converged / 80 schema-valid, unchanged - its only failure is the recorded
+`>= 82` assertion against the two corpus files deleted from this host, and the
+importer was not touched by this unit so `warning-clean` could not move.
+
+**2026-08-02: a part saved under a placeholder symbol keeps its
 extended attribute slots - and the measurement that says this was the smaller
 half of the problem.**
 A Tau-native kind with no faithful single LTspice symbol (switch, comparator,

@@ -181,9 +181,15 @@ describe("project schematic file formats", () => {
 
     // A part written under a carrier symbol keeps its slots in the Tau-only
     // field, so they are no longer a reason to block. The save stays blocked
-    // all the same: the carrier resistor drops the switch's two control pins.
-    const carrier = `Version 4\nSHEET 1 880 680\nSYMBOL sw 80 80 R0\nSYMATTR InstName S1\nSYMATTR SpiceLine Ron=1\n`;
+    // all the same: csw is a 2-pin symbol, so the carrier drops the cp/cn pair
+    // Tau draws on every switch.
+    const carrier = `Version 4\nSHEET 1 880 680\nSYMBOL csw 80 80 R0\nSYMATTR InstName S1\nSYMATTR SpiceLine Ron=1\n`;
     expect(ascRewriteRisks(carrier)).toEqual(["symbol-library identity"]);
+
+    // A voltage-controlled switch is not one of them: sw.asy's four pins are
+    // banked whole, so the part goes back out as itself.
+    const vswitch = `Version 4\nSHEET 1 880 680\nSYMBOL sw 80 80 R0\nSYMATTR InstName S1\nSYMATTR Value MYSW\n`;
+    expect(ascRewriteRisks(vswitch)).toEqual([]);
 
     // npn4's substrate pin has no banked geometry, so its identity cannot be
     // re-emitted faithfully and the save block stays.

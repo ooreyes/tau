@@ -150,11 +150,17 @@ const DIGITAL_GATE_LEAFS = new Set([
 
 /** LTspice symbol leafs whose imported form is NOT a faithful re-emission
  * target even though their pin geometry is banked: the bank drops real .asy
- * pins (npn4/pnp4 substrate, sw/csw control pair - wires to those pins would
- * silently detach), or the importer replaced the source Value with a
- * placeholder (varistor/diac get a neutral high-Z resistance). These stay on
- * the blocked-save path. */
-const VERBATIM_UNSAFE_LEAFS = new Set(["npn4", "pnp4", "sw", "csw", "varistor", "diac"]);
+ * pins (npn4/pnp4 substrate - wires to those pins would silently detach), the
+ * symbol has nowhere to put a pin Tau's kind exposes (csw is a 2-pin
+ * current-controlled switch, so the cp/cn pair Tau draws on every switch would
+ * be written to a symbol that has no such pins), or the importer replaced the
+ * source Value with a placeholder (varistor/diac get a neutral high-Z
+ * resistance). These stay on the blocked-save path.
+ *
+ * `sw` is NOT one of them: sw.asy's four pins (A, B, NC+, NC-) are banked whole
+ * and match the switch kind's a/b/cp/cn one for one, so the symbol re-imports
+ * with the same pins on the same nets. */
+const VERBATIM_UNSAFE_LEAFS = new Set(["npn4", "pnp4", "csw", "varistor", "diac"]);
 
 /**
  * Whether an imported LTspice symbol name can be re-emitted verbatim by the
@@ -220,11 +226,29 @@ export const TAU_CARRIER_KINDS: ReadonlySet<ComponentKind> = new Set<ComponentKi
   ...(LOSSY_CARRIER_KINDS as ReadonlySet<ComponentKind>),
 ]);
 
+/**
+ * True for a switch left on Tau's static open/closed state instead of naming a
+ * `.model`. LTspice's `sw` is only a switch because its Value names one, so a
+ * part on a static state is no longer that symbol however it was imported and
+ * belongs under the carrier - which is what the state means to a netlist too.
+ *
+ * An empty value is deliberately not a static state here: an imported `sw` with
+ * no `Value` attribute (LTspice writes several) has to go back out as a
+ * valueless `sw`, which reproduces the source record exactly. A switch placed
+ * in Tau carries no `pinOverride`, so it never reaches the verbatim path.
+ */
+function isStaticStateSwitch(component: SchematicComponent): boolean {
+  if (component.kind !== "switch") return false;
+  const state = component.value.trim().toLowerCase();
+  return state.startsWith("open") || state.startsWith("closed");
+}
+
 function componentToLtspiceSymbol(component: SchematicComponent): LtspiceComponentSymbol | null {
   if (
     component.ltSymbolType &&
     component.pinOverride?.length &&
-    canEmitLtSymbolVerbatim(component.ltSymbolType, component.kind)
+    canEmitLtSymbolVerbatim(component.ltSymbolType, component.kind) &&
+    !isStaticStateSwitch(component)
   ) {
     // An imported part keeps its original LTspice symbol: the banked geometry
     // regenerates the same pinOverride on re-import, and LTspice reopens the
@@ -396,7 +420,12 @@ export function schematicToAsc(input: SchematicExportInput): SchematicToAscResul
     // Tau round-trips these through their `Tau*` attributes, so the loss is
     // invisible here - it lands on whoever opens the file in LTspice and sees
     // a bare resistor where a switch or subcircuit used to be. Say so.
-    if (LOSSY_CARRIER_KINDS.has(c.kind)) {
+    //
+    // Only when the part really did go out under a carrier: a `TauKind` is what
+    // marks a stand-in symbol, and a kind in this set does not always need one
+    // (an imported `sw` is written back as itself). Reporting on the kind alone
+    // would claim a placeholder that is not in the file.
+    if (symbol.tauKind && LOSSY_CARRIER_KINDS.has(c.kind)) {
       const reads = symbol.value === "1T" ? "an open circuit" : `a ${symbol.value} resistor`;
       warnings.push(
         `${c.label || c.id}: ${LOSSY_CARRIER_MARKER}. Tau reopens it as a ${c.kind}, `

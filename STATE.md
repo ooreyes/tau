@@ -62,21 +62,15 @@ do not spend a fire diffing it again. Re-check only if its tip moves past
 Ordered. Take the top item unless it is blocked. Class A outranks everything -
 a plausible wrong number is worse than a refusal to run.
 
-1. **A switch cannot be written back as a switch.** LTspice's `sw`/`csw` have
-   two control pins; Tau saves the part as a placeholder resistor, so
-   `ascRewriteRisks` returns `symbol-library identity` and refuses to overwrite
-   the file. That verdict is CORRECT - rewriting it would cost the user their
-   switch - and it is the real reason these files cannot be saved. Closing it
-   means teaching the exporter to emit a faithful `sw` with its control pins,
-   not relaxing the guard.
-
-   **Do not re-take the extended-slots framing of this item: it was measured
-   and it was wrong.** The 2026-08-02 unit gave the carrier a Tau-only slot
-   (`TauAttrs`) to park `Value2`/`SpiceLine` in, which was worth landing for the
-   export layer, but running `ascRewriteRisks` over 3,999 real `.asc` files
-   showed it changes the verdict on 3 files and unblocks **zero** - every one of
-   them is independently blocked by symbol-library identity. Measure a "this
-   blocks saves" claim against the corpus before spending a fire on it.
+1. **A vendor symbol Tau cannot import blocks the save, and it is now the
+   dominant reason.** Landing the `sw` round-trip left 9 of the 10 real
+   switch files still blocked, every one of them by a part like `LTC4282` or
+   `TVSdiode`: the importer skips the symbol (`no Tau equivalent for LTspice
+   symbol "X"`), which raises BOTH `partially supported devices` and
+   `symbol-library identity`. That is the same wall the flagship model-import
+   work is aimed at. Measure any "this blocks saves" claim against
+   `~/Documents` (4,012 real `.asc` files) before spending a fire on it - two
+   units in a row have found the named cause was not the binding one.
 2. **A folded value that was edited blocks the save.** By design: an op-amp's
    value IS its slots joined, so an edit cannot be split back across them. The
    honest fix is to stop folding - give the component structured parameters
@@ -99,6 +93,7 @@ Newest first, ONE line each. Full evidence for every unit is in PROGRESS.md
 and in its commit message. This section exists so a fresh fire can see what
 is already done at a glance, not so it can re-read the reasoning.
 
+- 2026-08-02 - A VOLTAGE-CONTROLLED SWITCH is written back as a `sw` with all four pins instead of a placeholder resistor; `sw.asy`'s bank was already complete, so the "drops the control pair" comment guarding it was stale. `examples/Educational/Vswitch.asc` saves with zero risks and zero warnings.
 - 2026-08-02 - A PART SAVED UNDER A PLACEHOLDER SYMBOL keeps its extended slots in a Tau-only `TauAttrs` field. Measured over 3,999 real files: it unblocks ZERO of them - carrier kinds are blocked by symbol-library identity, which is the correct verdict.
 - 2026-08-02 - EXTENDED SYMATTR SLOTS (`Value2`/`SpiceLine`) go back into the slots they came from instead of collapsing onto `Value`; `examples/class-d-amplifier/deadtime.asc` now saves end to end with zero risks and zero warnings.
 - 2026-08-02 - HIERARCHY PORTS (`IOPIN`) survive a save instead of being silently discarded at parse; carried on the net label their FLAG became, so a port cannot outlive its label or be emitted without its FLAG.
