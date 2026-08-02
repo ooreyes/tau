@@ -68,6 +68,8 @@ interface Doc {
   ascDataFlags: SchematicAscDataFlag[];
   /** Original SYMBOL records with no Tau equivalent, retained for lossless `.asc` rewrites. */
   ascForeignSymbols: SchematicForeignSymbol[];
+  /** Original SYMBOL records that resolved to a hierarchical block and flattened. */
+  ascHierarchicalBlocks: SchematicForeignSymbol[];
   /** Original LTspice SHEET record, null for Tau-native/legacy documents. */
   ascSheet: SchematicSheet | null;
   /** Vendor model files attached to the document (see {@link SchematicModelLibrary}). */
@@ -102,6 +104,12 @@ export interface SchematicDocument {
   ascDataFlags?: SchematicAscDataFlag[];
   /** Source SYMBOL records with no Tau equivalent, retained for lossless `.asc` rewrites. */
   ascForeignSymbols?: SchematicForeignSymbol[];
+  /**
+   * Source SYMBOL records that resolved to a hierarchical block and were
+   * flattened into `components`. These simulate - unlike `ascForeignSymbols` -
+   * and are retained so a save can report the hierarchy it would flatten.
+   */
+  ascHierarchicalBlocks?: SchematicForeignSymbol[];
   /** Original LTspice SHEET record retained for lossless `.asc` rewrites. */
   ascSheet?: SchematicSheet | null;
   /**
@@ -244,6 +252,8 @@ interface SchematicState extends Doc {
   ascDataFlags: SchematicAscDataFlag[];
   /** Original SYMBOL records with no Tau equivalent; changed only by import/document replacement. */
   ascForeignSymbols: SchematicForeignSymbol[];
+  /** Original SYMBOL records that flattened as hierarchical blocks; same lifetime as above. */
+  ascHierarchicalBlocks: SchematicForeignSymbol[];
   ascSheet: SchematicSheet | null;
 
   /** Vendor model files attached to the document, inlined into the native deck when referenced. */
@@ -284,6 +294,7 @@ const docOf = (s: Doc): Doc => ({
   ascShapes: s.ascShapes,
   ascDataFlags: s.ascDataFlags,
   ascForeignSymbols: s.ascForeignSymbols,
+  ascHierarchicalBlocks: s.ascHierarchicalBlocks,
   ascSheet: s.ascSheet,
   userModelLibraries: s.userModelLibraries,
 });
@@ -425,6 +436,11 @@ function copyDocument(doc: SchematicDocument, freshIds: boolean): SchematicDocum
       attrs: { ...symbol.attrs },
       ...(symbol.windows ? { windows: symbol.windows.map((w) => ({ ...w })) } : {}),
     })),
+    ascHierarchicalBlocks: (doc.ascHierarchicalBlocks ?? []).map((symbol) => ({
+      ...symbol,
+      attrs: { ...symbol.attrs },
+      ...(symbol.windows ? { windows: symbol.windows.map((w) => ({ ...w })) } : {}),
+    })),
     ...(doc.ascSheet ? { ascSheet: { ...doc.ascSheet } } : {}),
     // Attachments are immutable, so a shallow copy shares the (possibly large)
     // text without duplicating it - fresh ids never apply to library files.
@@ -449,6 +465,7 @@ function copyHistoryEntry(entry: Doc): Doc {
     ascShapes: document.ascShapes ?? [],
     ascDataFlags: document.ascDataFlags ?? [],
     ascForeignSymbols: document.ascForeignSymbols ?? [],
+    ascHierarchicalBlocks: document.ascHierarchicalBlocks ?? [],
     ascSheet: document.ascSheet ?? null,
     userModelLibraries: document.userModelLibraries ?? [],
   };
@@ -727,6 +744,7 @@ export const useSchematic = create<SchematicState>()((set) => {
     ascShapes: initialDoc?.ascShapes ?? [],
     ascDataFlags: initialDoc?.ascDataFlags ?? [],
     ascForeignSymbols: initialDoc?.ascForeignSymbols ?? [],
+    ascHierarchicalBlocks: initialDoc?.ascHierarchicalBlocks ?? [],
     ascSheet: initialDoc?.ascSheet ?? null,
     userModelLibraries: initialDoc?.userModelLibraries ?? [],
     past: [],
@@ -1157,6 +1175,7 @@ export const useSchematic = create<SchematicState>()((set) => {
           ascShapes: cloned.ascShapes ?? [],
           ascDataFlags: cloned.ascDataFlags ?? [],
           ascForeignSymbols: cloned.ascForeignSymbols ?? [],
+    ascHierarchicalBlocks: cloned.ascHierarchicalBlocks ?? [],
           ascSheet: cloned.ascSheet ?? null,
           userModelLibraries: cloned.userModelLibraries ?? [],
           past: [],
@@ -1184,6 +1203,7 @@ export const useSchematic = create<SchematicState>()((set) => {
           ascShapes: replacement.ascShapes ?? [],
           ascDataFlags: replacement.ascDataFlags ?? [],
           ascForeignSymbols: replacement.ascForeignSymbols ?? [],
+    ascHierarchicalBlocks: replacement.ascHierarchicalBlocks ?? [],
           ascSheet: replacement.ascSheet ?? null,
           userModelLibraries: replacement.userModelLibraries ?? [],
           selectedId: null,
@@ -1208,6 +1228,7 @@ export const useSchematic = create<SchematicState>()((set) => {
           ascShapes: restored.ascShapes ?? [],
           ascDataFlags: restored.ascDataFlags ?? [],
           ascForeignSymbols: restored.ascForeignSymbols ?? [],
+    ascHierarchicalBlocks: restored.ascHierarchicalBlocks ?? [],
           ascSheet: restored.ascSheet ?? null,
           userModelLibraries: restored.userModelLibraries ?? [],
           past: history.past.map(copyHistoryEntry).slice(-HISTORY_LIMIT),
@@ -1231,6 +1252,7 @@ export const useSchematic = create<SchematicState>()((set) => {
         textAnnotations: [],
         ascShapes: [],
         ascForeignSymbols: [],
+        ascHierarchicalBlocks: [],
         ascSheet: null,
         userModelLibraries: [],
         past: [],
@@ -1255,6 +1277,7 @@ useSchematic.subscribe((state, prev) => {
     || state.textAnnotations !== prev.textAnnotations
     || state.ascShapes !== prev.ascShapes
     || state.ascForeignSymbols !== prev.ascForeignSymbols
+    || state.ascHierarchicalBlocks !== prev.ascHierarchicalBlocks
     || state.ascSheet !== prev.ascSheet
     || state.userModelLibraries !== prev.userModelLibraries
   ) {
@@ -1267,6 +1290,7 @@ useSchematic.subscribe((state, prev) => {
       textAnnotations: state.textAnnotations,
       ascShapes: state.ascShapes,
       ascForeignSymbols: state.ascForeignSymbols,
+      ascHierarchicalBlocks: state.ascHierarchicalBlocks,
       ...(state.ascSheet ? { ascSheet: state.ascSheet } : {}),
       ...(state.userModelLibraries.length > 0 ? { userModelLibraries: state.userModelLibraries } : {}),
     });

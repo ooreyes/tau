@@ -316,46 +316,54 @@ const FORGES_ASC_RECORD = /[\s\u0000-\u001f\u007f]/;
 // space is ordinary and must stay; only a control character can forge a record.
 const CONTROL_CHARACTER = /[\u0000-\u001f\u007f]/;
 
-function foreignSymbol(value: unknown, index: number): SchematicForeignSymbol {
-  const source = record(value, `ascForeignSymbols[${index}]`);
-  const orientation = text(source.orientation, `ascForeignSymbols[${index}].orientation`, 8);
+// Shared by `ascForeignSymbols` and `ascHierarchicalBlocks`: both carry a raw
+// SYMBOL record with identical shape and identical re-emission rules, so the
+// field name only decides how a rejection is reported.
+function foreignSymbol(
+  value: unknown,
+  index: number,
+  field: "ascForeignSymbols" | "ascHierarchicalBlocks" = "ascForeignSymbols",
+): SchematicForeignSymbol {
+  const label = `${field}[${index}]`;
+  const source = record(value, label);
+  const orientation = text(source.orientation, `${label}.orientation`, 8);
   if (!ASC_ORIENTATIONS.has(orientation)) {
-    fail(`ascForeignSymbols[${index}].orientation must be one of R0, R90, R180, R270, M0, M90, M180, M270.`);
+    fail(`${label}.orientation must be one of R0, R90, R180, R270, M0, M90, M180, M270.`);
   }
-  const attrsSource = record(source.attrs, `ascForeignSymbols[${index}].attrs`);
+  const attrsSource = record(source.attrs, `${label}.attrs`);
   const attrsEntries = Object.entries(attrsSource);
   if (attrsEntries.length > MAX_FOREIGN_SYMBOL_ATTRS) {
-    fail(`ascForeignSymbols[${index}].attrs must have at most ${MAX_FOREIGN_SYMBOL_ATTRS} entries.`);
+    fail(`${label}.attrs must have at most ${MAX_FOREIGN_SYMBOL_ATTRS} entries.`);
   }
   const attrs: Record<string, string> = {};
   for (const [name, raw] of attrsEntries) {
-    if (name.length > MAX_TEXT_LENGTH) fail(`ascForeignSymbols[${index}].attrs has a field name that is too long.`);
+    if (name.length > MAX_TEXT_LENGTH) fail(`${label}.attrs has a field name that is too long.`);
     if (name === "" || FORGES_ASC_RECORD.test(name)) {
-      fail(`ascForeignSymbols[${index}].attrs has a field name that is not a valid SYMATTR name.`);
+      fail(`${label}.attrs has a field name that is not a valid SYMATTR name.`);
     }
-    const attrValue = text(raw, `ascForeignSymbols[${index}].attrs.${name}`, MAX_COMPONENT_VALUE_LENGTH);
+    const attrValue = text(raw, `${label}.attrs.${name}`, MAX_COMPONENT_VALUE_LENGTH);
     if (CONTROL_CHARACTER.test(attrValue)) {
-      fail(`ascForeignSymbols[${index}].attrs.${name} must not contain control characters.`);
+      fail(`${label}.attrs.${name} must not contain control characters.`);
     }
     attrs[name] = attrValue;
   }
-  const symbolType = text(source.type, `ascForeignSymbols[${index}].type`, MAX_TEXT_LENGTH);
+  const symbolType = text(source.type, `${label}.type`, MAX_TEXT_LENGTH);
   if (symbolType === "" || FORGES_ASC_RECORD.test(symbolType)) {
-    fail(`ascForeignSymbols[${index}].type must be a non-empty LTspice symbol name with no whitespace.`);
+    fail(`${label}.type must be a non-empty LTspice symbol name with no whitespace.`);
   }
   const result: SchematicForeignSymbol = {
     type: symbolType,
-    x: coordinate(source.x, `ascForeignSymbols[${index}].x`),
-    y: coordinate(source.y, `ascForeignSymbols[${index}].y`),
+    x: coordinate(source.x, `${label}.x`),
+    y: coordinate(source.y, `${label}.y`),
     orientation: orientation as SchematicForeignSymbol["orientation"],
     attrs,
   };
   if (source.windows !== undefined) {
     if (!Array.isArray(source.windows) || source.windows.length > MAX_WINDOWS_PER_COMPONENT) {
-      fail(`ascForeignSymbols[${index}].windows must be an array of at most ${MAX_WINDOWS_PER_COMPONENT} records.`);
+      fail(`${label}.windows must be an array of at most ${MAX_WINDOWS_PER_COMPONENT} records.`);
     }
     result.windows = source.windows.map((candidate, windowIndex) => {
-      const name = `ascForeignSymbols[${index}].windows[${windowIndex}]`;
+      const name = `${label}.windows[${windowIndex}]`;
       const window = record(candidate, name);
       const { attr, size } = window;
       if (typeof attr !== "number" || !Number.isInteger(attr) || attr < 0) fail(`${name}.attr must be a non-negative integer.`);
@@ -399,6 +407,7 @@ export function validateSchematicDocument(value: unknown): SchematicDocument {
   const ascShapes = source.ascShapes === undefined ? [] : source.ascShapes;
   const ascDataFlags = source.ascDataFlags === undefined ? [] : source.ascDataFlags;
   const ascForeignSymbols = source.ascForeignSymbols === undefined ? [] : source.ascForeignSymbols;
+  const ascHierarchicalBlocks = source.ascHierarchicalBlocks === undefined ? [] : source.ascHierarchicalBlocks;
   const ascSheet = source.ascSheet;
   const userModelLibraries = source.userModelLibraries === undefined ? [] : source.userModelLibraries;
   if (!Array.isArray(probes) || probes.length > MAX_COMPONENTS) fail("probes must be a bounded array.");
@@ -415,6 +424,9 @@ export function validateSchematicDocument(value: unknown): SchematicDocument {
   }
   if (!Array.isArray(ascForeignSymbols) || ascForeignSymbols.length > MAX_ASC_FOREIGN_SYMBOLS) {
     fail(`ascForeignSymbols must be an array of at most ${MAX_ASC_FOREIGN_SYMBOLS} items.`);
+  }
+  if (!Array.isArray(ascHierarchicalBlocks) || ascHierarchicalBlocks.length > MAX_ASC_FOREIGN_SYMBOLS) {
+    fail(`ascHierarchicalBlocks must be an array of at most ${MAX_ASC_FOREIGN_SYMBOLS} items.`);
   }
   if (!Array.isArray(userModelLibraries) || userModelLibraries.length > MAX_MODEL_LIBRARIES) {
     fail(`userModelLibraries must be an array of at most ${MAX_MODEL_LIBRARIES} items.`);
@@ -471,7 +483,18 @@ export function validateSchematicDocument(value: unknown): SchematicDocument {
       : {}),
     ...(ascShapes.length > 0 ? { ascShapes: ascShapes.map(ascShape) } : {}),
     ...(ascDataFlags.length > 0 ? { ascDataFlags: ascDataFlags.map(ascDataFlag) } : {}),
-    ...(ascForeignSymbols.length > 0 ? { ascForeignSymbols: ascForeignSymbols.map(foreignSymbol) } : {}),
+    // Arrow, not a bare reference: `map` passes the array as a third argument,
+    // which would land in `field`.
+    ...(ascForeignSymbols.length > 0
+      ? { ascForeignSymbols: ascForeignSymbols.map((candidate: unknown, index: number) => foreignSymbol(candidate, index)) }
+      : {}),
+    ...(ascHierarchicalBlocks.length > 0
+      ? {
+        ascHierarchicalBlocks: ascHierarchicalBlocks.map(
+          (candidate: unknown, index: number) => foreignSymbol(candidate, index, "ascHierarchicalBlocks"),
+        ),
+      }
+      : {}),
     ...(ascSheet !== undefined ? { ascSheet: schematicSheet(ascSheet) } : {}),
     // Additive: only emit the key when attachments exist so legacy/empty
     // documents keep their exact prior serialized shape.

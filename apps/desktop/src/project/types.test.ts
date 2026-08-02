@@ -406,6 +406,73 @@ SYMATTR InstName X1
     const risks = ascRewriteRisks(source, resolved.foreignSymbols);
     expect(risks).toContain("symbol-library identity");
     expect(ascSaveBlockReason(risks, 0, [])).not.toBeNull();
+
+    // The un-flattened record is retained, and NOT as a foreign symbol: it
+    // simulates, and `ascForeignSymbols` feeds the simulation-integrity
+    // refusal, so putting it there would stop the block running at all.
+    expect(resolved.hierarchicalBlocks).toHaveLength(1);
+    expect(resolved.hierarchicalBlocks[0]).toMatchObject({
+      type: "mydiv2",
+      x: 200,
+      y: 200,
+      orientation: "R0",
+      attrs: { InstName: "X1" },
+    });
+
+    // Told which records resolved, the verdict is unchanged - the save is
+    // still refused - but the reason stops claiming Tau has no symbol for a
+    // part it read, resolved and inlined.
+    const named = ascRewriteRisks(source, resolved.foreignSymbols, resolved.hierarchicalBlocks);
+    expect(named).toEqual(["hierarchical blocks"]);
+    expect(ascSaveBlockReason(named, 0, [])).toBe("Tau cannot yet preserve hierarchical blocks.");
+  });
+
+  it("still names the hierarchy after a .sim save and reopen", () => {
+    // A `.sim` written from an imported `.asc` and reopened must not be the
+    // step that forgets which symbols were blocks: the document is the only
+    // record of it, so dropping the field would silently put the misleading
+    // "symbol-library identity" reason back on the next save.
+    const bodyAsy = `Version 4
+SymbolType BLOCK
+PIN -32 0 LEFT 8
+PINATTR PinName a
+PINATTR SpiceOrder 1
+PIN 32 0 RIGHT 8
+PINATTR PinName b
+PINATTR SpiceOrder 2`;
+    const bodyAsc = `Version 4
+SHEET 1 100 200
+FLAG 16 0 a
+FLAG 16 160 b
+SYMBOL res 0 -16 R0
+SYMATTR InstName R1
+SYMATTR Value 1k`;
+    const source = `Version 4
+SHEET 1 880 680
+SYMBOL mydiv2 200 200 R0
+SYMATTR InstName X1
+`;
+    const resolved = importAsc(source, {
+      resolveSubcircuit: makeSubcircuitResolver((type) =>
+        type.toLowerCase() === "mydiv2" ? { asy: bodyAsy, asc: bodyAsc } : null,
+      ),
+    });
+
+    const saved = serializeSchematicFile("/Schematics/hier.sim", {
+      components: resolved.components,
+      wires: resolved.wires,
+      probes: [],
+      netLabels: resolved.netLabels,
+      directives: resolved.directives,
+      ascForeignSymbols: resolved.foreignSymbols,
+      ascHierarchicalBlocks: resolved.hierarchicalBlocks,
+    });
+    const reopened = validateSchematicDocument(JSON.parse(saved.contents));
+    expect(reopened.ascHierarchicalBlocks).toEqual(resolved.hierarchicalBlocks);
+
+    const risks = ascRewriteRisks(source, reopened.ascForeignSymbols, reopened.ascHierarchicalBlocks);
+    expect(risks).toEqual(["hierarchical blocks"]);
+    expect(ascSaveBlockReason(risks, 0, [])).toBe("Tau cannot yet preserve hierarchical blocks.");
   });
 
   it("round-trips a foreign symbol through a .sim save/open", () => {

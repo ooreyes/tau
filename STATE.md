@@ -7,6 +7,26 @@ The working memory of an unattended loop that starts from zero every fire.
 
 **Status:** IDLE - 2026-08-02
 
+Landed "Next up" item 1, half 1 of 2: the un-flattened hierarchical-block
+`SYMBOL` record is carried on the document, and the save-block reason now names
+the hierarchy. Measured on `examples/class-d-amplifier/class-d-starter.asc`:
+`["symbol-library identity","partially supported devices"]` becomes exactly
+`["hierarchical blocks"]`, so "Tau cannot yet preserve symbol-library identity."
+becomes "Tau cannot yet preserve hierarchical blocks." The verdict is unchanged
+- the save is still refused, correctly, because an in-place write would flatten
+the user's hierarchy. Only the false part of the message is gone.
+
+**The record must NOT go on `ascForeignSymbols`.** That set feeds
+`assertSimulationIntegrity` (`App.tsx:578`), which refuses to simulate anything
+in it; a resolved block DOES simulate, so reusing the field would have stopped
+the flagship class-d example running at all. It is a separate field for that
+reason, and a block nested inside a block's own body stays with the child file.
+
+Half 2 is the hard half and is unchanged: the exporter must emit the block
+record and SUPPRESS its flattened parts, which needs per-component provenance
+plus a guard that refuses when a flattened part was edited (that edit belongs in
+the child `.asc`, which Tau is not writing).
+
 `DATAFLAG` is carried through import and export, which closes the WHOLE
 `unknown LTspice records` save-block category.
 
@@ -78,13 +98,14 @@ which are folded into the block above.
 Ordered. Take the top item unless it is blocked. Class A outranks everything -
 a plausible wrong number is worse than a refusal to run.
 
-1. **A hierarchical block still cannot be saved in place, and now it is a
-   visible gap rather than one of thousands.** A resolved block is FLATTENED at
-   import (`ascImport.ts:1651`), so an in-place save would rewrite the user's
-   hierarchy as flat parts. Carrying the un-flattened `SYMBOL` alongside the
-   flattened components - the way a foreign symbol is carried now - is the
-   shape of the fix, but the exporter must then emit the block and NOT its
-   flattened parts, which is the hard half.
+1. **A hierarchical block still cannot be saved in place - half 2 of 2.**
+   Half 1 landed: the un-flattened `SYMBOL` is now carried on the document as
+   `ascHierarchicalBlocks` and the block reason names the hierarchy. What
+   remains is the hard half - the exporter must emit that record and NOT the
+   flattened parts. That needs per-component provenance (which flattened part
+   came from which block instance) plus a guard: if the user edited a part
+   inside the block, the edit belongs in the CHILD `.asc`, which Tau is not
+   writing, so that case must stay blocked rather than be silently dropped.
 2. **A folded value that was edited blocks the save.** By design: an op-amp's
    value IS its slots joined, so an edit cannot be split back across them. The
    honest fix is to stop folding - give the component structured parameters
@@ -107,6 +128,7 @@ Newest first, ONE line each. Full evidence for every unit is in PROGRESS.md
 and in its commit message. This section exists so a fresh fire can see what
 is already done at a glance, not so it can re-read the reasoning.
 
+- 2026-08-02 - A HIERARCHICAL BLOCK'S SAVE-BLOCK REASON STOPS LYING (half 1 of 2): the resolved-and-flattened `SYMBOL` is carried as `ascHierarchicalBlocks`, turning `["symbol-library identity","partially supported devices"]` into `["hierarchical blocks"]` on the class-d starter. It is a SEPARATE field because `ascForeignSymbols` feeds the simulation-integrity refusal and a block must still simulate.
 - 2026-08-02 - A `DATAFLAG` READOUT SURVIVES A SAVE, emptying the whole `unknown LTspice records` category: save-blocked over 4,012 real `.asc` falls 39 -> 36, and the 8 records in the 3 affected files round-trip identically with no save warning. The expression is carried as the verbatim line tail, never re-joined from split tokens.
 - 2026-08-02 - FRESH PACKAGED-APP QA IS GREEN. The exact release `.app` opens the canonical `class-d_starter.asc` with its sibling `deadtime` block, runs bundled ngspice to 16,873 samples / 33 parts, renders the expected switching and sine/output waveforms, and reports Efficiency = 990.7 m (99.07%). The same top-level file without its required sibling sources refuses by name and shows no telemetry or partial plot. Chrome at the 900x600 minimum had zero clipped controls and zero console warnings/errors.
 - 2026-08-02 - THE SCHEDULER IS ACTIVE AND ITS COMPLETION PROOF REACHES INSIDE THE DMG. Its first controlled fire honored quota backoff, exited 0, and released the PID lock. A completion marker now requires real OP and XSPICE runs against the mounted Tau.app's bundled library before notification.

@@ -9,9 +9,51 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-02 17:35 CDT**
+**Status: DONE - 2026-08-02 18:20 CDT**
 
-Latest unit: `DATAFLAG` readouts are carried through import and export, which
+Latest unit: a hierarchical block's save-block reason stops claiming Tau has no
+symbol for a part it resolved, read and inlined (half 1 of 2).
+
+A block that resolves against its sibling files is FLATTENED at import, and
+until now nothing recorded that it had ever been a block: the document held only
+the flat parts. `ascRewriteRisks` re-imports the source WITHOUT a subcircuit
+resolver, so the same symbol fell through to the foreign-symbol branch and was
+reported as `symbol-library identity`. On
+`examples/class-d-amplifier/class-d-starter.asc` the user was told "Tau cannot
+yet preserve symbol-library identity." for `deadtime` - a file Tau had just
+read, resolved and inlined into 33 working components.
+
+The un-flattened `SYMBOL` record is now carried through import, the store,
+document validation and a `.sim` round trip as `ascHierarchicalBlocks`, and
+`ascRewriteRisks` takes it as a third argument. The class-d starter's risks go
+from `["symbol-library identity","partially supported devices"]` to exactly
+`["hierarchical blocks"]`, and the message becomes "Tau cannot yet preserve
+hierarchical blocks."
+
+The verdict is deliberately unchanged: the save is still refused, because an
+in-place write really would rewrite the user's hierarchy as flat parts. Only the
+false half of the message is gone. Omitting the new argument keeps the old
+conservative behaviour, so no caller is silently changed.
+
+The record is carried in its OWN field rather than on `ascForeignSymbols`,
+which feeds `assertSimulationIntegrity` (`App.tsx:578`) and refuses to simulate
+anything in that set. Reusing it would have stopped the flagship class-d example
+simulating at all. A block nested inside another block's body stays with the
+child file and is not carried up to the parent.
+
+Each part of the fix was proved load-bearing by reverting it and watching the
+tests fail: dropping the risk-naming branch fails 2, dropping the import carry
+fails 2, dropping the `.sim` persistence fails 1.
+
+Gates: typecheck; full frontend suite (154 files, 2358 tests, 0 failed); cargo
+test (46 passed); clippy clean; acceptance corpus 82 imported / 80 warning-clean
+/ 80 deck-built / 80 op-converged / 82 schema-valid, at baseline.
+
+Next candidate: half 2 - teach the exporter to emit the block record and
+suppress its flattened parts, with per-component provenance and a guard that
+keeps the save blocked when a part inside the block was edited.
+
+Previous unit: `DATAFLAG` readouts are carried through import and export, which
 empties the `unknown LTspice records` save-block category. Re-censused over the
 4,012 real `.asc` under `~/Documents`, decoded the way the app decodes: files
 blocked from an in-place save fall from 39 to 36, and the category that this

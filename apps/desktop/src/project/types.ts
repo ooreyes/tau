@@ -131,10 +131,17 @@ const foreignSymbolKey = (symbol: {
  * Deriving the set locally would therefore unblock a lossy save. Omitting the
  * argument means "unknown", which keeps the conservative pre-carry behaviour -
  * over-blocking is safe, under-blocking corrupts files.
+ *
+ * `carriedHierarchicalBlocks` is the same document's `ascHierarchicalBlocks`:
+ * the records that DID resolve and flatten. It changes no verdict - such a save
+ * is still blocked - only the reason given. Without it a resolved block is
+ * reported as "symbol-library identity", which tells the user Tau has no symbol
+ * for a part it in fact resolved, read and inlined.
  */
 export function ascRewriteRisks(
   source: string,
   carriedForeignSymbols?: readonly SchematicForeignSymbol[],
+  carriedHierarchicalBlocks?: readonly SchematicForeignSymbol[],
 ): string[] {
   const parsed = parseAsc(source);
   const risks = new Set<string>();
@@ -144,6 +151,11 @@ export function ascRewriteRisks(
   for (const symbol of carriedForeignSymbols ?? []) {
     const key = foreignSymbolKey(symbol);
     carriedByKey.set(key, (carriedByKey.get(key) ?? 0) + 1);
+  }
+  const blockByKey = new Map<string, number>();
+  for (const symbol of carriedHierarchicalBlocks ?? []) {
+    const key = foreignSymbolKey(symbol);
+    blockByKey.set(key, (blockByKey.get(key) ?? 0) + 1);
   }
   const carriedWarnings = new Set<string>();
 
@@ -169,6 +181,18 @@ export function ascRewriteRisks(
     if (carriedCount > 0) {
       carriedByKey.set(carriedKey, carriedCount - 1);
       carriedWarnings.add(foreignSymbolWarning(symbol.attrs.InstName ?? "", symbol.type));
+      continue;
+    }
+    // A record the document resolved as a hierarchical block. Tau knows exactly
+    // what this symbol is, so neither "no symbol for it" nor "loses its slots"
+    // describes the loss - saving would rewrite the hierarchy as flat parts.
+    // Name that instead, and drop the unresolved-symbol warning this local
+    // re-import raises only because it runs without a subcircuit resolver.
+    const blockCount = blockByKey.get(carriedKey) ?? 0;
+    if (blockCount > 0) {
+      blockByKey.set(carriedKey, blockCount - 1);
+      carriedWarnings.add(foreignSymbolWarning(symbol.attrs.InstName ?? "", symbol.type));
+      risks.add("hierarchical blocks");
       continue;
     }
     const kind = ltspiceTypeToKind(symbol.type);
@@ -280,6 +304,12 @@ export function serializeSchematicFile(
         // back to `.asc` later would drop those parts.
         ...(document.ascForeignSymbols && document.ascForeignSymbols.length > 0
           ? { ascForeignSymbols: document.ascForeignSymbols }
+          : {}),
+        // Additive as well: without it a reopened `.sim` could no longer tell a
+        // resolved block from an unmappable symbol, and the save-block reason
+        // would silently regress to naming the wrong loss.
+        ...(document.ascHierarchicalBlocks && document.ascHierarchicalBlocks.length > 0
+          ? { ascHierarchicalBlocks: document.ascHierarchicalBlocks }
           : {}),
         ...(document.ascSheet ? { ascSheet: document.ascSheet } : {}),
         // Additive: only present when the document carries attached vendor model

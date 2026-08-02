@@ -182,6 +182,7 @@ export function schematicDocumentSignature(doc: SchematicDocument): string {
     ascShapes: doc.ascShapes ?? [],
     ascDataFlags: doc.ascDataFlags ?? [],
     ascForeignSymbols: doc.ascForeignSymbols ?? [],
+    ascHierarchicalBlocks: doc.ascHierarchicalBlocks ?? [],
     ascSheet: doc.ascSheet ?? null,
     userModelLibraries: doc.userModelLibraries ?? [],
   });
@@ -220,6 +221,7 @@ function App() {
   const ascShapes = useSchematic((s) => s.ascShapes);
   const ascDataFlags = useSchematic((s) => s.ascDataFlags);
   const ascForeignSymbols = useSchematic((s) => s.ascForeignSymbols);
+  const ascHierarchicalBlocks = useSchematic((s) => s.ascHierarchicalBlocks);
   const ascSheet = useSchematic((s) => s.ascSheet);
   const userModelLibraries = useSchematic((s) => s.userModelLibraries);
   const past = useSchematic((s) => s.past);
@@ -433,9 +435,10 @@ function App() {
     ascShapes,
     ascDataFlags,
     ascForeignSymbols,
+    ascHierarchicalBlocks,
     ...(ascSheet ? { ascSheet } : {}),
     ...(userModelLibraries.length > 0 ? { userModelLibraries } : {}),
-  }), [ascDataFlags, ascForeignSymbols, ascSheet, ascShapes, components, directives, netLabels, probes, textAnnotations, userModelLibraries, wires]);
+  }), [ascDataFlags, ascForeignSymbols, ascHierarchicalBlocks, ascSheet, ascShapes, components, directives, netLabels, probes, textAnnotations, userModelLibraries, wires]);
   // Native runs take the raw vendor text (LTspice-only cleanup happens in the
   // deck builder); the store keeps names alongside for the attachment UI.
   const userModelLibraryTexts = useMemo(
@@ -954,6 +957,7 @@ function App() {
               ascShapes,
               ascDataFlags,
               ascForeignSymbols,
+              ascHierarchicalBlocks,
               ...(ascSheet ? { ascSheet } : {}),
             },
             history: { past, future },
@@ -967,11 +971,12 @@ function App() {
               ascShapes,
               ascDataFlags,
               ascForeignSymbols,
+              ascHierarchicalBlocks,
               ...(ascSheet ? { ascSheet } : {}),
             })),
           }
         : tab)),
-    [activeId, ascDataFlags, ascForeignSymbols, ascSheet, ascShapes, components, wires, probes, netLabels, directives, textAnnotations, past, future],
+    [activeId, ascDataFlags, ascForeignSymbols, ascHierarchicalBlocks, ascSheet, ascShapes, components, wires, probes, netLabels, directives, textAnnotations, past, future],
   );
 
   // Adopt an imported circuit's own `.tran` settings (stop time / sample count)
@@ -1105,6 +1110,7 @@ function App() {
         ascShapes: result.shapes,
         ascDataFlags: result.dataFlags,
         ascForeignSymbols: result.foreignSymbols,
+        ascHierarchicalBlocks: result.hierarchicalBlocks,
         ascSheet: result.sheet,
         probes: [],
         // Vendor models a `.include`/`.lib` named and the importer found beside
@@ -1114,7 +1120,7 @@ function App() {
       });
       // The resolver-aware carried set, not one re-derived from `text`: see
       // ascRewriteRisks for why a locally derived set unblocks a lossy save.
-      openDocument(doc, title, path, ascRewriteRisks(text, result.foreignSymbols));
+      openDocument(doc, title, path, ascRewriteRisks(text, result.foreignSymbols, result.hierarchicalBlocks));
       if (allWarnings.length > 0) {
         console.warn(`Imported ${title} with ${allWarnings.length} warning(s):`, allWarnings);
         showNotice(`Opened ${title} with ${allWarnings.length} import ${allWarnings.length === 1 ? "warning" : "warnings"}. See Diagnostics.`);
@@ -1210,7 +1216,7 @@ function App() {
       action.document,
       basename(path),
       path,
-      ascRewriteRisks(action.source, action.document.ascForeignSymbols),
+      ascRewriteRisks(action.source, action.document.ascForeignSymbols, action.document.ascHierarchicalBlocks),
     );
     showNotice(`Created ${basename(path)}`);
   }, [createSchematicInRoot, deleteProjectNode, openDocument, showNotice, writeSim]);
@@ -1237,7 +1243,7 @@ function App() {
             doc: appliedDocument,
             history: appliedHistory,
             dirty: true,
-            ascRewriteRisks: ascRewriteRisks(action.source, action.document.ascForeignSymbols),
+            ascRewriteRisks: ascRewriteRisks(action.source, action.document.ascForeignSymbols, action.document.ascHierarchicalBlocks),
           }
         : tab
     )));

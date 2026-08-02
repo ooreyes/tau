@@ -13,6 +13,19 @@
 
 **Repo:** `auto/ltspice-parity` · **Audit date:** 2026-07-17 · **Auditor:** interactive session (Fable 5) + two background subagents (fuzz + sim cross-check).
 
+## 2026-08-02 — `newCircuit` leaves the previous schematic's DATAFLAG readouts in the store (CONFIRMED)
+
+`useSchematic.ts`'s `newCircuit` resets every other carried `.asc` field -
+`ascShapes`, `ascForeignSymbols`, `ascHierarchicalBlocks`, `ascSheet`,
+`userModelLibraries` - but never clears `ascDataFlags`. Opening a schematic that
+carries `DATAFLAG` records and then choosing New circuit therefore starts a
+blank document that still holds the old file's readouts, and saving it as `.asc`
+would write them into a file they never belonged to.
+
+Found while wiring `ascHierarchicalBlocks` through the same reset. Not fixed in
+that unit: the one-line addition needs its own regression test, and the unit in
+flight was already gated. Small, self-contained, and ready to take.
+
 ## 2026-08-01 — the staged engine was Homebrew's copy, not the pinned build (CONFIRMED, FIXED)
 
 The engine under `apps/desktop/src-tauri/resources/ngspice/` on this host was

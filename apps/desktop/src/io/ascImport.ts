@@ -956,6 +956,15 @@ export interface AscImportResult {
    * silently delete the part from the user's file.
    */
   foreignSymbols: AscSymbol[];
+  /**
+   * Source `SYMBOL` records that resolved to a hierarchical block and were
+   * flattened into `components`. Unlike `foreignSymbols` these DO simulate -
+   * the record is retained only so a save can tell a resolved block apart from
+   * a symbol Tau cannot map, and so the exporter can one day re-emit the block
+   * instead of its flattened parts. A block's own nested blocks belong to the
+   * child file and are not carried here.
+   */
+  hierarchicalBlocks: AscSymbol[];
   /** Original SHEET record retained for lossless `.asc` save. */
   sheet: AscDocument["sheet"];
   /** Non-fatal issues (symbols placed without pin-accurate geometry, etc.). */
@@ -1553,6 +1562,9 @@ function flattenSubcircuit(
     // A foreign symbol inside a block's own body belongs to that block's file,
     // not to the parent, so it must not be injected into the parent on save.
     foreignSymbols: [],
+    // Likewise a block nested inside this body: its SYMBOL record lives in the
+    // child `.asc`, so only the parent's own instance record is carried up.
+    hierarchicalBlocks: [],
     sheet: { ...body.sheet },
     warnings: body.warnings.map((w) => `${instName}: ${w}`),
     notes: body.notes.map((n) => `${instName}: ${n}`),
@@ -1671,6 +1683,9 @@ export function ascToSchematic(doc: AscDocument, options: AscImportOptions = {})
   // Source SYMBOL records with no Tau equivalent, retained verbatim so an
   // in-place save does not silently delete the part - see AscImportResult.
   const foreignSymbols: AscSymbol[] = [];
+  // Source SYMBOL records that flattened into real components - retained so a
+  // save can name the hierarchy instead of reporting an unmappable symbol.
+  const hierarchicalBlocks: AscSymbol[] = [];
 
   for (const symbol of doc.symbols) {
     const leaf = symbol.type.replace(/\\/g, "/").toLowerCase().split("/").pop() ?? "";
@@ -1714,6 +1729,17 @@ export function ascToSchematic(doc: AscDocument, options: AscImportOptions = {})
         deferredBridges.push(...bridges);
         warnings.push(...result.warnings);
         notes.push(...result.notes);
+        // Retain the un-flattened record. The block simulates (its parts are in
+        // `components`), so this must NOT go on `foreignSymbols` - that set
+        // means "not simulated" and feeds the simulation-integrity refusal.
+        hierarchicalBlocks.push({
+          type: symbol.type,
+          x: symbol.x,
+          y: symbol.y,
+          orientation: symbol.orientation,
+          attrs: { ...symbol.attrs },
+          ...(symbol.windows ? { windows: symbol.windows.map((w) => ({ ...w })) } : {}),
+        });
         // Propagate the advanced cursor back to this scope for the next sibling.
         options._placement = placement;
         continue;
@@ -1847,6 +1873,7 @@ export function ascToSchematic(doc: AscDocument, options: AscImportOptions = {})
     shapes: doc.shapes.map((shape) => ({ ...shape, coords: [...shape.coords] })),
     dataFlags: doc.dataFlags.map((dataFlag) => ({ ...dataFlag })),
     foreignSymbols,
+    hierarchicalBlocks,
     sheet: { ...doc.sheet },
     warnings,
     notes,
