@@ -29,7 +29,70 @@ figure all run on the real engine. Do not restore a readiness banner until every
 Class A and Class B item in the audit is closed or consciously accepted, with
 file:line evidence.
 
-**Last unit - 2026-08-02: a voltage-controlled switch is written back as a
+**Last unit - 2026-08-02: an unmappable vendor symbol survives the app and a
+`.sim` save - half 1 of 2, and the save is still blocked.**
+
+An imported `SYMBOL` with no Tau equivalent (`PowerProducts\LTC4449`,
+`Optos\PC817D`, the long tail that a census of 4,012 real `.asc` files under
+`~/Documents` found blocking 3,490 of the 3,509 unsaveable ones) is now retained
+verbatim on the document. The importer side, the exporter side, the validation
+and the store had landed under an ugly `wip: checkpoint` message - the runner's
+durability net force-committed a mid-edit tree, which is trap 6 in STATE.md
+behaving exactly as documented. The remainder was stranded on
+`auto/ltspice-parity-wip` and is finished here.
+
+The stranded half mattered: nothing put the retained record into the store, so
+the field was always empty in the running app, and a `.sim` save wrote the
+schematic without the part. `App.tsx` now carries it through the document
+signature, tab persistence and the import path, and `serializeSchematicFile`
+writes it into the `.sim` body.
+
+The stranded diff also contained a literal `if (false)` where the
+control-character check on a `SYMATTR` value belonged, with `CONTROL_CHARACTER`
+declared and unused and its own test asserting a throw that could not happen.
+That is fixed. The guard is load-bearing rather than decorative: a foreign
+symbol is the only document field written back into `.asc` text without passing
+through a fixed table first, and `SYMBOL`/`SYMATTR` are space-delimited line
+records, so validation refuses whitespace or a control character in a symbol
+type or an attribute name (either would forge whole records or shift a record's
+fields) and a control character in a value. An attribute value's interior spaces
+stay legal - it is the last field on its line, and a real part writes
+`SpiceLine Rser=1 Cpar=2`.
+
+Both mutations were run, not assumed: restoring `if (false)` fails the
+control-character case, and removing the `.sim` serialize line fails the new
+round-trip test with `expected undefined to deeply equal [ { type: 'Optos\PC817D' ... } ]`.
+The `.sim` round trip had shipped in the stranded diff with no test at all; that
+test is added here.
+
+**This half changes nothing a user can see, and the entry says so.**
+`ascRewriteRisks` still raises `symbol-library identity` for any symbol with no
+Tau kind, so these files still refuse to save. Half 2 is the unblock.
+
+What half 2 must not do, verified this fire and recorded in STATE.md: the
+obvious implementation causes data loss. `ascRewriteRisks` takes only a source
+string and re-imports it with no options, but the document that actually gets
+saved was imported WITH a subcircuit resolver (`projectAscImport.ts:196`). The
+two disagree precisely on hierarchical blocks - with the resolver a block is
+flattened into ordinary components, so an in-place save rewrites the user's
+hierarchy as flat parts and must stay blocked; without it, that same symbol
+falls through to the foreign-symbol branch and looks carried-verbatim. Taking
+the carried set from a resolver-less re-import would therefore unblock a
+hierarchical schematic and overwrite it flattened. The authoritative set is
+already in scope at `App.tsx:1085`, fifteen lines above the `ascRewriteRisks`
+call, and must be passed in; omitting it has to keep today's conservative
+verdict, because over-blocking is safe and under-blocking corrupts files.
+
+Gates: `tsc --noEmit` clean; full suite 2327 passed / 6 skipped across 151 files
+(`--maxWorkers=2`); `cargo test` 46 passed; `cargo clippy --all-targets` clean;
+acceptance corpus 80 imported / 77 warning-clean / 80 deck-built / 80
+op-converged / 80 schema-valid, unchanged - its only failure remains the
+recorded `>= 82` assertion against the two corpus files deleted from this host.
+`schema-valid` holding at 80 is the meaningful number for this unit, since the
+new validation is the thing that could have rejected a document that previously
+loaded.
+
+**2026-08-02: a voltage-controlled switch is written back as a
 switch.**
 An imported LTspice `sw` was saved as a placeholder resistor, so
 `ascRewriteRisks` returned `symbol-library identity` and Tau refused to
