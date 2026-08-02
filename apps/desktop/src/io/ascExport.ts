@@ -50,6 +50,10 @@ export function serializeAscDocument(doc: AscDocument): string {
   }
   for (const f of doc.flags) {
     lines.push(`FLAG ${int(f.x)} ${int(f.y)} ${f.net}`);
+    // LTspice writes a hierarchy port directly after the FLAG it decorates, and
+    // reads the pair back by coordinate. Emitting it anywhere else would orphan
+    // the port.
+    if (f.port) lines.push(`IOPIN ${int(f.x)} ${int(f.y)} ${f.port}`);
   }
   for (const s of doc.symbols) {
     lines.push(`SYMBOL ${s.type} ${int(s.x)} ${int(s.y)} ${s.orientation}`);
@@ -423,7 +427,12 @@ export function schematicToAsc(input: SchematicExportInput): SchematicToAscResul
   }
 
   for (const label of input.netLabels) {
-    doc.flags.push({ x: label.x, y: label.y, net: label.text });
+    doc.flags.push({
+      x: label.x,
+      y: label.y,
+      net: label.text,
+      ...(label.port ? { port: label.port } : {}),
+    });
   }
 
   // Preserve every imported comment at its original position. For directives,

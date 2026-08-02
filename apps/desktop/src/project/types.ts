@@ -115,7 +115,9 @@ export function ascRewriteRisks(source: string): string[] {
   // when the part keeps its source symbol. One Tau could not attach or could
   // not reproduce exactly is parsed into `unknown` instead, which is already a
   // risk above; a symbol that changes on export raises its own export warning.
-  if (/^\s*IOPIN\b/im.test(source)) risks.add("hierarchy ports");
+  // A hierarchy port is carried on the net label its FLAG became and re-emitted
+  // after that FLAG. One Tau could not pair or reproduce exactly is parsed into
+  // `unknown` instead, which is already a risk above.
 
   for (const symbol of parsed.symbols) {
     const kind = ltspiceTypeToKind(symbol.type);

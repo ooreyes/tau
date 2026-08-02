@@ -6,6 +6,7 @@ import type {
   Probe,
   Rotation,
   SchematicAscShape,
+  SchematicPortDirection,
   SchematicComponent,
   SchematicSheet,
   SchematicTextAnnotation,
@@ -203,6 +204,15 @@ function netLabel(value: unknown, index: number): NetLabel {
   // explicit zero offset the user actually dragged onto the anchor.
   if (source.dx !== undefined) result.dx = coordinate(source.dx, `netLabels[${index}].dx`);
   if (source.dy !== undefined) result.dy = coordinate(source.dy, `netLabels[${index}].dy`);
+  // Re-emitted verbatim into an `IOPIN` record, so only LTspice's own spellings
+  // may pass - anything else would write a file LTspice reads as malformed.
+  if (source.port !== undefined) {
+    const port = text(source.port, `netLabels[${index}].port`, 8);
+    if (port !== "In" && port !== "Out" && port !== "BiDir") {
+      fail(`netLabels[${index}].port must be "In", "Out", or "BiDir".`);
+    }
+    result.port = port as SchematicPortDirection;
+  }
   return result;
 }
 

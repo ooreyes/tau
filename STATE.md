@@ -62,11 +62,15 @@ do not spend a fire diffing it again. Re-check only if its tip moves past
 Ordered. Take the top item unless it is blocked. Class A outranks everything -
 a plausible wrong number is worse than a refusal to run.
 
-1. **Preview solver vs native DC operating point.** The TS preview was said to
-   start reactive parts at zero (`uic`-style) while ngspice solves the DC OP
-   first. **Verify before starting:** `KNOWN_ISSUES.md:100` now states the
-   preview solves the DC operating point before a transient unless the analysis
-   specifies `uic`, so this may already be closed and only this entry is stale.
+1. **`SYMATTR SpiceLine` / `Value2` are dropped on an `.asc` round-trip**, so a
+   save is refused with "extended symbol attributes". Unlike the annotation
+   records already closed, these carry real electrical parameters, which is why
+   the block is correct today and why lifting it means carrying them onto the
+   component and back, not just re-emitting them. Measured 2026-08-02 against
+   `examples/class-d-amplifier/deadtime.asc`: after the IOPIN unit landed, this
+   is the ONLY remaining risk on that file (`unknown` is empty, 2 `SpiceLine`
+   + 2 `Value2` across 14 symbols). Closing it makes a real hierarchical sheet
+   saveable end to end.
 2. **The provenance record describes the tree, not its contents.** The check
    landed 2026-08-01 refuses a staged resource whose `build-info.json` is absent,
    from another commit, or from another target, and it names every required file.
@@ -84,6 +88,7 @@ Newest first, ONE line each. Full evidence for every unit is in PROGRESS.md
 and in its commit message. This section exists so a fresh fire can see what
 is already done at a glance, not so it can re-read the reasoning.
 
+- 2026-08-02 - HIERARCHY PORTS (`IOPIN`) survive a save instead of being silently discarded at parse; carried on the net label their FLAG became, so a port cannot outlive its label or be emitted without its FLAG.
 - 2026-08-01 - THE DESKTOP BUILD REFUSES TO PACKAGE AN ENGINE THAT IS NOT THE PINNED BUILD. `build-info.json` was written by every successful run of the build script and read by nothing; `build.rs` now refuses a staged resource with no record, from another commit or target, whose recorded library is absent, or missing a code model. Each refusal proved through a real `cargo build` on a doctored tree....
 - 2026-08-01 - THE BUNDLED ENGINE IS TAU'S OWN BUILD AND CARRIES ITS XSPICE CODE MODELS, so a D flip-flop, sample-and-hold or modulator runs. **The handed-down diagnosis....
 - 2026-08-01 - A MISSING XSPICE CODE-MODEL BUNDLE stops being silent, and the real-library test that proves the FFI vector read stops dying on it. **Tau's bundled engine....

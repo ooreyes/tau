@@ -176,6 +176,10 @@ export interface SchematicSheet {
 
 /** An LTspice drawing primitive: pure annotation, no electrical meaning, but it
  *  must survive a save or reopening the file loses the author's diagram. */
+/** LTspice hierarchy-port direction, carried by an `IOPIN` record. Marks which
+ *  nets become a sheet's ports when it is used as a subcircuit symbol. */
+export type SchematicPortDirection = "In" | "Out" | "BiDir";
+
 export interface SchematicAscShape {
   kind: "LINE" | "RECTANGLE" | "CIRCLE" | "ARC";
   /** LTspice's pen-width word, which sits between the tag and the coordinates. */
@@ -224,6 +228,13 @@ export interface NetLabel {
    */
   dx?: number;
   dy?: number;
+  /**
+   * Hierarchy-port direction, set when the label came from a FLAG that an
+   * `IOPIN` record marked as a port. Riding on the label rather than in a
+   * parallel list keeps LTspice's invariant structural: a port cannot outlive
+   * the net label it names, and cannot be emitted without its FLAG.
+   */
+  port?: SchematicPortDirection;
 }
 
 /** The active editing tool. */

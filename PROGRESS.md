@@ -29,7 +29,41 @@ figure all run on the real engine. Do not restore a readiness banner until every
 Class A and Class B item in the audit is closed or consciously accepted, with
 file:line evidence.
 
-**Last unit - 2026-08-01: the desktop build refuses to package an engine that is
+**Last unit - 2026-08-02: hierarchy ports (`IOPIN`) survive a round-trip save.**
+The parser had a `case "IOPIN": break;` - the record was recognized and then
+silently discarded, and `ascRewriteRisks` blocked the save with a source-text
+regex. So the port data never reached the document at all, which means that had
+the block ever been lifted without this, a subcircuit definition sheet would have
+been rewritten with no ports.
+
+**The port rides on the net label, not in a parallel list.** An `IOPIN` has no
+independent meaning: it decorates the FLAG at its own coordinates, and LTspice
+reads the pair back by adjacency. Storing the direction on the `NetLabel` its
+FLAG became makes LTspice's invariant structural - a port cannot outlive the
+label it names, cannot be emitted without its FLAG, and follows the label if the
+user moves it. The exporter emits `IOPIN` directly after the FLAG it belongs to.
+Anything that cannot be paired and reproduced exactly - an unrecognized direction
+word, a non-integer coordinate, a trailing token, no flag at those coordinates,
+or a ground flag (which has no port to be) - falls through to `unknown`, which is
+already a blocking risk, so the guard weakens for the exact cases it can prove
+and for no others. `documentValidation` accepts only LTspice's own three
+spellings, so a hand-edited `.sim` cannot inject a malformed record.
+
+**Gates.** 2297 tests green (150 files, `--maxWorkers=2`), tsc clean, cargo test
+46 passed, clippy clean. Corpus held at `imported 80 · deck-built 80 ·
+op-converged 80 · schema-valid 80`; the script's `>= 82` assertion still fails on
+missing inputs (documented, blocked on Omar), not on this change. The four new
+tests were mutation-checked: with the parser reverted, all four fail.
+
+**What this does NOT do,** recorded in `KNOWN_ISSUES.md`: Tau draws no port
+marker and does not resolve a hierarchy. The ports are preserved, not acted on.
+
+**Next.** `deadtime.asc` is still blocked, now by exactly one remaining risk -
+`SYMATTR SpiceLine` / `Value2` (2 and 2 across its 14 symbols; `unknown` is
+empty). Unlike the annotation records closed so far, those carry real electrical
+parameters, so the block is correct until they round-trip onto the component.
+
+**2026-08-01: the desktop build refuses to package an engine that is
 not the pinned build.** `build-info.json` had been written by
 `scripts/build-ngspice.sh` on every successful run and **read by nothing** - the
 only record of engine provenance, and decorative. That is exactly how a

@@ -29,6 +29,7 @@ import type {
   PinOverride,
   SchematicAscShape,
   SchematicComponent,
+  SchematicPortDirection,
   SchematicWire,
 } from "../schematic/types";
 import { canonicalWindowJustification } from "../schematic/types";
@@ -103,6 +104,9 @@ export interface AscFlag {
   y: number;
   /** Net name; "0" denotes ground. */
   net: string;
+  /** Hierarchy-port direction from the `IOPIN` record LTspice writes directly
+   *  after this FLAG. Absent on an ordinary net label. */
+  port?: AscPortDirection;
 }
 
 export interface AscSymbol {
@@ -153,6 +157,7 @@ export interface AscText {
 }
 
 export type AscShape = SchematicAscShape;
+export type AscPortDirection = SchematicPortDirection;
 
 export interface AscDocument {
   version: number;
@@ -180,6 +185,10 @@ const num = (token: string | undefined): number => {
 
 /** Pen widths LTspice writes for a drawing primitive. */
 const ASC_SHAPE_WIDTHS = ["Normal", "Wide"] as const;
+
+/** Directions LTspice writes on an `IOPIN`, in its own capitalization - the
+ *  record is re-emitted verbatim, so the spelling has to survive the trip. */
+const ASC_PORT_DIRECTIONS = ["In", "Out", "BiDir"] as const;
 
 /** `LINE|RECTANGLE|CIRCLE|ARC <width> <coords...>`. The width word is not a
  *  coordinate; dropping it writes a record LTspice reads back as malformed.
@@ -290,9 +299,35 @@ export function parseAsc(text: string): AscDocument {
         current = null;
         break;
       }
-      case "IOPIN":
-        // Hierarchy port - recorded as a flag-like net marker is out of scope v1.
+      case "IOPIN": {
+        // A hierarchy port decorates the FLAG at its own coordinates - LTspice
+        // writes the pair adjacently and one is meaningless without the other,
+        // so the direction is stored on that flag. Anything that cannot be
+        // paired and re-emitted exactly (an unknown direction word, no flag at
+        // those coordinates, or a ground flag, which has no port to be) falls
+        // through to `unknown` so the save stays blocked rather than silently
+        // dropping the port.
+        // Screen the source tokens first: `num` coerces anything unparseable to
+        // 0, which would re-emit the port at the origin instead of on its flag.
+        const token = parts[3]?.toLowerCase();
+        const direction = ASC_PORT_DIRECTIONS.find((d) => d.toLowerCase() === token);
+        const wellFormed = direction !== undefined
+          && parts.length === 4
+          && /^[+-]?\d+$/.test(parts[1])
+          && /^[+-]?\d+$/.test(parts[2]);
+        // Last match wins: LTspice writes the IOPIN directly after its FLAG, so
+        // the most recently parsed flag at those coordinates is the owner.
+        const owner = wellFormed
+          ? [...doc.flags].reverse().find((f) => f.x === num(parts[1]) && f.y === num(parts[2]) && f.net !== "0")
+          : undefined;
+        if (!owner) {
+          doc.unknown.push(line);
+          break;
+        }
+        owner.port = direction;
+        current = null;
         break;
+      }
       default:
         doc.unknown.push(line);
         break;
@@ -1593,7 +1628,13 @@ export function ascToSchematic(doc: AscDocument, options: AscImportOptions = {})
         label: "",
       });
     } else if (flag.net.trim() !== "") {
-      netLabels.push({ id: id("n"), x: flag.x, y: flag.y, text: flag.net });
+      netLabels.push({
+        id: id("n"),
+        x: flag.x,
+        y: flag.y,
+        text: flag.net,
+        ...(flag.port ? { port: flag.port } : {}),
+      });
     }
   }
   // Register subcircuit port bridges last so a same-node parent FLAG names the net.

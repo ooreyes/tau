@@ -639,3 +639,73 @@ describe("lossy carrier export warnings", () => {
     expect(warnings).toEqual([]);
   });
 });
+
+// A hierarchy sheet's ports: one of each direction, plus an ordinary net label
+// and a ground flag that must stay untouched.
+const IOPIN_SOURCE = `Version 4
+SHEET 1 880 680
+FLAG -64 480 0
+FLAG 624 80 gp
+IOPIN 624 80 Out
+FLAG -432 208 pwm
+IOPIN -432 208 In
+FLAG 80 64 vrcp
+FLAG 96 -32 bus
+IOPIN 96 -32 BiDir`;
+
+describe("IOPIN (hierarchy port) round-trip", () => {
+  it("pairs each port with its FLAG and re-emits it byte-identically", () => {
+    const doc = parseAsc(IOPIN_SOURCE);
+    expect(doc.unknown).toEqual([]);
+    expect(doc.flags).toEqual([
+      { x: -64, y: 480, net: "0" },
+      { x: 624, y: 80, net: "gp", port: "Out" },
+      { x: -432, y: 208, net: "pwm", port: "In" },
+      { x: 80, y: 64, net: "vrcp" },
+      { x: 96, y: -32, net: "bus", port: "BiDir" },
+    ]);
+    const serialized = serializeAscDocument(doc);
+    for (const line of IOPIN_SOURCE.split("\n").filter((l) => /^(FLAG|IOPIN)\b/.test(l))) {
+      expect(serialized, line).toContain(line);
+    }
+    // LTspice reads the pair by adjacency; the port must follow its own FLAG.
+    expect(serialized).toContain("FLAG 624 80 gp\nIOPIN 624 80 Out");
+    expect(serialized).toContain("FLAG -432 208 pwm\nIOPIN -432 208 In");
+  });
+
+  it("survives the full .asc -> schematic -> .asc trip", () => {
+    const imported = importAsc(IOPIN_SOURCE);
+    expect(
+      imported.netLabels.map((l) => [l.text, l.port]).sort((a, b) => String(a[0]).localeCompare(String(b[0]))),
+    ).toEqual([["bus", "BiDir"], ["gp", "Out"], ["pwm", "In"], ["vrcp", undefined]]);
+    const { text } = schematicToAsc({
+      components: imported.components,
+      wires: imported.wires,
+      netLabels: imported.netLabels,
+    });
+    expect(text).toContain("FLAG 624 80 gp\nIOPIN 624 80 Out");
+    expect(text).toContain("FLAG -432 208 pwm\nIOPIN -432 208 In");
+    expect(text).toContain("FLAG 96 -32 bus\nIOPIN 96 -32 BiDir");
+    // The plain label keeps no port, and ground never grows one.
+    expect(text).toContain("FLAG 80 64 vrcp\n");
+    expect(text).not.toMatch(/FLAG -64 480 0\nIOPIN/);
+  });
+
+  it("no longer blocks a save for hierarchy ports alone", () => {
+    expect(ascRewriteRisks(IOPIN_SOURCE)).toEqual([]);
+    expect(ascSaveBlockReason(ascRewriteRisks(IOPIN_SOURCE), 0, [])).toBeNull();
+  });
+
+  it("keeps the save blocked for a port it cannot reproduce exactly", () => {
+    // An unknown direction word, and a port with no FLAG to decorate: both must
+    // land in `unknown` rather than being dropped on the way back out.
+    for (const bad of ["IOPIN 96 -32 Sideways", "IOPIN 4096 4096 In", "IOPIN 96 -32 In extra"]) {
+      const source = `${IOPIN_SOURCE}\n${bad}`;
+      expect(parseAsc(source).unknown, bad).toContain(bad);
+      expect(ascRewriteRisks(source), bad).toContain("unknown LTspice records");
+    }
+    // A ground flag has no port to be.
+    const grounded = "Version 4\nSHEET 1 880 680\nFLAG -64 480 0\nIOPIN -64 480 In";
+    expect(parseAsc(grounded).unknown).toEqual(["IOPIN -64 480 In"]);
+  });
+});

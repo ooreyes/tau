@@ -67,7 +67,12 @@ one engine for the whole session.
   symbol. Drawing primitives (`LINE`, `RECTANGLE`, `CIRCLE`, `ARC`) are drawn on
   the canvas with their pen width and dash style, survive a save byte-for-byte,
   and are framed by fit-to-view along with the circuit, so a sheet border - or a
-  sheet that is nothing but a drawing - opens in view. Tau still refuses to overwrite a file when the
+  sheet that is nothing but a drawing - opens in view. Hierarchy ports (`IOPIN`
+  records, which mark the nets a sheet exposes when it is used as a subcircuit
+  symbol) survive a save with their direction, attached to the net label they
+  name. Tau does not draw a port marker for them and does not yet resolve a
+  hierarchy, so such a sheet still opens as a flat circuit - the ports are
+  preserved, not acted on. Tau still refuses to overwrite a file when the
   rewrite would drop information it cannot yet reproduce: comment placement,
   extra symbol attributes such as SpiceLine, and symbols with pins Tau does not
   model (4-pin BJT substrate, switch control pins). The message names the
