@@ -9,7 +9,22 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-02 14:47 CDT**
+**Status: DONE - 2026-08-02 17:35 CDT**
+
+Latest unit: `DATAFLAG` readouts are carried through import and export, which
+empties the `unknown LTspice records` save-block category. Re-censused over the
+4,012 real `.asc` under `~/Documents`, decoded the way the app decodes: files
+blocked from an in-place save fall from 39 to 36, and the category that this
+unit targeted goes from 3 files / 8 records to zero. All 8 records in the three
+affected files (`AD8397.asc`, `DCopPnt.asc`, `Linkwitz.asc`) survive a real
+`serializeSchematicFile` write and re-import identically, with no save warning.
+The expression is carried as the verbatim tail of the record rather than
+re-joined from split tokens, so a quoted expression containing spaces comes
+back out unchanged; a record whose coordinates cannot be reproduced exactly
+still falls through to `unknown` and still blocks the save. Gates: typecheck,
+full frontend suite, Rust tests and clippy, acceptance corpus.
+
+Previous heartbeat:
 
 User-directed autobuilder recovery: repair the unreachable completion signal,
 atomic lock/disk preflight, corpus coverage and independent floors, Class-D

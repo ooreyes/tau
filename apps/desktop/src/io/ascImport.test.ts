@@ -80,6 +80,40 @@ describe("parseAsc", () => {
     ]);
   });
 
+  it("captures DATAFLAG readouts instead of blocking the save as unknown records", () => {
+    // The exact records LTspice writes in its own shipped examples: an empty
+    // quoted expression, which is the default readout.
+    const parsed = parseAsc(
+      "Version 4\nSHEET 1 880 680\nFLAG -784 1648 out\nDATAFLAG -784 1648 \"\"\nDATAFLAG 320 1584 \"\"",
+    );
+    expect(parsed.unknown).toEqual([]);
+    expect(parsed.dataFlags).toEqual([
+      { x: -784, y: 1648, expr: "\"\"" },
+      { x: 320, y: 1584, expr: "\"\"" },
+    ]);
+  });
+
+  it("carries a DATAFLAG expression verbatim, including spaces inside its quotes", () => {
+    // Split-and-rejoin would collapse the inner spacing; the record is opaque
+    // to Tau, so the tail is kept exactly as written.
+    const parsed = parseAsc("Version 4\nSHEET 1 880 680\nDATAFLAG 32 64 \"V(out) - V(in)\"");
+    expect(parsed.dataFlags).toEqual([{ x: 32, y: 64, expr: "\"V(out) - V(in)\"" }]);
+    expect(parsed.unknown).toEqual([]);
+  });
+
+  it("rejects a malformed DATAFLAG into `unknown` so the save stays blocked", () => {
+    // `num` coerces an unparseable token to 0, which would move the readout to
+    // the origin on the way back out. Screen the source text instead.
+    const fractional = "DATAFLAG 0.5 64 \"\"";
+    const notANumber = "DATAFLAG x y \"\"";
+    const missingY = "DATAFLAG 32";
+    for (const line of [fractional, notANumber, missingY]) {
+      const parsed = parseAsc(`Version 4\nSHEET 1 880 680\n${line}`);
+      expect(parsed.dataFlags, line).toEqual([]);
+      expect(parsed.unknown, line).toEqual([line]);
+    }
+  });
+
   it("rejects a malformed drawing primitive into `unknown` instead of `shapes`", () => {
     const badWidth = "LINE Dotted 0 0 8 8";   // "Dotted" is not a pen-width word
     const short = "LINE Normal 0 0";          // too few coordinates for a LINE

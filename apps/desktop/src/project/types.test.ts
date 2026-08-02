@@ -164,6 +164,14 @@ describe("project schematic file formats", () => {
     // One with no symbol to attach to, or with an operand Tau cannot reproduce
     // exactly, is not understood - it stays on the blocked-save path instead of
     // being dropped on the floor.
+    // A DATAFLAG readout is carried on the document (`doc.ascDataFlags`) and
+    // re-emitted verbatim, so it no longer blocks the save. It was the only
+    // record left in the `unknown` category across the real corpus.
+    expect(ascRewriteRisks(`${ASC_SOURCE}DATAFLAG 80 96 ""\n`)).toEqual([]);
+    // One whose coordinates cannot be reproduced exactly stays blocked rather
+    // than being re-emitted at the origin.
+    expect(ascRewriteRisks(`${ASC_SOURCE}DATAFLAG 0.5 96 ""\n`)).toEqual(["unknown LTspice records"]);
+
     expect(ascRewriteRisks(`${ASC_SOURCE}WINDOW 0 24 56 Left 2\n`)).toEqual(["unknown LTspice records"]);
     expect(ascRewriteRisks(nudgedLabel.replace("VBottom", "Sideways"))).toEqual(["unknown LTspice records"]);
 
@@ -240,6 +248,40 @@ ARC Normal 500 240 600 320 500 320 600 240
     expect(saved.contents).toContain("CIRCLE Wide 500 160 540 200");
     expect(saved.contents).toContain("ARC Normal 500 240 600 320 500 320 600 240");
     expect(ascSaveBlockReason(ascRewriteRisks(saved.contents), 0, saved.warnings)).toBeNull();
+  });
+
+  it("carries DATAFLAG readouts through a real save instead of dropping them", () => {
+    // The record forms LTspice writes in its own shipped examples, plus a
+    // non-empty expression with inner spaces to prove the tail is not re-joined
+    // from split tokens.
+    const source = `${ASC_SOURCE}DATAFLAG -784 1648 ""
+DATAFLAG 320 1584 ""
+DATAFLAG 64 128 "V(out) - V(input)"
+`;
+    const risks = ascRewriteRisks(source);
+    expect(risks).toEqual([]);
+    expect(ascSaveBlockReason(risks, 0, [])).toBeNull();
+
+    // End to end: the readouts survive a real save with no warnings. Parsing
+    // them is not enough - they have to reach the written file.
+    const imported = importAsc(source);
+    expect(imported.warnings).toEqual([]);
+    expect(imported.dataFlags).toHaveLength(3);
+    const saved = serializeSchematicFile("/Schematics/readouts.asc", {
+      components: imported.components,
+      wires: imported.wires,
+      probes: [],
+      netLabels: imported.netLabels,
+      directives: imported.directives,
+      ascDataFlags: imported.dataFlags,
+    });
+    expect(saved.warnings).toEqual([]);
+    expect(saved.contents).toContain('DATAFLAG -784 1648 ""');
+    expect(saved.contents).toContain('DATAFLAG 320 1584 ""');
+    expect(saved.contents).toContain('DATAFLAG 64 128 "V(out) - V(input)"');
+    // The written file is itself clean, so a second save is not blocked either.
+    expect(ascSaveBlockReason(ascRewriteRisks(saved.contents), 0, saved.warnings)).toBeNull();
+    expect(importAsc(saved.contents).dataFlags).toEqual(imported.dataFlags);
   });
 
   it("carries a foreign symbol with no Tau equivalent through a real save instead of dropping it", () => {

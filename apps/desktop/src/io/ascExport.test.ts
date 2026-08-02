@@ -78,6 +78,7 @@ describe("serializeAscDocument", () => {
       flags: [],
       symbols: [],
       texts: [],
+      dataFlags: [],
       shapes: [],
       unknown: ["GIBBERISH 1 2 3"],
     };

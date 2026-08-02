@@ -180,6 +180,7 @@ export function schematicDocumentSignature(doc: SchematicDocument): string {
     directives: doc.directives ?? [],
     textAnnotations: doc.textAnnotations ?? [],
     ascShapes: doc.ascShapes ?? [],
+    ascDataFlags: doc.ascDataFlags ?? [],
     ascForeignSymbols: doc.ascForeignSymbols ?? [],
     ascSheet: doc.ascSheet ?? null,
     userModelLibraries: doc.userModelLibraries ?? [],
@@ -217,6 +218,7 @@ function App() {
   const directives = useSchematic((s) => s.directives);
   const textAnnotations = useSchematic((s) => s.textAnnotations);
   const ascShapes = useSchematic((s) => s.ascShapes);
+  const ascDataFlags = useSchematic((s) => s.ascDataFlags);
   const ascForeignSymbols = useSchematic((s) => s.ascForeignSymbols);
   const ascSheet = useSchematic((s) => s.ascSheet);
   const userModelLibraries = useSchematic((s) => s.userModelLibraries);
@@ -429,10 +431,11 @@ function App() {
     directives,
     textAnnotations,
     ascShapes,
+    ascDataFlags,
     ascForeignSymbols,
     ...(ascSheet ? { ascSheet } : {}),
     ...(userModelLibraries.length > 0 ? { userModelLibraries } : {}),
-  }), [ascForeignSymbols, ascSheet, ascShapes, components, directives, netLabels, probes, textAnnotations, userModelLibraries, wires]);
+  }), [ascDataFlags, ascForeignSymbols, ascSheet, ascShapes, components, directives, netLabels, probes, textAnnotations, userModelLibraries, wires]);
   // Native runs take the raw vendor text (LTspice-only cleanup happens in the
   // deck builder); the store keeps names alongside for the attachment UI.
   const userModelLibraryTexts = useMemo(
@@ -949,6 +952,7 @@ function App() {
               directives,
               textAnnotations,
               ascShapes,
+              ascDataFlags,
               ascForeignSymbols,
               ...(ascSheet ? { ascSheet } : {}),
             },
@@ -961,12 +965,13 @@ function App() {
               directives,
               textAnnotations,
               ascShapes,
+              ascDataFlags,
               ascForeignSymbols,
               ...(ascSheet ? { ascSheet } : {}),
             })),
           }
         : tab)),
-    [activeId, ascForeignSymbols, ascSheet, ascShapes, components, wires, probes, netLabels, directives, textAnnotations, past, future],
+    [activeId, ascDataFlags, ascForeignSymbols, ascSheet, ascShapes, components, wires, probes, netLabels, directives, textAnnotations, past, future],
   );
 
   // Adopt an imported circuit's own `.tran` settings (stop time / sample count)
@@ -1098,6 +1103,7 @@ function App() {
         directives: result.directives,
         textAnnotations: result.textAnnotations,
         ascShapes: result.shapes,
+        ascDataFlags: result.dataFlags,
         ascForeignSymbols: result.foreignSymbols,
         ascSheet: result.sheet,
         probes: [],

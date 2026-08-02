@@ -5,6 +5,7 @@ import type {
   Point,
   Probe,
   Rotation,
+  SchematicAscDataFlag,
   SchematicAscShape,
   SchematicForeignSymbol,
   SchematicPortDirection,
@@ -48,6 +49,10 @@ const MAX_WINDOWS_PER_COMPONENT = 64;
 const MAX_DIRECTIVES = 1_000;
 const MAX_TEXT_ANNOTATIONS = 2_000;
 const MAX_ASC_SHAPES = 2_000;
+const MAX_ASC_DATA_FLAGS = 2_000;
+// A DATAFLAG expression is carried verbatim and never interpreted, so it only
+// needs to be bounded, not parsed. Matches a directive's ceiling.
+const MAX_ASC_DATA_FLAG_EXPR_LENGTH = 32_768;
 const MAX_ASC_FOREIGN_SYMBOLS = 2_000;
 // Generous next to any real symbol (LTspice itself writes a handful of SYMATTR
 // fields per part) and small enough that a crafted file cannot grow one
@@ -243,6 +248,24 @@ function textAnnotation(value: unknown, index: number): SchematicTextAnnotation 
   };
 }
 
+function ascDataFlag(value: unknown, index: number): SchematicAscDataFlag {
+  const source = record(value, `ascDataFlags[${index}]`);
+  const x = coordinate(source.x, `ascDataFlags[${index}].x`);
+  const y = coordinate(source.y, `ascDataFlags[${index}].y`);
+  // Whole numbers only, matching what the `.asc` parser accepts: these are
+  // re-emitted through `Math.round`, so a fractional coordinate would move the
+  // readout on the way back out instead of being refused.
+  if (!Number.isInteger(x)) fail(`ascDataFlags[${index}].x must be a whole number.`);
+  if (!Number.isInteger(y)) fail(`ascDataFlags[${index}].y must be a whole number.`);
+  const expr = source.expr === undefined
+    ? ""
+    : text(source.expr, `ascDataFlags[${index}].expr`, MAX_ASC_DATA_FLAG_EXPR_LENGTH);
+  // The expression is re-emitted as the tail of a single record, so a newline
+  // in it would forge extra `.asc` lines on save.
+  if (/[\r\n]/.test(expr)) fail(`ascDataFlags[${index}].expr must be a single line.`);
+  return { x, y, expr };
+}
+
 const ASC_SHAPE_KINDS = new Set(["LINE", "RECTANGLE", "CIRCLE", "ARC"]);
 const ASC_SHAPE_WIDTHS = new Set(["Normal", "Wide"]);
 
@@ -374,6 +397,7 @@ export function validateSchematicDocument(value: unknown): SchematicDocument {
   const directives = source.directives === undefined ? [] : source.directives;
   const textAnnotations = source.textAnnotations === undefined ? [] : source.textAnnotations;
   const ascShapes = source.ascShapes === undefined ? [] : source.ascShapes;
+  const ascDataFlags = source.ascDataFlags === undefined ? [] : source.ascDataFlags;
   const ascForeignSymbols = source.ascForeignSymbols === undefined ? [] : source.ascForeignSymbols;
   const ascSheet = source.ascSheet;
   const userModelLibraries = source.userModelLibraries === undefined ? [] : source.userModelLibraries;
@@ -385,6 +409,9 @@ export function validateSchematicDocument(value: unknown): SchematicDocument {
   }
   if (!Array.isArray(ascShapes) || ascShapes.length > MAX_ASC_SHAPES) {
     fail(`ascShapes must be an array of at most ${MAX_ASC_SHAPES} items.`);
+  }
+  if (!Array.isArray(ascDataFlags) || ascDataFlags.length > MAX_ASC_DATA_FLAGS) {
+    fail(`ascDataFlags must be an array of at most ${MAX_ASC_DATA_FLAGS} items.`);
   }
   if (!Array.isArray(ascForeignSymbols) || ascForeignSymbols.length > MAX_ASC_FOREIGN_SYMBOLS) {
     fail(`ascForeignSymbols must be an array of at most ${MAX_ASC_FOREIGN_SYMBOLS} items.`);
@@ -443,6 +470,7 @@ export function validateSchematicDocument(value: unknown): SchematicDocument {
       ? { textAnnotations: textAnnotations.map(textAnnotation) }
       : {}),
     ...(ascShapes.length > 0 ? { ascShapes: ascShapes.map(ascShape) } : {}),
+    ...(ascDataFlags.length > 0 ? { ascDataFlags: ascDataFlags.map(ascDataFlag) } : {}),
     ...(ascForeignSymbols.length > 0 ? { ascForeignSymbols: ascForeignSymbols.map(foreignSymbol) } : {}),
     ...(ascSheet !== undefined ? { ascSheet: schematicSheet(ascSheet) } : {}),
     // Additive: only emit the key when attachments exist so legacy/empty

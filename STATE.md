@@ -5,7 +5,22 @@ The working memory of an unattended loop that starts from zero every fire.
 
 ## Now
 
-**Status:** DONE - 2026-08-02 14:47 CDT
+**Status:** IDLE - 2026-08-02
+
+`DATAFLAG` is carried through import and export, which closes the WHOLE
+`unknown LTspice records` save-block category.
+
+**Re-census of "Next up" item 1 is DONE (fresh measurement, this fire).** Over
+4,012 real `.asc` under `~/Documents`, decoded with `decodeSchematicText` and
+imported with a sibling resolver, **39 files were save-blocked, now 36**:
+- 20 `extended symbol attributes` (item 2 below - the folded-value problem)
+- 17 `symbol-library identity` (item 1 below - hierarchical blocks)
+-  0 `unknown LTspice records` - was 3 files / 8 records, **100% DATAFLAG**,
+   all blocked by nothing else. That category is now empty on the corpus.
+
+A census MUST decode with `decodeSchematicText(readFileSync(f))`, never
+`readFileSync(f, "latin1")` and never `grep`: `DCopPnt.asc` is UTF-16LE, so
+both of those instruments miss it and under-count the category.
 
 User-directed recovery unit: the runner/completion protocol, recursive corpus,
 waveform parity, `.step`/`.meas`, PNG export, and native AC/OP data are repaired.
@@ -52,10 +67,9 @@ Being killed mid-unit is normal and expected on a Pro plan. It is not a
 failure, and it is not a reason to restart the unit from scratch. Pick up the
 partial work.
 
-**The current `-wip` rescue tip is `45365c4`.** It contains only the interrupted
-heartbeat claim captured before this recovery. The canonical branch contains
-all substantive work; verify the diff, then delete the rescue ref before
-restarting launchd.
+No `-wip` rescue ref is outstanding. `45365c4` was inspected and deleted this
+fire: it held only an interrupted heartbeat claim plus a census note, both of
+which are folded into the block above.
 
 ---
 
@@ -64,27 +78,19 @@ restarting launchd.
 Ordered. Take the top item unless it is blocked. Class A outranks everything -
 a plausible wrong number is worse than a refusal to run.
 
-1. **The 46 files still save-blocked.** Down from 3,509, so the remaining set
-   is finally small enough to enumerate rather than estimate. Re-census it
-   first (`ascRewriteRisks(text)` vs `ascRewriteRisks(text, resolved
-   .foreignSymbols)` over `~/Documents`) and group by risk before picking -
-   `unknown LTspice records` and hierarchical blocks are the two known
-   remainders and they are completely different units. Measure any "this
-   blocks saves" claim against the corpus before spending a fire on it - three
-   units in a row found the named cause was not the binding one.
-2. **A hierarchical block still cannot be saved in place, and now it is a
+1. **A hierarchical block still cannot be saved in place, and now it is a
    visible gap rather than one of thousands.** A resolved block is FLATTENED at
    import (`ascImport.ts:1651`), so an in-place save would rewrite the user's
    hierarchy as flat parts. Carrying the un-flattened `SYMBOL` alongside the
    flattened components - the way a foreign symbol is carried now - is the
    shape of the fix, but the exporter must then emit the block and NOT its
    flattened parts, which is the hard half.
-3. **A folded value that was edited blocks the save.** By design: an op-amp's
+2. **A folded value that was edited blocks the save.** By design: an op-amp's
    value IS its slots joined, so an edit cannot be split back across them. The
    honest fix is to stop folding - give the component structured parameters
    instead of one string - which is a much larger unit than this note implies.
    Logged so it is a decision, not an oversight.
-4. **The provenance record describes the tree, not its contents.** The check
+3. **The provenance record describes the tree, not its contents.** The check
    landed 2026-08-01 refuses a staged resource whose `build-info.json` is absent,
    from another commit, or from another target, and it names every required file.
    It cannot tell that the library *file* was swapped after a legitimate build,
@@ -101,6 +107,7 @@ Newest first, ONE line each. Full evidence for every unit is in PROGRESS.md
 and in its commit message. This section exists so a fresh fire can see what
 is already done at a glance, not so it can re-read the reasoning.
 
+- 2026-08-02 - A `DATAFLAG` READOUT SURVIVES A SAVE, emptying the whole `unknown LTspice records` category: save-blocked over 4,012 real `.asc` falls 39 -> 36, and the 8 records in the 3 affected files round-trip identically with no save warning. The expression is carried as the verbatim line tail, never re-joined from split tokens.
 - 2026-08-02 - FRESH PACKAGED-APP QA IS GREEN. The exact release `.app` opens the canonical `class-d_starter.asc` with its sibling `deadtime` block, runs bundled ngspice to 16,873 samples / 33 parts, renders the expected switching and sine/output waveforms, and reports Efficiency = 990.7 m (99.07%). The same top-level file without its required sibling sources refuses by name and shows no telemetry or partial plot. Chrome at the 900x600 minimum had zero clipped controls and zero console warnings/errors.
 - 2026-08-02 - THE SCHEDULER IS ACTIVE AND ITS COMPLETION PROOF REACHES INSIDE THE DMG. Its first controlled fire honored quota backoff, exited 0, and released the PID lock. A completion marker now requires real OP and XSPICE runs against the mounted Tau.app's bundled library before notification.
 - 2026-08-02 - UNSUPPORTED DEVICES CAN NO LONGER PRODUCE A PLAUSIBLE FALSE ANSWER. DIAC/TRIAC invoke the unmodified file's own `.subckt`s, VARISTOR and PHIDET have direct LTspice waveform parity proofs, and NIGBT/LT1184F refuse atomically by name. The canonical runner now truthfully proves 80/82 warning-clean, deck-built, and op-converged, with the two refusals separated from hard failures.

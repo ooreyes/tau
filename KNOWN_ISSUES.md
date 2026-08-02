@@ -75,7 +75,10 @@ one engine for the whole session.
   symbol) survive a save with their direction, attached to the net label they
   name. Tau does not draw a port marker for them and does not yet resolve a
   hierarchy, so such a sheet still opens as a flat circuit - the ports are
-  preserved, not acted on. The extra symbol attributes that carry a part's
+  preserved, not acted on. The readouts LTspice paints on a schematic after a
+  run (`DATAFLAG` records) survive a save with their expression intact; Tau
+  does not evaluate or draw them, so they too are preserved rather than acted
+  on. The extra symbol attributes that carry a part's
   parameters (`Value2`, `SpiceLine`, …) go back into the slots they came from,
   so a part whose whole spec lives in them - an op-amp with no `Value` at all -
   reopens as itself rather than with everything collapsed onto `Value`. Tau

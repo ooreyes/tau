@@ -239,6 +239,7 @@ export function serializeSchematicFile(
       directives: document.directives ?? [],
       textAnnotations: document.textAnnotations ?? [],
       shapes: document.ascShapes,
+      dataFlags: document.ascDataFlags,
       foreignSymbols: document.ascForeignSymbols,
       ...(document.ascSheet ? { sheet: document.ascSheet } : {}),
     });
@@ -270,6 +271,9 @@ export function serializeSchematicFile(
           : {}),
         ...(document.ascShapes && document.ascShapes.length > 0
           ? { ascShapes: document.ascShapes }
+          : {}),
+        ...(document.ascDataFlags && document.ascDataFlags.length > 0
+          ? { ascDataFlags: document.ascDataFlags }
           : {}),
         // Additive, like the fields above: a `.sim` saved from an imported
         // `.asc` has to keep the source symbols Tau does not model, or saving

@@ -220,6 +220,24 @@ export interface SchematicAscShape {
 }
 
 /**
+ * An LTspice `DATAFLAG` record: a readout LTspice paints at a point on the
+ * schematic after a run. No electrical content and Tau does not evaluate it,
+ * but it must survive a save or reopening the file loses the author's readouts.
+ * Mirrors {@link SchematicAscShape}'s role for drawing primitives.
+ */
+export interface SchematicAscDataFlag {
+  x: number;
+  y: number;
+  /**
+   * Everything after the coordinates, verbatim. LTspice quotes the expression
+   * and it may contain spaces, so the remainder is carried as one opaque string
+   * rather than re-joined tokens: Tau never interprets it, and re-emitting it
+   * byte for byte is what keeps the save faithful.
+   */
+  expr: string;
+}
+
+/**
  * A source `SYMBOL` record LTspice writes that Tau has no equivalent for (e.g.
  * a vendor part like "PowerProducts\\LTC4449"). Not interpreted or simulated -
  * carried verbatim so an in-place `.asc` save re-emits the SYMBOL, its WINDOW

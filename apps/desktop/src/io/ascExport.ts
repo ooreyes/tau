@@ -17,6 +17,7 @@
 import type {
   ComponentKind,
   NetLabel,
+  SchematicAscDataFlag,
   SchematicAscShape,
   SchematicComponent,
   SchematicForeignSymbol,
@@ -60,6 +61,13 @@ export function serializeAscDocument(doc: AscDocument): string {
     // reads the pair back by coordinate. Emitting it anywhere else would orphan
     // the port.
     if (f.port) lines.push(`IOPIN ${int(f.x)} ${int(f.y)} ${f.port}`);
+  }
+  // LTspice writes its readouts after the flags and before the symbols. The
+  // expression is the verbatim tail of the source record, quotes included, so
+  // it goes back out exactly as it came in; an empty one leaves no trailing
+  // space to re-parse.
+  for (const d of doc.dataFlags) {
+    lines.push(`DATAFLAG ${int(d.x)} ${int(d.y)} ${d.expr}`.trimEnd());
   }
   for (const s of doc.symbols) {
     lines.push(`SYMBOL ${s.type} ${int(s.x)} ${int(s.y)} ${s.orientation}`);
@@ -368,6 +376,8 @@ export interface SchematicExportInput {
   textAnnotations?: SchematicTextAnnotation[];
   /** Drawing primitives retained from an imported `.asc`. */
   shapes?: SchematicAscShape[];
+  /** `DATAFLAG` readouts retained from an imported `.asc`. */
+  dataFlags?: SchematicAscDataFlag[];
   /**
    * Source SYMBOL records with no Tau equivalent, retained from an imported
    * `.asc` so an in-place save does not silently delete the part.
@@ -399,6 +409,7 @@ export function schematicToAsc(input: SchematicExportInput): SchematicToAscResul
     symbols: [],
     texts: [],
     shapes: (input.shapes ?? []).map((shape) => ({ ...shape, coords: [...shape.coords] })),
+    dataFlags: (input.dataFlags ?? []).map((dataFlag) => ({ ...dataFlag })),
     unknown: [],
   };
 

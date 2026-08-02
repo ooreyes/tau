@@ -27,6 +27,7 @@ import type {
   LtspiceWindow,
   NetLabel,
   PinOverride,
+  SchematicAscDataFlag,
   SchematicAscShape,
   SchematicComponent,
   SchematicPortDirection,
@@ -157,6 +158,7 @@ export interface AscText {
 }
 
 export type AscShape = SchematicAscShape;
+export type AscDataFlag = SchematicAscDataFlag;
 export type AscPortDirection = SchematicPortDirection;
 
 export interface AscDocument {
@@ -167,6 +169,7 @@ export interface AscDocument {
   symbols: AscSymbol[];
   texts: AscText[];
   shapes: AscShape[];
+  dataFlags: AscDataFlag[];
   /** Lines that were not understood, preserved for diagnostics. */
   unknown: string[];
 }
@@ -223,6 +226,7 @@ export function parseAsc(text: string): AscDocument {
     symbols: [],
     texts: [],
     shapes: [],
+    dataFlags: [],
     unknown: [],
   };
 
@@ -296,6 +300,24 @@ export function parseAsc(text: string): AscDocument {
         const shape = parseShapeRecord(tag, parts);
         if (shape) doc.shapes.push(shape);
         else doc.unknown.push(line);
+        current = null;
+        break;
+      }
+      case "DATAFLAG": {
+        // A readout LTspice paints on the schematic after a run. No electrical
+        // content and Tau does not evaluate it, but it must survive a save or
+        // reopening the file loses it. The expression is quoted and may contain
+        // spaces, so take the remainder of the line verbatim instead of
+        // re-joining split tokens. Screen the coordinates against the source
+        // text: `num` coerces anything unparseable to 0, which would move the
+        // readout to the origin on the way back out; such a record falls
+        // through to `unknown` so the save stays blocked.
+        const dataFlag = /^DATAFLAG\s+([+-]?\d+)\s+([+-]?\d+)(?:\s+(.*))?$/i.exec(line.trim());
+        if (!dataFlag) {
+          doc.unknown.push(line);
+          break;
+        }
+        doc.dataFlags.push({ x: num(dataFlag[1]), y: num(dataFlag[2]), expr: dataFlag[3] ?? "" });
         current = null;
         break;
       }
@@ -926,6 +948,8 @@ export interface AscImportResult {
   textAnnotations: AscText[];
   /** Original drawing primitives retained for lossless `.asc` save. */
   shapes: AscShape[];
+  /** Original `DATAFLAG` readouts retained for lossless `.asc` save. */
+  dataFlags: AscDataFlag[];
   /**
    * Source `SYMBOL` records Tau has no equivalent for (e.g. a vendor part like
    * "PowerProducts\\LTC4449"), retained verbatim so an in-place save does not
@@ -1523,6 +1547,9 @@ function flattenSubcircuit(
     comments: [],
     textAnnotations: [],
     shapes: [],
+    // A flattened block's own carried records belong to the child file, not to
+    // the parent that inlined it - same as `textAnnotations`/`shapes` above.
+    dataFlags: [],
     // A foreign symbol inside a block's own body belongs to that block's file,
     // not to the parent, so it must not be injected into the parent on save.
     foreignSymbols: [],
@@ -1818,6 +1845,7 @@ export function ascToSchematic(doc: AscDocument, options: AscImportOptions = {})
     comments,
     textAnnotations: doc.texts.map((text) => ({ ...text })),
     shapes: doc.shapes.map((shape) => ({ ...shape, coords: [...shape.coords] })),
+    dataFlags: doc.dataFlags.map((dataFlag) => ({ ...dataFlag })),
     foreignSymbols,
     sheet: { ...doc.sheet },
     warnings,
