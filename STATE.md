@@ -5,12 +5,13 @@ The working memory of an unattended loop that starts from zero every fire.
 
 ## Now
 
-**Status:** IN PROGRESS - 2026-08-03 01:43 CDT
+**Status:** DONE - 2026-08-03 01:52 CDT
 
-Resolving the remaining `elip_grd.asc` deck failure. Its negative capacitor is
-intentional LTspice filter mathematics, so the only acceptable outcomes are an
-electrically exact native translation or an atomic named refusal. The sign will
-not be clamped, absolutized, or silently approximated. Scheduler remains
+Negative-capacitance parity is complete. LTspice's active-network capacitor is
+translated exactly as ngspice `Q(V)=C*V`; a real AC proof holds the positive
+45-degree phase that would flip if the sign were lost. `elip_grd.asc` now builds
+and converges, leaving four extended-corpus hard failures. Preview solvers
+refuse the unsupported non-passive stamp explicitly. Scheduler remains
 unloaded.
 
 **Product UX contract (Omar, 2026-08-03): Tau is not a prettier command-line
@@ -120,12 +121,12 @@ which are folded into the block above.
 Ordered. Take the top item unless it is blocked. Class A outranks everything -
 a plausible wrong number is worse than a refusal to run.
 
-1. **Reduce the remaining 5 non-refusal failures in the 4,012-file extended
-   corpus.** Four are native operating-point failures (AD8235, LT1168, LT1194,
-   LT1795); one is the negative-capacitance `elip_grd.asc` deck failure. Inspect
-   source/model topology before changing convergence behavior. Translate only
-   proven LTspice semantics or refuse atomically; never hide a singular or
-   nonphysical circuit with a plausible number.
+1. **Resolve the remaining 4 non-refusal failures in the 4,012-file extended
+   corpus.** All are native operating-point failures: AD8235, LT1168, LT1194,
+   and LT1795. Inspect imported source/model topology before changing
+   convergence behavior; LT1168 is a shorted VCVS while the other three report
+   singular branch/node pairs. Translate only proven LTspice semantics or
+   refuse atomically; never hide a singular circuit with a plausible number.
 
 ---
 
@@ -135,6 +136,7 @@ Newest first, ONE line each. Full evidence for every unit is in PROGRESS.md
 and in its commit message. This section exists so a fresh fire can see what
 is already done at a glance, not so it can re-read the reasoning.
 
+- 2026-08-03 - LTSPICE NEGATIVE CAPACITANCE IS PRESERVED EXACTLY AS `Q(V)=C*V`. A native RC proof holds the required +45-degree lead, `elip_grd.asc` now builds/converges, preview solvers refuse rather than alter the sign, and extended hard failures fall 5 -> 4.
 - 2026-08-03 - SELF-CONTAINED LTSPICE BRACE ARITHMETIC AND `Q=` CAPACITORS ARE NATIVE. Empty `.param` scope no longer blocks valid arithmetic; `Q=` emits ngspice's charge device, preview solvers refuse rather than approximate, and the Value UI exposes Charge expression + Initial voltage without raw syntax. Extended hard failures fall 15 -> 5.
 - 2026-08-03 - LTSPICE CURRENT-CONTROLLED SWITCHES ARE REAL W DEVICES. `SpiceModel` resolves the sensing voltage source, `Value` resolves CSW/translated ISWITCH, exact save/reopen is supported, and every unprovable identity refuses atomically. CLI ngspice and the rebuilt packaged app prove the 5 V switched output.
 - 2026-08-02 - EVERY PACKAGED NGSPICE RESOURCE IS SHA-256 BOUND TO ITS BUILD RECORD. `build.rs` verifies exact set equality, contents, target and commit; doctored-tree tests cover swaps, corruption, injection, omission, malformed data and escaping symlinks. The rebuilt DMG's 27 resources match exactly and real OP/noise/XSPICE tests pass from inside it. Completion logging no longer writes into the read-only mount.

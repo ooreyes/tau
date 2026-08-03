@@ -544,7 +544,12 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   the electrical result; preview OP/tran/AC/noise refuse by name because their
   constant-C stamp cannot reproduce `dQ/dV`/`dQ/dt`. Self-contained braced
   values such as `{5.1Meg+120K}` and `{3.3/2}` also evaluate without requiring a
-  `.param` scope. Still to add: browser-solver ESR stamps and behavioral R/L.
+  `.param` scope. **Negative constant capacitance also lands on the same native
+  charge law, `Q(V)=C*V`, preserving the authored sign instead of rejecting,
+  clamping, or absolutizing it.** Native AC proves the required +45-degree lead
+  and the real `elip_grd.asc` now builds/converges; browser previews refuse the
+  non-passive stamp explicitly. Still to add: browser-solver ESR stamps and
+  behavioral R/L.
 - 🟡 Sources — DC/AC/PULSE plus **inline LTspice transient functions on V/I sources now emit to the ngspice deck: SINE (offset/amp/freq/td/damping/phase), PULSE (full 7-arg, Ncycles trimmed), PWL, EXP, SFFM** (`engine/sourceFunction.ts`; µ/meg normalized). **TS-fallback solver now evaluates the same families in the time domain** (`simulation/sourceWaveform.ts` `parseTransientSource` → `{ dc, at(t), maxFrequencyHz }`): the `.tran` loop drives `vsource`/`isource` (and the `vac`/`iac` AC symbols) from the parsed waveform instead of DC-only, `.op` seeds the t=0 bias, and `inspectTransientResolution` derives the sampling requirement from a function source's own frequency. ngspice-verified: PULSE(0 5 1m 0 0 2m 4m) node = 0/5/0 V at t=0.5/2/3.5 ms in both engines. Still missing: PWL FILE, explicit AC spec on these, noise sources (**arbitrary behavioral B-source `V=…`/`I=…` also landed** — see the dedicated B item below)
 - 🟡 Semiconductors — diode/BJT/MOS/zener present; **bundled LTspice standard
   models landed** (`engine/standardModels.ts`): common parts referenced by name

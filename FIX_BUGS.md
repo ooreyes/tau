@@ -13,6 +13,22 @@
 
 **Repo:** `auto/ltspice-parity` · **Audit date:** 2026-07-17 · **Auditor:** interactive session (Fable 5) + two background subagents (fuzz + sim cross-check).
 
+## 2026-08-03 — LTspice negative capacitor was rejected as malformed (CONFIRMED, FIXED)
+
+`elip_grd.asc` intentionally synthesizes an active filter section whose
+`Cb2=Cob/(0.25/A2-A2)` evaluates to `-23.7190675 nF`. LTspice permits that
+negative capacitance; Tau's positive-only native C validator rejected the deck.
+Taking the absolute value would build a plausible but electrically different
+filter.
+
+**Fixed 2026-08-03.** A negative constant capacitor emits ngspice's native
+charge-defined form with the exact law `Q(V)=C*V`; series resistance and `IC=`
+remain intact. A real-engine 1 kHz RC proof measures `0.5+j0.5`, the +45-degree
+lead whose imaginary sign would fail under an absolute-value bug. Preview
+solvers refuse by component name until their non-passive stamps are audited.
+The real `elip_grd.asc` now deck-builds and op-converges, reducing extended-
+corpus hard failures from 5 to 4 (526 decks built, 522 operating points).
+
 ## 2026-08-03 — valid LTspice expression values failed without `.param` (CONFIRMED, FIXED)
 
 `resolveComponentValues` returned early whenever the parameter/function scope

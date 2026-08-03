@@ -9,14 +9,16 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: IN PROGRESS - 2026-08-03 01:43 CDT**
+**Status: DONE - 2026-08-03 01:52 CDT**
 
-Interactive correctness unit: resolve `elip_grd.asc`, the remaining extended-
-corpus deck failure caused by an intentional negative LTspice capacitor. Prove
-the exact electrical semantics against native ngspice and translate it without
-changing the sign, or refuse the circuit atomically by name if native parity is
-not possible. Add regression/corpus evidence and rerun the full corpus.
-Scheduler stays unloaded.
+LTspice negative constant capacitors now preserve their exact constitutive law
+through ngspice's native charge device: `Q(V)=C*V`, including the negative sign
+and any series resistance/initial condition. A real 1 kHz RC proof returns
+`0.5+j0.5` (+45 degrees); changing the sign or taking `abs(C)` fails it. The
+real `elip_grd.asc` now deck-builds and operating-point converges. Preview
+solvers resolve braces and refuse this active-network stamp by name rather than
+calling it malformed or changing it. Extended corpus: 526 decks built, 522
+operating points, four hard failures. Scheduler stays unloaded.
 
 Previous completed unit:
 
@@ -11117,3 +11119,21 @@ evidence is kept in full here.
   warning-clean, 525 deck-built, 521 op-converged, five hard failures, and 3,486
   explicit refusals; canonical remains 80/82. Scheduler remains intentionally
   unloaded.
+
+- 2026-08-03 - Preserved LTspice negative capacitance instead of rejecting or
+  altering it. `elip_grd.asc` computes C6 from
+  `Cb2=Cob/(0.25/A2-A2)`, intentionally yielding -23.7190675 nF for an active
+  group-delay-correction network. ngspice rejects a negative numeric C token but
+  represents the same device exactly as `Q(V)=C*V`, so Tau now emits that native
+  charge law with the authored sign, `IC=`, and ESR topology intact. A real AC
+  test at `|wRC|=1` measures `V(out)=0.5+j0.5` (+45 degrees); clamping or taking
+  `abs(C)` produces the opposite imaginary sign and fails. Preview OP/tran/AC/
+  noise resolve parameter braces first and then refuse the non-passive stamp by
+  name rather than calling it malformed or approximating it. The actual
+  `elip_grd.asc` now builds and op-converges. Evidence: typecheck; 156 frontend
+  files passed / one skipped, 2,391 tests passed / six skipped; production web
+  build; Rust fmt/clippy, 53 ordinary + five real-library tests; four native
+  corpus files / 18 tests; six DoD parity tests; full 4,012-file corpus with 526
+  deck-built, 522 op-converged, four hard failures and 3,486 explicit refusals;
+  canonical 80/82; fresh unsigned Tau.app/DMG, strict codesign, and valid DMG
+  checksum. Scheduler remains intentionally unloaded.
