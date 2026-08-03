@@ -1651,6 +1651,17 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   Team ID. The unsigned app therefore loads sealed bundled ngspice end-to-end;
   `codesign --verify --deep --strict` and `hdiutil verify` still pass. The final
   Developer ID signature must re-enable hardened runtime before notarization.
+- ✅ **Truthful completion notification gate (2026-08-03):** the scheduler can
+  stop only on a fresh two-commit marker whose parent is the exact clean commit
+  that passed `scripts/verify-autobuilder-completion.sh --record`; unit-level
+  heartbeat text is never consulted. Gate v2 pins the editor/viewer regression
+  files, runs all real embedded-engine tests against both staged and mounted
+  resources, produces the 48-image dark/light 1440/1280/900 matrix from its own
+  strict-port Vite server outside the worktree, verifies codesign and the DMG,
+  and makes the executable mounted from that DMG return a structured 0-to-5 V
+  XSPICE transient before it may write the marker. An occupied visual-QA port,
+  missing library, stale/malformed marker, dirty tree, or less than 15 GiB free
+  fails closed and cannot notify.
 
 ## 10. Visual design system — **IMPERATIVE (Omar's directive)** — ✅ FULLY ADOPTED (2026-07-08, Phase 4c)
 

@@ -9,16 +9,20 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: IN PROGRESS - 2026-08-03 12:09 CDT**
+**Status: DONE - 2026-08-03 12:17 CDT**
 
-Claimed unit: harden the only scheduler completion predicate so a passing unit
-heartbeat can never become a false "Tau is ready" notification. The committed
-completion verifier will run the full dark/light minimum-size screenshot matrix
-outside the worktree, pin the editor and waveform-viewer Definition-of-Done
-regressions, include every real embedded-engine test, and execute an XSPICE
-transient through the Tau binary mounted from the DMG before it may create the
-two-commit completion marker. The scheduler remains unloaded while this gate is
-built and deliberately failure-tested.
+Completed unit: the only scheduler completion predicate now fails closed around
+a version-2 two-commit marker; it never reads a unit heartbeat. It pins 226
+release-critical editor/viewer tests, all real embedded-engine tests against the
+staged and mounted libraries, and a 48-image dark/light 1440/1280/900 matrix
+served from the commit's own strict-port Vite process outside the worktree. The
+executable mounted from the DMG must itself return a structured XSPICE transient:
+the current Tau.app produced 336 samples and switched 0 to 5 V. Occupied visual
+ports, a missing library, missing marker, dirty tree, stale marker, and low disk
+all reject. Typecheck, all 2,475 frontend tests, production build, shell syntax /
+shellcheck, isolated visual matrix, mounted-binary positive/negative tests, and
+marker rejection pass. `--record` correctly refused at the 15 GiB preflight with
+10 GiB free and wrote no marker. Scheduler remains unloaded.
 
 Previous completed unit:
 
@@ -11492,3 +11496,23 @@ evidence is kept in full here.
   under Computer Use. Scheduler remains intentionally unloaded. Next: continue
   the remaining acceptance-corpus, waveform, editor, visual-system, and release
   Definition-of-Done gates; do not emit completion until every box is proved.
+
+- 2026-08-03 - Hardened the release completion and notification proof. The
+  runner already required a fresh signal line plus a two-commit marker and did
+  not confuse per-unit DONE heartbeats with project completion; gate v2 now
+  closes three remaining false-positive paths. It runs the full 48-image
+  dark/light 1440x900, 1280x720, and 900x600 matrix outside the worktree from a
+  dedicated strict-port Vite server, explicitly pins 226 editor/waveform DoD
+  tests, and runs every ignored real-engine test against both staged and mounted
+  ngspice trees. A new packaged-worker smoke invokes the Tau executable mounted
+  from the DMG, parses its private structured response, verifies that it loaded
+  that mounted library, and requires a real XSPICE waveform spanning 0 to 5 V;
+  the current package returned 336 samples. Deliberate failure tests reject an
+  occupied/unidentified visual server, missing library, and missing marker. The
+  clean-tree record path also refused 10 GiB free against its 15 GiB floor and
+  created no marker. Evidence: shell syntax and shellcheck; typecheck; 163
+  frontend files passed / one skipped, 2,475 tests passed / six skipped; 8
+  pinned files / 226 tests; production build; isolated 48-image visual run;
+  packaged-worker positive/negative runs. Scheduler remains intentionally
+  unloaded. Next: reclaim reproducible build-cache space, continue the remaining
+  product DoD boxes, then run this all-up gate from the exact clean commit.
