@@ -9,7 +9,16 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-02 22:58 CDT**
+**Status: IN PROGRESS - 2026-08-02 23:00 CDT**
+
+Interactive correctness unit: replace the current-controlled-switch (`csw`)
+fixed-open approximation with ngspice's native `W` device when the imported
+LTspice control-source identity is provable, and atomically refuse otherwise.
+Use real `.asc` encodings from the corpus, test import/deck/native behavior and
+lossless-save implications, then rerun the required gates. Scheduler stays
+unloaded.
+
+Previous completed unit:
 
 Every staged native-engine file is now bound to `build-info.json` by SHA-256,
 and `build.rs` watches and verifies the exact resource set before every build.

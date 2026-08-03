@@ -5,7 +5,15 @@ The working memory of an unattended loop that starts from zero every fire.
 
 ## Now
 
-**Status:** DONE - 2026-08-02 22:58 CDT
+**Status:** IN PROGRESS - 2026-08-02 23:00 CDT
+
+Claimed current-controlled-switch correctness: read the control-source/model
+identity from real LTspice `csw` records and emit a native ngspice `W` device
+only when complete; otherwise refuse the whole analysis instead of substituting
+a fixed-open circuit. Cover import, deck, native behavior, and safe save.
+Scheduler remains unloaded.
+
+Previous completed unit:
 
 Native-engine content integrity is complete. The build script records SHA-256
 for the exact staged tree; `build.rs` rejects missing/malformed/stale metadata,
