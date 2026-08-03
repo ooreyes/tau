@@ -1507,7 +1507,13 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   budget, so an intentionally pathological deck can monopolize or crash Tau.
 
 ## 9. Packaging / distribution (to actually sell)
-- ⬜ Bundle `libngspice` reliably (currently git-untracked; only `.gitkeep`)
+- ✅ Bundle `libngspice` reliably — `scripts/build-ngspice.sh` rebuilds the
+  pinned commit with XSPICE, stages every required module, signs the macOS
+  dylib ad hoc, and records SHA-256 for the exact resource tree. `build.rs`
+  refuses stale target/commit/library metadata, missing or extra files, changed
+  bytes, malformed digests, and escaping symlinks before packaging. Completion
+  compares the verified staged tree with the mounted DMG and runs real OP and
+  XSPICE tests against the library inside it (27/27 files verified 2026-08-02).
 - 🧑‍💻 macOS code signing + notarization — **HUMAN-OWNED (Omar), does not gate
   completion** (see AGENTS.md → Definition of Done). Agent scope stops at an
   unsigned, production-ready DMG. Windows/Linux builds: later, out of DoD.

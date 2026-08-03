@@ -98,7 +98,7 @@ live in `apps/desktop/src-tauri/src/staged_engine.rs`, which `build.rs` includes
 by path, since the staged tree is gitignored and cannot be checked from the test
 suite alone.
 
-## 2026-07-29 — the real-library Rust test cannot go green on this host (CONFIRMED)
+## 2026-07-29 — the real-library Rust test cannot go green on this host (CONFIRMED, FIXED 2026-08-02)
 
 `spice::tests::runs_an_operating_point_with_the_real_ngspice_library` is
 `#[ignore]`d behind `TAU_NGSPICE_LIB`, so `cargo test` never runs it. Pointed at
@@ -117,8 +117,13 @@ earlier assertions do run and can be mutation-checked (swapping the complex
 real/imaginary read fails it at the frequency-scale assertion), so it is usable
 as a proof today - just not as a gate, and not past the register case.
 
-Also note: running the two `--ignored` real-library tests in one process
-SIGSEGVs. libngspice is a stateful singleton; they need `--test-threads=1`.
+**Fixed 2026-08-02.** The pinned resource now includes all seven code-model
+modules and every real-engine test passes against both the staged dylib and the
+one inside the mounted DMG. The real-library tests share an internal mutex
+because libngspice owns process-global callback/circuit state; the ordinary
+parallel `cargo test -- --ignored` invocation now passes OP, noise, missing-
+code-model diagnosis, and a two-bit XSPICE register without a special thread
+flag or process abort.
 
 ## 2026-07-18 stress-test session (interactive, Fable 5) — fixes applied in working tree
 

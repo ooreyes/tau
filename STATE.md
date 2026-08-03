@@ -5,12 +5,15 @@ The working memory of an unattended loop that starts from zero every fire.
 
 ## Now
 
-**Status:** IN PROGRESS - 2026-08-02 22:41 CDT
+**Status:** DONE - 2026-08-02 22:58 CDT
 
-Claimed native-engine content integrity: record SHA-256 for every staged
-ngspice library/code-model resource and refuse packaging if metadata or bytes
-do not match. Regenerate the pinned resources and rerun the full release proof.
-Scheduler remains unloaded.
+Native-engine content integrity is complete. The build script records SHA-256
+for the exact staged tree; `build.rs` rejects missing/malformed/stale metadata,
+changed or unrecorded bytes, missing entries, and symlink escapes. The pinned
+engine, app, and DMG were rebuilt; 27/27 packaged resources match, real OP,
+noise, and XSPICE tests pass from the mounted DMG, and launch stays alive. The
+completion verifier now logs outside its read-only mount and compares the whole
+packaged tree before it can notify. Scheduler remains unloaded.
 
 Previous completed unit:
 
@@ -99,14 +102,11 @@ which are folded into the block above.
 Ordered. Take the top item unless it is blocked. Class A outranks everything -
 a plausible wrong number is worse than a refusal to run.
 
-1. **The provenance record describes the tree, not its contents.** The check
-   landed 2026-08-01 refuses a staged resource whose `build-info.json` is absent,
-   from another commit, or from another target, and it names every required file.
-   It cannot tell that the library *file* was swapped after a legitimate build,
-   because the record holds no digest. Recording a SHA-256 per staged file at
-   staging time and verifying it in `build.rs` would close that; the cost is that
-   adopting it needs a full engine rebuild (~25 min) to regenerate the record,
-   which is why it was not folded into the same unit.
+1. **Implement LTspice current-controlled switches (`csw`) honestly.** Tau now
+   warns and models them as fixed-open, which avoids a silent wrong result but
+   is not parity. Determine the controlling-source/model records in real `.asc`
+   files and either emit ngspice's native `W` device end to end or atomically
+   refuse the analysis when the required control identity is unavailable.
 
 ---
 
@@ -116,6 +116,7 @@ Newest first, ONE line each. Full evidence for every unit is in PROGRESS.md
 and in its commit message. This section exists so a fresh fire can see what
 is already done at a glance, not so it can re-read the reasoning.
 
+- 2026-08-02 - EVERY PACKAGED NGSPICE RESOURCE IS SHA-256 BOUND TO ITS BUILD RECORD. `build.rs` verifies exact set equality, contents, target and commit; doctored-tree tests cover swaps, corruption, injection, omission, malformed data and escaping symlinks. The rebuilt DMG's 27 resources match exactly and real OP/noise/XSPICE tests pass from inside it. Completion logging no longer writes into the read-only mount.
 - 2026-08-02 - IMPORTED/CUSTOM OP-AMP PARAMETERS ARE HONEST AND EDITABLE in the packaged inspector; a one-slot Avol change writes back to Value2 and retains SpiceLine instead of collapsing both onto Value.
 - 2026-08-02 - THE REAL APP PRESERVES EXTENDED LTSPICE VALUE PROVENANCE. The validator had silently dropped `ltExtraAttrs`; it now retains/bounds/sanitizes it, hierarchy fingerprints cover it, and single-slot joined-value edits reconcile to their owning slot while cross-slot edits remain blocked.
 - 2026-08-02 - RUNNING A CLEAN IMPORTED `.asc` IS BYTE-PRESERVING. The pre-run save compares the live semantic signature first, so record order, micro glyphs and vendor attributes cannot change merely because the user pressed Run.

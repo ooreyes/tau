@@ -9,13 +9,17 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: IN PROGRESS - 2026-08-02 22:41 CDT**
+**Status: DONE - 2026-08-02 22:58 CDT**
 
-Interactive security unit: bind every staged native ngspice resource to the
-engine provenance record with SHA-256 and make `build.rs` reject a missing,
-malformed, stale, swapped, or corrupted file before packaging. Tests must prove
-the rejection on doctored staging trees and a regenerated pinned engine must
-pass the complete native/release/DMG smoke path. The scheduler stays unloaded.
+Every staged native-engine file is now bound to `build-info.json` by SHA-256,
+and `build.rs` watches and verifies the exact resource set before every build.
+Missing metadata, malformed hashes, stale commit/host/library data, modified
+dylibs or code models, injected/missing files, and escaping symlinks are hard
+failures. The pinned engine was rebuilt from source; 27/27 staged and packaged
+resources match their manifest. The mounted DMG passed real OP, noise, and
+XSPICE tests and its executable stayed alive. The completion verifier's launch
+log was also moved off the read-only DMG mount, fixing a bug that made a healthy
+release unable to produce a completion signal. The scheduler stays unloaded.
 
 Previous completed unit:
 
@@ -11036,3 +11040,26 @@ evidence is kept in full here.
   tests pass. The runner can therefore notify only for an exact pushed marker
   commit backed by green source, corpus, parity, package, launch, and bundled-
   engine gates.
+
+- 2026-08-02 - Bound the complete native-engine resource to its build record.
+  `scripts/build-ngspice.sh` records SHA-256 for every staged file and symlink;
+  `build.rs` verifies exact set equality, content, target, commit, library, and
+  symlink containment whenever any resource changes. Nineteen doctored-tree
+  tests reject absent or malformed metadata, stale builds, swapped dylibs,
+  corrupted digital models, injected/missing files, and escaping symlinks. A
+  clean pinned-source rebuild produced 27/27 matching entries. The ordinary
+  parallel ignored-test command previously aborted because libngspice is
+  process-global; the four real-engine proofs now self-serialize and all pass.
+  The completion verifier also had a live false-negative: it redirected Tau's
+  launch output into the read-only DMG mount, so no valid release could reach
+  the five-second launch proof or notify. It now logs to a separate temp file,
+  compares the entire mounted engine tree against the verified stage, then runs
+  native OP/XSPICE inside the DMG. Evidence: typecheck; 154 frontend files / 2,367
+  tests; 53 Rust + 4 real-engine tests; clippy/fmt; production web build; full
+  4,012-file corpus; six DoD and 15 native-analysis parity tests; zero production
+  pnpm advisories; unsigned app/DMG build; codesign and DMG checksum valid;
+  exact mounted resources; mounted OP/noise/XSPICE green; app alive at five
+  seconds. Computer Use could not repeat visual inspection because the Mac was
+  locked; this unit changes no UI, and the immediately prior packaged UI plus
+  900x600 Chrome acceptance remains green. Scheduler remains intentionally
+  unloaded.
