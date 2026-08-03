@@ -9,16 +9,25 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: IN PROGRESS - 2026-08-02 19:02 CDT**
+**Status: DONE - 2026-08-02 22:16 CDT**
 
-Interactive parity unit: make a resolved LTspice hierarchical block saveable
-without flattening it. The exporter must re-emit the original parent `SYMBOL`
-and suppress exactly the untouched flattened components, wires, and synthetic
-labels used for simulation. Any edit, deletion, or incomplete provenance inside
-the flattened child must keep the save blocked with a specific diagnostic.
-The unit includes `.sim` persistence, hostile-document validation, an exact
-Class-D round trip, and packaged-app/Chrome verification before it is marked
-done.
+Resolved LTspice hierarchical blocks now save losslessly. The importer records
+exact, owner-scoped provenance for every flattened simulation member; the
+exporter re-emits the original parent `SYMBOL` and suppresses those members only
+while their counts and fingerprints remain exact. Edited or incomplete blocks
+stay blocked with an instance-specific reason. Provenance persists through
+`.sim`, survives hostile-document validation, and is stripped from copied or
+duplicated members so new top-level content cannot disappear on save.
+
+Packaged-app validation opened the unmodified Class-D project with its sibling
+`deadtime` block and ran bundled ngspice to 16,873 samples / 16 nets / 33 parts;
+PS = 3.616, PL = 3.582, Efficiency = 990.7 m (99.07%). Chrome at the 900x600
+minimum found zero clipped controls, zero document overflow, and no console
+errors. The broad corpus exposed two follow-ups before close: its validator was
+not forwarding hierarchy records, and Run rewrote a clean imported `.asc`.
+Both are fixed; Run is now byte-preserving until the schematic is semantically
+edited. The UI-mutated corpus source was restored byte-for-byte and verified by
+SHA-256. The scheduler remains intentionally unloaded.
 
 Latest unit: a new circuit no longer inherits the previous file's `DATAFLAG`
 readouts, so saving it cannot write records into a file that never had them.
@@ -1716,6 +1725,52 @@ needs Omar's Developer ID.
 - **Status:** DONE
 - **Last completed sub-step:** packaged Tau saved and reopened a disposable buck converter while preserving comments/directive positions, then bundled ngspice completed its 165,337-sample transient; all required gates and the 55-check advanced circuit corpus are green.
 - **Next candidates:** keep the remaining unsupported ASC drawing/window records explicit, and continue the acceptance-corpus path rather than widening the editor with lossy representations.
+
+## 2026-08-03T03:16Z - auto/ltspice-parity - Lossless hierarchy save + clean-source Run (§1/§7)
+
+### What I did
+
+- Added exact owner/fingerprint provenance to flattened hierarchy components,
+  wires, labels, and bridges, plus the original parent block and expected counts.
+- Re-emitted an untouched block's original LTspice `SYMBOL` while suppressing
+  exactly its synthetic flattened members; edits/deletions remain hard refusals.
+- Persisted/bounded provenance in `.sim`, stripped it from copies/duplicates,
+  and added the canonical Class-D save/reopen regression.
+- Made Run a read-only operation for a clean disk-backed schematic. Tau no
+  longer normalizes an unedited LTspice file merely because the user simulates.
+- Updated the acceptance harness to validate carried hierarchy records and
+  removed all known production dependency advisories.
+
+### Files
+
+`hierarchyProvenance.ts`, schematic/import/export/project/store validation and
+tests, `App.tsx`, `App.workspace.test.tsx`, the acceptance corpus harness,
+workspace/package lockfiles, `Cargo.lock`.
+
+### Tests
+
+- Frontend: 154 passed / 1 skipped files; 2,363 passed / 6 skipped tests.
+- Typecheck and production Vite build pass.
+- DoD parity: 3 files / 6 tests pass.
+- Acceptance corpus: 4,012 imports and the canonical 82-file floor pass; the
+  canonical subset remains 80 warning-clean / 80 deck-built / 80 op-converged.
+- Rust: fmt, clippy `-D warnings`, and 46 tests pass (4 ignored).
+- Unsigned Tauri release and DMG build; DMG verifies/mounts, app stays alive,
+  and bundled ngspice passes real OP and XSPICE smoke tests.
+- `pnpm audit --prod --audit-level=low`: no known vulnerabilities. Cargo audit
+  has only target-specific GTK3 advisories absent from the macOS dependency tree.
+
+### Parity items
+
+Hierarchy re-export is complete for resolved, unchanged blocks. Tau-native
+hierarchy editing and an in-canvas block symbol remain open. Clean imported
+`.asc` runs are now source-byte-preserving.
+
+### Next step
+
+Replace folded extended-value strings with structured component parameters so
+an edited `Value2`/`SpiceLine` part can save without ambiguity; keep the scheduler
+paused while interactive replacement work continues.
 
 ---
 

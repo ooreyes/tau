@@ -482,8 +482,14 @@ Status legend: ✅ done · 🟡 partial · ⬜ not started
   dialog (multi-select) feeds it the user's `.asy/.asc` siblings. **Clears the
   last import warning on the flagship `class-d_starter.asc`** (its `deadtime` X1
   fully inlines: 33 components, all 5 ports bridged, netlist extracts clean). 7
-  tests. Still ⬜: a Tau-native subckt *device* / hierarchy re-export and an
-  in-canvas hierarchical block symbol (this path flattens on import only).
+  tests. **Guarded hierarchy re-export now landed (2026-08-02):** every
+  flattened simulation member carries exact owner/fingerprint provenance, so
+  an untouched instance saves as its original LTspice `SYMBOL` while its
+  synthetic components/wires/labels are suppressed. Any edit, deletion, or
+  incomplete group remains blocked by instance name; `.sim` persistence,
+  hostile validation, copy/duplicate stripping, and the canonical Class-D
+  round trip are covered. Still ⬜: a Tau-native subckt *device*, editing the
+  child hierarchy in Tau, and an in-canvas hierarchical block symbol.
 - ⬜ Net highlighting (hover a net → highlight whole net)
 - ⬜ Component attribute window/editor (full SPICE line editor per part)
 - ⬜ Pin/port symbols (IOPIN) for hierarchy

@@ -5,13 +5,16 @@ The working memory of an unattended loop that starts from zero every fire.
 
 ## Now
 
-**Status:** IN PROGRESS - 2026-08-02 19:02 CDT
+**Status:** DONE - 2026-08-02 22:16 CDT
 
-Interactive parity unit claimed: hierarchical-block save, half 2 of 2. Preserve
-the original block record and suppress its unchanged flattened simulation
-members; an edited, deleted, duplicated, or incomplete child must remain a hard
-save refusal. The scheduler is unloaded and its leaked Vite/esbuild children
-were stopped before this claim, so no autonomous run can race the unit.
+Hierarchical-block save half 2 is complete. A resolved, untouched block keeps
+its original LTspice `SYMBOL`; its flattened simulation-only members carry exact
+owner/fingerprint provenance and are suppressed only when the whole group still
+matches. Edited/deleted/incomplete groups remain blocked by instance name.
+`.sim`, hostile-input, copy/duplicate, canonical Class-D, corpus, packaged-app,
+Chrome minimum-window, and security gates pass. Run no longer rewrites a clean
+imported `.asc`; the disk write begins only after a semantic edit. The scheduler
+is still deliberately unloaded so it cannot race interactive work.
 
 Landed the CONFIRMED `newCircuit` leak from the top of `FIX_BUGS.md`: the reset
 had fallen one field behind, so a new circuit still held the previous file's
@@ -26,12 +29,13 @@ feeds `assertSimulationIntegrity` (`App.tsx:578`), which refuses to simulate
 anything in it; a resolved block DOES simulate, so reusing the field would have
 stopped the flagship class-d example running at all. `ascHierarchicalBlocks` is
 a separate field for that reason, and a block nested inside a block's own body
-stays with the child file. Half 2 of that unit is "Next up" item 1 below.
+stays with the child file. The guarded re-export now depends on that separation.
 
-**Save-block census, measured over the 4,012 real `.asc` under `~/Documents`,
-imported with a sibling resolver: 36 files blocked** - 20 `extended symbol
-attributes` (item 2 below), 17 `symbol-library identity` (item 1 below), and 0
-`unknown LTspice records`, a category `DATAFLAG` support emptied entirely.
+**The last pre-hierarchy-save census over the 4,012 real `.asc` under
+`~/Documents` found 36 blocked files** - 20 `extended symbol attributes`, 17
+`symbol-library identity`, and 0 `unknown LTspice records`. Rerun the exact
+census before quoting a new post-fix total; hierarchy re-export should reduce
+it, but an unmeasured number is not evidence.
 
 A census MUST decode with `decodeSchematicText(readFileSync(f))`, never
 `readFileSync(f, "latin1")` and never `grep`: `DCopPnt.asc` is UTF-16LE, so
@@ -79,20 +83,12 @@ which are folded into the block above.
 Ordered. Take the top item unless it is blocked. Class A outranks everything -
 a plausible wrong number is worse than a refusal to run.
 
-1. **A hierarchical block still cannot be saved in place - half 2 of 2.**
-   Half 1 landed: the un-flattened `SYMBOL` is now carried on the document as
-   `ascHierarchicalBlocks` and the block reason names the hierarchy. What
-   remains is the hard half - the exporter must emit that record and NOT the
-   flattened parts. That needs per-component provenance (which flattened part
-   came from which block instance) plus a guard: if the user edited a part
-   inside the block, the edit belongs in the CHILD `.asc`, which Tau is not
-   writing, so that case must stay blocked rather than be silently dropped.
-2. **A folded value that was edited blocks the save.** By design: an op-amp's
+1. **A folded value that was edited blocks the save.** By design: an op-amp's
    value IS its slots joined, so an edit cannot be split back across them. The
    honest fix is to stop folding - give the component structured parameters
    instead of one string - which is a much larger unit than this note implies.
    Logged so it is a decision, not an oversight.
-3. **The provenance record describes the tree, not its contents.** The check
+2. **The provenance record describes the tree, not its contents.** The check
    landed 2026-08-01 refuses a staged resource whose `build-info.json` is absent,
    from another commit, or from another target, and it names every required file.
    It cannot tell that the library *file* was swapped after a legitimate build,
@@ -109,11 +105,13 @@ Newest first, ONE line each. Full evidence for every unit is in PROGRESS.md
 and in its commit message. This section exists so a fresh fire can see what
 is already done at a glance, not so it can re-read the reasoning.
 
+- 2026-08-02 - RUNNING A CLEAN IMPORTED `.asc` IS BYTE-PRESERVING. The pre-run save compares the live semantic signature first, so record order, micro glyphs and vendor attributes cannot change merely because the user pressed Run.
+- 2026-08-02 - RESOLVED HIERARCHICAL BLOCKS SAVE LOSSLESSLY (half 2 of 2): exact owner/fingerprint provenance suppresses only unchanged flattened simulation members and re-emits the original parent `SYMBOL`; edited or incomplete groups remain instance-specific hard refusals.
 - 2026-08-02 - A NEW CIRCUIT NO LONGER INHERITS THE PREVIOUS FILE'S `DATAFLAG` READOUTS, which a save wrote to disk. `newCircuit`'s reset now comes from `blankDoc(): Doc`, whose explicit return type makes an uncleared carried field a compile error instead of the next leak.
 - 2026-08-02 - A HIERARCHICAL BLOCK'S SAVE-BLOCK REASON STOPS LYING (half 1 of 2): the resolved-and-flattened `SYMBOL` is carried as `ascHierarchicalBlocks`, turning `["symbol-library identity","partially supported devices"]` into `["hierarchical blocks"]` on the class-d starter. It is a SEPARATE field because `ascForeignSymbols` feeds the simulation-integrity refusal and a block must still simulate.
 - 2026-08-02 - A `DATAFLAG` READOUT SURVIVES A SAVE, emptying the whole `unknown LTspice records` category: save-blocked over 4,012 real `.asc` falls 39 -> 36, and the 8 records in the 3 affected files round-trip identically with no save warning. The expression is carried as the verbatim line tail, never re-joined from split tokens.
 - 2026-08-02 - FRESH PACKAGED-APP QA IS GREEN. The exact release `.app` opens the canonical `class-d_starter.asc` with its sibling `deadtime` block, runs bundled ngspice to 16,873 samples / 33 parts, renders the expected switching and sine/output waveforms, and reports Efficiency = 990.7 m (99.07%). The same top-level file without its required sibling sources refuses by name and shows no telemetry or partial plot. Chrome at the 900x600 minimum had zero clipped controls and zero console warnings/errors.
-- 2026-08-02 - THE SCHEDULER IS ACTIVE AND ITS COMPLETION PROOF REACHES INSIDE THE DMG. Its first controlled fire honored quota backoff, exited 0, and released the PID lock. A completion marker now requires real OP and XSPICE runs against the mounted Tau.app's bundled library before notification.
+- 2026-08-02 - THE AUTOBUILDER CONTROL PLANE AND COMPLETION PROOF REACH INSIDE THE DMG. Its controlled fire honored quota backoff, exited 0, and released the PID lock; a completion marker requires real OP and XSPICE runs against the mounted Tau.app's bundled library. The launchd job is currently intentionally unloaded for interactive work.
 - 2026-08-02 - UNSUPPORTED DEVICES CAN NO LONGER PRODUCE A PLAUSIBLE FALSE ANSWER. DIAC/TRIAC invoke the unmodified file's own `.subckt`s, VARISTOR and PHIDET have direct LTspice waveform parity proofs, and NIGBT/LT1184F refuse atomically by name. The canonical runner now truthfully proves 80/82 warning-clean, deck-built, and op-converged, with the two refusals separated from hard failures.
 - 2026-08-02 - NATIVE AC returns source/inductor/semiconductor currents and OP exposes device bias, conductance, and region data, all held against real ngspice vectors.
 - 2026-08-02 - WAVEFORM PNG EXPORT captures every visible pane at 2× with computed theme styles inlined.

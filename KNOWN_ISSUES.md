@@ -95,10 +95,12 @@ one engine for the whole session.
   vendor symbol Tau has no equivalent for: its raw `SYMBOL` record, WINDOW
   placements and every SYMATTR are carried through the save verbatim, so the
   part comes back out exactly as it arrived. It still is not simulated, and the
-  import warning still says so. A schematic that instantiates another `.asc` as
-  a hierarchical block does stay blocked - Tau flattens the block on import, so
-  saving in place would rewrite the hierarchy as flat parts.
-  The message names the specific reason.
+  import warning still says so. A resolved `.asc` hierarchical block also saves
+  in place while untouched: Tau keeps the original parent `SYMBOL` and suppresses
+  only the exact flattened members used for simulation. Editing or deleting a
+  member inside that flattened block stays blocked, because Tau cannot yet write
+  the edit back into the child `.asc`; the message names the instance and whether
+  its provenance is edited or incomplete.
   Native `.sim` saves are unaffected.
 
 ## Importing vendor SPICE models
