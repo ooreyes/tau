@@ -9,7 +9,18 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-03 11:37 CDT**
+**Status: IN PROGRESS - 2026-08-03 11:40 CDT**
+
+Claimed unit: make the Class-D non-overlap gate driver directly placeable from
+the native subcircuit chooser. The bundled five-terminal block will normalize
+PWM against its VCC/VEE rails, use the packaged XSPICE digital-event path for
+complementary gate commands, expose Dead time / Input threshold / Hysteresis /
+Gate transition / Output resistance as named validated controls, and prove both
+shoot-through overlap is zero and requested dead time is accurate on the real
+embedded ngspice library. No approximate RC delay will be shipped. Scheduler
+remains unloaded.
+
+Previous completed unit:
 
 Native subcircuits are now menu-first components. Properties discovers document,
 attached-library, and bundled `.subckt` contracts in native resolution order,
