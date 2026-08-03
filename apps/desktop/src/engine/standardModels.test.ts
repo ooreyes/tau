@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { standardModelLine, standardModelNames, standardModelType } from "./standardModels";
+import { standardModelCatalog, standardModelLine, standardModelNames, standardModelType } from "./standardModels";
 
 describe("standardModelLine", () => {
   it("returns the LTspice 1N4148 diode model line", () => {
@@ -35,6 +35,12 @@ describe("standardModelLine", () => {
     expect(standardModelLine("QS6K1")).not.toContain("Cgso");
     expect(standardModelType("QS6K1")).toBe("vdmos");
     expect(standardModelType("RSR015P06")).toBe("vdmos");
+  });
+
+  it("exposes display names and types without leaking the internal map", () => {
+    const catalog = standardModelCatalog();
+    expect(catalog.find((entry) => entry.name === "QS6K1")).toMatchObject({ type: "vdmos" });
+    expect(catalog.find((entry) => entry.name === "2N3904")).toMatchObject({ type: "npn" });
   });
 
   it("bundles zeners with a breakdown voltage", () => {

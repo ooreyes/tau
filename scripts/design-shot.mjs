@@ -21,6 +21,8 @@
  *   inspector  - same circuit with the first component selected, so the
  *                bottom component-inspector (property grid, not its empty
  *                "no selection" state) is visible.
+ *   model      - exact Class-D PMOS selected in the buck-converter fixture;
+ *                proves the compatible model chooser at the responsive floor.
  *   simulator  - same circuit after clicking Run; simulator/scope view.
  *                Web mode has no Tauri/native ngspice bridge, but
  *                `runTransientAnalysis` (the TS fallback solver, see
@@ -39,7 +41,7 @@
 
 import { spawn } from "node:child_process";
 import { mkdir } from "node:fs/promises";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -60,6 +62,7 @@ const DEV_URL = "http://localhost:1420";
 const NAV_TIMEOUT_MS = 15_000;
 const SERVER_READY_TIMEOUT_MS = 45_000;
 const STATE_TIMEOUT_MS = 15_000;
+const SYSTEM_CHROME = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
 
 const label = process.argv[2] ?? new Date().toISOString().replace(/[:.]/g, "-");
 const outDir = path.join(REPO_ROOT, "screenshots", label);
@@ -69,6 +72,8 @@ const outDir = path.join(REPO_ROOT, "screenshots", label);
 // to show: components to select, and a curve the TS solver actually produces.
 const SAMPLE_ASC = path.join(REPO_ROOT, "Circuit_testing_v1", "02_tran_rc_pulse_meas.asc");
 const sampleAscText = readFileSync(SAMPLE_ASC, "utf8");
+const MODEL_ASC = path.join(REPO_ROOT, "Circuit_testing_v1", "12_buck_converter.asc");
+const modelAscText = readFileSync(MODEL_ASC, "utf8");
 
 function readViewports() {
   const viewports = [
@@ -203,6 +208,51 @@ async function shootViewport(page, viewport, theme) {
   await page.waitForTimeout(150);
   await page.screenshot({ path: path.join(outDir, `inspector-${theme}-${viewport.name}.png`), fullPage: true });
 
+  // --- model: compatible exact-part chooser on a real power MOSFET --------
+  await page.evaluate(
+    ([name, text]) => window.__TAU_DEV__.importAscText(name, text),
+    [path.basename(MODEL_ASC), modelAscText],
+  );
+  const modelFileButton = page.locator(".explorer-panel .tree-file", { hasText: path.basename(MODEL_ASC) });
+  await modelFileButton.waitFor({ state: "visible", timeout: STATE_TIMEOUT_MS });
+  await modelFileButton.click();
+  await page.locator('.activity-rail button[aria-label="Components"]').click();
+  await page.waitForSelector(".stage .component", { timeout: STATE_TIMEOUT_MS });
+  const selectedPowerMosfet = await page.evaluate(() => window.__TAU_DEV__.selectComponent("M1"));
+  if (!selectedPowerMosfet) throw new Error("buck-converter PMOS M1 was not imported");
+  const modelPicker = page.getByRole("combobox", { name: "Simulation model" });
+  await modelPicker.waitFor({ state: "visible", timeout: STATE_TIMEOUT_MS });
+  if (await modelPicker.inputValue() !== "RSR015P06") {
+    throw new Error("buck-converter PMOS did not open on its exact RSR015P06 model");
+  }
+  const pickerOptions = await modelPicker.locator("option").allTextContents();
+  if (!pickerOptions.some((option) => option.includes("RSR015P06 · Tau exact models"))) {
+    throw new Error("exact Class-D PMOS is absent from the model chooser");
+  }
+  if (pickerOptions.some((option) => option.startsWith("QS6K1"))) {
+    throw new Error("N-channel QS6K1 was offered to a PMOS symbol");
+  }
+  await modelPicker.selectOption("PMOS");
+  await page.getByText(/Generic starter/).waitFor({ state: "visible", timeout: STATE_TIMEOUT_MS });
+  await modelPicker.selectOption("RSR015P06");
+  await page.getByText(/Ready · exact VDMOS model from Tau exact models/).waitFor({ state: "visible", timeout: STATE_TIMEOUT_MS });
+  if (await page.getByRole("textbox", { name: "Width (W)" }).count()) {
+    throw new Error("VDMOS selection incorrectly exposes Level-1 W/L geometry");
+  }
+  const modelBounds = await modelPicker.evaluate((element) => {
+    const control = element.getBoundingClientRect();
+    const row = element.closest(".property-field")?.getBoundingClientRect();
+    return { controlRight: control.right, rowRight: row?.right ?? 0, viewportRight: innerWidth };
+  });
+  if (modelBounds.controlRight > modelBounds.rowRight + 0.5 || modelBounds.controlRight > modelBounds.viewportRight + 0.5) {
+    throw new Error("model chooser overflows the Properties rail at this viewport");
+  }
+  await page.waitForTimeout(150);
+  await page.screenshot({ path: path.join(outDir, `model-${theme}-${viewport.name}.png`), fullPage: true });
+
+  // Return to the linear RC fixture for the browser-fallback solver proof.
+  await page.locator(".explorer-panel .tree-file", { hasText: path.basename(SAMPLE_ASC) }).click();
+
   // --- simulator: click Run, switch to scope view -------------------------
   const runButton = page.locator('button[aria-label="Run simulation"]').first();
   await runButton.waitFor({ state: "visible", timeout: STATE_TIMEOUT_MS });
@@ -247,7 +297,15 @@ async function main() {
   let browser;
   let exitCode = 0;
   try {
-    browser = await chromium.launch({ headless: true });
+    // `pnpm install --offline` restores the Playwright package but not always
+    // its separately-downloaded Chromium binary. Use the installed system
+    // Chrome on macOS when present so the committed screenshot gate remains
+    // re-runnable after a cache cleanup instead of asking for a network
+    // download at the exact moment visual QA is needed.
+    browser = await chromium.launch({
+      headless: true,
+      ...(existsSync(SYSTEM_CHROME) ? { executablePath: SYSTEM_CHROME } : {}),
+    });
     const context = await browser.newContext();
     const page = await context.newPage();
     page.setDefaultTimeout(STATE_TIMEOUT_MS);

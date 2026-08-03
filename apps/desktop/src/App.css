@@ -5758,7 +5758,10 @@ button.bottom-panel-head:focus-visible {
 }
 
 .property-field select {
+  width: 100%;
+  max-width: 168px;
   min-width: 0;
+  box-sizing: border-box;
   height: var(--row-h);
   color: var(--text);
   background: transparent;
@@ -5766,6 +5769,9 @@ button.bottom-panel-head:focus-visible {
   border-radius: var(--r-sm);
   outline: none;
   padding: 0 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font: 500 var(--fs-label) var(--font-mono);
 }
 

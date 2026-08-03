@@ -72,6 +72,23 @@ export function standardModelNames(): ReadonlySet<string> {
   return new Set(STANDARD_MODELS.keys());
 }
 
+/** A display-safe catalog of the exact bundled models. The returned objects
+ * are freshly allocated so callers cannot mutate the internal model map. */
+export function standardModelCatalog(): ReadonlyArray<{
+  name: string;
+  type: string;
+  line: string;
+}> {
+  return MODEL_LINES.map((line) => {
+    const match = /^\.model\s+(\S+)\s+([A-Za-z][\w-]*)/i.exec(line);
+    return {
+      name: match?.[1] ?? "",
+      type: match?.[2]?.toLowerCase() ?? "",
+      line,
+    };
+  }).filter((entry) => entry.name !== "" && entry.type !== "");
+}
+
 /**
  * Return the `.model` line for a bundled LTspice standard part, or `null` if the
  * name is not one we ship. Case-insensitive; tolerates a value that carries

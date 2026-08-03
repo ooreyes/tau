@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ChangeEvent, type DragEvent, type PointerEvent, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ChangeEvent, type DragEvent, type PointerEvent, type ReactNode } from "react";
 import { userFacingErrorMessage } from "../lib/errorMessage";
 import {
   ChevronRight,
@@ -40,6 +40,7 @@ import { IndependentSourceEditor } from "./IndependentSourceEditor";
 import { Palette } from "./Palette";
 import { OPAMP_LIBRARY, findOpAmp } from "../library/opamps";
 import { inspectOpampModel, opampIdentity } from "../engine/opampModel";
+import { componentModelOptions, isModelComponentKind } from "../engine/componentModelCatalog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
@@ -1497,6 +1498,19 @@ export function ComponentInspector({
     value: decoded[field.key] ?? "",
     editable: true,
   }));
+  const modelKind = selected && isModelComponentKind(selected.kind) ? selected.kind : null;
+  const modelOptions = useMemo(
+    () => modelKind ? componentModelOptions(modelKind, directives, modelLibraries) : [],
+    [modelKind, directives, modelLibraries],
+  );
+  const selectedModelName = selected && modelKind
+    ? (modelKind === "nmos" || modelKind === "pmos"
+      ? decoded.model ?? ""
+      : selected.value.trim().split(/\s+/)[0] ?? "")
+    : "";
+  const selectedModelOption = modelOptions.find(
+    (option) => option.name.toLowerCase() === selectedModelName.toLowerCase(),
+  );
 
   const beginParamChange = (key: string) => {
     if (!selected) return;
@@ -1566,6 +1580,100 @@ export function ComponentInspector({
               onBeginChange={beginParamChange}
               onValueChange={(value) => setValue(selected.id, value)}
             />
+          ) : modelKind ? (
+            <>
+              <label className="property-field">
+                <span>Simulation model</span>
+                <select
+                  className="mono-num"
+                  aria-label="Simulation model"
+                  value={selectedModelOption?.name ?? selectedModelName}
+                  onFocus={() => {
+                    editKeyRef.current = null;
+                  }}
+                  onChange={(event) => {
+                    beginParamChange("model");
+                    if (modelKind === "nmos" || modelKind === "pmos") {
+                      const choice = modelOptions.find((option) => option.name === event.currentTarget.value);
+                      const next: Record<string, string> = {
+                        ...decodeParams(modelKind, selected.value.trim() || entry?.defaultValue || ""),
+                        model: event.currentTarget.value,
+                      };
+                      // KP/VTO belong to Tau's editable generic Level-1 model,
+                      // never to an exact vendor model. A VDMOS also has no W/L
+                      // instance geometry in ngspice. Drop stale, inapplicable
+                      // values at the model transition instead of emitting a
+                      // plausible-looking card the selected model ignores.
+                      if (choice?.source !== "generic") {
+                        next.kp = "";
+                        next.vto = "";
+                      }
+                      if (choice?.modelType === "vdmos") {
+                        next.w = "";
+                        next.l = "";
+                      }
+                      setValue(selected.id, encodeParams(modelKind, next));
+                    } else {
+                      setValue(selected.id, event.currentTarget.value);
+                    }
+                  }}
+                >
+                  {!selectedModelOption && selectedModelName && (
+                    <option value={selectedModelName}>{selectedModelName} · missing or incompatible</option>
+                  )}
+                  {modelOptions.map((option) => (
+                    <option key={`${option.source}:${option.sourceLabel}:${option.name}`} value={option.name}>
+                      {option.name} · {option.sourceLabel}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <p className="property-hint" role="status">
+                {!selectedModelOption
+                  ? `Substitution warning · ${selectedModelName || "No model"} is unavailable or incompatible; Tau will report and use its generic ${modelKind.toUpperCase()} starter.`
+                  : selectedModelOption.source === "generic"
+                    ? `Generic starter · useful for topology checks, not an exact manufacturer part.`
+                    : `Ready · exact ${selectedModelOption.modelType.toUpperCase()} model from ${selectedModelOption.sourceLabel}`}
+              </p>
+              {visibleFields.filter((field) => {
+                if (field.key === "model") return false;
+                if (selectedModelOption?.modelType === "vdmos") return false;
+                if (selectedModelOption?.source !== "generic" && (field.key === "kp" || field.key === "vto")) return false;
+                return true;
+              }).map((field) => (
+                <label key={field.key} className="property-field">
+                  <span>{field.label}</span>
+                  {field.unit ? (
+                    <EngineeringInput
+                      label={field.label}
+                      value={field.value}
+                      unit={field.unit}
+                      onBeginChange={() => beginParamChange(field.key)}
+                      onValueChange={(value) => updateParam(field.key, value)}
+                    />
+                  ) : (
+                    <input
+                      className="mono-num"
+                      value={field.value}
+                      aria-label={field.label}
+                      spellCheck={false}
+                      onFocus={() => {
+                        editKeyRef.current = null;
+                      }}
+                      onChange={(event) => {
+                        beginParamChange(field.key);
+                        updateParam(field.key, event.currentTarget.value);
+                      }}
+                    />
+                  )}
+                </label>
+              ))}
+              {onOpenModelLibraries && (!selectedModelOption || selectedModelOption.source === "generic") && (
+                <Button type="button" variant="outline" size="sm" onClick={onOpenModelLibraries}>
+                  Attach Model Library
+                </Button>
+              )}
+            </>
           ) : selected.kind === "opamp" ? (
             <>
               {opamp?.mode === "vendor" ? (

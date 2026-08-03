@@ -1192,23 +1192,35 @@ function componentLines(entry: ExtractedComponent, index: number, name: string, 
       const mos = decodeParams("nmos", component.value);
       // Prefer a user `.model` named in the value; else the TAU starter.
       const named = (mos.model ?? "").trim();
-      const model =
-        named && userModels.has(named.toLowerCase()) ? named : genericModel(named, "TAU_NMOS");
+      const genericOverride = named.toLowerCase() === "nmos" && Boolean(mos.kp?.trim() || mos.vto?.trim());
+      const model = genericOverride
+        ? `TAU_NMOS_${safeName(name)}`
+        : named && userModels.has(named.toLowerCase()) ? named : genericModel(named, "TAU_NMOS");
       const geom = mosfetInstanceParams(mos);
+      const modelLine = genericOverride
+        ? `.model ${model} NMOS(Level=1 Vto=${mosfetModelParam(mos.vto, "1", params)} Kp=${mosfetModelParam(mos.kp, "200u", params)} Lambda=0.02)`
+        : null;
       // VDMOS power MOSFET → 3-terminal line (no bulk); else 4-terminal level-1 MOS.
-      return isVdmos(model)
+      const deviceLine = isVdmos(model)
         ? [`${name} ${node("d")} ${node("g")} ${node("s")} ${model}${geom}`]
         : [`${name} ${node("d")} ${node("g")} ${node("s")} ${node("b")} ${model}${geom}`];
+      return modelLine ? [modelLine, ...deviceLine] : deviceLine;
     }
     case "pmos": {
       const mos = decodeParams("pmos", component.value);
       const named = (mos.model ?? "").trim();
-      const model =
-        named && userModels.has(named.toLowerCase()) ? named : genericModel(named, "TAU_PMOS");
+      const genericOverride = named.toLowerCase() === "pmos" && Boolean(mos.kp?.trim() || mos.vto?.trim());
+      const model = genericOverride
+        ? `TAU_PMOS_${safeName(name)}`
+        : named && userModels.has(named.toLowerCase()) ? named : genericModel(named, "TAU_PMOS");
       const geom = mosfetInstanceParams(mos);
-      return isVdmos(model)
+      const modelLine = genericOverride
+        ? `.model ${model} PMOS(Level=1 Vto=${mosfetModelParam(mos.vto, "-1", params)} Kp=${mosfetModelParam(mos.kp, "80u", params)} Lambda=0.02)`
+        : null;
+      const deviceLine = isVdmos(model)
         ? [`${name} ${node("d")} ${node("g")} ${node("s")} ${model}${geom}`]
         : [`${name} ${node("d")} ${node("g")} ${node("s")} ${node("b")} ${model}${geom}`];
+      return modelLine ? [modelLine, ...deviceLine] : deviceLine;
     }
     case "njf":
       return [`${name} ${node("d")} ${node("g")} ${node("s")} ${deviceModel("TAU_NJF")}`];
@@ -1889,11 +1901,23 @@ function mosfetInstanceParams(mos: Record<string, string>): string {
   const parts: string[] = [];
   if (mos.w?.trim()) parts.push(`W=${mos.w.trim()}`);
   if (mos.l?.trim()) parts.push(`L=${mos.l.trim()}`);
-  // KP/VTO are model parameters in SPICE; when the user sets them on the
-  // instance we still emit them as instance overrides (ngspice accepts W/L
-  // on M lines; KP/VTO on the instance are ignored by some engines - keep
-  // them in the value string for the UI and only emit W/L on the deck line).
+  // KP/VTO are model parameters, never M-line instance parameters. The generic
+  // NMOS/PMOS cases above turn them into a per-instance `.model`; exact vendor
+  // models do not expose them. This helper therefore emits only legal W/L
+  // geometry for an ordinary MOS instance.
   return parts.length ? ` ${parts.join(" ")}` : "";
+}
+
+/** Resolve a named generic MOS model knob against the document's `.param`
+ * scope, preserving a single ngspice numeric token. EngineeringInput already
+ * prevents whitespace in normal UI use; this final guard also protects
+ * imported/project values from turning one model field into extra deck cards. */
+function mosfetModelParam(value: string | undefined, fallback: string, params: ParamScope): string {
+  const resolved = substituteKnownBraces(value?.trim() || fallback, params).replace(/µ/g, "u");
+  if (!/^[+\-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+\-]?\d+|[a-z]+)?$/i.test(resolved)) {
+    throw new Error(`MOS model parameter "${value}" is not a finite SPICE quantity.`);
+  }
+  return resolved;
 }
 
 function parseWireResistanceOhms(text: string): number {

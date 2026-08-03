@@ -1635,6 +1635,36 @@ describe("model substitution reporting", () => {
     expect(deck.modelSubstitutions).toEqual([]);
   });
 
+  it("applies the editable generic KP/VTO knobs through a per-instance model", () => {
+    const deck = buildSpiceDeck(
+      { components: [grounded(), component("nmos", "M1", "NMOS W=20u L=2u KP=350u VTO=1.8", 128, 128)], wires: [] },
+      { kind: "op" },
+    );
+
+    expect(deck.netlist).toContain(".model TAU_NMOS_M1 NMOS(Level=1 Vto=1.8 Kp=350u Lambda=0.02)");
+    expect(deck.netlist).toMatch(/M1 \S+ \S+ \S+ \S+ TAU_NMOS_M1 W=20u L=2u/);
+  });
+
+  it("emits the two chooser-visible Class-D parts as exact 3-terminal VDMOS devices", () => {
+    const deck = buildSpiceDeck(
+      {
+        components: [
+          grounded(),
+          component("pmos", "M1", "RSR015P06", 128, 128),
+          component("nmos", "M2", "QS6K1", 256, 128),
+        ],
+        wires: [],
+      },
+      { kind: "op" },
+    );
+
+    expect(deck.netlist).toMatch(/^\.model RSR015P06 VDMOS\(pchan/m);
+    expect(deck.netlist).toMatch(/^\.model QS6K1 VDMOS\(/m);
+    expect(deck.netlist.match(/^M1\s+\S+\s+\S+\s+\S+\s+RSR015P06$/m)).toBeTruthy();
+    expect(deck.netlist.match(/^M2\s+\S+\s+\S+\s+\S+\s+QS6K1$/m)).toBeTruthy();
+    expect(deck.modelSubstitutions).toEqual([]);
+  });
+
   it("stays silent when the document defines the model it names", () => {
     const deck = buildSpiceDeck(
       {

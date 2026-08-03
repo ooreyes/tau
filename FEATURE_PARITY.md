@@ -569,8 +569,16 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   5231 zeners, 2N2222/3904/BC547 NPN, 2N2907/3906/BC557 PNP) now emit their real
   LTspice `lib/cmp/standard.*` parameters into the deck and the device line uses
   the part name. Live-verified in ngspice (1N750 zener clamps at 4.67 V). Generic
-  `TAU_*` still covers unbundled/unknown names. **NEXT:** broaden the bundle; MOS
-  VDMOS power models + JFET kinds; browser TS-solver model parsing.
+  `TAU_*` still covers unbundled/unknown names. **Named model chooser landed
+  (2026-08-03):** diode/BJT/JFET/MOS Properties lists only compatible definitions
+  from the document, attached Model Libraries, and Tau's exact bundle, with the
+  winning source named beside each part. Wrong-polarity VDMOS choices are absent;
+  unresolved imported names remain selected with an explicit generic-substitution
+  warning. The Class-D pair RSR015P06/QS6K1 is selectable without syntax and emits
+  exact three-terminal VDMOS cards. Generic MOS W/L/KP/VTO are named controls and
+  KP/VTO now build a real per-instance Level-1 model instead of being ignored;
+  exact vendor models hide inapplicable override fields. **NEXT:** broaden the
+  exact bundle as corpus parts require; browser TS-solver model parsing.
 - ✅ **Behavioral sources (B)** — used constantly in real LTspice circuits —
   **landed end-to-end.** New `bsource` component kind (2-terminal output, value
   carries `V=<expr>`/`I=<expr>`): pin geometry + diamond symbol + palette entry
@@ -786,8 +794,9 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   never introduces an undefined-model error. **User-attached vendor libraries
   landed** (`engine/userModelLibrary.ts`): `parseUserModelLibraries` folds
   attached `.lib`/`.subckt`/`.mod` text into a registry the deck builder
-  consults as the last resolution source (after inline directives and Tau's
-  bundled parts), inlining the matched `.model` line or `.subckt` block.
+  consults after inline directives and before Tau's bundled parts, inlining the
+  matched `.model` line or `.subckt` block so a deliberately attached local
+  definition can override a same-named bundled part.
   **Unresolved-reference errors surfaced:** a `subckt` reference that resolves
   nowhere is reported on `SpiceDeck.unresolvedSubckts`, and the native runner
   fails fast through `userFacingErrorMessage` naming the missing part instead of
@@ -797,7 +806,7 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   lib`), searches its supported subcircuit/standard-model text files, and
   selectively attaches one chosen file to the current document. The real local
   install reports 2,698 attachable files and `UniversalOpAmp4.lib` reads cleanly.
-  Tau never copies or redistributes the 133 MB proprietary library. The native
+  Tau never copies or embeds the user's 133 MB installed library. The native
   boundary is fixed-root/read-only, skips symlinks, limits recursion and count,
   accepts only model-text extensions up to 5 MiB, rejects traversal and binary/
   encrypted content, and retains the document's 64-file/20 MiB aggregate caps.

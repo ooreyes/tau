@@ -36,6 +36,7 @@ function resetStore() {
     probes: [],
     netLabels: [],
     directives: [],
+    userModelLibraries: [],
     past: [],
     future: [],
   });
@@ -241,6 +242,77 @@ describe("ComponentInspector - imported op-amp parameters", () => {
       value: "OP07 MY_OP07",
       ltExtraAttrs: { extras: { Value2: "MY_OP07" } },
     });
+  });
+});
+
+describe("ComponentInspector - semiconductor model chooser", () => {
+  it("selects the exact bundled Class-D PMOS and drops inapplicable Level-1 geometry", () => {
+    const selected = {
+      id: "m-p",
+      kind: "pmos" as const,
+      x: 160,
+      y: 160,
+      rotation: 0 as const,
+      value: "PMOS W=40u L=2u",
+      label: "M1",
+    };
+    useSchematic.setState({ components: [selected], selectedId: selected.id, selectedIds: [selected.id] });
+    render(<ComponentInspector selected={selected} />);
+
+    const chooser = screen.getByRole("combobox", { name: "Simulation model" }) as HTMLSelectElement;
+    expect(Array.from(chooser.options).some((option) => option.textContent?.includes("RSR015P06 · Tau exact models"))).toBe(true);
+    expect(Array.from(chooser.options).some((option) => option.textContent?.startsWith("QS6K1"))).toBe(false);
+    fireEvent.change(chooser, { target: { value: "RSR015P06" } });
+
+    expect(useSchematic.getState().components[0].value).toBe("RSR015P06");
+    expect(screen.queryByRole("textbox", { name: "Value" })).toBeNull();
+  });
+
+  it("offers compatible attached models with their filename and never wrong device types", () => {
+    const selected = {
+      id: "q-n",
+      kind: "npn" as const,
+      x: 160,
+      y: 160,
+      rotation: 0 as const,
+      value: "MY_NPN",
+      label: "Q1",
+    };
+    useSchematic.setState({
+      components: [selected],
+      selectedId: selected.id,
+      selectedIds: [selected.id],
+      userModelLibraries: [{
+        name: "transistors.lib",
+        text: ".model MY_NPN NPN(Bf=175)\n.model NOT_FOR_Q1 PNP(Bf=90)",
+      }],
+    });
+    render(<ComponentInspector selected={selected} />);
+
+    const chooser = screen.getByRole("combobox", { name: "Simulation model" }) as HTMLSelectElement;
+    expect(Array.from(chooser.options).map((option) => option.textContent)).toContain("MY_NPN · transistors.lib");
+    expect(Array.from(chooser.options).some((option) => option.textContent?.includes("NOT_FOR_Q1"))).toBe(false);
+    expect(screen.getByRole("status").textContent).toContain("Ready · exact NPN model from transistors.lib");
+  });
+
+  it("keeps an unresolved imported part visible and offers the library action", () => {
+    const selected = {
+      id: "m-missing",
+      kind: "nmos" as const,
+      x: 160,
+      y: 160,
+      rotation: 0 as const,
+      value: "IRF540",
+      label: "M1",
+    };
+    const openLibraries = vi.fn();
+    useSchematic.setState({ components: [selected], selectedId: selected.id, selectedIds: [selected.id] });
+    render(<ComponentInspector selected={selected} onOpenModelLibraries={openLibraries} />);
+
+    expect((screen.getByRole("combobox", { name: "Simulation model" }) as HTMLSelectElement).value).toBe("IRF540");
+    expect(screen.getByRole("status").textContent).toMatch(/Substitution warning.*generic NMOS starter/);
+    fireEvent.click(screen.getByRole("button", { name: "Attach Model Library" }));
+    expect(openLibraries).toHaveBeenCalledOnce();
   });
 });
 

@@ -15,6 +15,7 @@
  */
 
 import { useProject } from "../store/useProject";
+import { useSchematic } from "../store/useSchematic";
 import { DEFAULT_WORKSPACE_ID } from "../project/defaultWorkspace";
 
 export interface TauDevBridge {
@@ -25,6 +26,8 @@ export interface TauDevBridge {
    * Returns the created path, or null if the import was rejected.
    */
   importAscText: (name: string, text: string) => Promise<string | null>;
+  /** Select the first open-schematic component with this reference designator. */
+  selectComponent: (reference: string) => boolean;
   useProject: typeof useProject;
 }
 
@@ -55,6 +58,16 @@ export function installDevBridge(): void {
       // validation, warning collection) instead of a test-only shortcut.
       const file = new File([text], name, { type: "text/plain" });
       return store.importAscFile(root, file);
+    },
+
+    selectComponent: (reference) => {
+      const store = useSchematic.getState();
+      const component = store.components.find(
+        (candidate) => candidate.label.toLowerCase() === reference.trim().toLowerCase(),
+      );
+      if (!component) return false;
+      store.select(component.id);
+      return true;
     },
 
     useProject,

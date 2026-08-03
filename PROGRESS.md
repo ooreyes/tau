@@ -9,7 +9,24 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-03 10:43 CDT**
+**Status: DONE - 2026-08-03 11:13 CDT**
+
+Semiconductor Properties now has a source-labelled Simulation model chooser
+instead of a free-text Value/model field. It offers only electrically compatible
+document, attached-library, and bundled exact definitions: the PMOS picker has
+RSR015P06 but cannot offer N-channel QS6K1, and local definitions keep the same
+priority as the native deck. Missing imported parts remain visible with an
+explicit generic-substitution warning. Generic NMOS/PMOS KP and VTO controls now
+create a real per-instance Level-1 model (ngspice measured 2.772 mA for the
+authored proof); exact VDMOS selection drops inapplicable W/L/KP/VTO controls and
+emits the exact three-terminal model. Typecheck, all 2,454 frontend tests,
+production web build, Rust fmt/clippy/56 ordinary tests, all eight ignored real-
+engine/model tests, direct ngspice proof, and the dark/light visual pipeline at
+1440x900, 1280x720, and 900x600 pass. The pipeline now includes this model state
+and falls back to installed Chrome when Playwright's separate browser cache is
+absent. Scheduler remains unloaded.
+
+Previous completed unit:
 
 Model Libraries now discovers the user-owned LTspice install at its real macOS
 Application Support location, searches the 2,698 supported text files, and
@@ -11374,3 +11391,23 @@ evidence is kept in full here.
   Chrome at 900x600 remains exact-width with no console errors. Packaged visual
   control could not run because macOS is locked, not because Tau failed to
   launch. Scheduler remains intentionally unloaded.
+
+- 2026-08-03 - Replaced semiconductor free-text model entry with a compatible,
+  source-labelled chooser in Properties. Document definitions win, followed by
+  attached Model Libraries and Tau's bundled exact parts; wrong device types and
+  wrong-polarity VDMOS definitions never appear. Unresolved imported identities
+  stay selected and show the exact generic-substitution warning rather than
+  disappearing. The Class-D PMOS chooses RSR015P06, the NMOS chooses QS6K1, and
+  both emit exact three-terminal VDMOS cards without irrelevant Level-1 geometry.
+  A second accuracy defect was fixed in the same vertical path: generic MOS KP
+  and VTO controls previously persisted in the UI but did not reach ngspice;
+  they now generate a safe per-instance model, live-measured at 2.772 mA for
+  VTO=1.8 V, KP=350 uA/V², W=20 um, and L=2 um. The committed visual pipeline
+  adds a model-chooser state, uses installed Chrome if Playwright's cache was
+  cleaned, and proves generic→exact interaction, polarity filtering, and zero
+  overflow in dark/light at 1440x900, 1280x720, and the 900x600 floor. Evidence:
+  typecheck; 161 frontend files passed / one skipped, 2,454 tests passed / six
+  skipped; production web build; Rust fmt/clippy, 56 ordinary + all eight ignored
+  real-library/model tests; direct ngspice operating-point proof. Scheduler
+  remains intentionally unloaded. Next: make attached `.subckt` definitions
+  placeable from named UI with a terminal bank derived from the selected block.
