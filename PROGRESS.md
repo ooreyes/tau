@@ -9,7 +9,15 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-03 10:13 CDT**
+**Status: IN PROGRESS - 2026-08-03 10:18 CDT**
+
+Claimed unit: replace raw `.meas` authoring for the Class-D power/efficiency
+workflow with named measurement controls. Imported supported measurements must
+decode into rows and apply back without losing unrelated expert directives;
+average node/current/component-power results and derived formulas must be
+authorable without typing a `.meas` line. Scheduler stays unloaded.
+
+Previous completed unit:
 
 Raw Steps is gone from the primary simulation surface and the opaque Refine
 transport action is removed. Circuit duration accepts ns/µs/ms/s/min and

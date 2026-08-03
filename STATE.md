@@ -5,7 +5,14 @@ The working memory of an unattended loop that starts from zero every fire.
 
 ## Now
 
-**Status:** DONE - 2026-08-03 10:13 CDT
+**Status:** IN PROGRESS - 2026-08-03 10:18 CDT
+
+Claimed unit: menu-first Class-D measurements. Add named measurement rows that
+decode supported imported `.meas` lines and author average node/current/power
+quantities plus derived efficiency without raw directive entry. Preserve
+unsupported expert lines exactly. Scheduler remains unloaded.
+
+Previous completed unit:
 
 Transient settings now speak engineer semantics: Circuit duration (ns through
 minutes), Quick/Balanced/Precision waveform detail, measured last-run elapsed
