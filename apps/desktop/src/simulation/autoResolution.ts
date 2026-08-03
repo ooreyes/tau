@@ -13,7 +13,7 @@ import { parseQuantity } from "./quantity";
  * "Tau automatically chooses simulation settings unless overridden": infer a
  * transient window + step count from the circuit's own RC/RL time constants
  * and its periodic-source frequencies, so a plain Run shows the waveform
- * shape without manual STOP/STEPS tuning.
+ * shape without manual duration/output-point tuning.
  *
  * DOCUMENTED HEURISTIC (not a full pole/zero analysis):
  * - Time constants: every capacitor contributes τ = C·R_typ and every
@@ -57,6 +57,41 @@ export interface AutoResolutionInputs {
   maxTauSeconds: number;
   /** Fastest estimated time constant (s), 0 when there are no C/L parts. */
   minTauSeconds: number;
+}
+
+export type TransientDetailLevel = "quick" | "balanced" | "precision";
+
+const DETAIL_PROFILES: Record<TransientDetailLevel, {
+  minimumPoints: number;
+  samplesPerCycle: number;
+  samplesPerFastestTau: number;
+}> = {
+  quick: { minimumPoints: 32, samplesPerCycle: MIN_SAMPLES_PER_CYCLE, samplesPerFastestTau: 2 },
+  balanced: { minimumPoints: 240, samplesPerCycle: MIN_SAMPLES_PER_CYCLE * 2, samplesPerFastestTau: 4 },
+  precision: { minimumPoints: 480, samplesPerCycle: MIN_SAMPLES_PER_CYCLE * 4, samplesPerFastestTau: 8 },
+};
+
+/**
+ * Translate the UI's engineer-facing waveform-detail choice into the exact
+ * output point count SPICE needs. This is deliberately about plotted temporal
+ * detail, not a promise about solver wall-clock time or convergence accuracy.
+ */
+export function transientDetailSteps(
+  inputs: AutoResolutionInputs,
+  stopTime: number,
+  detail: TransientDetailLevel,
+  maxSteps = MAX_TRANSIENT_STEPS,
+): number {
+  const profile = DETAIL_PROFILES[detail];
+  const ceilSafe = (value: number) => Math.ceil(value * (1 - 1e-12));
+  let steps = profile.minimumPoints;
+  if (inputs.maxSourceHz > 0) {
+    steps = Math.max(steps, ceilSafe(stopTime * inputs.maxSourceHz * profile.samplesPerCycle));
+  }
+  if (inputs.minTauSeconds > 0) {
+    steps = Math.max(steps, ceilSafe((stopTime / inputs.minTauSeconds) * profile.samplesPerFastestTau));
+  }
+  return Math.min(maxSteps, steps);
 }
 
 /** Scan the schematic for the frequency/time-constant figures the heuristic

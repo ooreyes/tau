@@ -185,8 +185,15 @@ describe("App schematic workspace tools", () => {
     fireEvent.click(screen.getByRole("button", { name: "Simulator" }));
     fireEvent.click(screen.getByRole("button", { name: "Toggle advanced settings" }));
 
-    expect((screen.getByLabelText("Simulation stop time") as HTMLInputElement).value).toBe("500");
-    expect((screen.getByLabelText("Simulation stop time SI prefix") as HTMLSelectElement).value).toBe("u");
+    expect((screen.getByLabelText("Circuit duration value") as HTMLInputElement).value).toBe("500");
+    expect((screen.getByLabelText("Circuit duration unit") as HTMLSelectElement).value).toBe("us");
+    expect(screen.getByText("DOCUMENT")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Use quick waveform detail" }));
+    await waitFor(() => expect(screen.getByText("CUSTOM")).toBeTruthy());
+    fireEvent.click(screen.getByRole("button", { name: "Use document settings" }));
+    await waitFor(() => expect(screen.getByText("DOCUMENT")).toBeTruthy());
+    expect((screen.getByLabelText("Circuit duration value") as HTMLInputElement).value).toBe("500");
   });
 
   it("explains the simulator is view-only when an edit shortcut is attempted", async () => {

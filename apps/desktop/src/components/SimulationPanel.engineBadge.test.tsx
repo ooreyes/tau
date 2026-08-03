@@ -89,7 +89,6 @@ function renderPanel(overrides: Partial<Parameters<typeof SimulationPanel>[0]> =
       onRunNoise={vi.fn()}
       onRunStep={vi.fn()}
       onStop={vi.fn()}
-      onStep={vi.fn()}
       onClose={vi.fn()}
       onOptionsChange={vi.fn()}
       onDcSetupChange={vi.fn()}

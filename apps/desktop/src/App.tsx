@@ -237,8 +237,8 @@ function App() {
   const redo = useSchematic((s) => s.redo);
   const [analysisOptions, setAnalysisOptions] = useState<AnalysisOptions>(DEFAULT_ANALYSIS_OPTIONS);
   // Tau chooses transient resolution automatically (from the
-  // circuit's time constants + source frequencies) until the user touches a
-  // dial; manual state then sticks until "Reset to auto".
+  // circuit's time constants + source frequencies) until the user chooses a
+  // duration/detail override; that manual state sticks until explicitly reset.
   const [optionsOverridden, setOptionsOverridden] = useState(false);
   const autoAnalysisOptions = useMemo(() => suggestTransientOptions(components), [components]);
   const authoredAnalysisOptions = useMemo(
@@ -262,6 +262,11 @@ function App() {
     setOptionsOverridden(true);
   }, []);
   const resetAnalysisOptions = useCallback(() => setOptionsOverridden(false), []);
+  const analysisOptionsSource = optionsOverridden
+    ? "custom" as const
+    : authoredAnalysisOptions
+      ? "document" as const
+      : "automatic" as const;
   const [analysis, setAnalysis] = useState<(AnalysisResult & EngineProvenance) | null>(null);
   const [opAnalysis, setOpAnalysis] = useState<(OperatingPointResult & EngineProvenance) | null>(null);
   const [acAnalysis, setAcAnalysis] = useState<(AcResult & EngineProvenance) | null>(null);
@@ -274,6 +279,7 @@ function App() {
   const [acStepFamily, setAcStepFamily] = useState<AnalysisFamily<AcResult> | null>(null);
   const [dcStepFamily, setDcStepFamily] = useState<AnalysisFamily<DcSweepResult> | null>(null);
   const [analysisRunning, setAnalysisRunning] = useState(false);
+  const [lastTransientDurationMs, setLastTransientDurationMs] = useState<number | null>(null);
   // Determinate while the web TS solver is reporting real fractions; null
   // (indeterminate bar) before the first callback and for the whole run when
   // native ngspice ends up handling it (no progress channel - see
@@ -581,10 +587,13 @@ function App() {
 
   const executeTransient = useCallback(async (options: AnalysisOptions) => {
     const requestId = ++analysisRequestRef.current;
+    const startedAt = Date.now();
     setAnalysisRunning(true);
+    setLastTransientDurationMs(null);
     setRunProgress(null); // indeterminate until the web solver's first onProgress call (native never gets one)
     const controller = new AbortController();
     transientAbortRef.current = controller;
+    let recordedTransientResult = false;
     let lastProgressAt = 0;
     const onProgress = (fraction: number) => {
       // Throttle to ~10/sec (100ms) - the solver yields far more often than
@@ -602,6 +611,7 @@ function App() {
         // Stop marks this request stale even if the worker happened to finish
         // during cancellation, so a late native result can never overwrite UI.
         if (analysisRequestRef.current !== requestId || controller.signal.aborted) return;
+        recordedTransientResult = true;
         setAnalysis(withEngine(nativeResult, "ngspice"));
         setRunState(nativeResult.ok ? "complete" : "error");
         return;
@@ -612,6 +622,7 @@ function App() {
         { onProgress, signal: controller.signal },
       );
       if (analysisRequestRef.current !== requestId) return;
+      recordedTransientResult = true;
       setAnalysis(withEngine(result, "preview"));
       setRunState(result.ok ? "complete" : "error");
       if (controller.signal.aborted) showNotice("Stopped early - showing partial result.");
@@ -629,9 +640,11 @@ function App() {
         warnings: [],
         engine: attemptedEngine(),
       });
+      recordedTransientResult = true;
       setRunState("error");
     } finally {
       if (analysisRequestRef.current === requestId) {
+        setLastTransientDurationMs(recordedTransientResult ? Date.now() - startedAt : null);
         setAnalysisRunning(false);
         setRunProgress(null);
       }
@@ -904,20 +917,6 @@ function App() {
     executeTransient,
   ]);
 
-  const stepAnalysis = useCallback(async () => {
-    // Native ngspice may return an endpoint in addition to requested samples.
-    const maxSteps = isNativeSpiceRuntime() ? MAX_NATIVE_OUTPUT_POINTS - 1 : MAX_TRANSIENT_STEPS;
-    const nextOptions = {
-      ...effectiveAnalysisOptions,
-      steps: Math.min(maxSteps, Math.max(effectiveAnalysisOptions.steps + 1, Math.ceil(effectiveAnalysisOptions.steps * 1.25))),
-    };
-    overrideAnalysisOptions(nextOptions);
-    setMode("simulator");
-    setGraphOpen(true);
-    await executeTransient(nextOptions);
-    showNotice(`Re-ran transient at ${nextOptions.steps.toLocaleString()} samples.`);
-  }, [effectiveAnalysisOptions, overrideAnalysisOptions, executeTransient, showNotice]);
-
   const stopAnalysis = useCallback(() => {
     // transientAbortRef is non-null ONLY while executeTransient's own run is
     // in flight (set at its start, cleared in its finally). The browser solver
@@ -984,6 +983,7 @@ function App() {
   const adoptDirectiveOptions = useCallback((doc: SchematicDocument) => {
     const { tran } = analysesFromDirectives(doc.directives ?? []);
     if (tran) setAnalysisOptions(tran);
+    setOptionsOverridden(false);
   }, []);
 
   // Open a document: focus its tab if already open, otherwise add a new one.
@@ -1748,7 +1748,6 @@ function App() {
             mode={mode}
             isRunning={analysisRunning}
             onRun={runAndShowSimulator}
-            onStep={stepAnalysis}
             onStop={stopAnalysis}
             onClearScratchpad={() => setConfirmClearOpen(true)}
             modelLibraryCount={userModelLibraries.length}
@@ -1856,6 +1855,9 @@ function App() {
                 noiseMeasurements={noiseMeasurements}
                 options={effectiveAnalysisOptions}
                 optionsAuto={!optionsOverridden}
+                optionsSource={analysisOptionsSource}
+                resetOptionsTarget={authoredAnalysisOptions ? "document" : "automatic"}
+                lastRunDurationMs={lastTransientDurationMs}
                 isRunning={analysisRunning}
                 runProgress={runProgress}
                 onOptionsChange={overrideAnalysisOptions}
@@ -1868,7 +1870,6 @@ function App() {
                 onRunNoise={runNoiseAnalysis_}
                 onRunStep={runStepAnalysis}
                 onStop={stopAnalysis}
-                onStep={stepAnalysis}
                 onClose={() => setGraphOpen(false)}
                 dcSetup={dcSetup}
                 onDcSetupChange={setDcSetup}

@@ -46,7 +46,6 @@ beforeEach(() => resetStore());
 const noopToolbarProps = {
   isRunning: false,
   onRun: () => {},
-  onStep: () => {},
   onStop: () => {},
   onClearScratchpad: () => {},
   modelLibraryCount: 0,
@@ -55,6 +54,13 @@ const noopToolbarProps = {
 };
 
 describe("EditorToolbar - read-only outside schematic view ", () => {
+  it("keeps transport explicit: Run and Stop only, with no opaque refine button", () => {
+    render(<EditorToolbar mode="schematic" {...noopToolbarProps} />);
+    expect(screen.getByRole("button", { name: "Run simulation" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Stop simulation" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Refine transient resolution" })).toBeNull();
+  });
+
   it("disables Wire, Net label, Undo, Redo, selection deletion, and Clear scratchpad in simulator mode", () => {
     const emptyDoc = { components: [], wires: [], counters: {}, probes: [], netLabels: [], directives: [], textAnnotations: [], ascShapes: [], ascDataFlags: [], ascForeignSymbols: [], ascHierarchicalBlocks: [], ascSheet: null, userModelLibraries: [] };
     // Both past and future populated so canUndo/canRedo would be true if the

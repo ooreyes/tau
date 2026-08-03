@@ -1,11 +1,10 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import type {
-  CSSProperties,
   KeyboardEvent as ReactKeyboardEvent,
   PointerEvent as ReactPointerEvent,
   ReactNode,
 } from "react";
-import { Crosshair, Maximize2, Minimize2, RefreshCw, Square } from "lucide-react";
+import { Crosshair, Maximize2, Minimize2, Square } from "lucide-react";
 import { useSchematic } from "../store/useSchematic";
 import {
   MAX_TRANSIENT_STEPS,
@@ -104,6 +103,11 @@ import { AnalysisModeRail, type AnalysisMode } from "./AnalysisModeRail";
 import { ENGINE_DESCRIPTIONS, ENGINE_LABELS, type EngineProvenance } from "../simulation/engineProvenance";
 import { EngineeringInput } from "./EngineeringInput";
 import { interpolateAt } from "../simulation/waveformCompare";
+import {
+  collectAutoResolutionInputs,
+  transientDetailSteps,
+  type TransientDetailLevel,
+} from "../simulation/autoResolution";
 
 interface SimulationPanelProps {
   /** Active circuit tab's title - a best-effort key for persisting the TRAN
@@ -131,6 +135,12 @@ interface SimulationPanelProps {
   options: AnalysisOptions;
   /** True while transient resolution is auto-derived from the circuit. */
   optionsAuto?: boolean;
+  /** Honest origin of the active transient settings. */
+  optionsSource?: "automatic" | "document" | "custom";
+  /** Destination restored when a custom override is cleared. */
+  resetOptionsTarget?: "automatic" | "document";
+  /** Measured wall-clock duration of the last completed transient run. */
+  lastRunDurationMs?: number | null;
   isRunning: boolean;
   /** Fraction in [0, 1] while the web TS transient solver is reporting real
    *  progress; null before the first callback and for the whole run when
@@ -149,7 +159,6 @@ interface SimulationPanelProps {
   onRunNoise: () => void | Promise<void>;
   onRunStep: () => void | Promise<void>;
   onStop: () => void;
-  onStep: () => void | Promise<void>;
   onClose: () => void;
   dcSetup: DcSweepSpec;
   onDcSetupChange: (next: DcSweepSpec) => void;
@@ -202,6 +211,9 @@ export function SimulationPanel({
   noiseMeasurements,
   options,
   optionsAuto,
+  optionsSource,
+  resetOptionsTarget = "automatic",
+  lastRunDurationMs = null,
   isRunning,
   runProgress,
   onOptionsChange,
@@ -214,7 +226,6 @@ export function SimulationPanel({
   onRunNoise,
   onRunStep,
   onStop,
-  onStep,
   dcSetup,
   onDcSetupChange,
   tfSetup,
@@ -531,6 +542,15 @@ export function SimulationPanel({
     resolution && resolution.requiredSteps > 0 && resolution.requiredSteps <= maxTransientSteps
       ? Math.max(32, resolution.requiredSteps)
       : 32;
+  const resolvedOptionsSource = optionsSource ?? (optionsAuto === false ? "custom" : "automatic");
+  const detailInputs = useMemo(() => collectAutoResolutionInputs(components), [components]);
+  const detailSteps = useMemo<Record<TransientDetailLevel, number>>(() => ({
+    quick: Math.max(minimumTransientSteps, transientDetailSteps(detailInputs, options.stopTime, "quick", maxTransientSteps)),
+    balanced: Math.max(minimumTransientSteps, transientDetailSteps(detailInputs, options.stopTime, "balanced", maxTransientSteps)),
+    precision: Math.max(minimumTransientSteps, transientDetailSteps(detailInputs, options.stopTime, "precision", maxTransientSteps)),
+  }), [detailInputs, maxTransientSteps, minimumTransientSteps, options.stopTime]);
+  const selectedDetail = (Object.entries(detailSteps) as [TransientDetailLevel, number][])
+    .find(([, steps]) => steps === options.steps)?.[0] ?? null;
 
   // one status voice for the whole panel: the dashboard strip
   // under the tabs. Idle (nothing run), Running (amber, tactical), Complete
@@ -557,7 +577,7 @@ export function SimulationPanel({
     : "Idle";
   const lastRunInfo =
     runStatus === "complete" && mode === "tran" && result?.ok
-      ? `${formatEngineering(result.stats.stopTime, "s", 2)} · ${result.stats.sampleCount} samples · ${result.stats.netCount} nets · ${result.stats.componentCount} parts`
+      ? `${formatEngineering(result.stats.stopTime, "s", 2)} · ${result.stats.sampleCount} samples · ${result.stats.netCount} nets · ${result.stats.componentCount} parts${lastRunDurationMs !== null ? ` · ${formatElapsed(lastRunDurationMs)} elapsed` : ""}`
       : runStatus === "error"
         ? "Simulation failed - details below"
         : runStatus === "idle"
@@ -632,9 +652,8 @@ export function SimulationPanel({
             <TooltipContent>{maximized ? "Restore panel" : "Maximize analysis"}</TooltipContent>
           </Tooltip>
           {/* No Run button here - the single primary Run lives in the top
-              toolbar. Refine transient resolution moved into
-              Advanced ▸ Simulation settings (niche, TRAN-only); run status
-              lives in the dashboard strip under the tabs (Unit C6). */}
+              toolbar. Duration/detail live in Advanced ▸ Simulation settings;
+              run status lives in the dashboard strip under the tabs. */}
         </div>
       </div>
 
@@ -732,7 +751,7 @@ export function SimulationPanel({
               aria-label="Toggle advanced settings"
             >
               <span className="disclosure-label">Advanced</span>
-              {optionsAuto && <span className="advanced-settings-auto">AUTO</span>}
+              <span className="advanced-settings-auto">{resolvedOptionsSource.toUpperCase()}</span>
               <span className="disclosure-rule" aria-hidden="true" />
               <span className={`disclosure-chevron${advancedOpen ? " open" : ""}`}>›</span>
             </button>
@@ -905,80 +924,74 @@ export function SimulationPanel({
                   <h4 className="advanced-group-title">Simulation settings</h4>
                   <div className="advanced-settings-help-row">
                     <p className="advanced-settings-help">
-                      Tau automatically chooses simulation settings unless overridden.
+                      Circuit duration is simulated time, not how long Tau waits. Tau chooses waveform detail unless you override it.
                     </p>
                     <div className="flex items-center gap-2">
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={onStep}
-                            disabled={isRunning}
-                            aria-label="Refine transient resolution"
-                          >
-                            <RefreshCw size={13} strokeWidth={1.8} aria-hidden="true" />
-                            Refine
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent>Re-run transient at finer resolution</TooltipContent>
-                      </Tooltip>
-                      {!optionsAuto && onResetOptions && (
+                      {resolvedOptionsSource === "custom" && onResetOptions && (
                         <Button variant="outline" size="sm" onClick={onResetOptions}>
-                          Reset to auto
+                          Use {resetOptionsTarget === "document" ? "document" : "automatic"} settings
                         </Button>
                       )}
                     </div>
                   </div>
-                  <div className="plotter-controls">
-                    <DialControl
-                      label="STOP"
-                      value={`${formatEngineering(options.stopTime, "s", 2)}`}
-                      min={0.1}
-                      max={200}
-                      step={0.1}
-                      numericValue={options.stopTime * 1000}
-                      onChange={(value) => onOptionsChange({ ...options, stopTime: value / 1000 })}
-                      editor={
-                        <EngineeringInput
-                          label="Simulation stop time"
-                          value={engineeringInputDisplay(options.stopTime, "s")}
-                          unit="s"
-                          onValueChange={(value) => {
-                            try {
-                              const stopTime = parseQuantity(value, "s");
-                              if (Number.isFinite(stopTime) && stopTime > 0) {
-                                onOptionsChange({ ...options, stopTime });
-                              }
-                            } catch {
-                              // EngineeringInput retains the editable draft
-                              // until it becomes a valid numeric value.
-                            }
-                          }}
-                        />
-                      }
+                  <div className="transient-settings-grid">
+                    <CircuitDurationControl
+                      key={circuitTitle ?? "default"}
+                      seconds={options.stopTime}
+                      onChange={(stopTime) => onOptionsChange({ ...options, stopTime })}
                     />
-                    <DialControl
-                      label="STEPS"
-                      value={String(options.steps)}
-                      min={minimumTransientSteps}
-                      max={maxTransientSteps}
-                      step={1}
-                      numericValue={options.steps}
-                      onChange={(value) => onOptionsChange({
-                        ...options,
-                        steps: Math.max(minimumTransientSteps, Math.round(value)),
-                      })}
-                    />
+                    <div className="waveform-detail-control">
+                      <div className="waveform-detail-control__head">
+                        <span>Waveform detail</span>
+                        <strong>{resolvedOptionsSource === "automatic"
+                          ? "Circuit-aware"
+                          : resolvedOptionsSource === "document"
+                            ? "From document"
+                            : selectedDetail ? detailLabel(selectedDetail) : "Custom"}</strong>
+                      </div>
+                      <div className="waveform-detail-presets" role="group" aria-label="Waveform detail">
+                        {(["quick", "balanced", "precision"] as const).map((detail) => (
+                          <button
+                            key={detail}
+                            type="button"
+                            aria-label={`Use ${detail} waveform detail`}
+                            aria-pressed={resolvedOptionsSource === "custom" && selectedDetail === detail}
+                            onClick={() => onOptionsChange({ ...options, steps: detailSteps[detail] })}
+                          >
+                            <strong>{detailLabel(detail)}</strong>
+                            <small>{detailDescription(detail)}</small>
+                          </button>
+                        ))}
+                      </div>
+                      <small className="waveform-detail-note">
+                        Output interval {formatEngineering(options.stopTime / options.steps, "s", 3)} · {formatCount(options.steps)} points. Solver time depends on circuit complexity and convergence.
+                      </small>
+                    </div>
                     <ResolutionControl
                       resolution={resolution}
-                      steps={options.steps}
                       maxSteps={maxTransientSteps}
-                      onApply={() => {
-                        if (!resolution || resolution.requiredSteps <= 0 || resolution.requiredSteps > maxTransientSteps) return;
-                        onOptionsChange({ ...options, steps: Math.max(32, resolution.requiredSteps) });
-                      }}
                     />
+                    <details className="transient-expert-settings">
+                      <summary>Exact output settings</summary>
+                      <label>
+                        <span>Output points</span>
+                        <Input
+                          type="number"
+                          variant="mono"
+                          aria-label="Exact output points"
+                          min={minimumTransientSteps}
+                          max={maxTransientSteps}
+                          step={1}
+                          value={options.steps}
+                          onChange={(event) => {
+                            const steps = Number(event.currentTarget.value);
+                            if (!Number.isInteger(steps) || steps < minimumTransientSteps || steps > maxTransientSteps) return;
+                            onOptionsChange({ ...options, steps });
+                          }}
+                        />
+                      </label>
+                      <small>Use an exact count for imported-result reproduction or a controlled convergence study.</small>
+                    </details>
                   </div>
                 </section>
               </div>
@@ -3593,64 +3606,87 @@ function Metric({ label, value, tone }: { label: string; value: string; tone: st
   );
 }
 
-function DialControl({
-  label,
-  value,
-  numericValue,
-  min,
-  max,
-  step,
-  onChange,
-  editor,
-}: {
-  label: string;
-  value: string;
-  numericValue: number;
-  min: number;
-  max: number;
-  step: number;
-  onChange: (value: number) => void;
-  editor?: ReactNode;
-}) {
-  const progress = Math.max(0, Math.min(1, (numericValue - min) / (max - min)));
+const DURATION_UNITS = [
+  { value: "ns", label: "ns", seconds: 1e-9 },
+  { value: "us", label: "µs", seconds: 1e-6 },
+  { value: "ms", label: "ms", seconds: 1e-3 },
+  { value: "s", label: "s", seconds: 1 },
+  { value: "min", label: "min", seconds: 60 },
+] as const;
+type DurationUnit = typeof DURATION_UNITS[number]["value"];
+
+const durationFactor = (unit: DurationUnit) => DURATION_UNITS.find((candidate) => candidate.value === unit)?.seconds ?? 1;
+const initialDurationUnit = (seconds: number): DurationUnit =>
+  seconds >= 60 ? "min" : seconds >= 1 ? "s" : seconds >= 1e-3 ? "ms" : seconds >= 1e-6 ? "us" : "ns";
+const durationDraft = (seconds: number, unit: DurationUnit) => Number((seconds / durationFactor(unit)).toPrecision(8)).toString();
+
+function CircuitDurationControl({ seconds, onChange }: { seconds: number; onChange: (seconds: number) => void }) {
+  const [unit, setUnit] = useState<DurationUnit>(() => initialDurationUnit(seconds));
+  const [draft, setDraft] = useState(() => durationDraft(seconds, unit));
+  const focused = useRef(false);
+  const valid = Number.isFinite(Number(draft)) && Number(draft) > 0;
+  useEffect(() => {
+    if (!focused.current) setDraft(durationDraft(seconds, unit));
+  }, [seconds, unit]);
+
   return (
-    <label className="param-control">
-      <div className="param-head">
-        <span className="param-label">{label}</span>
-        {editor ?? <span className="param-value mono-num">{value}</span>}
+    <div className="circuit-duration-control">
+      <div className="circuit-duration-control__head">
+        <span>Circuit duration</span>
+        <strong>{formatEngineering(seconds, "s", 3)}</strong>
       </div>
-      <input
-        className="param-slider"
-        aria-label={`${label} slider`}
-        type="range"
-        min={min}
-        max={max}
-        step={step}
-        value={numericValue}
-        onChange={(event) => onChange(Number(event.currentTarget.value))}
-        style={{ "--fill": `${progress * 100}%` } as CSSProperties}
-      />
-    </label>
+      <div className="circuit-duration-control__editor">
+        <Input
+          type="text"
+          variant="mono"
+          inputMode="decimal"
+          aria-label="Circuit duration value"
+          aria-invalid={!valid}
+          value={draft}
+          onFocus={() => { focused.current = true; }}
+          onBlur={() => {
+            focused.current = false;
+            if (!valid) setDraft(durationDraft(seconds, unit));
+          }}
+          onChange={(event) => {
+            const next = event.currentTarget.value;
+            setDraft(next);
+            const amount = Number(next);
+            if (Number.isFinite(amount) && amount > 0) onChange(amount * durationFactor(unit));
+          }}
+        />
+        <select
+          aria-label="Circuit duration unit"
+          value={unit}
+          onChange={(event) => {
+            const next = event.currentTarget.value as DurationUnit;
+            setUnit(next);
+            setDraft(durationDraft(seconds, next));
+          }}
+        >
+          {DURATION_UNITS.map((candidate) => (
+            <option key={candidate.value} value={candidate.value}>{candidate.label}</option>
+          ))}
+        </select>
+      </div>
+      <small>This is simulated circuit time. A 3 min run models 180 s of circuit behavior; it does not promise three minutes of solver time.</small>
+    </div>
   );
 }
 
 function ResolutionControl({
   resolution,
-  steps,
   maxSteps,
-  onApply,
 }: {
   resolution: ReturnType<typeof inspectTransientResolution> | null;
-  steps: number;
   maxSteps: number;
-  onApply: () => void;
 }) {
   if (!resolution || resolution.maxFrequencyHz <= 0) {
     return (
       <div className="resolution-control neutral">
-        <span>RESOLUTION</span>
+        <span>DETAIL CHECK</span>
         <strong className="mono-num">DC / static</strong>
-        <small>Add an AC source to calculate samples per cycle.</small>
+        <small>No periodic source was found; Tau also considers reactive time constants when choosing detail.</small>
       </div>
     );
   }
@@ -3661,17 +3697,13 @@ function ResolutionControl({
   return (
     <div className={`resolution-control${ready ? " ready" : " warning"}`}>
       <div>
-        <span>RESOLUTION</span>
+        <span>DETAIL CHECK</span>
         <strong className="mono-num">{formatSamples(samples)} samples / cycle</strong>
         <small>
-          {formatEngineering(resolution.maxFrequencyHz, "Hz", 3)} requires {formatCount(resolution.requiredSteps)} steps for {MIN_SAMPLES_PER_CYCLE}× sampling.
+          Fastest known source: {formatEngineering(resolution.maxFrequencyHz, "Hz", 3)} · minimum {MIN_SAMPLES_PER_CYCLE} samples/cycle.
         </small>
       </div>
-      {canResolve ? (
-        <button type="button" onClick={onApply} disabled={steps >= resolution.requiredSteps}>
-          {ready ? "Resolved" : `Set ${MIN_SAMPLES_PER_CYCLE}×`}
-        </button>
-      ) : (
+      {canResolve ? <strong className="resolution-state">{ready ? "Ready" : "Increase detail"}</strong> : (
         <small className="resolution-limit">Shorten STOP or use AC analysis. Output limit: {formatCount(maxSteps)} steps.</small>
       )}
     </div>
@@ -3680,5 +3712,11 @@ function ResolutionControl({
 
 const formatCount = (value: number) => value.toLocaleString("en-US");
 const formatSamples = (value: number) => Number(value.toPrecision(3)).toString();
+const detailLabel = (detail: TransientDetailLevel) => detail === "quick" ? "Quick" : detail === "balanced" ? "Balanced" : "Precision";
+const detailDescription = (detail: TransientDetailLevel) =>
+  detail === "quick" ? "Fast preview" : detail === "balanced" ? "Recommended" : "Fine transitions";
+const formatElapsed = (milliseconds: number) => milliseconds < 1_000
+  ? `${Math.max(1, Math.round(milliseconds))} ms`
+  : `${Number((milliseconds / 1_000).toPrecision(3))} s`;
 const engineeringInputDisplay = (value: number, unit: string) =>
   formatEngineering(value, unit, 8).replace(/\s+/g, "");

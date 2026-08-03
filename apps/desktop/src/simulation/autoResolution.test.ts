@@ -5,6 +5,7 @@ import {
   collectAutoResolutionInputs,
   suggestAcSweep,
   suggestTransientOptions,
+  transientDetailSteps,
 } from "./autoResolution";
 import { MAX_TRANSIENT_STEPS } from "./linearTransient";
 import type { SchematicComponent } from "../schematic/types";
@@ -121,6 +122,22 @@ describe("autoTransientOptions", () => {
     ]);
     expect(options.stopTime).toBeCloseTo(0.007, 9);
     expect(options.steps).toBe(448);
+  });
+});
+
+describe("transientDetailSteps", () => {
+  it("maps engineer-facing detail levels to explicit samples per fastest cycle", () => {
+    const inputs = { maxSourceHz: 1_000, minSourceHz: 1_000, maxTauSeconds: 0, minTauSeconds: 0 };
+    expect(transientDetailSteps(inputs, 5e-3, "quick")).toBe(160);
+    expect(transientDetailSteps(inputs, 5e-3, "balanced")).toBe(320);
+    expect(transientDetailSteps(inputs, 5e-3, "precision")).toBe(640);
+  });
+
+  it("increases samples across the fastest time constant and honors the output cap", () => {
+    const inputs = { maxSourceHz: 0, minSourceHz: 0, maxTauSeconds: 1e-3, minTauSeconds: 1e-6 };
+    expect(transientDetailSteps(inputs, 7e-3, "quick")).toBe(14_000);
+    expect(transientDetailSteps(inputs, 7e-3, "balanced")).toBe(28_000);
+    expect(transientDetailSteps(inputs, 7e-3, "precision", 50_000)).toBe(50_000);
   });
 });
 

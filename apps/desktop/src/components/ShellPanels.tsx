@@ -1123,7 +1123,6 @@ export function EditorToolbar({
   mode,
   isRunning,
   onRun,
-  onStep,
   onStop,
   onClearScratchpad,
   modelLibraryCount,
@@ -1133,7 +1132,6 @@ export function EditorToolbar({
   mode: "schematic" | "simulator";
   isRunning: boolean;
   onRun: () => void;
-  onStep: () => void;
   onStop: () => void;
   onClearScratchpad: () => void;
   modelLibraryCount: number;
@@ -1218,14 +1216,6 @@ export function EditorToolbar({
           onClick={onStop}
         >
           ■
-        </button>
-        <button
-          title="Re-run transient at finer resolution"
-          aria-label="Refine transient resolution"
-          onClick={onStep}
-          disabled={isRunning}
-        >
-          ▸▌
         </button>
       </div>
     </div>

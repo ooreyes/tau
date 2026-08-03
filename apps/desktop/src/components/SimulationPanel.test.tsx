@@ -49,7 +49,6 @@ function renderPanel(overrides: Partial<Parameters<typeof SimulationPanel>[0]> =
     onRunNoise: vi.fn(),
     onRunStep: vi.fn(),
     onStop: vi.fn(),
-    onStep: vi.fn(),
     onClose: vi.fn(),
     onOptionsChange: vi.fn(),
     onDcSetupChange: vi.fn(),
@@ -139,11 +138,12 @@ describe("SimulationPanel - no redundant Run button", { timeout: 20_000 }, () =>
     expect(screen.getByRole("status").textContent).toContain("241 samples");
   });
 
-  it("keeps the refine control as a subtle secondary rerun affordance, tucked in Advanced ▸ Simulation settings", () => {
+  it("uses explicit waveform-detail choices instead of an opaque refine action", () => {
     const handlers = renderPanel();
     fireEvent.click(screen.getByRole("button", { name: "Toggle advanced settings" }));
-    fireEvent.click(screen.getByRole("button", { name: "Refine transient resolution" }));
-    expect(handlers.onStep).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("button", { name: "Refine transient resolution" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Use precision waveform detail" }));
+    expect(handlers.onOptionsChange).toHaveBeenLastCalledWith({ stopTime: 0.006, steps: 480 });
   });
 });
 
@@ -481,7 +481,7 @@ describe("visibleTransientTraces - node names and probes are the plot authority"
 });
 
 describe("SimulationPanel - one Advanced disclosure per tab (simplify pass)", { timeout: 20_000 }, () => {
-  it("hides the STOP/STEPS/resolution controls behind a closed-by-default disclosure", () => {
+  it("hides duration/detail settings behind a closed-by-default disclosure", () => {
     renderPanel();
     const toggle = screen.getByRole("button", { name: "Toggle advanced settings" });
     expect(toggle.getAttribute("aria-expanded")).toBe("false");
@@ -490,31 +490,46 @@ describe("SimulationPanel - one Advanced disclosure per tab (simplify pass)", { 
     expect(screen.queryByText("Tau automatically chooses simulation settings unless overridden.")).toBeNull();
   });
 
-  it("reveals the dials and the auto-settings helper text when opened", () => {
+  it("reveals duration, detail, and the simulated-time explanation when opened", () => {
     renderPanel();
     const toggle = screen.getByRole("button", { name: "Toggle advanced settings" });
     fireEvent.click(toggle);
     expect(toggle.getAttribute("aria-expanded")).toBe("true");
-    expect(screen.getByText("STOP")).toBeTruthy();
-    expect(screen.getByText("STEPS")).toBeTruthy();
+    expect(screen.getByText("Circuit duration")).toBeTruthy();
+    expect(screen.getByText("Waveform detail")).toBeTruthy();
+    expect(screen.queryByLabelText("STEPS slider")).toBeNull();
     expect(
-      screen.getByText("Tau automatically chooses simulation settings unless overridden."),
+      screen.getByText("Circuit duration is simulated time, not how long Tau waits. Tau chooses waveform detail unless you override it."),
     ).toBeTruthy();
   });
 
-  it("shows the AUTO badge while resolution is auto-derived, with no reset control", () => {
+  it("shows the AUTOMATIC badge while detail is circuit-derived, with no reset control", () => {
     renderPanel({ optionsAuto: true, onResetOptions: vi.fn() });
-    expect(screen.getByText("AUTO")).toBeTruthy();
+    expect(screen.getByText("AUTOMATIC")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Toggle advanced settings" }));
     expect(screen.queryByRole("button", { name: "Reset to auto" })).toBeNull();
   });
 
-  it("offers Reset to auto once the user has overridden the resolution", () => {
+  it("offers automatic settings once the user has overridden the detail", () => {
     const onResetOptions = vi.fn();
     renderPanel({ optionsAuto: false, onResetOptions });
     expect(screen.queryByText("AUTO")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Toggle advanced settings" }));
-    fireEvent.click(screen.getByRole("button", { name: "Reset to auto" }));
+    fireEvent.click(screen.getByRole("button", { name: "Use automatic settings" }));
+    expect(onResetOptions).toHaveBeenCalledTimes(1);
+  });
+
+  it("labels imported transient settings as document-authored and resets custom edits back to them", () => {
+    const onResetOptions = vi.fn();
+    renderPanel({ optionsSource: "document", resetOptionsTarget: "document", onResetOptions });
+    expect(screen.getByText("DOCUMENT")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Toggle advanced settings" }));
+    expect(screen.queryByRole("button", { name: "Use document settings" })).toBeNull();
+    cleanup();
+
+    renderPanel({ optionsSource: "custom", resetOptionsTarget: "document", onResetOptions });
+    fireEvent.click(screen.getByRole("button", { name: "Toggle advanced settings" }));
+    fireEvent.click(screen.getByRole("button", { name: "Use document settings" }));
     expect(onResetOptions).toHaveBeenCalledTimes(1);
   });
 
@@ -528,7 +543,7 @@ describe("SimulationPanel - one Advanced disclosure per tab (simplify pass)", { 
 });
 
 describe("SimulationPanel - engineering-safe transient controls", { timeout: 20_000 }, () => {
-  it("sets the STEPS slider floor from the fastest source and clamps changes to it", () => {
+  it("keeps unsafe raw output counts out of the primary surface and bounds the expert override", () => {
     useSchematic.setState({
       components: [
         { id: "v1", kind: "vac", label: "V1", value: "1 1Meg", x: 0, y: 0, rotation: 0 },
@@ -537,20 +552,31 @@ describe("SimulationPanel - engineering-safe transient controls", { timeout: 20_
     const handlers = renderPanel({ options: { stopTime: 10e-6, steps: 100 } });
 
     fireEvent.click(screen.getByRole("button", { name: "Toggle advanced settings" }));
-    const slider = screen.getByLabelText("STEPS slider") as HTMLInputElement;
-    expect(slider.min).toBe("320");
-
-    fireEvent.change(slider, { target: { value: "32" } });
-    expect(slider.value).toBe("320");
+    expect(screen.queryByLabelText("STEPS slider")).toBeNull();
+    fireEvent.click(screen.getByText("Exact output settings"));
+    const points = screen.getByLabelText("Exact output points") as HTMLInputElement;
+    expect(points.min).toBe("320");
+    fireEvent.change(points, { target: { value: "32" } });
     expect(handlers.onOptionsChange).not.toHaveBeenCalled();
   });
 
-  it("accepts an exact exponent-form STOP time", () => {
+  it("accepts long circuit durations in human units and separates them from elapsed solver time", () => {
     const handlers = renderPanel();
     fireEvent.click(screen.getByRole("button", { name: "Toggle advanced settings" }));
-    fireEvent.change(screen.getByLabelText("Simulation stop time SI prefix"), { target: { value: "" } });
-    fireEvent.change(screen.getByLabelText("Simulation stop time"), { target: { value: "2e-3" } });
-    expect(handlers.onOptionsChange).toHaveBeenLastCalledWith({ stopTime: 0.002, steps: 240 });
+    fireEvent.change(screen.getByLabelText("Circuit duration unit"), { target: { value: "min" } });
+    fireEvent.change(screen.getByLabelText("Circuit duration value"), { target: { value: "3" } });
+    expect(handlers.onOptionsChange).toHaveBeenLastCalledWith({ stopTime: 180, steps: 240 });
+    expect(screen.getByText(/simulated circuit time/i)).toBeTruthy();
+  });
+
+  it("reports measured solver elapsed time without presenting it as an estimate", () => {
+    const okResult = {
+      ok: true, title: "Transient", times: [0, 0.006], traces: [], currents: [],
+      stats: { netCount: 1, componentCount: 1, sampleCount: 2, stopTime: 0.006, stepSize: 0.006 },
+      warnings: [], circuit: {} as never,
+    } as Extract<import("../simulation/linearTransient").AnalysisResult, { ok: true }>;
+    renderPanel({ result: okResult, lastRunDurationMs: 1_250 });
+    expect(screen.getByRole("status").textContent).toContain("1.25 s elapsed");
   });
 
   it("opens cursors directly from a trace and keeps exact interval endpoints in sync", () => {

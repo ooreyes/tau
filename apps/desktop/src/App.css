@@ -126,7 +126,6 @@
   --trace-purple: #BC6A98;   /* purple */
   --trace-amber: #BD7900;   /* orange */
 
-  --dial-track:  #3a3a3c;
 
   /* Spacing - 4pt Apple grid */
   --sp-1:  4px;
@@ -317,7 +316,6 @@
     --trace-purple: #A55583;   /* purple */
     --trace-amber: #A76300;   /* orange */
 
-    --dial-track:  #e8e7e3;
 
     /* Shadows stay a black family (a shadow is an absence of light in both
        themes) but at a fraction of dark-mode strength - a full-strength
@@ -431,7 +429,6 @@
   --trace-purple: #A55583;   /* purple */
   --trace-amber: #A76300;   /* orange */
 
-  --dial-track:  #e8e7e3;
 
   --elev-1:   inset 0 0.5px 0 rgba(255, 255, 255, 0.8);
   --elev-2:   0 1px 2px rgba(0, 0, 0, 0.10), inset 0 0.5px 0 rgba(255, 255, 255, 0.8);
@@ -536,7 +533,6 @@
   --trace-purple: #BC6A98;   /* purple */
   --trace-amber: #BD7900;   /* orange */
 
-  --dial-track:  #3a3a3c;
 
   --elev-1:   inset 0 0.5px 0 rgba(255, 255, 255, 0.06);
   --elev-2:   0 1px 2px rgba(0, 0, 0, 0.35), inset 0 0.5px 0 rgba(255, 255, 255, 0.06);
@@ -3017,13 +3013,156 @@ body {
   letter-spacing: 0.5px;
 }
 
-/* Parameter controls (formerly "dial controls") */
-.plotter-controls {
-  flex-shrink: 0;
+.transient-settings-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
   gap: var(--sp-3);
-  padding: 0 2px 10px;
+  padding: 0 2px var(--sp-3);
+}
+
+.circuit-duration-control,
+.waveform-detail-control,
+.transient-expert-settings {
+  min-width: 0;
+  padding: var(--sp-3);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--panel-3);
+}
+
+.circuit-duration-control__head,
+.waveform-detail-control__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-2);
+  margin-bottom: var(--sp-2);
+}
+
+.circuit-duration-control__head span,
+.waveform-detail-control__head span,
+.transient-expert-settings > summary,
+.transient-expert-settings label > span {
+  color: var(--muted);
+  font: 600 var(--fs-caption) var(--font-ui);
+}
+
+.circuit-duration-control__head strong,
+.waveform-detail-control__head strong {
+  color: var(--text);
+  font: 600 var(--fs-label) var(--font-mono);
+}
+
+.circuit-duration-control__editor {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--sp-1);
+}
+
+.circuit-duration-control__editor select {
+  min-width: 62px;
+  padding: 0 var(--sp-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  color: var(--text);
+  background: var(--panel-2);
+  font: 600 var(--fs-label) var(--font-mono);
+}
+
+.circuit-duration-control > small,
+.waveform-detail-note,
+.transient-expert-settings > small {
+  display: block;
+  margin-top: var(--sp-2);
+  color: var(--muted);
+  font-size: var(--fs-caption);
+  line-height: 1.4;
+}
+
+.waveform-detail-presets {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+}
+
+.waveform-detail-presets button {
+  min-width: 0;
+  min-height: 48px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 2px;
+  padding: var(--sp-2);
+  border: 0;
+  color: var(--muted);
+  background: var(--panel-2);
+  cursor: pointer;
+}
+
+.waveform-detail-presets button + button {
+  border-left: 1px solid var(--border);
+}
+
+.waveform-detail-presets button strong {
+  color: var(--text);
+  font: 600 var(--fs-caption) var(--font-ui);
+}
+
+.waveform-detail-presets button small {
+  overflow: hidden;
+  max-width: 100%;
+  font: 500 var(--fs-micro) var(--font-ui);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.waveform-detail-presets button[aria-pressed="true"] {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.waveform-detail-presets button[aria-pressed="true"] strong {
+  color: var(--accent);
+}
+
+.resolution-control,
+.transient-expert-settings {
+  grid-column: 1 / -1;
+}
+
+.resolution-state {
+  font-size: var(--fs-caption) !important;
+  text-transform: uppercase;
+}
+
+.transient-expert-settings > summary {
+  cursor: pointer;
+}
+
+.transient-expert-settings[open] > summary {
+  margin-bottom: var(--sp-3);
+}
+
+.transient-expert-settings label {
+  display: grid;
+  grid-template-columns: auto minmax(120px, 220px);
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+}
+
+@media (max-width: 760px) {
+  .transient-settings-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .circuit-duration-control,
+  .waveform-detail-control {
+    grid-column: 1;
+  }
 }
 
 .resolution-control {
@@ -3726,73 +3865,6 @@ body {
   opacity: 1;
   stroke-width: 2.5;
   fill: color-mix(in srgb, var(--accent) 28%, transparent);
-}
-
-/* ── Analysis parameter sliders ────────────────────────── */
-.param-control {
-  display: flex;
-  flex-direction: column;
-  gap: var(--sp-2);
-}
-.param-head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--sp-2);
-}
-/* Font/tabular-figure declarations now live in the shared `.mono-num` utility
-   (applied in SimulationPanel.tsx's DialControl) - this rule only carries
-   what `.mono-num` doesn't (size, color). */
-.param-value {
-  font-size: var(--fs-title);
-  font-weight: 500;
-  color: var(--text);
-}
-
-.param-head .eng-input {
-  justify-content: flex-end;
-}
-.param-slider {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 100%;
-  height: 3px;
-  border-radius: 2px;
-  background: linear-gradient(
-    to right,
-    var(--accent) var(--fill, 0%),
-    var(--dial-track) var(--fill, 0%)
-  );
-  cursor: pointer;
-  outline: none;
-}
-.param-slider::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 13px;
-  height: 13px;
-  border-radius: 50%;
-  background: var(--cream);
-  box-shadow: 0 1px 3px var(--thumb-shadow), 0 0 0 1px var(--accent-line);
-  cursor: pointer;
-  transition: transform var(--motion-fast) var(--spring),
-    box-shadow var(--motion-fast) var(--spring);
-}
-/* Bare white dot with a barely-there 1.1 scale → cool --cream thumb ringed in
-   the neutral accent, spring-grows into an --accent-glow halo on grab. */
-.param-slider::-webkit-slider-thumb:hover {
-  transform: scale(1.15);
-  box-shadow: 0 1px 3px var(--thumb-shadow), 0 0 0 1px var(--accent),
-    0 0 0 5px var(--accent-glow);
-}
-.param-slider::-webkit-slider-thumb:active {
-  transform: scale(1.05);
-  box-shadow: 0 1px 3px var(--thumb-shadow-active), 0 0 0 1px var(--accent),
-    0 0 0 3px var(--accent-glow);
-}
-.param-slider:focus-visible::-webkit-slider-thumb {
-  box-shadow: 0 1px 3px var(--thumb-shadow), 0 0 0 2px var(--bg),
-    0 0 0 4px var(--accent);
 }
 
 /* ── Structured parameter fields (selection strip) ─────── */
