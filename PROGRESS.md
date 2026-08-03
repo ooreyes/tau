@@ -9,18 +9,14 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-03 01:40 CDT**
+**Status: IN PROGRESS - 2026-08-03 01:43 CDT**
 
-LTspice self-contained brace arithmetic now evaluates even without a `.param`
-scope, and nonlinear `Q=<charge expression>` capacitors emit ngspice's native
-charge-defined device instead of being misparsed as constant capacitance. Bare
-LTspice `x` binds to the exact capacitor terminal voltage without corrupting a
-real `V(x)` node accessor. The Value inspector exposes named Charge expression
-and Initial voltage controls, while preview solvers refuse explicitly rather
-than approximate. A real-ngspice RC proof reaches the expected one-time-
-constant voltage. The 4,012-file extended corpus improves from 15 to 5 hard
-failures (deck-built 515 -> 525; op-converged 511 -> 521); canonical remains an
-honest 80/82. Scheduler stays unloaded.
+Interactive correctness unit: resolve `elip_grd.asc`, the remaining extended-
+corpus deck failure caused by an intentional negative LTspice capacitor. Prove
+the exact electrical semantics against native ngspice and translate it without
+changing the sign, or refuse the circuit atomically by name if native parity is
+not possible. Add regression/corpus evidence and rerun the full corpus.
+Scheduler stays unloaded.
 
 Previous completed unit:
 

@@ -5,15 +5,12 @@ The working memory of an unattended loop that starts from zero every fire.
 
 ## Now
 
-**Status:** DONE - 2026-08-03 01:40 CDT
+**Status:** IN PROGRESS - 2026-08-03 01:43 CDT
 
-Extended-value compatibility is complete for self-contained brace arithmetic
-and charge-defined `Q=` capacitors. The native deck evaluates the former and
-emits the latter as a real ngspice nonlinear capacitor; every preview solver
-refuses the unsupported stamp instead of substituting a plausible constant.
-The Value inspector exposes Charge expression and Initial voltage as separate
-named controls. The full extended corpus improved from 15 to 5 hard failures,
-with 525 decks built and 521 operating points converged. Scheduler remains
+Resolving the remaining `elip_grd.asc` deck failure. Its negative capacitor is
+intentional LTspice filter mathematics, so the only acceptable outcomes are an
+electrically exact native translation or an atomic named refusal. The sign will
+not be clamped, absolutized, or silently approximated. Scheduler remains
 unloaded.
 
 **Product UX contract (Omar, 2026-08-03): Tau is not a prettier command-line
