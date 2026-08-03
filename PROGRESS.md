@@ -9,16 +9,24 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: IN PROGRESS - 2026-08-02 22:19 CDT**
+**Status: DONE - 2026-08-02 22:38 CDT**
 
-Interactive parity unit: replace the lossy folded-value contract for imported
-LTspice `Value`/`Value2`/`SpiceLine`/`SpiceLine2` attributes with structured,
-validated provenance. An untouched component must keep each original slot; a
-supported edit must update the electrically authoritative slot without dropping
-the others, and an ambiguous transformation must remain an explicit refusal.
-The unit is complete only with fail-first save/reopen tests, a real-corpus
-census, frontend/native gates, and a packaged-app check. The scheduler stays
-unloaded.
+Imported LTspice extended value slots now survive the real App path and support
+safe edits. The document validator previously dropped `ltExtraAttrs` while
+opening the file, so exporter-only tests were false confidence: any later save
+could still collapse `Value2`/`SpiceLine` onto `Value`. The validator now retains,
+bounds, and sanitizes the structured slot provenance; hierarchy fingerprints
+also cover it. A minimal edit wholly inside one literal source slot is written
+back to that slot, while cross-slot or filtered projections remain explicit
+refusals.
+
+The packaged inspector no longer calls a parameterized imported op-amp “Ideal.”
+It shows “Imported / custom” plus an editable parameter line. In the rebuilt
+release app, changing `Avol=1Meg` to `Avol=2Meg` and saving produced exactly
+`Value2 Avol=2Meg GBW=10Gig Slew=10Gig` and retained
+`SpiceLine ilimit=2 rail=0`; no `Value Avol=...` record appeared. The final DMG,
+codesign check, full 4,012-file corpus, 2,367 frontend tests, six DoD numerical
+proofs, production audit, typecheck, and build are green. Scheduler stays paused.
 
 Previous completed unit:
 
@@ -1736,6 +1744,50 @@ needs Omar's Developer ID.
 - **Status:** DONE
 - **Last completed sub-step:** packaged Tau saved and reopened a disposable buck converter while preserving comments/directive positions, then bundled ngspice completed its 165,337-sample transient; all required gates and the 55-check advanced circuit corpus are green.
 - **Next candidates:** keep the remaining unsupported ASC drawing/window records explicit, and continue the acceptance-corpus path rather than widening the editor with lossy representations.
+
+## 2026-08-03T03:38Z - auto/ltspice-parity - Structured LTspice value-slot editing (§1/§7)
+
+### What I did
+
+- Reconciled a minimal joined-value edit back into its single owning LTspice
+  `Value`/`Value2`/`SpiceLine`/`SpiceLine2` slot; ambiguous cross-slot edits
+  remain blocked.
+- Fixed the real App validator dropping `ltExtraAttrs`, added 16-slot/length/
+  field-name/control-character bounds, and included the provenance in hierarchy
+  fingerprints.
+- Added an honest “Imported / custom” op-amp state and editable Parameters
+  field instead of falsely presenting a parameterized import as “Ideal.”
+
+### Files
+
+`ascExport.ts` and tests, `documentValidation.ts` and tests,
+`hierarchyProvenance.ts`, `App.workspace.test.tsx`, `ShellPanels.tsx` and tests,
+project hierarchy tests, and parity/state documentation.
+
+### Tests
+
+- Fail-first exporter test produced the old lossy warning before reconciliation.
+- App test opens a real imported op-amp, edits Avol, saves, and proves Value2
+  changed while SpiceLine and the absence of a synthetic Value record hold.
+- Frontend: 154 passed / 1 skipped files; 2,367 passed / 6 skipped tests.
+- Acceptance corpus, typecheck, production build, and 6 DoD parity proofs pass.
+- Rebuilt unsigned `.app`/DMG pass codesign and `hdiutil verify`; Computer Use
+  repeated the edit/save against the exact packaged app.
+- `pnpm audit --prod --audit-level=low`: no known vulnerabilities.
+
+### Parity items
+
+Single-slot edits to joined LTspice values are now lossless and user-accessible
+for imported/custom op-amps. Edits that span multiple original slots remain an
+honest save refusal until Tau has a complete per-slot attribute editor.
+
+### Next step
+
+Add content digests to the staged native-engine provenance record and verify
+them in `build.rs`, then regenerate the pinned engine resources with the full
+native build.
+
+---
 
 ## 2026-08-03T03:16Z - auto/ltspice-parity - Lossless hierarchy save + clean-source Run (§1/§7)
 

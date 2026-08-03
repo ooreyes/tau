@@ -1463,6 +1463,13 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   dirty tab now closes through Save / Don't Save / Cancel; Save completes the
   disk write before closing. Packaged Tau proved the flow on the buck fixture
   and reran its bundled-ngspice transient after save/reopen.
+  **Structured LTspice slot editing (2026-08-02):** the App validator now
+  preserves/bounds `ltExtraAttrs` instead of dropping it on open. A minimal edit
+  wholly inside one joined `Value2`/`SpiceLine` slot is written back to that
+  exact slot; cross-slot transformations remain explicit refusals. Imported
+  parameterized op-amps are labeled “Imported / custom” and expose their full
+  Parameters line. The packaged app changed Avol in Value2 while retaining an
+  untouched SpiceLine and emitted no collapsed Value record.
   **Release stress/security follow-up (2026-07-16):** a committed five-case
   adversarial suite now drives the logical-plan ceiling (80 components / 160
   pins), long PWL/identifier boundaries, ambiguous/dangling/case-colliding

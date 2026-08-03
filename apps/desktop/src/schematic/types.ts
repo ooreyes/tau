@@ -140,11 +140,12 @@ export interface LtspiceExtraAttrs {
   /** The source symbol's own `Value`; empty when it wrote none. */
   baseValue: string;
   /**
-   * The component value Tau derived from the whole set. The split can only be
-   * restored while the component still holds this value - once the folded
-   * value is edited there is no way to distribute the edit back across slots.
-   * When it equals `baseValue` nothing was folded, so an edit is safe to write
-   * straight into `Value` with the other slots untouched.
+   * The component value Tau derived from the whole set. The exporter restores
+   * the original split unchanged, and can map a minimal edit back when it stays
+   * wholly inside one literal source slot. An edit spanning slot boundaries is
+   * still refused rather than guessed. When this equals `baseValue`, nothing
+   * was folded and an edit writes straight into `Value` while the independent
+   * slots remain untouched.
    */
   derivedValue: string;
   /** Every other field, in the order the file wrote them. */

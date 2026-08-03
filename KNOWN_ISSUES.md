@@ -85,7 +85,8 @@ one engine for the whole session.
   still refuses to overwrite a file when the rewrite would drop information it
   cannot yet reproduce: comment placement, those attributes on a symbol Tau
   would have to rewrite into a different real symbol (so the slots have nowhere
-  to land) or whose folded value has since been edited, and symbols whose pins
+  to land), a joined-value edit that spans more than one original attribute slot
+  (a change wholly inside one slot is written back there), and symbols whose pins
   and Tau's do not line up (a 4-pin BJT's substrate, which Tau does not model;
   a 2-pin current-controlled switch, which has nowhere to put the control pair
   Tau draws on every switch). A voltage-controlled switch (`sw`) is not one of

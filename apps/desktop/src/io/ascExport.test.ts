@@ -925,9 +925,10 @@ describe("extended SYMATTR slots (Value2 / SpiceLine) round-trip", () => {
     expect(importAsc(text).components.find((c) => c.label === "U2")?.value).toBe(editedValue);
   });
 
-  it("refuses the save when a folded value was edited", () => {
-    // The op-amp's value IS its slots joined, so an edit cannot be distributed
-    // back across them. Dropping them silently is the failure this guards.
+  it("refuses the save when an edit spans multiple folded slots", () => {
+    // Replacing the whole joined line deletes text from both Value2 and
+    // SpiceLine. That cannot be assigned to one authoritative slot, so
+    // dropping the originals silently is the failure this guards.
     const { text, warnings } = resaveExtendedAttrs((c) => c.label === "U2" ? { ...c, value: "Avol=2Meg" } : c);
     expect(warnings).toEqual([
       "U2: Value2, SpiceLine are not preserved; the part's parameters are saved on Value alone.",

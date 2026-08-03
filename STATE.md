@@ -5,12 +5,14 @@ The working memory of an unattended loop that starts from zero every fire.
 
 ## Now
 
-**Status:** IN PROGRESS - 2026-08-02 22:19 CDT
+**Status:** DONE - 2026-08-02 22:38 CDT
 
-Claimed the next save-parity unit: replace imported extended-attribute value
-folding with structured provenance so editing a supported `Value2`/`SpiceLine`
-part can save without erasing or ambiguously redistributing its LTspice slots.
-The scheduler remains unloaded.
+Extended LTspice value-slot editing is complete for unambiguous single-slot
+changes. The real App validator now preserves and bounds `ltExtraAttrs` instead
+of silently dropping it, exporter reconciliation updates only the owning slot,
+and the packaged inspector exposes imported/custom op-amp parameters rather
+than mislabeling them as Ideal. Cross-slot transformations remain blocked. The
+scheduler remains unloaded.
 
 Previous completed unit:
 
@@ -90,12 +92,7 @@ which are folded into the block above.
 Ordered. Take the top item unless it is blocked. Class A outranks everything -
 a plausible wrong number is worse than a refusal to run.
 
-1. **A folded value that was edited blocks the save.** By design: an op-amp's
-   value IS its slots joined, so an edit cannot be split back across them. The
-   honest fix is to stop folding - give the component structured parameters
-   instead of one string - which is a much larger unit than this note implies.
-   Logged so it is a decision, not an oversight.
-2. **The provenance record describes the tree, not its contents.** The check
+1. **The provenance record describes the tree, not its contents.** The check
    landed 2026-08-01 refuses a staged resource whose `build-info.json` is absent,
    from another commit, or from another target, and it names every required file.
    It cannot tell that the library *file* was swapped after a legitimate build,
@@ -112,6 +109,8 @@ Newest first, ONE line each. Full evidence for every unit is in PROGRESS.md
 and in its commit message. This section exists so a fresh fire can see what
 is already done at a glance, not so it can re-read the reasoning.
 
+- 2026-08-02 - IMPORTED/CUSTOM OP-AMP PARAMETERS ARE HONEST AND EDITABLE in the packaged inspector; a one-slot Avol change writes back to Value2 and retains SpiceLine instead of collapsing both onto Value.
+- 2026-08-02 - THE REAL APP PRESERVES EXTENDED LTSPICE VALUE PROVENANCE. The validator had silently dropped `ltExtraAttrs`; it now retains/bounds/sanitizes it, hierarchy fingerprints cover it, and single-slot joined-value edits reconcile to their owning slot while cross-slot edits remain blocked.
 - 2026-08-02 - RUNNING A CLEAN IMPORTED `.asc` IS BYTE-PRESERVING. The pre-run save compares the live semantic signature first, so record order, micro glyphs and vendor attributes cannot change merely because the user pressed Run.
 - 2026-08-02 - RESOLVED HIERARCHICAL BLOCKS SAVE LOSSLESSLY (half 2 of 2): exact owner/fingerprint provenance suppresses only unchanged flattened simulation members and re-emits the original parent `SYMBOL`; edited or incomplete groups remain instance-specific hard refusals.
 - 2026-08-02 - A NEW CIRCUIT NO LONGER INHERITS THE PREVIOUS FILE'S `DATAFLAG` READOUTS, which a save wrote to disk. `newCircuit`'s reset now comes from `blankDoc(): Doc`, whose explicit return type makes an uncleared carried field a compile error instead of the next leak.
