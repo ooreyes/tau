@@ -5,7 +5,15 @@ The working memory of an unattended loop that starts from zero every fire.
 
 ## Now
 
-**Status:** DONE - 2026-08-03 09:56 CDT
+**Status:** IN PROGRESS - 2026-08-03 10:01 CDT
+
+Claimed unit: transient settings semantics. Remove raw Steps from the primary
+surface; expose Circuit duration and Quick/Balanced/Precision detail, retain
+exact output points under Expert, report measured last-run elapsed time, and
+label automatic/document/custom settings honestly. A manual setting must not
+leak when a different circuit is opened. Scheduler remains unloaded.
+
+Previous completed unit:
 
 Direct transient trace interaction is complete. A trace can be selected and
 recolored from Tau's validated palette beside its plot; C1/C2 glide by mouse,

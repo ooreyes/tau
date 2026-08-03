@@ -9,7 +9,16 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-03 09:56 CDT**
+**Status: IN PROGRESS - 2026-08-03 10:01 CDT**
+
+Claimed unit: replace the misleading raw Steps control with engineer-facing
+transient semantics. Circuit duration will be explicit simulated time, Quick /
+Balanced / Precision will control waveform detail, exact output points will
+remain under Expert, and the last real solver elapsed time will be reported
+without pretending it can be predicted. Document/automatic/custom provenance
+must be honest and must reset on circuit changes. Scheduler stays unloaded.
+
+Previous completed unit:
 
 Transient traces are now instrument channels: select a line, choose any Tau
 color-safe trace color, activate C1 or C2, then glide across interpolated data
