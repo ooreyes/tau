@@ -88,7 +88,7 @@ record_completion() {
 
   pnpm --filter @tau/desktop tauri build
 
-  local app dmg mount_dir mounted_app mounted_library app_pid
+  local app dmg mount_dir mounted_app mounted_library mounted_resource app_log app_pid
   app="$ROOT/apps/desktop/src-tauri/target/release/bundle/macos/Tau.app"
   dmg="$(find "$ROOT/apps/desktop/src-tauri/target/release/bundle/dmg" -maxdepth 1 -type f -name '*.dmg' -print -quit)"
   [[ -d "$app" ]] || die "tauri build produced no Tau.app"
@@ -97,16 +97,24 @@ record_completion() {
   hdiutil verify "$dmg"
 
   mount_dir="$(mktemp -d "${TMPDIR:-/tmp}/tau-completion-mount.XXXXXX")"
+  app_log="$(mktemp "${TMPDIR:-/tmp}/tau-completion-app.XXXXXX.log")"
   cleanup_mount() {
     hdiutil detach "$mount_dir" -quiet >/dev/null 2>&1 || true
     rmdir "$mount_dir" >/dev/null 2>&1 || true
+    rm -f "$app_log"
   }
   trap cleanup_mount EXIT
   hdiutil attach "$dmg" -readonly -nobrowse -mountpoint "$mount_dir" -quiet
   mounted_app="$mount_dir/Tau.app"
   [[ -x "$mounted_app/Contents/MacOS/tau" ]] || die "mounted DMG has no runnable Tau executable"
-  mounted_library="$mounted_app/Contents/Resources/ngspice/lib/libngspice.dylib"
+  mounted_resource="$mounted_app/Contents/Resources/ngspice"
+  mounted_library="$mounted_resource/lib/libngspice.dylib"
   [[ -f "$mounted_library" ]] || die "mounted Tau.app has no bundled ngspice library"
+  # build.rs verified every source-resource digest before packaging. Require
+  # the DMG to contain that exact tree so a copy/sign/bundle defect cannot
+  # mutate an unexercised support file and still produce a completion signal.
+  diff -rq "$resource_dir" "$mounted_resource" ||
+    die "mounted Tau.app's ngspice resource differs from the verified staged tree"
   # The source resource passed above does not prove the DMG contains the same
   # runnable engine or its adjacent XSPICE modules. Exercise the library from
   # the mounted app bundle before this proof is allowed to notify completion.
@@ -118,7 +126,10 @@ record_completion() {
     --manifest-path apps/desktop/src-tauri/Cargo.toml \
     runs_a_digital_register_with_the_real_ngspice_code_models \
     -- --ignored --test-threads=1
-  "$mounted_app/Contents/MacOS/tau" >"$mount_dir/tau-app.log" 2>&1 &
+  # The DMG is deliberately mounted read-only; logging under `mount_dir`
+  # makes a healthy app fail before it can launch. Keep runtime output in a
+  # separate temporary file outside the mounted filesystem.
+  "$mounted_app/Contents/MacOS/tau" >"$app_log" 2>&1 &
   app_pid=$!
   sleep 5
   kill -0 "$app_pid" 2>/dev/null || die "Tau.app did not stay alive for five seconds"

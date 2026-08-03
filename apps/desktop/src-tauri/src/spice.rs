@@ -1286,13 +1286,26 @@ fn fatal_engine_messages(state: &CallbackState) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use std::{io::Cursor, path::PathBuf};
+    use std::{io::Cursor, path::PathBuf, sync::Mutex};
 
     use super::{
         deck_lines, fatal_engine_messages, library_file_name, missing_codemodel_message,
         read_bounded, record_engine_message, take_messages, CallbackState, SpiceEngine,
         SpiceRequest, WorkerResponse, MAX_ENGINE_MESSAGES, MAX_ENGINE_MESSAGE_BYTES,
     };
+
+    // libngspice owns process-global callback and circuit state. Cargo runs
+    // ignored tests in parallel by default, so independent `SpiceEngine`
+    // instances can otherwise race inside the same native library and abort
+    // the test process. Keep the real-library proofs deterministic without
+    // weakening ordinary unit-test parallelism.
+    static REAL_ENGINE_TEST: Mutex<()> = Mutex::new(());
+
+    fn real_engine_test_guard() -> std::sync::MutexGuard<'static, ()> {
+        REAL_ENGINE_TEST
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
 
     #[test]
     fn accepts_a_complete_deck() {
@@ -1596,6 +1609,7 @@ R1 out fb 10k
     #[test]
     #[ignore = "requires TAU_NGSPICE_LIB pointing to libngspice"]
     fn runs_an_operating_point_with_the_real_ngspice_library() {
+        let _guard = real_engine_test_guard();
         let library = std::env::var_os("TAU_NGSPICE_LIB")
             .map(PathBuf::from)
             .expect("TAU_NGSPICE_LIB must point to a shared ngspice library");
@@ -1781,6 +1795,7 @@ R1 out fb 10k
     #[test]
     #[ignore = "requires TAU_NGSPICE_LIB pointing to libngspice with its code models"]
     fn runs_a_digital_register_with_the_real_ngspice_code_models() {
+        let _guard = real_engine_test_guard();
         let library = std::env::var_os("TAU_NGSPICE_LIB")
             .map(PathBuf::from)
             .expect("TAU_NGSPICE_LIB must point to a shared ngspice library");
@@ -1862,6 +1877,7 @@ A_a2_dac [a2_dq a2_dnq] [q1 q1bar] a2_dac
     #[cfg(unix)]
     #[ignore = "requires TAU_NGSPICE_LIB pointing to libngspice"]
     fn refuses_an_xspice_device_on_a_library_that_staged_no_code_models() {
+        let _guard = real_engine_test_guard();
         let library = std::env::var_os("TAU_NGSPICE_LIB")
             .map(PathBuf::from)
             .expect("TAU_NGSPICE_LIB must point to a shared ngspice library");
@@ -1898,6 +1914,7 @@ A_a2_dac [a2_dq a2_dnq] [q1 q1bar] a2_dac
     #[test]
     #[ignore = "requires TAU_NGSPICE_LIB pointing to libngspice"]
     fn returns_both_plots_of_a_real_noise_run() {
+        let _guard = real_engine_test_guard();
         let library = std::env::var_os("TAU_NGSPICE_LIB")
             .map(PathBuf::from)
             .expect("TAU_NGSPICE_LIB must point to a shared ngspice library");

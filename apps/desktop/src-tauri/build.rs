@@ -17,11 +17,10 @@ fn main() {
     let engine_library = engine_directory.join(library_name);
     let build_script = manifest_dir.join("../../../scripts/build-ngspice.sh");
 
-    println!("cargo:rerun-if-changed={}", engine_directory.display());
-    println!(
-        "cargo:rerun-if-changed={}",
-        resource_dir.join("build-info.json").display()
-    );
+    // Cargo must rerun this verifier when *any* packaged resource changes.
+    // Watching only `lib/` would leave a cached build blind to an altered
+    // script under `share/`, despite that file being part of the digest map.
+    println!("cargo:rerun-if-changed={}", resource_dir.display());
     println!("cargo:rerun-if-changed={}", build_script.display());
     if !engine_library.is_file() {
         panic!(

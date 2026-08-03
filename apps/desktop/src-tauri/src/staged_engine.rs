@@ -10,9 +10,17 @@
  * every desktop build and every packaging run has to go through.
  *
  * The rule is that the staged tree must carry the record the build script
- * writes, and the record must describe this build. A library that arrived any
- * other way has no record at all.
+ * writes, the record must describe this build, and its SHA-256 map must exactly
+ * cover the staged files. A library that arrived any other way has no record at
+ * all; a resource changed after staging no longer matches it.
  */
+
+use sha2::{Digest, Sha256};
+use std::{
+    collections::BTreeMap,
+    io::Read,
+    path::{Path, PathBuf},
+};
 
 /**
  * The XSPICE code models `SpiceEngine::load_bundled_codemodels` loads at run
@@ -98,6 +106,146 @@ fn record_field(record: &serde_json::Value, field: &str) -> Result<String, Strin
         .ok_or_else(|| format!("build-info.json has no \"{field}\" string."))
 }
 
+fn collect_resource_files(resource_dir: &Path) -> Result<BTreeMap<String, PathBuf>, String> {
+    fn visit(
+        root: &Path,
+        directory: &Path,
+        files: &mut BTreeMap<String, PathBuf>,
+    ) -> Result<(), String> {
+        let entries = std::fs::read_dir(directory).map_err(|error| {
+            format!(
+                "Could not inspect staged resource directory {}: {error}",
+                directory.display()
+            )
+        })?;
+        for entry in entries {
+            let entry = entry.map_err(|error| {
+                format!(
+                    "Could not inspect an entry under {}: {error}",
+                    directory.display()
+                )
+            })?;
+            let path = entry.path();
+            let metadata = std::fs::symlink_metadata(&path).map_err(|error| {
+                format!(
+                    "Could not inspect staged resource {}: {error}",
+                    path.display()
+                )
+            })?;
+            if metadata.is_dir() {
+                visit(root, &path, files)?;
+                continue;
+            }
+            if !metadata.is_file() && !metadata.file_type().is_symlink() {
+                return Err(format!(
+                    "Staged resource {} is neither a file nor a supported symlink.",
+                    path.display()
+                ));
+            }
+            let relative = path.strip_prefix(root).map_err(|_| {
+                format!(
+                    "Staged resource {} escaped {}.",
+                    path.display(),
+                    root.display()
+                )
+            })?;
+            let relative = relative
+                .to_str()
+                .ok_or_else(|| {
+                    format!(
+                        "Staged resource {} has a path build-info.json cannot represent.",
+                        path.display()
+                    )
+                })?
+                .replace('\\', "/");
+            if relative == "build-info.json" || relative == ".gitkeep" {
+                continue;
+            }
+            if metadata.file_type().is_symlink() {
+                let target = std::fs::canonicalize(&path).map_err(|error| {
+                    format!(
+                        "Staged resource symlink {} cannot be resolved: {error}",
+                        path.display()
+                    )
+                })?;
+                let canonical_root = std::fs::canonicalize(root).map_err(|error| {
+                    format!(
+                        "Could not resolve staged resource root {}: {error}",
+                        root.display()
+                    )
+                })?;
+                if !target.starts_with(&canonical_root) || !target.is_file() {
+                    return Err(format!(
+                        "Staged resource symlink {} points outside the resource tree.",
+                        path.display()
+                    ));
+                }
+            }
+            files.insert(relative, path);
+        }
+        Ok(())
+    }
+
+    let mut files = BTreeMap::new();
+    visit(resource_dir, resource_dir, &mut files)?;
+    Ok(files)
+}
+
+fn sha256_file(path: &Path) -> Result<String, String> {
+    let mut file = std::fs::File::open(path)
+        .map_err(|error| format!("Could not read staged resource {}: {error}", path.display()))?;
+    let mut digest = Sha256::new();
+    let mut buffer = [0u8; 64 * 1024];
+    loop {
+        let count = file.read(&mut buffer).map_err(|error| {
+            format!("Could not hash staged resource {}: {error}", path.display())
+        })?;
+        if count == 0 {
+            break;
+        }
+        digest.update(&buffer[..count]);
+    }
+    Ok(format!("{:x}", digest.finalize()))
+}
+
+fn verify_resource_digests(resource_dir: &Path, record: &serde_json::Value) -> Result<(), String> {
+    let manifest = record
+        .get("files")
+        .and_then(serde_json::Value::as_object)
+        .ok_or_else(|| "build-info.json has no \"files\" digest object.".to_string())?;
+    if manifest.is_empty() {
+        return Err("build-info.json has an empty \"files\" digest object.".to_string());
+    }
+    let actual_files = collect_resource_files(resource_dir)?;
+    for (relative, path) in &actual_files {
+        let expected = manifest
+            .get(relative)
+            .and_then(serde_json::Value::as_str)
+            .ok_or_else(|| {
+                format!("build-info.json has no SHA-256 digest for staged resource {relative}.")
+            })?;
+        if expected.len() != 64 || !expected.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+            return Err(format!(
+                "build-info.json has a malformed SHA-256 digest for {relative}."
+            ));
+        }
+        let actual = sha256_file(path)?;
+        if !actual.eq_ignore_ascii_case(expected) {
+            return Err(format!(
+                "Staged ngspice resource {relative} failed SHA-256 verification (recorded {expected}, actual {actual}). Re-run scripts/build-ngspice.sh."
+            ));
+        }
+    }
+    for relative in manifest.keys() {
+        if !actual_files.contains_key(relative) {
+            return Err(format!(
+                "build-info.json records {relative}, but that staged resource is missing."
+            ));
+        }
+    }
+    Ok(())
+}
+
 /**
  * Refuse a staged resource that the pinned build script did not produce for
  * this target. `resource_dir` is the staged `resources/ngspice` tree,
@@ -167,6 +315,8 @@ pub fn verify_staged_engine(
         ));
     }
 
+    verify_resource_digests(resource_dir, &record)?;
+
     Ok(())
 }
 
@@ -189,9 +339,26 @@ mod tests {
     }
 
     fn record(commit: &str, host: &str, library: &str) -> String {
-        format!(
-            "{{\n  \"repository\": \"https://github.com/imr/ngspice.git\",\n  \"commit\": \"{commit}\",\n  \"host\": \"{host}\",\n  \"library\": \"{library}\"\n}}\n"
-        )
+        let mut files = serde_json::Map::new();
+        files.insert(
+            "lib/libngspice.dylib".into(),
+            serde_json::Value::String(format!("{:x}", Sha256::digest(b"library"))),
+        );
+        for name in REQUIRED_CODEMODELS {
+            files.insert(
+                format!("lib/ngspice/{name}"),
+                serde_json::Value::String(format!("{:x}", Sha256::digest(b"module"))),
+            );
+        }
+        serde_json::to_string_pretty(&serde_json::json!({
+            "repository": "https://github.com/imr/ngspice.git",
+            "commit": commit,
+            "host": host,
+            "library": library,
+            "files": files,
+        }))
+        .expect("build record")
+            + "\n"
     }
 
     fn verify(root: &Path) -> Result<(), String> {
@@ -299,6 +466,103 @@ mod tests {
         stage(dir.path(), Some("{ \"host\": \"Darwin-arm64\" }"));
         let message = verify(dir.path()).expect_err("a record with no commit");
         assert!(message.contains("commit"), "{message}");
+    }
+
+    #[test]
+    fn refuses_a_library_changed_after_staging() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        stage(
+            dir.path(),
+            Some(&record(COMMIT, "Darwin-arm64", "lib/libngspice.dylib")),
+        );
+        std::fs::write(dir.path().join("lib/libngspice.dylib"), b"swapped")
+            .expect("replace staged library");
+        let message = verify(dir.path()).expect_err("a swapped library");
+        assert!(message.contains("lib/libngspice.dylib"), "{message}");
+        assert!(message.contains("SHA-256"), "{message}");
+    }
+
+    #[test]
+    fn refuses_a_code_model_changed_after_staging() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        stage(
+            dir.path(),
+            Some(&record(COMMIT, "Darwin-arm64", "lib/libngspice.dylib")),
+        );
+        std::fs::write(dir.path().join("lib/ngspice/digital.cm"), b"swapped")
+            .expect("replace staged code model");
+        let message = verify(dir.path()).expect_err("a swapped code model");
+        assert!(message.contains("digital.cm"), "{message}");
+        assert!(message.contains("SHA-256"), "{message}");
+    }
+
+    #[test]
+    fn refuses_an_unrecorded_staged_file() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        stage(
+            dir.path(),
+            Some(&record(COMMIT, "Darwin-arm64", "lib/libngspice.dylib")),
+        );
+        std::fs::write(dir.path().join("lib/ngspice/injected.cm"), b"payload")
+            .expect("add unrecorded resource");
+        let message = verify(dir.path()).expect_err("an unrecorded staged resource");
+        assert!(message.contains("injected.cm"), "{message}");
+        assert!(message.contains("no SHA-256"), "{message}");
+    }
+
+    #[test]
+    fn refuses_a_malformed_digest() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let malformed = record(COMMIT, "Darwin-arm64", "lib/libngspice.dylib")
+            .replace(&format!("{:x}", Sha256::digest(b"library")), "not-a-sha256");
+        stage(dir.path(), Some(&malformed));
+        let message = verify(dir.path()).expect_err("a malformed digest");
+        assert!(message.contains("malformed SHA-256"), "{message}");
+    }
+
+    #[test]
+    fn refuses_a_record_without_a_digest_map() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        stage(
+            dir.path(),
+            Some(&format!(
+                "{{\"commit\":\"{COMMIT}\",\"host\":\"Darwin-arm64\",\"library\":\"lib/libngspice.dylib\"}}"
+            )),
+        );
+        let message = verify(dir.path()).expect_err("a record with no digest map");
+        assert!(message.contains("files"), "{message}");
+        assert!(message.contains("digest object"), "{message}");
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn refuses_a_staged_symlink_that_escapes_the_resource_tree() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        stage(
+            dir.path(),
+            Some(&record(COMMIT, "Darwin-arm64", "lib/libngspice.dylib")),
+        );
+        let outside = tempfile::NamedTempFile::new().expect("external file");
+        std::os::unix::fs::symlink(outside.path(), dir.path().join("lib/ngspice/escaped.cm"))
+            .expect("escaping symlink");
+        let message = verify(dir.path()).expect_err("a symlink outside the resource tree");
+        assert!(message.contains("escaped.cm"), "{message}");
+        assert!(message.contains("outside"), "{message}");
+    }
+
+    #[test]
+    fn refuses_a_manifest_entry_whose_resource_is_missing() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let mut value: serde_json::Value =
+            serde_json::from_str(&record(COMMIT, "Darwin-arm64", "lib/libngspice.dylib"))
+                .expect("build record JSON");
+        value["files"]["share/ngspice/spinit"] =
+            serde_json::Value::String(format!("{:x}", Sha256::digest(b"missing")));
+        let record = serde_json::to_string_pretty(&value).expect("modified record") + "\n";
+        stage(dir.path(), Some(&record));
+        let message = verify(dir.path()).expect_err("a recorded file that is absent");
+        assert!(message.contains("share/ngspice/spinit"), "{message}");
+        assert!(message.contains("missing"), "{message}");
     }
 
     #[test]

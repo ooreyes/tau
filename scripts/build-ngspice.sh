@@ -204,13 +204,37 @@ if [[ "$(uname -s)" == "Darwin" ]]; then
   fi
 fi
 
-cat >"$RESOURCE_DIR/build-info.json" <<EOF
-{
-  "repository": "$NGSPICE_REPOSITORY",
-  "commit": "$NGSPICE_COMMIT",
-  "host": "$(uname -s)-$(uname -m)",
-  "library": "lib/$ENGINE_LIBRARY"
+hash_file() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$1" | awk '{print $1}'
+  else
+    shasum -a 256 "$1" | awk '{print $1}'
+  fi
 }
-EOF
+
+# Bind every packaged engine resource (including the loader-facing library
+# symlink) to this record. The packaging check also requires exact set equality,
+# so an injected file and a removed file are both fatal instead of merely going
+# unhashed.
+{
+  printf '{\n'
+  printf '  "repository": "%s",\n' "$NGSPICE_REPOSITORY"
+  printf '  "commit": "%s",\n' "$NGSPICE_COMMIT"
+  printf '  "host": "%s-%s",\n' "$(uname -s)" "$(uname -m)"
+  printf '  "library": "lib/%s",\n' "$ENGINE_LIBRARY"
+  printf '  "files": {\n'
+  first_digest=1
+  while IFS= read -r resource; do
+    relative="${resource#"$RESOURCE_DIR/"}"
+    [[ "$relative" == ".gitkeep" || "$relative" == "build-info.json" ]] && continue
+    digest="$(hash_file "$resource")"
+    if (( first_digest == 0 )); then
+      printf ',\n'
+    fi
+    first_digest=0
+    printf '    "%s": "%s"' "$relative" "$digest"
+  done < <(find "$RESOURCE_DIR" \( -type f -o -type l \) -print | LC_ALL=C sort)
+  printf '\n  }\n}\n'
+} >"$RESOURCE_DIR/build-info.json"
 
 echo "Bundled ngspice resource prepared at $RESOURCE_DIR (commit $NGSPICE_COMMIT)"
