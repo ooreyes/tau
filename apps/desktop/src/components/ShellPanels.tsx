@@ -41,6 +41,12 @@ import { Palette } from "./Palette";
 import { OPAMP_LIBRARY, findOpAmp } from "../library/opamps";
 import { inspectOpampModel, opampIdentity } from "../engine/opampModel";
 import { componentModelOptions, isModelComponentKind } from "../engine/componentModelCatalog";
+import {
+  encodeSubcircuitInstanceValue,
+  parseSubcircuitInstanceValue,
+  subcircuitParameterValue,
+  subcircuitOptions,
+} from "../engine/subcircuitCatalog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
@@ -1481,6 +1487,7 @@ export function ComponentInspector({
 }) {
   const entry = selected ? CATALOG_BY_KIND[selected.kind] : null;
   const setValue = useSchematic((s) => s.setValue);
+  const setSubcircuitModel = useSchematic((s) => s.setSubcircuitModel);
   const setOpampModel = useSchematic((s) => s.setOpampModel);
   const setLabel = useSchematic((s) => s.setLabel);
   const beginChange = useSchematic((s) => s.beginChange);
@@ -1511,6 +1518,16 @@ export function ComponentInspector({
   const selectedModelOption = modelOptions.find(
     (option) => option.name.toLowerCase() === selectedModelName.toLowerCase(),
   );
+  const subcircuitInstance = selected?.kind === "subckt"
+    ? parseSubcircuitInstanceValue(selected.value)
+    : null;
+  const availableSubcircuits = useMemo(
+    () => selected?.kind === "subckt" ? subcircuitOptions(directives, modelLibraries) : [],
+    [selected?.kind, directives, modelLibraries],
+  );
+  const selectedSubcircuit = subcircuitInstance
+    ? availableSubcircuits.find((option) => option.name.toLowerCase() === subcircuitInstance.name.toLowerCase())
+    : undefined;
 
   const beginParamChange = (key: string) => {
     if (!selected) return;
@@ -1525,6 +1542,18 @@ export function ComponentInspector({
     if (!selected) return;
     const base = selected.value.trim() || entry?.defaultValue || "";
     setValue(selected.id, encodeParams(selected.kind, { ...decodeParams(selected.kind, base), [key]: value }));
+  };
+
+  const updateSubcircuitParameter = (name: string, value: string, defaultValue: string) => {
+    if (!selected || !subcircuitInstance) return;
+    const overrides = new Map(subcircuitInstance.overrides);
+    for (const key of overrides.keys()) {
+      if (key.toLowerCase() === name.toLowerCase()) overrides.delete(key);
+    }
+    const trimmed = value.trim();
+    if (!trimmed || trimmed === defaultValue.trim()) overrides.delete(name);
+    else overrides.set(name, trimmed);
+    setValue(selected.id, encodeSubcircuitInstanceValue(subcircuitInstance.name, overrides));
   };
 
   const opamp = selected?.kind === "opamp" ? opampIdentity(selected) : null;
@@ -1580,6 +1609,68 @@ export function ComponentInspector({
               onBeginChange={beginParamChange}
               onValueChange={(value) => setValue(selected.id, value)}
             />
+          ) : selected.kind === "subckt" ? (
+            <>
+              <label className="property-field">
+                <span>Subcircuit model</span>
+                <select
+                  className="mono-num"
+                  aria-label="Subcircuit model"
+                  value={selectedSubcircuit?.name ?? subcircuitInstance?.name ?? ""}
+                  onFocus={() => {
+                    editKeyRef.current = null;
+                  }}
+                  onChange={(event) => {
+                    const choice = availableSubcircuits.find((option) => option.name === event.currentTarget.value);
+                    if (!choice) return;
+                    beginParamChange("subcircuit-model");
+                    setSubcircuitModel(selected.id, choice.name, choice.ports);
+                  }}
+                >
+                  {!selectedSubcircuit && subcircuitInstance?.name && (
+                    <option value={subcircuitInstance.name}>{subcircuitInstance.name} · missing</option>
+                  )}
+                  {availableSubcircuits.map((option) => (
+                    <option key={`${option.source}:${option.sourceLabel}:${option.name}`} value={option.name}>
+                      {option.name} · {option.ports.length} terminals · {option.sourceLabel}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <p className="property-hint" role="status">
+                {selectedSubcircuit
+                  ? `Ready · ${selectedSubcircuit.ports.length} named terminals (${selectedSubcircuit.ports.join(", ")}) from ${selectedSubcircuit.sourceLabel}`
+                  : `Blocked · ${subcircuitInstance?.name || "No subcircuit"} has no attached or document definition; Tau will not guess its pins or behavior.`}
+              </p>
+              {selectedSubcircuit?.parameters.map((parameter) => (
+                <label key={parameter.name} className="property-field">
+                  <span>{parameter.name}</span>
+                  <input
+                    className="mono-num"
+                    value={subcircuitInstance
+                      ? subcircuitParameterValue(subcircuitInstance.overrides, parameter.name) ?? parameter.defaultValue
+                      : parameter.defaultValue}
+                    aria-label={`Subcircuit parameter ${parameter.name}`}
+                    spellCheck={false}
+                    onFocus={() => {
+                      editKeyRef.current = null;
+                    }}
+                    onChange={(event) => {
+                      beginParamChange(`subcircuit-${parameter.name}`);
+                      updateSubcircuitParameter(parameter.name, event.currentTarget.value, parameter.defaultValue);
+                    }}
+                  />
+                </label>
+              ))}
+              {selectedSubcircuit && selectedSubcircuit.parameters.length === 0 && (
+                <p className="property-hint">This model defines terminals only; it has no instance parameters.</p>
+              )}
+              {!selectedSubcircuit && onOpenModelLibraries && (
+                <Button type="button" variant="outline" size="sm" onClick={onOpenModelLibraries}>
+                  Attach Model Library
+                </Button>
+              )}
+            </>
           ) : modelKind ? (
             <>
               <label className="property-field">

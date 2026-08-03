@@ -510,8 +510,16 @@ Status legend: ✅ done · 🟡 partial · ⬜ not started
   synthetic components/wires/labels are suppressed. Any edit, deletion, or
   incomplete group remains blocked by instance name; `.sim` persistence,
   hostile validation, copy/duplicate stripping, and the canonical Class-D
-  round trip are covered. Still ⬜: a Tau-native subckt *device*, editing the
-  child hierarchy in Tau, and an in-canvas hierarchical block symbol.
+  round trip are covered. **Tau-native X device landed (2026-08-03):**
+  Properties discovers document, attached-library, and bundled `.subckt`
+  contracts in native first-wins order, selects one by name, lists every formal
+  terminal, and exposes declared `params:` as named fields. Selection creates a
+  dynamic in-canvas block with exact p1..pN terminal order and labels, relocates
+  attached wires/labels/probes, emits the resolvable X line, and keeps raw
+  `param=value` text off the sketch. Guarded `TauPins` carrier metadata preserves
+  up to 64 terminals through `.asc` save/reopen; malformed/forged metadata is
+  ignored. Still ⬜: editing a child hierarchy as its own Tau schematic and
+  binding a native block directly to that child document.
 - ⬜ Net highlighting (hover a net → highlight whole net)
 - ⬜ Component attribute window/editor (full SPICE line editor per part)
 - ⬜ Pin/port symbols (IOPIN) for hierarchy
@@ -810,6 +818,12 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   boundary is fixed-root/read-only, skips symlinks, limits recursion and count,
   accepts only model-text extensions up to 5 MiB, rejects traversal and binary/
   encrypted content, and retains the document's 64-file/20 MiB aggregate caps.
+  **Native subcircuit chooser (2026-08-03):** every resolvable block is now a
+  source-labelled Properties choice with its exact named terminal count and
+  declared parameter defaults; missing blocks remain selected and explicitly
+  blocked with a Model Libraries action rather than accepting a raw X value or
+  guessing behavior. Formal parameters on `+` header continuations and
+  case-insensitive instance overrides are covered.
   **NEXT:** resolve imported relative `.lib`/`.inc` references through an
   explicit user-authorized project/library mapping; browser TS model physics.
 

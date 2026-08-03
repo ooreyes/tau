@@ -5,6 +5,7 @@ import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { Canvas } from "./Canvas";
 import { useSchematic } from "../store/useSchematic";
 import { getComponentPins } from "../schematic/pins";
+import { buildSubcircuitPinOverride } from "../schematic/subcircuitGeometry";
 
 class ResizeObserverStub {
   static instances: ResizeObserverStub[] = [];
@@ -426,6 +427,29 @@ describe("Canvas - schematic selection chrome", () => {
       { cx: "40", cy: "0" },
     ]);
     expect(document.querySelectorAll(".import-pin-lead")).toHaveLength(2);
+  });
+
+  it("renders every terminal and readable name on a native multi-pin subcircuit block", () => {
+    const base = {
+      id: "x1", kind: "subckt" as const, x: 96, y: 192, rotation: 0 as const,
+      value: "deadtime", label: "X1",
+    };
+    useSchematic.setState({
+      components: [{
+        ...base,
+        pinOverride: buildSubcircuitPinOverride(base, ["vcc", "vee", "pwm", "gp", "gn"]),
+      }],
+      wires: [],
+      tool: { mode: "wire" },
+    });
+    render(<Canvas interactive />);
+
+    expect([...document.querySelectorAll(".subckt-pin-label")].map((node) => node.textContent))
+      .toEqual(["vcc", "vee", "pwm", "gp", "gn"]);
+    expect(document.querySelectorAll(".component .pin-target")).toHaveLength(5);
+    expect(document.querySelectorAll(".import-pin-lead")).toHaveLength(0);
+    const body = document.querySelector(".component .symbol rect")!;
+    expect(body.getAttribute("height")).toBe("88");
   });
 
   it("clears marquee and moving snap markers when a pointer gesture is canceled", () => {

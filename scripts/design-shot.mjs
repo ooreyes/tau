@@ -23,6 +23,8 @@
  *                "no selection" state) is visible.
  *   model      - exact Class-D PMOS selected in the buck-converter fixture;
  *                proves the compatible model chooser at the responsive floor.
+ *   subcircuit - five-terminal menu-first driver with named terminals and one
+ *                editable declared parameter; proves X syntax stays off-canvas.
  *   simulator  - same circuit after clicking Run; simulator/scope view.
  *                Web mode has no Tauri/native ngspice bridge, but
  *                `runTransientAnalysis` (the TS fallback solver, see
@@ -74,6 +76,27 @@ const SAMPLE_ASC = path.join(REPO_ROOT, "Circuit_testing_v1", "02_tran_rc_pulse_
 const sampleAscText = readFileSync(SAMPLE_ASC, "utf8");
 const MODEL_ASC = path.join(REPO_ROOT, "Circuit_testing_v1", "12_buck_converter.asc");
 const modelAscText = readFileSync(MODEL_ASC, "utf8");
+const subcircuitPins = [
+  ["p1", "vcc", -48, -32], ["p2", "vee", -48, 0], ["p3", "pwm", -48, 32],
+  ["p4", "gp", 48, -16], ["p5", "gn", 48, 16],
+];
+const subcircuitAscText = `Version 4
+SHEET 1 880 680
+WIRE 224 208 272 208
+WIRE 224 240 272 240
+WIRE 224 272 272 272
+WIRE 368 224 416 224
+WIRE 368 256 416 256
+FLAG 272 240 0
+SYMBOL res 320 240 R0
+SYMATTR InstName R_TAU_1
+SYMATTR Value 1T
+SYMATTR TauKind subckt
+SYMATTR TauValue deadtime dead=300n
+SYMATTR TauLabel X1
+SYMATTR TauPins ${encodeURIComponent(JSON.stringify(subcircuitPins))}
+TEXT 128 336 Left 2 !.subckt deadtime vcc vee pwm gp gn params: dead=250n\\nRgp gp vee 1k\\nRgn gn vee 1k\\n.ends deadtime
+`;
 
 function readViewports() {
   const viewports = [
@@ -249,6 +272,33 @@ async function shootViewport(page, viewport, theme) {
   }
   await page.waitForTimeout(150);
   await page.screenshot({ path: path.join(outDir, `model-${theme}-${viewport.name}.png`), fullPage: true });
+
+  // --- subcircuit: named contract, terminals, and parameter UI ------------
+  await page.evaluate(
+    ([name, text]) => window.__TAU_DEV__.importAscText(name, text),
+    ["tau-native-deadtime.asc", subcircuitAscText],
+  );
+  const subcircuitFileButton = page.locator(".explorer-panel .tree-file", { hasText: "tau-native-deadtime.asc" });
+  await subcircuitFileButton.waitFor({ state: "visible", timeout: STATE_TIMEOUT_MS });
+  await subcircuitFileButton.click();
+  const selectedSubcircuit = await page.evaluate(() => window.__TAU_DEV__.selectComponent("X1"));
+  if (!selectedSubcircuit) throw new Error("native five-terminal subcircuit X1 was not imported");
+  const subcircuitPicker = page.getByRole("combobox", { name: "Subcircuit model" });
+  await subcircuitPicker.waitFor({ state: "visible", timeout: STATE_TIMEOUT_MS });
+  if (await subcircuitPicker.inputValue() !== "deadtime") {
+    throw new Error("native subcircuit did not resolve its inline deadtime definition");
+  }
+  await page.getByText(/5 named terminals \(vcc, vee, pwm, gp, gn\)/).waitFor({ state: "visible", timeout: STATE_TIMEOUT_MS });
+  const deadtimeField = page.getByRole("textbox", { name: "Subcircuit parameter dead" });
+  if (await deadtimeField.inputValue() !== "300n") throw new Error("dead-time override did not reach its named field");
+  if (await page.getByRole("textbox", { name: "Value" }).count()) {
+    throw new Error("native subcircuit exposed a raw Value/X syntax field");
+  }
+  if (await page.locator(".subckt-pin-label").allTextContents().then((labels) => labels.join(",")) !== "vcc,vee,pwm,gp,gn") {
+    throw new Error("native subcircuit canvas did not render all named terminals in SpiceOrder");
+  }
+  await page.waitForTimeout(150);
+  await page.screenshot({ path: path.join(outDir, `subcircuit-${theme}-${viewport.name}.png`), fullPage: true });
 
   // Return to the linear RC fixture for the browser-fallback solver proof.
   await page.locator(".explorer-panel .tree-file", { hasText: path.basename(SAMPLE_ASC) }).click();

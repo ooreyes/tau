@@ -9,15 +9,19 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: IN PROGRESS - 2026-08-03 11:19 CDT**
+**Status: DONE - 2026-08-03 11:37 CDT**
 
-Claimed unit: make native subcircuits a menu-first component. Properties will
-select compatible document, attached-library, or bundled `.subckt` definitions,
-expose named parameter overrides, create the exact named terminal count on the
-canvas, relocate attached wires when the choice changes, emit a resolvable X
-instance, and preserve those terminals through Tau's guarded `.asc` carrier
-round trip. The unit includes malformed-metadata guards, frontend tests, native
-gates, and minimum-window visual verification. Scheduler remains unloaded.
+Native subcircuits are now menu-first components. Properties discovers document,
+attached-library, and bundled `.subckt` contracts in native resolution order,
+selects a source-labelled model, reports its exact terminals, and exposes every
+formal header parameter as a named field. Model changes create a dynamic p1..pN
+block, keep terminal labels readable, relocate attached conductors/labels/probes,
+and emit the exact X instance while the sketch shows only the model name. Tau's
+guarded URI-encoded `TauPins` carrier preserves up to 64 terminals through `.asc`
+save/reopen and rejects malformed metadata. Typecheck, all 2,470 frontend tests,
+production web build, Rust fmt/clippy/56 ordinary tests, all eight ignored real-
+engine/library tests, live Chrome health, and dark/light visual proof at 1440x900,
+1280x720, and 900x600 pass. Scheduler remains unloaded.
 
 Previous completed unit:
 
@@ -11421,3 +11425,23 @@ evidence is kept in full here.
   real-library/model tests; direct ngspice operating-point proof. Scheduler
   remains intentionally unloaded. Next: make attached `.subckt` definitions
   placeable from named UI with a terminal bank derived from the selected block.
+
+- 2026-08-03 - Made attached and inline `.subckt` definitions placeable without
+  authoring raw X syntax. The Properties chooser follows the same document →
+  attached library → bundled priority as the native deck, derives up to 64
+  formal terminals (including continued headers), and exposes `params:` defaults
+  and case-insensitive overrides as named fields. Selecting a definition creates
+  a responsive block with exact p1..pN labels, moves existing wire endpoints,
+  net-label anchors, and voltage probes with retained terminal roles, and strips
+  stale imported-symbol provenance. The canvas displays only the model name;
+  instance knobs remain in Properties. A bounded URI-encoded `TauPins` field
+  round-trips the native terminal bank through Tau's LTspice-readable carrier;
+  wrong order, control characters, oversized offsets, invalid JSON, and excess
+  pin counts are ignored with an explicit warning. Evidence: typecheck; 163
+  frontend files passed / one skipped, 2,470 tests passed / six skipped;
+  production web build; Rust fmt/clippy, 56 ordinary and all eight ignored real-
+  engine/library tests; dark/light screenshot pipeline at 1440x900, 1280x720,
+  and 900x600; live Chrome loaded with exact-width layout and no Tau console
+  errors. Scheduler remains intentionally unloaded. Next: build a verified
+  menu-first dead-time driver/native child-block workflow for the flagship
+  Class-D circuit, then continue the remaining Definition-of-Done gates.

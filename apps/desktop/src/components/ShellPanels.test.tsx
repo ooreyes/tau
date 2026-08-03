@@ -316,6 +316,54 @@ describe("ComponentInspector - semiconductor model chooser", () => {
   });
 });
 
+describe("ComponentInspector - native subcircuit chooser", () => {
+  it("shows a named model contract and edits declared parameters without a raw Value field", () => {
+    const selected = {
+      id: "x1", kind: "subckt" as const, x: 0, y: 0, rotation: 0 as const,
+      value: "deadtime DEAD=300n", label: "X1",
+    };
+    useSchematic.setState({
+      components: [selected],
+      directives: [`.subckt deadtime vcc vee pwm gp gn params: dead=250n\\n.ends deadtime`],
+    });
+
+    const { rerender } = render(<ComponentInspector selected={selected} />);
+    const chooser = screen.getByRole("combobox", { name: "Subcircuit model" }) as HTMLSelectElement;
+    expect(chooser.value).toBe("deadtime");
+    expect(screen.getByRole("status").textContent).toContain("5 named terminals (vcc, vee, pwm, gp, gn)");
+    expect(screen.queryByRole("textbox", { name: "Value" })).toBeNull();
+
+    const dead = screen.getByRole("textbox", { name: "Subcircuit parameter dead" }) as HTMLInputElement;
+    expect(dead.value).toBe("300n");
+    fireEvent.change(dead, { target: { value: "400n" } });
+    expect(useSchematic.getState().components[0].value).toBe("deadtime dead=400n");
+
+    rerender(<ComponentInspector selected={useSchematic.getState().components[0]} />);
+    fireEvent.change(screen.getByRole("combobox", { name: "Subcircuit model" }), { target: { value: "tau_passthrough" } });
+    expect(useSchematic.getState().components[0]).toMatchObject({
+      value: "tau_passthrough",
+      pinOverride: [
+        { id: "p1", label: "1" },
+        { id: "p2", label: "2" },
+      ],
+    });
+  });
+
+  it("blocks an unresolved model and routes the user to Model Libraries", () => {
+    const selected = {
+      id: "x1", kind: "subckt" as const, x: 0, y: 0, rotation: 0 as const,
+      value: "vendor_driver", label: "X1",
+    };
+    const openLibraries = vi.fn();
+    useSchematic.setState({ components: [selected] });
+    render(<ComponentInspector selected={selected} onOpenModelLibraries={openLibraries} />);
+
+    expect(screen.getByRole("status").textContent).toContain("Tau will not guess its pins or behavior");
+    fireEvent.click(screen.getByRole("button", { name: "Attach Model Library" }));
+    expect(openLibraries).toHaveBeenCalledOnce();
+  });
+});
+
 describe("ComponentInspector - charge-defined capacitor", () => {
   it("exposes named charge and initial-voltage controls instead of one raw Q= field", () => {
     const selected = {

@@ -4,6 +4,11 @@ import { moveComponentTo, useSchematic } from "../store/useSchematic";
 import { ComponentSymbol, GRID, SYMBOL_BOX } from "../schematic/symbols";
 import type { NetLabel, Point, SchematicAscShape, SchematicComponent, SchematicWire } from "../schematic/types";
 import { getLocalPins, getComponentPins, transformPoint } from "../schematic/pins";
+import {
+  isNativeMultiPinSubcircuit,
+  localSubcircuitPins,
+  nativeSubcircuitBody,
+} from "../schematic/subcircuitGeometry";
 import type { OperatingPointResult } from "../simulation/operatingPoint";
 import { opAnnotations } from "../simulation/opAnnotations";
 import { extractCircuit, netAtPoint } from "../schematic/netlist";
@@ -1444,9 +1449,12 @@ function ComponentView({
   const visualOffset = { x: placement.x - comp.x, y: placement.y - comp.y };
   const overridePins = comp.pinOverride?.length ? getComponentPins(comp) : null;
   const nativePins = new Map(getLocalPins(comp.kind).map((pin) => [pin.id, pin]));
+  const nativeSubcircuit = isNativeMultiPinSubcircuit(comp);
+  const subcircuitPins = nativeSubcircuit ? localSubcircuitPins(comp) : [];
+  const subcircuitBody = nativeSubcircuit ? nativeSubcircuitBody(comp) : null;
   return (
     <g className={`component${selected ? " selected" : ""}`} transform={`translate(${comp.x} ${comp.y})`}>
-      {overridePins?.map((pin) => {
+      {!nativeSubcircuit && overridePins?.map((pin) => {
         const native = nativePins.get(pin.id);
         if (!native) return null;
         const local = transformPoint(native, placement.rotation, placement.mirrored);
@@ -1456,8 +1464,47 @@ function ComponentView({
         return <line key={`lead-${pin.id}`} className="import-pin-lead" x1={start.x} y1={start.y} x2={end.x} y2={end.y} />;
       })}
       <g className="symbol" transform={`translate(${visualOffset.x} ${visualOffset.y}) ${orient}`}>
-        <ComponentSymbol kind={comp.kind} />
+        {nativeSubcircuit && subcircuitBody ? (
+          <>
+            <rect
+              x={subcircuitBody.minX}
+              y={subcircuitBody.minY}
+              width={subcircuitBody.maxX - subcircuitBody.minX}
+              height={subcircuitBody.maxY - subcircuitBody.minY}
+              rx={3}
+            />
+            {subcircuitPins.map((pin) => (
+              <line
+                key={`subckt-lead-${pin.id}`}
+                x1={pin.x < 0 ? subcircuitBody.minX : subcircuitBody.maxX}
+                y1={pin.y}
+                x2={pin.x}
+                y2={pin.y}
+              />
+            ))}
+            <path d="M -7 -7 L 7 7 M -7 7 L 7 -7" />
+          </>
+        ) : (
+          <ComponentSymbol kind={comp.kind} />
+        )}
       </g>
+      {nativeSubcircuit && subcircuitBody && subcircuitPins.map((pin) => {
+        const labelPoint = transformPoint({
+          x: pin.x < 0 ? subcircuitBody.minX + 4 : subcircuitBody.maxX - 4,
+          y: pin.y,
+        }, placement.rotation, placement.mirrored);
+        return (
+          <text
+            key={`subckt-label-${pin.id}`}
+            className="subckt-pin-label"
+            x={labelPoint.x}
+            y={labelPoint.y + 3}
+            textAnchor={labelPoint.x < -8 ? "start" : labelPoint.x > 8 ? "end" : "middle"}
+          >
+            {pin.label}
+          </text>
+        );
+      })}
       {showPins && (
         <g className="pin-layer" transform={overridePins ? undefined : orient}>
           {(overridePins ?? getLocalPins(comp.kind)).map((pin) => (

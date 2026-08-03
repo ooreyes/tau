@@ -22,6 +22,7 @@ import { validateSchematicDocument } from "../schematic/documentValidation";
 import { extractCircuit, netAtPoint } from "../schematic/netlist";
 import { getComponentPins, rotatePoint, transformPoint } from "../schematic/pins";
 import { withOpampModel } from "../engine/opampModel";
+import { buildSubcircuitPinOverride } from "../schematic/subcircuitGeometry";
 
 /** Move a component while preserving the invariant that imported LTspice pin
  * overrides are absolute world coordinates attached to that component. */
@@ -237,6 +238,8 @@ interface SchematicState extends Doc {
   /** Clear any active selection (single, multi, or wire). */
   clearSelection: () => void;
   setValue: (id: string, value: string) => void;
+  /** Select a `.subckt` contract and rebuild its exact p1..pN terminal bank. */
+  setSubcircuitModel: (id: string, model: string, ports: readonly string[]) => void;
   /** Select a real op-amp subcircuit while preserving imported Value/Value2 slots. */
   setOpampModel: (id: string, model: string) => void;
   /** Rename a component's reference designator (canvas label). */
@@ -1187,6 +1190,40 @@ export const useSchematic = create<SchematicState>()((set) => {
       set((s) => ({
         components: s.components.map((c) => (c.id === id ? { ...c, value } : c)),
       })),
+    setSubcircuitModel: (id, model, ports) =>
+      set((s) => {
+        const before = s.components.filter((component) => component.id === id);
+        if (before.length !== 1 || before[0].kind !== "subckt" || ports.length === 0 || ports.length > 64) return {};
+        const components = s.components.map((component) => {
+          if (component.id !== id || component.kind !== "subckt") return component;
+          const next: SchematicComponent = {
+            ...component,
+            value: model.trim(),
+            pinOverride: buildSubcircuitPinOverride(component, ports),
+          };
+          // Choosing a different public contract turns an imported symbol into
+          // a Tau-native block. Its former `.asy` geometry and attribute slots
+          // no longer describe the selected terminal list.
+          delete next.ltSymbolType;
+          delete next.ltWindows;
+          delete next.ltExtraAttrs;
+          delete next.ltModelName;
+          delete next.ltModelFile;
+          return next;
+        });
+        const after = components.filter((component) => component.id === id);
+        const relocations = endpointRelocations(before, after);
+        const stationaryPinKeys = new Set(s.components
+          .filter((component) => component.id !== id)
+          .flatMap((component) => getComponentPins(component))
+          .map(pointKey));
+        return {
+          components,
+          wires: relocateAttachedEndpoints(s.wires, relocations, stationaryPinKeys),
+          netLabels: s.netLabels.map((label) => relocateAnchoredPoint(label, relocations, stationaryPinKeys)),
+          probes: s.probes.map((probe) => probe.componentId ? probe : relocateAnchoredPoint(probe, relocations, stationaryPinKeys)),
+        };
+      }),
     setOpampModel: (id, model) =>
       set((s) => ({
         components: s.components.map((c) => (

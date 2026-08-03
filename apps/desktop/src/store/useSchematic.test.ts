@@ -326,6 +326,47 @@ describe("schematic document store", () => {
     expect(useSchematic.getState().components[0].value).toBe("2.2k");
   });
 
+  it("selects a subcircuit contract, creates every named terminal, and keeps conductors attached", () => {
+    useSchematic.setState({
+      components: [{
+        id: "x1", kind: "subckt", x: 0, y: 0, rotation: 0,
+        value: "old", label: "X1", ltSymbolType: "Vendor\\old",
+        pinOverride: [
+          { id: "p1", label: "1", x: -32, y: 0 },
+          { id: "p2", label: "2", x: 32, y: 0 },
+        ],
+      }],
+      wires: [
+        { id: "in", points: [{ x: -96, y: 0 }, { x: -32, y: 0 }] },
+        { id: "out", points: [{ x: 32, y: 0 }, { x: 96, y: 0 }] },
+      ],
+      netLabels: [{ id: "label", x: -32, y: 0, text: "SUPPLY" }],
+      probes: [{ id: "probe", x: 32, y: 0, color: "var(--trace-red)" }],
+    });
+
+    useSchematic.getState().beginChange();
+    useSchematic.getState().setSubcircuitModel("x1", "deadtime", ["vcc", "vee", "pwm", "gp", "gn"]);
+    const state = useSchematic.getState();
+    expect(state.components[0]).toMatchObject({
+      value: "deadtime",
+      pinOverride: [
+        { id: "p1", label: "vcc", x: -48, y: -32 },
+        { id: "p2", label: "vee", x: -48, y: 0 },
+        { id: "p3", label: "pwm", x: -48, y: 32 },
+        { id: "p4", label: "gp", x: 48, y: -16 },
+        { id: "p5", label: "gn", x: 48, y: 16 },
+      ],
+    });
+    expect(state.components[0].ltSymbolType).toBeUndefined();
+    expect(state.wires[0].points[state.wires[0].points.length - 1]).toEqual({ x: -48, y: -32 });
+    expect(state.wires[1].points[0]).toEqual({ x: -48, y: 0 });
+    expect(state.netLabels[0]).toMatchObject({ x: -48, y: -32 });
+    expect(state.probes[0]).toMatchObject({ x: -48, y: 0 });
+
+    useSchematic.getState().undo();
+    expect(useSchematic.getState().components[0]).toMatchObject({ value: "old", ltSymbolType: "Vendor\\old" });
+  });
+
   it("starts each fresh document without residual probes or labels", () => {
     useSchematic.setState({
       probes: [{ id: "probe-1", x: 64, y: 0, color: "var(--trace-red)" }],

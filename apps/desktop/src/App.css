@@ -737,6 +737,18 @@ body {
   vector-effect: non-scaling-stroke;
 }
 
+.subckt-pin-label {
+  fill: var(--muted);
+  stroke: none;
+  font: 500 7px var(--font-mono);
+  user-select: none;
+  pointer-events: none;
+}
+
+.component.selected .subckt-pin-label {
+  fill: var(--text);
+}
+
 /* Rubber-band selection rectangle drawn while drag-selecting on empty canvas. */
 .select-box {
   fill: color-mix(in srgb, var(--accent) 14%, transparent);

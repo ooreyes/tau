@@ -54,4 +54,8 @@ describe("sourceValueLabel", () => {
     expect(sourceValueLabel("opamp", "ideal")).toBe("ideal");
     expect(sourceValueLabel("opamp", "LT1001")).toBe("LT1001");
   });
+
+  it("keeps subcircuit knobs in Properties instead of the sketch label", () => {
+    expect(sourceValueLabel("subckt", "deadtime dead=300n level=5")).toBe("deadtime");
+  });
 });

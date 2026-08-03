@@ -1162,7 +1162,7 @@ const SOURCE_KINDS_WITH_INLINE_SPEC = new Set<ComponentKind>(["vsource", "isourc
  * exporter and the save guard both key off this list, so it lives in one place.
  */
 export const RESERVED_SYMATTR_FIELDS: readonly string[] = [
-  "InstName", "Value", "TauKind", "TauValue", "TauLabel", "TauAttrs",
+  "InstName", "Value", "TauKind", "TauValue", "TauLabel", "TauAttrs", "TauPins",
 ];
 
 /**
@@ -1174,6 +1174,8 @@ export const RESERVED_SYMATTR_FIELDS: readonly string[] = [
  * to; LTspice ignores the field, and Tau restores the split on reopen.
  */
 export const TAU_CARRIED_ATTRS_FIELD = "TauAttrs";
+/** Tau-only, URI-encoded compact terminal geometry for native X blocks. */
+export const TAU_PINS_FIELD = "TauPins";
 
 /** Upper bounds on a carried set. Generous next to any real symbol (LTspice
  *  itself writes four spec slots) and small enough that a crafted file cannot
@@ -1239,6 +1241,47 @@ export function decodeCarriedAttrs(
   }
   if (hasControlCharacter(base)) return null;
   return { baseValue: base, extras };
+}
+
+const MAX_TAU_PINS_LENGTH = 32768;
+const MAX_TAU_PIN_OFFSET = 1_000_000;
+
+/** Persist native p1..pN geometry relative to the component anchor. */
+export function encodeTauPins(component: Pick<SchematicComponent, "x" | "y" | "pinOverride">): string | null {
+  const pins = component.pinOverride;
+  if (!pins || pins.length === 0 || pins.length > 64) return null;
+  const rows = pins.map((pin, index) => {
+    const dx = pin.x - component.x;
+    const dy = pin.y - component.y;
+    if (pin.id !== `p${index + 1}` || pin.label.length > 80 || hasControlCharacter(pin.label)) return null;
+    if (!Number.isFinite(dx) || !Number.isFinite(dy) || Math.abs(dx) > MAX_TAU_PIN_OFFSET || Math.abs(dy) > MAX_TAU_PIN_OFFSET) return null;
+    return [pin.id, pin.label, dx, dy] as const;
+  });
+  if (rows.some((row) => row === null)) return null;
+  const encoded = encodeURIComponent(JSON.stringify(rows));
+  return encoded.length <= MAX_TAU_PINS_LENGTH ? encoded : null;
+}
+
+/** Decode only the exact bounded shape Tau writes; hostile metadata is ignored. */
+export function decodeTauPins(encoded: string, x: number, y: number): PinOverride[] | null {
+  if (encoded.length === 0 || encoded.length > MAX_TAU_PINS_LENGTH) return null;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(decodeURIComponent(encoded));
+  } catch {
+    return null;
+  }
+  if (!Array.isArray(parsed) || parsed.length === 0 || parsed.length > 64) return null;
+  const pins: PinOverride[] = [];
+  for (const [index, candidate] of parsed.entries()) {
+    if (!Array.isArray(candidate) || candidate.length !== 4) return null;
+    const [id, label, dx, dy] = candidate;
+    if (id !== `p${index + 1}` || typeof label !== "string" || label.length > 80 || hasControlCharacter(label)) return null;
+    if (typeof dx !== "number" || typeof dy !== "number" || !Number.isFinite(dx) || !Number.isFinite(dy)) return null;
+    if (Math.abs(dx) > MAX_TAU_PIN_OFFSET || Math.abs(dy) > MAX_TAU_PIN_OFFSET) return null;
+    pins.push({ id, label, x: x + dx, y: y + dy });
+  }
+  return pins;
 }
 
 /**
@@ -1838,7 +1881,12 @@ export function ascToSchematic(doc: AscDocument, options: AscImportOptions = {})
       warnings.push(foreignSymbolWarning(instName, symbol.type));
       continue;
     }
-    const pinOverride = tauKind ? undefined : (buildPinOverride(symbol, kind) ?? undefined);
+    const tauPinAttribute = tauKind ? symbol.attrs[TAU_PINS_FIELD] : undefined;
+    const tauPins = tauPinAttribute ? decodeTauPins(tauPinAttribute, symbol.x, symbol.y) : null;
+    if (tauPinAttribute && !tauPins) {
+      warnings.push(`${instName || symbol.type}: ignored invalid TauPins terminal metadata.`);
+    }
+    const pinOverride = tauKind ? (tauPins ?? undefined) : (buildPinOverride(symbol, kind) ?? undefined);
     if (!pinOverride && !tauKind) {
       warnings.push(
         `${instName || symbol.type}: placed without pin-accurate geometry (no banked pins for "${symbol.type}"); its connections may be wrong.`,
@@ -1891,7 +1939,9 @@ export function ascToSchematic(doc: AscDocument, options: AscImportOptions = {})
       // can reproduce the original SYMBOL line instead of the canonical Tau
       // export symbol (which for e.g. a 3-pin `nmos` would relocate the bulk
       // pin and change connectivity).
-      ...(pinOverride ? { pinOverride, ltSymbolType: symbol.type } : {}),
+      ...(pinOverride
+        ? { pinOverride, ...(tauKind ? {} : { ltSymbolType: symbol.type }) }
+        : {}),
       // A vendor symbol can keep its actual simulation alias/model-file only
       // in the `.asy` defaults (the `.asc` instance often contains InstName
       // alone). Store those defaults separately: they affect model resolution

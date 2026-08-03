@@ -15,6 +15,7 @@ import type { NetLabel, SchematicComponent, SchematicWire } from "../schematic/t
 import { ascRewriteRisks, ascSaveBlockReason, schematicTopologySignature } from "../project/types";
 import { CATALOG } from "../schematic/catalog";
 import { withOpampModel } from "../engine/opampModel";
+import { buildSubcircuitPinOverride } from "../schematic/subcircuitGeometry";
 
 // The same representative LTspice grammar the importer tests use, minus the
 // drawing primitive (which the serializer canonicalizes away).
@@ -1155,6 +1156,64 @@ describe("extended SYMATTR slots on a part saved under a carrier symbol", () => 
       const { text } = schematicToAsc({ components: [component], wires: [], netLabels: [] });
       expect(text, record).not.toContain("SYMATTR TauAttrs");
       expect(text.split("\n").filter((l) => l.startsWith("SYMBOL")), record).toHaveLength(1);
+    }
+  });
+});
+
+describe("native subcircuit terminal carrier", () => {
+  it("preserves every named terminal and attached net through ASC save/reopen", () => {
+    const base: SchematicComponent = {
+      id: "x1", kind: "subckt", x: 96, y: 192, rotation: 90, mirrored: true,
+      value: "deadtime dead=300n", label: "X1",
+    };
+    const component = {
+      ...base,
+      pinOverride: buildSubcircuitPinOverride(base, ["vcc", "vee", "pwm", "gp", "gn"]),
+    };
+    const wires = component.pinOverride.map((pin, index) => ({
+      id: `w${index + 1}`,
+      points: [{ x: pin.x, y: pin.y }, { x: pin.x + 32, y: pin.y }],
+    }));
+    const { text, warnings } = schematicToAsc({ components: [component], wires, netLabels: [] });
+    expect(text).toContain("SYMATTR TauKind subckt");
+    expect(text).toContain("SYMATTR TauPins %5B");
+    expect(warnings.filter((warning) => !isLossyCarrierWarning(warning))).toEqual([]);
+
+    const round = importAsc(text);
+    expect(round.warnings).toEqual([]);
+    expect(round.components[0]).toMatchObject({
+      kind: "subckt",
+      value: "deadtime dead=300n",
+      label: "X1",
+      rotation: 90,
+      mirrored: true,
+      pinOverride: component.pinOverride,
+    });
+    expect(round.components[0].ltSymbolType).toBeUndefined();
+    expect(extractCircuit(round.components, round.wires, round.netLabels).components[0].pins)
+      .toEqual(expect.objectContaining({ p1: expect.any(String), p5: expect.any(String) }));
+    const second = importAsc(schematicToAsc({
+      components: round.components,
+      wires: round.wires,
+      netLabels: round.netLabels,
+    }).text);
+    expect(second.components[0].pinOverride).toEqual(component.pinOverride);
+  });
+
+  it("ignores malformed or forged terminal metadata instead of creating pins", () => {
+    const forged = [
+      "not-json",
+      encodeURIComponent(JSON.stringify([["p2", "wrong-order", 0, 0]])),
+      encodeURIComponent(JSON.stringify([["p1", "bad\nlabel", 0, 0]])),
+      encodeURIComponent(JSON.stringify([["p1", "far", 2_000_000, 0]])),
+    ];
+    for (const record of forged) {
+      const source = `Version 4\nSHEET 1 880 680\nSYMBOL res 96 192 R0\n`
+        + `SYMATTR InstName R_TAU_1\nSYMATTR Value 1T\nSYMATTR TauKind subckt\n`
+        + `SYMATTR TauValue deadtime\nSYMATTR TauLabel X1\nSYMATTR TauPins ${record}`;
+      const imported = importAsc(source);
+      expect(imported.components[0].pinOverride, record).toBeUndefined();
+      expect(imported.warnings, record).toContain("R_TAU_1: ignored invalid TauPins terminal metadata.");
     }
   });
 });

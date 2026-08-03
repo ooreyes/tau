@@ -4,6 +4,7 @@ import type { ComponentKind, NetLabel, Point, Rotation, SchematicAscShape, Schem
 import { getComponentPins, getLocalPins, transformPoint } from "../schematic/pins";
 import { decodeParams } from "../schematic/params";
 import { decodeIndependentSourceValue } from "../schematic/sourceValue";
+import { isNativeMultiPinSubcircuit, nativeSubcircuitBody } from "../schematic/subcircuitGeometry";
 
 export const snap = (v: number) => {
   const snapped = Math.round(v / GRID) * GRID;
@@ -43,6 +44,10 @@ export function componentVisualPlacement(component: SchematicComponent): Compone
     mirrored: component.mirrored ?? false,
   };
   if (!component.pinOverride?.length) return fallback;
+  // Tau-authored X devices already store their terminal bank around the true
+  // centre. Fitting the generic two-pin symbol onto p1/p2 would incorrectly
+  // translate/rotate a five-terminal block.
+  if (isNativeMultiPinSubcircuit(component)) return fallback;
 
   const nativeById = new Map(getLocalPins(component.kind).map((pin) => [pin.id, pin]));
   const matches = component.pinOverride.flatMap((pin) => {
@@ -83,7 +88,9 @@ export function componentVisualPlacement(component: SchematicComponent): Compone
 
 function componentGeometryBounds(component: SchematicComponent): Rect {
   const placement = componentVisualPlacement(component);
-  const box = SYMBOL_BODY[component.kind];
+  const box = isNativeMultiPinSubcircuit(component)
+    ? nativeSubcircuitBody(component)
+    : SYMBOL_BODY[component.kind];
   const bodyCorners: Point[] = [
     { x: box.minX, y: box.minY },
     { x: box.maxX, y: box.minY },
@@ -280,6 +287,9 @@ export const sourceValueLabel = (kind: ComponentKind, value: string): string => 
     if (w || l) return `${model} W=${w || "?"} L=${l || "?"}`;
     return model;
   }
+  // The sketch names the block; editable instance knobs belong in Properties,
+  // not in a raw `X... param=value` string beside the symbol.
+  if (kind === "subckt") return value.trim().split(/\s+/, 1)[0] ?? "";
   return explicitUnit(value, CATALOG_BY_KIND[kind].unit);
 };
 
@@ -788,7 +798,9 @@ const bodyBoxAt = (kind: ComponentKind, x: number, y: number, rotation: number):
 /** World-space body box using the fitted visual origin for imported parts. */
 const componentBodyBox = (component: SchematicComponent): Rect => {
   const placement = componentVisualPlacement(component);
-  const body = SYMBOL_BODY[component.kind];
+  const body = isNativeMultiPinSubcircuit(component)
+    ? nativeSubcircuitBody(component)
+    : SYMBOL_BODY[component.kind];
   const corners = [
     { x: body.minX, y: body.minY },
     { x: body.maxX, y: body.minY },

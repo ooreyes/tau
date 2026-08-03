@@ -9,6 +9,7 @@ import {
 import { buildParamScope } from "../simulation/paramScope";
 import type { NetLabel, PinOverride, SchematicComponent, SchematicWire } from "../schematic/types";
 import { CATALOG } from "../schematic/catalog";
+import { buildSubcircuitPinOverride } from "../schematic/subcircuitGeometry";
 
 const component = (
   kind: SchematicComponent["kind"],
@@ -940,6 +941,21 @@ describe("buildSpiceDeck", () => {
     expect(deck.netlist).toContain("R1 a b 4.7k");
     // A fully-resolved deck reports nothing missing.
     expect(deck.unresolvedSubckts).toEqual([]);
+  });
+
+  it("emits a menu-selected five-terminal contract in exact SpiceOrder with named overrides", () => {
+    const base = component("subckt", "X1", "deadtime dead=300n", 96, 192);
+    const pins = buildSubcircuitPinOverride(base, ["vcc", "vee", "pwm", "gp", "gn"]);
+    const deck = buildSpiceDeck({
+      components: [{ ...base, pinOverride: pins }],
+      wires: [],
+      netLabels: [{ id: "gnd", x: pins[1].x, y: pins[1].y, text: "0" }],
+      userModelLibraries: [`.subckt deadtime vcc vee pwm gp gn params: dead=250n\nRgp gp vee 1k\nRgn gn vee 1k\n.ends deadtime`],
+    }, { kind: "op" });
+
+    expect(deck.netlist).toContain(".subckt deadtime vcc vee pwm gp gn params: dead=250n");
+    expect(deck.netlist).toMatch(/^X1 \S+ 0 \S+ \S+ \S+ deadtime dead=300n$/m);
+    expect(deck.netlist.match(/^\.subckt deadtime /gm)).toHaveLength(1);
   });
 
   it("reports subckt references with no inline, bundled, or imported definition", () => {

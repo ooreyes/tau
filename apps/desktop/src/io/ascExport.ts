@@ -35,9 +35,11 @@ import {
 import type { AscDocument, AscOrientation } from "./ascImport";
 import {
   encodeCarriedAttrs,
+  encodeTauPins,
   hasBankedLtPins,
   ltspiceTypeToKind,
   TAU_CARRIED_ATTRS_FIELD,
+  TAU_PINS_FIELD,
 } from "./ascImport";
 import { decodeParams } from "../schematic/params";
 import { parseQuantity } from "../simulation/quantity";
@@ -596,6 +598,11 @@ export function schematicToAsc(input: SchematicExportInput): SchematicToAscResul
       attrs.TauKind = roundTripTauKind;
       attrs.TauValue = symbol.tauValue || c.value || "\"\"";
       attrs.TauLabel = c.label || "\"\"";
+    }
+    if (symbol.tauKind && c.kind === "subckt" && c.pinOverride?.length && !c.ltSymbolType) {
+      const encodedPins = encodeTauPins(c);
+      if (encodedPins) attrs[TAU_PINS_FIELD] = encodedPins;
+      else warnings.push(`${c.label || c.id}: native subcircuit terminal geometry could not be preserved.`);
     }
     // Label placement is expressed in the source symbol's own attribute slots
     // and geometry, so it only survives when the part is written back under
