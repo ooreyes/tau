@@ -9,7 +9,15 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-03 09:37 CDT**
+**Status: IN PROGRESS - 2026-08-03 09:41 CDT**
+
+Claimed unit: make transient traces directly selectable and measurable. A trace
+readout will expose the validated Tau palette, C1/C2 will glide over interpolated
+plot data by mouse hover or touch drag, and the plot will show the selected
+trace's time/value at each cursor with its real V/A/W unit. Existing exact time
+fields remain available. Scheduler stays unloaded during interactive work.
+
+Previous completed unit:
 
 Independent V/I sources now have a Waveform selector and named, unit-aware DC,
 Sine, Pulse, Piecewise, Exponential, FM, and optional AC controls. DC operating

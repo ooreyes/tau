@@ -5,7 +5,15 @@ The working memory of an unattended loop that starts from zero every fire.
 
 ## Now
 
-**Status:** DONE - 2026-08-03 09:37 CDT
+**Status:** IN PROGRESS - 2026-08-03 09:41 CDT
+
+Claimed unit: direct transient trace interaction. Select a trace and its
+color-safe display color beside the plot, select C1 or C2, then glide that
+cursor along interpolated data with a mouse or touch. Plot and table readouts
+must preserve each trace's real unit. Exact time entry stays available.
+Scheduler remains unloaded.
+
+Previous completed unit:
 
 Independent-source waveform editing is complete for DC, Sine, Pulse, PWL, EXP,
 SFFM, and AC stimulus. DC operating-point bias is separate; PWL is an editable
