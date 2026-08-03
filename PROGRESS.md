@@ -9,7 +9,16 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-02 18:35 CDT**
+**Status: IN PROGRESS - 2026-08-02 19:02 CDT**
+
+Interactive parity unit: make a resolved LTspice hierarchical block saveable
+without flattening it. The exporter must re-emit the original parent `SYMBOL`
+and suppress exactly the untouched flattened components, wires, and synthetic
+labels used for simulation. Any edit, deletion, or incomplete provenance inside
+the flattened child must keep the save blocked with a specific diagnostic.
+The unit includes `.sim` persistence, hostile-document validation, an exact
+Class-D round trip, and packaged-app/Chrome verification before it is marked
+done.
 
 Latest unit: a new circuit no longer inherits the previous file's `DATAFLAG`
 readouts, so saving it cannot write records into a file that never had them.

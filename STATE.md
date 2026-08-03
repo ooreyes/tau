@@ -5,7 +5,13 @@ The working memory of an unattended loop that starts from zero every fire.
 
 ## Now
 
-**Status:** IDLE - 2026-08-02
+**Status:** IN PROGRESS - 2026-08-02 19:02 CDT
+
+Interactive parity unit claimed: hierarchical-block save, half 2 of 2. Preserve
+the original block record and suppress its unchanged flattened simulation
+members; an edited, deleted, duplicated, or incomplete child must remain a hard
+save refusal. The scheduler is unloaded and its leaked Vite/esbuild children
+were stopped before this claim, so no autonomous run can race the unit.
 
 Landed the CONFIRMED `newCircuit` leak from the top of `FIX_BUGS.md`: the reset
 had fallen one field behind, so a new circuit still held the previous file's
