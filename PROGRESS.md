@@ -9,15 +9,19 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: IN PROGRESS - 2026-08-03 11:40 CDT**
+**Status: DONE - 2026-08-03 12:04 CDT**
 
-Claimed unit: make the Class-D non-overlap gate driver directly placeable from
-the native subcircuit chooser. The bundled five-terminal block will normalize
-PWM against its VCC/VEE rails, use the packaged XSPICE digital-event path for
-complementary gate commands, expose Dead time / Input threshold / Hysteresis /
-Gate transition / Output resistance as named validated controls, and prove both
-shoot-through overlap is zero and requested dead time is accurate on the real
-embedded ngspice library. No approximate RC delay will be shipped. Scheduler
+Completed unit: the native subcircuit chooser now places an original five-pin
+TauDeadtimeDriver with named VCC / VEE / PWM / GP / GN terminals. Its Dead time,
+Input threshold, Hysteresis, Gate transition, and Output resistance controls are
+bounded, unit-aware, and visible at Tau's 900x600 floor; raw XSPICE syntax stays
+off the canvas. The shared packaged XSPICE block delays only each turn-on edge.
+Real embedded-ngspice proofs measure the requested 200 ns and edited 400 ns
+non-overlap within 2 ns on bipolar and unipolar rails, with zero simultaneous-on
+command. Typecheck, all 2,475 frontend tests, production web build, Rust fmt /
+clippy / 56 ordinary tests / all nine real-engine tests, live Chrome health,
+dark/light 1440/1280/900 screenshots, fresh Tau.app/DMG build, strict codesign,
+valid DMG checksum, and packaged-app launch/stay-alive proof pass. Scheduler
 remains unloaded.
 
 Previous completed unit:
@@ -11456,3 +11460,24 @@ evidence is kept in full here.
   errors. Scheduler remains intentionally unloaded. Next: build a verified
   menu-first dead-time driver/native child-block workflow for the flagship
   Class-D circuit, then continue the remaining Definition-of-Done gates.
+
+- 2026-08-03 - Added a native, menu-first Class-D non-overlap gate driver. The
+  bundled `TauDeadtimeDriver` has five named VCC / VEE / PWM / GP / GN terminals
+  and exposes Dead time, Input threshold, Hysteresis, Gate transition, and
+  Output resistance as bounded engineering controls; no X line, digital model,
+  or delay expression appears on the schematic. Its shared source normalizes
+  PWM to live rails, uses packaged XSPICE conversion plus asymmetric inertial
+  buffers, scales the gate commands back to the selected rails, and delays only
+  the edge that turns a device on. A real embedded-library regression proves
+  200 ns on -10/+10 V rails and an edited 400 ns on 0/5 V rails within 2 ns,
+  with zero simultaneous PMOS-on/NMOS-on command. The visual gate caught and
+  fixed a responsive defect where a full-width unit selector collapsed the
+  numeric mantissa; all values and units now remain visible at 900x600. Evidence:
+  typecheck; 163 frontend files passed / one skipped, 2,475 tests passed / six
+  skipped; production web build; Rust fmt/clippy, 56 ordinary and all nine
+  ignored real-engine/library tests; live Chrome exact-width/no-Tau-error check;
+  dark/light screenshots at 1440x900, 1280x720, and 900x600; fresh unsigned
+  Tau.app/DMG build, strict codesign, valid DMG checksum, and packaged app alive
+  under Computer Use. Scheduler remains intentionally unloaded. Next: continue
+  the remaining acceptance-corpus, waveform, editor, visual-system, and release
+  Definition-of-Done gates; do not emit completion until every box is proved.

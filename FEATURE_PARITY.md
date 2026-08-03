@@ -824,6 +824,15 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   blocked with a Model Libraries action rather than accepting a raw X value or
   guessing behavior. Formal parameters on `+` header continuations and
   case-insensitive instance overrides are covered.
+  **Menu-first Class-D gate driver (2026-08-03):** Tau now bundles an original
+  five-terminal `TauDeadtimeDriver` block for VCC / VEE / PWM / high-side gate /
+  low-side gate. Properties exposes Dead time, Input threshold, Hysteresis, Gate
+  transition, and Output resistance as bounded named controls with units; the
+  canvas carries no raw `X...` or delay expression. The one shared subcircuit
+  source uses the packaged XSPICE ADC/event-buffer/DAC path: the outgoing device
+  turns off immediately and the incoming device turns on after the requested
+  interval. Embedded-library regressions prove 200 ns on -10/+10 V rails and an
+  edited 400 ns on 0/5 V rails within 2 ns, with zero simultaneous-on command.
   **NEXT:** resolve imported relative `.lib`/`.inc` references through an
   explicit user-authorized project/library mapping; browser TS model physics.
 
