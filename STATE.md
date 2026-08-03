@@ -5,11 +5,13 @@ The working memory of an unattended loop that starts from zero every fire.
 
 ## Now
 
-**Status:** IN PROGRESS - 2026-08-03 01:54 CDT
+**Status:** DONE - 2026-08-03 02:01 CDT
 
-Diagnosing the `LT1168.asc` shorted-VCVS failure. The work is scoped to original
-pin/model provenance and imported electrical topology; no solver tolerance,
-gmin, or invented resistance will be used to hide a collapsed source. Scheduler
+The extended corpus now has zero hard failures. AD8235, LT1168, LT1194, and
+LT1795 were multi-pin amplifier symbols forced through a guessed five-pin bank;
+Tau now preserves and refuses them by name instead of producing false generic
+gain blocks. Corpus: 4,012 imported/schema-valid, 522 warning-clean/deck-built/
+op-converged, 3,490 explicit refusals; canonical remains 80/82. Scheduler
 remains unloaded.
 
 **Product UX contract (Omar, 2026-08-03): Tau is not a prettier command-line
@@ -119,12 +121,14 @@ which are folded into the block above.
 Ordered. Take the top item unless it is blocked. Class A outranks everything -
 a plausible wrong number is worse than a refusal to run.
 
-1. **Resolve the remaining 4 non-refusal failures in the 4,012-file extended
-   corpus.** All are native operating-point failures: AD8235, LT1168, LT1194,
-   and LT1795. Inspect imported source/model topology before changing
-   convergence behavior; LT1168 is a shorted VCVS while the other three report
-   singular branch/node pairs. Translate only proven LTspice semantics or
-   refuse atomically; never hide a singular circuit with a plausible number.
+1. **Eliminate the remaining named-vendor-op-amp model substitution.** A
+   decoded census finds 683 named `Opamps/...` instances across 475 files and
+   432 distinct part names (generic opamp/universal symbols excluded). Ordinary
+   five-pin parts currently retain the right shared pin topology but still run
+   Tau's generic rail-clamped gain block, not their vendor macromodel. Build a
+   user-supplied symbol/model attachment path with a named Model control in the
+   Value UI, then atomically refuse any part whose real model is absent. Do not
+   preserve the 80/82 metric by simulating a different amplifier.
 
 ---
 
@@ -134,6 +138,7 @@ Newest first, ONE line each. Full evidence for every unit is in PROGRESS.md
 and in its commit message. This section exists so a fresh fire can see what
 is already done at a glance, not so it can re-read the reasoning.
 
+- 2026-08-03 - VERIFIED MULTI-PIN AMPLIFIERS ARE NEVER FORCED THROUGH A FIVE-PIN OP-AMP BANK. AD8235/LT1168/LT1194/LT1795 preserve losslessly and refuse by name, eliminating all remaining extended-corpus hard failures; 522 real decks/op points remain and canonical is still 80/82.
 - 2026-08-03 - LTSPICE NEGATIVE CAPACITANCE IS PRESERVED EXACTLY AS `Q(V)=C*V`. A native RC proof holds the required +45-degree lead, `elip_grd.asc` now builds/converges, preview solvers refuse rather than alter the sign, and extended hard failures fall 5 -> 4.
 - 2026-08-03 - SELF-CONTAINED LTSPICE BRACE ARITHMETIC AND `Q=` CAPACITORS ARE NATIVE. Empty `.param` scope no longer blocks valid arithmetic; `Q=` emits ngspice's charge device, preview solvers refuse rather than approximate, and the Value UI exposes Charge expression + Initial voltage without raw syntax. Extended hard failures fall 15 -> 5.
 - 2026-08-03 - LTSPICE CURRENT-CONTROLLED SWITCHES ARE REAL W DEVICES. `SpiceModel` resolves the sensing voltage source, `Value` resolves CSW/translated ISWITCH, exact save/reopen is supported, and every unprovable identity refuses atomically. CLI ngspice and the rebuilt packaged app prove the 5 V switched output.

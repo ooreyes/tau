@@ -13,6 +13,36 @@
 
 **Repo:** `auto/ltspice-parity` · **Audit date:** 2026-07-17 · **Auditor:** interactive session (Fable 5) + two background subagents (fuzz + sim cross-check).
 
+## 2026-08-03 — named five-pin vendor op-amps still run a generic gain block (CONFIRMED, OPEN)
+
+The directory rule still maps an ordinary-shaped named part such as LT1001,
+LT1028, LT1468, or AD8675 to Tau's behavioral `opamp` kind. The pin bank can be
+topologically correct, but the native deck ignores the vendor identity and
+emits Tau's generic rail-clamped/open-loop gain source. That is not an LTspice
+macromodel and cannot support a waveform-parity claim. The local decoded census
+(generic opamp/universal symbols excluded) finds **683 instances across 475
+files and 432 distinct part names**.
+
+Required repair: resolve an explicitly user-supplied `.asy` + model/subcircuit
+through a named Model control/library attachment, and refuse atomically when
+the real model is unavailable. Do not protect a corpus number by running a
+different amplifier.
+
+## 2026-08-03 — multi-pin amplifiers were forced through five guessed op-amp pins (CONFIRMED, FIXED)
+
+AD8235, LT1168, LT1194, and LT1795 are instrumentation, fully differential, or
+high-current amplifiers with non-five-pin terminal banks. The importer treated
+every `Opamps/...` symbol as the same opampO geometry. On LT1168, Tau's guessed
+“output” landed on the real REF/ground node, so the deck emitted a shorted VCVS;
+the other three produced singular branch/node pairs. Any converged result from
+that mapping would have been a plausible false circuit.
+
+**Fixed 2026-08-03.** These four verified non-five-pin types remain exact
+foreign records, survive lossless save, and trigger an atomic part-named model
+refusal. No gmin, parasitic, or tolerance change was used. The full 4,012-file
+corpus now reports zero hard failures, 522 warning-clean/deck-built/op-converged
+and 3,490 explicit refusals; canonical remains 80/82.
+
 ## 2026-08-03 — LTspice negative capacitor was rejected as malformed (CONFIRMED, FIXED)
 
 `elip_grd.asc` intentionally synthesizes an active filter section whose

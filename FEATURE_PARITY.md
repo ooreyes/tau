@@ -176,16 +176,23 @@ Status legend: ✅ done · 🟡 partial · ⬜ not started
     banked-pin warnings logged non-fatally. Real-file proof: opening
     `class-d_starter.asc` (15 comps/46 wires/4 directives), `deadtime.asc`
     (18/59), `Draft1.asc` (4/10/1) all load.
-  - ✅ **Op-amp + E/G controlled-source pins now banked** — extracted from the
+  - 🟡 **Op-amp + E/G controlled-source pins banked** — extracted from the
     real LTspice 17.2.4 `lib/sym` `.asy` files. Op-amps resolve to one of two
     geometry families (`opampC` for the centered UniversalOpAmp/UniversalOpAmp2;
-    `opampO` for the offset layout shared by `opamp.asy`, `opamp2.asy` and EVERY
-    vendor part — AD823/LT1001/LT1028/AD711/OP07…); E/E2 (VCVS) and G/G2 (VCCS)
+    `opampO` for the offset layout shared by `opamp.asy`, `opamp2.asy`, and
+    ordinary five-pin vendor symbols); E/E2 (VCVS) and G/G2 (VCCS)
     map their control/output pairs (the `2` variants swap controls; G reverses
     output polarity). This flips **22 acceptance files** from "placed without
     pin-accurate geometry (connections may be wrong)" to pin-accurate — incl. the
     key-goal `deadtime.asc`. Warning-clean import coverage ultimately reached
     **80/82**; only NIGBT and encrypted LT1184F remain named refusals.
+    **Correction (2026-08-03):** “every vendor part” was false. AD8235, LT1168,
+    LT1194, and LT1795 expose instrumentation/fully-differential/high-current
+    multi-pin layouts. The guessed opampO bank collapsed REF/output/supply nets
+    and generated singular or shorted VCVSs. They now remain lossless foreign
+    records and refuse by name. Still open: import user-supplied `.asy` pin banks
+    and real vendor macromodels; a shared five-pin shape does not prove model
+    fidelity.
   - **Pin data banked:** `LTSPICE_PINS` + `transformLtPoint()` in `io/ascImport.ts`
     hold the real LTspice symbol-local pin offsets (from `lib/sym/*.asy`) and the
     orientation transform (clockwise, Y-down, mirror-aware). Now covers passives,
@@ -1341,6 +1348,12 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   `−` pin zips onto Tau's p because isource emission swaps to `I n p`; the
   identity zip ran every imported I source backwards and logamp's starved
   bias node hung gmin stepping). **Zero remaining op failures.**
+  **Extended-corpus correction (2026-08-03):** all 4,012 files now have zero
+  non-refusal hard failures, but this is not a vendor-model parity claim. Four
+  verified multi-pin amplifiers moved from malformed generic decks to explicit
+  refusals. A separate decoded census finds 683 named five-pin/vendor-opamp
+  instances across 475 files still using Tau's generic gain block; model-backed
+  import/refusal is required before those results count as LTspice parity.
 - ✅ **Class-D fidelity — the flagship circuit now SIMULATES correctly
   (2026-07-03), proven by a committed runner** (`scripts/classdParity.corpus.ts`,
   runs with `scripts/acceptance-corpus.sh`). Two fixes:

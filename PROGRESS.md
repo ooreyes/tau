@@ -9,14 +9,16 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: IN PROGRESS - 2026-08-03 01:54 CDT**
+**Status: DONE - 2026-08-03 02:01 CDT**
 
-Interactive correctness unit: diagnose and repair `LT1168.asc`, where the
-imported vendor model currently reaches ngspice as a shorted VCVS (`E_U1`).
-Trace original pin/model provenance and fix only a proven importer or deck-
-topology error; do not mask it with convergence options or parasitics. Prove the
-real file and a committed regression, then rerun the full corpus. Scheduler
-stays unloaded.
+AD8235, LT1168, LT1194, and LT1795 are verified multi-pin amplifier symbols,
+not five-pin op-amps. Tau no longer assigns the guessed opampO bank that put
+REF/output/supply terminals on the wrong nets and produced singular or shorted
+VCVS decks. Their exact foreign records survive save, and simulation refuses
+atomically by part/model name until the user supplies real symbols/models. The
+4,012-file corpus now has zero non-refusal hard failures: 522 warning-clean,
+522 deck-built, 522 op-converged, 3,490 honest refusals. Canonical stays 80/82.
+Scheduler stays unloaded.
 
 Previous completed unit:
 
@@ -11135,3 +11137,21 @@ evidence is kept in full here.
   deck-built, 522 op-converged, four hard failures and 3,486 explicit refusals;
   canonical 80/82; fresh unsigned Tau.app/DMG, strict codesign, and valid DMG
   checksum. Scheduler remains intentionally unloaded.
+
+- 2026-08-03 - Eliminated the final four extended-corpus hard failures without
+  touching solver tolerances. AD8235, LT1168, LT1194, and LT1795 are verified
+  multi-pin amplifier symbols, but the `base.includes("opamp")` importer rule
+  assigned all of them opampO's five guessed terminals. LT1168's guessed output
+  was the real REF/ground node, yielding ngspice's “shorted VCVS”; the other
+  three collapsed source/supply nets into singular pairs. They now remain exact
+  foreign records and simulation refuses the whole document by part/model name
+  until a user supplies real symbols/models. Lossless-save provenance is kept.
+  Evidence: typecheck; 156 frontend files passed / one skipped, 2,392 tests
+  passed / six skipped; production web build; four native corpus files / 18
+  tests; six DoD parity tests; full 4,012-file corpus with 522 warning-clean,
+  522 deck-built, 522 op-converged, zero hard failures, and 3,490 explicit
+  refusals; canonical 80/82. New confirmed red flag: a decoded census finds 683
+  ordinary-shaped named vendor-opamp instances across 475 files/432 types still
+  using Tau's generic gain block. That model-fidelity repair is next; topology
+  compatibility alone is not LTspice parity. Scheduler remains intentionally
+  unloaded.
