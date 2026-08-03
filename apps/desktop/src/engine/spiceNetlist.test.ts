@@ -535,6 +535,17 @@ describe("buildSpiceDeck", () => {
     expect(deck.netlist).toContain("V1 n001 0 DC 0 SIN(0 7.5 1000)");
   });
 
+  it("emits a distinct DC operating point before an edited PWL waveform", () => {
+    const components = [
+      component("vsource", "V1", "DC 3.3 PWL(0 0 1m 5)", 0, 32),
+      component("resistor", "R1", "1k", 0, 96),
+      component("ground", "", "", 0, 128),
+    ];
+    const deck = buildSpiceDeck({ components, wires: [] }, { kind: "op" });
+
+    expect(deck.netlist).toMatch(/^V1\s+\S+\s+\S+\s+DC 3\.3 PWL\(0 0 0\.001 5\)$/m);
+  });
+
   it("emits a full LTspice PULSE function and trims its Ncycles slot", () => {
     const components = [
       component("vsource", "V1", "PULSE(-10 10 5u 25u 25u 0u 50u)", 0, 32),

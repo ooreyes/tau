@@ -2,6 +2,12 @@ import { describe, it, expect } from "vitest";
 import { parseTransientSource, isFunctionSource } from "./sourceWaveform";
 
 describe("parseTransientSource", () => {
+  it("uses an explicit DC prefix for the operating point without changing the transient waveform", () => {
+    const source = parseTransientSource("DC 3.3 PWL(0 0 1m 5)", "V");
+    expect(source.dc).toBe(3.3);
+    expect(source.at(0)).toBe(0);
+    expect(source.at(0.001)).toBe(5);
+  });
   it("treats a plain number as constant DC", () => {
     const s = parseTransientSource("5", "V");
     expect(s.dc).toBe(5);

@@ -44,7 +44,18 @@ export function parsePwlTimeToken(token: string, previous: number): number {
  * number), so callers fall back to their numeric path.
  */
 export function parseSourceFunction(rawValue: string, unit: SourceUnit): SourceSpec | null {
-  const value = rawValue.trim();
+  let value = rawValue.trim();
+  let dcOverride: number | undefined;
+  const dcMatch = /^DC\s+([^\s,;]+)\s+/i.exec(value);
+  if (dcMatch) {
+    try {
+      const parsed = parseQuantity(dcMatch[1], unit);
+      if (Number.isFinite(parsed)) dcOverride = parseFloat(parsed.toPrecision(12));
+    } catch {
+      return null;
+    }
+    value = value.slice(dcMatch[0].length).trim();
+  }
   const match = value.match(/^(SINE|SIN|PULSE|PWL|EXP|SFFM)\s*\(([^)]*)\)/i);
   if (!match) return null;
 
@@ -79,7 +90,8 @@ export function parseSourceFunction(rawValue: string, unit: SourceUnit): SourceS
       const phase = num(args[5], "deg");
       const tail = [off, amp, freq, td, theta, phase];
       while (tail.length > 3 && tail[tail.length - 1] === 0) tail.pop();
-      return { text: `DC ${off} SIN(${tail.join(" ")})`, dc: off };
+      const dc = dcOverride ?? off;
+      return { text: `DC ${dc} SIN(${tail.join(" ")})`, dc };
     }
     case "PULSE": {
       // LTspice PULSE(V1 V2 Tdelay Trise Tfall Ton Tperiod Ncycles)
@@ -93,7 +105,8 @@ export function parseSourceFunction(rawValue: string, unit: SourceUnit): SourceS
       const per = num(args[6], "s");
       const tail = [v1, v2, td, tr, tf, pw, per];
       while (tail.length > 2 && tail[tail.length - 1] === 0) tail.pop();
-      return { text: `DC ${v1} PULSE(${tail.join(" ")})`, dc: v1 };
+      const dc = dcOverride ?? v1;
+      return { text: `DC ${dc} PULSE(${tail.join(" ")})`, dc };
     }
     case "PWL": {
       // Alternating time/level pairs; ngspice accepts the same form. Levels use
@@ -107,7 +120,8 @@ export function parseSourceFunction(rawValue: string, unit: SourceUnit): SourceS
         if (i + 1 < args.length) pairs.push(num(args[i + 1], unit));
       }
       const dc = pairs.length >= 2 ? pairs[1] : 0;
-      return { text: `DC ${dc} PWL(${pairs.join(" ")})`, dc };
+      const operatingPoint = dcOverride ?? dc;
+      return { text: `DC ${operatingPoint} PWL(${pairs.join(" ")})`, dc: operatingPoint };
     }
     case "EXP": {
       // EXP(V1 V2 Td1 Tau1 Td2 Tau2)
@@ -117,7 +131,8 @@ export function parseSourceFunction(rawValue: string, unit: SourceUnit): SourceS
       const tau1 = num(args[3], "s");
       const td2 = num(args[4], "s");
       const tau2 = num(args[5], "s");
-      return { text: `DC ${v1} EXP(${v1} ${v2} ${td1} ${tau1} ${td2} ${tau2})`, dc: v1 };
+      const dc = dcOverride ?? v1;
+      return { text: `DC ${dc} EXP(${v1} ${v2} ${td1} ${tau1} ${td2} ${tau2})`, dc };
     }
     case "SFFM": {
       // SFFM(Voff Vamp Fcar MDI Fsig)
@@ -126,7 +141,8 @@ export function parseSourceFunction(rawValue: string, unit: SourceUnit): SourceS
       const fc = num(args[2], "Hz");
       const mdi = num(args[3], "");
       const fs = num(args[4], "Hz");
-      return { text: `DC ${off} SFFM(${off} ${amp} ${fc} ${mdi} ${fs})`, dc: off };
+      const dc = dcOverride ?? off;
+      return { text: `DC ${dc} SFFM(${off} ${amp} ${fc} ${mdi} ${fs})`, dc };
     }
   }
   return null;

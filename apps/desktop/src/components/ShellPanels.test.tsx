@@ -263,6 +263,73 @@ describe("ComponentInspector - charge-defined capacitor", () => {
   });
 });
 
+describe("ComponentInspector - independent source waveform controls", () => {
+  it("renders PWL as a mode and point rows, never as a DC-level string", () => {
+    const selected = {
+      id: "v-pwl",
+      kind: "vsource" as const,
+      x: 160,
+      y: 160,
+      rotation: 0 as const,
+      value: "PWL(0 0 2u 0 +1u 1) AC 2",
+      label: "V6",
+    };
+    useSchematic.setState({ components: [selected], selectedId: selected.id, selectedIds: [selected.id] });
+    render(<ComponentInspector selected={selected} />);
+
+    expect((screen.getByRole("combobox", { name: "Waveform type" }) as HTMLSelectElement).value).toBe("pwl");
+    expect((screen.getByRole("textbox", { name: "DC operating point" }) as HTMLInputElement).value).toBe("0");
+    expect((screen.getByRole("textbox", { name: "PWL time 3" }) as HTMLInputElement).value).toBe("+1");
+    expect((screen.getByRole("combobox", { name: "PWL time 3 SI prefix" }) as HTMLSelectElement).value).toBe("u");
+    expect((screen.getByRole("textbox", { name: "PWL level 3" }) as HTMLInputElement).value).toBe("1");
+    expect((screen.getByRole("textbox", { name: "AC amplitude" }) as HTMLInputElement).value).toBe("2");
+    expect(screen.queryByRole("textbox", { name: "DC level" })).toBeNull();
+    expect(screen.queryByDisplayValue(/PWL\(/)).toBeNull();
+  });
+
+  it("updates PWL rows and DC bias through controls", () => {
+    const selected = {
+      id: "v-pwl-edit",
+      kind: "vsource" as const,
+      x: 160,
+      y: 160,
+      rotation: 0 as const,
+      value: "PWL(0 0 2u 0)",
+      label: "V1",
+    };
+    useSchematic.setState({ components: [selected], selectedId: selected.id, selectedIds: [selected.id] });
+    const { rerender } = render(<ComponentInspector selected={selected} />);
+
+    fireEvent.change(screen.getByRole("textbox", { name: "PWL level 2" }), { target: { value: "5" } });
+    expect(useSchematic.getState().components[0].value).toBe("PWL(0 0 2u 5)");
+
+    rerender(<ComponentInspector selected={useSchematic.getState().components[0]} />);
+
+    fireEvent.change(screen.getByRole("textbox", { name: "DC operating point" }), { target: { value: "2" } });
+    expect(useSchematic.getState().components[0].value).toBe("DC 2 PWL(0 0 2u 5)");
+  });
+
+  it("switches waveform modes without requiring raw SINE syntax", () => {
+    const selected = {
+      id: "i-dc",
+      kind: "isource" as const,
+      x: 160,
+      y: 160,
+      rotation: 0 as const,
+      value: "5m",
+      label: "I1",
+    };
+    useSchematic.setState({ components: [selected], selectedId: selected.id, selectedIds: [selected.id] });
+    const { rerender } = render(<ComponentInspector selected={selected} />);
+
+    fireEvent.change(screen.getByRole("combobox", { name: "Waveform type" }), { target: { value: "sine" } });
+    expect(useSchematic.getState().components[0].value).toBe("SINE(5m 1 1k)");
+    rerender(<ComponentInspector selected={useSchematic.getState().components[0]} />);
+    expect(screen.getByRole("textbox", { name: "Amplitude" })).toBeTruthy();
+    expect(screen.queryByDisplayValue(/SINE\(/)).toBeNull();
+  });
+});
+
 describe("ComponentsRail - responsive shell budget", () => {
   function Harness({ maxWidth, embedded = false }: { maxWidth: number; embedded?: boolean }) {
     const resize = usePanelWidth({

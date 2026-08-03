@@ -36,6 +36,7 @@ import { ComponentSymbol } from "../schematic/symbols";
 import type { SchematicComponent, SchematicWire } from "../schematic/types";
 import { decodeParams, encodeParams, paramFields } from "../schematic/params";
 import { EngineeringInput } from "./EngineeringInput";
+import { IndependentSourceEditor } from "./IndependentSourceEditor";
 import { Palette } from "./Palette";
 import { OPAMP_LIBRARY, findOpAmp } from "../library/opamps";
 import { inspectOpampModel, opampIdentity } from "../engine/opampModel";
@@ -1568,7 +1569,14 @@ export function ComponentInspector({
               }}
             />
           </label>
-          {selected.kind === "opamp" ? (
+          {selected.kind === "vsource" || selected.kind === "isource" ? (
+            <IndependentSourceEditor
+              value={valueSource}
+              unit={selected.kind === "vsource" ? "V" : "A"}
+              onBeginChange={beginParamChange}
+              onValueChange={(value) => setValue(selected.id, value)}
+            />
+          ) : selected.kind === "opamp" ? (
             <>
               {opamp?.mode === "vendor" ? (
                 <>

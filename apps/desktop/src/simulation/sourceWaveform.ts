@@ -34,7 +34,13 @@ const DEG2RAD = Math.PI / 180;
  * browser/test engine reproduces the same waveforms without ngspice.
  */
 export function parseTransientSource(rawValue: string, unit: SourceUnit): TransientSource {
-  const value = stripAcSpec(rawValue ?? "").trim();
+  let value = stripAcSpec(rawValue ?? "").trim();
+  let dcOverride: number | undefined;
+  const dcMatch = /^DC\s+([^\s,;]+)\s+/i.exec(value);
+  if (dcMatch) {
+    dcOverride = parseLevel(dcMatch[1], unit, 0);
+    value = value.slice(dcMatch[0].length).trim();
+  }
   const match = value.match(/^(SINE|SIN|PULSE|PWL|EXP|SFFM)\s*\(([^)]*)\)/i);
 
   if (!match) {
@@ -69,7 +75,7 @@ export function parseTransientSource(rawValue: string, unit: SourceUnit): Transi
         const damp = theta !== 0 ? Math.exp(-dt * theta) : 1;
         return off + amp * damp * Math.sin(2 * Math.PI * freq * dt + phaseRad);
       };
-      return { dc: off + amp * Math.sin(phaseRad), at, maxFrequencyHz: freq };
+      return { dc: dcOverride ?? (off + amp * Math.sin(phaseRad)), at, maxFrequencyHz: freq };
     }
     case "PULSE": {
       // PULSE(V1 V2 Tdelay Trise Tfall Ton Tperiod Ncycles)
@@ -93,7 +99,7 @@ export function parseTransientSource(rawValue: string, unit: SourceUnit): Transi
         if (local < tr + pw + tf) return tf > 0 ? v2 + (v1 - v2) * ((local - tr - pw) / tf) : v1;
         return v1;
       };
-      return { dc: v1, at, maxFrequencyHz: per > 0 ? 1 / per : 0 };
+      return { dc: dcOverride ?? v1, at, maxFrequencyHz: per > 0 ? 1 / per : 0 };
     }
     case "PWL": {
       // Alternating time/level pairs; linear interpolation, flat-held at the ends.
@@ -122,7 +128,7 @@ export function parseTransientSource(rawValue: string, unit: SourceUnit): Transi
       // PWL breakpoints are user-authored; like LTspice we impose no minimum-step
       // sampling requirement from them (a tiny segment would otherwise force an
       // impractically high step count and reject an otherwise-fine circuit).
-      return { dc: first, at, maxFrequencyHz: 0 };
+      return { dc: dcOverride ?? first, at, maxFrequencyHz: 0 };
     }
     case "EXP": {
       // EXP(V1 V2 Td1 Tau1 Td2 Tau2)
@@ -137,7 +143,7 @@ export function parseTransientSource(rawValue: string, unit: SourceUnit): Transi
         const fall = t > td2 && tau2 > 0 ? (v1 - v2) * (1 - Math.exp(-(t - td2) / tau2)) : 0;
         return v1 + rise + fall;
       };
-      return { dc: v1, at, maxFrequencyHz: 0 };
+      return { dc: dcOverride ?? v1, at, maxFrequencyHz: 0 };
     }
     case "SFFM": {
       // SFFM(Voff Vamp Fcarrier MDI Fsignal)
@@ -148,7 +154,7 @@ export function parseTransientSource(rawValue: string, unit: SourceUnit): Transi
       const fs = parseLevel(args[4], "Hz", 0);
       const at = (t: number): number =>
         off + amp * Math.sin(2 * Math.PI * fc * t + mdi * Math.sin(2 * Math.PI * fs * t));
-      return { dc: off, at, maxFrequencyHz: Math.max(fc, fs) };
+      return { dc: dcOverride ?? off, at, maxFrequencyHz: Math.max(fc, fs) };
     }
   }
   const dc = parseLevel(value, unit, 0);
@@ -157,7 +163,9 @@ export function parseTransientSource(rawValue: string, unit: SourceUnit): Transi
 
 /** True when the value is a recognized transient function form (SINE/PULSE/…). */
 export function isFunctionSource(rawValue: string): boolean {
-  return /^(SINE|SIN|PULSE|PWL|EXP|SFFM)\s*\(/i.test(stripAcSpec(rawValue ?? "").trim());
+  return /^(?:DC\s+[^\s,;]+\s+)?(SINE|SIN|PULSE|PWL|EXP|SFFM)\s*\(/i.test(
+    stripAcSpec(rawValue ?? "").trim(),
+  );
 }
 
 function parseLevel(token: string | undefined, unit: string, fallback: number): number {

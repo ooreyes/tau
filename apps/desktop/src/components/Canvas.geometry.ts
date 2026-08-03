@@ -3,6 +3,7 @@ import { CATALOG_BY_KIND } from "../schematic/catalog";
 import type { ComponentKind, NetLabel, Point, Rotation, SchematicAscShape, SchematicComponent, SchematicWire } from "../schematic/types";
 import { getComponentPins, getLocalPins, transformPoint } from "../schematic/pins";
 import { decodeParams } from "../schematic/params";
+import { decodeIndependentSourceValue } from "../schematic/sourceValue";
 
 export const snap = (v: number) => {
   const snapped = Math.round(v / GRID) * GRID;
@@ -236,6 +237,24 @@ const explicitUnit = (value: string, unit: string) => {
  * (`decodeParams`), instead of the catalog abusing `unit` as a display hint.
  */
 export const sourceValueLabel = (kind: ComponentKind, value: string): string => {
+  if (kind === "vsource" || kind === "isource") {
+    const unit = kind === "vsource" ? "V" : "A";
+    const source = decodeIndependentSourceValue(value, unit);
+    switch (source.mode) {
+      case "dc":
+        return explicitUnit(source.dcBias, unit);
+      case "sine":
+        return `Sine · ${explicitUnit(source.parameters.amplitude || "1", unit)} @ ${explicitUnit(source.parameters.frequency || "1k", "Hz")}`;
+      case "pulse":
+        return `Pulse · ${explicitUnit(source.parameters.low || "0", unit)}→${explicitUnit(source.parameters.high || "5", unit)}`;
+      case "pwl":
+        return `Piecewise · ${source.pwlPoints.length} ${source.pwlPoints.length === 1 ? "point" : "points"}`;
+      case "exp":
+        return `Exponential · ${explicitUnit(source.parameters.initial || "0", unit)}→${explicitUnit(source.parameters.pulsed || "1", unit)}`;
+      case "sffm":
+        return `FM · ${explicitUnit(source.parameters.carrierFrequency || "1k", "Hz")} carrier`;
+    }
+  }
   if (kind === "vac" || kind === "iac") {
     const params = decodeParams(kind, value);
     const ampUnit = kind === "vac" ? "V" : "A";

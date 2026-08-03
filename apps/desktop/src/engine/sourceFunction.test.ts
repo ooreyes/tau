@@ -42,6 +42,11 @@ describe("parseSourceFunction", () => {
     expect(spec!.dc).toBe(0);
   });
 
+  it("keeps an explicit operating-point bias separate from the transient waveform", () => {
+    const spec = parseSourceFunction("DC 3.3 PWL(0 0 1m 5)", "V");
+    expect(spec).toEqual({ text: "DC 3.3 PWL(0 0 0.001 5)", dc: 3.3 });
+  });
+
   it("accumulates LTspice relative PWL times and rejects backwards axes", () => {
     const spec = parseSourceFunction("PWL(0 0 10m 0 +1u 100 100m 100 +1u 400)", "V");
     expect(spec!.text).toBe("DC 0 PWL(0 0 0.01 0 0.010001 100 0.1 100 0.100001 400)");

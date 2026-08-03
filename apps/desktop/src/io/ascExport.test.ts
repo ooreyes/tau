@@ -210,6 +210,32 @@ describe("rotationToOrientation", () => {
 });
 
 describe("schematicToAsc", () => {
+  it("round-trips an edited source's separate DC bias and PWL waveform", () => {
+    const original = importAsc(SAMPLE);
+    const source = original.components.find((component) => component.label === "V1");
+    expect(source).toBeTruthy();
+    source!.value = "DC 3.3 PWL(0 0 2u 5) AC 2";
+
+    const result = schematicToAsc({
+      components: original.components,
+      wires: original.wires,
+      netLabels: original.netLabels,
+      directives: original.directives,
+      comments: original.comments,
+      textAnnotations: original.textAnnotations,
+      shapes: original.shapes,
+      dataFlags: original.dataFlags,
+      foreignSymbols: original.foreignSymbols,
+      hierarchicalBlocks: original.hierarchicalBlocks,
+      sheet: original.sheet,
+    });
+
+    expect(result.warnings).toEqual([]);
+    expect(result.text).toContain("SYMATTR Value DC 3.3 PWL(0 0 2u 5) AC 2");
+    expect(importAsc(result.text).components.find((component) => component.label === "V1")?.value)
+      .toBe("DC 3.3 PWL(0 0 2u 5) AC 2");
+  });
+
   it("round-trips Tau schematic content through the importer", () => {
     const original = importAsc(SAMPLE);
     const { text, warnings } = schematicToAsc({

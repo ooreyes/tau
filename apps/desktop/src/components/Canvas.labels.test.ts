@@ -26,6 +26,12 @@ describe("sourceValueLabel", () => {
     expect(sourceValueLabel("iac", "5m 2k")).toBe(`5m${thin}A @ 2k${thin}Hz`);
   });
 
+  it("summarizes independent-source waveforms without raw SPICE functions", () => {
+    expect(sourceValueLabel("vsource", "SINE(0 7.5 1k)")).toBe(`Sine · 7.5${thin}V @ 1k${thin}Hz`);
+    expect(sourceValueLabel("isource", "PULSE(0 5m 0 1u 1u 5u 10u)")).toBe(`Pulse · 0${thin}A→5m${thin}A`);
+    expect(sourceValueLabel("vsource", "PWL(0 0 1m 5 2m 0)")).toBe("Piecewise · 3 points");
+  });
+
   it("formats the comparator as high/low volts, not a garbled unit suffix", () => {
     expect(sourceValueLabel("comparator", "1 0")).toBe(`1${thin}V/0${thin}V`);
     expect(sourceValueLabel("comparator", "")).toBe(`1${thin}V/0${thin}V`); // default spec
