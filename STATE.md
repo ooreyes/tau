@@ -5,15 +5,15 @@ The working memory of an unattended loop that starts from zero every fire.
 
 ## Now
 
-**Status:** IN PROGRESS - 2026-08-03 02:09 CDT
+**Status:** DONE - 2026-08-03 09:13 CDT
 
-Current unit: eliminate named five-pin vendor op-amps' generic gain-block
-substitution. Resolve a real attached `.subckt` using the imported part/model
-identity and verified LTspice terminal order; refuse before native execution
-when the model is absent or incompatible. Replace the inspector's misleading
-"Imported / custom" raw parameter line with named Part / Simulation model /
-model-status controls and an Attach Model Library action. Scheduler remains
-unloaded.
+Named five-pin vendor op-amp model integrity is complete. Exact document or
+user-attached five-terminal subcircuits execute through Tau's native engine;
+missing/incompatible/unsafe models refuse atomically instead of becoming a
+generic gain block. Part, Simulation model, readiness, and model attachment are
+named controls. Canonical and cron-staged corpora hold 80/82 with zero hard
+failures; release app/DMG, packaged launch, and Chrome minimum-window checks are
+green. Scheduler remains unloaded while the next interactive UX unit is claimed.
 
 **Product UX contract (Omar, 2026-08-03): Tau is not a prettier command-line
 wrapper.** Known SPICE semantics must appear as named, editable controls in the

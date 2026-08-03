@@ -9,15 +9,16 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: IN PROGRESS - 2026-08-03 02:09 CDT**
+**Status: DONE - 2026-08-03 09:13 CDT**
 
-Claimed unit: remove the generic-gain substitution for named five-pin vendor
-op-amps. A named part must resolve to an exact user-supplied `.subckt` and emit
-its verified LTspice five-terminal SpiceOrder, or refuse atomically with a
-model-specific attachment action. The Properties/Value UI will expose the
-part and simulation model as named controls/status, not a raw parameter line.
-Prove attached-model native behavior, missing-model refusal, exact ASC save,
-corpus impact, and packaged UI. Scheduler stays unloaded.
+Named five-pin vendor op-amps no longer fall through to Tau's generic gain
+block. Exact document/attached five-terminal subcircuits run through a bounded
+LTspice-compatibility normalizer; missing, incompatible, or path-escaping models
+refuse atomically. Properties exposes Part, Simulation model, readiness, and an
+Attach Model Library action. The canonical and staged cron corpora are honestly
+80/82 with zero hard failures; Class-D OP converges. A fresh unsigned app/DMG,
+strict signature verification, DMG checksum, real-app launch, and Chrome at
+900x600 pass. Scheduler remains unloaded while interactive UX work continues.
 
 Previous completed unit:
 
@@ -11153,4 +11154,24 @@ evidence is kept in full here.
   ordinary-shaped named vendor-opamp instances across 475 files/432 types still
   using Tau's generic gain block. That model-fidelity repair is next; topology
   compatibility alone is not LTspice parity. Scheduler remains intentionally
+  unloaded.
+
+- 2026-08-03 - Removed generic-gain substitution for named five-pin vendor
+  op-amps. Import now preserves Part / Simulation model / Model file identity;
+  exact inline or user-attached five-terminal subcircuits are normalized for
+  supported LTspice constructs and executed natively, while missing,
+  incompatible, nested-include, active-multiplier, unsafe-name, and path-escape
+  cases refuse before execution. Model-only ASC edits update `Value2` without
+  altering the visible part, and untouched imports remain byte-identical. The
+  same refusal applies to all browser preview solvers. Tau's native worker now
+  drives the acceptance corpus, and disabling unused libngspice callbacks fixes
+  a real mixed-JFET saved-vector crash. Evidence: 158 frontend files / 2,417
+  passed / 6 skipped tests; typecheck, production web build, Rust fmt/clippy,
+  53 Rust tests plus four ignored real-library proofs; exact user-subcircuit
+  corpus; clean pinned-ngspice rebuild; canonical and staged-cron corpus both
+  82 imported / 80 warning-clean / 80 deck-built / 80 OP-converged / zero hard
+  failures. A fresh unsigned Tau.app and DMG build, strict codesign, valid DMG
+  checksum, packaged-app launch, and Chrome 900x600 no-overflow/no-console-error
+  check pass. The two remaining 82-file refusals are the LTspice-only NIGBT and
+  encrypted LT1184F, never approximated. Scheduler remains intentionally
   unloaded.

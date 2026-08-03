@@ -190,9 +190,14 @@ Status legend: ✅ done · 🟡 partial · ⬜ not started
     LT1194, and LT1795 expose instrumentation/fully-differential/high-current
     multi-pin layouts. The guessed opampO bank collapsed REF/output/supply nets
     and generated singular or shorted VCVSs. They now remain lossless foreign
-    records and refuse by name. Still open: import user-supplied `.asy` pin banks
-    and real vendor macromodels; a shared five-pin shape does not prove model
-    fidelity.
+    records and refuse by name. **Named five-pin vendor op-amps are now
+    model-gated (2026-08-03):** a verified five-terminal `.subckt` from the
+    document or a user-attached library executes through Tau's native worker;
+    a missing or incompatible model refuses atomically instead of using the
+    generic gain block. Part / Simulation model / status are named inspector
+    controls and exact `Value2` model identity round-trips. Still open: import
+    arbitrary user-supplied multi-pin `.asy` banks; a shared five-pin shape does
+    not prove pin fidelity for those parts.
   - **Pin data banked:** `LTSPICE_PINS` + `transformLtPoint()` in `io/ascImport.ts`
     hold the real LTspice symbol-local pin offsets (from `lib/sym/*.asy`) and the
     orientation transform (clockwise, Y-down, mirror-aware). Now covers passives,
