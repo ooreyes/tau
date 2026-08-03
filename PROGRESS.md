@@ -9,12 +9,20 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: IN PROGRESS - 2026-08-03 10:30 CDT**
+**Status: DONE - 2026-08-03 10:43 CDT**
 
-Claimed unit: safely discover the user's installed LTspice model tree and let a
-document selectively attach a chosen model. Do not copy the 133 MB proprietary
-library into Tau, scan arbitrary paths, follow symlinks, accept binary/encrypted
-payloads, or exceed existing attachment caps. Scheduler remains unloaded.
+Model Libraries now discovers the user-owned LTspice install at its real macOS
+Application Support location, searches the 2,698 supported text files, and
+selectively attaches only the chosen file to the document. Native access is
+fixed-root and read-only; traversal, symlinks, unsupported extensions, >5 MiB
+files, >10,000-file scans, and binary/encrypted content are rejected. Nothing
+proprietary is copied into Tau or its repository. Typecheck, all 2,445 frontend
+tests, web build, Rust fmt/clippy/56 tests, all eight ignored real-native/model
+proofs, real `UniversalOpAmp4.lib` discovery, fresh app/DMG package, strict
+codesign, valid DMG, mounted-resource identity, mounted-native tests, five-second
+launch, Computer Use packaged startup, and 900x600 dialog containment pass. DMG
+SHA-256: `38bdd65f4782bd516e05c919bedc7444c89297976b8e38682de0dfdedbfac966`.
+Scheduler remains unloaded.
 
 Previous completed unit:
 

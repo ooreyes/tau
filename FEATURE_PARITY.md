@@ -791,9 +791,18 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   **Unresolved-reference errors surfaced:** a `subckt` reference that resolves
   nowhere is reported on `SpiceDeck.unresolvedSubckts`, and the native runner
   fails fast through `userFacingErrorMessage` naming the missing part instead of
-  handing ngspice a deck that dies with a cryptic "unknown subckt". **NEXT:** a
-  project UI affordance to attach a model file; resolve `.lib`/`.inc` *file
-  paths* (read & inline, or hand to ngspice); browser TS-solver model parsing.
+  handing ngspice a deck that dies with a cryptic "unknown subckt".
+  **Installed-library browser (2026-08-03):** Model Libraries now locates the
+  user's own macOS LTspice data tree (`~/Library/Application Support/LTspice/
+  lib`), searches its supported subcircuit/standard-model text files, and
+  selectively attaches one chosen file to the current document. The real local
+  install reports 2,698 attachable files and `UniversalOpAmp4.lib` reads cleanly.
+  Tau never copies or redistributes the 133 MB proprietary library. The native
+  boundary is fixed-root/read-only, skips symlinks, limits recursion and count,
+  accepts only model-text extensions up to 5 MiB, rejects traversal and binary/
+  encrypted content, and retains the document's 64-file/20 MiB aggregate caps.
+  **NEXT:** resolve imported relative `.lib`/`.inc` references through an
+  explicit user-authorized project/library mapping; browser TS model physics.
 
 ## 4. Analyses (simulation commands)
 - ✅ `.op` Operating point — TS + native — `operatingPoint.ts`

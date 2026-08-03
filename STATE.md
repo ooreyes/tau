@@ -5,12 +5,14 @@ The working memory of an unattended loop that starts from zero every fire.
 
 ## Now
 
-**Status:** IN PROGRESS - 2026-08-03 10:30 CDT
+**Status:** DONE - 2026-08-03 10:43 CDT
 
-Claimed unit: fixed-root, read-only discovery of the user-owned installed
-LTspice model library with selective per-document attachment. Bound file count,
-depth, type, size, traversal, symlink, text/binary handling, and existing
-document caps; never redistribute the library. Scheduler remains unloaded.
+Installed LTspice models are now discoverable from their real user-owned macOS
+library and selectively attachable per document. The native command is fixed-
+root/read-only and bounds count, depth, type, size, traversal, symlinks, and
+text/binary input. `UniversalOpAmp4.lib` passed against the real 2,698-file
+install; all frontend/native/real-ngspice/package/mounted-DMG/launch gates pass.
+No proprietary library is bundled. Scheduler remains unloaded.
 
 Previous completed unit:
 
