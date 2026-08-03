@@ -49,4 +49,45 @@ describe("SimulationSetupDialog", () => {
       ".meas op output FIND V(out)",
     ]);
   });
+
+  it("decodes imported Class-D measurements into named rows instead of raw directives", () => {
+    useSchematic.getState().setDirectives([
+      ".tran 0 3m",
+      ".meas tran PS avg -(10*I(V1)+10*I(V2))",
+      ".meas tran PL avg V(vo)*I(R1)",
+      ".meas tran Efficiency param PL/PS",
+      ".step param load list 4 8",
+    ]);
+    render(<SimulationSetupDialog open onOpenChange={() => {}} />);
+
+    expect(screen.getAllByText(/^Result \d$/)).toHaveLength(3);
+    expect((screen.getByLabelText("Measurement 1 name") as HTMLInputElement).value).toBe("PS");
+    expect((screen.getByLabelText("Measurement 1 formula") as HTMLInputElement).value).toBe("-(10*I(V1)+10*I(V2))");
+    expect((screen.getByLabelText("Measurement 3 calculation") as HTMLSelectElement).value).toBe("PARAM");
+    expect((screen.getByLabelText("Measurement 3 formula") as HTMLInputElement).value).toBe("PL/PS");
+    expect((screen.getByLabelText("Advanced SPICE directives") as HTMLTextAreaElement).value).toBe(".step param load list 4 8");
+
+    fireEvent.click(screen.getByRole("button", { name: "Apply setup" }));
+    expect(useSchematic.getState().directives).toEqual([
+      ".tran 0 3m",
+      ".meas tran PS avg -(10*I(V1)+10*I(V2))",
+      ".meas tran PL avg V(vo)*I(R1)",
+      ".meas tran Efficiency param PL/PS",
+      ".step param load list 4 8",
+    ]);
+  });
+
+  it("authors a named average node measurement with form controls", () => {
+    useSchematic.setState({
+      netLabels: [
+        { id: "out", x: 0, y: 0, text: "out" },
+        { id: "gnd", x: 0, y: 32, text: "0" },
+      ],
+    });
+    render(<SimulationSetupDialog open onOpenChange={() => {}} />);
+    fireEvent.click(screen.getByRole("button", { name: "Add measurement" }));
+    fireEvent.change(screen.getByLabelText("Measurement 1 name"), { target: { value: "VoutAvg" } });
+    fireEvent.click(screen.getByRole("button", { name: "Apply setup" }));
+    expect(useSchematic.getState().directives).toEqual([".meas tran VoutAvg AVG V(out)"]);
+  });
 });

@@ -10,10 +10,26 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import {
+  blankEditableMeasurement,
+  editableMeasurementFromDirective,
+  measurementAuthoringContext,
+  serializeEditableMeasurement,
+  validateEditableMeasurements,
+  type EditableMeasurement,
+  type EditableMeasurementCalculation,
+  type EditableMeasurementQuantity,
+} from "../simulation/measurementAuthoring";
 
 type PrimaryAnalysis = "none" | "op" | "tran" | "ac";
 
 const PRIMARY_RE = /^\s*\.?(?:op|tran|ac)\b/i;
+let measurementSequence = 0;
+
+function nextMeasurementId(): string {
+  measurementSequence += 1;
+  return `measurement-${measurementSequence}`;
+}
 
 function normalizedDirective(line: string): string {
   const trimmed = line.trim();
@@ -43,6 +59,9 @@ export function SimulationSetupDialog({
 }) {
   const directives = useSchematic((state) => state.directives);
   const setDirectives = useSchematic((state) => state.setDirectives);
+  const components = useSchematic((state) => state.components);
+  const wires = useSchematic((state) => state.wires);
+  const netLabels = useSchematic((state) => state.netLabels);
   const [analysis, setAnalysis] = useState<PrimaryAnalysis>("none");
   const [tranStop, setTranStop] = useState("10m");
   const [tranInterval, setTranInterval] = useState("");
@@ -51,7 +70,12 @@ export function SimulationSetupDialog({
   const [acStart, setAcStart] = useState("10");
   const [acStop, setAcStop] = useState("1Meg");
   const [advanced, setAdvanced] = useState("");
+  const [measurements, setMeasurements] = useState<EditableMeasurement[]>([]);
   const [error, setError] = useState("");
+  const measurementContext = useMemo(
+    () => measurementAuthoringContext(components, wires, netLabels),
+    [components, netLabels, wires],
+  );
 
   useEffect(() => {
     if (!open) return;
@@ -73,7 +97,16 @@ export function SimulationSetupDialog({
       setAcStart(primaryTokens[2] ?? "10");
       setAcStop(primaryTokens[3] ?? "1Meg");
     }
-    setAdvanced(directives.filter((line) => !PRIMARY_RE.test(line)).join("\n"));
+    const editableMeasurements: EditableMeasurement[] = [];
+    const expertDirectives: string[] = [];
+    for (const line of directives) {
+      if (PRIMARY_RE.test(line)) continue;
+      const measurement = editableMeasurementFromDirective(line, nextMeasurementId());
+      if (measurement) editableMeasurements.push(measurement);
+      else expertDirectives.push(line);
+    }
+    setMeasurements(editableMeasurements);
+    setAdvanced(expertDirectives.join("\n"));
     setError("");
   }, [directives, open]);
 
@@ -95,12 +128,29 @@ export function SimulationSetupDialog({
       setError("Complete the highlighted analysis fields before applying.");
       return;
     }
+    const measurementError = validateEditableMeasurements(measurements, measurementContext);
+    if (measurementError) {
+      setError(measurementError);
+      return;
+    }
     const advancedDirectives = advanced
       .split(/\r?\n/)
       .map(normalizedDirective)
       .filter(Boolean);
-    setDirectives([...(primaryDirective ? [primaryDirective] : []), ...advancedDirectives]);
+    const measurementDirectives = measurements.map((measurement) => (
+      serializeEditableMeasurement(measurement, measurementContext)
+    ));
+    setDirectives([
+      ...(primaryDirective ? [primaryDirective] : []),
+      ...measurementDirectives,
+      ...advancedDirectives,
+    ]);
     onOpenChange(false);
+  };
+
+  const updateMeasurement = (id: string, update: Partial<EditableMeasurement>) => {
+    setMeasurements((current) => current.map((row) => (row.id === id ? { ...row, ...update } : row)));
+    setError("");
   };
 
   return (
@@ -180,14 +230,206 @@ export function SimulationSetupDialog({
             Place <em>Pulse Voltage</em> or <em>AC Voltage</em> from Sources, then edit its named fields in Properties—no <code>PULSE(...)</code> syntax is required.
           </div>
 
+          <section className="measurement-builder" aria-labelledby="measurement-builder-title">
+            <div className="measurement-builder-header">
+              <div>
+                <h3 id="measurement-builder-title">Measurements</h3>
+                <p>Save averages, extrema, power, and derived efficiency as named results.</p>
+              </div>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => setMeasurements((current) => [
+                  ...current,
+                  {
+                    ...blankEditableMeasurement(nextMeasurementId()),
+                    analysis: analysis === "ac" ? "ac" : "tran",
+                    target: measurementContext.nodeNames[0] ?? "",
+                  },
+                ])}
+              >
+                Add measurement
+              </Button>
+            </div>
+
+            {measurements.length === 0 ? (
+              <p className="measurement-builder-empty">No saved measurements. Simulation results still show live trace readouts.</p>
+            ) : (
+              <div className="measurement-builder-rows">
+                {measurements.map((measurement, index) => {
+                  const derived = measurement.calculation === "PARAM";
+                  const quantity = derived ? "formula" : measurement.quantity;
+                  const componentTargets = quantity === "component-power"
+                    ? [...measurementContext.powerExpressionByRef.keys()]
+                    : quantity === "component-power-delivered"
+                      ? measurementContext.sourcePowerRefs
+                      : measurementContext.currentRefs;
+                  return (
+                    <article className="measurement-builder-row" key={measurement.id}>
+                      <div className="measurement-builder-row-heading">
+                        <span>Result {index + 1}</span>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          aria-label={`Remove measurement ${index + 1}`}
+                          onClick={() => setMeasurements((current) => current.filter((row) => row.id !== measurement.id))}
+                        >
+                          Remove
+                        </Button>
+                      </div>
+                      <div className="measurement-builder-grid">
+                        <label className="simulation-setup-field">
+                          <span>Name</span>
+                          <Input
+                            aria-label={`Measurement ${index + 1} name`}
+                            value={measurement.name}
+                            onChange={(event) => updateMeasurement(measurement.id, { name: event.currentTarget.value })}
+                          />
+                        </label>
+                        <label className="simulation-setup-field">
+                          <span>Analysis</span>
+                          <select
+                            aria-label={`Measurement ${index + 1} analysis`}
+                            value={measurement.analysis}
+                            onChange={(event) => updateMeasurement(measurement.id, { analysis: event.currentTarget.value as EditableMeasurement["analysis"] })}
+                          >
+                            <option value="tran">Transient</option>
+                            <option value="ac">AC sweep</option>
+                            <option value="dc">DC sweep</option>
+                            <option value="noise">Noise</option>
+                          </select>
+                        </label>
+                        <label className="simulation-setup-field">
+                          <span>Calculation</span>
+                          <select
+                            aria-label={`Measurement ${index + 1} calculation`}
+                            value={measurement.calculation}
+                            onChange={(event) => {
+                              const calculation = event.currentTarget.value as EditableMeasurementCalculation;
+                              updateMeasurement(measurement.id, {
+                                calculation,
+                                ...(calculation === "PARAM" ? { quantity: "formula" as const } : {}),
+                              });
+                            }}
+                          >
+                            <option value="AVG">Average</option>
+                            <option value="RMS">RMS</option>
+                            <option value="MAX">Maximum</option>
+                            <option value="MIN">Minimum</option>
+                            <option value="PP">Peak to peak</option>
+                            <option value="INTEG">Integral</option>
+                            <option value="PARAM">Derived result</option>
+                          </select>
+                        </label>
+                        {!derived && (
+                          <label className="simulation-setup-field">
+                            <span>Quantity</span>
+                            <select
+                              aria-label={`Measurement ${index + 1} quantity`}
+                              value={measurement.quantity}
+                              onChange={(event) => {
+                                const nextQuantity = event.currentTarget.value as EditableMeasurementQuantity;
+                                const target = nextQuantity === "node-voltage"
+                                  ? measurementContext.nodeNames[0] ?? ""
+                                  : nextQuantity === "component-current"
+                                    ? measurementContext.currentRefs[0] ?? ""
+                                    : nextQuantity === "component-power"
+                                      ? [...measurementContext.powerExpressionByRef.keys()][0] ?? ""
+                                      : nextQuantity === "component-power-delivered"
+                                        ? measurementContext.sourcePowerRefs[0] ?? ""
+                                      : "";
+                                updateMeasurement(measurement.id, { quantity: nextQuantity, target });
+                              }}
+                            >
+                              <option value="node-voltage">Node voltage</option>
+                              <option value="component-current">Component current</option>
+                              <option value="component-power">Power absorbed by component</option>
+                              <option value="component-power-delivered">Power delivered by source</option>
+                              <option value="formula">Formula</option>
+                            </select>
+                          </label>
+                        )}
+                      </div>
+
+                      {quantity === "node-voltage" && (
+                        <label className="simulation-setup-field">
+                          <span>Node</span>
+                          <select
+                            aria-label={`Measurement ${index + 1} node`}
+                            value={measurement.target}
+                            onChange={(event) => updateMeasurement(measurement.id, { target: event.currentTarget.value })}
+                          >
+                            <option value="">Choose node…</option>
+                            {measurementContext.nodeNames.map((node) => <option value={node} key={node}>{node}</option>)}
+                          </select>
+                        </label>
+                      )}
+                      {(quantity === "component-current" || quantity === "component-power" || quantity === "component-power-delivered") && (
+                        <label className="simulation-setup-field">
+                          <span>Component</span>
+                          <select
+                            aria-label={`Measurement ${index + 1} component`}
+                            value={measurement.target}
+                            onChange={(event) => updateMeasurement(measurement.id, { target: event.currentTarget.value })}
+                          >
+                            <option value="">Choose component…</option>
+                            {componentTargets.map((ref) => <option value={ref} key={ref}>{ref}</option>)}
+                          </select>
+                        </label>
+                      )}
+                      {quantity === "formula" && (
+                        <label className="simulation-setup-field">
+                          <span>{derived ? "Formula using earlier result names" : "Quantity formula"}</span>
+                          <Input
+                            aria-label={`Measurement ${index + 1} formula`}
+                            value={measurement.formula}
+                            onChange={(event) => updateMeasurement(measurement.id, { formula: event.currentTarget.value })}
+                            placeholder={derived ? "PL / PS" : "V(out) * I(R1)"}
+                          />
+                        </label>
+                      )}
+                      {!derived && (
+                        <details className="measurement-builder-window">
+                          <summary>Measurement window</summary>
+                          <div className="simulation-setup-grid">
+                            <label className="simulation-setup-field">
+                              <span>Start <small>seconds, optional</small></span>
+                              <Input
+                                aria-label={`Measurement ${index + 1} start time`}
+                                inputMode="decimal"
+                                value={measurement.from}
+                                onChange={(event) => updateMeasurement(measurement.id, { from: event.currentTarget.value })}
+                              />
+                            </label>
+                            <label className="simulation-setup-field">
+                              <span>End <small>seconds, optional</small></span>
+                              <Input
+                                aria-label={`Measurement ${index + 1} end time`}
+                                inputMode="decimal"
+                                value={measurement.to}
+                                onChange={(event) => updateMeasurement(measurement.id, { to: event.currentTarget.value })}
+                              />
+                            </label>
+                          </div>
+                        </details>
+                      )}
+                    </article>
+                  );
+                })}
+              </div>
+            )}
+          </section>
+
           <details className="simulation-setup-advanced">
             <summary>Advanced directives</summary>
-            <p>One directive per line, such as <code>.param</code>, <code>.step</code>, <code>.meas</code>, <code>.model</code>, or <code>.include</code>.</p>
+            <p>Exact imported or unsupported expert syntax only, such as custom <code>.param</code>, <code>.step</code>, <code>.model</code>, or <code>.include</code> lines.</p>
             <textarea
               aria-label="Advanced SPICE directives"
               value={advanced}
               onChange={(event) => setAdvanced(event.currentTarget.value)}
-              placeholder=".param Rload=10k&#10;.meas tran peak MAX V(out)"
+              placeholder=".param Rload=10k"
               spellCheck={false}
             />
           </details>

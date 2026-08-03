@@ -7992,7 +7992,10 @@ button.bottom-panel-head:focus-visible {
    from ui/dialog.tsx + ui/button.tsx. */
 
 .simulation-setup-dialog {
-  width: min(560px, calc(100vw - 32px));
+  width: min(720px, calc(100vw - 32px));
+  max-width: min(720px, calc(100vw - 32px));
+  max-height: min(820px, calc(100vh - 32px));
+  overflow-y: auto;
 }
 
 .simulation-setup-body {
@@ -8058,6 +8061,74 @@ button.bottom-panel-head:focus-visible {
   font-family: var(--font-mono);
 }
 
+.measurement-builder {
+  display: grid;
+  gap: var(--sp-3);
+  padding-top: var(--sp-3);
+  border-top: 1px solid var(--border);
+}
+
+.measurement-builder-header,
+.measurement-builder-row-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+}
+
+.measurement-builder-header h3 {
+  margin: 0;
+  color: var(--text);
+  font: 650 var(--fs-body) var(--font-ui);
+}
+
+.measurement-builder-header p,
+.measurement-builder-empty {
+  margin: var(--sp-1) 0 0;
+  color: var(--text-dim);
+  font: 500 var(--fs-caption) / 1.45 var(--font-ui);
+}
+
+.measurement-builder-rows {
+  display: grid;
+  gap: var(--sp-3);
+}
+
+.measurement-builder-row {
+  display: grid;
+  gap: var(--sp-3);
+  padding: var(--sp-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--panel);
+}
+
+.measurement-builder-row-heading > span {
+  color: var(--text-muted);
+  font: 650 var(--fs-caption) var(--font-ui);
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+}
+
+.measurement-builder-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--sp-3);
+}
+
+.measurement-builder-window {
+  color: var(--text-muted);
+  font: 600 var(--fs-caption) var(--font-ui);
+}
+
+.measurement-builder-window summary {
+  cursor: pointer;
+}
+
+.measurement-builder-window[open] summary {
+  margin-bottom: var(--sp-3);
+}
+
 .simulation-setup-advanced {
   border-top: 1px solid var(--border);
   padding-top: var(--sp-3);
@@ -8089,8 +8160,14 @@ button.bottom-panel-head:focus-visible {
 
 @media (max-width: 560px) {
   .simulation-setup-grid,
-  .simulation-setup-grid--ac {
+  .simulation-setup-grid--ac,
+  .measurement-builder-grid {
     grid-template-columns: 1fr;
+  }
+
+  .measurement-builder-header {
+    align-items: flex-start;
+    flex-direction: column;
   }
 }
 
