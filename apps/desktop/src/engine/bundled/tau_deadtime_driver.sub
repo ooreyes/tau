@@ -1,0 +1,17 @@
+* Tau half-bridge non-overlap driver. XSPICE event delays create the blanking
+* interval; behavioral sources scale normalized digital outputs to live rails.
+.subckt TauDeadtimeDriver vcc vee pwm gp gn params: dead=200n threshold=0.5 hysteresis=0.02 transition=10n rout=5
+B_tau_norm tau_norm 0 V=(V(pwm)-V(vee))/(V(vcc)-V(vee))
+.model tau_dead_adc adc_bridge(in_low={threshold-hysteresis/2} in_high={threshold+hysteresis/2})
+A_tau_dead_adc [tau_norm] [tau_din] tau_dead_adc
+.model tau_gp_delay d_buffer(rise_delay=1p fall_delay={dead} inertial_delay=true)
+A_tau_gp tau_din tau_dgp tau_gp_delay
+.model tau_gn_delay d_buffer(rise_delay={dead} fall_delay=1p inertial_delay=true)
+A_tau_gn tau_din tau_dgn tau_gn_delay
+.model tau_dead_dac dac_bridge(out_low=0 out_high=1 t_rise={transition} t_fall={transition})
+A_tau_dead_dac [tau_dgp tau_dgn] [tau_gp_norm tau_gn_norm] tau_dead_dac
+B_tau_gp tau_gp_drive 0 V=V(vee)+V(tau_gp_norm)*(V(vcc)-V(vee))
+R_tau_gp tau_gp_drive gp {rout}
+B_tau_gn tau_gn_drive 0 V=V(vee)+V(tau_gn_norm)*(V(vcc)-V(vee))
+R_tau_gn tau_gn_drive gn {rout}
+.ends TauDeadtimeDriver

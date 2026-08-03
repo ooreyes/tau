@@ -1642,26 +1642,50 @@ export function ComponentInspector({
                   ? `Ready · ${selectedSubcircuit.ports.length} named terminals (${selectedSubcircuit.ports.join(", ")}) from ${selectedSubcircuit.sourceLabel}`
                   : `Blocked · ${subcircuitInstance?.name || "No subcircuit"} has no attached or document definition; Tau will not guess its pins or behavior.`}
               </p>
-              {selectedSubcircuit?.parameters.map((parameter) => (
-                <label key={parameter.name} className="property-field">
-                  <span>{parameter.name}</span>
-                  <input
-                    className="mono-num"
-                    value={subcircuitInstance
-                      ? subcircuitParameterValue(subcircuitInstance.overrides, parameter.name) ?? parameter.defaultValue
-                      : parameter.defaultValue}
-                    aria-label={`Subcircuit parameter ${parameter.name}`}
-                    spellCheck={false}
-                    onFocus={() => {
-                      editKeyRef.current = null;
-                    }}
-                    onChange={(event) => {
-                      beginParamChange(`subcircuit-${parameter.name}`);
-                      updateSubcircuitParameter(parameter.name, event.currentTarget.value, parameter.defaultValue);
-                    }}
-                  />
-                </label>
-              ))}
+              {selectedSubcircuit?.parameters.map((parameter) => {
+                const parameterLabel = parameter.label ?? parameter.name;
+                const parameterValue = subcircuitInstance
+                  ? subcircuitParameterValue(subcircuitInstance.overrides, parameter.name) ?? parameter.defaultValue
+                  : parameter.defaultValue;
+                return (
+                  <div key={parameter.name} className="property-parameter">
+                    <label className="property-field">
+                      <span>{parameterLabel}</span>
+                      {parameter.label ? (
+                        <EngineeringInput
+                          value={parameterValue}
+                          unit={parameter.unit ?? ""}
+                          label={parameterLabel}
+                          min={parameter.min}
+                          max={parameter.max}
+                          minExclusive={parameter.minExclusive}
+                          onBeginChange={() => beginParamChange(`subcircuit-${parameter.name}`)}
+                          onValueChange={(value) => updateSubcircuitParameter(
+                            parameter.name,
+                            value,
+                            parameter.defaultValue,
+                          )}
+                        />
+                      ) : (
+                        <input
+                          className="mono-num"
+                          value={parameterValue}
+                          aria-label={`Subcircuit parameter ${parameter.name}`}
+                          spellCheck={false}
+                          onFocus={() => {
+                            editKeyRef.current = null;
+                          }}
+                          onChange={(event) => {
+                            beginParamChange(`subcircuit-${parameter.name}`);
+                            updateSubcircuitParameter(parameter.name, event.currentTarget.value, parameter.defaultValue);
+                          }}
+                        />
+                      )}
+                    </label>
+                    {parameter.description && <p className="property-hint">{parameter.description}</p>}
+                  </div>
+                );
+              })}
               {selectedSubcircuit && selectedSubcircuit.parameters.length === 0 && (
                 <p className="property-hint">This model defines terminals only; it has no instance parameters.</p>
               )}

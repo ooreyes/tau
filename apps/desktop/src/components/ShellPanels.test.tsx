@@ -317,6 +317,40 @@ describe("ComponentInspector - semiconductor model chooser", () => {
 });
 
 describe("ComponentInspector - native subcircuit chooser", () => {
+  it("places the bundled Class-D driver with exact terminals and bounded named knobs", () => {
+    const selected = {
+      id: "x1", kind: "subckt" as const, x: 0, y: 0, rotation: 0 as const,
+      value: "tau_passthrough", label: "X1",
+    };
+    useSchematic.setState({ components: [selected] });
+    const { rerender } = render(<ComponentInspector selected={selected} />);
+    fireEvent.change(screen.getByRole("combobox", { name: "Subcircuit model" }), {
+      target: { value: "TauDeadtimeDriver" },
+    });
+
+    expect(useSchematic.getState().components[0]).toMatchObject({
+      value: "TauDeadtimeDriver",
+      pinOverride: [
+        { id: "p1", label: "vcc" },
+        { id: "p2", label: "vee" },
+        { id: "p3", label: "pwm" },
+        { id: "p4", label: "gp" },
+        { id: "p5", label: "gn" },
+      ],
+    });
+    rerender(<ComponentInspector selected={useSchematic.getState().components[0]} />);
+
+    const dead = screen.getByRole("textbox", { name: "Dead time" }) as HTMLInputElement;
+    expect(dead.value).toBe("200");
+    expect((screen.getByRole("combobox", { name: "Dead time SI prefix" }) as HTMLSelectElement).value).toBe("n");
+    expect((screen.getByRole("textbox", { name: "Input threshold" }) as HTMLInputElement).value).toBe("0.5");
+    expect(screen.queryByRole("combobox", { name: "Input threshold SI prefix" })).toBeNull();
+    expect(screen.getByText(/Blanking interval between one gate turning off/)).toBeTruthy();
+
+    fireEvent.change(dead, { target: { value: "250" } });
+    expect(useSchematic.getState().components[0].value).toBe("TauDeadtimeDriver dead=250n");
+  });
+
   it("shows a named model contract and edits declared parameters without a raw Value field", () => {
     const selected = {
       id: "x1", kind: "subckt" as const, x: 0, y: 0, rotation: 0 as const,

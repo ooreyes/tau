@@ -1914,6 +1914,94 @@ A_a2_dac [a2_dq a2_dnq] [q1 q1bar] a2_dac
         assert!(value_near("q0", 0.0051) < 1.0 && value_near("q1", 0.0051) > 4.0);
     }
 
+    /** The menu-first Class-D driver uses two asymmetric XSPICE event buffers:
+     * both gate voltages follow PWM, but the turn-on edge is delayed while the
+     * opposite device's turn-off edge is immediate. Prove the one shared
+     * bundled source against the embedded-library API on bipolar and unipolar
+     * rails, including an adjusted dead-time value and zero command overlap. */
+    #[test]
+    #[ignore = "requires TAU_NGSPICE_LIB pointing to libngspice with its code models"]
+    fn runs_the_bundled_deadtime_driver_with_accurate_nonoverlap() {
+        let _guard = real_engine_test_guard();
+        let library = std::env::var_os("TAU_NGSPICE_LIB")
+            .map(PathBuf::from)
+            .expect("TAU_NGSPICE_LIB must point to a shared ngspice library");
+        let mut engine = SpiceEngine::load(vec![library]).expect("ngspice library should load");
+        let block = include_str!("../../src/engine/bundled/tau_deadtime_driver.sub");
+
+        let prove = |engine: &mut SpiceEngine, low: f64, high: f64, dead: f64| {
+            let result = engine
+                .run(SpiceRequest {
+                    netlist: format!(
+                        "Tau dead-time driver native proof\n\
+                         VCC vcc 0 {high}\n\
+                         VEE vee 0 {low}\n\
+                         VPWM pwm 0 PULSE({low} {high} 1u 1n 1n 2u 4u)\n\
+                         {block}\n\
+                         XDRV vcc vee pwm gp gn TauDeadtimeDriver dead={dead} threshold=.5 hysteresis=.02 transition=10n rout=5\n\
+                         Cgp gp 0 10p\nCgn gn 0 10p\nRgp gp 0 1G\nRgn gn 0 1G\n\
+                         .tran 1n 6u\n.end"
+                    ),
+                })
+                .expect("bundled dead-time driver transient should solve");
+            let vector = |name: &str| {
+                result
+                    .vectors
+                    .iter()
+                    .find(|vector| vector.name.eq_ignore_ascii_case(name))
+                    .unwrap_or_else(|| panic!("{name} missing; messages: {:?}", result.messages))
+            };
+            let time = &vector("time").real;
+            let gp = &vector("gp").real;
+            let gn = &vector("gn").real;
+            let level = (low + high) / 2.0;
+            let crossing = |values: &[f64], rising: bool, after: f64| {
+                (1..time.len())
+                    .find_map(|index| {
+                        if time[index] < after {
+                            return None;
+                        }
+                        let crossed = if rising {
+                            values[index - 1] < level && values[index] >= level
+                        } else {
+                            values[index - 1] > level && values[index] <= level
+                        };
+                        if !crossed {
+                            return None;
+                        }
+                        let fraction =
+                            (level - values[index - 1]) / (values[index] - values[index - 1]);
+                        Some(time[index - 1] + fraction * (time[index] - time[index - 1]))
+                    })
+                    .expect("gate threshold crossing should exist")
+            };
+            let gp_rise = crossing(gp, true, 0.5e-6);
+            let gn_rise = crossing(gn, true, 0.5e-6);
+            let gn_fall = crossing(gn, false, 2.5e-6);
+            let gp_fall = crossing(gp, false, 2.5e-6);
+            let tolerance = 2e-9;
+            assert!(
+                ((gn_rise - gp_rise) - dead).abs() <= tolerance,
+                "rising non-overlap was {} s, requested {dead} s",
+                gn_rise - gp_rise
+            );
+            assert!(
+                ((gp_fall - gn_fall) - dead).abs() <= tolerance,
+                "falling non-overlap was {} s, requested {dead} s",
+                gp_fall - gn_fall
+            );
+            assert!(
+                gp.iter()
+                    .zip(gn)
+                    .all(|(gp_value, gn_value)| !(*gp_value < level && *gn_value > level)),
+                "PMOS-on and NMOS-on commands overlapped"
+            );
+        };
+
+        prove(&mut engine, -10.0, 10.0, 200e-9);
+        prove(&mut engine, 0.0, 5.0, 400e-9);
+    }
+
     /** Tau's LTspice vendor-library adapter relies on the patched OTA current
      * limit in analog.cm and on xtradev's LTspice-equivalent simple diode. A
      * real bundled-engine run proves both model types load and that the OTA

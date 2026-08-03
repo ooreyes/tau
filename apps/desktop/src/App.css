@@ -5805,6 +5805,14 @@ button.bottom-panel-head:focus-visible {
   line-height: 1.4;
 }
 
+.property-parameter {
+  min-width: 0;
+}
+
+.property-parameter .property-hint {
+  margin: 2px 2px var(--sp-1);
+}
+
 .property-field {
   min-width: 0;
   display: grid;
@@ -5867,6 +5875,19 @@ button.bottom-panel-head:focus-visible {
 
 .property-field .eng-input input,
 .property-field .eng-input select {
+  flex: 0 0 auto;
+}
+
+/* `.property-field select { width: 100% }` is correct for standalone model
+   pickers, but an engineering unit picker shares a row with its mantissa.
+   Keep both controls intrinsic so the select cannot squeeze the number down
+   to padding-only at the minimum-width Properties rail. */
+.property-field .eng-input input {
+  min-width: 2.5ch;
+}
+
+.property-field .eng-input select {
+  width: auto;
   min-width: 0;
 }
 

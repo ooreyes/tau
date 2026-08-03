@@ -1,5 +1,8 @@
 /**
- * Bundled LTspice **library subcircuits** (LTspice parity). Five LTspice-library symbols in the acceptance
+ * Bundled subcircuits. Tau-native engineering blocks live in small imported
+ * text files so the frontend deck builder and the native regression suite run
+ * the exact same source. The remaining blocks provide LTspice library parity.
+ * Five LTspice-library symbols in the acceptance
  * corpus (`Misc\\TowTom2`, `SpecialFunctions\\capmeter`, `ISO16750-2`,
  * `ISO7637-2`, `Opamps\\opamp`) instantiate subcircuits whose bodies ship
  * with LTspice 17.2.4 in `lib/sub/*.{sub,lib}`. Real `.asc` files reference
@@ -24,6 +27,8 @@
  *
  * Lookup is case-insensitive; ngspice treats subckt names case-insensitively.
  */
+
+import tauDeadtimeDriver from "./bundled/tau_deadtime_driver.sub?raw";
 
 /**
  * Map an LTspice subcircuit name onto the ngspice-safe name the bundled text
@@ -484,6 +489,7 @@ const LIBRARY_FILES = new Map<string, string>([
   ["tau-native.sub", `.subckt tau_passthrough 1 2
 Rpass 1 2 1m
 .ends tau_passthrough`],
+  ["tau-deadtime-driver.sub", tauDeadtimeDriver],
   ["opamp.sub", OPAMP_SUB],
   ["towtom2.sub", TOWTOM2_SUB],
   ["capometer.sub", CAPOMETER_SUB],

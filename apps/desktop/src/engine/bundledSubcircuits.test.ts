@@ -58,15 +58,25 @@ describe("sanitizeSubcktName", () => {
 });
 
 describe("bundled block registry", () => {
-  it("ships all 32 blocks: Tau passthrough + opamp + TowTom2 + capometer + 10 ISO7637 pulses + 18 ISO16750 profiles", () => {
+  it("ships all 33 blocks, including Tau's native passthrough and dead-time driver", () => {
     const names = bundledSubcircuitNames();
-    expect(names.size).toBe(32);
+    expect(names.size).toBe(33);
     expect(names.has("tau_passthrough")).toBe(true);
+    expect(names.has("taudeadtimedriver")).toBe(true);
     expect(names.has("opamp")).toBe(true);
     expect(names.has("towtom2")).toBe(true);
     expect(names.has("capometer")).toBe(true);
     expect(names.has("pulse1_12v")).toBe(true);
     expect(names.has("4_6_3_24v_startingprofile")).toBe(true);
+  });
+
+  it("ships the menu-first driver as the exact shared XSPICE block", () => {
+    const block = bundledSubcircuitBlock("TauDeadtimeDriver")!;
+    expect(block).toContain(".subckt TauDeadtimeDriver vcc vee pwm gp gn params: dead=200n");
+    expect(block).toContain("d_buffer(rise_delay=1p fall_delay={dead}");
+    expect(block).toContain("d_buffer(rise_delay={dead} fall_delay=1p");
+    expect(block).toContain("V=(V(pwm)-V(vee))/(V(vcc)-V(vee))");
+    expect(bundledLibraryText("tau-deadtime-driver.sub")).toContain(block);
   });
 
   it("opamp block declares the .asy's Aol/GBW defaults on the .subckt line (X-line params need them declared)", () => {
@@ -134,6 +144,28 @@ describe("bundledLibraryText", () => {
 });
 
 describe("deck integration - subckt instances", () => {
+  it("emits the five-terminal Class-D driver in menu terminal order with overrides", () => {
+    const comps = [
+      sub("TauDeadtimeDriver dead=300n", "X1", [
+        ["p1", "vcc", 0, 0],
+        ["p2", "vee", 0, 32],
+        ["p3", "pwm", 0, 64],
+        ["p4", "gp", 96, 0],
+        ["p5", "gn", 96, 32],
+      ]),
+      { id: "gnd", kind: "ground" as const, x: 200, y: 200, rotation: 0 as const, value: "", label: "" },
+    ];
+    const netLabels = [
+      lbl(0, 0, "vcc"), lbl(0, 32, "vee"), lbl(0, 64, "pwm"),
+      lbl(96, 0, "gp"), lbl(96, 32, "gn"),
+    ];
+    const deck = buildSpiceDeck({ components: comps, wires: [], netLabels }, { kind: "tran", stopTime: 1e-6, steps: 1_000 });
+    expect(deck.netlist).toMatch(/^X1 vcc vee pwm gp gn TauDeadtimeDriver dead=300n$/m);
+    expect(deck.netlist.match(/^\.subckt TauDeadtimeDriver /gm)).toHaveLength(1);
+    expect(deck.netlist).toContain("d_buffer(rise_delay={dead} fall_delay=1p");
+    expect(deck.unresolvedSubckts).toEqual([]);
+  });
+
   it("emits the X line (SpiceOrder nodes, sanitized name) plus the bundled block once", () => {
     // U1: p1 shared with R1.a via a wire, p2 grounded by a flag.
     const comps = [

@@ -10,6 +10,12 @@ export interface SubcircuitLibraryText {
 export interface SubcircuitParameter {
   readonly name: string;
   readonly defaultValue: string;
+  readonly label?: string;
+  readonly unit?: string;
+  readonly min?: number;
+  readonly max?: number;
+  readonly minExclusive?: boolean;
+  readonly description?: string;
 }
 
 export interface SubcircuitOption {
@@ -26,6 +32,45 @@ export interface SubcircuitInstanceValue {
 }
 
 const ASSIGNMENT = /([A-Za-z_][\w.]*)\s*=\s*(\{[^}]*\}|"[^"]*"|'[^']*'|[^\s]+)/g;
+
+const BUNDLED_PARAMETER_UI: Readonly<Record<string, Readonly<Record<string, Omit<SubcircuitParameter, "name" | "defaultValue">>>>> = {
+  taudeadtimedriver: {
+    dead: {
+      label: "Dead time",
+      unit: "s",
+      min: 1e-12,
+      max: 1,
+      minExclusive: false,
+      description: "Blanking interval between one gate turning off and the other turning on.",
+    },
+    threshold: {
+      label: "Input threshold",
+      min: 0.1,
+      max: 0.9,
+      description: "PWM switching threshold as a fraction from VEE (0) to VCC (1).",
+    },
+    hysteresis: {
+      label: "Input hysteresis",
+      min: 0,
+      max: 0.2,
+      description: "Normalized Schmitt band around the input threshold.",
+    },
+    transition: {
+      label: "Gate transition",
+      unit: "s",
+      min: 1e-12,
+      max: 1e-3,
+      description: "Analog rise/fall time of each gate command.",
+    },
+    rout: {
+      label: "Output resistance",
+      unit: "Ω",
+      min: 1e-3,
+      max: 1e6,
+      description: "Series resistance between the ideal rail-scaled driver and each gate.",
+    },
+  },
+};
 
 /** Read the public contract of a `.subckt` without interpreting its body. */
 export function describeSubcircuit(block: string): Pick<SubcircuitOption, "name" | "ports" | "parameters"> | null {
@@ -71,7 +116,16 @@ function addBlocks(
     const key = descriptor.name.toLowerCase();
     if (claimed.has(key)) continue;
     claimed.add(key);
-    found.push({ ...descriptor, source, sourceLabel });
+    const ui = source === "bundled" ? BUNDLED_PARAMETER_UI[key] : undefined;
+    found.push({
+      ...descriptor,
+      parameters: descriptor.parameters.map((parameter) => ({
+        ...parameter,
+        ...(ui?.[parameter.name.toLowerCase()] ?? {}),
+      })),
+      source,
+      sourceLabel,
+    });
   }
   found.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base", numeric: true }));
   options.push(...found);

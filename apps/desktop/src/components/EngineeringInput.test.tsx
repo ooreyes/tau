@@ -84,4 +84,41 @@ describe("EngineeringInput", () => {
     fireEvent.blur(input, { relatedTarget: screen.getByText("elsewhere") });
     expect(input.value).toBe("1.23456789e11");
   });
+
+  it("marks an out-of-range draft invalid, refuses it, and restores the committed value", () => {
+    const onValueChange = vi.fn();
+    render(
+      <div>
+        <EngineeringInput
+          label="Dead time"
+          unit="s"
+          value="200n"
+          min={1e-12}
+          max={1}
+          onValueChange={onValueChange}
+        />
+        <button type="button">elsewhere</button>
+      </div>,
+    );
+    const input = screen.getByLabelText("Dead time") as HTMLInputElement;
+    fireEvent.change(input, { target: { value: "0" } });
+    expect(input.getAttribute("aria-invalid")).toBe("true");
+    expect(onValueChange).not.toHaveBeenCalled();
+    fireEvent.blur(input, { relatedTarget: screen.getByText("elsewhere") });
+    expect(input.value).toBe("200");
+  });
+
+  it("uses a bounded unitless field without an irrelevant SI-prefix chooser", () => {
+    const onValueChange = vi.fn();
+    render(
+      <EngineeringInput label="Input threshold" unit="" value="0.5" min={0.1} max={0.9} onValueChange={onValueChange} />,
+    );
+    const input = screen.getByLabelText("Input threshold") as HTMLInputElement;
+    expect(screen.queryByLabelText("Input threshold SI prefix")).toBeNull();
+    fireEvent.change(input, { target: { value: "0.6" } });
+    expect(onValueChange).toHaveBeenCalledWith("0.6");
+    fireEvent.change(input, { target: { value: "1" } });
+    expect(input.getAttribute("aria-invalid")).toBe("true");
+    expect(onValueChange).toHaveBeenCalledTimes(1);
+  });
 });

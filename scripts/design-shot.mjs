@@ -92,10 +92,9 @@ SYMBOL res 320 240 R0
 SYMATTR InstName R_TAU_1
 SYMATTR Value 1T
 SYMATTR TauKind subckt
-SYMATTR TauValue deadtime dead=300n
+SYMATTR TauValue TauDeadtimeDriver dead=300n
 SYMATTR TauLabel X1
 SYMATTR TauPins ${encodeURIComponent(JSON.stringify(subcircuitPins))}
-TEXT 128 336 Left 2 !.subckt deadtime vcc vee pwm gp gn params: dead=250n\\nRgp gp vee 1k\\nRgn gn vee 1k\\n.ends deadtime
 `;
 
 function readViewports() {
@@ -285,12 +284,18 @@ async function shootViewport(page, viewport, theme) {
   if (!selectedSubcircuit) throw new Error("native five-terminal subcircuit X1 was not imported");
   const subcircuitPicker = page.getByRole("combobox", { name: "Subcircuit model" });
   await subcircuitPicker.waitFor({ state: "visible", timeout: STATE_TIMEOUT_MS });
-  if (await subcircuitPicker.inputValue() !== "deadtime") {
-    throw new Error("native subcircuit did not resolve its inline deadtime definition");
+  if (await subcircuitPicker.inputValue() !== "TauDeadtimeDriver") {
+    throw new Error("native subcircuit did not resolve Tau's bundled dead-time driver");
   }
   await page.getByText(/5 named terminals \(vcc, vee, pwm, gp, gn\)/).waitFor({ state: "visible", timeout: STATE_TIMEOUT_MS });
-  const deadtimeField = page.getByRole("textbox", { name: "Subcircuit parameter dead" });
-  if (await deadtimeField.inputValue() !== "300n") throw new Error("dead-time override did not reach its named field");
+  const deadtimeField = page.getByRole("textbox", { name: "Dead time" });
+  if (await deadtimeField.inputValue() !== "300") throw new Error("dead-time override did not reach its named field");
+  if (await deadtimeField.evaluate((element) => element.getBoundingClientRect().width) < 32) {
+    throw new Error("dead-time mantissa collapsed below a readable width");
+  }
+  if (await page.getByRole("combobox", { name: "Dead time SI prefix" }).inputValue() !== "n") {
+    throw new Error("dead-time override did not retain its nanosecond unit prefix");
+  }
   if (await page.getByRole("textbox", { name: "Value" }).count()) {
     throw new Error("native subcircuit exposed a raw Value/X syntax field");
   }

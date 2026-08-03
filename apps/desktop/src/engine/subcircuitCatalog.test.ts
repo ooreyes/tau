@@ -37,6 +37,17 @@ describe("subcircuit catalog", () => {
       sourceLabel: "driver.lib",
     }));
     expect(options.find((option) => option.name === "tau_passthrough")?.source).toBe("bundled");
+    expect(options.find((option) => option.name === "TauDeadtimeDriver")).toEqual(expect.objectContaining({
+      ports: ["vcc", "vee", "pwm", "gp", "gn"],
+      source: "bundled",
+      parameters: [
+        expect.objectContaining({ name: "dead", label: "Dead time", unit: "s", defaultValue: "200n" }),
+        expect.objectContaining({ name: "threshold", label: "Input threshold", min: 0.1, max: 0.9 }),
+        expect.objectContaining({ name: "hysteresis", label: "Input hysteresis", min: 0, max: 0.2 }),
+        expect.objectContaining({ name: "transition", label: "Gate transition", unit: "s" }),
+        expect.objectContaining({ name: "rout", label: "Output resistance", unit: "Ω" }),
+      ],
+    }));
   });
 
   it("round-trips instance overrides without exposing raw X syntax", () => {
