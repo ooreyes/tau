@@ -5,7 +5,14 @@ The working memory of an unattended loop that starts from zero every fire.
 
 ## Now
 
-**Status:** DONE - 2026-08-03 10:27 CDT
+**Status:** IN PROGRESS - 2026-08-03 10:30 CDT
+
+Claimed unit: fixed-root, read-only discovery of the user-owned installed
+LTspice model library with selective per-document attachment. Bound file count,
+depth, type, size, traversal, symlink, text/binary handling, and existing
+document caps; never redistribute the library. Scheduler remains unloaded.
+
+Previous completed unit:
 
 Class-D measurements are menu-first. Imported aggregate and derived `.meas`
 lines decode into named result rows; new rows select analysis, calculation,

@@ -9,7 +9,14 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-03 10:27 CDT**
+**Status: IN PROGRESS - 2026-08-03 10:30 CDT**
+
+Claimed unit: safely discover the user's installed LTspice model tree and let a
+document selectively attach a chosen model. Do not copy the 133 MB proprietary
+library into Tau, scan arbitrary paths, follow symlinks, accept binary/encrypted
+payloads, or exceed existing attachment caps. Scheduler remains unloaded.
+
+Previous completed unit:
 
 Simulation Setup now decodes supported `.meas` aggregates and derived results
 into named rows. New results select analysis, calculation, node/component, load
