@@ -237,9 +237,12 @@ describe("ltspiceTypeToKind", () => {
     expect(ltspiceTypeToKind("UprightPowerResistor")).toBe("resistor");
   });
 
-  it("treats any opamps/* library symbol as an op-amp", () => {
+  it("maps ordinary five-pin opamps but refuses verified multi-pin amplifiers", () => {
     expect(ltspiceTypeToKind("opamps\\LT1468")).toBe("opamp");
     expect(ltspiceTypeToKind("Opamps\\AD8675")).toBe("opamp");
+    for (const type of ["Opamps\\AD8235", "opamps\\LT1168", "opamps\\LT1194", "opamps\\LT1795"]) {
+      expect(ltspiceTypeToKind(type)).toBeNull();
+    }
   });
 
   it("returns null for unmapped vendor/library symbols", () => {
@@ -1060,6 +1063,20 @@ SYMATTR SpiceModel LTC4449BOOST`;
     expect(
       doc.warnings.some((w) => w.includes('no Tau equivalent for LTspice symbol "PowerProducts\\LTC4449"')),
     ).toBe(true);
+  });
+
+  it("retains LT1168 as an unsupported multi-pin model instead of guessing five op-amp pins", () => {
+    const source = `Version 4
+SHEET 1 936 680
+SYMBOL opamps\\LT1168 432 224 R0
+SYMATTR InstName U1`;
+    const doc = ascToSchematic(parseAsc(source));
+    expect(doc.components.some((component) => component.label === "U1")).toBe(false);
+    expect(doc.foreignSymbols).toHaveLength(1);
+    expect(doc.foreignSymbols[0]?.type).toBe("opamps\\LT1168");
+    expect(doc.warnings).toContain(
+      'Skipped U1: no Tau equivalent for LTspice symbol "opamps\\LT1168".',
+    );
   });
 
   it("does not carry a foreign symbol from inside a flattened subcircuit body into the parent", () => {

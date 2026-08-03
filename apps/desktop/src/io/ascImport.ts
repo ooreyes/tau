@@ -427,9 +427,10 @@ export function parseAsy(text: string): AsySymbol {
 
 /**
  * Map an LTspice symbol type to a Tau component kind. Case-insensitive; handles
- * the common built-ins. Vendor/library symbols (e.g. "opamps\\LT1468") return
- * `null` here - they need subcircuit-model import (tracked separately) - except
- * where a generic native kind is a faithful stand-in (handled by the caller).
+ * the common built-ins. Vendor/library symbols return `null` unless a shared
+ * native kind has a proven electrical pin topology. Model fidelity remains a
+ * separate requirement even when the pins can be represented; verified
+ * multi-pin amplifiers below are never forced through the five-pin op-amp kind.
  */
 export function ltspiceTypeToKind(type: string): ComponentKind | null {
   const base = type.replace(/\\/g, "/").toLowerCase();
@@ -524,7 +525,16 @@ export function ltspiceTypeToKind(type: string): ComponentKind | null {
   // unlike the behavioral vendor-opamp mapping below. Must be checked before
   // the directory-wide opamp rule; note its SpiceOrder puts invin FIRST.
   if (leaf === "opamp") return "subckt";
-  // Any symbol living under an "opamps" directory is an op-amp at heart.
+  // These verified library parts are NOT five-pin op-amps. They are eight- or
+  // multi-pin instrumentation/fully-differential/high-current amplifiers. The
+  // old directory-wide rule assigned opampO's guessed five-pin bank, collapsing
+  // REF/output/supply nodes and producing plausible generic gain blocks or a
+  // shorted VCVS. Until the user supplies each real symbol/model, retain the
+  // foreign record and refuse the whole simulation by part name.
+  if (base.includes("opamp") && NON_FIVE_PIN_AMPLIFIER_LEAFS.has(leaf)) return null;
+  // Ordinary single-output five-pin symbols under Opamps/ keep the behavioral
+  // op-amp path. Their vendor-model fidelity remains a separate, explicit
+  // model-library task; this branch only claims the shared pin topology.
   if (base.includes("opamp")) return "opamp";
   // LTspice idealized digital A-devices live under `Digital\`. The path prefix
   // is required - bare leafs like "and"/"or" are too generic to claim globally.
@@ -549,6 +559,15 @@ export function ltspiceTypeToKind(type: string): ComponentKind | null {
  *  `sampleHold` kind above.) */
 const DIGITAL_GATE_LEAFS = new Set([
   "inv", "buf", "buf1", "and", "or", "xor", "schmitt", "schmtbuf", "schmtinv",
+]);
+
+/** Proven from the corresponding real LTspice application schematics: these
+ * parts expose more/different terminals than opampO's in+/in-/out/v+/v- bank. */
+const NON_FIVE_PIN_AMPLIFIER_LEAFS = new Set([
+  "ad8235",
+  "lt1168",
+  "lt1194",
+  "lt1795",
 ]);
 
 /**
