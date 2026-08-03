@@ -5,13 +5,15 @@ The working memory of an unattended loop that starts from zero every fire.
 
 ## Now
 
-**Status:** IN PROGRESS - 2026-08-03 10:01 CDT
+**Status:** DONE - 2026-08-03 10:13 CDT
 
-Claimed unit: transient settings semantics. Remove raw Steps from the primary
-surface; expose Circuit duration and Quick/Balanced/Precision detail, retain
-exact output points under Expert, report measured last-run elapsed time, and
-label automatic/document/custom settings honestly. A manual setting must not
-leak when a different circuit is opened. Scheduler remains unloaded.
+Transient settings now speak engineer semantics: Circuit duration (ns through
+minutes), Quick/Balanced/Precision waveform detail, measured last-run elapsed
+time, and an Expert-only exact output count. Raw Steps and the opaque Refine
+button are gone from primary UI. AUTOMATIC/DOCUMENT/CUSTOM labels are truthful;
+custom reset restores the imported `.tran`, and document changes clear prior
+manual state. Typecheck, 2,438 frontend tests, web build, and Chrome minimum-
+window containment pass. Scheduler remains unloaded.
 
 Previous completed unit:
 

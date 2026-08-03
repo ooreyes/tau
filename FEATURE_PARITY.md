@@ -1061,6 +1061,18 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   instead of silently substituting an automatic sweep. Clean `.asc` imports no
   longer show an unsaved dot merely because the store regenerated internal
   IDs; duplicate-reference errors name the duplicated component and count.
+  **Transient-settings semantics (2026-08-03):** the raw STEPS slider and
+  opaque refine-and-rerun transport action are removed. The primary settings
+  now distinguish **Circuit duration** (simulated physical time, with
+  ns/µs/ms/s/min units) from **Waveform detail** (Quick/Balanced/Precision,
+  derived from the fastest source and time constant). Exact output points stay
+  available under an Expert disclosure for reproducibility. Tau reports the
+  measured elapsed time after a real run rather than predicting solver time.
+  Settings provenance reads AUTOMATIC, DOCUMENT, or CUSTOM; a custom reset
+  returns to the imported `.tran` when present, and switching/opening a circuit
+  clears the preceding document's manual override. The cycle-density mapping,
+  runtime cap, human-duration input, provenance/reset, App workspace import
+  path, and two-button Run/Stop transport have regression coverage.
 - 🟡 Bode (AC mag/phase) — **magnitude + phase now both plotted** (`AcPlot`): a
   second log-frequency sub-plot draws each trace's `phaseDeg` on a 45°-snapped
   degrees axis below the dB magnitude, matching LTspice's dual Bode. Shared

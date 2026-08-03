@@ -9,14 +9,19 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: IN PROGRESS - 2026-08-03 10:01 CDT**
+**Status: DONE - 2026-08-03 10:13 CDT**
 
-Claimed unit: replace the misleading raw Steps control with engineer-facing
-transient semantics. Circuit duration will be explicit simulated time, Quick /
-Balanced / Precision will control waveform detail, exact output points will
-remain under Expert, and the last real solver elapsed time will be reported
-without pretending it can be predicted. Document/automatic/custom provenance
-must be honest and must reset on circuit changes. Scheduler stays unloaded.
+Raw Steps is gone from the primary simulation surface and the opaque Refine
+transport action is removed. Circuit duration accepts ns/µs/ms/s/min and
+explicitly means physical time being modeled; Quick/Balanced/Precision map to
+tested source-cycle and time-constant density, while exact output points remain
+under Expert. The completed run reports measured wall-clock elapsed time; Tau
+does not invent an estimate. AUTOMATIC/DOCUMENT/CUSTOM provenance is honest,
+custom reset returns to an imported `.tran` when present, and opening/switching
+circuits clears a prior manual override. Typecheck, all 2,438 frontend tests,
+production web build, and Chrome 900x600 containment pass. Final packaged visual
+QA remains grouped with the remaining UI units because macOS is locked.
+Scheduler stays unloaded.
 
 Previous completed unit:
 
@@ -1789,6 +1794,47 @@ needs Omar's Developer ID.
 - **Status:** DONE
 - **Last completed sub-step:** packaged Tau saved and reopened a disposable buck converter while preserving comments/directive positions, then bundled ngspice completed its 165,337-sample transient; all required gates and the 55-check advanced circuit corpus are green.
 - **Next candidates:** keep the remaining unsupported ASC drawing/window records explicit, and continue the acceptance-corpus path rather than widening the editor with lossy representations.
+
+## 2026-08-03T15:13Z - auto/ltspice-parity - Engineer-facing transient settings (§3/§6)
+
+### What I did
+
+- Replaced STOP/STEPS sliders with a human-unit Circuit duration editor and
+  Quick/Balanced/Precision waveform-detail presets.
+- Moved exact output-point control into Expert and removed the transport's
+  opaque 25%-more Refine action.
+- Added measured transient elapsed time to completed-run status; aborted native
+  runs cannot attach their elapsed time to a stale result.
+- Distinguished AUTOMATIC, imported DOCUMENT, and CUSTOM settings, with a
+  reset target that restores document intent and override reset on every
+  document adoption/switch.
+
+### Files
+
+- `apps/desktop/src/App.tsx`
+- `apps/desktop/src/components/SimulationPanel.tsx`
+- `apps/desktop/src/components/ShellPanels.tsx`
+- `apps/desktop/src/simulation/autoResolution.ts`
+- CSS and integration/regression tests
+
+### Tests
+
+- `pnpm -C apps/desktop typecheck`
+- `pnpm -C apps/desktop test` - 159 passed / 1 skipped files; 2,438 passed /
+  6 skipped tests
+- `pnpm --filter @tau/desktop build`
+- Chrome 900x600 client/scroll exact; zero clipped controls
+
+### Parity items
+
+- Transient duration/detail control: complete for normal and expert paths.
+- Imported `.tran` intent: visible and resettable without raw syntax.
+- Scheduler: intentionally unloaded during interactive work.
+
+### Next step
+
+Finish the menu-only Class-D authoring path and user-owned installed LTspice
+model discovery without redistributing proprietary assets.
 
 ## 2026-08-03T14:56Z - auto/ltspice-parity - Direct transient trace cursors (§7)
 
