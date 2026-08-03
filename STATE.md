@@ -5,7 +5,14 @@ The working memory of an unattended loop that starts from zero every fire.
 
 ## Now
 
-**Status:** DONE - 2026-08-02 22:16 CDT
+**Status:** IN PROGRESS - 2026-08-02 22:19 CDT
+
+Claimed the next save-parity unit: replace imported extended-attribute value
+folding with structured provenance so editing a supported `Value2`/`SpiceLine`
+part can save without erasing or ambiguously redistributing its LTspice slots.
+The scheduler remains unloaded.
+
+Previous completed unit:
 
 Hierarchical-block save half 2 is complete. A resolved, untouched block keeps
 its original LTspice `SYMBOL`; its flattened simulation-only members carry exact

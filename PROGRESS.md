@@ -9,7 +9,18 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-02 22:16 CDT**
+**Status: IN PROGRESS - 2026-08-02 22:19 CDT**
+
+Interactive parity unit: replace the lossy folded-value contract for imported
+LTspice `Value`/`Value2`/`SpiceLine`/`SpiceLine2` attributes with structured,
+validated provenance. An untouched component must keep each original slot; a
+supported edit must update the electrically authoritative slot without dropping
+the others, and an ambiguous transformation must remain an explicit refusal.
+The unit is complete only with fail-first save/reopen tests, a real-corpus
+census, frontend/native gates, and a packaged-app check. The scheduler stays
+unloaded.
+
+Previous completed unit:
 
 Resolved LTspice hierarchical blocks now save losslessly. The importer records
 exact, owner-scoped provenance for every flattened simulation member; the
