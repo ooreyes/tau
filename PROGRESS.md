@@ -9,7 +9,18 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-03 12:04 CDT**
+**Status: IN PROGRESS - 2026-08-03 12:09 CDT**
+
+Claimed unit: harden the only scheduler completion predicate so a passing unit
+heartbeat can never become a false "Tau is ready" notification. The committed
+completion verifier will run the full dark/light minimum-size screenshot matrix
+outside the worktree, pin the editor and waveform-viewer Definition-of-Done
+regressions, include every real embedded-engine test, and execute an XSPICE
+transient through the Tau binary mounted from the DMG before it may create the
+two-commit completion marker. The scheduler remains unloaded while this gate is
+built and deliberately failure-tested.
+
+Previous completed unit:
 
 Completed unit: the native subcircuit chooser now places an original five-pin
 TauDeadtimeDriver with named VCC / VEE / PWM / GP / GN terminals. Its Dead time,
