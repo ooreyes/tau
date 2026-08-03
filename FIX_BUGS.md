@@ -13,6 +13,24 @@
 
 **Repo:** `auto/ltspice-parity` · **Audit date:** 2026-07-17 · **Auditor:** interactive session (Fable 5) + two background subagents (fuzz + sim cross-check).
 
+## 2026-08-03 — valid LTspice expression values failed without `.param` (CONFIRMED, FIXED)
+
+`resolveComponentValues` returned early whenever the parameter/function scope
+was empty, even though LTspice also uses braces for self-contained arithmetic.
+Real values such as `{5.1Meg+120K}`, `{3.3/2}`, `{1300+160}`, and `{2.32+75}`
+therefore reached the quantity parser unchanged and failed deck construction.
+The same corpus exposed LTspice's nonlinear capacitor form
+`Q=100p*sin(2*pi*2K*time)`, which Tau tried to parse as a constant capacitance.
+
+**Fixed 2026-08-03.** The fast path now depends on the absence of braces, not
+an empty scope. `Q=` capacitors emit ngspice's native charge-defined device,
+including safe bare-`x` terminal-voltage binding and `IC=`, while all preview
+solvers refuse rather than inventing a constant. The inspector exposes named
+Charge expression and Initial voltage controls. Unit, DOM, preview-refusal,
+deck, and real-ngspice RC tests cover the path. In the 4,012-file corpus the
+non-refusal failures fall from 15 to 5 (deck-built 515 -> 525; op-converged
+511 -> 521) with all 4,012 imports still schema-valid.
+
 ## 2026-08-03 — LTspice `csw` silently became a fixed-open resistor (CONFIRMED, FIXED)
 
 The importer mapped LTspice's two-pin current-controlled switch to Tau's generic

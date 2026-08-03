@@ -5,14 +5,26 @@ The working memory of an unattended loop that starts from zero every fire.
 
 ## Now
 
-**Status:** DONE - 2026-08-03 00:58 CDT
+**Status:** DONE - 2026-08-03 01:40 CDT
 
-Current-controlled-switch correctness is complete. LTspice `csw` imports now
-resolve `SpiceModel` as the sensing voltage-source identity and `Value` as the
-CSW model, emit a native ngspice `W` device, and save/reopen losslessly. Every
-missing, malformed, or wrong-kind identity refuses atomically, including in the
-preview solvers. The rebuilt packaged app reports `COMPLETE ngspice` and a real
-5 V switched output. Scheduler remains unloaded.
+Extended-value compatibility is complete for self-contained brace arithmetic
+and charge-defined `Q=` capacitors. The native deck evaluates the former and
+emits the latter as a real ngspice nonlinear capacitor; every preview solver
+refuses the unsupported stamp instead of substituting a plausible constant.
+The Value inspector exposes Charge expression and Initial voltage as separate
+named controls. The full extended corpus improved from 15 to 5 hard failures,
+with 525 decks built and 521 operating points converged. Scheduler remains
+unloaded.
+
+**Product UX contract (Omar, 2026-08-03): Tau is not a prettier command-line
+wrapper.** Known SPICE semantics must appear as named, editable controls in the
+Value/Analysis UI, with units and validation. Users must not need to type or
+place raw `.op`, `.tran`, `Q=...`, model-option, or similar syntax on the
+schematic for normal work. Raw directives remain only for exact LTspice
+round-trip, unsupported/unknown expert syntax, and an explicit advanced escape
+hatch. Import should decode known syntax into controls; edits must encode it
+back losslessly. Treat a known knob exposed only as a raw string as unfinished
+UI parity.
 
 Previous completed unit:
 
@@ -111,11 +123,12 @@ which are folded into the block above.
 Ordered. Take the top item unless it is blocked. Class A outranks everything -
 a plausible wrong number is worse than a refusal to run.
 
-1. **Reduce the 15 non-refusal failures in the 4,012-file extended corpus.**
-   Start with the repeated invalid R/C/V value family (LT1395/LT1677/LT2078-79/
-   LT2178-79), determine the real LTspice value syntax, and either translate it
-   exactly or turn it into a named atomic refusal. Never coerce a malformed
-   value into a plausible circuit.
+1. **Reduce the remaining 5 non-refusal failures in the 4,012-file extended
+   corpus.** Four are native operating-point failures (AD8235, LT1168, LT1194,
+   LT1795); one is the negative-capacitance `elip_grd.asc` deck failure. Inspect
+   source/model topology before changing convergence behavior. Translate only
+   proven LTspice semantics or refuse atomically; never hide a singular or
+   nonphysical circuit with a plausible number.
 
 ---
 
@@ -125,6 +138,7 @@ Newest first, ONE line each. Full evidence for every unit is in PROGRESS.md
 and in its commit message. This section exists so a fresh fire can see what
 is already done at a glance, not so it can re-read the reasoning.
 
+- 2026-08-03 - SELF-CONTAINED LTSPICE BRACE ARITHMETIC AND `Q=` CAPACITORS ARE NATIVE. Empty `.param` scope no longer blocks valid arithmetic; `Q=` emits ngspice's charge device, preview solvers refuse rather than approximate, and the Value UI exposes Charge expression + Initial voltage without raw syntax. Extended hard failures fall 15 -> 5.
 - 2026-08-03 - LTSPICE CURRENT-CONTROLLED SWITCHES ARE REAL W DEVICES. `SpiceModel` resolves the sensing voltage source, `Value` resolves CSW/translated ISWITCH, exact save/reopen is supported, and every unprovable identity refuses atomically. CLI ngspice and the rebuilt packaged app prove the 5 V switched output.
 - 2026-08-02 - EVERY PACKAGED NGSPICE RESOURCE IS SHA-256 BOUND TO ITS BUILD RECORD. `build.rs` verifies exact set equality, contents, target and commit; doctored-tree tests cover swaps, corruption, injection, omission, malformed data and escaping symlinks. The rebuilt DMG's 27 resources match exactly and real OP/noise/XSPICE tests pass from inside it. Completion logging no longer writes into the read-only mount.
 - 2026-08-02 - IMPORTED/CUSTOM OP-AMP PARAMETERS ARE HONEST AND EDITABLE in the packaged inspector; a one-slot Avol change writes back to Value2 and retains SpiceLine instead of collapsing both onto Value.

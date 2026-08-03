@@ -372,6 +372,16 @@ Status legend: ✅ done · 🟡 partial · ⬜ not started
   resistance preservation, ghost lifecycle, and resize regressions are covered.
 - ✅ Undo/redo, autosave, multi-tab documents
 - ✅ Component value editing (double-click) + structured params.
+  **Product contract (Omar, 2026-08-03):** every known SPICE knob belongs in a
+  named Value/Analysis control with units and validation; normal users should
+  never need to author `.op(...)`-style text on the canvas. Raw directives are
+  retained for lossless import/export and as an explicit advanced escape hatch,
+  not as the primary UI. Any known option that is only a raw string is still an
+  unfinished item under this contract.
+  **Charge-defined capacitor controls (2026-08-03):** an imported LTspice
+  `Q=<expression>` capacitor exposes separate **Charge expression** and
+  **Initial voltage** fields. Edits encode back to the native value without
+  asking the user to author `Q=` or `IC=` syntax.
   **Engineering-input repair (2026-07-23):** single-quantity component editors
   now size from the visible mantissa instead of collapsing to a one-digit
   border-box; complete values remain readable and long finite mantissas compact
@@ -527,7 +537,14 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   per-instance token. A capacitor is only treated as a BVD crystal when its
   motional `Lser` is present (bare `Cpar`/`Rser` no longer misclassifies it).
   PowerSim LLC's C1/Lp/Ls/Lr now build and run with their authored losses.
-  Still to add: browser-solver ESR stamps and behavioral R/C/L.
+  **LTspice nonlinear `Q=<charge expression>` capacitors now land on ngspice's
+  native charge-defined capacitor.** Bare LTspice `x` is bound to that exact
+  instance's terminal voltage, `.param`/`.func` and LT function translations
+  are preserved, and `IC=` remains supported. A real-ngspice RC corpus proves
+  the electrical result; preview OP/tran/AC/noise refuse by name because their
+  constant-C stamp cannot reproduce `dQ/dV`/`dQ/dt`. Self-contained braced
+  values such as `{5.1Meg+120K}` and `{3.3/2}` also evaluate without requiring a
+  `.param` scope. Still to add: browser-solver ESR stamps and behavioral R/L.
 - 🟡 Sources — DC/AC/PULSE plus **inline LTspice transient functions on V/I sources now emit to the ngspice deck: SINE (offset/amp/freq/td/damping/phase), PULSE (full 7-arg, Ncycles trimmed), PWL, EXP, SFFM** (`engine/sourceFunction.ts`; µ/meg normalized). **TS-fallback solver now evaluates the same families in the time domain** (`simulation/sourceWaveform.ts` `parseTransientSource` → `{ dc, at(t), maxFrequencyHz }`): the `.tran` loop drives `vsource`/`isource` (and the `vac`/`iac` AC symbols) from the parsed waveform instead of DC-only, `.op` seeds the t=0 bias, and `inspectTransientResolution` derives the sampling requirement from a function source's own frequency. ngspice-verified: PULSE(0 5 1m 0 0 2m 4m) node = 0/5/0 V at t=0.5/2/3.5 ms in both engines. Still missing: PWL FILE, explicit AC spec on these, noise sources (**arbitrary behavioral B-source `V=…`/`I=…` also landed** — see the dedicated B item below)
 - 🟡 Semiconductors — diode/BJT/MOS/zener present; **bundled LTspice standard
   models landed** (`engine/standardModels.ts`): common parts referenced by name

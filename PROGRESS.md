@@ -9,14 +9,18 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: IN PROGRESS - 2026-08-03 01:02 CDT**
+**Status: DONE - 2026-08-03 01:40 CDT**
 
-Interactive correctness unit: inspect the repeated invalid R/C/V values behind
-the LT1395/LT1677/LT2078-79/LT2178-79 extended-corpus deck failures, implement
-the smallest exact LTspice-compatible translation shared by that family, or
-convert genuinely unsupported syntax into a named atomic refusal. Prove the
-real imported decks with native ngspice and rerun the full corpus. Scheduler
-stays unloaded.
+LTspice self-contained brace arithmetic now evaluates even without a `.param`
+scope, and nonlinear `Q=<charge expression>` capacitors emit ngspice's native
+charge-defined device instead of being misparsed as constant capacitance. Bare
+LTspice `x` binds to the exact capacitor terminal voltage without corrupting a
+real `V(x)` node accessor. The Value inspector exposes named Charge expression
+and Initial voltage controls, while preview solvers refuse explicitly rather
+than approximate. A real-ngspice RC proof reaches the expected one-time-
+constant voltage. The 4,012-file extended corpus improves from 15 to 5 hard
+failures (deck-built 515 -> 525; op-converged 511 -> 521); canonical remains an
+honest 80/82. Scheduler stays unloaded.
 
 Previous completed unit:
 
@@ -11094,3 +11098,26 @@ evidence is kept in full here.
   The extended corpus still reports 15 non-refusal hard failures and 3,486
   explicit unsupported refusals; that is the next correctness work, not a
   completion claim. Scheduler remains intentionally unloaded.
+
+- 2026-08-03 - Repaired the repeated extended-corpus R/C/V expression failures.
+  LTspice braces are now evaluated even when no `.param` exists, covering the
+  real `{1300+160}`, `{2.32+75}`, `{5.1Meg+120K}`, and `{3.3/2}` values. The
+  nonlinear capacitor form `Q=<expression>` now emits ngspice's native charge
+  device, preserves `IC=`, translates functions/parameters, and binds only a
+  bare LTspice `x` to the exact instance voltage without changing `V(x)` node
+  accessors. Browser preview OP/tran/AC/noise refuse instead of approximating.
+  The Value inspector presents Charge expression and Initial voltage as named
+  fields, so normal editing does not require `Q=`/`IC=` syntax. A real-ngspice
+  `Q=100p*x` RC step reaches 0.60-0.67 V at one time constant; the committed
+  completion verifier runs that corpus proof. Evidence: typecheck; 156 frontend
+  files passed / 1 skipped, 2,389 tests passed / 6 skipped; four native corpus
+  files / 17 tests; six DoD parity tests; production web build; Rust fmt/clippy,
+  53 Rust tests and five real-library tests; fresh unsigned app/DMG build;
+  strict codesign, DMG checksum, production dependency audit, and exact packaged
+  resource verification. Chrome rendered the current UI with no console errors;
+  its upload guard correctly blocked direct filesystem injection, so the named
+  control/edit proof is the real ComponentInspector DOM test rather than a
+  bypassed browser upload. Full corpus: 4,012 imported/schema-valid, 526
+  warning-clean, 525 deck-built, 521 op-converged, five hard failures, and 3,486
+  explicit refusals; canonical remains 80/82. Scheduler remains intentionally
+  unloaded.
