@@ -9,16 +9,14 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-03 00:58 CDT**
+**Status: IN PROGRESS - 2026-08-03 01:02 CDT**
 
-LTspice current-controlled switches (`csw`) now preserve their real field
-contract (`SpiceModel` = sensing voltage source, `Value` = CSW model), save
-losslessly, and emit ngspice's native `W` device. Missing/wrong sources,
-missing/wrong/malformed models, and malformed instance tails refuse the entire
-analysis; every preview solver also refuses instead of approximating. A fresh
-packaged Tau.app ran the real fixture through bundled ngspice and reported
-`COMPLETE ngspice`, `V(out) = 5 V`, and `I(Vsense) = -1 mA`. The scheduler
-remains unloaded.
+Interactive correctness unit: inspect the repeated invalid R/C/V values behind
+the LT1395/LT1677/LT2078-79/LT2178-79 extended-corpus deck failures, implement
+the smallest exact LTspice-compatible translation shared by that family, or
+convert genuinely unsupported syntax into a named atomic refusal. Prove the
+real imported decks with native ngspice and rerun the full corpus. Scheduler
+stays unloaded.
 
 Previous completed unit:
 
