@@ -1,5 +1,6 @@
 mod credentials;
 mod local_ai;
+mod ltspice_library;
 mod project_fs;
 mod spice;
 pub mod staged_engine;
@@ -25,6 +26,8 @@ pub fn run() {
             local_ai::install_local_ai_runtime,
             local_ai::start_local_ai,
             local_ai::stop_local_ai,
+            ltspice_library::discover_installed_ltspice_library,
+            ltspice_library::read_installed_ltspice_model,
             project_fs::authorize_project_directory,
             project_fs::create_project_directory,
             project_fs::create_project_text_file_exclusive,
