@@ -21,10 +21,16 @@ import type {
   SchematicAscShape,
   SchematicComponent,
   SchematicForeignSymbol,
+  SchematicHierarchicalBlock,
   SchematicSheet,
   SchematicTextAnnotation,
   SchematicWire,
 } from "../schematic/types";
+import {
+  hierarchyComponentFingerprint,
+  hierarchyNetLabelFingerprint,
+  hierarchyWireFingerprint,
+} from "../schematic/hierarchyProvenance";
 import type { AscDocument, AscOrientation } from "./ascImport";
 import {
   encodeCarriedAttrs,
@@ -383,6 +389,9 @@ export interface SchematicExportInput {
    * `.asc` so an in-place save does not silently delete the part.
    */
   foreignSymbols?: SchematicForeignSymbol[];
+  /** Resolved source blocks plus provenance for their flattened simulation
+   * members. Untouched groups are re-emitted as the original block record. */
+  hierarchicalBlocks?: SchematicHierarchicalBlock[];
   /** Original LTspice sheet geometry retained from import. */
   sheet?: SchematicSheet;
 }
@@ -391,6 +400,9 @@ export interface SchematicToAscResult {
   text: string;
   /** Non-fatal issues (parts with no LTspice symbol, multi-segment wires split). */
   warnings: string[];
+  /** Owners whose unchanged flattened members were replaced by their original
+   * hierarchy record. Used by the semantic post-save topology check. */
+  preservedHierarchyOwners?: string[];
 }
 
 /**
@@ -401,6 +413,44 @@ export interface SchematicToAscResult {
  */
 export function schematicToAsc(input: SchematicExportInput): SchematicToAscResult {
   const warnings: string[] = [];
+  const preservedHierarchyOwners = new Set<string>();
+  const emittedHierarchyBlocks: SchematicHierarchicalBlock[] = [];
+  const seenHierarchyOwners = new Set<string>();
+
+  // Prove the synthetic implementation is byte-for-byte equivalent to the
+  // snapshot taken at import before suppressing any of it. Counts catch a
+  // deletion; exact canonical fingerprints catch electrical, geometry, and
+  // label edits. An invalid group is exported flat only as diagnostic output -
+  // its blocking warning prevents the caller from writing that output.
+  for (const block of input.hierarchicalBlocks ?? []) {
+    const instance = block.attrs.InstName || block.type;
+    const provenance = block.provenance;
+    if (!provenance || seenHierarchyOwners.has(provenance.owner)) {
+      warnings.push(`${instance}: hierarchical block has incomplete preservation provenance; save refused.`);
+      continue;
+    }
+    seenHierarchyOwners.add(provenance.owner);
+    const components = input.components.filter((component) => component.ltHierarchy?.owner === provenance.owner);
+    const wires = input.wires.filter((wire) => wire.ltHierarchy?.owner === provenance.owner);
+    const labels = input.netLabels.filter((label) => label.ltHierarchy?.owner === provenance.owner);
+    const complete = components.length === provenance.componentCount
+      && wires.length === provenance.wireCount
+      && labels.length === provenance.netLabelCount;
+    if (!complete) {
+      warnings.push(`${instance}: hierarchical block is incomplete; a flattened child object was added, removed, or lost.`);
+      continue;
+    }
+    const edited = components.some((component) =>
+      component.ltHierarchy?.original !== hierarchyComponentFingerprint(component)
+    ) || wires.some((wire) => wire.ltHierarchy?.original !== hierarchyWireFingerprint(wire))
+      || labels.some((label) => label.ltHierarchy?.original !== hierarchyNetLabelFingerprint(label));
+    if (edited) {
+      warnings.push(`${instance}: hierarchical block was edited inside its flattened child; edit the child .asc before saving the parent.`);
+      continue;
+    }
+    preservedHierarchyOwners.add(provenance.owner);
+    emittedHierarchyBlocks.push(block);
+  }
   const doc: AscDocument = {
     version: 4,
     sheet: input.sheet ? { ...input.sheet } : { index: 1, width: 880, height: 680 },
@@ -414,6 +464,7 @@ export function schematicToAsc(input: SchematicExportInput): SchematicToAscResul
   };
 
   for (const wire of input.wires) {
+    if (wire.ltHierarchy && preservedHierarchyOwners.has(wire.ltHierarchy.owner)) continue;
     // Tau wires are polylines; LTspice WIREs are single segments. Split.
     for (let i = 0; i + 1 < wire.points.length; i += 1) {
       const a = wire.points[i];
@@ -425,6 +476,7 @@ export function schematicToAsc(input: SchematicExportInput): SchematicToAscResul
   }
 
   for (const [componentIndex, c] of input.components.entries()) {
+    if (c.ltHierarchy && preservedHierarchyOwners.has(c.ltHierarchy.owner)) continue;
     if (c.kind === "ground") {
       doc.flags.push({ x: c.x, y: c.y, net: "0" });
       continue;
@@ -537,7 +589,22 @@ export function schematicToAsc(input: SchematicExportInput): SchematicToAscResul
     });
   }
 
+  // A preserved block is a real source record, not a foreign/unsupported part:
+  // its flattened members power simulation in Tau, while this exact record is
+  // what LTspice must receive when the parent file is saved.
+  for (const block of emittedHierarchyBlocks) {
+    doc.symbols.push({
+      type: block.type,
+      x: block.x,
+      y: block.y,
+      orientation: block.orientation,
+      attrs: { ...block.attrs },
+      ...(block.windows ? { windows: block.windows.map((window) => ({ ...window })) } : {}),
+    });
+  }
+
   for (const label of input.netLabels) {
+    if (label.ltHierarchy && preservedHierarchyOwners.has(label.ltHierarchy.owner)) continue;
     doc.flags.push({
       x: label.x,
       y: label.y,
@@ -587,5 +654,11 @@ export function schematicToAsc(input: SchematicExportInput): SchematicToAscResul
     }
   }
 
-  return { text: serializeAscDocument(doc), warnings };
+  return {
+    text: serializeAscDocument(doc),
+    warnings,
+    ...(preservedHierarchyOwners.size > 0
+      ? { preservedHierarchyOwners: [...preservedHierarchyOwners] }
+      : {}),
+  };
 }

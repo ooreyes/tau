@@ -778,6 +778,31 @@ describe("schematic document store", () => {
     expect(useSchematic.getState().components).toHaveLength(1);
   });
 
+  it("turns a duplicated flattened child into a normal top-level component", () => {
+    const source = sourceDocument();
+    source.components[0] = {
+      ...source.components[0],
+      ltHierarchy: { owner: "h-1", original: "original-child-snapshot" },
+    };
+    source.ascHierarchicalBlocks = [{
+      type: "mydiv",
+      x: 200,
+      y: 200,
+      orientation: "R0",
+      attrs: { InstName: "X1" },
+      provenance: { owner: "h-1", componentCount: 1, wireCount: 0, netLabelCount: 0 },
+    }];
+    useSchematic.getState().loadCircuit(source);
+    const originalId = useSchematic.getState().components[0].id;
+    useSchematic.setState({ selectedId: originalId, selectedIds: [originalId] });
+
+    useSchematic.getState().duplicateSelected();
+
+    const [original, copy] = useSchematic.getState().components;
+    expect(original.ltHierarchy?.owner).toBe("h-1");
+    expect(copy.ltHierarchy).toBeUndefined();
+  });
+
   it("removes a component's current probe with the component and restores both on undo", () => {
     useSchematic.setState({
       components: [{ id: "r1", kind: "resistor", x: 0, y: 0, rotation: 0, value: "1k", label: "R1" }],

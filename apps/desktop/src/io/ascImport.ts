@@ -30,10 +30,16 @@ import type {
   SchematicAscDataFlag,
   SchematicAscShape,
   SchematicComponent,
+  SchematicHierarchicalBlock,
   SchematicPortDirection,
   SchematicWire,
 } from "../schematic/types";
 import { canonicalWindowJustification } from "../schematic/types";
+import {
+  hierarchyComponentFingerprint,
+  hierarchyNetLabelFingerprint,
+  hierarchyWireFingerprint,
+} from "../schematic/hierarchyProvenance";
 import { buildPartialParamScope, inlineFuncCalls, parseParamAssignments, substituteKnownBraces, substituteBehavioralBraces, substituteScopeIdentifiers, substituteIdentifierExpressions } from "../simulation/paramScope";
 import { isComponentKind } from "../schematic/types";
 import { getLocalPins, transformPoint } from "../schematic/pins";
@@ -964,7 +970,7 @@ export interface AscImportResult {
    * instead of its flattened parts. A block's own nested blocks belong to the
    * child file and are not carried here.
    */
-  hierarchicalBlocks: AscSymbol[];
+  hierarchicalBlocks: SchematicHierarchicalBlock[];
   /** Original SHEET record retained for lossless `.asc` save. */
   sheet: AscDocument["sheet"];
   /** Non-fatal issues (symbols placed without pin-accurate geometry, etc.). */
@@ -1396,6 +1402,7 @@ function flattenSubcircuit(
   symbol: AscSymbol,
   def: SubcircuitDef,
   instName: string,
+  hierarchyOwner: string,
   options: AscImportOptions,
   newId: (prefix: string) => string,
 ): { result: AscImportResult; bridges: NetLabel[] } {
@@ -1537,19 +1544,43 @@ function flattenSubcircuit(
     }
   }
 
+  const flattenedComponents = bodyComponents.map((component) => {
+    const flattened: SchematicComponent = {
+      ...component,
+      id: `${instName}~${component.id}`,
+      label: component.label ? `${instName}.${component.label}` : component.label,
+      x: component.x + dx,
+      ...(component.pinOverride
+        ? { pinOverride: component.pinOverride.map((pin) => ({ ...pin, x: pin.x + dx })) }
+        : {}),
+    };
+    return {
+      ...flattened,
+      ltHierarchy: { owner: hierarchyOwner, original: hierarchyComponentFingerprint(flattened) },
+    };
+  });
+  const flattenedWires = body.wires.map((wire) => {
+    const flattened: SchematicWire = {
+      ...wire,
+      id: `${instName}~${wire.id}`,
+      points: wire.points.map((point) => ({ x: point.x + dx, y: point.y })),
+    };
+    return {
+      ...flattened,
+      ltHierarchy: { owner: hierarchyOwner, original: hierarchyWireFingerprint(flattened) },
+    };
+  });
+  const markLabel = (label: NetLabel): NetLabel => ({
+    ...label,
+    ltHierarchy: { owner: hierarchyOwner, original: hierarchyNetLabelFingerprint(label) },
+  });
+  const flattenedLabels = internalLabels.map(markLabel);
+  const flattenedBridges = [...bridges, ...portLabels].map(markLabel);
+
   const result: AscImportResult = {
-    components: bodyComponents.map((c) => ({
-      ...c,
-      id: `${instName}~${c.id}`,
-      label: c.label ? `${instName}.${c.label}` : c.label,
-      x: c.x + dx,
-      ...(c.pinOverride ? { pinOverride: c.pinOverride.map((p) => ({ ...p, x: p.x + dx })) } : {}),
-    })),
-    wires: body.wires.map((w) => ({
-      id: `${instName}~${w.id}`,
-      points: w.points.map((p) => ({ x: p.x + dx, y: p.y })),
-    })),
-    netLabels: internalLabels,
+    components: flattenedComponents,
+    wires: flattenedWires,
+    netLabels: flattenedLabels,
     // A subcircuit body's own directives/comments are for standalone testing of
     // the block; they must not run when the block is used inside a parent.
     directives: [],
@@ -1571,7 +1602,7 @@ function flattenSubcircuit(
   };
   // `bridges` (parent-side) + `portLabels` (body-side) carry the same synthetic
   // names; both are deferred so a coincident parent FLAG names the net instead.
-  return { result, bridges: [...bridges, ...portLabels] };
+  return { result, bridges: flattenedBridges };
 }
 
 /**
@@ -1685,7 +1716,7 @@ export function ascToSchematic(doc: AscDocument, options: AscImportOptions = {})
   const foreignSymbols: AscSymbol[] = [];
   // Source SYMBOL records that flattened into real components - retained so a
   // save can name the hierarchy instead of reporting an unmappable symbol.
-  const hierarchicalBlocks: AscSymbol[] = [];
+  const hierarchicalBlocks: SchematicHierarchicalBlock[] = [];
 
   for (const symbol of doc.symbols) {
     const leaf = symbol.type.replace(/\\/g, "/").toLowerCase().split("/").pop() ?? "";
@@ -1716,10 +1747,12 @@ export function ascToSchematic(doc: AscDocument, options: AscImportOptions = {})
       if (def && ["BLOCK", "CELL"].includes(def.symbol.symbolType.toUpperCase()) && depth < MAX_SUBCIRCUIT_DEPTH
         && !(options._stack ?? new Set()).has(symbol.type.toLowerCase())) {
         const placement = options._placement ?? { nextX: 1_000_000 };
+        const hierarchyOwner = id("h");
         const { result, bridges } = flattenSubcircuit(
           symbol,
           def,
           instName || `X${counter}`,
+          hierarchyOwner,
           { ...options, _placement: placement },
           id,
         );
@@ -1739,6 +1772,12 @@ export function ascToSchematic(doc: AscDocument, options: AscImportOptions = {})
           orientation: symbol.orientation,
           attrs: { ...symbol.attrs },
           ...(symbol.windows ? { windows: symbol.windows.map((w) => ({ ...w })) } : {}),
+          provenance: {
+            owner: hierarchyOwner,
+            componentCount: result.components.length,
+            wireCount: result.wires.length,
+            netLabelCount: result.netLabels.length + bridges.length,
+          },
         });
         // Propagate the advanced cursor back to this scope for the next sibling.
         options._placement = placement;

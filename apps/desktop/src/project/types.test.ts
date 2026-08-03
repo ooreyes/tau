@@ -362,7 +362,7 @@ SYMATTR Value LTC4449
     expect(ascRewriteRisks(saved.contents, reimported.foreignSymbols)).toEqual([]);
   });
 
-  it("keeps blocking a hierarchical block, whose in-place save would flatten it", () => {
+  it("re-emits an untouched hierarchical block but refuses a changed or incomplete child", () => {
     // The trap the second argument exists for. `ascRewriteRisks` re-imports the
     // source with NO subcircuit resolver, so `mydiv2` falls through to the
     // foreign-symbol branch and looks carried verbatim. The document the app
@@ -419,12 +419,53 @@ SYMATTR InstName X1
       attrs: { InstName: "X1" },
     });
 
-    // Told which records resolved, the verdict is unchanged - the save is
-    // still refused - but the reason stops claiming Tau has no symbol for a
-    // part it read, resolved and inlined.
+    // The resolver now carries exact provenance for the hidden flattened
+    // implementation. An untouched body is suppressed on export and the
+    // original parent SYMBOL is emitted instead, so hierarchy is no longer a
+    // rewrite risk.
     const named = ascRewriteRisks(source, resolved.foreignSymbols, resolved.hierarchicalBlocks);
-    expect(named).toEqual(["hierarchical blocks"]);
-    expect(ascSaveBlockReason(named, 0, [])).toBe("Tau cannot yet preserve hierarchical blocks.");
+    expect(named).toEqual([]);
+    const saved = serializeSchematicFile("/Schematics/hier.asc", {
+      components: resolved.components,
+      wires: resolved.wires,
+      probes: [],
+      netLabels: resolved.netLabels,
+      directives: resolved.directives,
+      ascForeignSymbols: resolved.foreignSymbols,
+      ascHierarchicalBlocks: resolved.hierarchicalBlocks,
+    });
+    expect(saved.warnings).toEqual([]);
+    expect(saved.contents).toContain("SYMBOL mydiv2 200 200 R0");
+    expect(saved.contents).toContain("SYMATTR InstName X1");
+    expect(saved.contents).not.toContain("SYMATTR InstName X1.R1");
+
+    // An edit belongs in the child `.asc`, which this parent save is not
+    // writing. It must never disappear behind the original parent SYMBOL.
+    const edited = serializeSchematicFile("/Schematics/hier.asc", {
+      components: resolved.components.map((component, index) =>
+        index === 0 ? { ...component, value: "9k" } : component,
+      ),
+      wires: resolved.wires,
+      probes: [],
+      netLabels: resolved.netLabels,
+      directives: resolved.directives,
+      ascForeignSymbols: resolved.foreignSymbols,
+      ascHierarchicalBlocks: resolved.hierarchicalBlocks,
+    });
+    expect(edited.warnings.some((warning) => warning.includes("X1") && warning.includes("edited"))).toBe(true);
+    expect(ascSaveBlockReason([], 0, edited.warnings)).not.toBeNull();
+
+    const incomplete = serializeSchematicFile("/Schematics/hier.asc", {
+      components: resolved.components.slice(1),
+      wires: resolved.wires,
+      probes: [],
+      netLabels: resolved.netLabels,
+      directives: resolved.directives,
+      ascForeignSymbols: resolved.foreignSymbols,
+      ascHierarchicalBlocks: resolved.hierarchicalBlocks,
+    });
+    expect(incomplete.warnings.some((warning) => warning.includes("X1") && warning.includes("incomplete"))).toBe(true);
+    expect(ascSaveBlockReason([], 0, incomplete.warnings)).not.toBeNull();
   });
 
   it("still names the hierarchy after a .sim save and reopen", () => {
@@ -471,8 +512,11 @@ SYMATTR InstName X1
     expect(reopened.ascHierarchicalBlocks).toEqual(resolved.hierarchicalBlocks);
 
     const risks = ascRewriteRisks(source, reopened.ascForeignSymbols, reopened.ascHierarchicalBlocks);
-    expect(risks).toEqual(["hierarchical blocks"]);
-    expect(ascSaveBlockReason(risks, 0, [])).toBe("Tau cannot yet preserve hierarchical blocks.");
+    expect(risks).toEqual([]);
+    const ascSaved = serializeSchematicFile("/Schematics/hier.asc", reopened);
+    expect(ascSaved.warnings).toEqual([]);
+    expect(ascSaved.contents).toContain("SYMBOL mydiv2 200 200 R0");
+    expect(ascSaved.contents).not.toContain("SYMATTR InstName X1.R1");
   });
 
   it("round-trips a foreign symbol through a .sim save/open", () => {

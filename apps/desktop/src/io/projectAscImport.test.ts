@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
+import { access, readFile } from "node:fs/promises";
+import { join, resolve } from "node:path";
 import { importProjectAsc } from "./projectAscImport";
+import { ascRewriteRisks, serializeSchematicFile } from "../project/types";
 
 const parent = `Version 4
 SHEET 1 880 680
@@ -36,6 +39,45 @@ TEXT 0 100 Left 2 !.param doubled={gain}*2
 `;
 
 describe("importProjectAsc", () => {
+  it("saves the canonical Class-D parent with its deadtime hierarchy intact", async () => {
+    const fixtureDir = resolve(process.cwd(), "../../examples/class-d-amplifier");
+    const sourcePath = join(fixtureDir, "class-d-starter.asc");
+    const source = await readFile(sourcePath, "utf8");
+    const result = await importProjectAsc(source, {
+      sourcePath,
+      rootPath: fixtureDir,
+      pathExists: async (path) => access(path).then(() => true, () => false),
+      readText: async (path) => readFile(path, "utf8"),
+    });
+
+    expect(result.hierarchicalBlocks).toHaveLength(1);
+    expect(result.hierarchicalBlocks[0]).toMatchObject({
+      type: "deadtime",
+      attrs: { InstName: "X1" },
+      provenance: expect.objectContaining({ componentCount: expect.any(Number) }),
+    });
+    expect(ascRewriteRisks(source, result.foreignSymbols, result.hierarchicalBlocks)).toEqual([]);
+
+    const saved = serializeSchematicFile(sourcePath, {
+      components: result.components,
+      wires: result.wires,
+      probes: [],
+      netLabels: result.netLabels,
+      directives: result.directives,
+      textAnnotations: result.textAnnotations,
+      ascShapes: result.shapes,
+      ascDataFlags: result.dataFlags,
+      ascForeignSymbols: result.foreignSymbols,
+      ascHierarchicalBlocks: result.hierarchicalBlocks,
+      ascSheet: result.sheet,
+      userModelLibraries: result.modelLibraries,
+    });
+    expect(saved.warnings).toEqual([]);
+    expect(saved.contents).toContain("SYMBOL deadtime 336 -304 R0");
+    expect(saved.contents).toContain("SYMATTR InstName X1");
+    expect(saved.contents).not.toContain("SYMATTR InstName X1.");
+  });
+
   it("resolves project-root symbol libraries and applies CELL overrides", async () => {
     const inMemory = new Map([
       ["/project/sym/child.asy", childAsy],

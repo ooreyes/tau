@@ -13,6 +13,7 @@ import type {
   SchematicAscDataFlag,
   SchematicAscShape,
   SchematicForeignSymbol,
+  SchematicHierarchicalBlock,
   SchematicSheet,
 } from "../schematic/types";
 import { CATALOG_BY_KIND } from "../schematic/catalog";
@@ -69,7 +70,7 @@ interface Doc {
   /** Original SYMBOL records with no Tau equivalent, retained for lossless `.asc` rewrites. */
   ascForeignSymbols: SchematicForeignSymbol[];
   /** Original SYMBOL records that resolved to a hierarchical block and flattened. */
-  ascHierarchicalBlocks: SchematicForeignSymbol[];
+  ascHierarchicalBlocks: SchematicHierarchicalBlock[];
   /** Original LTspice SHEET record, null for Tau-native/legacy documents. */
   ascSheet: SchematicSheet | null;
   /** Vendor model files attached to the document (see {@link SchematicModelLibrary}). */
@@ -109,7 +110,7 @@ export interface SchematicDocument {
    * flattened into `components`. These simulate - unlike `ascForeignSymbols` -
    * and are retained so a save can report the hierarchy it would flatten.
    */
-  ascHierarchicalBlocks?: SchematicForeignSymbol[];
+  ascHierarchicalBlocks?: SchematicHierarchicalBlock[];
   /** Original LTspice SHEET record retained for lossless `.asc` rewrites. */
   ascSheet?: SchematicSheet | null;
   /**
@@ -253,7 +254,7 @@ interface SchematicState extends Doc {
   /** Original SYMBOL records with no Tau equivalent; changed only by import/document replacement. */
   ascForeignSymbols: SchematicForeignSymbol[];
   /** Original SYMBOL records that flattened as hierarchical blocks; same lifetime as above. */
-  ascHierarchicalBlocks: SchematicForeignSymbol[];
+  ascHierarchicalBlocks: SchematicHierarchicalBlock[];
   ascSheet: SchematicSheet | null;
 
   /** Vendor model files attached to the document, inlined into the native deck when referenced. */
@@ -335,11 +336,15 @@ function placeClone(
   counters: Record<string, number>,
   src: SchematicComponent,
 ): { comp: SchematicComponent; prefix: string; next: number } {
+  // A pasted child is a new top-level object. Keeping the source block's
+  // ownership would make the hierarchy guard call the original group
+  // incomplete (or, worse, suppress the paste with it).
+  const { ltHierarchy: _hierarchy, ...copyable } = src;
   const entry = CATALOG_BY_KIND[src.kind];
   const next = (counters[entry.prefix] ?? 0) + 1;
   const label = entry.prefix === "GND" ? "" : `${entry.prefix}${next}`;
   const comp: SchematicComponent = {
-    ...src,
+    ...copyable,
     id: nanoid(6),
     x: src.x + PASTE_OFFSET,
     y: src.y + PASTE_OFFSET,
@@ -380,17 +385,23 @@ function pasteClipboard(state: SchematicState, clipboard: SchematicClipboard): P
     componentIdMap.set(source.id, comp.id);
     return comp;
   });
-  const wires = clipboard.wires.map((wire) => ({
-    ...wire,
-    id: nanoid(6),
-    points: wire.points.map((point) => ({ x: point.x + PASTE_OFFSET, y: point.y + PASTE_OFFSET })),
-  }));
-  const netLabels = clipboard.netLabels.map((label) => ({
-    ...label,
-    id: nanoid(6),
-    x: label.x + PASTE_OFFSET,
-    y: label.y + PASTE_OFFSET,
-  }));
+  const wires = clipboard.wires.map((wire) => {
+    const { ltHierarchy: _hierarchy, ...copyable } = wire;
+    return {
+      ...copyable,
+      id: nanoid(6),
+      points: wire.points.map((point) => ({ x: point.x + PASTE_OFFSET, y: point.y + PASTE_OFFSET })),
+    };
+  });
+  const netLabels = clipboard.netLabels.map((label) => {
+    const { ltHierarchy: _hierarchy, ...copyable } = label;
+    return {
+      ...copyable,
+      id: nanoid(6),
+      x: label.x + PASTE_OFFSET,
+      y: label.y + PASTE_OFFSET,
+    };
+  });
   const probes = clipboard.probes.map(({ netId: _netId, componentId, ...probe }) => ({
     ...probe,
     id: nanoid(6),
@@ -441,7 +452,12 @@ function copyDocument(doc: SchematicDocument, freshIds: boolean): SchematicDocum
   });
   return {
     components,
-    wires: doc.wires.map((w) => ({ id: freshIds ? nanoid(6) : w.id, points: w.points.map((p) => ({ ...p })) })),
+    wires: doc.wires.map((wire) => ({
+      ...wire,
+      id: freshIds ? nanoid(6) : wire.id,
+      points: wire.points.map((point) => ({ ...point })),
+      ...(wire.ltHierarchy ? { ltHierarchy: { ...wire.ltHierarchy } } : {}),
+    })),
     probes: (doc.probes ?? []).map((probe) => ({
       ...probe,
       id: freshIds ? nanoid(6) : probe.id,
@@ -463,6 +479,7 @@ function copyDocument(doc: SchematicDocument, freshIds: boolean): SchematicDocum
       ...symbol,
       attrs: { ...symbol.attrs },
       ...(symbol.windows ? { windows: symbol.windows.map((w) => ({ ...w })) } : {}),
+      ...(symbol.provenance ? { provenance: { ...symbol.provenance } } : {}),
     })),
     ...(doc.ascSheet ? { ascSheet: { ...doc.ascSheet } } : {}),
     // Attachments are immutable, so a shallow copy shares the (possibly large)

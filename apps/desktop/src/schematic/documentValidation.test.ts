@@ -39,6 +39,45 @@ describe("schematic document validation", () => {
     expect(validateSchematicDocument(document)).toEqual(document);
   });
 
+  it("preserves bounded hierarchy provenance and rejects orphaned or duplicate owners", () => {
+    const base = validDocument();
+    const hierarchy = {
+      ...base,
+      components: [{
+        ...base.components[0],
+        ltHierarchy: { owner: "h-1", original: "exact component snapshot" },
+      }],
+      ascHierarchicalBlocks: [{
+        type: "mydiv",
+        x: 200,
+        y: 200,
+        orientation: "R0",
+        attrs: { InstName: "X1" },
+        provenance: { owner: "h-1", componentCount: 1, wireCount: 0, netLabelCount: 0 },
+      }],
+    };
+    expect(validateSchematicDocument(hierarchy)).toEqual(hierarchy);
+
+    expect(() => validateSchematicDocument({
+      ...hierarchy,
+      ascHierarchicalBlocks: [],
+    })).toThrow(/missing owner/i);
+    expect(() => validateSchematicDocument({
+      ...hierarchy,
+      ascHierarchicalBlocks: [
+        hierarchy.ascHierarchicalBlocks[0],
+        { ...hierarchy.ascHierarchicalBlocks[0], attrs: { InstName: "X2" } },
+      ],
+    })).toThrow(/owners must be unique/i);
+    expect(() => validateSchematicDocument({
+      ...hierarchy,
+      ascHierarchicalBlocks: [{
+        ...hierarchy.ascHierarchicalBlocks[0],
+        provenance: { ...hierarchy.ascHierarchicalBlocks[0].provenance, componentCount: -1 },
+      }],
+    })).toThrow(/componentCount/i);
+  });
+
   it("preserves LTspice label placement and rejects a record it could not write back", () => {
     const base = validDocument();
     const document = {

@@ -12,7 +12,7 @@ import {
   ltspiceTypeToKind,
   parseAsc,
 } from "../io/ascImport";
-import type { SchematicForeignSymbol } from "../schematic/types";
+import type { SchematicForeignSymbol, SchematicHierarchicalBlock } from "../schematic/types";
 import type { SchematicDocument } from "../store/useSchematic";
 import { extractCircuit } from "../schematic/netlist";
 
@@ -141,7 +141,7 @@ const foreignSymbolKey = (symbol: {
 export function ascRewriteRisks(
   source: string,
   carriedForeignSymbols?: readonly SchematicForeignSymbol[],
-  carriedHierarchicalBlocks?: readonly SchematicForeignSymbol[],
+  carriedHierarchicalBlocks?: readonly SchematicHierarchicalBlock[],
 ): string[] {
   const parsed = parseAsc(source);
   const risks = new Set<string>();
@@ -152,10 +152,10 @@ export function ascRewriteRisks(
     const key = foreignSymbolKey(symbol);
     carriedByKey.set(key, (carriedByKey.get(key) ?? 0) + 1);
   }
-  const blockByKey = new Map<string, number>();
+  const blockByKey = new Map<string, SchematicHierarchicalBlock[]>();
   for (const symbol of carriedHierarchicalBlocks ?? []) {
     const key = foreignSymbolKey(symbol);
-    blockByKey.set(key, (blockByKey.get(key) ?? 0) + 1);
+    blockByKey.set(key, [...(blockByKey.get(key) ?? []), symbol]);
   }
   const carriedWarnings = new Set<string>();
 
@@ -188,11 +188,14 @@ export function ascRewriteRisks(
     // describes the loss - saving would rewrite the hierarchy as flat parts.
     // Name that instead, and drop the unresolved-symbol warning this local
     // re-import raises only because it runs without a subcircuit resolver.
-    const blockCount = blockByKey.get(carriedKey) ?? 0;
-    if (blockCount > 0) {
-      blockByKey.set(carriedKey, blockCount - 1);
+    const carriedBlocks = blockByKey.get(carriedKey) ?? [];
+    const carriedBlock = carriedBlocks.shift();
+    if (carriedBlock) {
       carriedWarnings.add(foreignSymbolWarning(symbol.attrs.InstName ?? "", symbol.type));
-      risks.add("hierarchical blocks");
+      // Current imports carry exact per-member provenance. The exporter still
+      // validates every member before suppressing it; older `.sim` documents
+      // without that proof remain conservatively blocked.
+      if (!carriedBlock.provenance) risks.add("hierarchical blocks");
       continue;
     }
     const kind = ltspiceTypeToKind(symbol.type);
@@ -265,10 +268,24 @@ export function serializeSchematicFile(
       shapes: document.ascShapes,
       dataFlags: document.ascDataFlags,
       foreignSymbols: document.ascForeignSymbols,
+      hierarchicalBlocks: document.ascHierarchicalBlocks,
       ...(document.ascSheet ? { sheet: document.ascSheet } : {}),
     });
     const reopened = importAsc(result.text);
-    const topologyChanged = JSON.stringify(schematicTopologySignature(document))
+    const preservedOwners = new Set(result.preservedHierarchyOwners ?? []);
+    const topologySource: SchematicDocument = preservedOwners.size === 0 ? document : {
+      ...document,
+      components: document.components.filter((component) =>
+        !component.ltHierarchy || !preservedOwners.has(component.ltHierarchy.owner)
+      ),
+      wires: document.wires.filter((wire) =>
+        !wire.ltHierarchy || !preservedOwners.has(wire.ltHierarchy.owner)
+      ),
+      netLabels: (document.netLabels ?? []).filter((label) =>
+        !label.ltHierarchy || !preservedOwners.has(label.ltHierarchy.owner)
+      ),
+    };
+    const topologyChanged = JSON.stringify(schematicTopologySignature(topologySource))
       !== JSON.stringify(schematicTopologySignature(reopened));
     return {
       contents: result.text,

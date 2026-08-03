@@ -8,6 +8,8 @@ import type {
   SchematicAscDataFlag,
   SchematicAscShape,
   SchematicForeignSymbol,
+  SchematicHierarchicalBlock,
+  SchematicHierarchyMemberProvenance,
   SchematicPortDirection,
   SchematicComponent,
   SchematicSheet,
@@ -105,6 +107,17 @@ function coordinate(value: unknown, name: string): number {
   return value;
 }
 
+const HIERARCHY_OWNER = /^h-[1-9]\d*$/;
+
+function hierarchyMemberProvenance(value: unknown, name: string): SchematicHierarchyMemberProvenance {
+  const source = record(value, name);
+  const owner = text(source.owner, `${name}.owner`, MAX_ID_LENGTH);
+  if (!HIERARCHY_OWNER.test(owner)) fail(`${name}.owner is not a valid hierarchy owner.`);
+  const original = text(source.original, `${name}.original`, MAX_SCHEMATIC_FILE_BYTES);
+  if (original.length === 0) fail(`${name}.original must not be empty.`);
+  return { owner, original };
+}
+
 function point(value: unknown, name: string): Point {
   const source = record(value, name);
   return { x: coordinate(source.x, `${name}.x`), y: coordinate(source.y, `${name}.y`) };
@@ -162,6 +175,9 @@ function component(value: unknown, index: number): SchematicComponent {
       return { attr, x: coordinate(window.x, `${name}.x`), y: coordinate(window.y, `${name}.y`), justification, size };
     });
   }
+  if (source.ltHierarchy !== undefined) {
+    result.ltHierarchy = hierarchyMemberProvenance(source.ltHierarchy, `components[${index}].ltHierarchy`);
+  }
   return result;
 }
 
@@ -179,7 +195,14 @@ function wire(value: unknown, index: number, remainingPoints: { value: number })
     source.resistance === undefined || source.resistance === null || source.resistance === ""
       ? undefined
       : text(source.resistance, `wires[${index}].resistance`, 40);
-  return { id: text(source.id, `wires[${index}].id`, MAX_ID_LENGTH), points, ...(resistance ? { resistance } : {}) };
+  return {
+    id: text(source.id, `wires[${index}].id`, MAX_ID_LENGTH),
+    points,
+    ...(resistance ? { resistance } : {}),
+    ...(source.ltHierarchy !== undefined
+      ? { ltHierarchy: hierarchyMemberProvenance(source.ltHierarchy, `wires[${index}].ltHierarchy`) }
+      : {}),
+  };
 }
 
 function probe(value: unknown, index: number): Probe {
@@ -223,6 +246,9 @@ function netLabel(value: unknown, index: number): NetLabel {
       fail(`netLabels[${index}].port must be "In", "Out", or "BiDir".`);
     }
     result.port = port as SchematicPortDirection;
+  }
+  if (source.ltHierarchy !== undefined) {
+    result.ltHierarchy = hierarchyMemberProvenance(source.ltHierarchy, `netLabels[${index}].ltHierarchy`);
   }
   return result;
 }
@@ -378,6 +404,30 @@ function foreignSymbol(
   return result;
 }
 
+function hierarchicalBlock(value: unknown, index: number): SchematicHierarchicalBlock {
+  const result: SchematicHierarchicalBlock = foreignSymbol(value, index, "ascHierarchicalBlocks");
+  const source = record(value, `ascHierarchicalBlocks[${index}]`);
+  if (source.provenance === undefined) return result;
+  const raw = record(source.provenance, `ascHierarchicalBlocks[${index}].provenance`);
+  const owner = text(raw.owner, `ascHierarchicalBlocks[${index}].provenance.owner`, MAX_ID_LENGTH);
+  if (!HIERARCHY_OWNER.test(owner)) {
+    fail(`ascHierarchicalBlocks[${index}].provenance.owner is not a valid hierarchy owner.`);
+  }
+  const boundedCount = (name: string, value: unknown, max: number): number => {
+    if (typeof value !== "number" || !Number.isInteger(value) || value < 0 || value > max) {
+      fail(`ascHierarchicalBlocks[${index}].provenance.${name} must be an integer from 0 to ${max}.`);
+    }
+    return value;
+  };
+  result.provenance = {
+    owner,
+    componentCount: boundedCount("componentCount", raw.componentCount, MAX_COMPONENTS),
+    wireCount: boundedCount("wireCount", raw.wireCount, MAX_WIRES),
+    netLabelCount: boundedCount("netLabelCount", raw.netLabelCount, MAX_COMPONENTS),
+  };
+  return result;
+}
+
 function schematicSheet(value: unknown): SchematicSheet {
   const source = record(value, "ascSheet");
   const index = source.index;
@@ -437,6 +487,27 @@ export function validateSchematicDocument(value: unknown): SchematicDocument {
   const validatedWires = source.wires.map((candidate, index) => wire(candidate, index, remainingPoints));
   const validatedProbes = probes.map(probe);
   const validatedLabels = netLabels.map(netLabel);
+  const validatedHierarchicalBlocks = ascHierarchicalBlocks.map(
+    (candidate: unknown, index: number) => hierarchicalBlock(candidate, index),
+  );
+  const hierarchyOwners = validatedHierarchicalBlocks
+    .map((block) => block.provenance?.owner)
+    .filter((owner): owner is string => owner !== undefined);
+  if (new Set(hierarchyOwners).size !== hierarchyOwners.length) {
+    fail("ascHierarchicalBlocks provenance owners must be unique.");
+  }
+  const hierarchyOwnerSet = new Set(hierarchyOwners);
+  const hierarchyMembers = [
+    ...validatedComponents.map((item) => item.ltHierarchy),
+    ...validatedWires.map((item) => item.ltHierarchy),
+    ...validatedLabels.map((item) => item.ltHierarchy),
+  ].filter((item): item is SchematicHierarchyMemberProvenance => item !== undefined);
+  const orphan = hierarchyMembers.find((item) => !hierarchyOwnerSet.has(item.owner));
+  if (orphan) fail(`hierarchy member references missing owner "${orphan.owner}".`);
+  const hierarchySnapshotBytes = hierarchyMembers.reduce((sum, item) => sum + item.original.length, 0);
+  if (hierarchySnapshotBytes > 2 * MAX_SCHEMATIC_FILE_BYTES) {
+    fail("hierarchy member snapshots exceed the aggregate document limit.");
+  }
   const allIds = [
     ...validatedComponents.map((item) => item.id),
     ...validatedWires.map((item) => item.id),
@@ -488,12 +559,8 @@ export function validateSchematicDocument(value: unknown): SchematicDocument {
     ...(ascForeignSymbols.length > 0
       ? { ascForeignSymbols: ascForeignSymbols.map((candidate: unknown, index: number) => foreignSymbol(candidate, index)) }
       : {}),
-    ...(ascHierarchicalBlocks.length > 0
-      ? {
-        ascHierarchicalBlocks: ascHierarchicalBlocks.map(
-          (candidate: unknown, index: number) => foreignSymbol(candidate, index, "ascHierarchicalBlocks"),
-        ),
-      }
+    ...(validatedHierarchicalBlocks.length > 0
+      ? { ascHierarchicalBlocks: validatedHierarchicalBlocks }
       : {}),
     ...(ascSheet !== undefined ? { ascSheet: schematicSheet(ascSheet) } : {}),
     // Additive: only emit the key when attachments exist so legacy/empty
