@@ -62,4 +62,55 @@ print tau_v
     expect(Number(match![1])).toBeGreaterThan(0.60);
     expect(Number(match![1])).toBeLessThan(0.67);
   });
+
+  it("preserves a negative constant capacitor's leading AC phase", () => {
+    const negativeComponents: SchematicComponent[] = [
+      placed("v-neg", "vsource", "V1", "AC 1", [
+        { id: "p", label: "+", x: 0, y: 0 },
+        { id: "n", label: "-", x: 0, y: 100 },
+      ]),
+      placed("r-neg", "resistor", "R1", "1k", [
+        { id: "a", label: "a", x: 0, y: 0 },
+        { id: "b", label: "b", x: 100, y: 0 },
+      ]),
+      placed("c-neg", "capacitor", "C1", "-159.1549n", [
+        { id: "a", label: "a", x: 100, y: 0 },
+        { id: "b", label: "b", x: 100, y: 100 },
+      ]),
+      placed("g-neg-1", "ground", "", "", [{ id: "g", label: "GND", x: 0, y: 100 }]),
+      placed("g-neg-2", "ground", "", "", [{ id: "g", label: "GND", x: 100, y: 100 }]),
+    ];
+    const deck = buildSpiceDeck(
+      { components: negativeComponents, wires: [], netLabels },
+      { kind: "ac", startHz: 100, stopHz: 10_000, pointsPerDecade: 10 },
+    );
+    expect(deck.netlist).toMatch(/^C1 out 0 Q='\(-1\.591549e-7\)\*V\(out,0\)'$/m);
+
+    const netlist = `${deck.netlist.replace(/^\s*\.end\s*$/mi, "")}
+.control
+run
+print frequency real(v(out)) imag(v(out))
+.endc
+.end
+`;
+    const path = join(tmpdir(), "tau-negative-capacitor.cir");
+    writeFileSync(path, netlist);
+    const run = spawnSync("ngspice", ["-b", path], { encoding: "utf8", timeout: 120_000 });
+    const output = `${run.stdout}\n${run.stderr}`;
+    expect(run.status, output).toBe(0);
+    const poleRow = output.split("\n").map((line) => line.trim().split(/\s+/)).find((cells) => (
+      cells.length === 4
+      && /^\d+$/.test(cells[0] ?? "")
+      && Math.abs(Number(cells[1]) - 1_000) < 1e-6
+      && Number.isFinite(Number(cells[2]))
+      && Number.isFinite(Number(cells[3]))
+    ));
+    expect(poleRow, output).toBeDefined();
+    const real = Number(poleRow![2]);
+    const imag = Number(poleRow![3]);
+    // At |wRC|=1, a negative C gives H=1/(1-j)=0.5+j0.5: the phase
+    // leads. Taking abs(C) would produce the opposite sign and fail here.
+    expect(real).toBeCloseTo(0.5, 3);
+    expect(imag).toBeCloseTo(0.5, 3);
+  });
 });

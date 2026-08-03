@@ -1022,11 +1022,22 @@ function componentLines(entry: ExtractedComponent, index: number, name: string, 
       const crystal = parseCrystal(component.value);
       if (crystal) return crystalDeckLines(name, node("a"), node("b"), crystal);
       const series = passiveSeriesResistance(component);
+      const internal = `tau_${safeName(name).toLowerCase()}_esr`;
+      const capacitorNegativeNode = series.ohms !== null && series.ohms > 0 ? internal : node("b");
+      const negative = negativeCapacitorDeckValue(
+        { ...component, value: series.value },
+        node("a"),
+        capacitorNegativeNode,
+      );
+      if (negative) {
+        const capacitorLine = `${name} ${node("a")} ${capacitorNegativeNode} ${negative}`;
+        if (series.ohms === null || series.ohms === 0) return [capacitorLine];
+        return [capacitorLine, `RTAU_${safeName(name)}_ESR ${internal} ${node("b")} ${series.ohms}`];
+      }
       const capacitance = positiveNumberFromText(component, stripIcSpec(series.value), "F");
       if (series.ohms === null || series.ohms === 0) {
         return [`${name} ${node("a")} ${node("b")} ${capacitance}${icSpecDeckText(component.value)}`];
       }
-      const internal = `tau_${safeName(name).toLowerCase()}_esr`;
       return [
         `${name} ${node("a")} ${internal} ${capacitance}${icSpecDeckText(component.value)}`,
         `RTAU_${safeName(name)}_ESR ${internal} ${node("b")} ${series.ohms}`,
@@ -1747,6 +1758,26 @@ function behavioralCapacitorDeckValue(
   );
   expr = moduloToFloor(ltFuncsToNgspice(statFuncsToNgspice(ifToTernary(expr))));
   return `Q='${expr}'${icSpecDeckText(component.value)}`;
+}
+
+/** LTspice permits a constant negative capacitance for active filter models.
+ * ngspice rejects a negative numeric C value, but its native charge-defined
+ * capacitor represents the same constitutive law exactly: Q(V)=C*V. Preserve
+ * the authored sign rather than taking an absolute value or clamping it. */
+function negativeCapacitorDeckValue(
+  component: SchematicComponent,
+  positiveNode: string,
+  negativeNode: string,
+): string | null {
+  const text = stripIcSpec(component.value).trim();
+  let capacitance: number;
+  try {
+    capacitance = parseQuantity(text, "F");
+  } catch {
+    return null;
+  }
+  if (!Number.isFinite(capacitance) || capacitance >= 0) return null;
+  return `Q='(${capacitance})*V(${positiveNode},${negativeNode})'${icSpecDeckText(component.value)}`;
 }
 
 /** LTspice's passive `Rser=` is a real series parasitic, but ngspice's C/L

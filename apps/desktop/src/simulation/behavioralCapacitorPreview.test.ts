@@ -40,3 +40,25 @@ describe("charge-defined capacitor preview integrity", () => {
     if (!result.ok) expect(result.message).toMatch(expected);
   });
 });
+
+describe("negative-capacitance preview integrity", () => {
+  const negativeComponents: SchematicComponent[] = [
+    { id: "c-neg", kind: "capacitor", label: "CNEG", value: "{-159.1549n}", x: 0, y: 0, rotation: 0 },
+    { id: "g-neg", kind: "ground", label: "", value: "", x: 32, y: 0, rotation: 0 },
+  ];
+  const negativeExpected = /CNEG.*negative-capacitance.*native ngspice engine.*Q\(V\)=C\*V.*will not change or approximate.*sign/i;
+
+  it("resolves braces and refuses every preview solver without changing the sign", async () => {
+    const op = runOperatingPoint({ components: negativeComponents, wires: [] });
+    const tran = await runTransientAnalysis({ components: negativeComponents, wires: [] }, { stopTime: 1e-3, steps: 16 });
+    const ac = runAcSweep({ components: negativeComponents, wires: [] }, { startHz: 1, stopHz: 1e3, pointsPerDecade: 10 });
+    const noise = runNoiseAnalysis(
+      { components: negativeComponents, wires: [] },
+      { output: { pos: "out" }, source: "V1", sweep: { startHz: 1, stopHz: 1e3, pointsPerDecade: 10 } },
+    );
+    for (const result of [op, tran, ac, noise]) {
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.message).toMatch(negativeExpected);
+    }
+  });
+});

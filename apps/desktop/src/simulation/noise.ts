@@ -35,7 +35,7 @@ import { extractCircuit, type ExtractedCircuit } from "../schematic/netlist";
 import { parseQuantity } from "./quantity";
 import { resolveComponentValues, EMPTY_SCOPE, type ParamScope } from "./paramScope";
 import { previewCurrentControlledSwitchMessage } from "../schematic/currentControlledSwitch";
-import { previewChargeDefinedCapacitorMessage } from "../schematic/behavioralCapacitor";
+import { previewChargeDefinedCapacitorMessage, previewNegativeCapacitorMessage } from "../schematic/behavioralCapacitor";
 
 // ---------------------------------------------------------------------------
 // Physical constants
@@ -324,6 +324,8 @@ export function runNoiseAnalysis(schematic: Schematic, spec: NoiseSpec): NoiseRe
     const chargeCapacitorMessage = previewChargeDefinedCapacitorMessage(schematic.components);
     if (chargeCapacitorMessage) return fail(chargeCapacitorMessage, circuit);
     const components = resolveComponentValues(schematic.components, schematic.params ?? EMPTY_SCOPE);
+    const negativeCapacitorMessage = previewNegativeCapacitorMessage(components);
+    if (negativeCapacitorMessage) return fail(negativeCapacitorMessage, circuit);
     circuit = extractCircuit(components, schematic.wires, schematic.netLabels ?? []);
 
     const currentSwitchMessage = previewCurrentControlledSwitchMessage(components);

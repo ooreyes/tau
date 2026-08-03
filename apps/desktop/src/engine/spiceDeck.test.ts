@@ -373,13 +373,12 @@ describe("deck builder - failure modes", () => {
     ).toThrow(/non-zero/i);
   });
 
-  it("rejects a negative capacitance", () => {
-    expect(() =>
-      buildSpiceDeck(
-        { components: [Vdc(0, 32, "5"), Cap(96, 0, "-1u", "C1"), GND(0, 64), GND(128, 0)], wires: [W({ x: 0, y: 0 }, { x: 64, y: 0 })] },
-        { kind: "op" },
-      ),
-    ).toThrow(/positive/i);
+  it("preserves LTspice negative capacitance through the native Q(V)=C*V law", () => {
+    const deck = buildSpiceDeck(
+      { components: [Vdc(0, 32, "5"), Cap(96, 0, "-1u", "C1"), GND(0, 64), GND(128, 0)], wires: [W({ x: 0, y: 0 }, { x: 64, y: 0 })] },
+      { kind: "op" },
+    );
+    expect(deck.netlist).toContain("C1 n001 0 Q='(-0.000001)*V(n001,0)'");
   });
 
   it("rejects a non-finite component value (NaN string)", () => {

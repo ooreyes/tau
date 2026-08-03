@@ -99,6 +99,28 @@ describe("buildSpiceDeck", () => {
     expect(deck.netlist).not.toContain("needs a valid F value");
   });
 
+  it("preserves an LTspice negative capacitor exactly through Q(V)=C*V", () => {
+    const components = [
+      component("vsource", "V1", "AC 1", 0, 32),
+      component("resistor", "R1", "1k", 96, 0),
+      component("capacitor", "C1", "-159.1549n", 224, 0),
+      component("ground", "", "", 0, 64),
+      component("ground", "", "", 256, 0),
+    ];
+    const wires = [
+      wire("w1", [{ x: 0, y: 0 }, { x: 64, y: 0 }]),
+      wire("w2", [{ x: 128, y: 0 }, { x: 192, y: 0 }]),
+    ];
+
+    const deck = buildSpiceDeck(
+      { components, wires, netLabels: [{ id: "out", x: 192, y: 0, text: "out" }] },
+      { kind: "ac", startHz: 100, stopHz: 10_000, pointsPerDecade: 10 },
+    );
+
+    expect(deck.netlist).toContain("C1 out 0 Q='(-1.591549e-7)*V(out,0)'");
+    expect(deck.netlist).not.toContain("needs a positive F value");
+  });
+
   it("preserves authored transient output-start and maximum-step controls", () => {
     const components = [component("resistor", "R1", "1k", 0, 0), component("ground", "", "", 64, 0)];
     const deck = buildSpiceDeck({ components, wires: [] }, {

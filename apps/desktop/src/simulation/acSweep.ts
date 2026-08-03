@@ -20,7 +20,7 @@ import { mutualTerms, type CouplingSpec, type MutualTerm } from "./coupling";
 import { linearBSourceModel, resolveBehavioralTerms, type LinearBehavioral } from "./behavioral";
 import { parseAcSpec } from "../engine/acSpec";
 import { previewCurrentControlledSwitchMessage } from "../schematic/currentControlledSwitch";
-import { previewChargeDefinedCapacitorMessage } from "../schematic/behavioralCapacitor";
+import { previewChargeDefinedCapacitorMessage, previewNegativeCapacitorMessage } from "../schematic/behavioralCapacitor";
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -309,6 +309,8 @@ export function runAcSweep(
     const chargeCapacitorMessage = previewChargeDefinedCapacitorMessage(schematic.components);
     if (chargeCapacitorMessage) return fail(chargeCapacitorMessage, circuit);
     const components = resolveComponentValues(schematic.components, schematic.params ?? EMPTY_SCOPE);
+    const negativeCapacitorMessage = previewNegativeCapacitorMessage(components);
+    if (negativeCapacitorMessage) return fail(negativeCapacitorMessage, circuit);
     circuit = extractCircuit(components, schematic.wires, schematic.netLabels ?? []);
 
     const currentSwitchMessage = previewCurrentControlledSwitchMessage(components);
