@@ -9,16 +9,15 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-03 09:13 CDT**
+**Status: IN PROGRESS - 2026-08-03 09:17 CDT**
 
-Named five-pin vendor op-amps no longer fall through to Tau's generic gain
-block. Exact document/attached five-terminal subcircuits run through a bounded
-LTspice-compatibility normalizer; missing, incompatible, or path-escaping models
-refuse atomically. Properties exposes Part, Simulation model, readiness, and an
-Attach Model Library action. The canonical and staged cron corpora are honestly
-80/82 with zero hard failures; Class-D OP converges. A fresh unsigned app/DMG,
-strict signature verification, DMG checksum, real-app launch, and Chrome at
-900x600 pass. Scheduler remains unloaded while interactive UX work continues.
+Claimed unit: replace the independent-source raw Value field with a waveform
+editor. DC operating-point bias must be a distinct numeric control; Sine, Pulse,
+PWL, Exponential, and SFFM must expose named parameters and units, including a
+real point editor for PWL and separate AC stimulus controls. Existing LTspice
+values remain byte-stable until edited; edits re-encode valid SPICE beneath the
+UI. Prove parser/encoder, inspector interaction, engine behavior, import/export,
+and 900x600 layout. Scheduler stays unloaded.
 
 Previous completed unit:
 

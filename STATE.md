@@ -5,15 +5,13 @@ The working memory of an unattended loop that starts from zero every fire.
 
 ## Now
 
-**Status:** DONE - 2026-08-03 09:13 CDT
+**Status:** IN PROGRESS - 2026-08-03 09:17 CDT
 
-Named five-pin vendor op-amp model integrity is complete. Exact document or
-user-attached five-terminal subcircuits execute through Tau's native engine;
-missing/incompatible/unsafe models refuse atomically instead of becoming a
-generic gain block. Part, Simulation model, readiness, and model attachment are
-named controls. Canonical and cron-staged corpora hold 80/82 with zero hard
-failures; release app/DMG, packaged launch, and Chrome minimum-window checks are
-green. Scheduler remains unloaded while the next interactive UX unit is claimed.
+Current unit: independent-source waveform editing. Separate DC operating-point
+bias from the waveform mode and expose named, unit-aware Sine/Pulse/PWL/EXP/SFFM
+and AC controls. PWL gets editable time/level rows rather than appearing inside
+"DC level". Preserve untouched LTspice text exactly and emit valid syntax only
+under the UI after a real edit. Scheduler remains unloaded.
 
 **Product UX contract (Omar, 2026-08-03): Tau is not a prettier command-line
 wrapper.** Known SPICE semantics must appear as named, editable controls in the
