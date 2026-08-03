@@ -25,6 +25,13 @@ export function hierarchyComponentFingerprint(component: SchematicComponent): st
     })),
     ltSymbolType: component.ltSymbolType ?? null,
     ltWindows: (component.ltWindows ?? []).map((window) => ({ ...window })),
+    ltExtraAttrs: component.ltExtraAttrs
+      ? {
+        baseValue: component.ltExtraAttrs.baseValue,
+        derivedValue: component.ltExtraAttrs.derivedValue,
+        extras: { ...component.ltExtraAttrs.extras },
+      }
+      : null,
   });
 }
 

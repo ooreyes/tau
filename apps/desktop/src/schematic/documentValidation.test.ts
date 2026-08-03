@@ -39,6 +39,30 @@ describe("schematic document validation", () => {
     expect(validateSchematicDocument(document)).toEqual(document);
   });
 
+  it("preserves bounded LTspice value-slot provenance and rejects forged slots", () => {
+    const base = validDocument();
+    const ltExtraAttrs = {
+      baseValue: "",
+      derivedValue: "Avol=1Meg GBW=10Gig",
+      extras: { Value2: "Avol=1Meg", SpiceLine: "GBW=10Gig" },
+    };
+    const document = {
+      ...base,
+      components: [{ ...base.components[0], value: ltExtraAttrs.derivedValue, ltExtraAttrs }],
+    };
+    expect(validateSchematicDocument(document)).toEqual(document);
+
+    const bad = (attrs: unknown) => () => validateSchematicDocument({
+      ...base,
+      components: [{ ...base.components[0], ltExtraAttrs: attrs }],
+    });
+    expect(bad({ ...ltExtraAttrs, extras: { "SpiceLine\nSYMBOL": "x" } })).toThrow(/field name/i);
+    expect(bad({ ...ltExtraAttrs, extras: { SpiceLine: "x\nFLAG 0 0 0" } })).toThrow(/control character/i);
+    expect(bad({ ...ltExtraAttrs, extras: Object.fromEntries(
+      Array.from({ length: 17 }, (_, index) => [`Slot${index}`, "x"]),
+    ) })).toThrow(/at most 16/i);
+  });
+
   it("preserves bounded hierarchy provenance and rejects orphaned or duplicate owners", () => {
     const base = validDocument();
     const hierarchy = {

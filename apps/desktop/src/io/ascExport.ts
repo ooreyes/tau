@@ -22,6 +22,7 @@ import type {
   SchematicComponent,
   SchematicForeignSymbol,
   SchematicHierarchicalBlock,
+  LtspiceExtraAttrs,
   SchematicSheet,
   SchematicTextAnnotation,
   SchematicWire,
@@ -46,6 +47,84 @@ const int = (n: number): string => String(Math.round(n));
 /** LTspice writes symbol paths with doubled backslashes; compare on a single
  *  normalized form so `Opamps\\AD823` and `opamps/AD823` are the same symbol. */
 const normalizeLtType = (type: string): string => type.replace(/\\+/g, "/").toLowerCase();
+
+const FOLDED_VALUE_FIELDS = ["Value2", "SpiceLine", "SpiceLine2"] as const;
+
+interface ReconciledLtspiceAttrs {
+  baseValue: string;
+  extras: Record<string, string>;
+}
+
+/**
+ * Put a safe edit to Tau's joined value back into the one LTspice attribute
+ * slot that owns the changed text.
+ *
+ * LTspice concatenates Value/Value2/SpiceLine/SpiceLine2 for sources, op-amps,
+ * and A-devices, while Tau exposes that electrical line as one editable value.
+ * The original split is already structured in `LtspiceExtraAttrs`; a minimal
+ * prefix/suffix diff tells us whether an edit stayed wholly inside exactly one
+ * source slot. When it crosses a slot boundary (or Tau's derived value was a
+ * filtered projection such as capacitor Rser metadata), returning null keeps
+ * the existing explicit save refusal instead of guessing.
+ */
+function reconcileFoldedLtspiceValue(
+  provenance: LtspiceExtraAttrs,
+  nextValue: string,
+): ReconciledLtspiceAttrs | null {
+  const rawBase = provenance.baseValue.trim();
+  const base = /^["']*$/.test(rawBase) ? "" : rawBase;
+  const slots: Array<{ field: "Value" | typeof FOLDED_VALUE_FIELDS[number]; text: string; start: number; end: number }> = [];
+  const addSlot = (field: "Value" | typeof FOLDED_VALUE_FIELDS[number], text: string) => {
+    if (!text) return;
+    const start = slots.length === 0 ? 0 : slots[slots.length - 1].end + 1;
+    slots.push({ field, text, start, end: start + text.length });
+  };
+  addSlot("Value", base);
+  for (const field of FOLDED_VALUE_FIELDS) addSlot(field, provenance.extras[field]?.trim() ?? "");
+
+  // Only a literal whole-slot concatenation is reversible. Filtered/derived
+  // projections deliberately remain conservative.
+  if (slots.map((slot) => slot.text).join(" ") !== provenance.derivedValue) return null;
+  if (nextValue === provenance.derivedValue) {
+    return { baseValue: provenance.baseValue, extras: { ...provenance.extras } };
+  }
+
+  let prefix = 0;
+  while (
+    prefix < provenance.derivedValue.length
+    && prefix < nextValue.length
+    && provenance.derivedValue[prefix] === nextValue[prefix]
+  ) prefix += 1;
+  let suffix = 0;
+  while (
+    suffix < provenance.derivedValue.length - prefix
+    && suffix < nextValue.length - prefix
+    && provenance.derivedValue[provenance.derivedValue.length - 1 - suffix]
+      === nextValue[nextValue.length - 1 - suffix]
+  ) suffix += 1;
+
+  const oldEnd = provenance.derivedValue.length - suffix;
+  const replacement = nextValue.slice(prefix, nextValue.length - suffix);
+  const owners = slots.filter((slot) => prefix >= slot.start && oldEnd <= slot.end);
+  if (owners.length !== 1) return null;
+  const owner = owners[0];
+  const updatedText = owner.text.slice(0, prefix - owner.start)
+    + replacement
+    + owner.text.slice(oldEnd - owner.start);
+  const extras = { ...provenance.extras };
+  let baseValue = provenance.baseValue;
+  if (owner.field === "Value") baseValue = updatedText;
+  else if (updatedText) extras[owner.field] = updatedText;
+  else delete extras[owner.field];
+
+  const normalizedBase = /^["']*$/.test(baseValue.trim()) ? "" : baseValue.trim();
+  const reconstructed = [
+    normalizedBase,
+    ...FOLDED_VALUE_FIELDS.map((field) => extras[field]?.trim() ?? ""),
+  ].filter(Boolean).join(" ");
+  if (reconstructed !== nextValue) return null;
+  return { baseValue, extras };
+}
 
 /**
  * Serialize an {@link AscDocument} to LTspice `.asc` text. Inverse of `parseAsc`.
@@ -542,17 +621,26 @@ export function schematicToAsc(input: SchematicExportInput): SchematicToAscResul
     if (extraAttrs) {
       // Nothing was folded onto the value when the two agree, so the slots stay
       // independent of it and an edited value simply takes `Value`. Otherwise
-      // the value has to still be the one Tau derived, since a folded edit
-      // cannot be distributed back across the slots it came from.
+      // an edit is accepted only when its minimal diff stays inside one exact
+      // source slot. A cross-slot transformation remains ambiguous and blocked.
+      const currentValue = c.value ?? "";
+      const reconciled = extraAttrs.derivedValue === extraAttrs.baseValue
+        || currentValue === extraAttrs.derivedValue
+        ? null
+        : reconcileFoldedLtspiceValue(extraAttrs, currentValue);
       const valueIntact = extraAttrs.derivedValue === extraAttrs.baseValue
-        || c.value === extraAttrs.derivedValue;
-      const base = extraAttrs.derivedValue === extraAttrs.baseValue ? c.value : extraAttrs.baseValue;
+        || currentValue === extraAttrs.derivedValue
+        || reconciled !== null;
+      const base = extraAttrs.derivedValue === extraAttrs.baseValue
+        ? currentValue
+        : (reconciled?.baseValue ?? extraAttrs.baseValue);
+      const extras = reconciled?.extras ?? extraAttrs.extras;
       if (valueIntact && keepsSourceSymbol && !symbol.tauKind) {
         // LTspice omits `Value` entirely on a part whose spec lives in the
         // other slots; writing one back would add an attribute it never had.
         if (base) attrs.Value = base;
         else delete attrs.Value;
-        for (const [name, value] of Object.entries(extraAttrs.extras)) attrs[name] = value;
+        for (const [name, value] of Object.entries(extras)) attrs[name] = value;
       } else if (valueIntact && symbol.tauKind) {
         // The part is written under a carrier symbol, so its slots cannot go
         // back under their own names - `SpiceLine` on the placeholder resistor
@@ -560,7 +648,7 @@ export function schematicToAsc(input: SchematicExportInput): SchematicToAscResul
         // instead, next to the `TauKind` that says which part they describe.
         // LTspice sees the carrier either way; this is what stops a save from
         // destroying the spec on the way through Tau.
-        attrs[TAU_CARRIED_ATTRS_FIELD] = encodeCarriedAttrs(base, extraAttrs.extras);
+        attrs[TAU_CARRIED_ATTRS_FIELD] = encodeCarriedAttrs(base, extras);
       } else {
         warnings.push(
           `${c.label || c.id}: ${Object.keys(extraAttrs.extras).join(", ")} ${

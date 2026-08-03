@@ -913,6 +913,18 @@ describe("extended SYMATTR slots (Value2 / SpiceLine) round-trip", () => {
     expect(warnings).toEqual([]);
   });
 
+  it("writes a single-slot folded edit back to the LTspice slot that owns it", () => {
+    const editedValue = "Avol=2Meg GBW=10Gig Slew=10Gig ilimit=2 rail=0 Vos=0 phimargin=45";
+    const { text, warnings } = resaveExtendedAttrs((c) => (
+      c.label === "U2" ? { ...c, value: editedValue } : c
+    ));
+
+    expect(warnings).toEqual([]);
+    expect(text).toContain("SYMATTR Value2 Avol=2Meg GBW=10Gig Slew=10Gig");
+    expect(text).toContain("SYMATTR SpiceLine ilimit=2 rail=0 Vos=0 phimargin=45");
+    expect(importAsc(text).components.find((c) => c.label === "U2")?.value).toBe(editedValue);
+  });
+
   it("refuses the save when a folded value was edited", () => {
     // The op-amp's value IS its slots joined, so an edit cannot be distributed
     // back across them. Dropping them silently is the failure this guards.

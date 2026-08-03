@@ -1,6 +1,7 @@
 import { CATALOG_BY_KIND } from "./catalog";
 import type {
   ComponentKind,
+  LtspiceExtraAttrs,
   NetLabel,
   Point,
   Probe,
@@ -175,6 +176,9 @@ function component(value: unknown, index: number): SchematicComponent {
       return { attr, x: coordinate(window.x, `${name}.x`), y: coordinate(window.y, `${name}.y`), justification, size };
     });
   }
+  if (source.ltExtraAttrs !== undefined) {
+    result.ltExtraAttrs = ltspiceExtraAttrs(source.ltExtraAttrs, `components[${index}].ltExtraAttrs`);
+  }
   if (source.ltHierarchy !== undefined) {
     result.ltHierarchy = hierarchyMemberProvenance(source.ltHierarchy, `components[${index}].ltHierarchy`);
   }
@@ -341,6 +345,34 @@ const FORGES_ASC_RECORD = /[\s\u0000-\u001f\u007f]/;
 // An attribute VALUE is the last field on its `SYMATTR` line, so an interior
 // space is ordinary and must stay; only a control character can forge a record.
 const CONTROL_CHARACTER = /[\u0000-\u001f\u007f]/;
+const LTSPICE_ATTR_FIELD = /^[A-Za-z_][A-Za-z0-9_]*$/;
+const RESERVED_COMPONENT_ATTR_FIELDS = new Set([
+  "InstName", "Value", "TauKind", "TauValue", "TauLabel", "TauAttrs",
+]);
+const MAX_LT_EXTRA_ATTRS = 16;
+
+function ltspiceExtraAttrs(value: unknown, name: string): LtspiceExtraAttrs {
+  const source = record(value, name);
+  const baseValue = text(source.baseValue, `${name}.baseValue`, MAX_COMPONENT_VALUE_LENGTH);
+  const derivedValue = text(source.derivedValue, `${name}.derivedValue`, MAX_COMPONENT_VALUE_LENGTH);
+  if (CONTROL_CHARACTER.test(baseValue)) fail(`${name}.baseValue must not contain control characters.`);
+  if (CONTROL_CHARACTER.test(derivedValue)) fail(`${name}.derivedValue must not contain control characters.`);
+  const rawExtras = record(source.extras, `${name}.extras`);
+  const entries = Object.entries(rawExtras);
+  if (entries.length === 0 || entries.length > MAX_LT_EXTRA_ATTRS) {
+    fail(`${name}.extras must have from 1 to at most ${MAX_LT_EXTRA_ATTRS} entries.`);
+  }
+  const extras: Record<string, string> = {};
+  for (const [field, raw] of entries) {
+    if (!LTSPICE_ATTR_FIELD.test(field) || RESERVED_COMPONENT_ATTR_FIELDS.has(field)) {
+      fail(`${name}.extras has a field name that is not a valid extended SYMATTR name.`);
+    }
+    const attrValue = text(raw, `${name}.extras.${field}`, MAX_COMPONENT_VALUE_LENGTH);
+    if (CONTROL_CHARACTER.test(attrValue)) fail(`${name}.extras.${field} must not contain control characters.`);
+    extras[field] = attrValue;
+  }
+  return { baseValue, derivedValue, extras };
+}
 
 // Shared by `ascForeignSymbols` and `ascHierarchicalBlocks`: both carry a raw
 // SYMBOL record with identical shape and identical re-emission rules, so the

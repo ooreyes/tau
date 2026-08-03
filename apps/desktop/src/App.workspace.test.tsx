@@ -379,6 +379,49 @@ describe("App schematic workspace tools", () => {
     expect(useProject.getState().workspaceFiles[path].contents).toBe(contents);
   });
 
+  it("updates one extended LTspice value slot without collapsing the others", async () => {
+    const path = `${DEFAULT_WORKSPACE_ID}/opamp.asc`;
+    const contents = [
+      "Version 4",
+      "SHEET 1 880 680",
+      "SYMBOL OpAmps/UniversalOpAmp2 160 160 R0",
+      "SYMATTR InstName U1",
+      "SYMATTR Value2 Avol=1Meg GBW=10Gig Slew=10Gig",
+      "SYMATTR SpiceLine ilimit=2 rail=0",
+      "TEXT 32 320 Left 2 !.tran 1m",
+      "",
+    ].join("\n");
+    const file = { path, name: "opamp.asc", contents, kind: "asc" as const };
+    useProject.setState({
+      rootPath: DEFAULT_WORKSPACE_ID,
+      rootName: DEFAULT_WORKSPACE_NAME,
+      tree: defaultWorkspaceTree([file]),
+      expanded: [DEFAULT_WORKSPACE_ID],
+      workspaceFiles: { [path]: file },
+      error: null,
+      capability: "none",
+    });
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "opamp.asc" }));
+    await screen.findByRole("tab", { name: /opamp\.asc/ });
+    const opamp = useSchematic.getState().components.find((component) => component.label === "U1");
+    expect(opamp?.ltExtraAttrs)
+      .toMatchObject({ extras: { Value2: "Avol=1Meg GBW=10Gig Slew=10Gig", SpiceLine: "ilimit=2 rail=0" } });
+    act(() => useSchematic.getState().setValue(
+      opamp!.id,
+      "Avol=2Meg GBW=10Gig Slew=10Gig ilimit=2 rail=0",
+    ));
+    fireEvent.keyDown(document.body, { key: "s", metaKey: true });
+
+    await waitFor(() => {
+      const saved = useProject.getState().workspaceFiles[path].contents;
+      expect(saved).toContain("SYMATTR Value2 Avol=2Meg GBW=10Gig Slew=10Gig");
+      expect(saved).toContain("SYMATTR SpiceLine ilimit=2 rail=0");
+      expect(saved).not.toContain("SYMATTR Value Avol=2Meg");
+    });
+  });
+
   it("refuses Run when a preserved LTspice symbol has no Tau electrical model", async () => {
     await renderOpenProject();
     act(() => useSchematic.setState({

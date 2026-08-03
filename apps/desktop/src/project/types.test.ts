@@ -383,7 +383,8 @@ FLAG 16 0 a
 FLAG 16 160 b
 SYMBOL res 0 -16 R0
 SYMATTR InstName R1
-SYMATTR Value 1k`;
+SYMATTR Value 1k
+SYMATTR SpiceLine tol=1`;
     const resolver: SubcircuitResolver = makeSubcircuitResolver((type) =>
       type.toLowerCase() === "mydiv2" ? { asy: bodyAsy, asc: bodyAsc } : null,
     );
@@ -454,6 +455,25 @@ SYMATTR InstName X1
     });
     expect(edited.warnings.some((warning) => warning.includes("X1") && warning.includes("edited"))).toBe(true);
     expect(ascSaveBlockReason([], 0, edited.warnings)).not.toBeNull();
+
+    const slotEdited = serializeSchematicFile("/Schematics/hier.asc", {
+      components: resolved.components.map((component, index) => index === 0
+        ? {
+          ...component,
+          ltExtraAttrs: component.ltExtraAttrs
+            ? { ...component.ltExtraAttrs, extras: { ...component.ltExtraAttrs.extras, SpiceLine: "tol=2" } }
+            : undefined,
+        }
+        : component),
+      wires: resolved.wires,
+      probes: [],
+      netLabels: resolved.netLabels,
+      directives: resolved.directives,
+      ascForeignSymbols: resolved.foreignSymbols,
+      ascHierarchicalBlocks: resolved.hierarchicalBlocks,
+    });
+    expect(slotEdited.warnings.some((warning) => warning.includes("X1") && warning.includes("edited"))).toBe(true);
+    expect(ascSaveBlockReason([], 0, slotEdited.warnings)).not.toBeNull();
 
     const incomplete = serializeSchematicFile("/Schematics/hier.asc", {
       components: resolved.components.slice(1),
