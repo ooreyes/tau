@@ -169,6 +169,41 @@ describe("ComponentInspector - no-selection empty state", () => {
   });
 });
 
+describe("ComponentInspector - imported op-amp parameters", () => {
+  it("labels a non-library LTspice model honestly and exposes its joined parameter line", () => {
+    const selected = {
+      id: "u-1",
+      kind: "opamp" as const,
+      x: 160,
+      y: 160,
+      rotation: 0 as const,
+      value: "Avol=1Meg GBW=10Gig Slew=10Gig ilimit=2 rail=0",
+      label: "U1",
+      ltExtraAttrs: {
+        baseValue: "",
+        derivedValue: "Avol=1Meg GBW=10Gig Slew=10Gig ilimit=2 rail=0",
+        extras: {
+          Value2: "Avol=1Meg GBW=10Gig Slew=10Gig",
+          SpiceLine: "ilimit=2 rail=0",
+        },
+      },
+    };
+    useSchematic.setState({ components: [selected], selectedId: selected.id, selectedIds: [selected.id] });
+    render(<ComponentInspector selected={selected} />);
+
+    expect((screen.getByRole("combobox", { name: "Op-amp model" }) as HTMLSelectElement).value)
+      .toBe("__custom__");
+    const parameters = screen.getByRole("textbox", { name: "Op-amp parameters" }) as HTMLInputElement;
+    expect(parameters.value).toBe(selected.value);
+
+    fireEvent.change(parameters, {
+      target: { value: "Avol=2Meg GBW=10Gig Slew=10Gig ilimit=2 rail=0" },
+    });
+    expect(useSchematic.getState().components[0].value)
+      .toBe("Avol=2Meg GBW=10Gig Slew=10Gig ilimit=2 rail=0");
+  });
+});
+
 describe("ComponentsRail - responsive shell budget", () => {
   function Harness({ maxWidth, embedded = false }: { maxWidth: number; embedded?: boolean }) {
     const resize = usePanelWidth({

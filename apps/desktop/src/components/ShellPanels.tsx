@@ -1513,6 +1513,7 @@ export function ComponentInspector({ selected }: { selected: SchematicComponent 
   };
 
   const opampPart = selected?.kind === "opamp" ? findOpAmp(selected.value) : null;
+  const customOpamp = selected?.kind === "opamp" && !OPAMP_LIBRARY.some((part) => part.part === selected.value);
 
   return (
     <div className="component-inspector">
@@ -1559,12 +1560,13 @@ export function ComponentInspector({ selected }: { selected: SchematicComponent 
                 <select
                   className="mono-num"
                   aria-label="Op-amp model"
-                  value={OPAMP_LIBRARY.some((p) => p.part === selected.value) ? selected.value : "Ideal"}
+                  value={customOpamp ? "__custom__" : selected.value}
                   onChange={(event) => {
                     beginParamChange("model");
                     setValue(selected.id, event.currentTarget.value);
                   }}
                 >
+                  {customOpamp && <option value="__custom__">Imported / custom</option>}
                   {OPAMP_LIBRARY.map((p) => (
                     <option key={p.part} value={p.part}>
                       {p.part}
@@ -1573,6 +1575,24 @@ export function ComponentInspector({ selected }: { selected: SchematicComponent 
                   ))}
                 </select>
               </label>
+              {customOpamp && (
+                <label className="property-field">
+                  <span>Parameters</span>
+                  <input
+                    className="mono-num"
+                    value={selected.value}
+                    aria-label="Op-amp parameters"
+                    spellCheck={false}
+                    onFocus={() => {
+                      editKeyRef.current = null;
+                    }}
+                    onChange={(event) => {
+                      beginParamChange("parameters");
+                      setValue(selected.id, event.currentTarget.value);
+                    }}
+                  />
+                </label>
+              )}
               {opampPart && (
                 <p className="property-hint">
                   {Number.isFinite(opampPart.gbwHz) && opampPart.gbwHz > 0
