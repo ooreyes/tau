@@ -1783,6 +1783,39 @@ R1 out fb 10k
         );
     }
 
+    #[test]
+    #[ignore = "requires TAU_NGSPICE_LIB pointing to libngspice"]
+    fn runs_a_current_controlled_switch_with_the_real_ngspice_library() {
+        let _guard = real_engine_test_guard();
+        let library = std::env::var_os("TAU_NGSPICE_LIB")
+            .map(PathBuf::from)
+            .expect("TAU_NGSPICE_LIB must point to a shared ngspice library");
+        let mut engine = SpiceEngine::load(vec![library]).expect("ngspice library should load");
+
+        let output_for = |engine: &mut SpiceEngine, control: &str| {
+            let result = engine
+                .run(SpiceRequest {
+                    netlist: format!(
+                        "Tau W-device proof\n.model MYSW CSW(Ron=1 Roff=1Meg It=.5m Ih=0)\nVload in 0 5\nW1 in out Vsense MYSW\nRload out 0 1k\nIctl 0 sense {control}\nVsense sense 0 0\n.op\n.end"
+                    ),
+                })
+                .expect("the current-controlled switch should solve");
+            result
+                .vectors
+                .iter()
+                .find(|vector| vector.name.eq_ignore_ascii_case("out"))
+                .and_then(|vector| vector.real.first())
+                .copied()
+                .unwrap_or_else(|| panic!("out vector missing; messages: {:?}", result.messages))
+        };
+
+        let on = output_for(&mut engine, "1m");
+        let off = output_for(&mut engine, ".1m");
+        assert!(on > 4.99, "on-state output was {on}");
+        assert!(off > 0.0 && off < 0.01, "off-state output was {off}");
+        assert!(on / off > 900.0, "on/off ratio was {}", on / off);
+    }
+
     /** Exact assistant 2-bit register regression: ngspice XSPICE d_dff
      * controls are active-high, so PRE/CLR are held at zero. On clock rising
      * edges at 1/3/5 ms the two outputs must sample 01, 11, 10.

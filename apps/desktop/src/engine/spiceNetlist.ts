@@ -20,12 +20,13 @@ import { laplaceTransfer, laplaceSourceLines } from "./laplace";
 import { coreInductance } from "./coreInductor";
 import { standardModelLine, standardModelType } from "./standardModels";
 import { bundledSubcircuitBlock, bundledLibraryText, sanitizeSubcktName } from "./bundledSubcircuits";
-import { parseUserModelLibraries, resolveUserModel, resolveUserSubckt } from "./userModelLibrary";
+import { parseUserModelLibraries, resolveUserModel, resolveUserSubckt, translateSwitchModelCard } from "./userModelLibrary";
 import { tlineDeckParams } from "./tlineSpec";
 import { parseTempDirective } from "../io/directiveAnalysis";
 import { assertSimulationIntegrity } from "../simulation/simulationIntegrity";
 import { parseVaristor, varistorDeckLine } from "./varistorSpec";
 import { parsePhaseDetector, phaseDetectorDeckLines } from "./phaseDetectorSpec";
+import { isLtspiceCurrentControlledSwitch } from "../schematic/currentControlledSwitch";
 
 export type SpiceAnalysis =
   | { kind: "tran"; stopTime: number; steps: number; startTime?: number; maxStep?: number; uic?: boolean; startup?: boolean }
@@ -227,6 +228,18 @@ export function buildSpiceDeck(schematic: Schematic, analysis: SpiceAnalysis): S
   // Deck instance names, resolved once so behavioral current refs, coupling
   // lines, and element emission all agree; throws on a genuine duplicate.
   const instanceNames = resolveInstanceNames(circuit.components);
+  const resolveScopedComponent = (
+    ref: string,
+    ownerLabel: string,
+  ): { entry: ExtractedComponent; index: number } | null => {
+    const segments = ownerLabel.split(".");
+    for (let keep = segments.length - 1; keep >= 0; keep -= 1) {
+      const prefix = segments.slice(0, keep).join(".");
+      const target = componentsByLabel.get((prefix ? `${prefix}.${ref}` : ref).toLowerCase());
+      if (target) return target;
+    }
+    return null;
+  };
   const deckNode = (netId: string | undefined): string | null =>
     netId === undefined ? null : netId === circuit.groundNetId ? "0" : netId.toLowerCase();
   // Node names inside behavioral expressions must transliterate exactly like
@@ -238,11 +251,8 @@ export function buildSpiceDeck(schematic: Schematic, analysis: SpiceAnalysis): S
     );
   const rewriteCurrentRefs = (value: string, ownerLabel: string): string =>
     value.replace(/\bI\s*\(\s*([\w.]+)\s*\)/gi, (match, ref: string) => {
-      const segments = ownerLabel.split(".");
-      for (let keep = segments.length - 1; keep >= 0; keep -= 1) {
-        const prefix = segments.slice(0, keep).join(".");
-        const target = componentsByLabel.get((prefix ? `${prefix}.${ref}` : ref).toLowerCase());
-        if (!target) continue;
+      const target = resolveScopedComponent(ref, ownerLabel);
+      if (target) {
         const kind = target.entry.component.kind;
         if (kind === "vsource" || kind === "vac" || kind === "inductor") {
           return `I(${instanceNames.get(target.index)!})`;
@@ -280,7 +290,8 @@ export function buildSpiceDeck(schematic: Schematic, analysis: SpiceAnalysis): S
 
   const lines = ["Tau generated circuit", optionsLineFromDirectives(flatDirectives)];
   const usedKinds = new Set(components.map((component) => component.kind));
-  const needsModels = ["diode", "led", "zener", "nmos", "pmos", "njf", "pjf", "npn", "pnp", "switch"].some((kind) => usedKinds.has(kind as ComponentKind));
+  const needsModels = ["diode", "led", "zener", "nmos", "pmos", "njf", "pjf", "npn", "pnp"].some((kind) => usedKinds.has(kind as ComponentKind))
+    || components.some((component) => component.kind === "switch" && !isLtspiceCurrentControlledSwitch(component));
   if (needsModels) lines.push(...DEFAULT_MODELS);
 
   // Carry the document's own `.model`/`.lib`/`.inc`/`.subckt` definitions into the
@@ -323,7 +334,11 @@ export function buildSpiceDeck(schematic: Schematic, analysis: SpiceAnalysis): S
       if (file && !attachedLibraryFiles.has(libraryFileKey(file))) unresolvedLibraryFiles.add(file);
     } else {
       if (/^\.subckt\b/i.test(line.trim())) subcktDepth += 1;
-      lines.push(subcktDepth > 0 ? line : substituteKnownBraces(line, passthroughScope));
+      const substituted = subcktDepth > 0 ? line : substituteKnownBraces(line, passthroughScope);
+      // A VSWITCH/ISWITCH threshold may itself be a `{param}` expression.
+      // modelDirectives translates literal levels first; retry after global
+      // substitution so a parameterized card also reaches ngspice as SW/CSW.
+      lines.push(translateSwitchModelCard(substituted));
       if (/^\.ends\b/i.test(line.trim())) subcktDepth = Math.max(0, subcktDepth - 1);
     }
   }
@@ -368,11 +383,12 @@ export function buildSpiceDeck(schematic: Schematic, analysis: SpiceAnalysis): S
   lines.push(...icLines);
 
   const userModels = definedModelNames(schematic.directives ?? []);
+  const documentModelTypes = definedModelTypes(schematic.directives ?? []);
   // VDMOS power-MOSFET model names (lower-cased), from the document's own
   // `.model … VDMOS(…)` definitions. A MOSFET on one of these emits a 3-terminal
   // VDMOS device line (the bulk node is dropped - see `componentLines`).
   const vdmosModels = new Set<string>();
-  for (const [model, type] of definedModelTypes(schematic.directives ?? [])) {
+  for (const [model, type] of documentModelTypes) {
     if (type === "vdmos") vdmosModels.add(model);
   }
 
@@ -394,6 +410,75 @@ export function buildSpiceDeck(schematic: Schematic, analysis: SpiceAnalysis): S
   // user-defined + emitted-standard names tells `deviceModel` which names are
   // safe to put on the device line.
   const knownModels = new Set(userModels);
+
+  // LTspice's csw.asy is a W device: its Value is exactly
+  // `<controlling voltage source> <CSW model> [on|off]`. Validate and resolve
+  // every identity before component emission so a missing source/model can
+  // never degrade into the generic switch's fixed-open resistor. Attached
+  // ISWITCH cards have already been translated to ngspice CSW by the registry.
+  const currentSwitchSpecs = new Map<number, CurrentSwitchDeckSpec>();
+  const emittedCurrentSwitchModels = new Set<string>();
+  circuit.components.forEach((entry, index) => {
+    const component = entry.component;
+    if (!isLtspiceCurrentControlledSwitch(component)) return;
+    const ref = component.label.trim() || `W${index + 1}`;
+    const spec = parseCurrentSwitchValue(component.value);
+    if (!spec) {
+      throw currentSwitchRefusal(ref, `its value must be "Vsense Model [on|off]"; received "${component.value.trim()}"`);
+    }
+
+    const control = resolveScopedComponent(spec.controlSource, component.label ?? "");
+    if (!control) {
+      throw currentSwitchRefusal(ref, `controlling voltage source "${spec.controlSource}" was not found`);
+    }
+    if (!["vsource", "vac", "vpulse"].includes(control.entry.component.kind)) {
+      throw currentSwitchRefusal(
+        ref,
+        `"${spec.controlSource}" is a ${control.entry.component.kind}, not a voltage source`,
+      );
+    }
+    const controlName = instanceNames.get(control.index);
+    if (!controlName || !/^V/i.test(controlName)) {
+      throw currentSwitchRefusal(ref, `controlling source "${spec.controlSource}" has no valid V-device identity`);
+    }
+
+    const modelKey = spec.model.toLowerCase();
+    const inlineType = documentModelTypes.get(modelKey);
+    if (inlineType !== undefined && inlineType !== "csw" && inlineType !== "iswitch") {
+      throw currentSwitchRefusal(ref, `model "${spec.model}" is ${inlineType.toUpperCase()}, not CSW`);
+    }
+    if (inlineType !== undefined) {
+      const emittedType = lines
+        .flatMap((line) => line.split("\n"))
+        .map((line) => /^\s*\.model\s+(\S+)\s+([A-Za-z][\w-]*)/i.exec(line))
+        .find((match) => match?.[1].toLowerCase() === modelKey)?.[2].toLowerCase();
+      if (emittedType !== "csw") {
+        throw currentSwitchRefusal(
+          ref,
+          `model "${spec.model}" could not be translated to an ngspice CSW card`,
+        );
+      }
+    }
+    if (inlineType === undefined) {
+      const userLine = resolveUserModel(userLibraryRegistry, spec.model);
+      if (!userLine) {
+        throw currentSwitchRefusal(ref, `model "${spec.model}" was not found`);
+      }
+      const attachedType = /^\s*\.model\s+\S+\s+([A-Za-z][\w-]*)/i.exec(userLine)?.[1].toLowerCase();
+      if (attachedType !== "csw") {
+        throw currentSwitchRefusal(
+          ref,
+          `model "${spec.model}" is ${(attachedType ?? "unknown").toUpperCase()}, not CSW`,
+        );
+      }
+      if (!emittedCurrentSwitchModels.has(modelKey)) {
+        lines.push(userLine);
+        emittedCurrentSwitchModels.add(modelKey);
+      }
+      knownModels.add(modelKey);
+    }
+    currentSwitchSpecs.set(index, { ...spec, controlSource: controlName });
+  });
   const SEMI_KINDS: ReadonlySet<ComponentKind> = new Set([
     "diode", "led", "zener", "npn", "pnp", "nmos", "pmos", "njf", "pjf",
   ]);
@@ -530,6 +615,7 @@ export function buildSpiceDeck(schematic: Schematic, analysis: SpiceAnalysis): S
       directiveIc,
       modelSubstitutions,
       analysis.kind === "tran" && analysis.startup ? Math.min(20e-6, analysis.stopTime) : undefined,
+      currentSwitchSpecs.get(index),
     );
     lines.push(...emitted);
     // Read off the lines that were actually emitted rather than off the
@@ -555,6 +641,7 @@ export function buildSpiceDeck(schematic: Schematic, analysis: SpiceAnalysis): S
     // degraded to a fixed open circuit before this was reported.
     if (
       entry.component.kind === "switch"
+      && !isLtspiceCurrentControlledSwitch(entry.component)
       && !isStaticSwitchState(entry.component.value)
       && switchControlNodes(entry, netPinCount) === null
     ) {
@@ -791,6 +878,32 @@ export function unresolvedSubcktMessage(names: readonly string[]): string {
 
 const MAX_LISTED_MISSING_SUBCKTS = 6;
 
+interface CurrentSwitchDeckSpec {
+  controlSource: string;
+  model: string;
+  state?: "on" | "off";
+}
+
+/** Strict LTspice W-device instance tail. Accepting extra tokens would let an
+ * accidental/malformed Value change the circuit while still looking valid. */
+function parseCurrentSwitchValue(value: string): CurrentSwitchDeckSpec | null {
+  const tokens = value.trim().split(/\s+/).filter(Boolean);
+  if (tokens.length !== 2 && tokens.length !== 3) return null;
+  const state = tokens[2]?.toLowerCase();
+  if (state !== undefined && state !== "on" && state !== "off") return null;
+  return {
+    controlSource: tokens[0]!,
+    model: tokens[1]!,
+    ...(state ? { state } : {}),
+  };
+}
+
+function currentSwitchRefusal(ref: string, reason: string): Error {
+  return new Error(
+    `Simulation refused: ${ref} (csw) cannot be emitted safely because ${reason}. No approximate or partial circuit was run.`,
+  );
+}
+
 /** True when a switch carries Tau's own static state rather than the name of a
  *  `.model … SW(…)`. These are authored in Tau, not imported, and stay a fixed
  *  resistance even if their control pins are wired. */
@@ -857,7 +970,7 @@ export function unresolvedLibraryWarning(file: string): string {
   return `Could not resolve the library file ${file}, so its models and subcircuits are not part of this run. Attach the file under Model Libraries to use its definitions.`;
 }
 
-function componentLines(entry: ExtractedComponent, index: number, name: string, userModels: Set<string> = new Set(), params: ParamScope = EMPTY_SCOPE, vdmosModels: ReadonlySet<string> = new Set(), netPinCount: ReadonlyMap<string, number> = new Map(), subcktModels: ReadonlySet<string> = new Set(), directiveInductorIc?: string, substitutions: ModelSubstitution[] = [], startupRampSeconds?: number): string[] {
+function componentLines(entry: ExtractedComponent, index: number, name: string, userModels: Set<string> = new Set(), params: ParamScope = EMPTY_SCOPE, vdmosModels: ReadonlySet<string> = new Set(), netPinCount: ReadonlyMap<string, number> = new Map(), subcktModels: ReadonlySet<string> = new Set(), directiveInductorIc?: string, substitutions: ModelSubstitution[] = [], startupRampSeconds?: number, currentSwitch?: CurrentSwitchDeckSpec): string[] {
   const { component } = entry;
   const node = (pin: string) => requiredNode(entry, pin);
 
@@ -1220,6 +1333,14 @@ function componentLines(entry: ExtractedComponent, index: number, name: string, 
       ];
     }
     case "switch": {
+      if (isLtspiceCurrentControlledSwitch(component)) {
+        if (!currentSwitch) {
+          throw currentSwitchRefusal(component.label.trim() || name, "its validated W-device specification is unavailable");
+        }
+        return [
+          `${name} ${node("a")} ${node("b")} ${currentSwitch.controlSource} ${currentSwitch.model}${currentSwitch.state ? ` ${currentSwitch.state}` : ""}`,
+        ];
+      }
       // A voltage-controlled switch (LTspice sw.asy) is ngspice's `S` device:
       // the switched path A/B gated by the NC+/NC- control pair. Emit the real
       // device whenever that pair is wired and the value names a model. A part
@@ -1482,6 +1603,10 @@ const SPICE_PREFIX: Record<ComponentKind, string> = {
   potentiometer: "R", switch: "S", transformer: "L", tline: "T", subckt: "X", testpoint: "X", ground: "X",
 };
 
+function componentSpicePrefix(component: SchematicComponent): string {
+  return isLtspiceCurrentControlledSwitch(component) ? "W" : SPICE_PREFIX[component.kind];
+}
+
 /** The label's own SPICE name when it already carries the kind's prefix
  * (`R1` for a resistor), or null when a prefixed fallback must be
  * manufactured. SPICE identifiers are case-insensitive; a lowercase refdes
@@ -1489,7 +1614,7 @@ const SPICE_PREFIX: Record<ComponentKind, string> = {
  * device instead of manufacturing a misleading `Rr1` fallback. */
 function requestedInstanceName(component: SchematicComponent): string | null {
   const requested = safeName(component.label);
-  const p = SPICE_PREFIX[component.kind];
+  const p = componentSpicePrefix(component);
   return requested.slice(0, p.length).toLocaleLowerCase() === p.toLocaleLowerCase() ? requested : null;
 }
 
@@ -1525,7 +1650,7 @@ function resolveInstanceNames(components: readonly ExtractedComponent[]): Map<nu
   components.forEach(({ component }, index) => {
     if (!named(component) || resolved.has(index)) return;
     const requested = safeName(component.label);
-    const p = SPICE_PREFIX[component.kind];
+    const p = componentSpicePrefix(component);
     const base = requested ? `${p}${requested}` : `${p}${index + 1}`;
     let name = base;
     for (let n = 2; used.has(name.toLocaleLowerCase()); n += 1) name = `${base}_${n}`;

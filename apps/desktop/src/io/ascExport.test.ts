@@ -595,15 +595,14 @@ SYMATTR Value AD823`;
   });
 
   it("keeps the save block for symbols whose bank drops real pins or rewrites the value", () => {
-    // npn4 has a substrate pin the 3-pin npn bank cannot represent; csw is a
-    // 2-pin current-controlled switch with nowhere to put the cp/cn pair Tau
-    // draws on every switch; diac's imported value is a placeholder resistance.
-    for (const type of ["npn4", "csw", "diac"]) {
+    // npn4 has a substrate pin the 3-pin npn bank cannot represent; diac's
+    // imported value is transformed into a subcircuit invocation.
+    for (const type of ["npn4", "diac"]) {
       const src = NMOS3.replace("SYMBOL nmos", `SYMBOL ${type}`);
       expect(ascRewriteRisks(src), type).toContain("symbol-library identity");
     }
     expect(canEmitLtSymbolVerbatim("npn4", "npn")).toBe(false);
-    expect(canEmitLtSymbolVerbatim("csw", "switch")).toBe(false);
+    expect(canEmitLtSymbolVerbatim("csw", "switch")).toBe(true);
     expect(canEmitLtSymbolVerbatim("diac", "resistor")).toBe(false);
     // Digital gates encode their function in the symbol leaf, which the
     // importer prepends to the value; verbatim re-emission would double it.
@@ -657,6 +656,29 @@ SYMATTR Value MYSW`;
     expect(again.value).toBe("MYSW");
     expect(again.ltSymbolType).toBe("sw");
     expect(again.pinOverride).toEqual(source.pinOverride);
+  });
+
+  it("round-trips a current-controlled switch as csw with its named source and model", () => {
+    const source = `Version 4
+SHEET 1 880 680
+SYMBOL csw 100 100 R0
+SYMATTR InstName W1
+SYMATTR SpiceModel Vsense
+SYMATTR Value MYSW
+SYMATTR SpiceLine on`;
+    const imported = importAsc(source);
+    expect(imported.warnings).toEqual([]);
+    expect(ascRewriteRisks(source)).toEqual([]);
+    const exported = schematicToAsc(imported);
+    expect(exported.warnings).toEqual([]);
+    expect(exported.text).toContain("SYMBOL csw 100 100 R0");
+    expect(exported.text).toContain("SYMATTR InstName W1");
+    expect(exported.text).toContain("SYMATTR SpiceModel Vsense");
+    expect(exported.text).toContain("SYMATTR Value MYSW");
+    expect(exported.text).toContain("SYMATTR SpiceLine on");
+    expect(importAsc(exported.text).components[0]).toMatchObject({
+      kind: "switch", label: "W1", value: "Vsense MYSW on", ltSymbolType: "csw",
+    });
   });
 
   it("re-emits a switch that carried no Value without inventing one", () => {
@@ -946,16 +968,20 @@ describe("extended SYMATTR slots (Value2 / SpiceLine) round-trip", () => {
   });
 });
 
-// A current-controlled switch is saved as a placeholder resistor - csw.asy is
-// a 2-pin symbol with nowhere to put the cp/cn pair Tau draws - so `SpiceLine`
-// cannot go back under its own name: on a resistor LTspice would read it as the
-// resistor's parasitics. The slots ride in the Tau-only field instead.
+// A Tau-native switch saved under a placeholder resistor cannot put its
+// `SpiceLine` back under that name: on a resistor LTspice would read it as the
+// resistor's parasitics. The slots ride in the Tau-only field instead. This
+// fixture starts as an already-authored Tau carrier; imported csw now remains
+// csw and is covered independently above.
 const CARRIER_ATTR_SOURCE = `Version 4
 SHEET 1 880 680
-SYMBOL csw 400 400 R0
-SYMATTR InstName S1
-SYMATTR Value MYSW
-SYMATTR SpiceLine Ron=1 Roff=1Meg`;
+SYMBOL res 400 400 R0
+SYMATTR InstName R_TAU_1
+SYMATTR Value 1T
+SYMATTR TauKind switch
+SYMATTR TauValue MYSW
+SYMATTR TauLabel S1
+SYMATTR TauAttrs {"base":"MYSW","slots":{"SpiceLine":"Ron=1 Roff=1Meg"}}`;
 
 const CARRIED_SLOTS = "{\"base\":\"MYSW\",\"slots\":{\"SpiceLine\":\"Ron=1 Roff=1Meg\"}}";
 
@@ -1004,10 +1030,9 @@ describe("extended SYMATTR slots on a part saved under a carrier symbol", () => 
   });
 
   it("stops naming the slots as a reason the source file cannot be rewritten", () => {
-    // Saving over the LTspice original stays blocked, but on the symbol
-    // identity alone: the carrier resistor is not a switch, so writing the file
-    // back would still cost the user their part.
-    expect(ascRewriteRisks(CARRIER_ATTR_SOURCE)).toEqual(["symbol-library identity"]);
+    // The source is already Tau's explicit carrier representation, so another
+    // save does not create a new rewrite risk.
+    expect(ascRewriteRisks(CARRIER_ATTR_SOURCE)).toEqual([]);
   });
 
   it("refuses to park slots the value no longer matches", () => {

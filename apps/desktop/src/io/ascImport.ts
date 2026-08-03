@@ -1324,6 +1324,20 @@ export function componentValueFromAttrs(
   return base;
 }
 
+/** Reconstruct LTspice's W-device tail from the fields csw.asy assigns to it:
+ * `SpiceModel` is the controlling voltage-source name, `Value` is the CSW
+ * model name, and a trailing instance state lives in the normal spec slots.
+ * The installed csw.asy supplies `Value CSW` as a symbol default, so a
+ * schematic normally omits that field when it has not been customized. */
+export function currentSwitchValueFromAttrs(attrs: Record<string, string>): string {
+  const controlSource = (attrs.SpiceModel ?? "").trim();
+  const model = (attrs.Value ?? "").trim() || "CSW";
+  const tail = [attrs.Value2, attrs.SpiceLine, attrs.SpiceLine2]
+    .map((value) => value?.trim())
+    .filter((value): value is string => !!value);
+  return [controlSource, model, ...tail].filter(Boolean).join(" ");
+}
+
 /** A resolved hierarchical block: the `.asy` symbol (ports) plus the `.asc`
  *  schematic body it stands for. Returned by a {@link SubcircuitResolver}. */
 export interface SubcircuitDef {
@@ -1815,11 +1829,13 @@ export function ascToSchematic(doc: AscDocument, options: AscImportOptions = {})
     // Value2/SpiceLine; subcktValueFromSymbol retains those instance params.
     const value = tauKind
       ? (symbol.attrs.TauValue === "\"\"" ? "" : (symbol.attrs.TauValue ?? symbol.attrs.Value ?? ""))
-      : kind === "digitalGate"
-      ? `${leaf} ${componentValueFromAttrs(kind, symbol.attrs)}`.trim()
-      : kind === "subckt"
-        ? subcktValueFromSymbol(leaf, symbol.attrs)
-        : componentValueFromAttrs(kind, symbol.attrs);
+      : leaf === "csw"
+        ? currentSwitchValueFromAttrs(symbol.attrs)
+        : kind === "digitalGate"
+          ? `${leaf} ${componentValueFromAttrs(kind, symbol.attrs)}`.trim()
+          : kind === "subckt"
+            ? subcktValueFromSymbol(leaf, symbol.attrs)
+            : componentValueFromAttrs(kind, symbol.attrs);
     // A part Tau wrote under a carrier symbol keeps its slots in the Tau-only
     // field, since on the carrier their own names belong to another part. They
     // are read back with the `Value` they sat beside, so the exporter has the

@@ -187,12 +187,10 @@ describe("project schematic file formats", () => {
     expect(schematicToAsc({ components: resaved.components, wires: [], netLabels: [] }).text)
       .toContain("SYMATTR InstName U1\nSYMATTR SpiceLine Avol=1Meg");
 
-    // A part written under a carrier symbol keeps its slots in the Tau-only
-    // field, so they are no longer a reason to block. The save stays blocked
-    // all the same: csw is a 2-pin symbol, so the carrier drops the cp/cn pair
-    // Tau draws on every switch.
-    const carrier = `Version 4\nSHEET 1 880 680\nSYMBOL csw 80 80 R0\nSYMATTR InstName S1\nSYMATTR SpiceLine Ron=1\n`;
-    expect(ascRewriteRisks(carrier)).toEqual(["symbol-library identity"]);
+    // csw is a true two-pin W device. Its named control source/model stay in
+    // SpiceModel/Value, so the exact symbol and extended slots are rewrite-safe.
+    const carrier = `Version 4\nSHEET 1 880 680\nSYMBOL csw 80 80 R0\nSYMATTR InstName W1\nSYMATTR SpiceModel Vsense\nSYMATTR Value MYSW\nSYMATTR SpiceLine on\n`;
+    expect(ascRewriteRisks(carrier)).toEqual([]);
 
     // A voltage-controlled switch is not one of them: sw.asy's four pins are
     // banked whole, so the part goes back out as itself.

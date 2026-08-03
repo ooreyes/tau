@@ -120,7 +120,7 @@ function formatSwitchLevel(value: number): string {
  * lines), is returned UNCHANGED - the caller then inlines it as the vendor
  * wrote it, exactly as before, rather than risk emitting a malformed card.
  */
-function translateSwitchModelCard(line: string): string {
+export function translateSwitchModelCard(line: string): string {
   const match = /^\s*\.model\s+(\S+)\s+(vswitch|iswitch)\s*\(([^()]*)\)/i.exec(line);
   if (!match) return line;
   const [, name, kind, body] = match;

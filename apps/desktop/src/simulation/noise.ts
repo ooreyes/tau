@@ -34,6 +34,7 @@ import type { ComponentKind, NetLabel, SchematicComponent, SchematicWire } from 
 import { extractCircuit, type ExtractedCircuit } from "../schematic/netlist";
 import { parseQuantity } from "./quantity";
 import { resolveComponentValues, EMPTY_SCOPE, type ParamScope } from "./paramScope";
+import { previewCurrentControlledSwitchMessage } from "../schematic/currentControlledSwitch";
 
 // ---------------------------------------------------------------------------
 // Physical constants
@@ -321,6 +322,9 @@ export function runNoiseAnalysis(schematic: Schematic, spec: NoiseSpec): NoiseRe
   try {
     const components = resolveComponentValues(schematic.components, schematic.params ?? EMPTY_SCOPE);
     circuit = extractCircuit(components, schematic.wires, schematic.netLabels ?? []);
+
+    const currentSwitchMessage = previewCurrentControlledSwitchMessage(components);
+    if (currentSwitchMessage) return fail(currentSwitchMessage, circuit);
 
     if (!circuit.groundNetId) {
       return fail("Add a ground symbol so node voltages have a reference.", circuit);

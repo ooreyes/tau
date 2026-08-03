@@ -10,6 +10,7 @@ import { parseTransientSource, isFunctionSource, type TransientSource } from "./
 import { stripTcSpec } from "./temperature";
 import { DIODE_KINDS, diodeConductance, diodeCurrent, diodeSpecFor, limitDiodeVoltage } from "./diodeCompanion";
 import { primaryBranches, runOperatingPoint } from "./operatingPoint";
+import { previewCurrentControlledSwitchMessage } from "../schematic/currentControlledSwitch";
 
 export interface AnalysisOptions {
   stopTime: number;
@@ -199,6 +200,9 @@ export async function runTransientAnalysis(
     const components = resolveComponentValues(schematic.components, schematic.params ?? EMPTY_SCOPE);
     circuit = extractCircuit(components, schematic.wires, schematic.netLabels ?? []);
     validateOptions(options);
+
+    const currentSwitchMessage = previewCurrentControlledSwitchMessage(components);
+    if (currentSwitchMessage) return fail("Native engine required", currentSwitchMessage, circuit);
 
     const resolution = inspectTransientResolution(components, options);
     validateTransientResolution(resolution, options);

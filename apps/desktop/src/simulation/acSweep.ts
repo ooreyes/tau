@@ -19,6 +19,7 @@ import { resolveComponentValues, EMPTY_SCOPE, type ParamScope } from "./paramSco
 import { mutualTerms, type CouplingSpec, type MutualTerm } from "./coupling";
 import { linearBSourceModel, resolveBehavioralTerms, type LinearBehavioral } from "./behavioral";
 import { parseAcSpec } from "../engine/acSpec";
+import { previewCurrentControlledSwitchMessage } from "../schematic/currentControlledSwitch";
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -306,6 +307,9 @@ export function runAcSweep(
   try {
     const components = resolveComponentValues(schematic.components, schematic.params ?? EMPTY_SCOPE);
     circuit = extractCircuit(components, schematic.wires, schematic.netLabels ?? []);
+
+    const currentSwitchMessage = previewCurrentControlledSwitchMessage(components);
+    if (currentSwitchMessage) return fail(currentSwitchMessage, circuit);
 
     if (!circuit.groundNetId) {
       return fail("Add a ground symbol so node voltages have a reference.", circuit);

@@ -450,15 +450,29 @@ SYMATTR Value MYSW`;
     const O = `Version 4
 SHEET 1 880 680
 SYMBOL csw 100 100 R0
-SYMATTR InstName S2
-SYMATTR Value MYSW`;
+SYMATTR InstName W2
+SYMATTR SpiceModel Vsense
+SYMATTR Value MYSW
+SYMATTR SpiceLine on`;
     const doc = ascToSchematic(parseAsc(O));
-    const s2 = doc.components.find((c) => c.label === "S2");
+    const s2 = doc.components.find((c) => c.label === "W2");
     expect(s2?.kind).toBe("switch");
+    expect(s2?.value).toBe("Vsense MYSW on");
+    expect(s2?.ltSymbolType).toBe("csw");
     const pins = s2?.pinOverride ?? [];
     expect(pins.map((p) => p.id)).toEqual(["a", "b"]);
     expect(pins[0]).toMatchObject({ x: 100, y: 100 });
     expect(pins[1]).toMatchObject({ x: 100, y: 180 });
+  });
+
+  it("uses csw.asy's default CSW model when the schematic omits Value", () => {
+    const source = `Version 4
+SHEET 1 880 680
+SYMBOL csw 100 100 R0
+SYMATTR InstName W1
+SYMATTR SpiceModel Vsense`;
+    const [w1] = ascToSchematic(parseAsc(source)).components;
+    expect(w1).toMatchObject({ kind: "switch", label: "W1", value: "Vsense CSW", ltSymbolType: "csw" });
   });
 
   it("banks VCVS (e) and VCCS (g) control/output pins to LTspice geometry", () => {

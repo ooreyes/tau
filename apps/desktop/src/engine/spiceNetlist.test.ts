@@ -1071,6 +1071,90 @@ describe("buildSpiceDeck", () => {
     expect(deck.modelSubstitutions.map((s) => s.ref)).toContain("S1");
   });
 
+  const currentSwitchedLoad = (
+    value = "Vsense MYSW",
+    directives = [".model MYSW CSW(Ron=.1 Roff=1Meg It=.5m Ih=.1m)"],
+    controlKind: SchematicComponent["kind"] = "vsource",
+  ) => ({
+    components: [
+      { ...component("switch", "W1", value, 0, 0), ltSymbolType: "csw",
+        pinOverride: [
+          { id: "a", label: "+", x: 0, y: 0 },
+          { id: "b", label: "-", x: 96, y: 0 },
+        ] },
+      { ...component(controlKind, "Vsense", controlKind === "resistor" ? "1k" : "0", 192, 0),
+        pinOverride: controlKind === "resistor"
+          ? [{ id: "a", label: "a", x: 192, y: 0 }, { id: "b", label: "b", x: 192, y: 96 }]
+          : [{ id: "p", label: "+", x: 192, y: 0 }, { id: "n", label: "-", x: 192, y: 96 }] },
+      { ...component("vsource", "Vload", "5", 0, 0), pinOverride: [
+        { id: "p", label: "+", x: 0, y: 0 },
+        { id: "n", label: "-", x: 0, y: 96 },
+      ] },
+      { ...component("resistor", "Rcontrol", "1k", 192, 0), pinOverride: [
+        { id: "a", label: "a", x: 192, y: 0 },
+        { id: "b", label: "b", x: 192, y: 96 },
+      ] },
+      component("ground", "", "", 96, 0),
+      component("ground", "", "", 0, 96),
+      component("ground", "", "", 192, 96),
+    ] as SchematicComponent[],
+    wires: [] as SchematicWire[],
+    directives,
+  });
+
+  it("emits an imported LTspice csw as a native W device", () => {
+    const deck = buildSpiceDeck(currentSwitchedLoad("Vsense MYSW on"), { kind: "op" });
+    expect(deck.netlist).toMatch(/^W1 \S+ 0 Vsense MYSW on$/m);
+    expect(deck.netlist).toContain(".model MYSW CSW(Ron=.1 Roff=1Meg It=.5m Ih=.1m)");
+    expect(deck.netlist).not.toMatch(/^R_W1 /m);
+    expect(deck.circuit.warnings).toEqual([]);
+  });
+
+  it("resolves an LTspice ISWITCH model from an attached user library", () => {
+    const input = currentSwitchedLoad("Vsense VendorCS", []);
+    const deck = buildSpiceDeck({
+      ...input,
+      userModelLibraries: [".model VendorCS ISWITCH(Ron=.2 Roff=2Meg Ion=3m Ioff=1m)"],
+    }, { kind: "op" });
+    expect(deck.netlist).toContain(".model VendorCS CSW(RON=.2 ROFF=2Meg IT=0.002 IH=0.001)");
+    expect(deck.netlist).toMatch(/^W1 \S+ 0 Vsense VendorCS$/m);
+  });
+
+  it("translates a parameterized inline ISWITCH after resolving its thresholds", () => {
+    const input = currentSwitchedLoad("Vsense MYSW", [
+      ".model MYSW ISWITCH(Ron=.1 Roff=1Meg Ion={ion} Ioff={ioff})",
+    ]);
+    const deck = buildSpiceDeck({
+      ...input,
+      params: buildParamScope([".param ion=3m ioff=1m"]),
+    }, { kind: "op" });
+    expect(deck.netlist).toContain(".model MYSW CSW(RON=.1 ROFF=1Meg IT=0.002 IH=0.001)");
+    expect(deck.netlist).toMatch(/^W1 \S+ 0 Vsense MYSW$/m);
+  });
+
+  it("resolves a flattened csw's control source inside its own hierarchy scope", () => {
+    const input = currentSwitchedLoad();
+    input.components[0] = { ...input.components[0], label: "X1.W1" };
+    input.components[1] = { ...input.components[1], label: "X1.Vsense" };
+    const deck = buildSpiceDeck(input, { kind: "op" });
+    expect(deck.netlist).toMatch(/^WX1_W1 \S+ 0 VX1_Vsense MYSW$/m);
+  });
+
+  it("atomically refuses a csw whose source identity, model, or value is not provable", () => {
+    expect(() => buildSpiceDeck(currentSwitchedLoad("Missing MYSW"), { kind: "op" }))
+      .toThrow(/Simulation refused: W1 \(csw\).*voltage source "Missing".*No approximate or partial circuit was run/);
+    expect(() => buildSpiceDeck(currentSwitchedLoad("Vsense MYSW", undefined, "resistor"), { kind: "op" }))
+      .toThrow(/Simulation refused: W1 \(csw\).*"Vsense" is a resistor.*No approximate or partial circuit was run/);
+    expect(() => buildSpiceDeck(currentSwitchedLoad("Vsense Missing", []), { kind: "op" }))
+      .toThrow(/Simulation refused: W1 \(csw\).*model "Missing" was not found.*No approximate or partial circuit was run/);
+    expect(() => buildSpiceDeck(currentSwitchedLoad("Vsense WRONG", [".model WRONG SW(Ron=1 Roff=1Meg Vt=1)"]), { kind: "op" }))
+      .toThrow(/Simulation refused: W1 \(csw\).*model "WRONG" is SW, not CSW.*No approximate or partial circuit was run/);
+    expect(() => buildSpiceDeck(currentSwitchedLoad("Vsense MYSW", [".model MYSW ISWITCH(Ion=banana Ioff=0)"]), { kind: "op" }))
+      .toThrow(/Simulation refused: W1 \(csw\).*could not be translated to an ngspice CSW card.*No approximate or partial circuit was run/);
+    expect(() => buildSpiceDeck(currentSwitchedLoad("MYSW"), { kind: "op" }))
+      .toThrow(/Simulation refused: W1 \(csw\).*Vsense Model \[on\|off\].*No approximate or partial circuit was run/);
+  });
+
   it("clamps an op-amp with driven supply pins to its rails (Class-D PWM comparator)", () => {
     // U1 at origin: in+(-32,16) in-(-32,-16) out(32,0) v+(0,-32) v-(0,32).
     // VP feeds v+ via a wire, v- is wired to ground - both rails driven, so the

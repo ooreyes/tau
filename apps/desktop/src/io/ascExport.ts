@@ -244,17 +244,14 @@ const DIGITAL_GATE_LEAFS = new Set([
 
 /** LTspice symbol leafs whose imported form is NOT a faithful re-emission
  * target even though their pin geometry is banked: the bank drops real .asy
- * pins (npn4/pnp4 substrate - wires to those pins would silently detach), the
- * symbol has nowhere to put a pin Tau's kind exposes (csw is a 2-pin
- * current-controlled switch, so the cp/cn pair Tau draws on every switch would
- * be written to a symbol that has no such pins), or the importer replaced the
- * source Value with a placeholder (varistor/diac get a neutral high-Z
- * resistance). These stay on the blocked-save path.
+ * pins (npn4/pnp4 substrate - wires to those pins would silently detach), or
+ * the importer replaced the source Value with a transformed simulation
+ * carrier (varistor/diac). These stay on the blocked-save path.
  *
- * `sw` is NOT one of them: sw.asy's four pins (A, B, NC+, NC-) are banked whole
- * and match the switch kind's a/b/cp/cn one for one, so the symbol re-imports
- * with the same pins on the same nets. */
-const VERBATIM_UNSAFE_LEAFS = new Set(["npn4", "pnp4", "csw", "varistor", "diac"]);
+ * `sw` and `csw` are NOT among them: sw.asy's four pins match a/b/cp/cn,
+ * while csw.asy's two pins are banked exactly as a/b and its named current
+ * control remains in SpiceModel. */
+const VERBATIM_UNSAFE_LEAFS = new Set(["npn4", "pnp4", "varistor", "diac"]);
 
 /**
  * Whether an imported LTspice symbol name can be re-emitted verbatim by the

@@ -24,6 +24,7 @@ import { linearBSourceModel, resolveBehavioralTerms, type BehavioralTerm, type L
 import { stripAcSpec } from "../engine/acSpec";
 import { parseTransientSource, isFunctionSource } from "./sourceWaveform";
 import { DIODE_KINDS, diodeConductance, diodeCurrent, diodeSpecFor, limitDiodeVoltage } from "./diodeCompanion";
+import { previewCurrentControlledSwitchMessage } from "../schematic/currentControlledSwitch";
 
 // ---------------------------------------------------------------------------
 // Result type (mirrors linearTransient's style)
@@ -144,6 +145,9 @@ export function runOperatingPoint(
   try {
     const components = resolveComponentValues(schematic.components, schematic.params ?? EMPTY_SCOPE);
     circuit = extractCircuit(components, schematic.wires, schematic.netLabels ?? []);
+
+    const currentSwitchMessage = previewCurrentControlledSwitchMessage(components);
+    if (currentSwitchMessage) return fail(currentSwitchMessage, circuit);
 
     if (components.length === 0) {
       return fail("Place components before running analysis.", circuit);

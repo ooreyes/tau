@@ -50,6 +50,16 @@ describe("modelLibLinesFromDirectives", () => {
     expect(modelLibLinesFromDirectives([".model LPN PNP(Bf=3)"])).toEqual([".model LPN PNP(Bf=3)"]);
   });
 
+  it("translates LTspice VSWITCH/ISWITCH cards, including their thresholds", () => {
+    expect(modelLibLinesFromDirectives([
+      ".model VS VSWITCH(Ron=.1 Roff=1Meg Von=.8 Voff=.2)",
+      ".model CS ISWITCH(Ron=.2 Roff=2Meg Ion=3m Ioff=1m)",
+    ])).toEqual([
+      ".model VS SW(RON=.1 ROFF=1Meg VT=0.5 VH=0.3)",
+      ".model CS CSW(RON=.2 ROFF=2Meg IT=0.002 IH=0.001)",
+    ]);
+  });
+
   it("expands a multi-line .subckt block on the LTspice \\n escape", () => {
     const block = ".subckt myamp in out vcc\\nR1 in n1 1k\\nC1 n1 0 1n\\n.ends myamp";
     expect(modelLibLinesFromDirectives([block])).toEqual([

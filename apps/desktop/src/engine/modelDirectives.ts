@@ -13,6 +13,8 @@
  * analysis/param/option directives (handled elsewhere) untouched.
  */
 
+import { translateSwitchModelCard } from "./userModelLibrary";
+
 const BLOCK_KEYWORDS = ["model", "lib", "inc", "include", "subckt"] as const;
 
 /** First whitespace-delimited keyword of a line, lower-cased, leading `.`/`!` stripped. */
@@ -103,7 +105,7 @@ export function definedModelTypes(directives: ReadonlyArray<string>): Map<string
  */
 function translateModelType(line: string): string {
   const translated = line.replace(/^(\.model\s+\S+\s+)l(pnp|npn)\b/i, (_m, head: string, type: string) => `${head}${type.toUpperCase()}`);
-  return stripInformationalDiodeParams(translated);
+  return stripInformationalDiodeParams(translateSwitchModelCard(translated));
 }
 
 /**
