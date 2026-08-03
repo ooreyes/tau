@@ -1663,6 +1663,121 @@ body {
   gap: var(--sp-1);
 }
 
+/* A trace is an interactive instrument channel, not a passive legend row.
+   Selecting it reveals the validated color-safe palette and makes C1/C2 glide
+   over that exact series. All colors remain token-backed. */
+.trace-interaction {
+  min-width: 0;
+  padding: var(--sp-1);
+  border: 1px solid transparent;
+  border-radius: var(--r-md);
+}
+
+.trace-interaction.selected {
+  border-color: var(--accent-line);
+  background: var(--accent-soft);
+}
+
+.trace-interaction__toolbar {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: 0 0 var(--sp-1);
+}
+
+.trace-interaction__select,
+.trace-interaction__cursors button {
+  min-height: 28px;
+  appearance: none;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  color: var(--muted);
+  background: var(--panel-3);
+  font: 600 var(--fs-caption) var(--font-ui);
+  cursor: pointer;
+}
+
+.trace-interaction__select {
+  min-width: 0;
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: 0 var(--sp-2);
+  text-align: left;
+}
+
+.trace-interaction__select i {
+  width: 10px;
+  height: 10px;
+  flex: none;
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px var(--border-strong);
+}
+
+.trace-interaction__select span {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-family: var(--font-mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.trace-interaction__select[aria-pressed="true"],
+.trace-interaction__cursors button[aria-pressed="true"] {
+  color: var(--accent);
+  border-color: var(--accent-line);
+  background: var(--accent-soft);
+}
+
+.trace-interaction__cursors {
+  flex: none;
+  display: inline-flex;
+  overflow: hidden;
+  border-radius: var(--r-sm);
+}
+
+.trace-interaction__cursors button {
+  min-width: 34px;
+  padding: 0 var(--sp-2);
+  border-radius: 0;
+}
+
+.trace-interaction__cursors button + button {
+  margin-left: -1px;
+}
+
+.trace-interaction__palette {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 30px;
+  padding: 0 var(--sp-1) var(--sp-2);
+}
+
+.trace-interaction__palette button {
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.trace-interaction__palette button.active {
+  outline: 2px solid var(--text);
+  outline-offset: 2px;
+}
+
+.trace-interaction__hint {
+  margin: 0;
+  padding: 0 var(--sp-1) var(--sp-2);
+  color: var(--muted);
+  font: 500 var(--fs-micro) var(--font-ui);
+}
+
 /* Per-trace spec table under a plot. Stacked rows (label left, value+unit
    right, hairline separators) instead of the old three-track grid: the grid's
    hard px minimums exceeded a half-width dashboard card and painted UNDER the
@@ -2197,6 +2312,40 @@ body {
 
 .transient-cursors {
   pointer-events: none;
+}
+
+.cursor-glide-surface {
+  pointer-events: all;
+  cursor: crosshair;
+  touch-action: none;
+}
+
+.cursor-glide-surface:focus-visible {
+  outline: none;
+  stroke: var(--accent);
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+}
+
+.cursor-trace-point {
+  stroke: var(--scope-surface);
+  stroke-width: 1.5;
+}
+
+.cursor-trace-readout rect {
+  fill: var(--panel-3);
+  stroke: var(--border-strong);
+  stroke-width: 0.75;
+}
+
+.cursor-trace-readout text {
+  fill: var(--text);
+  font: 600 7.5px var(--font-mono);
+}
+
+.cursor-trace-readout.active rect {
+  fill: var(--accent-soft);
+  stroke: var(--accent);
 }
 
 .transient-cursor.cursor-2 line {

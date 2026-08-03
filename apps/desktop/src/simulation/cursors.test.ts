@@ -1,5 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { cursorReadout, dbPerDecade, fractionToX, logFractionToX } from "./cursors";
+import {
+  cursorReadout,
+  dbPerDecade,
+  fractionToX,
+  logFractionToX,
+  plotClientXToFraction,
+} from "./cursors";
 
 const axis = [0, 1, 2, 3, 4];
 const ramp = { label: "V(out)", values: [0, 10, 20, 30, 40] };
@@ -52,9 +58,11 @@ describe("cursorReadout", () => {
   });
 
   it("handles multiple traces", () => {
-    const flat = { label: "V(ref)", values: [5, 5, 5, 5, 5] };
-    const r = cursorReadout(axis, [ramp, flat], 0, 4);
+    const flat = { label: "I(load)", unit: "A", values: [5, 5, 5, 5, 5] };
+    const r = cursorReadout(axis, [{ ...ramp, unit: "V" }, flat], 0, 4);
     expect(r.traces).toHaveLength(2);
+    expect(r.traces[0].unit).toBe("V");
+    expect(r.traces[1].unit).toBe("A");
     expect(r.traces[1].dy).toBe(0);
     expect(r.traces[1].y1).toBe(5);
   });
@@ -62,6 +70,17 @@ describe("cursorReadout", () => {
   it("throws on an empty axis or a mismatched trace", () => {
     expect(() => cursorReadout([], [], 0, 1)).toThrow(/empty/);
     expect(() => cursorReadout(axis, [{ label: "x", values: [1, 2] }], 0, 1)).toThrow(/length/);
+  });
+});
+
+describe("plotClientXToFraction", () => {
+  it("maps the padded plot face onto the full-run cursor fraction", () => {
+    expect(plotClientXToFraction(440, { left: 100, width: 680 }, 340, 46, { xMin: 0, xMax: 4 }, axis)).toBeCloseTo(0.5);
+  });
+
+  it("respects a zoomed viewport and clamps pointer travel to the plot face", () => {
+    expect(plotClientXToFraction(100, { left: 100, width: 680 }, 340, 46, { xMin: 1, xMax: 3 }, axis)).toBeCloseTo(0.25);
+    expect(plotClientXToFraction(780, { left: 100, width: 680 }, 340, 46, { xMin: 1, xMax: 3 }, axis)).toBeCloseTo(0.75);
   });
 });
 

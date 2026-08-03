@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-import { afterEach, describe, expect, it } from "vitest";
-import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import {
   WaveformPlot,
   AcPlot,
@@ -43,6 +43,51 @@ function makeTranResult(): Extract<AnalysisResult, { ok: true }> {
 }
 
 describe("WaveformPlot (TRAN) - real tick axes", () => {
+  it("selects a trace color and glides an active cursor directly over the plot", async () => {
+    const result = makeTranResult();
+    const onActiveCursorChange = vi.fn();
+    const onCursorFractionChange = vi.fn();
+    const { container } = render(
+      <WaveformPlot
+        result={result}
+        baseTraces={result.traces}
+        netLabels={[]}
+        paneLayout={defaultLayout(["n1"])}
+        cursors={{ x1: 0.0015, x2: 0.0045 }}
+        cursorTool={{
+          activeCursor: "c1",
+          onActiveCursorChange,
+          onCursorFractionChange,
+        }}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Set V(out) trace color to green" }));
+    expect(container.querySelector(".scope-trace")?.getAttribute("stroke")).toBe("var(--trace-green)");
+
+    fireEvent.click(screen.getByRole("button", { name: "Glide cursor 2 on V(out)" }));
+    expect(onActiveCursorChange).toHaveBeenCalledWith("c2");
+
+    const svg = container.querySelector(".scope-svg") as SVGSVGElement;
+    vi.spyOn(svg, "getBoundingClientRect").mockReturnValue({
+      left: 100,
+      top: 50,
+      width: 680,
+      height: 380,
+      right: 780,
+      bottom: 430,
+      x: 100,
+      y: 50,
+      toJSON: () => ({}),
+    });
+    fireEvent.pointerMove(screen.getByLabelText("Glide cursor 1 over V(out)"), {
+      clientX: 440,
+      pointerType: "mouse",
+    });
+    await waitFor(() => expect(onCursorFractionChange).toHaveBeenCalledWith("c1", expect.closeTo(0.5, 4)));
+    expect(container.querySelectorAll(".cursor-trace-point")).toHaveLength(2);
+  });
+
   it("renders multiple x and y tick labels with units, not just corner min/max", () => {
     const result = makeTranResult();
     const { container } = render(

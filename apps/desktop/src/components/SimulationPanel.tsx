@@ -1,5 +1,10 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
-import type { CSSProperties, PointerEvent as ReactPointerEvent, ReactNode } from "react";
+import type {
+  CSSProperties,
+  KeyboardEvent as ReactKeyboardEvent,
+  PointerEvent as ReactPointerEvent,
+  ReactNode,
+} from "react";
 import { Crosshair, Maximize2, Minimize2, RefreshCw, Square } from "lucide-react";
 import { useSchematic } from "../store/useSchematic";
 import {
@@ -48,7 +53,13 @@ import { runWaveformFft, type WindowFn } from "../simulation/fft";
 import { spectrumInsights } from "../simulation/spectrumInsights";
 import { buildSpiceDeck } from "../engine/spiceNetlist";
 import { serializeRaw, inferRawType } from "../io/rawExport";
-import { cursorReadout, dbPerDecade, fractionToX, logFractionToX } from "../simulation/cursors";
+import {
+  cursorReadout,
+  dbPerDecade,
+  fractionToX,
+  logFractionToX,
+  plotClientXToFraction,
+} from "../simulation/cursors";
 import type { CursorTraceInput } from "../simulation/cursors";
 import { parseRaw } from "../io/rawImport";
 import type { RawData } from "../io/rawImport";
@@ -92,6 +103,7 @@ import { traceStatistics } from "../simulation/measurementModel";
 import { AnalysisModeRail, type AnalysisMode } from "./AnalysisModeRail";
 import { ENGINE_DESCRIPTIONS, ENGINE_LABELS, type EngineProvenance } from "../simulation/engineProvenance";
 import { EngineeringInput } from "./EngineeringInput";
+import { interpolateAt } from "../simulation/waveformCompare";
 
 interface SimulationPanelProps {
   /** Active circuit tab's title - a best-effort key for persisting the TRAN
@@ -159,6 +171,17 @@ const PLOT_PAD = 46;
 // exactly onto the clip boundary shaved half the stroke and made periodic
 // traces look cut off at both ends even though their samples were complete.
 const TRACE_EDGE_GUTTER = 2.5;
+
+type TransientCursorId = "c1" | "c2";
+
+const TRACE_SWATCHES = [
+  { color: "var(--trace-green)", name: "green" },
+  { color: "var(--trace-red)", name: "vermillion" },
+  { color: "var(--trace-cyan)", name: "sky" },
+  { color: "var(--trace-cream)", name: "olive" },
+  { color: "var(--trace-purple)", name: "purple" },
+  { color: "var(--trace-amber)", name: "orange" },
+] as const;
 
 export function SimulationPanel({
   circuitTitle,
@@ -229,6 +252,7 @@ export function SimulationPanel({
   // so the default scope reads as a clean waveform, not a measurement grid.
   const [showStats, setShowStats] = useState(false);
   const [cursorsOpen, setCursorsOpen] = useState(false);
+  const [activeTransientCursor, setActiveTransientCursor] = useState<TransientCursorId | null>(null);
   const [cursorF1, setCursorF1] = useState(0.25);
   const [cursorF2, setCursorF2] = useState(0.75);
   const [maximized, setMaximized] = useState(false);
@@ -686,6 +710,17 @@ export function SimulationPanel({
               fourier={fourier}
               layoutKey={circuitTitle ?? "default"}
               cursors={transientCursorPositions}
+              cursorTool={{
+                activeCursor: cursorsOpen ? activeTransientCursor : null,
+                onActiveCursorChange: (cursor) => {
+                  if (cursor !== null) setCursorsOpen(true);
+                  setActiveTransientCursor(cursor);
+                },
+                onCursorFractionChange: (cursor, fraction) => {
+                  if (cursor === "c1") setCursorF1(fraction);
+                  else setCursorF2(fraction);
+                },
+              }}
             />
           </div>
 
@@ -816,7 +851,10 @@ export function SimulationPanel({
                     result={result}
                     extraTraces={exprTraces}
                     open={cursorsOpen}
-                    onOpenChange={setCursorsOpen}
+                    onOpenChange={(open) => {
+                      setCursorsOpen(open);
+                      setActiveTransientCursor(open ? (activeTransientCursor ?? "c1") : null);
+                    }}
                     f1={cursorF1}
                     f2={cursorF2}
                     onF1Change={setCursorF1}
@@ -1169,6 +1207,7 @@ export function WaveformPlot({
   fourier = [],
   layoutKey = "default",
   cursors = null,
+  cursorTool,
 }: {
   result: AnalysisResult | null;
   baseTraces: Trace[];
@@ -1189,21 +1228,53 @@ export function WaveformPlot({
   layoutKey?: string;
   /** Active transient measurement positions, drawn through every plot pane. */
   cursors?: { x1: number; x2: number } | null;
+  /** Direct plot interaction shared with the exact C1/C2 controls. */
+  cursorTool?: {
+    activeCursor: TransientCursorId | null;
+    onActiveCursorChange: (cursor: TransientCursorId | null) => void;
+    onCursorFractionChange: (cursor: TransientCursorId, fraction: number) => void;
+  };
 }) {
   const success = result?.ok ? result : null;
+  const [activeTraceId, setActiveTraceId] = useState<string | null>(null);
+  const [traceColorOverrides, setTraceColorOverrides] = useState<Record<string, string>>({});
+  useEffect(() => {
+    setActiveTraceId(null);
+    setTraceColorOverrides({});
+  }, [layoutKey]);
 
   // Build the full ordered trace list (all panes, all traces) the same way as
   // before - probed nets or the first 6, then expression/ref overlays.  We keep
   // a map from id → Trace for fast lookup when rendering per-pane subsets.
   const allTraces = useMemo<Trace[]>(() => {
-    return [...baseTraces, ...extraTraces];
-  }, [baseTraces, extraTraces]);
+    return [...baseTraces, ...extraTraces].map((trace) => {
+      const color = traceColorOverrides[trace.id];
+      return color ? { ...trace, color } : trace;
+    });
+  }, [baseTraces, extraTraces, traceColorOverrides]);
 
   const traceById = useMemo<Map<string, Trace>>(() => {
     const m = new Map<string, Trace>();
     for (const t of allTraces) m.set(t.id, t);
     return m;
   }, [allTraces]);
+
+  const paneTracesById = useMemo(() => {
+    const byPane = new Map<string, Trace[]>();
+    for (const pane of paneLayout) {
+      byPane.set(
+        pane.id,
+        pane.traceIds.map((traceId) => traceById.get(traceId)).filter((trace): trace is Trace => trace !== undefined),
+      );
+    }
+    return byPane;
+  }, [paneLayout, traceById]);
+
+  const activeTrace = (activeTraceId ? traceById.get(activeTraceId) : undefined) ?? allTraces[0] ?? null;
+  useEffect(() => {
+    if (activeTrace && activeTrace.id !== activeTraceId) setActiveTraceId(activeTrace.id);
+    if (!activeTrace && activeTraceId !== null) setActiveTraceId(null);
+  }, [activeTrace, activeTraceId]);
 
   const tMax = useMemo(() => (success ? success.times[success.times.length - 1] || 1 : 1), [success]);
   const [sharedX, setSharedX] = useState({ xMin: 0, xMax: tMax });
@@ -1363,9 +1434,7 @@ export function WaveformPlot({
             const pane = paneByCardId.get(id);
             if (!pane) return null;
             const paneIndex = paneLayout.indexOf(pane);
-            const paneTraces = pane.traceIds
-              .map((traceId) => traceById.get(traceId))
-              .filter((t): t is Trace => t !== undefined);
+            const paneTraces = paneTracesById.get(pane.id) ?? [];
             const plot =
               success && paneTraces.length > 0
                 ? (() => {
@@ -1401,16 +1470,93 @@ export function WaveformPlot({
                   showStatistics={showStatistics}
                   plotHeight={PLOT_HEIGHT_PX[height]}
                   cursors={cursors}
+                  activeTrace={activeTrace}
+                  cursorTool={cursorTool}
                 />
                 <div className="scope-legend" aria-label="Trace measurements">
                   {paneTraces.length > 0 ? (
-                    paneTraces.map((trace) => (
-                      <EngineeringTraceReadout
-                        key={trace.id}
-                        trace={{ ...trace, label: labelFor(trace) }}
-                        times={success ? success.times : []}
-                      />
-                    ))
+                    paneTraces.map((trace) => {
+                      const displayLabel = labelFor(trace);
+                      const selected = activeTrace?.id === trace.id;
+                      return (
+                        <div
+                          key={trace.id}
+                          className={`trace-interaction${selected ? " selected" : ""}`}
+                        >
+                          <div className="trace-interaction__toolbar">
+                            <button
+                              type="button"
+                              className="trace-interaction__select"
+                              aria-label={`Select ${displayLabel} for cursor measurement`}
+                              aria-pressed={selected}
+                              onClick={() => setActiveTraceId(trace.id)}
+                            >
+                              <i style={{ background: trace.color }} aria-hidden="true" />
+                              <span>{displayLabel}</span>
+                            </button>
+                            {cursorTool && (
+                              <div className="trace-interaction__cursors" role="group" aria-label={`Cursor tool for ${displayLabel}`}>
+                                <button
+                                  type="button"
+                                  aria-label={`Pan ${displayLabel} plot`}
+                                  aria-pressed={selected && cursorTool.activeCursor === null}
+                                  onClick={() => {
+                                    setActiveTraceId(trace.id);
+                                    cursorTool.onActiveCursorChange(null);
+                                  }}
+                                >
+                                  Pan
+                                </button>
+                                {(["c1", "c2"] as const).map((cursor) => (
+                                  <button
+                                    key={cursor}
+                                    type="button"
+                                    aria-label={`Glide cursor ${cursor === "c1" ? "1" : "2"} on ${displayLabel}`}
+                                    aria-pressed={selected && cursorTool.activeCursor === cursor}
+                                    onClick={() => {
+                                      setActiveTraceId(trace.id);
+                                      cursorTool.onActiveCursorChange(cursor);
+                                    }}
+                                  >
+                                    {cursor.toUpperCase()}
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                          {selected && (
+                            <div className="trace-interaction__palette" role="group" aria-label={`Color for ${displayLabel}`}>
+                              {TRACE_SWATCHES.map((swatch) => (
+                                <button
+                                  key={swatch.color}
+                                  type="button"
+                                  className={trace.color === swatch.color ? "active" : ""}
+                                  style={{ background: swatch.color }}
+                                  aria-label={`Set ${displayLabel} trace color to ${swatch.name}`}
+                                  aria-pressed={trace.color === swatch.color}
+                                  onClick={() => setTraceColorOverrides((current) => ({ ...current, [trace.id]: swatch.color }))}
+                                />
+                              ))}
+                            </div>
+                          )}
+                          {selected && cursorTool?.activeCursor && (
+                            <p className="trace-interaction__hint">
+                              Move over the plot · drag on touch · ←/→ for fine control
+                            </p>
+                          )}
+                          <EngineeringTraceReadout
+                            trace={{ ...trace, label: displayLabel }}
+                            times={success ? success.times : []}
+                            cursor={selected && cursors && cursorTool?.activeCursor
+                              ? {
+                                  label: cursorTool.activeCursor.toUpperCase(),
+                                  time: cursorTool.activeCursor === "c1" ? cursors.x1 : cursors.x2,
+                                }
+                              : undefined}
+                          />
+                        </div>
+                      );
+                    })
                   ) : (
                     <span className="muted">Empty - move a trace here</span>
                   )}
@@ -1519,6 +1665,8 @@ function TranScopePane({
   showStatistics,
   plotHeight = 190,
   cursors,
+  activeTrace,
+  cursorTool,
 }: {
   paneTraces: Trace[];
   plot: { min: number; max: number; tMax: number; unit: string } | null;
@@ -1535,6 +1683,12 @@ function TranScopePane({
    *  to the old fixed 190 for any caller that doesn't specify one. */
   plotHeight?: number;
   cursors?: { x1: number; x2: number } | null;
+  activeTrace?: Trace | null;
+  cursorTool?: {
+    activeCursor: TransientCursorId | null;
+    onActiveCursorChange: (cursor: TransientCursorId | null) => void;
+    onCursorFractionChange: (cursor: TransientCursorId, fraction: number) => void;
+  };
 }) {
   const clipId = useId();
   const [measureRef, size] = useMeasuredSize<SVGSVGElement>();
@@ -1567,6 +1721,57 @@ function TranScopePane({
   const autoFrame = useCallback(() => {
     fitTo(autoFrameWaveform(times, paneTraces, viewport));
   }, [fitTo, paneTraces, times, viewport]);
+  const tracePaths = useMemo(
+    () => paneTraces.map((trace) => ({
+      trace,
+      path: tracePath(trace, times, viewport.xMin, viewport.xMax, viewport.yMin, viewport.yMax, plotHeight),
+    })),
+    [paneTraces, times, viewport.xMin, viewport.xMax, viewport.yMin, viewport.yMax, plotHeight],
+  );
+  const selectedPaneTrace = activeTrace
+    ? paneTraces.find((trace) => trace.id === activeTrace.id) ?? null
+    : null;
+  const dragPointerRef = useRef<number | null>(null);
+  const glideFromPointer = useCallback((event: ReactPointerEvent<SVGRectElement>) => {
+    if (!cursorTool?.activeCursor) return;
+    if (event.pointerType === "touch" && dragPointerRef.current !== event.pointerId) return;
+    const svg = event.currentTarget.ownerSVGElement;
+    if (!svg) return;
+    const fraction = plotClientXToFraction(
+      event.clientX,
+      svg.getBoundingClientRect(),
+      PLOT_WIDTH,
+      PLOT_PAD,
+      viewport,
+      times,
+    );
+    if (Number.isFinite(fraction)) cursorTool.onCursorFractionChange(cursorTool.activeCursor, fraction);
+  }, [cursorTool, times, viewport]);
+  const beginCursorDrag = useCallback((event: ReactPointerEvent<SVGRectElement>) => {
+    if (!cursorTool?.activeCursor) return;
+    event.preventDefault();
+    event.stopPropagation();
+    dragPointerRef.current = event.pointerId;
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+    glideFromPointer(event);
+  }, [cursorTool, glideFromPointer]);
+  const endCursorDrag = useCallback((event: ReactPointerEvent<SVGRectElement>) => {
+    event.stopPropagation();
+    if (dragPointerRef.current === event.pointerId) dragPointerRef.current = null;
+  }, []);
+  const nudgeCursor = useCallback((event: ReactKeyboardEvent<SVGRectElement>) => {
+    if (!cursorTool?.activeCursor || !cursors || times.length < 2) return;
+    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+    event.preventDefault();
+    event.stopPropagation();
+    const value = cursorTool.activeCursor === "c1" ? cursors.x1 : cursors.x2;
+    const span = times[times.length - 1] - times[0];
+    if (!(span > 0)) return;
+    const current = (value - times[0]) / span;
+    const increment = event.shiftKey ? 0.01 : 0.001;
+    const direction = event.key === "ArrowLeft" ? -1 : 1;
+    cursorTool.onCursorFractionChange(cursorTool.activeCursor, Math.max(0, Math.min(1, current + direction * increment)));
+  }, [cursorTool, cursors, times]);
 
   return (
     <div className="scope-plot-wrap">
@@ -1575,7 +1780,7 @@ function TranScopePane({
         className={isPanning ? "scope-svg panning" : "scope-svg"}
         viewBox={`0 0 ${PLOT_WIDTH} ${plotHeight}`}
         style={{ aspectRatio: `${PLOT_WIDTH} / ${plotHeight}` }}
-        role="img"
+        role={selectedPaneTrace && cursorTool?.activeCursor ? "group" : "img"}
         aria-label={ariaLabel}
         {...dragHandlers}
       >
@@ -1598,13 +1803,13 @@ function TranScopePane({
         {plot && (
           <>
             <ScopeClip id={clipId} width={PLOT_WIDTH} height={plotHeight} pad={PLOT_PAD}>
-              {paneTraces.map((trace) => (
+              {tracePaths.map(({ trace, path }) => (
                 <path
                   key={trace.id}
                   className={trace.id.startsWith("ref:") ? "scope-trace ref" : "scope-trace"}
                   stroke={trace.color}
                   fill="none"
-                  d={tracePath(trace, times, viewport.xMin, viewport.xMax, viewport.yMin, viewport.yMax, plotHeight)}
+                  d={path}
                 />
               ))}
             </ScopeClip>
@@ -1624,14 +1829,67 @@ function TranScopePane({
                 ].map((cursor) => {
                   if (cursor.value < viewport.xMin || cursor.value > viewport.xMax) return null;
                   const x = PLOT_PAD + ((cursor.value - viewport.xMin) / (viewport.xMax - viewport.xMin)) * (PLOT_WIDTH - 2 * PLOT_PAD);
+                  const selectedValue = selectedPaneTrace
+                    ? interpolateAt(times, selectedPaneTrace.values, cursor.value)
+                    : NaN;
+                  const pointVisible = Number.isFinite(selectedValue)
+                    && selectedValue >= viewport.yMin
+                    && selectedValue <= viewport.yMax;
+                  const y = pointVisible
+                    ? PLOT_PAD + ((viewport.yMax - selectedValue) / (viewport.yMax - viewport.yMin)) * (plotHeight - 2 * PLOT_PAD)
+                    : NaN;
+                  const labelWidth = 118;
+                  const labelX = x > PLOT_WIDTH / 2 ? x - labelWidth - 4 : x + 4;
+                  const labelY = pointVisible
+                    ? Math.max(PLOT_PAD + 3, Math.min(y - 20, plotHeight - PLOT_PAD - 18))
+                    : 0;
                   return (
                     <g key={cursor.label} className={`plot-cursor transient-cursor ${cursor.className}`}>
                       <line x1={x} y1={PLOT_PAD} x2={x} y2={plotHeight - PLOT_PAD} />
                       <text x={x + 4} y={PLOT_PAD + 11}>{cursor.label}</text>
+                      {selectedPaneTrace && pointVisible && (
+                        <g className={`cursor-trace-readout${cursorTool?.activeCursor === cursor.label.toLowerCase() ? " active" : ""}`}>
+                          <circle
+                            className="cursor-trace-point"
+                            cx={x}
+                            cy={y}
+                            r={3.5}
+                            fill={selectedPaneTrace.color}
+                          />
+                          <rect x={labelX} y={labelY} width={labelWidth} height={17} rx={3} />
+                          <text x={labelX + 5} y={labelY + 11.5}>
+                            {cursor.label} · {formatEngineering(selectedValue, selectedPaneTrace.unit, 3)} · {formatEngineering(cursor.value, "s", 3)}
+                          </text>
+                        </g>
+                      )}
                     </g>
                   );
                 })}
               </g>
+            )}
+            {selectedPaneTrace && cursorTool?.activeCursor && (
+              <rect
+                className="cursor-glide-surface"
+                x={PLOT_PAD}
+                y={PLOT_PAD}
+                width={PLOT_WIDTH - 2 * PLOT_PAD}
+                height={plotHeight - 2 * PLOT_PAD}
+                fill="transparent"
+                role="slider"
+                tabIndex={0}
+                aria-label={`Glide cursor ${cursorTool.activeCursor === "c1" ? "1" : "2"} over ${selectedPaneTrace.label}`}
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={Math.round((((cursorTool.activeCursor === "c1" ? cursors?.x1 : cursors?.x2) ?? times[0]) - times[0]) / ((times[times.length - 1] ?? times[0]) - times[0] || 1) * 100)}
+                onPointerDown={beginCursorDrag}
+                onPointerMove={(event) => {
+                  event.stopPropagation();
+                  glideFromPointer(event);
+                }}
+                onPointerUp={endCursorDrag}
+                onPointerCancel={endCursorDrag}
+                onKeyDown={nudgeCursor}
+              />
             )}
           </>
         )}
@@ -2398,9 +2656,9 @@ function CursorView({
   const signals = useMemo<CursorTraceInput[]>(() => {
     if (!success) return [];
     return [
-      ...success.traces.map((t) => ({ label: t.label, values: t.values })),
-      ...success.currents.map((c) => ({ label: c.label, values: c.values })),
-      ...extraTraces.map((t) => ({ label: t.label, values: t.values })),
+      ...success.traces.map((t) => ({ label: t.label, unit: t.unit, values: t.values })),
+      ...success.currents.map((c) => ({ label: c.label, unit: "A", values: c.values })),
+      ...extraTraces.map((t) => ({ label: t.label, unit: t.unit, values: t.values })),
     ];
   }, [success, extraTraces]);
 
@@ -2508,9 +2766,9 @@ function CursorView({
                 {readout.traces.map((t) => (
                   <tr key={t.label}>
                     <td>{t.label}</td>
-                    <td>{formatEngineering(t.y1, "V", 3)}</td>
-                    <td>{formatEngineering(t.y2, "V", 3)}</td>
-                    <td>{formatEngineering(t.dy, "V", 3)}</td>
+                    <td>{formatEngineering(t.y1, t.unit ?? "", 3)}</td>
+                    <td>{formatEngineering(t.y2, t.unit ?? "", 3)}</td>
+                    <td>{formatEngineering(t.dy, t.unit ?? "", 3)}</td>
                   </tr>
                 ))}
               </tbody>

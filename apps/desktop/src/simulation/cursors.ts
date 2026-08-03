@@ -10,11 +10,14 @@ import { interpolateAt } from "./waveformCompare";
 
 export interface CursorTraceInput {
   label: string;
+  /** Physical unit carried through to the readout (V/A/W/etc.). */
+  unit?: string;
   values: readonly number[];
 }
 
 export interface CursorTraceReadout {
   label: string;
+  unit?: string;
   /** Value at cursor 1 / cursor 2. */
   y1: number;
   y2: number;
@@ -49,6 +52,29 @@ export function fractionToX(axis: readonly number[], fraction: number): number {
   const first = axis[0];
   const last = axis[axis.length - 1];
   return first + clamp(fraction, 0, 1) * (last - first);
+}
+
+/**
+ * Convert a pointer's client-space X coordinate into the cursor fraction used
+ * by the full run. The SVG's axis gutter is excluded, and a zoomed viewport is
+ * mapped back into the complete data domain so direct plot dragging and the
+ * exact-time fields remain one source of truth.
+ */
+export function plotClientXToFraction(
+  clientX: number,
+  bounds: { left: number; width: number },
+  viewBoxWidth: number,
+  pad: number,
+  viewport: { xMin: number; xMax: number },
+  axis: readonly number[],
+): number {
+  if (axis.length === 0 || bounds.width <= 0 || viewBoxWidth <= pad * 2) return NaN;
+  const svgX = ((clientX - bounds.left) / bounds.width) * viewBoxWidth;
+  const plotFraction = clamp((svgX - pad) / (viewBoxWidth - pad * 2), 0, 1);
+  const x = viewport.xMin + plotFraction * (viewport.xMax - viewport.xMin);
+  const first = axis[0];
+  const span = axis[axis.length - 1] - first;
+  return span === 0 ? 0 : clamp((x - first) / span, 0, 1);
 }
 
 /**
@@ -105,7 +131,7 @@ export function cursorReadout(
     const y1 = interpolateAt(axis, t.values, cx1);
     const y2 = interpolateAt(axis, t.values, cx2);
     const dy = y2 - y1;
-    return { label: t.label, y1, y2, dy, slope: dx === 0 ? NaN : dy / dx };
+    return { label: t.label, unit: t.unit, y1, y2, dy, slope: dx === 0 ? NaN : dy / dx };
   });
 
   return {

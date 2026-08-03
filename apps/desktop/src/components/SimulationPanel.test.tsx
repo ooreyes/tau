@@ -553,7 +553,7 @@ describe("SimulationPanel - engineering-safe transient controls", { timeout: 20_
     expect(handlers.onOptionsChange).toHaveBeenLastCalledWith({ stopTime: 0.002, steps: 240 });
   });
 
-  it("draws both cursors through the waveform and accepts exact interval endpoints", () => {
+  it("opens cursors directly from a trace and keeps exact interval endpoints in sync", () => {
     useSchematic.setState({
       wires: [{ id: "w1", points: [{ x: 0, y: 0 }, { x: 16, y: 0 }] }],
       probes: [{ id: "p1", x: 0, y: 0, netId: "n1", color: "var(--trace-cyan)" }],
@@ -575,10 +575,12 @@ describe("SimulationPanel - engineering-safe transient controls", { timeout: 20_
     } as Extract<import("../simulation/linearTransient").AnalysisResult, { ok: true }>;
     renderPanel({ result });
 
-    fireEvent.click(screen.getByRole("button", { name: "Toggle advanced settings" }));
-    fireEvent.click(screen.getByRole("button", { name: "Toggle measurement cursors" }));
+    // Direct line interaction is available beside the trace - engineers do
+    // not have to discover a slider hidden under Advanced first.
+    fireEvent.click(screen.getByRole("button", { name: "Glide cursor 1 on V(out)" }));
     expect(document.querySelectorAll(".transient-cursor")).toHaveLength(2);
 
+    fireEvent.click(screen.getByRole("button", { name: "Toggle advanced settings" }));
     fireEvent.change(screen.getByLabelText("Cursor 1 time SI prefix"), { target: { value: "" } });
     fireEvent.change(screen.getByLabelText("Cursor 1 time"), { target: { value: "1e0" } });
     const firstCursorLine = document.querySelector(".transient-cursor.cursor-1 line");
