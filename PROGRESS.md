@@ -9,7 +9,15 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-02 22:38 CDT**
+**Status: IN PROGRESS - 2026-08-02 22:41 CDT**
+
+Interactive security unit: bind every staged native ngspice resource to the
+engine provenance record with SHA-256 and make `build.rs` reject a missing,
+malformed, stale, swapped, or corrupted file before packaging. Tests must prove
+the rejection on doctored staging trees and a regenerated pinned engine must
+pass the complete native/release/DMG smoke path. The scheduler stays unloaded.
+
+Previous completed unit:
 
 Imported LTspice extended value slots now survive the real App path and support
 safe edits. The document validator previously dropped `ltExtraAttrs` while

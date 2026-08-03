@@ -5,7 +5,14 @@ The working memory of an unattended loop that starts from zero every fire.
 
 ## Now
 
-**Status:** DONE - 2026-08-02 22:38 CDT
+**Status:** IN PROGRESS - 2026-08-02 22:41 CDT
+
+Claimed native-engine content integrity: record SHA-256 for every staged
+ngspice library/code-model resource and refuse packaging if metadata or bytes
+do not match. Regenerate the pinned resources and rerun the full release proof.
+Scheduler remains unloaded.
+
+Previous completed unit:
 
 Extended LTspice value-slot editing is complete for unambiguous single-slot
 changes. The real App validator now preserves and bounds `ltExtraAttrs` instead
