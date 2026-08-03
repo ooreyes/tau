@@ -9,7 +9,17 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-03 11:13 CDT**
+**Status: IN PROGRESS - 2026-08-03 11:19 CDT**
+
+Claimed unit: make native subcircuits a menu-first component. Properties will
+select compatible document, attached-library, or bundled `.subckt` definitions,
+expose named parameter overrides, create the exact named terminal count on the
+canvas, relocate attached wires when the choice changes, emit a resolvable X
+instance, and preserve those terminals through Tau's guarded `.asc` carrier
+round trip. The unit includes malformed-metadata guards, frontend tests, native
+gates, and minimum-window visual verification. Scheduler remains unloaded.
+
+Previous completed unit:
 
 Semiconductor Properties now has a source-labelled Simulation model chooser
 instead of a free-text Value/model field. It offers only electrically compatible
