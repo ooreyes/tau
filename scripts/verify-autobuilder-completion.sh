@@ -67,7 +67,7 @@ record_completion() {
   scripts/dod-parity.sh
   pnpm -C apps/desktop exec vitest run --config vitest.corpus.config.ts \
     scripts/acNative.corpus.ts scripts/opNative.corpus.ts scripts/currentSwitchNative.corpus.ts \
-    scripts/behavioralCapacitorNative.corpus.ts
+    scripts/behavioralCapacitorNative.corpus.ts scripts/userSubcktImport.corpus.ts
   pnpm --filter @tau/desktop build
 
   cargo fmt --manifest-path apps/desktop/src-tauri/Cargo.toml --check
@@ -85,6 +85,14 @@ record_completion() {
   TAU_NGSPICE_LIB="$library" cargo test \
     --manifest-path apps/desktop/src-tauri/Cargo.toml \
     runs_a_digital_register_with_the_real_ngspice_code_models \
+    -- --ignored --test-threads=1
+  TAU_NGSPICE_LIB="$library" cargo test \
+    --manifest-path apps/desktop/src-tauri/Cargo.toml \
+    runs_ltspice_ota_and_ideal_diode_compatibility_models \
+    -- --ignored --test-threads=1
+  TAU_NGSPICE_LIB="$library" cargo test \
+    --manifest-path apps/desktop/src-tauri/Cargo.toml \
+    mixed_jfet_operating_point_vectors_do_not_crash_the_native_boundary \
     -- --ignored --test-threads=1
 
   pnpm --filter @tau/desktop tauri build
@@ -126,6 +134,14 @@ record_completion() {
   TAU_NGSPICE_LIB="$mounted_library" cargo test \
     --manifest-path apps/desktop/src-tauri/Cargo.toml \
     runs_a_digital_register_with_the_real_ngspice_code_models \
+    -- --ignored --test-threads=1
+  TAU_NGSPICE_LIB="$mounted_library" cargo test \
+    --manifest-path apps/desktop/src-tauri/Cargo.toml \
+    runs_ltspice_ota_and_ideal_diode_compatibility_models \
+    -- --ignored --test-threads=1
+  TAU_NGSPICE_LIB="$mounted_library" cargo test \
+    --manifest-path apps/desktop/src-tauri/Cargo.toml \
+    mixed_jfet_operating_point_vectors_do_not_crash_the_native_boundary \
     -- --ignored --test-threads=1
   # The DMG is deliberately mounted read-only; logging under `mount_dir`
   # makes a healthy app fail before it can launch. Keep runtime output in a

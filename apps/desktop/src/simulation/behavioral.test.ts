@@ -5,7 +5,22 @@ import {
   linearizeBehavioral,
   ifToTernary,
   statFuncsToNgspice,
+  ltFuncsToNgspice,
 } from "./behavioral";
+
+describe("LTspice soft-limit translation", () => {
+  it("rewrites nested uplim/dnlim calls to ngspice ternaries without a hard clamp", () => {
+    const translated = ltFuncsToNgspice("dnlim(uplim(V(in),5,.3),-5,.2)");
+    expect(translated).not.toMatch(/\b(?:up|dn)lim\s*\(/i);
+    expect(translated).toContain("exp(");
+    expect(translated).toContain("min(");
+    expect(translated).toContain("max(");
+  });
+
+  it("leaves a wrong-arity call explicit instead of guessing", () => {
+    expect(ltFuncsToNgspice("uplim(x,y)")).toBe("uplim(x,y)");
+  });
+});
 
 describe("ifToTernary", () => {
   it("leaves an expression without if() untouched", () => {

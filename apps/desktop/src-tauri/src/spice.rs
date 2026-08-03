@@ -141,23 +141,6 @@ unsafe extern "C" fn on_exit(
     0
 }
 
-unsafe extern "C" fn on_data(
-    _values: *mut c_void,
-    _count: c_int,
-    _ident: c_int,
-    _user_data: *mut c_void,
-) -> c_int {
-    0
-}
-
-unsafe extern "C" fn on_init_data(
-    _info: *mut c_void,
-    _ident: c_int,
-    _user_data: *mut c_void,
-) -> c_int {
-    0
-}
-
 unsafe extern "C" fn on_bg_thread(_running: bool, _ident: c_int, _user_data: *mut c_void) -> c_int {
     0
 }
@@ -330,8 +313,13 @@ impl SpiceEngine {
                 Some(on_char),
                 Some(on_stat),
                 Some(on_exit),
-                Some(on_data),
-                Some(on_init_data),
+                // Tau reads completed plots through ngSpice_AllVecs and
+                // ngGet_Vec_Info below; it never consumes streaming samples.
+                // Leaving these callbacks absent also keeps libngspice out of
+                // its streaming bookkeeping path, which can dereference a
+                // null vector when valid mixed device-property saves are used.
+                None,
+                None,
                 Some(on_bg_thread),
                 user_data,
             )
@@ -1152,6 +1140,7 @@ fn screen_card(compact: &str, line_number: usize) -> Result<(), String> {
                 | ".noise"
                 | ".tf"
                 | ".param"
+                | ".params"
                 | ".func"
                 | ".temp"
                 | ".ic"
@@ -1328,6 +1317,7 @@ mod tests {
     fn accepts_safe_inline_models_and_analysis_cards_without_file_access() {
         let netlist = r#"Tau safe complex deck
 .param gain=2
+.params offset=1
 .func twice(x) {2*x}
 .global vdd
 .subckt cell in out params: r=1k
@@ -1816,6 +1806,30 @@ R1 out fb 10k
         assert!(on / off > 900.0, "on/off ratio was {}", on / off);
     }
 
+    #[test]
+    #[ignore = "requires TAU_NGSPICE_LIB pointing to libngspice"]
+    fn mixed_jfet_operating_point_vectors_do_not_crash_the_native_boundary() {
+        let _guard = real_engine_test_guard();
+        let library = std::env::var_os("TAU_NGSPICE_LIB")
+            .map(PathBuf::from)
+            .expect("TAU_NGSPICE_LIB must point to a shared ngspice library");
+        let mut engine = SpiceEngine::load(vec![library]).expect("ngspice library should load");
+        let result = engine
+            .run(SpiceRequest {
+                netlist: r#"Tau JFET operating-point vectors
+.model J NJF(Is=.25p Vto=-1.5 Beta=3m Lambda=10m)
+VDD drain 0 10
+J1 drain gate 0 J
+R1 gate 0 100k
+.save all @j1[id] @j1[vgs] @j1[vds] @j1[vdsat] @j1[gm] @j1[gds]
+.op
+.end"#
+                    .to_string(),
+            })
+            .expect("mixed JFET vectors should solve without entering the unused streaming callback path");
+        assert!(!result.vectors.is_empty());
+    }
+
     /** Exact assistant 2-bit register regression: ngspice XSPICE d_dff
      * controls are active-high, so PRE/CLR are held at zero. On clock rising
      * edges at 1/3/5 ms the two outputs must sample 01, 11, 10.
@@ -1898,6 +1912,57 @@ A_a2_dac [a2_dq a2_dnq] [q1 q1bar] a2_dac
         assert!(value_near("q0", 0.0011) > 4.0 && value_near("q1", 0.0011) < 1.0);
         assert!(value_near("q0", 0.0031) > 4.0 && value_near("q1", 0.0031) > 4.0);
         assert!(value_near("q0", 0.0051) < 1.0 && value_near("q1", 0.0051) > 4.0);
+    }
+
+    /** Tau's LTspice vendor-library adapter relies on the patched OTA current
+     * limit in analog.cm and on xtradev's LTspice-equivalent simple diode. A
+     * real bundled-engine run proves both model types load and that the OTA
+     * reaches Iout*tanh(gm*Vin/Iout), rather than the old unbounded gm*Vin. */
+    #[test]
+    #[ignore = "requires TAU_NGSPICE_LIB pointing to libngspice with its code models"]
+    fn runs_ltspice_ota_and_ideal_diode_compatibility_models() {
+        let _guard = real_engine_test_guard();
+        let library = std::env::var_os("TAU_NGSPICE_LIB")
+            .map(PathBuf::from)
+            .expect("TAU_NGSPICE_LIB must point to a shared ngspice library");
+        let mut engine = SpiceEngine::load(vec![library]).expect("ngspice library should load");
+        let result = engine
+            .run(SpiceRequest {
+                netlist: r#"Tau LTspice compatibility code models
+Vin in 0 1
+.model tau_ota ota(gm=1 iout=10m rout=1e308 rin=1e308)
+Aota in 0 ota_sink tau_ota
+Vsense ota_sink 0 0
+Fout out 0 Vsense 1
+Rout out 0 1k
+Vdiode supply 0 1
+Rdiode supply diode 100
+Adiode diode 0 tau_diode
+.model tau_diode sidiode(ron=10 roff=1T vfwd=.8 epsilon=.1)
+.op
+.end"#
+                    .to_string(),
+            })
+            .expect("patched OTA and simple diode should solve");
+        let value = |name: &str| {
+            result
+                .vectors
+                .iter()
+                .find(|vector| vector.name.eq_ignore_ascii_case(name))
+                .and_then(|vector| vector.real.first())
+                .copied()
+                .unwrap_or_else(|| panic!("{name} missing; messages: {:?}", result.messages))
+        };
+        assert!(
+            (9.9..10.1).contains(&value("out")),
+            "OTA output should be limited to 10 mA into 1 kOhm; got {} V",
+            value("out")
+        );
+        assert!(
+            (0.80..0.90).contains(&value("diode")),
+            "LTspice-style Ron/Vfwd diode should conduct near its 0.8 V knee; got {} V",
+            value("diode")
+        );
     }
 
     /** A library with no `.cm` modules beside it is exactly the state Tau's

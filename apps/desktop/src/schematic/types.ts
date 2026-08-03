@@ -106,6 +106,12 @@ export interface SchematicComponent {
    * in the editor.
    */
   ltSymbolType?: string;
+  /** Simulation model selected by the source `.asy` defaults (often Value2).
+   * Kept separate from the `.asc` instance attrs so an untouched save never
+   * invents a SYMATTR record that the source file did not contain. */
+  ltModelName?: string;
+  /** User-owned model file declared by the source `.asy` (SpiceModel). */
+  ltModelFile?: string;
   /**
    * LTspice `WINDOW` records retained from the source symbol - where that
    * symbol's attribute text is drawn. Purely presentational, but LTspice writes

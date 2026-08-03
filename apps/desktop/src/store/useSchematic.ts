@@ -21,6 +21,7 @@ import { canCurrentProbe } from "../simulation/analysisSetup";
 import { validateSchematicDocument } from "../schematic/documentValidation";
 import { extractCircuit, netAtPoint } from "../schematic/netlist";
 import { getComponentPins, rotatePoint, transformPoint } from "../schematic/pins";
+import { withOpampModel } from "../engine/opampModel";
 
 /** Move a component while preserving the invariant that imported LTspice pin
  * overrides are absolute world coordinates attached to that component. */
@@ -236,6 +237,8 @@ interface SchematicState extends Doc {
   /** Clear any active selection (single, multi, or wire). */
   clearSelection: () => void;
   setValue: (id: string, value: string) => void;
+  /** Select a real op-amp subcircuit while preserving imported Value/Value2 slots. */
+  setOpampModel: (id: string, model: string) => void;
   /** Rename a component's reference designator (canvas label). */
   setLabel: (id: string, label: string) => void;
   /** Set optional series resistance on a wire (empty / "0" = ideal). */
@@ -1183,6 +1186,12 @@ export const useSchematic = create<SchematicState>()((set) => {
     setValue: (id, value) =>
       set((s) => ({
         components: s.components.map((c) => (c.id === id ? { ...c, value } : c)),
+      })),
+    setOpampModel: (id, model) =>
+      set((s) => ({
+        components: s.components.map((c) => (
+          c.id === id && c.kind === "opamp" ? withOpampModel(c, model) : c
+        )),
       })),
     setLabel: (id, label) =>
       set((s) => ({

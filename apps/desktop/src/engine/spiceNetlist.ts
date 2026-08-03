@@ -20,13 +20,14 @@ import { laplaceTransfer, laplaceSourceLines } from "./laplace";
 import { coreInductance } from "./coreInductor";
 import { standardModelLine, standardModelType } from "./standardModels";
 import { bundledSubcircuitBlock, bundledLibraryText, sanitizeSubcktName } from "./bundledSubcircuits";
-import { parseUserModelLibraries, resolveUserModel, resolveUserSubckt, translateSwitchModelCard } from "./userModelLibrary";
+import { parseUserModelLibraries, resolveUserModel, resolveUserSubckt, TAU_MODEL_REFUSAL_MARKER, TAU_NOISE_REFUSAL_MARKER, translateSwitchModelCard } from "./userModelLibrary";
 import { tlineDeckParams } from "./tlineSpec";
 import { parseTempDirective } from "../io/directiveAnalysis";
 import { assertSimulationIntegrity } from "../simulation/simulationIntegrity";
 import { parseVaristor, varistorDeckLine } from "./varistorSpec";
 import { parsePhaseDetector, phaseDetectorDeckLines } from "./phaseDetectorSpec";
 import { isLtspiceCurrentControlledSwitch } from "../schematic/currentControlledSwitch";
+import { opampModelRefusal, resolveOpampModel } from "./opampModel";
 
 export type SpiceAnalysis =
   | { kind: "tran"; stopTime: number; steps: number; startTime?: number; maxStep?: number; uic?: boolean; startup?: boolean }
@@ -315,14 +316,48 @@ export function buildSpiceDeck(schematic: Schematic, analysis: SpiceAnalysis): S
   const attachedLibraryFiles = new Set(
     (schematic.userModelLibraryNames ?? []).map(libraryFileKey).filter((key) => key !== ""),
   );
-  // Track `.subckt … .ends` nesting: LTspice evaluates a `{param}` on a
-  // passthrough `.model` line against the document's global `.param` scope
-  // (Fc.asc's `.model DX D(Cjo={Cjo} …)` - ngspice instead dies with
-  // "Undefined parameter"), but a brace INSIDE a document-defined subckt body
-  // must stay verbatim for ngspice to resolve against the subckt's own params.
+  // LTspice evaluates a `{param}` on a top-level passthrough `.model` against
+  // the document's global `.param` scope. Document `.subckt` blocks instead go
+  // through the same compatibility normalizer as attached vendor libraries;
+  // their local braces stay verbatim and their raw body is skipped here.
   let subcktDepth = 0;
   const passthroughScope = schematic.params ?? EMPTY_SCOPE;
-  for (const line of modelLibLinesFromDirectives(rawDirectives)) {
+  const documentModelLines = modelLibLinesFromDirectives(rawDirectives);
+  const documentLibraryRegistry = parseUserModelLibraries([documentModelLines.join("\n")]);
+  for (const line of documentModelLines) {
+    if (subcktDepth > 0) {
+      const nestedFileRef = /^\.(include|lib)\s+(.+)$/i.exec(line.trim());
+      const nestedFile = nestedFileRef ? includedFileName(nestedFileRef[2]) : "";
+      const nestedBundled = nestedFile ? bundledLibraryText(nestedFile) : null;
+      if (nestedBundled) {
+        lines.push(nestedBundled);
+        for (const match of nestedBundled.matchAll(/^\.subckt\s+(\S+)/gim)) {
+          inlinedSubckts.add(match[1].toLowerCase());
+        }
+      } else if (nestedFileRef && nestedFile && !attachedLibraryFiles.has(libraryFileKey(nestedFile))) {
+        unresolvedLibraryFiles.add(nestedFile);
+      }
+      if (/^\.subckt\b/i.test(line.trim())) subcktDepth += 1;
+      if (/^\.ends\b/i.test(line.trim())) subcktDepth = Math.max(0, subcktDepth - 1);
+      continue;
+    }
+    const subckt = /^\.subckt\s+(\S+)/i.exec(line.trim());
+    if (subckt) {
+      subcktDepth = 1;
+      const key = sanitizeSubcktName(subckt[1]).toLowerCase();
+      const normalized = documentLibraryRegistry.subckts.get(key);
+      if (normalized && !inlinedSubckts.has(key)) {
+        const refusal = normalized.split("\n").find((entry) => entry.startsWith(TAU_MODEL_REFUSAL_MARKER));
+        if (refusal) {
+          throw new Error(
+            `Simulation refused: ${refusal.slice(TAU_MODEL_REFUSAL_MARKER.length)} No approximate or partial circuit was run.`,
+          );
+        }
+        lines.push(normalized);
+        inlinedSubckts.add(key);
+      }
+      continue;
+    }
     const fileRef = /^\.(include|lib)\s+(.+)$/i.exec(line.trim());
     // Resolve and report against the SAME token, so a directive the bundled
     // lookup never really tried can't be reported as an unresolvable file.
@@ -334,13 +369,11 @@ export function buildSpiceDeck(schematic: Schematic, analysis: SpiceAnalysis): S
     } else if (fileRef) {
       if (file && !attachedLibraryFiles.has(libraryFileKey(file))) unresolvedLibraryFiles.add(file);
     } else {
-      if (/^\.subckt\b/i.test(line.trim())) subcktDepth += 1;
-      const substituted = subcktDepth > 0 ? line : substituteKnownBraces(line, passthroughScope);
+      const substituted = substituteKnownBraces(line, passthroughScope);
       // A VSWITCH/ISWITCH threshold may itself be a `{param}` expression.
       // modelDirectives translates literal levels first; retry after global
       // substitution so a parameterized card also reaches ngspice as SW/CSW.
       lines.push(translateSwitchModelCard(substituted));
-      if (/^\.ends\b/i.test(line.trim())) subcktDepth = Math.max(0, subcktDepth - 1);
     }
   }
   for (const file of unresolvedLibraryFiles) circuit.warnings.push(unresolvedLibraryWarning(file));
@@ -403,6 +436,36 @@ export function buildSpiceDeck(schematic: Schematic, analysis: SpiceAnalysis): S
   // Parsing an empty/absent list yields an empty registry, so every lookup
   // below misses and deck output is unchanged when no libraries are supplied.
   const userLibraryRegistry = parseUserModelLibraries(schematic.userModelLibraries ?? []);
+
+  // A named five-pin op-amp is a vendor X-device, not an excuse to run Tau's
+  // generic gain block under a recognizable part number. Resolve the actual
+  // subckt identity (which may come from LTspice Value2 and differ from the
+  // visible part name), verify its five-port interface, and inline an attached
+  // user definition exactly once. Missing/incompatible models refuse the whole
+  // deck before any component is emitted or native process starts.
+  const vendorOpampModels = new Map<number, string>();
+  const emittedOpampSubckts = new Set<string>(inlinedSubckts);
+  circuit.components.forEach((entry, index) => {
+    if (entry.component.kind !== "opamp") return;
+    const status = resolveOpampModel(entry.component, rawDirectives, userLibraryRegistry);
+    if (status.kind === "behavioral") return;
+    if (status.kind !== "ready") throw opampModelRefusal(entry.component, status);
+    if (analysis.kind === "noise" && status.block?.includes(TAU_NOISE_REFUSAL_MARKER)) {
+      const detail = status.block
+        .split("\n")
+        .find((line) => line.startsWith(TAU_NOISE_REFUSAL_MARKER))
+        ?.slice(TAU_NOISE_REFUSAL_MARKER.length) ?? status.identity.modelName;
+      throw new Error(
+        `Simulation refused: ${detail} Tau will not flatten that spectrum into an approximate white/flicker pair. No approximate or partial circuit was run.`,
+      );
+    }
+    vendorOpampModels.set(index, status.header.name);
+    const key = sanitizeSubcktName(status.header.name).toLowerCase();
+    if (status.block && !emittedOpampSubckts.has(key)) {
+      lines.push(status.block);
+      emittedOpampSubckts.add(key);
+    }
+  });
 
   // A semiconductor may reference an LTspice standard part by name (1N4148,
   // 2N2222, …) with no inline `.model`. When the document doesn't define it but
@@ -516,7 +579,7 @@ export function buildSpiceDeck(schematic: Schematic, analysis: SpiceAnalysis): S
   // bundledSubcircuits.ts) so the deck is self-contained - this is how the
   // ISO16750-2/ISO7637-2 symbols work in LTspice, whose `.asy` ModelFile
   // attribute pulls the library in without any on-canvas directive.
-  const emittedSubckts = new Set<string>();
+  const emittedSubckts = new Set<string>(emittedOpampSubckts);
   for (const { component } of circuit.components) {
     if (component.kind !== "subckt") continue;
     if (importedSymbolLeaf(component) === "varistor") continue;
@@ -558,7 +621,11 @@ export function buildSpiceDeck(schematic: Schematic, analysis: SpiceAnalysis): S
   // passthrough or an inlined bundled library): LTspice netlists such a device
   // as an X instance with the same node order; ngspice's Q line would die with
   // "could not find a valid modelname" (UHFpreamp's MRF901).
-  const subcktModels = new Set([...definedSubcktNames(rawDirectives), ...inlinedSubckts]);
+  const subcktModels = new Set([
+    ...definedSubcktNames(rawDirectives),
+    ...inlinedSubckts,
+    ...emittedOpampSubckts,
+  ]);
 
   // A `subckt` instance whose referenced name resolves to no definition
   // anywhere - inline document `.subckt`, a bundled library block, or a
@@ -617,6 +684,7 @@ export function buildSpiceDeck(schematic: Schematic, analysis: SpiceAnalysis): S
       modelSubstitutions,
       analysis.kind === "tran" && analysis.startup ? Math.min(20e-6, analysis.stopTime) : undefined,
       currentSwitchSpecs.get(index),
+      vendorOpampModels.get(index),
     );
     lines.push(...emitted);
     // Read off the lines that were actually emitted rather than off the
@@ -971,7 +1039,7 @@ export function unresolvedLibraryWarning(file: string): string {
   return `Could not resolve the library file ${file}, so its models and subcircuits are not part of this run. Attach the file under Model Libraries to use its definitions.`;
 }
 
-function componentLines(entry: ExtractedComponent, index: number, name: string, userModels: Set<string> = new Set(), params: ParamScope = EMPTY_SCOPE, vdmosModels: ReadonlySet<string> = new Set(), netPinCount: ReadonlyMap<string, number> = new Map(), subcktModels: ReadonlySet<string> = new Set(), directiveInductorIc?: string, substitutions: ModelSubstitution[] = [], startupRampSeconds?: number, currentSwitch?: CurrentSwitchDeckSpec): string[] {
+function componentLines(entry: ExtractedComponent, index: number, name: string, userModels: Set<string> = new Set(), params: ParamScope = EMPTY_SCOPE, vdmosModels: ReadonlySet<string> = new Set(), netPinCount: ReadonlyMap<string, number> = new Map(), subcktModels: ReadonlySet<string> = new Set(), directiveInductorIc?: string, substitutions: ModelSubstitution[] = [], startupRampSeconds?: number, currentSwitch?: CurrentSwitchDeckSpec, vendorOpampModel?: string): string[] {
   const { component } = entry;
   const node = (pin: string) => requiredNode(entry, pin);
 
@@ -1159,6 +1227,12 @@ function componentLines(entry: ExtractedComponent, index: number, name: string, 
     }
     case "opamp": {
       const base = safeName(component.label || `U${index + 1}`);
+      if (vendorOpampModel) {
+        // Verified against LTspice's ordinary Opamps/*.asy family: SpiceOrder
+        // 1..5 is IN+, IN-, V+, V-, OUT. Tau's role-oriented pin bank stores
+        // OUT before the rails, so spelling this order explicitly is required.
+        return [`X${base} ${node("in+")} ${node("in-")} ${node("v+")} ${node("v-")} ${node("out")} ${vendorOpampModel}`];
+      }
       // When both supply pins are actually driven (on the ground net or a net
       // with another pin), clamp the output to the rails like LTspice's
       // UniversalOpamp2 - run open loop (class-d_starter's PWM comparator) the

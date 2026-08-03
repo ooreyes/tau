@@ -107,6 +107,18 @@ if [[ "$(git -C "$SOURCE_DIR" rev-parse HEAD)" != "$NGSPICE_COMMIT" ]]; then
   exit 1
 fi
 
+# The pinned upstream OTA code model carries LTspice-compatible noise
+# parameters but its deterministic transfer is unbounded and therefore cannot
+# execute vendor macromodels that rely on LTspice's documented Iout/tanh limit.
+# Keep the small auditable delta in-repo and fail if the pinned source ever
+# drifts enough that it no longer applies cleanly.
+OTA_PATCH="$ROOT/scripts/patches/ngspice-ltspice-ota-current-limit.patch"
+if ! git -C "$SOURCE_DIR" apply --check "$OTA_PATCH"; then
+  echo "The pinned ngspice OTA compatibility patch no longer applies cleanly." >&2
+  exit 1
+fi
+git -C "$SOURCE_DIR" apply "$OTA_PATCH"
+
 rm -rf "$BUILD_DIR" "$STAGE_DIR"
 mkdir -p "$BUILD_DIR" "$STAGE_DIR"
 prepare_autotools_path

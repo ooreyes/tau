@@ -37,6 +37,108 @@ describe("buildSpiceDeck", () => {
     }
   });
 
+  it("emits a named vendor op-amp as its exact attached five-pin subcircuit", () => {
+    const vendor: SchematicComponent = {
+      ...component("opamp", "U1", "OP07 LT1001", 0, 0),
+      ltSymbolType: "Opamps\\OP07",
+      ltExtraAttrs: {
+        baseValue: "OP07",
+        derivedValue: "OP07 LT1001",
+        extras: { Value2: "LT1001" },
+      },
+      pinOverride: [
+        { id: "in+", label: "In+", x: 0, y: 0 },
+        { id: "in-", label: "In-", x: 0, y: 16 },
+        { id: "out", label: "OUT", x: 64, y: 8 },
+        { id: "v+", label: "V+", x: 32, y: -16 },
+        { id: "v-", label: "V-", x: 32, y: 32 },
+      ],
+    };
+    const netLabels: NetLabel[] = [
+      { id: "p", x: 0, y: 0, text: "inp" },
+      { id: "m", x: 0, y: 16, text: "inm" },
+      { id: "vp", x: 32, y: -16, text: "vdd" },
+      { id: "vm", x: 32, y: 32, text: "0" },
+      { id: "o", x: 64, y: 8, text: "out" },
+    ];
+    const userModelLibraries = [
+      ".subckt LT1001 plus minus vplus vminus output\nE1 output 0 plus minus 10\n.ends LT1001",
+    ];
+
+    const deck = buildSpiceDeck(
+      { components: [vendor], wires: [], netLabels, userModelLibraries },
+      { kind: "op" },
+    );
+    expect(deck.netlist).toContain(".subckt LT1001 plus minus vplus vminus output");
+    expect(deck.netlist).toMatch(/^XU1 inp inm vdd 0 out LT1001$/m);
+    expect(deck.netlist).not.toMatch(/^[BE]_U1\b/m);
+  });
+
+  it("refuses a named vendor op-amp when its exact model is missing or has the wrong interface", () => {
+    const vendor: SchematicComponent = {
+      ...component("opamp", "U1", "LT1001", 0, 0),
+      ltSymbolType: "Opamps\\LT1001",
+    };
+    const grounded: NetLabel[] = [{ id: "g", x: 0, y: 0, text: "0" }];
+    expect(() => buildSpiceDeck({ components: [vendor], wires: [], netLabels: grounded }, { kind: "op" }))
+      .toThrow(/Simulation refused: U1 \(LT1001\).*no document definition or attached Model Library.*No approximate or partial circuit was run/);
+    expect(() => buildSpiceDeck({
+      components: [vendor],
+      wires: [],
+      netLabels: grounded,
+      userModelLibraries: [".subckt LT1001 1 2 3 4 5 6 7\nR1 1 2 1k\n.ends LT1001"],
+    }, { kind: "op" })).toThrow(/exposes 7 terminals instead of the required five/);
+  });
+
+  it("refuses vendor OTA noise whose frequency law cannot be preserved", () => {
+    const vendor: SchematicComponent = {
+      ...component("opamp", "U1", "AMP", 0, 0),
+      ltSymbolType: "Opamps\\AMP",
+    };
+    const model = [
+      ".subckt AMP 1 2 3 4 5",
+      "A1 1 2 0 0 0 0 5 0 OTA g=1m en={2n*sqrt(freq)} Vhigh=1e308 Vlow=-1e308",
+      ".ends AMP",
+    ].join("\n");
+    expect(() => buildSpiceDeck({
+      components: [vendor],
+      wires: [],
+      netLabels: [{ id: "g", x: 0, y: 0, text: "0" }],
+      userModelLibraries: [model],
+    }, {
+      kind: "noise",
+      output: { node: "out" },
+      source: "V1",
+      startHz: 10,
+      stopHz: 1e6,
+      pointsPerDecade: 20,
+    })).toThrow(/frequency-dependent.*will not flatten.*No approximate or partial circuit was run/i);
+  });
+
+  it("normalizes an inline document vendor subcircuit once before using it", () => {
+    const vendor: SchematicComponent = {
+      ...component("opamp", "U1", "LT1001", 0, 0),
+      ltSymbolType: "Opamps\\LT1001",
+    };
+    const directives = [[
+      ".subckt LT1001 1 2 3 4 5",
+      "C1 1 2 1p Rpar=1G",
+      "I1 3 4 10u load",
+      ".ends LT1001",
+    ].join("\n")];
+    const deck = buildSpiceDeck({
+      components: [vendor],
+      wires: [],
+      directives,
+      netLabels: [{ id: "g", x: 0, y: 0, text: "0" }],
+    }, { kind: "op" });
+    expect(deck.netlist.match(/^\.subckt LT1001\b/gm)).toHaveLength(1);
+    expect(deck.netlist).toContain("R__tau_rpar_LT1001_C1 1 2 1G");
+    expect(deck.netlist).toContain("B__tau_load_I1 3 4 I={(10u)*");
+    expect(deck.netlist).not.toMatch(/\bRpar=/i);
+    expect(deck.netlist).not.toMatch(/^I1\s+3\s+4\s+10u\s+load$/mi);
+  });
+
   it("emits an ngspice transient deck for a grounded RC circuit", () => {
     const components = [
       component("vsource", "V1", "5", 0, 32),

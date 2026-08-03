@@ -193,7 +193,7 @@ describe("ComponentInspector - imported op-amp parameters", () => {
 
     expect((screen.getByRole("combobox", { name: "Op-amp model" }) as HTMLSelectElement).value)
       .toBe("__custom__");
-    const parameters = screen.getByRole("textbox", { name: "Op-amp parameters" }) as HTMLInputElement;
+    const parameters = screen.getByRole("textbox", { name: "Advanced op-amp parameters" }) as HTMLInputElement;
     expect(parameters.value).toBe(selected.value);
 
     fireEvent.change(parameters, {
@@ -201,6 +201,40 @@ describe("ComponentInspector - imported op-amp parameters", () => {
     });
     expect(useSchematic.getState().components[0].value)
       .toBe("Avol=2Meg GBW=10Gig Slew=10Gig ilimit=2 rail=0");
+  });
+
+  it("shows separate part/model controls and an honest missing-model action", () => {
+    const selected = {
+      id: "u-vendor",
+      kind: "opamp" as const,
+      x: 160,
+      y: 160,
+      rotation: 0 as const,
+      value: "OP07 LT1001",
+      label: "U1",
+      ltSymbolType: "Opamps\\OP07",
+      ltExtraAttrs: {
+        baseValue: "OP07",
+        derivedValue: "OP07 LT1001",
+        extras: { Value2: "LT1001" },
+      },
+    };
+    const openLibraries = vi.fn();
+    useSchematic.setState({ components: [selected], selectedId: selected.id, selectedIds: [selected.id] });
+    render(<ComponentInspector selected={selected} onOpenModelLibraries={openLibraries} />);
+
+    expect((screen.getByRole("textbox", { name: "Op-amp part" }) as HTMLInputElement).value).toBe("OP07");
+    const model = screen.getByRole("textbox", { name: "Op-amp simulation model" }) as HTMLInputElement;
+    expect(model.value).toBe("LT1001");
+    expect(screen.getByRole("status").textContent).toMatch(/Model library required.*not substitute a generic gain block/);
+    fireEvent.click(screen.getByRole("button", { name: "Attach Model Library" }));
+    expect(openLibraries).toHaveBeenCalledOnce();
+
+    fireEvent.change(model, { target: { value: "MY_OP07" } });
+    expect(useSchematic.getState().components[0]).toMatchObject({
+      value: "OP07 MY_OP07",
+      ltExtraAttrs: { extras: { Value2: "MY_OP07" } },
+    });
   });
 });
 

@@ -23,6 +23,7 @@
 
 import { parseQuantity } from "../simulation/quantity";
 import { sanitizeSubcktName } from "./bundledSubcircuits";
+import { ifToTernary, ltFuncsToNgspice } from "../simulation/behavioral";
 
 export interface UserModelLibraryRegistry {
   /** Model name (lower-cased) -> its full `.model` line, with any `+`
@@ -91,6 +92,149 @@ function stripNoiselessFlag(line: string): string {
     .replace(/[ \t]{2,}/g, " ")
     .replace(/[ \t]+$/g, "");
   return lead + body;
+}
+
+const LTSPICE_PI = "3.141592653589793";
+const LTSPICE_IDEAL_DIODE_KEYS = /\b(?:ron|roff|vfwd|vrev|rrev|ilimit|revilimit|epsilon|revepsilon)\s*=/i;
+export const TAU_MODEL_REFUSAL_MARKER = "* TAU_MODEL_REFUSAL: ";
+export const TAU_NOISE_REFUSAL_MARKER = "* TAU_NOISE_REFUSAL: ";
+
+function replaceLtspiceConstants(line: string): string {
+  return line.replace(/\bpi\b/gi, LTSPICE_PI);
+}
+
+function modelParamMap(text: string): Map<string, string> {
+  const params = new Map<string, string>();
+  for (const match of text.matchAll(/([A-Za-z_]\w*)\s*=\s*(\{[^}]*\}|[^\s]+)/g)) {
+    params.set(match[1].toLowerCase(), match[2]);
+  }
+  return params;
+}
+
+function finiteLiteral(value: string | undefined): number | null {
+  if (value === undefined || /[{}A-DF-Za-df-z_]/.test(value)) return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+/** LTspice's piecewise-linear diode and ngspice's bundled `sidiode` code
+ * model implement the same Ron/Roff/Vfwd/Vrev/Rrev/current-limit/quadratic-
+ * shoulder contract. Rename the model type and its instances; do not feed the
+ * parameters to ngspice's unrelated Berkeley diode and accept its warnings. */
+function translateIdealDiodes(lines: string[]): string[] {
+  const idealModels = new Set<string>();
+  for (const line of lines) {
+    const match = /^\s*\.model\s+(\S+)\s+D\s*\((.*)\)\s*$/i.exec(line);
+    if (match && LTSPICE_IDEAL_DIODE_KEYS.test(match[2])) idealModels.add(match[1].toLowerCase());
+  }
+  return lines.map((line) => {
+    const model = /^\s*\.model\s+(\S+)\s+D\s*\((.*)\)\s*$/i.exec(line);
+    if (model && idealModels.has(model[1].toLowerCase())) {
+      return `.model ${model[1]} sidiode(${stripNoiselessFlag(model[2]).trim()})`;
+    }
+    const device = /^\s*(D\S+)\s+(\S+)\s+(\S+)\s+(\S+)(.*)$/i.exec(line);
+    if (!device || !idealModels.has(device[4].toLowerCase())) return line;
+    if (device[5].trim() !== "") {
+      return `${TAU_MODEL_REFUSAL_MARKER}${device[1]} uses LTspice ideal-diode instance options Tau cannot map exactly.`;
+    }
+    return `A__tau_${device[1]} ${device[2]} ${device[3]} ${device[4]}`;
+  });
+}
+
+/** LTspice accepts `Rpar=<value>` on a capacitor instance; ngspice rejects
+ * that token. The electrical definition is exactly a resistor in parallel
+ * with the capacitor, so preserve the capacitor and emit that resistor. */
+function translateCapacitorRpar(line: string, subcktName: string): string[] {
+  const capacitor = /^(\s*)(C\S+)\s+(\S+)\s+(\S+)\s+(\S+)(.*)$/i.exec(line);
+  if (!capacitor) return [line];
+  const rpar = /\brpar\s*=\s*(\{[^}]*\}|[^\s]+)/i.exec(capacitor[6]);
+  if (!rpar) return [line];
+
+  const remainingTail = capacitor[6]
+    .replace(rpar[0], "")
+    .replace(/[ \t]{2,}/g, " ")
+    .replace(/[ \t]+$/g, "");
+  const safe = `${subcktName}_${capacitor[2]}`.replace(/[^A-Za-z0-9_]/g, "_");
+  return [
+    `${capacitor[1]}${capacitor[2]} ${capacitor[3]} ${capacitor[4]} ${capacitor[5]}${remainingTail}`,
+    `${capacitor[1]}R__tau_rpar_${safe} ${capacitor[3]} ${capacitor[4]} ${rpar[1]}`,
+  ];
+}
+
+/** LTspice's `load` flag makes an independent current source dissipative.
+ * Tau's transfer was measured against LTspice 17.2.4: for normalized current
+ * it is `4V` at V<=0, `4V-4V²` from 0..0.5 V, and 1 above 0.5 V. This also
+ * matches LTspice's documented zero-voltage resistance (0.25 V / I), bend
+ * point, and high-voltage current. ngspice otherwise rejects the bare flag. */
+function translateDissipativeCurrentLoad(line: string): string {
+  const source = /^(\s*)(I\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+load\s*$/i.exec(line);
+  if (!source) return line;
+  const safe = source[2].replace(/[^A-Za-z0-9_]/g, "_");
+  const voltage = `V(${source[3]},${source[4]})`;
+  return `${source[1]}B__tau_load_${safe} ${source[3]} ${source[4]} I={(${source[5]})*(${voltage}<=0 ? 4*${voltage} : ${voltage}<0.5 ? 4*${voltage}-4*${voltage}*${voltage} : 1)}`;
+}
+
+/** Map the documented LTspice OTA subset used by current vendor op-amp
+ * libraries onto Tau's pinned native OTA code model. Multiplying ports must be
+ * tied off, compliance must be explicitly infinite, and asymmetric/linear
+ * variants refuse rather than quietly changing transfer behavior. Cout/Rout
+ * remain literal passive elements across LTspice's output/common pins. */
+function translateLtspiceOta(line: string, subcktName: string): string[] {
+  const match = /^\s*(A\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+OTA\b(.*)$/i.exec(line);
+  if (!match) return [line];
+  const [, instance, inp, inn, mul1p, mul1n, mul2p, mul2n, out, common, tail] = match;
+  const params = modelParamMap(tail);
+  const refusal = (reason: string) => [`${TAU_MODEL_REFUSAL_MARKER}${subcktName}/${instance} ${reason}`];
+
+  if (mul1p.toLowerCase() !== mul1n.toLowerCase() || mul2p.toLowerCase() !== mul2n.toLowerCase()) {
+    return refusal("uses active four-quadrant multiplier ports; the native two-port OTA is not equivalent.");
+  }
+  if (/\b(?:asym|linear)\b/i.test(tail) || params.has("isink") || params.has("ref") || params.has("rclamp") || params.has("epsilon")) {
+    return refusal("uses an asymmetric, linear, offset, or compliance-shaping OTA option not yet mapped exactly.");
+  }
+
+  const gm = params.get("g") ?? "1";
+  const gmLiteral = finiteLiteral(gm);
+  const inactiveOutput = gmLiteral === 0 && out.toLowerCase() === common.toLowerCase();
+  const vhigh = finiteLiteral(params.get("vhigh"));
+  const vlow = finiteLiteral(params.get("vlow"));
+  if (!inactiveOutput && (vhigh === null || vlow === null || vhigh < 1e100 || vlow > -1e100)) {
+    return refusal("uses finite or implicit voltage compliance; substituting an unclamped OTA would be inaccurate.");
+  }
+
+  const safe = `${subcktName}_${instance}`.replace(/[^A-Za-z0-9_]/g, "_");
+  const model = `__tau_ota_${safe}`;
+  const sink = `__tau_ota_sink_${safe}`;
+  const sensor = `V__tau_ota_${safe}`;
+  const modelParams = [`gm=${gm}`, `iout=${params.get("iout") ?? "10u"}`, "rout=1e308", "rin=1e308"];
+  const simpleNoise = [
+    ["en", "en"], ["enk", "enk"], ["in", "in_noise"],
+    ["ink", "ink"], ["incm", "incm"], ["incmk", "incmk"],
+  ] as const;
+  const noiseRefusals: string[] = [];
+  for (const [ltName, ngName] of simpleNoise) {
+    const value = params.get(ltName);
+    if (!value) continue;
+    if (/\bfreq\b/i.test(value)) noiseRefusals.push(`${ltName} is frequency-dependent`);
+    else modelParams.push(`${ngName}=${value}`);
+  }
+
+  const translated = [
+    `.model ${model} ota(${modelParams.join(" ")})`,
+    `A__tau_ota_${safe} ${inp} ${inn} ${sink} ${model}`,
+    `${sensor} ${sink} 0 0`,
+    `F__tau_ota_${safe} ${out} ${common} ${sensor} 1`,
+  ];
+  const cout = params.get("cout");
+  if (cout && finiteLiteral(cout) !== 0) translated.push(`C__tau_ota_${safe} ${out} ${common} ${cout}`);
+  const rout = params.get("rout");
+  if (rout && (finiteLiteral(rout) === null || (finiteLiteral(rout) ?? 0) < 1e100)) {
+    translated.push(`R__tau_ota_${safe} ${out} ${common} ${rout}`);
+  }
+  if (noiseRefusals.length > 0) {
+    translated.push(`${TAU_NOISE_REFUSAL_MARKER}${subcktName}/${instance}: ${noiseRefusals.join(", ")}.`);
+  }
+  return translated;
 }
 
 /** Emit a computed switch threshold as a clean deck token: strip the binary
@@ -178,17 +322,25 @@ export function translateSwitchModelCard(line: string): string {
  * the vendor wrote it.
  */
 function normalizeSubcktInterior(block: string): string {
-  return block
+  const subcktName = /^\s*\.subckt\s+(\S+)/im.exec(block)?.[1] ?? "vendor-subckt";
+  const normalized = block
     .split("\n")
-    .map((line) => {
+    .flatMap((line) => {
       if (/^\s*[*;]/.test(line)) return line;
+      // A nested file reference is never followed: all library bytes must be
+      // attached/read by Tau first and then inlined through this registry.
+      if (/^\s*\.(?:include|inc|lib)\b/i.test(line)) return [];
       if (/^\s*\.model\b/i.test(line)) return stripNoiselessFlag(translateSwitchModelCard(line));
       let out = line;
       if (/^\s*S[\w$]/i.test(out) && out.includes("(")) {
         out = out.replace(/\(([^()]*)\)/, (_full, inner: string) => inner.replace(/,/g, " ").trim());
       }
-      return stripNoiselessFlag(out);
-    })
+      out = replaceLtspiceConstants(ltFuncsToNgspice(ifToTernary(stripNoiselessFlag(out))));
+      out = translateDissipativeCurrentLoad(out);
+      return translateLtspiceOta(out, subcktName)
+        .flatMap((translated) => translateCapacitorRpar(translated, subcktName));
+    });
+  return translateIdealDiodes(normalized)
     .join("\n");
 }
 
@@ -313,5 +465,11 @@ export function resolveUserModel(registry: UserModelLibraryRegistry, name: strin
 export function resolveUserSubckt(registry: UserModelLibraryRegistry, name: string): string | null {
   const first = name.trim().split(/\s+/)[0] ?? "";
   if (!first) return null;
-  return registry.subckts.get(sanitizeSubcktName(first).toLowerCase()) ?? null;
+  const block = registry.subckts.get(sanitizeSubcktName(first).toLowerCase()) ?? null;
+  if (!block) return null;
+  const refusal = block.split("\n").find((line) => line.startsWith(TAU_MODEL_REFUSAL_MARKER));
+  if (refusal) {
+    throw new Error(`Simulation refused: ${refusal.slice(TAU_MODEL_REFUSAL_MARKER.length)} No approximate or partial circuit was run.`);
+  }
+  return block;
 }

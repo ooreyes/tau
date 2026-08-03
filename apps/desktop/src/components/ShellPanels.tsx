@@ -38,6 +38,7 @@ import { decodeParams, encodeParams, paramFields } from "../schematic/params";
 import { EngineeringInput } from "./EngineeringInput";
 import { Palette } from "./Palette";
 import { OPAMP_LIBRARY, findOpAmp } from "../library/opamps";
+import { inspectOpampModel, opampIdentity } from "../engine/opampModel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
@@ -1479,11 +1480,20 @@ export function BottomPanel({
 }
 
 // Exported for component tests only (same pattern as the plot components).
-export function ComponentInspector({ selected }: { selected: SchematicComponent | null }) {
+export function ComponentInspector({
+  selected,
+  onOpenModelLibraries,
+}: {
+  selected: SchematicComponent | null;
+  onOpenModelLibraries?: () => void;
+}) {
   const entry = selected ? CATALOG_BY_KIND[selected.kind] : null;
   const setValue = useSchematic((s) => s.setValue);
+  const setOpampModel = useSchematic((s) => s.setOpampModel);
   const setLabel = useSchematic((s) => s.setLabel);
   const beginChange = useSchematic((s) => s.beginChange);
+  const directives = useSchematic((s) => s.directives);
+  const modelLibraries = useSchematic((s) => s.userModelLibraries);
   const editKeyRef = useRef<string | null>(null);
   // Empty catalog values (e.g. Class-D MOSFETs) still show editable defaults.
   const valueSource = selected
@@ -1512,8 +1522,13 @@ export function ComponentInspector({ selected }: { selected: SchematicComponent 
     setValue(selected.id, encodeParams(selected.kind, { ...decodeParams(selected.kind, base), [key]: value }));
   };
 
-  const opampPart = selected?.kind === "opamp" ? findOpAmp(selected.value) : null;
-  const customOpamp = selected?.kind === "opamp" && !OPAMP_LIBRARY.some((part) => part.part === selected.value);
+  const opamp = selected?.kind === "opamp" ? opampIdentity(selected) : null;
+  const opampPart = opamp ? findOpAmp(opamp.partName) : null;
+  const customOpamp = opamp?.mode === "behavioral"
+    && !OPAMP_LIBRARY.some((part) => part.part === selected?.value);
+  const opampStatus = selected?.kind === "opamp"
+    ? inspectOpampModel(selected, directives, modelLibraries.map((library) => library.text))
+    : null;
 
   return (
     <div className="component-inspector">
@@ -1555,33 +1570,83 @@ export function ComponentInspector({ selected }: { selected: SchematicComponent 
           </label>
           {selected.kind === "opamp" ? (
             <>
-              <label className="property-field">
-                <span>Model</span>
-                <select
-                  className="mono-num"
-                  aria-label="Op-amp model"
-                  value={customOpamp ? "__custom__" : selected.value}
-                  onChange={(event) => {
-                    beginParamChange("model");
-                    setValue(selected.id, event.currentTarget.value);
-                  }}
-                >
-                  {customOpamp && <option value="__custom__">Imported / custom</option>}
-                  {OPAMP_LIBRARY.map((p) => (
-                    <option key={p.part} value={p.part}>
-                      {p.part}
-                      {p.part === "Ideal" ? "" : ` · ${p.manufacturer}`}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              {customOpamp && (
+              {opamp?.mode === "vendor" ? (
+                <>
+                  <label className="property-field">
+                    <span>Part</span>
+                    <input
+                      className="mono-num"
+                      value={opamp.partName}
+                      aria-label="Op-amp part"
+                      readOnly
+                    />
+                  </label>
+                  <label className="property-field">
+                    <span>Simulation model</span>
+                    <input
+                      className="mono-num"
+                      value={opamp.modelName}
+                      aria-label="Op-amp simulation model"
+                      spellCheck={false}
+                      maxLength={160}
+                      pattern="[^\\s=(){};]+"
+                      title="Use one SPICE subcircuit name (no spaces or parameter syntax)."
+                      onFocus={() => {
+                        editKeyRef.current = null;
+                      }}
+                      onChange={(event) => {
+                        beginParamChange("model");
+                        setOpampModel(selected.id, event.currentTarget.value);
+                      }}
+                    />
+                  </label>
+                  <p className="property-hint" role="status">
+                    {opampStatus?.kind === "ready"
+                      ? `Ready · exact five-terminal subcircuit from ${opampStatus.source === "library" ? "Model Libraries" : "this document"}`
+                      : opampStatus?.kind === "incompatible"
+                        ? `Blocked · model has ${opampStatus.portCount} terminals; this symbol requires five`
+                        : "Model library required · Tau will not substitute a generic gain block"}
+                  </p>
+                  {opampStatus?.kind !== "ready" && onOpenModelLibraries && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={onOpenModelLibraries}
+                    >
+                      Attach Model Library
+                    </Button>
+                  )}
+                </>
+              ) : (
                 <label className="property-field">
-                  <span>Parameters</span>
+                  <span>Model</span>
+                  <select
+                    className="mono-num"
+                    aria-label="Op-amp model"
+                    value={customOpamp ? "__custom__" : selected.value}
+                    onChange={(event) => {
+                      beginParamChange("model");
+                      setValue(selected.id, event.currentTarget.value);
+                    }}
+                  >
+                    {customOpamp && <option value="__custom__">Universal / behavioral</option>}
+                    {OPAMP_LIBRARY.map((p) => (
+                      <option key={p.part} value={p.part}>
+                        {p.part}
+                        {p.part === "Ideal" ? "" : ` · ${p.manufacturer}`}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+              {customOpamp && opamp?.mode === "behavioral" && (
+                <label className="property-field">
+                  <span>Advanced parameters</span>
                   <input
                     className="mono-num"
                     value={selected.value}
-                    aria-label="Op-amp parameters"
+                    aria-label="Advanced op-amp parameters"
                     spellCheck={false}
                     onFocus={() => {
                       editKeyRef.current = null;
@@ -1699,12 +1764,14 @@ function WireInspector({ wire }: { wire: SchematicWire }) {
 export function ComponentsRail({
   focusSignal,
   onNotice,
+  onOpenModelLibraries,
   resize,
   maxWidth,
   embedded = false,
 }: {
   focusSignal: number;
   onNotice: (message: string) => void;
+  onOpenModelLibraries?: () => void;
   /** Width state is shell-owned so Explorer and this rail update in one render. */
   resize: ReturnType<typeof usePanelWidth>;
   /** Responsive ceiling supplied by the shell after reserving Explorer and the editor. */
@@ -1784,7 +1851,7 @@ export function ComponentsRail({
       <div className="components-rail-body">
         {segment === "properties" ? (
           selected ? (
-            <ComponentInspector selected={selected} />
+            <ComponentInspector selected={selected} onOpenModelLibraries={onOpenModelLibraries} />
           ) : selectedWire ? (
             <WireInspector wire={selectedWire} />
           ) : (

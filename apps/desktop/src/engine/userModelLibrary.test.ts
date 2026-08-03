@@ -170,6 +170,77 @@ describe("parseUserModelLibraries", () => {
     expect(block).toContain(".model Switch SW(RON=0.001 ROFF=1e6 VT=1 VH=0.005)");
   });
 
+  it("translates LTspice soft-limit calls inside a vendor subcircuit", () => {
+    const block = parseUserModelLibraries([
+      ".subckt AMP 1 2 3 4 5\nB1 0 5 I=dnlim(uplim(V(1),V(3)-.9,.3),V(4)+.9,.3)\n.ends AMP",
+    ]).subckts.get("amp") ?? "";
+    expect(block).not.toMatch(/\b(?:up|dn)lim\s*\(/i);
+    expect(block).toContain("exp(");
+  });
+
+  it("maps LTspice's idealized diode onto the equivalent bundled sidiode code model", () => {
+    const block = parseUserModelLibraries([
+      [
+        ".subckt AMP 1 2 3 4 5",
+        "D1 5 X LIMIT",
+        ".model LIMIT D(Ron=10K Roff=1T Vfwd=.82 Vrev=.82 epsilon=.1 revepsilon=.1 noiseless)",
+        ".ends AMP",
+      ].join("\n"),
+    ]).subckts.get("amp") ?? "";
+    expect(block).toContain("A__tau_D1 5 X LIMIT");
+    expect(block).toContain(".model LIMIT sidiode(Ron=10K Roff=1T Vfwd=.82 Vrev=.82 epsilon=.1 revepsilon=.1)");
+    expect(block).not.toMatch(/^D1\b/m);
+  });
+
+  it("maps a tied-multiplier LTspice OTA to the pinned native OTA and literal output loading", () => {
+    const block = parseUserModelLibraries([
+      [
+        ".subckt AMP 1 2 3 4 5",
+        "A1 0 N004 0 0 0 0 X 0 OTA g=150u Iout=7u Cout=28p en=9.8n enk=4 Vhigh=1e308 Vlow=-1e308",
+        ".ends AMP",
+      ].join("\n"),
+    ]).subckts.get("amp") ?? "";
+    expect(block).toContain(".model __tau_ota_AMP_A1 ota(gm=150u iout=7u rout=1e308 rin=1e308 en=9.8n enk=4)");
+    expect(block).toContain("A__tau_ota_AMP_A1 0 N004 __tau_ota_sink_AMP_A1 __tau_ota_AMP_A1");
+    expect(block).toContain("F__tau_ota_AMP_A1 X 0 V__tau_ota_AMP_A1 1");
+    expect(block).toContain("C__tau_ota_AMP_A1 X 0 28p");
+    expect(block).not.toMatch(/^A1\b/m);
+  });
+
+  it("replaces LTspice's built-in pi constant at full double precision", () => {
+    const block = parseUserModelLibraries([
+      ".subckt AMP 1 2 3 4 5\n.param Cf={1/(2*pi*1Meg)}\n.ends AMP",
+    ]).subckts.get("amp") ?? "";
+    expect(block).toContain("2*3.141592653589793*1Meg");
+    expect(block).not.toMatch(/\bpi\b/i);
+  });
+
+  it("expands LTspice capacitor Rpar into an exact parallel resistor", () => {
+    const block = parseUserModelLibraries([
+      ".subckt AMP 1 2 3 4 5\nC11 2 5 .9p Rpar=2e13\n.ends AMP",
+    ]).subckts.get("amp") ?? "";
+    expect(block).toContain("C11 2 5 .9p");
+    expect(block).toContain("R__tau_rpar_AMP_C11 2 5 2e13");
+    expect(block).not.toMatch(/\brpar\s*=/i);
+  });
+
+  it("maps LTspice's dissipative current-load flag to its documented transfer", () => {
+    const block = parseUserModelLibraries([
+      ".subckt AMP 1 2 3 4 5\nI3 2 3 50u load\n.ends AMP",
+    ]).subckts.get("amp") ?? "";
+    expect(block).toContain("B__tau_load_I3 2 3 I={(50u)*(V(2,3)<=0 ? 4*V(2,3) : V(2,3)<0.5 ? 4*V(2,3)-4*V(2,3)*V(2,3) : 1)}");
+    expect(block).not.toMatch(/^I3\b/m);
+  });
+
+  it("refuses active OTA multiplier ports instead of substituting a two-port gain block", () => {
+    const registry = parseUserModelLibraries([
+      ".subckt AMP 1 2 3 4 5\nA1 1 2 3 4 0 0 5 0 OTA g=1m Vhigh=1e308 Vlow=-1e308\n.ends AMP",
+    ]);
+    expect(() => resolveUserSubckt(registry, "AMP")).toThrow(
+      /Simulation refused: AMP\/A1 uses active four-quadrant multiplier ports.*No approximate or partial circuit was run/,
+    );
+  });
+
   it("strips the fatal bare `noiseless` flag from a captured subckt's instance lines", () => {
     // Real ADI macromodels (ADA4351, MAX4230) tag every internal passive with
     // LTspice's `noiseless` flag. On an R/C/L INSTANCE line ngspice reads it as

@@ -1368,11 +1368,17 @@ export interface SubcircuitDef {
  *  definition, or `null` if it is not a sub-schematic. The Open dialog backs
  *  this with sibling-file reads; tests back it with in-memory fixtures. */
 export type SubcircuitResolver = (symbolType: string) => SubcircuitDef | null;
+/** Resolve user-owned `.asy` defaults without requiring a sibling `.asc` body.
+ * Used for vendor model identity only; defaults are not merged into source
+ * attrs, so lossless save still reflects exactly what the `.asc` contained. */
+export type SymbolMetadataResolver = (symbolType: string) => AsySymbol | null;
 
 /** Options for {@link ascToSchematic}. */
 export interface AscImportOptions {
   /** Resolve a symbol with no built-in kind to a hierarchical sub-schematic. */
   resolveSubcircuit?: SubcircuitResolver;
+  /** Resolve model metadata declared by a user-owned `.asy` symbol. */
+  resolveSymbolMetadata?: SymbolMetadataResolver;
   /** Internal: recursion depth (guards against a symbol referencing itself). */
   _depth?: number;
   /** Internal: shared placement cursor so every flattened block lands in its
@@ -1753,6 +1759,7 @@ export function ascToSchematic(doc: AscDocument, options: AscImportOptions = {})
 
   for (const symbol of doc.symbols) {
     const leaf = symbol.type.replace(/\\/g, "/").toLowerCase().split("/").pop() ?? "";
+    const symbolMetadata = options.resolveSymbolMetadata?.(symbol.type) ?? null;
     if (leaf === "jumper") {
       // A jumper is a graphical net-tie (0 Ω short), not a SPICE device -
       // LTspice emits no netlist line for it. Import it as a wire between its
@@ -1885,6 +1892,21 @@ export function ascToSchematic(doc: AscDocument, options: AscImportOptions = {})
       // export symbol (which for e.g. a 3-pin `nmos` would relocate the bulk
       // pin and change connectivity).
       ...(pinOverride ? { pinOverride, ltSymbolType: symbol.type } : {}),
+      // A vendor symbol can keep its actual simulation alias/model-file only
+      // in the `.asy` defaults (the `.asc` instance often contains InstName
+      // alone). Store those defaults separately: they affect model resolution
+      // but are never re-emitted as source SYMATTR records unless the user edits
+      // the named Simulation model control.
+      ...(kind === "opamp" && symbolMetadata
+        ? {
+          ltModelName: [symbolMetadata.attrs.Value2, symbolMetadata.attrs.Value, leaf]
+            .map((candidate) => candidate?.trim().split(/\s+/)[0] ?? "")
+            .find((candidate) => candidate !== "" && !candidate.includes("=")) ?? leaf,
+          ...(symbolMetadata.attrs.SpiceModel?.trim()
+            ? { ltModelFile: symbolMetadata.attrs.SpiceModel.trim() }
+            : {}),
+        }
+        : {}),
       // Label placement travels with the part, not the symbol bank, so keep it
       // even for a symbol whose geometry Tau could not bank - the exporter
       // decides whether it can be re-emitted.

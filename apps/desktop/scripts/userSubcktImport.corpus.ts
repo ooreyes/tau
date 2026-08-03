@@ -15,10 +15,11 @@
  *
  * The model is the AD8541 rail-to-rail CMOS op-amp from LTspice's own library
  * (Analog Devices macromodel); the file is read from disk and passed verbatim,
- * never copied into this repo (third-party asset). It is wired as a unity-gain
- * buffer on a single 5 V supply: with the switch constructs translated the
- * output must follow the 2.5 V input; a control build without the library
- * confirms the subcircuit is otherwise unresolved.
+ * never copied into this repo (third-party asset). It is imported through the
+ * ordinary five-pin `opamp` path, not pre-converted to Tau's generic `subckt`
+ * carrier. With the model attached its output must follow the 2.5 V input; a
+ * control build without the library must refuse instead of substituting Tau's
+ * ideal/gain-block op-amp.
  *
  * Runs under vitest.corpus.config.ts (scripts/acceptance-corpus.sh), NOT the
  * default suite: it needs a real ngspice and the installed vendor file, and is
@@ -52,14 +53,22 @@ function measValue(output: string, name: string): number {
  */
 function unityBuffer(): { components: SchematicComponent[]; netLabels: NetLabel[] } {
   const pinOverride: PinOverride[] = [
-    { id: "p1", label: "+IN", x: 0, y: 0 },
-    { id: "p2", label: "-IN", x: 0, y: 40 },
-    { id: "p3", label: "V+", x: 0, y: 80 },
-    { id: "p4", label: "V-", x: 0, y: 120 },
-    { id: "p5", label: "OUT", x: 100, y: 0 },
+    { id: "in+", label: "+IN", x: 0, y: 0 },
+    { id: "in-", label: "-IN", x: 0, y: 40 },
+    { id: "v+", label: "V+", x: 0, y: 80 },
+    { id: "v-", label: "V-", x: 0, y: 120 },
+    { id: "out", label: "OUT", x: 100, y: 0 },
   ];
   const u1: SchematicComponent = {
-    id: "U1", kind: "subckt", label: "U1", value: "AD8541", x: 0, y: 0, rotation: 0, pinOverride,
+    id: "U1",
+    kind: "opamp",
+    label: "U1",
+    value: "AD8541",
+    x: 0,
+    y: 0,
+    rotation: 0,
+    pinOverride,
+    ltSymbolType: "Opamps\\AD8541",
   };
   const vsource = (label: string, value: string, x: number, y: number): SchematicComponent => ({
     id: label, kind: "vsource", label, value, x, y, rotation: 0,
@@ -86,16 +95,17 @@ describe.skipIf(!existsSync(LIB_PATH) || !haveNgspice)("user vendor .subckt impo
     // With the library attached: the vendor subckt is inlined and its two
     // LTspice-only switch constructs are rewritten into ngspice's spelling.
     const deck = buildSpiceDeck({ components, wires: [], netLabels, userModelLibraries: [libText] }, analysis);
+    expect(deck.netlist).toMatch(/^XU1 inp vout vpos 0 vout AD8541$/m);
+    expect(deck.netlist).not.toMatch(/^[BE]_U1\b/m);
     expect(deck.netlist).toMatch(/\.model\s+VSY_SWITCH\s+SW\(/i);
     expect(deck.netlist).toMatch(/S1\s+90\s+91\s+50\s+99\s+VSY_SWITCH/i);
     expect(deck.netlist).not.toMatch(/vswitch/i);
     expect(deck.netlist).not.toContain("(50,99)");
 
-    // Control: the SAME schematic with no library inlines no AD8541 definition,
-    // proving the resolution above came from the user library.
-    const without = buildSpiceDeck({ components, wires: [], netLabels }, analysis);
-    expect(without.netlist).not.toMatch(/\.subckt\s+AD8541/i);
-    expect(without.netlist).not.toMatch(/VSY_SWITCH/i);
+    // Control: the SAME named part with no library is an atomic refusal, not
+    // an unresolved native error and not Tau's ideal/generic op-amp.
+    expect(() => buildSpiceDeck({ components, wires: [], netLabels }, analysis))
+      .toThrow(/Simulation refused: U1 \(AD8541\).*attached Model Library.*No approximate or partial circuit was run/);
 
     // Run the resolved deck through the real engine. As a unity buffer the
     // output must track the 2.5 V input to within an op-amp's offset/settling.

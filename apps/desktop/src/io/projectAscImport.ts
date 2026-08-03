@@ -1,4 +1,4 @@
-import { importAsc, makeSubcircuitResolver, parseAsc, type AscImportResult } from "./ascImport";
+import { importAsc, makeSubcircuitResolver, parseAsc, parseAsy, type AscImportResult } from "./ascImport";
 import { joinPath } from "../project/types";
 import { bundledLibraryText } from "../engine/bundledSubcircuits";
 import { modelLibLinesFromDirectives } from "../engine/modelDirectives";
@@ -71,6 +71,7 @@ function safeLibraryPath(ref: string): string | null {
  */
 async function resolveModelLibraries(
   directives: readonly string[],
+  implicitFiles: readonly string[],
   roots: readonly string[],
   options: ProjectAscImportOptions,
 ): Promise<SchematicModelLibrary[]> {
@@ -78,10 +79,11 @@ async function resolveModelLibraries(
   const seen = new Set<string>();
   let totalChars = 0;
 
-  for (const line of modelLibLinesFromDirectives(directives)) {
+  const explicitFiles = modelLibLinesFromDirectives(directives).flatMap((line) => {
     const fileRef = /^\.(include|lib)\s+(.+)$/i.exec(line.trim());
-    if (!fileRef) continue;
-    const file = includedFileName(fileRef[2]);
+    return fileRef ? [includedFileName(fileRef[2])] : [];
+  });
+  for (const file of [...explicitFiles, ...implicitFiles]) {
     // A name the bundled LTspice libraries already satisfy is inlined by the
     // deck builder; reading a same-named file would duplicate every definition.
     if (!file || bundledLibraryText(file)) continue;
@@ -137,6 +139,7 @@ export async function importProjectAsc(
     ...(options.rootPath ? [joinPath(options.rootPath, "sym"), options.rootPath] : []),
   ].filter((root, index, all) => root !== "" && all.indexOf(root) === index);
   const files = new Map<string, { asy: string; asc: string }>();
+  const symbolMetadata = new Map<string, string>();
   const queued = new Set<string>();
   const queue: string[] = [];
   let totalChars = 0;
@@ -184,6 +187,7 @@ export async function importProjectAsc(
       readCandidate(symbolPath, ".asy"),
       readCandidate(symbolPath, ".asc"),
     ]);
+    if (asy) symbolMetadata.set(symbolPath.toLowerCase(), asy);
     if (!asy || !asc) continue;
     files.set(symbolPath.toLowerCase(), { asy, asc });
     for (const nested of parseAsc(asc).symbols) enqueue(nested.type);
@@ -193,7 +197,14 @@ export async function importProjectAsc(
     const safe = safeSymbolPath(symbolType);
     return safe ? files.get(safe.toLowerCase()) ?? null : null;
   });
-  const result = importAsc(text, { resolveSubcircuit: resolver });
+  const result = importAsc(text, {
+    resolveSubcircuit: resolver,
+    resolveSymbolMetadata: (symbolType) => {
+      const safe = safeSymbolPath(symbolType);
+      const asy = safe ? symbolMetadata.get(safe.toLowerCase()) : undefined;
+      return asy ? parseAsy(asy) : null;
+    },
+  });
   // LTspice looks for an included library beside the schematic first, then in
   // its own library folders. Keep that order so a copy the user dropped next
   // to the design wins over a project-wide one of the same name.
@@ -203,6 +214,13 @@ export async function importProjectAsc(
       ? [joinPath(options.rootPath, "lib"), joinPath(options.rootPath, "lib/sub"), options.rootPath]
       : []),
   ].filter((root, index, all) => root !== "" && all.indexOf(root) === index);
-  const modelLibraries = await resolveModelLibraries(result.directives, libraryRoots, options);
+  const implicitModelFiles = result.components
+    .flatMap((component) => component.ltModelFile ? [component.ltModelFile] : []);
+  const modelLibraries = await resolveModelLibraries(
+    result.directives,
+    implicitModelFiles,
+    libraryRoots,
+    options,
+  );
   return { ...result, modelLibraries };
 }

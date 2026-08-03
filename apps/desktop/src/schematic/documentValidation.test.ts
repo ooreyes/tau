@@ -39,6 +39,26 @@ describe("schematic document validation", () => {
     expect(validateSchematicDocument(document)).toEqual(document);
   });
 
+  it("preserves vendor-model metadata but rejects injected names and paths", () => {
+    const base = validDocument();
+    const component = {
+      ...base.components[0],
+      ltSymbolType: "Opamps\\OP07",
+      ltModelName: "LT1001",
+      ltModelFile: "vendor models/LTC.lib",
+    };
+    expect(validateSchematicDocument({ ...base, components: [component] }).components[0])
+      .toMatchObject(component);
+
+    const invalid = (field: string, value: string) => () => validateSchematicDocument({
+      ...base,
+      components: [{ ...component, [field]: value }],
+    });
+    expect(invalid("ltModelName", "LT1001\n.end")).toThrow(/control characters/i);
+    expect(invalid("ltModelName", "LT1001 params=evil")).toThrow(/one SPICE name token/i);
+    expect(invalid("ltModelFile", "LTC.lib\nSYMBOL forged")).toThrow(/control characters/i);
+  });
+
   it("preserves bounded LTspice value-slot provenance and rejects forged slots", () => {
     const base = validDocument();
     const ltExtraAttrs = {

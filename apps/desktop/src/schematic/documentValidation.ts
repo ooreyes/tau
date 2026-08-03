@@ -101,6 +101,18 @@ function text(value: unknown, name: string, maxLength = MAX_TEXT_LENGTH): string
   return value;
 }
 
+function singleLineText(value: unknown, name: string, maxLength = MAX_TEXT_LENGTH): string {
+  const result = text(value, name, maxLength);
+  if (/[\u0000-\u001f\u007f]/.test(result)) fail(`${name} must not contain control characters.`);
+  return result;
+}
+
+function spiceNameText(value: unknown, name: string): string {
+  const result = singleLineText(value, name);
+  if (!result || /[\s=(){};]/.test(result)) fail(`${name} must be one SPICE name token.`);
+  return result;
+}
+
 function coordinate(value: unknown, name: string): number {
   if (typeof value !== "number" || !Number.isFinite(value) || Math.abs(value) > MAX_ABS_COORDINATE) {
     fail(`${name} must be a finite coordinate within the canvas limit.`);
@@ -157,7 +169,13 @@ function component(value: unknown, index: number): SchematicComponent {
     });
   }
   if (source.ltSymbolType !== undefined) {
-    result.ltSymbolType = text(source.ltSymbolType, `components[${index}].ltSymbolType`, MAX_TEXT_LENGTH);
+    result.ltSymbolType = singleLineText(source.ltSymbolType, `components[${index}].ltSymbolType`, MAX_TEXT_LENGTH);
+  }
+  if (source.ltModelName !== undefined) {
+    result.ltModelName = spiceNameText(source.ltModelName, `components[${index}].ltModelName`);
+  }
+  if (source.ltModelFile !== undefined) {
+    result.ltModelFile = singleLineText(source.ltModelFile, `components[${index}].ltModelFile`, MAX_TEXT_LENGTH);
   }
   if (source.ltWindows !== undefined) {
     if (!Array.isArray(source.ltWindows) || source.ltWindows.length > MAX_WINDOWS_PER_COMPONENT) {

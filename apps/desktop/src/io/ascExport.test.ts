@@ -14,6 +14,7 @@ import type { AscDocument } from "./ascImport";
 import type { NetLabel, SchematicComponent, SchematicWire } from "../schematic/types";
 import { ascRewriteRisks, ascSaveBlockReason, schematicTopologySignature } from "../project/types";
 import { CATALOG } from "../schematic/catalog";
+import { withOpampModel } from "../engine/opampModel";
 
 // The same representative LTspice grammar the importer tests use, minus the
 // drawing primitive (which the serializer canonicalizes away).
@@ -895,6 +896,22 @@ const resaveExtendedAttrs = (edit: (c: SchematicComponent) => SchematicComponent
 };
 
 describe("extended SYMATTR slots (Value2 / SpiceLine) round-trip", () => {
+  it("saves a vendor model choice to Value2 without changing the visible part", () => {
+    const source = "Version 4\nSHEET 1 880 680\nSYMBOL Opamps\\OP07 80 80 R0\n"
+      + "SYMATTR InstName U1\nSYMATTR Value OP07\nSYMATTR Value2 LT1001";
+    const imported = importAsc(source);
+    const result = schematicToAsc({
+      components: imported.components.map((component) => withOpampModel(component, "MY_OP07")),
+      wires: imported.wires,
+      netLabels: imported.netLabels,
+    });
+    expect(result.warnings).toEqual([]);
+    expect(result.text).toContain("SYMATTR Value OP07\nSYMATTR Value2 MY_OP07");
+    const reopened = importAsc(result.text).components[0];
+    expect(reopened.value).toBe("OP07 MY_OP07");
+    expect(reopened.ltSymbolType).toBe("Opamps\\OP07");
+  });
+
   it("puts each parameter back in the slot it came from", () => {
     const { text } = resaveExtendedAttrs();
     // The op-amp had no Value; inventing one would hand LTspice a different

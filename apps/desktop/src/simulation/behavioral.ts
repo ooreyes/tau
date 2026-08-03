@@ -186,7 +186,7 @@ export function ltFuncsToNgspice(expr: string): string {
       i += "table(".length;
       continue;
     }
-    const fn = ["atan2(", "round(", "int("].find((f) => lower.startsWith(f, i));
+    const fn = ["atan2(", "round(", "int(", "uplim(", "dnlim("].find((f) => lower.startsWith(f, i));
     if (isWordBoundary && fn) {
       const open = i + fn.length - 1;
       const close = matchParen(expr, open);
@@ -209,6 +209,17 @@ export function ltFuncsToNgspice(expr: string): string {
       if (fn === "int(" && args.length === 1) {
         const a = args[0];
         out += `(((${a}) >= 0) ? floor(${a}) : ceil(${a}))`;
+        i = close + 1;
+        continue;
+      }
+      if ((fn === "uplim(" || fn === "dnlim(") && args.length === 3) {
+        const [x, y, z] = args;
+        // LTspice's soft limits are linear outside the transition zone and use
+        // an exponential shoulder inside it. Preserve the documented z<=0
+        // hard-limit behavior so the generated expression never divides by 0.
+        out += fn === "uplim("
+          ? `(((${z}) <= 0) ? min((${x}),(${y})) : ((((${y})-(${x})) < (${z})) ? ((${y})-(${z})*exp(((${y})-(${x})-(${z}))/(${z}))) : (${x})))`
+          : `(((${z}) <= 0) ? max((${x}),(${y})) : ((((${x})-(${y})) < (${z})) ? ((${y})+(${z})*exp(((${x})-(${y})-(${z}))/(${z}))) : (${x})))`;
         i = close + 1;
         continue;
       }

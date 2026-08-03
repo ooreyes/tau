@@ -24,6 +24,8 @@ export function hierarchyComponentFingerprint(component: SchematicComponent): st
       y: pin.y,
     })),
     ltSymbolType: component.ltSymbolType ?? null,
+    ltModelName: component.ltModelName ?? null,
+    ltModelFile: component.ltModelFile ?? null,
     ltWindows: (component.ltWindows ?? []).map((window) => ({ ...window })),
     ltExtraAttrs: component.ltExtraAttrs
       ? {

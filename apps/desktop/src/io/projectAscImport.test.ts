@@ -165,6 +165,81 @@ describe("importProjectAsc model library resolution", () => {
     expect(io.read).toEqual(["/project/examples/opamp.lib"]);
   });
 
+  it("resolves a vendor op-amp's .asy model alias and implicit library without changing the ASC", async () => {
+    const source = `Version 4
+SHEET 1 880 680
+SYMBOL Opamps/OP07 100 100 R0
+SYMATTR InstName U1
+`;
+    const symbol = `Version 4
+SymbolType CELL
+SYMATTR Value OP07
+SYMATTR Prefix X
+SYMATTR SpiceModel vendor.lib
+SYMATTR Value2 LT1001
+PIN -32 80 NONE 0
+PINATTR PinName In+
+PINATTR SpiceOrder 1
+PIN -32 48 NONE 0
+PINATTR PinName In-
+PINATTR SpiceOrder 2
+PIN 0 32 NONE 0
+PINATTR PinName V+
+PINATTR SpiceOrder 3
+PIN 0 96 NONE 0
+PINATTR PinName V-
+PINATTR SpiceOrder 4
+PIN 32 64 NONE 0
+PINATTR PinName OUT
+PINATTR SpiceOrder 5
+`;
+    const model = ".subckt LT1001 1 2 3 4 5\nE1 5 0 1 2 1Meg\n.ends LT1001\n";
+    const io = probe(new Map([
+      ["/project/sym/Opamps/OP07.asy", symbol],
+      ["/project/lib/sub/vendor.lib", model],
+    ]));
+    const result = await importProjectAsc(source, {
+      sourcePath: "/project/examples/top.asc",
+      rootPath: "/project",
+      pathExists: io.pathExists,
+      readText: io.readText,
+    });
+
+    expect(result.components[0]).toMatchObject({
+      kind: "opamp",
+      ltSymbolType: "Opamps/OP07",
+      ltModelName: "LT1001",
+      ltModelFile: "vendor.lib",
+    });
+    expect(result.modelLibraries).toEqual([{ name: "vendor.lib", text: model }]);
+    const saved = serializeSchematicFile("/project/examples/top.asc", {
+      components: result.components,
+      wires: result.wires,
+      probes: [],
+      netLabels: result.netLabels,
+      directives: result.directives,
+      ascForeignSymbols: result.foreignSymbols,
+      ascHierarchicalBlocks: result.hierarchicalBlocks,
+      userModelLibraries: result.modelLibraries,
+    });
+    expect(saved.contents).toBe(source);
+    expect(saved.contents).not.toMatch(/SYMATTR (?:Value2|SpiceModel)/);
+  });
+
+  it("does not read an implicit model path that escapes through .asy metadata", async () => {
+    const source = "Version 4\nSHEET 1 880 680\nSYMBOL Opamps/OP07 0 0 R0\nSYMATTR InstName U1\n";
+    const symbol = "Version 4\nSymbolType CELL\nSYMATTR Value OP07\nSYMATTR Value2 LT1001\nSYMATTR SpiceModel ../../secret.lib\n";
+    const io = probe(new Map([["/project/sym/Opamps/OP07.asy", symbol]]));
+    const result = await importProjectAsc(source, {
+      sourcePath: "/project/examples/top.asc",
+      rootPath: "/project",
+      pathExists: io.pathExists,
+      readText: io.readText,
+    });
+    expect(result.modelLibraries).toEqual([]);
+    expect(io.asked.every((path) => !path.includes("secret"))).toBe(true);
+  });
+
   it("falls back to the project library folders when the sibling is absent", async () => {
     const io = probe(new Map([["/project/lib/sub/opamp.lib", opampLib]]));
     const result = await importProjectAsc(withInclude("opamp.lib"), {

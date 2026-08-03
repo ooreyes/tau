@@ -2,7 +2,8 @@
  * Acceptance-corpus runner: recursively imports every `.asc` below
  * `~/Downloads/LTspice_export` and `~/Documents/LTspice`, builds an `.op` deck
  * for each, and
- * batch-runs it in the installed ngspice, then prints and asserts the
+ * batch-runs it through Tau's isolated native worker and bundled ngspice, then
+ * prints and asserts the
  * warning-clean / deck-built / op-converged counts.
  *
  * NOT part of the default suite (`pnpm test` includes only `src/**`): run it
@@ -15,20 +16,27 @@
  *   CORPUS_SKIP_NGSPICE=1  import + deck-build only (no op runs)
  *   CORPUS_EXTRA_ROOTS=…   path-delimited external roots, walked recursively
  *   CORPUS_SYMBOL_ROOTS=…  additional .asy/.asc search roots for hierarchy
+ *   CORPUS_MATCH=…         debug only: run files whose display path contains text
+ *   CORPUS_DECK_DIR=…      debug only: retain generated decks in this directory
  */
-import { readFileSync, readdirSync, existsSync, writeFileSync, mkdtempSync, rmSync } from "node:fs";
-import { spawnSync } from "node:child_process";
+import { readFileSync, readdirSync, existsSync, writeFileSync, mkdtempSync, mkdirSync, rmSync } from "node:fs";
 import { basename, delimiter, isAbsolute, join, normalize, relative, sep } from "node:path";
 import { homedir, tmpdir } from "node:os";
 import { describe, it, expect } from "vitest";
-import { importAsc, makeSubcircuitResolver, decodeSchematicText } from "../src/io/ascImport";
+import { importAsc, makeSubcircuitResolver, decodeSchematicText, parseAsy, type AsySymbol } from "../src/io/ascImport";
 import { buildParamScope } from "../src/simulation/paramScope";
 import { buildSpiceDeck } from "../src/engine/spiceNetlist";
 import { validateSchematicDocument } from "../src/schematic/documentValidation";
-import { summarizeCorpus, formatCorpusReport, ngspiceOpSucceeded, type CorpusRow } from "../src/io/corpusReport";
+import { summarizeCorpus, formatCorpusReport, type CorpusRow } from "../src/io/corpusReport";
+import { opampIdentity } from "../src/engine/opampModel";
+import { parseUserModelLibraries, resolveUserSubckt, type UserModelLibraryRegistry } from "../src/engine/userModelLibrary";
+import { ltspiceLibRoot } from "./ltspiceLibRoot";
+import { nativeWorkerPaths, runNativeSpiceWorker } from "./nativeSpiceWorker";
 
 const HOME = homedir();
 const NGSPICE_TIMEOUT_MS = 20_000;
+const CORPUS_MATCH = process.env.CORPUS_MATCH?.trim().toLowerCase() ?? "";
+const CORPUS_DECK_DIR = process.env.CORPUS_DECK_DIR?.trim() ?? "";
 
 function envPaths(name: string): string[] {
   return (process.env[name] ?? "")
@@ -45,6 +53,9 @@ const EXTRA_SYMBOL_ROOTS = [
 
 const DOWNLOADS_ROOT = join(HOME, "Downloads", "LTspice_export");
 const DOCUMENTS_ROOT = join(HOME, "Documents", "LTspice");
+const LTSPICE_LIB_ROOT = ltspiceLibRoot();
+const symbolMetadataCache = new Map<string, AsySymbol | null>();
+const modelRegistryCache = new Map<string, UserModelLibraryRegistry | null>();
 
 /** Every user-owned tree the Definition of Done requires this runner to cover. */
 const CORPUS_ROOTS = [
@@ -92,6 +103,7 @@ function collectCorpus(): CorpusFile[] {
   return files
     .filter((file, index, all) => all.findIndex((candidate) => candidate.path === file.path) === index)
     .filter((file) => process.env.CORPUS_CANONICAL_ONLY !== "1" || file.canonical)
+    .filter((file) => !CORPUS_MATCH || file.display.toLowerCase().includes(CORPUS_MATCH))
     .sort((a, b) => a.display.localeCompare(b.display));
 }
 
@@ -122,6 +134,66 @@ function siblingResolver(parentDir: string) {
   });
 }
 
+/** Read only the user's installed/staged LTspice `.asy` metadata. The ASC text
+ * usually omits Value2/SpiceModel defaults, but those fields select the real
+ * vendor subcircuit and file. No third-party bytes are copied into Tau. */
+function installedSymbolMetadata(symbolType: string): AsySymbol | null {
+  const relativeSymbol = normalize(symbolType.replace(/[\\/]+/g, sep));
+  if (
+    !relativeSymbol
+    || isAbsolute(relativeSymbol)
+    || relativeSymbol === ".."
+    || relativeSymbol.startsWith(`..${sep}`)
+  ) return null;
+  const key = relativeSymbol.toLowerCase();
+  if (symbolMetadataCache.has(key)) return symbolMetadataCache.get(key) ?? null;
+  const roots = [...EXTRA_SYMBOL_ROOTS, join(LTSPICE_LIB_ROOT, "sym")];
+  for (const root of roots) {
+    const path = join(root, `${relativeSymbol}.asy`);
+    const rel = relative(root, path);
+    if (rel === ".." || rel.startsWith(`..${sep}`) || isAbsolute(rel) || !existsSync(path)) continue;
+    const parsed = parseAsy(decodeSchematicText(readFileSync(path)));
+    symbolMetadataCache.set(key, parsed);
+    return parsed;
+  }
+  symbolMetadataCache.set(key, null);
+  return null;
+}
+
+/** Extract only the selected vendor block from the user's model file. Parsing
+ * is cached per file so the 4k corpus never repeatedly scans LTC.lib/ADI*.lib. */
+function attachedOpampBlocks(components: readonly import("../src/schematic/types").SchematicComponent[]): string[] {
+  const blocks = new Map<string, string>();
+  for (const component of components) {
+    if (component.kind !== "opamp" || !component.ltModelFile) continue;
+    const identity = opampIdentity(component);
+    if (identity.mode !== "vendor") continue;
+    const relativeFile = normalize(component.ltModelFile.replace(/[\\/]+/g, sep));
+    if (
+      !relativeFile
+      || isAbsolute(relativeFile)
+      || relativeFile === ".."
+      || relativeFile.startsWith(`..${sep}`)
+    ) continue;
+    let registry = modelRegistryCache.get(relativeFile.toLowerCase());
+    if (registry === undefined) {
+      registry = null;
+      for (const root of [join(LTSPICE_LIB_ROOT, "sub"), LTSPICE_LIB_ROOT]) {
+        const path = join(root, relativeFile);
+        const rel = relative(root, path);
+        if (rel === ".." || rel.startsWith(`..${sep}`) || isAbsolute(rel) || !existsSync(path)) continue;
+        registry = parseUserModelLibraries([decodeSchematicText(readFileSync(path))]);
+        break;
+      }
+      modelRegistryCache.set(relativeFile.toLowerCase(), registry);
+    }
+    if (!registry) continue;
+    const block = resolveUserSubckt(registry, identity.modelName);
+    if (block) blocks.set(identity.modelName.toLowerCase(), block);
+  }
+  return [...blocks.values()];
+}
+
 function runFile(file: CorpusFile, tmpDir: string, skipNgspice: boolean): CorpusRow {
   const row: CorpusRow = {
     file: file.display,
@@ -135,7 +207,10 @@ function runFile(file: CorpusFile, tmpDir: string, skipNgspice: boolean): Corpus
   let imported;
   try {
     const text = decodeSchematicText(readFileSync(file.path));
-    imported = importAsc(text, { resolveSubcircuit: siblingResolver(join(file.path, "..")) });
+    imported = importAsc(text, {
+      resolveSubcircuit: siblingResolver(join(file.path, "..")),
+      resolveSymbolMetadata: installedSymbolMetadata,
+    });
     row.imported = true;
     row.warnings = imported.warnings.length;
   } catch (error) {
@@ -167,6 +242,7 @@ function runFile(file: CorpusFile, tmpDir: string, skipNgspice: boolean): Corpus
   let netlist: string;
   try {
     const params = buildParamScope(imported.directives);
+    const userModelLibraries = attachedOpampBlocks(imported.components);
     const deck = buildSpiceDeck(
       {
         components: imported.components,
@@ -174,6 +250,7 @@ function runFile(file: CorpusFile, tmpDir: string, skipNgspice: boolean): Corpus
         netLabels: imported.netLabels,
         params,
         directives: imported.directives,
+        userModelLibraries,
         ascForeignSymbols: imported.foreignSymbols,
       },
       { kind: "op" },
@@ -187,27 +264,30 @@ function runFile(file: CorpusFile, tmpDir: string, skipNgspice: boolean): Corpus
 
   if (skipNgspice) return row;
 
-  const cirPath = join(tmpDir, `${file.display.replace(/[^A-Za-z0-9._-]/g, "_")}.cir`);
+  const deckDir = CORPUS_DECK_DIR || tmpDir;
+  if (CORPUS_DECK_DIR) mkdirSync(deckDir, { recursive: true });
+  const cirPath = join(deckDir, `${file.display.replace(/[^A-Za-z0-9._-]/g, "_")}.cir`);
   writeFileSync(cirPath, netlist);
-  const run = spawnSync("ngspice", ["-b", cirPath], {
-    encoding: "utf8",
-    timeout: NGSPICE_TIMEOUT_MS,
-  });
-  const output = `${run.stdout ?? ""}\n${run.stderr ?? ""}`;
-  row.opConverged = ngspiceOpSucceeded(output, run.status);
+  const run = runNativeSpiceWorker(netlist, NGSPICE_TIMEOUT_MS);
+  const output = [run.error, ...run.messages].filter(Boolean).join("\n");
+  row.opConverged = run.ok;
   if (!row.opConverged) {
-    const marker =
-      output
-        .split("\n")
-        .find((l) => /singular|aborted|convergence|fatal|error/i.test(l))
-        ?.trim() ?? (run.status === null ? "ngspice timeout" : `ngspice exit ${run.status}`);
-    row.error = `op: ${marker.slice(0, 100)}`;
+    const lines = output.split("\n");
+    const markerIndex = lines.findIndex((line) => /singular|aborted|convergence|fatal|error/i.test(line));
+    const marker = markerIndex >= 0
+      ? lines
+        .slice(markerIndex, markerIndex + 4)
+        .map((line) => line.trim())
+        .filter(Boolean)
+        .join(" | ")
+      : (run.error ?? "Tau's native ngspice worker returned no result");
+    row.error = `op: ${marker.slice(0, 320)}`;
   }
   return row;
 }
 
 const corpus = collectCorpus();
-const skipNgspice = process.env.CORPUS_SKIP_NGSPICE === "1" || spawnSync("ngspice", ["--version"], { encoding: "utf8" }).error !== undefined;
+const skipNgspice = process.env.CORPUS_SKIP_NGSPICE === "1" || nativeWorkerPaths() === null;
 
 describe.skipIf(corpus.length === 0)("acceptance corpus (user's own LTspice files)", () => {
   it("imports, builds, and op-solves the corpus at or above the recorded baseline", async () => {
@@ -272,7 +352,7 @@ describe.skipIf(corpus.length === 0)("acceptance corpus (user's own LTspice file
       // ALL 82 op-converge as of the polarity fix.
       // `expect.soft` is deliberate: a missing input must not mask a separate
       // warning/deck/convergence regression in the same run's report.
-      if (EXTRA_ROOTS.length === 0) {
+      if (EXTRA_ROOTS.length === 0 && !CORPUS_MATCH) {
         expect.soft(canonicalSummary.total, "canonical input files discovered").toBeGreaterThanOrEqual(82);
         expect.soft(canonicalSummary.imported, "canonical imports").toBeGreaterThanOrEqual(82);
         expect.soft(canonicalSummary.warningClean, "canonical warning-clean floor").toBeGreaterThanOrEqual(80);

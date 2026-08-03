@@ -1,0 +1,111 @@
+diff --git a/src/xspice/icm/analog/ota/cfunc.mod b/src/xspice/icm/analog/ota/cfunc.mod
+index e82ee0e..9b16ef4 100644
+--- a/src/xspice/icm/analog/ota/cfunc.mod
++++ b/src/xspice/icm/analog/ota/cfunc.mod
+@@ -23,6 +23,7 @@ SUMMARY
+ ================================================================================
+ */
+ 
++#include <math.h>
+ #include <stdlib.h>
+ 
+ 
+@@ -31,6 +32,7 @@ void cm_ota(ARGS)
+     double gm_val = PARAM(gm);
+     double rout = PARAM(rout);
+     double rin = PARAM(rin);
++    double iout = PARAM(iout);
+ 
+     Mif_Complex_t ac_gain;
+ 
+@@ -84,8 +86,20 @@ void cm_ota(ARGS)
+         double v_in = INPUT(inp);
+         double v_out = INPUT(out);
+ 
+-        OUTPUT(out) = gm_val * v_in + v_out / rout;
+-        PARTIAL(out, inp) = gm_val;
++        double drive;
++        double drive_gain;
++        if (iout < 1.0e29) {
++            double limited = tanh(gm_val * v_in / iout);
++            drive = iout * limited;
++            drive_gain = gm_val * (1.0 - limited * limited);
++        }
++        else {
++            drive = gm_val * v_in;
++            drive_gain = gm_val;
++        }
++
++        OUTPUT(out) = drive + v_out / rout;
++        PARTIAL(out, inp) = drive_gain;
+         PARTIAL(out, out) = 1.0 / rout;
+ 
+         OUTPUT(inp) = v_in / rin;
+@@ -95,7 +109,14 @@ void cm_ota(ARGS)
+         Mif_Complex_t ac_rout;
+         Mif_Complex_t ac_rin;
+ 
+-        ac_gain.real = gm_val;
++        double v_in = INPUT(inp);
++        if (iout < 1.0e29) {
++            double limited = tanh(gm_val * v_in / iout);
++            ac_gain.real = gm_val * (1.0 - limited * limited);
++        }
++        else {
++            ac_gain.real = gm_val;
++        }
+         ac_gain.imag = 0.0;
+         AC_GAIN(out, inp) = ac_gain;
+ 
+diff --git a/src/xspice/icm/analog/ota/ifspec.ifs b/src/xspice/icm/analog/ota/ifspec.ifs
+index 0a6721a..6c6a3f4 100644
+--- a/src/xspice/icm/analog/ota/ifspec.ifs
++++ b/src/xspice/icm/analog/ota/ifspec.ifs
+@@ -41,7 +41,7 @@ Parameter_Name:     gm                  rout
+ Description:        "transconductance"  "output resistance"
+ Data_Type:          real                real
+ Default_Value:      1.0e-3              1.0e12
+-Limits:             [1e-15 -]           [0 -]
++Limits:             -                   [0 -]
+ Vector:             no                  no
+ Vector_Bounds:      -                   -
+ Null_Allowed:       yes                 yes
+@@ -50,6 +50,19 @@ Null_Allowed:       yes                 yes
+ PARAMETER_TABLE:
+ 
+ 
++Parameter_Name:     iout
++Description:        "symmetric output current limit"
++Data_Type:          real
++Default_Value:      1.0e30
++Limits:             [1e-15 -]
++Vector:             no
++Vector_Bounds:      -
++Null_Allowed:       yes
++
++
++PARAMETER_TABLE:
++
++
+ Parameter_Name:     rin
+ Description:        "input resistance"
+ Data_Type:          real
+@@ -110,5 +123,3 @@ Limits:             -
+ Vector:             no
+ Vector_Bounds:      -
+ Null_Allowed:       yes
+-
+-
+diff --git a/src/xspice/icm/xtradev/sidiode/ifspec.ifs b/src/xspice/icm/xtradev/sidiode/ifspec.ifs
+index ba0754e..9cb556e 100644
+--- a/src/xspice/icm/xtradev/sidiode/ifspec.ifs
++++ b/src/xspice/icm/xtradev/sidiode/ifspec.ifs
+@@ -60,7 +60,7 @@ Parameter_Name:    vfwd                      vrev
+ Description:       "forward voltage"         "reverse breakdown voltage"
+ Data_Type:     	   real                      real
+ Default_Value:     0.                        1e30
+-Limits:            [0. -]                    [0. -]
++Limits:            -                         [0. -]
+ Vector:            no                        no
+ Vector_Bounds:      -                         -
+ Null_Allowed:      yes                       yes

@@ -21,6 +21,7 @@ import { linearBSourceModel, resolveBehavioralTerms, type LinearBehavioral } fro
 import { parseAcSpec } from "../engine/acSpec";
 import { previewCurrentControlledSwitchMessage } from "../schematic/currentControlledSwitch";
 import { previewChargeDefinedCapacitorMessage, previewNegativeCapacitorMessage } from "../schematic/behavioralCapacitor";
+import { previewVendorOpampMessage } from "../engine/opampModel";
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -309,6 +310,8 @@ export function runAcSweep(
     const chargeCapacitorMessage = previewChargeDefinedCapacitorMessage(schematic.components);
     if (chargeCapacitorMessage) return fail(chargeCapacitorMessage, circuit);
     const components = resolveComponentValues(schematic.components, schematic.params ?? EMPTY_SCOPE);
+    const vendorOpampMessage = previewVendorOpampMessage(components);
+    if (vendorOpampMessage) return fail(vendorOpampMessage, circuit);
     const negativeCapacitorMessage = previewNegativeCapacitorMessage(components);
     if (negativeCapacitorMessage) return fail(negativeCapacitorMessage, circuit);
     circuit = extractCircuit(components, schematic.wires, schematic.netLabels ?? []);

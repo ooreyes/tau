@@ -1892,6 +1892,7 @@ function App() {
           <ComponentsRail
             focusSignal={componentFocusSignal}
             onNotice={showNotice}
+            onOpenModelLibraries={() => setModelLibrariesOpen(true)}
             resize={componentsRailResize}
             maxWidth={componentsRailResponsiveMax}
           />
