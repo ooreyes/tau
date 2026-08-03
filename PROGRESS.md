@@ -9,16 +9,15 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-03 02:01 CDT**
+**Status: IN PROGRESS - 2026-08-03 02:09 CDT**
 
-AD8235, LT1168, LT1194, and LT1795 are verified multi-pin amplifier symbols,
-not five-pin op-amps. Tau no longer assigns the guessed opampO bank that put
-REF/output/supply terminals on the wrong nets and produced singular or shorted
-VCVS decks. Their exact foreign records survive save, and simulation refuses
-atomically by part/model name until the user supplies real symbols/models. The
-4,012-file corpus now has zero non-refusal hard failures: 522 warning-clean,
-522 deck-built, 522 op-converged, 3,490 honest refusals. Canonical stays 80/82.
-Scheduler stays unloaded.
+Claimed unit: remove the generic-gain substitution for named five-pin vendor
+op-amps. A named part must resolve to an exact user-supplied `.subckt` and emit
+its verified LTspice five-terminal SpiceOrder, or refuse atomically with a
+model-specific attachment action. The Properties/Value UI will expose the
+part and simulation model as named controls/status, not a raw parameter line.
+Prove attached-model native behavior, missing-model refusal, exact ASC save,
+corpus impact, and packaged UI. Scheduler stays unloaded.
 
 Previous completed unit:
 

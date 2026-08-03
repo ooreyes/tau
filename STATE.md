@@ -5,14 +5,15 @@ The working memory of an unattended loop that starts from zero every fire.
 
 ## Now
 
-**Status:** DONE - 2026-08-03 02:01 CDT
+**Status:** IN PROGRESS - 2026-08-03 02:09 CDT
 
-The extended corpus now has zero hard failures. AD8235, LT1168, LT1194, and
-LT1795 were multi-pin amplifier symbols forced through a guessed five-pin bank;
-Tau now preserves and refuses them by name instead of producing false generic
-gain blocks. Corpus: 4,012 imported/schema-valid, 522 warning-clean/deck-built/
-op-converged, 3,490 explicit refusals; canonical remains 80/82. Scheduler
-remains unloaded.
+Current unit: eliminate named five-pin vendor op-amps' generic gain-block
+substitution. Resolve a real attached `.subckt` using the imported part/model
+identity and verified LTspice terminal order; refuse before native execution
+when the model is absent or incompatible. Replace the inspector's misleading
+"Imported / custom" raw parameter line with named Part / Simulation model /
+model-status controls and an Attach Model Library action. Scheduler remains
+unloaded.
 
 **Product UX contract (Omar, 2026-08-03): Tau is not a prettier command-line
 wrapper.** Known SPICE semantics must appear as named, editable controls in the
