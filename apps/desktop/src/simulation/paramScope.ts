@@ -437,7 +437,11 @@ export function substituteBehavioralBraces(text: string, ctx: ParamScope = EMPTY
  * common no-parameter circuit pays nothing.
  */
 export function resolveComponentValues(components: SchematicComponent[], ctx: ParamScope = EMPTY_SCOPE): SchematicComponent[] {
-  if (Object.keys(ctx.scope).length === 0 && Object.keys(ctx.funcs).length === 0) return components;
+  // LTspice also braces self-contained arithmetic (`{5.1Meg+120K}`), not only
+  // expressions that reference `.param`. The old empty-scope fast path left
+  // those braces intact and the ordinary quantity parser then rejected real
+  // R/C/L/V values. Preserve a fast path only when there is nothing to resolve.
+  if (!components.some((component) => component.value?.includes("{"))) return components;
   return components.map((component) =>
     component.value && component.value.includes("{")
       ? { ...component, value: substituteBraces(component.value, ctx) }

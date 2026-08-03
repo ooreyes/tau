@@ -70,8 +70,15 @@ describe("resolveComponentValues / substituteBraces", () => {
     expect(substituteBraces("10k", params)).toBe("10k");
   });
 
-  it("returns the same array reference when scope is empty (fast path)", () => {
-    const list = [resistor(0, 0, "{Rtop}")];
+  it("evaluates a self-contained LTspice brace expression without requiring .param", () => {
+    const item = resistor(0, 0, "{5.1Meg+120K}");
+    const out = resolveComponentValues([item]);
+    expect(out[0]).not.toBe(item);
+    expect(out[0].value).toBe("5220000");
+  });
+
+  it("keeps the array fast path when no component contains braces", () => {
+    const list = [resistor(0, 0, "1k")];
     expect(resolveComponentValues(list)).toBe(list);
   });
 

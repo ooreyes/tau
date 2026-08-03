@@ -25,6 +25,7 @@ import { stripAcSpec } from "../engine/acSpec";
 import { parseTransientSource, isFunctionSource } from "./sourceWaveform";
 import { DIODE_KINDS, diodeConductance, diodeCurrent, diodeSpecFor, limitDiodeVoltage } from "./diodeCompanion";
 import { previewCurrentControlledSwitchMessage } from "../schematic/currentControlledSwitch";
+import { previewChargeDefinedCapacitorMessage } from "../schematic/behavioralCapacitor";
 
 // ---------------------------------------------------------------------------
 // Result type (mirrors linearTransient's style)
@@ -143,6 +144,8 @@ export function runOperatingPoint(
   let circuit: ExtractedCircuit | undefined;
 
   try {
+    const chargeCapacitorMessage = previewChargeDefinedCapacitorMessage(schematic.components);
+    if (chargeCapacitorMessage) return fail(chargeCapacitorMessage, circuit);
     const components = resolveComponentValues(schematic.components, schematic.params ?? EMPTY_SCOPE);
     circuit = extractCircuit(components, schematic.wires, schematic.netLabels ?? []);
 

@@ -1,5 +1,6 @@
 import type { ComponentKind } from "./types";
 import { parseComparator } from "../engine/comparatorSpec";
+import { parseIcValue, stripIcSpec } from "../engine/icSpec";
 
 /**
  * Structured parameter fields per component kind. The canonical storage stays a
@@ -66,7 +67,13 @@ const SCHEMA: Partial<Record<ComponentKind, ParamField[]>> = {
   // opamp uses a dedicated model chooser; testpoint / ground take no parameters.
 };
 
-export function paramFields(kind: ComponentKind): ParamField[] {
+const CHARGE_CAPACITOR_FIELDS: ParamField[] = [
+  { key: "charge", label: "Charge expression", unit: "" },
+  { key: "ic", label: "Initial voltage", unit: "V" },
+];
+
+export function paramFields(kind: ComponentKind, value = ""): ParamField[] {
+  if (kind === "capacitor" && /^\s*Q\s*=/i.test(value)) return CHARGE_CAPACITOR_FIELDS;
   return SCHEMA[kind] ?? [];
 }
 
@@ -74,8 +81,14 @@ const AC_KINDS = new Set<ComponentKind>(["vac", "iac"]);
 
 /** Split a value string into its structured fields for the given kind. */
 export function decodeParams(kind: ComponentKind, value: string): Record<string, string> {
-  const fields = paramFields(kind);
+  const fields = paramFields(kind, value);
   if (fields.length === 0) return {};
+  if (kind === "capacitor" && /^\s*Q\s*=/i.test(value)) {
+    return {
+      charge: stripIcSpec(value).replace(/^\s*Q\s*=\s*/i, "").trim(),
+      ic: parseIcValue(value) ?? "",
+    };
+  }
   if (fields.length === 1) return { [fields[0].key]: value.trim() };
   if (AC_KINDS.has(kind)) {
     const t = value.trim().split(/[\s,;@]+/).filter(Boolean);
@@ -137,6 +150,11 @@ function decodeMosfetParams(value: string, fallbackModel: string): Record<string
 
 /** Re-assemble a value string from structured fields (solver-compatible form). */
 export function encodeParams(kind: ComponentKind, values: Record<string, string>): string {
+  if (kind === "capacitor" && Object.prototype.hasOwnProperty.call(values, "charge")) {
+    const charge = (values.charge ?? "").trim();
+    const ic = (values.ic ?? "").trim();
+    return `Q=${charge}${ic ? ` IC=${ic}` : ""}`;
+  }
   const fields = paramFields(kind);
   if (fields.length === 1) return (values[fields[0].key] ?? "").trim();
   if (AC_KINDS.has(kind)) {

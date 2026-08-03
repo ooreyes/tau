@@ -61,6 +61,44 @@ describe("buildSpiceDeck", () => {
     expect(deck.netlist).toContain(".options gmin=1e-12 reltol=1e-4 abstol=1e-12 vntol=1e-7");
   });
 
+  it("evaluates LTspice brace arithmetic even when it references no .param", () => {
+    const components = [
+      component("vsource", "V1", "{3.3/2}", 0, 32),
+      component("resistor", "R1", "{5.1Meg+120K}", 96, 0),
+      component("ground", "", "", 0, 64),
+      component("ground", "", "", 128, 0),
+    ];
+    const wires = [wire("w1", [{ x: 0, y: 0 }, { x: 64, y: 0 }])];
+
+    const deck = buildSpiceDeck({ components, wires }, { kind: "op" });
+
+    expect(deck.netlist).toContain("V1 n001 0 DC 1.65");
+    expect(deck.netlist).toContain("R1 n001 0 5220000");
+    expect(deck.netlist).not.toContain("{");
+  });
+
+  it("emits LTspice charge-defined capacitors as native ngspice Q expressions", () => {
+    const components = [
+      component("vsource", "V1", "PULSE(0 1 0 1n 1n 5u 10u)", 0, 32),
+      component("resistor", "R1", "1k", 96, 0),
+      component("capacitor", "C1", "Q=100p*x*sin(2*pi*2K*time)+1p*V(out) IC=0", 224, 0),
+      component("ground", "", "", 0, 64),
+      component("ground", "", "", 256, 0),
+    ];
+    const wires = [
+      wire("w1", [{ x: 0, y: 0 }, { x: 64, y: 0 }]),
+      wire("w2", [{ x: 128, y: 0 }, { x: 192, y: 0 }]),
+    ];
+
+    const deck = buildSpiceDeck(
+      { components, wires, netLabels: [{ id: "out", x: 192, y: 0, text: "out" }] },
+      { kind: "tran", stopTime: 20e-6, steps: 200 },
+    );
+
+    expect(deck.netlist).toContain("C1 out 0 Q='100p*(V(out,0))*sin(2*pi*2K*time)+1p*V(out)' IC=0");
+    expect(deck.netlist).not.toContain("needs a valid F value");
+  });
+
   it("preserves authored transient output-start and maximum-step controls", () => {
     const components = [component("resistor", "R1", "1k", 0, 0), component("ground", "", "", 64, 0)];
     const deck = buildSpiceDeck({ components, wires: [] }, {

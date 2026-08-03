@@ -1485,11 +1485,11 @@ export function ComponentInspector({ selected }: { selected: SchematicComponent 
   const setLabel = useSchematic((s) => s.setLabel);
   const beginChange = useSchematic((s) => s.beginChange);
   const editKeyRef = useRef<string | null>(null);
-  const fields = selected && entry ? paramFields(selected.kind) : [];
   // Empty catalog values (e.g. Class-D MOSFETs) still show editable defaults.
   const valueSource = selected
     ? (selected.value.trim() || entry?.defaultValue || "")
     : "";
+  const fields = selected && entry ? paramFields(selected.kind, valueSource) : [];
   const decoded = selected ? decodeParams(selected.kind, valueSource) : {};
   const visibleFields = fields.map((field) => ({
     ...field,

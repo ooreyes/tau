@@ -35,3 +35,17 @@ describe("MOSFET param encode/decode", () => {
     expect(decodeParams("inductor", "10u")).toEqual({ l: "10u" });
   });
 });
+
+describe("charge-defined capacitor controls", () => {
+  it("decodes the LTspice Q expression and initial voltage into named fields", () => {
+    expect(decodeParams("capacitor", "Q=100p*x*sin(2*pi*2K*time) IC=0.25")).toEqual({
+      charge: "100p*x*sin(2*pi*2K*time)",
+      ic: "0.25",
+    });
+  });
+
+  it("re-encodes edits without requiring the user to type Q= or IC= syntax", () => {
+    expect(encodeParams("capacitor", { charge: "200p*x", ic: "1" })).toBe("Q=200p*x IC=1");
+    expect(encodeParams("capacitor", { charge: "200p*x", ic: "" })).toBe("Q=200p*x");
+  });
+});

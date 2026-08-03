@@ -1,5 +1,5 @@
 import { extractCircuit, isResistiveWire, netAtPoint, spiceSafeToken, type ExtractedCircuit, type ExtractedComponent } from "../schematic/netlist";
-import { resolveComponentValues, expandDirectiveLines, inlineFuncCalls, substituteKnownBraces, substituteBehavioralBraces, substituteScopeIdentifiers, EMPTY_SCOPE, type ParamScope } from "../simulation/paramScope";
+import { resolveComponentValues, expandDirectiveLines, inlineFuncCalls, substituteKnownBraces, substituteBehavioralBraces, substituteScopeIdentifiers, substituteIdentifierExpressions, EMPTY_SCOPE, type ParamScope } from "../simulation/paramScope";
 import type { ComponentKind, NetLabel, SchematicComponent, SchematicForeignSymbol, SchematicWire } from "../schematic/types";
 import { parseQuantity } from "../simulation/quantity";
 import { decodeParams } from "../schematic/params";
@@ -180,9 +180,10 @@ const DEFAULT_MODELS = [
  * are intentionally generic starter models; named vendor models belong in an
  * imported library, not in the schematic renderer or React UI.
  */
-/** LTspice behavioral element values: a `V=` / `I=` / `R=` expression prefix. */
+/** LTspice behavioral element values: V/I sources, behavioral resistance, and
+ * the charge-defined capacitor's `Q=` expression. */
 function isBehavioralValue(value: string | undefined): boolean {
-  return !!value && /^\s*[VIR]\s*=/i.test(value);
+  return !!value && /^\s*[VIRQ]\s*=/i.test(value);
 }
 
 function importedSymbolLeaf(component: SchematicComponent): string {
@@ -1012,6 +1013,8 @@ function componentLines(entry: ExtractedComponent, index: number, name: string, 
       return [`${name} ${node("a")} ${node("b")} ${nonZeroNumberValue(component, "Ohm")}`];
     }
     case "capacitor": {
+      const charge = behavioralCapacitorDeckValue(component, node("a"), node("b"), params);
+      if (charge) return [`${name} ${node("a")} ${node("b")} ${charge}`];
       // An imported crystal (Misc\xtal) lands as a capacitor whose value carries
       // the motional-branch params (Lser/Cpar); expand it into the real BVD
       // model so the deck builds and a Pierce/Colpitts oscillator can resonate,
@@ -1709,6 +1712,41 @@ function positiveNumberFromText(component: SchematicComponent, text: string, uni
     throw new Error(`${component.label || component.kind} needs a positive ${unit} value (got ${value}).`);
   }
   return value.toString();
+}
+
+/** LTspice's general nonlinear capacitor defines charge rather than a constant
+ * capacitance: `Q=<expression>`. ngspice has the same native device, but quotes
+ * the expression and has no LTspice `x` shorthand, so bind `x` to the voltage
+ * across this exact instance before applying the ordinary behavioral-function
+ * translations. Returning null distinguishes an ordinary capacitor. */
+function behavioralCapacitorDeckValue(
+  component: SchematicComponent,
+  positiveNode: string,
+  negativeNode: string,
+  params: ParamScope,
+): string | null {
+  const value = stripIcSpec(component.value).trim();
+  const match = /^Q\s*=\s*(.+)$/is.exec(value);
+  if (!match) return null;
+
+  let expr = match[1].trim();
+  if ((expr.startsWith("'") && expr.endsWith("'")) || (expr.startsWith('"') && expr.endsWith('"'))) {
+    expr = expr.slice(1, -1).trim();
+  }
+  if (!expr || /['"\r\n]/.test(expr)) {
+    throw new Error(`${component.label || "A capacitor"} needs a valid Q=<charge expression> value.`);
+  }
+
+  expr = inlineFuncCalls(expr, params.funcs);
+  expr = substituteScopeIdentifiers(substituteBehavioralBraces(expr, params), params);
+  // Reuse the behavioral identifier scanner so a legitimate node accessor
+  // such as V(x) keeps its node name; only LTspice's bare special `x` changes.
+  expr = substituteIdentifierExpressions(
+    expr,
+    new Map([["x", `V(${positiveNode},${negativeNode})`]]),
+  );
+  expr = moduloToFloor(ltFuncsToNgspice(statFuncsToNgspice(ifToTernary(expr))));
+  return `Q='${expr}'${icSpecDeckText(component.value)}`;
 }
 
 /** LTspice's passive `Rser=` is a real series parasitic, but ngspice's C/L

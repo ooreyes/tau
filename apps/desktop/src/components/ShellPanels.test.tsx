@@ -204,6 +204,31 @@ describe("ComponentInspector - imported op-amp parameters", () => {
   });
 });
 
+describe("ComponentInspector - charge-defined capacitor", () => {
+  it("exposes named charge and initial-voltage controls instead of one raw Q= field", () => {
+    const selected = {
+      id: "c-q",
+      kind: "capacitor" as const,
+      x: 160,
+      y: 160,
+      rotation: 0 as const,
+      value: "Q=100p*x*sin(2*pi*2K*time) IC=0.25",
+      label: "C1",
+    };
+    useSchematic.setState({ components: [selected], selectedId: selected.id, selectedIds: [selected.id] });
+    render(<ComponentInspector selected={selected} />);
+
+    const charge = screen.getByRole("textbox", { name: "Charge expression" }) as HTMLInputElement;
+    const initialVoltage = screen.getByRole("textbox", { name: "Initial voltage" }) as HTMLInputElement;
+    expect(charge.value).toBe("100p*x*sin(2*pi*2K*time)");
+    expect(initialVoltage.value).toBe("0.25");
+    expect(screen.queryByRole("textbox", { name: "Capacitance" })).toBeNull();
+
+    fireEvent.change(charge, { target: { value: "200p*x" } });
+    expect(useSchematic.getState().components[0].value).toBe("Q=200p*x IC=0.25");
+  });
+});
+
 describe("ComponentsRail - responsive shell budget", () => {
   function Harness({ maxWidth, embedded = false }: { maxWidth: number; embedded?: boolean }) {
     const resize = usePanelWidth({
