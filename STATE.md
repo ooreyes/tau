@@ -5,13 +5,14 @@ The working memory of an unattended loop that starts from zero every fire.
 
 ## Now
 
-**Status:** IN PROGRESS - 2026-08-02 23:00 CDT
+**Status:** DONE - 2026-08-03 00:58 CDT
 
-Claimed current-controlled-switch correctness: read the control-source/model
-identity from real LTspice `csw` records and emit a native ngspice `W` device
-only when complete; otherwise refuse the whole analysis instead of substituting
-a fixed-open circuit. Cover import, deck, native behavior, and safe save.
-Scheduler remains unloaded.
+Current-controlled-switch correctness is complete. LTspice `csw` imports now
+resolve `SpiceModel` as the sensing voltage-source identity and `Value` as the
+CSW model, emit a native ngspice `W` device, and save/reopen losslessly. Every
+missing, malformed, or wrong-kind identity refuses atomically, including in the
+preview solvers. The rebuilt packaged app reports `COMPLETE ngspice` and a real
+5 V switched output. Scheduler remains unloaded.
 
 Previous completed unit:
 
@@ -110,11 +111,11 @@ which are folded into the block above.
 Ordered. Take the top item unless it is blocked. Class A outranks everything -
 a plausible wrong number is worse than a refusal to run.
 
-1. **Implement LTspice current-controlled switches (`csw`) honestly.** Tau now
-   warns and models them as fixed-open, which avoids a silent wrong result but
-   is not parity. Determine the controlling-source/model records in real `.asc`
-   files and either emit ngspice's native `W` device end to end or atomically
-   refuse the analysis when the required control identity is unavailable.
+1. **Reduce the 15 non-refusal failures in the 4,012-file extended corpus.**
+   Start with the repeated invalid R/C/V value family (LT1395/LT1677/LT2078-79/
+   LT2178-79), determine the real LTspice value syntax, and either translate it
+   exactly or turn it into a named atomic refusal. Never coerce a malformed
+   value into a plausible circuit.
 
 ---
 
@@ -124,6 +125,7 @@ Newest first, ONE line each. Full evidence for every unit is in PROGRESS.md
 and in its commit message. This section exists so a fresh fire can see what
 is already done at a glance, not so it can re-read the reasoning.
 
+- 2026-08-03 - LTSPICE CURRENT-CONTROLLED SWITCHES ARE REAL W DEVICES. `SpiceModel` resolves the sensing voltage source, `Value` resolves CSW/translated ISWITCH, exact save/reopen is supported, and every unprovable identity refuses atomically. CLI ngspice and the rebuilt packaged app prove the 5 V switched output.
 - 2026-08-02 - EVERY PACKAGED NGSPICE RESOURCE IS SHA-256 BOUND TO ITS BUILD RECORD. `build.rs` verifies exact set equality, contents, target and commit; doctored-tree tests cover swaps, corruption, injection, omission, malformed data and escaping symlinks. The rebuilt DMG's 27 resources match exactly and real OP/noise/XSPICE tests pass from inside it. Completion logging no longer writes into the read-only mount.
 - 2026-08-02 - IMPORTED/CUSTOM OP-AMP PARAMETERS ARE HONEST AND EDITABLE in the packaged inspector; a one-slot Avol change writes back to Value2 and retains SpiceLine instead of collapsing both onto Value.
 - 2026-08-02 - THE REAL APP PRESERVES EXTENDED LTSPICE VALUE PROVENANCE. The validator had silently dropped `ltExtraAttrs`; it now retains/bounds/sanitizes it, hierarchy fingerprints cover it, and single-slot joined-value edits reconcile to their owning slot while cross-slot edits remain blocked.

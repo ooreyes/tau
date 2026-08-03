@@ -13,6 +13,24 @@
 
 **Repo:** `auto/ltspice-parity` · **Audit date:** 2026-07-17 · **Auditor:** interactive session (Fable 5) + two background subagents (fuzz + sim cross-check).
 
+## 2026-08-03 — LTspice `csw` silently became a fixed-open resistor (CONFIRMED, FIXED)
+
+The importer mapped LTspice's two-pin current-controlled switch to Tau's generic
+four-pin switch kind, but the deck builder could not find voltage-control pins
+and emitted a 1 TΩ resistor. The result looked plausible while being electrically
+wrong. The controlling source was also read from the wrong attribute: real
+LTspice `csw` instances name it in `SpiceModel`, while `Value` names the CSW
+model.
+
+**Fixed 2026-08-03.** Imported `csw` parts now retain that field contract, emit
+an ngspice `W` device only after resolving a real voltage source and a real
+CSW/translated ISWITCH model, and refuse atomically for every incomplete or
+wrong-kind case. Preview solvers refuse rather than approximate, and exact
+`.asc` export restores `SpiceModel`, `Value`, and optional instance state. A
+native on/off corpus test and the rebuilt packaged app prove the switched
+voltage; mutation-sensitive unit tests cover hierarchy, attached/inline models,
+malformed values, refusal atomicity, and lossless save/reopen.
+
 ## 2026-08-02 — `newCircuit` leaves the previous schematic's DATAFLAG readouts in the store (CONFIRMED, FIXED)
 
 `useSchematic.ts`'s `newCircuit` resets every other carried `.asc` field -

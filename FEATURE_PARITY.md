@@ -497,6 +497,16 @@ Status legend: ✅ done · 🟡 partial · ⬜ not started
 ## 3. Component / symbol library
 Current Tau kinds (~25): R, C, L, pot, V(DC), I(DC), Vac, Iac, **Vpulse**, diode, LED,
 zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**, **B (behavioral)**, NMOS, PMOS, **NJF**, **PJF**, NPN, PNP, switch, transformer, **tline**, testpoint, ground.
+- ✅ **LTspice current-controlled switch (`csw` / W device)** — the importer
+  reconstructs the native instance tail from LTspice's actual fields
+  (`SpiceModel` sensing-source identity + `Value` CSW model + optional state),
+  the exporter round-trips those fields and the two-pin symbol exactly, and the
+  native deck resolves hierarchical source names before emitting `W...`.
+  Inline/attached `CSW` and LTspice `ISWITCH` cards are supported; missing,
+  malformed, or wrong-kind sources/models atomically refuse with no partial
+  circuit. Browser preview OP/tran/AC/noise also refuses rather than reviving
+  the old 1 TΩ fixed-open approximation. Real CLI ngspice and the freshly
+  packaged Tau.app prove both on/off behavior and a 5 V switched output.
 - 🟡 Passives R/C/L (✅) — **C/L initial conditions (`IC=`) landed**: the importer
   pulls an `IC=` token from a cap/inductor's `Value2`/`SpiceLine`/`SpiceLine2`
   (LTspice writes e.g. `SpiceLine2 IC=1`; `engine/icSpec.ts` + `componentValueFromAttrs`)

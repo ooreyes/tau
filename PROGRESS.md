@@ -9,14 +9,16 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: IN PROGRESS - 2026-08-02 23:00 CDT**
+**Status: DONE - 2026-08-03 00:58 CDT**
 
-Interactive correctness unit: replace the current-controlled-switch (`csw`)
-fixed-open approximation with ngspice's native `W` device when the imported
-LTspice control-source identity is provable, and atomically refuse otherwise.
-Use real `.asc` encodings from the corpus, test import/deck/native behavior and
-lossless-save implications, then rerun the required gates. Scheduler stays
-unloaded.
+LTspice current-controlled switches (`csw`) now preserve their real field
+contract (`SpiceModel` = sensing voltage source, `Value` = CSW model), save
+losslessly, and emit ngspice's native `W` device. Missing/wrong sources,
+missing/wrong/malformed models, and malformed instance tails refuse the entire
+analysis; every preview solver also refuses instead of approximating. A fresh
+packaged Tau.app ran the real fixture through bundled ngspice and reported
+`COMPLETE ngspice`, `V(out) = 5 V`, and `I(Vsense) = -1 mA`. The scheduler
+remains unloaded.
 
 Previous completed unit:
 
@@ -11072,3 +11074,25 @@ evidence is kept in full here.
   locked; this unit changes no UI, and the immediately prior packaged UI plus
   900x600 Chrome acceptance remains green. Scheduler remains intentionally
   unloaded.
+
+- 2026-08-03 - Replaced the LTspice current-controlled-switch false answer with
+  native parity. The installed `csw.asy` and LTspice help establish a two-pin W
+  device whose `SpiceModel` names the sensing voltage source and whose `Value`
+  names the CSW model; no `csw` occurred in the 4,012-file local corpus, so the
+  committed fixture uses that real record shape rather than inventing a Tau-only
+  encoding. Import reconstructs the instance tail, exact export/reopen restores
+  it, hierarchy-aware deck resolution emits `W...`, and inline/attached
+  CSW/ISWITCH models translate safely. Missing, malformed, or wrong-kind source
+  and model identities refuse the entire native run, while all four preview
+  solvers refuse instead of emitting the old 1 TΩ approximation. A dedicated
+  CLI corpus proves on >4.99 V, off <0.01 V, and >900:1 ratio; the ignored Rust
+  test exercises the real bundled library. Computer Use then opened the fixture
+  in the freshly rebuilt release app and observed `COMPLETE ngspice`, three
+  nodes, `V(out) = 5 V`, and `I(Vsense) = -1 mA`. Evidence: typecheck; 155
+  frontend files / 2,379 passed / 6 skipped; production web build; Rust fmt and
+  clippy; 53 Rust passed / 5 ignored plus all 5 real-library tests; 16 native
+  corpus tests; six DoD numerical tests; full 4,012-file corpus and canonical
+  80/82 release floor; unsigned app/DMG build; strict codesign and DMG checksum.
+  The extended corpus still reports 15 non-refusal hard failures and 3,486
+  explicit unsupported refusals; that is the next correctness work, not a
+  completion claim. Scheduler remains intentionally unloaded.
