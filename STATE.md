@@ -5,14 +5,12 @@ The working memory of an unattended loop that starts from zero every fire.
 
 ## Now
 
-**Status:** DONE - 2026-08-03 01:52 CDT
+**Status:** IN PROGRESS - 2026-08-03 01:54 CDT
 
-Negative-capacitance parity is complete. LTspice's active-network capacitor is
-translated exactly as ngspice `Q(V)=C*V`; a real AC proof holds the positive
-45-degree phase that would flip if the sign were lost. `elip_grd.asc` now builds
-and converges, leaving four extended-corpus hard failures. Preview solvers
-refuse the unsupported non-passive stamp explicitly. Scheduler remains
-unloaded.
+Diagnosing the `LT1168.asc` shorted-VCVS failure. The work is scoped to original
+pin/model provenance and imported electrical topology; no solver tolerance,
+gmin, or invented resistance will be used to hide a collapsed source. Scheduler
+remains unloaded.
 
 **Product UX contract (Omar, 2026-08-03): Tau is not a prettier command-line
 wrapper.** Known SPICE semantics must appear as named, editable controls in the

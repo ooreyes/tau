@@ -9,16 +9,14 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-03 01:52 CDT**
+**Status: IN PROGRESS - 2026-08-03 01:54 CDT**
 
-LTspice negative constant capacitors now preserve their exact constitutive law
-through ngspice's native charge device: `Q(V)=C*V`, including the negative sign
-and any series resistance/initial condition. A real 1 kHz RC proof returns
-`0.5+j0.5` (+45 degrees); changing the sign or taking `abs(C)` fails it. The
-real `elip_grd.asc` now deck-builds and operating-point converges. Preview
-solvers resolve braces and refuse this active-network stamp by name rather than
-calling it malformed or changing it. Extended corpus: 526 decks built, 522
-operating points, four hard failures. Scheduler stays unloaded.
+Interactive correctness unit: diagnose and repair `LT1168.asc`, where the
+imported vendor model currently reaches ngspice as a shorted VCVS (`E_U1`).
+Trace original pin/model provenance and fix only a proven importer or deck-
+topology error; do not mask it with convergence options or parasitics. Prove the
+real file and a committed regression, then rerun the full corpus. Scheduler
+stays unloaded.
 
 Previous completed unit:
 
