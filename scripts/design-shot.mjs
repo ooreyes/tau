@@ -60,14 +60,29 @@ const REPO_ROOT = path.resolve(__dirname, "..");
 // workspace root doesn't otherwise need.
 const desktopRequire = createRequire(path.join(REPO_ROOT, "apps/desktop/package.json"));
 const { chromium } = desktopRequire("playwright");
-const DEV_URL = "http://localhost:1420";
+const devPortText = process.env.TAU_DESIGN_PORT ?? "1420";
+if (!/^\d+$/.test(devPortText) || Number(devPortText) < 1024 || Number(devPortText) > 65535) {
+  throw new Error("TAU_DESIGN_PORT must be an unprivileged TCP port from 1024 to 65535");
+}
+const DEV_PORT = Number(devPortText);
+const DEV_URL = `http://localhost:${DEV_PORT}`;
+const FORCE_OWN_SERVER = process.env.TAU_DESIGN_FORCE_SERVER === "1";
 const NAV_TIMEOUT_MS = 15_000;
 const SERVER_READY_TIMEOUT_MS = 45_000;
 const STATE_TIMEOUT_MS = 15_000;
 const SYSTEM_CHROME = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
 
 const label = process.argv[2] ?? new Date().toISOString().replace(/[:.]/g, "-");
-const outDir = path.join(REPO_ROOT, "screenshots", label);
+if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(label)) {
+  throw new Error("screenshot label must contain only letters, numbers, dots, underscores, and hyphens");
+}
+// Completion QA must not dirty the clean commit it is certifying. Normal
+// interactive runs retain the familiar repo-local screenshots/ location,
+// while the completion verifier supplies a temporary external root.
+const screenshotRoot = process.env.TAU_SCREENSHOT_ROOT
+  ? path.resolve(process.env.TAU_SCREENSHOT_ROOT)
+  : path.join(REPO_ROOT, "screenshots");
+const outDir = path.join(screenshotRoot, label);
 
 // The schematic/inspector/simulator states all hang off one imported circuit.
 // An RC pulse with a .tran + .meas gives every downstream state something real
@@ -140,16 +155,20 @@ async function isServerUp(url) {
   }
 }
 
-/** Starts `pnpm dev:web` as its own process group so it (and any vite
- *  children) can be killed together on exit. No-ops if something is already
- *  listening on the dev port - that server is reused and left running. */
+/** Starts Vite as its own process group so it (and any children) can be killed
+ *  together on exit. Interactive runs may reuse the normal Tau server. The
+ *  completion gate forces an isolated port so another checkout cannot be
+ *  mistaken for the commit being certified. */
 async function ensureDevServer() {
   if (await isServerUp(DEV_URL)) {
+    if (FORCE_OWN_SERVER) {
+      throw new Error(`completion QA port ${DEV_PORT} is already in use; refusing to test an unidentified server`);
+    }
     console.log(`[design-shot] reusing already-running dev server at ${DEV_URL}`);
     return { child: null };
   }
-  console.log(`[design-shot] starting dev server (pnpm dev:web)…`);
-  const child = spawn("pnpm", ["dev:web"], {
+  console.log(`[design-shot] starting isolated dev server on ${DEV_PORT}…`);
+  const child = spawn("pnpm", ["-C", "apps/desktop", "exec", "vite", "--port", String(DEV_PORT), "--strictPort"], {
     cwd: REPO_ROOT,
     stdio: ["ignore", "pipe", "pipe"],
     detached: true, // own process group so we can kill vite's children too
@@ -390,7 +409,7 @@ async function main() {
         await shootViewport(page, viewport, theme);
       }
     }
-    console.log(`[design-shot] done. Screenshots written to ${path.relative(REPO_ROOT, outDir)}/`);
+    console.log(`[design-shot] done. Screenshots written to ${outDir}/`);
   } catch (error) {
     exitCode = 1;
     console.error(`[design-shot] FAILED: ${error instanceof Error ? error.message : error}`);
