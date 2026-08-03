@@ -966,6 +966,15 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   `mag(I(L1))`, `ph(I(Q1))`, and `.meas ac` current expressions resolve. The
   installed-ngspice corpus holds `I(L1)` against the series resistor phasor at
   every frequency. All four spectral/sweep `.meas` domains run.
+  **Menu-first measurement authoring (2026-08-03):** Simulation Setup decodes
+  imported aggregate/derived measurements into named rows and authors AVG/RMS/
+  MAX/MIN/PP/INTEG results over node voltage, component current, power absorbed,
+  or power delivered by a source. Power expressions are derived from extracted
+  terminal connectivity; chained PARAM rows expose formulas such as `PL / PS`
+  without exposing a `.meas` line. The Class-D `PS`/`PL`/`Efficiency` set
+  round-trips exactly. Optional windows are named fields; invalid or duplicate
+  rows block Apply. Unsupported WHEN/TRIG/TARG forms and unrelated directives
+  remain byte-for-byte in Expert until their dedicated controls land.
 - ✅ **DC operating point annotation on schematic** (show node V / device I
   in-place, 2026-07-02) — after an OP run, the simulator-mode canvas labels
   every non-ground net with its DC voltage (cyan, at the net's

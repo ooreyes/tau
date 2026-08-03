@@ -9,13 +9,17 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: IN PROGRESS - 2026-08-03 10:18 CDT**
+**Status: DONE - 2026-08-03 10:27 CDT**
 
-Claimed unit: replace raw `.meas` authoring for the Class-D power/efficiency
-workflow with named measurement controls. Imported supported measurements must
-decode into rows and apply back without losing unrelated expert directives;
-average node/current/component-power results and derived formulas must be
-authorable without typing a `.meas` line. Scheduler stays unloaded.
+Simulation Setup now decodes supported `.meas` aggregates and derived results
+into named rows. New results select analysis, calculation, node/component, load
+power, delivered source power, formula, and an optional window; the app derives
+the hidden directive from actual circuit connectivity. The Class-D PS/PL/
+Efficiency lines round-trip exactly, unsupported timing forms and unrelated
+directives remain unchanged under Expert, and duplicate/incomplete rows block
+Apply with a plain error. Typecheck, all 2,443 frontend tests, web build, and an
+actual 900x600 dialog pass (720x568, scrollable, zero clipped controls). The
+scheduler remains unloaded.
 
 Previous completed unit:
 
@@ -1802,6 +1806,49 @@ needs Omar's Developer ID.
 - **Status:** DONE
 - **Last completed sub-step:** packaged Tau saved and reopened a disposable buck converter while preserving comments/directive positions, then bundled ngspice completed its 165,337-sample transient; all required gates and the 55-check advanced circuit corpus are green.
 - **Next candidates:** keep the remaining unsupported ASC drawing/window records explicit, and continue the acceptance-corpus path rather than widening the editor with lossy representations.
+
+## 2026-08-03T15:27Z - auto/ltspice-parity - Menu-first Class-D measurements (§4)
+
+### What I did
+
+- Added structured measurement rows for average/RMS/extrema/integral results,
+  node voltage, branch current, absorbed/load power, delivered source power,
+  derived formulas, and optional measurement windows.
+- Derived component-power expressions from the extracted circuit's terminal
+  nets instead of asking the user to author `V(...)*I(...)` syntax.
+- Decoded the imported Class-D PS/PL/Efficiency measurements into editable rows
+  and preserved their exact original lines when untouched.
+- Kept unsupported crossing/timing measurements and all unrelated cards exact
+  under the explicit Expert disclosure.
+
+### Files
+
+- `apps/desktop/src/simulation/measurementAuthoring.ts`
+- `apps/desktop/src/components/SimulationSetupDialog.tsx`
+- `apps/desktop/src/App.css`
+- unit and component tests
+
+### Tests
+
+- `pnpm -C apps/desktop typecheck`
+- `pnpm -C apps/desktop test` - 160 passed / 1 skipped files; 2,443 passed /
+  6 skipped tests
+- `pnpm --filter @tau/desktop build`
+- Live Chrome/Playwright 900x600 dialog: 720x568, internal scrolling, zero
+  horizontally clipped controls, zero document overflow
+
+### Parity items
+
+- Normal Class-D power/efficiency measurement authoring: complete without raw
+  `.meas` lines.
+- WHEN/TRIG/TARG measurement authoring: still explicit Expert syntax; execution
+  remains supported.
+- Scheduler: intentionally unloaded during interactive work.
+
+### Next step
+
+Discover and selectively attach the user's installed LTspice models without
+copying proprietary assets into Tau or silently substituting unsupported parts.
 
 ## 2026-08-03T15:13Z - auto/ltspice-parity - Engineer-facing transient settings (§3/§6)
 

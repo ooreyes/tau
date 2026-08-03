@@ -5,12 +5,15 @@ The working memory of an unattended loop that starts from zero every fire.
 
 ## Now
 
-**Status:** IN PROGRESS - 2026-08-03 10:18 CDT
+**Status:** DONE - 2026-08-03 10:27 CDT
 
-Claimed unit: menu-first Class-D measurements. Add named measurement rows that
-decode supported imported `.meas` lines and author average node/current/power
-quantities plus derived efficiency without raw directive entry. Preserve
-unsupported expert lines exactly. Scheduler remains unloaded.
+Class-D measurements are menu-first. Imported aggregate and derived `.meas`
+lines decode into named result rows; new rows select analysis, calculation,
+node/component, absorbed or delivered power, derived formula, and optional
+window. Tau derives hidden power expressions from real connectivity. The
+Class-D PS/PL/Efficiency set round-trips, unsupported timing forms stay exact in
+Expert, and malformed/duplicate results are refused. Typecheck, 2,443 tests,
+web build, and the 900x600 live dialog pass. Scheduler remains unloaded.
 
 Previous completed unit:
 
