@@ -1319,6 +1319,13 @@ function App() {
     if (!tab) return false;
     const document = targetId === activeId ? currentDocument : tab.doc ?? blankDocument();
     let filePath = tab.filePath ?? null;
+    // Running a freshly opened LTspice schematic must be a read-only operation.
+    // The previous unconditional best-effort save normalized the source even
+    // when the user had made no edit (record order, micro glyphs, and vendor
+    // attributes could all change merely by pressing Run). Compare the live
+    // semantic signature instead of trusting the asynchronously-derived dirty
+    // badge so a clean, already-backed tab never touches disk.
+    if (filePath && tab.savedSignature === schematicDocumentSignature(document)) return true;
     let createdForSave = false;
     if (!filePath) {
       filePath = await createSchematicInRoot(tab.title);

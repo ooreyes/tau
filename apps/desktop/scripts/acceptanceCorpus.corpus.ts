@@ -157,6 +157,7 @@ function runFile(file: CorpusFile, tmpDir: string, skipNgspice: boolean): Corpus
       netLabels: imported.netLabels,
       directives: imported.directives,
       ascForeignSymbols: imported.foreignSymbols,
+      ascHierarchicalBlocks: imported.hierarchicalBlocks,
     });
     row.validated = true;
   } catch (error) {

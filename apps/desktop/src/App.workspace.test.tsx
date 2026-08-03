@@ -345,6 +345,40 @@ describe("App schematic workspace tools", () => {
     expect(screen.queryByRole("img", { name: "untitled.asc has unsaved changes" })).toBeNull();
   });
 
+  it("runs a clean imported ASC without rewriting its source bytes", async () => {
+    const path = `${DEFAULT_WORKSPACE_ID}/source.asc`;
+    const contents = [
+      "Version 4",
+      "SHEET 1 880 680",
+      // Deliberately non-canonical record order: a save would move the FLAG
+      // ahead of the SYMBOL, so byte identity proves Run did not write.
+      "SYMBOL res 96 64 R0",
+      "SYMATTR InstName R1",
+      "SYMATTR Value 1k",
+      "FLAG 96 64 out",
+      "TEXT 32 128 Left 2 !.tran 1m",
+      "",
+    ].join("\n");
+    const file = { path, name: "source.asc", contents, kind: "asc" as const };
+    useProject.setState({
+      rootPath: DEFAULT_WORKSPACE_ID,
+      rootName: DEFAULT_WORKSPACE_NAME,
+      tree: defaultWorkspaceTree([file]),
+      expanded: [DEFAULT_WORKSPACE_ID],
+      workspaceFiles: { [path]: file },
+      error: null,
+      capability: "none",
+    });
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "source.asc" }));
+    await screen.findByRole("tab", { name: /source\.asc/ });
+    fireEvent.click(screen.getAllByRole("button", { name: "Run simulation" })[0]);
+
+    await waitFor(() => expect(screen.getByRole("button", { name: "Schematic" })).toBeTruthy());
+    expect(useProject.getState().workspaceFiles[path].contents).toBe(contents);
+  });
+
   it("refuses Run when a preserved LTspice symbol has no Tau electrical model", async () => {
     await renderOpenProject();
     act(() => useSchematic.setState({
