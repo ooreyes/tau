@@ -1193,6 +1193,17 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   200,015-sample native run verified the plot lines, full `781.25 ms` /
   `2.34375 s` fields, interpolated signal table, Δt, and reciprocal-frequency
   readout at the 900×600 minimum.
+  **Direct trace interaction (2026-08-03):** each transient channel is now
+  selectable beside its plot with Tau's validated color-safe palette. C1/C2
+  activate directly from that channel and glide over interpolated plot data by
+  mouse hover or captured touch drag; keyboard arrows provide fine adjustment
+  and Pan restores plot navigation. Every pane keeps the shared vertical lines,
+  while the selected channel adds a colored sample point and inline physical
+  value/time chip. The table now carries each signal's real V/A/W/etc. unit
+  instead of hard-coding volts. Exact-time fields and plot movement share the
+  same fractions. Regression coverage includes zoom-aware pointer mapping,
+  touch/mouse control wiring, palette application, unit propagation, and the
+  real SimulationPanel activation path.
 - ✅ **Overlay an LTspice `.raw` reference on the scope** (the acceptance-test
   overlay) — **Ref .raw** button loads a `.raw`, `buildReferenceOverlay`
   (`simulation/rawOverlay.ts`, 4 tests) matches its variables to the plotted Tau

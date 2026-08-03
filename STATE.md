@@ -5,13 +5,15 @@ The working memory of an unattended loop that starts from zero every fire.
 
 ## Now
 
-**Status:** IN PROGRESS - 2026-08-03 09:41 CDT
+**Status:** DONE - 2026-08-03 09:56 CDT
 
-Claimed unit: direct transient trace interaction. Select a trace and its
-color-safe display color beside the plot, select C1 or C2, then glide that
-cursor along interpolated data with a mouse or touch. Plot and table readouts
-must preserve each trace's real unit. Exact time entry stays available.
-Scheduler remains unloaded.
+Direct transient trace interaction is complete. A trace can be selected and
+recolored from Tau's validated palette beside its plot; C1/C2 glide by mouse,
+touch, or keyboard and show an interpolated colored point plus inline time/value
+chip. Pan remains an explicit mode, exact time fields stay synchronized, and
+the cursor table no longer labels current/power as volts. All frontend/build/
+unsigned-package checks pass. Packaged visual control is deferred only because
+macOS is locked. Scheduler remains unloaded.
 
 Previous completed unit:
 

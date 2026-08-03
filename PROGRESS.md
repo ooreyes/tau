@@ -9,13 +9,18 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: IN PROGRESS - 2026-08-03 09:41 CDT**
+**Status: DONE - 2026-08-03 09:56 CDT**
 
-Claimed unit: make transient traces directly selectable and measurable. A trace
-readout will expose the validated Tau palette, C1/C2 will glide over interpolated
-plot data by mouse hover or touch drag, and the plot will show the selected
-trace's time/value at each cursor with its real V/A/W unit. Existing exact time
-fields remain available. Scheduler stays unloaded during interactive work.
+Transient traces are now instrument channels: select a line, choose any Tau
+color-safe trace color, activate C1 or C2, then glide across interpolated data
+by mouse hover or touch drag. Every pane retains the shared vertical cursors;
+the selected trace adds a colored point and inline time/value chip. Arrow keys
+provide fine control, Pan restores zoom/pan, and exact time fields remain in
+sync. Cursor tables now preserve V/A/W/etc. instead of falsely formatting every
+signal as volts. All 2,433 frontend tests, typecheck, web build, unsigned app/
+DMG build, ad-hoc signature, checksum, and five-second launch check pass. Chrome
+at 900x600 has no clipped controls or document overflow. Packaged visual control
+remains deferred only because macOS is locked. Scheduler stays unloaded.
 
 Previous completed unit:
 
@@ -1775,6 +1780,48 @@ needs Omar's Developer ID.
 - **Status:** DONE
 - **Last completed sub-step:** packaged Tau saved and reopened a disposable buck converter while preserving comments/directive positions, then bundled ngspice completed its 165,337-sample transient; all required gates and the 55-check advanced circuit corpus are green.
 - **Next candidates:** keep the remaining unsupported ASC drawing/window records explicit, and continue the acceptance-corpus path rather than widening the editor with lossy representations.
+
+## 2026-08-03T14:56Z - auto/ltspice-parity - Direct transient trace cursors (§7)
+
+### What I did
+
+- Turned each transient trace readout into a selectable instrument channel with
+  direct C1/C2 and Pan controls plus the existing validated trace palette.
+- Added zoom-aware pointer mapping: mouse hover glides; touch captures and
+  drags; arrow keys provide fine or Shift-assisted movement.
+- Drew the selected trace's interpolated colored point and physical value/time
+  chip at both shared cursors without recomputing dense trace paths per move.
+- Preserved units through cursor math/table rendering, fixing current and power
+  rows that were incorrectly formatted as volts.
+
+### Files
+
+- `apps/desktop/src/components/SimulationPanel.tsx`
+- `apps/desktop/src/App.css`
+- `apps/desktop/src/simulation/cursors.ts`
+- Cursor and SimulationPanel regression tests
+
+### Tests
+
+- `pnpm -C apps/desktop typecheck`
+- `pnpm -C apps/desktop test` - 159 passed / 1 skipped files; 2,433 passed /
+  6 skipped tests
+- `pnpm --filter @tau/desktop build`
+- `pnpm --filter @tau/desktop tauri build`
+- `codesign --verify --deep --strict` and DMG SHA-256
+- Fresh packaged binary stayed alive for five seconds
+- Chrome 900x600 shell containment: 900x600 client/scroll, zero clipped buttons
+- Computer Use packaged visual inspection deferred: macOS is locked
+
+### Parity items
+
+- Measurement cursors: direct trace selection/color/glide complete.
+- Scheduler: intentionally unloaded during interactive work.
+
+### Next step
+
+Replace raw `Steps` exposure with engineer-facing automatic accuracy/runtime
+semantics, retaining exact step count only as an expert override.
 
 ## 2026-08-03T03:38Z - auto/ltspice-parity - Structured LTspice value-slot editing (§1/§7)
 
