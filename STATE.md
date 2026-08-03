@@ -5,13 +5,15 @@ The working memory of an unattended loop that starts from zero every fire.
 
 ## Now
 
-**Status:** IN PROGRESS - 2026-08-03 09:17 CDT
+**Status:** DONE - 2026-08-03 09:37 CDT
 
-Current unit: independent-source waveform editing. Separate DC operating-point
-bias from the waveform mode and expose named, unit-aware Sine/Pulse/PWL/EXP/SFFM
-and AC controls. PWL gets editable time/level rows rather than appearing inside
-"DC level". Preserve untouched LTspice text exactly and emit valid syntax only
-under the UI after a real edit. Scheduler remains unloaded.
+Independent-source waveform editing is complete for DC, Sine, Pulse, PWL, EXP,
+SFFM, and AC stimulus. DC operating-point bias is separate; PWL is an editable
+point table; raw function strings no longer appear in Properties or schematic
+labels. Both engines and LTspice ASC round-trip agree. All frontend, Rust,
+real-ngspice, canonical 80/82, Class-D, web-build, unsigned app/DMG, signature,
+checksum, and launch-stability gates pass. Computer Use visual inspection is
+deferred only because macOS is locked. Scheduler remains unloaded.
 
 **Product UX contract (Omar, 2026-08-03): Tau is not a prettier command-line
 wrapper.** Known SPICE semantics must appear as named, editable controls in the

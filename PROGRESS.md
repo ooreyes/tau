@@ -9,15 +9,16 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: IN PROGRESS - 2026-08-03 09:17 CDT**
+**Status: DONE - 2026-08-03 09:37 CDT**
 
-Claimed unit: replace the independent-source raw Value field with a waveform
-editor. DC operating-point bias must be a distinct numeric control; Sine, Pulse,
-PWL, Exponential, and SFFM must expose named parameters and units, including a
-real point editor for PWL and separate AC stimulus controls. Existing LTspice
-values remain byte-stable until edited; edits re-encode valid SPICE beneath the
-UI. Prove parser/encoder, inspector interaction, engine behavior, import/export,
-and 900x600 layout. Scheduler stays unloaded.
+Independent V/I sources now have a Waveform selector and named, unit-aware DC,
+Sine, Pulse, Piecewise, Exponential, FM, and optional AC controls. DC operating
+point is independent of the transient waveform; PWL is a time/level row editor,
+never text inside "DC level." Both engines honor the distinct bias, edited ASC
+round-trips, and schematic labels show human summaries instead of raw function
+syntax. Full frontend/native/corpus/release gates pass. The fresh packaged
+binary stays alive; Computer Use visual inspection is deferred only because the
+Mac is locked. Scheduler stays unloaded.
 
 Previous completed unit:
 
@@ -11174,3 +11175,22 @@ evidence is kept in full here.
   check pass. The two remaining 82-file refusals are the LTspice-only NIGBT and
   encrypted LT1184F, never approximated. Scheduler remains intentionally
   unloaded.
+
+- 2026-08-03 - Replaced independent voltage/current sources' raw Value field
+  with a proper waveform editor. The user chooses DC, Sine, Pulse, Piecewise
+  linear, Exponential, or single-frequency FM and edits named parameters with
+  units; AC stimulus has an explicit enable control, amplitude, and phase. PWL
+  uses add/remove time-level rows. A separately edited DC operating point emits
+  `DC <bias>` ahead of the transient function, and both the native deck path and
+  TS fallback honor that bias without altering the time waveform. Existing
+  imported text remains untouched until an edit, while edited ASC reopens with
+  the exact new source value. Canvas labels say e.g. "Sine · 7.5 V @ 1 kHz" or
+  "Piecewise · 3 points," never raw function syntax. Evidence: 159 frontend
+  files / 2,430 passed / 6 skipped tests; typecheck and production build; Rust
+  fmt/clippy, 53 ordinary and all seven ignored real-ngspice tests; canonical
+  corpus 82 imported / 80 warning-clean / 80 deck-built / 80 OP-converged /
+  zero hard failures; Class-D native parity; fresh unsigned app/DMG, strict
+  codesign, valid DMG checksum, and packaged binary alive after five seconds.
+  Chrome at 900x600 remains exact-width with no console errors. Packaged visual
+  control could not run because macOS is locked, not because Tau failed to
+  launch. Scheduler remains intentionally unloaded.
