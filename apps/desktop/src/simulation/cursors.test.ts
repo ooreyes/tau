@@ -2,9 +2,12 @@ import { describe, it, expect } from "vitest";
 import {
   cursorReadout,
   dbPerDecade,
+  findTraceCrossings,
   fractionToX,
   logFractionToX,
+  nearestCrossing,
   plotClientXToFraction,
+  xToFraction,
 } from "./cursors";
 
 const axis = [0, 1, 2, 3, 4];
@@ -123,5 +126,103 @@ describe("dbPerDecade", () => {
     expect(dbPerDecade(same, same.traces[0])).toBeNaN();
     const zeroAxis = cursorReadout([0, 1], [{ label: "V(out)", values: [0, 0] }], 0, 1);
     expect(dbPerDecade(zeroAxis, zeroAxis.traces[0])).toBeNaN();
+  });
+});
+
+describe("findTraceCrossings", () => {
+  const axis = [0, 1, 2, 3, 4];
+
+  it("interpolates a rising crossing onto the rendered line", () => {
+    const crossings = findTraceCrossings(axis, [0, 2, 4, 6, 8], 3);
+    expect(crossings).toHaveLength(1);
+    expect(crossings[0].x).toBeCloseTo(1.5, 12);
+    expect(crossings[0].rising).toBe(true);
+    expect(crossings[0].index).toBe(1);
+  });
+
+  it("finds every crossing of a triangle, in order, with direction", () => {
+    const crossings = findTraceCrossings(axis, [0, 4, 0, 4, 0], 2);
+    expect(crossings.map((c) => c.x)).toEqual([0.5, 1.5, 2.5, 3.5]);
+    expect(crossings.map((c) => c.rising)).toEqual([true, false, true, false]);
+  });
+
+  it("reports a sample sitting exactly on the target once, at that sample", () => {
+    const crossings = findTraceCrossings(axis, [0, 1, 2, 3, 4], 2);
+    expect(crossings).toHaveLength(1);
+    expect(crossings[0].x).toBe(2);
+    expect(crossings[0].index).toBe(2);
+    expect(crossings[0].rising).toBe(true);
+  });
+
+  it("reports a settled flat run only where it is entered", () => {
+    // A step that reaches the target and holds must not report one crossing
+    // per sample - that is the difference between a usable readout and noise.
+    const flat = [0, 5, 5, 5, 5];
+    const crossings = findTraceCrossings(axis, flat, 5);
+    expect(crossings).toHaveLength(1);
+    expect(crossings[0].x).toBe(1);
+  });
+
+  it("returns nothing when the target is never reached, and nothing for NaN", () => {
+    expect(findTraceCrossings(axis, [0, 1, 2, 3, 4], 9)).toEqual([]);
+    expect(findTraceCrossings(axis, [0, 1, 2, 3, 4], NaN)).toEqual([]);
+  });
+
+  it("never interpolates a root across a non-finite gap", () => {
+    // 0 -> 4 does span the target, but only by bridging the NaN at index 1.
+    // Reporting a position there would put a readout on a line the scope never
+    // drew, so the gap yields nothing.
+    expect(findTraceCrossings(axis, [0, NaN, 4, 6, 8], 3)).toEqual([]);
+  });
+
+  it("resumes finding crossings on finite segments after a gap", () => {
+    const crossings = findTraceCrossings(axis, [0, NaN, 2, 6, 8], 4);
+    expect(crossings.map((c) => c.x)).toEqual([2.5]);
+    expect(crossings[0].rising).toBe(true);
+  });
+
+  it("refuses mismatched lengths and honours the limit", () => {
+    expect(findTraceCrossings(axis, [0, 1], 1)).toEqual([]);
+    const saw = Array.from({ length: 200 }, (_, i) => (i % 2 === 0 ? 0 : 10));
+    const sawAxis = saw.map((_, i) => i);
+    expect(findTraceCrossings(sawAxis, saw, 5, 7)).toHaveLength(7);
+  });
+
+  it("finds a descending crossing on a falling edge", () => {
+    const crossings = findTraceCrossings(axis, [8, 6, 4, 2, 0], 3);
+    expect(crossings).toHaveLength(1);
+    expect(crossings[0].x).toBeCloseTo(2.5, 12);
+    expect(crossings[0].rising).toBe(false);
+  });
+});
+
+describe("nearestCrossing", () => {
+  it("picks the crossing closest to the reference position", () => {
+    const crossings = findTraceCrossings([0, 1, 2, 3, 4], [0, 4, 0, 4, 0], 2);
+    expect(nearestCrossing(crossings, 3.4)?.x).toBe(3.5);
+    expect(nearestCrossing(crossings, 0)?.x).toBe(0.5);
+  });
+
+  it("prefers the earlier crossing on a tie and handles an empty list", () => {
+    const crossings = findTraceCrossings([0, 1, 2, 3, 4], [0, 4, 0, 4, 0], 2);
+    // 1.5 and 2.5 are equidistant from 2.
+    expect(nearestCrossing(crossings, 2)?.x).toBe(1.5);
+    expect(nearestCrossing([], 1)).toBeNull();
+  });
+});
+
+describe("xToFraction", () => {
+  it("inverts fractionToX across the axis", () => {
+    const axis = [10, 20, 30, 40];
+    for (const fraction of [0, 0.25, 0.5, 1]) {
+      expect(xToFraction(axis, fractionToX(axis, fraction))).toBeCloseTo(fraction, 12);
+    }
+  });
+
+  it("clamps outside the range and collapses a zero-span axis", () => {
+    expect(xToFraction([0, 10], -5)).toBe(0);
+    expect(xToFraction([0, 10], 99)).toBe(1);
+    expect(xToFraction([5, 5], 5)).toBe(0);
+    expect(Number.isNaN(xToFraction([], 1))).toBe(true);
   });
 });

@@ -59,8 +59,12 @@ import {
   fractionToX,
   logFractionToX,
   plotClientXToFraction,
+  findTraceCrossings,
+  nearestCrossing,
+  xToFraction,
 } from "../simulation/cursors";
 import type { CursorTraceInput } from "../simulation/cursors";
+import { resolveCssColorHex, sameCssColor } from "../lib/cssColor";
 import { parseRaw } from "../io/rawImport";
 import type { RawData } from "../io/rawImport";
 import { buildReferenceOverlay } from "../simulation/rawOverlay";
@@ -1541,18 +1545,66 @@ export function WaveformPlot({
                           </div>
                           {selected && (
                             <div className="trace-interaction__palette" role="group" aria-label={`Color for ${displayLabel}`}>
-                              {TRACE_SWATCHES.map((swatch) => (
-                                <button
-                                  key={swatch.color}
-                                  type="button"
-                                  className={trace.color === swatch.color ? "active" : ""}
-                                  style={{ background: swatch.color }}
-                                  aria-label={`Set ${displayLabel} trace color to ${swatch.name}`}
-                                  aria-pressed={trace.color === swatch.color}
-                                  onClick={() => setTraceColorOverrides((current) => ({ ...current, [trace.id]: swatch.color }))}
+                              {TRACE_SWATCHES.map((swatch) => {
+                                const isCurrent = sameCssColor(trace.color, swatch.color);
+                                // A palette entry another trace already wears is
+                                // still selectable, but saying so stops the user
+                                // creating two traces they cannot tell apart.
+                                const takenBy = isCurrent
+                                  ? undefined
+                                  : allTraces.find((other) => other.id !== trace.id && sameCssColor(other.color, swatch.color));
+                                return (
+                                  <button
+                                    key={swatch.color}
+                                    type="button"
+                                    className={`${isCurrent ? "active" : ""}${takenBy ? " taken" : ""}`}
+                                    style={{ background: swatch.color }}
+                                    aria-label={takenBy
+                                      ? `Set ${displayLabel} trace color to ${swatch.name} - already used by ${labelFor(takenBy)}`
+                                      : `Set ${displayLabel} trace color to ${swatch.name}`}
+                                    aria-pressed={isCurrent}
+                                    title={takenBy ? `${swatch.name} - already used by ${labelFor(takenBy)}` : swatch.name}
+                                    onClick={() => setTraceColorOverrides((current) => ({ ...current, [trace.id]: swatch.color }))}
+                                  />
+                                );
+                              })}
+                              {/* The six presets are the same colors the engine
+                                  auto-assigns, so a pane with several traces runs
+                                  out. Any color is allowed. */}
+                              <label
+                                className="trace-interaction__custom-color"
+                                title={`Pick any color for ${displayLabel}`}
+                              >
+                                <input
+                                  type="color"
+                                  value={resolveCssColorHex(trace.color)}
+                                  aria-label={`Pick a custom color for ${displayLabel}`}
+                                  onChange={(event) => {
+                                    const color = event.currentTarget.value;
+                                    setTraceColorOverrides((current) => ({ ...current, [trace.id]: color }));
+                                  }}
                                 />
-                              ))}
+                              </label>
                             </div>
+                          )}
+                          {selected && cursorTool && success && success.times.length > 1 && (
+                            <TraceSeekFields
+                              trace={trace}
+                              label={displayLabel}
+                              times={success.times}
+                              cursorX={cursors
+                                ? (cursorTool.activeCursor === "c2" ? cursors.x2 : cursors.x1)
+                                : null}
+                              activeCursor={cursorTool.activeCursor}
+                              onSeek={(fraction) => {
+                                // Typing a coordinate is itself a request to
+                                // place a cursor, so default to C1 rather than
+                                // silently doing nothing in Pan mode.
+                                const target = cursorTool.activeCursor ?? "c1";
+                                if (cursorTool.activeCursor === null) cursorTool.onActiveCursorChange(target);
+                                cursorTool.onCursorFractionChange(target, fraction);
+                              }}
+                            />
                           )}
                           {selected && cursorTool?.activeCursor && (
                             <p className="trace-interaction__hint">
@@ -1774,6 +1826,48 @@ function TranScopePane({
     event.stopPropagation();
     if (dragPointerRef.current === event.pointerId) dragPointerRef.current = null;
   }, []);
+  // Hover readout: available in Pan mode, without arming a cursor first. Reads
+  // whichever trace is closest to the pointer vertically so a multi-trace pane
+  // answers "what is that line worth here?" for the line being pointed at.
+  const [hover, setHover] = useState<{ x: number; y: number; dataX: number; value: number; trace: Trace } | null>(null);
+  const hoverEnabled = Boolean(plot) && !cursorTool?.activeCursor && !isPanning && paneTraces.length > 0;
+  useEffect(() => {
+    if (!hoverEnabled) setHover(null);
+  }, [hoverEnabled]);
+  const trackHover = useCallback((event: ReactPointerEvent<SVGRectElement>) => {
+    if (!hoverEnabled) return;
+    const svg = event.currentTarget.ownerSVGElement ?? event.currentTarget.closest("svg");
+    if (!svg) return;
+    const bounds = svg.getBoundingClientRect();
+    if (bounds.width <= 0 || bounds.height <= 0) return;
+    const fraction = plotClientXToFraction(event.clientX, bounds, PLOT_WIDTH, PLOT_PAD, viewport, times);
+    if (!Number.isFinite(fraction)) return;
+    const x = fractionToX(times, fraction);
+    const plotSpanY = plotHeight - 2 * PLOT_PAD;
+    const toScreenY = (value: number) =>
+      PLOT_PAD + ((viewport.yMax - value) / (viewport.yMax - viewport.yMin)) * plotSpanY;
+    const pointerSvgY = ((event.clientY - bounds.top) / bounds.height) * plotHeight;
+
+    let best: { value: number; trace: Trace; screenY: number } | null = null;
+    for (const trace of paneTraces) {
+      const value = interpolateAt(times, trace.values, x);
+      if (!Number.isFinite(value)) continue;
+      const screenY = toScreenY(value);
+      if (!best || Math.abs(screenY - pointerSvgY) < Math.abs(best.screenY - pointerSvgY)) {
+        best = { value, trace, screenY };
+      }
+    }
+    if (!best) {
+      setHover(null);
+      return;
+    }
+    const screenX = PLOT_PAD
+      + ((x - viewport.xMin) / (viewport.xMax - viewport.xMin)) * (PLOT_WIDTH - 2 * PLOT_PAD);
+    setHover({ x: screenX, y: best.screenY, dataX: x, value: best.value, trace: best.trace });
+  }, [hoverEnabled, times, viewport, plotHeight, paneTraces]);
+  const hoverVisible = hover
+    && hover.x >= PLOT_PAD && hover.x <= PLOT_WIDTH - PLOT_PAD
+    && hover.y >= PLOT_PAD && hover.y <= plotHeight - PLOT_PAD;
   const nudgeCursor = useCallback((event: ReactKeyboardEvent<SVGRectElement>) => {
     if (!cursorTool?.activeCursor || !cursors || times.length < 2) return;
     if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
@@ -1882,6 +1976,36 @@ function TranScopePane({
                 })}
               </g>
             )}
+            {hoverEnabled && (
+              <rect
+                className="scope-hover-surface"
+                x={PLOT_PAD}
+                y={PLOT_PAD}
+                width={PLOT_WIDTH - 2 * PLOT_PAD}
+                height={plotHeight - 2 * PLOT_PAD}
+                fill="transparent"
+                // Deliberately does not stop propagation: the svg's own drag
+                // handlers must still receive the event so panning keeps working.
+                onPointerMove={trackHover}
+                onPointerLeave={() => setHover(null)}
+                onPointerCancel={() => setHover(null)}
+              />
+            )}
+            {hoverVisible && hover && (() => {
+              const chipWidth = 132;
+              const chipX = hover.x > PLOT_WIDTH / 2 ? hover.x - chipWidth - 4 : hover.x + 4;
+              const chipY = Math.max(PLOT_PAD + 3, Math.min(hover.y - 20, plotHeight - PLOT_PAD - 18));
+              return (
+                <g className="scope-hover" aria-hidden="true">
+                  <line x1={hover.x} y1={PLOT_PAD} x2={hover.x} y2={plotHeight - PLOT_PAD} />
+                  <circle className="scope-hover-point" cx={hover.x} cy={hover.y} r={3} fill={hover.trace.color} />
+                  <rect x={chipX} y={chipY} width={chipWidth} height={17} rx={3} />
+                  <text x={chipX + 5} y={chipY + 11.5}>
+                    {formatEngineering(hover.value, hover.trace.unit, 3)} · {formatEngineering(hover.dataX, "s", 3)}
+                  </text>
+                </g>
+              );
+            })()}
             {selectedPaneTrace && cursorTool?.activeCursor && (
               <rect
                 className="cursor-glide-surface"
@@ -3722,3 +3846,90 @@ const formatElapsed = (milliseconds: number) => milliseconds < 1_000
   : `${Number((milliseconds / 1_000).toPrecision(3))} s`;
 const engineeringInputDisplay = (value: number, unit: string) =>
   formatEngineering(value, unit, 8).replace(/\s+/g, "");
+
+/**
+ * Type a coordinate to move the active cursor there. Time is the direct case.
+ * A value is the inverse question - "when is this signal 3.3 V?" - which has
+ * zero, one, or many answers, so it resolves to the crossing nearest the cursor
+ * and says plainly when the trace never reaches the value.
+ */
+function TraceSeekFields({
+  trace,
+  label,
+  times,
+  cursorX,
+  activeCursor,
+  onSeek,
+}: {
+  trace: Trace;
+  label: string;
+  times: readonly number[];
+  /** Current position of the cursor being driven, for nearest-crossing choice. */
+  cursorX: number | null;
+  activeCursor: TransientCursorId | null;
+  onSeek: (fraction: number) => void;
+}) {
+  const [note, setNote] = useState<string | null>(null);
+  // A stale "never reaches" note would be misleading against a new run or a
+  // different trace.
+  useEffect(() => setNote(null), [trace.id, times]);
+
+  const cursorLabel = (activeCursor ?? "c1").toUpperCase();
+  const valueUnit = trace.unit || "V";
+
+  const seekTime = (raw: string) => {
+    try {
+      const seconds = parseQuantity(raw, "s");
+      if (!Number.isFinite(seconds)) return;
+      setNote(null);
+      onSeek(xToFraction(times, seconds));
+    } catch {
+      // The engineering input keeps partial drafts (e.g. a bare "1e") local.
+    }
+  };
+
+  const seekValue = (raw: string) => {
+    let target: number;
+    try {
+      target = parseQuantity(raw, valueUnit);
+    } catch {
+      return;
+    }
+    if (!Number.isFinite(target)) return;
+    const crossings = findTraceCrossings(times, trace.values, target);
+    if (crossings.length === 0) {
+      setNote(`${label} never reaches ${formatEngineering(target, valueUnit, 3)}.`);
+      return;
+    }
+    const reference = cursorX ?? times[0];
+    const hit = nearestCrossing(crossings, reference) ?? crossings[0];
+    setNote(crossings.length > 1
+      ? `${crossings.length} crossings · moved ${cursorLabel} to the nearest at ${formatEngineering(hit.x, "s", 3)}`
+      : `${cursorLabel} → ${formatEngineering(hit.x, "s", 3)}`);
+    onSeek(xToFraction(times, hit.x));
+  };
+
+  return (
+    <div className="trace-seek">
+      <label className="trace-seek__field">
+        <span>At time</span>
+        <EngineeringInput
+          label={`Move cursor ${cursorLabel} on ${label} to a time`}
+          value={cursorX != null ? engineeringInputDisplay(cursorX, "s") : ""}
+          unit="s"
+          onValueChange={seekTime}
+        />
+      </label>
+      <label className="trace-seek__field">
+        <span>At value</span>
+        <EngineeringInput
+          label={`Move cursor ${cursorLabel} to where ${label} equals a value`}
+          value=""
+          unit={valueUnit}
+          onValueChange={seekValue}
+        />
+      </label>
+      {note && <p className="trace-seek__note" role="status">{note}</p>}
+    </div>
+  );
+}

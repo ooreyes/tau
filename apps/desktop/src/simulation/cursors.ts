@@ -103,6 +103,117 @@ export function dbPerDecade(readout: CursorReadout, trace: CursorTraceReadout): 
   return trace.dy / (Math.log10(readout.x2) - Math.log10(readout.x1));
 }
 
+/** One place where a trace passes through a target value. */
+export interface TraceCrossing {
+  /** Interpolated position on the independent axis. */
+  x: number;
+  /** Index of the sample starting the segment that contains the crossing. */
+  index: number;
+  /** True when the trace is increasing through the target. */
+  rising: boolean;
+}
+
+/**
+ * Every position where `values` crosses `target`, left to right - the inverse of
+ * reading a value off a cursor: "at what time is this signal 3.3 V?". Linear
+ * interpolation inside each segment matches how the scope draws the trace, so a
+ * reported crossing always lands on the rendered line.
+ *
+ * A sample sitting exactly on the target is reported once, at that sample. A
+ * flat run exactly equal to the target reports only where it is entered, so a
+ * clipped/settled waveform yields one crossing rather than thousands. Segments
+ * with a non-finite endpoint are skipped instead of producing a bogus root.
+ * `limit` bounds the result for pathological (e.g. noisy) inputs.
+ */
+export function findTraceCrossings(
+  axis: readonly number[],
+  values: readonly number[],
+  target: number,
+  limit = 256,
+): TraceCrossing[] {
+  const crossings: TraceCrossing[] = [];
+  if (!Number.isFinite(target) || axis.length === 0 || values.length !== axis.length) return crossings;
+
+  // Whether the previous sample was itself exactly on the target, so an
+  // entered-and-held flat run is not re-reported at every sample.
+  let previousWasExact = false;
+  for (let i = 0; i < axis.length && crossings.length < limit; i += 1) {
+    const y = values[i];
+    if (!Number.isFinite(y)) {
+      previousWasExact = false;
+      continue;
+    }
+    if (y === target) {
+      if (!previousWasExact) crossings.push({ x: axis[i], index: i, rising: risingAt(values, i, target) });
+      previousWasExact = true;
+      continue;
+    }
+    previousWasExact = false;
+    if (i === 0) continue;
+    const prev = values[i - 1];
+    // The equality case is owned by the branch above; only a strict straddle
+    // produces an interior root.
+    if (!Number.isFinite(prev) || prev === target) continue;
+    const below = prev < target;
+    if (below === y < target) continue;
+    const span = y - prev;
+    const t = span === 0 ? 0 : (target - prev) / span;
+    crossings.push({
+      x: axis[i - 1] + t * (axis[i] - axis[i - 1]),
+      index: i - 1,
+      rising: below,
+    });
+  }
+  return crossings;
+}
+
+/** Direction through `target` at an exactly-equal sample, using its neighbours. */
+function risingAt(values: readonly number[], index: number, target: number): boolean {
+  for (let after = index + 1; after < values.length; after += 1) {
+    const y = values[after];
+    if (!Number.isFinite(y) || y === target) continue;
+    return y > target;
+  }
+  for (let before = index - 1; before >= 0; before -= 1) {
+    const y = values[before];
+    if (!Number.isFinite(y) || y === target) continue;
+    return y < target;
+  }
+  return true;
+}
+
+/**
+ * The crossing closest to `referenceX` - what a cursor should snap to when the
+ * user types a value, so the jump is to the nearest matching point rather than
+ * always back to the start of the run. Ties prefer the earlier crossing.
+ */
+export function nearestCrossing(
+  crossings: readonly TraceCrossing[],
+  referenceX: number,
+): TraceCrossing | null {
+  let best: TraceCrossing | null = null;
+  let bestDistance = Infinity;
+  for (const crossing of crossings) {
+    const distance = Math.abs(crossing.x - referenceX);
+    if (distance < bestDistance) {
+      best = crossing;
+      bestDistance = distance;
+    }
+  }
+  return best;
+}
+
+/**
+ * Map an absolute axis position back to the `[0,1]` fraction the cursor state
+ * stores. Inverse of `fractionToX`; a zero-span axis maps to 0.
+ */
+export function xToFraction(axis: readonly number[], x: number): number {
+  if (axis.length === 0) return NaN;
+  const first = axis[0];
+  const span = axis[axis.length - 1] - first;
+  return span === 0 ? 0 : clamp((x - first) / span, 0, 1);
+}
+
 /**
  * Compute a two-cursor readout. `x1`/`x2` are absolute positions on the
  * independent axis (e.g. seconds); each is clamped to the axis range and each

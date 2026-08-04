@@ -730,3 +730,174 @@ describe("StepPlot measurements", () => {
     expect(screen.getByText("930 m")).toBeTruthy();
   });
 });
+
+describe("SimulationPanel - trace color choice and cursor seek", () => {
+  function twoTraceResult() {
+    return {
+      ok: true as const,
+      title: "Transient",
+      // V(out) ramps 0 -> 4 so a target value has exactly one crossing.
+      times: [0, 1, 2],
+      traces: [
+        { id: "n1", label: "V(out)", unit: "V" as const, color: "var(--trace-cyan)", values: [0, 2, 4] },
+        { id: "n2", label: "V(in)", unit: "V" as const, color: "var(--trace-green)", values: [5, 5, 5] },
+      ],
+      currents: [],
+      stats: { netCount: 2, componentCount: 0, sampleCount: 3, stopTime: 2, stepSize: 1 },
+      warnings: [],
+      circuit: {
+        groundNetId: null,
+        warnings: [],
+        nets: [
+          { id: "n1", points: [{ x: 0, y: 0 }, { x: 16, y: 0 }], pins: [], isGround: false, labelCount: 0 },
+          { id: "n2", points: [{ x: 0, y: 32 }, { x: 16, y: 32 }], pins: [], isGround: false, labelCount: 0 },
+        ],
+        components: [],
+      },
+    } as Extract<import("../simulation/linearTransient").AnalysisResult, { ok: true }>;
+  }
+
+  /** Traces are only visible when the schematic actually probes those nets. */
+  function seedProbes() {
+    // A probe's own color wins over the result's, so these are the colors the
+    // legend and palette actually compare against.
+    useSchematic.setState({
+      wires: [
+        { id: "w1", points: [{ x: 0, y: 0 }, { x: 16, y: 0 }] },
+        { id: "w2", points: [{ x: 0, y: 32 }, { x: 16, y: 32 }] },
+      ],
+      probes: [
+        { id: "p1", x: 0, y: 0, netId: "n1", color: "var(--trace-cyan)" },
+        { id: "p2", x: 0, y: 32, netId: "n2", color: "var(--trace-green)" },
+      ],
+    });
+  }
+
+  function renderTwoTracePanel() {
+    seedProbes();
+    renderPanel({ result: twoTraceResult() });
+  }
+
+  function selectOutTrace() {
+    fireEvent.click(screen.getByRole("button", { name: "Select V(out) for cursor measurement" }));
+  }
+
+  it("marks a preset another trace already uses, without disabling it", () => {
+    renderTwoTracePanel();
+    selectOutTrace();
+
+    // V(in) is green, so green is a confusing choice for V(out) - say so.
+    const green = screen.getByRole("button", {
+      name: "Set V(out) trace color to green - already used by V(in)",
+    });
+    expect(green.className).toContain("taken");
+    expect(green.hasAttribute("disabled")).toBe(false);
+
+    // The trace's own color is never reported as taken by someone else.
+    const sky = screen.getByRole("button", { name: "Set V(out) trace color to sky" });
+    expect(sky.className).not.toContain("taken");
+    expect(sky.getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("offers an arbitrary color beyond the six presets and applies it to the trace", () => {
+    renderTwoTracePanel();
+    selectOutTrace();
+
+    const picker = screen.getByLabelText("Pick a custom color for V(out)") as HTMLInputElement;
+    expect(picker.type).toBe("color");
+    fireEvent.change(picker, { target: { value: "#ff00aa" } });
+
+    // The legend swatch is the rendered proof the override reached the trace.
+    const legendSwatch = screen
+      .getByRole("button", { name: "Select V(out) for cursor measurement" })
+      .querySelector("i");
+    expect(legendSwatch?.getAttribute("style")).toContain("rgb(255, 0, 170)");
+  });
+
+  it("moves a cursor to an exact typed time from beside the trace", () => {
+    renderTwoTracePanel();
+    selectOutTrace();
+    fireEvent.click(screen.getByRole("button", { name: "Glide cursor 1 on V(out)" }));
+
+    fireEvent.change(screen.getByLabelText("Move cursor C1 on V(out) to a time SI prefix"), { target: { value: "" } });
+    fireEvent.change(screen.getByLabelText("Move cursor C1 on V(out) to a time"), { target: { value: "1e0" } });
+
+    const line = document.querySelector(".transient-cursor.cursor-1 line");
+    expect(Number(line?.getAttribute("x1"))).toBeCloseTo(170, 3);
+  });
+
+  it("solves for the time at a typed value and reports where it landed", () => {
+    renderTwoTracePanel();
+    selectOutTrace();
+    fireEvent.click(screen.getByRole("button", { name: "Glide cursor 1 on V(out)" }));
+
+    const label = "Move cursor C1 to where V(out) equals a value";
+    fireEvent.change(screen.getByLabelText(`${label} SI prefix`), { target: { value: "" } });
+    // V(out) is 3 V halfway through the second segment, i.e. t = 1.5 s.
+    fireEvent.change(screen.getByLabelText(label), { target: { value: "3e0" } });
+
+    expect(document.querySelector(".trace-seek__note")?.textContent).toContain("1.5");
+    const xFromValue = document.querySelector(".transient-cursor.cursor-1 line")?.getAttribute("x1");
+
+    // Solving for a value must land the cursor in exactly the same place as
+    // typing the equivalent time. Asserting the equivalence rather than a pixel
+    // keeps this honest if the pane's x-domain headroom ever changes.
+    fireEvent.change(screen.getByLabelText("Move cursor C1 on V(out) to a time SI prefix"), { target: { value: "" } });
+    fireEvent.change(screen.getByLabelText("Move cursor C1 on V(out) to a time"), { target: { value: "1.5e0" } });
+    expect(document.querySelector(".transient-cursor.cursor-1 line")?.getAttribute("x1")).toBe(xFromValue);
+  });
+
+  it("says plainly when the trace never reaches the typed value", () => {
+    renderTwoTracePanel();
+    selectOutTrace();
+    fireEvent.click(screen.getByRole("button", { name: "Glide cursor 1 on V(out)" }));
+
+    const label = "Move cursor C1 to where V(out) equals a value";
+    fireEvent.change(screen.getByLabelText(`${label} SI prefix`), { target: { value: "" } });
+    fireEvent.change(screen.getByLabelText(label), { target: { value: "99e0" } });
+
+    expect(document.querySelector(".trace-seek__note")?.textContent).toMatch(/never reaches/i);
+  });
+
+  it("reads a value off the line on hover, in pan mode, per pane", () => {
+    const rect = vi.spyOn(Element.prototype, "getBoundingClientRect").mockReturnValue({
+      // Matches the 340x190 viewBox so svg units map 1:1 to client pixels.
+      left: 0, top: 0, width: 340, height: 190, right: 340, bottom: 190, x: 0, y: 0, toJSON: () => ({}),
+    } as DOMRect);
+    try {
+      renderTwoTracePanel();
+      // Each trace gets its own pane by default, so there is one hover surface
+      // per trace and each reports its own signal.
+      const surfaces = document.querySelectorAll(".scope-hover-surface");
+      expect(surfaces).toHaveLength(2);
+
+      // x = 170 is the middle of a 340-wide plot padded by 30, i.e. t = 1 s,
+      // where the 0 -> 4 ramp is worth 2 V. No cursor was armed first.
+      fireEvent.pointerMove(surfaces[0], { clientX: 170, clientY: 95 });
+      const chip = document.querySelector(".scope-hover text");
+      expect(chip?.textContent).toContain(formatEngineering(2, "V", 3));
+      expect(chip?.textContent).toContain(formatEngineering(1, "s", 3));
+      // The readout dot sits on the interpolated point, not on a sample.
+      expect(document.querySelector(".scope-hover-point")?.getAttribute("cy")).toBe("95");
+
+      fireEvent.pointerLeave(surfaces[0]);
+      expect(document.querySelector(".scope-hover")).toBeNull();
+
+      // The flat 5 V trace's own pane reads 5 V at the same x.
+      fireEvent.pointerMove(surfaces[1], { clientX: 170, clientY: 95 });
+      expect(document.querySelector(".scope-hover text")?.textContent)
+        .toContain(formatEngineering(5, "V", 3));
+    } finally {
+      rect.mockRestore();
+    }
+  });
+
+  it("retires the hover surface once a cursor is armed, so the two never fight", () => {
+    renderTwoTracePanel();
+    expect(document.querySelector(".scope-hover-surface")).toBeTruthy();
+    selectOutTrace();
+    fireEvent.click(screen.getByRole("button", { name: "Glide cursor 1 on V(out)" }));
+    expect(document.querySelector(".scope-hover-surface")).toBeNull();
+    expect(document.querySelector(".cursor-glide-surface")).toBeTruthy();
+  });
+});
