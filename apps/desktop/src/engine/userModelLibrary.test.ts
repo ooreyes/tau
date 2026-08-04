@@ -206,6 +206,22 @@ describe("parseUserModelLibraries", () => {
     expect(block).not.toMatch(/\.model\s+2p\s+sidiode/i);
   });
 
+  it("spells LTspice positional diode area explicitly for scoped ngspice models", () => {
+    const block = parseUserModelLibraries([
+      [
+        ".subckt AMP 1 2 3 4 5 params: scale=20",
+        "D60 1 2 DIN1 1000",
+        "D61 2 3 DIN1 {scale} off",
+        "D62 3 4 DIN1 area=5",
+        ".model DIN1 D(Is=1e-16)",
+        ".ends AMP",
+      ].join("\n"),
+    ]).subckts.get("amp") ?? "";
+    expect(block).toContain("D60 1 2 DIN1 area=1000");
+    expect(block).toContain("D61 2 3 DIN1 area={scale} off");
+    expect(block).toContain("D62 3 4 DIN1 area=5");
+  });
+
   it("maps a tied-multiplier LTspice OTA to the pinned native OTA and literal output loading", () => {
     const block = parseUserModelLibraries([
       [

@@ -1454,6 +1454,10 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   Numeric LTspice ideal-diode model names (for example AD8033's `.model 2p`)
   are now rebound to deterministic valid XSPICE identifiers without changing
   safe vendor names, bringing hard failures to 12 and native OPs to 216.
+  Positional diode area inside local-model subcircuits is rewritten from
+  LTspice's `D… model 1000` to the electrically identical `area=1000` keyword;
+  this avoids ngspice's malformed double-scope model lookup and moves the same
+  metrics to 7 hard failures / 221 native OPs.
 - ✅ **Class-D fidelity — the flagship circuit now SIMULATES correctly
   (2026-07-03), proven by a committed runner** (`scripts/classdParity.corpus.ts`,
   runs with `scripts/acceptance-corpus.sh`). Two fixes:

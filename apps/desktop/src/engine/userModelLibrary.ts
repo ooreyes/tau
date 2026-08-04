@@ -220,6 +220,20 @@ function translatePassiveParasitics(line: string, subcktName: string): string[] 
   return translated;
 }
 
+/** LTspice accepts the diode area as a bare positional token. ngspice accepts
+ * that form at top level but, inside a subcircuit with a local `.model`, folds
+ * the token into a malformed doubly-scoped model identity (`x1.x1:model`). Its
+ * documented `area=<value>` spelling is electrically identical and unambiguous.
+ */
+function translateDiodeArea(line: string): string {
+  const diode = /^(\s*D\S*\s+\S+\s+\S+\s+\S+)\s+(\{[^}]*\}|\S+)(.*)$/i.exec(line);
+  if (!diode) return line;
+  const token = diode[2];
+  // No positional area: the first token is already a keyword option/flag.
+  if (token.includes("=") || /^(?:off|on)$/i.test(token)) return line;
+  return `${diode[1]} area=${token}${diode[3]}`;
+}
+
 /** LTspice's `load` flag makes an independent current source dissipative.
  * Tau's transfer was measured against LTspice 17.2.4: for normalized current
  * it is `4V` at V<=0, `4V-4V²` from 0..0.5 V, and 1 above 0.5 V. This also
@@ -395,6 +409,7 @@ function normalizeSubcktInterior(block: string): string {
         out = out.replace(/\(([^()]*)\)/, (_full, inner: string) => inner.replace(/,/g, " ").trim());
       }
       out = replaceLtspiceConstants(ltFuncsToNgspice(ifToTernary(stripNoiselessFlag(out))));
+      out = translateDiodeArea(out);
       out = translateDissipativeCurrentLoad(out);
       return translateLtspiceOta(out, subcktName)
         .flatMap((translated) => translatePassiveParasitics(translated, subcktName));

@@ -9,7 +9,20 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-03 20:35 CDT**
+**Status: DONE - 2026-08-03 20:40 CDT**
+
+Claimed unit: translate LTspice's positional diode area inside vendor
+subcircuits (`Dname anode cathode model 1000`) to ngspice's unambiguous
+`area=1000` spelling. Preserve existing keyword options and positional
+expressions; prove the affected ADI application decks converge.
+
+Completed unit: diode positional area now emits as explicit `area=<value>`
+inside normalized vendor blocks while keyword options/flags remain untouched.
+The model identity and area are unchanged, but ngspice no longer constructs a
+malformed doubly scoped model name. AD8648, AD8671/72/74, and LT1252 converge;
+full-corpus hard failures fall 12→7 and native OPs rise 216→221.
+
+Previous completed unit:
 
 Claimed unit: preserve LTspice ideal-diode models whose names are legal in
 LTspice but invalid XSPICE identifiers (for example `.model 2p D(...)`). Rename
@@ -11610,3 +11623,13 @@ evidence is kept in full here.
   zero model substitutions. The release gate ceiling is now 12. Next: resolve
   nested local diode model scoping/area and LTspice controlled-source limiter
   options in the remaining failures.
+
+- 2026-08-03 - Normalized LTspice's positional diode area for native subcircuit
+  model scoping. A minimal bundled-ngspice reproduction proved `D1 a b DM 1000`
+  is misparsed as a doubly scoped model while `D1 a b DM area=1000` is accepted;
+  Tau now emits the latter without changing the model or electrical scale,
+  including brace expressions and following flags. Evidence: 36 focused vendor-
+  library tests; full 4,012-file corpus at 228 decks, 221 OP convergences, seven
+  hard failures, 3,784 explicit unsupported refusals, and zero substitutions.
+  The gate ceiling is seven. Next: map or explicitly refuse LTspice's `dir`/
+  `vto` controlled-source limiting syntax, then isolate LTC1047.
