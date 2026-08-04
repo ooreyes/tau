@@ -22,6 +22,8 @@ pub fn run() {
             greet,
             credentials::load_assistant_api_key,
             credentials::save_assistant_api_key,
+            credentials::load_provider_api_key,
+            credentials::save_provider_api_key,
             local_ai::local_ai_status,
             local_ai::install_local_ai_runtime,
             local_ai::start_local_ai,

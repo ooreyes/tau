@@ -34,9 +34,11 @@ import {
   type AssistantStreamHandle,
 } from "../lib/assistant";
 import { saveAssistantPreferences, useAssistantPreferences } from "../lib/assistantPreferences";
-import { AssistantProviderError, type AssistantProviderReply } from "../lib/assistantProvider";
+import { AssistantProviderError, type AssistantProvider, type AssistantProviderReply } from "../lib/assistantProvider";
 import type { AssistantRunMetrics } from "../lib/assistantProvider";
 import { LocalMlxAssistant, LOCAL_MLX_MODEL_PRESETS } from "../lib/localMlxAssistant";
+import { GeminiAssistant, GEMINI_MODEL_PRESETS } from "../lib/geminiAssistant";
+import { useGeminiApiKey } from "../lib/providerApiKey";
 import { getLocalAiStatus, startLocalAi, LOCAL_AI_PRESETS, type LocalAiStatus } from "../lib/localAiRuntime";
 import { loadCustomLocalAiModels } from "../lib/localAiModels";
 import { renderMiniMarkdown } from "../lib/miniMarkdown";
@@ -237,6 +239,7 @@ export function AssistantPanel({
   legacyMemoryKey,
 }: AssistantPanelProps) {
   const apiKey = useAssistantApiKey();
+  const geminiKey = useGeminiApiKey();
   const preferences = useAssistantPreferences();
   const userModelLibraries = useSchematic((s) => s.userModelLibraries);
   const installedLtspiceModelLibraries = useRuntimeModelLibraries((s) => s.installedLtspice);
@@ -249,6 +252,15 @@ export function AssistantPanel({
     () => new LocalMlxAssistant({ model: preferences.localModel }),
     [preferences.localModel],
   );
+  const geminiAssistant = useMemo(
+    () => (geminiKey ? new GeminiAssistant({ apiKey: geminiKey, model: preferences.geminiModel }) : null),
+    [geminiKey, preferences.geminiModel],
+  );
+  /** Both non-Anthropic providers implement the same non-streaming
+   *  AssistantProvider contract, so the send path below branches once. */
+  const directAssistant: AssistantProvider | null = preferences.provider === "gemini"
+    ? geminiAssistant
+    : preferences.provider === "local-mlx" ? localAssistant : null;
   // One seed call - StrictMode double-invokes lazy initializers, and three
   // separate seedConversationState() calls would mint three different ids for
   // an empty circuit.
@@ -473,7 +485,9 @@ export function AssistantPanel({
       setRetryPrompt(null);
       return;
     }
-    if (!text || streaming || !localAiCanSend || (preferences.provider === "anthropic" && !apiKey)) return;
+    if (!text || streaming || !localAiCanSend
+      || (preferences.provider === "anthropic" && !apiKey)
+      || (preferences.provider === "gemini" && !geminiAssistant)) return;
     setError(null);
     setRetryPrompt(null);
 
@@ -563,10 +577,11 @@ export function AssistantPanel({
       )));
     };
 
-    if (preferences.provider === "local-mlx") {
+    if (directAssistant) {
+      const isLocal = preferences.provider === "local-mlx";
       const controller = new AbortController();
       localAbortRef.current = controller;
-      void localAssistant.complete({
+      void directAssistant.complete({
         contextText,
         history,
         allowCurrentApply: canApplyCurrent,
@@ -575,6 +590,7 @@ export function AssistantPanel({
         if (controller.signal.aborted || localAbortRef.current !== controller) return;
         localAbortRef.current = null;
         completeTurn(reply);
+        if (!isLocal) return;
         // A completion proves the runtime is alive. If the setup card is
         // still showing a stale "stopped" (the server was started elsewhere,
         // e.g. the first-run dialog), reconcile so the card retires.
@@ -593,7 +609,7 @@ export function AssistantPanel({
         // The server can die between the mount-time status check and this
         // send; refresh so the setup card reappears instead of stranding the
         // user on an error with no start button.
-        if (localError instanceof AssistantProviderError && localError.kind === "offline") {
+        if (isLocal && localError instanceof AssistantProviderError && localError.kind === "offline") {
           void getLocalAiStatus().then(setLocalAiStatus).catch(() => {});
         }
       });
@@ -614,7 +630,7 @@ export function AssistantPanel({
       },
       onProgress: setProgressPhase,
     }, { analysis, params }, { allowCurrentApply: canApplyCurrent });
-  }, [messages, streaming, localAiCanSend, preferences.provider, apiKey, components, wires, netLabels, probes, directives, userModelLibraryTexts, params, analysis, opResult, acResult, dcResult, fourier, componentRows, measurements, selectedId, localAssistant, memoryKey]);
+  }, [messages, streaming, localAiCanSend, preferences.provider, apiKey, components, wires, netLabels, probes, directives, userModelLibraryTexts, params, analysis, opResult, acResult, dcResult, fourier, componentRows, measurements, selectedId, localAssistant, geminiAssistant, directAssistant, memoryKey]);
 
   const beginMessageEdit = useCallback((message: ChatMessage) => {
     if (streaming || message.role !== "user") return;
@@ -748,7 +764,9 @@ export function AssistantPanel({
   };
 
   const hasContent = messages.length > 0 || error;
-  const modelChoice = preferences.provider === "anthropic" ? "anthropic" : preferences.localModel;
+  const modelChoice = preferences.provider === "anthropic"
+    ? "anthropic"
+    : preferences.provider === "gemini" ? preferences.geminiModel : preferences.localModel;
   const suggestions = useMemo(() => buildAssistantSuggestions({
     components,
     wires,
@@ -770,11 +788,17 @@ export function AssistantPanel({
       saveAssistantPreferences({ ...preferences, provider: "anthropic" });
       return;
     }
+    if (value in GEMINI_MODEL_PRESETS) {
+      saveAssistantPreferences({ ...preferences, provider: "gemini", geminiModel: value });
+      return;
+    }
     if (localAiPresets.some((preset) => preset.id === value)) {
-      saveAssistantPreferences({ provider: "local-mlx", localModel: value });
+      saveAssistantPreferences({ ...preferences, provider: "local-mlx", localModel: value });
     }
   };
-  const needsCloudKey = preferences.provider === "anthropic" && !apiKey;
+  const needsCloudKey = (preferences.provider === "anthropic" && !apiKey)
+    || (preferences.provider === "gemini" && !geminiKey);
+  const missingKeyProvider = preferences.provider === "gemini" ? "Gemini" : "Anthropic";
 
   return (
     <aside
@@ -890,6 +914,8 @@ export function AssistantPanel({
             <SelectTrigger size="sm" className="assistant-model-select" aria-label="Assistant model"><SelectValue /></SelectTrigger>
             <SelectContent align="center">
               <SelectItem value="anthropic">{ASSISTANT_MODEL_LABEL} · Cloud</SelectItem>
+              <SelectItem value="gemini-2.5-flash">{GEMINI_MODEL_PRESETS["gemini-2.5-flash"].label} · Cloud (free tier)</SelectItem>
+              <SelectItem value="gemini-2.5-pro">{GEMINI_MODEL_PRESETS["gemini-2.5-pro"].label} · Cloud</SelectItem>
               <SelectItem value="qwen3-4b-4bit">{LOCAL_MLX_MODEL_PRESETS["qwen3-4b-4bit"].label} · Local</SelectItem>
               <SelectItem value="qwen3-1.7b-4bit">{LOCAL_MLX_MODEL_PRESETS["qwen3-1.7b-4bit"].label} · Local</SelectItem>
               {customLocalAiModels.map((model) => <SelectItem key={model.id} value={model.id}>{model.label} · Imported</SelectItem>)}
@@ -903,7 +929,7 @@ export function AssistantPanel({
           <div className="panel-empty">
             <div className="panel-empty-glyph" aria-hidden="true" />
             <strong>No API Key</strong>
-            <span>Add an Anthropic API key in Settings to ask questions about this circuit.</span>
+            <span>{`Add a${missingKeyProvider === "Anthropic" ? "n" : ""} ${missingKeyProvider} API key in Settings to ask questions about this circuit.`}</span>
             <Button size="sm" variant="outline" onClick={onOpenSettings}>Open Settings</Button>
           </div>
         </div>
@@ -1021,7 +1047,7 @@ export function AssistantPanel({
                     <div className="assistant-progress" role="status" aria-live="polite">
                       <span className="assistant-progress-orb" aria-hidden="true" />
                       <div className="assistant-progress-copy">
-                        <strong>{preferences.provider === "anthropic" ? PROGRESS_LABELS[progressPhase] : "Planning on this Mac"}</strong>
+                        <strong>{preferences.provider === "local-mlx" ? "Planning on this Mac" : PROGRESS_LABELS[progressPhase]}</strong>
                         <span>{elapsedLabel(elapsedSeconds)}</span>
                       </div>
                     </div>

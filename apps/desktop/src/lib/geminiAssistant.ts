@@ -1,0 +1,112 @@
+/**
+ * Google Gemini via its OpenAI-compatible chat-completions endpoint. Tau reuses
+ * the shared OpenAI-shaped machinery in openAiCompatibleAssistant.ts rather than
+ * adding a second SDK, so Gemini inherits the same catalog-grounded system
+ * prompt, the same strict plan compiler, the same bounded inspect round-trips,
+ * and the same plan-repair loop as the on-device provider.
+ *
+ * Why Gemini specifically: its free tier needs no credit card, which is the
+ * only cloud path a student can use. The key is the user's own and lives in the
+ * OS keychain exactly like the Anthropic one - Tau never proxies it.
+ */
+import {
+  OpenAiCompatibleAssistant,
+  type ChatProviderProfile,
+  type OpenAiCompatibleAssistantOptions,
+} from "./openAiCompatibleAssistant";
+
+export const GEMINI_MODEL_PRESETS = {
+  "gemini-2.5-flash": {
+    label: "Gemini 2.5 Flash",
+    model: "gemini-2.5-flash",
+    /** Free-tier eligible: the no-credit-card default for students. */
+    freeTier: true,
+  },
+  "gemini-2.5-pro": {
+    label: "Gemini 2.5 Pro",
+    model: "gemini-2.5-pro",
+    freeTier: false,
+  },
+} as const;
+
+export type GeminiModelPreset = keyof typeof GEMINI_MODEL_PRESETS;
+
+/** Google's OpenAI-compatibility shim. Pinned in the Tauri CSP connect-src. */
+const GEMINI_CHAT_COMPLETIONS_ENDPOINT =
+  "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
+
+export const GEMINI_REQUEST_TIMEOUT_MS = 3 * 60_000;
+export const GEMINI_DEFAULT_MODEL: GeminiModelPreset = "gemini-2.5-flash";
+
+function resolveGeminiModel(model: string): string {
+  if (model in GEMINI_MODEL_PRESETS) return GEMINI_MODEL_PRESETS[model as GeminiModelPreset].model;
+  return model.replace(/^custom:/, "");
+}
+
+/** The key is captured per-instance so it never becomes module state and never
+ *  outlives the panel that constructed the provider. */
+export function geminiProfile(apiKey: string): ChatProviderProfile {
+  return {
+    id: "gemini",
+    endpoint: GEMINI_CHAT_COMPLETIONS_ENDPOINT,
+    maxTokens: 8192,
+    timeoutMs: GEMINI_REQUEST_TIMEOUT_MS,
+    resolveModel: resolveGeminiModel,
+    authHeaders: () => ({ Authorization: `Bearer ${apiKey}` }),
+    // Google's shim rejects unknown top-level fields; MLX's thinking switch and
+    // parallel_tool_calls are both absent from its accepted schema.
+    sendChatTemplateKwargs: false,
+    sendParallelToolCallsFlag: false,
+    thinkingMarker: "",
+    assistantLabel: "circuit assistant",
+    // Gemini emits well-formed native tool_calls; inviting a bare-JSON fallback
+    // would only widen what Tau has to treat as a possible action.
+    allowTextToolFallback: false,
+    wording: {
+      subject: "Gemini model",
+      unreachable: () =>
+        "Tau could not reach Google's Gemini API. Check your network connection and try again.",
+      httpStatus: (status) => {
+        if (status === 400) {
+          return "Gemini rejected the request as malformed (HTTP 400). If you set a custom model name, check its spelling.";
+        }
+        if (status === 401 || status === 403) {
+          return "Gemini rejected the API key (HTTP "
+            + status
+            + "). Check the key in Settings; create one free at aistudio.google.com/apikey.";
+        }
+        if (status === 404) {
+          return "Gemini does not recognize that model (HTTP 404). Pick a listed model in Settings, or correct the custom name.";
+        }
+        if (status === 429) {
+          return "Gemini rate-limited this key (HTTP 429). The free tier has a daily request cap - wait and retry, or switch to the on-device model.";
+        }
+        if (status >= 500) {
+          return `Gemini reported a server error (HTTP ${status}). This is on Google's side; retry shortly.`;
+        }
+        return `Gemini returned HTTP ${status}.`;
+      },
+      invalidJson: () => "Gemini returned invalid JSON.",
+      timedOut: (seconds) =>
+        `Gemini made no complete reply within ${seconds} seconds. Tau stopped the request.`,
+      aborted: () => "The Gemini request was stopped.",
+      failed: () => "The Gemini request failed.",
+    },
+  };
+}
+
+export interface GeminiAssistantOptions extends OpenAiCompatibleAssistantOptions {
+  apiKey: string;
+  model?: GeminiModelPreset | string;
+}
+
+/** Hosted Gemini provider. Returns proposals only; every file/canvas mutation
+ *  still requires the user's explicit confirmation outside this interface. */
+export class GeminiAssistant extends OpenAiCompatibleAssistant {
+  constructor(options: GeminiAssistantOptions) {
+    super(geminiProfile(options.apiKey), {
+      ...options,
+      model: options.model ?? GEMINI_DEFAULT_MODEL,
+    });
+  }
+}

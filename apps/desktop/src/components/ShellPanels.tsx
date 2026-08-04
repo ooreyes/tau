@@ -68,6 +68,8 @@ import { IMPORT_ACCEPT, IMPORT_BUTTON_LABEL } from "../io/importUi";
 import type { AnalysisResult } from "../simulation/linearTransient";
 import { formatEngineering } from "../simulation/quantity";
 import { loadAssistantApiKey, saveAssistantApiKey, useAssistantApiKey } from "../lib/assistant";
+import { loadGeminiApiKey, saveGeminiApiKey, useGeminiApiKey } from "../lib/providerApiKey";
+import { GEMINI_MODEL_PRESETS } from "../lib/geminiAssistant";
 import {
   saveAssistantPreferences,
   useAssistantPreferences,
@@ -2104,6 +2106,13 @@ export function SettingsPanel({
   const setProbeColor = useSchematic((s) => s.setProbeColor);
   const storedApiKey = useAssistantApiKey();
   const [apiKeyInput, setApiKeyInput] = useState(loadAssistantApiKey);
+  const [geminiKeyInput, setGeminiKeyInput] = useState(loadGeminiApiKey);
+  const hydratedGeminiKey = useGeminiApiKey();
+  // The keychain read completes after mount; adopt it unless the user has
+  // already typed into the field this session.
+  useEffect(() => {
+    setGeminiKeyInput((current) => (current ? current : hydratedGeminiKey));
+  }, [hydratedGeminiKey]);
   const assistantPreferences = useAssistantPreferences();
   const [localAiStatus, setLocalAiStatus] = useState<LocalAiStatus | null>(null);
   const [localAiBusy, setLocalAiBusy] = useState(false);
@@ -2222,11 +2231,14 @@ export function SettingsPanel({
                 >
                   <option value="local-mlx">Local MLX</option>
                   <option value="anthropic">Anthropic</option>
+                  <option value="gemini">Google Gemini</option>
                 </select>
                 <span className="settings-field-hint">
                   {assistantPreferences.provider === "local-mlx"
                     ? "Runs on this Mac through Tau's fixed loopback endpoint. Circuit context stays local."
-                    : "Uses Claude Sonnet 5 through api.anthropic.com with your Keychain-protected key."}
+                    : assistantPreferences.provider === "gemini"
+                      ? "Uses Gemini through generativelanguage.googleapis.com with your Keychain-protected key. The free tier needs no credit card."
+                      : "Uses Claude Sonnet 5 through api.anthropic.com with your Keychain-protected key."}
                 </span>
               </label>
 
@@ -2348,6 +2360,55 @@ export function SettingsPanel({
                       </div>
                     )}
                   </div>
+                </>
+              ) : assistantPreferences.provider === "gemini" ? (
+                <>
+                  <label className="settings-field" htmlFor="assistant-gemini-model">
+                    <span>Gemini model</span>
+                    <select
+                      id="assistant-gemini-model"
+                      className="settings-select"
+                      aria-label="Gemini model"
+                      value={assistantPreferences.geminiModel}
+                      onChange={(event) => saveAssistantPreferences({
+                        ...assistantPreferences,
+                        geminiModel: event.currentTarget.value,
+                      })}
+                    >
+                      {Object.entries(GEMINI_MODEL_PRESETS).map(([id, preset]) => (
+                        <option key={id} value={id}>
+                          {preset.freeTier ? `${preset.label} (free tier)` : preset.label}
+                        </option>
+                      ))}
+                    </select>
+                    <span className="settings-field-hint">
+                      Flash is free-tier eligible and fast enough for circuit questions. Pro reasons harder about
+                      stability and biasing but needs billing enabled on your Google account.
+                    </span>
+                  </label>
+                  <label className="settings-field" htmlFor="assistant-gemini-key">
+                    <span>Gemini API key</span>
+                    <Input
+                      id="assistant-gemini-key"
+                      aria-label="Gemini API key"
+                      type="password"
+                      variant="mono"
+                      autoComplete="off"
+                      spellCheck={false}
+                      placeholder="AIza…"
+                      value={geminiKeyInput}
+                      onChange={(event) => {
+                        const next = event.currentTarget.value;
+                        setGeminiKeyInput(next);
+                        saveGeminiApiKey(next);
+                      }}
+                    />
+                    <span className="settings-field-hint">
+                      Stored securely in your system keychain and sent only to generativelanguage.googleapis.com.
+                      Create a free key at aistudio.google.com/apikey - no credit card required. Google may use
+                      free-tier requests to improve its models, so avoid it for confidential designs.
+                    </span>
+                  </label>
                 </>
               ) : (
                 <label className="settings-field" htmlFor="assistant-api-key">
