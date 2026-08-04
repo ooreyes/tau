@@ -9,7 +9,24 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-03 20:12 CDT**
+**Status: DONE - 2026-08-03 20:29 CDT**
+
+Claimed unit: translate LTspice capacitor/inductor `Rser`, `Rpar`, and `Cpar`
+instance parasitics found in installed vendor subcircuits into explicit,
+electrically equivalent native SPICE elements. Preserve the original L/C
+identity, local subcircuit scope, and parameter expressions; prove the expanded
+block in bundled ngspice and rerun the full corpus hard-failure count.
+
+Completed unit: installed vendor C/L instance parasitics `Rser`, `Rpar`, and
+`Cpar` now expand into LTspice's documented equivalent series/parallel circuit
+before native execution. The original capacitor/inductor name stays on the
+reactive element for currents and K coupling; literal zero resistance is
+elided, expressions and remaining instance options survive, and multiplicity
+combinations refuse instead of guessing. Forty-seven extended-corpus vendor
+applications now converge; non-refusal hard failures fall from 61 to 14 and
+synthetic operating-point convergence rises from 167 to 214.
+
+Previous completed unit:
 
 Claimed unit: fail closed when a schematic explicitly names a semiconductor or
 switch model that Tau cannot resolve. Generic starter models remain available
@@ -11555,3 +11572,17 @@ evidence is kept in full here.
   analysis parity plus student, professional, developer, and safe OpenAI gates.
   Next: eliminate the 61 extended-corpus hard failures, then broaden exact
   vendor-symbol/subcircuit resolution and authored-analysis comparisons.
+
+- 2026-08-03 - Implemented exact native expansion for LTspice capacitor and
+  inductor `Rser`, `Rpar`, and `Cpar` instance parameters found throughout the
+  installed vendor op-amp library. Series resistance receives a collision-safe
+  internal node while the named C/L remains probeable/coupleable; Rpar and Cpar
+  span the original terminals, zero series resistance disappears, brace
+  expressions remain scoped, and `m=` plus parasitics fails closed until its
+  per-unit scaling is proven. Evidence: focused 34 parser/normalizer tests;
+  real installed 2N3055 model-import corpus; full recursive corpus 4,012
+  imported/schema-valid, 228 decks, 214 embedded-ngspice OPs, 14 hard failures,
+  3,784 explicit unsupported refusals, zero substitutions; canonical floor
+  remains 80/82. The full gate now enforces a 14-hard-failure ceiling. Next:
+  resolve the remaining nested model-name and POLY/code-model failures, then
+  broaden the 3,784 explicit vendor-symbol refusals.

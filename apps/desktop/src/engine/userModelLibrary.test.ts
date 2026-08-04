@@ -224,6 +224,46 @@ describe("parseUserModelLibraries", () => {
     expect(block).not.toMatch(/\brpar\s*=/i);
   });
 
+  it("expands LTspice capacitor series/parallel parasitics without changing its identity", () => {
+    const block = parseUserModelLibraries([
+      ".subckt AMP 1 2 3 4 5 params: rs=100\nC11 2 5 .9p Rser={rs} Rpar=2e13 Cpar=.1p ic=.2\n.ends AMP",
+    ]).subckts.get("amp") ?? "";
+    expect(block).toContain("C11 __tau_cser_AMP_C11 5 .9p ic=.2");
+    expect(block).toContain("R__tau_rser_AMP_C11 2 __tau_cser_AMP_C11 {rs}");
+    expect(block).toContain("R__tau_rpar_AMP_C11 2 5 2e13");
+    expect(block).toContain("C__tau_cpar_AMP_C11 2 5 .1p");
+    expect(block).not.toMatch(/\b(?:rser|rpar|cpar)\s*=/i);
+  });
+
+  it("expands LTspice inductor series/parallel parasitics and keeps the L name for coupling", () => {
+    const block = parseUserModelLibraries([
+      ".subckt AMP 1 2 3 4 5\nL3 2 5 3.18m Rser=1k Rpar=30Meg Cpar=2p ic=1m\n.ends AMP",
+    ]).subckts.get("amp") ?? "";
+    expect(block).toContain("L3 __tau_lser_AMP_L3 5 3.18m ic=1m");
+    expect(block).toContain("R__tau_rser_AMP_L3 2 __tau_lser_AMP_L3 1k");
+    expect(block).toContain("R__tau_rpar_AMP_L3 2 5 30Meg");
+    expect(block).toContain("C__tau_cpar_AMP_L3 2 5 2p");
+    expect(block).not.toMatch(/\b(?:rser|rpar|cpar)\s*=/i);
+  });
+
+  it("strips a literal zero series parasitic without creating a zero-ohm branch", () => {
+    const block = parseUserModelLibraries([
+      ".subckt AMP 1 2\nC1 1 2 318f Rser=0\nL1 1 2 30u Rser=0\n.ends AMP",
+    ]).subckts.get("amp") ?? "";
+    expect(block).toContain("C1 1 2 318f");
+    expect(block).toContain("L1 1 2 30u");
+    expect(block).not.toMatch(/__tau_rser|\brser\s*=/i);
+  });
+
+  it("refuses multiplicity combined with expanded parasitics instead of guessing scaling", () => {
+    const registry = parseUserModelLibraries([
+      ".subckt AMP 1 2\nC1 1 2 1u Rser=1 m=4\n.ends AMP",
+    ]);
+    expect(() => resolveUserSubckt(registry, "AMP")).toThrow(
+      /Simulation refused: AMP\/C1 combines m= with LTspice parasitics.*No approximate or partial circuit was run/,
+    );
+  });
+
   it("maps LTspice's dissipative current-load flag to its documented transfer", () => {
     const block = parseUserModelLibraries([
       ".subckt AMP 1 2 3 4 5\nI3 2 3 50u load\n.ends AMP",

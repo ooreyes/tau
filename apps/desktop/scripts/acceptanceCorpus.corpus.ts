@@ -381,6 +381,9 @@ describe.skipIf(corpus.length === 0)("acceptance corpus (user's own LTspice file
         if (!skipNgspice) {
           expect.soft(canonicalSummary.opConverged, "canonical operating-point floor").toBeGreaterThanOrEqual(80);
         }
+        if (process.env.CORPUS_CANONICAL_ONLY !== "1") {
+          expect.soft(hardFailures.length, "full-corpus non-refusal hard-failure ceiling").toBeLessThanOrEqual(14);
+        }
       }
     } finally {
       rmSync(tmpDir, { recursive: true, force: true });

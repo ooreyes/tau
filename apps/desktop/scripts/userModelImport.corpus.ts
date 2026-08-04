@@ -86,12 +86,11 @@ describe.skipIf(!existsSync(LIB_PATH) || !haveNgspice)("user vendor .model impor
     expect(deck.netlist).not.toMatch(/mfg\s*=/i);
     expect(deck.netlist).toMatch(/^Q\w*\s+coll\s+base\s+0\s+2N3055\b/im);
 
-    // Control: the SAME schematic with no library falls back to Tau's generic
-    // starter model and inlines no 2N3055 card - proof the resolution above
-    // came from the user library, not a bundled part.
-    const without = buildSpiceDeck({ components, wires: [], netLabels }, analysis);
-    expect(without.netlist).not.toMatch(/^\.model\s+2N3055\b/im);
-    expect(without.netlist).toMatch(/^Q\w*\s+coll\s+base\s+0\s+TAU_NPN\b/im);
+    // Control: the SAME explicitly named schematic with no library refuses;
+    // it may never plot Tau's generic starter as if that were a 2N3055.
+    expect(() => buildSpiceDeck({ components, wires: [], netLabels }, analysis)).toThrow(
+      /Simulation refused: Q1 names model "2N3055".*could not resolve/i,
+    );
 
     // Run the resolved deck through the real engine. The stage must bias into
     // forward-active operation, and the collector/base current ratio must

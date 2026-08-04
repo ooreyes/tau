@@ -1444,6 +1444,13 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   honest compatibility baseline, not an LTspice-killer claim; vendor symbol and
   macromodel coverage plus authored-analysis differential results must improve
   materially before completion.
+  **Passive-parasitic compatibility (2026-08-03):** LTspice C/L instance
+  `Rser`, `Rpar`, and `Cpar` inside installed vendor subcircuits now expand to
+  the exact documented series/parallel topology with explicit native elements;
+  the original C/L identity remains available to probes and K coupling. Literal
+  zero series resistance is elided, parameter expressions survive, and `m=`
+  combinations refuse until per-unit scaling is proven. The full corpus hard-
+  failure count falls from 61 to 14 and native OP convergence rises 167→214.
 - ✅ **Class-D fidelity — the flagship circuit now SIMULATES correctly
   (2026-07-03), proven by a committed runner** (`scripts/classdParity.corpus.ts`,
   runs with `scripts/acceptance-corpus.sh`). Two fixes:

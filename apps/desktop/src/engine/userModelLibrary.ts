@@ -4,8 +4,8 @@
  * subcircuit name that is neither inline in the document, nor one of Tau's
  * bundled parts (standardModels.ts's standard.dio/bjt/jft parts,
  * bundledSubcircuits.ts's library subcircuits). Without this there is
- * nowhere to get the real definition and the device falls back to a generic
- * `TAU_*` starter model.
+ * nowhere to get the real definition and an explicitly named device must
+ * refuse rather than fall back to a generic `TAU_*` starter model.
  *
  * The native engine's deck sanitizer (src-tauri/src/spice.rs `deck_lines`)
  * REJECTS file-backed primitives (`.include`, `.lib`, `file=`, `filename=`,
@@ -141,24 +141,63 @@ function translateIdealDiodes(lines: string[]): string[] {
   });
 }
 
-/** LTspice accepts `Rpar=<value>` on a capacitor instance; ngspice rejects
- * that token. The electrical definition is exactly a resistor in parallel
- * with the capacitor, so preserve the capacitor and emit that resistor. */
-function translateCapacitorRpar(line: string, subcktName: string): string[] {
-  const capacitor = /^(\s*)(C\S+)\s+(\S+)\s+(\S+)\s+(\S+)(.*)$/i.exec(line);
-  if (!capacitor) return [line];
-  const rpar = /\brpar\s*=\s*(\{[^}]*\}|[^\s]+)/i.exec(capacitor[6]);
-  if (!rpar) return [line];
+function instanceParameter(tail: string, name: "rser" | "rpar" | "cpar" | "m"): string | null {
+  return new RegExp(`\\b${name}\\s*=\\s*(\\{[^}]*\\}|[^\\s]+)`, "i").exec(tail)?.[1] ?? null;
+}
 
-  const remainingTail = capacitor[6]
-    .replace(rpar[0], "")
-    .replace(/[ \t]{2,}/g, " ")
-    .replace(/[ \t]+$/g, "");
-  const safe = `${subcktName}_${capacitor[2]}`.replace(/[^A-Za-z0-9_]/g, "_");
-  return [
-    `${capacitor[1]}${capacitor[2]} ${capacitor[3]} ${capacitor[4]} ${capacitor[5]}${remainingTail}`,
-    `${capacitor[1]}R__tau_rpar_${safe} ${capacitor[3]} ${capacitor[4]} ${rpar[1]}`,
+function withoutInstanceParameters(tail: string, names: readonly ("rser" | "rpar" | "cpar")[]): string {
+  let remaining = tail;
+  for (const name of names) {
+    remaining = remaining.replace(new RegExp(`\\s+${name}\\s*=\\s*(?:\\{[^}]*\\}|[^\\s]+)`, "ig"), "");
+  }
+  return remaining.replace(/[ \t]{2,}/g, " ").replace(/[ \t]+$/g, "");
+}
+
+function isLiteralZero(value: string | null): boolean {
+  if (value === null || value.includes("{")) return false;
+  try {
+    return parseQuantity(value) === 0;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * LTspice's C/L devices accept Rser/Rpar/Cpar instance parasitics that ngspice
+ * either rejects or only partly implements. Expand the documented equivalent
+ * circuits explicitly: Rser is in series with the named reactive element,
+ * while Rpar and Cpar span the original two terminals. The original C/L name
+ * remains on the reactive element so current probes and K-coupling identities
+ * do not change. Parameter expressions remain literal subcircuit expressions.
+ */
+function translatePassiveParasitics(line: string, subcktName: string): string[] {
+  const passive = /^(\s*)([CL]\S+)\s+(\S+)\s+(\S+)\s+(\S+)(.*)$/i.exec(line);
+  if (!passive) return [line];
+  const [, indent, instance, positive, negative, value, tail] = passive;
+  const rser = instanceParameter(tail, "rser");
+  const rpar = instanceParameter(tail, "rpar");
+  const cpar = instanceParameter(tail, "cpar");
+  if (rser === null && rpar === null && cpar === null) return [line];
+
+  if (instanceParameter(tail, "m") !== null) {
+    return [`${TAU_MODEL_REFUSAL_MARKER}${subcktName}/${instance} combines m= with LTspice parasitics; Tau cannot preserve per-unit scaling exactly yet.`];
+  }
+
+  const remainingTail = withoutInstanceParameters(tail, ["rser", "rpar", "cpar"]);
+  const safe = `${subcktName}_${instance}`.replace(/[^A-Za-z0-9_]/g, "_");
+  const hasSeriesResistance = rser !== null && !isLiteralZero(rser);
+  const reactivePositive = hasSeriesResistance
+    ? `__tau_${instance[0].toLowerCase()}ser_${safe}`
+    : positive;
+  const translated = [
+    `${indent}${instance} ${reactivePositive} ${negative} ${value}${remainingTail}`,
   ];
+  if (hasSeriesResistance) {
+    translated.push(`${indent}R__tau_rser_${safe} ${positive} ${reactivePositive} ${rser}`);
+  }
+  if (rpar !== null) translated.push(`${indent}R__tau_rpar_${safe} ${positive} ${negative} ${rpar}`);
+  if (cpar !== null) translated.push(`${indent}C__tau_cpar_${safe} ${positive} ${negative} ${cpar}`);
+  return translated;
 }
 
 /** LTspice's `load` flag makes an independent current source dissipative.
@@ -338,7 +377,7 @@ function normalizeSubcktInterior(block: string): string {
       out = replaceLtspiceConstants(ltFuncsToNgspice(ifToTernary(stripNoiselessFlag(out))));
       out = translateDissipativeCurrentLoad(out);
       return translateLtspiceOta(out, subcktName)
-        .flatMap((translated) => translateCapacitorRpar(translated, subcktName));
+        .flatMap((translated) => translatePassiveParasitics(translated, subcktName));
     });
   return translateIdealDiodes(normalized)
     .join("\n");
