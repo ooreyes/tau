@@ -30,7 +30,7 @@ import { validateSchematicDocument } from "../src/schematic/documentValidation";
 import { summarizeCorpus, formatCorpusReport, type CorpusRow } from "../src/io/corpusReport";
 import { opampIdentity } from "../src/engine/opampModel";
 import { parseUserModelLibraries, resolveUserSubckt, type UserModelLibraryRegistry } from "../src/engine/userModelLibrary";
-import { ltspiceLibRoot, ltspiceLibRoots } from "./ltspiceLibRoot";
+import { ltspiceLibRoots } from "./ltspiceLibRoot";
 import { nativeWorkerPaths, runNativeSpiceWorker } from "./nativeSpiceWorker";
 
 const HOME = homedir();
@@ -53,7 +53,6 @@ const EXTRA_SYMBOL_ROOTS = [
 
 const DOWNLOADS_ROOT = join(HOME, "Downloads", "LTspice_export");
 const DOCUMENTS_ROOT = join(HOME, "Documents", "LTspice");
-const LTSPICE_LIB_ROOT = ltspiceLibRoot();
 const INSTALLED_STANDARD_MODEL_LIBRARIES = [
   "standard.dio",
   "standard.bjt",
@@ -158,7 +157,10 @@ function installedSymbolMetadata(symbolType: string): AsySymbol | null {
   ) return null;
   const key = relativeSymbol.toLowerCase();
   if (symbolMetadataCache.has(key)) return symbolMetadataCache.get(key) ?? null;
-  const roots = [...EXTRA_SYMBOL_ROOTS, join(LTSPICE_LIB_ROOT, "sym")];
+  const roots = [
+    ...EXTRA_SYMBOL_ROOTS,
+    ...ltspiceLibRoots().map((root) => join(root, "sym")),
+  ];
   for (const root of roots) {
     const path = join(root, `${relativeSymbol}.asy`);
     const rel = relative(root, path);
@@ -173,12 +175,14 @@ function installedSymbolMetadata(symbolType: string): AsySymbol | null {
 
 /** Extract only the selected vendor block from the user's model file. Parsing
  * is cached per file so the 4k corpus never repeatedly scans LTC.lib/ADI*.lib. */
-function attachedOpampBlocks(components: readonly import("../src/schematic/types").SchematicComponent[]): string[] {
+function attachedInstalledModelBlocks(components: readonly import("../src/schematic/types").SchematicComponent[]): string[] {
   const blocks = new Map<string, string>();
   for (const component of components) {
-    if (component.kind !== "opamp" || !component.ltModelFile) continue;
-    const identity = opampIdentity(component);
-    if (identity.mode !== "vendor") continue;
+    if (!component.ltModelFile || (component.kind !== "opamp" && component.kind !== "subckt")) continue;
+    const opamp = component.kind === "opamp" ? opampIdentity(component) : null;
+    if (opamp?.mode === "behavioral") continue;
+    const requested = opamp?.modelName ?? component.value.trim().split(/\s+/)[0] ?? "";
+    if (!requested) continue;
     const relativeFile = normalize(component.ltModelFile.replace(/[\\/]+/g, sep));
     if (
       !relativeFile
@@ -189,7 +193,7 @@ function attachedOpampBlocks(components: readonly import("../src/schematic/types
     let registry = modelRegistryCache.get(relativeFile.toLowerCase());
     if (registry === undefined) {
       registry = null;
-      for (const root of [join(LTSPICE_LIB_ROOT, "sub"), LTSPICE_LIB_ROOT]) {
+      for (const root of ltspiceLibRoots().flatMap((candidate) => [join(candidate, "sub"), candidate])) {
         const path = join(root, relativeFile);
         const rel = relative(root, path);
         if (rel === ".." || rel.startsWith(`..${sep}`) || isAbsolute(rel) || !existsSync(path)) continue;
@@ -199,8 +203,8 @@ function attachedOpampBlocks(components: readonly import("../src/schematic/types
       modelRegistryCache.set(relativeFile.toLowerCase(), registry);
     }
     if (!registry) continue;
-    const block = resolveUserSubckt(registry, identity.modelName);
-    if (block) blocks.set(identity.modelName.toLowerCase(), block);
+    const block = resolveUserSubckt(registry, requested);
+    if (block) blocks.set(requested.toLowerCase(), block);
   }
   return [...blocks.values()];
 }
@@ -259,7 +263,7 @@ function runFile(file: CorpusFile, tmpDir: string, skipNgspice: boolean): Corpus
     // copy, or redistribute it with Tau. Schematic-specific blocks remain
     // first so an explicit local definition wins a name collision.
     const userModelLibraries = [
-      ...attachedOpampBlocks(imported.components),
+      ...attachedInstalledModelBlocks(imported.components),
       ...INSTALLED_STANDARD_MODEL_LIBRARIES,
     ];
     const deck = buildSpiceDeck(

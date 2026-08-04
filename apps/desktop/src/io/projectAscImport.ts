@@ -23,6 +23,10 @@ export interface ProjectAscImportOptions {
   rootPath: string | null;
   readText: (path: string) => Promise<string>;
   pathExists: (path: string) => Promise<boolean>;
+  /** Read one fixed-root file from the user's installed LTspice library. The
+   * native boundary rejects traversal, symlinks, oversized/binary/encrypted
+   * content, and every extension except model text plus `.asy` metadata. */
+  readInstalledLtspiceText?: (id: string) => Promise<string>;
 }
 
 export interface ProjectAscImportResult extends AscImportResult {
@@ -94,6 +98,7 @@ async function resolveModelLibraries(
     seen.add(key);
     if (libraries.length >= MAX_MODEL_LIBRARIES) break;
 
+    let resolved = false;
     for (const root of roots) {
       const candidate = joinPath(root, safe);
       if (!(await options.pathExists(candidate))) continue;
@@ -116,7 +121,19 @@ async function resolveModelLibraries(
       if (totalChars + contents.length > MAX_MODEL_LIBRARY_TOTAL_LENGTH) break;
       totalChars += contents.length;
       libraries.push({ name: key, text: contents });
+      resolved = true;
       break;
+    }
+    if (resolved || !options.readInstalledLtspiceText) continue;
+    const installedId = safe.toLowerCase().startsWith("sub/") ? safe : `sub/${safe}`;
+    try {
+      const contents = await options.readInstalledLtspiceText(installedId);
+      if (totalChars + contents.length > MAX_MODEL_LIBRARY_TOTAL_LENGTH) continue;
+      totalChars += contents.length;
+      libraries.push({ name: key, text: contents });
+    } catch {
+      // Most installed ADI `.sub` files are intentionally encrypted. They are
+      // not SPICE text and must remain an explicit missing-model refusal.
     }
   }
   return libraries;
@@ -171,6 +188,23 @@ export async function importProjectAsc(
         const candidate = joinPath(root, `${libraryPath}${suffix}`);
         if (!(await options.pathExists(candidate))) continue;
         const contents = await options.readText(candidate);
+        totalChars += contents.length;
+        if (totalChars > MAX_HIERARCHY_SOURCE_CHARS) {
+          throw new Error("Hierarchical symbol sources exceed Tau's 20 MiB import budget.");
+        }
+        return contents;
+      }
+    }
+    if (suffix === ".asy" && options.readInstalledLtspiceText) {
+      for (const libraryPath of libraryPaths) {
+        let contents: string;
+        try {
+          contents = await options.readInstalledLtspiceText(`sym/${libraryPath}.asy`);
+        } catch {
+          // A missing installed symbol is ordinary: continue to the next
+          // conventional library path, then preserve it as foreign if absent.
+          continue;
+        }
         totalChars += contents.length;
         if (totalChars > MAX_HIERARCHY_SOURCE_CHARS) {
           throw new Error("Hierarchical symbol sources exceed Tau's 20 MiB import budget.");

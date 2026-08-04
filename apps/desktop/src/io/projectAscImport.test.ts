@@ -226,6 +226,72 @@ PINATTR SpiceOrder 5
     expect(saved.contents).not.toMatch(/SYMATTR (?:Value2|SpiceModel)/);
   });
 
+  it("reads Prefix-X symbol metadata and plaintext model only from the fixed installed library", async () => {
+    const source = `Version 4
+SHEET 1 880 680
+SYMBOL PowerProducts/LT1175 100 200 R0
+SYMATTR InstName U1
+`;
+    const symbol = `Version 4
+SymbolType CELL
+SYMATTR Value LT1175
+SYMATTR Prefix X
+SYMATTR SpiceModel LT1175.lib
+SYMATTR Value2 LT1175
+PIN 0 -144 TOP 8
+PINATTR PinName IN
+PINATTR SpiceOrder 1
+PIN 128 64 RIGHT 8
+PINATTR PinName OUT
+PINATTR SpiceOrder 2
+`;
+    const model = ".subckt LT1175 IN OUT\nR1 IN OUT 1k\n.ends LT1175\n";
+    const installed = new Map([
+      ["sym/PowerProducts/LT1175.asy", symbol],
+      ["sub/LT1175.lib", model],
+    ]);
+    const reads: string[] = [];
+    const result = await importProjectAsc(source, {
+      sourcePath: "/project/examples/top.asc",
+      rootPath: "/project",
+      pathExists: async () => false,
+      readText: async () => "",
+      readInstalledLtspiceText: async (id) => {
+        reads.push(id);
+        const text = installed.get(id);
+        if (!text) throw new Error("missing");
+        return text;
+      },
+    });
+
+    expect(result.foreignSymbols).toHaveLength(0);
+    expect(result.components[0]).toMatchObject({
+      kind: "subckt",
+      value: "LT1175",
+      ltModelFile: "LT1175.lib",
+    });
+    expect(result.modelLibraries).toEqual([{ name: "lt1175.lib", text: model }]);
+    expect(reads).toContain("sym/PowerProducts/LT1175.asy");
+    expect(reads).toContain("sub/LT1175.lib");
+  });
+
+  it("keeps an installed encrypted model unavailable without sinking the schematic", async () => {
+    const source = "Version 4\nSHEET 1 880 680\nSYMBOL PowerProducts/LT1172 0 0 R0\nSYMATTR InstName U1\n";
+    const symbol = "Version 4\nSymbolType CELL\nSYMATTR Value LT1172\nSYMATTR Prefix X\nSYMATTR SpiceModel LT1172.sub\nPIN 0 0 LEFT 0\nPINATTR PinName IN\nPINATTR SpiceOrder 1\n";
+    const result = await importProjectAsc(source, {
+      sourcePath: "/project/top.asc",
+      rootPath: "/project",
+      pathExists: async () => false,
+      readText: async () => "",
+      readInstalledLtspiceText: async (id) => {
+        if (id.endsWith(".asy")) return symbol;
+        throw new Error("binary or encrypted");
+      },
+    });
+    expect(result.components[0]).toMatchObject({ kind: "subckt", value: "LT1172" });
+    expect(result.modelLibraries).toEqual([]);
+  });
+
   it("does not read an implicit model path that escapes through .asy metadata", async () => {
     const source = "Version 4\nSHEET 1 880 680\nSYMBOL Opamps/OP07 0 0 R0\nSYMATTR InstName U1\n";
     const symbol = "Version 4\nSymbolType CELL\nSYMATTR Value OP07\nSYMATTR Value2 LT1001\nSYMATTR SpiceModel ../../secret.lib\n";

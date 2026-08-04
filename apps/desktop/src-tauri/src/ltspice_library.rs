@@ -58,6 +58,14 @@ fn supported_extension(path: &Path) -> bool {
     )
 }
 
+fn readable_extension(path: &Path) -> bool {
+    supported_extension(path)
+        || path
+            .extension()
+            .and_then(|value| value.to_str())
+            .is_some_and(|value| value.eq_ignore_ascii_case("asy"))
+}
+
 fn safe_relative_path(relative: &Path) -> bool {
     relative.components().count() > 0
         && relative
@@ -215,7 +223,7 @@ fn read_model_at(root: &Path, id: &str) -> Result<InstalledLtspiceModelText, Str
     let root = fs::canonicalize(root)
         .map_err(|error| format!("Could not access the installed LTspice library: {error}"))?;
     let relative = Path::new(id);
-    if !safe_relative_path(relative) || !supported_extension(relative) {
+    if !safe_relative_path(relative) || !readable_extension(relative) {
         return Err("The selected LTspice model path is invalid.".into());
     }
     let candidate = root.join(relative);
@@ -303,6 +311,8 @@ mod tests {
                 .collect::<Vec<_>>(),
             vec!["cmp/standard.mos", "sub/OPX.sub"]
         );
+        let symbol = read_model_at(temp.path(), "sub/ignore.asy").unwrap();
+        assert_eq!(symbol.text, "Version 4\n");
     }
 
     #[test]

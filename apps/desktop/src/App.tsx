@@ -94,6 +94,7 @@ import {
   runNativeTransient,
 } from "./engine/nativeSpice";
 import { useProject } from "./store/useProject";
+import { readInstalledLtspiceModel } from "./project/installedLtspiceLibrary";
 import {
   ascRewriteRisks,
   ascSaveBlockReason,
@@ -1082,6 +1083,7 @@ function App() {
         rootPath: useProject.getState().rootPath,
         readText: readProjectText,
         pathExists: projectPathExists,
+        readInstalledLtspiceText: async (id) => (await readInstalledLtspiceModel(id)).text,
       });
       // Duplicate reference designators only failed later, at deck build,
       // far from the cause. Flag them at open time instead.

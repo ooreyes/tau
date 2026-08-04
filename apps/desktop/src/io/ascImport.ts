@@ -1013,10 +1013,17 @@ export interface AscImportResult {
  * the bulk to the source (LTspice's convention) so the 4-node device still
  * resolves every terminal.
  */
-function buildPinOverride(symbol: AscSymbol, kind: ComponentKind): PinOverride[] | null {
+function buildPinOverride(
+  symbol: AscSymbol,
+  kind: ComponentKind,
+  symbolMetadata?: AsySymbol | null,
+): PinOverride[] | null {
+  const metadataPins = kind === "subckt" && symbolMetadata?.pins.length
+    ? symbolMetadata.pins.map((pin) => ({ name: pin.name, dx: pin.x, dy: pin.y }))
+    : null;
   const key = ltPinKey(symbol.type);
-  if (!key) return null;
-  const ltPins = LTSPICE_PINS[key];
+  const ltPins = metadataPins ?? (key ? LTSPICE_PINS[key] : null);
+  if (!ltPins) return null;
   const tauPins = getLocalPins(kind);
   if (ltPins.length === 0 || tauPins.length === 0) return null;
 
@@ -1712,12 +1719,30 @@ const SUBCKT_SYMBOL_DEFAULTS: Record<string, { name: string; params?: string }> 
  * instance params ride on `SpiceLine`/`SpiceLine2` (Fc.asc's capmeter). The
  * deck builder sanitizes the name and normalizes `µ` at emission time.
  */
-function subcktValueFromSymbol(leaf: string, attrs: Record<string, string>): string {
+function subcktValueFromSymbol(
+  leaf: string,
+  attrs: Record<string, string>,
+  metadataAttrs?: Record<string, string>,
+): string {
   const def = SUBCKT_SYMBOL_DEFAULTS[leaf];
-  const rawValue = attrs.Value?.trim() ?? "";
+  const effective = { ...metadataAttrs, ...attrs };
+  const rawValue = effective.Value?.trim() ?? "";
   const valueIsParams = /^\w+\s*=/.test(rawValue);
-  const name = (attrs.SpiceModel ?? (valueIsParams ? "" : rawValue)).trim() || def?.name || leaf;
-  const params = [valueIsParams ? rawValue : undefined, attrs.Value2, attrs.SpiceLine, attrs.SpiceLine2]
+  const value2 = effective.Value2?.trim() ?? "";
+  const value2IsParams = /^\w+\s*=/.test(value2);
+  // On installed Prefix-X symbols Value2 is LTspice's exact X-line tail: its
+  // first token is the simulation subcircuit and any following tokens are
+  // instance parameters. SpiceModel on the .asy is the FILE name, while a
+  // SpiceModel written on the .asc instance is an explicit subcircuit/profile
+  // override (the ISO transient symbols use that form).
+  const name = [
+    attrs.SpiceModel,
+    value2IsParams ? "" : value2,
+    valueIsParams ? "" : rawValue,
+    def?.name,
+    leaf,
+  ].map((candidate) => candidate?.trim() ?? "").find(Boolean) ?? leaf;
+  const params = [valueIsParams ? rawValue : undefined, value2IsParams ? value2 : undefined, effective.SpiceLine, effective.SpiceLine2]
     .map((s) => s?.trim())
     .filter((s): s is string => !!s)
     .join(" ") || def?.params || "";
@@ -1819,7 +1844,10 @@ export function ascToSchematic(doc: AscDocument, options: AscImportOptions = {})
       continue;
     }
     const tauKind = isComponentKind(symbol.attrs.TauKind) ? symbol.attrs.TauKind : null;
-    const kind = tauKind ?? ltspiceTypeToKind(symbol.type);
+    const mappedKind = ltspiceTypeToKind(symbol.type);
+    const installedPrefixX = symbolMetadata?.attrs.Prefix?.trim().toUpperCase() === "X"
+      && symbolMetadata.pins.length > 0;
+    const kind = tauKind ?? mappedKind ?? (installedPrefixX ? "subckt" : null);
     const instName = symbol.attrs.InstName ?? "";
     if (!kind) {
       // No built-in kind: try resolving the symbol as a hierarchical block and
@@ -1886,7 +1914,9 @@ export function ascToSchematic(doc: AscDocument, options: AscImportOptions = {})
     if (tauPinAttribute && !tauPins) {
       warnings.push(`${instName || symbol.type}: ignored invalid TauPins terminal metadata.`);
     }
-    const pinOverride = tauKind ? (tauPins ?? undefined) : (buildPinOverride(symbol, kind) ?? undefined);
+    const pinOverride = tauKind
+      ? (tauPins ?? undefined)
+      : (buildPinOverride(symbol, kind, symbolMetadata) ?? undefined);
     if (!pinOverride && !tauKind) {
       warnings.push(
         `${instName || symbol.type}: placed without pin-accurate geometry (no banked pins for "${symbol.type}"); its connections may be wrong.`,
@@ -1908,7 +1938,7 @@ export function ascToSchematic(doc: AscDocument, options: AscImportOptions = {})
         : kind === "digitalGate"
           ? `${leaf} ${componentValueFromAttrs(kind, symbol.attrs)}`.trim()
           : kind === "subckt"
-            ? subcktValueFromSymbol(leaf, symbol.attrs)
+            ? subcktValueFromSymbol(leaf, symbol.attrs, symbolMetadata?.attrs)
             : componentValueFromAttrs(kind, symbol.attrs);
     // A part Tau wrote under a carrier symbol keeps its slots in the Tau-only
     // field, since on the carrier their own names belong to another part. They
@@ -1947,7 +1977,7 @@ export function ascToSchematic(doc: AscDocument, options: AscImportOptions = {})
       // alone). Store those defaults separately: they affect model resolution
       // but are never re-emitted as source SYMATTR records unless the user edits
       // the named Simulation model control.
-      ...(kind === "opamp" && symbolMetadata
+      ...((kind === "opamp" || kind === "subckt") && symbolMetadata
         ? {
           ltModelName: [symbolMetadata.attrs.Value2, symbolMetadata.attrs.Value, leaf]
             .map((candidate) => candidate?.trim().split(/\s+/)[0] ?? "")

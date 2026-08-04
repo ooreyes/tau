@@ -1421,6 +1421,36 @@ describe("library-subcircuit symbols (Prefix X: TowTom2/capmeter/ISO16750-2/ISO7
     expect(ltspiceTypeToKind("POWERPRODUCTS\\LT1184F")).toBeNull();
   });
 
+  it("imports an arbitrary installed Prefix-X symbol with exact SpiceOrder pins and model defaults", () => {
+    const source = `Version 4
+SHEET 1 880 680
+SYMBOL PowerProducts\\ADM7150-2.8 100 200 R0
+SYMATTR InstName U1`;
+    const metadata = parseAsy(`Version 4
+SymbolType CELL
+SYMATTR Value ADM7150-2.8
+SYMATTR Prefix X
+SYMATTR SpiceModel ADM7150_1.sub
+SYMATTR Value2 ADM7150_1 Vreg=3.5 Vref=2.812
+PIN 128 64 RIGHT 8
+PINATTR PinName OUT
+PINATTR SpiceOrder 2
+PIN 0 -144 TOP 8
+PINATTR PinName IN
+PINATTR SpiceOrder 1`);
+    const doc = importAsc(source, { resolveSymbolMetadata: () => metadata });
+    expect(doc.foreignSymbols).toHaveLength(0);
+    expect(doc.warnings).toHaveLength(0);
+    const u1 = doc.components.find((component) => component.label === "U1");
+    expect(u1?.kind).toBe("subckt");
+    expect(u1?.value).toBe("ADM7150_1 Vreg=3.5 Vref=2.812");
+    expect(u1?.ltModelFile).toBe("ADM7150_1.sub");
+    expect(u1?.pinOverride).toEqual([
+      { id: "p1", label: "IN", x: 100, y: 56 },
+      { id: "p2", label: "OUT", x: 228, y: 264 },
+    ]);
+  });
+
   it("imports MISC\\TOWTOM2 with SpiceOrder pins p1..p3 and the .asy default name", () => {
     // TowTom2.asy: V1(-32,64) V2(-32,-32) INV(-32,160), Value TowTom2.
     // 1563.asc places it R0 at (2192,1024) with no Value attr.

@@ -9,7 +9,14 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-03 20:47 CDT**
+**Status: IN PROGRESS - 2026-08-03 20:53 CDT**
+
+Claimed unit: import any installed LTspice `Prefix X` symbol as a native Tau
+subcircuit carrier using its `.asy` SpiceOrder pin bank, Value2/model defaults,
+and exact locally installed plaintext `.sub` definition. Encrypted or missing
+definitions must remain explicit refusals. Measure the full corpus delta.
+
+Previous completed unit:
 
 Claimed unit: translate LTspice's undocumented G-source `dir=±1 vto=<V>`
 limiter into its measured one-sided square-law current transfer. Ground truth
