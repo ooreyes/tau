@@ -302,6 +302,33 @@ describe("parseUserModelLibraries", () => {
     expect(block).not.toMatch(/^I3\b/m);
   });
 
+  it("maps LTspice dir/vto G limiting to its measured one-sided square law", () => {
+    const block = parseUserModelLibraries([
+      [
+        ".subckt AMP 1 2 3 4 5",
+        "G3 N007 0 N007 3 500m dir=1 vto=-.66",
+        "G4 0 N007 4 N007 500m Vto=.5 DIR=-1",
+        ".ends AMP",
+      ].join("\n"),
+    ]).subckts.get("amp") ?? "";
+    expect(block).toContain(
+      "B__tau_G3 N007 0 I={(V(N007,3)-(-.66))>0 ? (500m)*(V(N007,3)-(-.66))*(V(N007,3)-(-.66)) : 0}",
+    );
+    expect(block).toContain(
+      "B__tau_G4 0 N007 I={(V(4,N007)-(.5))<0 ? -(500m)*(V(4,N007)-(.5))*(V(4,N007)-(.5)) : 0}",
+    );
+    expect(block).not.toMatch(/\b(?:dir|vto)\s*=/i);
+  });
+
+  it("refuses an unsupported directed-G option combination", () => {
+    const registry = parseUserModelLibraries([
+      ".subckt AMP 1 2\nG1 1 0 1 2 1 dir=2 vto=.5\n.ends AMP",
+    ]);
+    expect(() => resolveUserSubckt(registry, "AMP")).toThrow(
+      /Simulation refused: AMP\/G1 uses LTspice directed-G options Tau cannot map exactly.*No approximate or partial circuit was run/,
+    );
+  });
+
   it("refuses active OTA multiplier ports instead of substituting a two-port gain block", () => {
     const registry = parseUserModelLibraries([
       ".subckt AMP 1 2 3 4 5\nA1 1 2 3 4 0 0 5 0 OTA g=1m Vhigh=1e308 Vlow=-1e308\n.ends AMP",

@@ -9,7 +9,21 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-03 20:40 CDT**
+**Status: DONE - 2026-08-03 20:47 CDT**
+
+Claimed unit: translate LTspice's undocumented G-source `dir=±1 vto=<V>`
+limiter into its measured one-sided square-law current transfer. Ground truth
+comes from LTspice 17.2.4 for both directions; unknown option combinations must
+refuse. Prove the six affected installed vendor applications converge.
+
+Completed unit: directed G sources now emit the exact measured one-sided
+square-law transfer through a native behavioral current source. Unsupported
+directions, incomplete pairs, and extra options refuse atomically. LT1208,
+LT1209, LT1220, LT1221, LT1225, and LTC1049 converge; the full 4,012-file run
+reaches 228 native OPs, zero hard failures, 3,784 explicit refusals, and zero
+substitutions.
+
+Previous completed unit:
 
 Claimed unit: translate LTspice's positional diode area inside vendor
 subcircuits (`Dname anode cathode model 1000`) to ngspice's unambiguous
@@ -11633,3 +11647,14 @@ evidence is kept in full here.
   hard failures, 3,784 explicit unsupported refusals, and zero substitutions.
   The gate ceiling is seven. Next: map or explicitly refuse LTspice's `dir`/
   `vto` controlled-source limiting syntax, then isolate LTC1047.
+
+- 2026-08-03 - Translated LTspice's undocumented directed G-source limiter
+  from measured simulator behavior. LTspice 17.2.4 establishes
+  `I = dir·gain·max(dir·(Vcontrol−vto), 0)²` for `dir=±1`; Tau emits the
+  same transfer as a behavioral current source and refuses all unproven option
+  combinations. Evidence: 38 focused vendor-library tests; full 4,012-file
+  embedded-engine corpus at 228 decks and 228 OP convergences, zero non-refusal
+  hard failures, 3,784 explicit unsupported refusals, and zero substitutions.
+  The gate now requires zero hard failures. Next: reduce the explicit vendor-
+  symbol/subcircuit refusals and replace synthetic OP proof with authored-
+  analysis differential results.

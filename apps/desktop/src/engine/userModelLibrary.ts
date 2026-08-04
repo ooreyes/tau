@@ -234,6 +234,35 @@ function translateDiodeArea(line: string): string {
   return `${diode[1]} area=${token}${diode[3]}`;
 }
 
+/**
+ * LTspice's undocumented `dir`/`vto` extension on a linear G source is a
+ * one-sided square-law transconductor. Measured against LTspice 17.2.4:
+ *   I = dir * gain * max(dir * (V(control) - vto), 0)^2
+ * Emit that exact transfer as a behavioral current source. Unknown directions,
+ * missing pairs, or extra bare options refuse instead of becoming a linear G.
+ */
+function translateDirectedG(line: string, subcktName: string): string {
+  const source = /^(\s*)(G\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)(.*)$/i.exec(line);
+  if (!source) return line;
+  const [, indent, instance, outPositive, outNegative, controlPositive, controlNegative, gain, tail] = source;
+  const params = modelParamMap(tail);
+  const hasDirectedOption = params.has("dir") || params.has("vto");
+  if (!hasDirectedOption) return line;
+  const remaining = tail
+    .replace(/\s+(?:dir|vto)\s*=\s*(?:\{[^}]*\}|\S+)/gi, "")
+    .trim();
+  const direction = Number(params.get("dir"));
+  const vto = params.get("vto");
+  if ((direction !== 1 && direction !== -1) || vto === undefined || remaining !== "") {
+    return `${TAU_MODEL_REFUSAL_MARKER}${subcktName}/${instance} uses LTspice directed-G options Tau cannot map exactly.`;
+  }
+  const drive = `V(${controlPositive},${controlNegative})-(${vto})`;
+  const current = direction === 1
+    ? `(${drive})>0 ? (${gain})*(${drive})*(${drive}) : 0`
+    : `(${drive})<0 ? -(${gain})*(${drive})*(${drive}) : 0`;
+  return `${indent}B__tau_${instance} ${outPositive} ${outNegative} I={${current}}`;
+}
+
 /** LTspice's `load` flag makes an independent current source dissipative.
  * Tau's transfer was measured against LTspice 17.2.4: for normalized current
  * it is `4V` at V<=0, `4V-4V²` from 0..0.5 V, and 1 above 0.5 V. This also
@@ -410,6 +439,7 @@ function normalizeSubcktInterior(block: string): string {
       }
       out = replaceLtspiceConstants(ltFuncsToNgspice(ifToTernary(stripNoiselessFlag(out))));
       out = translateDiodeArea(out);
+      out = translateDirectedG(out, subcktName);
       out = translateDissipativeCurrentLoad(out);
       return translateLtspiceOta(out, subcktName)
         .flatMap((translated) => translatePassiveParasitics(translated, subcktName));

@@ -1458,6 +1458,15 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   LTspice's `D… model 1000` to the electrically identical `area=1000` keyword;
   this avoids ngspice's malformed double-scope model lookup and moves the same
   metrics to 7 hard failures / 221 native OPs.
+  LTspice 17.2.4 measurements of the undocumented G-source `dir=±1 vto=V`
+  extension established `I = dir·gain·max(dir·(Vcontrol−vto), 0)²`; Tau now
+  emits that exact one-sided square-law transfer as a behavioral current
+  source. Both directions and the refusal path are regression-tested. LT1208,
+  LT1209, LT1220, LT1221, LT1225, and LTC1049 now converge, taking the same
+  4,012-file corpus to 228 native OP convergences, zero non-refusal hard
+  failures, 3,784 explicit unsupported refusals, and zero substitutions. The
+  remaining refusals are the next compatibility workload; zero hard failures
+  alone is not an LTspice-killer claim.
 - ✅ **Class-D fidelity — the flagship circuit now SIMULATES correctly
   (2026-07-03), proven by a committed runner** (`scripts/classdParity.corpus.ts`,
   runs with `scripts/acceptance-corpus.sh`). Two fixes:

@@ -382,7 +382,7 @@ describe.skipIf(corpus.length === 0)("acceptance corpus (user's own LTspice file
           expect.soft(canonicalSummary.opConverged, "canonical operating-point floor").toBeGreaterThanOrEqual(80);
         }
         if (process.env.CORPUS_CANONICAL_ONLY !== "1") {
-          expect.soft(hardFailures.length, "full-corpus non-refusal hard-failure ceiling").toBeLessThanOrEqual(7);
+          expect.soft(hardFailures.length, "full-corpus non-refusal hard-failure ceiling").toBe(0);
         }
       }
     } finally {
