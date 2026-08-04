@@ -122,22 +122,42 @@ function finiteLiteral(value: string | undefined): number | null {
  * shoulder contract. Rename the model type and its instances; do not feed the
  * parameters to ngspice's unrelated Berkeley diode and accept its warnings. */
 function translateIdealDiodes(lines: string[]): string[] {
-  const idealModels = new Set<string>();
+  const usedModelNames = new Set<string>();
+  for (const line of lines) {
+    const name = /^\s*\.model\s+(\S+)/i.exec(line)?.[1];
+    if (name) usedModelNames.add(name.toLowerCase());
+  }
+  const idealModels = new Map<string, string>();
   for (const line of lines) {
     const match = /^\s*\.model\s+(\S+)\s+D\s*\((.*)\)\s*$/i.exec(line);
-    if (match && LTSPICE_IDEAL_DIODE_KEYS.test(match[2])) idealModels.add(match[1].toLowerCase());
+    if (!match || !LTSPICE_IDEAL_DIODE_KEYS.test(match[2])) continue;
+    const original = match[1];
+    let emitted = original;
+    // XSPICE model identifiers must start with a name character. LTspice
+    // permits numeric names such as `2p`; bind those to a private safe name
+    // while leaving valid vendor identities byte-for-byte.
+    if (!/^[A-Za-z_][A-Za-z0-9_.$]*$/.test(original)) {
+      const base = `__tau_sidiode_${original.replace(/[^A-Za-z0-9_]/g, "_") || "model"}`;
+      emitted = base;
+      let suffix = 2;
+      while (usedModelNames.has(emitted.toLowerCase())) emitted = `${base}_${suffix++}`;
+      usedModelNames.add(emitted.toLowerCase());
+    }
+    idealModels.set(original.toLowerCase(), emitted);
   }
   return lines.map((line) => {
     const model = /^\s*\.model\s+(\S+)\s+D\s*\((.*)\)\s*$/i.exec(line);
-    if (model && idealModels.has(model[1].toLowerCase())) {
-      return `.model ${model[1]} sidiode(${stripNoiselessFlag(model[2]).trim()})`;
+    const emittedModel = model ? idealModels.get(model[1].toLowerCase()) : undefined;
+    if (model && emittedModel) {
+      return `.model ${emittedModel} sidiode(${stripNoiselessFlag(model[2]).trim()})`;
     }
     const device = /^\s*(D\S+)\s+(\S+)\s+(\S+)\s+(\S+)(.*)$/i.exec(line);
-    if (!device || !idealModels.has(device[4].toLowerCase())) return line;
+    const emittedDeviceModel = device ? idealModels.get(device[4].toLowerCase()) : undefined;
+    if (!device || !emittedDeviceModel) return line;
     if (device[5].trim() !== "") {
       return `${TAU_MODEL_REFUSAL_MARKER}${device[1]} uses LTspice ideal-diode instance options Tau cannot map exactly.`;
     }
-    return `A__tau_${device[1]} ${device[2]} ${device[3]} ${device[4]}`;
+    return `A__tau_${device[1]} ${device[2]} ${device[3]} ${emittedDeviceModel}`;
   });
 }
 

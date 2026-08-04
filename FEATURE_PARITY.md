@@ -1451,6 +1451,9 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   zero series resistance is elided, parameter expressions survive, and `m=`
   combinations refuse until per-unit scaling is proven. The full corpus hard-
   failure count falls from 61 to 14 and native OP convergence rises 167→214.
+  Numeric LTspice ideal-diode model names (for example AD8033's `.model 2p`)
+  are now rebound to deterministic valid XSPICE identifiers without changing
+  safe vendor names, bringing hard failures to 12 and native OPs to 216.
 - ✅ **Class-D fidelity — the flagship circuit now SIMULATES correctly
   (2026-07-03), proven by a committed runner** (`scripts/classdParity.corpus.ts`,
   runs with `scripts/acceptance-corpus.sh`). Two fixes:

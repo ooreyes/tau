@@ -192,6 +192,20 @@ describe("parseUserModelLibraries", () => {
     expect(block).not.toMatch(/^D1\b/m);
   });
 
+  it("renames a numeric LTspice ideal-diode model to a valid XSPICE identifier", () => {
+    const block = parseUserModelLibraries([
+      [
+        ".subckt AMP 1 2 3 4 5",
+        "D4 3 2 2p",
+        ".model 2p D(Ron=1T epsilon=1 Ilimit=2p noiseless)",
+        ".ends AMP",
+      ].join("\n"),
+    ]).subckts.get("amp") ?? "";
+    expect(block).toContain("A__tau_D4 3 2 __tau_sidiode_2p");
+    expect(block).toContain(".model __tau_sidiode_2p sidiode(Ron=1T epsilon=1 Ilimit=2p)");
+    expect(block).not.toMatch(/\.model\s+2p\s+sidiode/i);
+  });
+
   it("maps a tied-multiplier LTspice OTA to the pinned native OTA and literal output loading", () => {
     const block = parseUserModelLibraries([
       [

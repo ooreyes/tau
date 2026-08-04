@@ -9,7 +9,20 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-03 20:29 CDT**
+**Status: DONE - 2026-08-03 20:35 CDT**
+
+Claimed unit: preserve LTspice ideal-diode models whose names are legal in
+LTspice but invalid XSPICE identifiers (for example `.model 2p D(...)`). Rename
+only the emitted native `sidiode` model and its bound A-device reference to a
+deterministic safe identifier, then prove AD8033/AD8034 converge.
+
+Completed unit: LTspice ideal-diode models with numeric/unsafe identifiers now
+receive a deterministic collision-checked private XSPICE name, and their
+translated A-device instances bind to that exact name. Safe vendor names remain
+unchanged. AD8033 and AD8034 now converge; full-corpus hard failures fall 14→12
+and native synthetic OP convergence rises 214→216.
+
+Previous completed unit:
 
 Claimed unit: translate LTspice capacitor/inductor `Rser`, `Rpar`, and `Cpar`
 instance parasitics found in installed vendor subcircuits into explicit,
@@ -11586,3 +11599,14 @@ evidence is kept in full here.
   remains 80/82. The full gate now enforces a 14-hard-failure ceiling. Next:
   resolve the remaining nested model-name and POLY/code-model failures, then
   broaden the 3,784 explicit vendor-symbol refusals.
+
+- 2026-08-03 - Preserved LTspice's numeric ideal-diode model names across the
+  native XSPICE boundary. The compatibility normalizer now renames only model
+  identifiers that XSPICE cannot accept (AD8033/AD8034 use `.model 2p`) and
+  rewrites the bound sidiode A-device reference to the collision-checked private
+  name; ordinary identifiers such as LIMIT remain untouched. Evidence: 35
+  focused user-library tests; full 4,012-file embedded-engine corpus with 228
+  decks, 216 OP convergences, 12 hard failures, 3,784 explicit refusals, and
+  zero model substitutions. The release gate ceiling is now 12. Next: resolve
+  nested local diode model scoping/area and LTspice controlled-source limiter
+  options in the remaining failures.
