@@ -5,14 +5,46 @@ The working memory of an unattended loop that starts from zero every fire.
 
 ## Now
 
-**Status:** DONE - 2026-08-03 10:43 CDT
+**Status:** NOT DONE - completion RETRACTED by the owner 2026-08-04
 
-Installed LTspice models are now discoverable from their real user-owned macOS
-library and selectively attachable per document. The native command is fixed-
-root/read-only and bounds count, depth, type, size, traversal, symlinks, and
-text/binary input. `UniversalOpAmp4.lib` passed against the real 2,698-file
-install; all frontend/native/real-ngspice/package/mounted-DMG/launch gates pass.
-No proprietary library is bundled. Scheduler remains unloaded.
+The 2026-08-03 "PROJECT COMPLETE" signal was wrong and has been withdrawn. A
+four-part adversarial audit reproduced the gates and disagreed with these docs.
+**Do not trust a status line in this file or in `PROGRESS.md` over your own
+re-measurement.** The authoritative backlog is now "THE NEW BAR" in the
+autobuilder driver prompt; `AGENTS.md`'s Definition of Done checkboxes and
+`KNOWN_ISSUES.md` are the trustworthy in-repo signals.
+
+What the audit measured, against what these docs claimed:
+
+- **Vendor demo circuits do not work.** App-faithful probe over 392
+  `examples/Applications` files: **1 converged, 0.3%**, operating point only.
+  3.9% even with the corpus harness auto-attaching vendor libraries.
+- **The Educational set is real:** 87% OP, 34/40 authored transients — but that
+  is 86 files out of 4,012, and it is the honest product surface today.
+- **99.4% of the vendor library is encrypted** (2,453/2,469 `.sub`). Unfixable
+  by code. Vendor-model parity is not a goal any more.
+- **The corpus gate currently FAILS on this tree:** 1,609 hard failures, 1,465
+  `unknown subckt`. "Zero hard failures" in `PROGRESS.md` is false, and was
+  satisfiable by error-message wording rather than capability.
+- **"80/82" is a constructed subset** that excludes all 3,913 vendor files and
+  counts 12 of the owner's own `Draft*`/`hw3` scratch files.
+- **Three silent wrong answers still ship:** saturable core → linear `L` with no
+  warning; non-rational/current-source `Laplace=` → DC gain with `exact:false`
+  discarded; `load`/`load2` dropped.
+- **Legal blockers:** no `LICENSE`/`THIRD_PARTY_NOTICES` at all; unused GPLv2
+  `table.cm` in the bundle; ADI's `AD8541.lib` committed and advertised.
+- Good news that is also verified: ngspice is Modified BSD and `dlopen`ed, so
+  Tau's own source has no copyleft exposure, and all 725 npm deps are clean.
+
+Landed since: a **Google Gemini assistant provider** (free tier, no credit card
+— the student on-ramp), sharing one profile-driven OpenAI-compatible path with
+the local MLX provider so their prompts cannot drift. Per-provider keychain
+entries; CSP pins `generativelanguage.googleapis.com`. Unit-tested against a
+stubbed fetch; **not yet exercised against the live Google API.**
+
+Next up: P0 in THE NEW BAR — third-party attribution, then the three silent
+substitutions, then the transitive `.subckt` closure check, then making the
+corpus gate measure capability instead of message prefixes.
 
 Previous completed unit:
 
