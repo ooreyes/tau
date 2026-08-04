@@ -9,7 +9,40 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: LANDED - 2026-08-04 14:10 CDT**
+**Status: IN PROGRESS - 2026-08-04 14:40 CDT**
+
+Unit: stop redistributing Analog Devices' `AD8541.lib`, and remove every claim
+in shipped text that depends on it.
+
+The file is ADI's published macromodel, copyright 2021, carrying a license
+statement whose own terms are accepted by *use*, not by redistribution. It was
+committed to this repository and advertised in `README.md`, `SHARE.md`,
+`KNOWN_ISSUES.md` and `examples/README.md`. The same text is also embedded
+verbatim inside `examples/ad8541-buffer/ad8541-buffer.sim`, so deleting the
+`.lib` alone would have left the copyrighted netlist shipping in JSON.
+
+Removed: both files in `examples/ad8541-buffer/`, the demo proof
+`apps/desktop/scripts/examplesAd8541Buffer.corpus.ts`, and the four documents'
+paragraphs about the part.
+
+Kept, deliberately:
+
+- The sanitizer's vendor-macromodel coverage. `spice.rs`'s screening test read
+  the ADI file off disk; it now screens a Tau-authored fixture written to carry
+  the same constructs the allowlist has to survive - uppercase cards, numeric
+  nodes, tabbed comment art, `POLY` sources, a CCVS naming a vsource,
+  parenthesized switch control nodes, and comma-separated `.model` parameter
+  lists.
+- `apps/desktop/scripts/userSubcktImport.corpus.ts`, which reads the
+  developer's own installed LTspice library rather than anything in this
+  repository. It redistributes nothing and remains the real proof of the
+  model-attach flow against a genuine vendor model.
+
+`examples/README.md`'s Model-libraries walkthrough was rewritten around the
+user's own `.lib` file instead of a bundled one; the mechanism it teaches is
+unchanged. `examples/class-d-amplifier/` is self-authored and stays.
+
+Previous completed unit:
 
 Unit: third-party attribution. Add `LICENSE` and `THIRD_PARTY_NOTICES`, and
 stop shipping every GPL v2 part of the ngspice build so the notices' "no GPL
@@ -71,10 +104,8 @@ models explicitly from `REQUIRED_CODEMODELS` (`spice.rs:341`), so its stale
   script-text check passed the whole time GPL code was shipping, because it
   only ever read what the script said it did.
 
-Not in this unit, and still open under P0.1: the committed ADI `AD8541.lib` and
-the docs that advertise it. Its macromodel text is also embedded in
-`examples/ad8541-buffer/ad8541-buffer.sim`, so removing it means removing the
-example and its corpus proof, which is its own unit.
+Not in this unit: the committed ADI `AD8541.lib` and the docs that advertise
+it. Closed by the unit above.
 
 Previous completed unit:
 

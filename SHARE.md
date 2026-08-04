@@ -24,10 +24,10 @@ Tau is a native Mac circuit app (not a website). This is the **v1.0 release buil
 2. Open `class-d-amplifier/class-d-starter.asc` - a real LTspice class-D power
    stage, imported natively - and press **Run**. The transient finishes in
    under a second on the embedded ngspice engine.
-3. Open `ad8541-buffer/ad8541-buffer.sim` and press **Run** - a real Analog
-   Devices AD8541 macromodel simulating as a unity-gain buffer. The Examples
-   README walks through the vendor model attach flow (the same path works for
-   any manufacturer's `.lib`/`.subckt` file).
+3. Attach a manufacturer's model: place a part, name it after the `.subckt`
+   your `.lib` file defines, and point the **Model libraries** dialog at the
+   file. The Examples README walks through it. Tau ships no vendor model
+   files - you bring your own.
 4. Import your own `.asc`: open any folder containing it and click the file.
    Probing a wire plots it; the Diagnostics panel explains anything Tau
    couldn't map.
@@ -61,9 +61,8 @@ a thread about what the post left out.
 
 ```
 Tau - a native-Mac circuit simulator that opens LTspice .asc files and runs
-them on a real embedded ngspice engine. Vendor .lib/.subckt models import and
-simulate (the demo runs an actual ADI AD8541 macromodel). Optional on-device
-AI assistant, no cloud.
+them on a real embedded ngspice engine. Attach your own vendor .lib/.subckt
+models and they import and simulate. Optional on-device AI assistant, no cloud.
 
 Honest about where it is: transient, op, AC, DC sweep, transfer function and
 noise all run on ngspice. Current-controlled switches are not modelled, and it

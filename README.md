@@ -72,9 +72,9 @@ the document through the Model libraries dialog (toolbar button or command
 palette). Attached definitions resolve by name, persist with the document, and
 simulate through the native engine; LTspice-only constructs common in vendor
 macromodels (`VSWITCH`/`ISWITCH` cards, parenthesized switch control nodes,
-`mfg=` annotations) are translated automatically. The
-[AD8541 example](examples/README.md) runs a real Analog Devices macromodel end
-to end. Tau does not bundle or copy LTspice's proprietary libraries.
+`mfg=` annotations) are translated automatically. Tau bundles no
+manufacturer's model file and copies none of LTspice's proprietary libraries -
+you attach your own.
 On macOS, the desktop app also consults the four implicit `standard.*` device
 databases in the user's installed LTspice copy without adding those files to
 the Tau document or distribution.

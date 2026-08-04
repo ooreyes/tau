@@ -5,15 +5,25 @@ The working memory of an unattended loop that starts from zero every fire.
 
 ## Now
 
-**Status:** IDLE 2026-08-04 - third-party attribution landed. Completion
-remains RETRACTED by the owner; the rest of P0 is untouched.
+**Status:** IDLE 2026-08-04 - P0.1 is closed: Tau now has `LICENSE` and
+`THIRD_PARTY_NOTICES`, ships no GPL code, and redistributes no manufacturer
+model file. Completion remains RETRACTED by the owner. **P0.2 is next: the
+three silent substitutions** (saturable Chan core emitted as a plain linear
+`L`; non-rational and current-source `Laplace=` collapsed to DC gain with
+`exact:false` discarded; `load`/`load2` dropped).
 
-Still open under P0.1: the committed ADI `AD8541.lib` and the docs that
-advertise it. Its macromodel text is also embedded in
-`examples/ad8541-buffer/ad8541-buffer.sim` and proved by
-`apps/desktop/scripts/examplesAd8541Buffer.corpus.ts`, so removing it means
-removing the example, its proof, and its paragraphs in `README.md`,
-`SHARE.md`, `KNOWN_ISSUES.md` and `examples/README.md`. That is the next unit.
+Two things a fresh fire needs before it wastes its window:
+
+- **The staged ngspice resource in a fresh clone is older than `build.rs`'s
+  digest check and makes every Rust gate look broken.** `cargo test`,
+  `cargo clippy` and `scripts/acceptance-corpus.sh` all die in `build.rs` with
+  `build-info.json has no "files" digest object`. That is a stale resource, not
+  a regression: the digest map arrived in `0c95d14` (2026-08-02) and the staged
+  copy predates it. Fix is `./scripts/build-ngspice.sh`, which takes many
+  minutes from a cold `configure` - budget for it or pick TS-only work.
+- **Run the gates serially.** The React suite times out under load and looks
+  red when it is not; see the 2026-08-04 entry in `FIX_BUGS.md` for the
+  measurement.
 
 The 2026-08-03 "PROJECT COMPLETE" signal was wrong and has been withdrawn. A
 four-part adversarial audit reproduced the gates and disagreed with these docs.
@@ -218,6 +228,7 @@ Newest first, ONE line each. Full evidence for every unit is in PROGRESS.md
 and in its commit message. This section exists so a fresh fire can see what
 is already done at a glance, not so it can re-read the reasoning.
 
+- 2026-08-04 - TAU REDISTRIBUTES NO MANUFACTURER MODEL FILE. ADI's copyrighted `AD8541.lib` is gone, along with the `.sim` that embedded the same netlist verbatim in JSON, its corpus proof, and its paragraphs in four documents; the sanitizer's vendor-macromodel coverage moves to a Tau-authored fixture, and the model-attach walkthrough now teaches the flow with the user's own `.lib`.
 - 2026-08-04 - TAU HAS A `LICENSE` AND `THIRD_PARTY_NOTICES`, AND SHIPS NO GPL CODE. Beyond the known `table.cm`, review found `ivlng.vpi` and `ghdl_vpi.c` (GPL v2+, Icarus Verilog) were also shipping; the unused `d_cosim` tool chain is now dropped at staging and a test reads the staged tree rather than the script text.
 - 2026-08-03 - VERIFIED MULTI-PIN AMPLIFIERS ARE NEVER FORCED THROUGH A FIVE-PIN OP-AMP BANK. AD8235/LT1168/LT1194/LT1795 preserve losslessly and refuse by name, eliminating all remaining extended-corpus hard failures; 522 real decks/op points remain and canonical is still 80/82.
 - 2026-08-03 - LTSPICE NEGATIVE CAPACITANCE IS PRESERVED EXACTLY AS `Q(V)=C*V`. A native RC proof holds the required +45-degree lead, `elip_grd.asc` now builds/converges, preview solvers refuse rather than alter the sign, and extended hard failures fall 5 -> 4.

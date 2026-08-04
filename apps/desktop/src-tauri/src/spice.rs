@@ -1502,19 +1502,45 @@ R1 out fb 10k
     }
 
     #[test]
-    fn accepts_the_bundled_ad8541_vendor_macromodel() {
-        // The real Analog Devices macromodel shipped in examples/, screened as
-        // a deck exactly the way userModelLibrary.ts hands it over: verbatim,
-        // comments and all.
-        let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("../../../examples/ad8541-buffer/AD8541.lib");
-        let vendor = std::fs::read_to_string(&path)
-            .unwrap_or_else(|error| panic!("{} should be readable: {error}", path.display()));
-        let deck =
-            format!("Tau AD8541 buffer\n{vendor}\nX1 in 0 vcc vee out AD8541\nV1 in 0 1\nR1 out 0 10k\n.tran 1u 1m\n.end\n");
+    fn accepts_a_vendor_style_opamp_macromodel() {
+        // Screened the way userModelLibrary.ts hands an attached library over:
+        // verbatim, comments and all. The fixture is Tau's own, written to
+        // carry the constructs published op-amp macromodels actually use and
+        // that the allowlist has to survive - uppercase cards, numeric nodes,
+        // tabbed comment art, POLY sources, a CCVS naming a vsource,
+        // parenthesized switch control nodes, and comma-separated .model
+        // parameter lists.
+        let vendor = "* Tau vendor-style CMOS rail-to-rail op-amp macromodel
+* Node Assignments
+*\t\t\t\tnoninverting input
+*\t\t\t\t|\tinverting input
+*\t\t\t\t|\t|\t positive supply
+*\t\t\t\t|\t|\t |\t negative supply
+*\t\t\t\t|\t|\t |\t |\t output
+.SUBCKT TAUOPA\t1\t2\t99\t50\t45
+M1   4  1 8 8 PIX L=2.0E-6 W=98E-6
+M2   6  7 8 8 PIX L=2.0E-6 W=98E-6
+I1  99  8 1.77E-5
+EOS  7  2 POLY(3) (22,98) (73,98) (81,0) 1.0E-3 1 1 1
+GB1  1 50 POLY(3) (8,1) (4,1) (50,1) 0.5E-12 1E-12 1E-12 1E-12
+ECM1 21 98 POLY(2) (1,98) (2,98) 0 .5 .5
+VN1 80 0 0
+HN  81 0 VN1 37
+VFIX 90 98 DC 1
+S1   90 91 (50,99) VSY_SWITCH
+G1  98 30 POLY(2) (4,6) (11,12) 0 2.5E-5 2.5E-5
+M5  45 46 99 99 POX L=2E-6 W=0.98E-3
+.MODEL POX PMOS (LEVEL=2,KP=20E-6,VTO=-1,LAMBDA=0.067)
+.MODEL PIX PMOS (LEVEL=2,KP=20E-6,VTO=-0.1,LAMBDA=0.01,KF=1E-31)
+.MODEL VSY_SWITCH VSWITCH(ROFF=100E3,RON=1,VOFF=-4.2,VON=-3.5)
+.ENDS TAUOPA
+";
+        let deck = format!(
+            "Tau buffer\n{vendor}\nX1 in 0 vcc vee out TAUOPA\nV1 in 0 1\nR1 out 0 10k\n.tran 1u 1m\n.end\n"
+        );
         assert!(
             deck_lines(&deck).is_ok(),
-            "the bundled AD8541 vendor model was rejected"
+            "a vendor-style op-amp macromodel was rejected"
         );
     }
 

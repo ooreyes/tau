@@ -1,8 +1,7 @@
 # Tau examples
 
-Tau is a native-Mac, LTspice-.asc-compatible circuit simulator. These two
-schematics are small, fast demos meant to prove Tau works the moment you open
-it.
+Tau is a native-Mac, LTspice-.asc-compatible circuit simulator. This schematic
+is a small, fast demo meant to prove Tau works the moment you open it.
 
 **The DMG is read-only.** Copy this whole `Examples` folder to somewhere
 writable (your Desktop, Documents, wherever) before you open anything in Tau -
@@ -14,7 +13,7 @@ button at the top of the project explorer), point it at your copy of this
 
 ---
 
-## 1. Class-D amplifier (`class-d-amplifier/`)
+## Class-D amplifier (`class-d-amplifier/`)
 
 **What it shows:** a complete class-D audio power stage imported straight from
 LTspice - a PWM comparator (op-amp run open-loop against a triangle carrier),
@@ -35,41 +34,33 @@ finishes in well under a second - there is no wait.
 
 ---
 
-## 2. AD8541 unity-gain buffer (`ad8541-buffer/`)
+## Bringing in a manufacturer's model
 
-**What it shows:** Tau's vendor model attach flow. Op-amps in the real world
-usually aren't ideal math blocks - they're vendor SPICE macromodels with real
-quirks (input offset, slew rate, output clamping). `ad8541-buffer.sim` places
-a single AD8541 (Analog Devices' rail-to-rail CMOS op-amp) wired as a
-single-supply unity-gain buffer, with the vendor's own model already attached
-to the document.
+Op-amps, transistors and ICs in the real world usually aren't ideal math
+blocks - they're vendor SPICE macromodels with real quirks (input offset, slew
+rate, output clamping). Tau builds in a generic set and resolves everything
+else from a model file **you** supply. It ships no manufacturer's model file:
+those are the vendors' to license, and redistributing them is theirs to
+permit, not ours.
 
-`AD8541.lib` is Analog Devices' published SPICE macromodel for the part,
-included here for convenience so the demo works offline, exactly as it ships
-in LTspice's own component library.
+To attach one:
 
-**How to open it:** open `ad8541-buffer.sim` in the project explorer.
+1. Place the part and set its value to the subcircuit name the model file
+   defines (the name on its `.subckt` line).
+2. Press **Run**. Tau reports that the subcircuit can't be resolved and points
+   you at the Model libraries dialog. It refuses the run rather than
+   substituting a generic device - a plausible waveform from the wrong model
+   is worse than no waveform.
+3. Open the toolbar's **Model libraries** button (the library-book icon next
+   to Run - also in the command palette as "Model libraries..."), click
+   **Attach model file...**, and pick any vendor `.lib`/`.subckt` file you
+   have. If you have LTspice installed, its own library folder is full of
+   them.
+4. Press Run again. The definition resolves by name and simulates on the
+   native engine. It stays attached to the document, so the file opens working
+   next time.
 
-**What to expect when you press Run:** the output tracks the 2.5 V input to
-within a few millivolts - a real unity-gain buffer, built from the vendor's
-actual transistor-level model rather than an idealized op-amp.
-
-**The Model libraries walkthrough:** this file ships with `AD8541.lib`
-already attached, which is why it works the moment you open it. To see the
-mechanism yourself:
-
-1. Open the toolbar's **Model libraries** button (the library-book icon next
-   to Run - you can also reach it from the command palette as
-   "Model libraries...").
-2. You'll see `AD8541.lib` listed as attached to this document. Click
-   **Remove**.
-3. Press Run again. Tau now reports that the AD8541 subcircuit can't be
-   resolved, and points you at the Model libraries dialog - this is exactly
-   what happens when you place a vendor part Tau doesn't build in and forget
-   to attach its model.
-4. Click **Attach model file...** in the same dialog and pick the
-   `AD8541.lib` file in this folder (or any vendor `.lib`/`.subckt` file you
-   have). Press Run once more - the buffer works again.
-
-That attach/remove/reattach loop is how you'd bring in any vendor op-amp,
-transistor, or IC model LTspice supports but Tau doesn't build in natively.
+LTspice-only constructs that vendor macromodels lean on - `VSWITCH`/`ISWITCH`
+model cards, parenthesized switch control nodes, `mfg=` annotations - are
+translated for you. Encrypted vendor models are not readable outside LTspice
+and will not resolve; Tau says so instead of guessing.

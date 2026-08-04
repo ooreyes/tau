@@ -13,6 +13,29 @@
 
 **Repo:** `auto/ltspice-parity` · **Audit date:** 2026-07-17 · **Auditor:** interactive session (Fable 5) + two background subagents (fuzz + sim cross-check).
 
+## 2026-08-04 — the React suite times out under load and looks like a red baseline (CONFIRMED, OPEN)
+
+Vitest's default 5 s `testTimeout` is not enough for the full-`App` render
+specs on a busy machine. Running `vitest run` concurrently with a `cargo build`
+produced **39 failures across 13 files**; re-running the same 13 files alone
+left 9, and re-running those 5 files alone left 5 - a *different* five each
+time. Every failure was `Error: Test timed out in 5000ms`, plus
+`netlist.test.ts`'s 1,500 ms budget measuring 2,512 ms. Nothing was
+deterministically broken.
+
+The cost is a whole session: a fire that runs the gates in parallel sees a red
+suite, cannot attribute it, and spends its window bisecting a phantom. The
+affected specs are the heaviest renders - `App.workspace.test.tsx`,
+`App.import.test.tsx`, `AssistantPanel.test.tsx`, `SettingsPanel.test.tsx`,
+`ExplorerPanel.test.tsx`, `usePlotViewport.test.tsx`.
+
+Two things are wanted, and they are separable units: raise `testTimeout` in
+`vitest.config.ts` to something a loaded machine can meet (the specs are not
+testing latency, so the 5 s default is measuring the host, not the code), and
+make `netlist.test.ts`'s all-pairs guard assert complexity rather than
+wall-clock milliseconds. Until then: **run the gates serially**, and before
+believing a red suite, re-run the failing files alone.
+
 ## 2026-08-03 — named five-pin vendor op-amps still run a generic gain block (CONFIRMED, OPEN)
 
 The directory rule still maps an ordinary-shaped named part such as LT1001,

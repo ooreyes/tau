@@ -114,8 +114,10 @@ one engine for the whole session.
   automatically: datasheet annotations ngspice rejects (for example
   `mfg=STMicro`), `VSWITCH`/`ISWITCH` switch model cards, parenthesized
   switch control nodes, and the bare `noiseless` device flag (which ngspice
-  otherwise rejects as an unknown parameter, aborting the whole deck). The
-  shipped AD8541 example runs a real Analog Devices macromodel end to end.
+  otherwise rejects as an unknown parameter, aborting the whole deck).
+- Tau ships no manufacturer model files and bundles no example that depends on
+  one. You attach your own `.lib`/`.subckt`; nothing vendor-specific is
+  redistributed with the app.
 - LTspice's built-in behavioral code models (for example the `OTA` A-device)
   and its soft-limit helper functions (`uplim`/`dnlim`, common in Analog
   Devices output stages) are not translated yet; a macromodel built from them
