@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildSpiceDeck,
   includedFileName,
+  unresolvedModelMessage,
   transformerWindings,
   unresolvedLibraryWarning,
   unresolvedSubcktMessage,
@@ -298,7 +299,7 @@ describe("buildSpiceDeck", () => {
     expect(deck.netlist).not.toMatch(/D1 \S+ \S+ TAU_DIODE/);
   });
 
-  it("falls back to the generic model for an unknown diode part name", () => {
+  it("refuses an unknown diode part name rather than plotting the generic diode", () => {
     const components = [
       component("vsource", "V1", "5", 0, 32),
       component("diode", "D1", "MYSTERY_PART", 96, 0),
@@ -306,9 +307,9 @@ describe("buildSpiceDeck", () => {
       component("ground", "", "", 128, 0),
     ];
     const wires = [wire("w1", [{ x: 0, y: 0 }, { x: 64, y: 0 }])];
-    const deck = buildSpiceDeck({ components, wires }, { kind: "op" });
-    expect(deck.netlist).toMatch(/D1 \S+ \S+ TAU_DIODE/);
-    expect(deck.netlist).not.toContain(".model MYSTERY_PART");
+    expect(() => buildSpiceDeck({ components, wires }, { kind: "op" })).toThrow(
+      'Simulation refused: D1 names model "MYSTERY_PART", but Tau could not resolve it.',
+    );
   });
 
   it("emits a capacitor IC and adds uic to the transient (Draft10 case)", () => {
@@ -810,16 +811,14 @@ describe("buildSpiceDeck", () => {
     expect(deck.netlist).not.toMatch(/M1 .*TAU_NMOS/);
   });
 
-  it("falls back to the generic model when the named one is undefined and unbundled", () => {
+  it("refuses an undefined named model instead of emitting a generic substitute", () => {
     const components = [
       component("diode", "D1", "XYZ999", 0, 0),
       component("ground", "", "", 16, 32),
     ];
-    // No matching .model present and not a bundled standard part → must not emit
-    // an undefined model reference; use the generic starter.
-    const deck = buildSpiceDeck({ components, wires: [] }, { kind: "op" });
-    expect(deck.netlist).toMatch(/D1 n\d+ n\d+ TAU_DIODE/);
-    expect(deck.netlist).not.toContain("XYZ999");
+    expect(() => buildSpiceDeck({ components, wires: [] }, { kind: "op" })).toThrow(
+      'Simulation refused: D1 names model "XYZ999", but Tau could not resolve it.',
+    );
   });
 
   it("resolves a semiconductor model from a user-supplied vendor library (no inline/bundled model exists)", () => {
@@ -1252,12 +1251,10 @@ describe("buildSpiceDeck", () => {
     expect(buildSpiceDeck(closed, { kind: "op" }).circuit.warnings).toEqual([]);
   });
 
-  it("falls back to the starter switch model when the document defines none", () => {
-    const deck = buildSpiceDeck({ ...switchedLoad(true), directives: [] }, { kind: "op" });
-
-    expect(deck.netlist).toMatch(/^S1 \S+ \S+ \S+ \S+ TAU_SW$/m);
-    expect(deck.netlist).toContain(".model TAU_SW SW(");
-    expect(deck.modelSubstitutions.map((s) => s.ref)).toContain("S1");
+  it("refuses a named switch model when the document defines none", () => {
+    expect(() => buildSpiceDeck({ ...switchedLoad(true), directives: [] }, { kind: "op" })).toThrow(
+      'Simulation refused: S1 names model "MYSW", but Tau could not resolve it.',
+    );
   });
 
   const currentSwitchedLoad = (
@@ -1616,26 +1613,18 @@ describe("unresolvedSubcktMessage", () => {
   });
 });
 
-describe("model substitution reporting", () => {
+describe("unresolved named models", () => {
   const grounded = () => component("ground", "", "", 0, 0);
 
-  it("reports a named vendor part that resolved to a generic starter", () => {
+  it("refuses a named vendor part before returning any approximate deck", () => {
     // The trust-destroying case: the deck happily emits a textbook Level=1
     // device under the vendor part's designator. Silence here means the user
     // reads a confident waveform for a device Tau does not have.
-    const deck = buildSpiceDeck(
+    expect(() => buildSpiceDeck(
       { components: [grounded(), component("nmos", "M1", "IRF540", 128, 128)], wires: [] },
       { kind: "op" },
-    );
-
-    expect(deck.modelSubstitutions).toEqual([
-      { ref: "M1", requested: "IRF540", substituted: "TAU_NMOS" },
-    ]);
-    expect(deck.netlist).toContain("TAU_NMOS");
-
-    const [warning] = deck.circuit.warnings.filter((w) => w.includes("IRF540"));
-    expect(warning).toBe(
-      'M1: model "IRF540" was not found. Tau simulates it as a generic NMOS (Level=1), which will not match the real device.',
+    )).toThrow(
+      'Simulation refused: M1 names model "IRF540", but Tau could not resolve it. Attach or select the exact vendor model under Model libraries, or explicitly choose Generic NMOS if an approximation is intentional.',
     );
   });
 
@@ -1698,7 +1687,7 @@ describe("model substitution reporting", () => {
   it("names every unresolved part, not just the first", () => {
     // BC847C is deliberately not one of the bundled standard parts; 2N3904 is,
     // and is asserted below to stay silent.
-    const deck = buildSpiceDeck(
+    expect(() => buildSpiceDeck(
       {
         components: [
           grounded(),
@@ -1708,9 +1697,18 @@ describe("model substitution reporting", () => {
         wires: [],
       },
       { kind: "op" },
+    )).toThrow(
+      'Simulation refused: M1 names model "IRF540" and Q1 names model "BC847C", but Tau could not resolve them.',
     );
+  });
 
-    expect(deck.modelSubstitutions.map((s) => s.ref).sort()).toEqual(["M1", "Q1"]);
+  it("formats a bounded plural refusal with one deliberate-generic escape hatch", () => {
+    expect(unresolvedModelMessage([
+      { ref: "M1", requested: "IRF540", substituted: "TAU_NMOS" },
+      { ref: "Q1", requested: "BC847C", substituted: "TAU_NPN" },
+    ])).toBe(
+      'Simulation refused: M1 names model "IRF540" and Q1 names model "BC847C", but Tau could not resolve them. Attach or select the exact vendor models under Model libraries, or explicitly choose the matching Generic device if an approximation is intentional.',
+    );
   });
 
   it("stays silent for a part the bundled standard library defines", () => {

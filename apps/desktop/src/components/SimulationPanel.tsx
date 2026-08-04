@@ -6,6 +6,7 @@ import type {
 } from "react";
 import { Crosshair, Maximize2, Minimize2, Square } from "lucide-react";
 import { useSchematic } from "../store/useSchematic";
+import { useRuntimeModelLibraries } from "../store/useRuntimeModelLibraries";
 import {
   MAX_TRANSIENT_STEPS,
   MIN_SAMPLES_PER_CYCLE,
@@ -241,13 +242,14 @@ export function SimulationPanel({
   const netLabels = useSchematic((s) => s.netLabels);
   const directives = useSchematic((s) => s.directives);
   const userModelLibraries = useSchematic((s) => s.userModelLibraries);
+  const installedLtspiceModelLibraries = useRuntimeModelLibraries((s) => s.installedLtspice);
   const userModelLibraryTexts = useMemo(
-    () => userModelLibraries.map((library) => library.text),
-    [userModelLibraries],
+    () => [...userModelLibraries, ...installedLtspiceModelLibraries].map((library) => library.text),
+    [installedLtspiceModelLibraries, userModelLibraries],
   );
   const userModelLibraryNames = useMemo(
-    () => userModelLibraries.map((library) => library.name),
-    [userModelLibraries],
+    () => [...userModelLibraries, ...installedLtspiceModelLibraries].map((library) => library.name),
+    [installedLtspiceModelLibraries, userModelLibraries],
   );
   const warnings = result?.warnings ?? [];
 

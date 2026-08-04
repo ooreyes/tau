@@ -27,6 +27,9 @@ export interface CorpusRow {
    * a real, non-hostile file.
    */
   validated: boolean;
+  /** Named device models replaced by a generic starter. Must remain zero; a
+   *  nonzero value is release-failing evidence even if ngspice converged. */
+  modelSubstitutions: number;
   /** First failure message (import throw, deck throw, or ngspice marker). */
   error?: string;
 }
@@ -40,6 +43,7 @@ export interface CorpusSummary {
   opConverged: number;
   /** Imported AND passed validateSchematicDocument. */
   validated: number;
+  modelSubstitutions: number;
 }
 
 export function summarizeCorpus(rows: CorpusRow[]): CorpusSummary {
@@ -50,6 +54,7 @@ export function summarizeCorpus(rows: CorpusRow[]): CorpusSummary {
     deckBuilt: rows.filter((r) => r.deckBuilt).length,
     opConverged: rows.filter((r) => r.opConverged).length,
     validated: rows.filter((r) => r.imported && r.validated).length,
+    modelSubstitutions: rows.reduce((count, row) => count + row.modelSubstitutions, 0),
   };
 }
 
@@ -81,16 +86,16 @@ export function formatCorpusReport(rows: CorpusRow[]): string {
   const summary = summarizeCorpus(rows);
   const nameWidth = Math.max(4, ...rows.map((r) => r.file.length));
   const lines: string[] = [];
-  lines.push(`${"file".padEnd(nameWidth)}  import  warn  deck  op  valid`);
+  lines.push(`${"file".padEnd(nameWidth)}  import  warn  deck  op  valid  subst`);
   for (const r of rows) {
     const mark = (ok: boolean) => (ok ? "  ✓ " : "  ✗ ");
     lines.push(
-      `${r.file.padEnd(nameWidth)}  ${mark(r.imported)}   ${String(r.warnings).padStart(3)}${mark(r.deckBuilt)} ${mark(r.opConverged)}${mark(r.validated)}${r.error ? `  ${r.error}` : ""}`,
+      `${r.file.padEnd(nameWidth)}  ${mark(r.imported)}   ${String(r.warnings).padStart(3)}${mark(r.deckBuilt)} ${mark(r.opConverged)}${mark(r.validated)}  ${String(r.modelSubstitutions).padStart(3)}${r.error ? `  ${r.error}` : ""}`,
     );
   }
   lines.push("");
   lines.push(
-    `total ${summary.total} · imported ${summary.imported} · warning-clean ${summary.warningClean} · deck-built ${summary.deckBuilt} · op-converged ${summary.opConverged} · schema-valid ${summary.validated}`,
+    `total ${summary.total} · imported ${summary.imported} · warning-clean ${summary.warningClean} · deck-built ${summary.deckBuilt} · op-converged ${summary.opConverged} · schema-valid ${summary.validated} · model-substitutions ${summary.modelSubstitutions}`,
   );
   return lines.join("\n");
 }

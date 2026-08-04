@@ -76,9 +76,9 @@ export type SpiceAnalysis =
 /**
  * One semiconductor whose named model resolved to nothing - no document
  * `.model`, no bundled LTspice standard part, no attached vendor library - and
- * was therefore emitted on a generic `TAU_*` starter instead. A plausible
- * waveform from the wrong device is worse than no waveform, so every one of
- * these is named out loud on the deck's warning channel.
+ * would otherwise be emitted on a generic `TAU_*` starter. A plausible
+ * waveform from the wrong device is worse than no waveform, so any non-empty
+ * collection aborts deck construction before a simulator can start.
  */
 export interface ModelSubstitution {
   /** The part's reference designator as drawn (M1, Q3, D2). */
@@ -92,10 +92,9 @@ export interface ModelSubstitution {
 export interface SpiceDeck {
   circuit: ExtractedCircuit;
   netlist: string;
-  /** Semiconductors emitted on a generic starter because the model they name is
-   *  defined nowhere. Each also appears as prose in `circuit.warnings`, which
-   *  every native analysis result forwards to the UI. Empty for a deck whose
-   *  every named model resolved. */
+  /** Explicit proof surface for callers and corpus tooling. Returned decks
+   *  always contain an empty array: buildSpiceDeck refuses before return when
+   *  a named model could only be substituted. */
   modelSubstitutions: ModelSubstitution[];
   /** Subcircuit reference names (original casing, deduped, sorted) that no
    *  inline directive, bundled library, or user-imported `.lib`/`.subckt`
@@ -717,7 +716,9 @@ export function buildSpiceDeck(schematic: Schematic, analysis: SpiceAnalysis): S
       circuit.warnings.push(uncontrolledSwitchWarning(entry.component));
     }
   });
-  circuit.warnings.push(...modelSubstitutions.map(modelSubstitutionMessage));
+  if (modelSubstitutions.length > 0) {
+    throw new Error(unresolvedModelMessage(modelSubstitutions));
+  }
 
   // Non-ideal wires: series resistors between the nets at each endpoint.
   // Ideal wires already shorted those nets in extractCircuit.
@@ -887,27 +888,41 @@ export function saveCardLines(vectors: readonly string[]): string[] {
   return lines;
 }
 
-/** How each generic starter reads in product copy, keyed by its model name. */
-const GENERIC_MODEL_DESCRIPTION: Record<string, string> = {
-  TAU_DIODE: "a generic diode",
-  TAU_LED: "a generic LED",
-  TAU_ZENER: "a generic 5.1 V zener",
-  TAU_NMOS: "a generic NMOS (Level=1)",
-  TAU_PMOS: "a generic PMOS (Level=1)",
-  TAU_NPN: "a generic NPN",
-  TAU_PNP: "a generic PNP",
-  TAU_NJF: "a generic N-channel JFET",
-  TAU_PJF: "a generic P-channel JFET",
+const MAX_LISTED_MISSING_MODELS = 6;
+
+const GENERIC_MODEL_CHOICE: Record<string, string> = {
+  TAU_DIODE: "Generic diode",
+  TAU_LED: "Generic LED",
+  TAU_ZENER: "Generic zener",
+  TAU_NMOS: "Generic NMOS",
+  TAU_PMOS: "Generic PMOS",
+  TAU_NPN: "Generic NPN",
+  TAU_PNP: "Generic PNP",
+  TAU_NJF: "Generic N-channel JFET",
+  TAU_PJF: "Generic P-channel JFET",
+  TAU_SW: "Generic switch",
 };
 
-/**
- * Product copy for one {@link ModelSubstitution}: the part, the model it asked
- * for, and the consequence. Blunt on purpose - the user is about to read a
- * waveform that looks right and is not, and only this sentence says so.
- */
-export function modelSubstitutionMessage(substitution: ModelSubstitution): string {
-  const generic = GENERIC_MODEL_DESCRIPTION[substitution.substituted] ?? "a generic starter model";
-  return `${substitution.ref}: model "${substitution.requested}" was not found. Tau simulates it as ${generic}, which will not match the real device.`;
+/** Fail-closed product copy for explicitly named models that resolved nowhere.
+ *  It gives both safe recovery paths: attach/select the exact definition, or
+ *  deliberately opt into a generic approximation. */
+export function unresolvedModelMessage(substitutions: readonly ModelSubstitution[]): string {
+  const listed = substitutions.slice(0, MAX_LISTED_MISSING_MODELS);
+  const extra = substitutions.length - listed.length;
+  const clauses = listed.map(({ ref, requested }) => `${ref} names model "${requested}"`);
+  const enumerated = clauses.length === 1
+    ? clauses[0]
+    : clauses.length === 2
+      ? `${clauses[0]} and ${clauses[1]}`
+      : `${clauses.slice(0, -1).join(", ")}, and ${clauses[clauses.length - 1]}`;
+  const withExtra = extra > 0
+    ? `${enumerated}, plus ${extra} more unresolved ${extra === 1 ? "model" : "models"}`
+    : enumerated;
+  if (substitutions.length === 1) {
+    const generic = GENERIC_MODEL_CHOICE[substitutions[0]!.substituted] ?? "the matching Generic device";
+    return `Simulation refused: ${withExtra}, but Tau could not resolve it. Attach or select the exact vendor model under Model libraries, or explicitly choose ${generic} if an approximation is intentional.`;
+  }
+  return `Simulation refused: ${withExtra}, but Tau could not resolve them. Attach or select the exact vendor models under Model libraries, or explicitly choose the matching Generic device if an approximation is intentional.`;
 }
 
 /** Value tokens that name the *generic* device of a kind rather than a real

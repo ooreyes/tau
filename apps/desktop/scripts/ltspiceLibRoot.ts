@@ -21,11 +21,22 @@ import { join } from "node:path";
  * Devices and LTspice redistributables, and this repo may be published.
  */
 export function ltspiceLibRoot(): string {
-  const fromEnv = process.env.TAU_LTSPICE_LIB_ROOT;
-  if (fromEnv && existsSync(fromEnv)) return fromEnv;
+  return ltspiceLibRoots()[0]
+    ?? join(homedir(), "Library", "Application Support", "LTspice", "lib");
+}
 
-  const staged = join(homedir(), ".tau-autobuilder", "ltspice-models", "lib");
-  if (existsSync(staged)) return staged;
-
-  return join(homedir(), "Library", "Application Support", "LTspice", "lib");
+/** All readable candidates, in precedence order. A staged autobuilder tree
+ * may intentionally contain only the vendor files needed by older gates, so
+ * callers looking for several independent standard databases must fall
+ * through per file instead of treating the first root as complete. */
+export function ltspiceLibRoots(): string[] {
+  const candidates = [
+    process.env.TAU_LTSPICE_LIB_ROOT,
+    join(homedir(), ".tau-autobuilder", "ltspice-models", "lib"),
+    join(homedir(), "Library", "Application Support", "LTspice", "lib"),
+  ];
+  return candidates
+    .filter((root): root is string => typeof root === "string" && root.length > 0)
+    .filter((root) => existsSync(root))
+    .filter((root, index, roots) => roots.indexOf(root) === index);
 }

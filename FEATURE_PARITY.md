@@ -577,16 +577,20 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   5231 zeners, 2N2222/3904/BC547 NPN, 2N2907/3906/BC557 PNP) now emit their real
   LTspice `lib/cmp/standard.*` parameters into the deck and the device line uses
   the part name. Live-verified in ngspice (1N750 zener clamps at 4.67 V). Generic
-  `TAU_*` still covers unbundled/unknown names. **Named model chooser landed
+  `TAU_*` covers only deliberately generic parts. **Named model chooser landed
   (2026-08-03):** diode/BJT/JFET/MOS Properties lists only compatible definitions
   from the document, attached Model Libraries, and Tau's exact bundle, with the
   winning source named beside each part. Wrong-polarity VDMOS choices are absent;
-  unresolved imported names remain selected with an explicit generic-substitution
-  warning. The Class-D pair RSR015P06/QS6K1 is selectable without syntax and emits
+  unresolved imported names remain selected and refuse atomically before any
+  engine call. The Class-D pair RSR015P06/QS6K1 is selectable without syntax and emits
   exact three-terminal VDMOS cards. Generic MOS W/L/KP/VTO are named controls and
   KP/VTO now build a real per-instance Level-1 model instead of being ignored;
-  exact vendor models hide inapplicable override fields. **NEXT:** broaden the
-  exact bundle as corpus parts require; browser TS-solver model parsing.
+  exact vendor models hide inapplicable override fields. The desktop app also
+  discovers the user's four installed LTspice `standard.*` databases before the
+  first runnable UI and consults them after document attachments, without
+  persisting or redistributing those files. The canonical corpus is 80/82 with
+  zero named-model substitutions. **NEXT:** browser TS-solver model parsing and
+  broader compatible vendor-subcircuit resolution.
 - ✅ **Behavioral sources (B)** — used constantly in real LTspice circuits —
   **landed end-to-end.** New `bsource` component kind (2-terminal output, value
   carries `V=<expr>`/`I=<expr>`): pin geometry + diamond symbol + palette entry
@@ -798,8 +802,9 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   11 unit tests + a deck-integration test. **Model-name mapping landed:**
   `definedModelNames` collects the document's `.model`/`.subckt` names and the
   deck builder emits a semiconductor's own `SYMATTR Value` model name on its
-  device line *when that model is defined* (else the generic `TAU_*`), so it
-  never introduces an undefined-model error. **User-attached vendor libraries
+  device line *when that model is defined*. An unresolved explicitly named
+  semiconductor/switch now refuses the whole run; generic `TAU_*` models are
+  reserved for deliberately generic parts. **User-attached vendor libraries
   landed** (`engine/userModelLibrary.ts`): `parseUserModelLibraries` folds
   attached `.lib`/`.subckt`/`.mod` text into a registry the deck builder
   consults after inline directives and before Tau's bundled parts, inlining the
@@ -818,6 +823,11 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   boundary is fixed-root/read-only, skips symlinks, limits recursion and count,
   accepts only model-text extensions up to 5 MiB, rejects traversal and binary/
   encrypted content, and retains the document's 64-file/20 MiB aggregate caps.
+  The four implicit installed `standard.dio` / `.bjt` / `.mos` / `.jft`
+  databases are loaded into ephemeral runtime state before the UI renders, so
+  named parts behave as they do in LTspice without inflating the document or
+  redistributing third-party assets. Explicit document attachments retain
+  first-definition priority.
   **Native subcircuit chooser (2026-08-03):** every resolvable block is now a
   source-labelled Properties choice with its exact named terminal count and
   declared parameter defaults; missing blocks remain selected and explicitly
@@ -1426,12 +1436,14 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   `−` pin zips onto Tau's p because isource emission swaps to `I n p`; the
   identity zip ran every imported I source backwards and logamp's starved
   bias node hung gmin stepping). **Zero remaining op failures.**
-  **Extended-corpus correction (2026-08-03):** all 4,012 files now have zero
-  non-refusal hard failures, but this is not a vendor-model parity claim. Four
-  verified multi-pin amplifiers moved from malformed generic decks to explicit
-  refusals. A separate decoded census finds 683 named five-pin/vendor-opamp
-  instances across 475 files still using Tau's generic gain block; model-backed
-  import/refusal is required before those results count as LTspice parity.
+  **Extended-corpus correction (2026-08-03):** after named-device substitution
+  was made fatal, the full 4,012-file run reports 4,012 imported/schema-valid,
+  522 warning-clean, 228 deck-built, 167 synthetic-op converged, 61 non-refusal
+  hard failures, 3,784 honest unsupported refusals, and zero model
+  substitutions. The canonical subset remains 80/82 build/converge. This is an
+  honest compatibility baseline, not an LTspice-killer claim; vendor symbol and
+  macromodel coverage plus authored-analysis differential results must improve
+  materially before completion.
 - ✅ **Class-D fidelity — the flagship circuit now SIMULATES correctly
   (2026-07-03), proven by a committed runner** (`scripts/classdParity.corpus.ts`,
   runs with `scripts/acceptance-corpus.sh`). Two fixes:
@@ -1455,10 +1467,12 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   Efficiency to installed LTspice within 2%. The same gate compares RC and
   Class-D traces point-for-point and the unmodified educational Colpitts
   oscillator by amplitude, RMS, and frequency. All four proofs pass headlessly.
-- 🟡 Ship/bundle a real device-model set — **common LTspice standard diodes/
+- 🟡 Resolve a real device-model set — **common LTspice standard diodes/
   zeners/BJTs + the class-d power VDMOS pair bundled** (`engine/standardModels.ts`,
   real `standard.*` params, emitted by `buildSpiceDeck` when referenced by name).
-  Still generic for any unbundled part.
+  The desktop app additionally uses the user's installed standard diode/BJT/
+  MOS/JFET databases in place. Unresolved named parts refuse; only an explicitly
+  generic catalog choice receives a starter model.
 - 🟡 Convergence aids — a baseline `rshunt=1e12` ships in the default `.options`
   so floating-node circuits solve; gmin/source stepping not yet surfaced to user.
 - ⬜ Per-analysis ngspice option mapping

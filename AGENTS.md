@@ -111,11 +111,10 @@ or gate completion: the bot finishes at "production-ready, unsigned"; the
 completion notification tells Omar it is time to create the Apple Developer
 account and sign/notarize/ship.
 
-- [ ] **A committed, re‑runnable acceptance‑corpus script** (e.g.
-      `scripts/acceptance-corpus.sh`) that imports every `.asc` under
+- [x] **A committed, re‑runnable acceptance‑corpus script**
+      (`scripts/acceptance-corpus.sh`) that imports every `.asc` under
       `~/Downloads/LTspice_export/` and `~/Documents/LTspice/**` and reports
       warning‑clean count / deck‑builds count / op‑point‑converges count.
-      **This does not exist yet — build it before trusting any corpus number.**
       A number in a doc that nobody can reproduce with one command is not a
       fact; it is a claim.
 - [ ] **Acceptance corpus ≥ 80/82** per that script's own output (not a
@@ -139,6 +138,26 @@ account and sign/notarize/ship.
       column so narrow controls become unreachable, no header stuck above the
       scroll position. Verify with the screenshot pipeline (STEP 3.5 in the
       build prompt) at the minimum size, not just a comfortable one.
+- [ ] **Named-device fidelity is fail-closed everywhere:** zero silent generic
+      semiconductor, switch, op-amp, subcircuit, or vendor-symbol substitution;
+      the full recursive corpus has zero non-refusal hard failures and at least
+      95% of unencrypted circuits build their authored analysis using exact
+      document, user-installed, user-attached, or Tau-owned compatible models.
+- [ ] **Broad differential parity, not a synthetic `.op` proxy:** the acceptance
+      runner executes each circuit's authored `.tran` / `.ac` / `.dc` / `.op` /
+      `.noise` / `.tf` / `.step` / `.meas` analyses and compares numeric outputs
+      with LTspice over a representative device and topology matrix.
+- [ ] **AI is production-safe and genuinely circuit-aware:** a supported OpenAI
+      path (Tau OAuth/backend or native BYOK with separate API billing) keeps
+      service credentials out of the renderer, obtains explicit cloud-data
+      consent, gives the model bounded exact schematic/netlist/analysis tools,
+      validates generated schematics with packaged ngspice before apply, and
+      has release-gated live evaluations. Never reuse ChatGPT browser cookies or
+      imply that a ChatGPT subscription pays API usage.
+- [ ] **Student, professional, and developer product gates:** a first-success
+      learning path and contextual help; crash-safe unsaved recovery plus safe
+      external-edit/conflict handling and reproducible run records; and a stable,
+      documented, versioned CLI/API with machine-readable diagnostics.
 - [ ] All gates green; **unsigned release build is production‑ready**:
       `pnpm --filter @tau/desktop tauri build` succeeds, the DMG mounts, the
       built Tau.app launches and stays alive, and bundled ngspice simulates

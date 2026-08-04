@@ -8,6 +8,7 @@ const row = (over: Partial<CorpusRow>): CorpusRow => ({
   deckBuilt: true,
   opConverged: true,
   validated: true,
+  modelSubstitutions: 0,
   ...over,
 });
 
@@ -27,6 +28,7 @@ describe("summarizeCorpus", () => {
       deckBuilt: 3,
       opConverged: 2,
       validated: 4,
+      modelSubstitutions: 0,
     });
   });
 
@@ -53,6 +55,7 @@ describe("summarizeCorpus", () => {
       deckBuilt: 0,
       opConverged: 0,
       validated: 0,
+      modelSubstitutions: 0,
     });
   });
 });
@@ -93,5 +96,10 @@ describe("formatCorpusReport", () => {
     expect(lines[2]).toContain("bad.asc");
     expect(lines[2]).toContain("singular matrix");
     expect(text).toContain("total 2 · imported 2 · warning-clean 2 · deck-built 2 · op-converged 1");
+    expect(text).toContain("model-substitutions 0");
+  });
+
+  it("prints any model substitution as a release-visible count", () => {
+    expect(formatCorpusReport([row({ modelSubstitutions: 2 })])).toContain("model-substitutions 2");
   });
 });

@@ -62,8 +62,10 @@ NMOS/PMOS, NPN/PNP, op amp, potentiometer, switch, transformer, and test point.
 The native desktop app exports the current library to ngspice. R/C/L, DC and
 AC sources, diodes, LEDs, zeners, NMOS/PMOS, NPN/PNP, ideal op amps,
 potentiometers, switches, transformers, grounds, and test points therefore run
-through real SPICE analysis. Tau supplies conservative generic models for the
-semiconductor symbols.
+through real SPICE analysis. Tau supplies conservative generic models only for
+symbols the user deliberately leaves generic. If a schematic names a vendor
+device, Tau resolves the exact model or refuses the run; it never presents a
+generic device's waveform as that named part.
 
 For vendor-accurate parts, attach the manufacturer's `.lib`/`.subckt` file to
 the document through the Model libraries dialog (toolbar button or command
@@ -73,6 +75,9 @@ macromodels (`VSWITCH`/`ISWITCH` cards, parenthesized switch control nodes,
 `mfg=` annotations) are translated automatically. The
 [AD8541 example](examples/README.md) runs a real Analog Devices macromodel end
 to end. Tau does not bundle or copy LTspice's proprietary libraries.
+On macOS, the desktop app also consults the four implicit `standard.*` device
+databases in the user's installed LTspice copy without adding those files to
+the Tau document or distribution.
 
 ## Quickstart (development)
 

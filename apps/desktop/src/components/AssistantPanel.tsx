@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { useSchematic } from "../store/useSchematic";
+import { useRuntimeModelLibraries } from "../store/useRuntimeModelLibraries";
 import type { NetLabel, Probe, SchematicComponent, SchematicWire } from "../schematic/types";
 import type { ParamScope } from "../simulation/paramScope";
 import type { AnalysisResult } from "../simulation/linearTransient";
@@ -238,9 +239,10 @@ export function AssistantPanel({
   const apiKey = useAssistantApiKey();
   const preferences = useAssistantPreferences();
   const userModelLibraries = useSchematic((s) => s.userModelLibraries);
+  const installedLtspiceModelLibraries = useRuntimeModelLibraries((s) => s.installedLtspice);
   const userModelLibraryTexts = useMemo(
-    () => userModelLibraries.map((library) => library.text),
-    [userModelLibraries],
+    () => [...userModelLibraries, ...installedLtspiceModelLibraries].map((library) => library.text),
+    [installedLtspiceModelLibraries, userModelLibraries],
   );
   const restoredRecovery = useMemo(() => loadAssistantRecovery(memoryKey), [memoryKey]);
   const localAssistant = useMemo(

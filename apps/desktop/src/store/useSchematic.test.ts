@@ -1761,9 +1761,10 @@ describe("user model library attachments", () => {
     expect(deck.netlist).toMatch(/^\.model\s+MYVENDNPN\s+NPN/im);
     expect(deck.netlist).toMatch(/^Q\w*\s+coll\s+base\s+0\s+MYVENDNPN\b/im);
 
-    // Control: the same circuit with the attachment removed no longer inlines
-    // the vendor card - proof the card came from the attached library.
-    const withoutDeck = buildSpiceDeck({ ...schematic, userModelLibraries: [] }, { kind: "op" });
-    expect(withoutDeck.netlist).not.toMatch(/^\.model\s+MYVENDNPN\b/im);
+    // Control: removing the attachment refuses the run instead of silently
+    // replacing the named transistor with Tau's generic NPN.
+    expect(() => buildSpiceDeck({ ...schematic, userModelLibraries: [] }, { kind: "op" })).toThrow(
+      'Simulation refused: Q1 names model "MYVENDNPN", but Tau could not resolve it.',
+    );
   });
 });

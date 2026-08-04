@@ -32,17 +32,19 @@ one engine for the whole session.
 
 ## Devices that are not modelled yet
 
-- **Current-controlled switches (`csw`) do not switch.** A `csw` is controlled
-  by the current through a named source rather than by pins, which Tau does not
-  model, so it simulates as a fixed open circuit - and says so with the result
-  instead of returning a confident wrong waveform. Voltage-controlled switches
-  (`sw`) do switch: they import with their NC+/NC- control pins and simulate as
-  a real ngspice `S` device against the schematic's own `.model`.
-- Tau ships 28 standard device models against LTspice's ~2,500. A part whose
-  model name Tau cannot resolve is simulated on a generic starter device
-  (`Level=1` MOSFET, textbook BJT/diode) and **says so before the run** - the
-  warning names the part and the model it could not find. Attach the vendor
-  `.lib` through the Model libraries dialog to get the real device.
+- Current-controlled (`csw`/`iswitch`) and voltage-controlled (`sw`/`vswitch`)
+  switches execute through native ngspice. Tau validates the named sensing
+  voltage source, translates LTspice threshold/hysteresis cards, and refuses a
+  missing, malformed, or wrong-kind control/model before execution. A browser-
+  only preview still cannot stand in for that native proof.
+- Tau ships 28 standard device models against LTspice's ~2,500. In the macOS
+  desktop app it also reads the exact diode/BJT/MOS/JFET `standard.*` databases
+  from the user's installed LTspice copy, ephemerally and read-only. A named
+  part unresolved by the document, an attached library, Tau's exact bundle, or
+  that installed database now refuses the entire run before ngspice starts.
+  Choose a Generic device deliberately for a starter model, or attach the exact
+  vendor `.lib` through Model Libraries; Tau never substitutes a generic
+  waveform for an explicitly named device.
 - A `.include`/`.lib` is read from disk only when the reference is relative,
   stays inside the project folder, and ends in `.lib`, `.sub`, `.subckt`,
   `.mod` or `.inc`; Tau looks beside the schematic first, then in the project's

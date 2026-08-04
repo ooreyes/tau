@@ -30,7 +30,7 @@ import { validateSchematicDocument } from "../src/schematic/documentValidation";
 import { summarizeCorpus, formatCorpusReport, type CorpusRow } from "../src/io/corpusReport";
 import { opampIdentity } from "../src/engine/opampModel";
 import { parseUserModelLibraries, resolveUserSubckt, type UserModelLibraryRegistry } from "../src/engine/userModelLibrary";
-import { ltspiceLibRoot } from "./ltspiceLibRoot";
+import { ltspiceLibRoot, ltspiceLibRoots } from "./ltspiceLibRoot";
 import { nativeWorkerPaths, runNativeSpiceWorker } from "./nativeSpiceWorker";
 
 const HOME = homedir();
@@ -54,6 +54,17 @@ const EXTRA_SYMBOL_ROOTS = [
 const DOWNLOADS_ROOT = join(HOME, "Downloads", "LTspice_export");
 const DOCUMENTS_ROOT = join(HOME, "Documents", "LTspice");
 const LTSPICE_LIB_ROOT = ltspiceLibRoot();
+const INSTALLED_STANDARD_MODEL_LIBRARIES = [
+  "standard.dio",
+  "standard.bjt",
+  "standard.mos",
+  "standard.jft",
+]
+  .map((name) => ltspiceLibRoots()
+    .map((root) => join(root, "cmp", name))
+    .find((path) => existsSync(path)))
+  .filter((path): path is string => Boolean(path))
+  .map((path) => decodeSchematicText(readFileSync(path)));
 const symbolMetadataCache = new Map<string, AsySymbol | null>();
 const modelRegistryCache = new Map<string, UserModelLibraryRegistry | null>();
 
@@ -202,6 +213,7 @@ function runFile(file: CorpusFile, tmpDir: string, skipNgspice: boolean): Corpus
     deckBuilt: false,
     opConverged: false,
     validated: false,
+    modelSubstitutions: 0,
   };
 
   let imported;
@@ -242,7 +254,14 @@ function runFile(file: CorpusFile, tmpDir: string, skipNgspice: boolean): Corpus
   let netlist: string;
   try {
     const params = buildParamScope(imported.directives);
-    const userModelLibraries = attachedOpampBlocks(imported.components);
+    // LTspice implicitly consults these four standard databases for named
+    // semiconductors. Read the user's installed copy in place; never stage,
+    // copy, or redistribute it with Tau. Schematic-specific blocks remain
+    // first so an explicit local definition wins a name collision.
+    const userModelLibraries = [
+      ...attachedOpampBlocks(imported.components),
+      ...INSTALLED_STANDARD_MODEL_LIBRARIES,
+    ];
     const deck = buildSpiceDeck(
       {
         components: imported.components,
@@ -255,6 +274,7 @@ function runFile(file: CorpusFile, tmpDir: string, skipNgspice: boolean): Corpus
       },
       { kind: "op" },
     );
+    row.modelSubstitutions = deck.modelSubstitutions.length;
     netlist = deck.netlist;
     row.deckBuilt = true;
   } catch (error) {
@@ -319,7 +339,7 @@ describe.skipIf(corpus.length === 0)("acceptance corpus (user's own LTspice file
       console.log([
         "",
         "ALL DISCOVERED FILES",
-        `total ${summary.total} · imported ${summary.imported} · warning-clean ${summary.warningClean} · deck-built ${summary.deckBuilt} · op-converged ${summary.opConverged} · schema-valid ${summary.validated}`,
+        `total ${summary.total} · imported ${summary.imported} · warning-clean ${summary.warningClean} · deck-built ${summary.deckBuilt} · op-converged ${summary.opConverged} · schema-valid ${summary.validated} · model-substitutions ${summary.modelSubstitutions}`,
         hardFailures.length > 0
           ? `\nHARD FAILURES (${hardFailures.length})\n${formatCorpusReport(hardFailures)}`
           : "\nHARD FAILURES (0)",
@@ -335,6 +355,7 @@ describe.skipIf(corpus.length === 0)("acceptance corpus (user's own LTspice file
       // successfully-imported file must also pass validateSchematicDocument.
       // See the comment on the validate step in runFile() above.
       expect.soft(summary.validated, "all imported files must remain schema-valid").toBe(summary.imported);
+      expect.soft(summary.modelSubstitutions, "no accepted deck may substitute a named device model").toBe(0);
 
       // Floors = the truthful release target from AGENTS.md: at least 80 of the
       // canonical 82 must build and converge. Earlier 82/82 measurements

@@ -9,7 +9,25 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-03 12:17 CDT**
+**Status: DONE - 2026-08-03 20:12 CDT**
+
+Claimed unit: fail closed when a schematic explicitly names a semiconductor or
+switch model that Tau cannot resolve. Generic starter models remain available
+only when the user deliberately chose a generic device. Add product-copy and
+corpus regressions so a plausible waveform from the wrong vendor device can
+never satisfy an acceptance gate.
+
+Completed unit: explicitly named semiconductor and switch models now fail
+closed before ngspice whenever document, attached, bundled, or user-installed
+exact resolution misses. Generic starter devices still work only when selected
+as Generic. Tau hydrates the user's installed LTspice standard diode/BJT/MOS/
+JFET databases into ephemeral runtime state before rendering and shares them
+with every native run and AI validation path without persisting or
+redistributing their contents. The canonical native corpus is 80/82 build and
+converge with zero model substitutions; the full 4,012-file report now exposes
+the materially lower extended compatibility baseline instead of hiding it.
+
+Previous completed unit:
 
 Completed unit: the only scheduler completion predicate now fails closed around
 a version-2 two-commit marker; it never reads a unit heartbeat. It pins 226
@@ -11516,3 +11534,24 @@ evidence is kept in full here.
   packaged-worker positive/negative runs. Scheduler remains intentionally
   unloaded. Next: reclaim reproducible build-cache space, continue the remaining
   product DoD boxes, then run this all-up gate from the exact clean commit.
+
+- 2026-08-03 - Removed the last silent generic substitution path for explicitly
+  named semiconductor and switch models. Deck building now refuses atomically
+  with bounded product copy and a Model Libraries/Generic recovery path; a
+  successful acceptance row must report zero substitutions. The macOS app
+  discovers and reads only the user's installed `standard.dio`, `standard.bjt`,
+  `standard.mos`, and `standard.jft` databases into ephemeral Zustand state
+  before rendering, then supplies them to every native and assistant validation
+  path after explicit document libraries so local definitions still win. No
+  third-party library bytes enter a document, repository, or release. Evidence:
+  typecheck; 164 frontend files passed / one skipped, 2,479 tests passed / six
+  skipped; production build; Rust fmt/clippy, 56 ordinary + all nine ignored
+  real-engine/library tests; canonical corpus 82 imported / 80 warning-clean /
+  80 deck-built / 80 OP-converged / zero substitutions. The full recursive
+  4,012-file run is now recorded honestly at 228 decks, 167 synthetic OPs, 61
+  hard failures, and 3,784 explicit unsupported refusals; a fresh unsigned app
+  and DMG build and packaged Tau launch also pass. The stale completion marker
+  was removed and the finish contract expanded to require broad authored-
+  analysis parity plus student, professional, developer, and safe OpenAI gates.
+  Next: eliminate the 61 extended-corpus hard failures, then broaden exact
+  vendor-symbol/subcircuit resolution and authored-analysis comparisons.

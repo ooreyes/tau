@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { technicalErrorDetails, userFacingErrorMessage } from "./errorMessage";
-import { unresolvedSubcktMessage } from "../engine/spiceNetlist";
+import { unresolvedModelMessage, unresolvedSubcktMessage } from "../engine/spiceNetlist";
 
 describe("userFacingErrorMessage", () => {
   it("preserves bounded Error and Tauri string diagnostics", () => {
@@ -29,6 +29,13 @@ describe("userFacingErrorMessage", () => {
 
   it("surfaces the missing-subcircuit message verbatim (model-import guidance reaches the user)", () => {
     const message = unresolvedSubcktMessage(["LT1001"]);
+    expect(userFacingErrorMessage(new Error(message), "ngspice could not run this simulation.")).toBe(message);
+  });
+
+  it("surfaces the missing-device-model refusal verbatim", () => {
+    const message = unresolvedModelMessage([
+      { ref: "M1", requested: "IRF540", substituted: "TAU_NMOS" },
+    ]);
     expect(userFacingErrorMessage(new Error(message), "ngspice could not run this simulation.")).toBe(message);
   });
 

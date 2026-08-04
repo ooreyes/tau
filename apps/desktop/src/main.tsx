@@ -7,6 +7,7 @@ import App from "./App";
 import { AppErrorBoundary } from "./components/AppErrorBoundary";
 import { installDevBridge } from "./lib/devBridge";
 import { initThemeMode } from "./lib/theme";
+import { hydrateInstalledLtspiceStandardModels } from "./store/useRuntimeModelLibraries";
 
 // Dev-only. Tree-shaken out of production builds by the constant condition, so
 // nothing here reaches a shipped bundle.
@@ -17,10 +18,18 @@ if (import.meta.env.DEV) installDevBridge();
 // block already handles it - but this still runs to clear a stale data-theme.
 initThemeMode();
 
-ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
-  <React.StrictMode>
-    <AppErrorBoundary>
-      <App />
-    </AppErrorBoundary>
-  </React.StrictMode>,
-);
+async function boot() {
+  // LTspice resolves standard diode/BJT/MOS/JFET names implicitly. Load those
+  // exact user-installed databases before the first runnable UI appears so a
+  // fast click cannot race into a generic-model refusal.
+  await hydrateInstalledLtspiceStandardModels();
+  ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
+    <React.StrictMode>
+      <AppErrorBoundary>
+        <App />
+      </AppErrorBoundary>
+    </React.StrictMode>,
+  );
+}
+
+void boot();

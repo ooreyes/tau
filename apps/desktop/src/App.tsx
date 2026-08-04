@@ -35,6 +35,7 @@ import {
   UnsavedChangesDialog,
 } from "./components/ShellPanels";
 import { useSchematic, type SchematicDocument, type SchematicHistory } from "./store/useSchematic";
+import { useRuntimeModelLibraries } from "./store/useRuntimeModelLibraries";
 import { CATALOG } from "./schematic/catalog";
 import { dispatchShortcutAction, isEditingAction, resolveShortcut } from "./schematic/shortcuts";
 import { extractCircuit } from "./schematic/netlist";
@@ -224,6 +225,7 @@ function App() {
   const ascHierarchicalBlocks = useSchematic((s) => s.ascHierarchicalBlocks);
   const ascSheet = useSchematic((s) => s.ascSheet);
   const userModelLibraries = useSchematic((s) => s.userModelLibraries);
+  const installedLtspiceModelLibraries = useRuntimeModelLibraries((s) => s.installedLtspice);
   const past = useSchematic((s) => s.past);
   const future = useSchematic((s) => s.future);
   const cancel = useSchematic((s) => s.cancel);
@@ -448,14 +450,14 @@ function App() {
   // Native runs take the raw vendor text (LTspice-only cleanup happens in the
   // deck builder); the store keeps names alongside for the attachment UI.
   const userModelLibraryTexts = useMemo(
-    () => userModelLibraries.map((library) => library.text),
-    [userModelLibraries],
+    () => [...userModelLibraries, ...installedLtspiceModelLibraries].map((library) => library.text),
+    [installedLtspiceModelLibraries, userModelLibraries],
   );
   // A `.include` naming one of these resolved at open time, so the deck must
   // not warn that it could not find the file.
   const userModelLibraryNames = useMemo(
-    () => userModelLibraries.map((library) => library.name),
-    [userModelLibraries],
+    () => [...userModelLibraries, ...installedLtspiceModelLibraries].map((library) => library.name),
+    [installedLtspiceModelLibraries, userModelLibraries],
   );
   const currentSignature = useMemo(
     () => schematicDocumentSignature(currentDocument),
