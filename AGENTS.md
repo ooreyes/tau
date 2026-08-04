@@ -81,7 +81,10 @@ reproducing LTspice results. UI breadth without that path is not progress.
 - Never fake a model, simulation, cancellation, or AI capability. Keep
   unsupported behavior explicit.
 - User‑provided models/libraries only; never redistribute LTspice assets.
-- Proprietary license stays; do not add an OSS license file.
+- Proprietary license stays: `LICENSE` grants no open-source rights over Tau's
+  own code, and must not be replaced with an OSS license. Attribution for
+  bundled third-party software is separate and mandatory - `THIRD_PARTY_NOTICES`
+  must exist and stay accurate, and no GPL-licensed file may be shipped.
 - Don't hardcode colors — every color goes through the design-token CSS
   variables (`src/App.css` today; the §10 shadcn token layer once it lands).
   No SPICE specifics in React components.

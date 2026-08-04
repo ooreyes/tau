@@ -29,14 +29,21 @@ use std::{
  * behavioral A device is simulated. The loader and the packaging check read
  * one list: a name that drifted apart would be staged and never loaded, or
  * loaded and never staged, in both cases silently.
+ *
+ * ngspice builds a seventh module, `table.cm`. It is deliberately absent: it
+ * is licensed GPL v2 rather than Modified BSD, Tau emits no device that needs
+ * it, and shipping it would put the whole product under the GPL for no
+ * capability. `scripts/build-ngspice.sh` deletes it from the staged resource,
+ * along with the `d_cosim` co-simulation tool chain, which carries GPL code
+ * for the same non-reason. `THIRD_PARTY_NOTICES` states that Tau distributes
+ * no GPL code. Do not add either back to get a file count to match.
  */
-pub const REQUIRED_CODEMODELS: [&str; 7] = [
+pub const REQUIRED_CODEMODELS: [&str; 6] = [
     "spice2poly.cm",
     "analog.cm",
     "digital.cm",
     "xtradev.cm",
     "xtraevt.cm",
-    "table.cm",
     "tlines.cm",
 ];
 
@@ -576,6 +583,124 @@ mod tests {
     fn reports_no_pin_when_the_build_script_stops_declaring_one() {
         assert_eq!(pinned_commit("NGSPICE_TAG=\"v43\"\n"), None);
         assert_eq!(pinned_commit("NGSPICE_COMMIT=\"$SOME_VAR\"\n"), None);
+    }
+
+    /** Repository root, from this crate's manifest directory. */
+    fn repo_root() -> std::path::PathBuf {
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..")
+    }
+
+    fn read_repo_file(relative: &str) -> String {
+        let path = repo_root().join(relative);
+        std::fs::read_to_string(&path).unwrap_or_else(|error| {
+            panic!("{relative} must ship in the repository: {error}");
+        })
+    }
+
+    /**
+     * The names the build script demands and the names the loader asks for are
+     * the same set, and `table` is in neither. Comparing the sets rather than
+     * the literal line keeps this honest if the loop is ever reformatted.
+     */
+    #[test]
+    fn stages_exactly_the_code_models_the_loader_loads() {
+        let script = read_repo_file("scripts/build-ngspice.sh");
+        let loop_line = script
+            .lines()
+            .find(|line| line.trim_start().starts_with("for codemodel in "))
+            .expect("build-ngspice.sh declares the required code models in a loop");
+        let mut staged: Vec<&str> = loop_line
+            .trim()
+            .trim_start_matches("for codemodel in ")
+            .trim_end_matches("; do")
+            .split_whitespace()
+            .collect();
+        staged.sort_unstable();
+
+        let mut loaded: Vec<&str> = REQUIRED_CODEMODELS
+            .iter()
+            .map(|name| name.trim_end_matches(".cm"))
+            .collect();
+        loaded.sort_unstable();
+
+        assert_eq!(staged, loaded, "staged code models must equal loaded ones");
+        assert!(
+            !staged.contains(&"table"),
+            "table.cm is GPL v2 and unused; it must not be staged or loaded"
+        );
+    }
+
+    /**
+     * ngspice always builds these, so keeping them out of the required list is
+     * not enough - the resource copy takes whole directories. Shipping any of
+     * them would put GPL v2 code in a proprietary bundle. `ivlng` is the Icarus
+     * Verilog VPI module and `scripts/src` holds `ghdl_vpi.c`, both part of the
+     * `d_cosim` co-simulation path that Tau does not expose.
+     */
+    #[test]
+    fn deletes_the_gpl_licensed_parts_from_the_staged_resource() {
+        let script = read_repo_file("scripts/build-ngspice.sh");
+        for removal in [
+            r#"rm -f "$RESOURCE_DIR/lib/ngspice/table.cm""#,
+            r#""$RESOURCE_DIR/lib/ngspice/ivlng.so""#,
+            r#""$RESOURCE_DIR/lib/ngspice/ivlng.vpi""#,
+            r#"rm -rf "$RESOURCE_DIR/share/ngspice/scripts/src""#,
+        ] {
+            assert!(
+                script.contains(removal),
+                "build-ngspice.sh must delete GPL-licensed staged files: {removal}"
+            );
+        }
+    }
+
+    /**
+     * The check above reads the script; this one reads what the script actually
+     * produced. Only the second kind catches a removal that was written down
+     * and never took effect, which is how `ivlng` and `ghdl_vpi.c` shipped
+     * while the notices claimed no GPL code was distributed. The resource is
+     * gitignored, so this is inert on a tree that has never staged an engine.
+     */
+    #[test]
+    fn the_staged_resource_carries_no_gpl_licensed_file() {
+        let resource = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("resources/ngspice");
+        if !resource.join("build-info.json").is_file() {
+            return;
+        }
+        for forbidden in [
+            "lib/ngspice/table.cm",
+            "lib/ngspice/ivlng.so",
+            "lib/ngspice/ivlng.vpi",
+            "share/ngspice/scripts/src",
+        ] {
+            assert!(
+                !resource.join(forbidden).exists(),
+                "GPL-licensed {forbidden} must not be staged for distribution"
+            );
+        }
+    }
+
+    /**
+     * The notices carry ngspice's source offer, so the commit they name has to
+     * be the commit actually built. A pin bump that forgets this file points a
+     * user at source that is not what they were shipped.
+     */
+    #[test]
+    fn third_party_notices_name_the_commit_the_build_script_pins() {
+        let script = read_repo_file("scripts/build-ngspice.sh");
+        let pinned = pinned_commit(&script).expect("build-ngspice.sh pins a commit");
+        let notices = read_repo_file("THIRD_PARTY_NOTICES");
+        assert!(
+            notices.to_lowercase().contains(&pinned.to_lowercase()),
+            "THIRD_PARTY_NOTICES must offer the source for pinned commit {pinned}"
+        );
+        assert!(
+            notices.contains("scripts/patches/ngspice-ltspice-ota-current-limit.patch"),
+            "THIRD_PARTY_NOTICES must disclose the patch Tau applies to ngspice"
+        );
+        assert!(
+            read_repo_file("LICENSE").contains("THIRD_PARTY_NOTICES"),
+            "LICENSE must point at the third-party notices"
+        );
     }
 
     #[test]

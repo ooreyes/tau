@@ -164,6 +164,14 @@ Tau/
 
 ## License
 
-Copyright (c) 2026 Omar Reyes. All rights reserved. The long-term license is
-intentionally undecided to keep open-source, open-core, and commercial paths
-available.
+Copyright (c) 2026 Omar Reyes. All rights reserved. See [LICENSE](LICENSE). The
+long-term license is intentionally undecided to keep open-source, open-core,
+and commercial paths available.
+
+Tau bundles third-party open-source software - most of all the ngspice engine,
+which is under the Modified BSD license with LGPL v2.1 and MPL v2.0 parts. Those
+components, their license texts, and the ngspice source offer (pinned commit
+plus the one patch Tau applies) are in
+[THIRD_PARTY_NOTICES](THIRD_PARTY_NOTICES). Tau ships no GPL-licensed code:
+ngspice's GPL v2 `table` code model and its Verilog/VHDL co-simulation tool
+chain are both dropped from the bundle, and Tau uses neither.

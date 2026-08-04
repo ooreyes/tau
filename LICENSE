@@ -1,0 +1,35 @@
+Tau Software License
+
+Copyright (c) 2026 Omar Reyes. All rights reserved.
+
+Tau's own source code, assets, and documentation in this repository are
+proprietary. They are not open source, and no open source license is granted
+to you for them. The long-term license is intentionally undecided, to keep
+open-source, open-core, and commercial paths available.
+
+No permission is granted to use, copy, modify, merge, publish, distribute,
+sublicense, or sell copies of this software, in source or binary form, except
+under a separate written agreement with the copyright holder.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY, WHETHER
+IN AN ACTION OF CONTRACT, TORT, OR OTHERWISE, ARISING FROM, OUT OF, OR IN
+CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+Tau is not affiliated with, endorsed by, or sponsored by Analog Devices, Inc.
+or any other semiconductor vendor. LTspice is a trademark of Analog Devices,
+Inc., used here only to describe file-format compatibility.
+
+--------------------------------------------------------------------------
+
+Third-party components
+
+Tau is distributed together with third-party software that IS open source and
+that carries its own licenses and conditions - most importantly the ngspice
+simulation engine. Those components, their license texts, and the source offer
+they require are in THIRD_PARTY_NOTICES, in this directory.
+
+Nothing in this file limits, and nothing here is intended to limit, any right
+you have under those third-party licenses.

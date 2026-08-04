@@ -178,7 +178,7 @@ shopt -u nullglob
 # unnoticed. Every name the engine loader asks for is required, so a partial
 # code-model build is caught here rather than one device at a time in the app.
 missing_codemodels=()
-for codemodel in spice2poly analog digital xtradev xtraevt table tlines; do
+for codemodel in spice2poly analog digital xtradev xtraevt tlines; do
   if [[ ! -f "$STAGE_DIR/lib/ngspice/$codemodel.cm" ]]; then
     missing_codemodels+=("$codemodel.cm")
   fi
@@ -188,9 +188,25 @@ if (( ${#missing_codemodels[@]} > 0 )); then
   exit 1
 fi
 cp -R "$STAGE_DIR/lib/ngspice" "$RESOURCE_DIR/lib/"
+# ngspice's `table` code model is the one part of the engine under GPL v2
+# instead of Modified BSD. Tau emits no device that uses it, so it is dropped
+# from the resource rather than shipped: distributing it would put the whole
+# product under the GPL for no capability, and THIRD_PARTY_NOTICES states that
+# Tau carries no GPL code. It is absent from the required list above for the
+# same reason, and the loader's list must not name it either.
+rm -f "$RESOURCE_DIR/lib/ngspice/table.cm"
+# The `d_cosim` co-simulation tool chain is the other place GPL code enters the
+# build: `ivlng.vpi` is built from `src/xspice/verilog/vpi.c` and the installed
+# shim sources include `ghdl_vpi.c`, both GPL v2 or later. The rest of the tool
+# chain is Modified BSD but goes with them, because Tau emits no `d_cosim`
+# device and offers no Verilog or VHDL co-simulation.
+rm -f "$RESOURCE_DIR/lib/ngspice/ivlng.so" "$RESOURCE_DIR/lib/ngspice/ivlng.vpi"
 if [[ -d "$STAGE_DIR/share/ngspice" ]]; then
   mkdir -p "$RESOURCE_DIR/share"
   cp -R "$STAGE_DIR/share/ngspice" "$RESOURCE_DIR/share/"
+  rm -rf "$RESOURCE_DIR/share/ngspice/scripts/src"
+  rm -f "$RESOURCE_DIR/share/ngspice/scripts/ghnggen" \
+    "$RESOURCE_DIR/share/ngspice/scripts/vlnggen"
 fi
 touch "$RESOURCE_DIR/.gitkeep"
 

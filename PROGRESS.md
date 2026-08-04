@@ -9,12 +9,72 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: IN PROGRESS - 2026-08-03 20:53 CDT**
+**Status: LANDED - 2026-08-04 14:10 CDT**
 
-Claimed unit: import any installed LTspice `Prefix X` symbol as a native Tau
-subcircuit carrier using its `.asy` SpiceOrder pin bank, Value2/model defaults,
-and exact locally installed plaintext `.sub` definition. Encrypted or missing
-definitions must remain explicit refusals. Measure the full corpus delta.
+Unit: third-party attribution. Add `LICENSE` and `THIRD_PARTY_NOTICES`, and
+stop shipping every GPL v2 part of the ngspice build so the notices' "no GPL
+code" statement is true rather than aspirational.
+
+Reconciled from the durability rescue branch, which held this work as an
+uncommitted blob, then reviewed and completed before landing. The review found
+that the rescued change did not make its own central claim true - see the GPL
+co-simulation finding below.
+
+What landed:
+
+- `LICENSE` - Tau's own code stays proprietary, with the copyright holder and
+  the "long-term license undecided" wording already in `README.md`, plus a
+  pointer to the third-party notices and a trademark disclaimer.
+- `THIRD_PARTY_NOTICES` - ngspice's bundled-engine section with its license
+  mixture (Modified BSD overall; LGPL v2.1 `numparam`/`KLU`; MPL v2.0 `osdi`;
+  public-domain XSPICE), the source offer (pinned commit
+  `67fbaa9e6a6d756fa23bf52c7b565fbe926fb9c6`, both repository URLs), explicit
+  disclosure that Tau applies `scripts/patches/ngspice-ltspice-ota-current-
+  limit.patch`, and an LGPL relinking statement. Then a measured Rust crate
+  inventory (259 third-party crates, no GPL/LGPL anywhere in the graph), the
+  25 direct JavaScript runtime dependencies with their declared licenses, the
+  MIT/ISC/Apache texts, and ngspice's own `COPYING` reproduced verbatim.
+- `scripts/build-ngspice.sh` - `table` is out of the required code-model list,
+  and `table.cm` is now deleted from the staged resource. Removing it from the
+  required list alone would not have been enough: the staging step copies the
+  whole `lib/ngspice` directory, so the GPL module shipped regardless.
+- `staged_engine.rs` - `REQUIRED_CODEMODELS` drops to six, with the reason
+  recorded so it is not "fixed" back to seven.
+
+**`table.cm` was not the only GPL code in the bundle.** Reviewing the rescued
+change against the staged resource rather than against its own description
+found two more GPL v2-or-later files shipping, which made the notices' central
+claim false as written:
+
+- `lib/ngspice/ivlng.vpi`, built from ngspice's `src/xspice/verilog/vpi.c`
+  (Copyright (c) 2002 Stephen Williams of Icarus Verilog, (c) 2023 Giles
+  Atkinson), carrying an explicit "GNU General Public License ... version 2
+  ... or any later version" header.
+- `share/ngspice/scripts/src/ghdl_vpi.c`, same origin and same header, which
+  ngspice installs as source into the resource tree.
+
+Both belong to the `d_cosim` Verilog/VHDL co-simulation path. Tau emits no
+`d_cosim` device and references none of that plumbing anywhere in the tree, so
+the whole tool chain is now removed at staging time: `ivlng.so`, `ivlng.vpi`,
+`share/ngspice/scripts/src`, and the `ghnggen`/`vlnggen` generator scripts that
+exist only to drive it. The `share/ngspice/scripts/spinit` that remains is
+inert here - `libngspice` does not source it when embedded, and Tau loads code
+models explicitly from `REQUIRED_CODEMODELS` (`spice.rs:341`), so its stale
+`codemodel table.cm` line is never read.
+
+- Four regression tests in `staged_engine.rs`: staged and loaded code-model
+  sets must be equal and must not contain `table`; the build script must delete
+  every GPL-licensed staged file; `THIRD_PARTY_NOTICES` must name the commit
+  the build script pins, disclose the patch, and be pointed at from `LICENSE`;
+  and the staged resource itself, when one has been built, must contain none of
+  those files. That last test is the one that would have caught this: the
+  script-text check passed the whole time GPL code was shipping, because it
+  only ever read what the script said it did.
+
+Not in this unit, and still open under P0.1: the committed ADI `AD8541.lib` and
+the docs that advertise it. Its macromodel text is also embedded in
+`examples/ad8541-buffer/ad8541-buffer.sim`, so removing it means removing the
+example and its corpus proof, which is its own unit.
 
 Previous completed unit:
 

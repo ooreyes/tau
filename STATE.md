@@ -5,7 +5,15 @@ The working memory of an unattended loop that starts from zero every fire.
 
 ## Now
 
-**Status:** NOT DONE - completion RETRACTED by the owner 2026-08-04
+**Status:** IDLE 2026-08-04 - third-party attribution landed. Completion
+remains RETRACTED by the owner; the rest of P0 is untouched.
+
+Still open under P0.1: the committed ADI `AD8541.lib` and the docs that
+advertise it. Its macromodel text is also embedded in
+`examples/ad8541-buffer/ad8541-buffer.sim` and proved by
+`apps/desktop/scripts/examplesAd8541Buffer.corpus.ts`, so removing it means
+removing the example, its proof, and its paragraphs in `README.md`,
+`SHARE.md`, `KNOWN_ISSUES.md` and `examples/README.md`. That is the next unit.
 
 The 2026-08-03 "PROJECT COMPLETE" signal was wrong and has been withdrawn. A
 four-part adversarial audit reproduced the gates and disagreed with these docs.
@@ -210,6 +218,7 @@ Newest first, ONE line each. Full evidence for every unit is in PROGRESS.md
 and in its commit message. This section exists so a fresh fire can see what
 is already done at a glance, not so it can re-read the reasoning.
 
+- 2026-08-04 - TAU HAS A `LICENSE` AND `THIRD_PARTY_NOTICES`, AND SHIPS NO GPL CODE. Beyond the known `table.cm`, review found `ivlng.vpi` and `ghdl_vpi.c` (GPL v2+, Icarus Verilog) were also shipping; the unused `d_cosim` tool chain is now dropped at staging and a test reads the staged tree rather than the script text.
 - 2026-08-03 - VERIFIED MULTI-PIN AMPLIFIERS ARE NEVER FORCED THROUGH A FIVE-PIN OP-AMP BANK. AD8235/LT1168/LT1194/LT1795 preserve losslessly and refuse by name, eliminating all remaining extended-corpus hard failures; 522 real decks/op points remain and canonical is still 80/82.
 - 2026-08-03 - LTSPICE NEGATIVE CAPACITANCE IS PRESERVED EXACTLY AS `Q(V)=C*V`. A native RC proof holds the required +45-degree lead, `elip_grd.asc` now builds/converges, preview solvers refuse rather than alter the sign, and extended hard failures fall 5 -> 4.
 - 2026-08-03 - SELF-CONTAINED LTSPICE BRACE ARITHMETIC AND `Q=` CAPACITORS ARE NATIVE. Empty `.param` scope no longer blocks valid arithmetic; `Q=` emits ngspice's charge device, preview solvers refuse rather than approximate, and the Value UI exposes Charge expression + Initial voltage without raw syntax. Extended hard failures fall 15 -> 5.
@@ -304,3 +313,14 @@ Check for each before calling a unit done.
 7. **A proof pipeline that quietly stops proving.** `design-shot.mjs` broke
    when the workspace stopped seeding examples, then covered only light once
    light tokens landed. Look at the PNGs.
+8. **A stale staged engine makes every cargo gate red before it compiles a
+   line of Tau.** Found 2026-08-04: the resource under
+   `src-tauri/resources/ngspice` was staged 2026-08-01, before the SHA-256
+   manifest landed, so its `build-info.json` had no `files` object and
+   `build.rs` panicked with `build-info.json has no "files" digest object.`
+   The resource is gitignored, so a fresh clone or a stale one both hit this,
+   and cargo compiles the entire Tauri tree first - a cold ~25 minute wait for
+   a panic that has nothing to do with your diff. **Before recording a cargo
+   gate, confirm the resource is current**, and treat an unexplained cargo
+   failure here as environment until proven otherwise. Fixing it means running
+   `scripts/build-ngspice.sh` (another ~25 minutes), so budget a whole fire.

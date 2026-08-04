@@ -1578,7 +1578,10 @@ R1 out fb 10k
         assert!(message.contains("code models"), "{message}");
         // The same deck on an engine that did load its modules is fine, so the
         // message reports the engine build rather than the circuit.
-        assert_eq!(missing_codemodel_message(&lines, 7), None);
+        assert_eq!(
+            missing_codemodel_message(&lines, crate::staged_engine::REQUIRED_CODEMODELS.len()),
+            None
+        );
     }
 
     #[test]
