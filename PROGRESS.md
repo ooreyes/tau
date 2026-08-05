@@ -9,15 +9,45 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: IN PROGRESS - 2026-08-04 20:58 CDT**
+**Status: DONE - 2026-08-04 21:03 CDT**
 
-Unit: P1.6 parse native ngspice `.meas`/`.four` log lines into the UI
-measurement/Fourier tables. Native `.step` emission deferred this unit:
-emitting `.step` while the TS re-run loop still drives each native deck
-would double-step, and consuming stepped multi-plots needs a larger
-transfer/UI slice than one run. Prefer native-parsed results when
-present; fall back to TS runners when the log has none. No fabricated
-numbers. Shippable? NO.
+Unit: P1.6 AC/DC native `.meas` log parse into UI. Reused
+`parseNativeMeasurements` on native AC/DC results; App prefers those
+rows when present (TS fallback otherwise). Transient+Fourier path was
+69a9fd3. `.step` still TS re-run — no native emit. Shippable? NO.
+
+What landed this unit:
+
+- `AcResult` / `DcSweepResult` optional `nativeMeasurements`
+- `runNativeAcSweep` / `runNativeDcSweep` attach parsed log rows
+- App AC/DC measurement memos prefer native when non-empty
+- One extra parser test for AC-domain measure lines
+
+Next unit: P1.6 native `.step` single-deck emission + multi-plot
+consumption (must not emit under TS re-run); authored-analysis
+differential parity.
+
+Previous completed unit:
+
+**Status: DONE - 2026-08-04 21:01 CDT**
+
+Unit: P1.6 parse native ngspice `.meas`/`.four` log lines into the UI.
+Native `.step` emission deferred: emitting `.step` while the TS re-run
+loop still drives each native deck would double-step, and consuming
+stepped multi-plots needs a larger transfer/UI slice. Prefer
+native-parsed results when present; TS runners remain the fallback.
+Canonical unchanged (not re-swept this unit). Shippable? NO.
+
+What landed this unit:
+
+- `simulation/nativeMeasFour.ts` (+ tests) parses engine messages
+- `runNativeTransient` attaches `nativeMeasurements` / `nativeFourier`
+- `App.tsx` prefers those fields when non-empty
+- FEATURE_PARITY / STATE honesty on `.step` deferral reason
+
+Next unit: AC/DC native `.meas` log parse (same helpers); then P1.6
+native `.step` single-deck + multi-plot; authored-analysis differential
+parity.
 
 Previous completed unit:
 

@@ -568,17 +568,21 @@ function App() {
     [analysis],
   );
 
-  // Evaluate the document's `.meas ac …` directives against the latest AC sweep.
-  // Mirrors the transient measurements but on the frequency axis (db/mag/phase).
+  // Prefer ngspice `.meas ac` printout when present (P1.6).
   const acMeasurements = useMemo<MeasResult[]>(() => {
     if (!acAnalysis || !acAnalysis.ok || directives.length === 0) return [];
+    if (acAnalysis.nativeMeasurements && acAnalysis.nativeMeasurements.length > 0) {
+      return acAnalysis.nativeMeasurements;
+    }
     return runAcMeasurements(directives, acAnalysis, params.scope, params.funcs);
   }, [acAnalysis, directives, params]);
 
-  // Evaluate the document's `.meas dc …` directives against the latest DC sweep
-  // (aggregates / FIND / WHEN over the swept-source axis, not time).
+  // Prefer ngspice `.meas dc` printout when present (P1.6).
   const dcMeasurements = useMemo<MeasResult[]>(() => {
     if (!dcAnalysis || !dcAnalysis.ok || directives.length === 0) return [];
+    if (dcAnalysis.nativeMeasurements && dcAnalysis.nativeMeasurements.length > 0) {
+      return dcAnalysis.nativeMeasurements;
+    }
     return runDcMeasurements(directives, dcAnalysis, params.scope, params.funcs);
   }, [dcAnalysis, directives, params]);
 

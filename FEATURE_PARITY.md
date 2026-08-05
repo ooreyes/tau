@@ -1079,9 +1079,10 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   `.meas`/`.measure`/`.four` cards ride in the native netlist after the analysis
   line (`measFourLinesFromDirectives`); `parseNativeMeasurements` /
   `parseNativeFourier` read ngspice's printed results from the engine message
-  log and `App.tsx` prefers those when present (TS runners remain the fallback).
-  `.step` remains the TS re-run loop — native `.step` emission deferred (would
-  double-step under that loop; multi-plot consumption is a larger unit).
+  log and `App.tsx` prefers those when present (TS runners remain the fallback)
+  for transient, AC, and DC native runs. `.step` remains the TS re-run loop —
+  native `.step` emission deferred (would double-step under that loop;
+  multi-plot consumption is a larger unit).
 - ✅ **DC operating point annotation on schematic** (show node V / device I
   in-place, 2026-07-02) — after an OP run, the simulator-mode canvas labels
   every non-ground net with its DC voltage (cyan, at the net's

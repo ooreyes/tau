@@ -467,7 +467,14 @@ export async function runNativeAcSweep(
     seen.add(derived.ref.toLowerCase());
   }
 
-  return { ok: true, freqs: frequency.real, traces, warnings: [...execution.deck.circuit.warnings, ...engineWarnings(execution.result.messages)] };
+  const nativeMeasurements = parseNativeMeasurements(execution.result.messages);
+  return {
+    ok: true,
+    freqs: frequency.real,
+    traces,
+    warnings: [...execution.deck.circuit.warnings, ...engineWarnings(execution.result.messages)],
+    ...(nativeMeasurements.length > 0 ? { nativeMeasurements } : {}),
+  };
 }
 
 /**
@@ -552,6 +559,8 @@ export async function runNativeDcSweep(
   if (series.length === 0) throw new Error("ngspice completed, but returned no DC node-voltage traces.");
 
   const warnings = [...execution.deck.circuit.warnings, ...engineWarnings(execution.result.messages)];
+  const nativeMeasurements = parseNativeMeasurements(execution.result.messages);
+  const nativeExtra = nativeMeasurements.length > 0 ? { nativeMeasurements } : {};
 
   if (!outer) {
     // Ground rides along at 0 V so the shape matches the TS solver, which
@@ -560,7 +569,7 @@ export async function runNativeDcSweep(
       { id: "0", label: "GND", voltages: sweep.map(() => 0), ground: true },
       ...series.map((net) => ({ id: net.id, label: net.label, voltages: net.values, ground: false })),
     ];
-    return { ok: true, source: inner.label, sweep, nets, warnings };
+    return { ok: true, source: inner.label, sweep, nets, warnings, ...nativeExtra };
   }
 
   const fanned: DcSweepNet[] = [];
@@ -582,7 +591,7 @@ export async function runNativeDcSweep(
       });
     }
   }
-  return { ok: true, source: inner.label, sweep, nets: fanned, warnings };
+  return { ok: true, source: inner.label, sweep, nets: fanned, warnings, ...nativeExtra };
 }
 
 /** Independent-source kinds usable as a `.tf` or `.noise` stimulus, matching

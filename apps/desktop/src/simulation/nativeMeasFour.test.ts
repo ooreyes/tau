@@ -44,6 +44,14 @@ describe("parseNativeMeasurements", () => {
     ]);
     expect(rows).toEqual([]);
   });
+
+  it("parses AC-domain measure lines the same way", () => {
+    const rows = parseNativeMeasurements([
+      "Measurements for AC Analysis",
+      "gain                =  -6.02060e+00 at=  1.00000e+03",
+    ]);
+    expect(rows).toEqual([{ name: "gain", value: -6.0206, at: 1000 }]);
+  });
 });
 
 describe("parseNativeFourier", () => {

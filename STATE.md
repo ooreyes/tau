@@ -5,12 +5,10 @@ The working memory of an unattended loop that starts from zero every fire.
 
 ## Now
 
-**Status:** IDLE 2026-08-04 21:00 CDT - P1.6 native `.meas`/`.four` log
-parse into UI landed (`parseNativeMeasurements`/`parseNativeFourier`);
-App prefers ngspice printout when present, TS fallback otherwise.
-Native `.step` emission still deferred (TS re-run would double-step;
-multi-plot consumption larger). Canonical still 82/81/79/79 expected.
-Completion RETRACTED. Shippable? NO.
+**Status:** IDLE 2026-08-04 21:03 CDT - P1.6 native `.meas`/`.four` log
+parse covers transient + AC + DC UI paths; TS fallback when log empty.
+`.step` still TS re-run (no native emit — would double-step). Shippable?
+NO.
 
 **Next unit:** P1.6 native `.step` single-deck emission + multi-plot
 consumption (honest; no emit under TS re-run); authored-analysis

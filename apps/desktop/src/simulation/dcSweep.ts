@@ -23,6 +23,7 @@ import type { NetLabel, SchematicComponent, SchematicWire } from "../schematic/t
 import { runOperatingPoint } from "./operatingPoint";
 import { parseQuantity } from "./quantity";
 import { EMPTY_SCOPE, type ParamScope } from "./paramScope";
+import type { MeasResult } from "./measure";
 
 /** Source kinds whose DC value a `.dc` sweep is allowed to drive. */
 const SWEEPABLE = new Set(["vsource", "isource", "vac", "iac"]);
@@ -73,6 +74,8 @@ export type DcSweepResult =
       /** One series per net (×outer value for nested sweeps). */
       nets: DcSweepNet[];
       warnings: string[];
+      /** ngspice `.meas dc` rows from the engine log (P1.6), when present. */
+      nativeMeasurements?: MeasResult[];
     }
   | {
       ok: false;

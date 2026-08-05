@@ -18,6 +18,7 @@ import { parseQuantity } from "./quantity";
 import { resolveComponentValues, EMPTY_SCOPE, type ParamScope } from "./paramScope";
 import { mutualTerms, type CouplingSpec, type MutualTerm } from "./coupling";
 import { linearBSourceModel, resolveBehavioralTerms, type LinearBehavioral } from "./behavioral";
+import type { MeasResult } from "./measure";
 import { parseAcSpec } from "../engine/acSpec";
 import { previewCurrentControlledSwitchMessage } from "../schematic/currentControlledSwitch";
 import { previewChargeDefinedCapacitorMessage, previewNegativeCapacitorMessage } from "../schematic/behavioralCapacitor";
@@ -41,7 +42,14 @@ export interface AcTrace {
 }
 
 export type AcResult =
-  | { ok: true; freqs: number[]; traces: AcTrace[]; warnings: string[] }
+  | {
+      ok: true;
+      freqs: number[];
+      traces: AcTrace[];
+      warnings: string[];
+      /** ngspice `.meas ac` rows from the engine log (P1.6), when present. */
+      nativeMeasurements?: MeasResult[];
+    }
   | { ok: false; message: string; warnings: string[] };
 
 /**
