@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent } from "react";
 import { nanoid } from "nanoid";
-import { Check, FilePlus2, History, MessageSquarePlus, Pencil, RefreshCw, Sparkles, Square, Trash2, X } from "lucide-react";
+import { Check, FilePlus2, History, MessageSquarePlus, Pencil, RefreshCw, Square, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -938,7 +938,7 @@ export function AssistantPanel({
           {showLocalAiSetup && localAiStatus && (
             <div className="assistant-setup-card" data-state={localAiStatus.state}>
               <div className="assistant-setup-head">
-                <Sparkles size={14} strokeWidth={1.7} aria-hidden="true" />
+                <MessageSquarePlus size={14} strokeWidth={1.7} aria-hidden="true" />
                 <div className="assistant-setup-copy">
                   <strong>{selectedLocalAiPreset.label}</strong>
                   <span>{selectedLocalAiPreset.downloadMb.toLocaleString("en-US")} MB</span>
