@@ -38,6 +38,32 @@ Differential pass=95 · named-device 48.1%. Settings locked. SHIPPABLE? **NO**
 - ct 12/13 buck/boost (named VDMOS + Schottky), Educational non-wall leftovers,
   or waveform DoD. Leave ct19 OP / IRFP / Draft* / Settings alone.
 
+### 2026-08-05 — Bode phase/group-delay measurement cursors (§waveform DoD)
+
+**What I did**
+- Shared AcPlot **Cursors** toggle now also marks the lower Bode pane and
+  reads φ@C1/φ@C2/Δ (or τ@C1/τ@C2/Δ when Group delay) at the same f1/f2.
+- ND wall at 48.1% — waveform pivot. Left ct 17/18/16/19, continue 34 ASC,
+  Chan/NIGBT/FRA, Settings alone.
+
+**Files**
+- `apps/desktop/src/components/SimulationPanel.tsx` (+ 2 wiring tests)
+- `FEATURE_PARITY.md`, `PROGRESS.md`
+
+**Tests**
+- `pnpm -C apps/desktop typecheck` + `test` green (2756 passed)
+- Bode phase + group-delay cursor wiring 2
+
+**Parity items**
+- Waveform viewer 🟡 (Bode phase cursors landed). Differential pass=95 ·
+  named-device 48.1% · SHIPPABLE? NO
+
+**Next step**
+- Standalone phase window / AC-DC legend math / non-wall ND. Leave
+  Educational/IRFP/Settings alone.
+
+
+
 ### 2026-08-05 — Bode AC magnitude measurement cursors (§waveform DoD)
 
 **What I did**
