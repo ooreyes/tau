@@ -282,9 +282,11 @@ function translateDissipativeCurrentLoad(line: string): string {
  * libraries onto Tau's pinned native OTA code model. Multiplying ports must be
  * tied off and voltage compliance must be explicitly infinite. Asymmetric
  * Isource/Isink (`asym`) and input `Ref` offset map onto the patched OTA
- * (tanh current limit + series offset). `linear`, `rclamp`, and `epsilon`
- * still refuse — they change the transfer or compliance shape. Cout/Rout
- * remain literal passive elements across LTspice's output/common pins. */
+ * (tanh current limit + series offset). The LTspice `linear` flag disables
+ * current limiting entirely (`Io = G·Vdiff`) — map that by omitting Iout so
+ * the native model stays on its unbounded gm path; never substitute tanh.
+ * Finite-V `linear`, `rclamp`, and `epsilon` still refuse. Cout/Rout remain
+ * literal passives across LTspice's output/common pins. */
 function translateLtspiceOta(line: string, subcktName: string): string[] {
   const match = /^\s*(A\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+OTA\b(.*)$/i.exec(line);
   if (!match) return [line];
@@ -295,16 +297,16 @@ function translateLtspiceOta(line: string, subcktName: string): string[] {
   if (mul1p.toLowerCase() !== mul1n.toLowerCase() || mul2p.toLowerCase() !== mul2n.toLowerCase()) {
     return refusal("uses active four-quadrant multiplier ports; the native two-port OTA is not equivalent.");
   }
-  if (/\blinear\b/i.test(tail)) {
-    return refusal("uses LTspice OTA 'linear' hard-clip transfer; Tau's tanh Iout limit is not equivalent.");
-  }
   if (params.has("rclamp") || params.has("epsilon")) {
     return refusal("uses OTA voltage-compliance shaping (rclamp/epsilon) not mapped exactly.");
   }
 
+  // LTspice Help / LTwiki: `linear` disables tanh current limiting
+  // (Io = Iraw). It is not a hard-clip transfer.
+  const isLinear = /\blinear\b/i.test(tail);
   const isource = params.get("isource") ?? params.get("isrc");
   const isink = params.get("isink");
-  const wantsAsym = /\basym\b/i.test(tail) || isource !== undefined || isink !== undefined;
+  const wantsAsym = !isLinear && (/\basym\b/i.test(tail) || isource !== undefined || isink !== undefined);
   if (wantsAsym && (isource === undefined || isink === undefined)) {
     return refusal("uses asymmetric OTA current limits without both Isource and Isink; refusing rather than guessing a symmetric Iout.");
   }
@@ -315,7 +317,11 @@ function translateLtspiceOta(line: string, subcktName: string): string[] {
   const vhigh = finiteLiteral(params.get("vhigh"));
   const vlow = finiteLiteral(params.get("vlow"));
   if (!inactiveOutput && (vhigh === null || vlow === null || vhigh < 1e100 || vlow > -1e100)) {
-    return refusal("uses finite or implicit voltage compliance; substituting an unclamped OTA would be inaccurate.");
+    return refusal(
+      isLinear
+        ? "uses LTspice OTA 'linear' with finite voltage compliance; Tau maps unbounded current only when Vhigh/Vlow are infinite."
+        : "uses finite or implicit voltage compliance; substituting an unclamped OTA would be inaccurate.",
+    );
   }
 
   const safe = `${subcktName}_${instance}`.replace(/[^A-Za-z0-9_]/g, "_");
@@ -323,10 +329,14 @@ function translateLtspiceOta(line: string, subcktName: string): string[] {
   const sink = `__tau_ota_sink_${safe}`;
   const sensor = `V__tau_ota_${safe}`;
   const modelParams = [`gm=${gm}`, "rout=1e308", "rin=1e308"];
-  if (wantsAsym && isource !== undefined && isink !== undefined) {
-    modelParams.push(`isource=${isource}`, `isink=${isink}`);
-  } else {
-    modelParams.push(`iout=${params.get("iout") ?? "10u"}`);
+  // `linear` omits iout/isource/isink so PARAM defaults keep gm*Vin
+  // (i_lim ≥ 1e30). Pushing iout would silently reintroduce tanh limiting.
+  if (!isLinear) {
+    if (wantsAsym && isource !== undefined && isink !== undefined) {
+      modelParams.push(`isource=${isource}`, `isink=${isink}`);
+    } else {
+      modelParams.push(`iout=${params.get("iout") ?? "10u"}`);
+    }
   }
   const simpleNoise = [
     ["en", "en"], ["enk", "enk"], ["in", "in_noise"],

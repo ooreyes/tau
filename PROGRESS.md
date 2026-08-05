@@ -9,15 +9,59 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 00:21 CDT**
+**Status: DONE - 2026-08-05 00:25 CDT** (Overnight DoD — OTA linear)
 
-Unit: Class-D DC differential (V1 rail 8–12 V) → **SUMMARY pass=21 sibling=5 gap=1**.
-Remaining gap: Class-D noise/tf. Named-device tip 17.3%. Concurrent OTA linear WIP
-left unstaged. Freshman AI untouched. SHIPPABLE? **NO**
+Unit: LTspice OTA `linear` → pin-faithful unbounded `Io = G·Vdiff` (omit Iout;
+not hard-clip, not tanh) when Vhigh/Vlow infinite. Finite-V linear stays
+honest refuse. Never silent tanh Iout. Never encrypted denominator games.
+
+**Measured tip stdout (truth):**
+```
+NAMED-DEVICE: exact=2 refuse=4 silent=0
+NAMED-DEVICE-RECURSIVE: unencrypted=2539 exact=550 refuse=1989 silent=0 hard-failure=0 encrypted-excluded=1473 exact-rate=21.7%
+```
+Before (same session, tip revert): 2538/439/2099/0/1474 @ 17.3%. After: exact
++111 (21.7%). ≥95% unchecked. SHIPPABLE? **NO**.
+
+**Forbidden lanes left alone:** Settings* · AssistantPanel · ShellPanels · App.css.
 
 **SHIPPABLE?** **NO**
 
 ---
+
+### 2026-08-05 — OTA linear unbounded map → named-device 21.7% (§DoD)
+
+**What I did**
+- Corrected prior “hard-clip” characterization: LTspice Help/LTwiki document
+  `linear` as **disabling** tanh current limiting (`Io = Iraw = G·Vdiff`).
+- `translateLtspiceOta`: infinite-V `linear` omits iout/isource/isink so the
+  patched ngspice OTA stays on its unbounded gm path; still maps `Ref`;
+  ignores authored Iout under `linear` (LTspice does too). Finite-V `linear`
+  refuses with a specific compliance reason (no silent unclamp).
+- Tests: userModelLibrary map/refuse/ignore-Iout; ignored cargo proof
+  `runs_ltspice_ota_linear_unbounded_transfer` (50 mV·gm·1k → ≈50 V, not
+  tanh-clipped ~10 V). No ngspice rebuild — existing unbounded branch.
+
+**Exact stdout**
+```
+BEFORE:
+NAMED-DEVICE: exact=2 refuse=4 silent=0
+NAMED-DEVICE-RECURSIVE: unencrypted=2538 exact=439 refuse=2099 silent=0 hard-failure=0 encrypted-excluded=1474 exact-rate=17.3%
+
+AFTER:
+NAMED-DEVICE: exact=2 refuse=4 silent=0
+NAMED-DEVICE-RECURSIVE: unencrypted=2539 exact=550 refuse=1989 silent=0 hard-failure=0 encrypted-excluded=1473 exact-rate=21.7%
+```
+(+111 exact; silent=0 HF=0. Unencrypted 2538→2539 is the script’s own count
+this run — not a denominator game.)
+
+**Parity items**
+- Named-device 🟡 HF=0 silent=0 exact-rate **21.7%** (not ≥95%). SHIPPABLE? NO
+
+**Next step**
+- Remaining ~finite-V OTA (~80× / linear+finite-V compliance shaping) /
+  multipliers/incomplete asym; encrypted bare SYMBOL stays refuse.
+
 
 ### 2026-08-05 — Class-D DC differential → pass=21 (§DoD)
 

@@ -2124,6 +2124,45 @@ Adiode diode 0 tau_diode
         );
     }
 
+    /** LTspice `linear` is Io = gm*Vin with no tanh Iout. Omitting iout must
+     * stay on that unbounded path — never silently pick up the 10u default. */
+    #[test]
+    #[ignore = "requires TAU_NGSPICE_LIB pointing to libngspice with its code models"]
+    fn runs_ltspice_ota_linear_unbounded_transfer() {
+        let _guard = real_engine_test_guard();
+        let library = std::env::var_os("TAU_NGSPICE_LIB")
+            .map(PathBuf::from)
+            .expect("TAU_NGSPICE_LIB must point to a shared ngspice library");
+        let mut engine = SpiceEngine::load(vec![library]).expect("ngspice library should load");
+        let result = engine
+            .run(SpiceRequest {
+                netlist: r#"Tau linear OTA (no Iout)
+Vin in 0 50m
+.model tau_ota ota(gm=1 rout=1e308 rin=1e308)
+Aota in 0 ota_sink tau_ota
+Vsense ota_sink 0 0
+Fout out 0 Vsense 1
+Rout out 0 1k
+.op
+.end"#
+                    .to_string(),
+            })
+            .expect("unbounded linear OTA should solve");
+        let out = result
+            .vectors
+            .iter()
+            .find(|vector| vector.name.eq_ignore_ascii_case("out"))
+            .and_then(|vector| vector.real.first())
+            .copied()
+            .unwrap_or_else(|| panic!("out missing; messages: {:?}", result.messages));
+        // gm*Vin*Rout = 1*0.05*1k = 50 V. tanh with iout=10m would clip near 10 V.
+        assert!(
+            (49.0..51.0).contains(&out),
+            "linear OTA should be unbounded gm*Vin into 1k (≈50 V); got {} V",
+            out
+        );
+    }
+
     /** Asymmetric Isource/Isink must follow LTspice's split tanh limits — not
      * the larger of the two, and not a silent symmetric Iout substitution. */
     #[test]

@@ -266,13 +266,41 @@ describe("parseUserModelLibraries", () => {
     expect(block).toContain("iout=300u");
   });
 
-  it("refuses LTspice OTA linear hard-clip with a specific reason", () => {
+  it("maps LTspice OTA linear (unbounded Io=G·Vdiff) by omitting Iout", () => {
+    const block = parseUserModelLibraries([
+      [
+        ".subckt AMP 1 2 3 4 5",
+        "A1 0 N003 0 0 0 0 N006 0 OTA g=1u linear Vlow=-1e308 Vhigh=1e308 ref=.389",
+        ".ends AMP",
+      ].join("\n"),
+    ]).subckts.get("amp") ?? "";
+    // Must not reintroduce tanh via a default/symmetric iout.
+    expect(block).toContain(".model __tau_ota_AMP_A1 ota(gm=1u rout=1e308 rin=1e308)");
+    expect(block).not.toMatch(/\biout=/i);
+    expect(block).not.toMatch(/\bisource=/i);
+    expect(block).toContain("V__tau_ota_ref_AMP_A1 __tau_ota_ref_AMP_A1 N003 .389");
+    expect(block).toContain("A__tau_ota_AMP_A1 0 __tau_ota_ref_AMP_A1 __tau_ota_sink_AMP_A1 __tau_ota_AMP_A1");
+  });
+
+  it("refuses LTspice OTA linear with finite voltage compliance", () => {
     const registry = parseUserModelLibraries([
-      ".subckt AMP 1 2 3 4 5\nA1 0 N003 0 0 0 0 N006 0 OTA g=1u linear Vlow=-1e308 Vhigh=1e308\n.ends AMP",
+      ".subckt AMP 1 2 3 4 5\nA1 0 N003 0 0 0 0 N006 0 OTA g=1u linear Vlow=-560m Vhigh=560m\n.ends AMP",
     ]);
     expect(() => resolveUserSubckt(registry, "AMP")).toThrow(
-      /Simulation refused: AMP\/A1 uses LTspice OTA 'linear' hard-clip transfer.*No approximate or partial circuit was run/,
+      /Simulation refused: AMP\/A1 uses LTspice OTA 'linear' with finite voltage compliance.*No approximate or partial circuit was run/,
     );
+  });
+
+  it("ignores authored Iout when linear disables current limiting", () => {
+    const block = parseUserModelLibraries([
+      [
+        ".subckt AMP 1 2 3 4 5",
+        "A1 0 N003 0 0 0 0 N006 0 OTA g=1m Iout=10u linear Vlow=-1e308 Vhigh=1e308",
+        ".ends AMP",
+      ].join("\n"),
+    ]).subckts.get("amp") ?? "";
+    expect(block).toContain(".model __tau_ota_AMP_A1 ota(gm=1m rout=1e308 rin=1e308)");
+    expect(block).not.toMatch(/\biout=/i);
   });
 
   it("replaces LTspice's built-in pi constant at full double precision", () => {

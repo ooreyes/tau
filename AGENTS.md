@@ -162,10 +162,10 @@ account and sign/notarize/ship.
       document, user-installed, user-attached, or Tau-owned compatible models.
       **Partial (2026-08-05):** unit proof `scripts/named-device-fidelity.sh`
       prints `NAMED-DEVICE: exact=2 refuse=4 silent=0` and recursive stdout
-      `NAMED-DEVICE-RECURSIVE: unencrypted=2538 exact=439 refuse=2099 silent=0
-      hard-failure=0 encrypted-excluded=1474 exact-rate=17.3%` — tip after
-      OTA `asym` Isource/Isink + `Ref` exact map on patched ngspice (+29 vs
-      16.2% bare-SYMBOL tip). `linear`/finite-V/incomplete asym stay refuse.
+      `NAMED-DEVICE-RECURSIVE: unencrypted=2539 exact=550 refuse=1989 silent=0
+      hard-failure=0 encrypted-excluded=1473 exact-rate=21.7%` — tip after
+      OTA `linear` unbounded map (+111 vs 17.3% asym/Ref tip; LTspice `linear`
+      disables tanh, not hard-clip). Finite-V linear/incomplete asym stay refuse.
       Full unique-leaf probe 33.4%/enc=2781 remains retracted (denominator
       game). Never silent substitution. ≥95% exact-rate **not** met; DoD box
       stays unchecked. SHIPPABLE? **NO**.
