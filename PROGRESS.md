@@ -1,10 +1,10 @@
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 09:30 CDT**
+**Status: DONE - 2026-08-05 09:40 CDT**
 
-Unit: AC Bode magnitude multi-pane cards (waveform DoD).
-Worktree `Tau-wt-wave-ac-bode-panes` on tip `aa015fe`. Left EveryCircuit
-library / current-mode / Settings / Educational alone. SHIPPABLE? **NO**
+Unit: Step-family manual Y limits (waveform DoD).
+Worktree `Tau-wt-wave-step-ylim` on tip `274215c`. Left EveryCircuit library /
+current-mode / Settings / Educational / stash@{0} alone. SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
@@ -14,6 +14,30 @@ library / current-mode / Settings / Educational alone. SHIPPABLE? **NO**
 ---
 
 
+
+### 2026-08-05 — Step-family manual Y limits (§waveform DoD)
+
+**What I did**
+- StepPlot Ymin/Ymax + Apply Y / Autoscale Y via `parseManualYLimits` /
+  `applyManualYToDomain`. Active signal/expression change clears manual.
+
+**Files**
+- `components/SimulationPanel.tsx` (StepPlot)
+- `components/SimulationPanel.test.tsx`
+- `FEATURE_PARITY.md`, `PROGRESS.md`
+
+**Tests**
+- `pnpm -C apps/desktop typecheck` + StepPlot Y test; full suite before push
+
+**Parity items**
+- §waveform DoD: step-family Y limits. NEXT: AC/DC step-family Y / non-wall ND.
+
+**Next step**
+- AC/DC step-family Y limits or non-wall ND; never Chan/NIGBT/FRA.
+
+SHIPPABLE? **NO**
+
+---
 
 ### 2026-08-05 — AC Bode magnitude multi-pane cards (§waveform DoD)
 

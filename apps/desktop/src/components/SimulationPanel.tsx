@@ -5607,6 +5607,10 @@ export function StepPlot({ result, probes, wires }: { result: StepFamilyResult |
   const [cf2, setCf2] = useState(0.75);
   /** Legend click hides a step member; never allow hiding the last visible curve. */
   const [hiddenLabels, setHiddenLabels] = useState<string[]>([]);
+  const [yMinDraft, setYMinDraft] = useState("");
+  const [yMaxDraft, setYMaxDraft] = useState("");
+  const [manualY, setManualY] = useState<ManualAxisLimits | null>(null);
+  const [yLimitsError, setYLimitsError] = useState<string | null>(null);
 
   const exprFamily = useMemo(() => {
     if (!activeExpr) return null;
@@ -5670,6 +5674,26 @@ export function StepPlot({ result, probes, wires }: { result: StepFamilyResult |
     const tMax = visibleSeries.reduce((acc, s) => Math.max(acc, s.times[s.times.length - 1] || 0), 0) || 1;
     return { min, max, tMax };
   }, [visibleSeries]);
+
+  const yDomain = useMemo(() => {
+    if (!visibleFrame) return null;
+    return applyManualYToDomain(
+      {
+        xMin: 0,
+        xMax: visibleFrame.tMax,
+        yMin: visibleFrame.min,
+        yMax: visibleFrame.max,
+      },
+      manualY,
+    );
+  }, [visibleFrame, manualY]);
+
+  useEffect(() => {
+    setManualY(null);
+    setYLimitsError(null);
+    setYMinDraft("");
+    setYMaxDraft("");
+  }, [activeExpr, family?.signal]);
 
   const toggleStepMember = (label: string) => {
     setHiddenLabels((prev) => {
@@ -5775,7 +5799,7 @@ export function StepPlot({ result, probes, wires }: { result: StepFamilyResult |
       </div>
     );
   }
-  if (!visibleFrame || visibleSeries.length === 0) {
+  if (!visibleFrame || !yDomain || visibleSeries.length === 0) {
     return (
       <div className="analysis-empty">
         Step ran, but no step members are visible. Click a legend chip to show a curve.
@@ -5865,8 +5889,8 @@ export function StepPlot({ result, probes, wires }: { result: StepFamilyResult |
             pad={PLOT_PAD}
             xMin={0}
             xMax={visibleFrame.tMax}
-            yMin={visibleFrame.min}
-            yMax={visibleFrame.max}
+            yMin={yDomain.yMin}
+            yMax={yDomain.yMax}
             xUnit="s"
             yUnit={family.unit || "V"}
             yAxisTitle={family.unit === "A" ? "Current" : family.unit === "W" ? "Power" : "Voltage"}
@@ -5880,7 +5904,7 @@ export function StepPlot({ result, probes, wires }: { result: StepFamilyResult |
                 key={s.label}
                 className="scope-trace"
                 stroke={STEP_COLORS[i % STEP_COLORS.length]}
-                d={tracePath(s.trace, s.times, 0, visibleFrame.tMax, visibleFrame.min, visibleFrame.max)}
+                d={tracePath(s.trace, s.times, 0, visibleFrame.tMax, yDomain.yMin, yDomain.yMax)}
               />
             );
           })}
@@ -5965,6 +5989,73 @@ export function StepPlot({ result, probes, wires }: { result: StepFamilyResult |
           Export PNG
         </Button>
       </div>
+      <div className="meter-row analysis-meter" aria-label="Step family Y limits">
+        <label className="axis-limit-field">
+          Ymin
+          <Input
+            variant="mono"
+            size="sm"
+            className="w-20"
+            value={yMinDraft}
+            aria-label="Step family Y min"
+            placeholder={String(visibleFrame.min)}
+            onChange={(e) => {
+              setYMinDraft(e.currentTarget.value);
+              if (yLimitsError) setYLimitsError(null);
+            }}
+          />
+        </label>
+        <label className="axis-limit-field">
+          Ymax
+          <Input
+            variant="mono"
+            size="sm"
+            className="w-20"
+            value={yMaxDraft}
+            aria-label="Step family Y max"
+            placeholder={String(visibleFrame.max)}
+            onChange={(e) => {
+              setYMaxDraft(e.currentTarget.value);
+              if (yLimitsError) setYLimitsError(null);
+            }}
+          />
+        </label>
+        <Button
+          size="sm"
+          variant="outline"
+          aria-label="Apply step family Y limits"
+          onClick={() => {
+            const parsed = parseManualYLimits(yMinDraft, yMaxDraft);
+            if (!parsed.ok) {
+              setYLimitsError(parsed.error);
+              return;
+            }
+            setManualY(parsed.limits);
+            setYLimitsError(null);
+          }}
+        >
+          Apply Y
+        </Button>
+        <Button
+          size="sm"
+          variant={manualY ? "default" : "outline"}
+          aria-label="Autoscale step family Y"
+          aria-pressed={!manualY}
+          onClick={() => {
+            setManualY(null);
+            setYLimitsError(null);
+            setYMinDraft("");
+            setYMaxDraft("");
+          }}
+        >
+          Autoscale Y
+        </Button>
+      </div>
+      {yLimitsError && (
+        <div className="expr-error" role="alert">
+          {yLimitsError}
+        </div>
+      )}
       {cursorsOn && (
         <div className="cursor-sliders">
           <label>

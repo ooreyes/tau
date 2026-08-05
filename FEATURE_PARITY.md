@@ -1333,7 +1333,8 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   NoisePlot Ymin/Ymax + Apply Y / Autoscale Y; log scale refuses non-positive
   limits; yScale flip clears manual. **FFT magnitude manual Y limits landed**
   (2026-08-05): FftView Ymin/Ymax + Apply Y / Autoscale Y; signal/window change
-  clears manual.
+  clears manual. **Step-family manual Y limits landed** (2026-08-05): StepPlot
+  Ymin/Ymax + Apply Y / Autoscale Y.
 - ✅ **Per-component simulator telemetry (§11 D10, 2026-07-10):** every named
   component receives a selectable row with voltage across, current through,
   instantaneous power, sparkline, and signal class. Voltage polarity follows
@@ -1595,7 +1596,9 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   Apply Y / Autoscale Y. **DC sweep multi-pane cards landed** (2026-08-05):
   DcPlot automatic one-net-per-pane cards + MIN/AVG/MAX. **AC Bode magnitude
   multi-pane cards landed** (2026-08-05): AcPlot one-trace-per-mag-card +
-  shared phase pane. **NEXT:** non-wall ND / remaining waveform polish.
+  shared phase pane. **Step-family manual Y limits landed** (2026-08-05):
+  StepPlot Ymin/Ymax + Apply Y / Autoscale Y; signal/expression change clears
+  manual. **NEXT:** AC/DC step-family Y limits / non-wall ND.
 - 🟡 Right-click trace → math/operations — **abs / negate / dB / uramp / sgn /
   ddt / idt landed** (2026-08-05): `traceMath.ts` wraps a legend trace into
   `abs(…)`, `-(…)`, `db(…)`, `uramp(…)`, `sgn(…)`, `ddt(…)`, or `idt(…)`;

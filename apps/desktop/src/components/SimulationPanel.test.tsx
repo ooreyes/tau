@@ -1110,6 +1110,30 @@ describe("StepPlot measurements", () => {
     fireEvent.click(screen.getByRole("button", { name: "Show step RL=1" }));
     expect(container.querySelectorAll(".scope-trace").length).toBe(2);
   });
+
+  it("Apply Y locks step-family axis; Autoscale Y restores autorange", () => {
+    render(
+      <StepPlot
+        result={{
+          ok: true,
+          spec: { kind: "param", name: "RL", values: [1, 2] },
+          members: [member("RL=1", 1), member("RL=2", 2)],
+          warnings: [],
+        }}
+        probes={[]}
+        wires={[]}
+      />,
+    );
+    expect(screen.getByLabelText("Step family Y limits")).toBeTruthy();
+    fireEvent.change(screen.getByLabelText("Step family Y min"), { target: { value: "0" } });
+    fireEvent.change(screen.getByLabelText("Step family Y max"), { target: { value: "1" } });
+    fireEvent.click(screen.getByRole("button", { name: "Apply step family Y limits" }));
+    expect(screen.queryByRole("alert")).toBeNull();
+    const autoscale = screen.getByRole("button", { name: "Autoscale step family Y" });
+    expect(autoscale.getAttribute("aria-pressed")).toBe("false");
+    fireEvent.click(autoscale);
+    expect(autoscale.getAttribute("aria-pressed")).toBe("true");
+  });
 });
 
 describe("AcFamilyPlot / DcFamilyPlot Export PNG", { timeout: 20_000 }, () => {
