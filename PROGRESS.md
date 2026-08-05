@@ -9,6 +9,51 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
+**Status: DONE - 2026-08-04 22:36 CDT**
+
+Unit: Unsigned release smoke — `tauri build` / packaged Tau.app + bundled
+ngspice end-to-end. AGENTS DoD unsigned-release box → checked. Shippable? NO
+(other DoD boxes still open).
+
+What landed this unit:
+
+- Fresh `pnpm --filter @tau/desktop tauri build` → Tau.app + aarch64 DMG
+- codesign verify, hdiutil verify VALID, resource tree == staged ngspice
+- 10/10 ignored cargo tests on mounted libngspice; packaged-engine-smoke
+  336 samples; stay-alive ≥5s
+- Differential unit earlier this session: **pass=15 · sibling=5 · gap=2**
+
+Next unit: Educational steptemp/stepmodelparam / Class-D AC·DC·noise·tf /
+§10 / named-device. Shippable stays NO.
+
+---
+
+### 2026-08-04 — Unsigned release smoke PASS (DoD box checked)
+
+**What I did**
+- Ran fresh unsigned `tauri build` after differential gap-closure gates.
+- Mounted DMG read-only; verified bundled ngspice tree, ignored cargo
+  smoke against mounted dylib, `packaged-engine-smoke.py`, and 5s stay-alive.
+- Checked AGENTS.md unsigned-release DoD box with dated evidence. Shippable
+  remains NO — broad differential / §10 / named-device / etc. still open.
+
+**Files**
+- `AGENTS.md`, `PROGRESS.md`, `STATE.md` (docs only; no product code)
+
+**Tests / proof**
+- `pnpm --filter @tau/desktop tauri build` → Tau.app + DMG
+- codesign --verify --deep --strict OK; hdiutil verify VALID
+- TAU_NGSPICE_LIB=mounted cargo test -- --ignored → 10 passed
+- `scripts/packaged-engine-smoke.py` → passed (336 samples)
+- Tau binary stay-alive ≥5s
+
+**Parity items**
+- Unsigned release DoD: ✅ this run
+- Broad differential: still open (pass=15 sibling=5 gap=2)
+
+**Next step**
+- Educational steptemp/stepmodelparam differential, or §10 / named-device.
+
 **Status: IN PROGRESS - 2026-08-04 22:34 CDT**
 
 Unit: Unsigned release smoke — `tauri build` / packaged Tau.app + bundled

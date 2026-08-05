@@ -5,12 +5,13 @@ The working memory of an unattended loop that starts from zero every fire.
 
 ## Now
 
-**Status:** IDLE 2026-08-04 22:35 CDT - Differential gaps closed to
-pass=15 · sibling=5 · gap=2 on stdout. DoD broad-differential box still
+**Status:** IDLE 2026-08-04 22:36 CDT - Differential gaps closed
+(pass=15 · sibling=5 · gap=2) + unsigned release smoke PASS (DoD
+unsigned-release box checked). Broad-differential / §10 / named-device still
 open. Shippable? NO.
 
 **Next unit:** Educational steptemp/stepmodelparam/step_expand differential /
-Class-D AC·DC·noise·tf / §10 / named-device / unsigned release smoke.
+Class-D AC·DC·noise·tf / §10 / named-device.
 
 The 2026-08-03 "PROJECT COMPLETE" signal was wrong and has been withdrawn. A
 four-part adversarial audit reproduced the gates and disagreed with these docs.

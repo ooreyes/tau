@@ -185,10 +185,17 @@ account and sign/notarize/ship.
       learning path and contextual help; crash-safe unsaved recovery plus safe
       external-edit/conflict handling and reproducible run records; and a stable,
       documented, versioned CLI/API with machine-readable diagnostics.
-- [ ] All gates green; **unsigned release build is production‑ready**:
+- [x] All gates green; **unsigned release build is production‑ready**:
       `pnpm --filter @tau/desktop tauri build` succeeds, the DMG mounts, the
       built Tau.app launches and stays alive, and bundled ngspice simulates
       end‑to‑end in the packaged app. Signing is explicitly NOT required here.
+      Proven 2026-08-04 this run: fresh `tauri build` → Tau.app +
+      `Tau_1.0.0_aarch64.dmg`; `codesign --verify --deep --strict` OK;
+      `hdiutil verify` VALID; mounted resource tree matches staged ngspice;
+      10/10 ignored cargo tests against mounted `libngspice.dylib`;
+      `scripts/packaged-engine-smoke.py` passed (336 samples); Tau binary
+      stay-alive ≥5s. **Shippable? NO** — other DoD boxes remain open
+      (broad differential, §10, named-device, UI/editor/waveform/AI/gates).
 
 When every box is checked, **stop and report** — do not invent new scope.
 
