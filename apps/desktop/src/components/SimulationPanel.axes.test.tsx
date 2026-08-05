@@ -303,6 +303,27 @@ describe("AcPlot - log-frequency ticks on both magnitude and phase", () => {
     expect(ticks.some((t) => /Hz/.test(t))).toBe(true);
     expect(container.querySelectorAll("path.scope-trace").length).toBeGreaterThan(0);
   });
+
+  it("Log Y toggle switches magnitude from dB to |V| decades", () => {
+    const freqs = [10, 100, 1000, 10000, 100000];
+    const result: AcResult = {
+      ok: true,
+      freqs,
+      traces: [{ id: "n1", label: "V(out)", magDb: [0, -3, -20, -40, -60], phaseDeg: [0, -45, -90, -90, -90] }],
+      warnings: [],
+    };
+    const { container } = render(<AcPlot result={result} />);
+    const linY = screen.getByRole("button", { name: "Lin Y" });
+    const logY = screen.getByRole("button", { name: "Log Y" });
+    expect(linY.getAttribute("aria-pressed")).toBe("true");
+    expect(container.textContent).toMatch(/dB/);
+    fireEvent.click(logY);
+    expect(logY.getAttribute("aria-pressed")).toBe("true");
+    expect(linY.getAttribute("aria-pressed")).toBe("false");
+    const ticks = Array.from(container.querySelectorAll(".scope-tick")).map((t) => t.textContent ?? "");
+    expect(ticks.some((t) => /V\/V/.test(t))).toBe(true);
+    expect(container.querySelectorAll("path.scope-trace").length).toBeGreaterThan(0);
+  });
 });
 
 describe("DcPlot - linear sweep/volts ticks", () => {

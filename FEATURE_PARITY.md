@@ -1425,8 +1425,10 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   meter row now shows the primary trace's **peak group delay**. **Log/linear X
   toggle landed** (2026-08-05): `freqToFraction` + AcPlot **Log X / Lin X**
   buttons remaps Bode magnitude/phase axes and paths (default log). 2 pure +
-  1 AcPlot wiring tests. Still ⬜: standalone phase pane, group-delay trace
-  overlay, Y log toggle.
+  1 AcPlot wiring tests. **Log/linear Y toggle landed** (2026-08-05): AcPlot
+  **Log Y / Lin Y** — Lin Y keeps dB (default); Log Y converts to |V|/|Vref|
+  decades via `bodeMagYDomain` / `dbToLinearMag`. Still ⬜: standalone phase
+  pane, group-delay trace overlay.
 - 🟡 **Loop-stability margins** (LTspice Bode readouts) — **landed**
   (`simulation/stability.ts`, 10 tests): `stabilityMargins(freqs, magDb, phaseDeg)`
   returns **phase margin** (180°+φ at the 0 dB gain crossover) and **gain margin**
@@ -1522,9 +1524,11 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   **Export PNG** rasters the family SVG via `waveformSvgsToPng` (`tau-step-….png`).
   1 wiring test. **AC/DC step-family Export PNG landed** (2026-08-05):
   AcFamilyPlot / DcFamilyPlot **Export PNG** (`tau-ac-step-….png` /
-  `tau-dc-step-….png`). 2 wiring tests. **NEXT:** (waveform
-  CSV/PNG/plt/FFT/expressions/dual-axis/right-click/Bode-X/cursor-CSV/step-PNG
-  covered — remaining: derivative/avg/rms right-click, Y log, phase pane).
+  `tau-dc-step-….png`). 2 wiring tests. **Bode Log Y / Lin Y landed**
+  (2026-08-05): AcPlot magnitude Lin Y = dB; Log Y = `|V|/|Vref|` decades
+  via `bodeMagYDomain` / `dbToLinearMag`. **NEXT:** (waveform
+  CSV/PNG/plt/FFT/expressions/dual-axis/right-click/Bode-X/Y/cursor-CSV/step-PNG
+  covered — remaining: derivative/avg/rms right-click, phase pane).
 - 🟡 Right-click trace → math/operations — **abs / negate / dB / uramp / sgn
   landed** (2026-08-05): `traceMath.ts` wraps a legend trace into `abs(…)`,
   `-(…)`, `db(…)`, `uramp(…)`, or `sgn(…)` and adds it via the existing

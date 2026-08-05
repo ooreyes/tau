@@ -1,21 +1,16 @@
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 06:39 CDT**
+**Status: DONE - 2026-08-05 06:43 CDT**
 
-Unit: Circuit_testing_v1 `11_stress_rc_ladder.asc` authored `.ac` → differential **pass=92**.
-```
-SUMMARY pass=92 sibling=5 gap=0
-ac ct-stress-rc-ladder … v(out) nRms=0.0000 nMax=0.0000 span=1.000
-```
-Named-device 48.1%. Worktree `Tau-wt-diff-92` — rebased over Staff EE AC/DC
-step PNG + uramp/sgn tips (`307456b` / `a06e149`). Left Settings alone.
-SHIPPABLE? **NO**
+Unit: Waveform DoD — **Bode magnitude Log Y / Lin Y** (dB vs |V| decades).
+Differential pass=92 · named-device 48.1%. Settings locked. SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
 
 
 ---
+
 
 
 ### 2026-08-05 — ct 11_stress_rc_ladder .ac → pass=92 (§DoD)
@@ -42,6 +37,31 @@ SHIPPABLE? **NO**
 **Next step**
 - Continue: Educational non-wall leftovers, ct 16/19, or waveform Y-log /
   phase. Leave IRFP/Draft*/Settings alone.
+
+
+### 2026-08-05 — Bode magnitude Log Y / Lin Y (§waveform DoD)
+
+**What I did**
+- AcPlot **Log Y / Lin Y**: Lin Y keeps dB (default); Log Y plots `|V|/|Vref|`
+  on log decades via `bodeMagYDomain` / `dbToLinearMag` (not log-of-dB).
+- ND wall at 48.1% — waveform pivot. Left 100W/IRFP, ct ASC, Educational
+  (continue 30), Chan/NIGBT/FRA, Settings alone.
+
+**Files**
+- `apps/desktop/src/simulation/freqAxis.ts` (+ test)
+- `apps/desktop/src/components/SimulationPanel.tsx` (+ wiring test)
+- `FEATURE_PARITY.md`, `PROGRESS.md`
+
+**Tests**
+- `pnpm -C apps/desktop typecheck` + `test` green (2740 passed)
+- freqAxis bodeMag + AcPlot Log Y 2
+
+**Parity items**
+- Waveform viewer 🟡 (Bode Log Y landed). Differential pass=92 ·
+  named-device 48.1% · SHIPPABLE? NO
+
+**Next step**
+- Phase pane / derivative right-click / FFT polish. Leave Educational/IRFP/Settings alone.
 
 
 

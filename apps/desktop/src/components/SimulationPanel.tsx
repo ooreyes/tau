@@ -62,7 +62,7 @@ import {
 import { commonTraceUnit } from "../simulation/exprUnit";
 import { partitionTracesByAxis, planDualAxisY } from "../simulation/dualAxis";
 import { groupDelay } from "../simulation/groupDelay";
-import { freqToFraction } from "../simulation/freqAxis";
+import { bodeMagYDomain, dbToLinearMag, freqToFraction } from "../simulation/freqAxis";
 import type { AxisScale } from "../simulation/axisTicks";
 import { stabilityMargins } from "../simulation/stability";
 import { seriesToCsv, stepFamilyToCsv, spectrumToCsv, cursorReadoutToCsv } from "../simulation/waveformCsv";
@@ -3383,7 +3383,9 @@ export function AcPlot({ result, overlays = [] }: { result: AcResult | null; ove
   const [magMeasureRef, magSize] = useMeasuredSize<SVGSVGElement>();
   const [phaseMeasureRef, phaseSize] = useMeasuredSize<SVGSVGElement>();
   // Bode X defaults to log decades (LTspice); Lin X is an explicit toggle.
+  // Magnitude Y defaults to Lin dB; Log Y plots |V|/|Vref| on decades.
   const [freqScale, setFreqScale] = useState<AxisScale>("log");
+  const [magYScale, setMagYScale] = useState<AxisScale>("linear");
   const magTicks = tickCountsFromSize(magSize);
   const phaseTicks = tickCountsFromSize(phaseSize);
   const traces = success ? success.traces.slice(0, 4) : [];
@@ -3391,24 +3393,8 @@ export function AcPlot({ result, overlays = [] }: { result: AcResult | null; ove
   const magTraces = success ? [...traces, ...overlays] : [];
   const plot = useMemo(() => {
     if (!success || magTraces.length === 0) return null;
-    let rawMin = 0;
-    let rawMax = 0;
-    let found = false;
-    for (const trace of magTraces) {
-      for (const db of trace.magDb) {
-        if (!Number.isFinite(db) || db <= -250) continue;
-        if (!found) {
-          rawMin = db;
-          rawMax = db;
-          found = true;
-        } else {
-          rawMin = Math.min(rawMin, db);
-          rawMax = Math.max(rawMax, db);
-        }
-      }
-    }
-    const maxDb = Math.ceil(Math.max(rawMax, 0) / 10) * 10;
-    const minDb = Math.floor(Math.min(rawMin, maxDb - 10) / 10) * 10;
+    const magY = bodeMagYDomain(magTraces.map((t) => t.magDb), magYScale);
+    if (!magY) return null;
     const f0 = Math.log10(success.freqs[0] || 1);
     const f1 = Math.log10(success.freqs[success.freqs.length - 1] || 10);
     // Phase axis: bound to the data, snapped to 45° gridlines, with a sane
@@ -3424,15 +3410,28 @@ export function AcPlot({ result, overlays = [] }: { result: AcResult | null; ove
     }
     const maxPh = Math.ceil(Math.max(phMax, 0) / 45) * 45;
     const minPh = Math.floor(Math.min(phMin, maxPh - 45) / 45) * 45;
-    return { minDb, maxDb, f0, f1, minPh, maxPh };
-  }, [success, traces, overlays]);
+    return {
+      yMin: magY.yMin,
+      yMax: magY.yMax,
+      yUnit: magY.unit,
+      f0,
+      f1,
+      minPh,
+      maxPh,
+    };
+  }, [success, traces, overlays, magTraces, magYScale]);
 
   // Independent zoom per pane - magnitude and phase don't share an x-viewport
   // in this pass (a documented scoping decision, see PROGRESS.md): they're
   // visually stacked halves of one Bode plot but each is its own `<svg>` with
   // its own `usePlotViewport`, so zooming one doesn't move the other.
   const magDomain = useMemo<Viewport>(
-    () => ({ xMin: plot ? 10 ** plot.f0 : 1, xMax: plot ? 10 ** plot.f1 : 10, yMin: plot ? plot.minDb : -60, yMax: plot ? plot.maxDb : 0 }),
+    () => ({
+      xMin: plot ? 10 ** plot.f0 : 1,
+      xMax: plot ? 10 ** plot.f1 : 10,
+      yMin: plot ? plot.yMin : -60,
+      yMax: plot ? plot.yMax : 0,
+    }),
     [plot],
   );
   const phaseDomain = useMemo<Viewport>(
@@ -3442,7 +3441,10 @@ export function AcPlot({ result, overlays = [] }: { result: AcResult | null; ove
   const magVp = usePlotViewport({
     domain: magDomain,
     xScale: freqScale,
-    resetKey: plot && success ? `${freqScale}:${success.freqs[0]}:${success.freqs[success.freqs.length - 1]}` : null,
+    yScale: magYScale,
+    resetKey: plot && success
+      ? `${freqScale}:${magYScale}:${success.freqs[0]}:${success.freqs[success.freqs.length - 1]}`
+      : null,
     width: PLOT_WIDTH,
     height: PLOT_HEIGHT,
     pad: PLOT_PAD,
@@ -3514,8 +3516,9 @@ export function AcPlot({ result, overlays = [] }: { result: AcResult | null; ove
               yMin={magVp.viewport.yMin}
               yMax={magVp.viewport.yMax}
               xScale={freqScale}
+              yScale={magYScale}
               xUnit="Hz"
-              yUnit="dB"
+              yUnit={plot?.yUnit ?? "dB"}
               targetXTicks={magTicks.targetXTicks}
               targetYTicks={magTicks.targetYTicks}
               showXTicks={false}
@@ -3530,13 +3533,15 @@ export function AcPlot({ result, overlays = [] }: { result: AcResult | null; ove
                     xMax: magVp.viewport.xMax,
                     xScale: freqScale,
                   };
+                  const seriesValues = (magDb: number[]) =>
+                    magYScale === "log" ? magDb.map(dbToLinearMag) : magDb;
                   return (
                     <>
                       {traces.map((t, i) => (
-                        <path key={t.id} className="scope-trace" stroke={AC_COLORS[i % AC_COLORS.length]} d={bodePath(t.magDb, success!.freqs, magPlot)} />
+                        <path key={t.id} className="scope-trace" stroke={AC_COLORS[i % AC_COLORS.length]} d={bodePath(seriesValues(t.magDb), success!.freqs, magPlot)} />
                       ))}
                       {overlays.map((t, i) => (
-                        <path key={t.id} className="scope-trace" stroke={EXPR_COLORS[i % EXPR_COLORS.length]} d={bodePath(t.magDb, success!.freqs, magPlot)} />
+                        <path key={t.id} className="scope-trace" stroke={EXPR_COLORS[i % EXPR_COLORS.length]} d={bodePath(seriesValues(t.magDb), success!.freqs, magPlot)} />
                       ))}
                     </>
                   );
@@ -3610,7 +3615,7 @@ export function AcPlot({ result, overlays = [] }: { result: AcResult | null; ove
         </div>
       </div>
       <div className="meter-row analysis-meter">
-        <div className="bode-x-scale" role="group" aria-label="Bode frequency axis scale">
+        <div className="bode-x-scale" role="group" aria-label="Bode axis scales">
           <Button
             size="sm"
             variant={freqScale === "log" ? "default" : "outline"}
@@ -3626,6 +3631,22 @@ export function AcPlot({ result, overlays = [] }: { result: AcResult | null; ove
             onClick={() => setFreqScale("linear")}
           >
             Lin X
+          </Button>
+          <Button
+            size="sm"
+            variant={magYScale === "log" ? "default" : "outline"}
+            aria-pressed={magYScale === "log"}
+            onClick={() => setMagYScale("log")}
+          >
+            Log Y
+          </Button>
+          <Button
+            size="sm"
+            variant={magYScale === "linear" ? "default" : "outline"}
+            aria-pressed={magYScale === "linear"}
+            onClick={() => setMagYScale("linear")}
+          >
+            Lin Y
           </Button>
         </div>
         <Metric label="START" value={formatEngineering(result.freqs[0] ?? 0, "Hz", 0)} tone="green" />
