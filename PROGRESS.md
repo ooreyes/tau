@@ -1,8 +1,8 @@
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 06:43 CDT**
+**Status: DONE - 2026-08-05 06:48 CDT**
 
-Unit: Waveform DoD — **Bode magnitude Log Y / Lin Y** (dB vs |V| decades).
+Unit: Waveform DoD — **right-click derivative `ddt(…)`** (plot expression + menu).
 Differential pass=92 · named-device 48.1%. Settings locked. SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
@@ -10,6 +10,34 @@ Differential pass=92 · named-device 48.1%. Settings locked. SHIPPABLE? **NO**
 
 
 ---
+
+
+### 2026-08-05 — right-click derivative ddt(…) (§waveform DoD)
+
+**What I did**
+- Legend ContextMenu **Plot ddt(…)**: wraps via `traceMath`; whole-expr
+  `ddt` peels + numerical `ddtSeries` in `evaluatePlotExpression` (LTspice
+  waveform arithmetic). Nested `ddt(ddt(…))` supported; compounds like
+  `ddt(x)+1` still need deeper compiler work.
+- ND wall at 48.1% — waveform pivot. Left 100W/step PNG, ct ASC, Educational
+  (continue 31), Chan/NIGBT/FRA, Settings alone.
+
+**Files**
+- `apps/desktop/src/simulation/waveformDerivative.ts` (+ test)
+- `apps/desktop/src/simulation/plotExpression.ts` (+ test)
+- `apps/desktop/src/simulation/traceMath.ts` (+ test)
+- `FEATURE_PARITY.md`, `PROGRESS.md`
+
+**Tests**
+- `pnpm -C apps/desktop typecheck` + `test` green (2744 passed)
+- waveformDerivative + plotExpression ddt + traceMath
+
+**Parity items**
+- Waveform viewer 🟡 (ddt right-click landed). Differential pass=92 ·
+  named-device 48.1% · SHIPPABLE? NO
+
+**Next step**
+- Phase pane / FFT polish / avg-rms Ctrl+click. Leave Educational/IRFP/Settings alone.
 
 
 

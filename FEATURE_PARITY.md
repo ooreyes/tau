@@ -1528,13 +1528,13 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   (2026-08-05): AcPlot magnitude Lin Y = dB; Log Y = `|V|/|Vref|` decades
   via `bodeMagYDomain` / `dbToLinearMag`. **NEXT:** (waveform
   CSV/PNG/plt/FFT/expressions/dual-axis/right-click/Bode-X/Y/cursor-CSV/step-PNG
-  covered — remaining: derivative/avg/rms right-click, phase pane).
-- 🟡 Right-click trace → math/operations — **abs / negate / dB / uramp / sgn
-  landed** (2026-08-05): `traceMath.ts` wraps a legend trace into `abs(…)`,
-  `-(…)`, `db(…)`, `uramp(…)`, or `sgn(…)` and adds it via the existing
-  expression overlay path; transient legend ContextMenu. 3 pure + 1
-  SimulationPanel wiring tests. Still ⬜: derivative/`avg`/`rms` ops,
-  AC/DC/step legend menus.
+  covered — remaining: avg/rms readout polish, phase pane).
+- 🟡 Right-click trace → math/operations — **abs / negate / dB / uramp / sgn /
+  ddt landed** (2026-08-05): `traceMath.ts` wraps a legend trace into `abs(…)`,
+  `-(…)`, `db(…)`, `uramp(…)`, `sgn(…)`, or `ddt(…)`; whole-expr `ddt` peels
+  via `waveformDerivative` + numerical `ddtSeries` in `evaluatePlotExpression`.
+  Transient legend ContextMenu. Pure + SimulationPanel wiring tests. Still ⬜:
+  Ctrl+click avg/rms over visible window, AC/DC/step legend menus.
 ## 7. Engine & accuracy
 - ✅ Native ngspice FFI (desktop) — `src-tauri/src/spice.rs`
 - ✅ Interim TS MNA solver (linear) for browser/tests

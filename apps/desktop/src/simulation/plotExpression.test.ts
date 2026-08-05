@@ -68,4 +68,15 @@ describe("evaluatePlotExpression", () => {
     if (r.ok) return;
     expect(r.error).toMatch(/no finite values/);
   });
+
+  it("plots whole-expression ddt(…) via numerical differentiation", () => {
+    // V(in) = [1,2,3] over t=[0,1,2] → unit ramp slope 1
+    const r = evaluatePlotExpression("ddt(V(in))", fixture(), "#abc");
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.trace.values).toEqual([1, 1, 1]);
+    expect(r.trace.label).toBe("ddt(V(in))");
+    expect(r.trace.id).toBe("expr:ddt(V(in))");
+    expect(r.trace.unit).toBe("");
+  });
 });
