@@ -1559,7 +1559,7 @@ export function ComponentInspector({
           <>
             <svg viewBox="-44 -40 88 80">
               <g className="symbol">
-                <ComponentSymbol kind={selected.kind} />
+                <ComponentSymbol kind={selected.kind} value={selected.value} />
               </g>
             </svg>
             <strong>{selected.label || entry.name}</strong>

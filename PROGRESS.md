@@ -1,14 +1,49 @@
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 08:48 CDT**
+**Status: DONE - 2026-08-05 08:50 CDT**
 
-Unit: Waveform DoD — **transient manual Y limits**.
-Worktree `Tau-wt-wave-tran-ylim` over `fe8d57e` (pass=101). Settings locked.
-SHIPPABLE? **NO**
+Unit: AC source UX + EveryCircuit-style OP current mode (labels + flow dots).
+Worktree `Tau-wt-ux-ac-current` rebased onto tip (pass=101 + transient Y).
+Left Staff EE / continue / Settings alone. SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
 
+
+---
+
+
+
+### 2026-08-05 — AC source geometry + OP current mode (§UX / §EveryCircuit)
+
+**What I did**
+- Unified DC/AC/pulse/current source circle+pin geometry (`SOURCE_CIRCLE_R` /
+  `SOURCE_PIN_Y`); imported LTspice sources scale-to-fit pinOverride so AC/DC
+  share footprint; `vac` stays a real sine source; DC "AC stimulus" relabeled
+  **Small-signal AC (.ac)**.
+- Current mode: OP annotations now include derived resistor currents (green);
+  animated wire flow dots from real OP currents (`wireCurrentFlow` +
+  `OpCurrentFlowLayer`). Not full EveryCircuit live-sim parity.
+
+**Files**
+- `schematic/symbols.tsx`, `pins.ts`, `catalog.ts`, `sourceGeometry.test.tsx`
+- `components/Canvas.tsx`, `Canvas.geometry.ts`, `OpCurrentFlowLayer.tsx`,
+  `IndependentSourceEditor.tsx`, `ShellPanels.tsx`, `App.css`
+- `simulation/opAnnotations.ts`, `wireCurrentFlow.ts` (+ tests)
+- `FEATURE_PARITY.md`, `PROGRESS.md`
+
+**Tests**
+- `pnpm -C apps/desktop typecheck` + `test` → 2793 passed
+
+**Parity items**
+- §3 Sources AC UX; §4 OP annotation current-mode refresh; EveryCircuit library
+  gaps documented honestly.
+
+**Next step**
+- Transient/live continuous current mode; library gaps (bulb/motor/555/…) only
+  with real engine models.
+
+SHIPPABLE? **NO**
 
 ---
 
@@ -113,6 +148,39 @@ SHIPPABLE? **NO**
 **Next step**
 - Bode phase / transient numeric Y limits / non-wall ND. Leave
   Educational/IRFP/Settings alone.
+
+### 2026-08-05 — AC source geometry + OP current mode (§UX / §EveryCircuit)
+
+**What I did**
+- Unified DC/AC/pulse/current source circle+pin geometry (`SOURCE_CIRCLE_R` /
+  `SOURCE_PIN_Y`); imported LTspice sources scale-to-fit pinOverride so AC/DC
+  share footprint; `vac` stays a real sine source; DC "AC stimulus" relabeled
+  **Small-signal AC (.ac)**.
+- Current mode: OP annotations now include derived resistor currents (green);
+  animated wire flow dots from real OP currents (`wireCurrentFlow` +
+  `OpCurrentFlowLayer`). Not full EveryCircuit live-sim parity.
+
+**Files**
+- `schematic/symbols.tsx`, `pins.ts`, `catalog.ts`, `sourceGeometry.test.tsx`
+- `components/Canvas.tsx`, `Canvas.geometry.ts`, `OpCurrentFlowLayer.tsx`,
+  `IndependentSourceEditor.tsx`, `ShellPanels.tsx`, `App.css`
+- `simulation/opAnnotations.ts`, `wireCurrentFlow.ts` (+ tests)
+- `FEATURE_PARITY.md`, `PROGRESS.md`
+
+**Tests**
+- `pnpm -C apps/desktop typecheck` + `test` → 2793 passed
+
+**Parity items**
+- §3 Sources AC UX; §4 OP annotation current-mode refresh; EveryCircuit library
+  gaps documented honestly.
+
+**Next step**
+- Transient/live continuous current mode; library gaps (bulb/motor/555/…) only
+  with real engine models.
+
+SHIPPABLE? **NO**
+
+---
 
 ### 2026-08-05 — Bode magnitude manual Y limits (§waveform DoD)
 

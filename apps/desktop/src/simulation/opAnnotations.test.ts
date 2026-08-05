@@ -50,10 +50,14 @@ describe("opAnnotations", () => {
   it("labels the voltage source with its branch current at the component position", () => {
     const anns = annotated();
     const amps = anns.filter((a) => a.kind === "current");
-    expect(amps).toHaveLength(1);
-    expect(amps[0]).toMatchObject({ x: 0, y: 32, key: "i:vs-1" });
+    // V1 MNA branch + R1 + R2 derived currents (EveryCircuit-style branch set).
+    expect(amps).toHaveLength(3);
+    const v1 = amps.find((a) => a.key === "i:vs-1");
+    expect(v1).toMatchObject({ x: 0, y: 32, key: "i:vs-1" });
     // MNA branch current for a sourcing battery is negative: −10V/2k = −5 mA.
-    expect(amps[0].text).toBe("-5 mA");
+    expect(v1?.text).toBe("-5 mA");
+    expect(amps.find((a) => a.key === "i:r-1")?.text).toBe("5 mA");
+    expect(amps.find((a) => a.key === "i:r-2")?.text).toBe("5 mA");
   });
 
   it("returns [] for a null, failed, or geometry-less input", () => {
@@ -70,10 +74,15 @@ describe("opAnnotations", () => {
     expect(opAnnotations(op, emptyCircuit)).toEqual([]);
   });
 
-  it("omits branch currents when the OP run did not return branches", () => {
+  it("still derives resistor currents when the OP run did not return MNA branches", () => {
     const op = runOperatingPoint({ components, wires });
     const circuit = extractCircuit(components, wires, []);
-    expect(opAnnotations(op, circuit).every((a) => a.kind === "voltage")).toBe(true);
+    const anns = opAnnotations(op, circuit);
+    expect(anns.some((a) => a.kind === "voltage")).toBe(true);
+    // No V-source MNA branch without returnBranches, but R currents still come
+    // from node voltages (EveryCircuit-style current mode).
+    expect(anns.find((a) => a.key === "i:vs-1")).toBeUndefined();
+    expect(anns.find((a) => a.key === "i:r-1")?.text).toBe("5 mA");
   });
 
   it("draws one current label per part when a branch list carries per-terminal entries", () => {
@@ -95,10 +104,9 @@ describe("opAnnotations", () => {
     const circuit = extractCircuit(components, wires, []);
     const amps = opAnnotations(withTerminals, circuit).filter((a) => a.kind === "current");
 
-    expect(amps).toHaveLength(1);
-    // The one that survives is the part's own current, not a terminal: 0.25 A
-    // or -0.75 A here would mean a terminal took the canvas label.
-    expect(amps[0].text).toBe("-5 mA");
+    // Primary V1 + R1 + R2; terminal Ib/Ie entries must not multiply V1's label.
+    expect(amps.filter((a) => a.key === "i:vs-1")).toHaveLength(1);
+    expect(amps.find((a) => a.key === "i:vs-1")?.text).toBe("-5 mA");
     // Every render key is distinct, which is what the collision would break.
     expect(new Set(amps.map((a) => a.key)).size).toBe(amps.length);
   });

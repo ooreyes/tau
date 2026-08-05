@@ -204,10 +204,12 @@ export function IndependentSourceEditor({
       )}
 
       <label className="property-field source-ac-toggle">
-        <span>AC stimulus</span>
+        <span title="Small-signal AC magnitude for .ac analysis (LTspice Vac on a DC source). For a large-signal sine, place AC Voltage from the palette.">
+          Small-signal AC (.ac)
+        </span>
         <input
           type="checkbox"
-          aria-label="Enable AC stimulus"
+          aria-label="Enable small-signal AC stimulus for .ac analysis"
           checked={Boolean(source.acMagnitude)}
           onChange={(event) => commit(
             "ac-enabled",
@@ -222,7 +224,7 @@ export function IndependentSourceEditor({
       {source.acMagnitude && (
         <>
           <SourceField
-            label="AC amplitude"
+            label="AC amplitude (.ac)"
             value={source.acMagnitude}
             unit={unit}
             onBeginChange={() => onBeginChange("acMagnitude")}

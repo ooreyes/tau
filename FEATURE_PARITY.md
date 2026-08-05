@@ -608,7 +608,8 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   and the real `elip_grd.asc` now builds/converges; browser previews refuse the
   non-passive stamp explicitly. Still to add: browser-solver ESR stamps and
   behavioral R/L.
-- 🟡 Sources — DC/AC/PULSE plus **inline LTspice transient functions on V/I sources now emit to the ngspice deck: SINE (offset/amp/freq/td/damping/phase), PULSE (full 7-arg, Ncycles trimmed), PWL, EXP, SFFM** (`engine/sourceFunction.ts`; µ/meg normalized). **TS-fallback solver now evaluates the same families in the time domain** (`simulation/sourceWaveform.ts` `parseTransientSource` → `{ dc, at(t), maxFrequencyHz }`): the `.tran` loop drives `vsource`/`isource` (and the `vac`/`iac` AC symbols) from the parsed waveform instead of DC-only, `.op` seeds the t=0 bias, and `inspectTransientResolution` derives the sampling requirement from a function source's own frequency. ngspice-verified: PULSE(0 5 1m 0 0 2m 4m) node = 0/5/0 V at t=0.5/2/3.5 ms in both engines. **Named source editor landed (2026-08-03):** Waveform selector plus unit-aware DC operating point, Sine/Pulse/EXP/SFFM parameters, PWL time/level rows, and optional AC amplitude/phase. The DC bias is electrically separate from the transient waveform in both engines; imported text stays byte-stable until edited and edited ASC round-trips. Still missing: PWL FILE, source noise, and named controls for imported source parasitics such as Rser/Cpar (**arbitrary behavioral B-source `V=…`/`I=…` also landed** — see the dedicated B item below)
+- 🟡 Sources — DC/AC/PULSE plus **inline LTspice transient functions on V/I sources now emit to the ngspice deck: SINE (offset/amp/freq/td/damping/phase), PULSE (full 7-arg, Ncycles trimmed), PWL, EXP, SFFM** (`engine/sourceFunction.ts`; µ/meg normalized). **TS-fallback solver now evaluates the same families in the time domain** (`simulation/sourceWaveform.ts` `parseTransientSource` → `{ dc, at(t), maxFrequencyHz }`): the `.tran` loop drives `vsource`/`isource` (and the `vac`/`iac` AC symbols) from the parsed waveform instead of DC-only, `.op` seeds the t=0 bias, and `inspectTransientResolution` derives the sampling requirement from a function source's own frequency. ngspice-verified: PULSE(0 5 1m 0 0 2m 4m) node = 0/5/0 V at t=0.5/2/3.5 ms in both engines. **Named source editor landed (2026-08-03):** Waveform selector plus unit-aware DC operating point, Sine/Pulse/EXP/SFFM parameters, PWL time/level rows, and optional AC amplitude/phase. The DC bias is electrically separate from the transient waveform in both engines; imported text stays byte-stable until edited and edited ASC round-trips. **AC Voltage palette UX (2026-08-05):** palette `vac` places a real sine source (amplitude/frequency props); DC Voltage's former "AC stimulus" toggle is labeled **Small-signal AC (.ac)** so it is not confused with the AC source; DC/AC/pulse/current share `SOURCE_CIRCLE_R`/`SOURCE_PIN_Y` and imported voltage.asy bodies scale-to-fit pinOverride so they match native AC footprint. Still missing: PWL FILE, source noise, and named controls for imported source parasitics such as Rser/Cpar (**arbitrary behavioral B-source `V=…`/`I=…` also landed** — see the dedicated B item below)
+- 🟡 **EveryCircuit library gaps (honest, 2026-08-05)** — Tau has DC/AC V/I, pulse, ground, R/pot, C/L, transformer, tline, switch, opamp, comparator, E/F/G/H, B, diode/LED/zener, BJT/MOS/JFET, digital gates, dflop, sample-hold, modulator, subckt, testpoint. **Not in palette (need deep work or refuse):** light bulb, motor, polarized cap (as distinct kind), center-tapped transformer, SPDT/push-button/relay, photodiode, 7-segment, logic constant, SR/T/JK latches, 555, ADC/DAC, counter/decoder ICs. Do not claim EveryCircuit library parity.
 - 🟡 Semiconductors — diode/BJT/MOS/zener present; **bundled LTspice standard
   models landed** (`engine/standardModels.ts`): common parts referenced by name
   with no inline `.model` (1N4148/1N914, 1N5817-19 Schottky, BAT54, 1N750/4733/
@@ -1114,19 +1115,14 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   Unsupported param brace shapes stay on the TS re-run loop (mutually
   exclusive — no emit under that loop).
 - ✅ **DC operating point annotation on schematic** (show node V / device I
-  in-place, 2026-07-02) — after an OP run, the simulator-mode canvas labels
-  every non-ground net with its DC voltage (cyan, at the net's
-  topmost-leftmost point) and every V-source/inductor with its MNA branch
-  current (amber, centered under the body). Native `.op` also requests and
-  displays device bias/small-signal data (diode VD/GD; BJT VBE/VBC/GM/GPI/GO;
-  MOS/JFET VGS/VDS/VDSAT/GM/GDS) and classifies cutoff, active/linear, and
-  saturation regions from the returned operating point. Pure resolver
-  `simulation/opAnnotations.ts` (5 tests on a real divider run: V(out)=Vin/2
-  at the hand-computed anchor, I(V1)=−5 mA, ground skipped, stale/failed/null
-  inputs degrade to []); `runOperatingAnalysis` now requests `returnBranches`
-  from the JS solver (native ngspice path annotates voltages only). Labels
-  use a background stroke for readability over wires. Live-verified via
-  Playwright on the divider example: 10 V / 5 V / −5 mA all placed correctly.
+  in-place, 2026-07-02; **current-mode refresh 2026-08-05**) — after an OP run,
+  the simulator-mode canvas labels every non-ground net with its DC voltage
+  (cyan) and every V-source/inductor **plus derived resistor** branch current
+  (green). Animated green flow dots on wires follow the same real OP currents
+  (`simulation/wireCurrentFlow.ts` + `OpCurrentFlowLayer`). Native `.op` also
+  requests device bias/small-signal data. Divider unit tests: V(out)=Vin/2,
+  I(V1)=−5 mA, I(R1)/I(R2)=5 mA. Not full EveryCircuit live-sim parity;
+  SHIPPABLE? **NO**.
 - 🟡 Initial conditions **`.ic` / `.nodeset`** — `buildSpiceDeck` carries node
   voltages and `.nodeset` through to native ngspice. LTspice-only inductor
   current assignments (`.ic I(L1)=…`) are translated to the winding's instance

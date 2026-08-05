@@ -1,13 +1,13 @@
 /**
- * In-place DC operating point annotations (LTspice parity): after an `.op`
- * run, the schematic shows each net's voltage next to the net and each
- * V-source/inductor branch current next to its component - LTspice's ".op data
- * label" readout, but live on the canvas. Pure positioning/formatting logic so
- * it is fully unit-testable; the canvas just renders the returned labels.
+ * In-place DC operating point annotations (LTspice + EveryCircuit-style
+ * current mode): after an `.op` run, the schematic shows each net's voltage
+ * and each part's branch current. Voltages from the OP net list; currents from
+ * MNA source/inductor branches plus derived resistor currents — never faked.
  */
 import { primaryBranches, type OperatingPointResult } from "./operatingPoint";
 import type { ExtractedCircuit } from "../schematic/netlist";
 import { formatEngineering } from "./quantity";
+import { deriveDcRcBranches } from "./currents";
 
 export interface OpAnnotation {
   /** Stable render key (net id / component id). */
@@ -54,14 +54,31 @@ export function opAnnotations(
     });
   }
 
+  const seenCurrentIds = new Set<string>();
   // One label per part. A multi-terminal device contributes a branch per
-  // terminal under one component id, and they all anchor to the same component
-  // coordinates - so drawing them would stack several readings on one spot
-  // under one render key. The part's own current is the one on the canvas; the
-  // per-terminal figures are in the operating-point table.
+  // terminal under one component id — only the untagged primary belongs here.
   for (const branch of primaryBranches(op.branches)) {
     const extracted = circuit.components.find((c) => c.component.id === branch.id);
     if (!extracted) continue;
+    seenCurrentIds.add(branch.id);
+    annotations.push({
+      key: `i:${branch.id}`,
+      x: extracted.component.x,
+      y: extracted.component.y,
+      text: formatEngineering(branch.current, "A", 3),
+      kind: "current",
+    });
+  }
+
+  // Resistor currents from node voltages (EveryCircuit shows every branch).
+  // Capacitors are 0 A at a converged DC point — omit rather than spam "0 A".
+  const voltageByNet = new Map(op.nets.map((net) => [net.id, net.voltage]));
+  for (const branch of deriveDcRcBranches(circuit.components, voltageByNet)) {
+    if (seenCurrentIds.has(branch.id)) continue;
+    if (Math.abs(branch.current) < 1e-15) continue;
+    const extracted = circuit.components.find((c) => c.component.id === branch.id);
+    if (!extracted) continue;
+    if (extracted.component.kind !== "resistor") continue;
     annotations.push({
       key: `i:${branch.id}`,
       x: extracted.component.x,

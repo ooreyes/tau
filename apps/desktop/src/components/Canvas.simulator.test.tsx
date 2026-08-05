@@ -426,7 +426,9 @@ describe("Canvas - schematic selection chrome", () => {
       { cx: "-40", cy: "0" },
       { cx: "40", cy: "0" },
     ]);
-    expect(document.querySelectorAll(".import-pin-lead")).toHaveLength(2);
+    // Fit-scale maps Tau's ±32 pin bank onto the 80-unit LTspice span, so the
+    // symbol pins land on pinOverride and no repair leads are needed.
+    expect(document.querySelectorAll(".import-pin-lead")).toHaveLength(0);
   });
 
   it("renders every terminal and readable name on a native multi-pin subcircuit block", () => {

@@ -2561,7 +2561,14 @@ body {
 }
 
 .op-annotation.current {
-  fill: var(--trace-amber);
+  fill: var(--trace-green);
+}
+
+/* EveryCircuit-like current-mode flow dots (real OP branch currents only). */
+.flow-layer .flow-dot {
+  fill: var(--trace-green);
+  stroke: none;
+  pointer-events: none;
 }
 
 .fft-view {

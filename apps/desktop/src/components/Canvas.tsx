@@ -11,6 +11,7 @@ import {
 } from "../schematic/subcircuitGeometry";
 import type { OperatingPointResult } from "../simulation/operatingPoint";
 import { opAnnotations } from "../simulation/opAnnotations";
+import { OpCurrentFlowLayer } from "./OpCurrentFlowLayer";
 import { extractCircuit, netAtPoint } from "../schematic/netlist";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
@@ -41,6 +42,7 @@ import {
   snap,
   sourceValueLabel,
   symbolTransform,
+  sourceSymbolFitScale,
   translateAttachedWireEndpoints,
   wireIntersectsRect,
   wireSegments,
@@ -165,10 +167,15 @@ export function Canvas({
 
   // In-place OP annotations (simulator mode only): re-extract geometry only
   // when an ok OP result is actually on screen - never during schematic edits.
-  const opLabels = useMemo(() => {
-    if (interactive || !op?.ok) return [];
-    return opAnnotations(op, extractCircuit(components, wires, netLabels));
+  const opCircuit = useMemo(() => {
+    if (interactive || !op?.ok) return null;
+    return extractCircuit(components, wires, netLabels);
   }, [interactive, op, components, wires, netLabels]);
+
+  const opLabels = useMemo(() => {
+    if (!opCircuit) return [];
+    return opAnnotations(op, opCircuit);
+  }, [op, opCircuit]);
 
   const editDirty = useRef(false);
 
@@ -1306,6 +1313,14 @@ export function Canvas({
             ),
           )}
 
+          <OpCurrentFlowLayer
+            op={op}
+            circuit={opCircuit}
+            wires={wires}
+            pinIndex={pinIndex}
+            active={!interactive && Boolean(op?.ok)}
+          />
+
           <ComponentLabels components={components} wires={wires} />
 
           {placing && ghost && (
@@ -1446,6 +1461,8 @@ function ComponentView({
   // transforms right-to-left, so `rotate(R) scale(-1 1)` flips then rotates.
   const placement = componentVisualPlacement(comp);
   const orient = symbolTransform(placement.rotation, placement.mirrored);
+  const fitScale = sourceSymbolFitScale(comp);
+  const fit = fitScale === 1 ? "" : ` scale(${fitScale})`;
   const visualOffset = { x: placement.x - comp.x, y: placement.y - comp.y };
   const overridePins = comp.pinOverride?.length ? getComponentPins(comp) : null;
   const nativePins = new Map(getLocalPins(comp.kind).map((pin) => [pin.id, pin]));
@@ -1457,13 +1474,14 @@ function ComponentView({
       {!nativeSubcircuit && overridePins?.map((pin) => {
         const native = nativePins.get(pin.id);
         if (!native) return null;
-        const local = transformPoint(native, placement.rotation, placement.mirrored);
+        const scaledNative = { x: native.x * fitScale, y: native.y * fitScale };
+        const local = transformPoint(scaledNative, placement.rotation, placement.mirrored);
         const start = { x: visualOffset.x + local.x, y: visualOffset.y + local.y };
         const end = { x: pin.x - comp.x, y: pin.y - comp.y };
-        if (start.x === end.x && start.y === end.y) return null;
+        if (Math.hypot(start.x - end.x, start.y - end.y) < 0.5) return null;
         return <line key={`lead-${pin.id}`} className="import-pin-lead" x1={start.x} y1={start.y} x2={end.x} y2={end.y} />;
       })}
-      <g className="symbol" transform={`translate(${visualOffset.x} ${visualOffset.y}) ${orient}`}>
+      <g className="symbol" transform={`translate(${visualOffset.x} ${visualOffset.y}) ${orient}${fit}`}>
         {nativeSubcircuit && subcircuitBody ? (
           <>
             <rect
@@ -1485,7 +1503,7 @@ function ComponentView({
             <path d="M -7 -7 L 7 7 M -7 7 L 7 -7" />
           </>
         ) : (
-          <ComponentSymbol kind={comp.kind} />
+          <ComponentSymbol kind={comp.kind} value={comp.value} />
         )}
       </g>
       {nativeSubcircuit && subcircuitBody && subcircuitPins.map((pin) => {

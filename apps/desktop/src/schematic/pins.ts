@@ -1,4 +1,5 @@
 import type { ComponentKind, Point, Rotation, SchematicComponent } from "./types";
+import { SOURCE_PIN_Y } from "./symbols";
 
 export interface LocalPin {
   id: string;
@@ -18,30 +19,21 @@ const TWO_TERMINAL_PINS: LocalPin[] = [
   { id: "b", label: "B", x: 32, y: 0 },
 ];
 
+/** Shared vertical source pin bank — DC/AC/pulse/current must match. */
+const SOURCE_PINS: LocalPin[] = [
+  { id: "p", label: "+", x: 0, y: -SOURCE_PIN_Y },
+  { id: "n", label: "-", x: 0, y: SOURCE_PIN_Y },
+];
+
 const LOCAL_PINS: Record<ComponentKind, LocalPin[]> = {
   resistor: TWO_TERMINAL_PINS,
   capacitor: TWO_TERMINAL_PINS,
   inductor: TWO_TERMINAL_PINS,
-  vsource: [
-    { id: "p", label: "+", x: 0, y: -32 },
-    { id: "n", label: "-", x: 0, y: 32 },
-  ],
-  isource: [
-    { id: "p", label: "+", x: 0, y: -32 },
-    { id: "n", label: "-", x: 0, y: 32 },
-  ],
-  vac: [
-    { id: "p", label: "+", x: 0, y: -32 },
-    { id: "n", label: "-", x: 0, y: 32 },
-  ],
-  iac: [
-    { id: "p", label: "+", x: 0, y: -32 },
-    { id: "n", label: "-", x: 0, y: 32 },
-  ],
-  vpulse: [
-    { id: "p", label: "+", x: 0, y: -32 },
-    { id: "n", label: "-", x: 0, y: 32 },
-  ],
+  vsource: SOURCE_PINS,
+  isource: SOURCE_PINS,
+  vac: SOURCE_PINS,
+  iac: SOURCE_PINS,
+  vpulse: SOURCE_PINS,
   diode: [
     { id: "a", label: "A", x: -32, y: 0 },
     { id: "k", label: "K", x: 32, y: 0 },

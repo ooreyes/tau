@@ -222,6 +222,25 @@ const rotateLocalPoint = (point: Point, rotation: number): Point => {
 export const symbolTransform = (rotation: number, mirrored: boolean): string =>
   mirrored ? `rotate(${rotation}) scale(-1 1)` : `rotate(${rotation})`;
 
+/**
+ * Scale an imported LTspice independent source so Tau's native pin bank
+ * lands on the file's pinOverride terminals. Without this, DC voltage.asy
+ * (80-unit pin span) draws the same circle as a native vac (64-unit span)
+ * but with longer repair leads — reading as a different size beside AC.
+ */
+export function sourceSymbolFitScale(component: SchematicComponent): number {
+  const pins = component.pinOverride;
+  if (!pins || pins.length < 2) return 1;
+  const native = getLocalPins(component.kind);
+  if (native.length < 2) return 1;
+  const nativeSpan = Math.hypot(native[0].x - native[1].x, native[0].y - native[1].y);
+  const overrideSpan = Math.hypot(pins[0].x - pins[1].x, pins[0].y - pins[1].y);
+  if (!(nativeSpan > 0) || !(overrideSpan > 0)) return 1;
+  const scale = overrideSpan / nativeSpan;
+  if (scale < 0.5 || scale > 2.5) return 1;
+  return scale;
+}
+
 const explicitUnit = (value: string, unit: string) => {
   if (!unit) return value.trim();
   const v = value.trim();

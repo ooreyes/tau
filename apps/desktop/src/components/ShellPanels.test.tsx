@@ -442,7 +442,7 @@ describe("ComponentInspector - independent source waveform controls", () => {
     expect((screen.getByRole("textbox", { name: "PWL time 3" }) as HTMLInputElement).value).toBe("+1");
     expect((screen.getByRole("combobox", { name: "PWL time 3 SI prefix" }) as HTMLSelectElement).value).toBe("u");
     expect((screen.getByRole("textbox", { name: "PWL level 3" }) as HTMLInputElement).value).toBe("1");
-    expect((screen.getByRole("textbox", { name: "AC amplitude" }) as HTMLInputElement).value).toBe("2");
+    expect((screen.getByRole("textbox", { name: "AC amplitude (.ac)" }) as HTMLInputElement).value).toBe("2");
     expect(screen.queryByRole("textbox", { name: "DC level" })).toBeNull();
     expect(screen.queryByDisplayValue(/PWL\(/)).toBeNull();
   });

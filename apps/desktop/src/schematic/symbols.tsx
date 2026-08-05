@@ -8,6 +8,16 @@ export const GRID = 16;
  *  drifting a few pixels left/right as their surrounding symbols evolve. */
 export const CENTERED_SINE_PATH = "M -11 0 C -8 -9 -3 -9 0 0 S 8 9 11 0";
 
+/**
+ * Shared independent-source body geometry. DC (vsource), AC (vac), pulse,
+ * and current sources MUST use the same circle radius and pin extent so they
+ * snap onto the same grid lines and read as the same size side-by-side.
+ * LTspice voltage.asy uses a 64-unit diameter circle with pins 80 apart; Tau
+ * keeps pins on the 16-unit grid at ±SOURCE_PIN_Y and a matching circle.
+ */
+export const SOURCE_CIRCLE_R = 15;
+export const SOURCE_PIN_Y = 32;
+
 function CenteredSineGlyph({ y = 0 }: { y?: number }) {
   return (
     <path
@@ -17,6 +27,11 @@ function CenteredSineGlyph({ y = 0 }: { y?: number }) {
       transform={y === 0 ? undefined : `translate(0 ${y})`}
     />
   );
+}
+
+/** True when a voltage/current source value is an explicit SINE/SIN function. */
+export function valueLooksLikeSine(value: string | undefined): boolean {
+  return /^\s*(SINE|SIN)\s*\(/i.test(value ?? "");
 }
 
 /** Accurate local bounding box of each symbol's drawn body (excludes pin leads).
@@ -112,10 +127,15 @@ export const SYMBOL_BOX: Record<ComponentKind, { halfW: number; halfH: number }>
  *
  * Pin convention (used later for wiring):
  *  - 2-terminal horizontal parts: pins at (-32, 0) and (32, 0)
- *  - vertical source parts:        pins at (0, -32) and (0, 32)
+ *  - vertical source parts:        pins at (0, -SOURCE_PIN_Y) and (0, SOURCE_PIN_Y)
  *  - ground:                       single pin at (0, 0)
+ *
+ * Optional `value` lets a DC `vsource`/`isource` whose value is an explicit
+ * SINE(...) draw the AC sine glyph so a waveform change matches the body.
  */
-export function ComponentSymbol({ kind }: { kind: ComponentKind }) {
+export function ComponentSymbol({ kind, value }: { kind: ComponentKind; value?: string }) {
+  const r = SOURCE_CIRCLE_R;
+  const pin = SOURCE_PIN_Y;
   switch (kind) {
     case "resistor":
       return (
@@ -146,60 +166,70 @@ export function ComponentSymbol({ kind }: { kind: ComponentKind }) {
       );
 
     case "vsource":
+      if (valueLooksLikeSine(value)) {
+        return (
+          <>
+            <line x1={0} y1={-pin} x2={0} y2={-r} />
+            <circle cx={0} cy={0} r={r} />
+            <CenteredSineGlyph />
+            <line x1={0} y1={r} x2={0} y2={pin} />
+          </>
+        );
+      }
       return (
         <>
-          <line x1={0} y1={-32} x2={0} y2={-15} />
-          <circle cx={0} cy={0} r={15} />
+          <line x1={0} y1={-pin} x2={0} y2={-r} />
+          <circle cx={0} cy={0} r={r} />
           {/* + */}
           <line x1={-4} y1={-6} x2={4} y2={-6} />
           <line x1={0} y1={-10} x2={0} y2={-2} />
           {/* − */}
           <line x1={-4} y1={7} x2={4} y2={7} />
-          <line x1={0} y1={15} x2={0} y2={32} />
+          <line x1={0} y1={r} x2={0} y2={pin} />
         </>
       );
 
     case "isource":
       return (
         <>
-          <line x1={0} y1={-32} x2={0} y2={-15} />
-          <circle cx={0} cy={0} r={15} />
+          <line x1={0} y1={-pin} x2={0} y2={-r} />
+          <circle cx={0} cy={0} r={r} />
           <path d="M 0 -9 V 8" />
           <path d="M -5 3 L 0 9 L 5 3" />
-          <line x1={0} y1={15} x2={0} y2={32} />
+          <line x1={0} y1={r} x2={0} y2={pin} />
         </>
       );
 
     case "vac":
       return (
         <>
-          <line x1={0} y1={-32} x2={0} y2={-15} />
-          <circle cx={0} cy={0} r={15} />
+          <line x1={0} y1={-pin} x2={0} y2={-r} />
+          <circle cx={0} cy={0} r={r} />
           <CenteredSineGlyph />
-          <line x1={0} y1={15} x2={0} y2={32} />
+          <line x1={0} y1={r} x2={0} y2={pin} />
         </>
       );
 
     case "iac":
       return (
         <>
-          <line x1={0} y1={-32} x2={0} y2={-15} />
-          <circle cx={0} cy={0} r={15} />
+          <line x1={0} y1={-pin} x2={0} y2={-r} />
+          <circle cx={0} cy={0} r={r} />
           <CenteredSineGlyph y={-5} />
           <path d="M 0 1 V 10" />
           <path d="M -5 5 L 0 11 L 5 5" />
-          <line x1={0} y1={15} x2={0} y2={32} />
+          <line x1={0} y1={r} x2={0} y2={pin} />
         </>
       );
 
     case "vpulse":
       return (
         <>
-          <line x1={0} y1={-32} x2={0} y2={-15} />
-          <circle cx={0} cy={0} r={15} />
+          <line x1={0} y1={-pin} x2={0} y2={-r} />
+          <circle cx={0} cy={0} r={r} />
           {/* pulse train: low-high-low-high */}
           <path d="M -10 5 L -10 -5 L -2 -5 L -2 5 L 6 5 L 6 -5 L 10 -5" />
-          <line x1={0} y1={15} x2={0} y2={32} />
+          <line x1={0} y1={r} x2={0} y2={pin} />
         </>
       );
 

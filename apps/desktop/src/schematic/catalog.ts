@@ -23,6 +23,8 @@ export const CATALOG: CatalogEntry[] = [
 
   { kind: "vsource",       section: "Sources",           name: "DC Voltage",      hotkey: "v", prefix: "V",   defaultValue: "5",     unit: "V" },
   { kind: "isource",       section: "Sources",           name: "DC Current",      hotkey: "i", prefix: "I",   defaultValue: "1m",    unit: "A" },
+  // Literal AC source: places `vac` with amplitude + frequency (sine). Not a
+  // DC source with small-signal AC stimulus toggled on — that stays on DC Voltage.
   { kind: "vac",           section: "Sources",           name: "AC Voltage",      hotkey: "a", prefix: "V",   defaultValue: "1 1k",  unit: "V Hz" },
   { kind: "iac",           section: "Sources",           name: "AC Current",      hotkey: "y", prefix: "I",   defaultValue: "1m 1k", unit: "A Hz" },
   // unit is "" (not "V"): the value is the 4-token PULSE spec (low high freq
