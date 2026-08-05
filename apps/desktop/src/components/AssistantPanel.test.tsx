@@ -532,7 +532,7 @@ describe("AssistantPanel", () => {
     const onOpenSettings = vi.fn();
     render(<AssistantPanel {...baseProps({ onOpenSettings })} />);
 
-    expect(screen.getByText("No API Key")).toBeTruthy();
+    expect(screen.getByText("API key needed")).toBeTruthy();
     expect(screen.queryByRole("textbox", { name: "Message the assistant" })).toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: "Open Settings" }));
@@ -597,7 +597,7 @@ describe("AssistantPanel", () => {
     await waitFor(() => expect(localAiStatusMock).toHaveBeenCalled());
     expect(screen.getByRole("combobox", { name: "Assistant model" }).textContent).toContain("Qwen3 4B");
     expect(screen.getByRole("textbox", { name: "Message the assistant" })).toBeTruthy();
-    expect(screen.queryByText("No API Key")).toBeNull();
+    expect(screen.queryByText("API key needed")).toBeNull();
 
     fireEvent.change(screen.getByRole("textbox", { name: "Message the assistant" }), {
       target: { value: "Create an RC circuit locally" },
