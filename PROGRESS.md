@@ -9,15 +9,36 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-04 23:52 CDT**
+**Status: DONE - 2026-08-04 23:57 CDT**
 
-Unit: Bundle 2N2219A + Educational steptemp.asc differential OP (−55/27/125).
-Stdout: `SUMMARY pass=17 sibling=5 gap=2`. Named-device tip **15.8%**/HF0.
-SHIPPABLE? **NO**.
+Unit: Educational stepmodelparam differential (`.step NPN 2N2222(Vaf)` expand).
+Stdout: **SUMMARY pass=18 sibling=5 gap=2**. Remaining gaps: native step_expand;
+Class-D AC/DC/noise/tf. Named-device tip still 15.8%/HF0. Concurrent named-device
+WIP may exist unstaged — leave Freshman AI / Design lanes alone.
 
 **SHIPPABLE?** **NO**
 
 ---
+
+### 2026-08-04 — Educational stepmodelparam differential → pass=18 (§DoD)
+
+**What I did**
+- Expanded Educational `stepmodelparam.asc` `.step NPN 2N2222(Vaf) 100/50/25`
+  into three nested-DC decks with VAF overrides (bundled 2N2222); compared
+  I(V1) vs LTspice via `compareAlignedSeries` (Vstep=0.5 point-count parity).
+- Gap note narrowed: steptemp + stepmodelparam proven; native step_expand +
+  Class-D AC/DC/noise/tf remain.
+
+**Proof**
+- `scripts/differential-parity.sh` / vitest verbose → SUMMARY pass=18 sibling=5 gap=2
+- New cell: stepmodelparam Vaf=100/50/25 nRms=0.0000 samples=105 each
+
+**Parity items**
+- Broad differential: still open (pass=18 · sibling=5 · gap=2)
+
+**Next**
+- native step_expand or Class-D AC; named-device exact-rate toward ≥95%
+  (OTA Isink/Isrc refuse stays honest until exact map).
 
 ### 2026-08-04 — Educational steptemp differential → pass=17 (§DoD)
 

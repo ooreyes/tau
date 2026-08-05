@@ -45,6 +45,7 @@ const EDU = join(homedir(), "Documents", "LTspice", "examples", "Educational");
 const CURVETRACE_ASC = join(EDU, "curvetrace.asc");
 const NOISEFIGURE_ASC = join(EDU, "NoiseFigure.asc");
 const STEPTEMP_ASC = join(EDU, "steptemp.asc");
+const STEPMODELPARAM_ASC = join(EDU, "stepmodelparam.asc");
 const COLPITTS_ASC = process.env.COLPITTS_ASC ?? join(EDU, "colpits.asc");
 
 const RC_TRAN = [
@@ -179,7 +180,7 @@ function withAcStimulus(netlist: string): string {
 describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential parity matrix", () => {
   const cells: DifferentialCell[] = [];
 
-  it("matches RC .tran/.ac/.meas, divider analyses, .step families, curvetrace, NoiseFigure, Colpitts AC, Class-D OP", () => {
+  it("matches RC .tran/.ac/.meas, divider analyses, .step families, curvetrace, stepmodelparam, NoiseFigure, Colpitts AC, Class-D OP", () => {
     // --- TRAN (also covered by waveformParity; re-assert here so this file is self-sufficient) ---
     {
       const result = runPairedBatch("diff-rc-tran", RC_TRAN, ["v(out)"]);
@@ -569,6 +570,61 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
       });
     }
 
+    // --- Educational stepmodelparam.asc: .step NPN 2N2222(Vaf) → expanded nested DC ---
+    {
+      expect(existsSync(STEPMODELPARAM_ASC), `missing ${STEPMODELPARAM_ASC}`).toBe(true);
+      const imported = importAsc(decodeSchematicText(readFileSync(STEPMODELPARAM_ASC)));
+      expect(imported.warnings).toEqual([]);
+      const parsed = analysesFromDirectives(imported.directives);
+      expect(parsed.dc?.source2, "stepmodelparam must be nested .dc").toBeTruthy();
+      const bjtModel = standardModelLine("2N2222");
+      expect(bjtModel, "bundled 2N2222 model required").toBeTruthy();
+      const modelWithVaf = (vaf: number) => bjtModel!.replace(/\bVAF=\S+/i, `VAF=${vaf}`);
+      const baseDirectives = imported.directives.filter((d) => !/^\.step\b/i.test(d.trim()));
+      const vafs = [100, 50, 25] as const;
+      const memberNotes: string[] = [];
+      for (const vaf of vafs) {
+        const directives = [...baseDirectives, modelWithVaf(vaf)];
+        const params = buildParamScope(directives);
+        const deck = buildSpiceDeck({
+          components: imported.components,
+          wires: imported.wires,
+          netLabels: imported.netLabels,
+          directives,
+          params,
+        }, {
+          kind: "dc",
+          source: parsed.dc!.source,
+          start: parsed.dc!.start,
+          stop: parsed.dc!.stop,
+          step: 0.5,
+          source2: parsed.dc!.source2,
+          start2: parsed.dc!.start2,
+          stop2: parsed.dc!.stop2,
+          step2: parsed.dc!.step2,
+        });
+        expect(deck.unresolvedSubckts, `stepmodelparam Vaf=${vaf}`).toEqual([]);
+        expect(deck.netlist).toContain("2N2222");
+        expect(deck.netlist).toMatch(new RegExp(`\\bVAF=${vaf}\\b`, "i"));
+        const result = runPairedBatch(`diff-stepmodelparam-vaf-${vaf}`, deck.netlist, ["i(v1)"]);
+        const lt = result.ltspice.get("i(v1)")!;
+        const ng = result.ngspice.get("i(v1)")!;
+        const comparison = compareAlignedSeries(ng, lt, {
+          rmsTolerance: 0.01,
+          maxTolerance: 0.03,
+        });
+        expect(comparison.pass, `Vaf=${vaf} ${JSON.stringify(comparison)}`).toBe(true);
+        memberNotes.push(`Vaf=${vaf} nRms=${comparison.normalizedRms.toFixed(4)} samples=${comparison.samples}`);
+      }
+      cells.push({
+        analysis: "step",
+        circuit: "stepmodelparam",
+        topology: "Educational stepmodelparam.asc .step NPN 2N2222(Vaf) 100/50/25 nested DC (expanded)",
+        status: "pass",
+        note: `${memberNotes.join("; ")} (Vstep=0.5 for point-count parity)`,
+      });
+    }
+
     // --- Educational NoiseFigure.asc (Tau deck expands V1 Rser=1K) ---
     {
       expect(existsSync(NOISEFIGURE_ASC), `missing ${NOISEFIGURE_ASC}`).toBe(true);
@@ -755,9 +811,9 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
       {
         analysis: "step",
         circuit: "any",
-        topology: "Educational steptemp / stepmodelparam / native step_expand vs LTspice .step card",
+        topology: "native step_expand vs LTspice .step card",
         status: "gap",
-        note: "Educational steptemp.asc OP at −55/27/125 proven; stepmodelparam (.step NPN Vaf) and deck-card step_expand still open",
+        note: "Educational steptemp.asc OP at −55/27/125 and stepmodelparam.asc Vaf expand proven; deck-card step_expand still open",
       },
       {
         analysis: "ac",
@@ -779,7 +835,7 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
     expect(report).toContain("GAPS (explicit):");
     const passCount = cells.filter((cell) => cell.status === "pass").length;
     const gapCount = cells.filter((cell) => cell.status === "gap").length;
-    expect(passCount).toBeGreaterThanOrEqual(17);
+    expect(passCount).toBeGreaterThanOrEqual(18);
     expect(gapCount).toBeGreaterThanOrEqual(1);
   }, 240_000);
 });
