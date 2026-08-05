@@ -9,17 +9,48 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 04:31 CDT**
+**Status: IN PROGRESS - 2026-08-05 ~04:32 CDT**
 
-Unit: Merged continue-19 `waveout` TRAN **pass=75** + Staff EE TIP121/TIP127 → named-device **48.1%**.
-```
-SUMMARY pass=75 sibling=5 gap=0
-tran waveout … v(syn) nRms≈0.0078
-NAMED-DEVICE-RECURSIVE: unencrypted=2541 exact=1222 refuse=1319 silent=0 hard-failure=0 encrypted-excluded=1471 exact-rate=48.1%
-```
-Both landed on tip after diverge. SHIPPABLE? **NO**
+Unit: Merge tip reconcile (waveout pass=75 + TIP121 48.1%) then land next honest
+differential fixture (prefer Educational Wien / NonLinearTransformer — not Draft*).
 
 **SHIPPABLE?** **NO**
+
+
+
+
+---
+
+
+### 2026-08-05 — merge reconcile: waveout pass=75 + TIP121 48.1% (§DoD)
+
+**What I did**
+- Resolved divergent tips: `aaa9c73` Educational waveout.asc TRAN → pass=75 and
+  `c7f3ea2` TIP121/TIP127 Prefix-X + sibling `.lib` → named-device exact=1222 /
+  48.1%. Kept both units; no named-device map thrash beyond TIP121 commit.
+
+**Exact stdout (each tip)**
+
+```
+SUMMARY pass=75 sibling=5 gap=0
+NAMED-DEVICE-RECURSIVE: unencrypted=2541 exact=1222 refuse=1319 silent=0 hard-failure=0 encrypted-excluded=1471 exact-rate=48.1%
+```
+
+**Files**
+- `apps/desktop/scripts/differentialParity.corpus.ts` (waveout)
+- `apps/desktop/src/io/ascImport.ts` (+ test), `namedDeviceRecursive.corpus.ts`
+- `AGENTS.md`, `FEATURE_PARITY.md`, `PROGRESS.md`
+
+**Tests**
+- Prior tip gates green on each side; merge is docs+corpus combine
+
+**Parity items**
+- Differential 🟡 **pass=75**. Named-device exact **1222** / **48.1%**. SHIPPABLE? NO
+
+**Next step**
+- Land pass=76 on a non-colliding Educational fixture (Wien / similar). Avoid
+  Draft*/wavein/Fc/Chan/NIGBT/LT1001 walls and named-device map thrash.
+
 
 
 ---
@@ -37,6 +68,7 @@ Both landed on tip after diverge. SHIPPABLE? **NO**
   Distinct from wavein (wavefile= stimulus — not landed).
 
 **Exact stdout**
+
 ```
 SUMMARY pass=75 sibling=5 gap=0
 ```
@@ -50,10 +82,11 @@ SUMMARY pass=75 sibling=5 gap=0
 - `bash scripts/differential-parity.sh` → pass=75
 
 **Parity items**
-- Differential 🟡 **pass=75**. Named-device concurrent tip **48.1%** / exact=1222. SHIPPABLE? NO
+- Differential 🟡 **pass=75**. Named-device exact=1220 / 48.0% at that tip. SHIPPABLE? NO
 
 **Next step**
-- Continue honest differential outside Draft*/named-device. Avoid wavein/Fc/Chan/NIGBT/LT1001 walls.
+- Continue honest differential outside Draft*/named-device.
+
 
 
 ---
@@ -70,6 +103,7 @@ SUMMARY pass=75 sibling=5 gap=0
   blocked. Left BandGaps alone.
 
 **Exact stdout**
+
 ```
 NAMED-DEVICE: exact=2 refuse=4 silent=0
 NAMED-DEVICE-RECURSIVE: unencrypted=2541 exact=1222 refuse=1319 silent=0 hard-failure=0 encrypted-excluded=1471 exact-rate=48.1%
@@ -86,10 +120,11 @@ NAMED-DEVICE-RECURSIVE: unencrypted=2541 exact=1222 refuse=1319 silent=0 hard-fa
 
 **Parity items**
 - Named-device 🟡 exact **1222** / rate **48.1%** (≥95% not met). Differential
-  concurrent **pass=75**. SHIPPABLE? NO
+  pass=74 at that tip. SHIPPABLE? NO
 
 **Next step**
-- Next plaintext refuse leftover / Draft5 if exact.
+- Continue 19 differential; next plaintext refuse leftover.
+
 
 
 ---
