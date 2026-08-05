@@ -1,14 +1,12 @@
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 09:25 CDT**
+**Status: IN PROGRESS - 2026-08-05 ~09:30 CDT**
 
-Unit: DC sweep multi-pane cards (waveform DoD).
-Worktree `Tau-wt-wave-ac-panes` on tip `0d6a2b2`. Left EveryCircuit library /
-current-mode / Settings / Educational alone. SHIPPABLE? **NO**
+Unit: EveryCircuit library — **polarized capacitor** + **logic constant**
+(honest C / DC-V) + scope cursor → schematic `readoutTime`.
+Not full EC parity. SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
-
-
 
 
 ---
