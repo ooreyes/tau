@@ -9,25 +9,30 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-04 23:47 CDT** (Overnight DoD — named-device ModelFile)
+**Status: DONE - 2026-08-04 23:50 CDT**
 
-Unit: Prefer `.asy` `ModelFile` for `ltModelFile` + encrypted `.sub`→plaintext
-same-stem `.lib` attach (refuse→exact via real library text). Encrypted-103
-audit integrity clean (wouldHard=0). Retracted false 33.3%/2782 docs claim.
-
-**Measured tip stdout (truth):**
-```
-NAMED-DEVICE: exact=2 refuse=4 silent=0
-NAMED-DEVICE-RECURSIVE: unencrypted=2539 exact=400 refuse=2139 silent=0 hard-failure=0 encrypted-excluded=1473 exact-rate=15.8%
-```
-Before (exact-asy baseline): 2538/399/2139/0/1474 @ 15.7%. After: +1 exact
-(15.8%). ≥95% unchecked. SHIPPABLE? **NO**.
-
-**Forbidden lanes left alone:** Settings* · AssistantPanel · ShellPanels · App.css.
+Unit: Differential BJT CE `.step temp` OP (−55/27/125 °C) — pass=16.
+Stdout: `SUMMARY pass=16 sibling=5 gap=2`. Named-device tip remains **15.8%**/HF0
+(exact-asy denominator). SHIPPABLE? **NO**.
 
 **SHIPPABLE?** **NO**
 
 ---
+
+### 2026-08-04 — Differential BJT CE .step temp → pass=16 (§DoD)
+
+**What I did**
+- Added minimal 2N3904 CE `.op` at −55/27/125 °C (Educational steptemp range)
+  via `.temp` expand; LTspice vs ngspice V(coll) relErr ≤ 1e−4.
+- Gap note narrowed; full Educational steptemp / stepmodelparam / Class-D AC
+  still gap. DoD broad-differential stays unchecked.
+
+**Proof**
+- `scripts/differential-parity.sh` → SUMMARY pass=16 sibling=5 gap=2
+
+**Next**
+- stepmodelparam / 2N2219A Educational steptemp; or OTA asym/Isink exact map
+  to raise named-device exact-rate on tip 15.8% denominator.
 
 ### 2026-08-04 — ModelFile + .lib twin → exact-rate 15.8% (§DoD)
 

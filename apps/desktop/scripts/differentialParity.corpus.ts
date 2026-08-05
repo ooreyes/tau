@@ -34,6 +34,7 @@ import {
   runPairedTransferFunction,
   type NumericTrace,
 } from "./parityHarness";
+import { standardModelLine } from "../src/engine/standardModels";
 
 const haveLtspice = existsSync(LTSPICE_BINARY);
 const haveNgspice = spawnSync("ngspice", ["--version"], { encoding: "utf8" }).error === undefined;
@@ -389,6 +390,39 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
       });
     }
 
+    // --- BJT CE .step temp (Educational steptemp range endpoints + mid) ---
+    {
+      const bjtModel = standardModelLine("2N3904");
+      expect(bjtModel, "bundled 2N3904 model required").toBeTruthy();
+      const temps = [-55, 27, 125] as const;
+      const memberNotes: string[] = [];
+      for (const temp of temps) {
+        const deck = [
+          "Tau differential BJT CE step temp",
+          "Vcc vcc 0 5",
+          "Rc vcc coll 1k",
+          "Q1 coll base 0 2N3904",
+          "Rb vin base 100k",
+          "Vin vin 0 0.8",
+          bjtModel!,
+          `.temp ${temp}`,
+          ".op",
+        ].join("\n");
+        const result = runPairedBatch(`diff-bjt-temp-${temp}`, deck, ["v(coll)"]);
+        const lt = firstSample(result.ltspice.get("v(coll)")!);
+        const ng = firstSample(result.ngspice.get("v(coll)")!);
+        expect(relativeError(ng, lt), `BJT temp=${temp} lt=${lt} ng=${ng}`).toBeLessThanOrEqual(1e-4);
+        memberNotes.push(`T=${temp} V(coll)=${ng.toFixed(6)} rel=${relativeError(ng, lt).toExponential(2)}`);
+      }
+      cells.push({
+        analysis: "step",
+        circuit: "bjt",
+        topology: ".step temp -55/27/125 on 2N3904 CE .op (expanded via .temp)",
+        status: "pass",
+        note: memberNotes.join("; "),
+      });
+    }
+
     // --- .step source family: expand V1 DC values on OP ---
     {
       const volts = [1, 2, 3] as const;
@@ -687,7 +721,7 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
         circuit: "any",
         topology: "Educational steptemp / stepmodelparam / native step_expand vs LTspice .step card",
         status: "gap",
-        note: "simple RC temp/source/nested expanded proven; full Educational BJT steptemp, .step NPN(Vaf), and deck-card step_expand differential still open",
+        note: "minimal 2N3904 CE .step temp OP proven; full Educational steptemp (needs 2N2219A), stepmodelparam (.step NPN Vaf), and deck-card step_expand still open",
       },
       {
         analysis: "ac",
@@ -709,7 +743,7 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
     expect(report).toContain("GAPS (explicit):");
     const passCount = cells.filter((cell) => cell.status === "pass").length;
     const gapCount = cells.filter((cell) => cell.status === "gap").length;
-    expect(passCount).toBeGreaterThanOrEqual(15);
+    expect(passCount).toBeGreaterThanOrEqual(16);
     expect(gapCount).toBeGreaterThanOrEqual(1);
   }, 240_000);
 });
