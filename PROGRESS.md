@@ -9,12 +9,63 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: IN PROGRESS - 2026-08-04 23:50 CDT**
+**Status: DONE - 2026-08-04 23:35 CDT** (Staff EE — encrypted-103 honesty)
 
-Unit: Named-device encrypted-103 classifier honesty + refuse→exact (PWL/zero R/C) — WT finish. Shippable? NO.
+Unit: CEO redirect — sample the HF→encrypted −103/+103. Verdict: **TRUE
+encrypted dependents**, not false positives hiding HF. DoD ≥95% stays
+**unchecked**. SHIPPABLE? **NO**.
+
+**Measured (re-prove):** `scripts/named-device-fidelity.sh`
+```
+NAMED-DEVICE: exact=2 refuse=4 silent=0
+NAMED-DEVICE-RECURSIVE: unencrypted=2538 exact=399 refuse=2139 silent=0
+hard-failure=0 encrypted-excluded=1474 exact-rate=15.7%
+```
+`NAMED_DEVICE_ENCRYPTED_AUDIT=1`: without-flag refuse=1474 hard_failure=0;
+reasons unresolvedEncStem=1439 otherEncSignal=35. Clearing encryptedDependent
+never yields HF — classifier fail-closed holds.
+
+**Next unit:** refuse→exact via library/symbol resolve (plaintext models only);
+basename ASY search must not re-enter the recursive denominator until HF
+re-triaged (it inflated encrypted ~1474→2776 and resurfaced HF=13).
 
 
 ---
+
+
+### 2026-08-04 — Staff EE: HF=0 encrypted reclass is legitimate (§DoD)
+
+**What I did**
+- Inspected `circuitDependsOnEncryptedModel` / `classifyNamedDeviceBucket` /
+  recursive encryptedDependent path. `encryptedDependent` may only rebucket
+  `capability_refusal` → `encrypted` (never HF).
+- Reproduced QA baseline on tip after locking recursive ASY resolve to exact
+  relative join (basename search dishonestly inflated encrypted-excluded).
+- Sampled encrypted-excluded: top unresolved stems (`adp2503_4`, `ltc4449`,
+  `adp2370`, `adp121`, `lt1184f`, …) are real on-disk `<Binary File>` `.sub`
+  models. `AD3551R.asy` → `ModelFile AD3551R.sub` (encrypted). `LTC3260.asc`
+  Rload+/− + encrypted `LTC3260.sub` — former hard deck errors unmasked to
+  refuse∩encrypted after parasitic/`safeName` fixes; exact stayed 399.
+- Fail-closed unit test + `NAMED_DEVICE_ENCRYPTED_AUDIT` integrity green.
+
+**Files**
+- `apps/desktop/scripts/namedDeviceRecursive.corpus.ts` (audit + ASY join lock)
+- `apps/desktop/src/io/corpusReport.ts` / `.test.ts` (fail-closed comment/tests)
+- `PROGRESS.md`, `~/Desktop/TAU-MORNING-STATUS.md`
+
+**Tests / proof**
+- `corpusReport.test.ts` green; fidelity stdout above; encrypted audit
+  wouldHard=0
+
+**Parity items**
+- Named-device: 🟡 HF=0 silent=0 on unencrypted=2538 is honest exclude;
+  exact-rate 15.7% ≪ 95%; DoD box unchecked; SHIPPABLE? NO
+
+**Next step**
+- Raise exact-rate: refuse→exact via library resolve for plaintext installed
+  models. Do not claim ≥95%. Do not reopen basename ASY search in the
+  recursive denominator without HF triage.
+
 
 ### 2026-08-04 — EE-trust copy (student-calm Settings + quieter notices)
 
