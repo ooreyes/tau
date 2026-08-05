@@ -511,6 +511,26 @@ describe("DcPlot - linear sweep/volts ticks", () => {
     fireEvent.click(absItem);
     expect(onPlotExpression).toHaveBeenCalledWith("abs(V(out))");
   });
+
+  it("Apply Y locks DC sweep axis; Autoscale Y restores autorange", () => {
+    const result: DcSweepResult = {
+      ok: true,
+      source: "V1",
+      sweep: [0, 1, 2, 3, 4, 5],
+      nets: [{ id: "n1", label: "V(out)", voltages: [0, 0.5, 1, 1.5, 2, 2.5], ground: false }],
+      warnings: [],
+    };
+    render(<DcPlot result={result} />);
+    expect(screen.getByLabelText("DC sweep Y limits")).toBeTruthy();
+    fireEvent.change(screen.getByLabelText("DC sweep Y min"), { target: { value: "0" } });
+    fireEvent.change(screen.getByLabelText("DC sweep Y max"), { target: { value: "1" } });
+    fireEvent.click(screen.getByRole("button", { name: "Apply DC sweep Y limits" }));
+    expect(screen.queryByRole("alert")).toBeNull();
+    const autoscale = screen.getByRole("button", { name: "Autoscale DC sweep Y" });
+    expect(autoscale.getAttribute("aria-pressed")).toBe("false");
+    fireEvent.click(autoscale);
+    expect(autoscale.getAttribute("aria-pressed")).toBe("true");
+  });
 });
 
 describe("NoisePlot - log-log (frequency × V/√Hz decades) ticks", () => {

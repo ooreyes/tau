@@ -4597,6 +4597,10 @@ export function DcPlot({
   const clipId = useId();
   const [measureRef, size] = useMeasuredSize<SVGSVGElement>();
   const { targetXTicks, targetYTicks } = tickCountsFromSize(size);
+  const [yMinDraft, setYMinDraft] = useState("");
+  const [yMaxDraft, setYMaxDraft] = useState("");
+  const [manualY, setManualY] = useState<ManualAxisLimits | null>(null);
+  const [yLimitsError, setYLimitsError] = useState<string | null>(null);
   const traces = result?.ok ? result.nets.filter((n) => !n.ground).slice(0, 6) : [];
   const sweep = result?.ok ? result.sweep : [];
   // Expression overlays share the voltage axis with the swept node curves.
@@ -4624,12 +4628,23 @@ export function DcPlot({
   }, [traces, overlays, sweep]);
 
   const domain = useMemo<Viewport>(
-    () => ({ xMin: plot ? plot.xMin : 0, xMax: plot ? plot.xMax : 1, yMin: plot ? plot.vMin : -1, yMax: plot ? plot.vMax : 1 }),
-    [plot],
+    () =>
+      applyManualYToDomain(
+        {
+          xMin: plot ? plot.xMin : 0,
+          xMax: plot ? plot.xMax : 1,
+          yMin: plot ? plot.vMin : -1,
+          yMax: plot ? plot.vMax : 1,
+        },
+        manualY,
+      ),
+    [plot, manualY],
   );
   const { viewport, attachSvg, isPanning, fit, zoomBy, dragHandlers } = usePlotViewport({
     domain,
-    resetKey: plot ? result : null,
+    resetKey: plot
+      ? `${manualY ? `${manualY.yMin}:${manualY.yMax}` : "auto"}:${result?.ok ? result.source : ""}:${plot.xMin}:${plot.xMax}`
+      : null,
     width: PLOT_WIDTH,
     height: PLOT_HEIGHT,
     pad: PLOT_PAD,
@@ -4770,6 +4785,75 @@ export function DcPlot({
         <Metric label="POINTS" value={String(sweep.length)} tone="cyan" />
         <Metric label="NETS" value={String(traces.length)} tone="cream" />
       </div>
+      <div className="meter-row analysis-meter" aria-label="DC sweep Y limits">
+        <label className="axis-limit-field">
+          Ymin
+          <Input
+            variant="mono"
+            size="sm"
+            className="w-20"
+            value={yMinDraft}
+            aria-label="DC sweep Y min"
+            placeholder={plot ? String(plot.vMin) : "0"}
+            onChange={(e) => {
+              setYMinDraft(e.currentTarget.value);
+              if (yLimitsError) setYLimitsError(null);
+            }}
+          />
+        </label>
+        <label className="axis-limit-field">
+          Ymax
+          <Input
+            variant="mono"
+            size="sm"
+            className="w-20"
+            value={yMaxDraft}
+            aria-label="DC sweep Y max"
+            placeholder={plot ? String(plot.vMax) : "5"}
+            onChange={(e) => {
+              setYMaxDraft(e.currentTarget.value);
+              if (yLimitsError) setYLimitsError(null);
+            }}
+          />
+        </label>
+        <Button
+          size="sm"
+          variant="outline"
+          aria-label="Apply DC sweep Y limits"
+          disabled={!plot}
+          onClick={() => {
+            const parsed = parseManualYLimits(yMinDraft, yMaxDraft);
+            if (!parsed.ok) {
+              setYLimitsError(parsed.error);
+              return;
+            }
+            setManualY(parsed.limits);
+            setYLimitsError(null);
+          }}
+        >
+          Apply Y
+        </Button>
+        <Button
+          size="sm"
+          variant={manualY ? "default" : "outline"}
+          aria-label="Autoscale DC sweep Y"
+          aria-pressed={!manualY}
+          disabled={!plot}
+          onClick={() => {
+            setManualY(null);
+            setYLimitsError(null);
+            setYMinDraft("");
+            setYMaxDraft("");
+          }}
+        >
+          Autoscale Y
+        </Button>
+      </div>
+      {yLimitsError && (
+        <div className="expr-error" role="alert">
+          {yLimitsError}
+        </div>
+      )}
     </>
   );
 }
