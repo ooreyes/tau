@@ -1737,13 +1737,22 @@ function subcktValueFromSymbol(
   const valueIsParams = /^\w+\s*=/.test(rawValue);
   const value2 = effective.Value2?.trim() ?? "";
   const value2IsParams = /^\w+\s*=/.test(value2);
+  const metadataSpiceModel = metadataAttrs?.SpiceModel?.trim() ?? "";
+  const metadataModelFile = metadataAttrs?.ModelFile?.trim() ?? "";
+  // When `.asy` carries ModelFile (or SpiceModel is a non-file profile), the
+  // symbol's SpiceModel is the default subckt/profile name (UniversalOpAmp
+  // `level1`, ISO16750 pulse). When SpiceModel alone is `*.lib`/`*.sub`, it is
+  // the library path and Value2/Value hold the subckt name (AD711 → AD712).
+  const metadataProfile = metadataSpiceModel
+    && (metadataModelFile || !/\.(lib|sub|mod)$/i.test(metadataSpiceModel))
+    ? metadataSpiceModel
+    : "";
   // On installed Prefix-X symbols Value2 is LTspice's exact X-line tail: its
   // first token is the simulation subcircuit and any following tokens are
-  // instance parameters. SpiceModel on the .asy is the FILE name, while a
-  // SpiceModel written on the .asc instance is an explicit subcircuit/profile
-  // override (the ISO transient symbols use that form).
+  // instance parameters. An instance SpiceModel is always an explicit override.
   const name = [
     attrs.SpiceModel,
+    metadataProfile,
     value2IsParams ? "" : value2,
     valueIsParams ? "" : rawValue,
     def?.name,

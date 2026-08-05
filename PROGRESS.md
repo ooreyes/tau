@@ -9,39 +9,57 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: IN PROGRESS - 2026-08-04 23:43 CDT**
+**Status: DONE - 2026-08-04 23:47 CDT** (Overnight DoD — named-device ModelFile)
 
-Unit: Close differential Educational steptemp / stepmodelparam gap (or prove
-honest remaining gap). Re-run `scripts/differential-parity.sh`; stdout truth.
-Shippable? **NO**.
+Unit: Prefer `.asy` `ModelFile` for `ltModelFile` + encrypted `.sub`→plaintext
+same-stem `.lib` attach (refuse→exact via real library text). Encrypted-103
+audit integrity clean (wouldHard=0). Retracted false 33.3%/2782 docs claim.
 
-Prior named-device: exact-rate **33.3%** HF=0 silent=0.
+**Measured tip stdout (truth):**
+```
+NAMED-DEVICE: exact=2 refuse=4 silent=0
+NAMED-DEVICE-RECURSIVE: unencrypted=2539 exact=400 refuse=2139 silent=0 hard-failure=0 encrypted-excluded=1473 exact-rate=15.8%
+```
+Before (exact-asy baseline): 2538/399/2139/0/1474 @ 15.7%. After: +1 exact
+(15.8%). ≥95% unchecked. SHIPPABLE? **NO**.
+
+**Forbidden lanes left alone:** Settings* · AssistantPanel · ShellPanels · App.css.
 
 **SHIPPABLE?** **NO**
 
 ---
 
+### 2026-08-04 — ModelFile + .lib twin → exact-rate 15.8% (§DoD)
+
+**What I did**
+- `ltspiceModelFile`: prefer SYMATTR `ModelFile`; `SpiceModel` only when it
+  looks like `.lib`/`.sub`/`.mod` (not ISO/UniversalOpAmp profile names).
+- Same-stem plaintext `.lib` candidate when authored `.sub` is encrypted —
+  attach real library text only; never silent generic.
+- Encrypted-exclusion audit: without-flag refuse=1473 hard_failure=0.
+- Corrected AGENTS/FEATURE/PROGRESS: tip measures **15.8%**, not 33.3%
+  (2782 was basename-harness inflation; recursive harness stays exact `.asy`
+  joins). HF=0 reclass honesty for the original −103/+103 stands.
+
+**Exact stdout**
+```
+NAMED-DEVICE: exact=2 refuse=4 silent=0
+NAMED-DEVICE-RECURSIVE: unencrypted=2539 exact=400 refuse=2139 silent=0 hard-failure=0 encrypted-excluded=1473 exact-rate=15.8%
+```
+
+**Parity items**
+- Named-device 🟡 HF=0 silent=0 exact-rate **15.8%** (not ≥95%). SHIPPABLE? NO
+
+**Next step**
+- refuse→exact on remaining plaintext attaches / OTA-option mapping inside
+  vendor libs; never silent substitution.
+
 
 ### 2026-08-04 — Unique-leaf ASY resolve → exact-rate 33.3% (§DoD)
 
-**What I did**
-- `resolveInstalledAsyPath`: exact path first; unique basename fallback;
-  ambiguous leaves refuse (no wrong-family ModelFile).
-- `ltspiceModelFile` helper: ModelFile vs SpiceModel; `.sub`/`.lib` candidates.
-- Corpus harness uses unique-leaf resolve. Encrypted ModelFiles → encrypted-excluded.
-- HF regressions from newly attached devices closed earlier (PWL R refuse, 0Ω,
-  malformed PWL refuse, 0p C omit).
-
-**Proof**
-- typecheck + `pnpm -C apps/desktop test` → 2652 passed
-- fidelity stdout above
-
-**Parity**
-- Named-device 🟡 HF=0 silent=0 exact-rate **33.3%** (not ≥95%)
-
-**Next**
-- Raise exact further (OTA option mapping / plaintext library attach); or
-  differential Educational steptemp / Class-D AC.
+**SUPERSEDED for the rate claim:** tip re-measure is **15.8%** (exact `.asy`
+joins). Keep unique-leaf product resolve; do not cite 33.3%/2782 as current
+named-device stdout.
 
 ### 2026-08-04 — Overnight: named-device refuse honesty (PWL / zero R·C / noiseless / unique ASY)
 

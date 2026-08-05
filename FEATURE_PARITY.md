@@ -226,16 +226,16 @@ Status legend: ✅ done · 🟡 partial · ⬜ not started
     fail-closed deck: missing named models block Run rather than promising a
     generic starter. Proof: `scripts/named-device-fidelity.sh` →
     `NAMED-DEVICE: exact=2 refuse=4 silent=0` and recursive
-    `NAMED-DEVICE-RECURSIVE: unencrypted=1230 exact=410 refuse=820 silent=0
-    hard-failure=0 encrypted-excluded=2782 exact-rate=33.3%` (2026-08-04 23:40).
-    2026-08-04; `NAMED_DEVICE_ENCRYPTED_AUDIT` wouldHard=0). HF 103→0 is
-    −103/+103 encrypted reclass vs prior 2641/103/1371: deck fixes unmasked
-    parse failures into honest encrypted ModelFile refusals — exact stayed
-    399 (not 103 new exact models). Recursive harness uses exact `.asy` joins
-    only. SHIPPABLE? NO. Still open: import arbitrary user-supplied
-    multi-pin `.asy` banks; raise recursive exact-model floor to ≥95% with
-    hard-failure=0; a shared five-pin shape does not prove pin fidelity for
-    those parts.
+    `NAMED-DEVICE-RECURSIVE: unencrypted=2539 exact=400 refuse=2139 silent=0
+    hard-failure=0 encrypted-excluded=1473 exact-rate=15.8%` (tip 2026-08-04
+    23:45; `NAMED_DEVICE_ENCRYPTED_AUDIT` wouldHard=0). HF 103→0 is −103/+103
+    encrypted reclass vs prior 2641/103/1371 — exact stayed 399 until ModelFile
+    prefer + `.sub`→plaintext `.lib` twin raised exact to 400 (15.7%→15.8%).
+    Never silent substitution. Retract 33.3%/encrypted=2782 (basename harness
+    inflation). Recursive harness: exact `.asy` joins only. SHIPPABLE? NO.
+    Still open: import arbitrary user-supplied multi-pin `.asy` banks; raise
+    recursive exact-model floor to ≥95% with hard-failure=0; a shared five-pin
+    shape does not prove pin fidelity for those parts.
   - **Pin data banked:** `LTSPICE_PINS` + `transformLtPoint()` in `io/ascImport.ts`
     hold the real LTspice symbol-local pin offsets (from `lib/sym/*.asy`) and the
     orientation transform (clockwise, Y-down, mirror-aware). Now covers passives,
