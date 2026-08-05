@@ -9,21 +9,58 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 04:55 CDT**
+**Status: DONE - 2026-08-05 05:01 CDT**
 
-Unit: LTspice.app Resources `Draft1.asc` authored `.dc` + `_exp`→`exp` → differential **pass=79**.
+Unit: Educational `100W.asc` TRAN + bundled IRFP240/IRFP9240 → differential **pass=80**.
 ```
-SUMMARY pass=79 sibling=5 gap=0
-dc resources-draft1 … v(x) nRms=0 span=10; v(n001) nRms=0 span=148.4 samples=10001
+SUMMARY pass=80 sibling=5 gap=0
+tran edu-100w … v(out)/v(out1) nRms=0.0001 span=80.43
 ```
-≠ Documents Draft1. Named-device 48.1%. SHIPPABLE? **NO**
+Named-device 48.1% unchanged (Chan/NIGBT/FRA). SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
 
 
-
 ---
+
+
+### 2026-08-05 — Educational 100W.asc TRAN + IRFP240/9240 → pass=80 (§DoD)
+
+**What I did**
+- Bundled exact `standard.mos` IRFP240 / IRFP9240 VDMOS into
+  `engine/standardModels.ts` (Cgso→Cgs; mfg/Vds/Ron/Qg stripped — same class
+  as QS6K1/RSR015P06).
+- Educational `100W.asc` authored `.tran 10m` at `.param V=1.44` (authored
+  `.step oct param V` stripped for single-deck). Document MJE340/MJE350 kept.
+  Probes `v(out)`/`v(out1)` match LTspice (nRms=0.0001 @ 2%/5%).
+- Named-device hunt: Educational leftovers still Chan/NIGBT/FRA only; Applications
+  refuses are encrypted REF-* — no sibling-.lib climb. Left Resources Draft1 /
+  Butterworth/ISO/IGBTeq/waveout/BandGaps alone.
+
+**Exact stdout**
+
+```
+SUMMARY pass=80 sibling=5 gap=0
+```
+
+**Files**
+- `apps/desktop/src/engine/standardModels.ts` (+ test)
+- `apps/desktop/scripts/differentialParity.corpus.ts`
+- `AGENTS.md`, `FEATURE_PARITY.md`, `PROGRESS.md`
+
+**Tests**
+- `pnpm -C apps/desktop typecheck` + `test` green
+- `bash scripts/differential-parity.sh` → pass=80
+
+**Parity items**
+- Differential 🟡 **pass=80**. Named-device 🟡 **48.1%**. SHIPPABLE? NO
+
+**Next step**
+- Continue 22 differential outside 100W/Resources Draft1/Butterworth; Staff EE
+  named-device only if a non-Chan/NIGBT/FRA plaintext climb appears.
+
+
 
 
 ### 2026-08-05 — Resources Draft1.asc DC `_exp`→`exp` → pass=79 (§DoD)

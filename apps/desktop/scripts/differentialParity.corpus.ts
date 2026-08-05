@@ -97,6 +97,7 @@ const HELP_BUTTERWORTH_ASC = join(
 );
 /** LTspice.app Resources BV demo — soft `_exp` (≠ Documents/LTspice/Draft1.asc diode–L–R). */
 const RESOURCES_DRAFT1_ASC = join("/Applications/LTspice.app/Contents/Resources", "Draft1.asc");
+const EDU_100W_ASC = join(EDU, "100W.asc");
 const SAMPLEANDHOLD_ASC = join(EDU, "SampleAndHold.asc");
 const EDU_VARISTOR_ASC = join(EDU, "varistor.asc");
 const STEPNOISE_ASC = join(EDU, "stepnoise.asc");
@@ -256,7 +257,7 @@ function withAcStimulus(netlist: string): string {
 describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential parity matrix", () => {
   const cells: DifferentialCell[] = [];
 
-  it("matches RC .tran/.ac/.meas, divider analyses, .step families, curvetrace, stepmodelparam, NoiseFigure, noise.asc, Colpitts/Clapp/Hartly AC, Cohn AC, MeasureBW AC, Transformer/Transformer2/IdealTransformer TRAN, notch/passive/butter/opamp/Linkwitz AC, LM741/LM308/LM78XX/P2/logamp TRAN, GFT AC, DCopPnt OP, audioamp TRAN, UHFpreamp AC, 1563 AC, S-param AC, stepAC AC, 2ndOrder* AC, MonteCarlo AC, varactor AC, phaseshift AC, Pierce/colpits2 AC, edu-varistor TRAN, stepnoise noise, UniversalOpAmp/1/2 TRAN, contrib/qztst AC, SampleAndHold TRAN, contrib/elip_grd AC, Draft3 AC, Draft7 AC, Draft2 TRAN, Draft1 TRAN, BandGaps DC-temp, waveout TRAN, ISO16750 TRAN, IGBTeq nested DC, help-Butterworth AC, Resources-Draft1 DC, Class-D AC/OP/DC/noise/tf", () => {
+  it("matches RC .tran/.ac/.meas, divider analyses, .step families, curvetrace, stepmodelparam, NoiseFigure, noise.asc, Colpitts/Clapp/Hartly AC, Cohn AC, MeasureBW AC, Transformer/Transformer2/IdealTransformer TRAN, notch/passive/butter/opamp/Linkwitz AC, LM741/LM308/LM78XX/P2/logamp TRAN, GFT AC, DCopPnt OP, audioamp TRAN, UHFpreamp AC, 1563 AC, S-param AC, stepAC AC, 2ndOrder* AC, MonteCarlo AC, varactor AC, phaseshift AC, Pierce/colpits2 AC, edu-varistor TRAN, stepnoise noise, UniversalOpAmp/1/2 TRAN, contrib/qztst AC, SampleAndHold TRAN, contrib/elip_grd AC, Draft3 AC, Draft7 AC, Draft2 TRAN, Draft1 TRAN, BandGaps DC-temp, waveout TRAN, ISO16750 TRAN, IGBTeq nested DC, help-Butterworth AC, Resources-Draft1 DC, 100W TRAN, Class-D AC/OP/DC/noise/tf", () => {
     // --- TRAN (also covered by waveformParity; re-assert here so this file is self-sufficient) ---
     {
       const result = runPairedBatch("diff-rc-tran", RC_TRAN, ["v(out)"]);
@@ -1435,7 +1436,7 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
 
 
     // --- Educational P2.asc authored .tran (parametric amp; exact schematic .model cards) ---
-    // 100W.asc needs IRFP240/IRFP9240 VDMOS from standard.mos (not yet bundled) — refuse, not silent TAU_*.
+    // 100W.asc IRFP240/IRFP9240 now bundled in standardModels (see edu-100W cell).
     // 160.asc is digital A-devices; ISO7637 spike still misses paired TOL —
     // ISO16750-2_example TRAN landed separately (bundled profiles).
     // Dense .raw (~5e5 samples): use comparison.referenceRange (avoid Math.max(...spread) stack blow).
@@ -3174,6 +3175,68 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
       });
     }
 
+    // --- Educational 100W.asc authored .tran (IRFP240/IRFP9240 VDMOS + document MJE340/350) ---
+    // Bundled exact standard.mos IRFP pair (Cgso→Cgs; mfg/Vds/Ron/Qg stripped) — same
+    // class as QS6K1/RSR015P06. Authored `.step oct param V` stripped for single-deck
+    // V=1.44 (100W RMS); `.four` kept. Probes v(out)/v(out1): nRms≈1e-4 @ 2%/5%.
+    // Named-device leftovers Chan/NIGBT/FRA unchanged. Left Resources Draft1 /
+    // help-Butterworth/ISO/IGBTeq/waveout/BandGaps alone. Tip pass=79 → 80.
+    {
+      expect(existsSync(EDU_100W_ASC), `missing ${EDU_100W_ASC}`).toBe(true);
+      const imported = importAsc(decodeSchematicText(readFileSync(EDU_100W_ASC)));
+      expect(imported.warnings).toEqual([]);
+      expect(imported.foreignSymbols).toEqual([]);
+      const dirs = expandDirectiveLines(imported.directives).filter((d) => !/^\.step\b/i.test(d));
+      const parsed = analysesFromDirectives(dirs);
+      expect(parsed.tran, "100W.asc must author .tran").toBeTruthy();
+      const params = buildParamScope(dirs);
+      expect(Number(params.scope.V ?? params.scope.v)).toBeCloseTo(1.44, 5);
+      const deck = buildSpiceDeck({
+        components: imported.components,
+        wires: imported.wires,
+        netLabels: imported.netLabels,
+        directives: dirs,
+        params,
+      }, {
+        kind: "tran",
+        stopTime: parsed.tran!.stopTime,
+        steps: Math.max(parsed.tran!.steps ?? 240, 5000),
+        startTime: parsed.tran!.startTime,
+        maxStep: parsed.tran!.maxStep,
+      });
+      expect(deck.unresolvedSubckts ?? []).toEqual([]);
+      expect(deck.modelSubstitutions ?? []).toEqual([]);
+      expect(deck.netlist).toMatch(/\.model\s+IRFP240\s+VDMOS\b/i);
+      expect(deck.netlist).toMatch(/\.model\s+IRFP9240\s+VDMOS\b/i);
+      expect(deck.netlist).toMatch(/\.model\s+MJE340\s+NPN\b/i);
+      expect(deck.netlist).toMatch(/\.model\s+MJE350\s+PNP\b/i);
+      expect(deck.netlist).toMatch(/\.tran\b/i);
+      expect(deck.netlist).not.toMatch(/^\.step\b/im);
+      const probes = ["v(out)", "v(out1)"] as const;
+      const result = runPairedBatch("diff-edu-100w-tran", deck.netlist, [...probes]);
+      const memberNotes: string[] = [];
+      for (const probe of probes) {
+        const lt = result.ltspice.get(probe)!;
+        const ng = result.ngspice.get(probe)!;
+        const comparison = compareWaveforms(ng.axis, ng.values, lt.axis, lt.values, {
+          rmsTolerance: 0.02,
+          maxTolerance: 0.05,
+        });
+        expect(comparison.pass, `100W ${probe} ${JSON.stringify(comparison)}`).toBe(true);
+        expect(comparison.referenceRange, `100W ${probe} non-hollow`).toBeGreaterThan(50);
+        memberNotes.push(
+          `${probe} nRms=${comparison.normalizedRms.toFixed(4)} nMax=${comparison.normalizedMax.toFixed(4)} span=${comparison.referenceRange.toFixed(2)}`,
+        );
+      }
+      cells.push({
+        analysis: "tran",
+        circuit: "edu-100w",
+        topology: "Educational 100W.asc IRFP240/IRFP9240 amp (authored .tran 10m; .param V=1.44; .step stripped)",
+        status: "pass",
+        note: memberNotes.join("; "),
+      });
+    }
+
     // --- Class-D AC/OP (authored analyses are .tran/.meas; add AC/OP for differential proof) ---
     {
       const ascPath = join(CLASSD_DIR, "class-d-starter.asc");
@@ -3470,6 +3533,6 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
     expect(passCount).toBeGreaterThanOrEqual(70);
     expect(siblingCount).toBe(5);
     expect(gapCount).toBe(0);
-    expect(report).toMatch(/SUMMARY pass=79 sibling=5 gap=0/);
+    expect(report).toMatch(/SUMMARY pass=80 sibling=5 gap=0/);
   }, 240_000);
 });

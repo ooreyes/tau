@@ -53,11 +53,14 @@ const MODEL_LINES: readonly string[] = [
   ".model J310 NJF(Beta=3.384m Betatce=-0.5 Vto=-3.409 Vtotc=-2.5m Lambda=17m Is=193.9f Xti=3 Isr=1881f Nr=2 N=1 Rd=1 Rs=1 Cgd=6.2p Cgs=6.2p Fc=0.5 M=465m Pb=1 Kf=46340f Af=1)",
   ".model 2N5484 NJF(Is=.25p Vto=-1.5 Vtotc=-3m Beta=3.0m Lambda=10m Betatce=-.5 Rd=10 Rs=10 Cgs=4p Cgd=4p Kf=3e-17)",
   ".model 2N5486 NJF(Is=.25p Vto=-4.0 Vtotc=-3m Beta=4.0m Lambda=10m Betatce=-.5 Rd=10 Rs=10 Cgs=4p Cgd=4p Kf=3e-17)",
-  // --- Power MOSFETs (standard.mos, VDMOS) - class-d_starter's half bridge.
-  // LTspice's `Cgso` is ngspice's `Cgs` (renamed; ngspice warns "unrecognized
-  // parameter (cgso)" otherwise); mfg/Vds/Ron/Qg annotation keys stripped. ---
+  // --- Power MOSFETs (standard.mos, VDMOS) - class-d_starter's half bridge +
+  // Educational/100W.asc IRFP pair. LTspice's `Cgso` is ngspice's `Cgs`
+  // (renamed; ngspice warns "unrecognized parameter (cgso)" otherwise);
+  // mfg/Vds/Ron/Qg annotation keys stripped. ---
   ".model QS6K1 VDMOS(Rg=45 Vto=1.179 Rd=19.2m Rs=100m Rb=60m Kp=6.084 Lambda=50m Cgdmin=9p Cgdmax=75p A=0.6 Cgs=62p Is=1.7898p N=1.127 Cjo=15.057p M=235.72m Vj=617.76m TT=20n ksubthres=.1)",
   ".model RSR015P06 VDMOS(pchan Rg=39 Vto=-2.072 Rd=153.3m Rs=30m Rb=35m Kp=7.507 Lambda=50m Cgdmin=18p Cgdmax=75p A=0.2 Cgs=470p Is=716.43f N=1.039 Cjo=129.74p M=445.93m Vj=769.5m TT=43.5n)",
+  ".model IRFP240 VDMOS(Rg=3 Vto=4 Rd=72m Rs=18m Rb=36m Kp=4.9 Lambda=.03 Cgdmax=1.34n Cgdmin=.1n Cgs=1.25n Cjo=1.25n Is=67p ksubthres=.1)",
+  ".model IRFP9240 VDMOS(pchan Rg=3 Vto=-4 Rd=200m Rs=50m Rb=100m Kp=8.2 Lambda=.10 Cgdmax=1.8n Cgdmin=.07n Cgs=.77n Cjo=.77n Is=76p ksubthres=.1)",
   // --- P-channel JFETs (standard.jft) ---
   ".model 2N5460 PJF(Is=1.5p Vto=-3.4 Vtotc=-3m Beta=1.0m Lambda=10m Betatce=-.5 Rd=10 Rs=10 Cgs=5p Cgd=5p Kf=3e-17)",
   ".model J175 PJF(Beta=1.031m Betatce=-0.5 Vto=-3.762 Vtotc=-2.5m Lambda=28m Is=461.5f Xti=3 Isr=4402f Nr=2 N=1 Rd=1 Rs=1 Cgd=6.5p Cgs=9p Fc=0.5 M=279m Pb=1 Kf=66610f Af=1)",

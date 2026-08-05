@@ -38,6 +38,15 @@ describe("standardModelLine", () => {
     expect(standardModelType("RSR015P06")).toBe("vdmos");
   });
 
+  it("bundles Educational 100W.asc IRFP240/IRFP9240 VDMOS", () => {
+    expect(standardModelLine("IRFP240")).toMatch(/VDMOS\(Rg=3 Vto=4/);
+    expect(standardModelLine("IRFP9240")).toMatch(/VDMOS\(pchan Rg=3 Vto=-4/);
+    expect(standardModelLine("IRFP240")).not.toContain("mfg=");
+    expect(standardModelLine("IRFP9240")).not.toContain("Cgso");
+    expect(standardModelType("IRFP240")).toBe("vdmos");
+    expect(standardModelType("IRFP9240")).toBe("vdmos");
+  });
+
   it("exposes display names and types without leaking the internal map", () => {
     const catalog = standardModelCatalog();
     expect(catalog.find((entry) => entry.name === "QS6K1")).toMatchObject({ type: "vdmos" });
