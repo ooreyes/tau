@@ -1,9 +1,9 @@
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 08:05 CDT**
+**Status: DONE - 2026-08-05 08:15 CDT**
 
-Unit: Waveform DoD — **step-family measurement cursors**.
-Worktree `Tau-wt-wave-step-cur` over `49af5ab`. Settings locked. SHIPPABLE? **NO**
+Unit: Waveform DoD — **AC/DC step-family measurement cursors**.
+Worktree `Tau-wt-wave-ac-step-cur` over `1ba7823`. Settings locked. SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
@@ -12,6 +12,32 @@ Worktree `Tau-wt-wave-step-cur` over `49af5ab`. Settings locked. SHIPPABLE? **NO
 ---
 
 
+
+### 2026-08-05 — AC/DC step-family measurement cursors (§waveform DoD)
+
+**What I did**
+- AcFamilyPlot / DcFamilyPlot **Cursors** — log-f / linear-sweep markers with
+  f1/f2 or x1/x2 + @C1/@C2/Δ on the family SIGNAL (first member grid) via
+  `logFractionToX` / `fractionToX` / `cursorReadout`. Worktree
+  `Tau-wt-wave-ac-step-cur` over `1ba7823`. Left Educational continue 38 ASC,
+  ct 14/15, ct 19 OP, Chan/NIGBT/FRA, Settings alone. Deleted leftover
+  `_probe_fc.test.ts` on main (untracked; not committed).
+
+**Files**
+- `apps/desktop/src/components/SimulationPanel.tsx` (+ wiring tests)
+- `FEATURE_PARITY.md`, `PROGRESS.md`
+
+**Tests**
+- `pnpm -C apps/desktop typecheck` + `test` green (2780 passed)
+- AC/DC step cursors → f1/f2|x1/x2/@C1/@C2/Δ
+
+**Parity items**
+- Waveform viewer 🟡 (AC/DC step-family cursors landed). Differential pass=99 ·
+  named-device 48.1% · SHIPPABLE? NO
+
+**Next step**
+- Step-family per-trace selection / manual axis limits / non-wall ND. Leave
+  Educational/IRFP/Settings alone.
 
 ### 2026-08-05 — step-family measurement cursors (§waveform DoD)
 

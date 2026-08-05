@@ -5157,6 +5157,9 @@ export function AcFamilyPlot({ family }: { family: AnalysisFamily<AcResult> | nu
   const [exprError, setExprError] = useState<string | null>(null);
   const { targetXTicks, targetYTicks } = tickCountsFromSize(size);
   const [exportError, setExportError] = useState<string | null>(null);
+  const [cursorsOn, setCursorsOn] = useState(false);
+  const [cf1, setCf1] = useState(0.25);
+  const [cf2, setCf2] = useState(0.75);
   const probeOverlay = useMemo(() => acFamilyOverlaySeries(family), [family]);
   const exprOverlay = useMemo(() => {
     if (!activeExpr) return null;
@@ -5205,6 +5208,35 @@ export function AcFamilyPlot({ family }: { family: AnalysisFamily<AcResult> | nu
     const xMax = fHi > fLo ? fHi : fLo * 10;
     return { min, max, xMin: fLo, xMax, xScale: "log" as const };
   }, [overlay]);
+
+  // Two log-frequency cursors on the family SIGNAL (first member grid).
+  const acStepCursors = useMemo(() => {
+    if (!cursorsOn || !overlay || overlay.series.length === 0) return null;
+    const first = overlay.series[0];
+    const x1 = logFractionToX(first.freqs, cf1);
+    const x2 = logFractionToX(first.freqs, cf2);
+    if (!Number.isFinite(x1) || !Number.isFinite(x2)) return null;
+    try {
+      return cursorReadout(
+        first.freqs,
+        [{ label: overlay.signal, values: first.magDb, unit: "dB" }],
+        x1,
+        x2,
+      );
+    } catch {
+      return null;
+    }
+  }, [cursorsOn, overlay, cf1, cf2]);
+
+  const acStepCursorPixelX = (f: number, xMin: number, xMax: number): number | null => {
+    if (!(f > 0) || !(xMin > 0) || !(xMax > 0)) return null;
+    const f0 = Math.log10(xMin);
+    const f1 = Math.log10(xMax);
+    const fSpan = f1 - f0 || 1;
+    const frac = (Math.log10(f) - f0) / fSpan;
+    if (frac < 0 || frac > 1) return null;
+    return PLOT_PAD + frac * (PLOT_WIDTH - PLOT_PAD * 2);
+  };
 
   const activateAcFamilyExpression = (expr: string) => {
     const trimmed = expr.trim();
@@ -5283,6 +5315,19 @@ export function AcFamilyPlot({ family }: { family: AnalysisFamily<AcResult> | nu
               d={bodeValuePath(s.magDb, s.freqs, plot)}
             />
           ))}
+          {acStepCursors &&
+            [acStepCursors.x1, acStepCursors.x2].map((f, i) => {
+              const x = acStepCursorPixelX(f, plot.xMin, plot.xMax);
+              if (x === null) return null;
+              return (
+                <g key={`asc${i}`} className="plot-cursor">
+                  <line x1={x} y1={PLOT_PAD} x2={x} y2={PLOT_HEIGHT - PLOT_PAD} />
+                  <text x={x + 3} y={PLOT_PAD + 10}>
+                    {i + 1}
+                  </text>
+                </g>
+              );
+            })}
         </svg>
         <div className="scope-legend" aria-label="AC step legend">
           <ContextMenu>
@@ -5318,6 +5363,15 @@ export function AcFamilyPlot({ family }: { family: AnalysisFamily<AcResult> | nu
         </div>
       </div>
       <div className="meter-row analysis-meter">
+        <Button
+          size="sm"
+          variant={cursorsOn ? "default" : "outline"}
+          aria-pressed={cursorsOn}
+          aria-label="Toggle AC step cursors"
+          onClick={() => setCursorsOn((c) => !c)}
+        >
+          Cursors
+        </Button>
         <Metric label="SIGNAL" value={overlay.signal} tone="green" />
         <Metric label="STEPS" value={String(overlay.series.length)} tone="cyan" />
         <Metric label="SWEEP" value={family.spec?.name ?? "--"} tone="cream" />
@@ -5340,6 +5394,53 @@ export function AcFamilyPlot({ family }: { family: AnalysisFamily<AcResult> | nu
           Export PNG
         </Button>
       </div>
+      {cursorsOn && (
+        <div className="cursor-sliders">
+          <label>
+            C1
+            <input
+              type="range"
+              min={0}
+              max={1000}
+              value={Math.round(cf1 * 1000)}
+              aria-label="AC step cursor 1 position"
+              onChange={(e) => setCf1(Number(e.currentTarget.value) / 1000)}
+            />
+          </label>
+          <label>
+            C2
+            <input
+              type="range"
+              min={0}
+              max={1000}
+              value={Math.round(cf2 * 1000)}
+              aria-label="AC step cursor 2 position"
+              onChange={(e) => setCf2(Number(e.currentTarget.value) / 1000)}
+            />
+          </label>
+        </div>
+      )}
+      {acStepCursors && (
+        <div className="meter-row analysis-meter" aria-label="AC step cursor readout">
+          <Metric label="f1" value={formatEngineering(acStepCursors.x1, "Hz", 3)} tone="cyan" />
+          <Metric label="f2" value={formatEngineering(acStepCursors.x2, "Hz", 3)} tone="cyan" />
+          <Metric
+            label="@C1"
+            value={formatEngineering(acStepCursors.traces[0]!.y1, "dB", 3)}
+            tone="green"
+          />
+          <Metric
+            label="@C2"
+            value={formatEngineering(acStepCursors.traces[0]!.y2, "dB", 3)}
+            tone="green"
+          />
+          <Metric
+            label="Δ"
+            value={formatEngineering(acStepCursors.traces[0]!.dy, "dB", 3)}
+            tone="cream"
+          />
+        </div>
+      )}
       {exprError && <div className="expr-error" role="alert">{exprError}</div>}
       {exportError && <div className="expr-error" role="alert">{exportError}</div>}
     </>
@@ -5357,6 +5458,9 @@ export function DcFamilyPlot({ family }: { family: AnalysisFamily<DcSweepResult>
   const [exprError, setExprError] = useState<string | null>(null);
   const { targetXTicks, targetYTicks } = tickCountsFromSize(size);
   const [exportError, setExportError] = useState<string | null>(null);
+  const [cursorsOn, setCursorsOn] = useState(false);
+  const [cf1, setCf1] = useState(0.25);
+  const [cf2, setCf2] = useState(0.75);
   const probeOverlay = useMemo(() => dcFamilyOverlaySeries(family), [family]);
   const exprOverlay = useMemo(() => {
     if (!activeExpr) return null;
@@ -5400,6 +5504,34 @@ export function DcFamilyPlot({ family }: { family: AnalysisFamily<DcSweepResult>
     }
     return { vMin, vMax, xMin, xMax };
   }, [overlay]);
+
+  // Two linear-sweep cursors on the family SIGNAL (first member grid).
+  const dcStepCursors = useMemo(() => {
+    if (!cursorsOn || !overlay || overlay.series.length === 0) return null;
+    const first = overlay.series[0];
+    const x1 = fractionToX(first.sweep, cf1);
+    const x2 = fractionToX(first.sweep, cf2);
+    if (!Number.isFinite(x1) || !Number.isFinite(x2)) return null;
+    try {
+      return cursorReadout(
+        first.sweep,
+        [{ label: overlay.signal, values: first.voltages, unit: "V" }],
+        x1,
+        x2,
+      );
+    } catch {
+      return null;
+    }
+  }, [cursorsOn, overlay, cf1, cf2]);
+
+  const dcStepCursorPixelX = (x: number, xMin: number, xMax: number): number | null => {
+    if (!Number.isFinite(x) || !Number.isFinite(xMin) || !Number.isFinite(xMax)) return null;
+    const span = xMax - xMin;
+    if (!(span > 0)) return null;
+    const frac = (x - xMin) / span;
+    if (frac < 0 || frac > 1) return null;
+    return PLOT_PAD + frac * (PLOT_WIDTH - PLOT_PAD * 2);
+  };
 
   const activateDcFamilyExpression = (expr: string) => {
     const trimmed = expr.trim();
@@ -5476,6 +5608,19 @@ export function DcFamilyPlot({ family }: { family: AnalysisFamily<DcSweepResult>
               d={dcPath(s.voltages, s.sweep, plot)}
             />
           ))}
+          {dcStepCursors &&
+            [dcStepCursors.x1, dcStepCursors.x2].map((sx, i) => {
+              const x = dcStepCursorPixelX(sx, plot.xMin, plot.xMax);
+              if (x === null) return null;
+              return (
+                <g key={`dsc${i}`} className="plot-cursor">
+                  <line x1={x} y1={PLOT_PAD} x2={x} y2={PLOT_HEIGHT - PLOT_PAD} />
+                  <text x={x + 3} y={PLOT_PAD + 10}>
+                    {i + 1}
+                  </text>
+                </g>
+              );
+            })}
         </svg>
         <div className="scope-legend" aria-label="DC step legend">
           <ContextMenu>
@@ -5511,6 +5656,15 @@ export function DcFamilyPlot({ family }: { family: AnalysisFamily<DcSweepResult>
         </div>
       </div>
       <div className="meter-row analysis-meter">
+        <Button
+          size="sm"
+          variant={cursorsOn ? "default" : "outline"}
+          aria-pressed={cursorsOn}
+          aria-label="Toggle DC step cursors"
+          onClick={() => setCursorsOn((c) => !c)}
+        >
+          Cursors
+        </Button>
         <Metric label="SIGNAL" value={overlay.signal} tone="green" />
         <Metric label="STEPS" value={String(overlay.series.length)} tone="cyan" />
         <Metric label="SWEEP" value={family.spec?.name ?? "--"} tone="cream" />
@@ -5533,6 +5687,53 @@ export function DcFamilyPlot({ family }: { family: AnalysisFamily<DcSweepResult>
           Export PNG
         </Button>
       </div>
+      {cursorsOn && (
+        <div className="cursor-sliders">
+          <label>
+            C1
+            <input
+              type="range"
+              min={0}
+              max={1000}
+              value={Math.round(cf1 * 1000)}
+              aria-label="DC step cursor 1 position"
+              onChange={(e) => setCf1(Number(e.currentTarget.value) / 1000)}
+            />
+          </label>
+          <label>
+            C2
+            <input
+              type="range"
+              min={0}
+              max={1000}
+              value={Math.round(cf2 * 1000)}
+              aria-label="DC step cursor 2 position"
+              onChange={(e) => setCf2(Number(e.currentTarget.value) / 1000)}
+            />
+          </label>
+        </div>
+      )}
+      {dcStepCursors && (
+        <div className="meter-row analysis-meter" aria-label="DC step cursor readout">
+          <Metric label="x1" value={formatEngineering(dcStepCursors.x1, "", 3)} tone="cyan" />
+          <Metric label="x2" value={formatEngineering(dcStepCursors.x2, "", 3)} tone="cyan" />
+          <Metric
+            label="@C1"
+            value={formatEngineering(dcStepCursors.traces[0]!.y1, "V", 3)}
+            tone="green"
+          />
+          <Metric
+            label="@C2"
+            value={formatEngineering(dcStepCursors.traces[0]!.y2, "V", 3)}
+            tone="green"
+          />
+          <Metric
+            label="Δ"
+            value={formatEngineering(dcStepCursors.traces[0]!.dy, "V", 3)}
+            tone="cream"
+          />
+        </div>
+      )}
       {exprError && <div className="expr-error" role="alert">{exprError}</div>}
       {exportError && <div className="expr-error" role="alert">{exportError}</div>}
     </>

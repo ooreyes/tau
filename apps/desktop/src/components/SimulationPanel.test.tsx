@@ -1295,6 +1295,75 @@ describe("AcFamilyPlot / DcFamilyPlot Export PNG", { timeout: 20_000 }, () => {
     expect(signalMeter?.textContent).toContain("abs(V(out))");
     expect(screen.getByRole("button", { name: "Use probe" })).toBeTruthy();
   });
+
+  it("AC step cursors read f1/f2/@C1/@C2/Δ on the family SIGNAL", () => {
+    const acMember = (label: string, magDb: number[]) => ({
+      label,
+      value: 1,
+      result: {
+        ok: true as const,
+        freqs: [10, 100, 1000, 10000],
+        traces: [{ id: "n1", label: "V(out)", magDb, phaseDeg: [0, -45, -90, -135] }],
+        warnings: [],
+      },
+    });
+    const { container } = render(
+      <AcFamilyPlot
+        family={{
+          ok: true,
+          spec: { kind: "param", name: "R", values: [1, 2] },
+          members: [acMember("R=1", [0, -3, -20, -40]), acMember("R=2", [0, -6, -40, -60])],
+          warnings: [],
+        }}
+      />,
+    );
+    const btn = screen.getByRole("button", { name: "Toggle AC step cursors" });
+    expect(btn.getAttribute("aria-pressed")).toBe("false");
+    fireEvent.click(btn);
+    expect(btn.getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByRole("slider", { name: "AC step cursor 1 position" })).toBeTruthy();
+    expect(screen.getByRole("slider", { name: "AC step cursor 2 position" })).toBeTruthy();
+    const readout = screen.getByLabelText("AC step cursor readout");
+    expect(readout.textContent).toMatch(/f1/i);
+    expect(readout.textContent).toMatch(/@C1/);
+    expect(readout.textContent).toMatch(/Δ/);
+    expect(container.querySelectorAll(".plot-cursor").length).toBe(2);
+  });
+
+  it("DC step cursors read x1/x2/@C1/@C2/Δ on the family SIGNAL", () => {
+    const dcMember = (label: string, voltages: number[]) => ({
+      label,
+      value: 1,
+      result: {
+        ok: true as const,
+        source: "V1",
+        sweep: [0, 1, 2, 3],
+        nets: [{ id: "n1", label: "V(out)", voltages, ground: false }],
+        warnings: [],
+      },
+    });
+    const { container } = render(
+      <DcFamilyPlot
+        family={{
+          ok: true,
+          spec: { kind: "param", name: "R", values: [1, 2] },
+          members: [dcMember("R=1", [0, 0.5, 1, 1.5]), dcMember("R=2", [0, 0.25, 0.5, 0.75])],
+          warnings: [],
+        }}
+      />,
+    );
+    const btn = screen.getByRole("button", { name: "Toggle DC step cursors" });
+    expect(btn.getAttribute("aria-pressed")).toBe("false");
+    fireEvent.click(btn);
+    expect(btn.getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByRole("slider", { name: "DC step cursor 1 position" })).toBeTruthy();
+    expect(screen.getByRole("slider", { name: "DC step cursor 2 position" })).toBeTruthy();
+    const readout = screen.getByLabelText("DC step cursor readout");
+    expect(readout.textContent).toMatch(/x1/i);
+    expect(readout.textContent).toMatch(/@C1/);
+    expect(readout.textContent).toMatch(/Δ/);
+    expect(container.querySelectorAll(".plot-cursor").length).toBe(2);
+  });
 });
 
 describe("SimulationPanel - trace color choice and cursor seek", () => {
