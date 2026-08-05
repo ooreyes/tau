@@ -9,18 +9,43 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 02:27 CDT**
+**Status: DONE - 2026-08-05 02:33 CDT**
 
-Unit: Educational `audioamp.asc` TRAN + `UHFpreamp.asc` AC → differential **pass=41**.
+Unit: Educational `1563.asc` authored `.ac` Tow-Thomas (TowTom2) → differential **pass=42**.
 ```
-SUMMARY pass=41 sibling=5 gap=0
-tran audioamp … v(a)/v(b)/v(in) nRms≈0.0001
-ac uhfpreamp … |V(out)| nRms=0
+SUMMARY pass=42 sibling=5 gap=0
+ac towtom-1563 … v(n003)/v(n002) nRms=0
 ```
-Avoided LoopGain (Staff EE) / Clapp/Hartly / Howland OTA / Vswitch / HalfSlope Laplace-as-G=1. SoftDiodeRecovery deferred. Named-device 47.9%. SHIPPABLE? **NO**
+MC1648 deferred (probe stack). Electrometer/LoopGain LT1001 OTA wall. Named-device 47.9%. SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
+
+---
+
+### 2026-08-05 — 1563.asc Tow-Thomas AC → pass=42 (§DoD)
+
+**What I did**
+- Educational `1563.asc` authored `.ac oct 1k–10Meg`: Tow-Thomas filter via
+  `.include TowTom2.sub` (XU1 n003 n002 n001 TowTom2). Probes filter outs
+  v(n003)/v(n002) vs LTspice nRms=0 (not hollow V(in)).
+- Deferred: MC1648 (harness stack overflow); Electrometer/LoopGain LT1001 OTA wall.
+- Fix commit: prior docs-only thrash (`87e61b4`) lacked the corpus cell — this lands it.
+
+**Files**
+- `apps/desktop/scripts/differentialParity.corpus.ts`
+- `AGENTS.md`, `FEATURE_PARITY.md`, `PROGRESS.md`
+
+**Tests**
+- `vitest … differentialParity.corpus.ts` → SUMMARY pass=42 sibling=5 gap=0
+- `pnpm -C apps/desktop typecheck` + `test`
+
+**Parity items**
+- Differential matrix climb 41→42; DoD broad-differential box still open.
+- Named-device 47.9%; SHIPPABLE? **NO**
+
+**Next step**
+- Non-colliding Educational authored analysis (not LoopGain/MC1648/LT1001 wall).
 
 ---
 

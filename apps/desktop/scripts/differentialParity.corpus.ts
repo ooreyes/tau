@@ -63,6 +63,7 @@ const GFT_ASC = join(EDU, "GFT.asc");
 const DCOPNT_ASC = join(EDU, "DCopPnt.asc");
 const AUDIOAMP_ASC = join(EDU, "audioamp.asc");
 const UHFPREAMP_ASC = join(EDU, "UHFpreamp.asc");
+const ASC1563_ASC = join(EDU, "1563.asc");
 const STEPTEMP_ASC = join(EDU, "steptemp.asc");
 const STEPMODELPARAM_ASC = join(EDU, "stepmodelparam.asc");
 const COLPITTS_ASC = process.env.COLPITTS_ASC ?? join(EDU, "colpits.asc");
@@ -210,7 +211,7 @@ function withAcStimulus(netlist: string): string {
 describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential parity matrix", () => {
   const cells: DifferentialCell[] = [];
 
-  it("matches RC .tran/.ac/.meas, divider analyses, .step families, curvetrace, stepmodelparam, NoiseFigure, noise.asc, Colpitts/Clapp/Hartly AC, Cohn AC, MeasureBW AC, Transformer/Transformer2/IdealTransformer TRAN, notch/passive/butter/opamp/Linkwitz AC, LM741 TRAN, GFT AC, DCopPnt OP, audioamp TRAN, UHFpreamp AC, Class-D AC/OP/DC/noise/tf", () => {
+  it("matches RC .tran/.ac/.meas, divider analyses, .step families, curvetrace, stepmodelparam, NoiseFigure, noise.asc, Colpitts/Clapp/Hartly AC, Cohn AC, MeasureBW AC, Transformer/Transformer2/IdealTransformer TRAN, notch/passive/butter/opamp/Linkwitz AC, LM741 TRAN, GFT AC, DCopPnt OP, audioamp TRAN, UHFpreamp AC, 1563 AC, Class-D AC/OP/DC/noise/tf", () => {
     // --- TRAN (also covered by waveformParity; re-assert here so this file is self-sufficient) ---
     {
       const result = runPairedBatch("diff-rc-tran", RC_TRAN, ["v(out)"]);
@@ -1444,6 +1445,56 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
       });
     }
 
+
+    // --- Educational 1563.asc authored .ac (Tow-Thomas filter via TowTom2.sub) ---
+    // Probe TowTom2 V1/V2 outputs (XU1 n003/n002), not hollow V(in).
+    // MC1648 OUT deferred (harness stack overflow on dense .tran); Electrometer=LT1001 wall; 160 LTspice fail.
+    {
+      expect(existsSync(ASC1563_ASC), `missing ${ASC1563_ASC}`).toBe(true);
+      const imported = importAsc(decodeSchematicText(readFileSync(ASC1563_ASC)));
+      expect(imported.warnings).toEqual([]);
+      const parsed = analysesFromDirectives(imported.directives);
+      expect(parsed.ac, "1563.asc must author .ac").toBeTruthy();
+      expect(imported.directives.some((d) => /\.include\s+TowTom2\.sub\b/i.test(d))).toBe(true);
+      const params = buildParamScope(imported.directives);
+      const deck = buildSpiceDeck({
+        components: imported.components,
+        wires: imported.wires,
+        netLabels: imported.netLabels,
+        directives: imported.directives,
+        params,
+      }, {
+        kind: "ac",
+        startHz: parsed.ac!.startHz,
+        stopHz: parsed.ac!.stopHz,
+        pointsPerDecade: parsed.ac!.pointsPerDecade,
+      });
+      expect(deck.unresolvedSubckts).toEqual([]);
+      expect(deck.netlist).toMatch(/\.subckt\s+TowTom2\b/i);
+      expect(deck.netlist).toMatch(/^XU1\s+\S+\s+\S+\s+\S+\s+TowTom2\b/im);
+      // XU1 n003 n002 n001 TowTom2 → pin1 V1=n003, pin2 V2=n002
+      const probes = ["v(n003)", "v(n002)"] as const;
+      const result = runPairedBatch("diff-1563-ac", deck.netlist, [...probes]);
+      const memberNotes: string[] = [];
+      for (const probe of probes) {
+        const lt = result.ltspice.get(probe)!;
+        const ng = result.ngspice.get(probe)!;
+        const comparison = compareWaveforms(ng.axis, ng.values, lt.axis, lt.values, {
+          rmsTolerance: 0.02,
+          maxTolerance: 0.05,
+        });
+        expect(comparison.pass, `${probe} ${JSON.stringify(comparison)}`).toBe(true);
+        memberNotes.push(`${probe} nRms=${comparison.normalizedRms.toFixed(4)} nMax=${comparison.normalizedMax.toFixed(4)}`);
+      }
+      cells.push({
+        analysis: "ac",
+        circuit: "towtom-1563",
+        topology: "Educational 1563.asc Tow-Thomas TowTom2.sub (authored .ac oct 1k–10Meg)",
+        status: "pass",
+        note: memberNotes.join("; "),
+      });
+    }
+
     // --- Class-D AC/OP (authored analyses are .tran/.meas; add AC/OP for differential proof) ---
     {
       const ascPath = join(CLASSD_DIR, "class-d-starter.asc");
@@ -1737,9 +1788,9 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
     const passCount = cells.filter((cell) => cell.status === "pass").length;
     const gapCount = cells.filter((cell) => cell.status === "gap").length;
     const siblingCount = cells.filter((cell) => cell.status === "sibling").length;
-    expect(passCount).toBeGreaterThanOrEqual(41);
+    expect(passCount).toBeGreaterThanOrEqual(42);
     expect(siblingCount).toBe(5);
     expect(gapCount).toBe(0);
-    expect(report).toMatch(/SUMMARY pass=41 sibling=5 gap=0/);
+    expect(report).toMatch(/SUMMARY pass=42 sibling=5 gap=0/);
   }, 240_000);
 });
