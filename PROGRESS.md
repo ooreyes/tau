@@ -1,21 +1,17 @@
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 07:08 CDT**
+**Status: DONE - 2026-08-05 07:14 CDT**
 
-Unit: Circuit_testing_v1 `17_three_phase_power_grid.asc` authored `.tran` → differential **pass=95**.
-```
-SUMMARY pass=95 sibling=5 gap=0
-tran ct-three-phase … v(a_load) nRms=0.0043 nMax=0.0113 span=179.781
-```
-Named-device 48.1%. Worktree `Tau-dod-wt` rebased over tip `0bc5fd4` (idt + Bode PNG + pass=94).
-Left Settings / IRFP / Draft* / ct12–15 / ct19 INA alone.
-SHIPPABLE? **NO**
+Unit: Waveform DoD — **Bode AC magnitude measurement cursors**.
+Differential pass=95 · named-device 48.1%. Settings locked. SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
 
 
 ---
+
+
 
 ### 2026-08-05 — ct 17_three_phase_power_grid .tran → pass=95 (§DoD)
 
@@ -41,6 +37,33 @@ SHIPPABLE? **NO**
 **Next step**
 - ct 12/13 buck/boost (named VDMOS + Schottky), Educational non-wall leftovers,
   or waveform DoD. Leave ct19 OP / IRFP / Draft* / Settings alone.
+
+### 2026-08-05 — Bode AC magnitude measurement cursors (§waveform DoD)
+
+**What I did**
+- AcPlot **Cursors** toggle: two log-fraction markers on the mag pane with
+  f1/f2/@C1/@C2/Δ/SLOPE (dB/dec) via `logFractionToX` / `cursorReadout` /
+  `dbPerDecade` (FFT-style Bode readout).
+- ND wall at 48.1% — waveform pivot. Left ct 17/18/16/19, continue 34 ASC,
+  Chan/NIGBT/FRA, Settings alone. Rebased over pass=95 tip `45e4386`.
+
+**Files**
+- `apps/desktop/src/components/SimulationPanel.tsx` (+ wiring test)
+- `FEATURE_PARITY.md`, `PROGRESS.md`
+
+**Tests**
+- `pnpm -C apps/desktop typecheck` + `test` green (2755 passed)
+- AcPlot Bode cursors 1
+
+**Parity items**
+- Waveform viewer 🟡 (Bode AC cursors landed). Differential pass=95 ·
+  named-device 48.1% · SHIPPABLE? NO
+
+**Next step**
+- Standalone phase window / AC-DC legend math / non-wall ND. Leave
+  Educational/IRFP/Settings alone.
+
+
 
 ### 2026-08-05 — ct 18_full_bridge_power_supply .tran → pass=94 (§DoD)
 

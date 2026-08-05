@@ -375,6 +375,29 @@ describe("AcPlot - log-frequency ticks on both magnitude and phase", () => {
       download.mockRestore();
     }
   });
+
+  it("Bode cursors toggle shows f1/f2 mag readout and plot markers", () => {
+    // −20 dB/dec from 10 Hz→100 kHz → slope −20 at C1=0.25 / C2=0.75 decades.
+    const freqs = [10, 100, 1000, 10000, 100000];
+    const magDb = [0, -20, -40, -60, -80];
+    const result: AcResult = {
+      ok: true,
+      freqs,
+      traces: [{ id: "n1", label: "V(out)", magDb, phaseDeg: [0, -45, -90, -90, -90] }],
+      warnings: [],
+    };
+    const { container } = render(<AcPlot result={result} />);
+    const btn = screen.getByRole("button", { name: "Toggle Bode cursors" });
+    expect(btn.getAttribute("aria-pressed")).toBe("false");
+    fireEvent.click(btn);
+    expect(btn.getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByRole("slider", { name: "Bode cursor 1 position" })).toBeTruthy();
+    expect(screen.getByRole("slider", { name: "Bode cursor 2 position" })).toBeTruthy();
+    const readout = screen.getByLabelText("Bode cursor readout");
+    expect(readout.textContent).toMatch(/f1/i);
+    expect(readout.textContent).toMatch(/SLOPE/i);
+    expect(container.querySelectorAll(".plot-cursor").length).toBe(2);
+  });
 });
 
 describe("DcPlot - linear sweep/volts ticks", () => {

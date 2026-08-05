@@ -3477,6 +3477,9 @@ export function AcPlot({ result, overlays = [] }: { result: AcResult | null; ove
   const [freqScale, setFreqScale] = useState<AxisScale>("log");
   const [magYScale, setMagYScale] = useState<AxisScale>("linear");
   const [lowerMode, setLowerMode] = useState<"phase" | "groupDelay">("phase");
+  const [cursorsOn, setCursorsOn] = useState(false);
+  const [cf1, setCf1] = useState(0.25);
+  const [cf2, setCf2] = useState(0.75);
   const magTicks = tickCountsFromSize(magSize);
   const phaseTicks = tickCountsFromSize(phaseSize);
   const traces = success ? success.traces.slice(0, 4) : [];
@@ -3575,6 +3578,31 @@ export function AcPlot({ result, overlays = [] }: { result: AcResult | null; ove
     [phaseMeasureRef, phaseVp.attachSvg],
   );
 
+  // Two log-fraction cursors on the Bode magnitude pane (FFT-style): dB at each,
+  // ΔdB, and dB/decade slope of the primary (and sibling) mag traces.
+  const bodeCursors = useMemo(() => {
+    if (!cursorsOn || !success || traces.length === 0) return null;
+    const x1 = logFractionToX(success.freqs, cf1);
+    const x2 = logFractionToX(success.freqs, cf2);
+    if (!Number.isFinite(x1) || !Number.isFinite(x2)) return null;
+    try {
+      return cursorReadout(
+        success.freqs,
+        traces.map((t) => ({ label: t.label, values: t.magDb, unit: "dB" })),
+        x1,
+        x2,
+      );
+    } catch {
+      return null;
+    }
+  }, [cursorsOn, success, traces, cf1, cf2]);
+
+  const bodeCursorPixelX = (f: number): number | null => {
+    const frac = freqToFraction(f, magVp.viewport.xMin, magVp.viewport.xMax, freqScale);
+    if (frac === null || frac < 0 || frac > 1) return null;
+    return PLOT_PAD + frac * (PLOT_WIDTH - PLOT_PAD * 2);
+  };
+
   if (!result) return null;
   if (!result.ok) return <div className="analysis-empty">{result.message}</div>;
   let peak = -Infinity;
@@ -3651,6 +3679,17 @@ export function AcPlot({ result, overlays = [] }: { result: AcResult | null; ove
                 })()}
               </ScopeClip>
             )}
+            {bodeCursors &&
+              [bodeCursors.x1, bodeCursors.x2].map((f, i) => {
+                const x = bodeCursorPixelX(f);
+                if (x === null) return null;
+                return (
+                  <g key={`bc${i}`} className="plot-cursor">
+                    <line x1={x} y1={PLOT_PAD} x2={x} y2={PLOT_HEIGHT - PLOT_PAD} />
+                    <text x={x + 3} y={PLOT_PAD + 10}>{i + 1}</text>
+                  </g>
+                );
+              })}
           </svg>
           {plot && <ScopeZoomCluster onZoomIn={() => magVp.zoomBy(0.7)} onZoomOut={() => magVp.zoomBy(1 / 0.7)} onFit={magVp.fit} />}
         </div>
@@ -3800,6 +3839,15 @@ export function AcPlot({ result, overlays = [] }: { result: AcResult | null; ove
           >
             Export PNG
           </Button>
+          <Button
+            size="sm"
+            variant={cursorsOn ? "default" : "outline"}
+            aria-pressed={cursorsOn}
+            aria-label="Toggle Bode cursors"
+            onClick={() => setCursorsOn((c) => !c)}
+          >
+            Cursors
+          </Button>
         </div>
         <Metric label="START" value={formatEngineering(result.freqs[0] ?? 0, "Hz", 0)} tone="green" />
         <Metric label="POINTS" value={String(result.freqs.length)} tone="cyan" />
@@ -3816,6 +3864,50 @@ export function AcPlot({ result, overlays = [] }: { result: AcResult | null; ove
           tone={margins?.gainMarginDb != null && margins.gainMarginDb < 0 ? "red" : "green"}
         />
       </div>
+      {cursorsOn && (
+        <div className="cursor-sliders">
+          <label>
+            C1
+            <input
+              type="range"
+              min={0}
+              max={1000}
+              value={Math.round(cf1 * 1000)}
+              aria-label="Bode cursor 1 position"
+              onChange={(e) => setCf1(Number(e.currentTarget.value) / 1000)}
+            />
+          </label>
+          <label>
+            C2
+            <input
+              type="range"
+              min={0}
+              max={1000}
+              value={Math.round(cf2 * 1000)}
+              aria-label="Bode cursor 2 position"
+              onChange={(e) => setCf2(Number(e.currentTarget.value) / 1000)}
+            />
+          </label>
+        </div>
+      )}
+      {bodeCursors && (
+        <div className="meter-row analysis-meter" aria-label="Bode cursor readout">
+          <Metric label="f1" value={formatEngineering(bodeCursors.x1, "Hz", 3)} tone="cyan" />
+          <Metric label="f2" value={formatEngineering(bodeCursors.x2, "Hz", 3)} tone="cyan" />
+          <Metric label="@C1" value={`${bodeCursors.traces[0]!.y1.toFixed(1)} dB`} tone="green" />
+          <Metric label="@C2" value={`${bodeCursors.traces[0]!.y2.toFixed(1)} dB`} tone="green" />
+          <Metric label="Δ" value={`${bodeCursors.traces[0]!.dy.toFixed(1)} dB`} tone="cream" />
+          <Metric
+            label="SLOPE"
+            value={
+              Number.isFinite(dbPerDecade(bodeCursors, bodeCursors.traces[0]!))
+                ? `${dbPerDecade(bodeCursors, bodeCursors.traces[0]!).toFixed(1)} dB/dec`
+                : "--"
+            }
+            tone="cream"
+          />
+        </div>
+      )}
     </>
   );
 }
