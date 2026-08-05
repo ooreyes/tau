@@ -9,17 +9,54 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 05:25 CDT**
+**Status: DONE - 2026-08-05 05:29 CDT**
 
-Unit: Waveform DoD — **step-family CSV export** (per-member time grids).
-`stepFamilyToCsv` long-format `step,time,<signal>` + StepPlot Export CSV.
-SHIPPABLE? **NO** (`.plt` / expressions-in-step / dual-axis still open)
+Unit: Circuit_testing_v1 `08_tran_rlc_ringing.asc` authored `.tran` → differential **pass=84**.
+```
+SUMMARY pass=84 sibling=5 gap=0
+tran ct-rlc-ringing … v(out) nRms=0.0008 span=11.044; v(in) nRms=0 span=5
+```
+≠ synthetic RC_TRAN. Named-device 48.1%. Left 100W/IRFP alone. SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
 
 
 ---
+
+
+
+### 2026-08-05 — ct 08_tran_rlc_ringing TRAN → pass=84 (§DoD)
+
+**What I did**
+- Circuit_testing_v1 `08_tran_rlc_ringing.asc` authored `.tran 100n 2m` +
+  `.meas Vpp`: underdamped series R=10 / L=100u / C=100n + PULSE. Pure R/L/C;
+  v(out)/v(in) nRms≈8e-4 / 0. Distinct from synthetic RC_TRAN. Avoided Staff EE
+  100W/IRFP/named-device and already-landed help ACstep/NoiseStep/MicroCode.
+  Tip MicroCode pass=83 → **84**. Worktree `Tau-wt-dod-draft`.
+
+**Exact stdout**
+
+```
+SUMMARY pass=84 sibling=5 gap=0
+tran ct-rlc-ringing … v(out) nRms=0.0008 nMax=0.0066 span=11.044; v(in) nRms=0.0000 span=5.000
+```
+
+**Files**
+- `apps/desktop/scripts/differentialParity.corpus.ts`
+- `AGENTS.md`, `FEATURE_PARITY.md`, `PROGRESS.md`
+
+**Tests**
+- `pnpm -C apps/desktop typecheck` + `test` green (2689)
+- `bash scripts/differential-parity.sh` → pass=84
+
+**Parity items**
+- Differential 🟡 **pass=84**. Named-device exact **1222** / **48.1%**. SHIPPABLE? NO
+
+**Next step**
+- Continue honest differential (Circuit_testing diode DC / other non-colliding
+  ASC). Avoid ISO7637/sinh/.machine/Documents Draft* / Staff EE maps.
+
 
 
 ### 2026-08-05 — step-family CSV export (§waveform DoD)
