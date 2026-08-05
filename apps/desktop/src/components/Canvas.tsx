@@ -10,9 +10,15 @@ import {
   nativeSubcircuitBody,
 } from "../schematic/subcircuitGeometry";
 import type { OperatingPointResult } from "../simulation/operatingPoint";
-import { opAnnotations } from "../simulation/opAnnotations";
+import { opAnnotations, tranAnnotations } from "../simulation/opAnnotations";
 import { OpCurrentFlowLayer } from "./OpCurrentFlowLayer";
 import { extractCircuit, netAtPoint } from "../schematic/netlist";
+import type { AnalysisResult } from "../simulation/linearTransient";
+import {
+  nearestSampleIndex,
+  opComponentCurrents,
+  tranComponentCurrents,
+} from "../simulation/wireCurrentFlow";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   autoNetLabelOffset,
@@ -97,12 +103,20 @@ interface DragState {
 
 export function Canvas({
   op = null,
+  tran = null,
+  readoutTime = null,
   interactive = true,
   fitSignal = 0,
 }: {
   /** Last DC operating point; in simulator mode its node voltages / branch
    *  currents are annotated in place on the schematic. */
   op?: OperatingPointResult | null;
+  /** Last successful `.tran`; when present, schematic current mode prefers a
+   *  real waveform sample (default = final) over the DC OP. */
+  tran?: AnalysisResult | null;
+  /** Optional seconds into the transient for the schematic readout (cursor).
+   *  Null → last sample. Ignored when there is no ok transient. */
+  readoutTime?: number | null;
   /** When false (simulator view) topology is read-only: pan/zoom, inspection,
    *  probe dots, and topology-neutral node aliases remain available. */
   interactive?: boolean;
@@ -165,17 +179,33 @@ export function Canvas({
   const setNetLabelOffsetDirect = useSchematic((s) => s.setNetLabelOffsetDirect);
   const [editingId, setEditingId] = useState<string | null>(null);
 
-  // In-place OP annotations (simulator mode only): re-extract geometry only
-  // when an ok OP result is actually on screen - never during schematic edits.
-  const opCircuit = useMemo(() => {
-    if (interactive || !op?.ok) return null;
-    return extractCircuit(components, wires, netLabels);
-  }, [interactive, op, components, wires, netLabels]);
+  // In-place bias annotations (simulator mode): prefer a real `.tran` sample
+  // when available; otherwise fall back to DC OP. Never invent currents.
+  const useTranReadout = !interactive && Boolean(tran?.ok && tran.times.length > 0);
+  const biasCircuit = useMemo(() => {
+    if (interactive) return null;
+    if (useTranReadout || op?.ok) return extractCircuit(components, wires, netLabels);
+    return null;
+  }, [interactive, useTranReadout, op, components, wires, netLabels]);
 
   const opLabels = useMemo(() => {
-    if (!opCircuit) return [];
-    return opAnnotations(op, opCircuit);
-  }, [op, opCircuit]);
+    if (!biasCircuit) return [];
+    if (useTranReadout && tran?.ok) return tranAnnotations(tran, biasCircuit, readoutTime);
+    return opAnnotations(op, biasCircuit);
+  }, [biasCircuit, useTranReadout, tran, readoutTime, op]);
+
+  const flowCurrents = useMemo(() => {
+    if (!biasCircuit) return null;
+    if (useTranReadout && tran?.ok) {
+      const sample =
+        readoutTime == null
+          ? tran.times.length - 1
+          : nearestSampleIndex(tran.times, readoutTime);
+      return tranComponentCurrents(tran, sample);
+    }
+    if (op?.ok) return opComponentCurrents(op, biasCircuit);
+    return null;
+  }, [biasCircuit, useTranReadout, tran, readoutTime, op]);
 
   const editDirty = useRef(false);
 
@@ -1314,11 +1344,10 @@ export function Canvas({
           )}
 
           <OpCurrentFlowLayer
-            op={op}
-            circuit={opCircuit}
+            currents={flowCurrents}
             wires={wires}
             pinIndex={pinIndex}
-            active={!interactive && Boolean(op?.ok)}
+            active={!interactive && Boolean(flowCurrents && flowCurrents.size > 0)}
           />
 
           <ComponentLabels components={components} wires={wires} />

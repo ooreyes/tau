@@ -1,30 +1,26 @@
 /**
  * EveryCircuit-like animated current-flow dots on schematic wires, driven only
- * by a real operating-point current map (engine MNA branches + derived R).
+ * by a real current map (OP MNA + derived R, or a `.tran` sample).
  */
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { SchematicWire } from "../schematic/types";
-import type { ExtractedCircuit } from "../schematic/netlist";
-import type { OperatingPointResult } from "../simulation/operatingPoint";
 import {
   flowDotsForWires,
-  opComponentCurrents,
   type FlowDot,
   type PinIndex,
 } from "../simulation/wireCurrentFlow";
 
 export function OpCurrentFlowLayer({
-  op,
-  circuit,
+  currents,
   wires,
   pinIndex,
   active,
 }: {
-  op: OperatingPointResult | null;
-  circuit: ExtractedCircuit | null;
+  /** Component-id → amps (a→b / MNA). Null/empty clears the layer. */
+  currents: ReadonlyMap<string, number> | null;
   wires: SchematicWire[];
   pinIndex: PinIndex;
-  /** When false, clear dots (schematic edit mode / no OP). */
+  /** When false, clear dots (schematic edit mode / no bias readout). */
   active: boolean;
 }) {
   const [dots, setDots] = useState<FlowDot[]>([]);
@@ -32,13 +28,10 @@ export function OpCurrentFlowLayer({
   const raf = useRef<number | undefined>(undefined);
   const last = useRef(0);
 
-  const currents = useMemo(() => {
-    if (!active || !op?.ok || !circuit) return null;
-    return opComponentCurrents(op, circuit);
-  }, [active, op, circuit]);
+  const live = active && currents && currents.size > 0 ? currents : null;
 
   useEffect(() => {
-    if (!currents || currents.size === 0) {
+    if (!live) {
       setDots([]);
       phase.current = new Map();
       return;
@@ -46,14 +39,14 @@ export function OpCurrentFlowLayer({
     const tick = (now: number) => {
       const dtMs = Math.min(64, now - (last.current || now));
       last.current = now;
-      setDots(flowDotsForWires(wires, pinIndex, currents, phase.current, dtMs / 1000));
+      setDots(flowDotsForWires(wires, pinIndex, live, phase.current, dtMs / 1000));
       raf.current = requestAnimationFrame(tick);
     };
     raf.current = requestAnimationFrame(tick);
     return () => {
       if (raf.current) cancelAnimationFrame(raf.current);
     };
-  }, [currents, wires, pinIndex]);
+  }, [live, wires, pinIndex]);
 
   if (dots.length === 0) return null;
   return (

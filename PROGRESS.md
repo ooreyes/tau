@@ -1,13 +1,43 @@
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 09:05 CDT**
+**Status: DONE - 2026-08-05 ~09:00 CDT**
 
-Unit: NoisePlot manual Y limits (waveform DoD leftover).
-Worktree `Tau-wt-wave-noise-ylim` on tip `403ac2a`. Left EveryCircuit /
-current-mode / Settings / Educational alone. SHIPPABLE? **NO**
+Unit: EveryCircuit-style **transient current mode** (schematic V/I + wire flow
+from real `.tran` final sample; OP fallback). Worktree
+`Tau-wt-ux-tran-current`. Not live continuous sim. SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
+
+---
+
+### 2026-08-05 — transient schematic current mode (§UX / §EveryCircuit)
+
+**What I did**
+- After a successful `.tran`, simulator canvas prefers a real waveform sample
+  (default = final time; `readoutTime` ready for cursor hookup) for cyan V /
+  green I labels + animated wire flow via `tranAnnotations` /
+  `tranComponentCurrents` / shared `OpCurrentFlowLayer` currents map.
+- Falls back to OP current mode when no ok transient. Numbers from engine /
+  derived currents only — never invented.
+
+**Files**
+- `simulation/wireCurrentFlow.ts`, `opAnnotations.ts` (+ tests)
+- `components/OpCurrentFlowLayer.tsx`, `Canvas.tsx`, `App.tsx`
+- `FEATURE_PARITY.md`, `PROGRESS.md`
+
+**Tests**
+- `pnpm -C apps/desktop typecheck` + `test` → 2801 passed
+
+**Parity items**
+- §4 transient schematic current mode 🟡; EveryCircuit library gaps unchanged.
+  SHIPPABLE? NO
+
+**Next step**
+- Scope-cursor → `readoutTime` wiring; library gaps only with real models;
+  leave Staff EE / continue 40 / Settings alone.
+
+SHIPPABLE? **NO**
 
 
 

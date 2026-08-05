@@ -5,7 +5,8 @@
  */
 import type { Point, SchematicWire } from "../schematic/types";
 import type { ExtractedCircuit } from "../schematic/netlist";
-import { deriveDcRcBranches } from "./currents";
+import { deriveDcRcBranches, findCurrentTrace } from "./currents";
+import type { AnalysisResult } from "./linearTransient";
 import { primaryBranches, type OperatingPointResult } from "./operatingPoint";
 
 export type PinIndex = Map<string, { componentId: string; pinId: string }[]>;
@@ -25,6 +26,61 @@ export function opComponentCurrents(
   const voltageByNet = new Map(op.nets.map((net) => [net.id, net.voltage]));
   for (const branch of deriveDcRcBranches(circuit.components, voltageByNet)) {
     if (!out.has(branch.id)) out.set(branch.id, branch.current);
+  }
+  return out;
+}
+
+/** Index of the sample nearest to `timeSeconds` (clamped to the waveform). */
+export function nearestSampleIndex(times: readonly number[], timeSeconds: number): number {
+  if (times.length === 0) return 0;
+  if (!(timeSeconds > times[0])) return 0;
+  const last = times.length - 1;
+  if (!(timeSeconds < times[last])) return last;
+  let best = 0;
+  let bestErr = Math.abs(times[0] - timeSeconds);
+  for (let i = 1; i < times.length; i += 1) {
+    const err = Math.abs(times[i] - timeSeconds);
+    if (err < bestErr) {
+      best = i;
+      bestErr = err;
+    }
+  }
+  return best;
+}
+
+/**
+ * Instantaneous branch currents from a successful `.tran` result, keyed by
+ * SchematicComponent id. Uses engine / derived `result.currents` only.
+ */
+export function tranComponentCurrents(
+  result: Extract<AnalysisResult, { ok: true }>,
+  sampleIndex: number,
+): Map<string, number> {
+  const out = new Map<string, number>();
+  const i = Math.max(0, Math.min(sampleIndex, result.times.length - 1));
+  for (const { component } of result.circuit.components) {
+    if (!component.label) continue;
+    const trace = findCurrentTrace(result.currents, component.label);
+    if (!trace) continue;
+    const amps = trace.values[i];
+    if (!Number.isFinite(amps)) continue;
+    out.set(component.id, amps);
+  }
+  return out;
+}
+
+/** Instantaneous net voltages from a successful `.tran` result (net id → V). */
+export function tranNetVoltages(
+  result: Extract<AnalysisResult, { ok: true }>,
+  sampleIndex: number,
+): Map<string, number> {
+  const out = new Map<string, number>();
+  const i = Math.max(0, Math.min(sampleIndex, result.times.length - 1));
+  for (const trace of result.traces) {
+    if (trace.unit !== "V") continue;
+    const v = trace.values[i];
+    if (!Number.isFinite(v)) continue;
+    out.set(trace.id, v);
   }
   return out;
 }

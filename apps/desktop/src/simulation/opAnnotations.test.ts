@@ -1,7 +1,6 @@
 /**
- * OP schematic annotations: positioned voltage/current labels from a real
- * operating-point run over a voltage divider, so net-id and component-id
- * resolution are exercised end to end.
+ * OP / transient schematic annotations: positioned voltage/current labels from
+ * a real operating-point or `.tran` run over a voltage divider.
  *
  * Divider (documented pin geometry, GRID = 16):
  *   VS at (0, 32):    p=(0,0),   n=(0,64)   - 10 V
@@ -13,8 +12,9 @@
 import { describe, it, expect } from "vitest";
 import { runOperatingPoint } from "./operatingPoint";
 import { extractCircuit } from "../schematic/netlist";
-import { opAnnotations } from "./opAnnotations";
+import { opAnnotations, tranAnnotations } from "./opAnnotations";
 import type { SchematicComponent, SchematicWire } from "../schematic/types";
+import { runTransientAnalysis } from "./linearTransient";
 
 const VS: SchematicComponent = { id: "vs-1", kind: "vsource", x: 0, y: 32, rotation: 0, value: "10V", label: "V1" };
 const R1: SchematicComponent = { id: "r-1", kind: "resistor", x: 96, y: 0, rotation: 0, value: "1k", label: "R1" };
@@ -109,5 +109,28 @@ describe("opAnnotations", () => {
     expect(amps.find((a) => a.key === "i:vs-1")?.text).toBe("-5 mA");
     // Every render key is distinct, which is what the collision would break.
     expect(new Set(amps.map((a) => a.key)).size).toBe(amps.length);
+  });
+});
+
+describe("tranAnnotations (transient current mode)", () => {
+  it("labels V/I from a real .tran final sample on the DC divider", async () => {
+    const result = await runTransientAnalysis(
+      { components, wires },
+      { stopTime: 1e-3, steps: 50 },
+    );
+    expect(result.ok).toBe(true);
+    const circuit = extractCircuit(components, wires, []);
+    const anns = tranAnnotations(result, circuit);
+    expect(anns.find((a) => a.x === 0 && a.y === 0 && a.kind === "voltage")?.text).toBe("10 V");
+    expect(anns.find((a) => a.x === 128 && a.y === 0 && a.kind === "voltage")?.text).toBe("5 V");
+    expect(anns.find((a) => a.key === "i:vs-1")?.text).toBe("-5 mA");
+    expect(anns.find((a) => a.key === "i:r-1")?.text).toBe("5 mA");
+    expect(anns.find((a) => a.key === "i:r-2")?.text).toBe("5 mA");
+  });
+
+  it("returns [] for failed/null transient input", () => {
+    const circuit = extractCircuit(components, wires, []);
+    expect(tranAnnotations(null, circuit)).toEqual([]);
+    expect(tranAnnotations({ ok: false, title: "t", message: "x", warnings: [] }, circuit)).toEqual([]);
   });
 });

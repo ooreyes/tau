@@ -3,10 +3,14 @@ import { extractCircuit } from "../schematic/netlist";
 import { getComponentPins } from "../schematic/pins";
 import type { SchematicComponent, SchematicWire } from "../schematic/types";
 import { runOperatingPoint } from "./operatingPoint";
+import { runTransientAnalysis } from "./linearTransient";
 import {
   flowDotsForWires,
+  nearestSampleIndex,
   opComponentCurrents,
   peakAbsCurrent,
+  tranComponentCurrents,
+  tranNetVoltages,
   wireFlowCurrent,
 } from "./wireCurrentFlow";
 
@@ -65,5 +69,35 @@ describe("wireCurrentFlow (current mode)", () => {
     expect(dots.length).toBeGreaterThan(0);
     expect(dots.every((d) => Number.isFinite(d.x) && Number.isFinite(d.y) && d.opacity > 0)).toBe(true);
     expect(flowDotsForWires(wires, pinIndex, new Map(), new Map(), 0.05)).toEqual([]);
+  });
+
+  it("nearestSampleIndex clamps and picks the closest time sample", () => {
+    const times = [0, 1e-3, 2e-3, 3e-3];
+    expect(nearestSampleIndex(times, -1)).toBe(0);
+    expect(nearestSampleIndex(times, 1.4e-3)).toBe(1);
+    expect(nearestSampleIndex(times, 1.6e-3)).toBe(2);
+    expect(nearestSampleIndex(times, 99)).toBe(3);
+  });
+
+  it("samples real .tran currents/voltages at the final sample (DC divider settles)", async () => {
+    const result = await runTransientAnalysis(
+      { components, wires },
+      { stopTime: 1e-3, steps: 50 },
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const last = result.times.length - 1;
+    const currents = tranComponentCurrents(result, last);
+    expect(currents.get("vs-1")).toBeCloseTo(-0.005, 6);
+    expect(currents.get("r-1")).toBeCloseTo(0.005, 6);
+    expect(currents.get("r-2")).toBeCloseTo(0.005, 6);
+    const volts = tranNetVoltages(result, last);
+    // Source net ≈ 10 V, midpoint ≈ 5 V (exact net ids come from extract).
+    const values = [...volts.values()].sort((a, b) => b - a);
+    expect(values[0]).toBeCloseTo(10, 5);
+    expect(values[1]).toBeCloseTo(5, 5);
+    const pinIndex = buildPinIndex();
+    const dots = flowDotsForWires(wires, pinIndex, currents, new Map(), 0.05);
+    expect(dots.length).toBeGreaterThan(0);
   });
 });

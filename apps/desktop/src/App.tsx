@@ -1925,7 +1925,7 @@ function App() {
             onHideSimulator={() => setMode("schematic")}
           />
           <main className="stage">
-            <Canvas op={opAnalysis} interactive fitSignal={fitSignal} />
+            <Canvas op={opAnalysis} tran={analysis} interactive fitSignal={fitSignal} />
             {components.length === 0 && wires.length === 0 && toolMode === "select" && (
               <EmptyState
                 projectOpen
@@ -1988,7 +1988,7 @@ function App() {
                 </span>
               </header>
               <div className="sim-schematic-canvas">
-                <Canvas op={opAnalysis} interactive={false} fitSignal={fitSignal} />
+                <Canvas op={opAnalysis} tran={analysis} interactive={false} fitSignal={fitSignal} />
               </div>
               <TelemetryDock rows={componentRows} selectedId={selectedId} onSelect={select} />
             </section>
