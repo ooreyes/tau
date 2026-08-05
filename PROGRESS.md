@@ -9,21 +9,57 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 04:25 CDT**
+**Status: DONE - 2026-08-05 04:28 CDT**
 
-Unit: Named-device PAsystem discrete aliases → exact **1220** (rate stdout 48.0%).
+Unit: Educational `waveout.asc` authored `.tran` → differential **pass=75**.
 ```
-NAMED-DEVICE-RECURSIVE: unencrypted=2541 exact=1220 refuse=1321 silent=0 hard-failure=0 encrypted-excluded=1471 exact-rate=48.0%
+SUMMARY pass=75 sibling=5 gap=0
+tran waveout … v(syn) nRms≈0.0078 nMax≈0.021 span≈1.57
 ```
-Maps 2N3904/2N3906/2N5458/SMcap/MylarCap/coaxCap7 + sibling `.asy` pins
-(+1 HandsFreeLayout vs 1219). PowerAmpLayout still TIP121/TIP127 refuse.
-Left BandGaps alone. Differential pass=74. SHIPPABLE? **NO**
+BV product mixer; tip `bdca160` PAsystem exact=1220 + BandGaps pass=74 → 75.
+Left Draft* / named-device maps alone. Named-device exact=1220 / 48.0%.
+SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
 
 
+
 ---
+
+
+### 2026-08-05 — Educational waveout.asc TRAN → pass=75 (§DoD)
+
+**What I did**
+- Educational `waveout.asc` authored `.tran .5`: V2/V3/V4 + B1
+  `V=2*V(a)*V(b)*V(c)` product mixer. Document `.wave` is LTspice output-only
+  and is not emitted into the Tau deck. Default 2%/5%: v(syn) nRms≈0.0078 /
+  nMax≈0.021 span≈1.57. Zero unresolved / modelSubstitutions.
+- Tip `bdca160` PAsystem exact=1220 (BandGaps pass=74) → 75. Worktree
+  `Tau-wt-dod-draft`. Left Draft* / named-device maps / avoid-list alone.
+  Distinct from wavein (wavefile= stimulus — not landed).
+
+**Exact stdout**
+
+```
+SUMMARY pass=75 sibling=5 gap=0
+```
+
+**Files**
+- `apps/desktop/scripts/differentialParity.corpus.ts`
+- `AGENTS.md`, `FEATURE_PARITY.md`, `PROGRESS.md`
+
+**Tests**
+- `pnpm -C apps/desktop typecheck` + `test` green
+- `bash scripts/differential-parity.sh` → pass=75
+
+**Parity items**
+- Differential 🟡 **pass=75**. Named-device exact=1220 / 48.0%. SHIPPABLE? NO
+
+**Next step**
+- Continue honest differential outside Draft*/named-device. Avoid
+  wavein/Fc/Chan/NIGBT/LT1001 walls.
+
 
 
 ### 2026-08-05 — PAsystem discrete aliases → named-device exact=1220 (§DoD)
@@ -55,7 +91,7 @@ NAMED-DEVICE-RECURSIVE: unencrypted=2541 exact=1220 refuse=1321 silent=0 hard-fa
 
 **Parity items**
 - Named-device 🟡 exact **1220** / rate stdout **48.0%** (≥95% not met).
-  Differential pass=74. SHIPPABLE? NO
+  Differential pass=74 at time of landing. SHIPPABLE? NO
 
 **Next step**
 - TIP121/TIP127 sibling `.lib` subckt path for PowerAmpLayout; Continue 19
