@@ -1437,8 +1437,10 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   `waveformSvgsToPng` (`tau-ac-phase-….png`). 1 wiring test. **Bode AC
   magnitude cursors landed** (2026-08-05): AcPlot **Cursors** toggle — two
   log-fraction markers on the mag pane with f1/f2/@C1/@C2/Δ/SLOPE (dB/dec)
-  via `logFractionToX` / `cursorReadout` / `dbPerDecade`. 1 wiring test.
-  Still ⬜: standalone detached phase window.
+  via `logFractionToX` / `cursorReadout` / `dbPerDecade`. **Bode phase /
+  group-delay cursors landed** (2026-08-05): same Cursors toggle also marks
+  the lower pane and reads φ@C1/φ@C2/Δ (or τ when Group delay). 2 wiring
+  tests. Still ⬜: standalone detached phase window.
 - 🟡 **Loop-stability margins** (LTspice Bode readouts) — **landed**
   (`simulation/stability.ts`, 10 tests): `stabilityMargins(freqs, magDb, phaseDeg)`
   returns **phase margin** (180°+φ at the 0 dB gain crossover) and **gain margin**
@@ -1541,7 +1543,8 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   pane landed** (2026-08-05): AcPlot Phase / Group delay toggle. **Phase Export
   PNG landed** (2026-08-05): AcPlot lower-pane **Export PNG** (`tau-ac-phase-….png`).
   **Bode AC magnitude cursors landed** (2026-08-05): AcPlot Cursors toggle +
-  f1/f2/Δ/SLOPE readout. **NEXT:** (waveform
+  f1/f2/Δ/SLOPE readout. **Bode phase/group-delay cursors landed** (2026-08-05):
+  shared Cursors toggle marks lower pane + φ/τ readout. **NEXT:** (waveform
   CSV/PNG/plt/FFT/expressions/dual-axis/right-click/Bode-X/Y/τ/cursors covered —
   remaining: standalone phase window).
 - 🟡 Right-click trace → math/operations — **abs / negate / dB / uramp / sgn /

@@ -393,10 +393,32 @@ describe("AcPlot - log-frequency ticks on both magnitude and phase", () => {
     expect(btn.getAttribute("aria-pressed")).toBe("true");
     expect(screen.getByRole("slider", { name: "Bode cursor 1 position" })).toBeTruthy();
     expect(screen.getByRole("slider", { name: "Bode cursor 2 position" })).toBeTruthy();
-    const readout = screen.getByLabelText("Bode cursor readout");
-    expect(readout.textContent).toMatch(/f1/i);
-    expect(readout.textContent).toMatch(/SLOPE/i);
-    expect(container.querySelectorAll(".plot-cursor").length).toBe(2);
+    const magReadout = screen.getByLabelText("Bode magnitude cursor readout");
+    expect(magReadout.textContent).toMatch(/f1/i);
+    expect(magReadout.textContent).toMatch(/SLOPE/i);
+    const phaseReadout = screen.getByLabelText("Bode phase cursor readout");
+    expect(phaseReadout.textContent).toMatch(/φ@C1/);
+    expect(phaseReadout.textContent).toMatch(/φ@C2/);
+    // Two markers on mag + two on phase.
+    expect(container.querySelectorAll(".plot-cursor").length).toBe(4);
+  });
+
+  it("Bode cursors on Group delay pane read τ at C1/C2", () => {
+    const tau0 = 1e-3;
+    const freqs = [10, 100, 1000, 10000, 100000];
+    const phaseDeg = freqs.map((f) => -360 * f * tau0);
+    const result: AcResult = {
+      ok: true,
+      freqs,
+      traces: [{ id: "n1", label: "V(out)", magDb: [0, -3, -20, -40, -60], phaseDeg }],
+      warnings: [],
+    };
+    render(<AcPlot result={result} />);
+    fireEvent.click(screen.getByRole("button", { name: "Group delay" }));
+    fireEvent.click(screen.getByRole("button", { name: "Toggle Bode cursors" }));
+    const gdReadout = screen.getByLabelText("Bode group-delay cursor readout");
+    expect(gdReadout.textContent).toMatch(/τ@C1/);
+    expect(gdReadout.textContent).toMatch(/τ@C2/);
   });
 });
 

@@ -3578,8 +3578,8 @@ export function AcPlot({ result, overlays = [] }: { result: AcResult | null; ove
     [phaseMeasureRef, phaseVp.attachSvg],
   );
 
-  // Two log-fraction cursors on the Bode magnitude pane (FFT-style): dB at each,
-  // ΔdB, and dB/decade slope of the primary (and sibling) mag traces.
+  // Two log-fraction cursors shared across Bode mag + lower panes (FFT-style):
+  // mag readout in dB; lower pane reads φ (°) or τ (s) depending on mode.
   const bodeCursors = useMemo(() => {
     if (!cursorsOn || !success || traces.length === 0) return null;
     const x1 = logFractionToX(success.freqs, cf1);
@@ -3597,8 +3597,41 @@ export function AcPlot({ result, overlays = [] }: { result: AcResult | null; ove
     }
   }, [cursorsOn, success, traces, cf1, cf2]);
 
-  const bodeCursorPixelX = (f: number): number | null => {
-    const frac = freqToFraction(f, magVp.viewport.xMin, magVp.viewport.xMax, freqScale);
+  const bodeLowerCursors = useMemo(() => {
+    if (!cursorsOn || !success || traces.length === 0) return null;
+    const x1 = logFractionToX(success.freqs, cf1);
+    const x2 = logFractionToX(success.freqs, cf2);
+    if (!Number.isFinite(x1) || !Number.isFinite(x2)) return null;
+    try {
+      if (lowerMode === "groupDelay") {
+        if (!plot) return null;
+        return cursorReadout(
+          success.freqs,
+          plot.tauSeries.map((tau, i) => ({
+            label: traces[i]?.label ?? `τ${i}`,
+            values: tau,
+            unit: "s",
+          })),
+          x1,
+          x2,
+        );
+      }
+      return cursorReadout(
+        success.freqs,
+        traces.map((t) => ({ label: t.label, values: t.phaseDeg, unit: "°" })),
+        x1,
+        x2,
+      );
+    } catch {
+      return null;
+    }
+  }, [cursorsOn, success, traces, cf1, cf2, lowerMode, plot]);
+
+  const bodeCursorPixelX = (
+    f: number,
+    viewport: { xMin: number; xMax: number },
+  ): number | null => {
+    const frac = freqToFraction(f, viewport.xMin, viewport.xMax, freqScale);
     if (frac === null || frac < 0 || frac > 1) return null;
     return PLOT_PAD + frac * (PLOT_WIDTH - PLOT_PAD * 2);
   };
@@ -3681,7 +3714,7 @@ export function AcPlot({ result, overlays = [] }: { result: AcResult | null; ove
             )}
             {bodeCursors &&
               [bodeCursors.x1, bodeCursors.x2].map((f, i) => {
-                const x = bodeCursorPixelX(f);
+                const x = bodeCursorPixelX(f, magVp.viewport);
                 if (x === null) return null;
                 return (
                   <g key={`bc${i}`} className="plot-cursor">
@@ -3749,6 +3782,17 @@ export function AcPlot({ result, overlays = [] }: { result: AcResult | null; ove
                     ))}
               </ScopeClip>
             )}
+            {bodeLowerCursors &&
+              [bodeLowerCursors.x1, bodeLowerCursors.x2].map((f, i) => {
+                const x = bodeCursorPixelX(f, phaseVp.viewport);
+                if (x === null) return null;
+                return (
+                  <g key={`bpc${i}`} className="plot-cursor">
+                    <line x1={x} y1={PLOT_PAD} x2={x} y2={PLOT_HEIGHT - PLOT_PAD} />
+                    <text x={x + 3} y={PLOT_PAD + 10}>{i + 1}</text>
+                  </g>
+                );
+              })}
           </svg>
           {plot && <ScopeZoomCluster onZoomIn={() => phaseVp.zoomBy(0.7)} onZoomOut={() => phaseVp.zoomBy(1 / 0.7)} onFit={phaseVp.fit} />}
         </div>
@@ -3891,7 +3935,7 @@ export function AcPlot({ result, overlays = [] }: { result: AcResult | null; ove
         </div>
       )}
       {bodeCursors && (
-        <div className="meter-row analysis-meter" aria-label="Bode cursor readout">
+        <div className="meter-row analysis-meter" aria-label="Bode magnitude cursor readout">
           <Metric label="f1" value={formatEngineering(bodeCursors.x1, "Hz", 3)} tone="cyan" />
           <Metric label="f2" value={formatEngineering(bodeCursors.x2, "Hz", 3)} tone="cyan" />
           <Metric label="@C1" value={`${bodeCursors.traces[0]!.y1.toFixed(1)} dB`} tone="green" />
@@ -3903,6 +3947,44 @@ export function AcPlot({ result, overlays = [] }: { result: AcResult | null; ove
               Number.isFinite(dbPerDecade(bodeCursors, bodeCursors.traces[0]!))
                 ? `${dbPerDecade(bodeCursors, bodeCursors.traces[0]!).toFixed(1)} dB/dec`
                 : "--"
+            }
+            tone="cream"
+          />
+        </div>
+      )}
+      {bodeLowerCursors && (
+        <div
+          className="meter-row analysis-meter"
+          aria-label={
+            lowerMode === "groupDelay"
+              ? "Bode group-delay cursor readout"
+              : "Bode phase cursor readout"
+          }
+        >
+          <Metric
+            label={lowerMode === "groupDelay" ? "τ@C1" : "φ@C1"}
+            value={
+              lowerMode === "groupDelay"
+                ? formatEngineering(bodeLowerCursors.traces[0]!.y1, "s", 3)
+                : `${bodeLowerCursors.traces[0]!.y1.toFixed(1)}°`
+            }
+            tone="green"
+          />
+          <Metric
+            label={lowerMode === "groupDelay" ? "τ@C2" : "φ@C2"}
+            value={
+              lowerMode === "groupDelay"
+                ? formatEngineering(bodeLowerCursors.traces[0]!.y2, "s", 3)
+                : `${bodeLowerCursors.traces[0]!.y2.toFixed(1)}°`
+            }
+            tone="green"
+          />
+          <Metric
+            label="Δ"
+            value={
+              lowerMode === "groupDelay"
+                ? formatEngineering(bodeLowerCursors.traces[0]!.dy, "s", 3)
+                : `${bodeLowerCursors.traces[0]!.dy.toFixed(1)}°`
             }
             tone="cream"
           />

@@ -1,8 +1,8 @@
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 07:14 CDT**
+**Status: DONE - 2026-08-05 07:16 CDT**
 
-Unit: Waveform DoD — **Bode AC magnitude measurement cursors**.
+Unit: Waveform DoD — **Bode phase/group-delay measurement cursors**.
 Differential pass=95 · named-device 48.1%. Settings locked. SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
