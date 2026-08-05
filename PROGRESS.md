@@ -9,21 +9,57 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 04:05 CDT**
+**Status: DONE - 2026-08-05 04:12 CDT**
 
-Unit: Named-device OTA `±1e309` unbounded rails → exact-rate **48.0%**.
+Unit: Documents/LTspice `Draft2.asc` authored `.tran` → differential **pass=72**.
 ```
-NAMED-DEVICE-RECURSIVE: unencrypted=2541 exact=1219 refuse=1322 silent=0 hard-failure=0 encrypted-excluded=1471 exact-rate=48.0%
+SUMMARY pass=72 sibling=5 gap=0
+tran draft2 … v(vout) nRms=0.0062 nMax=0.0207 span=0.198
 ```
-ADHV4702-1 / LT6372-1 leftover plaintext refuse (+2 exact vs 47.9%). Track A
-3725-3726 still fail-closed. Reverted `/tmp` debug dumps. Differential
-pass=71 unchanged. SHIPPABLE? **NO**
+Series C–R highpass; tip `543ddba` OTA 48.0% / Draft7 pass=71 → 72.
+Left 3725-3726 / PLL / dimmer / avoid-list alone. Named-device **48.0%**.
+SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
 
 
 ---
+
+
+### 2026-08-05 — Documents/LTspice Draft2.asc TRAN → pass=72 (§DoD)
+
+**What I did**
+- Documents/LTspice `Draft2.asc` authored `.tran 50m`: series C=26.5n + R=1k
+  with V1 SINE(0 1 600) → probe `v(vout)`. nRms≈0.0062 / nMax≈0.0207
+  span≈0.198 under 2%/5%. Pure passives; zero unresolved / substitutions.
+- Tip `543ddba` OTA named-device 48.0% + Draft7 pass=71 → 72. Worktree
+  `Tau-wt-grdel`. Left 3725-3726 / PLL / dimmer / avoid-list alone.
+- Probed but not landed: Draft8 Laplace brace-mangle (TwoTau-class);
+  hw3/Draft4 AD823 unresolved refuse; Draft1 unnamed diode + long `.tran`.
+  AC-inject on Draft2 also exact — not double-landed (fixture is `.tran`-authored).
+
+**Exact stdout**
+```
+SUMMARY pass=72 sibling=5 gap=0
+tran draft2 … v(vout) nRms=0.0062 nMax=0.0207 span=0.198
+```
+
+**Files**
+- `apps/desktop/scripts/differentialParity.corpus.ts`
+- `AGENTS.md`, `FEATURE_PARITY.md`, `PROGRESS.md`
+- `~/Desktop/TAU-MORNING-STATUS.md`
+
+**Tests**
+- `vitest … differentialParity.corpus.ts` → SUMMARY pass=72 sibling=5 gap=0
+- `pnpm -C apps/desktop typecheck` + `test` (2681 passed)
+
+**Parity items**
+- Differential 🟡 harness **pass=72 · sibling=5 · gap=0**. Named-device 🟡 **48.0%**.
+  SHIPPABLE? NO
+
+**Next**
+- Non-colliding Draft/Educational (not 3725-3726). Leave Settings locked.
 
 
 ### 2026-08-05 — OTA ±1e309 unbounded rails → named-device 48.0% (§DoD)

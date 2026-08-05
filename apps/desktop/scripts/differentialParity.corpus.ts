@@ -81,6 +81,7 @@ const PIERCE_ASC = join(EDU, "Pierce.asc");
 const COLPITS2_ASC = join(EDU, "colpits2.asc");
 const QZTST_ASC = join(EDU, "contrib", "qztst.asc");
 const ELIP_GRD_ASC = join(EDU, "contrib", "elip_grd.asc");
+const DRAFT2_ASC = join(DOC_LTSPICE, "Draft2.asc");
 const DRAFT3_ASC = join(DOC_LTSPICE, "Draft3.asc");
 const DRAFT7_ASC = join(DOC_LTSPICE, "Draft7.asc");
 const SAMPLEANDHOLD_ASC = join(EDU, "SampleAndHold.asc");
@@ -242,7 +243,7 @@ function withAcStimulus(netlist: string): string {
 describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential parity matrix", () => {
   const cells: DifferentialCell[] = [];
 
-  it("matches RC .tran/.ac/.meas, divider analyses, .step families, curvetrace, stepmodelparam, NoiseFigure, noise.asc, Colpitts/Clapp/Hartly AC, Cohn AC, MeasureBW AC, Transformer/Transformer2/IdealTransformer TRAN, notch/passive/butter/opamp/Linkwitz AC, LM741/LM308/LM78XX/P2/logamp TRAN, GFT AC, DCopPnt OP, audioamp TRAN, UHFpreamp AC, 1563 AC, S-param AC, stepAC AC, 2ndOrder* AC, MonteCarlo AC, varactor AC, phaseshift AC, Pierce/colpits2 AC, edu-varistor TRAN, stepnoise noise, UniversalOpAmp/1/2 TRAN, contrib/qztst AC, SampleAndHold TRAN, contrib/elip_grd AC, Draft3 AC, Draft7 AC, Class-D AC/OP/DC/noise/tf", () => {
+  it("matches RC .tran/.ac/.meas, divider analyses, .step families, curvetrace, stepmodelparam, NoiseFigure, noise.asc, Colpitts/Clapp/Hartly AC, Cohn AC, MeasureBW AC, Transformer/Transformer2/IdealTransformer TRAN, notch/passive/butter/opamp/Linkwitz AC, LM741/LM308/LM78XX/P2/logamp TRAN, GFT AC, DCopPnt OP, audioamp TRAN, UHFpreamp AC, 1563 AC, S-param AC, stepAC AC, 2ndOrder* AC, MonteCarlo AC, varactor AC, phaseshift AC, Pierce/colpits2 AC, edu-varistor TRAN, stepnoise noise, UniversalOpAmp/1/2 TRAN, contrib/qztst AC, SampleAndHold TRAN, contrib/elip_grd AC, Draft3 AC, Draft7 AC, Draft2 TRAN, Class-D AC/OP/DC/noise/tf", () => {
     // --- TRAN (also covered by waveformParity; re-assert here so this file is self-sufficient) ---
     {
       const result = runPairedBatch("diff-rc-tran", RC_TRAN, ["v(out)"]);
@@ -2683,6 +2684,56 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
       });
     }
 
+    // --- Documents/LTspice/Draft2.asc authored .tran (series C–R highpass; V1 SINE 600 Hz) ---
+    // Pure C–R: V1 SINE(0 1 600) + AC 1, C=26.5n, R=1k → v(vout). Authored `.tran 50m`
+    // (not AC-inject — AC under added stimulus is also exact but fixture is .tran-authored).
+    // Probe: nRms≈0.006 / nMax≈0.021 span≈0.20. Stacked on tip Draft7 pass=71.
+    // Left 3725-3726 (Staff EE) / PLL / dimmer / avoid-list alone. Draft8 Laplace
+    // brace-mangle (TwoTau-class) deferred; hw3/Draft4 AD823 unresolved refuse.
+    {
+      expect(existsSync(DRAFT2_ASC), `missing ${DRAFT2_ASC}`).toBe(true);
+      const imported = importAsc(decodeSchematicText(readFileSync(DRAFT2_ASC)));
+      expect(imported.warnings).toEqual([]);
+      const dirs = expandDirectiveLines(imported.directives);
+      const parsed = analysesFromDirectives(dirs);
+      expect(parsed.tran, "Draft2.asc must author .tran").toBeTruthy();
+      const params = buildParamScope(dirs);
+      const deck = buildSpiceDeck({
+        components: imported.components,
+        wires: imported.wires,
+        netLabels: imported.netLabels,
+        directives: dirs,
+        params,
+      }, {
+        kind: "tran",
+        stopTime: parsed.tran!.stopTime,
+        steps: parsed.tran!.steps ?? 3000,
+      });
+      expect(deck.unresolvedSubckts ?? []).toEqual([]);
+      expect(deck.modelSubstitutions ?? []).toEqual([]);
+      expect(deck.netlist).toMatch(/^C1\b/im);
+      expect(deck.netlist).toMatch(/^R1\b/im);
+      expect(deck.netlist).toMatch(/^V1\b.*\bSIN\b/im);
+      expect(deck.netlist).not.toMatch(/^X\w*\b/im);
+      expect(deck.netlist).toMatch(/\.tran\b/i);
+      const result = runPairedBatch("diff-draft2-tran", deck.netlist, ["v(vout)"]);
+      const lt = result.ltspice.get("v(vout)")!;
+      const ng = result.ngspice.get("v(vout)")!;
+      const comparison = compareWaveforms(ng.axis, ng.values, lt.axis, lt.values, {
+        rmsTolerance: 0.02,
+        maxTolerance: 0.05,
+      });
+      expect(comparison.pass, `Draft2 ${JSON.stringify(comparison)}`).toBe(true);
+      expect(comparison.referenceRange, "Draft2 non-hollow").toBeGreaterThan(0.1);
+      cells.push({
+        analysis: "tran",
+        circuit: "draft2",
+        topology: "Documents/LTspice/Draft2.asc series C–R highpass (authored .tran 50m; V1 SINE 600 Hz)",
+        status: "pass",
+        note: `v(vout) nRms=${comparison.normalizedRms.toFixed(4)} nMax=${comparison.normalizedMax.toFixed(4)} span=${comparison.referenceRange.toFixed(3)}`,
+      });
+    }
+
     // --- Class-D AC/OP (authored analyses are .tran/.meas; add AC/OP for differential proof) ---
     {
       const ascPath = join(CLASSD_DIR, "class-d-starter.asc");
@@ -2976,9 +3027,9 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
     const passCount = cells.filter((cell) => cell.status === "pass").length;
     const gapCount = cells.filter((cell) => cell.status === "gap").length;
     const siblingCount = cells.filter((cell) => cell.status === "sibling").length;
-    expect(passCount).toBeGreaterThanOrEqual(69);
+    expect(passCount).toBeGreaterThanOrEqual(70);
     expect(siblingCount).toBe(5);
     expect(gapCount).toBe(0);
-    expect(report).toMatch(/SUMMARY pass=71 sibling=5 gap=0/);
+    expect(report).toMatch(/SUMMARY pass=72 sibling=5 gap=0/);
   }, 240_000);
 });
