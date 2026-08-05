@@ -1492,8 +1492,10 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   `DcFamilyPlot` draw the family under the Bode/DC panes with a `name=value`
   legend, autoranged axes, and per-member error surfacing. 11 tests with
   hand-computed RC-corner / divider-ratio values.
-  Per-member `.meas` results are shown below the transient family. Pending:
-  per-trace selection, cursor readout.
+  Per-member `.meas` results are shown below the transient family.
+  **Step-family cursor readout landed** (2026-08-05): StepPlot **Cursors**
+  toggle — two time markers with t1/t2/@C1/@C2/Δ on the family SIGNAL (first
+  member grid) via `cursorReadout`. Pending: per-trace selection.
 - 🟡 Save plot settings (`.plt`), export image/CSV — **CSV + PNG export landed**
   (`simulation/waveformCsv.ts` `seriesToCsv`): an **Export CSV** button on the
   transient scope writes a table of `time` + every node-voltage trace + branch

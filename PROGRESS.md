@@ -1,10 +1,9 @@
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 07:59 CDT**
+**Status: DONE - 2026-08-05 08:05 CDT**
 
-Unit: Waveform DoD — **noise plot measurement cursors**.
-Worktree `Tau-wt-wave-noise-cur` rebased over Continue ct15 → **pass=99**.
-Settings locked. SHIPPABLE? **NO**
+Unit: Waveform DoD — **step-family measurement cursors**.
+Worktree `Tau-wt-wave-step-cur` over `49af5ab`. Settings locked. SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
@@ -13,6 +12,30 @@ Settings locked. SHIPPABLE? **NO**
 ---
 
 
+
+### 2026-08-05 — step-family measurement cursors (§waveform DoD)
+
+**What I did**
+- StepPlot **Cursors** toggle — two time markers with t1/t2/@C1/@C2/Δ on the
+  family SIGNAL (first member grid) via `cursorReadout` (noise/Bode-style).
+  Worktree `Tau-wt-wave-step-cur` over `49af5ab`. Left ct 14/15, Educational
+  continue 38 ASC, ct 19 OP, Chan/NIGBT/FRA, Settings alone.
+
+**Files**
+- `apps/desktop/src/components/SimulationPanel.tsx` (+ wiring test)
+- `FEATURE_PARITY.md`, `PROGRESS.md`
+
+**Tests**
+- `pnpm -C apps/desktop typecheck` + `test` green (2778 passed)
+- StepPlot cursors → t1/t2/@C1/@C2/Δ
+
+**Parity items**
+- Waveform viewer 🟡 (step-family cursors landed). Differential pass=99 ·
+  named-device 48.1% · SHIPPABLE? NO
+
+**Next step**
+- Step-family per-trace selection / manual axis limits / non-wall ND. Leave
+  Educational/IRFP/Settings alone.
 
 ### 2026-08-05 — noise plot measurement cursors (§waveform DoD)
 

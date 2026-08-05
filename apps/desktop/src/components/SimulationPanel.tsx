@@ -4732,6 +4732,9 @@ export function StepPlot({ result, probes, wires }: { result: StepFamilyResult |
   const [activeExpr, setActiveExpr] = useState<string | null>(null);
   const [exprError, setExprError] = useState<string | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
+  const [cursorsOn, setCursorsOn] = useState(false);
+  const [cf1, setCf1] = useState(0.25);
+  const [cf2, setCf2] = useState(0.75);
 
   const exprFamily = useMemo(() => {
     if (!activeExpr) return null;
@@ -4781,6 +4784,33 @@ export function StepPlot({ result, probes, wires }: { result: StepFamilyResult |
       : !activeExpr
         ? probeFamily
         : null;
+
+  // Two time cursors on the family SIGNAL (first member's grid) — LTspice-style
+  // step-plot readout; sliders span [0, tMax] shared by the overlay frame.
+  const stepCursors = useMemo(() => {
+    if (!cursorsOn || !family || family.series.length === 0 || !(family.tMax > 0)) return null;
+    const first = family.series[0];
+    const x1 = cf1 * family.tMax;
+    const x2 = cf2 * family.tMax;
+    if (!Number.isFinite(x1) || !Number.isFinite(x2)) return null;
+    try {
+      return cursorReadout(
+        first.times,
+        [{ label: family.signal, values: first.trace.values, unit: family.unit || "V" }],
+        x1,
+        x2,
+      );
+    } catch {
+      return null;
+    }
+  }, [cursorsOn, family, cf1, cf2]);
+
+  const stepCursorPixelX = (t: number, tMax: number): number | null => {
+    if (!(tMax > 0) || !Number.isFinite(t)) return null;
+    const frac = t / tMax;
+    if (frac < 0 || frac > 1) return null;
+    return PLOT_PAD + frac * (PLOT_WIDTH - PLOT_PAD * 2);
+  };
 
   const activateStepExpression = (expr: string) => {
     const trimmed = expr.trim();
@@ -4944,6 +4974,19 @@ export function StepPlot({ result, probes, wires }: { result: StepFamilyResult |
               d={tracePath(s.trace, s.times, 0, family.tMax, family.min, family.max)}
             />
           ))}
+          {stepCursors &&
+            [stepCursors.x1, stepCursors.x2].map((t, i) => {
+              const x = stepCursorPixelX(t, family.tMax);
+              if (x === null) return null;
+              return (
+                <g key={`sc${i}`} className="plot-cursor">
+                  <line x1={x} y1={PLOT_PAD} x2={x} y2={PLOT_HEIGHT - PLOT_PAD} />
+                  <text x={x + 3} y={PLOT_PAD + 10}>
+                    {i + 1}
+                  </text>
+                </g>
+              );
+            })}
         </svg>
         <div className="scope-legend" aria-label="Step legend">
           <ContextMenu>
@@ -4979,6 +5022,15 @@ export function StepPlot({ result, probes, wires }: { result: StepFamilyResult |
         </div>
       </div>
       <div className="meter-row analysis-meter">
+        <Button
+          size="sm"
+          variant={cursorsOn ? "default" : "outline"}
+          aria-pressed={cursorsOn}
+          aria-label="Toggle step cursors"
+          onClick={() => setCursorsOn((c) => !c)}
+        >
+          Cursors
+        </Button>
         <Metric label="SIGNAL" value={family.signal} tone="green" />
         <Metric label="STEPS" value={String(family.series.length)} tone="cyan" />
         <Metric label="SWEEP" value={result.spec?.name ?? "--"} tone="cream" />
@@ -4989,6 +5041,53 @@ export function StepPlot({ result, probes, wires }: { result: StepFamilyResult |
           Export PNG
         </Button>
       </div>
+      {cursorsOn && (
+        <div className="cursor-sliders">
+          <label>
+            C1
+            <input
+              type="range"
+              min={0}
+              max={1000}
+              value={Math.round(cf1 * 1000)}
+              aria-label="Step cursor 1 position"
+              onChange={(e) => setCf1(Number(e.currentTarget.value) / 1000)}
+            />
+          </label>
+          <label>
+            C2
+            <input
+              type="range"
+              min={0}
+              max={1000}
+              value={Math.round(cf2 * 1000)}
+              aria-label="Step cursor 2 position"
+              onChange={(e) => setCf2(Number(e.currentTarget.value) / 1000)}
+            />
+          </label>
+        </div>
+      )}
+      {stepCursors && (
+        <div className="meter-row analysis-meter" aria-label="Step cursor readout">
+          <Metric label="t1" value={formatEngineering(stepCursors.x1, "s", 3)} tone="cyan" />
+          <Metric label="t2" value={formatEngineering(stepCursors.x2, "s", 3)} tone="cyan" />
+          <Metric
+            label="@C1"
+            value={formatEngineering(stepCursors.traces[0]!.y1, family.unit || "V", 3)}
+            tone="green"
+          />
+          <Metric
+            label="@C2"
+            value={formatEngineering(stepCursors.traces[0]!.y2, family.unit || "V", 3)}
+            tone="green"
+          />
+          <Metric
+            label="Δ"
+            value={formatEngineering(stepCursors.traces[0]!.dy, family.unit || "V", 3)}
+            tone="cream"
+          />
+        </div>
+      )}
       {exportError && <div className="expr-error" role="alert">{exportError}</div>}
       <StepMeasTable members={result.members} />
       {result.warnings.length > 0 && (

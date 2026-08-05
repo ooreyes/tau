@@ -1047,6 +1047,35 @@ describe("StepPlot measurements", () => {
     expect(signalMeter?.textContent).toContain("abs(V(out))");
     expect(screen.getByRole("button", { name: "Use probe" })).toBeTruthy();
   });
+
+  it("step cursors read t1/t2/@C1/@C2/Δ on the family SIGNAL", () => {
+    const { container } = render(
+      <StepPlot
+        result={{
+          ok: true,
+          spec: { kind: "param", name: "RL", values: [1, 2] },
+          members: [
+            member("RL=1", 1, undefined, [0, 1e-3, 2e-3], [0, 1, 2]),
+            member("RL=2", 2, undefined, [0, 1e-3, 2e-3], [0, 0.5, 1]),
+          ],
+          warnings: [],
+        }}
+        probes={[]}
+        wires={[]}
+      />,
+    );
+    const btn = screen.getByRole("button", { name: "Toggle step cursors" });
+    expect(btn.getAttribute("aria-pressed")).toBe("false");
+    fireEvent.click(btn);
+    expect(btn.getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByRole("slider", { name: "Step cursor 1 position" })).toBeTruthy();
+    expect(screen.getByRole("slider", { name: "Step cursor 2 position" })).toBeTruthy();
+    const readout = screen.getByLabelText("Step cursor readout");
+    expect(readout.textContent).toMatch(/t1/i);
+    expect(readout.textContent).toMatch(/@C1/);
+    expect(readout.textContent).toMatch(/Δ/);
+    expect(container.querySelectorAll(".plot-cursor").length).toBe(2);
+  });
 });
 
 describe("AcFamilyPlot / DcFamilyPlot Export PNG", { timeout: 20_000 }, () => {
