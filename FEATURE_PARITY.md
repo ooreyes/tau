@@ -1414,7 +1414,9 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   by a 131k-bin regression, avoiding quadratic work on large native spectra.
   **FFT spectrum CSV export landed** (2026-08-05): `spectrumToCsv` writes
   `freq_Hz,<signal>,<signal>_dB` per bin; FftView **Export CSV** downloads it
-  (THD/SFDR remain on the meter). 2 pure tests.
+  (THD/SFDR remain on the meter). 2 pure tests. **FFT Export PNG landed**
+  (2026-08-05): FftView **Export PNG** rasters the spectrum SVG via
+  `waveformSvgsToPng` (`tau-fft-….png`). 1 wiring test.
 - 🟡 Log/linear axes, dB, phase, **group delay** — **group delay landed**
   (`simulation/groupDelay.ts`, 12 tests): pure `groupDelay(freqs, phaseDeg)`
   computes τ = −dφ/dω in seconds — phase is **unwrapped** first (`unwrapPhaseDeg`
@@ -1526,7 +1528,8 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   AcFamilyPlot / DcFamilyPlot **Export PNG** (`tau-ac-step-….png` /
   `tau-dc-step-….png`). 2 wiring tests. **Bode Log Y / Lin Y landed**
   (2026-08-05): AcPlot magnitude Lin Y = dB; Log Y = `|V|/|Vref|` decades
-  via `bodeMagYDomain` / `dbToLinearMag`. **NEXT:** (waveform
+  via `bodeMagYDomain` / `dbToLinearMag`. **FFT Export PNG landed** (2026-08-05):
+  FftView **Export PNG** (`tau-fft-….png`). 1 wiring test. **NEXT:** (waveform
   CSV/PNG/plt/FFT/expressions/dual-axis/right-click/Bode-X/Y/cursor-CSV/step-PNG
   covered — remaining: avg/rms readout polish, phase pane).
 - 🟡 Right-click trace → math/operations — **abs / negate / dB / uramp / sgn /

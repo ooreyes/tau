@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 
-import { SimulationPanel, StepPlot, WaveformPlot, AcFamilyPlot, DcFamilyPlot } from "./SimulationPanel";
+import { SimulationPanel, StepPlot, WaveformPlot, AcFamilyPlot, DcFamilyPlot, FftView } from "./SimulationPanel";
 import { visibleTransientTraces } from "../simulation/visibleTraces";
 import {
   defaultDcSetup,
@@ -1430,6 +1430,46 @@ describe("SimulationPanel - Noise Export PNG", { timeout: 20_000 }, () => {
       const svgs = toPng.mock.calls[0]![0] as SVGSVGElement[];
       expect(svgs.length).toBeGreaterThanOrEqual(1);
       expect(download).toHaveBeenCalledWith(expect.any(Blob), "noise");
+    } finally {
+      toPng.mockRestore();
+      download.mockRestore();
+    }
+  });
+});
+
+describe("FftView Export PNG", { timeout: 20_000 }, () => {
+  it("exports FFT spectrum SVG via waveformSvgsToPng with tag fft", async () => {
+    const png = await import("../simulation/plotPng");
+    const toPng = vi.spyOn(png, "waveformSvgsToPng").mockResolvedValue(new Blob(["png"]));
+    const download = vi.spyOn(png, "downloadWaveformPng").mockImplementation(() => {});
+    try {
+      const n = 256;
+      const times = Array.from({ length: n }, (_, i) => i / n);
+      const values = times.map((t) => Math.sin(2 * Math.PI * 8 * t));
+      const result = {
+        ok: true as const,
+        title: "Transient",
+        times,
+        traces: [{ id: "n1", label: "V(out)", unit: "V" as const, color: "var(--trace-cyan)", values }],
+        currents: [],
+        stats: { netCount: 1, componentCount: 0, sampleCount: n, stopTime: 1, stepSize: 1 / n },
+        warnings: [],
+        circuit: {
+          groundNetId: null,
+          warnings: [],
+          nets: [{ id: "n1", points: [{ x: 0, y: 0 }, { x: 16, y: 0 }], pins: [], isGround: false, labelCount: 0 }],
+          components: [],
+        },
+      };
+      render(<FftView result={result} />);
+      fireEvent.click(screen.getByRole("button", { name: "Toggle FFT spectrum" }));
+      const btn = await screen.findByRole("button", { name: "Export FFT spectrum PNG" });
+      expect((btn as HTMLButtonElement).disabled).toBe(false);
+      fireEvent.click(btn);
+      await waitFor(() => expect(toPng).toHaveBeenCalled());
+      const svgs = toPng.mock.calls[0]![0] as SVGSVGElement[];
+      expect(svgs.length).toBe(1);
+      expect(download).toHaveBeenCalledWith(expect.any(Blob), "fft");
     } finally {
       toPng.mockRestore();
       download.mockRestore();

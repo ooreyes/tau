@@ -1,8 +1,8 @@
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 06:48 CDT**
+**Status: DONE - 2026-08-05 06:51 CDT**
 
-Unit: Waveform DoD — **right-click derivative `ddt(…)`** (plot expression + menu).
+Unit: Waveform DoD — **FFT spectrum Export PNG**.
 Differential pass=92 · named-device 48.1%. Settings locked. SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
@@ -10,6 +10,31 @@ Differential pass=92 · named-device 48.1%. Settings locked. SHIPPABLE? **NO**
 
 
 ---
+
+
+### 2026-08-05 — FFT spectrum Export PNG (§waveform DoD)
+
+**What I did**
+- FftView **Export PNG** rasters the spectrum `svg.scope-svg` via
+  `waveformSvgsToPng` (`tau-fft-….png`), matching TRAN/AC/DC/noise/step.
+- ND wall at 48.1% — waveform pivot. Left 100W/step PNG, ct ASC, Educational
+  (continue 31), Chan/NIGBT/FRA, Settings alone.
+
+**Files**
+- `apps/desktop/src/components/SimulationPanel.tsx` (+ wiring test)
+- `FEATURE_PARITY.md`, `PROGRESS.md`
+
+**Tests**
+- `pnpm -C apps/desktop typecheck` + `test` green (2745 passed)
+- FftView Export PNG 1
+
+**Parity items**
+- Waveform viewer 🟡 (FFT PNG landed). Differential pass=92 ·
+  named-device 48.1% · SHIPPABLE? NO
+
+**Next step**
+- Phase pane / avg-rms Ctrl+click. Leave Educational/IRFP/Settings alone.
+
 
 
 ### 2026-08-05 — right-click derivative ddt(…) (§waveform DoD)

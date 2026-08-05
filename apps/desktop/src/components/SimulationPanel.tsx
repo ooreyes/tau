@@ -3011,6 +3011,24 @@ export function FftView({ result, preferredSignals = [] }: { result: AnalysisRes
             >
               Export CSV
             </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={!spectrum}
+              aria-label="Export FFT spectrum PNG"
+              onClick={async () => {
+                const svg = measureRef.current;
+                if (!svg || !spectrum) return;
+                try {
+                  const blob = await waveformSvgsToPng([svg]);
+                  downloadWaveformPng(blob, "fft");
+                } catch {
+                  // Raster failures stay silent here — CSV remains available.
+                }
+              }}
+            >
+              Export PNG
+            </Button>
           </div>
           <div className="scope-shell">
             <div className="scope-plot-wrap">
