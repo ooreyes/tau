@@ -9,6 +9,27 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
+**Status: DONE - 2026-08-04 22:12 CDT**
+
+Unit: Broad differential parity — smallest honest vertical slice.
+Re-runnable harness compares authored `.tran`/`.ac`/`.dc`/`.op`/`.noise`/
+`.tf` vs LTspice; stdout coverage matrix is truth. DoD box stays open.
+Shippable? NO.
+
+What landed this unit:
+
+- `parityHarness`: complex ngspice raw, TF scalar pairing, noise aliases,
+  strip duplicate `.meas` (fixes Class-D Efficiency after P1.6 emit)
+- `differentialParity.corpus.ts` + `scripts/differential-parity.sh`
+- Report helpers + unit tests; wired into `dod-parity.sh`
+- Proven this run: pass=6 (RC tran/ac, divider dc/op/tf/noise) +
+  sibling=5 (Colpitts/Class-D/meas/varistor/phasedet) + gap=6 documented
+
+Next unit: widen differential matrix (step families, curvetrace, NoiseFigure,
+Class-D non-tran); §10; named-device; unsigned release.
+
+Previous completed unit:
+
 **Status: DONE - 2026-08-04 22:02 CDT**
 
 Unit: P1.6 AC/DC native `.step` into STEP tab — same single-deck /
@@ -25,25 +46,6 @@ What landed this unit:
 
 Next unit: authored-analysis differential parity; §10; named-device;
 unsigned release.
-
-Previous completed unit:
-
-**Status: DONE - 2026-08-04 21:51 CDT**
-
-Unit: P1.6 native `.step` temp — LTspice `tc=` → ngspice `tc1=`/`tc2=`;
-Rust expands emitted `.step` (stock ngspice has no `.step` card) into
-multi-run plots; temp eligible on the native path. No double-step.
-Shippable? NO.
-
-What landed this unit:
-
-- Resistor deck emit of `tc1=`/`tc2=` from LTspice `tc=`
-- `step_expand.rs`: parse/strip/expand `.step` temp/source/param
-- `canUseNativeStepPath` accepts temp; real-lib ignored proof
-- Tests: deck emit, eligibility, family labels, Rust unit + ignored smoke
-
-Next unit: AC/DC native step wiring into UI; authored-analysis
-differential parity; §10; named-device; unsigned release.
 
 Previous completed unit:
 

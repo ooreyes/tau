@@ -19,6 +19,31 @@ export interface PairedBatchResult {
   ngspiceLog: string;
 }
 
+export interface PairedBatchOptions {
+  measurements?: readonly string[];
+  ngspiceNetlist?: string;
+  /**
+   * Map each LTspice save / extract name to the ngspice raw vector name when
+   * the engines disagree (e.g. noise `V(onoise)` ↔ `onoise_spectrum`).
+   */
+  ngspiceAliases?: Readonly<Record<string, string>>;
+  /**
+   * When true, omit the `.save` card. Required for LTspice `.noise`, which
+   * writes its own density vectors and produces an empty raw when `.save` is
+   * forced to a name it does not keep.
+   */
+  skipSave?: boolean;
+  /** Extra raw vectors to pull (in addition to `saves`) under the given keys. */
+  extract?: readonly string[];
+}
+
+export interface PairedScalarResult {
+  ltspice: Map<string, number>;
+  ngspice: Map<string, number>;
+  ltspiceLog: string;
+  ngspiceLog: string;
+}
+
 function compatibleOptions(line: string, ltspice: boolean): string {
   if (!/^\.options?\b/i.test(line.trim())) return line;
   if (!ltspice) return line;
@@ -33,13 +58,22 @@ function prepareDeck(
   saves: readonly string[],
   measurements: readonly string[],
   ltspice: boolean,
+  skipSave = false,
 ): string {
   const lines = source
     .split(/\r?\n/)
-    .filter((line) => !/^\.save\b/i.test(line.trim()) && !/^\.end\b/i.test(line.trim()))
+    .filter((line) => {
+      const trimmed = line.trim();
+      // Drop save/end/measure cards so the harness owns them. Tau's deck
+      // builder may already emit authored `.meas` (P1.6); re-appending the
+      // same names makes LTspice refuse with "Multiply defined .measure".
+      return !/^\.save\b/i.test(trimmed)
+        && !/^\.end\b/i.test(trimmed)
+        && !/^\.meas(?:ure)?\b/i.test(trimmed);
+    })
     .map((line) => compatibleOptions(line, ltspice));
   if (ltspice) lines.push(".options plotwinsize=0");
-  lines.push(`.save ${saves.join(" ")}`);
+  if (!skipSave && saves.length > 0) lines.push(`.save ${saves.join(" ")}`);
   lines.push(...measurements);
   lines.push(".end");
   return `${lines.join("\n")}\n`;
@@ -53,11 +87,14 @@ function decodeLtspiceLog(bytes: Uint8Array): string {
 interface NgRaw {
   variables: string[];
   values: number[][];
+  complex: boolean;
 }
 
-/** ngspice's binary raw writer stores every real value as float64, unlike
- * LTspice's mixed float64-axis/float32-dependent layout. */
-function parseNgspiceRaw(bytes: Uint8Array): NgRaw {
+/** ngspice's binary raw writer stores every real value as float64. Complex
+ * (`.ac`) plots store every variable — including the frequency axis — as a
+ * (re, im) float64 pair, matching LTspice's complex layout rather than the
+ * mixed float64-axis / float32-dependent real layout. */
+export function parseNgspiceRaw(bytes: Uint8Array): NgRaw {
   const marker = new TextEncoder().encode("Binary:\n");
   let dataStart = -1;
   outer: for (let offset = 0; offset + marker.length <= bytes.length; offset += 1) {
@@ -71,12 +108,14 @@ function parseNgspiceRaw(bytes: Uint8Array): NgRaw {
   const header = new TextDecoder().decode(bytes.subarray(0, dataStart));
   const pointCount = Number(/^No\. Points:\s*(\d+)/im.exec(header)?.[1] ?? "0");
   const variableCount = Number(/^No\. Variables:\s*(\d+)/im.exec(header)?.[1] ?? "0");
+  const complex = /\bFlags:\s*[^\r\n]*\bcomplex\b/i.test(header);
   const variableLines = header.split(/\r?\n/).filter((line) => /^\s*\d+\s+\S+/.test(line));
   const variables = variableLines.map((line) => line.trim().split(/\s+/)[1]!);
   if (variables.length !== variableCount || pointCount < 1) {
     throw new Error(`invalid ngspice raw header (${variables.length}/${variableCount} variables, ${pointCount} points)`);
   }
-  const expectedBytes = pointCount * variableCount * 8;
+  const stride = complex ? 16 : 8;
+  const expectedBytes = pointCount * variableCount * stride;
   if (bytes.length - dataStart < expectedBytes) {
     throw new Error("truncated ngspice raw output");
   }
@@ -85,17 +124,43 @@ function parseNgspiceRaw(bytes: Uint8Array): NgRaw {
   let offset = 0;
   for (let point = 0; point < pointCount; point += 1) {
     for (let variable = 0; variable < variableCount; variable += 1) {
-      values[variable]![point] = view.getFloat64(offset, true);
+      const re = view.getFloat64(offset, true);
       offset += 8;
+      if (complex) {
+        const im = view.getFloat64(offset, true);
+        offset += 8;
+        // Axis 0 (frequency) uses the real part; dependents use magnitude so
+        // they match LTspice `rawTrace` complex behavior.
+        values[variable]![point] = variable === 0 ? re : Math.hypot(re, im);
+      } else {
+        values[variable]![point] = re;
+      }
     }
   }
-  return { variables, values };
+  return { variables, values, complex };
 }
 
 function ngTrace(raw: NgRaw, expression: string): NumericTrace {
   const index = raw.variables.findIndex((name) => name.toLowerCase() === expression.toLowerCase());
   if (index < 0) throw new Error(`ngspice raw output is missing ${expression}`);
-  return { axis: raw.values[0]!, values: raw.values[index]! };
+  const series = raw.values[index]!;
+  // Operating-point plots often have a single saved dependent and no separate
+  // sweep axis; mirror sample indices onto a dummy axis so callers can still
+  // compare scalars via the first sample.
+  if (raw.variables.length === 1) {
+    return { axis: series.map((_, i) => i), values: series };
+  }
+  return { axis: raw.values[0]!, values: series };
+}
+
+function ltTraceOrScalar(bytes: Uint8Array, expression: string): NumericTrace {
+  const ltRaw = parseRaw(bytes);
+  const lt = rawTrace(ltRaw, expression);
+  if (!lt) throw new Error(`LTspice raw output is missing ${expression}`);
+  if (ltRaw.variables.length === 1) {
+    return { axis: lt.values.map((_, i) => i), values: lt.values };
+  }
+  return { axis: lt.axis, values: lt.values };
 }
 
 function assertRun(label: string, status: number | null, output: string): void {
@@ -111,6 +176,19 @@ export function measurementValue(output: string, name: string): number {
   return value;
 }
 
+/** Parse `name = value` scalars from an ngspice `.tf` stdout block. */
+export function parseNgspiceTransferScalars(output: string): Map<string, number> {
+  const block = output.split(/transfer function information:/i)[1];
+  if (!block) throw new Error("ngspice printed no transfer function information");
+  const scalars = new Map<string, number>();
+  for (const line of block.split(/\r?\n/)) {
+    const match = /^\s*(\S+)\s*=\s*([-0-9.eE+]+)\s*$/.exec(line);
+    if (match) scalars.set(match[1]!.toLowerCase(), Number(match[2]));
+  }
+  if (scalars.size === 0) throw new Error("ngspice transfer block contained no scalars");
+  return scalars;
+}
+
 /** Run the same Tau-derived electrical deck through both installed simulators.
  * LTspice-only/ngspice-only output controls are added to otherwise identical
  * decks, and all generated artifacts live in a disposable temp directory. */
@@ -118,9 +196,14 @@ export function runPairedBatch(
   name: string,
   netlist: string,
   saves: readonly string[],
-  measurements: readonly string[] = [],
-  ngspiceNetlist: string = netlist,
+  measurementsOrOptions: readonly string[] | PairedBatchOptions = [],
+  ngspiceNetlistArg: string = netlist,
 ): PairedBatchResult {
+  const options: PairedBatchOptions = Array.isArray(measurementsOrOptions)
+    ? { measurements: measurementsOrOptions, ngspiceNetlist: ngspiceNetlistArg }
+    : { ngspiceNetlist: ngspiceNetlistArg, ...measurementsOrOptions };
+  const ngspiceNetlist = options.ngspiceNetlist ?? netlist;
+  const measurementLines = options.measurements ?? [];
   if (!existsSync(LTSPICE_BINARY)) throw new Error(`LTspice is missing at ${LTSPICE_BINARY}`);
   const dir = mkdtempSync(join(tmpdir(), `tau-parity-${name}-`));
   try {
@@ -130,14 +213,15 @@ export function runPairedBatch(
     // `.meas` expression; name those currents on its save card. ngspice can
     // evaluate them directly for the measurement run and may not expose a
     // corresponding raw vector (notably I(R1)), so they are LT-only outputs.
-    const measuredCurrents = measurements.flatMap((line) => (
+    const measuredCurrents = measurementLines.flatMap((line) => (
       [...line.matchAll(/\bi\s*\(\s*([^)]+)\s*\)/gi)].map((match) => `i(${match[1]!.trim()})`)
     ));
     const ltSaves = [...new Set([...saves, ...measuredCurrents])];
-    writeFileSync(ltPath, prepareDeck(netlist, ltSaves, measurements, true));
+    const ngSaves = saves.map((expression) => options.ngspiceAliases?.[expression] ?? expression);
+    writeFileSync(ltPath, prepareDeck(netlist, ltSaves, measurementLines, true, options.skipSave));
     // Tau evaluates authored measurements from returned traces (simulation/
     // measure.ts); do not ask ngspice's more limited `.meas` dialect to do so.
-    writeFileSync(ngPath, prepareDeck(ngspiceNetlist, saves, [], false));
+    writeFileSync(ngPath, prepareDeck(ngspiceNetlist, ngSaves, [], false, options.skipSave));
 
     const ltRun = spawnSync(LTSPICE_BINARY, ["-b", ltPath], { encoding: "utf8", timeout: 120_000 });
     const ltLogPath = join(dir, `${name}-lt.log`);
@@ -153,16 +237,60 @@ export function runPairedBatch(
 
     const ltRawPath = join(dir, `${name}-lt.raw`);
     if (!existsSync(ltRawPath) || !existsSync(ngRawPath)) throw new Error("simulator did not produce a raw waveform");
-    const ltRaw = parseRaw(readFileSync(ltRawPath));
+    const ltBytes = readFileSync(ltRawPath);
     const ngRaw = parseNgspiceRaw(readFileSync(ngRawPath));
     const ltspice = new Map<string, NumericTrace>();
     const ngspice = new Map<string, NumericTrace>();
-    for (const expression of saves) {
-      const lt = rawTrace(ltRaw, expression);
-      if (!lt) throw new Error(`LTspice raw output is missing ${expression}`);
-      ltspice.set(expression, { axis: lt.axis, values: lt.values });
-      ngspice.set(expression, ngTrace(ngRaw, expression));
+    const keys = [...new Set([...saves, ...(options.extract ?? [])])];
+    for (const expression of keys) {
+      ltspice.set(expression, ltTraceOrScalar(ltBytes, expression));
+      const ngName = options.ngspiceAliases?.[expression] ?? expression;
+      ngspice.set(expression, ngTrace(ngRaw, ngName));
     }
+    return { ltspice, ngspice, ltspiceLog, ngspiceLog };
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+/**
+ * Compare an LTspice `.tf` raw (Transfer_function / impedances) against
+ * ngspice's "Transfer function information" log block on the same deck.
+ */
+export function runPairedTransferFunction(
+  name: string,
+  netlist: string,
+  ngspiceNetlist: string = netlist,
+): PairedScalarResult {
+  if (!existsSync(LTSPICE_BINARY)) throw new Error(`LTspice is missing at ${LTSPICE_BINARY}`);
+  const dir = mkdtempSync(join(tmpdir(), `tau-parity-tf-${name}-`));
+  try {
+    const ltPath = join(dir, `${name}-lt.cir`);
+    const ngPath = join(dir, `${name}-ng.cir`);
+    writeFileSync(ltPath, prepareDeck(netlist, [], [], true, true));
+    writeFileSync(ngPath, prepareDeck(ngspiceNetlist, [], [], false, true));
+
+    const ltRun = spawnSync(LTSPICE_BINARY, ["-b", ltPath], { encoding: "utf8", timeout: 60_000 });
+    const ltLogPath = join(dir, `${name}-lt.log`);
+    const ltspiceLog = existsSync(ltLogPath)
+      ? decodeLtspiceLog(readFileSync(ltLogPath))
+      : `${ltRun.stdout ?? ""}\n${ltRun.stderr ?? ""}`;
+    assertRun("LTspice", ltRun.status, ltspiceLog);
+
+    const ngRun = spawnSync("ngspice", ["-b", ngPath], { encoding: "utf8", timeout: 60_000 });
+    const ngspiceLog = `${ngRun.stdout ?? ""}\n${ngRun.stderr ?? ""}`;
+    assertRun("ngspice", ngRun.status, ngspiceLog);
+
+    const ltRawPath = join(dir, `${name}-lt.raw`);
+    if (!existsSync(ltRawPath)) throw new Error("LTspice did not produce a transfer-function raw");
+    const ltRaw = parseRaw(readFileSync(ltRawPath));
+    const ltspice = new Map<string, number>();
+    for (const variable of ltRaw.variables) {
+      const series = ltRaw.values[variable.index];
+      if (!series || series.length < 1) continue;
+      ltspice.set(variable.name.toLowerCase(), series[0]!);
+    }
+    const ngspice = parseNgspiceTransferScalars(ngspiceLog);
     return { ltspice, ngspice, ltspiceLog, ngspiceLog };
   } finally {
     rmSync(dir, { recursive: true, force: true });

@@ -1561,6 +1561,11 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   Efficiency to installed LTspice within 2%. The same gate compares RC and
   Class-D traces point-for-point and the unmodified educational Colpitts
   oscillator by amplitude, RMS, and frequency. All four proofs pass headlessly.
+  **Differential matrix slice (2026-08-04):** `scripts/differential-parity.sh`
+  (wired into `dod-parity.sh`) extends beyond TRAN-only to AC/DC/OP/TF/noise
+  vs LTspice on RC + resistive divider; prints an explicit pass/sibling/gap
+  coverage matrix to stdout. DoD broad-differential box remains open — see
+  AGENTS.md.
 - 🟡 Resolve a real device-model set — **common LTspice standard diodes/
   zeners/BJTs + the class-d power VDMOS pair bundled** (`engine/standardModels.ts`,
   real `standard.*` params, emitted by `buildSpiceDeck` when referenced by name).

@@ -5,12 +5,12 @@ The working memory of an unattended loop that starts from zero every fire.
 
 ## Now
 
-**Status:** IDLE 2026-08-04 22:02 CDT - P1.6 AC/DC native `.step` into
-STEP tab landed (single-deck + Rust expand; TS exclusive). Matrix:
-source ✅ param ✅ temp ✅ AC ✅ DC ✅. Shippable? NO.
+**Status:** IDLE 2026-08-04 22:12 CDT - Differential parity harness landed
+(pass=6 + sibling=5 + gap=6 on stdout). DoD broad-differential box still
+open. Shippable? NO.
 
-**Next unit:** Authored-analysis differential parity / §10 /
-named-device / unsigned release proof.
+**Next unit:** Widen differential matrix (`.step` families, curvetrace,
+NoiseFigure, Class-D non-tran) / §10 / named-device / unsigned release.
 
 The 2026-08-03 "PROJECT COMPLETE" signal was wrong and has been withdrawn. A
 four-part adversarial audit reproduced the gates and disagreed with these docs.
