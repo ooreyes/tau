@@ -1,8 +1,8 @@
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 ~10:25 CDT**
+**Status: DONE - 2026-08-05 ~10:30 CDT**
 
-Unit: EveryCircuit UX — **Live continuous current mode** (TRAN sample scrub)
+Unit: EveryCircuit UX — **Palette grouping polish** (explicit section order)
 + hard-defer 7seg / 555 / ADC-DAC / counter. Not full EC parity.
 SHIPPABLE? **NO**
 
@@ -10,6 +10,36 @@ SHIPPABLE? **NO**
 
 
 
+
+---
+
+### 2026-08-05 — Palette grouping polish (§EveryCircuit UX)
+
+**What I did**
+- Explicit `PALETTE_SECTIONS` browse order: Sources → Passives →
+  Semiconductors → Analog → Digital → Electromechanical → Markers.
+  Palette no longer derives section order from `Set(CATALOG)` (which used to
+  hoist Digital above Semiconductors because `logicConstant` sat mid-Sources).
+- Contiguous catalog + within-section order: polarized C with caps; photodiode
+  with diodes; Digital constant→gate→SR/D/T/JK; Electromechanical
+  switches→relay→motor→transformers/CT/tline.
+- Settings chrome untouched. Hard-deferred ICs unchanged.
+
+**Files**
+- `schematic/catalog.ts`, `catalogContract.test.tsx`
+- `components/Palette.tsx`
+- `FEATURE_PARITY.md`, `PROGRESS.md`
+
+**Tests**
+- `pnpm -C apps/desktop typecheck`
+- `pnpm -C apps/desktop test` (2844 passed)
+
+**Parity items**
+- §EveryCircuit UX: palette grouping polish. Deferred ICs unchanged. SHIPPABLE? NO
+
+**Next step**
+- Staff EE / other DoD boxes, or Live-mode screenshot proof under screenshots/.
+  Refuse 555/ADC/counter without real subckts.
 
 ---
 

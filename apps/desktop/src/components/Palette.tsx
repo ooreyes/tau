@@ -1,14 +1,18 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSchematic } from "../store/useSchematic";
-import { CATALOG } from "../schematic/catalog";
+import { CATALOG, PALETTE_SECTIONS, catalogSectionEntries } from "../schematic/catalog";
 import { ComponentSymbol } from "../schematic/symbols";
 import type { ComponentKind } from "../schematic/types";
 import { Input } from "@/components/ui/input";
 
-const sections = [...new Set(CATALOG.map((entry) => entry.section))];
+// Explicit EveryCircuit-like browse order (not CATALOG insertion order).
+const sections = [...PALETTE_SECTIONS];
 
 // Initialize all sections as open
-const initialOpen = Object.fromEntries(sections.map((s) => [s, true]));
+const initialOpen = Object.fromEntries([
+  ...sections.map((s) => [s, true] as const),
+  ["__tools__", true] as const,
+]);
 
 export function Palette({ focusSignal }: { focusSignal: number; onNotice: (message: string) => void }) {
   const tool = useSchematic((s) => s.tool);
@@ -97,7 +101,7 @@ export function Palette({ focusSignal }: { focusSignal: number; onNotice: (messa
           /* Grouped sections */
           <>
             {sections.map((section) => {
-              const items = CATALOG.filter((e) => e.section === section);
+              const items = catalogSectionEntries(section);
               const isOpen = openSections[section] !== false;
               return (
                 <div className="palette-section" key={section}>
