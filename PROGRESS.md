@@ -9,17 +9,51 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 04:30 CDT**
+**Status: DONE - 2026-08-05 04:31 CDT**
 
-Unit: PowerAmpLayout TIP121/TIP127 exact Prefix-X + sibling `.lib` → **48.1%**.
+Unit: Merged continue-19 `waveout` TRAN **pass=75** + Staff EE TIP121/TIP127 → named-device **48.1%**.
 ```
+SUMMARY pass=75 sibling=5 gap=0
+tran waveout … v(syn) nRms≈0.0078
 NAMED-DEVICE-RECURSIVE: unencrypted=2541 exact=1222 refuse=1319 silent=0 hard-failure=0 encrypted-excluded=1471 exact-rate=48.1%
 ```
-Authored `.lib TIP121.LIB` / `.lib TIP127.LIB` darlington subckts (+2 exact vs
-1220). Draft5 AD823 `.tf` blocked. Left BandGaps alone. SHIPPABLE? **NO**
+Both landed on tip after diverge. SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
+
+---
+
+
+### 2026-08-05 — Educational waveout.asc TRAN → pass=75 (§DoD)
+
+**What I did**
+- Educational `waveout.asc` authored `.tran .5`: V2/V3/V4 + B1
+  `V=2*V(a)*V(b)*V(c)` product mixer. Document `.wave` is LTspice output-only
+  and is not emitted into the Tau deck. Default 2%/5%: v(syn) nRms≈0.0078 /
+  nMax≈0.021 span≈1.57. Zero unresolved / modelSubstitutions.
+- Tip `bdca160` PAsystem exact=1220 (BandGaps pass=74) → 75. Worktree
+  `Tau-wt-dod-draft`. Left Draft* / named-device maps / avoid-list alone.
+  Distinct from wavein (wavefile= stimulus — not landed).
+
+**Exact stdout**
+```
+SUMMARY pass=75 sibling=5 gap=0
+```
+
+**Files**
+- `apps/desktop/scripts/differentialParity.corpus.ts`
+- `AGENTS.md`, `FEATURE_PARITY.md`, `PROGRESS.md`
+
+**Tests**
+- `pnpm -C apps/desktop typecheck` + `test` green
+- `bash scripts/differential-parity.sh` → pass=75
+
+**Parity items**
+- Differential 🟡 **pass=75**. Named-device concurrent tip **48.1%** / exact=1222. SHIPPABLE? NO
+
+**Next step**
+- Continue honest differential outside Draft*/named-device. Avoid wavein/Fc/Chan/NIGBT/LT1001 walls.
 
 
 ---
@@ -36,7 +70,6 @@ Authored `.lib TIP121.LIB` / `.lib TIP127.LIB` darlington subckts (+2 exact vs
   blocked. Left BandGaps alone.
 
 **Exact stdout**
-
 ```
 NAMED-DEVICE: exact=2 refuse=4 silent=0
 NAMED-DEVICE-RECURSIVE: unencrypted=2541 exact=1222 refuse=1319 silent=0 hard-failure=0 encrypted-excluded=1471 exact-rate=48.1%
@@ -53,13 +86,10 @@ NAMED-DEVICE-RECURSIVE: unencrypted=2541 exact=1222 refuse=1319 silent=0 hard-fa
 
 **Parity items**
 - Named-device 🟡 exact **1222** / rate **48.1%** (≥95% not met). Differential
-  pass=74. SHIPPABLE? NO
+  concurrent **pass=75**. SHIPPABLE? NO
 
 **Next step**
-- Continue 19 differential; next plaintext refuse leftover.
-
-
-
+- Next plaintext refuse leftover / Draft5 if exact.
 
 
 ---
@@ -94,7 +124,7 @@ NAMED-DEVICE-RECURSIVE: unencrypted=2541 exact=1220 refuse=1321 silent=0 hard-fa
 
 **Parity items**
 - Named-device 🟡 exact **1220** / rate stdout **48.0%** (≥95% not met).
-  Differential pass=74. SHIPPABLE? NO
+  Differential pass=74 at time of landing. SHIPPABLE? NO
 
 **Next step**
 - TIP121/TIP127 sibling `.lib` subckt path for PowerAmpLayout; Continue 19

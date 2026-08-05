@@ -86,6 +86,7 @@ const DRAFT2_ASC = join(DOC_LTSPICE, "Draft2.asc");
 const DRAFT3_ASC = join(DOC_LTSPICE, "Draft3.asc");
 const DRAFT7_ASC = join(DOC_LTSPICE, "Draft7.asc");
 const BANDGAPS_ASC = join(EDU, "BandGaps.asc");
+const WAVEOUT_ASC = join(EDU, "waveout.asc");
 const SAMPLEANDHOLD_ASC = join(EDU, "SampleAndHold.asc");
 const EDU_VARISTOR_ASC = join(EDU, "varistor.asc");
 const STEPNOISE_ASC = join(EDU, "stepnoise.asc");
@@ -245,7 +246,7 @@ function withAcStimulus(netlist: string): string {
 describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential parity matrix", () => {
   const cells: DifferentialCell[] = [];
 
-  it("matches RC .tran/.ac/.meas, divider analyses, .step families, curvetrace, stepmodelparam, NoiseFigure, noise.asc, Colpitts/Clapp/Hartly AC, Cohn AC, MeasureBW AC, Transformer/Transformer2/IdealTransformer TRAN, notch/passive/butter/opamp/Linkwitz AC, LM741/LM308/LM78XX/P2/logamp TRAN, GFT AC, DCopPnt OP, audioamp TRAN, UHFpreamp AC, 1563 AC, S-param AC, stepAC AC, 2ndOrder* AC, MonteCarlo AC, varactor AC, phaseshift AC, Pierce/colpits2 AC, edu-varistor TRAN, stepnoise noise, UniversalOpAmp/1/2 TRAN, contrib/qztst AC, SampleAndHold TRAN, contrib/elip_grd AC, Draft3 AC, Draft7 AC, Draft2 TRAN, Draft1 TRAN, BandGaps DC-temp, Class-D AC/OP/DC/noise/tf", () => {
+  it("matches RC .tran/.ac/.meas, divider analyses, .step families, curvetrace, stepmodelparam, NoiseFigure, noise.asc, Colpitts/Clapp/Hartly AC, Cohn AC, MeasureBW AC, Transformer/Transformer2/IdealTransformer TRAN, notch/passive/butter/opamp/Linkwitz AC, LM741/LM308/LM78XX/P2/logamp TRAN, GFT AC, DCopPnt OP, audioamp TRAN, UHFpreamp AC, 1563 AC, S-param AC, stepAC AC, 2ndOrder* AC, MonteCarlo AC, varactor AC, phaseshift AC, Pierce/colpits2 AC, edu-varistor TRAN, stepnoise noise, UniversalOpAmp/1/2 TRAN, contrib/qztst AC, SampleAndHold TRAN, contrib/elip_grd AC, Draft3 AC, Draft7 AC, Draft2 TRAN, Draft1 TRAN, BandGaps DC-temp, waveout TRAN, Class-D AC/OP/DC/noise/tf", () => {
     // --- TRAN (also covered by waveformParity; re-assert here so this file is self-sufficient) ---
     {
       const result = runPairedBatch("diff-rc-tran", RC_TRAN, ["v(out)"]);
@@ -2853,6 +2854,63 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
       });
     }
 
+    // --- Educational waveout.asc authored .tran (BV product mixer; .wave is output-only) ---
+    // Pure V2/V3/V4 + B1 V=2*V(a)*V(b)*V(c). Authored `.tran .5`; document `.wave` is an
+    // LTspice save directive and is not emitted into the Tau deck (not a model path).
+    // Default 2%/5%: v(syn) nRms≈0.0078 nMax≈0.021 span≈1.57. Zero unresolved /
+    // substitutions. Distinct from wavein (wavefile= stimulus — not landed). Left Draft* /
+    // named-device maps / avoid-list alone. Stacked on tip BandGaps pass=74 → 75.
+    {
+      expect(existsSync(WAVEOUT_ASC), `missing ${WAVEOUT_ASC}`).toBe(true);
+      const imported = importAsc(decodeSchematicText(readFileSync(WAVEOUT_ASC)));
+      expect(imported.warnings).toEqual([]);
+      const dirs = expandDirectiveLines(imported.directives);
+      expect(dirs.some((d) => /^\.tran\b/i.test(d))).toBe(true);
+      expect(dirs.some((d) => /^\.wave\b/i.test(d))).toBe(true);
+      const parsed = analysesFromDirectives(dirs);
+      expect(parsed.tran, "waveout.asc must author .tran").toBeTruthy();
+      const params = buildParamScope(dirs);
+      const deck = buildSpiceDeck({
+        components: imported.components,
+        wires: imported.wires,
+        netLabels: imported.netLabels,
+        directives: dirs,
+        params,
+      }, {
+        kind: "tran",
+        stopTime: parsed.tran!.stopTime,
+        steps: parsed.tran!.steps ?? 5000,
+      });
+      expect(deck.unresolvedSubckts ?? []).toEqual([]);
+      expect(deck.modelSubstitutions ?? []).toEqual([]);
+      expect(deck.netlist).toMatch(/^B1\b.*V=2\*V\(a\)\*V\(b\)\*V\(c\)/im);
+      expect(deck.netlist).not.toMatch(/\.wave\b/i);
+      expect(deck.netlist).not.toMatch(/^X\w*\b/im);
+      const probes = ["v(a)", "v(b)", "v(c)", "v(syn)"] as const;
+      const result = runPairedBatch("diff-waveout-tran", deck.netlist, [...probes]);
+      const memberNotes: string[] = [];
+      for (const probe of probes) {
+        const lt = result.ltspice.get(probe)!;
+        const ng = result.ngspice.get(probe)!;
+        const comparison = compareWaveforms(ng.axis, ng.values, lt.axis, lt.values, {
+          rmsTolerance: 0.02,
+          maxTolerance: 0.05,
+        });
+        expect(comparison.pass, `waveout ${probe} ${JSON.stringify(comparison)}`).toBe(true);
+        expect(comparison.referenceRange, `waveout ${probe} non-hollow`).toBeGreaterThan(0.5);
+        memberNotes.push(
+          `${probe} nRms=${comparison.normalizedRms.toFixed(4)} nMax=${comparison.normalizedMax.toFixed(4)} span=${comparison.referenceRange.toFixed(3)}`,
+        );
+      }
+      cells.push({
+        analysis: "tran",
+        circuit: "waveout",
+        topology: "Educational waveout.asc BV product mixer V(a)*V(b)*V(c) (authored .tran .5; .wave output-only)",
+        status: "pass",
+        note: memberNotes.join("; "),
+      });
+    }
+
     // --- Class-D AC/OP (authored analyses are .tran/.meas; add AC/OP for differential proof) ---
     {
       const ascPath = join(CLASSD_DIR, "class-d-starter.asc");
@@ -3149,6 +3207,6 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
     expect(passCount).toBeGreaterThanOrEqual(70);
     expect(siblingCount).toBe(5);
     expect(gapCount).toBe(0);
-    expect(report).toMatch(/SUMMARY pass=74 sibling=5 gap=0/);
+    expect(report).toMatch(/SUMMARY pass=75 sibling=5 gap=0/);
   }, 240_000);
 });
