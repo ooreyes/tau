@@ -2,14 +2,51 @@
 
 **Status: DONE - 2026-08-05 07:20 CDT**
 
-Unit: Waveform DoD — **AC Bode legend right-click math**.
-Differential pass=95 · named-device 48.1%. Settings locked. SHIPPABLE? **NO**
+Unit: Circuit_testing_v1 `12_buck_converter.asc` authored `.tran` → differential **pass=96**.
+```
+SUMMARY pass=96 sibling=5 gap=0
+tran ct-buck … v(out) nRms=0.0000 nMax=0.0000 span=7.595; VOUT_AVG≈4.6417
+```
+Named-device 48.1%. Worktree `Tau-wt-diff-96` rebased over tip `2b2def2`
+(AC Bode legend math + pass=95). Left Staff EE Bode/waveform / Settings /
+Draft* / ct13–15 / ct19 alone.
+SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
 
 
 ---
+
+
+### 2026-08-05 — ct 12_buck_converter .tran → pass=96 (§DoD)
+
+**What I did**
+- Circuit_testing_v1 `12_buck_converter.asc` authored `.tran 50n 4m`
+  (12 V + PULSE gate 100 kHz 40% + PMOS RSR015P06 + Schottky 1N5819 +
+  L=100u/C=47u Rser + RLOAD=10): v(out) vs LTspice nRms≈2e-5; `.meas`
+  VOUT_AVG/VOUT_PP relErr≪2% (AVG≈4.642 V, PP≈15.1 mV). Exact
+  standardModels RSR015P06 + 1N5819 — zero unresolved/substitutions.
+  Probe filtered v(out) only (switch-node edge timing can exceed 5% maxTol).
+  Distinct from ct 18 bridge, edu 100W IRFP, ct 13 boost. Worktree
+  `Tau-wt-diff-96` rebased over `2b2def2` (AC Bode legend math).
+  Left Staff EE Bode/waveform / Settings / Draft* / ct13–15 / ct19 alone.
+
+**Files**
+- `apps/desktop/scripts/differentialParity.corpus.ts`
+- `FEATURE_PARITY.md`, `AGENTS.md`, `PROGRESS.md`
+
+**Tests**
+- `scripts/differential-parity.sh` → SUMMARY pass=96 sibling=5 gap=0
+- `pnpm -C apps/desktop typecheck` + `test` green (2754 passed)
+
+**Parity items**
+- Differential **pass=96** · named-device 48.1% · SHIPPABLE? NO
+
+**Next step**
+- ct 13 boost (QS6K1), ct 14 logic (if A-device stable), or Educational
+  non-wall leftovers. Leave ct19 OP / IRFP WIP / Draft* / Settings alone.
+
 
 
 
