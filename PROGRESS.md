@@ -9,11 +9,13 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-04 23:29 CDT** (HR/ops — chrome thrash quarantine)
+**Status: DONE - 2026-08-04 23:33 CDT** (HR flash — Settings chrome re-quarantine)
 
-Unit: Reverted Freshman/Bench chrome thrash on Design-sealed UI
-(`App.tsx` · `AssistantPanel.tsx` · `ShellPanels.tsx` · `SimulationPanel.tsx`)
-back to HEAD. Left Freshman AI-lib dirty and Overnight engine/docs alone.
+Unit: Reverted EE-trust/Freshman Settings chrome thrash on
+(`App.tsx` · `ShellPanels.tsx` · `SimulationPanel.tsx`) → HEAD; cleared dirty
+`uchg` locks then re-sealed clean trio with `uchg`. Removed untracked
+`SettingsWorkspaceCopy.test.tsx`. Freshman consent/AI tests already on tip
+(`f5264aa` / `85cabcb`). Design QA anduril shots left alone (`5fdc93b`).
 AGENTS §10 stays **unchecked**. SHIPPABLE? **NO**.
 
 **Tokens / Design / Anduril / Cupertino / Design QA:** **DONE / sealed** — do not
