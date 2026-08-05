@@ -1,11 +1,13 @@
 ## HEARTBEAT
 
-**Status: IN PROGRESS - 2026-08-05 ~14:35 CDT**
+**Status: DONE - 2026-08-05 ~14:35 CDT**
 
-Unit: **Resources/sinh.asc domain-safe .dc → pass=112** — then PowerAmpLayout
-A=0.2..0.7 → pass=113. DoD broad box stays open. SHIPPABLE? **NO**
+Unit: **LTspice.app Resources/sinh.asc domain-safe .dc → pass=112** — BV
+atanh≡½log ±0.99 (authored ±1.01 poles deferred). DoD broad-differential
+box stays open. SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
+
 
 
 ---
