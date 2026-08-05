@@ -59,6 +59,14 @@ describe("parseSourceFunction", () => {
     expect(() => parseSourceFunction("PWL(0 0 nope 1)", "V")).toThrow(/time.*invalid/i);
   });
 
+  it("rejects truncated PWL without a closing parenthesis", () => {
+    expect(() => parseSourceFunction("PWL(0 0 10m 0 +100n 3.3", "V")).toThrow(/malformed PWL/i);
+  });
+
+  it("rejects paren-less PWL with an odd argument count", () => {
+    expect(() => parseSourceFunction("PWL 0 0 +10u", "V")).toThrow(/malformed PWL/i);
+  });
+
   it("parses EXP and SFFM", () => {
     expect(parseSourceFunction("EXP(0 5 1m 2m 5m 3m)", "V")!.text).toBe(
       "DC 0 EXP(0 5 0.001 0.002 0.005 0.003)",

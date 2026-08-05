@@ -236,6 +236,9 @@ export function classifyNamedDeviceBucket(
     return "exact";
   }
   if (capability === "capability_refusal") {
+    // Encrypted exclusion applies ONLY to honest capability refusals.
+    // Never rebucket hard_failure here — that would hide real deck/import
+    // failures behind encrypted-excluded and fake HF→0.
     return options.encryptedDependent ? "encrypted" : "refuse";
   }
   return "hard_failure";

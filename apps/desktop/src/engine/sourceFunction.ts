@@ -13,6 +13,34 @@ export interface SourceSpec {
   dc: number;
 }
 
+export class MalformedPwlError extends Error {
+  constructor(message = "malformed PWL waveform") {
+    super(message);
+    this.name = "MalformedPwlError";
+  }
+}
+
+/** True when a PWL card is visibly truncated (unclosed `(` or odd arg count). */
+export function isMalformedPwlValue(rawValue: string): boolean {
+  let value = rawValue.trim();
+  const dcMatch = /^DC\s+([^\s,;]+)\s+/i.exec(value);
+  if (dcMatch) value = value.slice(dcMatch[0].length).trim();
+  const parenMatch = /^PWL\s*\((.*)$/is.exec(value);
+  if (parenMatch) {
+    const tail = parenMatch[1]!;
+    if (!tail.includes(")")) return true;
+    const inner = tail.slice(0, tail.lastIndexOf(")")).trim();
+    const args = inner.split(/[\s,]+/).filter(Boolean);
+    return args.length === 0 || args.length % 2 !== 0;
+  }
+  const parenlessMatch = /^PWL\s+(?!\()/is.exec(value);
+  if (parenlessMatch) {
+    const args = value.slice(parenlessMatch[0].length).trim().split(/[\s,]+/).filter(Boolean);
+    return args.length === 0 || args.length % 2 !== 0;
+  }
+  return false;
+}
+
 /** Parse one LTspice PWL time token. A leading `+` is relative to the previous
  * breakpoint (not merely a positive absolute number). Reject backwards or
  * malformed time axes instead of silently turning them into time zero. */
@@ -23,11 +51,11 @@ export function parsePwlTimeToken(token: string, previous: number): number {
   try {
     parsed = parseQuantity(quantity, "s");
   } catch {
-    throw new Error(`PWL time "${token}" is invalid.`);
+    throw new MalformedPwlError(`PWL time "${token}" is invalid.`);
   }
-  if (!Number.isFinite(parsed) || parsed < 0) throw new Error(`PWL time "${token}" is invalid.`);
+  if (!Number.isFinite(parsed) || parsed < 0) throw new MalformedPwlError(`PWL time "${token}" is invalid.`);
   const time = relative ? previous + parsed : parsed;
-  if (time < previous) throw new Error(`PWL time "${token}" goes backwards.`);
+  if (time < previous) throw new MalformedPwlError(`PWL time "${token}" goes backwards.`);
   return parseFloat(time.toPrecision(12));
 }
 
@@ -56,11 +84,17 @@ export function parseSourceFunction(rawValue: string, unit: SourceUnit): SourceS
     }
     value = value.slice(dcMatch[0].length).trim();
   }
+  if (/^\s*PWL\b/i.test(value) && isMalformedPwlValue(value)) {
+    throw new MalformedPwlError();
+  }
   // LTspice accepts both `PWL(...)` and paren-less `PWL 0 0 +10u 3.3 …`
   // (LT8708-1 V3). Require a following `(` or whitespace+args so a bare
   // keyword alone is not treated as a waveform.
   const match = value.match(/^(SINE|SIN|PULSE|PWL|EXP|SFFM)(?:\s*\(([^)]*)\)|\s+(.+))$/i);
-  if (!match) return null;
+  if (!match) {
+    if (/^\s*PWL\b/i.test(value)) throw new MalformedPwlError();
+    return null;
+  }
 
   const fn = match[1]!.toUpperCase();
   const args = (match[2] ?? match[3] ?? "").trim().split(/[\s,]+/).filter(Boolean);
@@ -114,10 +148,17 @@ export function parseSourceFunction(rawValue: string, unit: SourceUnit): SourceS
     case "PWL": {
       // Alternating time/level pairs; ngspice accepts the same form. Levels use
       // the source unit, times are seconds.
+      if (args.length === 0 || args.length % 2 !== 0) throw new MalformedPwlError();
       const pairs: number[] = [];
       let previousTime = 0;
       for (let i = 0; i < args.length; i += 2) {
-        const time = parsePwlTimeToken(args[i], previousTime);
+        let time: number;
+        try {
+          time = parsePwlTimeToken(args[i]!, previousTime);
+        } catch (err) {
+          if (err instanceof MalformedPwlError) throw err;
+          throw new MalformedPwlError();
+        }
         pairs.push(time);
         previousTime = time;
         if (i + 1 < args.length) pairs.push(num(args[i + 1], unit));

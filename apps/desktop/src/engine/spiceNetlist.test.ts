@@ -473,12 +473,72 @@ describe("buildSpiceDeck", () => {
     expect(deck.netlist).toMatch(/R1 \S+ \S+ -1000/);
   });
 
-  it("still rejects a zero resistance (a short)", () => {
+  it("emits a zero-ohm short (LTspice Value 0)", () => {
     const components = [
+      component("vsource", "V1", "1", 0, 32),
       component("resistor", "R1", "0", 0, 0),
       component("ground", "", "", 16, 32),
     ];
-    expect(() => buildSpiceDeck({ components, wires: [] }, { kind: "op" })).toThrow(/non-zero/);
+    const wires = [wire("w1", [{ x: 0, y: 0 }, { x: 64, y: 0 }])];
+    const deck = buildSpiceDeck({ components, wires }, { kind: "op" });
+    expect(deck.netlist).toMatch(/R1 \S+ \S+ 0/);
+  });
+
+  it("refuses a time-varying PWL resistance", () => {
+    const components = [
+      component("resistor", "R1", "PWL(0 1k 1m 2k)", 0, 0),
+      component("ground", "", "", 16, 32),
+    ];
+    expect(() => buildSpiceDeck({ components, wires: [] }, { kind: "op" })).toThrow(
+      "Simulation refused: R1 uses a time-varying PWL resistance Tau cannot map exactly. No approximate or partial circuit was run.",
+    );
+  });
+
+  it("refuses a paren-less PWL resistance", () => {
+    const components = [
+      component("resistor", "R1", "PWL 0 1k 1m 2k", 0, 0),
+      component("ground", "", "", 16, 32),
+    ];
+    expect(() => buildSpiceDeck({ components, wires: [] }, { kind: "op" })).toThrow(
+      /time-varying PWL resistance/,
+    );
+  });
+
+  it("omits a zero-valued capacitor (open circuit)", () => {
+    const components = [
+      component("vsource", "V1", "5", 0, 32),
+      component("capacitor", "Ccomp_H", "0p", 96, 0),
+      component("ground", "", "", 0, 64),
+      component("ground", "", "", 128, 0),
+    ];
+    const wires = [wire("w1", [{ x: 0, y: 0 }, { x: 64, y: 0 }])];
+    const deck = buildSpiceDeck({ components, wires }, { kind: "op" });
+    expect(deck.netlist).not.toMatch(/^Ccomp_H\b/m);
+  });
+
+  it("omits a zero-valued capacitor after param expansion", () => {
+    const components = [
+      component("vsource", "V1", "5", 0, 32),
+      component("capacitor", "Ccomp_H", "{Ccomp}", 96, 0),
+      component("ground", "", "", 0, 64),
+      component("ground", "", "", 128, 0),
+    ];
+    const wires = [wire("w1", [{ x: 0, y: 0 }, { x: 64, y: 0 }])];
+    const deck = buildSpiceDeck(
+      { components, wires, params: buildParamScope([".param Ccomp=0p"]) },
+      { kind: "op" },
+    );
+    expect(deck.netlist).not.toMatch(/^Ccomp_H\b/m);
+  });
+
+  it("refuses a malformed truncated PWL voltage source", () => {
+    const components = [
+      component("vsource", "V5", "PWL(0 0 10m 0 +100n 3.3", 0, 32),
+      component("ground", "", "", 0, 64),
+    ];
+    expect(() => buildSpiceDeck({ components, wires: [] }, { kind: "op" })).toThrow(
+      "Simulation refused: V5 has a malformed PWL waveform. No approximate or partial circuit was run.",
+    );
   });
 
   it("lets a document's .options directive override the default deck options", () => {

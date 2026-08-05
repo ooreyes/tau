@@ -14,6 +14,12 @@
  * Deck-only (no ngspice): exact-model *build* rate, not authored-analysis
  * numeric parity. Encrypted ModelFile dependents are excluded from the
  * unencrypted denominator.
+ *
+ * Symbol metadata for this harness uses **exact relative `.asy` joins only**.
+ * Basename ASY search (`resolveInstalledAsyPath`) can attach a different
+ * family's ModelFile and inflate encrypted-excluded — do not use it here.
+ * Optional audits: NAMED_DEVICE_TRIAGE / NAMED_DEVICE_REFUSE_TRIAGE /
+ * NAMED_DEVICE_ENCRYPTED_AUDIT=1.
  */
 import { readFileSync, readdirSync, existsSync } from "node:fs";
 import { basename, delimiter, isAbsolute, join, normalize, relative, sep } from "node:path";
@@ -34,7 +40,6 @@ import {
 import { opampIdentity } from "../src/engine/opampModel";
 import { parseUserModelLibraries, resolveUserSubckt, type UserModelLibraryRegistry } from "../src/engine/userModelLibrary";
 import { ltspiceLibRoots } from "./ltspiceLibRoot";
-import { resolveInstalledAsyPath } from "../src/io/ltspiceSymbolResolve";
 import type { SchematicComponent } from "../src/schematic/types";
 
 const HOME = homedir();
@@ -129,16 +134,6 @@ function siblingResolver(parentDir: string) {
   });
 }
 
-function cacheSymbolMetadata(relativeSymbol: string, parsed: AsySymbol | null): AsySymbol | null {
-  const key = relativeSymbol.toLowerCase();
-  symbolMetadataCache.set(key, parsed);
-  const leafKey = basename(relativeSymbol).toLowerCase();
-  if (leafKey !== key && !symbolMetadataCache.has(leafKey)) {
-    symbolMetadataCache.set(leafKey, parsed);
-  }
-  return parsed;
-}
-
 function installedSymbolMetadata(symbolType: string): AsySymbol | null {
   const relativeSymbol = normalize(symbolType.replace(/[\\/]+/g, sep));
   if (
@@ -153,10 +148,19 @@ function installedSymbolMetadata(symbolType: string): AsySymbol | null {
     ...EXTRA_SYMBOL_ROOTS,
     ...ltspiceLibRoots().map((root) => join(root, "sym")),
   ];
-  const path = resolveInstalledAsyPath(roots, symbolType);
-  if (!path) return cacheSymbolMetadata(relativeSymbol, null);
-  const parsed = parseAsy(decodeSchematicText(readFileSync(path)));
-  return cacheSymbolMetadata(relativeSymbol, parsed);
+  // Exact relative join only — no basename ASY search. Fuzzy basename resolve
+  // can attach another family's ModelFile and dishonestly inflate
+  // encrypted-excluded (seen as ~1474 → ~2776 on this corpus).
+  for (const root of roots) {
+    const path = join(root, `${relativeSymbol}.asy`);
+    const rel = relative(root, path);
+    if (rel === ".." || rel.startsWith(`..${sep}`) || isAbsolute(rel) || !existsSync(path)) continue;
+    const parsed = parseAsy(decodeSchematicText(readFileSync(path)));
+    symbolMetadataCache.set(key, parsed);
+    return parsed;
+  }
+  symbolMetadataCache.set(key, null);
+  return null;
 }
 
 /** True when the relative ModelFile resolves to encrypted/binary installed bytes. */
@@ -399,6 +403,47 @@ describe.skipIf(corpus.length === 0)("named-device recursive exact-model %", () 
       }
     }
 
+    if (process.env.NAMED_DEVICE_REFUSE_TRIAGE === "1") {
+      const refused = entries.filter((e) =>
+        classifyNamedDeviceBucket(e.row, {
+          encryptedDependent: e.encryptedDependent,
+          skipNgspice: true,
+        }) === "refuse"
+      );
+      const buckets = new Map<string, { count: number; samples: string[] }>();
+      for (const entry of refused) {
+        const err = entry.row.error ?? "(no error)";
+        let key = err;
+        if (err.startsWith("import: ")) key = `import: ${err.slice(8, 80)}`;
+        else if (err.startsWith("validate: ")) key = `validate: ${err.slice(10, 100)}`;
+        else if (err.startsWith("deck: ")) {
+          const body = err.slice(6);
+          key = `deck: ${body
+            .replace(/"[^"]+"/g, '"…"')
+            .replace(/\b[A-Z][A-Za-z0-9]*\d+\b/g, "REF")
+            .replace(/\b[A-Za-z0-9_./\\-]{24,}\b/g, "…")
+            .slice(0, 140)}`;
+        } else {
+          key = err.slice(0, 140);
+        }
+        const slot = buckets.get(key) ?? { count: 0, samples: [] };
+        slot.count += 1;
+        if (slot.samples.length < 2) slot.samples.push(entry.row.file);
+        buckets.set(key, slot);
+      }
+      const ranked = [...buckets.entries()].sort((a, b) => b[1].count - a[1].count);
+      // eslint-disable-next-line no-console
+      console.log(`\nREFUSE TRIAGE (${refused.length} files, ${ranked.length} classes):\n`);
+      for (const [key, info] of ranked.slice(0, 40)) {
+        // eslint-disable-next-line no-console
+        console.log(`  ${info.count}× ${key}`);
+        for (const sample of info.samples) {
+          // eslint-disable-next-line no-console
+          console.log(`      e.g. ${sample}`);
+        }
+      }
+    }
+
     if (process.env.NAMED_DEVICE_ENCRYPTED_AUDIT === "1") {
       // CEO red-flag audit: encrypted-excluded must be capability_refusal ∩
       // encryptedDependent only. Clearing the flag must yield refuse, never
@@ -414,6 +459,8 @@ describe.skipIf(corpus.length === 0)("named-device recursive exact-model %", () 
       let wouldOther = 0;
       const buckets = new Map<string, { count: number; samples: string[] }>();
       const unresolvedStems = new Map<string, number>();
+      let viaUnresolvedEncStem = 0;
+      let viaOtherEncSignal = 0;
       for (const entry of encrypted) {
         const without = classifyNamedDeviceBucket(entry.row, {
           encryptedDependent: false,
@@ -422,6 +469,11 @@ describe.skipIf(corpus.length === 0)("named-device recursive exact-model %", () 
         if (without === "refuse") wouldRefuse += 1;
         else if (without === "hard_failure") wouldHard += 1;
         else wouldOther += 1;
+        const hasUnresolvedEnc = (entry.row.unresolvedSubckts ?? []).some((n) =>
+          tokenNamesEncryptedInstalledModel(n)
+        );
+        if (hasUnresolvedEnc) viaUnresolvedEncStem += 1;
+        else viaOtherEncSignal += 1;
         for (const name of entry.row.unresolvedSubckts ?? []) {
           const stem = name.replace(/\\/g, "/").split("/").pop()!.toLowerCase();
           unresolvedStems.set(stem, (unresolvedStems.get(stem) ?? 0) + 1);
@@ -448,6 +500,10 @@ describe.skipIf(corpus.length === 0)("named-device recursive exact-model %", () 
       // eslint-disable-next-line no-console
       console.log(
         `\nENCRYPTED-EXCLUSION AUDIT (${encrypted.length} files): without-flag refuse=${wouldRefuse} hard_failure=${wouldHard} other=${wouldOther}`,
+      );
+      // eslint-disable-next-line no-console
+      console.log(
+        `  reasons: unresolvedEncStem=${viaUnresolvedEncStem} otherEncSignal=${viaOtherEncSignal}`,
       );
       // eslint-disable-next-line no-console
       console.log(

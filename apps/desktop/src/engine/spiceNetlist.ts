@@ -17,7 +17,7 @@ import {
 import type { ComponentKind, NetLabel, SchematicComponent, SchematicForeignSymbol, SchematicWire } from "../schematic/types";
 import { parseQuantity, formatEngineering } from "../simulation/quantity";
 import { decodeParams } from "../schematic/params";
-import { parseSourceFunction } from "./sourceFunction";
+import { parseSourceFunction, MalformedPwlError, type SourceUnit, type SourceSpec } from "./sourceFunction";
 import { stripAcSpec, acSpecDeckText, stripSourceModifiers, stripLtspiceInlineComment } from "./acSpec";
 import { stripIcSpec, icSpecDeckText, parseIcValue } from "./icSpec";
 import { behavioralSpecText as behavioralSpec, ifToTernary, ltFuncsToNgspice, moduloToFloor, statFuncsToNgspice } from "../simulation/behavioral";
@@ -1255,6 +1255,12 @@ function componentLines(entry: ExtractedComponent, index: number, name: string, 
       // `V=`/`R=` expression (switchable drive strength ron/roff). ngspice
       // takes the run-time expression quoted: R1 a b r = 'expr'.
       const raw = component.value ?? "";
+      if (/^\s*PWL\b/i.test(raw)) {
+        const ref = component.label.trim() || name;
+        throw new Error(
+          `Simulation refused: ${ref} uses a time-varying PWL resistance Tau cannot map exactly. No approximate or partial circuit was run.`,
+        );
+      }
       if (/^\s*[VR]\s*=/i.test(raw)) {
         const expr = moduloToFloor(ltFuncsToNgspice(statFuncsToNgspice(ifToTernary(raw.replace(/^\s*[VR]\s*=\s*/i, "")))));
         return [`${name} ${node("a")} ${node("b")} r = '${expr}'`];
@@ -1263,12 +1269,12 @@ function componentLines(entry: ExtractedComponent, index: number, name: string, 
       // `.step temp` actually move the resistor. Magnitude is the stripped
       // value (braces may remain for native `.step param`).
       const tempco = ngspiceResistorTempcoSuffix(raw);
-      const magnitude = nonZeroNumberValue(
+      const magnitude = resistorNumberValue(
         tempco ? { ...component, value: stripTcSpec(raw) } : component,
         "Ohm",
       );
       // SPICE allows negative resistance (active/negative-impedance elements,
-      // e.g. Draft7's -1k); reject only zero/NaN, which is a short.
+      // e.g. Draft7's -1k) and zero (an ideal short); reject only NaN/invalid.
       return [`${name} ${node("a")} ${node("b")} ${magnitude}${tempco}`];
     }
     case "capacitor": {
@@ -1301,7 +1307,10 @@ function componentLines(entry: ExtractedComponent, index: number, name: string, 
           ...parallel,
         ];
       }
-      const capacitance = positiveNumberFromText(component, stripIcSpec(parasitics.value), "F");
+      const capacitance = capacitanceDeckValue(component, stripIcSpec(parasitics.value));
+      if (capacitance === null) {
+        return parallel;
+      }
       if (!hasRser) {
         return [
           `${name} ${positive} ${negative} ${capacitance}${icSpecDeckText(component.value)}`,
@@ -1355,7 +1364,7 @@ function componentLines(entry: ExtractedComponent, index: number, name: string, 
       const internal = `tau_${safeName(name).toLowerCase()}_rser`;
       const posNode = series.ohms !== null && series.ohms > 0 ? internal : positive;
       let sourceLine: string;
-      const fn = parseSourceFunction(main, "V");
+      const fn = parseSourceFunctionForDeck(main, "V", component.label.trim() || name);
       if (fn) {
         sourceLine = `${name} ${posNode} ${negative} ${fn.text}${ac}`;
       } else {
@@ -1385,7 +1394,7 @@ function componentLines(entry: ExtractedComponent, index: number, name: string, 
       if (loadFlag) warnings.push(clampedLoadSourceWarning(component.label.trim() || name, loadFlag[1].toLowerCase()));
       const main = withFlag.replace(/\s+load2?\s*$/i, "");
       const ac = acSpecDeckText(component.value);
-      const fn = parseSourceFunction(main, "A");
+      const fn = parseSourceFunctionForDeck(main, "A", component.label.trim() || name);
       if (fn) return [`${name} ${node("n")} ${node("p")} ${fn.text}${ac}`];
       const dc = numberFromText(component, main, "A");
       const startup = startupRampSeconds === undefined ? "" : ` PWL(0 0 ${startupRampSeconds} ${dc})`;
@@ -2234,17 +2243,44 @@ function passiveSeriesResistance(component: SchematicComponent): { value: string
   };
 }
 
-/** Like parsedNumber but rejects only zero/NaN, allowing negative values.
- *  Used for resistors, where SPICE permits a negative (active) resistance but a
- *  zero value is a short that yields a singular deck.
+/** Parse a source waveform, turning malformed PWL into an honest refusal. */
+function parseSourceFunctionForDeck(raw: string, unit: SourceUnit, ref: string): SourceSpec | null {
+  try {
+    return parseSourceFunction(raw, unit);
+  } catch (err) {
+    if (err instanceof MalformedPwlError || /^\s*PWL\b/i.test(raw)) {
+      throw new Error(
+        `Simulation refused: ${ref} has a malformed PWL waveform. No approximate or partial circuit was run.`,
+      );
+    }
+    throw err;
+  }
+}
+
+/** Capacitance for an ordinary C element: null omits a zero-valued cap (open). */
+function capacitanceDeckValue(component: SchematicComponent, text: string): string | null {
+  const trimmed = text.trim().replace(/µ/g, "u");
+  if (hasUnresolvedBrace(trimmed)) return trimmed;
+  let value: number;
+  try {
+    value = parseQuantity(trimmed, "F");
+    if (!Number.isFinite(value)) throw new Error("not finite");
+  } catch {
+    throw new Error(`${component.label || component.kind} needs a valid F value.`);
+  }
+  if (value === 0) return null;
+  if (value < 0) {
+    throw new Error(`${component.label || component.kind} needs a positive F value (got ${value}).`);
+  }
+  return value.toString();
+}
+
+/** Like parsedNumber but allows zero and negative values for resistors.
  *  Unresolved `{expr}` passes through for the native `.step param` path. */
-function nonZeroNumberValue(component: SchematicComponent, unit: string): string {
+function resistorNumberValue(component: SchematicComponent, unit: string): string {
   const raw = (component.value ?? "").trim().replace(/µ/g, "u");
   if (hasUnresolvedBrace(raw)) return raw;
   const value = parsedNumber(component, unit);
-  if (value === 0) {
-    throw new Error(`${component.label || component.kind} needs a non-zero ${unit} value.`);
-  }
   return value.toString();
 }
 
