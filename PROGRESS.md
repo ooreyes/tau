@@ -9,19 +9,51 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 01:47 CDT**
+**Status: DONE - 2026-08-05 01:55 CDT**
 
-Unit: Plaintext refuse dig (exhausted) + Educational MeasureBW.asc AC → differential **pass=26**.
+Unit: Educational `Transformer.asc` authored `.tran` + `K1 L1 L2 1` → differential **pass=27**.
 ```
-NAMED-DEVICE-RECURSIVE: … exact-rate=47.9% (unchanged; refuse mass = encrypted SpiceModel .sub)
-SUMMARY pass=26 sibling=5 gap=0
+SUMMARY pass=27 sibling=5 gap=0
+tran transformer … v(in) nRms=0.0000 · v(out) nRms=0.0000
 ```
+Vswitch deferred: LTspice negative-`Vh` continuous SW ≠ ngspice abrupt (honest gap).
 SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
 
 ---
+
+### 2026-08-05 — Transformer TRAN differential → pass=27 (§DoD)
+
+**What I did**
+- Pivoted off named-device plaintext wall and Vswitch (negative-`Vh` SW
+  continuous in LTspice, abrupt in ngspice-46 — not faked).
+- Educational `Transformer.asc`: coupled inductors + `K1 L1 L2 1`, authored
+  `.tran 100u` → Tau deck vs LTspice/ngspice V(in)/V(out) match → **pass=27**.
+
+**Exact stdout**
+```
+SUMMARY pass=27 sibling=5 gap=0 (DoD box stays open until broad authored-analysis matrix is green)
+tran      transformer       pass      … v(in) nRms=0.0000 nMax=0.0000; v(out) nRms=0.0000 nMax=0.0001
+```
+
+**Files**
+- `apps/desktop/scripts/differentialParity.corpus.ts`
+- `AGENTS.md`, `FEATURE_PARITY.md`, `PROGRESS.md`
+- `~/Desktop/TAU-MORNING-STATUS.md`
+
+**Tests**
+- `scripts/differential-parity.sh`; typecheck; apps/desktop test
+
+**Parity items**
+- Differential 🟡 **pass=27 · sibling=5 · gap=0**; broad matrix still open
+- Named-device 🟡 **47.9%** unchanged (encrypted wall). SHIPPABLE? NO
+
+**Next**
+- IdealTransformer / Howland (needs LT1001 attach) / Clapp AC; or continuous
+  negative-`Vh` SW translation for Vswitch — never fake encrypted
+
 
 ### 2026-08-05 — MeasureBW AC + plaintext refuse exhausted (§DoD)
 

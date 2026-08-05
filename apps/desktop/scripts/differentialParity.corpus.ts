@@ -48,6 +48,7 @@ const NOISEFIGURE_ASC = join(EDU, "NoiseFigure.asc");
 const NOISE_ASC = join(EDU, "noise.asc");
 const COHN_ASC = join(EDU, "Cohn.asc");
 const MEASUREBW_ASC = join(EDU, "MeasureBW.asc");
+const TRANSFORMER_ASC = join(EDU, "Transformer.asc");
 const STEPTEMP_ASC = join(EDU, "steptemp.asc");
 const STEPMODELPARAM_ASC = join(EDU, "stepmodelparam.asc");
 const COLPITTS_ASC = process.env.COLPITTS_ASC ?? join(EDU, "colpits.asc");
@@ -195,7 +196,7 @@ function withAcStimulus(netlist: string): string {
 describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential parity matrix", () => {
   const cells: DifferentialCell[] = [];
 
-  it("matches RC .tran/.ac/.meas, divider analyses, .step families, curvetrace, stepmodelparam, NoiseFigure, noise.asc, Colpitts AC, Cohn AC, MeasureBW AC, Class-D AC/OP/DC/noise/tf", () => {
+  it("matches RC .tran/.ac/.meas, divider analyses, .step families, curvetrace, stepmodelparam, NoiseFigure, noise.asc, Colpitts AC, Cohn AC, MeasureBW AC, Transformer TRAN, Class-D AC/OP/DC/noise/tf", () => {
     // --- TRAN (also covered by waveformParity; re-assert here so this file is self-sufficient) ---
     {
       const result = runPairedBatch("diff-rc-tran", RC_TRAN, ["v(out)"]);
@@ -880,6 +881,51 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
       });
     }
 
+    // --- Educational Transformer.asc authored .tran (coupled inductors K=1) ---
+    {
+      expect(existsSync(TRANSFORMER_ASC), `missing ${TRANSFORMER_ASC}`).toBe(true);
+      const imported = importAsc(decodeSchematicText(readFileSync(TRANSFORMER_ASC)));
+      expect(imported.warnings).toEqual([]);
+      const parsed = analysesFromDirectives(imported.directives);
+      expect(parsed.tran, "Transformer.asc must author .tran").toBeTruthy();
+      expect(imported.directives.some((d) => /^K1\b/i.test(d.trim()))).toBe(true);
+      const params = buildParamScope(imported.directives);
+      const deck = buildSpiceDeck({
+        components: imported.components,
+        wires: imported.wires,
+        netLabels: imported.netLabels,
+        directives: imported.directives,
+        params,
+      }, {
+        kind: "tran",
+        stopTime: parsed.tran!.stopTime,
+        steps: parsed.tran!.steps ?? 3000,
+      });
+      expect(deck.unresolvedSubckts ?? []).toEqual([]);
+      expect(deck.netlist).toMatch(/^K1\s+L1\s+L2\b/im);
+      expect(deck.netlist).toMatch(/^L1\b/im);
+      expect(deck.netlist).toMatch(/^L2\b/im);
+      const result = runPairedBatch("diff-transformer-tran", deck.netlist, ["v(in)", "v(out)"]);
+      const memberNotes: string[] = [];
+      for (const trace of ["v(in)", "v(out)"] as const) {
+        const lt = result.ltspice.get(trace)!;
+        const ng = result.ngspice.get(trace)!;
+        const comparison = compareWaveforms(ng.axis, ng.values, lt.axis, lt.values, {
+          rmsTolerance: 0.02,
+          maxTolerance: 0.05,
+        });
+        expect(comparison.pass, `${trace} ${JSON.stringify(comparison)}`).toBe(true);
+        memberNotes.push(`${trace} nRms=${comparison.normalizedRms.toFixed(4)} nMax=${comparison.normalizedMax.toFixed(4)}`);
+      }
+      cells.push({
+        analysis: "tran",
+        circuit: "transformer",
+        topology: "Educational Transformer.asc coupled L1/L2 K=1 (authored .tran 100µ)",
+        status: "pass",
+        note: memberNotes.join("; "),
+      });
+    }
+
     // --- Class-D AC/OP (authored analyses are .tran/.meas; add AC/OP for differential proof) ---
     {
       const ascPath = join(CLASSD_DIR, "class-d-starter.asc");
@@ -1173,9 +1219,9 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
     const passCount = cells.filter((cell) => cell.status === "pass").length;
     const gapCount = cells.filter((cell) => cell.status === "gap").length;
     const siblingCount = cells.filter((cell) => cell.status === "sibling").length;
-    expect(passCount).toBeGreaterThanOrEqual(26);
+    expect(passCount).toBeGreaterThanOrEqual(27);
     expect(siblingCount).toBe(5);
     expect(gapCount).toBe(0);
-    expect(report).toMatch(/SUMMARY pass=26 sibling=5 gap=0/);
+    expect(report).toMatch(/SUMMARY pass=27 sibling=5 gap=0/);
   }, 240_000);
 });
