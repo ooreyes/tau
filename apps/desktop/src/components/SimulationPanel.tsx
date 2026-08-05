@@ -2771,6 +2771,9 @@ export function NoisePlot({ result }: { result: NoiseResult | null }) {
   const { targetXTicks, targetYTicks } = tickCountsFromSize(size);
   const [exprList, setExprList] = useState<string[]>([]);
   const [exprError, setExprError] = useState<string | null>(null);
+  const [cursorsOn, setCursorsOn] = useState(false);
+  const [cf1, setCf1] = useState(0.25);
+  const [cf2, setCf2] = useState(0.75);
 
   const overlays = useMemo(() => {
     if (!success) return [];
@@ -2862,6 +2865,34 @@ export function NoisePlot({ result }: { result: NoiseResult | null }) {
     [measureRef, attachSvg],
   );
 
+  // Two log-frequency cursors on V(onoise) — FFT/Bode-style f1/f2/@C1/@C2/Δ.
+  const noiseCursors = useMemo(() => {
+    if (!cursorsOn || !success) return null;
+    const x1 = logFractionToX(success.freqs, cf1);
+    const x2 = logFractionToX(success.freqs, cf2);
+    if (!Number.isFinite(x1) || !Number.isFinite(x2)) return null;
+    try {
+      return cursorReadout(
+        success.freqs,
+        [{ label: "V(onoise)", values: success.onoise, unit: "V/√Hz" }],
+        x1,
+        x2,
+      );
+    } catch {
+      return null;
+    }
+  }, [cursorsOn, success, cf1, cf2]);
+
+  const noiseCursorPixelX = (f: number): number | null => {
+    if (!(f > 0) || !(viewport.xMin > 0) || !(viewport.xMax > 0)) return null;
+    const f0 = Math.log10(viewport.xMin);
+    const f1 = Math.log10(viewport.xMax);
+    const fSpan = f1 - f0 || 1;
+    const frac = (Math.log10(f) - f0) / fSpan;
+    if (frac < 0 || frac > 1) return null;
+    return PLOT_PAD + frac * (PLOT_WIDTH - PLOT_PAD * 2);
+  };
+
   const plotNoiseExpression = (expr: string) => {
     const trimmed = expr.trim();
     if (!trimmed) return;
@@ -2935,6 +2966,19 @@ export function NoisePlot({ result }: { result: NoiseResult | null }) {
                 })}
               </ScopeClip>
             )}
+            {noiseCursors &&
+              [noiseCursors.x1, noiseCursors.x2].map((f, i) => {
+                const x = noiseCursorPixelX(f);
+                if (x === null) return null;
+                return (
+                  <g key={`nc${i}`} className="plot-cursor">
+                    <line x1={x} y1={PLOT_PAD} x2={x} y2={PLOT_HEIGHT - PLOT_PAD} />
+                    <text x={x + 3} y={PLOT_PAD + 10}>
+                      {i + 1}
+                    </text>
+                  </g>
+                );
+              })}
           </svg>
           {plot && <ScopeZoomCluster onZoomIn={() => zoomBy(0.7)} onZoomOut={() => zoomBy(1 / 0.7)} onFit={fit} />}
         </div>
@@ -2985,10 +3029,66 @@ export function NoisePlot({ result }: { result: NoiseResult | null }) {
         </div>
       )}
       <div className="meter-row analysis-meter">
+        <Button
+          size="sm"
+          variant={cursorsOn ? "default" : "outline"}
+          aria-pressed={cursorsOn}
+          aria-label="Toggle noise cursors"
+          onClick={() => setCursorsOn((c) => !c)}
+        >
+          Cursors
+        </Button>
         <Metric label="TOT ONOISE" value={formatEngineering(result.totalOutputNoise, "V", 3)} tone="green" />
         <Metric label="TOT INOISE" value={formatEngineering(result.totalInputNoise, result.inoiseUnit.replace("/√Hz", ""), 3)} tone="cyan" />
         <Metric label="POINTS" value={String(result.freqs.length)} tone="cream" />
       </div>
+      {cursorsOn && (
+        <div className="cursor-sliders">
+          <label>
+            C1
+            <input
+              type="range"
+              min={0}
+              max={1000}
+              value={Math.round(cf1 * 1000)}
+              aria-label="Noise cursor 1 position"
+              onChange={(e) => setCf1(Number(e.currentTarget.value) / 1000)}
+            />
+          </label>
+          <label>
+            C2
+            <input
+              type="range"
+              min={0}
+              max={1000}
+              value={Math.round(cf2 * 1000)}
+              aria-label="Noise cursor 2 position"
+              onChange={(e) => setCf2(Number(e.currentTarget.value) / 1000)}
+            />
+          </label>
+        </div>
+      )}
+      {noiseCursors && (
+        <div className="meter-row analysis-meter" aria-label="Noise cursor readout">
+          <Metric label="f1" value={formatEngineering(noiseCursors.x1, "Hz", 3)} tone="cyan" />
+          <Metric label="f2" value={formatEngineering(noiseCursors.x2, "Hz", 3)} tone="cyan" />
+          <Metric
+            label="@C1"
+            value={formatEngineering(noiseCursors.traces[0]!.y1, "V/√Hz", 3)}
+            tone="green"
+          />
+          <Metric
+            label="@C2"
+            value={formatEngineering(noiseCursors.traces[0]!.y2, "V/√Hz", 3)}
+            tone="green"
+          />
+          <Metric
+            label="Δ"
+            value={formatEngineering(noiseCursors.traces[0]!.dy, "V/√Hz", 3)}
+            tone="cream"
+          />
+        </div>
+      )}
       {result.warnings.length > 0 && <div className="analysis-empty warn" role="status">{result.warnings.join(" ")}</div>}
     </>
   );

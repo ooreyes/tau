@@ -534,4 +534,32 @@ describe("NoisePlot - log-log (frequency × V/√Hz decades) ticks", () => {
     expect(screen.getByLabelText("Remove abs(V(onoise))")).toBeTruthy();
     expect(screen.getByText("abs(V(onoise))")).toBeTruthy();
   });
+
+  it("noise cursors read f1/f2/@C1/@C2/Δ on V(onoise)", () => {
+    const freqs = [10, 100, 1000, 10000];
+    const onoise = [1e-8, 1e-7, 1e-6, 1e-7];
+    const result: NoiseResult = {
+      ok: true,
+      spec: { output: { pos: "out" }, source: "V1", sweep: { startHz: 10, stopHz: 10000, pointsPerDecade: 10 } },
+      freqs,
+      onoise,
+      inoise: onoise,
+      inoiseUnit: "V/√Hz",
+      totalOutputNoise: 1e-5,
+      totalInputNoise: 1e-5,
+      warnings: [],
+    };
+    const { container } = render(<NoisePlot result={result} />);
+    const btn = screen.getByRole("button", { name: "Toggle noise cursors" });
+    expect(btn.getAttribute("aria-pressed")).toBe("false");
+    fireEvent.click(btn);
+    expect(btn.getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByRole("slider", { name: "Noise cursor 1 position" })).toBeTruthy();
+    expect(screen.getByRole("slider", { name: "Noise cursor 2 position" })).toBeTruthy();
+    const readout = screen.getByLabelText("Noise cursor readout");
+    expect(readout.textContent).toMatch(/f1/i);
+    expect(readout.textContent).toMatch(/@C1/);
+    expect(readout.textContent).toMatch(/Δ/);
+    expect(container.querySelectorAll(".plot-cursor").length).toBe(2);
+  });
 });

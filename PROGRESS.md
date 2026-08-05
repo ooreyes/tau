@@ -1,16 +1,10 @@
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 07:56 CDT**
+**Status: DONE - 2026-08-05 07:59 CDT**
 
-Unit: Circuit_testing_v1 `15_dflop_register.asc` authored `.tran` → differential **pass=99**.
-```
-SUMMARY pass=99 sibling=5 gap=0
-tran ct-dflop … strobes 01→11→10; nRms≈0.010/0.007 nMax≈1 edge-skew
-```
-Dual-deck: LTspice native 8-node DFLOP ↔ Tau XSPICE (same-deck XSPICE rejected).
-Named-device 48.1%. Worktree `Tau-wt-diff-99` over tip `d4a4c79`.
-Left Staff EE / Settings / ct19 / Draft* alone.
-SHIPPABLE? **NO**
+Unit: Waveform DoD — **noise plot measurement cursors**.
+Worktree `Tau-wt-wave-noise-cur` rebased over Continue ct15 → **pass=99**.
+Settings locked. SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
@@ -19,6 +13,31 @@ SHIPPABLE? **NO**
 ---
 
 
+
+### 2026-08-05 — noise plot measurement cursors (§waveform DoD)
+
+**What I did**
+- NoisePlot **Cursors** toggle — two log-fraction markers with f1/f2/@C1/@C2/Δ
+  on V(onoise) via `logFractionToX` / `cursorReadout` (FFT/Bode-style).
+  Worktree `Tau-wt-wave-noise-cur` over `d4a4c79`, rebased onto Continue ct15
+  pass=99. Left ct 14/15, Educational continue 38 ASC, ct 19 OP, Chan/NIGBT/FRA,
+  Settings alone.
+
+**Files**
+- `apps/desktop/src/components/SimulationPanel.tsx` (+ wiring test)
+- `FEATURE_PARITY.md`, `PROGRESS.md`
+
+**Tests**
+- `pnpm -C apps/desktop typecheck` + `test` green (2777 passed)
+- NoisePlot cursors → f1/f2/@C1/@C2/Δ
+
+**Parity items**
+- Waveform viewer 🟡 (noise cursors landed). Differential pass=99 ·
+  named-device 48.1% · SHIPPABLE? NO
+
+**Next step**
+- Step-family cursors / manual axis limits / non-wall ND. Leave
+  Educational/IRFP/Settings alone.
 
 ### 2026-08-05 — ct 15_dflop_register .tran → pass=99 (§DoD)
 

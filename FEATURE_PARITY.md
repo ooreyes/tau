@@ -941,8 +941,10 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   output noise = 4kTR/(1+(ωRC)²); integrated kTC noise = √(kT/C). 16 hand-computed
   tests. `analysesFromDirectives` maps an imported `.asc`'s own `.noise`; a **NOISE**
   tab in `SimulationPanel` (`NoisePlot`) draws output-referred density on a log–log
-  axis with integrated totals. **NEXT:** device (non-resistor) noise needs the
-  native ngspice engine; `.meas noise` domain.
+  axis with integrated totals. **Noise measurement cursors landed** (2026-08-05):
+  NoisePlot **Cursors** toggle — two log-fraction markers with f1/f2/@C1/@C2/Δ
+  on V(onoise) via `logFractionToX` / `cursorReadout`. **NEXT:** device
+  (non-resistor) noise needs the native ngspice engine; `.meas noise` domain.
 - ✅ `.tf` **Transfer function** (small-signal DC gain, Zin/Zout) — **solver +
   parser + UI landed** (`simulation/transferFunction.ts`): `parseTfDirective`
   reads `V(node)`/`V(a,b)`/`I(dev)` outputs + an independent source; `runTransferFunction`
