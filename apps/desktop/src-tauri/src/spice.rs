@@ -2163,6 +2163,46 @@ Rout out 0 1k
         );
     }
 
+    /** Finite-V OTA compliance: outside [Vlow,Vhigh], Rout is swapped for
+     * Rclamp-to-rail on V(out,common). Io*Rclamp above the high rail. */
+    #[test]
+    #[ignore = "requires TAU_NGSPICE_LIB pointing to libngspice with its code models"]
+    fn runs_ltspice_ota_finite_v_rclamp_compliance() {
+        let _guard = real_engine_test_guard();
+        let library = std::env::var_os("TAU_NGSPICE_LIB")
+            .map(PathBuf::from)
+            .expect("TAU_NGSPICE_LIB must point to a shared ngspice library");
+        let mut engine = SpiceEngine::load(vec![library]).expect("ngspice library should load");
+        let result = engine
+            .run(SpiceRequest {
+                // gm*Vin = 10mA into the compliance B-load. Above Vhigh=0.5 with
+                // Rclamp=1: V = 0.5 + 0.01 = 0.51. Unclamped into 1k would be 10 V.
+                netlist: r#"Tau finite-V OTA compliance
+Vin in 0 10m
+.model tau_ota ota(gm=1 rout=1e308 rin=1e308)
+Aota in 0 ota_sink tau_ota
+Vsense ota_sink 0 0
+Fout out 0 Vsense 1
+Bcomp out 0 I={(V(out,0))>(0.5) ? ((V(out,0))-(0.5))/(1) : (V(out,0))<(-0.5) ? ((V(out,0))-(-0.5))/(1) : (V(out,0))/(1k)}
+.op
+.end"#
+                    .to_string(),
+            })
+            .expect("finite-V OTA compliance should solve");
+        let out = result
+            .vectors
+            .iter()
+            .find(|vector| vector.name.eq_ignore_ascii_case("out"))
+            .and_then(|vector| vector.real.first())
+            .copied()
+            .unwrap_or_else(|| panic!("out missing; messages: {:?}", result.messages));
+        assert!(
+            (0.505..0.515).contains(&out),
+            "finite-V clamp should sit at Vhigh+Io*Rclamp (≈0.51 V); got {} V",
+            out
+        );
+    }
+
     /** Asymmetric Isource/Isink must follow LTspice's split tanh limits — not
      * the larger of the two, and not a silent symmetric Iout substitution. */
     #[test]

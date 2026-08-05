@@ -278,15 +278,26 @@ function translateDissipativeCurrentLoad(line: string): string {
   return `${source[1]}B__tau_load_${safe} ${source[3]} ${source[4]} I={(${source[5]})*(${voltage}<=0 ? 4*${voltage} : ${voltage}<0.5 ? 4*${voltage}-4*${voltage}*${voltage} : 1)}`;
 }
 
+/** Parse an OTA rail/compliance literal (`560m`, `1e308`, `2`). Expressions
+ * and unknown suffixes refuse rather than guessing. */
+function parseOtaComplianceLiteral(token: string): number | null {
+  try {
+    const value = parseQuantity(token);
+    return Number.isFinite(value) ? value : null;
+  } catch {
+    return null;
+  }
+}
+
 /** Map the documented LTspice OTA subset used by current vendor op-amp
  * libraries onto Tau's pinned native OTA code model. Multiplying ports must be
- * tied off and voltage compliance must be explicitly infinite. Asymmetric
- * Isource/Isink (`asym`) and input `Ref` offset map onto the patched OTA
- * (tanh current limit + series offset). The LTspice `linear` flag disables
- * current limiting entirely (`Io = G·Vdiff`) — map that by omitting Iout so
- * the native model stays on its unbounded gm path; never substitute tanh.
- * Finite-V `linear`, `rclamp`, and `epsilon` still refuse. Cout/Rout remain
- * literal passives across LTspice's output/common pins. */
+ * tied off. Asymmetric Isource/Isink (`asym`) and input `Ref` offset map onto
+ * the patched OTA (tanh current limit + series offset). The LTspice `linear`
+ * flag disables current limiting entirely (`Io = G·Vdiff`) — map that by
+ * omitting Iout so the native model stays on its unbounded gm path; never
+ * substitute tanh. Finite Vhigh/Vlow (Help defaults 2/0 when omitted) map as
+ * epsilon=0 Rclamp-to-rail load swap on V(out,common); non-zero `epsilon`
+ * still refuses. Cout remains a literal passive across out/common. */
 function translateLtspiceOta(line: string, subcktName: string): string[] {
   const match = /^\s*(A\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+OTA\b(.*)$/i.exec(line);
   if (!match) return [line];
@@ -297,8 +308,12 @@ function translateLtspiceOta(line: string, subcktName: string): string[] {
   if (mul1p.toLowerCase() !== mul1n.toLowerCase() || mul2p.toLowerCase() !== mul2n.toLowerCase()) {
     return refusal("uses active four-quadrant multiplier ports; the native two-port OTA is not equivalent.");
   }
-  if (params.has("rclamp") || params.has("epsilon")) {
-    return refusal("uses OTA voltage-compliance shaping (rclamp/epsilon) not mapped exactly.");
+  // Soft epsilon blend is not yet pin-faithful; abrupt (0 / omitted) is.
+  if (params.has("epsilon")) {
+    const epsilon = parseOtaComplianceLiteral(params.get("epsilon")!);
+    if (epsilon === null || Math.abs(epsilon) > 0) {
+      return refusal("uses OTA voltage-compliance shaping (rclamp/epsilon) not mapped exactly.");
+    }
   }
 
   // LTspice Help / LTwiki: `linear` disables tanh current limiting
@@ -314,14 +329,21 @@ function translateLtspiceOta(line: string, subcktName: string): string[] {
   const gm = params.get("g") ?? "1";
   const gmLiteral = finiteLiteral(gm);
   const inactiveOutput = gmLiteral === 0 && out.toLowerCase() === common.toLowerCase();
-  const vhigh = finiteLiteral(params.get("vhigh"));
-  const vlow = finiteLiteral(params.get("vlow"));
-  if (!inactiveOutput && (vhigh === null || vlow === null || vhigh < 1e100 || vlow > -1e100)) {
-    return refusal(
-      isLinear
-        ? "uses LTspice OTA 'linear' with finite voltage compliance; Tau maps unbounded current only when Vhigh/Vlow are infinite."
-        : "uses finite or implicit voltage compliance; substituting an unclamped OTA would be inaccurate.",
-    );
+
+  // LTspice Help defaults: Vhigh=2, Vlow=0, Rclamp=1. Rails are relative to
+  // the common pin (floating gnd). Non-literal rails refuse — no silent open.
+  const vhighTok = params.get("vhigh") ?? "2";
+  const vlowTok = params.get("vlow") ?? "0";
+  const vhigh = parseOtaComplianceLiteral(vhighTok);
+  const vlow = parseOtaComplianceLiteral(vlowTok);
+  if (!inactiveOutput && (vhigh === null || vlow === null)) {
+    return refusal("uses non-literal OTA voltage compliance; Tau cannot map expression rails exactly.");
+  }
+  const needsClamp =
+    !inactiveOutput && vhigh !== null && vlow !== null && (vhigh < 1e100 || vlow > -1e100);
+  const rclampTok = params.get("rclamp") ?? "1";
+  if (needsClamp && params.has("rclamp") && parseOtaComplianceLiteral(rclampTok) === null) {
+    return refusal("uses non-literal OTA Rclamp; Tau cannot map expression clamp impedance exactly.");
   }
 
   const safe = `${subcktName}_${instance}`.replace(/[^A-Za-z0-9_]/g, "_");
@@ -368,7 +390,20 @@ function translateLtspiceOta(line: string, subcktName: string): string[] {
   const cout = params.get("cout");
   if (cout && finiteLiteral(cout) !== 0) translated.push(`C__tau_ota_${safe} ${out} ${common} ${cout}`);
   const rout = params.get("rout");
-  if (rout && (finiteLiteral(rout) === null || (finiteLiteral(rout) ?? 0) < 1e100)) {
+  const routLiteral = rout === undefined ? null : parseOtaComplianceLiteral(rout);
+  // Infinite-V: Rout stays a literal R. Finite-V: LTspice swaps Rout for
+  // Rclamp-to-rail outside [Vlow,Vhigh] — emit that as one B load (never an
+  // unclamped R in parallel with a dead clamp).
+  if (needsClamp) {
+    const vDiff = `V(${out},${common})`;
+    const inRangeLoad =
+      rout !== undefined && (routLiteral === null || routLiteral < 1e100)
+        ? `(${vDiff})/(${rout})`
+        : "0";
+    translated.push(
+      `B__tau_ota_comp_${safe} ${out} ${common} I={(${vDiff})>(${vhighTok}) ? ((${vDiff})-(${vhighTok}))/(${rclampTok}) : (${vDiff})<(${vlowTok}) ? ((${vDiff})-(${vlowTok}))/(${rclampTok}) : ${inRangeLoad}}`,
+    );
+  } else if (rout && (routLiteral === null || routLiteral < 1e100)) {
     translated.push(`R__tau_ota_${safe} ${out} ${common} ${rout}`);
   }
   if (noiseRefusals.length > 0) {

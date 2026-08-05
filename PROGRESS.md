@@ -9,15 +9,38 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 00:32 CDT**
+**Status: DONE - 2026-08-05 00:34 CDT**
 
-Unit: Educational noise.asc differential → **SUMMARY pass=22 sibling=5 gap=1**.
-Class-D noise/tf synthetic probes pass but stay gap (no authored .noise/.tf).
-ND tip 21.7%. Freshman AI untouched. SHIPPABLE? **NO**
+Unit: Exact OTA finite-V Rclamp-to-rail compliance → named-device **28.7%**.
+```
+NAMED-DEVICE-RECURSIVE: unencrypted=2539 exact=729 refuse=1810 silent=0 hard-failure=0 encrypted-excluded=1473 exact-rate=28.7%
+```
+Before 21.7%/550 → after +179 exact. Soft epsilon / non-literal rails refuse.
+Freshman AI untouched. SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
 ---
+
+### 2026-08-05 — OTA finite-V Rclamp compliance → exact-rate 28.7% (§DoD)
+
+**What I did**
+- Map finite Vhigh/Vlow (Help defaults 2/0) as abrupt Rclamp-to-rail B-load swap
+  on V(out,common); Rout in-range, Rclamp outside. `linear` + finite-V included.
+- Refuse soft epsilon≠0 and non-literal rails/Rclamp.
+- Tests + ignored cargo compliance proof (~0.51 V clamp).
+
+**Exact stdout**
+```
+NAMED-DEVICE: exact=2 refuse=4 silent=0
+NAMED-DEVICE-RECURSIVE: unencrypted=2539 exact=729 refuse=1810 silent=0 hard-failure=0 encrypted-excluded=1473 exact-rate=28.7%
+```
+
+**Parity items**
+- Named-device 🟡 HF=0 silent=0 exact-rate **28.7%** (not ≥95%). SHIPPABLE? NO
+
+**Next**
+- Vendor REF maps (~740); multipliers; ideal-diode options
 
 ### 2026-08-05 — Educational noise.asc differential → pass=22 (§DoD)
 

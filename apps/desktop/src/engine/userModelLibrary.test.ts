@@ -282,12 +282,53 @@ describe("parseUserModelLibraries", () => {
     expect(block).toContain("A__tau_ota_AMP_A1 0 __tau_ota_ref_AMP_A1 __tau_ota_sink_AMP_A1 __tau_ota_AMP_A1");
   });
 
-  it("refuses LTspice OTA linear with finite voltage compliance", () => {
+  it("maps LTspice OTA linear finite-V as Rclamp-to-rail load swap (not unclamped)", () => {
+    const block = parseUserModelLibraries([
+      [
+        ".subckt AMP 1 2 3 4 5",
+        "A1 0 N003 0 0 0 0 N006 0 OTA g=1m linear en=8n enk=4 Rout=1k Cout=4p Vlow=-560m Vhigh=560m",
+        ".ends AMP",
+      ].join("\n"),
+    ]).subckts.get("amp") ?? "";
+    expect(block).toContain(".model __tau_ota_AMP_A1 ota(gm=1m rout=1e308 rin=1e308 en=8n enk=4)");
+    expect(block).not.toMatch(/\biout=/i);
+    expect(block).toContain("C__tau_ota_AMP_A1 N006 0 4p");
+    // Rout is swapped for Rclamp outside the rails — never a bare R plus dead open.
+    expect(block).not.toMatch(/R__tau_ota_AMP_A1/);
+    expect(block).toContain(
+      "B__tau_ota_comp_AMP_A1 N006 0 I={(V(N006,0))>(560m) ? ((V(N006,0))-(560m))/(1) : (V(N006,0))<(-560m) ? ((V(N006,0))-(-560m))/(1) : (V(N006,0))/(1k)}",
+    );
+  });
+
+  it("maps finite-V tanh OTA compliance with default Help rails when omitted", () => {
+    const block = parseUserModelLibraries([
+      [
+        ".subckt AMP 1 2 3 4 5",
+        "A1 N005 5 1 1 1 1 N003 1 OTA G=4.55u Iout=3u en=60n enk=20k Vhigh=0 Vlow=-1",
+        ".ends AMP",
+      ].join("\n"),
+    ]).subckts.get("amp") ?? "";
+    expect(block).toContain("iout=3u");
+    expect(block).toContain(
+      "B__tau_ota_comp_AMP_A1 N003 1 I={(V(N003,1))>(0) ? ((V(N003,1))-(0))/(1) : (V(N003,1))<(-1) ? ((V(N003,1))-(-1))/(1) : 0}",
+    );
+  });
+
+  it("refuses OTA soft epsilon voltage-compliance shaping", () => {
     const registry = parseUserModelLibraries([
-      ".subckt AMP 1 2 3 4 5\nA1 0 N003 0 0 0 0 N006 0 OTA g=1u linear Vlow=-560m Vhigh=560m\n.ends AMP",
+      ".subckt AMP 1 2 3 4 5\nA1 0 N003 0 0 0 0 N006 0 OTA g=1u linear Vlow=-60m Vhigh=60m epsilon=20m\n.ends AMP",
     ]);
     expect(() => resolveUserSubckt(registry, "AMP")).toThrow(
-      /Simulation refused: AMP\/A1 uses LTspice OTA 'linear' with finite voltage compliance.*No approximate or partial circuit was run/,
+      /Simulation refused: AMP\/A1 uses OTA voltage-compliance shaping \(rclamp\/epsilon\) not mapped exactly\..*No approximate or partial circuit was run/,
+    );
+  });
+
+  it("refuses non-literal OTA voltage compliance rails", () => {
+    const registry = parseUserModelLibraries([
+      ".subckt AMP 1 2 3 4 5\nA1 0 N003 0 0 0 0 N006 0 OTA g=1u Vhigh={Vc} Vlow={Ve}\n.ends AMP",
+    ]);
+    expect(() => resolveUserSubckt(registry, "AMP")).toThrow(
+      /Simulation refused: AMP\/A1 uses non-literal OTA voltage compliance.*No approximate or partial circuit was run/,
     );
   });
 

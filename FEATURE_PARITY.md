@@ -226,10 +226,10 @@ Status legend: ✅ done · 🟡 partial · ⬜ not started
     fail-closed deck: missing named models block Run rather than promising a
     generic starter. Proof: `scripts/named-device-fidelity.sh` →
     `NAMED-DEVICE: exact=2 refuse=4 silent=0` and recursive
-    `NAMED-DEVICE-RECURSIVE: unencrypted=2539 exact=550 refuse=1989 silent=0
-    hard-failure=0 encrypted-excluded=1473 exact-rate=21.7%` (tip 2026-08-05
+    `NAMED-DEVICE-RECURSIVE: unencrypted=2539 exact=729 refuse=1810 silent=0
+    hard-failure=0 encrypted-excluded=1473 exact-rate=28.7%` (tip 2026-08-05
     00:25). OTA `linear` (unbounded Io=G·Vdiff, infinite-V) + prior asym/Ref
-    map (+111 exact vs 17.3% tip); finite-V linear stays honest refuse.
+    finite-V Rclamp (+179 exact vs 21.7% tip); soft epsilon stays refuse.
     Harness skips encrypted-only leaves (no 33.4% denominator game). Never
     silent substitution. SHIPPABLE? NO.
     Still open: import arbitrary user-supplied multi-pin `.asy` banks; raise
