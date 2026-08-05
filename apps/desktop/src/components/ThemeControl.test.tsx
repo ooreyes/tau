@@ -35,21 +35,22 @@ afterEach(() => {
 });
 
 describe("ThemeControl", () => {
-  it("defaults to System selected and applies no data-theme override", () => {
+  it("defaults to Light selected and stamps data-theme=light", () => {
     render(<ThemeControl />);
-    const system = screen.getByRole("radio", { name: "System" });
-    expect(system.getAttribute("aria-checked")).toBe("true");
-    expect(document.documentElement.hasAttribute("data-theme")).toBe(false);
+    const light = screen.getByRole("radio", { name: "Light" });
+    expect(light.getAttribute("aria-checked")).toBe("true");
+    expect(document.documentElement.getAttribute("data-theme")).toBe("light");
+    expect(screen.getByText("Default")).toBeTruthy();
   });
 
-  it("selecting Light stamps data-theme and persists the choice", () => {
+  it("selecting Dark stamps data-theme and persists the choice", () => {
     render(<ThemeControl />);
-    fireEvent.click(screen.getByRole("radio", { name: "Light" }));
+    fireEvent.click(screen.getByRole("radio", { name: "Dark" }));
 
-    expect(document.documentElement.getAttribute("data-theme")).toBe("light");
-    expect(localStorage.getItem("tau.ui.theme")).toBe("light");
-    expect(screen.getByRole("radio", { name: "Light" }).getAttribute("aria-checked")).toBe("true");
-    expect(screen.getByRole("radio", { name: "System" }).getAttribute("aria-checked")).toBe("false");
+    expect(document.documentElement.getAttribute("data-theme")).toBe("dark");
+    expect(localStorage.getItem("tau.ui.theme")).toBe("dark");
+    expect(screen.getByRole("radio", { name: "Dark" }).getAttribute("aria-checked")).toBe("true");
+    expect(screen.getByRole("radio", { name: "Light" }).getAttribute("aria-checked")).toBe("false");
   });
 
   it("selecting Dark then System clears the override again", () => {
@@ -60,6 +61,7 @@ describe("ThemeControl", () => {
     fireEvent.click(screen.getByRole("radio", { name: "System" }));
     expect(document.documentElement.hasAttribute("data-theme")).toBe(false);
     expect(localStorage.getItem("tau.ui.theme")).toBe("system");
+    expect(screen.getByText("Follows macOS")).toBeTruthy();
   });
 
   it("reads a previously persisted preference on mount", () => {

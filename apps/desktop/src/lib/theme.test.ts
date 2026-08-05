@@ -31,8 +31,8 @@ afterEach(() => {
 });
 
 describe("loadThemeMode", () => {
-  it("defaults to system when nothing is stored", () => {
-    expect(loadThemeMode()).toBe("system");
+  it("defaults to light when nothing is stored", () => {
+    expect(loadThemeMode()).toBe("light");
   });
 
   it("round-trips a saved mode", () => {
@@ -42,9 +42,9 @@ describe("loadThemeMode", () => {
     expect(loadThemeMode()).toBe("light");
   });
 
-  it("falls back to system for a corrupt or unknown stored value", () => {
+  it("falls back to light for a corrupt or unknown stored value", () => {
     localStorage.setItem("tau.ui.theme", "solarized");
-    expect(loadThemeMode()).toBe("system");
+    expect(loadThemeMode()).toBe("light");
   });
 });
 
@@ -78,8 +78,8 @@ describe("initThemeMode", () => {
     expect(document.documentElement.getAttribute("data-theme")).toBe("dark");
   });
 
-  it("applies system (no attribute) when nothing was ever saved", () => {
-    expect(initThemeMode()).toBe("system");
-    expect(document.documentElement.hasAttribute("data-theme")).toBe(false);
+  it("applies light (data-theme=light) when nothing was ever saved", () => {
+    expect(initThemeMode()).toBe("light");
+    expect(document.documentElement.getAttribute("data-theme")).toBe("light");
   });
 });

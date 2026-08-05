@@ -201,9 +201,17 @@ function killProcessGroup(child) {
 
 async function shootViewport(page, viewport, theme) {
   await page.setViewportSize({ width: viewport.width, height: viewport.height });
-  // Drives App.css's `@media (prefers-color-scheme: …)` block, i.e. the app's
-  // "System" mode - the same path a user gets from their OS setting, rather
-  // than stamping data-theme and testing only the explicit override.
+  // Persist the theme before navigation so index.html's FOUC boot script
+  // stamps data-theme correctly. emulateMedia alone is no longer enough now
+  // that Light is the product default (stamped via data-theme).
+  await page.goto("about:blank");
+  await page.evaluate((nextTheme) => {
+    try {
+      localStorage.setItem("tau.ui.theme", nextTheme);
+    } catch {
+      /* private mode */
+    }
+  }, theme);
   await page.emulateMedia({ colorScheme: theme });
 
   // --- empty: fresh load, blank scratchpad -------------------------------

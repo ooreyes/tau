@@ -32,8 +32,11 @@ Corollaries:
 
 ## 1. Themes
 
-Both themes are first-class. Dark is the default and the one the instrument metaphor was
-designed around; light exists because a large share of LTspice users work on white and print
+Both themes are first-class. **Light is the product default** (first launch and
+corrupt-storage fallback) - paper chrome that reads as a paid engineering tool.
+Dark remains a first-class explicit choice and the System mode still follows the
+OS via `prefers-color-scheme`. The instrument metaphor was designed around dark;
+light is derived for the large share of LTspice users who work on white and print
 schematics.
 
 Light is **derived, not inverted**. A naive inversion produces glowing pastel traces on
