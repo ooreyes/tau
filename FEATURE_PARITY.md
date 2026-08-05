@@ -1576,13 +1576,14 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   oscillator by amplitude, RMS, and frequency. All four proofs pass headlessly.
   **Differential matrix slice (2026-08-05):** `scripts/differential-parity.sh`
   (wired into `dod-parity.sh`) prints pass/sibling/gap coverage to stdout
-  (truth). Gap-closure → **pass=48 · sibling=5 · gap=0**: prior cells through
-  DCopPnt OP / audioamp / UHFpreamp / 1563 / LM308 / LM78XX / S-param / P2 /
-  stepAC plus Educational logamp.asc authored `.tran` + opamp.sub (v(out)/v(in)
-  nRms=0). Pierce/phaseshift phase miss; TwoTau/colpits2 LTspice fail; 100W IRFP
-  refuse. HalfSlope Laplace stripped; SoftDiodeRecovery deferred; BandGaps
-  dc-temp miss; LoopGain/Electrometer LT1001 OTA wall; MC1648 deferred.
-  Harness-slice gaps closed; DoD broad-differential box remains open — see AGENTS.md.
+  (truth). Gap-closure → **pass=54 · sibling=5 · gap=0**: prior cells through
+  logamp TRAN plus Applications 2ndOrder{Lowpass,Bandpass,Highpass,Notch,Allpass,
+  Complexzero}.asc authored `.ac` (G-source RLC; v(2) nRms=0). Note: tip `a0d6080`
+  message claimed Lowpass but corpus was logamp — this lands the real Applications
+  family. Pierce/phaseshift phase miss; 100W IRFP refuse. HalfSlope Laplace stripped;
+  SoftDiodeRecovery deferred; BandGaps dc-temp miss; LoopGain/Electrometer LT1001
+  OTA wall; MC1648 deferred. Harness-slice gaps closed; DoD broad-differential box
+  remains open — see AGENTS.md.
 - 🟡 Resolve a real device-model set — **common LTspice standard diodes/
   zeners/BJTs + the class-d power VDMOS pair bundled** (`engine/standardModels.ts`,
   real `standard.*` params, emitted by `buildSpiceDeck` when referenced by name).

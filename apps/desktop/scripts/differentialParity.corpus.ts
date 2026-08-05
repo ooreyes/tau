@@ -43,6 +43,7 @@ const haveNgspice = spawnSync("ngspice", ["--version"], { encoding: "utf8" }).er
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
 const CLASSD_DIR = join(REPO_ROOT, "examples", "class-d-amplifier");
 const EDU = join(homedir(), "Documents", "LTspice", "examples", "Educational");
+const APP = join(homedir(), "Documents", "LTspice", "examples", "Applications");
 const CURVETRACE_ASC = join(EDU, "curvetrace.asc");
 const NOISEFIGURE_ASC = join(EDU, "NoiseFigure.asc");
 const NOISE_ASC = join(EDU, "noise.asc");
@@ -70,6 +71,12 @@ const SPARAM_ASC = join(EDU, "S-param.asc");
 const P2_ASC = join(EDU, "P2.asc");
 const STEPAC_ASC = join(EDU, "stepAC.asc");
 const LOGAMP_ASC = join(EDU, "logamp.asc");
+const ORDER2_LOWPASS_ASC = join(APP, "2ndOrderLowpass.asc");
+const ORDER2_BANDPASS_ASC = join(APP, "2ndOrderBandpass.asc");
+const ORDER2_HIGHPASS_ASC = join(APP, "2ndOrderHighpass.asc");
+const ORDER2_NOTCH_ASC = join(APP, "2ndOrderNotch.asc");
+const ORDER2_ALLPASS_ASC = join(APP, "2ndOrderAllpass.asc");
+const ORDER2_COMPLEXZERO_ASC = join(APP, "2ndOrderComplexzero.asc");
 const STEPTEMP_ASC = join(EDU, "steptemp.asc");
 const STEPMODELPARAM_ASC = join(EDU, "stepmodelparam.asc");
 const COLPITTS_ASC = process.env.COLPITTS_ASC ?? join(EDU, "colpits.asc");
@@ -217,7 +224,7 @@ function withAcStimulus(netlist: string): string {
 describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential parity matrix", () => {
   const cells: DifferentialCell[] = [];
 
-  it("matches RC .tran/.ac/.meas, divider analyses, .step families, curvetrace, stepmodelparam, NoiseFigure, noise.asc, Colpitts/Clapp/Hartly AC, Cohn AC, MeasureBW AC, Transformer/Transformer2/IdealTransformer TRAN, notch/passive/butter/opamp/Linkwitz AC, LM741/LM308/LM78XX/P2/logamp TRAN, GFT AC, DCopPnt OP, audioamp TRAN, UHFpreamp AC, 1563 AC, S-param AC, stepAC AC, Class-D AC/OP/DC/noise/tf", () => {
+  it("matches RC .tran/.ac/.meas, divider analyses, .step families, curvetrace, stepmodelparam, NoiseFigure, noise.asc, Colpitts/Clapp/Hartly AC, Cohn AC, MeasureBW AC, Transformer/Transformer2/IdealTransformer TRAN, notch/passive/butter/opamp/Linkwitz AC, LM741/LM308/LM78XX/P2/logamp TRAN, GFT AC, DCopPnt OP, audioamp TRAN, UHFpreamp AC, 1563 AC, S-param AC, stepAC AC, 2ndOrder* AC, Class-D AC/OP/DC/noise/tf", () => {
     // --- TRAN (also covered by waveformParity; re-assert here so this file is self-sufficient) ---
     {
       const result = runPairedBatch("diff-rc-tran", RC_TRAN, ["v(out)"]);
@@ -1849,6 +1856,88 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
       });
     }
 
+
+    // --- Applications 2ndOrder*.asc authored .ac (G-source RLC filter family; param-baked) ---
+    // Tip a0d6080 claimed Lowpass but corpus had logamp — this lands the real Applications cells.
+    // Probe filter node v(2) only (v(1) is flat AC stimulus — hollow).
+    for (const fixture of [
+      {
+        path: ORDER2_LOWPASS_ASC,
+        circuit: "2ndorder-lp",
+        topology: "Applications 2ndOrderLowpass.asc G-source RLC (.param f0/Q/H baked; authored .ac dec 100–10k)",
+        id: "diff-2ndorder-lp-ac",
+      },
+      {
+        path: ORDER2_BANDPASS_ASC,
+        circuit: "2ndorder-bp",
+        topology: "Applications 2ndOrderBandpass.asc G-source RLC (.param f0/Q/H baked; authored .ac dec 100–10k)",
+        id: "diff-2ndorder-bp-ac",
+      },
+      {
+        path: ORDER2_HIGHPASS_ASC,
+        circuit: "2ndorder-hp",
+        topology: "Applications 2ndOrderHighpass.asc G-source RLC (.param f0/Q/H baked; authored .ac dec 100–10k)",
+        id: "diff-2ndorder-hp-ac",
+      },
+      {
+        path: ORDER2_NOTCH_ASC,
+        circuit: "2ndorder-notch",
+        topology: "Applications 2ndOrderNotch.asc G-source RLC (.param f0/Q/H baked; authored .ac dec 100–10k)",
+        id: "diff-2ndorder-notch-ac",
+      },
+      {
+        path: ORDER2_ALLPASS_ASC,
+        circuit: "2ndorder-ap",
+        topology: "Applications 2ndOrderAllpass.asc G-source RLC (.param f0/Q/H baked; authored .ac dec 100–10k)",
+        id: "diff-2ndorder-ap-ac",
+      },
+      {
+        path: ORDER2_COMPLEXZERO_ASC,
+        circuit: "2ndorder-cz",
+        topology: "Applications 2ndOrderComplexzero.asc G-source RLC (.param f0/Q/fn/Qn baked; authored .ac dec 100–10k)",
+        id: "diff-2ndorder-cz-ac",
+      },
+    ] as const) {
+      expect(existsSync(fixture.path), `missing ${fixture.path}`).toBe(true);
+      const imported = importAsc(decodeSchematicText(readFileSync(fixture.path)));
+      expect(imported.warnings).toEqual([]);
+      const dirs = expandDirectiveLines(imported.directives);
+      const parsed = analysesFromDirectives(dirs);
+      expect(parsed.ac, `${fixture.circuit} must author .ac`).toBeTruthy();
+      const params = buildParamScope(dirs);
+      const deck = buildSpiceDeck({
+        components: imported.components,
+        wires: imported.wires,
+        netLabels: imported.netLabels,
+        directives: dirs,
+        params,
+      }, {
+        kind: "ac",
+        startHz: parsed.ac!.startHz,
+        stopHz: parsed.ac!.stopHz,
+        pointsPerDecade: parsed.ac!.pointsPerDecade,
+      });
+      expect(deck.unresolvedSubckts ?? []).toEqual([]);
+      expect(deck.modelSubstitutions ?? []).toEqual([]);
+      expect(deck.netlist).toMatch(/^G\w*\b/im);
+      const result = runPairedBatch(fixture.id, deck.netlist, ["v(2)"]);
+      const lt = result.ltspice.get("v(2)")!;
+      const ng = result.ngspice.get("v(2)")!;
+      const comparison = compareWaveforms(ng.axis, ng.values, lt.axis, lt.values, {
+        rmsTolerance: 0.02,
+        maxTolerance: 0.05,
+      });
+      expect(comparison.pass, `${fixture.circuit} ${JSON.stringify(comparison)}`).toBe(true);
+      expect(comparison.referenceRange, `${fixture.circuit} non-hollow`).toBeGreaterThan(0.05);
+      cells.push({
+        analysis: "ac",
+        circuit: fixture.circuit,
+        topology: fixture.topology,
+        status: "pass",
+        note: `v(2) nRms=${comparison.normalizedRms.toFixed(4)} nMax=${comparison.normalizedMax.toFixed(4)} span=${comparison.referenceRange.toFixed(3)}`,
+      });
+    }
+
     // --- Class-D AC/OP (authored analyses are .tran/.meas; add AC/OP for differential proof) ---
     {
       const ascPath = join(CLASSD_DIR, "class-d-starter.asc");
@@ -2142,9 +2231,9 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
     const passCount = cells.filter((cell) => cell.status === "pass").length;
     const gapCount = cells.filter((cell) => cell.status === "gap").length;
     const siblingCount = cells.filter((cell) => cell.status === "sibling").length;
-    expect(passCount).toBeGreaterThanOrEqual(48);
+    expect(passCount).toBeGreaterThanOrEqual(54);
     expect(siblingCount).toBe(5);
     expect(gapCount).toBe(0);
-    expect(report).toMatch(/SUMMARY pass=48 sibling=5 gap=0/);
+    expect(report).toMatch(/SUMMARY pass=54 sibling=5 gap=0/);
   }, 240_000);
 });

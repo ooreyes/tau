@@ -9,18 +9,43 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 02:57 CDT**
+**Status: DONE - 2026-08-05 03:00 CDT**
 
-Unit: Educational `logamp.asc` authored `.tran` + opamp.sub → differential **pass=48**.
+Unit: Applications 2ndOrder{LP,BP,HP,Notch,AP,CZ}.asc authored `.ac` → differential **pass=54**.
 ```
-SUMMARY pass=48 sibling=5 gap=0
-tran logamp … v(out)/v(in) nRms=0 span≈4.22/20.08
+SUMMARY pass=54 sibling=5 gap=0
+ac 2ndorder-lp/bp/hp/notch/ap/cz … v(2) nRms=0
 ```
-Note: tip `a0d6080` message said 2ndOrderLowpass but corpus cell is logamp — docs corrected.
-Pierce/phaseshift phase miss. Named-device 47.9%. SHIPPABLE? **NO**
+Corrects tip `a0d6080` docs thrash (claimed Lowpass, corpus was logamp). Named-device 47.9%. SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
+
+---
+
+### 2026-08-05 — Applications 2ndOrder* AC family → pass=54 (§DoD)
+
+**What I did**
+- Landed real Applications `2ndOrder{Lowpass,Bandpass,Highpass,Notch,Allpass,
+  Complexzero}.asc` authored `.ac dec 101 100–10k`: G-source RLC with baked
+  `.param`; probe **v(2)** nRms=0 vs LTspice (non-hollow; not flat v(1) stim).
+- Tip `a0d6080` message claimed Lowpass but corpus cell was logamp — this is the
+  real Applications climb 48→54. Left logamp cell intact.
+
+**Files**
+- `apps/desktop/scripts/differentialParity.corpus.ts`
+- `AGENTS.md`, `FEATURE_PARITY.md`, `PROGRESS.md`
+
+**Tests**
+- `vitest … differentialParity.corpus.ts` → SUMMARY pass=54 sibling=5 gap=0
+- `pnpm -C apps/desktop typecheck` + `test`
+
+**Parity items**
+- Differential matrix climb 48→54; DoD broad-differential box still open.
+- Named-device 47.9%; SHIPPABLE? **NO**
+
+**Next step**
+- Non-colliding Educational/Applications authored analysis.
 
 ---
 
