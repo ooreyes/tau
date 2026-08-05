@@ -1271,3 +1271,32 @@ describe("SimulationPanel - AC Bode Export PNG", { timeout: 20_000 }, () => {
     }
   });
 });
+
+describe("SimulationPanel - DC Export PNG", { timeout: 20_000 }, () => {
+  it("exports DC sweep SVGs via waveformSvgsToPng with tag dc", async () => {
+    const png = await import("../simulation/plotPng");
+    const toPng = vi.spyOn(png, "waveformSvgsToPng").mockResolvedValue(new Blob(["png"]));
+    const download = vi.spyOn(png, "downloadWaveformPng").mockImplementation(() => {});
+    try {
+      const dcResult = {
+        ok: true as const,
+        source: "V1",
+        sweep: [0, 1, 2],
+        nets: [{ id: "n1", label: "V(out)", voltages: [0, 0.5, 1], ground: false }],
+        warnings: [],
+      };
+      renderPanel({ preferredMode: "dc", dcResult });
+      fireEvent.click(screen.getByRole("button", { name: "Toggle advanced settings" }));
+      const btn = screen.getByRole("button", { name: "Export PNG" });
+      expect((btn as HTMLButtonElement).disabled).toBe(false);
+      fireEvent.click(btn);
+      await waitFor(() => expect(toPng).toHaveBeenCalled());
+      const svgs = toPng.mock.calls[0]![0] as SVGSVGElement[];
+      expect(svgs.length).toBeGreaterThanOrEqual(1);
+      expect(download).toHaveBeenCalledWith(expect.any(Blob), "dc");
+    } finally {
+      toPng.mockRestore();
+      download.mockRestore();
+    }
+  });
+});

@@ -1,15 +1,41 @@
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 06:16 CDT**
+**Status: DONE - 2026-08-05 06:18 CDT**
 
-Unit: Waveform DoD — **AC Bode Export PNG** (`waveformSvgsToPng` + Advanced Export PNG).
-Base tip `e60b15b` pass=89. Named-device 48.1%. Settings locked. SHIPPABLE? **NO**
+Unit: Waveform DoD — **DC Export PNG** (`waveformSvgsToPng` + Advanced Export PNG).
+Base tip `64bb1b6` pass=89. Named-device 48.1%. Settings locked. SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
 
 
 ---
+
+
+### 2026-08-05 — DC Export PNG (§waveform DoD)
+
+**What I did**
+- DC Advanced **Export PNG** rasters the DC sweep `svg.scope-svg` via the same
+  `waveformSvgsToPng` path as TRAN/AC (`tau-dc-….png`).
+- ND wall at 48.1% — waveform pivot. Left 100W/IRFP, ct ASC (continue 28),
+  Chan/NIGBT/FRA, Settings alone.
+
+**Files**
+- `apps/desktop/src/components/SimulationPanel.tsx` (+ wiring test)
+- `FEATURE_PARITY.md`, `PROGRESS.md`
+
+**Tests**
+- `pnpm -C apps/desktop typecheck` + `test` green
+- DC Export PNG 1
+
+**Parity items**
+- Waveform viewer 🟡 (DC PNG landed). Differential pass=89 · named-device
+  48.1% · SHIPPABLE? NO
+
+**Next step**
+- Noise PNG, richer right-click, or continue 28 differential. Leave
+  IRFP/Draft*/Settings alone.
+
 
 
 ### 2026-08-05 — AC Bode Export PNG (§waveform DoD)

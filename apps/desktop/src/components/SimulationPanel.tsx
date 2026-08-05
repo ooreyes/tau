@@ -326,6 +326,7 @@ export function SimulationPanel({
   const [exportError, setExportError] = useState<string | null>(null);
   const transientPlotsRef = useRef<HTMLDivElement | null>(null);
   const acPlotsRef = useRef<HTMLDivElement | null>(null);
+  const dcPlotsRef = useRef<HTMLDivElement | null>(null);
   // Multi-pane layout for the transient scope. Starts as a single pane with all
   // traces (preserving existing behavior). Updated via pane controls / trace moves.
   const [paneLayout, setPaneLayout] = useState<PaneLayout>(() => defaultLayout());
@@ -670,6 +671,17 @@ export function SimulationPanel({
       setExportError(null);
     } catch (error) {
       setExportError(error instanceof Error ? error.message : "Could not export the Bode PNG.");
+    }
+  };
+
+  const exportDcPng = async () => {
+    try {
+      const svgs = dcPlotsRef.current?.querySelectorAll<SVGSVGElement>("svg.scope-svg") ?? [];
+      const blob = await waveformSvgsToPng(Array.from(svgs));
+      downloadWaveformPng(blob, "dc");
+      setExportError(null);
+    } catch (error) {
+      setExportError(error instanceof Error ? error.message : "Could not export the DC PNG.");
     }
   };
 
@@ -1378,7 +1390,9 @@ export function SimulationPanel({
       {mode === "dc" && (
         <>
           <DcSetupForm setup={dcSetup} components={components} onChange={onDcSetupChange} />
-          <DcPlot result={dcResult} overlays={dcExprTraces} />
+          <div ref={dcPlotsRef}>
+            <DcPlot result={dcResult} overlays={dcExprTraces} />
+          </div>
           <DcFamilyPlot family={dcStepFamily} />
           <MeasTable measurements={dcMeasurements} />
 
@@ -1424,8 +1438,17 @@ export function SimulationPanel({
                       </TooltipTrigger>
                       <TooltipContent>Export the DC sweep as a CSV table</TooltipContent>
                     </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button variant="outline" size="sm" onClick={() => void exportDcPng()} disabled={!dcResult?.ok}>
+                          Export PNG
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>Export the DC sweep plot as a PNG image</TooltipContent>
+                    </Tooltip>
                   </div>
                   {dcExprError && <div className="expr-error" role="alert">{dcExprError}</div>}
+                  {exportError && mode === "dc" && <div className="expr-error" role="alert">{exportError}</div>}
                   {dcExprList.length > 0 && (
                     <div className="expr-list">
                       {dcExprList.map((expr, i) => (
