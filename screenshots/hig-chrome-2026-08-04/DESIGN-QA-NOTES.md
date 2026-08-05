@@ -36,3 +36,36 @@
 
 - `AssistantPanel`: reject reintroduced `Sparkles`; use `MessageSquarePlus` already in-file for local-AI setup head.
 - `TelemetryDock.test`: already imports `TelemetryDock` (no `MeasurementsDock` leak on tree).
+
+---
+
+## Anduril Light pop re-score (2026-08-04 ~23:28 CDT)
+
+**Base:** `a999864` (palette pop) + `48d16ac` (Settings/Lucide guard). Capture @ `8719077` working tree; `App.css` light tokens unchanged from pop.  
+**Shots:** **POST-POP** (prior `empty-light` / `dialog-light` @ 23:11 are **PRE-pop**).
+
+| File | Viewport | Notes |
+|------|----------|-------|
+| `empty-light-anduril-1440x900.png` | 1440×900 | Empty / open-project card |
+| `schematic-light-anduril-1440x900.png` | 1440×900 | RC schematic + library |
+| `dialog-light-anduril-1440x900.png` | 1440×900 | Settings open (AI off → ochre) |
+| `empty-light-anduril-900x600.png` | 900×600 min | Empty floor |
+| `schematic-light-anduril-900x600.png` | 900×600 min | Schematic floor |
+| `dialog-light-anduril-900x600.png` | 900×600 min | Settings floor |
+
+Capture via isolated `design-shot` light path (`TAU_DESIGN_PORT=1441`, force own server) — empty → schematic → Settings dialog.
+
+### Scorecard
+
+| Criterion | Verdict | Evidence |
+|-----------|---------|----------|
+| Cool paper (not gray) | **PASS** | Empty chrome avg RGB **(237,241,246) = `#EDF1F6` exact** (L1=0). PRE-pop empty averaged **(245,246,248)** — neutral SaaS gray. |
+| Accent pop `#0068D6` | **PASS** | Solid Open folder / Turn on / Light appearance / Run / net labels `in`·`out` / Library underline. Clear pop on paper. |
+| Warnings quiet (not danger-red) | **PASS** | Settings “On-device AI · Off” uses **muted sandy ochre** panel; right-panel danger-red sample count **0**. Hard errors still reserved. |
+| Not childish | **PASS** | Thin Lucide chrome, restrained radius, no mascot/Sparkles. Engineering-tool read. |
+
+### Verdict
+
+**Anduril Light palette CLOSED for this cycle.** Prior “boring SaaS gray” complaint is addressed on post-pop light shots.  
+**§10 DoD:** still unchecked (full visual system / panel migration not claimed).  
+**SHIPPABLE=NO.** No App.css / token / ShellPanels edits this pass.
