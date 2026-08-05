@@ -1116,15 +1116,17 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   exclusive — no emit under that loop).
 - ✅ **DC operating point annotation on schematic** (show node V / device I
   in-place, 2026-07-02; **current-mode refresh 2026-08-05**) — after an OP run,
-  the simulator-mode canvas labels every non-ground net with its DC voltage
+  the **editor and simulator** canvases label every non-ground net with its DC voltage
   (cyan) and every V-source/inductor **plus derived resistor** branch current
   (green). Animated green flow dots on wires follow the same real OP currents
-  (`simulation/wireCurrentFlow.ts` + `OpCurrentFlowLayer`). Native `.op` also
+  (`simulation/wireCurrentFlow.ts` + `OpCurrentFlowLayer`). Default-on when
+  results exist (not gated behind simulator-only); Circuit header shows a
+  **Current mode** badge. Native `.op` also
   requests device bias/small-signal data. Divider unit tests: V(out)=Vin/2,
   I(V1)=−5 mA, I(R1)/I(R2)=5 mA. Not full EveryCircuit live-sim parity;
   SHIPPABLE? **NO**.
 - 🟡 **Transient schematic current mode** (2026-08-05) — after a successful
-  `.tran`, simulator canvas prefers a real waveform sample (default = final
+  `.tran`, editor + simulator canvases prefer a real waveform sample (default = final
   time; **scope cursors open → active cursor time via `readoutTime`**) for the same cyan V /
   green I labels + wire flow dots (`tranAnnotations` /
   `tranComponentCurrents`). Numbers from engine/derived `result.currents` only

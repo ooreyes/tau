@@ -1,6 +1,6 @@
 ## HEARTBEAT
 
-**Status: IN PROGRESS - 2026-08-05 ~09:50 CDT**
+**Status: DONE - 2026-08-05 ~09:55 CDT**
 
 Unit: Current mode visible on editor + sim badge (EveryCircuit UX) —
 rebase onto tip + screenshot proof. Worktree
