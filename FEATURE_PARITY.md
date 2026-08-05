@@ -1086,10 +1086,11 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   `parseNativeFourier` read ngspice's printed results from the engine message
   log and `App.tsx` prefers those when present (TS runners remain the fallback)
   for transient, AC, and DC native runs. **Native `.step` (2026-08-04):**
-  source + param single-deck emit + multi-plot consume via `emitNativeStep` /
-  `runNativeSteppedTransient` (param leaves `{X}` + emits `.param`); temp and
-  unsupported param brace shapes stay on the TS re-run loop (mutually
-  exclusive — no emit under that loop).
+  source + param + temp single-deck emit + multi-plot consume via
+  `emitNativeStep` / `runNativeSteppedTransient` / Rust `step_expand`
+  (stock ngspice has no `.step` card; resistors emit `tc1=`/`tc2=` from
+  LTspice `tc=`). Unsupported param brace shapes stay on the TS re-run
+  loop (mutually exclusive — no emit under that loop).
 - ✅ **DC operating point annotation on schematic** (show node V / device I
   in-place, 2026-07-02) — after an OP run, the simulator-mode canvas labels
   every non-ground net with its DC voltage (cyan, at the net's
