@@ -453,6 +453,22 @@ describe("DcPlot - linear sweep/volts ticks", () => {
     expect(ticks.some((t) => /V/.test(t))).toBe(true);
     expect(ticks.length).toBeGreaterThan(3);
   });
+
+  it("right-click DC legend adds abs(V(out)) via onPlotExpression", async () => {
+    const onPlotExpression = vi.fn();
+    const result: DcSweepResult = {
+      ok: true,
+      source: "V1",
+      sweep: [0, 1, 2],
+      nets: [{ id: "n1", label: "V(out)", voltages: [0, 0.5, 1], ground: false }],
+      warnings: [],
+    };
+    render(<DcPlot result={result} onPlotExpression={onPlotExpression} />);
+    fireEvent.contextMenu(screen.getByRole("button", { name: "Math for V(out)" }));
+    const absItem = await screen.findByRole("menuitem", { name: /Plot abs\(V\(out\)\)/i });
+    fireEvent.click(absItem);
+    expect(onPlotExpression).toHaveBeenCalledWith("abs(V(out))");
+  });
 });
 
 describe("NoisePlot - log-log (frequency × V/√Hz decades) ticks", () => {

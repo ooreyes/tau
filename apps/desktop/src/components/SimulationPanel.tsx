@@ -645,13 +645,19 @@ export function SimulationPanel({
   const addDcExpression = () => {
     const expr = dcExprInput.trim();
     if (!expr) return;
-    const probe = evaluateDcPlotExpression(expr, dcResult);
+    plotDcExpression(expr);
+    setDcExprInput("");
+  };
+
+  const plotDcExpression = (expr: string) => {
+    const trimmed = expr.trim();
+    if (!trimmed) return;
+    const probe = evaluateDcPlotExpression(trimmed, dcResult);
     if (!probe.ok) {
       setDcExprError(probe.error);
       return;
     }
-    if (!dcExprList.includes(expr)) setDcExprList((prev) => [...prev, expr]);
-    setDcExprInput("");
+    if (!dcExprList.includes(trimmed)) setDcExprList((prev) => [...prev, trimmed]);
     setDcExprError(null);
   };
 
@@ -1417,7 +1423,7 @@ export function SimulationPanel({
         <>
           <DcSetupForm setup={dcSetup} components={components} onChange={onDcSetupChange} />
           <div ref={dcPlotsRef}>
-            <DcPlot result={dcResult} overlays={dcExprTraces} />
+            <DcPlot result={dcResult} overlays={dcExprTraces} onPlotExpression={plotDcExpression} />
           </div>
           <DcFamilyPlot family={dcStepFamily} />
           <MeasTable measurements={dcMeasurements} />
@@ -4120,7 +4126,16 @@ function bodeValuePath(
  * node's voltage on a linear Y axis. Mirrors {@link AcPlot} but without the log
  * frequency mapping. The ground net (label "GND") is dropped - it is always 0 V.
  */
-export function DcPlot({ result, overlays = [] }: { result: DcSweepResult | null; overlays?: DcSweepNet[] }) {
+export function DcPlot({
+  result,
+  overlays = [],
+  onPlotExpression,
+}: {
+  result: DcSweepResult | null;
+  overlays?: DcSweepNet[];
+  /** Right-click DC legend math → add a DC expression overlay. */
+  onPlotExpression?: (expression: string) => void;
+}) {
   const clipId = useId();
   const [measureRef, size] = useMeasuredSize<SVGSVGElement>();
   const { targetXTicks, targetYTicks } = tickCountsFromSize(size);
@@ -4211,23 +4226,85 @@ export function DcPlot({ result, overlays = [] }: { result: DcSweepResult | null
           </svg>
           {plot && <ScopeZoomCluster onZoomIn={() => zoomBy(0.7)} onZoomOut={() => zoomBy(1 / 0.7)} onFit={fit} />}
         </div>
-        <div className="scope-legend">
+        <div className="scope-legend" aria-label="DC legend">
           {traces.length > 0 ? (
-            traces.map((net, i) => (
-              <span key={net.id}>
-                <i style={{ background: AC_COLORS[i % AC_COLORS.length] }} />
-                {net.label}
-              </span>
-            ))
+            traces.map((net, i) => {
+              const mathSource = expressionForTrace(net.id, net.label);
+              if (!mathSource || !onPlotExpression) {
+                return (
+                  <span key={net.id} className="bode-legend-chip">
+                    <i style={{ background: AC_COLORS[i % AC_COLORS.length] }} />
+                    {net.label}
+                  </span>
+                );
+              }
+              return (
+                <ContextMenu key={net.id}>
+                  <ContextMenuTrigger asChild>
+                    <button
+                      type="button"
+                      className="bode-legend-chip"
+                      aria-label={`Math for ${net.label}`}
+                    >
+                      <i style={{ background: AC_COLORS[i % AC_COLORS.length] }} aria-hidden="true" />
+                      {net.label}
+                    </button>
+                  </ContextMenuTrigger>
+                  <ContextMenuContent aria-label={`Math for ${net.label}`}>
+                    <ContextMenuLabel>Math</ContextMenuLabel>
+                    <ContextMenuSeparator />
+                    {acTraceMathMenuItems().map((item) => (
+                      <ContextMenuItem
+                        key={item.op}
+                        onClick={() => onPlotExpression(wrapTraceMath(mathSource, item.op))}
+                      >
+                        {item.label.replace("…", net.label)}
+                      </ContextMenuItem>
+                    ))}
+                  </ContextMenuContent>
+                </ContextMenu>
+              );
+            })
           ) : (
             <span className="muted">No traces</span>
           )}
-          {overlays.map((net, i) => (
-            <span key={net.id}>
-              <i style={{ background: EXPR_COLORS[i % EXPR_COLORS.length] }} />
-              {net.label}
-            </span>
-          ))}
+          {overlays.map((net, i) => {
+            const mathSource = expressionForTrace(net.id, net.label);
+            if (!mathSource || !onPlotExpression) {
+              return (
+                <span key={net.id} className="bode-legend-chip">
+                  <i style={{ background: EXPR_COLORS[i % EXPR_COLORS.length] }} />
+                  {net.label}
+                </span>
+              );
+            }
+            return (
+              <ContextMenu key={net.id}>
+                <ContextMenuTrigger asChild>
+                  <button
+                    type="button"
+                    className="bode-legend-chip"
+                    aria-label={`Math for ${net.label}`}
+                  >
+                    <i style={{ background: EXPR_COLORS[i % EXPR_COLORS.length] }} aria-hidden="true" />
+                    {net.label}
+                  </button>
+                </ContextMenuTrigger>
+                <ContextMenuContent aria-label={`Math for ${net.label}`}>
+                  <ContextMenuLabel>Math</ContextMenuLabel>
+                  <ContextMenuSeparator />
+                  {acTraceMathMenuItems().map((item) => (
+                    <ContextMenuItem
+                      key={item.op}
+                      onClick={() => onPlotExpression(wrapTraceMath(mathSource, item.op))}
+                    >
+                      {item.label.replace("…", net.label)}
+                    </ContextMenuItem>
+                  ))}
+                </ContextMenuContent>
+              </ContextMenu>
+            );
+          })}
         </div>
       </div>
       <div className="meter-row analysis-meter">

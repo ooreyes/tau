@@ -1556,7 +1556,9 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   `windowedTraceStatistics` + legend Ctrl/⌘+click opens Dialog with AVG/RMS
   over `sharedX`. **AC Bode legend right-click math landed** (2026-08-05):
   `acTraceMathMenuItems` (abs/neg/db/uramp/sgn — no ddt/idt) + AcPlot legend
-  ContextMenu → `onPlotExpression`. Still ⬜: DC/step legend menus.
+  ContextMenu → `onPlotExpression`. **DC sweep legend right-click math landed**
+  (2026-08-05): DcPlot legend ContextMenu via the same overlay ops → DC
+  expression overlays. Still ⬜: step legend menus.
 
 ## 7. Engine & accuracy
 - ✅ Native ngspice FFI (desktop) — `src-tauri/src/spice.rs`

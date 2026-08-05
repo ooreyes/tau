@@ -1,16 +1,9 @@
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 07:20 CDT**
+**Status: DONE - 2026-08-05 07:23 CDT**
 
-Unit: Circuit_testing_v1 `12_buck_converter.asc` authored `.tran` → differential **pass=96**.
-```
-SUMMARY pass=96 sibling=5 gap=0
-tran ct-buck … v(out) nRms=0.0000 nMax=0.0000 span=7.595; VOUT_AVG≈4.6417
-```
-Named-device 48.1%. Worktree `Tau-wt-diff-96` rebased over tip `2b2def2`
-(AC Bode legend math + pass=95). Left Staff EE Bode/waveform / Settings /
-Draft* / ct13–15 / ct19 alone.
-SHIPPABLE? **NO**
+Unit: Waveform DoD — **DC sweep legend right-click math**.
+Rebased over Continue ct12 → **pass=96**. Settings locked. SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
@@ -49,6 +42,30 @@ SHIPPABLE? **NO**
 
 
 
+
+### 2026-08-05 — DC sweep legend right-click math (§waveform DoD)
+
+**What I did**
+- DcPlot legend ContextMenu via `acTraceMathMenuItems` (abs/neg/db/uramp/sgn;
+  no ddt/idt) → `onPlotExpression` / DC expression overlays — same pattern as
+  AC Bode legend math. ND wall at 48.1% — waveform pivot. Left ct 17/18/16/19,
+  continue 34 ASC, Chan/NIGBT/FRA, Settings alone.
+
+**Files**
+- `apps/desktop/src/components/SimulationPanel.tsx` (+ wiring test)
+- `FEATURE_PARITY.md`, `PROGRESS.md`
+
+**Tests**
+- `pnpm -C apps/desktop typecheck` + `test` green (2759 passed)
+- DcPlot legend ContextMenu → abs(V(out))
+
+**Parity items**
+- Waveform viewer 🟡 (DC legend math landed; step legend menus still ⬜).
+  Differential pass=96 · named-device 48.1% · SHIPPABLE? NO
+
+**Next step**
+- Step legend math / standalone phase window / non-wall ND. Leave
+  Educational/IRFP/Settings alone.
 
 ### 2026-08-05 — ct 17_three_phase_power_grid .tran → pass=95 (§DoD)
 
