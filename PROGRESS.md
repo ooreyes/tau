@@ -37,6 +37,37 @@ Settings locked. SHIPPABLE? **NO**
 **Next step**
 - Bode polish scraps / non-wall ND. Leave Educational/IRFP/Settings alone.
 
+### 2026-08-05 — ct 14_logic_gate_matrix .tran → pass=98 (§DoD)
+
+**What I did**
+- Circuit_testing_v1 `14_logic_gate_matrix.asc` authored `.tran 10n 8u`
+  (VA/VB PULSE 0–5 V + Digital\and/or/xor/inv → AND/NAND/OR/NOR/XOR/XNOR +
+  100k loads): six output traces vs LTspice nRms≈0.0025 / nMax≈0.266
+  @ maxTol=0.30 (discontinuous B-source edge-step placement; span≈5 —
+  not hollow). Same-deck Tau B-emit.
+- Product AND / sum>0 OR in `digitalGateSpec` — LTspice 17.2.4 rejects
+  C-style `&&`/`||` on B-lines (grammatical error); ngspice accepts both.
+  Distinct from SampleAndHold SAMPLE, ct 15 dflop, Educational/160.
+  Worktree `Tau-wt-diff-98` rebased over `9030f42`. Left Staff EE /
+  Settings / Draft* / ct15 / ct19 alone.
+
+**Files**
+- `apps/desktop/src/engine/digitalGateSpec.ts` (+ tests)
+- `apps/desktop/src/engine/spiceNetlist.test.ts`
+- `apps/desktop/scripts/differentialParity.corpus.ts`
+- `FEATURE_PARITY.md`, `AGENTS.md`, `PROGRESS.md`
+
+**Tests**
+- `scripts/differential-parity.sh` → SUMMARY pass=98 sibling=5 gap=0
+- `pnpm -C apps/desktop typecheck` + `test` green (2760+ passed)
+
+**Parity items**
+- Differential **pass=98** · named-device 48.1% · SHIPPABLE? NO
+
+**Next step**
+- ct 15 dflop (if XSPICE bridges stable on same-deck LTspice), or Educational
+  non-wall leftovers. Leave ct19 OP / IRFP WIP / Draft* / Settings alone.
+
 ### 2026-08-05 — AC/DC step-family legend right-click math (§waveform DoD)
 
 **What I did**
