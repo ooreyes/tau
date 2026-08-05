@@ -59,4 +59,27 @@ describe("ltspiceSymbolResolve", () => {
     writeFileSync(join(root, "Misc", "AD4000.asy"), "Version 4\nSYMATTR Prefix X\n");
     expect(resolveInstalledAsyPath([root], "AD4000")).toBeNull();
   });
+
+  it("treats the same relative path in two lib roots as one unique leaf", () => {
+    // Autobuilder stages a TCC-safe copy beside the live LTspice lib; both
+    // expose OpAmps/ADA4077-1.asy. Absolute-path uniqueness falsely refused.
+    const staged = fixture();
+    const liveParent = mkdtempSync(join(tmpdir(), "tau-ltspice-live-"));
+    const live = join(liveParent, "sym");
+    mkdirSync(join(live, "OpAmps"), { recursive: true });
+    writeFileSync(join(live, "OpAmps", "ADA4077-1.asy"), "Version 4\nSYMATTR Prefix X\n");
+    writeFileSync(join(staged, "OpAmps", "ADA4077-1.asy"), "Version 4\nSYMATTR Prefix X\n");
+    try {
+      expect(resolveInstalledAsyPath([staged, live], "ADA4077-1")).toBe(
+        join(staged, "OpAmps", "ADA4077-1.asy"),
+      );
+      resetInstalledAsyPathCacheForTests();
+      // Distinct families across roots stay refused.
+      mkdirSync(join(live, "Misc"), { recursive: true });
+      writeFileSync(join(live, "Misc", "ADA4077-1.asy"), "Version 4\nSYMATTR Prefix X\n");
+      expect(resolveInstalledAsyPath([staged, live], "ADA4077-1")).toBeNull();
+    } finally {
+      rmSync(liveParent, { recursive: true, force: true });
+    }
+  });
 });

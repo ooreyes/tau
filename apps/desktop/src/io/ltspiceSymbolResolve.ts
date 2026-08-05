@@ -84,21 +84,26 @@ export function resolveInstalledAsyPath(symRoots: string[], symbolType: string):
   }
 
   // Bare names (Applications `SYMBOL AD4000`) need a unique leaf match.
-  const basenameHits: string[] = [];
+  // Uniqueness is by relative path under each sym root — the same
+  // `OpAmps/ADA4077-1.asy` in a staged autobuilder tree and the live LTspice
+  // lib is one identity (prefer the first root), not an ambiguous family
+  // collision. Distinct relatives (`ADC/X.asy` vs `Misc/X.asy`) still refuse.
+  type BasenameHit = { abs: string; relKey: string; root: string };
+  const basenameHits: BasenameHit[] = [];
   for (const root of symRoots) {
-    basenameHits.push(...findAllAsyByBasename(root, leaf));
+    for (const abs of findAllAsyByBasename(root, leaf)) {
+      const relKey = relative(root, abs).replace(/\\/g, "/").toLowerCase();
+      basenameHits.push({ abs, relKey, root });
+    }
   }
-  const unique = [...new Set(basenameHits.map((path) => path.toLowerCase()))];
-  if (unique.length === 1) {
-    const found = basenameHits[0]!;
+  const uniqueRel = [...new Set(basenameHits.map((hit) => hit.relKey))];
+  if (uniqueRel.length === 1) {
+    const found = basenameHits.find((hit) => hit.relKey === uniqueRel[0])!.abs;
+    const foundRoot = basenameHits.find((hit) => hit.abs === found)!.root;
     cacheResolvedPath([queryKey, leafKey], found);
-    for (const root of symRoots) {
-      if (!found.toLowerCase().startsWith(root.toLowerCase())) continue;
-      const relativeKey = relative(root, found).replace(/\.asy$/i, "").toLowerCase();
-      if (relativeKey && relativeKey !== queryKey && relativeKey !== leafKey) {
-        cacheResolvedPath([relativeKey], found);
-      }
-      break;
+    const relativeKey = relative(foundRoot, found).replace(/\.asy$/i, "").toLowerCase();
+    if (relativeKey && relativeKey !== queryKey && relativeKey !== leafKey) {
+      cacheResolvedPath([relativeKey], found);
     }
     return found;
   }

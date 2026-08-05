@@ -9,27 +9,42 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 00:50 CDT** (Overnight DoD — 4Q OTA + ideal-diode M/N)
+**Status: DONE - 2026-08-05 00:53 CDT**
 
-Unit: LTspice OTA four-quadrant multiplier ports (effective-Vin product) **and**
-ideal-diode `m=`/`N=` sidiode scale → named-device **33.0%**. Pin-faithful
-refuse→exact. Never silent two-port/generic-diode sub. Never fake ≥95%.
-
-**Measured tip stdout (truth):**
+Unit: Multi-root unique-leaf ASY relative-path identity → named-device **42.7%**.
 ```
-NAMED-DEVICE: exact=2 refuse=4 silent=0
-NAMED-DEVICE-RECURSIVE: unencrypted=2539 exact=837 refuse=1702 silent=0 hard-failure=0 encrypted-excluded=1473 exact-rate=33.0%
+NAMED-DEVICE-RECURSIVE: unencrypted=2539 exact=1083 refuse=1456 silent=0 hard-failure=0 encrypted-excluded=1473 exact-rate=42.7%
 ```
-Before (finite-V tip): 729/28.7%. After: **+108 exact**. Cleared refuse classes:
-**63×** four-quadrant OTA · **54×** ideal-diode instance options (m=/N=). Soft
-epsilon (~4×) / incomplete asym (~7×) / off|non-default temp stay refuse.
-Encrypted bare SYMBOL stays refuse. SHIPPABLE? **NO**
-
-**Forbidden lanes left alone:** Settings* · AssistantPanel · ShellPanels · App.css.
+Before 33.0%/837 → +246 exact. Same `OpAmps/ADA4077-1.asy` in staged+live
+libs is one leaf (prefer first root); distinct families still refuse. Freshman
+AI / palette untouched. SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
 ---
+
+### 2026-08-05 — Multi-root unique-leaf ASY → exact-rate 42.7% (§DoD)
+
+**What I did**
+- Bare SYMBOL unique-leaf uniqueness was by absolute path, so the staged
+  `~/.tau-autobuilder/ltspice-models` tree + live Application Support copy of
+  the same `OpAmps/ADA4077-1.asy` looked like an ambiguous family collision.
+- Dedup by relative path under each `sym` root; prefer first root in
+  `ltspiceLibRoots()` order. Distinct relatives (`ADC/X` vs `Misc/X`) still
+  refuse — never silent wrong-family ModelFile.
+
+**Exact stdout**
+```
+NAMED-DEVICE: exact=2 refuse=4 silent=0
+NAMED-DEVICE-RECURSIVE: unencrypted=2539 exact=1083 refuse=1456 silent=0 hard-failure=0 encrypted-excluded=1473 exact-rate=42.7%
+```
+
+**Parity items**
+- Named-device 🟡 HF=0 silent=0 exact-rate **42.7%** (not ≥95%). SHIPPABLE? NO
+
+**Next**
+- Remaining encrypted bare SYMBOL refuse; pin-count mismatches; incomplete asym
+
 
 ### 2026-08-05 — OTA 4Q multipliers + ideal-diode M/N → exact-rate 33.0% (§DoD)
 
