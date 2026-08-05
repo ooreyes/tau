@@ -173,17 +173,15 @@ account and sign/notarize/ship.
       with LTspice over a representative device and topology matrix.
       **Partial (2026-08-05):** `scripts/differential-parity.sh` +
       `differentialParity.corpus.ts` (also under `dod-parity.sh`) prove
-      pass=32 · sibling=5 · gap=0 on stdout: prior RC/divider/curvetrace/
+      pass=34 · sibling=5 · gap=0 on stdout: prior RC/divider/curvetrace/
       NoiseFigure + Educational noise.asc + Cohn.asc AC + MeasureBW.asc AC +
       Transformer.asc TRAN (coupled L K=1) + Transformer2 / IdealTransformer
-      TRAN + notch/passive/butter authored `.ac` (RLC filter breadth), expanded
-      `.step` families, steptemp/stepmodelparam, native emitNativeStep `.step`
-      card, Colpitts AC, Class-D AC/OP/DC/noise/tf (V1 rail; noise/tf under the
-      same added-analysis precedent as AC/OP/DC — fixture authors .tran/.meas).
-      Sibling TRAN/meas
-      proofs remain Colpitts/Class-D/Efficiency/special devices. Harness-slice
-      gap closed; broad topology/device matrix still open — DoD box stays
-      unchecked.
+      TRAN + notch/passive/butter authored `.ac` + Clapp/Hartly JFET oscillator
+      AC (Colpitts-precedent V1 stim), expanded `.step` families,
+      steptemp/stepmodelparam, native emitNativeStep `.step` card, Colpitts AC,
+      Class-D AC/OP/DC/noise/tf (V1 rail). Sibling TRAN/meas proofs remain
+      Colpitts/Class-D/Efficiency/special devices. Harness-slice gap closed;
+      broad topology/device matrix still open — DoD box stays unchecked.
 - [ ] **AI is production-safe and genuinely circuit-aware:** a supported OpenAI
       path (Tau OAuth/backend or native BYOK with separate API billing) keeps
       service credentials out of the renderer, obtains explicit cloud-data

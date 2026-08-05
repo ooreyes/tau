@@ -9,13 +9,13 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 02:02 CDT**
+**Status: DONE - 2026-08-05 02:07 CDT**
 
-Unit: Educational `Transformer2.asc` + `IdealTransformer.asc` authored `.tran` → differential **pass=32**.
+Unit: Educational Clapp.asc + Hartly.asc AC → differential **pass=34**.
 ```
-SUMMARY pass=32 sibling=5 gap=0
-tran transformer2 … v(in)/v(a)/v(b) nRms=0
-tran idealtransformer … v(N002)/v(N004) nRms=0
+SUMMARY pass=34 sibling=5 gap=0
+ac clapp  … |V(out)| nRms=0.0029
+ac hartly … |V(out)| nRms=0.0000
 ```
 Named-device 47.9% encrypted wall unchanged. SHIPPABLE? **NO**
 
@@ -23,6 +23,33 @@ Named-device 47.9% encrypted wall unchanged. SHIPPABLE? **NO**
 
 
 ---
+
+### 2026-08-05 — Clapp/Hartly AC differential → pass=34 (§DoD)
+
+**What I did**
+- Educational `Clapp.asc` / `Hartly.asc` JFET oscillators: fixtures author
+  `.tran`; differential proof adds AC stim on V1 (Colpitts precedent).
+- LTspice↔ngspice |V(out)|: Clapp nRms=0.0029, Hartly nRms=0.
+- Left Transformer*/IdealTransformer/notch/passive/butter/Class-D untouched.
+
+**Exact stdout**
+```
+SUMMARY pass=34 sibling=5 gap=0
+```
+
+**Files**
+- `apps/desktop/scripts/differentialParity.corpus.ts`
+- `AGENTS.md`, `FEATURE_PARITY.md`, `PROGRESS.md`
+
+**Tests**
+- vitest differentialParity; typecheck; apps/desktop test
+
+**Parity items**
+- Differential 🟡 **pass=34 · sibling=5 · gap=0**. Named-device 47.9%. SHIPPABLE? NO
+
+**Next**
+- Howland/opamp/Linkwitz if exact; Vswitch deferred; encrypted refuse
+
 
 ### 2026-08-05 — Transformer2 + IdealTransformer TRAN → pass=32 (§DoD)
 
