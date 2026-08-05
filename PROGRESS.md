@@ -9,20 +9,56 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 03:10 CDT**
+**Status: DONE - 2026-08-05 03:17 CDT**
 
-Unit: Educational `MonteCarlo.asc` authored `.ac` mc→nominal → differential **pass=55**.
+Unit: Educational `phaseshift.asc` / `phaseshift2.asc` AC stim → differential **pass=59**.
 ```
-SUMMARY pass=55 sibling=5 gap=0
-ac montecarlo … v(out) nRms=0 span≈0.499
+SUMMARY pass=59 sibling=5 gap=0
+ac phaseshift … |V(out)| nRms=0 span≈2.771
+ac phaseshift2 … |V(out)| nRms=0 span≈0.592
 ```
-Tip `65e05ce` commit message claimed MV2201/varactor pass=56 but corpus/AGENTS carry **MonteCarlo pass=55** (+ bundled MV2201 unused by cells yet). Named-device 47.9%. SHIPPABLE? **NO**
+Exact bundled 2N2222/2N3904; authored `.tran` phase-miss deferred (astable-class).
+Collision-avoided Staff EE varistor/stepnoise. Named-device 47.9%. SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
 
 
 ---
+
+
+### 2026-08-05 — phaseshift/phaseshift2 AC stim → pass=59 (§DoD)
+
+**What I did**
+- Educational `phaseshift.asc` / `phaseshift2.asc`: BJT RC phase-shift oscillators
+  (exact 2N2222 / 2N3904; phaseshift2 bakes `.params R=10K`). Authored `.tran`
+  startup phase-misses vs LTspice (same class as astable) — landed same-deck
+  AC stim on V1 (Colpitts/Clapp/Hartly pattern). |V(out)| nRms≈0.
+- Tip was `5eeb141` varactor/varactor2 pass=57; this climbs 57→59.
+- Collision-avoided Staff EE varistor/stepnoise. Never faked NE555/LoopGain/
+  Vswitch/Howland/SoftDiode/HalfSlope/TLINE-inv/astable/100W/160.
+
+**Exact stdout**
+```
+SUMMARY pass=59 sibling=5 gap=0
+```
+
+**Files**
+- `apps/desktop/scripts/differentialParity.corpus.ts`
+- `AGENTS.md`, `FEATURE_PARITY.md`, `PROGRESS.md`
+- `~/Desktop/TAU-MORNING-STATUS.md`
+
+**Tests**
+- `vitest … differentialParity.corpus.ts` → SUMMARY pass=59 sibling=5 gap=0
+- `pnpm -C apps/desktop typecheck` + `test` (2680 passed)
+
+**Parity items**
+- Differential 🟡 harness **pass=59 · sibling=5 · gap=0**; DoD broad box unchecked.
+- Named-device 🟡 **47.9%** unchanged. SHIPPABLE? NO
+
+**Next**
+- Non-colliding Educational/Applications AC/TRAN (not varistor/stepnoise).
+  Leave 100W/160 alone. Pierce XTAL import looks importable later.
 
 
 ### 2026-08-05 — MonteCarlo.asc RLC AC mc→nominal → pass=55 (§DoD)

@@ -74,6 +74,8 @@ const LOGAMP_ASC = join(EDU, "logamp.asc");
 const MONTECARLO_ASC = join(EDU, "MonteCarlo.asc");
 const VARACTOR_ASC = join(EDU, "varactor.asc");
 const VARACTOR2_ASC = join(EDU, "varactor2.asc");
+const PHASESHIFT_ASC = join(EDU, "phaseshift.asc");
+const PHASESHIFT2_ASC = join(EDU, "phaseshift2.asc");
 const ORDER2_LOWPASS_ASC = join(APP, "2ndOrderLowpass.asc");
 const ORDER2_BANDPASS_ASC = join(APP, "2ndOrderBandpass.asc");
 const ORDER2_HIGHPASS_ASC = join(APP, "2ndOrderHighpass.asc");
@@ -227,7 +229,7 @@ function withAcStimulus(netlist: string): string {
 describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential parity matrix", () => {
   const cells: DifferentialCell[] = [];
 
-  it("matches RC .tran/.ac/.meas, divider analyses, .step families, curvetrace, stepmodelparam, NoiseFigure, noise.asc, Colpitts/Clapp/Hartly AC, Cohn AC, MeasureBW AC, Transformer/Transformer2/IdealTransformer TRAN, notch/passive/butter/opamp/Linkwitz AC, LM741/LM308/LM78XX/P2/logamp TRAN, GFT AC, DCopPnt OP, audioamp TRAN, UHFpreamp AC, 1563 AC, S-param AC, stepAC AC, 2ndOrder* AC, MonteCarlo AC, varactor AC, Class-D AC/OP/DC/noise/tf", () => {
+  it("matches RC .tran/.ac/.meas, divider analyses, .step families, curvetrace, stepmodelparam, NoiseFigure, noise.asc, Colpitts/Clapp/Hartly AC, Cohn AC, MeasureBW AC, Transformer/Transformer2/IdealTransformer TRAN, notch/passive/butter/opamp/Linkwitz AC, LM741/LM308/LM78XX/P2/logamp TRAN, GFT AC, DCopPnt OP, audioamp TRAN, UHFpreamp AC, 1563 AC, S-param AC, stepAC AC, 2ndOrder* AC, MonteCarlo AC, varactor AC, phaseshift AC, Class-D AC/OP/DC/noise/tf", () => {
     // --- TRAN (also covered by waveformParity; re-assert here so this file is self-sufficient) ---
     {
       const result = runPairedBatch("diff-rc-tran", RC_TRAN, ["v(out)"]);
@@ -2066,6 +2068,80 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
       });
     }
 
+    // --- Educational phaseshift.asc / phaseshift2.asc AC (BJT RC phase-shift oscillators) ---
+    // Authored analysis is .tran (startup); TRAN vs LTspice phase-misses like astable —
+    // same-deck AC stim on V1 (Colpitts/Clapp/Hartly pattern) proves small-signal.
+    // Exact bundled 2N2222 / 2N3904; phaseshift2 bakes .params R=10K. Collision-avoided
+    // Staff EE varistor/stepnoise; never NE555/LoopGain/Vswitch/Howland/SoftDiode/HalfSlope.
+    for (const osc of [
+      {
+        path: PHASESHIFT_ASC,
+        circuit: "phaseshift",
+        topology: "Educational phaseshift.asc BJT RC phase-shift + 2N2222 (AC stim on V1; .tran-authored)",
+        id: "diff-phaseshift-ac",
+        startHz: 100,
+        stopHz: 100e3,
+        model: "2N2222",
+      },
+      {
+        path: PHASESHIFT2_ASC,
+        circuit: "phaseshift2",
+        topology: "Educational phaseshift2.asc BJT RC phase-shift + 2N3904 (.param R=10K; AC stim on V1; .tran-authored)",
+        id: "diff-phaseshift2-ac",
+        startHz: 10,
+        stopHz: 10e3,
+        model: "2N3904",
+      },
+    ] as const) {
+      expect(existsSync(osc.path), `missing ${osc.path}`).toBe(true);
+      const imported = importAsc(decodeSchematicText(readFileSync(osc.path)));
+      expect(imported.warnings).toEqual([]);
+      const dirs = expandDirectiveLines(imported.directives);
+      const params = buildParamScope(dirs);
+      const deck = buildSpiceDeck({
+        components: imported.components,
+        wires: imported.wires,
+        netLabels: imported.netLabels,
+        directives: dirs,
+        params,
+      }, {
+        kind: "ac",
+        startHz: osc.startHz,
+        stopHz: osc.stopHz,
+        pointsPerDecade: 50,
+      });
+      expect(deck.unresolvedSubckts ?? []).toEqual([]);
+      expect(deck.modelSubstitutions ?? []).toEqual([]);
+      expect(deck.netlist).toMatch(new RegExp(`\\.model\\s+${osc.model}\\s+NPN\\b`, "i"));
+      const qLines = deck.netlist.split(/\r?\n/).filter((line) => /^Q\w*\b/i.test(line.trim()));
+      expect(qLines.length).toBeGreaterThanOrEqual(1);
+      for (const line of qLines) {
+        expect(line, line).toMatch(new RegExp(`\\b${osc.model}\\b`));
+        expect(line, line).not.toMatch(/\bTAU_NPN\b/);
+      }
+      if (osc.circuit === "phaseshift2") {
+        expect(deck.netlist).toMatch(/\b10[eE]3\b|\b10000\b/);
+      }
+      const netlist = withAcStimulus(deck.netlist);
+      expect(netlist).toMatch(/^V\w*\b.*\bAC\b/im);
+      const result = runPairedBatch(osc.id, netlist, ["v(out)"]);
+      const lt = result.ltspice.get("v(out)")!;
+      const ng = result.ngspice.get("v(out)")!;
+      const comparison = compareWaveforms(ng.axis, ng.values, lt.axis, lt.values, {
+        rmsTolerance: 0.02,
+        maxTolerance: 0.05,
+      });
+      expect(comparison.pass, `${osc.circuit} ${JSON.stringify(comparison)}`).toBe(true);
+      expect(comparison.referenceRange, `${osc.circuit} non-hollow`).toBeGreaterThan(0.1);
+      cells.push({
+        analysis: "ac",
+        circuit: osc.circuit,
+        topology: osc.topology,
+        status: "pass",
+        note: `|V(out)| nRms=${comparison.normalizedRms.toFixed(4)} nMax=${comparison.normalizedMax.toFixed(4)} span=${comparison.referenceRange.toFixed(3)}`,
+      });
+    }
+
     // --- Class-D AC/OP (authored analyses are .tran/.meas; add AC/OP for differential proof) ---
     {
       const ascPath = join(CLASSD_DIR, "class-d-starter.asc");
@@ -2362,6 +2438,6 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
     expect(passCount).toBeGreaterThanOrEqual(57);
     expect(siblingCount).toBe(5);
     expect(gapCount).toBe(0);
-    expect(report).toMatch(/SUMMARY pass=57 sibling=5 gap=0/);
+    expect(report).toMatch(/SUMMARY pass=59 sibling=5 gap=0/);
   }, 240_000);
 });

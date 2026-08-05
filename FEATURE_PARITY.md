@@ -1576,13 +1576,16 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   oscillator by amplitude, RMS, and frequency. All four proofs pass headlessly.
   **Differential matrix slice (2026-08-05):** `scripts/differential-parity.sh`
   (wired into `dod-parity.sh`) prints pass/sibling/gap coverage to stdout
-  (truth). Gap-closure → **pass=57 · sibling=5 · gap=0**: prior cells through
-  2ndOrder* + MonteCarlo AC plus Educational varactor/varactor2.asc authored `.ac`
-  (bundled exact MV2201; v(out)/v(a,b,c) nRms≈0). tip 65e05ce thrash corrected
-  (claimed varactor, corpus was MonteCarlo). phono/relax/SAH blocked. HalfSlope
-  Laplace stripped; SoftDiodeRecovery deferred; BandGaps dc-temp miss; LoopGain/
-  Electrometer LT1001 OTA wall; MC1648 deferred. Harness-slice gaps closed; DoD
-  broad-differential box remains open — see AGENTS.md.
+  (truth). Gap-closure → **pass=59 · sibling=5 · gap=0**: prior cells through
+  2ndOrder* + MonteCarlo AC + Educational varactor/varactor2.asc authored `.ac`
+  (bundled exact MV2201; v(out)/v(a,b,c) nRms≈0) plus Educational
+  phaseshift/phaseshift2.asc AC stim (exact 2N2222/2N3904; |V(out)| nRms≈0;
+  authored `.tran` phase-miss deferred like astable). tip 65e05ce thrash
+  corrected (claimed varactor, corpus was MonteCarlo). phono/relax/SAH blocked.
+  HalfSlope Laplace stripped; SoftDiodeRecovery deferred; BandGaps dc-temp miss;
+  LoopGain/Electrometer LT1001 OTA wall; MC1648 deferred. Staff EE owns
+  varistor/stepnoise. Harness-slice gaps closed; DoD broad-differential box
+  remains open — see AGENTS.md.
 - 🟡 Resolve a real device-model set — **common LTspice standard diodes/
   zeners/BJTs + the class-d power VDMOS pair bundled** (`engine/standardModels.ts`,
   real `standard.*` params, emitted by `buildSpiceDeck` when referenced by name).
