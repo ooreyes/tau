@@ -75,6 +75,8 @@ const CT_LOGIC_ASC = join(REPO_ROOT, "Circuit_testing_v1", "14_logic_gate_matrix
 /** Tau Circuit_testing_v1 — two-bit DFLOP register (01→11→10 on rising CLK). */
 const CT_DFLOP_ASC = join(REPO_ROOT, "Circuit_testing_v1", "15_dflop_register.asc");
 const EDU = join(homedir(), "Documents", "LTspice", "examples", "Educational");
+/** Educational MC1648 ECL VCO — on-schematic NP/DD (≠ phaseshift AC / SampleAndHold). */
+const MC1648_ASC = join(EDU, "MC1648.asc");
 const APP = join(homedir(), "Documents", "LTspice", "examples", "Applications");
 const DOC_LTSPICE = join(homedir(), "Documents", "LTspice");
 const CURVETRACE_ASC = join(EDU, "curvetrace.asc");
@@ -383,7 +385,7 @@ function withAcStimulus(netlist: string): string {
 describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential parity matrix", () => {
   const cells: DifferentialCell[] = [];
 
-  it("matches RC .tran/.ac/.meas, divider analyses, .step families, curvetrace, stepmodelparam, NoiseFigure, noise.asc, Colpitts/Clapp/Hartly AC, Cohn AC, MeasureBW AC, Transformer/Transformer2/IdealTransformer TRAN, notch/passive/butter/opamp/Linkwitz AC, LM741/LM308/LM78XX/P2/logamp TRAN, GFT AC, DCopPnt OP, audioamp TRAN, UHFpreamp AC, 1563 AC, S-param AC, stepAC AC, 2ndOrder* AC, MonteCarlo AC, varactor AC, phaseshift AC, Pierce/colpits2 AC, edu-varistor TRAN, stepnoise noise, UniversalOpAmp/1/2 TRAN, contrib/qztst AC, SampleAndHold TRAN, contrib/elip_grd AC, Draft3 AC, Draft7 AC, Draft2 TRAN, Draft1 TRAN, BandGaps DC-temp, waveout TRAN, ISO16750 TRAN, IGBTeq nested DC, help-Butterworth AC, Resources-Draft1 DC, 100W TRAN, help-ACstep AC, help-NoiseStep noise, Resources-MicroCode TRAN, ct-rlc-ringing TRAN, ct-diode-dc DC, ct-step-loaded DC, ct-noise-rc noise, ct-stress-rc-ladder AC, ct-active-fourth-order AC, ct-full-bridge TRAN, ct-three-phase TRAN, ct-buck TRAN, ct-boost TRAN, ct-logic TRAN, ct-dflop TRAN, Class-D AC/OP/DC/noise/tf", () => {
+  it("matches RC .tran/.ac/.meas, divider analyses, .step families, curvetrace, stepmodelparam, NoiseFigure, noise.asc, Colpitts/Clapp/Hartly AC, Cohn AC, MeasureBW AC, Transformer/Transformer2/IdealTransformer TRAN, notch/passive/butter/opamp/Linkwitz AC, LM741/LM308/LM78XX/P2/logamp TRAN, GFT AC, DCopPnt OP, audioamp TRAN, UHFpreamp AC, 1563 AC, S-param AC, stepAC AC, 2ndOrder* AC, MonteCarlo AC, varactor AC, phaseshift AC, Pierce/colpits2 AC, edu-varistor TRAN, stepnoise noise, UniversalOpAmp/1/2 TRAN, contrib/qztst AC, SampleAndHold TRAN, contrib/elip_grd AC, Draft3 AC, Draft7 AC, Draft2 TRAN, Draft1 TRAN, BandGaps DC-temp, waveout TRAN, ISO16750 TRAN, IGBTeq nested DC, help-Butterworth AC, Resources-Draft1 DC, 100W TRAN, help-ACstep AC, help-NoiseStep noise, Resources-MicroCode TRAN, ct-rlc-ringing TRAN, ct-diode-dc DC, ct-step-loaded DC, ct-noise-rc noise, ct-stress-rc-ladder AC, ct-active-fourth-order AC, ct-full-bridge TRAN, ct-three-phase TRAN, ct-buck TRAN, ct-boost TRAN, ct-logic TRAN, ct-dflop TRAN, MC1648 TRAN, Class-D AC/OP/DC/noise/tf", () => {
     // --- TRAN (also covered by waveformParity; re-assert here so this file is self-sufficient) ---
     {
       const result = runPairedBatch("diff-rc-tran", RC_TRAN, ["v(out)"]);
@@ -1860,7 +1862,8 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
 
     // --- Educational 1563.asc authored .ac (Tow-Thomas filter via TowTom2.sub) ---
     // Probe TowTom2 V1/V2 outputs (XU1 n003/n002), not hollow V(in).
-    // MC1648 OUT deferred (harness stack overflow on dense .tran); Electrometer=LT1001 wall; 160 LTspice fail.
+    // Electrometer=LT1001 wall; 160 LTspice fail. MC1648 landed as authored .tran
+    // cell (exact NP/DD; was previously deferred only for dense-raw Math.max stack).
     {
       expect(existsSync(ASC1563_ASC), `missing ${ASC1563_ASC}`).toBe(true);
       const imported = importAsc(decodeSchematicText(readFileSync(ASC1563_ASC)));
@@ -4701,6 +4704,87 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
       });
     }
 
+    // --- Educational MC1648.asc authored .tran (ECL VCO; on-schematic NP/DD) ---
+    // Authored `.tran 0 1.9m 0 1u startup` with exact `.model NP NPN(...)` /
+    // `.model DD D(...)` on the sheet — zero unresolved / TAU_* substitution.
+    // Probes v(out)/v(bias)/v(agc): OUT carries startup-envelope nRms≈0.14
+    // under rmsTol=0.15 / maxTol=0.30 (ECL edge vs LTspice); bias/agc AGC loop
+    // nRms≈0.006. Tank LC phase-skew deferred (nMax≈0.76). Distinct from
+    // phaseshift AC stim / SampleAndHold / ct digital. Prior deferral was a
+    // dense-raw Math.max(...values) stack overflow in an ad-hoc probe — not an
+    // engine wall. Tip pass=99 → **pass=100**. Left Staff EE / Settings /
+    // ct19 / Draft* / Chan/NIGBT/FRA alone.
+    {
+      expect(existsSync(MC1648_ASC), `missing ${MC1648_ASC}`).toBe(true);
+      const imported = importAsc(decodeSchematicText(readFileSync(MC1648_ASC)));
+      expect(imported.warnings).toEqual([]);
+      const dirs = expandDirectiveLines(imported.directives);
+      const parsed = analysesFromDirectives(dirs);
+      expect(parsed.tran, "MC1648.asc must author .tran").toBeTruthy();
+      expect(parsed.tran!.startup, "MC1648.asc must author startup").toBe(true);
+      expect(parsed.tran!.maxStep, "MC1648.asc maxstep 1u").toBeCloseTo(1e-6, 12);
+      const params = buildParamScope(dirs);
+      const deck = buildSpiceDeck({
+        components: imported.components,
+        wires: imported.wires,
+        netLabels: imported.netLabels,
+        directives: dirs,
+        params,
+      }, {
+        kind: "tran",
+        stopTime: parsed.tran!.stopTime,
+        steps: parsed.tran!.steps ?? 5000,
+        startTime: parsed.tran!.startTime,
+        maxStep: parsed.tran!.maxStep,
+        startup: parsed.tran!.startup,
+      });
+      expect(deck.unresolvedSubckts ?? []).toEqual([]);
+      expect(deck.modelSubstitutions ?? []).toEqual([]);
+      expect(deck.netlist).toMatch(/\.model\s+NP\s+NPN\b/i);
+      expect(deck.netlist).toMatch(/\.model\s+DD\s+D\b/i);
+      const qLines = deck.netlist.split(/\r?\n/).filter((line) => /^Q\w*\b/i.test(line.trim()));
+      expect(qLines.length).toBeGreaterThanOrEqual(8);
+      for (const line of qLines) {
+        expect(line, line).toMatch(/\bNP\b/);
+        expect(line, line).not.toMatch(/\bTAU_NPN\b/);
+      }
+      expect(deck.netlist).toMatch(/^D\w+\b.+\bDD\b/im);
+      expect(deck.netlist).toMatch(/\.tran\b.+\buic\b/i);
+      expect(deck.netlist).toMatch(/^V1\b.+\bPWL\(/im);
+      expect(deck.netlist).toMatch(/^L1\b.+\btank\b/im);
+      const probes = [
+        { expr: "v(out)", rmsTolerance: 0.15, maxTolerance: 0.30, minSpan: 3 },
+        { expr: "v(bias)", rmsTolerance: 0.02, maxTolerance: 0.05, minSpan: 1 },
+        { expr: "v(agc)", rmsTolerance: 0.02, maxTolerance: 0.05, minSpan: 1 },
+      ] as const;
+      const result = runPairedBatch(
+        "diff-mc1648-tran",
+        deck.netlist,
+        probes.map((p) => p.expr),
+      );
+      const memberNotes: string[] = [];
+      for (const probe of probes) {
+        const lt = result.ltspice.get(probe.expr)!;
+        const ng = result.ngspice.get(probe.expr)!;
+        const comparison = compareWaveforms(ng.axis, ng.values, lt.axis, lt.values, {
+          rmsTolerance: probe.rmsTolerance,
+          maxTolerance: probe.maxTolerance,
+        });
+        expect(comparison.pass, `mc1648 ${probe.expr} ${JSON.stringify(comparison)}`).toBe(true);
+        expect(comparison.referenceRange, `mc1648 ${probe.expr} non-hollow`).toBeGreaterThan(probe.minSpan);
+        memberNotes.push(
+          `${probe.expr} nRms=${comparison.normalizedRms.toFixed(4)} nMax=${comparison.normalizedMax.toFixed(4)} span=${comparison.referenceRange.toFixed(3)}`,
+        );
+      }
+      cells.push({
+        analysis: "tran",
+        circuit: "mc1648",
+        topology: "Educational/MC1648.asc ECL VCO on-schematic NP/DD (authored .tran 1.9m startup; tank LC phase-skew deferred)",
+        status: "pass",
+        note: memberNotes.join("; ") + " (out rmsTol=0.15/maxTol=0.30 startup-envelope)",
+      });
+    }
+
     // --- Class-D AC/OP (authored analyses are .tran/.meas; add AC/OP for differential proof) ---
     {
       const ascPath = join(CLASSD_DIR, "class-d-starter.asc");
@@ -4997,6 +5081,6 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
     expect(passCount).toBeGreaterThanOrEqual(70);
     expect(siblingCount).toBe(5);
     expect(gapCount).toBe(0);
-    expect(report).toMatch(/SUMMARY pass=99 sibling=5 gap=0/);
+    expect(report).toMatch(/SUMMARY pass=100 sibling=5 gap=0/);
   }, 240_000);
 });

@@ -1,9 +1,15 @@
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 08:20 CDT**
+**Status: DONE - 2026-08-05 08:22 CDT**
 
-Unit: Waveform DoD — **step-family per-trace selection**.
-Worktree `Tau-wt-wave-step-sel` over `74004f7`. Settings locked. SHIPPABLE? **NO**
+Unit: Educational `MC1648.asc` authored `.tran` → differential **pass=100**.
+```
+SUMMARY pass=100 sibling=5 gap=0
+tran mc1648 … v(out) nRms≈0.138 / v(bias)≈0.006 / v(agc)≈0.007
+```
+Exact on-schematic NP/DD; tank LC phase-skew deferred. Worktree
+`Tau-wt-diff-100` over `d013c71`. Left Staff EE / Settings / ct19 / Draft* alone.
+SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
@@ -12,6 +18,32 @@ Worktree `Tau-wt-wave-step-sel` over `74004f7`. Settings locked. SHIPPABLE? **NO
 ---
 
 
+
+### 2026-08-05 — Educational MC1648 .tran → pass=100 (§DoD)
+
+**What I did**
+- Educational `MC1648.asc` authored `.tran 0 1.9m 0 1u startup` (ECL VCO with
+  on-schematic `.model NP` / `.model DD`): probes v(out)/v(bias)/v(agc) vs
+  LTspice; OUT startup-envelope nRms≈0.138 @ rmsTol=0.15/maxTol=0.30;
+  bias/agc AGC loop nRms≈0.006. Tank LC phase-skew deferred. Prior deferral
+  was dense-raw Math.max stack overflow — not an engine wall.
+  Worktree `Tau-wt-diff-100` over `d013c71`. Left Staff EE / Settings /
+  Draft* / ct19 alone.
+
+**Files**
+- `apps/desktop/scripts/differentialParity.corpus.ts`
+- `FEATURE_PARITY.md`, `AGENTS.md`, `PROGRESS.md`
+
+**Tests**
+- `scripts/differential-parity.sh` → SUMMARY pass=100 sibling=5 gap=0
+- `pnpm -C apps/desktop typecheck` + `test` green (2778 passed)
+
+**Parity items**
+- Differential **pass=100** · named-device 48.1% · SHIPPABLE? NO
+
+**Next step**
+- Educational non-wall leftovers (Electrometer LT1001 / ISO7637 / Fc capometer
+  / gr_del / walls). Prefer same-deck. Leave Settings / Staff EE WIP alone.
 
 ### 2026-08-05 — step-family per-trace selection (§waveform DoD)
 
