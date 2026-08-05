@@ -642,4 +642,51 @@ describe("NoisePlot - log-log (frequency × V/√Hz decades) ticks", () => {
     expect(readout.textContent).toMatch(/Δ/);
     expect(container.querySelectorAll(".plot-cursor").length).toBe(2);
   });
+
+  it("Apply Y locks noise density axis; Autoscale Y restores autorange", () => {
+    const freqs = [10, 100, 1000, 10000];
+    const onoise = [1e-8, 1e-7, 1e-6, 1e-7];
+    const result: NoiseResult = {
+      ok: true,
+      spec: { output: { pos: "out" }, source: "V1", sweep: { startHz: 10, stopHz: 10000, pointsPerDecade: 10 } },
+      freqs,
+      onoise,
+      inoise: onoise,
+      inoiseUnit: "V/√Hz",
+      totalOutputNoise: 1e-5,
+      totalInputNoise: 1e-5,
+      warnings: [],
+    };
+    render(<NoisePlot result={result} />);
+    expect(screen.getByLabelText("Noise density Y limits")).toBeTruthy();
+    fireEvent.change(screen.getByLabelText("Noise density Y min"), { target: { value: "1e-9" } });
+    fireEvent.change(screen.getByLabelText("Noise density Y max"), { target: { value: "1e-6" } });
+    fireEvent.click(screen.getByRole("button", { name: "Apply noise density Y limits" }));
+    expect(screen.queryByRole("alert")).toBeNull();
+    const autoscale = screen.getByRole("button", { name: "Autoscale noise density Y" });
+    expect(autoscale.getAttribute("aria-pressed")).toBe("false");
+    fireEvent.click(autoscale);
+    expect(autoscale.getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("refuses non-positive noise Y limits on log density scale", () => {
+    const freqs = [10, 100, 1000];
+    const onoise = [1e-8, 1e-7, 1e-6];
+    const result: NoiseResult = {
+      ok: true,
+      spec: { output: { pos: "out" }, source: "V1", sweep: { startHz: 10, stopHz: 1000, pointsPerDecade: 10 } },
+      freqs,
+      onoise,
+      inoise: onoise,
+      inoiseUnit: "V/√Hz",
+      totalOutputNoise: 1e-5,
+      totalInputNoise: 1e-5,
+      warnings: [],
+    };
+    render(<NoisePlot result={result} />);
+    fireEvent.change(screen.getByLabelText("Noise density Y min"), { target: { value: "0" } });
+    fireEvent.change(screen.getByLabelText("Noise density Y max"), { target: { value: "1e-6" } });
+    fireEvent.click(screen.getByRole("button", { name: "Apply noise density Y limits" }));
+    expect(screen.getByRole("alert").textContent).toMatch(/positive/i);
+  });
 });

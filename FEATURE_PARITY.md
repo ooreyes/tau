@@ -1317,7 +1317,9 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   Ymin/Ymax + Apply φY / Autoscale φY; Phase↔Group delay clears manual.
   **Transient manual Y limits landed** (2026-08-05): WaveformPlot Ymin/Ymax +
   Apply Y / Autoscale Y applied to every TranScopePane left axis (right-axis
-  amps stay data-fit).
+  amps stay data-fit). **Noise density manual Y limits landed** (2026-08-05):
+  NoisePlot Ymin/Ymax + Apply Y / Autoscale Y; log scale refuses non-positive
+  limits; yScale flip clears manual.
 - ✅ **Per-component simulator telemetry (§11 D10, 2026-07-10):** every named
   component receives a selectable row with voltage across, current through,
   instantaneous power, sparkline, and signal class. Voltage polarity follows
@@ -1570,9 +1572,10 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   **Bode magnitude manual Y limits landed** (2026-08-05): AcPlot Ymin/Ymax +
   Apply Y / Autoscale Y. **DC sweep manual Y limits landed** (2026-08-05):
   DcPlot Ymin/Ymax + Apply Y / Autoscale Y. **Bode phase manual Y limits landed**
-  (2026-08-05): AcPlot lower-pane Apply φY / Autoscale φY. **Transient manual
+  (2026-08-05): AcPlot lower-pane Apply φY / Autoscale φY.   **Transient manual
   Y limits landed** (2026-08-05): WaveformPlot Apply Y / Autoscale Y on left
-  axis. **NEXT:** AC/DC multi-pane cards.
+  axis. **Noise density manual Y limits landed** (2026-08-05): NoisePlot Apply Y
+  / Autoscale Y. **NEXT:** AC/DC multi-pane cards / FFT polish.
 - 🟡 Right-click trace → math/operations — **abs / negate / dB / uramp / sgn /
   ddt / idt landed** (2026-08-05): `traceMath.ts` wraps a legend trace into
   `abs(…)`, `-(…)`, `db(…)`, `uramp(…)`, `sgn(…)`, `ddt(…)`, or `idt(…)`;

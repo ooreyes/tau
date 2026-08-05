@@ -1,18 +1,44 @@
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 08:50 CDT**
+**Status: DONE - 2026-08-05 09:05 CDT**
 
-Unit: AC source UX + EveryCircuit-style OP current mode (labels + flow dots).
-Worktree `Tau-wt-ux-ac-current` rebased onto tip (pass=101 + transient Y).
-Left Staff EE / continue / Settings alone. SHIPPABLE? **NO**
+Unit: NoisePlot manual Y limits (waveform DoD leftover).
+Worktree `Tau-wt-wave-noise-ylim` on tip `403ac2a`. Left EveryCircuit /
+current-mode / Settings / Educational alone. SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
+
 
 
 
 ---
 
 
+
+### 2026-08-05 — Noise density manual Y limits (§waveform DoD)
+
+**What I did**
+- NoisePlot Ymin/Ymax + Apply Y / Autoscale Y via `parseManualYLimits` /
+  `applyManualYToDomain` (same helpers as Bode/DC/transient). Log density
+  scale refuses non-positive limits; yScale log↔linear clears manual.
+
+**Files**
+- `components/SimulationPanel.tsx` (NoisePlot)
+- `components/SimulationPanel.axes.test.tsx`
+- `FEATURE_PARITY.md`, `PROGRESS.md`
+
+**Tests**
+- `pnpm -C apps/desktop typecheck` + NoisePlot axes tests; full suite before push
+
+**Parity items**
+- §waveform DoD: noise Y limits. NEXT: AC/DC multi-pane / FFT polish.
+
+**Next step**
+- AC/DC multi-pane cards or FFT polish; never Chan/NIGBT/FRA.
+
+SHIPPABLE? **NO**
+
+---
 
 ### 2026-08-05 — AC source geometry + OP current mode (§UX / §EveryCircuit)
 

@@ -2874,6 +2874,10 @@ export function NoisePlot({ result }: { result: NoiseResult | null }) {
   const [cursorsOn, setCursorsOn] = useState(false);
   const [cf1, setCf1] = useState(0.25);
   const [cf2, setCf2] = useState(0.75);
+  const [yMinDraft, setYMinDraft] = useState("");
+  const [yMaxDraft, setYMaxDraft] = useState("");
+  const [manualY, setManualY] = useState<ManualAxisLimits | null>(null);
+  const [yLimitsError, setYLimitsError] = useState<string | null>(null);
 
   const overlays = useMemo(() => {
     if (!success) return [];
@@ -2894,6 +2898,13 @@ export function NoisePlot({ result }: { result: NoiseResult | null }) {
     }
     return "log";
   }, [overlays]);
+
+  useEffect(() => {
+    setManualY(null);
+    setYLimitsError(null);
+    setYMinDraft("");
+    setYMaxDraft("");
+  }, [yScale]);
 
   const plot = useMemo(() => {
     if (!success) return null;
@@ -2940,19 +2951,25 @@ export function NoisePlot({ result }: { result: NoiseResult | null }) {
   }, [success, overlays, yScale]);
 
   const domain = useMemo<Viewport>(
-    () => ({
-      xMin: plot ? 10 ** plot.f0 : 1,
-      xMax: plot ? 10 ** plot.f1 : 10,
-      yMin: plot ? (plot.yScale === "log" ? 10 ** plot.yMin : plot.yMin) : 1e-9,
-      yMax: plot ? (plot.yScale === "log" ? 10 ** plot.yMax : plot.yMax) : 1e-6,
-    }),
-    [plot],
+    () =>
+      applyManualYToDomain(
+        {
+          xMin: plot ? 10 ** plot.f0 : 1,
+          xMax: plot ? 10 ** plot.f1 : 10,
+          yMin: plot ? (plot.yScale === "log" ? 10 ** plot.yMin : plot.yMin) : 1e-9,
+          yMax: plot ? (plot.yScale === "log" ? 10 ** plot.yMax : plot.yMax) : 1e-6,
+        },
+        manualY,
+      ),
+    [plot, manualY],
   );
   const { viewport, attachSvg, isPanning, fit, zoomBy, dragHandlers } = usePlotViewport({
     domain,
     xScale: "log",
     yScale,
-    resetKey: plot ? `${success ? "ok" : "no"}:${yScale}:${exprList.join("|")}` : null,
+    resetKey: plot
+      ? `${success ? "ok" : "no"}:${yScale}:${manualY ? `${manualY.yMin}:${manualY.yMax}` : "auto"}:${exprList.join("|")}`
+      : null,
     width: PLOT_WIDTH,
     height: PLOT_HEIGHT,
     pad: PLOT_PAD,
@@ -3142,6 +3159,87 @@ export function NoisePlot({ result }: { result: NoiseResult | null }) {
         <Metric label="TOT INOISE" value={formatEngineering(result.totalInputNoise, result.inoiseUnit.replace("/√Hz", ""), 3)} tone="cyan" />
         <Metric label="POINTS" value={String(result.freqs.length)} tone="cream" />
       </div>
+      <div className="meter-row analysis-meter" aria-label="Noise density Y limits">
+        <label className="axis-limit-field">
+          Ymin
+          <Input
+            variant="mono"
+            size="sm"
+            className="w-24"
+            value={yMinDraft}
+            aria-label="Noise density Y min"
+            placeholder={
+              plot
+                ? String(plot.yScale === "log" ? 10 ** plot.yMin : plot.yMin)
+                : "1e-9"
+            }
+            onChange={(e) => {
+              setYMinDraft(e.currentTarget.value);
+              if (yLimitsError) setYLimitsError(null);
+            }}
+          />
+        </label>
+        <label className="axis-limit-field">
+          Ymax
+          <Input
+            variant="mono"
+            size="sm"
+            className="w-24"
+            value={yMaxDraft}
+            aria-label="Noise density Y max"
+            placeholder={
+              plot
+                ? String(plot.yScale === "log" ? 10 ** plot.yMax : plot.yMax)
+                : "1e-6"
+            }
+            onChange={(e) => {
+              setYMaxDraft(e.currentTarget.value);
+              if (yLimitsError) setYLimitsError(null);
+            }}
+          />
+        </label>
+        <Button
+          size="sm"
+          variant="outline"
+          aria-label="Apply noise density Y limits"
+          disabled={!plot}
+          onClick={() => {
+            const parsed = parseManualYLimits(yMinDraft, yMaxDraft);
+            if (!parsed.ok) {
+              setYLimitsError(parsed.error);
+              return;
+            }
+            if (yScale === "log" && (parsed.limits.yMin <= 0 || parsed.limits.yMax <= 0)) {
+              setYLimitsError("Log noise Y limits must be positive.");
+              return;
+            }
+            setManualY(parsed.limits);
+            setYLimitsError(null);
+          }}
+        >
+          Apply Y
+        </Button>
+        <Button
+          size="sm"
+          variant={manualY ? "default" : "outline"}
+          aria-label="Autoscale noise density Y"
+          aria-pressed={!manualY}
+          disabled={!plot}
+          onClick={() => {
+            setManualY(null);
+            setYLimitsError(null);
+            setYMinDraft("");
+            setYMaxDraft("");
+          }}
+        >
+          Autoscale Y
+        </Button>
+      </div>
+      {yLimitsError && (
+        <div className="expr-error" role="alert">
+          {yLimitsError}
+        </div>
+      )}
       {cursorsOn && (
         <div className="cursor-sliders">
           <label>
