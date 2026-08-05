@@ -1,14 +1,50 @@
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 ~12:55 CDT**
+**Status: DONE - 2026-08-05 ~13:30 CDT**
 
-Unit: **§10 ShellPanels Simulation model → ui/Select** — native semiconductor
-Simulation model `<select>` onto shadcn `ui/Select` (Settings untouched).
-AGENTS §10 / min-window DoD stay UNCHECKED. SHIPPABLE? **NO**
+Unit: Differential PowerAmp TIP A=0.1 → **pass=105**
+SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
 
+
+---
+
+### 2026-08-05 — PowerAmp TIP A=0.1 TRAN → pass=105 (§DoD)
+
+**What I did**
+- Educational `PAsystem/PowerAmp.asc` authored `.tran 5m` + `.step param A`:
+  expand to **A=0.1** only (strip `.step` + `.four`; bake `.param A=0.1`).
+  Prefix-X `ndarlington`/`pdarlington` → TIP121/TIP127 via sibling `.asy` pins
+  + sibling `.lib` subckts — zero silent TAU_* device substitution.
+- Speaker terminals from `RSpeaker` nets vs LTspice: nRms≈0.0003 @ 5%/15%.
+- Never Chan/NIGBT/FRA. Left Fc/ISO7637 spike / astable / SoftDiode Vp>0 /
+  Draft10 UOA2 same-deck alone.
+
+**Exact stdout**
+```
+SUMMARY pass=105 sibling=5 gap=0 (DoD box stays open until broad authored-analysis matrix is green)
+tran poweramp … A=0.1 speaker nRms≈0.0003
+```
+
+**Files**
+- `apps/desktop/scripts/differentialParity.corpus.ts`
+- `AGENTS.md`, `FEATURE_PARITY.md`, `PROGRESS.md`
+
+**Tests**
+- `scripts/differential-parity.sh` → SUMMARY pass=105 sibling=5 gap=0
+- `pnpm -C apps/desktop typecheck` green
+- `pnpm -C apps/desktop test` → 2884 passed / 6 skipped
+
+**Parity items**
+- Differential 🟡 **pass=105 · sibling=5 · gap=0**; DoD broad box unchecked.
+- SHIPPABLE? **NO**
+
+**Next**
+- Fc/ISO7637/astable period-meas / SoftDiode Vp>0; never Chan/NIGBT/FRA.
+
+SHIPPABLE? **NO**
 
 ---
 
@@ -44,6 +80,7 @@ AGENTS §10 / min-window DoD stay UNCHECKED. SHIPPABLE? **NO**
 
 SHIPPABLE? **NO**
 
+---
 
 ### 2026-08-05 — Crash-safe unsaved recovery (product-gates partial)
 

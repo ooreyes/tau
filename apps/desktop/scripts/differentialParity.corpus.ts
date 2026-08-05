@@ -21,7 +21,7 @@ import {
   formatDifferentialParityReport,
   type DifferentialCell,
 } from "../src/io/differentialParityReport";
-import { decodeSchematicText, importAsc, makeSubcircuitResolver } from "../src/io/ascImport";
+import { decodeSchematicText, importAsc, makeSubcircuitResolver, parseAsy } from "../src/io/ascImport";
 import { analysesFromDirectives } from "../src/io/directiveAnalysis";
 import { buildSpiceDeck } from "../src/engine/spiceNetlist";
 import { buildParamScope, expandDirectiveLines } from "../src/simulation/paramScope";
@@ -85,6 +85,8 @@ const VSWITCH_ASC = join(EDU, "Vswitch.asc");
 const DIMMER_ASC = join(EDU, "dimmer.asc");
 /** Educational SoftDiodeRecovery — LTspice Vp soft-recovery diode (Vp=0 member). */
 const SOFTDIODE_ASC = join(EDU, "SoftDiodeRecovery.asc");
+/** Educational PAsystem PowerAmp — TIP121/TIP127 Prefix-X + sibling .lib (A=0.1 member). */
+const POWERAMP_ASC = join(EDU, "PAsystem", "PowerAmp.asc");
 const APP = join(homedir(), "Documents", "LTspice", "examples", "Applications");
 const DOC_LTSPICE = join(homedir(), "Documents", "LTspice");
 const CURVETRACE_ASC = join(EDU, "curvetrace.asc");
@@ -377,6 +379,17 @@ function siblingResolver(dir: string) {
   });
 }
 
+/** Sibling `.asy` pins for Prefix-X overrides (PAsystem ndarlington/pdarlington → TIP). */
+function siblingSymbolMetadata(dir: string) {
+  return (symbolType: string) => {
+    const leaf = symbolType.replace(/\\/g, "/").split("/").pop() ?? "";
+    if (!leaf || leaf.includes("..")) return null;
+    const path = join(dir, `${leaf}.asy`);
+    if (!existsSync(path)) return null;
+    return parseAsy(decodeSchematicText(readFileSync(path)));
+  };
+}
+
 /** Inject `AC 1` on the first V-source line when absent (LTspice requires an AC stimulus). */
 function withAcStimulus(netlist: string): string {
   return netlist
@@ -393,7 +406,7 @@ function withAcStimulus(netlist: string): string {
 describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential parity matrix", () => {
   const cells: DifferentialCell[] = [];
 
-  it("matches RC .tran/.ac/.meas, divider analyses, .step families, curvetrace, stepmodelparam, NoiseFigure, noise.asc, Colpitts/Clapp/Hartly AC, Cohn AC, MeasureBW AC, Transformer/Transformer2/IdealTransformer TRAN, notch/passive/butter/opamp/Linkwitz AC, LM741/LM308/LM78XX/P2/logamp TRAN, GFT AC, DCopPnt OP, audioamp TRAN, UHFpreamp AC, 1563 AC, S-param AC, stepAC AC, 2ndOrder* AC, MonteCarlo AC, varactor AC, phaseshift AC, Pierce/colpits2 AC, edu-varistor TRAN, stepnoise noise, UniversalOpAmp/1/2 TRAN, contrib/qztst AC, SampleAndHold TRAN, contrib/elip_grd AC, Draft3 AC, Draft7 AC, Draft2 TRAN, Draft1 TRAN, BandGaps DC-temp, waveout TRAN, ISO16750 TRAN, IGBTeq nested DC, help-Butterworth AC, Resources-Draft1 DC, 100W TRAN, help-ACstep AC, help-NoiseStep noise, Resources-MicroCode TRAN, ct-rlc-ringing TRAN, ct-diode-dc DC, ct-step-loaded DC, ct-noise-rc noise, ct-stress-rc-ladder AC, ct-active-fourth-order AC, ct-full-bridge TRAN, ct-three-phase TRAN, ct-buck TRAN, ct-boost TRAN, ct-logic TRAN, ct-dflop TRAN, MC1648 TRAN, HandsFreePreamp TRAN, Vswitch TRAN, dimmer TRAN, SoftDiodeRecovery TRAN, Class-D AC/OP/DC/noise/tf", () => {
+  it("matches RC .tran/.ac/.meas, divider analyses, .step families, curvetrace, stepmodelparam, NoiseFigure, noise.asc, Colpitts/Clapp/Hartly AC, Cohn AC, MeasureBW AC, Transformer/Transformer2/IdealTransformer TRAN, notch/passive/butter/opamp/Linkwitz AC, LM741/LM308/LM78XX/P2/logamp TRAN, GFT AC, DCopPnt OP, audioamp TRAN, UHFpreamp AC, 1563 AC, S-param AC, stepAC AC, 2ndOrder* AC, MonteCarlo AC, varactor AC, phaseshift AC, Pierce/colpits2 AC, edu-varistor TRAN, stepnoise noise, UniversalOpAmp/1/2 TRAN, contrib/qztst AC, SampleAndHold TRAN, contrib/elip_grd AC, Draft3 AC, Draft7 AC, Draft2 TRAN, Draft1 TRAN, BandGaps DC-temp, waveout TRAN, ISO16750 TRAN, IGBTeq nested DC, help-Butterworth AC, Resources-Draft1 DC, 100W TRAN, help-ACstep AC, help-NoiseStep noise, Resources-MicroCode TRAN, ct-rlc-ringing TRAN, ct-diode-dc DC, ct-step-loaded DC, ct-noise-rc noise, ct-stress-rc-ladder AC, ct-active-fourth-order AC, ct-full-bridge TRAN, ct-three-phase TRAN, ct-buck TRAN, ct-boost TRAN, ct-logic TRAN, ct-dflop TRAN, MC1648 TRAN, HandsFreePreamp TRAN, Vswitch TRAN, dimmer TRAN, SoftDiodeRecovery TRAN, PowerAmp TRAN, Class-D AC/OP/DC/noise/tf", () => {
     // --- TRAN (also covered by waveformParity; re-assert here so this file is self-sufficient) ---
     {
       const result = runPairedBatch("diff-rc-tran", RC_TRAN, ["v(out)"]);
@@ -5080,6 +5093,98 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
       });
     }
 
+    // --- Educational/PAsystem/PowerAmp.asc authored .tran + .step param A ---
+    // Discrete BJT power amp: Prefix-X `ndarlington`/`pdarlington` → TIP121/
+    // TIP127 with sibling `.asy` pins + sibling `.lib` subckts (exact path;
+    // zero silent TAU_*). Expand `.step param A .1 .7 .1` for the **A=0.1**
+    // member only (strip .step + .four; bake `.param A=0.1`). Probe speaker
+    // terminals from `RSpeaker` nets: nRms≈0.0003 @ 5%/15%. Never Chan/NIGBT/
+    // FRA. Tip pass=104 → **pass=105**. Left Fc/ISO7637 spike / astable phase /
+    // TLINE-inv / NE555 Output / SoftDiode Vp>0 alone.
+    {
+      expect(existsSync(POWERAMP_ASC), `missing ${POWERAMP_ASC}`).toBe(true);
+      const powerAmpDir = dirname(POWERAMP_ASC);
+      const tip121Path = join(powerAmpDir, "TIP121.lib");
+      const tip127Path = join(powerAmpDir, "TIP127.lib");
+      expect(existsSync(tip121Path), `missing sibling ${tip121Path}`).toBe(true);
+      expect(existsSync(tip127Path), `missing sibling ${tip127Path}`).toBe(true);
+      const imported = importAsc(decodeSchematicText(readFileSync(POWERAMP_ASC)), {
+        resolveSymbolMetadata: siblingSymbolMetadata(powerAmpDir),
+      });
+      expect(imported.warnings).toEqual([]);
+      expect(imported.foreignSymbols).toEqual([]);
+      const tipComps = imported.components.filter((c) => c.kind === "subckt");
+      expect(tipComps.length, "four TIP darlingtons").toBe(4);
+      expect(tipComps.every((c) => /^TIP12[17]$/i.test(String(c.value ?? "")))).toBe(true);
+      const dirs = expandDirectiveLines(imported.directives);
+      expect(dirs.some((d) => /\.step\s+param\s+A\b/i.test(d))).toBe(true);
+      expect(dirs.some((d) => /\.lib\s+TIP121\.LIB\b/i.test(d))).toBe(true);
+      expect(dirs.some((d) => /\.lib\s+TIP127\.LIB\b/i.test(d))).toBe(true);
+      const parsed = analysesFromDirectives(dirs);
+      expect(parsed.tran, "PowerAmp.asc must author .tran").toBeTruthy();
+      expect(parsed.tran!.stopTime, "PowerAmp .tran 5m").toBeCloseTo(0.005, 12);
+      const withParam = [
+        ...dirs.filter((d) => !/^\.step\b/i.test(d.trim()) && !/^\.four\b/i.test(d.trim())),
+        ".param A=0.1",
+      ];
+      const params = buildParamScope(withParam);
+      expect(Number(params.scope.A ?? params.scope.a), "A=0.1").toBeCloseTo(0.1, 12);
+      const tip121 = decodeSchematicText(readFileSync(tip121Path));
+      const tip127 = decodeSchematicText(readFileSync(tip127Path));
+      const deck = buildSpiceDeck({
+        components: imported.components,
+        wires: imported.wires,
+        netLabels: imported.netLabels,
+        directives: withParam,
+        params,
+        userModelLibraries: [tip121, tip127],
+        userModelLibraryNames: ["TIP121.lib", "TIP127.lib"],
+      }, {
+        kind: "tran",
+        stopTime: parsed.tran!.stopTime,
+        steps: Math.max(parsed.tran!.steps ?? 240, 5000),
+      });
+      expect(deck.unresolvedSubckts ?? []).toEqual([]);
+      expect(deck.modelSubstitutions ?? []).toEqual([]);
+      expect(deck.netlist).toMatch(/\.SUBCKT\s+tip121\b/i);
+      expect(deck.netlist).toMatch(/\.SUBCKT\s+tip127\b/i);
+      expect(deck.netlist).toMatch(/^XQ\d+\b.+\bTIP121\b/im);
+      expect(deck.netlist).toMatch(/^XQ\d+\b.+\bTIP127\b/im);
+      expect(deck.netlist).toMatch(/^RSpeaker\b/im);
+      expect(deck.netlist).toMatch(/^V3\b.+\bSIN\(0 0\.1 1000\)/im);
+      expect(deck.netlist).not.toMatch(/^\.step\b/im);
+      expect(deck.netlist).not.toMatch(/^\.four\b/im);
+      // Devices must use exact TIP/2N/1N models — never silent TAU_* substitution
+      // (DEFAULT_MODELS still lists unused TAU_* cards; that is not a device use).
+      expect(deck.netlist).not.toMatch(/^[DQ]\w+\b.+\bTAU_/im);
+      expect(deck.netlist).not.toMatch(/^X\w+\b.+\bTAU_/im);
+      const speaker = /^RSpeaker\s+(\S+)\s+(\S+)\s+/im.exec(deck.netlist);
+      expect(speaker, "RSpeaker nets").toBeTruthy();
+      const probes = [`v(${speaker![1]})`, `v(${speaker![2]})`] as const;
+      const result = runPairedBatch("diff-poweramp-a01", deck.netlist, [...probes]);
+      const memberNotes: string[] = [];
+      for (const probe of probes) {
+        const lt = result.ltspice.get(probe)!;
+        const ng = result.ngspice.get(probe)!;
+        const comparison = compareWaveforms(ng.axis, ng.values, lt.axis, lt.values, {
+          rmsTolerance: 0.05,
+          maxTolerance: 0.15,
+        });
+        expect(comparison.pass, `poweramp A=0.1 ${probe} ${JSON.stringify(comparison)}`).toBe(true);
+        expect(comparison.referenceRange, `poweramp ${probe} non-hollow`).toBeGreaterThan(0.5);
+        memberNotes.push(
+          `${probe} nRms=${comparison.normalizedRms.toFixed(4)} nMax=${comparison.normalizedMax.toFixed(4)} span=${comparison.referenceRange.toFixed(3)}`,
+        );
+      }
+      cells.push({
+        analysis: "tran",
+        circuit: "poweramp",
+        topology: "Educational/PAsystem/PowerAmp.asc TIP121/TIP127 Prefix-X + sibling .lib A=0.1 (authored .tran 5m; higher-A deferred)",
+        status: "pass",
+        note: `A=0.1 ${memberNotes.join("; ")} (TIP sibling .lib)`,
+      });
+    }
+
     // --- Class-D AC/OP (authored analyses are .tran/.meas; add AC/OP for differential proof) ---
     {
       const ascPath = join(CLASSD_DIR, "class-d-starter.asc");
@@ -5376,6 +5481,6 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
     expect(passCount).toBeGreaterThanOrEqual(70);
     expect(siblingCount).toBe(5);
     expect(gapCount).toBe(0);
-    expect(report).toMatch(/SUMMARY pass=104 sibling=5 gap=0/);
+    expect(report).toMatch(/SUMMARY pass=105 sibling=5 gap=0/);
   }, 600_000);
 });
