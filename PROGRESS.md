@@ -9,19 +9,42 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 00:53 CDT**
+**Status: DONE - 2026-08-05 01:00 CDT**
 
-Unit: Multi-root unique-leaf ASY relative-path identity → named-device **42.7%**.
+Unit: Non-five-pin Prefix-X OpAmps → exact SpiceOrder subckt → named-device **46.4%**.
 ```
-NAMED-DEVICE-RECURSIVE: unencrypted=2539 exact=1083 refuse=1456 silent=0 hard-failure=0 encrypted-excluded=1473 exact-rate=42.7%
+NAMED-DEVICE-RECURSIVE: unencrypted=2541 exact=1179 refuse=1362 silent=0 hard-failure=0 encrypted-excluded=1471 exact-rate=46.4%
 ```
-Before 33.0%/837 → +246 exact. Same `OpAmps/ADA4077-1.asy` in staged+live
-libs is one leaf (prefer first root); distinct families still refuse. Freshman
-AI / palette untouched. SHIPPABLE? **NO**
+Before 42.7%/1083 → +96 exact. AD8029-class 6-pin (and 8/10-pin) keep authored
+ports; five-pin OpAmps stay on vendor opamp path. Freshman AI untouched.
+SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
 ---
+
+### 2026-08-05 — Non-five-pin OpAmp → SpiceOrder subckt → 46.4% (§DoD)
+
+**What I did**
+- Opamps/ directory mapped every Prefix-X part to the five-terminal `opamp`
+  kind. AD8029.asy has 6 SpiceOrder pins matching `.subckt AD8029 1..6` but
+  Tau refused "exposes 6 terminals instead of the required five" and dropped
+  pin 6 on the geometry zip.
+- When installed Prefix-X metadata pin count ≠ 5, import as `subckt` with
+  exact SpiceOrder p1..pN; five-pin OpAmps stay on the vendor opamp path.
+
+**Exact stdout**
+```
+NAMED-DEVICE: exact=2 refuse=4 silent=0
+NAMED-DEVICE-RECURSIVE: unencrypted=2541 exact=1179 refuse=1362 silent=0 hard-failure=0 encrypted-excluded=1471 exact-rate=46.4%
+```
+
+**Parity items**
+- Named-device 🟡 HF=0 silent=0 exact-rate **46.4%** (not ≥95%). SHIPPABLE? NO
+
+**Next**
+- Remaining encrypted bare SYMBOL; incomplete asym; Class-D noise/tf gap
+
 
 ### 2026-08-05 — Multi-root unique-leaf ASY → exact-rate 42.7% (§DoD)
 

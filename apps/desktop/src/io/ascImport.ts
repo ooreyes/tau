@@ -1863,7 +1863,18 @@ export function ascToSchematic(doc: AscDocument, options: AscImportOptions = {})
     const mappedKind = ltspiceTypeToKind(symbol.type);
     const installedPrefixX = symbolMetadata?.attrs.Prefix?.trim().toUpperCase() === "X"
       && symbolMetadata.pins.length > 0;
-    const kind = tauKind ?? mappedKind ?? (installedPrefixX ? "subckt" : null);
+    // Opamps/ maps to the five-terminal `opamp` kind for the ordinary single-
+    // output family. Prefix-X symbols whose .asy exposes a different pin count
+    // (disable pin, instrumentation, FDA, …) must keep exact SpiceOrder ports
+    // as a `subckt` — forcing the five-pin contract refused exact 6-port models
+    // like AD8029 and silently dropped unused .asy pins.
+    const nonFivePinOpamp = mappedKind === "opamp"
+      && installedPrefixX
+      && symbolMetadata!.pins.length !== 5;
+    const kind = tauKind
+      ?? (nonFivePinOpamp ? "subckt" : null)
+      ?? mappedKind
+      ?? (installedPrefixX ? "subckt" : null);
     const instName = symbol.attrs.InstName ?? "";
     if (!kind) {
       // No built-in kind: try resolving the symbol as a hierarchical block and

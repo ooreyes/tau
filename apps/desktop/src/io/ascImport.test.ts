@@ -1426,6 +1426,84 @@ describe("library-subcircuit symbols (Prefix X: TowTom2/capmeter/ISO16750-2/ISO7
     expect(ltspiceTypeToKind("POWERPRODUCTS\\LT1184F")).toBeNull();
   });
 
+  it("imports Prefix-X OpAmps with non-five pin banks as exact SpiceOrder subckts", () => {
+    // AD8029.asy is under Opamps/ (directory rule → opamp) but exposes six
+    // SpiceOrder pins matching `.subckt AD8029 1 2 3 4 5 6`. Forcing the
+    // five-terminal opamp contract refused the exact model and dropped pin 6.
+    const source = `Version 4
+SHEET 1 880 680
+SYMBOL Opamps\\AD8029 100 200 R0
+SYMATTR InstName U1
+`;
+    const metadata = parseAsy(`Version 4
+SymbolType CELL
+SYMATTR Value AD8029
+SYMATTR Prefix X
+SYMATTR SpiceModel ADI.lib
+SYMATTR Value2 AD8029
+PIN -32 16 NONE 0
+PINATTR PinName In+
+PINATTR SpiceOrder 1
+PIN -32 -16 NONE 0
+PINATTR PinName In-
+PINATTR SpiceOrder 2
+PIN -16 -32 NONE 0
+PINATTR PinName V+
+PINATTR SpiceOrder 3
+PIN -16 32 NONE 0
+PINATTR PinName V-
+PINATTR SpiceOrder 4
+PIN 32 0 NONE 0
+PINATTR PinName OUT
+PINATTR SpiceOrder 5
+PIN 16 32 NONE 0
+PINATTR PinName DISABLE
+PINATTR SpiceOrder 6
+`);
+    const doc = importAsc(source, { resolveSymbolMetadata: () => metadata });
+    expect(doc.foreignSymbols).toHaveLength(0);
+    const u1 = doc.components.find((c) => c.label === "U1");
+    expect(u1?.kind).toBe("subckt");
+    expect(u1?.value).toMatch(/^AD8029\b/);
+    expect(u1?.ltModelFile).toBe("ADI.lib");
+    expect(u1?.pinOverride?.map((p) => p.id)).toEqual(["p1", "p2", "p3", "p4", "p5", "p6"]);
+    expect(u1?.pinOverride?.map((p) => p.label)).toEqual([
+      "In+", "In-", "V+", "V-", "OUT", "DISABLE",
+    ]);
+  });
+
+  it("keeps ordinary five-pin OpAmps on the vendor opamp path", () => {
+    const source = `Version 4
+SHEET 1 880 680
+SYMBOL Opamps\\ADA4077-1 100 200 R0
+SYMATTR InstName U1
+`;
+    const metadata = parseAsy(`Version 4
+SymbolType CELL
+SYMATTR Value ADA4077-1
+SYMATTR Prefix X
+SYMATTR SpiceModel ADA4077.lib
+SYMATTR Value2 ADA4077
+PIN -32 80 NONE 0
+PINATTR PinName In+
+PINATTR SpiceOrder 1
+PIN -32 48 NONE 0
+PINATTR PinName In-
+PINATTR SpiceOrder 2
+PIN 0 32 NONE 0
+PINATTR PinName V+
+PINATTR SpiceOrder 3
+PIN 0 96 NONE 0
+PINATTR PinName V-
+PINATTR SpiceOrder 4
+PIN 32 64 NONE 0
+PINATTR PinName OUT
+PINATTR SpiceOrder 5
+`);
+    const doc = importAsc(source, { resolveSymbolMetadata: () => metadata });
+    expect(doc.components.find((c) => c.label === "U1")?.kind).toBe("opamp");
+  });
+
   it("imports an arbitrary installed Prefix-X symbol with exact SpiceOrder pins and model defaults", () => {
     const source = `Version 4
 SHEET 1 880 680
