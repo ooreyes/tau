@@ -173,12 +173,10 @@ account and sign/notarize/ship.
       with LTspice over a representative device and topology matrix.
       **Partial (2026-08-05):** `scripts/differential-parity.sh` +
       `differentialParity.corpus.ts` (also under `dod-parity.sh`) prove
-      pass=37 · sibling=5 · gap=0 on stdout: prior RC/divider/curvetrace/
-      NoiseFigure + Educational noise/Cohn/MeasureBW AC + Transformer family
-      TRAN + notch/passive/butter + Clapp/Hartly AC + opamp.asc/Linkwitz.asc
-      authored `.ac`, expanded `.step` families, steptemp/stepmodelparam,
-      native emitNativeStep, Colpitts AC, Class-D AC/OP/DC/noise/tf. + LM741.asc discrete BJT op-amp TRAN (exact NP/PN).
-      Sibling TRAN/meas remain Colpitts/Class-D/Efficiency/special devices.
+      pass=38 · sibling=5 · gap=0 on stdout: prior cells through LM741 TRAN +
+      Educational GFT.asc authored `.ac` (General Feedback Theorem; V(y)/V(o)
+      nRms=0). LoopGain/LoopGain2 need LT1001 — Tau OTA remap is not
+      LTspice↔stock-ngspice same-deck (honest refuse; same wall as Howland).
       Harness-slice gap closed; broad topology/device matrix still open —
       DoD box stays unchecked.
 - [ ] **AI is production-safe and genuinely circuit-aware:** a supported OpenAI

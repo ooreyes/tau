@@ -9,19 +9,47 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 02:15 CDT**
+**Status: DONE - 2026-08-05 02:19 CDT**
 
-Unit: Educational `LM741.asc` authored `.tran` (discrete BJT op-amp, exact NP/PN) → differential **pass=37**.
+Unit: Educational GFT.asc authored `.ac` → differential **pass=38** (LoopGain blocked).
 ```
-SUMMARY pass=37 sibling=5 gap=0
-tran lm741 … v(6)/v(3)/v(2) nRms≈0.0005
+SUMMARY pass=38 sibling=5 gap=0
+ac gft … v(y)/v(o) nRms=0
 ```
-Built on tip `0aeb204` (opamp/Linkwitz → pass=36). Howland+LT1001 deferred (OTA remap not LTspice-same-deck). Named-device 47.9% unchanged. SHIPPABLE? **NO**
+LoopGain/LoopGain2: LT1001 OTA remap not LTspice↔stock-ngspice same-deck (honest). Named-device 47.9%. SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
 
 ---
+
+### 2026-08-05 — GFT AC differential → pass=38 (§DoD)
+
+**What I did**
+- Probed LoopGain/LoopGain2 with exact `LTC.lib` LT1001 attach: Tau remaps
+  OTA → LTspice fatal "too few nodes"; stock ngspice "Unknown model type ota".
+  Same wall as Howland — fail-closed, no silent sub / no fake same-deck.
+- Fallback: Educational `GFT.asc` authored `.ac` (General Feedback Theorem)
+  → |V(y)|/|V(o)| nRms=0 vs LTspice. Left LM741/Clapp/Howland untouched.
+
+**Exact stdout**
+```
+SUMMARY pass=38 sibling=5 gap=0
+```
+
+**Files**
+- `apps/desktop/scripts/differentialParity.corpus.ts`
+- `AGENTS.md`, `FEATURE_PARITY.md`, `PROGRESS.md`
+
+**Tests**
+- vitest differentialParity; typecheck; apps/desktop test
+
+**Parity items**
+- Differential 🟡 **pass=38**. LoopGain deferred honest. Named-device 47.9%. SHIPPABLE? NO
+
+**Next**
+- Same-deck LT1001/OTA path OR more Educational without LT opamps; Vswitch deferred
+
 
 ### 2026-08-05 — LM741 TRAN differential → pass=37 (§DoD)
 
