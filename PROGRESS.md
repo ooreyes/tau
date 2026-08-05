@@ -9,17 +9,44 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 02:35 CDT**
+**Status: DONE - 2026-08-05 02:41 CDT**
 
-Unit: Educational `LM308.asc` authored `.tran` discrete BJT+JFET op-amp → differential **pass=43**.
+Unit: Educational `LM78XX.asc` authored `.tran` discrete BJT 78xx → differential **pass=44**.
 ```
-SUMMARY pass=43 sibling=5 gap=0
-tran lm308 … v(6)/v(3)/v(2) nRms≈0.0004
+SUMMARY pass=44 sibling=5 gap=0
+tran lm78xx … v(out) nRms≈0.0002 span≈5.11 (Rx=905/5V)
 ```
-Avoided 1563 (already landed) / LoopGain LT1001 / TLINE inv miss / astable phase / Howland/SoftDiode/HalfSlope/Vswitch fakes. Named-device 47.9%. SHIPPABLE? **NO**
+NE555 blocked (v(3)/v(7) nRms≈0.4). LoopGain LT1001 wall. Named-device 47.9%. SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
+
+---
+
+### 2026-08-05 — LM78XX.asc discrete BJT regulator TRAN → pass=44 (§DoD)
+
+**What I did**
+- Claimed NE555 first: Output/Dischrg v(3)/v(7) nRms≈0.42/0.39 vs LTspice —
+  honest phase/topology miss (like astable). Not hollow-landed.
+- Fallback Educational `LM78XX.asc` authored `.tran 10m`: discrete BJT 78xx
+  regulator with honest LPNP→PNP, exact NP/PN + 6.3V/DZ zeners. `.step param Rx
+  list 905 5.78K 7.87K` → first member Rx=905 (~5V). Probe v(out) nRms≈0.0002
+  span≈5.11 (non-hollow).
+
+**Files**
+- `apps/desktop/scripts/differentialParity.corpus.ts`
+- `AGENTS.md`, `FEATURE_PARITY.md`, `PROGRESS.md`
+
+**Tests**
+- `vitest … differentialParity.corpus.ts` → SUMMARY pass=44 sibling=5 gap=0
+- `pnpm -C apps/desktop typecheck` + `test`
+
+**Parity items**
+- Differential matrix climb 43→44; DoD broad-differential box still open.
+- Named-device 47.9%; SHIPPABLE? **NO**
+
+**Next step**
+- Non-colliding Educational authored analysis (not NE555/LoopGain/MC1648).
 
 ---
 
