@@ -9,26 +9,37 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 00:45 CDT**
+**Status: DONE - 2026-08-05 00:50 CDT** (Overnight DoD — 4Q OTA + ideal-diode M/N)
 
-Unit: Exact ideal-diode M/N instance multipliers → named-device **33.0%**.
+Unit: LTspice OTA four-quadrant multiplier ports (effective-Vin product) **and**
+ideal-diode `m=`/`N=` sidiode scale → named-device **33.0%**. Pin-faithful
+refuse→exact. Never silent two-port/generic-diode sub. Never fake ≥95%.
+
+**Measured tip stdout (truth):**
 ```
+NAMED-DEVICE: exact=2 refuse=4 silent=0
 NAMED-DEVICE-RECURSIVE: unencrypted=2539 exact=837 refuse=1702 silent=0 hard-failure=0 encrypted-excluded=1473 exact-rate=33.0%
 ```
-Before 28.7%/729 → +108 exact. off/non-default temp stay refuse. Freshman AI
-untouched. SHIPPABLE? **NO**
+Before (finite-V tip): 729/28.7%. After: **+108 exact**. Cleared refuse classes:
+**63×** four-quadrant OTA · **54×** ideal-diode instance options (m=/N=). Soft
+epsilon (~4×) / incomplete asym (~7×) / off|non-default temp stay refuse.
+Encrypted bare SYMBOL stays refuse. SHIPPABLE? **NO**
+
+**Forbidden lanes left alone:** Settings* · AssistantPanel · ShellPanels · App.css.
 
 **SHIPPABLE?** **NO**
 
 ---
 
-### 2026-08-05 — Ideal-diode M/N scale → exact-rate 33.0% (§DoD)
+### 2026-08-05 — OTA 4Q multipliers + ideal-diode M/N → exact-rate 33.0% (§DoD)
 
 **What I did**
-- Map LTspice ideal-diode `m=`/`N=` onto scaled sidiode model params (Ron/Roff
-  series÷parallel, Ilimit×parallel, Vfwd/epsilon×series).
-- Refuse `off`, non-default `temp=`, `area=` with explicit reasons — never silent
-  generic diode.
+- **Four-quadrant OTA:** Help/LTwiki `I = f(G·(Vin+−Vin−−Ref)·V(ncm1)·V(ncm2))`
+  — active mul ports fold into `B__tau_ota_veff` effective Vin; tied ports stay
+  direct two-port (unity, never ×0). Native OTA keeps tanh/asym/noise.
+- **Ideal-diode M/N:** scale sidiode Ron/Roff/Ilimit/Vfwd/epsilon; refuse
+  `off` / non-default `temp=` / `area=` with explicit detail.
+- Tests + ignored cargo four-quadrant linear product proof (~100 V).
 
 **Exact stdout**
 ```
@@ -40,7 +51,13 @@ NAMED-DEVICE-RECURSIVE: unencrypted=2539 exact=837 refuse=1702 silent=0 hard-fai
 - Named-device 🟡 HF=0 silent=0 exact-rate **33.0%** (not ≥95%). SHIPPABLE? NO
 
 **Next**
-- Vendor REF (~740); multipliers; incomplete asym
+- ~7× incomplete asym OTA / ~4× soft epsilon; encrypted bare SYMBOL stays refuse;
+  large vendor REF unresolved buckets remain.
+
+### 2026-08-05 — Ideal-diode M/N scale (landed in same tip as 4Q) (§DoD)
+
+**Note:** Tip `69985e1` also carries ideal-diode M/N sidiode scale. Combined
+measured rate is **33.0%** above — do not attribute +108 to M/N alone.
 
 ### 2026-08-05 — OTA finite-V Rclamp compliance → exact-rate 28.7% (§DoD)
 
