@@ -19,6 +19,11 @@ export function traceMathMenuItems(): ReadonlyArray<{ op: TraceMathOp; label: st
   return OPS;
 }
 
+/** AC Bode legend math — no time-domain `ddt` / `idt`. */
+export function acTraceMathMenuItems(): ReadonlyArray<{ op: TraceMathOp; label: string }> {
+  return OPS.filter((item) => item.op !== "ddt" && item.op !== "idt");
+}
+
 /**
  * Map a scope trace to a plottable expression string. Expression overlays
  * (`expr:…`) keep their authored form; ordinary V/I traces use their label

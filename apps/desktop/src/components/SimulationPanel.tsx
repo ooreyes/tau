@@ -61,6 +61,7 @@ import { evaluateAcPlotExpression } from "../simulation/plotExpressionAc";
 import { evaluateDcPlotExpression } from "../simulation/plotExpressionDc";
 import { evaluateStepPlotExpression } from "../simulation/plotExpressionStep";
 import {
+  acTraceMathMenuItems,
   expressionForTrace,
   traceMathMenuItems,
   wrapTraceMath,
@@ -625,13 +626,19 @@ export function SimulationPanel({
   const addAcExpression = () => {
     const expr = acExprInput.trim();
     if (!expr) return;
-    const probe = evaluateAcPlotExpression(expr, acResult);
+    plotAcExpression(expr);
+    setAcExprInput("");
+  };
+
+  const plotAcExpression = (expr: string) => {
+    const trimmed = expr.trim();
+    if (!trimmed) return;
+    const probe = evaluateAcPlotExpression(trimmed, acResult);
     if (!probe.ok) {
       setAcExprError(probe.error);
       return;
     }
-    if (!acExprList.includes(expr)) setAcExprList((prev) => [...prev, expr]);
-    setAcExprInput("");
+    if (!acExprList.includes(trimmed)) setAcExprList((prev) => [...prev, trimmed]);
     setAcExprError(null);
   };
 
@@ -1325,7 +1332,7 @@ export function SimulationPanel({
       {mode === "ac" && (
         <>
           <div ref={acPlotsRef}>
-            <AcPlot result={acResult} overlays={acExprTraces} />
+            <AcPlot result={acResult} overlays={acExprTraces} onPlotExpression={plotAcExpression} />
           </div>
           <AcFamilyPlot family={acStepFamily} />
           <MeasTable measurements={acMeasurements} />
@@ -3465,7 +3472,16 @@ function CursorView({
   );
 }
 
-export function AcPlot({ result, overlays = [] }: { result: AcResult | null; overlays?: AcTrace[] }) {
+export function AcPlot({
+  result,
+  overlays = [],
+  onPlotExpression,
+}: {
+  result: AcResult | null;
+  overlays?: AcTrace[];
+  /** Right-click Bode legend math → add an AC expression overlay. */
+  onPlotExpression?: (expression: string) => void;
+}) {
   const success = result?.ok ? result : null;
   const magClipId = useId();
   const phaseClipId = useId();
@@ -3796,23 +3812,86 @@ export function AcPlot({ result, overlays = [] }: { result: AcResult | null; ove
           </svg>
           {plot && <ScopeZoomCluster onZoomIn={() => phaseVp.zoomBy(0.7)} onZoomOut={() => phaseVp.zoomBy(1 / 0.7)} onFit={phaseVp.fit} />}
         </div>
-        <div className="scope-legend">
+        <div className="scope-legend" aria-label="Bode legend">
           {traces.length > 0 ? (
-            traces.map((t, i) => (
-              <span key={t.id}>
-                <i style={{ background: AC_COLORS[i % AC_COLORS.length] }} />
-                {t.label}
-              </span>
-            ))
+            traces.map((t, i) => {
+              const mathSource = expressionForTrace(t.id, t.label);
+              const chip = (
+                <span className="bode-legend-chip">
+                  <i style={{ background: AC_COLORS[i % AC_COLORS.length] }} />
+                  {t.label}
+                </span>
+              );
+              if (!mathSource || !onPlotExpression) {
+                return <span key={t.id}>{chip}</span>;
+              }
+              return (
+                <ContextMenu key={t.id}>
+                  <ContextMenuTrigger asChild>
+                    <button
+                      type="button"
+                      className="bode-legend-chip"
+                      aria-label={`Math for ${t.label}`}
+                    >
+                      <i style={{ background: AC_COLORS[i % AC_COLORS.length] }} aria-hidden="true" />
+                      {t.label}
+                    </button>
+                  </ContextMenuTrigger>
+                  <ContextMenuContent aria-label={`Math for ${t.label}`}>
+                    <ContextMenuLabel>Math</ContextMenuLabel>
+                    <ContextMenuSeparator />
+                    {acTraceMathMenuItems().map((item) => (
+                      <ContextMenuItem
+                        key={item.op}
+                        onClick={() => onPlotExpression(wrapTraceMath(mathSource, item.op))}
+                      >
+                        {item.label.replace("…", t.label)}
+                      </ContextMenuItem>
+                    ))}
+                  </ContextMenuContent>
+                </ContextMenu>
+              );
+            })
           ) : (
             <span className="muted">No traces</span>
           )}
-          {overlays.map((t, i) => (
-            <span key={t.id}>
-              <i style={{ background: EXPR_COLORS[i % EXPR_COLORS.length] }} />
-              {t.label}
-            </span>
-          ))}
+          {overlays.map((t, i) => {
+            const mathSource = expressionForTrace(t.id, t.label);
+            if (!mathSource || !onPlotExpression) {
+              return (
+                <span key={t.id} className="bode-legend-chip">
+                  <i style={{ background: EXPR_COLORS[i % EXPR_COLORS.length] }} />
+                  {t.label}
+                </span>
+              );
+            }
+            return (
+              <ContextMenu key={t.id}>
+                <ContextMenuTrigger asChild>
+                  <button
+                    type="button"
+                    className="bode-legend-chip"
+                    aria-label={`Math for ${t.label}`}
+                  >
+                    <i style={{ background: EXPR_COLORS[i % EXPR_COLORS.length] }} aria-hidden="true" />
+                    {t.label}
+                  </button>
+                </ContextMenuTrigger>
+                <ContextMenuContent aria-label={`Math for ${t.label}`}>
+                  <ContextMenuLabel>Math</ContextMenuLabel>
+                  <ContextMenuSeparator />
+                  {acTraceMathMenuItems().map((item) => (
+                    <ContextMenuItem
+                      key={item.op}
+                      onClick={() => onPlotExpression(wrapTraceMath(mathSource, item.op))}
+                    >
+                      {item.label.replace("…", t.label)}
+                    </ContextMenuItem>
+                  ))}
+                </ContextMenuContent>
+              </ContextMenu>
+            );
+          })}
         </div>
       </div>
       <div className="meter-row analysis-meter">

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  acTraceMathMenuItems,
   expressionForTrace,
   traceMathMenuItems,
   wrapTraceMath,
@@ -40,6 +41,18 @@ describe("traceMathMenuItems", () => {
       "sgn",
       "ddt",
       "idt",
+    ]);
+  });
+});
+
+describe("acTraceMathMenuItems", () => {
+  it("exposes abs / neg / db / uramp / sgn without ddt / idt", () => {
+    expect(acTraceMathMenuItems().map((m) => m.op)).toEqual([
+      "abs",
+      "neg",
+      "db",
+      "uramp",
+      "sgn",
     ]);
   });
 });

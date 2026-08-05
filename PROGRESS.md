@@ -1,8 +1,8 @@
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 07:16 CDT**
+**Status: DONE - 2026-08-05 07:20 CDT**
 
-Unit: Waveform DoD — **Bode phase/group-delay measurement cursors**.
+Unit: Waveform DoD — **AC Bode legend right-click math**.
 Differential pass=95 · named-device 48.1%. Settings locked. SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
@@ -37,6 +37,34 @@ Differential pass=95 · named-device 48.1%. Settings locked. SHIPPABLE? **NO**
 **Next step**
 - ct 12/13 buck/boost (named VDMOS + Schottky), Educational non-wall leftovers,
   or waveform DoD. Leave ct19 OP / IRFP / Draft* / Settings alone.
+
+### 2026-08-05 — AC Bode legend right-click math (§waveform DoD)
+
+**What I did**
+- AcPlot legend ContextMenu via `acTraceMathMenuItems` (abs/neg/db/uramp/sgn;
+  no ddt/idt) → `onPlotExpression` / AC expression overlays.
+- ND wall at 48.1% — waveform pivot. Left ct 17/18/16/19, continue 34 ASC,
+  Chan/NIGBT/FRA, Settings alone.
+
+**Files**
+- `apps/desktop/src/simulation/traceMath.ts` (+ test)
+- `apps/desktop/src/components/SimulationPanel.tsx` (+ wiring test)
+- `apps/desktop/src/App.css`
+- `FEATURE_PARITY.md`, `PROGRESS.md`
+
+**Tests**
+- `pnpm -C apps/desktop typecheck` + `test` green (2758 passed)
+- acTraceMathMenuItems + AcPlot legend ContextMenu 2
+
+**Parity items**
+- Waveform viewer 🟡 (AC legend math landed). Differential pass=95 ·
+  named-device 48.1% · SHIPPABLE? NO
+
+**Next step**
+- DC/step legend math / standalone phase window / non-wall ND. Leave
+  Educational/IRFP/Settings alone.
+
+
 
 ### 2026-08-05 — Bode phase/group-delay measurement cursors (§waveform DoD)
 

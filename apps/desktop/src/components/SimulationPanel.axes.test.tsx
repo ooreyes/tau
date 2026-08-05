@@ -420,6 +420,22 @@ describe("AcPlot - log-frequency ticks on both magnitude and phase", () => {
     expect(gdReadout.textContent).toMatch(/τ@C1/);
     expect(gdReadout.textContent).toMatch(/τ@C2/);
   });
+
+  it("right-click Bode legend adds abs(V(out)) via onPlotExpression", async () => {
+    const onPlotExpression = vi.fn();
+    const freqs = [10, 100, 1000];
+    const result: AcResult = {
+      ok: true,
+      freqs,
+      traces: [{ id: "n1", label: "V(out)", magDb: [0, -3, -20], phaseDeg: [0, -45, -90] }],
+      warnings: [],
+    };
+    render(<AcPlot result={result} onPlotExpression={onPlotExpression} />);
+    fireEvent.contextMenu(screen.getByRole("button", { name: "Math for V(out)" }));
+    const absItem = await screen.findByRole("menuitem", { name: /Plot abs\(V\(out\)\)/i });
+    fireEvent.click(absItem);
+    expect(onPlotExpression).toHaveBeenCalledWith("abs(V(out))");
+  });
 });
 
 describe("DcPlot - linear sweep/volts ticks", () => {

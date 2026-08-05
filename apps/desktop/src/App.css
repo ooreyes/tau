@@ -1686,6 +1686,19 @@ body {
   gap: var(--sp-1);
 }
 
+.bode-legend-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: context-menu;
+}
+
 /* A trace is an interactive instrument channel, not a passive legend row.
    Selecting it reveals the validated color-safe palette and makes C1/C2 glide
    over that exact series. All colors remain token-backed. */

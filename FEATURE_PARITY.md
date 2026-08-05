@@ -1554,7 +1554,9 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   `evaluatePlotExpression`. Transient legend ContextMenu. Pure + SimulationPanel
   wiring tests. **Ctrl+click avg/RMS over visible window landed** (2026-08-05):
   `windowedTraceStatistics` + legend Ctrl/⌘+click opens Dialog with AVG/RMS
-  over `sharedX`. Still ⬜: AC/DC/step legend menus.
+  over `sharedX`. **AC Bode legend right-click math landed** (2026-08-05):
+  `acTraceMathMenuItems` (abs/neg/db/uramp/sgn — no ddt/idt) + AcPlot legend
+  ContextMenu → `onPlotExpression`. Still ⬜: DC/step legend menus.
 
 ## 7. Engine & accuracy
 - ✅ Native ngspice FFI (desktop) — `src-tauri/src/spice.rs`
