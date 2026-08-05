@@ -30,6 +30,12 @@
   --color-card-foreground: var(--text);
   --color-popover: var(--panel-4);
   --color-popover-foreground: var(--text);
+  /* Anduril Light aliases — resolve through App.css theme cascade
+   * (cool paper / ink / precision blue). Prefer these names in new
+   * utility-migrated chrome over restating --color-background/--primary. */
+  --color-paper: var(--bg);
+  --color-ink: var(--text);
+  --color-precision: var(--accent);
 
   /* Brand / interaction */
   --color-primary: var(--accent);

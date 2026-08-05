@@ -87,6 +87,9 @@ min + 1440.
 | `--diagnostic-warning` (-text) | `#b25000` | `#A34A00` |
 | `--diagnostic-warning-soft` | `0.06` ochre | `0.05` ochre (stays quiet; not danger-red) |
 
+Tailwind aliases in `apps/desktop/src/styles/tokens.css` (var() → App.css cascade):
+`--color-paper` → `--bg`, `--color-ink` → `--text`, `--color-precision` → `--accent`.
+
 ### 1.2 Separators and fills
 
 | Token | Dark | Light |
