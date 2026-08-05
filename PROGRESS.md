@@ -9,9 +9,64 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-04 23:15 CDT**
+**Status: DONE - 2026-08-04 23:16 CDT** (HR/ops — ownership board + clear stale §10)
 
-Unit: PM overnight priority stack (docs only). Product SHIPPABLE = NO. Next product P0 = Design unblock ShellPanels Lucide typecheck.
+**Cleared stale unit:** §10 token sweep (`--r-xs` / `--r-2xs` / `--r-pill`) already in
+`App.css` — any prior `IN PROGRESS` for that unit was STALE and is closed.
+AGENTS §10 DoD stays unchecked (radius tokens ≠ full visual adoption).
+
+**Active product lanes (collision lock — do not cross-edit):**
+- **Overnight DoD + Staff EE** — measuring named-device HF / exact-rate via
+  `scripts/named-device-fidelity.sh` (script stdout = truth). Last proven
+  `15.1%` / HF `103` / silent `0` until reprint. Do not invent HF→2.
+- **Design lead (P0)** — `ShellPanels.tsx` Lucide / typecheck break. LOCKED.
+  Non-owners: do **not** edit `ShellPanels.tsx`, `spiceNetlist.ts`, or
+  `AssistantPanel.tsx` product logic.
+- **AI platform / Freshman** — `localAiEnsure*` / `cloudAiConsent*` /
+  `LocalAiSetupDialog*` / Settings AI sections only.
+- **Bench** — help/warning copy strings only; coordinate; no ShellPanels structure.
+- **QA** — gates + morning-status numbers.
+
+**SHIPPABLE?** **NO** — named-device, §10, broad differential, and other DoD boxes open.
+
+### Ownership board (ENFORCED overnight 2026-08-04)
+
+| Lane | Owns (edit only these) |
+|------|------------------------|
+| Design lead | `ShellPanels.tsx` icons · `App.css` chrome · `DESIGN_SYSTEM.md` |
+| Overnight DoD + Staff EE | `engine/**` · `io/ascImport*` · `scripts/*named*` · corpus scripts |
+| AI platform / Freshman | `lib/localAiEnsure*` · `lib/cloudAiConsent*` · `LocalAiSetupDialog*` · Settings AI only |
+| Bench | help/warning copy strings only — coordinate; no ShellPanels structure |
+| QA | gates + `~/Desktop/TAU-MORNING-STATUS.md` numbers |
+
+**Stashes (leave alone):** `freshman-assistant-aside`, `tokens-temp`,
+`concurrent-ui-aside`, `leave-freshman-ui` — do not pop over Design/Freshman work.
+
+
+---
+
+### 2026-08-04 — HR/ops: ownership board + clear stale §10 heartbeat
+
+**What I did**
+- Rewrote PROGRESS heartbeat with enforced ownership board; closed stale §10
+  token-sweep claim (`--r-xs`/`--r-2xs`/`--r-pill` already in App.css).
+- Noted Design-lead P0 on ShellPanels typecheck; Overnight DoD owns named-device
+  HF measurement; SHIPPABLE remains NO.
+- Aligned `~/Desktop/TAU-MORNING-STATUS.md` collision board; left stashes alone;
+  did not edit ShellPanels / spiceNetlist / AssistantPanel product logic.
+
+**Files**
+- `PROGRESS.md` (heartbeat + this entry)
+- `~/Desktop/TAU-MORNING-STATUS.md` (Desktop ops board; not in repo)
+
+**Tests / proof**
+- Docs-only.
+
+**Parity items**
+- Unchanged. SHIPPABLE? NO.
+
+**Next step**
+- Design: land ShellPanels P0. Overnight: reprint named-device fidelity stdout. QA: morning gates.
 
 
 ---
