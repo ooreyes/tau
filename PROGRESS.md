@@ -61,7 +61,7 @@ SHIPPABLE? **NO**
 
 **Tests**
 - `pnpm -C apps/desktop typecheck` (green)
-- `pnpm -C apps/desktop test` → 2860 passed / 6 skipped
+- `pnpm -C apps/desktop test` → 2875 passed / 6 skipped
 
 **Parity items**
 - §10 FFT/op-amp Select slice ✅; whole-app §10 DoD still open.
