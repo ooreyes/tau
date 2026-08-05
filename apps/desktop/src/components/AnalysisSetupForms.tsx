@@ -9,7 +9,17 @@ import {
   type StepSetupUi,
 } from "../simulation/analysisSetup";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { EngineeringInput } from "./EngineeringInput";
+
+/** Radix SelectItem forbids value=""; map the empty placeholder slot. */
+const SELECT_EMPTY = "__tau_empty__";
 
 function FieldRow({ label, children }: { label: string; children: ReactNode }) {
   return (
@@ -32,20 +42,48 @@ function SourceSelect({
   label: string;
 }) {
   const sources = sweepableSources(components);
+  const items: { value: string; label: string }[] = sources.map((c) => ({
+    value: c.label,
+    label: c.label,
+  }));
+  if (value && !items.some((item) => item.value === value)) {
+    items.unshift({ value, label: value });
+  }
+  if (items.length === 0 || value === "") {
+    if (!items.some((item) => item.value === SELECT_EMPTY)) {
+      items.unshift({ value: SELECT_EMPTY, label: value || "-" });
+    }
+  }
+  const selectValue = value === "" ? SELECT_EMPTY : value;
+
   return (
-    <select
-      className="analysis-setup-select mono-num"
-      aria-label={label}
-      value={value}
-      onChange={(e) => onChange(e.currentTarget.value)}
+    <Select
+      value={selectValue}
+      onValueChange={(next) => onChange(next === SELECT_EMPTY ? "" : next)}
     >
-      {sources.length === 0 && <option value={value}>{value || "-"}</option>}
-      {sources.map((c) => (
-        <option key={c.id} value={c.label}>{c.label}</option>
-      ))}
-    </select>
+      <SelectTrigger
+        size="sm"
+        className="analysis-setup-select mono-num w-full"
+        aria-label={label}
+      >
+        <SelectValue placeholder="-" />
+      </SelectTrigger>
+      <SelectContent>
+        {items.map((item) => (
+          <SelectItem key={item.value} value={item.value}>
+            {item.label}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
   );
 }
+
+const STEP_KIND_ITEMS: readonly { value: StepSetupUi["kind"]; label: string }[] = [
+  { value: "source", label: "Source" },
+  { value: "param", label: "Parameter" },
+  { value: "temp", label: "Temperature" },
+];
 
 export function DcSetupForm({
   setup,
@@ -235,16 +273,25 @@ export function StepSetupForm({
       <div className="analysis-setup-head">Step sweep</div>
       <div className="analysis-setup-grid">
         <FieldRow label="Kind">
-          <select
-            className="analysis-setup-select mono-num"
-            aria-label="Step sweep kind"
+          <Select
             value={setup.kind}
-            onChange={(e) => onChange({ ...setup, kind: e.currentTarget.value as StepSetupUi["kind"] })}
+            onValueChange={(kind) => onChange({ ...setup, kind: kind as StepSetupUi["kind"] })}
           >
-            <option value="source">Source</option>
-            <option value="param">Parameter</option>
-            <option value="temp">Temperature</option>
-          </select>
+            <SelectTrigger
+              size="sm"
+              className="analysis-setup-select mono-num w-full"
+              aria-label="Step sweep kind"
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {STEP_KIND_ITEMS.map((item) => (
+                <SelectItem key={item.value} value={item.value}>
+                  {item.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </FieldRow>
         {setup.kind !== "temp" && (
           <FieldRow label={setup.kind === "param" ? "Param" : "Source"}>

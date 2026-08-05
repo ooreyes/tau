@@ -1,15 +1,50 @@
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 ~13:35 CDT**
+**Status: DONE - 2026-08-05 ~13:40 CDT**
 
-Unit: **Product gates — first-success learning path** — versioned
-`tau.learning.path.v1`, EmptyState Try RC Charging + contextual coach;
-completes on settled ok. With prior CLI/API on tip, all product-gates
-bullets proven → DoD box ✅. SHIPPABLE? **NO** (other boxes open)
+Unit: **§10 AnalysisSetupForms + circuit-duration → ui/Select** — SourceSelect /
+Step kind / Circuit duration unit onto shadcn `ui/Select`; analysis-setup +
+duration trigger token drift. AGENTS §10 stays UNCHECKED. SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
 
+
+---
+
+### 2026-08-05 — AnalysisSetupForms + circuit-duration → ui/Select (§10)
+
+**What I did**
+- Migrated AnalysisSetupForms SourceSelect (DC/TF/Noise/Step) and Step kind
+  from native `<select>` to shadcn `ui/Select` with dense
+  `analysis-setup-select` triggers; empty source via `__tau_empty__`.
+- Migrated Circuit duration unit onto `circuit-duration-unit` ui/Select.
+- Token drift: analysis-setup field tracking → `--tracking-micro`; select
+  triggers get `--row-h` / ellipsis value rules matching simulation-setup.
+- Did **not** flip AGENTS §10 DoD (local-AI Settings selects + Resizable /
+  Command / Toast + whole-app drift proof still open). SHIPPABLE? **NO**.
+
+**Files**
+- `apps/desktop/src/components/AnalysisSetupForms.tsx` (+ test)
+- `apps/desktop/src/components/SimulationPanel.tsx` (+ test)
+- `apps/desktop/src/App.workspace.test.tsx`
+- `apps/desktop/src/App.css`
+- `FEATURE_PARITY.md`, `PROGRESS.md`
+
+**Tests**
+- `AnalysisSetupForms.test.tsx` (3) + duration cases in SimulationPanel /
+  App.workspace
+- `pnpm -C apps/desktop typecheck` / `test` green
+
+**Parity items**
+- §10 partial: AnalysisSetupForms + circuit-duration Select. Box stays ⬜.
+  SHIPPABLE? NO
+
+**Next step**
+- local-AI Settings selects (or leave Settings locked); Resizable/Command/
+  Toast; whole-app drift grep+screenshot. Never flip AGENTS §10 on a partial.
+
+SHIPPABLE? **NO**
 
 ---
 

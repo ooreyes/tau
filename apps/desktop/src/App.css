@@ -3358,14 +3358,31 @@ body {
   gap: var(--sp-1);
 }
 
-.circuit-duration-control__editor select {
+.circuit-duration-control__editor select,
+.circuit-duration-control__editor [data-slot="select-trigger"].circuit-duration-unit {
   min-width: 62px;
+  height: var(--row-h);
+  min-height: var(--row-h);
   padding: 0 var(--sp-2);
   border: 1px solid var(--border);
   border-radius: var(--r-sm);
   color: var(--text);
   background: var(--panel-2);
   font: 600 var(--fs-label) var(--font-mono);
+  box-sizing: border-box;
+}
+
+.circuit-duration-control__editor [data-slot="select-trigger"].circuit-duration-unit [data-slot="select-value"] {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.circuit-duration-control__editor [data-slot="select-trigger"].circuit-duration-unit svg {
+  width: 10px;
+  height: 10px;
 }
 
 .circuit-duration-control > small,
@@ -5209,20 +5226,33 @@ body {
 .analysis-setup-field > span {
   font-size: var(--fs-caption);
   font-weight: 510;
-  letter-spacing: -0.01em;
+  letter-spacing: var(--tracking-micro);
   text-transform: none;
   color: var(--muted);
 }
 
-.analysis-setup-select {
+.analysis-setup-select,
+.analysis-setup [data-slot="select-trigger"].analysis-setup-select {
+  width: 100%;
   height: var(--row-h);
+  min-height: var(--row-h);
   min-width: 0;
+  max-width: none;
   padding: 0 var(--sp-2);
   border: 1px solid var(--border);
   border-radius: var(--r-sm);
   background: var(--panel-2);
   color: var(--text);
   font-size: var(--fs-label);
+  box-sizing: border-box;
+}
+
+.analysis-setup [data-slot="select-trigger"].analysis-setup-select [data-slot="select-value"] {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .analysis-setup-hint {

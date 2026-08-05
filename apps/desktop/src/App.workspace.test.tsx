@@ -186,7 +186,10 @@ describe("App schematic workspace tools", () => {
     fireEvent.click(screen.getByRole("button", { name: "Toggle advanced settings" }));
 
     expect((screen.getByLabelText("Circuit duration value") as HTMLInputElement).value).toBe("500");
-    expect((screen.getByLabelText("Circuit duration unit") as HTMLSelectElement).value).toBe("us");
+    const durationUnit = screen.getByRole("combobox", { name: "Circuit duration unit" });
+    expect(durationUnit.tagName).toBe("BUTTON");
+    expect(durationUnit.getAttribute("data-slot")).toBe("select-trigger");
+    expect(durationUnit.textContent).toContain("µs");
     expect(screen.getByText("DOCUMENT")).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "Use quick waveform detail" }));

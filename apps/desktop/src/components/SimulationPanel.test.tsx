@@ -578,10 +578,10 @@ describe("SimulationPanel - engineering-safe transient controls", { timeout: 20_
     expect(handlers.onOptionsChange).not.toHaveBeenCalled();
   });
 
-  it("accepts long circuit durations in human units and separates them from elapsed solver time", () => {
+  it("accepts long circuit durations in human units and separates them from elapsed solver time", async () => {
     const handlers = renderPanel();
     fireEvent.click(screen.getByRole("button", { name: "Toggle advanced settings" }));
-    fireEvent.change(screen.getByLabelText("Circuit duration unit"), { target: { value: "min" } });
+    await chooseSelectOption("Circuit duration unit", "min");
     fireEvent.change(screen.getByLabelText("Circuit duration value"), { target: { value: "3" } });
     expect(handlers.onOptionsChange).toHaveBeenLastCalledWith({ stopTime: 180, steps: 240 });
     // Advanced help and the duration control both say "simulated circuit time"
@@ -589,6 +589,10 @@ describe("SimulationPanel - engineering-safe transient controls", { timeout: 20_
     expect(
       screen.getByText(/This is simulated circuit time\. A 3 min run models 180 s/i),
     ).toBeTruthy();
+    const unit = screen.getByRole("combobox", { name: "Circuit duration unit" });
+    expect(unit.tagName).toBe("BUTTON");
+    expect(unit.getAttribute("data-slot")).toBe("select-trigger");
+    expect(document.querySelector(".circuit-duration-control select")).toBeNull();
   });
 
   it("reports measured solver elapsed time without presenting it as an estimate", () => {

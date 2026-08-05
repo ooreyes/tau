@@ -7472,19 +7472,29 @@ function CircuitDurationControl({ seconds, onChange }: { seconds: number; onChan
             if (Number.isFinite(amount) && amount > 0) onChange(amount * durationFactor(unit));
           }}
         />
-        <select
-          aria-label="Circuit duration unit"
+        <Select
           value={unit}
-          onChange={(event) => {
-            const next = event.currentTarget.value as DurationUnit;
+          onValueChange={(nextValue) => {
+            const next = nextValue as DurationUnit;
             setUnit(next);
             setDraft(durationDraft(seconds, next));
           }}
         >
-          {DURATION_UNITS.map((candidate) => (
-            <option key={candidate.value} value={candidate.value}>{candidate.label}</option>
-          ))}
-        </select>
+          <SelectTrigger
+            size="sm"
+            className="circuit-duration-unit mono-num"
+            aria-label="Circuit duration unit"
+          >
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {DURATION_UNITS.map((candidate) => (
+              <SelectItem key={candidate.value} value={candidate.value}>
+                {candidate.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
       <small>This is simulated circuit time. A 3 min run models 180 s of circuit behavior; it does not promise three minutes of solver time.</small>
     </div>
