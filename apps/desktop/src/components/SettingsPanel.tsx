@@ -17,9 +17,9 @@ import { useEffect, useState } from "react";
 import { applyThemeMode, saveThemeMode, loadThemeMode, type ThemeMode } from "../lib/theme";
 
 const OPTIONS: { mode: ThemeMode; label: string }[] = [
-  { mode: "system", label: "System" },
   { mode: "light", label: "Light" },
   { mode: "dark", label: "Dark" },
+  { mode: "system", label: "System" },
 ];
 
 export function ThemeControl() {
@@ -38,13 +38,16 @@ export function ThemeControl() {
     saveThemeMode(next);
   };
 
+  const hint =
+    mode === "system" ? "Follows macOS" : mode === "light" ? "Default" : "Forced dark";
+
   return (
     <div className="settings-row">
       <div className="settings-row-copy">
         <span className="settings-row-label">Appearance</span>
         {/* .settings-row-hint truncates rather than wraps, so this has to stay
             short enough to read whole at the sheet's narrowest width. */}
-        <span className="settings-row-hint">Follows macOS</span>
+        <span className="settings-row-hint">{hint}</span>
       </div>
       <div className="mode-toggle" role="radiogroup" aria-label="Appearance">
         {OPTIONS.map((option) => (

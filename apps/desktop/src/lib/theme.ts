@@ -1,14 +1,14 @@
 /**
  * Theme mode state - System / Light / Dark (DESIGN_SYSTEM.md §1).
  *
- * "System" needs no JavaScript at all: App.css's
- * `@media (prefers-color-scheme: light)` block already redefines every
- * color token when the OS reports light, and the plain `:root` (no
- * data-theme attribute) stays dark otherwise. This module exists only for
- * the EXPLICIT override path - stamping `data-theme="light"` or
- * `data-theme="dark"` on <html> forces one theme regardless of the OS
- * setting, per the cascade documented at the top of the light-theme block
- * in App.css:
+ * Light is the product default for first launch (paid-product paper chrome).
+ * "System" still needs no JavaScript: App.css's
+ * `@media (prefers-color-scheme: light)` block redefines every color token
+ * when the OS reports light, and the plain `:root` (no data-theme attribute)
+ * stays dark otherwise. This module also owns the EXPLICIT override path -
+ * stamping `data-theme="light"` or `data-theme="dark"` on <html> forces one
+ * theme regardless of the OS setting, per the cascade documented at the top
+ * of the light-theme block in App.css:
  *
  *   :root (dark) -> @media (prefers-color-scheme: light) -> :root[data-theme]
  *
@@ -20,21 +20,23 @@ export type ThemeMode = "system" | "light" | "dark";
 
 const STORAGE_KEY = "tau.ui.theme";
 const MODES: readonly ThemeMode[] = ["system", "light", "dark"];
+/** First-run / corrupt-storage fallback - Light, not System. */
+const DEFAULT_THEME_MODE: ThemeMode = "light";
 
 function isThemeMode(value: unknown): value is ThemeMode {
   return typeof value === "string" && (MODES as readonly string[]).includes(value);
 }
 
-/** Reads the persisted preference. Falls back to "system" if unset,
+/** Reads the persisted preference. Falls back to Light if unset,
  *  invalid, or localStorage is unavailable (private browsing, or a test
  *  environment without one installed). */
 export function loadThemeMode(): ThemeMode {
-  if (typeof localStorage === "undefined") return "system";
+  if (typeof localStorage === "undefined") return DEFAULT_THEME_MODE;
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    return isThemeMode(raw) ? raw : "system";
+    return isThemeMode(raw) ? raw : DEFAULT_THEME_MODE;
   } catch {
-    return "system";
+    return DEFAULT_THEME_MODE;
   }
 }
 

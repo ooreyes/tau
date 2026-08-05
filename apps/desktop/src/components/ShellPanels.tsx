@@ -1654,7 +1654,7 @@ export function ComponentInspector({
               <p className="property-hint" role="status">
                 {selectedSubcircuit
                   ? `Ready · ${selectedSubcircuit.ports.length} named terminals (${selectedSubcircuit.ports.join(", ")}) from ${selectedSubcircuit.sourceLabel}`
-                  : `Blocked · ${subcircuitInstance?.name || "No subcircuit"} has no attached or document definition; Tau will not guess its pins or behavior.`}
+                  : `Needs a definition · ${subcircuitInstance?.name || "No subcircuit"} isn't in an attached library or this sheet. Run won't invent pins.`}
               </p>
               {selectedSubcircuit?.parameters.map((parameter) => {
                 const parameterLabel = parameter.label ?? parameter.name;
@@ -1759,9 +1759,9 @@ export function ComponentInspector({
               </label>
               <p className="property-hint" role="status">
                 {!selectedModelOption
-                  ? `Blocked · ${selectedModelName || "No model"} is unavailable or incompatible; Run will refuse rather than substitute a generic ${modelKind.toUpperCase()} starter. Attach the exact model or deliberately choose Generic.`
+                  ? `Needs a model · ${selectedModelName || "No model"} isn't available. Run won't substitute a generic ${modelKind.toUpperCase()} — attach the library or choose Generic.`
                   : selectedModelOption.source === "generic"
-                    ? `Generic starter · useful for topology checks, not an exact manufacturer part.`
+                    ? `Generic starter · fine for topology checks; not a manufacturer part.`
                     : `Ready · exact ${selectedModelOption.modelType.toUpperCase()} model from ${selectedModelOption.sourceLabel}`}
               </p>
               {visibleFields.filter((field) => {
