@@ -23,14 +23,6 @@ import {
   Library,
   SlidersHorizontal,
 } from "lucide-react";
-import {
-  VscodeCollapseAllIcon,
-  VscodeImportFileIcon,
-  VscodeImportFolderIcon,
-  VscodeNewFileIcon,
-  VscodeNewFolderIcon,
-  VscodeRefreshIcon,
-} from "./VscodeExplorerIcons";
 import { CATALOG_BY_KIND } from "../schematic/catalog";
 import { ComponentSymbol } from "../schematic/symbols";
 import type { SchematicComponent, SchematicWire } from "../schematic/types";
@@ -596,7 +588,7 @@ export function ExplorerPanel({
                 if (ok) onNotice("Opened Schematics folder.");
               }}
             >
-              <VscodeImportFolderIcon />
+              <FolderInput size={16} strokeWidth={1.6} aria-hidden="true" />
             </button>
             {capability === "tauri" && (
               <button
@@ -608,7 +600,7 @@ export function ExplorerPanel({
                   if (ok) onNotice("Created Schematics folder.");
                 }}
               >
-                <VscodeNewFolderIcon />
+                <FolderPlus size={16} strokeWidth={1.6} aria-hidden="true" />
               </button>
             )}
             <button
@@ -617,7 +609,7 @@ export function ExplorerPanel({
               aria-label={IMPORT_BUTTON_LABEL}
               onClick={() => ascInputRef.current?.click()}
             >
-              <VscodeImportFileIcon />
+              <FileInput size={16} strokeWidth={1.6} aria-hidden="true" />
             </button>
           </div>
         </div>
@@ -651,7 +643,7 @@ export function ExplorerPanel({
               setCreateDraft({ kind: "file", parentPath: rootPath, name: "untitled.asc" });
             }}
           >
-            <VscodeNewFileIcon />
+            <FilePlus size={16} strokeWidth={1.6} aria-hidden="true" />
           </button>
           <button
             type="button"
@@ -662,7 +654,7 @@ export function ExplorerPanel({
               setCreateDraft({ kind: "folder", parentPath: rootPath, name: "New Folder" });
             }}
           >
-            <VscodeNewFolderIcon />
+            <FolderPlus size={16} strokeWidth={1.6} aria-hidden="true" />
           </button>
           <button
             type="button"
@@ -670,7 +662,7 @@ export function ExplorerPanel({
             aria-label={IMPORT_BUTTON_LABEL}
             onClick={() => ascInputRef.current?.click()}
           >
-            <VscodeImportFileIcon />
+            <FileInput size={16} strokeWidth={1.6} aria-hidden="true" />
           </button>
           <button
             type="button"
@@ -681,7 +673,7 @@ export function ExplorerPanel({
               if (ok) onNotice("Explorer refreshed.");
             }}
           >
-            <VscodeRefreshIcon />
+            <RefreshCw size={16} strokeWidth={1.6} aria-hidden="true" />
           </button>
           <button
             type="button"
@@ -689,7 +681,7 @@ export function ExplorerPanel({
             aria-label="Collapse folders in explorer"
             onClick={collapseAll}
           >
-            <VscodeCollapseAllIcon />
+            <FoldVertical size={16} strokeWidth={1.6} aria-hidden="true" />
           </button>
         </div>
       </div>

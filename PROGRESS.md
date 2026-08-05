@@ -9,10 +9,37 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: IN PROGRESS - 2026-08-04 23:05 CDT**
+**Status: DONE - 2026-08-04 23:12 CDT**
 
-Unit: §10 token sweep — define missing `--r-xs` (+ `--r-2xs`/`--r-pill`), migrate raw border-radius chrome, tokenize assistant SVG snapshot colors. Leave AGENTS §10 DoD unchecked.
+Unit: Cupertino HIG chrome icons + quiet warning chrome (defer light palette tokens to Anduril Light). Not whole-app shippable.
 
+
+---
+
+### 2026-08-04 — Cupertino HIG chrome icons (light-first, no toy glyphs)
+
+**What I did**
+- Replaced ASCII transport ▶/■ with Lucide Play/Square; Sparkles→MessageSquare;
+  faceless Bode resistor mark; Lucide CircuitBoard/Activity/Settings in toolbar.
+- Quieted warning chrome (hairline Diagnostics rows; no amber wash banners).
+- Light is product default (`theme.ts` + `index.html` FOUC). design-shot stamps
+  `tau.ui.theme` before navigate. Left App.css light *palette* to Anduril Light.
+- Screenshot proof: `screenshots/hig-chrome-2026-08-04/empty-{light,dark}-1440x900.png`
+  + dialog shots. Full design-shot aborted on unrelated subcircuit fixture.
+
+**Files**
+- Toolbar/EmptyState/BodeMascot/ShellPanels transport+tabs, App.css warning chrome,
+  theme default, design-shot theme stamp, ShellPanels.test sync
+
+**Tests / proof**
+- typecheck green; Toolbar/Theme/ShellPanels/EmptyState vitest green
+- Full suite currently red on Freshman AssistantPanel mid-edit (out of scope)
+
+**Parity items**
+- §10 DoD still open (Anduril Light owns remaining token pop)
+
+**Next step**
+- Align to Anduril Light token file when it lands; don’t re-fight Assistant settings.
 
 ---
 

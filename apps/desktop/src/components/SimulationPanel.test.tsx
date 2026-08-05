@@ -195,7 +195,7 @@ describe("SimulationPanel - dashboard status strip", { timeout: 20_000 }, () => 
     renderPanel();
     const strip = screen.getByRole("status");
     expect(strip.textContent).toContain("Idle");
-    expect(strip.textContent).toContain("press Run in the toolbar");
+    expect(strip.textContent).toContain("press Run");
     expect(strip.classList.contains("plotter-status--idle")).toBe(true);
   });
 

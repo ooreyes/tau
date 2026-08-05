@@ -178,4 +178,17 @@ describe("SettingsPanel local assistant lifecycle", () => {
     expect(screen.queryByRole("combobox", { name: "Local model" })).toBeNull();
     expect(screen.queryByText(/Download size:/)).toBeNull();
   });
+
+  it("keeps workspace recovery controls behind a closed disclosure", async () => {
+    runtime.getStatus.mockResolvedValue(status());
+    render(<SettingsPanel {...props} />);
+    expect(screen.getByText("Find parts")).toBeTruthy();
+    expect(screen.getByText("Circuit assistant")).toBeTruthy();
+    const workspace = screen.getByText("Workspace").closest("details");
+    expect(workspace).toBeTruthy();
+    expect(workspace?.hasAttribute("open")).toBe(false);
+    expect(screen.queryByText("Recovery copy of untitled edits")).toBeNull();
+    fireEvent.click(screen.getByText("Workspace"));
+    expect(screen.getByText("Recovery copy of untitled edits")).toBeTruthy();
+  });
 });

@@ -233,7 +233,7 @@ describe("ComponentInspector - imported op-amp parameters", () => {
     expect((screen.getByRole("textbox", { name: "Op-amp part" }) as HTMLInputElement).value).toBe("OP07");
     const model = screen.getByRole("textbox", { name: "Op-amp simulation model" }) as HTMLInputElement;
     expect(model.value).toBe("LT1001");
-    expect(screen.getByRole("status").textContent).toMatch(/Model library required.*not substitute a generic gain block/);
+    expect(screen.getByRole("status").textContent).toMatch(/Needs a library model · Tau will not substitute a generic gain block/);
     fireEvent.click(screen.getByRole("button", { name: "Attach Model Library" }));
     expect(openLibraries).toHaveBeenCalledOnce();
 
@@ -310,7 +310,7 @@ describe("ComponentInspector - semiconductor model chooser", () => {
     render(<ComponentInspector selected={selected} onOpenModelLibraries={openLibraries} />);
 
     expect((screen.getByRole("combobox", { name: "Simulation model" }) as HTMLSelectElement).value).toBe("IRF540");
-    expect(screen.getByRole("status").textContent).toMatch(/Blocked ·.*will refuse rather than substitute a generic NMOS starter/);
+    expect(screen.getByRole("status").textContent).toMatch(/Needs a model ·.*won't substitute a generic NMOS/);
     fireEvent.click(screen.getByRole("button", { name: "Attach Model Library" }));
     expect(openLibraries).toHaveBeenCalledOnce();
   });
@@ -392,7 +392,7 @@ describe("ComponentInspector - native subcircuit chooser", () => {
     useSchematic.setState({ components: [selected] });
     render(<ComponentInspector selected={selected} onOpenModelLibraries={openLibraries} />);
 
-    expect(screen.getByRole("status").textContent).toContain("Tau will not guess its pins or behavior");
+    expect(screen.getByRole("status").textContent).toContain("Run won't invent pins");
     fireEvent.click(screen.getByRole("button", { name: "Attach Model Library" }));
     expect(openLibraries).toHaveBeenCalledOnce();
   });
