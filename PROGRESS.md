@@ -9,16 +9,53 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 05:48 CDT**
+**Status: DONE - 2026-08-05 05:50 CDT**
 
-Unit: Waveform DoD — **step-pane expression traces** (+ PROGRESS `.plt` entry
-conflict-marker cleanup). Base tip `66231ca` / pass=85. SHIPPABLE? **NO**
+Unit: Circuit_testing_v1 `05_step_loaded_divider.asc` authored `.dc` + `.step param LOAD` → differential **pass=86**.
+```
+SUMMARY pass=86 sibling=5 gap=0
+dc ct-step-loaded … LOAD=1k/4k/7k/10k v(out) nRms=0
+```
+Named-device 48.1%. Left 100W/IRFP/diode-dc alone. Rebased over waveform tip `81deff3`. SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
 
 
 ---
+
+### 2026-08-05 — ct 05_step_loaded_divider DC+step → pass=86 (§DoD)
+
+**What I did**
+- Circuit_testing_v1 `05_step_loaded_divider.asc` authored `.dc V1 0 5 250m` +
+  `.step param LOAD 1k 10k 3k`: expand LOAD→1k/4k/7k/10k (strip `.step`, bake
+  `.param`), compare v(out) vs LTspice (nRms=0 all members). Pure resistive;
+  distinct from synthetic divider DC, source-step OP, help ACstep, and
+  ct-diode-dc. Avoided Staff EE 100W/IRFP/named-device and Documents Draft*.
+  Tip diode pass=85 → **86**. Worktree `Tau-wt-dod-draft`.
+
+**Exact stdout**
+
+```
+SUMMARY pass=86 sibling=5 gap=0
+dc ct-step-loaded … LOAD=1000/4000/7000/10000 v(out) nRms=0.0000
+```
+
+**Files**
+- `apps/desktop/scripts/differentialParity.corpus.ts`
+- `AGENTS.md`, `FEATURE_PARITY.md`, `PROGRESS.md`
+
+**Tests**
+- `pnpm -C apps/desktop typecheck` + `test` green (2701)
+- `bash scripts/differential-parity.sh` → pass=86
+
+**Parity items**
+- Differential 🟡 **pass=86**. Named-device exact **1222** / **48.1%**. SHIPPABLE? NO
+
+**Next step**
+- Next honest differential (ct 03/06/07/11 or other non-colliding fixture). Leave
+  Staff EE stashes; Settings locked.
+
 
 
 ### 2026-08-05 — step-pane expression traces (§waveform DoD)
@@ -75,6 +112,8 @@ conflict-marker cleanup). Base tip `66231ca` / pass=85. SHIPPABLE? **NO**
 
 **Next step**
 - Continue 22: step-pane expression traces. Continue 24 owns next differential.
+
+
 
 
 
