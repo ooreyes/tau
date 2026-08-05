@@ -1084,6 +1084,35 @@ describe("AcFamilyPlot / DcFamilyPlot Export PNG", { timeout: 20_000 }, () => {
     }
   });
 
+  it("right-click AC step SIGNAL chip plots abs(V(out)) across steps", async () => {
+    const acMember = (label: string, magDb: number[]) => ({
+      label,
+      value: 1,
+      result: {
+        ok: true as const,
+        freqs: [10, 100, 1000],
+        traces: [{ id: "n1", label: "V(out)", magDb, phaseDeg: [0, -45, -90] }],
+        warnings: [],
+      },
+    });
+    render(
+      <AcFamilyPlot
+        family={{
+          ok: true,
+          spec: { kind: "param", name: "R", values: [1, 2] },
+          members: [acMember("R=1", [0, -3, -20]), acMember("R=2", [0, -6, -40])],
+          warnings: [],
+        }}
+      />,
+    );
+    fireEvent.contextMenu(screen.getByRole("button", { name: "Math for V(out)" }));
+    const absItem = await screen.findByRole("menuitem", { name: /Plot abs\(V\(out\)\)/i });
+    fireEvent.click(absItem);
+    const signalMeter = screen.getByText("SIGNAL").parentElement;
+    expect(signalMeter?.textContent).toContain("abs(V(out))");
+    expect(screen.getByRole("button", { name: "Use probe" })).toBeTruthy();
+  });
+
   it("exports DC step-family SVG via waveformSvgsToPng with tag dc-step", async () => {
     const png = await import("../simulation/plotPng");
     const toPng = vi.spyOn(png, "waveformSvgsToPng").mockResolvedValue(new Blob(["png"]));
@@ -1117,6 +1146,36 @@ describe("AcFamilyPlot / DcFamilyPlot Export PNG", { timeout: 20_000 }, () => {
       toPng.mockRestore();
       download.mockRestore();
     }
+  });
+
+  it("right-click DC step SIGNAL chip plots abs(V(out)) across steps", async () => {
+    const dcMember = (label: string, voltages: number[]) => ({
+      label,
+      value: 1,
+      result: {
+        ok: true as const,
+        source: "V1",
+        sweep: [0, 1, 2],
+        nets: [{ id: "n1", label: "V(out)", voltages, ground: false }],
+        warnings: [],
+      },
+    });
+    render(
+      <DcFamilyPlot
+        family={{
+          ok: true,
+          spec: { kind: "param", name: "R", values: [1, 2] },
+          members: [dcMember("R=1", [0, -0.5, -1]), dcMember("R=2", [0, -0.25, -0.5])],
+          warnings: [],
+        }}
+      />,
+    );
+    fireEvent.contextMenu(screen.getByRole("button", { name: "Math for V(out)" }));
+    const absItem = await screen.findByRole("menuitem", { name: /Plot abs\(V\(out\)\)/i });
+    fireEvent.click(absItem);
+    const signalMeter = screen.getByText("SIGNAL").parentElement;
+    expect(signalMeter?.textContent).toContain("abs(V(out))");
+    expect(screen.getByRole("button", { name: "Use probe" })).toBeTruthy();
   });
 });
 

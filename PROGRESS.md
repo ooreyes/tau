@@ -1,9 +1,10 @@
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 07:34 CDT**
+**Status: DONE - 2026-08-05 07:40 CDT**
 
-Unit: Waveform DoD — **noise legend right-click math**.
-Tip `9467920` → this commit. pass=97. Settings locked. SHIPPABLE? **NO**
+Unit: Waveform DoD — **AC/DC step-family legend right-click math**.
+Worktree `Tau-wt-wave-family` over tip `016807c` → this commit. pass=97.
+Settings locked. SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
@@ -12,6 +13,33 @@ Tip `9467920` → this commit. pass=97. Settings locked. SHIPPABLE? **NO**
 ---
 
 
+
+### 2026-08-05 — AC/DC step-family legend right-click math (§waveform DoD)
+
+**What I did**
+- `evaluateAcStepPlotExpression` / `evaluateDcStepPlotExpression` + SIGNAL
+  chip ContextMenu via `acTraceMathMenuItems` (abs/neg/db/uramp/sgn; no
+  ddt/idt) on AcFamilyPlot / DcFamilyPlot → expression across the stepped
+  family (Use probe restores). Worktree `Tau-wt-wave-family` over `016807c`.
+  Left ct 12/13/14, continue 36 ASC, ct 19 OP, Chan/NIGBT/FRA, Settings alone.
+
+**Files**
+- `apps/desktop/src/simulation/plotExpressionAcStep.ts` (+ test)
+- `apps/desktop/src/simulation/plotExpressionDcStep.ts` (+ test)
+- `apps/desktop/src/components/SimulationPanel.tsx` (+ wiring tests)
+- `FEATURE_PARITY.md`, `PROGRESS.md`
+
+**Tests**
+- `pnpm -C apps/desktop typecheck` + `test` green (2771 passed)
+- AC/DC step expression evaluators + SIGNAL ContextMenu wiring
+
+**Parity items**
+- Waveform viewer 🟡 (AC/DC step-family legend math landed; standalone phase
+  window still ⬜). Differential pass=97 · named-device 48.1% · SHIPPABLE? NO
+
+**Next step**
+- Standalone phase window / Bode polish / non-wall ND. Leave
+  Educational/IRFP/Settings alone.
 
 ### 2026-08-05 — noise legend right-click math (§waveform DoD)
 

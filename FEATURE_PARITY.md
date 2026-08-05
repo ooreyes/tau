@@ -1565,7 +1565,10 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   `evaluateNoisePlotExpression` + NoisePlot ContextMenu via
   `acTraceMathMenuItems` (abs/neg/db/uramp/sgn — no ddt/idt) on V(onoise)/
   V(inoise); lin-Y fallback when overlays leave the positive-density plane.
-  Still ⬜: AC/DC step-family legend menus.
+  **AC/DC step-family legend right-click math landed** (2026-08-05):
+  `evaluateAcStepPlotExpression` / `evaluateDcStepPlotExpression` + SIGNAL
+  chip ContextMenu via `acTraceMathMenuItems` (abs/neg/db/uramp/sgn) on
+  AcFamilyPlot / DcFamilyPlot. Still ⬜: standalone detached phase window.
 
 ## 7. Engine & accuracy
 - ✅ Native ngspice FFI (desktop) — `src-tauri/src/spice.rs`

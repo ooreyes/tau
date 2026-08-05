@@ -61,6 +61,8 @@ import { evaluateAcPlotExpression } from "../simulation/plotExpressionAc";
 import { evaluateDcPlotExpression } from "../simulation/plotExpressionDc";
 import { evaluateStepPlotExpression } from "../simulation/plotExpressionStep";
 import { evaluateNoisePlotExpression } from "../simulation/plotExpressionNoise";
+import { evaluateAcStepPlotExpression } from "../simulation/plotExpressionAcStep";
+import { evaluateDcStepPlotExpression } from "../simulation/plotExpressionDcStep";
 import {
   acTraceMathMenuItems,
   expressionForTrace,
@@ -4808,9 +4810,27 @@ function pickFamilyTraceId(
  */
 export function AcFamilyPlot({ family }: { family: AnalysisFamily<AcResult> | null }) {
   const [svgRef, size] = useMeasuredSize<SVGSVGElement>();
+  const [activeExpr, setActiveExpr] = useState<string | null>(null);
+  const [exprError, setExprError] = useState<string | null>(null);
   const { targetXTicks, targetYTicks } = tickCountsFromSize(size);
   const [exportError, setExportError] = useState<string | null>(null);
-  const overlay = useMemo(() => acFamilyOverlaySeries(family), [family]);
+  const probeOverlay = useMemo(() => acFamilyOverlaySeries(family), [family]);
+  const exprOverlay = useMemo(() => {
+    if (!activeExpr) return null;
+    const evaluated = evaluateAcStepPlotExpression(activeExpr, family);
+    if (!evaluated.ok) return evaluated;
+    return {
+      ok: true as const,
+      signal: evaluated.expression,
+      series: evaluated.series,
+    };
+  }, [activeExpr, family]);
+  const overlay =
+    activeExpr && exprOverlay && exprOverlay.ok
+      ? exprOverlay
+      : !activeExpr
+        ? probeOverlay
+        : null;
   const plot = useMemo(() => {
     if (!overlay) return null;
     let rawMin = 0;
@@ -4843,12 +4863,31 @@ export function AcFamilyPlot({ family }: { family: AnalysisFamily<AcResult> | nu
     return { min, max, xMin: fLo, xMax, xScale: "log" as const };
   }, [overlay]);
 
+  const activateAcFamilyExpression = (expr: string) => {
+    const trimmed = expr.trim();
+    if (!trimmed) return;
+    const probe = evaluateAcStepPlotExpression(trimmed, family);
+    if (!probe.ok) {
+      setExprError(probe.error);
+      return;
+    }
+    setActiveExpr(trimmed);
+    setExprError(null);
+  };
+
   if (!family) return null;
   if (!family.ok) {
     // When every member failed, surface the first member's own error (e.g. a
     // singular matrix) instead of a generic banner.
     const memberError = family.members.map((m) => (m.result.ok ? null : m.result.message)).find((m) => m);
     return <div className="analysis-empty">{family.message ?? memberError ?? "The .step sweep could not run."}</div>;
+  }
+  if (activeExpr && exprOverlay && !exprOverlay.ok) {
+    return (
+      <div className="analysis-empty" role="alert">
+        {exprOverlay.error}
+      </div>
+    );
   }
   if (!overlay || !plot) return null;
 
@@ -4891,9 +4930,33 @@ export function AcFamilyPlot({ family }: { family: AnalysisFamily<AcResult> | nu
             />
           ))}
         </svg>
-        <div className="scope-legend">
+        <div className="scope-legend" aria-label="AC step legend">
+          <ContextMenu>
+            <ContextMenuTrigger asChild>
+              <button
+                type="button"
+                className="bode-legend-chip"
+                aria-label={`Math for ${overlay.signal}`}
+              >
+                <i style={{ background: "var(--trace-cyan)" }} aria-hidden="true" />
+                {overlay.signal}
+              </button>
+            </ContextMenuTrigger>
+            <ContextMenuContent aria-label={`Math for ${overlay.signal}`}>
+              <ContextMenuLabel>Math</ContextMenuLabel>
+              <ContextMenuSeparator />
+              {acTraceMathMenuItems().map((item) => (
+                <ContextMenuItem
+                  key={item.op}
+                  onClick={() => activateAcFamilyExpression(wrapTraceMath(overlay.signal, item.op))}
+                >
+                  {item.label.replace("…", overlay.signal)}
+                </ContextMenuItem>
+              ))}
+            </ContextMenuContent>
+          </ContextMenu>
           {overlay.series.map((s, i) => (
-            <span key={s.label}>
+            <span key={s.label} className="bode-legend-chip">
               <i style={{ background: STEP_COLORS[i % STEP_COLORS.length] }} />
               {s.label}
             </span>
@@ -4904,10 +4967,23 @@ export function AcFamilyPlot({ family }: { family: AnalysisFamily<AcResult> | nu
         <Metric label="SIGNAL" value={overlay.signal} tone="green" />
         <Metric label="STEPS" value={String(overlay.series.length)} tone="cyan" />
         <Metric label="SWEEP" value={family.spec?.name ?? "--"} tone="cream" />
+        {activeExpr && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setActiveExpr(null);
+              setExprError(null);
+            }}
+          >
+            Use probe
+          </Button>
+        )}
         <Button variant="outline" size="sm" onClick={() => void exportAcStepPng()}>
           Export PNG
         </Button>
       </div>
+      {exprError && <div className="expr-error" role="alert">{exprError}</div>}
       {exportError && <div className="expr-error" role="alert">{exportError}</div>}
     </>
   );
@@ -4920,9 +4996,27 @@ export function AcFamilyPlot({ family }: { family: AnalysisFamily<AcResult> | nu
  */
 export function DcFamilyPlot({ family }: { family: AnalysisFamily<DcSweepResult> | null }) {
   const [svgRef, size] = useMeasuredSize<SVGSVGElement>();
+  const [activeExpr, setActiveExpr] = useState<string | null>(null);
+  const [exprError, setExprError] = useState<string | null>(null);
   const { targetXTicks, targetYTicks } = tickCountsFromSize(size);
   const [exportError, setExportError] = useState<string | null>(null);
-  const overlay = useMemo(() => dcFamilyOverlaySeries(family), [family]);
+  const probeOverlay = useMemo(() => dcFamilyOverlaySeries(family), [family]);
+  const exprOverlay = useMemo(() => {
+    if (!activeExpr) return null;
+    const evaluated = evaluateDcStepPlotExpression(activeExpr, family);
+    if (!evaluated.ok) return evaluated;
+    return {
+      ok: true as const,
+      signal: evaluated.expression,
+      series: evaluated.series,
+    };
+  }, [activeExpr, family]);
+  const overlay =
+    activeExpr && exprOverlay && exprOverlay.ok
+      ? exprOverlay
+      : !activeExpr
+        ? probeOverlay
+        : null;
   const plot = useMemo(() => {
     if (!overlay) return null;
     let vMin = Infinity;
@@ -4950,12 +5044,31 @@ export function DcFamilyPlot({ family }: { family: AnalysisFamily<DcSweepResult>
     return { vMin, vMax, xMin, xMax };
   }, [overlay]);
 
+  const activateDcFamilyExpression = (expr: string) => {
+    const trimmed = expr.trim();
+    if (!trimmed) return;
+    const probe = evaluateDcStepPlotExpression(trimmed, family);
+    if (!probe.ok) {
+      setExprError(probe.error);
+      return;
+    }
+    setActiveExpr(trimmed);
+    setExprError(null);
+  };
+
   if (!family) return null;
   if (!family.ok) {
     // When every member failed, surface the first member's own error (e.g. a
     // singular matrix) instead of a generic banner.
     const memberError = family.members.map((m) => (m.result.ok ? null : m.result.message)).find((m) => m);
     return <div className="analysis-empty">{family.message ?? memberError ?? "The .step sweep could not run."}</div>;
+  }
+  if (activeExpr && exprOverlay && !exprOverlay.ok) {
+    return (
+      <div className="analysis-empty" role="alert">
+        {exprOverlay.error}
+      </div>
+    );
   }
   if (!overlay || !plot) return null;
 
@@ -4996,9 +5109,33 @@ export function DcFamilyPlot({ family }: { family: AnalysisFamily<DcSweepResult>
             />
           ))}
         </svg>
-        <div className="scope-legend">
+        <div className="scope-legend" aria-label="DC step legend">
+          <ContextMenu>
+            <ContextMenuTrigger asChild>
+              <button
+                type="button"
+                className="bode-legend-chip"
+                aria-label={`Math for ${overlay.signal}`}
+              >
+                <i style={{ background: "var(--trace-cyan)" }} aria-hidden="true" />
+                {overlay.signal}
+              </button>
+            </ContextMenuTrigger>
+            <ContextMenuContent aria-label={`Math for ${overlay.signal}`}>
+              <ContextMenuLabel>Math</ContextMenuLabel>
+              <ContextMenuSeparator />
+              {acTraceMathMenuItems().map((item) => (
+                <ContextMenuItem
+                  key={item.op}
+                  onClick={() => activateDcFamilyExpression(wrapTraceMath(overlay.signal, item.op))}
+                >
+                  {item.label.replace("…", overlay.signal)}
+                </ContextMenuItem>
+              ))}
+            </ContextMenuContent>
+          </ContextMenu>
           {overlay.series.map((s, i) => (
-            <span key={s.label}>
+            <span key={s.label} className="bode-legend-chip">
               <i style={{ background: STEP_COLORS[i % STEP_COLORS.length] }} />
               {s.label}
             </span>
@@ -5009,10 +5146,23 @@ export function DcFamilyPlot({ family }: { family: AnalysisFamily<DcSweepResult>
         <Metric label="SIGNAL" value={overlay.signal} tone="green" />
         <Metric label="STEPS" value={String(overlay.series.length)} tone="cyan" />
         <Metric label="SWEEP" value={family.spec?.name ?? "--"} tone="cream" />
+        {activeExpr && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setActiveExpr(null);
+              setExprError(null);
+            }}
+          >
+            Use probe
+          </Button>
+        )}
         <Button variant="outline" size="sm" onClick={() => void exportDcStepPng()}>
           Export PNG
         </Button>
       </div>
+      {exprError && <div className="expr-error" role="alert">{exprError}</div>}
       {exportError && <div className="expr-error" role="alert">{exportError}</div>}
     </>
   );
