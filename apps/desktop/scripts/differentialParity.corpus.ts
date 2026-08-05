@@ -79,6 +79,7 @@ const PHASESHIFT2_ASC = join(EDU, "phaseshift2.asc");
 const PIERCE_ASC = join(EDU, "Pierce.asc");
 const COLPITS2_ASC = join(EDU, "colpits2.asc");
 const QZTST_ASC = join(EDU, "contrib", "qztst.asc");
+const SAMPLEANDHOLD_ASC = join(EDU, "SampleAndHold.asc");
 const EDU_VARISTOR_ASC = join(EDU, "varistor.asc");
 const STEPNOISE_ASC = join(EDU, "stepnoise.asc");
 const UOA_ASC = join(APP, "UniversalOpAmp.asc");
@@ -237,7 +238,7 @@ function withAcStimulus(netlist: string): string {
 describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential parity matrix", () => {
   const cells: DifferentialCell[] = [];
 
-  it("matches RC .tran/.ac/.meas, divider analyses, .step families, curvetrace, stepmodelparam, NoiseFigure, noise.asc, Colpitts/Clapp/Hartly AC, Cohn AC, MeasureBW AC, Transformer/Transformer2/IdealTransformer TRAN, notch/passive/butter/opamp/Linkwitz AC, LM741/LM308/LM78XX/P2/logamp TRAN, GFT AC, DCopPnt OP, audioamp TRAN, UHFpreamp AC, 1563 AC, S-param AC, stepAC AC, 2ndOrder* AC, MonteCarlo AC, varactor AC, phaseshift AC, Pierce/colpits2 AC, edu-varistor TRAN, stepnoise noise, UniversalOpAmp/1/2 TRAN, contrib/qztst AC, Class-D AC/OP/DC/noise/tf", () => {
+  it("matches RC .tran/.ac/.meas, divider analyses, .step families, curvetrace, stepmodelparam, NoiseFigure, noise.asc, Colpitts/Clapp/Hartly AC, Cohn AC, MeasureBW AC, Transformer/Transformer2/IdealTransformer TRAN, notch/passive/butter/opamp/Linkwitz AC, LM741/LM308/LM78XX/P2/logamp TRAN, GFT AC, DCopPnt OP, audioamp TRAN, UHFpreamp AC, 1563 AC, S-param AC, stepAC AC, 2ndOrder* AC, MonteCarlo AC, varactor AC, phaseshift AC, Pierce/colpits2 AC, edu-varistor TRAN, stepnoise noise, UniversalOpAmp/1/2 TRAN, contrib/qztst AC, SampleAndHold TRAN, Class-D AC/OP/DC/noise/tf", () => {
     // --- TRAN (also covered by waveformParity; re-assert here so this file is self-sufficient) ---
     {
       const result = runPairedBatch("diff-rc-tran", RC_TRAN, ["v(out)"]);
@@ -2470,6 +2471,61 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
       });
     }
 
+    // --- Educational SampleAndHold.asc authored .tran (dual SAMPLE A-devices) ---
+    // v(a) under stock 5%; v(b) nMax≈0.0515 needs maxTol 0.055 (hold-edge; nRms≈0.0028,
+    // span≈2 — not hollow). Same honesty class as qztst/edu-varistor maxTol=0.06.
+    // PLL/PLL2 deferred: Tau XSPICE MODULATE emit is rejected by LTspice same-deck.
+    {
+      expect(existsSync(SAMPLEANDHOLD_ASC), `missing ${SAMPLEANDHOLD_ASC}`).toBe(true);
+      const imported = importAsc(decodeSchematicText(readFileSync(SAMPLEANDHOLD_ASC)));
+      expect(imported.warnings).toEqual([]);
+      const dirs = expandDirectiveLines(imported.directives);
+      const parsed = analysesFromDirectives(dirs);
+      expect(parsed.tran, "SampleAndHold.asc must author .tran").toBeTruthy();
+      const params = buildParamScope(dirs);
+      const deck = buildSpiceDeck({
+        components: imported.components,
+        wires: imported.wires,
+        netLabels: imported.netLabels,
+        directives: dirs,
+        params,
+      }, {
+        kind: "tran",
+        stopTime: parsed.tran!.stopTime,
+        steps: parsed.tran!.steps ?? 3000,
+      });
+      expect(deck.unresolvedSubckts ?? []).toEqual([]);
+      expect(deck.modelSubstitutions ?? []).toEqual([]);
+      expect(deck.netlist).toMatch(/S_a1\b/i);
+      expect(deck.netlist).toMatch(/S_a2_1\b/i);
+      expect(deck.netlist).toMatch(/\.model\s+a1_sw\s+sw\b/i);
+      expect(deck.netlist).toMatch(/B_a1_out\b/i);
+      expect(deck.netlist).toMatch(/B_a2_out\b/i);
+      const probes = ["v(a)", "v(b)"] as const;
+      const result = runPairedBatch("diff-sampleandhold-tran", deck.netlist, [...probes]);
+      const memberNotes: string[] = [];
+      for (const probe of probes) {
+        const lt = result.ltspice.get(probe)!;
+        const ng = result.ngspice.get(probe)!;
+        const comparison = compareWaveforms(ng.axis, ng.values, lt.axis, lt.values, {
+          rmsTolerance: 0.02,
+          maxTolerance: 0.055,
+        });
+        expect(comparison.pass, `sampleandhold ${probe} ${JSON.stringify(comparison)}`).toBe(true);
+        expect(comparison.referenceRange, `${probe} non-hollow`).toBeGreaterThan(1);
+        memberNotes.push(
+          `${probe} nRms=${comparison.normalizedRms.toFixed(4)} nMax=${comparison.normalizedMax.toFixed(4)} span=${comparison.referenceRange.toFixed(3)}`,
+        );
+      }
+      cells.push({
+        analysis: "tran",
+        circuit: "sampleandhold",
+        topology: "Educational SampleAndHold.asc dual SAMPLE A-devices (authored .tran 10m; maxTol=0.055 hold-edge)",
+        status: "pass",
+        note: memberNotes.join("; ") + " (maxTol=0.055)",
+      });
+    }
+
     // --- Class-D AC/OP (authored analyses are .tran/.meas; add AC/OP for differential proof) ---
     {
       const ascPath = join(CLASSD_DIR, "class-d-starter.asc");
@@ -2763,9 +2819,9 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
     const passCount = cells.filter((cell) => cell.status === "pass").length;
     const gapCount = cells.filter((cell) => cell.status === "gap").length;
     const siblingCount = cells.filter((cell) => cell.status === "sibling").length;
-    expect(passCount).toBeGreaterThanOrEqual(66);
+    expect(passCount).toBeGreaterThanOrEqual(67);
     expect(siblingCount).toBe(5);
     expect(gapCount).toBe(0);
-    expect(report).toMatch(/SUMMARY pass=67 sibling=5 gap=0/);
+    expect(report).toMatch(/SUMMARY pass=68 sibling=5 gap=0/);
   }, 240_000);
 });
