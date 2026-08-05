@@ -89,6 +89,8 @@ const DIMMER_ASC = join(EDU, "dimmer.asc");
 const SOFTDIODE_ASC = join(EDU, "SoftDiodeRecovery.asc");
 /** Educational PAsystem PowerAmp — TIP121/TIP127 Prefix-X + sibling .lib (A=0.1 + A=0.2..0.7). */
 const POWERAMP_ASC = join(EDU, "PAsystem", "PowerAmp.asc");
+/** Educational PAsystem PowerAmpLayout — layout TIP121/TIP127 + sibling .lib (≠ PowerAmp.asc). */
+const POWERAMP_LAYOUT_ASC = join(EDU, "PAsystem", "PowerAmpLayout.asc");
 /** Educational astable — 2N3904 BJT multivibrator (period-meas; continuous phase deferred). */
 const ASTABLE_ASC = join(EDU, "astable.asc");
 /** Educational NE555 — discrete BJT 555 (period-meas on Output; continuous phase deferred). */

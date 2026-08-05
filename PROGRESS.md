@@ -49,36 +49,6 @@ SHIPPABLE? **NO**
 
 ---
 
-### 2026-08-05 — contrib gr_del midnodes AC → pass=110 (§DoD)
-
-**What I did**
-- Educational/contrib `gr_del.asc` authored `.ac lin 401 1µ–10Meg`: all-pass
-  lattice cells with K1/K2. Named gd1/gd2 outs remain |V|≈1 hollow (deferred).
-  Lattice midnodes `v(n005)`/`v(n006)`/`v(n008)` match LTspice nRms≈0 @ 2%/5%.
-  Tip had HandsFreeLayout as pass=109 → this cell is **pass=110**.
-- Left SoftDiode Vp>0 / Fc / ISO7637 / TLINE-inv / Draft10 / PowerAmpLayout
-  alone. Never Chan/NIGBT/FRA. DoD broad box stays open. SHIPPABLE? **NO**.
-
-**Files**
-- `apps/desktop/scripts/differentialParity.corpus.ts`
-- `FEATURE_PARITY.md`, `PROGRESS.md`, `AGENTS.md`
-
-**Tests**
-- `pnpm -C apps/desktop typecheck` green
-- `pnpm -C apps/desktop test` → 2984 passed / 8 skipped
-- `scripts/differential-parity.sh` → SUMMARY pass=110 sibling=5 gap=0
-
-**Parity items**
-- Differential 🟡 **pass=110 · sibling=5 · gap=0**; DoD broad box unchecked.
-  SHIPPABLE? **NO**
-
-**Next step**
-- PowerAmpLayout TIP lib / Fc / ISO7637 / TLINE-inv / Draft10; never SoftDiode
-  Vp>0 fakes. SHIPPABLE? **NO**
-
-SHIPPABLE? **NO**
-
-
 ---
 
 ### 2026-08-05 — Command + Toast + Resizable + drift gate (§10)
