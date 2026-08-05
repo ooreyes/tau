@@ -233,35 +233,41 @@
  */
 @media (prefers-color-scheme: light) {
   :root {
-    --bg:       #f5f5f3;
-    --panel:    #ecebe7;
-    --panel-2:  #e2e1dc;
-    --panel-3:  #f1f0ec;
-    --panel-4:  #ffffff;
+    /* Anduril Light - cool paper (blue-gray undertone), high-contrast ink,
+       precision blue interaction. Rejects warm cream/graphite paper and flat
+       dead gray. Inspiration: Apple HIG light labels + systemBlue family,
+       Palantir Blueprint BLACK/GRAY1/BLUE3, Anduril Lattice cool surfaces. */
+    --bg:       #F5F6F8;
+    --panel:    #EBEEF2;
+    --panel-2:  #E0E4EA;
+    --panel-3:  #F0F2F5;
+    --panel-4:  #FFFFFF;
 
-    --border:         rgba(60, 60, 67, 0.22);
-    --border-strong:  rgba(60, 60, 67, 0.36);
-    --border-subtle:  rgba(60, 60, 67, 0.13);
+    --border:         rgba(17, 20, 24, 0.12);
+    --border-strong:  rgba(17, 20, 24, 0.22);
+    --border-subtle:  rgba(17, 20, 24, 0.08);
 
-    --overlay-hover:        rgba(60, 60, 67, 0.10);
-    --overlay-hover-faint:  rgba(60, 60, 67, 0.05);
+    --overlay-hover:        rgba(17, 20, 24, 0.06);
+    --overlay-hover-faint:  rgba(17, 20, 24, 0.035);
 
-    --scrim:         rgba(0, 0, 0, 0.20);
-    --scrim-strong:  rgba(0, 0, 0, 0.32);
+    --scrim:         rgba(11, 18, 32, 0.22);
+    --scrim-strong:  rgba(11, 18, 32, 0.36);
 
-    --text:   #1c1c1e;
-    --muted:  rgba(60, 60, 67, 0.62);
-    --faint:  rgba(60, 60, 67, 0.34);
-    --canvas-label: #1c1c1e;
-    --canvas-label-muted: rgba(60, 60, 67, 0.55);
-    --canvas-label-halo: #ffffff;
+    /* Ink: Palantir BLACK + GRAY1. Solid muted clears WCAG AA (~5.0:1). */
+    --text:   #111418;
+    --muted:  #5F6B7C;
+    --faint:  #8F99A8;
+    --canvas-label: #111418;
+    --canvas-label-muted: #5F6B7C;
+    --canvas-label-halo: #F5F6F8;
 
-    --accent:       #3a362f;
-    --accent-hover: #4c473e;
-    --accent-ink:   #faf9f6;
-    --accent-soft:  rgba(58, 54, 47, 0.07);
-    --accent-glow:  rgba(58, 54, 47, 0.12);
-    --accent-line:  rgba(58, 54, 47, 0.32);
+    /* Precision blue - Apple x Palantir. Filled primary ~5.7:1 white-on-blue. */
+    --accent:       #0A66C2;
+    --accent-hover: #0856A5;
+    --accent-ink:   #FFFFFF;
+    --accent-soft:  rgba(10, 102, 194, 0.08);
+    --accent-glow:  rgba(10, 102, 194, 0.14);
+    --accent-line:  rgba(10, 102, 194, 0.36);
 
     --signal:       #96620a;
     --signal-soft:  rgba(150, 98, 10, 0.08);
@@ -277,17 +283,14 @@
     --success-line: rgba(36, 138, 61, 0.30);
     --success-glow: rgba(36, 138, 61, 0.15);
 
-    /* Assistant identity - same darken-for-paper transform as the trace
-       ramp below, not a spec table value (the assistant violet/aqua pair
-       is a one-off product accent, not one of the six instrument traces). */
-    --assistant:       #6841aa;
-    --assistant-alt:   #0f6b59;
-    --assistant-soft:  rgba(104, 65, 170, 0.08);
-    --assistant-line:  rgba(104, 65, 170, 0.36);
-    --assistant-glow:  rgba(15, 107, 89, 0.16);
-    /* --cream equals --text in dark (#f5f5f7 both); keep that identity. */
-    --cream:        #1c1c1e;
-    --cream-soft:   rgba(28, 28, 30, 0.05);
+    /* Assistant - teal, not purple SaaS. Shares precision blue as alt. */
+    --assistant:       #0F6B59;
+    --assistant-alt:   #0A66C2;
+    --assistant-soft:  rgba(15, 107, 89, 0.08);
+    --assistant-line:  rgba(15, 107, 89, 0.34);
+    --assistant-glow:  rgba(10, 102, 194, 0.14);
+    --cream:        #111418;
+    --cream-soft:   rgba(17, 20, 24, 0.05);
 
     --diagnostic-ok:          #248a3d;
     --diagnostic-ok-text:     #248a3d;
@@ -296,27 +299,25 @@
     --diagnostic-ok-glow:     rgba(36, 138, 61, 0.20);
     --diagnostic-warning:     #b25000;
     --diagnostic-warning-text: #b25000;
-    --diagnostic-warning-soft: rgba(178, 80, 0, 0.05);
-    --diagnostic-warning-line: rgba(178, 80, 0, 0.22);
-    --diagnostic-warning-glow: rgba(178, 80, 0, 0.10);
+    --diagnostic-warning-soft: rgba(178, 80, 0, 0.06);
+    --diagnostic-warning-line: rgba(178, 80, 0, 0.28);
+    --diagnostic-warning-glow: rgba(178, 80, 0, 0.12);
     --diagnostic-error:       #d70015;
     --diagnostic-error-text:  #d70015;
     --diagnostic-error-soft:  rgba(215, 0, 21, 0.08);
     --diagnostic-error-line:  rgba(215, 0, 21, 0.37);
     --diagnostic-error-glow:  rgba(215, 0, 21, 0.20);
-    --diagnostic-glass-shine: rgba(255, 255, 255, 0.5);
+    --diagnostic-glass-shine: rgba(255, 255, 255, 0.55);
 
-    /* Schematic strokes - dark ink on a near-white sheet (inverse of dark
-       theme's light-label-on-black). */
-    --comp:      #1c1c1e;
-    --comp-ref:  rgba(60, 60, 67, 0.48);
+    --comp:      #111418;
+    --comp-ref:  rgba(17, 20, 24, 0.48);
 
-    --grid-dot:        rgba(60, 60, 67, 0.12);
-    --grid-dot-major:  rgba(60, 60, 67, 0.20);
-    --canvas-bg:      #ffffff;
-    --canvas-surface: #fafaf8;
-    --scope-surface:  #fbfbfa;
-    --scope-grid:  #ecebe7;
+    --grid-dot:        rgba(17, 20, 24, 0.10);
+    --grid-dot-major:  rgba(17, 20, 24, 0.16);
+    --canvas-bg:      #F5F6F8;
+    --canvas-surface: #FAFBFC;
+    --scope-surface:  #F7F8FA;
+    --scope-grid:  #EBEEF2;
 
     --trace-cyan: #0E7EB0;   /* sky */
     --trace-green: #008B62;   /* green */
@@ -325,62 +326,56 @@
     --trace-purple: #A55583;   /* purple */
     --trace-amber: #A76300;   /* orange */
 
+    --elev-1:   inset 0 0.5px 0 rgba(255, 255, 255, 0.85);
+    --elev-2:   0 1px 2px rgba(11, 18, 32, 0.08), inset 0 0.5px 0 rgba(255, 255, 255, 0.85);
+    --elev-pop: 0 16px 40px rgba(11, 18, 32, 0.14), 0 0 0 0.5px rgba(17, 20, 24, 0.10);
+    --elev-inset: inset 0 1px 2px rgba(11, 18, 32, 0.08);
 
-    /* Shadows stay a black family (a shadow is an absence of light in both
-       themes) but at a fraction of dark-mode strength - a full-strength
-       dark shadow on a light panel is the textbook "bolted-on theme" tell.
-       The white bevel highlights (top-edge catch-light) still work as-is
-       here since they sit on --panel/--panel-2, which are off-white, not
-       pure white - only --panel-4 is pure white, where they harmlessly
-       no-op. */
-    --elev-1:   inset 0 0.5px 0 rgba(255, 255, 255, 0.8);
-    --elev-2:   0 1px 2px rgba(0, 0, 0, 0.10), inset 0 0.5px 0 rgba(255, 255, 255, 0.8);
-    --elev-pop: 0 16px 40px rgba(0, 0, 0, 0.16), 0 0 0 0.5px rgba(60, 60, 67, 0.12);
-    --elev-inset: inset 0 1px 2px rgba(0, 0, 0, 0.10);
-
-    --control-edge:        rgba(0, 0, 0, 0.14);
-    --thumb-shadow:         rgba(0, 0, 0, 0.18);
-    --thumb-shadow-active:  rgba(0, 0, 0, 0.22);
-    --fill-track:           rgba(60, 60, 67, 0.06);
+    --control-edge:        rgba(11, 18, 32, 0.14);
+    --thumb-shadow:         rgba(11, 18, 32, 0.16);
+    --thumb-shadow-active:  rgba(11, 18, 32, 0.22);
+    --fill-track:           rgba(17, 20, 24, 0.06);
     --status-ink-mix:       black;
-    /* The dark-mode inset highlight is dropped, not just re-tinted: it sits
-       on .mode-btn.active's --panel-4 fill, which is pure white in light
-       mode, so a white-on-white inset is a no-op - carrying it forward
-       would be dead CSS, not a themed value. */
-    --pill-shadow: 0 0.5px 1px rgba(0, 0, 0, 0.14);
+    --pill-shadow: 0 0.5px 1px rgba(11, 18, 32, 0.12);
   }
 }
 
 :root[data-theme="light"] {
-  --bg:       #f5f5f3;
-  --panel:    #ecebe7;
-  --panel-2:  #e2e1dc;
-  --panel-3:  #f1f0ec;
-  --panel-4:  #ffffff;
+  /* Anduril Light - cool paper (blue-gray undertone), high-contrast ink,
+     precision blue interaction. Rejects warm cream/graphite paper and flat
+     dead gray. Inspiration: Apple HIG light labels + systemBlue family,
+     Palantir Blueprint BLACK/GRAY1/BLUE3, Anduril Lattice cool surfaces. */
+  --bg:       #F5F6F8;
+  --panel:    #EBEEF2;
+  --panel-2:  #E0E4EA;
+  --panel-3:  #F0F2F5;
+  --panel-4:  #FFFFFF;
 
-  --border:         rgba(60, 60, 67, 0.22);
-  --border-strong:  rgba(60, 60, 67, 0.36);
-  --border-subtle:  rgba(60, 60, 67, 0.13);
+  --border:         rgba(17, 20, 24, 0.12);
+  --border-strong:  rgba(17, 20, 24, 0.22);
+  --border-subtle:  rgba(17, 20, 24, 0.08);
 
-  --overlay-hover:        rgba(60, 60, 67, 0.10);
-  --overlay-hover-faint:  rgba(60, 60, 67, 0.05);
+  --overlay-hover:        rgba(17, 20, 24, 0.06);
+  --overlay-hover-faint:  rgba(17, 20, 24, 0.035);
 
-  --scrim:         rgba(0, 0, 0, 0.20);
-  --scrim-strong:  rgba(0, 0, 0, 0.32);
+  --scrim:         rgba(11, 18, 32, 0.22);
+  --scrim-strong:  rgba(11, 18, 32, 0.36);
 
-  --text:   #1c1c1e;
-  --muted:  rgba(60, 60, 67, 0.62);
-  --faint:  rgba(60, 60, 67, 0.34);
-  --canvas-label: #1c1c1e;
-  --canvas-label-muted: rgba(60, 60, 67, 0.55);
-  --canvas-label-halo: #ffffff;
+  /* Ink: Palantir BLACK + GRAY1. Solid muted clears WCAG AA (~5.0:1). */
+  --text:   #111418;
+  --muted:  #5F6B7C;
+  --faint:  #8F99A8;
+  --canvas-label: #111418;
+  --canvas-label-muted: #5F6B7C;
+  --canvas-label-halo: #F5F6F8;
 
-  --accent:       #3a362f;
-  --accent-hover: #4c473e;
-  --accent-ink:   #faf9f6;
-  --accent-soft:  rgba(58, 54, 47, 0.07);
-  --accent-glow:  rgba(58, 54, 47, 0.12);
-  --accent-line:  rgba(58, 54, 47, 0.32);
+  /* Precision blue - Apple x Palantir. Filled primary ~5.7:1 white-on-blue. */
+  --accent:       #0A66C2;
+  --accent-hover: #0856A5;
+  --accent-ink:   #FFFFFF;
+  --accent-soft:  rgba(10, 102, 194, 0.08);
+  --accent-glow:  rgba(10, 102, 194, 0.14);
+  --accent-line:  rgba(10, 102, 194, 0.36);
 
   --signal:       #96620a;
   --signal-soft:  rgba(150, 98, 10, 0.08);
@@ -396,13 +391,14 @@
   --success-line: rgba(36, 138, 61, 0.30);
   --success-glow: rgba(36, 138, 61, 0.15);
 
-  --assistant:       #6841aa;
-  --assistant-alt:   #0f6b59;
-  --assistant-soft:  rgba(104, 65, 170, 0.08);
-  --assistant-line:  rgba(104, 65, 170, 0.36);
-  --assistant-glow:  rgba(15, 107, 89, 0.16);
-  --cream:        #1c1c1e;
-  --cream-soft:   rgba(28, 28, 30, 0.05);
+  /* Assistant - teal, not purple SaaS. Shares precision blue as alt. */
+  --assistant:       #0F6B59;
+  --assistant-alt:   #0A66C2;
+  --assistant-soft:  rgba(15, 107, 89, 0.08);
+  --assistant-line:  rgba(15, 107, 89, 0.34);
+  --assistant-glow:  rgba(10, 102, 194, 0.14);
+  --cream:        #111418;
+  --cream-soft:   rgba(17, 20, 24, 0.05);
 
   --diagnostic-ok:          #248a3d;
   --diagnostic-ok-text:     #248a3d;
@@ -411,25 +407,25 @@
   --diagnostic-ok-glow:     rgba(36, 138, 61, 0.20);
   --diagnostic-warning:     #b25000;
   --diagnostic-warning-text: #b25000;
-  --diagnostic-warning-soft: rgba(178, 80, 0, 0.05);
-  --diagnostic-warning-line: rgba(178, 80, 0, 0.22);
-  --diagnostic-warning-glow: rgba(178, 80, 0, 0.10);
+  --diagnostic-warning-soft: rgba(178, 80, 0, 0.06);
+  --diagnostic-warning-line: rgba(178, 80, 0, 0.28);
+  --diagnostic-warning-glow: rgba(178, 80, 0, 0.12);
   --diagnostic-error:       #d70015;
   --diagnostic-error-text:  #d70015;
   --diagnostic-error-soft:  rgba(215, 0, 21, 0.08);
   --diagnostic-error-line:  rgba(215, 0, 21, 0.37);
   --diagnostic-error-glow:  rgba(215, 0, 21, 0.20);
-  --diagnostic-glass-shine: rgba(255, 255, 255, 0.5);
+  --diagnostic-glass-shine: rgba(255, 255, 255, 0.55);
 
-  --comp:      #1c1c1e;
-  --comp-ref:  rgba(60, 60, 67, 0.48);
+  --comp:      #111418;
+  --comp-ref:  rgba(17, 20, 24, 0.48);
 
-  --grid-dot:        rgba(60, 60, 67, 0.12);
-  --grid-dot-major:  rgba(60, 60, 67, 0.20);
-  --canvas-bg:      #ffffff;
-  --canvas-surface: #fafaf8;
-  --scope-surface:  #fbfbfa;
-  --scope-grid:  #ecebe7;
+  --grid-dot:        rgba(17, 20, 24, 0.10);
+  --grid-dot-major:  rgba(17, 20, 24, 0.16);
+  --canvas-bg:      #F5F6F8;
+  --canvas-surface: #FAFBFC;
+  --scope-surface:  #F7F8FA;
+  --scope-grid:  #EBEEF2;
 
   --trace-cyan: #0E7EB0;   /* sky */
   --trace-green: #008B62;   /* green */
@@ -438,18 +434,17 @@
   --trace-purple: #A55583;   /* purple */
   --trace-amber: #A76300;   /* orange */
 
+  --elev-1:   inset 0 0.5px 0 rgba(255, 255, 255, 0.85);
+  --elev-2:   0 1px 2px rgba(11, 18, 32, 0.08), inset 0 0.5px 0 rgba(255, 255, 255, 0.85);
+  --elev-pop: 0 16px 40px rgba(11, 18, 32, 0.14), 0 0 0 0.5px rgba(17, 20, 24, 0.10);
+  --elev-inset: inset 0 1px 2px rgba(11, 18, 32, 0.08);
 
-  --elev-1:   inset 0 0.5px 0 rgba(255, 255, 255, 0.8);
-  --elev-2:   0 1px 2px rgba(0, 0, 0, 0.10), inset 0 0.5px 0 rgba(255, 255, 255, 0.8);
-  --elev-pop: 0 16px 40px rgba(0, 0, 0, 0.16), 0 0 0 0.5px rgba(60, 60, 67, 0.12);
-  --elev-inset: inset 0 1px 2px rgba(0, 0, 0, 0.10);
-
-  --control-edge:        rgba(0, 0, 0, 0.14);
-  --thumb-shadow:         rgba(0, 0, 0, 0.18);
-  --thumb-shadow-active:  rgba(0, 0, 0, 0.22);
-  --fill-track:           rgba(60, 60, 67, 0.06);
-  --status-ink-mix:       black; /* ...and toward black on a pale one */
-  --pill-shadow: 0 0.5px 1px rgba(0, 0, 0, 0.14);
+  --control-edge:        rgba(11, 18, 32, 0.14);
+  --thumb-shadow:         rgba(11, 18, 32, 0.16);
+  --thumb-shadow-active:  rgba(11, 18, 32, 0.22);
+  --fill-track:           rgba(17, 20, 24, 0.06);
+  --status-ink-mix:       black;
+  --pill-shadow: 0 0.5px 1px rgba(11, 18, 32, 0.12);
 }
 
 /* Explicit Dark re-affirms the plain :root values so a user who picks Dark
@@ -8071,6 +8066,29 @@ button.bottom-panel-head:focus-visible {
   line-height: 1.4;
   color: var(--faint);
 }
+
+.settings-more {
+  margin-top: var(--sp-3);
+  border-top: 1px solid var(--border);
+  padding-top: var(--sp-3);
+}
+
+.settings-more > summary {
+  cursor: pointer;
+  font: 550 var(--fs-caption) var(--font-ui);
+  color: var(--muted);
+  list-style: none;
+}
+
+.settings-more > summary::-webkit-details-marker {
+  display: none;
+}
+
+.settings-more[open] > summary {
+  margin-bottom: var(--sp-3);
+  color: var(--foreground);
+}
+
 
 .settings-select {
   width: 100%;

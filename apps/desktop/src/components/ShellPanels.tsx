@@ -8,7 +8,11 @@ import {
   FolderOpen,
   Folder,
   FolderPlus,
+  FolderInput,
+  FileInput,
+  FoldVertical,
   Pencil,
+  RefreshCw,
   Search,
   Trash2,
   Eraser,
@@ -28,14 +32,6 @@ import {
   X,
   ArrowLeft,
 } from "lucide-react";
-import {
-  VscodeCollapseAllIcon,
-  VscodeImportFileIcon,
-  VscodeImportFolderIcon,
-  VscodeNewFileIcon,
-  VscodeNewFolderIcon,
-  VscodeRefreshIcon,
-} from "./VscodeExplorerIcons";
 import { CATALOG_BY_KIND } from "../schematic/catalog";
 import { ComponentSymbol } from "../schematic/symbols";
 import type { SchematicComponent, SchematicWire } from "../schematic/types";
@@ -601,7 +597,7 @@ export function ExplorerPanel({
                 if (ok) onNotice("Opened Schematics folder.");
               }}
             >
-              <VscodeImportFolderIcon />
+              <FolderInput size={16} strokeWidth={1.6} aria-hidden="true" />
             </button>
             {capability === "tauri" && (
               <button
@@ -613,7 +609,7 @@ export function ExplorerPanel({
                   if (ok) onNotice("Created Schematics folder.");
                 }}
               >
-                <VscodeNewFolderIcon />
+                <FolderPlus size={16} strokeWidth={1.6} aria-hidden="true" />
               </button>
             )}
             <button
@@ -622,7 +618,7 @@ export function ExplorerPanel({
               aria-label={IMPORT_BUTTON_LABEL}
               onClick={() => ascInputRef.current?.click()}
             >
-              <VscodeImportFileIcon />
+              <FileInput size={16} strokeWidth={1.6} aria-hidden="true" />
             </button>
           </div>
         </div>

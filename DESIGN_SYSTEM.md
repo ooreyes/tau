@@ -10,13 +10,14 @@ document is updated in the same commit.
 **Color is measurement.**
 
 Saturated color in Tau means exactly two things: a **measured trace**, or a **status lamp**.
-Everything else - every panel, toolbar, button, tab, input, label, border - is neutral
-graphite and warm ice.
+Chrome is cool, sharp, and restrained - Anduril Light paper with a precision-blue
+interaction accent (not purple SaaS, not cream-terracotta, not flat dead gray).
 
 This is the rule that makes Tau read as a bench instrument instead of a consumer app, and it
-is the first thing to check in review. A blue "primary" button, a colored panel header, or a
+is the first thing to check in review. A washed brand gradient, a colored panel header, or a
 tinted card background all break it: they spend the user's attention budget on chrome, and
-they compete with the only thing on screen that is actually data.
+they compete with the only thing on screen that is actually data. The precision-blue accent
+is for focus, selection, and filled primary controls only - never a panel wash.
 
 Corollaries:
 
@@ -51,54 +52,57 @@ a raw color value - see §7.
 
 | Token | Dark | Light | Role |
 |---|---|---|---|
-| `--bg` | `#000000` | `#fbfbfa` | Instrument face / app ground |
-| `--panel` | `#1c1c1e` | `#f2f1ee` | Panel fill |
-| `--panel-2` | `#2c2c2e` | `#e8e7e3` | Recessed / secondary fill |
-| `--panel-3` | `#161617` | `#f7f6f4` | Sidebar, toolbar underlay |
-| `--panel-4` | `#3a3a3c` | `#ffffff` | Elevated control, popover |
-| `--canvas-bg` | `#000000` | `#fbfbfa` | Schematic ground |
-| `--canvas-surface` | `#0a0a0a` | `#f6f5f2` | Schematic sheet |
-| `--scope-surface` | `#0c0c0e` | `#f7f7f5` | Plot face |
+| `--bg` | `#000000` | `#F5F6F8` | Instrument face / app ground |
+| `--panel` | `#1c1c1e` | `#EBEEF2` | Panel fill |
+| `--panel-2` | `#2c2c2e` | `#E0E4EA` | Recessed / secondary fill |
+| `--panel-3` | `#161617` | `#F0F2F5` | Sidebar, toolbar underlay |
+| `--panel-4` | `#3a3a3c` | `#FFFFFF` | Elevated control, popover |
+| `--canvas-bg` | `#000000` | `#F5F6F8` | Schematic ground |
+| `--canvas-surface` | `#0a0a0a` | `#FAFBFC` | Schematic sheet |
+| `--scope-surface` | `#0c0c0e` | `#F7F8FA` | Plot face |
 
-The light neutrals carry a deliberate warm bias (toward the ice accent) rather than a pure
-grey. Pure `#808080`-family greys read as unconsidered next to the warm accent family.
+Light neutrals carry a cool blue-gray undertone (Apple/Anduril paper), not a warm cream
+bias. Pure `#808080` greys still read as unconsidered next to the precision-blue accent.
 
 ### 1.2 Separators and fills
 
 | Token | Dark | Light |
 |---|---|---|
-| `--border` | `rgba(84, 84, 88, 0.65)` | `rgba(60, 60, 67, 0.22)` |
-| `--border-strong` | `rgba(142, 142, 147, 0.45)` | `rgba(60, 60, 67, 0.36)` |
-| `--border-subtle` | `rgba(84, 84, 88, 0.36)` | `rgba(60, 60, 67, 0.13)` |
-| `--overlay-hover` | `rgba(120, 120, 128, 0.24)` | `rgba(60, 60, 67, 0.10)` |
-| `--overlay-hover-faint` | `rgba(120, 120, 128, 0.14)` | `rgba(60, 60, 67, 0.05)` |
-| `--scrim` | `rgba(0, 0, 0, 0.36)` | `rgba(0, 0, 0, 0.20)` |
-| `--scrim-strong` | `rgba(0, 0, 0, 0.55)` | `rgba(0, 0, 0, 0.32)` |
+| `--border` | `rgba(84, 84, 88, 0.65)` | `rgba(17, 20, 24, 0.12)` |
+| `--border-strong` | `rgba(142, 142, 147, 0.45)` | `rgba(17, 20, 24, 0.22)` |
+| `--border-subtle` | `rgba(84, 84, 88, 0.36)` | `rgba(17, 20, 24, 0.08)` |
+| `--overlay-hover` | `rgba(120, 120, 128, 0.24)` | `rgba(17, 20, 24, 0.06)` |
+| `--overlay-hover-faint` | `rgba(120, 120, 128, 0.14)` | `rgba(17, 20, 24, 0.035)` |
+| `--scrim` | `rgba(0, 0, 0, 0.36)` | `rgba(11, 18, 32, 0.22)` |
+| `--scrim-strong` | `rgba(0, 0, 0, 0.55)` | `rgba(11, 18, 32, 0.36)` |
 
 ### 1.3 Ink
 
 | Token | Dark | Light |
 |---|---|---|
-| `--text` | `#f5f5f7` | `#1c1c1e` |
-| `--muted` | `rgba(235, 235, 245, 0.60)` | `rgba(60, 60, 67, 0.62)` |
-| `--faint` | `rgba(235, 235, 245, 0.30)` | `rgba(60, 60, 67, 0.34)` |
+| `--text` | `#f5f5f7` | `#111418` |
+| `--muted` | `rgba(235, 235, 245, 0.60)` | `#5F6B7C` |
+| `--faint` | `rgba(235, 235, 245, 0.30)` | `#8F99A8` |
 
-### 1.4 Accent - warm ice / graphite
+Light `--muted` is a solid (Palantir GRAY1), not a translucent mix: body text must clear
+WCAG AA 4.5:1 on paper (~5.0:1 measured).
 
-Deliberately near-neutral. It is the *interaction* color, not a brand color, and it must never
-compete with a trace.
+### 1.4 Accent - precision blue (light) / warm ice (dark)
+
+Light: Apple×Palantir precision blue for focus, selection, and filled primary controls.
+Dark: near-neutral warm ice so chrome stays quiet on the black instrument face. Neither may
+compete with a trace hue.
 
 | Token | Dark | Light |
 |---|---|---|
-| `--accent` | `#d6d3ca` | `#3a362f` |
-| `--accent-hover` | `#ebe8df` | `#4c473e` |
-| `--accent-ink` | `#121214` | `#faf9f6` |
-| `--accent-soft` | `rgba(214, 211, 202, 0.10)` | `rgba(58, 54, 47, 0.07)` |
-| `--accent-line` | `rgba(214, 211, 202, 0.38)` | `rgba(58, 54, 47, 0.32)` |
+| `--accent` | `#d6d3ca` | `#0A66C2` |
+| `--accent-hover` | `#ebe8df` | `#0856A5` |
+| `--accent-ink` | `#121214` | `#FFFFFF` |
+| `--accent-soft` | `rgba(214, 211, 202, 0.10)` | `rgba(10, 102, 194, 0.08)` |
+| `--accent-line` | `rgba(214, 211, 202, 0.38)` | `rgba(10, 102, 194, 0.36)` |
 
-The light accent is the same warm family rotated to the dark end of the ramp, not a different
-hue. A filled primary control is a dark warm graphite face with cream ink - the exact inverse
-relationship of the dark theme, so the control keeps its weight in the hierarchy.
+Light filled primary is white ink on `#0A66C2` (~5.7:1). Dark filled primary remains cream
+ink on warm ice - the inverse weight relationship of the dark instrument metaphor.
 
 ### 1.5 Traces - the instrument palette
 
