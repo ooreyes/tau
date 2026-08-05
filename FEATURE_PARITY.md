@@ -500,6 +500,13 @@ Status legend: ✅ done · 🟡 partial · ⬜ not started
   complete marquee selection—components, wires, net labels, and probes—as one
   offset group with fresh object IDs and reference designators, preserving
   relative geometry and one-step undo. 11 store tests.
+  **Shift+click mixed multi-select + first-gesture wire drag (2026-08-05):**
+  `toggleSelect` no longer clears wires/labels/probes; new
+  `toggleSelectWire` / `toggleSelectLabel` / `toggleSelectProbe` let Shift+click
+  grow a true mixed selection from any object kind; an unselected wire
+  selects-and-drags on the first pointer gesture (same as components) so
+  rubber-band wire moves do not need a second click. Store + Canvas pointer
+  tests cover the mixed toggle and one-gesture wire translate.
 - ✅ **Drag wires / move with rubber-banding** — `moveGroup` rubber-bands wire
   endpoints attached to moved pins with orthogonal elbow insertion (store-level,
   shared by single and group moves). **Topology-invariant hardening

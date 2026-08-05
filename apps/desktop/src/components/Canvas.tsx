@@ -166,6 +166,9 @@ export function Canvas({
   const selectedLabelIds = useSchematic((s) => s.selectedLabelIds);
   const selectedProbeIds = useSchematic((s) => s.selectedProbeIds);
   const toggleSelect = useSchematic((s) => s.toggleSelect);
+  const toggleSelectWire = useSchematic((s) => s.toggleSelectWire);
+  const toggleSelectLabel = useSchematic((s) => s.toggleSelectLabel);
+  const toggleSelectProbe = useSchematic((s) => s.toggleSelectProbe);
   const moveGroup = useSchematic((s) => s.moveGroup);
   const clearSelection = useSchematic((s) => s.clearSelection);
   const beginChange = useSchematic((s) => s.beginChange);
@@ -789,11 +792,22 @@ export function Canvas({
     }
     if (tool.mode !== "select") return; // let place/wire/pan handle via bubbling
     e.stopPropagation();
+    if (e.shiftKey) {
+      // Shift+click: toggle this wire in/out of the mixed multi-selection.
+      toggleSelectWire(wire.id);
+      drag.current = { mode: "none", lastX: e.clientX, lastY: e.clientY, moved: false };
+      return;
+    }
+    const world = screenToWorld(e.clientX, e.clientY);
+    // Match component semantics: an already-selected wire (alone or in a
+    // mixed group) starts a group drag; a fresh click selects then drags in
+    // one gesture so rubber-band wire moves don't need a second click.
     if (selectedWireIds.includes(wire.id)) {
-      beginSelectedGroupDrag(e, screenToWorld(e.clientX, e.clientY));
+      beginSelectedGroupDrag(e, world);
       return;
     }
     selectWire(wire.id);
+    beginSelectedGroupDrag(e, world);
   };
 
   const onPointerMove = (e: ReactPointerEvent<SVGElement>) => {
@@ -1079,13 +1093,14 @@ export function Canvas({
   // enough to absorb hand tremor on a trackpad tap.
   const LABEL_DRAG_THRESHOLD = 4;
 
-  const activateNetLabel = (l: NetLabel) => {
+  const activateNetLabel = (l: NetLabel, shiftKey = false) => {
     if (!interactive && labeling) {
       // Click-without-drag opens the rename draft - unchanged from before
       // labels were draggable.
       setLabelDraft({ x: l.x, y: l.y, text: l.text });
     } else if (interactive && tool.mode === "select") {
-      selectMixed({ componentIds: [], wireIds: [], labelIds: [l.id], probeIds: [] });
+      if (shiftKey) toggleSelectLabel(l.id);
+      else selectMixed({ componentIds: [], wireIds: [], labelIds: [l.id], probeIds: [] });
     }
   };
 
@@ -1093,6 +1108,12 @@ export function Canvas({
     (event: ReactPointerEvent<SVGTextElement>) => {
       if (event.button !== 0) return;
       event.stopPropagation();
+      if (interactive && tool.mode === "select" && event.shiftKey) {
+        // Shift+click toggles without starting a label-offset drag.
+        toggleSelectLabel(l.id);
+        netLabelDrag.current = null;
+        return;
+      }
       netLabelDrag.current = {
         id: l.id,
         startClientX: event.clientX,
@@ -1126,6 +1147,8 @@ export function Canvas({
     }
     netLabelDrag.current = null;
     if (drag?.moved) return; // already committed live via setNetLabelOffsetDirect
+    // Shift+toggle already handled on pointerdown; skip the exclusive select.
+    if (event.shiftKey) return;
     activateNetLabel(l);
   };
 
@@ -1258,6 +1281,7 @@ export function Canvas({
                 onPointerDown={probeCanSelect || probeCanRemove ? (event) => {
                   event.stopPropagation();
                   if (probeCanRemove) removeProbe(p.id);
+                  else if (event.shiftKey) toggleSelectProbe(p.id);
                   else selectMixed({ componentIds: [], wireIds: [], labelIds: [], probeIds: [p.id] });
                 } : undefined}
                 onClick={probeCanSelect || probeCanRemove ? (event) => {
@@ -1266,7 +1290,7 @@ export function Canvas({
                   // pointer activation already completed the same idempotent
                   // selection (or unmounted the removed marker).
                   event.stopPropagation();
-                  if (probeCanSelect) {
+                  if (probeCanSelect && !event.shiftKey) {
                     selectMixed({ componentIds: [], wireIds: [], labelIds: [], probeIds: [p.id] });
                   }
                 } : undefined}

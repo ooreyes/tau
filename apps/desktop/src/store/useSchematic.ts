@@ -166,6 +166,12 @@ interface SchematicState extends Doc {
   selectMixed: (sel: { componentIds: string[]; wireIds: string[]; labelIds: string[]; probeIds: string[] }) => void;
   /** Toggle a single component in/out of the multi-selection (Shift+click). */
   toggleSelect: (id: string) => void;
+  /** Toggle a wire in/out of the mixed multi-selection (Shift+click). */
+  toggleSelectWire: (id: string) => void;
+  /** Toggle a net label in/out of the mixed multi-selection (Shift+click). */
+  toggleSelectLabel: (id: string) => void;
+  /** Toggle a probe in/out of the mixed multi-selection (Shift+click). */
+  toggleSelectProbe: (id: string) => void;
   /**
    * Move a group of components together by (dx, dy) *from their drag-start
    * origins*, rubber-banding any wire endpoints that were pinned to their pins
@@ -883,12 +889,69 @@ export const useSchematic = create<SchematicState>()((set) => {
     toggleSelect: (id) =>
       set((s) => {
         const already = s.selectedIds.includes(id);
-        const next = already ? s.selectedIds.filter((x) => x !== id) : [...s.selectedIds, id];
+        const selectedIds = already ? s.selectedIds.filter((x) => x !== id) : [...s.selectedIds, id];
         return {
-          selectedIds: next,
-          selectedId: next.length === 1 ? next[0] : null,
-          selectedWireId: null,
-          selectedWireIds: [], selectedLabelIds: [], selectedProbeIds: [],
+          selectedIds,
+          selectedId: selectedIds.length === 1 && s.selectedWireIds.length === 0 ? selectedIds[0] : null,
+          // Preserve wires/labels/probes so Shift+click builds a true mixed selection.
+          selectedWireIds: s.selectedWireIds,
+          selectedWireId: s.selectedWireIds.length === 1 && selectedIds.length === 0
+            ? s.selectedWireIds[0]
+            : null,
+          selectedLabelIds: s.selectedLabelIds,
+          selectedProbeIds: s.selectedProbeIds,
+        };
+      }),
+
+    toggleSelectWire: (id) =>
+      set((s) => {
+        const already = s.selectedWireIds.includes(id);
+        const selectedWireIds = already
+          ? s.selectedWireIds.filter((x) => x !== id)
+          : [...s.selectedWireIds, id];
+        return {
+          selectedWireIds,
+          selectedWireId: selectedWireIds.length === 1 && s.selectedIds.length === 0
+            ? selectedWireIds[0]
+            : null,
+          selectedIds: s.selectedIds,
+          selectedId: s.selectedIds.length === 1 && selectedWireIds.length === 0
+            ? s.selectedIds[0]
+            : null,
+          selectedLabelIds: s.selectedLabelIds,
+          selectedProbeIds: s.selectedProbeIds,
+        };
+      }),
+
+    toggleSelectLabel: (id) =>
+      set((s) => {
+        const already = s.selectedLabelIds.includes(id);
+        const selectedLabelIds = already
+          ? s.selectedLabelIds.filter((x) => x !== id)
+          : [...s.selectedLabelIds, id];
+        return {
+          selectedLabelIds,
+          selectedIds: s.selectedIds,
+          selectedId: s.selectedId,
+          selectedWireIds: s.selectedWireIds,
+          selectedWireId: s.selectedWireId,
+          selectedProbeIds: s.selectedProbeIds,
+        };
+      }),
+
+    toggleSelectProbe: (id) =>
+      set((s) => {
+        const already = s.selectedProbeIds.includes(id);
+        const selectedProbeIds = already
+          ? s.selectedProbeIds.filter((x) => x !== id)
+          : [...s.selectedProbeIds, id];
+        return {
+          selectedProbeIds,
+          selectedIds: s.selectedIds,
+          selectedId: s.selectedId,
+          selectedWireIds: s.selectedWireIds,
+          selectedWireId: s.selectedWireId,
+          selectedLabelIds: s.selectedLabelIds,
         };
       }),
 

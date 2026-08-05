@@ -1028,6 +1028,79 @@ describe("multi-select", () => {
     expect(useSchematic.getState().selectedId).toBe(id2);
   });
 
+  it("toggleSelect preserves wires, labels, and probes in a mixed selection", () => {
+    useSchematic.getState().loadCircuit(twoResistorDocument());
+    const [id1, id2] = useSchematic.getState().components.map((c) => c.id);
+    useSchematic.setState({
+      wires: [{ id: "w1", points: [{ x: 0, y: 0 }, { x: 64, y: 0 }] }],
+      netLabels: [{ id: "l1", x: 0, y: 0, text: "N1" }],
+      probes: [{ id: "p1", x: 32, y: 0, color: "var(--trace-red)" }],
+    });
+    useSchematic.getState().selectMixed({
+      componentIds: [id1],
+      wireIds: ["w1"],
+      labelIds: ["l1"],
+      probeIds: ["p1"],
+    });
+
+    useSchematic.getState().toggleSelect(id2);
+    const added = useSchematic.getState();
+    expect(added.selectedIds).toEqual([id1, id2]);
+    expect(added.selectedWireIds).toEqual(["w1"]);
+    expect(added.selectedLabelIds).toEqual(["l1"]);
+    expect(added.selectedProbeIds).toEqual(["p1"]);
+
+    useSchematic.getState().toggleSelect(id1);
+    const removed = useSchematic.getState();
+    expect(removed.selectedIds).toEqual([id2]);
+    expect(removed.selectedWireIds).toEqual(["w1"]);
+    expect(removed.selectedLabelIds).toEqual(["l1"]);
+    expect(removed.selectedProbeIds).toEqual(["p1"]);
+  });
+
+  it("toggleSelectWire / Label / Probe build and shrink a mixed Shift+click selection", () => {
+    useSchematic.getState().loadCircuit(twoResistorDocument());
+    const [id1] = useSchematic.getState().components.map((c) => c.id);
+    useSchematic.setState({
+      wires: [
+        { id: "w1", points: [{ x: 0, y: 0 }, { x: 64, y: 0 }] },
+        { id: "w2", points: [{ x: 0, y: 32 }, { x: 64, y: 32 }] },
+      ],
+      netLabels: [
+        { id: "l1", x: 0, y: 0, text: "A" },
+        { id: "l2", x: 64, y: 0, text: "B" },
+      ],
+      probes: [
+        { id: "p1", x: 0, y: 0, color: "var(--trace-red)" },
+        { id: "p2", x: 64, y: 0, color: "var(--trace-blue)" },
+      ],
+      selectedIds: [id1],
+      selectedId: id1,
+    });
+
+    useSchematic.getState().toggleSelectWire("w1");
+    useSchematic.getState().toggleSelectLabel("l1");
+    useSchematic.getState().toggleSelectProbe("p1");
+    expect(useSchematic.getState()).toMatchObject({
+      selectedIds: [id1],
+      selectedWireIds: ["w1"],
+      selectedLabelIds: ["l1"],
+      selectedProbeIds: ["p1"],
+    });
+
+    useSchematic.getState().toggleSelectWire("w2");
+    useSchematic.getState().toggleSelectWire("w1");
+    useSchematic.getState().toggleSelectLabel("l2");
+    useSchematic.getState().toggleSelectProbe("p2");
+    useSchematic.getState().toggleSelectProbe("p1");
+    expect(useSchematic.getState()).toMatchObject({
+      selectedIds: [id1],
+      selectedWireIds: ["w2"],
+      selectedLabelIds: ["l1", "l2"],
+      selectedProbeIds: ["p2"],
+    });
+  });
+
   it("clearSelection clears all selection kinds", () => {
     useSchematic.getState().loadCircuit(twoResistorDocument());
     const [id1, id2] = useSchematic.getState().components.map((c) => c.id);

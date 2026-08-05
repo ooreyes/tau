@@ -1,15 +1,47 @@
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 ~10:50 CDT**
+**Status: DONE - 2026-08-05 ~11:15 CDT**
 
-Unit: Waveform viewer DoD proof — consolidated vitest +
-`scripts/waveform-viewer-dod.sh`; flipped AGENTS.md checkbox with evidence.
-Left palette / Settings / Educational alone. SHIPPABLE? **NO**
+Unit: Editor DoD — **Shift+click mixed multi-select** + first-gesture
+wire drag (rubber-band wire moves). Hardens already-checked Editor box.
+SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
 
 
+
+---
+
+### 2026-08-05 — Shift+click mixed multi-select + first-gesture wire drag (§2 editor)
+
+**What I did**
+- `toggleSelect` preserves wires/labels/probes (was wiping mixed selection).
+- Added `toggleSelectWire` / `toggleSelectLabel` / `toggleSelectProbe`;
+  Canvas Shift+click wires, labels, probes into a mixed selection.
+- Unselected wire: select + group-drag on first pointer-down (component
+  parity) so rubber-band wire moves need one gesture.
+- Avoided EC palette / Settings / engine. Editor AGENTS box already
+  proven earlier this day; this hardens multi-select further.
+  SHIPPABLE? NO.
+
+**Files**
+- `store/useSchematic.ts` (+ `.test.ts`)
+- `components/Canvas.tsx`, `Canvas.simulator.test.tsx`
+- `FEATURE_PARITY.md`, `PROGRESS.md`
+
+**Tests**
+- `pnpm -C apps/desktop typecheck`
+- targeted vitest: useSchematic + Canvas.simulator (126 passed)
+- full `pnpm -C apps/desktop test`: 2838 passed; App.workspace
+  timeouts also reproduce on tip without this diff (pre-existing flake)
+
+**Parity items**
+- §2 multi-select / rubber-band wire moves hardened. SHIPPABLE? NO
+
+**Next step**
+- Net highlighting (§2 ⬜), or other open DoD boxes. Refuse claiming
+  SHIPPABLE.
 
 ---
 
@@ -71,7 +103,6 @@ SHIPPABLE? **NO**
   named-device ≥95%, broad differential, AI, product gates.
 
 ---
-
 ### 2026-08-05 — Palette grouping polish (§EveryCircuit UX)
 
 **What I did**

@@ -330,6 +330,64 @@ describe("Canvas - schematic selection chrome", () => {
     expect(document.querySelector(".component.selected")).not.toBeNull();
   });
 
+  it("Shift+clicks a wire into a mixed multi-selection without starting a drag", () => {
+    useSchematic.setState({
+      selectedIds: ["r1"],
+      selectedId: "r1",
+      tool: { mode: "select" },
+    });
+    render(<Canvas interactive />);
+    const wireHit = document.querySelector(".wire-group")!;
+
+    fireEvent.pointerDown(wireHit, {
+      button: 0, clientX: 20, clientY: 20, pointerId: 20, shiftKey: true,
+    });
+    fireEvent.pointerUp(wireHit, {
+      button: 0, clientX: 20, clientY: 20, pointerId: 20, shiftKey: true,
+    });
+
+    expect(useSchematic.getState().selectedIds).toEqual(["r1"]);
+    expect(useSchematic.getState().selectedWireIds).toEqual(["w1"]);
+    expect(useSchematic.getState().components[0]).toMatchObject({ x: 0, y: 0 });
+    expect(useSchematic.getState().wires[0].points).toEqual([{ x: 0, y: 20 }, { x: 20, y: 20 }]);
+  });
+
+  it("drags an unselected wire on the first pointer gesture", () => {
+    useSchematic.setState({
+      components: [{ id: "r1", kind: "resistor", x: 0, y: 0, rotation: 0, value: "1k", label: "R1" }],
+      wires: [{ id: "w1", points: [{ x: 64, y: 64 }, { x: 128, y: 64 }] }],
+      tool: { mode: "select" },
+    });
+    render(<Canvas interactive />);
+    const canvas = document.querySelector("svg.canvas")!;
+    const wireHit = document.querySelector(".wire-group")!;
+
+    fireEvent.pointerDown(wireHit, { button: 0, clientX: 64, clientY: 64, pointerId: 21 });
+    fireEvent.pointerMove(canvas, { clientX: 96, clientY: 96, pointerId: 21 });
+    fireEvent.pointerUp(canvas, { button: 0, clientX: 96, clientY: 96, pointerId: 21 });
+
+    expect(useSchematic.getState().selectedWireIds).toEqual(["w1"]);
+    expect(useSchematic.getState().wires[0].points).toEqual([{ x: 96, y: 96 }, { x: 160, y: 96 }]);
+    // The unselected resistor stays put — only the wire translated.
+    expect(useSchematic.getState().components[0]).toMatchObject({ x: 0, y: 0 });
+  });
+
+  it("Shift+clicks a probe into an existing selection", () => {
+    useSchematic.setState({
+      probes: [{ id: "p1", x: 10, y: 20, color: "var(--trace-red)", netId: "N001" }],
+      selectedIds: ["r1"],
+      selectedId: "r1",
+      tool: { mode: "select" },
+    });
+    render(<Canvas interactive />);
+
+    const marker = screen.getByRole("button", { name: "Select voltage probe" });
+    fireEvent.pointerDown(marker, { button: 0, shiftKey: true, pointerId: 22 });
+
+    expect(useSchematic.getState().selectedIds).toEqual(["r1"]);
+    expect(useSchematic.getState().selectedProbeIds).toEqual(["p1"]);
+  });
+
   it("selects and deletes an individual probe without selecting or deleting its wire", () => {
     useSchematic.setState({
       probes: [{ id: "p1", x: 10, y: 20, color: "var(--trace-red)", netId: "N001" }],
