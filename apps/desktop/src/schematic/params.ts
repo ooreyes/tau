@@ -54,6 +54,7 @@ const SCHEMA: Partial<Record<ComponentKind, ParamField[]>> = {
     { key: "l", label: "Armature L", unit: "H" },
   ],
   transformer: [{ key: "ratio", label: "Turns ratio", unit: "" }],
+  ctTransformer: [{ key: "ratio", label: "Turns ratio", unit: "" }],
   comparator: [
     { key: "vhigh", label: "Output high", unit: "V" },
     { key: "vlow", label: "Output low", unit: "V" },

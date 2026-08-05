@@ -53,6 +53,7 @@ export const ASSISTANT_DIRECT_GENERATABLE_KINDS = [
  * before layout/export, retaining every requested terminal electrically. */
 export const ASSISTANT_COMPOSITE_KINDS = [
   "cccs", "ccvs", "comparator", "potentiometer", "switch", "pushButton", "relay", "motor", "transformer",
+  "ctTransformer",
 ] as const satisfies readonly ComponentKind[];
 
 export const ASSISTANT_GENERATABLE_KINDS = [
@@ -868,6 +869,30 @@ function lowerCompositePlan(plan: CircuitPlan): DirectCircuitPlan {
         mapPin(`${component.ref}.s1`, `${secondary}.a`);
         mapPin(`${component.ref}.s2`, `${secondary}.b`);
         internalDirectives.push(`K_${component.ref} ${primary} ${secondary} 0.999`);
+        break;
+      }
+      case "ctTransformer": {
+        const ratio = /^\s*(\d+(?:\.\d+)?)\s*:\s*(\d+(?:\.\d+)?)\s*$/.exec(value);
+        const primaryTurns = Number(ratio?.[1]);
+        const secondaryTurns = Number(ratio?.[2]);
+        if (!ratio || primaryTurns <= 0 || secondaryTurns <= 0) {
+          throw new Error(`${component.ref} needs a positive turns ratio such as 1:2`);
+        }
+        const primary = uniqueRef(`L_${component.ref}_P`);
+        const sa = uniqueRef(`L_${component.ref}_SA`);
+        const sb = uniqueRef(`L_${component.ref}_SB`);
+        const primaryInductance = 10e-3;
+        const fullSecondary = primaryInductance * (secondaryTurns / primaryTurns) ** 2;
+        const half = fullSecondary / 4;
+        add(primary, "inductor", String(primaryInductance));
+        add(sa, "inductor", String(half));
+        add(sb, "inductor", String(half));
+        mapPin(`${component.ref}.p1`, `${primary}.a`);
+        mapPin(`${component.ref}.p2`, `${primary}.b`);
+        mapPin(`${component.ref}.s1`, `${sa}.a`);
+        mapPin(`${component.ref}.ct`, `${sa}.b`, `${sb}.b`);
+        mapPin(`${component.ref}.s2`, `${sb}.a`);
+        internalDirectives.push(`K_${component.ref} ${primary} ${sa} ${sb} 0.999`);
         break;
       }
       case "cccs":

@@ -1884,6 +1884,21 @@ function componentLines(entry: ExtractedComponent, index: number, name: string, 
         `K_${base} L_${base}_p L_${base}_s ${windings.coupling}`,
       ];
     }
+    case "ctTransformer": {
+      // Center-tapped secondary: two half-windings share CT. Each half has
+      // L_full/4 because L ∝ N² and each half has N/2 turns of the full
+      // secondary. Outer nodes are dotted (SPICE first-pin convention) so CT
+      // grounded yields push-pull opposite polarity at s1/s2.
+      const base = safeName(component.label || `T${index + 1}`);
+      const windings = transformerWindings(component.value);
+      const half = windings.secondary / 4;
+      return [
+        `L_${base}_p ${node("p1")} ${node("p2")} ${windings.primary}`,
+        `L_${base}_sa ${node("s1")} ${node("ct")} ${half}`,
+        `L_${base}_sb ${node("s2")} ${node("ct")} ${half}`,
+        `K_${base} L_${base}_p L_${base}_sa L_${base}_sb ${windings.coupling}`,
+      ];
+    }
     case "tline": {
       // Ideal lossless transmission line: T N1 N2 N3 N4 Z0=.. TD=..
       // Port A = (a1,a2), port B = (b1,b2). Delay/impedance element - native
@@ -2171,7 +2186,7 @@ const SPICE_PREFIX: Record<ComponentKind, string> = {
   logicConstant: "V",
   diode: "D", led: "D", zener: "D", photodiode: "D", opamp: "E", comparator: "B", digitalGate: "B", dflop: "A", srflop: "A", tflop: "A", jkflop: "A", sampleHold: "A", modulator: "A", vcvs: "E", vccs: "G", cccs: "F", ccvs: "H", bsource: "B", nmos: "M", pmos: "M", njf: "J", pjf: "J", npn: "Q", pnp: "Q",
   potentiometer: "R", bulb: "R", switch: "S", pushButton: "S", spdt: "S", relay: "S", motor: "L",
-  transformer: "L", tline: "T", subckt: "X", testpoint: "X", ground: "X",
+  transformer: "L", ctTransformer: "L", tline: "T", subckt: "X", testpoint: "X", ground: "X",
 };
 
 function componentSpicePrefix(component: SchematicComponent): string {

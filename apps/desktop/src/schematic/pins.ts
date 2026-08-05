@@ -266,6 +266,14 @@ const LOCAL_PINS: Record<ComponentKind, LocalPin[]> = {
     { id: "s1", label: "S1", x: 32, y: -16 },
     { id: "s2", label: "S2", x: 32, y: 16 },
   ],
+  // Center-tapped secondary: primary p1/p2, secondary s1–ct–s2 (outer dots).
+  ctTransformer: [
+    { id: "p1", label: "P1", x: -32, y: -16 },
+    { id: "p2", label: "P2", x: -32, y: 16 },
+    { id: "s1", label: "S1", x: 32, y: -24 },
+    { id: "ct", label: "CT", x: 32, y: 0 },
+    { id: "s2", label: "S2", x: 32, y: 24 },
+  ],
   // Ideal lossless transmission line (4-terminal 2-port). Port A = (a1,a2) on
   // the left, port B = (b1,b2) on the right. Order matches LTspice's tline
   // SpiceOrder (I1,R1,I2,R2) so imported pin overrides zip 1:1.

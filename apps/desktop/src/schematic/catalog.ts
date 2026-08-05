@@ -82,6 +82,8 @@ export const CATALOG: CatalogEntry[] = [
   // Armature series R+L only — no back-EMF / mechanical load.
   { kind: "motor",         section: "Electromechanical", name: "DC Motor",        hotkey: "",  prefix: "M",   defaultValue: "10 1m", unit: "Ω H" },
   { kind: "transformer",   section: "Electromechanical", name: "Transformer",     hotkey: "t", prefix: "T",   defaultValue: "1:1",   unit: "" },
+  // Center-tapped secondary: primary L + two half-secondaries + multi-winding K.
+  { kind: "ctTransformer", section: "Electromechanical", name: "CT Transformer",  hotkey: "",  prefix: "T",   defaultValue: "1:1",   unit: "" },
   // unit is "" (not "Ω s"): the value is a "Td=50n Z0=50" key=value spec that
   // already self-describes each token - LTspice shows it as raw text, and a
   // two-word "unit" suffixed onto the whole string was never meaningful.

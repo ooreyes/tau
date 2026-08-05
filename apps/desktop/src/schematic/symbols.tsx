@@ -87,6 +87,7 @@ export const SYMBOL_BODY: Record<ComponentKind, BodyBox> = {
   relay: { minX: -18, minY: -20, maxX: 18, maxY: 22 },
   motor: { minX: -16, minY: -16, maxX: 16, maxY: 16 },
   transformer: { minX: -24, minY: -27, maxX: 24, maxY: 27 },
+  ctTransformer: { minX: -24, minY: -32, maxX: 24, maxY: 32 },
   tline: { minX: -20, minY: -16, maxX: 20, maxY: 16 },
   subckt: { minX: -24, minY: -20, maxX: 24, maxY: 20 },
   testpoint: { minX: -11, minY: -16, maxX: 11, maxY: 14 },
@@ -137,6 +138,7 @@ export const SYMBOL_BOX: Record<ComponentKind, { halfW: number; halfH: number }>
   relay: { halfW: 16, halfH: 22 },
   motor: { halfW: 16, halfH: 16 },
   transformer: { halfW: 24, halfH: 27 },
+  ctTransformer: { halfW: 24, halfH: 32 },
   tline: { halfW: 20, halfH: 18 },
   subckt: { halfW: 26, halfH: 22 },
   testpoint: { halfW: 11, halfH: 16 },
@@ -766,6 +768,22 @@ export function ComponentSymbol({ kind, value }: { kind: ComponentKind; value?: 
           <path d="M 22 -16 A 7 7 0 0 0 22 -2 A 7 7 0 0 0 22 12 A 7 7 0 0 0 22 26" />
           <line x1={22} y1={-16} x2={32} y2={-16} />
           <line x1={22} y1={16} x2={32} y2={16} />
+        </>
+      );
+
+    case "ctTransformer":
+      return (
+        <>
+          <line x1={-32} y1={-16} x2={-22} y2={-16} />
+          <line x1={-32} y1={16} x2={-22} y2={16} />
+          <path d="M -22 -16 A 7 7 0 0 1 -22 -2 A 7 7 0 0 1 -22 12 A 7 7 0 0 1 -22 26" />
+          <line x1={-2} y1={-30} x2={-2} y2={30} />
+          <line x1={2} y1={-30} x2={2} y2={30} />
+          <path d="M 22 -24 A 7 7 0 0 0 22 -10 A 7 7 0 0 0 22 4" />
+          <path d="M 22 4 A 7 7 0 0 0 22 18 A 7 7 0 0 0 22 32" />
+          <line x1={22} y1={-24} x2={32} y2={-24} />
+          <line x1={22} y1={0} x2={32} y2={0} />
+          <line x1={22} y1={24} x2={32} y2={24} />
         </>
       );
 

@@ -1,9 +1,9 @@
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 ~10:05 CDT**
+**Status: DONE - 2026-08-05 ~10:20 CDT**
 
-Unit: EveryCircuit library — **SR latch** + **T FF** + **JK FF**
-(XSPICE d_dff set/reset · d_tff · d_jkff). Not full EC parity.
+Unit: EveryCircuit library — **CT transformer** (3×L + multi-winding K)
++ hard-defer 7seg / 555 / ADC-DAC / counter. Not full EC parity.
 SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
@@ -13,6 +13,32 @@ SHIPPABLE? **NO**
 
 ---
 
+### 2026-08-05 — CT transformer (§EveryCircuit)
+
+**What I did**
+- Palette **CT Transformer** (`ctTransformer`): primary `L` + two secondary
+  half-windings (`L_full/4` each, outer dots) + multi-winding `K` — same
+  IdealTransformer-style coupling path as the 2-winding transformer.
+- ASC lossy carrier (no single LTspice 5-pin CT symbol); assistant composite expand.
+- **Hard-deferred (documented, not faked):** 7-segment, 555, ADC/DAC,
+  counter/decoder ICs — need real Tau-owned subckt or limited behavioral model.
+
+**Files**
+- `schematic/{types,catalog,pins,params,symbols,everyCircuitLibrary.test}.ts(x)`
+- `engine/spiceNetlist.ts`, `io/ascExport.ts`, `lib/assistantCircuitPlan.ts`
+- `FEATURE_PARITY.md`, `PROGRESS.md`
+
+**Tests**
+- `pnpm -C apps/desktop typecheck`
+- `pnpm -C apps/desktop test` (2838 passed)
+
+**Parity items**
+- §EveryCircuit: CT xfmr landed. Deferred: 7seg / 555 / ADC-DAC / counter. SHIPPABLE? NO
+
+**Next step**
+- Leave 555/ADC/counter refused without real subckts; Staff EE / other DoD boxes.
+
+---
 
 ### 2026-08-05 — SR / T / JK flip-flops (§EveryCircuit)
 

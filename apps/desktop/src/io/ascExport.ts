@@ -310,6 +310,8 @@ export const LOSSY_CARRIER_KINDS: ReadonlySet<string> = new Set([
   "comparator", "cccs", "ccvs", "switch", "pushButton", "spdt", "relay", "motor",
   // T/JK are Tau-native XSPICE flops — no LTspice Digital\*.asy counterparts.
   "tflop", "jkflop",
+  // CT transformer expands to 3×L + K; no single LTspice 5-pin CT symbol.
+  "ctTransformer",
   "subckt", "testpoint",
 ]);
 

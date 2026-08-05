@@ -469,3 +469,36 @@ describe("EveryCircuit library — SR / T / JK flip-flops", () => {
     expect(deckJk.netlist).toContain("A_a3 a3_dj a3_dk a3_dclk a3_dpre a3_dclr a3_dq a3_dnq a3_jkff");
   });
 });
+
+describe("EveryCircuit library — center-tapped transformer", () => {
+  it("lists CT transformer with five pins", () => {
+    expect(CATALOG.some((e) => e.kind === "ctTransformer")).toBe(true);
+    expect(getLocalPins("ctTransformer").map((p) => p.id)).toEqual([
+      "p1", "p2", "s1", "ct", "s2",
+    ]);
+  });
+
+  it("emits three coupled inductors (primary + two half-secondaries)", () => {
+    const xfmr: SchematicComponent = {
+      ...c("ctTransformer", "T1", "1:2 L1=1m k=0.99", 0, 0),
+      pinOverride: [
+        { id: "p1", label: "P1", x: -32, y: -16 },
+        { id: "p2", label: "P2", x: -32, y: 16 },
+        { id: "s1", label: "S1", x: 32, y: -24 },
+        { id: "ct", label: "CT", x: 32, y: 0 },
+        { id: "s2", label: "S2", x: 32, y: 24 },
+      ],
+    };
+    const gnd: SchematicComponent = {
+      ...c("ground", "GND", "", 0, 64),
+      pinOverride: [{ id: "g", label: "0", x: 0, y: 64 }],
+    };
+    const deck = buildSpiceDeck({ components: [xfmr, gnd], wires: [] }, { kind: "op" });
+    // Full secondary L2 = 1m * (2/1)^2 = 4m → each half = 1m.
+    expect(deck.netlist).toMatch(/^L_T1_p\b.+\b0\.001\b/m);
+    expect(deck.netlist).toMatch(/^L_T1_sa\b.+\b0\.001\b/m);
+    expect(deck.netlist).toMatch(/^L_T1_sb\b.+\b0\.001\b/m);
+    expect(deck.netlist).toMatch(/^K_T1 L_T1_p L_T1_sa L_T1_sb 0\.99$/m);
+    expect(deck.netlist).not.toMatch(/unsupported|refused/i);
+  });
+});

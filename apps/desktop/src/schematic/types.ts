@@ -49,6 +49,7 @@ export type ComponentKind =
   | "relay"
   | "motor"
   | "transformer"
+  | "ctTransformer"
   | "tline"
   | "subckt"
   | "testpoint"
@@ -62,7 +63,7 @@ export const COMPONENT_KINDS = [
   "tflop", "jkflop", "sampleHold",
   "modulator", "vcvs", "vccs", "cccs", "ccvs", "bsource", "nmos", "pmos", "njf", "pjf",
   "npn", "pnp", "potentiometer", "bulb", "switch", "pushButton", "spdt", "relay", "motor",
-  "transformer", "tline", "subckt", "testpoint",
+  "transformer", "ctTransformer", "tline", "subckt", "testpoint",
   "ground",
 ] as const satisfies readonly ComponentKind[];
 
