@@ -162,16 +162,14 @@ account and sign/notarize/ship.
       document, user-installed, user-attached, or Tau-owned compatible models.
       **Partial (2026-08-04):** unit proof `scripts/named-device-fidelity.sh`
       prints `NAMED-DEVICE: exact=2 refuse=4 silent=0` and recursive stdout
-      `NAMED-DEVICE-RECURSIVE: unencrypted=2539 exact=400 refuse=2139 silent=0
-      hard-failure=0 encrypted-excluded=1473 exact-rate=15.8%` — re-proved tip
-      2026-08-04 23:45 with `NAMED_DEVICE_ENCRYPTED_AUDIT=1` (without-flag
-      refuse=1473 · hard_failure=0). Prior 2641/HF103/encrypted1371 → −103/+103
-      is encrypted reclass (exact stayed 399 — not 103 deck fixes). ModelFile
-      prefer + same-stem plaintext `.lib` twin raised exact 399→400 (15.7%→15.8%)
-      on the exact-`.asy`-join denominator; never silent substitution. A brief
-      33.3%/encrypted=2782 claim was basename/unique-leaf harness inflation —
-      **not** current stdout (harness stays exact `.asy` joins only). ≥95%
-      exact-rate **not** met; DoD box stays unchecked. SHIPPABLE? **NO**.
+      `NAMED-DEVICE-RECURSIVE: unencrypted=2538 exact=410 refuse=2128 silent=0
+      hard-failure=0 encrypted-excluded=1474 exact-rate=16.2%` — tip after
+      bare-SYMBOL unique-leaf plaintext attach (product native unique-leaf;
+      harness unique-leaf only when ModelFile has plaintext twin — full
+      unique-leaf probe 33.4%/enc=2781 retracted as denominator game). Prior
+      ModelFile+`.lib` twin was 2539/400/2139/1473 @ 15.8%. Never silent
+      substitution. ≥95% exact-rate **not** met; DoD box stays unchecked.
+      SHIPPABLE? **NO**.
 - [ ] **Broad differential parity, not a synthetic `.op` proxy:** the acceptance
       runner executes each circuit's authored `.tran` / `.ac` / `.dc` / `.op` /
       `.noise` / `.tf` / `.step` / `.meas` analyses and compares numeric outputs

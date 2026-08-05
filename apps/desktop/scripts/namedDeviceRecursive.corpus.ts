@@ -15,9 +15,11 @@
  * numeric parity. Encrypted ModelFile dependents are excluded from the
  * unencrypted denominator.
  *
- * Symbol metadata for this harness uses **exact relative `.asy` joins only**.
- * Even unique basename ASY search can change ModelFile attachment and move
- * files across encrypted/refuse buckets — keep it out of this denominator.
+ * Symbol metadata: unique-leaf installed `.asy` resolve (same as product /
+ * acceptance) **only when** the authored ModelFile/SpiceModel has a plaintext
+ * twin. Encrypted-only ModelFiles stay unresolved here so bare SYMBOL leaves
+ * do not migrate refuse→encrypted-excluded and inflate exact-rate via
+ * denominator shrink (CEO: never denominator games). Ambiguous leaves refuse.
  * Optional audits: NAMED_DEVICE_TRIAGE / NAMED_DEVICE_REFUSE_TRIAGE /
  * NAMED_DEVICE_ENCRYPTED_AUDIT=1.
  */
@@ -39,7 +41,8 @@ import {
 } from "../src/io/corpusReport";
 import { opampIdentity } from "../src/engine/opampModel";
 import { parseUserModelLibraries, resolveUserSubckt, type UserModelLibraryRegistry } from "../src/engine/userModelLibrary";
-import { installedLibraryFileCandidates } from "../src/io/ltspiceModelFile";
+import { installedLibraryFileCandidates, ltspiceModelFileFromSymbolAttrs } from "../src/io/ltspiceModelFile";
+import { resolveInstalledAsyPath } from "../src/io/ltspiceSymbolResolve";
 import { ltspiceLibRoots } from "./ltspiceLibRoot";
 import type { SchematicComponent } from "../src/schematic/types";
 
@@ -149,18 +152,33 @@ function installedSymbolMetadata(symbolType: string): AsySymbol | null {
     ...EXTRA_SYMBOL_ROOTS,
     ...ltspiceLibRoots().map((root) => join(root, "sym")),
   ];
-  // Exact relative join only. Basename ASY search (even unique-leaf) must not
-  // feed this harness — it previously inflated encrypted-excluded ~1474→2776.
+
+  // Exact relative join first (path-qualified SYMBOL OpAmps\ADA4077-1).
   for (const root of roots) {
-    const path = join(root, `${relativeSymbol}.asy`);
-    const rel = relative(root, path);
-    if (rel === ".." || rel.startsWith(`..${sep}`) || isAbsolute(rel) || !existsSync(path)) continue;
-    const parsed = parseAsy(decodeSchematicText(readFileSync(path)));
+    const exactPath = join(root, `${relativeSymbol}.asy`);
+    const rel = relative(root, exactPath);
+    if (rel === ".." || rel.startsWith(`..${sep}`) || isAbsolute(rel) || !existsSync(exactPath)) continue;
+    const parsed = parseAsy(decodeSchematicText(readFileSync(exactPath)));
     symbolMetadataCache.set(key, parsed);
     return parsed;
   }
-  symbolMetadataCache.set(key, null);
-  return null;
+
+  // Bare Applications leaf: unique-leaf only when ModelFile has plaintext.
+  // Encrypted-only models stay foreign here (refuse) so we do not shrink the
+  // unencrypted denominator via refuse→encrypted-excluded reclass.
+  const path = resolveInstalledAsyPath(roots, symbolType);
+  if (!path) {
+    symbolMetadataCache.set(key, null);
+    return null;
+  }
+  const parsed = parseAsy(decodeSchematicText(readFileSync(path)));
+  const modelFile = ltspiceModelFileFromSymbolAttrs(parsed.attrs);
+  if (modelFile && installedModelFileIsEncrypted(modelFile)) {
+    symbolMetadataCache.set(key, null);
+    return null;
+  }
+  symbolMetadataCache.set(key, parsed);
+  return parsed;
 }
 
 /**

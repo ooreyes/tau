@@ -219,6 +219,61 @@ fn decode_windows_1252(bytes: &[u8]) -> String {
         .collect()
 }
 
+/// Applications schematics often write bare `SYMBOL ADA4077-1` while the
+/// installed file lives at `sym/OpAmps/ADA4077-1.asy`. Prefer an exact relative
+/// join; when the request is a single-segment `sym/<leaf>.asy` that is missing,
+/// accept a **unique** basename hit under `sym/` (ambiguous leaves stay missing
+/// so Tau never attaches the wrong family's ModelFile).
+fn unique_sym_asy_leaf(root: &Path, leaf_asy: &str) -> Result<Option<PathBuf>, String> {
+    let target = leaf_asy.to_ascii_lowercase();
+    let sym_root = root.join("sym");
+    if !sym_root.is_dir() {
+        return Ok(None);
+    }
+    let mut hits: Vec<PathBuf> = Vec::new();
+    fn walk(dir: &Path, target: &str, hits: &mut Vec<PathBuf>, depth: usize) -> Result<(), String> {
+        if depth > MAX_SCAN_DEPTH {
+            return Ok(());
+        }
+        let entries = match fs::read_dir(dir) {
+            Ok(entries) => entries,
+            Err(_) => return Ok(()),
+        };
+        for entry in entries {
+            let entry = entry
+                .map_err(|error| format!("Could not inspect an LTspice symbol entry: {error}"))?;
+            let file_type = entry
+                .file_type()
+                .map_err(|error| format!("Could not inspect an LTspice symbol entry: {error}"))?;
+            if file_type.is_symlink() {
+                continue;
+            }
+            let path = entry.path();
+            if file_type.is_dir() {
+                walk(&path, target, hits, depth + 1)?;
+                continue;
+            }
+            if !file_type.is_file() {
+                continue;
+            }
+            let name = path
+                .file_name()
+                .and_then(|value| value.to_str())
+                .unwrap_or("");
+            if name.eq_ignore_ascii_case(target) {
+                hits.push(path);
+            }
+        }
+        Ok(())
+    }
+    walk(&sym_root, &target, &mut hits, 0)?;
+    if hits.len() == 1 {
+        Ok(Some(hits.remove(0)))
+    } else {
+        Ok(None)
+    }
+}
+
 fn read_model_at(root: &Path, id: &str) -> Result<InstalledLtspiceModelText, String> {
     let root = fs::canonicalize(root)
         .map_err(|error| format!("Could not access the installed LTspice library: {error}"))?;
@@ -226,7 +281,29 @@ fn read_model_at(root: &Path, id: &str) -> Result<InstalledLtspiceModelText, Str
     if !safe_relative_path(relative) || !readable_extension(relative) {
         return Err("The selected LTspice model path is invalid.".into());
     }
-    let candidate = root.join(relative);
+    let mut candidate = root.join(relative);
+    if !candidate.is_file() {
+        // Bare Applications leaf: `sym/ADA4077-1.asy` → unique `sym/OpAmps/…`.
+        let components: Vec<_> = relative.components().collect();
+        if components.len() == 2
+            && matches!(components[0], Component::Normal(value) if value.eq_ignore_ascii_case("sym"))
+            && matches!(
+                components[1],
+                Component::Normal(value)
+                    if value
+                        .to_str()
+                        .is_some_and(|name| name.to_ascii_lowercase().ends_with(".asy"))
+            )
+        {
+            let leaf = match components[1] {
+                Component::Normal(value) => value.to_string_lossy().into_owned(),
+                _ => unreachable!(),
+            };
+            if let Some(found) = unique_sym_asy_leaf(&root, &leaf)? {
+                candidate = found;
+            }
+        }
+    }
     let link_metadata = fs::symlink_metadata(&candidate)
         .map_err(|error| format!("Could not access the selected LTspice model: {error}"))?;
     if link_metadata.file_type().is_symlink() || !link_metadata.file_type().is_file() {
@@ -288,6 +365,32 @@ pub fn read_installed_ltspice_model(id: String) -> Result<InstalledLtspiceModelT
 mod tests {
     use super::*;
     use std::io::Write;
+
+    #[test]
+    fn resolves_unique_bare_sym_asy_leaf_and_refuses_ambiguous() {
+        let temp = tempfile::tempdir().unwrap();
+        let opamps = temp.path().join("sym/OpAmps");
+        let adc = temp.path().join("sym/ADC");
+        fs::create_dir_all(&opamps).unwrap();
+        fs::create_dir_all(&adc).unwrap();
+        fs::write(
+            opamps.join("ADA4077-1.asy"),
+            "Version 4\nSYMATTR Prefix X\n",
+        )
+        .unwrap();
+        fs::write(adc.join("AD4000.asy"), "Version 4\nSYMATTR Prefix X\n").unwrap();
+
+        let opamp = read_model_at(temp.path(), "sym/ADA4077-1.asy").unwrap();
+        assert!(opamp.text.contains("Prefix X"));
+        let adc_sym = read_model_at(temp.path(), "sym/AD4000.asy").unwrap();
+        assert!(adc_sym.text.contains("Prefix X"));
+
+        // Ambiguous leaf stays missing (never pick a family).
+        fs::write(adc.join("ADA4077-1.asy"), "Version 4\nSYMATTR Prefix X\n").unwrap();
+        assert!(read_model_at(temp.path(), "sym/ADA4077-1.asy")
+            .unwrap_err()
+            .contains("Could not access"));
+    }
 
     #[test]
     fn discovers_supported_text_models_without_following_symlinks() {

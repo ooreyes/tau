@@ -316,6 +316,109 @@ PINATTR SpiceOrder 5
     expect(saved.contents).not.toMatch(/SYMATTR (?:Value2|SpiceModel)/);
   });
 
+  it("resolves a bare Applications SYMBOL via unique installed .asy leaf + plaintext SpiceModel.lib", async () => {
+    // LTspice Applications write `SYMBOL ADA4077-1` while the ASY lives under
+    // OpAmps/. Unique-leaf installed resolve (native) must attach the real
+    // ADA4077.lib — never a silent generic op-amp.
+    const source = `Version 4
+SHEET 1 880 680
+SYMBOL ADA4077-1 100 200 R0
+SYMATTR InstName U1
+`;
+    const symbol = `Version 4
+SymbolType CELL
+SYMATTR Value ADA4077-1
+SYMATTR Prefix X
+SYMATTR SpiceModel ADA4077.lib
+SYMATTR Value2 ADA4077
+PIN -32 32 LEFT 0
+PINATTR PinName In+
+PINATTR SpiceOrder 1
+PIN -32 96 LEFT 0
+PINATTR PinName In-
+PINATTR SpiceOrder 2
+PIN 32 96 RIGHT 0
+PINATTR PinName V+
+PINATTR SpiceOrder 3
+PIN 32 32 RIGHT 0
+PINATTR PinName V-
+PINATTR SpiceOrder 4
+PIN 96 64 RIGHT 0
+PINATTR PinName OUT
+PINATTR SpiceOrder 5
+`;
+    const model = ".subckt ADA4077 1 2 3 4 5\nE1 5 0 1 2 1Meg\n.ends ADA4077\n";
+    const installed = new Map([
+      ["sym/OpAmps/ADA4077-1.asy", symbol],
+      ["sub/ADA4077.lib", model],
+    ]);
+    const reads: string[] = [];
+    /** Mirror native unique-leaf: bare `sym/<leaf>.asy` hits exactly one path. */
+    const readInstalled = async (id: string) => {
+      reads.push(id);
+      const direct = installed.get(id);
+      if (direct) return direct;
+      const bare = /^sym\/([^/]+)\.asy$/i.exec(id);
+      if (bare) {
+        const leaf = `${bare[1]!.toLowerCase()}.asy`;
+        const hits = [...installed.keys()].filter((key) => {
+          if (!key.toLowerCase().startsWith("sym/")) return false;
+          return key.split("/").pop()!.toLowerCase() === leaf;
+        });
+        if (hits.length === 1) return installed.get(hits[0]!)!;
+      }
+      throw new Error("missing");
+    };
+    const result = await importProjectAsc(source, {
+      sourcePath: "/project/examples/top.asc",
+      rootPath: "/project",
+      pathExists: async () => false,
+      readText: async () => "",
+      readInstalledLtspiceText: readInstalled,
+    });
+
+    expect(result.foreignSymbols).toHaveLength(0);
+    expect(result.components[0]).toMatchObject({
+      kind: "subckt",
+      value: "ADA4077",
+      ltModelFile: "ADA4077.lib",
+    });
+    expect(result.modelLibraries).toEqual([{ name: "ada4077.lib", text: model }]);
+    expect(reads).toContain("sym/ADA4077-1.asy");
+    expect(reads).toContain("sub/ADA4077.lib");
+  });
+
+  it("refuses an ambiguous bare leaf instead of attaching the wrong family's ModelFile", async () => {
+    const source = "Version 4\nSHEET 1 880 680\nSYMBOL DUP 0 0 R0\nSYMATTR InstName U1\n";
+    const installed = new Map([
+      ["sym/OpAmps/DUP.asy", "Version 4\nSYMATTR Prefix X\nSYMATTR SpiceModel A.lib\nPIN 0 0 LEFT 0\nPINATTR SpiceOrder 1\n"],
+      ["sym/ADC/DUP.asy", "Version 4\nSYMATTR Prefix X\nSYMATTR SpiceModel B.lib\nPIN 0 0 LEFT 0\nPINATTR SpiceOrder 1\n"],
+    ]);
+    const readInstalled = async (id: string) => {
+      const direct = installed.get(id);
+      if (direct) return direct;
+      const bare = /^sym\/([^/]+)\.asy$/i.exec(id);
+      if (bare) {
+        const leaf = `${bare[1]!.toLowerCase()}.asy`;
+        const hits = [...installed.keys()].filter((key) =>
+          key.toLowerCase().startsWith("sym/") && key.split("/").pop()!.toLowerCase() === leaf
+        );
+        if (hits.length === 1) return installed.get(hits[0]!)!;
+      }
+      throw new Error("missing");
+    };
+    const result = await importProjectAsc(source, {
+      sourcePath: "/project/top.asc",
+      rootPath: "/project",
+      pathExists: async () => false,
+      readText: async () => "",
+      readInstalledLtspiceText: readInstalled,
+    });
+    expect(result.foreignSymbols).toHaveLength(1);
+    expect(result.foreignSymbols[0]?.type).toBe("DUP");
+    expect(result.components).toHaveLength(0);
+  });
+
   it("reads Prefix-X symbol metadata and plaintext model only from the fixed installed library", async () => {
     const source = `Version 4
 SHEET 1 880 680

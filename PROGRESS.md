@@ -9,16 +9,52 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-04 23:57 CDT**
+**Status: DONE - 2026-08-04 23:59 CDT** (Overnight DoD — bare vendor SYMBOL)
 
-Unit: Educational stepmodelparam differential (`.step NPN 2N2222(Vaf)` expand).
-Stdout: **SUMMARY pass=18 sibling=5 gap=2**. Remaining gaps: native step_expand;
-Class-D AC/DC/noise/tf. Named-device tip still 15.8%/HF0. Concurrent named-device
-WIP may exist unstaged — leave Freshman AI / Design lanes alone.
+Unit: Unique-leaf installed `.asy` for bare Applications SYMBOL names →
+Prefix-X + plaintext ModelFile/SpiceModel.lib attach (product native +
+harness plaintext-only leaf). Never silent generic. Never encrypted
+denominator inflation (full unique-leaf briefly measured 33.4%/enc=2781 —
+retracted for harness; product still unique-leafs all leaves).
+
+**Measured tip stdout (truth):**
+```
+NAMED-DEVICE: exact=2 refuse=4 silent=0
+NAMED-DEVICE-RECURSIVE: unencrypted=2538 exact=410 refuse=2128 silent=0 hard-failure=0 encrypted-excluded=1474 exact-rate=16.2%
+```
+Before: 2539/400/2139/0/1473 @ 15.8%. After: exact +10 (16.2%). ≥95% unchecked.
+SHIPPABLE? **NO**.
+
+**Forbidden lanes left alone:** Settings* · AssistantPanel · ShellPanels · App.css.
 
 **SHIPPABLE?** **NO**
 
 ---
+
+### 2026-08-04 — Bare vendor SYMBOL unique-leaf → exact-rate 16.2% (§DoD)
+
+**What I did**
+- Native `read_installed_ltspice_model`: bare `sym/<leaf>.asy` unique-leaf
+  under `sym/` (ambiguous → missing). Product open path attaches plaintext
+  ADA4077.lib-class models for Applications bare SYMBOL names.
+- Named-device harness: unique-leaf **only when** ModelFile has plaintext twin
+  (encrypted-only bare leaves stay foreign/refuse — no refuse→encrypted
+  denominator game). Full unique-leaf probe was 33.4%/enc=2781 — not tip.
+- Tests: projectAscImport bare ADA4077-1 + ambiguous DUP; Rust unique-leaf.
+
+**Exact stdout**
+```
+NAMED-DEVICE: exact=2 refuse=4 silent=0
+NAMED-DEVICE-RECURSIVE: unencrypted=2538 exact=410 refuse=2128 silent=0 hard-failure=0 encrypted-excluded=1474 exact-rate=16.2%
+```
+
+**Parity items**
+- Named-device 🟡 HF=0 silent=0 exact-rate **16.2%** (not ≥95%). SHIPPABLE? NO
+
+**Next step**
+- Remaining ~765-class encrypted bare SYMBOL (honest refuse until plaintext) /
+  path-qualified plaintext attaches; then ~228× OTA option mapping.
+
 
 ### 2026-08-04 — Educational stepmodelparam differential → pass=18 (§DoD)
 

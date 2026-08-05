@@ -27,7 +27,8 @@ export interface ProjectAscImportOptions {
   pathExists: (path: string) => Promise<boolean>;
   /** Read one fixed-root file from the user's installed LTspice library. The
    * native boundary rejects traversal, symlinks, oversized/binary/encrypted
-   * content, and every extension except model text plus `.asy` metadata. */
+   * content, and every extension except model text plus `.asy` metadata.
+   * Bare `sym/<leaf>.asy` ids uniquely resolve under `sym/` (native). */
   readInstalledLtspiceText?: (id: string) => Promise<string>;
 }
 
