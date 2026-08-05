@@ -9,20 +9,46 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-04 23:38 CDT** (Overnight DoD — named-device 15.7%/HF0)
+**Status: DONE - 2026-08-04 23:40 CDT**
 
-Unit: Re-measure + schematic R `noiseless` exact strip + unique `.asy` basename
-resolve. HF=0 (not ≫10). Exact-rate 15.7% — DoD ≥95% unchecked. SHIPPABLE? **NO**.
-
-**Measured** (`scripts/named-device-fidelity.sh`):
-`NAMED-DEVICE: exact=2 refuse=4 silent=0`
-`NAMED-DEVICE-RECURSIVE: unencrypted=2538 exact=399 refuse=2139 silent=0
-hard-failure=0 encrypted-excluded=1474 exact-rate=15.7%`
-
-**SHIPPABLE?** **NO**
+Unit: Overnight named-device — PWL/zero R·C/noiseless honesty + unique ASY
+basename refuse. Exact-rate unchanged 15.7%. Shippable? NO.
 
 
 ---
+
+
+### 2026-08-04 — Overnight: named-device refuse honesty (PWL / zero R·C / noiseless / unique ASY)
+
+**What I did**
+- Finished dirty WT: malformed/truncated PWL → fail-closed refuse; zero-ohm R
+  and zero C map LTspice-exactly (short/open); schematic `noiseless` stripped
+  before magnitude parse; product ASY basename resolve refuses ambiguous leaves
+  (never wrong-family ModelFile). Recursive harness stays **exact `.asy` joins
+  only** (basename search out of denominator).
+- Re-measured fidelity — exact-rate **unchanged** (no ≥95% claim).
+
+**Exact stdout**
+```
+NAMED-DEVICE: exact=2 refuse=4 silent=0
+NAMED-DEVICE-RECURSIVE: unencrypted=2538 exact=399 refuse=2139 silent=0 hard-failure=0 encrypted-excluded=1474 exact-rate=15.7%
+```
+
+**Files**
+- `sourceFunction.ts`, `spiceNetlist.ts`, `spiceDeck.test.ts`, `ltspiceSymbolResolve.ts`
+- `namedDeviceRecursive.corpus.ts`, `corpusReport.ts` (via prior wip checkpoint)
+- `PROGRESS.md` / morning status
+
+**Tests / proof**
+- typecheck + full desktop test green; `scripts/named-device-fidelity.sh` above
+
+**Parity items**
+- Named-device DoD still unchecked at 15.7%. SHIPPABLE? NO.
+
+**Next step**
+- refuse→exact on plaintext library attach (~765× “no equivalent Tau model”);
+  never silent substitution. Leave Bench Settings / Freshman chrome alone.
+
 
 ### 2026-08-04 — Named-device re-measure + schematic R noiseless (§DoD)
 
