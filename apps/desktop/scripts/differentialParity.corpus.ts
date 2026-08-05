@@ -107,6 +107,8 @@ const HELP_NOISESTEP_ASC = join(
 );
 /** LTspice.app Resources BV demo — soft `_exp` (≠ Documents/LTspice/Draft1.asc diode–L–R). */
 const RESOURCES_DRAFT1_ASC = join("/Applications/LTspice.app/Contents/Resources", "Draft1.asc");
+/** LTspice.app Resources BI microcode demo — split Value/Value2 `if(` expressions. */
+const RESOURCES_MICROCODE_ASC = join("/Applications/LTspice.app/Contents/Resources", "MicroCode.asc");
 const EDU_100W_ASC = join(EDU, "100W.asc");
 const SAMPLEANDHOLD_ASC = join(EDU, "SampleAndHold.asc");
 const EDU_VARISTOR_ASC = join(EDU, "varistor.asc");
@@ -267,7 +269,7 @@ function withAcStimulus(netlist: string): string {
 describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential parity matrix", () => {
   const cells: DifferentialCell[] = [];
 
-  it("matches RC .tran/.ac/.meas, divider analyses, .step families, curvetrace, stepmodelparam, NoiseFigure, noise.asc, Colpitts/Clapp/Hartly AC, Cohn AC, MeasureBW AC, Transformer/Transformer2/IdealTransformer TRAN, notch/passive/butter/opamp/Linkwitz AC, LM741/LM308/LM78XX/P2/logamp TRAN, GFT AC, DCopPnt OP, audioamp TRAN, UHFpreamp AC, 1563 AC, S-param AC, stepAC AC, 2ndOrder* AC, MonteCarlo AC, varactor AC, phaseshift AC, Pierce/colpits2 AC, edu-varistor TRAN, stepnoise noise, UniversalOpAmp/1/2 TRAN, contrib/qztst AC, SampleAndHold TRAN, contrib/elip_grd AC, Draft3 AC, Draft7 AC, Draft2 TRAN, Draft1 TRAN, BandGaps DC-temp, waveout TRAN, ISO16750 TRAN, IGBTeq nested DC, help-Butterworth AC, Resources-Draft1 DC, 100W TRAN, help-ACstep AC, help-NoiseStep noise, Class-D AC/OP/DC/noise/tf", () => {
+  it("matches RC .tran/.ac/.meas, divider analyses, .step families, curvetrace, stepmodelparam, NoiseFigure, noise.asc, Colpitts/Clapp/Hartly AC, Cohn AC, MeasureBW AC, Transformer/Transformer2/IdealTransformer TRAN, notch/passive/butter/opamp/Linkwitz AC, LM741/LM308/LM78XX/P2/logamp TRAN, GFT AC, DCopPnt OP, audioamp TRAN, UHFpreamp AC, 1563 AC, S-param AC, stepAC AC, 2ndOrder* AC, MonteCarlo AC, varactor AC, phaseshift AC, Pierce/colpits2 AC, edu-varistor TRAN, stepnoise noise, UniversalOpAmp/1/2 TRAN, contrib/qztst AC, SampleAndHold TRAN, contrib/elip_grd AC, Draft3 AC, Draft7 AC, Draft2 TRAN, Draft1 TRAN, BandGaps DC-temp, waveout TRAN, ISO16750 TRAN, IGBTeq nested DC, help-Butterworth AC, Resources-Draft1 DC, 100W TRAN, help-ACstep AC, help-NoiseStep noise, Resources-MicroCode TRAN, Class-D AC/OP/DC/noise/tf", () => {
     // --- TRAN (also covered by waveformParity; re-assert here so this file is self-sufficient) ---
     {
       const result = runPairedBatch("diff-rc-tran", RC_TRAN, ["v(out)"]);
@@ -3374,6 +3376,72 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
       });
     }
 
+    // --- LTspice.app Resources MicroCode.asc authored .tran (BI Value+Value2 join) ---
+    // Authored `.tran 0 1m 0 1u` + gm1/gm2/Ibias params. Two BI pairs: soft-limit
+    // uplim/dnlim (B1/B2) and split `I=if(…` across Value/Value2 (B1b/B2b). Import
+    // joins bsource Value2 like vsource AC (ascImport SOURCE_KINDS). Probes
+    // v(out)/v(out2) nRms≈6e-6 @ 2%/5%. mextram has no authored analysis (defer).
+    // Left help NoiseStep/ACstep/Butterworth/Draft1/100W/sinh/.machine alone.
+    // Tip help-NoiseStep pass=82 → 83.
+    {
+      expect(existsSync(RESOURCES_MICROCODE_ASC), `missing ${RESOURCES_MICROCODE_ASC}`).toBe(true);
+      const imported = importAsc(decodeSchematicText(readFileSync(RESOURCES_MICROCODE_ASC)));
+      expect(imported.warnings).toEqual([]);
+      expect(imported.foreignSymbols).toEqual([]);
+      const dirs = expandDirectiveLines(imported.directives);
+      const parsed = analysesFromDirectives(dirs);
+      expect(parsed.tran, "MicroCode.asc must author .tran").toBeTruthy();
+      const params = buildParamScope(dirs);
+      expect(Number(params.scope.gm1 ?? params.scope.Gm1)).toBeCloseTo(1e-3, 12);
+      const bSources = imported.components.filter((c) => c.kind === "bsource");
+      expect(bSources.length).toBeGreaterThanOrEqual(4);
+      expect(bSources.some((b) => /I=if\(V\(m,i\)>=0,/i.test(b.value) && /,\s*0\)\s*$/.test(b.value))).toBe(true);
+      const deck = buildSpiceDeck({
+        components: imported.components,
+        wires: imported.wires,
+        netLabels: imported.netLabels,
+        directives: dirs,
+        params,
+      }, {
+        kind: "tran",
+        stopTime: parsed.tran!.stopTime,
+        steps: Math.max(parsed.tran!.steps ?? 240, 2000),
+        startTime: parsed.tran!.startTime,
+        maxStep: parsed.tran!.maxStep,
+      });
+      expect(deck.unresolvedSubckts ?? []).toEqual([]);
+      expect(deck.modelSubstitutions ?? []).toEqual([]);
+      // ltFuncsToNgspice rewrites LTspice if() → ngspice ternary; Value2 join must
+      // still yield a complete B1b/B2b line (not a truncated `I=if(V(m,i)>=0,`).
+      expect(deck.netlist).toMatch(/^B1b\b.+\?\s*\(/im);
+      expect(deck.netlist).toMatch(/^B2b\b.+\?\s*\(/im);
+      expect(deck.netlist).not.toMatch(/^B1b\b.*I=if\(V\(m,i\)>=0,\s*$/im);
+      expect(deck.netlist).toMatch(/\.tran\b/i);
+      const probes = ["v(out)", "v(out2)"] as const;
+      const result = runPairedBatch("diff-resources-microcode-tran", deck.netlist, [...probes]);
+      const memberNotes: string[] = [];
+      for (const probe of probes) {
+        const lt = result.ltspice.get(probe)!;
+        const ng = result.ngspice.get(probe)!;
+        const comparison = compareWaveforms(ng.axis, ng.values, lt.axis, lt.values, {
+          rmsTolerance: 0.02,
+          maxTolerance: 0.05,
+        });
+        expect(comparison.pass, `MicroCode ${probe} ${JSON.stringify(comparison)}`).toBe(true);
+        expect(comparison.referenceRange, `MicroCode ${probe} non-hollow`).toBeGreaterThan(5);
+        memberNotes.push(
+          `${probe} nRms=${comparison.normalizedRms.toFixed(4)} nMax=${comparison.normalizedMax.toFixed(4)} span=${comparison.referenceRange.toFixed(2)}`,
+        );
+      }
+      cells.push({
+        analysis: "tran",
+        circuit: "resources-microcode",
+        topology: "LTspice.app Resources/MicroCode.asc BI soft-limit + split if( Value/Value2 (authored .tran 1m)",
+        status: "pass",
+        note: memberNotes.join("; "),
+      });
+    }
+
     // --- Class-D AC/OP (authored analyses are .tran/.meas; add AC/OP for differential proof) ---
     {
       const ascPath = join(CLASSD_DIR, "class-d-starter.asc");
@@ -3670,6 +3738,6 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
     expect(passCount).toBeGreaterThanOrEqual(70);
     expect(siblingCount).toBe(5);
     expect(gapCount).toBe(0);
-    expect(report).toMatch(/SUMMARY pass=82 sibling=5 gap=0/);
+    expect(report).toMatch(/SUMMARY pass=83 sibling=5 gap=0/);
   }, 240_000);
 });

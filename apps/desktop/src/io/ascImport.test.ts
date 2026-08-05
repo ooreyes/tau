@@ -733,6 +733,24 @@ SYMATTR Value2 AC 1`;
     expect(v1?.value).toBe("SINE(0 1 1) AC 1");
   });
 
+  it("joins bi/bv Value2 onto a split behavioral expression (MicroCode.asc)", () => {
+    // LTspice wraps long I=/V= expressions across Value + Value2 mid-token.
+    const SRC = `Version 4
+SHEET 1 880 680
+SYMBOL bi 80 96 R0
+SYMATTR InstName B1
+SYMATTR Value I=if(V(m,i)>=0,
+SYMATTR Value2 V(m,i)*(Gm1+Gm2*V(m,i)),0)`;
+    const doc = ascToSchematic(parseAsc(SRC));
+    const b1 = doc.components.find((c) => c.label === "B1");
+    expect(b1?.kind).toBe("bsource");
+    expect(b1?.value).toBe("I=if(V(m,i)>=0, V(m,i)*(Gm1+Gm2*V(m,i)),0)");
+    expect(componentValueFromAttrs("bsource", {
+      Value: "I=if(V(a)>=0,",
+      Value2: "V(a),0)",
+    })).toBe("I=if(V(a)>=0, V(a),0)");
+  });
+
   it("drops LTspice empty-attribute quote sentinels on sources (LT3956)", () => {
     expect(componentValueFromAttrs("vsource", { Value: "10", Value2: '""', SpiceLine: '""' })).toBe("10");
     expect(componentValueFromAttrs("vsource", { Value: '""', Value2: "AC 1" })).toBe("AC 1");

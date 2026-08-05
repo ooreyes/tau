@@ -1187,9 +1187,11 @@ function recoverLegacyTauPinGeometry(
  */
 /** Independent-source kinds whose LTspice `Value2`/`SpiceLine` carry the
  *  `AC <mag> [phase]` stimulus (and other inline spec) that concatenates onto
- *  the SPICE source line. For every other kind we keep only `Value` (Value2 on
+ *  the SPICE source line. Behavioral B-sources (`bv`/`bi`) also split long
+ *  `V=`/`I=` expressions across Value/Value2 (MicroCode.asc `if(` …); join
+ *  those the same way. For every other kind we keep only `Value` (Value2 on
  *  a semiconductor names instance params the generic models don't consume yet). */
-const SOURCE_KINDS_WITH_INLINE_SPEC = new Set<ComponentKind>(["vsource", "isource"]);
+const SOURCE_KINDS_WITH_INLINE_SPEC = new Set<ComponentKind>(["vsource", "isource", "bsource"]);
 
 /**
  * `SYMATTR` fields Tau reads structure out of: the two LTspice writes for every

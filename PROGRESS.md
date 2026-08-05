@@ -9,20 +9,53 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 05:11 CDT**
+**Status: DONE - 2026-08-05 05:20 CDT**
 
-Unit: LTspice.app help `NoiseStep.asc` noise (≠ Educational stepnoise) → differential **pass=82**.
+Unit: Resources `MicroCode.asc` TRAN (bsource Value+Value2 join) → differential **pass=83**.
 ```
-SUMMARY pass=82 sibling=5 gap=0
-noise help-noisestep … V(onoise)/V(inoise) nRms=0.0000
+SUMMARY pass=83 sibling=5 gap=0
+tran resources-microcode … v(out)/v(out2) nRms=0.0000 span≈12
 ```
-sinh/divide2/inverter deferred (log-domain / `.machine`). SHIPPABLE? **NO**
+mextram deferred (no authored analysis). SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
 
 
 ---
+
+
+### 2026-08-05 — Resources MicroCode.asc TRAN → pass=83 (§DoD)
+
+**What I did**
+- Import joins `bsource` Value+Value2 like vsource AC (MicroCode splits long
+  `I=if(` across SYMATTR fields). Resources `MicroCode.asc` authored `.tran 1m`:
+  BI soft-limit + split if(); v(out)/v(out2) match LTspice (nRms≈6e-6).
+- mextram.asc has no authored analysis (empty-value reference diagram) — deferred.
+  Left help NoiseStep/ACstep/Butterworth/Draft1/100W/sinh/.machine alone.
+
+**Exact stdout**
+
+```
+SUMMARY pass=83 sibling=5 gap=0
+```
+
+**Files**
+- `apps/desktop/src/io/ascImport.ts` (+ test)
+- `apps/desktop/scripts/differentialParity.corpus.ts`
+- `AGENTS.md`, `FEATURE_PARITY.md`, `PROGRESS.md`
+
+**Tests**
+- `pnpm -C apps/desktop typecheck` + `test` green
+- differential corpus → pass=83
+
+**Parity items**
+- Differential 🟡 **pass=83**. Named-device 🟡 **48.1%**. SHIPPABLE? NO
+
+**Next step**
+- Continue 22; mextram/sinh/.machine remain walls.
+
+
 
 
 ### 2026-08-05 — help NoiseStep.asc noise → pass=82 (§DoD)
