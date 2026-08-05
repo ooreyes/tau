@@ -258,8 +258,6 @@ export function SimulationPanel({
     () => [...userModelLibraries, ...installedLtspiceModelLibraries].map((library) => library.name),
     [installedLtspiceModelLibraries, userModelLibraries],
   );
-  const warnings = result?.warnings ?? [];
-
   const [mode, setMode] = useState<AnalysisMode>(preferredMode);
   // Each analysis tab collapses its power-user controls behind ONE Advanced
   // disclosure, closed by default - the default view stays a calm read of
@@ -594,7 +592,7 @@ export function SimulationPanel({
       : runStatus === "error"
         ? "Simulation failed - details below"
         : runStatus === "idle"
-          ? "No analysis yet — press Run, or select an analysis tab to run it"
+          ? "No analysis yet — press Run"
           : null;
 
   // Selecting an analysis tab both switches the visible pane and kicks off
@@ -1221,13 +1219,7 @@ export function SimulationPanel({
         </>
       )}
 
-      {warnings.length > 0 && (
-        <div className="warning-list">
-          {warnings.slice(0, 3).map((warning) => (
-            <div key={warning}>{warning}</div>
-          ))}
-        </div>
-      )}
+      {/* Run warnings live in Diagnostics — avoid a second banner here. */}
       </div>
     </aside>
   );

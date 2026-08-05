@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const runtime = vi.hoisted(() => ({
+  isNative: vi.fn(),
   getStatus: vi.fn(),
   start: vi.fn(),
   stop: vi.fn(),
@@ -11,6 +12,7 @@ const runtime = vi.hoisted(() => ({
 
 vi.mock("../lib/localAiRuntime", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../lib/localAiRuntime")>()),
+  isNativeDesktopApp: runtime.isNative,
   getLocalAiStatus: runtime.getStatus,
   startLocalAi: runtime.start,
   stopLocalAi: runtime.stop,
@@ -19,6 +21,7 @@ vi.mock("../lib/localAiRuntime", async (importOriginal) => ({
 
 import { SettingsPanel } from "./ShellPanels";
 import { saveAssistantPreferences } from "../lib/assistantPreferences";
+import { hasCloudAiConsent, saveCloudAiConsent } from "../lib/cloudAiConsent";
 import type { LocalAiStatus } from "../lib/localAiRuntime";
 
 const storage = new Map<string, string>();
@@ -52,22 +55,12 @@ function status({
     installed,
     modelId: state === "ready" || state === "starting" ? "qwen3-1.7b-4bit" : null,
     modelRepository: state === "ready" || state === "starting" ? "Qwen/Qwen3-1.7B-MLX-4bit" : null,
-    detail: state === "ready" ? "Local inference is ready." : "Choose a model to start local inference.",
+    detail: state === "ready"
+      ? "Local inference is ready on 127.0.0.1:8080."
+      : "MLX LM on port 8080. Choose a model.",
     presets: [
-      {
-        id: "qwen3-1.7b-4bit",
-        repository: "Qwen/Qwen3-1.7B-MLX-4bit",
-        label: "Qwen3 1.7B · 4-bit",
-        downloadMb: 914,
-        downloaded: downloaded17,
-      },
-      {
-        id: "qwen3-4b-4bit",
-        repository: "Qwen/Qwen3-4B-MLX-4bit",
-        label: "Qwen3 4B · 4-bit",
-        downloadMb: 2_300,
-        downloaded: downloaded4,
-      },
+      { id: "qwen3-1.7b-4bit", repository: "Qwen/Qwen3-1.7B-MLX-4bit", label: "Qwen3 1.7B · 4-bit", downloadMb: 914, downloaded: downloaded17 },
+      { id: "qwen3-4b-4bit", repository: "Qwen/Qwen3-4B-MLX-4bit", label: "Qwen3 4B · 4-bit", downloadMb: 2300, downloaded: downloaded4 },
     ],
   };
 }
@@ -83,108 +76,106 @@ const props = {
 afterEach(() => cleanup());
 beforeEach(() => {
   storage.clear();
+  runtime.isNative.mockReset();
   runtime.getStatus.mockReset();
   runtime.start.mockReset();
   runtime.stop.mockReset();
   runtime.install.mockReset();
+  runtime.isNative.mockResolvedValue(true);
+  saveCloudAiConsent({ consented: false });
   saveAssistantPreferences({ provider: "local-mlx", localModel: "qwen3-1.7b-4bit" });
 });
 
 describe("SettingsPanel local assistant lifecycle", () => {
-  it("offers Set up when the runtime is missing", async () => {
+  it("offers Turn on when the runtime is missing and installs then starts", async () => {
     runtime.getStatus.mockResolvedValue(status({ installed: false }));
-    runtime.install.mockResolvedValue(status({ installed: true }));
+    runtime.install.mockResolvedValue(status({ installed: true, state: "stopped" }));
+    runtime.start.mockResolvedValue(status({ state: "starting", managed: true, installed: true }));
     render(<SettingsPanel {...props} />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Set up" }));
+    expect(screen.queryByText(/8080|127\.0\.0\.1|localhost/i)).toBeNull();
+    fireEvent.click(await screen.findByRole("button", { name: "Turn on" }));
     await waitFor(() => expect(runtime.install).toHaveBeenCalledTimes(1));
-    expect(runtime.start).not.toHaveBeenCalled();
+    await waitFor(() => expect(runtime.start).toHaveBeenCalled());
   });
 
-  it("defaults to Local MLX and requires an explicit size-labeled download start", async () => {
+  it("defaults to on-device and downloads via one Turn on control", async () => {
     runtime.getStatus.mockResolvedValue(status());
     runtime.start.mockResolvedValue(status({ state: "starting", managed: true }));
     render(<SettingsPanel {...props} />);
 
-    expect((screen.getByRole("combobox", { name: "Provider" }) as HTMLSelectElement).value).toBe("local-mlx");
-    expect((screen.getByRole("combobox", { name: "Model" }) as HTMLSelectElement).value).toBe("qwen3-1.7b-4bit");
-    expect(screen.queryByLabelText("Anthropic API key")).toBeNull();
-    expect(await screen.findByText("914 MB download")).toBeTruthy();
-    expect(runtime.start).not.toHaveBeenCalled();
+    expect(screen.getByRole("radio", { name: "On-device" }).getAttribute("aria-checked")).toBe("true");
+    expect((screen.getByRole("combobox", { name: "On-device model" }) as HTMLSelectElement).value).toBe("qwen3-1.7b-4bit");
+    expect(await screen.findByText("Download: 914 MB")).toBeTruthy();
+    expect(screen.queryByText(/8080|127\.0\.0\.1|localhost/i)).toBeNull();
 
-    fireEvent.click(screen.getByRole("button", { name: "Download & Start" }));
-    await waitFor(() => expect(runtime.start).toHaveBeenCalledWith("qwen3-1.7b-4bit", true));
+    fireEvent.click(screen.getByRole("button", { name: "Download & turn on" }));
+    await waitFor(() => expect(runtime.start).toHaveBeenCalledWith("qwen3-1.7b-4bit", true, undefined));
   });
 
-  it("starts an already cached selected model without download permission", async () => {
+  it("starts a cached model with Turn on", async () => {
     saveAssistantPreferences({ provider: "local-mlx", localModel: "qwen3-4b-4bit" });
     runtime.getStatus.mockResolvedValue(status({ downloaded4: true }));
     runtime.start.mockResolvedValue(status({ state: "starting", managed: true, downloaded4: true }));
     render(<SettingsPanel {...props} />);
 
-    const start = await screen.findByRole("button", { name: "Start" });
-    expect(screen.queryByText(/MB download/)).toBeNull();
-    fireEvent.click(start);
-    await waitFor(() => expect(runtime.start).toHaveBeenCalledWith("qwen3-4b-4bit", false));
+    fireEvent.click(await screen.findByRole("button", { name: "Turn on" }));
+    await waitFor(() => expect(runtime.start).toHaveBeenCalledWith("qwen3-4b-4bit", true, undefined));
   });
 
-  it("queries managed ready state and exposes an explicit Stop action", async () => {
+  it("exposes Turn off when ready", async () => {
     runtime.getStatus.mockResolvedValue(status({ state: "ready", managed: true, downloaded17: true }));
     runtime.stop.mockResolvedValue(status({ downloaded17: true }));
     render(<SettingsPanel {...props} />);
 
-    expect(await screen.findByText("Status · Ready")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Stop" }));
+    expect(await screen.findByText("On-device AI · Ready")).toBeTruthy();
+    expect(screen.queryByText(/8080|127\.0\.0\.1|localhost/i)).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Turn off" }));
     await waitFor(() => expect(runtime.stop).toHaveBeenCalledTimes(1));
   });
 
-  it("imports, selects, starts, and removes a custom Hugging Face MLX model", async () => {
+  it("imports a custom model from Advanced", async () => {
     runtime.getStatus.mockResolvedValue(status());
-    runtime.start.mockResolvedValue(status({ state: "starting", managed: true }));
     const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
     render(<SettingsPanel {...props} />);
-    await screen.findByText("914 MB download");
+    await screen.findByText("Download: 914 MB");
+
+    const advanced = screen.getByText("Advanced").closest("details");
+    if (advanced && !advanced.open) fireEvent.click(screen.getByText("Advanced"));
 
     fireEvent.change(screen.getByRole("textbox", { name: "Hugging Face model repository" }), {
       target: { value: "mlx-community/Custom-Circuit-4bit" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Add" }));
+    fireEvent.click(screen.getByRole("button", { name: "Import" }));
 
-    await waitFor(() => expect((screen.getByRole("combobox", { name: "Model" }) as HTMLSelectElement).value)
+    await waitFor(() => expect((screen.getByRole("combobox", { name: "On-device model" }) as HTMLSelectElement).value)
       .toBe("custom:mlx-community/Custom-Circuit-4bit"));
-    fireEvent.click(screen.getByRole("button", { name: "Download & Start" }));
-    await waitFor(() => expect(runtime.start).toHaveBeenCalledWith(
-      "custom:mlx-community/Custom-Circuit-4bit",
-      true,
-      "mlx-community/Custom-Circuit-4bit",
-    ));
     fireEvent.click(screen.getByRole("button", { name: "Remove" }));
     expect(confirm).toHaveBeenCalledOnce();
-    await waitFor(() => expect((screen.getByRole("combobox", { name: "Model" }) as HTMLSelectElement).value)
-      .toBe("qwen3-4b-4bit"));
     confirm.mockRestore();
   });
 
-  it("shows the cloud key only after Anthropic is selected", async () => {
+  it("requires cloud consent before circuit context can leave the Mac", async () => {
     runtime.getStatus.mockResolvedValue(status());
     render(<SettingsPanel {...props} />);
-    await screen.findByText("914 MB download");
+    await screen.findByText("Download: 914 MB");
 
-    fireEvent.change(screen.getByRole("combobox", { name: "Provider" }), {
-      target: { value: "anthropic" },
-    });
-    expect(await screen.findByLabelText("Anthropic API key")).toBeTruthy();
-    expect(screen.queryByRole("combobox", { name: "Model" })).toBeNull();
-    expect(screen.queryByText(/MB download/)).toBeNull();
+    fireEvent.click(screen.getByRole("radio", { name: "Cloud" }));
+    expect(await screen.findByLabelText(/API key/)).toBeTruthy();
+    expect(screen.getByText(/Consent is required/i)).toBeTruthy();
+    expect(hasCloudAiConsent()).toBe(false);
+
+    fireEvent.click(screen.getByRole("checkbox"));
+    expect(hasCloudAiConsent()).toBe(true);
+    expect(screen.queryByText(/Consent is required/i)).toBeNull();
   });
 
-  it("keeps student-simple Settings rows for palette and recovery", async () => {
+  it("keeps student-simple Settings rows", async () => {
     runtime.getStatus.mockResolvedValue(status());
     render(<SettingsPanel {...props} />);
     expect(screen.getAllByText("Appearance").length).toBeGreaterThan(0);
-    expect(screen.getByText("Assistant")).toBeTruthy();
-    expect(screen.getByText("Command palette")).toBeTruthy();
+    expect(screen.getByText("Circuit assistant")).toBeTruthy();
+    expect(screen.getByText("Find parts")).toBeTruthy();
     expect(screen.getByText("Autosave")).toBeTruthy();
-    expect(screen.getByText("Recovery snapshot for untitled edits")).toBeTruthy();
   });
 });

@@ -9,61 +9,61 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-04 23:23 CDT** (HR/ops — Design QA land + ownership lock)
+**Status: DONE - 2026-08-04 23:28 CDT**
 
-Unit: Design dirty sealed on remote; ownership board refreshed. AGENTS §10 DoD
-stays **unchecked**. SHIPPABLE? **NO**.
-
-**Tokens:** **DONE** (`58b13c6` light default + honest §10; Anduril pop + aliases
-`1d6ebef` / Design QA `1250dbc`).
-
-**Measured (QA re-prove 23:25):** `scripts/named-device-fidelity.sh` —
-`NAMED-DEVICE: exact=2 refuse=4 silent=0` ·
-`NAMED-DEVICE-RECURSIVE: unencrypted=2538 exact=399 refuse=2139 silent=0
-hard-failure=0 encrypted-excluded=1474 exact-rate=15.7%`. HF=0 is −103/+103
-encrypted reclass vs prior 2641/103/1371 (exact unchanged) — not 103 deck fixes.
-Raise exact-rate next; do not invent ≥95%. SHIPPABLE? NO.
-
-**Active product lanes (collision lock — do not cross-edit):**
-- **Overnight DoD + Staff EE** — measuring / raising named-device exact-rate via
-  `engine/**` · `io/ascImport*` · `scripts/*named*` · corpus. **No UI.**
-- **Anduril Light** — `tokens.css` aliases · `DESIGN_SYSTEM.md` palette tables
-  · `App.css` light token blocks **only**. No ShellPanels icon redo.
-- **Cupertino** — chrome icons DONE (`6aa5f98` / Design QA `1250dbc`). Closed.
-- **AI platform / Freshman** — AI libs only: `localAiEnsure*` · `cloudAiConsent*` ·
-  `localMlxAssistant*` · `LocalAiSetupDialog*` · extracted Settings AI module.
-  Do **not** thrash ShellPanels chrome; prefer `SettingsAiSection` extract.
-- **Design QA** — notes landed `1250dbc`; light screenshots at min + 1440 next.
-- **Bench** — help/warning copy strings only.
-- **QA / HR** — gates + morning-status; stash discipline; never force-push;
-  never check AGENTS §10.
-
-**SHIPPABLE?** **NO** — exact-rate 15.7%, §10 unchecked, broad differential open.
-
-### Ownership board (ENFORCED · HR refresh 23:23)
-
-| Lane | Owns (edit only these) |
-|------|------------------------|
-| Tokens | **DONE** `58b13c6` / Anduril aliases `1d6ebef` |
-| Anduril Light | `tokens.css` · `DESIGN_SYSTEM.md` · `App.css` light tokens **only** |
-| Cupertino / Design QA | **DONE** icons + `DESIGN-QA-NOTES` (`1250dbc` / `f073aee`) — no reopen |
-| Overnight DoD + Staff EE | `engine/**` · `io/ascImport*` · `scripts/*named*` · corpus — measuring |
-| AI platform / Freshman | AI libs only (`localAiEnsure*` · `cloudAiConsent*` · `localMlx*` · LocalAiSetupDialog · SettingsAiSection) |
-| Bench | help/warning copy strings only |
-| HR/ops | Split dirty lanes; never blind-pop stashes; never check AGENTS §10 |
-| QA | gates + `~/Desktop/TAU-MORNING-STATUS.md` numbers |
-
-**Stashes (leave alone):** `freshman-assistant-aside`, `tokens-temp`,
-`concurrent-ui-aside`, `leave-freshman-ui` — do not pop over Design/Freshman work.
-
-**HR note:** Design sealed = `1250dbc` (QA notes + ShellPanels Lucide + DESIGN_SYSTEM)
-+ `1d6ebef` (token aliases) + `f073aee` (Sparkles drop). Engine PWL/LT3956 =
-`6a1a44e`/`db57703`. AI wording = `98ffd2d`. **Collision:** Freshman WIP still
-touches `ShellPanels.tsx` Settings AI — move to `SettingsAiSection.tsx`; do not
-rewrite Design chrome.
+Unit: EE-trust / student-calm product copy — quiet import toasts, Workspace disclosure in Settings, fail-closed inspector wording stays honest without alarm spam. Shippable? NO (DoD open).
 
 
 ---
+
+### 2026-08-04 — EE-trust copy (student-calm Settings + quieter notices)
+
+**What I did**
+- Quieted import toasts (Diagnostics owns warnings; no "See Diagnostics" nag).
+- Settings: Find parts + Workspace disclosure; Circuit assistant kicker.
+- Plotter: no duplicate run-warning banner; idle strip says press Run.
+- Inspector refuse copy stays fail-closed, calmer ("Needs a model/definition").
+
+**Files**
+- `App.tsx`, `ShellPanels.tsx`, `SimulationPanel.tsx`, `SettingsPanel.test.tsx`
+
+**Tests / proof**
+- SettingsPanel + ShellPanels + SimulationPanel focused vitest green
+
+**Parity items**
+- Product-trust UX copy only; DoD boxes unchanged. Shippable? NO.
+
+**Next step**
+- Leave Freshman on-device AI / Cupertino §10 alone; resume named-device HF triage.
+
+
+
+### 2026-08-04 — Named-device fidelity re-measure (Overnight DoD)
+
+**What I did**
+- `git pull --ff-only`. Ran `scripts/named-device-fidelity.sh` (exact stdout below).
+- HF=0 (not ≫10) → no engine fail-closed/exact-model change this unit.
+- Docs cite script stdout; AGENTS `unencrypted=` corrected 2641→2538. Honest note:
+  HF 103→0 is −103/+103 encrypted reclassification (exact unchanged at 399).
+- Never claim ≥95% / SHIPPABLE.
+
+**Exact stdout**
+```
+NAMED-DEVICE: exact=2 refuse=4 silent=0
+NAMED-DEVICE-RECURSIVE: unencrypted=2538 exact=399 refuse=2139 silent=0 hard-failure=0 encrypted-excluded=1474 exact-rate=15.7%
+```
+
+**Files**
+- `AGENTS.md`, `FEATURE_PARITY.md`, `PROGRESS.md`
+
+**Tests / proof**
+- `scripts/named-device-fidelity.sh`; gates typecheck + test on clean tip
+
+**Parity items**
+- Named-device: 🟡 HF=0 silent=0; exact-rate 15.7% (not ≥95%); SHIPPABLE? NO
+
+**Next step**
+- Raise exact-rate (refuse→exact); never silent substitution.
 
 ### 2026-08-04 — HR/ops: Design QA sealed + ownership lock
 

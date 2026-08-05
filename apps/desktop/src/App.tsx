@@ -1278,8 +1278,10 @@ function App() {
       // ascRewriteRisks for why a locally derived set unblocks a lossy save.
       openDocument(doc, title, path, ascRewriteRisks(text, result.foreignSymbols, result.hierarchicalBlocks));
       if (allWarnings.length > 0) {
+        // Diagnostics already lists these; skip a second toast that nags "See Diagnostics."
         console.warn(`Imported ${title} with ${allWarnings.length} warning(s):`, allWarnings);
-        showNotice(`Opened ${title} with ${allWarnings.length} import ${allWarnings.length === 1 ? "warning" : "warnings"}. See Diagnostics.`);
+      } else {
+        showNotice(`Opened ${title}`);
       }
     } catch (error) {
       showNotice(userFacingErrorMessage(error, "Could not import .asc file."));
@@ -1626,7 +1628,7 @@ function App() {
     setMode("schematic");
     setConfirmClearOpen(false);
     setGraphOpen(true);
-    showNotice("Scratchpad cleared.");
+    showNotice("Schematic cleared.");
   }, [activeId, newCircuit, invalidateAnalysis, showNotice]);
 
   useEffect(() => {
