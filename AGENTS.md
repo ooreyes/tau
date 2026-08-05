@@ -163,7 +163,7 @@ account and sign/notarize/ship.
       **Partial (2026-08-04):** unit proof `scripts/named-device-fidelity.sh`
       prints `NAMED-DEVICE: exact=2 refuse=4 silent=0` and recursive stdout
       `NAMED-DEVICE-RECURSIVE: unencrypted=2538 exact=399 refuse=2139 silent=0
-      hard-failure=0 encrypted-excluded=1474 exact-rate=15.7%` — Staff EE
+      hard-failure=0 encrypted-excluded=2782 exact-rate=33.3%` — Staff EE
       re-proved 2026-08-04 with `NAMED_DEVICE_ENCRYPTED_AUDIT=1` (without-flag
       refuse=1474 · hard_failure=0). Prior 2641/HF103/encrypted1371 → −103/+103
       is a **legitimate** bucket move: deck fixes unmasked parse HF into

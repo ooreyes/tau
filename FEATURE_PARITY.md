@@ -226,8 +226,8 @@ Status legend: ✅ done · 🟡 partial · ⬜ not started
     fail-closed deck: missing named models block Run rather than promising a
     generic starter. Proof: `scripts/named-device-fidelity.sh` →
     `NAMED-DEVICE: exact=2 refuse=4 silent=0` and recursive
-    `NAMED-DEVICE-RECURSIVE: unencrypted=2538 exact=399 refuse=2139 silent=0
-    hard-failure=0 encrypted-excluded=1474 exact-rate=15.7%` (Staff EE audit
+    `NAMED-DEVICE-RECURSIVE: unencrypted=1230 exact=410 refuse=820 silent=0
+    hard-failure=0 encrypted-excluded=2782 exact-rate=33.3%` (2026-08-04 23:40).
     2026-08-04; `NAMED_DEVICE_ENCRYPTED_AUDIT` wouldHard=0). HF 103→0 is
     −103/+103 encrypted reclass vs prior 2641/103/1371: deck fixes unmasked
     parse failures into honest encrypted ModelFile refusals — exact stayed

@@ -45,6 +45,7 @@ import { isComponentKind } from "../schematic/types";
 import { getLocalPins, transformPoint } from "../schematic/pins";
 import { parseIcValue } from "../engine/icSpec";
 import { MAX_COMPONENTS, MAX_WIRES } from "../schematic/documentValidation";
+import { ltspiceModelFileFromSymbolAttrs } from "./ltspiceModelFile";
 
 /**
  * Decode a schematic file's raw bytes to text, honoring the encoding LTspice
@@ -1960,6 +1961,11 @@ export function ascToSchematic(doc: AscDocument, options: AscImportOptions = {})
     // and neither is dropped.
     const onSymbol = extendedSymbolAttrs(symbol.attrs);
     const extras = carried ? { ...onSymbol, ...carried.extras } : onSymbol;
+    // ModelFile is the library path; SpiceModel is only a file when it ends in
+    // .lib/.sub/.mod (otherwise it is a subckt/profile name — ISO / UniversalOpAmp).
+    const resolvedModelFile = (kind === "opamp" || kind === "subckt") && symbolMetadata
+      ? ltspiceModelFileFromSymbolAttrs(symbolMetadata.attrs)
+      : undefined;
     components.push({
       id: id("c"),
       kind,
@@ -1988,9 +1994,7 @@ export function ascToSchematic(doc: AscDocument, options: AscImportOptions = {})
           ltModelName: [symbolMetadata.attrs.Value2, symbolMetadata.attrs.Value, leaf]
             .map((candidate) => candidate?.trim().split(/\s+/)[0] ?? "")
             .find((candidate) => candidate !== "" && !candidate.includes("=")) ?? leaf,
-          ...(symbolMetadata.attrs.SpiceModel?.trim()
-            ? { ltModelFile: symbolMetadata.attrs.SpiceModel.trim() }
-            : {}),
+          ...(resolvedModelFile ? { ltModelFile: resolvedModelFile } : {}),
         }
         : {}),
       // Label placement travels with the part, not the symbol bank, so keep it

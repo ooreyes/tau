@@ -9,14 +9,47 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-04 23:40 CDT**
+**Status: DONE - 2026-08-04 23:42 CDT**
 
-Unit: Overnight named-device — PWL/zero R·C/noiseless honesty + unique ASY
-basename refuse. Exact-rate unchanged 15.7%. Shippable? NO.
+Unit: Unique-leaf `.asy` basename resolve + ModelFile candidate helper; re-measure
+named-device. **exact-rate 33.3%**, HF=0, silent=0. ≥95% unchecked. SHIPPABLE? **NO**.
 
+**Measured** (`scripts/named-device-fidelity.sh`):
+`NAMED-DEVICE: exact=2 refuse=4 silent=0`
+`NAMED-DEVICE-RECURSIVE: unencrypted=1230 exact=410 refuse=820 silent=0
+hard-failure=0 encrypted-excluded=2782 exact-rate=33.3%`
+
+Prior tonight: HF 103→0; exact-rate 15.1%→15.7%→**33.3%** (unique basename +
+honest encrypted exclude). Do not revert unique-leaf resolve without measuring.
+
+**Lanes:** Overnight DoD owns `engine/**` `io/ascImport*` `io/ltspice*` `scripts/*named*`.
+Freshman AI / Design ShellPanels LOCKED.
+
+**SHIPPABLE?** **NO**
 
 ---
 
+
+### 2026-08-04 — Unique-leaf ASY resolve → exact-rate 33.3% (§DoD)
+
+**What I did**
+- `resolveInstalledAsyPath`: exact path first; unique basename fallback;
+  ambiguous leaves refuse (no wrong-family ModelFile).
+- `ltspiceModelFile` helper: ModelFile vs SpiceModel; `.sub`/`.lib` candidates.
+- Corpus harness uses unique-leaf resolve. Encrypted ModelFiles → encrypted-excluded.
+- HF regressions from newly attached devices closed earlier (PWL R refuse, 0Ω,
+  malformed PWL refuse, 0p C omit).
+
+**Proof**
+- typecheck + `pnpm -C apps/desktop test` → 2652 passed
+- fidelity stdout above
+
+**Parity**
+- Named-device 🟡 HF=0 silent=0 exact-rate **33.3%** (not ≥95%)
+
+**Next**
+- Raise exact further (OTA option mapping / plaintext library attach); or
+  differential Educational steptemp / Class-D AC.
 
 ### 2026-08-04 — Overnight: named-device refuse honesty (PWL / zero R·C / noiseless / unique ASY)
 

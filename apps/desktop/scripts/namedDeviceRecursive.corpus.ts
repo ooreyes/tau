@@ -39,6 +39,7 @@ import {
 } from "../src/io/corpusReport";
 import { opampIdentity } from "../src/engine/opampModel";
 import { parseUserModelLibraries, resolveUserSubckt, type UserModelLibraryRegistry } from "../src/engine/userModelLibrary";
+import { installedLibraryFileCandidates } from "../src/io/ltspiceModelFile";
 import { ltspiceLibRoots } from "./ltspiceLibRoot";
 import type { SchematicComponent } from "../src/schematic/types";
 
@@ -162,7 +163,11 @@ function installedSymbolMetadata(symbolType: string): AsySymbol | null {
   return null;
 }
 
-/** True when the relative ModelFile resolves to encrypted/binary installed bytes. */
+/**
+ * Encrypted-dependent only when every same-stem candidate is missing or
+ * encrypted. Authored `LT1175.sub` with plaintext `LT1175.lib` is NOT encrypted
+ * — the twin is exact-model plaintext (never a silent generic substitute).
+ */
 function installedModelFileIsEncrypted(relativeFile: string): boolean {
   const normalized = normalize(relativeFile.replace(/[\\/]+/g, sep));
   if (
@@ -171,18 +176,25 @@ function installedModelFileIsEncrypted(relativeFile: string): boolean {
     || normalized === ".."
     || normalized.startsWith(`..${sep}`)
   ) return false;
-  const key = normalized.toLowerCase();
+  const key = `any:${normalized.toLowerCase()}`;
   if (encryptedModelCache.has(key)) return encryptedModelCache.get(key)!;
-  for (const root of ltspiceLibRoots().flatMap((candidate) => [join(candidate, "sub"), candidate])) {
-    const path = join(root, normalized);
-    const rel = relative(root, path);
-    if (rel === ".." || rel.startsWith(`..${sep}`) || isAbsolute(rel) || !existsSync(path)) continue;
-    const encrypted = isEncryptedModelBytes(readFileSync(path));
-    encryptedModelCache.set(key, encrypted);
-    return encrypted;
+  let sawEncrypted = false;
+  for (const candidate of installedLibraryFileCandidates(normalized)) {
+    const candidateKey = normalize(candidate.replace(/[\\/]+/g, sep));
+    for (const root of ltspiceLibRoots().flatMap((entry) => [join(entry, "sub"), entry])) {
+      const path = join(root, candidateKey);
+      const rel = relative(root, path);
+      if (rel === ".." || rel.startsWith(`..${sep}`) || isAbsolute(rel) || !existsSync(path)) continue;
+      if (!isEncryptedModelBytes(readFileSync(path))) {
+        encryptedModelCache.set(key, false);
+        return false;
+      }
+      sawEncrypted = true;
+      break;
+    }
   }
-  encryptedModelCache.set(key, false);
-  return false;
+  encryptedModelCache.set(key, sawEncrypted);
+  return sawEncrypted;
 }
 
 function attachedInstalledModelBlocks(components: readonly SchematicComponent[]): string[] {
@@ -203,14 +215,18 @@ function attachedInstalledModelBlocks(components: readonly SchematicComponent[])
     let registry = modelRegistryCache.get(relativeFile.toLowerCase());
     if (registry === undefined) {
       registry = null;
-      for (const root of ltspiceLibRoots().flatMap((candidate) => [join(candidate, "sub"), candidate])) {
-        const path = join(root, relativeFile);
-        const rel = relative(root, path);
-        if (rel === ".." || rel.startsWith(`..${sep}`) || isAbsolute(rel) || !existsSync(path)) continue;
-        // Encrypted bytes are not SPICE text — skip without caching a parse.
-        if (isEncryptedModelBytes(readFileSync(path))) break;
-        registry = parseUserModelLibraries([decodeSchematicText(readFileSync(path))]);
-        break;
+      // Prefer authored path; if encrypted/missing, try same-stem .lib/.mod twin.
+      candidateLoop: for (const candidate of installedLibraryFileCandidates(relativeFile)) {
+        const normalizedCandidate = normalize(candidate.replace(/[\\/]+/g, sep));
+        for (const root of ltspiceLibRoots().flatMap((entry) => [join(entry, "sub"), entry])) {
+          const path = join(root, normalizedCandidate);
+          const rel = relative(root, path);
+          if (rel === ".." || rel.startsWith(`..${sep}`) || isAbsolute(rel) || !existsSync(path)) continue;
+          const bytes = readFileSync(path);
+          if (isEncryptedModelBytes(bytes)) continue;
+          registry = parseUserModelLibraries([decodeSchematicText(bytes)]);
+          break candidateLoop;
+        }
       }
       modelRegistryCache.set(relativeFile.toLowerCase(), registry);
     }
@@ -221,7 +237,7 @@ function attachedInstalledModelBlocks(components: readonly SchematicComponent[])
   return [...blocks.values()];
 }
 
-/** True when a token names an installed encrypted `.sub` / `.lib` (basename). */
+/** True when a token names an installed encrypted model with no plaintext twin. */
 function tokenNamesEncryptedInstalledModel(token: string): boolean {
   const name = token.trim();
   if (!name) return false;

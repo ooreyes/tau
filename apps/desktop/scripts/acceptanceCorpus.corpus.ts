@@ -27,7 +27,8 @@ import { importAsc, makeSubcircuitResolver, decodeSchematicText, parseAsy, type 
 import { buildParamScope } from "../src/simulation/paramScope";
 import { buildSpiceDeck, unresolvedSubcktMessage } from "../src/engine/spiceNetlist";
 import { validateSchematicDocument } from "../src/schematic/documentValidation";
-import { summarizeCorpus, formatCorpusReport, summarizeCorpusCapability, formatCorpusCapabilitySummary, classifyCorpusCapability, type CorpusRow } from "../src/io/corpusReport";
+import { summarizeCorpus, formatCorpusReport, summarizeCorpusCapability, formatCorpusCapabilitySummary, classifyCorpusCapability, isEncryptedModelBytes, type CorpusRow } from "../src/io/corpusReport";
+import { installedLibraryFileCandidates } from "../src/io/ltspiceModelFile";
 import { opampIdentity } from "../src/engine/opampModel";
 import { parseUserModelLibraries, resolveUserSubckt, type UserModelLibraryRegistry } from "../src/engine/userModelLibrary";
 import { ltspiceLibRoots } from "./ltspiceLibRoot";
@@ -199,12 +200,17 @@ function attachedInstalledModelBlocks(components: readonly import("../src/schema
     let registry = modelRegistryCache.get(relativeFile.toLowerCase());
     if (registry === undefined) {
       registry = null;
-      for (const root of ltspiceLibRoots().flatMap((candidate) => [join(candidate, "sub"), candidate])) {
-        const path = join(root, relativeFile);
-        const rel = relative(root, path);
-        if (rel === ".." || rel.startsWith(`..${sep}`) || isAbsolute(rel) || !existsSync(path)) continue;
-        registry = parseUserModelLibraries([decodeSchematicText(readFileSync(path))]);
-        break;
+      candidateLoop: for (const candidate of installedLibraryFileCandidates(relativeFile)) {
+        const normalizedCandidate = normalize(candidate.replace(/[\\/]+/g, sep));
+        for (const root of ltspiceLibRoots().flatMap((entry) => [join(entry, "sub"), entry])) {
+          const path = join(root, normalizedCandidate);
+          const rel = relative(root, path);
+          if (rel === ".." || rel.startsWith(`..${sep}`) || isAbsolute(rel) || !existsSync(path)) continue;
+          const bytes = readFileSync(path);
+          if (isEncryptedModelBytes(bytes)) continue;
+          registry = parseUserModelLibraries([decodeSchematicText(bytes)]);
+          break candidateLoop;
+        }
       }
       modelRegistryCache.set(relativeFile.toLowerCase(), registry);
     }

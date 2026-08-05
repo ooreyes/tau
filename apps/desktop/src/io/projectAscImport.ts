@@ -5,6 +5,8 @@ import { modelLibLinesFromDirectives } from "../engine/modelDirectives";
 import { includedFileName, libraryFileKey } from "../engine/spiceNetlist";
 import { MAX_MODEL_LIBRARIES, MAX_MODEL_LIBRARY_TOTAL_LENGTH } from "../schematic/documentValidation";
 import type { SchematicModelLibrary } from "../store/useSchematic";
+import { installedLibraryFileCandidates } from "./ltspiceModelFile";
+import { isEncryptedModelBytes } from "./corpusReport";
 
 const MAX_HIERARCHY_SYMBOLS = 128;
 const MAX_HIERARCHY_SOURCE_CHARS = 20 * 1024 * 1024;
@@ -143,13 +145,19 @@ async function resolveModelLibraries(
       break;
     }
     if (contents === null && options.readInstalledLtspiceText) {
-      const installedId = safe.toLowerCase().startsWith("sub/") ? safe : `sub/${safe}`;
-      try {
-        contents = await options.readInstalledLtspiceText(installedId);
-      } catch {
-        // Most installed ADI `.sub` files are intentionally encrypted. They are
-        // not SPICE text and must remain an explicit missing-model refusal.
-        contents = null;
+      const relative = safe.toLowerCase().startsWith("sub/") ? safe.slice(4) : safe;
+      // Authored `.sub` may be ADI-encrypted while a same-stem plaintext `.lib`
+      // ships beside it (LT1175, AD8561). Try each candidate; never a new stem.
+      for (const candidate of installedLibraryFileCandidates(relative)) {
+        const installedId = `sub/${candidate}`;
+        try {
+          const text = await options.readInstalledLtspiceText(installedId);
+          if (isEncryptedModelBytes(Buffer.from(text, "latin1"))) continue;
+          contents = text;
+          break;
+        } catch {
+          // Encrypted/missing installed bytes stay an honest missing-model refuse.
+        }
       }
     }
     if (contents === null) continue;

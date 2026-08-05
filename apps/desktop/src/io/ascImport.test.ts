@@ -1523,11 +1523,75 @@ SHEET 1 880 680
 SYMBOL ISO16750-2 544 -64 R0
 SYMATTR InstName U2
 SYMATTR SpiceModel 4-6-3_24V_StartingProfile`;
-    const doc = ascToSchematic(parseAsc(src));
+    const metadata = parseAsy(`Version 4
+SymbolType CELL
+SYMATTR SpiceModel 4-6-3_12V_StartingProfile
+SYMATTR Prefix X
+SYMATTR ModelFile ISO16750-2.lib
+PIN 0 0 LEFT 0
+PINATTR PinName +
+PINATTR SpiceOrder 1
+PIN 0 80 LEFT 0
+PINATTR PinName -
+PINATTR SpiceOrder 2`);
+    const doc = importAsc(src, { resolveSymbolMetadata: () => metadata });
     const u2 = doc.components.find((c) => c.label === "U2");
     expect(u2?.kind).toBe("subckt");
     expect(u2?.value).toBe("4-6-3_24V_StartingProfile");
+    // ModelFile is the library; instance SpiceModel is the profile name only.
+    expect(u2?.ltModelFile).toBe("ISO16750-2.lib");
     expect(doc.warnings).toHaveLength(0);
+  });
+
+  it("prefers .asy ModelFile over a non-file SpiceModel (UniversalOpAmp / AD8237)", () => {
+    const source = `Version 4
+SHEET 1 880 680
+SYMBOL OpAmps\\UniversalOpAmp 100 100 R0
+SYMATTR InstName U1
+SYMBOL OpAmps\\AD8237 300 100 R0
+SYMATTR InstName U2`;
+    const universal = parseAsy(`Version 4
+SymbolType CELL
+SYMATTR SpiceModel level1
+SYMATTR Prefix X
+SYMATTR Value2 Avol=1Meg GBW=10Meg
+SYMATTR ModelFile UniversalOpAmp1.lib
+PIN 16 48 LEFT 0
+PINATTR PinName In+
+PINATTR SpiceOrder 1
+PIN 16 80 LEFT 0
+PINATTR PinName In-
+PINATTR SpiceOrder 2
+PIN 96 64 RIGHT 0
+PINATTR PinName OUT
+PINATTR SpiceOrder 3`);
+    const ad8237 = parseAsy(`Version 4
+SymbolType CELL
+SYMATTR Value AD8237
+SYMATTR Prefix X
+SYMATTR ModelFile AD8237.lib
+PIN 0 32 LEFT 0
+PINATTR PinName +IN
+PINATTR SpiceOrder 1
+PIN 0 64 LEFT 0
+PINATTR PinName -IN
+PINATTR SpiceOrder 2
+PIN 64 48 RIGHT 0
+PINATTR PinName OUT
+PINATTR SpiceOrder 3`);
+    const doc = importAsc(source, {
+      resolveSymbolMetadata: (symbolType) => {
+        const leaf = symbolType.replace(/\\/g, "/").split("/").pop()?.toLowerCase();
+        if (leaf === "universalopamp") return universal;
+        if (leaf === "ad8237") return ad8237;
+        return null;
+      },
+    });
+    const u1 = doc.components.find((c) => c.label === "U1");
+    const u2 = doc.components.find((c) => c.label === "U2");
+    expect(u1?.ltModelFile).toBe("UniversalOpAmp1.lib");
+    expect(u2?.ltModelFile).toBe("AD8237.lib");
+    expect(u2?.ltModelName ?? u2?.value).toMatch(/AD8237/i);
   });
 
   it("Opamps\\opamp is a subckt (not the behavioral opamp kind) with SpiceOrder pins invin FIRST", () => {
