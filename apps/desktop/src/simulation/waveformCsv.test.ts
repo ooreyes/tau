@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { seriesToCsv, stepFamilyToCsv } from "./waveformCsv";
+import { seriesToCsv, stepFamilyToCsv, spectrumToCsv } from "./waveformCsv";
 
 describe("seriesToCsv", () => {
   it("writes a header row plus one row per axis sample", () => {
@@ -65,5 +65,37 @@ describe("stepFamilyToCsv", () => {
       { label: "V1=5", times: [0, 1, 2], values: [0.1] },
     ]);
     expect(csv).toBe(["step,time,I(R1)", "V1=5,0,0.1", "V1=5,1,", "V1=5,2,"].join("\n"));
+  });
+});
+
+describe("spectrumToCsv", () => {
+  it("exports freq + linear magnitude + dB columns for an FFT spectrum", () => {
+    const csv = spectrumToCsv(
+      {
+        frequencies: [0, 1000, 2000],
+        magnitude: [0.1, 1, 0.5],
+        magnitudeDb: [-20, 0, -6.0206],
+      },
+      "V(out)",
+    );
+    expect(csv).toBe(
+      [
+        "freq_Hz,V(out),V(out)_dB",
+        "0,0.1,-20",
+        "1000,1,0",
+        "2000,0.5,-6.0206",
+      ].join("\n"),
+    );
+  });
+
+  it("quotes signal labels with commas and defaults the label when blank", () => {
+    const csv = spectrumToCsv(
+      { frequencies: [0], magnitude: [1], magnitudeDb: [0] },
+      "V(a,b)",
+    );
+    expect(csv.split("\n")[0]).toBe('freq_Hz,"V(a,b)","V(a,b)_dB"');
+    expect(spectrumToCsv({ frequencies: [], magnitude: [], magnitudeDb: [] }, "  ").split("\n")[0]).toBe(
+      "freq_Hz,magnitude,magnitude_dB",
+    );
   });
 });

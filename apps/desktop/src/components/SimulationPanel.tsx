@@ -49,7 +49,7 @@ import { commonTraceUnit } from "../simulation/exprUnit";
 import { partitionTracesByAxis, planDualAxisY } from "../simulation/dualAxis";
 import { groupDelay } from "../simulation/groupDelay";
 import { stabilityMargins } from "../simulation/stability";
-import { seriesToCsv, stepFamilyToCsv } from "../simulation/waveformCsv";
+import { seriesToCsv, stepFamilyToCsv, spectrumToCsv } from "../simulation/waveformCsv";
 import {
   applyPltSection,
   buildPltSection,
@@ -2877,6 +2877,18 @@ export function FftView({ result, preferredSignals = [] }: { result: AnalysisRes
               onClick={() => setCursorsOn((c) => !c)}
             >
               Cursors
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={!spectrum}
+              aria-label="Export FFT spectrum CSV"
+              onClick={() => {
+                if (!spectrum) return;
+                downloadCsv(spectrumToCsv(spectrum, chosen || "magnitude"), "fft");
+              }}
+            >
+              Export CSV
             </Button>
           </div>
           <div className="scope-shell">

@@ -1,28 +1,17 @@
-# Tau Autobuilder — Progress Log
-
-<!-- ───────────────────────────────────────────────────────────────────────
-     ⏱ HEARTBEAT — the single source of "what is happening right now".
-     Every run REWRITES this block: at claim (Status: IN PROGRESS) and again at
-     done (Status: DONE). If you start a run and Status is still IN PROGRESS
-     from an OLD timestamp, the previous run died mid‑unit — run
-     `git log --oneline -8`, recover/finish/revert that unit FIRST, then go on.
-     ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 05:55 CDT**
+**Status: DONE - 2026-08-05 05:58 CDT**
 
-Unit: Circuit_testing_v1 `07_noise_rc_lowpass.asc` authored `.noise` → differential **pass=87**.
-```
-SUMMARY pass=87 sibling=5 gap=0
-noise ct-noise-rc … V(onoise) nRms=0
-```
-Named-device 48.1%. Left 100W/IRFP/Documents Draft*/Settings alone. Rebased over waveform `.plt` tip `0a3f6c0`. SHIPPABLE? **NO**
+Unit: Waveform DoD — **FFT spectrum CSV export** (`spectrumToCsv` + FftView Export CSV).
+Base tip `da8fe56` pass=87. Named-device 48.1%. Settings locked. SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
 
 
 ---
+
+
 
 ### 2026-08-05 — ct 07_noise_rc_lowpass .noise → pass=87 (§DoD)
 
@@ -48,6 +37,34 @@ Named-device 48.1%. Left 100W/IRFP/Documents Draft*/Settings alone. Rebased over
 **Next step**
 - Next honest differential (e.g. ct TF / OP) or non-wall named-device leftovers.
   Leave IRFP/Draft*/ISO7637/Settings alone.
+
+
+
+### 2026-08-05 — FFT spectrum CSV export (§waveform DoD)
+
+**What I did**
+- `spectrumToCsv` exports `freq_Hz,<signal>,<signal>_dB` per FFT bin; FftView
+  **Export CSV** downloads it. THD/SFDR stay on the spectrum meter.
+- Left 100W/IRFP, ct step/diode/RLC, Settings, Chan/NIGBT/FRA alone.
+  Continue 25 owns differential.
+
+**Files**
+- `apps/desktop/src/simulation/waveformCsv.ts` (+ test)
+- `apps/desktop/src/components/SimulationPanel.tsx`
+- `FEATURE_PARITY.md`, `PROGRESS.md`
+
+**Tests**
+- `pnpm -C apps/desktop typecheck` + `test` green
+- spectrumToCsv 2
+
+**Parity items**
+- Waveform viewer 🟡 (FFT CSV landed). Differential pass=87 · named-device
+  48.1% · SHIPPABLE? NO
+
+**Next step**
+- Right-click math, or non-wall named-device leftovers. Leave IRFP/Draft*/Settings alone.
+
+
 
 
 

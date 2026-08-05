@@ -1409,6 +1409,9 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   per-bin noise floor, SFDR, THD, and THD+N, and lists up to eight harmonic
   peaks with dB/dBc values. Harmonic lookup is binary-search based and covered
   by a 131k-bin regression, avoiding quadratic work on large native spectra.
+  **FFT spectrum CSV export landed** (2026-08-05): `spectrumToCsv` writes
+  `freq_Hz,<signal>,<signal>_dB` per bin; FftView **Export CSV** downloads it
+  (THD/SFDR remain on the meter). 2 pure tests.
 - 🟡 Log/linear axes, dB, phase, **group delay** — **group delay landed**
   (`simulation/groupDelay.ts`, 12 tests): pure `groupDelay(freqs, phaseDeg)`
   computes τ = −dφ/dω in seconds — phase is **unwrapped** first (`unwrapPhaseDeg`
@@ -1490,9 +1493,10 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   **`.plt` save/export landed** (2026-08-05): `serializePlt` / `buildPltSection`
   round-trip durable panes/traces/X/Y/Log; Advanced **Save .plt** downloads
   current Transient/AC/DC panes. 5 round-trip + 1 Save wiring tests.
-  **Dual-axis Y landed** (see expressions item). **Step-pane expressions
-  landed** (see expressions item). **NEXT:** (waveform CSV/PNG/plt/expressions
-  /dual-axis covered — remaining: right-click math).
+  **FFT spectrum CSV landed** (see FFT item). **Dual-axis Y landed** (see
+  expressions item). **Step-pane expressions landed** (see expressions item).
+  **NEXT:** (waveform CSV/PNG/plt/FFT/expressions/dual-axis covered —
+  remaining: right-click math).
 - ⬜ Right-click trace → math/operations
 
 ## 7. Engine & accuracy

@@ -77,3 +77,24 @@ export function stepFamilyToCsv(
   }
   return rows.join("\n");
 }
+
+/**
+ * Serialize an FFT amplitude spectrum: `freq_Hz,<signal>,<signal>_dB` one row
+ * per bin (including DC). Reuses {@link seriesToCsv} so quoting/non-finite
+ * cells match every other analysis export. THD stays in the FFT meter — this
+ * is the numeric spectrum dump LTspice's FFT viewer can File→Export.
+ */
+export function spectrumToCsv(
+  spectrum: {
+    frequencies: ReadonlyArray<number>;
+    magnitude: ReadonlyArray<number>;
+    magnitudeDb: ReadonlyArray<number>;
+  },
+  signalLabel = "magnitude",
+): string {
+  const label = signalLabel.trim() || "magnitude";
+  return seriesToCsv("freq_Hz", spectrum.frequencies, [
+    { label, values: spectrum.magnitude },
+    { label: `${label}_dB`, values: spectrum.magnitudeDb },
+  ]);
+}
