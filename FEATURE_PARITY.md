@@ -2038,8 +2038,13 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   conflict / missing). `ExternalEditConflictDialog` offers Reload, Keep mine
   (acknowledge disk revision; Save overwrites), or Keep open+detach / Discard
   when missing. Never silent overwrite. Proof:
-  `scripts/product-gates-external-edit.sh`. Still open for the product-gates
-  DoD box: first-success learning path, reproducible run records, versioned
+  `scripts/product-gates-external-edit.sh`. **Reproducible run records
+  (2026-08-05, product-gates partial):** versioned `tau.run.record.v1` after
+  each settled analysis (document signature + optional deck fingerprint +
+  engine + machine-readable diagnostics + measurements + bounded summary);
+  session history ring (`tau.run.history.v1`); Export `.tau-run.json` from the
+  analysis panel. Proof: `scripts/product-gates-run-records.sh`. Still open
+  for the product-gates DoD box: first-success learning path, versioned
   CLI/API. Box stays ⬜. SHIPPABLE? NO.
   **Structured LTspice slot editing (2026-08-02):** the App validator now
   preserves/bounds `ltExtraAttrs` instead of dropping it on open. A minimal edit

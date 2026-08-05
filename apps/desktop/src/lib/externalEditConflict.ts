@@ -8,7 +8,7 @@
  *   - conflict: disk changed and the editor has local edits
  *   - missing: path no longer exists
  *
- * Does not claim the full product-gates box: learning path, run records,
+ * Does not claim the full product-gates box: first-success learning path
  * and versioned CLI/API remain open.
  */
 

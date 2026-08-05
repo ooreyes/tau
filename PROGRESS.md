@@ -2,15 +2,51 @@
 
 **Status: DONE - 2026-08-05 ~13:15 CDT**
 
-Unit: **AI DoD box ✅** — native BYOK (Anthropic/Gemini + MLX) satisfies the
-AGENTS.md OR clause; Tau OAuth not required / not faked. Umbrella
-`scripts/ai-dod.sh`. SHIPPABLE? **NO** (other DoD boxes open)
+Unit: **Product gates — reproducible run records** — versioned
+`tau.run.record.v1` (signature + deck fingerprint + engine + diagnostics +
+measurements); session history + Export `.tau-run.json`. Product-gates DoD
+box stays ⬜ (learning path / CLI still open). SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
 
 
 ---
+
+### 2026-08-05 — Reproducible run records (product-gates partial)
+
+**What I did**
+- Landed versioned `tau.run.record.v1` run records after each settled analysis:
+  document signature, optional deck fingerprint, engine provenance,
+  machine-readable diagnostics, measurements, bounded summary (no waveform dump).
+- Session history ring (`tau.run.history.v1`, cap 20) + Export `.tau-run.json`
+  from the analysis panel. Reproducibility key ignores wall-clock fields.
+- Product-gates DoD box stays unchecked (learning path, CLI/API still open).
+  SHIPPABLE? **NO**.
+
+**Files**
+- `apps/desktop/src/lib/runRecord.ts` (+ test)
+- `apps/desktop/src/components/SimulationPanel.tsx` (+ runRecord test)
+- `apps/desktop/src/App.tsx` (signature / path props)
+- `scripts/product-gates-run-records.sh`
+- `AGENTS.md`, `FEATURE_PARITY.md`, `PROGRESS.md`
+
+**Tests**
+- `bash scripts/product-gates-run-records.sh` → PRODUCT-GATES-RUN-RECORDS: ok (15)
+- `pnpm -C apps/desktop typecheck` green
+- `pnpm -C apps/desktop test` → 2940 passed / 8 skipped
+
+**Parity items**
+- Product-gates DoD partial: run records ✅ alongside recovery + external-edit.
+  Box stays ⬜. SHIPPABLE? NO
+
+**Next step**
+- First-success learning path or versioned CLI/API.
+
+SHIPPABLE? **NO**
+
+---
+
 
 ### 2026-08-05 — AI DoD box proven via native BYOK (§AI)
 

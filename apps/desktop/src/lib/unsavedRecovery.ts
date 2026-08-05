@@ -5,9 +5,8 @@
  * Restore / Discard on the next launch instead of silently hydrating into the
  * live editor (which project-first open would then overwrite).
  *
- * Does not claim the full student/pro/dev product-gates box: external-edit
- * conflict handling, reproducible run records, first-success learning path,
- * and versioned CLI/API remain open.
+ * Does not claim the full student/pro/dev product-gates box: first-success
+ * learning path and versioned CLI/API remain open.
  */
 
 import type { SchematicDocument } from "../store/useSchematic";

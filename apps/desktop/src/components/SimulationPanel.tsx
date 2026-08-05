@@ -4,7 +4,16 @@ import type {
   PointerEvent as ReactPointerEvent,
   ReactNode,
 } from "react";
-import { Crosshair, Maximize2, Minimize2, Square } from "lucide-react";
+import { Crosshair, FileDown, Maximize2, Minimize2, Square } from "lucide-react";
+import {
+  buildRunRecord,
+  rememberRunRecord,
+  runRecordFileName,
+  serializeRunRecord,
+  type RunRecordAnalysis,
+  type RunRecordEngine,
+  type RunRecordStatus,
+} from "../lib/runRecord";
 import { useSchematic } from "../store/useSchematic";
 import { useRuntimeModelLibraries } from "../store/useRuntimeModelLibraries";
 import {
@@ -204,6 +213,10 @@ interface SimulationPanelProps {
   resetOptionsTarget?: "automatic" | "document";
   /** Measured wall-clock duration of the last completed transient run. */
   lastRunDurationMs?: number | null;
+  /** Id-independent schematic signature for reproducible run records. */
+  documentSignature?: string;
+  /** Active tab path when the schematic is disk-backed. */
+  circuitFilePath?: string | null;
   isRunning: boolean;
   /** Fraction in [0, 1] while the web TS transient solver is reporting real
    *  progress; null before the first callback and for the whole run when
@@ -286,6 +299,8 @@ export function SimulationPanel({
   optionsSource,
   resetOptionsTarget = "automatic",
   lastRunDurationMs = null,
+  documentSignature = "",
+  circuitFilePath = null,
   isRunning,
   runProgress,
   onOptionsChange,
@@ -935,6 +950,173 @@ export function SimulationPanel({
           ? "No analysis yet — press Run"
           : null;
 
+  const composeActiveRunRecord = useCallback(() => {
+    if (!activeResult) return null;
+    const analysis = mode as RunRecordAnalysis;
+    const engine: RunRecordEngine = activeResult.engine ?? "unknown";
+    const status: RunRecordStatus = activeResult.ok ? "ok" : "error";
+    const activeMeasurements =
+      mode === "tran" ? measurements
+      : mode === "ac" ? acMeasurements
+      : mode === "dc" ? dcMeasurements
+      : mode === "noise" ? noiseMeasurements
+      : [];
+
+    let message: string | null = null;
+    let details: string | null = null;
+    let warnings: string[] = [];
+    const summary: Parameters<typeof buildRunRecord>[0]["summary"] = {
+      durationMs: mode === "tran" ? lastRunDurationMs : null,
+    };
+
+    if (mode === "tran" && result) {
+      warnings = result.warnings ?? [];
+      if (result.ok) {
+        summary.sampleCount = result.stats.sampleCount;
+        summary.netCount = result.stats.netCount;
+        summary.componentCount = result.stats.componentCount;
+        summary.stopTime = result.stats.stopTime;
+      } else {
+        message = result.message;
+        details = result.details ?? null;
+      }
+    } else if (mode === "op" && opResult) {
+      warnings = opResult.warnings ?? [];
+      if (opResult.ok) {
+        summary.netCount = opResult.nets.length;
+        summary.highlights = opResult.nets.slice(0, 16).map((net) => ({
+          label: net.label || net.id,
+          value: net.voltage,
+          unit: "V",
+        }));
+      } else {
+        message = opResult.message;
+      }
+    } else if (mode === "ac" && acResult) {
+      warnings = acResult.warnings ?? [];
+      if (acResult.ok) {
+        summary.sampleCount = acResult.freqs.length;
+      } else {
+        message = acResult.message;
+      }
+    } else if (mode === "dc" && dcResult) {
+      warnings = dcResult.warnings ?? [];
+      if (dcResult.ok) {
+        summary.sampleCount = dcResult.sweep.length;
+      } else {
+        message = dcResult.message;
+      }
+    } else if (mode === "tf" && tfResult) {
+      warnings = tfResult.warnings ?? [];
+      if (tfResult.ok) {
+        summary.highlights = [
+          { label: "gain", value: tfResult.gain },
+          { label: "Zin", value: tfResult.inputImpedance, unit: "Ω" },
+          { label: "Zout", value: tfResult.outputImpedance, unit: "Ω" },
+        ];
+      } else {
+        message = tfResult.message;
+      }
+    } else if (mode === "noise" && noiseResult) {
+      warnings = noiseResult.warnings ?? [];
+      if (noiseResult.ok) {
+        summary.sampleCount = noiseResult.freqs.length;
+      } else {
+        message = noiseResult.message;
+      }
+    } else if (mode === "step" && stepResult) {
+      warnings = stepResult.warnings ?? [];
+      if (!stepResult.ok) message = stepResult.message ?? "Step family failed.";
+    }
+
+    let deckText: string | null = null;
+    try {
+      const params = directives.length > 0 ? buildParamScope(directives) : undefined;
+      // Fingerprint the circuit deck (`.op`) — analysis identity lives in
+      // `analysis.kind`, not in the analysis card baked into the netlist.
+      const deck = buildSpiceDeck(
+        {
+          components,
+          wires,
+          netLabels,
+          params,
+          directives,
+          ...(userModelLibraryTexts.length > 0
+            ? { userModelLibraries: userModelLibraryTexts, userModelLibraryNames }
+            : {}),
+        },
+        { kind: "op" },
+      );
+      deckText = deck.netlist;
+    } catch {
+      deckText = null;
+    }
+
+    return buildRunRecord({
+      title: circuitTitle ?? "untitled.asc",
+      filePath: circuitFilePath,
+      documentSignature: documentSignature || "unsigned",
+      deckText,
+      analysis,
+      engine,
+      status,
+      message,
+      details,
+      warnings,
+      measurements: activeMeasurements,
+      summary,
+    });
+  }, [
+    activeResult,
+    mode,
+    measurements,
+    acMeasurements,
+    dcMeasurements,
+    noiseMeasurements,
+    result,
+    opResult,
+    acResult,
+    dcResult,
+    tfResult,
+    noiseResult,
+    stepResult,
+    lastRunDurationMs,
+    directives,
+    components,
+    wires,
+    netLabels,
+    userModelLibraryTexts,
+    userModelLibraryNames,
+    circuitTitle,
+    circuitFilePath,
+    documentSignature,
+  ]);
+
+  // Persist a bounded session history whenever a new analysis result settles
+  // (identity change), not on every compose dependency churn.
+  const lastRememberedResultRef = useRef<unknown>(null);
+  useEffect(() => {
+    if (isRunning || !activeResult) return;
+    if (lastRememberedResultRef.current === activeResult) return;
+    lastRememberedResultRef.current = activeResult;
+    const record = composeActiveRunRecord();
+    if (record) rememberRunRecord(record);
+  }, [activeResult, isRunning, composeActiveRunRecord]);
+
+  const exportRunRecord = () => {
+    const record = composeActiveRunRecord();
+    if (!record) return;
+    rememberRunRecord(record);
+    const blob = new Blob([serializeRunRecord(record)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = runRecordFileName(circuitTitle ?? "untitled.asc");
+    a.click();
+    URL.revokeObjectURL(url);
+    setExportError(null);
+  };
+
   // Selecting an analysis tab both switches the visible pane and kicks off
   // that analysis immediately - the one primary Run control lives in the top
   // toolbar; in here tab selection IS the run gesture.
@@ -1002,6 +1184,22 @@ export function SimulationPanel({
             </TooltipTrigger>
             <TooltipContent>{maximized ? "Restore panel" : "Maximize analysis"}</TooltipContent>
           </Tooltip>
+          {activeResult && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="icon-sm"
+                  className="text-muted-foreground hover:text-foreground"
+                  onClick={exportRunRecord}
+                  aria-label="Export run record"
+                >
+                  <FileDown size={13} strokeWidth={1.8} aria-hidden="true" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Export reproducible .tau-run.json run record</TooltipContent>
+            </Tooltip>
+          )}
           {/* No Run button here - the single primary Run lives in the top
               toolbar. Duration/detail live in Advanced ▸ Simulation settings;
               run status lives in the dashboard strip under the tabs. */}

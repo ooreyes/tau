@@ -2313,6 +2313,8 @@ function App() {
                 optionsSource={analysisOptionsSource}
                 resetOptionsTarget={authoredAnalysisOptions ? "document" : "automatic"}
                 lastRunDurationMs={lastTransientDurationMs}
+                documentSignature={currentSignature}
+                circuitFilePath={activeFilePath}
                 isRunning={analysisRunning}
                 runProgress={runProgress}
                 onOptionsChange={overrideAnalysisOptions}

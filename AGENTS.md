@@ -350,9 +350,13 @@ account and sign/notarize/ship.
       pre-Save classify (`external-only` / `conflict` / `missing`),
       Reload / Keep mine / Keep open+detach dialog (`externalEditConflict.ts` +
       `ExternalEditConflictDialog`); proof
-      `scripts/product-gates-external-edit.sh`. Still open: first-success
-      learning path + contextual help; reproducible run records; versioned
-      CLI/API diagnostics. DoD box stays unchecked. SHIPPABLE? **NO**.
+      `scripts/product-gates-external-edit.sh`. Reproducible run records landed —
+      versioned `tau.run.record.v1` (document signature + deck fingerprint +
+      engine + diagnostics + measurements + bounded summary), session history
+      ring + Export `.tau-run.json` (`runRecord.ts` + SimulationPanel); proof
+      `scripts/product-gates-run-records.sh`. Still open: first-success
+      learning path + contextual help; versioned CLI/API diagnostics. DoD box
+      stays unchecked. SHIPPABLE? **NO**.
 - [x] All gates green; **unsigned release build is production‑ready**:
       `pnpm --filter @tau/desktop tauri build` succeeds, the DMG mounts, the
       built Tau.app launches and stays alive, and bundled ngspice simulates
