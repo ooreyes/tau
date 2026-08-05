@@ -1,12 +1,48 @@
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 ~15:05 CDT**
+**Status: DONE - 2026-08-05 ~15:10 CDT**
 
-Unit: **Documents/LTspice/Draft8.asc Laplace dual-deck .ac → pass=114** —
-native E Laplace↔s_xfer nRms≈0. Broad-differential **not** matrix-complete.
+Unit: **Applications/AD8237.asc authored .tran → pass=115** — plaintext
+AD8237.lib + installed OpAmps .asy; v(vout) nRms≈1e-4. Resources/help
+exhausted. Broad-differential **not** matrix-complete.
 SHIPPABLE? **NO** (ND≪95%).
 
 **SHIPPABLE?** **NO**
+
+
+
+---
+
+### 2026-08-05 — Applications AD8237 plaintext INA TRAN → pass=115 (§DoD)
+
+**What I did**
+- Tip was `bce16ba` / pass=114 (Draft8 Laplace). Resources/help ASC set
+  exhausted; SoftDiode Vp>0 / ISO7637 / TLINE / Chan / NIGBT / LT1001 avoided.
+- Landed **Applications/AD8237.asc** authored `.tran 5m`: installed
+  `OpAmps/AD8237.asy` (Prefix X) + plaintext `sub/AD8237.lib` via
+  `ltspiceLibRoots`. Probes `v(vout)`/`v(n002)` nRms≈1e-4. AD8233 same-deck
+  fails LTspice on Tau ternary rewrite — left alone. Tip → **pass=115**.
+- ND unchanged at 48.1% (Omar plaintext install). SHIPPABLE? **NO**.
+
+**Files**
+- `apps/desktop/scripts/differentialParity.corpus.ts`
+- `FEATURE_PARITY.md`, `PROGRESS.md`, `AGENTS.md`
+- `~/Desktop/TAU-MORNING-STATUS.md`
+
+**Tests**
+- Probe AD8237 v(vout) nRms≈1e-4
+- `pnpm -C apps/desktop typecheck` / `test` (2986 pass)
+- `scripts/differential-parity.sh` → SUMMARY pass=115 sibling=5 gap=0
+
+**Parity items**
+- Differential 🟡 **pass=115 · sibling=5 · gap=0**; DoD broad box unchecked.
+  SHIPPABLE? **NO**
+
+**Next step**
+- SoftDiode Vp>0 / Fc / ISO7637 / TLINE / Draft10 / AD8233 ternary / `.machine`
+  hollow; never fake ND. SHIPPABLE? **NO**
+
+SHIPPABLE? **NO**
 
 
 

@@ -36,6 +36,7 @@ import {
   type NumericTrace,
 } from "./parityHarness";
 import { standardModelLine } from "../src/engine/standardModels";
+import { ltspiceLibRoots } from "./ltspiceLibRoot";
 
 const haveLtspice = existsSync(LTSPICE_BINARY);
 const haveNgspice = spawnSync("ngspice", ["--version"], { encoding: "utf8" }).error === undefined;
@@ -141,6 +142,8 @@ const DRAFT3_ASC = join(DOC_LTSPICE, "Draft3.asc");
 const DRAFT7_ASC = join(DOC_LTSPICE, "Draft7.asc");
 /** Documents/LTspice Draft8 — Laplace E open/closed/inverting (dual-deck native↔s_xfer). */
 const DRAFT8_ASC = join(DOC_LTSPICE, "Draft8.asc");
+/** Applications AD8237 — plaintext AD8237.lib INA (authored .tran 5m; ≠ Draft8 Laplace / UOA*). */
+const AD8237_ASC = join(APP, "AD8237.asc");
 const BANDGAPS_ASC = join(EDU, "BandGaps.asc");
 const WAVEOUT_ASC = join(EDU, "waveout.asc");
 const ISO16750_ASC = join(EDU, "ISO16750-2_example.asc");
@@ -404,6 +407,31 @@ function siblingSymbolMetadata(dir: string) {
   };
 }
 
+/** Installed `sym/OpAmps/<leaf>.asy` from staged/TCC-safe LTspice lib roots. */
+function installedOpAmpSymbolMetadata(leafName: string) {
+  const want = leafName.toLowerCase();
+  return (symbolType: string) => {
+    const leaf = symbolType.replace(/\\/g, "/").split("/").pop() ?? "";
+    if (leaf.toLowerCase() !== want) return null;
+    for (const root of ltspiceLibRoots()) {
+      const path = join(root, "sym", "OpAmps", `${leaf}.asy`);
+      if (!existsSync(path)) continue;
+      return parseAsy(decodeSchematicText(readFileSync(path)));
+    }
+    return null;
+  };
+}
+
+/** Read plaintext `sub/<name>` from the first LTspice lib root that has it. */
+function readInstalledSubLib(fileName: string): { text: string; path: string } {
+  for (const root of ltspiceLibRoots()) {
+    const path = join(root, "sub", fileName);
+    if (!existsSync(path)) continue;
+    return { text: decodeSchematicText(readFileSync(path)), path };
+  }
+  throw new Error(`missing installed sub/${fileName}`);
+}
+
 /** Inject `AC 1` on the first V-source line when absent (LTspice requires an AC stimulus). */
 function withAcStimulus(netlist: string): string {
   return netlist
@@ -420,7 +448,7 @@ function withAcStimulus(netlist: string): string {
 describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential parity matrix", () => {
   const cells: DifferentialCell[] = [];
 
-  it("matches RC .tran/.ac/.meas, divider analyses, .step families, curvetrace, stepmodelparam, NoiseFigure, noise.asc, Colpitts/Clapp/Hartly AC, Cohn AC, MeasureBW AC, Transformer/Transformer2/IdealTransformer TRAN, notch/passive/butter/opamp/Linkwitz AC, LM741/LM308/LM78XX/P2/logamp TRAN, GFT AC, DCopPnt OP, audioamp TRAN, UHFpreamp AC, 1563 AC, S-param AC, stepAC AC, 2ndOrder* AC, MonteCarlo AC, varactor AC, phaseshift AC, Pierce/colpits2 AC, edu-varistor TRAN, stepnoise noise, UniversalOpAmp/1/2 TRAN, contrib/qztst AC, SampleAndHold TRAN, contrib/elip_grd AC, Draft3 AC, Draft7 AC, Draft2 TRAN, Draft1 TRAN, BandGaps DC-temp, waveout TRAN, ISO16750 TRAN, IGBTeq nested DC, help-Butterworth AC, Resources-Draft1 DC, 100W TRAN, help-ACstep AC, help-NoiseStep noise, Resources-MicroCode TRAN, ct-rlc-ringing TRAN, ct-diode-dc DC, ct-step-loaded DC, ct-noise-rc noise, ct-stress-rc-ladder AC, ct-active-fourth-order AC, ct-full-bridge TRAN, ct-three-phase TRAN, ct-buck TRAN, ct-boost TRAN, ct-logic TRAN, ct-dflop TRAN, MC1648 TRAN, HandsFreePreamp TRAN, Vswitch TRAN, dimmer TRAN, SoftDiodeRecovery TRAN, PowerAmp TRAN, PowerAmp A=0.2..0.7 TRAN, astable period, NE555 period, HandsFreeLayout TRAN, contrib/gr_del AC, PowerAmpLayout TRAN, PowerAmpLayout A=0.2..0.7 TRAN, Resources-sinh DC, Draft8 Laplace AC, Class-D AC/OP/DC/noise/tf", () => {
+  it("matches RC .tran/.ac/.meas, divider analyses, .step families, curvetrace, stepmodelparam, NoiseFigure, noise.asc, Colpitts/Clapp/Hartly AC, Cohn AC, MeasureBW AC, Transformer/Transformer2/IdealTransformer TRAN, notch/passive/butter/opamp/Linkwitz AC, LM741/LM308/LM78XX/P2/logamp TRAN, GFT AC, DCopPnt OP, audioamp TRAN, UHFpreamp AC, 1563 AC, S-param AC, stepAC AC, 2ndOrder* AC, MonteCarlo AC, varactor AC, phaseshift AC, Pierce/colpits2 AC, edu-varistor TRAN, stepnoise noise, UniversalOpAmp/1/2 TRAN, contrib/qztst AC, SampleAndHold TRAN, contrib/elip_grd AC, Draft3 AC, Draft7 AC, Draft2 TRAN, Draft1 TRAN, BandGaps DC-temp, waveout TRAN, ISO16750 TRAN, IGBTeq nested DC, help-Butterworth AC, Resources-Draft1 DC, 100W TRAN, help-ACstep AC, help-NoiseStep noise, Resources-MicroCode TRAN, ct-rlc-ringing TRAN, ct-diode-dc DC, ct-step-loaded DC, ct-noise-rc noise, ct-stress-rc-ladder AC, ct-active-fourth-order AC, ct-full-bridge TRAN, ct-three-phase TRAN, ct-buck TRAN, ct-boost TRAN, ct-logic TRAN, ct-dflop TRAN, MC1648 TRAN, HandsFreePreamp TRAN, Vswitch TRAN, dimmer TRAN, SoftDiodeRecovery TRAN, PowerAmp TRAN, PowerAmp A=0.2..0.7 TRAN, astable period, NE555 period, HandsFreeLayout TRAN, contrib/gr_del AC, PowerAmpLayout TRAN, PowerAmpLayout A=0.2..0.7 TRAN, Resources-sinh DC, Draft8 Laplace AC, AD8237 TRAN, Class-D AC/OP/DC/noise/tf", () => {
     // --- TRAN (also covered by waveformParity; re-assert here so this file is self-sufficient) ---
     {
       const result = runPairedBatch("diff-rc-tran", RC_TRAN, ["v(out)"]);
@@ -5854,6 +5882,81 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
       });
     }
 
+    // --- Applications/AD8237.asc authored .tran (plaintext AD8237.lib INA) ---
+    // Micropower rail-to-rail instrumentation amp demo: installed OpAmps/AD8237.asy
+    // (Prefix X + ModelFile AD8237.lib) + plaintext `sub/AD8237.lib` via
+    // ltspiceLibRoots (TCC-safe staged tree). Authored `.tran 5m` with 10 mV
+    // 1 kHz sine. Probe v(vout) nRms≈1e-4 @ 5%/15%, span≈0.40. Resources/help
+    // ASC set exhausted; AD8233 same-deck fails LTspice on Tau ternary rewrite
+    // of nested A-device B sources — left alone. Never SoftDiode Vp>0 / ISO7637 /
+    // TLINE / Chan / NIGBT / LT1001. Tip Draft8 pass=114 → **pass=115**.
+    // SHIPPABLE? **NO**.
+    {
+      expect(existsSync(AD8237_ASC), `missing ${AD8237_ASC}`).toBe(true);
+      const { text: ad8237Lib, path: ad8237LibPath } = readInstalledSubLib("AD8237.lib");
+      expect(ad8237Lib, `empty ${ad8237LibPath}`).toMatch(/\.subckt\s+AD8237\b/i);
+      expect(ad8237Lib.slice(0, 200)).not.toMatch(/^\*\s*\$\s*Encrypted/i);
+      const imported = importAsc(decodeSchematicText(readFileSync(AD8237_ASC)), {
+        resolveSymbolMetadata: installedOpAmpSymbolMetadata("AD8237"),
+      });
+      expect(imported.warnings).toEqual([]);
+      expect(imported.foreignSymbols).toEqual([]);
+      const ina = imported.components.filter((c) => c.kind === "subckt");
+      expect(ina.length, "one AD8237 subckt").toBe(1);
+      expect(String(ina[0]!.value ?? ""), "AD8237 value").toMatch(/^AD8237$/i);
+      const dirs = expandDirectiveLines(imported.directives);
+      const parsed = analysesFromDirectives(dirs);
+      expect(parsed.tran, "AD8237.asc must author .tran").toBeTruthy();
+      expect(parsed.tran!.stopTime, "AD8237 .tran 5m").toBeCloseTo(0.005, 12);
+      const params = buildParamScope(dirs);
+      const deck = buildSpiceDeck({
+        components: imported.components,
+        wires: imported.wires,
+        netLabels: imported.netLabels,
+        directives: dirs,
+        params,
+        userModelLibraries: [ad8237Lib],
+        userModelLibraryNames: ["AD8237.lib"],
+      }, {
+        kind: "tran",
+        stopTime: parsed.tran!.stopTime,
+        steps: Math.max(parsed.tran!.steps ?? 240, 5000),
+      });
+      expect(deck.unresolvedSubckts ?? []).toEqual([]);
+      expect(deck.modelSubstitutions ?? []).toEqual([]);
+      expect(deck.netlist).toMatch(/\.subckt\s+AD8237\b/i);
+      expect(deck.netlist).toMatch(/^XU1\b.+\bAD8237\b/im);
+      expect(deck.netlist).toMatch(/\bvout\b/i);
+      expect(deck.netlist).not.toMatch(/^[DQ]\w+\b.+\bTAU_/im);
+      expect(deck.netlist).not.toMatch(/^X\w+\b.+\bTAU_/im);
+      const probes = [
+        { expr: "v(vout)", rmsTolerance: 0.05, maxTolerance: 0.15, minSpan: 0.2 },
+        { expr: "v(n002)", rmsTolerance: 0.05, maxTolerance: 0.15, minSpan: 0.02 },
+      ] as const;
+      const result = runPairedBatch("diff-ad8237-tran", deck.netlist, probes.map((p) => p.expr));
+      const memberNotes: string[] = [];
+      for (const probe of probes) {
+        const lt = result.ltspice.get(probe.expr)!;
+        const ng = result.ngspice.get(probe.expr)!;
+        const comparison = compareWaveforms(ng.axis, ng.values, lt.axis, lt.values, {
+          rmsTolerance: probe.rmsTolerance,
+          maxTolerance: probe.maxTolerance,
+        });
+        expect(comparison.pass, `AD8237 ${probe.expr} ${JSON.stringify(comparison)}`).toBe(true);
+        expect(comparison.referenceRange, `AD8237 ${probe.expr} non-hollow`).toBeGreaterThan(probe.minSpan);
+        memberNotes.push(
+          `${probe.expr} nRms=${comparison.normalizedRms.toFixed(4)} nMax=${comparison.normalizedMax.toFixed(4)} span=${comparison.referenceRange.toFixed(3)}`,
+        );
+      }
+      cells.push({
+        analysis: "tran",
+        circuit: "ad8237",
+        topology: "Applications/AD8237.asc plaintext AD8237.lib INA (authored .tran 5m; installed OpAmps .asy)",
+        status: "pass",
+        note: memberNotes.join("; ") + " (plaintext AD8237.lib)",
+      });
+    }
+
     // --- Class-D AC/OP (authored analyses are .tran/.meas; add AC/OP for differential proof) ---
     {
       const ascPath = join(CLASSD_DIR, "class-d-starter.asc");
@@ -6150,6 +6253,6 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
     expect(passCount).toBeGreaterThanOrEqual(70);
     expect(siblingCount).toBe(5);
     expect(gapCount).toBe(0);
-    expect(report).toMatch(/SUMMARY pass=114 sibling=5 gap=0/);
+    expect(report).toMatch(/SUMMARY pass=115 sibling=5 gap=0/);
   }, 600_000);
 });

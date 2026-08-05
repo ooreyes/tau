@@ -229,7 +229,7 @@ account and sign/notarize/ship.
       with LTspice over a representative device and topology matrix.
       **Partial (2026-08-05):** `scripts/differential-parity.sh` +
       `differentialParity.corpus.ts` (also under `dod-parity.sh`) prove
-      pass=114 · sibling=5 · gap=0 on stdout: prior cells through SampleAndHold +
+      pass=115 · sibling=5 · gap=0 on stdout: prior cells through SampleAndHold +
       Educational/contrib/elip_grd.asc authored `.ac` (elliptic RLC + K1; S21/S11
       nRms≈0.0057/0.0039 @ maxTol=0.10 peak) + Documents/LTspice/Draft3.asc
       authored `.ac` (series RLC L/C/R; v(vout) nRms=0 / nMax=0 span≈1.04) +
@@ -343,11 +343,13 @@ account and sign/notarize/ship.
       TIP A=0.2..0.7; ≠ PowerAmp.asc 5m A-step; speaker nRms=0) +
       Documents/LTspice/Draft8.asc authored `.ac` (rational Laplace E
       open/closed/inv; dual-deck native Laplace↔s_xfer; v(vo_ol)/v(vo_cl)/v(l)
-      nRms=0; ≠ TwoTau/HalfSlope non-rational hollow).
-      Probed this session: Applications non-vendor leftovers=0; Documents
-      Draft10 UOA2 same-deck B_U* triangle fails LTspice timestep; TLINE-inv
-      nRms≈0.28; HalfSlope Laplace stripped to G=1; TwoTau s_xfer same-deck
-      rejected by LTspice; contrib exhausted (gd outs hollow). Matrix still
+      nRms=0; ≠ TwoTau/HalfSlope non-rational hollow) +
+      Applications/AD8237.asc authored `.tran` (plaintext AD8237.lib INA +
+      installed OpAmps .asy; v(vout)/v(n002) nRms≈1e-4; ≠ AD8233 ternary rewrite
+      wall / Draft6 AD823 encrypted ADI.lib / UOA2 Draft10).
+      Probed this session: Resources/help ASC exhausted; AD8233 same-deck fails
+      LTspice on Tau `?→` rewrite of nested A-device B sources; SoftDiode Vp>0 /
+      ISO7637 / TLINE / Chan / NIGBT / LT1001 left alone. Matrix still
       open — DoD box stays unchecked. SHIPPABLE? **NO** (named-device ≥95% also open).
 - [x] **AI is production-safe and genuinely circuit-aware:** a supported OpenAI
       path (Tau OAuth/backend or native BYOK with separate API billing) keeps
