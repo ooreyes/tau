@@ -345,6 +345,29 @@ describe("buildSpiceDeck", () => {
     expect(deck.netlist).toMatch(/^RTAU_C1_ESR\s+tau_c1_esr\s+0\s+0\.001$/m);
   });
 
+  it("expands LTspice voltage-source Rser into an explicit series resistor (NoiseFigure)", () => {
+    // Educational NoiseFigure.asc: V1 Value2=AC 1, SpiceLine Rser=1K. ngspice
+    // rejects Rser= on V, so the deck must expand it the same way C/L ESR does.
+    const components = [
+      component("vsource", "V1", "AC 1 Rser=1K", 0, 32),
+      component("resistor", "R1", "1k", 96, 0),
+      component("ground", "", "", 0, 64),
+      component("ground", "", "", 128, 0),
+    ];
+    const wires = [wire("w1", [{ x: 0, y: 0 }, { x: 64, y: 0 }])];
+    const deck = buildSpiceDeck({ components, wires }, {
+      kind: "noise",
+      output: { node: "n001" },
+      source: "V1",
+      startHz: 1e3,
+      stopHz: 1e5,
+      pointsPerDecade: 10,
+    });
+    expect(deck.netlist).toMatch(/^V1\s+tau_v1_rser\s+0\s+DC\s+0\s+AC\s+1$/m);
+    expect(deck.netlist).toMatch(/^RTAU_V1_RSER\s+\S+\s+tau_v1_rser\s+1000$/m);
+    expect(deck.netlist).not.toMatch(/\bRser=/i);
+  });
+
   it("expands LTspice inductor Rser without changing the coupled inductor name", () => {
     const components = [
       component("vsource", "V1", "5", 0, 32),

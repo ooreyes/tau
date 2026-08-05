@@ -1327,13 +1327,29 @@ function componentLines(entry: ExtractedComponent, index: number, name: string, 
     case "vsource": {
       // LTspice carries SINE/PULSE/PWL/EXP/SFFM inline on the source value, plus
       // an optional `AC <mag> [phase]` stimulus (from SYMATTR Value2). Split them.
-      const main = stripSourceModifiers(stripAcSpec(component.value));
-      const ac = acSpecDeckText(component.value);
+      // `Rser=` is a real series source impedance (Educational NoiseFigure.asc);
+      // ngspice rejects it on V, so expand to an explicit resistor like C/L ESR.
+      const series = passiveSeriesResistance(component);
+      const main = stripSourceModifiers(stripAcSpec(series.value));
+      const ac = acSpecDeckText(series.value);
+      const positive = node("p");
+      const negative = node("n");
+      const internal = `tau_${safeName(name).toLowerCase()}_rser`;
+      const posNode = series.ohms !== null && series.ohms > 0 ? internal : positive;
+      let sourceLine: string;
       const fn = parseSourceFunction(main, "V");
-      if (fn) return [`${name} ${node("p")} ${node("n")} ${fn.text}${ac}`];
-      const dc = numberFromText(component, main, "V");
-      const startup = startupRampSeconds === undefined ? "" : ` PWL(0 0 ${startupRampSeconds} ${dc})`;
-      return [`${name} ${node("p")} ${node("n")} DC ${dc}${startup}${ac}`];
+      if (fn) {
+        sourceLine = `${name} ${posNode} ${negative} ${fn.text}${ac}`;
+      } else {
+        const dc = numberFromText(component, main, "V");
+        const startup = startupRampSeconds === undefined ? "" : ` PWL(0 0 ${startupRampSeconds} ${dc})`;
+        sourceLine = `${name} ${posNode} ${negative} DC ${dc}${startup}${ac}`;
+      }
+      if (series.ohms === null || series.ohms === 0) return [sourceLine];
+      return [
+        sourceLine,
+        `RTAU_${safeName(name)}_RSER ${positive} ${internal} ${series.ohms}`,
+      ];
     }
     case "isource": {
       // SPICE convention: I N+ N- value → current flows from N+ toward N- through the

@@ -65,13 +65,14 @@ export function stripAcSpec(value: string): string {
 
 /**
  * Remove LTspice source *instance-parameter* tokens (`Rser=50`, `Cpar=10p`,
- * `wavefile=…`, `chan=0`, …) from a source value. ngspice's independent sources
- * reject these inline (`unknown parameter (rser)`), so an imported `.asc` whose
- * source value is `AC 1 Rser=1K` must drop the `Rser=` token before the DC level
- * parses - otherwise the leftover `Rser=1K` fails as "needs a valid V value".
- * Transient functions (SINE/PULSE/PWL/EXP/SFFM) contain no bare `key=value`
- * tokens, so this never disturbs them. The dropped series resistance is a small
- * accuracy concession in exchange for the deck building/simulating at all.
+ * `wavefile=…`, `chan=0`, …) from a source value so the remaining text parses
+ * as a clean DC level / transient function. ngspice rejects these inline
+ * (`unknown parameter (rser)`). The deck builder extracts `Rser=` first via
+ * `passiveSeriesResistance` and expands it to an explicit series resistor
+ * (Educational NoiseFigure.asc); this strip still runs on the residual value
+ * so a leftover `Rser=1K` cannot fail as "needs a valid V value". Transient
+ * functions (SINE/PULSE/PWL/EXP/SFFM) contain no bare `key=value` tokens, so
+ * this never disturbs them.
  */
 export function stripSourceModifiers(value: string): string {
   return value.replace(/\b[A-Za-z_]\w*\s*=\s*\S+/g, " ").replace(/\s+/g, " ").trim();

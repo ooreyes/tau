@@ -165,12 +165,14 @@ account and sign/notarize/ship.
       `.noise` / `.tf` / `.step` / `.meas` analyses and compares numeric outputs
       with LTspice over a representative device and topology matrix.
       **Partial (2026-08-04):** `scripts/differential-parity.sh` +
-      `differentialParity.corpus.ts` (also under `dod-parity.sh`) prove RC
-      `.tran`/`.ac` and divider `.dc`/`.op`/`.tf`/`.noise` vs installed LTspice;
-      sibling TRAN/meas proofs remain Colpitts/Class-D/Efficiency/special
-      devices. Stdout coverage matrix is truth (`pass`/`sibling`/`gap`). Box
-      stays open — `.step` families, Educational curvetrace/NoiseFigure, and
-      broad topology matrix are still gaps.
+      `differentialParity.corpus.ts` (also under `dod-parity.sh`) prove
+      pass=10 · sibling=5 · gap=3 on stdout: RC `.tran`/`.ac`/`.meas`, divider
+      `.dc`/`.op`/`.tf`/`.noise`, expanded `.step param` RC family, Educational
+      curvetrace nested DC, Educational NoiseFigure (Vsource `Rser` expanded).
+      Sibling TRAN/meas proofs remain Colpitts/Class-D/Efficiency/special
+      devices. Remaining gaps: nested/temp/source `.step` families, Colpitts AC,
+      Class-D non-tran (OP refuses behavioral L). Broad topology matrix still
+      open — DoD box stays unchecked.
 - [ ] **AI is production-safe and genuinely circuit-aware:** a supported OpenAI
       path (Tau OAuth/backend or native BYOK with separate API billing) keeps
       service credentials out of the renderer, obtains explicit cloud-data

@@ -9,6 +9,23 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
+**Status: DONE - 2026-08-04 22:20 CDT**
+
+Unit: Widen differential matrix — move gap rows to pass/sibling with
+honest LTspice↔ngspice compares. Stdout coverage matrix is truth.
+DoD broad-differential box stays open. Shippable? NO.
+
+What landed this unit:
+
+- Vsource `Rser=` expands to explicit series R (NoiseFigure.asc source Z)
+- Differential corpus: RC `.meas`, `.step param` RC family (expanded),
+  Educational curvetrace nested DC (aligned compare), NoiseFigure onoise/inoise
+- Proven this run: **pass=10 · sibling=5 · gap=3**
+- Remaining gaps: nested/temp/source `.step`; Colpitts AC; Class-D non-tran
+  (OP refuses behavioral L `@device[param]`)
+
+Next unit: remaining differential gaps / §10 / named-device / unsigned release.
+
 **Status: DONE - 2026-08-04 22:12 CDT**
 
 Unit: Broad differential parity — smallest honest vertical slice.
