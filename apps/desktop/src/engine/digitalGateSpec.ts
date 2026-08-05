@@ -11,13 +11,15 @@ import { parseQuantity } from "../simulation/quantity";
  * {buf, and, or, xor, schmitt}, and inversion falls out of *which output pin*
  * a line drives. Floating inputs are ignored (LTspice semantics).
  *
- * Emission is a B-source per connected output using ngspice's ternary - the
- * same live-verified idiom as engine/comparatorSpec.ts. Boolean `&&`/`||`,
- * `==`, and `abs()` in B expressions are all live-verified in ngspice-46.
- * The flip-flop (DFLOP) is stateful and cannot be a B-source; it emits an
- * XSPICE d_dff between explicit adc/dac bridges (also live-verified - the
- * AUTO bridge's default thresholds sit above LTspice's 0..1 V logic levels,
- * so explicit bridges at Vt/Vlow/Vhigh are required, not optional).
+ * Emission is a B-source per connected output using the ternary `cond ? a : b`
+ * idiom (live-verified in ngspice-46; LTspice 17.2.4 accepts the same form).
+ * Multi-input AND/OR must NOT use C-style `&&`/`||` — LTspice rejects those
+ * with a grammatical error on the B-line. Use arithmetic on 0/1 comparisons
+ * instead: AND = product of terms, OR = sum of terms `>0`. `==` and `abs()`
+ * are likewise live-verified. The flip-flop (DFLOP) is stateful and cannot be
+ * a B-source; it emits an XSPICE d_dff between explicit adc/dac bridges (also
+ * live-verified — the AUTO bridge's default thresholds sit above LTspice's
+ * 0..1 V logic levels, so explicit bridges at Vt/Vlow/Vhigh are required).
  */
 export type DigitalGateFn = "buf" | "and" | "or" | "xor" | "schmitt";
 
@@ -136,9 +138,11 @@ export function digitalGateDeckLines(
   if (ins.length === 0) {
     cond = "0"; // all inputs floating → logic false (ternary picks vlow)
   } else if (fn === "and") {
-    cond = ins.map((n) => term(n, vt)).join("&&");
+    // Product of 0/1 comparisons — LTspice rejects C-style `&&` in B-sources.
+    cond = ins.map((n) => term(n, vt)).join("*");
   } else if (fn === "or") {
-    cond = ins.map((n) => term(n, vt)).join("||");
+    // Sum of 0/1 comparisons > 0 — LTspice rejects C-style `||` in B-sources.
+    cond = `(${ins.map((n) => term(n, vt)).join("+")})>0`;
   } else if (fn === "xor") {
     // LTspice XOR is "exactly one input true" (equals classic XOR at 2 inputs).
     cond = `(${ins.map((n) => term(n, vt)).join("+")})==1`;

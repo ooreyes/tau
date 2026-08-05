@@ -70,6 +70,8 @@ const CT_THREE_PHASE_ASC = join(REPO_ROOT, "Circuit_testing_v1", "17_three_phase
 const CT_BUCK_ASC = join(REPO_ROOT, "Circuit_testing_v1", "12_buck_converter.asc");
 /** Tau Circuit_testing_v1 — async boost QS6K1 + 1N5819 (≠ ct 12 buck / edu 100W IRFP). */
 const CT_BOOST_ASC = join(REPO_ROOT, "Circuit_testing_v1", "13_boost_converter.asc");
+/** Tau Circuit_testing_v1 — combinational AND/NAND/OR/NOR/XOR/XNOR A-device matrix. */
+const CT_LOGIC_ASC = join(REPO_ROOT, "Circuit_testing_v1", "14_logic_gate_matrix.asc");
 const EDU = join(homedir(), "Documents", "LTspice", "examples", "Educational");
 const APP = join(homedir(), "Documents", "LTspice", "examples", "Applications");
 const DOC_LTSPICE = join(homedir(), "Documents", "LTspice");
@@ -297,7 +299,7 @@ function withAcStimulus(netlist: string): string {
 describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential parity matrix", () => {
   const cells: DifferentialCell[] = [];
 
-  it("matches RC .tran/.ac/.meas, divider analyses, .step families, curvetrace, stepmodelparam, NoiseFigure, noise.asc, Colpitts/Clapp/Hartly AC, Cohn AC, MeasureBW AC, Transformer/Transformer2/IdealTransformer TRAN, notch/passive/butter/opamp/Linkwitz AC, LM741/LM308/LM78XX/P2/logamp TRAN, GFT AC, DCopPnt OP, audioamp TRAN, UHFpreamp AC, 1563 AC, S-param AC, stepAC AC, 2ndOrder* AC, MonteCarlo AC, varactor AC, phaseshift AC, Pierce/colpits2 AC, edu-varistor TRAN, stepnoise noise, UniversalOpAmp/1/2 TRAN, contrib/qztst AC, SampleAndHold TRAN, contrib/elip_grd AC, Draft3 AC, Draft7 AC, Draft2 TRAN, Draft1 TRAN, BandGaps DC-temp, waveout TRAN, ISO16750 TRAN, IGBTeq nested DC, help-Butterworth AC, Resources-Draft1 DC, 100W TRAN, help-ACstep AC, help-NoiseStep noise, Resources-MicroCode TRAN, ct-rlc-ringing TRAN, ct-diode-dc DC, ct-step-loaded DC, ct-noise-rc noise, ct-stress-rc-ladder AC, ct-active-fourth-order AC, ct-full-bridge TRAN, ct-three-phase TRAN, ct-buck TRAN, ct-boost TRAN, Class-D AC/OP/DC/noise/tf", () => {
+  it("matches RC .tran/.ac/.meas, divider analyses, .step families, curvetrace, stepmodelparam, NoiseFigure, noise.asc, Colpitts/Clapp/Hartly AC, Cohn AC, MeasureBW AC, Transformer/Transformer2/IdealTransformer TRAN, notch/passive/butter/opamp/Linkwitz AC, LM741/LM308/LM78XX/P2/logamp TRAN, GFT AC, DCopPnt OP, audioamp TRAN, UHFpreamp AC, 1563 AC, S-param AC, stepAC AC, 2ndOrder* AC, MonteCarlo AC, varactor AC, phaseshift AC, Pierce/colpits2 AC, edu-varistor TRAN, stepnoise noise, UniversalOpAmp/1/2 TRAN, contrib/qztst AC, SampleAndHold TRAN, contrib/elip_grd AC, Draft3 AC, Draft7 AC, Draft2 TRAN, Draft1 TRAN, BandGaps DC-temp, waveout TRAN, ISO16750 TRAN, IGBTeq nested DC, help-Butterworth AC, Resources-Draft1 DC, 100W TRAN, help-ACstep AC, help-NoiseStep noise, Resources-MicroCode TRAN, ct-rlc-ringing TRAN, ct-diode-dc DC, ct-step-loaded DC, ct-noise-rc noise, ct-stress-rc-ladder AC, ct-active-fourth-order AC, ct-full-bridge TRAN, ct-three-phase TRAN, ct-buck TRAN, ct-boost TRAN, ct-logic TRAN, Class-D AC/OP/DC/noise/tf", () => {
     // --- TRAN (also covered by waveformParity; re-assert here so this file is self-sufficient) ---
     {
       const result = runPairedBatch("diff-rc-tran", RC_TRAN, ["v(out)"]);
@@ -4437,6 +4439,75 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
       });
     }
 
+    // --- Circuit_testing_v1/14_logic_gate_matrix.asc authored .tran ---
+    // Tau-owned ASC: VA/VB PULSE 0–5 V exercising all four AB states +
+    // Digital\and/or/xor/inv (NAND/NOR/XNOR via complementary/inv pins) +
+    // 100k loads. Authored `.tran 10n 8u`. Same-deck B-source emit (product
+    // AND / sum>0 OR — LTspice rejects C-style &&/|| on B-lines). Fine
+    // maxStep=100p so discontinuous ternary edges align across solvers;
+    // nRms≈0.0025 under stock 2%, nMax≈0.27 needs maxTol=0.30 (edge-step
+    // placement — not hollow; span≈5). Distinct from SampleAndHold SAMPLE
+    // A-devices, ct 15 dflop, Educational/160.asc. Left Staff EE waveform /
+    // Settings / Draft* / ct15 / ct19 INA alone. Tip ct-boost pass=97 → **pass=98**.
+    {
+      expect(existsSync(CT_LOGIC_ASC), `missing ${CT_LOGIC_ASC}`).toBe(true);
+      const imported = importAsc(decodeSchematicText(readFileSync(CT_LOGIC_ASC)));
+      expect(imported.warnings).toEqual([]);
+      expect(imported.foreignSymbols).toEqual([]);
+      expect(imported.components.filter((c) => c.kind === "digitalGate")).toHaveLength(4);
+      const dirs = expandDirectiveLines(imported.directives);
+      const parsed = analysesFromDirectives(dirs);
+      expect(parsed.tran, "14_logic_gate_matrix.asc must author .tran").toBeTruthy();
+      const params = buildParamScope(dirs);
+      const deck = buildSpiceDeck({
+        components: imported.components,
+        wires: imported.wires,
+        netLabels: imported.netLabels,
+        directives: dirs,
+        params,
+      }, {
+        kind: "tran",
+        stopTime: parsed.tran!.stopTime,
+        steps: Math.max(parsed.tran!.steps ?? 800, 20000),
+        startTime: parsed.tran!.startTime,
+        maxStep: Math.min(parsed.tran!.maxStep ?? 1e-10, 1e-10),
+      });
+      expect(deck.unresolvedSubckts ?? []).toEqual([]);
+      expect(deck.modelSubstitutions ?? []).toEqual([]);
+      expect(deck.netlist).toMatch(/B_A1_Q\b.+\*\(V\(b\)/i);
+      expect(deck.netlist).toMatch(/B_A2_Q\b.+\+.*\)>0/i);
+      expect(deck.netlist).toMatch(/B_A3_Q\b.+==1/i);
+      expect(deck.netlist).toMatch(/B_A4_QB\b/i);
+      expect(deck.netlist).not.toMatch(/&&|\|\|/);
+      expect(deck.netlist).toMatch(/^VA\b.+\bPULSE\(/im);
+      expect(deck.netlist).toMatch(/^VB\b.+\bPULSE\(/im);
+      expect(deck.netlist).toMatch(/\.tran\b/i);
+      const probes = ["v(and)", "v(nand)", "v(or)", "v(nor)", "v(xor)", "v(xnor)"] as const;
+      const result = runPairedBatch("diff-ct-logic-tran", deck.netlist, [...probes]);
+      const memberNotes: string[] = [];
+      for (const probe of probes) {
+        const lt = result.ltspice.get(probe)!;
+        const ng = result.ngspice.get(probe)!;
+        const comparison = compareWaveforms(ng.axis, ng.values, lt.axis, lt.values, {
+          rmsTolerance: 0.02,
+          maxTolerance: 0.30,
+        });
+        expect(comparison.pass, `ct-logic ${probe} ${JSON.stringify(comparison)}`).toBe(true);
+        expect(comparison.referenceRange, `ct-logic ${probe} non-hollow`).toBeGreaterThan(4);
+        expect(comparison.normalizedRms, `ct-logic ${probe} nRms`).toBeLessThan(0.02);
+        memberNotes.push(
+          `${probe} nRms=${comparison.normalizedRms.toFixed(4)} nMax=${comparison.normalizedMax.toFixed(4)} span=${comparison.referenceRange.toFixed(3)}`,
+        );
+      }
+      cells.push({
+        analysis: "tran",
+        circuit: "ct-logic",
+        topology: "Circuit_testing_v1/14_logic_gate_matrix.asc AND/NAND/OR/NOR/XOR/XNOR (authored .tran 10n–8u; maxTol=0.30 edge)",
+        status: "pass",
+        note: memberNotes.join("; ") + " (maxTol=0.30)",
+      });
+    }
+
     // --- Class-D AC/OP (authored analyses are .tran/.meas; add AC/OP for differential proof) ---
     {
       const ascPath = join(CLASSD_DIR, "class-d-starter.asc");
@@ -4733,6 +4804,6 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
     expect(passCount).toBeGreaterThanOrEqual(70);
     expect(siblingCount).toBe(5);
     expect(gapCount).toBe(0);
-    expect(report).toMatch(/SUMMARY pass=97 sibling=5 gap=0/);
+    expect(report).toMatch(/SUMMARY pass=98 sibling=5 gap=0/);
   }, 240_000);
 });

@@ -1861,10 +1861,11 @@ describe("buildSpiceDeck", () => {
       wire("w3", [{ x: 32, y: -16 }, { x: 64, y: -16 }]),
     ];
     const deck = buildSpiceDeck({ components, wires }, { kind: "op" });
-    // Both driven inputs appear as threshold terms ANDed together; only the
+    // Both driven inputs appear as threshold terms multiplied (AND); only the
     // connected true output emits a line (floating qbar/in3-5 are ignored).
+    // Product form (not C-style &&) — LTspice rejects && on B-lines.
     expect(deck.netlist).toMatch(
-      /B_A1_Q \S+ 0 V=\(\(V\(\S+\)>0\.5\)&&\(V\(\S+\)>0\.5\)\) \? 1 : 0/,
+      /B_A1_Q \S+ 0 V=\(\(V\(\S+\)>0\.5\)\*\(V\(\S+\)>0\.5\)\) \? 1 : 0/,
     );
     expect(deck.netlist).not.toContain("B_A1_QB");
   });

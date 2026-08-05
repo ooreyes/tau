@@ -48,9 +48,9 @@ describe("digitalGateDeckLines", () => {
   it("emits an AND ternary per connected output (qbar swaps levels)", () => {
     const lines = digitalGateDeckLines("A1", { ins: ["a", "b"], q: "y", qbar: "yb" }, spec);
     expect(lines).toEqual([
-      "B_A1_Q A1_qd 0 V=((V(a)>0.5)&&(V(b)>0.5)) ? 1 : 0",
+      "B_A1_Q A1_qd 0 V=((V(a)>0.5)*(V(b)>0.5)) ? 1 : 0",
       "R_A1_Q A1_qd y 1",
-      "B_A1_QB A1_qbd 0 V=((V(a)>0.5)&&(V(b)>0.5)) ? 0 : 1",
+      "B_A1_QB A1_qbd 0 V=((V(a)>0.5)*(V(b)>0.5)) ? 0 : 1",
       "R_A1_QB A1_qbd yb 1",
     ]);
   });
@@ -59,9 +59,9 @@ describe("digitalGateDeckLines", () => {
     expect(digitalGateDeckLines("A1", { ins: ["a"] }, spec)).toEqual([]);
   });
 
-  it("OR joins terms with ||; XOR is exactly-one-true", () => {
+  it("OR joins terms as sum>0; XOR is exactly-one-true", () => {
     const or = digitalGateDeckLines("A1", { ins: ["a", "b"], q: "y" }, parseDigitalGate("or"));
-    expect(or[0]).toBe("B_A1_Q A1_qd 0 V=((V(a)>0.5)||(V(b)>0.5)) ? 1 : 0");
+    expect(or[0]).toBe("B_A1_Q A1_qd 0 V=(((V(a)>0.5)+(V(b)>0.5))>0) ? 1 : 0");
     const xor = digitalGateDeckLines("A1", { ins: ["a", "b"], q: "y" }, parseDigitalGate("xor"));
     expect(xor[0]).toBe("B_A1_Q A1_qd 0 V=(((V(a)>0.5)+(V(b)>0.5))==1) ? 1 : 0");
   });

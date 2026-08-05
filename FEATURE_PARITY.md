@@ -1675,7 +1675,7 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   oscillator by amplitude, RMS, and frequency. All four proofs pass headlessly.
   **Differential matrix slice (2026-08-05):** `scripts/differential-parity.sh`
   (wired into `dod-parity.sh`) prints pass/sibling/gap coverage to stdout
-  (truth). Gap-closure → **pass=97 · sibling=5 · gap=0**: prior cells through
+  (truth). Gap-closure → **pass=98 · sibling=5 · gap=0**: prior cells through
   SampleAndHold plus Educational/contrib/**elip_grd.asc** authored `.ac`
   (elliptic RLC+K1; S21/S11 nRms≈0.0057/0.0039 @ maxTol=0.10 peak) plus
   Documents/LTspice/**Draft3.asc** authored `.ac` (series RLC L/C/R; v(vout)
@@ -1738,7 +1738,11 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   .meas VOUT_AVG/VOUT_PP relErr≤2%; ≠ ct 18 bridge / edu 100W IRFP / ct 13 boost) plus
   Circuit_testing_v1/**13_boost_converter.asc** authored `.tran`
   (QS6K1 VDMOS + 1N5819 Schottky + L/C Rser; v(out) nRms=0 / nMax≈0.0015;
-  .meas VOUT_AVG/VOUT_PP relErr≤2%; ≠ ct 12 buck / ct 18 bridge / edu 100W).
+  .meas VOUT_AVG/VOUT_PP relErr≤2%; ≠ ct 12 buck / ct 18 bridge / edu 100W) plus
+  Circuit_testing_v1/**14_logic_gate_matrix.asc** authored `.tran`
+  (Digital\and/or/xor/inv; AND/NAND/OR/NOR/XOR/XNOR; product/sum B-emit;
+  six traces nRms≈0.0025 @ maxTol=0.30 edge; ≠ SampleAndHold / ct 15 dflop /
+  Educational/160).
   ct 19 INA `.op` deferred (LTspice OP fails on same-deck tanh B_U*).
   gr_del
   deferred (all-pass |V|≈1
