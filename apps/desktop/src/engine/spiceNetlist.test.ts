@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildSpiceDeck,
   includedFileName,
+  nestedXSubcktRefs,
   unresolvedModelMessage,
   transformerWindings,
   unresolvedLibraryWarning,
@@ -1015,6 +1016,99 @@ describe("buildSpiceDeck", () => {
     expect(deck.netlist).toMatch(/^XU1 \S+ \S+ MyBlock$/m);
   });
 
+  it("reports a nested X ref inside an inlined body when that peer is missing", () => {
+    let counter = 0;
+    const uid = (p: string) => `${p}-${++counter}`;
+    const sub = (label: string, value: string, pins: Array<[string, string, number, number]>): SchematicComponent => ({
+      id: uid("subckt"),
+      kind: "subckt",
+      x: 0,
+      y: 0,
+      rotation: 0,
+      value,
+      label,
+      pinOverride: pins.map(([id, pinLabel, x, y]): PinOverride => ({ id, label: pinLabel, x, y })),
+    });
+    const lbl = (x: number, y: number, text: string): NetLabel => ({ id: uid("flag"), x, y, text });
+
+    const comps = [sub("U1", "Outer", [["p1", "a", 0, 0], ["p2", "b", 0, 80]])];
+    const netLabels = [lbl(0, 80, "0")];
+    // Outer is defined; its body calls MissingPeer which is nowhere.
+    const directives = [".subckt Outer a b\\nX1 a b MissingPeer\\n.ends Outer"];
+    const deck = buildSpiceDeck({ components: comps, wires: [], netLabels, directives }, { kind: "op" });
+
+    expect(deck.unresolvedSubckts).toEqual(["MissingPeer"]);
+    expect(deck.netlist).toMatch(/^XU1 \S+ \S+ Outer$/m);
+    expect(deck.netlist).toContain("X1 a b MissingPeer");
+  });
+
+  it("emits a nested peer from the user library when an inlined body calls it", () => {
+    let counter = 0;
+    const uid = (p: string) => `${p}-${++counter}`;
+    const sub = (label: string, value: string, pins: Array<[string, string, number, number]>): SchematicComponent => ({
+      id: uid("subckt"),
+      kind: "subckt",
+      x: 0,
+      y: 0,
+      rotation: 0,
+      value,
+      label,
+      pinOverride: pins.map(([id, pinLabel, x, y]): PinOverride => ({ id, label: pinLabel, x, y })),
+    });
+    const lbl = (x: number, y: number, text: string): NetLabel => ({ id: uid("flag"), x, y, text });
+
+    const comps = [sub("U1", "Outer", [["p1", "a", 0, 0], ["p2", "b", 0, 80]])];
+    const netLabels = [lbl(0, 80, "0")];
+    // Only Outer is on the schematic; Peer lives in the attached library and
+    // must be pulled in by transitive closure (not only top-level X refs).
+    const userModelLibraries = [
+      [
+        ".subckt Outer a b",
+        "Xnest a b Peer",
+        ".ends Outer",
+        ".subckt Peer c d",
+        "R1 c d 1k",
+        ".ends Peer",
+      ].join("\n"),
+    ];
+    const deck = buildSpiceDeck(
+      { components: comps, wires: [], netLabels, userModelLibraries },
+      { kind: "op" },
+    );
+
+    expect(deck.unresolvedSubckts).toEqual([]);
+    expect(deck.netlist).toMatch(/^\.subckt Outer /m);
+    expect(deck.netlist).toMatch(/^\.subckt Peer /m);
+    expect(deck.netlist).toContain("R1 c d 1k");
+    expect(deck.netlist.match(/^\.subckt Peer /gm)?.length).toBe(1);
+  });
+
+  it("does not flag a nested .subckt defined inside the same inlined body", () => {
+    let counter = 0;
+    const uid = (p: string) => `${p}-${++counter}`;
+    const sub = (label: string, value: string, pins: Array<[string, string, number, number]>): SchematicComponent => ({
+      id: uid("subckt"),
+      kind: "subckt",
+      x: 0,
+      y: 0,
+      rotation: 0,
+      value,
+      label,
+      pinOverride: pins.map(([id, pinLabel, x, y]): PinOverride => ({ id, label: pinLabel, x, y })),
+    });
+    const lbl = (x: number, y: number, text: string): NetLabel => ({ id: uid("flag"), x, y, text });
+
+    const comps = [sub("U1", "Outer", [["p1", "a", 0, 0], ["p2", "b", 0, 80]])];
+    const netLabels = [lbl(0, 80, "0")];
+    const directives = [
+      ".subckt Outer a b\\n.subckt Inner c d\\nR1 c d 1k\\n.ends Inner\\nX1 a b Inner\\n.ends Outer",
+    ];
+    const deck = buildSpiceDeck({ components: comps, wires: [], netLabels, directives }, { kind: "op" });
+
+    expect(deck.unresolvedSubckts).toEqual([]);
+    expect(deck.netlist).toContain("X1 a b Inner");
+  });
+
   it("leaves deck output unchanged when no user model libraries are supplied (regression guard)", () => {
     const components = [
       component("vsource", "V1", "5", 0, 32),
@@ -1612,6 +1706,29 @@ describe("unresolvedSubcktMessage", () => {
     const message = unresolvedSubcktMessage(names);
     expect(message).toContain('"A", "B", "C", "D", "E", "F", and 2 more');
     expect(message).not.toContain('"G"');
+  });
+});
+
+describe("nestedXSubcktRefs", () => {
+  it("returns peer X names and skips locally nested .subckt definitions", () => {
+    const block = [
+      ".subckt Outer a b",
+      ".subckt Inner c d",
+      "R1 c d 1k",
+      ".ends Inner",
+      "X1 a b Inner",
+      "X2 a b MissingPeer params: gain=2",
+      "X3 a b MissingPeer",
+      "* Xskip a b CommentedOut",
+      "R2 a b 10",
+      ".ends Outer",
+    ].join("\n");
+    expect(nestedXSubcktRefs(block)).toEqual(["MissingPeer"]);
+  });
+
+  it("stops at params: / assignments when reading the subckt name", () => {
+    expect(nestedXSubcktRefs(".subckt O a b\nX1 a b Foo bar=1\n.ends O")).toEqual(["Foo"]);
+    expect(nestedXSubcktRefs(".subckt O a b\nX1 a b Bar params: x=1\n.ends O")).toEqual(["Bar"]);
   });
 });
 

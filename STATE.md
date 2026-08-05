@@ -5,14 +5,13 @@ The working memory of an unattended loop that starts from zero every fire.
 
 ## Now
 
-**Status:** IDLE 2026-08-04 20:25 CDT - P0.2 closed; corpus unresolvedSubckts
-guard landed. Canonical 82/81/79/79 with 0 hard failures / 3 honest refusals.
-Completion remains RETRACTED.
+**Status:** IDLE 2026-08-04 20:24 CDT - transitive `.subckt` closure landed;
+staged GPL residue cleared locally. Canonical floors unchanged (closure is a
+refusal/emission correctness unit, not a corpus-floor mover). Completion
+remains RETRACTED.
 
-**Next unit:** transitive `.subckt` closure inside `buildSpiceDeck` (walk
-inlined bodies for nested X refs) and/or make the full-corpus gate measure
-capability honestly (P0.3 remainder / P0.4). Staged `table.cm` GPL residue
-still fails cargo until a rebuild.
+**Next unit:** P0.4 full-corpus capability measurement (gate on capability,
+not message prefixes) and/or Class-D `.tran`/`.meas` blockers.
 
 The 2026-08-03 "PROJECT COMPLETE" signal was wrong and has been withdrawn. A
 four-part adversarial audit reproduced the gates and disagreed with these docs.
@@ -49,10 +48,10 @@ the local MLX provider so their prompts cannot drift. Per-provider keychain
 entries; CSP pins `generativelanguage.googleapis.com`. Unit-tested against a
 stubbed fetch; **not yet exercised against the live Google API.**
 
-Next up, in order: transitive `.subckt` closure + corpus harness applying
-`unresolvedSubckts` (converts Royer/LT1184F and ~1,465 unknown-subckt crashes
-into named refusals), then make the corpus gate measure capability instead of
-message prefixes. P0.1 and P0.2 are closed.
+Next up, in order: P0.4 full-corpus capability measurement (gate on
+capability, not message-prefix wording), then Class-D `.tran`/`.meas`
+blockers. P0.1, P0.2, and transitive nested-X closure are closed; corpus
+already applies `unresolvedSubckts` at the harness.
 
 **Product UX contract (Omar, 2026-08-03): Tau is not a prettier command-line
 wrapper.** Known SPICE semantics must appear as named, editable controls in the
@@ -119,6 +118,7 @@ Newest first, ONE line each. Full evidence for every unit is in PROGRESS.md
 and in its commit message. This section exists so a fresh fire can see what
 is already done at a glance, not so it can re-read the reasoning.
 
+- 2026-08-04 - TRANSITIVE `.subckt` CLOSURE: nested X refs inside inlined bodies emit resolvable peers or land on unresolvedSubckts; staged GPL residue cleared locally so cargo staged_engine is green.
 - 2026-08-04 - CORPUS APPLIES THE APP'S unresolvedSubckts GUARD. Royer/LT1184F is an honest deck refusal; canonical hard failures 1 -> 0; floors 82/81/79/79.
 - 2026-08-04 - CHAN-CORE INDUCTORS REFUSE INSTEAD OF SUBSTITUTING LINEAR L. NonLinearTransformer is the only canonical casualty; corpus re-measured 82/81/80/79; mutation-checked. P0.2 closed.
 - 2026-08-04 - TWO OF THE THREE SILENT SUBSTITUTIONS NOW SPEAK. A `Laplace=` that no rational polynomial can express - which is every current-source `Laplace=`, since `s_xfer` is voltage-in/voltage-out - reports the DC gain H(0) it actually ran and that its frequency response is unsimulated; a dropped LTspice `load`/`load2` flag reports that the source can now deliver as well as draw current. Mutation-checked: reverting the three pushes fails exactly the three positive tests and neither negative control.

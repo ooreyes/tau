@@ -98,10 +98,11 @@ export interface SpiceDeck {
   modelSubstitutions: ModelSubstitution[];
   /** Subcircuit reference names (original casing, deduped, sorted) that no
    *  inline directive, bundled library, or user-imported `.lib`/`.subckt`
-   *  defines. The netlist still emits their `X` lines, so the native engine
-   *  would fail with a cryptic "unknown subckt"; the native runner checks this
-   *  first and fails fast with product copy naming the missing part(s). Empty
-   *  for every fully-resolved deck. */
+   *  defines — including nested `X` instances inside already-inlined bodies.
+   *  The netlist still emits top-level `X` lines, so the native engine would
+   *  fail with a cryptic "unknown subckt"; the native runner checks this first
+   *  and fails fast with product copy naming the missing part(s). Empty for
+   *  every fully-resolved deck. */
   unresolvedSubckts: string[];
   /** Every device whose own current the deck named in a `.save`, and the vector
    *  ngspice returns it under. Recorded per component so the read side looks up
@@ -600,6 +601,55 @@ export function buildSpiceDeck(schematic: Schematic, analysis: SpiceAnalysis): S
     }
   }
 
+  // Transitive closure over nested `X` instances inside every body already on
+  // the deck (document / bundled-file / selectively-emitted). A macromodel that
+  // calls a peer `.subckt` must pull that peer in when we have it; otherwise
+  // name the missing part on unresolvedSubckts so the runner refuses honestly
+  // instead of dying on ngspice's "unknown subckt".
+  const unresolvedByKey = new Map<string, string>();
+  const lookupSubcktBody = (key: string): string | null => {
+    const fromDocument = documentLibraryRegistry.subckts.get(key);
+    if (fromDocument) return fromDocument;
+    const fromUser = userLibraryRegistry.subckts.get(key);
+    if (fromUser) {
+      const refusal = fromUser.split("\n").find((entry) => entry.startsWith(TAU_MODEL_REFUSAL_MARKER));
+      if (refusal) {
+        throw new Error(
+          `Simulation refused: ${refusal.slice(TAU_MODEL_REFUSAL_MARKER.length)} No approximate or partial circuit was run.`,
+        );
+      }
+      return fromUser;
+    }
+    return bundledSubcircuitBlock(key);
+  };
+  const deckHasSubckt = (key: string): boolean =>
+    inlinedSubckts.has(key) || emittedSubckts.has(key);
+  const walkedBodies = new Set<string>();
+  const closureQueue = [...new Set([...inlinedSubckts, ...emittedSubckts])];
+  while (closureQueue.length > 0) {
+    const key = closureQueue.pop()!;
+    if (walkedBodies.has(key)) continue;
+    walkedBodies.add(key);
+    const body = lookupSubcktBody(key);
+    if (!body) continue;
+    for (const displayName of nestedXSubcktRefs(body)) {
+      const nestedKey = sanitizeSubcktName(displayName).toLowerCase();
+      if (!nestedKey) continue;
+      if (deckHasSubckt(nestedKey)) {
+        if (!walkedBodies.has(nestedKey)) closureQueue.push(nestedKey);
+        continue;
+      }
+      const nestedBody = lookupSubcktBody(nestedKey);
+      if (nestedBody) {
+        lines.push(nestedBody);
+        emittedSubckts.add(nestedKey);
+        closureQueue.push(nestedKey);
+        continue;
+      }
+      if (!unresolvedByKey.has(nestedKey)) unresolvedByKey.set(nestedKey, displayName);
+    }
+  }
+
   // A per-instance C/L initial condition also needs `uic` so the value holds at
   // t=0, exactly like a `.ic` directive.
   const hasInstanceIc = circuit.components.some(
@@ -623,7 +673,7 @@ export function buildSpiceDeck(schematic: Schematic, analysis: SpiceAnalysis): S
   const subcktModels = new Set([
     ...definedSubcktNames(rawDirectives),
     ...inlinedSubckts,
-    ...emittedOpampSubckts,
+    ...emittedSubckts,
   ]);
 
   // A `subckt` instance whose referenced name resolves to no definition
@@ -633,13 +683,13 @@ export function buildSpiceDeck(schematic: Schematic, analysis: SpiceAnalysis): S
   // names (original casing, deduped) so the native runner can fail fast with
   // product copy naming exactly which part's library is missing. Membership is
   // tested against both the sanitized and raw forms of every known-defined name
-  // so a legitimately resolvable reference is never flagged.
+  // so a legitimately resolvable reference is never flagged. Nested X refs
+  // discovered during the closure walk above are already in unresolvedByKey.
   const definedSubcktRefs = new Set<string>();
-  for (const known of [...subcktModels, ...emittedSubckts, ...userModels]) {
+  for (const known of [...subcktModels, ...userModels]) {
     definedSubcktRefs.add(known);
     definedSubcktRefs.add(sanitizeSubcktName(known).toLowerCase());
   }
-  const unresolvedByKey = new Map<string, string>();
   for (const { component } of circuit.components) {
     if (component.kind !== "subckt") continue;
     if (importedSymbolLeaf(component) === "varistor") continue;
@@ -962,6 +1012,42 @@ export function unresolvedSubcktMessage(names: readonly string[]): string {
 }
 
 const MAX_LISTED_MISSING_SUBCKTS = 6;
+
+/**
+ * Subcircuit names referenced by `X` instances inside a `.subckt … .ends`
+ * block (or a multi-block library dump), excluding names defined by a
+ * `.subckt` header in the same text (nested local definitions travel with the
+ * outer block). Preserves first-seen original casing; dedupes case-insensitively.
+ *
+ * An X line is `Xname n1 n2 … SubcktName [params: … | a=b …]`. The subckt name
+ * is the last token that is neither `params:` nor a `name=value` assignment.
+ */
+export function nestedXSubcktRefs(blockText: string): string[] {
+  const localNames = new Set<string>();
+  for (const match of blockText.matchAll(/^\.subckt\s+(\S+)/gim)) {
+    localNames.add(sanitizeSubcktName(match[1]!).toLowerCase());
+  }
+  const refs: string[] = [];
+  const seen = new Set<string>();
+  for (const raw of blockText.replace(/\r\n/g, "\n").split("\n")) {
+    const line = raw.trim().replace(/\s*;.*$/, "");
+    if (line === "" || line.startsWith("*")) continue;
+    if (!/^X\S*/i.test(line)) continue;
+    const tokens = line.split(/\s+/).filter(Boolean);
+    let name: string | undefined;
+    for (let i = 1; i < tokens.length; i += 1) {
+      const token = tokens[i]!;
+      if (/^params:$/i.test(token) || token.includes("=")) break;
+      name = token;
+    }
+    if (!name) continue;
+    const key = sanitizeSubcktName(name).toLowerCase();
+    if (!key || localNames.has(key) || seen.has(key)) continue;
+    seen.add(key);
+    refs.push(name);
+  }
+  return refs;
+}
 
 interface CurrentSwitchDeckSpec {
   controlSource: string;

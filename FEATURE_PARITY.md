@@ -824,6 +824,12 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   nowhere is reported on `SpiceDeck.unresolvedSubckts`, and the native runner
   fails fast through `userFacingErrorMessage` naming the missing part instead of
   handing ngspice a deck that dies with a cryptic "unknown subckt".
+  **Transitive nested-X closure (2026-08-04):** `buildSpiceDeck` walks every
+  inlined `.subckt` body for nested `X` instances — emits resolvable peer
+  definitions from the document / user library / bundled blocks, and adds
+  missing nested names to `unresolvedSubckts` (same honest refusal path as
+  top-level). Local nested `.subckt`…`.ends` definitions inside the same body
+  are not flagged.
   **Installed-library browser (2026-08-03):** Model Libraries now locates the
   user's own macOS LTspice data tree (`~/Library/Application Support/LTspice/
   lib`), searches its supported subcircuit/standard-model text files, and

@@ -9,6 +9,19 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
+**Status: DONE - 2026-08-04 20:24 CDT**
+
+Unit: transitive `.subckt` closure in `buildSpiceDeck`. Nested `X` refs inside
+inlined bodies now emit resolvable peers or land on `unresolvedSubckts`.
+Staged GPL residue (`table.cm` / `ivlng*` / `scripts/src` / cosim scripts)
+cleared from `resources/ngspice` + digest map; cargo `staged_engine` green.
+Gates: typecheck clean; 2554 frontend tests passed; staged_engine 23/23.
+
+Next unit: P0.4 full-corpus capability measurement (honest gate vs message
+prefixes) and/or Class-D blockers. DoD still open; shippable? NO.
+
+Previous completed unit:
+
 **Status: DONE - 2026-08-04 20:25 CDT**
 
 Unit: corpus harness applies the app's unresolvedSubckts guard. Royer/LT1184F
@@ -16,30 +29,17 @@ is now an honest deck refusal instead of an ngspice "unknown subckt" hard op
 failure. Canonical re-measured: 82/81/79/79, HARD FAILURES (0), three honest
 refusals (NIGBT, Chan, LT1184F).
 
-Previous completed unit:
+What landed this unit:
 
-**Status: DONE - 2026-08-04 20:20 CDT**
-
-Unit: refuse Chan magnetic-core inductors (last P0.2 silent substitution).
-Measured canonical corpus after the change: 82 imported / 81 warning-clean /
-80 deck-built / 79 op-converged. Floors set to warning-clean ≥80, deck ≥80,
-op ≥79. Mutation-checked: disabling the refusal fails the new test.
-
-What landed:
-
-- `spiceNetlist.ts` inductor path refuses `isCoreInductor` specs with
-  `coreInductorRefusalMessage` instead of emitting unsaturated linear L.
-- `coreInductor.ts` documents refusal; `coreInductance` kept for diagnostics
-  only.
-- Corpus floors + FEATURE_PARITY / acceptance-corpus.sh comments updated to
-  the re-measured numbers. Honest accounting: NIGBT + Chan are deck refusals;
-  Royer.asc still hard-fails at op on encrypted LT1184F until the harness
-  applies `unresolvedSubckts` (next unit / P0.3).
-
-Gates: `tsc --noEmit` clean; full frontend suite 2549 passed; canonical
-corpus soft floors green at 82/81/80/79. Cargo lib test still red on a
-pre-existing staged `table.cm` (GPL) left in resources - not introduced by
-this unit; `build-ngspice.sh` already deletes it on a rebuild.
+- `nestedXSubcktRefs` extracts peer `X` names from a body (skips local nested
+  `.subckt` defs; stops at `params:` / `a=b`).
+- `buildSpiceDeck` BFS-closes over inlined/emitted bodies: emit from document /
+  user / bundled registries, else name on `unresolvedSubckts`.
+- Tests: missing nested peer reported; peer from user lib emitted once; local
+  nested def not flagged; helper unit tests.
+- Local fix (gitignored resources): deleted GPL staged files and rewrote
+  `build-info.json` digests so cargo packaging checks pass without a full
+  `./scripts/build-ngspice.sh` rebuild.
 
 Previous completed unit:
 
