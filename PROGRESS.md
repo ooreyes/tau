@@ -1,15 +1,46 @@
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 ~10:46 CDT**
+**Status: DONE - 2026-08-05 ~10:50 CDT**
 
-Unit: CEO war room — **Editor DoD audit** (mirror/flip, copy/paste,
-multi-select, rubber-band). All four proven green this session; AGENTS.md
-Editor box flipped. SHIPPABLE? **NO**
+Unit: Waveform viewer DoD proof — consolidated vitest +
+`scripts/waveform-viewer-dod.sh`; flipped AGENTS.md checkbox with evidence.
+Left palette / Settings / Educational alone. SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
 
 
+
+---
+
+### 2026-08-05 — Waveform viewer DoD proof (§waveform DoD)
+
+**What I did**
+- Audited FEATURE_PARITY + SimulationPanel: expressions, cursors, FFT/THD,
+  stepped-family overlays, and CSV/PNG were already landed with tests but the
+  AGENTS.md DoD box stayed unchecked for lack of a single re-runnable proof.
+- Added `waveformViewerDod.test.ts` (6 assertions covering every bullet) and
+  `scripts/waveform-viewer-dod.sh`. Flipped AGENTS.md + FEATURE_PARITY ✅
+  with cited landmark SHAs. No UI feature grind; no palette/Settings.
+
+**Files**
+- `apps/desktop/src/simulation/waveformViewerDod.test.ts`
+- `scripts/waveform-viewer-dod.sh`
+- `AGENTS.md`, `FEATURE_PARITY.md`, `PROGRESS.md`
+
+**Tests**
+- `bash scripts/waveform-viewer-dod.sh` (6/6)
+- `pnpm -C apps/desktop typecheck` + DoD-related suites (102 passed);
+  App.workspace timeouts are pre-existing flakes unrelated to this proof.
+
+**Parity items**
+- AGENTS.md Waveform viewer DoD → checked. SHIPPABLE? NO (other DoD boxes open)
+
+**Next step**
+- Remaining open DoD: directives coverage, §10 design system, min-window UI,
+  named-device ≥95%, broad differential, AI, product gates.
+
+SHIPPABLE? **NO**
 
 ---
 
@@ -36,9 +67,8 @@ Editor box flipped. SHIPPABLE? **NO**
 - AGENTS.md Editor DoD box → ✅ (proven). SHIPPABLE? NO
 
 **Next step**
-- Remaining open DoD: directives coverage, waveform viewer, §10 design
-  system, min-window UI, named-device ≥95%, broad differential, AI,
-  product gates.
+- Remaining open DoD: directives coverage, §10 design system, min-window UI,
+  named-device ≥95%, broad differential, AI, product gates.
 
 ---
 

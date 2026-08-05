@@ -144,8 +144,18 @@ account and sign/notarize/ship.
       by `scripts/waveformParity.corpus.ts` via `scripts/dod-parity.sh`.
 - [ ] All directives used in the corpus are supported: `.tran .ac .op .dc .step
       .meas .noise .tf .param .func .temp .options .model .inc .subckt`.
-- [ ] Waveform viewer: arbitrary expressions, cursors, FFT/THD, stepped‑family
-      overlays, CSV/image export.
+- [x] Waveform viewer: arbitrary expressions, cursors, FFT/THD, stepped‑family
+      overlays, CSV/image export. Proven 2026-08-05 by
+      `scripts/waveform-viewer-dod.sh` → `apps/desktop/src/simulation/waveformViewerDod.test.ts`
+      (6/6): expressions (`evaluatePlotExpression`); cursors (`cursorReadout` +
+      CSV); FFT/THD (`waveformSpectrum` + `spectrumThd` = 50%); stepped‑family
+      overlays (`acFamilyOverlaySeries`); CSV (`seriesToCsv` /
+      `stepFamilyToCsv` / `spectrumToCsv`); image (`waveformSvgsToPng`).
+      Landmark commits (ancestors of tip): `59173c7` expressions, `643759c`
+      cursors, `3147ff8` THD, `3d3de6a` AC/DC step overlays, `6950eb2` /
+      `a358208` / `d4a4c79` CSV, `e8009b8` PNG. UI wiring covered by existing
+      `SimulationPanel.test.tsx` / `SimulationPanel.axes.test.tsx` Export /
+      FFT / StepPlot / AcFamilyPlot cases.
 - [x] Editor: mirror/flip, copy/paste, multi‑select, rubber‑band wire moves.
       Proven 2026-08-05 this session (242 green): `useSchematic.test.ts`
       (`mirror` toggle/undo/multi-select; `copySelected`/`paste`/`duplicateSelected`

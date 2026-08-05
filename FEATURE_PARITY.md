@@ -1268,7 +1268,7 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   click toggles its real branch-current trace over time. Probe dots remain
   keyboard/click removable. The Name tool adds/renames/removes the one name per
   physical node. Components, values, wires, and topology remain immutable.
-- 🟡 **Plot arbitrary expressions** (`V(a)-V(b)`, `I(R1)*V(out)`, power `V(out)*I(out)`)
+- ✅ **Plot arbitrary expressions** (`V(a)-V(b)`, `I(R1)*V(out)`, power `V(out)*I(out)`)
   — **landed** (`simulation/plotExpression.ts`): an expression bar under the
   transient scope evaluates any expression of the simulated signals at every
   time point and overlays it as a derived trace. Reuses the `.meas` expression
@@ -1310,6 +1310,10 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   against every successful `.step` member; StepPlot expression bar selects the
   family SIGNAL (Use probe restores the probe pick). 4 pure + 1 StepPlot test.
   **NEXT:** (none on this expressions item — AC/DC/TRAN/STEP covered).
+  **AGENTS.md Waveform viewer DoD closed (2026-08-05):** consolidated proof
+  `scripts/waveform-viewer-dod.sh` /
+  `src/simulation/waveformViewerDod.test.ts` asserts expressions + cursors +
+  FFT/THD + stepped-family overlays + CSV/image together.
 - 🟡 Multiple plot panes and autorange — **landed for the
   transient scope** (`plotPanes.ts` pure pane model + per-pane Y autorange,
   with manual pane add/remove/move removed from the default UI so plots remain
@@ -1512,7 +1516,7 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   domain or tick values. Femtoscale native-solver residue on a physically steady
   engineering signal now receives steady-signal framing instead of generating
   visually duplicate, crowded Y labels.
-- 🟡 `.step` family-of-curves overlay — **transient + AC + DC families landed**.
+- ✅ `.step` family-of-curves overlay — **transient + AC + DC families landed**.
   Transient: `StepPlot` in `SimulationPanel` (the **STEP** tab re-runs the sweep
   and draws the probed signal across all members in a color ramp; legend lists
   each `name=value`). AC/DC: `simulation/stepAnalysisFamily.ts` re-runs the TS
@@ -1534,7 +1538,7 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   **AC/DC step-family per-trace selection landed** (2026-08-05): AcFamilyPlot /
   DcFamilyPlot legend chips mirror StepPlot (hide/show, last-visible refuse,
   STEPS `visible/total`, axes reframe to visible).
-- 🟡 Save plot settings (`.plt`), export image/CSV — **CSV + PNG export landed**
+- ✅ Save plot settings (`.plt`), export image/CSV — **CSV + PNG export landed**
   (`simulation/waveformCsv.ts` `seriesToCsv`): an **Export CSV** button on the
   transient scope writes a table of `time` + every node-voltage trace + branch
   current + plotted expression, one row per timestep (RFC-4180 quoting,
