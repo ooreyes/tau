@@ -59,6 +59,7 @@ const HARTLY_ASC = join(EDU, "Hartly.asc");
 const OPAMP_FILTER_ASC = join(EDU, "opamp.asc");
 const LINKWITZ_ASC = join(EDU, "Linkwitz.asc");
 const LM741_ASC = join(EDU, "LM741.asc");
+const LM308_ASC = join(EDU, "LM308.asc");
 const GFT_ASC = join(EDU, "GFT.asc");
 const DCOPNT_ASC = join(EDU, "DCopPnt.asc");
 const AUDIOAMP_ASC = join(EDU, "audioamp.asc");
@@ -211,7 +212,7 @@ function withAcStimulus(netlist: string): string {
 describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential parity matrix", () => {
   const cells: DifferentialCell[] = [];
 
-  it("matches RC .tran/.ac/.meas, divider analyses, .step families, curvetrace, stepmodelparam, NoiseFigure, noise.asc, Colpitts/Clapp/Hartly AC, Cohn AC, MeasureBW AC, Transformer/Transformer2/IdealTransformer TRAN, notch/passive/butter/opamp/Linkwitz AC, LM741 TRAN, GFT AC, DCopPnt OP, audioamp TRAN, UHFpreamp AC, 1563 AC, Class-D AC/OP/DC/noise/tf", () => {
+  it("matches RC .tran/.ac/.meas, divider analyses, .step families, curvetrace, stepmodelparam, NoiseFigure, noise.asc, Colpitts/Clapp/Hartly AC, Cohn AC, MeasureBW AC, Transformer/Transformer2/IdealTransformer TRAN, notch/passive/butter/opamp/Linkwitz AC, LM741/LM308 TRAN, GFT AC, DCopPnt OP, audioamp TRAN, UHFpreamp AC, 1563 AC, Class-D AC/OP/DC/noise/tf", () => {
     // --- TRAN (also covered by waveformParity; re-assert here so this file is self-sufficient) ---
     {
       const result = runPairedBatch("diff-rc-tran", RC_TRAN, ["v(out)"]);
@@ -1265,6 +1266,64 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
       });
     }
 
+    // --- Educational LM308.asc authored .tran (discrete BJT op-amp; LPNP→PNP + NJF; pins 6/3/2) ---
+    // TransmissionLineInverter TLINE pin/topology miss; astable multivibrator phase miss;
+    // LoopGain/Wien/Electrometer = LT1001 OTA wall; SoftDiode/Howland/HalfSlope/Vswitch avoided.
+    {
+      expect(existsSync(LM308_ASC), `missing ${LM308_ASC}`).toBe(true);
+      const imported = importAsc(decodeSchematicText(readFileSync(LM308_ASC)));
+      expect(imported.warnings).toEqual([]);
+      const dirs = expandDirectiveLines(imported.directives);
+      const parsed = analysesFromDirectives(dirs);
+      expect(parsed.tran, "LM308.asc must author .tran").toBeTruthy();
+      const params = buildParamScope(dirs);
+      const deck = buildSpiceDeck({
+        components: imported.components,
+        wires: imported.wires,
+        netLabels: imported.netLabels,
+        directives: dirs,
+        params,
+      }, {
+        kind: "tran",
+        stopTime: parsed.tran!.stopTime,
+        steps: parsed.tran!.steps ?? 3000,
+      });
+      expect(deck.unresolvedSubckts ?? []).toEqual([]);
+      expect(deck.modelSubstitutions ?? []).toEqual([]);
+      expect(deck.netlist).not.toMatch(/\bLPNP\b/);
+      expect(deck.netlist).toMatch(/\.model\s+NP\s+NPN\b/i);
+      expect(deck.netlist).toMatch(/\.model\s+PN\s+PNP\b/i);
+      expect(deck.netlist).toMatch(/\.model\s+SB\s+NPN\b/i);
+      expect(deck.netlist).toMatch(/\.model\s+NJ\s+NJF\b/i);
+      const qLines = deck.netlist.split(/\r?\n/).filter((line) => /^Q\w*\b/i.test(line.trim()));
+      expect(qLines.length).toBeGreaterThanOrEqual(20);
+      for (const line of qLines) {
+        expect(line, line).not.toMatch(/\bTAU_NPN\b|\bTAU_PNP\b/);
+        expect(line, line).toMatch(/\b(NP|PN|SB)\b/);
+      }
+      expect(deck.netlist).toMatch(/^J1\b.+\bNJ\b/im);
+      const probes = ["v(6)", "v(3)", "v(2)"] as const;
+      const result = runPairedBatch("diff-lm308-tran", deck.netlist, [...probes]);
+      const memberNotes: string[] = [];
+      for (const trace of probes) {
+        const lt = result.ltspice.get(trace)!;
+        const ng = result.ngspice.get(trace)!;
+        const comparison = compareWaveforms(ng.axis, ng.values, lt.axis, lt.values, {
+          rmsTolerance: 0.02,
+          maxTolerance: 0.05,
+        });
+        expect(comparison.pass, `${trace} ${JSON.stringify(comparison)}`).toBe(true);
+        memberNotes.push(`${trace} nRms=${comparison.normalizedRms.toFixed(4)} nMax=${comparison.normalizedMax.toFixed(4)}`);
+      }
+      cells.push({
+        analysis: "tran",
+        circuit: "lm308",
+        topology: "Educational LM308.asc discrete BJT+JFET op-amp NP/PN/SB/NJ (authored .tran 10m startup)",
+        status: "pass",
+        note: memberNotes.join("; "),
+      });
+    }
+
 
     // --- Educational GFT.asc authored .ac (General Feedback Theorem; z=@.param default) ---
     // LoopGain/LoopGain2 need LT1001: Tau OTA remap is not LTspice↔stock-ngspice
@@ -1788,9 +1847,9 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
     const passCount = cells.filter((cell) => cell.status === "pass").length;
     const gapCount = cells.filter((cell) => cell.status === "gap").length;
     const siblingCount = cells.filter((cell) => cell.status === "sibling").length;
-    expect(passCount).toBeGreaterThanOrEqual(42);
+    expect(passCount).toBeGreaterThanOrEqual(43);
     expect(siblingCount).toBe(5);
     expect(gapCount).toBe(0);
-    expect(report).toMatch(/SUMMARY pass=42 sibling=5 gap=0/);
+    expect(report).toMatch(/SUMMARY pass=43 sibling=5 gap=0/);
   }, 240_000);
 });

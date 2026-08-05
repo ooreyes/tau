@@ -9,19 +9,53 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 02:33 CDT**
+**Status: DONE - 2026-08-05 02:35 CDT**
 
-Unit: Educational `1563.asc` authored `.ac` Tow-Thomas (TowTom2) → differential **pass=42**.
+Unit: Educational `LM308.asc` authored `.tran` discrete BJT+JFET op-amp → differential **pass=43**.
 ```
-SUMMARY pass=42 sibling=5 gap=0
-ac towtom-1563 … v(n003)/v(n002) nRms=0
+SUMMARY pass=43 sibling=5 gap=0
+tran lm308 … v(6)/v(3)/v(2) nRms≈0.0004
 ```
-MC1648 deferred (probe stack). Electrometer/LoopGain LT1001 OTA wall. Named-device 47.9%. SHIPPABLE? **NO**
+Avoided 1563 (already landed) / LoopGain LT1001 / TLINE inv miss / astable phase / Howland/SoftDiode/HalfSlope/Vswitch fakes. Named-device 47.9%. SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
 
 ---
+
+### 2026-08-05 — LM308 TRAN differential → pass=43 (§DoD)
+
+**What I did**
+- Educational `LM308.asc` authored `.tran 10m startup`: discrete BJT+JFET op-amp
+  with schematic `.model` NP/PN/SB/NJ. Honest `LPNP`→`PNP` rewrite (same path as
+  LM741); zero `modelSubstitutions`. Package pins v(6)/v(3)/v(2) vs LTspice
+  nRms≈0.0004.
+- Collision-avoided Staff EE 1563; LoopGain/Wien/Electrometer LT1001 wall;
+  TransmissionLineInverter TLINE topology miss; astable multivibrator phase miss.
+  Never faked Vswitch/Howland/SoftDiode/HalfSlope/encrypted.
+
+**Exact stdout**
+```
+SUMMARY pass=43 sibling=5 gap=0
+tran lm308 … v(6) nRms=0.0004; v(3) nRms=0.0004; v(2) nRms=0.0004
+```
+
+**Files**
+- `apps/desktop/scripts/differentialParity.corpus.ts`
+- `AGENTS.md`, `FEATURE_PARITY.md`, `PROGRESS.md`
+- `~/Desktop/TAU-MORNING-STATUS.md`
+
+**Tests**
+- `scripts/differential-parity.sh` → pass=43; typecheck; apps/desktop test (2679)
+
+**Parity items**
+- Differential 🟡 harness **pass=43 · sibling=5 · gap=0**; DoD broad box unchecked.
+- Named-device 🟡 **47.9%** unchanged. SHIPPABLE? NO
+
+**Next**
+- NE555 TRAN (similar numeric pins); dual-deck Howland only if same-deck honest;
+  never fake Vswitch SW / encrypted decrypt / HalfSlope Laplace / SoftDiode TAU_DIODE.
+
 
 ### 2026-08-05 — 1563.asc Tow-Thomas AC → pass=42 (§DoD)
 
