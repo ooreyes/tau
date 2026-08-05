@@ -160,12 +160,12 @@ account and sign/notarize/ship.
       the full recursive corpus has zero non-refusal hard failures and at least
       95% of unencrypted circuits build their authored analysis using exact
       document, user-installed, user-attached, or Tau-owned compatible models.
-      **Partial (2026-08-04):** `scripts/named-device-fidelity.sh` stdout
-      `NAMED-DEVICE: exact=2 refuse=4 silent=0` — transient preview now refuses
-      vendor op-amps (was the last ideal-nullor silent path vs OP/AC/noise);
-      semiconductor Properties no longer promises a generic starter when Run
-      refuses; deck refuse-vs-exact covered for named diode + five-pin op-amp.
-      ≥95% recursive unencrypted floor **not** claimed; DoD box stays unchecked.
+      **Partial (2026-08-04):** unit proof `scripts/named-device-fidelity.sh`
+      prints `NAMED-DEVICE: exact=2 refuse=4 silent=0` and recursive stdout
+      `NAMED-DEVICE-RECURSIVE: unencrypted=2641 exact=399 refuse=2139 silent=0
+      hard-failure=103 encrypted-excluded=1371 exact-rate=15.1%` — silent=0
+      held; ≥95% floor and zero hard-failure **not** met; DoD box stays
+      unchecked.
 - [ ] **Broad differential parity, not a synthetic `.op` proxy:** the acceptance
       runner executes each circuit's authored `.tran` / `.ac` / `.dc` / `.op` /
       `.noise` / `.tf` / `.step` / `.meas` analyses and compares numeric outputs

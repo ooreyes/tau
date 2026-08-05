@@ -5,12 +5,14 @@ The working memory of an unattended loop that starts from zero every fire.
 
 ## Now
 
-**Status:** IDLE 2026-08-04 22:43 CDT - Named-device slice landed:
-transient preview refuses vendor op-amps; NAMED-DEVICE exact=2 refuse=4
-silent=0. ≥95% DoD box still open. Shippable? NO.
+**Status:** IDLE 2026-08-04 22:52 CDT - Recursive exact-model % harness landed.
+Stdout: NAMED-DEVICE-RECURSIVE exact-rate=15.1% (exact=399 refuse=2139
+silent=0 hard-failure=103 encrypted-excluded=1371). ≥95% DoD unchecked.
+Shippable? NO.
 
-**Next unit:** Recursive ≥95% exact-model measurement / Educational
-steptemp/stepmodelparam / Class-D AC·DC·noise·tf / §10.
+**Next unit:** Cut unencrypted hard-failure (103→0) and raise exact-rate
+toward ≥95%; or Educational steptemp/stepmodelparam / Class-D
+AC·DC·noise·tf / §10.
 
 The 2026-08-03 "PROJECT COMPLETE" signal was wrong and has been withdrawn. A
 four-part adversarial audit reproduced the gates and disagreed with these docs.
@@ -102,12 +104,10 @@ corpus reason above, and is restated there rather than left on a rescue ref.
 Ordered. Take the top item unless it is blocked. Class A outranks everything -
 a plausible wrong number is worse than a refusal to run.
 
-1. **Measure recursive named-device ≥95% (exact vs refuse).** Transient preview
-   vendor-opamp silence and Properties "use generic" lie are closed this fire
-   (`NAMED-DEVICE: exact=2 refuse=4 silent=0`). Next: instrument the recursive
-   unencrypted corpus for exact-model authored-analysis %, keep silent=0 /
-   hard-failure=0, and only then consider the DoD box. Still open: multi-pin
-   `.asy` banks and broad exact macromodel coverage.
+1. **Drive recursive named-device exact-rate toward ≥95%.** Harness landed:
+   `NAMED-DEVICE-RECURSIVE: … exact-rate=15.1%` with silent=0 but
+   hard-failure=103. Next: triage those hard failures and refusals on the
+   unencrypted set; keep silent=0; only claim DoD when stdout ≥95% + HF=0.
 
 ---
 
@@ -117,6 +117,9 @@ Newest first, ONE line each. Full evidence for every unit is in PROGRESS.md
 and in its commit message. This section exists so a fresh fire can see what
 is already done at a glance, not so it can re-read the reasoning.
 
+- 2026-08-04 - NAMED-DEVICE RECURSIVE %: harness + stdout
+  unencrypted=2641 exact=399 refuse=2139 silent=0 hard-failure=103
+  encrypted-excluded=1371 exact-rate=15.1%. ≥95% DoD unchecked.
 - 2026-08-04 - NAMED-DEVICE SLICE: transient preview refuses vendor op-amps; Properties refuse copy; named-device-fidelity.sh exact=2 refuse=4 silent=0. ≥95% unproven.
 - 2026-08-04 - DoD CORPUS METRIC HONESTY: ≥80/82 deck/op retired; checked floor is success ≥79 + refusal-only remainder + leak/failure 0; soft asserts added; no refusal weakening.
 - 2026-08-04 - P1.6 `.meas`/`.four` DECK EMISSION: domain-matched cards reach ngspice after the analysis line; UI still TS; `.step` still re-run loop.

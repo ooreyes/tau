@@ -5,9 +5,9 @@
  * Prints a machine-readable summary line so DoD claims stay tied to stdout:
  *   NAMED-DEVICE: exact=N refuse=M silent=0
  *
- * Does not claim the full ≥95% unencrypted-corpus floor — that needs the
- * recursive acceptance runner with installed libraries. This script only
- * proves the closed classes stay refuse-or-exact.
+ * Does not claim the full ≥95% unencrypted-corpus floor — that is measured by
+ * `namedDeviceRecursive.corpus.ts` (`NAMED-DEVICE-RECURSIVE: …`). This script
+ * only proves the closed classes stay refuse-or-exact.
  */
 import { describe, expect, it } from "vitest";
 import { buildSpiceDeck, unresolvedModelMessage } from "../src/engine/spiceNetlist";

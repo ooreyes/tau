@@ -1,0 +1,378 @@
+/**
+ * Recursive named-device fidelity measurement (AGENTS ≥95% floor).
+ *
+ * Walks every unencrypted-eligible `.asc` under the user's LTspice corpus,
+ * builds an `.op` deck with the same installed-library attach path the
+ * acceptance runner uses, and prints:
+ *
+ *   NAMED-DEVICE-RECURSIVE: unencrypted=N exact=E refuse=R silent=S
+ *     hard-failure=H encrypted-excluded=X exact-rate=RR.R%
+ *
+ * Stdout is truth. This script does NOT claim the DoD box — only a measured
+ * exact-rate ≥95% with silent=0 and hard-failure=0 may.
+ *
+ * Deck-only (no ngspice): exact-model *build* rate, not authored-analysis
+ * numeric parity. Encrypted ModelFile dependents are excluded from the
+ * unencrypted denominator.
+ */
+import { readFileSync, readdirSync, existsSync } from "node:fs";
+import { basename, delimiter, isAbsolute, join, normalize, relative, sep } from "node:path";
+import { homedir } from "node:os";
+import { describe, it, expect } from "vitest";
+import { importAsc, makeSubcircuitResolver, decodeSchematicText, parseAsy, type AsySymbol } from "../src/io/ascImport";
+import { buildParamScope } from "../src/simulation/paramScope";
+import { buildSpiceDeck, unresolvedSubcktMessage } from "../src/engine/spiceNetlist";
+import { validateSchematicDocument } from "../src/schematic/documentValidation";
+import {
+  classifyCorpusCapability,
+  formatNamedDeviceRecursiveSummary,
+  isEncryptedModelBytes,
+  summarizeNamedDeviceFidelity,
+  type CorpusRow,
+} from "../src/io/corpusReport";
+import { opampIdentity } from "../src/engine/opampModel";
+import { parseUserModelLibraries, resolveUserSubckt, type UserModelLibraryRegistry } from "../src/engine/userModelLibrary";
+import { ltspiceLibRoots } from "./ltspiceLibRoot";
+import type { SchematicComponent } from "../src/schematic/types";
+
+const HOME = homedir();
+const CORPUS_MATCH = process.env.CORPUS_MATCH?.trim().toLowerCase() ?? "";
+
+function envPaths(name: string): string[] {
+  return (process.env[name] ?? "")
+    .split(delimiter)
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+}
+
+const EXTRA_ROOTS = envPaths("CORPUS_EXTRA_ROOTS");
+const EXTRA_SYMBOL_ROOTS = [
+  ...envPaths("CORPUS_SYMBOL_ROOTS"),
+  ...EXTRA_ROOTS.map((root) => join(root, "sym")),
+].filter((root, index, roots) => existsSync(root) && roots.indexOf(root) === index);
+
+const DOWNLOADS_ROOT = join(HOME, "Downloads", "LTspice_export");
+const DOCUMENTS_ROOT = join(HOME, "Documents", "LTspice");
+const INSTALLED_STANDARD_MODEL_LIBRARIES = [
+  "standard.dio",
+  "standard.bjt",
+  "standard.mos",
+  "standard.jft",
+]
+  .map((name) => ltspiceLibRoots()
+    .map((root) => join(root, "cmp", name))
+    .find((path) => existsSync(path)))
+  .filter((path): path is string => Boolean(path))
+  .map((path) => decodeSchematicText(readFileSync(path)));
+
+const symbolMetadataCache = new Map<string, AsySymbol | null>();
+const modelRegistryCache = new Map<string, UserModelLibraryRegistry | null>();
+const encryptedModelCache = new Map<string, boolean>();
+
+interface CorpusFile {
+  path: string;
+  display: string;
+}
+
+function collectCorpus(): CorpusFile[] {
+  const files: CorpusFile[] = [];
+  const walk = (dir: string, label: string, rel = "") => {
+    for (const entry of readdirSync(dir, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
+      const abs = join(dir, entry.name);
+      const relName = rel ? `${rel}/${entry.name}` : entry.name;
+      if (entry.isDirectory()) walk(abs, label, relName);
+      else if (/\.asc$/i.test(entry.name)) {
+        files.push({ path: abs, display: `${label}/${relName}` });
+      }
+    }
+  };
+  for (const { dir, label } of [
+    { dir: DOWNLOADS_ROOT, label: "LTspice_export" },
+    { dir: DOCUMENTS_ROOT, label: "LTspice" },
+  ]) {
+    if (existsSync(dir)) walk(dir, label);
+  }
+  for (const root of EXTRA_ROOTS) {
+    if (existsSync(root)) walk(root, basename(root) || "external");
+  }
+  return files
+    .filter((file, index, all) => all.findIndex((candidate) => candidate.path === file.path) === index)
+    .filter((file) => !CORPUS_MATCH || file.display.toLowerCase().includes(CORPUS_MATCH))
+    .sort((a, b) => a.display.localeCompare(b.display));
+}
+
+function siblingResolver(parentDir: string) {
+  return makeSubcircuitResolver((symbolType) => {
+    const relativeSymbol = normalize(symbolType.replace(/[\\/]+/g, sep));
+    if (
+      !relativeSymbol
+      || isAbsolute(relativeSymbol)
+      || relativeSymbol === ".."
+      || relativeSymbol.startsWith(`..${sep}`)
+    ) return null;
+    const roots = [parentDir, ...EXTRA_SYMBOL_ROOTS];
+    const read = (suffix: ".asy" | ".asc"): string | undefined => {
+      for (const root of roots) {
+        const path = join(root, `${relativeSymbol}${suffix}`);
+        const rel = relative(root, path);
+        if (rel === ".." || rel.startsWith(`..${sep}`) || isAbsolute(rel) || !existsSync(path)) continue;
+        return decodeSchematicText(readFileSync(path));
+      }
+      return undefined;
+    };
+    const asy = read(".asy");
+    const asc = read(".asc");
+    if (!asy && !asc) return null;
+    return { asy, asc };
+  });
+}
+
+function installedSymbolMetadata(symbolType: string): AsySymbol | null {
+  const relativeSymbol = normalize(symbolType.replace(/[\\/]+/g, sep));
+  if (
+    !relativeSymbol
+    || isAbsolute(relativeSymbol)
+    || relativeSymbol === ".."
+    || relativeSymbol.startsWith(`..${sep}`)
+  ) return null;
+  const key = relativeSymbol.toLowerCase();
+  if (symbolMetadataCache.has(key)) return symbolMetadataCache.get(key) ?? null;
+  const roots = [
+    ...EXTRA_SYMBOL_ROOTS,
+    ...ltspiceLibRoots().map((root) => join(root, "sym")),
+  ];
+  for (const root of roots) {
+    const path = join(root, `${relativeSymbol}.asy`);
+    const rel = relative(root, path);
+    if (rel === ".." || rel.startsWith(`..${sep}`) || isAbsolute(rel) || !existsSync(path)) continue;
+    const parsed = parseAsy(decodeSchematicText(readFileSync(path)));
+    symbolMetadataCache.set(key, parsed);
+    return parsed;
+  }
+  symbolMetadataCache.set(key, null);
+  return null;
+}
+
+/** True when the relative ModelFile resolves to encrypted/binary installed bytes. */
+function installedModelFileIsEncrypted(relativeFile: string): boolean {
+  const normalized = normalize(relativeFile.replace(/[\\/]+/g, sep));
+  if (
+    !normalized
+    || isAbsolute(normalized)
+    || normalized === ".."
+    || normalized.startsWith(`..${sep}`)
+  ) return false;
+  const key = normalized.toLowerCase();
+  if (encryptedModelCache.has(key)) return encryptedModelCache.get(key)!;
+  for (const root of ltspiceLibRoots().flatMap((candidate) => [join(candidate, "sub"), candidate])) {
+    const path = join(root, normalized);
+    const rel = relative(root, path);
+    if (rel === ".." || rel.startsWith(`..${sep}`) || isAbsolute(rel) || !existsSync(path)) continue;
+    const encrypted = isEncryptedModelBytes(readFileSync(path));
+    encryptedModelCache.set(key, encrypted);
+    return encrypted;
+  }
+  encryptedModelCache.set(key, false);
+  return false;
+}
+
+function attachedInstalledModelBlocks(components: readonly SchematicComponent[]): string[] {
+  const blocks = new Map<string, string>();
+  for (const component of components) {
+    if (!component.ltModelFile || (component.kind !== "opamp" && component.kind !== "subckt")) continue;
+    const opamp = component.kind === "opamp" ? opampIdentity(component) : null;
+    if (opamp?.mode === "behavioral") continue;
+    const requested = opamp?.modelName ?? component.value.trim().split(/\s+/)[0] ?? "";
+    if (!requested) continue;
+    const relativeFile = normalize(component.ltModelFile.replace(/[\\/]+/g, sep));
+    if (
+      !relativeFile
+      || isAbsolute(relativeFile)
+      || relativeFile === ".."
+      || relativeFile.startsWith(`..${sep}`)
+    ) continue;
+    let registry = modelRegistryCache.get(relativeFile.toLowerCase());
+    if (registry === undefined) {
+      registry = null;
+      for (const root of ltspiceLibRoots().flatMap((candidate) => [join(candidate, "sub"), candidate])) {
+        const path = join(root, relativeFile);
+        const rel = relative(root, path);
+        if (rel === ".." || rel.startsWith(`..${sep}`) || isAbsolute(rel) || !existsSync(path)) continue;
+        // Encrypted bytes are not SPICE text — skip without caching a parse.
+        if (isEncryptedModelBytes(readFileSync(path))) break;
+        registry = parseUserModelLibraries([decodeSchematicText(readFileSync(path))]);
+        break;
+      }
+      modelRegistryCache.set(relativeFile.toLowerCase(), registry);
+    }
+    if (!registry) continue;
+    const block = resolveUserSubckt(registry, requested);
+    if (block) blocks.set(requested.toLowerCase(), block);
+  }
+  return [...blocks.values()];
+}
+
+/** True when a token names an installed encrypted `.sub` / `.lib` (basename). */
+function tokenNamesEncryptedInstalledModel(token: string): boolean {
+  const name = token.trim();
+  if (!name) return false;
+  const base = name.includes("/") || name.includes("\\")
+    ? name.replace(/\\/g, "/").split("/").pop()!
+    : name;
+  const stem = base.replace(/\.(sub|lib|mod)$/i, "");
+  return installedModelFileIsEncrypted(`${stem}.sub`)
+    || installedModelFileIsEncrypted(`${stem}.lib`)
+    || installedModelFileIsEncrypted(base);
+}
+
+/**
+ * Encrypted-dependent: schematic names a ModelFile whose installed bytes are
+ * encrypted, or an unresolved/requested subcircuit whose matching installed
+ * `.sub`/`.lib` is encrypted. Missing plaintext models stay ordinary refusals.
+ */
+function circuitDependsOnEncryptedModel(
+  components: readonly SchematicComponent[],
+  unresolvedSubckts: readonly string[] = [],
+): boolean {
+  for (const component of components) {
+    if (component.ltModelFile && installedModelFileIsEncrypted(component.ltModelFile)) {
+      return true;
+    }
+    if (component.kind === "opamp" || component.kind === "subckt") {
+      const opamp = component.kind === "opamp" ? opampIdentity(component) : null;
+      if (opamp?.mode === "vendor" && tokenNamesEncryptedInstalledModel(opamp.modelName)) {
+        return true;
+      }
+      if (!opamp) {
+        const requested = component.value.trim().split(/\s+/)[0] ?? "";
+        if (requested && tokenNamesEncryptedInstalledModel(requested)) return true;
+      }
+    }
+  }
+  for (const name of unresolvedSubckts) {
+    if (tokenNamesEncryptedInstalledModel(name)) return true;
+  }
+  return false;
+}
+
+function runFile(file: CorpusFile): { row: CorpusRow; encryptedDependent: boolean } {
+  const row: CorpusRow = {
+    file: file.display,
+    imported: false,
+    warnings: 0,
+    deckBuilt: false,
+    opConverged: false,
+    validated: false,
+    modelSubstitutions: 0,
+  };
+  let components: readonly SchematicComponent[] = [];
+
+  let imported;
+  try {
+    const text = decodeSchematicText(readFileSync(file.path));
+    imported = importAsc(text, {
+      resolveSubcircuit: siblingResolver(join(file.path, "..")),
+      resolveSymbolMetadata: installedSymbolMetadata,
+    });
+    row.imported = true;
+    row.warnings = imported.warnings.length;
+    components = imported.components;
+  } catch (error) {
+    row.error = `import: ${error instanceof Error ? error.message : String(error)}`;
+    return {
+      row,
+      encryptedDependent: circuitDependsOnEncryptedModel(components),
+    };
+  }
+
+  try {
+    validateSchematicDocument({
+      components: imported.components,
+      wires: imported.wires,
+      probes: [],
+      netLabels: imported.netLabels,
+      directives: imported.directives,
+      ascForeignSymbols: imported.foreignSymbols,
+      ascHierarchicalBlocks: imported.hierarchicalBlocks,
+    });
+    row.validated = true;
+  } catch (error) {
+    row.error = row.error ?? `validate: ${error instanceof Error ? error.message : String(error)}`;
+  }
+
+  try {
+    const params = buildParamScope(imported.directives);
+    const userModelLibraries = [
+      ...attachedInstalledModelBlocks(imported.components),
+      ...INSTALLED_STANDARD_MODEL_LIBRARIES,
+    ];
+    const deck = buildSpiceDeck(
+      {
+        components: imported.components,
+        wires: imported.wires,
+        netLabels: imported.netLabels,
+        params,
+        directives: imported.directives,
+        userModelLibraries,
+        ascForeignSymbols: imported.foreignSymbols,
+      },
+      { kind: "op" },
+    );
+    if (deck.unresolvedSubckts.length > 0) {
+      row.unresolvedSubckts = [...deck.unresolvedSubckts];
+      throw new Error(unresolvedSubcktMessage(deck.unresolvedSubckts));
+    }
+    row.modelSubstitutions = deck.modelSubstitutions.length;
+    row.deckBuilt = true;
+  } catch (error) {
+    row.error = `deck: ${error instanceof Error ? error.message : String(error)}`;
+  }
+
+  return {
+    row,
+    encryptedDependent: circuitDependsOnEncryptedModel(components, row.unresolvedSubckts ?? []),
+  };
+}
+
+const corpus = collectCorpus();
+
+describe.skipIf(corpus.length === 0)("named-device recursive exact-model %", () => {
+  it("measures exact / refuse / silent / hard-failure on the unencrypted recursive corpus", async () => {
+    const entries: Array<{ row: CorpusRow; encryptedDependent: boolean }> = [];
+    for (let index = 0; index < corpus.length; index += 1) {
+      entries.push(runFile(corpus[index]!));
+      if ((index + 1) % 50 === 0) {
+        await new Promise<void>((resolve) => setImmediate(resolve));
+      }
+    }
+
+    const summary = summarizeNamedDeviceFidelity(entries, { skipNgspice: true });
+    const line = formatNamedDeviceRecursiveSummary(summary);
+    // eslint-disable-next-line no-console
+    console.log(`\n${line}\n`);
+
+    // Integrity guards only — never assert the ≥95% floor here. Claiming that
+    // DoD box requires a measured exact-rate with silent=0 and hard-failure=0.
+    expect(summary.silent, "no accepted deck may silently substitute a named model").toBe(0);
+    expect(summary.exact + summary.refuse + summary.silent + summary.hardFailure + summary.encryptedExcluded)
+      .toBe(corpus.length);
+
+    // Soft visibility: capability buckets must partition the same rows.
+    const capabilityExact = entries.filter((e) =>
+      classifyCorpusCapability(e.row, { skipNgspice: true }) === "success"
+    ).length;
+    expect(summary.exact).toBe(capabilityExact);
+
+    if (summary.unencrypted > 0 && summary.exactRate >= 0.95 && summary.hardFailure === 0) {
+      // eslint-disable-next-line no-console
+      console.log(
+        "(measured exact-rate ≥95% with silent=0 and hard-failure=0 — eligible to claim DoD only after docs cite this stdout)",
+      );
+    } else {
+      // eslint-disable-next-line no-console
+      console.log(
+        `(DoD ≥95% floor NOT met or not claimable: exact-rate=${(summary.exactRate * 100).toFixed(1)}% silent=${summary.silent} hard-failure=${summary.hardFailure})`,
+      );
+    }
+  });
+});

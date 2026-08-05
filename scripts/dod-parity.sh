@@ -10,6 +10,7 @@ specs=(
   "scripts/specialDeviceParity.corpus.ts"
   "scripts/differentialParity.corpus.ts"
   "scripts/namedDeviceFidelity.corpus.ts"
+  "scripts/namedDeviceRecursive.corpus.ts"
 )
 
 for spec in "${specs[@]}"; do

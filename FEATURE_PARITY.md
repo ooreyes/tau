@@ -225,9 +225,12 @@ Status legend: ✅ done · 🟡 partial · ⬜ not started
     stamped the ideal nullor). Semiconductor Properties copy matches the
     fail-closed deck: missing named models block Run rather than promising a
     generic starter. Proof: `scripts/named-device-fidelity.sh` →
-    `NAMED-DEVICE: exact=2 refuse=4 silent=0`. Still open: import arbitrary
-    user-supplied multi-pin `.asy` banks; recursive ≥95% exact-model floor;
-    a shared five-pin shape does not prove pin fidelity for those parts.
+    `NAMED-DEVICE: exact=2 refuse=4 silent=0` and recursive
+    `NAMED-DEVICE-RECURSIVE: unencrypted=2641 exact=399 refuse=2139 silent=0
+    hard-failure=103 encrypted-excluded=1371 exact-rate=15.1%` (2026-08-04).
+    Still open: import arbitrary user-supplied multi-pin `.asy` banks; raise
+    recursive exact-model floor to ≥95% with hard-failure=0; a shared five-pin
+    shape does not prove pin fidelity for those parts.
   - **Pin data banked:** `LTSPICE_PINS` + `transformLtPoint()` in `io/ascImport.ts`
     hold the real LTspice symbol-local pin offsets (from `lib/sym/*.asy`) and the
     orientation transform (clockwise, Y-down, mirror-aware). Now covers passives,

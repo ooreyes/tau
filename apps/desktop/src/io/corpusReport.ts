@@ -170,6 +170,137 @@ export function formatCorpusCapabilitySummary(summary: CorpusCapabilitySummary):
 }
 
 /**
+ * Named-device fidelity bucket for one recursive-corpus file (AGENTS ≥95%
+ * floor). Encrypted-model dependents are excluded from the unencrypted
+ * denominator — they are not a product soft-fail we can fix in code.
+ *
+ * - `exact` — imported, validated, deck built with zero model substitutions.
+ * - `refuse` — honest capability refusal that is not encrypted-dependent.
+ * - `silent` — an accepted deck that substituted a named model (must stay 0).
+ * - `hard_failure` — import/validate/unexpected deck/guard-leak/OP failure.
+ * - `encrypted` — capability refusal whose schematic names an encrypted
+ *   installed ModelFile (excluded from the ≥95% rate).
+ */
+export type NamedDeviceBucket =
+  | "exact"
+  | "refuse"
+  | "silent"
+  | "hard_failure"
+  | "encrypted";
+
+export interface NamedDeviceFidelitySummary {
+  exact: number;
+  refuse: number;
+  silent: number;
+  hardFailure: number;
+  encryptedExcluded: number;
+  /** Denominator for the ≥95% floor: exact + refuse + silent + hardFailure. */
+  unencrypted: number;
+  /** exact / unencrypted, or 0 when unencrypted is 0. */
+  exactRate: number;
+}
+
+/**
+ * Match the native `read_installed_ltspice_model` rejection: null bytes or a
+ * high ratio of suspicious control bytes mean binary/encrypted ADI content.
+ * Also recognizes LTspice's plaintext `<Binary File>` banner.
+ */
+export function isEncryptedModelBytes(bytes: Uint8Array | Buffer): boolean {
+  if (bytes.length === 0) return false;
+  const head = typeof bytes.slice === "function"
+    ? bytes.subarray(0, Math.min(bytes.length, 64))
+    : bytes;
+  const headText = Buffer.from(head).toString("latin1");
+  if (headText.includes("<Binary File>")) return true;
+  for (let i = 0; i < bytes.length; i += 1) {
+    if (bytes[i] === 0) return true;
+  }
+  let suspicious = 0;
+  for (let i = 0; i < bytes.length; i += 1) {
+    const byte = bytes[i]!;
+    if (byte < 0x09 || (byte >= 0x0e && byte < 0x20)) suspicious += 1;
+  }
+  return suspicious * 100 > bytes.length;
+}
+
+export function classifyNamedDeviceBucket(
+  row: CorpusRow,
+  options: { encryptedDependent?: boolean; skipNgspice?: boolean } = {},
+): NamedDeviceBucket {
+  if (row.deckBuilt && row.modelSubstitutions > 0) {
+    return "silent";
+  }
+
+  const capability = classifyCorpusCapability(row, { skipNgspice: options.skipNgspice });
+  if (capability === "success") {
+    return "exact";
+  }
+  if (capability === "capability_refusal") {
+    return options.encryptedDependent ? "encrypted" : "refuse";
+  }
+  return "hard_failure";
+}
+
+export function summarizeNamedDeviceFidelity(
+  rows: ReadonlyArray<{ row: CorpusRow; encryptedDependent: boolean }>,
+  options: { skipNgspice?: boolean } = {},
+): NamedDeviceFidelitySummary {
+  let exact = 0;
+  let refuse = 0;
+  let silent = 0;
+  let hardFailure = 0;
+  let encryptedExcluded = 0;
+  for (const entry of rows) {
+    const bucket = classifyNamedDeviceBucket(entry.row, {
+      encryptedDependent: entry.encryptedDependent,
+      skipNgspice: options.skipNgspice,
+    });
+    switch (bucket) {
+      case "exact":
+        exact += 1;
+        break;
+      case "refuse":
+        refuse += 1;
+        break;
+      case "silent":
+        silent += 1;
+        break;
+      case "hard_failure":
+        hardFailure += 1;
+        break;
+      case "encrypted":
+        encryptedExcluded += 1;
+        break;
+    }
+  }
+  const unencrypted = exact + refuse + silent + hardFailure;
+  return {
+    exact,
+    refuse,
+    silent,
+    hardFailure,
+    encryptedExcluded,
+    unencrypted,
+    exactRate: unencrypted === 0 ? 0 : exact / unencrypted,
+  };
+}
+
+/** Machine-readable stdout line — DoD claims must cite this, not prose. */
+export function formatNamedDeviceRecursiveSummary(summary: NamedDeviceFidelitySummary): string {
+  const pct = (summary.exactRate * 100).toFixed(1);
+  return [
+    "NAMED-DEVICE-RECURSIVE:",
+    `unencrypted=${summary.unencrypted}`,
+    `exact=${summary.exact}`,
+    `refuse=${summary.refuse}`,
+    `silent=${summary.silent}`,
+    `hard-failure=${summary.hardFailure}`,
+    `encrypted-excluded=${summary.encryptedExcluded}`,
+    `exact-rate=${pct}%`,
+  ].join(" ");
+}
+
+/**
  * Judge a batch ngspice run. Exit status alone is not trustworthy (ngspice
  * exits 0 after printing "simulation(s) aborted"), so the verdict needs the
  * output text: any known failure marker fails, and a successful `.op` must

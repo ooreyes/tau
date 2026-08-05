@@ -6,6 +6,10 @@ import {
   classifyCorpusCapability,
   summarizeCorpusCapability,
   formatCorpusCapabilitySummary,
+  isEncryptedModelBytes,
+  classifyNamedDeviceBucket,
+  summarizeNamedDeviceFidelity,
+  formatNamedDeviceRecursiveSummary,
   type CorpusRow,
 } from "./corpusReport";
 
@@ -194,5 +198,74 @@ describe("formatCorpusReport", () => {
 
   it("prints any model substitution as a release-visible count", () => {
     expect(formatCorpusReport([row({ modelSubstitutions: 2 })])).toContain("model-substitutions 2");
+  });
+});
+
+describe("named-device recursive fidelity classification", () => {
+  it("detects LTspice <Binary File> banners and null-byte encrypted models", () => {
+    expect(isEncryptedModelBytes(Buffer.from("\r\n<Binary File>\r\n\r\n\x1a\xd7"))).toBe(true);
+    expect(isEncryptedModelBytes(Buffer.from("\0\x01secret"))).toBe(true);
+    expect(isEncryptedModelBytes(Buffer.from(".subckt OPX 1 2\n.ends OPX\n"))).toBe(false);
+  });
+
+  it("buckets exact / refuse / silent / hard-failure / encrypted", () => {
+    expect(classifyNamedDeviceBucket(row({}), { skipNgspice: true })).toBe("exact");
+    expect(classifyNamedDeviceBucket(row({
+      deckBuilt: false,
+      opConverged: false,
+      error: "deck: Simulation refused: M1 names model \"IRF540\"",
+    }), { skipNgspice: true })).toBe("refuse");
+    expect(classifyNamedDeviceBucket(row({
+      deckBuilt: false,
+      opConverged: false,
+      unresolvedSubckts: ["LT1001"],
+      error: "deck: missing",
+    }), { encryptedDependent: true, skipNgspice: true })).toBe("encrypted");
+    expect(classifyNamedDeviceBucket(row({
+      deckBuilt: true,
+      modelSubstitutions: 2,
+    }), { skipNgspice: true })).toBe("silent");
+    expect(classifyNamedDeviceBucket(row({
+      deckBuilt: false,
+      opConverged: false,
+      error: "deck: unexpected boom",
+    }), { skipNgspice: true })).toBe("hard_failure");
+  });
+
+  it("summarizes the unencrypted rate and formats the stdout truth line", () => {
+    const summary = summarizeNamedDeviceFidelity([
+      { row: row({ file: "exact.asc" }), encryptedDependent: false },
+      { row: row({
+        file: "refuse.asc",
+        deckBuilt: false,
+        opConverged: false,
+        error: "deck: Simulation refused: unsupported",
+      }), encryptedDependent: false },
+      { row: row({
+        file: "enc.asc",
+        deckBuilt: false,
+        opConverged: false,
+        unresolvedSubckts: ["LT1184F"],
+        error: "deck: missing",
+      }), encryptedDependent: true },
+      { row: row({
+        file: "hard.asc",
+        deckBuilt: false,
+        opConverged: false,
+        error: "import: boom",
+      }), encryptedDependent: false },
+    ], { skipNgspice: true });
+    expect(summary).toEqual({
+      exact: 1,
+      refuse: 1,
+      silent: 0,
+      hardFailure: 1,
+      encryptedExcluded: 1,
+      unencrypted: 3,
+      exactRate: 1 / 3,
+    });
+    expect(formatNamedDeviceRecursiveSummary(summary)).toBe(
+      "NAMED-DEVICE-RECURSIVE: unencrypted=3 exact=1 refuse=1 silent=0 hard-failure=1 encrypted-excluded=1 exact-rate=33.3%",
+    );
   });
 });

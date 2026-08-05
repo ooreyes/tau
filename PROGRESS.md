@@ -9,21 +9,54 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-04 22:43 CDT**
+**Status: DONE - 2026-08-04 22:52 CDT**
 
-Unit: Named-device fidelity slice — close transient-preview silent ideal-stamp
-for vendor op-amps + refuse-vs-exact proof. DoD ≥95% box stays open.
+Unit: Recursive exact-model % measurement — committed re-runnable harness.
+Stdout truth: `NAMED-DEVICE-RECURSIVE: unencrypted=2641 exact=399 refuse=2139
+silent=0 hard-failure=103 encrypted-excluded=1371 exact-rate=15.1%` plus unit
+`NAMED-DEVICE: exact=2 refuse=4 silent=0`. ≥95% DoD box stays unchecked.
 Shippable? NO.
 
 What landed this unit:
 
-- Transient preview refuses named vendor op-amps (same as OP/AC/noise)
-- Semiconductor Properties: Blocked/refuse copy (no “use generic starter” lie)
-- `scripts/named-device-fidelity.sh` stdout: **NAMED-DEVICE: exact=2 refuse=4 silent=0**
-- Wired into `dod-parity.sh`; AGENTS named-device box stays unchecked (Partial note)
+- `namedDeviceRecursive.corpus.ts` + classifiers in `corpusReport.ts`
+- `scripts/named-device-fidelity.sh` runs unit + recursive (verbose stdout)
+- Wired into `dod-parity.sh`; AGENTS/FEATURE_PARITY Partial notes cite stdout
 
-Next unit: recursive ≥95% exact-model measurement / Educational
-steptemp/stepmodelparam / Class-D AC·DC·noise·tf / §10. Shippable stays NO.
+Next unit: drive exact-rate up / hard-failure→0 on unencrypted corpus; or
+Educational steptemp/stepmodelparam / Class-D AC·DC·noise·tf / §10.
+Shippable stays NO.
+
+---
+
+### 2026-08-04 — Recursive named-device exact-model % measurement
+
+**What I did**
+- Added a committed recursive corpus harness that walks every user `.asc`,
+  builds decks with installed plaintext libraries, classifies
+  exact / refuse / silent / hard-failure, and excludes encrypted ModelFile
+  dependents from the unencrypted denominator.
+- Measured honestly; did **not** claim the ≥95% DoD box.
+
+**Files**
+- `apps/desktop/src/io/corpusReport.ts` (+ test)
+- `apps/desktop/scripts/namedDeviceRecursive.corpus.ts`
+- `apps/desktop/scripts/namedDeviceFidelity.corpus.ts` (comment)
+- `scripts/named-device-fidelity.sh`, `scripts/dod-parity.sh`
+- `AGENTS.md`, `FEATURE_PARITY.md`, `STATE.md`, `PROGRESS.md`
+
+**Tests / proof**
+- `pnpm -C apps/desktop typecheck` green
+- `pnpm -C apps/desktop test` → 2614+ passed
+- `scripts/named-device-fidelity.sh` → unit + recursive stdout lines above
+
+**Parity items**
+- Named-device DoD: 🟡 Partial (instrumented; exact-rate 15.1%, HF 103)
+- Broad differential: unchanged
+
+**Next step**
+- Reduce hard-failure / raise exact-rate on unencrypted set; or differential
+  gaps / §10.
 
 ---
 
