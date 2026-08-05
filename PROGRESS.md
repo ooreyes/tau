@@ -1,14 +1,48 @@
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 ~11:25 CDT**
+**Status: DONE - 2026-08-05 ~12:35 CDT**
 
-Unit: Waveform DoD polish — **cursor readout CSV** (FFT/Noise/Bode/step/AC·DC)
-+ Noise typed expression bar. DoD box already ✅ (eb2217a); this extends it.
+Unit: Corpus directives DoD — prove `.tran .ac .op .dc .step .meas .noise
+.tf .param .func .temp .options .model .inc .subckt` via
+`scripts/directives-dod.sh` (15/15); flip AGENTS checkbox.
 SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
 
+
+
+---
+
+### 2026-08-05 — Corpus directives DoD proven (AGENTS.md)
+
+**What I did**
+- Recovered aborted land from `Tau-wt-directives-dod-land` (uncommitted
+  proof on tip `9014ac0`).
+- Added `directivesDod.test.ts` (15 assertions, one per DoD keyword) and
+  `scripts/directives-dod.sh`. All green this session.
+- Flipped AGENTS.md directives box + FEATURE_PARITY note. No palette /
+  Settings / AI / Educational differential. SHIPPABLE? NO.
+
+**Files**
+- `apps/desktop/src/simulation/directivesDod.test.ts`
+- `scripts/directives-dod.sh`
+- `AGENTS.md`, `FEATURE_PARITY.md`, `PROGRESS.md`
+
+**Tests**
+- `bash scripts/directives-dod.sh` (15/15)
+- `pnpm -C apps/desktop typecheck` (green)
+- `pnpm -C apps/desktop test` (2874 passed)
+
+**Parity items**
+- AGENTS.md “All directives used in the corpus are supported” → checked.
+  SHIPPABLE? NO (other DoD boxes open)
+
+**Next step**
+- Remaining open DoD: §10 design system, min-window UI, named-device ≥95%,
+  broad differential, AI, product gates.
+
+SHIPPABLE? **NO**
 
 ---
 
