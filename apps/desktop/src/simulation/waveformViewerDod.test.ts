@@ -80,6 +80,20 @@ describe("AGENTS.md Waveform viewer DoD", () => {
     const csv = cursorReadoutToCsv(readout);
     expect(csv.split("\n")[0]).toBe("signal,unit,c1,c2,delta,slope");
     expect(csv).toMatch(/V\(out\)/);
+
+    // Frequency-axis export (FFT / Noise / Bode / AC step cursors).
+    const freqCsv = cursorReadoutToCsv(
+      {
+        x1: 1e3,
+        x2: 1e4,
+        dx: 9e3,
+        inverseDx: 1 / 9e3,
+        traces: [{ label: "V(out)", unit: "dB", y1: 0, y2: -20, dy: -20, slope: -20 / 9e3 }],
+      },
+      "freq",
+      "Hz",
+    );
+    expect(freqCsv.split("\n")[1]).toMatch(/^freq,Hz,1000,10000,9000,/);
   });
 
   it("FFT/THD: spectrum + THD = 50% for fund + half-amp 2nd harmonic", () => {

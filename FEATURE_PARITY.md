@@ -954,7 +954,10 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   tab in `SimulationPanel` (`NoisePlot`) draws output-referred density on a log–log
   axis with integrated totals. **Noise measurement cursors landed** (2026-08-05):
   NoisePlot **Cursors** toggle — two log-fraction markers with f1/f2/@C1/@C2/Δ
-  on V(onoise) via `logFractionToX` / `cursorReadout`. **NEXT:** device
+  on V(onoise) via `logFractionToX` / `cursorReadout`. **Noise typed expression
+  bar + cursor CSV landed** (2026-08-05): expression bar (`V(inoise)` /
+  `abs(V(onoise))` …) overlays on the density plot; cursors include overlays;
+  **Export CSV** writes `freq,Hz` + traces. **NEXT:** device
   (non-resistor) noise needs the native ngspice engine; `.meas noise` domain.
 - ✅ `.tf` **Transfer function** (small-signal DC gain, Zin/Zout) — **solver +
   parser + UI landed** (`simulation/transferFunction.ts`): `parseTfDirective`
@@ -1398,6 +1401,10 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   **Cursor readout CSV landed** (2026-08-05): `cursorReadoutToCsv` writes
   `signal,unit,c1,c2,delta,slope` (time row + traces); Cursors **Export CSV**.
   2 pure tests.
+  **Frequency-axis / family cursor CSV landed** (2026-08-05): same helper with
+  `freq`/`Hz` (or `sweep`) on FFT, Noise, Bode magnitude, and AC/DC step-family
+  cursor meters; transient step-family uses time axis. Distinct
+  `Export … cursor CSV` aria-labels. Pure freq-axis + wiring tests.
   **Engineer-facing cursor redesign (2026-07-23):** C1/C2 are now shared across
   every visible transient plot and drawn as labelled, color-distinct vertical
   lines on the waveform. Sliders remain for coarse placement, while dedicated
@@ -1462,7 +1469,8 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   (2026-08-05): FftView **Export PNG** rasters the spectrum SVG via
   `waveformSvgsToPng` (`tau-fft-….png`). 1 wiring test. **FFT magnitude manual
   Y limits landed** (2026-08-05): FftView Ymin/Ymax + Apply Y / Autoscale Y;
-  signal/window change clears manual.
+  signal/window change clears manual. **FFT cursor CSV landed** (2026-08-05):
+  FftView cursors **Export CSV** via `cursorReadoutToCsv(…, "freq", "Hz")`.
 - 🟡 Log/linear axes, dB, phase, **group delay** — **group delay landed**
   (`simulation/groupDelay.ts`, 12 tests): pure `groupDelay(freqs, phaseDeg)`
   computes τ = −dφ/dω in seconds — phase is **unwrapped** first (`unwrapPhaseDeg`
@@ -1619,8 +1627,12 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   shared phase pane. **Step-family manual Y limits landed** (2026-08-05):
   StepPlot Ymin/Ymax + Apply Y / Autoscale Y; signal/expression change clears
   manual. **AC/DC step-family manual Y limits landed** (2026-08-05):
-  AcFamilyPlot / DcFamilyPlot Ymin/Ymax + Apply Y / Autoscale Y. **NEXT:**
-  non-wall ND / remaining waveform polish.
+  AcFamilyPlot / DcFamilyPlot Ymin/Ymax + Apply Y / Autoscale Y. **Cursor CSV
+  across plot contexts landed** (2026-08-05): FFT / Noise / Bode / step /
+  AC·DC step-family cursor meters export via `cursorReadoutToCsv` (freq or
+  time axis). **Noise typed expression bar landed** (see §4 `.noise`).
+  AGENTS.md Waveform viewer DoD already ✅ (`eb2217a` + `waveform-viewer-dod.sh`).
+  **NEXT:** residual polish only (not a DoD gate).
 - 🟡 Right-click trace → math/operations — **abs / negate / dB / uramp / sgn /
   ddt / idt landed** (2026-08-05): `traceMath.ts` wraps a legend trace into
   `abs(…)`, `-(…)`, `db(…)`, `uramp(…)`, `sgn(…)`, `ddt(…)`, or `idt(…)`;

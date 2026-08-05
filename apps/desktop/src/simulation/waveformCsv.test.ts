@@ -160,4 +160,22 @@ describe("cursorReadoutToCsv", () => {
     expect(csv.split("\n")[1]).toBe("time,s,0,0,0,");
     expect(csv.split("\n")[2]).toBe('"V(a,b)",V,1,1,0,');
   });
+
+  it("accepts a frequency axis label for FFT/noise/Bode cursor export", () => {
+    const csv = cursorReadoutToCsv(
+      {
+        x1: 1e3,
+        x2: 1e4,
+        dx: 9e3,
+        inverseDx: 1 / 9e3,
+        traces: [{ label: "V(out)", unit: "dB", y1: 0, y2: -20, dy: -20, slope: -20 / 9e3 }],
+      },
+      "freq",
+      "Hz",
+    );
+    const lines = csv.split("\n");
+    expect(lines[0]).toBe("signal,unit,c1,c2,delta,slope");
+    expect(lines[1]).toMatch(/^freq,Hz,1000,10000,9000,/);
+    expect(lines[2]).toMatch(/^V\(out\),dB,0,-20,-20,/);
+  });
 });

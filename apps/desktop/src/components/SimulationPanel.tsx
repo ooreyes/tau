@@ -2929,6 +2929,7 @@ export function NoisePlot({ result }: { result: NoiseResult | null }) {
   const [measureRef, size] = useMeasuredSize<SVGSVGElement>();
   const { targetXTicks, targetYTicks } = tickCountsFromSize(size);
   const [exprList, setExprList] = useState<string[]>([]);
+  const [exprInput, setExprInput] = useState("");
   const [exprError, setExprError] = useState<string | null>(null);
   const [cursorsOn, setCursorsOn] = useState(false);
   const [cf1, setCf1] = useState(0.25);
@@ -3041,7 +3042,7 @@ export function NoisePlot({ result }: { result: NoiseResult | null }) {
     [measureRef, attachSvg],
   );
 
-  // Two log-frequency cursors on V(onoise) — FFT/Bode-style f1/f2/@C1/@C2/Δ.
+  // Two log-frequency cursors on V(onoise) + expression overlays — FFT/Bode-style.
   const noiseCursors = useMemo(() => {
     if (!cursorsOn || !success) return null;
     const x1 = logFractionToX(success.freqs, cf1);
@@ -3050,14 +3051,17 @@ export function NoisePlot({ result }: { result: NoiseResult | null }) {
     try {
       return cursorReadout(
         success.freqs,
-        [{ label: "V(onoise)", values: success.onoise, unit: "V/√Hz" }],
+        [
+          { label: "V(onoise)", values: success.onoise, unit: "V/√Hz" },
+          ...overlays.map((t) => ({ label: t.label, values: t.values })),
+        ],
         x1,
         x2,
       );
     } catch {
       return null;
     }
-  }, [cursorsOn, success, cf1, cf2]);
+  }, [cursorsOn, success, cf1, cf2, overlays]);
 
   const noiseCursorPixelX = (f: number): number | null => {
     if (!(f > 0) || !(viewport.xMin > 0) || !(viewport.xMax > 0)) return null;
@@ -3069,16 +3073,17 @@ export function NoisePlot({ result }: { result: NoiseResult | null }) {
     return PLOT_PAD + frac * (PLOT_WIDTH - PLOT_PAD * 2);
   };
 
-  const plotNoiseExpression = (expr: string) => {
+  const plotNoiseExpression = (expr: string): boolean => {
     const trimmed = expr.trim();
-    if (!trimmed) return;
+    if (!trimmed) return false;
     const probe = evaluateNoisePlotExpression(trimmed, result);
     if (!probe.ok) {
       setExprError(probe.error);
-      return;
+      return false;
     }
     setExprList((prev) => (prev.includes(trimmed) ? prev : [...prev, trimmed]));
     setExprError(null);
+    return true;
   };
 
   if (!result) return null;
@@ -3101,6 +3106,35 @@ export function NoisePlot({ result }: { result: NoiseResult | null }) {
 
   return (
     <>
+      <div className="expr-bar">
+        <Input
+          variant="mono"
+          size="sm"
+          className="flex-1 min-w-40"
+          type="text"
+          value={exprInput}
+          placeholder="Plot an expression, e.g. V(inoise) or abs(V(onoise))"
+          aria-label="Plot noise expression"
+          onChange={(e) => {
+            setExprInput(e.currentTarget.value);
+            if (exprError) setExprError(null);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              if (plotNoiseExpression(exprInput)) setExprInput("");
+            }
+          }}
+        />
+        <Button
+          size="sm"
+          disabled={!exprInput.trim()}
+          onClick={() => {
+            if (plotNoiseExpression(exprInput)) setExprInput("");
+          }}
+        >
+          Add trace
+        </Button>
+      </div>
       <div className="scope-shell">
         <div className="scope-plot-wrap">
           <svg
@@ -3344,6 +3378,14 @@ export function NoisePlot({ result }: { result: NoiseResult | null }) {
             value={formatEngineering(noiseCursors.traces[0]!.dy, "V/√Hz", 3)}
             tone="cream"
           />
+          <Button
+            variant="outline"
+            size="sm"
+            aria-label="Export noise cursor CSV"
+            onClick={() => downloadCsv(cursorReadoutToCsv(noiseCursors, "freq", "Hz"), "noise-cursors")}
+          >
+            Export CSV
+          </Button>
         </div>
       )}
       {result.warnings.length > 0 && <div className="analysis-empty warn" role="status">{result.warnings.join(" ")}</div>}
@@ -3795,7 +3837,7 @@ export function FftView({ result, preferredSignals = [] }: { result: AnalysisRes
             </div>
           )}
           {cursors && (
-            <div className="meter-row analysis-meter">
+            <div className="meter-row analysis-meter" aria-label="FFT cursor readout">
               <Metric label="f1" value={formatEngineering(cursors.x1, "Hz", 3)} tone="cyan" />
               <Metric label="f2" value={formatEngineering(cursors.x2, "Hz", 3)} tone="cyan" />
               <Metric label="@C1" value={`${cursors.traces[0].y1.toFixed(1)} dB`} tone="green" />
@@ -3810,6 +3852,14 @@ export function FftView({ result, preferredSignals = [] }: { result: AnalysisRes
                 }
                 tone="cream"
               />
+              <Button
+                variant="outline"
+                size="sm"
+                aria-label="Export FFT cursor CSV"
+                onClick={() => downloadCsv(cursorReadoutToCsv(cursors, "freq", "Hz"), "fft-cursors")}
+              >
+                Export CSV
+              </Button>
             </div>
           )}
           {insights && <SpectrumInsightsPanel insights={insights} unit={chosen.startsWith("I(") ? "A" : "V"} />}
@@ -4800,6 +4850,14 @@ export function AcPlot({
             }
             tone="cream"
           />
+          <Button
+            variant="outline"
+            size="sm"
+            aria-label="Export Bode cursor CSV"
+            onClick={() => downloadCsv(cursorReadoutToCsv(bodeCursors, "freq", "Hz"), "bode-cursors")}
+          >
+            Export CSV
+          </Button>
         </div>
       )}
       {bodeLowerCursors && (
@@ -6160,6 +6218,14 @@ export function StepPlot({ result, probes, wires }: { result: StepFamilyResult |
             value={formatEngineering(stepCursors.traces[0]!.dy, family.unit || "V", 3)}
             tone="cream"
           />
+          <Button
+            variant="outline"
+            size="sm"
+            aria-label="Export step cursor CSV"
+            onClick={() => downloadCsv(cursorReadoutToCsv(stepCursors), "step-cursors")}
+          >
+            Export CSV
+          </Button>
         </div>
       )}
       {exportError && <div className="expr-error" role="alert">{exportError}</div>}
@@ -6641,6 +6707,14 @@ export function AcFamilyPlot({ family }: { family: AnalysisFamily<AcResult> | nu
             value={formatEngineering(acStepCursors.traces[0]!.dy, "dB", 3)}
             tone="cream"
           />
+          <Button
+            variant="outline"
+            size="sm"
+            aria-label="Export AC step cursor CSV"
+            onClick={() => downloadCsv(cursorReadoutToCsv(acStepCursors, "freq", "Hz"), "ac-step-cursors")}
+          >
+            Export CSV
+          </Button>
         </div>
       )}
       {exprError && <div className="expr-error" role="alert">{exprError}</div>}
@@ -7062,6 +7136,14 @@ export function DcFamilyPlot({ family }: { family: AnalysisFamily<DcSweepResult>
             value={formatEngineering(dcStepCursors.traces[0]!.dy, "V", 3)}
             tone="cream"
           />
+          <Button
+            variant="outline"
+            size="sm"
+            aria-label="Export DC step cursor CSV"
+            onClick={() => downloadCsv(cursorReadoutToCsv(dcStepCursors, "sweep", ""), "dc-step-cursors")}
+          >
+            Export CSV
+          </Button>
         </div>
       )}
       {exprError && <div className="expr-error" role="alert">{exprError}</div>}

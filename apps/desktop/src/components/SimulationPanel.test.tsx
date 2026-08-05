@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 
-import { SimulationPanel, StepPlot, WaveformPlot, AcFamilyPlot, DcFamilyPlot, FftView } from "./SimulationPanel";
+import { SimulationPanel, StepPlot, WaveformPlot, AcFamilyPlot, DcFamilyPlot, FftView, NoisePlot } from "./SimulationPanel";
 import { visibleTransientTraces } from "../simulation/visibleTraces";
 import {
   defaultDcSetup,
@@ -1075,6 +1075,48 @@ describe("StepPlot measurements", () => {
     expect(readout.textContent).toMatch(/@C1/);
     expect(readout.textContent).toMatch(/Δ/);
     expect(container.querySelectorAll(".plot-cursor").length).toBe(2);
+    expect(screen.getByRole("button", { name: "Export step cursor CSV" })).toBeTruthy();
+  });
+
+  it("exports step cursor readout CSV via Export cursor CSV", async () => {
+    const originalCreateObjectURL = URL.createObjectURL;
+    const originalRevokeObjectURL = URL.revokeObjectURL;
+    const capturedBlobs: Blob[] = [];
+    URL.createObjectURL = ((blob: Blob) => {
+      capturedBlobs.push(blob);
+      return "blob:mock-step-cursor-csv";
+    }) as typeof URL.createObjectURL;
+    URL.revokeObjectURL = (() => {}) as typeof URL.revokeObjectURL;
+    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+
+    try {
+      render(
+        <StepPlot
+          result={{
+            ok: true,
+            spec: { kind: "param", name: "RL", values: [1, 2] },
+            members: [
+              member("RL=1", 1, undefined, [0, 1e-3, 2e-3], [0, 1, 2]),
+              member("RL=2", 2, undefined, [0, 1e-3, 2e-3], [0, 0.5, 1]),
+            ],
+            warnings: [],
+          }}
+          probes={[]}
+          wires={[]}
+        />,
+      );
+      fireEvent.click(screen.getByRole("button", { name: "Toggle step cursors" }));
+      fireEvent.click(screen.getByRole("button", { name: "Export step cursor CSV" }));
+      expect(capturedBlobs).toHaveLength(1);
+      const csv = await capturedBlobs[0].text();
+      expect(csv.split("\n")[0]).toBe("signal,unit,c1,c2,delta,slope");
+      expect(csv.split("\n")[1]).toMatch(/^time,s,/);
+      expect(clickSpy).toHaveBeenCalled();
+    } finally {
+      clickSpy.mockRestore();
+      URL.createObjectURL = originalCreateObjectURL;
+      URL.revokeObjectURL = originalRevokeObjectURL;
+    }
   });
 
   it("legend click hides a step member and refuses to hide the last one", () => {
@@ -2003,5 +2045,109 @@ describe("FftView manual Y limits", () => {
     expect(autoscale.getAttribute("aria-pressed")).toBe("false");
     fireEvent.click(autoscale);
     expect(autoscale.getAttribute("aria-pressed")).toBe("true");
+  });
+});
+
+describe("FftView / NoisePlot cursor CSV", () => {
+  function sineResult(n = 256) {
+    const times = Array.from({ length: n }, (_, i) => i / n);
+    const values = times.map((t) => Math.sin(2 * Math.PI * 8 * t));
+    return {
+      ok: true as const,
+      title: "Transient",
+      times,
+      traces: [{ id: "n1", label: "V(out)", unit: "V" as const, color: "var(--trace-cyan)", values }],
+      currents: [],
+      stats: { netCount: 1, componentCount: 0, sampleCount: n, stopTime: 1, stepSize: 1 / n },
+      warnings: [],
+      circuit: {
+        groundNetId: null,
+        warnings: [],
+        nets: [{ id: "n1", points: [{ x: 0, y: 0 }, { x: 16, y: 0 }], pins: [], isGround: false, labelCount: 0 }],
+        components: [],
+      },
+    };
+  }
+
+  function flatNoise() {
+    return {
+      ok: true as const,
+      spec: {
+        output: { pos: "out" },
+        source: "V1",
+        sweep: { startHz: 1, stopHz: 1e3, pointsPerDecade: 1 },
+      },
+      freqs: [1, 10, 100, 1000],
+      onoise: [4e-9, 4e-9, 5e-9, 8e-9],
+      inoise: [4e-10, 4e-10, 5e-10, 8e-10],
+      inoiseUnit: "V/√Hz" as const,
+      totalOutputNoise: 1e-5,
+      totalInputNoise: 1e-6,
+      warnings: [],
+    };
+  }
+
+  it("exports FFT cursor readout as freq-axis CSV", async () => {
+    const originalCreateObjectURL = URL.createObjectURL;
+    const originalRevokeObjectURL = URL.revokeObjectURL;
+    const capturedBlobs: Blob[] = [];
+    URL.createObjectURL = ((blob: Blob) => {
+      capturedBlobs.push(blob);
+      return "blob:mock-fft-cursor-csv";
+    }) as typeof URL.createObjectURL;
+    URL.revokeObjectURL = (() => {}) as typeof URL.revokeObjectURL;
+    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+
+    try {
+      render(<FftView result={sineResult()} />);
+      fireEvent.click(screen.getByRole("button", { name: "Toggle FFT spectrum" }));
+      fireEvent.click(await screen.findByRole("button", { name: "Toggle FFT cursors" }));
+      expect(await screen.findByLabelText("FFT cursor readout")).toBeTruthy();
+      fireEvent.click(screen.getByRole("button", { name: "Export FFT cursor CSV" }));
+      expect(capturedBlobs).toHaveLength(1);
+      const csv = await capturedBlobs[0].text();
+      expect(csv.split("\n")[0]).toBe("signal,unit,c1,c2,delta,slope");
+      expect(csv.split("\n")[1]).toMatch(/^freq,Hz,/);
+      expect(clickSpy).toHaveBeenCalled();
+    } finally {
+      clickSpy.mockRestore();
+      URL.createObjectURL = originalCreateObjectURL;
+      URL.revokeObjectURL = originalRevokeObjectURL;
+    }
+  });
+
+  it("NoisePlot expression bar + cursor CSV include overlays", async () => {
+    const originalCreateObjectURL = URL.createObjectURL;
+    const originalRevokeObjectURL = URL.revokeObjectURL;
+    const capturedBlobs: Blob[] = [];
+    URL.createObjectURL = ((blob: Blob) => {
+      capturedBlobs.push(blob);
+      return "blob:mock-noise-cursor-csv";
+    }) as typeof URL.createObjectURL;
+    URL.revokeObjectURL = (() => {}) as typeof URL.revokeObjectURL;
+    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+
+    try {
+      render(<NoisePlot result={flatNoise()} />);
+      const expr = screen.getByLabelText("Plot noise expression");
+      fireEvent.change(expr, { target: { value: "V(inoise)" } });
+      fireEvent.click(screen.getByRole("button", { name: "Add trace" }));
+      expect(screen.getByLabelText("Remove V(inoise)")).toBeTruthy();
+
+      fireEvent.click(screen.getByRole("button", { name: "Toggle noise cursors" }));
+      expect(screen.getByLabelText("Noise cursor readout")).toBeTruthy();
+      fireEvent.click(screen.getByRole("button", { name: "Export noise cursor CSV" }));
+      expect(capturedBlobs).toHaveLength(1);
+      const csv = await capturedBlobs[0].text();
+      expect(csv.split("\n")[0]).toBe("signal,unit,c1,c2,delta,slope");
+      expect(csv.split("\n")[1]).toMatch(/^freq,Hz,/);
+      expect(csv).toContain("V(onoise)");
+      expect(csv).toContain("V(inoise)");
+      expect(clickSpy).toHaveBeenCalled();
+    } finally {
+      clickSpy.mockRestore();
+      URL.createObjectURL = originalCreateObjectURL;
+      URL.revokeObjectURL = originalRevokeObjectURL;
+    }
   });
 });

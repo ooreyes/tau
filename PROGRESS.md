@@ -1,15 +1,49 @@
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 ~11:20 CDT**
+**Status: DONE - 2026-08-05 ~11:25 CDT**
 
-Unit: Named-device DoD — **wall doc** (exact-rate 48.1% blocked on
-encrypted ADI/LTC bare SYMBOL; no honest map cluster left).
-SHIPPABLE? **NO** — DoD named-device box stays unchecked.
+Unit: Waveform DoD polish — **cursor readout CSV** (FFT/Noise/Bode/step/AC·DC)
++ Noise typed expression bar. DoD box already ✅ (eb2217a); this extends it.
+SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
 
 
+---
+
+### 2026-08-05 — Cursor CSV across plot contexts (§waveform DoD)
+
+**What I did**
+- Cursor meters on FFT, Noise, Bode magnitude, transient step-family, and
+  AC/DC step-family now **Export CSV** via `cursorReadoutToCsv` (freq/Hz or
+  time/s or sweep axis). Distinct aria-labels so family Export CSV stays
+  unambiguous.
+- NoisePlot typed expression bar (`V(inoise)` / math overlays); cursor
+  readout includes overlays in the CSV.
+- Pure freq-axis CSV test + FftView / NoisePlot / StepPlot wiring tests.
+  Extended `waveformViewerDod.test.ts` cursor CSV with freq-axis row.
+  Settings / EC palette untouched. DoD box remains ✅ from eb2217a.
+
+**Files**
+- `components/SimulationPanel.tsx`, `SimulationPanel.test.tsx`
+- `simulation/waveformCsv.test.ts`, `waveformViewerDod.test.ts`
+- `FEATURE_PARITY.md`, `PROGRESS.md`
+
+**Tests**
+- `pnpm -C apps/desktop typecheck` (green)
+- focused: waveformCsv + SimulationPanel + cursors + plotExpressionNoise (123)
+- full suite under load: App.workspace / App.import timeouts only; both
+  re-run alone green (21+6). Unrelated to this unit.
+
+**Parity items**
+- §waveform DoD polish: cursor CSV everywhere + ND expression bar.
+  Waveform DoD box already ✅. SHIPPABLE? NO
+
+**Next step**
+- Other open DoD boxes; never Chan/NIGBT/FRA / Settings thrash / EC palette.
+
+SHIPPABLE? **NO**
 
 ---
 
