@@ -62,6 +62,8 @@ import {
 import { commonTraceUnit } from "../simulation/exprUnit";
 import { partitionTracesByAxis, planDualAxisY } from "../simulation/dualAxis";
 import { groupDelay } from "../simulation/groupDelay";
+import { freqToFraction } from "../simulation/freqAxis";
+import type { AxisScale } from "../simulation/axisTicks";
 import { stabilityMargins } from "../simulation/stability";
 import { seriesToCsv, stepFamilyToCsv, spectrumToCsv } from "../simulation/waveformCsv";
 import {
@@ -2975,8 +2977,9 @@ export function FftView({ result, preferredSignals = [] }: { result: AnalysisRes
                       d={bodePath(spectrum.magnitudeDb, spectrum.frequencies, {
                         minDb: viewport.yMin,
                         maxDb: viewport.yMax,
-                        f0: Math.log10(viewport.xMin),
-                        f1: Math.log10(viewport.xMax),
+                        xMin: viewport.xMin,
+                        xMax: viewport.xMax,
+                        xScale: "log",
                       })}
                     />
                   </ScopeClip>
@@ -3301,6 +3304,8 @@ export function AcPlot({ result, overlays = [] }: { result: AcResult | null; ove
   const phaseClipId = useId();
   const [magMeasureRef, magSize] = useMeasuredSize<SVGSVGElement>();
   const [phaseMeasureRef, phaseSize] = useMeasuredSize<SVGSVGElement>();
+  // Bode X defaults to log decades (LTspice); Lin X is an explicit toggle.
+  const [freqScale, setFreqScale] = useState<AxisScale>("log");
   const magTicks = tickCountsFromSize(magSize);
   const phaseTicks = tickCountsFromSize(phaseSize);
   const traces = success ? success.traces.slice(0, 4) : [];
@@ -3358,16 +3363,16 @@ export function AcPlot({ result, overlays = [] }: { result: AcResult | null; ove
   );
   const magVp = usePlotViewport({
     domain: magDomain,
-    xScale: "log",
-    resetKey: plot ? success : null,
+    xScale: freqScale,
+    resetKey: plot && success ? `${freqScale}:${success.freqs[0]}:${success.freqs[success.freqs.length - 1]}` : null,
     width: PLOT_WIDTH,
     height: PLOT_HEIGHT,
     pad: PLOT_PAD,
   });
   const phaseVp = usePlotViewport({
     domain: phaseDomain,
-    xScale: "log",
-    resetKey: plot ? success : null,
+    xScale: freqScale,
+    resetKey: plot && success ? `${freqScale}:${success.freqs[0]}:${success.freqs[success.freqs.length - 1]}` : null,
     width: PLOT_WIDTH,
     height: PLOT_HEIGHT,
     pad: PLOT_PAD,
@@ -3430,7 +3435,7 @@ export function AcPlot({ result, overlays = [] }: { result: AcResult | null; ove
               xMax={magVp.viewport.xMax}
               yMin={magVp.viewport.yMin}
               yMax={magVp.viewport.yMax}
-              xScale="log"
+              xScale={freqScale}
               xUnit="Hz"
               yUnit="dB"
               targetXTicks={magTicks.targetXTicks}
@@ -3440,7 +3445,13 @@ export function AcPlot({ result, overlays = [] }: { result: AcResult | null; ove
             {plot && (
               <ScopeClip id={magClipId} width={PLOT_WIDTH} height={PLOT_HEIGHT} pad={PLOT_PAD}>
                 {(() => {
-                  const magPlot = { minDb: magVp.viewport.yMin, maxDb: magVp.viewport.yMax, f0: Math.log10(magVp.viewport.xMin), f1: Math.log10(magVp.viewport.xMax) };
+                  const magPlot = {
+                    minDb: magVp.viewport.yMin,
+                    maxDb: magVp.viewport.yMax,
+                    xMin: magVp.viewport.xMin,
+                    xMax: magVp.viewport.xMax,
+                    xScale: freqScale,
+                  };
                   return (
                     <>
                       {traces.map((t, i) => (
@@ -3474,7 +3485,7 @@ export function AcPlot({ result, overlays = [] }: { result: AcResult | null; ove
               xMax={phaseVp.viewport.xMax}
               yMin={phaseVp.viewport.yMin}
               yMax={phaseVp.viewport.yMax}
-              xScale="log"
+              xScale={freqScale}
               xUnit="Hz"
               yUnit="°"
               targetXTicks={phaseTicks.targetXTicks}
@@ -3490,8 +3501,9 @@ export function AcPlot({ result, overlays = [] }: { result: AcResult | null; ove
                     d={bodeValuePath(t.phaseDeg, success!.freqs, {
                       min: phaseVp.viewport.yMin,
                       max: phaseVp.viewport.yMax,
-                      f0: Math.log10(phaseVp.viewport.xMin),
-                      f1: Math.log10(phaseVp.viewport.xMax),
+                      xMin: phaseVp.viewport.xMin,
+                      xMax: phaseVp.viewport.xMax,
+                      xScale: freqScale,
                     })}
                   />
                 ))}
@@ -3520,6 +3532,24 @@ export function AcPlot({ result, overlays = [] }: { result: AcResult | null; ove
         </div>
       </div>
       <div className="meter-row analysis-meter">
+        <div className="bode-x-scale" role="group" aria-label="Bode frequency axis scale">
+          <Button
+            size="sm"
+            variant={freqScale === "log" ? "default" : "outline"}
+            aria-pressed={freqScale === "log"}
+            onClick={() => setFreqScale("log")}
+          >
+            Log X
+          </Button>
+          <Button
+            size="sm"
+            variant={freqScale === "linear" ? "default" : "outline"}
+            aria-pressed={freqScale === "linear"}
+            onClick={() => setFreqScale("linear")}
+          >
+            Lin X
+          </Button>
+        </div>
         <Metric label="START" value={formatEngineering(result.freqs[0] ?? 0, "Hz", 0)} tone="green" />
         <Metric label="POINTS" value={String(result.freqs.length)} tone="cyan" />
         <Metric label="PEAK" value={Number.isFinite(peak) ? `${peak.toFixed(1)} dB` : "--"} tone="cream" />
@@ -3539,20 +3569,30 @@ export function AcPlot({ result, overlays = [] }: { result: AcResult | null; ove
   );
 }
 
-function bodePath(magDb: number[], freqs: number[], plot: { minDb: number; maxDb: number; f0: number; f1: number }): string {
-  return bodeValuePath(magDb, freqs, { min: plot.minDb, max: plot.maxDb, f0: plot.f0, f1: plot.f1 });
+function bodePath(
+  magDb: number[],
+  freqs: number[],
+  plot: { minDb: number; maxDb: number; xMin: number; xMax: number; xScale?: AxisScale },
+): string {
+  return bodeValuePath(magDb, freqs, {
+    min: plot.minDb,
+    max: plot.maxDb,
+    xMin: plot.xMin,
+    xMax: plot.xMax,
+    xScale: plot.xScale,
+  });
 }
 
-// Generic "value vs. log-frequency" trace path shared by the Bode magnitude
-// (dB) and phase (degrees) sub-plots. X is log10(f); Y maps [min,max] onto the
-// plot box (clamped so out-of-range samples ride the frame instead of escaping).
+// Generic "value vs. frequency" trace path shared by Bode magnitude (dB) and
+// phase (degrees). X follows `xScale` via {@link freqToFraction}; Y maps
+// [min,max] onto the plot box (clamped so out-of-range samples ride the frame).
 function bodeValuePath(
   values: number[],
   freqs: number[],
-  plot: { min: number; max: number; f0: number; f1: number },
+  plot: { min: number; max: number; xMin: number; xMax: number; xScale?: AxisScale },
 ): string {
   const span = plot.max - plot.min || 1;
-  const fSpan = plot.f1 - plot.f0 || 1;
+  const xScale = plot.xScale ?? "log";
   const count = Math.min(values.length, freqs.length);
   let path = "";
   let started = false;
@@ -3560,7 +3600,8 @@ function bodeValuePath(
     const v = values[index];
     const frequency = freqs[index];
     if (!Number.isFinite(v) || !Number.isFinite(frequency) || frequency <= 0) continue;
-    const lx = (Math.log10(frequency) - plot.f0) / fSpan;
+    const lx = freqToFraction(frequency, plot.xMin, plot.xMax, xScale);
+    if (lx === null) continue;
     const x = PLOT_PAD + lx * (PLOT_WIDTH - PLOT_PAD * 2);
     const yv = Math.max(plot.min, Math.min(plot.max, v));
     const y = PLOT_HEIGHT - PLOT_PAD - ((yv - plot.min) / span) * (PLOT_HEIGHT - PLOT_PAD * 2);
@@ -4047,7 +4088,8 @@ export function AcFamilyPlot({ family }: { family: AnalysisFamily<AcResult> | nu
     if (!found || !Number.isFinite(fLo)) return null;
     const max = Math.ceil(Math.max(rawMax, 0) / 10) * 10;
     const min = Math.floor(Math.min(rawMin, max - 10) / 10) * 10;
-    return { min, max, f0: Math.log10(fLo), f1: Math.log10(fHi > fLo ? fHi : fLo * 10) };
+    const xMax = fHi > fLo ? fHi : fLo * 10;
+    return { min, max, xMin: fLo, xMax, xScale: "log" as const };
   }, [overlay]);
 
   if (!family) return null;
@@ -4067,11 +4109,11 @@ export function AcFamilyPlot({ family }: { family: AnalysisFamily<AcResult> | nu
             width={PLOT_WIDTH}
             height={PLOT_HEIGHT}
             pad={PLOT_PAD}
-            xMin={10 ** plot.f0}
-            xMax={10 ** plot.f1}
+            xMin={plot.xMin}
+            xMax={plot.xMax}
             yMin={plot.min}
             yMax={plot.max}
-            xScale="log"
+            xScale={plot.xScale}
             xUnit="Hz"
             yUnit="dB"
             targetXTicks={targetXTicks}

@@ -1,19 +1,45 @@
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 06:02 CDT**
+**Status: DONE - 2026-08-05 06:09 CDT**
 
-Unit: Circuit_testing_v1 `03_ac_rc_lowpass.asc` authored `.ac` → differential **pass=88**.
-```
-SUMMARY pass=88 sibling=5 gap=0
-ac ct-ac-rc … v(out) nRms=0.0000 span=0.998
-```
-Named-device 48.1%. Left 100W/IRFP/Documents Draft*/Settings alone. Rebased over right-click math tip `f6214b6`. SHIPPABLE? **NO**
+Unit: Waveform DoD — **AC Bode log/linear X toggle** (`freqToFraction` + Log X / Lin X).
+Base tip `2a5ad88` pass=88. Named-device 48.1%. Settings locked. SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
 
 
 ---
+
+
+### 2026-08-05 — AC Bode log/linear X toggle (§waveform DoD)
+
+**What I did**
+- `freqToFraction` maps Bode X under log decades or linear Hz; AcPlot **Log X /
+  Lin X** toggles axes + path builders (default log). FFT/AC-family stay log.
+- ND plaintext wall at 48.1% — waveform pivot. Left 100W/IRFP, ct ASC
+  (continue 27), Chan/NIGBT/FRA, Settings alone.
+
+**Files**
+- `apps/desktop/src/simulation/freqAxis.ts` (+ test)
+- `apps/desktop/src/components/SimulationPanel.tsx` (+ axes test)
+- `apps/desktop/src/App.css`
+- `FEATURE_PARITY.md`, `PROGRESS.md`
+
+**Tests**
+- `pnpm -C apps/desktop typecheck` + `test` green
+- freqAxis 2 + AcPlot Lin X 1
+
+**Parity items**
+- Waveform viewer 🟡 (Bode Log/Lin X landed). Differential pass=88 ·
+  named-device 48.1% · SHIPPABLE? NO
+
+**Next step**
+- Richer right-click / Y log / phase pane, or continue 27 differential.
+  Leave IRFP/Draft*/Settings alone.
+
+
+
 
 ### 2026-08-05 — ct 03_ac_rc_lowpass .ac → pass=88 (§DoD)
 

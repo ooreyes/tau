@@ -1419,8 +1419,11 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   central-differenced (one-sided at the ends) with the degrees→Hz conversion
   τ = −dφ_deg/(360·df). Hand-verified: a linear-phase pure delay gives constant τ,
   flat phase gives 0, and an unwrapped ±180 crossing stays smooth. The AC pane's
-  meter row now shows the primary trace's **peak group delay**. Still ⬜:
-  log/linear axis toggle, standalone phase pane, group-delay trace overlay.
+  meter row now shows the primary trace's **peak group delay**. **Log/linear X
+  toggle landed** (2026-08-05): `freqToFraction` + AcPlot **Log X / Lin X**
+  buttons remaps Bode magnitude/phase axes and paths (default log). 2 pure +
+  1 AcPlot wiring tests. Still ⬜: standalone phase pane, group-delay trace
+  overlay, Y log toggle.
 - 🟡 **Loop-stability margins** (LTspice Bode readouts) — **landed**
   (`simulation/stability.ts`, 10 tests): `stabilityMargins(freqs, magDb, phaseDeg)`
   returns **phase margin** (180°+φ at the 0 dB gain crossover) and **gain margin**
@@ -1495,9 +1498,10 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   current Transient/AC/DC panes. 5 round-trip + 1 Save wiring tests.
   **FFT spectrum CSV landed** (see FFT item). **Dual-axis Y landed** (see
   expressions item). **Step-pane expressions landed** (see expressions item).
-  **Right-click math (slice) landed** (see right-click item). **NEXT:**
-  (waveform CSV/PNG/plt/FFT/expressions/dual-axis/right-click-abs covered —
-  remaining: richer right-click ops, log/linear toggle).
+  **Right-click math (slice) landed** (see right-click item). **Bode Log/Lin X
+  landed** (see group-delay / axes item). **NEXT:** (waveform
+  CSV/PNG/plt/FFT/expressions/dual-axis/right-click/Bode-X covered —
+  remaining: richer right-click ops, Y log, phase pane).
 - 🟡 Right-click trace → math/operations — **abs / negate / dB landed**
   (2026-08-05): `traceMath.ts` wraps a legend trace into `abs(…)`, `-(…)`,
   or `db(…)` and adds it via the existing expression overlay path; transient

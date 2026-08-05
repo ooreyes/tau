@@ -282,6 +282,27 @@ describe("AcPlot - log-frequency ticks on both magnitude and phase", () => {
     expect(ticks.some((t) => /°/.test(t))).toBe(true);
     expect(ticks.length).toBeGreaterThan(4);
   });
+
+  it("Lin X toggle remaps Bode axes off log decades", () => {
+    const freqs = [10, 100, 1000, 10000, 100000];
+    const result: AcResult = {
+      ok: true,
+      freqs,
+      traces: [{ id: "n1", label: "V(out)", magDb: [0, -3, -20, -40, -60], phaseDeg: [0, -45, -90, -90, -90] }],
+      warnings: [],
+    };
+    const { container } = render(<AcPlot result={result} />);
+    const logBtn = screen.getByRole("button", { name: "Log X" });
+    const linBtn = screen.getByRole("button", { name: "Lin X" });
+    expect(logBtn.getAttribute("aria-pressed")).toBe("true");
+    fireEvent.click(linBtn);
+    expect(linBtn.getAttribute("aria-pressed")).toBe("true");
+    expect(logBtn.getAttribute("aria-pressed")).toBe("false");
+    // Linear decades still label Hz; path exists on both panes.
+    const ticks = Array.from(container.querySelectorAll(".scope-tick")).map((t) => t.textContent ?? "");
+    expect(ticks.some((t) => /Hz/.test(t))).toBe(true);
+    expect(container.querySelectorAll("path.scope-trace").length).toBeGreaterThan(0);
+  });
 });
 
 describe("DcPlot - linear sweep/volts ticks", () => {

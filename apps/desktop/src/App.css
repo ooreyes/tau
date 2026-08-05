@@ -2927,6 +2927,14 @@ body {
   padding-top: var(--sp-2);
 }
 
+.bode-x-scale {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 2px;
+  grid-column: 1 / -1;
+}
+
 .analysis-empty {
   margin: 12px 14px 10px;
   padding: var(--sp-3);
