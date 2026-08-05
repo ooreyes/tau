@@ -56,6 +56,8 @@ const PASSIVE_ASC = join(EDU, "passive.asc");
 const BUTTER_ASC = join(EDU, "butter.asc");
 const CLAPP_ASC = join(EDU, "Clapp.asc");
 const HARTLY_ASC = join(EDU, "Hartly.asc");
+const OPAMP_FILTER_ASC = join(EDU, "opamp.asc");
+const LINKWITZ_ASC = join(EDU, "Linkwitz.asc");
 const STEPTEMP_ASC = join(EDU, "steptemp.asc");
 const STEPMODELPARAM_ASC = join(EDU, "stepmodelparam.asc");
 const COLPITTS_ASC = process.env.COLPITTS_ASC ?? join(EDU, "colpits.asc");
@@ -203,7 +205,7 @@ function withAcStimulus(netlist: string): string {
 describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential parity matrix", () => {
   const cells: DifferentialCell[] = [];
 
-  it("matches RC .tran/.ac/.meas, divider analyses, .step families, curvetrace, stepmodelparam, NoiseFigure, noise.asc, Colpitts/Clapp/Hartly AC, Cohn AC, MeasureBW AC, Transformer/Transformer2/IdealTransformer TRAN, notch/passive/butter AC, Class-D AC/OP/DC/noise/tf", () => {
+  it("matches RC .tran/.ac/.meas, divider analyses, .step families, curvetrace, stepmodelparam, NoiseFigure, noise.asc, Colpitts/Clapp/Hartly AC, Cohn AC, MeasureBW AC, Transformer/Transformer2/IdealTransformer TRAN, notch/passive/butter/opamp/Linkwitz AC, Class-D AC/OP/DC/noise/tf", () => {
     // --- TRAN (also covered by waveformParity; re-assert here so this file is self-sufficient) ---
     {
       const result = runPairedBatch("diff-rc-tran", RC_TRAN, ["v(out)"]);
@@ -1152,6 +1154,61 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
       });
     }
 
+
+    // --- Educational opamp.asc / Linkwitz.asc authored .ac (active filter breadth) ---
+    for (const fixture of [
+      {
+        path: OPAMP_FILTER_ASC,
+        circuit: "opamp-filter",
+        topology: "Educational opamp.asc state-variable filter + opamp.sub (authored .ac oct 1–100k)",
+        probe: "v(bp)",
+        id: "diff-opamp-filter-ac",
+      },
+      {
+        path: LINKWITZ_ASC,
+        circuit: "linkwitz",
+        topology: "Educational Linkwitz.asc crossover + speaker load (authored .ac oct 10–10k)",
+        probe: "v(out)",
+        id: "diff-linkwitz-ac",
+      },
+    ] as const) {
+      expect(existsSync(fixture.path), `missing ${fixture.path}`).toBe(true);
+      const imported = importAsc(decodeSchematicText(readFileSync(fixture.path)));
+      expect(imported.warnings).toEqual([]);
+      const parsed = analysesFromDirectives(imported.directives);
+      expect(parsed.ac, `${fixture.circuit} must author .ac`).toBeTruthy();
+      const params = buildParamScope(imported.directives);
+      const deck = buildSpiceDeck({
+        components: imported.components,
+        wires: imported.wires,
+        netLabels: imported.netLabels,
+        directives: imported.directives,
+        params,
+      }, {
+        kind: "ac",
+        startHz: parsed.ac!.startHz,
+        stopHz: parsed.ac!.stopHz,
+        pointsPerDecade: parsed.ac!.pointsPerDecade,
+      });
+      expect(deck.unresolvedSubckts).toEqual([]);
+      const result = runPairedBatch(fixture.id, deck.netlist, [fixture.probe]);
+      const lt = result.ltspice.get(fixture.probe)!;
+      const ng = result.ngspice.get(fixture.probe)!;
+      const comparison = compareWaveforms(ng.axis, ng.values, lt.axis, lt.values, {
+        rmsTolerance: 0.02,
+        maxTolerance: 0.05,
+      });
+      expect(comparison.pass, `${fixture.circuit} ${JSON.stringify(comparison)}`).toBe(true);
+      cells.push({
+        analysis: "ac",
+        circuit: fixture.circuit,
+        topology: fixture.topology,
+        status: "pass",
+        note: `|${fixture.probe}| nRms=${comparison.normalizedRms.toFixed(4)} nMax=${comparison.normalizedMax.toFixed(4)}`,
+      });
+    }
+
+
     // --- Class-D AC/OP (authored analyses are .tran/.meas; add AC/OP for differential proof) ---
     {
       const ascPath = join(CLASSD_DIR, "class-d-starter.asc");
@@ -1445,9 +1502,9 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
     const passCount = cells.filter((cell) => cell.status === "pass").length;
     const gapCount = cells.filter((cell) => cell.status === "gap").length;
     const siblingCount = cells.filter((cell) => cell.status === "sibling").length;
-    expect(passCount).toBeGreaterThanOrEqual(34);
+    expect(passCount).toBeGreaterThanOrEqual(36);
     expect(siblingCount).toBe(5);
     expect(gapCount).toBe(0);
-    expect(report).toMatch(/SUMMARY pass=34 sibling=5 gap=0/);
+    expect(report).toMatch(/SUMMARY pass=36 sibling=5 gap=0/);
   }, 240_000);
 });

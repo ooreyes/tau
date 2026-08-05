@@ -9,20 +9,111 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 02:07 CDT**
+**Status: DONE - 2026-08-05 02:11 CDT**
 
-Unit: Educational Clapp.asc + Hartly.asc AC → differential **pass=34**.
+Unit: Educational opamp.asc + Linkwitz.asc authored `.ac` → differential **pass=36**.
 ```
-SUMMARY pass=34 sibling=5 gap=0
-ac clapp  … |V(out)| nRms=0.0029
-ac hartly … |V(out)| nRms=0.0000
+SUMMARY pass=36 sibling=5 gap=0
+ac opamp-filter … |v(bp)| nRms=0.0000
+ac linkwitz … |v(out)| nRms=0.0000
 ```
-Named-device 47.9% encrypted wall unchanged. SHIPPABLE? **NO**
+Left Howland/LM741 for continue 6. Named-device 47.9%. SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
 
 ---
+
+### 2026-08-05 — opamp/Linkwitz AC differential → pass=36 (§DoD)
+
+**What I did**
+- `opamp.asc` state-variable filter (`.include opamp.sub`) authored `.ac` →
+  |V(bp)| nRms=0 vs LTspice.
+- `Linkwitz.asc` crossover + speaker load authored `.ac` → |V(out)| nRms=0.
+- Did not land concurrent LM741 WIP (left for continue 6).
+
+**Exact stdout**
+```
+SUMMARY pass=36 sibling=5 gap=0
+```
+
+**Files**
+- `apps/desktop/scripts/differentialParity.corpus.ts`
+- `AGENTS.md`, `FEATURE_PARITY.md`, `PROGRESS.md`
+
+**Tests**
+- vitest differentialParity; typecheck; apps/desktop test
+
+**Parity items**
+- Differential 🟡 **pass=36**. Named-device 47.9%. SHIPPABLE? NO
+
+**Next**
+- LM741/Howland (continue 6); Vswitch deferred; encrypted refuse
+
+
+### 2026-08-05 — LM741 TRAN differential → pass=35 (§DoD)
+
+**What I did**
+- Educational `LM741.asc` authored `.tran 10m`: 20 discrete BJTs with
+  schematic `.model NP` / `.model PN` (zero `modelSubstitutions`, no TAU_*
+  generics). Probed net labels 6=OUT / 3=IN+ / 2=IN− vs LTspice.
+- Collision-avoided Clapp/Hartly (Staff EE tip `35003c3`). Howland+LT1001
+  probed but deferred — Tau OTA A-device remap is ngspice-shaped; same-deck
+  LTspice rejects it (`Too few nodes`). HalfSlope Laplace silently collapses
+  to G=1 — rejected as dishonest.
+- Broad DoD matrix still open. SHIPPABLE? **NO**.
+
+**Exact stdout**
+```
+SUMMARY pass=35 sibling=5 gap=0
+tran lm741 … v(6) nRms=0.0005 nMax=0.0009; v(3) nRms=0.0004; v(2) nRms=0.0005
+```
+
+**Files**
+- `apps/desktop/scripts/differentialParity.corpus.ts`
+- `AGENTS.md`, `FEATURE_PARITY.md`, `PROGRESS.md`
+- `~/Desktop/TAU-MORNING-STATUS.md`
+
+**Tests**
+- `scripts/differential-parity.sh` (vitest corpus); typecheck; apps/desktop test
+
+**Parity items**
+- Differential 🟡 harness **pass=35 · sibling=5 · gap=0**; DoD broad box unchecked.
+- Named-device 🟡 **47.9%** unchanged. SHIPPABLE? NO
+
+**Next**
+- audioamp / MonteCarlo AC / SoftDiodeRecovery; Howland needs dual-deck or
+  LTspice-native OTA path. Never fake Vswitch continuous SW or encrypted decrypt.
+
+
+
+### 2026-08-05 — opamp/Linkwitz AC differential → pass=36 (§DoD)
+
+**What I did**
+- Educational `opamp.asc` state-variable filter (`.include opamp.sub`) authored
+  `.ac` → |V(bp)| nRms=0 vs LTspice.
+- Educational `Linkwitz.asc` crossover + speaker load authored `.ac` →
+  |V(out)| nRms=0.
+- Left Howland / Clapp / Hartly / Transformer* / Class-D untouched.
+
+**Exact stdout**
+```
+SUMMARY pass=36 sibling=5 gap=0
+```
+
+**Files**
+- `apps/desktop/scripts/differentialParity.corpus.ts`
+- `AGENTS.md`, `FEATURE_PARITY.md`, `PROGRESS.md`
+
+**Tests**
+- vitest differentialParity; typecheck; apps/desktop test
+
+**Parity items**
+- Differential 🟡 **pass=36 · sibling=5 · gap=0**. Named-device 47.9%. SHIPPABLE? NO
+
+**Next**
+- Howland (continue 6); more Educational; Vswitch deferred; encrypted refuse
+
 
 ### 2026-08-05 — Clapp/Hartly AC differential → pass=34 (§DoD)
 

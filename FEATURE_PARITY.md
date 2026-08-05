@@ -1576,12 +1576,10 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   oscillator by amplitude, RMS, and frequency. All four proofs pass headlessly.
   **Differential matrix slice (2026-08-05):** `scripts/differential-parity.sh`
   (wired into `dod-parity.sh`) prints pass/sibling/gap coverage to stdout
-  (truth). Gap-closure → **pass=34 · sibling=5 · gap=0**: prior cells
-  plus Educational noise.asc, MeasureBW.asc AC, Transformer.asc TRAN
-  (coupled L1/L2 K=1), Transformer2 (3-winding K) + IdealTransformer
-  (G-source N=10) TRAN, notch/passive/butter authored `.ac`, Clapp/Hartly
-  JFET oscillator AC (V1 stim; |V(out)| nRms≈0.003/0),
-  steptemp/stepmodelparam, native step_expand, Colpitts AC, Class-D
+  (truth). Gap-closure → **pass=36 · sibling=5 · gap=0**: prior cells
+  plus Educational noise/MeasureBW/Transformer family, notch/passive/butter,
+  Clapp/Hartly AC, opamp.asc + Linkwitz.asc authored `.ac` (|V(bp)|/|V(out)|
+  nRms=0), steptemp/stepmodelparam, native step_expand, Colpitts AC, Class-D
   AC/OP/DC/noise/tf. Harness-slice gaps closed; DoD broad-differential box
   remains open — see AGENTS.md.
 - 🟡 Resolve a real device-model set — **common LTspice standard diodes/
