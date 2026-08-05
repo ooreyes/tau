@@ -1,18 +1,46 @@
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 ~14:25 CDT**
+**Status: IN PROGRESS - 2026-08-05 ~14:35 CDT**
 
-Unit: **Educational PowerAmpLayout A=0.1 → pass=111** — layout TIP121/TIP127
-+ sibling `.lib` `.tran 10m` (≠ PowerAmp.asc 5m). DoD broad-differential box
-stays open. SHIPPABLE? **NO** (named-device ≥95%, broad differential still open;
-§10 design-system checked on tip).
+Unit: **Resources/sinh.asc domain-safe .dc → pass=112** — then PowerAmpLayout
+A=0.2..0.7 → pass=113. DoD broad box stays open. SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
 
-
-
 ---
+
+### 2026-08-05 — Resources/sinh.asc DC → pass=112 (§DoD)
+
+**What I did**
+- LTspice.app `Resources/sinh.asc` authored `.dc v1 -1.01 1.01 10u` is singular
+  at |V|≥1 (ngspice log-range). Honest stand-in (NoiseStep list→band class):
+  domain-safe `.dc V1 -0.99 0.99 0.01`. BV atanh ≡ ½log; v(n001)/v(n002)
+  nRms≈0 span≈4.94. Tip PowerAmpLayout A=0.1 was pass=111 → **pass=112**.
+- Left SoftDiode Vp>0 / Fc / ISO7637 / divide2 / inverter `.machine` /
+  Draft10 / Chan/NIGBT/FRA. DoD broad box stays open. SHIPPABLE? **NO**.
+
+**Files**
+- `apps/desktop/scripts/differentialParity.corpus.ts`
+- `FEATURE_PARITY.md`, `PROGRESS.md`, `AGENTS.md`
+
+**Tests**
+- Probe sinh domain-safe DC: pass nRms≈0
+- `pnpm -C apps/desktop typecheck` / `test` → 2985 passed / 8 skipped
+- `scripts/differential-parity.sh` → SUMMARY pass=112 sibling=5 gap=0
+
+**Parity items**
+- Differential 🟡 **pass=112 · sibling=5 · gap=0**; DoD broad box unchecked.
+  SHIPPABLE? **NO**
+
+**Next step**
+- PowerAmpLayout A=0.2..0.7 / Fc / ISO7637 / TLINE-inv / Draft10; never
+  SoftDiode Vp>0 fakes. SHIPPABLE? **NO**
+
+SHIPPABLE? **NO**
+
+
+
 
 ### 2026-08-05 — PowerAmpLayout A=0.1 TRAN → pass=111 (§DoD)
 

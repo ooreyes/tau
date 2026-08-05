@@ -225,7 +225,7 @@ account and sign/notarize/ship.
       with LTspice over a representative device and topology matrix.
       **Partial (2026-08-05):** `scripts/differential-parity.sh` +
       `differentialParity.corpus.ts` (also under `dod-parity.sh`) prove
-      pass=111 · sibling=5 · gap=0 on stdout: prior cells through SampleAndHold +
+      pass=112 · sibling=5 · gap=0 on stdout: prior cells through SampleAndHold +
       Educational/contrib/elip_grd.asc authored `.ac` (elliptic RLC + K1; S21/S11
       nRms≈0.0057/0.0039 @ maxTol=0.10 peak) + Documents/LTspice/Draft3.asc
       authored `.ac` (series RLC L/C/R; v(vout) nRms=0 / nMax=0 span≈1.04) +
@@ -329,13 +329,15 @@ account and sign/notarize/ship.
       deferred. Draft6 AD823 / Draft10 UOA2 same-deck not landed. HalfSlope
       Laplace not landed. SoftDiodeRecovery Vp>0 still deferred. wavein (wavefile=)
       deferred. ISO7637 spike still misses. Educational/IGBT.asc NIGBT refuse (≠ IGBTeq).
-      dimmer gate/near-cutoff still deferred. Resources sinh / divide2 / inverter deferred
-      (log-domain / `.machine` hollow). Resources mextram deferred (no authored analysis).
+      dimmer gate/near-cutoff still deferred. Resources sinh authored ±1.01 poles still deferred
+      (domain-safe ±0.99 landed); divide2 / inverter deferred (`.machine` hollow). Resources mextram deferred (no authored analysis).
       NonLinearTransformer Chan refuse. NE555 continuous Output phase deferred (period landed).
-            Harness-slice gap closed; broad topology/device matrix still open —
-      DoD box stays unchecked.
       Educational/PAsystem/PowerAmpLayout.asc authored `.tran` (layout
-      TIP121/TIP127 + sibling .lib A=0.1; ≠ PowerAmp.asc 5m; speaker nRms=0).
+      TIP121/TIP127 + sibling .lib A=0.1; ≠ PowerAmp.asc 5m; speaker nRms=0) +
+      LTspice.app Resources/sinh.asc authored `.dc` (BV atanh≡½log;
+      ±1.01→domain-safe ±0.99; v(n001)/v(n002) nRms≈0; authored poles deferred).
+      Harness-slice gap closed; broad topology/device matrix still open —
+      DoD box stays unchecked.
 - [x] **AI is production-safe and genuinely circuit-aware:** a supported OpenAI
       path (Tau OAuth/backend or native BYOK with separate API billing) keeps
       service credentials out of the renderer, obtains explicit cloud-data

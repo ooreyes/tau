@@ -163,6 +163,8 @@ const HELP_NOISESTEP_ASC = join(
 const RESOURCES_DRAFT1_ASC = join("/Applications/LTspice.app/Contents/Resources", "Draft1.asc");
 /** LTspice.app Resources BI microcode demo — split Value/Value2 `if(` expressions. */
 const RESOURCES_MICROCODE_ASC = join("/Applications/LTspice.app/Contents/Resources", "MicroCode.asc");
+/** LTspice.app Resources BV atanh/log demo — authored `.dc` past ±1 is singular. */
+const RESOURCES_SINH_ASC = join("/Applications/LTspice.app/Contents/Resources", "sinh.asc");
 const EDU_100W_ASC = join(EDU, "100W.asc");
 const SAMPLEANDHOLD_ASC = join(EDU, "SampleAndHold.asc");
 const EDU_VARISTOR_ASC = join(EDU, "varistor.asc");
@@ -416,7 +418,7 @@ function withAcStimulus(netlist: string): string {
 describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential parity matrix", () => {
   const cells: DifferentialCell[] = [];
 
-  it("matches RC .tran/.ac/.meas, divider analyses, .step families, curvetrace, stepmodelparam, NoiseFigure, noise.asc, Colpitts/Clapp/Hartly AC, Cohn AC, MeasureBW AC, Transformer/Transformer2/IdealTransformer TRAN, notch/passive/butter/opamp/Linkwitz AC, LM741/LM308/LM78XX/P2/logamp TRAN, GFT AC, DCopPnt OP, audioamp TRAN, UHFpreamp AC, 1563 AC, S-param AC, stepAC AC, 2ndOrder* AC, MonteCarlo AC, varactor AC, phaseshift AC, Pierce/colpits2 AC, edu-varistor TRAN, stepnoise noise, UniversalOpAmp/1/2 TRAN, contrib/qztst AC, SampleAndHold TRAN, contrib/elip_grd AC, Draft3 AC, Draft7 AC, Draft2 TRAN, Draft1 TRAN, BandGaps DC-temp, waveout TRAN, ISO16750 TRAN, IGBTeq nested DC, help-Butterworth AC, Resources-Draft1 DC, 100W TRAN, help-ACstep AC, help-NoiseStep noise, Resources-MicroCode TRAN, ct-rlc-ringing TRAN, ct-diode-dc DC, ct-step-loaded DC, ct-noise-rc noise, ct-stress-rc-ladder AC, ct-active-fourth-order AC, ct-full-bridge TRAN, ct-three-phase TRAN, ct-buck TRAN, ct-boost TRAN, ct-logic TRAN, ct-dflop TRAN, MC1648 TRAN, HandsFreePreamp TRAN, Vswitch TRAN, dimmer TRAN, SoftDiodeRecovery TRAN, PowerAmp TRAN, PowerAmp A=0.2..0.7 TRAN, astable period, NE555 period, HandsFreeLayout TRAN, contrib/gr_del AC, PowerAmpLayout TRAN, Class-D AC/OP/DC/noise/tf", () => {
+  it("matches RC .tran/.ac/.meas, divider analyses, .step families, curvetrace, stepmodelparam, NoiseFigure, noise.asc, Colpitts/Clapp/Hartly AC, Cohn AC, MeasureBW AC, Transformer/Transformer2/IdealTransformer TRAN, notch/passive/butter/opamp/Linkwitz AC, LM741/LM308/LM78XX/P2/logamp TRAN, GFT AC, DCopPnt OP, audioamp TRAN, UHFpreamp AC, 1563 AC, S-param AC, stepAC AC, 2ndOrder* AC, MonteCarlo AC, varactor AC, phaseshift AC, Pierce/colpits2 AC, edu-varistor TRAN, stepnoise noise, UniversalOpAmp/1/2 TRAN, contrib/qztst AC, SampleAndHold TRAN, contrib/elip_grd AC, Draft3 AC, Draft7 AC, Draft2 TRAN, Draft1 TRAN, BandGaps DC-temp, waveout TRAN, ISO16750 TRAN, IGBTeq nested DC, help-Butterworth AC, Resources-Draft1 DC, 100W TRAN, help-ACstep AC, help-NoiseStep noise, Resources-MicroCode TRAN, ct-rlc-ringing TRAN, ct-diode-dc DC, ct-step-loaded DC, ct-noise-rc noise, ct-stress-rc-ladder AC, ct-active-fourth-order AC, ct-full-bridge TRAN, ct-three-phase TRAN, ct-buck TRAN, ct-boost TRAN, ct-logic TRAN, ct-dflop TRAN, MC1648 TRAN, HandsFreePreamp TRAN, Vswitch TRAN, dimmer TRAN, SoftDiodeRecovery TRAN, PowerAmp TRAN, PowerAmp A=0.2..0.7 TRAN, astable period, NE555 period, HandsFreeLayout TRAN, contrib/gr_del AC, PowerAmpLayout TRAN, Resources-sinh DC, Class-D AC/OP/DC/noise/tf", () => {
     // --- TRAN (also covered by waveformParity; re-assert here so this file is self-sufficient) ---
     {
       const result = runPairedBatch("diff-rc-tran", RC_TRAN, ["v(out)"]);
@@ -5625,6 +5627,77 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
       });
     }
 
+    // --- LTspice.app Resources/sinh.asc authored .dc (BV atanh ≡ ½log artanh) ---
+    // Pure V1 + B3 `V=atanh(V(X))` + B1 `V=.5*log((1+V(x))/(1-V(x)))`. Authored
+    // `.dc v1 -1.01 1.01 10u` crosses the |V|=1 singularity (ngspice: "out of
+    // range for log") — same honest stand-in pattern as help NoiseStep
+    // list→band: keep domain-safe `.dc V1 -0.99 0.99 0.01` (span≈4.94, nRms≈0).
+    // Authored poles |V|≥1 remain deferred. ≠ Resources Draft1 `_exp` DC /
+    // MicroCode TRAN. Zero unresolved / substitutions. Tip PowerAmpLayout
+    // pass=111 → **pass=112**. Left SoftDiode Vp>0 / Fc / ISO7637 / divide2 /
+    // inverter `.machine` / Draft10 alone.
+    {
+      expect(existsSync(RESOURCES_SINH_ASC), `missing ${RESOURCES_SINH_ASC}`).toBe(true);
+      const imported = importAsc(decodeSchematicText(readFileSync(RESOURCES_SINH_ASC)));
+      expect(imported.warnings).toEqual([]);
+      expect(imported.foreignSymbols).toEqual([]);
+      const dirs = expandDirectiveLines(imported.directives);
+      const parsed = analysesFromDirectives(dirs);
+      expect(parsed.dc, "sinh.asc must author .dc").toBeTruthy();
+      expect(parsed.dc!.source.toUpperCase()).toBe("V1");
+      expect(parsed.dc!.start, "authored .dc start −1.01").toBeCloseTo(-1.01, 10);
+      expect(parsed.dc!.stop, "authored .dc stop 1.01").toBeCloseTo(1.01, 10);
+      expect(parsed.dc!.source2, "sinh.asc is single-source .dc").toBeFalsy();
+      const bSources = imported.components.filter((c) => c.kind === "bsource");
+      expect(bSources.length).toBe(2);
+      expect(bSources.some((b) => /atanh\s*\(\s*V\(X\)\s*\)/i.test(b.value))).toBe(true);
+      expect(bSources.some((b) => /\.5\s*\*\s*log\s*\(\s*\(1\+V\(x\)\)\s*\/\s*\(1-V\(x\)\)\s*\)/i.test(b.value))).toBe(true);
+      const params = buildParamScope(dirs);
+      const deck = buildSpiceDeck({
+        components: imported.components,
+        wires: imported.wires,
+        netLabels: imported.netLabels,
+        directives: dirs,
+        params,
+      }, {
+        kind: "dc",
+        source: "V1",
+        start: -0.99,
+        stop: 0.99,
+        step: 0.01,
+      });
+      expect(deck.unresolvedSubckts ?? []).toEqual([]);
+      expect(deck.modelSubstitutions ?? []).toEqual([]);
+      expect(deck.netlist).toMatch(/^B3\b.+\batanh\b/im);
+      expect(deck.netlist).toMatch(/^B1\b.+\blog\b/im);
+      expect(deck.netlist).toMatch(/\.dc\s+V1\s+-0\.99\s+0\.99\s+0\.01\b/i);
+      expect(deck.netlist).not.toMatch(/^X\w*\b/im);
+      const probes = ["v(n001)", "v(n002)"] as const;
+      const result = runPairedBatch("diff-resources-sinh-dc", deck.netlist, [...probes]);
+      const memberNotes: string[] = [];
+      for (const probe of probes) {
+        const lt = result.ltspice.get(probe)!;
+        const ng = result.ngspice.get(probe)!;
+        const comparison = compareWaveforms(ng.axis, ng.values, lt.axis, lt.values, {
+          rmsTolerance: 0.02,
+          maxTolerance: 0.05,
+        });
+        expect(comparison.pass, `Resources-sinh ${probe} ${JSON.stringify(comparison)}`).toBe(true);
+        expect(comparison.referenceRange, `Resources-sinh ${probe} non-hollow`).toBeGreaterThan(4);
+        expect(comparison.samples, `Resources-sinh ${probe} samples`).toBeGreaterThan(100);
+        memberNotes.push(
+          `${probe} nRms=${comparison.normalizedRms.toFixed(4)} nMax=${comparison.normalizedMax.toFixed(4)} span=${comparison.referenceRange.toFixed(2)}`,
+        );
+      }
+      cells.push({
+        analysis: "dc",
+        circuit: "resources-sinh",
+        topology: "LTspice.app Resources/sinh.asc BV atanh≡½log (.dc ±1.01→domain-safe ±0.99; authored poles deferred)",
+        status: "pass",
+        note: memberNotes.join("; "),
+      });
+    }
+
     // --- Class-D AC/OP (authored analyses are .tran/.meas; add AC/OP for differential proof) ---
     {
       const ascPath = join(CLASSD_DIR, "class-d-starter.asc");
@@ -5921,6 +5994,6 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
     expect(passCount).toBeGreaterThanOrEqual(70);
     expect(siblingCount).toBe(5);
     expect(gapCount).toBe(0);
-    expect(report).toMatch(/SUMMARY pass=111 sibling=5 gap=0/);
+    expect(report).toMatch(/SUMMARY pass=112 sibling=5 gap=0/);
   }, 600_000);
 });
