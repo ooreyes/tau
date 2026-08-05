@@ -1,9 +1,9 @@
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 09:15 CDT**
+**Status: DONE - 2026-08-05 09:25 CDT**
 
-Unit: FFT magnitude manual Y limits (waveform DoD / FFT polish).
-Worktree `Tau-wt-wave-fft-ylim` on tip `0cbdb0b`. Left EveryCircuit library /
+Unit: DC sweep multi-pane cards (waveform DoD).
+Worktree `Tau-wt-wave-ac-panes` on tip `0d6a2b2`. Left EveryCircuit library /
 current-mode / Settings / Educational alone. SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
@@ -14,6 +14,32 @@ current-mode / Settings / Educational alone. SHIPPABLE? **NO**
 ---
 
 
+
+### 2026-08-05 — DC sweep multi-pane cards (§waveform DoD)
+
+**What I did**
+- DcPlot automatic one-net-per-pane cards via `automaticLayout`: shared sweep X,
+  per-pane Y autorange, MIN/AVG/MAX stats + overlay marks; shared Apply Y.
+  AC Bode panes still open.
+
+**Files**
+- `components/SimulationPanel.tsx` (DcPlot / DcScopePane)
+- `components/SimulationPanel.axes.test.tsx`
+- `App.css` (`.dc-pane-stack`)
+- `FEATURE_PARITY.md`, `PROGRESS.md`
+
+**Tests**
+- `pnpm -C apps/desktop typecheck` + DcPlot axes tests; full suite before push
+
+**Parity items**
+- §waveform DoD: DC multi-pane cards. NEXT: AC Bode multi-pane.
+
+**Next step**
+- AC Bode multi-pane cards; never Chan/NIGBT/FRA.
+
+SHIPPABLE? **NO**
+
+---
 
 ### 2026-08-05 — FFT magnitude manual Y limits (§waveform DoD)
 

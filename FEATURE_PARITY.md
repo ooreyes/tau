@@ -1315,7 +1315,10 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   using engineering units (`measurementModel.ts`; 29 pane-model + 9 measurement
   tests). The 2026-07-12 overhaul replaced the former two-column cards with
   full-width, vertically aligned instrument panes and synchronized time zoom.
-  Still ⬜: AC/DC panes. **Bode magnitude manual Y limits landed**
+  **DC sweep multi-pane cards landed** (2026-08-05): DcPlot uses
+  `automaticLayout` (one net/overlay per card), shared sweep X, per-pane Y
+  autorange + MIN/AVG/MAX stats; shared Apply Y. Still ⬜: AC Bode panes.
+  **Bode magnitude manual Y limits landed**
   (2026-08-05): AcPlot Ymin/Ymax + Apply Y / Autoscale Y via
   `parseManualYLimits` / `applyManualYToDomain` (swaps inverted; refuses
   blank/equal). Log Y / Lin Y clears manual. **DC sweep manual Y limits landed**
@@ -1587,7 +1590,9 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   Y limits landed** (2026-08-05): WaveformPlot Apply Y / Autoscale Y on left
   axis. **Noise density manual Y limits landed** (2026-08-05): NoisePlot Apply Y
   / Autoscale Y. **FFT magnitude manual Y limits landed** (2026-08-05): FftView
-  Apply Y / Autoscale Y. **NEXT:** AC/DC multi-pane cards.
+  Apply Y / Autoscale Y. **DC sweep multi-pane cards landed** (2026-08-05):
+  DcPlot automatic one-net-per-pane cards + MIN/AVG/MAX. **NEXT:** AC Bode
+  multi-pane cards.
 - 🟡 Right-click trace → math/operations — **abs / negate / dB / uramp / sgn /
   ddt / idt landed** (2026-08-05): `traceMath.ts` wraps a legend trace into
   `abs(…)`, `-(…)`, `db(…)`, `uramp(…)`, `sgn(…)`, `ddt(…)`, or `idt(…)`;

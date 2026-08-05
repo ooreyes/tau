@@ -4979,18 +4979,41 @@ export function DcPlot({
   /** Right-click DC legend math → add a DC expression overlay. */
   onPlotExpression?: (expression: string) => void;
 }) {
-  const clipId = useId();
-  const [measureRef, size] = useMeasuredSize<SVGSVGElement>();
-  const { targetXTicks, targetYTicks } = tickCountsFromSize(size);
   const [yMinDraft, setYMinDraft] = useState("");
   const [yMaxDraft, setYMaxDraft] = useState("");
   const [manualY, setManualY] = useState<ManualAxisLimits | null>(null);
   const [yLimitsError, setYLimitsError] = useState<string | null>(null);
-  const traces = result?.ok ? result.nets.filter((n) => !n.ground).slice(0, 6) : [];
+
   const sweep = result?.ok ? result.sweep : [];
-  // Expression overlays share the voltage axis with the swept node curves.
-  const allTraces = result?.ok ? [...traces, ...overlays] : [];
-  const plot = useMemo(() => {
+  const allTraces = useMemo(() => {
+    if (!result?.ok) return [];
+    return [...result.nets.filter((n) => !n.ground).slice(0, 6), ...overlays];
+  }, [result, overlays]);
+  const traces = useMemo(
+    () => (result?.ok ? result.nets.filter((n) => !n.ground).slice(0, 6) : []),
+    [result],
+  );
+  const netById = useMemo(() => {
+    const map = new Map<string, DcSweepNet>();
+    for (const net of allTraces) map.set(net.id, net);
+    return map;
+  }, [allTraces]);
+  const paneLayout = useMemo(
+    () => automaticLayout(allTraces.map((net) => net.id)),
+    [allTraces],
+  );
+
+  const colorForNet = useCallback(
+    (net: DcSweepNet): string => {
+      const overlayIndex = overlays.findIndex((o) => o.id === net.id);
+      if (overlayIndex >= 0) return EXPR_COLORS[overlayIndex % EXPR_COLORS.length];
+      const traceIndex = traces.findIndex((t) => t.id === net.id);
+      return AC_COLORS[(traceIndex >= 0 ? traceIndex : 0) % AC_COLORS.length];
+    },
+    [overlays, traces],
+  );
+
+  const globalPlot = useMemo(() => {
     if (allTraces.length === 0 || sweep.length === 0) return null;
     let vMin = Infinity;
     let vMax = -Infinity;
@@ -5002,173 +5025,72 @@ export function DcPlot({
       }
     }
     if (!Number.isFinite(vMin) || !Number.isFinite(vMax)) return null;
-    // Pad a flat trace so it sits mid-frame instead of on an axis edge.
     if (vMax - vMin < 1e-12) {
       vMin -= 0.5;
       vMax += 0.5;
     }
-    const xMin = sweep[0];
-    const xMax = sweep[sweep.length - 1];
-    return { vMin, vMax, xMin, xMax };
-  }, [traces, overlays, sweep]);
+    return {
+      vMin,
+      vMax,
+      xMin: sweep[0],
+      xMax: sweep[sweep.length - 1],
+    };
+  }, [allTraces, sweep]);
 
-  const domain = useMemo<Viewport>(
-    () =>
-      applyManualYToDomain(
-        {
-          xMin: plot ? plot.xMin : 0,
-          xMax: plot ? plot.xMax : 1,
-          yMin: plot ? plot.vMin : -1,
-          yMax: plot ? plot.vMax : 1,
-        },
-        manualY,
-      ),
-    [plot, manualY],
-  );
-  const { viewport, attachSvg, isPanning, fit, zoomBy, dragHandlers } = usePlotViewport({
-    domain,
-    resetKey: plot
-      ? `${manualY ? `${manualY.yMin}:${manualY.yMax}` : "auto"}:${result?.ok ? result.source : ""}:${plot.xMin}:${plot.xMax}`
-      : null,
-    width: PLOT_WIDTH,
-    height: PLOT_HEIGHT,
-    pad: PLOT_PAD,
-  });
-  const setRefs = useCallback(
-    (el: SVGSVGElement | null) => {
-      measureRef.current = el;
-      attachSvg(el);
-    },
-    [measureRef, attachSvg],
-  );
+  const [sharedX, setSharedX] = useState({ xMin: 0, xMax: 1 });
+  useEffect(() => {
+    if (!globalPlot) return;
+    setSharedX({ xMin: globalPlot.xMin, xMax: globalPlot.xMax });
+  }, [globalPlot?.xMin, globalPlot?.xMax, result?.ok ? result.source : null]);
+  const shareXViewport = useCallback((next: { xMin: number; xMax: number }) => {
+    setSharedX((current) =>
+      current.xMin === next.xMin && current.xMax === next.xMax ? current : next,
+    );
+  }, []);
 
   if (!result) return null;
   if (!result.ok) return <div className="analysis-empty">{result.message}</div>;
 
-  const viewPlot = { vMin: viewport.yMin, vMax: viewport.yMax, xMin: viewport.xMin, xMax: viewport.xMax };
-
   return (
     <>
-      <div className="scope-shell">
-        <div className="scope-plot-wrap">
-          <svg
-            ref={setRefs}
-            className={isPanning ? "scope-svg panning" : "scope-svg"}
-            viewBox={`0 0 ${PLOT_WIDTH} ${PLOT_HEIGHT}`}
-            role="img"
-            aria-label="DC sweep plot"
-            {...dragHandlers}
-          >
-            <PlotAxes
-              width={PLOT_WIDTH}
-              height={PLOT_HEIGHT}
-              pad={PLOT_PAD}
-              xMin={viewport.xMin}
-              xMax={viewport.xMax}
-              yMin={viewport.yMin}
-              yMax={viewport.yMax}
-              yUnit="V"
-              targetXTicks={targetXTicks}
-              targetYTicks={targetYTicks}
-            />
-            {plot && (
-              <ScopeClip id={clipId} width={PLOT_WIDTH} height={PLOT_HEIGHT} pad={PLOT_PAD}>
-                {traces.map((net, i) => (
-                  <path key={net.id} className="scope-trace" stroke={AC_COLORS[i % AC_COLORS.length]} d={dcPath(net.voltages, sweep, viewPlot)} />
-                ))}
-                {overlays.map((net, i) => (
-                  <path key={net.id} className="scope-trace" stroke={EXPR_COLORS[i % EXPR_COLORS.length]} d={dcPath(net.voltages, sweep, viewPlot)} />
-                ))}
-              </ScopeClip>
-            )}
-          </svg>
-          {plot && <ScopeZoomCluster onZoomIn={() => zoomBy(0.7)} onZoomOut={() => zoomBy(1 / 0.7)} onFit={fit} />}
-        </div>
-        <div className="scope-legend" aria-label="DC legend">
-          {traces.length > 0 ? (
-            traces.map((net, i) => {
-              const mathSource = expressionForTrace(net.id, net.label);
-              if (!mathSource || !onPlotExpression) {
-                return (
-                  <span key={net.id} className="bode-legend-chip">
-                    <i style={{ background: AC_COLORS[i % AC_COLORS.length] }} />
-                    {net.label}
-                  </span>
-                );
-              }
-              return (
-                <ContextMenu key={net.id}>
-                  <ContextMenuTrigger asChild>
-                    <button
-                      type="button"
-                      className="bode-legend-chip"
-                      aria-label={`Math for ${net.label}`}
-                    >
-                      <i style={{ background: AC_COLORS[i % AC_COLORS.length] }} aria-hidden="true" />
-                      {net.label}
-                    </button>
-                  </ContextMenuTrigger>
-                  <ContextMenuContent aria-label={`Math for ${net.label}`}>
-                    <ContextMenuLabel>Math</ContextMenuLabel>
-                    <ContextMenuSeparator />
-                    {acTraceMathMenuItems().map((item) => (
-                      <ContextMenuItem
-                        key={item.op}
-                        onClick={() => onPlotExpression(wrapTraceMath(mathSource, item.op))}
-                      >
-                        {item.label.replace("…", net.label)}
-                      </ContextMenuItem>
-                    ))}
-                  </ContextMenuContent>
-                </ContextMenu>
-              );
-            })
-          ) : (
-            <span className="muted">No traces</span>
-          )}
-          {overlays.map((net, i) => {
-            const mathSource = expressionForTrace(net.id, net.label);
-            if (!mathSource || !onPlotExpression) {
-              return (
-                <span key={net.id} className="bode-legend-chip">
-                  <i style={{ background: EXPR_COLORS[i % EXPR_COLORS.length] }} />
-                  {net.label}
-                </span>
-              );
-            }
-            return (
-              <ContextMenu key={net.id}>
-                <ContextMenuTrigger asChild>
-                  <button
-                    type="button"
-                    className="bode-legend-chip"
-                    aria-label={`Math for ${net.label}`}
-                  >
-                    <i style={{ background: EXPR_COLORS[i % EXPR_COLORS.length] }} aria-hidden="true" />
-                    {net.label}
-                  </button>
-                </ContextMenuTrigger>
-                <ContextMenuContent aria-label={`Math for ${net.label}`}>
-                  <ContextMenuLabel>Math</ContextMenuLabel>
-                  <ContextMenuSeparator />
-                  {acTraceMathMenuItems().map((item) => (
-                    <ContextMenuItem
-                      key={item.op}
-                      onClick={() => onPlotExpression(wrapTraceMath(mathSource, item.op))}
-                    >
-                      {item.label.replace("…", net.label)}
-                    </ContextMenuItem>
-                  ))}
-                </ContextMenuContent>
-              </ContextMenu>
-            );
-          })}
-        </div>
+      <div className="dc-pane-stack" aria-label="DC sweep panes">
+        {paneLayout.map((pane, paneIndex) => {
+          const paneNets = pane.traceIds
+            .map((id) => netById.get(id))
+            .filter((net): net is DcSweepNet => net !== undefined);
+          const title = paneNets.map((n) => n.label).join(", ") || "Empty";
+          return (
+            <div key={pane.id} className="dashboard-card dashboard-card--full">
+              <div className="dashboard-card-header">
+                <span className="dashboard-card-title">{title}</span>
+              </div>
+              <div className="dashboard-card-body">
+                <DcScopePane
+                  nets={paneNets}
+                  sweep={sweep}
+                  colorForNet={colorForNet}
+                  ariaLabel={
+                    paneLayout.length === 1
+                      ? "DC sweep plot"
+                      : `DC sweep pane ${paneIndex + 1}`
+                  }
+                  showXAxis={paneIndex === paneLayout.length - 1}
+                  manualY={manualY}
+                  sharedX={sharedX}
+                  onSharedXChange={shareXViewport}
+                  runKey={globalPlot ? `${result.source}:${globalPlot.xMin}:${globalPlot.xMax}` : null}
+                  onPlotExpression={onPlotExpression}
+                />
+              </div>
+            </div>
+          );
+        })}
       </div>
       <div className="meter-row analysis-meter">
         <Metric label="SWEEP" value={result.source} tone="green" />
         <Metric label="POINTS" value={String(sweep.length)} tone="cyan" />
         <Metric label="NETS" value={String(traces.length)} tone="cream" />
+        <Metric label="PANES" value={String(paneLayout.length)} tone="cream" />
       </div>
       <div className="meter-row analysis-meter" aria-label="DC sweep Y limits">
         <label className="axis-limit-field">
@@ -5179,7 +5101,7 @@ export function DcPlot({
             className="w-20"
             value={yMinDraft}
             aria-label="DC sweep Y min"
-            placeholder={plot ? String(plot.vMin) : "0"}
+            placeholder={globalPlot ? String(globalPlot.vMin) : "0"}
             onChange={(e) => {
               setYMinDraft(e.currentTarget.value);
               if (yLimitsError) setYLimitsError(null);
@@ -5194,7 +5116,7 @@ export function DcPlot({
             className="w-20"
             value={yMaxDraft}
             aria-label="DC sweep Y max"
-            placeholder={plot ? String(plot.vMax) : "5"}
+            placeholder={globalPlot ? String(globalPlot.vMax) : "5"}
             onChange={(e) => {
               setYMaxDraft(e.currentTarget.value);
               if (yLimitsError) setYLimitsError(null);
@@ -5205,7 +5127,7 @@ export function DcPlot({
           size="sm"
           variant="outline"
           aria-label="Apply DC sweep Y limits"
-          disabled={!plot}
+          disabled={!globalPlot}
           onClick={() => {
             const parsed = parseManualYLimits(yMinDraft, yMaxDraft);
             if (!parsed.ok) {
@@ -5223,7 +5145,7 @@ export function DcPlot({
           variant={manualY ? "default" : "outline"}
           aria-label="Autoscale DC sweep Y"
           aria-pressed={!manualY}
-          disabled={!plot}
+          disabled={!globalPlot}
           onClick={() => {
             setManualY(null);
             setYLimitsError(null);
@@ -5240,6 +5162,209 @@ export function DcPlot({
         </div>
       )}
     </>
+  );
+}
+
+/**
+ * One DC sweep instrument card: own Y autorange, shared sweep X with siblings,
+ * optional MIN/AVG/MAX when the card holds a single net.
+ */
+function DcScopePane({
+  nets,
+  sweep,
+  colorForNet,
+  ariaLabel,
+  showXAxis,
+  manualY,
+  sharedX,
+  onSharedXChange,
+  runKey,
+  onPlotExpression,
+}: {
+  nets: DcSweepNet[];
+  sweep: number[];
+  colorForNet: (net: DcSweepNet) => string;
+  ariaLabel: string;
+  showXAxis: boolean;
+  manualY: ManualAxisLimits | null;
+  sharedX: { xMin: number; xMax: number };
+  onSharedXChange: (x: { xMin: number; xMax: number }) => void;
+  runKey: unknown;
+  onPlotExpression?: (expression: string) => void;
+}) {
+  const clipId = useId();
+  const [measureRef, size] = useMeasuredSize<SVGSVGElement>();
+  const { targetXTicks, targetYTicks } = tickCountsFromSize(size);
+
+  const plot = useMemo(() => {
+    if (nets.length === 0 || sweep.length === 0) return null;
+    let vMin = Infinity;
+    let vMax = -Infinity;
+    for (const net of nets) {
+      for (const v of net.voltages) {
+        if (!Number.isFinite(v)) continue;
+        vMin = Math.min(vMin, v);
+        vMax = Math.max(vMax, v);
+      }
+    }
+    if (!Number.isFinite(vMin) || !Number.isFinite(vMax)) return null;
+    if (vMax - vMin < 1e-12) {
+      vMin -= 0.5;
+      vMax += 0.5;
+    }
+    return { vMin, vMax, xMin: sweep[0], xMax: sweep[sweep.length - 1] };
+  }, [nets, sweep]);
+
+  const domain = useMemo<Viewport>(
+    () =>
+      applyManualYToDomain(
+        {
+          xMin: plot ? plot.xMin : 0,
+          xMax: plot ? plot.xMax : 1,
+          yMin: plot ? plot.vMin : -1,
+          yMax: plot ? plot.vMax : 1,
+        },
+        manualY,
+      ),
+    [plot, manualY],
+  );
+  const viewportResetKey = useMemo(() => {
+    if (!plot || runKey == null) return null;
+    if (!manualY) return runKey;
+    return { run: runKey, yMin: manualY.yMin, yMax: manualY.yMax };
+  }, [plot, runKey, manualY]);
+  const { viewport, attachSvg, isPanning, fit, zoomBy, dragHandlers } = usePlotViewport({
+    domain,
+    resetKey: viewportResetKey,
+    width: PLOT_WIDTH,
+    height: PLOT_HEIGHT,
+    pad: PLOT_PAD,
+    sharedX,
+    onXViewportChange: plot ? onSharedXChange : undefined,
+  });
+  const setRefs = useCallback(
+    (el: SVGSVGElement | null) => {
+      measureRef.current = el;
+      attachSvg(el);
+    },
+    [measureRef, attachSvg],
+  );
+
+  const viewPlot = { vMin: viewport.yMin, vMax: viewport.yMax, xMin: viewport.xMin, xMax: viewport.xMax };
+  const solo = nets.length === 1 ? nets[0]! : null;
+  const soloStats = useMemo(
+    () => (solo ? traceStatistics(sweep, solo.voltages) : null),
+    [solo, sweep],
+  );
+  const soloTrace: Trace | null = solo
+    ? {
+        id: solo.id,
+        label: solo.label,
+        unit: "V",
+        color: colorForNet(solo),
+        values: solo.voltages,
+      }
+    : null;
+
+  return (
+    <div className="scope-shell">
+      <div className="scope-plot-wrap">
+        <svg
+          ref={setRefs}
+          className={isPanning ? "scope-svg panning" : "scope-svg"}
+          viewBox={`0 0 ${PLOT_WIDTH} ${PLOT_HEIGHT}`}
+          role="img"
+          aria-label={ariaLabel}
+          {...dragHandlers}
+        >
+          <PlotAxes
+            width={PLOT_WIDTH}
+            height={PLOT_HEIGHT}
+            pad={PLOT_PAD}
+            xMin={viewport.xMin}
+            xMax={viewport.xMax}
+            yMin={viewport.yMin}
+            yMax={viewport.yMax}
+            yUnit="V"
+            showXTicks={showXAxis}
+            targetXTicks={targetXTicks}
+            targetYTicks={targetYTicks}
+          />
+          {plot && (
+            <ScopeClip id={clipId} width={PLOT_WIDTH} height={PLOT_HEIGHT} pad={PLOT_PAD}>
+              {nets.map((net) => (
+                <path
+                  key={net.id}
+                  className="scope-trace"
+                  stroke={colorForNet(net)}
+                  d={dcPath(net.voltages, sweep, viewPlot)}
+                />
+              ))}
+            </ScopeClip>
+          )}
+          {soloTrace && soloStats && (
+            <ScopeStatisticsOverlay
+              trace={soloTrace}
+              times={sweep}
+              viewport={viewport}
+              height={PLOT_HEIGHT}
+            />
+          )}
+        </svg>
+        {plot && <ScopeZoomCluster onZoomIn={() => zoomBy(0.7)} onZoomOut={() => zoomBy(1 / 0.7)} onFit={fit} />}
+      </div>
+      <div className="scope-legend" aria-label="DC legend">
+        {nets.length > 0 ? (
+          nets.map((net) => {
+            const mathSource = expressionForTrace(net.id, net.label);
+            const color = colorForNet(net);
+            if (!mathSource || !onPlotExpression) {
+              return (
+                <span key={net.id} className="bode-legend-chip">
+                  <i style={{ background: color }} />
+                  {net.label}
+                </span>
+              );
+            }
+            return (
+              <ContextMenu key={net.id}>
+                <ContextMenuTrigger asChild>
+                  <button
+                    type="button"
+                    className="bode-legend-chip"
+                    aria-label={`Math for ${net.label}`}
+                  >
+                    <i style={{ background: color }} aria-hidden="true" />
+                    {net.label}
+                  </button>
+                </ContextMenuTrigger>
+                <ContextMenuContent aria-label={`Math for ${net.label}`}>
+                  <ContextMenuLabel>Math</ContextMenuLabel>
+                  <ContextMenuSeparator />
+                  {acTraceMathMenuItems().map((item) => (
+                    <ContextMenuItem
+                      key={item.op}
+                      onClick={() => onPlotExpression(wrapTraceMath(mathSource, item.op))}
+                    >
+                      {item.label.replace("…", net.label)}
+                    </ContextMenuItem>
+                  ))}
+                </ContextMenuContent>
+              </ContextMenu>
+            );
+          })
+        ) : (
+          <span className="muted">No traces</span>
+        )}
+      </div>
+      {soloStats && solo && (
+        <div className="meter-row analysis-meter" aria-label={`${solo.label} DC statistics`}>
+          <Metric label="MIN" value={formatEngineering(soloStats.min, "V", 3)} tone="cyan" />
+          <Metric label="AVG" value={formatEngineering(soloStats.average, "V", 3)} tone="green" />
+          <Metric label="MAX" value={formatEngineering(soloStats.max, "V", 3)} tone="cream" />
+        </div>
+      )}
+    </div>
   );
 }
 

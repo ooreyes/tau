@@ -570,6 +570,27 @@ describe("DcPlot - linear sweep/volts ticks", () => {
     fireEvent.click(autoscale);
     expect(autoscale.getAttribute("aria-pressed")).toBe("true");
   });
+
+  it("splits multiple nets into automatic one-net-per-pane cards with statistics", () => {
+    const result: DcSweepResult = {
+      ok: true,
+      source: "V1",
+      sweep: [0, 1, 2, 3, 4, 5],
+      nets: [
+        { id: "n1", label: "V(out)", voltages: [0, 0.5, 1, 1.5, 2, 2.5], ground: false },
+        { id: "n2", label: "V(mid)", voltages: [0, 0.25, 0.5, 0.75, 1, 1.25], ground: false },
+      ],
+      warnings: [],
+    };
+    const { container } = render(<DcPlot result={result} />);
+    expect(screen.getByLabelText("DC sweep panes")).toBeTruthy();
+    expect(screen.getByRole("img", { name: "DC sweep pane 1" })).toBeTruthy();
+    expect(screen.getByRole("img", { name: "DC sweep pane 2" })).toBeTruthy();
+    expect(container.querySelectorAll(".scope-svg").length).toBe(2);
+    expect(screen.getByLabelText("V(out) DC statistics").textContent).toMatch(/MIN/);
+    expect(screen.getByLabelText("V(mid) DC statistics").textContent).toMatch(/AVG/);
+    expect(screen.getByText("PANES")).toBeTruthy();
+  });
 });
 
 describe("NoisePlot - log-log (frequency × V/√Hz decades) ticks", () => {
