@@ -1,16 +1,9 @@
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 07:29 CDT**
+**Status: DONE - 2026-08-05 07:34 CDT**
 
-Unit: Circuit_testing_v1 `13_boost_converter.asc` authored `.tran` → differential **pass=97**.
-```
-SUMMARY pass=97 sibling=5 gap=0
-tran ct-boost … v(out) nRms=0.0000 nMax=0.0015 span=7.577; VOUT_AVG≈9.6949
-```
-Named-device 48.1%. Worktree `Tau-wt-diff-97` rebased over tip `125495d`
-(step-family legend math + pass=96). Left Staff EE Bode/waveform / Settings /
-Draft* / ct14–15 / ct19 alone.
-SHIPPABLE? **NO**
+Unit: Waveform DoD — **noise legend right-click math**.
+Tip `9467920` → this commit. pass=97. Settings locked. SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
@@ -18,6 +11,33 @@ SHIPPABLE? **NO**
 
 ---
 
+
+
+### 2026-08-05 — noise legend right-click math (§waveform DoD)
+
+**What I did**
+- `evaluateNoisePlotExpression` (`plotExpressionNoise.ts`) + NoisePlot legend
+  ContextMenu via `acTraceMathMenuItems` (abs/neg/db/uramp/sgn; no ddt/idt)
+  on V(onoise)/V(inoise) → density overlays; linear-Y fallback when overlays
+  leave the positive-density plane. ND wall at 48.1% — waveform pivot.
+  Left ct 12/13, continue 36 ASC, ct 19 OP, Chan/NIGBT/FRA, Settings alone.
+
+**Files**
+- `apps/desktop/src/simulation/plotExpressionNoise.ts` (+ test)
+- `apps/desktop/src/components/SimulationPanel.tsx` (+ wiring test)
+- `FEATURE_PARITY.md`, `PROGRESS.md`
+
+**Tests**
+- `pnpm -C apps/desktop typecheck` + `test` green (2765 passed)
+- evaluateNoisePlotExpression 4 + NoisePlot legend ContextMenu
+
+**Parity items**
+- Waveform viewer 🟡 (noise legend math landed; AC/DC family menus still ⬜).
+  Differential pass=97 · named-device 48.1% · SHIPPABLE? NO
+
+**Next step**
+- AC·DC step-family legend / standalone phase window / non-wall ND. Leave
+  Educational/IRFP/Settings alone.
 
 ### 2026-08-05 — ct 13_boost_converter .tran → pass=97 (§DoD)
 

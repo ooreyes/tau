@@ -60,6 +60,7 @@ import { evaluatePlotExpression } from "../simulation/plotExpression";
 import { evaluateAcPlotExpression } from "../simulation/plotExpressionAc";
 import { evaluateDcPlotExpression } from "../simulation/plotExpressionDc";
 import { evaluateStepPlotExpression } from "../simulation/plotExpressionStep";
+import { evaluateNoisePlotExpression } from "../simulation/plotExpressionNoise";
 import {
   acTraceMathMenuItems,
   expressionForTrace,
@@ -2766,15 +2767,61 @@ export function NoisePlot({ result }: { result: NoiseResult | null }) {
   const clipId = useId();
   const [measureRef, size] = useMeasuredSize<SVGSVGElement>();
   const { targetXTicks, targetYTicks } = tickCountsFromSize(size);
+  const [exprList, setExprList] = useState<string[]>([]);
+  const [exprError, setExprError] = useState<string | null>(null);
+
+  const overlays = useMemo(() => {
+    if (!success) return [];
+    const traces: { id: string; label: string; values: number[] }[] = [];
+    for (const expr of exprList) {
+      const evaluated = evaluateNoisePlotExpression(expr, success);
+      if (evaluated.ok) traces.push(evaluated.trace);
+    }
+    return traces;
+  }, [success, exprList]);
+
+  // db(…) / neg(…) can leave the log-density plane — fall back to linear Y.
+  const yScale: AxisScale = useMemo(() => {
+    for (const t of overlays) {
+      for (const v of t.values) {
+        if (Number.isFinite(v) && v <= 0) return "linear";
+      }
+    }
+    return "log";
+  }, [overlays]);
+
   const plot = useMemo(() => {
     if (!success) return null;
+    const series = [success.onoise, ...overlays.map((t) => t.values)];
+    const f0 = Math.log10(success.freqs[0] || 1);
+    const f1 = Math.log10(success.freqs[success.freqs.length - 1] || 10);
+    if (yScale === "linear") {
+      let lo = Infinity;
+      let hi = -Infinity;
+      for (const values of series) {
+        for (const v of values) {
+          if (!Number.isFinite(v)) continue;
+          lo = Math.min(lo, v);
+          hi = Math.max(hi, v);
+        }
+      }
+      if (!Number.isFinite(lo) || !Number.isFinite(hi)) return null;
+      if (hi === lo) {
+        lo -= 1;
+        hi += 1;
+      }
+      const pad = (hi - lo) * 0.05;
+      return { yMin: lo - pad, yMax: hi + pad, f0, f1, yScale: "linear" as const };
+    }
     let lo = Infinity;
     let hi = -Infinity;
-    for (const v of success.onoise) {
-      if (!Number.isFinite(v) || v <= 0) continue;
-      const l = Math.log10(v);
-      lo = Math.min(lo, l);
-      hi = Math.max(hi, l);
+    for (const values of series) {
+      for (const v of values) {
+        if (!Number.isFinite(v) || v <= 0) continue;
+        const l = Math.log10(v);
+        lo = Math.min(lo, l);
+        hi = Math.max(hi, l);
+      }
     }
     if (!Number.isFinite(lo) || !Number.isFinite(hi)) return null;
     // Pad to whole decades and guarantee a non-zero span for a flat spectrum.
@@ -2784,25 +2831,23 @@ export function NoisePlot({ result }: { result: NoiseResult | null }) {
       yMin = Math.floor(lo - 0.5);
       yMax = Math.ceil(hi + 0.5);
     }
-    const f0 = Math.log10(success.freqs[0] || 1);
-    const f1 = Math.log10(success.freqs[success.freqs.length - 1] || 10);
-    return { yMin, yMax, f0, f1 };
-  }, [success]);
+    return { yMin, yMax, f0, f1, yScale: "log" as const };
+  }, [success, overlays, yScale]);
 
   const domain = useMemo<Viewport>(
     () => ({
       xMin: plot ? 10 ** plot.f0 : 1,
       xMax: plot ? 10 ** plot.f1 : 10,
-      yMin: plot ? 10 ** plot.yMin : 1e-9,
-      yMax: plot ? 10 ** plot.yMax : 1e-6,
+      yMin: plot ? (plot.yScale === "log" ? 10 ** plot.yMin : plot.yMin) : 1e-9,
+      yMax: plot ? (plot.yScale === "log" ? 10 ** plot.yMax : plot.yMax) : 1e-6,
     }),
     [plot],
   );
   const { viewport, attachSvg, isPanning, fit, zoomBy, dragHandlers } = usePlotViewport({
     domain,
     xScale: "log",
-    yScale: "log",
-    resetKey: plot ? success : null,
+    yScale,
+    resetKey: plot ? `${success ? "ok" : "no"}:${yScale}:${exprList.join("|")}` : null,
     width: PLOT_WIDTH,
     height: PLOT_HEIGHT,
     pad: PLOT_PAD,
@@ -2815,17 +2860,35 @@ export function NoisePlot({ result }: { result: NoiseResult | null }) {
     [measureRef, attachSvg],
   );
 
+  const plotNoiseExpression = (expr: string) => {
+    const trimmed = expr.trim();
+    if (!trimmed) return;
+    const probe = evaluateNoisePlotExpression(trimmed, result);
+    if (!probe.ok) {
+      setExprError(probe.error);
+      return;
+    }
+    setExprList((prev) => (prev.includes(trimmed) ? prev : [...prev, trimmed]));
+    setExprError(null);
+  };
+
   if (!result) return null;
   if (!result.ok) return <div className="analysis-empty">{result.message}</div>;
 
-  const path = plot
-    ? noisePath(result.onoise, result.freqs, {
-        yMin: Math.log10(viewport.yMin),
-        yMax: Math.log10(viewport.yMax),
+  const pathArgs = plot
+    ? {
+        yMin: yScale === "log" ? Math.log10(viewport.yMin) : viewport.yMin,
+        yMax: yScale === "log" ? Math.log10(viewport.yMax) : viewport.yMax,
         f0: Math.log10(viewport.xMin),
         f1: Math.log10(viewport.xMax),
-      })
-    : "";
+        yScale,
+      }
+    : null;
+  const path = pathArgs ? noisePath(result.onoise, result.freqs, pathArgs) : "";
+  const baseSources = [
+    { id: "onoise", label: "V(onoise)", color: "var(--trace-red)" },
+    { id: "inoise", label: "V(inoise)", color: "var(--trace-cyan)" },
+  ] as const;
 
   return (
     <>
@@ -2848,28 +2911,77 @@ export function NoisePlot({ result }: { result: NoiseResult | null }) {
               yMin={viewport.yMin}
               yMax={viewport.yMax}
               xScale="log"
-              yScale="log"
+              yScale={yScale}
               xUnit="Hz"
-              yUnit="V/√Hz"
+              yUnit={yScale === "log" ? "V/√Hz" : ""}
               targetXTicks={targetXTicks}
               targetYTicks={targetYTicks}
             />
-            {path && (
+            {pathArgs && (
               <ScopeClip id={clipId} width={PLOT_WIDTH} height={PLOT_HEIGHT} pad={PLOT_PAD}>
-                <path className="scope-trace" stroke="var(--trace-red)" d={path} />
+                {path && <path className="scope-trace" stroke="var(--trace-red)" d={path} />}
+                {overlays.map((t, i) => {
+                  const d = noisePath(t.values, result.freqs, pathArgs);
+                  return d ? (
+                    <path
+                      key={t.id}
+                      className="scope-trace"
+                      stroke={EXPR_COLORS[i % EXPR_COLORS.length]}
+                      d={d}
+                    />
+                  ) : null;
+                })}
               </ScopeClip>
             )}
           </svg>
           {plot && <ScopeZoomCluster onZoomIn={() => zoomBy(0.7)} onZoomOut={() => zoomBy(1 / 0.7)} onFit={fit} />}
         </div>
-        <div className="scope-legend">
-          <span>
-            <i style={{ background: "var(--trace-red)" }} />
-            Output noise V({result.spec.output.pos}
-            {result.spec.output.neg ? `,${result.spec.output.neg}` : ""})
-          </span>
+        <div className="scope-legend" aria-label="Noise legend">
+          {baseSources.map((src) => (
+            <ContextMenu key={src.id}>
+              <ContextMenuTrigger asChild>
+                <button type="button" className="bode-legend-chip" aria-label={`Math for ${src.label}`}>
+                  <i style={{ background: src.color }} aria-hidden="true" />
+                  {src.id === "onoise"
+                    ? `Output noise V(${result.spec.output.pos}${result.spec.output.neg ? `,${result.spec.output.neg}` : ""})`
+                    : src.label}
+                </button>
+              </ContextMenuTrigger>
+              <ContextMenuContent aria-label={`Math for ${src.label}`}>
+                <ContextMenuLabel>Math</ContextMenuLabel>
+                <ContextMenuSeparator />
+                {acTraceMathMenuItems().map((item) => (
+                  <ContextMenuItem
+                    key={item.op}
+                    onClick={() => plotNoiseExpression(wrapTraceMath(src.label, item.op))}
+                  >
+                    {item.label.replace("…", src.label)}
+                  </ContextMenuItem>
+                ))}
+              </ContextMenuContent>
+            </ContextMenu>
+          ))}
+          {overlays.map((t, i) => (
+            <span key={t.id} className="bode-legend-chip" style={{ borderColor: EXPR_COLORS[i % EXPR_COLORS.length] }}>
+              <i style={{ background: EXPR_COLORS[i % EXPR_COLORS.length] }} />
+              {t.label}
+              <button
+                type="button"
+                aria-label={`Remove ${t.label}`}
+                onClick={() => setExprList((prev) => prev.filter((e) => e !== t.label))}
+                style={{ background: "transparent", border: 0, color: "inherit", cursor: "pointer", padding: 0, marginLeft: 4 }}
+              >
+                ×
+              </button>
+            </span>
+          ))}
         </div>
       </div>
+      {exprError && (
+        <div className="expr-error" role="alert">
+          {exprError}
+        </div>
+      )}
       <div className="meter-row analysis-meter">
         <Metric label="TOT ONOISE" value={formatEngineering(result.totalOutputNoise, "V", 3)} tone="green" />
         <Metric label="TOT INOISE" value={formatEngineering(result.totalInputNoise, result.inoiseUnit.replace("/√Hz", ""), 3)} tone="cyan" />
@@ -2880,19 +2992,29 @@ export function NoisePlot({ result }: { result: NoiseResult | null }) {
   );
 }
 
-function noisePath(onoise: number[], freqs: number[], plot: { yMin: number; yMax: number; f0: number; f1: number }): string {
+function noisePath(
+  values: number[],
+  freqs: number[],
+  plot: { yMin: number; yMax: number; f0: number; f1: number; yScale: AxisScale },
+): string {
   const span = plot.yMax - plot.yMin || 1;
   const fSpan = plot.f1 - plot.f0 || 1;
-  const count = Math.min(onoise.length, freqs.length);
+  const count = Math.min(values.length, freqs.length);
   let path = "";
   let started = false;
   for (const index of displaySampleIndices(count)) {
-    const v = onoise[index];
+    const v = values[index];
     const frequency = freqs[index];
-    if (!Number.isFinite(v) || v <= 0 || !Number.isFinite(frequency) || frequency <= 0) continue;
+    if (!Number.isFinite(frequency) || frequency <= 0) continue;
+    if (plot.yScale === "log") {
+      if (!Number.isFinite(v) || v <= 0) continue;
+    } else if (!Number.isFinite(v)) {
+      continue;
+    }
     const lx = (Math.log10(frequency) - plot.f0) / fSpan;
     const x = PLOT_PAD + lx * (PLOT_WIDTH - PLOT_PAD * 2);
-    const ly = Math.max(plot.yMin, Math.min(plot.yMax, Math.log10(v)));
+    const rawY = plot.yScale === "log" ? Math.log10(v) : v;
+    const ly = Math.max(plot.yMin, Math.min(plot.yMax, rawY));
     const y = PLOT_HEIGHT - PLOT_PAD - ((ly - plot.yMin) / span) * (PLOT_HEIGHT - PLOT_PAD * 2);
     path += `${started ? "L" : "M"} ${x.toFixed(2)} ${y.toFixed(2)} `;
     started = true;

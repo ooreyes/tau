@@ -491,4 +491,26 @@ describe("NoisePlot - log-log (frequency × V/√Hz decades) ticks", () => {
     expect(ticks.some((t) => /Hz/.test(t))).toBe(true);
     expect(ticks.some((t) => /V\/√Hz/.test(t))).toBe(true);
   });
+
+  it("right-click noise legend adds abs(V(onoise)) overlay", async () => {
+    const freqs = [10, 100, 1000];
+    const onoise = [1e-8, 1e-7, 1e-6];
+    const result: NoiseResult = {
+      ok: true,
+      spec: { output: { pos: "out" }, source: "V1", sweep: { startHz: 10, stopHz: 1000, pointsPerDecade: 10 } },
+      freqs,
+      onoise,
+      inoise: onoise.map((v) => v / 10),
+      inoiseUnit: "V/√Hz",
+      totalOutputNoise: 1e-5,
+      totalInputNoise: 1e-6,
+      warnings: [],
+    };
+    render(<NoisePlot result={result} />);
+    fireEvent.contextMenu(screen.getByRole("button", { name: "Math for V(onoise)" }));
+    const absItem = await screen.findByRole("menuitem", { name: /Plot abs\(V\(onoise\)\)/i });
+    fireEvent.click(absItem);
+    expect(screen.getByLabelText("Remove abs(V(onoise))")).toBeTruthy();
+    expect(screen.getByText("abs(V(onoise))")).toBeTruthy();
+  });
 });
