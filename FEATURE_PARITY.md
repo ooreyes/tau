@@ -2016,8 +2016,13 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   **Credentials out of renderer (2026-08-05):** Tauri `cloud_ai_proxy` +
   `has_*_api_key` presence-only hydration; Anthropic/Gemini cloud HTTPS never
   hydrates raw keychain secrets into the webview session for API use
-  (`scripts/ai-credentials-out-of-renderer.sh`). Tau OAuth/backend and
-  release-gated live evals remain open — AI DoD stays unchecked.
+  (`scripts/ai-credentials-out-of-renderer.sh`).
+  **Release-gated live evals (2026-08-05):** `aiLiveEvalGate.ts` +
+  `scripts/ai-live-eval.sh` — opt-in `TAU_AI_LIVE_EVAL=1`, contract unit tests
+  always, `--require-live` fail-closed when unset, no_backend fail when opted
+  in without MLX/keys, real `localMlxAssistant.live.test.ts` /
+  `cloudAiAssistant.live.test.ts` smokes when backends present. Tau
+  OAuth/backend remains open (not faked) — AI DoD stays unchecked.
   **Crash-safe unsaved recovery (2026-08-05, product-gates partial):** dirty
   edits persist to versioned `tau.unsaved.recovery.v1`; launch offers
   Restore/Discard (`UnsavedRecoveryDialog`) instead of silently hydrating into

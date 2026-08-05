@@ -318,8 +318,12 @@ account and sign/notarize/ship.
       cloud BYOK landed: `has_*_api_key` presence-only IPC, `cloud_ai_proxy`
       attaches OS-keychain secrets on allowlisted HTTPS (Anthropic/Gemini),
       CSP no longer allows renderer→provider connect-src, proven by
-      `scripts/ai-credentials-out-of-renderer.sh`. Still FAIL: no Tau
-      OAuth/backend; no release-gated live evals. DoD box stays unchecked.
+      `scripts/ai-credentials-out-of-renderer.sh`. Release-gated live evals
+      landed: `aiLiveEvalGate.ts` + `scripts/ai-live-eval.sh` (opt-in
+      `TAU_AI_LIVE_EVAL=1`; contract always; `--require-live` /
+      `TAU_AI_LIVE_EVAL_REQUIRE=1` fail-closed when unset; flag set without
+      MLX/keys exits non-zero; MLX/cloud `*.live.test.ts` smokes when present).
+      Still FAIL: no Tau OAuth/backend (not faked). DoD box stays unchecked.
       SHIPPABLE? **NO**.
 - [ ] **Student, professional, and developer product gates:** a first-success
       learning path and contextual help; crash-safe unsaved recovery plus safe

@@ -1,9 +1,10 @@
 /**
- * Opt-in live smoke test for the local MLX stack. It is skipped unless
- * TAU_LIVE_MLX=1 because it needs a running loopback server:
+ * Opt-in live smoke for the local MLX stack. Gated by TAU_AI_LIVE_EVAL=1
+ * (legacy TAU_LIVE_MLX=1 still accepted). Default CI never runs these —
+ * see scripts/ai-live-eval.sh and aiLiveEvalGate.ts.
  *
  *   mlx_lm.server --model Qwen/Qwen3-4B-MLX-4bit --host 127.0.0.1 --port 8080
- *   TAU_LIVE_MLX=1 pnpm -C apps/desktop vitest run src/lib/localMlxAssistant.live.test.ts
+ *   TAU_AI_LIVE_EVAL=1 pnpm -C apps/desktop vitest run src/lib/localMlxAssistant.live.test.ts
  *
  * Unlike localMlxAssistant.test.ts (mocked transport), this proves the real
  * model emits a build_tau_circuit call that survives Tau's strict compiler.
@@ -12,9 +13,10 @@ import { describe, expect, it } from "vitest";
 import type { AnalysisResult } from "../simulation/linearTransient";
 import { runOperatingPoint } from "../simulation/operatingPoint";
 import { EMPTY_SCOPE } from "../simulation/paramScope";
+import { isAiLiveEvalFlagSet } from "./aiLiveEvalGate";
 import { LocalMlxAssistant } from "./localMlxAssistant";
 
-const live = process.env.TAU_LIVE_MLX === "1";
+const live = isAiLiveEvalFlagSet();
 
 /** Minimal real-shaped transient result so the live model can exercise the
  *  read-only inspect_simulation_signal round-trip end to end. */

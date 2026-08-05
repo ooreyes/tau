@@ -1,14 +1,56 @@
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 ~13:00 CDT**
+**Status: DONE - 2026-08-05 ~13:05 CDT**
 
-Unit: **Product gates — external-edit / conflict handling** — disk fingerprint
-+ Reload/Keep mine / missing detach; focus + pre-Save probe. Product-gates DoD
-box stays ⬜ (learning path / run records / CLI still open). SHIPPABLE? **NO**
+Unit: **AI release-gated live evals** — `TAU_AI_LIVE_EVAL=1` harness +
+`scripts/ai-live-eval.sh` (fail-closed unset/`--require-live`; MLX live
+3/3 when opted in). Tau OAuth not faked. AI DoD box stays ⬜.
+SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
 
+
+---
+
+### 2026-08-05 — AI release-gated live evaluations (§AI partial)
+
+**What I did**
+- Highest-leverage remaining AI slice: release-gated live eval harness (not
+  Tau OAuth — that stays explicitly incomplete / unfaked).
+- `aiLiveEvalGate.ts`: opt-in `TAU_AI_LIVE_EVAL=1` (legacy `TAU_LIVE_MLX=1`);
+  refuse when unset; refuse `no_backend` when opted in without MLX/keys.
+- `scripts/ai-live-eval.sh`: always runs gate contract; unset →
+  `AI-LIVE-EVAL: refuse (unset)` + `contract-ok`; `--require-live` /
+  `TAU_AI_LIVE_EVAL_REQUIRE=1` exits 1 when unset; live MLX/cloud
+  `*.live.test.ts` when backends present.
+- Proven live: `TAU_AI_LIVE_EVAL=1` → MLX loopback divider/inspect/clarify
+  suite **3/3** (~208s). AI DoD box stays unchecked (no Tau OAuth/backend).
+  SHIPPABLE? **NO**.
+
+**Files**
+- `apps/desktop/src/lib/aiLiveEvalGate.ts` (+ test)
+- `apps/desktop/src/lib/localMlxAssistant.live.test.ts` (gate via helper)
+- `apps/desktop/src/lib/cloudAiAssistant.live.test.ts` (BYOK opt-in)
+- `scripts/ai-live-eval.sh`
+- `AGENTS.md`, `FEATURE_PARITY.md`, `PROGRESS.md`
+
+**Tests**
+- `bash scripts/ai-live-eval.sh` → contract-ok / refuse(unset)
+- `bash scripts/ai-live-eval.sh --require-live` → exit 1 (fail-closed)
+- `TAU_AI_LIVE_EVAL=1` + fake curl → refuse(no_backend) exit 1
+- `TAU_AI_LIVE_EVAL=1 bash scripts/ai-live-eval.sh` → AI-LIVE-EVAL: ok (MLX 3/3)
+- `pnpm -C apps/desktop typecheck` green
+- `pnpm -C apps/desktop test` → 2910 passed / 8 skipped
+
+**Parity items**
+- §AI partial: release-gated live evals ✅. Full AI DoD still open (Tau
+  OAuth/backend). SHIPPABLE? **NO**
+
+**Next step**
+- Tau OAuth/backend (real only — never fake); remaining open DoD boxes.
+
+SHIPPABLE? **NO**
 
 ---
 
