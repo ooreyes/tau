@@ -9,19 +9,58 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 02:22 CDT**
+**Status: DONE - 2026-08-05 02:27 CDT**
 
-Unit: Educational DCopPnt.asc authored `.op` → differential **pass=39**.
+Unit: Educational `audioamp.asc` TRAN + `UHFpreamp.asc` AC → differential **pass=41**.
 ```
-SUMMARY pass=39 sibling=5 gap=0
-op dcoppnt … V(out) rel=2.28e-5
+SUMMARY pass=41 sibling=5 gap=0
+tran audioamp … v(a)/v(b)/v(in) nRms≈0.0001
+ac uhfpreamp … |V(out)| nRms=0
 ```
-BandGaps `.dc temp` miss (nRms≈0.05); HalfSlope Laplace stripped to unity VCCS (hollow — not landed); Fc ngspice fail. SHIPPABLE? **NO**
+Avoided LoopGain (Staff EE) / Clapp/Hartly / Howland OTA / Vswitch / HalfSlope Laplace-as-G=1. SoftDiodeRecovery deferred. Named-device 47.9%. SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
 
 ---
+
+### 2026-08-05 — audioamp TRAN + UHFpreamp AC → pass=41 (§DoD)
+
+**What I did**
+- Educational `audioamp.asc` authored `.tran 10m`: discrete BJT amp with exact
+  standard `2N3904` / `2N2219A` / `2N3906` (zero `modelSubstitutions`). Probes
+  v(a)/v(b)/v(in) vs LTspice nRms≈0.0001.
+- Educational `UHFpreamp.asc` authored `.ac oct 140–700 MHz`: QR99 + 1N4148 +
+  TLINE, exact models, |V(out)| nRms=0.
+- Collision-avoided LoopGain (Staff EE), Clapp/Hartly, Howland OTA remap,
+  Vswitch fake, HalfSlope (Laplace stripped to unity VCCS — hollow). SoftDiode
+  deferred: schematic `.model X` not applied (TAU_DIODE) + LTspice-only `Vp`.
+- Broad DoD matrix still open. SHIPPABLE? **NO**.
+
+**Exact stdout**
+```
+SUMMARY pass=41 sibling=5 gap=0
+tran audioamp … v(a) nRms=0.0001; v(b) nRms=0.0001; v(in) nRms=0.0001
+ac uhfpreamp … |V(out)| nRms=0.0000
+```
+
+**Files**
+- `apps/desktop/scripts/differentialParity.corpus.ts`
+- `AGENTS.md`, `FEATURE_PARITY.md`, `PROGRESS.md`
+- `~/Desktop/TAU-MORNING-STATUS.md`
+
+**Tests**
+- `scripts/differential-parity.sh` (vitest corpus); typecheck; apps/desktop test
+
+**Parity items**
+- Differential 🟡 harness **pass=41 · sibling=5 · gap=0**; DoD broad box unchecked.
+- Named-device 🟡 **47.9%** unchanged. SHIPPABLE? NO
+
+**Next**
+- NE555/LM308 TRAN (numeric pin labels); MonteCarlo AC only if mc() honesty
+  proven; dual-deck Howland. Never fake Vswitch SW / encrypted decrypt /
+  HalfSlope Laplace / SoftDiode silent TAU_DIODE.
+
 
 ### 2026-08-05 — DCopPnt OP differential → pass=39 (§DoD)
 

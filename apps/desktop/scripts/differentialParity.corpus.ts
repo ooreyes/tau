@@ -24,7 +24,7 @@ import {
 import { decodeSchematicText, importAsc, makeSubcircuitResolver } from "../src/io/ascImport";
 import { analysesFromDirectives } from "../src/io/directiveAnalysis";
 import { buildSpiceDeck } from "../src/engine/spiceNetlist";
-import { buildParamScope } from "../src/simulation/paramScope";
+import { buildParamScope, expandDirectiveLines } from "../src/simulation/paramScope";
 import { runMeasurements } from "../src/simulation/measure";
 import { compareWaveforms } from "../src/simulation/waveformCompare";
 import {
@@ -61,6 +61,8 @@ const LINKWITZ_ASC = join(EDU, "Linkwitz.asc");
 const LM741_ASC = join(EDU, "LM741.asc");
 const GFT_ASC = join(EDU, "GFT.asc");
 const DCOPNT_ASC = join(EDU, "DCopPnt.asc");
+const AUDIOAMP_ASC = join(EDU, "audioamp.asc");
+const UHFPREAMP_ASC = join(EDU, "UHFpreamp.asc");
 const STEPTEMP_ASC = join(EDU, "steptemp.asc");
 const STEPMODELPARAM_ASC = join(EDU, "stepmodelparam.asc");
 const COLPITTS_ASC = process.env.COLPITTS_ASC ?? join(EDU, "colpits.asc");
@@ -208,7 +210,7 @@ function withAcStimulus(netlist: string): string {
 describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential parity matrix", () => {
   const cells: DifferentialCell[] = [];
 
-  it("matches RC .tran/.ac/.meas, divider analyses, .step families, curvetrace, stepmodelparam, NoiseFigure, noise.asc, Colpitts/Clapp/Hartly AC, Cohn AC, MeasureBW AC, Transformer/Transformer2/IdealTransformer TRAN, notch/passive/butter/opamp/Linkwitz AC, LM741 TRAN, GFT AC, DCopPnt OP, Class-D AC/OP/DC/noise/tf", () => {
+  it("matches RC .tran/.ac/.meas, divider analyses, .step families, curvetrace, stepmodelparam, NoiseFigure, noise.asc, Colpitts/Clapp/Hartly AC, Cohn AC, MeasureBW AC, Transformer/Transformer2/IdealTransformer TRAN, notch/passive/butter/opamp/Linkwitz AC, LM741 TRAN, GFT AC, DCopPnt OP, audioamp TRAN, UHFpreamp AC, Class-D AC/OP/DC/noise/tf", () => {
     // --- TRAN (also covered by waveformParity; re-assert here so this file is self-sufficient) ---
     {
       const result = runPairedBatch("diff-rc-tran", RC_TRAN, ["v(out)"]);
@@ -1343,6 +1345,105 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
       });
     }
 
+    // --- Educational audioamp.asc authored .tran (discrete BJT power amp; exact 2N3904/2N2219A/2N3906) ---
+    {
+      expect(existsSync(AUDIOAMP_ASC), `missing ${AUDIOAMP_ASC}`).toBe(true);
+      const imported = importAsc(decodeSchematicText(readFileSync(AUDIOAMP_ASC)));
+      expect(imported.warnings).toEqual([]);
+      const dirs = expandDirectiveLines(imported.directives);
+      const parsed = analysesFromDirectives(dirs);
+      expect(parsed.tran, "audioamp.asc must author .tran").toBeTruthy();
+      const params = buildParamScope(dirs);
+      const deck = buildSpiceDeck({
+        components: imported.components,
+        wires: imported.wires,
+        netLabels: imported.netLabels,
+        directives: dirs,
+        params,
+      }, {
+        kind: "tran",
+        stopTime: parsed.tran!.stopTime,
+        steps: parsed.tran!.steps ?? 3000,
+      });
+      expect(deck.unresolvedSubckts ?? []).toEqual([]);
+      expect(deck.modelSubstitutions ?? []).toEqual([]);
+      const qLines = deck.netlist.split(/\r?\n/).filter((line) => /^Q\w*\b/i.test(line.trim()));
+      expect(qLines.length).toBeGreaterThanOrEqual(6);
+      for (const line of qLines) {
+        expect(line, line).not.toMatch(/\bTAU_NPN\b|\bTAU_PNP\b/);
+        expect(line, line).toMatch(/\b(2N3904|2N2219A|2N3906)\b/);
+      }
+      const probes = ["v(a)", "v(b)", "v(in)"] as const;
+      const result = runPairedBatch("diff-audioamp-tran", deck.netlist, [...probes]);
+      const memberNotes: string[] = [];
+      for (const probe of probes) {
+        const ltProbe = result.ltspice.get(probe)!;
+        const ngProbe = result.ngspice.get(probe)!;
+        const comparison = compareWaveforms(ngProbe.axis, ngProbe.values, ltProbe.axis, ltProbe.values, {
+          rmsTolerance: 0.02,
+          maxTolerance: 0.05,
+        });
+        expect(comparison.pass, `${probe} ${JSON.stringify(comparison)}`).toBe(true);
+        memberNotes.push(`${probe} nRms=${comparison.normalizedRms.toFixed(4)} nMax=${comparison.normalizedMax.toFixed(4)}`);
+      }
+      cells.push({
+        analysis: "tran",
+        circuit: "audioamp",
+        topology: "Educational audioamp.asc discrete BJT amp 2N3904/2N2219A/2N3906 (authored .tran 10m)",
+        status: "pass",
+        note: memberNotes.join("; "),
+      });
+    }
+
+    // --- Educational UHFpreamp.asc authored .ac (MRF901/QR99 + 1N4148 + TLINE; exact models) ---
+    {
+      expect(existsSync(UHFPREAMP_ASC), `missing ${UHFPREAMP_ASC}`).toBe(true);
+      const imported = importAsc(decodeSchematicText(readFileSync(UHFPREAMP_ASC)));
+      expect(imported.warnings).toEqual([]);
+      const dirs = expandDirectiveLines(imported.directives);
+      const parsed = analysesFromDirectives(dirs);
+      expect(parsed.ac, "UHFpreamp.asc must author .ac").toBeTruthy();
+      const params = buildParamScope(dirs);
+      const deck = buildSpiceDeck({
+        components: imported.components,
+        wires: imported.wires,
+        netLabels: imported.netLabels,
+        directives: dirs,
+        params,
+      }, {
+        kind: "ac",
+        startHz: parsed.ac!.startHz,
+        stopHz: parsed.ac!.stopHz,
+        pointsPerDecade: parsed.ac!.pointsPerDecade,
+      });
+      expect(deck.unresolvedSubckts ?? []).toEqual([]);
+      expect(deck.modelSubstitutions ?? []).toEqual([]);
+      expect(deck.netlist).toMatch(/^T\w*\b/im);
+      expect(deck.netlist).toMatch(/\bQR99\b/);
+      expect(deck.netlist).toMatch(/\b1N4148\b/);
+      const qdLines = deck.netlist.split(/\r?\n/).filter((line) => /^[QD]\w*\b/i.test(line.trim()));
+      expect(qdLines.length).toBeGreaterThanOrEqual(2);
+      for (const line of qdLines) {
+        expect(line, line).not.toMatch(/\bTAU_NPN\b|\bTAU_DIODE\b/);
+        expect(line, line).toMatch(/\b(QR99|1N4148)\b/);
+      }
+      const result = runPairedBatch("diff-uhfpreamp-ac", deck.netlist, ["v(out)"]);
+      const ltOut = result.ltspice.get("v(out)")!;
+      const ngOut = result.ngspice.get("v(out)")!;
+      const comparison = compareWaveforms(ngOut.axis, ngOut.values, ltOut.axis, ltOut.values, {
+        rmsTolerance: 0.02,
+        maxTolerance: 0.05,
+      });
+      expect(comparison.pass, JSON.stringify(comparison)).toBe(true);
+      cells.push({
+        analysis: "ac",
+        circuit: "uhfpreamp",
+        topology: "Educational UHFpreamp.asc MRF901/QR99 + 1N4148 + TLINE (authored .ac oct 140–700 MHz)",
+        status: "pass",
+        note: `|V(out)| nRms=${comparison.normalizedRms.toFixed(4)} nMax=${comparison.normalizedMax.toFixed(4)}`,
+      });
+    }
+
     // --- Class-D AC/OP (authored analyses are .tran/.meas; add AC/OP for differential proof) ---
     {
       const ascPath = join(CLASSD_DIR, "class-d-starter.asc");
@@ -1636,9 +1737,9 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
     const passCount = cells.filter((cell) => cell.status === "pass").length;
     const gapCount = cells.filter((cell) => cell.status === "gap").length;
     const siblingCount = cells.filter((cell) => cell.status === "sibling").length;
-    expect(passCount).toBeGreaterThanOrEqual(39);
+    expect(passCount).toBeGreaterThanOrEqual(41);
     expect(siblingCount).toBe(5);
     expect(gapCount).toBe(0);
-    expect(report).toMatch(/SUMMARY pass=39 sibling=5 gap=0/);
+    expect(report).toMatch(/SUMMARY pass=41 sibling=5 gap=0/);
   }, 240_000);
 });
