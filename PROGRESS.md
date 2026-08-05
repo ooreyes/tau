@@ -1,9 +1,9 @@
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 07:05 CDT**
+**Status: DONE - 2026-08-05 07:08 CDT**
 
-Unit: Waveform DoD — **Bode phase/group-delay Export PNG**.
-Tip base `72a033c` pass=94 (ct full-bridge). Named-device 48.1%. Settings locked. SHIPPABLE? **NO**
+Unit: Waveform DoD — **right-click idt(…)** (+ PROGRESS phase-PNG dated entry).
+Differential pass=94 · named-device 48.1%. Settings locked. SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
@@ -38,6 +38,61 @@ Tip base `72a033c` pass=94 (ct full-bridge). Named-device 48.1%. Settings locked
 **Next step**
 - ct 17 three-phase RLC, ct 12/13 buck/boost (named VDMOS), or Educational
   non-wall leftovers. Leave ct19 OP / IRFP / Draft* / Settings alone.
+
+### 2026-08-05 — Bode phase/group-delay Export PNG (§waveform DoD)
+
+**What I did**
+- AcPlot **Export PNG** rasters the lower Bode SVG (phase or group delay) via
+  `waveformSvgsToPng` (`tau-ac-phase-….png`), distinct from Advanced mag+phase.
+  Landed as tip `02c1049` (rebased over pass=94 `72a033c`); dated entry was
+  missing from PROGRESS and is recorded here.
+- ND wall at 48.1% — waveform pivot. Left ct ASC / Educational (continue 33) /
+  Chan/NIGBT/FRA / Settings alone.
+
+**Files**
+- `apps/desktop/src/components/SimulationPanel.tsx` (+ wiring test)
+- `FEATURE_PARITY.md`, `PROGRESS.md`
+
+**Tests**
+- AcPlot Export phase PNG 1 (in tip `02c1049`)
+
+**Parity items**
+- Waveform viewer 🟡 (phase PNG landed). Differential pass=94 ·
+  named-device 48.1% · SHIPPABLE? NO
+
+**Next step**
+- idt right-click / standalone phase window / non-wall ND.
+
+
+### 2026-08-05 — right-click idt(…) (§waveform DoD)
+
+**What I did**
+- Legend ContextMenu **Plot idt(…)**: wraps via `traceMath`; whole-expr
+  `idt`/`ddt` peel via `peelTimeOps` + trapezoidal `idtSeries` /
+  `ddtSeries` in `evaluatePlotExpression` (LTspice waveform arithmetic).
+- Also backfills the missing PROGRESS dated entry for phase PNG (`02c1049`).
+- ND wall at 48.1% — waveform pivot. Left ct 18/16/19, Educational (continue
+  33), Chan/NIGBT/FRA, Settings alone.
+
+**Files**
+- `apps/desktop/src/simulation/waveformDerivative.ts` (+ test)
+- `apps/desktop/src/simulation/plotExpression.ts` (+ test)
+- `apps/desktop/src/simulation/traceMath.ts` (+ test)
+- `FEATURE_PARITY.md`, `PROGRESS.md`
+
+**Tests**
+- `pnpm -C apps/desktop typecheck` + `test` green (2754 passed)
+- idtSeries / peelTimeOps / plotExpression idt / traceMath
+
+**Parity items**
+- Waveform viewer 🟡 (idt right-click landed). Differential pass=94 ·
+  named-device 48.1% · SHIPPABLE? NO
+
+**Next step**
+- Standalone phase window / AC-DC legend math / non-wall ND. Leave
+  Educational/IRFP/Settings alone.
+
+
 
 ### 2026-08-05 — ct 16_active_fourth_order_filter .ac → pass=93 (§DoD)
 

@@ -2,7 +2,7 @@
 // unary expression and re-plot it via the existing expression overlay path.
 // Keep this pure — UI only calls wrapTraceMath / expressionForTrace.
 
-export type TraceMathOp = "abs" | "neg" | "db" | "uramp" | "sgn" | "ddt";
+export type TraceMathOp = "abs" | "neg" | "db" | "uramp" | "sgn" | "ddt" | "idt";
 
 const OPS: ReadonlyArray<{ op: TraceMathOp; label: string }> = [
   { op: "abs", label: "Plot abs(…)" },
@@ -11,6 +11,7 @@ const OPS: ReadonlyArray<{ op: TraceMathOp; label: string }> = [
   { op: "uramp", label: "Plot uramp(…)" },
   { op: "sgn", label: "Plot sgn(…)" },
   { op: "ddt", label: "Plot ddt(…)" },
+  { op: "idt", label: "Plot idt(…)" },
 ];
 
 /** Menu rows for the transient legend context menu. */
@@ -53,5 +54,7 @@ export function wrapTraceMath(expression: string, op: TraceMathOp): string {
       return `sgn(${e})`;
     case "ddt":
       return `ddt(${e})`;
+    case "idt":
+      return `idt(${e})`;
   }
 }

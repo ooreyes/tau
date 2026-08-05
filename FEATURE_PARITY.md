@@ -1540,11 +1540,11 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   **NEXT:** (waveform CSV/PNG/plt/FFT/expressions/dual-axis/right-click/Bode-X/Y/τ
   covered — remaining: standalone phase window).
 - 🟡 Right-click trace → math/operations — **abs / negate / dB / uramp / sgn /
-  ddt landed** (2026-08-05): `traceMath.ts` wraps a legend trace into `abs(…)`,
-  `-(…)`, `db(…)`, `uramp(…)`, `sgn(…)`, or `ddt(…)`; whole-expr `ddt` peels
-  via `waveformDerivative` + numerical `ddtSeries` in `evaluatePlotExpression`.
-  Transient legend ContextMenu. Pure + SimulationPanel wiring tests.
-  **Ctrl+click avg/RMS over visible window landed** (2026-08-05):
+  ddt / idt landed** (2026-08-05): `traceMath.ts` wraps a legend trace into
+  `abs(…)`, `-(…)`, `db(…)`, `uramp(…)`, `sgn(…)`, `ddt(…)`, or `idt(…)`;
+  whole-expr `ddt`/`idt` peel via `peelTimeOps` + `ddtSeries`/`idtSeries` in
+  `evaluatePlotExpression`. Transient legend ContextMenu. Pure + SimulationPanel
+  wiring tests. **Ctrl+click avg/RMS over visible window landed** (2026-08-05):
   `windowedTraceStatistics` + legend Ctrl/⌘+click opens Dialog with AVG/RMS
   over `sharedX`. Still ⬜: AC/DC/step legend menus.
 

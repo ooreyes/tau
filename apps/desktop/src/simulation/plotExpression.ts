@@ -13,7 +13,7 @@ import { type FuncDef, type Scope } from "./expr";
 import { compileExpr, type MeasWaveform } from "./measure";
 import { inferExpressionUnit } from "./exprUnit";
 import type { AnalysisResult, Trace } from "./linearTransient";
-import { ddtSeries, peelOuterDdt } from "./waveformDerivative";
+import { ddtSeries, idtSeries, peelTimeOps } from "./waveformDerivative";
 
 export type PlotExpressionResult =
   | { ok: true; trace: Trace }
@@ -31,8 +31,9 @@ function toWaveform(result: Extract<AnalysisResult, { ok: true }>): MeasWaveform
  * result is not a successful transient, or the expression resolves to no finite
  * sample (an unknown signal name or a malformed expression).
  *
- * Whole-expression `ddt(…)` / nested `ddt(ddt(…))` (LTspice waveform arithmetic)
- * are peeled, the inner expression is sampled, then numerically differentiated.
+ * Whole-expression `ddt(…)` / `idt(…)` (and nested mixes) are peeled, the
+ * inner expression is sampled, then numerical d/dt or ∫dt is applied inside-out
+ * (LTspice waveform arithmetic).
  */
 export function evaluatePlotExpression(
   expr: string,
@@ -45,7 +46,7 @@ export function evaluatePlotExpression(
   if (!trimmed) return { ok: false, error: "Enter an expression to plot." };
   if (!result || !result.ok) return { ok: false, error: "Run a transient analysis first." };
 
-  const { inner, layers } = peelOuterDdt(trimmed);
+  const { inner, ops } = peelTimeOps(trimmed);
   if (!inner) return { ok: false, error: "Enter an expression to plot." };
 
   const wf = toWaveform(result);
@@ -62,10 +63,11 @@ export function evaluatePlotExpression(
     return { ok: false, error: `“${trimmed}” has no finite values - check the signal names.` };
   }
 
-  for (let k = 0; k < layers; k++) {
-    values = ddtSeries(wf.times, values);
+  // ops are outermost-first; apply inside-out.
+  for (let k = ops.length - 1; k >= 0; k--) {
+    values = ops[k] === "ddt" ? ddtSeries(wf.times, values) : idtSeries(wf.times, values);
   }
-  if (layers > 0) {
+  if (ops.length > 0) {
     anyFinite = values.some((v) => Number.isFinite(v));
     if (!anyFinite) {
       return { ok: false, error: `“${trimmed}” has no finite values - check the signal names.` };
@@ -75,8 +77,8 @@ export function evaluatePlotExpression(
   // Label the axis by the expression's physical dimension (amps for a probed
   // current, watts for V·I power) instead of always volts; fall back to "V" for
   // a dimensionless/un-inferable expression so existing behaviour is preserved.
-  // `ddt` yields V/s / A/s — TraceUnit has no rate symbols yet, so leave blank.
-  const unit = layers > 0 ? "" : inferExpressionUnit(trimmed) || "V";
+  // `ddt`/`idt` change physical units — TraceUnit has no rate/integral symbols yet.
+  const unit = ops.length > 0 ? "" : inferExpressionUnit(trimmed) || "V";
 
   return {
     ok: true,

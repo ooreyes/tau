@@ -16,7 +16,7 @@ describe("expressionForTrace", () => {
 });
 
 describe("wrapTraceMath", () => {
-  it("wraps abs / neg / db / uramp / sgn / ddt with parentheses for compound exprs", () => {
+  it("wraps abs / neg / db / uramp / sgn / ddt / idt with parentheses for compound exprs", () => {
     expect(wrapTraceMath("V(out)", "abs")).toBe("abs(V(out))");
     expect(wrapTraceMath("V(a)-V(b)", "neg")).toBe("-(V(a)-V(b))");
     expect(wrapTraceMath("V(out)", "db")).toBe("db(V(out))");
@@ -24,13 +24,14 @@ describe("wrapTraceMath", () => {
     expect(wrapTraceMath("V(a)-V(b)", "sgn")).toBe("sgn(V(a)-V(b))");
     expect(wrapTraceMath("V(out)", "ddt")).toBe("ddt(V(out))");
     expect(wrapTraceMath("V(a)-V(b)", "ddt")).toBe("ddt(V(a)-V(b))");
+    expect(wrapTraceMath("V(out)", "idt")).toBe("idt(V(out))");
     expect(wrapTraceMath("  I(R1)  ", "abs")).toBe("abs(I(R1))");
     expect(wrapTraceMath("   ", "abs")).toBe("");
   });
 });
 
 describe("traceMathMenuItems", () => {
-  it("exposes abs / neg / db / uramp / sgn / ddt", () => {
+  it("exposes abs / neg / db / uramp / sgn / ddt / idt", () => {
     expect(traceMathMenuItems().map((m) => m.op)).toEqual([
       "abs",
       "neg",
@@ -38,6 +39,7 @@ describe("traceMathMenuItems", () => {
       "uramp",
       "sgn",
       "ddt",
+      "idt",
     ]);
   });
 });

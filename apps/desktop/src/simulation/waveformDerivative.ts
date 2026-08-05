@@ -1,16 +1,20 @@
-// Time derivative of a sampled waveform (LTspice `ddt(x)` for plot expressions).
-// Central difference interior; one-sided at the ends. Pure — no UI/DOM.
+// Time derivative / integral of sampled waveforms (LTspice `ddt` / `idt` for
+// plot expressions). Pure — no UI/DOM.
+
+export type TimeOp = "ddt" | "idt";
 
 /**
- * If `expr` is wholly wrapped in one or more `ddt(…)` calls, peel them and
- * return the inner expression plus peel count. Compound forms like
- * `ddt(V(out))+1` are left alone (`layers === 0`).
+ * Peel whole-expression outer `ddt(…)` / `idt(…)` wrappers (outermost first).
+ * Compound forms like `ddt(V(out))+1` are left alone (`ops` empty).
  */
-export function peelOuterDdt(expr: string): { inner: string; layers: number } {
+export function peelTimeOps(expr: string): { inner: string; ops: TimeOp[] } {
   let s = expr.trim();
-  let layers = 0;
+  const ops: TimeOp[] = [];
   for (;;) {
-    if (!/^ddt\s*\(/i.test(s) || !s.endsWith(")")) break;
+    let op: TimeOp | null = null;
+    if (/^ddt\s*\(/i.test(s)) op = "ddt";
+    else if (/^idt\s*\(/i.test(s)) op = "idt";
+    if (!op || !s.endsWith(")")) break;
     const openIdx = s.indexOf("(");
     let depth = 0;
     let match = -1;
@@ -25,12 +29,22 @@ export function peelOuterDdt(expr: string): { inner: string; layers: number } {
         }
       }
     }
-    // Only peel when the matching `)` is the last character (whole-expr wrap).
     if (match !== s.length - 1) break;
     s = s.slice(openIdx + 1, match).trim();
-    layers++;
+    ops.push(op);
   }
-  return { inner: s, layers };
+  return { inner: s, ops };
+}
+
+/** @deprecated Prefer {@link peelTimeOps}; kept for existing ddt-only call sites. */
+export function peelOuterDdt(expr: string): { inner: string; layers: number } {
+  const { inner, ops } = peelTimeOps(expr);
+  if (ops.length > 0 && ops.every((o) => o === "ddt")) {
+    return { inner, layers: ops.length };
+  }
+  if (ops.length === 0) return { inner, layers: 0 };
+  // Mixed / idt-only: do not pretend they are pure ddt peels.
+  return { inner: expr.trim(), layers: 0 };
 }
 
 /**
@@ -75,6 +89,35 @@ export function ddtSeries(
           ? (vNext - vPrev) / dt
           : Number.NaN;
     }
+  }
+  return out;
+}
+
+/**
+ * Trapezoidal running integral of `values` vs `times` (LTspice `idt(x)`, ic=0).
+ * `out[0] = 0`; subsequent samples accumulate ∫ v dt.
+ */
+export function idtSeries(
+  times: ReadonlyArray<number>,
+  values: ReadonlyArray<number>,
+): number[] {
+  const n = values.length;
+  const out = new Array<number>(n);
+  if (n === 0) return out;
+  if (times.length !== n) {
+    out.fill(Number.NaN);
+    return out;
+  }
+  out[0] = 0;
+  let acc = 0;
+  for (let i = 1; i < n; i++) {
+    const dt = times[i]! - times[i - 1]!;
+    const a = values[i - 1]!;
+    const b = values[i]!;
+    if (dt > 0 && Number.isFinite(a) && Number.isFinite(b)) {
+      acc += ((a + b) / 2) * dt;
+    }
+    out[i] = acc;
   }
   return out;
 }

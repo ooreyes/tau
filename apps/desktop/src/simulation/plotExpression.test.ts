@@ -79,4 +79,16 @@ describe("evaluatePlotExpression", () => {
     expect(r.trace.id).toBe("expr:ddt(V(in))");
     expect(r.trace.unit).toBe("");
   });
+
+  it("plots whole-expression idt(…) via trapezoidal integration", () => {
+    // V(in) = [1,2,3] over t=[0,1,2] → ∫ ≈ [0, 1.5, 4]
+    const r = evaluatePlotExpression("idt(V(in))", fixture(), "#abc");
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.trace.values[0]).toBe(0);
+    expect(r.trace.values[1]).toBeCloseTo(1.5);
+    expect(r.trace.values[2]).toBeCloseTo(4);
+    expect(r.trace.label).toBe("idt(V(in))");
+    expect(r.trace.unit).toBe("");
+  });
 });
