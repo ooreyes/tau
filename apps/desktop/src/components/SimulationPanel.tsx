@@ -4002,9 +4002,7 @@ export function AcPlot({
   onPlotExpression?: (expression: string) => void;
 }) {
   const success = result?.ok ? result : null;
-  const magClipId = useId();
   const phaseClipId = useId();
-  const [magMeasureRef, magSize] = useMeasuredSize<SVGSVGElement>();
   const [phaseMeasureRef, phaseSize] = useMeasuredSize<SVGSVGElement>();
   // Bode X defaults to log decades (LTspice); Lin X is an explicit toggle.
   // Magnitude Y defaults to Lin dB; Log Y plots |V|/|Vref| on decades.
@@ -4024,14 +4022,37 @@ export function AcPlot({
   const [phaseYMaxDraft, setPhaseYMaxDraft] = useState("");
   const [phaseManualY, setPhaseManualY] = useState<ManualAxisLimits | null>(null);
   const [phaseYLimitsError, setPhaseYLimitsError] = useState<string | null>(null);
-  const magTicks = tickCountsFromSize(magSize);
   const phaseTicks = tickCountsFromSize(phaseSize);
   const detachedPhaseClipId = useId();
   const [detachedPhaseMeasureRef, detachedPhaseSize] = useMeasuredSize<SVGSVGElement>();
   const detachedPhaseTicks = tickCountsFromSize(detachedPhaseSize);
-  const traces = success ? success.traces.slice(0, 4) : [];
+  const traces = useMemo(
+    () => (success ? success.traces.slice(0, 4) : []),
+    [success],
+  );
   // Expression overlays share the magnitude axis (their value rides `magDb`).
-  const magTraces = success ? [...traces, ...overlays] : [];
+  const magTraces = useMemo(
+    () => (success ? [...traces, ...overlays] : []),
+    [success, traces, overlays],
+  );
+  const magTraceById = useMemo(() => {
+    const map = new Map<string, AcTrace>();
+    for (const t of magTraces) map.set(t.id, t);
+    return map;
+  }, [magTraces]);
+  const magPaneLayout = useMemo(
+    () => automaticLayout(magTraces.map((t) => t.id)),
+    [magTraces],
+  );
+  const colorForMagTrace = useCallback(
+    (trace: AcTrace): string => {
+      const overlayIndex = overlays.findIndex((o) => o.id === trace.id);
+      if (overlayIndex >= 0) return EXPR_COLORS[overlayIndex % EXPR_COLORS.length];
+      const traceIndex = traces.findIndex((t) => t.id === trace.id);
+      return AC_COLORS[(traceIndex >= 0 ? traceIndex : 0) % AC_COLORS.length];
+    },
+    [overlays, traces],
+  );
   const plot = useMemo(() => {
     if (!success || magTraces.length === 0) return null;
     const magY = bodeMagYDomain(magTraces.map((t) => t.magDb), magYScale);
@@ -4065,25 +4086,21 @@ export function AcPlot({
       tauYMin: tauY.yMin,
       tauYMax: tauY.yMax,
     };
-  }, [success, traces, overlays, magTraces, magYScale]);
+  }, [success, traces, magTraces, magYScale]);
 
-  // Independent zoom per pane - magnitude and phase don't share an x-viewport
-  // in this pass (a documented scoping decision, see PROGRESS.md): they're
-  // visually stacked halves of one Bode plot but each is its own `<svg>` with
-  // its own `usePlotViewport`, so zooming one doesn't move the other.
-  const magDomain = useMemo<Viewport>(
-    () =>
-      applyManualYToDomain(
-        {
-          xMin: plot ? 10 ** plot.f0 : 1,
-          xMax: plot ? 10 ** plot.f1 : 10,
-          yMin: plot ? plot.yMin : -60,
-          yMax: plot ? plot.yMax : 0,
-        },
-        manualY,
-      ),
-    [plot, manualY],
-  );
+  // Mag cards share frequency X; phase stays an independent viewport (existing
+  // Bode scoping: mag/phase halves don't lock zoom together).
+  const [sharedMagX, setSharedMagX] = useState({ xMin: 1, xMax: 10 });
+  useEffect(() => {
+    if (!plot) return;
+    setSharedMagX({ xMin: 10 ** plot.f0, xMax: 10 ** plot.f1 });
+  }, [plot?.f0, plot?.f1, success?.freqs?.[0], success?.freqs?.[(success.freqs.length ?? 1) - 1]]);
+  const shareMagX = useCallback((next: { xMin: number; xMax: number }) => {
+    setSharedMagX((current) =>
+      current.xMin === next.xMin && current.xMax === next.xMax ? current : next,
+    );
+  }, []);
+
   const phaseDomain = useMemo<Viewport>(
     () =>
       applyManualYToDomain(
@@ -4097,17 +4114,6 @@ export function AcPlot({
       ),
     [plot, lowerMode, phaseManualY],
   );
-  const magVp = usePlotViewport({
-    domain: magDomain,
-    xScale: freqScale,
-    yScale: magYScale,
-    resetKey: plot && success
-      ? `${freqScale}:${magYScale}:${manualY ? `${manualY.yMin}:${manualY.yMax}` : "auto"}:${success.freqs[0]}:${success.freqs[success.freqs.length - 1]}`
-      : null,
-    width: PLOT_WIDTH,
-    height: PLOT_HEIGHT,
-    pad: PLOT_PAD,
-  });
   const phaseVp = usePlotViewport({
     domain: phaseDomain,
     xScale: freqScale,
@@ -4128,13 +4134,6 @@ export function AcPlot({
     height: PLOT_HEIGHT,
     pad: PLOT_PAD,
   });
-  const setMagRefs = useCallback(
-    (el: SVGSVGElement | null) => {
-      magMeasureRef.current = el;
-      magVp.attachSvg(el);
-    },
-    [magMeasureRef, magVp.attachSvg],
-  );
   const setPhaseRefs = useCallback(
     (el: SVGSVGElement | null) => {
       phaseMeasureRef.current = el;
@@ -4233,71 +4232,47 @@ export function AcPlot({
 
   return (
     <>
+      <div className="ac-bode-stack" aria-label="Bode magnitude panes">
+        {magPaneLayout.map((pane, paneIndex) => {
+          const paneTraces = pane.traceIds
+            .map((id) => magTraceById.get(id))
+            .filter((t): t is AcTrace => t !== undefined);
+          const title = paneTraces.map((t) => t.label).join(", ") || "Empty";
+          return (
+            <div key={pane.id} className="dashboard-card dashboard-card--full">
+              <div className="dashboard-card-header">
+                <span className="dashboard-card-title">{title}</span>
+              </div>
+              <div className="dashboard-card-body">
+                <AcMagScopePane
+                  traces={paneTraces}
+                  freqs={result.freqs}
+                  colorForTrace={colorForMagTrace}
+                  ariaLabel={
+                    magPaneLayout.length === 1
+                      ? "Bode magnitude"
+                      : `Bode magnitude pane ${paneIndex + 1}`
+                  }
+                  freqScale={freqScale}
+                  magYScale={magYScale}
+                  manualY={manualY}
+                  sharedX={sharedMagX}
+                  onSharedXChange={shareMagX}
+                  runKey={
+                    plot
+                      ? `${freqScale}:${magYScale}:${result.freqs[0]}:${result.freqs[result.freqs.length - 1]}`
+                      : null
+                  }
+                  cursors={bodeCursors}
+                  cursorPixelX={bodeCursorPixelX}
+                  onPlotExpression={onPlotExpression}
+                />
+              </div>
+            </div>
+          );
+        })}
+      </div>
       <div className="scope-shell">
-        <div className="scope-plot-wrap">
-          <svg
-            ref={setMagRefs}
-            className={magVp.isPanning ? "scope-svg panning" : "scope-svg"}
-            viewBox={`0 0 ${PLOT_WIDTH} ${PLOT_HEIGHT}`}
-            role="img"
-            aria-label="Bode magnitude"
-            {...magVp.dragHandlers}
-          >
-            <PlotAxes
-              width={PLOT_WIDTH}
-              height={PLOT_HEIGHT}
-              pad={PLOT_PAD}
-              xMin={magVp.viewport.xMin}
-              xMax={magVp.viewport.xMax}
-              yMin={magVp.viewport.yMin}
-              yMax={magVp.viewport.yMax}
-              xScale={freqScale}
-              yScale={magYScale}
-              xUnit="Hz"
-              yUnit={plot?.yUnit ?? "dB"}
-              targetXTicks={magTicks.targetXTicks}
-              targetYTicks={magTicks.targetYTicks}
-              showXTicks={false}
-            />
-            {plot && (
-              <ScopeClip id={magClipId} width={PLOT_WIDTH} height={PLOT_HEIGHT} pad={PLOT_PAD}>
-                {(() => {
-                  const magPlot = {
-                    minDb: magVp.viewport.yMin,
-                    maxDb: magVp.viewport.yMax,
-                    xMin: magVp.viewport.xMin,
-                    xMax: magVp.viewport.xMax,
-                    xScale: freqScale,
-                  };
-                  const seriesValues = (magDb: number[]) =>
-                    magYScale === "log" ? magDb.map(dbToLinearMag) : magDb;
-                  return (
-                    <>
-                      {traces.map((t, i) => (
-                        <path key={t.id} className="scope-trace" stroke={AC_COLORS[i % AC_COLORS.length]} d={bodePath(seriesValues(t.magDb), success!.freqs, magPlot)} />
-                      ))}
-                      {overlays.map((t, i) => (
-                        <path key={t.id} className="scope-trace" stroke={EXPR_COLORS[i % EXPR_COLORS.length]} d={bodePath(seriesValues(t.magDb), success!.freqs, magPlot)} />
-                      ))}
-                    </>
-                  );
-                })()}
-              </ScopeClip>
-            )}
-            {bodeCursors &&
-              [bodeCursors.x1, bodeCursors.x2].map((f, i) => {
-                const x = bodeCursorPixelX(f, magVp.viewport);
-                if (x === null) return null;
-                return (
-                  <g key={`bc${i}`} className="plot-cursor">
-                    <line x1={x} y1={PLOT_PAD} x2={x} y2={PLOT_HEIGHT - PLOT_PAD} />
-                    <text x={x + 3} y={PLOT_PAD + 10}>{i + 1}</text>
-                  </g>
-                );
-              })}
-          </svg>
-          {plot && <ScopeZoomCluster onZoomIn={() => magVp.zoomBy(0.7)} onZoomOut={() => magVp.zoomBy(1 / 0.7)} onFit={magVp.fit} />}
-        </div>
         <div className="scope-plot-wrap">
           <svg
             ref={setPhaseRefs}
@@ -4572,6 +4547,7 @@ export function AcPlot({
           value={margins?.gainMarginDb != null ? `${margins.gainMarginDb.toFixed(1)} dB` : "--"}
           tone={margins?.gainMarginDb != null && margins.gainMarginDb < 0 ? "red" : "green"}
         />
+        <Metric label="PANES" value={String(magPaneLayout.length)} tone="cream" />
       </div>
       <div className="meter-row analysis-meter" aria-label="Bode magnitude Y limits">
         <label className="axis-limit-field">
@@ -4919,6 +4895,216 @@ export function AcPlot({
         </DialogContent>
       </Dialog>
     </>
+  );
+}
+
+/**
+ * One Bode magnitude instrument card: per-card Y autorange, shared frequency X
+ * with sibling mag cards, optional MIN/PEAK meters for a single-trace card.
+ */
+function AcMagScopePane({
+  traces,
+  freqs,
+  colorForTrace,
+  ariaLabel,
+  freqScale,
+  magYScale,
+  manualY,
+  sharedX,
+  onSharedXChange,
+  runKey,
+  cursors,
+  cursorPixelX,
+  onPlotExpression,
+}: {
+  traces: AcTrace[];
+  freqs: number[];
+  colorForTrace: (trace: AcTrace) => string;
+  ariaLabel: string;
+  freqScale: AxisScale;
+  magYScale: AxisScale;
+  manualY: ManualAxisLimits | null;
+  sharedX: { xMin: number; xMax: number };
+  onSharedXChange: (x: { xMin: number; xMax: number }) => void;
+  runKey: unknown;
+  cursors: { x1: number; x2: number } | null;
+  cursorPixelX: (f: number, viewport: { xMin: number; xMax: number }) => number | null;
+  onPlotExpression?: (expression: string) => void;
+}) {
+  const clipId = useId();
+  const [measureRef, size] = useMeasuredSize<SVGSVGElement>();
+  const { targetXTicks, targetYTicks } = tickCountsFromSize(size);
+
+  const magY = useMemo(
+    () => bodeMagYDomain(traces.map((t) => t.magDb), magYScale),
+    [traces, magYScale],
+  );
+  const domain = useMemo<Viewport>(
+    () =>
+      applyManualYToDomain(
+        {
+          xMin: sharedX.xMin,
+          xMax: sharedX.xMax,
+          yMin: magY ? magY.yMin : -60,
+          yMax: magY ? magY.yMax : 0,
+        },
+        manualY,
+      ),
+    [sharedX.xMin, sharedX.xMax, magY, manualY],
+  );
+  const viewportResetKey = useMemo(() => {
+    if (!magY || runKey == null) return null;
+    if (!manualY) return runKey;
+    return { run: runKey, yMin: manualY.yMin, yMax: manualY.yMax };
+  }, [magY, runKey, manualY]);
+  const { viewport, attachSvg, isPanning, fit, zoomBy, dragHandlers } = usePlotViewport({
+    domain,
+    xScale: freqScale,
+    yScale: magYScale,
+    resetKey: viewportResetKey,
+    width: PLOT_WIDTH,
+    height: PLOT_HEIGHT,
+    pad: PLOT_PAD,
+    sharedX,
+    onXViewportChange: magY ? onSharedXChange : undefined,
+  });
+  const setRefs = useCallback(
+    (el: SVGSVGElement | null) => {
+      measureRef.current = el;
+      attachSvg(el);
+    },
+    [measureRef, attachSvg],
+  );
+
+  const solo = traces.length === 1 ? traces[0]! : null;
+  const soloPeak = useMemo(() => {
+    if (!solo) return null;
+    let peak = -Infinity;
+    let floor = Infinity;
+    for (const db of solo.magDb) {
+      if (!Number.isFinite(db) || db <= -250) continue;
+      peak = Math.max(peak, db);
+      floor = Math.min(floor, db);
+    }
+    if (!Number.isFinite(peak)) return null;
+    return { peak, floor: Number.isFinite(floor) ? floor : peak };
+  }, [solo]);
+
+  return (
+    <div className="scope-shell">
+      <div className="scope-plot-wrap">
+        <svg
+          ref={setRefs}
+          className={isPanning ? "scope-svg panning" : "scope-svg"}
+          viewBox={`0 0 ${PLOT_WIDTH} ${PLOT_HEIGHT}`}
+          role="img"
+          aria-label={ariaLabel}
+          {...dragHandlers}
+        >
+          <PlotAxes
+            width={PLOT_WIDTH}
+            height={PLOT_HEIGHT}
+            pad={PLOT_PAD}
+            xMin={viewport.xMin}
+            xMax={viewport.xMax}
+            yMin={viewport.yMin}
+            yMax={viewport.yMax}
+            xScale={freqScale}
+            yScale={magYScale}
+            xUnit="Hz"
+            yUnit={magY?.unit ?? "dB"}
+            targetXTicks={targetXTicks}
+            targetYTicks={targetYTicks}
+            showXTicks={false}
+          />
+          {magY && (
+            <ScopeClip id={clipId} width={PLOT_WIDTH} height={PLOT_HEIGHT} pad={PLOT_PAD}>
+              {traces.map((t) => {
+                const series = magYScale === "log" ? t.magDb.map(dbToLinearMag) : t.magDb;
+                return (
+                  <path
+                    key={t.id}
+                    className="scope-trace"
+                    stroke={colorForTrace(t)}
+                    d={bodePath(series, freqs, {
+                      minDb: viewport.yMin,
+                      maxDb: viewport.yMax,
+                      xMin: viewport.xMin,
+                      xMax: viewport.xMax,
+                      xScale: freqScale,
+                    })}
+                  />
+                );
+              })}
+            </ScopeClip>
+          )}
+          {cursors &&
+            [cursors.x1, cursors.x2].map((f, i) => {
+              const x = cursorPixelX(f, viewport);
+              if (x === null) return null;
+              return (
+                <g key={`bc${i}`} className="plot-cursor">
+                  <line x1={x} y1={PLOT_PAD} x2={x} y2={PLOT_HEIGHT - PLOT_PAD} />
+                  <text x={x + 3} y={PLOT_PAD + 10}>
+                    {i + 1}
+                  </text>
+                </g>
+              );
+            })}
+        </svg>
+        {magY && <ScopeZoomCluster onZoomIn={() => zoomBy(0.7)} onZoomOut={() => zoomBy(1 / 0.7)} onFit={fit} />}
+      </div>
+      <div className="scope-legend" aria-label="Bode magnitude legend">
+        {traces.length > 0 ? (
+          traces.map((t) => {
+            const mathSource = expressionForTrace(t.id, t.label);
+            const color = colorForTrace(t);
+            if (!mathSource || !onPlotExpression) {
+              return (
+                <span key={t.id} className="bode-legend-chip">
+                  <i style={{ background: color }} />
+                  {t.label}
+                </span>
+              );
+            }
+            return (
+              <ContextMenu key={t.id}>
+                <ContextMenuTrigger asChild>
+                  <button
+                    type="button"
+                    className="bode-legend-chip"
+                    aria-label={`Math for ${t.label}`}
+                  >
+                    <i style={{ background: color }} aria-hidden="true" />
+                    {t.label}
+                  </button>
+                </ContextMenuTrigger>
+                <ContextMenuContent aria-label={`Math for ${t.label}`}>
+                  <ContextMenuLabel>Math</ContextMenuLabel>
+                  <ContextMenuSeparator />
+                  {acTraceMathMenuItems().map((item) => (
+                    <ContextMenuItem
+                      key={item.op}
+                      onClick={() => onPlotExpression(wrapTraceMath(mathSource, item.op))}
+                    >
+                      {item.label.replace("…", t.label)}
+                    </ContextMenuItem>
+                  ))}
+                </ContextMenuContent>
+              </ContextMenu>
+            );
+          })
+        ) : (
+          <span className="muted">No traces</span>
+        )}
+      </div>
+      {solo && soloPeak && (
+        <div className="meter-row analysis-meter" aria-label={`${solo.label} Bode magnitude statistics`}>
+          <Metric label="MIN" value={`${soloPeak.floor.toFixed(1)} dB`} tone="cyan" />
+          <Metric label="PEAK" value={`${soloPeak.peak.toFixed(1)} dB`} tone="cream" />
+        </div>
+      )}
+    </div>
   );
 }
 

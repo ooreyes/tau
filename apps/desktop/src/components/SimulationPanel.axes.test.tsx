@@ -512,10 +512,33 @@ describe("AcPlot - log-frequency ticks on both magnitude and phase", () => {
       warnings: [],
     };
     render(<AcPlot result={result} onPlotExpression={onPlotExpression} />);
-    fireEvent.contextMenu(screen.getByRole("button", { name: "Math for V(out)" }));
+    const mathButtons = screen.getAllByRole("button", { name: "Math for V(out)" });
+    fireEvent.contextMenu(mathButtons[0]!);
     const absItem = await screen.findByRole("menuitem", { name: /Plot abs\(V\(out\)\)/i });
     fireEvent.click(absItem);
     expect(onPlotExpression).toHaveBeenCalledWith("abs(V(out))");
+  });
+
+  it("splits multiple AC traces into automatic magnitude pane cards", () => {
+    const freqs = [10, 100, 1000, 10000];
+    const result: AcResult = {
+      ok: true,
+      freqs,
+      traces: [
+        { id: "n1", label: "V(out)", magDb: [0, -3, -20, -40], phaseDeg: [0, -45, -90, -90] },
+        { id: "n2", label: "V(mid)", magDb: [-6, -10, -26, -46], phaseDeg: [0, -30, -60, -80] },
+      ],
+      warnings: [],
+    };
+    const { container } = render(<AcPlot result={result} />);
+    expect(screen.getByLabelText("Bode magnitude panes")).toBeTruthy();
+    expect(screen.getByRole("img", { name: "Bode magnitude pane 1" })).toBeTruthy();
+    expect(screen.getByRole("img", { name: "Bode magnitude pane 2" })).toBeTruthy();
+    expect(screen.getByRole("img", { name: "Bode phase" })).toBeTruthy();
+    // Mag cards + shared phase pane.
+    expect(container.querySelectorAll(".scope-svg").length).toBeGreaterThanOrEqual(3);
+    expect(screen.getByLabelText("V(out) Bode magnitude statistics").textContent).toMatch(/PEAK/);
+    expect(screen.getByText("PANES")).toBeTruthy();
   });
 });
 

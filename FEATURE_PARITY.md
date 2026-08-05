@@ -1317,7 +1317,9 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   full-width, vertically aligned instrument panes and synchronized time zoom.
   **DC sweep multi-pane cards landed** (2026-08-05): DcPlot uses
   `automaticLayout` (one net/overlay per card), shared sweep X, per-pane Y
-  autorange + MIN/AVG/MAX stats; shared Apply Y. Still ⬜: AC Bode panes.
+  autorange + MIN/AVG/MAX stats; shared Apply Y. **AC Bode magnitude multi-pane
+  cards landed** (2026-08-05): AcPlot `automaticLayout` one-trace-per-mag-card
+  with shared freq X, per-card Y + MIN/PEAK; shared phase/group-delay pane.
   **Bode magnitude manual Y limits landed**
   (2026-08-05): AcPlot Ymin/Ymax + Apply Y / Autoscale Y via
   `parseManualYLimits` / `applyManualYToDomain` (swaps inverted; refuses
@@ -1591,8 +1593,9 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   axis. **Noise density manual Y limits landed** (2026-08-05): NoisePlot Apply Y
   / Autoscale Y. **FFT magnitude manual Y limits landed** (2026-08-05): FftView
   Apply Y / Autoscale Y. **DC sweep multi-pane cards landed** (2026-08-05):
-  DcPlot automatic one-net-per-pane cards + MIN/AVG/MAX. **NEXT:** AC Bode
-  multi-pane cards.
+  DcPlot automatic one-net-per-pane cards + MIN/AVG/MAX. **AC Bode magnitude
+  multi-pane cards landed** (2026-08-05): AcPlot one-trace-per-mag-card +
+  shared phase pane. **NEXT:** non-wall ND / remaining waveform polish.
 - 🟡 Right-click trace → math/operations — **abs / negate / dB / uramp / sgn /
   ddt / idt landed** (2026-08-05): `traceMath.ts` wraps a legend trace into
   `abs(…)`, `-(…)`, `db(…)`, `uramp(…)`, `sgn(…)`, `ddt(…)`, or `idt(…)`;

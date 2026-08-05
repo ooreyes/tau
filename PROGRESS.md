@@ -1,16 +1,48 @@
 ## HEARTBEAT
 
-**Status: IN PROGRESS - 2026-08-05 ~09:30 CDT**
+**Status: DONE - 2026-08-05 09:30 CDT**
 
-Unit: EveryCircuit library — **polarized capacitor** + **logic constant**
-(honest C / DC-V) + scope cursor → schematic `readoutTime`.
-Not full EC parity. Concurrent: Educational Vswitch → **pass=102**. SHIPPABLE? **NO**
+Unit: AC Bode magnitude multi-pane cards (waveform DoD).
+Worktree `Tau-wt-wave-ac-bode-panes` on tip `aa015fe`. Left EveryCircuit
+library / current-mode / Settings / Educational alone. SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
 
+
+
 ---
 
+
+
+### 2026-08-05 — AC Bode magnitude multi-pane cards (§waveform DoD)
+
+**What I did**
+- AcPlot automatic one-trace-per-magnitude-card via `automaticLayout`: shared
+  freq X across mag cards, per-card Y autorange + MIN/PEAK; phase/group-delay
+  stays one shared lower pane. Shared Apply Y.
+- Tip hygiene: durability-checkpoint `kindGroups.ts` referenced kinds not on
+  `ComponentKind` (Omar library-fills WIP leak) — trimmed to existing kinds so
+  typecheck gates; did not implement palette fills.
+
+**Files**
+- `components/SimulationPanel.tsx` (AcPlot / AcMagScopePane)
+- `components/SimulationPanel.axes.test.tsx`
+- `App.css` (`.ac-bode-stack`)
+- `FEATURE_PARITY.md`, `PROGRESS.md`
+
+**Tests**
+- `pnpm -C apps/desktop typecheck` + AcPlot axes tests; full suite before push
+
+**Parity items**
+- §waveform DoD: AC Bode mag multi-pane. NEXT: non-wall ND / polish.
+
+**Next step**
+- Non-wall ND leftovers or remaining waveform polish; never Chan/NIGBT/FRA.
+
+SHIPPABLE? **NO**
+
+---
 
 ### 2026-08-05 — Educational Vswitch .tran → pass=102 (§DoD)
 
