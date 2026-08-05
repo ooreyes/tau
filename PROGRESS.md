@@ -9,18 +9,46 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: IN PROGRESS - 2026-08-05 ~04:32 CDT**
+**Status: DONE - 2026-08-05 04:37 CDT**
 
-Unit: Merge tip reconcile (waveout pass=75 + TIP121 48.1%) then land next honest
-differential fixture (prefer Educational Wien / NonLinearTransformer — not Draft*).
+Unit: Staff EE blocked — Draft5 AD823 `.tf` (`ADI.lib`, no plaintext twin) +
+leftover plaintext refuse = Chan / NIGBT / FRA only. Named-device **48.1%** /
+exact=1222 unchanged. Differential pass=75. SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
 
 
-
 ---
 
+
+### 2026-08-05 — Staff EE blocked: Draft5 AD823 + Chan/NIGBT/FRA wall (§DoD)
+
+**What I did**
+- Tip `807355f`. Full refuse triage: non-`no electrically equivalent` leftover
+  = **1× Chan** (NonLinearTransformer). Educational dump also FRA `@1`/
+  `fraprobe` and `misc\\nigbt` — permanent honest walls. PAsystem clean.
+- Draft5/Draft4/hw3 = AD823 `.tf`; AD823.asy → `SpiceModel ADI.lib` with no
+  plaintext AD823 twin — fail-closed (not silent UOA). No code land.
+
+**Exact stdout (unchanged)**
+
+```
+NAMED-DEVICE-RECURSIVE: unencrypted=2541 exact=1222 refuse=1319 silent=0 hard-failure=0 encrypted-excluded=1471 exact-rate=48.1%
+```
+
+**Files**
+- `PROGRESS.md`
+
+**Tests**
+- `pnpm -C apps/desktop typecheck` + `test` green (no code delta)
+
+**Parity items**
+- Named-device 🟡 **48.1%**. Differential pass=75. SHIPPABLE? NO
+
+**Next step**
+- Continue 20 differential (not Chan/NIGBT/FRA/ADI). Staff EE needs a new
+  plaintext class outside those walls.
 
 ### 2026-08-05 — merge reconcile: waveout pass=75 + TIP121 48.1% (§DoD)
 
