@@ -993,9 +993,13 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   strips it and multi-runs (temp via `.temp`, source via `alter`, param via
   rewritten `.param`). Resistors emit ngspice-visible `tc1=`/`tc2=` from
   LTspice `tc=`. Param braces inside SINE/PULSE/PWL/… or `AC {…}` fall back to
-  TS. `MAX_EXTRA_PLOTS` 255. AC/DC native step remain open;
-  wire a domain selector into the STEP tab (currently transient-only in the UI);
-  per-trace pick in the overlay legend.
+  TS. `MAX_EXTRA_PLOTS` 255. **AC/DC native step (2026-08-04):**
+  `runNativeSteppedAcSweep` / `runNativeSteppedDcSweep` reuse the same
+  emit + Rust `step_expand` + multi-plot assemble path; App wires them into
+  AC/DC runs and the STEP tab (domain from authored `.ac`/`.dc` via
+  `stepAnalysisDomain`). TS `runAcStepFamily` / `runDcStepFamily` remain the
+  exclusive fallback (never `emitNativeStep`). Per-trace pick in the overlay
+  legend still open.
 - ✅ `.four` **Fourier analysis** — **parser + solver + UI landed** (`simulation/fourier.ts`):
   `parseFourDirective(".four 1k [Nharm] [Nperiods] V(out) …")` → `{freq, harmonics,
   outputs}` (leading `.`/`!` tolerated, bare-integer Nharmonics/Nperiods consumed,
@@ -1089,8 +1093,10 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   source + param + temp single-deck emit + multi-plot consume via
   `emitNativeStep` / `runNativeSteppedTransient` / Rust `step_expand`
   (stock ngspice has no `.step` card; resistors emit `tc1=`/`tc2=` from
-  LTspice `tc=`). Unsupported param brace shapes stay on the TS re-run
-  loop (mutually exclusive — no emit under that loop).
+  LTspice `tc=`). **AC/DC:** `runNativeSteppedAcSweep` /
+  `runNativeSteppedDcSweep` + STEP-tab domain from authored `.ac`/`.dc`.
+  Unsupported param brace shapes stay on the TS re-run loop (mutually
+  exclusive — no emit under that loop).
 - ✅ **DC operating point annotation on schematic** (show node V / device I
   in-place, 2026-07-02) — after an OP run, the simulator-mode canvas labels
   every non-ground net with its DC voltage (cyan, at the net's

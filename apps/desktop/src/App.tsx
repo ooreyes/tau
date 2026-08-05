@@ -93,8 +93,10 @@ import {
   runNativeTransferFunction,
   runNativeTransient,
   runNativeSteppedTransient,
+  runNativeSteppedAcSweep,
+  runNativeSteppedDcSweep,
 } from "./engine/nativeSpice";
-import { canUseNativeStepPath } from "./simulation/nativeStepFamily";
+import { canUseNativeStepPath, stepAnalysisDomain } from "./simulation/nativeStepFamily";
 import { useProject } from "./store/useProject";
 import { readInstalledLtspiceModel } from "./project/installedLtspiceLibrary";
 import {
@@ -721,28 +723,48 @@ function App() {
       // An imported LTspice .ac directive is the user's analysis definition.
       // Suggest a useful range only when the document does not provide one.
       const acSweep = analysesFromDirectives(directives).ac ?? suggestAcSweep(components);
+      const schematic = {
+        components,
+        wires,
+        netLabels,
+        params,
+        directives,
+        userModelLibraries: userModelLibraryTexts,
+        userModelLibraryNames,
+      };
       const result = resolveEngineResult(
-        await runNativeAcSweep(
-          { components, wires, netLabels, params, directives, userModelLibraries: userModelLibraryTexts, userModelLibraryNames },
-          acSweep,
-        ),
+        await runNativeAcSweep(schematic, acSweep),
         () => runAcSweep({ components, wires, netLabels, params, couplings }, acSweep),
       );
       if (analysisRequestRef.current !== requestId) return;
       setAcAnalysis(result);
-      // A runnable `.step` also produces a family of Bode curves to overlay,
-      // swept over the document's own `.ac` range when it has one (TS solver).
+      // A runnable `.step` also produces a family of Bode curves to overlay.
+      // Native single-deck path first (emitNativeStep); TS re-run is exclusive.
       const specs = runnableStepsFromDirectives(directives);
-      setAcStepFamily(
-        specs.length > 0
-          ? runAcStepFamily(
+      if (specs.length === 0) {
+        setAcStepFamily(null);
+      } else if (isNativeSpiceRuntime() && canUseNativeStepPath(specs, { components })) {
+        const nativeFamily = await runNativeSteppedAcSweep(schematic, acSweep, specs);
+        if (analysisRequestRef.current !== requestId) return;
+        setAcStepFamily(
+          nativeFamily
+            ?? runAcStepFamily(
               specs,
               params,
               { components, wires, netLabels, couplings },
               analysesFromDirectives(directives).ac ?? acSweep,
-            )
-          : null,
-      );
+            ),
+        );
+      } else {
+        setAcStepFamily(
+          runAcStepFamily(
+            specs,
+            params,
+            { components, wires, netLabels, couplings },
+            analysesFromDirectives(directives).ac ?? acSweep,
+          ),
+        );
+      }
     } catch (error) {
       if (analysisRequestRef.current !== requestId) return;
       setAcAnalysis({ ok: false, message: userFacingErrorMessage(error, "ngspice could not run this AC sweep."), warnings: [], engine: attemptedEngine() });
@@ -750,7 +772,7 @@ function App() {
     } finally {
       if (analysisRequestRef.current === requestId) setAnalysisRunning(false);
     }
-  }, [components, wires, netLabels, params, directives, userModelLibraryTexts, couplings, assertCurrentSimulationIntegrity]);
+  }, [components, wires, netLabels, params, directives, userModelLibraryTexts, userModelLibraryNames, couplings, assertCurrentSimulationIntegrity]);
 
   useEffect(() => {
     setDcSetup((d) => defaultDcSetup(components, d));
@@ -767,22 +789,37 @@ function App() {
     setAnalysisRunning(true);
     try {
       assertCurrentSimulationIntegrity();
+      const schematic = {
+        components,
+        wires,
+        netLabels,
+        params,
+        directives,
+        userModelLibraries: userModelLibraryTexts,
+        userModelLibraryNames,
+      };
       // ngspice first: the TS solver has no semiconductor stamps, so it cannot
       // sweep a transistor at all.
       const result = resolveEngineResult(
-        await runNativeDcSweep(
-          { components, wires, netLabels, params, directives, userModelLibraries: userModelLibraryTexts, userModelLibraryNames },
-          dc,
-        ),
+        await runNativeDcSweep(schematic, dc),
         () => runDcSweep({ components, wires, netLabels, params }, dc),
       );
       if (analysisRequestRef.current !== requestId) return;
       setDcAnalysis(result);
       // A runnable `.step` also produces a family of transfer curves to overlay.
       const specs = runnableStepsFromDirectives(directives);
-      setDcStepFamily(
-        specs.length > 0 ? runDcStepFamily(specs, params, { components, wires, netLabels }, dc) : null,
-      );
+      if (specs.length === 0) {
+        setDcStepFamily(null);
+      } else if (isNativeSpiceRuntime() && canUseNativeStepPath(specs, { components })) {
+        const nativeFamily = await runNativeSteppedDcSweep(schematic, dc, specs);
+        if (analysisRequestRef.current !== requestId) return;
+        setDcStepFamily(
+          nativeFamily
+            ?? runDcStepFamily(specs, params, { components, wires, netLabels }, dc),
+        );
+      } else {
+        setDcStepFamily(runDcStepFamily(specs, params, { components, wires, netLabels }, dc));
+      }
     } catch (error) {
       if (analysisRequestRef.current !== requestId) return;
       setDcAnalysis({ ok: false, message: userFacingErrorMessage(error, "Could not run this DC sweep."), warnings: [], engine: attemptedEngine() });
@@ -790,7 +827,7 @@ function App() {
     } finally {
       if (analysisRequestRef.current === requestId) setAnalysisRunning(false);
     }
-  }, [components, wires, netLabels, params, directives, dcSetup, userModelLibraryTexts, assertCurrentSimulationIntegrity]);
+  }, [components, wires, netLabels, params, directives, dcSetup, userModelLibraryTexts, userModelLibraryNames, assertCurrentSimulationIntegrity]);
 
   const runTfAnalysis = useCallback(async () => {
     const requestId = ++analysisRequestRef.current;
@@ -857,31 +894,101 @@ function App() {
       });
       return;
     }
-    let contexts;
-    try {
-      assertCurrentSimulationIntegrity();
-      contexts = nestedStepContexts(specs, params, components);
-    } catch (error) {
-      setStepFamily({ ok: false, message: userFacingErrorMessage(error, "Could not expand this .step."), members: [], warnings: [] });
-      return;
-    }
+    const domain = stepAnalysisDomain(pickAutoRunAnalysis(directives)?.kind);
+    const schematic = {
+      components,
+      wires,
+      netLabels,
+      params,
+      directives,
+      userModelLibraries: userModelLibraryTexts,
+      userModelLibraryNames,
+    };
     setAnalysisRunning(true);
     try {
+      assertCurrentSimulationIntegrity();
+
+      // AC/DC STEP domains: same native single-deck path as TRAN; TS re-run
+      // stays exclusive (never emitNativeStep under that loop).
+      if (domain === "ac") {
+        const acSweep = analysesFromDirectives(directives).ac ?? suggestAcSweep(components);
+        if (isNativeSpiceRuntime() && canUseNativeStepPath(specs, { components })) {
+          const nativeFamily = await runNativeSteppedAcSweep(schematic, acSweep, specs);
+          if (analysisRequestRef.current !== requestId) return;
+          if (nativeFamily) {
+            setAcStepFamily(nativeFamily);
+            setStepFamily({
+              ok: nativeFamily.ok,
+              message: nativeFamily.message,
+              members: [],
+              warnings: nativeFamily.warnings,
+              engine: nativeFamily.ok ? "ngspice" : attemptedEngine(),
+            });
+            return;
+          }
+        }
+        const family = runAcStepFamily(
+          specs,
+          params,
+          { components, wires, netLabels, couplings },
+          acSweep,
+        );
+        if (analysisRequestRef.current !== requestId) return;
+        setAcStepFamily(family);
+        setStepFamily({
+          ok: family.ok,
+          message: family.message,
+          members: [],
+          warnings: family.warnings,
+          engine: "preview",
+        });
+        return;
+      }
+
+      if (domain === "dc") {
+        const dc = analysesFromDirectives(directives).dc ?? dcSetup;
+        if (isNativeSpiceRuntime() && canUseNativeStepPath(specs, { components })) {
+          const nativeFamily = await runNativeSteppedDcSweep(schematic, dc, specs);
+          if (analysisRequestRef.current !== requestId) return;
+          if (nativeFamily) {
+            setDcStepFamily(nativeFamily);
+            setStepFamily({
+              ok: nativeFamily.ok,
+              message: nativeFamily.message,
+              members: [],
+              warnings: nativeFamily.warnings,
+              engine: nativeFamily.ok ? "ngspice" : attemptedEngine(),
+            });
+            return;
+          }
+        }
+        const family = runDcStepFamily(specs, params, { components, wires, netLabels }, dc);
+        if (analysisRequestRef.current !== requestId) return;
+        setDcStepFamily(family);
+        setStepFamily({
+          ok: family.ok,
+          message: family.message,
+          members: [],
+          warnings: family.warnings,
+          engine: "preview",
+        });
+        return;
+      }
+
+      let contexts;
+      try {
+        contexts = nestedStepContexts(specs, params, components);
+      } catch (error) {
+        setStepFamily({ ok: false, message: userFacingErrorMessage(error, "Could not expand this .step."), members: [], warnings: [] });
+        return;
+      }
       // P1.6 native single-deck `.step` (source + param + temp): one emit,
       // multi-plot consume. Mutually exclusive with the TS re-run loop below —
       // that path never passes emitNativeStep, so decks stay step-free.
       // Unsupported param brace shapes fall through to the TS path.
       if (isNativeSpiceRuntime() && canUseNativeStepPath(specs, { components })) {
         const nativeFamily = await runNativeSteppedTransient(
-          {
-            components,
-            wires,
-            netLabels,
-            params,
-            directives,
-            userModelLibraries: userModelLibraryTexts,
-            userModelLibraryNames,
-          },
+          schematic,
           effectiveAnalysisOptions,
           specs,
         );
@@ -925,10 +1032,14 @@ function App() {
     } finally {
       if (analysisRequestRef.current === requestId) setAnalysisRunning(false);
     }
-  }, [components, wires, netLabels, params, directives, userModelLibraryTexts, userModelLibraryNames, effectiveAnalysisOptions, stepSetupUi, assertCurrentSimulationIntegrity]);
+  }, [components, wires, netLabels, params, directives, userModelLibraryTexts, userModelLibraryNames, effectiveAnalysisOptions, stepSetupUi, dcSetup, couplings, assertCurrentSimulationIntegrity]);
 
   const preferredAnalysis = useMemo(
     () => pickAutoRunAnalysis(directives)?.kind ?? "tran",
+    [directives],
+  );
+  const stepDomain = useMemo(
+    () => stepAnalysisDomain(pickAutoRunAnalysis(directives)?.kind),
     [directives],
   );
 
@@ -1891,6 +2002,7 @@ function App() {
                 tfResult={tfAnalysis}
                 noiseResult={noiseAnalysis}
                 stepResult={stepFamily}
+                stepDomain={stepDomain}
                 acStepFamily={acStepFamily}
                 dcStepFamily={dcStepFamily}
                 measurements={measurements}

@@ -129,6 +129,8 @@ interface SimulationPanelProps {
   tfResult: (TfResult & EngineProvenance) | null;
   noiseResult: (NoiseResult & EngineProvenance) | null;
   stepResult: (StepFamilyResult & EngineProvenance) | null;
+  /** Which analysis STEP repeats (from authored .ac/.dc, else transient). */
+  stepDomain?: "tran" | "ac" | "dc";
   /** `.step` families of the AC/DC analyses, drawn as extra curves on their panes. */
   acStepFamily: AnalysisFamily<AcResult> | null;
   dcStepFamily: AnalysisFamily<DcSweepResult> | null;
@@ -207,6 +209,7 @@ export function SimulationPanel({
   tfResult,
   noiseResult,
   stepResult,
+  stepDomain = "tran",
   acStepFamily,
   dcStepFamily,
   measurements,
@@ -569,6 +572,10 @@ export function SimulationPanel({
     : mode === "dc" ? dcResult
     : mode === "tf" ? tfResult
     : mode === "noise" ? noiseResult
+    : mode === "step" && stepDomain === "ac"
+      ? (acStepFamily ? { ok: acStepFamily.ok, ...(stepResult?.engine ? { engine: stepResult.engine } : {}) } : stepResult)
+    : mode === "step" && stepDomain === "dc"
+      ? (dcStepFamily ? { ok: dcStepFamily.ok, ...(stepResult?.engine ? { engine: stepResult.engine } : {}) } : stepResult)
     : stepResult;
   const runStatus = isRunning ? "running" : activeResult ? (activeResult.ok ? "complete" : "error") : "idle";
   // Read off the displayed result, not off the runtime: the two engines model
@@ -1199,7 +1206,18 @@ export function SimulationPanel({
       {mode === "step" && (
         <>
           <StepSetupForm setup={stepSetupUi} components={components} onChange={onStepSetupUiChange} />
-          <StepPlot result={stepResult} probes={probes} wires={wires} />
+          {stepDomain === "ac" ? (
+            <AcFamilyPlot family={acStepFamily} />
+          ) : stepDomain === "dc" ? (
+            <DcFamilyPlot family={dcStepFamily} />
+          ) : (
+            <StepPlot result={stepResult} probes={probes} wires={wires} />
+          )}
+          {stepResult && !stepResult.ok && stepResult.message && stepDomain !== "tran" && (
+            <div className="warning-list" role="alert">
+              <div>{stepResult.message}</div>
+            </div>
+          )}
         </>
       )}
 

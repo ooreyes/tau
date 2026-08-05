@@ -14,6 +14,8 @@ import {
   runNativeTransferFunction,
   runNativeTransient,
   runNativeSteppedTransient,
+  runNativeSteppedAcSweep,
+  runNativeSteppedDcSweep,
 } from "./nativeSpice";
 import { NO_AC_SOURCE_MESSAGE } from "../simulation/acSweep";
 import { primaryBranches } from "../simulation/operatingPoint";
@@ -1327,6 +1329,145 @@ describe("native single-deck .step (P1.6)", () => {
       [sourceSpec()],
     );
 
+    expect(family?.ok).toBe(false);
+    expect(family?.message).toMatch(/returned 1 step plot.*asks for 2/i);
+    expect(family?.members).toEqual([]);
+  });
+});
+
+describe("native single-deck .step AC/DC (P1.6)", () => {
+  const sourceSpec = () => {
+    const spec = parseStepDirective(".step param Rload list 1k 2k");
+    if (!spec) throw new Error("parse failed");
+    return spec;
+  };
+
+  const steppedAcSchematic = () => ({
+    ...acExcitedSchematic(),
+    components: acExcitedSchematic().components.map((part) =>
+      part.label === "R1" ? { ...part, value: "{Rload}" } : part,
+    ),
+    directives: [".ac dec 1 10 100", ".step param Rload list 1k 2k"],
+    params: { scope: { Rload: 1000, rload: 1000 }, funcs: {} },
+  });
+
+  it("AC: does not invoke outside Tauri (caller keeps the TS re-run path)", async () => {
+    await expect(runNativeSteppedAcSweep(
+      steppedAcSchematic(),
+      { startHz: 10, stopHz: 100, pointsPerDecade: 1 },
+      [sourceSpec()],
+    )).resolves.toBeNull();
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it("AC: emits .step once and assembles a Bode family from extraPlots + current", async () => {
+    enableNativeRuntime();
+    invoke.mockResolvedValueOnce({
+      plot: "ac2",
+      vectors: [
+        { name: "frequency", real: [10, 100], imaginary: [0, 0] },
+        { name: "v(n001)", real: [1, 1], imaginary: [0, 0] },
+        { name: "v(n002)", real: [0.5, 0.2], imaginary: [0, 0] },
+      ],
+      extraPlots: [{
+        name: "ac1",
+        vectors: [
+          { name: "frequency", real: [10, 100], imaginary: [0, 0] },
+          { name: "v(n001)", real: [1, 1], imaginary: [0, 0] },
+          { name: "v(n002)", real: [0.7, 0.4], imaginary: [0, 0] },
+        ],
+      }],
+      messages: [],
+      libraryPath: "/bundle/libngspice.dylib",
+    });
+
+    const family = await runNativeSteppedAcSweep(
+      steppedAcSchematic(),
+      { startHz: 10, stopHz: 100, pointsPerDecade: 1 },
+      [sourceSpec()],
+    );
+
+    expect(invoke).toHaveBeenCalledTimes(1);
+    const netlist = invoke.mock.calls[0]![1].request.netlist as string;
+    expect(netlist).toContain(".step param Rload list 1k 2k");
+    expect(netlist).toMatch(/\.ac /);
+    expect(netlist).toMatch(/\bR1\b[^\n]*\{Rload\}/);
+    // Mutually exclusive: one invoke, not a TS re-run per step.
+    expect(family?.ok).toBe(true);
+    expect(family?.members.map((m) => m.label)).toEqual(["Rload=1000", "Rload=2000"]);
+    expect(family?.members[0]!.result.ok && family?.members[0]!.result.freqs).toEqual([10, 100]);
+    expect(family?.members[1]!.result.ok && family?.members[1]!.result.traces[0]?.magDb.length).toBe(2);
+  });
+
+  it("DC: emits .step once and assembles a transfer family from extraPlots + current", async () => {
+    enableNativeRuntime();
+    const param = parseStepDirective(".step param Rload list 1k 3k");
+    if (!param) throw new Error("parse failed");
+    invoke.mockResolvedValueOnce({
+      plot: "dc2",
+      vectors: [
+        { name: "v-sweep", real: [0, 1, 2], imaginary: null },
+        { name: "v(n001)", real: [0, 1, 2], imaginary: null },
+        { name: "v(n002)", real: [0, 0.25, 0.5], imaginary: null },
+      ],
+      extraPlots: [{
+        name: "dc1",
+        vectors: [
+          { name: "v-sweep", real: [0, 1, 2], imaginary: null },
+          { name: "v(n001)", real: [0, 1, 2], imaginary: null },
+          { name: "v(n002)", real: [0, 0.5, 1], imaginary: null },
+        ],
+      }],
+      messages: [],
+      libraryPath: "/bundle/libngspice.dylib",
+    });
+
+    const schematic = {
+      ...rcSchematic(),
+      components: rcSchematic().components.map((part) =>
+        part.label === "R1" ? { ...part, value: "{Rload}" } : part,
+      ),
+      directives: [".dc V1 0 2 1", ".step param Rload list 1k 3k"],
+      params: { scope: { Rload: 1000, rload: 1000 }, funcs: {} },
+    };
+
+    const family = await runNativeSteppedDcSweep(
+      schematic,
+      { source: "V1", start: 0, stop: 2, step: 1 },
+      [param],
+    );
+
+    expect(invoke).toHaveBeenCalledTimes(1);
+    const netlist = invoke.mock.calls[0]![1].request.netlist as string;
+    expect(netlist).toContain(".step param Rload list 1k 3k");
+    expect(netlist).toMatch(/\.dc /);
+    expect(family?.ok).toBe(true);
+    expect(family?.members.map((m) => m.label)).toEqual(["Rload=1000", "Rload=3000"]);
+    expect(family?.members.every((m) => m.result.ok)).toBe(true);
+    if (family?.members[0]!.result.ok) {
+      expect(family.members[0]!.result.sweep).toEqual([0, 1, 2]);
+    }
+  });
+
+  it("AC: refuses mismatched plot counts instead of inventing Bode curves", async () => {
+    enableNativeRuntime();
+    invoke.mockResolvedValueOnce({
+      plot: "ac1",
+      vectors: [
+        { name: "frequency", real: [10, 100], imaginary: [0, 0] },
+        { name: "v(n001)", real: [1, 1], imaginary: [0, 0] },
+        { name: "v(n002)", real: [0.5, 0.2], imaginary: [0, 0] },
+      ],
+      extraPlots: [],
+      messages: [],
+      libraryPath: "/bundle/libngspice.dylib",
+    });
+
+    const family = await runNativeSteppedAcSweep(
+      steppedAcSchematic(),
+      { startHz: 10, stopHz: 100, pointsPerDecade: 1 },
+      [sourceSpec()],
+    );
     expect(family?.ok).toBe(false);
     expect(family?.message).toMatch(/returned 1 step plot.*asks for 2/i);
     expect(family?.members).toEqual([]);

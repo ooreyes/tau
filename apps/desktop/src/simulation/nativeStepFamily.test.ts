@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
+  assembleNativeAnalysisFamily,
   assembleNativeStepFamily,
   canUseNativeStepPath,
   nativeStepMemberLabels,
   nativeStepMemberValues,
   nativeStepPathRefusal,
   orderNativeStepPlots,
+  stepAnalysisDomain,
   unsupportedNativeParamBraceReason,
 } from "./nativeStepFamily";
 import { parseStepDirective } from "./paramStep";
@@ -179,5 +181,32 @@ describe("orderNativeStepPlots + assembleNativeStepFamily", () => {
     expect(family.ok).toBe(false);
     expect(family.message).toMatch(/returned 1 step plot.*asks for 3/i);
     expect(family.members).toEqual([]);
+  });
+});
+
+describe("assembleNativeAnalysisFamily", () => {
+  it("zips AC-shaped members without inventing plots", () => {
+    const specs = [sourceSpec(".step V1 list 1 2")];
+    const plots = orderNativeStepPlots(
+      { name: "ac2", vectors: [] },
+      [{ name: "ac1", vectors: [] }],
+    );
+    const family = assembleNativeAnalysisFamily(plots, specs, (plot, label, value) => ({
+      label,
+      value,
+      result: { ok: true, warnings: [], freqs: [1], traces: [], plot: plot.name },
+    }));
+    expect(family.ok).toBe(true);
+    expect(family.members.map((m) => m.label)).toEqual(["V1=1", "V1=2"]);
+  });
+});
+
+describe("stepAnalysisDomain", () => {
+  it("follows authored AC/DC; otherwise transient", () => {
+    expect(stepAnalysisDomain("ac")).toBe("ac");
+    expect(stepAnalysisDomain("dc")).toBe("dc");
+    expect(stepAnalysisDomain("tran")).toBe("tran");
+    expect(stepAnalysisDomain("op")).toBe("tran");
+    expect(stepAnalysisDomain(null)).toBe("tran");
   });
 });

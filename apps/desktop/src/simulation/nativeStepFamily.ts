@@ -19,6 +19,7 @@
 
 import type { SchematicComponent } from "../schematic/types";
 import type { StepSpec } from "./paramStep";
+import type { AnalysisFamily, AnalysisFamilyMember } from "./stepAnalysisFamily";
 import {
   assertStepFamilySize,
   formatStepValue,
@@ -210,4 +211,60 @@ export function assembleNativeStepFamily(
     members,
     warnings,
   };
+}
+
+/**
+ * Same plot×label zip as {@link assembleNativeStepFamily}, for AC/DC
+ * {@link AnalysisFamily} members (no per-member `.meas` attachment).
+ */
+export function assembleNativeAnalysisFamily<R extends { ok: boolean; warnings: string[] }>(
+  plots: ReadonlyArray<NativePlotVectors>,
+  specs: readonly StepSpec[],
+  memberFromPlot: (
+    plot: NativePlotVectors,
+    label: string,
+    value: number,
+    index: number,
+  ) => AnalysisFamilyMember<R>,
+): AnalysisFamily<R> {
+  const refusal = nativeStepPathRefusal(specs);
+  if (refusal) {
+    return { ok: false, message: refusal, members: [], warnings: [] };
+  }
+  const labels = nativeStepMemberLabels(specs);
+  const values = nativeStepMemberValues(specs);
+  if (plots.length !== labels.length) {
+    return {
+      ok: false,
+      message:
+        `ngspice returned ${plots.length} step plot(s) but .step asks for ${labels.length}. `
+        + "No partial family was fabricated.",
+      members: [],
+      warnings: [],
+    };
+  }
+  const members = plots.map((plot, index) =>
+    memberFromPlot(plot, labels[index]!, values[index]!, index),
+  );
+  const warnings = members.find((m) => m.result.ok)?.result.warnings ?? [];
+  return {
+    ok: members.some((m) => m.result.ok),
+    spec: specs[0],
+    members,
+    warnings,
+  };
+}
+
+/** Which analysis the STEP tab repeats when the document authors one. */
+export type StepAnalysisDomain = "tran" | "ac" | "dc";
+
+/**
+ * Prefer an authored `.ac` / `.dc` when that is the document's primary
+ * analysis; otherwise STEP remains a transient family (historical default).
+ */
+export function stepAnalysisDomain(
+  preferredKind: string | null | undefined,
+): StepAnalysisDomain {
+  if (preferredKind === "ac" || preferredKind === "dc") return preferredKind;
+  return "tran";
 }

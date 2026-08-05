@@ -21,6 +21,7 @@ import {
 import { formatOutput, unitFor, type TfResult, type TfSpec } from "../simulation/transferFunction";
 import { parseNativeFourier, parseNativeMeasurements } from "../simulation/nativeMeasFour";
 import {
+  assembleNativeAnalysisFamily,
   assembleNativeStepFamily,
   canUseNativeStepPath,
   orderNativeStepPlots,
@@ -28,6 +29,7 @@ import {
 } from "../simulation/nativeStepFamily";
 import type { StepSpec } from "../simulation/paramStep";
 import type { StepFamilyResult } from "../simulation/stepFamily";
+import type { AnalysisFamily } from "../simulation/stepAnalysisFamily";
 
 interface NativeVector {
   name: string;
@@ -484,13 +486,87 @@ export async function runNativeAcSweep(
 
   const execution = await executeNative(schematic, { kind: "ac", ...options });
   if (!execution) return null;
-  const frequency = vector(execution.result, AC_SCALE_NAME);
-  if (!frequency || frequency.real.length < 2) throw new Error("ngspice returned no AC frequency vector.");
+  const converted = acFromNativePlot(
+    { name: execution.result.plot, vectors: execution.result.vectors },
+    execution.deck,
+    execution.result.messages,
+    { requireOk: true },
+  );
+  const nativeMeasurements = parseNativeMeasurements(execution.result.messages);
+  if (!converted.ok) return converted;
+  return {
+    ...converted,
+    ...(nativeMeasurements.length > 0 ? { nativeMeasurements } : {}),
+  };
+}
 
-  const nodeTraces: AcTrace[] = execution.deck.circuit.nets
+/**
+ * Single-deck native `.step` for AC (P1.6): one emit, multi-plot Bode family.
+ * Mutually exclusive with `runAcStepFamily` (that path never sets
+ * `emitNativeStep`). Returns null outside Tauri or when the step kind is
+ * ineligible so the caller keeps the TypeScript re-run path.
+ */
+export async function runNativeSteppedAcSweep(
+  schematic: Schematic,
+  options: { startHz: number; stopHz: number; pointsPerDecade: number },
+  specs: readonly StepSpec[],
+): Promise<AnalysisFamily<AcResult> | null> {
+  if (!isNativeSpiceRuntime()) return null;
+  if (!canUseNativeStepPath(specs, { components: schematic.components })) return null;
+
+  const resolved = resolveComponentValues(schematic.components, schematic.params ?? EMPTY_SCOPE);
+  if (!hasAcExcitation(resolved)) {
+    return { ok: false, message: NO_AC_SOURCE_MESSAGE, members: [], warnings: [] };
+  }
+
+  const execution = await executeNative(
+    schematic,
+    { kind: "ac", ...options },
+    { emitNativeStep: true },
+  );
+  if (!execution) return null;
+
+  const ordered = orderNativeStepPlots(
+    { name: execution.result.plot, vectors: execution.result.vectors },
+    execution.result.extraPlots,
+  );
+  const familyWarnings = [...execution.deck.circuit.warnings, ...engineWarnings(execution.result.messages)];
+  return assembleNativeAnalysisFamily(ordered, specs, (plot, label, value) => ({
+    label,
+    value,
+    result: acFromNativePlot(plot, execution.deck, [], {
+      requireOk: false,
+      warnings: familyWarnings,
+    }),
+  }));
+}
+
+/** Convert one ngspice AC plot into a Tau Bode result (shared by single + step). */
+function acFromNativePlot(
+  plot: NativePlotVectors,
+  deck: NativeExecution["deck"],
+  messages: readonly string[],
+  meta: { requireOk: boolean; warnings?: string[] },
+): AcResult {
+  const lookup = (name: string) => vectorIn(plot.vectors, name);
+  const frequency = lookup(AC_SCALE_NAME);
+  if (!frequency || frequency.real.length < 2) {
+    const detail = messages
+      .map((message) => message.trim())
+      .filter(Boolean)
+      .slice(-4)
+      .join(" ");
+    const message = detail
+      ? `ngspice could not start the AC analysis: ${detail}`
+      : `ngspice step plot “${plot.name}” returned no AC frequency vector.`;
+    if (meta.requireOk) throw new Error(message);
+    return { ok: false, message, warnings: meta.warnings ?? [] };
+  }
+
+  const nodeTraces: AcTrace[] = deck.circuit.nets
     .filter((net) => !net.isGround)
     .flatMap((net) => {
-      const values = vector(execution.result, `v(${net.id})`);
+      const values = lookup(`v(${net.id})`);
       if (!values || values.real.length !== frequency.real.length) return [];
       return [{
         id: net.id,
@@ -499,27 +575,33 @@ export async function runNativeAcSweep(
       }];
     });
 
-  if (nodeTraces.length === 0) throw new Error("ngspice completed, but returned no AC node-voltage traces.");
+  if (nodeTraces.length === 0) {
+    const message = meta.requireOk
+      ? "ngspice completed, but returned no AC node-voltage traces."
+      : `ngspice step plot “${plot.name}” returned no AC node-voltage traces.`;
+    if (meta.requireOk) throw new Error(message);
+    return { ok: false, message, warnings: meta.warnings ?? [] };
+  }
 
   const count = frequency.real.length;
   const nodePhasors = new Map<string, { real: number[]; imaginary: number[] }>();
-  for (const net of execution.deck.circuit.nets) {
+  for (const net of deck.circuit.nets) {
     if (net.isGround) {
       nodePhasors.set(net.id, { real: new Array(count).fill(0), imaginary: new Array(count).fill(0) });
       continue;
     }
-    const values = vector(execution.result, `v(${net.id})`);
+    const values = lookup(`v(${net.id})`);
     if (!values || values.real.length !== count) continue;
     nodePhasors.set(net.id, { real: values.real, imaginary: values.imaginary ?? new Array(count).fill(0) });
   }
 
   const traces = [...nodeTraces];
-  const primary = primaryDeviceCurrents(execution.deck.deviceCurrents);
+  const primary = primaryDeviceCurrents(deck.deviceCurrents);
   const seen = new Set<string>();
-  for (const { component } of execution.deck.circuit.components) {
+  for (const { component } of deck.circuit.components) {
     const ref = component.label;
     if (!ref || seen.has(ref.toLowerCase())) continue;
-    let values = componentCurrentVector(execution.result, primary.get(component.id), ref);
+    let values = componentCurrentVectorFrom(plot.vectors, primary.get(component.id), ref);
     if (!values && (component.kind === "isource" || component.kind === "iac")) {
       const stimulus = parseAcSpec(component.value);
       const magnitude = stimulus?.mag ?? 0;
@@ -537,9 +619,9 @@ export async function runNativeAcSweep(
       ...acTraceFromComplex(values.real, values.imaginary),
     });
     seen.add(ref.toLowerCase());
-    for (const extra of execution.deck.deviceCurrents) {
+    for (const extra of deck.deviceCurrents) {
       if (extra.componentId !== component.id || !extra.terminal) continue;
-      const terminal = vector(execution.result, extra.vector);
+      const terminal = lookup(extra.vector);
       if (!terminal || terminal.real.length !== count) continue;
       traces.push({
         id: `current:${component.id}:${extra.terminal}`,
@@ -548,7 +630,7 @@ export async function runNativeAcSweep(
       });
     }
   }
-  for (const derived of deriveAcRcCurrents(execution.deck.circuit.components, nodePhasors, frequency.real)) {
+  for (const derived of deriveAcRcCurrents(deck.circuit.components, nodePhasors, frequency.real)) {
     if (seen.has(derived.ref.toLowerCase())) continue;
     traces.push({
       id: `current:${derived.id}`,
@@ -558,13 +640,11 @@ export async function runNativeAcSweep(
     seen.add(derived.ref.toLowerCase());
   }
 
-  const nativeMeasurements = parseNativeMeasurements(execution.result.messages);
   return {
     ok: true,
     freqs: frequency.real,
     traces,
-    warnings: [...execution.deck.circuit.warnings, ...engineWarnings(execution.result.messages)],
-    ...(nativeMeasurements.length > 0 ? { nativeMeasurements } : {}),
+    warnings: meta.warnings ?? [...deck.circuit.warnings, ...engineWarnings([...messages])],
   };
 }
 
@@ -603,17 +683,74 @@ export async function runNativeDcSweep(
 ): Promise<DcSweepResult | null> {
   if (!isNativeSpiceRuntime()) return null;
 
-  // Validate the sweep spec before paying a native round trip: ngspice reports
-  // an unknown sweep source as a generic parse failure the user cannot act on,
-  // and its own point count is unbounded, so the TS solver's caps are applied
-  // here too rather than letting a nested sweep fan out into thousands of curves.
+  const resolved = resolveDcSweepAxes(schematic, spec);
+  const execution = await executeNative(schematic, { kind: "dc", ...spec });
+  if (!execution) return null;
+
+  const converted = dcFromNativePlot(
+    { name: execution.result.plot, vectors: execution.result.vectors },
+    execution.deck,
+    resolved,
+    execution.result.messages,
+    { requireOk: true },
+  );
+  const nativeMeasurements = parseNativeMeasurements(execution.result.messages);
+  if (!converted.ok) return converted;
+  return {
+    ...converted,
+    ...(nativeMeasurements.length > 0 ? { nativeMeasurements } : {}),
+  };
+}
+
+/**
+ * Single-deck native `.step` for DC (P1.6): one emit, multi-plot transfer
+ * family. Mutually exclusive with `runDcStepFamily`. Returns null outside
+ * Tauri or when the step kind is ineligible.
+ */
+export async function runNativeSteppedDcSweep(
+  schematic: Schematic,
+  spec: DcSweepSpec,
+  specs: readonly StepSpec[],
+): Promise<AnalysisFamily<DcSweepResult> | null> {
+  if (!isNativeSpiceRuntime()) return null;
+  if (!canUseNativeStepPath(specs, { components: schematic.components })) return null;
+
+  const resolved = resolveDcSweepAxes(schematic, spec);
+  const execution = await executeNative(
+    schematic,
+    { kind: "dc", ...spec },
+    { emitNativeStep: true },
+  );
+  if (!execution) return null;
+
+  const ordered = orderNativeStepPlots(
+    { name: execution.result.plot, vectors: execution.result.vectors },
+    execution.result.extraPlots,
+  );
+  const familyWarnings = [...execution.deck.circuit.warnings, ...engineWarnings(execution.result.messages)];
+  return assembleNativeAnalysisFamily(ordered, specs, (plot, label, value) => ({
+    label,
+    value,
+    result: dcFromNativePlot(plot, execution.deck, resolved, [], {
+      requireOk: false,
+      warnings: familyWarnings,
+    }),
+  }));
+}
+
+type ResolvedDcAxes = {
+  innerLabel: string;
+  outer: SchematicComponent | null;
+  outerValues: number[];
+};
+
+/** Validate + resolve `.dc` axes before a native round trip (shared by single/step). */
+function resolveDcSweepAxes(schematic: Schematic, spec: DcSweepSpec): ResolvedDcAxes {
   const inner = findSource(schematic, spec.source);
   if (typeof inner === "string") throw new Error(inner);
   sweepValues(spec, MAX_POINTS);
   let outer: SchematicComponent | null = null;
   let outerValues: number[] = [];
-  // Exactly the condition the deck emits a second sweep on, so the runner and
-  // `analysisLine` can never disagree about whether a run is nested.
   const source2 = spec.source2?.trim();
   if (
     source2
@@ -631,43 +768,60 @@ export async function runNativeDcSweep(
       MAX_OUTER_POINTS,
     );
   }
+  return { innerLabel: inner.label, outer, outerValues };
+}
 
-  const execution = await executeNative(schematic, { kind: "dc", ...spec });
-  if (!execution) return null;
-
-  const scale = execution.result.vectors.find((candidate) => DC_SWEEP_SCALE.test(candidate.name.trim()));
-  if (!scale || scale.real.length === 0) throw new Error("ngspice completed, but returned no DC sweep axis.");
+function dcFromNativePlot(
+  plot: NativePlotVectors,
+  deck: NativeExecution["deck"],
+  axes: ResolvedDcAxes,
+  messages: readonly string[],
+  meta: { requireOk: boolean; warnings?: string[] },
+): DcSweepResult {
+  const scale = plot.vectors.find((candidate) => DC_SWEEP_SCALE.test(candidate.name.trim()));
+  if (!scale || scale.real.length === 0) {
+    const detail = messages
+      .map((message) => message.trim())
+      .filter(Boolean)
+      .slice(-4)
+      .join(" ");
+    const message = detail
+      ? `ngspice could not start the DC sweep: ${detail}`
+      : `ngspice step plot “${plot.name}” returned no DC sweep axis.`;
+    if (meta.requireOk) throw new Error(message);
+    return { ok: false, message, warnings: meta.warnings ?? [] };
+  }
 
   const { sweep, legLength, legCount } = splitDcSweepLegs(scale.real);
-
-  const series = execution.deck.circuit.nets
+  const lookup = (name: string) => vectorIn(plot.vectors, name);
+  const series = deck.circuit.nets
     .filter((net) => !net.isGround)
     .flatMap((net) => {
-      const values = vector(execution.result, `v(${net.id})`);
+      const values = lookup(`v(${net.id})`);
       if (!values || values.real.length !== scale.real.length) return [];
       return [{ id: net.id, label: `V(${friendlyNetName(net)})`, values: values.real }];
     });
-  if (series.length === 0) throw new Error("ngspice completed, but returned no DC node-voltage traces.");
+  if (series.length === 0) {
+    const message = meta.requireOk
+      ? "ngspice completed, but returned no DC node-voltage traces."
+      : `ngspice step plot “${plot.name}” returned no DC node-voltage traces.`;
+    if (meta.requireOk) throw new Error(message);
+    return { ok: false, message, warnings: meta.warnings ?? [] };
+  }
 
-  const warnings = [...execution.deck.circuit.warnings, ...engineWarnings(execution.result.messages)];
-  const nativeMeasurements = parseNativeMeasurements(execution.result.messages);
-  const nativeExtra = nativeMeasurements.length > 0 ? { nativeMeasurements } : {};
+  const warnings = meta.warnings ?? [...deck.circuit.warnings, ...engineWarnings([...messages])];
+  const { innerLabel, outer, outerValues } = axes;
 
   if (!outer) {
-    // Ground rides along at 0 V so the shape matches the TS solver, which
-    // carries it through from the operating point; the plot hides it.
     const nets: DcSweepNet[] = [
       { id: "0", label: "GND", voltages: sweep.map(() => 0), ground: true },
       ...series.map((net) => ({ id: net.id, label: net.label, voltages: net.values, ground: false })),
     ];
-    return { ok: true, source: inner.label, sweep, nets, warnings, ...nativeExtra };
+    return { ok: true, source: innerLabel, sweep, nets, warnings };
   }
 
   const fanned: DcSweepNet[] = [];
   for (let leg = 0; leg < legCount; leg += 1) {
-    // Label from the outer values Tau computed, which is the same arithmetic
-    // ngspice sweeps with. If the two ever disagree on leg count, fall back to
-    // the leg's ordinal rather than captioning a curve with the wrong value.
     const value = outerValues[leg];
     const caption = value === undefined
       ? `${outer.label} leg ${leg + 1}`
@@ -682,7 +836,7 @@ export async function runNativeDcSweep(
       });
     }
   }
-  return { ok: true, source: inner.label, sweep, nets: fanned, warnings, ...nativeExtra };
+  return { ok: true, source: innerLabel, sweep, nets: fanned, warnings };
 }
 
 /** Independent-source kinds usable as a `.tf` or `.noise` stimulus, matching

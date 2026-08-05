@@ -9,6 +9,25 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
+**Status: DONE - 2026-08-04 22:02 CDT**
+
+Unit: P1.6 AC/DC native `.step` into STEP tab — same single-deck /
+`step_expand` path as TRAN; TS re-run mutually exclusive (no double-step).
+Native AC + DC stepped families in UI. Shippable? NO.
+
+What landed this unit:
+
+- `runNativeSteppedAcSweep` / `runNativeSteppedDcSweep` + plot converters
+- `assembleNativeAnalysisFamily`; `stepAnalysisDomain` from authored `.ac`/`.dc`
+- App: AC/DC runs + STEP tab prefer native; TS fallback exclusive
+- STEP tab shows `AcFamilyPlot` / `DcFamilyPlot` when domain is ac/dc
+- Tests: mocked multi-plot AC/DC families, mismatch refuse, domain helper
+
+Next unit: authored-analysis differential parity; §10; named-device;
+unsigned release.
+
+Previous completed unit:
+
 **Status: DONE - 2026-08-04 21:51 CDT**
 
 Unit: P1.6 native `.step` temp — LTspice `tc=` → ngspice `tc1=`/`tc2=`;

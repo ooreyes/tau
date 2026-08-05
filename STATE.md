@@ -5,12 +5,12 @@ The working memory of an unattended loop that starts from zero every fire.
 
 ## Now
 
-**Status:** IDLE 2026-08-04 21:51 CDT - P1.6 native `.step` temp landed
-(`tc=`→`tc1`/`tc2`, Rust expands `.step` because stock ngspice has no
-card). Source/param/temp native. AC/DC native step open. Shippable? NO.
+**Status:** IDLE 2026-08-04 22:02 CDT - P1.6 AC/DC native `.step` into
+STEP tab landed (single-deck + Rust expand; TS exclusive). Matrix:
+source ✅ param ✅ temp ✅ AC ✅ DC ✅. Shippable? NO.
 
-**Next unit:** AC/DC native step wiring; authored-analysis differential
-parity / §10 / named-device / unsigned release proof.
+**Next unit:** Authored-analysis differential parity / §10 /
+named-device / unsigned release proof.
 
 The 2026-08-03 "PROJECT COMPLETE" signal was wrong and has been withdrawn. A
 four-part adversarial audit reproduced the gates and disagreed with these docs.
