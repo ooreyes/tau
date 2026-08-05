@@ -9,6 +9,15 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
+**Status: DONE - 2026-08-04 20:25 CDT**
+
+Unit: corpus harness applies the app's unresolvedSubckts guard. Royer/LT1184F
+is now an honest deck refusal instead of an ngspice "unknown subckt" hard op
+failure. Canonical re-measured: 82/81/79/79, HARD FAILURES (0), three honest
+refusals (NIGBT, Chan, LT1184F).
+
+Previous completed unit:
+
 **Status: DONE - 2026-08-04 20:20 CDT**
 
 Unit: refuse Chan magnetic-core inductors (last P0.2 silent substitution).

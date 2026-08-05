@@ -25,7 +25,7 @@ import { homedir, tmpdir } from "node:os";
 import { describe, it, expect } from "vitest";
 import { importAsc, makeSubcircuitResolver, decodeSchematicText, parseAsy, type AsySymbol } from "../src/io/ascImport";
 import { buildParamScope } from "../src/simulation/paramScope";
-import { buildSpiceDeck } from "../src/engine/spiceNetlist";
+import { buildSpiceDeck, unresolvedSubcktMessage } from "../src/engine/spiceNetlist";
 import { validateSchematicDocument } from "../src/schematic/documentValidation";
 import { summarizeCorpus, formatCorpusReport, type CorpusRow } from "../src/io/corpusReport";
 import { opampIdentity } from "../src/engine/opampModel";
@@ -83,7 +83,7 @@ interface CorpusFile {
  * The historical 82-file baseline is the two Downloads fixtures, the eleven
  * schematics directly below Documents/LTspice, and the 69 Educational
  * examples. Keep that subset for the release floors (warning-clean ≥80;
- * deck ≥80; op ≥79 after Chan refusal) while the default
+ * deck/op ≥79 after three honest deck refusals) while the default
  * runner still exercises every nested `.asc` file and reports its own totals.
  */
 function isCanonical(path: string): boolean {
@@ -279,6 +279,12 @@ function runFile(file: CorpusFile, tmpDir: string, skipNgspice: boolean): Corpus
       },
       { kind: "op" },
     );
+    // Match the app path (`nativeSpice.ts`): a missing X definition must not
+    // reach ngspice as a cryptic "unknown subckt". Fail at deck time with the
+    // same product copy the UI shows.
+    if (deck.unresolvedSubckts.length > 0) {
+      throw new Error(unresolvedSubcktMessage(deck.unresolvedSubckts));
+    }
     row.modelSubstitutions = deck.modelSubstitutions.length;
     netlist = deck.netlist;
     row.deckBuilt = true;
@@ -333,11 +339,22 @@ describe.skipIf(corpus.length === 0)("acceptance corpus (user's own LTspice file
       const summary = summarizeCorpus(rows);
       const canonicalRows = rows.filter((_, index) => corpus[index]?.canonical);
       const canonicalSummary = summarizeCorpus(canonicalRows);
-      const unsupportedRefusals = rows.filter((row) => row.error?.startsWith("deck: Simulation refused:"));
+      const isHonestDeckRefusal = (error: string | undefined): boolean => {
+        if (!error?.startsWith("deck: ")) return false;
+        const body = error.slice("deck: ".length);
+        // App-path refusals: Simulation refused:… (NIGBT/Chan/foreign) and the
+        // unresolvedSubcktMessage product copy from nativeSpice.ts.
+        return (
+          body.startsWith("Simulation refused:")
+          || body.startsWith("No imported library defines the subcircuit")
+          || body.startsWith("No imported library defines these subcircuits:")
+        );
+      };
+      const unsupportedRefusals = rows.filter((row) => isHonestDeckRefusal(row.error));
       const hardFailures = rows.filter((row) => (
         !row.imported
         || !row.validated
-        || (!row.error?.startsWith("deck: Simulation refused:") && (
+        || (!isHonestDeckRefusal(row.error) && (
           !row.deckBuilt || (!skipNgspice && !row.opConverged)
         ))
       ));
@@ -363,22 +380,19 @@ describe.skipIf(corpus.length === 0)("acceptance corpus (user's own LTspice file
       expect.soft(summary.modelSubstitutions, "no accepted deck may substitute a named device model").toBe(0);
 
       // Floors = measured truthful release numbers after fail-closed Chan
-      // refusal (2026-08-04): 82 imported / 81 warning-clean / 80 deck-built /
-      // 79 op-converged. Deck refusals: NIGBT (IGBT.asc) and Chan-core
-      // NonLinearTransformer. Royer.asc still builds a deck that names the
-      // encrypted LT1184F subckt and then fails at op ("unknown subckt") -
-      // that is a hard op failure in this harness, not a deck refusal, until
-      // the corpus applies the app's unresolvedSubckts guard (P0.3/P0.4).
-      // Earlier 82/82 measurements counted unsupported symbols that had been
-      // silently dropped or replaced. DIAC/TRIAC invoke the document's own
-      // models; VARISTOR and PHIDET have LTspice-backed parity proofs.
+      // refusal + corpus unresolvedSubckts guard (2026-08-04): 82 imported /
+      // 81 warning-clean / 79 deck-built / 79 op-converged. Three honest deck
+      // refusals: NIGBT (IGBT.asc), Chan-core NonLinearTransformer, and
+      // encrypted LT1184F via unresolvedSubckts (Royer.asc) - matching the
+      // app path in nativeSpice.ts. Hard failures on the canonical subset
+      // are now zero.
       // `expect.soft` is deliberate: a missing input must not mask a separate
       // warning/deck/convergence regression in the same run's report.
       if (EXTRA_ROOTS.length === 0 && !CORPUS_MATCH) {
         expect.soft(canonicalSummary.total, "canonical input files discovered").toBeGreaterThanOrEqual(82);
         expect.soft(canonicalSummary.imported, "canonical imports").toBeGreaterThanOrEqual(82);
         expect.soft(canonicalSummary.warningClean, "canonical warning-clean floor").toBeGreaterThanOrEqual(80);
-        expect.soft(canonicalSummary.deckBuilt, "canonical deck-build floor").toBeGreaterThanOrEqual(80);
+        expect.soft(canonicalSummary.deckBuilt, "canonical deck-build floor").toBeGreaterThanOrEqual(79);
         if (!skipNgspice) {
           expect.soft(canonicalSummary.opConverged, "canonical operating-point floor").toBeGreaterThanOrEqual(79);
         }

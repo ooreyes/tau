@@ -6,11 +6,11 @@
 # builds an `.op` deck for each, runs it through Tau's isolated native worker
 # and bundled ngspice/code models, and reports
 # warning-clean / deck-built / op-converged counts. Fails if any count drops
-# below the measured floors (warning-clean ≥80; deck-built ≥80; op-converged
-# ≥79 of the canonical 82). Deck refusals today: NIGBT and Chan-core
-# NonLinearTransformer. Royer.asc still hard-fails at op on encrypted LT1184F
-# until the harness applies unresolvedSubckts. Unsupported devices that the
-# deck builder refuses are reported as explicit refusals rather than silent
+# below the measured floors (warning-clean ≥80; deck-built / op-converged ≥79
+# of the canonical 82). Three honest deck refusals: NIGBT, Chan-core
+# NonLinearTransformer, and unresolved LT1184F (Royer.asc) via the same
+# unresolvedSubckts guard the app uses. Unsupported devices that the deck
+# builder refuses are reported as explicit refusals rather than silent
 # approximations.
 #
 # Usage:

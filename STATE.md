@@ -5,19 +5,14 @@ The working memory of an unattended loop that starts from zero every fire.
 
 ## Now
 
-**Status:** IDLE 2026-08-04 20:20 CDT - P0.2 closed. All three silent
-substitutions are honest: Laplace/`load` warn; Chan-core inductors refuse.
-Canonical corpus re-measured at 82/81/80/79. Completion remains RETRACTED.
+**Status:** IDLE 2026-08-04 20:25 CDT - P0.2 closed; corpus unresolvedSubckts
+guard landed. Canonical 82/81/79/79 with 0 hard failures / 3 honest refusals.
+Completion remains RETRACTED.
 
-**Next unit:** make the corpus harness apply the app's `unresolvedSubckts`
-guard (and/or transitive `.subckt` closure). Today Royer.asc builds a deck
-that names encrypted LT1184F and hard-fails at op - the app path would refuse
-earlier via `nativeSpice.ts`. That is P0.3/P0.4.
-
-**Staged GPL residue:** `resources/ngspice/lib/ngspice/table.cm` is still on
-disk and fails `staged_engine::the_staged_resource_carries_no_gpl_licensed_file`.
-`build-ngspice.sh` already `rm -f`s it; a rebuild (or digest-aware delete) is
-needed. Do not claim the legal gate green until that test passes.
+**Next unit:** transitive `.subckt` closure inside `buildSpiceDeck` (walk
+inlined bodies for nested X refs) and/or make the full-corpus gate measure
+capability honestly (P0.3 remainder / P0.4). Staged `table.cm` GPL residue
+still fails cargo until a rebuild.
 
 The 2026-08-03 "PROJECT COMPLETE" signal was wrong and has been withdrawn. A
 four-part adversarial audit reproduced the gates and disagreed with these docs.
@@ -124,6 +119,7 @@ Newest first, ONE line each. Full evidence for every unit is in PROGRESS.md
 and in its commit message. This section exists so a fresh fire can see what
 is already done at a glance, not so it can re-read the reasoning.
 
+- 2026-08-04 - CORPUS APPLIES THE APP'S unresolvedSubckts GUARD. Royer/LT1184F is an honest deck refusal; canonical hard failures 1 -> 0; floors 82/81/79/79.
 - 2026-08-04 - CHAN-CORE INDUCTORS REFUSE INSTEAD OF SUBSTITUTING LINEAR L. NonLinearTransformer is the only canonical casualty; corpus re-measured 82/81/80/79; mutation-checked. P0.2 closed.
 - 2026-08-04 - TWO OF THE THREE SILENT SUBSTITUTIONS NOW SPEAK. A `Laplace=` that no rational polynomial can express - which is every current-source `Laplace=`, since `s_xfer` is voltage-in/voltage-out - reports the DC gain H(0) it actually ran and that its frequency response is unsimulated; a dropped LTspice `load`/`load2` flag reports that the source can now deliver as well as draw current. Mutation-checked: reverting the three pushes fails exactly the three positive tests and neither negative control.
 - 2026-08-04 - TAU REDISTRIBUTES NO MANUFACTURER MODEL FILE. ADI's copyrighted `AD8541.lib` is gone, along with the `.sim` that embedded the same netlist verbatim in JSON, its corpus proof, and its paragraphs in four documents; the sanitizer's vendor-macromodel coverage moves to a Tau-authored fixture, and the model-attach walkthrough now teaches the flow with the user's own `.lib`.

@@ -10,13 +10,13 @@
 > copy‑pasted here, since this file is not rewritten every run and WILL drift.
 > Acceptance corpus is tracked qualitatively below (per‑symbol ⬜/🟡/✅ in §1)
 > **and quantitatively by the committed runner** `scripts/acceptance-corpus.sh`
-> (✅ — see §1; measured 2026‑08‑04: 82 imported / 81 warning‑clean / 80
-> deck‑built / 79 op‑converged. Deck refusals: NIGBT, Chan‑core
-> NonLinearTransformer. Royer.asc hard‑fails at op on encrypted LT1184F until
-> the harness applies unresolvedSubckts). **Done = corpus script
+> (✅ — see §1; measured 2026‑08‑04: 82 imported / 81 warning‑clean / 79
+> deck‑built / 79 op‑converged, with three honest deck refusals: NIGBT,
+> Chan‑core NonLinearTransformer, and unresolved LT1184F on Royer via the
+> app's unresolvedSubckts guard). **Done = corpus script
 > proves ≥ 80/82 + Class‑D
 > `.tran`/`.meas` parity + production-ready unsigned DMG** (full checklist in AGENTS.md → Definition of Done).
-> The AGENTS.md ≥80/82 op box stays open at the measured **79/82** op floor.
+> The AGENTS.md ≥80/82 deck/op box stays open at the measured **79/82**.
 
 ---
 
@@ -80,17 +80,18 @@ Status legend: ✅ done · 🟡 partial · ⬜ not started
   now expands to a 4-element crystal model (`engine/crystalSpec.ts`), and
   varistor/diac placeholders get a valid high-Z value + collision-safe SPICE
   names. **Current truthful measurement (2026-08-04): 82 imported / 81
-  warning-clean / 80 deck-built / 79 op-converged.** Deck refusals: NIGBT
-  (IGBT.asc) and Chan-core NonLinearTransformer. Royer.asc still hard-fails
-  at op on encrypted LT1184F (`unknown subckt`) until the harness applies the
-  app's `unresolvedSubckts` guard. Knobs: `CORPUS_SKIP_NGSPICE=1`
+  warning-clean / 79 deck-built / 79 op-converged.** Three honest deck
+  refusals: NIGBT (IGBT.asc), Chan-core NonLinearTransformer, and unresolved
+  LT1184F on Royer.asc (corpus now applies the app's `unresolvedSubckts`
+  guard). Canonical hard failures: 0. Knobs: `CORPUS_SKIP_NGSPICE=1`
   (import+deck only),
   `CORPUS_CANONICAL_ONLY=1` (historical release subset).
 - ✅ **Real-`.asc` release floors by the committed runner: warning-clean ≥80,
-  deck-built ≥80, op-converged ≥79** (was 34/82 at this work's start; briefly
-  80/82 op while a Chan core was silently sized to unsaturated linear L;
-  fail-closed Chan refusal on 2026-08-04 drops op to 79 without lowering the
-  deck floor). The "82/82" previously recorded here
+  deck-built ≥79, op-converged ≥79** (was 34/82 at this work's start; briefly
+  80/82 while a Chan core was silently sized to unsaturated linear L and while
+  the corpus skipped the app's unresolvedSubckts guard; fail-closed Chan
+  refusal + unresolvedSubckts on 2026-08-04 set deck/op at 79/82). The "82/82"
+  previously recorded here
   predated the runner and double-counted 3 files — Pierce/dimmer/varistor —
   that throw at deck time:
   `decodeSchematicText` falls back to **Windows-1252** when the bytes aren't valid
@@ -112,8 +113,8 @@ Status legend: ✅ done · 🟡 partial · ⬜ not started
   NonLinearTransformer is the Chan casualty. DIAC/TRIAC invoke the
   unmodified file's authored `.subckt`s; VARISTOR and PHASEDET have direct
   LTspice waveform proofs. Named deck refusals: NIGBT (LTspice-only
-  intrinsic) and Chan-core NonLinearTransformer. Royer's encrypted LT1184F
-  remains a harness hard op failure until unresolvedSubckts is applied.
+  intrinsic), Chan-core NonLinearTransformer, and unresolved LT1184F
+  (Royer.asc) via unresolvedSubckts.
 - ✅ **Repository-owned analysis/UX stress pack** (`Circuit_testing_v1/`,
   expanded 2026-07-23): 19 LTspice-compatible `.asc` fixtures plus `run.sh`
   cover OP/TRAN/AC/DC/STEP/MEAS/TF/NOISE, RLC behavior, an 18-part ladder,
@@ -193,9 +194,8 @@ Status legend: ✅ done · 🟡 partial · ⬜ not started
     output polarity). This flips **22 acceptance files** from "placed without
     pin-accurate geometry (connections may be wrong)" to pin-accurate — incl. the
     key-goal `deadtime.asc`. Warning-clean import coverage is **81/82**;
-    deck-built **80/82**; op-converged **79/82**. Deck refusals: NIGBT and
-    Chan-core NonLinearTransformer. Royer.asc hard-fails at op on encrypted
-    LT1184F until unresolvedSubckts is applied in the harness.
+    deck-built / op-converged **79/82**. Three honest deck refusals: NIGBT,
+    Chan-core NonLinearTransformer, and unresolved LT1184F (Royer).
     **Correction (2026-08-03):** “every vendor part” was false. AD8235, LT1168,
     LT1194, and LT1795 expose instrumentation/fully-differential/high-current
     multi-pin layouts. The guessed opampO bank collapsed REF/output/supply nets
@@ -2127,7 +2127,6 @@ should map LTspice symbol `type` → Tau `ComponentKind`, falling back to a gene
 
 _This footer is intentionally not a live status line — see the `PROGRESS.md`
 heartbeat for the current test count and active unit. The committed runner now
-proves **81/82 warning-clean, 80/82 deck-built, and 79/82 op-converged**. Deck
-refusals: misc\nigbt and Chan-core NonLinearTransformer. Royer.asc still
-hard-fails at op on encrypted LT1184F until the harness applies
-unresolvedSubckts._
+proves **81/82 warning-clean and 79/82 deck-built / op-converged**, with three
+honest deck refusals (NIGBT, Chan-core NonLinearTransformer, unresolved
+LT1184F on Royer) and zero canonical hard failures._
