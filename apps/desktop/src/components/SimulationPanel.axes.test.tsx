@@ -114,6 +114,26 @@ describe("WaveformPlot (TRAN) - real tick axes", () => {
     expect(Number(yTick?.getAttribute("x")) - Number(titles[1]?.getAttribute("x"))).toBeGreaterThanOrEqual(30);
   });
 
+  it("Apply Y locks transient left axis; Autoscale Y restores autorange", () => {
+    const result = makeTranResult();
+    render(
+      <WaveformPlot
+        result={result}
+        baseTraces={result.traces}
+        netLabels={[]}
+        paneLayout={defaultLayout(["n1"])}
+      />,
+    );
+    expect(screen.getByLabelText("Transient Y limits")).toBeTruthy();
+    fireEvent.change(screen.getByLabelText("Transient Y min"), { target: { value: "0" } });
+    fireEvent.change(screen.getByLabelText("Transient Y max"), { target: { value: "2" } });
+    fireEvent.click(screen.getByRole("button", { name: "Apply transient Y limits" }));
+    const autoscale = screen.getByRole("button", { name: "Autoscale transient Y" });
+    expect(autoscale.getAttribute("aria-pressed")).toBe("false");
+    fireEvent.click(autoscale);
+    expect(autoscale.getAttribute("aria-pressed")).toBe("true");
+  });
+
   it("splits x/y ticks across panes in multi-pane mode and only labels the bottom pane's x axis", () => {
     const result = makeTranResult();
     const layout = defaultLayout(["n1"]);

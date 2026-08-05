@@ -1319,7 +1319,9 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   (2026-08-05): DcPlot Ymin/Ymax + Apply Y / Autoscale Y (same helpers).
   **Bode phase manual Y limits landed** (2026-08-05): AcPlot lower-pane
   Ymin/Ymax + Apply φY / Autoscale φY; Phase↔Group delay clears manual.
-  Pending: transient numeric axis limits.
+  **Transient manual Y limits landed** (2026-08-05): WaveformPlot Ymin/Ymax +
+  Apply Y / Autoscale Y applied to every TranScopePane left axis (right-axis
+  amps stay data-fit).
 - ✅ **Per-component simulator telemetry (§11 D10, 2026-07-10):** every named
   component receives a selectable row with voltage across, current through,
   instantaneous power, sparkline, and signal class. Voltage polarity follows
@@ -1572,8 +1574,9 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   **Bode magnitude manual Y limits landed** (2026-08-05): AcPlot Ymin/Ymax +
   Apply Y / Autoscale Y. **DC sweep manual Y limits landed** (2026-08-05):
   DcPlot Ymin/Ymax + Apply Y / Autoscale Y. **Bode phase manual Y limits landed**
-  (2026-08-05): AcPlot lower-pane Apply φY / Autoscale φY. **NEXT:** transient
-  numeric axis limits; AC/DC multi-pane cards.
+  (2026-08-05): AcPlot lower-pane Apply φY / Autoscale φY. **Transient manual
+  Y limits landed** (2026-08-05): WaveformPlot Apply Y / Autoscale Y on left
+  axis. **NEXT:** AC/DC multi-pane cards.
 - 🟡 Right-click trace → math/operations — **abs / negate / dB / uramp / sgn /
   ddt / idt landed** (2026-08-05): `traceMath.ts` wraps a legend trace into
   `abs(…)`, `-(…)`, `db(…)`, `uramp(…)`, `sgn(…)`, `ddt(…)`, or `idt(…)`;

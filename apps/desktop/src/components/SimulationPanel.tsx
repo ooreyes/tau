@@ -1645,10 +1645,18 @@ export function WaveformPlot({
     tMin: number;
     tMax: number;
   } | null>(null);
+  const [yMinDraft, setYMinDraft] = useState("");
+  const [yMaxDraft, setYMaxDraft] = useState("");
+  const [manualY, setManualY] = useState<ManualAxisLimits | null>(null);
+  const [yLimitsError, setYLimitsError] = useState<string | null>(null);
   useEffect(() => {
     setActiveTraceId(null);
     setTraceColorOverrides({});
     setWindowStats(null);
+    setManualY(null);
+    setYLimitsError(null);
+    setYMinDraft("");
+    setYMaxDraft("");
   }, [layoutKey]);
 
   // Build the full ordered trace list (all panes, all traces) the same way as
@@ -1660,6 +1668,11 @@ export function WaveformPlot({
       return color ? { ...trace, color } : trace;
     });
   }, [baseTraces, extraTraces, traceColorOverrides]);
+
+  const autoYBounds = useMemo(() => {
+    if (allTraces.length === 0) return null;
+    return waveformBounds(allTraces);
+  }, [allTraces]);
 
   const traceById = useMemo<Map<string, Trace>>(() => {
     const m = new Map<string, Trace>();
@@ -1892,6 +1905,7 @@ export function WaveformPlot({
                   // reset effect fires exactly when this pane actually has
                   // data to fit, not before.
                   runKey={plot ? success : null}
+                  manualY={manualY}
                   sharedX={sharedX}
                   onSharedXChange={shareXViewport}
                   showStatistics={showStatistics}
@@ -2087,6 +2101,75 @@ export function WaveformPlot({
           })}
         </div>
       )}
+      {allTraces.length > 0 && (
+        <div className="meter-row analysis-meter" aria-label="Transient Y limits">
+          <label className="axis-limit-field">
+            Ymin
+            <Input
+              variant="mono"
+              size="sm"
+              className="w-20"
+              value={yMinDraft}
+              aria-label="Transient Y min"
+              placeholder={autoYBounds ? String(autoYBounds.min) : "0"}
+              onChange={(e) => {
+                setYMinDraft(e.currentTarget.value);
+                if (yLimitsError) setYLimitsError(null);
+              }}
+            />
+          </label>
+          <label className="axis-limit-field">
+            Ymax
+            <Input
+              variant="mono"
+              size="sm"
+              className="w-20"
+              value={yMaxDraft}
+              aria-label="Transient Y max"
+              placeholder={autoYBounds ? String(autoYBounds.max) : "5"}
+              onChange={(e) => {
+                setYMaxDraft(e.currentTarget.value);
+                if (yLimitsError) setYLimitsError(null);
+              }}
+            />
+          </label>
+          <Button
+            size="sm"
+            variant="outline"
+            aria-label="Apply transient Y limits"
+            onClick={() => {
+              const parsed = parseManualYLimits(yMinDraft, yMaxDraft);
+              if (!parsed.ok) {
+                setYLimitsError(parsed.error);
+                return;
+              }
+              setManualY(parsed.limits);
+              setYLimitsError(null);
+            }}
+          >
+            Apply Y
+          </Button>
+          <Button
+            size="sm"
+            variant={manualY ? "default" : "outline"}
+            aria-label="Autoscale transient Y"
+            aria-pressed={!manualY}
+            onClick={() => {
+              setManualY(null);
+              setYLimitsError(null);
+              setYMinDraft("");
+              setYMaxDraft("");
+            }}
+          >
+            Autoscale Y
+          </Button>
+        </div>
+      )}
+      {yLimitsError && (
+        <div className="expr-error" role="alert">
+          {yLimitsError}
+        </div>
+      )}
     </div>
     <Dialog open={windowStats !== null} onOpenChange={(open) => { if (!open) setWindowStats(null); }}>
       <DialogContent aria-describedby="window-avg-rms-desc">
@@ -2212,6 +2295,7 @@ function TranScopePane({
   ariaLabel,
   showXAxis,
   runKey,
+  manualY = null,
   sharedX,
   onSharedXChange,
   showStatistics,
@@ -2232,6 +2316,8 @@ function TranScopePane({
   showXAxis: boolean;
   /** Identity of the current run - changing it resets this pane's zoom to full-fit. */
   runKey: unknown;
+  /** Optional shared manual left-axis Y limits (right axis stays data-fit). */
+  manualY?: ManualAxisLimits | null;
   sharedX: { xMin: number; xMax: number };
   onSharedXChange: (x: { xMin: number; xMax: number }) => void;
   /** MIN/AVG/MAX overlay on this pane, when it carries exactly one trace. */
@@ -2257,17 +2343,26 @@ function TranScopePane({
   // with real (e.g. millisecond-scale) data onto a bogus 0-1s window.
   // Left axis owns the zoomable Y viewport; right-axis (amps) stays data-fit.
   const domain = useMemo<Viewport>(
-    () => ({
-      xMin: 0,
-      xMax: plot ? plot.tMax : 1,
-      yMin: plot ? plot.left.min : -1,
-      yMax: plot ? plot.left.max : 1,
-    }),
-    [plot],
+    () =>
+      applyManualYToDomain(
+        {
+          xMin: 0,
+          xMax: plot ? plot.tMax : 1,
+          yMin: plot ? plot.left.min : -1,
+          yMax: plot ? plot.left.max : 1,
+        },
+        manualY,
+      ),
+    [plot, manualY],
   );
+  const viewportResetKey = useMemo(() => {
+    if (!plot || runKey == null) return null;
+    if (!manualY) return runKey;
+    return { run: runKey, yMin: manualY.yMin, yMax: manualY.yMax };
+  }, [plot, runKey, manualY]);
   const { viewport, attachSvg, isPanning, fit, fitTo, zoomBy, dragHandlers } = usePlotViewport({
     domain,
-    resetKey: runKey,
+    resetKey: viewportResetKey,
     width: PLOT_WIDTH,
     height: plotHeight,
     pad: PLOT_PAD,

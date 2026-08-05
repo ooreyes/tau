@@ -1,15 +1,9 @@
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 08:42 CDT**
+**Status: DONE - 2026-08-05 08:48 CDT**
 
-Unit: Educational/PAsystem `HandsFreePreamp.asc` authored `.tran` → differential **pass=101**.
-```
-SUMMARY pass=101 sibling=5 gap=0
-tran handsfree-preamp … v(out) nRms≈0.0005
-```
-Top-level ideal D→sidiode (`translateIdealDiodeDeckLines`); dual-deck LT↔NG.
-Worktree `Tau-wt-diff-101` rebased onto `5448a9f`. Left SoftDiodeRecovery /
-PowerAmp / Staff EE transient-Y WIP / Settings alone.
+Unit: Waveform DoD — **transient manual Y limits**.
+Worktree `Tau-wt-wave-tran-ylim` over `fe8d57e` (pass=101). Settings locked.
 SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
@@ -17,6 +11,30 @@ SHIPPABLE? **NO**
 
 
 ---
+
+### 2026-08-05 — transient manual Y limits (§waveform DoD)
+
+**What I did**
+- WaveformPlot Ymin/Ymax + Apply Y / Autoscale Y via `parseManualYLimits` /
+  `applyManualYToDomain` on every TranScopePane left axis (right-axis amps
+  stay data-fit). Worktree `Tau-wt-wave-tran-ylim` rebased onto `fe8d57e`
+  pass=101. Left HandsFreePreamp / continue 40 Educational ASC, Omar morning
+  palette/probe-current/Settings, Chan/NIGBT/FRA alone.
+
+**Files**
+- `apps/desktop/src/components/SimulationPanel.tsx` (+ axes wiring test)
+- `FEATURE_PARITY.md`, `PROGRESS.md`
+
+**Tests**
+- `pnpm -C apps/desktop typecheck` + `test` green (2791 passed)
+- WaveformPlot Apply/Autoscale Y wiring
+
+**Parity items**
+- Waveform viewer 🟡 (transient manual Y limits landed; mag/DC/phase already).
+  Differential pass=101 · named-device 48.1% · SHIPPABLE? NO
+
+**Next step**
+- AC/DC multi-pane cards / non-wall ND. Leave Educational/Omar morning alone.
 
 ### 2026-08-05 — Educational HandsFreePreamp .tran → pass=101 (§DoD)
 
