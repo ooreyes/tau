@@ -40,7 +40,7 @@ const LABELED_FANOUT_THRESHOLD = 12;
 // proprietary symbol library. Native-only markers and the kinds whose ASC
 // symbol mapping is not yet lossless stay out of the model-facing contract.
 export const ASSISTANT_DIRECT_GENERATABLE_KINDS = [
-  "resistor", "capacitor", "polarizedCapacitor", "inductor", "vsource", "isource",
+  "resistor", "capacitor", "polarizedCapacitor", "inductor", "bulb", "vsource", "isource",
   "logicConstant",
   "diode", "led", "zener", "photodiode", "opamp", "vcvs", "vccs",
   "bsource", "nmos", "pmos", "njf", "pjf", "npn", "pnp",
@@ -52,7 +52,7 @@ export const ASSISTANT_DIRECT_GENERATABLE_KINDS = [
  * LTspice symbol. The compiler lowers these macros into portable primitives
  * before layout/export, retaining every requested terminal electrically. */
 export const ASSISTANT_COMPOSITE_KINDS = [
-  "cccs", "ccvs", "comparator", "potentiometer", "switch", "pushButton", "transformer",
+  "cccs", "ccvs", "comparator", "potentiometer", "switch", "pushButton", "relay", "motor", "transformer",
 ] as const satisfies readonly ComponentKind[];
 
 export const ASSISTANT_GENERATABLE_KINDS = [
@@ -825,6 +825,31 @@ function lowerCompositePlan(plan: CircuitPlan): DirectCircuitPlan {
         mapPin(`${component.ref}.b`, `${resistor}.b`);
         break;
       }
+      case "relay": {
+        // Coil R + contact held open as a high-Z R in the ASC macro expand —
+        // native ngspice path uses TAU_SW; the portable expand stays honest
+        // about "coil present, contact not auto-switching in ASC".
+        const coilOhms = value.trim() || "100";
+        const coil = uniqueRef(`R_${component.ref}_coil`);
+        const contact = uniqueRef(`R_${component.ref}_sw`);
+        add(coil, "resistor", coilOhms);
+        add(contact, "resistor", "1e12");
+        mapPin(`${component.ref}.cp`, `${coil}.a`);
+        mapPin(`${component.ref}.cn`, `${coil}.b`);
+        mapPin(`${component.ref}.a`, `${contact}.a`);
+        mapPin(`${component.ref}.b`, `${contact}.b`);
+        break;
+      }
+      case "motor": {
+        // ASC macro: armature R only. Native deck emits series R+L.
+        const tokens = value.trim().split(/[\s,;]+/).filter(Boolean);
+        const r = tokens[0] || "10";
+        const armR = uniqueRef(`R_${component.ref}`);
+        add(armR, "resistor", r);
+        mapPin(`${component.ref}.a`, `${armR}.a`);
+        mapPin(`${component.ref}.b`, `${armR}.b`);
+        break;
+      }
       case "transformer": {
         const ratio = /^\s*(\d+(?:\.\d+)?)\s*:\s*(\d+(?:\.\d+)?)\s*$/.exec(value);
         const primaryTurns = Number(ratio?.[1]);
@@ -910,7 +935,7 @@ const ROW_PITCH = 144;
 // Two-pin passives Tau draws natively with left/right pins at rotation 0.
 // Rotation below uses Tau's native pin transform (NOT LTspice ASC banks).
 const ROTATABLE_TWO_PIN_KINDS = new Set<ComponentKind>([
-  "resistor", "capacitor", "polarizedCapacitor", "inductor", "diode", "led", "zener", "photodiode",
+  "resistor", "capacitor", "polarizedCapacitor", "inductor", "bulb", "motor", "diode", "led", "zener", "photodiode",
 ]);
 
 /** net name → refs of every component on that net. */

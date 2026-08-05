@@ -77,9 +77,12 @@ export const SYMBOL_BODY: Record<ComponentKind, BodyBox> = {
   npn: { minX: -8, minY: -20, maxX: 18, maxY: 20 },
   pnp: { minX: -8, minY: -20, maxX: 18, maxY: 20 },
   potentiometer: { minX: -28, minY: -18, maxX: 28, maxY: 12 },
+  bulb: { minX: -16, minY: -16, maxX: 16, maxY: 16 },
   switch: { minX: -18, minY: -20, maxX: 18, maxY: 20 },
   pushButton: { minX: -14, minY: -18, maxX: 14, maxY: 14 },
   spdt: { minX: -18, minY: -22, maxX: 18, maxY: 22 },
+  relay: { minX: -18, minY: -20, maxX: 18, maxY: 22 },
+  motor: { minX: -16, minY: -16, maxX: 16, maxY: 16 },
   transformer: { minX: -24, minY: -27, maxX: 24, maxY: 27 },
   tline: { minX: -20, minY: -16, maxX: 20, maxY: 16 },
   subckt: { minX: -24, minY: -20, maxX: 24, maxY: 20 },
@@ -121,9 +124,12 @@ export const SYMBOL_BOX: Record<ComponentKind, { halfW: number; halfH: number }>
   npn: { halfW: 22, halfH: 20 },
   pnp: { halfW: 22, halfH: 20 },
   potentiometer: { halfW: 30, halfH: 18 },
+  bulb: { halfW: 16, halfH: 16 },
   switch: { halfW: 14, halfH: 20 },
   pushButton: { halfW: 14, halfH: 18 },
   spdt: { halfW: 16, halfH: 22 },
+  relay: { halfW: 16, halfH: 22 },
+  motor: { halfW: 16, halfH: 16 },
   transformer: { halfW: 24, halfH: 27 },
   tline: { halfW: 20, halfH: 18 },
   subckt: { halfW: 26, halfH: 22 },
@@ -615,6 +621,16 @@ export function ComponentSymbol({ kind, value }: { kind: ComponentKind; value?: 
         </>
       );
 
+    case "bulb":
+      return (
+        <>
+          <line x1={-32} y1={0} x2={-14} y2={0} />
+          <circle cx={0} cy={0} r={14} />
+          <path d="M -6 -4 L -3 4 L 0 -4 L 3 4 L 6 -4" />
+          <line x1={14} y1={0} x2={32} y2={0} />
+        </>
+      );
+
     case "switch":
       return (
         <>
@@ -653,6 +669,31 @@ export function ComponentSymbol({ kind, value }: { kind: ComponentKind; value?: 
           <line x1={12} y1={-16} x2={32} y2={-16} />
           <line x1={12} y1={16} x2={32} y2={16} />
           <line x1={-10} y1={-2} x2={10} y2={-14} />
+        </>
+      );
+
+    case "relay":
+      return (
+        <>
+          <line x1={-32} y1={0} x2={-12} y2={0} />
+          <line x1={12} y1={0} x2={32} y2={0} />
+          <circle cx={-12} cy={0} r={3} />
+          <circle cx={12} cy={0} r={3} />
+          <line x1={-10} y1={-3} x2={11} y2={-14} />
+          <rect x={-14} y={14} width={28} height={14} rx={1} />
+          <path d="M -10 21 L -6 17 L -2 25 L 2 17 L 6 25 L 10 21" />
+          <line x1={-16} y1={32} x2={-16} y2={28} />
+          <line x1={16} y1={32} x2={16} y2={28} />
+        </>
+      );
+
+    case "motor":
+      return (
+        <>
+          <line x1={-32} y1={0} x2={-14} y2={0} />
+          <circle cx={0} cy={0} r={14} />
+          <path d="M -6 5 L -6 -5 L -2 2 L 2 -5 L 6 5" fill="none" />
+          <line x1={14} y1={0} x2={32} y2={0} />
         </>
       );
 

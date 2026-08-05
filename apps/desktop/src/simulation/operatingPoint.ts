@@ -17,7 +17,7 @@
  */
 
 import type { ComponentKind, NetLabel, SchematicComponent, SchematicWire } from "../schematic/types";
-import { isIndependentVoltageBranchKind, isSpdtThrowToNo, isStaticContactClosed, logicConstantVolts, photodiodePhotocurrentAmps } from "../schematic/kindGroups";
+import { isIndependentVoltageBranchKind, isSpdtThrowToNo, isStaticContactClosed, logicConstantVolts, motorArmature, photodiodePhotocurrentAmps } from "../schematic/kindGroups";
 import { extractCircuit, type ExtractedCircuit } from "../schematic/netlist";
 import { parseQuantity } from "./quantity";
 import { resolveComponentValues, EMPTY_SCOPE, type ParamScope } from "./paramScope";
@@ -102,6 +102,7 @@ export interface OpOptions {
 
 const OP_SUPPORTED = new Set<ComponentKind>([
   "resistor",
+  "bulb",
   "capacitor",
   "polarizedCapacitor",
   "inductor",
@@ -119,6 +120,7 @@ const OP_SUPPORTED = new Set<ComponentKind>([
   "switch",
   "pushButton",
   "spdt",
+  "motor",
   "testpoint",
   "ground",
   "diode",
@@ -282,8 +284,19 @@ export function runOperatingPoint(
     // Stamp each component
     for (const entry of circuit.components) {
       switch (entry.component.kind) {
-        case "resistor": {
+        case "resistor":
+        case "bulb": {
           const resistance = positiveValue(entry.component, "Ω");
+          const g = 1 / resistance;
+          const a = nodeIdx(entry.pins["a"], nodeIndex);
+          const b = nodeIdx(entry.pins["b"], nodeIndex);
+          stampConductance(matrix, a, b, g);
+          break;
+        }
+
+        case "motor": {
+          // At DC the armature inductance is a short — stamp cold R only.
+          const { resistance } = motorArmature(entry.component.value);
           const g = 1 / resistance;
           const a = nodeIdx(entry.pins["a"], nodeIndex);
           const b = nodeIdx(entry.pins["b"], nodeIndex);

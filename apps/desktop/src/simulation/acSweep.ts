@@ -218,6 +218,7 @@ const GMIN = 1e-12;
 
 const AC_SUPPORTED = new Set<ComponentKind>([
   "resistor",
+  "bulb",
   "capacitor",
   "polarizedCapacitor",
   "inductor",
@@ -434,7 +435,8 @@ export function runAcSweep(
         const { component, pins } = entry;
 
         switch (component.kind) {
-          case "resistor": {
+          case "resistor":
+          case "bulb": {
             const R = positiveValue(component.value, component.id, component.label, "Ω");
             const G: Complex = { re: 1 / R, im: 0 };
             stampCAdmittance(

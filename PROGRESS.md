@@ -1,10 +1,10 @@
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 ~09:55 CDT**
+**Status: DONE - 2026-08-05 ~10:00 CDT**
 
-Unit: Current mode visible on editor + sim badge (EveryCircuit UX) —
-rebase onto tip + screenshot proof. Worktree
-`Tau-wt-ux-current-proof`. Left palette fills alone. SHIPPABLE? **NO**
+Unit: EveryCircuit library — **bulb** + **relay** + **motor**
+(honest R / coil+SW / series RL). Worktree `Tau-wt-ec-lib`. Not full EC parity.
+SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
@@ -12,6 +12,35 @@ rebase onto tip + screenshot proof. Worktree
 
 
 ---
+
+
+### 2026-08-05 — bulb + relay + motor (§EveryCircuit)
+
+**What I did**
+- Palette **bulb**: cold filament as honest SPICE `R` (I²R via same current path).
+- Palette **relay**: coil `R` + contact `S` (TAU_SW gated by coil voltage).
+- Palette **motor**: armature series `R`+`L` only — no back-EMF / torque.
+- ASC lossy-carriers; catalog/placement/netlist/OP tests.
+- Left CT xfmr / 7seg / SR-T-JK / 555 / ADC-DAC / counter refused or deep work.
+
+**Files**
+- `schematic/{types,catalog,pins,params,symbols,kindGroups,everyCircuitLibrary.test}.ts(x)`
+- `engine/spiceNetlist.ts`, `simulation/{operatingPoint,linearTransient,acSweep,noise,currents,analysisSetup,opAnnotations,autoResolution}.ts`
+- `io/{ascExport,cirImport}.ts`, `lib/assistantCircuitPlan.ts`
+- `FEATURE_PARITY.md`, `PROGRESS.md`
+
+**Tests**
+- `pnpm -C apps/desktop typecheck`
+- `pnpm -C apps/desktop test` (2828 passed)
+
+**Parity items**
+- §EveryCircuit: bulb + relay + motor landed. Remaining: CT xfmr / 7seg / SR-T-JK / 555 / ADC-DAC / counter. SHIPPABLE? NO
+
+**Next step**
+- CT transformer (if honest multi-L + K) or leave complex ICs refused; Staff EE / current-mode proof stay off palette.
+
+---
+
 
 
 

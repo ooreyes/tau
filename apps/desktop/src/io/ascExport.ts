@@ -202,6 +202,7 @@ export function kindToLtspiceType(kind: ComponentKind): string | null {
     zener: "zener",
     led: "led",
     photodiode: "diode",
+    bulb: "res",
     npn: "npn",
     pnp: "pnp",
     // Tau exposes an explicit bulk terminal, so use LTspice's four-pin symbols;
@@ -305,7 +306,7 @@ export function isLossyCarrierWarning(warning: string): boolean {
 }
 
 export const LOSSY_CARRIER_KINDS: ReadonlySet<string> = new Set([
-  "comparator", "cccs", "ccvs", "switch", "pushButton", "spdt", "subckt", "testpoint",
+  "comparator", "cccs", "ccvs", "switch", "pushButton", "spdt", "relay", "motor", "subckt", "testpoint",
 ]);
 
 /**
@@ -318,7 +319,7 @@ export const LOSSY_CARRIER_KINDS: ReadonlySet<string> = new Set([
  * of every kind in this set and requires a `TauKind` on each.
  */
 export const TAU_CARRIER_KINDS: ReadonlySet<ComponentKind> = new Set<ComponentKind>([
-  "vac", "iac", "vpulse", "potentiometer", "transformer",
+  "vac", "iac", "vpulse", "potentiometer", "transformer", "bulb",
   ...(LOSSY_CARRIER_KINDS as ReadonlySet<ComponentKind>),
 ]);
 
@@ -399,6 +400,16 @@ function componentToLtspiceSymbol(component: SchematicComponent): LtspiceCompone
       tauValue: component.value, carrierPrefix: "L",
     };
   }
+  if (component.kind === "bulb") {
+    // Electrically a resistor; carrier keeps the bulb glyph identity on reopen.
+    return {
+      type: "res",
+      value: component.value.trim() || "10",
+      tauKind: component.kind,
+      tauValue: component.value,
+      carrierPrefix: "R",
+    };
+  }
   if (LOSSY_CARRIER_KINDS.has(component.kind)) {
     // These Tau-native parts expand to multiple ngspice devices and therefore
     // have no faithful single LTspice symbol. Persist them as a benign high-Z
@@ -410,9 +421,16 @@ function componentToLtspiceSymbol(component: SchematicComponent): LtspiceCompone
         || component.value.trim().toLowerCase() === "pressed"
         || component.value.trim().toLowerCase() === "on"
         || component.value.trim().toLowerCase() === "1");
+    let carrierValue = closedContact ? "1m" : "1T";
+    if (component.kind === "motor") {
+      const rTok = component.value.trim().split(/[\s,;]+/).filter(Boolean)[0];
+      carrierValue = rTok || "10";
+    } else if (component.kind === "relay") {
+      carrierValue = component.value.trim() || "100";
+    }
     return {
       type: "res",
-      value: closedContact ? "1m" : "1T",
+      value: carrierValue,
       tauKind: component.kind,
       tauValue: component.value,
       carrierPrefix: "R",

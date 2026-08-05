@@ -106,7 +106,7 @@ export function collectAutoResolutionInputs(
   const taus: { kind: "C" | "L"; value: number }[] = [];
 
   for (const component of components) {
-    if (component.kind === "resistor" || component.kind === "potentiometer") {
+    if (component.kind === "resistor" || component.kind === "bulb" || component.kind === "potentiometer") {
       const r = leadingQuantity(component.value, "Ω");
       if (Number.isFinite(r) && r > 0) resistances.push(r);
       continue;

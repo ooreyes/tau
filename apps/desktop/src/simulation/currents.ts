@@ -30,13 +30,20 @@ function rcElements(components: ReadonlyArray<ExtractedComponent>): RcElement[] 
   for (const { component, pins } of components) {
     const ref = component.label;
     if (!ref) continue;
-    if (component.kind !== "resistor" && component.kind !== "capacitor") continue;
+    if (component.kind !== "resistor" && component.kind !== "bulb" && component.kind !== "capacitor") continue;
     let size: number;
     try {
-      size = parseQuantity(component.value, component.kind === "resistor" ? "Ω" : "F");
+      size = parseQuantity(component.value, component.kind === "capacitor" ? "F" : "Ω");
     } catch { continue; }
-    if (component.kind === "resistor" ? size === 0 : !(size > 0)) continue;
-    out.push({ id: component.id, ref, kind: component.kind, size, a: pins.a, b: pins.b });
+    if (component.kind === "capacitor" ? !(size > 0) : size === 0) continue;
+    out.push({
+      id: component.id,
+      ref,
+      kind: component.kind === "capacitor" ? "capacitor" : "resistor",
+      size,
+      a: pins.a,
+      b: pins.b,
+    });
   }
   return out;
 }

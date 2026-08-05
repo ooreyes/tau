@@ -7,7 +7,9 @@ import {
   isSpdtThrowToNo,
   isStaticContactClosed,
   logicConstantVolts,
+  motorArmature,
   photodiodePhotocurrentAmps,
+  relayCoilOhms,
 } from "./kindGroups";
 import { getLocalPins } from "./pins";
 import type { SchematicComponent } from "./types";
@@ -250,5 +252,130 @@ describe("EveryCircuit library — push-button + SPDT + photodiode", () => {
     // Photovoltaic: Iph into the load develops a positive anode voltage.
     const anode = op.nets.find((n) => n.voltage > 0.1);
     expect(anode).toBeDefined();
+  });
+});
+
+describe("EveryCircuit library — bulb + relay + motor", () => {
+  it("lists the new parts in the palette with expected pin counts", () => {
+    expect(CATALOG.some((e) => e.kind === "bulb")).toBe(true);
+    expect(CATALOG.some((e) => e.kind === "relay")).toBe(true);
+    expect(CATALOG.some((e) => e.kind === "motor")).toBe(true);
+    expect(getLocalPins("bulb").map((p) => p.id)).toEqual(["a", "b"]);
+    expect(getLocalPins("relay").map((p) => p.id)).toEqual(["a", "b", "cp", "cn"]);
+    expect(getLocalPins("motor").map((p) => p.id)).toEqual(["a", "b"]);
+  });
+
+  it("parses relay coil and motor armature values honestly", () => {
+    expect(relayCoilOhms("")).toBe(100);
+    expect(relayCoilOhms("220")).toBe(220);
+    expect(motorArmature("").resistance).toBe(10);
+    expect(motorArmature("").inductance).toBeCloseTo(1e-3, 12);
+    expect(motorArmature("5 2m").resistance).toBe(5);
+    expect(motorArmature("5 2m").inductance).toBeCloseTo(2e-3, 12);
+    expect(motorArmature("R=8 L=500u").resistance).toBe(8);
+    expect(motorArmature("R=8 L=500u").inductance).toBeCloseTo(500e-6, 12);
+  });
+
+  it("emits bulb as a resistor and solves OP (I²R path)", () => {
+    const components: SchematicComponent[] = [
+      {
+        ...c("vsource", "V1", "12", 0, 0),
+        pinOverride: [
+          { id: "p", label: "+", x: 0, y: 0 },
+          { id: "n", label: "-", x: 0, y: 64 },
+        ],
+      },
+      {
+        ...c("bulb", "R1", "10", 32, 0),
+        pinOverride: [
+          { id: "a", label: "A", x: 0, y: 0 },
+          { id: "b", label: "B", x: 0, y: 64 },
+        ],
+      },
+      {
+        ...c("ground", "GND", "", 0, 64),
+        pinOverride: [{ id: "g", label: "0", x: 0, y: 64 }],
+      },
+    ];
+    const deck = buildSpiceDeck({ components, wires: [] }, { kind: "op" });
+    expect(deck.netlist).toMatch(/^R1\b.+\b10\b/m);
+
+    const op = runOperatingPoint({ components, wires: [] });
+    expect(op.ok).toBe(true);
+    if (!op.ok) return;
+    const hot = op.nets.find((n) => Math.abs(n.voltage - 12) < 1e-3);
+    expect(hot).toBeDefined();
+    // 12 V / 10 Ω → 1.2 A through the filament (power = 14.4 W via I²R).
+    const branch = op.branches?.find((b) => b.label === "R1" || b.id === "r1");
+    if (branch) expect(Math.abs(branch.current)).toBeCloseTo(1.2, 3);
+  });
+
+  it("emits relay as coil R + voltage-controlled SW contact", () => {
+    const components: SchematicComponent[] = [
+      {
+        ...c("relay", "K1", "100", 0, 0),
+        pinOverride: [
+          { id: "a", label: "A", x: -32, y: 0 },
+          { id: "b", label: "B", x: 32, y: 0 },
+          { id: "cp", label: "COIL+", x: -16, y: 32 },
+          { id: "cn", label: "COIL-", x: 16, y: 32 },
+        ],
+      },
+      {
+        ...c("ground", "GND", "", 16, 32),
+        pinOverride: [{ id: "g", label: "0", x: 16, y: 32 }],
+      },
+    ];
+    const deck = buildSpiceDeck({ components, wires: [] }, { kind: "op" });
+    expect(deck.netlist).toMatch(/\.model TAU_SW SW\(/);
+    expect(deck.netlist).toMatch(/^R_K1_coil\b.+\b100\b/m);
+    expect(deck.netlist).toMatch(/^S_K1\b.+\bTAU_SW\b/m);
+  });
+
+  it("emits motor as series armature R + L (no back-EMF)", () => {
+    const components: SchematicComponent[] = [
+      {
+        ...c("motor", "M1", "10 1m", 0, 0),
+        pinOverride: [
+          { id: "a", label: "A", x: -32, y: 0 },
+          { id: "b", label: "B", x: 32, y: 0 },
+        ],
+      },
+      {
+        ...c("ground", "GND", "", 32, 0),
+        pinOverride: [{ id: "g", label: "0", x: 32, y: 0 }],
+      },
+    ];
+    const deck = buildSpiceDeck({ components, wires: [] }, { kind: "op" });
+    expect(deck.netlist).toMatch(/^R_M1\b.+\b10\b/m);
+    expect(deck.netlist).toMatch(/^L_M1\b.+\b1m\b/m);
+    expect(deck.netlist).not.toMatch(/back.?emf|BEMF|torque/i);
+
+    // Browser OP stamps armature R only (L shorts at DC).
+    const driven: SchematicComponent[] = [
+      {
+        ...c("vsource", "V1", "5", 0, 0),
+        pinOverride: [
+          { id: "p", label: "+", x: 0, y: 0 },
+          { id: "n", label: "-", x: 0, y: 64 },
+        ],
+      },
+      {
+        ...c("motor", "M1", "10 1m", 32, 0),
+        pinOverride: [
+          { id: "a", label: "A", x: 0, y: 0 },
+          { id: "b", label: "B", x: 0, y: 64 },
+        ],
+      },
+      {
+        ...c("ground", "GND", "", 0, 64),
+        pinOverride: [{ id: "g", label: "0", x: 0, y: 64 }],
+      },
+    ];
+    const op = runOperatingPoint({ components: driven, wires: [] });
+    expect(op.ok).toBe(true);
+    if (!op.ok) return;
+    const hot = op.nets.find((n) => Math.abs(n.voltage - 5) < 1e-3);
+    expect(hot).toBeDefined();
   });
 });

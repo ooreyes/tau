@@ -15,7 +15,7 @@ import {
   type ParamScope,
 } from "../simulation/paramScope";
 import type { ComponentKind, NetLabel, SchematicComponent, SchematicForeignSymbol, SchematicWire } from "../schematic/types";
-import { isCapacitorKind, isSpdtThrowToNo, isStaticContactClosed, logicConstantVolts, photodiodePhotocurrentAmps } from "../schematic/kindGroups";
+import { isCapacitorKind, isSpdtThrowToNo, isStaticContactClosed, logicConstantVolts, motorArmature, photodiodePhotocurrentAmps, relayCoilOhms } from "../schematic/kindGroups";
 import { parseQuantity, formatEngineering } from "../simulation/quantity";
 import { decodeParams } from "../schematic/params";
 import { parseSourceFunction, MalformedPwlError, type SourceUnit, type SourceSpec } from "./sourceFunction";
@@ -349,7 +349,9 @@ export function buildSpiceDeck(
   const lines = ["Tau generated circuit", optionsLineFromDirectives(flatDirectives)];
   const usedKinds = new Set(components.map((component) => component.kind));
   const needsModels = ["diode", "led", "zener", "photodiode", "nmos", "pmos", "njf", "pjf", "npn", "pnp"].some((kind) => usedKinds.has(kind as ComponentKind))
-    || components.some((component) => component.kind === "switch" && !isLtspiceCurrentControlledSwitch(component));
+    || components.some((component) =>
+      (component.kind === "switch" && !isLtspiceCurrentControlledSwitch(component))
+      || component.kind === "relay");
   if (needsModels) lines.push(...DEFAULT_MODELS);
 
   // Carry the document's own `.model`/`.lib`/`.inc`/`.subckt` definitions into the
@@ -1297,12 +1299,14 @@ function componentLines(entry: ExtractedComponent, index: number, name: string, 
     vdmosModels.has(modelName.toLowerCase());
 
   switch (component.kind) {
-    case "resistor": {
+    case "resistor":
+    case "bulb": {
       // PowerSim GD-style behavioral resistance: a res symbol whose value is a
       // `V=`/`R=` expression (switchable drive strength ron/roff). ngspice
       // takes the run-time expression quoted: R1 a b r = 'expr'.
       // LTspice `noiseless` is a device flag on Value (e.g. `1k noiseless`),
       // not part of the magnitude — strip before parse; ngspice rejects it.
+      // Bulb is the same R device (cold filament); power is I²R like any resistor.
       const raw = stripNoiselessSpec(component.value ?? "");
       if (/^\s*PWL\b/i.test(raw)) {
         const ref = component.label.trim() || name;
@@ -1792,6 +1796,31 @@ function componentLines(entry: ExtractedComponent, index: number, name: string, 
         `R_${base}_nc ${node("com")} ${node("nc")} ${toNo ? "1e12" : "1m"}`,
       ];
     }
+    case "relay": {
+      // Coil is a resistor between COIL+/COIL-; contact is a voltage-controlled
+      // SW gated by the coil voltage (TAU_SW Vt=0.5). No fake mechanical model.
+      const base = safeName(component.label || `K${index + 1}`);
+      const coil = formatEngineering(relayCoilOhms(component.value))
+        .replace(/\s+/g, "")
+        .replace(/µ/g, "u");
+      return [
+        `R_${base}_coil ${node("cp")} ${node("cn")} ${coil}`,
+        `S_${base} ${node("a")} ${node("b")} ${node("cp")} ${node("cn")} TAU_SW`,
+      ];
+    }
+    case "motor": {
+      // Armature series R+L only — no back-EMF, friction, or shaft. Honest
+      // electrical stub for DC motor load / startup current studies.
+      const base = safeName(component.label || `M${index + 1}`);
+      const arm = motorArmature(component.value);
+      const r = formatEngineering(arm.resistance).replace(/\s+/g, "").replace(/µ/g, "u");
+      const l = formatEngineering(arm.inductance).replace(/\s+/g, "").replace(/µ/g, "u");
+      const mid = `${base}_arm`;
+      return [
+        `R_${base} ${node("a")} ${mid} ${r}`,
+        `L_${base} ${mid} ${node("b")} ${l}`,
+      ];
+    }
     case "transformer": {
       const base = safeName(component.label || `T${index + 1}`);
       const windings = transformerWindings(component.value);
@@ -2087,7 +2116,8 @@ const SPICE_PREFIX: Record<ComponentKind, string> = {
   resistor: "R", capacitor: "C", polarizedCapacitor: "C", inductor: "L", vsource: "V", isource: "I", vac: "V", iac: "I", vpulse: "V",
   logicConstant: "V",
   diode: "D", led: "D", zener: "D", photodiode: "D", opamp: "E", comparator: "B", digitalGate: "B", dflop: "A", sampleHold: "A", modulator: "A", vcvs: "E", vccs: "G", cccs: "F", ccvs: "H", bsource: "B", nmos: "M", pmos: "M", njf: "J", pjf: "J", npn: "Q", pnp: "Q",
-  potentiometer: "R", switch: "S", pushButton: "S", spdt: "S", transformer: "L", tline: "T", subckt: "X", testpoint: "X", ground: "X",
+  potentiometer: "R", bulb: "R", switch: "S", pushButton: "S", spdt: "S", relay: "S", motor: "L",
+  transformer: "L", tline: "T", subckt: "X", testpoint: "X", ground: "X",
 };
 
 function componentSpicePrefix(component: SchematicComponent): string {

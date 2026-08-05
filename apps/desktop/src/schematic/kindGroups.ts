@@ -58,3 +58,56 @@ export function photodiodePhotocurrentAmps(value: string): number {
     return 100e-6;
   }
 }
+
+/** Ordinary resistor and light-bulb filament share the same R device / stamps. */
+export function isResistorKind(kind: ComponentKind): boolean {
+  return kind === "resistor" || kind === "bulb";
+}
+
+/** Relay coil resistance (Ω). Blank → 100 Ω. */
+export function relayCoilOhms(value: string): number {
+  const t = value.trim();
+  if (!t) return 100;
+  try {
+    const ohms = parseQuantity(t.split(/\s+/)[0] ?? t, "Ω");
+    return Number.isFinite(ohms) && ohms > 0 ? ohms : 100;
+  } catch {
+    return 100;
+  }
+}
+
+/**
+ * DC motor electrical armature only: series R + L, no back-EMF / torque.
+ * Accepts `10 1m`, `R=10 L=1m`, or a bare resistance (L defaults to 1 mH).
+ */
+export function motorArmature(value: string): { resistance: number; inductance: number } {
+  const t = value.trim().replace(/µ/g, "u");
+  if (!t) return { resistance: 10, inductance: 1e-3 };
+  const rKey = /(?:^|[\s,;])R\s*=\s*([^\s,;]+)/i.exec(` ${t}`);
+  const lKey = /(?:^|[\s,;])L\s*=\s*([^\s,;]+)/i.exec(` ${t}`);
+  if (rKey || lKey) {
+    let resistance = 10;
+    let inductance = 1e-3;
+    try {
+      if (rKey) resistance = parseQuantity(rKey[1], "Ω");
+    } catch { /* keep default */ }
+    try {
+      if (lKey) inductance = parseQuantity(lKey[1], "H");
+    } catch { /* keep default */ }
+    return {
+      resistance: Number.isFinite(resistance) && resistance > 0 ? resistance : 10,
+      inductance: Number.isFinite(inductance) && inductance >= 0 ? inductance : 1e-3,
+    };
+  }
+  const tokens = t.split(/[\s,;]+/).filter(Boolean);
+  try {
+    const resistance = parseQuantity(tokens[0] ?? "10", "Ω");
+    const inductance = tokens[1] ? parseQuantity(tokens[1], "H") : 1e-3;
+    return {
+      resistance: Number.isFinite(resistance) && resistance > 0 ? resistance : 10,
+      inductance: Number.isFinite(inductance) && inductance >= 0 ? inductance : 1e-3,
+    };
+  } catch {
+    return { resistance: 10, inductance: 1e-3 };
+  }
+}

@@ -21,6 +21,7 @@ const SCHEMA: Partial<Record<ComponentKind, ParamField[]>> = {
   polarizedCapacitor: [{ key: "c", label: "Capacitance", unit: "F" }],
   inductor: [{ key: "l", label: "Inductance", unit: "H" }],
   potentiometer: [{ key: "r", label: "Resistance", unit: "Ω" }],
+  bulb: [{ key: "r", label: "Filament R (cold)", unit: "Ω" }],
   vsource: [{ key: "dc", label: "DC level", unit: "V" }],
   isource: [{ key: "dc", label: "DC level", unit: "A" }],
   logicConstant: [{ key: "level", label: "Level (0 / 1)", unit: "V" }],
@@ -47,6 +48,11 @@ const SCHEMA: Partial<Record<ComponentKind, ParamField[]>> = {
   pushButton: [{ key: "state", label: "State (open/pressed)", unit: "" }],
   spdt: [{ key: "throw", label: "Throw (no/nc)", unit: "" }],
   photodiode: [{ key: "iph", label: "Photocurrent", unit: "A" }],
+  relay: [{ key: "coil", label: "Coil resistance", unit: "Ω" }],
+  motor: [
+    { key: "r", label: "Armature R", unit: "Ω" },
+    { key: "l", label: "Armature L", unit: "H" },
+  ],
   transformer: [{ key: "ratio", label: "Turns ratio", unit: "" }],
   comparator: [
     { key: "vhigh", label: "Output high", unit: "V" },
@@ -122,6 +128,16 @@ export function decodeParams(kind: ComponentKind, value: string): Record<string,
   if (kind === "nmos" || kind === "pmos") {
     return decodeMosfetParams(value, kind === "nmos" ? "NMOS" : "PMOS");
   }
+  if (kind === "motor") {
+    const t = value.trim().replace(/µ/g, "u");
+    const rKey = /(?:^|[\s,;])R\s*=\s*([^\s,;]+)/i.exec(` ${t}`);
+    const lKey = /(?:^|[\s,;])L\s*=\s*([^\s,;]+)/i.exec(` ${t}`);
+    if (rKey || lKey) {
+      return { r: rKey?.[1] ?? "10", l: lKey?.[1] ?? "1m" };
+    }
+    const tokens = t.split(/[\s,;]+/).filter(Boolean);
+    return { r: tokens[0] ?? "10", l: tokens[1] ?? "1m" };
+  }
   return {};
 }
 
@@ -195,6 +211,11 @@ export function encodeParams(kind: ComponentKind, values: Record<string, string>
     if (kp) parts.push(`KP=${kp}`);
     if (vto) parts.push(`VTO=${vto}`);
     return parts.join(" ");
+  }
+  if (kind === "motor") {
+    const r = (values.r ?? "").trim() || "10";
+    const l = (values.l ?? "").trim() || "1m";
+    return `${r} ${l}`;
   }
   return "";
 }

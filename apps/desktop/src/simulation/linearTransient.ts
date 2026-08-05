@@ -124,6 +124,7 @@ const TRACE_COLORS = [
 
 const TRANSIENT_SUPPORTED = new Set<ComponentKind>([
   "resistor",
+  "bulb",
   "capacitor",
   "polarizedCapacitor",
   "inductor",
@@ -419,7 +420,8 @@ export async function runTransientAnalysis(
     for (const entry of circuit.components) {
       const { id } = entry.component;
       switch (entry.component.kind) {
-        case "resistor": {
+        case "resistor":
+        case "bulb": {
           conductanceOf.set(id, resistanceToConductance(entry));
           let r = 0;
           try { r = parseQuantity(entry.component.value, "Ω"); } catch { r = 0; }
@@ -517,6 +519,7 @@ export async function runTransientAnalysis(
       for (const entry of resolvedCircuit.components) {
         switch (entry.component.kind) {
           case "resistor":
+          case "bulb":
             stampConductance(matrix, netIndex(entry.pins.a, nodeIndex), netIndex(entry.pins.b, nodeIndex), conductanceOf.get(entry.component.id)!);
             break;
           case "polarizedCapacitor":
@@ -841,7 +844,8 @@ export async function runTransientAnalysis(
             pushCurrent(id, ref, solution[currentIndex]);
             break;
           }
-          case "resistor": {
+          case "resistor":
+          case "bulb": {
             const r = sampleResistance.get(id)!;
             if (r > 0) pushCurrent(id, ref, voltageBetween(entry.pins.a, entry.pins.b, nodeIndex, solution) / r);
             break;

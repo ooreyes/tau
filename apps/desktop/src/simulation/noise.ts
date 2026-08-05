@@ -187,6 +187,7 @@ function solveCLinearSystem(matrix: CMatrix, rhs: CVector): CVector {
 
 const NOISE_SUPPORTED = new Set<ComponentKind>([
   "resistor",
+  "bulb",
   "capacitor",
   "polarizedCapacitor",
   "inductor",
@@ -399,7 +400,7 @@ export function runNoiseAnalysis(schematic: Schematic, spec: NoiseSpec): NoiseRe
 
     // Resistors (the noise generators) - precompute their node index pairs + value.
     const resistors = circuit.components
-      .filter(({ component }) => component.kind === "resistor")
+      .filter(({ component }) => component.kind === "resistor" || component.kind === "bulb")
       .map(({ component, pins }) => ({
         R: positiveValue(component.value, component.id, component.label, "Ω"),
         a: nodeIdx(pins["a"], nodeIndex),
@@ -424,7 +425,8 @@ export function runNoiseAnalysis(schematic: Schematic, spec: NoiseSpec): NoiseRe
       for (const entry of circuit.components) {
         const { component, pins } = entry;
         switch (component.kind) {
-          case "resistor": {
+          case "resistor":
+          case "bulb": {
             const R = positiveValue(component.value, component.id, component.label, "Ω");
             stampCAdmittance(matrix, nodeIdx(pins["a"], nodeIndex), nodeIdx(pins["b"], nodeIndex), { re: 1 / R, im: 0 });
             break;

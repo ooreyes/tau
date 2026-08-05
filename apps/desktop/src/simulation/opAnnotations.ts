@@ -62,6 +62,7 @@ function currentAnnotations(
     if (
       Math.abs(current) < 1e-15
       && (extracted.component.kind === "resistor"
+        || extracted.component.kind === "bulb"
         || extracted.component.kind === "capacitor"
         || extracted.component.kind === "polarizedCapacitor")
     ) {

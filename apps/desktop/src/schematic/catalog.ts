@@ -21,6 +21,8 @@ export const CATALOG: CatalogEntry[] = [
   { kind: "polarizedCapacitor", section: "Passives",     name: "Polarized Cap",   hotkey: "",  prefix: "C",   defaultValue: "10µ",   unit: "F" },
   { kind: "inductor",      section: "Passives",          name: "Inductor",        hotkey: "l", prefix: "L",   defaultValue: "1m",    unit: "H" },
   { kind: "potentiometer", section: "Passives",          name: "Potentiometer",   hotkey: "h", prefix: "RV",  defaultValue: "10k",   unit: "Ω" },
+  // Filament as a plain resistor — power is I²R from the same path as any R.
+  { kind: "bulb",          section: "Passives",          name: "Light Bulb",      hotkey: "",  prefix: "R",   defaultValue: "10",    unit: "Ω" },
 
   { kind: "vsource",       section: "Sources",           name: "DC Voltage",      hotkey: "v", prefix: "V",   defaultValue: "5",     unit: "V" },
   { kind: "isource",       section: "Sources",           name: "DC Current",      hotkey: "i", prefix: "I",   defaultValue: "1m",    unit: "A" },
@@ -70,6 +72,10 @@ export const CATALOG: CatalogEntry[] = [
   { kind: "switch",        section: "Electromechanical", name: "Switch",          hotkey: "s", prefix: "S",   defaultValue: "open",  unit: "" },
   { kind: "pushButton",    section: "Electromechanical", name: "Push Button",     hotkey: "",  prefix: "S",   defaultValue: "open",  unit: "" },
   { kind: "spdt",          section: "Electromechanical", name: "SPDT",            hotkey: "",  prefix: "S",   defaultValue: "no",    unit: "" },
+  // Coil R + voltage-controlled contact (TAU_SW). Value = coil ohms.
+  { kind: "relay",         section: "Electromechanical", name: "Relay",           hotkey: "",  prefix: "K",   defaultValue: "100",   unit: "Ω" },
+  // Armature series R+L only — no back-EMF / mechanical load.
+  { kind: "motor",         section: "Electromechanical", name: "DC Motor",        hotkey: "",  prefix: "M",   defaultValue: "10 1m", unit: "Ω H" },
   { kind: "transformer",   section: "Electromechanical", name: "Transformer",     hotkey: "t", prefix: "T",   defaultValue: "1:1",   unit: "" },
   // unit is "" (not "Ω s"): the value is a "Td=50n Z0=50" key=value spec that
   // already self-describes each token - LTspice shows it as raw text, and a
