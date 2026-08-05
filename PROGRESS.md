@@ -22,30 +22,62 @@ hard-failure=0 encrypted-excluded=1474 exact-rate=15.7%`
 Prior: HF 103 → **0** (Cpar/Rpar, `;` strip, Rload±, quote sentinels, paren-less PWL).
 
 **Active product lanes (collision lock — do not cross-edit):**
-- **Overnight DoD + Staff EE** — `engine/**` · `io/ascImport*` · `scripts/*named*` · corpus (this unit).
-- **Design lead / Cupertino** — `ShellPanels.tsx` · `App.css` chrome · `DESIGN_SYSTEM.md`. LOCKED.
-- **AI platform / Freshman** — `localAiEnsure*` / `cloudAiConsent*` /
-  `LocalAiSetupDialog*` / Settings AI / `localMlx*` / AssistantPanel AI paths. LOCKED.
+- **Overnight DoD + Staff EE** — `engine/**` · `io/ascImport*` · `scripts/*named*` · corpus (this unit). **No UI.**
+- **Cupertino** — DONE @ `6aa5f98` (Lucide chrome, light default). Do not reopen icon pass.
+- **Anduril Light** — `App.css` light tokens / `DESIGN_SYSTEM.md` palette pop ONLY — not ShellPanels icon redo.
+- **AI platform / Freshman** — `localAiEnsure*` · `cloudAiConsent*` · `localMlxAssistant*` ·
+  `LocalAiSetupDialog*` · Settings AI sections. **AssistantPanel ONLY for ensure/consent wiring — no chrome thrash.**
+- **Design QA** — review `screenshots/hig-chrome-2026-08-04/` + keep typecheck green.
 - **Bench** — help/warning copy strings only.
-- **QA** — gates + morning-status numbers.
+- **QA / HR** — gates + morning-status numbers; stash discipline.
 
 **SHIPPABLE?** **NO** — exact-rate 15.7% (need ≥95%), §10, broad differential, other DoD open.
 
-### Ownership board (ENFORCED overnight 2026-08-04)
+### Ownership board (ENFORCED overnight 2026-08-04 · HR refresh 23:22)
 
 | Lane | Owns (edit only these) |
 |------|------------------------|
-| Design lead | `ShellPanels.tsx` icons · `App.css` chrome · `DESIGN_SYSTEM.md` |
-| Overnight DoD + Staff EE | `engine/**` · `io/ascImport*` · `scripts/*named*` · corpus scripts |
-| AI platform / Freshman | `lib/localAiEnsure*` · `lib/cloudAiConsent*` · `LocalAiSetupDialog*` · Settings AI only |
+| Cupertino | **DONE** `6aa5f98` — Lucide / light default; no further icon thrash |
+| Anduril Light | `App.css` light tokens · `DESIGN_SYSTEM.md` palette only — **not** ShellPanels icons |
+| Design QA | Screenshot review · typecheck green · test one-liners |
+| Overnight DoD + Staff EE | `engine/**` · `io/ascImport*` · `scripts/*named*` · corpus — **no UI** |
+| AI platform / Freshman | `localAiEnsure*` · `cloudAiConsent*` · `localMlxAssistant*` · LocalAiSetupDialog · Settings AI; AssistantPanel **ensure/consent only** |
 | Bench | help/warning copy strings only — coordinate; no ShellPanels structure |
+| HR/ops | Split dirty lanes; never blind-pop stashes |
 | QA | gates + `~/Desktop/TAU-MORNING-STATUS.md` numbers |
 
 **Stashes (leave alone):** `freshman-assistant-aside`, `tokens-temp`,
 `concurrent-ui-aside`, `leave-freshman-ui` — do not pop over Design/Freshman work.
 
+**HR note:** Real engine PWL/LT3956 = `6a1a44e`. Mislabelled `db57703` was ShellPanels/Assistant
+(typecheck) scooped mid-race — superseded by Design QA `1250dbc` + Sparkles drop `f073aee`.
+AI wording = `98ffd2d`.
+
 
 ---
+
+### 2026-08-04 — HR/ops: three-lane split (engine + AI landed)
+
+**What I did**
+- Separated dirty collision: engine DoD already committed by Overnight as `6a1a44e`;
+  landed AI no-localhost copy `98ffd2d`; one-line Sparkles→MessageSquarePlus `f073aee`
+  (undo Cupertino regression from race). Left Design/Anduril and Freshman ensure
+  dirty for owners. Did not blind-pop named stashes.
+
+**Files / commits**
+- Engine: `6a1a44e` (Overnight) — `sourceFunction*` / `ascImport*` / spiceNetlist test
+- AI: `98ffd2d` — `localMlxAssistant.ts` + test
+- Ops fix: `f073aee` — AssistantPanel icon only
+- Docs: this heartbeat ownership refresh
+
+**Tests**
+- Engine vitest 248/248; localMlxAssistant 19 pass; `tsc --noEmit` green
+
+**Parity items**
+- Unchanged DoD boxes; SHIPPABLE=NO
+
+**Next step**
+- Overnight continues exact-rate; Freshman finishes consent/ensure dirty; Anduril palette only.
 
 ### 2026-08-04 — Named-device hard-failure 103→0 (exact deck fixes)
 
