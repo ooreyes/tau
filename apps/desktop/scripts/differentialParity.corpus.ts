@@ -50,6 +50,8 @@ const CT_DIODE_DC_ASC = join(REPO_ROOT, "Circuit_testing_v1", "04_dc_diode_curve
 const CT_STEP_LOADED_ASC = join(REPO_ROOT, "Circuit_testing_v1", "05_step_loaded_divider.asc");
 /** Tau Circuit_testing_v1 — RC lowpass thermal .noise (≠ synthetic resistive divider noise). */
 const CT_NOISE_RC_ASC = join(REPO_ROOT, "Circuit_testing_v1", "07_noise_rc_lowpass.asc");
+/** Tau Circuit_testing_v1 — RC lowpass authored .ac (≠ synthetic RC_AC / ct noise RC). */
+const CT_AC_RC_ASC = join(REPO_ROOT, "Circuit_testing_v1", "03_ac_rc_lowpass.asc");
 const EDU = join(homedir(), "Documents", "LTspice", "examples", "Educational");
 const APP = join(homedir(), "Documents", "LTspice", "examples", "Applications");
 const DOC_LTSPICE = join(homedir(), "Documents", "LTspice");
@@ -3704,6 +3706,61 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
       });
     }
 
+    // --- Circuit_testing_v1/03_ac_rc_lowpass.asc authored .ac (RC Bode) ---
+    // Tau-owned ASC: V1 AC 1 + R1=1k + C1=100n to GND. Authored
+    // `.ac dec 24 10 1Meg`. Pure RC; zero models/subckts. Distinct from
+    // synthetic RC_AC (C=1u, dec 10, stop 100k), ct 07_noise (R=10k C=10n
+    // .noise), and Educational butter/elip/Cohn. Default 2%/5%. Left
+    // 100W/IRFP / Documents Draft* / Settings alone. Tip ct-noise pass=87 → **pass=88**.
+    {
+      expect(existsSync(CT_AC_RC_ASC), `missing ${CT_AC_RC_ASC}`).toBe(true);
+      const imported = importAsc(decodeSchematicText(readFileSync(CT_AC_RC_ASC)));
+      expect(imported.warnings).toEqual([]);
+      expect(imported.foreignSymbols).toEqual([]);
+      const dirs = expandDirectiveLines(imported.directives);
+      const parsed = analysesFromDirectives(dirs);
+      expect(parsed.ac, "03_ac_rc_lowpass.asc must author .ac").toBeTruthy();
+      const params = buildParamScope(dirs);
+      const deck = buildSpiceDeck({
+        components: imported.components,
+        wires: imported.wires,
+        netLabels: imported.netLabels,
+        directives: dirs,
+        params,
+      }, {
+        kind: "ac",
+        startHz: parsed.ac!.startHz,
+        stopHz: parsed.ac!.stopHz,
+        pointsPerDecade: parsed.ac!.pointsPerDecade,
+      });
+      expect(deck.unresolvedSubckts ?? []).toEqual([]);
+      expect(deck.modelSubstitutions ?? []).toEqual([]);
+      expect(deck.netlist).toMatch(/^V1\b.*\bAC\b/im);
+      expect(deck.netlist).toMatch(/^R1\b.+\b1000\b/im);
+      expect(deck.netlist).toMatch(/^C1\b.+\b1(?:\.0+0*1)?e-7\b/im);
+      expect(deck.netlist).toMatch(/\.ac\s+dec\s+24\s+10\s+1000000\b/i);
+      expect(deck.netlist).not.toMatch(/^X\w*\b/im);
+      expect(deck.netlist).not.toMatch(/^\.model\b/im);
+      // Probe v(out) only — v(in) is flat AC stimulus (hollow span), same as
+      // synthetic RC_AC / 2ndOrder* AC cells.
+      const result = runPairedBatch("diff-ct-ac-rc", deck.netlist, ["v(out)"]);
+      const lt = result.ltspice.get("v(out)")!;
+      const ng = result.ngspice.get("v(out)")!;
+      const comparison = compareWaveforms(ng.axis, ng.values, lt.axis, lt.values, {
+        rmsTolerance: 0.02,
+        maxTolerance: 0.05,
+      });
+      expect(comparison.pass, `ct-ac-rc ${JSON.stringify(comparison)}`).toBe(true);
+      expect(comparison.referenceRange, "ct-ac-rc v(out) non-hollow").toBeGreaterThan(0.1);
+      cells.push({
+        analysis: "ac",
+        circuit: "ct-ac-rc",
+        topology: "Circuit_testing_v1/03_ac_rc_lowpass.asc R=1k C=100n (authored .ac dec 24 10–1Meg)",
+        status: "pass",
+        note: `v(out) nRms=${comparison.normalizedRms.toFixed(4)} nMax=${comparison.normalizedMax.toFixed(4)} span=${comparison.referenceRange.toFixed(3)}`,
+      });
+    }
+
     // --- Class-D AC/OP (authored analyses are .tran/.meas; add AC/OP for differential proof) ---
     {
       const ascPath = join(CLASSD_DIR, "class-d-starter.asc");
@@ -4000,6 +4057,6 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
     expect(passCount).toBeGreaterThanOrEqual(70);
     expect(siblingCount).toBe(5);
     expect(gapCount).toBe(0);
-    expect(report).toMatch(/SUMMARY pass=87 sibling=5 gap=0/);
+    expect(report).toMatch(/SUMMARY pass=88 sibling=5 gap=0/);
   }, 240_000);
 });

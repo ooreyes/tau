@@ -2,14 +2,47 @@
 
 **Status: DONE - 2026-08-05 06:02 CDT**
 
+<<<<<<< HEAD
 Unit: Waveform DoD — **right-click trace math** (abs / negate / dB → expression overlay).
 Base tip `a358208` pass=87. Named-device 48.1%. Settings locked. SHIPPABLE? **NO**
+=======
+Unit: Circuit_testing_v1 `03_ac_rc_lowpass.asc` authored `.ac` → differential **pass=88**.
+```
+SUMMARY pass=88 sibling=5 gap=0
+ac ct-ac-rc … v(out) nRms=0.0000 span=0.998
+```
+Named-device 48.1%. Left 100W/IRFP/Documents Draft*/Settings alone. Rebased over FFT CSV tip `a358208`. SHIPPABLE? **NO**
+>>>>>>> 9ffb9c7 (auto: Circuit_testing 03_ac_rc_lowpass .ac → pass=88 (§DoD))
 
 **SHIPPABLE?** **NO**
 
 
 
 ---
+
+### 2026-08-05 — ct 03_ac_rc_lowpass .ac → pass=88 (§DoD)
+
+**What I did**
+- Circuit_testing_v1 `03_ac_rc_lowpass.asc` authored
+  `.ac dec 24 10 1Meg` (R=1k + C=100n): v(out) vs LTspice nRms=0
+  span≈0.998. Distinct from synthetic RC_AC (C=1u/dec10/100k) and
+  ct 07_noise (R=10k C=10n .noise). Probe v(out) only — flat AC stim
+  on v(in) is hollow. Avoided Staff EE 100W/IRFP, Documents Draft*,
+  Settings/palette thrash.
+
+**Files**
+- `apps/desktop/scripts/differentialParity.corpus.ts`
+- `FEATURE_PARITY.md`, `AGENTS.md`, `PROGRESS.md`
+
+**Tests**
+- `scripts/differential-parity.sh` → SUMMARY pass=88 sibling=5 gap=0
+- `pnpm -C apps/desktop typecheck` + `test` green (2721 passed)
+
+**Parity items**
+- Differential **pass=88** · named-device 48.1% · SHIPPABLE? NO
+
+**Next step**
+- Continue: ct `06_tf` / `01_op` / `02_tran` or non-wall Educational leftovers.
 
 
 ### 2026-08-05 — right-click trace math abs/neg/db (§waveform DoD)
