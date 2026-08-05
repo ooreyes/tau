@@ -72,6 +72,8 @@ const CT_BUCK_ASC = join(REPO_ROOT, "Circuit_testing_v1", "12_buck_converter.asc
 const CT_BOOST_ASC = join(REPO_ROOT, "Circuit_testing_v1", "13_boost_converter.asc");
 /** Tau Circuit_testing_v1 — combinational AND/NAND/OR/NOR/XOR/XNOR A-device matrix. */
 const CT_LOGIC_ASC = join(REPO_ROOT, "Circuit_testing_v1", "14_logic_gate_matrix.asc");
+/** Tau Circuit_testing_v1 — two-bit DFLOP register (01→11→10 on rising CLK). */
+const CT_DFLOP_ASC = join(REPO_ROOT, "Circuit_testing_v1", "15_dflop_register.asc");
 const EDU = join(homedir(), "Documents", "LTspice", "examples", "Educational");
 const APP = join(homedir(), "Documents", "LTspice", "examples", "Applications");
 const DOC_LTSPICE = join(homedir(), "Documents", "LTspice");
@@ -226,6 +228,88 @@ function firstSample(trace: NumericTrace): number {
   return value!;
 }
 
+/** Linear interpolate a numeric trace at time `t` (seconds). */
+function sampleAt(trace: NumericTrace, t: number): number {
+  const { axis, values } = trace;
+  if (axis.length === 0 || values.length === 0) {
+    throw new Error("empty trace");
+  }
+  if (t <= axis[0]!) return values[0]!;
+  if (t >= axis[axis.length - 1]!) return values[values.length - 1]!;
+  let lo = 0;
+  let hi = axis.length - 1;
+  while (hi - lo > 1) {
+    const mid = (lo + hi) >> 1;
+    if (axis[mid]! <= t) lo = mid;
+    else hi = mid;
+  }
+  const t0 = axis[lo]!;
+  const t1 = axis[hi]!;
+  const u = (t - t0) / Math.max(t1 - t0, 1e-30);
+  return values[lo]! + u * (values[hi]! - values[lo]!);
+}
+
+/**
+ * LTspice rejects XSPICE `adc_bridge`/`d_dff`/`dac_bridge` (unknown model
+ * types). Rewrite Tau's product-path DFLOP bridges into native 8-node A-device
+ * DFLOP (SpiceOrder: D, unused, CLK, PRE, CLR, _Q, Q, com) for same-ASC
+ * dual-deck differential. Params come from the schematic Value attrs.
+ */
+function toLtspiceNativeDflopDeck(
+  netlist: string,
+  paramsByBase: ReadonlyMap<string, string>,
+): string {
+  const lines = netlist.split(/\r?\n/);
+  const out: string[] = [];
+  const flops = new Map<string, {
+    d: string;
+    clk: string;
+    pre: string;
+    clr: string;
+    q: string;
+    qbar: string;
+  }>();
+  for (const line of lines) {
+    const mAdc = line.match(/^A_(\w+)_adc\s+\[(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\]\s+\[/i);
+    if (mAdc) {
+      const b = mAdc[1]!.toLowerCase();
+      const cur = flops.get(b) ?? {
+        d: "0", clk: "0", pre: "0", clr: "0", q: `${b}_qnc`, qbar: `${b}_qbnc`,
+      };
+      cur.d = mAdc[2]!;
+      cur.clk = mAdc[3]!;
+      cur.pre = mAdc[4]!;
+      cur.clr = mAdc[5]!;
+      flops.set(b, cur);
+      continue;
+    }
+    const mDac = line.match(/^A_(\w+)_dac\s+\[\S+\s+\S+\]\s+\[(\S+)\s+(\S+)\]/i);
+    if (mDac) {
+      const b = mDac[1]!.toLowerCase();
+      const cur = flops.get(b) ?? {
+        d: "0", clk: "0", pre: "0", clr: "0", q: `${b}_qnc`, qbar: `${b}_qbnc`,
+      };
+      cur.q = mDac[2]!;
+      cur.qbar = mDac[3]!;
+      flops.set(b, cur);
+      continue;
+    }
+    if (/^A_\w+\s+\w+_dd\b/i.test(line)) continue;
+    if (/^\.model\s+\w+_(adc|dff|dac)\b/i.test(line)) continue;
+    out.push(line);
+  }
+  const inject: string[] = [];
+  for (const [b, n] of flops) {
+    const params = paramsByBase.get(b) ?? "Vhigh=5 Vlow=0 Vt=2.5 Td=10n";
+    inject.push(`A${b} ${n.d} 0 ${n.clk} ${n.pre} ${n.clr} ${n.qbar} ${n.q} 0 DFLOP`);
+    inject.push(`+ ${params}`);
+  }
+  const idx = out.findIndex((l) => /^\.tran\b/i.test(l.trim()));
+  if (idx >= 0) out.splice(idx, 0, ...inject);
+  else out.push(...inject);
+  return out.join("\n");
+}
+
 function pickScalar(map: Map<string, number>, candidates: readonly string[]): number {
   for (const name of candidates) {
     const hit = [...map.entries()].find(([key]) => key.toLowerCase() === name.toLowerCase());
@@ -299,7 +383,7 @@ function withAcStimulus(netlist: string): string {
 describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential parity matrix", () => {
   const cells: DifferentialCell[] = [];
 
-  it("matches RC .tran/.ac/.meas, divider analyses, .step families, curvetrace, stepmodelparam, NoiseFigure, noise.asc, Colpitts/Clapp/Hartly AC, Cohn AC, MeasureBW AC, Transformer/Transformer2/IdealTransformer TRAN, notch/passive/butter/opamp/Linkwitz AC, LM741/LM308/LM78XX/P2/logamp TRAN, GFT AC, DCopPnt OP, audioamp TRAN, UHFpreamp AC, 1563 AC, S-param AC, stepAC AC, 2ndOrder* AC, MonteCarlo AC, varactor AC, phaseshift AC, Pierce/colpits2 AC, edu-varistor TRAN, stepnoise noise, UniversalOpAmp/1/2 TRAN, contrib/qztst AC, SampleAndHold TRAN, contrib/elip_grd AC, Draft3 AC, Draft7 AC, Draft2 TRAN, Draft1 TRAN, BandGaps DC-temp, waveout TRAN, ISO16750 TRAN, IGBTeq nested DC, help-Butterworth AC, Resources-Draft1 DC, 100W TRAN, help-ACstep AC, help-NoiseStep noise, Resources-MicroCode TRAN, ct-rlc-ringing TRAN, ct-diode-dc DC, ct-step-loaded DC, ct-noise-rc noise, ct-stress-rc-ladder AC, ct-active-fourth-order AC, ct-full-bridge TRAN, ct-three-phase TRAN, ct-buck TRAN, ct-boost TRAN, ct-logic TRAN, Class-D AC/OP/DC/noise/tf", () => {
+  it("matches RC .tran/.ac/.meas, divider analyses, .step families, curvetrace, stepmodelparam, NoiseFigure, noise.asc, Colpitts/Clapp/Hartly AC, Cohn AC, MeasureBW AC, Transformer/Transformer2/IdealTransformer TRAN, notch/passive/butter/opamp/Linkwitz AC, LM741/LM308/LM78XX/P2/logamp TRAN, GFT AC, DCopPnt OP, audioamp TRAN, UHFpreamp AC, 1563 AC, S-param AC, stepAC AC, 2ndOrder* AC, MonteCarlo AC, varactor AC, phaseshift AC, Pierce/colpits2 AC, edu-varistor TRAN, stepnoise noise, UniversalOpAmp/1/2 TRAN, contrib/qztst AC, SampleAndHold TRAN, contrib/elip_grd AC, Draft3 AC, Draft7 AC, Draft2 TRAN, Draft1 TRAN, BandGaps DC-temp, waveout TRAN, ISO16750 TRAN, IGBTeq nested DC, help-Butterworth AC, Resources-Draft1 DC, 100W TRAN, help-ACstep AC, help-NoiseStep noise, Resources-MicroCode TRAN, ct-rlc-ringing TRAN, ct-diode-dc DC, ct-step-loaded DC, ct-noise-rc noise, ct-stress-rc-ladder AC, ct-active-fourth-order AC, ct-full-bridge TRAN, ct-three-phase TRAN, ct-buck TRAN, ct-boost TRAN, ct-logic TRAN, ct-dflop TRAN, Class-D AC/OP/DC/noise/tf", () => {
     // --- TRAN (also covered by waveformParity; re-assert here so this file is self-sufficient) ---
     {
       const result = runPairedBatch("diff-rc-tran", RC_TRAN, ["v(out)"]);
@@ -4508,6 +4592,115 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
       });
     }
 
+    // --- Circuit_testing_v1/15_dflop_register.asc authored .tran ---
+    // Tau-owned ASC: two Digital\dflop + PWL D0/D1 + PULSE CLK → register
+    // samples 01 → 11 → 10 on rising edges (authored `.tran 1u 6m`).
+    // Product path emits XSPICE adc→d_dff→dac (ngspice); LTspice 17.2.4
+    // rejects those model types (Fatal / Unknown model type) — dual-deck
+    // rewrites to native 8-node A-device DFLOP for the LTspice leg only
+    // (harness `ngspiceNetlist`). Continuous nRms≈0.01 under 5%; nMax≈1
+    // from DFLOP vs XSPICE edge-model skew (not claimed). Pass criterion =
+    // mid-clock strobes matching the README sequence (engineering question).
+    // Distinct from ct 14 combinational B-gates / SampleAndHold SAMPLE.
+    // Left Staff EE / Settings / Draft* / ct19 INA alone. Tip ct-logic
+    // pass=98 → **pass=99**.
+    {
+      expect(existsSync(CT_DFLOP_ASC), `missing ${CT_DFLOP_ASC}`).toBe(true);
+      const imported = importAsc(decodeSchematicText(readFileSync(CT_DFLOP_ASC)));
+      expect(imported.warnings).toEqual([]);
+      expect(imported.foreignSymbols).toEqual([]);
+      expect(imported.components.filter((c) => c.kind === "dflop")).toHaveLength(2);
+      const dirs = expandDirectiveLines(imported.directives);
+      const parsed = analysesFromDirectives(dirs);
+      expect(parsed.tran, "15_dflop_register.asc must author .tran").toBeTruthy();
+      const params = buildParamScope(dirs);
+      const deck = buildSpiceDeck({
+        components: imported.components,
+        wires: imported.wires,
+        netLabels: imported.netLabels,
+        directives: dirs,
+        params,
+      }, {
+        kind: "tran",
+        stopTime: parsed.tran!.stopTime,
+        steps: Math.max(parsed.tran!.steps ?? 800, 60000),
+        startTime: parsed.tran!.startTime,
+        maxStep: Math.min(parsed.tran!.maxStep ?? 1e-7, 1e-7),
+      });
+      expect(deck.unresolvedSubckts ?? []).toEqual([]);
+      expect(deck.modelSubstitutions ?? []).toEqual([]);
+      expect(deck.netlist).toMatch(/\.model\s+a1_adc\s+adc_bridge\b/i);
+      expect(deck.netlist).toMatch(/\.model\s+a1_dff\s+d_dff\b/i);
+      expect(deck.netlist).toMatch(/\.model\s+a1_dac\s+dac_bridge\b/i);
+      expect(deck.netlist).toMatch(/A_a1_adc\s+\[d0\s+clk\s+0\s+0\]/i);
+      expect(deck.netlist).toMatch(/A_a2_adc\s+\[d1\s+clk\s+0\s+0\]/i);
+      expect(deck.netlist).toMatch(/^VD0\b.+\bPWL\(/im);
+      expect(deck.netlist).toMatch(/^VCLK\b.+\bPULSE\(/im);
+      expect(deck.netlist).toMatch(/\.tran\b/i);
+      const paramsByBase = new Map<string, string>();
+      for (const c of imported.components) {
+        if (c.kind === "dflop") {
+          paramsByBase.set(
+            c.label.toLowerCase(),
+            c.value.trim() || "Vhigh=5 Vlow=0 Vt=2.5 Td=10n",
+          );
+        }
+      }
+      const ltDeck = toLtspiceNativeDflopDeck(deck.netlist, paramsByBase);
+      expect(ltDeck).toMatch(/\bDFLOP\b/);
+      expect(ltDeck).not.toMatch(/adc_bridge|d_dff|dac_bridge/i);
+      expect(ltDeck).toMatch(/^Aa1\b.+\bDFLOP\b/m);
+      expect(ltDeck).toMatch(/^Aa2\b.+\bDFLOP\b/m);
+      const probes = ["v(q0)", "v(q0bar)", "v(q1)", "v(q1bar)"] as const;
+      const result = runPairedBatch("diff-ct-dflop-tran", ltDeck, [...probes], {
+        ngspiceNetlist: deck.netlist,
+      });
+      const memberNotes: string[] = [];
+      for (const probe of probes) {
+        const lt = result.ltspice.get(probe)!;
+        const ng = result.ngspice.get(probe)!;
+        const comparison = compareWaveforms(ng.axis, ng.values, lt.axis, lt.values, {
+          rmsTolerance: 0.05,
+          maxTolerance: 0.05, // unused for pass bit — nMax≈1 from edge-model skew
+        });
+        // Continuous nRms stays tight; nMax≈1 is DFLOP vs XSPICE edge placement
+        // (not claimed). Register state is proven by mid-clock strobes below.
+        expect(comparison.referenceRange, `ct-dflop ${probe} non-hollow`).toBeGreaterThan(4);
+        expect(comparison.normalizedRms, `ct-dflop ${probe} nRms`).toBeLessThan(0.05);
+        memberNotes.push(
+          `${probe} nRms=${comparison.normalizedRms.toFixed(4)} nMax=${comparison.normalizedMax.toFixed(4)} span=${comparison.referenceRange.toFixed(3)}`,
+        );
+      }
+      // Mid-clock strobes after rising edges @ 1m/3m/5m → expected 01, 11, 10.
+      const strobes: Array<{ t: number; q1: 0 | 1; q0: 0 | 1 }> = [
+        { t: 1.5e-3, q1: 0, q0: 1 },
+        { t: 3.5e-3, q1: 1, q0: 1 },
+        { t: 5.5e-3, q1: 1, q0: 0 },
+      ];
+      const logic = (v: number) => (v > 2.5 ? 1 : 0);
+      for (const s of strobes) {
+        for (const side of ["ltspice", "ngspice"] as const) {
+          const map = result[side];
+          const q0 = logic(sampleAt(map.get("v(q0)")!, s.t));
+          const q1 = logic(sampleAt(map.get("v(q1)")!, s.t));
+          const q0b = logic(sampleAt(map.get("v(q0bar)")!, s.t));
+          const q1b = logic(sampleAt(map.get("v(q1bar)")!, s.t));
+          expect(q0, `${side} Q0 @${s.t}`).toBe(s.q0);
+          expect(q1, `${side} Q1 @${s.t}`).toBe(s.q1);
+          expect(q0b, `${side} Q0BAR @${s.t}`).toBe(1 - s.q0);
+          expect(q1b, `${side} Q1BAR @${s.t}`).toBe(1 - s.q1);
+        }
+      }
+      memberNotes.push("strobes 01→11→10 @1.5/3.5/5.5ms dual-deck");
+      cells.push({
+        analysis: "tran",
+        circuit: "ct-dflop",
+        topology: "Circuit_testing_v1/15_dflop_register.asc dual DFLOP register (authored .tran 1u–6m; dual-deck native↔XSPICE; strobe 01→11→10)",
+        status: "pass",
+        note: memberNotes.join("; ") + " (nMax edge-skew; strobe pass)",
+      });
+    }
+
     // --- Class-D AC/OP (authored analyses are .tran/.meas; add AC/OP for differential proof) ---
     {
       const ascPath = join(CLASSD_DIR, "class-d-starter.asc");
@@ -4804,6 +4997,6 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
     expect(passCount).toBeGreaterThanOrEqual(70);
     expect(siblingCount).toBe(5);
     expect(gapCount).toBe(0);
-    expect(report).toMatch(/SUMMARY pass=98 sibling=5 gap=0/);
+    expect(report).toMatch(/SUMMARY pass=99 sibling=5 gap=0/);
   }, 240_000);
 });

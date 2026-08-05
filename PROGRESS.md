@@ -1,16 +1,54 @@
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 07:52 CDT**
+**Status: DONE - 2026-08-05 07:56 CDT**
 
-Unit: Waveform DoD — **AC/DC step-family Export CSV**.
-Worktree `Tau-wt-wave-family-csv` over tip `f08237b` → this commit. pass=98.
-Settings locked. SHIPPABLE? **NO**
+Unit: Circuit_testing_v1 `15_dflop_register.asc` authored `.tran` → differential **pass=99**.
+```
+SUMMARY pass=99 sibling=5 gap=0
+tran ct-dflop … strobes 01→11→10; nRms≈0.010/0.007 nMax≈1 edge-skew
+```
+Dual-deck: LTspice native 8-node DFLOP ↔ Tau XSPICE (same-deck XSPICE rejected).
+Named-device 48.1%. Worktree `Tau-wt-diff-99` over tip `d4a4c79`.
+Left Staff EE / Settings / ct19 / Draft* alone.
+SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
 
 
 ---
+
+
+
+### 2026-08-05 — ct 15_dflop_register .tran → pass=99 (§DoD)
+
+**What I did**
+- Circuit_testing_v1 `15_dflop_register.asc` authored `.tran 1u 6m`
+  (two Digital\\dflop + PWL D0/D1 + PULSE CLK): mid-clock strobes prove
+  register sequence 01→11→10 on both engines; continuous nRms≈0.010/0.007
+  (nMax≈1 from DFLOP vs XSPICE edge-model skew — not claimed as maxTol pass).
+- Dual-deck required: LTspice 17.2.4 rejects XSPICE adc_bridge/d_dff/dac_bridge;
+  harness uses native 8-node A-device DFLOP for the LTspice leg and Tau's
+  product-path XSPICE emit for ngspice (`ngspiceNetlist`). Distinct from
+  ct 14 combinational B-gates / SampleAndHold SAMPLE.
+  Worktree `Tau-wt-diff-99` over `d4a4c79`. Left Staff EE / Settings /
+  Draft* / ct19 alone.
+
+**Files**
+- `apps/desktop/scripts/differentialParity.corpus.ts`
+- `FEATURE_PARITY.md`, `AGENTS.md`, `PROGRESS.md`
+
+**Tests**
+- `scripts/differential-parity.sh` → SUMMARY pass=99 sibling=5 gap=0
+- `pnpm -C apps/desktop typecheck` + `test` green (2772 passed)
+
+**Parity items**
+- Differential **pass=99** · named-device 48.1% · SHIPPABLE? NO
+
+**Next step**
+- Educational non-wall leftovers (not ct19 OP / Chan/NIGBT/FRA / Draft* /
+  Settings). Prefer same-deck where possible.
+
 
 
 
