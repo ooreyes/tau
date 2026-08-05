@@ -574,10 +574,12 @@ describe("LocalMlxAssistant", () => {
     const offline = new LocalMlxAssistant({
       fetchImpl: vi.fn(async () => { throw new TypeError("fetch failed"); }),
     });
-    await expect(offline.complete(request())).rejects.toMatchObject({
+    const offlineError = await offline.complete(request()).catch((error: unknown) => error);
+    expect(offlineError).toMatchObject({
       kind: "offline",
-      message: expect.stringMatching(/On-device AI is not ready/i),
+      message: expect.stringMatching(/On-device AI is not ready.*Turn on/i),
     });
+    expect((offlineError as Error).message).not.toMatch(/localhost|127\.0\.0\.1|8080|loopback/i);
 
     const server = new LocalMlxAssistant({
       fetchImpl: vi.fn(async () => new Response("down", { status: 503 })),

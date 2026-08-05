@@ -108,6 +108,7 @@ import {
   streamAssistantReply,
 } from "../lib/assistant";
 import { saveAssistantPreferences } from "../lib/assistantPreferences";
+import { saveCloudAiConsent } from "../lib/cloudAiConsent";
 import {
   createConversation,
   getActiveConversationId,
@@ -177,6 +178,7 @@ afterEach(() => {
 beforeEach(() => {
   localStorage.clear();
   saveAssistantApiKey("");
+  saveCloudAiConsent({ consented: true });
   saveAssistantPreferences({ provider: "anthropic", localModel: "qwen3-1.7b-4bit" });
   streams.length = 0;
   streamRequests.length = 0;

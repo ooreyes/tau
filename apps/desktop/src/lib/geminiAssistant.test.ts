@@ -1,6 +1,10 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { GeminiAssistant, GEMINI_MODEL_PRESETS, GEMINI_DEFAULT_MODEL } from "./geminiAssistant";
 import { AssistantProviderError } from "./assistantProvider";
+import {
+  CLOUD_AI_CONSENT_REQUIRED,
+  saveCloudAiConsent,
+} from "./cloudAiConsent";
 
 const PLAN = {
   mode: "create",
@@ -44,6 +48,35 @@ function toolCallCompletion() {
 }
 
 describe("GeminiAssistant", () => {
+  beforeEach(() => {
+    const values = new Map<string, string>();
+    vi.stubGlobal("localStorage", {
+      getItem: (key: string) => values.get(key) ?? null,
+      setItem: (key: string, value: string) => values.set(key, value),
+      removeItem: (key: string) => values.delete(key),
+    });
+    vi.stubGlobal("window", { dispatchEvent: vi.fn() });
+    // Happy-path provider tests opt in; the refusal case clears consent explicitly.
+    saveCloudAiConsent({ consented: true });
+  });
+
+  it("refuses to send circuit context until cloud consent is granted", async () => {
+    saveCloudAiConsent({ consented: false });
+    const fetchImpl = vi.fn(async () => completion({
+      choices: [{ finish_reason: "stop", message: { role: "assistant", content: "should not run" } }],
+    }));
+    const provider = new GeminiAssistant({ apiKey: "k", fetchImpl });
+    await expect(provider.complete({
+      contextText: "SPICE netlist:\n* secret",
+      history: [{ role: "user", content: "hi" }],
+    })).rejects.toMatchObject({
+      name: "AssistantProviderError",
+      kind: "unknown",
+      message: CLOUD_AI_CONSENT_REQUIRED,
+    });
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
   it("posts to Google's OpenAI-compatible endpoint with a bearer key and no MLX-only fields", async () => {
     let url = "";
     let init: RequestInit | undefined;
