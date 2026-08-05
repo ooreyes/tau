@@ -20,7 +20,7 @@ export function OpCurrentFlowLayer({
   currents: ReadonlyMap<string, number> | null;
   wires: SchematicWire[];
   pinIndex: PinIndex;
-  /** When false, clear dots (schematic edit mode / no bias readout). */
+  /** When false, clear dots (no bias readout / empty current map). */
   active: boolean;
 }) {
   const [dots, setDots] = useState<FlowDot[]>([]);
@@ -57,7 +57,7 @@ export function OpCurrentFlowLayer({
           className="flow-dot"
           cx={d.x}
           cy={d.y}
-          r={2.2}
+          r={2.8}
           style={{ opacity: d.opacity }}
         />
       ))}

@@ -179,14 +179,14 @@ export function Canvas({
   const setNetLabelOffsetDirect = useSchematic((s) => s.setNetLabelOffsetDirect);
   const [editingId, setEditingId] = useState<string | null>(null);
 
-  // In-place bias annotations (simulator mode): prefer a real `.tran` sample
-  // when available; otherwise fall back to DC OP. Never invent currents.
-  const useTranReadout = !interactive && Boolean(tran?.ok && tran.times.length > 0);
+  // EveryCircuit-style current mode: show real OP / `.tran` V/I on the
+  // schematic whenever results exist — editor and simulator. Prefer a real
+  // `.tran` sample when available; otherwise DC OP. Never invent currents.
+  const useTranReadout = Boolean(tran?.ok && tran.times.length > 0);
   const biasCircuit = useMemo(() => {
-    if (interactive) return null;
     if (useTranReadout || op?.ok) return extractCircuit(components, wires, netLabels);
     return null;
-  }, [interactive, useTranReadout, op, components, wires, netLabels]);
+  }, [useTranReadout, op, components, wires, netLabels]);
 
   const opLabels = useMemo(() => {
     if (!biasCircuit) return [];
@@ -1347,7 +1347,7 @@ export function Canvas({
             currents={flowCurrents}
             wires={wires}
             pinIndex={pinIndex}
-            active={!interactive && Boolean(flowCurrents && flowCurrents.size > 0)}
+            active={Boolean(flowCurrents && flowCurrents.size > 0)}
           />
 
           <ComponentLabels components={components} wires={wires} />

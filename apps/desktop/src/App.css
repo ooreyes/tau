@@ -2560,11 +2560,12 @@ body {
    background stroke keeps them readable over wires and symbol bodies. Kept
    outside the App.css type scale (schematic canvas SVG text). */
 .op-annotation {
-  font-size: 10px;
+  font-size: 12px;
+  font-weight: 600;
   font-family: var(--font-mono);
   paint-order: stroke;
   stroke: var(--bg);
-  stroke-width: 3px;
+  stroke-width: 3.5px;
   pointer-events: none;
 }
 
@@ -6292,6 +6293,22 @@ button.bottom-panel-head:focus-visible {
   border: 1px solid var(--border);
   border-radius: var(--r-md);
   background: var(--panel-3);
+}
+
+.sim-current-mode-badge {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 var(--sp-2);
+  margin-left: auto;
+  font-size: var(--fs-label);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--trace-green);
+  border: 1px solid color-mix(in srgb, var(--trace-green) 35%, var(--border));
+  border-radius: var(--r-md);
+  background: color-mix(in srgb, var(--trace-green) 12%, var(--panel-3));
 }
 
 .sim-circuit-tools {

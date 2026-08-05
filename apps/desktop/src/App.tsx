@@ -1926,7 +1926,13 @@ function App() {
             onHideSimulator={() => setMode("schematic")}
           />
           <main className="stage">
-            <Canvas op={opAnalysis} tran={analysis} interactive fitSignal={fitSignal} />
+            <Canvas
+              op={opAnalysis}
+              tran={analysis}
+              readoutTime={schematicReadoutTime}
+              interactive
+              fitSignal={fitSignal}
+            />
             {components.length === 0 && wires.length === 0 && toolMode === "select" && (
               <EmptyState
                 projectOpen
@@ -1980,6 +1986,15 @@ function App() {
                     <span>Name</span>
                   </button>
                 </div>
+                {(opAnalysis?.ok || analysis?.ok) && (
+                  <span
+                    className="sim-current-mode-badge"
+                    aria-label="Current mode on"
+                    title="Schematic shows measured voltages and currents from the last run"
+                  >
+                    Current mode
+                  </span>
+                )}
                 <span
                   className="sim-view-only"
                   aria-label="View-only circuit topology"

@@ -1,11 +1,10 @@
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 ~09:45 CDT**
+**Status: IN PROGRESS - 2026-08-05 ~09:50 CDT**
 
-Unit: EveryCircuit library — **push-button** + **SPDT** + **photodiode**
-(honest R / dual-R / D+Iph). Worktree `Tau-wt-ec-lib`. Not full EC parity.
-SHIPPABLE? **NO**
-
+Unit: Current mode visible on editor + sim badge (EveryCircuit UX) —
+rebase onto tip + screenshot proof. Worktree
+`Tau-wt-ux-current-proof`. Left palette fills alone. SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
@@ -15,6 +14,36 @@ SHIPPABLE? **NO**
 ---
 
 
+
+### 2026-08-05 — Current mode visible on editor + sim badge (§EveryCircuit UX)
+
+**What I did**
+- Editor Canvas now paints real OP/TRAN V/I + wire flow when results exist
+  (was gated behind `interactive===false` / simulator-only — Omar-invisible).
+- Simulator Circuit header shows **Current mode** badge after a successful run.
+- Editor canvas receives `readoutTime` so scope cursor follows on both surfaces.
+
+**Files**
+- `components/Canvas.tsx`, `components/OpCurrentFlowLayer.tsx`
+- `components/Canvas.currentMode.test.tsx`
+- `App.tsx`, `App.css`
+- `PROGRESS.md`, `FEATURE_PARITY.md`
+
+**Tests**
+- `pnpm -C apps/desktop typecheck`
+- `vitest run src/components/Canvas.currentMode.test.tsx` + full suite before push
+- Screenshot proof under `screenshots/ec-current-mode-visible/`
+
+**Parity items**
+- §EveryCircuit: current mode default-visible after Run. Not full EC parity.
+  SHIPPABLE? NO
+
+**Next step**
+- Omar click-path in morning status. Leave palette / Settings / Educational alone.
+
+SHIPPABLE? **NO**
+
+---
 
 ### 2026-08-05 — Educational dimmer .tran → pass=103 (§DoD)
 
