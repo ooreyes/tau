@@ -1,12 +1,54 @@
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 ~13:10 CDT**
+**Status: DONE - 2026-08-05 ~12:50 CDT**
 
-Unit: **§10 IndependentSourceEditor Waveform → ui/Select** — native
-waveform-type `<select>` migrated onto shadcn `ui/Select` (Settings
-untouched). AGENTS §10 / min-window DoD stay UNCHECKED. SHIPPABLE? **NO**
+Unit: **AI credentials out of renderer** — Tauri `cloud_ai_proxy` +
+presence-only hydration (`has_*_api_key`); Anthropic/Gemini never receive
+raw keychain secrets in the webview for cloud HTTPS. AI DoD box stays ⬜
+(OAuth/evals still open). Consent untouched. SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
+
+
+
+---
+
+### 2026-08-05 — AI credentials out of renderer (§AI partial)
+
+**What I did**
+- Native BYOK path: renderer hydrates key *presence* only (`has_assistant_api_key`
+  / `has_provider_api_key`). Cloud HTTPS goes through `cloud_ai_proxy`, which
+  reads the OS keychain and attaches credentials on allowlisted Anthropic/Gemini
+  hosts. Secret headers stripped on IPC; CSP drops renderer→provider connect-src.
+- Settings password fields no longer rehydrate raw secrets; placeholders show
+  keychain-saved state. Web/test keeps process-local keys for vitest seams.
+- Proof: `cloudAiCredentials.test.ts` + Rust `credentials::tests` +
+  `scripts/ai-credentials-out-of-renderer.sh`. Consent gates unchanged.
+  AI DoD box stays unchecked (OAuth / live evals). SHIPPABLE? **NO**
+
+**Files**
+- `src-tauri/src/credentials.rs`, `lib.rs`, `Cargo.toml`, `Cargo.lock`, `tauri.conf.json`
+- `lib/cloudAiFetch.ts`, `cloudAiCredentials.test.ts`, `assistant.ts`,
+  `providerApiKey.ts`, `geminiAssistant.ts`
+- `components/AssistantPanel.tsx` (+ test), `SettingsAiSection.tsx`
+- `scripts/ai-credentials-out-of-renderer.sh`
+- `AGENTS.md`, `FEATURE_PARITY.md`, `PROGRESS.md`
+
+**Tests**
+- `pnpm -C apps/desktop typecheck` green
+- `bash scripts/ai-credentials-out-of-renderer.sh` → AI-CREDENTIALS-OUT-OF-RENDERER: ok
+  (15 vitest + 3 Rust credentials::tests)
+- `pnpm -C apps/desktop test` → 2890 passed / 6 skipped
+- `cargo clippy --all-targets -D warnings` green
+
+**Parity items**
+- §AI partial: keys-out-of-renderer ✅. Full AI DoD still open (OAuth / live
+  evals). SHIPPABLE? **NO**
+
+**Next step**
+- Tau OAuth/backend or release-gated live evals; never weaken consent.
+
+SHIPPABLE? **NO**
 
 
 
@@ -41,6 +83,8 @@ untouched). AGENTS §10 / min-window DoD stay UNCHECKED. SHIPPABLE? **NO**
   on a partial.
 
 SHIPPABLE? **NO**
+
+
 
 ---
 
@@ -87,6 +131,8 @@ REFUSE TRIAGE: no-electrically-equivalent=1318 other-refuse=1
   never weaken Chan/NIGBT/FRA / never denominator games.
 
 SHIPPABLE? **NO**
+
+
 
 ---
 

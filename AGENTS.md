@@ -311,9 +311,13 @@ account and sign/notarize/ship.
       imply that a ChatGPT subscription pays API usage.
       **Partial (2026-08-05):** packaged-ngspice-before-apply landed fail-closed
       (`assistantNgspiceValidate.ts` + Create/Apply gate in `AssistantPanel`;
-      `scripts/ai-ngspice-before-apply.sh`). Still FAIL: credentials still
-      hydrate into the renderer session; no Tau OAuth/backend; no release-gated
-      live evals. DoD box stays unchecked. SHIPPABLE? **NO**.
+      `scripts/ai-ngspice-before-apply.sh`). Credentials-out-of-renderer for
+      cloud BYOK landed: `has_*_api_key` presence-only IPC, `cloud_ai_proxy`
+      attaches OS-keychain secrets on allowlisted HTTPS (Anthropic/Gemini),
+      CSP no longer allows renderer→provider connect-src, proven by
+      `scripts/ai-credentials-out-of-renderer.sh`. Still FAIL: no Tau
+      OAuth/backend; no release-gated live evals. DoD box stays unchecked.
+      SHIPPABLE? **NO**.
 - [ ] **Student, professional, and developer product gates:** a first-success
       learning path and contextual help; crash-safe unsaved recovery plus safe
       external-edit/conflict handling and reproducible run records; and a stable,

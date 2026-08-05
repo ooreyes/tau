@@ -1,7 +1,9 @@
 /**
  * Anthropic API integration for Tau's assistant column. The key is the
  * user's own and entered in Settings. Native Tau stores it in the operating
- * system keychain; it is never placed in web storage or a project file.
+ * system keychain and attaches it inside Rust (`cloud_ai_proxy`); the renderer
+ * never hydrates the raw key for API calls, never places it in web storage,
+ * and never writes it to a project file.
  */
 import { useEffect, useState } from "react";
 import { invoke, isTauri } from "@tauri-apps/api/core";
@@ -20,6 +22,7 @@ import {
   TAU_CIRCUIT_PLAN_TOOL_NAME,
 } from "./assistantCircuitPlan";
 import { wrapAssistantContextForPrompt } from "./assistantContext";
+import { createCloudAiFetch, isNativeCloudAiProxy } from "./cloudAiFetch";
 import { cloudAiConsentRefusal } from "./cloudAiConsent";
 import {
   executeAssistantOperation,
@@ -108,65 +111,84 @@ When the user asks to add, remove, revise, or reconnect something in the current
 Extended thinking adds latency and cost. Use it only when it materially improves a multi-stage circuit decision; ordinary questions and small library plans should be answered directly.`;
 
 const API_KEY_EVENT = "tau:assistant-api-key-changed";
-let sessionApiKey = "";
+/** Presence flag shared by Settings and the assistant send gate. */
+let sessionHasApiKey = false;
+/** Web/test only — never populated when `isTauri()` is true. */
+let webOnlyApiKey = "";
 let credentialHydration: Promise<void> | null = null;
 let credentialSaveTimer: ReturnType<typeof setTimeout> | null = null;
 let credentialRevision = 0;
 
+/** Raw key for web/test seams only. Always "" in the packaged Tauri app. */
 export function loadAssistantApiKey(): string {
-  return sessionApiKey;
+  return isTauri() ? "" : webOnlyApiKey;
+}
+
+export function hasAssistantApiKey(): boolean {
+  return sessionHasApiKey;
 }
 
 function notifyApiKeyChanged(): void {
   if (typeof window !== "undefined") window.dispatchEvent(new Event(API_KEY_EVENT));
 }
 
-/** Hydrates once per renderer lifetime from the native credential boundary. */
+/** Hydrates key *presence* once per renderer lifetime — never the secret. */
 export function hydrateAssistantApiKey(): Promise<void> {
   if (!isTauri()) return Promise.resolve();
   if (!credentialHydration) {
     const revisionAtStart = credentialRevision;
-    credentialHydration = invoke<string | null>("load_assistant_api_key")
-      .then((key) => {
+    credentialHydration = invoke<boolean>("has_assistant_api_key")
+      .then((present) => {
         // A user edit made while the native read was in flight wins.
         if (credentialRevision !== revisionAtStart) return;
-        sessionApiKey = key?.trim() ?? "";
+        sessionHasApiKey = present;
+        webOnlyApiKey = "";
         notifyApiKeyChanged();
       })
       .catch(() => {
-        // The assistant stays usable for a key entered during this session.
+        // Presence stays whatever the user typed this session.
       });
   }
   return credentialHydration;
 }
 
-/** Updates this process immediately and debounces a native keychain write. */
+/** Writes through to the OS keychain (Tauri) without retaining the secret in
+ *  renderer module state. Web/test keeps a process-local copy for mocks. */
 export function saveAssistantApiKey(key: string): void {
-  sessionApiKey = key.trim();
+  const trimmed = key.trim();
   credentialRevision += 1;
+  sessionHasApiKey = trimmed.length > 0;
+  if (isTauri()) {
+    webOnlyApiKey = "";
+  } else {
+    webOnlyApiKey = trimmed;
+  }
   notifyApiKeyChanged();
   if (!isTauri()) return;
   if (credentialSaveTimer) globalThis.clearTimeout(credentialSaveTimer);
   credentialSaveTimer = globalThis.setTimeout(() => {
     credentialSaveTimer = null;
-    const apiKey = sessionApiKey;
-    void invoke("save_assistant_api_key", { apiKey }).catch(() => {
+    void invoke("save_assistant_api_key", { apiKey: trimmed }).catch(() => {
       // Settings remains responsive; a later edit retries the keychain write.
     });
   }, 350);
 }
 
-/** Reactive read of the stored API key - updates when Settings saves a new
- *  one (same tab, via API_KEY_EVENT) or another tab changes it (`storage`). */
-export function useAssistantApiKey(): string {
-  const [key, setKey] = useState(loadAssistantApiKey);
+/** Reactive presence of an Anthropic key (never the raw secret in Tauri). */
+export function useHasAssistantApiKey(): boolean {
+  const [present, setPresent] = useState(hasAssistantApiKey);
   useEffect(() => {
-    const onChange = () => setKey(loadAssistantApiKey());
+    const onChange = () => setPresent(hasAssistantApiKey());
     window.addEventListener(API_KEY_EVENT, onChange);
     void hydrateAssistantApiKey();
     return () => window.removeEventListener(API_KEY_EVENT, onChange);
   }, []);
-  return key;
+  return present;
+}
+
+/** @deprecated Prefer useHasAssistantApiKey — raw keys are never exposed in Tauri. */
+export function useAssistantApiKey(): string {
+  return useHasAssistantApiKey() ? (loadAssistantApiKey() || "saved") : "";
 }
 
 export type AssistantErrorKind = "auth" | "rate_limit" | "network" | "invalid_action" | "unknown";
@@ -327,7 +349,6 @@ function classifyAssistantError(error: unknown): AssistantError {
  * stateless, so the full history goes on every call.
  */
 export function streamAssistantReply(
-  apiKey: string,
   contextText: string,
   history: readonly AssistantChatMessage[],
   handlers: AssistantStreamHandlers,
@@ -340,13 +361,26 @@ export function streamAssistantReply(
     queueMicrotask(() => handlers.onError({ kind: "unknown", message: consentRefusal }));
     return handle;
   }
+  const nativeProxy = isNativeCloudAiProxy();
+  const apiKey = nativeProxy ? "keychain" : webOnlyApiKey;
+  if (!apiKey) {
+    const handle: AssistantStreamHandle = { abort: () => {} };
+    queueMicrotask(() => handlers.onError({
+      kind: "auth",
+      message: "Authentication failed. Check your API key in Settings.",
+    }));
+    return handle;
+  }
   // Match the SDK's own fetch ceiling to Tau's larger mutation ceiling. The
   // SDK defaults to ten minutes, which would otherwise undercut Tau's
-  // progress-aware twelve-minute build budget.
+  // progress-aware twelve-minute build budget. In Tauri the placeholder
+  // `apiKey` is never sent — createCloudAiFetch strips auth headers and Rust
+  // attaches the keychain credential on the allowlisted HTTPS call.
   const client = new Anthropic({
     apiKey,
     dangerouslyAllowBrowser: true,
     timeout: ASSISTANT_REQUEST_TIMEOUT_MS,
+    ...(nativeProxy ? { fetch: createCloudAiFetch("anthropic") } : {}),
   });
   let userAborted = false;
   let activeStream: { abort: () => void } | null = null;

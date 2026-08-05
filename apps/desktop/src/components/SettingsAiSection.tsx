@@ -7,8 +7,8 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { userFacingErrorMessage } from "../lib/errorMessage";
-import { loadAssistantApiKey, saveAssistantApiKey, useAssistantApiKey } from "../lib/assistant";
-import { loadGeminiApiKey, saveGeminiApiKey, useGeminiApiKey } from "../lib/providerApiKey";
+import { saveAssistantApiKey, useHasAssistantApiKey } from "../lib/assistant";
+import { saveGeminiApiKey, useHasGeminiApiKey } from "../lib/providerApiKey";
 import { GEMINI_MODEL_PRESETS } from "../lib/geminiAssistant";
 import {
   saveAssistantPreferences,
@@ -39,13 +39,10 @@ export function SettingsAiSection({
 }: {
   onNotice: (message: string) => void;
 }) {
-  const storedApiKey = useAssistantApiKey();
-  const [apiKeyInput, setApiKeyInput] = useState(loadAssistantApiKey);
-  const [geminiKeyInput, setGeminiKeyInput] = useState(loadGeminiApiKey);
-  const hydratedGeminiKey = useGeminiApiKey();
-  useEffect(() => {
-    setGeminiKeyInput((current) => (current ? current : hydratedGeminiKey));
-  }, [hydratedGeminiKey]);
+  const hasAnthropicKey = useHasAssistantApiKey();
+  const [apiKeyInput, setApiKeyInput] = useState("");
+  const [geminiKeyInput, setGeminiKeyInput] = useState("");
+  const hasGeminiKey = useHasGeminiApiKey();
   const assistantPreferences = useAssistantPreferences();
   const cloudConsent = useCloudAiConsent();
   const [localAiStatus, setLocalAiStatus] = useState<LocalAiStatus | null>(null);
@@ -54,8 +51,6 @@ export function SettingsAiSection({
   const [customLocalModels, setCustomLocalModels] = useState(loadCustomLocalAiModels);
   const [customModelRepository, setCustomModelRepository] = useState("");
   const [showAdvancedLocal, setShowAdvancedLocal] = useState(false);
-
-  useEffect(() => setApiKeyInput(storedApiKey), [storedApiKey]);
 
   useEffect(() => {
     if (assistantPreferences.provider !== "local-mlx") return;
@@ -347,7 +342,9 @@ export function SettingsAiSection({
                   variant="mono"
                   autoComplete="off"
                   spellCheck={false}
-                  placeholder="Optional until you chat — AIza…"
+                  placeholder={hasGeminiKey
+                    ? "Key saved in Mac keychain — paste a new key to replace"
+                    : "Optional until you chat — AIza…"}
                   value={geminiKeyInput}
                   onChange={(event) => {
                     const next = event.currentTarget.value;
@@ -356,7 +353,7 @@ export function SettingsAiSection({
                   }}
                 />
                 <span className="settings-field-hint">
-                  Free key at aistudio.google.com/apikey. Stored in your Mac keychain — never in the schematic file.
+                  Free key at aistudio.google.com/apikey. Stored in your Mac keychain — never held in the renderer for API calls, never in the schematic file.
                 </span>
               </label>
             ) : (
@@ -369,7 +366,9 @@ export function SettingsAiSection({
                   variant="mono"
                   autoComplete="off"
                   spellCheck={false}
-                  placeholder="Optional until you chat — sk-ant-…"
+                  placeholder={hasAnthropicKey
+                    ? "Key saved in Mac keychain — paste a new key to replace"
+                    : "Optional until you chat — sk-ant-…"}
                   value={apiKeyInput}
                   onChange={(event) => {
                     const next = event.currentTarget.value;
@@ -378,7 +377,7 @@ export function SettingsAiSection({
                   }}
                 />
                 <span className="settings-field-hint">
-                  Stored in your Mac keychain. A ChatGPT subscription does not cover this key.
+                  Stored in your Mac keychain and attached by Tau's native process — never held in the renderer for API calls. A ChatGPT subscription does not cover this key.
                 </span>
               </label>
             )}

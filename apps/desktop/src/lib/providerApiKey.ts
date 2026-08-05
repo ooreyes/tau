@@ -1,23 +1,30 @@
 /**
- * Per-provider API-key store. Same guarantees as the Anthropic path in
- * assistant.ts: the key lives in module scope for this renderer's lifetime and
- * in the OS keychain across launches - never in localStorage, never in a
- * project file, never logged. Each provider gets its own keychain entry, so
- * holding a Gemini key never exposes an Anthropic one.
+ * Per-provider API-key presence store. In the native app the secret lives only
+ * in the OS keychain: the renderer may write a new key (Settings) or learn
+ * whether one exists, but never hydrates the raw value for API calls. Cloud
+ * HTTPS attaches the credential inside Rust (`cloud_ai_proxy`).
+ *
+ * Outside Tauri (unit tests / web preview) a process-local key is kept so
+ * injected fetch seams can still authenticate — that path is not the packaged
+ * desktop security boundary.
  */
 import { useEffect, useState } from "react";
 import { invoke, isTauri } from "@tauri-apps/api/core";
 
 export interface ProviderKeyStore {
+  /** Raw key for web/test only; always "" in Tauri. */
   load(): string;
+  hasKey(): boolean;
   hydrate(): Promise<void>;
   save(key: string): void;
-  useKey(): string;
+  useHasKey(): boolean;
 }
 
 export function createProviderKeyStore(provider: string): ProviderKeyStore {
   const changeEvent = `tau:assistant-api-key-changed:${provider}`;
-  let sessionKey = "";
+  /** Packaged app: presence only. Web/test: optional raw key for fetch seams. */
+  let sessionHasKey = false;
+  let webOnlyKey = "";
   let hydration: Promise<void> | null = null;
   let saveTimer: ReturnType<typeof setTimeout> | null = null;
   let revision = 0;
@@ -26,58 +33,69 @@ export function createProviderKeyStore(provider: string): ProviderKeyStore {
     if (typeof window !== "undefined") window.dispatchEvent(new Event(changeEvent));
   };
 
-  const load = () => sessionKey;
+  const load = () => (isTauri() ? "" : webOnlyKey);
+
+  const hasKey = () => sessionHasKey;
 
   const hydrate = (): Promise<void> => {
     if (!isTauri()) return Promise.resolve();
     if (!hydration) {
       const revisionAtStart = revision;
-      hydration = invoke<string | null>("load_provider_api_key", { provider })
-        .then((key) => {
-          // A user edit made while the native read was in flight wins.
+      hydration = invoke<boolean>("has_provider_api_key", { provider })
+        .then((present) => {
           if (revision !== revisionAtStart) return;
-          sessionKey = key?.trim() ?? "";
+          sessionHasKey = present;
+          webOnlyKey = "";
           notify();
         })
         .catch(() => {
-          // The assistant stays usable for a key entered during this session.
+          // Presence stays whatever the user typed this session.
         });
     }
     return hydration;
   };
 
   const save = (key: string): void => {
-    sessionKey = key.trim();
+    const trimmed = key.trim();
     revision += 1;
+    sessionHasKey = trimmed.length > 0;
+    if (isTauri()) {
+      webOnlyKey = "";
+    } else {
+      webOnlyKey = trimmed;
+    }
     notify();
     if (!isTauri()) return;
     if (saveTimer) globalThis.clearTimeout(saveTimer);
     saveTimer = globalThis.setTimeout(() => {
       saveTimer = null;
-      const apiKey = sessionKey;
-      void invoke("save_provider_api_key", { provider, apiKey }).catch(() => {
+      void invoke("save_provider_api_key", { provider, apiKey: trimmed }).catch(() => {
         // Settings remains responsive; a later edit retries the keychain write.
       });
     }, 350);
   };
 
-  const useKey = (): string => {
-    const [key, setKey] = useState(load);
+  const useHasKey = (): boolean => {
+    const [present, setPresent] = useState(hasKey);
     useEffect(() => {
-      const onChange = () => setKey(load());
+      const onChange = () => setPresent(hasKey());
       window.addEventListener(changeEvent, onChange);
       void hydrate();
       return () => window.removeEventListener(changeEvent, onChange);
     }, []);
-    return key;
+    return present;
   };
 
-  return { load, hydrate, save, useKey };
+  return { load, hasKey, hydrate, save, useHasKey };
 }
 
 const geminiStore = createProviderKeyStore("gemini");
 
 export const loadGeminiApiKey = geminiStore.load;
+export const hasGeminiApiKey = geminiStore.hasKey;
 export const hydrateGeminiApiKey = geminiStore.hydrate;
 export const saveGeminiApiKey = geminiStore.save;
-export const useGeminiApiKey = geminiStore.useKey;
+export const useHasGeminiApiKey = geminiStore.useHasKey;
+
+/** @deprecated Prefer useHasGeminiApiKey — raw keys are never exposed in Tauri. */
+export const useGeminiApiKey = (): string => (useHasGeminiApiKey() ? (loadGeminiApiKey() || "saved") : "");

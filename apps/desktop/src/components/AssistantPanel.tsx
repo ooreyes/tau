@@ -28,7 +28,7 @@ import {
   ASSISTANT_MODEL_LABEL,
   compactAssistantHistory,
   streamAssistantReply,
-  useAssistantApiKey,
+  useHasAssistantApiKey,
   type AssistantChatMessage,
   type AssistantError,
   type AssistantProgressPhase,
@@ -39,7 +39,7 @@ import { AssistantProviderError, type AssistantProvider, type AssistantProviderR
 import type { AssistantRunMetrics } from "../lib/assistantProvider";
 import { LocalMlxAssistant, LOCAL_MLX_MODEL_PRESETS } from "../lib/localMlxAssistant";
 import { GeminiAssistant, GEMINI_MODEL_PRESETS } from "../lib/geminiAssistant";
-import { useGeminiApiKey } from "../lib/providerApiKey";
+import { useHasGeminiApiKey } from "../lib/providerApiKey";
 import { getLocalAiStatus, LOCAL_AI_PRESETS, type LocalAiStatus } from "../lib/localAiRuntime";
 import {
   ensureLocalAi,
@@ -245,8 +245,8 @@ export function AssistantPanel({
   memoryKey = "untitled.asc",
   legacyMemoryKey,
 }: AssistantPanelProps) {
-  const apiKey = useAssistantApiKey();
-  const geminiKey = useGeminiApiKey();
+  const hasAnthropicKey = useHasAssistantApiKey();
+  const hasGeminiKey = useHasGeminiApiKey();
   const preferences = useAssistantPreferences();
   const userModelLibraries = useSchematic((s) => s.userModelLibraries);
   const installedLtspiceModelLibraries = useRuntimeModelLibraries((s) => s.installedLtspice);
@@ -267,8 +267,8 @@ export function AssistantPanel({
     [preferences.localModel],
   );
   const geminiAssistant = useMemo(
-    () => (geminiKey ? new GeminiAssistant({ apiKey: geminiKey, model: preferences.geminiModel }) : null),
-    [geminiKey, preferences.geminiModel],
+    () => (hasGeminiKey ? new GeminiAssistant({ model: preferences.geminiModel }) : null),
+    [hasGeminiKey, preferences.geminiModel],
   );
   /** Both non-Anthropic providers implement the same non-streaming
    *  AssistantProvider contract, so the send path below branches once. */
@@ -519,7 +519,7 @@ export function AssistantPanel({
       return;
     }
     if (!text || streaming || !localAiCanSend
-      || (preferences.provider === "anthropic" && (!apiKey || !hasCloudAiConsent()))
+      || (preferences.provider === "anthropic" && (!hasAnthropicKey || !hasCloudAiConsent()))
       || (preferences.provider === "gemini" && (!geminiAssistant || !hasCloudAiConsent()))) return;
     setError(null);
     setRetryPrompt(null);
@@ -649,7 +649,7 @@ export function AssistantPanel({
       return;
     }
 
-    streamRef.current = streamAssistantReply(apiKey, contextText, history, {
+    streamRef.current = streamAssistantReply(contextText, history, {
       onDelta: (snapshot) => {
         setMessages((list) => list.map((m) => (m.id === assistantMessage.id ? { ...m, content: snapshot } : m)));
       },
@@ -663,7 +663,7 @@ export function AssistantPanel({
       },
       onProgress: setProgressPhase,
     }, { analysis, params }, { allowCurrentApply: canApplyCurrent });
-  }, [messages, streaming, localAiCanSend, preferences.provider, apiKey, components, wires, netLabels, probes, directives, userModelLibraryTexts, params, analysis, opResult, acResult, dcResult, fourier, componentRows, measurements, selectedId, localAssistant, geminiAssistant, directAssistant, memoryKey]);
+  }, [messages, streaming, localAiCanSend, preferences.provider, hasAnthropicKey, components, wires, netLabels, probes, directives, userModelLibraryTexts, params, analysis, opResult, acResult, dcResult, fourier, componentRows, measurements, selectedId, localAssistant, geminiAssistant, directAssistant, memoryKey]);
 
   const beginMessageEdit = useCallback((message: ChatMessage) => {
     if (streaming || message.role !== "user") return;
@@ -843,8 +843,8 @@ export function AssistantPanel({
       saveAssistantPreferences({ ...preferences, provider: "local-mlx", localModel: value });
     }
   };
-  const needsCloudKey = (preferences.provider === "anthropic" && !apiKey)
-    || (preferences.provider === "gemini" && !geminiKey);
+  const needsCloudKey = (preferences.provider === "anthropic" && !hasAnthropicKey)
+    || (preferences.provider === "gemini" && !hasGeminiKey);
   const needsCloudConsent = (preferences.provider === "anthropic" || preferences.provider === "gemini")
     && !cloudConsent.consented;
   const missingKeyProvider = preferences.provider === "gemini" ? "Gemini" : "Anthropic";

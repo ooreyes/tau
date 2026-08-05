@@ -21,10 +21,11 @@ pub fn run() {
         .manage(spice::NativeSpiceState::default())
         .invoke_handler(tauri::generate_handler![
             greet,
-            credentials::load_assistant_api_key,
+            credentials::has_assistant_api_key,
             credentials::save_assistant_api_key,
-            credentials::load_provider_api_key,
+            credentials::has_provider_api_key,
             credentials::save_provider_api_key,
+            credentials::cloud_ai_proxy,
             local_ai::local_ai_status,
             local_ai::install_local_ai_runtime,
             local_ai::start_local_ai,

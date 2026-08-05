@@ -308,7 +308,8 @@ describe("AssistantPanel", () => {
     saveCloudAiConsent({ consented: false });
     const onError = vi.fn();
     const onDelta = vi.fn();
-    const handle = streamAssistantReply("test-key", "Circuit context", [{ role: "user", content: "Build an amplifier" }], {
+    saveAssistantApiKey("test-key");
+    const handle = streamAssistantReply("Circuit context", [{ role: "user", content: "Build an amplifier" }], {
       onDelta,
       onDone: vi.fn(),
       onError,
@@ -325,7 +326,8 @@ describe("AssistantPanel", () => {
   it("stops a cloud request that never starts responding instead of hanging for minutes", () => {
     vi.useFakeTimers();
     const onError = vi.fn();
-    streamAssistantReply("test-key", "Circuit context", [{ role: "user", content: "Build an amplifier" }], {
+    saveAssistantApiKey("test-key");
+    streamAssistantReply("Circuit context", [{ role: "user", content: "Build an amplifier" }], {
       onDelta: vi.fn(),
       onDone: vi.fn(),
       onError,
@@ -342,7 +344,8 @@ describe("AssistantPanel", () => {
   it("keeps a long Sonnet build alive while stream activity continues", () => {
     vi.useFakeTimers();
     const onError = vi.fn();
-    const handle = streamAssistantReply("test-key", "Circuit context", [{ role: "user", content: "Build an amplifier" }], {
+    saveAssistantApiKey("test-key");
+    const handle = streamAssistantReply("Circuit context", [{ role: "user", content: "Build an amplifier" }], {
       onDelta: vi.fn(),
       onDone: vi.fn(),
       onError,
@@ -363,7 +366,8 @@ describe("AssistantPanel", () => {
   it("stops a connected stream only after it becomes inactive", () => {
     vi.useFakeTimers();
     const onError = vi.fn();
-    streamAssistantReply("test-key", "Circuit context", [{ role: "user", content: "Build an amplifier" }], {
+    saveAssistantApiKey("test-key");
+    streamAssistantReply("Circuit context", [{ role: "user", content: "Build an amplifier" }], {
       onDelta: vi.fn(),
       onDone: vi.fn(),
       onError,
@@ -384,7 +388,8 @@ describe("AssistantPanel", () => {
   it("keeps a sane absolute ceiling even if a provider emits activity forever", () => {
     vi.useFakeTimers();
     const onError = vi.fn();
-    streamAssistantReply("test-key", "Circuit context", [{ role: "user", content: "Build an amplifier" }], {
+    saveAssistantApiKey("test-key");
+    streamAssistantReply("Circuit context", [{ role: "user", content: "Build an amplifier" }], {
       onDelta: vi.fn(),
       onDone: vi.fn(),
       onError,
@@ -407,7 +412,8 @@ describe("AssistantPanel", () => {
     const onDelta = vi.fn();
     const onDone = vi.fn();
     const onError = vi.fn();
-    streamAssistantReply("test-key", "Circuit context", [{ role: "user", content: "Build an amplifier" }], {
+    saveAssistantApiKey("test-key");
+    streamAssistantReply("Circuit context", [{ role: "user", content: "Build an amplifier" }], {
       onDelta,
       onDone,
       onError,
@@ -428,7 +434,8 @@ describe("AssistantPanel", () => {
   it("ignores replayed events from an earlier repair attempt", async () => {
     const onDelta = vi.fn();
     const onDone = vi.fn();
-    streamAssistantReply("test-key", "Circuit context", [{ role: "user", content: "Build an amplifier" }], {
+    saveAssistantApiKey("test-key");
+    streamAssistantReply("Circuit context", [{ role: "user", content: "Build an amplifier" }], {
       onDelta,
       onDone,
       onError: vi.fn(),
@@ -461,7 +468,8 @@ describe("AssistantPanel", () => {
     const onError = vi.fn();
     const consoleLog = vi.spyOn(console, "log").mockImplementation(() => {});
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
-    streamAssistantReply(secretMarker, "Circuit context", [{ role: "user", content: "Explain R1" }], {
+    saveAssistantApiKey(secretMarker);
+    streamAssistantReply("Circuit context", [{ role: "user", content: "Explain R1" }], {
       onDelta: vi.fn(),
       onDone: vi.fn(),
       onError,
@@ -479,7 +487,8 @@ describe("AssistantPanel", () => {
     const onError = vi.fn();
     streamCreateErrors.push(new Error("synchronous request construction failure"));
 
-    expect(() => streamAssistantReply("test-key", "Circuit context", [{ role: "user", content: "Explain R1" }], {
+    saveAssistantApiKey("test-key");
+    expect(() => streamAssistantReply("Circuit context", [{ role: "user", content: "Explain R1" }], {
       onDelta: vi.fn(),
       onDone: vi.fn(),
       onError,
@@ -492,7 +501,8 @@ describe("AssistantPanel", () => {
     const onDelta = vi.fn();
     const onDone = vi.fn();
     const onError = vi.fn();
-    const handle = streamAssistantReply("test-key", "Circuit context", [{ role: "user", content: "Build an amplifier" }], {
+    saveAssistantApiKey("test-key");
+    const handle = streamAssistantReply("Circuit context", [{ role: "user", content: "Build an amplifier" }], {
       onDelta,
       onDone,
       onError,
