@@ -1312,7 +1312,11 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   using engineering units (`measurementModel.ts`; 29 pane-model + 9 measurement
   tests). The 2026-07-12 overhaul replaced the former two-column cards with
   full-width, vertically aligned instrument panes and synchronized time zoom.
-  Still ⬜: AC/DC panes, manual axis limits.
+  Still ⬜: AC/DC panes. **Bode magnitude manual Y limits landed**
+  (2026-08-05): AcPlot Ymin/Ymax + Apply Y / Autoscale Y via
+  `parseManualYLimits` / `applyManualYToDomain` (swaps inverted; refuses
+  blank/equal). Log Y / Lin Y clears manual. Pending: DC / phase / transient
+  numeric axis limits.
 - ✅ **Per-component simulator telemetry (§11 D10, 2026-07-10):** every named
   component receives a selectable row with voltage across, current through,
   instantaneous power, sparkline, and signal class. Voltage polarity follows
@@ -1561,9 +1565,10 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   **Bode AC magnitude cursors landed** (2026-08-05): AcPlot Cursors toggle +
   f1/f2/Δ/SLOPE readout. **Bode phase/group-delay cursors landed** (2026-08-05):
   shared Cursors toggle marks lower pane + φ/τ readout. **Standalone detached
-  phase window landed** (2026-08-05): AcPlot **Phase window** Dialog. **NEXT:**
-  (waveform CSV/PNG/plt/FFT/expressions/dual-axis/right-click/Bode-X/Y/τ/
-  cursors/phase-window covered).
+  phase window landed** (2026-08-05): AcPlot **Phase window** Dialog.
+  **Bode magnitude manual Y limits landed** (2026-08-05): AcPlot Ymin/Ymax +
+  Apply Y / Autoscale Y. **NEXT:** DC / phase / transient numeric axis limits;
+  AC/DC multi-pane cards.
 - 🟡 Right-click trace → math/operations — **abs / negate / dB / uramp / sgn /
   ddt / idt landed** (2026-08-05): `traceMath.ts` wraps a legend trace into
   `abs(…)`, `-(…)`, `db(…)`, `uramp(…)`, `sgn(…)`, `ddt(…)`, or `idt(…)`;

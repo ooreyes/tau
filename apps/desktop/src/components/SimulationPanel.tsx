@@ -74,6 +74,11 @@ import { commonTraceUnit } from "../simulation/exprUnit";
 import { partitionTracesByAxis, planDualAxisY } from "../simulation/dualAxis";
 import { groupDelay, groupDelayYDomain } from "../simulation/groupDelay";
 import { bodeMagYDomain, dbToLinearMag, freqToFraction } from "../simulation/freqAxis";
+import {
+  applyManualYToDomain,
+  parseManualYLimits,
+  type ManualAxisLimits,
+} from "../simulation/manualAxisLimits";
 import type { AxisScale } from "../simulation/axisTicks";
 import { stabilityMargins } from "../simulation/stability";
 import { seriesToCsv, stepFamilyToCsv, spectrumToCsv, cursorReadoutToCsv, analysisFamilyToCsv } from "../simulation/waveformCsv";
@@ -3727,6 +3732,10 @@ export function AcPlot({
   const [phaseWindowOpen, setPhaseWindowOpen] = useState(false);
   const [cf1, setCf1] = useState(0.25);
   const [cf2, setCf2] = useState(0.75);
+  const [yMinDraft, setYMinDraft] = useState("");
+  const [yMaxDraft, setYMaxDraft] = useState("");
+  const [manualY, setManualY] = useState<ManualAxisLimits | null>(null);
+  const [yLimitsError, setYLimitsError] = useState<string | null>(null);
   const magTicks = tickCountsFromSize(magSize);
   const phaseTicks = tickCountsFromSize(phaseSize);
   const detachedPhaseClipId = useId();
@@ -3775,13 +3784,17 @@ export function AcPlot({
   // visually stacked halves of one Bode plot but each is its own `<svg>` with
   // its own `usePlotViewport`, so zooming one doesn't move the other.
   const magDomain = useMemo<Viewport>(
-    () => ({
-      xMin: plot ? 10 ** plot.f0 : 1,
-      xMax: plot ? 10 ** plot.f1 : 10,
-      yMin: plot ? plot.yMin : -60,
-      yMax: plot ? plot.yMax : 0,
-    }),
-    [plot],
+    () =>
+      applyManualYToDomain(
+        {
+          xMin: plot ? 10 ** plot.f0 : 1,
+          xMax: plot ? 10 ** plot.f1 : 10,
+          yMin: plot ? plot.yMin : -60,
+          yMax: plot ? plot.yMax : 0,
+        },
+        manualY,
+      ),
+    [plot, manualY],
   );
   const phaseDomain = useMemo<Viewport>(
     () => ({
@@ -3797,7 +3810,7 @@ export function AcPlot({
     xScale: freqScale,
     yScale: magYScale,
     resetKey: plot && success
-      ? `${freqScale}:${magYScale}:${success.freqs[0]}:${success.freqs[success.freqs.length - 1]}`
+      ? `${freqScale}:${magYScale}:${manualY ? `${manualY.yMin}:${manualY.yMax}` : "auto"}:${success.freqs[0]}:${success.freqs[success.freqs.length - 1]}`
       : null,
     width: PLOT_WIDTH,
     height: PLOT_HEIGHT,
@@ -4167,7 +4180,11 @@ export function AcPlot({
             size="sm"
             variant={magYScale === "log" ? "default" : "outline"}
             aria-pressed={magYScale === "log"}
-            onClick={() => setMagYScale("log")}
+            onClick={() => {
+              setMagYScale("log");
+              setManualY(null);
+              setYLimitsError(null);
+            }}
           >
             Log Y
           </Button>
@@ -4175,7 +4192,11 @@ export function AcPlot({
             size="sm"
             variant={magYScale === "linear" ? "default" : "outline"}
             aria-pressed={magYScale === "linear"}
-            onClick={() => setMagYScale("linear")}
+            onClick={() => {
+              setMagYScale("linear");
+              setManualY(null);
+              setYLimitsError(null);
+            }}
           >
             Lin Y
           </Button>
@@ -4248,6 +4269,75 @@ export function AcPlot({
           tone={margins?.gainMarginDb != null && margins.gainMarginDb < 0 ? "red" : "green"}
         />
       </div>
+      <div className="meter-row analysis-meter" aria-label="Bode magnitude Y limits">
+        <label className="axis-limit-field">
+          Ymin
+          <Input
+            variant="mono"
+            size="sm"
+            className="w-20"
+            value={yMinDraft}
+            aria-label="Bode magnitude Y min"
+            placeholder={plot ? String(plot.yMin) : "-60"}
+            onChange={(e) => {
+              setYMinDraft(e.currentTarget.value);
+              if (yLimitsError) setYLimitsError(null);
+            }}
+          />
+        </label>
+        <label className="axis-limit-field">
+          Ymax
+          <Input
+            variant="mono"
+            size="sm"
+            className="w-20"
+            value={yMaxDraft}
+            aria-label="Bode magnitude Y max"
+            placeholder={plot ? String(plot.yMax) : "0"}
+            onChange={(e) => {
+              setYMaxDraft(e.currentTarget.value);
+              if (yLimitsError) setYLimitsError(null);
+            }}
+          />
+        </label>
+        <Button
+          size="sm"
+          variant="outline"
+          aria-label="Apply Bode magnitude Y limits"
+          disabled={!plot}
+          onClick={() => {
+            const parsed = parseManualYLimits(yMinDraft, yMaxDraft);
+            if (!parsed.ok) {
+              setYLimitsError(parsed.error);
+              return;
+            }
+            setManualY(parsed.limits);
+            setYLimitsError(null);
+          }}
+        >
+          Apply Y
+        </Button>
+        <Button
+          size="sm"
+          variant={manualY ? "default" : "outline"}
+          aria-label="Autoscale Bode magnitude Y"
+          aria-pressed={!manualY}
+          disabled={!plot}
+          onClick={() => {
+            setManualY(null);
+            setYLimitsError(null);
+            setYMinDraft("");
+            setYMaxDraft("");
+          }}
+        >
+          Autoscale Y
+        </Button>
+      </div>
+      {yLimitsError && (
+        <div className="expr-error" role="alert">
+          {yLimitsError}
+        </div>
+      )}
       {cursorsOn && (
         <div className="cursor-sliders">
           <label>

@@ -1,9 +1,9 @@
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 08:25 CDT**
+**Status: DONE - 2026-08-05 08:30 CDT**
 
-Unit: Waveform DoD — **AC/DC step-family per-trace selection**.
-Worktree `Tau-wt-wave-acdc-sel` over `d152c64` (pass=100). Settings locked.
+Unit: Waveform DoD — **Bode magnitude manual Y limits**.
+Worktree `Tau-wt-wave-bode-ylim` over `0695815` (pass=100). Settings locked.
 SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
@@ -13,6 +13,32 @@ SHIPPABLE? **NO**
 ---
 
 
+
+### 2026-08-05 — Bode magnitude manual Y limits (§waveform DoD)
+
+**What I did**
+- AcPlot Ymin/Ymax + Apply Y / Autoscale Y via `parseManualYLimits` /
+  `applyManualYToDomain` (swap inverted; refuse blank/equal). Log/Lin Y clears
+  manual. Worktree `Tau-wt-wave-bode-ylim` over `0695815`. Left MC1648 /
+  continue 39 Educational ASC, ct 19 OP, Chan/NIGBT/FRA, Settings alone.
+
+**Files**
+- `apps/desktop/src/simulation/manualAxisLimits.ts` (+ test)
+- `apps/desktop/src/components/SimulationPanel.tsx` (+ axes wiring test)
+- `apps/desktop/src/App.css`
+- `FEATURE_PARITY.md`, `PROGRESS.md`
+
+**Tests**
+- `pnpm -C apps/desktop typecheck` + `test` green (2787 passed)
+- parseManualYLimits 3 + Apply/Autoscale Y wiring
+
+**Parity items**
+- Waveform viewer 🟡 (Bode mag manual Y limits landed; DC/phase/tran pending).
+  Differential pass=100 · named-device 48.1% · SHIPPABLE? NO
+
+**Next step**
+- DC/phase/transient numeric axis limits / non-wall ND. Leave
+  Educational/IRFP/Settings alone.
 
 ### 2026-08-05 — AC/DC step-family per-trace selection (§waveform DoD)
 

@@ -325,6 +325,27 @@ describe("AcPlot - log-frequency ticks on both magnitude and phase", () => {
     expect(container.querySelectorAll("path.scope-trace").length).toBeGreaterThan(0);
   });
 
+  it("Apply Y locks Bode magnitude axis; Autoscale Y restores autorange", () => {
+    const freqs = [10, 100, 1000, 10000];
+    const result: AcResult = {
+      ok: true,
+      freqs,
+      traces: [{ id: "n1", label: "V(out)", magDb: [0, -3, -20, -40], phaseDeg: [0, -45, -90, -90] }],
+      warnings: [],
+    };
+    render(<AcPlot result={result} />);
+    const limits = screen.getByLabelText("Bode magnitude Y limits");
+    fireEvent.change(screen.getByLabelText("Bode magnitude Y min"), { target: { value: "-40" } });
+    fireEvent.change(screen.getByLabelText("Bode magnitude Y max"), { target: { value: "10" } });
+    fireEvent.click(screen.getByRole("button", { name: "Apply Bode magnitude Y limits" }));
+    expect(screen.queryByRole("alert")).toBeNull();
+    const autoscale = screen.getByRole("button", { name: "Autoscale Bode magnitude Y" });
+    expect(autoscale.getAttribute("aria-pressed")).toBe("false");
+    fireEvent.click(autoscale);
+    expect(autoscale.getAttribute("aria-pressed")).toBe("true");
+    expect(limits).toBeTruthy();
+  });
+
   it("Group delay toggle swaps the lower Bode pane to τ (s)", () => {
     // Linear phase φ = −360·f·τ0 → constant group delay τ0.
     const tau0 = 1e-3;
