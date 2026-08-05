@@ -207,7 +207,7 @@ account and sign/notarize/ship.
       with LTspice over a representative device and topology matrix.
       **Partial (2026-08-05):** `scripts/differential-parity.sh` +
       `differentialParity.corpus.ts` (also under `dod-parity.sh`) prove
-      pass=103 · sibling=5 · gap=0 on stdout: prior cells through SampleAndHold +
+      pass=104 · sibling=5 · gap=0 on stdout: prior cells through SampleAndHold +
       Educational/contrib/elip_grd.asc authored `.ac` (elliptic RLC + K1; S21/S11
       nRms≈0.0057/0.0039 @ maxTol=0.10 peak) + Documents/LTspice/Draft3.asc
       authored `.ac` (series RLC L/C/R; v(vout) nRms=0 / nMax=0 span≈1.04) +
@@ -287,12 +287,14 @@ account and sign/notarize/ship.
       log-R rewrite; v(out)/v(in) nRms≈0.0001/0) +
       Educational/dimmer.asc authored `.tran` (on-schematic DIAC+TRIAC;
       `.step Rdim` expanded 1k/50k/100k; v(loadpower) nRms≈0.0003/0.011/0.008;
-      gate v(b) + Rdim≥200k deferred).
+      gate v(b) + Rdim≥200k deferred) +
+      Educational/SoftDiodeRecovery.asc authored `.tran` (`.model X D(tt/Vp/Cjo)`;
+      `.step Vp` expanded Vp=0; v(n001) nRms≈0.0026; Vp>0 soft-recovery deferred).
       ct 19 INA `.op` deferred (LTspice OP fails on same-deck tanh B_U*).
       gr_del deferred (all-pass |V|≈1 hollow magnitude). TwoTau deferred
       (LTspice rejects Tau s_xfer same-deck). Draft8 Laplace brace-mangle
       deferred. Draft6 AD823 / Draft10 UOA2 same-deck not landed. HalfSlope
-      Laplace not landed. SoftDiodeRecovery deferred. wavein (wavefile=)
+      Laplace not landed. SoftDiodeRecovery Vp>0 still deferred. wavein (wavefile=)
       deferred. ISO7637 spike still misses. Educational/IGBT.asc NIGBT refuse (≠ IGBTeq).
       dimmer gate/near-cutoff still deferred. Resources sinh / divide2 / inverter deferred
       (log-domain / `.machine`). Resources mextram deferred (no authored analysis).

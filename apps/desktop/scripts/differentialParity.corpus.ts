@@ -83,6 +83,8 @@ const HANDSFREE_PREAMP_ASC = join(EDU, "PAsystem", "HandsFreePreamp.asc");
 const VSWITCH_ASC = join(EDU, "Vswitch.asc");
 /** Educational dimmer — on-schematic DIAC/TRIAC + stepped Rdim (load-power probe). */
 const DIMMER_ASC = join(EDU, "dimmer.asc");
+/** Educational SoftDiodeRecovery — LTspice Vp soft-recovery diode (Vp=0 member). */
+const SOFTDIODE_ASC = join(EDU, "SoftDiodeRecovery.asc");
 const APP = join(homedir(), "Documents", "LTspice", "examples", "Applications");
 const DOC_LTSPICE = join(homedir(), "Documents", "LTspice");
 const CURVETRACE_ASC = join(EDU, "curvetrace.asc");
@@ -391,7 +393,7 @@ function withAcStimulus(netlist: string): string {
 describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential parity matrix", () => {
   const cells: DifferentialCell[] = [];
 
-  it("matches RC .tran/.ac/.meas, divider analyses, .step families, curvetrace, stepmodelparam, NoiseFigure, noise.asc, Colpitts/Clapp/Hartly AC, Cohn AC, MeasureBW AC, Transformer/Transformer2/IdealTransformer TRAN, notch/passive/butter/opamp/Linkwitz AC, LM741/LM308/LM78XX/P2/logamp TRAN, GFT AC, DCopPnt OP, audioamp TRAN, UHFpreamp AC, 1563 AC, S-param AC, stepAC AC, 2ndOrder* AC, MonteCarlo AC, varactor AC, phaseshift AC, Pierce/colpits2 AC, edu-varistor TRAN, stepnoise noise, UniversalOpAmp/1/2 TRAN, contrib/qztst AC, SampleAndHold TRAN, contrib/elip_grd AC, Draft3 AC, Draft7 AC, Draft2 TRAN, Draft1 TRAN, BandGaps DC-temp, waveout TRAN, ISO16750 TRAN, IGBTeq nested DC, help-Butterworth AC, Resources-Draft1 DC, 100W TRAN, help-ACstep AC, help-NoiseStep noise, Resources-MicroCode TRAN, ct-rlc-ringing TRAN, ct-diode-dc DC, ct-step-loaded DC, ct-noise-rc noise, ct-stress-rc-ladder AC, ct-active-fourth-order AC, ct-full-bridge TRAN, ct-three-phase TRAN, ct-buck TRAN, ct-boost TRAN, ct-logic TRAN, ct-dflop TRAN, MC1648 TRAN, HandsFreePreamp TRAN, Vswitch TRAN, dimmer TRAN, Class-D AC/OP/DC/noise/tf", () => {
+  it("matches RC .tran/.ac/.meas, divider analyses, .step families, curvetrace, stepmodelparam, NoiseFigure, noise.asc, Colpitts/Clapp/Hartly AC, Cohn AC, MeasureBW AC, Transformer/Transformer2/IdealTransformer TRAN, notch/passive/butter/opamp/Linkwitz AC, LM741/LM308/LM78XX/P2/logamp TRAN, GFT AC, DCopPnt OP, audioamp TRAN, UHFpreamp AC, 1563 AC, S-param AC, stepAC AC, 2ndOrder* AC, MonteCarlo AC, varactor AC, phaseshift AC, Pierce/colpits2 AC, edu-varistor TRAN, stepnoise noise, UniversalOpAmp/1/2 TRAN, contrib/qztst AC, SampleAndHold TRAN, contrib/elip_grd AC, Draft3 AC, Draft7 AC, Draft2 TRAN, Draft1 TRAN, BandGaps DC-temp, waveout TRAN, ISO16750 TRAN, IGBTeq nested DC, help-Butterworth AC, Resources-Draft1 DC, 100W TRAN, help-ACstep AC, help-NoiseStep noise, Resources-MicroCode TRAN, ct-rlc-ringing TRAN, ct-diode-dc DC, ct-step-loaded DC, ct-noise-rc noise, ct-stress-rc-ladder AC, ct-active-fourth-order AC, ct-full-bridge TRAN, ct-three-phase TRAN, ct-buck TRAN, ct-boost TRAN, ct-logic TRAN, ct-dflop TRAN, MC1648 TRAN, HandsFreePreamp TRAN, Vswitch TRAN, dimmer TRAN, SoftDiodeRecovery TRAN, Class-D AC/OP/DC/noise/tf", () => {
     // --- TRAN (also covered by waveformParity; re-assert here so this file is self-sufficient) ---
     {
       const result = runPairedBatch("diff-rc-tran", RC_TRAN, ["v(out)"]);
@@ -5014,6 +5016,70 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
       });
     }
 
+    // --- Educational/SoftDiodeRecovery.asc authored .tran + .step param Vp ---
+    // Soft-recovery diode demo: on-schematic `.model X D(… tt=3u Vp={Vp} Cjo=10n)`
+    // + PULSE drive. Expand `.step param Vp list 0…1` for the **Vp=0** member
+    // only (strip .step; bake `.param Vp=0`) — same honest pattern as dimmer /
+    // ct-step-loaded. Probe diode anode v(n001): nRms≈0.0026 @ 5%/15%.
+    // Vp>0 (LTspice-only dQ/dt damping) remains deferred (nMax climbs with Vp;
+    // ngspice ignores Vp). Never silent TAU_DIODE. Tip pass=103 → **pass=104**.
+    // Left PowerAmp TIP / Staff EE / Settings / Fc / ISO7637 spike / astable
+    // phase / TLINE-inv / NE555 Output alone.
+    {
+      expect(existsSync(SOFTDIODE_ASC), `missing ${SOFTDIODE_ASC}`).toBe(true);
+      const imported = importAsc(decodeSchematicText(readFileSync(SOFTDIODE_ASC)));
+      expect(imported.warnings).toEqual([]);
+      expect(imported.foreignSymbols).toEqual([]);
+      const dirs = expandDirectiveLines(imported.directives);
+      expect(dirs.some((d) => /\.step\s+param\s+Vp\b/i.test(d))).toBe(true);
+      expect(dirs.some((d) => /\.model\s+X\s+D\b/i.test(d))).toBe(true);
+      const parsed = analysesFromDirectives(dirs);
+      expect(parsed.tran, "SoftDiodeRecovery.asc must author .tran").toBeTruthy();
+      expect(parsed.tran!.stopTime, "SoftDiodeRecovery .tran 60u").toBeCloseTo(60e-6, 12);
+      const withParam = [
+        ...dirs.filter((d) => !/^\.step\b/i.test(d.trim())),
+        ".param Vp=0",
+      ];
+      const params = buildParamScope(withParam);
+      expect(Number(params.scope.Vp ?? params.scope.vp), "Vp=0").toBeCloseTo(0, 12);
+      const deck = buildSpiceDeck({
+        components: imported.components,
+        wires: imported.wires,
+        netLabels: imported.netLabels,
+        directives: withParam,
+        params,
+      }, {
+        kind: "tran",
+        stopTime: parsed.tran!.stopTime,
+        steps: Math.max(parsed.tran!.steps ?? 240, 8000),
+      });
+      expect(deck.unresolvedSubckts ?? []).toEqual([]);
+      expect(deck.modelSubstitutions ?? []).toEqual([]);
+      expect(deck.netlist).toMatch(/\.model\s+X\s+D\(.*\bVp=0\b/i);
+      expect(deck.netlist).toMatch(/^D3\b.+\bx\b/im);
+      expect(deck.netlist).not.toMatch(/^D3\b.+\bTAU_DIODE\b/im);
+      expect(deck.netlist).toMatch(/^V3\b.+\bPULSE\b/im);
+      expect(deck.netlist).toMatch(/^R1\b.+\b1\b/im);
+      expect(deck.netlist).toMatch(/\.tran\b/i);
+      expect(deck.netlist).not.toMatch(/^\.step\b/im);
+      const result = runPairedBatch("diff-softdiode-vp0", deck.netlist, ["v(n001)"]);
+      const lt = result.ltspice.get("v(n001)")!;
+      const ng = result.ngspice.get("v(n001)")!;
+      const comparison = compareWaveforms(ng.axis, ng.values, lt.axis, lt.values, {
+        rmsTolerance: 0.05,
+        maxTolerance: 0.15,
+      });
+      expect(comparison.pass, `softdiode Vp=0 ${JSON.stringify(comparison)}`).toBe(true);
+      expect(comparison.referenceRange, "softdiode Vp=0 non-hollow").toBeGreaterThan(5);
+      cells.push({
+        analysis: "tran",
+        circuit: "softdiode",
+        topology: "Educational/SoftDiodeRecovery.asc .model X D(tt/Vp/Cjo) Vp=0 member (authored .tran 60u; Vp>0 soft-recovery deferred)",
+        status: "pass",
+        note: `Vp=0 v(n001) nRms=${comparison.normalizedRms.toFixed(4)} nMax=${comparison.normalizedMax.toFixed(4)} span=${comparison.referenceRange.toFixed(3)} (Vp>0 deferred)`,
+      });
+    }
+
     // --- Class-D AC/OP (authored analyses are .tran/.meas; add AC/OP for differential proof) ---
     {
       const ascPath = join(CLASSD_DIR, "class-d-starter.asc");
@@ -5310,6 +5376,6 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
     expect(passCount).toBeGreaterThanOrEqual(70);
     expect(siblingCount).toBe(5);
     expect(gapCount).toBe(0);
-    expect(report).toMatch(/SUMMARY pass=103 sibling=5 gap=0/);
-  }, 240_000);
+    expect(report).toMatch(/SUMMARY pass=104 sibling=5 gap=0/);
+  }, 600_000);
 });

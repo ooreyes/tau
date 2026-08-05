@@ -1767,7 +1767,7 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   oscillator by amplitude, RMS, and frequency. All four proofs pass headlessly.
   **Differential matrix slice (2026-08-05):** `scripts/differential-parity.sh`
   (wired into `dod-parity.sh`) prints pass/sibling/gap coverage to stdout
-  (truth). Gap-closure → **pass=103 · sibling=5 · gap=0**: prior cells through
+  (truth). Gap-closure → **pass=104 · sibling=5 · gap=0**: prior cells through
   SampleAndHold plus Educational/contrib/**elip_grd.asc** authored `.ac`
   (elliptic RLC+K1; S21/S11 nRms≈0.0057/0.0039 @ maxTol=0.10 peak) plus
   Documents/LTspice/**Draft3.asc** authored `.ac` (series RLC L/C/R; v(vout)
@@ -1852,7 +1852,10 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   ≠ SoftDiodeRecovery / ISO7637 spike / Fc) plus Educational/**dimmer.asc**
   authored `.tran` (on-schematic DIAC+TRIAC; `.step Rdim` expanded 1k/50k/100k;
   v(loadpower) nRms≈0.0003/0.011/0.008; gate v(b) + Rdim≥200k deferred;
-  ≠ SoftDiodeRecovery / PowerAmp / ct digital).
+  ≠ SoftDiodeRecovery Vp>0 / PowerAmp / ct digital) plus
+  Educational/**SoftDiodeRecovery.asc** authored `.tran` (`.model X D(tt/Vp/Cjo)`;
+  `.step Vp` → Vp=0 member; v(n001) nRms≈0.0026 nMax≈0.095 span≈10.7; Vp>0
+  LTspice-only soft-recovery deferred; ≠ ct diode DC / HandsFree ideal-D).
   ct 19 INA `.op` deferred (LTspice OP fails on same-deck tanh B_U*).
   gr_del
   deferred (all-pass |V|≈1
@@ -1860,7 +1863,8 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   Draft10 UOA2 same-deck not landed. tip 65e05ce thrash
   corrected. phono/relax blocked. wavein (wavefile=) deferred. HalfSlope Laplace stripped;
   Vswitch continuous SW landed (pass=102); dimmer TRIAC load-power landed (pass=103;
-  gate/near-cutoff deferred); SoftDiodeRecovery deferred; LoopGain/Electrometer
+  gate/near-cutoff deferred); SoftDiodeRecovery Vp=0 landed (pass=104; Vp>0 deferred);
+  LoopGain/Electrometer
   LT1001 OTA wall; ISO7637 spike miss; Educational/IGBT.asc NIGBT refuse (≠ IGBTeq); Resources sinh/divide2/inverter deferred (log-domain/`.machine`); Resources mextram deferred (no authored analysis). Harness-slice gaps
   closed; DoD broad-differential box remains open — see AGENTS.md.
 - 🟡 Resolve a real device-model set — **common LTspice standard diodes/

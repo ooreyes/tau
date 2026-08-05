@@ -1,15 +1,52 @@
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 ~12:45 CDT**
+**Status: DONE - 2026-08-05 ~12:50 CDT**
 
-Unit: **AI ngspice-before-apply** — fail-closed packaged validation on
-Create/Apply (`assistantNgspiceValidate` + AssistantPanel gate +
-`scripts/ai-ngspice-before-apply.sh`). AI DoD box stays ⬜ (keys/OAuth/evals).
+Unit: Differential SoftDiodeRecovery Vp=0 → **pass=104**
 SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
 
+
+---
+
+### 2026-08-05 — SoftDiodeRecovery Vp=0 TRAN → pass=104 (§DoD)
+
+**What I did**
+- Educational `SoftDiodeRecovery.asc` authored `.tran 60u` + `.step param Vp`:
+  expand to **Vp=0** only (strip `.step`; bake `.param Vp=0`). Exact on-sheet
+  `.model X D(tt/Vp/Cjo)` — zero `TAU_DIODE` / substitutions. Probe diode anode
+  `v(n001)` vs LTspice: nRms≈0.0026 nMax≈0.095 span≈10.7 @ 5%/15%.
+- Vp>0 (LTspice-only dQ/dt soft-recovery) remains deferred. Never weakened
+  Chan/NIGBT/FRA. Left PowerAmp TIP foreign asy / Fc capometer / ISO7637 spike /
+  astable phase / TLINE-inv / NE555 Output alone.
+- Harness LTspice/ngspice batch timeout 120s→300s (P2 under concurrent load).
+
+**Exact stdout**
+```
+SUMMARY pass=104 sibling=5 gap=0 (DoD box stays open until broad authored-analysis matrix is green)
+tran softdiode … Vp=0 v(n001) nRms=0.0026 nMax=0.0949 span=10.653
+```
+
+**Files**
+- `apps/desktop/scripts/differentialParity.corpus.ts`
+- `apps/desktop/scripts/parityHarness.ts` (timeout)
+- `AGENTS.md`, `FEATURE_PARITY.md`, `PROGRESS.md`
+
+**Tests**
+- `scripts/differential-parity.sh` → SUMMARY pass=104 sibling=5 gap=0
+  (`tran softdiode … nRms=0.0026 nMax=0.0949 span=10.653`)
+- `pnpm -C apps/desktop typecheck` green
+- `pnpm -C apps/desktop test` → 2859 passed / 6 skipped
+
+**Parity items**
+- Differential 🟡 **pass=104 · sibling=5 · gap=0**; DoD broad box unchecked.
+- SHIPPABLE? **NO**
+
+**Next**
+- PowerAmp TIP if sibling `.asy` maps; Fc/ISO7637/astable period-meas; never
+  fake Vp soft-recovery / Chan / NIGBT.
 
 ---
 

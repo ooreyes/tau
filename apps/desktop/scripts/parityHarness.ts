@@ -234,7 +234,7 @@ export function runPairedBatch(
     // measure.ts); do not ask ngspice's more limited `.meas` dialect to do so.
     writeFileSync(ngPath, prepareDeck(ngspiceNetlist, ngSaves, [], false, options.skipSave));
 
-    const ltRun = spawnSync(LTSPICE_BINARY, ["-b", ltPath], { encoding: "utf8", timeout: 120_000 });
+    const ltRun = spawnSync(LTSPICE_BINARY, ["-b", ltPath], { encoding: "utf8", timeout: 300_000 });
     const ltLogPath = join(dir, `${name}-lt.log`);
     const ltspiceLog = existsSync(ltLogPath)
       ? decodeLtspiceLog(readFileSync(ltLogPath))
@@ -242,7 +242,7 @@ export function runPairedBatch(
     assertRun("LTspice", ltRun.status, ltspiceLog);
 
     const ngRawPath = join(dir, `${name}-ng.raw`);
-    const ngRun = spawnSync("ngspice", ["-b", "-r", ngRawPath, ngPath], { encoding: "utf8", timeout: 120_000 });
+    const ngRun = spawnSync("ngspice", ["-b", "-r", ngRawPath, ngPath], { encoding: "utf8", timeout: 300_000 });
     const ngspiceLog = `${ngRun.stdout ?? ""}\n${ngRun.stderr ?? ""}`;
     assertRun("ngspice", ngRun.status, ngspiceLog);
 
