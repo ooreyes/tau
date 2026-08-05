@@ -243,8 +243,12 @@ Status legend: ✅ done · 🟡 partial · ⬜ not started
     map cluster (Downloads/Docs sibling leftover=0;
     plaintext Application `.lib` twins already exact). Refuse path-family from
     script stdout: Applications 1311 / FRA 5 / Educational 2;
-    no-equiv=1317 / other=1 (Chan). ≥95% blocked on Omar installing
-    **plaintext** ADI/LTC macromodels — see `NAMED-DEVICE-WALL.md` and
+    no-equiv=1317 / other=1 (Chan). **Plaintext-refuse probe (same day):**
+    `plaintext-twin-on-disk=0` encrypted-only=1315 missing=2 other=1 —
+    no Tau map debt; Omar must install **1142** unique plaintext stems into
+    `~/Library/Application Support/LTspice/lib/sub` (+ staged
+    `~/.tau-autobuilder/ltspice-models/lib/sub`) for projected
+    1223→2538 / 2541 ≈ 99.9% — see `NAMED-DEVICE-WALL.md` and
     `~/Desktop/TAU-NAMED-DEVICE-WALL.md`. DoD box stays ⬜. SHIPPABLE? NO.
     Still open: import arbitrary user-supplied multi-pin `.asy` banks; raise
     recursive exact-model floor to ≥95% with hard-failure=0; a shared five-pin

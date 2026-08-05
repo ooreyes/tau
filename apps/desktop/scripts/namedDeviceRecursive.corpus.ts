@@ -548,6 +548,187 @@ describe.skipIf(corpus.length === 0)("named-device recursive exact-model %", () 
           }
         }
       }
+
+      // Honest climb probe: among refuse rows, does any named model already
+      // have an on-disk plaintext twin Tau could map without decrypt / silent
+      // substitution? Non-zero ⇒ remaining Tau map work. Zero ⇒ Omar install wall.
+      const stemHasPlaintextOnDisk = (stem: string): boolean => {
+        for (const name of [`${stem}.sub`, `${stem}.lib`, `${stem}.mod`, stem]) {
+          for (const cand of installedLibraryFileCandidates(name)) {
+            const candidateKey = normalize(cand.replace(/[\\/]+/g, sep));
+            for (const root of ltspiceLibRoots().flatMap((entry) => [join(entry, "sub"), entry])) {
+              const path = join(root, candidateKey);
+              const rel = relative(root, path);
+              if (rel === ".." || rel.startsWith(`..${sep}`) || isAbsolute(rel) || !existsSync(path)) continue;
+              if (!isEncryptedModelBytes(readFileSync(path))) return true;
+            }
+          }
+        }
+        return false;
+      };
+      const stemExistsOnDisk = (stem: string): boolean => {
+        for (const name of [`${stem}.sub`, `${stem}.lib`, `${stem}.mod`, stem]) {
+          for (const cand of installedLibraryFileCandidates(name)) {
+            const candidateKey = normalize(cand.replace(/[\\/]+/g, sep));
+            for (const root of ltspiceLibRoots().flatMap((entry) => [join(entry, "sub"), entry])) {
+              const path = join(root, candidateKey);
+              const rel = relative(root, path);
+              if (rel === ".." || rel.startsWith(`..${sep}`) || isAbsolute(rel) || !existsSync(path)) continue;
+              return true;
+            }
+          }
+        }
+        return false;
+      };
+      /** Map a refuse Value/leaf token → authored ModelFile/SpiceModel stem via .asy. */
+      const modelStemFromSymbolLeaf = (leaf: string): string | null => {
+        const roots = [
+          ...EXTRA_SYMBOL_ROOTS,
+          ...ltspiceLibRoots().map((root) => join(root, "sym")),
+        ];
+        const path = resolveInstalledAsyPath(roots, leaf);
+        if (!path) return null;
+        const parsed = parseAsy(decodeSchematicText(readFileSync(path)));
+        const modelFile = ltspiceModelFileFromSymbolAttrs(parsed.attrs);
+        if (modelFile) {
+          return modelFile.replace(/\\/g, "/").split("/").pop()!.replace(/\.(sub|lib|mod)$/i, "");
+        }
+        // SpiceModel may be a bare subckt stem (LT8604C) without .sub suffix.
+        const spiceModel = parsed.attrs.SpiceModel?.trim();
+        if (spiceModel && !/\s/.test(spiceModel)) {
+          return spiceModel.replace(/\\/g, "/").split("/").pop()!.replace(/\.(sub|lib|mod)$/i, "");
+        }
+        return null;
+      };
+      const extractRefuseTokens = (entry: { row: CorpusRow }): string[] => {
+        const tokens = new Set<string>();
+        for (const name of entry.row.unresolvedSubckts ?? []) {
+          const stem = name.replace(/\\/g, "/").split("/").pop()!.replace(/\.(sub|lib|mod)$/i, "");
+          if (stem) tokens.add(stem);
+        }
+        const err = entry.row.error ?? "";
+        // "U1 (AD4000) has no electrically equivalent" / multi-part lists
+        for (const match of err.matchAll(/\(([A-Za-z][A-Za-z0-9+_.\\/-]*)\)/g)) {
+          const raw = match[1]!.replace(/\\/g, "/").split("/").pop()!;
+          const leaf = raw.replace(/\.(sub|lib|mod)$/i, "");
+          if (!leaf || /^[Uu]\d+$/i.test(leaf)) continue;
+          // Prefer .asy ModelFile/SpiceModel stem (ADM7150-1.8 → ADM7150_1)
+          // so voltage-suffix Values are not false "missing-model".
+          const mapped = modelStemFromSymbolLeaf(leaf);
+          tokens.add(mapped ?? leaf);
+        }
+        return [...tokens];
+      };
+      let refuseWithPlaintextTwin = 0;
+      let refuseEncryptedOnly = 0;
+      let refuseMissingModel = 0;
+      let refuseOther = 0;
+      const plaintextClimbSamples: string[] = [];
+      const missingStemCounts = new Map<string, number>();
+      const encOnlyStemCounts = new Map<string, number>();
+      for (const entry of refused) {
+        const tokens = extractRefuseTokens(entry);
+        if (tokens.length === 0) {
+          // Chan / NIGBT / message-only refusals without a paren model token
+          refuseOther += 1;
+          continue;
+        }
+        const plainTokens = tokens.filter((t) => stemHasPlaintextOnDisk(t));
+        if (plainTokens.length > 0) {
+          refuseWithPlaintextTwin += 1;
+          if (plaintextClimbSamples.length < 12) {
+            plaintextClimbSamples.push(`${entry.row.file} ← plaintext:${plainTokens.join(",")}`);
+          }
+          continue;
+        }
+        const encTokens = tokens.filter((t) => tokenNamesEncryptedInstalledModel(t));
+        // Prefer encrypted-only when any real vendor stem is encrypted — junk
+        // paren tokens (fra, xv) from FRA error text must not rebucket as missing.
+        if (encTokens.length > 0) {
+          refuseEncryptedOnly += 1;
+          for (const t of encTokens) {
+            encOnlyStemCounts.set(t, (encOnlyStemCounts.get(t) ?? 0) + 1);
+          }
+          continue;
+        }
+        const missingTokens = tokens.filter((t) => !stemExistsOnDisk(t));
+        if (missingTokens.length > 0) {
+          refuseMissingModel += 1;
+          for (const t of missingTokens) {
+            missingStemCounts.set(t, (missingStemCounts.get(t) ?? 0) + 1);
+          }
+          continue;
+        }
+        refuseOther += 1;
+      }
+      // eslint-disable-next-line no-console
+      console.log(
+        `\nPLAINTEXT-REFUSE PROBE (among ${refused.length} refuse):`,
+      );
+      // eslint-disable-next-line no-console
+      console.log(
+        `  plaintext-twin-on-disk=${refuseWithPlaintextTwin} encrypted-only=${refuseEncryptedOnly} missing-model=${refuseMissingModel} other=${refuseOther}`,
+      );
+      if (plaintextClimbSamples.length > 0) {
+        // eslint-disable-next-line no-console
+        console.log("  plaintext-twin climb samples (Tau map debt if non-zero):");
+        for (const sample of plaintextClimbSamples) {
+          // eslint-disable-next-line no-console
+          console.log(`    ${sample}`);
+        }
+      } else {
+        // eslint-disable-next-line no-console
+        console.log("  plaintext-twin climb samples: (none — no Tau map debt in refuse set)");
+      }
+      const topEnc = [...encOnlyStemCounts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 40);
+      if (topEnc.length > 0) {
+        // eslint-disable-next-line no-console
+        console.log(
+          `  top encrypted-only refuse stems (${encOnlyStemCounts.size} unique; Omar plaintext install targets):`,
+        );
+        for (const [stem, count] of topEnc) {
+          // eslint-disable-next-line no-console
+          console.log(`    ${count}× ${stem}`);
+        }
+      }
+      const topMissing = [...missingStemCounts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 20);
+      if (topMissing.length > 0) {
+        // eslint-disable-next-line no-console
+        console.log("  top missing-model refuse stems:");
+        for (const [stem, count] of topMissing) {
+          // eslint-disable-next-line no-console
+          console.log(`    ${count}× ${stem}`);
+        }
+      }
+      // Projection — never claims DoD; math only.
+      const movable = refuseEncryptedOnly;
+      const projectedExact = summary.exact + movable;
+      const projectedRate = summary.unencrypted > 0 ? projectedExact / summary.unencrypted : 0;
+      const need95 = Math.ceil(0.95 * summary.unencrypted);
+      // eslint-disable-next-line no-console
+      console.log(
+        `\nOMAR INSTALL PROJECTION (if plaintext twins land for all ${movable} encrypted-only refuse; Chan/NIGBT stay refuse):`,
+      );
+      // eslint-disable-next-line no-console
+      console.log(
+        `  unique stems to install: ${encOnlyStemCounts.size}`,
+      );
+      // eslint-disable-next-line no-console
+      console.log(
+        `  exact ${summary.exact}→${projectedExact} / unencrypted ${summary.unencrypted} → ${(projectedRate * 100).toFixed(1)}%`,
+      );
+      // eslint-disable-next-line no-console
+      console.log(
+        `  ≥95% needs ≥${need95} exact (gap ${Math.max(0, need95 - summary.exact)}); install covers ${movable}`,
+      );
+      // eslint-disable-next-line no-console
+      console.log(
+        `  install dirs: ~/Library/Application Support/LTspice/lib/sub  AND  ~/.tau-autobuilder/ltspice-models/lib/sub`,
+      );
+      // eslint-disable-next-line no-console
+      console.log(
+        `  source: Analog.com / vendor plaintext .lib/.cir/.sub — NOT LTspice encrypted <Binary File> .sub`,
+      );
     }
 
     if (process.env.NAMED_DEVICE_ENCRYPTED_AUDIT === "1") {

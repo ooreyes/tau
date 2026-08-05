@@ -1,13 +1,52 @@
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 ~14:45 CDT**
+**Status: DONE - 2026-08-05 ~14:40 CDT**
 
-Unit: **Educational PowerAmpLayout A=0.2..0.7 → pass=113** — layout TIP121/TIP127
-+ sibling `.lib` `.tran 10m` higher-A step members (≠ PowerAmp.asc A-step 5m).
-Tip had Resources/sinh as pass=112. DoD broad-differential box stays open.
-SHIPPABLE? **NO** (named-device ≥95%, broad differential still open).
+Unit: **Named-device plaintext-refuse map + Omar install projection** —
+`PLAINTEXT-REFUSE PROBE` proves plaintext-twin-on-disk=0; wall docs
+1142 stems / install dirs / 1223→2538 (99.9%) math. DoD box stays ⬜.
+SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
+
+
+
+---
+
+### 2026-08-05 — Named-device plaintext-refuse probe + Omar install map (§DoD)
+
+**What I did**
+- Re-measured tip: exact-rate **48.1%** held (`1223/2541`, refuse=1318,
+  silent=0, hard-failure=0).
+- Extended `NAMED_DEVICE_REFUSE_TRIAGE=1` with **PLAINTEXT-REFUSE PROBE**:
+  Value→`.asy` ModelFile/SpiceModel stem resolve; on-disk plaintext twin
+  check. Result: **plaintext-twin-on-disk=0**, encrypted-only=1315,
+  missing=2 (`nigbt`+`fra`), other=1 (Chan). **No Tau map debt left.**
+- Documented Omar install: **1142 unique stems** → projected exact
+  1223→2538 / 2541 = **99.9%**; dirs
+  `~/Library/Application Support/LTspice/lib/sub` +
+  `~/.tau-autobuilder/ltspice-models/lib/sub`; Analog.com plaintext only.
+- Did **not** check ND≥95% box. SHIPPABLE? **NO**.
+
+**Files**
+- `apps/desktop/scripts/namedDeviceRecursive.corpus.ts` (probe + projection)
+- `NAMED-DEVICE-WALL.md`, `~/Desktop/TAU-NAMED-DEVICE-WALL.md`
+- `AGENTS.md`, `FEATURE_PARITY.md`, `PROGRESS.md`
+
+**Tests**
+- `NAMED_DEVICE_REFUSE_TRIAGE=1 scripts/named-device-fidelity.sh` →
+  exact-rate=48.1%; PLAINTEXT-REFUSE PROBE plaintext=0 / enc=1315;
+  OMAR INSTALL PROJECTION unique stems=1142
+
+**Parity items**
+- Named-device ≥95% still ⬜ — wall is Omar plaintext install, not Tau code.
+  SHIPPABLE? NO
+
+**Next step**
+- Omar installs plaintext ADI/LTC macromodels, or other open DoD boxes
+  (broad differential).
+
+SHIPPABLE? **NO**
 
 ---
 

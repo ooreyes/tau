@@ -1,12 +1,12 @@
 # Tau named-device wall — exact-rate stuck at 48.1% (need ≥95%)
 
 **Date:** 2026-08-05  
-**Tip measured:** `5129e78` (AD8561 ambiguous-leaf climb)  
+**Tip measured:** `26c97d1` + plaintext-refuse probe (this session)  
 **SHIPPABLE?** **NO** — DoD named-device box stays unchecked. Never claim ≥95% from this doc.
 
 This is the Omar-visible wall for the AGENTS.md named-device fidelity floor.
 Tau will **not** silently substitute generics, decrypt LTspice models, or
-weaken Chan / NIGBT / FRA refusals to inflate the rate.
+weaken Chan / NIGBT refusals to inflate the rate.
 
 ---
 
@@ -23,18 +23,46 @@ Re-run anytime:
 
 ```bash
 bash scripts/named-device-fidelity.sh
-# enriched refuse breakdown (path family + non-no-equiv dump):
+# refuse path-family + plaintext-refuse probe + Omar install projection:
 NAMED_DEVICE_REFUSE_TRIAGE=1 bash scripts/named-device-fidelity.sh
 ```
 
 **Math:** ≥95% of 2541 unencrypted needs **≥2414 exact**. We have **1223**.
-Gap ≈ **1191**. Almost the entire `refuse=1318` bucket must become exact —
-and that bucket is dominated by **encrypted Analog Devices / LTC vendor
-`.sub` bodies** already installed under LTspice, not by missing Tau maps.
+Gap = **1191**. The refuse bucket is **not** missing Tau maps — see probe below.
 
 ---
 
-## Refuse triage (from `NAMED_DEVICE_REFUSE_TRIAGE=1` stdout)
+## Plaintext-refuse probe (option 1 — exhausted)
+
+`NAMED_DEVICE_REFUSE_TRIAGE=1` now prints a **PLAINTEXT-REFUSE PROBE** that, for
+every refuse row, resolves Value leaves through installed `.asy`
+ModelFile/SpiceModel and checks for an on-disk plaintext twin:
+
+```
+PLAINTEXT-REFUSE PROBE (among 1318 refuse):
+  plaintext-twin-on-disk=0 encrypted-only=1315 missing-model=2 other=1
+  plaintext-twin climb samples: (none — no Tau map debt in refuse set)
+  top encrypted-only refuse stems (1142 unique; Omar plaintext install targets):
+    …
+OMAR INSTALL PROJECTION (…):
+  unique stems to install: 1142
+  exact 1223→2538 / unencrypted 2541 → 99.9%
+  ≥95% needs ≥2414 exact (gap 1191); install covers 1315
+```
+
+| Probe bucket | Count | Meaning |
+| --- | ---: | --- |
+| **plaintext-twin-on-disk** | **0** | No remaining honest Tau exact-map. Every refuse part that already has a plaintext `.lib`/`.sub` twin is already **exact**. |
+| **encrypted-only** | **1315** | Installed `lib/sub/<stem>.sub` is LTspice `<Binary File>` with no plaintext twin. |
+| **missing-model** | **2** | `nigbt` (permanent Educational IGBT) + one FRA token artifact (`fra`). |
+| **other** | **1** | Chan-core: `Educational/NonLinearTransformer.asc` (keep). |
+
+**Verdict:** there is **no further plaintext refuse for Tau to map**. Option 1 is
+closed. ≥95% requires Omar plaintext installs (option 2).
+
+---
+
+## Refuse triage (path family)
 
 ```
 REFUSE TRIAGE (1318 files, 325 classes):
@@ -47,142 +75,117 @@ REFUSE TRIAGE (1318 files, 325 classes):
 
 | Bucket | Count | What it is |
 | --- | ---: | --- |
-| **no-electrically-equivalent** | **1317** | Bare SYMBOL / Prefix-X whose installed `lib/sub/*.sub` is encrypted (`<Binary File>`) or LTspice-only (NIGBT). Includes Educational `IGBT.asc` (`misc\nigbt`). |
-| **other-refuse** | **1** | Chan-core: `Educational/NonLinearTransformer.asc` (dedicated Chan refuse copy — keep). |
-| **Applications** | **1311** | Bulk wall: AD4000 / ADA4523-1 / ADM7150-* / ADP* / LTC* / … encrypted Applications examples. |
-| **FRA** | **5** | Encrypted FRA examples (`LT8609.sub`, `LTC3869.sub`, …) still counted as refuse (not denominator-excluded). |
-| **Educational** | **2** | `IGBT.asc` (NIGBT) + `NonLinearTransformer.asc` (Chan). |
-
-Top collapsed message classes (refdes → `REF`; still 325 raw classes because voltage/bit suffixes stay distinct):
-
-- **558×** `REF (REF)` — e.g. `Applications/AD4000.asc`, `AD4001.asc`
-- **85×** `REF (REF-1)` — e.g. `ADA4523-1.asc`, `ADAQ7767-1.asc`
-- **49×** `REF (REF-2)` — e.g. `ADP1071-2.asc`, `ADP5138-2.asc`
-- then REF-3.3 / 2.5 / 1.8 / … regulator & ADC suffix families
+| **Applications** | **1311** | Encrypted bare SYMBOL / Prefix-X examples under `Documents/LTspice/examples/Applications`. |
+| **FRA** | **5** | Encrypted FRA examples (`LT8609.sub`, `LTC3869.sub`, …). |
+| **Educational** | **2** | `IGBT.asc` (NIGBT) + `NonLinearTransformer.asc` (Chan) — permanent. |
 
 `silent=0` and `hard-failure=0` **held**.
 
 ---
 
-## Verdict (re-confirmed this session)
+## Exact Omar install path (option 2 — moves the rate)
 
-**≥95% is impossible from Tau code alone** on this corpus.
+### What to install
 
-- Honest plaintext climbs already landed (standard libs, `ADI.lib` /
-  `ADI1.lib` / `LTC.lib` twins, Educational PAsystem discrete aliases,
-  TIP121/TIP127 Prefix-X + sibling `.lib`, AD8561 ambiguous-leaf →
-  OpAmps plaintext `.lib` over Comparators encrypted `.sub`).
-- Downloads + Documents sibling-`.lib` leftovers: **0** remaining climb
-  candidates (only TIP121/TIP127 siblings remain on disk — already exact).
-- Spot-check: Applications parts that already have plaintext `lib/sub/*.lib`
-  twins (`MAX44245`, `ADA4177`, `AD8237`, `LTC6252`, `LT1521`, `LT6658`, …)
-  measure **exact** today — not refuse. No missing Tau map for those.
-- Remaining refuse mass is **encrypted bare SYMBOL** (Applications + FRA)
-  plus permanent Educational Chan / NIGBT. Ambiguous encrypted-only leaves
-  (`AD4858`, `AD8460`) stay honest refuse.
-- Moving encrypted bare SYMBOL → `encrypted-excluded` would shrink the
-  denominator and fake a higher exact-rate — **rejected** (CEO: no
-  denominator games). Encrypted bare SYMBOL stays honest **refuse**.
-- **No further honest Tau-owned / sibling exact-map cluster left** without
-  silent substitution or weakening Chan / NIGBT / FRA — Omar must install
-  plaintext ADI/LTC macromodels.
+**1142 unique plaintext macromodel stems** covering **1315** encrypted-only
+refuse circuits. Same stem as the encrypted LTspice body (from `.asy`
+`ModelFile` / `SpiceModel`), e.g.:
 
----
+| Circuits | Stem to install as plaintext |
+| ---: | --- |
+| 14 | `ADP2503_4` |
+| 12 | `ADP2370` |
+| 11 each | `ADP2108-x.x`, `ADP2109-x.x`, `ADP7158_9` |
+| 10 each | `ADP121`, `ADP122` |
+| 9 each | `ADM7150_1`, `ADM7154_5`, `ADP2138-x.x`, `ADP2139-x.x` |
+| 8 each | `ADP124`, `ADP505x_chan1_2` |
+| … | … (1142 unique — full ranked list in triage stdout) |
+| 1 each | `AD4000`, `AD4001`, … (long tail of single-circuit ADCs / parts) |
 
-## Refuse classes (do not weaken)
+Voltage-suffixed schematics (e.g. `ADM7150-1.8.asc`) resolve through the `.asy`
+to a shared encrypted body (`ADM7150_1.sub`) — install **that** stem, not the
+schematic filename.
 
-| Class | What it is | Path to exact |
-| --- | --- | --- |
-| **Encrypted ADI/LTC Applications** (≈1311) | Installed `lib/sub/*.sub` is LTspice-encrypted; Prefix-X symbol has no electrically equivalent Tau model | Omar installs **plaintext** vendor `.lib`/`.sub` (same stem) into Tau Model libraries / LTspice `lib/sub` |
-| **NIGBT** | `Educational/IGBT.asc` — LTspice-only intrinsic | Permanent refuse (keep). Use `IGBTeq.asc` for parity work |
-| **Chan-core inductor** | `Educational/NonLinearTransformer.asc` | Permanent refuse (keep) |
-| **FRA encrypted** (5) | `FRA/fra_eg…` encrypted `LT8609.sub`, `LTC3869.sub`, … | Same as Applications: need plaintext twins |
-| **Royer `LT1184F`** | Unresolved encrypted subckt | Already `encrypted-excluded`; keep fail-closed |
+### Where to put the files
 
----
+Tau reads LTspice libs from, in order (`ltspiceLibRoot.ts`):
 
-## Exact install instructions (Omar)
+1. `$TAU_LTSPICE_LIB_ROOT` (if set)
+2. **`~/.tau-autobuilder/ltspice-models/lib`** (staged autobuilder copy — prefer this for unattended runs / TCC)
+3. **`~/Library/Application Support/LTspice/lib`** (interactive LTspice install)
 
-Tau only accepts **plaintext** SPICE text (`.lib` / `.sub` / `.mod` with
-`.subckt` / `.model`). Encrypted LTspice `<Binary File>` blobs never count.
-**Do not ask Tau to decrypt.**
-
-### 1. Confirm what you already have
-
-```bash
-# LTspice Application Support library (already present on this Mac):
-ls "$HOME/Library/Application Support/LTspice/lib/sub" | head
-# Encrypted example (will NOT help Tau):
-file "$HOME/Library/Application Support/LTspice/lib/sub/AD4000.sub"
-# → data / binary — skipped by Tau
-```
-
-### 2. Obtain plaintext models (outside Tau)
-
-Highest-leverage refuse stems from triage (install plaintext twins for these
-families first):
-
-- ADCs: `AD4000`, `AD4001`, `LTC2311-*`, `LTC2323-*`, `AD4630-*`, …
-- Op-amps: `ADA4523-1`, …
-- Regulators / PMICs: `ADM7150-*`, `ADM7170-*`, `ADP121-*`, `ADP2108-*`, …
-- Power / drivers / FRA: `LTC4449`, `LT8609`, `LTC3869`, …
-
-Sources (pick one per part; Tau must not redistribute LTspice assets):
-
-1. **Analog Devices / Analog.com** — download the public SPICE macromodel
-   ZIP for that part number (usually a `.cir` / `.lib` text file).
-2. **Vendor “LTspice-compatible” plaintext** from the product page — not the
-   encrypted body shipped inside LTspice.app / Application Support.
-3. Your own authored `.subckt` that matches the symbol pin order
-   (`SpiceOrder` on the `.asy`).
-
-### 3. Install where Tau can see them
-
-**Preferred (product path):** Tau → Model libraries → attach the plaintext
-file to the schematic (or put it in the project folder and `.lib` /
-`.include` it).
-
-**Corpus / installed-library path:** copy the plaintext file next to the
-encrypted twin so the same stem resolves:
+**Corpus path that moves the measured rate** — copy plaintext next to the
+encrypted twin so same-stem resolution finds it:
 
 ```bash
 SUB="$HOME/Library/Application Support/LTspice/lib/sub"
-# Example: plaintext AD4000 from ADI site saved as AD4000.lib
-cp ~/Downloads/AD4000.lib "$SUB/AD4000.lib"
-# Tau tries authored .sub then same-stem .lib/.mod and skips encrypted bytes.
+STAGE="$HOME/.tau-autobuilder/ltspice-models/lib/sub"
+
+# Example: ADI plaintext macromodel saved as ADP121.lib
+cp ~/Downloads/ADP121.lib "$SUB/ADP121.lib"
+mkdir -p "$STAGE" && cp ~/Downloads/ADP121.lib "$STAGE/ADP121.lib"
+
+# Confirm Tau will see plaintext (must NOT be <Binary File>):
+file "$SUB/ADP121.lib"
+# → ASCII text / Unicode text, NOT "data"
 ```
 
-Pin/subckt name must match what the `.asy` / schematic requests (often the
-part leaf, e.g. `.subckt AD4000 …`).
+**Product path (also works):** Tau → Model libraries → attach the plaintext
+`.lib`/`.sub`/`.cir` to the schematic (or project-local `.lib` / `.include`).
 
-### 4. Re-measure
+Pin / `.subckt` name must match what the `.asy` requests.
+
+### Where **not** to look
+
+| Path | Why it does not help |
+| --- | --- |
+| LTspice.app / Application Support `lib/sub/*.sub` encrypted bodies | Already present; Tau skips `<Binary File>` |
+| Decrypting those blobs | Forbidden — Tau must not decrypt |
+| Reclassifying refuse → `encrypted-excluded` | Denominator game — rejected |
+| Tau-owned `TAU_*` generics | Silent substitution — rejected |
+
+### Sources (Omar obtains; Tau never redistributes)
+
+1. **Analog.com** product page → SPICE / LTspice-compatible **plaintext** macromodel ZIP (usually `.cir` / `.lib` text).
+2. Vendor “unencrypted” / evaluation models — not the encrypted body shipped inside LTspice.
+3. Your own `.subckt` matching `.asy` `SpiceOrder`.
+
+### Projected rate after full install (math only — not a claim)
+
+```
+exact 1223 → 2538 / unencrypted 2541 → 99.9%
+≥95% needs ≥2414 exact (gap 1191); install of 1142 stems covers 1315 refuse
+Permanent refuse left: Chan + NIGBT (and any stem still missing plaintext)
+```
+
+Only a **re-measured** `exact-rate≥95%` with `silent=0` and `hard-failure=0`
+from `scripts/named-device-fidelity.sh` may check the DoD box.
 
 ```bash
 cd /path/to/Tau
 bash scripts/named-device-fidelity.sh
 ```
 
-Only a measured `exact-rate≥95%` with `silent=0` and `hard-failure=0` may
-claim the DoD box. Do **not** check the box from this wall doc.
+---
 
-### 5. What will not work
+## Refuse classes (do not weaken)
 
-- Leaving only LTspice’s encrypted `.sub` in place (current machine state).
-- Asking Tau to decrypt, approximate, or map to `TAU_*` generics.
-- Reclassifying encrypted bare SYMBOL → `encrypted-excluded` to juice %.
-- Weakening NIGBT / Chan / FRA refusals.
-- Hunting another Tau-owned exact-map cluster — Downloads/Docs sibling
-  climbs, plaintext Application twins, and the AD8561 ambiguous-leaf climb
-  are exhausted / exact.
+| Class | Count | Path to exact |
+| --- | ---: | --- |
+| Encrypted ADI/LTC Applications (+ FRA) | ~1315 | Omar installs plaintext twins for **1142** stems into `lib/sub` (and staged twin) |
+| NIGBT | 1 | Permanent refuse — use `IGBTeq.asc` for parity |
+| Chan-core inductor | 1 | Permanent refuse |
+| Royer `LT1184F` | (encrypted-excluded) | Keep fail-closed |
 
 ---
 
 ## Already proven exact (do not re-audit without regression)
 
 - Unit proof: `NAMED-DEVICE: exact=2 refuse=4 silent=0`
-- Recursive plaintext climbs: standard.dio/bjt/mos/jft, ADI/LTC plaintext
-  twins, Educational PAsystem aliases, TIP121/TIP127 + sibling `.lib`,
+- Recursive plaintext climbs exhausted: standard.dio/bjt/mos/jft, ADI/LTC
+  plaintext twins, Educational PAsystem aliases, TIP121/TIP127 + sibling `.lib`,
   AD8561 OpAmps plaintext `.lib` (ambiguous Comparators/OpAmps leaf)
+- **Plaintext-refuse probe = 0** (this session) — no further Tau map cluster
 - Integrity: `silent=0`, `hard-failure=0`
 
 ---

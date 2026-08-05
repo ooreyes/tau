@@ -212,6 +212,10 @@ account and sign/notarize/ship.
       AD8561 ambiguous-leaf → OpAmps plaintext `.lib` (+1 vs 1222). TIP121/
       TIP127 Prefix-X + sibling `.lib` (+2 vs 1220; PowerAmpLayout). PAsystem
       discrete aliases (+1 HandsFree). Encrypted bare SYMBOL stay refuse.
+      **Plaintext-refuse probe:** `NAMED_DEVICE_REFUSE_TRIAGE=1` →
+      `plaintext-twin-on-disk=0` encrypted-only=1315 (1142 unique stems);
+      Omar install dirs + projected 1223→2538 (99.9%) in
+      `NAMED-DEVICE-WALL.md` — DoD box stays unchecked.
       Full unique-leaf probe 33.4%/enc=2781 remains retracted (denominator
       game). Never silent substitution. ≥95% exact-rate **not** met without
       Omar installing plaintext ADI/LTC macromodels — wall:
