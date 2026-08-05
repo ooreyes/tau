@@ -69,7 +69,7 @@ describe("EditorToolbar - read-only outside schematic view ", () => {
     useSchematic.setState({ past: [emptyDoc], future: [emptyDoc] });
     render(<EditorToolbar mode="simulator" {...noopToolbarProps} />);
 
-    for (const name of ["Wire", "Net label (F4)", "Undo", "Redo", "Delete selection (Delete)", "Clear scratchpad"]) {
+    for (const name of ["Wire", "Net label (F4)", "Undo", "Redo", "Delete selection (Delete)", "Clear schematic"]) {
       expect((screen.getByRole("button", { name }) as HTMLButtonElement).disabled).toBe(true);
     }
   });
@@ -549,7 +549,7 @@ describe("BottomPanel - errors tab states", () => {
     const { container } = render(<BottomPanel result={null} />);
     expect(screen.getByRole("region", { name: "Simulation diagnostics" })).toBeTruthy();
     const clear = screen.getByRole("status");
-    expect(clear.textContent).toContain("Not run");
+    expect(clear.textContent).toContain("No analysis yet");
     expect(container.querySelector(".bottom-panel-state svg")).toBeTruthy();
     expect(screen.getByText("Diagnostics")).toBeTruthy();
     expect(container.querySelector(".bottom-panel.has-error")).toBeNull();

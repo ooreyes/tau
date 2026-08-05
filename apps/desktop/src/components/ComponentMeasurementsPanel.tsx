@@ -371,7 +371,7 @@ function CompactMeasurementsGrid({
   if (rows.length === 0) {
     return (
       <p className={cn("telemetry-strip-empty", className)} aria-live="polite">
-        Run a simulation to see per-component telemetry.
+        Run a simulation to see per-component V, I, and P.
       </p>
     );
   }
@@ -433,7 +433,7 @@ export function ComponentMeasurementsPanel({
             </h2>
           </div>
           <p className="m-0 mt-1 text-xs text-muted-foreground">
-            {rows.length} components · {completeCount} with complete V/I/P telemetry
+            {rows.length} components · {completeCount} with complete V/I/P
           </p>
         </div>
 
@@ -483,7 +483,7 @@ export function ComponentMeasurementsPanel({
           ) : (
             <div className="grid min-h-36 place-items-center px-5 text-center text-sm text-muted-foreground" aria-live="polite">
               {rows.length === 0
-                ? "Run a transient analysis to populate component telemetry."
+                ? "Run a transient analysis to populate component measurements."
                 : `No components match “${query.trim()}”.`}
             </div>
           )}

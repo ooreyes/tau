@@ -63,13 +63,13 @@ export function TelemetryDock({
   return (
     <section
       className={`telemetry-dock${collapsed ? " telemetry-dock--collapsed" : ""}`}
-      aria-label="Component telemetry"
+      aria-label="Component measurements"
       style={collapsed ? undefined : { height: resize.width }}
     >
       {!collapsed && (
         <PanelResizeHandle
           edge="top"
-          label="Resize component telemetry dock"
+          label="Resize component measurements dock"
           width={resize.width}
           minWidth={DOCK_HEIGHT_CONFIG.minWidth}
           maxWidth={DOCK_HEIGHT_CONFIG.maxWidth}
@@ -83,9 +83,9 @@ export function TelemetryDock({
         className="disclosure-header telemetry-dock-header"
         onClick={toggleCollapsed}
         aria-expanded={!collapsed}
-        aria-label="Toggle component telemetry"
+        aria-label="Toggle component measurements"
       >
-        <span className="disclosure-label">Telemetry</span>
+        <span className="disclosure-label">Measurements</span>
         <span className="telemetry-dock-count">{rows.length} components</span>
         <span className="disclosure-rule" aria-hidden="true" />
         <span className={`disclosure-chevron${!collapsed ? " open" : ""}`}>›</span>

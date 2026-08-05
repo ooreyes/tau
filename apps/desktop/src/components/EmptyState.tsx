@@ -1,6 +1,6 @@
 import { useRef, type ChangeEvent } from "react";
 import { BodeMascot } from "./BodeMascot";
-import { FolderOpen, FolderPlus, Import, Plus, Sparkles } from "lucide-react";
+import { FolderOpen, FolderPlus, Import, MessageSquare, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { importDroppedFile } from "../io/fileImport";
 import { IMPORT_ACCEPT, IMPORT_BUTTON_LABEL } from "../io/importUi";
@@ -57,21 +57,21 @@ export function EmptyState({
           <BodeMascot className="bode-empty-mascot" aria-hidden="true" />
           {/* One flex item, not three: .empty-kicker gaps its children, so a
               bare text node after the brand would space the comma off it. */}
-          <span>Meet <span className="empty-brand">Bode</span>, your circuit assistant</span>
+          <span><span className="empty-brand">Bode</span> · circuit assistant</span>
         </div>
         <h1>{projectOpen ? "Create or open a schematic" : "Open a project folder"}</h1>
         {projectOpen ? (
           <>
             <p>
-              Every schematic is saved inside this project. Create a circuit,
-              open one from Explorer, or ask Bode to design it with you.
+              Schematics live in this project. Create one, open from Explorer,
+              or ask Bode about the circuit.
             </p>
             <div className="empty-state-actions">
               <Button type="button" size="sm" onClick={onNewCircuit}>
                 <Plus aria-hidden="true" /> New schematic
               </Button>
               <Button type="button" size="sm" variant="outline" onClick={onAskBode}>
-                <Sparkles aria-hidden="true" /> Ask Bode
+                <MessageSquare aria-hidden="true" /> Ask Bode
               </Button>
             </div>
           </>

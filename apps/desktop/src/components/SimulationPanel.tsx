@@ -594,7 +594,7 @@ export function SimulationPanel({
       : runStatus === "error"
         ? "Simulation failed - details below"
         : runStatus === "idle"
-          ? "No results yet - press Run in the toolbar or pick an analysis tab"
+          ? "No analysis yet — press Run, or select an analysis tab to run it"
           : null;
 
   // Selecting an analysis tab both switches the visible pane and kicks off
@@ -719,7 +719,7 @@ export function SimulationPanel({
                 />
               </div>
               <div className="run-overlay-meta">
-                <span className="run-overlay-percent">{runPercent != null ? `${runPercent}%` : "Working…"}</span>
+                <span className="run-overlay-percent">{runPercent != null ? `${runPercent}%` : "Solving…"}</span>
                 <Button variant="outline" size="sm" onClick={onStop} className="run-overlay-stop">
                   Stop
                 </Button>
@@ -937,7 +937,7 @@ export function SimulationPanel({
                   <h4 className="advanced-group-title">Simulation settings</h4>
                   <div className="advanced-settings-help-row">
                     <p className="advanced-settings-help">
-                      Circuit duration is simulated time, not how long Tau waits. Tau chooses waveform detail unless you override it.
+                      STOP is simulated circuit time, not wall-clock solve time. Unless you override it, Tau sets output point density from the fastest source and reactive time constants.
                     </p>
                     <div className="flex items-center gap-2">
                       {resolvedOptionsSource === "custom" && onResetOptions && (
@@ -1438,8 +1438,8 @@ export function WaveformPlot({
       {success && allTraces.length === 0 && (
         <div className="scope-empty-state">
           <Crosshair size={20} strokeWidth={1.5} aria-hidden="true" />
-          <strong>Choose signals on the circuit</strong>
-          <span>Add a probe dot or name a node to create its plot automatically.</span>
+          <strong>No probed or labeled nets</strong>
+          <span>Place a voltage probe or name a net to plot it. Unlabeled nets are not shown.</span>
         </div>
       )}
 
@@ -3837,9 +3837,9 @@ function ResolutionControl({
   if (!resolution || resolution.maxFrequencyHz <= 0) {
     return (
       <div className="resolution-control neutral">
-        <span>DETAIL CHECK</span>
+        <span>RESOLUTION</span>
         <strong className="mono-num">DC / static</strong>
-        <small>No periodic source was found; Tau also considers reactive time constants when choosing detail.</small>
+        <small>No periodic source found; output spacing also accounts for reactive time constants.</small>
       </div>
     );
   }
@@ -3850,10 +3850,10 @@ function ResolutionControl({
   return (
     <div className={`resolution-control${ready ? " ready" : " warning"}`}>
       <div>
-        <span>DETAIL CHECK</span>
+        <span>RESOLUTION</span>
         <strong className="mono-num">{formatSamples(samples)} samples / cycle</strong>
         <small>
-          Fastest known source: {formatEngineering(resolution.maxFrequencyHz, "Hz", 3)} · minimum {MIN_SAMPLES_PER_CYCLE} samples/cycle.
+          Fastest source: {formatEngineering(resolution.maxFrequencyHz, "Hz", 3)} · need ≥{MIN_SAMPLES_PER_CYCLE} samples/cycle.
         </small>
       </div>
       {canResolve ? <strong className="resolution-state">{ready ? "Ready" : "Increase detail"}</strong> : (
@@ -3867,7 +3867,7 @@ const formatCount = (value: number) => value.toLocaleString("en-US");
 const formatSamples = (value: number) => Number(value.toPrecision(3)).toString();
 const detailLabel = (detail: TransientDetailLevel) => detail === "quick" ? "Quick" : detail === "balanced" ? "Balanced" : "Precision";
 const detailDescription = (detail: TransientDetailLevel) =>
-  detail === "quick" ? "Fast preview" : detail === "balanced" ? "Recommended" : "Fine transitions";
+  detail === "quick" ? "Coarse sampling" : detail === "balanced" ? "Default sampling" : "Fine sampling";
 const formatElapsed = (milliseconds: number) => milliseconds < 1_000
   ? `${Math.max(1, Math.round(milliseconds))} ms`
   : `${Number((milliseconds / 1_000).toPrecision(3))} s`;

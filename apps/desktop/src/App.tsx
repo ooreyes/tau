@@ -2104,9 +2104,9 @@ function App() {
       )}
       {confirmClearOpen && (
         <ConfirmDialog
-          title="Clear scratchpad?"
+          title="Clear schematic?"
           body="This starts a new untitled schematic and leaves the original file unchanged. Components, wires, labels, directives, probes, and the current analysis are cleared."
-          confirmLabel="Clear scratchpad"
+          confirmLabel="Clear schematic"
           onConfirm={clearScratchpad}
           onCancel={() => setConfirmClearOpen(false)}
         />

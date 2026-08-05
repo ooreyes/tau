@@ -22,6 +22,11 @@ import {
   Activity,
   Library,
   SlidersHorizontal,
+  Play,
+  Square,
+  Plus,
+  X,
+  ArrowLeft,
 } from "lucide-react";
 import {
   VscodeCollapseAllIcon,
@@ -1202,7 +1207,7 @@ export function EditorToolbar({
       <IconButton title="Delete selection (Delete)" disabled={!hasSelection || readOnly} onClick={deleteSelected}>
         <Trash2 size={16} strokeWidth={1.6} />
       </IconButton>
-      <IconButton title="Clear scratchpad" disabled={readOnly} onClick={onClearScratchpad}>
+      <IconButton title="Clear schematic" disabled={readOnly} onClick={onClearScratchpad}>
         <Eraser size={16} strokeWidth={1.6} />
       </IconButton>
       <span className="toolbar-divider" />
@@ -1217,14 +1222,16 @@ export function EditorToolbar({
       </IconButton>
       <div className="editor-toolbar-spacer" />
       <div className="transport">
-        <button className="transport-play" title="Run simulation" aria-label="Run simulation" onClick={onRun} disabled={isRunning}>▶</button>
+        <button className="transport-play" title="Run simulation" aria-label="Run simulation" onClick={onRun} disabled={isRunning}>
+          <Play size={14} strokeWidth={1.6} aria-hidden="true" />
+        </button>
         <button
           className="transport-stop"
           title="Clear current simulation result"
           aria-label="Stop simulation"
           onClick={onStop}
         >
-          ■
+          <Square size={12} strokeWidth={1.6} aria-hidden="true" />
         </button>
       </div>
     </div>
@@ -1342,9 +1349,7 @@ export function EditorTabs({
                 role="img"
                 aria-label={`${tab.title} has unsaved changes`}
                 title="Unsaved changes"
-              >
-                ●
-              </span>
+              />
             )}
             <button
               type="button"
@@ -1355,14 +1360,21 @@ export function EditorTabs({
                 onCloseTab(tab.id);
               }}
             >
-              ×
+              <X size={12} strokeWidth={1.8} aria-hidden="true" />
             </button>
           </div>
         );
       })}
-      <button className="editor-tab add" aria-label="New tab" onClick={onNewCircuit}>＋</button>
+      <button className="editor-tab add" aria-label="New tab" onClick={onNewCircuit}>
+        <Plus size={14} strokeWidth={1.6} aria-hidden="true" />
+      </button>
       <div className="editor-tab-spacer" />
-      {mode === "simulator" && <button className="editor-hide" aria-label="Return to schematic editor" onClick={onHideSimulator}>× back to schematic</button>}
+      {mode === "simulator" && (
+        <button className="editor-hide" aria-label="Return to schematic editor" onClick={onHideSimulator}>
+          <ArrowLeft size={12} strokeWidth={1.8} aria-hidden="true" />
+          Schematic
+        </button>
+      )}
     </div>
   );
 }
@@ -1421,7 +1433,7 @@ export function BottomPanel({
           </span>
           <span className="bottom-panel-title">Diagnostics</span>
           <span className="bottom-panel-clear" role="status">
-            {isRunning ? "Running" : isIdle ? "Not run" : "No issues"}
+            {isRunning ? "Running" : isIdle ? "No analysis yet" : "No issues"}
           </span>
         </div>
       ) : (
@@ -2207,7 +2219,7 @@ export function SettingsPanel({
         <SheetHeader>
           <span className="settings-sheet-kicker">Settings</span>
           <SheetTitle>{title}</SheetTitle>
-          <SheetDescription className="sr-only">Workspace and document settings for this scratchpad.</SheetDescription>
+          <SheetDescription className="sr-only">Workspace and document settings for the active schematic.</SheetDescription>
         </SheetHeader>
         <div className="settings-list">
           <div className="settings-section">
@@ -2436,7 +2448,7 @@ export function SettingsPanel({
           <SettingsRow label="Command palette" hint="⌘K · F2 · / - search & place parts">
             <Button size="sm" variant="outline" onClick={onOpenCommandPalette}>Open</Button>
           </SettingsRow>
-          <SettingsRow label="Meter probes" hint={`${probes.length} placed on this schematic`}>
+          <SettingsRow label="Waveform probes" hint={`${probes.length} placed on this schematic`}>
             <Button
               size="sm"
               variant="outline"
@@ -2472,10 +2484,10 @@ export function SettingsPanel({
               ))}
             </div>
           )}
-          <SettingsRow label="Local autosave" hint="browser localStorage snapshot">
+          <SettingsRow label="Local autosave" hint="Emergency recovery snapshot for untitled edits">
             <Button size="sm" variant="outline" onClick={clearAutosave}>Clear</Button>
           </SettingsRow>
-          <SettingsRow label="Document" hint="discard this scratchpad, start blank">
+          <SettingsRow label="Document" hint="Discard this untitled schematic and start blank">
             <Button
               size="sm"
               variant="destructive"
@@ -2516,10 +2528,7 @@ export function MinimizedPanelDock({
     <aside className="minimized-panel-dock" aria-label="Minimized panels">
       {graphHidden && (
         <button className="restore-orb graph" aria-label="Restore graphs panel" title="Restore graphs panel" onClick={onRestoreGraph}>
-          <svg viewBox="0 0 28 28" aria-hidden="true">
-            <path d="M5 19 11 10l4 5 8-11" />
-            <path d="M20 4h4v4" />
-          </svg>
+          <Activity size={16} strokeWidth={1.6} aria-hidden="true" />
           <span>Graphs</span>
         </button>
       )}

@@ -1,5 +1,5 @@
 import type { AnalysisResult } from "../simulation/linearTransient";
-import { Sparkles } from "lucide-react";
+import { Activity, CircuitBoard, MessageSquare, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
@@ -20,6 +20,8 @@ interface ToolbarProps {
 }
 
 type LampState = "idle" | "running" | "ok" | "error" | "warn";
+
+const ICON = { size: 13, strokeWidth: 1.6 } as const;
 
 export function Toolbar({ mode, result, runState, isRunning, title, assistantOpen, projectOpen = true, schematicOpen = true, onModeChange, onRun, onToggleAssistant, onOpenSettings }: ToolbarProps) {
   const isSimulator = mode === "simulator";
@@ -74,11 +76,7 @@ export function Toolbar({ mode, result, runState, isRunning, title, assistantOpe
           aria-pressed={mode === "schematic"}
           disabled={!projectOpen}
         >
-          <svg viewBox="0 0 16 16" aria-hidden="true">
-            <circle cx="4" cy="4" r="2" />
-            <circle cx="12" cy="12" r="2" />
-            <path d="M6 4h6v6" />
-          </svg>
+          <CircuitBoard {...ICON} aria-hidden="true" />
           Schematic
         </button>
         <button
@@ -87,10 +85,7 @@ export function Toolbar({ mode, result, runState, isRunning, title, assistantOpe
           aria-pressed={mode === "simulator"}
           disabled={!schematicOpen}
         >
-          <svg viewBox="0 0 16 16" aria-hidden="true">
-            <path d="M1 12l4-5 3 2 5-6" />
-            <path d="M11 3h2v2" />
-          </svg>
+          <Activity {...ICON} aria-hidden="true" />
           Simulator
         </button>
       </div>
@@ -141,7 +136,7 @@ export function Toolbar({ mode, result, runState, isRunning, title, assistantOpe
               disabled={!projectOpen}
               onClick={onToggleAssistant}
             >
-              <Sparkles size={14} strokeWidth={1.8} aria-hidden="true" />
+              <MessageSquare size={14} strokeWidth={1.6} aria-hidden="true" />
             </Button>
           </TooltipTrigger>
           <TooltipContent>{assistantOpen ? "Close Bode" : "Ask Bode"}</TooltipContent>
@@ -155,14 +150,7 @@ export function Toolbar({ mode, result, runState, isRunning, title, assistantOpe
               aria-label="Settings"
               onClick={onOpenSettings}
             >
-              <svg
-                viewBox="0 0 20 20"
-                aria-hidden="true"
-                className="size-3.5 fill-none stroke-current [stroke-linecap:round] [stroke-linejoin:round] [stroke-width:1.5]"
-              >
-                <path d="M10 2.5l1.8 1.2 2.1-.5.9 2 1.9.9-.5 2.1 1.2 1.8-1.2 1.8.5 2.1-1.9.9-.9 2-2.1-.5L10 17.5l-1.8-1.2-2.1.5-.9-2-1.9-.9.5-2.1L2.6 10l1.2-1.8-.5-2.1 1.9-.9.9-2 2.1.5z" />
-                <circle cx="10" cy="10" r="2.4" />
-              </svg>
+              <Settings size={14} strokeWidth={1.6} aria-hidden="true" />
             </Button>
           </TooltipTrigger>
           <TooltipContent>Settings</TooltipContent>

@@ -45,10 +45,10 @@ export function resolveEngineResult<T extends object>(
 
 export const ENGINE_LABELS: Record<SimulationEngine, string> = {
   ngspice: "ngspice",
-  preview: "Preview solver",
+  preview: "Linear preview",
 };
 
 export const ENGINE_DESCRIPTIONS: Record<SimulationEngine, string> = {
-  ngspice: "Solved by the bundled ngspice engine, using each part's full device model.",
-  preview: "Solved by Tau's built-in preview solver, which covers only linear R/C/L, sources, diodes and ideal op amps - not vendor device models. Run in the desktop app for ngspice.",
+  ngspice: "Solved by bundled ngspice with each part's authored device model.",
+  preview: "Not ngspice. Tau's linear MNA preview (R/C/L, sources, diodes, ideal op-amps only) — refuses vendor models and nonlinear devices. Use the desktop app for ngspice results.",
 };

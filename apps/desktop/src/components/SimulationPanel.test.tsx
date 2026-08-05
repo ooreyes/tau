@@ -134,7 +134,7 @@ describe("SimulationPanel - no redundant Run button", { timeout: 20_000 }, () =>
 
     expect(screen.getByRole("status").textContent).toContain("241 samples");
     fireEvent.mouseDown(screen.getByRole("tab", { name: "Operating point (.op)" }), { button: 0 });
-    expect(screen.getByRole("status").textContent).toContain("No results yet");
+    expect(screen.getByRole("status").textContent).toContain("No analysis yet");
     fireEvent.mouseDown(screen.getByRole("tab", { name: "Transient analysis (.tran)" }), { button: 0 });
     expect(screen.getByRole("status").textContent).toContain("241 samples");
   });
@@ -500,7 +500,7 @@ describe("SimulationPanel - one Advanced disclosure per tab (simplify pass)", { 
     expect(screen.getByText("Waveform detail")).toBeTruthy();
     expect(screen.queryByLabelText("STEPS slider")).toBeNull();
     expect(
-      screen.getByText("Circuit duration is simulated time, not how long Tau waits. Tau chooses waveform detail unless you override it."),
+      screen.getByText("STOP is simulated circuit time, not wall-clock solve time. Unless you override it, Tau sets output point density from the fastest source and reactive time constants."),
     ).toBeTruthy();
   });
 
@@ -637,7 +637,7 @@ describe("SimulationPanel - run-in-progress overlay (Fix 3)", () => {
     renderPanel({ isRunning: true, runProgress: null });
     const bar = screen.getByRole("progressbar");
     expect(bar.hasAttribute("aria-valuenow")).toBe(false);
-    expect(screen.getByText("Working…")).toBeTruthy();
+    expect(screen.getByText("Solving…")).toBeTruthy();
   });
 });
 

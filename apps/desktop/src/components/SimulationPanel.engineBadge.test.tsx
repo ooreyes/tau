@@ -111,9 +111,9 @@ describe("SimulationPanel - engine attribution badge", { timeout: 20_000 }, () =
     expect(badge()?.getAttribute("data-engine")).toBe("ngspice");
   });
 
-  it("names the preview solver, so its linear-subset answer is not read as ngspice's", () => {
+  it("names the linear preview solver so its subset answer is not read as ngspice", () => {
     renderPanel({ result: { ...tranResult, engine: "preview" } });
-    expect(badge()?.textContent).toBe("Preview solver");
+    expect(badge()?.textContent).toBe("Linear preview");
     // Styled apart from the native badge: this one is a qualification.
     expect(badge()?.className).toContain("plotter-status-engine--preview");
   });
@@ -138,7 +138,7 @@ describe("SimulationPanel - engine attribution badge", { timeout: 20_000 }, () =
     expect(badge()?.textContent).toBe("ngspice");
     // Radix TabsTrigger activates on mousedown, not click.
     fireEvent.mouseDown(screen.getByRole("tab", { name: "Operating point (.op)" }), { button: 0 });
-    expect(badge()?.textContent).toBe("Preview solver");
+    expect(badge()?.textContent).toBe("Linear preview");
   });
 
   it("attributes a failed run too - which engine rejected the circuit is the point", () => {
