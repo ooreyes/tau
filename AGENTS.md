@@ -174,7 +174,7 @@ account and sign/notarize/ship.
       with LTspice over a representative device and topology matrix.
       **Partial (2026-08-05):** `scripts/differential-parity.sh` +
       `differentialParity.corpus.ts` (also under `dod-parity.sh`) prove
-      pass=78 · sibling=5 · gap=0 on stdout: prior cells through SampleAndHold +
+      pass=79 · sibling=5 · gap=0 on stdout: prior cells through SampleAndHold +
       Educational/contrib/elip_grd.asc authored `.ac` (elliptic RLC + K1; S21/S11
       nRms≈0.0057/0.0039 @ maxTol=0.10 peak) + Documents/LTspice/Draft3.asc
       authored `.ac` (series RLC L/C/R; v(vout) nRms=0 / nMax=0 span≈1.04) +
@@ -191,7 +191,9 @@ account and sign/notarize/ship.
       LTspice.app Resources/IGBTeq.asc authored nested `.dc` (NMOS+PNP IGBT-eq;
       index-aligned v(n002)/i(v1) nRms≈5e-4 / ≈0) + LTspice.app help
       Butterworth.asc authored `.ac` (normalized LC ladder; ≠ Educational
-      butter.asc; v(n001)/v(n002)/v(out) nRms≈6e-4).
+      butter.asc; v(n001)/v(n002)/v(out) nRms≈6e-4) + LTspice.app
+      Resources/Draft1.asc authored `.dc` (BV soft `_exp`→`exp`; ≠ Documents
+      Draft1; v(x)/v(n001) nRms=0).
       gr_del deferred (all-pass |V|≈1 hollow magnitude). TwoTau deferred
       (LTspice rejects Tau s_xfer same-deck). Draft8 Laplace brace-mangle
       deferred. Draft6 AD823 / Draft10 UOA2 same-deck not landed. HalfSlope

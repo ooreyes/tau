@@ -186,6 +186,14 @@ export function ltFuncsToNgspice(expr: string): string {
       i += "table(".length;
       continue;
     }
+    // LTspice soft `_exp(x)` is overflow-safe exp; for same-deck LTspice+ngspice
+    // parity emit plain `exp` (both engines accept it). Soft-cap only matters
+    // for |x|≫300 — outside typical Resources/Draft1-style BV demos.
+    if (isWordBoundary && lower.startsWith("_exp(", i)) {
+      out += "exp(";
+      i += "_exp(".length;
+      continue;
+    }
     const fn = ["atan2(", "round(", "int(", "uplim(", "dnlim("].find((f) => lower.startsWith(f, i));
     if (isWordBoundary && fn) {
       const open = i + fn.length - 1;

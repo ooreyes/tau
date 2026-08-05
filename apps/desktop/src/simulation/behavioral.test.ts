@@ -20,6 +20,11 @@ describe("LTspice soft-limit translation", () => {
   it("leaves a wrong-arity call explicit instead of guessing", () => {
     expect(ltFuncsToNgspice("uplim(x,y)")).toBe("uplim(x,y)");
   });
+
+  it("rewrites LTspice soft _exp to plain exp for same-deck ngspice", () => {
+    expect(ltFuncsToNgspice("_exp(V(x))")).toBe("exp(V(x))");
+    expect(ltFuncsToNgspice("I=_exp(V(x))")).toBe("I=exp(V(x))");
+  });
 });
 
 describe("ifToTernary", () => {

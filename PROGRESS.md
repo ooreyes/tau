@@ -9,15 +9,14 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 04:50 CDT**
+**Status: DONE - 2026-08-05 04:55 CDT**
 
-Unit: LTspice.app help `Butterworth.asc` authored `.ac` → differential **pass=78**.
+Unit: LTspice.app Resources `Draft1.asc` authored `.dc` + `_exp`→`exp` → differential **pass=79**.
 ```
-SUMMARY pass=78 sibling=5 gap=0
-ac help-butterworth … v(n001) nRms=0.0006 span=1.642; v(out) nRms=0.0006 span=0.499
+SUMMARY pass=79 sibling=5 gap=0
+dc resources-draft1 … v(x) nRms=0 span=10; v(n001) nRms=0 span=148.4 samples=10001
 ```
-Normalized LC ladder (≠ Educational butter.asc). Left ISO7637/named-device alone.
-SHIPPABLE? **NO**
+≠ Documents Draft1. Named-device 48.1%. SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
@@ -25,6 +24,45 @@ SHIPPABLE? **NO**
 
 
 ---
+
+
+### 2026-08-05 — Resources Draft1.asc DC `_exp`→`exp` → pass=79 (§DoD)
+
+**What I did**
+- LTspice.app Resources `Draft1.asc` authored `.dc V1 -5 5 1m`: V1 + B1
+  `I=_exp(V(x))` + R1. Engine `ltFuncsToNgspice` rewrites soft `_exp` → plain
+  `exp` for same-deck ngspice. Index-aligned: v(x)/v(n001) nRms=0 /
+  samples=10001. Distinct from Documents/`Draft1.asc` (diode–L–R TRAN already
+  landed). Left ISO7637/sinh/named-device alone. Tip help-Butterworth pass=78 →
+  **79**.
+
+**Exact stdout**
+
+```
+SUMMARY pass=79 sibling=5 gap=0
+dc resources-draft1 … v(x) aligned nRms=0.0000 span=10.000; v(n001) aligned nRms=0.0000 span=148.406 samples=10001
+```
+
+**Files**
+- `apps/desktop/src/simulation/behavioral.ts` (+ test)
+- `apps/desktop/scripts/differentialParity.corpus.ts`
+- `AGENTS.md`, `FEATURE_PARITY.md`, `PROGRESS.md`
+
+**Tests**
+- `pnpm -C apps/desktop typecheck` + `test` green (2682)
+- differential corpus → pass=79
+
+**Parity items**
+- Differential 🟡 **pass=79**. Named-device exact **1222** / **48.1%**. SHIPPABLE? NO
+
+**Next step**
+- Avoid ISO7637 spike / sinh domain / Documents Draft* thrash; next honest
+  Resources/Educational cell.
+
+
+
+---
+
 
 
 ### 2026-08-05 — LTspice.app help Butterworth.asc AC → pass=78 (§DoD)
