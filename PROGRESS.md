@@ -1,15 +1,49 @@
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 ~13:15 CDT**
+**Status: DONE - 2026-08-05 ~13:25 CDT**
 
-Unit: **Product gates — reproducible run records** — versioned
-`tau.run.record.v1` (signature + deck fingerprint + engine + diagnostics +
-measurements); session history + Export `.tau-run.json`. Product-gates DoD
-box stays ⬜ (learning path / CLI still open). SHIPPABLE? **NO**
+Unit: Differential Educational/astable.asc period-meas → **pass=106**
+SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
 
+
+---
+
+### 2026-08-05 — Educational astable period-meas → pass=106 (§DoD)
+
+**What I did**
+- Educational `astable.asc` authored `.tran 25m startup`: exact bundled
+  2N3904 cross-coupled multivibrator. Continuous collector waveforms still
+  phase-miss after startup; land **period** via `.meas` TRIG/TARG on Q1
+  collector after settle (`TD=20m` RISE=1→2). LTspice log vs Tau
+  `runMeasurements`: tper relErr≈0.021%. Never Chan/NIGBT/FRA. Left SoftDiode
+  Vp>0 / Fc / ISO7637 spike / TLINE-inv / NE555 alone.
+
+**Exact stdout**
+```
+SUMMARY pass=106 sibling=5 gap=0 (DoD box stays open until broad authored-analysis matrix is green)
+tran astable … tper lt=1.130e-3 ng=1.130e-3 relErr=2.10e-4
+```
+
+**Files**
+- `apps/desktop/scripts/differentialParity.corpus.ts`
+- `AGENTS.md`, `FEATURE_PARITY.md`, `PROGRESS.md`
+
+**Tests**
+- `scripts/differential-parity.sh` → SUMMARY pass=106 sibling=5 gap=0
+- `pnpm -C apps/desktop typecheck` green
+- `pnpm -C apps/desktop test` → 2925 passed / 8 skipped
+
+**Parity items**
+- Differential 🟡 **pass=106 · sibling=5 · gap=0**; DoD broad box unchecked.
+- SHIPPABLE? **NO**
+
+**Next**
+- SoftDiode Vp>0 / Fc / ISO7637 spike / TLINE-inv; never Chan/NIGBT/FRA.
+
+SHIPPABLE? **NO**
 
 ---
 

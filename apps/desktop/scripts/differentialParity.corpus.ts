@@ -87,6 +87,8 @@ const DIMMER_ASC = join(EDU, "dimmer.asc");
 const SOFTDIODE_ASC = join(EDU, "SoftDiodeRecovery.asc");
 /** Educational PAsystem PowerAmp — TIP121/TIP127 Prefix-X + sibling .lib (A=0.1 member). */
 const POWERAMP_ASC = join(EDU, "PAsystem", "PowerAmp.asc");
+/** Educational astable — 2N3904 BJT multivibrator (period-meas; continuous phase deferred). */
+const ASTABLE_ASC = join(EDU, "astable.asc");
 const APP = join(homedir(), "Documents", "LTspice", "examples", "Applications");
 const DOC_LTSPICE = join(homedir(), "Documents", "LTspice");
 const CURVETRACE_ASC = join(EDU, "curvetrace.asc");
@@ -5185,6 +5187,82 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
       });
     }
 
+    // --- Educational/astable.asc authored .tran (2N3904 multivibrator; period-meas) ---
+    // Classic cross-coupled BJT astable: bundled exact 2N3904, `.tran 25m startup`.
+    // Continuous collector waveforms phase-miss vs LTspice (startup envelope) —
+    // land **period** via `.meas` TRIG/TARG on Q1 collector after settle
+    // (TD=20m RISE=1→2): LTspice log vs Tau `runMeasurements`, relErr≈0.25%.
+    // Never Chan/NIGBT/FRA. Tip pass=105 → **pass=106**. Left SoftDiode Vp>0 /
+    // Fc/ISO7637 spike / TLINE-inv / NE555 Output alone.
+    {
+      expect(existsSync(ASTABLE_ASC), `missing ${ASTABLE_ASC}`).toBe(true);
+      const imported = importAsc(decodeSchematicText(readFileSync(ASTABLE_ASC)));
+      expect(imported.warnings).toEqual([]);
+      expect(imported.foreignSymbols).toEqual([]);
+      const dirs = expandDirectiveLines(imported.directives);
+      const parsed = analysesFromDirectives(dirs);
+      expect(parsed.tran, "astable.asc must author .tran").toBeTruthy();
+      expect(parsed.tran!.stopTime, "astable .tran 25m").toBeCloseTo(0.025, 12);
+      expect(parsed.tran!.startup, "astable.asc must author startup").toBe(true);
+      const params = buildParamScope(dirs);
+      const deck = buildSpiceDeck({
+        components: imported.components,
+        wires: imported.wires,
+        netLabels: imported.netLabels,
+        directives: dirs,
+        params,
+      }, {
+        kind: "tran",
+        stopTime: parsed.tran!.stopTime,
+        steps: Math.max(parsed.tran!.steps ?? 240, 10000),
+        startTime: parsed.tran!.startTime,
+        maxStep: parsed.tran!.maxStep,
+        startup: parsed.tran!.startup,
+      });
+      expect(deck.unresolvedSubckts ?? []).toEqual([]);
+      expect(deck.modelSubstitutions ?? []).toEqual([]);
+      expect(deck.netlist).toMatch(/\.model\s+2N3904\s+NPN\b/i);
+      expect(deck.netlist).toMatch(/^Q1\b.+\b2N3904\b/im);
+      expect(deck.netlist).toMatch(/^Q2\b.+\b2N3904\b/im);
+      expect(deck.netlist).not.toMatch(/^Q\w+\b.+\bTAU_NPN\b/im);
+      expect(deck.netlist).toMatch(/\.tran\b.+\buic\b/i);
+      expect(deck.netlist).toMatch(/^V1\b.+\bPWL\(/im);
+      const q1 = /^Q1\s+(\S+)\s+(\S+)\s+(\S+)/im.exec(deck.netlist);
+      expect(q1, "Q1 collector/base/emitter").toBeTruthy();
+      const collector = q1![1]!;
+      const probe = `v(${collector})`;
+      // Oscillation only starts ~23 ms with startup — measure the settled cycle.
+      const measLines = [
+        `.meas tran tper TRIG V(${collector}) VAL=2.5 RISE=1 TD=20m TARG V(${collector}) VAL=2.5 RISE=2 TD=20m`,
+      ];
+      const result = runPairedBatch("diff-astable-period", deck.netlist, [probe], {
+        measurements: measLines,
+      });
+      const ltTrace = result.ltspice.get(probe)!;
+      const ngTrace = result.ngspice.get(probe)!;
+      const span = Math.max(
+        Math.max(...ltTrace.values) - Math.min(...ltTrace.values),
+        Math.max(...ngTrace.values) - Math.min(...ngTrace.values),
+      );
+      expect(span, "astable collector non-hollow").toBeGreaterThan(3);
+      const ltTper = measurementValue(result.ltspiceLog, "tper");
+      const tauMeas = runMeasurements(measLines, {
+        times: ngTrace.axis,
+        traces: [{ id: collector, label: `V(${collector})`, values: ngTrace.values }],
+      });
+      const ngTper = tauMeas.find((row) => row.name.toLowerCase() === "tper")?.value;
+      expect(ngTper, JSON.stringify(tauMeas)).toEqual(expect.any(Number));
+      const periodRel = relativeError(ngTper!, ltTper);
+      expect(periodRel, `astable tper lt=${ltTper} ng=${ngTper}`).toBeLessThanOrEqual(0.02);
+      cells.push({
+        analysis: "tran",
+        circuit: "astable",
+        topology: "Educational/astable.asc 2N3904 multivibrator (authored .tran 25m startup; period-meas; continuous phase deferred)",
+        status: "pass",
+        note: `tper lt=${ltTper.toExponential(3)} ng=${ngTper!.toExponential(3)} relErr=${periodRel.toExponential(2)} (collector ${probe}; waveform phase deferred)`,
+      });
+    }
+
     // --- Class-D AC/OP (authored analyses are .tran/.meas; add AC/OP for differential proof) ---
     {
       const ascPath = join(CLASSD_DIR, "class-d-starter.asc");
@@ -5481,6 +5559,6 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
     expect(passCount).toBeGreaterThanOrEqual(70);
     expect(siblingCount).toBe(5);
     expect(gapCount).toBe(0);
-    expect(report).toMatch(/SUMMARY pass=105 sibling=5 gap=0/);
+    expect(report).toMatch(/SUMMARY pass=106 sibling=5 gap=0/);
   }, 600_000);
 });
