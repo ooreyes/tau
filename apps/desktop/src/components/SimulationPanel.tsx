@@ -3782,6 +3782,24 @@ export function AcPlot({ result, overlays = [] }: { result: AcResult | null; ove
           >
             Group delay
           </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={!plot}
+            aria-label="Export phase PNG"
+            onClick={async () => {
+              const svg = phaseMeasureRef.current;
+              if (!svg) return;
+              try {
+                const blob = await waveformSvgsToPng([svg]);
+                downloadWaveformPng(blob, "ac-phase");
+              } catch {
+                // Raster failures stay silent — Advanced Bode PNG remains available.
+              }
+            }}
+          >
+            Export PNG
+          </Button>
         </div>
         <Metric label="START" value={formatEngineering(result.freqs[0] ?? 0, "Hz", 0)} tone="green" />
         <Metric label="POINTS" value={String(result.freqs.length)} tone="cyan" />

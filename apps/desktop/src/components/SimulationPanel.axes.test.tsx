@@ -349,6 +349,32 @@ describe("AcPlot - log-frequency ticks on both magnitude and phase", () => {
     expect(ticks.some((t) => /s/.test(t))).toBe(true);
     expect(container.querySelectorAll("path.scope-trace").length).toBeGreaterThan(0);
   });
+
+  it("Export phase PNG rasters the lower Bode SVG with tag ac-phase", async () => {
+    const png = await import("../simulation/plotPng");
+    const toPng = vi.spyOn(png, "waveformSvgsToPng").mockResolvedValue(new Blob(["png"]));
+    const download = vi.spyOn(png, "downloadWaveformPng").mockImplementation(() => {});
+    try {
+      const freqs = [10, 100, 1000, 10000, 100000];
+      const result: AcResult = {
+        ok: true,
+        freqs,
+        traces: [{ id: "n1", label: "V(out)", magDb: [0, -3, -20, -40, -60], phaseDeg: [0, -45, -90, -90, -90] }],
+        warnings: [],
+      };
+      render(<AcPlot result={result} />);
+      const btn = screen.getByRole("button", { name: "Export phase PNG" });
+      expect((btn as HTMLButtonElement).disabled).toBe(false);
+      fireEvent.click(btn);
+      await waitFor(() => expect(toPng).toHaveBeenCalled());
+      const svgs = toPng.mock.calls[0]![0] as SVGSVGElement[];
+      expect(svgs.length).toBe(1);
+      expect(download).toHaveBeenCalledWith(expect.any(Blob), "ac-phase");
+    } finally {
+      toPng.mockRestore();
+      download.mockRestore();
+    }
+  });
 });
 
 describe("DcPlot - linear sweep/volts ticks", () => {

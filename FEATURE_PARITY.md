@@ -1432,7 +1432,10 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   decades via `bodeMagYDomain` / `dbToLinearMag`. **Group-delay lower pane
   landed** (2026-08-05): AcPlot **Phase / Group delay** toggle swaps the
   Bode lower pane between φ (°) and τ = −dφ/dω (s) via `groupDelay` /
-  `groupDelayYDomain`. Still ⬜: standalone detached phase window.
+  `groupDelayYDomain`. **Phase Export PNG landed** (2026-08-05): AcPlot
+  **Export PNG** rasters the lower (phase / group-delay) SVG via
+  `waveformSvgsToPng` (`tau-ac-phase-….png`). 1 wiring test. Still ⬜:
+  standalone detached phase window.
 - 🟡 **Loop-stability margins** (LTspice Bode readouts) — **landed**
   (`simulation/stability.ts`, 10 tests): `stabilityMargins(freqs, magDb, phaseDeg)`
   returns **phase margin** (180°+φ at the 0 dB gain crossover) and **gain margin**
@@ -1532,8 +1535,9 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   (2026-08-05): AcPlot magnitude Lin Y = dB; Log Y = `|V|/|Vref|` decades
   via `bodeMagYDomain` / `dbToLinearMag`. **FFT Export PNG landed** (2026-08-05):
   FftView **Export PNG** (`tau-fft-….png`). 1 wiring test. **Group-delay lower
-  pane landed** (2026-08-05): AcPlot Phase / Group delay toggle. **NEXT:**
-  (waveform CSV/PNG/plt/FFT/expressions/dual-axis/right-click/Bode-X/Y/τ
+  pane landed** (2026-08-05): AcPlot Phase / Group delay toggle. **Phase Export
+  PNG landed** (2026-08-05): AcPlot lower-pane **Export PNG** (`tau-ac-phase-….png`).
+  **NEXT:** (waveform CSV/PNG/plt/FFT/expressions/dual-axis/right-click/Bode-X/Y/τ
   covered — remaining: standalone phase window).
 - 🟡 Right-click trace → math/operations — **abs / negate / dB / uramp / sgn /
   ddt landed** (2026-08-05): `traceMath.ts` wraps a legend trace into `abs(…)`,

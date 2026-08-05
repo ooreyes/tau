@@ -1,21 +1,17 @@
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 ~07:05 CDT**
+**Status: DONE - 2026-08-05 07:05 CDT**
 
-Unit: Circuit_testing_v1 `18_full_bridge_power_supply.asc` authored `.tran` + `.meas` → differential **pass=94**.
-```
-SUMMARY pass=94 sibling=5 gap=0
-tran ct-full-bridge … v(vdc) nRms=0.0001 nMax=0.0008 span=15.240
-```
-Named-device 48.1%. Worktree `Tau-wt-diff-92` rebased over Ctrl+click avg/RMS tip (`b6cf5fd`).
-ct 19 INA `.op` still deferred. Left Settings / IRFP / Draft* / ct 12–15 alone.
-SHIPPABLE? **NO**
+Unit: Waveform DoD — **Bode phase/group-delay Export PNG**.
+Tip base `72a033c` pass=94 (ct full-bridge). Named-device 48.1%. Settings locked. SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
 
 
 ---
+
+
 
 ### 2026-08-05 — ct 18_full_bridge_power_supply .tran → pass=94 (§DoD)
 
