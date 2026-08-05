@@ -1,19 +1,42 @@
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 06:18 CDT**
+**Status: DONE - 2026-08-05 06:23 CDT**
 
-Unit: Circuit_testing_v1 `01_op_voltage_divider.asc` authored `.op` → differential **pass=90**.
-```
-SUMMARY pass=90 sibling=5 gap=0
-op ct-op-divider … V(out) lt=3.333333333333333 ng=3.3333333311111115 relErr<=1e-6
-```
-Named-device 48.1%. Left 100W/IRFP/Documents Draft*/Settings alone. Rebased over DC PNG tip `9bc9415`. SHIPPABLE? **NO**
+Unit: Waveform DoD — **Noise Export PNG** (`waveformSvgsToPng` + Advanced Export PNG).
+Base tip `c4f53cc` pass=90. Named-device 48.1%. Settings locked. SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
 
 
 ---
+
+
+### 2026-08-05 — Noise Export PNG (§waveform DoD)
+
+**What I did**
+- Noise Advanced **Export PNG** rasters the noise spectrum `svg.scope-svg` via
+  the same `waveformSvgsToPng` path as TRAN/AC/DC (`tau-noise-….png`).
+- ND wall at 48.1% — waveform pivot. Left 100W/IRFP, ct ASC (continue 29),
+  Chan/NIGBT/FRA, Settings alone.
+
+**Files**
+- `apps/desktop/src/components/SimulationPanel.tsx` (+ wiring test)
+- `FEATURE_PARITY.md`, `PROGRESS.md`
+
+**Tests**
+- `pnpm -C apps/desktop typecheck` + `test` green (2733 passed)
+- Noise Export PNG 1
+
+**Parity items**
+- Waveform viewer 🟡 (Noise PNG landed). Differential pass=90 · named-device
+  48.1% · SHIPPABLE? NO
+
+**Next step**
+- Cursor CSV, richer right-click, or continue 29 differential. Leave
+  IRFP/Draft*/Settings alone.
+
+
 
 
 ### 2026-08-05 — ct 01_op_voltage_divider .op → pass=90 (§DoD)

@@ -1486,8 +1486,9 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   first plot. 6 hand-computed/DOM tests. **AC Bode Export PNG landed**
   (2026-08-05): same raster path for Bode magnitude + phase panes
   (`downloadWaveformPng(…, "ac")`). **DC Export PNG landed** (2026-08-05):
-  Advanced **Export PNG** for the DC sweep plot (`tau-dc-….png`). Still ⬜:
-  noise PNG. **Step-family CSV landed**
+  Advanced **Export PNG** for the DC sweep plot (`tau-dc-….png`). **Noise Export
+  PNG landed** (2026-08-05): Advanced **Export PNG** for the noise spectrum
+  (`tau-noise-….png`). **Step-family CSV landed**
   (`stepFamilyToCsv`, 2026-08-05): long-format `step,time,<signal>` keeps each
   `.step` member's own time grid (no forced resample); StepPlot **Export CSV**
   downloads it. 4 pure + 1 StepPlot wiring tests. **`.plt` import/apply landed**
@@ -1507,9 +1508,10 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   (2026-08-05): Advanced **Export PNG** rasters Bode mag+phase SVGs via the
   same `waveformSvgsToPng` path as transient (`tau-ac-….png`). 1 wiring test.
   **DC Export PNG landed** (2026-08-05): same path for the DC sweep pane
-  (`tau-dc-….png`). 1 wiring test. **NEXT:** (waveform
-  CSV/PNG/plt/FFT/expressions/dual-axis/right-click/Bode-X covered —
-  remaining: richer right-click ops, Y log, noise PNG, phase pane).
+  (`tau-dc-….png`). 1 wiring test. **Noise Export PNG landed** (2026-08-05):
+  same path for the noise spectrum pane (`tau-noise-….png`). 1 wiring test.
+  **NEXT:** (waveform CSV/PNG/plt/FFT/expressions/dual-axis/right-click/Bode-X
+  covered — remaining: richer right-click ops, Y log, phase pane).
 - 🟡 Right-click trace → math/operations — **abs / negate / dB landed**
   (2026-08-05): `traceMath.ts` wraps a legend trace into `abs(…)`, `-(…)`,
   or `db(…)` and adds it via the existing expression overlay path; transient

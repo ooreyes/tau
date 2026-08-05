@@ -327,6 +327,7 @@ export function SimulationPanel({
   const transientPlotsRef = useRef<HTMLDivElement | null>(null);
   const acPlotsRef = useRef<HTMLDivElement | null>(null);
   const dcPlotsRef = useRef<HTMLDivElement | null>(null);
+  const noisePlotsRef = useRef<HTMLDivElement | null>(null);
   // Multi-pane layout for the transient scope. Starts as a single pane with all
   // traces (preserving existing behavior). Updated via pane controls / trace moves.
   const [paneLayout, setPaneLayout] = useState<PaneLayout>(() => defaultLayout());
@@ -682,6 +683,17 @@ export function SimulationPanel({
       setExportError(null);
     } catch (error) {
       setExportError(error instanceof Error ? error.message : "Could not export the DC PNG.");
+    }
+  };
+
+  const exportNoisePng = async () => {
+    try {
+      const svgs = noisePlotsRef.current?.querySelectorAll<SVGSVGElement>("svg.scope-svg") ?? [];
+      const blob = await waveformSvgsToPng(Array.from(svgs));
+      downloadWaveformPng(blob, "noise");
+      setExportError(null);
+    } catch (error) {
+      setExportError(error instanceof Error ? error.message : "Could not export the noise PNG.");
     }
   };
 
@@ -1481,7 +1493,9 @@ export function SimulationPanel({
       {mode === "noise" && (
         <>
           <NoiseSetupForm setup={noiseSetup} components={components} onChange={onNoiseSetupChange} />
-          <NoisePlot result={noiseResult} />
+          <div ref={noisePlotsRef}>
+            <NoisePlot result={noiseResult} />
+          </div>
           <MeasTable measurements={noiseMeasurements} />
 
           <div className="advanced-settings">
@@ -1507,7 +1521,16 @@ export function SimulationPanel({
                       </TooltipTrigger>
                       <TooltipContent>Export the noise spectrum as a CSV table</TooltipContent>
                     </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button variant="outline" size="sm" onClick={() => void exportNoisePng()} disabled={!noiseResult?.ok}>
+                          Export PNG
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>Export the noise spectrum plot as a PNG image</TooltipContent>
+                    </Tooltip>
                   </div>
+                  {exportError && mode === "noise" && <div className="expr-error" role="alert">{exportError}</div>}
                 </section>
               </div>
             )}

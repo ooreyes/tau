@@ -1300,3 +1300,40 @@ describe("SimulationPanel - DC Export PNG", { timeout: 20_000 }, () => {
     }
   });
 });
+
+describe("SimulationPanel - Noise Export PNG", { timeout: 20_000 }, () => {
+  it("exports noise spectrum SVGs via waveformSvgsToPng with tag noise", async () => {
+    const png = await import("../simulation/plotPng");
+    const toPng = vi.spyOn(png, "waveformSvgsToPng").mockResolvedValue(new Blob(["png"]));
+    const download = vi.spyOn(png, "downloadWaveformPng").mockImplementation(() => {});
+    try {
+      const noiseResult = {
+        ok: true as const,
+        spec: {
+          output: { pos: "out" },
+          source: "V1",
+          sweep: { startHz: 10, stopHz: 1000, pointsPerDecade: 10 },
+        },
+        freqs: [10, 100, 1000],
+        onoise: [1e-8, 1e-7, 1e-6],
+        inoise: [1e-8, 1e-7, 1e-6],
+        inoiseUnit: "V/√Hz" as const,
+        totalOutputNoise: 1e-6,
+        totalInputNoise: 1e-6,
+        warnings: [],
+      };
+      renderPanel({ preferredMode: "noise", noiseResult });
+      fireEvent.click(screen.getByRole("button", { name: "Toggle advanced settings" }));
+      const btn = screen.getByRole("button", { name: "Export PNG" });
+      expect((btn as HTMLButtonElement).disabled).toBe(false);
+      fireEvent.click(btn);
+      await waitFor(() => expect(toPng).toHaveBeenCalled());
+      const svgs = toPng.mock.calls[0]![0] as SVGSVGElement[];
+      expect(svgs.length).toBeGreaterThanOrEqual(1);
+      expect(download).toHaveBeenCalledWith(expect.any(Blob), "noise");
+    } finally {
+      toPng.mockRestore();
+      download.mockRestore();
+    }
+  });
+});
