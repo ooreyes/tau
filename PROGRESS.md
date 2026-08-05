@@ -2,17 +2,12 @@
 
 **Status: DONE - 2026-08-05 06:02 CDT**
 
-<<<<<<< HEAD
-Unit: Waveform DoD — **right-click trace math** (abs / negate / dB → expression overlay).
-Base tip `a358208` pass=87. Named-device 48.1%. Settings locked. SHIPPABLE? **NO**
-=======
 Unit: Circuit_testing_v1 `03_ac_rc_lowpass.asc` authored `.ac` → differential **pass=88**.
 ```
 SUMMARY pass=88 sibling=5 gap=0
 ac ct-ac-rc … v(out) nRms=0.0000 span=0.998
 ```
-Named-device 48.1%. Left 100W/IRFP/Documents Draft*/Settings alone. Rebased over FFT CSV tip `a358208`. SHIPPABLE? **NO**
->>>>>>> 9ffb9c7 (auto: Circuit_testing 03_ac_rc_lowpass .ac → pass=88 (§DoD))
+Named-device 48.1%. Left 100W/IRFP/Documents Draft*/Settings alone. Rebased over right-click math tip `f6214b6`. SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
