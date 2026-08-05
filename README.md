@@ -99,6 +99,17 @@ pnpm test             # run solver/example correctness tests
 `pnpm dev:web` intentionally uses the browser fallback and cannot exercise the
 native engine. Use `pnpm dev` for ngspice verification.
 
+### Overnight builder (Cursor Python SDK)
+
+Unattended local agents against this checkout (DoD / UI priorities). Details:
+[scripts/README-overnight-sdk.md](scripts/README-overnight-sdk.md).
+
+```bash
+pip install cursor-sdk
+export CURSOR_API_KEY="cursor_..."   # https://cursor.com/dashboard/api
+python scripts/tau_overnight_sdk.py
+```
+
 The build script locks ngspice to its recorded source commit, compiles out of
 tree, stages a target-matched library under `src-tauri/resources/ngspice/`, and
 writes `build-info.json` with the exact provenance. Desktop builds fail early

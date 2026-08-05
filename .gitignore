@@ -33,3 +33,8 @@ apps/desktop/.agent-reload
 .env.*
 !.env.example
 .claude/worktrees/
+
+# Python
+__pycache__/
+*.py[cod]
+.tau-overnight-sdk-state.json
