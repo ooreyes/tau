@@ -45,6 +45,7 @@ import { evaluatePlotExpression } from "../simulation/plotExpression";
 import { evaluateAcPlotExpression } from "../simulation/plotExpressionAc";
 import { evaluateDcPlotExpression } from "../simulation/plotExpressionDc";
 import { commonTraceUnit } from "../simulation/exprUnit";
+import { partitionTracesByAxis, planDualAxisY } from "../simulation/dualAxis";
 import { groupDelay } from "../simulation/groupDelay";
 import { stabilityMargins } from "../simulation/stability";
 import { seriesToCsv, stepFamilyToCsv } from "../simulation/waveformCsv";
@@ -1627,9 +1628,22 @@ export function WaveformPlot({
             const plot =
               success && paneTraces.length > 0
                 ? (() => {
-                    const { min, max } = waveformBounds(paneTraces);
-                    const unit = commonTraceUnit(paneTraces.map((t) => t.unit)) || "V";
-                    return { min, max, tMax, unit };
+                    const plan = planDualAxisY(paneTraces.map((t) => t.unit));
+                    const { left, right } = partitionTracesByAxis(paneTraces, plan);
+                    const leftBounds = waveformBounds(left.length > 0 ? left : paneTraces);
+                    const rightBounds = right.length > 0 ? waveformBounds(right) : null;
+                    return {
+                      tMax,
+                      left: {
+                        min: leftBounds.min,
+                        max: leftBounds.max,
+                        unit: plan.leftUnit || commonTraceUnit(paneTraces.map((t) => t.unit)) || "V",
+                      },
+                      right:
+                        plan.dual && rightBounds && plan.rightUnit
+                          ? { min: rightBounds.min, max: rightBounds.max, unit: plan.rightUnit }
+                          : null,
+                    };
                   })()
                 : null;
             const height = reconciled.heights[id] ?? "M";
@@ -1906,7 +1920,12 @@ function TranScopePane({
   cursorTool,
 }: {
   paneTraces: Trace[];
-  plot: { min: number; max: number; tMax: number; unit: string } | null;
+  /** Left-axis domain (+ optional right-axis for mixed V+A). */
+  plot: {
+    tMax: number;
+    left: { min: number; max: number; unit: string };
+    right: { min: number; max: number; unit: string } | null;
+  } | null;
   times: number[];
   ariaLabel: string;
   showXAxis: boolean;
@@ -1935,8 +1954,14 @@ function TranScopePane({
   // never be shared: `onXViewportChange` below is only wired up when `plot`
   // is real, so this placeholder can't leak into `sharedX` and drag siblings
   // with real (e.g. millisecond-scale) data onto a bogus 0-1s window.
+  // Left axis owns the zoomable Y viewport; right-axis (amps) stays data-fit.
   const domain = useMemo<Viewport>(
-    () => ({ xMin: 0, xMax: plot ? plot.tMax : 1, yMin: plot ? plot.min : -1, yMax: plot ? plot.max : 1 }),
+    () => ({
+      xMin: 0,
+      xMax: plot ? plot.tMax : 1,
+      yMin: plot ? plot.left.min : -1,
+      yMax: plot ? plot.left.max : 1,
+    }),
     [plot],
   );
   const { viewport, attachSvg, isPanning, fit, fitTo, zoomBy, dragHandlers } = usePlotViewport({
@@ -1958,12 +1983,24 @@ function TranScopePane({
   const autoFrame = useCallback(() => {
     fitTo(autoFrameWaveform(times, paneTraces, viewport));
   }, [fitTo, paneTraces, times, viewport]);
+  const yRangeForTrace = useCallback(
+    (trace: Trace): { min: number; max: number } => {
+      if (plot?.right && trace.unit === plot.right.unit) {
+        return { min: plot.right.min, max: plot.right.max };
+      }
+      return { min: viewport.yMin, max: viewport.yMax };
+    },
+    [plot, viewport.yMin, viewport.yMax],
+  );
   const tracePaths = useMemo(
-    () => paneTraces.map((trace) => ({
-      trace,
-      path: tracePath(trace, times, viewport.xMin, viewport.xMax, viewport.yMin, viewport.yMax, plotHeight),
-    })),
-    [paneTraces, times, viewport.xMin, viewport.xMax, viewport.yMin, viewport.yMax, plotHeight],
+    () => paneTraces.map((trace) => {
+      const y = yRangeForTrace(trace);
+      return {
+        trace,
+        path: tracePath(trace, times, viewport.xMin, viewport.xMax, y.min, y.max, plotHeight),
+      };
+    }),
+    [paneTraces, times, viewport.xMin, viewport.xMax, yRangeForTrace, plotHeight],
   );
   const selectedPaneTrace = activeTrace
     ? paneTraces.find((trace) => trace.id === activeTrace.id) ?? null
@@ -2014,15 +2051,16 @@ function TranScopePane({
     if (!Number.isFinite(fraction)) return;
     const x = fractionToX(times, fraction);
     const plotSpanY = plotHeight - 2 * PLOT_PAD;
-    const toScreenY = (value: number) =>
-      PLOT_PAD + ((viewport.yMax - value) / (viewport.yMax - viewport.yMin)) * plotSpanY;
+    const toScreenY = (value: number, min: number, max: number) =>
+      PLOT_PAD + ((max - value) / (max - min || 1)) * plotSpanY;
     const pointerSvgY = ((event.clientY - bounds.top) / bounds.height) * plotHeight;
 
     let best: { value: number; trace: Trace; screenY: number } | null = null;
     for (const trace of paneTraces) {
       const value = interpolateAt(times, trace.values, x);
       if (!Number.isFinite(value)) continue;
-      const screenY = toScreenY(value);
+      const yr = yRangeForTrace(trace);
+      const screenY = toScreenY(value, yr.min, yr.max);
       if (!best || Math.abs(screenY - pointerSvgY) < Math.abs(best.screenY - pointerSvgY)) {
         best = { value, trace, screenY };
       }
@@ -2034,7 +2072,7 @@ function TranScopePane({
     const screenX = PLOT_PAD
       + ((x - viewport.xMin) / (viewport.xMax - viewport.xMin)) * (PLOT_WIDTH - 2 * PLOT_PAD);
     setHover({ x: screenX, y: best.screenY, dataX: x, value: best.value, trace: best.trace });
-  }, [hoverEnabled, times, viewport, plotHeight, paneTraces]);
+  }, [hoverEnabled, times, viewport, plotHeight, paneTraces, yRangeForTrace]);
   const hoverVisible = hover
     && hover.x >= PLOT_PAD && hover.x <= PLOT_WIDTH - PLOT_PAD
     && hover.y >= PLOT_PAD && hover.y <= plotHeight - PLOT_PAD;
@@ -2072,12 +2110,18 @@ function TranScopePane({
           yMin={viewport.yMin}
           yMax={viewport.yMax}
           xUnit="s"
-          yUnit={plot ? plot.unit : "V"}
+          yUnit={plot?.left.unit ?? "V"}
           xAxisTitle="Time"
-          yAxisTitle={plot?.unit === "A" ? "Current" : plot?.unit === "W" ? "Power" : "Voltage"}
+          yAxisTitle={
+            plot?.left.unit === "A" ? "Current" : plot?.left.unit === "W" ? "Power" : "Voltage"
+          }
           targetXTicks={targetXTicks}
           targetYTicks={targetYTicks}
           showXTicks={showXAxis}
+          y2Min={plot?.right?.min}
+          y2Max={plot?.right?.max}
+          y2Unit={plot?.right?.unit}
+          y2AxisTitle={plot?.right ? "Current" : undefined}
         />
         {plot && (
           <>
@@ -2111,11 +2155,14 @@ function TranScopePane({
                   const selectedValue = selectedPaneTrace
                     ? interpolateAt(times, selectedPaneTrace.values, cursor.value)
                     : NaN;
+                  const yr = selectedPaneTrace
+                    ? yRangeForTrace(selectedPaneTrace)
+                    : { min: viewport.yMin, max: viewport.yMax };
                   const pointVisible = Number.isFinite(selectedValue)
-                    && selectedValue >= viewport.yMin
-                    && selectedValue <= viewport.yMax;
+                    && selectedValue >= yr.min
+                    && selectedValue <= yr.max;
                   const y = pointVisible
-                    ? PLOT_PAD + ((viewport.yMax - selectedValue) / (viewport.yMax - viewport.yMin)) * (plotHeight - 2 * PLOT_PAD)
+                    ? PLOT_PAD + ((yr.max - selectedValue) / (yr.max - yr.min || 1)) * (plotHeight - 2 * PLOT_PAD)
                     : NaN;
                   const labelWidth = 118;
                   const labelX = x > PLOT_WIDTH / 2 ? x - labelWidth - 4 : x + 4;

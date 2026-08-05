@@ -9,20 +9,45 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 05:38 CDT**
+**Status: DONE - 2026-08-05 05:44 CDT**
 
-Unit: Circuit_testing_v1 `04_dc_diode_curve.asc` authored `.dc` → differential **pass=85**.
-```
-SUMMARY pass=85 sibling=5 gap=0
-dc ct-diode-dc … v(anode) nRms≈0 span=0.547; i(v1) nRms≈0 span≈4.3e-4
-```
-Exact 1N4148. Named-device 48.1%. Left 100W/IRFP alone. SHIPPABLE? **NO**
+Unit: Waveform DoD — **dual-axis Y** for mixed V+A on the transient scope.
+Tip base `511fb91` pass=85. SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
 
 
 ---
+
+
+### 2026-08-05 — dual-axis Y for mixed V+A (§waveform DoD)
+
+**What I did**
+- `planDualAxisY` / `partitionTracesByAxis`: exact V+A panes get left=V /
+  right=A; other mixes stay single-axis (no invented third axis).
+  `PlotAxes` optional right ticks + Current caption; `TranScopePane` maps
+  traces per axis (left zoomable, right data-fit).
+- Left 100W/IRFP, ct diode/RLC, Settings, Chan/NIGBT/FRA alone.
+
+**Files**
+- `apps/desktop/src/simulation/dualAxis.ts` (+ test)
+- `apps/desktop/src/components/PlotAxes.tsx` (+ test)
+- `apps/desktop/src/components/SimulationPanel.tsx`
+- `FEATURE_PARITY.md`, `PROGRESS.md`
+
+**Tests**
+- `pnpm -C apps/desktop typecheck` + `test` green
+- dualAxis 6 + PlotAxes dual-Y 2
+
+**Parity items**
+- Waveform viewer 🟡 (dual-axis landed; step-pane expressions / `.plt` save NEXT).
+  Differential pass=85 · named-device 48.1% · SHIPPABLE? NO
+
+**Next step**
+- Continue 22: step-pane expression traces. Continue 24 owns next differential.
+
+
 
 
 
@@ -60,7 +85,7 @@ dc ct-diode-dc … v(anode) nRms=0.0000 nMax=0.0000 span=0.547; i(v1) nRms=0.000
 
 
 
-### 2026-08-05 — LTspice .plt import/apply (§waveform DoD)
+=======### 2026-08-05 — LTspice .plt import/apply (§waveform DoD)
 
 **What I did**
 - Pure `parsePlt` / `applyPltSection` for Educational-style `.plt` files

@@ -1290,7 +1290,13 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   overlays drawn on the shared magnitude/voltage axis and listed in the legend.
   Transient derived traces/reference/export controls now live under a
   closed-by-default **Advanced plot tools** disclosure.
-  **NEXT:** expression traces in the step pane; dual axis for mixed V+A.
+  **Dual-axis Y for mixed V+A landed** (2026-08-05): `planDualAxisY` /
+  `partitionTracesByAxis` (`simulation/dualAxis.ts`) put volts on the left and
+  amps on the right when a pane holds exactly those two units; other mixes stay
+  single-axis (honest blank/`V` fallback). `PlotAxes` draws optional right-hand
+  ticks + caption; `TranScopePane` maps each trace onto its axis (left zoomable,
+  right data-fit). 6 pure + 2 PlotAxes tests. **NEXT:** expression traces in the
+  step pane.
 - 🟡 Multiple plot panes and autorange — **landed for the
   transient scope** (`plotPanes.ts` pure pane model + per-pane Y autorange,
   with manual pane add/remove/move removed from the default UI so plots remain
@@ -1478,7 +1484,8 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   **Open .plt** applies Transient/AC/DC settings (expression-bar traces so
   panes do not depend on probes; X window forced on the transient scope).
   11 pure + Educational corpus smoke + 1 SimulationPanel wiring test.
-  **NEXT:** dual-axis Y for mixed V+A; step-pane expression bar; `.plt` save.
+  **Dual-axis Y landed** (see expressions item). **NEXT:** step-pane expression
+  bar; `.plt` save.
 - ⬜ Right-click trace → math/operations
 
 ## 7. Engine & accuracy

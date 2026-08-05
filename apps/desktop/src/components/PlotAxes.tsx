@@ -35,6 +35,15 @@ export interface PlotAxesProps {
   /** Suppress the bottom x-axis tick row (e.g. a stacked pane that isn't the
    *  bottom-most one shares its x-axis with the pane below it). */
   showXTicks?: boolean;
+  /**
+   * Optional right-hand Y axis for mixed V+A panes. When set with a finite
+   * `[y2Min,y2Max]` span, tick labels and a unit caption render on the right;
+   * gridlines stay on the left axis only (one shared horizontal grid).
+   */
+  y2Min?: number;
+  y2Max?: number;
+  y2Unit?: string;
+  y2AxisTitle?: string;
 }
 
 export function PlotAxes({
@@ -54,11 +63,24 @@ export function PlotAxes({
   targetXTicks = 5,
   targetYTicks = 5,
   showXTicks = true,
+  y2Min,
+  y2Max,
+  y2Unit = "",
+  y2AxisTitle = "Value",
 }: PlotAxesProps) {
   const innerW = width - pad * 2;
   const innerH = height - pad * 2;
   const xTicks = computeAxisTicks(xMin, xMax, { scale: xScale, unit: xUnit, targetCount: targetXTicks });
   const yTicks = computeAxisTicks(yMin, yMax, { scale: yScale, unit: yUnit, targetCount: targetYTicks });
+  const dualY =
+    y2Min !== undefined
+    && y2Max !== undefined
+    && Number.isFinite(y2Min)
+    && Number.isFinite(y2Max)
+    && y2Max !== y2Min;
+  const y2Ticks = dualY
+    ? computeAxisTicks(y2Min, y2Max, { scale: yScale, unit: y2Unit, targetCount: targetYTicks })
+    : [];
 
   const xPixel = (frac: number) => pad + frac * innerW;
   // Y is inverted: frac 0 (yMin) sits at the bottom of the plot box.
@@ -144,6 +166,21 @@ export function PlotAxes({
             </text>
           );
         })}
+        {y2Ticks.map((t, i) => {
+          const py = yPixel(t.frac);
+          const clampedY = Math.min(height - pad - 1, Math.max(pad + 6, py));
+          return (
+            <text
+              key={`ty2${i}`}
+              className="scope-tick scope-tick-y2 mono-num"
+              textAnchor="start"
+              x={width - pad + 4}
+              y={clampedY + 3}
+            >
+              {t.label}
+            </text>
+          );
+        })}
       </g>
       {xAxisTitle && (
         <text className="scope-axis-title mono-num" x={pad + innerW / 2} y={height - 6} textAnchor="middle">
@@ -158,6 +195,16 @@ export function PlotAxes({
           textAnchor="start"
         >
           {yUnit ? `${yAxisTitle} (${yUnit})` : yAxisTitle}
+        </text>
+      )}
+      {dualY && y2AxisTitle && (
+        <text
+          className="scope-axis-title scope-axis-title-y2 mono-num"
+          x={width - 5}
+          y={Math.max(10, pad - 8)}
+          textAnchor="end"
+        >
+          {y2Unit ? `${y2AxisTitle} (${y2Unit})` : y2AxisTitle}
         </text>
       )}
     </>

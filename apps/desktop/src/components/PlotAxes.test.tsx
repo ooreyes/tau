@@ -111,3 +111,30 @@ describe("PlotAxes - X tick label collision thinning", () => {
     expect(Math.max(...xs)).toBeCloseTo(Math.max(...gridXs), 0);
   });
 });
+
+describe("PlotAxes - dual Y (right-hand current axis)", () => {
+  it("renders right-axis tick labels and a Current caption when y2 is set", () => {
+    const { container } = renderAxes({
+      yMin: -5,
+      yMax: 5,
+      yUnit: "V",
+      yAxisTitle: "Voltage",
+      y2Min: -0.01,
+      y2Max: 0.01,
+      y2Unit: "A",
+      y2AxisTitle: "Current",
+    });
+    const rightTicks = container.querySelectorAll(".scope-tick-y2");
+    expect(rightTicks.length).toBeGreaterThan(0);
+    const rightTitle = container.querySelector(".scope-axis-title-y2");
+    expect(rightTitle?.textContent).toContain("Current");
+    expect(rightTitle?.textContent).toContain("A");
+    expect(Number(rightTitle?.getAttribute("x"))).toBe(WIDTH - 5);
+  });
+
+  it("omits the right axis when y2 span is absent", () => {
+    const { container } = renderAxes();
+    expect(container.querySelectorAll(".scope-tick-y2")).toHaveLength(0);
+    expect(container.querySelector(".scope-axis-title-y2")).toBeNull();
+  });
+});
