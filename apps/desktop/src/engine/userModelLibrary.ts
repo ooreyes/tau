@@ -420,6 +420,20 @@ function parseOtaComplianceLiteral(token: string): number | null {
   }
 }
 
+/** LTwiki Isink default = −Iout: flip a literal current token's sign. */
+function negateOtaCurrentToken(token: string): string | null {
+  const trimmed = token.trim();
+  if (!trimmed || /[{}]/.test(trimmed)) return null;
+  try {
+    parseQuantity(trimmed);
+  } catch {
+    return null;
+  }
+  if (trimmed.startsWith("-")) return trimmed.slice(1);
+  if (trimmed.startsWith("+")) return `-${trimmed.slice(1)}`;
+  return `-${trimmed}`;
+}
+
 /** Map the documented LTspice OTA subset used by current vendor op-amp
  * libraries onto Tau's pinned native OTA code model. Four-quadrant
  * multiplier ports (Help / LTwiki: I = f(G·(Vin+−Vin−−Ref)·V(ncm1)·V(ncm2)))
@@ -427,12 +441,13 @@ function parseOtaComplianceLiteral(token: string): number | null {
  * pairs contribute unity (inactive), never zero; never a silent two-port
  * drop of active multipliers. Asymmetric Isource/Isink (`asym`) and input
  * `Ref` offset map onto the patched OTA (tanh current limit + series
- * offset). The LTspice `linear` flag disables current limiting entirely
- * (`Io = G·Vdiff·…`) — map that by omitting Iout so the native model stays
- * on its unbounded gm path; never substitute tanh. Finite Vhigh/Vlow
- * (Help defaults 2/0 when omitted) map as epsilon=0 Rclamp-to-rail load
- * swap on V(out,common); non-zero `epsilon` still refuses. Cout remains a
- * literal passive across out/common. */
+ * offset). Missing Isource/Isink fill from Help defaults (Isrc=Iout,
+ * Isink=−Iout); expression Iout still refuses. The LTspice `linear` flag
+ * disables current limiting entirely (`Io = G·Vdiff·…`) — map that by
+ * omitting Iout so the native model stays on its unbounded gm path; never
+ * substitute tanh. Finite Vhigh/Vlow (Help defaults 2/0 when omitted) map
+ * as epsilon=0 Rclamp-to-rail load swap on V(out,common); non-zero
+ * `epsilon` still refuses. Cout remains a literal passive across out/common. */
 function translateLtspiceOta(line: string, subcktName: string): string[] {
   const match = /^\s*(A\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+OTA\b(.*)$/i.exec(line);
   if (!match) return [line];
@@ -453,11 +468,29 @@ function translateLtspiceOta(line: string, subcktName: string): string[] {
   // LTspice Help / LTwiki: `linear` disables tanh current limiting
   // (Io = Iraw). It is not a hard-clip transfer.
   const isLinear = /\blinear\b/i.test(tail);
-  const isource = params.get("isource") ?? params.get("isrc");
-  const isink = params.get("isink");
-  const wantsAsym = !isLinear && (/\basym\b/i.test(tail) || isource !== undefined || isink !== undefined);
+  const isourceTok = params.get("isource") ?? params.get("isrc");
+  const isinkTok = params.get("isink");
+  const wantsAsym = !isLinear && (/\basym\b/i.test(tail) || isourceTok !== undefined || isinkTok !== undefined);
+  // Help/LTwiki defaults: Isrc = Iout, Isink = −Iout (Iout default 10u).
+  // Macromodels often write `Isrc=43u asym` and rely on Isink=−Iout — fill that
+  // documented default rather than collapsing to symmetric iout.
+  const ioutDefault = params.get("iout") ?? "10u";
+  let isource = isourceTok;
+  let isink = isinkTok;
   if (wantsAsym && (isource === undefined || isink === undefined)) {
-    return refusal("uses asymmetric OTA current limits without both Isource and Isink; refusing rather than guessing a symmetric Iout.");
+    if (isource === undefined) {
+      if (/[{}]/.test(ioutDefault)) {
+        return refusal("uses asymmetric OTA current limits with expression Iout; cannot default Isource exactly.");
+      }
+      isource = ioutDefault;
+    }
+    if (isink === undefined) {
+      const negated = negateOtaCurrentToken(ioutDefault);
+      if (negated === null) {
+        return refusal("uses asymmetric OTA current limits with non-literal Iout; cannot default Isink=−Iout exactly.");
+      }
+      isink = negated;
+    }
   }
 
   const gm = params.get("g") ?? "1";

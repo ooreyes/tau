@@ -9,19 +9,39 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 01:00 CDT**
+**Status: DONE - 2026-08-05 01:04 CDT**
 
-Unit: Non-five-pin Prefix-X OpAmps → exact SpiceOrder subckt → named-device **46.4%**.
+Unit: Incomplete asym OTA Help defaults (Isrc=Iout, Isink=−Iout) → named-device **46.9%**.
 ```
-NAMED-DEVICE-RECURSIVE: unencrypted=2541 exact=1179 refuse=1362 silent=0 hard-failure=0 encrypted-excluded=1471 exact-rate=46.4%
+NAMED-DEVICE-RECURSIVE: unencrypted=2541 exact=1191 refuse=1350 silent=0 hard-failure=0 encrypted-excluded=1471 exact-rate=46.9%
 ```
-Before 42.7%/1083 → +96 exact. AD8029-class 6-pin (and 8/10-pin) keep authored
-ports; five-pin OpAmps stay on vendor opamp path. Freshman AI untouched.
+Before 46.4%/1179 → +12 exact. Soft epsilon still refuse. Freshman AI untouched.
 SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
 ---
+
+### 2026-08-05 — Incomplete asym OTA Help defaults → 46.9% (§DoD)
+
+**What I did**
+- AD8038-class `OTA … Isrc=43u asym` omitted Isink; Help/LTwiki defaults are
+  Isrc=Iout and Isink=−Iout (Iout default 10u). Fill those literals instead of
+  refusing or collapsing to symmetric iout.
+- Expression Iout still refuses. Soft epsilon unchanged.
+
+**Exact stdout**
+```
+NAMED-DEVICE: exact=2 refuse=4 silent=0
+NAMED-DEVICE-RECURSIVE: unencrypted=2541 exact=1191 refuse=1350 silent=0 hard-failure=0 encrypted-excluded=1471 exact-rate=46.9%
+```
+
+**Parity items**
+- Named-device 🟡 HF=0 silent=0 exact-rate **46.9%** (not ≥95%). SHIPPABLE? NO
+
+**Next**
+- Soft epsilon; encrypted bare SYMBOL; broaden differential (Class-D noise/tf stays gap — no authored .noise/.tf)
+
 
 ### 2026-08-05 — Non-five-pin OpAmp → SpiceOrder subckt → 46.4% (§DoD)
 

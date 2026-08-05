@@ -291,6 +291,34 @@ describe("parseUserModelLibraries", () => {
     expect(block).not.toMatch(/\basym\b/i);
   });
 
+  it("fills missing Isink from Help default −Iout for asym Isrc-only OTAs", () => {
+    // AD8038: `OTA g=330u Isrc=43u … asym` — Isink defaults to −Iout (−10u).
+    const block = parseUserModelLibraries([
+      [
+        ".subckt AMP 1 2 3 4 5",
+        "A2 0 N005 M M M M N004 M OTA g=330u Isrc=43u en=8n enk=1k Vlow=-1e308 Vhigh=1e308 Cout=.1p asym",
+        ".ends AMP",
+      ].join("\n"),
+    ]).subckts.get("amp") ?? "";
+    expect(block).toContain(
+      ".model __tau_ota_AMP_A2 ota(gm=330u rout=1e308 rin=1e308 isource=43u isink=-10u en=8n enk=1k)",
+    );
+    expect(block).not.toMatch(/\biout=/i);
+    expect(block).not.toMatch(/TAU_MODEL_REFUSAL.*Isource and Isink/i);
+  });
+
+  it("fills missing Isource from Help default Iout when only Isink is set", () => {
+    const block = parseUserModelLibraries([
+      [
+        ".subckt AMP 1 2 3 4 5",
+        "A1 1 2 0 0 0 0 5 0 OTA g=1m isink=-25u iout=12u asym Vhigh=1e308 Vlow=-1e308",
+        ".ends AMP",
+      ].join("\n"),
+    ]).subckts.get("amp") ?? "";
+    expect(block).toContain("isource=12u");
+    expect(block).toContain("isink=-25u");
+  });
+
   it("maps OTA Ref offset as a series input voltage without changing gm/Iout", () => {
     const block = parseUserModelLibraries([
       [
