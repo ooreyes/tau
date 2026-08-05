@@ -9,13 +9,54 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 04:37 CDT**
+**Status: DONE - 2026-08-05 04:42 CDT**
 
-Unit: Staff EE blocked — Draft5 AD823 `.tf` (`ADI.lib`, no plaintext twin) +
-leftover plaintext refuse = Chan / NIGBT / FRA only. Named-device **48.1%** /
-exact=1222 unchanged. Differential pass=75. SHIPPABLE? **NO**
+Unit: Educational `ISO16750-2_example.asc` authored `.tran` → differential **pass=76**.
+```
+SUMMARY pass=76 sibling=5 gap=0
+tran iso16750 … v(n001)/v(n002) nRms≈0.035/0.025 span≈13.5/27
+```
+Bundled ISO 12V+24V starting profiles; tip waveout pass=75 → 76. Left
+waveout/BandGaps/TIP/Draft walls alone. Named-device 48.1%. SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
+
+
+
+---
+
+
+### 2026-08-05 — Educational ISO16750-2_example.asc TRAN → pass=76 (§DoD)
+
+**What I did**
+- Educational `ISO16750-2_example.asc` authored `.tran 0 20 0 1m`: two
+  ISO16750-2 Prefix-X instances (default 12V + SpiceModel 24V starting
+  profiles) via bundled subckts. Probes `v(n001)`/`v(n002)` match LTspice
+  (nRms≈0.035/0.025 @ rmsTol=0.05). Zero unresolved / substitutions.
+- Tip `e26dce6` waveout pass=75 → 76. ISO7637 spike still misses — not
+  double-landed. Left waveout/BandGaps/TIP/PAsystem/Draft walls alone.
+
+**Exact stdout**
+
+```
+SUMMARY pass=76 sibling=5 gap=0
+```
+
+**Files**
+- `apps/desktop/scripts/differentialParity.corpus.ts`
+- `AGENTS.md`, `FEATURE_PARITY.md`, `PROGRESS.md`
+
+**Tests**
+- `pnpm -C apps/desktop typecheck` + `test` green
+- `bash scripts/differential-parity.sh` → pass=76
+
+**Parity items**
+- Differential 🟡 **pass=76**. Named-device 48.1%. SHIPPABLE? NO
+
+**Next step**
+- Continue 20 differential; Staff EE next non-wall Educational/Documents cell.
+
+
 
 
 

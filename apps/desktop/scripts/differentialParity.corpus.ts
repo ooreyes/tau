@@ -87,6 +87,7 @@ const DRAFT3_ASC = join(DOC_LTSPICE, "Draft3.asc");
 const DRAFT7_ASC = join(DOC_LTSPICE, "Draft7.asc");
 const BANDGAPS_ASC = join(EDU, "BandGaps.asc");
 const WAVEOUT_ASC = join(EDU, "waveout.asc");
+const ISO16750_ASC = join(EDU, "ISO16750-2_example.asc");
 const SAMPLEANDHOLD_ASC = join(EDU, "SampleAndHold.asc");
 const EDU_VARISTOR_ASC = join(EDU, "varistor.asc");
 const STEPNOISE_ASC = join(EDU, "stepnoise.asc");
@@ -246,7 +247,7 @@ function withAcStimulus(netlist: string): string {
 describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential parity matrix", () => {
   const cells: DifferentialCell[] = [];
 
-  it("matches RC .tran/.ac/.meas, divider analyses, .step families, curvetrace, stepmodelparam, NoiseFigure, noise.asc, Colpitts/Clapp/Hartly AC, Cohn AC, MeasureBW AC, Transformer/Transformer2/IdealTransformer TRAN, notch/passive/butter/opamp/Linkwitz AC, LM741/LM308/LM78XX/P2/logamp TRAN, GFT AC, DCopPnt OP, audioamp TRAN, UHFpreamp AC, 1563 AC, S-param AC, stepAC AC, 2ndOrder* AC, MonteCarlo AC, varactor AC, phaseshift AC, Pierce/colpits2 AC, edu-varistor TRAN, stepnoise noise, UniversalOpAmp/1/2 TRAN, contrib/qztst AC, SampleAndHold TRAN, contrib/elip_grd AC, Draft3 AC, Draft7 AC, Draft2 TRAN, Draft1 TRAN, BandGaps DC-temp, waveout TRAN, Class-D AC/OP/DC/noise/tf", () => {
+  it("matches RC .tran/.ac/.meas, divider analyses, .step families, curvetrace, stepmodelparam, NoiseFigure, noise.asc, Colpitts/Clapp/Hartly AC, Cohn AC, MeasureBW AC, Transformer/Transformer2/IdealTransformer TRAN, notch/passive/butter/opamp/Linkwitz AC, LM741/LM308/LM78XX/P2/logamp TRAN, GFT AC, DCopPnt OP, audioamp TRAN, UHFpreamp AC, 1563 AC, S-param AC, stepAC AC, 2ndOrder* AC, MonteCarlo AC, varactor AC, phaseshift AC, Pierce/colpits2 AC, edu-varistor TRAN, stepnoise noise, UniversalOpAmp/1/2 TRAN, contrib/qztst AC, SampleAndHold TRAN, contrib/elip_grd AC, Draft3 AC, Draft7 AC, Draft2 TRAN, Draft1 TRAN, BandGaps DC-temp, waveout TRAN, ISO16750 TRAN, Class-D AC/OP/DC/noise/tf", () => {
     // --- TRAN (also covered by waveformParity; re-assert here so this file is self-sufficient) ---
     {
       const result = runPairedBatch("diff-rc-tran", RC_TRAN, ["v(out)"]);
@@ -1426,7 +1427,8 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
 
     // --- Educational P2.asc authored .tran (parametric amp; exact schematic .model cards) ---
     // 100W.asc needs IRFP240/IRFP9240 VDMOS from standard.mos (not yet bundled) — refuse, not silent TAU_*.
-    // 160.asc is digital A-devices; ISO16750/7637 LTspice Bad .sav in harness — deferred.
+    // 160.asc is digital A-devices; ISO7637 spike still misses paired TOL —
+    // ISO16750-2_example TRAN landed separately (bundled profiles).
     // Dense .raw (~5e5 samples): use comparison.referenceRange (avoid Math.max(...spread) stack blow).
     {
       expect(existsSync(P2_ASC), `missing ${P2_ASC}`).toBe(true);
@@ -2911,6 +2913,67 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
       });
     }
 
+    // --- Educational ISO16750-2_example.asc authored .tran (bundled ISO starting profiles) ---
+    // Two ISO16750-2 Prefix-X instances: U1 default 12V profile + U2 SpiceModel
+    // 4-6-3_24V_StartingProfile. Authored `.tran 0 20 0 1m`. Bundled subckts
+    // (engine/bundledSubcircuits); zero unresolved / substitutions. Probes
+    // v(n001)/v(n002) (XU1/XU2 + rails): nRms≈0.035/0.025 @ default 5%/10%.
+    // Prior "Bad .sav" note obsolete for this paired-batch path. ISO7637 spike
+    // still misses (nMax≈0.96) — not double-landed. Left waveout/BandGaps/
+    // Draft*/TIP alone. Stacked on tip waveout pass=75 → 76.
+    {
+      expect(existsSync(ISO16750_ASC), `missing ${ISO16750_ASC}`).toBe(true);
+      const imported = importAsc(decodeSchematicText(readFileSync(ISO16750_ASC)));
+      expect(imported.warnings).toEqual([]);
+      expect(imported.foreignSymbols).toEqual([]);
+      const dirs = expandDirectiveLines(imported.directives);
+      const parsed = analysesFromDirectives(dirs);
+      expect(parsed.tran, "ISO16750-2_example.asc must author .tran").toBeTruthy();
+      const params = buildParamScope(dirs);
+      const deck = buildSpiceDeck({
+        components: imported.components,
+        wires: imported.wires,
+        netLabels: imported.netLabels,
+        directives: dirs,
+        params,
+      }, {
+        kind: "tran",
+        stopTime: parsed.tran!.stopTime,
+        steps: Math.max(parsed.tran!.steps ?? 240, 2000),
+        startTime: parsed.tran!.startTime,
+        maxStep: parsed.tran!.maxStep,
+      });
+      expect(deck.unresolvedSubckts ?? []).toEqual([]);
+      expect(deck.modelSubstitutions ?? []).toEqual([]);
+      expect(deck.netlist).toMatch(/\.subckt\s+4_6_3_12V_StartingProfile\b/i);
+      expect(deck.netlist).toMatch(/\.subckt\s+4_6_3_24V_StartingProfile\b/i);
+      expect(deck.netlist).toMatch(/^XU1\b.+\b4_6_3_12V_StartingProfile\b/im);
+      expect(deck.netlist).toMatch(/^XU2\b.+\b4_6_3_24V_StartingProfile\b/im);
+      expect(deck.netlist).toMatch(/\.tran\b/i);
+      const memberNotes: string[] = [];
+      for (const probe of ["v(n001)", "v(n002)"] as const) {
+        const result = runPairedBatch(`diff-iso16750-${probe}`, deck.netlist, [probe]);
+        const lt = result.ltspice.get(probe)!;
+        const ng = result.ngspice.get(probe)!;
+        const comparison = compareWaveforms(ng.axis, ng.values, lt.axis, lt.values, {
+          rmsTolerance: 0.05,
+          maxTolerance: 0.10,
+        });
+        expect(comparison.pass, `ISO16750 ${probe} ${JSON.stringify(comparison)}`).toBe(true);
+        expect(comparison.referenceRange, `ISO16750 ${probe} non-hollow`).toBeGreaterThan(5);
+        memberNotes.push(
+          `${probe} nRms=${comparison.normalizedRms.toFixed(4)} nMax=${comparison.normalizedMax.toFixed(4)} span=${comparison.referenceRange.toFixed(3)}`,
+        );
+      }
+      cells.push({
+        analysis: "tran",
+        circuit: "iso16750",
+        topology: "Educational ISO16750-2_example.asc 12V+24V starting profiles (authored .tran 0 20 0 1m; bundled ISO16750)",
+        status: "pass",
+        note: memberNotes.join("; ") + " (rmsTol=0.05 maxTol=0.10)",
+      });
+    }
+
     // --- Class-D AC/OP (authored analyses are .tran/.meas; add AC/OP for differential proof) ---
     {
       const ascPath = join(CLASSD_DIR, "class-d-starter.asc");
@@ -3207,6 +3270,6 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
     expect(passCount).toBeGreaterThanOrEqual(70);
     expect(siblingCount).toBe(5);
     expect(gapCount).toBe(0);
-    expect(report).toMatch(/SUMMARY pass=75 sibling=5 gap=0/);
+    expect(report).toMatch(/SUMMARY pass=76 sibling=5 gap=0/);
   }, 240_000);
 });
