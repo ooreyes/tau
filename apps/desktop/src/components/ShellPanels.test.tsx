@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 
 import { BottomPanel, ComponentInspector, ComponentsRail, EditorToolbar } from "./ShellPanels";
@@ -15,6 +15,14 @@ import { usePanelWidth } from "./panelResize";
  * own `mode` gate - this was a second, mouse-driven bypass of the same bug
  * the keyboard gate fixes .
  */
+
+beforeAll(() => {
+  // Radix Select (ui/Select) needs pointer-capture APIs jsdom omits.
+  Element.prototype.hasPointerCapture = () => false;
+  Element.prototype.setPointerCapture = () => {};
+  Element.prototype.releasePointerCapture = () => {};
+  Element.prototype.scrollIntoView = () => {};
+});
 
 afterEach(() => cleanup());
 
@@ -440,7 +448,11 @@ describe("ComponentInspector - independent source waveform controls", () => {
     useSchematic.setState({ components: [selected], selectedId: selected.id, selectedIds: [selected.id] });
     render(<ComponentInspector selected={selected} />);
 
-    expect((screen.getByRole("combobox", { name: "Waveform type" }) as HTMLSelectElement).value).toBe("pwl");
+    const waveform = screen.getByRole("combobox", { name: "Waveform type" });
+    expect(waveform.tagName).toBe("BUTTON");
+    expect(waveform.getAttribute("data-slot")).toBe("select-trigger");
+    expect(waveform.textContent).toContain("Piecewise linear");
+    expect(document.querySelector(".source-value-editor select[aria-label='Waveform type']")).toBeNull();
     expect((screen.getByRole("textbox", { name: "DC operating point" }) as HTMLInputElement).value).toBe("0");
     expect((screen.getByRole("textbox", { name: "PWL time 3" }) as HTMLInputElement).value).toBe("+1");
     expect((screen.getByRole("combobox", { name: "PWL time 3 SI prefix" }) as HTMLSelectElement).value).toBe("u");
@@ -472,7 +484,7 @@ describe("ComponentInspector - independent source waveform controls", () => {
     expect(useSchematic.getState().components[0].value).toBe("DC 2 PWL(0 0 2u 5)");
   });
 
-  it("switches waveform modes without requiring raw SINE syntax", () => {
+  it("switches waveform modes without requiring raw SINE syntax", async () => {
     const selected = {
       id: "i-dc",
       kind: "isource" as const,
@@ -485,11 +497,22 @@ describe("ComponentInspector - independent source waveform controls", () => {
     useSchematic.setState({ components: [selected], selectedId: selected.id, selectedIds: [selected.id] });
     const { rerender } = render(<ComponentInspector selected={selected} />);
 
-    fireEvent.change(screen.getByRole("combobox", { name: "Waveform type" }), { target: { value: "sine" } });
+    const waveform = screen.getByRole("combobox", { name: "Waveform type" });
+    expect(waveform.tagName).toBe("BUTTON");
+    expect(waveform.getAttribute("data-slot")).toBe("select-trigger");
+    expect(waveform.textContent).toContain("DC");
+    // Radix Select opens on pointerdown; include button/pointerId so jsdom
+    // matches the pointer-capture path used in the real UI.
+    fireEvent.pointerDown(waveform, { button: 0, pointerId: 1, pointerType: "mouse" });
+    const sine = await screen.findByRole("option", { name: "Sine" });
+    fireEvent.pointerUp(sine, { button: 0, pointerId: 1, pointerType: "mouse" });
+    fireEvent.click(sine);
     expect(useSchematic.getState().components[0].value).toBe("SINE(5m 1 1k)");
     rerender(<ComponentInspector selected={useSchematic.getState().components[0]} />);
+    expect(screen.getByRole("combobox", { name: "Waveform type" }).textContent).toContain("Sine");
     expect(screen.getByRole("textbox", { name: "Amplitude" })).toBeTruthy();
     expect(screen.queryByDisplayValue(/SINE\(/)).toBeNull();
+    expect(document.querySelector(".source-value-editor select[aria-label='Waveform type']")).toBeNull();
   });
 });
 

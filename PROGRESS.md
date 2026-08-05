@@ -1,15 +1,46 @@
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 ~13:05 CDT**
+**Status: DONE - 2026-08-05 ~13:10 CDT**
 
-Unit: Named-device wall triage refresh — no honest plaintext climb left;
-enriched `NAMED_DEVICE_REFUSE_TRIAGE` (path family + non-no-equiv);
-`NAMED-DEVICE-WALL.md` + Desktop mirror from tip stdout (48.1% held).
-DoD ND box stays ⬜. SHIPPABLE? **NO**
+Unit: **§10 IndependentSourceEditor Waveform → ui/Select** — native
+waveform-type `<select>` migrated onto shadcn `ui/Select` (Settings
+untouched). AGENTS §10 / min-window DoD stay UNCHECKED. SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
 
+
+---
+
+### 2026-08-05 — IndependentSourceEditor Waveform → ui/Select (§10)
+
+**What I did**
+- Migrated inspector Waveform type from native `<select>` to shadcn
+  `ui/Select` with the same dense `property-select` / `--row-h` trigger
+  recipe as Op-amp model (Settings untouched).
+- ShellPanels tests assert `data-slot=select-trigger`, no native waveform
+  `<select>`, and open→pick Sine (jsdom pointer-capture polyfill).
+- Did **not** flip AGENTS §10 or min-window DoD boxes.
+
+**Files**
+- `apps/desktop/src/components/IndependentSourceEditor.tsx`
+- `apps/desktop/src/components/ShellPanels.test.tsx`
+- `FEATURE_PARITY.md`, `PROGRESS.md`
+
+**Tests**
+- `pnpm -C apps/desktop typecheck` green
+- `pnpm -C apps/desktop test` → 2884 passed / 6 skipped
+- focused: ShellPanels independent-source waveform (3/3)
+
+**Parity items**
+- §10 partial: Waveform Select. Box stays ⬜. SHIPPABLE? NO
+
+**Next step**
+- Remaining native `<select>`s (sim setup / EngineeringInput units /
+  MOSFET-subckt) or min-window screenshot proof. Never flip whole §10/min-window
+  on a partial.
+
+SHIPPABLE? **NO**
 
 ---
 

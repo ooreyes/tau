@@ -2,6 +2,13 @@ import { Plus, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   addPwlPoint,
   changeIndependentSourceMode,
   decodeIndependentSourceValue,
@@ -14,6 +21,15 @@ import {
   type IndependentSourceValue,
 } from "../schematic/sourceValue";
 import { EngineeringInput } from "./EngineeringInput";
+
+const WAVEFORM_MODES: readonly { value: IndependentSourceMode; label: string }[] = [
+  { value: "dc", label: "DC" },
+  { value: "sine", label: "Sine" },
+  { value: "pulse", label: "Pulse" },
+  { value: "pwl", label: "Piecewise linear" },
+  { value: "exp", label: "Exponential" },
+  { value: "sffm", label: "Single-frequency FM" },
+];
 
 interface SourceFieldProps {
   label: string;
@@ -81,22 +97,28 @@ export function IndependentSourceEditor({
     <div className="source-value-editor">
       <label className="property-field">
         <span>Waveform</span>
-        <select
-          className="mono-num"
-          aria-label="Waveform type"
+        <Select
           value={source.mode}
-          onChange={(event) => commit(
+          onValueChange={(next) => commit(
             "mode",
-            changeIndependentSourceMode(source, event.currentTarget.value as IndependentSourceMode),
+            changeIndependentSourceMode(source, next as IndependentSourceMode),
           )}
         >
-          <option value="dc">DC</option>
-          <option value="sine">Sine</option>
-          <option value="pulse">Pulse</option>
-          <option value="pwl">Piecewise linear</option>
-          <option value="exp">Exponential</option>
-          <option value="sffm">Single-frequency FM</option>
-        </select>
+          <SelectTrigger
+            size="sm"
+            className="property-select mono-num w-full max-w-[168px]"
+            aria-label="Waveform type"
+          >
+            <SelectValue placeholder="Waveform" />
+          </SelectTrigger>
+          <SelectContent>
+            {WAVEFORM_MODES.map((mode) => (
+              <SelectItem key={mode.value} value={mode.value}>
+                {mode.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </label>
 
       <SourceField

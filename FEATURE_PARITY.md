@@ -2101,10 +2101,11 @@ palette pop): Light is the product default; cool-paper + precision-blue accent
 popped to `#EDF1F6` / `#0068D6` (was `#F5F6F8` / `#0A66C2`); radius scale
 extended (`--r-2xs`/`--r-xs`/`--r-pill`) and raw chrome radii snapped; warning
 chrome stays quiet ochre (soft ≈0.05 — not danger-red for optional empties);
-settings rows simplified. **2026-08-05:** FFT Signal/Window + Op-amp model
-native `<select>`s migrated onto shadcn `ui/Select` (Settings locked/untouched);
-unit proof in SimulationPanel/ShellPanels tests (combobox triggers, not native
-`<select>`). Remaining §10 debt that blocks an honest DoD check:
+settings rows simplified. **2026-08-05:** FFT Signal/Window + Op-amp model +
+IndependentSourceEditor Waveform type native `<select>`s migrated onto shadcn
+`ui/Select` (Settings locked/untouched); unit proof in
+SimulationPanel/ShellPanels tests (combobox triggers, not native `<select>`).
+Remaining §10 debt that blocks an honest DoD check:
 Resizable/Command/Toast primitives still deferred; other native `<select>`s
 (Simulation setup, EngineeringInput units, semiconductor/subckt model
 choosers, local-AI settings) not yet on `ui/Select`; Assistant/local-AI
@@ -2312,9 +2313,12 @@ branch. Honest accounting of wider DoD (not §10): see AGENTS.md checklist.
   `ui/Select` (Settings untouched). Triggers use `--row-h` + ellipsis value
   truncation (undefined `--control-h-sm` would collapse). Unit tests assert
   combobox `data-slot=select-trigger` and no native FFT/op-amp `<select>`.
-  Left for a later pass: other native `<select>`s (sim setup, eng-input
-  units, MOSFET/subckt choosers), deferred Resizable/Command/Toast, and
-  min-window screenshot proof for this slice. →
+  **IndependentSourceEditor Waveform `ui/Select` (2026-08-05 follow-up):**
+  inspector Waveform type uses the same `property-select` dense trigger;
+  ShellPanels tests open the list and pick Sine (jsdom pointer-capture
+  polyfill). Left for a later pass: other native `<select>`s (sim setup,
+  eng-input units, MOSFET/subckt choosers), deferred Resizable/Command/Toast,
+  and min-window screenshot proof for this slice. →
   **dialogs ✅ (2026-07-08, Phase 3d unit A):** `SettingsPanel` migrated onto
   a new `ui/sheet.tsx` (Radix `Dialog`-based right-anchored slide-in sheet,
   same true-black-popover/hairline-ring/`--elev-pop` recipe as `ui/dialog.tsx`
