@@ -21,6 +21,10 @@ import { LocalAiSetupDialog } from "./components/LocalAiSetupDialog";
 import { ModelLibrariesDialog } from "./components/ModelLibrariesDialog";
 import { SimulationSetupDialog } from "./components/SimulationSetupDialog";
 import { UnsavedRecoveryDialog } from "./components/UnsavedRecoveryDialog";
+import {
+  ExternalEditConflictDialog,
+  type PendingExternalEdit,
+} from "./components/ExternalEditConflictDialog";
 import { CommandPalette } from "./components/CommandPalette";
 import {
   clearAllUnsavedLocalState,
@@ -30,6 +34,10 @@ import {
   saveUnsavedRecovery,
   type UnsavedRecoverySnapshot,
 } from "./lib/unsavedRecovery";
+import {
+  classifyExternalEdit,
+  diskContentFingerprint,
+} from "./lib/externalEditConflict";
 import {
   ActivityRail,
   BottomPanel,
@@ -113,6 +121,7 @@ import {
   ascSaveBlockReason,
   basename,
   isAscFile,
+  isSimFile,
   remapMovedProjectPath,
   serializeSchematicFile,
 } from "./project/types";
@@ -171,6 +180,8 @@ interface OpenTab {
   dirty?: boolean;
   /** Stable snapshot of the last successful disk write/open. */
   savedSignature?: string;
+  /** Fingerprint of on-disk bytes at last open/save (or Keep-mine acknowledge). */
+  diskFingerprint?: string;
   /** Reasons an imported ASC cannot be rewritten losslessly by Tau yet. */
   ascRewriteRisks?: string[];
 }
@@ -287,6 +298,9 @@ function App() {
   const [pendingRecovery, setPendingRecovery] = useState<UnsavedRecoverySnapshot | null>(() =>
     peekUnsavedRecoveryOffer(),
   );
+  const [pendingExternalEdit, setPendingExternalEdit] = useState<PendingExternalEdit | null>(null);
+  const pendingExternalEditRef = useRef<PendingExternalEdit | null>(null);
+  pendingExternalEditRef.current = pendingExternalEdit;
   const [schematicReadoutTime, setSchematicReadoutTime] = useState<number | null>(null);
   /** Animate schematic V/I through real `.tran` samples (EveryCircuit-style live). */
   const [liveSchematicPlayback, setLiveSchematicPlayback] = useState(true);
@@ -1172,12 +1186,13 @@ function App() {
     title: string,
     filePath?: string | null,
     rewriteRisks: string[] = [],
-    options?: { dirty?: boolean; notice?: string },
+    options?: { dirty?: boolean; notice?: string; diskFingerprint?: string },
   ) => {
     const snap = snapshotActive(tabs);
     const markDirty = Boolean(options?.dirty);
     const signature = schematicDocumentSignature(doc);
     const recoveredDetached = markDirty && !filePath;
+    const diskFingerprint = options?.diskFingerprint;
     const existing = snap.find((tab) => (filePath ? tab.filePath === filePath : tab.title === title));
     if (existing) {
       setTabs(snap.map((tab) =>
@@ -1194,6 +1209,7 @@ function App() {
               savedSignature: markDirty
                 ? `${signature}::recovered`
                 : signature,
+              ...(diskFingerprint !== undefined ? { diskFingerprint } : {}),
               ascRewriteRisks: rewriteRisks,
             }
           : tab,
@@ -1217,6 +1233,7 @@ function App() {
           detached: recoveredDetached,
           dirty: markDirty,
           savedSignature: markDirty ? `${signature}::recovered` : signature,
+          ...(diskFingerprint !== undefined ? { diskFingerprint } : {}),
           ascRewriteRisks: rewriteRisks,
         }]);
         setActiveId(snap[0].id);
@@ -1232,6 +1249,7 @@ function App() {
           detached: recoveredDetached,
           dirty: markDirty,
           savedSignature: markDirty ? `${signature}::recovered` : signature,
+          ...(diskFingerprint !== undefined ? { diskFingerprint } : {}),
           ascRewriteRisks: rewriteRisks,
         }]);
         setActiveId(id);
@@ -1249,7 +1267,7 @@ function App() {
     try {
       const parsed = JSON.parse(json) as unknown;
       const doc = validateSchematicDocument(parsed);
-      openDocument(doc, title, path);
+      openDocument(doc, title, path, [], { diskFingerprint: diskContentFingerprint(json) });
     } catch (error) {
       showNotice(userFacingErrorMessage(error, "Could not open .sim file."));
     }
@@ -1311,7 +1329,9 @@ function App() {
       });
       // The resolver-aware carried set, not one re-derived from `text`: see
       // ascRewriteRisks for why a locally derived set unblocks a lossy save.
-      openDocument(doc, title, path, ascRewriteRisks(text, result.foreignSymbols, result.hierarchicalBlocks));
+      openDocument(doc, title, path, ascRewriteRisks(text, result.foreignSymbols, result.hierarchicalBlocks), {
+        diskFingerprint: diskContentFingerprint(text),
+      });
       if (allWarnings.length > 0) {
         // Diagnostics already lists import warnings for this document — skip a
         // second toast that nags "See Diagnostics" after every imperfect ASC.
@@ -1527,6 +1547,45 @@ function App() {
       }
       createdForSave = true;
     }
+    // Refuse to silently overwrite when the on-disk file changed outside Tau.
+    if (!createdForSave && tab.diskFingerprint) {
+      try {
+        const exists = await projectPathExists(filePath);
+        if (!exists) {
+          setPendingExternalEdit({
+            tabId: targetId,
+            filePath,
+            title: tab.title,
+            kind: "missing",
+            diskText: null,
+            diskFingerprint: null,
+          });
+          return false;
+        }
+        const diskText = await readProjectText(filePath);
+        const diskFingerprint = diskContentFingerprint(diskText);
+        const editorDirty = tab.savedSignature !== schematicDocumentSignature(document);
+        const classification = classifyExternalEdit({
+          syncedFingerprint: tab.diskFingerprint,
+          diskFingerprint,
+          editorDirty,
+        });
+        if (classification.kind !== "in-sync") {
+          setPendingExternalEdit({
+            tabId: targetId,
+            filePath,
+            title: tab.title,
+            kind: classification.kind,
+            diskText,
+            diskFingerprint: classification.diskFingerprint,
+          });
+          return false;
+        }
+      } catch (error) {
+        showNotice(userFacingErrorMessage(error, "Could not verify the file on disk before saving."));
+        return false;
+      }
+    }
     const savePath = filePath;
     try {
       const serialized = serializeSchematicFile(savePath, document);
@@ -1554,6 +1613,7 @@ function App() {
               dirty: false,
               doc: document,
               savedSignature: schematicDocumentSignature(document),
+              diskFingerprint: diskContentFingerprint(serialized.contents),
             }
           : t
       )));
@@ -1602,7 +1662,15 @@ function App() {
     // Opening through the normal document path gives the tab its real filePath
     // immediately. The first ⌘S therefore updates the newly-created .asc
     // instead of falling back to the old pathless scratchpad warning.
-    openDocument(blankDocument(), basename(path), path);
+    let fingerprint: string | undefined;
+    try {
+      fingerprint = diskContentFingerprint(await readProjectText(path));
+    } catch {
+      fingerprint = undefined;
+    }
+    openDocument(blankDocument(), basename(path), path, [], {
+      ...(fingerprint !== undefined ? { diskFingerprint: fingerprint } : {}),
+    });
     setGraphOpen(true);
     showNotice(`Created ${basename(path)}`);
   }, [createSchematicInRoot, openDocument, showNotice]);
@@ -1653,6 +1721,7 @@ function App() {
             detached: Boolean(tab.filePath) || tab.detached,
             dirty: false,
             savedSignature: schematicDocumentSignature(blankDocument()),
+            diskFingerprint: undefined,
             ascRewriteRisks: [],
             doc: blankDocument(),
             history: emptyHistory(),
@@ -1710,6 +1779,120 @@ function App() {
     setPendingRecovery(null);
     showNotice("Discarded unsaved recovery copy.");
   }, [showNotice]);
+
+  const probeActiveExternalEdit = useCallback(async () => {
+    if (pendingRecovery || pendingExternalEditRef.current) return;
+    const tab = tabsRef.current.find((t) => t.id === activeId);
+    if (!tab?.filePath || !tab.diskFingerprint || tab.detached) return;
+    const filePath = tab.filePath;
+    try {
+      const exists = await projectPathExists(filePath);
+      const document = tab.id === activeId ? currentDocument : tab.doc ?? blankDocument();
+      const editorDirty = Boolean(
+        tab.savedSignature && tab.savedSignature !== schematicDocumentSignature(document),
+      );
+      if (!exists) {
+        setPendingExternalEdit({
+          tabId: tab.id,
+          filePath,
+          title: tab.title,
+          kind: "missing",
+          diskText: null,
+          diskFingerprint: null,
+        });
+        return;
+      }
+      const diskText = await readProjectText(filePath);
+      const diskFingerprint = diskContentFingerprint(diskText);
+      const classification = classifyExternalEdit({
+        syncedFingerprint: tab.diskFingerprint,
+        diskFingerprint,
+        editorDirty,
+      });
+      if (classification.kind === "in-sync") return;
+      setPendingExternalEdit({
+        tabId: tab.id,
+        filePath,
+        title: tab.title,
+        kind: classification.kind,
+        diskText,
+        diskFingerprint: classification.diskFingerprint,
+      });
+    } catch {
+      // Focus probes are best-effort; a transient FS error must not toast-spam.
+    }
+  }, [activeId, currentDocument, pendingRecovery]);
+
+  useEffect(() => {
+    const onFocus = () => { void probeActiveExternalEdit(); };
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") void probeActiveExternalEdit();
+    };
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [probeActiveExternalEdit]);
+
+  const reloadExternalEdit = useCallback(() => {
+    const pending = pendingExternalEdit;
+    if (!pending || pending.diskText === null) {
+      setPendingExternalEdit(null);
+      return;
+    }
+    setPendingExternalEdit(null);
+    const title = basename(pending.filePath);
+    if (isAscFile(pending.filePath)) {
+      void openAscFromProject(pending.filePath, title, pending.diskText);
+      return;
+    }
+    if (isSimFile(pending.filePath)) {
+      openSimFromProject(pending.filePath, title, pending.diskText);
+      return;
+    }
+    showNotice(`Could not reload ${title}: unsupported schematic type.`);
+  }, [pendingExternalEdit, openAscFromProject, openSimFromProject, showNotice]);
+
+  const keepExternalEdit = useCallback(() => {
+    const pending = pendingExternalEdit;
+    if (!pending) return;
+    setPendingExternalEdit(null);
+    if (pending.kind === "missing") {
+      // Detach so Save can recreate without claiming the vanished path is synced.
+      setTabs((list) => list.map((tab) => (
+        tab.id === pending.tabId
+          ? {
+              ...tab,
+              filePath: null,
+              detached: true,
+              dirty: true,
+              diskFingerprint: undefined,
+            }
+          : tab
+      )));
+      showNotice(`Kept “${pending.title}” open as an unsaved schematic.`);
+      return;
+    }
+    // Acknowledge the disk revision so we stop re-prompting; Save will overwrite.
+    if (pending.diskFingerprint) {
+      setTabs((list) => list.map((tab) => (
+        tab.id === pending.tabId
+          ? { ...tab, diskFingerprint: pending.diskFingerprint ?? tab.diskFingerprint }
+          : tab
+      )));
+    }
+    showNotice(`Keeping editor copy of “${pending.title}”. Save will overwrite disk.`);
+  }, [pendingExternalEdit, showNotice]);
+
+  const discardExternalEdit = useCallback(() => {
+    const pending = pendingExternalEdit;
+    if (!pending) return;
+    setPendingExternalEdit(null);
+    closeTab(pending.tabId, true);
+    showNotice(`Closed “${pending.title}” without writing.`);
+  }, [pendingExternalEdit, closeTab, showNotice]);
 
   useEffect(() => {
     modeRef.current = mode;
@@ -2212,6 +2395,14 @@ function App() {
           snapshot={pendingRecovery}
           onRestore={restorePendingRecovery}
           onDiscard={discardPendingRecovery}
+        />
+      )}
+      {pendingExternalEdit && (
+        <ExternalEditConflictDialog
+          pending={pendingExternalEdit}
+          onReload={reloadExternalEdit}
+          onKeep={keepExternalEdit}
+          onDiscard={discardExternalEdit}
         />
       )}
       {settingsOpen && (

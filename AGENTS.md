@@ -329,10 +329,14 @@ account and sign/notarize/ship.
       `tau.unsaved.recovery.v1` envelope, Restore/Discard dialog on launch
       (`unsavedRecovery.ts` + `UnsavedRecoveryDialog`), no silent hydrate into
       the live editor, cleared on successful Save / Discard / Settings clear;
-      proof `scripts/product-gates-unsaved-recovery.sh`. Still open: first-
-      success learning path + contextual help; external-edit/conflict handling;
-      reproducible run records; versioned CLI/API diagnostics. DoD box stays
-      unchecked. SHIPPABLE? **NO**.
+      proof `scripts/product-gates-unsaved-recovery.sh`. External-edit /
+      conflict handling landed — disk byte fingerprint on open/save, focus +
+      pre-Save classify (`external-only` / `conflict` / `missing`),
+      Reload / Keep mine / Keep open+detach dialog (`externalEditConflict.ts` +
+      `ExternalEditConflictDialog`); proof
+      `scripts/product-gates-external-edit.sh`. Still open: first-success
+      learning path + contextual help; reproducible run records; versioned
+      CLI/API diagnostics. DoD box stays unchecked. SHIPPABLE? **NO**.
 - [x] All gates green; **unsigned release build is production‑ready**:
       `pnpm --filter @tau/desktop tauri build` succeeds, the DMG mounts, the
       built Tau.app launches and stays alive, and bundled ngspice simulates

@@ -1,13 +1,48 @@
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 ~13:30 CDT**
+**Status: DONE - 2026-08-05 ~13:00 CDT**
 
-Unit: Differential PowerAmp TIP A=0.1 → **pass=105**
-SHIPPABLE? **NO**
+Unit: **Product gates — external-edit / conflict handling** — disk fingerprint
++ Reload/Keep mine / missing detach; focus + pre-Save probe. Product-gates DoD
+box stays ⬜ (learning path / run records / CLI still open). SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
 
+
+---
+
+### 2026-08-05 — External-edit / conflict handling (product-gates partial)
+
+**What I did**
+- Landed safe external-edit conflict handling next to crash-safe recovery.
+- Disk byte fingerprint on open/save; window focus + overwrite Save re-read and
+  classify (`external-only` / `conflict` / `missing`); dialog offers Reload,
+  Keep mine (acknowledge; Save overwrites), or Keep open+detach / Discard when
+  missing. Never silent overwrite.
+- Product-gates DoD box stays unchecked (learning path, run records, CLI/API
+  still open). SHIPPABLE? **NO**.
+
+**Files**
+- `apps/desktop/src/lib/externalEditConflict.ts` (+ test)
+- `apps/desktop/src/components/ExternalEditConflictDialog.tsx` (+ test)
+- `apps/desktop/src/App.tsx`
+- `scripts/product-gates-external-edit.sh`
+- `AGENTS.md`, `FEATURE_PARITY.md`, `PROGRESS.md`
+
+**Tests**
+- `bash scripts/product-gates-external-edit.sh` → PRODUCT-GATES-EXTERNAL-EDIT: ok (13)
+- `pnpm -C apps/desktop typecheck` green
+- `pnpm -C apps/desktop test` → 2916 passed / 6 skipped
+
+**Parity items**
+- Product-gates DoD partial: external-edit/conflict ✅ alongside unsaved recovery.
+  Box stays ⬜. SHIPPABLE? NO
+
+**Next step**
+- First-success learning path, reproducible run records, or versioned CLI/API.
+
+SHIPPABLE? **NO**
 
 ---
 

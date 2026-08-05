@@ -2023,9 +2023,15 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   Restore/Discard (`UnsavedRecoveryDialog`) instead of silently hydrating into
   the live store; successful Save / Discard / Settings clear wipe the envelope
   (+ legacy `tau.schematic.v1`). Proof: `scripts/product-gates-unsaved-recovery.sh`.
-  Still open for the product-gates DoD box: first-success learning path,
-  external-edit conflict handling, reproducible run records, versioned CLI/API.
-  Box stays ⬜. SHIPPABLE? NO.
+  **External-edit / conflict handling (2026-08-05, product-gates partial):**
+  disk-backed tabs store a content fingerprint at open/save; window focus and
+  overwrite Save re-read and classify via `classifyExternalEdit` (external-only /
+  conflict / missing). `ExternalEditConflictDialog` offers Reload, Keep mine
+  (acknowledge disk revision; Save overwrites), or Keep open+detach / Discard
+  when missing. Never silent overwrite. Proof:
+  `scripts/product-gates-external-edit.sh`. Still open for the product-gates
+  DoD box: first-success learning path, reproducible run records, versioned
+  CLI/API. Box stays ⬜. SHIPPABLE? NO.
   **Structured LTspice slot editing (2026-08-02):** the App validator now
   preserves/bounds `ltExtraAttrs` instead of dropping it on open. A minimal edit
   wholly inside one joined `Value2`/`SpiceLine` slot is written back to that
