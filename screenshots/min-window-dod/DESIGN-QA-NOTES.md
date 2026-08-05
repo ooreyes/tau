@@ -26,5 +26,5 @@
 ## Honest scope
 
 - **AGENTS.md min-window box:** checked with this proof.
-- **AGENTS.md §10 design-system box:** stays **unchecked** (native selects / Resizable / drift proof remain).
+- **AGENTS.md §10 design-system box:** **CHECKED 2026-08-05** via `scripts/design-system-dod.sh` (not this min-window script).
 - **SHIPPABLE?** **NO**

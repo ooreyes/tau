@@ -207,7 +207,9 @@ describe("App schematic workspace tools", () => {
 
     fireEvent.keyDown(document.body, { key: "Delete" });
 
-    expect(screen.getByText("Simulator is view only. Return to Schematic to edit.")).toBeTruthy();
+    await waitFor(() => {
+      expect(screen.getByText("Simulator is view only. Return to Schematic to edit.")).toBeTruthy();
+    });
     expect(useSchematic.getState().components).toHaveLength(before);
   });
 

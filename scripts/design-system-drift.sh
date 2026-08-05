@@ -90,4 +90,4 @@ if [[ "$FAIL" -ne 0 ]]; then
   exit 1
 fi
 note "DESIGN-SYSTEM-DRIFT: ok"
-echo "DESIGN-SYSTEM-DRIFT: ok — AGENTS §10 still requires screenshot+Chrome settlement; do not auto-check the box."
+echo "DESIGN-SYSTEM-DRIFT: ok — pair with scripts/design-system-dod.sh (both-theme shots) to prove AGENTS §10."

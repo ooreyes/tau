@@ -2146,7 +2146,7 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   missing library, stale/malformed marker, dirty tree, or less than 15 GiB free
   fails closed and cannot notify.
 
-## 10. Visual design system — **IMPERATIVE (Omar's directive)** — 🟡 ADOPTED WITH DRIFT (2026-08-04 overnight)
+## 10. Visual design system — **IMPERATIVE (Omar's directive)** — ✅ FULLY ADOPTED (2026-08-05)
 
 Goal: the app looks and feels **shadcn-grade** — a coherent, beautiful,
 token-driven design system, not a pile of ad-hoc CSS. This gates the
@@ -2154,34 +2154,20 @@ Definition of Done. Migrate **incrementally, panel by panel**, with screenshot
 QA (STEP 3.5 pipeline) before/after every panel — never a big-bang rewrite,
 never a broken intermediate state on the branch.
 
-**Status: foundation + panel migrations landed (Phases 1–4c), but AGENTS.md §10
-DoD stays UNCHECKED.** Overnight 2026-08-04 (Tokens + Cupertino + Anduril Light
-palette pop): Light is the product default; cool-paper + precision-blue accent
-popped to `#EDF1F6` / `#0068D6` (was `#F5F6F8` / `#0A66C2`); radius scale
-extended (`--r-2xs`/`--r-xs`/`--r-pill`) and raw chrome radii snapped; warning
-chrome stays quiet ochre (soft ≈0.05 — not danger-red for optional empties);
-settings rows simplified. **2026-08-05:** FFT Signal/Window + Op-amp model +
-IndependentSourceEditor Waveform type + semiconductor Simulation model +
-Subcircuit model + Simulation setup dialog + EngineeringInput SI-prefix +
-AnalysisSetupForms + circuit-duration unit + Settings AI / LocalAiSetup
-native `<select>`s migrated onto shadcn `ui/Select`; unit proof in
-SimulationPanel/ShellPanels/EngineeringInput/AnalysisSetupForms/
-SettingsPanel tests (combobox triggers, not native `<select>`).
-**Min-window DoD (separate AGENTS box) proven 2026-08-05** via
-`scripts/min-window-dod.sh` at 900×600 (12/12; Settings sheet viewport cap +
-scroll; editor toolbar horizontal scroll) — shots in
-`screenshots/min-window-dod/`. Remaining §10 debt that blocks an honest
-**§10 design-system** DoD check:
-Cupertino canvas zoom + EmptyState Sparkles settled 2026-08-05 (Lucide InstrumentIconButton / CircuitBoard); both-theme screenshot settlement for
-zero ad-hoc drift still required (machine gate
-`scripts/design-system-drift.sh` is green for select/hex/Command-Toast-
-Resizable consumption, but does not flip the DoD alone). Resizable/Command/
-Toast primitives landed 2026-08-05; zero native `<select>` under
-`apps/desktop/src/**/*.tsx` (component sources).
-Do **not** flip the AGENTS **§10** box until that screenshot proof exists.
+**Status: FULLY ADOPTED — AGENTS.md §10 CHECKED (2026-08-05).** Foundation +
+panel migrations (Phases 1–4c) + Settings/Local-AI `ui/Select` +
+Resizable/Command/Toast on the token layer; Cupertino icon chrome via
+`ui/instrument-icon-button` (canvas zoom Lucide cluster + EmptyState
+CircuitBoard settled 2026-08-05). **Proof:** `scripts/design-system-dod.sh`
+(`design-system-drift.sh` select/hex/primitive gate + both-theme 1440×900
+shots in `screenshots/design-system-dod/`). Overnight 2026-08-04 (Tokens +
+Cupertino + Anduril Light palette pop): Light is the product default;
+cool-paper + precision-blue accent `#EDF1F6` / `#0068D6`. SHIPPABLE? **NO** —
+named-device ≥95% and broad differential remain open.
 **Earlier claim (2026-07-08 Phase 4c) that §10 "closes" AGENTS DoD was premature**
 once light theme, Anduril retune, and post-migration chrome re-entered the
-branch. Honest accounting of wider DoD (not §10): see AGENTS.md checklist.
+branch. Re-proven closed 2026-08-05 with the greppable + screenshot gate above.
+Honest accounting of wider DoD (not §10): see AGENTS.md checklist.
 
 - ✅ **True-black palette retune (2026-07-08):** the single `:root` token block
   in `App.css` retuned from a cool blue-tinted graphite console (`--bg:
@@ -2418,8 +2404,12 @@ branch. Honest accounting of wider DoD (not §10): see AGENTS.md checklist.
   `ui/sonner` hosts notices (sr-only live region retained); `ui/resizable`
   re-exports Tau panelResize (honest deviation from react-resizable-panels);
   `scripts/design-system-drift.sh` proves zero native selects, hex confined
-  to token zone, and primitive consumption. AGENTS §10 stays UNCHECKED
-  Cupertino canvas/EmptyState icons settled 2026-08-05; pending both-theme screenshot settlement. →
+  to token zone, and primitive consumption. **Cupertino canvas zoom +
+  EmptyState CircuitBoard (2026-08-05).** **Both-theme screenshot proof
+  (2026-08-05):** `scripts/design-system-dod.sh` →
+  `screenshots/design-system-dod/` (empty/schematic/dialog/command ×
+  light/dark @ 1440×900; ui/sheet + ui/command asserted). **AGENTS §10
+  CHECKED.** →
   **dialogs ✅ (2026-07-08, Phase 3d unit A):** `SettingsPanel` migrated onto
   a new `ui/sheet.tsx` (Radix `Dialog`-based right-anchored slide-in sheet,
   same true-black-popover/hairline-ring/`--elev-pop` recipe as `ui/dialog.tsx`

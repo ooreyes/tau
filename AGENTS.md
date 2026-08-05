@@ -178,10 +178,18 @@ account and sign/notarize/ship.
       `Canvas.simulator.test.tsx` (marquee commit + mixed-selection drag);
       `Canvas.geometry.test.ts` (marquee intersection). SHIPPABLE? **NO** —
       other DoD boxes remain open.
-- [ ] **§10 visual design system fully adopted** (see FEATURE_PARITY §10 —
+- [x] **§10 visual design system fully adopted** (see FEATURE_PARITY §10 —
       IMPERATIVE per Omar): shadcn‑grade component system with a design‑token
       layer, every panel migrated, zero leftover ad‑hoc styling drift. The app
       must *look* like a product someone pays for, not a prototype.
+      **Proven 2026-08-05** by `scripts/design-system-dod.sh` →
+      `scripts/design-system-drift.sh` (zero native `<select>`; App.css hex
+      confined to token zone; `ui/command`+`ui/resizable`+`ui/sonner` wired)
+      + `scripts/design-system-dod.mjs` both-theme 1440×900 shots
+      (empty/schematic/dialog/command × light/dark) under
+      `screenshots/design-system-dod/` asserting ui/sheet + ui/command;
+      Cupertino chrome via `ui/instrument-icon-button`. SHIPPABLE? **NO** —
+      named-device ≥95% and broad differential still open.
 - [x] **UI is usable down to the app's own stated minimum window size** — no
       column so narrow controls become unreachable, no header stuck above the
       scroll position. Verify with the screenshot pipeline (STEP 3.5 in the

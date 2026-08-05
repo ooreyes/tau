@@ -1,15 +1,49 @@
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 ~14:00 CDT**
+**Status: DONE - 2026-08-05 ~14:15 CDT**
 
-Unit: **§10 Cupertino canvas zoom + EmptyState icon chrome** — Canvas
-`+/−/⌂` → Lucide InstrumentIconButton; EmptyState Sparkles → CircuitBoard.
-AGENTS §10 stays UNCHECKED (both-theme screenshot settlement remains).
-SHIPPABLE? **NO**
+Unit: **§10 design-system DoD proof** — both-theme screenshot gate on tip
+(Command/Toast/Resizable + Cupertino canvas/EmptyState already landed);
+`scripts/design-system-dod.sh` + AGENTS §10 CHECKED. SHIPPABLE? **NO**
+(named-device ≥95%, broad differential still open)
 
 **SHIPPABLE?** **NO**
 
 
+
+---
+
+### 2026-08-05 — §10 design-system DoD proof (grep + both-theme shots)
+
+**What I did**
+- Tip already had `ui/command` / `ui/resizable` / `ui/sonner` +
+  `scripts/design-system-drift.sh` + Cupertino canvas/EmptyState icons
+  (AGENTS §10 left unchecked pending screenshots). Added
+  `scripts/design-system-dod.{sh,mjs}` capturing empty/schematic/dialog/
+  command × light/dark @ 1440×900 under `screenshots/design-system-dod/`
+  (ui/sheet + ui/command asserted).
+- Flipped AGENTS.md §10 with that evidence. Sonner toast assertion in
+  App.workspace uses `waitFor`. SHIPPABLE? **NO**.
+
+**Files**
+- `scripts/design-system-dod.sh`, `design-system-dod.mjs`,
+  `design-system-dod-grep.mjs`
+- `screenshots/design-system-dod/`
+- `AGENTS.md`, `FEATURE_PARITY.md`, `PROGRESS.md`
+- `apps/desktop/src/App.workspace.test.tsx`
+
+**Tests**
+- `bash scripts/design-system-drift.sh` → ok
+- `node scripts/design-system-dod.mjs` → DESIGN-SYSTEM-DOD: ok
+- `pnpm -C apps/desktop typecheck` / `test`
+
+**Parity items**
+- §10 ✅ design-system DoD proven. SHIPPABLE? NO
+
+**Next step**
+- Named-device exact-rate ≥95% and/or broad differential matrix.
+
+SHIPPABLE? **NO**
 
 ---
 
@@ -45,7 +79,6 @@ SHIPPABLE? **NO**
 SHIPPABLE? **NO**
 
 ---
-
 
 ### 2026-08-05 — Educational/contrib gr_del midnodes → pass=110 (§DoD)
 
