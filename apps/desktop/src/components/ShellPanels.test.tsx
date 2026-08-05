@@ -62,7 +62,7 @@ describe("EditorToolbar - read-only outside schematic view ", () => {
     expect(screen.queryByRole("button", { name: "Refine transient resolution" })).toBeNull();
   });
 
-  it("disables Wire, Net label, Undo, Redo, selection deletion, and Clear scratchpad in simulator mode", () => {
+  it("disables Wire, Net label, Undo, Redo, selection deletion, and Clear schematic in simulator mode", () => {
     const emptyDoc = { components: [], wires: [], counters: {}, probes: [], netLabels: [], directives: [], textAnnotations: [], ascShapes: [], ascDataFlags: [], ascForeignSymbols: [], ascHierarchicalBlocks: [], ascSheet: null, userModelLibraries: [] };
     // Both past and future populated so canUndo/canRedo would be true if the
     // mode gate weren't there - proves the gate, not just an empty history.
@@ -92,10 +92,10 @@ describe("EditorToolbar - read-only outside schematic view ", () => {
     expect(useSchematic.getState().tool).toEqual({ mode: "select" });
   });
 
-  it("does not open the clear-scratchpad confirmation when clicked in simulator mode", () => {
+  it("does not open the clear-schematic confirmation when clicked in simulator mode", () => {
     const onClearScratchpad = vi.fn();
     render(<EditorToolbar mode="simulator" {...noopToolbarProps} onClearScratchpad={onClearScratchpad} />);
-    fireEvent.click(screen.getByRole("button", { name: "Clear scratchpad" }));
+    fireEvent.click(screen.getByRole("button", { name: "Clear schematic" }));
     expect(onClearScratchpad).not.toHaveBeenCalled();
   });
 
@@ -112,11 +112,11 @@ describe("EditorToolbar - read-only outside schematic view ", () => {
     expect(onOpenSimulationSetup).toHaveBeenCalledOnce();
   });
 
-  it("enables Wire, Undo (with history), and Clear scratchpad in schematic mode", () => {
+  it("enables Wire, Undo (with history), and Clear schematic in schematic mode", () => {
     useSchematic.setState({ past: [{ components: [], wires: [], counters: {}, probes: [], netLabels: [], directives: [], textAnnotations: [], ascShapes: [], ascDataFlags: [], ascForeignSymbols: [], ascHierarchicalBlocks: [], ascSheet: null, userModelLibraries: [] }] });
     render(<EditorToolbar mode="schematic" {...noopToolbarProps} />);
 
-    for (const name of ["Wire", "Net label (F4)", "Undo", "Clear scratchpad"]) {
+    for (const name of ["Wire", "Net label (F4)", "Undo", "Clear schematic"]) {
       expect((screen.getByRole("button", { name }) as HTMLButtonElement).disabled).toBe(false);
     }
   });

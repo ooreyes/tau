@@ -9,9 +9,9 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: IN PROGRESS (overnight handoff) - 2026-08-04 22:58 CDT**
+**Status: IN PROGRESS - 2026-08-04 23:05 CDT**
 
-Unit: Triage hard-failure 103→0. Mid-edit: Cpar/Rpar expand + `;` comment strip + Rload+/− safeName — untested/uncommitted. Resume there.
+Unit: §10 token sweep — define missing `--r-xs` (+ `--r-2xs`/`--r-pill`), migrate raw border-radius chrome, tokenize assistant SVG snapshot colors. Leave AGENTS §10 DoD unchecked.
 
 
 ---

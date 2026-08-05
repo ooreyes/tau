@@ -45,7 +45,7 @@ describe("ComponentMeasurementsPanel", () => {
     render(<ComponentMeasurementsPanel rows={rows} selectedId={null} onSelect={() => {}} />);
 
     expect(screen.getByRole("heading", { name: "Component measurements" })).toBeTruthy();
-    expect(screen.getByText("2 components · 1 with complete V/I/P telemetry")).toBeTruthy();
+    expect(screen.getByText("2 components · 1 with complete V/I/P")).toBeTruthy();
     expect(screen.getByText("Periodic · 1 kHz")).toBeTruthy();
     expect(screen.getAllByText("RMS")).toHaveLength(2);
     expect(screen.getByText("AVG")).toBeTruthy();
@@ -217,7 +217,7 @@ describe("ComponentMeasurementsPanel - variant=\"compact\" (telemetry dock grid)
 
   it("shows a one-line empty hint distinct from the full variant's copy", () => {
     render(<ComponentMeasurementsPanel rows={[]} selectedId={null} onSelect={() => {}} variant="compact" />);
-    expect(screen.getByText("Run a simulation to see per-component telemetry.")).toBeTruthy();
+    expect(screen.getByText("Run a simulation to see per-component V, I, and P.")).toBeTruthy();
   });
 });
 

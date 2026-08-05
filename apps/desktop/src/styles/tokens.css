@@ -42,7 +42,7 @@
   --color-accent-foreground: var(--text);
   --color-destructive: var(--danger);
   --color-destructive-foreground: var(--text);
-  /* Positive/run state (the ▶ run button, sim-live pill). App.css has no
+  /* Positive/run state (Run control, sim-live pill). App.css has no
    * bare semantic green; --trace-green is the calmest one in the palette. */
   --color-success: var(--trace-green);
   /* Tactical/amber signal (armed, running, warning) - the OP-1-style amber
@@ -57,10 +57,13 @@
   --color-ring: var(--accent);
 
   /* Radius scale (App.css --r-*) */
+  --radius-2xs: var(--r-2xs);
+  --radius-xs: var(--r-xs);
   --radius-sm: var(--r-sm);
   --radius-md: var(--r-md);
   --radius-lg: var(--r-lg);
   --radius-xl: var(--r-xl);
+  --radius-pill: var(--r-pill);
 
   /* Radix primitive motion - ties Tailwind v4's `--animate-*` theme
    * namespace (which generates `animate-*` utilities) to App.css's own

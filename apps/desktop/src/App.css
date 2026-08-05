@@ -153,11 +153,18 @@
 
   --icon-reticle: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.4' stroke-linecap='round'%3E%3Ccircle cx='12' cy='12' r='6'/%3E%3Cpath d='M12 1.75v3.5M12 18.75v3.5M1.75 12h3.5M18.75 12h3.5'/%3E%3C/svg%3E");
 
-  /* Continuous-corner-ish radii (macOS controls) */
-  --r-sm:  6px;
-  --r-md:  8px;
-  --r-lg:  10px;
-  --r-xl:  14px;
+  /* Continuous-corner-ish radii (macOS controls).
+     --r-xs was already consumed by explorer rename + editor-tab rename fields
+     but never defined (invalid → browser dropped the radius). Extended the
+     scale with 2xs/xs/pill so chrome stops inventing 2/3/4/5/7/9/999px
+     one-offs. Odd sizes snap to the nearest step. */
+  --r-2xs:  2px;   /* swatches, scrollbar thumbs, hairline indicators */
+  --r-xs:   4px;   /* dense chips, rename fields, compact controls */
+  --r-sm:   6px;
+  --r-md:   8px;
+  --r-lg:   10px;
+  --r-xl:   14px;
+  --r-pill: 999px; /* stadium chips / pills */
 
   /* Materials / elevation - soft Apple shadows, not neon glow */
   --elev-1:   inset 0 0.5px 0 rgba(255, 255, 255, 0.06);
@@ -5411,6 +5418,11 @@ body {
 }
 
 .transport .transport-play { color: var(--trace-green); }
+.transport .transport-play svg {
+  /* Play reads filled at toolbar density (SF Symbol style). */
+  fill: currentColor;
+  stroke: none;
+}
 .transport .transport-stop { color: var(--danger); }
 .transport .transport-stop svg {
   width: 11px;

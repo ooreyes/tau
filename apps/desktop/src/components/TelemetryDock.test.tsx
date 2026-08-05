@@ -43,24 +43,24 @@ const rows: ComponentMeasurement[] = [
 ];
 
 describe("TelemetryDock", () => {
-  it("shows a small-caps title, component count, and expanded telemetry cards by default", () => {
+  it("shows a measurements title, component count, and expanded cards by default", () => {
     render(<TelemetryDock rows={rows} selectedId={null} onSelect={() => {}} />);
-    expect(screen.getByText("Telemetry")).toBeTruthy();
+    expect(screen.getByText("Measurements")).toBeTruthy();
     expect(screen.getByText("2 components")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Toggle component telemetry" }).getAttribute("aria-expanded")).toBe("true");
+    expect(screen.getByRole("button", { name: "Toggle component measurements" }).getAttribute("aria-expanded")).toBe("true");
     expect(screen.getByText("R1")).toBeTruthy();
     expect(screen.getByText("C1")).toBeTruthy();
   });
 
   it("collapses to the header row only, and persists across a remount", () => {
     const { unmount } = render(<TelemetryDock rows={rows} selectedId={null} onSelect={() => {}} />);
-    fireEvent.click(screen.getByRole("button", { name: "Toggle component telemetry" }));
+    fireEvent.click(screen.getByRole("button", { name: "Toggle component measurements" }));
     expect(screen.queryByText("R1")).toBeNull();
-    expect(screen.getByRole("button", { name: "Toggle component telemetry" }).getAttribute("aria-expanded")).toBe("false");
+    expect(screen.getByRole("button", { name: "Toggle component measurements" }).getAttribute("aria-expanded")).toBe("false");
     unmount();
 
     render(<TelemetryDock rows={rows} selectedId={null} onSelect={() => {}} />);
-    expect(screen.getByRole("button", { name: "Toggle component telemetry" }).getAttribute("aria-expanded")).toBe("false");
+    expect(screen.getByRole("button", { name: "Toggle component measurements" }).getAttribute("aria-expanded")).toBe("false");
     expect(screen.queryByText("R1")).toBeNull();
   });
 
@@ -74,16 +74,16 @@ describe("TelemetryDock", () => {
   it("shows a one-line muted hint instead of stale data when there is no result", () => {
     render(<TelemetryDock rows={[]} selectedId={null} onSelect={() => {}} />);
     expect(screen.getByText("0 components")).toBeTruthy();
-    expect(screen.getByText("Run a simulation to see per-component telemetry.")).toBeTruthy();
+    expect(screen.getByText("Run a simulation to see per-component V, I, and P.")).toBeTruthy();
   });
 
   it("exposes a draggable top-edge resize handle while expanded, not while collapsed", () => {
     const { rerender } = render(<TelemetryDock rows={rows} selectedId={null} onSelect={() => {}} />);
-    const handle = screen.getByRole("separator", { name: "Resize component telemetry dock" });
+    const handle = screen.getByRole("separator", { name: "Resize component measurements dock" });
     expect(handle.getAttribute("aria-valuemax")).toBe("300");
 
-    fireEvent.click(screen.getByRole("button", { name: "Toggle component telemetry" }));
+    fireEvent.click(screen.getByRole("button", { name: "Toggle component measurements" }));
     rerender(<TelemetryDock rows={rows} selectedId={null} onSelect={() => {}} />);
-    expect(screen.queryByRole("separator", { name: "Resize component telemetry dock" })).toBeNull();
+    expect(screen.queryByRole("separator", { name: "Resize component measurements dock" })).toBeNull();
   });
 });
