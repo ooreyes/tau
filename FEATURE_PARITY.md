@@ -1534,13 +1534,16 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   FftView **Export PNG** (`tau-fft-….png`). 1 wiring test. **Group-delay lower
   pane landed** (2026-08-05): AcPlot Phase / Group delay toggle. **NEXT:**
   (waveform CSV/PNG/plt/FFT/expressions/dual-axis/right-click/Bode-X/Y/τ
-  covered — remaining: avg/rms readout polish, standalone phase window).
+  covered — remaining: standalone phase window).
 - 🟡 Right-click trace → math/operations — **abs / negate / dB / uramp / sgn /
   ddt landed** (2026-08-05): `traceMath.ts` wraps a legend trace into `abs(…)`,
   `-(…)`, `db(…)`, `uramp(…)`, `sgn(…)`, or `ddt(…)`; whole-expr `ddt` peels
   via `waveformDerivative` + numerical `ddtSeries` in `evaluatePlotExpression`.
-  Transient legend ContextMenu. Pure + SimulationPanel wiring tests. Still ⬜:
-  Ctrl+click avg/rms over visible window, AC/DC/step legend menus.
+  Transient legend ContextMenu. Pure + SimulationPanel wiring tests.
+  **Ctrl+click avg/RMS over visible window landed** (2026-08-05):
+  `windowedTraceStatistics` + legend Ctrl/⌘+click opens Dialog with AVG/RMS
+  over `sharedX`. Still ⬜: AC/DC/step legend menus.
+
 ## 7. Engine & accuracy
 - ✅ Native ngspice FFI (desktop) — `src-tauri/src/spice.rs`
 - ✅ Interim TS MNA solver (linear) for browser/tests

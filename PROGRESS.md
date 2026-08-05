@@ -1,8 +1,8 @@
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 06:55 CDT**
+**Status: DONE - 2026-08-05 06:58 CDT**
 
-Unit: Waveform DoD — **Bode Phase / Group delay lower-pane toggle**.
+Unit: Waveform DoD — **Ctrl+click avg/RMS over visible window**.
 Differential pass=93 · named-device 48.1%. Settings locked. SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**

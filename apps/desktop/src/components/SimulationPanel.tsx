@@ -22,6 +22,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   ContextMenu,
   ContextMenuContent,
   ContextMenuItem,
@@ -132,7 +139,7 @@ import { ScopeZoomCluster } from "./ScopeZoomCluster";
 import type { Viewport } from "../simulation/plotViewport";
 import { visibleTransientTraces } from "../simulation/visibleTraces";
 import { EngineeringTraceReadout } from "./EngineeringTraceReadout";
-import { traceStatistics } from "../simulation/measurementModel";
+import { traceStatistics, windowedTraceStatistics } from "../simulation/measurementModel";
 import { AnalysisModeRail, type AnalysisMode } from "./AnalysisModeRail";
 import { ENGINE_DESCRIPTIONS, ENGINE_LABELS, type EngineProvenance } from "../simulation/engineProvenance";
 import { EngineeringInput } from "./EngineeringInput";
@@ -1609,9 +1616,18 @@ export function WaveformPlot({
   const success = result?.ok ? result : null;
   const [activeTraceId, setActiveTraceId] = useState<string | null>(null);
   const [traceColorOverrides, setTraceColorOverrides] = useState<Record<string, string>>({});
+  const [windowStats, setWindowStats] = useState<{
+    label: string;
+    unit: string;
+    average: number;
+    rms: number;
+    tMin: number;
+    tMax: number;
+  } | null>(null);
   useEffect(() => {
     setActiveTraceId(null);
     setTraceColorOverrides({});
+    setWindowStats(null);
   }, [layoutKey]);
 
   // Build the full ordered trace list (all panes, all traces) the same way as
@@ -1760,6 +1776,7 @@ export function WaveformPlot({
   const clearDropPreview = () => setDropPreview(null);
 
   return (
+    <>
     <div className="scope-shell">
       {/* The failed-run message used to live in the (removed) footer strip;
           every other tab surfaces result.message inline, so TRAN does too. */}
@@ -1882,8 +1899,31 @@ export function WaveformPlot({
                               type="button"
                               className="trace-interaction__select"
                               aria-label={`Select ${displayLabel} for cursor measurement`}
+                              title="Ctrl/⌘+click for average & RMS over the visible window"
                               aria-pressed={selected}
-                              onClick={() => setActiveTraceId(trace.id)}
+                              onClick={(event) => {
+                                if (event.ctrlKey || event.metaKey) {
+                                  event.preventDefault();
+                                  if (!success) return;
+                                  const stats = windowedTraceStatistics(
+                                    success.times,
+                                    trace.values,
+                                    sharedX.xMin,
+                                    sharedX.xMax,
+                                  );
+                                  if (!stats) return;
+                                  setWindowStats({
+                                    label: displayLabel,
+                                    unit: trace.unit,
+                                    average: stats.average,
+                                    rms: stats.rms,
+                                    tMin: sharedX.xMin,
+                                    tMax: sharedX.xMax,
+                                  });
+                                  return;
+                                }
+                                setActiveTraceId(trace.id);
+                              }}
                             >
                               <i style={{ background: trace.color }} aria-hidden="true" />
                               <span>{displayLabel}</span>
@@ -2027,6 +2067,37 @@ export function WaveformPlot({
         </div>
       )}
     </div>
+    <Dialog open={windowStats !== null} onOpenChange={(open) => { if (!open) setWindowStats(null); }}>
+      <DialogContent aria-describedby="window-avg-rms-desc">
+        <DialogHeader>
+          <DialogTitle>{windowStats ? `${windowStats.label} — visible window` : "Visible window"}</DialogTitle>
+          <DialogDescription id="window-avg-rms-desc">
+            Average and RMS over the zoomed time window (LTspice Ctrl+click on a trace label).
+          </DialogDescription>
+        </DialogHeader>
+        {windowStats && (
+          <dl className="window-avg-rms" aria-label={`${windowStats.label} average and RMS`}>
+            <div>
+              <dt>From</dt>
+              <dd>{formatEngineering(windowStats.tMin, "s", 3)}</dd>
+            </div>
+            <div>
+              <dt>To</dt>
+              <dd>{formatEngineering(windowStats.tMax, "s", 3)}</dd>
+            </div>
+            <div>
+              <dt>Average</dt>
+              <dd>{formatEngineering(windowStats.average, windowStats.unit, 3)}</dd>
+            </div>
+            <div>
+              <dt>RMS</dt>
+              <dd>{formatEngineering(windowStats.rms, windowStats.unit, 3)}</dd>
+            </div>
+          </dl>
+        )}
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { AnalysisResult } from "./linearTransient";
-import { classifySignal, componentMeasurements, noiseFloorForUnit, traceStatistics } from "./measurementModel";
+import { classifySignal, componentMeasurements, noiseFloorForUnit, traceStatistics, windowedTraceStatistics } from "./measurementModel";
 
 describe("traceStatistics", () => {
   it("computes min/max/final and time-weighted AVG/RMS on a non-uniform axis", () => {
@@ -20,6 +20,23 @@ describe("traceStatistics", () => {
 
   it("excludes values whose timestamps are not finite", () => {
     expect(traceStatistics([0, Number.NaN, 2], [1, 100, 3])).toMatchObject({ min: 1, max: 3, final: 3 });
+  });
+});
+
+describe("windowedTraceStatistics", () => {
+  it("restricts AVG/RMS to the visible [tMin,tMax] window", () => {
+    // Full run: [0,1,2,3] → values [0,0,10,10]. Window [1,2] → samples 0,10 at t=1,2.
+    const stats = windowedTraceStatistics([0, 1, 2, 3], [0, 0, 10, 10], 1, 2);
+    expect(stats).not.toBeNull();
+    expect(stats!.average).toBeCloseTo(5);
+    expect(stats!.rms).toBeCloseTo(Math.sqrt(50));
+    expect(stats!.min).toBe(0);
+    expect(stats!.max).toBe(10);
+  });
+
+  it("returns null for an empty or inverted window", () => {
+    expect(windowedTraceStatistics([0, 1], [1, 2], 5, 6)).toBeNull();
+    expect(windowedTraceStatistics([0, 1], [1, 2], 1, 1)).toBeNull();
   });
 });
 

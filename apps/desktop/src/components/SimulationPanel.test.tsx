@@ -1341,6 +1341,40 @@ describe("SimulationPanel - right-click trace math", { timeout: 20_000 }, () => 
     fireEvent.click(absItem);
     expect(onPlotExpression).toHaveBeenCalledWith("abs(V(out))");
   });
+
+  it("Ctrl+click legend shows average and RMS over the visible window", async () => {
+    const result = {
+      ok: true as const,
+      title: "Transient",
+      times: [0, 1, 2, 3],
+      traces: [
+        { id: "n1", label: "V(out)", unit: "V" as const, color: "var(--trace-cyan)", values: [0, 0, 10, 10] },
+      ],
+      currents: [],
+      stats: { netCount: 1, componentCount: 0, sampleCount: 4, stopTime: 3, stepSize: 1 },
+      warnings: [],
+      circuit: {
+        groundNetId: null,
+        warnings: [],
+        nets: [{ id: "n1", points: [{ x: 0, y: 0 }, { x: 16, y: 0 }], pins: [], isGround: false, labelCount: 0 }],
+        components: [],
+      },
+    };
+    render(
+      <WaveformPlot
+        result={result}
+        baseTraces={result.traces}
+        netLabels={[]}
+        paneLayout={defaultLayout(["n1"])}
+      />,
+    );
+    const select = screen.getByRole("button", { name: "Select V(out) for cursor measurement" });
+    fireEvent.click(select, { ctrlKey: true });
+    expect(await screen.findByRole("heading", { name: /V\(out\).*visible window/i })).toBeTruthy();
+    const panel = screen.getByRole("dialog");
+    expect(panel.textContent).toMatch(/Average/i);
+    expect(panel.textContent).toMatch(/RMS/i);
+  });
 });
 
 describe("SimulationPanel - AC Bode Export PNG", { timeout: 20_000 }, () => {

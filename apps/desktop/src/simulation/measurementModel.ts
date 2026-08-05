@@ -107,6 +107,32 @@ export function traceStatistics(times: readonly number[], values: readonly numbe
 }
 
 /**
+ * AVG / RMS / min / max over the visible time window `[tMin, tMax]` (LTspice
+ * Ctrl+click on a waveform label). Samples outside the window are excluded;
+ * reuses {@link traceStatistics} so trapezoidal weighting stays consistent.
+ */
+export function windowedTraceStatistics(
+  times: readonly number[],
+  values: readonly number[],
+  tMin: number,
+  tMax: number,
+): TraceStatistics | null {
+  if (!Number.isFinite(tMin) || !Number.isFinite(tMax) || !(tMax > tMin)) return null;
+  const n = Math.min(times.length, values.length);
+  const wTimes: number[] = [];
+  const wValues: number[] = [];
+  for (let i = 0; i < n; i++) {
+    const t = times[i]!;
+    const v = values[i]!;
+    if (!Number.isFinite(t) || !Number.isFinite(v)) continue;
+    if (t < tMin || t > tMax) continue;
+    wTimes.push(t);
+    wValues.push(v);
+  }
+  return traceStatistics(wTimes, wValues);
+}
+
+/**
  * Absolute "this is solver noise, not signal" floor per physical quantity,
  * matching the tolerances a SPICE engine itself converges to (ngspice's
  * `abstol` 1 pA and `vntol` 1 µV, loosened one decade for headroom).
