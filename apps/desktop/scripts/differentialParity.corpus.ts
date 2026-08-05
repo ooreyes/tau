@@ -54,6 +54,8 @@ const CT_NOISE_RC_ASC = join(REPO_ROOT, "Circuit_testing_v1", "07_noise_rc_lowpa
 const CT_AC_RC_ASC = join(REPO_ROOT, "Circuit_testing_v1", "03_ac_rc_lowpass.asc");
 /** Tau Circuit_testing_v1 — resistive divider authored .tf (≠ synthetic DIVIDER_TF netlist). */
 const CT_TF_DIVIDER_ASC = join(REPO_ROOT, "Circuit_testing_v1", "06_tf_voltage_divider.asc");
+/** Tau Circuit_testing_v1 — 2:1 resistive divider authored .op (≠ synthetic DIVIDER_OP 1:1). */
+const CT_OP_DIVIDER_ASC = join(REPO_ROOT, "Circuit_testing_v1", "01_op_voltage_divider.asc");
 const EDU = join(homedir(), "Documents", "LTspice", "examples", "Educational");
 const APP = join(homedir(), "Documents", "LTspice", "examples", "Applications");
 const DOC_LTSPICE = join(homedir(), "Documents", "LTspice");
@@ -3828,6 +3830,52 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
       });
     }
 
+    // --- Circuit_testing_v1/01_op_voltage_divider.asc authored .op (2:1 resistive) ---
+    // Tau-owned ASC: V1=5 + R1=1k + R2=2k. Authored `.op`. Expected V(out)=10/3.
+    // Distinct from synthetic DIVIDER_OP (1:1 → 2.5 V hand netlist) and ct
+    // 06_tf (R1=R2=1k .tf) / 05_step_loaded (.dc+.step) — proves importAsc →
+    // buildSpiceDeck → paired OP on an authored ASC.
+    // Left 100W/IRFP / Documents Draft* / Settings alone. Tip ct-tf pass=89 → **pass=90**.
+    {
+      expect(existsSync(CT_OP_DIVIDER_ASC), `missing ${CT_OP_DIVIDER_ASC}`).toBe(true);
+      const imported = importAsc(decodeSchematicText(readFileSync(CT_OP_DIVIDER_ASC)));
+      expect(imported.warnings).toEqual([]);
+      expect(imported.foreignSymbols).toEqual([]);
+      expect(
+        imported.directives.some((d) => /^\.op\b/i.test(d.trim())),
+        "01_op_voltage_divider.asc must author .op",
+      ).toBe(true);
+      const params = buildParamScope(imported.directives);
+      const deck = buildSpiceDeck({
+        components: imported.components,
+        wires: imported.wires,
+        netLabels: imported.netLabels,
+        directives: imported.directives,
+        params,
+      }, { kind: "op" });
+      expect(deck.unresolvedSubckts ?? []).toEqual([]);
+      expect(deck.modelSubstitutions ?? []).toEqual([]);
+      expect(deck.netlist).toMatch(/^V1\b.+\b5\b/im);
+      expect(deck.netlist).toMatch(/^R1\b.+\b1000\b/im);
+      expect(deck.netlist).toMatch(/^R2\b.+\b2000\b/im);
+      expect(deck.netlist).toMatch(/\.op\b/i);
+      expect(deck.netlist).not.toMatch(/^X\w*\b/im);
+      expect(deck.netlist).not.toMatch(/^\.model\b/im);
+      const result = runPairedBatch("diff-ct-op-divider", deck.netlist, ["v(out)"]);
+      const lt = firstSample(result.ltspice.get("v(out)")!);
+      const ng = firstSample(result.ngspice.get("v(out)")!);
+      expect(Number.isFinite(lt) && Number.isFinite(ng)).toBe(true);
+      expect(relativeError(ng, lt), `ct-op V(out) lt=${lt} ng=${ng}`).toBeLessThanOrEqual(1e-6);
+      expect(ng).toBeCloseTo(10 / 3, 6);
+      cells.push({
+        analysis: "op",
+        circuit: "ct-op-divider",
+        topology: "Circuit_testing_v1/01_op_voltage_divider.asc R1=1k R2=2k (authored .op)",
+        status: "pass",
+        note: `V(out) lt=${lt} ng=${ng} relErr<=1e-6 (≈${(10 / 3).toFixed(4)} V)`,
+      });
+    }
+
     // --- Class-D AC/OP (authored analyses are .tran/.meas; add AC/OP for differential proof) ---
     {
       const ascPath = join(CLASSD_DIR, "class-d-starter.asc");
@@ -4124,6 +4172,6 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
     expect(passCount).toBeGreaterThanOrEqual(70);
     expect(siblingCount).toBe(5);
     expect(gapCount).toBe(0);
-    expect(report).toMatch(/SUMMARY pass=89 sibling=5 gap=0/);
+    expect(report).toMatch(/SUMMARY pass=90 sibling=5 gap=0/);
   }, 240_000);
 });

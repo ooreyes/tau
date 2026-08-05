@@ -2,14 +2,43 @@
 
 **Status: DONE - 2026-08-05 06:18 CDT**
 
-Unit: Waveform DoD — **DC Export PNG** (`waveformSvgsToPng` + Advanced Export PNG).
-Base tip `64bb1b6` pass=89. Named-device 48.1%. Settings locked. SHIPPABLE? **NO**
+Unit: Circuit_testing_v1 `01_op_voltage_divider.asc` authored `.op` → differential **pass=90**.
+```
+SUMMARY pass=90 sibling=5 gap=0
+op ct-op-divider … V(out) lt=3.333333333333333 ng=3.3333333311111115 relErr<=1e-6
+```
+Named-device 48.1%. Left 100W/IRFP/Documents Draft*/Settings alone. Rebased over DC PNG tip `9bc9415`. SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
 
 
 ---
+
+
+### 2026-08-05 — ct 01_op_voltage_divider .op → pass=90 (§DoD)
+
+**What I did**
+- Circuit_testing_v1 `01_op_voltage_divider.asc` authored `.op`
+  (V1=5, R1=1k, R2=2k): V(out) vs LTspice relErr≤1e-6 (≈3.333 V).
+  Distinct from synthetic DIVIDER_OP (1:1 → 2.5 V) and ct 06_tf
+  (R1=R2=1k .tf). Avoided Staff EE 100W/IRFP, Documents Draft*,
+  Settings/palette thrash. Worktree rebased over DC/AC PNG tips.
+
+**Files**
+- `apps/desktop/scripts/differentialParity.corpus.ts`
+- `FEATURE_PARITY.md`, `AGENTS.md`, `PROGRESS.md`
+
+**Tests**
+- `scripts/differential-parity.sh` → SUMMARY pass=90 sibling=5 gap=0
+- `pnpm -C apps/desktop typecheck` + `test` green (2730 passed)
+
+**Parity items**
+- Differential **pass=90** · named-device 48.1% · SHIPPABLE? NO
+
+**Next step**
+- Continue: ct `02_tran_rc_pulse_meas` or non-wall Educational leftovers.
+  Leave IRFP/Draft*/Settings alone.
 
 
 ### 2026-08-05 — DC Export PNG (§waveform DoD)
@@ -61,8 +90,6 @@ Base tip `64bb1b6` pass=89. Named-device 48.1%. Settings locked. SHIPPABLE? **NO
 **Next step**
 - DC/noise PNG, richer right-click, or continue 28 differential.
   Leave IRFP/Draft*/Settings alone.
-
-
 
 
 ### 2026-08-05 — ct 06_tf_voltage_divider .tf → pass=89 (§DoD)
