@@ -173,10 +173,11 @@ account and sign/notarize/ship.
       with LTspice over a representative device and topology matrix.
       **Partial (2026-08-05):** `scripts/differential-parity.sh` +
       `differentialParity.corpus.ts` (also under `dod-parity.sh`) prove
-      pass=41 · sibling=5 · gap=0 on stdout: prior cells through DCopPnt OP +
+      pass=42 · sibling=5 · gap=0 on stdout: prior cells through DCopPnt OP +
       Educational audioamp.asc authored `.tran` (exact 2N3904/2N2219A/2N3906;
       v(a)/v(b)/v(in) nRms≈0.0001) + UHFpreamp.asc authored `.ac` (QR99/1N4148/
-      TLINE; |V(out)| nRms=0). HalfSlope Laplace not landed (Tau strips to unity
+      TLINE; |V(out)| nRms=0) + 1563.asc authored `.ac` Tow-Thomas (TowTom2.sub;
+      v(n003)/v(n002) nRms=0). HalfSlope Laplace not landed (Tau strips to unity
       VCCS). SoftDiodeRecovery deferred (model X → silent TAU_DIODE / LTspice-only
       Vp). BandGaps `.dc temp` misses tolerance. Harness-slice gap closed; broad
       topology/device matrix still open — DoD box stays unchecked.

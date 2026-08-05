@@ -1576,12 +1576,12 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   oscillator by amplitude, RMS, and frequency. All four proofs pass headlessly.
   **Differential matrix slice (2026-08-05):** `scripts/differential-parity.sh`
   (wired into `dod-parity.sh`) prints pass/sibling/gap coverage to stdout
-  (truth). Gap-closure → **pass=41 · sibling=5 · gap=0**: prior cells through
-  DCopPnt OP plus Educational audioamp.asc authored `.tran` (exact
-  2N3904/2N2219A/2N3906) and UHFpreamp.asc authored `.ac` (QR99/1N4148/TLINE;
-  |V(out)| nRms=0). HalfSlope Laplace stripped (not landed); SoftDiodeRecovery
-  deferred; BandGaps dc-temp miss. Harness-slice gaps closed; DoD
-  broad-differential box remains open — see AGENTS.md.
+  (truth). Gap-closure → **pass=42 · sibling=5 · gap=0**: prior cells through
+  DCopPnt OP plus Educational audioamp/UHFpreamp and 1563.asc authored `.ac`
+  Tow-Thomas (TowTom2.sub; v(n003)/v(n002) nRms=0). HalfSlope Laplace stripped
+  (not landed); SoftDiodeRecovery deferred; BandGaps dc-temp miss; LoopGain/
+  Electrometer LT1001 OTA wall; MC1648 deferred (probe stack). Harness-slice
+  gaps closed; DoD broad-differential box remains open — see AGENTS.md.
 - 🟡 Resolve a real device-model set — **common LTspice standard diodes/
   zeners/BJTs + the class-d power VDMOS pair bundled** (`engine/standardModels.ts`,
   real `standard.*` params, emitted by `buildSpiceDeck` when referenced by name).
