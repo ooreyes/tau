@@ -3860,6 +3860,7 @@ export function StepPlot({ result, probes, wires }: { result: StepFamilyResult |
   const [exprList, setExprList] = useState<string[]>([]);
   const [activeExpr, setActiveExpr] = useState<string | null>(null);
   const [exprError, setExprError] = useState<string | null>(null);
+  const [exportError, setExportError] = useState<string | null>(null);
 
   const exprFamily = useMemo(() => {
     if (!activeExpr) return null;
@@ -3937,6 +3938,18 @@ export function StepPlot({ result, probes, wires }: { result: StepFamilyResult |
       ),
       "step",
     );
+  };
+
+  const exportStepPng = async () => {
+    const svg = svgRef.current;
+    if (!svg) return;
+    try {
+      const blob = await waveformSvgsToPng([svg]);
+      downloadWaveformPng(blob, "step");
+      setExportError(null);
+    } catch (error) {
+      setExportError(error instanceof Error ? error.message : "Could not export the step PNG.");
+    }
   };
 
   if (!result) return null;
@@ -4071,7 +4084,11 @@ export function StepPlot({ result, probes, wires }: { result: StepFamilyResult |
         <Button variant="outline" size="sm" onClick={exportStepCsv}>
           Export CSV
         </Button>
+        <Button variant="outline" size="sm" onClick={() => void exportStepPng()}>
+          Export PNG
+        </Button>
       </div>
+      {exportError && <div className="expr-error" role="alert">{exportError}</div>}
       <StepMeasTable members={result.members} />
       {result.warnings.length > 0 && (
         <div className="analysis-empty warn" role="status">{result.warnings.join(" ")}</div>

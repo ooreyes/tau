@@ -948,6 +948,34 @@ describe("StepPlot measurements", () => {
     }
   });
 
+  it("exports the step family SVG via waveformSvgsToPng with tag step", async () => {
+    const png = await import("../simulation/plotPng");
+    const toPng = vi.spyOn(png, "waveformSvgsToPng").mockResolvedValue(new Blob(["png"]));
+    const download = vi.spyOn(png, "downloadWaveformPng").mockImplementation(() => {});
+    try {
+      render(
+        <StepPlot
+          result={{
+            ok: true,
+            spec: { kind: "param", name: "RL", values: [1, 2] },
+            members: [member("RL=1", 1), member("RL=2", 2)],
+            warnings: [],
+          }}
+          probes={[]}
+          wires={[]}
+        />,
+      );
+      fireEvent.click(screen.getByRole("button", { name: "Export PNG" }));
+      await waitFor(() => expect(toPng).toHaveBeenCalled());
+      const svgs = toPng.mock.calls[0]![0] as SVGSVGElement[];
+      expect(svgs.length).toBe(1);
+      expect(download).toHaveBeenCalledWith(expect.any(Blob), "step");
+    } finally {
+      toPng.mockRestore();
+      download.mockRestore();
+    }
+  });
+
   it("plots a step-family expression and labels SIGNAL with the expression", () => {
     function memberWithMid(label: string, value: number, out: number[], mid: number[]) {
       const base = member(label, value, undefined, [0, 1e-3], out);
