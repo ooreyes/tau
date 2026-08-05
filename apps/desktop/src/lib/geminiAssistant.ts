@@ -10,6 +10,12 @@
  * OS keychain exactly like the Anthropic one - Tau never proxies it.
  */
 import {
+  AssistantProviderError,
+  type AssistantProviderReply,
+  type AssistantProviderRequest,
+} from "./assistantProvider";
+import { cloudAiConsentRefusal } from "./cloudAiConsent";
+import {
   OpenAiCompatibleAssistant,
   type ChatProviderProfile,
   type OpenAiCompatibleAssistantOptions,
@@ -108,5 +114,14 @@ export class GeminiAssistant extends OpenAiCompatibleAssistant {
       ...options,
       model: options.model ?? GEMINI_DEFAULT_MODEL,
     });
+  }
+
+  override async complete(
+    request: AssistantProviderRequest,
+    signal?: AbortSignal,
+  ): Promise<AssistantProviderReply> {
+    const refusal = cloudAiConsentRefusal();
+    if (refusal) throw new AssistantProviderError("unknown", refusal);
+    return super.complete(request, signal);
   }
 }

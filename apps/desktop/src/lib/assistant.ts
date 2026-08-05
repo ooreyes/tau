@@ -20,6 +20,7 @@ import {
   TAU_CIRCUIT_PLAN_TOOL_NAME,
 } from "./assistantCircuitPlan";
 import { wrapAssistantContextForPrompt } from "./assistantContext";
+import { cloudAiConsentRefusal } from "./cloudAiConsent";
 import {
   executeAssistantOperation,
   findAssistantOperation,
@@ -333,6 +334,12 @@ export function streamAssistantReply(
   operationContext?: AssistantOperationContext,
   options: AssistantStreamOptions = {},
 ): AssistantStreamHandle {
+  const consentRefusal = cloudAiConsentRefusal();
+  if (consentRefusal) {
+    const handle: AssistantStreamHandle = { abort: () => {} };
+    queueMicrotask(() => handlers.onError({ kind: "unknown", message: consentRefusal }));
+    return handle;
+  }
   // Match the SDK's own fetch ceiling to Tau's larger mutation ceiling. The
   // SDK defaults to ten minutes, which would otherwise undercut Tau's
   // progress-aware twelve-minute build budget.
