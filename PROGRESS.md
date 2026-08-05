@@ -2,13 +2,44 @@
 
 **Status: DONE - 2026-08-05 ~13:40 CDT**
 
-Unit: **Educational NE555 period-meas → pass=108** — discrete BJT 555
-Output `.meas` period (continuous phase deferred). DoD broad box stays
-open. SHIPPABLE? **NO**
+Unit: **§10 AnalysisSetupForms + circuit-duration → ui/Select (formalize)** —
+expand TF/Noise/orphan SourceSelect proof; durability `wip:` `b7d265a` already
+carried the migration. AGENTS §10 stays UNCHECKED. SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
 
+
+---
+
+### 2026-08-05 — §10 AnalysisSetupForms Select proof formalized
+
+**What I did**
+- Formalized the durability checkpoint (`b7d265a`) that migrated
+  AnalysisSetupForms SourceSelect + Step kind and Circuit duration unit onto
+  shadcn `ui/Select` with tokenized triggers.
+- Expanded `AnalysisSetupForms.test.tsx`: TF/Noise source comboboxes +
+  unresolved Step source stays visible. Did **not** flip AGENTS §10 DoD
+  (local-AI Settings selects + Resizable/Command/Toast + whole-app drift
+  proof still open). SHIPPABLE? **NO**.
+
+**Files**
+- `apps/desktop/src/components/AnalysisSetupForms.test.tsx`
+- `FEATURE_PARITY.md`, `PROGRESS.md`
+
+**Tests**
+- `vitest run AnalysisSetupForms.test.tsx` → 5/5
+- `pnpm -C apps/desktop typecheck` / `test` (gates before push)
+
+**Parity items**
+- §10 partial: AnalysisSetupForms + circuit-duration Select proven. Box ⬜.
+  SHIPPABLE? NO
+
+**Next step**
+- local-AI Settings selects; Resizable/Command/Toast; whole-app drift proof.
+  Never flip AGENTS §10 on a partial.
+
+SHIPPABLE? **NO**
 
 ---
 

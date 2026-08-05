@@ -2158,14 +2158,15 @@ extended (`--r-2xs`/`--r-xs`/`--r-pill`) and raw chrome radii snapped; warning
 chrome stays quiet ochre (soft ≈0.05 — not danger-red for optional empties);
 settings rows simplified. **2026-08-05:** FFT Signal/Window + Op-amp model +
 IndependentSourceEditor Waveform type + semiconductor Simulation model +
-Subcircuit model + Simulation setup dialog + EngineeringInput SI-prefix native
-`<select>`s migrated onto shadcn `ui/Select` (Settings locked/untouched); unit
-proof in SimulationPanel/ShellPanels/EngineeringInput tests (combobox triggers,
-not native `<select>`). **Min-window DoD (separate AGENTS box) proven 2026-08-05**
-via `scripts/min-window-dod.sh` at 900×600 (12/12; Settings sheet viewport cap +
-scroll; editor toolbar horizontal scroll) — shots in
-`screenshots/min-window-dod/`. Remaining §10 debt that blocks an honest **§10
-design-system** DoD check:
+Subcircuit model + Simulation setup dialog + EngineeringInput SI-prefix +
+AnalysisSetupForms + circuit-duration unit native `<select>`s migrated onto
+shadcn `ui/Select` (Settings locked/untouched); unit proof in
+SimulationPanel/ShellPanels/EngineeringInput/AnalysisSetupForms tests
+(combobox triggers, not native `<select>`). **Min-window DoD (separate AGENTS
+box) proven 2026-08-05** via `scripts/min-window-dod.sh` at 900×600 (12/12;
+Settings sheet viewport cap + scroll; editor toolbar horizontal scroll) —
+shots in `screenshots/min-window-dod/`. Remaining §10 debt that blocks an
+honest **§10 design-system** DoD check:
 Resizable/Command/Toast primitives still deferred; other native `<select>`s
 (local-AI settings) not yet on `ui/Select`; Assistant/local-AI settings
 surfaces still mid-migration; Cupertino icon chrome still settling; no proof
