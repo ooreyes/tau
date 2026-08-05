@@ -1,9 +1,16 @@
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 06:51 CDT**
+**Status: DONE - 2026-08-05 06:52 CDT**
 
-Unit: Waveform DoD — **FFT spectrum Export PNG**.
-Differential pass=92 · named-device 48.1%. Settings locked. SHIPPABLE? **NO**
+Unit: Circuit_testing_v1 `16_active_fourth_order_filter.asc` authored `.ac` → differential **pass=93**.
+```
+SUMMARY pass=93 sibling=5 gap=0
+ac ct-active-fourth-order … v(out) nRms=0.0000 nMax=0.0000 span=1.000
+```
+Named-device 48.1%. Worktree `Tau-wt-diff-92` rebased over FFT PNG tip (`54e844b`).
+ct 19 INA `.op` deferred (LTspice OP fails on same-deck tanh B_U*).
+Left Settings / IRFP / Draft* alone.
+SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
@@ -11,6 +18,31 @@ Differential pass=92 · named-device 48.1%. Settings locked. SHIPPABLE? **NO**
 
 ---
 
+### 2026-08-05 — ct 16_active_fourth_order_filter .ac → pass=93 (§DoD)
+
+**What I did**
+- Circuit_testing_v1 `16_active_fourth_order_filter.asc` authored `.ac dec 40 10 1Meg`
+  (4×R=1k/C=100n buffered poles + opamp2 Avol=1Meg rail-clamped tanh): v(out)
+  vs LTspice nRms=0 / nMax=0 span≈1.00. Distinct from Educational opamp.sub,
+  ct 03 single-pole RC, and ct 11 passive ladder. ct 19 INA `.op` probed but
+  deferred (LTspice OP fails to converge on same-deck B_U* tanh). Left
+  IRFP/Draft*/Settings alone.
+
+**Files**
+- `apps/desktop/scripts/differentialParity.corpus.ts`
+- `FEATURE_PARITY.md`, `AGENTS.md`, `PROGRESS.md`
+
+**Tests**
+- `scripts/differential-parity.sh` → SUMMARY pass=93 sibling=5 gap=0
+- `pnpm -C apps/desktop typecheck` + `test` green (2738 passed)
+
+**Parity items**
+- Differential **pass=93** · named-device 48.1% · SHIPPABLE? NO
+
+**Next step**
+- Continue: ct 17/18 (passive power), Educational non-wall leftovers, or
+  waveform phase/avg-rms. Leave IRFP/Draft*/Settings/ct19 OP alone unless OP
+  convergence for multi-B_U* is fixed.
 
 ### 2026-08-05 — FFT spectrum Export PNG (§waveform DoD)
 

@@ -60,6 +60,8 @@ const CT_OP_DIVIDER_ASC = join(REPO_ROOT, "Circuit_testing_v1", "01_op_voltage_d
 const CT_TRAN_RC_PULSE_ASC = join(REPO_ROOT, "Circuit_testing_v1", "02_tran_rc_pulse_meas.asc");
 /** Tau Circuit_testing_v1 — eight-pole RC ladder (≠ ct 03 single-pole RC AC). */
 const CT_STRESS_RC_LADDER_ASC = join(REPO_ROOT, "Circuit_testing_v1", "11_stress_rc_ladder.asc");
+/** Tau Circuit_testing_v1 — four buffered RC poles + opamp2 Avol (≠ edu opamp.sub / ct 03/11). */
+const CT_ACTIVE_FOURTH_ORDER_ASC = join(REPO_ROOT, "Circuit_testing_v1", "16_active_fourth_order_filter.asc");
 const EDU = join(homedir(), "Documents", "LTspice", "examples", "Educational");
 const APP = join(homedir(), "Documents", "LTspice", "examples", "Applications");
 const DOC_LTSPICE = join(homedir(), "Documents", "LTspice");
@@ -287,7 +289,7 @@ function withAcStimulus(netlist: string): string {
 describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential parity matrix", () => {
   const cells: DifferentialCell[] = [];
 
-  it("matches RC .tran/.ac/.meas, divider analyses, .step families, curvetrace, stepmodelparam, NoiseFigure, noise.asc, Colpitts/Clapp/Hartly AC, Cohn AC, MeasureBW AC, Transformer/Transformer2/IdealTransformer TRAN, notch/passive/butter/opamp/Linkwitz AC, LM741/LM308/LM78XX/P2/logamp TRAN, GFT AC, DCopPnt OP, audioamp TRAN, UHFpreamp AC, 1563 AC, S-param AC, stepAC AC, 2ndOrder* AC, MonteCarlo AC, varactor AC, phaseshift AC, Pierce/colpits2 AC, edu-varistor TRAN, stepnoise noise, UniversalOpAmp/1/2 TRAN, contrib/qztst AC, SampleAndHold TRAN, contrib/elip_grd AC, Draft3 AC, Draft7 AC, Draft2 TRAN, Draft1 TRAN, BandGaps DC-temp, waveout TRAN, ISO16750 TRAN, IGBTeq nested DC, help-Butterworth AC, Resources-Draft1 DC, 100W TRAN, help-ACstep AC, help-NoiseStep noise, Resources-MicroCode TRAN, ct-rlc-ringing TRAN, ct-diode-dc DC, ct-step-loaded DC, ct-noise-rc noise, ct-stress-rc-ladder AC, Class-D AC/OP/DC/noise/tf", () => {
+  it("matches RC .tran/.ac/.meas, divider analyses, .step families, curvetrace, stepmodelparam, NoiseFigure, noise.asc, Colpitts/Clapp/Hartly AC, Cohn AC, MeasureBW AC, Transformer/Transformer2/IdealTransformer TRAN, notch/passive/butter/opamp/Linkwitz AC, LM741/LM308/LM78XX/P2/logamp TRAN, GFT AC, DCopPnt OP, audioamp TRAN, UHFpreamp AC, 1563 AC, S-param AC, stepAC AC, 2ndOrder* AC, MonteCarlo AC, varactor AC, phaseshift AC, Pierce/colpits2 AC, edu-varistor TRAN, stepnoise noise, UniversalOpAmp/1/2 TRAN, contrib/qztst AC, SampleAndHold TRAN, contrib/elip_grd AC, Draft3 AC, Draft7 AC, Draft2 TRAN, Draft1 TRAN, BandGaps DC-temp, waveout TRAN, ISO16750 TRAN, IGBTeq nested DC, help-Butterworth AC, Resources-Draft1 DC, 100W TRAN, help-ACstep AC, help-NoiseStep noise, Resources-MicroCode TRAN, ct-rlc-ringing TRAN, ct-diode-dc DC, ct-step-loaded DC, ct-noise-rc noise, ct-stress-rc-ladder AC, ct-active-fourth-order AC, Class-D AC/OP/DC/noise/tf", () => {
     // --- TRAN (also covered by waveformParity; re-assert here so this file is self-sufficient) ---
     {
       const result = runPairedBatch("diff-rc-tran", RC_TRAN, ["v(out)"]);
@@ -4022,6 +4024,67 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
       });
     }
 
+    // --- Circuit_testing_v1/16_active_fourth_order_filter.asc authored .ac (4× buffered RC) ---
+    // Tau-owned ASC: VIN AC 1 + four cascaded R=1k/C=100n poles, each buffered by
+    // opamp2 Avol=1Meg (Tau rail-clamped tanh B_U*) + RLOAD=10k. Authored
+    // `.ac dec 40 10 1Meg`. Distinct from Educational opamp.asc (opamp.sub state-
+    // variable), Linkwitz, ct 03 single-pole RC, and ct 11 passive 8-pole ladder.
+    // Exact behavioral path — zero unresolved / substitutions. ct 19 INA .op
+    // deferred (LTspice OP fails to converge on same-deck tanh B_U* netlist).
+    // Left 100W/IRFP / Documents Draft* / Settings alone. Tip ct-stress pass=92 → **pass=93**.
+    {
+      expect(existsSync(CT_ACTIVE_FOURTH_ORDER_ASC), `missing ${CT_ACTIVE_FOURTH_ORDER_ASC}`).toBe(true);
+      const imported = importAsc(decodeSchematicText(readFileSync(CT_ACTIVE_FOURTH_ORDER_ASC)));
+      expect(imported.warnings).toEqual([]);
+      expect(imported.foreignSymbols).toEqual([]);
+      expect(imported.components.filter((c) => c.kind === "opamp")).toHaveLength(4);
+      const dirs = expandDirectiveLines(imported.directives);
+      const parsed = analysesFromDirectives(dirs);
+      expect(parsed.ac, "16_active_fourth_order_filter.asc must author .ac").toBeTruthy();
+      const params = buildParamScope(dirs);
+      const deck = buildSpiceDeck({
+        components: imported.components,
+        wires: imported.wires,
+        netLabels: imported.netLabels,
+        directives: dirs,
+        params,
+      }, {
+        kind: "ac",
+        startHz: parsed.ac!.startHz,
+        stopHz: parsed.ac!.stopHz,
+        pointsPerDecade: parsed.ac!.pointsPerDecade,
+      });
+      expect(deck.unresolvedSubckts ?? []).toEqual([]);
+      expect(deck.modelSubstitutions ?? []).toEqual([]);
+      expect(deck.netlist).toMatch(/^VIN\b.*\bAC\b/im);
+      expect(deck.netlist).toMatch(/^R1\b.+\b1000\b/im);
+      expect(deck.netlist).toMatch(/^C1\b.+\b1(?:\.0+0*1)?e-7\b/im);
+      expect(deck.netlist).toMatch(/^C4\b.+\b1(?:\.0+0*1)?e-7\b/im);
+      expect(deck.netlist).toMatch(/B_U1\b/i);
+      expect(deck.netlist).toMatch(/B_U4\b/i);
+      expect(deck.netlist).toMatch(/tanh\s*\(/i);
+      expect(deck.netlist).toMatch(/\.ac\s+dec\s+40\s+10\s+1000000\b/i);
+      expect(deck.netlist).not.toMatch(/^X\w*\b/im);
+      expect(deck.netlist).not.toMatch(/^\.model\b/im);
+      // Probe v(out) only — VIN is flat AC stimulus (hollow span).
+      const result = runPairedBatch("diff-ct-active-fourth-order-ac", deck.netlist, ["v(out)"]);
+      const lt = result.ltspice.get("v(out)")!;
+      const ng = result.ngspice.get("v(out)")!;
+      const comparison = compareWaveforms(ng.axis, ng.values, lt.axis, lt.values, {
+        rmsTolerance: 0.02,
+        maxTolerance: 0.05,
+      });
+      expect(comparison.pass, `ct-active-fourth-order ${JSON.stringify(comparison)}`).toBe(true);
+      expect(comparison.referenceRange, "ct-active-fourth-order v(out) non-hollow").toBeGreaterThan(0.1);
+      cells.push({
+        analysis: "ac",
+        circuit: "ct-active-fourth-order",
+        topology: "Circuit_testing_v1/16_active_fourth_order_filter.asc 4×R=1k/C=100n + opamp2 Avol (authored .ac dec 40 10–1Meg)",
+        status: "pass",
+        note: `v(out) nRms=${comparison.normalizedRms.toFixed(4)} nMax=${comparison.normalizedMax.toFixed(4)} span=${comparison.referenceRange.toFixed(3)}`,
+      });
+    }
+
     // --- Class-D AC/OP (authored analyses are .tran/.meas; add AC/OP for differential proof) ---
     {
       const ascPath = join(CLASSD_DIR, "class-d-starter.asc");
@@ -4318,6 +4381,6 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
     expect(passCount).toBeGreaterThanOrEqual(70);
     expect(siblingCount).toBe(5);
     expect(gapCount).toBe(0);
-    expect(report).toMatch(/SUMMARY pass=92 sibling=5 gap=0/);
+    expect(report).toMatch(/SUMMARY pass=93 sibling=5 gap=0/);
   }, 240_000);
 });
