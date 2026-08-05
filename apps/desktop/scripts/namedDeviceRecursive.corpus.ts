@@ -472,8 +472,25 @@ describe.skipIf(corpus.length === 0)("named-device recursive exact-model %", () 
         }) === "refuse"
       );
       const buckets = new Map<string, { count: number; samples: string[] }>();
+      const pathBuckets = new Map<string, number>();
+      const pathFamily = (file: string): string => {
+        const n = file.replace(/\\/g, "/").toLowerCase();
+        if (n.includes("/applications/") || n.includes("examples/applications/")) return "Applications";
+        if (n.includes("/fra/") || n.includes("examples/fra/")) return "FRA";
+        if (n.includes("/educational/") || n.includes("examples/educational/")) return "Educational";
+        if (n.includes("/powerproducts/") || n.includes("examples/powerproducts/")) return "PowerProducts";
+        if (n.startsWith("ltspice_export/") || n.includes("/ltspice_export/")) return "Downloads/LTspice_export";
+        if (n.startsWith("ltspice/") || n.includes("documents/ltspice")) return "Documents/LTspice";
+        return "other";
+      };
+      const isNoEquiv = (err: string) =>
+        /no electrically equivalent Tau model/i.test(err);
+      let noEquivCount = 0;
       for (const entry of refused) {
         const err = entry.row.error ?? "(no error)";
+        if (isNoEquiv(err)) noEquivCount += 1;
+        const fam = pathFamily(entry.row.file);
+        pathBuckets.set(fam, (pathBuckets.get(fam) ?? 0) + 1);
         let key = err;
         if (err.startsWith("import: ")) key = `import: ${err.slice(8, 80)}`;
         else if (err.startsWith("validate: ")) key = `validate: ${err.slice(10, 100)}`;
@@ -493,14 +510,42 @@ describe.skipIf(corpus.length === 0)("named-device recursive exact-model %", () 
         buckets.set(key, slot);
       }
       const ranked = [...buckets.entries()].sort((a, b) => b[1].count - a[1].count);
+      const pathRanked = [...pathBuckets.entries()].sort((a, b) => b[1] - a[1]);
+      const otherClasses = ranked.filter(([key]) => !isNoEquiv(key));
       // eslint-disable-next-line no-console
       console.log(`\nREFUSE TRIAGE (${refused.length} files, ${ranked.length} classes):\n`);
+      // eslint-disable-next-line no-console
+      console.log(
+        `  summary: no-electrically-equivalent=${noEquivCount} other-refuse=${refused.length - noEquivCount}`,
+      );
+      // eslint-disable-next-line no-console
+      console.log("  by path family:");
+      for (const [fam, count] of pathRanked) {
+        // eslint-disable-next-line no-console
+        console.log(`    ${count}× ${fam}`);
+      }
+      // eslint-disable-next-line no-console
+      console.log("  top message classes:");
       for (const [key, info] of ranked.slice(0, 40)) {
         // eslint-disable-next-line no-console
         console.log(`  ${info.count}× ${key}`);
         for (const sample of info.samples) {
           // eslint-disable-next-line no-console
           console.log(`      e.g. ${sample}`);
+        }
+      }
+      if (otherClasses.length > 0) {
+        // eslint-disable-next-line no-console
+        console.log(
+          `\n  non-no-equiv classes (${otherClasses.length}; full list — NIGBT/Chan/FRA leftovers):\n`,
+        );
+        for (const [key, info] of otherClasses) {
+          // eslint-disable-next-line no-console
+          console.log(`  ${info.count}× ${key}`);
+          for (const sample of info.samples) {
+            // eslint-disable-next-line no-console
+            console.log(`      e.g. ${sample}`);
+          }
         }
       }
     }

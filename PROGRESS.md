@@ -1,13 +1,61 @@
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 ~12:50 CDT**
+**Status: DONE - 2026-08-05 ~13:05 CDT**
 
-Unit: Differential SoftDiodeRecovery Vp=0 → **pass=104**
-SHIPPABLE? **NO**
+Unit: Named-device wall triage refresh — no honest plaintext climb left;
+enriched `NAMED_DEVICE_REFUSE_TRIAGE` (path family + non-no-equiv);
+`NAMED-DEVICE-WALL.md` + Desktop mirror from tip stdout (48.1% held).
+DoD ND box stays ⬜. SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
 
+
+---
+
+### 2026-08-05 — Named-device wall triage refresh (§DoD)
+
+**What I did**
+- Re-measured `NAMED_DEVICE_REFUSE_TRIAGE=1 scripts/named-device-fidelity.sh`
+  on tip lineage after `992f594`: exact-rate **48.1%** held
+  (`exact=1222` / `refuse=1319` / `silent=0` / `hard-failure=0` /
+  `encrypted-excluded=1471`).
+- Enriched refuse triage stdout: `no-electrically-equivalent=1318` /
+  `other-refuse=1` (Chan); path family **Applications 1312 / FRA 5 /
+  Educational 2** (IGBT NIGBT + Chan).
+- Confirmed **no honest plaintext exact-map cluster**: Downloads/Docs
+  sibling-`.lib` leftovers = TIP121/TIP127 only (already exact);
+  Applications plaintext `.lib` twins (MAX44245, ADA4177, …) already exact.
+- Refreshed `NAMED-DEVICE-WALL.md` + `~/Desktop/TAU-NAMED-DEVICE-WALL.md`
+  with triage tables. Did **not** decrypt; did **not** check ND≥95% box.
+
+**Exact stdout**
+
+```
+NAMED-DEVICE: exact=2 refuse=4 silent=0
+NAMED-DEVICE-RECURSIVE: unencrypted=2541 exact=1222 refuse=1319 silent=0
+  hard-failure=0 encrypted-excluded=1471 exact-rate=48.1%
+REFUSE TRIAGE: no-electrically-equivalent=1318 other-refuse=1
+  by path family: Applications 1312 · FRA 5 · Educational 2
+```
+
+**Files**
+- `apps/desktop/scripts/namedDeviceRecursive.corpus.ts` (triage enrichment)
+- `NAMED-DEVICE-WALL.md`, `~/Desktop/TAU-NAMED-DEVICE-WALL.md`
+- `FEATURE_PARITY.md`, `PROGRESS.md`, `AGENTS.md` (pointer only if needed)
+
+**Tests**
+- `NAMED_DEVICE_REFUSE_TRIAGE=1 bash scripts/named-device-fidelity.sh`
+- `pnpm -C apps/desktop typecheck` + focused gates
+
+**Parity items**
+- ND wall triage improved; box stays ⬜. SHIPPABLE? NO
+
+**Next step**
+- Omar plaintext ADI/LTC install OR other open DoD boxes. Never decrypt /
+  never weaken Chan/NIGBT/FRA / never denominator games.
+
+SHIPPABLE? **NO**
 
 ---
 

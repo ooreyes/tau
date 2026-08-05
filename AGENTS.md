@@ -199,8 +199,10 @@ account and sign/notarize/ship.
       refuse. Full unique-leaf probe 33.4%/enc=2781 remains retracted
       (denominator game). Never silent substitution. ≥95% exact-rate **not**
       met without Omar installing plaintext ADI/LTC macromodels — wall:
-      `NAMED-DEVICE-WALL.md` / `~/Desktop/TAU-NAMED-DEVICE-WALL.md`. DoD box
-      stays unchecked. SHIPPABLE? **NO**.
+      `NAMED-DEVICE-WALL.md` / `~/Desktop/TAU-NAMED-DEVICE-WALL.md` (triage
+      refresh: Applications 1312 / FRA 5 / Educational 2; no-equiv=1318 /
+      other=1 Chan; no honest climb left). DoD box stays unchecked.
+      SHIPPABLE? **NO**.
 - [ ] **Broad differential parity, not a synthetic `.op` proxy:** the acceptance
       runner executes each circuit's authored `.tran` / `.ac` / `.dc` / `.op` /
       `.noise` / `.tf` / `.step` / `.meas` analyses and compares numeric outputs
