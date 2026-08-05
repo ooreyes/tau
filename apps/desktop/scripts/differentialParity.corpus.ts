@@ -45,6 +45,7 @@ const CLASSD_DIR = join(REPO_ROOT, "examples", "class-d-amplifier");
 const EDU = join(homedir(), "Documents", "LTspice", "examples", "Educational");
 const CURVETRACE_ASC = join(EDU, "curvetrace.asc");
 const NOISEFIGURE_ASC = join(EDU, "NoiseFigure.asc");
+const NOISE_ASC = join(EDU, "noise.asc");
 const STEPTEMP_ASC = join(EDU, "steptemp.asc");
 const STEPMODELPARAM_ASC = join(EDU, "stepmodelparam.asc");
 const COLPITTS_ASC = process.env.COLPITTS_ASC ?? join(EDU, "colpits.asc");
@@ -192,7 +193,8 @@ function withAcStimulus(netlist: string): string {
 describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential parity matrix", () => {
   const cells: DifferentialCell[] = [];
 
-  it("matches RC .tran/.ac/.meas, divider analyses, .step families, curvetrace, stepmodelparam, NoiseFigure, Colpitts AC, Class-D AC/OP/DC", () => {
+  it("matches RC .tran/.ac/.meas, divider analyses, .step families, curvetrace, stepmodelparam, NoiseFigure, noise.asc, Colpitts AC, Class-D AC/OP/DC", () => {
+    let classDNoiseTfGapNote: string | undefined;
     // --- TRAN (also covered by waveformParity; re-assert here so this file is self-sufficient) ---
     {
       const result = runPairedBatch("diff-rc-tran", RC_TRAN, ["v(out)"]);
@@ -701,6 +703,62 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
       });
     }
 
+    // --- Educational noise.asc (multi-stage amp; V3 AC 1 stimulus) ---
+    {
+      expect(existsSync(NOISE_ASC), `missing ${NOISE_ASC}`).toBe(true);
+      const imported = importAsc(decodeSchematicText(readFileSync(NOISE_ASC)));
+      expect(imported.warnings).toEqual([]);
+      const parsed = analysesFromDirectives(imported.directives);
+      expect(parsed.noise, "noise.asc must author .noise").toBeTruthy();
+      const params = buildParamScope(imported.directives);
+      const deck = buildSpiceDeck({
+        components: imported.components,
+        wires: imported.wires,
+        netLabels: imported.netLabels,
+        directives: imported.directives,
+        params,
+      }, {
+        kind: "noise",
+        output: { node: parsed.noise!.output.pos, refNode: parsed.noise!.output.neg },
+        source: parsed.noise!.source,
+        startHz: parsed.noise!.sweep.startHz,
+        stopHz: parsed.noise!.sweep.stopHz,
+        pointsPerDecade: parsed.noise!.sweep.pointsPerDecade,
+      });
+      expect(deck.unresolvedSubckts).toEqual([]);
+      expect(deck.netlist).toContain("2N3904");
+      expect(deck.netlist).toContain("2N2219A");
+      const result = runPairedBatch("diff-edu-noise", deck.netlist, [], {
+        skipSave: true,
+        extract: ["V(onoise)", "V(inoise)"],
+        ngspiceAliases: {
+          "V(onoise)": "onoise_spectrum",
+          "V(inoise)": "inoise_spectrum",
+        },
+      });
+      const ltO = result.ltspice.get("V(onoise)")!;
+      const ngO = result.ngspice.get("V(onoise)")!;
+      const cmpO = compareWaveforms(ngO.axis, ngO.values, ltO.axis, ltO.values, {
+        rmsTolerance: 0.02,
+        maxTolerance: 0.05,
+      });
+      expect(cmpO.pass, JSON.stringify(cmpO)).toBe(true);
+      const ltI = result.ltspice.get("V(inoise)")!;
+      const ngI = result.ngspice.get("V(inoise)")!;
+      const cmpI = compareWaveforms(ngI.axis, ngI.values, ltI.axis, ltI.values, {
+        rmsTolerance: 0.02,
+        maxTolerance: 0.05,
+      });
+      expect(cmpI.pass, JSON.stringify(cmpI)).toBe(true);
+      cells.push({
+        analysis: "noise",
+        circuit: "noise-amp",
+        topology: "Educational noise.asc multi-stage BJT amp (V3 AC stim)",
+        status: "pass",
+        note: `onoise/inoise nRms=${cmpO.normalizedRms.toFixed(4)}/${cmpI.normalizedRms.toFixed(4)} oct 1–20kHz`,
+      });
+    }
+
     // --- Educational Colpitts AC (fixture is .tran-authored; add AC stimulus for small-signal) ---
     {
       expect(existsSync(COLPITTS_ASC), `missing ${COLPITTS_ASC}`).toBe(true);
@@ -850,6 +908,71 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
         status: "pass",
         note: `V(vo) nRms=${dcComparison.normalizedRms.toFixed(4)} nMax=${dcComparison.normalizedMax.toFixed(4)}`,
       });
+
+      // Honest probe: synthetic .noise/.tf (fixture is .tran/.meas-authored only).
+      classDNoiseTfGapNote =
+        "AC/OP/DC (V1 rail sweep) proven; authored analyses remain .tran/.meas";
+      {
+        const noiseDeck = buildSpiceDeck({
+          components: imported.components,
+          wires: imported.wires,
+          netLabels: imported.netLabels,
+          directives: imported.directives,
+          params,
+        }, {
+          kind: "noise",
+          output: { node: "vo", refNode: "0" },
+          source: "V1",
+          startHz: 100,
+          stopHz: 100e3,
+          pointsPerDecade: 10,
+        });
+        const noiseNetlist = noiseDeck.netlist
+          .split(/\r?\n/)
+          .map((line) => {
+            if (/^V1\b/i.test(line.trim()) && !/\bAC\b/i.test(line)) {
+              return `${line.trimEnd()} AC 1`;
+            }
+            return line;
+          })
+          .join("\n");
+        const noiseResult = runPairedBatch("diff-classd-noise-probe", noiseNetlist, [], {
+          skipSave: true,
+          extract: ["V(onoise)"],
+          ngspiceAliases: { "V(onoise)": "onoise_spectrum" },
+        });
+        const ltNoise = noiseResult.ltspice.get("V(onoise)")!;
+        const ngNoise = noiseResult.ngspice.get("V(onoise)")!;
+        const noiseCmp = compareWaveforms(
+          ngNoise.axis,
+          ngNoise.values,
+          ltNoise.axis,
+          ltNoise.values,
+          { rmsTolerance: 0.02, maxTolerance: 0.05 },
+        );
+        const noiseProbe = noiseCmp.pass
+          ? `synthetic .noise V(vo)/V1 nRms=${noiseCmp.normalizedRms.toFixed(4)} passes`
+          : `synthetic .noise V(vo)/V1 nRms=${noiseCmp.normalizedRms.toFixed(4)} nMax=${noiseCmp.normalizedMax.toFixed(4)} fails`;
+        const tfDeck = buildSpiceDeck({
+          components: imported.components,
+          wires: imported.wires,
+          netLabels: imported.netLabels,
+          directives: imported.directives,
+          params,
+        }, {
+          kind: "tf",
+          output: { kind: "voltage", node: "vo", refNode: "0" },
+          source: "V1",
+        });
+        const tfResult = runPairedTransferFunction("diff-classd-tf-probe", tfDeck.netlist);
+        const ltGain = pickScalar(tfResult.ltspice, ["transfer_function"]);
+        const ngGain = pickScalar(tfResult.ngspice, ["transfer_function"]);
+        const tfRel = relativeError(ngGain, ltGain);
+        const tfProbe = tfRel <= 1e-3
+          ? `synthetic .tf V(vo)/V1 gain≈${ngGain.toExponential(3)} rel=${tfRel.toExponential(2)} passes`
+          : `synthetic .tf V(vo)/V1 gain lt=${ltGain} ng=${ngGain} rel=${tfRel.toExponential(2)} fails`;
+        classDNoiseTfGapNote = `${classDNoiseTfGapNote} — probe: ${noiseProbe}; ${tfProbe} (not promoted; no authored .noise/.tf)`;
+      }
     }
 
     // --- Native single-deck `.step` card: LTspice stepped OP vs ngspice step_expand ---
@@ -949,7 +1072,7 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
         circuit: "class-d",
         topology: "Class-D noise/tf",
         status: "gap",
-        note: "AC/OP/DC (V1 rail sweep) proven; authored analyses remain .tran/.meas — noise/tf not differentially proven",
+        note: classDNoiseTfGapNote ?? "AC/OP/DC (V1 rail sweep) proven; authored analyses remain .tran/.meas — noise/tf not differentially proven",
       },
     );
 
@@ -964,7 +1087,7 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
     expect(report).toContain("GAPS (explicit):");
     const passCount = cells.filter((cell) => cell.status === "pass").length;
     const gapCount = cells.filter((cell) => cell.status === "gap").length;
-    expect(passCount).toBeGreaterThanOrEqual(21);
+    expect(passCount).toBeGreaterThanOrEqual(22);
     expect(gapCount).toBeGreaterThanOrEqual(1);
   }, 240_000);
 });

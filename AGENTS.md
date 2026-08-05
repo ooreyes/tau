@@ -175,13 +175,13 @@ account and sign/notarize/ship.
       with LTspice over a representative device and topology matrix.
       **Partial (2026-08-04):** `scripts/differential-parity.sh` +
       `differentialParity.corpus.ts` (also under `dod-parity.sh`) prove
-      pass=21 · sibling=5 · gap=1 on stdout: prior RC/divider/curvetrace/
-      NoiseFigure cells plus expanded `.step` temp/source/nested, Educational
-      steptemp OP + stepmodelparam Vaf expand, native emitNativeStep `.step`
-      card vs ngspice step_expand, Colpitts AC, Class-D AC/OP/DC (V1 rail).
-      Sibling TRAN/meas proofs remain Colpitts/Class-D/Efficiency/special
-      devices. Remaining gap: Class-D noise/tf. Broad topology matrix still
-      open — DoD box stays unchecked.
+      pass=22 · sibling=5 · gap=1 on stdout: prior RC/divider/curvetrace/
+      NoiseFigure + Educational noise.asc, expanded `.step` families,
+      steptemp/stepmodelparam, native emitNativeStep `.step` card, Colpitts
+      AC, Class-D AC/OP/DC (V1 rail). Sibling TRAN/meas proofs remain
+      Colpitts/Class-D/Efficiency/special devices. Remaining gap: Class-D
+      noise/tf (synthetic probes pass but fixture is .tran/.meas-authored).
+      Broad topology matrix still open — DoD box stays unchecked.
 - [ ] **AI is production-safe and genuinely circuit-aware:** a supported OpenAI
       path (Tau OAuth/backend or native BYOK with separate API billing) keeps
       service credentials out of the renderer, obtains explicit cloud-data

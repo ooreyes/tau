@@ -9,25 +9,29 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 00:25 CDT** (Overnight DoD — OTA linear)
+**Status: DONE - 2026-08-05 00:32 CDT**
 
-Unit: LTspice OTA `linear` → pin-faithful unbounded `Io = G·Vdiff` (omit Iout;
-not hard-clip, not tanh) when Vhigh/Vlow infinite. Finite-V linear stays
-honest refuse. Never silent tanh Iout. Never encrypted denominator games.
-
-**Measured tip stdout (truth):**
-```
-NAMED-DEVICE: exact=2 refuse=4 silent=0
-NAMED-DEVICE-RECURSIVE: unencrypted=2539 exact=550 refuse=1989 silent=0 hard-failure=0 encrypted-excluded=1473 exact-rate=21.7%
-```
-Before (same session, tip revert): 2538/439/2099/0/1474 @ 17.3%. After: exact
-+111 (21.7%). ≥95% unchecked. SHIPPABLE? **NO**.
-
-**Forbidden lanes left alone:** Settings* · AssistantPanel · ShellPanels · App.css.
+Unit: Educational noise.asc differential → **SUMMARY pass=22 sibling=5 gap=1**.
+Class-D noise/tf synthetic probes pass but stay gap (no authored .noise/.tf).
+ND tip 21.7%. Freshman AI untouched. SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
 ---
+
+### 2026-08-05 — Educational noise.asc differential → pass=22 (§DoD)
+
+**What I did**
+- Mirrored NoiseFigure pattern for Educational `noise.asc` (multi-stage BJT;
+  authored `.noise V(out) V3 oct …`); onoise nRms=0, inoise nRms≈0.0046.
+- Class-D synthetic .noise/.tf probes pass vs LTspice but not promoted
+  (fixture is .tran/.meas-authored only); gap note records probe results.
+
+**Proof**
+- vitest differentialParity → SUMMARY pass=22 sibling=5 gap=1
+
+**Next**
+- Broaden matrix / REF model maps for named-device rate; Freshman AI after commit
 
 ### 2026-08-05 — OTA linear unbounded map → named-device 21.7% (§DoD)
 
