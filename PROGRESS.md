@@ -9,21 +9,13 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-04 23:42 CDT**
+**Status: IN PROGRESS - 2026-08-04 23:43 CDT**
 
-Unit: Unique-leaf `.asy` basename resolve + ModelFile candidate helper; re-measure
-named-device. **exact-rate 33.3%**, HF=0, silent=0. ≥95% unchecked. SHIPPABLE? **NO**.
+Unit: Close differential Educational steptemp / stepmodelparam gap (or prove
+honest remaining gap). Re-run `scripts/differential-parity.sh`; stdout truth.
+Shippable? **NO**.
 
-**Measured** (`scripts/named-device-fidelity.sh`):
-`NAMED-DEVICE: exact=2 refuse=4 silent=0`
-`NAMED-DEVICE-RECURSIVE: unencrypted=1230 exact=410 refuse=820 silent=0
-hard-failure=0 encrypted-excluded=2782 exact-rate=33.3%`
-
-Prior tonight: HF 103→0; exact-rate 15.1%→15.7%→**33.3%** (unique basename +
-honest encrypted exclude). Do not revert unique-leaf resolve without measuring.
-
-**Lanes:** Overnight DoD owns `engine/**` `io/ascImport*` `io/ltspice*` `scripts/*named*`.
-Freshman AI / Design ShellPanels LOCKED.
+Prior named-device: exact-rate **33.3%** HF=0 silent=0.
 
 **SHIPPABLE?** **NO**
 
