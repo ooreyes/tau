@@ -1649,7 +1649,7 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   oscillator by amplitude, RMS, and frequency. All four proofs pass headlessly.
   **Differential matrix slice (2026-08-05):** `scripts/differential-parity.sh`
   (wired into `dod-parity.sh`) prints pass/sibling/gap coverage to stdout
-  (truth). Gap-closure → **pass=93 · sibling=5 · gap=0**: prior cells through
+  (truth). Gap-closure → **pass=94 · sibling=5 · gap=0**: prior cells through
   SampleAndHold plus Educational/contrib/**elip_grd.asc** authored `.ac`
   (elliptic RLC+K1; S21/S11 nRms≈0.0057/0.0039 @ maxTol=0.10 peak) plus
   Documents/LTspice/**Draft3.asc** authored `.ac` (series RLC L/C/R; v(vout)
@@ -1700,8 +1700,11 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   synthetic RC_AC) plus
   Circuit_testing_v1/**16_active_fourth_order_filter.asc** authored `.ac`
   (4×R=1k/C=100n buffered poles + opamp2 Avol tanh; v(out) nRms=0 / nMax=0
-  span≈1.00; ≠ Educational opamp.sub / ct 03 / ct 11). ct 19 INA `.op` deferred
-  (LTspice OP fails on same-deck tanh B_U*).
+  span≈1.00; ≠ Educational opamp.sub / ct 03 / ct 11) plus
+  Circuit_testing_v1/**18_full_bridge_power_supply.asc** authored `.tran`
+  (1N4007 bridge + 2200u Rser=80m + RLOAD=100; v(vdc)/v(ac1) nRms≈1e-4;
+  .meas VDC_AVG/VDC_PP relErr≤2%; ≠ ct 04 diode DC / Draft1 diode–L–R).
+  ct 19 INA `.op` deferred (LTspice OP fails on same-deck tanh B_U*).
   gr_del
   deferred (all-pass |V|≈1
   hollow). TwoTau / Draft8 Laplace brace-mangle deferred. Draft6 AD823 /

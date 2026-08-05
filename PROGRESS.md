@@ -1,9 +1,15 @@
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 06:58 CDT**
+**Status: DONE - 2026-08-05 ~07:05 CDT**
 
-Unit: Waveform DoD — **Ctrl+click avg/RMS over visible window**.
-Differential pass=93 · named-device 48.1%. Settings locked. SHIPPABLE? **NO**
+Unit: Circuit_testing_v1 `18_full_bridge_power_supply.asc` authored `.tran` + `.meas` → differential **pass=94**.
+```
+SUMMARY pass=94 sibling=5 gap=0
+tran ct-full-bridge … v(vdc) nRms=0.0001 nMax=0.0008 span=15.240
+```
+Named-device 48.1%. Worktree `Tau-wt-diff-92` rebased over Ctrl+click avg/RMS tip (`b6cf5fd`).
+ct 19 INA `.op` still deferred. Left Settings / IRFP / Draft* / ct 12–15 alone.
+SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
@@ -11,7 +17,31 @@ Differential pass=93 · named-device 48.1%. Settings locked. SHIPPABLE? **NO**
 
 ---
 
+### 2026-08-05 — ct 18_full_bridge_power_supply .tran → pass=94 (§DoD)
 
+**What I did**
+- Circuit_testing_v1 `18_full_bridge_power_supply.asc` authored `.tran 20u 120m`
+  (VAC SINE 17 V / 60 Hz + four 1N4007 bridge diodes + 2200u Rser=80m +
+  RLOAD=100): v(vdc)/v(ac1) vs LTspice nRms≈1e-4; `.meas` VDC_AVG/VDC_PP
+  relErr≤2%. Exact standardModels 1N4007 — zero unresolved/substitutions.
+  Distinct from ct 04 1N4148 DC, Documents Draft1 diode–L–R, ct 17 three-phase.
+  ct 19 INA `.op` still deferred. Left IRFP/Draft*/Settings alone. Rebased over
+  Bode phase + Ctrl+click avg/RMS waveform tips.
+
+**Files**
+- `apps/desktop/scripts/differentialParity.corpus.ts`
+- `FEATURE_PARITY.md`, `AGENTS.md`, `PROGRESS.md`
+
+**Tests**
+- `scripts/differential-parity.sh` → SUMMARY pass=94 sibling=5 gap=0
+- `pnpm -C apps/desktop typecheck` + `test` green (2745 passed)
+
+**Parity items**
+- Differential **pass=94** · named-device 48.1% · SHIPPABLE? NO
+
+**Next step**
+- ct 17 three-phase RLC, ct 12/13 buck/boost (named VDMOS), or Educational
+  non-wall leftovers. Leave ct19 OP / IRFP / Draft* / Settings alone.
 
 ### 2026-08-05 — ct 16_active_fourth_order_filter .ac → pass=93 (§DoD)
 

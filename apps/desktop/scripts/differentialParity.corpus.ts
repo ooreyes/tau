@@ -62,6 +62,8 @@ const CT_TRAN_RC_PULSE_ASC = join(REPO_ROOT, "Circuit_testing_v1", "02_tran_rc_p
 const CT_STRESS_RC_LADDER_ASC = join(REPO_ROOT, "Circuit_testing_v1", "11_stress_rc_ladder.asc");
 /** Tau Circuit_testing_v1 — four buffered RC poles + opamp2 Avol (≠ edu opamp.sub / ct 03/11). */
 const CT_ACTIVE_FOURTH_ORDER_ASC = join(REPO_ROOT, "Circuit_testing_v1", "16_active_fourth_order_filter.asc");
+/** Tau Circuit_testing_v1 — 1N4007 full-wave bridge + reservoir (≠ ct diode DC / Draft1 diode–L–R). */
+const CT_FULL_BRIDGE_ASC = join(REPO_ROOT, "Circuit_testing_v1", "18_full_bridge_power_supply.asc");
 const EDU = join(homedir(), "Documents", "LTspice", "examples", "Educational");
 const APP = join(homedir(), "Documents", "LTspice", "examples", "Applications");
 const DOC_LTSPICE = join(homedir(), "Documents", "LTspice");
@@ -4085,6 +4087,96 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
       });
     }
 
+    // --- Circuit_testing_v1/18_full_bridge_power_supply.asc authored .tran + .meas ---
+    // Tau-owned ASC: VAC SINE(0 17 60) + four 1N4007 bridge diodes + C=2200u
+    // Rser=80m reservoir + RLOAD=100. Authored `.tran 20u 120m` + `.meas
+    // VDC_AVG/VDC_PP … FROM=80m TO=120m`. Exact standardModels 1N4007 — zero
+    // unresolved / substitutions. Distinct from ct 04 1N4148 DC I–V, Documents
+    // Draft1 diode–L–R TRAN, and ct 17 three-phase RLC feeder. ct 19 INA .op
+    // still deferred (LTspice OP fails same-deck tanh). Left 100W/IRFP /
+    // Documents Draft* / Settings / ct 12–15 alone. Tip ct-active pass=93 → **pass=94**.
+    {
+      expect(existsSync(CT_FULL_BRIDGE_ASC), `missing ${CT_FULL_BRIDGE_ASC}`).toBe(true);
+      const imported = importAsc(decodeSchematicText(readFileSync(CT_FULL_BRIDGE_ASC)));
+      expect(imported.warnings).toEqual([]);
+      expect(imported.foreignSymbols).toEqual([]);
+      expect(imported.components.filter((c) => c.kind === "diode")).toHaveLength(4);
+      const dirs = expandDirectiveLines(imported.directives);
+      const parsed = analysesFromDirectives(dirs);
+      expect(parsed.tran, "18_full_bridge_power_supply.asc must author .tran").toBeTruthy();
+      const measLines = dirs.filter((d) => /^\.meas\b/i.test(d.trim()));
+      expect(measLines.length, "18_full_bridge must author .meas").toBeGreaterThanOrEqual(2);
+      expect(measLines.some((d) => /\bvdc_avg\b/i.test(d))).toBe(true);
+      expect(measLines.some((d) => /\bvdc_pp\b/i.test(d))).toBe(true);
+      const params = buildParamScope(dirs);
+      const deck = buildSpiceDeck({
+        components: imported.components,
+        wires: imported.wires,
+        netLabels: imported.netLabels,
+        directives: dirs,
+        params,
+      }, {
+        kind: "tran",
+        stopTime: parsed.tran!.stopTime,
+        steps: Math.max(parsed.tran!.steps ?? 240, 5000),
+        startTime: parsed.tran!.startTime,
+        maxStep: parsed.tran!.maxStep,
+      });
+      expect(deck.unresolvedSubckts ?? []).toEqual([]);
+      expect(deck.modelSubstitutions ?? []).toEqual([]);
+      expect(deck.netlist).toMatch(/\.model\s+1N4007\s+D\b/i);
+      expect(deck.netlist).toMatch(/^VAC\b.+\bSIN\(/im);
+      expect(deck.netlist).toMatch(/^D1\b.+\b1N4007\b/im);
+      expect(deck.netlist).toMatch(/^D4\b.+\b1N4007\b/im);
+      expect(deck.netlist).toMatch(/^C1\b.+\bvdc\b/im);
+      expect(deck.netlist).toMatch(/^RLOAD\b.+\b100\b/im);
+      expect(deck.netlist).toMatch(/\.tran\b/i);
+      expect(deck.netlist).not.toMatch(/^X\w*\b/im);
+      const probes = ["v(vdc)", "v(ac1)"] as const;
+      const result = runPairedBatch("diff-ct-full-bridge-tran", deck.netlist, [...probes], {
+        measurements: measLines,
+      });
+      const memberNotes: string[] = [];
+      for (const probe of probes) {
+        const lt = result.ltspice.get(probe)!;
+        const ng = result.ngspice.get(probe)!;
+        const comparison = compareWaveforms(ng.axis, ng.values, lt.axis, lt.values, {
+          rmsTolerance: 0.02,
+          maxTolerance: 0.05,
+        });
+        expect(comparison.pass, `ct-full-bridge ${probe} ${JSON.stringify(comparison)}`).toBe(true);
+        expect(comparison.referenceRange, `ct-full-bridge ${probe} non-hollow`).toBeGreaterThan(10);
+        memberNotes.push(
+          `${probe} nRms=${comparison.normalizedRms.toFixed(4)} nMax=${comparison.normalizedMax.toFixed(4)} span=${comparison.referenceRange.toFixed(3)}`,
+        );
+      }
+      const vdc = result.ngspice.get("v(vdc)")!;
+      const tauMeas = runMeasurements(measLines, {
+        times: vdc.axis,
+        traces: [{ id: "vdc", label: "V(VDC)", values: vdc.values }],
+      });
+      const byName = (name: string) =>
+        tauMeas.find((row) => row.name.toLowerCase() === name.toLowerCase())?.value;
+      const ltAvg = measurementValue(result.ltspiceLog, "vdc_avg");
+      const ltPp = measurementValue(result.ltspiceLog, "vdc_pp");
+      const ngAvg = byName("vdc_avg");
+      const ngPp = byName("vdc_pp");
+      expect(ngAvg, JSON.stringify(tauMeas)).toEqual(expect.any(Number));
+      expect(ngPp, JSON.stringify(tauMeas)).toEqual(expect.any(Number));
+      expect(relativeError(ngAvg!, ltAvg), `ct-full-bridge VDC_AVG lt=${ltAvg} ng=${ngAvg}`).toBeLessThanOrEqual(0.02);
+      expect(relativeError(ngPp!, ltPp), `ct-full-bridge VDC_PP lt=${ltPp} ng=${ngPp}`).toBeLessThanOrEqual(0.02);
+      memberNotes.push(
+        `VDC_AVG lt=${ltAvg.toFixed(4)} ng=${ngAvg!.toFixed(4)}; VDC_PP lt=${ltPp.toFixed(4)} ng=${ngPp!.toFixed(4)}`,
+      );
+      cells.push({
+        analysis: "tran",
+        circuit: "ct-full-bridge",
+        topology: "Circuit_testing_v1/18_full_bridge_power_supply.asc 1N4007 bridge + 2200u/100Ω (authored .tran 20u–120m; .meas VDC_AVG/PP)",
+        status: "pass",
+        note: memberNotes.join("; "),
+      });
+    }
+
     // --- Class-D AC/OP (authored analyses are .tran/.meas; add AC/OP for differential proof) ---
     {
       const ascPath = join(CLASSD_DIR, "class-d-starter.asc");
@@ -4381,6 +4473,6 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
     expect(passCount).toBeGreaterThanOrEqual(70);
     expect(siblingCount).toBe(5);
     expect(gapCount).toBe(0);
-    expect(report).toMatch(/SUMMARY pass=93 sibling=5 gap=0/);
+    expect(report).toMatch(/SUMMARY pass=94 sibling=5 gap=0/);
   }, 240_000);
 });

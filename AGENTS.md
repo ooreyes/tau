@@ -174,7 +174,7 @@ account and sign/notarize/ship.
       with LTspice over a representative device and topology matrix.
       **Partial (2026-08-05):** `scripts/differential-parity.sh` +
       `differentialParity.corpus.ts` (also under `dod-parity.sh`) prove
-      pass=93 · sibling=5 · gap=0 on stdout: prior cells through SampleAndHold +
+      pass=94 · sibling=5 · gap=0 on stdout: prior cells through SampleAndHold +
       Educational/contrib/elip_grd.asc authored `.ac` (elliptic RLC + K1; S21/S11
       nRms≈0.0057/0.0039 @ maxTol=0.10 peak) + Documents/LTspice/Draft3.asc
       authored `.ac` (series RLC L/C/R; v(vout) nRms=0 / nMax=0 span≈1.04) +
@@ -223,8 +223,11 @@ account and sign/notarize/ship.
       synthetic RC_AC) +
       Circuit_testing_v1/16_active_fourth_order_filter.asc authored `.ac`
       (4×R=1k/C=100n + opamp2 Avol tanh B_U*; v(out) nRms=0 / nMax=0
-      span≈1.00; ≠ Educational opamp.sub / ct 03 / ct 11). ct 19 INA `.op`
-      deferred (LTspice OP fails on same-deck tanh B_U*).
+      span≈1.00; ≠ Educational opamp.sub / ct 03 / ct 11) +
+      Circuit_testing_v1/18_full_bridge_power_supply.asc authored `.tran`
+      (1N4007 bridge + 2200u Rser + RLOAD=100; v(vdc)/v(ac1) nRms≈1e-4;
+      .meas VDC_AVG/VDC_PP relErr≤2%; ≠ ct 04 diode DC / Draft1 diode–L–R).
+      ct 19 INA `.op` deferred (LTspice OP fails on same-deck tanh B_U*).
       gr_del deferred (all-pass |V|≈1 hollow magnitude). TwoTau deferred
       (LTspice rejects Tau s_xfer same-deck). Draft8 Laplace brace-mangle
       deferred. Draft6 AD823 / Draft10 UOA2 same-deck not landed. HalfSlope
