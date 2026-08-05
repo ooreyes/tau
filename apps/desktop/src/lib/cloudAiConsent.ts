@@ -43,4 +43,9 @@ export function hasCloudAiConsent(): boolean {
   return loadCloudAiConsent().consented;
 }
 
+/** Fail-closed gate for cloud providers — returns null when consent is present. */
+export function cloudAiConsentRefusal(): string | null {
+  return hasCloudAiConsent() ? null : CLOUD_AI_CONSENT_REQUIRED;
+}
+
 export { CHANGE_EVENT as CLOUD_AI_CONSENT_CHANGE_EVENT };

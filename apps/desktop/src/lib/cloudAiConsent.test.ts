@@ -1,5 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { hasCloudAiConsent, loadCloudAiConsent, saveCloudAiConsent } from "./cloudAiConsent";
+import {
+  CLOUD_AI_CONSENT_REQUIRED,
+  cloudAiConsentRefusal,
+  hasCloudAiConsent,
+  loadCloudAiConsent,
+  saveCloudAiConsent,
+} from "./cloudAiConsent";
 
 describe("cloud AI consent", () => {
   beforeEach(() => {
@@ -15,11 +21,13 @@ describe("cloud AI consent", () => {
   it("defaults to no consent so circuit data stays local until the student opts in", () => {
     expect(loadCloudAiConsent()).toEqual({ consented: false });
     expect(hasCloudAiConsent()).toBe(false);
+    expect(cloudAiConsentRefusal()).toBe(CLOUD_AI_CONSENT_REQUIRED);
   });
 
   it("round-trips an explicit consent", () => {
     saveCloudAiConsent({ consented: true });
     expect(hasCloudAiConsent()).toBe(true);
+    expect(cloudAiConsentRefusal()).toBeNull();
     saveCloudAiConsent({ consented: false });
     expect(hasCloudAiConsent()).toBe(false);
   });
