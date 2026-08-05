@@ -9,20 +9,54 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 02:52 CDT**
+**Status: DONE - 2026-08-05 02:55 CDT**
 
-Unit: Educational `P2.asc` TRAN (+ tip also carries `stepAC.asc` AC) → differential **pass=47**.
+Unit: Applications `2ndOrderLowpass.asc` authored `.ac` G-source RLC → differential **pass=48**.
 ```
-SUMMARY pass=47 sibling=5 gap=0
-tran p2 … v(out) nRms≈0.0065 span≈2.17
-ac stepac … v(out)/v(in) nRms=0
+SUMMARY pass=48 sibling=5 gap=0
+ac 2ndorder-lp … v(2) nRms=0 span=1.144
 ```
-100W IRFP refuse. NE555/LoopGain blocked. Named-device 47.9%. SHIPPABLE? **NO**
+Collision-avoided Staff EE 100W/P2/160. NE555/LoopGain/HalfSlope untouched. Named-device 47.9%. SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
 
+
 ---
+
+
+### 2026-08-05 — 2ndOrderLowpass.asc G-source RLC AC → pass=48 (§DoD)
+
+**What I did**
+- Applications `2ndOrderLowpass.asc` authored `.ac dec 101 100–10k`: G-source
+  RLC lowpass with `.param f0/Q/H/R1/L1/C1` baked. Probe v(2) vs LTspice
+  nRms=0 span≈1.144 (non-hollow). Zero modelSubstitutions / X-subckts.
+- Tip already carried P2+stepAC at pass=47; left Staff EE 100W/160 alone.
+  Never faked NE555/LoopGain/Vswitch/Howland/SoftDiode/HalfSlope/TLINE-inv/astable.
+
+**Exact stdout**
+```
+SUMMARY pass=48 sibling=5 gap=0
+ac 2ndorder-lp … v(2) nRms=0.0000 span=1.144
+```
+
+**Files**
+- `apps/desktop/scripts/differentialParity.corpus.ts`
+- `AGENTS.md`, `FEATURE_PARITY.md`, `PROGRESS.md`
+- `~/Desktop/TAU-MORNING-STATUS.md`
+
+**Tests**
+- `scripts/differential-parity.sh` → pass=48; typecheck; apps/desktop test
+
+**Parity items**
+- Differential 🟡 harness **pass=48 · sibling=5 · gap=0**; DoD broad box unchecked.
+- Named-device 🟡 **47.9%** unchanged. SHIPPABLE? NO
+
+**Next**
+- Applications 2ndOrderHighpass/Bandpass/Notch siblings, or other non-colliding
+  Educational authored analysis; never fake Vswitch/Howland/SoftDiode/HalfSlope;
+  leave Staff EE 100W/160 alone.
+
 
 ### 2026-08-05 — P2.asc parametric amp TRAN → pass=46 (§DoD)
 

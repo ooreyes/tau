@@ -1576,13 +1576,13 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   oscillator by amplitude, RMS, and frequency. All four proofs pass headlessly.
   **Differential matrix slice (2026-08-05):** `scripts/differential-parity.sh`
   (wired into `dod-parity.sh`) prints pass/sibling/gap coverage to stdout
-  (truth). Gap-closure → **pass=47 · sibling=5 · gap=0**: prior cells through
-  DCopPnt OP / audioamp / UHFpreamp / 1563 / LM308 / LM78XX / S-param plus
-  Educational P2.asc authored `.tran` (v(out) nRms≈0.0065) and stepAC.asc
-  authored `.ac` (.step C→50p; v(out)/v(in) nRms=0). NE555 miss; 100W IRFP not
-  bundled (refuse). HalfSlope Laplace stripped; SoftDiodeRecovery deferred;
-  BandGaps dc-temp miss; LoopGain/Electrometer LT1001 OTA wall; MC1648 deferred.
-  Harness-slice gaps closed; DoD broad-differential box remains open — see AGENTS.md.
+  (truth). Gap-closure → **pass=48 · sibling=5 · gap=0**: prior cells through
+  DCopPnt OP / audioamp / UHFpreamp / 1563 / LM308 / LM78XX / S-param / P2 /
+  stepAC plus Applications 2ndOrderLowpass.asc authored `.ac` (G-source RLC;
+  v(2) nRms=0). NE555 miss; 100W IRFP not bundled (refuse). HalfSlope Laplace
+  stripped; SoftDiodeRecovery deferred; BandGaps dc-temp miss; LoopGain/
+  Electrometer LT1001 OTA wall; MC1648 deferred. Harness-slice gaps closed;
+  DoD broad-differential box remains open — see AGENTS.md.
 - 🟡 Resolve a real device-model set — **common LTspice standard diodes/
   zeners/BJTs + the class-d power VDMOS pair bundled** (`engine/standardModels.ts`,
   real `standard.*` params, emitted by `buildSpiceDeck` when referenced by name).

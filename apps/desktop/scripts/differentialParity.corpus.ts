@@ -69,6 +69,7 @@ const ASC1563_ASC = join(EDU, "1563.asc");
 const SPARAM_ASC = join(EDU, "S-param.asc");
 const P2_ASC = join(EDU, "P2.asc");
 const STEPAC_ASC = join(EDU, "stepAC.asc");
+const LOGAMP_ASC = join(EDU, "logamp.asc");
 const STEPTEMP_ASC = join(EDU, "steptemp.asc");
 const STEPMODELPARAM_ASC = join(EDU, "stepmodelparam.asc");
 const COLPITTS_ASC = process.env.COLPITTS_ASC ?? join(EDU, "colpits.asc");
@@ -216,7 +217,7 @@ function withAcStimulus(netlist: string): string {
 describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential parity matrix", () => {
   const cells: DifferentialCell[] = [];
 
-  it("matches RC .tran/.ac/.meas, divider analyses, .step families, curvetrace, stepmodelparam, NoiseFigure, noise.asc, Colpitts/Clapp/Hartly AC, Cohn AC, MeasureBW AC, Transformer/Transformer2/IdealTransformer TRAN, notch/passive/butter/opamp/Linkwitz AC, LM741/LM308/LM78XX/P2 TRAN, GFT AC, DCopPnt OP, audioamp TRAN, UHFpreamp AC, 1563 AC, S-param AC, stepAC AC, Class-D AC/OP/DC/noise/tf", () => {
+  it("matches RC .tran/.ac/.meas, divider analyses, .step families, curvetrace, stepmodelparam, NoiseFigure, noise.asc, Colpitts/Clapp/Hartly AC, Cohn AC, MeasureBW AC, Transformer/Transformer2/IdealTransformer TRAN, notch/passive/butter/opamp/Linkwitz AC, LM741/LM308/LM78XX/P2/logamp TRAN, GFT AC, DCopPnt OP, audioamp TRAN, UHFpreamp AC, 1563 AC, S-param AC, stepAC AC, Class-D AC/OP/DC/noise/tf", () => {
     // --- TRAN (also covered by waveformParity; re-assert here so this file is self-sufficient) ---
     {
       const result = runPairedBatch("diff-rc-tran", RC_TRAN, ["v(out)"]);
@@ -1457,6 +1458,59 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
       });
     }
 
+
+    // --- Educational logamp.asc authored .tran (log amp via opamp.sub; exact include) ---
+    // Pierce/phaseshift/phaseshift2 oscillator phase miss vs LTspice; TwoTau LTspice
+    // token fail; colpits2 LTspice fail — fail-closed. Prefer logamp plaintext opamp.sub.
+    {
+      expect(existsSync(LOGAMP_ASC), `missing ${LOGAMP_ASC}`).toBe(true);
+      const imported = importAsc(decodeSchematicText(readFileSync(LOGAMP_ASC)));
+      expect(imported.warnings).toEqual([]);
+      const dirs = expandDirectiveLines(imported.directives);
+      const parsed = analysesFromDirectives(dirs);
+      expect(parsed.tran, "logamp.asc must author .tran").toBeTruthy();
+      expect(dirs.some((d) => /\.include\s+opamp\.sub\b/i.test(d))).toBe(true);
+      const params = buildParamScope(dirs);
+      const deck = buildSpiceDeck({
+        components: imported.components,
+        wires: imported.wires,
+        netLabels: imported.netLabels,
+        directives: dirs,
+        params,
+      }, {
+        kind: "tran",
+        stopTime: parsed.tran!.stopTime,
+        steps: parsed.tran!.steps ?? 2000,
+      });
+      expect(deck.unresolvedSubckts ?? []).toEqual([]);
+      expect(deck.modelSubstitutions ?? []).toEqual([]);
+      expect(deck.netlist).toMatch(/\.subckt\s+opamp\b/i);
+      expect(deck.netlist).toMatch(/^XU\d+\b.+\bopamp\b/im);
+      const probes = ["v(out)", "v(in)"] as const;
+      const result = runPairedBatch("diff-logamp-tran", deck.netlist, [...probes]);
+      const memberNotes: string[] = [];
+      for (const trace of probes) {
+        const lt = result.ltspice.get(trace)!;
+        const ng = result.ngspice.get(trace)!;
+        const comparison = compareWaveforms(ng.axis, ng.values, lt.axis, lt.values, {
+          rmsTolerance: 0.02,
+          maxTolerance: 0.05,
+        });
+        expect(comparison.pass, `${trace} ${JSON.stringify(comparison)}`).toBe(true);
+        expect(comparison.referenceRange, `${trace} non-hollow`).toBeGreaterThan(1);
+        memberNotes.push(
+          `${trace} nRms=${comparison.normalizedRms.toFixed(4)} nMax=${comparison.normalizedMax.toFixed(4)} span=${comparison.referenceRange.toFixed(2)}`,
+        );
+      }
+      cells.push({
+        analysis: "tran",
+        circuit: "logamp",
+        topology: "Educational logamp.asc log amplifier + opamp.sub (authored .tran 10)",
+        status: "pass",
+        note: memberNotes.join("; "),
+      });
+    }
+
     // --- Educational GFT.asc authored .ac (General Feedback Theorem; z=@.param default) ---
     // LoopGain/LoopGain2 need LT1001: Tau OTA remap is not LTspice↔stock-ngspice
     // same-deck (LTspice rejects __tau_ota; brew ngspice lacks `ota` code model).
@@ -2088,9 +2142,9 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
     const passCount = cells.filter((cell) => cell.status === "pass").length;
     const gapCount = cells.filter((cell) => cell.status === "gap").length;
     const siblingCount = cells.filter((cell) => cell.status === "sibling").length;
-    expect(passCount).toBeGreaterThanOrEqual(47);
+    expect(passCount).toBeGreaterThanOrEqual(48);
     expect(siblingCount).toBe(5);
     expect(gapCount).toBe(0);
-    expect(report).toMatch(/SUMMARY pass=47 sibling=5 gap=0/);
+    expect(report).toMatch(/SUMMARY pass=48 sibling=5 gap=0/);
   }, 240_000);
 });

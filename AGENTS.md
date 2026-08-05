@@ -173,10 +173,10 @@ account and sign/notarize/ship.
       with LTspice over a representative device and topology matrix.
       **Partial (2026-08-05):** `scripts/differential-parity.sh` +
       `differentialParity.corpus.ts` (also under `dod-parity.sh`) prove
-      pass=47 · sibling=5 · gap=0 on stdout: prior cells through DCopPnt OP +
+      pass=48 · sibling=5 · gap=0 on stdout: prior cells through DCopPnt OP +
       Educational audioamp/UHFpreamp/1563/LM308/LM78XX/S-param + P2.asc authored
-      `.tran` (exact 2N344/2N274/2N597; v(out) nRms≈0.0065) + stepAC.asc authored
-      `.ac` (RLC; .step C→50p; v(out)/v(in) nRms=0). NE555 miss; 100W IRFP not
+      `.tran` + stepAC.asc authored `.ac` + Applications 2ndOrderLowpass.asc
+      authored `.ac` (G-source RLC; v(2) nRms=0). NE555 miss; 100W IRFP not
       bundled (refuse). HalfSlope Laplace not landed. SoftDiodeRecovery deferred.
       BandGaps `.dc temp` misses tolerance. Harness-slice gap closed; broad
       topology/device matrix still open — DoD box stays unchecked.
