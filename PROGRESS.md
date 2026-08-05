@@ -1,14 +1,82 @@
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 ~13:55 CDT**
+**Status: DONE - 2026-08-05 ~14:10 CDT**
 
-Unit: **§10 Command + Toast + Resizable + drift gate** — ui/command (cmdk)
-CommandPalette; ui/sonner notices; ui/resizable re-export of panelResize;
-`scripts/design-system-drift.sh` green. AGENTS §10 stays UNCHECKED
-(Cupertino chrome + both-theme screenshot settlement remain). SHIPPABLE? **NO**
+Unit: **Educational/contrib gr_del midnodes → pass=110** — all-pass lattice
+AC on non-hollow n005/n006/n008 (gd1/gd2 |V|≈1 hollow deferred). DoD broad
+box stays open. SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
+
+
+---
+
+### 2026-08-05 — Educational/contrib gr_del midnodes → pass=110 (§DoD)
+
+**What I did**
+- Educational `contrib/gr_del.asc` authored `.ac lin 401 1µ–10Meg`: three
+  param-baked Zo/F*/A* all-pass lattices with K1/K2. Named outs gd1/gd2 are
+  |V|≈1 (hollow) — deferred. Lattice midnodes `v(n005)`/`v(n006)`/`v(n008)`
+  match LTspice (nRms≈0 @ 2%/5%, spans≈0.89/0.88/2.16). Tip had HandsFreeLayout
+  as pass=109 → this cell is **pass=110**. Never Chan/NIGBT/FRA.
+- Probed and left deferred: SoftDiode Vp>0, Fc/capometer, ISO7637, Resources
+  sinh (±1.01 log domain), Draft10 UOA2, PowerAmpLayout TIP attach, gd1/gd2
+  phase. DoD broad box stays open. SHIPPABLE? **NO**.
+
+**Exact stdout**
+```
+SUMMARY pass=110 sibling=5 gap=0 (DoD box stays open until broad authored-analysis matrix is green)
+```
+
+**Files**
+- `apps/desktop/scripts/differentialParity.corpus.ts`
+- `AGENTS.md`, `FEATURE_PARITY.md`, `PROGRESS.md`
+
+**Tests**
+- `scripts/differential-parity.sh` → SUMMARY pass=110 sibling=5 gap=0
+- `pnpm -C apps/desktop typecheck` green
+- `pnpm -C apps/desktop test`
+
+**Parity items**
+- Differential 🟡 **pass=110 · sibling=5 · gap=0**; DoD broad box unchecked.
+
+**Next step**
+- SoftDiode Vp>0 / Fc / ISO7637 / sinh soft-domain / PowerAmpLayout /
+  Draft10 / gr_del gd phase; never Chan/NIGBT/FRA.
+
+SHIPPABLE? **NO**
+
+---
+
+### 2026-08-05 — contrib gr_del midnodes AC → pass=110 (§DoD)
+
+**What I did**
+- Educational/contrib `gr_del.asc` authored `.ac lin 401 1µ–10Meg`: all-pass
+  lattice cells with K1/K2. Named gd1/gd2 outs remain |V|≈1 hollow (deferred).
+  Lattice midnodes `v(n005)`/`v(n006)`/`v(n008)` match LTspice nRms≈0 @ 2%/5%.
+  Tip had HandsFreeLayout as pass=109 → this cell is **pass=110**.
+- Left SoftDiode Vp>0 / Fc / ISO7637 / TLINE-inv / Draft10 / PowerAmpLayout
+  alone. Never Chan/NIGBT/FRA. DoD broad box stays open. SHIPPABLE? **NO**.
+
+**Files**
+- `apps/desktop/scripts/differentialParity.corpus.ts`
+- `FEATURE_PARITY.md`, `PROGRESS.md`, `AGENTS.md`
+
+**Tests**
+- `pnpm -C apps/desktop typecheck` green
+- `pnpm -C apps/desktop test` → 2984 passed / 8 skipped
+- `scripts/differential-parity.sh` → SUMMARY pass=110 sibling=5 gap=0
+
+**Parity items**
+- Differential 🟡 **pass=110 · sibling=5 · gap=0**; DoD broad box unchecked.
+  SHIPPABLE? **NO**
+
+**Next step**
+- PowerAmpLayout TIP lib / Fc / ISO7637 / TLINE-inv / Draft10; never SoftDiode
+  Vp>0 fakes. SHIPPABLE? **NO**
+
+SHIPPABLE? **NO**
 
 
 ---

@@ -1772,7 +1772,7 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   oscillator by amplitude, RMS, and frequency. All four proofs pass headlessly.
   **Differential matrix slice (2026-08-05):** `scripts/differential-parity.sh`
   (wired into `dod-parity.sh`) prints pass/sibling/gap coverage to stdout
-  (truth). Gap-closure → **pass=109 · sibling=5 · gap=0**: prior cells through
+  (truth). Gap-closure → **pass=110 · sibling=5 · gap=0**: prior cells through
   SampleAndHold plus Educational/contrib/**elip_grd.asc** authored `.ac`
   (elliptic RLC+K1; S21/S11 nRms≈0.0057/0.0039 @ maxTol=0.10 peak) plus
   Documents/LTspice/**Draft3.asc** authored `.ac` (series RLC L/C/R; v(vout)
@@ -1871,9 +1871,11 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   `.meas` TRIG/TARG TD=5m on Output; relErr≈0.016%; continuous phase deferred;
   ≠ SoftDiode Vp>0 / Fc / ISO7637 / TLINE-inv) plus
   Educational/PAsystem/**HandsFreeLayout.asc** authored `.tran` (layout
-  2N5458/2N3906; ≠ HandsFreePreamp ElectretMic; v(out) nRms=0).
+  2N5458/2N3906; ≠ HandsFreePreamp ElectretMic; v(out) nRms=0) plus
+  Educational/contrib/**gr_del.asc** authored `.ac` (all-pass lattice midnodes
+  v(n005)/v(n006)/v(n008) nRms≈0; gd1/gd2 |V|≈1 hollow deferred).
   ct 19 INA `.op` deferred (LTspice OP fails on same-deck tanh B_U*).
-  gr_del
+  gr_del gd outs still
   deferred (all-pass |V|≈1
   hollow). TwoTau / Draft8 Laplace brace-mangle deferred. Draft6 AD823 /
   Draft10 UOA2 same-deck not landed. tip 65e05ce thrash
@@ -1882,7 +1884,7 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   gate/near-cutoff deferred); SoftDiodeRecovery Vp=0 landed (pass=104; Vp>0 deferred);
   PowerAmp TIP A=0.1 landed (pass=105); astable period-meas landed (pass=106;
   continuous phase deferred); PowerAmp A=0.2..0.7 landed (pass=107); NE555 period-meas landed (pass=108;
-  continuous phase deferred); HandsFreeLayout landed (pass=109; ≠ Preamp ElectretMic);
+  continuous phase deferred); HandsFreeLayout landed (pass=109; ≠ Preamp ElectretMic); gr_del midnodes landed (pass=110; gd outs hollow deferred);
   LoopGain/Electrometer
   LT1001 OTA wall; ISO7637 spike miss; Educational/IGBT.asc NIGBT refuse (≠ IGBTeq); Resources sinh/divide2/inverter deferred (log-domain/`.machine` hollow — not landed); Resources mextram deferred (no authored analysis). NonLinearTransformer Chan refuse. NE555 continuous Output phase deferred (period landed). PowerAmpLayout TIP attach still deferred. Harness-slice gaps
   closed; DoD broad-differential box remains open — see AGENTS.md.

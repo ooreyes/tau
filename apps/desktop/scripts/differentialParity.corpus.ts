@@ -131,6 +131,8 @@ const PIERCE_ASC = join(EDU, "Pierce.asc");
 const COLPITS2_ASC = join(EDU, "colpits2.asc");
 const QZTST_ASC = join(EDU, "contrib", "qztst.asc");
 const ELIP_GRD_ASC = join(EDU, "contrib", "elip_grd.asc");
+/** Educational/contrib gr_del — all-pass group-delay lattices (midnodes; |V|≈1 outs hollow). */
+const GR_DEL_ASC = join(EDU, "contrib", "gr_del.asc");
 const DRAFT1_ASC = join(DOC_LTSPICE, "Draft1.asc");
 const DRAFT2_ASC = join(DOC_LTSPICE, "Draft2.asc");
 const DRAFT3_ASC = join(DOC_LTSPICE, "Draft3.asc");
@@ -412,7 +414,7 @@ function withAcStimulus(netlist: string): string {
 describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential parity matrix", () => {
   const cells: DifferentialCell[] = [];
 
-  it("matches RC .tran/.ac/.meas, divider analyses, .step families, curvetrace, stepmodelparam, NoiseFigure, noise.asc, Colpitts/Clapp/Hartly AC, Cohn AC, MeasureBW AC, Transformer/Transformer2/IdealTransformer TRAN, notch/passive/butter/opamp/Linkwitz AC, LM741/LM308/LM78XX/P2/logamp TRAN, GFT AC, DCopPnt OP, audioamp TRAN, UHFpreamp AC, 1563 AC, S-param AC, stepAC AC, 2ndOrder* AC, MonteCarlo AC, varactor AC, phaseshift AC, Pierce/colpits2 AC, edu-varistor TRAN, stepnoise noise, UniversalOpAmp/1/2 TRAN, contrib/qztst AC, SampleAndHold TRAN, contrib/elip_grd AC, Draft3 AC, Draft7 AC, Draft2 TRAN, Draft1 TRAN, BandGaps DC-temp, waveout TRAN, ISO16750 TRAN, IGBTeq nested DC, help-Butterworth AC, Resources-Draft1 DC, 100W TRAN, help-ACstep AC, help-NoiseStep noise, Resources-MicroCode TRAN, ct-rlc-ringing TRAN, ct-diode-dc DC, ct-step-loaded DC, ct-noise-rc noise, ct-stress-rc-ladder AC, ct-active-fourth-order AC, ct-full-bridge TRAN, ct-three-phase TRAN, ct-buck TRAN, ct-boost TRAN, ct-logic TRAN, ct-dflop TRAN, MC1648 TRAN, HandsFreePreamp TRAN, Vswitch TRAN, dimmer TRAN, SoftDiodeRecovery TRAN, PowerAmp TRAN, PowerAmp A=0.2..0.7 TRAN, astable period, NE555 period, HandsFreeLayout TRAN, Class-D AC/OP/DC/noise/tf", () => {
+  it("matches RC .tran/.ac/.meas, divider analyses, .step families, curvetrace, stepmodelparam, NoiseFigure, noise.asc, Colpitts/Clapp/Hartly AC, Cohn AC, MeasureBW AC, Transformer/Transformer2/IdealTransformer TRAN, notch/passive/butter/opamp/Linkwitz AC, LM741/LM308/LM78XX/P2/logamp TRAN, GFT AC, DCopPnt OP, audioamp TRAN, UHFpreamp AC, 1563 AC, S-param AC, stepAC AC, 2ndOrder* AC, MonteCarlo AC, varactor AC, phaseshift AC, Pierce/colpits2 AC, edu-varistor TRAN, stepnoise noise, UniversalOpAmp/1/2 TRAN, contrib/qztst AC, SampleAndHold TRAN, contrib/elip_grd AC, Draft3 AC, Draft7 AC, Draft2 TRAN, Draft1 TRAN, BandGaps DC-temp, waveout TRAN, ISO16750 TRAN, IGBTeq nested DC, help-Butterworth AC, Resources-Draft1 DC, 100W TRAN, help-ACstep AC, help-NoiseStep noise, Resources-MicroCode TRAN, ct-rlc-ringing TRAN, ct-diode-dc DC, ct-step-loaded DC, ct-noise-rc noise, ct-stress-rc-ladder AC, ct-active-fourth-order AC, ct-full-bridge TRAN, ct-three-phase TRAN, ct-buck TRAN, ct-boost TRAN, ct-logic TRAN, ct-dflop TRAN, MC1648 TRAN, HandsFreePreamp TRAN, Vswitch TRAN, dimmer TRAN, SoftDiodeRecovery TRAN, PowerAmp TRAN, PowerAmp A=0.2..0.7 TRAN, astable period, NE555 period, HandsFreeLayout TRAN, contrib/gr_del AC, Class-D AC/OP/DC/noise/tf", () => {
     // --- TRAN (also covered by waveformParity; re-assert here so this file is self-sufficient) ---
     {
       const result = runPairedBatch("diff-rc-tran", RC_TRAN, ["v(out)"]);
@@ -2704,8 +2706,8 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
 
     // --- Educational/contrib elip_grd.asc authored .ac (elliptic filter + S11/S21 ports) ---
     // Pure RLC + K1 L1 L2; param-baked Zo/F*/A*. v(s21)/v(s11) nRms≈0.0057/0.0039 under 2%;
-    // nMax≈0.098/0.075 needs maxTol=0.10 (elliptic peak). gr_del deferred (all-pass |V|≈1
-    // hollow for magnitude). TwoTau deferred (LTspice rejects Tau s_xfer same-deck).
+    // nMax≈0.098/0.075 needs maxTol=0.10 (elliptic peak). gr_del gd outs still hollow;
+    // midnodes landed separately below. TwoTau deferred (LTspice rejects Tau s_xfer same-deck).
     {
       expect(existsSync(ELIP_GRD_ASC), `missing ${ELIP_GRD_ASC}`).toBe(true);
       const imported = importAsc(decodeSchematicText(readFileSync(ELIP_GRD_ASC)));
@@ -2753,6 +2755,66 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
         topology: "Educational/contrib/elip_grd.asc elliptic filter S11/S21 (authored .ac lin 1µ–3Meg; K1; maxTol=0.10 peak)",
         status: "pass",
         note: memberNotes.join("; ") + " (maxTol=0.10)",
+      });
+    }
+
+    // --- Educational/contrib/gr_del.asc authored .ac (all-pass group-delay lattices) ---
+    // Three param-baked Zo/F*/A* all-pass cells with K1/K2 coupled inductors.
+    // Named outs gd1/gd2 are |V|≈1 (hollow magnitude) — deferred. Lattice midnodes
+    // v(n005)/v(n006)/v(n008) are non-hollow and match LTspice (nRms≈0 @ 2%/5%).
+    // Authored `.ac lin 401 1µ–10Meg` (Tau remaps lin→dec points). ≠ elip_grd S-ports.
+    // Tip HandsFreeLayout pass=109 → **pass=110**. Left SoftDiode Vp>0 / Fc /
+    // ISO7637 / sinh soft-domain / Draft10 / PowerAmpLayout alone.
+    {
+      expect(existsSync(GR_DEL_ASC), `missing ${GR_DEL_ASC}`).toBe(true);
+      const imported = importAsc(decodeSchematicText(readFileSync(GR_DEL_ASC)));
+      expect(imported.warnings).toEqual([]);
+      const dirs = expandDirectiveLines(imported.directives);
+      const parsed = analysesFromDirectives(dirs);
+      expect(parsed.ac, "gr_del.asc must author .ac").toBeTruthy();
+      const params = buildParamScope(dirs);
+      expect(Number(params.scope.Zo ?? params.scope.zo)).toBeCloseTo(50, 10);
+      expect(Number(params.scope.F1 ?? params.scope.f1)).toBeCloseTo(1e6, 5);
+      const deck = buildSpiceDeck({
+        components: imported.components,
+        wires: imported.wires,
+        netLabels: imported.netLabels,
+        directives: dirs,
+        params,
+      }, {
+        kind: "ac",
+        startHz: parsed.ac!.startHz,
+        stopHz: parsed.ac!.stopHz,
+        pointsPerDecade: parsed.ac!.pointsPerDecade,
+      });
+      expect(deck.unresolvedSubckts ?? []).toEqual([]);
+      expect(deck.modelSubstitutions ?? []).toEqual([]);
+      expect(deck.netlist).toMatch(/^K1\b.+\bL1\b.+\bL2\b/im);
+      expect(deck.netlist).toMatch(/^K2\b.+\bL3\b.+\bL4\b/im);
+      expect(deck.netlist).not.toMatch(/^X\w*\b/im);
+      // Midnodes of cells 1–2 (cell-3 internals still miss); not hollow gd1/gd2.
+      const probes = ["v(n005)", "v(n006)", "v(n008)"] as const;
+      const result = runPairedBatch("diff-gr-del-ac", deck.netlist, [...probes]);
+      const memberNotes: string[] = [];
+      for (const probe of probes) {
+        const lt = result.ltspice.get(probe)!;
+        const ng = result.ngspice.get(probe)!;
+        const comparison = compareWaveforms(ng.axis, ng.values, lt.axis, lt.values, {
+          rmsTolerance: 0.02,
+          maxTolerance: 0.05,
+        });
+        expect(comparison.pass, `gr_del ${probe} ${JSON.stringify(comparison)}`).toBe(true);
+        expect(comparison.referenceRange, `${probe} non-hollow`).toBeGreaterThan(0.5);
+        memberNotes.push(
+          `${probe} nRms=${comparison.normalizedRms.toFixed(4)} nMax=${comparison.normalizedMax.toFixed(4)} span=${comparison.referenceRange.toFixed(3)}`,
+        );
+      }
+      cells.push({
+        analysis: "ac",
+        circuit: "gr-del",
+        topology: "Educational/contrib/gr_del.asc all-pass lattices midnodes (authored .ac lin 1µ–10Meg; K1/K2; gd1/gd2 |V|≈1 deferred)",
+        status: "pass",
+        note: memberNotes.join("; ") + " (gd outs hollow deferred)",
       });
     }
 
@@ -5766,6 +5828,6 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
     expect(passCount).toBeGreaterThanOrEqual(70);
     expect(siblingCount).toBe(5);
     expect(gapCount).toBe(0);
-    expect(report).toMatch(/SUMMARY pass=109 sibling=5 gap=0/);
+    expect(report).toMatch(/SUMMARY pass=110 sibling=5 gap=0/);
   }, 600_000);
 });
