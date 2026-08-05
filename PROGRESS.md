@@ -1,9 +1,9 @@
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 07:23 CDT**
+**Status: DONE - 2026-08-05 07:27 CDT**
 
-Unit: Waveform DoD — **DC sweep legend right-click math**.
-Rebased over Continue ct12 → **pass=96**. Settings locked. SHIPPABLE? **NO**
+Unit: Waveform DoD — **step-family legend right-click math**.
+Tip `3099730` → this commit. pass=96. Settings locked. SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
@@ -11,6 +11,31 @@ Rebased over Continue ct12 → **pass=96**. Settings locked. SHIPPABLE? **NO**
 
 ---
 
+
+
+### 2026-08-05 — step-family legend right-click math (§waveform DoD)
+
+**What I did**
+- StepPlot SIGNAL legend chip ContextMenu via `traceMathMenuItems`
+  (abs/neg/db/uramp/sgn/ddt/idt) → `activateStepExpression` across the family.
+  ND wall at 48.1% — waveform pivot. Left ct 12/13, continue 35 ASC, ct 19 OP,
+  Chan/NIGBT/FRA, Settings alone.
+
+**Files**
+- `apps/desktop/src/components/SimulationPanel.tsx` (+ wiring test)
+- `FEATURE_PARITY.md`, `PROGRESS.md`
+
+**Tests**
+- `pnpm -C apps/desktop typecheck` + `test` green
+- StepPlot SIGNAL ContextMenu → abs(V(out)) across steps
+
+**Parity items**
+- Waveform viewer 🟡 (step legend math landed; AC/DC family / noise menus still ⬜).
+  Differential pass=96 · named-device 48.1% · SHIPPABLE? NO
+
+**Next step**
+- Noise legend math / AC·DC step-family legend / standalone phase window /
+  non-wall ND. Leave Educational/IRFP/Settings alone.
 
 ### 2026-08-05 — ct 12_buck_converter .tran → pass=96 (§DoD)
 

@@ -1558,7 +1558,10 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   `acTraceMathMenuItems` (abs/neg/db/uramp/sgn — no ddt/idt) + AcPlot legend
   ContextMenu → `onPlotExpression`. **DC sweep legend right-click math landed**
   (2026-08-05): DcPlot legend ContextMenu via the same overlay ops → DC
-  expression overlays. Still ⬜: step legend menus.
+  expression overlays. **Step-family legend right-click math landed**
+  (2026-08-05): StepPlot SIGNAL chip ContextMenu via `traceMathMenuItems`
+  (abs/neg/db/uramp/sgn/ddt/idt) → `activateStepExpression` across the family.
+  Still ⬜: AC/DC step-family legend menus / noise legend math.
 
 ## 7. Engine & accuracy
 - ✅ Native ngspice FFI (desktop) — `src-tauri/src/spice.rs`

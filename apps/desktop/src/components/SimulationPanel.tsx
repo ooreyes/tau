@@ -4414,18 +4414,24 @@ export function StepPlot({ result, probes, wires }: { result: StepFamilyResult |
         ? probeFamily
         : null;
 
-  const addExpression = () => {
-    const expr = exprInput.trim();
-    if (!expr) return;
-    const probe = evaluateStepPlotExpression(expr, result);
+  const activateStepExpression = (expr: string) => {
+    const trimmed = expr.trim();
+    if (!trimmed) return;
+    const probe = evaluateStepPlotExpression(trimmed, result);
     if (!probe.ok) {
       setExprError(probe.error);
       return;
     }
-    setExprList((prev) => (prev.includes(expr) ? prev : [...prev, expr]));
-    setActiveExpr(expr);
-    setExprInput("");
+    setExprList((prev) => (prev.includes(trimmed) ? prev : [...prev, trimmed]));
+    setActiveExpr(trimmed);
     setExprError(null);
+  };
+
+  const addExpression = () => {
+    const expr = exprInput.trim();
+    if (!expr) return;
+    activateStepExpression(expr);
+    setExprInput("");
   };
 
   const exportStepCsv = () => {
@@ -4571,9 +4577,33 @@ export function StepPlot({ result, probes, wires }: { result: StepFamilyResult |
             />
           ))}
         </svg>
-        <div className="scope-legend">
+        <div className="scope-legend" aria-label="Step legend">
+          <ContextMenu>
+            <ContextMenuTrigger asChild>
+              <button
+                type="button"
+                className="bode-legend-chip"
+                aria-label={`Math for ${family.signal}`}
+              >
+                <i style={{ background: "var(--trace-cyan)" }} aria-hidden="true" />
+                {family.signal}
+              </button>
+            </ContextMenuTrigger>
+            <ContextMenuContent aria-label={`Math for ${family.signal}`}>
+              <ContextMenuLabel>Math</ContextMenuLabel>
+              <ContextMenuSeparator />
+              {traceMathMenuItems().map((item) => (
+                <ContextMenuItem
+                  key={item.op}
+                  onClick={() => activateStepExpression(wrapTraceMath(family.signal, item.op))}
+                >
+                  {item.label.replace("…", family.signal)}
+                </ContextMenuItem>
+              ))}
+            </ContextMenuContent>
+          </ContextMenu>
           {family.series.map((s, i) => (
-            <span key={s.label}>
+            <span key={s.label} className="bode-legend-chip">
               <i style={{ background: STEP_COLORS[i % STEP_COLORS.length] }} />
               {s.label}
             </span>

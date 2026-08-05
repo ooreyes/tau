@@ -1025,6 +1025,28 @@ describe("StepPlot measurements", () => {
     expect(signalMeter?.textContent).toContain("V(out)-V(mid)");
     expect(screen.getByRole("button", { name: "Use probe" })).toBeTruthy();
   });
+
+  it("right-click SIGNAL legend chip plots abs(V(out)) across steps", async () => {
+    render(
+      <StepPlot
+        result={{
+          ok: true,
+          spec: { kind: "param", name: "RL", values: [1, 2] },
+          members: [member("RL=1", 1, undefined, [0, 1e-3], [-1, 1]), member("RL=2", 2)],
+          warnings: [],
+        }}
+        probes={[]}
+        wires={[]}
+      />,
+    );
+    fireEvent.contextMenu(screen.getByRole("button", { name: "Math for V(out)" }));
+    const absItem = await screen.findByRole("menuitem", { name: /Plot abs\(V\(out\)\)/i });
+    fireEvent.click(absItem);
+    expect(screen.getByRole("button", { name: "Plot abs(V(out)) across steps" })).toBeTruthy();
+    const signalMeter = screen.getByText("SIGNAL").parentElement;
+    expect(signalMeter?.textContent).toContain("abs(V(out))");
+    expect(screen.getByRole("button", { name: "Use probe" })).toBeTruthy();
+  });
 });
 
 describe("AcFamilyPlot / DcFamilyPlot Export PNG", { timeout: 20_000 }, () => {
