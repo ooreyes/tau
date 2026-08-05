@@ -44,6 +44,7 @@ const CLASSD_DIR = join(REPO_ROOT, "examples", "class-d-amplifier");
 const EDU = join(homedir(), "Documents", "LTspice", "examples", "Educational");
 const CURVETRACE_ASC = join(EDU, "curvetrace.asc");
 const NOISEFIGURE_ASC = join(EDU, "NoiseFigure.asc");
+const STEPTEMP_ASC = join(EDU, "steptemp.asc");
 const COLPITTS_ASC = process.env.COLPITTS_ASC ?? join(EDU, "colpits.asc");
 
 const RC_TRAN = [
@@ -423,6 +424,41 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
       });
     }
 
+    // --- Educational steptemp.asc: authored .step temp → expanded .temp OP ---
+    {
+      expect(existsSync(STEPTEMP_ASC), `missing ${STEPTEMP_ASC}`).toBe(true);
+      const imported = importAsc(decodeSchematicText(readFileSync(STEPTEMP_ASC)));
+      expect(imported.foreignSymbols).toEqual([]);
+      const temps = [-55, 27, 125] as const;
+      const memberNotes: string[] = [];
+      for (const temp of temps) {
+        const directives = imported.directives
+          .filter((d) => !/^\.step\b/i.test(d.trim()) && !/^\.op\b/i.test(d.trim()));
+        directives.push(`.temp ${temp}`, ".op");
+        const deck = buildSpiceDeck({
+          components: imported.components,
+          wires: imported.wires,
+          netLabels: imported.netLabels,
+          params: buildParamScope(directives),
+          directives,
+        }, { kind: "op" });
+        expect(deck.unresolvedSubckts, `steptemp T=${temp}`).toEqual([]);
+        expect(deck.netlist).toMatch(/2N2219A/i);
+        const result = runPairedBatch(`diff-edu-steptemp-${temp}`, deck.netlist, ["v(out)"]);
+        const lt = firstSample(result.ltspice.get("v(out)")!);
+        const ng = firstSample(result.ngspice.get("v(out)")!);
+        expect(relativeError(ng, lt), `steptemp T=${temp} lt=${lt} ng=${ng}`).toBeLessThanOrEqual(1e-3);
+        memberNotes.push(`T=${temp} V(out)=${ng.toFixed(6)} rel=${relativeError(ng, lt).toExponential(2)}`);
+      }
+      cells.push({
+        analysis: "step",
+        circuit: "steptemp",
+        topology: "Educational steptemp.asc .step temp −55/27/125 .op (expanded via .temp)",
+        status: "pass",
+        note: memberNotes.join("; "),
+      });
+    }
+
     // --- .step source family: expand V1 DC values on OP ---
     {
       const volts = [1, 2, 3] as const;
@@ -721,7 +757,7 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
         circuit: "any",
         topology: "Educational steptemp / stepmodelparam / native step_expand vs LTspice .step card",
         status: "gap",
-        note: "minimal 2N3904 CE .step temp OP proven; full Educational steptemp (needs 2N2219A), stepmodelparam (.step NPN Vaf), and deck-card step_expand still open",
+        note: "Educational steptemp.asc OP at −55/27/125 proven; stepmodelparam (.step NPN Vaf) and deck-card step_expand still open",
       },
       {
         analysis: "ac",
@@ -743,7 +779,7 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
     expect(report).toContain("GAPS (explicit):");
     const passCount = cells.filter((cell) => cell.status === "pass").length;
     const gapCount = cells.filter((cell) => cell.status === "gap").length;
-    expect(passCount).toBeGreaterThanOrEqual(16);
+    expect(passCount).toBeGreaterThanOrEqual(17);
     expect(gapCount).toBeGreaterThanOrEqual(1);
   }, 240_000);
 });

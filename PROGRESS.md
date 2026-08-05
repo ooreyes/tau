@@ -4,20 +4,35 @@
      ⏱ HEARTBEAT — the single source of "what is happening right now".
      Every run REWRITES this block: at claim (Status: IN PROGRESS) and again at
      done (Status: DONE). If you start a run and Status is still IN PROGRESS
-     from an OLD timestamp, the previous run died mid-unit — run
+     from an OLD timestamp, the previous run died mid‑unit — run
      `git log --oneline -8`, recover/finish/revert that unit FIRST, then go on.
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-04 23:50 CDT**
+**Status: DONE - 2026-08-04 23:52 CDT**
 
-Unit: Differential BJT CE `.step temp` OP (−55/27/125 °C) — pass=16.
-Stdout: `SUMMARY pass=16 sibling=5 gap=2`. Named-device tip remains **15.8%**/HF0
-(exact-asy denominator). SHIPPABLE? **NO**.
+Unit: Bundle 2N2219A + Educational steptemp.asc differential OP (−55/27/125).
+Stdout: `SUMMARY pass=17 sibling=5 gap=2`. Named-device tip **15.8%**/HF0.
+SHIPPABLE? **NO**.
 
 **SHIPPABLE?** **NO**
 
 ---
+
+### 2026-08-04 — Educational steptemp differential → pass=17 (§DoD)
+
+**What I did**
+- Bundled ngspice-clean `2N2219A` in `standardModels.ts` (Educational steptemp).
+- Differential: import steptemp.asc, expand `.step temp` via `.temp` at −55/27/125,
+  compare V(out) vs LTspice (relErr ~1e−5).
+- Gap remains for stepmodelparam / step_expand / Class-D AC.
+
+**Proof**
+- `scripts/differential-parity.sh` → SUMMARY pass=17 sibling=5 gap=2
+- steptempEducational.deck.test + standardModels tests green
+
+**Next**
+- stepmodelparam (.step NPN Vaf); OTA asym/Isink exact map for named-device rate.
 
 ### 2026-08-04 — Differential BJT CE .step temp → pass=16 (§DoD)
 

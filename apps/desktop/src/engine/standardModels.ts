@@ -35,6 +35,7 @@ const MODEL_LINES: readonly string[] = [
   ".model 1N5231 D(Is=.88f Rs=.5 Cjo=120p M=.55 Bv=5.1 Ibv=20m)",
   // --- NPN BJTs (standard.bjt) ---
   ".model 2N2222 NPN(IS=1E-14 VAF=100 BF=200 IKF=0.3 XTB=1.5 BR=3 CJC=8E-12 CJE=25E-12 TR=100E-9 TF=400E-12 ITF=1 VTF=2 XTF=3 RB=10 RC=.3 RE=.2)",
+  ".model 2N2219A NPN(Is=14.34f Xti=3 Eg=1.11 Vaf=74.03 Bf=255.9 Ne=1.307 Ise=14.34f Ikf=.2847 Xtb=1.5 Br=6.092 Nc=2 Isc=0 Ikr=0 Rc=1 Cjc=7.306p Mjc=.3416 Vjc=.75 Fc=.5 Cje=22.01p Mje=.377 Vje=.75 Tr=46.91n Tf=411.1p Itf=.6 Vtf=1.7 Xtf=3 Rb=10)",
   ".model 2N3904 NPN(IS=1E-14 VAF=100 BF=300 IKF=0.4 XTB=1.5 BR=4 CJC=4E-12 CJE=8E-12 RB=20 RC=0.1 RE=0.1 TR=250E-9 TF=350E-12 ITF=1 VTF=2 XTF=3)",
   ".model BC547 NPN(IS=1E-14 VAF=100 BF=300 IKF=0.3 XTB=1.5 BR=5 CJC=6E-12 CJE=12E-12 RB=10 RC=.3 RE=.2 TR=100E-9 TF=400E-12 ITF=1 VTF=2 XTF=3)",
   // --- PNP BJTs (standard.bjt) ---

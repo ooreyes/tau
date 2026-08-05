@@ -24,6 +24,7 @@ describe("standardModelLine", () => {
 
   it("bundles npn and pnp BJTs with the right model type", () => {
     expect(standardModelLine("2N3904")).toMatch(/NPN\(/);
+    expect(standardModelLine("2N2219A")).toMatch(/NPN\(/);
     expect(standardModelLine("2N3906")).toMatch(/PNP\(/);
   });
 

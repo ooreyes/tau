@@ -1577,7 +1577,7 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   oscillator by amplitude, RMS, and frequency. All four proofs pass headlessly.
   **Differential matrix slice (2026-08-04):** `scripts/differential-parity.sh`
   (wired into `dod-parity.sh`) prints pass/sibling/gap coverage to stdout
-  (truth). Gap-closure pass → **pass=16 · sibling=5 · gap=2**: prior cells
+  (truth). Gap-closure pass → **pass=17 · sibling=5 · gap=2**: prior cells
   plus expanded `.step` temp/source/nested, Educational Colpitts AC (AC stim
   on V1), Class-D OP (linear L1; harness strips `@device` save wraps). Remaining
   gaps: Educational steptemp/stepmodelparam/native step_expand vs LTspice
