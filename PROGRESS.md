@@ -9,18 +9,53 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 01:42 CDT**
+**Status: DONE - 2026-08-05 01:47 CDT**
 
-Unit: Track A — Class-D differential noise/tf gap→pass (same AC/OP/DC added-analysis precedent).
+Unit: Plaintext refuse dig (exhausted) + Educational MeasureBW.asc AC → differential **pass=26**.
 ```
-SUMMARY pass=25 sibling=5 gap=0
+NAMED-DEVICE-RECURSIVE: … exact-rate=47.9% (unchanged; refuse mass = encrypted SpiceModel .sub)
+SUMMARY pass=26 sibling=5 gap=0
 ```
-Harness-slice gaps closed; broad DoD matrix still open. Named-device 47.9% unchanged. SHIPPABLE? **NO**
+SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
 
 ---
+
+### 2026-08-05 — MeasureBW AC + plaintext refuse exhausted (§DoD)
+
+**What I did**
+- Dig tip refuse (1324): soft-epsilon/load/five-terminal gone; only leftover
+  non-REF class is 2× non-literal OTA expression rails (honest refuse).
+- Mass "no electrically equivalent" Applications SYMBOLS use encrypted
+  `SpiceModel *.sub` (`<Binary File>`); unique-leaf stays refuse (no
+  denominator game). Spot-check plaintext Applications (AD8237) already exact.
+- Adjacent DoD: Educational `MeasureBW.asc` authored `.ac oct 10 1 10Meg`
+  BJT CE amp → LTspice/ngspice |V(out)| nRms=0 → **pass=26**.
+
+**Exact stdout**
+```
+NAMED-DEVICE-RECURSIVE: unencrypted=2541 exact=1217 refuse=1324 silent=0 hard-failure=0 encrypted-excluded=1471 exact-rate=47.9%
+SUMMARY pass=26 sibling=5 gap=0
+ac measurebw pass … |V(out)| nRms=0.0000 nMax=0.0000
+```
+
+**Files**
+- `apps/desktop/scripts/differentialParity.corpus.ts`
+- `AGENTS.md`, `FEATURE_PARITY.md`, `PROGRESS.md`
+- `~/Desktop/TAU-MORNING-STATUS.md`
+
+**Tests**
+- vitest differentialParity corpus; typecheck; apps/desktop test
+
+**Parity items**
+- Named-device 🟡 **47.9%** — plaintext maps exhausted; encrypted bare SYMBOL stay refuse. SHIPPABLE? NO
+- Differential 🟡 **pass=26 · sibling=5 · gap=0**; broad matrix still open
+
+**Next**
+- Broaden differential (Vswitch/Howland/Wien/SoftDiodeRecovery); never fake encrypted
+
 
 ### 2026-08-05 — Class-D noise/tf differential → pass=25 (§DoD)
 

@@ -1576,12 +1576,12 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   oscillator by amplitude, RMS, and frequency. All four proofs pass headlessly.
   **Differential matrix slice (2026-08-05):** `scripts/differential-parity.sh`
   (wired into `dod-parity.sh`) prints pass/sibling/gap coverage to stdout
-  (truth). Gap-closure → **pass=25 · sibling=5 · gap=0**: prior cells
-  plus Educational noise.asc, steptemp/stepmodelparam, native step_expand,
-  Colpitts AC, Class-D AC/OP/DC/noise/tf (noise/tf promoted under the same
-  added-analysis precedent as AC/OP/DC; V(onoise) nRms≈0.0003, .tf rel≈3e-8).
-  Harness-slice gaps closed; DoD broad-differential box remains open — see
-  AGENTS.md.
+  (truth). Gap-closure → **pass=26 · sibling=5 · gap=0**: prior cells
+  plus Educational noise.asc, MeasureBW.asc AC, steptemp/stepmodelparam, native
+  step_expand, Colpitts AC, Class-D AC/OP/DC/noise/tf (noise/tf promoted under
+  the same added-analysis precedent as AC/OP/DC; V(onoise) nRms≈0.0003,
+  .tf rel≈3e-8). Harness-slice gaps closed; DoD broad-differential box remains
+  open — see AGENTS.md.
 - 🟡 Resolve a real device-model set — **common LTspice standard diodes/
   zeners/BJTs + the class-d power VDMOS pair bundled** (`engine/standardModels.ts`,
   real `standard.*` params, emitted by `buildSpiceDeck` when referenced by name).
