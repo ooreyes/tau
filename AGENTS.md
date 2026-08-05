@@ -163,10 +163,15 @@ account and sign/notarize/ship.
       **Partial (2026-08-04):** unit proof `scripts/named-device-fidelity.sh`
       prints `NAMED-DEVICE: exact=2 refuse=4 silent=0` and recursive stdout
       `NAMED-DEVICE-RECURSIVE: unencrypted=2538 exact=399 refuse=2139 silent=0
-      hard-failure=0 encrypted-excluded=1474 exact-rate=15.7%` — QA re-proved
-      HF=0 (2026-08-04 23:25); vs prior 2641/HF103/encrypted1371 the −103/+103
-      is encrypted reclassification (exact unchanged), not 103 deck fixes; ≥95%
-      exact-rate **not** met; DoD box stays unchecked. SHIPPABLE? **NO**.
+      hard-failure=0 encrypted-excluded=1474 exact-rate=15.7%` — Staff EE
+      re-proved 2026-08-04 with `NAMED_DEVICE_ENCRYPTED_AUDIT=1` (without-flag
+      refuse=1474 · hard_failure=0). Prior 2641/HF103/encrypted1371 → −103/+103
+      is a **legitimate** bucket move: deck fixes unmasked parse HF into
+      `capability_refusal ∩ encryptedDependent` (exact stayed 399 — not 103 new
+      exact models). `encryptedDependent` never rebuckets hard_failure.
+      Basename ASY search must not feed this harness (inflated encrypted
+      ~1474→2776). ≥95% exact-rate **not** met; DoD box stays unchecked.
+      SHIPPABLE? **NO**.
 - [ ] **Broad differential parity, not a synthetic `.op` proxy:** the acceptance
       runner executes each circuit's authored `.tran` / `.ac` / `.dc` / `.op` /
       `.noise` / `.tf` / `.step` / `.meas` analyses and compares numeric outputs

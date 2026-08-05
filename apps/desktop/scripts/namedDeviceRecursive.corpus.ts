@@ -16,8 +16,8 @@
  * unencrypted denominator.
  *
  * Symbol metadata for this harness uses **exact relative `.asy` joins only**.
- * Basename ASY search (`resolveInstalledAsyPath`) can attach a different
- * family's ModelFile and inflate encrypted-excluded — do not use it here.
+ * Even unique basename ASY search can change ModelFile attachment and move
+ * files across encrypted/refuse buckets — keep it out of this denominator.
  * Optional audits: NAMED_DEVICE_TRIAGE / NAMED_DEVICE_REFUSE_TRIAGE /
  * NAMED_DEVICE_ENCRYPTED_AUDIT=1.
  */
@@ -148,9 +148,8 @@ function installedSymbolMetadata(symbolType: string): AsySymbol | null {
     ...EXTRA_SYMBOL_ROOTS,
     ...ltspiceLibRoots().map((root) => join(root, "sym")),
   ];
-  // Exact relative join only — no basename ASY search. Fuzzy basename resolve
-  // can attach another family's ModelFile and dishonestly inflate
-  // encrypted-excluded (seen as ~1474 → ~2776 on this corpus).
+  // Exact relative join only. Basename ASY search (even unique-leaf) must not
+  // feed this harness — it previously inflated encrypted-excluded ~1474→2776.
   for (const root of roots) {
     const path = join(root, `${relativeSymbol}.asy`);
     const rel = relative(root, path);

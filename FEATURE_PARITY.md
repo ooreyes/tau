@@ -227,9 +227,12 @@ Status legend: ✅ done · 🟡 partial · ⬜ not started
     generic starter. Proof: `scripts/named-device-fidelity.sh` →
     `NAMED-DEVICE: exact=2 refuse=4 silent=0` and recursive
     `NAMED-DEVICE-RECURSIVE: unencrypted=2538 exact=399 refuse=2139 silent=0
-    hard-failure=0 encrypted-excluded=1474 exact-rate=15.7%` (QA 2026-08-04
-    23:25; HF=0 is −103/+103 encrypted reclass vs prior 2641/103/1371 — exact
-    unchanged; SHIPPABLE? NO). Still open: import arbitrary user-supplied
+    hard-failure=0 encrypted-excluded=1474 exact-rate=15.7%` (Staff EE audit
+    2026-08-04; `NAMED_DEVICE_ENCRYPTED_AUDIT` wouldHard=0). HF 103→0 is
+    −103/+103 encrypted reclass vs prior 2641/103/1371: deck fixes unmasked
+    parse failures into honest encrypted ModelFile refusals — exact stayed
+    399 (not 103 new exact models). Recursive harness uses exact `.asy` joins
+    only. SHIPPABLE? NO. Still open: import arbitrary user-supplied
     multi-pin `.asy` banks; raise recursive exact-model floor to ≥95% with
     hard-failure=0; a shared five-pin shape does not prove pin fidelity for
     those parts.
