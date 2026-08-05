@@ -76,6 +76,8 @@ const VARACTOR_ASC = join(EDU, "varactor.asc");
 const VARACTOR2_ASC = join(EDU, "varactor2.asc");
 const PHASESHIFT_ASC = join(EDU, "phaseshift.asc");
 const PHASESHIFT2_ASC = join(EDU, "phaseshift2.asc");
+const PIERCE_ASC = join(EDU, "Pierce.asc");
+const COLPITS2_ASC = join(EDU, "colpits2.asc");
 const ORDER2_LOWPASS_ASC = join(APP, "2ndOrderLowpass.asc");
 const ORDER2_BANDPASS_ASC = join(APP, "2ndOrderBandpass.asc");
 const ORDER2_HIGHPASS_ASC = join(APP, "2ndOrderHighpass.asc");
@@ -229,7 +231,7 @@ function withAcStimulus(netlist: string): string {
 describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential parity matrix", () => {
   const cells: DifferentialCell[] = [];
 
-  it("matches RC .tran/.ac/.meas, divider analyses, .step families, curvetrace, stepmodelparam, NoiseFigure, noise.asc, Colpitts/Clapp/Hartly AC, Cohn AC, MeasureBW AC, Transformer/Transformer2/IdealTransformer TRAN, notch/passive/butter/opamp/Linkwitz AC, LM741/LM308/LM78XX/P2/logamp TRAN, GFT AC, DCopPnt OP, audioamp TRAN, UHFpreamp AC, 1563 AC, S-param AC, stepAC AC, 2ndOrder* AC, MonteCarlo AC, varactor AC, phaseshift AC, Class-D AC/OP/DC/noise/tf", () => {
+  it("matches RC .tran/.ac/.meas, divider analyses, .step families, curvetrace, stepmodelparam, NoiseFigure, noise.asc, Colpitts/Clapp/Hartly AC, Cohn AC, MeasureBW AC, Transformer/Transformer2/IdealTransformer TRAN, notch/passive/butter/opamp/Linkwitz AC, LM741/LM308/LM78XX/P2/logamp TRAN, GFT AC, DCopPnt OP, audioamp TRAN, UHFpreamp AC, 1563 AC, S-param AC, stepAC AC, 2ndOrder* AC, MonteCarlo AC, varactor AC, phaseshift AC, Pierce/colpits2 AC, Class-D AC/OP/DC/noise/tf", () => {
     // --- TRAN (also covered by waveformParity; re-assert here so this file is self-sufficient) ---
     {
       const result = runPairedBatch("diff-rc-tran", RC_TRAN, ["v(out)"]);
@@ -2142,6 +2144,90 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
       });
     }
 
+    // --- Educational Pierce.asc / colpits2.asc AC (JFET oscillators; exact 2N5484 + 1N4148) ---
+    // Authored analysis is .tran startup; TRAN vs LTspice phase-misses like phaseshift —
+    // same-deck AC stim on V1 (Colpitts/Clapp/Hartly pattern). Pierce expands Misc\xtal
+    // to Lser/Cser/Rser/Cpar; diode-tank OUT is AC-hollow so probe J1 drain. colpits2
+    // ties drain to Vdd — probe J1 gate. Collision-avoided Staff EE varistor/stepnoise.
+    for (const osc of [
+      {
+        path: PIERCE_ASC,
+        circuit: "pierce",
+        topology: "Educational Pierce.asc XTAL+JFET Pierce + 2N5484 (AC stim on V1; drain probe; .tran-authored)",
+        id: "diff-pierce-ac",
+        startHz: 100e3,
+        stopHz: 20e6,
+        probePin: "d" as const,
+        xtal: true,
+      },
+      {
+        path: COLPITS2_ASC,
+        circuit: "colpits2",
+        topology: "Educational colpits2.asc JFET Colpitts + 2N5484 (AC stim on V1; gate probe; .tran-authored)",
+        id: "diff-colpits2-ac",
+        startHz: 100e3,
+        stopHz: 20e6,
+        probePin: "g" as const,
+        xtal: false,
+      },
+    ] as const) {
+      expect(existsSync(osc.path), `missing ${osc.path}`).toBe(true);
+      const imported = importAsc(decodeSchematicText(readFileSync(osc.path)));
+      expect(imported.warnings).toEqual([]);
+      const dirs = expandDirectiveLines(imported.directives);
+      const params = buildParamScope(dirs);
+      const deck = buildSpiceDeck({
+        components: imported.components,
+        wires: imported.wires,
+        netLabels: imported.netLabels,
+        directives: dirs,
+        params,
+      }, {
+        kind: "ac",
+        startHz: osc.startHz,
+        stopHz: osc.stopHz,
+        pointsPerDecade: 50,
+      });
+      expect(deck.unresolvedSubckts ?? []).toEqual([]);
+      expect(deck.modelSubstitutions ?? []).toEqual([]);
+      expect(deck.netlist).toMatch(/\.model\s+2N5484\s+NJF\b/i);
+      expect(deck.netlist).toMatch(/\.model\s+1N4148\s+D\b/i);
+      const jLines = deck.netlist.split(/\r?\n/).filter((line) => /^J\w*\b/i.test(line.trim()));
+      expect(jLines.length).toBeGreaterThanOrEqual(1);
+      for (const line of jLines) {
+        expect(line, line).toMatch(/\b2N5484\b/);
+        expect(line, line).not.toMatch(/\bTAU_NJF\b/);
+      }
+      if (osc.xtal) {
+        expect(deck.netlist).toMatch(/^LCY1\b/im);
+        expect(deck.netlist).toMatch(/^CCY1\b/im);
+        expect(deck.netlist).toMatch(/^RCY1\b/im);
+        expect(deck.netlist).toMatch(/^CCY1p\b/im);
+      }
+      const j1 = deck.circuit.components.find(({ component }) => component.label.toLowerCase() === "j1");
+      const probeNet = j1?.pins[osc.probePin];
+      expect(probeNet, `${osc.circuit} J1.${osc.probePin} net`).toBeTruthy();
+      const expression = `v(${probeNet})`;
+      const netlist = withAcStimulus(deck.netlist);
+      expect(netlist).toMatch(/^V\w*\b.*\bAC\b/im);
+      const result = runPairedBatch(osc.id, netlist, [expression]);
+      const lt = result.ltspice.get(expression)!;
+      const ng = result.ngspice.get(expression)!;
+      const comparison = compareWaveforms(ng.axis, ng.values, lt.axis, lt.values, {
+        rmsTolerance: 0.02,
+        maxTolerance: 0.05,
+      });
+      expect(comparison.pass, `${osc.circuit} ${JSON.stringify(comparison)}`).toBe(true);
+      expect(comparison.referenceRange, `${osc.circuit} non-hollow`).toBeGreaterThan(0.1);
+      cells.push({
+        analysis: "ac",
+        circuit: osc.circuit,
+        topology: osc.topology,
+        status: "pass",
+        note: `|V(J1.${osc.probePin})| nRms=${comparison.normalizedRms.toFixed(4)} nMax=${comparison.normalizedMax.toFixed(4)} span=${comparison.referenceRange.toFixed(3)}`,
+      });
+    }
+
     // --- Class-D AC/OP (authored analyses are .tran/.meas; add AC/OP for differential proof) ---
     {
       const ascPath = join(CLASSD_DIR, "class-d-starter.asc");
@@ -2435,9 +2521,9 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
     const passCount = cells.filter((cell) => cell.status === "pass").length;
     const gapCount = cells.filter((cell) => cell.status === "gap").length;
     const siblingCount = cells.filter((cell) => cell.status === "sibling").length;
-    expect(passCount).toBeGreaterThanOrEqual(57);
+    expect(passCount).toBeGreaterThanOrEqual(59);
     expect(siblingCount).toBe(5);
     expect(gapCount).toBe(0);
-    expect(report).toMatch(/SUMMARY pass=59 sibling=5 gap=0/);
+    expect(report).toMatch(/SUMMARY pass=61 sibling=5 gap=0/);
   }, 240_000);
 });
