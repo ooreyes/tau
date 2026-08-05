@@ -35,10 +35,12 @@ export interface CirImportResult {
 const PIN_ORDER: Partial<Record<ComponentKind, string[]>> = {
   resistor: ["a", "b"],
   capacitor: ["a", "b"],
+  polarizedCapacitor: ["a", "b"],
   inductor: ["a", "b"],
   switch: ["a", "b"],
   vsource: ["p", "n"],
   isource: ["p", "n"],
+  logicConstant: ["p", "n"],
   bsource: ["p", "n"],
   diode: ["a", "k"],
   led: ["a", "k"],

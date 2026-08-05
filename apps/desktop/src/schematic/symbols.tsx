@@ -47,12 +47,14 @@ export interface BodyBox {
 export const SYMBOL_BODY: Record<ComponentKind, BodyBox> = {
   resistor: { minX: -28, minY: -12, maxX: 28, maxY: 12 },
   capacitor: { minX: -8, minY: -15, maxX: 8, maxY: 15 },
+  polarizedCapacitor: { minX: -10, minY: -15, maxX: 12, maxY: 15 },
   inductor: { minX: -26, minY: -10, maxX: 26, maxY: 10 },
   vsource: { minX: -16, minY: -16, maxX: 16, maxY: 16 },
   isource: { minX: -16, minY: -16, maxX: 16, maxY: 16 },
   vac: { minX: -16, minY: -16, maxX: 16, maxY: 16 },
   iac: { minX: -16, minY: -16, maxX: 16, maxY: 16 },
   vpulse: { minX: -16, minY: -16, maxX: 16, maxY: 16 },
+  logicConstant: { minX: -14, minY: -16, maxX: 14, maxY: 16 },
   diode: { minX: -13, minY: -15, maxX: 13, maxY: 15 },
   led: { minX: -13, minY: -15, maxX: 16, maxY: 15 },
   zener: { minX: -13, minY: -15, maxX: 16, maxY: 15 },
@@ -86,12 +88,14 @@ export const SYMBOL_BODY: Record<ComponentKind, BodyBox> = {
 export const SYMBOL_BOX: Record<ComponentKind, { halfW: number; halfH: number }> = {
   resistor: { halfW: 30, halfH: 12 },
   capacitor: { halfW: 8, halfH: 15 },
+  polarizedCapacitor: { halfW: 12, halfH: 15 },
   inductor: { halfW: 26, halfH: 9 },
   vsource: { halfW: 16, halfH: 17 },
   isource: { halfW: 16, halfH: 17 },
   vac: { halfW: 16, halfH: 17 },
   iac: { halfW: 16, halfH: 17 },
   vpulse: { halfW: 16, halfH: 17 },
+  logicConstant: { halfW: 14, halfH: 18 },
   diode: { halfW: 14, halfH: 15 },
   led: { halfW: 18, halfH: 22 },
   zener: { halfW: 16, halfH: 18 },
@@ -153,6 +157,17 @@ export function ComponentSymbol({ kind, value }: { kind: ComponentKind; value?: 
           <line x1={-5} y1={-13} x2={-5} y2={13} />
           <line x1={5} y1={-13} x2={5} y2={13} />
           <line x1={5} y1={0} x2={32} y2={0} />
+        </>
+      );
+
+    case "polarizedCapacitor":
+      return (
+        <>
+          <line x1={-32} y1={0} x2={-6} y2={0} />
+          <line x1={-6} y1={-13} x2={-6} y2={13} strokeWidth={2.5} />
+          <path d="M 4 -13 Q 14 0 4 13" fill="none" />
+          <line x1={6} y1={0} x2={32} y2={0} />
+          <path d="M -18 -8 H -12 M -15 -11 V -5" />
         </>
       );
 
@@ -230,6 +245,17 @@ export function ComponentSymbol({ kind, value }: { kind: ComponentKind; value?: 
           {/* pulse train: low-high-low-high */}
           <path d="M -10 5 L -10 -5 L -2 -5 L -2 5 L 6 5 L 6 -5 L 10 -5" />
           <line x1={0} y1={r} x2={0} y2={pin} />
+        </>
+      );
+
+    case "logicConstant":
+      return (
+        <>
+          <line x1={0} y1={-pin} x2={0} y2={-14} />
+          <rect x={-12} y={-14} width={24} height={28} rx={2} />
+          <path d="M -4 -4 H 4 M 0 -8 V 0" />
+          <line x1={-5} y1={7} x2={5} y2={7} />
+          <line x1={0} y1={14} x2={0} y2={pin} />
         </>
       );
 

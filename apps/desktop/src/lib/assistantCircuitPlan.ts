@@ -40,7 +40,8 @@ const LABELED_FANOUT_THRESHOLD = 12;
 // proprietary symbol library. Native-only markers and the kinds whose ASC
 // symbol mapping is not yet lossless stay out of the model-facing contract.
 export const ASSISTANT_DIRECT_GENERATABLE_KINDS = [
-  "resistor", "capacitor", "inductor", "vsource", "isource",
+  "resistor", "capacitor", "polarizedCapacitor", "inductor", "vsource", "isource",
+  "logicConstant",
   "diode", "led", "zener", "opamp", "vcvs", "vccs",
   "bsource", "nmos", "pmos", "njf", "pjf", "npn", "pnp",
   "tline", "sampleHold", "modulator",
@@ -908,7 +909,7 @@ const ROW_PITCH = 144;
 // Two-pin passives Tau draws natively with left/right pins at rotation 0.
 // Rotation below uses Tau's native pin transform (NOT LTspice ASC banks).
 const ROTATABLE_TWO_PIN_KINDS = new Set<ComponentKind>([
-  "resistor", "capacitor", "inductor", "diode", "led", "zener",
+  "resistor", "capacitor", "polarizedCapacitor", "inductor", "diode", "led", "zener",
 ]);
 
 /** net name → refs of every component on that net. */

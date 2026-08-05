@@ -28,12 +28,17 @@ const SOURCE_PINS: LocalPin[] = [
 const LOCAL_PINS: Record<ComponentKind, LocalPin[]> = {
   resistor: TWO_TERMINAL_PINS,
   capacitor: TWO_TERMINAL_PINS,
+  polarizedCapacitor: [
+    { id: "a", label: "+", x: -32, y: 0 },
+    { id: "b", label: "−", x: 32, y: 0 },
+  ],
   inductor: TWO_TERMINAL_PINS,
   vsource: SOURCE_PINS,
   isource: SOURCE_PINS,
   vac: SOURCE_PINS,
   iac: SOURCE_PINS,
   vpulse: SOURCE_PINS,
+  logicConstant: SOURCE_PINS,
   diode: [
     { id: "a", label: "A", x: -32, y: 0 },
     { id: "k", label: "K", x: 32, y: 0 },

@@ -61,7 +61,9 @@ function currentAnnotations(
     // Skip empty R/C spam; still label sources/inductors that report 0 A.
     if (
       Math.abs(current) < 1e-15
-      && (extracted.component.kind === "resistor" || extracted.component.kind === "capacitor")
+      && (extracted.component.kind === "resistor"
+        || extracted.component.kind === "capacitor"
+        || extracted.component.kind === "polarizedCapacitor")
     ) {
       continue;
     }

@@ -111,7 +111,7 @@ export function collectAutoResolutionInputs(
       if (Number.isFinite(r) && r > 0) resistances.push(r);
       continue;
     }
-    if (component.kind === "capacitor") {
+    if (component.kind === "capacitor" || component.kind === "polarizedCapacitor") {
       const c = leadingQuantity(component.value, "F");
       if (Number.isFinite(c) && c > 0) taus.push({ kind: "C", value: c });
       continue;

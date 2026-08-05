@@ -1,3 +1,4 @@
+import { isIndependentVoltageBranchKind, logicConstantVolts } from "../schematic/kindGroups";
 import type { ComponentKind, NetLabel, SchematicComponent, SchematicWire } from "../schematic/types";
 import { extractCircuit, type ExtractedCircuit, type ExtractedComponent } from "../schematic/netlist";
 import { formatEngineering, parseQuantity } from "./quantity";
@@ -124,11 +125,13 @@ const TRACE_COLORS = [
 const TRANSIENT_SUPPORTED = new Set<ComponentKind>([
   "resistor",
   "capacitor",
+  "polarizedCapacitor",
   "inductor",
   "vsource",
   "isource",
   "vac",
   "iac",
+  "logicConstant",
   "opamp",
   "vcvs",
   "vccs",
@@ -244,7 +247,7 @@ export async function runTransientAnalysis(
     if (!circuit.groundNetId) {
       return fail("No reference", "Add a ground symbol so node voltages have a reference.", circuit);
     }
-    if (!components.some((component) => ["vsource", "isource", "vac", "iac", "bsource"].includes(component.kind))) {
+    if (!components.some((component) => ["vsource", "isource", "vac", "iac", "bsource", "logicConstant"].includes(component.kind))) {
       return fail("No source", "Add a voltage or current source to excite the circuit. This preview solver requires an explicit independent source.", circuit);
     }
 
@@ -257,7 +260,7 @@ export async function runTransientAnalysis(
     // Behavioral expressions reference nodes by (sanitized net-label) name.
     const netByName = new Map<string, number>();
     nonGroundNets.forEach((net, index) => netByName.set(net.id.toLowerCase(), index));
-    const voltageSources = circuit.components.filter(({ component }) => component.kind === "vsource" || component.kind === "vac");
+    const voltageSources = circuit.components.filter(({ component }) => isIndependentVoltageBranchKind(component.kind));
     const inductors = circuit.components.filter(({ component }) => component.kind === "inductor");
     // Junction diodes (diode/led/zener) are the solver's only nonlinear devices:
     // each timestep re-solves via Newton with a per-device companion model, so
@@ -308,7 +311,7 @@ export async function runTransientAnalysis(
       const ic = parseIcValue(entry.component.value);
       if (ic === null) continue;
       try {
-        if (entry.component.kind === "capacitor") {
+        if (entry.component.kind === "capacitor" || entry.component.kind === "polarizedCapacitor") {
           capacitorVoltage.set(entry.component.id, parseQuantity(ic, "V"));
         } else if (entry.component.kind === "inductor") {
           inductorCurrent.set(entry.component.id, parseQuantity(ic, "A"));
@@ -330,7 +333,7 @@ export async function runTransientAnalysis(
       !options.uic && !options.startup &&
       circuit.components.some(
         ({ component }) =>
-          (component.kind === "capacitor" && !capacitorVoltage.has(component.id)) ||
+          ((component.kind === "capacitor" || component.kind === "polarizedCapacitor") && !capacitorVoltage.has(component.id)) ||
           (component.kind === "inductor" && !inductorCurrent.has(component.id)),
       );
     if (needsOpSeed) {
@@ -344,7 +347,7 @@ export async function runTransientAnalysis(
         const nodeVoltage = (netId: string | undefined) => (netId !== undefined ? voltageByNet.get(netId) ?? 0 : 0);
         for (const entry of circuit.components) {
           const { id, kind } = entry.component;
-          if (kind === "capacitor" && !capacitorVoltage.has(id)) {
+          if ((kind === "capacitor" || kind === "polarizedCapacitor") && !capacitorVoltage.has(id)) {
             capacitorVoltage.set(id, nodeVoltage(entry.pins.a) - nodeVoltage(entry.pins.b));
           } else if (kind === "inductor" && !inductorCurrent.has(id)) {
             const current = branchCurrentById.get(id);
@@ -420,6 +423,7 @@ export async function runTransientAnalysis(
           sampleResistance.set(id, r);
           break;
         }
+        case "polarizedCapacitor":
         case "capacitor": {
           capacitanceOf.set(id, positiveValue(entry, "F"));
           let c = 0;
@@ -433,6 +437,16 @@ export async function runTransientAnalysis(
         case "vsource":
           if (!sourceWaveforms.get(id)) dcSourceValue.set(id, parseQuantity(stripAcSpec(entry.component.value), "V"));
           break;
+        case "logicConstant": {
+          let v: number;
+          try {
+            v = logicConstantVolts(entry.component.value);
+          } catch {
+            v = parseQuantity(entry.component.value, "V");
+          }
+          dcSourceValue.set(id, v);
+          break;
+        }
         case "isource":
           if (!sourceWaveforms.get(id)) dcSourceValue.set(id, parseQuantity(stripAcSpec(entry.component.value), "A"));
           break;
@@ -498,6 +512,7 @@ export async function runTransientAnalysis(
           case "resistor":
             stampConductance(matrix, netIndex(entry.pins.a, nodeIndex), netIndex(entry.pins.b, nodeIndex), conductanceOf.get(entry.component.id)!);
             break;
+          case "polarizedCapacitor":
           case "capacitor": {
             const conductance = capacitanceOf.get(entry.component.id)! / stepSize;
             const a = netIndex(entry.pins.a, nodeIndex);
@@ -507,7 +522,8 @@ export async function runTransientAnalysis(
             stampCurrent(rhs, a, b, -conductance * previousVoltage);
             break;
           }
-          case "vsource": {
+          case "vsource":
+          case "logicConstant": {
             const sourceIndex = voltageSourceOffset + voltageSourceIndex.get(entry.component.id)!;
             const wave = sourceWaveforms.get(entry.component.id);
             const value = wave ? wave.at(time) : dcSourceValue.get(entry.component.id)!;
@@ -791,6 +807,7 @@ export async function runTransientAnalysis(
         const id = entry.component.id;
         const ref = entry.component.label;
         switch (entry.component.kind) {
+          case "polarizedCapacitor":
           case "capacitor": {
             const now = voltageBetween(entry.pins.a, entry.pins.b, nodeIndex, solution);
             const prev = capacitorVoltage.get(id) ?? 0;
@@ -811,6 +828,7 @@ export async function runTransientAnalysis(
             break;
           }
           case "vsource":
+          case "logicConstant":
           case "vac": {
             const currentIndex = voltageSourceOffset + voltageSourceIndex.get(id)!;
             pushCurrent(id, ref, solution[currentIndex]);

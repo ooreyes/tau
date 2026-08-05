@@ -15,6 +15,7 @@ import {
   type ParamScope,
 } from "../simulation/paramScope";
 import type { ComponentKind, NetLabel, SchematicComponent, SchematicForeignSymbol, SchematicWire } from "../schematic/types";
+import { isCapacitorKind, logicConstantVolts } from "../schematic/kindGroups";
 import { parseQuantity, formatEngineering } from "../simulation/quantity";
 import { decodeParams } from "../schematic/params";
 import { parseSourceFunction, MalformedPwlError, type SourceUnit, type SourceSpec } from "./sourceFunction";
@@ -711,7 +712,7 @@ export function buildSpiceDeck(
   // t=0, exactly like a `.ic` directive.
   const hasInstanceIc = circuit.components.some(
     ({ component }) =>
-      (component.kind === "capacitor" || component.kind === "inductor") &&
+      (isCapacitorKind(component.kind) || component.kind === "inductor") &&
       parseIcValue(component.value) !== null,
   );
 
@@ -1325,6 +1326,7 @@ function componentLines(entry: ExtractedComponent, index: number, name: string, 
       // e.g. Draft7's -1k) and zero (an ideal short); reject only NaN/invalid.
       return [`${name} ${node("a")} ${node("b")} ${magnitude}${tempco}`];
     }
+    case "polarizedCapacitor":
     case "capacitor": {
       const charge = behavioralCapacitorDeckValue(component, node("a"), node("b"), params);
       if (charge) return [`${name} ${node("a")} ${node("b")} ${charge}`];
@@ -1469,6 +1471,15 @@ function componentLines(entry: ExtractedComponent, index: number, name: string, 
       const width = Math.max(period * duty - edge, period * 0.005);
       // PULSE(V1 V2 TD TR TF PW PER)
       return [`${name} ${node("p")} ${node("n")} DC ${low} PULSE(${low} ${high} 0 ${edge} ${edge} ${width} ${period})`];
+    }
+    case "logicConstant": {
+      let voltsText: string;
+      try {
+        voltsText = String(logicConstantVolts(component.value));
+      } catch {
+        voltsText = numberFromText(component, component.value.trim() || "0", "V");
+      }
+      return [`${name} ${node("p")} ${node("n")} DC ${voltsText}`];
     }
     case "diode":
       return [`${name} ${node("a")} ${node("k")} ${deviceModel("TAU_DIODE")}`];
@@ -2049,7 +2060,8 @@ function deckNode(value: string, role: string, analysis: string): string {
 }
 
 const SPICE_PREFIX: Record<ComponentKind, string> = {
-  resistor: "R", capacitor: "C", inductor: "L", vsource: "V", isource: "I", vac: "V", iac: "I", vpulse: "V",
+  resistor: "R", capacitor: "C", polarizedCapacitor: "C", inductor: "L", vsource: "V", isource: "I", vac: "V", iac: "I", vpulse: "V",
+  logicConstant: "V",
   diode: "D", led: "D", zener: "D", opamp: "E", comparator: "B", digitalGate: "B", dflop: "A", sampleHold: "A", modulator: "A", vcvs: "E", vccs: "G", cccs: "F", ccvs: "H", bsource: "B", nmos: "M", pmos: "M", njf: "J", pjf: "J", npn: "Q", pnp: "Q",
   potentiometer: "R", switch: "S", transformer: "L", tline: "T", subckt: "X", testpoint: "X", ground: "X",
 };

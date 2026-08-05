@@ -1,14 +1,51 @@
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 09:40 CDT**
+**Status: DONE - 2026-08-05 ~09:40 CDT**
 
-Unit: Step-family manual Y limits (waveform DoD).
-Worktree `Tau-wt-wave-step-ylim` on tip `274215c`. Left EveryCircuit library /
-current-mode / Settings / Educational / stash@{0} alone. SHIPPABLE? **NO**
+Unit: EveryCircuit library — **polarized capacitor** + **logic constant**
+(honest C / DC-V) + scope cursor → schematic `readoutTime`.
+Worktree `Tau-wt-ec-lib` rebased onto step-family tip. Not full EC parity.
+SHIPPABLE? **NO**
+
 
 **SHIPPABLE?** **NO**
 
 
+
+
+---
+
+### 2026-08-05 — polarized cap + logic constant + cursor readout (§EveryCircuit)
+
+**What I did**
+- Palette `polarizedCapacitor`: electrolytic glyph; netlists as real SPICE `C`
+  (same stamps/deck path as capacitor). KiCad `c_polarized` / LTspice `polcap`
+  import to this kind.
+- Palette `logicConstant`: honest DC voltage source at 0/1 (or numeric volts);
+  OP/TRAN/AC/noise + ngspice deck.
+- Simulator scope cursors open → `readoutTime` on schematic current-mode canvas
+  (active cursor time; closed → final sample).
+
+**Files**
+- `schematic/{types,catalog,pins,params,symbols,kindGroups,behavioralCapacitor,everyCircuitLibrary.test}.ts(x)`
+- `engine/spiceNetlist.ts`, `simulation/{operatingPoint,linearTransient,acSweep,noise,autoResolution,opAnnotations,measurementModel,transferFunction,analysisSetup}.ts`
+- `io/{ascExport,ascImport,kicadNetImport,cirImport}.ts`, `lib/assistantCircuitPlan.ts`
+- `components/{Canvas.geometry,SimulationPanel}.tsx`, `App.tsx`
+- `FEATURE_PARITY.md`, `PROGRESS.md`
+
+**Tests**
+- `pnpm -C apps/desktop typecheck` + library/catalog tests; full suite 2813+
+  (one flaky App.workspace timeout; re-run 21/21 green)
+
+**Parity items**
+- §EveryCircuit: polarized C + logic constant landed; remaining gaps unchanged
+  (bulb/motor/SPDT/photodiode/…). SHIPPABLE? NO
+
+**Next step**
+- Photodiode or SPDT/push-button with honest models only; leave Staff EE /
+  continue 40 / Settings alone.
+
+SHIPPABLE? **NO**
 
 
 ---

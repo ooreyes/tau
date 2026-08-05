@@ -446,7 +446,7 @@ export function ltspiceTypeToKind(type: string): ComponentKind | null {
     cap: "capacitor",
     cap2: "capacitor",
     c: "capacitor",
-    polcap: "capacitor",
+    polcap: "polarizedCapacitor",
     // Crystal (xtal): a 2-terminal piezoelectric resonator modelled in LTspice
     // as a capacitor C element (series capacitance Cs) with optional parasitic
     // params (Rser, Lser, Cpar) on SpiceLine. Imported as a capacitor so the
@@ -1403,7 +1403,7 @@ export function componentValueFromAttrs(
   // attributes (LTspice writes e.g. `SpiceLine2 IC=1`). Append just the `IC=`
   // token - not the whole attribute, which can hold ngspice-incompatible
   // LTspice-only keys (Rser, Cpar, …).
-  if (kind === "capacitor" || kind === "inductor") {
+  if (kind === "capacitor" || kind === "polarizedCapacitor" || kind === "inductor") {
     // A nonlinear (Chan) magnetic-core inductor spreads its core geometry across
     // Value2/SpiceLine (A=/Lm=/Lg=/N=); keep all of it so the deck builder can
     // size the equivalent linear inductance. Plain L/C keep just the `IC=` token.
@@ -1421,7 +1421,7 @@ export function componentValueFromAttrs(
     // capacitance/inductance token unparsable. Lser identifies Misc\xtal and
     // its BVD expansion; ordinary C/L Rser is expanded explicitly by the deck.
     const parasitics = [...(attrs.SpiceLine ?? "").matchAll(/\b(Rser|Lser|Cpar)\s*=\s*([^\s]+)/gi)]
-      .filter((match) => kind === "capacitor" || match[1].toLowerCase() === "rser")
+      .filter((match) => kind === "capacitor" || kind === "polarizedCapacitor" || match[1].toLowerCase() === "rser")
       .map((match) => `${match[1]}=${match[2]}`);
     return [base, ...parasitics, ...(ic !== undefined ? [`IC=${ic}`] : [])]
       .filter(Boolean)

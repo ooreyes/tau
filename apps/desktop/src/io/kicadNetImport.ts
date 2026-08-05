@@ -153,8 +153,8 @@ const SAFE_DEVICE_PARTS: Record<string, ComponentKind> = {
   r_small: "resistor",
   c: "capacitor",
   c_small: "capacitor",
-  c_polarized: "capacitor",
-  c_polarized_small: "capacitor",
+  c_polarized: "polarizedCapacitor",
+  c_polarized_small: "polarizedCapacitor",
   l: "inductor",
   l_small: "inductor",
 };

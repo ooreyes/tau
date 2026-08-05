@@ -38,7 +38,7 @@ import { runOperatingPoint, type OperatingPointResult } from "./operatingPoint";
 import { EMPTY_SCOPE, resolveComponentValues, type ParamScope } from "./paramScope";
 
 /** Independent-source kinds usable as a `.tf` stimulus. */
-const SOURCE_KINDS = new Set<ComponentKind>(["vsource", "isource", "vac", "iac"]);
+const SOURCE_KINDS = new Set<ComponentKind>(["vsource", "isource", "vac", "iac", "logicConstant"]);
 
 export type TfOutput =
   | { kind: "voltage"; pos: string; neg?: string }
@@ -114,14 +114,18 @@ export function parseTfDirective(line: string): TfSpec | null {
 
 /** Clone a source component into a 0-contribution DC source (AC kinds collapse to DC). */
 function zeroed(c: SchematicComponent): SchematicComponent {
-  if (c.kind === "vsource" || c.kind === "vac") return { ...c, kind: "vsource", value: "0" };
+  if (c.kind === "vsource" || c.kind === "vac" || c.kind === "logicConstant") {
+    return { ...c, kind: "vsource", value: "0" };
+  }
   if (c.kind === "isource" || c.kind === "iac") return { ...c, kind: "isource", value: "0" };
   return c;
 }
 
 /** Clone a source component into a DC source driven at `value` (AC kinds become DC). */
 function driven(c: SchematicComponent, value: string): SchematicComponent {
-  if (c.kind === "vsource" || c.kind === "vac") return { ...c, kind: "vsource", value };
+  if (c.kind === "vsource" || c.kind === "vac" || c.kind === "logicConstant") {
+    return { ...c, kind: "vsource", value };
+  }
   if (c.kind === "isource" || c.kind === "iac") return { ...c, kind: "isource", value };
   return c;
 }
@@ -162,7 +166,7 @@ export function runTransferFunction(schematic: Schematic, spec: TfSpec): TfResul
       warnings,
     };
   }
-  const inputIsVoltage = input.kind === "vsource" || input.kind === "vac";
+  const inputIsVoltage = input.kind === "vsource" || input.kind === "vac" || input.kind === "logicConstant";
 
   const solve = (
     components: SchematicComponent[],

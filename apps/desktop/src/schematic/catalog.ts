@@ -18,6 +18,7 @@ export interface CatalogEntry {
 export const CATALOG: CatalogEntry[] = [
   { kind: "resistor",      section: "Passives",          name: "Resistor",        hotkey: "r", prefix: "R",   defaultValue: "1k",    unit: "Ω" },
   { kind: "capacitor",     section: "Passives",          name: "Capacitor",       hotkey: "c", prefix: "C",   defaultValue: "1µ",    unit: "F" },
+  { kind: "polarizedCapacitor", section: "Passives",     name: "Polarized Cap",   hotkey: "",  prefix: "C",   defaultValue: "10µ",   unit: "F" },
   { kind: "inductor",      section: "Passives",          name: "Inductor",        hotkey: "l", prefix: "L",   defaultValue: "1m",    unit: "H" },
   { kind: "potentiometer", section: "Passives",          name: "Potentiometer",   hotkey: "h", prefix: "RV",  defaultValue: "10k",   unit: "Ω" },
 
@@ -32,6 +33,7 @@ export const CATALOG: CatalogEntry[] = [
   // bespoke "low→high @ freq" canvas label instead of suffixing one unit
   // onto the whole token string.
   { kind: "vpulse",        section: "Sources",           name: "Pulse Voltage",   hotkey: "k", prefix: "V",   defaultValue: "0 5 100k 0.5", unit: "" },
+  { kind: "logicConstant", section: "Digital",           name: "Logic Constant",  hotkey: "",  prefix: "V",   defaultValue: "1",     unit: "V" },
   { kind: "ground",        section: "Sources",           name: "Ground",          hotkey: "g", prefix: "GND", defaultValue: "",      unit: "" },
 
   { kind: "diode",         section: "Semiconductors",    name: "Diode",           hotkey: "d", prefix: "D",   defaultValue: "D",     unit: "" },

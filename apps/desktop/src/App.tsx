@@ -275,6 +275,7 @@ function App() {
       ? "document" as const
       : "automatic" as const;
   const [analysis, setAnalysis] = useState<(AnalysisResult & EngineProvenance) | null>(null);
+  const [schematicReadoutTime, setSchematicReadoutTime] = useState<number | null>(null);
   const [opAnalysis, setOpAnalysis] = useState<(OperatingPointResult & EngineProvenance) | null>(null);
   const [acAnalysis, setAcAnalysis] = useState<(AcResult & EngineProvenance) | null>(null);
   const [dcAnalysis, setDcAnalysis] = useState<(DcSweepResult & EngineProvenance) | null>(null);
@@ -1988,7 +1989,13 @@ function App() {
                 </span>
               </header>
               <div className="sim-schematic-canvas">
-                <Canvas op={opAnalysis} tran={analysis} interactive={false} fitSignal={fitSignal} />
+                <Canvas
+                  op={opAnalysis}
+                  tran={analysis}
+                  readoutTime={schematicReadoutTime}
+                  interactive={false}
+                  fitSignal={fitSignal}
+                />
               </div>
               <TelemetryDock rows={componentRows} selectedId={selectedId} onSelect={select} />
             </section>
@@ -2037,6 +2044,7 @@ function App() {
                 onNoiseSetupChange={setNoiseSetup}
                 stepSetupUi={stepSetupUi}
                 onStepSetupUiChange={setStepSetupUi}
+                onSchematicReadoutTime={setSchematicReadoutTime}
               />
             </AnalysisErrorBoundary>
           </>

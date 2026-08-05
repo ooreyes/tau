@@ -1,11 +1,12 @@
 import type { SchematicComponent } from "./types";
+import { isCapacitorKind } from "./kindGroups";
 import { stripIcSpec } from "../engine/icSpec";
 import { parseQuantity } from "../simulation/quantity";
 
 /** LTspice's nonlinear capacitor form stores charge as `Q=<expression>` in
  * the ordinary capacitor Value field. */
 export function isChargeDefinedCapacitor(component: SchematicComponent): boolean {
-  return component.kind === "capacitor" && /^\s*Q\s*=/i.test(component.value);
+  return isCapacitorKind(component.kind) && /^\s*Q\s*=/i.test(component.value);
 }
 
 /** The interim preview solvers have only a constant-C stamp. AC/noise require
@@ -28,7 +29,7 @@ export function previewNegativeCapacitorMessage(
   components: readonly SchematicComponent[],
 ): string | null {
   for (const component of components) {
-    if (component.kind !== "capacitor" || isChargeDefinedCapacitor(component)) continue;
+    if (!isCapacitorKind(component.kind) || isChargeDefinedCapacitor(component)) continue;
     let capacitance: number;
     try {
       capacitance = parseQuantity(stripIcSpec(component.value), "F");

@@ -17,6 +17,7 @@
  */
 
 import type { ComponentKind, NetLabel, SchematicComponent, SchematicWire } from "../schematic/types";
+import { isIndependentVoltageBranchKind, logicConstantVolts } from "../schematic/kindGroups";
 import { extractCircuit, type ExtractedCircuit } from "../schematic/netlist";
 import { parseQuantity } from "./quantity";
 import { resolveComponentValues, EMPTY_SCOPE, type ParamScope } from "./paramScope";
@@ -102,11 +103,13 @@ export interface OpOptions {
 const OP_SUPPORTED = new Set<ComponentKind>([
   "resistor",
   "capacitor",
+  "polarizedCapacitor",
   "inductor",
   "vsource",
   "isource",
   "vac",
   "iac",
+  "logicConstant",
   "opamp",
   "vcvs",
   "vccs",
@@ -173,7 +176,7 @@ export function runOperatingPoint(
         circuit,
       );
     }
-    if (!components.some((c) => ["vsource", "isource", "vac", "iac", "bsource"].includes(c.kind))) {
+    if (!components.some((c) => ["vsource", "isource", "vac", "iac", "bsource", "logicConstant"].includes(c.kind))) {
       return fail("Add a voltage or current source to excite the circuit.", circuit);
     }
 
@@ -187,7 +190,7 @@ export function runOperatingPoint(
     // extra unknown (branch current). Op-amps add one extra unknown (output
     // branch current io) whose constraint row enforces V(in+) = V(in-).
     const voltageSources = circuit.components.filter(
-      ({ component }) => component.kind === "vsource" || component.kind === "vac",
+      ({ component }) => isIndependentVoltageBranchKind(component.kind),
     );
     const inductors = circuit.components.filter(
       ({ component }) => component.kind === "inductor",
@@ -285,6 +288,7 @@ export function runOperatingPoint(
           break;
         }
 
+        case "polarizedCapacitor":
         case "capacitor":
           // Open circuit at DC - skip entirely
           break;
@@ -313,6 +317,24 @@ export function runOperatingPoint(
           const v = isFunctionSource(entry.component.value)
             ? parseTransientSource(entry.component.value, "V").dc
             : parseQuantity(stripAcSpec(entry.component.value), "V");
+          stampVoltageSource(matrix, rhs, p, n, sIdx, v);
+          break;
+        }
+
+        case "logicConstant": {
+          const sIdx =
+            voltageSourceOffset +
+            voltageSources.findIndex(
+              (v) => v.component.id === entry.component.id,
+            );
+          const p = nodeIdx(entry.pins["p"], nodeIndex);
+          const n = nodeIdx(entry.pins["n"], nodeIndex);
+          let v: number;
+          try {
+            v = logicConstantVolts(entry.component.value);
+          } catch {
+            v = parseQuantity(entry.component.value, "V");
+          }
           stampVoltageSource(matrix, rhs, p, n, sIdx, v);
           break;
         }

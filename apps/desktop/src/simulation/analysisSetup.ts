@@ -9,7 +9,8 @@ const SWEEPABLE_KINDS = new Set(["vsource", "isource", "vac", "iac"]);
 // were previously listed as "nmosp"/"pmosp"/"njfet"/"pjfet", which match no
 // kind at all, so alt-clicking a MOSFET or JFET silently did nothing.
 const CURRENT_PROBE_KINDS = new Set([
-  "resistor", "capacitor", "inductor", "vsource", "isource", "diode", "led",
+  "resistor", "capacitor", "polarizedCapacitor", "inductor", "vsource", "isource",
+  "logicConstant", "diode", "led",
   "zener", "nmos", "pmos", "njf", "pjf", "npn", "pnp",
 ]);
 

@@ -220,6 +220,8 @@ interface SimulationPanelProps {
   onNoiseSetupChange: (next: NoiseSpec) => void;
   stepSetupUi: StepSetupUi;
   onStepSetupUiChange: (next: StepSetupUi) => void;
+  /** When transient cursors are open, report active cursor time for schematic readout. Null = final. */
+  onSchematicReadoutTime?: (timeSeconds: number | null) => void;
 }
 
 const PLOT_WIDTH = 340;
@@ -287,6 +289,7 @@ export function SimulationPanel({
   onNoiseSetupChange,
   stepSetupUi,
   onStepSetupUiChange,
+  onSchematicReadoutTime,
 }: SimulationPanelProps) {
   const components = useSchematic((s) => s.components);
   const wires = useSchematic((s) => s.wires);
@@ -319,6 +322,17 @@ export function SimulationPanel({
   const [activeTransientCursor, setActiveTransientCursor] = useState<TransientCursorId | null>(null);
   const [cursorF1, setCursorF1] = useState(0.25);
   const [cursorF2, setCursorF2] = useState(0.75);
+
+  useEffect(() => {
+    if (!onSchematicReadoutTime) return;
+    if (!cursorsOpen || !result?.ok || result.times.length === 0) {
+      onSchematicReadoutTime(null);
+      return;
+    }
+    const fraction = activeTransientCursor === "c2" ? cursorF2 : cursorF1;
+    onSchematicReadoutTime(fractionToX(result.times, fraction));
+  }, [onSchematicReadoutTime, cursorsOpen, activeTransientCursor, cursorF1, cursorF2, result]);
+
   const [maximized, setMaximized] = useState(false);
   // User-entered expression traces overlaid on the transient scope, e.g.
   // `V(out)-V(in)` or power `V(out)*I(R1)`.

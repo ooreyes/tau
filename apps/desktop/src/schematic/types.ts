@@ -9,12 +9,14 @@
 export type ComponentKind =
   | "resistor"
   | "capacitor"
+  | "polarizedCapacitor"
   | "inductor"
   | "vsource"
   | "isource"
   | "vac"
   | "iac"
   | "vpulse"
+  | "logicConstant"
   | "diode"
   | "led"
   | "zener"
@@ -45,7 +47,8 @@ export type ComponentKind =
 
 /** Runtime companion to ComponentKind for validating persisted/imported data. */
 export const COMPONENT_KINDS = [
-  "resistor", "capacitor", "inductor", "vsource", "isource", "vac", "iac", "vpulse",
+  "resistor", "capacitor", "polarizedCapacitor", "inductor", "vsource", "isource", "vac", "iac", "vpulse",
+  "logicConstant",
   "diode", "led", "zener", "opamp", "comparator", "digitalGate", "dflop", "sampleHold",
   "modulator", "vcvs", "vccs", "cccs", "ccvs", "bsource", "nmos", "pmos", "njf", "pjf",
   "npn", "pnp", "potentiometer", "switch", "transformer", "tline", "subckt", "testpoint",

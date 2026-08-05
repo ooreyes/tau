@@ -380,7 +380,7 @@ function deriveSeriesBranchCurrents(
   return currentsByComponentId;
 }
 
-const DIRECT_IDEAL_VOLTAGE_SOURCE_KINDS: ReadonlySet<ComponentKind> = new Set(["vsource", "vac", "vpulse"]);
+const DIRECT_IDEAL_VOLTAGE_SOURCE_KINDS: ReadonlySet<ComponentKind> = new Set(["vsource", "vac", "vpulse", "logicConstant"]);
 
 function sameUnorderedPair(a: readonly [string, string], b: readonly [string, string]): boolean {
   return (a[0] === b[0] && a[1] === b[1]) || (a[0] === b[1] && a[1] === b[0]);

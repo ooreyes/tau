@@ -12,6 +12,7 @@
  *   - types from ../schematic/types
  */
 
+import { isIndependentVoltageBranchKind } from "../schematic/kindGroups";
 import type { ComponentKind, NetLabel, SchematicComponent, SchematicWire } from "../schematic/types";
 import { extractCircuit, type ExtractedCircuit } from "../schematic/netlist";
 import { parseQuantity } from "./quantity";
@@ -218,11 +219,13 @@ const GMIN = 1e-12;
 const AC_SUPPORTED = new Set<ComponentKind>([
   "resistor",
   "capacitor",
+  "polarizedCapacitor",
   "inductor",
   "vsource",
   "isource",
   "vac",
   "iac",
+  "logicConstant",
   "opamp",
   "vcvs",
   "vccs",
@@ -353,7 +356,7 @@ export function runAcSweep(
 
     // Voltage sources in AC analysis: vac sources are active, vsource = 0 V (short)
     const voltageSources = circuit.components.filter(
-      ({ component }) => component.kind === "vsource" || component.kind === "vac",
+      ({ component }) => isIndependentVoltageBranchKind(component.kind),
     );
     // Inductors: add branch current unknown (like linearTransient)
     const inductors = circuit.components.filter(({ component }) => component.kind === "inductor");
@@ -441,6 +444,7 @@ export function runAcSweep(
             break;
           }
 
+          case "polarizedCapacitor":
           case "capacitor": {
             // Admittance = jωC
             const C = positiveValue(component.value, component.id, component.label, "F");
@@ -480,6 +484,7 @@ export function runAcSweep(
             break;
           }
 
+          case "logicConstant":
           case "vsource": {
             // A plain DC voltage source is a short (0 V) at AC; but LTspice lets
             // any V source carry an `AC <mag> [phase]` stimulus (imported onto the

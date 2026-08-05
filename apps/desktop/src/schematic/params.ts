@@ -18,10 +18,12 @@ export interface ParamField {
 const SCHEMA: Partial<Record<ComponentKind, ParamField[]>> = {
   resistor: [{ key: "r", label: "Resistance", unit: "Ω" }],
   capacitor: [{ key: "c", label: "Capacitance", unit: "F" }],
+  polarizedCapacitor: [{ key: "c", label: "Capacitance", unit: "F" }],
   inductor: [{ key: "l", label: "Inductance", unit: "H" }],
   potentiometer: [{ key: "r", label: "Resistance", unit: "Ω" }],
   vsource: [{ key: "dc", label: "DC level", unit: "V" }],
   isource: [{ key: "dc", label: "DC level", unit: "A" }],
+  logicConstant: [{ key: "level", label: "Level (0 / 1)", unit: "V" }],
   vac: [
     { key: "offset", label: "Offset", unit: "V" },
     { key: "amplitude", label: "Amplitude", unit: "V" },
@@ -73,7 +75,7 @@ const CHARGE_CAPACITOR_FIELDS: ParamField[] = [
 ];
 
 export function paramFields(kind: ComponentKind, value = ""): ParamField[] {
-  if (kind === "capacitor" && /^\s*Q\s*=/i.test(value)) return CHARGE_CAPACITOR_FIELDS;
+  if ((kind === "capacitor" || kind === "polarizedCapacitor") && /^\s*Q\s*=/i.test(value)) return CHARGE_CAPACITOR_FIELDS;
   return SCHEMA[kind] ?? [];
 }
 
@@ -83,7 +85,7 @@ const AC_KINDS = new Set<ComponentKind>(["vac", "iac"]);
 export function decodeParams(kind: ComponentKind, value: string): Record<string, string> {
   const fields = paramFields(kind, value);
   if (fields.length === 0) return {};
-  if (kind === "capacitor" && /^\s*Q\s*=/i.test(value)) {
+  if ((kind === "capacitor" || kind === "polarizedCapacitor") && /^\s*Q\s*=/i.test(value)) {
     return {
       charge: stripIcSpec(value).replace(/^\s*Q\s*=\s*/i, "").trim(),
       ic: parseIcValue(value) ?? "",
@@ -150,7 +152,7 @@ function decodeMosfetParams(value: string, fallbackModel: string): Record<string
 
 /** Re-assemble a value string from structured fields (solver-compatible form). */
 export function encodeParams(kind: ComponentKind, values: Record<string, string>): string {
-  if (kind === "capacitor" && Object.prototype.hasOwnProperty.call(values, "charge")) {
+  if ((kind === "capacitor" || kind === "polarizedCapacitor") && Object.prototype.hasOwnProperty.call(values, "charge")) {
     const charge = (values.charge ?? "").trim();
     const ic = (values.ic ?? "").trim();
     return `Q=${charge}${ic ? ` IC=${ic}` : ""}`;

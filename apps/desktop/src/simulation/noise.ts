@@ -31,6 +31,7 @@
  */
 
 import type { ComponentKind, NetLabel, SchematicComponent, SchematicWire } from "../schematic/types";
+import { isIndependentVoltageBranchKind } from "../schematic/kindGroups";
 import { extractCircuit, type ExtractedCircuit } from "../schematic/netlist";
 import { parseQuantity } from "./quantity";
 import { resolveComponentValues, EMPTY_SCOPE, type ParamScope } from "./paramScope";
@@ -187,18 +188,20 @@ function solveCLinearSystem(matrix: CMatrix, rhs: CVector): CVector {
 const NOISE_SUPPORTED = new Set<ComponentKind>([
   "resistor",
   "capacitor",
+  "polarizedCapacitor",
   "inductor",
   "vsource",
   "isource",
   "vac",
   "iac",
+  "logicConstant",
   "opamp",
   "switch",
   "testpoint",
   "ground",
 ]);
 
-const SOURCE_KINDS = new Set<ComponentKind>(["vsource", "isource", "vac", "iac"]);
+const SOURCE_KINDS = new Set<ComponentKind>(["vsource", "isource", "vac", "iac", "logicConstant"]);
 
 /**
  * Parse a `.noise` directive into a {@link NoiseSpec}. Accepts an optional
@@ -376,7 +379,7 @@ export function runNoiseAnalysis(schematic: Schematic, spec: NoiseSpec): NoiseRe
 
     // Branch unknown bookkeeping (mirror acSweep: voltage sources, inductors, op-amps).
     const voltageSources = circuit.components.filter(
-      ({ component }) => component.kind === "vsource" || component.kind === "vac",
+      ({ component }) => isIndependentVoltageBranchKind(component.kind),
     );
     const inductors = circuit.components.filter(({ component }) => component.kind === "inductor");
     const opamps = circuit.components.filter(({ component }) => component.kind === "opamp");
@@ -424,6 +427,7 @@ export function runNoiseAnalysis(schematic: Schematic, spec: NoiseSpec): NoiseRe
             stampCAdmittance(matrix, nodeIdx(pins["a"], nodeIndex), nodeIdx(pins["b"], nodeIndex), { re: 1 / R, im: 0 });
             break;
           }
+          case "polarizedCapacitor":
           case "capacitor": {
             const Cc = positiveValue(component.value, component.id, component.label, "F");
             stampCAdmittance(matrix, nodeIdx(pins["a"], nodeIndex), nodeIdx(pins["b"], nodeIndex), { re: 0, im: omega * Cc });
@@ -447,6 +451,7 @@ export function runNoiseAnalysis(schematic: Schematic, spec: NoiseSpec): NoiseRe
             matrix[iIdx][iIdx] = cadd(matrix[iIdx][iIdx], { re: 0, im: -omega * L });
             break;
           }
+          case "logicConstant":
           case "vsource":
           case "vac": {
             // Companion stamp only - source amplitude does not affect the system matrix.

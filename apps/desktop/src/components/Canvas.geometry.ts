@@ -263,6 +263,13 @@ const explicitUnit = (value: string, unit: string) => {
  * (`decodeParams`), instead of the catalog abusing `unit` as a display hint.
  */
 export const sourceValueLabel = (kind: ComponentKind, value: string): string => {
+  if (kind === "logicConstant") {
+    const raw = value.trim().toLowerCase();
+    if (raw === "0" || raw === "1" || raw === "low" || raw === "high") {
+      return raw === "0" || raw === "low" ? "0" : "1";
+    }
+    return value.trim() || "1";
+  }
   if (kind === "vsource" || kind === "isource") {
     const unit = kind === "vsource" ? "V" : "A";
     const source = decodeIndependentSourceValue(value, unit);
