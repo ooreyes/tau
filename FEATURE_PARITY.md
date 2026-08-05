@@ -1351,6 +1351,9 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   cursors along the run; a meter row shows t1/t2/Δt/(1/Δt) and a table lists each
   signal's value at C1, C2, and the delta. Reuses the tested `interpolateAt`
   resampler so readings are interpolated between samples.
+  **Cursor readout CSV landed** (2026-08-05): `cursorReadoutToCsv` writes
+  `signal,unit,c1,c2,delta,slope` (time row + traces); Cursors **Export CSV**.
+  2 pure tests.
   **Engineer-facing cursor redesign (2026-07-23):** C1/C2 are now shared across
   every visible transient plot and drawn as labelled, color-distinct vertical
   lines on the waveform. Sliders remain for coarse placement, while dedicated
@@ -1508,10 +1511,13 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   (2026-08-05): Advanced **Export PNG** rasters Bode mag+phase SVGs via the
   same `waveformSvgsToPng` path as transient (`tau-ac-….png`). 1 wiring test.
   **DC Export PNG landed** (2026-08-05): same path for the DC sweep pane
-  (`tau-dc-….png`). 1 wiring test. **Noise Export PNG landed** (2026-08-05):
+  (`tau-dc-….png`). 1 wiring test.   **Noise Export PNG landed** (2026-08-05):
   same path for the noise spectrum pane (`tau-noise-….png`). 1 wiring test.
-  **NEXT:** (waveform CSV/PNG/plt/FFT/expressions/dual-axis/right-click/Bode-X
-  covered — remaining: richer right-click ops, Y log, phase pane).
+  **Cursor readout CSV landed** (2026-08-05): `cursorReadoutToCsv` writes
+  `signal,unit,c1,c2,delta,slope` (time row + traces); Cursors panel **Export
+  CSV**. 2 pure tests. **NEXT:** (waveform CSV/PNG/plt/FFT/expressions/
+  dual-axis/right-click/Bode-X/cursor-CSV covered — remaining: richer
+  right-click ops, Y log, phase pane, step PNG).
 - 🟡 Right-click trace → math/operations — **abs / negate / dB landed**
   (2026-08-05): `traceMath.ts` wraps a legend trace into `abs(…)`, `-(…)`,
   or `db(…)` and adds it via the existing expression overlay path; transient

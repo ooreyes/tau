@@ -65,7 +65,7 @@ import { groupDelay } from "../simulation/groupDelay";
 import { freqToFraction } from "../simulation/freqAxis";
 import type { AxisScale } from "../simulation/axisTicks";
 import { stabilityMargins } from "../simulation/stability";
-import { seriesToCsv, stepFamilyToCsv, spectrumToCsv } from "../simulation/waveformCsv";
+import { seriesToCsv, stepFamilyToCsv, spectrumToCsv, cursorReadoutToCsv } from "../simulation/waveformCsv";
 import {
   applyPltSection,
   buildPltSection,
@@ -3333,16 +3333,25 @@ function CursorView({
             </>
           )}
           {readout && (
-            <div className="meter-row analysis-meter">
-              <Metric label="t1" value={formatEngineering(readout.x1, "s", 3)} tone="cyan" />
-              <Metric label="t2" value={formatEngineering(readout.x2, "s", 3)} tone="cyan" />
-              <Metric label="Δt" value={formatEngineering(readout.dx, "s", 3)} tone="green" />
-              <Metric
-                label="1/Δt"
-                value={Number.isFinite(readout.inverseDx) ? formatEngineering(readout.inverseDx, "Hz", 3) : "--"}
-                tone="cream"
-              />
-            </div>
+            <>
+              <div className="meter-row analysis-meter">
+                <Metric label="t1" value={formatEngineering(readout.x1, "s", 3)} tone="cyan" />
+                <Metric label="t2" value={formatEngineering(readout.x2, "s", 3)} tone="cyan" />
+                <Metric label="Δt" value={formatEngineering(readout.dx, "s", 3)} tone="green" />
+                <Metric
+                  label="1/Δt"
+                  value={Number.isFinite(readout.inverseDx) ? formatEngineering(readout.inverseDx, "Hz", 3) : "--"}
+                  tone="cream"
+                />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => downloadCsv(cursorReadoutToCsv(readout), "cursors")}
+                >
+                  Export CSV
+                </Button>
+              </div>
+            </>
           )}
           {readout && (
             <table className="cursor-table">

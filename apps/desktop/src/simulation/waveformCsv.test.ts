@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { seriesToCsv, stepFamilyToCsv, spectrumToCsv } from "./waveformCsv";
+import { seriesToCsv, stepFamilyToCsv, spectrumToCsv, cursorReadoutToCsv } from "./waveformCsv";
 
 describe("seriesToCsv", () => {
   it("writes a header row plus one row per axis sample", () => {
@@ -97,5 +97,41 @@ describe("spectrumToCsv", () => {
     expect(spectrumToCsv({ frequencies: [], magnitude: [], magnitudeDb: [] }, "  ").split("\n")[0]).toBe(
       "freq_Hz,magnitude,magnitude_dB",
     );
+  });
+});
+
+describe("cursorReadoutToCsv", () => {
+  it("exports time cursors then per-signal c1/c2/delta/slope rows", () => {
+    const csv = cursorReadoutToCsv({
+      x1: 1e-3,
+      x2: 2e-3,
+      dx: 1e-3,
+      inverseDx: 1000,
+      traces: [
+        { label: "V(out)", unit: "V", y1: 0, y2: 1, dy: 1, slope: 1000 },
+        { label: "I(R1)", unit: "A", y1: 0.001, y2: 0.002, dy: 0.001, slope: 1 },
+      ],
+    });
+    expect(csv).toBe(
+      [
+        "signal,unit,c1,c2,delta,slope",
+        "time,s,0.001,0.002,0.001,1000",
+        "V(out),V,0,1,1,1000",
+        "I(R1),A,0.001,0.002,0.001,1",
+      ].join("\n"),
+    );
+  });
+
+  it("quotes labels with commas and blanks non-finite slope", () => {
+    const csv = cursorReadoutToCsv({
+      x1: 0,
+      x2: 0,
+      dx: 0,
+      inverseDx: Number.NaN,
+      traces: [{ label: "V(a,b)", unit: "V", y1: 1, y2: 1, dy: 0, slope: Number.NaN }],
+    });
+    expect(csv.split("\n")[0]).toBe("signal,unit,c1,c2,delta,slope");
+    expect(csv.split("\n")[1]).toBe("time,s,0,0,0,");
+    expect(csv.split("\n")[2]).toBe('"V(a,b)",V,1,1,0,');
   });
 });

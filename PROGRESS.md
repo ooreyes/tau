@@ -1,15 +1,42 @@
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 06:23 CDT**
+**Status: DONE - 2026-08-05 06:26 CDT**
 
-Unit: Waveform DoD — **Noise Export PNG** (`waveformSvgsToPng` + Advanced Export PNG).
-Base tip `c4f53cc` pass=90. Named-device 48.1%. Settings locked. SHIPPABLE? **NO**
+Unit: Waveform DoD — **cursor readout CSV export** (`cursorReadoutToCsv` + Export CSV).
+Base tip `55ec762` pass=90. Named-device 48.1%. Settings locked. SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
 
 
 ---
+
+
+### 2026-08-05 — cursor readout CSV export (§waveform DoD)
+
+**What I did**
+- `cursorReadoutToCsv` writes `signal,unit,c1,c2,delta,slope` (time row +
+  traces); Cursors panel **Export CSV** (`tau-cursors-….csv`).
+- ND wall at 48.1% — waveform pivot. Left 100W/IRFP, ct ASC (continue 29),
+  Chan/NIGBT/FRA, Settings alone.
+
+**Files**
+- `apps/desktop/src/simulation/waveformCsv.ts` (+ test)
+- `apps/desktop/src/components/SimulationPanel.tsx`
+- `FEATURE_PARITY.md`, `PROGRESS.md`
+
+**Tests**
+- `pnpm -C apps/desktop typecheck` + `test` green (2735 passed)
+- cursorReadoutToCsv 2
+
+**Parity items**
+- Waveform viewer 🟡 (cursor CSV landed). Differential pass=90 · named-device
+  48.1% · SHIPPABLE? NO
+
+**Next step**
+- Step PNG / richer right-click, or continue 29 differential. Leave
+  IRFP/Draft*/Settings alone.
+
 
 
 ### 2026-08-05 — Noise Export PNG (§waveform DoD)

@@ -98,3 +98,52 @@ export function spectrumToCsv(
     { label: `${label}_dB`, values: spectrum.magnitudeDb },
   ]);
 }
+
+/** Minimal two-cursor readout shape for CSV export (matches `cursorReadout`). */
+export interface CursorCsvReadout {
+  x1: number;
+  x2: number;
+  dx: number;
+  inverseDx: number;
+  traces: ReadonlyArray<{
+    label: string;
+    unit?: string;
+    y1: number;
+    y2: number;
+    dy: number;
+    slope: number;
+  }>;
+}
+
+/**
+ * Serialize a two-cursor readout as `signal,unit,c1,c2,delta,slope`.
+ * The first data row is the independent axis (`time` by default); slope there
+ * is `1/|Δt|` (Hz). Per-trace rows follow with value deltas and dy/dx slope.
+ */
+export function cursorReadoutToCsv(readout: CursorCsvReadout, axisLabel = "time", axisUnit = "s"): string {
+  const header = ["signal", "unit", "c1", "c2", "delta", "slope"].map(csvCell).join(",");
+  const rows: string[] = [header];
+  rows.push(
+    [
+      csvCell(axisLabel),
+      csvCell(axisUnit),
+      num(readout.x1),
+      num(readout.x2),
+      num(readout.dx),
+      num(readout.inverseDx),
+    ].join(","),
+  );
+  for (const t of readout.traces) {
+    rows.push(
+      [
+        csvCell(t.label),
+        csvCell(t.unit ?? ""),
+        num(t.y1),
+        num(t.y2),
+        num(t.dy),
+        num(t.slope),
+      ].join(","),
+    );
+  }
+  return rows.join("\n");
+}
