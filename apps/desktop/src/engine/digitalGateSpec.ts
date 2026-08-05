@@ -27,6 +27,12 @@ export type DigitalGateFn = "buf" | "and" | "or" | "xor" | "schmitt";
 
 export interface DigitalGateSpec {
   fn: DigitalGateFn;
+  /**
+   * When true, invert the primary `q` sense (EveryCircuit NAND/NOR/XNOR/NOT
+   * place as a single-output part that still exposes complementary pins).
+   * `q` gets the inverted levels; `qbar` gets the non-inverted ones.
+   */
+  invertOut: boolean;
   /** Output level for logic true (LTspice default 1 V). */
   vhigh: number;
   /** Output level for logic false (LTspice default 0 V). */
@@ -39,14 +45,21 @@ export interface DigitalGateSpec {
   td: number;
 }
 
-/** LTspice symbol leaf → gate function + whether the single output is `_Q`. */
-const FN_ALIASES: Record<string, { fn: DigitalGateFn }> = {
+/** LTspice symbol leaf / EveryCircuit preset → gate function (+ optional invert). */
+const FN_ALIASES: Record<string, { fn: DigitalGateFn; invertOut?: boolean }> = {
   buf: { fn: "buf" },
   buf1: { fn: "buf" },
+  // LTspice `inv.asy` is a BUF that exposes the complementary pin — do NOT
+  // invert primary `q` or imported INV symbols that wire only qbar flip sense.
   inv: { fn: "buf" },
+  // EveryCircuit palette "NOT" places an inverter on the primary Q pin.
+  not: { fn: "buf", invertOut: true },
   and: { fn: "and" },
+  nand: { fn: "and", invertOut: true },
   or: { fn: "or" },
+  nor: { fn: "or", invertOut: true },
   xor: { fn: "xor" },
+  xnor: { fn: "xor", invertOut: true },
   schmitt: { fn: "schmitt" },
   schmtbuf: { fn: "schmitt" },
   schmtinv: { fn: "schmitt" },
@@ -70,6 +83,7 @@ const KEY_ALIASES: Record<string, keyof Omit<DigitalGateSpec, "fn">> = {
 export function parseDigitalGate(value: string): DigitalGateSpec {
   const tokens = (value ?? "").trim().split(/[\s,]+/).filter(Boolean);
   let fn: DigitalGateFn = "buf";
+  let invertOut = false;
   let vhigh = 1;
   let vlow = 0;
   let vt: number | null = null;
@@ -91,11 +105,15 @@ export function parseDigitalGate(value: string): DigitalGateSpec {
       continue;
     }
     const alias = FN_ALIASES[token.toLowerCase()];
-    if (alias) fn = alias.fn;
+    if (alias) {
+      fn = alias.fn;
+      invertOut = alias.invertOut === true;
+    }
   }
 
   return {
     fn,
+    invertOut,
     vhigh,
     vlow,
     vt: vt ?? (vhigh + vlow) / 2,
@@ -130,11 +148,14 @@ export function digitalGateDeckLines(
   nodes: DigitalGateNodes,
   spec: DigitalGateSpec,
 ): string[] {
-  const { fn, vhigh, vlow, vt, vhys } = spec;
+  const { fn, invertOut, vhigh, vlow, vt, vhys } = spec;
   const com = nodes.com && nodes.com !== "0" ? nodes.com : null;
   const vin = (n: string) => (com ? `V(${n},${com})` : `V(${n})`);
   const term = (n: string, threshold: number) => `(${vin(n)}>${threshold})`;
   const ins = nodes.ins;
+  // InvertOut (NAND/NOR/XNOR/NOT): swap the levels driven onto q vs qbar.
+  const qHi = invertOut ? vlow : vhigh;
+  const qLo = invertOut ? vhigh : vlow;
 
   let cond: string;
   if (ins.length === 0) {
@@ -182,11 +203,11 @@ export function digitalGateDeckLines(
   // singular ("check node b_…_q#branch"). 1 Ω is far below any realistic load.
   const lines: string[] = [];
   if (nodes.q) {
-    lines.push(`B_${base}_Q ${base}_qd 0 ${out(vhigh, vlow)}`);
+    lines.push(`B_${base}_Q ${base}_qd 0 ${out(qHi, qLo)}`);
     lines.push(`R_${base}_Q ${base}_qd ${nodes.q} 1`);
   }
   if (nodes.qbar) {
-    lines.push(`B_${base}_QB ${base}_qbd 0 ${out(vlow, vhigh)}`);
+    lines.push(`B_${base}_QB ${base}_qbd 0 ${out(qLo, qHi)}`);
     lines.push(`R_${base}_QB ${base}_qbd ${nodes.qbar} 1`);
   }
   return lines;

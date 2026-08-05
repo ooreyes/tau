@@ -11,7 +11,7 @@ import {
 describe("parseDigitalGate", () => {
   it("defaults to a 0/1 V buffer with midpoint threshold", () => {
     expect(parseDigitalGate("")).toEqual({
-      fn: "buf", vhigh: 1, vlow: 0, vt: 0.5, vhys: 0, td: 0,
+      fn: "buf", invertOut: false, vhigh: 1, vlow: 0, vt: 0.5, vhys: 0, td: 0,
     });
   });
 
@@ -20,6 +20,11 @@ describe("parseDigitalGate", () => {
     expect(parseDigitalGate("or").fn).toBe("or");
     expect(parseDigitalGate("xor").fn).toBe("xor");
     expect(parseDigitalGate("inv").fn).toBe("buf"); // inversion is pin choice
+    expect(parseDigitalGate("inv").invertOut).toBe(false);
+    expect(parseDigitalGate("not").invertOut).toBe(true);
+    expect(parseDigitalGate("nand")).toMatchObject({ fn: "and", invertOut: true });
+    expect(parseDigitalGate("nor")).toMatchObject({ fn: "or", invertOut: true });
+    expect(parseDigitalGate("xnor")).toMatchObject({ fn: "xor", invertOut: true });
     expect(parseDigitalGate("buf1").fn).toBe("buf");
     expect(parseDigitalGate("schmtbuf").fn).toBe("schmitt");
     expect(parseDigitalGate("schmtinv").fn).toBe("schmitt");
@@ -28,7 +33,7 @@ describe("parseDigitalGate", () => {
 
   it("honors key=value params with SI suffixes", () => {
     expect(parseDigitalGate("and Vhigh=5 Vlow=-5 Vt=1.2 Vhys=0.5 Td=10n")).toEqual({
-      fn: "and", vhigh: 5, vlow: -5, vt: 1.2, vhys: 0.5, td: 10e-9,
+      fn: "and", invertOut: false, vhigh: 5, vlow: -5, vt: 1.2, vhys: 0.5, td: 10e-9,
     });
   });
 

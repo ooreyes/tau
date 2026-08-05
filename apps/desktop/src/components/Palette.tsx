@@ -1,6 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSchematic } from "../store/useSchematic";
-import { CATALOG, PALETTE_SECTIONS, catalogSectionEntries } from "../schematic/catalog";
+import { PALETTE_SECTIONS } from "../schematic/catalog";
+import {
+  matchPaletteItems,
+  paletteItemsForSection,
+  type PaletteItemSpec,
+} from "../schematic/paletteItems";
 import { ComponentSymbol } from "../schematic/symbols";
 import type { ComponentKind } from "../schematic/types";
 import { Input } from "@/components/ui/input";
@@ -20,26 +25,31 @@ export function Palette({ focusSignal }: { focusSignal: number; onNotice: (messa
   const startWiring = useSchematic((s) => s.startWiring);
   const startProbing = useSchematic((s) => s.startProbing);
   const startLabeling = useSchematic((s) => s.startLabeling);
-  const activeKind = tool.mode === "place" ? tool.kind : null;
   const searchRef = useRef<HTMLInputElement | null>(null);
 
   const [query, setQuery] = useState("");
   const [openSections, setOpenSections] = useState<Record<string, boolean>>(initialOpen);
-  const [selectedKind, setSelectedKind] = useState<ComponentKind>("resistor");
+  const [preview, setPreview] = useState<{ kind: ComponentKind; name: string }>({
+    kind: "resistor",
+    name: "Resistor",
+  });
 
   const trimmed = query.trim().toLowerCase();
 
-  const filteredBySection = useMemo(() => {
-    if (!trimmed) return null; // null = use sections normally
-    const matched = CATALOG.filter(
-      (e) =>
-        e.name.toLowerCase().includes(trimmed) ||
-        e.section.toLowerCase().includes(trimmed) ||
-        e.kind.toLowerCase().includes(trimmed) ||
-        e.hotkey.toLowerCase() === trimmed,
-    );
-    return matched;
+  const filteredItems = useMemo(() => {
+    if (!trimmed) return null;
+    return matchPaletteItems(trimmed);
   }, [trimmed]);
+
+  const isActive = (item: PaletteItemSpec) =>
+    tool.mode === "place" &&
+    tool.kind === item.kind &&
+    (tool.value === undefined ? item.value === undefined || item.id === item.kind : tool.value === item.value);
+
+  const place = (item: PaletteItemSpec) => {
+    setPreview({ kind: item.kind, name: item.name });
+    startPlacing(item.kind, item.value);
+  };
 
   const toggleSection = (section: string) => {
     setOpenSections((prev) => ({ ...prev, [section]: !prev[section] }));
@@ -74,22 +84,16 @@ export function Palette({ focusSignal }: { focusSignal: number; onNotice: (messa
       </div>
 
       <div className="palette-scroll">
-        {filteredBySection !== null ? (
-          /* Flat search results */
-          filteredBySection.length > 0 ? (
+        {filteredItems !== null ? (
+          filteredItems.length > 0 ? (
             <div className="palette-section">
               <div className="palette-list">
-                {filteredBySection.map((e) => (
+                {filteredItems.map((item) => (
                   <PaletteItem
-                    key={e.kind}
-                    kind={e.kind}
-                    name={e.name}
-                    hotkey={e.hotkey}
-                    active={activeKind === e.kind}
-                    onPlace={() => {
-                      setSelectedKind(e.kind);
-                      startPlacing(e.kind);
-                    }}
+                    key={item.id}
+                    item={item}
+                    active={isActive(item)}
+                    onPlace={() => place(item)}
                   />
                 ))}
               </div>
@@ -98,10 +102,9 @@ export function Palette({ focusSignal }: { focusSignal: number; onNotice: (messa
             <div className="palette-empty">No parts match "{query.trim()}"</div>
           )
         ) : (
-          /* Grouped sections */
           <>
             {sections.map((section) => {
-              const items = catalogSectionEntries(section);
+              const items = paletteItemsForSection(section);
               const isOpen = openSections[section] !== false;
               return (
                 <div className="palette-section" key={section}>
@@ -116,17 +119,12 @@ export function Palette({ focusSignal }: { focusSignal: number; onNotice: (messa
                   </button>
                   {isOpen && (
                     <div className="palette-list">
-                      {items.map((e) => (
+                      {items.map((item) => (
                         <PaletteItem
-                          key={e.kind}
-                          kind={e.kind}
-                          name={e.name}
-                          hotkey={e.hotkey}
-                          active={activeKind === e.kind}
-                          onPlace={() => {
-                            setSelectedKind(e.kind);
-                            startPlacing(e.kind);
-                          }}
+                          key={item.id}
+                          item={item}
+                          active={isActive(item)}
+                          onPlace={() => place(item)}
                         />
                       ))}
                     </div>
@@ -135,7 +133,6 @@ export function Palette({ focusSignal }: { focusSignal: number; onNotice: (messa
               );
             })}
 
-            {/* Tools section */}
             <div className="palette-section">
               <button
                 className="palette-section-header"
@@ -210,10 +207,10 @@ export function Palette({ focusSignal }: { focusSignal: number; onNotice: (messa
         <div>
           <svg viewBox="-44 -40 88 80">
             <g className="symbol">
-              <ComponentSymbol kind={selectedKind} />
+              <ComponentSymbol kind={preview.kind} />
             </g>
           </svg>
-          <strong>{CATALOG.find((entry) => entry.kind === selectedKind)?.name ?? selectedKind}</strong>
+          <strong>{preview.name}</strong>
           <em>⌞</em>
         </div>
       </div>
@@ -222,21 +219,19 @@ export function Palette({ focusSignal }: { focusSignal: number; onNotice: (messa
 }
 
 interface PaletteItemProps {
-  kind: ComponentKind;
-  name: string;
-  hotkey: string;
+  item: PaletteItemSpec;
   active: boolean;
   onPlace: () => void;
 }
 
-function PaletteItem({ kind, name, hotkey, active, onPlace }: PaletteItemProps) {
+function PaletteItem({ item, active, onPlace }: PaletteItemProps) {
   return (
     <button
       className={`palette-item${active ? " active" : ""}`}
       title={
-        hotkey
-          ? `Place ${name.toLowerCase()} - press ${hotkey.toUpperCase()}`
-          : `Place ${name.toLowerCase()}`
+        item.hotkey
+          ? `Place ${item.name.toLowerCase()} - press ${item.hotkey.toUpperCase()}`
+          : `Place ${item.name.toLowerCase()}`
       }
       onClick={(ev) => {
         onPlace();
@@ -245,12 +240,12 @@ function PaletteItem({ kind, name, hotkey, active, onPlace }: PaletteItemProps) 
     >
       <svg className="palette-icon" viewBox="-42 -40 84 80">
         <g className="symbol">
-          <ComponentSymbol kind={kind} />
+          <ComponentSymbol kind={item.kind} />
         </g>
       </svg>
-      <span className="palette-name">{name}</span>
-      <span className="palette-desc">{kind}</span>
-      {hotkey ? <kbd className="palette-key">{hotkey.toUpperCase()}</kbd> : null}
+      <span className="palette-name">{item.name}</span>
+      {item.desc ? <span className="palette-desc">{item.desc}</span> : null}
+      {item.hotkey ? <kbd className="palette-key">{item.hotkey.toUpperCase()}</kbd> : null}
     </button>
   );
 }

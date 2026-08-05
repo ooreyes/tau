@@ -152,7 +152,8 @@ interface SchematicState extends Doc {
   undo: () => void;
   redo: () => void;
 
-  startPlacing: (kind: ComponentKind) => void;
+  /** Begin placing `kind`. Optional `value` overrides the catalog default (gate presets, NC push). */
+  startPlacing: (kind: ComponentKind, value?: string) => void;
   startWiring: () => void;
   cancel: () => void;
   select: (id: string | null) => void;
@@ -851,7 +852,16 @@ export const useSchematic = create<SchematicState>()((set) => {
         };
       }),
 
-    startPlacing: (kind) => set({ tool: { mode: "place", kind }, selectedId: null, selectedWireId: null, selectedWireIds: [], selectedLabelIds: [], selectedProbeIds: [], selectedIds: [] }),
+    startPlacing: (kind, value) =>
+      set({
+        tool: value !== undefined ? { mode: "place", kind, value } : { mode: "place", kind },
+        selectedId: null,
+        selectedWireId: null,
+        selectedWireIds: [],
+        selectedLabelIds: [],
+        selectedProbeIds: [],
+        selectedIds: [],
+      }),
     startWiring: () => set({ tool: { mode: "wire" }, selectedId: null, selectedWireId: null, selectedWireIds: [], selectedLabelIds: [], selectedProbeIds: [], selectedIds: [] }),
     cancel: () => set({ tool: { mode: "select" } }),
 
@@ -1116,6 +1126,10 @@ export const useSchematic = create<SchematicState>()((set) => {
         const entry = CATALOG_BY_KIND[kind];
         const n = (s.counters[entry.prefix] ?? 0) + 1;
         const label = entry.prefix === "GND" ? "" : `${entry.prefix}${n}`;
+        const placeValue =
+          s.tool.mode === "place" && s.tool.kind === kind && s.tool.value !== undefined
+            ? s.tool.value
+            : entry.defaultValue;
         const comp: SchematicComponent = {
           id: nanoid(6),
           kind,
@@ -1123,7 +1137,7 @@ export const useSchematic = create<SchematicState>()((set) => {
           y,
           rotation: s.placeRotation,
           mirrored: s.placeMirror,
-          value: entry.defaultValue,
+          value: placeValue,
           label,
         };
         return {

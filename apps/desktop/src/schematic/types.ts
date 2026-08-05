@@ -361,7 +361,12 @@ export interface NetLabel {
 /** The active editing tool. */
 export type Tool =
   | { mode: "select" }
-  | { mode: "place"; kind: ComponentKind }
+  | {
+      mode: "place";
+      kind: ComponentKind;
+      /** Optional value override for EveryCircuit-style palette presets (AND vs NAND, NO vs NC). */
+      value?: string;
+    }
   | { mode: "wire" }
   | { mode: "probe" }
   | { mode: "label" };
