@@ -173,12 +173,11 @@ account and sign/notarize/ship.
       with LTspice over a representative device and topology matrix.
       **Partial (2026-08-05):** `scripts/differential-parity.sh` +
       `differentialParity.corpus.ts` (also under `dod-parity.sh`) prove
-      pass=38 · sibling=5 · gap=0 on stdout: prior cells through LM741 TRAN +
-      Educational GFT.asc authored `.ac` (General Feedback Theorem; V(y)/V(o)
-      nRms=0). LoopGain/LoopGain2 need LT1001 — Tau OTA remap is not
-      LTspice↔stock-ngspice same-deck (honest refuse; same wall as Howland).
-      Harness-slice gap closed; broad topology/device matrix still open —
-      DoD box stays unchecked.
+      pass=39 · sibling=5 · gap=0 on stdout: prior cells through GFT.asc AC +
+      Educational DCopPnt.asc authored `.op` (V(out) rel≈2e-5). HalfSlope
+      Laplace not landed (Tau strips to unity VCCS). BandGaps `.dc temp` misses
+      tolerance. Harness-slice gap closed; broad topology/device matrix still
+      open — DoD box stays unchecked.
 - [ ] **AI is production-safe and genuinely circuit-aware:** a supported OpenAI
       path (Tau OAuth/backend or native BYOK with separate API billing) keeps
       service credentials out of the renderer, obtains explicit cloud-data

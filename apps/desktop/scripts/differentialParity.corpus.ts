@@ -24,7 +24,7 @@ import {
 import { decodeSchematicText, importAsc, makeSubcircuitResolver } from "../src/io/ascImport";
 import { analysesFromDirectives } from "../src/io/directiveAnalysis";
 import { buildSpiceDeck } from "../src/engine/spiceNetlist";
-import { buildParamScope } from "../src/simulation/paramScope";
+import { buildParamScope, expandDirectiveLines } from "../src/simulation/paramScope";
 import { runMeasurements } from "../src/simulation/measure";
 import { compareWaveforms } from "../src/simulation/waveformCompare";
 import {
@@ -60,6 +60,8 @@ const OPAMP_FILTER_ASC = join(EDU, "opamp.asc");
 const LINKWITZ_ASC = join(EDU, "Linkwitz.asc");
 const LM741_ASC = join(EDU, "LM741.asc");
 const GFT_ASC = join(EDU, "GFT.asc");
+const AUDIOAMP_ASC = join(EDU, "audioamp.asc");
+const UHFPREAMP_ASC = join(EDU, "UHFpreamp.asc");
 const STEPTEMP_ASC = join(EDU, "steptemp.asc");
 const STEPMODELPARAM_ASC = join(EDU, "stepmodelparam.asc");
 const COLPITTS_ASC = process.env.COLPITTS_ASC ?? join(EDU, "colpits.asc");

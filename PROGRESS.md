@@ -9,19 +9,46 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 02:19 CDT**
+**Status: DONE - 2026-08-05 02:22 CDT**
 
-Unit: Educational GFT.asc authored `.ac` → differential **pass=38** (LoopGain blocked).
+Unit: Educational DCopPnt.asc authored `.op` → differential **pass=39**.
 ```
-SUMMARY pass=38 sibling=5 gap=0
-ac gft … v(y)/v(o) nRms=0
+SUMMARY pass=39 sibling=5 gap=0
+op dcoppnt … V(out) rel=2.28e-5
 ```
-LoopGain/LoopGain2: LT1001 OTA remap not LTspice↔stock-ngspice same-deck (honest). Named-device 47.9%. SHIPPABLE? **NO**
+BandGaps `.dc temp` miss (nRms≈0.05); HalfSlope Laplace stripped to unity VCCS (hollow — not landed); Fc ngspice fail. SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
 
 ---
+
+### 2026-08-05 — DCopPnt OP differential → pass=39 (§DoD)
+
+**What I did**
+- Educational `DCopPnt.asc` authored `.op` BJT bias → V(out) LTspice↔ngspice
+  relErr≈2.28e-5.
+- Rejected HalfSlope (Tau drops `Laplace=` to gain=1 — not a real topology proof).
+- BandGaps `.dc temp` fails tolerance; Fc fails ngspice — honest.
+
+**Exact stdout**
+```
+SUMMARY pass=39 sibling=5 gap=0
+```
+
+**Files**
+- `apps/desktop/scripts/differentialParity.corpus.ts`
+- `AGENTS.md`, `FEATURE_PARITY.md`, `PROGRESS.md`
+
+**Tests**
+- vitest differentialParity; typecheck; apps/desktop test
+
+**Parity items**
+- Differential 🟡 **pass=39**. Named-device 47.9%. SHIPPABLE? NO
+
+**Next**
+- Laplace G exact emit; BandGaps temp-DC; more Educational without LT1001
+
 
 ### 2026-08-05 — GFT AC differential → pass=38 (§DoD)
 
