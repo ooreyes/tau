@@ -21,6 +21,14 @@ import { netAtPoint } from "../schematic/netlist";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuLabel,
+  ContextMenuSeparator,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu";
 import type { OperatingPointResult } from "../simulation/operatingPoint";
 import type { AcResult, AcTrace } from "../simulation/acSweep";
 import type { DcSweepResult, DcSweepNet, DcSweepSpec } from "../simulation/dcSweep";
@@ -45,6 +53,12 @@ import { evaluatePlotExpression } from "../simulation/plotExpression";
 import { evaluateAcPlotExpression } from "../simulation/plotExpressionAc";
 import { evaluateDcPlotExpression } from "../simulation/plotExpressionDc";
 import { evaluateStepPlotExpression } from "../simulation/plotExpressionStep";
+import {
+  expressionForTrace,
+  traceMathMenuItems,
+  wrapTraceMath,
+  type TraceMathOp,
+} from "../simulation/traceMath";
 import { commonTraceUnit } from "../simulation/exprUnit";
 import { partitionTracesByAxis, planDualAxisY } from "../simulation/dualAxis";
 import { groupDelay } from "../simulation/groupDelay";
@@ -574,17 +588,26 @@ export function SimulationPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [availableTraceKey, pltLoadedName]);
 
+  const plotExpression = useCallback(
+    (raw: string) => {
+      const expr = raw.trim();
+      if (!expr) return;
+      const probe = evaluatePlotExpression(expr, result, "#000");
+      if (!probe.ok) {
+        setExprError(probe.error);
+        return;
+      }
+      if (!exprList.includes(expr)) setExprList((prev) => [...prev, expr]);
+      setExprError(null);
+    },
+    [exprList, result],
+  );
+
   const addExpression = () => {
     const expr = exprInput.trim();
     if (!expr) return;
-    const probe = evaluatePlotExpression(expr, result, "#000");
-    if (!probe.ok) {
-      setExprError(probe.error);
-      return;
-    }
-    if (!exprList.includes(expr)) setExprList((prev) => [...prev, expr]);
+    plotExpression(expr);
     setExprInput("");
-    setExprError(null);
   };
 
   const addAcExpression = () => {
@@ -925,6 +948,7 @@ export function SimulationPanel({
               fourier={fourier}
               layoutKey={circuitTitle ?? "default"}
               forcedX={pltXWindow}
+              onPlotExpression={plotExpression}
               cursors={transientCursorPositions}
               cursorTool={{
                 activeCursor: cursorsOpen ? activeTransientCursor : null,
@@ -1479,6 +1503,7 @@ export function WaveformPlot({
   forcedX = null,
   cursors = null,
   cursorTool,
+  onPlotExpression,
 }: {
   result: AnalysisResult | null;
   baseTraces: Trace[];
@@ -1507,6 +1532,8 @@ export function WaveformPlot({
     onActiveCursorChange: (cursor: TransientCursorId | null) => void;
     onCursorFractionChange: (cursor: TransientCursorId, fraction: number) => void;
   };
+  /** Right-click math → add a derived expression overlay (parent owns exprList). */
+  onPlotExpression?: (expression: string) => void;
 }) {
   const success = result?.ok ? result : null;
   const [activeTraceId, setActiveTraceId] = useState<string | null>(null);
@@ -1769,7 +1796,12 @@ export function WaveformPlot({
                     paneTraces.map((trace) => {
                       const displayLabel = labelFor(trace);
                       const selected = activeTrace?.id === trace.id;
-                      return (
+                      const mathSource = expressionForTrace(trace.id, displayLabel);
+                      const applyMath = (op: TraceMathOp) => {
+                        if (!mathSource || !onPlotExpression) return;
+                        onPlotExpression(wrapTraceMath(mathSource, op));
+                      };
+                      const row = (
                         <div
                           key={trace.id}
                           className={`trace-interaction${selected ? " selected" : ""}`}
@@ -1894,6 +1926,24 @@ export function WaveformPlot({
                               : undefined}
                           />
                         </div>
+                      );
+                      if (!mathSource || !onPlotExpression) return row;
+                      return (
+                        <ContextMenu key={trace.id}>
+                          <ContextMenuTrigger asChild>{row}</ContextMenuTrigger>
+                          <ContextMenuContent aria-label={`Math for ${displayLabel}`}>
+                            <ContextMenuLabel>Math</ContextMenuLabel>
+                            <ContextMenuSeparator />
+                            {traceMathMenuItems().map((item) => (
+                              <ContextMenuItem
+                                key={item.op}
+                                onClick={() => applyMath(item.op)}
+                              >
+                                {item.label.replace("…", displayLabel)}
+                              </ContextMenuItem>
+                            ))}
+                          </ContextMenuContent>
+                        </ContextMenu>
                       );
                     })
                   ) : (

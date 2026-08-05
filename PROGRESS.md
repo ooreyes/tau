@@ -1,15 +1,42 @@
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 05:58 CDT**
+**Status: DONE - 2026-08-05 06:02 CDT**
 
-Unit: Waveform DoD — **FFT spectrum CSV export** (`spectrumToCsv` + FftView Export CSV).
-Base tip `da8fe56` pass=87. Named-device 48.1%. Settings locked. SHIPPABLE? **NO**
+Unit: Waveform DoD — **right-click trace math** (abs / negate / dB → expression overlay).
+Base tip `a358208` pass=87. Named-device 48.1%. Settings locked. SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
 
 
 ---
+
+
+### 2026-08-05 — right-click trace math abs/neg/db (§waveform DoD)
+
+**What I did**
+- `traceMath.ts` wraps legend traces into `abs(…)`, `-(…)`, `db(…)` and adds
+  them via the existing transient expression overlay; legend ContextMenu.
+- Left 100W/IRFP, ct ASC (continue 26), Chan/NIGBT/FRA, Settings alone.
+  Named-device plaintext remains wall-bound at 48.1%.
+
+**Files**
+- `apps/desktop/src/simulation/traceMath.ts` (+ test)
+- `apps/desktop/src/components/SimulationPanel.tsx` (+ wiring test)
+- `FEATURE_PARITY.md`, `PROGRESS.md`
+
+**Tests**
+- `pnpm -C apps/desktop typecheck` + `test` green
+- traceMath 3 + SimulationPanel right-click 1
+
+**Parity items**
+- Waveform viewer 🟡 (right-click abs/neg/db landed). Differential pass=87 ·
+  named-device 48.1% · SHIPPABLE? NO
+
+**Next step**
+- Richer right-click ops / log-linear, or continue 26 differential. Leave
+  IRFP/Draft*/Settings alone.
+
 
 
 

@@ -1206,3 +1206,40 @@ describe("SimulationPanel - trace color choice and cursor seek", () => {
     }
   });
 });
+
+describe("SimulationPanel - right-click trace math", { timeout: 20_000 }, () => {
+  it("invokes onPlotExpression with abs(V(out)) from the legend context menu", async () => {
+    const onPlotExpression = vi.fn();
+    const result = {
+      ok: true as const,
+      title: "Transient",
+      times: [0, 1e-3, 2e-3],
+      traces: [
+        { id: "n1", label: "V(out)", unit: "V" as const, color: "var(--trace-cyan)", values: [-1, 0, 1] },
+      ],
+      currents: [],
+      stats: { netCount: 1, componentCount: 0, sampleCount: 3, stopTime: 2e-3, stepSize: 1e-3 },
+      warnings: [],
+      circuit: {
+        groundNetId: null,
+        warnings: [],
+        nets: [{ id: "n1", points: [{ x: 0, y: 0 }, { x: 16, y: 0 }], pins: [], isGround: false, labelCount: 0 }],
+        components: [],
+      },
+    };
+    render(
+      <WaveformPlot
+        result={result}
+        baseTraces={result.traces}
+        netLabels={[]}
+        paneLayout={defaultLayout(["n1"])}
+        onPlotExpression={onPlotExpression}
+      />,
+    );
+    const select = screen.getByRole("button", { name: "Select V(out) for cursor measurement" });
+    fireEvent.contextMenu(select);
+    const absItem = await screen.findByRole("menuitem", { name: /Plot abs\(V\(out\)\)/i });
+    fireEvent.click(absItem);
+    expect(onPlotExpression).toHaveBeenCalledWith("abs(V(out))");
+  });
+});

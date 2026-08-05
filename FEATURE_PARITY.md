@@ -1495,10 +1495,14 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   current Transient/AC/DC panes. 5 round-trip + 1 Save wiring tests.
   **FFT spectrum CSV landed** (see FFT item). **Dual-axis Y landed** (see
   expressions item). **Step-pane expressions landed** (see expressions item).
-  **NEXT:** (waveform CSV/PNG/plt/FFT/expressions/dual-axis covered —
-  remaining: right-click math).
-- ⬜ Right-click trace → math/operations
-
+  **Right-click math (slice) landed** (see right-click item). **NEXT:**
+  (waveform CSV/PNG/plt/FFT/expressions/dual-axis/right-click-abs covered —
+  remaining: richer right-click ops, log/linear toggle).
+- 🟡 Right-click trace → math/operations — **abs / negate / dB landed**
+  (2026-08-05): `traceMath.ts` wraps a legend trace into `abs(…)`, `-(…)`,
+  or `db(…)` and adds it via the existing expression overlay path; transient
+  legend ContextMenu. 3 pure + 1 SimulationPanel wiring tests. Still ⬜:
+  derivative/`avg`/`rms` ops, AC/DC/step legend menus.
 ## 7. Engine & accuracy
 - ✅ Native ngspice FFI (desktop) — `src-tauri/src/spice.rs`
 - ✅ Interim TS MNA solver (linear) for browser/tests
