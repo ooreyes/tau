@@ -1,20 +1,9 @@
 ## HEARTBEAT
 
-<<<<<<< Updated upstream
-**Status: DONE - 2026-08-05 06:27 CDT**
-
-Unit: Circuit_testing_v1 `02_tran_rc_pulse_meas.asc` authored `.tran` + `.meas` → differential **pass=91**.
-```
-SUMMARY pass=91 sibling=5 gap=0
-tran ct-rc-pulse-meas … v(out) nRms=0.0001 nMax=0.0003; Vmax/Vavg match LTspice
-```
-Named-device 48.1%. Left 100W/IRFP/Documents Draft*/Settings alone. Rebased over cursor CSV tip `a39ba9f`. SHIPPABLE? **NO**
-=======
-**Status: DONE - 2026-08-05 06:28 CDT**
+**Status: DONE - 2026-08-05 06:30 CDT**
 
 Unit: Waveform DoD — **step-family Export PNG** (`waveformSvgsToPng` + StepPlot Export PNG).
-Base tip `a39ba9f` pass=90. Named-device 48.1%. Settings locked. SHIPPABLE? **NO**
->>>>>>> Stashed changes
+Base tip `22f976a` pass=91 (ct 02_tran). Named-device 48.1%. Settings locked. SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
@@ -23,7 +12,33 @@ Base tip `a39ba9f` pass=90. Named-device 48.1%. Settings locked. SHIPPABLE? **NO
 ---
 
 
-<<<<<<< Updated upstream
+
+### 2026-08-05 — step-family Export PNG (§waveform DoD)
+
+**What I did**
+- StepPlot **Export PNG** rasters the step-family `svg.scope-svg` via the same
+  `waveformSvgsToPng` path as TRAN/AC/DC/noise (`tau-step-….png`).
+- ND wall at 48.1% — waveform pivot. Left 100W/IRFP, ct ASC (continue 29),
+  Chan/NIGBT/FRA, Settings alone. Rebased over pass=91 tip `22f976a`.
+
+**Files**
+- `apps/desktop/src/components/SimulationPanel.tsx` (+ wiring test)
+- `FEATURE_PARITY.md`, `PROGRESS.md`
+
+**Tests**
+- `pnpm -C apps/desktop typecheck` + `test` green (2736 passed)
+- StepPlot Export PNG 1
+
+**Parity items**
+- Waveform viewer 🟡 (step PNG landed). Differential pass=91 · named-device
+  48.1% · SHIPPABLE? NO
+
+**Next step**
+- AC/DC step-family PNG, richer right-click, or continue 30 differential.
+  Leave IRFP/Draft*/Settings alone.
+
+
+
 ### 2026-08-05 — ct 02_tran_rc_pulse_meas .tran → pass=91 (§DoD)
 
 **What I did**
@@ -50,34 +65,7 @@ Base tip `a39ba9f` pass=90. Named-device 48.1%. Settings locked. SHIPPABLE? **NO
   Leave IRFP/Draft*/Settings alone.
 
 
-=======
-### 2026-08-05 — step-family Export PNG (§waveform DoD)
 
-**What I did**
-- StepPlot **Export PNG** rasters the step-family `svg.scope-svg` via the same
-  `waveformSvgsToPng` path as TRAN/AC/DC/noise (`tau-step-….png`).
-- ND wall at 48.1% — waveform pivot. Left 100W/IRFP, ct ASC (continue 29),
-  Chan/NIGBT/FRA, Settings alone.
-
-**Files**
-- `apps/desktop/src/components/SimulationPanel.tsx` (+ wiring test)
-- `FEATURE_PARITY.md`, `PROGRESS.md`
-
-**Tests**
-- `pnpm -C apps/desktop typecheck` + `test` green (2736 passed)
-- StepPlot Export PNG 1
-
-**Parity items**
-- Waveform viewer 🟡 (step PNG landed). Differential pass=90 · named-device
-  48.1% · SHIPPABLE? NO
-
-**Next step**
-- AC/DC step-family PNG, richer right-click, or continue 29 differential.
-  Leave IRFP/Draft*/Settings alone.
-
-
-
->>>>>>> Stashed changes
 ### 2026-08-05 — cursor readout CSV export (§waveform DoD)
 
 **What I did**
