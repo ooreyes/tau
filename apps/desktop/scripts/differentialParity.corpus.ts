@@ -49,6 +49,9 @@ const NOISE_ASC = join(EDU, "noise.asc");
 const COHN_ASC = join(EDU, "Cohn.asc");
 const MEASUREBW_ASC = join(EDU, "MeasureBW.asc");
 const TRANSFORMER_ASC = join(EDU, "Transformer.asc");
+const NOTCH_ASC = join(EDU, "notch.asc");
+const PASSIVE_ASC = join(EDU, "passive.asc");
+const BUTTER_ASC = join(EDU, "butter.asc");
 const STEPTEMP_ASC = join(EDU, "steptemp.asc");
 const STEPMODELPARAM_ASC = join(EDU, "stepmodelparam.asc");
 const COLPITTS_ASC = process.env.COLPITTS_ASC ?? join(EDU, "colpits.asc");
@@ -196,7 +199,7 @@ function withAcStimulus(netlist: string): string {
 describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential parity matrix", () => {
   const cells: DifferentialCell[] = [];
 
-  it("matches RC .tran/.ac/.meas, divider analyses, .step families, curvetrace, stepmodelparam, NoiseFigure, noise.asc, Colpitts AC, Cohn AC, MeasureBW AC, Transformer TRAN, Class-D AC/OP/DC/noise/tf", () => {
+  it("matches RC .tran/.ac/.meas, divider analyses, .step families, curvetrace, stepmodelparam, NoiseFigure, noise.asc, Colpitts AC, Cohn AC, MeasureBW AC, Transformer TRAN, notch/passive/butter AC, Class-D AC/OP/DC/noise/tf", () => {
     // --- TRAN (also covered by waveformParity; re-assert here so this file is self-sufficient) ---
     {
       const result = runPairedBatch("diff-rc-tran", RC_TRAN, ["v(out)"]);
@@ -926,6 +929,66 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
       });
     }
 
+    // --- Educational notch / passive / butter authored .ac (RLC filter breadth) ---
+    for (const fixture of [
+      {
+        path: NOTCH_ASC,
+        circuit: "notch",
+        topology: "Educational notch.asc twin-T cascade (authored .ac oct 100–10k)",
+        probe: "v(x)",
+        id: "diff-notch-ac",
+      },
+      {
+        path: PASSIVE_ASC,
+        circuit: "passive",
+        topology: "Educational passive.asc LC ladder (authored .ac lin 13k–24k)",
+        probe: "v(out)",
+        id: "diff-passive-ac",
+      },
+      {
+        path: BUTTER_ASC,
+        circuit: "butter",
+        topology: "Educational butter.asc Butterworth LC ladders (authored .ac oct 0.01–3)",
+        probe: "v(out1)",
+        id: "diff-butter-ac",
+      },
+    ] as const) {
+      expect(existsSync(fixture.path), `missing ${fixture.path}`).toBe(true);
+      const imported = importAsc(decodeSchematicText(readFileSync(fixture.path)));
+      expect(imported.warnings).toEqual([]);
+      const parsed = analysesFromDirectives(imported.directives);
+      expect(parsed.ac, `${fixture.circuit}.asc must author .ac`).toBeTruthy();
+      const params = buildParamScope(imported.directives);
+      const deck = buildSpiceDeck({
+        components: imported.components,
+        wires: imported.wires,
+        netLabels: imported.netLabels,
+        directives: imported.directives,
+        params,
+      }, {
+        kind: "ac",
+        startHz: parsed.ac!.startHz,
+        stopHz: parsed.ac!.stopHz,
+        pointsPerDecade: parsed.ac!.pointsPerDecade,
+      });
+      expect(deck.unresolvedSubckts).toEqual([]);
+      const result = runPairedBatch(fixture.id, deck.netlist, [fixture.probe]);
+      const lt = result.ltspice.get(fixture.probe)!;
+      const ng = result.ngspice.get(fixture.probe)!;
+      const comparison = compareWaveforms(ng.axis, ng.values, lt.axis, lt.values, {
+        rmsTolerance: 0.02,
+        maxTolerance: 0.05,
+      });
+      expect(comparison.pass, `${fixture.circuit} ${JSON.stringify(comparison)}`).toBe(true);
+      cells.push({
+        analysis: "ac",
+        circuit: fixture.circuit,
+        topology: fixture.topology,
+        status: "pass",
+        note: `|${fixture.probe}| nRms=${comparison.normalizedRms.toFixed(4)} nMax=${comparison.normalizedMax.toFixed(4)}`,
+      });
+    }
+
     // --- Class-D AC/OP (authored analyses are .tran/.meas; add AC/OP for differential proof) ---
     {
       const ascPath = join(CLASSD_DIR, "class-d-starter.asc");
@@ -1219,9 +1282,9 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
     const passCount = cells.filter((cell) => cell.status === "pass").length;
     const gapCount = cells.filter((cell) => cell.status === "gap").length;
     const siblingCount = cells.filter((cell) => cell.status === "sibling").length;
-    expect(passCount).toBeGreaterThanOrEqual(27);
+    expect(passCount).toBeGreaterThanOrEqual(30);
     expect(siblingCount).toBe(5);
     expect(gapCount).toBe(0);
-    expect(report).toMatch(/SUMMARY pass=27 sibling=5 gap=0/);
+    expect(report).toMatch(/SUMMARY pass=30 sibling=5 gap=0/);
   }, 240_000);
 });

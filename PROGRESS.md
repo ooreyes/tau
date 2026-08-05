@@ -9,20 +9,55 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 01:55 CDT**
+**Status: DONE - 2026-08-05 01:58 CDT**
 
-Unit: Educational `Transformer.asc` authored `.tran` + `K1 L1 L2 1` → differential **pass=27**.
+Unit: Educational notch/passive/butter authored `.ac` → differential **pass=30**.
 ```
-SUMMARY pass=27 sibling=5 gap=0
-tran transformer … v(in) nRms=0.0000 · v(out) nRms=0.0000
+SUMMARY pass=30 sibling=5 gap=0
+ac notch/passive/butter … nRms≈0
 ```
-Vswitch deferred: LTspice negative-`Vh` continuous SW ≠ ngspice abrupt (honest gap).
-SHIPPABLE? **NO**
+Named-device 47.9% encrypted wall unchanged. SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
 
 ---
+
+### 2026-08-05 — notch/passive/butter AC differential → pass=30 (§DoD)
+
+**What I did**
+- Added three Educational authored-`.ac` RLC filter cells (new topologies;
+  did not touch Transformer/MeasureBW/Class-D blocks):
+  - `notch.asc` twin-T cascade → |V(x)| nRms=0
+  - `passive.asc` LC ladder → |V(out)| nRms=0
+  - `butter.asc` Butterworth ladders → |V(out1)| nRms≈0
+- Honest LTspice↔ngspice compares; broad DoD matrix still open.
+
+**Exact stdout**
+```
+SUMMARY pass=30 sibling=5 gap=0
+ac notch   … |v(x)| nRms=0.0000
+ac passive … |v(out)| nRms=0.0000
+ac butter  … |v(out1)| nRms=0.0000
+```
+
+**Files**
+- `apps/desktop/scripts/differentialParity.corpus.ts`
+- `AGENTS.md`, `FEATURE_PARITY.md`, `PROGRESS.md`
+- `~/Desktop/TAU-MORNING-STATUS.md`
+
+**Tests**
+- `scripts/differential-parity.sh` / vitest corpus
+- typecheck + apps/desktop test
+
+**Parity items**
+- Differential 🟡 harness **pass=30 · sibling=5 · gap=0**; DoD broad box unchecked.
+- Named-device 🟡 **47.9%** unchanged. SHIPPABLE? NO
+
+**Next**
+- More Educational authored analyses (Linkwitz/phono/varactor2 need models);
+  Vswitch stays deferred; encrypted bare SYMBOL stay refuse
+
 
 ### 2026-08-05 — Transformer TRAN differential → pass=27 (§DoD)
 
