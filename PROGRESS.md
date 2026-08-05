@@ -9,23 +9,10 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-04 22:52 CDT**
+**Status: IN PROGRESS (overnight handoff) - 2026-08-04 22:58 CDT**
 
-Unit: Recursive exact-model % measurement — committed re-runnable harness.
-Stdout truth: `NAMED-DEVICE-RECURSIVE: unencrypted=2641 exact=399 refuse=2139
-silent=0 hard-failure=103 encrypted-excluded=1371 exact-rate=15.1%` plus unit
-`NAMED-DEVICE: exact=2 refuse=4 silent=0`. ≥95% DoD box stays unchecked.
-Shippable? NO.
+Unit: Triage hard-failure 103→0. Mid-edit: Cpar/Rpar expand + `;` comment strip + Rload+/− safeName — untested/uncommitted. Resume there.
 
-What landed this unit:
-
-- `namedDeviceRecursive.corpus.ts` + classifiers in `corpusReport.ts`
-- `scripts/named-device-fidelity.sh` runs unit + recursive (verbose stdout)
-- Wired into `dod-parity.sh`; AGENTS/FEATURE_PARITY Partial notes cite stdout
-
-Next unit: drive exact-rate up / hard-failure→0 on unencrypted corpus; or
-Educational steptemp/stepmodelparam / Class-D AC·DC·noise·tf / §10.
-Shippable stays NO.
 
 ---
 

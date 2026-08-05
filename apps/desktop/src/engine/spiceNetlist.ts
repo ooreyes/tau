@@ -18,7 +18,7 @@ import type { ComponentKind, NetLabel, SchematicComponent, SchematicForeignSymbo
 import { parseQuantity, formatEngineering } from "../simulation/quantity";
 import { decodeParams } from "../schematic/params";
 import { parseSourceFunction } from "./sourceFunction";
-import { stripAcSpec, acSpecDeckText, stripSourceModifiers } from "./acSpec";
+import { stripAcSpec, acSpecDeckText, stripSourceModifiers, stripLtspiceInlineComment } from "./acSpec";
 import { stripIcSpec, icSpecDeckText, parseIcValue } from "./icSpec";
 import { behavioralSpecText as behavioralSpec, ifToTernary, ltFuncsToNgspice, moduloToFloor, statFuncsToNgspice } from "../simulation/behavioral";
 import { parseComparator, comparatorDeckLine } from "./comparatorSpec";
@@ -1280,26 +1280,38 @@ function componentLines(entry: ExtractedComponent, index: number, name: string, 
       // instead of choking positiveNumberFromText on the param-laden value.
       const crystal = parseCrystal(component.value);
       if (crystal) return crystalDeckLines(name, node("a"), node("b"), crystal);
-      const series = passiveSeriesResistance(component);
+      const parasitics = extractPassiveParasitics(component);
+      const positive = node("a");
+      const negative = node("b");
+      const hasRser = parasitics.rserOhms !== null && parasitics.rserOhms > 0;
       const internal = `tau_${safeName(name).toLowerCase()}_esr`;
-      const capacitorNegativeNode = series.ohms !== null && series.ohms > 0 ? internal : node("b");
-      const negative = negativeCapacitorDeckValue(
-        { ...component, value: series.value },
-        node("a"),
+      const capacitorNegativeNode = hasRser ? internal : negative;
+      const negativeCap = negativeCapacitorDeckValue(
+        { ...component, value: parasitics.value },
+        positive,
         capacitorNegativeNode,
       );
-      if (negative) {
-        const capacitorLine = `${name} ${node("a")} ${capacitorNegativeNode} ${negative}`;
-        if (series.ohms === null || series.ohms === 0) return [capacitorLine];
-        return [capacitorLine, `RTAU_${safeName(name)}_ESR ${internal} ${node("b")} ${series.ohms}`];
+      const parallel = parallelPassiveParasiticLines(name, positive, negative, parasitics);
+      if (negativeCap) {
+        const capacitorLine = `${name} ${positive} ${capacitorNegativeNode} ${negativeCap}`;
+        if (!hasRser) return [capacitorLine, ...parallel];
+        return [
+          capacitorLine,
+          `RTAU_${safeName(name)}_ESR ${internal} ${negative} ${parasitics.rserOhms}`,
+          ...parallel,
+        ];
       }
-      const capacitance = positiveNumberFromText(component, stripIcSpec(series.value), "F");
-      if (series.ohms === null || series.ohms === 0) {
-        return [`${name} ${node("a")} ${node("b")} ${capacitance}${icSpecDeckText(component.value)}`];
+      const capacitance = positiveNumberFromText(component, stripIcSpec(parasitics.value), "F");
+      if (!hasRser) {
+        return [
+          `${name} ${positive} ${negative} ${capacitance}${icSpecDeckText(component.value)}`,
+          ...parallel,
+        ];
       }
       return [
-        `${name} ${node("a")} ${internal} ${capacitance}${icSpecDeckText(component.value)}`,
-        `RTAU_${safeName(name)}_ESR ${internal} ${node("b")} ${series.ohms}`,
+        `${name} ${positive} ${internal} ${capacitance}${icSpecDeckText(component.value)}`,
+        `RTAU_${safeName(name)}_ESR ${internal} ${negative} ${parasitics.rserOhms}`,
+        ...parallel,
       ];
     }
     case "inductor": {
@@ -1313,15 +1325,20 @@ function componentLines(entry: ExtractedComponent, index: number, name: string, 
       const ic = directiveInductorIc === undefined
         ? icSpecDeckText(component.value)
         : ` IC=${substituteKnownBraces(directiveInductorIc, params).replace(/µ/g, "u")}`;
-      const series = passiveSeriesResistance(component);
-      const inductance = positiveNumberFromText(component, stripIcSpec(series.value), "H");
-      if (series.ohms === null || series.ohms === 0) {
-        return [`${name} ${node("a")} ${node("b")} ${inductance}${ic}`];
+      const parasitics = extractPassiveParasitics(component);
+      const positive = node("a");
+      const negative = node("b");
+      const inductance = positiveNumberFromText(component, stripIcSpec(parasitics.value), "H");
+      const parallel = parallelPassiveParasiticLines(name, positive, negative, parasitics);
+      const hasRser = parasitics.rserOhms !== null && parasitics.rserOhms > 0;
+      if (!hasRser) {
+        return [`${name} ${positive} ${negative} ${inductance}${ic}`, ...parallel];
       }
       const internal = `tau_${safeName(name).toLowerCase()}_esr`;
       return [
-        `${name} ${node("a")} ${internal} ${inductance}${ic}`,
-        `RTAU_${safeName(name)}_ESR ${internal} ${node("b")} ${series.ohms}`,
+        `${name} ${positive} ${internal} ${inductance}${ic}`,
+        `RTAU_${safeName(name)}_ESR ${internal} ${negative} ${parasitics.rserOhms}`,
+        ...parallel,
       ];
     }
     case "vsource": {
@@ -1329,8 +1346,9 @@ function componentLines(entry: ExtractedComponent, index: number, name: string, 
       // an optional `AC <mag> [phase]` stimulus (from SYMATTR Value2). Split them.
       // `Rser=` is a real series source impedance (Educational NoiseFigure.asc);
       // ngspice rejects it on V, so expand to an explicit resistor like C/L ESR.
+      // A trailing `;…` is an LTspice inline comment (ADG1519's `5;PULSE(…)`).
       const series = passiveSeriesResistance(component);
-      const main = stripSourceModifiers(stripAcSpec(series.value));
+      const main = stripLtspiceInlineComment(stripSourceModifiers(stripAcSpec(series.value)));
       const ac = acSpecDeckText(series.value);
       const positive = node("p");
       const negative = node("n");
@@ -1362,7 +1380,7 @@ function componentLines(entry: ExtractedComponent, index: number, name: string, 
       // CP_PLL's `{gm} load`) have no ngspice equivalent - approximate as the
       // ideal source by dropping the flag rather than failing the deck, and say
       // so, because the ideal source conducts in a direction the clamp forbids.
-      const withFlag = stripSourceModifiers(stripAcSpec(component.value));
+      const withFlag = stripLtspiceInlineComment(stripSourceModifiers(stripAcSpec(component.value)));
       const loadFlag = /\s(load2?)\s*$/i.exec(withFlag);
       if (loadFlag) warnings.push(clampedLoadSourceWarning(component.label.trim() || name, loadFlag[1].toLowerCase()));
       const main = withFlag.replace(/\s+load2?\s*$/i, "");
@@ -2147,6 +2165,56 @@ function negativeCapacitorDeckValue(
   return `Q='(${capacitance})*V(${positiveNode},${negativeNode})'${icSpecDeckText(component.value)}`;
 }
 
+/** LTspice's passive `Rser=` / `Rpar=` / `Cpar=` are real parasitics, but
+ * ngspice's C/L primitives do not accept those per-instance parameters.
+ * Remove them from the value token so the magnitude parses, and let the
+ * component emitter expand explicit companion elements. */
+function extractPassiveParasitics(component: SchematicComponent): {
+  value: string;
+  rserOhms: number | null;
+  rparOhms: number | null;
+  cparFarads: number | null;
+} {
+  let value = component.value;
+  const take = (key: string, unit: string): number | null => {
+    const match = new RegExp(`(?:^|\\s)${key}\\s*=\\s*([^\\s]+)`, "i").exec(value);
+    if (!match) return null;
+    try {
+      const parsed = parseQuantity(match[1]!.replace(/µ/g, "u"), unit);
+      if (!Number.isFinite(parsed) || parsed < 0) throw new Error("invalid");
+      value = value.replace(match[0]!, " ").replace(/\s+/g, " ").trim();
+      return parsed;
+    } catch {
+      throw new Error(`${component.label || component.kind} needs a valid non-negative ${key} value.`);
+    }
+  };
+  return {
+    rserOhms: take("Rser", "Ohm"),
+    rparOhms: take("Rpar", "Ohm"),
+    cparFarads: take("Cpar", "F"),
+    value,
+  };
+}
+
+/** Parallel Rpar/Cpar companions across the original C/L terminals. Zero-valued
+ * parasitics are omitted (LTspice's inert default), never emitted as shorts. */
+function parallelPassiveParasiticLines(
+  name: string,
+  positive: string,
+  negative: string,
+  parasitics: { rparOhms: number | null; cparFarads: number | null },
+): string[] {
+  const base = safeName(name);
+  const lines: string[] = [];
+  if (parasitics.rparOhms !== null && parasitics.rparOhms > 0) {
+    lines.push(`RTAU_${base}_RPAR ${positive} ${negative} ${parasitics.rparOhms}`);
+  }
+  if (parasitics.cparFarads !== null && parasitics.cparFarads > 0) {
+    lines.push(`CTAU_${base}_CPAR ${positive} ${negative} ${parasitics.cparFarads}`);
+  }
+  return lines;
+}
+
 /** LTspice's passive `Rser=` is a real series parasitic, but ngspice's C/L
  * primitives do not accept that per-instance parameter. Remove it from the
  * value token and let componentLines expand an explicit internal resistor. */
@@ -2155,13 +2223,13 @@ function passiveSeriesResistance(component: SchematicComponent): { value: string
   if (!match) return { value: component.value, ohms: null };
   let ohms: number;
   try {
-    ohms = parseQuantity(match[1], "Ohm");
+    ohms = parseQuantity(match[1]!.replace(/µ/g, "u"), "Ohm");
     if (!Number.isFinite(ohms) || ohms < 0) throw new Error("invalid series resistance");
   } catch {
     throw new Error(`${component.label || component.kind} needs a valid non-negative Rser value.`);
   }
   return {
-    value: component.value.replace(match[0], " ").replace(/\s+/g, " ").trim(),
+    value: component.value.replace(match[0]!, " ").replace(/\s+/g, " ").trim(),
     ohms,
   };
 }
@@ -2288,5 +2356,10 @@ export function transformerWindings(value: string): {
 }
 
 function safeName(value: string): string {
-  return value.replace(/[^a-zA-Z0-9_]/g, "_") || "X";
+  // Preserve distinguishing `+`/`-` suffixes (LTspice `Rload+` / `Rload-`) so
+  // sanitizing does not collide two authored instance names into one token.
+  return value
+    .replace(/\+/g, "_p")
+    .replace(/-/g, "_m")
+    .replace(/[^a-zA-Z0-9_]/g, "_") || "X";
 }

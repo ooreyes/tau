@@ -345,6 +345,55 @@ describe("buildSpiceDeck", () => {
     expect(deck.netlist).toMatch(/^RTAU_C1_ESR\s+tau_c1_esr\s+0\s+0\.001$/m);
   });
 
+  it("expands LTspice capacitor Cpar/Rpar across the original terminals (LT1248)", () => {
+    // Applications/LT1248 C4: `100p Rser=10K Cpar=10p` — leftover Cpar used to
+    // hard-fail as "needs a valid F value" instead of building an exact deck.
+    const components = [
+      component("vsource", "V1", "5", 0, 32),
+      component("capacitor", "C4", "100p Rser=10K Cpar=10p", 96, 0),
+      component("ground", "", "", 0, 64),
+      component("ground", "", "", 128, 0),
+    ];
+    const wires = [wire("w1", [{ x: 0, y: 0 }, { x: 64, y: 0 }])];
+    const deck = buildSpiceDeck({ components, wires }, { kind: "op" });
+    expect(deck.netlist).toMatch(/^C4\s+\S+\s+tau_c4_esr\s+1e-10$/m);
+    expect(deck.netlist).toMatch(/^RTAU_C4_ESR\s+tau_c4_esr\s+0\s+10000$/m);
+    expect(deck.netlist).toMatch(/^CTAU_C4_CPAR\s+\S+\s+0\s+1e-11$/m);
+    expect(deck.netlist).not.toMatch(/\bCpar=/i);
+    expect(deck.netlist).not.toMatch(/\bRser=/i);
+  });
+
+  it("strips an LTspice inline ;comment on a voltage source (ADG1519)", () => {
+    const components = [
+      component("vsource", "V3", "5;PULSE(0 5 0 20n 20n 10u 20u)", 0, 32),
+      component("resistor", "R1", "1k", 96, 0),
+      component("ground", "", "", 0, 64),
+      component("ground", "", "", 128, 0),
+    ];
+    const wires = [wire("w1", [{ x: 0, y: 0 }, { x: 64, y: 0 }])];
+    const deck = buildSpiceDeck({ components, wires }, { kind: "op" });
+    expect(deck.netlist).toMatch(/^V3\s+\S+\s+0\s+DC\s+5$/m);
+    expect(deck.netlist).not.toMatch(/PULSE/i);
+  });
+
+  it("keeps Rload+ and Rload- as distinct SPICE instance names (LTC3260)", () => {
+    const components = [
+      component("vsource", "V1", "5", 0, 32),
+      component("resistor", "Rload+", "1k", 96, 0),
+      component("resistor", "Rload-", "2k", 192, 0),
+      component("ground", "", "", 0, 64),
+      component("ground", "", "", 128, 0),
+      component("ground", "", "", 224, 0),
+    ];
+    const wires = [
+      wire("w1", [{ x: 0, y: 0 }, { x: 64, y: 0 }]),
+      wire("w2", [{ x: 128, y: 0 }, { x: 160, y: 0 }]),
+    ];
+    const deck = buildSpiceDeck({ components, wires }, { kind: "op" });
+    expect(deck.netlist).toMatch(/^Rload_p\s+/m);
+    expect(deck.netlist).toMatch(/^Rload_m\s+/m);
+  });
+
   it("expands LTspice voltage-source Rser into an explicit series resistor (NoiseFigure)", () => {
     // Educational NoiseFigure.asc: V1 Value2=AC 1, SpiceLine Rser=1K. ngspice
     // rejects Rser= on V, so the deck must expand it the same way C/L ESR does.

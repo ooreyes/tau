@@ -25,6 +25,7 @@ import { buildSpiceDeck, unresolvedSubcktMessage } from "../src/engine/spiceNetl
 import { validateSchematicDocument } from "../src/schematic/documentValidation";
 import {
   classifyCorpusCapability,
+  classifyNamedDeviceBucket,
   formatNamedDeviceRecursiveSummary,
   isEncryptedModelBytes,
   summarizeNamedDeviceFidelity,
@@ -350,6 +351,48 @@ describe.skipIf(corpus.length === 0)("named-device recursive exact-model %", () 
     const line = formatNamedDeviceRecursiveSummary(summary);
     // eslint-disable-next-line no-console
     console.log(`\n${line}\n`);
+
+    if (process.env.NAMED_DEVICE_TRIAGE === "1") {
+      const hard = entries.filter((e) =>
+        classifyNamedDeviceBucket(e.row, {
+          encryptedDependent: e.encryptedDependent,
+          skipNgspice: true,
+        }) === "hard_failure"
+      );
+      const buckets = new Map<string, { count: number; samples: string[] }>();
+      for (const entry of hard) {
+        const err = entry.row.error ?? "(no error)";
+        let key = err;
+        if (err.startsWith("import: ")) key = `import: ${err.slice(8, 80)}`;
+        else if (err.startsWith("validate: ")) key = `validate: ${err.slice(10, 100)}`;
+        else if (err.startsWith("deck: ")) {
+          const body = err.slice(6);
+          // Collapse variable parts: quoted names, paths, refdes.
+          key = `deck: ${body
+            .replace(/"[^"]+"/g, '"…"')
+            .replace(/\b[A-Z][A-Za-z0-9]*\d+\b/g, "REF")
+            .replace(/\b[A-Za-z0-9_./\\-]{24,}\b/g, "…")
+            .slice(0, 140)}`;
+        } else {
+          key = err.slice(0, 140);
+        }
+        const slot = buckets.get(key) ?? { count: 0, samples: [] };
+        slot.count += 1;
+        if (slot.samples.length < 2) slot.samples.push(entry.row.file);
+        buckets.set(key, slot);
+      }
+      const ranked = [...buckets.entries()].sort((a, b) => b[1].count - a[1].count);
+      // eslint-disable-next-line no-console
+      console.log(`\nHARD-FAILURE TRIAGE (${hard.length} files, ${ranked.length} classes):\n`);
+      for (const [key, info] of ranked) {
+        // eslint-disable-next-line no-console
+        console.log(`  ${info.count}× ${key}`);
+        for (const sample of info.samples) {
+          // eslint-disable-next-line no-console
+          console.log(`      e.g. ${sample}`);
+        }
+      }
+    }
 
     // Integrity guards only — never assert the ≥95% floor here. Claiming that
     // DoD box requires a measured exact-rate with silent=0 and hard-failure=0.

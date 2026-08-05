@@ -78,6 +78,19 @@ export function stripSourceModifiers(value: string): string {
   return value.replace(/\b[A-Za-z_]\w*\s*=\s*\S+/g, " ").replace(/\s+/g, " ").trim();
 }
 
+/**
+ * LTspice treats `;` as the start of an inline comment on a SYMATTR value
+ * (Applications/ADG1519: `5;PULSE(0 5 …)` means DC 5 with the pulse commented
+ * out). Strip from the first `;` onward so the remaining DC / function parses.
+ * Transient function bodies do not contain bare `;`, so this is safe for
+ * SINE/PULSE/PWL/EXP/SFFM cards.
+ */
+export function stripLtspiceInlineComment(value: string): string {
+  const idx = value.indexOf(";");
+  if (idx < 0) return value;
+  return value.slice(0, idx).replace(/\s+/g, " ").trim();
+}
+
 /** ngspice deck text for an AC spec, e.g. ` AC 1` or ` AC 1 90` (empty if none). */
 export function acSpecDeckText(value: string): string {
   const ac = parseAcSpec(value);
