@@ -409,9 +409,20 @@ function translateDissipativeCurrentLoad(line: string): string {
   return `${source[1]}B__tau_load_${safe} ${source[3]} ${source[4]} I={(${source[5]})*(${voltage}<=0 ? 4*${voltage} : ${voltage}<0.5 ? 4*${voltage}-4*${voltage}*${voltage} : 1)}`;
 }
 
-/** Parse an OTA rail/compliance literal (`560m`, `1e308`, `2`). Expressions
- * and unknown suffixes refuse rather than guessing. */
+/** LTspice unbounded OTA rails (`±1e308` / `±1e309`). IEEE double overflows
+ * `1e309` to ±Infinity; map to ±1e308 so Tau keeps the same "no clamp"
+ * convention already used for `1e308` (needsClamp uses `< 1e100`). */
+function parseLtspiceUnboundedRail(token: string): number | null {
+  const m = token.trim().match(/^([-+]?)1e\+?30([89])$/i);
+  if (!m) return null;
+  return m[1] === "-" ? -1e308 : 1e308;
+}
+
+/** Parse an OTA rail/compliance literal (`560m`, `1e308`, `1e309`, `2`).
+ * Expressions and unknown suffixes refuse rather than guessing. */
 function parseOtaComplianceLiteral(token: string): number | null {
+  const unbounded = parseLtspiceUnboundedRail(token);
+  if (unbounded !== null) return unbounded;
   try {
     const value = parseQuantity(token);
     return Number.isFinite(value) ? value : null;

@@ -9,17 +9,61 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 04:02 CDT**
+**Status: DONE - 2026-08-05 04:05 CDT**
 
-Unit: Documents/LTspice `Draft7.asc` authored `.ac` → differential **pass=71**.
+Unit: Named-device OTA `±1e309` unbounded rails → exact-rate **48.0%**.
 ```
-SUMMARY pass=71 sibling=5 gap=0
-ac draft7 … v(vo) nRms=0.0000 nMax=0.0000 span=0.994
+NAMED-DEVICE-RECURSIVE: unencrypted=2541 exact=1219 refuse=1322 silent=0 hard-failure=0 encrypted-excluded=1471 exact-rate=48.0%
 ```
-Series C + neg-R; exact LT↔ng. Tip Draft3 pass=70 → 71. Left 3725-3726
-(Staff EE) / PLL / avoid-list alone. Named-device 47.9%. SHIPPABLE? **NO**
+ADHV4702-1 / LT6372-1 leftover plaintext refuse (+2 exact vs 47.9%). Track A
+3725-3726 still fail-closed. Reverted `/tmp` debug dumps. Differential
+pass=71 unchanged. SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
+
+
+
+---
+
+
+### 2026-08-05 — OTA ±1e309 unbounded rails → named-device 48.0% (§DoD)
+
+**What I did**
+- Track A `3725-3726.asc`: still fail-closed (no Tau equiv LTC3725/6 +
+  unresolved discretes) — not landed.
+- Track B: leftover plaintext refuse was OTA `vlow=-1e309 vhigh=1e309`
+  (ADHV4702-1 / LT6372-1). IEEE double overflows `1e309` → ±Infinity so
+  `parseQuantity` threw and Tau refused as "non-literal". Map LTspice
+  `±1e308`/`±1e309` unbounded rails to Tau's existing no-clamp `±1e308`
+  path — exact, not a silent substitute. Expression rails (`{Vc}`) still
+  refuse.
+- Reverted Staff EE `/tmp/nd-*.txt` `writeFileSync` debug in
+  `namedDeviceRecursive.corpus.ts` before commit.
+
+**Exact stdout**
+
+```
+NAMED-DEVICE: exact=2 refuse=4 silent=0
+NAMED-DEVICE-RECURSIVE: unencrypted=2541 exact=1219 refuse=1322 silent=0 hard-failure=0 encrypted-excluded=1471 exact-rate=48.0%
+```
+
+**Files**
+- `apps/desktop/src/engine/userModelLibrary.ts` (+ test)
+- `AGENTS.md`, `FEATURE_PARITY.md`, `PROGRESS.md`
+
+**Tests**
+- `pnpm -C apps/desktop typecheck` + `test` green
+- `bash scripts/named-device-fidelity.sh` → 48.0%
+
+**Parity items**
+- Named-device 🟡 **48.0%** (+2 exact; ≥95% not met). Differential pass=71.
+  SHIPPABLE? NO
+
+**Next step**
+- Leftover climb is encrypted wall / harder plaintext. Continue 17 on
+  differential — leave Draft3/Draft7 alone.
+
+
 
 
 

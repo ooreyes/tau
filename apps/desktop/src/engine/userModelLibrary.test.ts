@@ -399,6 +399,22 @@ describe("parseUserModelLibraries", () => {
     );
   });
 
+  it("accepts LTspice ±1e309 unbounded OTA rails (IEEE overflow of ±1e308)", () => {
+    // Vendor libs (ADHV4702-1, LT6372-1) write vlow=-1e309 vhigh=1e309; JS
+    // Number overflows those to ±Infinity — must map to Tau's no-clamp path,
+    // not refuse as "non-literal".
+    const block =
+      parseUserModelLibraries([
+        [
+          ".subckt AMP 1 2 3 4 5",
+          "A1 N005 0 4 4 4 4 9 4 OTA g=200u iout=300u vlow=-1e309 vhigh=1e309",
+          ".ends AMP",
+        ].join("\n"),
+      ]).subckts.get("amp") ?? "";
+    expect(block).toContain(".model __tau_ota_AMP_A1 ota(gm=200u rout=1e308 rin=1e308 iout=300u)");
+    expect(block).not.toMatch(/TAU_MODEL_REFUSAL|B__tau_ota_clamp/i);
+  });
+
   it("ignores authored Iout when linear disables current limiting", () => {
     const block = parseUserModelLibraries([
       [

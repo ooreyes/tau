@@ -162,11 +162,11 @@ account and sign/notarize/ship.
       document, user-installed, user-attached, or Tau-owned compatible models.
       **Partial (2026-08-05):** unit proof `scripts/named-device-fidelity.sh`
       prints `NAMED-DEVICE: exact=2 refuse=4 silent=0` and recursive stdout
-      `NAMED-DEVICE-RECURSIVE: unencrypted=2541 exact=1217 refuse=1324 silent=0 hard-failure=0 encrypted-excluded=1471 exact-rate=47.9%` — tip after
-      load/soft-epsilon/UOA1 (+16 vs 47.3%). Encrypted bare SYMBOL stay refuse.
-      Full unique-leaf probe 33.4%/enc=2781 remains retracted (denominator
-      game). Never silent substitution. ≥95% exact-rate **not** met; DoD box
-      stays unchecked. SHIPPABLE? **NO**.
+      `NAMED-DEVICE-RECURSIVE: unencrypted=2541 exact=1219 refuse=1322 silent=0 hard-failure=0 encrypted-excluded=1471 exact-rate=48.0%` — tip after
+      OTA `±1e309` unbounded-rail map (+2 vs 47.9%; ADHV4702-1 / LT6372-1).
+      Encrypted bare SYMBOL stay refuse. Full unique-leaf probe 33.4%/enc=2781
+      remains retracted (denominator game). Never silent substitution. ≥95%
+      exact-rate **not** met; DoD box stays unchecked. SHIPPABLE? **NO**.
 - [ ] **Broad differential parity, not a synthetic `.op` proxy:** the acceptance
       runner executes each circuit's authored `.tran` / `.ac` / `.dc` / `.op` /
       `.noise` / `.tf` / `.step` / `.meas` analyses and compares numeric outputs
