@@ -11,19 +11,46 @@
 
 **Status: DONE - 2026-08-05 03:45 CDT**
 
-Unit: Educational/contrib `qztst.asc` authored `.ac` → differential **pass=67**.
-```
-SUMMARY pass=67 sibling=5 gap=0
-ac qztst … v(out) nRms≈0.0024 nMax≈0.0512 span≈0.646 (maxTol=0.06)
-```
-Misc\XTAL → Lser/Cser/Rser/Cpar; stacked on tip UOA pass=66. dimmer TRIAC deferred.
-Named-device 47.9%. SHIPPABLE? **NO**
+Unit: Educational `SampleAndHold.asc` authored `.tran` → differential
+**pass=68** (dual SAMPLE; maxTol=0.055 hold-edge on v(b)). PLL/PLL2 deferred
+(LTspice XSPICE MODULATE same-deck reject). Tip `d243adc`. Named-device 47.9%.
+SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
 
 
 ---
+
+
+### 2026-08-05 — Educational SampleAndHold.asc TRAN → pass=68 (§DoD)
+
+**What I did**
+- Educational `SampleAndHold.asc` authored `.tran 10m`: dual SpecialFunctions
+  SAMPLE → switch+hold caps. Probe v(a)/v(b): nRms≈0.0014/0.0028; v(b)
+  nMax≈0.0515 needs maxTol=0.055 (hold-edge; span≈2 — not hollow).
+- PLL/PLL2 deferred: Tau MODULATE XSPICE emit rejected by LTspice same-deck.
+- Tip `1fb8161` qztst pass=67 → `d243adc` pass=68.
+
+**Exact stdout**
+```
+SUMMARY pass=68 sibling=5 gap=0
+```
+
+**Files**
+- `apps/desktop/scripts/differentialParity.corpus.ts` (on `d243adc`)
+- `AGENTS.md`, `FEATURE_PARITY.md` (on `d243adc`)
+- `PROGRESS.md` (this heartbeat)
+
+**Tests**
+- `vitest … differentialParity.corpus.ts` → SUMMARY pass=68 sibling=5 gap=0
+- typecheck + test green at land
+
+**Parity items**
+- Differential 🟡 **pass=68 · sibling=5 · gap=0**. SHIPPABLE? NO
+
+**Next**
+- Continue 15 non-colliding Educational.
 
 
 ### 2026-08-05 — Educational/contrib qztst.asc AC → pass=67 (§DoD)
