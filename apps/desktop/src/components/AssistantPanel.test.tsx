@@ -98,6 +98,18 @@ vi.mock("../lib/localAiRuntime", async (importOriginal) => ({
   isNativeDesktopApp: isNativeMock,
 }));
 
+// Packaged-ngspice gate: jsdom has no Tauri worker. Happy-path Create/Apply
+// tests opt into success; refusal coverage overrides per case.
+const { validateBeforeApplyMock } = vi.hoisted(() => ({
+  validateBeforeApplyMock: vi.fn(async (): Promise<
+    { ok: true; netlist: string } | { ok: false; reason: string }
+  > => ({ ok: true, netlist: "*mock" })),
+}));
+vi.mock("../lib/assistantNgspiceValidate", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../lib/assistantNgspiceValidate")>()),
+  validateAssistantProposalBeforeApply: validateBeforeApplyMock,
+}));
+
 import { AssistantPanel, type AssistantPanelProps } from "./AssistantPanel";
 import {
   ASSISTANT_CONNECT_TIMEOUT_MS,
@@ -126,6 +138,7 @@ import { EMPTY_SCOPE } from "../simulation/paramScope";
 import type { AnalysisResult } from "../simulation/linearTransient";
 import type { SchematicComponent } from "../schematic/types";
 import type { LocalAiStatus } from "../lib/localAiRuntime";
+import { ASSISTANT_NGSPICE_REFUSED_PREFIX } from "../lib/assistantNgspiceValidate";
 
 function localAiStatus(overrides: Partial<LocalAiStatus> = {}): LocalAiStatus {
   return {
@@ -195,6 +208,8 @@ beforeEach(() => {
   localAiStatusMock.mockResolvedValue(localAiStatus());
   startLocalAiMock.mockResolvedValue(localAiStatus({ state: "starting", managed: true }));
   installLocalAiMock.mockResolvedValue(localAiStatus({ installed: true }));
+  validateBeforeApplyMock.mockReset();
+  validateBeforeApplyMock.mockResolvedValue({ ok: true, netlist: "*mock" });
 });
 
 const resistor = (id: string, label: string): SchematicComponent => ({
@@ -982,6 +997,42 @@ describe("AssistantPanel", () => {
     expect(onCreateAsc.mock.calls[0][0].document.components.some((component: SchematicComponent) => component.label === "R1")).toBe(true);
     expect(onApplyCurrent).not.toHaveBeenCalled();
     expect(await screen.findByText("Created")).toBeTruthy();
+    expect(validateBeforeApplyMock).toHaveBeenCalled();
+  });
+
+  it("blocks Create when packaged ngspice validation refuses (fail-closed)", async () => {
+    saveAssistantApiKey("test-key");
+    validateBeforeApplyMock.mockResolvedValue({
+      ok: false,
+      reason: `${ASSISTANT_NGSPICE_REFUSED_PREFIX}: singular matrix`,
+    });
+    const onCreateAsc = vi.fn();
+    const onApplyCurrent = vi.fn();
+    render(<AssistantPanel {...baseProps({ onCreateAsc, onApplyCurrent })} />);
+
+    fireEvent.change(screen.getByRole("textbox", { name: "Message the assistant" }), {
+      target: { value: "Create an RC low-pass filter" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    await act(async () => {
+      streams[0].resolveContent([
+        { type: "text", text: "Here is a proposal." },
+        {
+          type: "tool_use",
+          id: "create-refuse",
+          name: "build_tau_circuit",
+          input: ASSISTANT_PLAN,
+        },
+      ]);
+      await streams[0].finalMessage();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Create rc-filter.asc" }));
+    expect(await screen.findByRole("alert")).toBeTruthy();
+    expect(screen.getByRole("alert").textContent).toContain(ASSISTANT_NGSPICE_REFUSED_PREFIX);
+    expect(onCreateAsc).not.toHaveBeenCalled();
+    expect(onApplyCurrent).not.toHaveBeenCalled();
+    expect(screen.queryByText("Created")).toBeNull();
   });
 
   it("keeps a current-circuit revision private until Apply and selects only the apply handler", async () => {
@@ -1021,6 +1072,42 @@ describe("AssistantPanel", () => {
     }));
     expect(onCreateAsc).not.toHaveBeenCalled();
     expect(await screen.findByText("Applied")).toBeTruthy();
+    expect(validateBeforeApplyMock).toHaveBeenCalled();
+  });
+
+  it("blocks Apply when packaged ngspice validation refuses (fail-closed)", async () => {
+    saveAssistantApiKey("test-key");
+    validateBeforeApplyMock.mockResolvedValue({
+      ok: false,
+      reason: `${ASSISTANT_NGSPICE_REFUSED_PREFIX}: singular matrix`,
+    });
+    const onCreateAsc = vi.fn();
+    const onApplyCurrent = vi.fn();
+    render(<AssistantPanel {...baseProps({ onCreateAsc, onApplyCurrent })} />);
+
+    fireEvent.change(screen.getByRole("textbox", { name: "Message the assistant" }), {
+      target: { value: "Add a load resistor to the current circuit" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    await act(async () => {
+      streams[0].resolveContent([
+        { type: "text", text: "I prepared the revised circuit." },
+        {
+          type: "tool_use",
+          id: "apply-refuse",
+          name: "apply_current_asc_circuit",
+          input: { source: ASSISTANT_ASC },
+        },
+      ]);
+      await streams[0].finalMessage();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Apply to current circuit" }));
+    expect(await screen.findByRole("alert")).toBeTruthy();
+    expect(screen.getByRole("alert").textContent).toContain(ASSISTANT_NGSPICE_REFUSED_PREFIX);
+    expect(onApplyCurrent).not.toHaveBeenCalled();
+    expect(onCreateAsc).not.toHaveBeenCalled();
+    expect(screen.queryByText("Applied")).toBeNull();
   });
 
   it("keeps a rejected plan visible with one-click retry and never invokes a mutation boundary", async () => {

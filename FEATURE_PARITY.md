@@ -1997,6 +1997,12 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   dirty tab now closes through Save / Don't Save / Cancel; Save completes the
   disk write before closing. Packaged Tau proved the flow on the buck fixture
   and reran its bundled-ngspice transient after save/reopen.
+  **Packaged ngspice before AI apply (2026-08-05):** Create/Apply is fail-closed
+  on `validateAssistantProposalBeforeApply` (finite `.op` deck + packaged
+  `simulate_spice`; unavailable engine refuses — never silent apply). Proven by
+  `assistantNgspiceValidate.test.ts` + AssistantPanel Create/Apply refusal
+  cases + `scripts/ai-ngspice-before-apply.sh`. Credentials-out-of-renderer,
+  Tau OAuth, and release-gated live evals remain open — AI DoD stays unchecked.
   **Structured LTspice slot editing (2026-08-02):** the App validator now
   preserves/bounds `ltExtraAttrs` instead of dropping it on open. A minimal edit
   wholly inside one joined `Value2`/`SpiceLine` slot is written back to that

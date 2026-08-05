@@ -1,15 +1,47 @@
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 ~12:40 CDT**
+**Status: DONE - 2026-08-05 ~12:45 CDT**
 
-Unit: §10 — migrate FFT Signal/Window + Op-amp model native `<select>`s
-onto shadcn `ui/Select` (Settings untouched). AGENTS §10 DoD stays unchecked.
+Unit: **AI ngspice-before-apply** — fail-closed packaged validation on
+Create/Apply (`assistantNgspiceValidate` + AssistantPanel gate +
+`scripts/ai-ngspice-before-apply.sh`). AI DoD box stays ⬜ (keys/OAuth/evals).
 SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
 
 
+---
+
+### 2026-08-05 — AI packaged ngspice before apply (§AI DoD partial)
+
+**What I did**
+- Fleet restaff after tip stall: landed hung `Tau-wt-ai-ngspice-apply` WIP onto
+  tip after directives DoD landed in parallel (`dd66e79`).
+- Create/Apply now requires packaged-ngspice `.op` convergence (or honest
+  refusal). Unavailable runtime refuses — never silent apply.
+- Credentials-out-of-renderer / Tau OAuth / release-gated live evals remain
+  open — AGENTS AI box stays unchecked. SHIPPABLE? **NO**.
+
+**Files**
+- `apps/desktop/src/lib/assistantNgspiceValidate.ts` (+ test)
+- `apps/desktop/src/components/AssistantPanel.tsx` (+ test)
+- `scripts/ai-ngspice-before-apply.sh`
+- `AGENTS.md`, `FEATURE_PARITY.md`, `PROGRESS.md`
+
+**Tests**
+- `bash scripts/ai-ngspice-before-apply.sh` → 57/57
+- `pnpm -C apps/desktop typecheck` green
+- `pnpm -C apps/desktop test` → 2883 passed / 6 skipped
+
+**Parity items**
+- AI DoD partial: ngspice-before-apply. Box stays ⬜. SHIPPABLE? NO
+
+**Next step**
+- Differential SoftDiode pass=104; §10/min-window; product gates; keys out of
+  renderer; named-device wall.
+
+SHIPPABLE? **NO**
 
 ---
 

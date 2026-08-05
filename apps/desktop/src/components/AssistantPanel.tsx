@@ -23,6 +23,7 @@ import type {
   AssistantAscAction,
   AssistantCreateAscAction,
 } from "../lib/assistantActions";
+import { validateAssistantProposalBeforeApply } from "../lib/assistantNgspiceValidate";
 import {
   ASSISTANT_MODEL_LABEL,
   compactAssistantHistory,
@@ -249,9 +250,16 @@ export function AssistantPanel({
   const preferences = useAssistantPreferences();
   const userModelLibraries = useSchematic((s) => s.userModelLibraries);
   const installedLtspiceModelLibraries = useRuntimeModelLibraries((s) => s.installedLtspice);
-  const userModelLibraryTexts = useMemo(
-    () => [...userModelLibraries, ...installedLtspiceModelLibraries].map((library) => library.text),
+  const projectModelLibraries = useMemo(
+    () => [...userModelLibraries, ...installedLtspiceModelLibraries].map((library) => ({
+      name: library.name,
+      text: library.text,
+    })),
     [installedLtspiceModelLibraries, userModelLibraries],
+  );
+  const userModelLibraryTexts = useMemo(
+    () => projectModelLibraries.map((library) => library.text),
+    [projectModelLibraries],
   );
   const restoredRecovery = useMemo(() => loadAssistantRecovery(memoryKey), [memoryKey]);
   const localAssistant = useMemo(
@@ -760,6 +768,20 @@ export function AssistantPanel({
     setError(null);
     setActionStates((states) => ({ ...states, [action.id]: "working" }));
     try {
+      // Fail-closed: packaged ngspice must validate the proposal before any
+      // Create / Apply mutation. Structural ASC checks alone are not enough.
+      const validation = await validateAssistantProposalBeforeApply({
+        ...action.document,
+        userModelLibraries: [
+          ...(action.document.userModelLibraries ?? []),
+          ...projectModelLibraries,
+        ],
+      });
+      if (!validation.ok) {
+        setActionStates((states) => ({ ...states, [action.id]: "idle" }));
+        setError({ kind: "invalid_action", message: validation.reason });
+        return;
+      }
       // Create remounts the panel under a new memoryKey - flush first so
       // migrateConversation in App can copy the complete transcript.
       if (action.type === "create_asc") {
@@ -779,7 +801,7 @@ export function AssistantPanel({
           : "Couldn't apply the proposed changes to the current circuit. Try asking for a revised proposal.",
       });
     }
-  }, [actionStates, activeConversationId, memoryKey, messages, onApplyCurrent, onCreateAsc]);
+  }, [actionStates, activeConversationId, memoryKey, messages, onApplyCurrent, onCreateAsc, projectModelLibraries]);
 
   const onComposerKeyDown = (event: ReactKeyboardEvent<HTMLTextAreaElement>) => {
     if (event.key === "Enter" && !event.shiftKey) {

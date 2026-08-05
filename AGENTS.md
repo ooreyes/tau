@@ -305,6 +305,11 @@ account and sign/notarize/ship.
       validates generated schematics with packaged ngspice before apply, and
       has release-gated live evaluations. Never reuse ChatGPT browser cookies or
       imply that a ChatGPT subscription pays API usage.
+      **Partial (2026-08-05):** packaged-ngspice-before-apply landed fail-closed
+      (`assistantNgspiceValidate.ts` + Create/Apply gate in `AssistantPanel`;
+      `scripts/ai-ngspice-before-apply.sh`). Still FAIL: credentials still
+      hydrate into the renderer session; no Tau OAuth/backend; no release-gated
+      live evals. DoD box stays unchecked. SHIPPABLE? **NO**.
 - [ ] **Student, professional, and developer product gates:** a first-success
       learning path and contextual help; crash-safe unsaved recovery plus safe
       external-edit/conflict handling and reproducible run records; and a stable,
