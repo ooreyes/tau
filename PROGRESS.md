@@ -9,18 +9,53 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 03:34 CDT**
+**Status: DONE - 2026-08-05 03:37 CDT**
 
-Unit: Educational `varistor.asc` TRAN + `stepnoise.asc` noise → differential
-**pass=63** (circuit ids `edu-varistor` / `stepnoise`; distinct from sibling
-specialDeviceParity `varistor`). Stacked on tip Pierce/colpits2 pass=61
-(`695139b`/`8ee1203`). Named-device 47.9%. SHIPPABLE? **NO**
+Unit: Applications `UniversalOpAmp.asc` / `UniversalOpAmp1.asc` /
+`UniversalOpAmp2.asc` authored `.tran` → differential **pass=66** (Tau-owned
+behavioral rail-clamped tanh). UOA3/4 refuse fail-closed (not landed).
+Named-device 47.9%. SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
 
 
 ---
+
+
+### 2026-08-05 — Applications UniversalOpAmp/1/2 TRAN → pass=66 (§DoD)
+
+**What I did**
+- Applications `UniversalOpAmp.asc` / `UniversalOpAmp1.asc` /
+  `UniversalOpAmp2.asc`: authored `.tran 1.5u` unity-gain pulse; Tau-owned
+  behavioral symbols (`opampModel` BEHAVIORAL_SYMBOLS) emit rail-clamped tanh
+  `B_U1` — exact compatible path, zero silent sub / unresolvedSubckts.
+  v(out) nRms≈0 span≈0.100 on all three.
+- UOA3/UOA4 require vendor UniversalOpAmp3/4 subckts → fail-closed refuse;
+  not landed (honest).
+- Tip `d96b0fb` edu-varistor/stepnoise pass=63 → 66. Left Pierce/phaseshift*/
+  varactor*/MonteCarlo/2ndOrder*/edu-varistor/stepnoise alone.
+
+**Exact stdout**
+```
+SUMMARY pass=66 sibling=5 gap=0
+```
+
+**Files**
+- `apps/desktop/scripts/differentialParity.corpus.ts`
+- `AGENTS.md`, `FEATURE_PARITY.md`, `PROGRESS.md`
+- `~/Desktop/TAU-MORNING-STATUS.md`
+
+**Tests**
+- `vitest … differentialParity.corpus.ts` → SUMMARY pass=66 sibling=5 gap=0
+- `pnpm -C apps/desktop typecheck` + `test`
+
+**Parity items**
+- Differential 🟡 harness **pass=66 · sibling=5 · gap=0**; DoD broad box unchecked.
+- Named-device 🟡 **47.9%** unchanged. SHIPPABLE? NO
+
+**Next**
+- Continue 14 non-colliding Educational/Applications. Leave Settings locked.
 
 
 ### 2026-08-05 — Educational varistor.asc + stepnoise.asc → pass=63 (§DoD)

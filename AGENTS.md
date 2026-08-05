@@ -173,11 +173,10 @@ account and sign/notarize/ship.
       with LTspice over a representative device and topology matrix.
       **Partial (2026-08-05):** `scripts/differential-parity.sh` +
       `differentialParity.corpus.ts` (also under `dod-parity.sh`) prove
-      pass=63 · sibling=5 · gap=0 on stdout: prior cells through Pierce/colpits2 +
-      Educational varistor.asc authored `.tran` (circuit id `edu-varistor`;
-      distinct from sibling specialDeviceParity `varistor`; v(out) nRms≈0.0126
-      nMax≈0.0583 @ maxTol=0.06) + Educational stepnoise.asc noise (list 10K →
-      9.5–10.5 kHz band; .step R first=500; onoise/inoise nRms≈0; exact 2N2222).
+      pass=66 · sibling=5 · gap=0 on stdout: prior cells through edu-varistor/
+      stepnoise + Applications UniversalOpAmp/UniversalOpAmp1/UniversalOpAmp2.asc
+      authored `.tran` (Tau-owned behavioral rail-clamped tanh; v(out) nRms≈0;
+      UOA3/4 refuse fail-closed — not landed).
       tip 65e05ce thrash corrected (claimed varactor, corpus was MonteCarlo).
       phono=LT1028; relax=LT1001; SAH borderline. HalfSlope Laplace not landed.
       SoftDiodeRecovery deferred. BandGaps `.dc temp` misses tolerance.

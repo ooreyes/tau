@@ -80,6 +80,9 @@ const PIERCE_ASC = join(EDU, "Pierce.asc");
 const COLPITS2_ASC = join(EDU, "colpits2.asc");
 const EDU_VARISTOR_ASC = join(EDU, "varistor.asc");
 const STEPNOISE_ASC = join(EDU, "stepnoise.asc");
+const UOA_ASC = join(APP, "UniversalOpAmp.asc");
+const UOA1_ASC = join(APP, "UniversalOpAmp1.asc");
+const UOA2_ASC = join(APP, "UniversalOpAmp2.asc");
 const ORDER2_LOWPASS_ASC = join(APP, "2ndOrderLowpass.asc");
 const ORDER2_BANDPASS_ASC = join(APP, "2ndOrderBandpass.asc");
 const ORDER2_HIGHPASS_ASC = join(APP, "2ndOrderHighpass.asc");
@@ -233,7 +236,7 @@ function withAcStimulus(netlist: string): string {
 describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential parity matrix", () => {
   const cells: DifferentialCell[] = [];
 
-  it("matches RC .tran/.ac/.meas, divider analyses, .step families, curvetrace, stepmodelparam, NoiseFigure, noise.asc, Colpitts/Clapp/Hartly AC, Cohn AC, MeasureBW AC, Transformer/Transformer2/IdealTransformer TRAN, notch/passive/butter/opamp/Linkwitz AC, LM741/LM308/LM78XX/P2/logamp TRAN, GFT AC, DCopPnt OP, audioamp TRAN, UHFpreamp AC, 1563 AC, S-param AC, stepAC AC, 2ndOrder* AC, MonteCarlo AC, varactor AC, phaseshift AC, Pierce/colpits2 AC, edu-varistor TRAN, stepnoise noise, Class-D AC/OP/DC/noise/tf", () => {
+  it("matches RC .tran/.ac/.meas, divider analyses, .step families, curvetrace, stepmodelparam, NoiseFigure, noise.asc, Colpitts/Clapp/Hartly AC, Cohn AC, MeasureBW AC, Transformer/Transformer2/IdealTransformer TRAN, notch/passive/butter/opamp/Linkwitz AC, LM741/LM308/LM78XX/P2/logamp TRAN, GFT AC, DCopPnt OP, audioamp TRAN, UHFpreamp AC, 1563 AC, S-param AC, stepAC AC, 2ndOrder* AC, MonteCarlo AC, varactor AC, phaseshift AC, Pierce/colpits2 AC, edu-varistor TRAN, stepnoise noise, UniversalOpAmp/1/2 TRAN, Class-D AC/OP/DC/noise/tf", () => {
     // --- TRAN (also covered by waveformParity; re-assert here so this file is self-sufficient) ---
     {
       const result = runPairedBatch("diff-rc-tran", RC_TRAN, ["v(out)"]);
@@ -2345,6 +2348,73 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
       });
     }
 
+    // --- Applications UniversalOpAmp.asc / UniversalOpAmp1.asc / UniversalOpAmp2.asc authored .tran ---
+    // Tau-owned behavioral rail-clamped tanh (opampModel BEHAVIORAL_SYMBOLS). UOA3/4 require
+    // vendor UniversalOpAmp3/4 subckts and refuse fail-closed — not landed. Exact path, no silent sub.
+    for (const fixture of [
+      {
+        path: UOA_ASC,
+        circuit: "universalopamp",
+        topology: "Applications UniversalOpAmp.asc Tau behavioral UOA (authored .tran 1.5u; rail-clamped tanh)",
+        id: "diff-uoa-tran",
+        symbol: "UniversalOpamp",
+      },
+      {
+        path: UOA1_ASC,
+        circuit: "universalopamp1",
+        topology: "Applications UniversalOpAmp1.asc Tau behavioral UOA1 (authored .tran 1.5u; rail-clamped tanh)",
+        id: "diff-uoa1-tran",
+        symbol: "UniversalOpAmp1",
+      },
+      {
+        path: UOA2_ASC,
+        circuit: "universalopamp2",
+        topology: "Applications UniversalOpAmp2.asc Tau behavioral UOA2 (authored .tran 1.5u; rail-clamped tanh)",
+        id: "diff-uoa2-tran",
+        symbol: "UniversalOpAmp2",
+      },
+    ] as const) {
+      expect(existsSync(fixture.path), `missing ${fixture.path}`).toBe(true);
+      const imported = importAsc(decodeSchematicText(readFileSync(fixture.path)));
+      expect(imported.warnings).toEqual([]);
+      const dirs = expandDirectiveLines(imported.directives);
+      const parsed = analysesFromDirectives(dirs);
+      expect(parsed.tran, `${fixture.circuit} must author .tran`).toBeTruthy();
+      const params = buildParamScope(dirs);
+      const deck = buildSpiceDeck({
+        components: imported.components,
+        wires: imported.wires,
+        netLabels: imported.netLabels,
+        directives: dirs,
+        params,
+      }, {
+        kind: "tran",
+        stopTime: parsed.tran!.stopTime,
+        steps: parsed.tran!.steps ?? 5000,
+      });
+      expect(deck.unresolvedSubckts ?? []).toEqual([]);
+      expect(deck.modelSubstitutions ?? []).toEqual([]);
+      expect(deck.netlist).toMatch(/B_U1\b/i);
+      expect(deck.netlist).toMatch(/tanh\s*\(/i);
+      expect(deck.netlist).not.toMatch(/^X\w*\b.*\bUniversalOpAmp/im);
+      const result = runPairedBatch(fixture.id, deck.netlist, ["v(out)"]);
+      const lt = result.ltspice.get("v(out)")!;
+      const ng = result.ngspice.get("v(out)")!;
+      const comparison = compareWaveforms(ng.axis, ng.values, lt.axis, lt.values, {
+        rmsTolerance: 0.02,
+        maxTolerance: 0.05,
+      });
+      expect(comparison.pass, `${fixture.circuit} ${JSON.stringify(comparison)}`).toBe(true);
+      expect(comparison.referenceRange, `${fixture.circuit} non-hollow`).toBeGreaterThan(0.05);
+      cells.push({
+        analysis: "tran",
+        circuit: fixture.circuit,
+        topology: fixture.topology,
+        status: "pass",
+        note: `v(out) nRms=${comparison.normalizedRms.toFixed(4)} nMax=${comparison.normalizedMax.toFixed(4)} span=${comparison.referenceRange.toFixed(3)}`,
+      });
+    }
+
     // --- Class-D AC/OP (authored analyses are .tran/.meas; add AC/OP for differential proof) ---
     {
       const ascPath = join(CLASSD_DIR, "class-d-starter.asc");
@@ -2638,9 +2708,9 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
     const passCount = cells.filter((cell) => cell.status === "pass").length;
     const gapCount = cells.filter((cell) => cell.status === "gap").length;
     const siblingCount = cells.filter((cell) => cell.status === "sibling").length;
-    expect(passCount).toBeGreaterThanOrEqual(61);
+    expect(passCount).toBeGreaterThanOrEqual(63);
     expect(siblingCount).toBe(5);
     expect(gapCount).toBe(0);
-    expect(report).toMatch(/SUMMARY pass=63 sibling=5 gap=0/);
+    expect(report).toMatch(/SUMMARY pass=66 sibling=5 gap=0/);
   }, 240_000);
 });
