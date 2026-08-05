@@ -64,6 +64,8 @@ const CT_STRESS_RC_LADDER_ASC = join(REPO_ROOT, "Circuit_testing_v1", "11_stress
 const CT_ACTIVE_FOURTH_ORDER_ASC = join(REPO_ROOT, "Circuit_testing_v1", "16_active_fourth_order_filter.asc");
 /** Tau Circuit_testing_v1 — 1N4007 full-wave bridge + reservoir (≠ ct diode DC / Draft1 diode–L–R). */
 const CT_FULL_BRIDGE_ASC = join(REPO_ROOT, "Circuit_testing_v1", "18_full_bridge_power_supply.asc");
+/** Tau Circuit_testing_v1 — balanced 3φ RLC feeder (≠ ct 18 bridge / ct 08 underdamped RLC). */
+const CT_THREE_PHASE_ASC = join(REPO_ROOT, "Circuit_testing_v1", "17_three_phase_power_grid.asc");
 const EDU = join(homedir(), "Documents", "LTspice", "examples", "Educational");
 const APP = join(homedir(), "Documents", "LTspice", "examples", "Applications");
 const DOC_LTSPICE = join(homedir(), "Documents", "LTspice");
@@ -4177,6 +4179,74 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
       });
     }
 
+    // --- Circuit_testing_v1/17_three_phase_power_grid.asc authored .tran ---
+    // Tau-owned ASC: three 120°-spaced SINE(0 170 60) sources + per-phase
+    // Rline=200m / Lline=2m / Rload=20 / Lload=30m / Cpf=47u shunt. Authored
+    // `.tran 50u 100m`. Passive RLC only — zero models/subckts. Distinct from
+    // ct 18 1N4007 bridge TRAN, ct 08 underdamped RLC, and ct 11 RC ladder AC.
+    // Left 100W/IRFP / Documents Draft* / Settings / ct 12–15 / ct19 INA alone.
+    // Tip ct-full-bridge pass=94 → **pass=95**.
+    {
+      expect(existsSync(CT_THREE_PHASE_ASC), `missing ${CT_THREE_PHASE_ASC}`).toBe(true);
+      const imported = importAsc(decodeSchematicText(readFileSync(CT_THREE_PHASE_ASC)));
+      expect(imported.warnings).toEqual([]);
+      expect(imported.foreignSymbols).toEqual([]);
+      expect(imported.components.filter((c) => c.kind === "vsource")).toHaveLength(3);
+      expect(imported.components.filter((c) => c.kind === "resistor")).toHaveLength(6);
+      expect(imported.components.filter((c) => c.kind === "inductor")).toHaveLength(6);
+      expect(imported.components.filter((c) => c.kind === "capacitor")).toHaveLength(3);
+      const dirs = expandDirectiveLines(imported.directives);
+      const parsed = analysesFromDirectives(dirs);
+      expect(parsed.tran, "17_three_phase_power_grid.asc must author .tran").toBeTruthy();
+      const params = buildParamScope(dirs);
+      const deck = buildSpiceDeck({
+        components: imported.components,
+        wires: imported.wires,
+        netLabels: imported.netLabels,
+        directives: dirs,
+        params,
+      }, {
+        kind: "tran",
+        stopTime: parsed.tran!.stopTime,
+        steps: Math.max(parsed.tran!.steps ?? 240, 4000),
+        startTime: parsed.tran!.startTime,
+        maxStep: parsed.tran!.maxStep,
+      });
+      expect(deck.unresolvedSubckts ?? []).toEqual([]);
+      expect(deck.modelSubstitutions ?? []).toEqual([]);
+      expect(deck.netlist).toMatch(/^VA\b.+\bSIN\(0 170 60\)/im);
+      expect(deck.netlist).toMatch(/^VB\b.+\bSIN\(0 170 60 0 0 -120\)/im);
+      expect(deck.netlist).toMatch(/^VC\b.+\bSIN\(0 170 60 0 0 120\)/im);
+      expect(deck.netlist).toMatch(/^RPA\b.+\b20\b/im);
+      expect(deck.netlist).toMatch(/^CFA\b.+\b0\.000047\b/im);
+      expect(deck.netlist).toMatch(/\.tran\b/i);
+      expect(deck.netlist).not.toMatch(/^X\w*\b/im);
+      expect(deck.netlist).not.toMatch(/\.model\b/i);
+      const probes = ["v(a_load)", "v(b_load)", "v(c_load)"] as const;
+      const result = runPairedBatch("diff-ct-three-phase-tran", deck.netlist, [...probes]);
+      const memberNotes: string[] = [];
+      for (const probe of probes) {
+        const lt = result.ltspice.get(probe)!;
+        const ng = result.ngspice.get(probe)!;
+        const comparison = compareWaveforms(ng.axis, ng.values, lt.axis, lt.values, {
+          rmsTolerance: 0.02,
+          maxTolerance: 0.05,
+        });
+        expect(comparison.pass, `ct-three-phase ${probe} ${JSON.stringify(comparison)}`).toBe(true);
+        expect(comparison.referenceRange, `ct-three-phase ${probe} non-hollow`).toBeGreaterThan(50);
+        memberNotes.push(
+          `${probe} nRms=${comparison.normalizedRms.toFixed(4)} nMax=${comparison.normalizedMax.toFixed(4)} span=${comparison.referenceRange.toFixed(3)}`,
+        );
+      }
+      cells.push({
+        analysis: "tran",
+        circuit: "ct-three-phase",
+        topology: "Circuit_testing_v1/17_three_phase_power_grid.asc 3φ SINE 170 V/60 Hz + RL line/load + 47u PF (authored .tran 50u–100m)",
+        status: "pass",
+        note: memberNotes.join("; "),
+      });
+    }
+
     // --- Class-D AC/OP (authored analyses are .tran/.meas; add AC/OP for differential proof) ---
     {
       const ascPath = join(CLASSD_DIR, "class-d-starter.asc");
@@ -4473,6 +4543,6 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
     expect(passCount).toBeGreaterThanOrEqual(70);
     expect(siblingCount).toBe(5);
     expect(gapCount).toBe(0);
-    expect(report).toMatch(/SUMMARY pass=94 sibling=5 gap=0/);
+    expect(report).toMatch(/SUMMARY pass=95 sibling=5 gap=0/);
   }, 240_000);
 });

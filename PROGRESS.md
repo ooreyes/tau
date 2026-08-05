@@ -2,8 +2,14 @@
 
 **Status: DONE - 2026-08-05 07:08 CDT**
 
-Unit: Waveform DoD — **right-click idt(…)** (+ PROGRESS phase-PNG dated entry).
-Differential pass=94 · named-device 48.1%. Settings locked. SHIPPABLE? **NO**
+Unit: Circuit_testing_v1 `17_three_phase_power_grid.asc` authored `.tran` → differential **pass=95**.
+```
+SUMMARY pass=95 sibling=5 gap=0
+tran ct-three-phase … v(a_load) nRms=0.0043 nMax=0.0113 span=179.781
+```
+Named-device 48.1%. Worktree `Tau-dod-wt` rebased over tip `0bc5fd4` (idt + Bode PNG + pass=94).
+Left Settings / IRFP / Draft* / ct12–15 / ct19 INA alone.
+SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
@@ -11,7 +17,30 @@ Differential pass=94 · named-device 48.1%. Settings locked. SHIPPABLE? **NO**
 
 ---
 
+### 2026-08-05 — ct 17_three_phase_power_grid .tran → pass=95 (§DoD)
 
+**What I did**
+- Circuit_testing_v1 `17_three_phase_power_grid.asc` authored `.tran 50u 100m`
+  (three 120°-spaced SINE(0 170 60) + per-phase Rline=200m / Lline=2m /
+  Rload=20 / Lload=30m / Cpf=47u): v(a_load)/v(b_load)/v(c_load) vs LTspice
+  nRms≈0.0043/0.0023/0.0023. Passive RLC only — zero models/subckts/subs.
+  Distinct from ct 18 1N4007 bridge, ct 08 underdamped RLC, ct 11 RC ladder.
+  ct 19 INA `.op` still deferred. Left IRFP/Draft*/Settings/ct12–15 alone.
+
+**Files**
+- `apps/desktop/scripts/differentialParity.corpus.ts`
+- `FEATURE_PARITY.md`, `AGENTS.md`, `PROGRESS.md`
+
+**Tests**
+- `scripts/differential-parity.sh` → SUMMARY pass=95 sibling=5 gap=0
+- `pnpm -C apps/desktop typecheck` + `test` green (2751 passed)
+
+**Parity items**
+- Differential **pass=95** · named-device 48.1% · SHIPPABLE? NO
+
+**Next step**
+- ct 12/13 buck/boost (named VDMOS + Schottky), Educational non-wall leftovers,
+  or waveform DoD. Leave ct19 OP / IRFP / Draft* / Settings alone.
 
 ### 2026-08-05 — ct 18_full_bridge_power_supply .tran → pass=94 (§DoD)
 
