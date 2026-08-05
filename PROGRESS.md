@@ -1,14 +1,50 @@
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 ~14:30 CDT**
+**Status: DONE - 2026-08-05 ~13:30 CDT**
 
-Unit: **§10 EngineeringInput SI prefix → ui/Select** — shared eng-input
-native `<select>` onto shadcn `ui/Select` (Settings untouched). AGENTS §10
-stays UNCHECKED. SHIPPABLE? **NO**
+Unit: **Product gates — versioned CLI/API** — `tau.cli.v1` diagnose
+envelope (import → validate → deck) with machine-readable diagnostics +
+`scripts/tau-cli.mjs`. Product-gates DoD box stays ⬜ (learning path still
+open). SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
 
+
+---
+
+### 2026-08-05 — Versioned CLI/API (product-gates partial)
+
+**What I did**
+- Landed stable `tau.cli.v1` / `tau.cli.diagnose.v1`: import → validate →
+  `.op` deck diagnose with machine-readable diagnostic codes, exit status
+  (0/1/2/3/64), and JSON or text output. No ngspice in this surface.
+- CLI entry `scripts/tau-cli.mjs` (+ `scripts/tau-cli.sh`) via Vite SSR;
+  proof `scripts/product-gates-cli-api.sh`.
+- Product-gates DoD box stays unchecked (first-success learning path +
+  contextual help still open). SHIPPABLE? **NO**.
+
+**Files**
+- `apps/desktop/src/cli/tauCliApi.ts` (+ test)
+- `apps/desktop/src/cli/runTauCli.ts` (+ test)
+- `scripts/tau-cli.mjs`, `scripts/tau-cli.sh`
+- `scripts/product-gates-cli-api.sh`
+- `AGENTS.md`, `FEATURE_PARITY.md`, `PROGRESS.md`
+
+**Tests**
+- `bash scripts/product-gates-cli-api.sh` → PRODUCT-GATES-CLI-API: ok (12 unit + live)
+- `pnpm -C apps/desktop typecheck` green
+- `pnpm -C apps/desktop test` → 2954 passed / 8 skipped
+
+**Parity items**
+- Product-gates DoD partial: CLI/API ✅ alongside recovery + external-edit +
+  run records. Box stays ⬜. SHIPPABLE? NO
+
+**Next step**
+- First-success learning path + contextual help. Never flip whole
+  product-gates box until that lands too.
+
+SHIPPABLE? **NO**
 
 ---
 

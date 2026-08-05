@@ -357,9 +357,12 @@ account and sign/notarize/ship.
       versioned `tau.run.record.v1` (document signature + deck fingerprint +
       engine + diagnostics + measurements + bounded summary), session history
       ring + Export `.tau-run.json` (`runRecord.ts` + SimulationPanel); proof
-      `scripts/product-gates-run-records.sh`. Still open: first-success
-      learning path + contextual help; versioned CLI/API diagnostics. DoD box
-      stays unchecked. SHIPPABLE? **NO**.
+      `scripts/product-gates-run-records.sh`. Versioned CLI/API landed —
+      `tau.cli.v1` / `tau.cli.diagnose.v1` (import → validate → `.op` deck;
+      machine-readable codes; exit 0/1/2/3/64); entry `scripts/tau-cli.mjs`;
+      proof `scripts/product-gates-cli-api.sh`. Still open: first-success
+      learning path + contextual help. DoD box stays unchecked. SHIPPABLE?
+      **NO**.
 - [x] All gates green; **unsigned release build is production‑ready**:
       `pnpm --filter @tau/desktop tauri build` succeeds, the DMG mounts, the
       built Tau.app launches and stays alive, and bundled ngspice simulates
