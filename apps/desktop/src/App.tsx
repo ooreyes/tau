@@ -276,6 +276,8 @@ function App() {
       : "automatic" as const;
   const [analysis, setAnalysis] = useState<(AnalysisResult & EngineProvenance) | null>(null);
   const [schematicReadoutTime, setSchematicReadoutTime] = useState<number | null>(null);
+  /** Animate schematic V/I through real `.tran` samples (EveryCircuit-style live). */
+  const [liveSchematicPlayback, setLiveSchematicPlayback] = useState(true);
   const [opAnalysis, setOpAnalysis] = useState<(OperatingPointResult & EngineProvenance) | null>(null);
   const [acAnalysis, setAcAnalysis] = useState<(AcResult & EngineProvenance) | null>(null);
   const [dcAnalysis, setDcAnalysis] = useState<(DcSweepResult & EngineProvenance) | null>(null);
@@ -1995,6 +1997,22 @@ function App() {
                     Current mode
                   </span>
                 )}
+                {analysis?.ok && (
+                  <button
+                    type="button"
+                    className={`sim-live-playback-badge${liveSchematicPlayback ? " active" : ""}`}
+                    aria-pressed={liveSchematicPlayback}
+                    aria-label={liveSchematicPlayback ? "Live current playback on" : "Live current playback off"}
+                    title={
+                      liveSchematicPlayback
+                        ? "Live: schematic V/I/flow scrub through real .tran samples (scope cursors override). Click to pause at the final sample."
+                        : "Paused at the final .tran sample. Click to animate schematic current mode through the waveform."
+                    }
+                    onClick={() => setLiveSchematicPlayback((on) => !on)}
+                  >
+                    Live
+                  </button>
+                )}
                 <span
                   className="sim-view-only"
                   aria-label="View-only circuit topology"
@@ -2060,6 +2078,7 @@ function App() {
                 stepSetupUi={stepSetupUi}
                 onStepSetupUiChange={setStepSetupUi}
                 onSchematicReadoutTime={setSchematicReadoutTime}
+                liveSchematicPlayback={liveSchematicPlayback}
               />
             </AnalysisErrorBoundary>
           </>

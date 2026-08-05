@@ -6311,6 +6311,34 @@ button.bottom-panel-head:focus-visible {
   background: color-mix(in srgb, var(--trace-green) 12%, var(--panel-3));
 }
 
+.sim-live-playback-badge {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 var(--sp-2);
+  margin-left: var(--sp-1);
+  font-size: var(--fs-label);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--panel-3);
+  cursor: pointer;
+}
+
+.sim-live-playback-badge.active {
+  color: var(--trace-cyan);
+  border-color: color-mix(in srgb, var(--trace-cyan) 40%, var(--border));
+  background: color-mix(in srgb, var(--trace-cyan) 12%, var(--panel-3));
+}
+
+.sim-live-playback-badge:hover {
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--text) 25%, var(--border));
+}
+
 .sim-circuit-tools {
   min-width: 0;
   display: inline-flex;

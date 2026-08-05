@@ -1,8 +1,8 @@
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 ~10:20 CDT**
+**Status: DONE - 2026-08-05 ~10:25 CDT**
 
-Unit: EveryCircuit library — **CT transformer** (3×L + multi-winding K)
+Unit: EveryCircuit UX — **Live continuous current mode** (TRAN sample scrub)
 + hard-defer 7seg / 555 / ADC-DAC / counter. Not full EC parity.
 SHIPPABLE? **NO**
 
@@ -10,6 +10,34 @@ SHIPPABLE? **NO**
 
 
 
+
+---
+
+### 2026-08-05 — Live continuous current mode (§EveryCircuit UX)
+
+**What I did**
+- After a successful `.tran`, schematic V/I/flow **Live**-scrubs through real
+  `result.times` samples (~3.2 s wall loop) via `liveSchematicPlayback.ts` →
+  existing `readoutTime` / `tranComponentCurrents` path — never invents currents.
+- Circuit header **Live** toggle (default on); scope cursors still win when open;
+  Live off → final sample.
+- Left 7seg / 555 / ADC-DAC / counter hard-deferred (no fake ICs).
+
+**Files**
+- `simulation/liveSchematicPlayback.ts(+test)`
+- `components/SimulationPanel.tsx`, `App.tsx`, `App.css`
+- `FEATURE_PARITY.md`, `PROGRESS.md`
+
+**Tests**
+- `pnpm -C apps/desktop typecheck`
+- `pnpm -C apps/desktop test` (2842 passed)
+
+**Parity items**
+- §EveryCircuit UX: live TRAN current scrub. Deferred ICs unchanged. SHIPPABLE? NO
+
+**Next step**
+- Palette grouping polish, or Staff EE / other DoD boxes. Refuse 555/ADC/counter
+  without real subckts.
 
 ---
 

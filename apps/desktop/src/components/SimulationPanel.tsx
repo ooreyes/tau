@@ -108,6 +108,10 @@ import {
   xToFraction,
 } from "../simulation/cursors";
 import type { CursorTraceInput } from "../simulation/cursors";
+import {
+  liveReadoutTime,
+  shouldDriveLiveSchematicReadout,
+} from "../simulation/liveSchematicPlayback";
 import { resolveCssColorHex, sameCssColor } from "../lib/cssColor";
 import { parseRaw } from "../io/rawImport";
 import type { RawData } from "../io/rawImport";
@@ -220,8 +224,14 @@ interface SimulationPanelProps {
   onNoiseSetupChange: (next: NoiseSpec) => void;
   stepSetupUi: StepSetupUi;
   onStepSetupUiChange: (next: StepSetupUi) => void;
-  /** When transient cursors are open, report active cursor time for schematic readout. Null = final. */
+  /**
+   * Drive schematic V/I/flow from a live `.tran` sample time.
+   * Cursor time wins when cursors are open; otherwise Live scrub (when enabled)
+   * loops through real waveform samples. Null = final sample.
+   */
   onSchematicReadoutTime?: (timeSeconds: number | null) => void;
+  /** Animate schematic current mode through the `.tran` timeline (real samples). */
+  liveSchematicPlayback?: boolean;
 }
 
 const PLOT_WIDTH = 340;
@@ -290,6 +300,7 @@ export function SimulationPanel({
   stepSetupUi,
   onStepSetupUiChange,
   onSchematicReadoutTime,
+  liveSchematicPlayback = true,
 }: SimulationPanelProps) {
   const components = useSchematic((s) => s.components);
   const wires = useSchematic((s) => s.wires);
@@ -325,13 +336,47 @@ export function SimulationPanel({
 
   useEffect(() => {
     if (!onSchematicReadoutTime) return;
-    if (!cursorsOpen || !result?.ok || result.times.length === 0) {
+    const hasOkTransient = Boolean(result?.ok && result.times.length > 0);
+
+    // Scope cursors always win over live scrub.
+    if (cursorsOpen && hasOkTransient && result?.ok) {
+      const fraction = activeTransientCursor === "c2" ? cursorF2 : cursorF1;
+      onSchematicReadoutTime(fractionToX(result.times, fraction));
+      return;
+    }
+
+    if (
+      !shouldDriveLiveSchematicReadout({
+        liveEnabled: liveSchematicPlayback,
+        cursorsOpen,
+        hasOkTransient,
+      }) ||
+      !result?.ok
+    ) {
       onSchematicReadoutTime(null);
       return;
     }
-    const fraction = activeTransientCursor === "c2" ? cursorF2 : cursorF1;
-    onSchematicReadoutTime(fractionToX(result.times, fraction));
-  }, [onSchematicReadoutTime, cursorsOpen, activeTransientCursor, cursorF1, cursorF2, result]);
+
+    const times = result.times;
+    const started = performance.now();
+    let raf = 0;
+    const tick = (now: number) => {
+      onSchematicReadoutTime(liveReadoutTime(times, now - started));
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => {
+      cancelAnimationFrame(raf);
+    };
+  }, [
+    onSchematicReadoutTime,
+    liveSchematicPlayback,
+    cursorsOpen,
+    activeTransientCursor,
+    cursorF1,
+    cursorF2,
+    result,
+  ]);
 
   const [maximized, setMaximized] = useState(false);
   // User-entered expression traces overlaid on the transient scope, e.g.
