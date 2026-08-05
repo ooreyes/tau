@@ -9,21 +9,54 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 04:05 CDT**
+**Status: DONE - 2026-08-05 04:02 CDT**
 
-Unit: Documents/LTspice `Draft3.asc` authored `.ac` → differential **pass=70**.
+Unit: Documents/LTspice `Draft7.asc` authored `.ac` → differential **pass=71**.
 ```
-SUMMARY pass=70 sibling=5 gap=0
-ac draft3 … v(vout) nRms=0.0000 nMax=0.0000 span=1.044
+SUMMARY pass=71 sibling=5 gap=0
+ac draft7 … v(vo) nRms=0.0000 nMax=0.0000 span=0.994
 ```
-Series RLC L/C/R; exact LT↔ng. Tip elip_grd pass=69 → 70. Left PLL/SAH alone.
-Named-device 47.9%. SHIPPABLE? **NO**
+Series C + neg-R; exact LT↔ng. Tip Draft3 pass=70 → 71. Left 3725-3726
+(Staff EE) / PLL / avoid-list alone. Named-device 47.9%. SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
 
 
 ---
+
+
+### 2026-08-05 — Documents/LTspice Draft7.asc AC → pass=71 (§DoD)
+
+**What I did**
+- Documents/LTspice `Draft7.asc` authored `.ac dec 100 1–100k`: series C=1µ +
+  R=−1k → probe `v(vo)`. Exact match nRms=0 / nMax=0, span≈0.994. Pure
+  passives; zero unresolved / substitutions. `v(vi)` hollow (AC stim) — not
+  probed.
+- Tip `1606b54` Draft3 pass=70 → 71. Worktree-isolated (`Tau-wt-grdel`).
+  Left 3725-3726 (Staff EE) / PLL / dimmer / avoid-list alone. Draft2 also
+  exact under added AC but is `.tran`-authored — not double-landed.
+
+**Exact stdout**
+```
+SUMMARY pass=71 sibling=5 gap=0
+ac draft7 … v(vo) nRms=0.0000 nMax=0.0000 span=0.994
+```
+
+**Files**
+- `apps/desktop/scripts/differentialParity.corpus.ts`
+- `AGENTS.md`, `FEATURE_PARITY.md`, `PROGRESS.md`
+- `~/Desktop/TAU-MORNING-STATUS.md`
+
+**Tests**
+- `vitest … differentialParity.corpus.ts` → SUMMARY pass=71 sibling=5 gap=0
+- `pnpm -C apps/desktop typecheck` + `test` (2680 passed)
+
+**Parity items**
+- Differential 🟡 harness **pass=71 · sibling=5 · gap=0**. SHIPPABLE? NO
+
+**Next**
+- Non-colliding Draft/Educational (not 3725-3726). Leave Settings locked.
 
 
 ### 2026-08-05 — Documents/LTspice Draft3.asc AC → pass=70 (§DoD)
