@@ -9,15 +9,30 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 00:03 CDT**
+**Status: DONE - 2026-08-05 00:09 CDT**
 
-Unit: Class-D AC differential (V1 supply coupling) → **SUMMARY pass=19 sibling=5 gap=2**.
-Remaining gaps: native step_expand; Class-D DC/noise/tf. Named-device tip 15.8%/HF0.
-Freshman AI lane untouched. SHIPPABLE? **NO**
+Unit: native step_expand differential → **SUMMARY pass=20 sibling=5 gap=1**.
+Only Class-D DC/noise/tf gap remains in this slice. Named-device tip 16.2%/HF0.
+Freshman AI untouched. SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
 ---
+
+### 2026-08-05 — Native step_expand differential → pass=20 (§DoD)
+
+**What I did**
+- Added `runPairedNativeStepOp` in parityHarness: LTspice runs authored `.step`
+  card (stepped OP raw); ngspice members mirror Rust `step_expand`.
+- Pass cell: divider `.step param Rload list 1k 2k 3k` OP; relErr ≤ 1e-6;
+  assert `buildSpiceDeck(..., { emitNativeStep: true })` emits the card.
+- Removed step/any gap; only Class-D DC/noise/tf gap remains.
+
+**Proof**
+- vitest differentialParity → SUMMARY pass=20 sibling=5 gap=1
+
+**Next**
+- Class-D DC or broaden matrix; named-device exact-rate toward ≥95%
 
 ### 2026-08-05 — Class-D AC differential → pass=19 (§DoD)
 

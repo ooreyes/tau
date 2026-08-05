@@ -3,6 +3,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "no
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { parseRaw, rawTrace } from "../src/io/rawImport";
+import { parseStepDirective, type StepSpec } from "../src/simulation/paramStep";
 
 export const LTSPICE_BINARY = process.env.LTSPICE_BINARY
   ?? "/Applications/LTspice.app/Contents/MacOS/LTspice";
@@ -267,6 +268,220 @@ export function runPairedBatch(
  * Compare an LTspice `.tf` raw (Transfer_function / impedances) against
  * ngspice's "Transfer function information" log block on the same deck.
  */
+/** One swept member after Rust/TS `step_expand` (temp, source alters, or param). */
+interface StepExpandMember {
+  temp?: number;
+  sources: Map<string, number>;
+  params: Map<string, number>;
+}
+
+export interface PairedNativeStepScalarResult {
+  ltspice: { axis: number[]; values: number[]; axisName: string };
+  ngspice: { axis: number[]; values: number[] };
+  ltspiceLog: string;
+  ngspiceLog: string;
+}
+
+/** Strip `.step` cards and collect parsed specs (mirrors `step_expand::split_step_directives`). */
+export function splitNativeStepDeck(netlist: string): { baseLines: string[]; specs: StepSpec[] } {
+  const baseLines: string[] = [];
+  const specs: StepSpec[] = [];
+  for (const line of netlist.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (/^[.!]step\b/i.test(trimmed)) {
+      const spec = parseStepDirective(trimmed);
+      if (!spec) throw new Error(`Unsupported native .step card: ${trimmed}`);
+      specs.push(spec);
+    } else {
+      baseLines.push(line);
+    }
+  }
+  if (specs.length === 0) throw new Error("native step deck has no .step cards");
+  return { baseLines, specs };
+}
+
+/** Cartesian product of step axes (mirrors `step_expand::step_members`). */
+export function nativeStepMembers(specs: readonly StepSpec[]): StepExpandMember[] {
+  let members: StepExpandMember[] = [{ sources: new Map(), params: new Map() }];
+  for (const spec of specs) {
+    const next: StepExpandMember[] = [];
+    for (const prefix of members) {
+      for (const value of spec.values) {
+        const member: StepExpandMember = {
+          temp: prefix.temp,
+          sources: new Map(prefix.sources),
+          params: new Map(prefix.params),
+        };
+        if (spec.kind === "temp") member.temp = value;
+        else if (spec.kind === "source" && spec.name) member.sources.set(spec.name.toLowerCase(), value);
+        else if (spec.kind === "param" && spec.name) member.params.set(spec.name.toLowerCase(), value);
+        next.push(member);
+      }
+    }
+    members = next;
+  }
+  return members;
+}
+
+/** Rewrite `.temp` / `.param` for one member (mirrors `step_expand::apply_member_to_deck`). */
+export function applyNativeStepMember(baseLines: readonly string[], member: StepExpandMember): string {
+  const out = baseLines
+    .filter((line) => !/^\.temp\b/i.test(line.trim()) && !/^!temp\b/i.test(line.trim()))
+    .map((line) => line);
+
+  const missing = [...member.params.entries()];
+  for (const line of out) {
+    const trimmed = line.trim();
+    const bare = trimmed.replace(/^[.!]/, "").trim();
+    if (!/^param(?:s)?\b/i.test(bare)) continue;
+    const rewritten = rewriteParamBindings(trimmed, member.params);
+    const index = out.indexOf(line);
+    out[index] = rewritten;
+    missing.splice(0, missing.length, ...missing.filter(([name]) => !paramLineHasBinding(rewritten, name)));
+  }
+
+  const insertAt = out.findIndex((line) => {
+    const bare = line.trim().replace(/^[.!]/, "").trim().toLowerCase();
+    return bare.startsWith("tran")
+      || bare.startsWith("ac")
+      || bare.startsWith("dc")
+      || bare.startsWith("op")
+      || bare.startsWith("noise")
+      || bare.startsWith("tf")
+      || bare.startsWith("meas")
+      || bare.startsWith("four")
+      || bare === "end";
+  });
+  const at = insertAt >= 0 ? insertAt : out.length;
+  const injected: string[] = [];
+  if (member.temp !== undefined) injected.push(`.temp ${member.temp}`);
+  if (missing.length > 0) {
+    injected.push(`.param ${missing.map(([name, value]) => `${name}=${value}`).join(" ")}`);
+  }
+  out.splice(at, 0, ...injected);
+
+  for (const [name, value] of member.sources) {
+    for (let i = 0; i < out.length; i += 1) {
+      const trimmed = out[i]!.trim();
+      if (!new RegExp(`^${name}\\b`, "i").test(trimmed)) continue;
+      const tokens = trimmed.split(/\s+/);
+      if (tokens.length >= 4) {
+        tokens[3] = String(value);
+        out[i] = tokens.join(" ");
+      }
+    }
+  }
+  return `${out.join("\n")}\n`;
+}
+
+function rewriteParamBindings(line: string, params: ReadonlyMap<string, number>): string {
+  const trimmed = line.trim();
+  const bare = trimmed.replace(/^[.!]/, "").trim();
+  const tokens = bare.split(/\s+/);
+  const keyword = tokens[0] ?? "param";
+  const body = tokens.slice(1).map((token) => {
+    const eq = token.indexOf("=");
+    if (eq < 0) return token;
+    const name = token.slice(0, eq);
+    const key = name.toLowerCase();
+    const hit = params.get(key);
+    return hit === undefined ? token : `${name}=${hit}`;
+  }).join(" ");
+  return `.${keyword} ${body}`;
+}
+
+function paramLineHasBinding(line: string, name: string): boolean {
+  const bare = line.trim().replace(/^[.!]/, "").trim();
+  for (const token of bare.split(/\s+/).slice(1)) {
+    const eq = token.indexOf("=");
+    if (eq >= 0 && token.slice(0, eq).toLowerCase() === name.toLowerCase()) return true;
+  }
+  return false;
+}
+
+function memberStepAxis(member: StepExpandMember, specs: readonly StepSpec[]): number {
+  if (specs.length === 0) return NaN;
+  const inner = specs[specs.length - 1]!;
+  if (inner.kind === "temp") return member.temp ?? NaN;
+  if (inner.kind === "param" && inner.name) return member.params.get(inner.name.toLowerCase()) ?? NaN;
+  if (inner.kind === "source" && inner.name) return member.sources.get(inner.name.toLowerCase()) ?? NaN;
+  return NaN;
+}
+
+/**
+ * LTspice runs the authored `.step` card natively (multi-point stepped raw).
+ * ngspice gets the same electrical deck with `.step` stripped and one member
+ * deck per axis value — the path Rust `step_expand` drives in production.
+ */
+export function runPairedNativeStepOp(
+  name: string,
+  nativeNetlist: string,
+  expression: string,
+): PairedNativeStepScalarResult {
+  if (!existsSync(LTSPICE_BINARY)) throw new Error(`LTspice is missing at ${LTSPICE_BINARY}`);
+  const { baseLines, specs } = splitNativeStepDeck(nativeNetlist);
+  const members = nativeStepMembers(specs);
+  const dir = mkdtempSync(join(tmpdir(), `tau-parity-nstep-${name}-`));
+  try {
+    const ltPath = join(dir, `${name}-lt.cir`);
+    writeFileSync(ltPath, prepareDeck(nativeNetlist, [expression], [], true, false));
+    const ltRun = spawnSync(LTSPICE_BINARY, ["-b", ltPath], { encoding: "utf8", timeout: 120_000 });
+    const ltLogPath = join(dir, `${name}-lt.log`);
+    const ltspiceLog = existsSync(ltLogPath)
+      ? decodeLtspiceLog(readFileSync(ltLogPath))
+      : `${ltRun.stdout ?? ""}\n${ltRun.stderr ?? ""}`;
+    assertRun("LTspice", ltRun.status, ltspiceLog);
+
+    const ltRawPath = join(dir, `${name}-lt.raw`);
+    if (!existsSync(ltRawPath)) throw new Error("LTspice did not produce a stepped operating-point raw");
+    const ltRaw = parseRaw(readFileSync(ltRawPath));
+    if (!ltRaw.flags.some((flag) => flag.toLowerCase() === "stepped")) {
+      throw new Error(`LTspice raw for ${name} is not stepped (${ltRaw.flags.join(",")})`);
+    }
+    const ltTrace = rawTrace(ltRaw, expression);
+    if (!ltTrace || ltTrace.values.length !== members.length) {
+      throw new Error(
+        `LTspice stepped raw has ${ltTrace?.values.length ?? 0} point(s) but .step asks for ${members.length}`,
+      );
+    }
+
+    const ngAxis: number[] = [];
+    const ngValues: number[] = [];
+    const ngLogs: string[] = [];
+    for (let index = 0; index < members.length; index += 1) {
+      const member = members[index]!;
+      const memberDeck = applyNativeStepMember(baseLines, member);
+      const ngPath = join(dir, `${name}-ng-${index}.cir`);
+      writeFileSync(ngPath, prepareDeck(memberDeck, [expression], [], false, false));
+      const ngRawPath = join(dir, `${name}-ng-${index}.raw`);
+      const ngRun = spawnSync("ngspice", ["-b", "-r", ngRawPath, ngPath], { encoding: "utf8", timeout: 60_000 });
+      const ngLog = `${ngRun.stdout ?? ""}\n${ngRun.stderr ?? ""}`;
+      ngLogs.push(ngLog);
+      assertRun(`ngspice member ${index}`, ngRun.status, ngLog);
+      if (!existsSync(ngRawPath)) throw new Error(`ngspice member ${index} produced no raw output`);
+      const ngRaw = parseNgspiceRaw(readFileSync(ngRawPath));
+      ngAxis.push(memberStepAxis(member, specs));
+      ngValues.push(firstNgSample(ngRaw, expression));
+    }
+
+    return {
+      ltspice: { axis: ltTrace.axis, values: ltTrace.values, axisName: ltTrace.axisName },
+      ngspice: { axis: ngAxis, values: ngValues },
+      ltspiceLog,
+      ngspiceLog: ngLogs.join("\n---\n"),
+    };
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+function firstNgSample(raw: NgRaw, expression: string): number {
+  const trace = ngTrace(raw, expression);
+  const value = trace.values[0];
+  if (!Number.isFinite(value)) throw new Error(`ngspice raw missing ${expression}`);
+  return value!;
+}
+
 export function runPairedTransferFunction(
   name: string,
   netlist: string,

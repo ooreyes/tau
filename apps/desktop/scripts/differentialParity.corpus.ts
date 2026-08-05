@@ -31,6 +31,7 @@ import {
   LTSPICE_BINARY,
   measurementValue,
   runPairedBatch,
+  runPairedNativeStepOp,
   runPairedTransferFunction,
   type NumericTrace,
 } from "./parityHarness";
@@ -94,6 +95,17 @@ const DIVIDER_NOISE = [
   "R1 in out 1k",
   "R2 out 0 1k",
   ".noise V(out) V1 dec 10 1 1k",
+].join("\n");
+
+/** emitNativeStep deck: `.param` + `{Rload}` + `.step` card (P1.6 native path). */
+const NATIVE_STEP_PARAM_OP = [
+  "Tau differential native step param op",
+  "V1 in 0 5",
+  ".param Rload=1000",
+  "R1 in out {Rload}",
+  "R2 out 0 1k",
+  ".op",
+  ".step param Rload list 1k 2k 3k",
 ].join("\n");
 
 function relativeError(tau: number, ltspice: number): number {
@@ -809,6 +821,57 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
       });
     }
 
+    // --- Native single-deck `.step` card: LTspice stepped OP vs ngspice step_expand ---
+    {
+      const result = runPairedNativeStepOp("diff-native-step-card", NATIVE_STEP_PARAM_OP, "v(out)");
+      expect(result.ltspice.values.length).toBe(3);
+      expect(result.ngspice.values.length).toBe(3);
+      const memberNotes: string[] = [];
+      for (let i = 0; i < result.ltspice.values.length; i += 1) {
+        const axis = result.ltspice.axis[i]!;
+        const lt = result.ltspice.values[i]!;
+        const ng = result.ngspice.values[i]!;
+        expect(result.ngspice.axis[i]).toBeCloseTo(axis, 6);
+        expect(relativeError(ng, lt), `Rload=${axis} lt=${lt} ng=${ng}`).toBeLessThanOrEqual(1e-6);
+        memberNotes.push(`Rload=${axis} V(out)=${ng.toFixed(4)} rel=${relativeError(ng, lt).toExponential(1)}`);
+      }
+      // Product path: buildSpiceDeck emitNativeStep emits the same `.step` card shape.
+      const stepParamDivider = {
+        components: [
+          { id: "V1", kind: "vsource" as const, label: "V1", value: "5", x: 0, y: 0, rotation: 0 as const },
+          { id: "R1", kind: "resistor" as const, label: "R1", value: "{Rload}", x: 64, y: 0, rotation: 0 as const },
+          { id: "R2", kind: "resistor" as const, label: "R2", value: "1k", x: 128, y: 0, rotation: 0 as const },
+        ],
+        wires: [
+          { id: "w1", points: [{ x: 32, y: 0 }, { x: 64, y: 0 }] },
+          { id: "w2", points: [{ x: 96, y: 0 }, { x: 128, y: 0 }] },
+        ],
+        netLabels: [
+          { id: "in-l", x: 0, y: 0, text: "in" },
+          { id: "out-l", x: 128, y: 0, text: "out" },
+          { id: "gnd1", x: 0, y: 32, text: "0" },
+          { id: "gnd2", x: 128, y: 32, text: "0" },
+        ],
+        directives: [".step param Rload list 1k 2k 3k"],
+      };
+      const params = buildParamScope(stepParamDivider.directives);
+      const nativeDeck = buildSpiceDeck(
+        { ...stepParamDivider, params },
+        { kind: "op" },
+        { emitNativeStep: true },
+      );
+      expect(nativeDeck.netlist).toContain(".step param Rload list 1k 2k 3k");
+      expect(nativeDeck.netlist).toMatch(/\{Rload\}/);
+      expect(nativeDeck.netlist).toMatch(/\.param\b[\s\S]*\bRload=1000\b/);
+      cells.push({
+        analysis: "step",
+        circuit: "divider",
+        topology: "native emitNativeStep .step param Rload OP (LTspice card vs ngspice step_expand)",
+        status: "pass",
+        note: memberNotes.join("; "),
+      });
+    }
+
     // Sibling proofs already committed under dod-parity.sh (not re-swept here).
     cells.push(
       {
@@ -851,13 +914,6 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
     // Explicit remaining gaps — keep the DoD box honest.
     cells.push(
       {
-        analysis: "step",
-        circuit: "any",
-        topology: "native step_expand vs LTspice .step card",
-        status: "gap",
-        note: "Educational steptemp.asc OP at −55/27/125 and stepmodelparam.asc Vaf expand proven; deck-card step_expand still open",
-      },
-      {
         analysis: "dc",
         circuit: "class-d",
         topology: "Class-D DC/noise/tf",
@@ -877,7 +933,7 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
     expect(report).toContain("GAPS (explicit):");
     const passCount = cells.filter((cell) => cell.status === "pass").length;
     const gapCount = cells.filter((cell) => cell.status === "gap").length;
-    expect(passCount).toBeGreaterThanOrEqual(19);
+    expect(passCount).toBeGreaterThanOrEqual(20);
     expect(gapCount).toBeGreaterThanOrEqual(1);
   }, 240_000);
 });
