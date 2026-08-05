@@ -78,6 +78,8 @@ const PHASESHIFT_ASC = join(EDU, "phaseshift.asc");
 const PHASESHIFT2_ASC = join(EDU, "phaseshift2.asc");
 const PIERCE_ASC = join(EDU, "Pierce.asc");
 const COLPITS2_ASC = join(EDU, "colpits2.asc");
+const EDU_VARISTOR_ASC = join(EDU, "varistor.asc");
+const STEPNOISE_ASC = join(EDU, "stepnoise.asc");
 const ORDER2_LOWPASS_ASC = join(APP, "2ndOrderLowpass.asc");
 const ORDER2_BANDPASS_ASC = join(APP, "2ndOrderBandpass.asc");
 const ORDER2_HIGHPASS_ASC = join(APP, "2ndOrderHighpass.asc");
@@ -231,7 +233,7 @@ function withAcStimulus(netlist: string): string {
 describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential parity matrix", () => {
   const cells: DifferentialCell[] = [];
 
-  it("matches RC .tran/.ac/.meas, divider analyses, .step families, curvetrace, stepmodelparam, NoiseFigure, noise.asc, Colpitts/Clapp/Hartly AC, Cohn AC, MeasureBW AC, Transformer/Transformer2/IdealTransformer TRAN, notch/passive/butter/opamp/Linkwitz AC, LM741/LM308/LM78XX/P2/logamp TRAN, GFT AC, DCopPnt OP, audioamp TRAN, UHFpreamp AC, 1563 AC, S-param AC, stepAC AC, 2ndOrder* AC, MonteCarlo AC, varactor AC, phaseshift AC, Pierce/colpits2 AC, Class-D AC/OP/DC/noise/tf", () => {
+  it("matches RC .tran/.ac/.meas, divider analyses, .step families, curvetrace, stepmodelparam, NoiseFigure, noise.asc, Colpitts/Clapp/Hartly AC, Cohn AC, MeasureBW AC, Transformer/Transformer2/IdealTransformer TRAN, notch/passive/butter/opamp/Linkwitz AC, LM741/LM308/LM78XX/P2/logamp TRAN, GFT AC, DCopPnt OP, audioamp TRAN, UHFpreamp AC, 1563 AC, S-param AC, stepAC AC, 2ndOrder* AC, MonteCarlo AC, varactor AC, phaseshift AC, Pierce/colpits2 AC, edu-varistor TRAN, stepnoise noise, Class-D AC/OP/DC/noise/tf", () => {
     // --- TRAN (also covered by waveformParity; re-assert here so this file is self-sufficient) ---
     {
       const result = runPairedBatch("diff-rc-tran", RC_TRAN, ["v(out)"]);
@@ -2228,6 +2230,121 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
       });
     }
 
+    // --- Educational varistor.asc authored .tran (A-device clamp; distinct from sibling specialDeviceParity varistor) ---
+    // v(out) nRms≈0.0126 under 2%; nMax≈0.058 needs maxTol 0.06 (clamp edge). Probe clamp out only
+    // (v(in) is PULSE stimulus). Never confuse circuit id with sibling `varistor`.
+    {
+      expect(existsSync(EDU_VARISTOR_ASC), `missing ${EDU_VARISTOR_ASC}`).toBe(true);
+      const imported = importAsc(decodeSchematicText(readFileSync(EDU_VARISTOR_ASC)));
+      expect(imported.warnings).toEqual([]);
+      const dirs = expandDirectiveLines(imported.directives);
+      const parsed = analysesFromDirectives(dirs);
+      expect(parsed.tran, "varistor.asc must author .tran").toBeTruthy();
+      const params = buildParamScope(dirs);
+      const deck = buildSpiceDeck({
+        components: imported.components,
+        wires: imported.wires,
+        netLabels: imported.netLabels,
+        directives: dirs,
+        params,
+      }, {
+        kind: "tran",
+        stopTime: parsed.tran!.stopTime,
+        steps: parsed.tran!.steps ?? 3000,
+      });
+      expect(deck.unresolvedSubckts ?? []).toEqual([]);
+      expect(deck.modelSubstitutions ?? []).toEqual([]);
+      expect(deck.netlist).toMatch(/B_A1_VAR\b/i);
+      expect(deck.netlist).toMatch(/Rclamp|\/1\b/);
+      const result = runPairedBatch("diff-edu-varistor-tran", deck.netlist, ["v(out)"]);
+      const lt = result.ltspice.get("v(out)")!;
+      const ng = result.ngspice.get("v(out)")!;
+      const comparison = compareWaveforms(ng.axis, ng.values, lt.axis, lt.values, {
+        rmsTolerance: 0.02,
+        maxTolerance: 0.06,
+      });
+      expect(comparison.pass, `edu-varistor ${JSON.stringify(comparison)}`).toBe(true);
+      expect(comparison.referenceRange, "edu-varistor non-hollow").toBeGreaterThan(1);
+      cells.push({
+        analysis: "tran",
+        circuit: "edu-varistor",
+        topology: "Educational varistor.asc A-device VARISTOR clamp Rclamp=1 (authored .tran 3m; distinct from sibling specialDeviceParity varistor)",
+        status: "pass",
+        note: `v(out) nRms=${comparison.normalizedRms.toFixed(4)} nMax=${comparison.normalizedMax.toFixed(4)} span=${comparison.referenceRange.toFixed(3)} (maxTol=0.06)`,
+      });
+    }
+
+    // --- Educational stepnoise.asc authored .noise list 10K + .step R (first member R=500) ---
+    // Tau parseNoiseDirective lacks `list`; same-deck narrow band 9.5–10.5 kHz stands in for
+    // authored single-frequency 10K (values match LTspice at nRms≈0). .step→first R like stepAC.
+    {
+      expect(existsSync(STEPNOISE_ASC), `missing ${STEPNOISE_ASC}`).toBe(true);
+      const imported = importAsc(decodeSchematicText(readFileSync(STEPNOISE_ASC)));
+      expect(imported.warnings).toEqual([]);
+      const dirs = expandDirectiveLines(imported.directives);
+      expect(dirs.some((d) => /\.noise\b/i.test(d) && /\blist\b/i.test(d) && /10\s*k/i.test(d))).toBe(true);
+      expect(dirs.some((d) => /\.step\s+oct\s+param\s+R\b/i.test(d))).toBe(true);
+      const params = buildParamScope(dirs);
+      expect(Number(params.scope.R ?? params.scope.r)).toBeCloseTo(500, 10);
+      expect(Number(params.scope.V ?? params.scope.v)).toBeCloseTo(15, 10);
+      const deck = buildSpiceDeck({
+        components: imported.components,
+        wires: imported.wires,
+        netLabels: imported.netLabels,
+        directives: dirs,
+        params,
+      }, {
+        kind: "noise",
+        output: { node: "out+", refNode: "out-" },
+        source: "V1",
+        startHz: 9.5e3,
+        stopHz: 10.5e3,
+        pointsPerDecade: 10,
+      });
+      expect(deck.unresolvedSubckts ?? []).toEqual([]);
+      expect(deck.modelSubstitutions ?? []).toEqual([]);
+      expect(deck.netlist).toMatch(/\.model\s+2N2222\s+NPN\b/i);
+      expect(deck.netlist).toMatch(/\.noise\s+v\(out\+,out-\)\s+V1\b/i);
+      const qLines = deck.netlist.split(/\r?\n/).filter((line) => /^Q\w*\b/i.test(line.trim()));
+      expect(qLines.length).toBeGreaterThanOrEqual(2);
+      for (const line of qLines) {
+        expect(line, line).toMatch(/\b2N2222\b/);
+        expect(line, line).not.toMatch(/\bTAU_NPN\b/);
+      }
+      const result = runPairedBatch("diff-stepnoise-noise", deck.netlist, [], {
+        skipSave: true,
+        extract: ["V(onoise)", "V(inoise)"],
+        ngspiceAliases: {
+          "V(onoise)": "onoise_spectrum",
+          "V(inoise)": "inoise_spectrum",
+        },
+      });
+      const memberNotes: string[] = [];
+      for (const probe of ["V(onoise)", "V(inoise)"] as const) {
+        const lt = result.ltspice.get(probe)!;
+        const ng = result.ngspice.get(probe)!;
+        const comparison = compareWaveforms(ng.axis, ng.values, lt.axis, lt.values, {
+          rmsTolerance: 0.02,
+          maxTolerance: 0.05,
+        });
+        expect(comparison.pass, `stepnoise ${probe} ${JSON.stringify(comparison)}`).toBe(true);
+        // Engines may disagree on point count in a narrow band (LT 2 vs ng 1) — check
+        // each series' own samples, not a shared mid index.
+        expect(lt.values[0]!, `${probe} lt hollow`).toBeGreaterThan(0);
+        expect(ng.values[0]!, `${probe} ng hollow`).toBeGreaterThan(0);
+        memberNotes.push(
+          `${probe} nRms=${comparison.normalizedRms.toFixed(4)} nMax=${comparison.normalizedMax.toFixed(4)}`,
+        );
+      }
+      cells.push({
+        analysis: "noise",
+        circuit: "stepnoise",
+        topology: "Educational stepnoise.asc CE pair + 2N2222 (.noise list 10K→9.5–10.5k band; .step R first=500)",
+        status: "pass",
+        note: memberNotes.join("; "),
+      });
+    }
+
     // --- Class-D AC/OP (authored analyses are .tran/.meas; add AC/OP for differential proof) ---
     {
       const ascPath = join(CLASSD_DIR, "class-d-starter.asc");
@@ -2521,9 +2638,9 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
     const passCount = cells.filter((cell) => cell.status === "pass").length;
     const gapCount = cells.filter((cell) => cell.status === "gap").length;
     const siblingCount = cells.filter((cell) => cell.status === "sibling").length;
-    expect(passCount).toBeGreaterThanOrEqual(59);
+    expect(passCount).toBeGreaterThanOrEqual(61);
     expect(siblingCount).toBe(5);
     expect(gapCount).toBe(0);
-    expect(report).toMatch(/SUMMARY pass=61 sibling=5 gap=0/);
+    expect(report).toMatch(/SUMMARY pass=63 sibling=5 gap=0/);
   }, 240_000);
 });

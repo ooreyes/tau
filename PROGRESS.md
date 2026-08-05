@@ -9,22 +9,53 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 03:28 CDT**
+**Status: DONE - 2026-08-05 03:34 CDT**
 
-Unit: Educational `Pierce.asc` / `colpits2.asc` AC stim → differential **pass=61**.
-```
-SUMMARY pass=61 sibling=5 gap=0
-ac pierce … |V(J1.d)| nRms=0.0002 span≈1.600
-ac colpits2 … |V(J1.g)| nRms=0.0037 span≈0.241
-```
-Exact 2N5484+1N4148; Pierce Misc\xtal → Lser/Cser/Rser/Cpar; TRAN phase-miss deferred.
-Collision-avoided Staff EE varistor/stepnoise. Named-device 47.9%. SHIPPABLE? **NO**
+Unit: Educational `varistor.asc` TRAN + `stepnoise.asc` noise → differential
+**pass=63** (circuit ids `edu-varistor` / `stepnoise`; distinct from sibling
+specialDeviceParity `varistor`). Stacked on tip Pierce/colpits2 pass=61
+(`695139b`/`8ee1203`). Named-device 47.9%. SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
 
 
 ---
+
+
+### 2026-08-05 — Educational varistor.asc + stepnoise.asc → pass=63 (§DoD)
+
+**What I did**
+- Educational `varistor.asc` authored `.tran`: A-device VARISTOR clamp
+  (`B_A1_VAR`); probe `v(out)` nRms≈0.0126 nMax≈0.0583 (maxTol=0.06). Circuit
+  id **`edu-varistor`** — not the sibling specialDeviceParity `varistor` row.
+- Educational `stepnoise.asc`: `.noise … list 10K` + `.step oct param R`
+  (first member R=500). Tau lacks `list` noise parse → same-deck 9.5–10.5 kHz
+  band; V(onoise)/V(inoise) nRms≈0; exact 2N2222.
+- Re-landed after Continue 13 discarded colliding WIP; tip `8ee1203`/`695139b`
+  Pierce pass=61 → 63. Left Pierce/phaseshift*/varactor*/MonteCarlo alone.
+  Never faked NE555/LoopGain/Vswitch/Howland/SoftDiode/2ndOrder*.
+
+**Exact stdout**
+```
+SUMMARY pass=63 sibling=5 gap=0
+```
+
+**Files**
+- `apps/desktop/scripts/differentialParity.corpus.ts`
+- `AGENTS.md`, `FEATURE_PARITY.md`, `PROGRESS.md`
+- `~/Desktop/TAU-MORNING-STATUS.md`
+
+**Tests**
+- `vitest … differentialParity.corpus.ts` → SUMMARY pass=63 sibling=5 gap=0
+- `pnpm -C apps/desktop typecheck` + `test`
+
+**Parity items**
+- Differential 🟡 harness **pass=63 · sibling=5 · gap=0**; DoD broad box unchecked.
+- Named-device 🟡 **47.9%** unchanged. SHIPPABLE? NO
+
+**Next**
+- Continue 14 non-colliding Educational. Leave Settings locked.
 
 
 ### 2026-08-05 — Pierce/colpits2 AC stim → pass=61 (§DoD)
