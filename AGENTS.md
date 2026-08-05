@@ -176,13 +176,12 @@ account and sign/notarize/ship.
       with LTspice over a representative device and topology matrix.
       **Partial (2026-08-04):** `scripts/differential-parity.sh` +
       `differentialParity.corpus.ts` (also under `dod-parity.sh`) prove
-      pass=18 · sibling=5 · gap=2 on stdout: prior RC/divider/curvetrace/
+      pass=19 · sibling=5 · gap=2 on stdout: prior RC/divider/curvetrace/
       NoiseFigure cells plus expanded `.step` temp/source/nested, Educational
-      steptemp OP + stepmodelparam Vaf expand, Colpitts AC (AC stim on V1),
-      Class-D OP (L1 is linear 225µH — prior “behavioral L @device[param]”
-      note was a MOSFET-save misread). Sibling TRAN/meas proofs remain
-      Colpitts/Class-D/Efficiency/special devices. Remaining gaps: native
-      step_expand vs LTspice `.step` card; Class-D AC/DC/noise/tf. Broad
+      steptemp OP + stepmodelparam Vaf expand, Colpitts AC, Class-D AC
+      (V1 supply coupling) + OP (L1 linear 225µH). Sibling TRAN/meas proofs
+      remain Colpitts/Class-D/Efficiency/special devices. Remaining gaps:
+      native step_expand vs LTspice `.step` card; Class-D DC/noise/tf. Broad
       topology matrix still open — DoD box stays unchecked.
 - [ ] **AI is production-safe and genuinely circuit-aware:** a supported OpenAI
       path (Tau OAuth/backend or native BYOK with separate API billing) keeps

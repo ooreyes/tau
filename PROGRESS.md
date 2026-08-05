@@ -9,27 +9,28 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-04 23:59 CDT** (Overnight DoD — bare vendor SYMBOL)
+**Status: DONE - 2026-08-05 00:03 CDT**
 
-Unit: Unique-leaf installed `.asy` for bare Applications SYMBOL names →
-Prefix-X + plaintext ModelFile/SpiceModel.lib attach (product native +
-harness plaintext-only leaf). Never silent generic. Never encrypted
-denominator inflation (full unique-leaf briefly measured 33.4%/enc=2781 —
-retracted for harness; product still unique-leafs all leaves).
-
-**Measured tip stdout (truth):**
-```
-NAMED-DEVICE: exact=2 refuse=4 silent=0
-NAMED-DEVICE-RECURSIVE: unencrypted=2538 exact=410 refuse=2128 silent=0 hard-failure=0 encrypted-excluded=1474 exact-rate=16.2%
-```
-Before: 2539/400/2139/0/1473 @ 15.8%. After: exact +10 (16.2%). ≥95% unchecked.
-SHIPPABLE? **NO**.
-
-**Forbidden lanes left alone:** Settings* · AssistantPanel · ShellPanels · App.css.
+Unit: Class-D AC differential (V1 supply coupling) → **SUMMARY pass=19 sibling=5 gap=2**.
+Remaining gaps: native step_expand; Class-D DC/noise/tf. Named-device tip 15.8%/HF0.
+Freshman AI lane untouched. SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
 ---
+
+### 2026-08-05 — Class-D AC differential → pass=19 (§DoD)
+
+**What I did**
+- class-d-starter has no authored `.ac`; PWM audio path (V3) has ~zero AC gain.
+- Proven non-trivial V1 rail AC supply-coupling at V(vo) vs LTspice (nRms≈0).
+- Gap narrowed to Class-D DC/noise/tf; AC+OP now pass cells.
+
+**Proof**
+- vitest differentialParity → SUMMARY pass=19 sibling=5 gap=2
+
+**Next**
+- native step_expand; Class-D DC; named-device exact-rate (≥95% still far)
 
 ### 2026-08-04 — Bare vendor SYMBOL unique-leaf → exact-rate 16.2% (§DoD)
 

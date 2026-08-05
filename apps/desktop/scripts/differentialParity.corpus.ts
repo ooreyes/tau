@@ -180,7 +180,7 @@ function withAcStimulus(netlist: string): string {
 describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential parity matrix", () => {
   const cells: DifferentialCell[] = [];
 
-  it("matches RC .tran/.ac/.meas, divider analyses, .step families, curvetrace, stepmodelparam, NoiseFigure, Colpitts AC, Class-D OP", () => {
+  it("matches RC .tran/.ac/.meas, divider analyses, .step families, curvetrace, stepmodelparam, NoiseFigure, Colpitts AC, Class-D AC/OP", () => {
     // --- TRAN (also covered by waveformParity; re-assert here so this file is self-sufficient) ---
     {
       const result = runPairedBatch("diff-rc-tran", RC_TRAN, ["v(out)"]);
@@ -731,7 +731,7 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
       });
     }
 
-    // --- Class-D OP (authored analyses are .tran/.meas; OP still converges differentially) ---
+    // --- Class-D AC/OP (authored analyses are .tran/.meas; add AC/OP for differential proof) ---
     {
       const ascPath = join(CLASSD_DIR, "class-d-starter.asc");
       expect(existsSync(ascPath), `missing ${ascPath}`).toBe(true);
@@ -739,23 +739,65 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
         resolveSubcircuit: siblingResolver(CLASSD_DIR),
       });
       const params = buildParamScope(imported.directives);
-      const deck = buildSpiceDeck({
+      const acDeck = buildSpiceDeck({
+        components: imported.components,
+        wires: imported.wires,
+        netLabels: imported.netLabels,
+        directives: imported.directives,
+        params,
+      }, {
+        kind: "ac",
+        startHz: 100,
+        stopHz: 100e3,
+        pointsPerDecade: 10,
+      });
+      expect(acDeck.unresolvedSubckts).toEqual([]);
+      // Fixture is .tran-authored; LTspice requires an AC stimulus. V3 (audio)
+      // has ~zero small-signal gain through the PWM comparator; V1 (rail)
+      // supply-ripple coupling at vo is non-trivial and matches LTspice.
+      // Prefer V1 only (do not AC-stamp every source).
+      const acNetlist = acDeck.netlist
+        .split(/\r?\n/)
+        .map((line) => {
+          if (/^V1\b/i.test(line.trim()) && !/\bAC\b/i.test(line)) {
+            return `${line.trimEnd()} AC 1`;
+          }
+          return line;
+        })
+        .join("\n");
+      expect(acNetlist).toMatch(/^V1\b.*\bAC\b/im);
+      const acResult = runPairedBatch("diff-classd-ac", acNetlist, ["v(vo)"]);
+      const ltAc = acResult.ltspice.get("v(vo)")!;
+      const ngAc = acResult.ngspice.get("v(vo)")!;
+      const acComparison = compareWaveforms(ngAc.axis, ngAc.values, ltAc.axis, ltAc.values, {
+        rmsTolerance: 0.02,
+        maxTolerance: 0.05,
+      });
+      expect(acComparison.pass, JSON.stringify(acComparison)).toBe(true);
+      cells.push({
+        analysis: "ac",
+        circuit: "class-d",
+        topology: "class-d-starter + deadtime (AC stim on V1)",
+        status: "pass",
+        note: `|V(vo)| nRms=${acComparison.normalizedRms.toFixed(4)} nMax=${acComparison.normalizedMax.toFixed(4)}`,
+      });
+
+      const opDeck = buildSpiceDeck({
         components: imported.components,
         wires: imported.wires,
         netLabels: imported.netLabels,
         directives: imported.directives,
         params,
       }, { kind: "op" });
-      expect(deck.unresolvedSubckts).toEqual([]);
       // L1 is linear 225µH — prior gap note about "behavioral L @device[param]"
       // was a misread of MOSFET/diode `@m1[id]` save vectors. Harness strips
       // those; node-voltage OP compares cleanly.
-      expect(deck.netlist).toMatch(/^L1\b.+\b0\.000225\b/m);
-      const result = runPairedBatch("diff-classd-op", deck.netlist, ["v(vo)", "v(vpwm)"]);
-      const ltVo = firstSample(result.ltspice.get("v(vo)")!);
-      const ngVo = firstSample(result.ngspice.get("v(vo)")!);
-      const ltPwm = firstSample(result.ltspice.get("v(vpwm)")!);
-      const ngPwm = firstSample(result.ngspice.get("v(vpwm)")!);
+      expect(opDeck.netlist).toMatch(/^L1\b.+\b0\.000225\b/m);
+      const opResult = runPairedBatch("diff-classd-op", opDeck.netlist, ["v(vo)", "v(vpwm)"]);
+      const ltVo = firstSample(opResult.ltspice.get("v(vo)")!);
+      const ngVo = firstSample(opResult.ngspice.get("v(vo)")!);
+      const ltPwm = firstSample(opResult.ltspice.get("v(vpwm)")!);
+      const ngPwm = firstSample(opResult.ngspice.get("v(vpwm)")!);
       expect(relativeError(ngVo, ltVo)).toBeLessThanOrEqual(1e-6);
       expect(relativeError(ngPwm, ltPwm)).toBeLessThanOrEqual(1e-6);
       cells.push({
@@ -816,11 +858,11 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
         note: "Educational steptemp.asc OP at −55/27/125 and stepmodelparam.asc Vaf expand proven; deck-card step_expand still open",
       },
       {
-        analysis: "ac",
+        analysis: "dc",
         circuit: "class-d",
-        topology: "Class-D AC/DC/noise/tf",
+        topology: "Class-D DC/noise/tf",
         status: "gap",
-        note: "OP proven; authored analyses remain .tran/.meas — other non-tran Class-D cells not differentially proven",
+        note: "AC (V1 supply coupling) and OP proven; authored analyses remain .tran/.meas — DC/noise/tf not differentially proven",
       },
     );
 
@@ -835,7 +877,7 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
     expect(report).toContain("GAPS (explicit):");
     const passCount = cells.filter((cell) => cell.status === "pass").length;
     const gapCount = cells.filter((cell) => cell.status === "gap").length;
-    expect(passCount).toBeGreaterThanOrEqual(18);
+    expect(passCount).toBeGreaterThanOrEqual(19);
     expect(gapCount).toBeGreaterThanOrEqual(1);
   }, 240_000);
 });
