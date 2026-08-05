@@ -695,6 +695,78 @@ describe("SimulationPanel - exportNetlist inlines attached model libraries", { t
   });
 });
 
+describe("SimulationPanel - Open .plt plot settings", { timeout: 20_000 }, () => {
+  const TRANSFORMER2_PLT = `[Transient Analysis]
+{
+   Npanes: 3
+   Active Pane: 1
+   {
+      traces: 1 {524290,0,"V(out)"}
+      X: ('µ',0,0,1e-005,0.0001)
+      Y[0]: (' ',1,-2.1,0.3,1.5)
+      Y[1]: ('_',0,1e+308,0,-1e+308)
+      Log: 0 0 0
+   },
+   {
+      traces: 1 {268959747,0,"V(in)"}
+      X: ('µ',0,0,1e-005,0.0001)
+      Y[0]: (' ',1,-2.1,0.3,1.5)
+      Y[1]: ('_',0,1e+308,0,-1e+308)
+      Log: 0 0 0
+   },
+   {
+      traces: 1 {268959748,0,"V(mid)"}
+      X: ('µ',0,0,1e-005,0.0001)
+      Y[0]: (' ',1,0,0.1,1)
+      Y[1]: ('_',0,1e+308,0,-1e+308)
+      Log: 0 0 0
+   }
+}
+`;
+
+  it("applies .plt panes as expression traces without Settings thrash", async () => {
+    const result = {
+      ok: true as const,
+      title: "Transient",
+      times: [0, 50e-6, 100e-6],
+      traces: [
+        { id: "n1", label: "V(out)", unit: "V" as const, color: "var(--trace-cyan)", values: [0, 1, 0] },
+        { id: "n2", label: "V(in)", unit: "V" as const, color: "var(--trace-green)", values: [1, 1, 1] },
+        { id: "n3", label: "V(mid)", unit: "V" as const, color: "var(--trace-cream)", values: [0.5, 0.5, 0.5] },
+      ],
+      currents: [],
+      stats: { netCount: 3, componentCount: 0, sampleCount: 3, stopTime: 100e-6, stepSize: 50e-6 },
+      warnings: [],
+      circuit: {
+        groundNetId: null,
+        warnings: [],
+        nets: [
+          { id: "n1", points: [{ x: 0, y: 0 }, { x: 16, y: 0 }], pins: [], isGround: false, labelCount: 0 },
+          { id: "n2", points: [{ x: 0, y: 32 }, { x: 16, y: 32 }], pins: [], isGround: false, labelCount: 0 },
+          { id: "n3", points: [{ x: 0, y: 64 }, { x: 16, y: 64 }], pins: [], isGround: false, labelCount: 0 },
+        ],
+        components: [],
+      },
+    };
+
+    renderPanel({ result });
+    fireEvent.click(screen.getByRole("button", { name: "Toggle advanced settings" }));
+    const input = document.querySelector('input[accept=".plt"]') as HTMLInputElement;
+    expect(input).toBeTruthy();
+
+    const file = new File([TRANSFORMER2_PLT], "Transformer2.plt", { type: "text/plain" });
+    fireEvent.change(input, { target: { files: [file] } });
+
+    expect(await screen.findByRole("button", { name: "Open .plt ✓" })).toBeTruthy();
+    // Expression chips from the .plt — plot authority without requiring probes.
+    const chips = document.querySelectorAll(".expr-chip");
+    const chipText = [...chips].map((el) => el.textContent ?? "");
+    expect(chipText.some((t) => t.includes("V(out)"))).toBe(true);
+    expect(chipText.some((t) => t.includes("V(in)"))).toBe(true);
+    expect(chipText.some((t) => t.includes("V(mid)"))).toBe(true);
+  });
+});
+
 describe("StepPlot measurements", () => {
   function member(label: string, value: number, measured?: number, times = [0, 1e-3, 2e-3], values = [0, 1, 2]) {
     return {

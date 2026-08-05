@@ -1471,7 +1471,14 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   first plot. 6 hand-computed/DOM tests. **Step-family CSV landed**
   (`stepFamilyToCsv`, 2026-08-05): long-format `step,time,<signal>` keeps each
   `.step` member's own time grid (no forced resample); StepPlot **Export CSV**
-  downloads it. 4 pure + 1 StepPlot wiring tests. **NEXT:** `.plt` settings.
+  downloads it. 4 pure + 1 StepPlot wiring tests. **`.plt` import/apply landed**
+  (2026-08-05): `simulation/plotSettings.ts` parses LTspice plot settings
+  (analysis sections, panes, traces, X/Y, Log flags — never mid-line `Y[0]`),
+  `applyPltSection` maps panes → Tau layout + expression ids, and Advanced
+  **Open .plt** applies Transient/AC/DC settings (expression-bar traces so
+  panes do not depend on probes; X window forced on the transient scope).
+  11 pure + Educational corpus smoke + 1 SimulationPanel wiring test.
+  **NEXT:** dual-axis Y for mixed V+A; step-pane expression bar; `.plt` save.
 - ⬜ Right-click trace → math/operations
 
 ## 7. Engine & accuracy

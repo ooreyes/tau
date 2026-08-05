@@ -9,20 +9,45 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-05 05:29 CDT**
+**Status: DONE - 2026-08-05 05:36 CDT**
 
-Unit: Circuit_testing_v1 `08_tran_rlc_ringing.asc` authored `.tran` → differential **pass=84**.
-```
-SUMMARY pass=84 sibling=5 gap=0
-tran ct-rlc-ringing … v(out) nRms=0.0008 span=11.044; v(in) nRms=0 span=5
-```
-≠ synthetic RC_TRAN. Named-device 48.1%. Left 100W/IRFP alone. SHIPPABLE? **NO**
+Unit: Waveform DoD — LTspice **`.plt` plot settings** parse + apply
+(panes/traces/X). Open .plt in Advanced plot tools.
+Base tip `31d66d8` pass=84. SHIPPABLE? **NO**
 
 **SHIPPABLE?** **NO**
 
 
 
 ---
+
+
+### 2026-08-05 — LTspice .plt import/apply (§waveform DoD)
+
+**What I did**
+- Pure `parsePlt` / `applyPltSection` for Educational-style `.plt` files
+  (multi-pane, ratio expressions, Log flags; never mid-line `Y[0]`).
+  Advanced **Open .plt** applies Transient/AC/DC via expression-bar traces +
+  pane layout + X window. Replaced durability `wip:` checkpoint with named commit.
+- Left 100W/IRFP, Chan/NIGBT/FRA, Settings alone. Continue 23 owns next differential.
+
+**Files**
+- `apps/desktop/src/simulation/plotSettings.ts` (+ test)
+- `apps/desktop/src/components/SimulationPanel.tsx` (+ Open .plt test)
+- `FEATURE_PARITY.md`, `PROGRESS.md`
+
+**Tests**
+- `pnpm -C apps/desktop typecheck` + `test` green
+- plotSettings + Educational smoke + SimulationPanel Open .plt wiring
+
+**Parity items**
+- Waveform viewer 🟡 (`.plt` import landed; dual-axis / step exprs / save NEXT).
+  Differential pass=84 · named-device 48.1% · SHIPPABLE? NO
+
+**Next step**
+- Continue 22 waveform: dual-axis Y or step-pane expressions. Continue 23 owns differential.
+
+
 
 
 

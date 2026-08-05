@@ -48,6 +48,13 @@ import { commonTraceUnit } from "../simulation/exprUnit";
 import { groupDelay } from "../simulation/groupDelay";
 import { stabilityMargins } from "../simulation/stability";
 import { seriesToCsv, stepFamilyToCsv } from "../simulation/waveformCsv";
+import {
+  applyPltSection,
+  makePltTraceResolver,
+  parsePlt,
+  pltKindForMode,
+  selectPltSection,
+} from "../simulation/plotSettings";
 import { downloadWaveformPng, waveformSvgsToPng } from "../simulation/plotPng";
 import { runWaveformFft, type WindowFn } from "../simulation/fft";
 import { spectrumInsights } from "../simulation/spectrumInsights";
@@ -80,6 +87,7 @@ import {
   type PaneLayout,
   defaultLayout,
   automaticLayout,
+  reconcileLayout,
 } from "./plotPanes";
 import {
   type CardHeight,
@@ -303,6 +311,11 @@ export function SimulationPanel({
   const [refData, setRefData] = useState<RawData | null>(null);
   const [refError, setRefError] = useState<string | null>(null);
   const refInputRef = useRef<HTMLInputElement | null>(null);
+  // LTspice `.plt` plot settings — panes/traces/X applied to the active analysis.
+  const [pltError, setPltError] = useState<string | null>(null);
+  const [pltXWindow, setPltXWindow] = useState<{ xMin: number; xMax: number } | null>(null);
+  const [pltLoadedName, setPltLoadedName] = useState<string | null>(null);
+  const pltInputRef = useRef<HTMLInputElement | null>(null);
 
   // Evaluate each saved expression against the latest transient result; drop the
   // ones that no longer resolve (e.g. after a circuit change removes a node).
@@ -360,6 +373,96 @@ export function SimulationPanel({
     }
   };
 
+  /** Apply an LTspice `.plt` — panes, traces, expressions, and X window. */
+  const loadPlotSettings = async (file: File) => {
+    try {
+      const text = await file.text();
+      const parsed = parsePlt(text);
+      const kind = pltKindForMode(mode, stepDomain);
+      const section = selectPltSection(parsed, kind);
+      if (!section) throw new Error("The .plt file has no plot sections.");
+
+      if (kind === "transient" || (mode === "step" && stepDomain === "tran")) {
+        if (!result?.ok) throw new Error("Run a transient analysis before applying .plt settings.");
+        const resolve = makePltTraceResolver([
+          ...result.traces.map((t) => ({ id: t.id, label: t.label })),
+          ...result.currents.map((c) => ({ id: `I(${c.ref})`, label: c.label })),
+        ]);
+        const applied = applyPltSection(section, resolve);
+        // LTspice .plt is plot authority: every authored expression becomes an
+        // expression-bar trace (`expr:…`) so panes do not depend on probes.
+        const allExprs = [
+          ...new Set(
+            section.panes.flatMap((p) => p.traces.map((t) => t.expression.trim())).filter(Boolean),
+          ),
+        ];
+        const layout = section.panes.map((pane, i) => ({
+          id: `plt-p${i}`,
+          traceIds: pane.traces
+            .map((t) => t.expression.trim())
+            .filter(Boolean)
+            .map((expr) => `expr:${expr}`),
+        }));
+        setExprList(allExprs);
+        setPaneLayout(layout.length > 0 ? layout : applied.layout);
+        setPltXWindow(applied.xWindow);
+      } else if (kind === "ac") {
+        if (!acResult?.ok) throw new Error("Run an AC analysis before applying .plt settings.");
+        const resolve = makePltTraceResolver(acResult.traces.map((t) => ({ id: t.id, label: t.label })));
+        const applied = applyPltSection(section, resolve);
+        // Bode multi-pane layout is not the transient pane model — collect every
+        // plotted expression (resolved labels + arithmetic) into the AC bar.
+        const exprs = section.panes.flatMap((p) => p.traces.map((t) => t.expression.trim())).filter(Boolean);
+        const needEval = [
+          ...applied.expressions,
+          ...exprs.filter((e) => !resolve(e) && !applied.expressions.includes(e)),
+        ];
+        // Prefer keeping simple V(node) traces via the AC result itself; only
+        // push arithmetic / unresolved into the expression bar.
+        if (needEval.length > 0) {
+          setAcExprList((prev) => {
+            const next = [...prev];
+            for (const expr of needEval) {
+              if (!next.includes(expr)) next.push(expr);
+            }
+            return next;
+          });
+        } else {
+          // All traces resolved: still surface them as AC expressions so the
+          // Bode pane shows the .plt selection even when probes differ.
+          setAcExprList(exprs);
+        }
+        setPltXWindow(applied.xWindow);
+      } else if (kind === "dc") {
+        if (!dcResult?.ok) throw new Error("Run a DC sweep before applying .plt settings.");
+        const resolve = makePltTraceResolver(dcResult.nets.map((n) => ({ id: n.id, label: n.label })));
+        const applied = applyPltSection(section, resolve);
+        if (applied.expressions.length > 0) {
+          setDcExprList((prev) => {
+            const next = [...prev];
+            for (const expr of applied.expressions) {
+              if (!next.includes(expr)) next.push(expr);
+            }
+            return next;
+          });
+        }
+        setPltXWindow(applied.xWindow);
+      } else {
+        throw new Error(
+          `This .plt section is “${section.header}”; Tau applies Transient/AC/DC plot settings only.`,
+        );
+      }
+
+      setPltLoadedName(file.name);
+      setPltError(null);
+    } catch (err) {
+      setPltLoadedName(null);
+      setPltError(err instanceof Error ? err.message : "Could not read the .plt file.");
+    } finally {
+      if (pltInputRef.current) pltInputRef.current.value = "";
+    }
+  };
+
   const scopeTraces = useMemo(
     () => (refOverlay ? [...exprTraces, ...refOverlay.traces] : exprTraces),
     [exprTraces, refOverlay],
@@ -383,12 +486,17 @@ export function SimulationPanel({
 
   // Auto-create one readable plot card per signal whenever the interest set
   // changes. A rerun with the same signals preserves manual pane assignments.
+  // When a `.plt` is applied, preserve its pane grouping via reconcile instead.
   const availableTraceKey = availableTraceIds.join("\u0000");
   useEffect(() => {
-    setPaneLayout(automaticLayout(availableTraceIds));
+    if (pltLoadedName) {
+      setPaneLayout((prev) => reconcileLayout(prev, availableTraceIds));
+    } else {
+      setPaneLayout(automaticLayout(availableTraceIds));
+    }
     // The stable key deliberately ignores a new result object's identity.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [availableTraceKey]);
+  }, [availableTraceKey, pltLoadedName]);
 
   const addExpression = () => {
     const expr = exprInput.trim();
@@ -740,6 +848,7 @@ export function SimulationPanel({
               measurements={measurements}
               fourier={fourier}
               layoutKey={circuitTitle ?? "default"}
+              forcedX={pltXWindow}
               cursors={transientCursorPositions}
               cursorTool={{
                 activeCursor: cursorsOpen ? activeTransientCursor : null,
@@ -816,6 +925,37 @@ export function SimulationPanel({
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => pltInputRef.current?.click()}
+                          disabled={mode !== "tran" && mode !== "ac" && mode !== "dc" && mode !== "step"}
+                        >
+                          {pltLoadedName ? "Open .plt ✓" : "Open .plt"}
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>Apply LTspice .plt plot settings (panes, traces, X window)</TooltipContent>
+                    </Tooltip>
+                    {pltLoadedName && (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              setPltLoadedName(null);
+                              setPltXWindow(null);
+                              setPltError(null);
+                            }}
+                          >
+                            Clear .plt
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>Clear applied plot settings (keeps current probes)</TooltipContent>
+                      </Tooltip>
+                    )}
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
                           type="button"
                           variant={showStats ? "secondary" : "outline"}
                           size="sm"
@@ -837,8 +977,19 @@ export function SimulationPanel({
                         if (file) void loadReferenceRaw(file);
                       }}
                     />
+                    <input
+                      ref={pltInputRef}
+                      className="file-input"
+                      type="file"
+                      accept=".plt"
+                      onChange={(e) => {
+                        const file = e.currentTarget.files?.[0];
+                        if (file) void loadPlotSettings(file);
+                      }}
+                    />
                   </div>
                   {refError && <div className="expr-error" role="alert">{refError}</div>}
+                  {pltError && <div className="expr-error" role="alert">{pltError}</div>}
                   {refOverlay && (
                     <div className="ref-compare">
                       {refOverlay.comparisons.length === 0 ? (
@@ -1236,6 +1387,7 @@ export function WaveformPlot({
   measurements = [],
   fourier = [],
   layoutKey = "default",
+  forcedX = null,
   cursors = null,
   cursorTool,
 }: {
@@ -1256,6 +1408,8 @@ export function WaveformPlot({
   /** Best-effort localStorage key for the dashboard's card order/width/
    *  height, one per circuit tab (App.tsx's active document title). */
   layoutKey?: string;
+  /** Optional X window from an applied LTspice `.plt` (overrides auto 0…tMax). */
+  forcedX?: { xMin: number; xMax: number } | null;
   /** Active transient measurement positions, drawn through every plot pane. */
   cursors?: { x1: number; x2: number } | null;
   /** Direct plot interaction shared with the exact C1/C2 controls. */
@@ -1309,6 +1463,11 @@ export function WaveformPlot({
   const tMax = useMemo(() => (success ? success.times[success.times.length - 1] || 1 : 1), [success]);
   const [sharedX, setSharedX] = useState({ xMin: 0, xMax: tMax });
   useEffect(() => setSharedX({ xMin: 0, xMax: tMax }), [success, tMax]);
+  useEffect(() => {
+    if (!forcedX) return;
+    if (!(forcedX.xMax > forcedX.xMin) || !Number.isFinite(forcedX.xMin) || !Number.isFinite(forcedX.xMax)) return;
+    setSharedX(forcedX);
+  }, [forcedX]);
   const shareXViewport = useCallback((next: { xMin: number; xMax: number }) => {
     setSharedX((current) => current.xMin === next.xMin && current.xMax === next.xMax ? current : next);
   }, []);
