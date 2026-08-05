@@ -1788,7 +1788,7 @@ zener, opamp, comparator, **VCVS (E)**, **VCCS (G)**, **CCCS (F)**, **CCVS (H)**
   missing library, stale/malformed marker, dirty tree, or less than 15 GiB free
   fails closed and cannot notify.
 
-## 10. Visual design system — **IMPERATIVE (Omar's directive)** — ✅ FULLY ADOPTED (2026-07-08, Phase 4c)
+## 10. Visual design system — **IMPERATIVE (Omar's directive)** — 🟡 ADOPTED WITH DRIFT (2026-08-04 overnight)
 
 Goal: the app looks and feels **shadcn-grade** — a coherent, beautiful,
 token-driven design system, not a pile of ad-hoc CSS. This gates the
@@ -1796,16 +1796,21 @@ Definition of Done. Migrate **incrementally, panel by panel**, with screenshot
 QA (STEP 3.5 pipeline) before/after every panel — never a big-bang rewrite,
 never a broken intermediate state on the branch.
 
-**Status: every bullet below is ✅.** Phase 4c (canvas chrome — the zoom
-cluster and inline value/net-label editor) was the last open item; the former
-"Current flow" animation/control was intentionally removed on 2026-07-10 until
-simulation fidelity justifies it. This
-closes the §10 line item of the AGENTS.md Definition of Done. Honest
-accounting of what's still open in the wider DoD (none of it is §10 scope):
-the re-runnable acceptance-corpus script, the `class-d_starter.asc`
-comparator-parity fix, cross-tool waveform-parity screenshots, and the
-final packaged-build/signing gates — see AGENTS.md's Definition of Done
-checklist for the authoritative list.
+**Status: foundation + panel migrations landed (Phases 1–4c), but AGENTS.md §10
+DoD stays UNCHECKED.** Overnight 2026-08-04 (Tokens + Cupertino): Light is now
+the product default; Anduril Light cool-paper + precision-blue accent
+(`#F5F6F8` / `#0A66C2`); radius scale extended (`--r-2xs`/`--r-xs`/`--r-pill`)
+and raw chrome radii snapped; warning chrome quieted (soft/glow + idle/has-warning
+panels flat, errors still vivid); settings rows simplified. Remaining §10 debt
+that blocks an honest DoD check: Resizable/Command/Toast primitives still
+deferred; native `<select>`s in FFT/op-amp not on `ui/Select`; Assistant/local-AI
+settings surfaces still mid-migration; Cupertino icon chrome still settling;
+no proof of zero ad-hoc drift across every panel at both themes + min window.
+Do **not** flip the AGENTS box until that grep+screenshot proof exists.
+
+**Earlier claim (2026-07-08 Phase 4c) that §10 "closes" AGENTS DoD was premature**
+once light theme, Anduril retune, and post-migration chrome re-entered the
+branch. Honest accounting of wider DoD (not §10): see AGENTS.md checklist.
 
 - ✅ **True-black palette retune (2026-07-08):** the single `:root` token block
   in `App.css` retuned from a cool blue-tinted graphite console (`--bg:

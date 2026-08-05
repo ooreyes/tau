@@ -9,19 +9,17 @@
      ─────────────────────────────────────────────────────────────────────── -->
 ## HEARTBEAT
 
-**Status: DONE - 2026-08-04 23:16 CDT** (HR/ops — ownership board + clear stale §10)
+**Status: DONE - 2026-08-04 23:18 CDT** (Tokens — §10 light default + quiet warnings)
 
-**Cleared stale unit:** §10 token sweep (`--r-xs` / `--r-2xs` / `--r-pill`) already in
-`App.css` — any prior `IN PROGRESS` for that unit was STALE and is closed.
-AGENTS §10 DoD stays unchecked (radius tokens ≠ full visual adoption).
+Unit: Anduril Light as product default; quieter warning/idle diagnostics; settings
+row chrome; radius token scale. AGENTS §10 DoD stays **unchecked**.
 
 **Active product lanes (collision lock — do not cross-edit):**
 - **Overnight DoD + Staff EE** — measuring named-device HF / exact-rate via
   `scripts/named-device-fidelity.sh` (script stdout = truth). Last proven
   `15.1%` / HF `103` / silent `0` until reprint. Do not invent HF→2.
-- **Design lead (P0)** — `ShellPanels.tsx` Lucide / typecheck break. LOCKED.
-  Non-owners: do **not** edit `ShellPanels.tsx`, `spiceNetlist.ts`, or
-  `AssistantPanel.tsx` product logic.
+- **Design lead / Cupertino** — `ShellPanels.tsx` Lucide icons. LOCKED for
+  non-owners. Tokens may touch `App.css` token blocks + settings chrome only.
 - **AI platform / Freshman** — `localAiEnsure*` / `cloudAiConsent*` /
   `LocalAiSetupDialog*` / Settings AI sections only.
 - **Bench** — help/warning copy strings only; coordinate; no ShellPanels structure.
@@ -44,6 +42,32 @@ AGENTS §10 DoD stays unchecked (radius tokens ≠ full visual adoption).
 
 
 ---
+
+### 2026-08-04 — Tokens: light default + quiet warning chrome (§10)
+
+**What I did**
+- Product default is Light (`theme.ts` + FOUC boot in `index.html`); Anduril
+  Light cool-paper / precision-blue accent already on branch (`#F5F6F8` /
+  `#0A66C2`); extended radius tokens; quieted warning + idle diagnostic wash
+  (errors stay vivid); simplified settings row / local-runtime chrome.
+- Corrected FEATURE_PARITY §10 from premature "FULLY ADOPTED / closes AGENTS
+  DoD" to 🟡 with remaining debt listed. AGENTS §10 box left unchecked.
+
+**Files**
+- `apps/desktop/src/App.css`, `apps/desktop/index.html`, `apps/desktop/src/lib/theme.ts`,
+  `apps/desktop/src/components/SettingsPanel.tsx`, `DESIGN_SYSTEM.md`,
+  `FEATURE_PARITY.md`, `PROGRESS.md` (plus ThemeControl/theme tests)
+
+**Tests / proof**
+- `pnpm -C apps/desktop typecheck` green (on clean tree)
+- `vitest` theme + ThemeControl + palette: 15/15 passed
+
+**Parity items**
+- FEATURE_PARITY §10 → 🟡; AGENTS §10 DoD still open
+
+**Next step**
+- Cupertino finishes icon chrome; Tokens/grep proof of zero ad-hoc drift at
+  both themes + 900×600 before anyone checks the AGENTS box.
 
 ### 2026-08-04 — HR/ops: ownership board + clear stale §10 heartbeat
 
