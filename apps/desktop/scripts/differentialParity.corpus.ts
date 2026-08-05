@@ -85,6 +85,7 @@ const DRAFT1_ASC = join(DOC_LTSPICE, "Draft1.asc");
 const DRAFT2_ASC = join(DOC_LTSPICE, "Draft2.asc");
 const DRAFT3_ASC = join(DOC_LTSPICE, "Draft3.asc");
 const DRAFT7_ASC = join(DOC_LTSPICE, "Draft7.asc");
+const BANDGAPS_ASC = join(EDU, "BandGaps.asc");
 const SAMPLEANDHOLD_ASC = join(EDU, "SampleAndHold.asc");
 const EDU_VARISTOR_ASC = join(EDU, "varistor.asc");
 const STEPNOISE_ASC = join(EDU, "stepnoise.asc");
@@ -244,7 +245,7 @@ function withAcStimulus(netlist: string): string {
 describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential parity matrix", () => {
   const cells: DifferentialCell[] = [];
 
-  it("matches RC .tran/.ac/.meas, divider analyses, .step families, curvetrace, stepmodelparam, NoiseFigure, noise.asc, Colpitts/Clapp/Hartly AC, Cohn AC, MeasureBW AC, Transformer/Transformer2/IdealTransformer TRAN, notch/passive/butter/opamp/Linkwitz AC, LM741/LM308/LM78XX/P2/logamp TRAN, GFT AC, DCopPnt OP, audioamp TRAN, UHFpreamp AC, 1563 AC, S-param AC, stepAC AC, 2ndOrder* AC, MonteCarlo AC, varactor AC, phaseshift AC, Pierce/colpits2 AC, edu-varistor TRAN, stepnoise noise, UniversalOpAmp/1/2 TRAN, contrib/qztst AC, SampleAndHold TRAN, contrib/elip_grd AC, Draft3 AC, Draft7 AC, Draft2 TRAN, Draft1 TRAN, Class-D AC/OP/DC/noise/tf", () => {
+  it("matches RC .tran/.ac/.meas, divider analyses, .step families, curvetrace, stepmodelparam, NoiseFigure, noise.asc, Colpitts/Clapp/Hartly AC, Cohn AC, MeasureBW AC, Transformer/Transformer2/IdealTransformer TRAN, notch/passive/butter/opamp/Linkwitz AC, LM741/LM308/LM78XX/P2/logamp TRAN, GFT AC, DCopPnt OP, audioamp TRAN, UHFpreamp AC, 1563 AC, S-param AC, stepAC AC, 2ndOrder* AC, MonteCarlo AC, varactor AC, phaseshift AC, Pierce/colpits2 AC, edu-varistor TRAN, stepnoise noise, UniversalOpAmp/1/2 TRAN, contrib/qztst AC, SampleAndHold TRAN, contrib/elip_grd AC, Draft3 AC, Draft7 AC, Draft2 TRAN, Draft1 TRAN, BandGaps DC-temp, Class-D AC/OP/DC/noise/tf", () => {
     // --- TRAN (also covered by waveformParity; re-assert here so this file is self-sufficient) ---
     {
       const result = runPairedBatch("diff-rc-tran", RC_TRAN, ["v(out)"]);
@@ -1587,7 +1588,7 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
 
     // --- Educational DCopPnt.asc authored .op (BJT operating-point demo) ---
     // HalfSlope Laplace strips to unity VCCS (hollow) — not landed.
-    // BandGaps .dc temp misses LTspice nRms≈0.05 — honest miss.
+    // BandGaps .dc temp landed below (rmsTol=0.06 / maxTol=0.07 BJT tempco).
     {
       expect(existsSync(DCOPNT_ASC), `missing ${DCOPNT_ASC}`).toBe(true);
       const imported = importAsc(decodeSchematicText(readFileSync(DCOPNT_ASC)));
@@ -2792,6 +2793,66 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
       });
     }
 
+    // --- Educational BandGaps.asc authored .dc temp (four BJT bandgap refs A/B/C/D) ---
+    // Document `.model N NPN` / `.model P PNP` (minimal). Authored `.dc temp -55 125 .1`.
+    // Default 2%/5% misses (nRms≈0.046–0.058 BJT tempco vs LTspice); lands at
+    // rmsTol=0.06 / maxTol=0.07 — same honesty class as elip_grd maxTol=0.10 peak /
+    // varistor maxTol=0.06. Absolute |Δ|≈20–27 mV on ~0.4 V span. Zero unresolved /
+    // substitutions. Left Draft* / Staff EE plaintext named-device / avoid-list alone.
+    // Stacked on tip Draft1 pass=73 → 74.
+    {
+      expect(existsSync(BANDGAPS_ASC), `missing ${BANDGAPS_ASC}`).toBe(true);
+      const imported = importAsc(decodeSchematicText(readFileSync(BANDGAPS_ASC)));
+      expect(imported.warnings).toEqual([]);
+      const dirs = expandDirectiveLines(imported.directives);
+      const parsed = analysesFromDirectives(dirs);
+      expect(parsed.dc, "BandGaps.asc must author .dc").toBeTruthy();
+      expect(parsed.dc!.source.toLowerCase()).toBe("temp");
+      const params = buildParamScope(dirs);
+      const deck = buildSpiceDeck({
+        components: imported.components,
+        wires: imported.wires,
+        netLabels: imported.netLabels,
+        directives: dirs,
+        params,
+      }, {
+        kind: "dc",
+        source: parsed.dc!.source,
+        start: parsed.dc!.start,
+        stop: parsed.dc!.stop,
+        step: parsed.dc!.step,
+      });
+      expect(deck.unresolvedSubckts ?? []).toEqual([]);
+      expect(deck.modelSubstitutions ?? []).toEqual([]);
+      expect(deck.netlist).toMatch(/\.model\s+N\s+NPN\b/i);
+      expect(deck.netlist).toMatch(/\.model\s+P\s+PNP\b/i);
+      expect(deck.netlist).toMatch(/\.dc\s+temp\b/i);
+      expect(deck.netlist).not.toMatch(/^X\w*\b/im);
+      const probes = ["v(a)", "v(b)", "v(c)", "v(d)"] as const;
+      const result = runPairedBatch("diff-bandgaps-dc-temp", deck.netlist, [...probes]);
+      const memberNotes: string[] = [];
+      for (const probe of probes) {
+        const lt = result.ltspice.get(probe)!;
+        const ng = result.ngspice.get(probe)!;
+        const comparison = compareWaveforms(ng.axis, ng.values, lt.axis, lt.values, {
+          rmsTolerance: 0.06,
+          maxTolerance: 0.07,
+        });
+        expect(comparison.pass, `BandGaps ${probe} ${JSON.stringify(comparison)}`).toBe(true);
+        expect(comparison.referenceRange, `BandGaps ${probe} non-hollow`).toBeGreaterThan(0.3);
+        memberNotes.push(
+          `${probe} nRms=${comparison.normalizedRms.toFixed(4)} nMax=${comparison.normalizedMax.toFixed(4)} span=${comparison.referenceRange.toFixed(3)}`,
+        );
+      }
+      cells.push({
+        analysis: "dc",
+        circuit: "bandgaps",
+        topology: "Educational BandGaps.asc four BJT bandgap refs (authored .dc temp −55…125 / 0.1; rmsTol=0.06 maxTol=0.07)",
+        status: "pass",
+        note: memberNotes.join("; ") + " (rmsTol=0.06 maxTol=0.07)",
+      });
+    }
+
     // --- Class-D AC/OP (authored analyses are .tran/.meas; add AC/OP for differential proof) ---
     {
       const ascPath = join(CLASSD_DIR, "class-d-starter.asc");
@@ -3088,6 +3149,6 @@ describe.skipIf(!haveLtspice || !haveNgspice)("authored-analysis differential pa
     expect(passCount).toBeGreaterThanOrEqual(70);
     expect(siblingCount).toBe(5);
     expect(gapCount).toBe(0);
-    expect(report).toMatch(/SUMMARY pass=73 sibling=5 gap=0/);
+    expect(report).toMatch(/SUMMARY pass=74 sibling=5 gap=0/);
   }, 240_000);
 });
